@@ -214,6 +214,7 @@ CREATE TABLE "Product" (
     "notifiedBodyName" TEXT,
     "declarationOfConformityUrl" TEXT,
     "impactProtectors" JSONB,
+    "fitGarment" JSONB,
     "serviceLevelPercent" DECIMAL(5,2),
     "orderingCostCents" INTEGER,
     "carryingCostPctYear" DECIMAL(5,2),

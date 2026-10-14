@@ -45,6 +45,8 @@ export const PRODUCT_COLUMNS: Record<string, Disposition> = {
   // compliance
   hsCode: g('compliance'), countryOfOrigin: g('compliance'), ppeCategory: g('compliance'), hazmatClass: g('compliance'), hazmatUnNumber: g('compliance'),
   garmentClass: g('compliance'), notifiedBodyNumber: g('compliance'), notifiedBodyName: g('compliance'), declarationOfConformityUrl: g('compliance'), impactProtectors: g('compliance'),
+  // Garment measurements (2026-10-14) — a fact of the garment, beside the protectors; the capture trigger follows it too.
+  fitGarment: g('compliance'),
   // structure
   parentId: g('structure'), isParent: g('structure'), familyId: g('structure'),
   // price (offered only when the owner chooses it)

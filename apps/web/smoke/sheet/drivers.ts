@@ -8,11 +8,12 @@
  */
 import { expect, type Locator, type Page } from '@playwright/test'
 import { elsewhereInRow, type ApiColumn, type ScopeName } from './grid'
+import { normalizeFitGarment, readFitGarment, type FitGarment } from '@nexus/shared/fit-garment'
 
 export type EditorId =
   | 'FormulaCellEditor' | 'SelectPanelEditor' | 'ListPanelEditor' | 'MeasureEditor' | 'ReferenceSelectEditor'
   | 'ChannelCategoryEditor' | 'EbayPolicyEditor' | 'SlotListEditor' | 'StructuredAttributeEditor'
-  | 'ImpactProtectorsEditor' | 'AxesPanelEditor' | 'Gateway' | 'MediaEditorGateway'
+  | 'ImpactProtectorsEditor' | 'GarmentMeasurementsEditor' | 'AxesPanelEditor' | 'Gateway' | 'MediaEditorGateway'
   | 'FormulaUnavailableEditor' | 'agLargeTextCellEditor' | 'agTextCellEditor' | 'agNumberCellEditor'
   | 'MatrixStockEditor'
 
@@ -84,6 +85,7 @@ export function editorOf(column: ApiColumn & { key: string }, scope: ScopeName):
   if (scope !== 'master' && CATEGORY_KEY[scope] === column.key) return 'ChannelCategoryEditor'
   if (scope === 'EBAY' && POLICY_KEYS.includes(column.key)) return 'EbayPolicyEditor'
   if (REFERENCE_KEYS.includes(column.key)) return 'ReferenceSelectEditor'
+  if (scope === 'master' && column.key === 'fitGarment') return 'GarmentMeasurementsEditor'
   if (scope === 'master' && column.key === 'impactProtectors') return 'ImpactProtectorsEditor'
   if (scope === 'master' && column.key === 'bulletPoints' && column.shape === 'list') return 'SlotListEditor'
   if (column.shape === 'list') return 'ListPanelEditor'
@@ -198,6 +200,24 @@ export function pickFor(editor: EditorId, column: ApiColumn, current: unknown, n
       // Qty and Buffer hold whole units, zero or more.
       const value = 7 + n + (current === 7 + n ? 10 : 0)
       return { input: String(value), wire: value, shows: String(value) }
+    }
+    case 'GarmentMeasurementsEditor': {
+      // The first size row gets a new name and a Chest value (the column is added when the table has none). A flat (half)
+      // Chest is typed half and stored doubled. Keyboard and mouse type `<name>|<chest>`; paste puts the whole table, as
+      // JSON, into the cell.
+      const held = readFitGarment(current).value
+      const flat = held?.flat?.includes('chest') ?? false
+      let name = `E2E${tag}`
+      // Size names are unique ignoring case: never the name another row already has.
+      while (held?.sizes.some((size, i) => i > 0 && size.name.toLowerCase() === name.toLowerCase())) name += 'x'
+      let typed = 101 + n
+      if (held?.sizes[0]?.chest === (flat ? typed * 2 : typed)) typed += 10
+      const chest = flat ? typed * 2 : typed
+      const table: FitGarment = held
+        ? { ...held, measures: held.measures.includes('chest') ? held.measures : [...held.measures, 'chest'], sizes: held.sizes.map((size, i) => (i === 0 ? { ...size, name, chest } : size)) }
+        : { measures: ['chest'], sizes: [{ name, chest }] }
+      const wire = normalizeFitGarment(table)
+      return path === 'paste' ? { input: JSON.stringify(wire), wire } : { input: `${name}|${typed}`, wire }
     }
     case 'SlotListEditor': {
       // Shared's bullets are ONE list: the edit replaces position 1 and keeps the rest.
@@ -424,6 +444,33 @@ export const DRIVERS: Record<EditorId, Driver> = {
     kinds: ['record'],
     abstain: 'Only on a master column the seed does not build (impactProtectors); the node test covers its Enter and Tab.',
     keyboard: { na: 'abstained' }, mouse: { na: 'abstained' }, paste: { na: 'abstained' },
+  },
+  GarmentMeasurementsEditor: {
+    kinds: ['text'],
+    // Enter opens the table on the first size's name; a pasted block with a header row fills that row (and adds the
+    // Chest column if missing); Enter saves.
+    keyboard: async ({ page, pick }) => {
+      const [name, chest] = pick.input.split('|')
+      await page.keyboard.press('Enter')
+      await expect(popup(page).locator('input').first()).toBeFocused()
+      const block = `Size\tChest\n${name}\t${chest}`
+      await page.evaluate((value) => navigator.clipboard.writeText(value), block)
+      await page.keyboard.press('ControlOrMeta+V')
+      await page.keyboard.press('Enter')
+    },
+    // Double-click opens it; the Chest column is added from the list when missing; the fields are filled; Save closes it.
+    mouse: async (ctx) => {
+      const [name, chest] = ctx.pick.input.split('|')
+      await ctx.cell.dblclick({ position: { x: 10, y: 10 } })
+      const pop = popup(ctx.page)
+      await expect(pop).toBeVisible()
+      if (await pop.locator('select option[value="chest"]').count()) await pop.getByRole('combobox', { name: 'Add measure' }).selectOption('chest')
+      await pop.getByRole('textbox', { name: 'Size name, row 1' }).fill(name)
+      await pop.getByRole('textbox', { name: new RegExp(`^${name}, Chest`) }).fill(chest)
+      await pop.getByRole('button', { name: 'Save', exact: true }).click()
+    },
+    // A whole table, as JSON (what the cell's parser reads), pasted onto the cell.
+    paste: async ({ page, cell, pick }) => paste(page, pick.input, cell),
   },
   AxesPanelEditor: {
     kinds: ['variationTheme'],

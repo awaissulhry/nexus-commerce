@@ -14,6 +14,7 @@ import { contentWireValue } from './content-read.js'
 import { checkForStorage, coerceForShape } from './sheet-values.js'
 import { editVerdict } from './value-verdict.js'
 import { channelValuePatch, jsonRecord, storedChannelState, type ValueRecord } from './channel-value-mutation.js'
+import { fitGarmentProblems, normalizeFitGarment } from '@nexus/shared/fit-garment'
 import type { SourceMapping, SourceExclusion } from './catalog-source-mapping.js'
 import { isReferenceField } from '@nexus/shared/reference-values'
 import { createReferenceResolver, type ReferenceResolver } from './reference-values.service.js'
@@ -205,6 +206,8 @@ function nativeConstraint(key: string, value: unknown): string | null {
   if (key === 'countryOfOrigin' && !/^[A-Z]{2}$/.test(String(value))) return 'Use an uppercase two-letter country code'
   if (key === 'hsCode' && !/^\d{4,12}$/.test(String(value))) return 'HS code must contain 4–12 digits'
   if (['gtin', 'ean', 'upc'].includes(key) && !/^\d{8,14}$/.test(String(value))) return 'Identifiers must contain 8–14 digits; use text to preserve leading zeros'
+  // Garment measurements (2026-10-14) — the bulk writer's rule (`normalizeFitGarment`), so an import cannot store a table the sheet would refuse.
+  if (key === 'fitGarment') { const problems = fitGarmentProblems(value); if (problems.length) return `Garment measurements: ${problems.join(' ')}` }
   return null
 }
 
@@ -552,7 +555,8 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
               && !Array.isArray(value) && !(typeof value === 'string' && value.trim().startsWith('['))
             // P1 (`value-verdict.ts`) — the verdict every edit path uses: only what the field's type cannot hold is
             // refused; an off-list or over-limit value is imported and named in the review.
-            const checked = checkForStorage(col, wrap ? [value] : value)
+            // Garment measurements are ONE table, not a scalar: `nativeConstraint` checks it with the table's own rule below.
+            const checked = col.key === 'fitGarment' ? { ok: true as const, value, findings: [] } : checkForStorage(col, wrap ? [value] : value)
             if (checked.ok === false) { error(row, checked.error); continue }
             value = checked.value
             for (const found of checked.findings) warnings.add(`${row.sku} ${col.label}: ${found.message} (row ${row.row}; imported as written).`)
@@ -564,6 +568,7 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
             const problem = inheritsFromParent ? null : nativeConstraint(col.key, value)
             if (problem) { error(row, problem); continue }
             if (['bulletPoints', 'keywords'].includes(col.key) && value === null) value = []
+            if (col.key === 'fitGarment' && value != null) value = normalizeFitGarment(value)
           }
           const changed = cell(row, old, value, state)
           target.cells.push(changed)
