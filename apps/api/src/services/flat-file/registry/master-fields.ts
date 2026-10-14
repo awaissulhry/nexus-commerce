@@ -13,6 +13,7 @@
 //   localizedContent   — JSON; flatten per-locale is FFD7; excluded here
 //   variantAttributes  — dynamic JSON; excluded (§6)
 //   impactProtectors   — JSON; excluded (§6)
+//   fitGarment         — JSON (garment measurements per size); excluded (§6)
 //   All image relations, tier prices, relation-only fields — §2.8
 //   b2bPrice, b2bMinQty — the old Nexus-only B2B price, read by nothing (Amazon Business step 7a);
 //                        Amazon's business price is the listing's, set in the Matrix
@@ -430,6 +431,7 @@ export const MASTER_FIELDS: FieldDefinition[] = [
     width: 16,
   },
   // impactProtectors — EXCLUDED (Json field; flatten or exclude §6)
+  // fitGarment — EXCLUDED (Json table of garment measurements per size; edited in the product sheet; §6)
 
   // ─── §2.4 Pricing & cost (master-level) ──────────────────────────────────
 

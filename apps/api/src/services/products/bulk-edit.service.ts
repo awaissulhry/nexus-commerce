@@ -17,6 +17,7 @@ import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
 import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
 import { nativeFieldValueError, nativeWriteValue, normalizeShopifyWeight, type NativeEdit } from '@nexus/shared/shopify-information'
 import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
+import { FitGarmentError, normalizeFitGarment } from '@nexus/shared/fit-garment'
 import { SHOPIFY_STATUS_FROM_STATUS_COLUMN } from '@nexus/shared/listing-actions'
 import { writeChannelOverrideMerge } from '../pim/channel-value-write.js'
 import { isReferenceField } from '@nexus/shared/reference-values'
@@ -266,6 +267,13 @@ export interface ProductBulkContext {
    */
   readinessAfterResponse?: boolean
 }
+
+/**
+ * A Product column's value as the model update takes it. Garment measurements (2026-10-14): a cleared table is a
+ * database NULL — a bare `null` sent to a `Json?` column through the model is stored as the JSON value `null`, which
+ * reads back as null but is not one (`IS NULL` is false).
+ */
+const productColumnValue = (field: string, value: unknown) => (field === 'fitGarment' && value === null ? Prisma.DbNull : value)
 
 /** S1 (F5) — the product fields that ARE a price: the master price, its floor and ceiling, and the eBay listing price. */
 const PRICE_FIELDS = new Set(['basePrice', 'minPrice', 'maxPrice', 'ebay_price'])
@@ -1542,6 +1550,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
             level: p?.level != null ? String(p.level) : null,
           }))
           .filter((p) => p.zone || p.standard || p.level)
+      }
+    } else if (c.field === 'fitGarment') {
+      // Garment measurements (2026-10-14) — ONE rule with the sheet's editor: the table as stored, `null` when
+      // nothing is left to keep (a clear), or every reason it cannot be saved.
+      try {
+        value = normalizeFitGarment(value)
+      } catch (error) {
+        errors.push({ id: c.id, field: c.field, error: error instanceof FitGarmentError ? `Garment measurements: ${error.problems.join(' ')}` : 'Garment measurements could not be read.' })
+        continue
       }
     } else if (c.field === 'isParent') {
       // GTIN.3 / Step 4 — boolean coercion. Accept true/false +
@@ -3038,7 +3055,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           updates.push(
             prisma.product.update({
               where: { id: v.id },
-              data: { [v.field]: v.value } as any,
+              data: { [v.field]: productColumnValue(v.field, v.value) } as any,
             })
           )
           // D11 — ONE statement for the whole fan-out, not one per child.
@@ -3055,7 +3072,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
               prisma.product.updateMany({
                 where: { id: { in: kids } },
                 data: {
-                  [v.field]: v.value,
+                  [v.field]: productColumnValue(v.field, v.value),
                   cascadedFields: { push: v.field },
                 } as any,
               })
@@ -3085,7 +3102,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         updates.push(
           prisma.product.update({
             where: { id: v.id },
-            data: { [v.field]: v.value } as any,
+            data: { [v.field]: productColumnValue(v.field, v.value) } as any,
           }),
           prisma.$executeRaw`
             UPDATE "Product"
@@ -3098,7 +3115,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         updates.push(
           prisma.product.update({
             where: { id: v.id },
-            data: { [v.field]: v.value } as any,
+            data: { [v.field]: productColumnValue(v.field, v.value) } as any,
           })
         )
       }

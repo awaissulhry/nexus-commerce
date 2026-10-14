@@ -34,6 +34,8 @@ const cases: Array<{ name: string; field: string; value: unknown; channel?: stri
   { name: 'shared bullets beyond legacy limit', field: 'bulletPoints', value: Array.from({ length: 21 }, (_, i) => `Bullet ${i + 1}`) },
   { name: 'reject structured records in text bullets', field: 'bulletPoints', value: [{ text: 'Do not stringify or discard me' }], rejects: true },
   { name: 'protector records', field: 'impactProtectors', value: [{ zone: 'shoulder', standard: 'EN 1621-1', level: '2' }, { zone: 'elbow', standard: 'EN 1621-1', level: '1' }] },
+  { name: 'garment measurements', field: 'fitGarment', value: { measures: ['chest', 'sleeve'], sizes: [{ name: 'M', chest: 106, sleeve: '62,5' }], flat: ['chest'] } },
+  { name: 'garment measurements, a length measured flat', field: 'fitGarment', value: { measures: ['sleeve'], sizes: [{ name: 'M', sleeve: 62 }], flat: ['sleeve'] }, rejects: true },
   { name: 'native PPE enum', field: 'ppeCategory', value: 'CAT_II' },
   { name: 'invalid PPE enum', field: 'ppeCategory', value: 'II', rejects: true },
   { name: 'eBay title boundary', field: 'ebay_title', value: 'x'.repeat(80), channel: 'EBAY' },

@@ -439,7 +439,7 @@ const PRODUCT_SELECT = {
   costPrice: true, minMargin: true, minPrice: true, maxPrice: true, lowStockThreshold: true,
   hsCode: true, countryOfOrigin: true, ppeCategory: true, garmentClass: true,
   hazmatClass: true, hazmatUnNumber: true, notifiedBodyNumber: true, notifiedBodyName: true,
-  declarationOfConformityUrl: true, impactProtectors: true,
+  declarationOfConformityUrl: true, impactProtectors: true, fitGarment: true,
   id: true, sku: true, name: true, parentId: true, isParent: true, status: true, productType: true,
   version: true, basePrice: true, categoryAttributes: true, localizedContent: true, variantAttributes: true,
   description: true, bulletPoints: true, keywords: true, brand: true, manufacturer: true,

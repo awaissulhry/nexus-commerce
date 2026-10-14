@@ -380,7 +380,7 @@ const FIELD_ORDER_BY_GROUP: Record<string, string[]> = {
   'master:attributes': ['model_number', 'material', 'fabric_type', 'color', 'size', 'target_gender', 'age_range_description', 'fit_type', 'care_instructions', 'water_resistance_level'],
   'master:identifiers': ['gtin', 'ean', 'upc'],
   'master:physical': ['weightValue', 'weightUnit', 'dimLength', 'dimWidth', 'dimHeight', 'dimUnit'],
-  'master:compliance': ['countryOfOrigin', 'hsCode', 'ppeCategory', 'garmentClass', 'glove_standard', 'glove_protection_level', 'knuckle_impact_protection', 'impactProtectors', 'notifiedBodyName', 'notifiedBodyNumber', 'declarationOfConformityUrl', 'hazmatClass', 'hazmatUnNumber'],
+  'master:compliance': ['countryOfOrigin', 'hsCode', 'ppeCategory', 'garmentClass', 'glove_standard', 'glove_protection_level', 'knuckle_impact_protection', 'impactProtectors', 'fitGarment', 'notifiedBodyName', 'notifiedBodyNumber', 'declarationOfConformityUrl', 'hazmatClass', 'hazmatUnNumber'],
   'master:pricing': ['costPrice', 'basePrice', 'minPrice', 'maxPrice', 'minMargin'],
   'master:inventory': ['totalStock', 'lowStockThreshold'],
   'AMAZON:product_identity': ['externally_assigned_product_identifier', 'supplier_declared_has_product_identifier_exemption', 'merchant_suggested_asin', 'brand', 'manufacturer', 'model_name', 'model_number', 'part_number', 'recommended_browse_nodes'],
@@ -1307,6 +1307,21 @@ export const SHEET_CONTENT_FIELDS: FieldDefinition[] = [
 ]
 
 /**
+ * Garment measurements (2026-10-14) — `Product.fitGarment`, a column of every product's Shared sheet whatever its family,
+ * also where the business's dictionary has no row for it (a family's row, when there is one, wins: the Map below keeps
+ * the last): the finished garment's measurements per size, one table per product, edited in
+ * its own pop-up (`GarmentMeasurementsInput`) and checked by `normalizeFitGarment` (@nexus/shared/fit-garment). In
+ * "Compliance and traceability", beside the impact protectors, so it is one Customise click away, not in the way.
+ */
+export const SHEET_FIT_FIELDS: FieldDefinition[] = [
+  {
+    id: 'fitGarment', label: 'Garment measurements', type: 'text', category: 'universal', group: MASTER_GROUPS.compliance, scope: 'global',
+    editable: true, width: 200,
+    helpText: 'The finished garment, measured per size. Shoppers never see these numbers; the size finder uses them to check the room.',
+  },
+]
+
+/**
  * Column sets are derived from cached schemas plus a rarely-changing aspect table, and both the
  * columns route AND every row read need one. Caching here rather than in the route means a page of
  * rows does not pay the schema walk on every keystroke of a search.
@@ -1485,7 +1500,7 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
     : await (await import('./family-sheet-schema.js')).coreSheetFields(input.locale)
   const canonical = new Set([...registry, ...familyFields].map(f => f.id.replace(/^attr_/, '')))
   const saved = familySchema ? (input.savedFields ?? []).filter(f => !canonical.has(f.id.replace(/^attr_/, '')) && !(f.id === 'attr_country_of_origin' && canonical.has('countryOfOrigin'))) : []
-  const fields = [...new Map([...registry, ...SHEET_CONTENT_FIELDS, ...saved, ...familyFields].map(f => [f.id, f])).values()]
+  const fields = [...new Map([...registry, ...SHEET_CONTENT_FIELDS, ...SHEET_FIT_FIELDS, ...saved, ...familyFields].map(f => [f.id, f])).values()]
 
   // ── the channel specs, CACHE ONLY (never a live channel call on a page-load path) ──
   const specs: Array<{ coordinate: SheetCoordinate; spec: ChannelSpec }> = []
