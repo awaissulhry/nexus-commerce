@@ -15,6 +15,7 @@ import {
   FIT_CIRCUMFERENCES, FIT_MEASURES, FIT_MEASURE_LABELS, FIT_SIZES_MAX, fitNumber, readFitGarment,
   type FitGarment, type FitMeasure,
 } from '@nexus/shared/fit-garment'
+import { sortGarmentSizes } from '@nexus/shared/garment-size-order'
 import type { VariationFamilyView } from '@/design-system/grid'
 
 export interface GarmentRowDraft {
@@ -226,12 +227,17 @@ export function pasteIntoDraft(draft: GarmentDraft, at: { row: number; column: n
 
 const SIZE_AXIS = /size|taglia|gr(o|ö|oe)(ss|ß)e|talla|taille|maat|rozmiar/i
 
-/** The names of the family's size values, in the family's order (the axis whose code or name says size), else []. */
+/**
+ * The names of the family's size values (the axis whose code or name says size), else []. A value with an option code
+ * keeps the family's order (its saved order, else the dictionary's); a value without one (a free-text size) has no order
+ * but first use, A–Z by SKU, so those follow in garment size order (XXS … 5XL, then 44 … 60, then the rest).
+ */
 export function familySizeNames(view: VariationFamilyView | null | undefined): string[] {
   const axis = view?.axes.find((a) => SIZE_AXIS.test(a.code) || SIZE_AXIS.test(a.label))
   if (!axis) return []
+  const ordered = axis.values.filter((v) => v.option), unordered = axis.values.filter((v) => !v.option)
   const names: string[] = []
-  for (const value of axis.values) {
+  for (const value of [...ordered, ...sortGarmentSizes(unordered, (v) => v.label)]) {
     const name = value.label.trim()
     if (name && !names.some((n) => n.toLowerCase() === name.toLowerCase())) names.push(name)
   }

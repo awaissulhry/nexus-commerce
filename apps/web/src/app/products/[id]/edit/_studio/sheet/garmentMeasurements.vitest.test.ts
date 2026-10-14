@@ -132,6 +132,19 @@ describe('the product sizes and the sheet cell', () => {
     expect(familySizeNames(null)).toEqual([])
   })
 
+  it('free-text sizes (no option code: no saved order, A–Z by SKU) come in garment size order; ordered ones keep theirs', () => {
+    const family = (values: Array<[label: string, option: string | null]>): VariationFamilyView => ({
+      axes: [{ code: 'taglia', label: 'Taglia', dictionary: values.some(([, o]) => o), values: values.map(([label, option]) => ({ key: option ? `taglia:${option}` : `taglia:text:${label.toLowerCase()}`, option, label, count: 2, photo: null })) }],
+      variants: [],
+    })
+    // The GALE jacket family: a free-text axis, first seen in SKU order.
+    expect(familySizeNames(family(['3XL', '4XL', '5XL', 'L', 'M', 'S', 'XL', 'XS', 'XXL', 'XXS'].map((s) => [s, null]))))
+      .toEqual(['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'])
+    expect(familySizeNames(family([['52', null], ['Taglia unica', null], ['46', null]]))).toEqual(['46', '52', 'Taglia unica'])
+    // A saved (or dictionary) order is the family's own, even when it is not the garment scale; free-text values follow it.
+    expect(familySizeNames(family([['L', 'l'], ['S', 's'], ['M', 'm'], ['XXL', null], ['XS', null]]))).toEqual(['L', 'S', 'M', 'XS', 'XXL'])
+  })
+
   it('a table pasted into the cell as JSON is read; other text keeps the cell', () => {
     const previous = { measures: ['chest'], sizes: [{ name: 'M', chest: 100 }] }
     expect(parseGarmentCell(JSON.stringify(STORED), previous)).toEqual(STORED)
