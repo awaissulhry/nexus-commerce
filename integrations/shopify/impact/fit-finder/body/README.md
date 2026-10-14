@@ -19,6 +19,11 @@ source traceable.
    bust/waist/hips circumference targets. Every shape gets the same treatment:
    - **Skin**: a light smoothing pass over the body (not hands, feet or head), a soft shallow navel, a feathered
      smoothing of the chest (no crease where it stops).
+   - **Chest**: smoothing alone left MakeHuman's pec edges and the crease under them, which looked like a dented chest.
+     So the chest is faired: the area becomes the smoothest surface (bi-Laplacian, cotangent weights) that meets the
+     body round it in place and slope. Men: neck to 13 cm under the nipples, armpit to armpit; the pecs' outward form
+     comes back on top, blurred over real distance (one implicit heat step), so they stay soft with no edge or crease.
+     Women: 5.5 cm round each breast tip, so the breasts are round, not pointed. Each morph is faired on its own.
    - **Face**: the eye sockets and the inside of the mouth are cut out and closed. Then eyes, nose and mouth (brow to
      under the lower lip, temple to temple) give way to one smooth surface: a thin-plate spline fitted, on a cylinder
      round the head, to a band of 4 edge rings round that area, so it meets cheeks, brow and chin with their own slope.

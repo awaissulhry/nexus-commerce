@@ -1,7 +1,7 @@
 # Stage 1 of the mannequin build, run in Blender headless (see README.md here). MakeHuman 1.1 CC0 assets:
 # sex base + muscle tone + shape targets -> store-mannequin treatment (smooth face keeping skull, jaw and chin; simple
-# ears; smoothed chest and crotch; fingers closed; arms lowered) -> measurement heights and baked ambient occlusion -> numpy files for
-# pack-body.mjs.
+# ears; smoothed crotch; the chest faired into one smooth surface; fingers closed; arms lowered) -> measurement heights
+# and baked ambient occlusion -> numpy files for pack-body.mjs.
 #   blender -b --factory-startup --python build_body.py -- <assets dir> <out dir> [arm angle, default 38]
 import bpy, sys, os, json, math, numpy as np
 argv = sys.argv[sys.argv.index('--') + 1:]
@@ -228,7 +228,58 @@ def feather(mask, passes):
     for _ in range(passes):
         mask = np.array([0.5 * mask[i] + 0.5 * mask[nbr_idx[i]].mean() if len(nbr_idx[i]) else mask[i] for i in range(len(mask))])
     return mask
-chest_mask = feather(np.clip(breast_w * 4, 0, 1), 12) * 0.95
+chest_mask = feather(np.clip(breast_w * 3, 0, 1), 30)
+TRI = np.array([[f[0], f[1], f[2]] for f in F] + [[f[0], f[2], f[3]] for f in F if len(f) == 4])
+has_nbr = np.array([len(n) > 0 for n in nbr_idx])
+def chest_region(P_ref):
+    # The male chest: between the armpits, from the neck to 13 cm under the nipples (a rounded box), front only, arms and
+    # head left out.
+    nl, nr = joint(P_ref, 'breast.L____tail'), joint(P_ref, 'breast.R____tail')
+    c = (nl + nr) / 2; hx = abs(nl[0] - nr[0]) / 2
+    top, bot = joint(P_ref, 'neck01____head')[1] + 0.1, c[1] - 1.3
+    e = np.abs((P_ref[:, 0] - c[0]) / (2 * hx)) ** 3 + np.abs((P_ref[:, 1] - (top + bot) / 2) / ((top - bot) / 2)) ** 3
+    return (e < 1) & (P_ref[:, 2] > joint(P_ref, 'spine03____head')[2]) & (arm_only < 0.25) & (head_w < 0.01) & has_nbr
+def breast_tips(P_ref):
+    # The female breast tips: 5.5 cm round each nipple, front only.
+    d = np.min([np.linalg.norm(P_ref - joint(P_ref, f'breast.{s}____tail'), axis=1) for s in 'LR'], 0)
+    return (d < 0.55) & (P_ref[:, 2] > joint(P_ref, 'spine03____head')[2]) & has_nbr
+def fair_op(R, P):
+    # Bi-Laplacian fairing with cotangent weights (so small dense patches like the nipples do not become spikes): the
+    # points in R become the smoothest surface that meets the fixed points round them in place and slope. Returns the
+    # region, the fixed points, M (region = M @ fixed points) and the region's cotangent matrix and areas (for blur()).
+    p0, p1, p2 = P[TRI[:, 0]], P[TRI[:, 1]], P[TRI[:, 2]]
+    cot = lambda u, v: (u * v).sum(1) / np.maximum(np.linalg.norm(np.cross(u, v), axis=1), 1e-12)
+    mass = np.zeros(len(P)); np.add.at(mass, TRI.ravel(), np.repeat(np.linalg.norm(np.cross(p1 - p0, p2 - p0), axis=1) / 6, 3))
+    C = {}
+    for ii, jj, w in ((TRI[:, 1], TRI[:, 2], cot(p1 - p0, p2 - p0)), (TRI[:, 0], TRI[:, 2], cot(p0 - p1, p2 - p1)),
+                      (TRI[:, 0], TRI[:, 1], cot(p0 - p2, p1 - p2))):
+        for i, j, x in zip(ii.tolist(), jj.tolist(), (w / 2).tolist()):
+            for u, v, y in ((i, j, x), (j, i, x), (i, i, -x), (j, j, -x)):
+                d = C.setdefault(u, {}); d[v] = d.get(v, 0) + y
+    idx = np.where(R)[0]; pos = {int(v): k for k, v in enumerate(idx)}
+    A, CR, ext = np.zeros((len(idx), len(idx))), np.zeros((len(idx), len(idx))), {}
+    for r, i in enumerate(idx):
+        row = {}
+        for j, a in C[int(i)].items():
+            if j in pos: CR[r, pos[j]] = a
+            for k, b in C[j].items(): row[k] = row.get(k, 0) + a * b / mass[j]
+        for k, val in row.items():
+            if k in pos: A[r, pos[k]] += val
+            else: ext.setdefault(k, []).append((r, val))
+    fixed = np.array(sorted(ext)); Ex = np.zeros((len(idx), len(fixed)))
+    for c, k in enumerate(fixed):
+        for r, val in ext[k]: Ex[r, c] += val
+    return idx, fixed, -np.linalg.solve(A, Ex), CR, mass[idx]
+def chest_fill(P, idx, fixed, M, blur=None):
+    # The region becomes the fair surface. With blur (a matrix), the chest's outward form above that surface (along its
+    # normal) comes back blurred: the pecs stay, their edges and the creases and valleys round them go.
+    Pf = P.copy(); Pf[idx] = M @ P[fixed]
+    if blur is None: return Pf
+    fn = np.cross(Pf[TRI[:, 1]] - Pf[TRI[:, 0]], Pf[TRI[:, 2]] - Pf[TRI[:, 0]]); vn = np.zeros_like(P)
+    for c in range(3): np.add.at(vn, TRI[:, c], fn)
+    vn = vn[idx] / np.maximum(np.linalg.norm(vn[idx], axis=1, keepdims=True), 1e-12)
+    Pf[idx] += blur @ (np.maximum(((P[idx] - Pf[idx]) * vn).sum(1), 0)[:, None] * vn)
+    return Pf
 hands_feet = np.clip(bone_weight(subtree('wrist.L') + subtree('wrist.R') + subtree('foot.L') + subtree('foot.R')) * 2, 0, 1)
 def mannequin(P, P_ref):
     # A mannequin's skin is smoother than a person's: a light pass over the body (not hands, feet or head), then the face,
@@ -345,6 +396,12 @@ for sex in ('male', 'female'):
     shapes = {'base': P0}
     for k, name in MORPHS.items(): shapes[k] = P0 + read_target(name.format(s=sex), N)
     smooth_shapes = {k: mannequin(P, P0) for k, P in shapes.items()}
+    # The chest becomes one smooth surface: MakeHuman's pec edges and the crease under them read as a dented chest on the
+    # web body. Men keep their pecs' outward form, softly; women's breast tips are rounded. Every shape gets the same
+    # treatment, so the morphs keep their own chest change.
+    idx, fixed, M, CR, mR = fair_op(chest_region(P0) if sex == 'male' else breast_tips(P0), smooth_shapes['base'])
+    blur = np.linalg.inv(np.diag(mR) - 0.08 * CR) * mR if sex == 'male' else None   # one implicit heat step: a blur in real distance
+    smooth_shapes = {k: chest_fill(P, idx, fixed, M, blur) for k, P in smooth_shapes.items()}
     # The arm angle: ARM_DEG, or less when the hands would come closer than HAND_GAP to the thighs or hips.
     arm_deg = ARM_DEG
     while arm_deg > 20 and arm_depth(pose(smooth_shapes['base'], arm_deg)) > -HAND_GAP: arm_deg -= 0.5
