@@ -242,6 +242,50 @@ async function landingOf(familyId: string, ctx: ToolContext) {
 const refusalOf = (c: VerbChange, reason: string): VerbRefusal => ({ rowId: c.rowId, sku: c.sku, coordinateKey: c.coordinateKey, kind: 'guard', reason })
 
 /**
+ * PURE — a money value typed once for many markets (a set price, a sale price, an exact business price or prices per
+ * unit) is one number in ONE currency: €30 is not £30 (#623's rule for the Matrix's Set price, held here by the tool until
+ * the Matrix verb takes a currency on main). With `currency`, a target in a market that sells in another is refused with
+ * the Matrix's sentence (`This market sells in GBP`); without it, targets in more than one currency refuse the request.
+ */
+export function moneyCurrencyGate(
+  coordinates: ReadonlyArray<{ key: string; currency: string }>,
+  targets: ReadonlyArray<{ coordinateKey: string }>,
+  currency: string | null,
+  what: string,
+): { error: string } | { refuse: (coordinateKey: string) => string | null } {
+  const of = (key: string) => coordinates.find((c) => c.key === key)?.currency ?? null
+  const sold = [...new Set(targets.map((t) => of(t.coordinateKey)).filter((c): c is string => !!c))]
+  if (!currency && sold.length > 1) {
+    return { error: `${what} is one number in one currency, and these markets sell in ${sold.join(', ')}: name currency (for example ${sold[0]}); the markets that sell in another are then left out.` }
+  }
+  return { refuse: (key) => { const sells = of(key); return currency && sells && sells !== currency ? PREVIEW_WORDS.marketCurrency(sells) : null } }
+}
+
+const currencyArg = (args: Record<string, unknown>) => (typeof args.currency === 'string' ? args.currency.toUpperCase() : null)
+
+/** set-price: the gate, read on the family's Matrix read — the error, or the check each change of the door's preview takes. */
+async function setPriceGate(args: Record<string, unknown>, ctx: ToolContext): Promise<{ error: string } | { vet: Vet }> {
+  const family = await familyRoot(String(args.productId))
+  if (!family) return { vet: async (_f, preview) => ({ preview, also: [] }) }
+  const { getMatrixRead } = await matrixRead()
+  const read = await getMatrixRead({ productId: family.id, accountId: null, canEditPrice: ctx.can(F.productsPriceEdit) })
+  const gate = moneyCurrencyGate(read.coordinates, args.targets as MatrixVerbTarget[], currencyArg(args), 'A price')
+  if ('error' in gate) return { error: `${family.sku}: ${gate.error}` }
+  return {
+    vet: async (_family, preview) => {
+      const changes: VerbChange[] = []
+      const refusals = [...preview.refusals]
+      for (const change of preview.changes) {
+        const why = gate.refuse(change.coordinateKey)
+        if (why) refusals.push({ ...refusalOf(change, why), kind: 'currency' })
+        else changes.push(change)
+      }
+      return { preview: { ...preview, changes, refusals }, also: [] }
+    },
+  }
+}
+
+/**
  * PURE — what a fulfilment change does, in words, for one change of the door's preview (its `note` says what is sent to
  * Amazon, where, and which markets are skipped). After Amazon accepts: FBM — Nexus manages the merchant quantity (the
  * stock it follows, or the pin), on every open EU market at once; FBA — Nexus sends no quantity, Amazon's FBA units are
@@ -345,7 +389,8 @@ const priceInput = z.object({
   price: z.coerce.number().positive().max(1_000_000).optional().describe('set-price: the price, in the market\'s currency'),
   percent: z.coerce.number().min(-90).max(500).optional().describe('adjust-prices: the change in percent, e.g. -10 or 5'),
   amount: z.coerce.number().min(-1_000_000).max(1_000_000).optional().describe('adjust-prices instead of percent: the change in the market\'s currency, e.g. -2.5 or 3'),
-  currency: z.string().trim().length(3).optional().describe('adjust-prices with amount: the currency of the amount, e.g. EUR; a market selling in another currency is refused'),
+  currency: z.string().trim().length(3).optional().describe('the currency of a money value, e.g. EUR: adjust-prices with amount (required), set-price, a sale price, '
+    + 'or business with an exact price or prices per unit — a market selling in another currency is refused; needed when the targets sell in more than one currency'),
   fromCoordinateKey: z.string().trim().min(1).max(160).optional().describe('copy-prices: the coordinate key to copy from (same currency)'),
   sale: z.object({
     price: z.coerce.number().positive().max(1_000_000).nullable().describe('the sale price; null ends the sale'),
@@ -386,11 +431,16 @@ async function planSale(args: Record<string, unknown>, ctx: ToolContext) {
   if (!ctx.can(F.productsPriceEdit)) return { error: 'A sale price needs products.price.edit.' }
   const { getMatrixRead } = await matrixRead()
   const read = await getMatrixRead({ productId: family.id, canEditPrice: true })
+  // A sale price is money in one currency too (ending a sale is not).
+  const gate = to.value == null ? null : moneyCurrencyGate(read.coordinates, args.targets as MatrixVerbTarget[], currencyArg(args), 'A sale price')
+  if (gate && 'error' in gate) return { error: gate.error }
   const cells: Array<{ rowId: string; sku: string; coordinateKey: string; from: SaleValue; to: SaleValue; version: number; listingId: string }> = []
   const refused: Array<{ sku: string; coordinateKey: string; reason: string }> = []
   for (const t of args.targets as MatrixVerbTarget[]) {
     const row = read.rows.find((r) => r.id === t.rowId)
     const cell = row?.cells[t.coordinateKey]
+    const otherCurrency = gate && 'refuse' in gate ? gate.refuse(t.coordinateKey) : null
+    if (otherCurrency) { refused.push({ sku: row?.sku ?? t.rowId, coordinateKey: t.coordinateKey, reason: otherCurrency }); continue }
     if (!row || !cell?.sale || !cell.listingId) { refused.push({ sku: row?.sku ?? t.rowId, coordinateKey: t.coordinateKey, reason: 'This market has no sale price here' }); continue }
     if (cell.writable.salePrice === false) { refused.push({ sku: row.sku, coordinateKey: t.coordinateKey, reason: cell.writeBlockedReason.salePrice ?? 'This sale price cannot be changed here' }); continue }
     const from = { value: cell.sale.value, start: cell.sale.start, end: cell.sale.end }
@@ -471,6 +521,11 @@ async function planBusinessTargets(args: Record<string, unknown>, ctx: ToolConte
   if (!ctx.can(F.productsPriceEdit)) return { error: 'A business price needs products.price.edit.' }
   const [{ getMatrixRead }, { locate }] = await Promise.all([matrixRead(), matrixWrite()])
   const read = await getMatrixRead({ productId: family.id, accountId: null, canEditPrice: true })
+  // An exact business price or prices per unit are money in one currency; a percent is not.
+  const input = args.businessPrice as BusinessInput
+  const money = input.price !== undefined || input.tiers?.type === 'fixed'
+  const gate = money ? moneyCurrencyGate(read.coordinates, args.targets as MatrixVerbTarget[], currencyArg(args), 'An exact business price or a price per unit') : null
+  if (gate && 'error' in gate) return { error: gate.error }
   const items: BusinessPlanItem[] = []
   const held: BusinessPlanRefusal[] = []
   const seen = new Set<string>()
@@ -482,6 +537,8 @@ async function planBusinessTargets(args: Record<string, unknown>, ctx: ToolConte
     const refuse = (reason: string) => held.push({ listingId: hit?.cells.listingId ?? '', sku, marketplace: null, rowId: t.rowId, coordinateKey: t.coordinateKey, reason })
     if (!hit?.cells.listingId) { refuse(PREVIEW_WORDS.notOnMarket); continue }
     if (hit.cells.business === undefined) { refuse(noBusinessHere(hit)); continue }
+    const otherCurrency = gate && 'refuse' in gate ? gate.refuse(t.coordinateKey) : null
+    if (otherCurrency) { refuse(otherCurrency); continue }
     // Held by the Matrix (the parent, no B2B for this listing, no price permission): the same sentence as the cell.
     if (hit.cells.writable.businessPrice !== true || !hit.cells.business) { refuse(hit.cells.writeBlockedReason.businessPrice ?? noBusinessHere(hit)); continue }
     items.push({ listingId: hit.cells.listingId, rowId: t.rowId, coordinateKey: t.coordinateKey, input: args.businessPrice as BusinessInput })
@@ -506,7 +563,10 @@ function businessPreview(plan: { family: Family; lines: BusinessTargetLine[]; un
   return {
     action: 'set-listing-price',
     family: { productId: plan.family.id, sku: plan.family.sku },
-    summary: businessCardSummary(head, plan.lines, (l) => `${l.sku} ${(l as BusinessTargetLine).coordinateKey}`),
+    // A long opening line (many markets, refusals) gives way to a short one before any warning would be cut.
+    summary: businessCardSummary(head, plan.lines, (l) => `${l.sku} ${(l as BusinessTargetLine).coordinateKey}`,
+      `${plan.family.sku}: business price — ${plan.lines.length} change${plan.lines.length === 1 ? '' : 's'} on ${keys.length} Amazon market${keys.length === 1 ? '' : 's'}`
+        + `${plan.refused.length ? `; ${plan.refused.length} refused` : ''}.`),
     verb: 'business',
     // 2.3 — it stands on each listing's business setting as it is and as it gets, never the listing's version.
     basisOn: BASIS_ON_FIELDS,
@@ -631,12 +691,17 @@ const setListingPrice: AgentTool = {
     + 'normal price, outside the minimum or maximum price); only remove: true removes one, and a business price Amazon shows '
     + 'that Nexus never kept is never removed from here; a change on a paused, draft or Inactive listing is kept in Nexus '
     + 'until it can be sent, and a first one waits while Amazon\'s shopper price is not Nexus\'s. Targets are rows and '
-    + 'coordinate keys from listing-matrix. A formula-owned price is refused. The preview is the Matrix\'s own. Waits for a '
+    + 'coordinate keys from listing-matrix. A typed price (set-price, a sale price, an exact business price or prices per '
+    + 'unit) is one number in one currency: with currency, a market that sells in another is refused; targets in more than '
+    + 'one currency need it. A formula-owned price is refused. The preview is the Matrix\'s own. Waits for a '
     + 'person to approve it in Nexus; a target that changed since is refused, and it can be put back.',
   async handler(args, ctx) {
     if (args.action === 'business') return previewBusiness(args, ctx)
     if (args.action !== 'sale') {
-      const out = await previewVerbFor('set-listing-price', args, ctx, priceParams(args))
+      // Set price: one number in one currency (moneyCurrencyGate).
+      const gate = args.action === 'set-price' ? await setPriceGate(args, ctx) : null
+      if (gate && 'error' in gate) return { ok: false, error: `${gate.error} Nothing was queued.` }
+      const out = await previewVerbFor('set-listing-price', args, ctx, priceParams(args), {}, gate && 'vet' in gate ? gate.vet : undefined)
       if (!out.ok) return out
       const preview = out.preview as { family: { productId: string }; changes: VerbChange[] }
       return { ...out, preview: { ...preview, planFacts: await priceVerbFacts(preview.family.productId, preview.changes, ctx) } }
@@ -661,7 +726,9 @@ const setListingPrice: AgentTool = {
       if (family && factHash(approved!.planFacts) !== factHash(await priceVerbFacts(family.id, approved!.changes as VerbChange[], ctx))) {
         return { ok: false, error: `${family.sku}: a sale on these listings changed since this price was approved. Nothing changed; ask Claude again.` }
       }
-      return runVerbFor(args, ctx, priceParams(args))
+      const gate = args.action === 'set-price' ? await setPriceGate(args, ctx) : null
+      if (gate && 'error' in gate) return { ok: false, error: `${gate.error} Nothing changed.` }
+      return runVerbFor(args, ctx, priceParams(args), gate && 'vet' in gate ? gate.vet : undefined)
     }
     const approved = ctx.approvedPreview as SalePreview | undefined
     if (approved?.verb !== 'sale' || !Array.isArray(approved.changes)) return { ok: false, error: 'A sale is set only after a person approved its preview. Nothing changed.' }

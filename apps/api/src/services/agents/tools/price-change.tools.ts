@@ -262,7 +262,8 @@ function businessBulkPreview(plan: { lines: BusinessLine[]; unchanged: number })
     businessPrices: true,
     // The one sentence the approval card shows: what it does, then what a person must know (counts and the first few).
     summary: businessCardSummary(`New business prices (Amazon Business) on ${plural(plan.lines.length, 'listing')}${plan.unchanged ? ` (${plan.unchanged} already so)` : ''}: `
-      + `${plan.lines.length - removed} set or changed, ${removed} removed.`, plan.lines, (l) => `${l.sku} ${l.marketplace}`),
+      + `${plan.lines.length - removed} set or changed, ${removed} removed.`, plan.lines, (l) => `${l.sku} ${l.marketplace}`,
+      `Business prices on ${plural(plan.lines.length, 'listing')}: ${plan.lines.length - removed} set, ${removed} removed.`),
     changes: plan.lines.slice(0, PREVIEW_LINES).map((l) => ({
       sku: l.sku, channel: 'AMAZON', market: l.marketplace, label: 'B2B price', currency: l.currency,
       fromLabel: businessFromWords(l), toLabel: businessSettingWords(l.to, l.currency),

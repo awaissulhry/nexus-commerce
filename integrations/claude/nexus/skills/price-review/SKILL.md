@@ -31,7 +31,7 @@ Report: prices out of bounds, listings below cost (when visible), missing prices
 |---|---|
 | One product's master price | `set-price` |
 | The same move on many / each its own price | `bulk-price-change` / `set-master-prices` (see `bulk-reprice`) |
-| A listing's price in one market (set, by %, copy from another market in the same currency, a sale) | `set-listing-price` with `targets` from `listing-matrix` (a formula-owned price is refused) |
+| A listing's price in one market (set, by %, copy from another market in the same currency, a sale) | `set-listing-price` with `targets` from `listing-matrix` (a formula-owned price is refused; a typed price is in one `currency` — name it, and markets that sell in another are refused; targets in more than one currency need it) |
 | A price change later, cancel one, or settle an UNKNOWN one after checking | `schedule-price-change` (`action`: create, cancel, resolve) |
 | A promotion on a channel, market or product type | `set-promotion` (create or end; nothing reaches a channel while the pricing schedule is off) |
 | An eBay markdown or volume pricing | `set-ebay-price-promotion` (it cannot be ended from Nexus: it is ended in eBay Seller Hub) |

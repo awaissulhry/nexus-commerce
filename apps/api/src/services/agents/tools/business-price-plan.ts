@@ -161,7 +161,7 @@ export type BusinessNoteKind = 'amazonOwn' | 'firstOffer' | 'kept' | 'amazonRule
 export interface BusinessNote { kind: BusinessNoteKind; text: string }
 const NOTE_ORDER: readonly BusinessNoteKind[] = ['amazonOwn', 'firstOffer', 'kept', 'amazonRule', 'removal']
 /** The card's words for many listings with the same note. */
-const NOTE_GROUP: Readonly<Record<BusinessNoteKind, string>> = {
+export const BUSINESS_NOTE_GROUP: Readonly<Record<BusinessNoteKind, string>> = {
   amazonOwn: 'Replaces Amazon\'s own business price (an undo cannot bring it back)',
   firstOffer: 'Waits until Amazon\'s shopper price is Nexus\'s',
   kept: 'Kept in Nexus, not sent yet (paused, draft or Inactive)',
@@ -169,7 +169,7 @@ const NOTE_GROUP: Readonly<Record<BusinessNoteKind, string>> = {
   removal: 'Removed at Amazon too',
 }
 /** The approval card shows at most this much of a summary (approval-queue.service.ts clips it). */
-const CARD_SUMMARY_MAX = 400
+export const CARD_SUMMARY_MAX = 400
 
 /** The `from` label of a line: Amazon's own business price where Nexus keeps none and Amazon shows one. */
 export function businessFromWords(line: Pick<BusinessLine, 'from' | 'amazonOwn' | 'currency'>): string {
@@ -179,19 +179,23 @@ export function businessFromWords(line: Pick<BusinessLine, 'from' | 'amazonOwn' 
 /**
  * PURE — the card's summary of a business price change: `head`, then what a person must know before approving, most
  * serious first. One listing: each note in full. Several: per kind, how many and the first listings (`where` names one).
- * It fits the card: fewer names, then none, then the short words — never a note left out to fit.
+ * It fits the card: fewer names, then none, then the short words, then the short opening line (`shortHead`) — never a
+ * note left out or cut to fit (the five kinds' short words with a short opening line always fit).
  */
-export function businessCardSummary(head: string, lines: readonly BusinessLine[], where: (line: BusinessLine) => string): string {
-  if (!lines.some((l) => l.notes.length)) return head
-  const grouped = (names: number) => `${head} ${NOTE_ORDER.flatMap((kind) => {
+export function businessCardSummary(head: string, lines: readonly BusinessLine[], where: (line: BusinessLine) => string, shortHead: string = head): string {
+  if (!lines.some((l) => l.notes.length)) return head.length <= CARD_SUMMARY_MAX ? head : shortHead
+  const grouped = (opening: string, names: number) => `${opening} ${NOTE_ORDER.flatMap((kind) => {
     const hit = lines.filter((l) => l.notes.some((n) => n.kind === kind))
     if (!hit.length) return []
     const named = names ? ` (${hit.slice(0, names).map(where).join(', ')}${hit.length > names ? ` and ${hit.length - names} more` : ''})` : ''
-    return [`${NOTE_GROUP[kind]}: ${hit.length}${named}`]
+    return [`${BUSINESS_NOTE_GROUP[kind]}: ${hit.length}${named}`]
   }).join('. ')}.`
-  const candidates = lines.length === 1
-    ? [(() => { const words = NOTE_ORDER.flatMap((kind) => lines[0]!.notes.filter((n) => n.kind === kind).map((n) => n.text)).join('; '); return `${head} ${words.charAt(0).toUpperCase()}${words.slice(1)}.` })(), grouped(0)]
-    : [grouped(3), grouped(2), grouped(1), grouped(0)]
+  const full = (opening: string) => {
+    const words = NOTE_ORDER.flatMap((kind) => lines[0]!.notes.filter((n) => n.kind === kind).map((n) => n.text)).join('; ')
+    return `${opening} ${words.charAt(0).toUpperCase()}${words.slice(1)}.`
+  }
+  const versions = (opening: string) => (lines.length === 1 ? [full(opening), grouped(opening, 0)] : [3, 2, 1, 0].map((names) => grouped(opening, names)))
+  const candidates = [...versions(head), ...versions(shortHead)]
   return candidates.find((c) => c.length <= CARD_SUMMARY_MAX) ?? candidates.at(-1)!
 }
 

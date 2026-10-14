@@ -23,7 +23,11 @@
  *   the approval card                    (#621 review) it shows only the summary and the from → to labels, so they say
  *                                        it all: Amazon's own price it replaces (and that an undo cannot bring it back),
  *                                        a first offer that waits, kept in Nexus, Amazon's warnings — counts for many.
- *   trust                                a business price change in bulk is held at ask whatever the tool is set to.
+ *   trust                                a business price change in bulk is held at ask whatever the tool is set to —
+ *                                        and the Approvals page says so (one request, and a plan's step), never "Confirm in
+ *                                        Claude" for what confirm-change refuses (#621 re-review).
+ *   card length                          every warning fits the card's 400 characters, a long opening line (many markets,
+ *                                        refusals) giving way to a short one, for every combination of warnings.
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -65,7 +69,13 @@ import { OFFER_AUDIENCE_FIELD_KEY } from '../../categories/seller-offer-audience
 import { PARENT_PRICE_REASON } from '../../pim/matrix-cells.js'
 import { BUSINESS_PRICE_SYNC_TYPE } from '../../pim/business-price-write.service.js'
 import { BUSINESS_NEEDS_A_PERSON, BULK_LISTING_PRICE_LIMITS, bulkListingPriceWithinLimits } from './price-change.tools.js'
-import { AMAZON_OWN_UNDO, REMOVAL_REACHES_AMAZON, resolveBusinessSetting } from './business-price-plan.js'
+import { moneyCurrencyGate } from './listing-stock.tools.js'
+import {
+  AMAZON_OWN_UNDO, BUSINESS_NOTE_GROUP, CARD_SUMMARY_MAX, REMOVAL_REACHES_AMAZON, businessCardSummary, resolveBusinessSetting,
+  type BusinessLine, type BusinessNote, type BusinessNoteKind,
+} from './business-price-plan.js'
+import { queueDetail } from '../../agent-fleet/approval-queue.service.js'
+import type { ToolPrincipal } from '../call-tool.js'
 import { resolveRequest } from '../../agent-fleet/approval-target.js'
 import { claudeRuleForChange } from '../claude-trust.service.js'
 
@@ -134,16 +144,18 @@ beforeAll(async () => {
   const membership = await c.workspaceMembership.create({ data: { workspaceId: LEGACY_WORKSPACE_ID, userId: people.approver, status: 'active' } })
   await c.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
   await inside(async () => {
-    for (const [channel, code] of [['AMAZON', 'IT'], ['AMAZON', 'DE'], ['EBAY', 'IT']]) {
-      await c.marketplace.create({ data: { channel, code, name: `${channel} ${code}`, currency: 'EUR', region: 'EU', language: 'it', languages: ['it'] } as never })
+    for (const [channel, code, currency] of [['AMAZON', 'IT', 'EUR'], ['AMAZON', 'DE', 'EUR'], ['EBAY', 'IT', 'EUR'], ['AMAZON', 'UK', 'GBP'], ['AMAZON', 'SE', 'SEK']]) {
+      await c.marketplace.create({ data: { channel, code, name: `${channel} ${code}`, currency, region: 'EU', language: 'it', languages: ['it'] } as never })
     }
     accounts.amazon = (await c.channelConnection.create({ data: { channelType: 'AMAZON', accountLabel: 'Test Amazon', isActive: true, isPrimary: true, externalAccountId: 'TEST-B2B-AMAZON' } })).id
     accounts.ebay = (await c.channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 'Test eBay', isActive: true, isPrimary: true, externalAccountId: 'TEST-B2B-EBAY' } })).id
     // Amazon lists Amazon Business for this account on IT (the seller-scoped schema answer); DE was never checked.
-    await c.sellerReferenceLabel.create({ data: {
-      channel: 'AMAZON', connectionId: accounts.amazon, marketplace: 'IT', productType: 'OUTERWEAR', fieldKey: OFFER_AUDIENCE_FIELD_KEY,
-      labels: { B2B: 'Amazon Business (B2B)', ALL: 'Vendita su Amazon' },
-    } as never })
+    for (const marketplace of ['IT', 'UK']) {
+      await c.sellerReferenceLabel.create({ data: {
+        channel: 'AMAZON', connectionId: accounts.amazon, marketplace, productType: 'OUTERWEAR', fieldKey: OFFER_AUDIENCE_FIELD_KEY,
+        labels: { B2B: 'Amazon Business (B2B)', ALL: 'Vendita su Amazon' },
+      } as never })
+    }
   })
 }, 180_000)
 afterAll(async () => { await database?.close() }, 60_000)
@@ -436,5 +448,129 @@ describe('#621 review — business prices in bulk are approved by a person in Ne
     } finally {
       await inside(() => db().agentTool.deleteMany({ where: { name: 'bulk-listing-price-change' } }))
     }
+  })
+})
+
+describe('#621 re-review — the Approvals page never offers "Confirm in Claude" for a bulk business price change', () => {
+  it('one request and a plan step: held at Ask me with the reason, at confirm and at watch; normal prices keep the rule\'s words', async () => {
+    const f = await family('QUEUE')
+    const viewer = { kind: 'user', userId: people.approver, label: 'Test Approver', permissions: { isOwner: true, permissions: new Set() }, workspace: business, via: 'app' } as unknown as ToolPrincipal
+    const created = await inside(async () => {
+      const run = await db().agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'awaiting_approval', via: 'claude', userId: people.asker } })
+      const request = (toolName: string, args: Row, preview: Row) => db().agentApproval.create({ data: {
+        agentRunId: run.id, toolName, status: 'pending', riskTier: 'high', expiresAt: new Date(Date.now() + 86_400_000), args, preview,
+      } })
+      const business = await request('bulk-listing-price-change', { businessPrices: [{ listingId: f.it, percent: 5 }] }, { action: 'bulk-listing-price-change', businessPrices: true, summary: 'New business prices on 1 listing.' })
+      const normal = await request('bulk-listing-price-change', { listingIds: [f.it], mode: 'percent', value: 1 }, { action: 'bulk-listing-price-change', summary: 'New prices on 1 listing.', totals: { listings: 1, maxChangePct: 1 } })
+      const plan = await request('submit-change-plan', { title: 'B2B', steps: [] }, { action: 'submit-change-plan', kinds: [{ tool: 'bulk-listing-price-change', title: 'Change many listing prices', count: 1, outbound: true }], totals: { steps: 1 } })
+      await db().agentPlanStep.create({ data: { approvalId: plan.id, position: 1, toolName: 'bulk-listing-price-change', args: { businessPrices: [{ listingId: f.it, percent: 5 }] } } })
+      return { business: business.id, normal: normal.id, plan: plan.id }
+    })
+    try {
+      for (const level of ['confirm', 'watch'] as const) {
+        await inside(() => db().agentTool.upsert({ where: { workspace_name: { workspaceId: LEGACY_WORKSPACE_ID, name: 'bulk-listing-price-change' } },
+          create: { name: 'bulk-listing-price-change', riskTier: 'high', requiresApproval: true, claudeTrust: level }, update: { claudeTrust: level } }))
+        const one = (await inside(() => queueDetail(created.business, viewer)))!
+        expect(one.automation.level, level).toBe('ask')
+        expect(one.automation.whyWaits).toBe(`It changes business prices (Amazon Business), which a person approves in Nexus, so you approve it here (your rule for Change many listing prices is ${level === 'confirm' ? 'Confirm in Claude' : 'Watch'})`)
+        expect(one.automation.whyWaits).not.toContain('can confirm it')
+        const plan = (await inside(() => queueDetail(created.plan, viewer)))!
+        expect(plan.automation.level).toBe('ask')
+        expect(plan.automation.whyWaits).toBe('A plan runs by itself, or is confirmed in Claude, only when every step may: Change many listing prices — it changes business prices (Amazon Business), which a person approves in Nexus, so you approve it here')
+      }
+      const normal = (await inside(() => queueDetail(created.normal, viewer)))!
+      expect(normal.automation.level).toBe('watch')
+    } finally {
+      await inside(() => db().agentTool.deleteMany({ where: { name: 'bulk-listing-price-change' } }))
+    }
+  })
+})
+
+describe('#621 re-review — every warning fits the card, whatever the combination', () => {
+  const KINDS: BusinessNoteKind[] = ['amazonOwn', 'firstOffer', 'kept', 'amazonRule', 'removal']
+  const TEXT: Record<BusinessNoteKind, string> = {
+    amazonOwn: 'replaces Amazon\'s own business price EUR 1185.00 (set outside Nexus; an undo cannot bring it back)',
+    firstOffer: 'not sent while Amazon\'s shopper price EUR 1210.00 is not Nexus\'s EUR 1200.00',
+    kept: 'kept in Nexus, not sent yet: this listing is a draft that has not been published',
+    amazonRule: 'The sale price EUR 1150.00 is lower than the business price EUR 1190.00; Amazon does not say which one business buyers then see',
+    removal: 'removes the business price at Amazon too',
+  }
+  const line = (i: number, kinds: BusinessNoteKind[]): BusinessLine => ({
+    listingId: `l${i}`, productId: `p${i}`, sku: `TEST-SKU-B2B-A-LONG-FAMILY-NAME-${i}-XXL`, marketplace: 'IT', rowId: `r${i}`, coordinateKey: `AMAZON:M${i}`,
+    version: 1, from: null, to: null, currency: 'EUR', normalPrice: 1200, priceNow: null, priceAfter: 1140, warnings: [], amazonOwn: null,
+    notes: kinds.map((kind): BusinessNote => ({ kind, text: TEXT[kind] })),
+  })
+  // The reviewer's case: a family on 9 Amazon markets with 2 refused — a 170-character opening line.
+  const sku = 'TEST-SKU-B2B-A-LONG-FAMILY-NAME'
+  const keys = Array.from({ length: 9 }, (_, i) => `AMAZON:M${i}`)
+  const head = (n: number) => `${sku}: business price (Amazon Business) — ${n} changes on ${keys.slice(0, 6).join(', ')} and 3 more; 2 refused (see refused).`
+  const short = (n: number) => `${sku}: business price — ${n} changes on 9 Amazon markets; 2 refused.`
+
+  it('every subset of the five kinds, on one listing and on nine: within 400 characters, each kind said whole', () => {
+    expect(head(9).length).toBeGreaterThanOrEqual(150)
+    for (let mask = 1; mask < 32; mask++) {
+      const kinds = KINDS.filter((_, i) => mask & (1 << i))
+      for (const count of [1, 9]) {
+        const lines = Array.from({ length: count }, (_, i) => line(i, kinds))
+        const summary = businessCardSummary(head(count), lines, (l) => `${l.sku} ${l.coordinateKey}`, short(count))
+        expect(summary.length, `${kinds.join('+')} × ${count}: ${summary}`).toBeLessThanOrEqual(CARD_SUMMARY_MAX)
+        for (const kind of kinds) {
+          const said = summary.includes(BUSINESS_NOTE_GROUP[kind]) || summary.toLowerCase().includes(TEXT[kind].toLowerCase())
+          expect(said, `${kinds.join('+')} × ${count}: ${kind} missing in "${summary}"`).toBe(true)
+        }
+      }
+    }
+  })
+})
+
+describe('#621 — a typed price is one number in one currency (€30 is not £30)', { timeout: 120_000 }, () => {
+  const price = (row: Row) => (row.price == null ? null : Number(row.price))
+  const listingRow = (id: string) => inside(() => db().channelListing.findUniqueOrThrow({ where: { id }, select: { price: true, priceOverride: true, salePrice: true } })) as Promise<Row>
+
+  it('the gate (pure): with currency, other markets refused with the Matrix\'s sentence; without, several currencies refuse', () => {
+    const coords = [{ key: 'AMAZON:IT', currency: 'EUR' }, { key: 'AMAZON:UK', currency: 'GBP' }, { key: 'AMAZON:SE', currency: 'SEK' }]
+    const targets = coords.map((c) => ({ coordinateKey: c.key }))
+    const named = moneyCurrencyGate(coords, targets, 'EUR', 'A price') as { refuse: (k: string) => string | null }
+    expect(['AMAZON:IT', 'AMAZON:UK', 'AMAZON:SE'].map(named.refuse)).toEqual([null, 'This market sells in GBP', 'This market sells in SEK'])
+    expect(moneyCurrencyGate(coords, targets, null, 'A price')).toEqual({ error: 'A price is one number in one currency, and these markets sell in EUR, GBP, SEK: name currency (for example EUR); the markets that sell in another are then left out.' })
+    expect('refuse' in moneyCurrencyGate(coords, [{ coordinateKey: 'AMAZON:IT' }], null, 'A price')).toBe(true)
+  })
+
+  it('set-price 30 EUR on IT, UK and SE: only IT changes, UK and SE refused with the reason; without currency it is refused whole', async () => {
+    const f = await family('CUR')
+    const uk = (await inside(() => f.list(f.child, 'AMAZON', 'UK'))).id as string
+    const se = (await inside(() => f.list(f.child, 'AMAZON', 'SE'))).id as string
+    const targets = ['AMAZON:IT', 'AMAZON:UK', 'AMAZON:SE'].map((coordinateKey) => ({ rowId: f.child, coordinateKey }))
+    expect(await dryRun('set-listing-price', { productId: f.child, action: 'set-price', price: 30, targets }))
+      .toMatchObject({ ok: false, error: expect.stringContaining('A price is one number in one currency, and these markets sell in EUR, GBP, SEK: name currency') })
+    const args = { productId: f.child, action: 'set-price', price: 30, currency: 'EUR', targets }
+    const dry = await dryRun('set-listing-price', args)
+    expect(dry.ok, dry.error).toBe(true)
+    expect(dry.preview.changes.map((c: Row) => c.coordinateKey)).toEqual(['AMAZON:IT'])
+    expect(dry.preview.refused).toEqual(expect.arrayContaining([
+      expect.objectContaining({ coordinateKey: 'AMAZON:UK', kind: 'currency', reason: 'This market sells in GBP' }),
+      expect.objectContaining({ coordinateKey: 'AMAZON:SE', kind: 'currency', reason: 'This market sells in SEK' }),
+    ]))
+    const { approvalId } = await askApprove('set-listing-price', args)
+    expect((await commit(approvalId)).status).toBe('executed')
+    expect([price(await listingRow(f.it)), price(await listingRow(uk)), price(await listingRow(se))]).toEqual([30, 200, 200])
+    // One market, no currency: as before.
+    expect((await dryRun('set-listing-price', { productId: f.child, action: 'set-price', price: 31, targets: targets.slice(0, 1) })).ok).toBe(true)
+  })
+
+  it('a sale price and an exact business price follow the same rule; a percent needs no currency', async () => {
+    const f = await family('CUR-B')
+    await inside(() => f.list(f.child, 'AMAZON', 'UK'))
+    const targets = ['AMAZON:IT', 'AMAZON:UK'].map((coordinateKey) => ({ rowId: f.child, coordinateKey }))
+    expect(await dryRun('set-listing-price', { productId: f.child, action: 'sale', sale: { price: 20 }, targets }))
+      .toMatchObject({ ok: false, error: expect.stringContaining('A sale price is one number in one currency') })
+    const sale = await dryRun('set-listing-price', { productId: f.child, action: 'sale', sale: { price: 20 }, currency: 'EUR', targets })
+    expect(sale.preview).toMatchObject({ changes: [{ coordinateKey: 'AMAZON:IT' }], refused: [{ coordinateKey: 'AMAZON:UK', reason: 'This market sells in GBP' }] })
+    expect(await dryRun('set-listing-price', { productId: f.child, action: 'business', businessPrice: { rule: 'FIXED', price: 187 }, targets }))
+      .toMatchObject({ ok: false, error: expect.stringContaining('An exact business price or a price per unit is one number in one currency') })
+    const exact = await dryRun('set-listing-price', { productId: f.child, action: 'business', businessPrice: { rule: 'FIXED', price: 187 }, currency: 'EUR', targets })
+    expect(exact.preview).toMatchObject({ changes: [{ coordinateKey: 'AMAZON:IT' }], refused: [{ coordinateKey: 'AMAZON:UK', reason: 'This market sells in GBP' }] })
+    const percent = await dryRun('set-listing-price', { productId: f.child, action: 'business', businessPrice: { percent: 5 }, targets })
+    expect(percent.preview.changes.map((c: Row) => c.coordinateKey)).toEqual(['AMAZON:IT', 'AMAZON:UK'])
   })
 })
