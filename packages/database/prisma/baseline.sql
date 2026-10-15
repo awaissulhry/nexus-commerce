@@ -10892,6 +10892,7 @@ CREATE TABLE "ShopifyColourProduct" (
     "remoteStatus" TEXT,
     "checkedAt" TIMESTAMP(3),
     "linkVerifiedAt" TIMESTAMP(3),
+    "swatchGroup" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -10912,6 +10913,7 @@ CREATE TABLE "ShopifyColourSync" (
     "leaseUntil" TIMESTAMP(3),
     "lastError" TEXT,
     "adoptOnly" BOOLEAN NOT NULL DEFAULT false,
+    "sizeMap" JSONB,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ShopifyColourSync_pkey" PRIMARY KEY ("id")
