@@ -13,7 +13,7 @@
  */
 import { changeLines } from '../google-ads/change-draft.js'
 import { COUPON_VALUE_TYPES, PROMOTION_DESTINATIONS } from '../../gateway/google-merchant-calls.js'
-import { RUN_TIME, RUN_TIME_MINUS_MINUTE } from './client.js'
+import { byRun, byRunMinute, isRunMarker, resolveRunTime } from './client.js'
 import { NOT_NEXUS_DATA_SOURCE, shownValue, type MerchantDraftResult } from './change-draft.js'
 import type { MerchantDataSource, MerchantPromotion } from './live.js'
 
@@ -61,7 +61,8 @@ export interface PromotionFacts {
   nexusMade: Set<string>
   /** The promotion with this id in the data source's country and language, live (null: none). */
   live: MerchantPromotion | null
-  recorded: { state: PromotionState | null; at: string } | null
+  /** Nexus's last record of it; `outcome` unknown: Merchant Center did not answer that change. */
+  recorded: { state: PromotionState | null; at: string; outcome?: 'done' | 'unknown' } | null
   now: Date
 }
 
@@ -143,12 +144,14 @@ export function promotionDraft(req: PromotionRequest, facts: PromotionFacts): Me
   if (req.action === 'end') {
     if (!recorded) return { refusal: `Nexus has no promotion ${req.promotionId} (${country}, ${language}) in data source ${source.dataSourceId} to end. Nothing was changed.` }
     if (Date.parse(recorded.endsAt) <= now) return { refusal: `Promotion ${req.promotionId} already ended at ${recorded.endsAt}. Nothing was sent.` }
-    const notStarted = Date.parse(recorded.startsAt) > now
+    // Settled when it runs, from the recorded times only: it ends then (or at its own end, if earlier); one that has not
+    // started by then starts a minute before (its period must start before it ends). The plan does not move if it
+    // starts between the preview and the run.
     state = {
       ...recorded,
-      ...(notStarted ? { startsAt: RUN_TIME_MINUS_MINUTE } : {}),
-      endsAt: RUN_TIME,
-      ...(recorded.displayEndsAt && Date.parse(recorded.displayEndsAt) > now ? { displayEndsAt: RUN_TIME, ...(recorded.displayStartsAt && Date.parse(recorded.displayStartsAt) > now ? { displayStartsAt: RUN_TIME_MINUS_MINUTE } : {}) } : {}),
+      startsAt: byRunMinute(recorded.startsAt),
+      endsAt: byRun(recorded.endsAt),
+      ...(recorded.displayStartsAt && recorded.displayEndsAt ? { displayStartsAt: byRunMinute(recorded.displayStartsAt), displayEndsAt: byRun(recorded.displayEndsAt) } : {}),
     }
   } else {
     const next: Record<string, unknown> = { ...(recorded ?? {}) }
@@ -164,13 +167,16 @@ export function promotionDraft(req: PromotionRequest, facts: PromotionFacts): Me
     const problem = promotionStateProblem(next as Partial<PromotionState>)
     if (problem) return { refusal: `Not sent: ${problem}. Nothing was changed.` }
     state = Object.fromEntries(Object.keys(next).sort().map((k) => [k, next[k]])) as unknown as PromotionState
-    if (recorded && canonical(state) === canonical(recorded)) return { refusal: `Nothing to change: promotion ${req.promotionId} already is exactly this (Nexus's record). Nothing was sent.` }
+    if (recorded && facts.recorded?.outcome !== 'unknown' && canonical(state) === canonical(recorded)) return { refusal: `Nothing to change: promotion ${req.promotionId} already is exactly this (Nexus's record). Nothing was sent.` }
     if (Date.parse(state.endsAt) <= now) return { refusal: `The promotion would end at ${state.endsAt}, which has passed: use action end to stop it now. Nothing was changed.` }
   }
-  const names = PROMOTION_FIELDS.filter((f) => canonical(recorded?.[f] ?? null) !== canonical((state as unknown as Record<string, unknown>)[f] ?? null))
+  // The lines a person reads: as the change would settle if it ran now (a start already passed stays as it is).
+  const settled = resolveRunTime(state, facts.now) as unknown as Record<string, unknown>
+  const names = PROMOTION_FIELDS.filter((f) => canonical(recorded?.[f] ?? null) !== canonical(settled[f] ?? null))
   const shown = (f: Field, s: PromotionState | null) => {
     const v = s ? (s as unknown as Record<string, unknown>)[f] : undefined
-    return v === RUN_TIME ? 'when this change runs' : v === RUN_TIME_MINUS_MINUTE ? 'a minute before this change runs' : shownValue(v)
+    if (!isRunMarker(v)) return shownValue(v)
+    return f === 'startsAt' || f === 'displayStartsAt' ? 'a minute before this change runs (it had not started)' : 'when this change runs'
   }
   const lines = changeLines(names.map((f) => [f, recorded ? shown(f, recorded) : '(none)', shown(f, state)]))
   const record = { action: req.action, merchantCenterId: facts.merchantCenterId, dataSourceId: source.dataSourceId, key, promotionId: req.promotionId, targetCountry: country, contentLanguage: language }
@@ -189,13 +195,16 @@ export function promotionDraft(req: PromotionRequest, facts: PromotionFacts): Me
       : `${recorded ? 'Change' : 'Make'} promotion ${req.promotionId} for ${country} (${language}): "${state.title}", ${offerWords(state)} on ${scope}.`,
     changes: lines.changes,
     totals: { fieldsChanged: names.length, ...(lines.more ? { moreLines: lines.more } : {}) },
-    warnings: req.action === 'end'
+    warnings: [
+      ...(facts.recorded?.outcome === 'unknown' ? [`Nexus's last change of this promotion (${facts.recorded.at.slice(0, 16).replace('T', ' ')} UTC) has an unknown outcome — Merchant Center did not answer — so it may differ from Nexus's record; this change replaces it whole.`] : []),
+      ...(req.action === 'end'
       ? ['Google stops showing it once it takes the new end; the shop\'s own discount (in Shopify) is not changed here.']
       : [
         'Google reviews every promotion before it shows (it can take up to a day; google-merchant-live view promotions shows its status).',
         `The shop must give the same offer at checkout${state.code ? ` with the code ${state.code}` : ''}: Nexus does not make the Shopify discount here, and Google disapproves a promotion the shop does not honour.`,
         'Promotions show only when the Merchant Center account takes part in the Promotions program.',
-      ],
+      ]),
+    ],
     spendsMoney: spends,
     call: {
       method: 'POST',
@@ -205,7 +214,7 @@ export function promotionDraft(req: PromotionRequest, facts: PromotionFacts): Me
         promotion: { promotionId: req.promotionId, contentLanguage: language, targetCountry: country, redemptionChannel: ['ONLINE'], attributes: promotionAttributes(state) },
       },
     },
-    stands: { source: { id: source.dataSourceId, type: source.type, country, language }, recorded, live: facts.live ? { dataSourceId: facts.live.dataSourceId } : null },
+    stands: { source: { id: source.dataSourceId, type: source.type, country, language }, recorded, outcome: facts.recorded?.outcome ?? null, live: facts.live ? { dataSourceId: facts.live.dataSourceId } : null },
     before: { ...record, state: recorded },
     after: { ...record, state },
   }

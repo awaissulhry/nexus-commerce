@@ -30,7 +30,7 @@
 import { createHash } from 'node:crypto'
 import { withSpan } from '../../utils/otel-setup.js'
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
-import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked } from './account.js'
+import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade } from './account.js'
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { writeLedgerRow } from './ledger.js'
@@ -231,6 +231,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // source, data sources, promotions), each body judged to exactly what they send (googleMerchantCallBodyOf); the Merchant
   // API has no check, so each is a write under the publish mode. Reads and changes alike go only to a Merchant Center
   // account this business chose through this connection (googleMerchantAccountLinked): an id never crosses businesses.
+  // Every change but a create writes only into a data source Nexus made for this business (its own change records,
+  // googleMerchantDataSourceNexusMade): never the primary feed of Shopify's Google channel. A read whose path seems to
+  // name an account the gateway cannot read is refused (fail closed).
   let googleBody: string | null = null
   const merchant = req.channel === 'GOOGLE' ? googleMerchantCall(req.method, req.url) : null
   if (merchant) {
@@ -242,11 +245,17 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     if (!req.connectionId || !(await googleMerchantAccountLinked(req.connectionId, merchant.account))) {
       return refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: Merchant Center account ${merchant.account} is not the Merchant Center account this business chose through this Google connection.`, 403)
     }
+    if (merchant.kind !== 'dataSources:create' && (!judged.dataSource || !(await googleMerchantDataSourceNexusMade(merchant.account, judged.dataSource)))) {
+      return refuse('refused', 'GOOGLE_DATA_SOURCE_NOT_NEXUS', `Nothing was sent to Google: Merchant Center data source ${judged.dataSource ?? '(none named)'} is not one Nexus made for this business, and Nexus changes no other (never the primary feed of Shopify's Google channel).`, 403)
+    }
     googleBody = judged.body
   } else if (req.channel === 'GOOGLE') {
     const merchantRead = googleCallKind(req.method, req.url) === 'read' ? merchantReadAccount(req.url) : null
-    if (merchantRead && (!req.connectionId || !(await googleMerchantAccountLinked(req.connectionId, merchantRead)))) {
-      return refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: Merchant Center account ${merchantRead} is not the Merchant Center account this business chose through this Google connection.`, 403)
+    if (merchantRead === 'unreadable') {
+      return refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: this Merchant Center read names an account Nexus cannot read from its path (${safePath(req.url)}), so it cannot check it is the one this business chose.`, 403)
+    }
+    if (merchantRead && (!req.connectionId || !(await googleMerchantAccountLinked(req.connectionId, merchantRead.account)))) {
+      return refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: Merchant Center account ${merchantRead.account} is not the Merchant Center account this business chose through this Google connection.`, 403)
     }
   }
   if (req.channel === 'GOOGLE' && !merchant) {

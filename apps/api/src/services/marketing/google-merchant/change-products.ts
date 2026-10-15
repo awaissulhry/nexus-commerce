@@ -38,8 +38,11 @@ export interface ProductFacts {
   dataSources: MerchantDataSource[]
   /** The data sources Nexus made (records.ts). */
   nexusMade: Set<string>
-  /** What Nexus last wrote for this product in this data source (null state: deleted), or null with no record. */
-  recorded: { state: ProductAttributes | null; at: string } | null
+  /**
+   * What Nexus last wrote for this product in this data source (null state: deleted), or null with no record. `outcome`
+   * unknown: Merchant Center did not answer that change, so the input may or may not hold `state`.
+   */
+  recorded: { state: ProductAttributes | null; at: string; outcome?: 'done' | 'unknown' } | null
   /** The processed product, live: whether Merchant Center has it, its primary data source and its attribute values. */
   live: { exists: boolean; dataSourceId: string | null; values: ProductAttributes }
   /** The Nexus product whose SKU is the offer id (null: none), with the values Nexus holds for it. */
@@ -53,6 +56,40 @@ const canonical = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typ
 const same = (a: unknown, b: unknown) => canonical(a ?? null) === canonical(b ?? null)
 const sorted = (o: ProductAttributes): ProductAttributes => Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]]))
 const asList = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : [])
+
+/**
+ * The attributes Shopping and Performance Max product groups and inventory filters split by (listing dimensions: custom
+ * label 0–4, brand, product type, Google product category, condition, item group id): a change of one can move the
+ * product into a group or filter that bids.
+ */
+export const GROUP_DIMENSIONS = ['customLabel0', 'customLabel1', 'customLabel2', 'customLabel3', 'customLabel4', 'brand', 'productTypes', 'googleProductCategory', 'condition', 'itemGroupId']
+
+/** The money line of a change of a listing dimension, or none. */
+export function groupMoved(names: string[], what: string): string[] {
+  const dims = names.filter((n) => GROUP_DIMENSIONS.includes(n))
+  return dims.length
+    ? [`SPENDS MONEY: ${what} changes ${dims.join(', ')} — what Shopping and Performance Max product groups and inventory filters split by — so it can move the product into a product group or inventory filter that bids, where enabled campaigns pay for its clicks.`]
+    : []
+}
+
+/** The attributes that decide whether a product may show in ads at all. */
+const SERVING = ['pause', 'excludedDestinations', 'includedDestinations', 'shoppingAdsExcludedCountries'] as const
+
+/**
+ * When this source wins the rule (it comes before the primary feed), the product's ads serving after the change, from
+ * what it shows LIVE: an attribute this source sets is its value; one it takes out falls back to the primary feed's value,
+ * which Nexus cannot see apart from the live value (so it counts as absent: the cautious reading); any other stays live.
+ */
+export function servingAfter(live: ProductAttributes, recorded: ProductAttributes | null, state: ProductAttributes | null): ProductAttributes {
+  const out: ProductAttributes = {}
+  for (const name of SERVING) {
+    if (state && name in state) out[name] = state[name]
+    else if (recorded && name in recorded) continue
+    else if (name in live) out[name] = live[name]
+  }
+  return out
+}
+const servingOf = (o: ProductAttributes): ProductAttributes => Object.fromEntries(SERVING.filter((n) => n in o).map((n) => [n, o[n]]))
 
 /** The ways a change of this source's input lets the product show in paid ads again (each a sentence). */
 export function adsReopened(before: ProductAttributes | null, after: ProductAttributes | null, what: string): string[] {
@@ -81,6 +118,14 @@ export function plainText(html: string): string {
  * Whether the values of supplemental data source `sourceId` reach the product, and win over its primary feed, as the live
  * default rule of the product's primary data source says. One warning, or none when the product is unknown.
  */
+/** Whether this supplemental source wins the default rule of the product's primary data source (it comes before `self`). */
+export function sourceWins(source: MerchantDataSource, primary: MerchantDataSource | null): boolean {
+  if (!primary || !source.linkedFrom.includes(primary.dataSourceId)) return false
+  const self = primary.defaultRule.indexOf('self')
+  const mine = primary.defaultRule.indexOf(source.dataSourceId)
+  return mine >= 0 && (self < 0 || mine < self)
+}
+
 export function reachWarning(source: MerchantDataSource, primary: MerchantDataSource | null, exists: boolean): string {
   if (!source.linkedFrom.length) {
     return `Data source ${source.dataSourceId} is not linked to any primary data source yet: these values reach no product until a person links it `
@@ -120,21 +165,40 @@ export function productDraft(req: ProductRequest, facts: ProductFacts): Merchant
     source: { id: source.dataSourceId, type: source.type, input: source.input, linkedFrom: [...source.linkedFrom].sort() },
     rule: primary?.defaultRule ?? null,
     recorded,
+    outcome: facts.recorded?.outcome ?? null,
     live: { exists: facts.live.exists, dataSourceId: facts.live.dataSourceId },
+  }
+  const unknown = facts.recorded?.outcome === 'unknown'
+  const unknownWarning = unknown
+    ? `Nexus's last change of this input (${facts.recorded!.at.slice(0, 16).replace('T', ' ')} UTC) has an unknown outcome — Merchant Center did not answer — so the input `
+      + 'Merchant Center holds may differ from Nexus\'s record (the Merchant API cannot read an input back: productInputs has no get). This change replaces it whole.'
+    : null
+  const wins = facts.live.exists && sourceWins(source, primary)
+  /** What can make the product show in paid ads: from Nexus's record, and — when this source wins the rule — from the live product. */
+  const money = (state: ProductAttributes | null, what: string): string[] => {
+    const lines = adsReopened(recorded, state, what)
+    if (wins) lines.push(...adsReopened(servingOf(facts.live.values), servingAfter(facts.live.values, recorded, state), what))
+    return [...new Set(lines)]
   }
   const query = { dataSource: `accounts/${facts.merchantCenterId}/dataSources/${source.dataSourceId}` }
 
   if (req.action === 'delete') {
-    if (!recorded) {
+    if (!recorded && !unknown) {
       return { refusal: `Nexus has no record of a product input it wrote for ${req.offerId} (${req.contentLanguage}, ${req.feedLabel}) in ${where}, so there is nothing of Nexus's to delete. Nothing was changed.` }
     }
-    const lines = changeLines(Object.keys(recorded).sort().map((name) => [name, shownValue(recorded[name]), '(no longer from this source)']))
+    const held = recorded ?? {}
+    const lines = changeLines(Object.keys(held).sort().map((name) => [name, shownValue(held[name]), '(no longer from this source)']))
+    const what = `Deleting this input of ${where}`
     return {
       summary: `Delete the product input of ${req.offerId} (${req.contentLanguage}, ${req.feedLabel}) from ${where}: the product keeps what its primary feed sends.`,
       changes: lines.changes,
-      totals: { attributes: Object.keys(recorded).length, ...(lines.more ? { moreLines: lines.more } : {}) },
-      warnings: ['It can take a few minutes before Merchant Center shows the change (google-merchant-live view product).'],
-      spendsMoney: adsReopened(recorded, null, `Deleting this input of ${where}`),
+      totals: { attributes: Object.keys(held).length, ...(lines.more ? { moreLines: lines.more } : {}) },
+      warnings: [
+        ...(unknownWarning ? [unknownWarning] : []),
+        ...(!recorded ? ['Nexus does not know what the input holds, so undo cannot write it back.'] : []),
+        'It can take a few minutes before Merchant Center shows the change (google-merchant-live view product).',
+      ],
+      spendsMoney: [...money(null, what), ...groupMoved(Object.keys(held), what)],
       call: { method: 'DELETE', path: `products/v1/accounts/${facts.merchantCenterId}/productInputs/${encodedKey(key)}`, query },
       stands,
       before: { ...record, state: recorded },
@@ -165,12 +229,19 @@ export function productDraft(req: ProductRequest, facts: ProductFacts): Merchant
   for (const name of clear) delete next[name]
   const state = sorted(next)
   if (!Object.keys(state).length) return { refusal: 'A product input holds at least one attribute: to take everything out, use action delete. Nothing was changed.' }
-  if (recorded && same(state, sorted(recorded))) {
+  if (recorded && !unknown && same(state, sorted(recorded))) {
     return { refusal: `Nothing to change: ${where} already holds exactly these values for ${req.offerId} (Nexus's record of ${facts.recorded?.at.slice(0, 16).replace('T', ' ')} UTC). Nothing was sent.` }
   }
   const names = [...new Set([...Object.keys(recorded ?? {}), ...Object.keys(state)])].sort().filter((n) => !same(recorded?.[n], state[n]))
   const lines = changeLines(names.map((name) => [name, shownValue(name in facts.live.values ? facts.live.values[name] : recorded?.[name]), name in state ? shownValue(state[name]) : '(no longer from this source)']))
   const warnings = [reachWarning(source, primary, facts.live.exists)]
+  if (unknownWarning) {
+    const sent = Object.keys(recorded ?? {})
+    const shows = sent.filter((n) => same(facts.live.values[n], recorded![n])).length
+    warnings.push(facts.live.exists && sent.length
+      ? `${unknownWarning} The live product shows ${shows} of the ${sent.length} values it sent (a value can also come from the primary feed, so this does not prove it was made).`
+      : unknownWarning)
+  }
   if (facts.nexus) {
     const differs = (['title', 'description', 'brand', 'gtins'] as const).filter((f) => f in given && !(req.fromNexus ?? []).includes(f) && facts.nexus!.values[f] != null && !same(facts.nexus!.values[f], given[f]))
     if (differs.length) {
@@ -179,15 +250,16 @@ export function productDraft(req: ProductRequest, facts: ProductFacts): Merchant
   } else {
     warnings.push(`No Nexus product has the SKU ${req.offerId}: Nexus cannot check these values against its own product data.`)
   }
-  if (names.some((n) => /^customLabel\d$/.test(n))) warnings.push('Custom labels decide which product group (and bid) of a Shopping or Performance Max campaign the product falls in.')
   if (names.includes('pause') && state.pause) warnings.push(`The product is paused for ${state.pause === 'ALL' ? 'every Google surface (ads and free listings)' : 'ads'} once Merchant Center takes this input.`)
   warnings.push('It can take a few minutes before Merchant Center shows the change (google-merchant-live view product).')
   return {
-    summary: `${recorded ? 'Change' : 'Add'} ${names.length} attribute${names.length === 1 ? '' : 's'} of ${req.offerId} (${req.contentLanguage}, ${req.feedLabel}) in ${where}.`,
+    summary: names.length
+      ? `${recorded ? 'Change' : 'Add'} ${names.length} attribute${names.length === 1 ? '' : 's'} of ${req.offerId} (${req.contentLanguage}, ${req.feedLabel}) in ${where}.`
+      : `Send the input of ${req.offerId} (${req.contentLanguage}, ${req.feedLabel}) in ${where} again (${Object.keys(state).length} attribute${Object.keys(state).length === 1 ? '' : 's'}): its last change was not confirmed.`,
     changes: lines.changes,
     totals: { attributesChanged: names.length, attributesInInput: Object.keys(state).length, ...(lines.more ? { moreLines: lines.more } : {}) },
     warnings,
-    spendsMoney: adsReopened(recorded, state, `This input of ${where}`),
+    spendsMoney: [...money(state, `This input of ${where}`), ...groupMoved(names, `This input of ${where}`)],
     call: {
       method: 'POST',
       path: `products/v1/accounts/${facts.merchantCenterId}/productInputs:insert`,
@@ -209,6 +281,7 @@ export function productUndoArgs(before: Record<string, unknown>, after: Record<s
   if (typeof base.dataSourceId !== 'string' || typeof base.offerId !== 'string') return { refusal: 'This change does not record which product input it wrote.' }
   const was = before.state && typeof before.state === 'object' ? before.state as ProductAttributes : null
   const now = after.state && typeof after.state === 'object' ? after.state as ProductAttributes : null
+  if (!was && !now) return { refusal: 'Nexus did not know what this product input held before the delete (its earlier change had an unknown outcome), so it cannot write it back.' }
   if (!was) return { args: { ...base, action: 'delete' } }
   const clear = Object.keys(now ?? {}).filter((k) => !(k in was))
   return { args: { ...base, action: 'set', attributes: was, ...(clear.length ? { clear } : {}) } }

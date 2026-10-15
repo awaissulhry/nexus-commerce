@@ -1,9 +1,14 @@
 /**
  * Google Ads programme 2, G12 (2026-10-16) — the Merchant Center changes Nexus sends (Merchant API v1,
- * merchantapi.googleapis.com). The gateway lets through exactly these methods and paths, for ONE Merchant Center account
- * the business chose in Nexus (its GoogleAccountLink product MERCHANT, through this Google connection), with exactly the
- * bodies the Merchant tools send (google-ads-merchant.tools.ts) — nothing broader. Every other Merchant change stays
- * refused (GOOGLE_READ_ONLY).
+ * merchantapi.googleapis.com). What the gateway checks (gateway.ts), and nothing it does not:
+ *   - the method, path and query are exactly one of those below, and the body exactly what the Merchant tools send
+ *     (google-ads-merchant.tools.ts); every other Merchant change is refused (GOOGLE_READ_ONLY);
+ *   - the Merchant Center account in the path is the one the business chose in Nexus, through this Google connection
+ *     (its GoogleAccountLink, product MERCHANT; GOOGLE_ACCOUNT_NOT_CHOSEN);
+ *   - every change but a create names a data source Nexus made for this business: its create is in Nexus's own change
+ *     records, read in the business the call runs in (account.ts googleMerchantDataSourceNexusMade;
+ *     GOOGLE_DATA_SOURCE_NOT_NEXUS). So the primary feed of Shopify's Google channel, or any data source Nexus did not
+ *     make, is never written, renamed or deleted, whatever a caller sends.
  *
  * Checked 2026-10-16 with curl of developers.google.com/merchant/api/reference/rest/<sub-API>/<resource>/<method> and the
  * discovery documents (https://merchantapi.googleapis.com/$discovery/rest?version=products_v1 | datasources_v1 |
@@ -17,8 +22,6 @@
  *   PATCH  /datasources/v1/accounts/{a}/dataSources/{d}?updateMask=displayName                      body DataSource
  *          ("Fields specified in the update mask without a value … will be deleted"; "*" is not supported)
  *   DELETE /datasources/v1/accounts/{a}/dataSources/{d}                                             no body
- *   POST   /datasources/v1/accounts/{a}/dataSources/{d}:fetch                                       body {} (FetchDataSourceRequest
- *          has no field; "only works on data sources with a file input set")
  *   POST   /promotions/v1/accounts/{a}/promotions:insert                                            body InsertPromotionRequest
  *          { promotion, dataSource } (an insert of an existing promotion replaces it: "overwrites the entire promotions resource")
  * No Merchant API write has validate_only (none of the request messages above has the field): Google cannot check a
@@ -27,18 +30,23 @@
  * feed belongs to Shopify's Google channel; a product in a primary needs a price, availability and link that must match
  * the shop, and an insert into another primary MOVES the product out of its feed), productInputs.patch (Nexus sends a
  * whole input, from its own record), local and regional inventory writes (Nexus has no store a Merchant Center store
- * code names), regions, account settings, and every other sub-API.
+ * code names), dataSources.fetch ("only works on data sources with a file input set": Nexus makes API data sources only,
+ * and never acts on one it did not make), regions, account settings, and every other sub-API.
  *
  * Reads: a GET (or a reports `…:search` POST) that names a Merchant Center account in its path is let through only for an
  * account this business chose through this connection (merchantReadAccount): a Merchant Center id never crosses
- * businesses. The account list (`/accounts/v1/accounts`, discovery) names none and stays as it is.
+ * businesses. A path that names an account Nexus cannot read from it (encoded, malformed) is refused: fail closed. The
+ * account list (`/accounts/v1/accounts`, discovery) names none and stays as it is.
  */
 
 const HOST = 'merchantapi.googleapis.com'
 
+/** The tool whose change records say which data sources Nexus made (after.created, after.dataSourceId, after.merchantCenterId). */
+export const MERCHANT_DATA_SOURCES_TOOL = 'set-google-merchant-data-sources'
+
 export type MerchantCallKind =
   | 'productInputs:insert' | 'productInputs:delete'
-  | 'dataSources:create' | 'dataSources:patch' | 'dataSources:delete' | 'dataSources:fetch'
+  | 'dataSources:create' | 'dataSources:patch' | 'dataSources:delete'
   | 'promotions:insert'
 
 export interface MerchantCall {
@@ -61,7 +69,6 @@ const PATHS: Array<{ method: string; kind: MerchantCallKind; re: RegExp; query: 
   { method: 'POST', kind: 'dataSources:create', re: new RegExp(`^/datasources/v1/accounts/${ACCOUNT}/dataSources$`), query: [] },
   { method: 'PATCH', kind: 'dataSources:patch', re: new RegExp(`^/datasources/v1/accounts/${ACCOUNT}/dataSources/${DS}$`), query: ['updateMask'] },
   { method: 'DELETE', kind: 'dataSources:delete', re: new RegExp(`^/datasources/v1/accounts/${ACCOUNT}/dataSources/${DS}$`), query: [] },
-  { method: 'POST', kind: 'dataSources:fetch', re: new RegExp(`^/datasources/v1/accounts/${ACCOUNT}/dataSources/${DS}:fetch$`), query: [] },
   { method: 'POST', kind: 'promotions:insert', re: new RegExp(`^/promotions/v1/accounts/${ACCOUNT}/promotions:insert$`), query: [] },
 ]
 
@@ -105,13 +112,23 @@ export function googleMerchantCall(method: string, url: string): MerchantCall | 
   return null
 }
 
-/** The Merchant Center account a Merchant READ names in its path (`/{api}/v1/accounts/{id}/…`), or null when it names none. */
-export function merchantReadAccount(url: string): string | null {
+/**
+ * The Merchant Center account a Merchant READ names in its path (`/{api}/v1/accounts/{id}/…`): `{ account }`; null when
+ * it names none (the account list, `/accounts/v1/accounts`); 'unreadable' when it seems to name one Nexus cannot read
+ * from the path (an encoded path, an `accounts` segment followed by something that is not an id) — the gateway refuses
+ * those: fail closed.
+ */
+export function merchantReadAccount(url: string): { account: string } | 'unreadable' | null {
   let parsed: URL
   try { parsed = new URL(url) } catch { return null }
   if (parsed.hostname !== HOST) return null
-  const match = /^\/[a-z]+\/v1(?:beta|alpha)?\/accounts\/(\d{1,20})(?:[/:]|$)/.exec(parsed.pathname)
-  return match ? match[1] : null
+  const path = parsed.pathname
+  const match = /^\/[a-z]+\/v1(?:beta|alpha)?\/accounts\/(\d{1,20})(?:[/:]|$)/.exec(path)
+  if (match) return { account: match[1] }
+  if (path.includes('%')) return 'unreadable'
+  // After /{api}/{version}: an `accounts` segment with something after it names an account.
+  const segments = path.split('/').slice(3)
+  return segments.some((seg, i) => seg.startsWith('accounts') && (seg !== 'accounts' || i < segments.length - 1)) ? 'unreadable' : null
 }
 
 // ── product inputs ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -349,12 +366,12 @@ function snakeKey(v: unknown): boolean {
 
 /**
  * A Merchant change's body as the gateway judges it, or why it is refused. The parsed body is what is sent (null: the
- * method takes no body). A body the methods without one carry is refused; a field in snake_case is refused (Google reads
+ * method takes no body); `dataSource` is the data source it writes into (null only for a create). A body the methods without one carry is refused; a field in snake_case is refused (Google reads
  * both spellings, so a second spelling could slip past this check).
  */
-export function googleMerchantCallBodyOf(call: MerchantCall, body: unknown): { body: string | null } | { refusal: string } {
+export function googleMerchantCallBodyOf(call: MerchantCall, body: unknown): { body: string | null; dataSource: string | null } | { refusal: string } {
   if (call.kind === 'productInputs:delete' || call.kind === 'dataSources:delete') {
-    return body === null || body === undefined || body === '' ? { body: null } : { refusal: 'a delete carries no body' }
+    return body === null || body === undefined || body === '' ? { body: null, dataSource: call.dataSource ?? null } : { refusal: 'a delete carries no body' }
   }
   if (typeof body !== 'string') return { refusal: 'the body is not JSON text' }
   let parsed: unknown
@@ -366,8 +383,10 @@ export function googleMerchantCallBodyOf(call: MerchantCall, body: unknown): { b
     case 'productInputs:insert': problem = productInputProblem(parsed); break
     case 'dataSources:create': problem = createProblem(parsed); break
     case 'dataSources:patch': problem = patchProblem(call, parsed); break
-    case 'dataSources:fetch': problem = Object.keys(parsed).length ? 'a fetch carries an empty body' : null; break
     case 'promotions:insert': problem = promotionProblem(call, parsed); break
   }
-  return problem ? { refusal: problem } : { body: JSON.stringify(parsed) }
+  if (problem) return { refusal: problem }
+  // The data source the change writes into: in the path or query, or (a promotion) in the body.
+  const fromBody = call.kind === 'promotions:insert' ? dataSourceRef(call.account).exec(String(parsed.dataSource))?.[1] ?? null : null
+  return { body: JSON.stringify(parsed), dataSource: call.dataSource ?? fromBody }
 }

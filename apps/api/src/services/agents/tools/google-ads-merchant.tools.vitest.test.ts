@@ -55,7 +55,7 @@ vi.mock('../../marketing/google-ads/read-detail.service.js', () => ({
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { GOOGLE_ADS_MERCHANT_TOOLS } from './google-ads-merchant.tools.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
-import { MerchantError, RUN_TIME } from '../../marketing/google-merchant/client.js'
+import { MerchantError, byRun } from '../../marketing/google-merchant/client.js'
 import type { ToolContext } from '../tool-types.js'
 
 const tool = (name: string) => GOOGLE_ADS_MERCHANT_TOOLS.find((t) => t.name === name)!
@@ -93,6 +93,11 @@ describe('the Merchant tools keep the change contract', () => {
     }
     expect(tool('google-merchant-live')).toMatchObject({ readOnly: true, openWorld: true, requires: [F.listingsView] })
     expect(tool('set-google-merchant-promotions').requires).toContain(F.pricingEdit)
+    // Ending a pause or an ads exclusion, or moving a product between product groups, can make the ads spend more.
+    expect(tool('set-google-merchant-products').requires).toContain(F.adsCampaignsManage)
+    // The Merchant API cannot read an input back: undo restores what Nexus recorded.
+    expect(tool('set-google-merchant-products').reversibility).toBe('partial')
+    expect(tool('set-google-merchant-data-sources').input.safeParse({ action: 'fetch-now', dataSourceId: '81' }).success).toBe(false)
   })
 })
 
@@ -113,7 +118,8 @@ describe('set-google-merchant-products', () => {
     const out = await tool('set-google-merchant-products').handler(ask, asker)
     expect(out.ok).toBe(true)
     expect(out.preview).toMatchObject({
-      googleCheck: { checked: false }, calls: 1, spendsMoney: false, reach: { mode: 'live', accountId: 'g-1', merchantCenterId: M },
+      googleCheck: { checked: false }, calls: 1, spendsMoney: true, reach: { mode: 'live', accountId: 'g-1', merchantCenterId: M },
+      spendsMoneyBecause: [expect.stringMatching(/changes customLabel0 .* product group or inventory filter that bids/)],
       changes: { customLabel0: { from: 'old', to: 'top' } },
       warnings: expect.arrayContaining([expect.stringMatching(/comes before the primary feed: its values win/)]),
     })
@@ -146,14 +152,22 @@ describe('set-google-merchant-products', () => {
     expect(await undo.current(run.change!)).not.toEqual(run.change!.after)
   })
 
-  it('not sent when what it stands on moved since approval; a Google failure with no answer is not confirmed', async () => {
+  it('not sent when what it stands on moved since approval; no answer from Google: recorded as NOT CONFIRMED, and the next change says so', async () => {
     const out = await tool('set-google-merchant-products').handler(ask, asker)
-    h.inputs.set('71|it~IT~SKU-A', { state: { customLabel1: 'x' }, at: '2026-10-16T10:00:00.000Z' })
+    h.inputs.set('71|it~IT~SKU-A', { state: { customLabel1: 'x' }, at: '2026-10-16T10:00:00.000Z', outcome: 'done' })
     expect((await tool('set-google-merchant-products').execute!(ask, approved(out.preview))).error).toMatch(/changed since this was approved/)
     expect(h.send).not.toHaveBeenCalled()
     h.inputs.clear()
     h.send.mockRejectedValue(new MerchantError('Merchant Center did not answer …', 'merchant.productInputs.insert', 'unknown'))
-    expect((await tool('set-google-merchant-products').execute!(ask, approved(out.preview))).error).toMatch(/^Not confirmed:/)
+    const run = await tool('set-google-merchant-products').execute!(ask, approved(out.preview))
+    expect(run).toMatchObject({ ok: true, data: { outcome: 'unknown', summary: expect.stringMatching(/^NOT CONFIRMED/) } })
+    expect(run.change).toMatchObject({ before: { state: null }, after: { state: { customLabel0: 'top' }, outcome: 'unknown', merchantCenterId: M } })
+    // Its undo still puts back what was there before (none: a delete), which is right whether or not Google applied it.
+    expect(tool('set-google-merchant-products').undo!.request(run.change!)).toMatchObject({ args: { action: 'delete' } })
+    // The next change of this input (the same values again is allowed) says the input may differ.
+    h.inputs.set('71|it~IT~SKU-A', { state: { customLabel0: 'top' }, at: '2026-10-16T10:00:00.000Z', outcome: 'unknown' })
+    const next = await tool('set-google-merchant-products').handler(ask, asker)
+    expect(next.preview).toMatchObject({ summary: expect.stringMatching(/again/), warnings: expect.arrayContaining([expect.stringMatching(/unknown outcome/)]) })
   })
 
   it('never into the primary feed; price is not an attribute it takes; writes off: said, and not sent', async () => {
@@ -180,8 +194,8 @@ describe('set-google-merchant-data-sources', () => {
     expect(tool('set-google-merchant-data-sources').input.safeParse((request as { args: unknown }).args).success).toBe(true)
   })
 
-  it('a fetch cannot be undone; a data source Nexus did not make is never renamed', async () => {
-    expect(tool('set-google-merchant-data-sources').undo!.request({ before: { action: 'fetch-now' }, after: { action: 'fetch-now', dataSourceId: '81' } })).toEqual({ refusal: expect.stringMatching(/cannot be undone/) })
+  it('a delete cannot be undone; a data source Nexus did not make is never renamed', async () => {
+    expect(tool('set-google-merchant-data-sources').undo!.request({ before: { action: 'delete' }, after: { action: 'delete', dataSourceId: '74', deleted: true } })).toEqual({ refusal: expect.stringMatching(/cannot come back/) })
     expect((await tool('set-google-merchant-data-sources').handler({ action: 'rename', dataSourceId: '11', displayName: 'X' }, asker)).error).toMatch(/not one Nexus made/)
   })
 })
@@ -207,7 +221,7 @@ describe('set-google-merchant-promotions', () => {
     expect(ending.preview).toMatchObject({ spendsMoney: false, changes: { endsAt: { from: '2099-11-08T00:00:00Z', to: 'when this change runs' } } })
     h.send.mockClear()
     const ended = await tool('set-google-merchant-promotions').execute!(end, approved(ending.preview))
-    expect(h.send.mock.calls[0][1].body.promotion.attributes.promotionEffectiveTimePeriod.endTime).toBe(RUN_TIME)
+    expect(h.send.mock.calls[0][1].body.promotion.attributes.promotionEffectiveTimePeriod).toEqual({ startTime: byRun('2026-10-01T00:00:00Z').replace('@BY_RUN:', '@BY_RUN-1M:'), endTime: byRun('2099-11-08T00:00:00Z') })
     const endedAt = (ended.change!.after as { state: { endsAt: string } }).state.endsAt
     expect(endedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/)
     expect(Date.parse(endedAt)).toBeLessThanOrEqual(Date.now())

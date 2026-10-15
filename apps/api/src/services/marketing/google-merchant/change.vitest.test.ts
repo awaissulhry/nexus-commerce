@@ -2,13 +2,14 @@
  * Google Ads programme 2, G12 (2026-10-16) — the Merchant Center change builders (pure) and the live mappers: a product
  * input goes only into a supplemental data source Nexus made, as the whole input Nexus last wrote with the change; the
  * preview says from the live rule whether the value reaches the product and whether the next Shopify feed fetch overwrites
- * it; a pause or an ads exclusion that ends SPENDS MONEY; data sources are made, renamed, fetched and deleted (empty, Nexus's
- * own) only; a promotion changes the price buyers see and is ended at the moment the change runs. Every body is one the
+ * it; a pause or an ads exclusion that ends (from Nexus's record, and from the live product when this source wins the
+ * rule) and a change of what product groups split by SPEND MONEY; a change Merchant Center did not answer is said, and the
+ * next replaces it whole; data sources are made, renamed and deleted (empty, Nexus's own) only; a promotion changes the price buyers see and is ended at the moment the change runs. Every body is one the
  * gateway lets through.
  */
 import { describe, expect, it } from 'vitest'
 import { googleMerchantCall, googleMerchantCallBodyOf } from '../../gateway/google-merchant-calls.js'
-import { MERCHANT_API_BASE, RUN_TIME, RUN_TIME_MINUS_MINUTE, merchantFailureSentence, type MerchantCallSpec } from './client.js'
+import { MERCHANT_API_BASE, byRun, byRunMinute, merchantFailureSentence, resolveRunTime, type MerchantCallSpec } from './client.js'
 import { dataSourceDraft, type DataSourceFacts } from './change-data-sources.js'
 import { plainText, productDraft, productUndoArgs, type ProductFacts, type ProductRequest } from './change-products.js'
 import { promotionDraft, promotionUndoArgs, type PromotionFacts, type PromotionState } from './change-promotions.js'
@@ -46,14 +47,14 @@ describe('set-google-merchant-products (productDraft)', () => {
       method: 'POST', path: `products/v1/accounts/${M}/productInputs:insert`, query: { dataSource: `accounts/${M}/dataSources/71` },
       body: { offerId: 'SKU-A', contentLanguage: 'it', feedLabel: 'IT', productAttributes: { customLabel0: 'top' } },
     })
-    expect(judged(d.call)).toEqual({ body: JSON.stringify(d.call.body) })
+    expect(judged(d.call)).toEqual({ body: JSON.stringify(d.call.body), dataSource: '71' })
     expect(d.changes).toEqual({ customLabel0: { from: 'old', to: 'top' } })
-    expect(d.spendsMoney).toEqual([])
+    // A custom label is what product groups and inventory filters split by: it can move the product where it bids.
+    expect(d.spendsMoney).toEqual([expect.stringMatching(/^SPENDS MONEY: .* changes customLabel0 .* can move the product into a product group or inventory filter that bids/)])
     expect(d.before).toMatchObject({ key: 'it~IT~SKU-A', state: null })
     expect(d.after).toMatchObject({ key: 'it~IT~SKU-A', state: { customLabel0: 'top' } })
     // The live rule takes the primary feed FIRST: the next Shopify feed fetch keeps the feed's value.
     expect(d.warnings[0]).toMatch(/would be overwritten by the next Shopify feed fetch/)
-    expect(d.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/^Custom labels decide/)]))
     expect(productUndoArgs(d.before, d.after)).toEqual({ args: { dataSourceId: '71', offerId: 'SKU-A', contentLanguage: 'it', feedLabel: 'IT', action: 'delete' } })
   })
 
@@ -63,7 +64,9 @@ describe('set-google-merchant-products (productDraft)', () => {
     expect((d.call.body as { productAttributes: unknown }).productAttributes).toEqual({ customLabel0: 'top', customLabel1: 'winter' })
     expect(Object.keys(d.changes).sort()).toEqual(['customLabel1', 'pause'])
     // The pause in this source ends: the product can show in paid ads again.
-    expect(d.spendsMoney).toEqual([expect.stringMatching(/^SPENDS MONEY: .* no longer pauses the product/)])
+    expect(d.spendsMoney).toEqual([expect.stringMatching(/^SPENDS MONEY: .* no longer pauses the product/), expect.stringMatching(/changes customLabel1 /)])
+    // A change of a value no product group splits by, with no pause or exclusion ending: no money line.
+    expect(draftOf(productDraft({ ...req, attributes: { title: 'Jacket B' } }, facts())).spendsMoney).toEqual([])
     expect(productUndoArgs(d.before, d.after)).toEqual({ args: { dataSourceId: '71', offerId: 'SKU-A', contentLanguage: 'it', feedLabel: 'IT', action: 'set', attributes: { customLabel0: 'top', pause: 'ADS' }, clear: ['customLabel1'] } })
     // The same values again: nothing to send.
     expect(productDraft({ ...req, attributes: { customLabel0: 'top' } }, facts({ recorded: { state: { customLabel0: 'top' }, at: recorded.at } }))).toEqual({ refusal: expect.stringMatching(/^Nothing to change/) })
@@ -95,9 +98,45 @@ describe('set-google-merchant-products (productDraft)', () => {
     expect(productDraft({ ...req, action: 'delete' }, facts())).toEqual({ refusal: expect.stringMatching(/no record of a product input it wrote/) })
     const d = draftOf(productDraft({ ...req, action: 'delete' }, facts({ recorded: { state: { excludedDestinations: ['SHOPPING_ADS'] }, at: '2026-10-15T10:00:00.000Z' } })))
     expect(d.call).toEqual({ method: 'DELETE', path: `products/v1/accounts/${M}/productInputs/${encodedKey('it~IT~SKU-A')}`, query: { dataSource: `accounts/${M}/dataSources/71` } })
-    expect(judged(d.call)).toEqual({ body: null })
+    expect(judged(d.call)).toEqual({ body: null, dataSource: '71' })
     expect(d.spendsMoney).toEqual([expect.stringMatching(/no longer excludes the product from SHOPPING_ADS/)])
+    expect(draftOf(productDraft({ ...req, action: 'delete' }, facts({ recorded: { state: { brand: 'Brand B' }, at: '2026-10-15T10:00:00.000Z' } }))).spendsMoney)
+      .toEqual([expect.stringMatching(/changes brand .* product group or inventory filter that bids/)])
     expect(productUndoArgs(d.before, d.after)).toEqual({ args: { dataSourceId: '71', offerId: 'SKU-A', contentLanguage: 'it', feedLabel: 'IT', action: 'set', attributes: { excludedDestinations: ['SHOPPING_ADS'] } } })
+  })
+})
+
+describe('set-google-merchant-products: what the live product shows', () => {
+  const req: ProductRequest = { action: 'set', dataSourceId: '71', offerId: 'SKU-A', contentLanguage: 'it', feedLabel: 'IT', attributes: { excludedDestinations: ['DISPLAY_ADS'] } }
+  const WINS = { ...PRIMARY, defaultRule: ['71', 'self'] }
+  const facts = (primary: MerchantDataSource, over: Partial<ProductFacts> = {}): ProductFacts => ({
+    merchantCenterId: M, dataSources: [primary, SUPPLEMENTAL], nexusMade: new Set(['71']), recorded: null,
+    live: { exists: true, dataSourceId: '11', values: { excludedDestinations: ['SHOPPING_ADS'], pause: 'ADS' } }, nexus: null, ...over,
+  })
+
+  it('this source wins the rule: an exclusion the live product has and this input no longer keeps SPENDS MONEY (no record needed)', () => {
+    const d = draftOf(productDraft(req, facts(WINS)))
+    expect(d.spendsMoney).toEqual([expect.stringMatching(/no longer excludes the product from SHOPPING_ADS/)])
+    // The pause it does not touch stays as the live product shows it: no line for it.
+    expect(d.spendsMoney.join(' ')).not.toMatch(/pauses/)
+    // A pause this source held and takes out falls back to the primary feed's value, which Nexus cannot see: SPENDS MONEY.
+    const held = draftOf(productDraft({ ...req, attributes: { customLabel0: 'x' }, clear: ['pause'] }, facts(WINS, { recorded: { state: { pause: 'ADS', customLabel0: 'y' }, at: '2026-10-15T10:00:00.000Z' } })))
+    expect(held.spendsMoney).toEqual(expect.arrayContaining([expect.stringMatching(/no longer pauses the product/)]))
+  })
+
+  it('the primary feed wins the rule: its exclusion stays, so no money line from the live product', () => {
+    expect(draftOf(productDraft(req, facts(PRIMARY))).spendsMoney).toEqual([])
+  })
+
+  it('after a change Merchant Center did not answer: said, the same values can be sent again, a later delete cannot be undone blind', () => {
+    const unknown = { state: { customLabel0: 'top' }, at: '2026-10-15T10:00:00.000Z', outcome: 'unknown' as const }
+    const again = draftOf(productDraft({ ...req, attributes: { customLabel0: 'top' } }, facts(PRIMARY, { recorded: unknown, live: { exists: true, dataSourceId: '11', values: { customLabel0: 'top' } } })))
+    expect(again.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/has an unknown outcome .* replaces it whole\. The live product shows 1 of the 1 values it sent/)]))
+    expect(again.call.body).toMatchObject({ productAttributes: { customLabel0: 'top' } })
+    const deletedBlind = { state: null, at: unknown.at, outcome: 'unknown' as const }
+    const d = draftOf(productDraft({ ...req, action: 'delete' }, facts(PRIMARY, { recorded: deletedBlind })))
+    expect(d.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/undo cannot write it back/)]))
+    expect(productUndoArgs(d.before, d.after)).toEqual({ refusal: expect.stringMatching(/cannot write it back/) })
   })
 })
 
@@ -129,16 +168,9 @@ describe('set-google-merchant-data-sources (dataSourceDraft)', () => {
     expect(dataSourceDraft({ action: 'delete', dataSourceId: '71', confirmDelete: true }, { ...unlinked, held: 2 })).toEqual({ refusal: expect.stringMatching(/still holds 2 product inputs/) })
     const d = draftOf(dataSourceDraft({ action: 'delete', dataSourceId: '71', confirmDelete: true }, unlinked))
     expect(d.call).toEqual({ method: 'DELETE', path: `datasources/v1/accounts/${M}/dataSources/71` })
-    expect(judged(d.call)).toEqual({ body: null })
+    expect(judged(d.call)).toEqual({ body: null, dataSource: '71' })
   })
 
-  it('fetches a fetched file or Google Sheet now (any of the account\'s); never an API source such as Shopify\'s feed', () => {
-    const f = draftOf(dataSourceDraft({ action: 'fetch-now', dataSourceId: '81' }, facts()))
-    expect(f.call).toEqual({ method: 'POST', path: `datasources/v1/accounts/${M}/dataSources/81:fetch`, body: {} })
-    expect(judged(f.call)).toEqual({ body: '{}' })
-    expect(f.warnings[0]).toMatch(/cannot be undone/)
-    expect(dataSourceDraft({ action: 'fetch-now', dataSourceId: '11' }, facts())).toEqual({ refusal: expect.stringMatching(/not a file data source Google fetches/) })
-  })
 })
 
 describe('set-google-merchant-promotions (promotionDraft)', () => {
@@ -164,18 +196,29 @@ describe('set-google-merchant-promotions (promotionDraft)', () => {
     expect(promotionDraft({ action: 'set', dataSourceId: '72', promotionId: 'P', fields: { ...fields, type: 'MONEY_OFF', percentOff: null, moneyOffCents: 1000 } }, facts())).toEqual({ refusal: expect.stringMatching(/names its currency/) })
   })
 
-  it('end: the end moves to the moment the change runs (a marker until then); undo puts the promotion back', () => {
+  it('end: settled when it runs, from the recorded times (a start between preview and run moves nothing); undo puts it back', () => {
     const recorded = { state: { ...fields, startsAt: '2026-10-01T00:00:00Z', endsAt: '2026-11-08T00:00:00Z' } as PromotionState, at: '2026-10-01T00:00:00Z' }
     const live = promotionOf({ promotionId: 'PROMO-A', contentLanguage: 'it', targetCountry: 'IT', dataSource: `accounts/${M}/dataSources/72` })
     const d = draftOf(promotionDraft({ action: 'end', dataSourceId: '72', promotionId: 'PROMO-A' }, facts({ recorded, live })))
-    expect((d.call.body as any).promotion.attributes.promotionEffectiveTimePeriod).toEqual({ startTime: '2026-10-01T00:00:00Z', endTime: RUN_TIME })
+    const period = (d.call.body as any).promotion.attributes.promotionEffectiveTimePeriod
+    expect(period).toEqual({ startTime: byRunMinute('2026-10-01T00:00:00Z'), endTime: byRun('2026-11-08T00:00:00Z') })
+    // Sent at 10:05: the end is then; the start, long past, stays.
+    const sent = resolveRunTime(period, new Date('2026-10-16T10:05:00.000Z'))
+    expect(sent).toEqual({ startTime: '2026-10-01T00:00:00Z', endTime: '2026-10-16T10:05:00Z' })
+    expect(judged({ ...d.call, body: resolveRunTime(d.call.body, new Date('2026-10-16T10:05:00.000Z')) })).toMatchObject({ body: expect.any(String) })
     expect(d.spendsMoney).toEqual([])
     expect(d.changes).toEqual({ endsAt: { from: '2026-11-08T00:00:00Z', to: 'when this change runs' } })
     expect(promotionUndoArgs(d.before, { ...d.after, state: { ...recorded.state, endsAt: '2026-10-16T10:05:00Z' } })).toEqual({ args: { dataSourceId: '72', promotionId: 'PROMO-A', action: 'set', ...recorded.state } })
-    // Not started yet: it starts a minute before it ends.
+    // Not started at the preview: the same plan whether it starts before the run or not.
     const future = { state: { ...fields } as PromotionState, at: recorded.at }
-    expect((draftOf(promotionDraft({ action: 'end', dataSourceId: '72', promotionId: 'PROMO-A' }, facts({ recorded: future, live }))).call.body as any).promotion.attributes.promotionEffectiveTimePeriod)
-      .toEqual({ startTime: RUN_TIME_MINUS_MINUTE, endTime: RUN_TIME })
+    const early = draftOf(promotionDraft({ action: 'end', dataSourceId: '72', promotionId: 'PROMO-A' }, facts({ recorded: future, live })))
+    const late = draftOf(promotionDraft({ action: 'end', dataSourceId: '72', promotionId: 'PROMO-A' }, facts({ recorded: future, live, now: new Date('2026-11-02T00:00:00Z') })))
+    expect(late.call).toEqual(early.call)
+    // Run before it started: it starts a minute before it ends. Run after: its own start stays.
+    expect(resolveRunTime((early.call.body as any).promotion.attributes.promotionEffectiveTimePeriod, new Date('2026-10-20T00:00:00.000Z')))
+      .toEqual({ startTime: '2026-10-19T23:59:00Z', endTime: '2026-10-20T00:00:00Z' })
+    expect(resolveRunTime((early.call.body as any).promotion.attributes.promotionEffectiveTimePeriod, new Date('2026-11-02T00:00:00.000Z')))
+      .toEqual({ startTime: '2026-11-01T00:00:00Z', endTime: '2026-11-02T00:00:00Z' })
   })
 
   it('only in a promotion data source Nexus made; never a promotion it has no record of', () => {

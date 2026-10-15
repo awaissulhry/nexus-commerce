@@ -1,21 +1,21 @@
 /**
  * Google Ads programme 2, G12 (2026-10-16) — data sources (pure): make a supplemental product data source or a promotion
  * data source (both API input: datasources_v1 dataSources.create), rename one Nexus made (dataSources.patch, updateMask
- * displayName), fetch a FILE data source now (dataSources.fetch: "only works on data sources with a file input set"), and
- * delete one Nexus made when it is empty (dataSources.delete; Google: a supplemental source "cannot be deleted before all
+ * displayName), and delete one Nexus made when it is empty (dataSources.delete; Google: a supplemental source "cannot be deleted before all
  * links are removed").
  *
  * Not offered, and said so: a PRIMARY data source (a product there needs a price, availability and link that must match
  * the shop — Shopify's Google channel sends them — and an insert into another primary MOVES the product out of its feed),
  * changing or deleting a data source Nexus did not make (the primary feed of Shopify's Google channel above all), and
  * linking a supplemental source into a primary's rules (that changes the primary feed: a person does it in Merchant
- * Center). Local and regional inventory data sources: Nexus has no store whose Merchant Center store code it knows.
+ * Center), and fetching a file data source now (dataSources.fetch "only works on data sources with a file input set";
+ * Nexus makes API data sources only and acts on no other). Local and regional inventory data sources: Nexus has no store whose Merchant Center store code it knows.
  */
 import { DATA_SOURCE_MASKS } from '../../gateway/google-merchant-calls.js'
 import { NOT_NEXUS_DATA_SOURCE, type MerchantDraftResult } from './change-draft.js'
 import type { MerchantDataSource } from './live.js'
 
-export const DATA_SOURCE_ACTIONS = ['create-supplemental', 'create-promotions', 'rename', 'fetch-now', 'delete'] as const
+export const DATA_SOURCE_ACTIONS = ['create-supplemental', 'create-promotions', 'rename', 'delete'] as const
 export type DataSourceAction = typeof DATA_SOURCE_ACTIONS[number]
 
 export interface DataSourceRequest {
@@ -81,26 +81,6 @@ export function dataSourceDraft(req: DataSourceRequest, facts: DataSourceFacts):
   const where = `data source ${source.dataSourceId}${source.displayName ? ` ("${source.displayName}")` : ''}`
   const name = `${base}/${source.dataSourceId}`
   const record = { action: req.action, merchantCenterId: facts.merchantCenterId, dataSourceId: source.dataSourceId, type: source.type }
-
-  if (req.action === 'fetch-now') {
-    if (source.input !== 'FILE' || !source.file || (source.file.type !== 'FETCH' && source.file.type !== 'GOOGLE_SHEETS')) {
-      return { refusal: `${where} is not a file data source Google fetches (its input is ${source.input ?? 'unknown'}${source.file?.type ? `, ${source.file.type}` : ''}): only a fetched file or a Google Sheet can be fetched now. Shopify's Google channel sends its products through the API, so its feed is never fetched. Nothing was changed.` }
-    }
-    return {
-      summary: `Ask Google to fetch ${where} now (outside its schedule): its products are read again from the file${source.file.fetchHost ? ` on ${source.file.fetchHost}` : ''}.`,
-      changes: { [`${where} fetch`]: { from: source.file.frequency ?? '(schedule)', to: 'now' } },
-      totals: { dataSources: 1 },
-      warnings: [
-        'The file decides what the products become: a fetch cannot be undone.',
-        'Google asks not to fetch a data source more than once a day (datasources_v1 dataSources.fetch).',
-      ],
-      spendsMoney: [`SPENDS MONEY: products the file adds or makes available again can show in Shopping ads after the fetch, and enabled campaigns pay for their clicks.`],
-      call: { method: 'POST', path: `${path}/${source.dataSourceId}:fetch`, body: {} },
-      stands: { id: source.dataSourceId, input: source.input, file: source.file },
-      before: { ...record, fetched: false },
-      after: { ...record, fetched: true },
-    }
-  }
 
   if (!facts.nexusMade.has(source.dataSourceId)) return { refusal: NOT_NEXUS_DATA_SOURCE(source.dataSourceId) }
 

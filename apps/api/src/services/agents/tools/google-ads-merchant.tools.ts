@@ -8,7 +8,7 @@
  *   set-google-merchant-products      a product's input in a supplemental data source Nexus made: set attributes (or fill
  *                                     them from Nexus's own product), take some out, or delete the input
  *   set-google-merchant-data-sources  make a supplemental or a promotion data source, rename or delete (when empty) one
- *                                     Nexus made, fetch a file data source now
+ *                                     Nexus made
  *   set-google-merchant-promotions    make, change or end a promotion in a promotion data source Nexus made
  *
  * Every change is a Nexus change: a preview, an approvalId, a person approves it in Nexus, it runs as that person, never by
@@ -33,7 +33,7 @@ import {
   COUNTRY_RE, FEED_LABEL_RE, LANGUAGE_RE, MERCHANT_PRODUCT_ATTRIBUTES, PROMOTION_DESTINATIONS, PROMOTION_ID_RE, COUPON_VALUE_TYPES,
   type MerchantAttributeSpec,
 } from '../../gateway/google-merchant-calls.js'
-import { MerchantError, merchantAccount, RUN_TIME, RUN_TIME_MINUS_MINUTE, type MerchantAccount } from '../../marketing/google-merchant/client.js'
+import { MerchantError, merchantAccount, resolveRunTime, type MerchantAccount } from '../../marketing/google-merchant/client.js'
 import {
   liveAccountIssues, liveAggregateStatuses, liveDataSources, liveFileUpload, liveInventory, livePerformance, liveProduct, liveProducts,
   livePromotions, MAX_PRODUCTS, productKey, productRowOf, productVerdict, type MerchantProductRow,
@@ -297,7 +297,7 @@ const buildProducts = (args: Json): MerchantDraftBuilder => async (account) => {
   ])
   const nexus = req.action === 'set' ? await nexusValues(req.offerId) : null
   return productDraft(req, {
-    merchantCenterId: account.merchantCenterId, dataSources, nexusMade, recorded,
+    merchantCenterId: account.merchantCenterId, dataSources, nexusMade, recorded: recorded ? { state: recorded.state, at: recorded.at, outcome: recorded.outcome } : null,
     live: { exists: !!raw, dataSourceId: raw?.dataSource ? String(raw.dataSource).slice(String(raw.dataSource).lastIndexOf('/') + 1) : null, values: (raw?.productAttributes ?? {}) as Json },
     nexus,
   })
@@ -323,8 +323,11 @@ const setGoogleMerchantProducts: AgentTool = {
   name: PRODUCTS_TOOL,
   title: 'Change a Merchant Center product',
   category: 'listings',
-  reversibility: 'full',
-  requires: [F.listingsEdit, F.listingsPublish],
+  // Partial: the Merchant API cannot read a product input back (productInputs has insert, patch and delete, no get), so
+  // undo restores what Nexus recorded; after a change Merchant Center did not answer, the input may differ from it.
+  reversibility: 'partial',
+  // Ending a pause or an ads exclusion, or moving a product between product groups, can make the ads spend more.
+  requires: [F.listingsEdit, F.listingsPublish, F.adsCampaignsManage],
   input: z.object({
     accountId: merchantAccountArg,
     merchantCenterId: merchantCenterIdArg,
@@ -352,15 +355,18 @@ const setGoogleMerchantProducts: AgentTool = {
     + 'they reach Shopify and its Google feed. The preview says from the live rules whether the values reach the product and whether the '
     + 'next Shopify feed fetch would overwrite them (a supplemental source reaches products only once a person links it to the primary '
     + 'data source in Merchant Center; Nexus never changes the primary\'s rules), warns when a value differs from Nexus\'s own, and marks '
-    + 'SPENDS MONEY when the product can show in paid ads again (a pause or an ads exclusion ends). Undo puts the input back as it was '
-    + '(a new one is deleted, a deleted one written again).' + MERCHANT_CHANGE_RULES,
+    + 'SPENDS MONEY when the product can show in paid ads again (a pause or an ads exclusion ends, from Nexus\'s record and — when this '
+    + 'source wins the rule — from the live product) or when a value product groups and inventory filters split by changes (custom '
+    + 'labels, brand, product type, category, condition). Undo puts the input back as Nexus recorded it (a new one is deleted, a deleted '
+    + 'one written again). When Merchant Center does not answer, the change is recorded as NOT CONFIRMED (outcome unknown) and the next '
+    + 'change of that input says so and replaces it whole.' + MERCHANT_CHANGE_RULES,
   undo: productsUndo,
   handler: (args, ctx) => merchantChangePreview(args, ctx, buildProducts(args)),
   execute: (args, ctx) => runMerchantChange(args, ctx, buildProducts(args), args.action === 'delete' ? 'merchant.productInputs.delete' : 'merchant.productInputs.insert', (draft) => ({
     data: { action: args.action, offerId: args.offerId, dataSourceId: args.dataSourceId, attributes: Object.keys((draft.after.state ?? {}) as Json).length },
     before: draft.before,
     after: draft.after,
-  })),
+  }), { recordUnknown: true }),
 }
 
 // ── set-google-merchant-data-sources ──────────────────────────────────────────────────────────────────────────────
@@ -406,8 +412,6 @@ const dataSourcesUndo: ToolUndo = {
       case 'rename':
         if (typeof before.displayName !== 'string' || !before.displayName) return { refusal: 'The data source had no name to put back.' }
         return { tool: DATA_SOURCES_TOOL, args: { ...account, action: 'rename', dataSourceId: after.dataSourceId, displayName: before.displayName, why: 'undo of a data source rename' } }
-      case 'fetch-now':
-        return { refusal: 'A fetch cannot be undone: Google read the file again, and the file decides what the products are.' }
       default:
         return { refusal: 'A deleted data source cannot come back: a new one gets a new id (make one with action create-supplemental or create-promotions).' }
     }
@@ -426,8 +430,7 @@ const setGoogleMerchantDataSources: AgentTool = {
     merchantCenterId: merchantCenterIdArg,
     action: z.preprocess(lower, z.enum(DATA_SOURCE_ACTIONS)).describe(
       'create-supplemental (displayName; feedLabel + contentLanguage, or neither for any), create-promotions (displayName, targetCountry, '
-      + 'contentLanguage), rename (dataSourceId of one Nexus made, displayName), fetch-now (dataSourceId of a fetched file or Google Sheet), '
-      + 'delete (dataSourceId of an EMPTY one Nexus made, confirmDelete)'),
+      + 'contentLanguage), rename (dataSourceId of one Nexus made, displayName), delete (dataSourceId of an EMPTY one Nexus made, confirmDelete)'),
     dataSourceId: merchantIdArg('the data source (google-merchant-live view data-sources)').optional(),
     displayName: z.string().trim().min(1).max(200).optional().describe('create / rename: the name Merchant Center shows'),
     feedLabel: feedLabelArg.optional(),
@@ -440,14 +443,14 @@ const setGoogleMerchantDataSources: AgentTool = {
     'Data sources of the Merchant Center account this business chose (google-merchant-live view data-sources shows them): make a '
     + 'SUPPLEMENTAL product data source (API input; it adds attributes to the products a primary feed sends — set-google-merchant-products '
     + 'writes into it) or a PROMOTION data source (for set-google-merchant-promotions); rename or delete (only when empty, with confirmDelete) '
-    + 'one Nexus made; ask Google to fetch a file data source (a fetched file or Google Sheet) now, outside its schedule (SPENDS MONEY: '
-    + 'products the file brings back can show in paid ads; a fetch cannot be undone). Nexus never edits or deletes the primary feed that '
-    + 'Shopify\'s Google channel owns, nor any other data source it did not make, and does not make a primary data source (a product there '
+    + 'one Nexus made. Nexus never edits, fetches or deletes the primary feed that Shopify\'s Google channel owns, nor any other data source '
+    + 'it did not make (the gateway refuses it too), and does not make a primary data source (a product there '
     + 'needs a price, availability and link that must match the shop, and a second primary would move products out of Shopify\'s feed). '
     + 'A new supplemental source reaches products only once a person links it to the primary data source in Merchant Center (Data '
     + 'sources › the primary › Rules): that changes the primary feed, so Nexus does not do it. Undo: a data source made is deleted (only '
     + 'when empty — a promotion data source that holds a promotion stays, as the Merchant API cannot delete a promotion), a rename is put '
-    + 'back; a fetch and a delete cannot be undone.' + MERCHANT_CHANGE_RULES,
+    + 'back; a delete cannot be undone. Fetching a file data source now is not offered: Nexus makes API data sources only, and the Merchant '
+    + 'API fetches only file ones.' + MERCHANT_CHANGE_RULES,
   undo: dataSourcesUndo,
   handler: (args, ctx) => merchantChangePreview(args, ctx, buildDataSources(args)),
   execute: (args, ctx) => runMerchantChange(args, ctx, buildDataSources(args), `merchant.dataSources.${String(args.action)}`, (draft, answer) => {
@@ -501,15 +504,8 @@ const buildPromotions = (args: Json): MerchantDraftBuilder => async (account) =>
   const recorded = await recordedPromotion(account.merchantCenterId, req.dataSourceId, `${country}~${language}~${req.promotionId}`)
   return promotionDraft(req, {
     merchantCenterId: account.merchantCenterId, dataSources, nexusMade, live,
-    recorded: recorded ? { state: recorded.state as PromotionState | null, at: recorded.at } : null, now: new Date(),
+    recorded: recorded ? { state: recorded.state as PromotionState | null, at: recorded.at, outcome: recorded.outcome } : null, now: new Date(),
   })
-}
-
-/** The record of a promotion ended "now" holds the moment it was sent, not the marker. */
-const atRunTime = (value: unknown, at: Date): unknown => {
-  const iso = at.toISOString().replace(/\.\d{3}Z$/, 'Z')
-  const before = new Date(at.getTime() - 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z')
-  return JSON.parse(JSON.stringify(value).split(`"${RUN_TIME_MINUS_MINUTE}"`).join(`"${before}"`).split(`"${RUN_TIME}"`).join(`"${iso}"`))
 }
 
 const promotionsUndo: ToolUndo = {
@@ -557,8 +553,9 @@ const setGoogleMerchantPromotions: AgentTool = {
   execute: (args, ctx) => runMerchantChange(args, ctx, buildPromotions(args), 'merchant.promotions.insert', (draft, _answer, sentAt) => ({
     data: { action: args.action, promotionId: args.promotionId, dataSourceId: args.dataSourceId },
     before: draft.before,
-    after: atRunTime(draft.after, sentAt) as Json,
-  })),
+    // The record of a promotion ended "now" holds the times it was sent with, not the markers.
+    after: resolveRunTime(draft.after, sentAt),
+  }), { recordUnknown: true }),
 }
 
 export const GOOGLE_ADS_MERCHANT_TOOLS: AgentTool[] = [googleMerchantLive, setGoogleMerchantProducts, setGoogleMerchantDataSources, setGoogleMerchantPromotions]

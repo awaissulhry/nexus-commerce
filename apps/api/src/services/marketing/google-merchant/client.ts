@@ -165,18 +165,26 @@ export interface MerchantCallSpec {
 }
 
 /**
- * A time the change takes when it RUNS (ending a promotion now): the draft holds this marker, so the plan a person
- * approved does not depend on the minute it was previewed; `sendMerchantCall` puts the time in just before sending.
+ * A time the change settles when it RUNS (ending a promotion "now"): the draft holds a marker with the recorded time, so
+ * the plan a person approved does not depend on the minute it was previewed (nor on a promotion starting meanwhile).
+ * `byRun(t)` becomes the earlier of t and the moment it is sent; `byRunMinute(t)` the earlier of t and a minute before.
+ * `resolveRunTime` puts the times in, just before sending and in the record.
  */
-export const RUN_TIME = '@RUN_TIME'
-/** One minute before the run (a promotion that has not started yet starts and ends at once). */
-export const RUN_TIME_MINUS_MINUTE = '@RUN_TIME-1M'
+const BY_RUN = '@BY_RUN:'
+const BY_RUN_MINUTE = '@BY_RUN-1M:'
+export const byRun = (iso: string): string => `${BY_RUN}${iso}`
+export const byRunMinute = (iso: string): string => `${BY_RUN_MINUTE}${iso}`
+export const isRunMarker = (v: unknown): v is string => typeof v === 'string' && (v.startsWith(BY_RUN) || v.startsWith(BY_RUN_MINUTE))
 
-function withRunTime(body: Record<string, unknown> | undefined, now: Date): Record<string, unknown> | undefined {
-  if (!body) return body
-  const at = now.toISOString().replace(/\.\d{3}Z$/, 'Z')
-  const before = new Date(now.getTime() - 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z')
-  return JSON.parse(JSON.stringify(body).split(`"${RUN_TIME_MINUS_MINUTE}"`).join(`"${before}"`).split(`"${RUN_TIME}"`).join(`"${at}"`))
+const isoOf = (t: number) => new Date(t).toISOString().replace(/\.\d{3}Z$/, 'Z')
+
+export function resolveRunTime<T>(value: T, at: Date): T {
+  if (value === undefined) return value
+  return JSON.parse(JSON.stringify(value).replace(/"@BY_RUN(-1M)?:([^"]+)"/g, (_m, minute: string | undefined, iso: string) => {
+    const cap = at.getTime() - (minute ? 60_000 : 0)
+    const t = Date.parse(iso)
+    return JSON.stringify(Number.isNaN(t) || t > cap ? isoOf(cap) : iso)
+  })) as T
 }
 
 /**
@@ -185,7 +193,7 @@ function withRunTime(body: Record<string, unknown> | undefined, now: Date): Reco
  * no: nothing changed), `unknown` (no answer, or Google failed on its side).
  */
 export async function sendMerchantCall(account: MerchantAccount, call: MerchantCallSpec, operation: string, now = new Date()): Promise<Json> {
-  const body = withRunTime(call.body, now)
+  const body = resolveRunTime(call.body, now)
   let response: Response
   try {
     response = await googleCall({

@@ -12,7 +12,7 @@ vi.mock('./ledger.js', () => import('../../test-support/gateway-stubs.js').then(
 vi.mock('../cx/token.service.js', () => ({ getAccessToken: vi.fn(async () => 'google-access-token') }))
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 
-import { gatewayAccounts, gatewayLedger, gatewayMerchantUnlinked } from '../../test-support/gateway-stubs.js'
+import { gatewayAccounts, gatewayLedger, gatewayMerchantForeignSources, gatewayMerchantUnlinked } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { gatewayCall, GatewayRefusal } from './gateway.js'
 import { googleCall, googleKind } from './google.js'
@@ -23,7 +23,6 @@ const INSERT = `${API}/products/v1/accounts/555/productInputs:insert?dataSource=
 const DELETE_INPUT = `${API}/products/v1/accounts/555/productInputs/aXR-SVQtU0tVLUE?dataSource=accounts/555/dataSources/71`
 const CREATE = `${API}/datasources/v1/accounts/555/dataSources`
 const RENAME = `${API}/datasources/v1/accounts/555/dataSources/71?updateMask=displayName`
-const FETCH = `${API}/datasources/v1/accounts/555/dataSources/81:fetch`
 const PROMOTION = `${API}/promotions/v1/accounts/555/promotions:insert`
 const INPUT = { offerId: 'SKU-A', contentLanguage: 'it', feedLabel: 'IT', productAttributes: { customLabel0: 'top', pause: 'ADS', gtins: ['1234567890128'] } }
 const PROMO = {
@@ -39,7 +38,7 @@ const PROMO = {
 
 beforeEach(() => {
   __rateTest.useMemory()
-  h.calls = []; gatewayLedger.length = 0; gatewayMerchantUnlinked.clear()
+  h.calls = []; gatewayLedger.length = 0; gatewayMerchantUnlinked.clear(); gatewayMerchantForeignSources.clear()
   for (const id of Object.keys(gatewayAccounts)) delete gatewayAccounts[id]
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     h.calls.push({ url: String(url), init })
@@ -51,7 +50,7 @@ afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); __rateTest.reset() 
 describe('which Merchant calls are changes Nexus sends', () => {
   it('exactly these kinds (a new one is a new line here, on purpose)', () => {
     expect([...MERCHANT_CALL_KINDS].sort()).toEqual([
-      'dataSources:create', 'dataSources:delete', 'dataSources:fetch', 'dataSources:patch', 'productInputs:delete', 'productInputs:insert', 'promotions:insert',
+      'dataSources:create', 'dataSources:delete', 'dataSources:patch', 'productInputs:delete', 'productInputs:insert', 'promotions:insert',
     ])
   })
 
@@ -61,7 +60,6 @@ describe('which Merchant calls are changes Nexus sends', () => {
     expect(googleMerchantCall('POST', CREATE)).toEqual({ kind: 'dataSources:create', account: '555' })
     expect(googleMerchantCall('PATCH', RENAME)).toEqual({ kind: 'dataSources:patch', account: '555', dataSource: '71', updateMask: 'displayName' })
     expect(googleMerchantCall('DELETE', `${CREATE}/71`)).toEqual({ kind: 'dataSources:delete', account: '555', dataSource: '71' })
-    expect(googleMerchantCall('POST', FETCH)).toEqual({ kind: 'dataSources:fetch', account: '555', dataSource: '81' })
     expect(googleMerchantCall('POST', PROMOTION)).toEqual({ kind: 'promotions:insert', account: '555' })
   })
 
@@ -77,16 +75,22 @@ describe('which Merchant calls are changes Nexus sends', () => {
       ['POST', `${API}/inventories/v1/accounts/555/products/aXR-SVQtU0tVLUE/localInventories:insert`],
       ['DELETE', `${API}/promotions/v1/accounts/555/promotions/PROMO-A`],
       ['POST', `${API}/accounts/v1/accounts/555/developerRegistration:registerGcp`],
+      ['POST', `${API}/datasources/v1/accounts/555/dataSources/81:fetch`],
       ['POST', `https://example.com/products/v1/accounts/555/productInputs:insert?dataSource=accounts/555/dataSources/71`],
     ] as const) expect(googleMerchantCall(method, url), `${method} ${url}`).toBeNull()
   })
 
-  it('the account a Merchant read names (none for the account list discovery reads)', () => {
-    expect(merchantReadAccount(`${API}/products/v1/accounts/555/products?pageSize=1000`)).toBe('555')
-    expect(merchantReadAccount(`${API}/reports/v1/accounts/555/reports:search`)).toBe('555')
-    expect(merchantReadAccount(`${API}/accounts/v1/accounts/555`)).toBe('555')
+  it('the account a Merchant read names (none for the account list discovery reads); one it cannot read: fail closed', () => {
+    expect(merchantReadAccount(`${API}/products/v1/accounts/555/products?pageSize=1000`)).toEqual({ account: '555' })
+    expect(merchantReadAccount(`${API}/reports/v1/accounts/555/reports:search`)).toEqual({ account: '555' })
+    expect(merchantReadAccount(`${API}/accounts/v1/accounts/555`)).toEqual({ account: '555' })
     expect(merchantReadAccount(`${API}/accounts/v1/accounts`)).toBeNull()
+    expect(merchantReadAccount(`${API}/accounts/v1/accounts?pageToken=x`)).toBeNull()
     expect(merchantReadAccount('https://googleads.googleapis.com/v25/customers/1/googleAds:search')).toBeNull()
+    for (const url of [
+      `${API}/products/v1/accounts%2F555/products`, `${API}/products/v1/accounts/abc/products`, `${API}/products/v2/accounts/555/products`,
+      `${API}/products/v1/x/accounts/555/products`, `${API}/products/v1/accounts/-555/products`,
+    ]) expect(merchantReadAccount(url), url).toBe('unreadable')
   })
 })
 
@@ -94,7 +98,7 @@ describe('the bodies the gateway lets through', () => {
   const judge = (method: string, url: string, body: unknown) => googleMerchantCallBodyOf(googleMerchantCall(method, url)!, body === undefined ? undefined : JSON.stringify(body))
 
   it('a product input of the attributes Nexus sends; price, availability, link and unknown fields are refused', () => {
-    expect(judge('POST', INSERT, INPUT)).toEqual({ body: JSON.stringify(INPUT) })
+    expect(judge('POST', INSERT, INPUT)).toEqual({ body: JSON.stringify(INPUT), dataSource: '71' })
     for (const [extra, why] of [
       [{ price: { amountMicros: '1000000', currencyCode: 'EUR' } }, /price is not an attribute/],
       [{ availability: 'IN_STOCK' }, /availability is not an attribute/],
@@ -113,11 +117,11 @@ describe('the bodies the gateway lets through', () => {
   })
 
   it('a delete carries no body', () => {
-    expect(googleMerchantCallBodyOf(googleMerchantCall('DELETE', DELETE_INPUT)!, null)).toEqual({ body: null })
+    expect(googleMerchantCallBodyOf(googleMerchantCall('DELETE', DELETE_INPUT)!, null)).toEqual({ body: null, dataSource: '71' })
     expect(googleMerchantCallBodyOf(googleMerchantCall('DELETE', DELETE_INPUT)!, '{}')).toEqual({ refusal: 'a delete carries no body' })
   })
 
-  it('data sources: a supplemental or a promotion one, a rename of the one in the path, an empty fetch — never a primary', () => {
+  it('data sources: a supplemental or a promotion one, a rename of the one in the path — never a primary', () => {
     expect(judge('POST', CREATE, { displayName: 'Nexus A', supplementalProductDataSource: {} })).toMatchObject({ body: expect.any(String) })
     expect(judge('POST', CREATE, { displayName: 'Nexus A', supplementalProductDataSource: { feedLabel: 'IT', contentLanguage: 'it' } })).toMatchObject({ body: expect.any(String) })
     expect(judge('POST', CREATE, { displayName: 'Nexus P', promotionDataSource: { targetCountry: 'IT', contentLanguage: 'it' } })).toMatchObject({ body: expect.any(String) })
@@ -127,12 +131,11 @@ describe('the bodies the gateway lets through', () => {
     expect(judge('PATCH', RENAME, { name: 'accounts/555/dataSources/71', displayName: 'Nexus B' })).toMatchObject({ body: expect.any(String) })
     expect(judge('PATCH', RENAME, { name: 'accounts/555/dataSources/72', displayName: 'Nexus B' })).toEqual({ refusal: 'the body does not name the data source in the path' })
     expect(judge('PATCH', RENAME, { name: 'accounts/555/dataSources/71', displayName: 'Nexus B', input: 'API' })).toEqual({ refusal: 'a rename names the data source and its new name only' })
-    expect(judge('POST', FETCH, {})).toEqual({ body: '{}' })
-    expect(judge('POST', FETCH, { x: 1 })).toEqual({ refusal: 'a fetch carries an empty body' })
+    expect(judge('POST', CREATE, { displayName: 'Nexus A', supplementalProductDataSource: {} })).toMatchObject({ dataSource: null })
   })
 
   it('a promotion in a data source of the same account, with Google\'s rules for its type', () => {
-    expect(judge('POST', PROMOTION, PROMO)).toMatchObject({ body: expect.any(String) })
+    expect(judge('POST', PROMOTION, PROMO)).toMatchObject({ body: expect.any(String), dataSource: '72' })
     const attributes = PROMO.promotion.attributes
     const variant = (a: Record<string, unknown>, p: Record<string, unknown> = {}) => ({ ...PROMO, promotion: { ...PROMO.promotion, ...p, attributes: { ...attributes, ...a } } })
     expect(judge('POST', PROMOTION, { ...PROMO, dataSource: 'accounts/556/dataSources/72' })).toEqual({ refusal: 'it does not name a data source of this account' })
@@ -181,15 +184,38 @@ describe('on the gateway', () => {
     expect(h.calls.map((c) => c.url)).toEqual([`${API}/accounts/v1/accounts`])
   })
 
+  it('every change but a create writes only into a data source Nexus made: another (the Shopify feed) is refused before sending', async () => {
+    gatewayMerchantForeignSources.add('555:71').add('555:72')
+    const tries = [
+      googleCall({ connectionId: 'g-1', operation: 'merchant.productInputs.insert', method: 'POST', url: INSERT, body: INPUT }),
+      googleCall({ connectionId: 'g-1', operation: 'merchant.productInputs.delete', method: 'DELETE', url: DELETE_INPUT }),
+      googleCall({ connectionId: 'g-1', operation: 'merchant.dataSources.patch', method: 'PATCH', url: RENAME, body: { name: 'accounts/555/dataSources/71', displayName: 'B' } }),
+      googleCall({ connectionId: 'g-1', operation: 'merchant.dataSources.delete', method: 'DELETE', url: `${CREATE}/71` }),
+      googleCall({ connectionId: 'g-1', operation: 'merchant.promotions.insert', method: 'POST', url: PROMOTION, body: PROMO }),
+    ]
+    for (const t of tries) expect(await t.catch((e) => e)).toMatchObject({ outcome: 'refused', code: 'GOOGLE_DATA_SOURCE_NOT_NEXUS' })
+    expect(h.calls).toHaveLength(0)
+    // A create names no data source yet: it goes.
+    await googleCall({ connectionId: 'g-1', operation: 'merchant.dataSources.create', method: 'POST', url: CREATE, body: { displayName: 'Nexus B', supplementalProductDataSource: {} } })
+    expect(h.calls).toHaveLength(1)
+  })
+
+  it('a Merchant read whose path names an account the gateway cannot read is refused (fail closed)', async () => {
+    const err = await googleCall({ connectionId: 'g-1', operation: 'merchant.products.list', method: 'GET', url: `${API}/products/v1/accounts%2F556/products` }).catch((e) => e)
+    expect(err).toMatchObject({ outcome: 'refused', code: 'GOOGLE_ACCOUNT_NOT_CHOSEN' })
+    expect(h.calls).toHaveLength(0)
+  })
+
   it('a body Nexus does not send, or a change declared as a read, is refused before anything is sent', async () => {
     const tries = [
       googleCall({ connectionId: 'g-1', operation: 'merchant.productInputs.insert', method: 'POST', url: INSERT, body: { ...INPUT, productAttributes: { price: { amountMicros: '1', currencyCode: 'EUR' } } } }),
       googleCall({ connectionId: 'g-1', operation: 'merchant.dataSources.create', method: 'POST', url: CREATE, body: { displayName: 'P', primaryProductDataSource: {} } }),
       gatewayCall({ channel: 'GOOGLE', operation: 'merchant.sneaky', kind: 'read', connectionId: 'g-1', url: INSERT, method: 'POST', body: JSON.stringify(INPUT) }),
       googleCall({ connectionId: 'g-1', operation: 'merchant.dataSources.patch', method: 'PATCH', url: `${API}/datasources/v1/accounts/555/dataSources/71?updateMask=primaryProductDataSource.defaultRule`, body: {} }),
+      googleCall({ connectionId: 'g-1', operation: 'merchant.dataSources.fetch', method: 'POST', url: `${API}/datasources/v1/accounts/555/dataSources/81:fetch`, body: {} }),
     ]
     for (const t of tries) expect(await t.catch((e) => e)).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY' })
     expect(h.calls).toHaveLength(0)
-    expect(gatewayLedger.map((r) => r.errorCode)).toEqual(['GOOGLE_READ_ONLY', 'GOOGLE_READ_ONLY', 'GOOGLE_READ_ONLY', 'GOOGLE_READ_ONLY'])
+    expect(gatewayLedger.map((r) => r.errorCode)).toEqual(['GOOGLE_READ_ONLY', 'GOOGLE_READ_ONLY', 'GOOGLE_READ_ONLY', 'GOOGLE_READ_ONLY', 'GOOGLE_READ_ONLY'])
   })
 })

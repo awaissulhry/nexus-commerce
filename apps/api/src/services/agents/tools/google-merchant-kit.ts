@@ -119,6 +119,12 @@ export interface MerchantRunOutcome { data: Record<string, unknown>; before: Rec
  * `execute` of a Merchant change tool: only as a request a person approved, as that person; the change is built again and
  * sent only when it is exactly what was approved. `finish` turns Google's answer (and the moment it was sent: a promotion
  * ended "now") into the record.
+ *
+ * `recordUnknown` (a product input, a promotion — an insert replaces the whole thing, so sending it again is harmless):
+ * when Merchant Center does not answer, Google may have applied the change, and Nexus cannot read it back. The change is
+ * then RECORDED with what was sent and `outcome: 'unknown'` (the request counts as run, its answer says NOT CONFIRMED), so
+ * the next change of the same input knows, says so, and replaces it whole; undo puts back what was there before. Without
+ * it (a data source), the request goes back to waiting and approving it again re-reads first.
  */
 export async function runMerchantChange(
   args: Record<string, unknown>,
@@ -126,6 +132,7 @@ export async function runMerchantChange(
   build: MerchantDraftBuilder,
   operation: string,
   finish: (draft: MerchantChangeDraft, answer: Record<string, unknown>, sentAt: Date) => MerchantRunOutcome,
+  options: { recordUnknown?: boolean } = {},
 ): Promise<ToolResult> {
   const run = approvedRun(ctx, String(args.why ?? ''))
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
@@ -144,18 +151,32 @@ export async function runMerchantChange(
     return notRun('Not run: Merchant Center (or Nexus\'s record of it) changed since this was approved — what it stands on, or the call it would send. Nothing was sent. Ask for it again with the account as it is now.')
   }
   const sentAt = new Date()
+  const stamp = (record: Record<string, unknown>) => ({ ...record, accountId: account.accountId, merchantCenterId: account.merchantCenterId })
   let answer: Record<string, unknown>
   try {
     answer = await sendMerchantCall(account, draft.call, operation, sentAt)
   } catch (err) {
     if (err instanceof MerchantError) {
+      if (err.outcome === 'unknown' && options.recordUnknown) {
+        const sent = finish(draft, {}, sentAt)
+        return {
+          ok: true,
+          data: {
+            summary: `NOT CONFIRMED — ${draft.summary}`,
+            outcome: 'unknown',
+            account: { accountId: account.accountId, merchantCenterId: account.merchantCenterId },
+            changeSetId: run.changeSetId,
+            note: `${err.message} Nexus recorded what it sent, marked "outcome unknown": the next change of it says so and replaces it whole, and undo puts back what was there before.`,
+          },
+          change: { before: stamp(sent.before), after: stamp({ ...sent.after, outcome: 'unknown' }) },
+        }
+      }
       // Unknown outcome: the request goes back to waiting; approving it again re-reads first (`basis`).
       return notRun(err.outcome === 'unknown' ? `Not confirmed: ${err.message}` : `Not run: ${err.message}${err.outcome === 'not_sent' ? '' : ' Nothing was changed.'}`)
     }
     throw err
   }
   const outcome = finish(draft, answer, sentAt)
-  const stamp = (record: Record<string, unknown>) => ({ ...record, accountId: account.accountId, merchantCenterId: account.merchantCenterId })
   return {
     ok: true,
     data: {
