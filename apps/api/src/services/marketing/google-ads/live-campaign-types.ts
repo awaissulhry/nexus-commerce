@@ -21,7 +21,9 @@
  *                       optimized_targeting_enabled, audience_setting.use_audience_grouped,
  *                       demand_gen_ad_group_settings.channel_controls.channel_strategy / channel_config /
  *                       selected_channels.{youtube_in_stream, youtube_in_feed, youtube_shorts, discover, gmail, display,
- *                       maps} — selectable and filterable; campaign is an attributed resource.
+ *                       maps} — selectable and filterable; targeting_setting.target_restrictions selectable, NOT
+ *                       filterable (never filtered); campaign is an attributed resource. TargetRestriction bid_only,
+ *                       targeting_dimension (rpc/v25 TargetRestriction, TargetingDimensionEnum).
  *   ad_group_criterion  criterion_id, type, status, negative, display_name, placement.url, topic.topic_constant,
  *                       keyword.text, keyword.match_type, youtube_video.video_id, youtube_channel.channel_id,
  *                       mobile_application.app_id, mobile_app_category.mobile_app_category_constant, user_list.user_list,
@@ -56,6 +58,7 @@
 import { liveRows } from './write-client.js'
 import { centsOfMicros, gaqlId, idOf } from './live.js'
 import { pairOf } from './live-campaigns.js'
+import { restrictionsOf } from './live-targeting.js'
 import type { GoogleAdsTarget } from './types.js'
 
 type Json = Record<string, any>
@@ -98,7 +101,8 @@ export interface LiveTypedCampaign {
   app: { appId: string | null; appStore: string | null; goal: string | null } | null
   merchantId: string | null
   feedLabel: string | null
-  upgradedTargeting: boolean | null
+  /** Demand Gen: locations and languages at the ad groups (true) or at the campaign (false). */
+  upgradedTargeting: boolean
   conversionActionIds: string[]
   optimizationGoals: string[]
   budget: { budgetId: string | null; amountCents: number | null; totalCents: number | null; period: string | null; shared: boolean } | null
@@ -141,7 +145,8 @@ export function liveTypedCampaignOf(row: Json): LiveTypedCampaign {
     app: app ? { appId: str(app.appId), appStore: str(app.appStore), goal: str(app.biddingStrategyGoalType) } : null,
     merchantId: str(c.shoppingSetting?.merchantId),
     feedLabel: str(c.shoppingSetting?.feedLabel),
-    upgradedTargeting: typeof c.demandGenCampaignSettings?.upgradedTargeting === 'boolean' ? c.demandGenCampaignSettings.upgradedTargeting : null,
+    // Google's JSON leaves a false bool out of its answer: no value is false (the campaign holds its own locations).
+    upgradedTargeting: c.demandGenCampaignSettings?.upgradedTargeting === true,
     conversionActionIds: strings(c.selectiveOptimization?.conversionActions).map((r) => idOf(r) ?? r),
     optimizationGoals: strings(c.optimizationGoalSetting?.optimizationGoalTypes),
     budget: b ? {
@@ -183,11 +188,18 @@ export interface LiveTypedAdGroup {
   audienceGrouped: boolean
   /** Demand Gen only; null elsewhere. */
   channels: ChannelControls | null
+  /**
+   * The targeting dimensions set to observation (TargetRestriction.bid_only true: "these criteria will only apply bid
+   * modifiers, and not affect targeting"): AUDIENCE, TOPIC, PLACEMENT, KEYWORD, AGE_RANGE, GENDER, PARENTAL_STATUS,
+   * INCOME_RANGE (TargetingDimension, v25).
+   */
+  observation: string[]
 }
 
 export const liveTypedAdGroupsQuery = (campaignId: string): string =>
   'SELECT ad_group.id, ad_group.name, ad_group.status, ad_group.type, ad_group.cpc_bid_micros, ad_group.cpm_bid_micros, ' +
   'ad_group.target_cpa_micros, ad_group.optimized_targeting_enabled, ad_group.audience_setting.use_audience_grouped, ' +
+  'ad_group.targeting_setting.target_restrictions, ' +
   'ad_group.demand_gen_ad_group_settings.channel_controls.channel_config, ad_group.demand_gen_ad_group_settings.channel_controls.channel_strategy, ' +
   DG_CHANNELS.map((c) => `ad_group.demand_gen_ad_group_settings.channel_controls.selected_channels.${c.toLowerCase()}`).join(', ') +
   `, campaign.id, campaign.status FROM ad_group WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group.status != 'REMOVED' ORDER BY ad_group.id`
@@ -217,6 +229,7 @@ export function liveTypedAdGroupOf(row: Json, campaignType: string | null): Live
     audienceGrouped: g.audienceSetting?.useAudienceGrouped === true,
     // Google leaves the default out of its answer: a Demand Gen ad group with no channel controls serves on all channels.
     channels: campaignType === 'DEMAND_GEN' ? channelsOf(g.demandGenAdGroupSettings) ?? { strategy: 'ALL_CHANNELS' } : null,
+    observation: restrictionsOf(g.targetingSetting).filter((r) => r.observationOnly && r.dimension).map((r) => r.dimension!),
   }
 }
 

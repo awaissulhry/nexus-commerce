@@ -71,7 +71,7 @@ const typedCampaign = (o: Record<string, unknown> = {}) => ({
 })
 const adGroup = (o: Record<string, unknown> = {}) => ({
   adGroupId: '51', name: 'Group A', status: 'ENABLED', type: null, cpcBidCents: null, cpmBidCents: null, targetCpaCents: null, optimizedTargeting: false,
-  audienceGrouped: false, channels: { strategy: 'ALL_CHANNELS' }, ...o,
+  audienceGrouped: false, channels: { strategy: 'ALL_CHANNELS' }, observation: [], ...o,
 })
 const multiAsset = {
   type: 'multi-asset', finalUrl: 'https://shop.example/a', brandName: 'Shop A', headlines: ['Head one'], descriptions: ['Text one'],
@@ -248,6 +248,43 @@ describe('the G11 tools', () => {
     expect(undo.args.ads).toEqual([{ id: '51~701', finalUrl: 'https://shop.example/a', headlines: ['Old one'] }])
     const back = await undoDraft(undo)
     expect(back.sent[0].adOperation.update.responsiveDisplayAd).toEqual({ headlines: [{ text: 'Old one' }] })
+  })
+
+  it('edit: what its SPENDS MONEY line rests on is checked again — a campaign enabled since the preview gets nothing sent', async () => {
+    const info = { headlines: [{ text: 'Old one' }], longHeadline: { text: 'Old long' }, descriptions: [{ text: 'Old text' }], businessName: 'Shop A', marketingImages: [{ asset: `${C}/assets/301` }], squareMarketingImages: [{ asset: `${C}/assets/302` }] }
+    const ad = (o: Record<string, unknown>) => ({ id: '51~701', adGroupId: '51', adId: '701', type: 'RESPONSIVE_DISPLAY_AD', status: 'ENABLED', adGroupStatus: 'ENABLED', campaignId: '21', campaignStatus: 'PAUSED', campaignType: 'DISPLAY', finalUrls: ['https://shop.example/a'], approval: 'DISAPPROVED', info, ...o })
+    h.live.ads = [ad({})]
+    const args = parsed('edit-google-campaign-type-ads', { ads: [{ id: '51~701', headlines: ['Fixed one'] }] })
+    h.mutate.mockReset()
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const out = await tool('edit-google-campaign-type-ads').handler(args, asker)
+    expect((out.preview as { spendsMoney: boolean }).spendsMoney).toBe(false)
+    h.mutate.mockReset()
+    h.live.ads = [ad({ campaignStatus: 'ENABLED' })]
+    const run = await tool('edit-google-campaign-type-ads').execute!(args, approved(out.preview))
+    expect(run.ok).toBe(false)
+    expect(run.error ?? JSON.stringify(run)).toMatch(/changed since this was approved/)
+    expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('undo leaves what had no value before as it is and says so: an edit\'s new brand name, a settings change\'s first ad group bid', () => {
+    const edit = tool('edit-google-campaign-type-ads').undo!.request({
+      before: { ads: [{ id: '51~701', campaignId: '21', brandName: null, headlines: ['Old one'] }] },
+      after: { ads: [{ id: '51~701', campaignId: '21', brandName: 'Shop A', headlines: ['New one'] }], accountId: 'g-1', customerId: '1234567890' },
+    } as ToolChange) as { tool: string; args: Record<string, unknown> }
+    expect(edit.args.ads).toEqual([{ id: '51~701', headlines: ['Old one'] }])
+    expect(edit.args.why).toMatch(/cannot take off what the ads did not have: 51~701: brand name/)
+    expect(tool('edit-google-campaign-type-ads').input.safeParse(edit.args).success).toBe(true)
+    const only = tool('edit-google-campaign-type-ads').undo!.request({ before: { ads: [{ id: '51~701', campaignId: '21', brandName: null }] }, after: { ads: [{ id: '51~701', campaignId: '21', brandName: 'Shop A' }] } } as ToolChange)
+    expect(only).toMatchObject({ refusal: expect.stringMatching(/cannot be taken off/) })
+    const settings = tool('set-google-campaign-type').undo!.request({
+      before: { campaignId: '21', campaign: { name: 'Old' }, adGroups: [{ adGroupId: '51', settings: {}, added: [], removed: [] }] },
+      after: { campaignId: '21', campaign: { name: 'New', startDate: '2026-11-01' }, adGroups: [{ adGroupId: '51', settings: { defaultBidCents: 40 }, added: [], removed: [] }], accountId: 'g-1', customerId: '1234567890' },
+    } as ToolChange) as { tool: string; args: Record<string, unknown> }
+    expect(settings.args).toMatchObject({ campaignId: '21', name: 'Old' })
+    expect(settings.args.adGroups).toBeUndefined()
+    expect(settings.args.why).toMatch(/not put back, they had no value before: the campaign's startDate, ad group 51's defaultBidCents/)
+    expect(tool('set-google-campaign-type').input.safeParse(settings.args).success).toBe(true)
   })
 
   it('a run happens only as a person\'s approval, and never when the account moved since', async () => {

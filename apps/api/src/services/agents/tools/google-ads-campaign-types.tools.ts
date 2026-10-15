@@ -71,6 +71,8 @@ const accountArgOf = (record: Stamped) => (record.accountId ? { accountId: recor
 const upper = (v: unknown) => (typeof v === 'string' ? v.trim().toUpperCase() : v)
 const lower = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v)
 const KIND_WORD: Record<TypedKind, string> = { DEMAND_GEN: 'Demand Gen', DISPLAY: 'Display', APP: 'App' }
+/** A `why` as the change tools take it (at most 300 characters). */
+const why300 = (text: string) => (text.length > 300 ? `${text.slice(0, 299)}…` : text)
 
 // ── what the tools read ─────────────────────────────────────────────────────────────────────────────────────────
 
@@ -444,9 +446,11 @@ const buildAdd = (args: Record<string, unknown>): GoogleDraftBuilder => async (a
   const campaign = await liveTypedCampaign(account.target, r.campaignId)
   if (!campaign) return typedAddDraft(customerResource(account.target), account.currency, r, { campaign: null, adGroups: [], names: {}, media: { images: {}, assets: [], youtube: [] } })
   const adGroups = await liveTypedAdGroups(account.target, r.campaignId, campaign.type)
+  // Demand Gen: the locations and languages of its ad groups (a new ad group without its own takes those they share).
+  const criteria = campaign.type === 'DEMAND_GEN' && r.adGroups?.length ? await liveTypedCriteria(account.target, r.campaignId) : []
   const names = await targetNames(account.target, (r.adGroups ?? []).flatMap((g) => g.targeting ?? []))
   const media = await mediaFor(account.target, mediaNeeds([...(r.adGroups ?? []).flatMap((g) => g.ads ?? []), ...(r.addAds ?? []).flatMap((x) => x.ads)]))
-  return typedAddDraft(customerResource(account.target), account.currency, r, { campaign, adGroups, names, media })
+  return typedAddDraft(customerResource(account.target), account.currency, r, { campaign, adGroups, criteria, names, media })
 }
 
 const addUndo: ToolUndo = {
@@ -507,7 +511,9 @@ const addCampaignTypeAds: AgentTool = {
     'Add new ad groups (with channel controls, bids, targeting and ads) and new ads in existing ad groups to ONE Demand Gen, '
     + 'Display or App campaign of the business\'s chosen account, in one request — the same ad groups and ads the create '
     + 'tools make (Demand Gen image, carousel, video and product ads; responsive display ads; app ads), with their new '
-    + 'images and YouTube videos. In an ENABLED campaign, new ad groups and new ads in enabled ad groups are made PAUSED '
+    + 'images and YouTube videos. A new Demand Gen ad group that names no location takes the locations and languages the '
+    + 'campaign\'s ad groups share (refused when they differ: name its locations). An App install ad group\'s Audience is a '
+    + 'signal for Google. In an ENABLED campaign, new ad groups and new ads in enabled ad groups are made PAUSED '
     + 'unless enable: true (SPENDS MONEY). A Video campaign cannot be added to through Google\'s API. Undo removes what it '
     + 'made (the new assets stay, unused).' + GOOGLE_CHANGE_RULES,
   undo: addUndo,
@@ -601,10 +607,22 @@ const settingsUndo: ToolUndo = {
       ...(after.campaignRemoved?.length ? { addCampaignTargeting: after.campaignRemoved } : {}),
       ...(after.campaignAdded?.length ? { removeCampaignTargeting: after.campaignAdded } : {}),
     }
-    if (!Object.keys(before.campaign ?? {}).length && !groups.length && !Object.keys(places).length) return { refusal: 'This change replaced nothing that can be put back.' }
+    // A setting that had no value before (no start date, no ad group bid, a budget not of its own …) cannot be put back
+    // as "none": it stays as the change set it, and the undo says so.
+    const unset = [
+      ...Object.keys(after.campaign ?? {}).filter((k) => !(k in (before.campaign ?? {}))).map((k) => `the campaign's ${k}`),
+      ...(after.adGroups ?? []).flatMap((a) => Object.keys(a.settings ?? {}).filter((k) => !(k in ((before.adGroups ?? []).find((x) => x.adGroupId === a.adGroupId)?.settings ?? {}))).map((k) => `ad group ${a.adGroupId}'s ${k}`)),
+    ]
+    const groupsLeft = groups.filter((g) => Object.keys(g).length > 1)
+    if (!Object.keys(before.campaign ?? {}).length && !groupsLeft.length && !Object.keys(places).length) {
+      return { refusal: `This change replaced nothing that can be put back${unset.length ? ` (${unset.join(', ')} had no value before: set it with this tool)` : ''}.` }
+    }
     return {
       tool: 'set-google-campaign-type',
-      args: { ...accountArgOf(after), campaignId: after.campaignId, ...(before.campaign ?? {}), ...places, ...(groups.length ? { adGroups: groups } : {}), why: 'undo of an earlier campaign change: settings and targeting back as they were' },
+      args: {
+        ...accountArgOf(after), campaignId: after.campaignId, ...(before.campaign ?? {}), ...places, ...(groupsLeft.length ? { adGroups: groupsLeft } : {}),
+        why: why300(`undo of an earlier campaign change: settings and targeting back as they were${unset.length ? ` (not put back, they had no value before: ${unset.join(', ')})` : ''}`),
+      },
     }
   },
 }
@@ -679,13 +697,20 @@ const editUndo: ToolUndo = {
     const before = (change.before ?? {}) as TypedEditRecord & Stamped
     const after = (change.after ?? {}) as TypedEditRecord & Stamped
     if (!before.ads?.length) return { refusal: 'This change does not record the ads it edited.' }
+    // A final URL or a brand name the ad did not have cannot be taken off again (Google needs them): they stay.
+    const kept: string[] = []
+    const ads = before.ads.map(({ campaignId: _c, ...fields }) => Object.fromEntries(Object.entries(fields)
+      .filter(([k, v]) => { const stays = (k === 'finalUrl' || k === 'brandName') && v === null; if (stays) kept.push(`${fields.id}: ${k === 'finalUrl' ? 'final URL' : 'brand name'}`); return !stays })
+      // A text that was empty is cleared again ('' clears an optional text); images and videos by their asset ids.
+      .map(([k, v]) => [k, v === null ? '' : v])))
+    const left = ads.filter((a) => Object.keys(a).length > 1)
+    if (!left.length) return { refusal: `This edit only set what the ads did not have (${kept.join('; ')}): Google needs it, so it cannot be taken off. Change it with this tool instead.` }
     return {
       tool: 'edit-google-campaign-type-ads',
       args: {
         ...accountArgOf(after),
-        // A text that was empty is cleared again ('' clears an optional text); images and videos by their asset ids.
-        ads: before.ads.map(({ campaignId: _c, ...fields }) => Object.fromEntries(Object.entries(fields).filter(([k, v]) => !(k === 'finalUrl' && v === null)).map(([k, v]) => [k, v === null ? '' : v]))),
-        why: 'undo of an earlier ad edit: texts, URLs, images and videos back as they were',
+        ads: left,
+        why: why300(`undo of an earlier ad edit: texts, URLs, images and videos back as they were${kept.length ? ` (it cannot take off what the ads did not have: ${kept.join('; ')} — those stay)` : ''}`),
       },
     }
   },

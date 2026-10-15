@@ -47,6 +47,8 @@ describe('the mappers', () => {
     })
     const dg = liveTypedCampaignOf({ campaign: { id: '22', advertisingChannelType: 'DEMAND_GEN', biddingStrategyType: 'MAXIMIZE_CONVERSIONS', maximizeConversions: { targetCpaMicros: '5000000' }, demandGenCampaignSettings: { upgradedTargeting: true }, shoppingSetting: { merchantId: '5550001' } }, campaignBudget: { id: '15', totalAmountMicros: '500000000', period: 'CUSTOM_PERIOD' } })
     expect(dg).toMatchObject({ targetCpaCents: 500, upgradedTargeting: true, merchantId: '5550001', budget: { totalCents: 50000, period: 'CUSTOM_PERIOD' } })
+    // Google's JSON leaves a false bool out: no value means the campaign holds its own locations.
+    expect(liveTypedCampaignOf({ campaign: { id: '23', advertisingChannelType: 'DEMAND_GEN' } }).upgradedTargeting).toBe(false)
   })
 
   it('an ad group: Demand Gen channels (none sent = all channels), its strategy or its picked channels; other kinds have none', () => {
@@ -55,6 +57,7 @@ describe('the mappers', () => {
     expect(liveTypedAdGroupOf({ adGroup: { ...base, demandGenAdGroupSettings: { channelControls: { channelStrategy: 'ALL_OWNED_AND_OPERATED_CHANNELS' } } } }, 'DEMAND_GEN').channels).toEqual({ strategy: 'ALL_OWNED_AND_OPERATED_CHANNELS' })
     expect(liveTypedAdGroupOf({ adGroup: { ...base, demandGenAdGroupSettings: { channelControls: { channelConfig: 'SELECTED_CHANNELS', selectedChannels: { youtubeShorts: true, gmail: true, display: false } } } } }, 'DEMAND_GEN').channels).toEqual({ selected: ['YOUTUBE_SHORTS', 'GMAIL'] })
     expect(liveTypedAdGroupOf({ adGroup: base }, 'DISPLAY').channels).toBeNull()
+    expect(liveTypedAdGroupOf({ adGroup: { ...base, targetingSetting: { targetRestrictions: [{ targetingDimension: 'AUDIENCE', bidOnly: true }, { targetingDimension: 'TOPIC' }] } } }, 'DISPLAY').observation).toEqual(['AUDIENCE'])
   })
 
   it('criteria: each kind to its value (resource names to ids); an ad with its info, review and AdGroupAd key; media assets', () => {

@@ -742,6 +742,10 @@ export function dimensionOf(kind: TargetKind): string {
   return 'audiences'
 }
 
+/** The dimension (dimensionOf) a TargetRestriction's targeting dimension narrows, or null. */
+const dimensionOfRestriction = (d: string): string | null =>
+  ({ AUDIENCE: 'audiences', TOPIC: 'topics', PLACEMENT: 'placements', KEYWORD: 'keywords', AGE_RANGE: 'demographics', GENDER: 'demographics', PARENTAL_STATUS: 'demographics', INCOME_RANGE: 'demographics' } as Record<string, string>)[d] ?? null
+
 /** The names Google gave the segments and Audience resources named, by `kind|id` (a missing key: Google does not know it). */
 export type TargetNames = Record<string, { name: string | null; status: string | null }>
 const nameKey = (item: TargetItem) => `${item.kind}|${item.value}`
@@ -788,7 +792,12 @@ export const TYPED_STRATEGIES = ['MANUAL_CPC', 'MANUAL_CPM', 'MAXIMIZE_CLICKS', 
 export type TypedStrategy = typeof TYPED_STRATEGIES[number]
 export interface TypedBidding { strategy: TypedStrategy; maxCpcCents?: number | null; targetCpcCents?: number | null; targetCpaCents?: number | null; targetRoas?: number | null; portfolioId?: string | null }
 
-/** The strategies each kind takes (Demand Gen guide; Display; App bidding follows its goal). */
+/**
+ * The strategies each kind takes; App bidding follows its goal. Demand Gen: docs/demand-gen/create-campaign lists Maximize
+ * Clicks, Target CPA, Maximize Conversions and Target ROAS, and docs/demand-gen/overview ("Key API resources", Campaign)
+ * names maximize_conversions, maximize_conversion_value, target_cpa, target_roas, target_spend and target_cpc (both v25,
+ * read 2026-10-15) — so Target CPC and Maximize conversion value are offered too (Google's check judges each campaign).
+ */
 export const STRATEGIES_OF: Record<'DEMAND_GEN' | 'DISPLAY', readonly TypedStrategy[]> = {
   DEMAND_GEN: ['MAXIMIZE_CLICKS', 'TARGET_CPC', 'MAXIMIZE_CONVERSIONS', 'TARGET_CPA', 'MAXIMIZE_CONVERSION_VALUE', 'TARGET_ROAS'],
   DISPLAY: ['MANUAL_CPC', 'MANUAL_CPM', 'MAXIMIZE_CLICKS', 'MAXIMIZE_CONVERSIONS', 'TARGET_CPA', 'MAXIMIZE_CONVERSION_VALUE', 'TARGET_ROAS', 'PORTFOLIO'],
@@ -967,6 +976,8 @@ interface GroupContext {
   feed: boolean
   /** Demand Gen locations and languages every ad group of a new campaign gets (upgraded targeting). */
   dgDefaults: TargetItem[]
+  /** A Demand Gen campaign without upgraded targeting: its locations and languages are the campaign's, not its ad groups'. */
+  campaignPlaces?: boolean
 }
 
 interface MadeGroup { name: string; tag: string; status: 'ENABLED' | 'PAUSED'; ads: number }
@@ -1006,8 +1017,14 @@ function newAdGroup(
   const targets = checkTargets([...ctx.dgDefaults, ...(g.targeting ?? [])], ctx.kind, ctx.subType, ctx.names, where, problems)
   if (targets.some((t) => t.kind === 'audience')) {
     if (targets.some((t) => SEGMENT_KIND[t.kind] && !t.exclude)) problems.push(`${where}: an ad group targets an Audience or audience segments, not both`)
-    // AudienceInfo needs the ad group made audience-grouped (immutable after it is made).
-    if (ctx.kind === 'DEMAND_GEN') body.audienceSetting = { useAudienceGrouped: true }
+    // AudienceInfo needs the ad group made audience-grouped (immutable after it is made): Demand Gen targeting and App
+    // audience signals alike (docs/remarketing/audiences, "Ad group criterion": "Demand Gen and App campaigns support
+    // adding an audience ad group criterion … to target audiences or provide audience signals … You must enable audience
+    // targeting in the AdGroup by setting use_audience_grouped to true when the ad group is created").
+    body.audienceSetting = { useAudienceGrouped: true }
+  }
+  if (ctx.campaignPlaces && targets.some((t) => t.kind === 'location' || t.kind === 'language')) {
+    problems.push(`${where}: this Demand Gen campaign holds its locations and languages at the campaign, not its ad groups (set-google-campaign-type addCampaignTargeting)`)
   }
   if (ctx.kind === 'APP' && ctx.subType === 'APP_CAMPAIGN_FOR_ENGAGEMENT' && !targets.some((t) => t.kind === 'user-list')) {
     problems.push(`${where}: an App engagement ad group needs a user list (people who have the app; Google's rule)`)
@@ -1315,8 +1332,33 @@ export interface TypedAddRequest {
 export interface TypedAddLive {
   campaign: LiveTypedCampaign | null
   adGroups: LiveTypedAdGroup[]
+  /** Demand Gen: the locations and languages of the campaign's ad groups (a new ad group without its own takes theirs). */
+  criteria?: LiveTypedCriterion[]
   names: TargetNames
   media: MediaLive
+}
+
+/**
+ * The locations and languages a new Demand Gen ad group gets when it names no targeted location: those every ad group
+ * of the campaign shares (Demand Gen holds them at the ad group, so a new ad group without any would show in every
+ * country). Refused when the campaign has no ad group, or its ad groups differ.
+ */
+function sharedPlaces(adGroups: LiveTypedAdGroup[], criteria: LiveTypedCriterion[]): { items: TargetItem[]; byGroup: string[] } | { problem: string } {
+  const placesOf = (adGroupId: string) => criteria
+    .filter((x) => x.adGroupId === adGroupId && (x.kind === 'location' || x.kind === 'language'))
+    .map((x) => ({ kind: x.kind as TargetKind, value: x.value, exclude: x.exclude }))
+    .sort((a, b) => targetKey(a).localeCompare(targetKey(b)))
+  if (!adGroups.length) return { problem: 'the campaign has no ad group to take locations from: give location items (targeting kind location) — a Demand Gen ad group without one shows in every country' }
+  const sets = adGroups.map((g) => placesOf(g.adGroupId))
+  const byGroup = adGroups.map((g, i) => `${g.adGroupId}:${sets[i].map(targetKey).join('|')}`).sort()
+  if (new Set(sets.map((set) => set.map(targetKey).join('|'))).size > 1) {
+    return { problem: 'the campaign\'s ad groups target different locations and languages: give location items (targeting kind location) for it — it then targets exactly those' }
+  }
+  return { items: sets[0], byGroup }
+}
+const placesText = (items: TargetItem[]) => {
+  const words = items.filter((t) => t.kind === 'location').map((t) => `${t.exclude ? 'not ' : ''}${t.value}`)
+  return words.length ? `locations ${words.join(', ')}` : 'no location (every country)'
 }
 
 export interface TypedAddRecord {
@@ -1345,16 +1387,32 @@ export function typedAddDraft(customer: string, currency: string, r: TypedAddReq
   const campaignRes = `${customer}/campaigns/${c.campaignId}`
   const serving = c.status === 'ENABLED'
   const groupStatus: 'ENABLED' | 'PAUSED' = serving && !r.enable ? 'PAUSED' : 'ENABLED'
+  const dgGroupPlaces = kind === 'DEMAND_GEN' && c.upgradedTargeting
   const ctx: GroupContext = {
     kind, subType: c.subType, currency, bidding: typedBiddingNow(c), names: live.names, feed: kind === 'DEMAND_GEN' && !!c.merchantId, dgDefaults: [],
+    campaignPlaces: kind === 'DEMAND_GEN' && !c.upgradedTargeting,
   }
+  const ownLocation = (g: TypedAdGroupRequest) => (g.targeting ?? []).some((t) => t.kind === 'location' && !t.exclude)
+  const shared = dgGroupPlaces && (r.adGroups ?? []).some((g) => !ownLocation(g)) ? sharedPlaces(live.adGroups, live.criteria ?? []) : null
   const taken = new Set(live.adGroups.map((g) => g.name.trim().toLowerCase()))
   const groups: MadeGroup[] = []
   if ((r.adGroups ?? []).length > MAX_AD_GROUPS) problems.push(`at most ${MAX_AD_GROUPS} new ad groups in one request`)
-  for (const [i, g] of (r.adGroups ?? []).entries()) {
-    const where = `new ad group ${i + 1} "${g.name.trim()}"`
-    if (taken.has(g.name.trim().toLowerCase())) { problems.push(`${where}: the campaign has an ad group of this name`); continue }
-    taken.add(g.name.trim().toLowerCase())
+  for (const [i, asked] of (r.adGroups ?? []).entries()) {
+    const where = `new ad group ${i + 1} "${asked.name.trim()}"`
+    if (taken.has(asked.name.trim().toLowerCase())) { problems.push(`${where}: the campaign has an ad group of this name`); continue }
+    taken.add(asked.name.trim().toLowerCase())
+    let g = asked
+    if (dgGroupPlaces) {
+      // Demand Gen holds locations at the ad group: one without its own takes those the campaign's ad groups share.
+      if (!ownLocation(asked)) {
+        if (!shared || 'problem' in shared) { problems.push(`${where}: ${shared && 'problem' in shared ? shared.problem : 'give location items'}`); continue }
+        g = { ...asked, targeting: [...shared.items, ...(asked.targeting ?? [])] }
+        lines.push([`"${asked.name.trim()}" locations`, '(none)', `${placesText(shared.items)} (as the campaign's other ad groups)`])
+        if (!shared.items.some((t) => t.kind === 'location' && !t.exclude)) notes.push(`${where}: it targets no location, like the campaign's other ad groups — when it serves it can show in every country.`)
+      } else {
+        lines.push([`"${asked.name.trim()}" locations`, '(none)', placesText((asked.targeting ?? []).filter((t) => t.kind === 'location'))])
+      }
+    }
     const made = newAdGroup(ops, media, campaignRes, g, groupStatus, ctx, where, problems, notes, lines)
     if (!made) continue
     groups.push(made)
@@ -1417,6 +1475,7 @@ export function typedAddDraft(customer: string, currency: string, r: TypedAddReq
       youtube: live.media.youtube.map((a) => `${a.youtubeVideoId}:${a.assetId}`).sort(),
       images: media.created.filter((a) => a.sha256).map((a) => a.sha256!).sort(),
       names: Object.keys(live.names).sort(),
+      places: shared && !('problem' in shared) ? shared.byGroup : null,
     },
     before: { campaignId: c.campaignId, adGroups: [], ads: [] },
     after: record,
@@ -1489,10 +1548,14 @@ export interface TypedSettingsRecord {
  */
 function widening(
   where: string, has: Array<{ kind: TargetKind; exclude: boolean }>, adds: TargetItem[], removes: TargetItem[], serves: boolean, note: string,
-  names: TargetNames, spends: string[], warnings: string[],
+  names: TargetNames, spends: string[], warnings: string[], bidOnly: { observation?: readonly string[]; signals?: boolean } = {},
 ): void {
   const dims = new Set([...adds, ...removes].filter((t) => !t.exclude).map((t) => dimensionOf(t.kind)))
   for (const dim of dims) {
+    // Neither narrows nor widens who sees the ads: an App install campaign's audiences are signals for Google, and a
+    // dimension in observation only adjusts bids (TargetRestriction.bid_only).
+    if (bidOnly.signals && dim === 'audiences') { warnings.push(`${where}: its audiences are signals for Google (a hint): they do not narrow or widen who sees the ads.`); continue }
+    if (bidOnly.observation?.includes(dim)) { warnings.push(`${where}: its ${dim} are in observation (bids only): they do not change who sees the ads.`); continue }
     const was = has.filter((x) => !x.exclude && dimensionOf(x.kind) === dim).length
     const plus = adds.filter((t) => !t.exclude && dimensionOf(t.kind) === dim).length
     const minus = removes.filter((t) => !t.exclude && dimensionOf(t.kind) === dim).length
@@ -1607,7 +1670,7 @@ export function typedSettingsDraft(customer: string, currency: string, r: TypedS
   // The campaign's own locations and languages (Display, App).
   const cAsk = [...(r.addCampaignTargeting ?? []), ...(r.removeCampaignTargeting ?? [])]
   if (cAsk.length) {
-    if (kind === 'DEMAND_GEN' && c.upgradedTargeting !== false) problems.push('a Demand Gen campaign holds its locations and languages at its ad groups: change them there (adGroups[].addTargeting / removeTargeting)')
+    if (kind === 'DEMAND_GEN' && c.upgradedTargeting) problems.push('a Demand Gen campaign holds its locations and languages at its ad groups: change them there (adGroups[].addTargeting / removeTargeting)')
     else {
       const has = live.campaignCriteria ?? []
       const hasKey = new Map(has.map((x) => [targetKey(x), x]))
@@ -1727,6 +1790,9 @@ export function typedSettingsDraft(customer: string, currency: string, r: TypedS
       if (hasKey.has(targetKey(t))) { warnings.push(`${where}: ${targetWords(t, live.names)} is already there.`); return false }
       return true
     })
+    if (kind === 'DEMAND_GEN' && !c.upgradedTargeting && adds.some((t) => t.kind === 'location' || t.kind === 'language')) {
+      problems.push(`${where}: this Demand Gen campaign holds its locations and languages at the campaign, not its ad groups (addCampaignTargeting)`)
+    }
     if (adds.some((t) => t.kind === 'audience') && !g.audienceGrouped) problems.push(`${where}: it was made without audience grouping, so it cannot target an Audience (Google sets that only when an ad group is made): target audience segments, or add a new ad group with add-google-campaign-type-ads`)
     const removes: Array<{ item: TargetItem; criterionId: string }> = []
     for (const raw of a.removeTargeting ?? []) {
@@ -1742,7 +1808,10 @@ export function typedSettingsDraft(customer: string, currency: string, r: TypedS
     }
     for (const t of adds) { operations.push(criterionCreate(customer, `${customer}/adGroups/${g.adGroupId}`, t)); lines.push([`${where} targeting`, '(none)', targetWords(t, live.names)]) }
     for (const x of removes) { operations.push({ adGroupCriterionOperation: { remove: `${customer}/adGroupCriteria/${g.adGroupId}~${x.criterionId}` } }); lines.push([`${where} targeting`, targetWords(x.item, live.names), 'removed']) }
-    widening(where, has, adds, removes.map((x) => x.item), serves, gNote, live.names, spends, warnings)
+    widening(where, has, adds, removes.map((x) => x.item), serves, gNote, live.names, spends, warnings, {
+      observation: g.observation.map(dimensionOfRestriction).filter((d): d is string => !!d),
+      signals: kind === 'APP' && c.subType === 'APP_CAMPAIGN',
+    })
     if (Object.keys(gAfter).length || adds.length || removes.length) {
       before.adGroups.push({ adGroupId: g.adGroupId, settings: gBefore, added: [], removed: [] })
       after.adGroups.push({ adGroupId: g.adGroupId, settings: gAfter, added: adds.map((t) => ({ kind: t.kind, value: t.value, exclude: t.exclude === true })), removed: removes.map((x) => x.item) })
@@ -1761,7 +1830,7 @@ export function typedSettingsDraft(customer: string, currency: string, r: TypedS
     operations,
     stands: {
       campaign: { id: c.campaignId, status: c.status, now, budget: c.budget },
-      adGroups: live.adGroups.filter((g) => seenGroups.has(g.adGroupId)).map((g) => ({ ...typedAdGroupNow(g, c), id: g.adGroupId, status: g.status, grouped: g.audienceGrouped })),
+      adGroups: live.adGroups.filter((g) => seenGroups.has(g.adGroupId)).map((g) => ({ ...typedAdGroupNow(g, c), id: g.adGroupId, status: g.status, grouped: g.audienceGrouped, observation: g.observation })),
       criteria: live.criteria.filter((x) => seenGroups.has(x.adGroupId)).map((x) => `${x.adGroupId}~${x.criterionId}:${x.kind}:${x.value}:${x.exclude}`).sort(),
       places: cAsk.length ? (live.campaignCriteria ?? []).map((x) => `${x.criterionId}:${x.kind}:${x.value}:${x.exclude}`).sort() : null,
       names: r.name ? live.campaignNames.map((n) => n.trim().toLowerCase()).filter((n) => n === r.name!.trim().toLowerCase()) : null,
@@ -1931,9 +2000,17 @@ export function typedEditDraft(customer: string, r: TypedEditRequest, live: Type
     tags.push(tag)
     before.ads.push({ id: ad.id, campaignId: ad.campaignId, ...was })
     writes.push({ id: ad.id, campaignId: ad.campaignId, fields: now })
-    const serving = ad.status === 'ENABLED' && ad.adGroupStatus === 'ENABLED' && ad.campaignStatus === 'ENABLED'
-    if (serving && (ad.approval === 'DISAPPROVED' || ad.approval === 'APPROVED_LIMITED' || ad.approval === 'AREA_OF_INTEREST_ONLY')) {
+    const serving = servingAd(ad)
+    if (serving && limitedNow(ad)) {
       spends.push(`${where} is enabled in a serving ad group but Google limits or stops it now (${ad.approval}): once Google approves the new version it can serve more.`)
+    }
+    // Media an ad had none of opens new places for it (a video in a responsive display ad; vertical images in a Demand Gen
+    // image ad, e.g. YouTube Shorts).
+    for (const [field, words] of NEW_PLACES[ad.type!] ?? []) {
+      const had = (adFieldNow(spec, field, ad) as unknown[] | null)?.length ?? 0
+      if (!had && (e[field] as unknown[] | null | undefined)?.length) {
+        (serving ? spends : warnings).push(`${where}: adds ${words} — the ad can show in new places${serving ? '' : ' (it does not serve now)'}.`)
+      }
     }
   }
   if (problems.length) return { refusal: `Not queued (${plural(problems.length, 'problem')}): ${problems.slice(0, 25).join(' · ')}. Nothing was sent.` }
@@ -1967,7 +2044,10 @@ export function typedEditDraft(customer: string, r: TypedEditRequest, live: Type
       // The ads' own fields (not Google's review or performance labels inside them, which move on their own).
       ads: live.ads.filter((a) => seen.has(a.id)).map((a) => {
         const spec = a.type ? AD_TYPES[a.type] : undefined
-        return { id: a.id, type: a.type, status: a.status, finalUrls: a.finalUrls, fields: spec ? Object.fromEntries(AD_FIELD_NAMES.map((f) => [f, recordForm(adFieldNow(spec, f, a))])) : null }
+        return {
+          id: a.id, type: a.type, status: a.status, adGroupStatus: a.adGroupStatus, campaignStatus: a.campaignStatus, limited: limitedNow(a),
+          finalUrls: a.finalUrls, fields: spec ? Object.fromEntries(AD_FIELD_NAMES.map((f) => [f, recordForm(adFieldNow(spec, f, a))])) : null,
+        }
       }),
       assets: live.media.assets.map((a) => `${a.assetId}:${a.type ?? ''}:${a.width ?? ''}x${a.height ?? ''}`).sort(),
       youtube: live.media.youtube.map((a) => `${a.youtubeVideoId}:${a.assetId}`).sort(),
@@ -1985,6 +2065,16 @@ function refsOf(v: unknown, media: Media): Array<{ assetId: string }> {
     const res = x?.asset ?? ''
     return { assetId: media.tagOf.get(res) ?? assetIdOf(res) }
   })
+}
+
+/** An ad that serves now: it, its ad group and its campaign are enabled. */
+const servingAd = (ad: LiveTypedAd) => ad.status === 'ENABLED' && ad.adGroupStatus === 'ENABLED' && ad.campaignStatus === 'ENABLED'
+/** Google limits or stops the ad now (its review). */
+const limitedNow = (ad: LiveTypedAd) => ad.approval === 'DISAPPROVED' || ad.approval === 'APPROVED_LIMITED' || ad.approval === 'AREA_OF_INTEREST_ONLY'
+/** Media that, added to an ad that had none, lets it show in new places. */
+const NEW_PLACES: Record<string, Array<[AdField, string]>> = {
+  RESPONSIVE_DISPLAY_AD: [['videos', 'YouTube videos (it can show as a video ad too)']],
+  DEMAND_GEN_MULTI_ASSET_AD: [['portraitMarketingImages', 'portrait images (vertical placements)'], ['tallPortraitMarketingImages', 'tall portrait images (vertical placements such as YouTube Shorts)']],
 }
 
 /** After a run: the new assets an edit made get Google's ids, and so do the image and video refs that pointed at them. */

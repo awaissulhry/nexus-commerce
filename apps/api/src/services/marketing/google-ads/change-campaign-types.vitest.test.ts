@@ -283,7 +283,7 @@ const campaign = (o: Partial<LiveTypedCampaign> = {}): LiveTypedCampaign => ({
 })
 const group = (o: Partial<LiveTypedAdGroup> = {}): LiveTypedAdGroup => ({
   adGroupId: '51', name: 'Group A', status: 'ENABLED', type: null, cpcBidCents: null, cpmBidCents: null, targetCpaCents: null, optimizedTargeting: false,
-  audienceGrouped: false, channels: { strategy: 'ALL_OWNED_AND_OPERATED_CHANNELS' }, ...o,
+  audienceGrouped: false, channels: { strategy: 'ALL_OWNED_AND_OPERATED_CHANNELS' }, observation: [], ...o,
 })
 const crit = (criterionId: string, kind: LiveTypedCriterion['kind'], value: string, exclude = false, adGroupId = '51'): LiveTypedCriterion =>
   ({ adGroupId, criterionId, kind, value, exclude, status: 'ENABLED', name: null })
@@ -300,6 +300,37 @@ describe('add to an existing campaign', () => {
     const on = draft(typedAddDraft(C, 'EUR', { campaignId: '21', adGroups: [{ name: 'Group B', ads: [multiAsset] }], addAds: [{ adGroupId: '51', ads: [multiAsset] }], enable: true }, live))
     expect(opsOf(on, 'adGroupOperation')[0].create.status).toBe('ENABLED')
     expect(on.spendsMoney).toHaveLength(2)
+  })
+
+  it('Demand Gen: a new ad group without a location takes the locations and languages the campaign\'s ad groups share (said in the preview, kept in what the change stands on)', () => {
+    const criteria = [crit('2', 'location', '2380'), crit('3', 'language', '1004'), crit('4', 'location', '2380', false, '52'), crit('5', 'language', '1004', false, '52'), crit('6', 'user-list', '502')]
+    const two = { ...live, adGroups: [group(), group({ adGroupId: '52', name: 'Group B' })], criteria }
+    const d = draft(typedAddDraft(C, 'EUR', { campaignId: '21', adGroups: [{ name: 'Group C', ads: [multiAsset] }] }, two))
+    const newGroup = opsOf(d, 'adGroupOperation')[0].create.resourceName
+    expect(opsOf(d, 'adGroupCriterionOperation').map((o) => o.create)).toEqual([
+      { adGroup: newGroup, language: { languageConstant: 'languageConstants/1004' } },
+      { adGroup: newGroup, location: { geoTargetConstant: 'geoTargetConstants/2380' } },
+    ])
+    expect(d.changes['"Group C" locations']).toEqual({ from: '(none)', to: 'locations 2380 (as the campaign\'s other ad groups)' })
+    expect((d.stands as { places: string[] }).places).toEqual(['51:+language:1004|+location:2380', '52:+language:1004|+location:2380'])
+    // Its own location: kept, and said.
+    const own = draft(typedAddDraft(C, 'EUR', { campaignId: '21', adGroups: [{ name: 'Group C', targeting: [{ kind: 'location', value: '2250' }] }] }, two))
+    expect(own.changes['"Group C" locations']).toEqual({ from: '(none)', to: 'locations 2250' })
+    expect(opsOf(own, 'adGroupCriterionOperation')).toHaveLength(1)
+    // Ad groups that differ, or none at all: refused until the request names its locations.
+    const differ = { ...two, criteria: [crit('2', 'location', '2380'), crit('4', 'location', '2250', false, '52')] }
+    expect(refused(typedAddDraft(C, 'EUR', { campaignId: '21', adGroups: [{ name: 'Group C' }] }, differ))).toMatch(/target different locations and languages: give location items/)
+    expect(refused(typedAddDraft(C, 'EUR', { campaignId: '21', adGroups: [{ name: 'Group C' }] }, { ...live, adGroups: [] }))).toMatch(/no ad group to take locations from/)
+    // A campaign that holds its own locations (no upgraded targeting): none at the ad group.
+    const own2 = { ...live, campaign: campaign({ upgradedTargeting: false }) }
+    expect(draft(typedAddDraft(C, 'EUR', { campaignId: '21', adGroups: [{ name: 'Group C' }] }, own2)).changes['"Group C" locations']).toBeUndefined()
+    expect(refused(typedAddDraft(C, 'EUR', { campaignId: '21', adGroups: [{ name: 'Group C', targeting: [{ kind: 'location', value: '2250' }] }] }, own2))).toMatch(/holds its locations and languages at the campaign/)
+  })
+
+  it('App installs: an Audience makes the new ad group audience-grouped (a signal, docs/remarketing/audiences)', () => {
+    const app = { ...live, campaign: campaign({ type: 'MULTI_CHANNEL', subType: 'APP_CAMPAIGN', bidding: 'TARGET_CPA', budget: null }) }
+    const d = draft(typedAddDraft(C, 'EUR', { campaignId: '21', adGroups: [{ name: 'Group C', targeting: [{ kind: 'audience', value: '601' }], ads: [{ headlines: ['A'], descriptions: ['B'] }] }] }, app))
+    expect(opsOf(d, 'adGroupOperation')[0].create.audienceSetting).toEqual({ useAudienceGrouped: true })
   })
 
   it('the record holds the ids Google gave (an ad by its adGroupId~adId); a taken name, a Video campaign and another campaign\'s ad group are refused', () => {
@@ -404,6 +435,26 @@ describe('settings and targeting of an existing campaign', () => {
     expect(refused(typedSettingsDraft(C, 'EUR', { campaignId: '21', name: 'Search A' }, live))).toMatch(/another campaign is named/)
   })
 
+  it('audiences in observation, and an App install campaign\'s audience signals, neither narrow nor widen: said, not SPENDS MONEY', () => {
+    const display = { ...live, campaign: campaign({ type: 'DISPLAY', bidding: 'MANUAL_CPC' }), adGroups: [group({ channels: null, observation: ['AUDIENCE'] })], criteria: [crit('1', 'user-list', '502')] }
+    const d = draft(typedSettingsDraft(C, 'EUR', { campaignId: '21', adGroups: [{ adGroupId: '51', addTargeting: [{ kind: 'user-list', value: '501' }] }] }, display))
+    expect(d.spendsMoney).toEqual([])
+    expect(d.warnings.join(' ')).toMatch(/audiences are in observation \(bids only\)/)
+    const app = { ...live, campaign: campaign({ type: 'MULTI_CHANNEL', subType: 'APP_CAMPAIGN', bidding: 'TARGET_CPA' }), adGroups: [group({ channels: null, audienceGrouped: true })], criteria: [] }
+    const a = draft(typedSettingsDraft(C, 'EUR', { campaignId: '21', adGroups: [{ adGroupId: '51', addTargeting: [{ kind: 'audience', value: '601' }] }] }, app))
+    expect(a.operations).toEqual([{ adGroupCriterionOperation: { create: { adGroup: `${C}/adGroups/51`, audience: { audience: `${C}/audiences/601` } } } }])
+    expect(a.warnings.join(' ')).toMatch(/signals for Google/)
+    expect(a.warnings.join(' ')).not.toMatch(/narrower/)
+  })
+
+  it('a Demand Gen campaign without upgraded targeting holds its locations at the campaign (and none at its ad groups)', () => {
+    const own = { ...live, campaign: campaign({ upgradedTargeting: false }), campaignCriteria: [] }
+    expect(draft(typedSettingsDraft(C, 'EUR', { campaignId: '21', addCampaignTargeting: [{ kind: 'location', value: '2380' }] }, own)).operations).toEqual([
+      { campaignCriterionOperation: { create: { campaign: `${C}/campaigns/21`, location: { geoTargetConstant: 'geoTargetConstants/2380' } } } },
+    ])
+    expect(refused(typedSettingsDraft(C, 'EUR', { campaignId: '21', adGroups: [{ adGroupId: '51', addTargeting: [{ kind: 'location', value: '2250' }] }] }, own))).toMatch(/holds its locations and languages at the campaign/)
+  })
+
   it('undo: what it wrote reads back the same from the live account (and not once it moved)', () => {
     const d = draft(typedSettingsDraft(C, 'EUR', { campaignId: '21', name: 'DG New', adGroups: [{ adGroupId: '51', optimizedTargeting: true, addTargeting: [{ kind: 'user-list', value: '501' }], removeTargeting: [{ kind: 'location', value: '2380' }] }] }, live))
     const after = d.after as TypedSettingsRecord
@@ -445,6 +496,17 @@ describe('edit ads in place', () => {
     const edited = liveAd({ info: { ...RDA_INFO, headlines: [{ text: 'New one' }, { text: 'New two' }], marketingImages: [{ asset: `${C}/assets/377` }] } })
     expect(typedEditNow(run, [edited])).toEqual(run)
     expect(typedEditNow(run, [liveAd({ info: RDA_INFO })])).not.toEqual(run)
+  })
+
+  it('media an ad had none of opens new places: a video in a responsive display ad, vertical images in a Demand Gen image ad — SPENDS MONEY where it serves', () => {
+    const rda = draft(typedEditDraft(C, { ads: [{ id: '51~701', videos: [{ assetId: '401' }] }] }, { ads: [liveAd({ info: RDA_INFO })], media: MEDIA }))
+    expect(rda.spendsMoney).toEqual(['responsive display ad 51~701: adds YouTube videos (it can show as a video ad too) — the ad can show in new places.'])
+    const paused = draft(typedEditDraft(C, { ads: [{ id: '51~701', videos: [{ assetId: '401' }] }] }, { ads: [liveAd({ info: RDA_INFO, campaignStatus: 'PAUSED' })], media: MEDIA }))
+    expect(paused.spendsMoney).toEqual([])
+    expect(paused.warnings.join(' ')).toMatch(/new places \(it does not serve now\)/)
+    const dg = liveAd({ type: 'DEMAND_GEN_MULTI_ASSET_AD', info: { headlines: [{ text: 'H' }], descriptions: [{ text: 'D' }], businessName: 'Shop A', squareMarketingImages: [{ asset: `${C}/assets/302` }], logoImages: [{ asset: `${C}/assets/303` }] } })
+    const media = { ...MEDIA, images: { ...MEDIA.images, 'url:https://cdn.example/tall.png': image(600, 1067, 'f') } }
+    expect(draft(typedEditDraft(C, { ads: [{ id: '51~701', tallPortraitMarketingImages: [{ imageUrl: 'https://cdn.example/tall.png' }] }] }, { ads: [dg], media })).spendsMoney[0]).toMatch(/tall portrait images/)
   })
 
   it('a Video campaign\'s video responsive ad: its video, business name and logo always go along (Google requires them); one headline only', () => {
