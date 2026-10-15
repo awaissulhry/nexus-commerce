@@ -81,12 +81,14 @@ describe('Google: reads, and Google Ads mutates only', () => {
     expect(h.calls.map((c) => JSON.parse(String(c.init.body)))).toEqual([{ mutateOperations: AD_EDIT, validateOnly: true }, { mutateOperations: AD_EDIT }])
     expect(gatewayLedger.map((r) => r.outcome)).toEqual(['sent', 'sent'])
     expect([...GOOGLE_ADS_MUTATE_KINDS].sort()).toEqual([
-      'adGroupAdLabelOperation', 'adGroupAdOperation', 'adGroupAssetOperation', 'adGroupBidModifierOperation', 'adGroupCriterionLabelOperation',
-      'adGroupCriterionOperation', 'adGroupLabelOperation', 'adGroupOperation', 'adOperation', 'assetOperation',
-      'biddingStrategyOperation', 'campaignAssetOperation', 'campaignBudgetOperation', 'campaignCriterionOperation',
-      'campaignDraftOperation', 'campaignLabelOperation', 'campaignOperation', 'campaignSharedSetOperation',
-      'customerAssetOperation', 'customerNegativeCriterionOperation', 'customerOperation', 'experimentArmOperation',
-      'experimentOperation', 'labelOperation',
+      'adGroupAdLabelOperation', 'adGroupAdOperation', 'adGroupAssetOperation', 'adGroupBidModifierOperation',
+      'adGroupCriterionLabelOperation', 'adGroupCriterionOperation', 'adGroupLabelOperation', 'adGroupOperation',
+      'adOperation', 'assetOperation', 'biddingStrategyOperation', 'campaignAssetOperation', 'campaignBudgetOperation',
+      'campaignConversionGoalOperation', 'campaignCriterionOperation', 'campaignDraftOperation',
+      'campaignLabelOperation', 'campaignOperation', 'campaignSharedSetOperation', 'conversionActionOperation',
+      'conversionGoalCampaignConfigOperation', 'conversionValueRuleOperation', 'conversionValueRuleSetOperation',
+      'customerAssetOperation', 'customerConversionGoalOperation', 'customerNegativeCriterionOperation',
+      'customerOperation', 'experimentArmOperation', 'experimentOperation', 'labelOperation',
       'recommendationSubscriptionOperation', 'sharedCriterionOperation', 'sharedSetOperation',
     ])
     // Its neighbours stay refused: an ad parameter (AdService's family), a customer operation that is not exactly an
@@ -390,6 +392,126 @@ describe('Google Ads G9: experiments, their arms and campaign drafts (a mutate),
     expect(googleKind('GET', `${DRAFT}:listAsyncErrors`)).toBe('read')
     await googleCall({ connectionId: 'g-1', operation: 'ads.operations.get', method: 'GET', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/operations/op-1` })
     expect(gatewayLedger).toEqual([expect.objectContaining({ operation: 'ads.operations.get', outcome: 'sent', success: true })])
+  })
+})
+
+describe('Google Ads G8a: conversion changes, sales sent to Google (Data Manager API) and their adjustments', () => {
+  const INGEST = 'https://datamanager.googleapis.com/v1/events:ingest'
+  const ADJUST = `${GOOGLE_ADS_API_BASE}/customers/1234567890:uploadConversionAdjustments`
+  const HASH = 'a'.repeat(64)
+  const EVENT = { transactionId: '5001', eventTimestamp: '2026-10-10T10:00:00.000Z', eventSource: 'WEB', conversionValue: 49.9, currency: 'EUR', adIdentifiers: { gclid: 'Cj0KCQjw-test' } }
+  const sales = (over: Record<string, unknown> = {}, event: Record<string, unknown> = EVENT) => ({
+    destinations: [{ operatingAccount: { accountType: 'GOOGLE_ADS', accountId: '1234567890' }, productDestinationId: '72' }],
+    events: [event], encoding: 'HEX', ...over,
+  })
+  const RETRACT = { conversionAction: 'customers/1234567890/conversionActions/72', adjustmentType: 'RETRACTION', orderId: '5001', adjustmentDateTime: '2026-10-15 10:00:00+00:00' }
+  const RESTATE = { ...RETRACT, adjustmentType: 'RESTATEMENT', restatementValue: { adjustedValue: 29.9, currencyCode: 'EUR' } }
+
+  it('conversion actions, goals, a campaign\'s goal level, value rules and rule sets go through a mutate (check and change)', async () => {
+    const ops = [
+      { conversionActionOperation: { create: { name: 'Sales A', type: 'UPLOAD_CLICKS', category: 'PURCHASE', primaryForGoal: false } } },
+      { customerConversionGoalOperation: { update: { resourceName: 'customers/1234567890/customerConversionGoals/PURCHASE~WEBSITE', biddable: true }, updateMask: 'biddable' } },
+      { campaignConversionGoalOperation: { update: { resourceName: 'customers/1234567890/campaignConversionGoals/21~PURCHASE~WEBSITE', biddable: false }, updateMask: 'biddable' } },
+      { conversionGoalCampaignConfigOperation: { update: { resourceName: 'customers/1234567890/conversionGoalCampaignConfigs/21', goalConfigLevel: 'CUSTOMER' }, updateMask: 'goal_config_level' } },
+      { conversionValueRuleOperation: { create: { resourceName: 'customers/1234567890/conversionValueRules/-1', action: { operation: 'MULTIPLY', value: 1.2 }, deviceCondition: { deviceTypes: ['MOBILE'] }, status: 'PAUSED' } } },
+      { conversionValueRuleSetOperation: { create: { resourceName: 'customers/1234567890/conversionValueRuleSets/-2', attachmentType: 'CUSTOMER', conversionValueRules: ['customers/1234567890/conversionValueRules/-1'], dimensions: ['DEVICE'] } } },
+    ]
+    await googleCall({ connectionId: 'g-1', operation: 'ads.mutate.check', method: 'POST', url: MUTATE, body: { mutateOperations: ops, validateOnly: true } })
+    await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: ops } })
+    expect(h.calls).toHaveLength(2)
+    expect(gatewayLedger.map((r) => r.outcome)).toEqual(['sent', 'sent'])
+    // A conversion custom variable or a custom goal: not what Nexus sends.
+    expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [{ conversionCustomVariableOperation: { create: {} } }] }))).toMatchObject({ refusal: expect.stringContaining('conversionCustomVariableOperation') })
+    expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [{ conversionGoalOperation: { create: {} } }] }))).toMatchObject({ refusal: expect.stringContaining('conversionGoalOperation') })
+  })
+
+  it('sales: a validate-only ingest is a check (read), a real one a write; sent once, the body as judged, on the Data Manager host', async () => {
+    expect(googleKind('POST', INGEST, sales({ validateOnly: true }))).toBe('read')
+    expect(googleKind('POST', INGEST, sales())).toBe('write')
+    await googleCall({ connectionId: 'g-1', operation: 'datamanager.events.ingest.check', method: 'POST', url: INGEST, body: sales({ validateOnly: true }) })
+    h.answers.push(() => new Response('{}', { status: 503 }))
+    const res = await googleCall({ connectionId: 'g-1', operation: 'datamanager.events.ingest', method: 'POST', url: INGEST, body: sales({ validateOnly: false }) })
+    expect(res.status).toBe(503)
+    expect(h.calls).toHaveLength(2)
+    expect(h.calls[1].url).toBe(INGEST)
+    expect(JSON.parse(String(h.calls[1].init.body))).toEqual(sales({ validateOnly: false }))
+    expect(headersOf(1)['developer-token']).toBeUndefined()
+    expect(gatewayLedger.map((r) => [r.operation, r.outcome])).toEqual([['datamanager.events.ingest.check', 'sent'], ['datamanager.events.ingest', 'sent']])
+    // Hashed contact data (64 hex characters) may go; a plain email never.
+    await googleCall({ connectionId: 'g-1', operation: 'datamanager.events.ingest.check', method: 'POST', url: INGEST, body: sales({ validateOnly: true }, { ...EVENT, userData: { userIdentifiers: [{ emailAddress: HASH }, { phoneNumber: HASH }] }, consent: { adUserData: 'CONSENT_GRANTED' } }) })
+    // A click-only sale may say consent was denied (nothing personal goes); ad personalization may be said too.
+    await googleCall({ connectionId: 'g-1', operation: 'datamanager.events.ingest.check', method: 'POST', url: INGEST, body: sales({ validateOnly: true }, { ...EVENT, consent: { adUserData: 'CONSENT_DENIED', adPersonalization: 'CONSENT_DENIED' } }) })
+    expect(h.calls).toHaveLength(4)
+  })
+
+  it('adjustments: partial failure always; a validate-only one is a check; the account\'s own conversion actions only', async () => {
+    expect(googleKind('POST', ADJUST, { conversionAdjustments: [RETRACT], partialFailure: true, validateOnly: true })).toBe('read')
+    expect(googleKind('POST', ADJUST, { conversionAdjustments: [RETRACT, RESTATE], partialFailure: true })).toBe('write')
+    await googleCall({ connectionId: 'g-1', operation: 'ads.conversionAdjustments', method: 'POST', url: ADJUST, body: { conversionAdjustments: [RETRACT, RESTATE], partialFailure: true, validateOnly: false } })
+    expect(h.calls).toHaveLength(1)
+    expect(gatewayLedger[0]).toMatchObject({ channel: 'GOOGLE', operation: 'ads.conversionAdjustments', outcome: 'sent' })
+  })
+
+  it('NEXUS_GOOGLE_ADS_WRITES=off: a real ingest or adjustment is refused before anything is sent; their checks still go', async () => {
+    vi.stubEnv('NEXUS_GOOGLE_ADS_WRITES', 'off')
+    for (const [url, body] of [[INGEST, sales()], [ADJUST, { conversionAdjustments: [RETRACT], partialFailure: true }]] as const) {
+      const err = await googleCall({ connectionId: 'g-1', operation: 'x', method: 'POST', url, body }).catch((e) => e)
+      expect(err).toMatchObject({ outcome: 'gated', code: 'PUBLISH_GATED' })
+    }
+    expect(h.calls).toHaveLength(0)
+    await googleCall({ connectionId: 'g-1', operation: 'datamanager.events.ingest.check', method: 'POST', url: INGEST, body: sales({ validateOnly: true }) })
+    expect(h.calls).toHaveLength(1)
+  })
+
+  it('every other ingest or adjustment body, path or declared kind is refused before anything is sent', async () => {
+    const send = (url: string, body: unknown) => googleCall({ connectionId: 'g-1', operation: 'x', method: 'POST', url, body })
+    const tries = [
+      // hashed user data without the buyer's consent, with consent denied, with an unknown consent value
+      send(INGEST, sales({}, { ...EVENT, userData: { userIdentifiers: [{ emailAddress: HASH }] } })),
+      send(INGEST, sales({}, { ...EVENT, userData: { userIdentifiers: [{ emailAddress: HASH }] }, consent: { adUserData: 'CONSENT_DENIED' } })),
+      send(INGEST, sales({}, { ...EVENT, consent: { adUserData: 'CONSENT_GRANTED', adPersonalization: 'MAYBE' } })),
+      // a plain email, an unknown identifier, an address (names), no identifier at all
+      send(INGEST, sales({}, { ...EVENT, userData: { userIdentifiers: [{ emailAddress: 'someone@example.com' }] }, consent: { adUserData: 'CONSENT_GRANTED' } })),
+      send(INGEST, sales({}, { ...EVENT, userData: { userIdentifiers: [{ address: { givenName: HASH } }] } })),
+      send(INGEST, sales({}, { ...EVENT, adIdentifiers: undefined })),
+      // two click ids, a field Nexus never sends, another event source, no order id
+      send(INGEST, sales({}, { ...EVENT, adIdentifiers: { gclid: 'Cj0KCQjw-test', gbraid: 'Cj0KCQjw-test' } })),
+      send(INGEST, sales({}, { ...EVENT, cartData: { items: [] } })),
+      send(INGEST, sales({}, { ...EVENT, eventSource: 'IN_STORE' })),
+      send(INGEST, sales({}, { ...EVENT, transactionId: undefined })),
+      // two destinations, another account type, request-level consent, another encoding, a non-boolean check
+      send(INGEST, { ...sales(), destinations: [sales().destinations[0], sales().destinations[0]] }),
+      send(INGEST, { ...sales(), destinations: [{ operatingAccount: { accountType: 'GOOGLE_ANALYTICS_PROPERTY', accountId: '1' }, productDestinationId: '72' }] }),
+      send(INGEST, sales({ consent: { adUserData: 'CONSENT_GRANTED' } })),
+      send(INGEST, sales({ encoding: 'BASE64' })),
+      send(INGEST, sales({ validateOnly: 'true' })),
+      // more than 2000 events; another Data Manager method; a query string
+      send(INGEST, { ...sales(), events: Array.from({ length: 2001 }, () => EVENT) }),
+      send('https://datamanager.googleapis.com/v1/audienceMembers:ingest', sales()),
+      send(`${INGEST}?x=1`, sales()),
+      // adjustments: no partial failure, another account's action, an enhancement, a retraction with a value, a restatement without one
+      send(ADJUST, { conversionAdjustments: [RETRACT], partialFailure: false }),
+      send(ADJUST, { conversionAdjustments: [{ ...RETRACT, conversionAction: 'customers/999/conversionActions/72' }], partialFailure: true }),
+      send(ADJUST, { conversionAdjustments: [{ ...RETRACT, adjustmentType: 'ENHANCEMENT' }], partialFailure: true }),
+      send(ADJUST, { conversionAdjustments: [{ ...RETRACT, restatementValue: { adjustedValue: 1 } }], partialFailure: true }),
+      send(ADJUST, { conversionAdjustments: [{ ...RESTATE, restatementValue: undefined }], partialFailure: true }),
+      send(ADJUST, { conversionAdjustments: [{ ...RETRACT, userIdentifiers: [{ hashedEmail: HASH }] }], partialFailure: true }),
+      // the click conversion upload (closed to Nexus: the Data Manager API instead)
+      send(`${GOOGLE_ADS_API_BASE}/customers/1234567890:uploadClickConversions`, { conversions: [], partialFailure: true }),
+      // a real ingest declared as a read
+      gatewayCall({ channel: 'GOOGLE', operation: 'x', kind: 'read', connectionId: 'g-1', url: INGEST, method: 'POST', body: JSON.stringify(sales()) }),
+    ]
+    for (const t of tries) expect(await t.catch((e) => e)).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY' })
+    expect(h.calls).toHaveLength(0)
+  })
+
+  it('sales or adjustments for an account the business did not choose through this connection are refused, check or change', async () => {
+    gatewayGoogleUnlinked.add('g-1:1234567890')
+    for (const [url, body] of [[INGEST, sales({ validateOnly: true })], [INGEST, sales()], [ADJUST, { conversionAdjustments: [RETRACT], partialFailure: true }]] as const) {
+      const err = await googleCall({ connectionId: 'g-1', operation: 'x', method: 'POST', url, body }).catch((e) => e)
+      expect(err).toMatchObject({ outcome: 'refused', code: 'GOOGLE_ACCOUNT_NOT_CHOSEN' })
+    }
+    expect(h.calls).toHaveLength(0)
   })
 })
 

@@ -187,6 +187,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'schedule-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'end-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-campaign-draft': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
+  'set-google-conversion-actions': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-conversions.tools test)',
+  'remove-google-conversion-actions': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-conversions.tools test)',
+  'set-google-conversion-goals': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-conversions.tools test)',
   'set-harvest-rules': 'the seeded rule is not a harvest rule, so there is nothing to archive (tools/ads-harvest-postgres test)',
   'set-harvest-sources': 'the seeded ad group feeds no terms to harvest (a manual campaign with no ad product), so it is no source (tools/ads-harvest-postgres test)',
 }
@@ -491,6 +494,13 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'graduate-google-experiment': () => ({ experimentId: '11', budgetId: '14' }),
   'set-google-campaign-draft': () => ({ create: { campaignId: '21', name: 'Draft Z' } }),
   'promote-google-campaign-draft': () => ({ draftId: '21~3' }),
+  // G8a — conversions, goals, value rules, sales sent to Google: no Google Ads account here either (their own tests).
+  'set-google-conversion-actions': () => ({ change: [{ conversionActionId: '71', primary: true }] }),
+  'remove-google-conversion-actions': () => ({ conversionActionIds: ['71'], confirmRemove: true }),
+  'set-google-conversion-goals': () => ({ accountGoals: [{ category: 'PURCHASE', origin: 'WEBSITE', biddable: true }] }),
+  'set-google-value-rules': () => ({ create: [{ multiply: 1.2, devices: ['MOBILE'] }] }),
+  'upload-google-sales': () => ({ conversionActionId: '72', orderIds: ['5001'] }),
+  'adjust-google-sales': () => ({ conversionActionId: '72', retract: ['5001'] }),
   // L2 — listing reads: where each listing lives, its stock and price per market, its photo plan.
   'listing-coordinates': (ids) => ({ productId: ids.productId }),
   'listing-matrix': (ids) => ({ productId: ids.productId }),

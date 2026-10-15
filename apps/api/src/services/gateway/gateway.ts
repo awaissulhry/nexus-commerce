@@ -37,7 +37,7 @@ import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
 import { ebaySignatureAppliesTo } from '../cx/connectors/ebay/signing.js'
 import {
-  apiVersionOf, authHeadersOf, bucketGroupOf, ebayMarketHeaders, googleAdsExperimentCall, googleAdsMutateCustomer, googleAdsRecommendationCall, googleCallKind, googleExperimentBodyOf, googleMutateBodyOf, googleRecommendationBodyOf, MarketUnconfigured, publishModeOf, rateReadingOf, sandboxUrlOf, shopifyGraphqlBodyOf,
+  apiVersionOf, authHeadersOf, bucketGroupOf, ebayMarketHeaders, googleAdjustmentBodyOf, googleAdsAdjustmentCall, googleAdsExperimentCall, googleAdsMutateCustomer, googleAdsRecommendationCall, googleCallKind, googleDataManagerBodyOf, googleExperimentBodyOf, googleMutateBodyOf, googleRecommendationBodyOf, isGoogleDataManagerIngest, MarketUnconfigured, publishModeOf, rateReadingOf, sandboxUrlOf, shopifyGraphqlBodyOf,
 } from './channels.js'
 import { bucketKey, observeRate, takeToken } from './rate.js'
 import { ledgerSafeBody } from './redact.js'
@@ -222,13 +222,20 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // G9 (2026-10-15): an experiment's schedule / end / promote / graduate and a campaign draft's promote
   // (googleAdsExperimentCall), judged by googleExperimentBodyOf; Google has validate_only for each, so like a mutate a
   // check goes as a read and a real one as a write.
+  // G8a (2026-10-15): sales sent to a Google Ads conversion action (the Data Manager API's events:ingest,
+  // isGoogleDataManagerIngest) and their adjustments (ConversionAdjustmentUploadService, googleAdsAdjustmentCall), each
+  // judged (googleDataManagerBodyOf, googleAdjustmentBodyOf): a check when validate-only, else a write under the publish
+  // mode; for the account the business chose through this connection only.
   let googleBody: string | null = null
   if (req.channel === 'GOOGLE') {
     const customer = googleAdsMutateCustomer(req.method, req.url)
     const recommendation = customer === null ? googleAdsRecommendationCall(req.method, req.url) : null
     const accountCall = customer === null && recommendation === null ? googleAdsAccountCall(req.method, req.url) : null
     const experiment = customer === null && recommendation === null && accountCall === null ? googleAdsExperimentCall(req.method, req.url) : null
-    const readOnly = (detail: string) => refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: Nexus only reads Google and changes Google Ads only through a mutate (or an apply or dismiss of its recommendations, an account call of its users, links and billing, or an experiment or campaign draft action), and this call is none of them (${req.method} ${safePath(req.url)}${detail}).`, 403)
+    const adjustment = customer === null && !recommendation && !accountCall && !experiment ? googleAdsAdjustmentCall(req.method, req.url) : null
+    const ingest = customer === null && !recommendation && !accountCall && !experiment && !adjustment && isGoogleDataManagerIngest(req.method, req.url)
+    const readOnly = (detail: string) => refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: Nexus only reads Google and changes Google Ads only through a mutate (or an apply or dismiss of its recommendations, an account call of its users, links and billing, an experiment or campaign draft action, or sales sent to a conversion action and their adjustments), and this call is none of them (${req.method} ${safePath(req.url)}${detail}).`, 403)
+    const notChosen = (id: string) => refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: Google Ads account ${id} is not the account this business chose through this Google connection.`, 403)
     if (accountCall) {
       const judged = googleAccountCallBodyOf(accountCall, req.body)
       if ('refusal' in judged) return readOnly(`: ${judged.refusal}`)
@@ -244,6 +251,15 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       if (!req.connectionId || !(await googleAdsCustomerLinked(req.connectionId, experiment.customer))) {
         return refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: Google Ads account ${experiment.customer} is not the account this business chose through this Google connection.`, 403)
       }
+      googleBody = judged.body
+    } else if (ingest || adjustment) {
+      const judged: { check: boolean; body: string; customer?: string } | { refusal: string } = adjustment ? googleAdjustmentBodyOf(adjustment, req.body) : googleDataManagerBodyOf(req.body)
+      if ('refusal' in judged) return readOnly(`: ${judged.refusal}`)
+      if (req.kind !== (judged.check ? 'read' : 'write')) return readOnly(': the kind declared is not the body\'s')
+      // The account the call acts on: an adjustment's is the customer in its URL (Google uses only the action id inside the
+      // body, never its customer part); a sale's is the destination's operating account.
+      const account = adjustment ? adjustment.customer : judged.customer ?? ''
+      if (!req.connectionId || !(await googleAdsCustomerLinked(req.connectionId, account))) return notChosen(account)
       googleBody = judged.body
     } else if (recommendation) {
       const judged = googleRecommendationBodyOf(recommendation, req.body)

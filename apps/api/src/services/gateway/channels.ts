@@ -228,7 +228,173 @@ export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   // G9 (2026-10-15): experiments, their arms and campaign drafts (v25 MutateOperation.experiment_operation,
   // experiment_arm_operation, campaign_draft_operation).
   'experimentOperation', 'experimentArmOperation', 'campaignDraftOperation',
+  // Conversion tracking (G8a, 2026-10-15; v25 MutateOperation fields): conversion actions, the account's and campaigns'
+  // conversion goals, a campaign's goal level, conversion value rules and rule sets.
+  'conversionActionOperation', 'customerConversionGoalOperation', 'campaignConversionGoalOperation',
+  'conversionGoalCampaignConfigOperation', 'conversionValueRuleOperation', 'conversionValueRuleSetOperation',
 ])
+
+// ── G8a: sales sent to Google, and their adjustments ────────────────────────────────────────────────────────────
+
+/**
+ * Google: the Data Manager API's event ingestion (G8a, 2026-10-15) — the way sales reach a Google Ads conversion action
+ * now that the Google Ads API's UploadClickConversions is closed to Cloud projects that never used it
+ * (developers.google.com/google-ads/api/docs/deprecations, 2026-06-15). One exact URL; a POST; its own host.
+ */
+export const DATA_MANAGER_INGEST_URL = 'https://datamanager.googleapis.com/v1/events:ingest'
+
+export function isGoogleDataManagerIngest(method: string, url: string): boolean {
+  if (method.toUpperCase() !== 'POST') return false
+  let parsed: URL
+  try { parsed = new URL(url) } catch { return false }
+  return parsed.hostname === 'datamanager.googleapis.com' && !parsed.search && parsed.pathname === '/v1/events:ingest'
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+const onlyKeys = (v: Record<string, unknown>, allowed: readonly string[]) => Object.keys(v).filter((k) => !allowed.includes(k))
+const SHA256_HEX = /^[0-9a-f]{64}$/
+const ORDER_ID = /^[A-Za-z0-9_\-]{1,64}$/
+const CLICK_VALUE = /^[A-Za-z0-9_\-.~]{8,1024}$/
+/** Google's limit per request (IngestEventsRequest.events, UploadConversionAdjustmentsRequest). */
+export const GOOGLE_SALES_MAX_PER_REQUEST = 2000
+
+function productAccountProblem(v: unknown, what: string): string | null {
+  if (!isObject(v)) return `${what} is not an object`
+  if (onlyKeys(v, ['accountType', 'accountId']).length) return `${what} names more than accountType and accountId`
+  if (v.accountType !== 'GOOGLE_ADS' || typeof v.accountId !== 'string' || !/^\d{1,20}$/.test(v.accountId)) return `${what} is not a Google Ads account id`
+  return null
+}
+
+/**
+ * An ingest body as the gateway judges it, or why it is refused: ONE destination (a Google Ads account and a conversion
+ * action of it), 1–2000 events, each a sale (transactionId, eventTimestamp, eventSource WEB, value, currency) with exactly
+ * one click id and/or user data that is HASHED only (emailAddress / phoneNumber as 64 hex characters: a plain email or
+ * phone is never sent) and only with the buyer's consent to ad user data GRANTED on the event; consent ad user data and
+ * ad personalization only; encoding HEX; validateOnly a boolean (true = Google's check: it takes nothing). Nothing else.
+ * The parsed body is what is sent; `customer` is the account it goes to.
+ */
+export function googleDataManagerBodyOf(body: unknown): { check: boolean; body: string; customer: string } | { refusal: string } {
+  if (typeof body !== 'string') return { refusal: 'the body is not JSON text' }
+  let parsed: Record<string, unknown>
+  try { parsed = JSON.parse(body) } catch { return { refusal: 'the body is not JSON' } }
+  if (!isObject(parsed)) return { refusal: 'the body is not a JSON object' }
+  const extra = onlyKeys(parsed, ['destinations', 'events', 'encoding', 'validateOnly'])
+  if (extra.length) return { refusal: `it names ${extra.join(', ')}` }
+  if (parsed.validateOnly !== undefined && typeof parsed.validateOnly !== 'boolean') return { refusal: 'validateOnly is not true or false' }
+  if (parsed.encoding !== undefined && parsed.encoding !== 'HEX') return { refusal: 'encoding is not HEX' }
+  const destinations = parsed.destinations
+  if (!Array.isArray(destinations) || destinations.length !== 1 || !isObject(destinations[0])) return { refusal: 'it does not name exactly one destination' }
+  const destination = destinations[0]
+  if (onlyKeys(destination, ['operatingAccount', 'loginAccount', 'productDestinationId']).length) return { refusal: 'its destination names more than an account and a conversion action' }
+  const accountProblem = productAccountProblem(destination.operatingAccount, 'its operating account')
+    ?? (destination.loginAccount === undefined ? null : productAccountProblem(destination.loginAccount, 'its login account'))
+  if (accountProblem) return { refusal: accountProblem }
+  if (typeof destination.productDestinationId !== 'string' || !/^\d{1,20}$/.test(destination.productDestinationId)) return { refusal: 'its destination is not a conversion action id' }
+  const events = parsed.events
+  if (!Array.isArray(events) || events.length === 0) return { refusal: 'it holds no events' }
+  if (events.length > GOOGLE_SALES_MAX_PER_REQUEST) return { refusal: `it holds more than ${GOOGLE_SALES_MAX_PER_REQUEST} events` }
+  for (const event of events) {
+    if (!isObject(event)) return { refusal: 'an event is not a JSON object' }
+    const more = onlyKeys(event, ['transactionId', 'eventTimestamp', 'eventSource', 'conversionValue', 'currency', 'adIdentifiers', 'userData', 'consent'])
+    if (more.length) return { refusal: `an event names ${more.join(', ')}` }
+    if (typeof event.transactionId !== 'string' || !ORDER_ID.test(event.transactionId)) return { refusal: 'an event has no order id (transactionId)' }
+    if (typeof event.eventTimestamp !== 'string' || Number.isNaN(Date.parse(event.eventTimestamp))) return { refusal: 'an event has no time' }
+    if (event.eventSource !== 'WEB') return { refusal: 'an event is not a web sale (eventSource WEB)' }
+    if (typeof event.conversionValue !== 'number' || !(event.conversionValue >= 0)) return { refusal: 'an event has no value' }
+    if (typeof event.currency !== 'string' || !/^[A-Z]{3}$/.test(event.currency)) return { refusal: 'an event has no currency' }
+    if (event.adIdentifiers !== undefined) {
+      const ids = event.adIdentifiers
+      if (!isObject(ids)) return { refusal: 'an event\'s click id is not an object' }
+      const kinds = Object.keys(ids)
+      if (kinds.length !== 1 || !['gclid', 'gbraid', 'wbraid'].includes(kinds[0]) || typeof ids[kinds[0]] !== 'string' || !CLICK_VALUE.test(ids[kinds[0]] as string)) {
+        return { refusal: 'an event does not carry exactly one click id (gclid, gbraid or wbraid)' }
+      }
+    }
+    if (event.userData !== undefined) {
+      const data = event.userData
+      if (!isObject(data) || onlyKeys(data, ['userIdentifiers']).length || !Array.isArray(data.userIdentifiers) || !data.userIdentifiers.length || data.userIdentifiers.length > 10) {
+        return { refusal: 'an event\'s user data is not 1 to 10 identifiers' }
+      }
+      for (const id of data.userIdentifiers) {
+        const keys = isObject(id) ? Object.keys(id) : []
+        if (keys.length !== 1 || !['emailAddress', 'phoneNumber'].includes(keys[0]) || typeof (id as Record<string, unknown>)[keys[0]] !== 'string' || !SHA256_HEX.test((id as Record<string, unknown>)[keys[0]] as string)) {
+          return { refusal: 'an event\'s user data is not a hashed email or phone (SHA-256, hex): Nexus never sends them in plain text' }
+        }
+      }
+    }
+    if (event.adIdentifiers === undefined && event.userData === undefined) return { refusal: 'an event carries neither a click id nor user data' }
+    if (event.consent !== undefined) {
+      const consent = event.consent
+      const status = (v: unknown) => v === undefined || v === 'CONSENT_GRANTED' || v === 'CONSENT_DENIED'
+      if (!isObject(consent) || onlyKeys(consent, ['adUserData', 'adPersonalization']).length || consent.adUserData === undefined || !status(consent.adUserData) || !status(consent.adPersonalization)) {
+        return { refusal: 'an event\'s consent is not ad user data (and ad personalization) granted or denied' }
+      }
+    }
+    // Defence in depth: a buyer's (hashed) contact goes only with their consent to ad user data, said on the event.
+    if (event.userData !== undefined && (event.consent as Record<string, unknown> | undefined)?.adUserData !== 'CONSENT_GRANTED') {
+      return { refusal: 'an event carries user data without the buyer\'s consent to ad user data (CONSENT_GRANTED)' }
+    }
+  }
+  return { check: parsed.validateOnly === true, body: JSON.stringify(parsed), customer: (destination.operatingAccount as Record<string, string>).accountId }
+}
+
+/**
+ * Google: ConversionAdjustmentUploadService.UploadConversionAdjustments (`POST https://googleads.googleapis.com/vNN/
+ * customers/{id}:uploadConversionAdjustments`, G8a) — retract a sale or restate its value. One customer.
+ */
+export function googleAdsAdjustmentCall(method: string, url: string): { customer: string } | null {
+  if (method.toUpperCase() !== 'POST') return null
+  let parsed: URL
+  try { parsed = new URL(url) } catch { return null }
+  if (parsed.hostname !== 'googleads.googleapis.com' || parsed.search) return null
+  const match = /^\/v\d+\/customers\/(\d{1,20}):uploadConversionAdjustments$/.exec(parsed.pathname)
+  return match ? { customer: match[1] } : null
+}
+
+/**
+ * An adjustment body as the gateway judges it, or why it is refused: 1–2000 adjustments, each a RETRACTION or a
+ * RESTATEMENT (with its new value) named by order id, with its time; partialFailure true (Google: always), validateOnly a
+ * boolean (true = Google's check). No enhancement, no user data, no gclid pair. Each action must be written under THIS
+ * customer, but that is tidiness, not the guard: Google ignores the customer id in `conversion_action` and uses only the
+ * action id (v25 ConversionAdjustment.conversion_action). The guard is the customer in the URL, which must be the account
+ * this business chose through this connection (gateway.ts, googleAdsCustomerLinked).
+ */
+export function googleAdjustmentBodyOf(call: { customer: string }, body: unknown): { check: boolean; body: string } | { refusal: string } {
+  if (typeof body !== 'string') return { refusal: 'the body is not JSON text' }
+  let parsed: Record<string, unknown>
+  try { parsed = JSON.parse(body) } catch { return { refusal: 'the body is not JSON' } }
+  if (!isObject(parsed)) return { refusal: 'the body is not a JSON object' }
+  const extra = onlyKeys(parsed, ['conversionAdjustments', 'partialFailure', 'validateOnly'])
+  if (extra.length) return { refusal: `it names ${extra.join(', ')}` }
+  if (parsed.partialFailure !== true) return { refusal: 'partialFailure is not true (Google takes adjustments one by one)' }
+  if (parsed.validateOnly !== undefined && typeof parsed.validateOnly !== 'boolean') return { refusal: 'validateOnly is not true or false' }
+  const adjustments = parsed.conversionAdjustments
+  if (!Array.isArray(adjustments) || adjustments.length === 0) return { refusal: 'it holds no adjustments' }
+  if (adjustments.length > GOOGLE_SALES_MAX_PER_REQUEST) return { refusal: `it holds more than ${GOOGLE_SALES_MAX_PER_REQUEST} adjustments` }
+  const prefix = `customers/${call.customer}/conversionActions/`
+  for (const a of adjustments) {
+    if (!isObject(a)) return { refusal: 'an adjustment is not a JSON object' }
+    const more = onlyKeys(a, ['conversionAction', 'adjustmentType', 'orderId', 'adjustmentDateTime', 'restatementValue'])
+    if (more.length) return { refusal: `an adjustment names ${more.join(', ')}` }
+    if (typeof a.conversionAction !== 'string' || !a.conversionAction.startsWith(prefix) || !/^\d{1,20}$/.test(a.conversionAction.slice(prefix.length))) {
+      return { refusal: 'an adjustment does not name a conversion action of this account' }
+    }
+    if (typeof a.orderId !== 'string' || !ORDER_ID.test(a.orderId)) return { refusal: 'an adjustment has no order id' }
+    if (typeof a.adjustmentDateTime !== 'string' || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/.test(a.adjustmentDateTime)) return { refusal: 'an adjustment has no time' }
+    if (a.adjustmentType === 'RETRACTION') {
+      if (a.restatementValue !== undefined) return { refusal: 'a retraction names a value' }
+    } else if (a.adjustmentType === 'RESTATEMENT') {
+      const v = a.restatementValue
+      if (!isObject(v) || onlyKeys(v, ['adjustedValue', 'currencyCode']).length || typeof v.adjustedValue !== 'number' || !(v.adjustedValue > 0)
+        || (v.currencyCode !== undefined && (typeof v.currencyCode !== 'string' || !/^[A-Z]{3}$/.test(v.currencyCode)))) {
+        return { refusal: 'a restatement has no new value' }
+      }
+    } else {
+      return { refusal: 'an adjustment is not a retraction or a restatement' }
+    }
+  }
+  return { check: parsed.validateOnly === true, body: JSON.stringify(parsed) }
+}
 
 /**
  * Google: the third change Nexus sends (G9, 2026-10-15) — ExperimentService's actions on ONE experiment and
@@ -400,9 +566,10 @@ export function isGoogleValidateOnly(body: unknown): boolean {
  * (isGoogleAdsBrandSuggestion, G7). Anything else — `…:mutate`,
  * `…:registerGcp`, PATCH, DELETE — is a change. The gateway lets through only a Google Ads mutate
  * (isGoogleAdsMutate): as a check when it is validate-only, else as a write under the publish mode; an apply or a
- * dismiss of Google's recommendations (googleAdsRecommendationCall), always as a write under the publish mode; and an
+ * dismiss of Google's recommendations (googleAdsRecommendationCall), always as a write under the publish mode; an
  * experiment's schedule / end / promote / graduate or a campaign draft's promote (googleAdsExperimentCall, G9), like a
- * mutate: a check when validate-only, else a write.
+ * mutate: a check when validate-only, else a write; and (G8a) sales sent to Google (isGoogleDataManagerIngest) and
+ * their adjustments (googleAdsAdjustmentCall), each a check when validate-only, else a write under the publish mode.
  */
 export function googleCallKind(method: string, url: string): 'read' | 'action' {
   const m = method.toUpperCase()

@@ -37,9 +37,11 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Google Ads G8b (2026-10-15) — the account's settings, users, links and billing.
 // Google Ads G6 (2026-10-15) — assets of every type and their links at the account, campaigns and ad groups change the Google Ads account.
 // Google Ads G9 (2026-10-15) — experiments and campaign drafts change the Google Ads account; google-ads-experiments reads it live.
+// Google Ads G8a (2026-10-15) — conversion actions, goals and value rules change the Google Ads account; Shopify sales and their adjustments are sent to Google.
 
 const OPEN_WORLD = [
-  'add-ad-targets', 'add-google-assets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
+  'add-ad-targets', 'add-google-assets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
+  'advance-purchase-order',
   'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'apply-google-recommendations',
   'apply-harvest',
   'archive-ads', 'build-google-campaigns', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
@@ -53,7 +55,7 @@ const OPEN_WORLD = [
   'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
-  'remove-google-labels', 'reopen-listing', 'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
+  'remove-google-conversion-actions', 'remove-google-labels', 'reopen-listing', 'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
   'request-review',
   'resend-prices', 'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign',
   'resume-automation', 'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
@@ -64,16 +66,17 @@ const OPEN_WORLD = [
   'set-google-account-settings', 'set-google-ad-groups', 'set-google-asset-links', 'set-google-assets',
   'set-google-audiences', 'set-google-auto-apply', 'set-google-bid-strategy', 'set-google-billing',
   'set-google-budget', 'set-google-campaign', 'set-google-campaign-draft', 'set-google-campaign-exclusions',
-  'set-google-demographics', 'set-google-exclusion-list', 'set-google-experiment', 'set-google-inventory-filter',
-  'set-google-keywords', 'set-google-labels',
-  'set-google-negative-list', 'set-google-negatives', 'set-google-product-groups', 'set-google-shopping-settings',
-  'set-google-status', 'set-google-targeting', 'set-google-urls', 'set-google-user-access', 'set-hourly-bid-plan', 'set-listing-price',
+  'set-google-conversion-actions', 'set-google-conversion-goals', 'set-google-demographics',
+  'set-google-exclusion-list', 'set-google-experiment', 'set-google-inventory-filter', 'set-google-keywords',
+  'set-google-labels', 'set-google-negative-list', 'set-google-negatives', 'set-google-product-groups',
+  'set-google-shopping-settings', 'set-google-status', 'set-google-targeting', 'set-google-urls',
+  'set-google-user-access', 'set-google-value-rules', 'set-hourly-bid-plan', 'set-listing-price',
   'set-listing-stock',
   'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
   'set-promotion', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
   'shipping-rates', 'shopify-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock',
   'tune-ad-engine', 'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change',
-  'void-shipping-label',
+  'upload-google-sales', 'void-shipping-label',
 ]
 
 describe('MCP.7 — every tool, as Claude sees it', () => {

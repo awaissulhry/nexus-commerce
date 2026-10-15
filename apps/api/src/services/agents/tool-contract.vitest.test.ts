@@ -806,6 +806,28 @@ describe('C1 — every registered tool keeps the contract', () => {
       'schedule-google-experiment': { before: { experimentId: '11', scheduled: false }, after: { experimentId: '11', scheduled: 'started', accountId: 'g-1', customerId: '1234567890' } },
       'graduate-google-experiment': { before: { experimentId: '11', campaignId: '23', budgetId: '12' }, after: { experimentId: '11', campaignId: '23', budgetId: '14', accountId: 'g-1', customerId: '1234567890' } },
       'set-google-campaign-draft': { before: { action: 'rename', draftId: '21~3', name: 'Draft A' }, after: { action: 'rename', draftId: '21~3', name: 'Draft B', accountId: 'g-1', customerId: '1234567890' } },
+      // G8a: conversion settings and goals go back; value rules get their old action (a rule it made and enabled is
+      // paused); an upload's sales are retracted; a restatement goes back to the value Nexus gave Google before.
+      'set-google-conversion-actions': {
+        before: { actions: [{ conversionActionId: '71', primary: false, clickWindowDays: 30 }], created: [], accountId: 'g-1', customerId: '1234567890' },
+        after: { actions: [{ conversionActionId: '71', primary: true, clickWindowDays: 60 }], created: [{ conversionActionId: '72', name: 'Sales B', type: 'UPLOAD_CLICKS' }], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-conversion-goals': {
+        before: { account: [{ category: 'PURCHASE', origin: 'WEBSITE', biddable: false }], campaigns: [{ campaignId: '21', category: 'SIGNUP', origin: 'WEBSITE', biddable: true }], levels: [{ campaignId: '21', goalsFrom: 'CUSTOMER' }], accountId: 'g-1', customerId: '1234567890' },
+        after: { account: [{ category: 'PURCHASE', origin: 'WEBSITE', biddable: true }], campaigns: [{ campaignId: '21', category: 'SIGNUP', origin: 'WEBSITE', biddable: false }], levels: [{ campaignId: '21', goalsFrom: 'CAMPAIGN' }], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-value-rules': {
+        before: { rules: [{ valueRuleId: '91', operation: 'MULTIPLY', multiply: 1.2, status: 'ENABLED' }], created: [], accountId: 'g-1', customerId: '1234567890' },
+        after: { rules: [{ valueRuleId: '91', operation: 'ADD', addCents: 500, status: 'PAUSED' }], created: [{ valueRuleId: '92', status: 'ENABLED' }], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'upload-google-sales': {
+        before: { conversionActionId: '72', sent: [], accountId: 'g-1', customerId: '1234567890' },
+        after: { conversionActionId: '72', sent: [{ orderId: '5001', name: '#1001', valueCents: 4990, currency: 'EUR', at: '2026-10-10T10:00:00.000Z', clickId: 'gclid', enhanced: false }], requestId: 'req-1', accountId: 'g-1', customerId: '1234567890' },
+      },
+      'adjust-google-sales': {
+        before: { conversionActionId: '72', retracted: ['5002'], restated: [{ orderId: '5001', valueCents: 4990, currency: 'EUR' }], accountId: 'g-1', customerId: '1234567890' },
+        after: { conversionActionId: '72', retracted: ['5002'], restated: [{ orderId: '5001', valueCents: 2990, currency: 'EUR' }], accountId: 'g-1', customerId: '1234567890' },
+      },
       // L7 — products created (parent and a variation), and products binned.
       'create-product': { before: { products: [] }, after: { products: [{ id: 'p1', deleted: false }, { id: 'p2', deleted: false }] } },
       'create-variations': { before: { products: [] }, after: { products: [{ id: 'p3', deleted: false }] } },
@@ -890,7 +912,9 @@ describe('C1 — every registered tool keeps the contract', () => {
       'edit-google-rsa', 'edit-google-assets', 'set-google-urls', 'replace-google-keywords', 'move-google-ads',
       'add-google-assets', 'set-google-asset-links',
       'create-google-experiment', 'set-google-experiment', 'schedule-google-experiment', 'end-google-experiment',
-      'promote-google-experiment', 'graduate-google-experiment', 'set-google-campaign-draft', 'promote-google-campaign-draft']) {
+      'promote-google-experiment', 'graduate-google-experiment', 'set-google-campaign-draft', 'promote-google-campaign-draft',
+      'set-google-conversion-actions', 'remove-google-conversion-actions', 'set-google-conversion-goals', 'set-google-value-rules',
+      'upload-google-sales', 'adjust-google-sales']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
