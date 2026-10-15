@@ -64,8 +64,8 @@ function parseShopifyTriggeredAt(request: { headers: Record<string, unknown> }):
  * 2026-10-15 — Shopify follows Nexus: a Shopify product edit NEVER renames a Nexus product. The legacy path here copied
  * the Shopify title into `Product.name` for a product whose old `shopifyProductId` column matched, which would overwrite
  * the Nexus names (Italian) with the store's English titles. Order import registers no product topic, so this receives
- * nothing; a stray delivery (a subscription left on the shop) only marks a content-managed listing for review, which
- * changes no product, and is otherwise acknowledged with one log line.
+ * nothing; a stray delivery (a subscription left on the shop) changes no Nexus product: it only marks a content-managed
+ * Shopify listing for review, and is otherwise acknowledged with one log line.
  */
 export async function handleProductUpdate(payload: ShopifyWebhookPayload): Promise<void> {
   try {
@@ -83,47 +83,16 @@ export async function handleProductUpdate(payload: ShopifyWebhookPayload): Promi
 }
 
 /**
- * Process product delete webhook
+ * Process product delete webhook.
+ *
+ * 2026-10-15 — Shopify follows Nexus: a Shopify product deleted in Shopify NEVER changes a Nexus product. The legacy
+ * path here set `Product.status` to INACTIVE for a product whose old `shopifyProductId` column matched, which would take
+ * a product that also sells on Amazon and eBay out of the active catalogue. Order import registers no product topic, so
+ * this receives nothing; a stray delivery is recorded in the inbound ledger by the receiver and logged, nothing more.
  */
 export async function handleProductDelete(payload: ShopifyWebhookPayload): Promise<void> {
-  try {
-    const product = payload as any;
-    const shopifyProductId = String(product.id);
-
-    console.log(`[ShopifyWebhooks] Processing product delete: ${shopifyProductId}`);
-
-    // Find and mark product as inactive
-    const dbProduct = await (prisma as any).product.findFirst({
-      where: { shopifyProductId },
-    });
-
-    if (dbProduct) {
-      await (prisma as any).product.update({
-        where: { id: dbProduct.id },
-        data: { status: "INACTIVE" },
-      });
-
-      // P-RT.2 — emit product.deleted on the SSE bus. We use the
-      // PRODUCT_DELETED event type even though the row stays in the
-      // DB (status flipped to INACTIVE) because semantically the
-      // product left the active catalog from Shopify's perspective —
-      // /products grid should drop it from the active view in real
-      // time. The Timeline tab keeps the row + the audit event.
-      void productEventService.emit({
-        aggregateId: dbProduct.id,
-        aggregateType: 'Product',
-        eventType: 'PRODUCT_DELETED',
-        data: { shopifyProductId },
-        metadata: { source: 'WEBHOOK', shopifyProductId, channel: 'SHOPIFY' },
-      });
-
-      console.log(`[ShopifyWebhooks] Product ${shopifyProductId} marked as inactive`);
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[ShopifyWebhooks] Failed to process product delete:", message);
-    throw error;
-  }
+  const shopifyProductId = String((payload as any)?.id ?? '');
+  logger.warn('[ShopifyWebhooks] products/delete acknowledged, nothing written: a product deleted in Shopify never changes a Nexus product', { shopifyProductId });
 }
 
 /**

@@ -46,7 +46,7 @@ const UNREPLAYABLE = {
  */
 const RECEIVED_NOT_REGISTERED = {
   'product/update': 'Shopify follows Nexus: a Shopify title never renames a Nexus product. Kept for a subscription a person left on the shop.',
-  'product/delete': 'Shopify follows Nexus: not registered by order import. Kept for a subscription a person left on the shop.',
+  'product/delete': 'Shopify follows Nexus: a product deleted in Shopify never changes a Nexus product. Kept for a subscription a person left on the shop.',
   'inventory/update': 'Nexus stock counts are not set from Shopify. Kept for a subscription a person left on the shop.',
   'app/scopes_update': 'Not needed by order import; kept for a subscription made before it.',
   'customers/data_request': 'A privacy topic: configured with the app, not registered per shop.',

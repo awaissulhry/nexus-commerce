@@ -185,13 +185,18 @@ describe('a replay runs the same door as the receiver', () => {
   })
 })
 
-describe('a stray products/update never renames a Nexus product', () => {
-  it('even for a product with the legacy shopifyProductId: no product read, no write, no event', async () => {
-    m.answers['product.findFirst'] = { id: 'prod-1', shopifyProductId: '555', name: 'Giacca da moto' }
-    const response = await deliver('/webhooks/shopify/products/update', { id: 555, title: 'Motorcycle jacket', updated_at: '2026-10-16T08:00:00Z' })
+describe('a stray product webhook never changes a Nexus product', () => {
+  it.each([
+    ['/webhooks/shopify/products/update', { id: 555, title: 'Motorcycle jacket', updated_at: '2026-10-16T08:00:00Z' }],
+    ['/webhooks/shopify/products/delete', { id: 555 }],
+  ])('%s, even for a product with the legacy shopifyProductId: no product read or write, no event', async (path, payload) => {
+    m.answers['product.findFirst'] = { id: 'prod-1', shopifyProductId: '555', name: 'Giacca da moto', status: 'ACTIVE' }
+    const response = await deliver(path, payload)
     expect(response.statusCode).toBe(200)
     expect(m.dbCalls.filter((c) => c.model === 'product')).toEqual([])
+    expect(m.dbCalls.filter((c) => /^(create|update|upsert|delete)/.test(c.method))).toEqual([])
     const { productEventService } = await import('../services/product-event.service.js')
     expect(productEventService.emit).not.toHaveBeenCalled()
+    expect(m.finished).toEqual([{ id: expect.any(String), outcome: 'done' }])
   })
 })

@@ -9,7 +9,9 @@
  *   movement, no return;
  * - an order created at or after the start date is held and taken exactly as the writer does it without the gate;
  * - the start date is written once (five simultaneous starts give one row and one time) at a whole second;
- * - while the server switch is off an order webhook is held (InboundDeferred) and writes nothing.
+ * - while the server switch is off an order webhook is held (InboundDeferred) and writes nothing;
+ * - a stray products/delete or products/update for a linked product changes no Nexus product (status, name, any field)
+ *   and no listing on any channel.
  *
  * 🔴 Needs a MULTI-CONNECTION PostgreSQL. Without one the suite SKIPS. From the repo root:
  * `node scripts/run-real-postgres-tests.mjs` (registered).
@@ -56,6 +58,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shopify order import from its start d
   let shopify: typeof import('../../routes/shopify-webhooks.js')
   let ingest: typeof import('./order-ingest-switch.js')
   let ledger: typeof import('../cx/ingress/ledger.js')
+  let handlers: typeof import('../cx/ingress/handlers.js')
   let mainId = ''
 
   const seedProduct = async (onHand = 10) => {
@@ -108,6 +111,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shopify order import from its start d
     shopify = await import('../../routes/shopify-webhooks.js')
     ingest = await import('./order-ingest-switch.js')
     ledger = await import('../cx/ingress/ledger.js')
+    handlers = await import('../cx/ingress/handlers.js')
   }, 180_000)
 
   afterAll(async () => {
@@ -215,5 +219,34 @@ describe.skipIf(!concurrentDatabaseUrl())(`Shopify order import from its start d
     expect(await nexusOrder(order.id)).toBeUndefined()
     expect(await level(p.productId)).toEqual({ quantity: 10, reserved: 0, available: 10 })
     expect(await traces(p.productId, `R-${order.id}`)).toEqual({ holds: 0, movements: 0, returns: 0 })
+  })
+
+  it('6. a stray products/delete or products/update for a linked product changes no Nexus product and no listing', async () => {
+    const p = await seedProduct(), store = await shop(T0), shopifyProductId = String(Date.now())
+    await q(`UPDATE "Product" SET "shopifyProductId"=$2, name='Giacca da moto Xavia', status='ACTIVE' WHERE id=$1`, [p.productId, shopifyProductId])
+    const listing = (channel: string, region: string, market: string, connection: string | null, external: string | null) =>
+      q(`INSERT INTO "ChannelListing" (id,"workspaceId","productId",channel,marketplace,region,"channelMarket","channelConnectionId","externalListingId","listingStatus","isPublished",title,quantity,"updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$5,$6,$7,$8,'ACTIVE',true,'Giacca da moto Xavia',5,now())`, [randomUUID(), WS, p.productId, channel, region, market, connection, external])
+    await listing('SHOPIFY', 'IT', 'SHOPIFY_IT', store, shopifyProductId)
+    await listing('AMAZON', 'IT', 'AMAZON_IT', null, 'B0TEST0001')
+    await listing('EBAY', 'IT', 'EBAY_IT', null, '110000000001')
+    const snapshot = async () => ({
+      product: (await q(`SELECT to_jsonb(p) AS row FROM "Product" p WHERE id=$1`, [p.productId]))[0].row,
+      listings: (await q(`SELECT to_jsonb(l) AS row FROM "ChannelListing" l WHERE "productId"=$1 ORDER BY channel`, [p.productId])).map((r) => r.row),
+      events: Number((await q(`SELECT count(*)::text AS n FROM "ProductEvent" WHERE "aggregateId"=$1`, [p.productId]))[0].n),
+    })
+    const before = await snapshot()
+    // Positive control: the product and its three listings are there, active, and the Shopify one names the product.
+    expect(before.product).toMatchObject({ status: 'ACTIVE', name: 'Giacca da moto Xavia', shopifyProductId })
+    expect(before.listings.map((l: { channel: string }) => l.channel)).toEqual(['AMAZON', 'EBAY', 'SHOPIFY'])
+
+    for (const [eventType, payload] of [
+      ['product/delete', { id: Number(shopifyProductId) }],
+      ['product/update', { id: Number(shopifyProductId), title: 'Xavia motorcycle jacket', status: 'archived', updated_at: '2026-10-16T08:00:00Z' }],
+    ] as const) {
+      const handler = await handlers.inboundHandlerFor('SHOPIFY', eventType)
+      await inBusiness(() => handler!(payload, { connectionId: store, eventType, channel: 'SHOPIFY' }))
+    }
+    expect(await snapshot()).toEqual(before)
   })
 })

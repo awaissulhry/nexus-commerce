@@ -4,9 +4,9 @@ import { publicApiOrigin } from '../public-api-origin.js'
  *
  * 2026-10-15 — only what Shopify order import needs: the order topics and app/uninstalled, and only for an account
  * whose order import was started (it has its start date, order-ingest-switch.ts). No product topics (Shopify follows
- * Nexus: products/update would rename Nexus products, products/delete deactivate them), no inventory_levels/update (it
- * would set Nexus counts from Shopify's), no privacy topics (configured with the app, not per shop). A subscription of
- * any other topic already on the shop is listed in the result (`leftInPlace`) and never deleted: a person decides.
+ * Nexus: a product delivery never changes a Nexus product), no inventory_levels/update (it would set Nexus counts from
+ * Shopify's), no privacy topics (configured with the app, not per shop). A subscription of any other topic already on
+ * the shop is listed in the result (`leftInPlace`) and never deleted: a person decides.
  *
  * Nothing registered them. `ensureShopifySchemaSubscriptions` registers three metafield
  * topics and nothing else, so the seven product/order receivers — and now the five

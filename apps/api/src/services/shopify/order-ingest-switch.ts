@@ -18,9 +18,10 @@
  * order writer unchanged.
  *
  * Registration (webhook-registration.service.ts) subscribes only the order topics and app/uninstalled. No product topics:
- * Shopify follows Nexus, and products/update would overwrite the Nexus product names (Italian) with the store's English
- * titles, products/delete would deactivate Nexus products. No inventory_levels/update: it would set Nexus counts from
- * Shopify's. A subscription of another topic already on the shop is listed in the result and left in place.
+ * Shopify follows Nexus, so a products/update or products/delete delivery never changes a Nexus product (no name, no
+ * status, no field; routes/shopify-webhooks.ts), and nothing is gained by asking for them. No inventory_levels/update: it
+ * would set Nexus counts from Shopify's. A subscription of another topic already on the shop is listed in the result
+ * and left in place.
  */
 import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
