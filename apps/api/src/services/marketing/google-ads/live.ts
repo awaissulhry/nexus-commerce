@@ -621,10 +621,18 @@ export async function liveChangeHistory(target: GoogleAdsTarget, day: string): P
 }
 
 export const LIVE_DRAFTS_QUERY =
-  'SELECT campaign_draft.draft_id, campaign_draft.name, campaign_draft.status, campaign_draft.base_campaign, ' +
-  'campaign_draft.draft_campaign, campaign_draft.has_experiment_running FROM campaign_draft'
+  'SELECT campaign_draft.resource_name, campaign_draft.draft_id, campaign_draft.name, campaign_draft.status, ' +
+  'campaign_draft.base_campaign, campaign_draft.draft_campaign, campaign_draft.has_experiment_running FROM campaign_draft'
 
-export interface LiveDraft { draftId: string; name: string | null; status: string | null; baseCampaignId: string | null; draftCampaignId: string | null; experimentRunning: boolean }
+export interface LiveDraft {
+  /** `{baseCampaignId}~{draftId}` (its resource name's last part), as set-google-campaign-draft and promote-google-campaign-draft take it. */
+  draftId: string
+  name: string | null
+  status: string | null
+  baseCampaignId: string | null
+  draftCampaignId: string | null
+  experimentRunning: boolean
+}
 
 /**
  * Campaign drafts (Google Ads "Drafts & experiments"). The "Drafts in progress" of Google's campaign creation pages are
@@ -635,7 +643,8 @@ export async function liveDrafts(target: GoogleAdsTarget): Promise<LiveDraft[]> 
   return rows.map((row) => {
     const d = row.campaignDraft ?? {}
     return {
-      draftId: str(d.draftId) ?? '',
+      // G9 (2026-10-15): the draft's id alone ("3") is unique only within its campaign; the tools take campaignId~draftId.
+      draftId: idOf(d.resourceName) ?? '',
       name: str(d.name),
       status: str(d.status),
       baseCampaignId: idOf(d.baseCampaign),

@@ -117,6 +117,12 @@ function armOf(row: Json): { experiment: string | null; arm: LiveExperimentArm }
   }
 }
 
+/**
+ * Arms in one order whatever order Google sends them in (the queries have no ORDER BY, and a change stands on the arms
+ * as read): by arm id, numerically (`31~2` before `31~10`).
+ */
+const byArmId = (a: LiveExperimentArm, b: LiveExperimentArm) => a.armId.localeCompare(b.armId, 'en', { numeric: true })
+
 /** One experiment with its arms (two queries), or null when Google has none of that id (or it is removed). */
 export async function liveExperiment(target: GoogleAdsTarget, experimentId: string): Promise<LiveExperimentState | null> {
   const rows = await liveRows<Json>(target, experimentQuery(experimentId), 'ads.search.live.experiment')
@@ -124,7 +130,7 @@ export async function liveExperiment(target: GoogleAdsTarget, experimentId: stri
   const experiment = experimentOf(rows[0])
   if (experiment.status === 'REMOVED') return null
   const arms = await liveRows<Json>(target, experimentArmsQuery(experiment.resourceName), 'ads.search.live.experiment-arms')
-  experiment.arms = arms.map(armOf).map((a) => a.arm)
+  experiment.arms = arms.map(armOf).map((a) => a.arm).sort(byArmId)
   return experiment
 }
 
@@ -133,7 +139,7 @@ export async function liveExperimentList(target: GoogleAdsTarget): Promise<LiveE
   const experiments = (await liveRows<Json>(target, EXPERIMENTS_LIST_QUERY, 'ads.search.live.experiments')).map(experimentOf)
   if (!experiments.length) return experiments
   const arms = (await liveRows<Json>(target, ALL_ARMS_QUERY, 'ads.search.live.experiment-arms')).map(armOf)
-  for (const e of experiments) e.arms = arms.filter((a) => a.experiment === e.resourceName).map((a) => a.arm)
+  for (const e of experiments) e.arms = arms.filter((a) => a.experiment === e.resourceName).map((a) => a.arm).sort(byArmId)
   return experiments
 }
 

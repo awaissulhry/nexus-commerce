@@ -329,7 +329,11 @@ export function setExperimentDraft(customer: string, request: SetExperimentReque
 
 // ── schedule-google-experiment ───────────────────────────────────────────────────────────────────────────────────
 
-export interface ScheduleRecord { experimentId: string; scheduled: boolean }
+/**
+ * `scheduled: 'started'`: Google answered a schedule with its long-running operation — started, not done (the experiment
+ * reads INITIATED, then ENABLED when Google has made the experiment campaign). Never recorded as done.
+ */
+export interface ScheduleRecord { experimentId: string; scheduled: false | 'started' }
 
 export function scheduleExperimentDraft(customer: string, live: { experimentId: string; experiment: LiveExperimentState | null; campaigns: LiveExperimentCampaign[] }): GoogleChangeDraft | Refusal {
   const e = live.experiment
@@ -353,10 +357,14 @@ export function scheduleExperimentDraft(customer: string, live: { experimentId: 
   const enabled = base.status === 'ENABLED'
   const spends: string[] = []
   const warnings: string[] = []
-  const lines: Array<[string, unknown, unknown]> = [['experiment', `${e.name} (${statusOf('SETUP')})`, 'scheduled (Google makes the treatment campaign)']]
+  const lines: Array<[string, unknown, unknown]> = [['experiment', `${e.name} (${statusOf('SETUP')})`, 'scheduling started (Google makes the treatment campaign over a while)']]
+  // What each SPENDS MONEY line is worded from (the in-design campaign's name and budget): stood on, so a change to it
+  // after the preview stops the run.
+  const designs: Array<{ armId: string; campaignId: string; name: string | null; budgetId: string | null; budgetName: string | null }> = []
   for (const t of treatments) {
     const designId = t.inDesignCampaignIds[0] ?? t.campaignIds[0]
     const design = byId.get(designId)
+    designs.push({ armId: t.armId, campaignId: designId, name: design?.name ?? null, budgetId: design?.budget?.budgetId ?? null, budgetName: design?.budget?.name ?? null })
     const own = design?.budget?.budgetId && base.budget?.budgetId && design.budget.budgetId !== base.budget.budgetId
     const on = own ? `on its own budget "${design!.budget!.name ?? design!.budget!.budgetId}"` : `on "${base.name}"'s budget, shared by both arms (not raised)`
     spends.push(`From ${e.start ?? 'when Google has made it'}${e.end ? ` to ${e.end}` : ''} the treatment "${t.name ?? t.armId}" (campaign "${design?.name ?? designId}") serves ${t.trafficSplitPct ?? '?'} % of campaign "${base.name}"'s traffic with the treatment's settings, ${on}.${enabled ? '' : pausedNote(base.name, base.status)}`)
@@ -365,13 +373,16 @@ export function scheduleExperimentDraft(customer: string, live: { experimentId: 
   warnings.push(NOT_DONE_YET, 'Google refuses to schedule a treatment whose in-design campaign has no change from the campaign; that refusal can come after the answer (google-ads-experiments shows it).')
   if (e.syncEnabled) warnings.push('Sync is on: changes to the campaign while it runs are copied to the treatment.')
   return draft({
-    summary: `Schedule the experiment "${e.name}" on campaign "${base.name}": Google turns the treatment's in-design campaign into the experiment campaign.`,
+    summary: `Ask Google to schedule the experiment "${e.name}" on campaign "${base.name}": Google turns the treatment's in-design campaign into the experiment campaign over a while (not done when it answers).`,
     operations: [{ scheduleExperiment: { resourceName: `${customer}/experiments/${e.experimentId}` } }],
     spendsMoney: spends,
     warnings,
-    stands: { experimentId: e.experimentId, status: e.status, start: e.start, end: e.end, arms: e.arms, base: { campaignId: base.campaignId, status: base.status, budgetShared: base.budget?.shared ?? null, budgetPeriod: base.budget?.period ?? null } },
+    stands: {
+      experimentId: e.experimentId, status: e.status, start: e.start, end: e.end, arms: e.arms, designs,
+      base: { campaignId: base.campaignId, name: base.name, status: base.status, budgetId: base.budget?.budgetId ?? null, budgetShared: base.budget?.shared ?? null, budgetPeriod: base.budget?.period ?? null },
+    },
     before: { experimentId: e.experimentId, scheduled: false } satisfies ScheduleRecord,
-    after: { experimentId: e.experimentId, scheduled: true } satisfies ScheduleRecord,
+    after: { experimentId: e.experimentId, scheduled: 'started' } satisfies ScheduleRecord,
   }, lines)
 }
 
@@ -402,8 +413,11 @@ export function endExperimentDraft(customer: string, live: { experimentId: strin
 
 // ── the settings a promote applies (experiment and campaign draft) ──────────────────────────────────────────────
 
-/** The main settings of the base campaign and the treatment / draft campaign, side by side; what can spend more. */
-export function promotedSettings(base: Settings, treatment: Settings, currency: string): { lines: Array<[string, unknown, unknown]>; spends: string[]; record: Record<string, unknown> } {
+/**
+ * The main settings of the base campaign (`from`) and the treatment / draft campaign (`to`), side by side; what can spend
+ * more. Both sides word the SPENDS MONEY lines, so a promote stands on both.
+ */
+export function promotedSettings(base: Settings, treatment: Settings, currency: string): { lines: Array<[string, unknown, unknown]>; spends: string[]; from: Record<string, unknown>; to: Record<string, unknown> } {
   const lines: Array<[string, unknown, unknown]> = []
   const spends: string[] = []
   const pick = (s: Settings) => ({
@@ -430,7 +444,7 @@ export function promotedSettings(base: Settings, treatment: Settings, currency: 
   if (differs('display')) { lines.push(['display network', from.display, to.display]); if (to.display) spends.push('Turns on the display network.') }
   if (differs('aiMax')) { lines.push(['AI Max', from.aiMax, to.aiMax]); if (to.aiMax) spends.push('Turns on AI Max (wider matching, Google writes text).') }
   if (differs('keywordMatchType')) { lines.push(['keyword match type', from.keywordMatchType, to.keywordMatchType]); if (to.keywordMatchType === 'BROAD') spends.push('Turns the campaign\'s keywords to broad match.') }
-  return { lines, spends, record: from }
+  return { lines, spends, from, to }
 }
 
 // ── promote-google-experiment ────────────────────────────────────────────────────────────────────────────────────
@@ -446,16 +460,23 @@ export function promoteExperimentDraft(customer: string, currency: string, live:
   const e = live.experiment
   if (!e) return { refusal: `Experiment ${live.experimentId} is not in the Google Ads account (google-ads-experiments lists them).` }
   if (NOT_PROMOTABLE.has(e.type ?? '')) return { refusal: `Google cannot promote a ${typeName(e.type)} experiment (its guide): graduate it (graduate-google-experiment) or end it.` }
-  if (e.status !== 'ENABLED') return { refusal: `Experiment "${e.name}" is ${statusOf(e.status)}: Google promotes an experiment that is running (ENABLED).` }
+  // Promote only a running experiment, checked 2026-10-15: Google's v25 guides name End, Promote and Graduate as the three
+  // ways to complete one (docs/experiments/overview "Complete (HALTED, PROMOTED, or GRADUATED)"; system-managed "End: If
+  // you want to stop the experiment without applying changes"), PromoteExperimentRequest and the ExperimentError enum
+  // (STATUS_TRANSITION_INVALID) say nothing of a promote after an end, and no page allows one — so an ended (HALTED)
+  // experiment is not promoted here. Graduate after an end is not documented either; there Google's validate_only check
+  // of the exact request decides before anything is queued.
+  if (e.status !== 'ENABLED') return { refusal: `Experiment "${e.name}" is ${statusOf(e.status)}: Google promotes an experiment that is running (ENABLED); an ended one was stopped without applying its changes.` }
   if (e.promoteStatus === 'IN_PROGRESS') return { refusal: `Google is promoting "${e.name}" already: google-ads-experiments shows when it is done.` }
   const { control, treatments } = armsOf(e)
   if (treatments.length !== 1) return { refusal: `Experiment "${e.name}" has ${plural(treatments.length, 'treatment')}: a promote applies one treatment to the campaign. Graduate the one you want (graduate-google-experiment) instead.` }
   const base = live.base
   if (!control?.campaignIds.length || !base) return { refusal: `The experiment's campaign is not in the account any more: nothing to promote into.` }
   const intra = !SYSTEM_MANAGED_TYPES.has(e.type ?? '')
-  const lines: Array<[string, unknown, unknown]> = [['experiment', `${e.name} (running)`, 'promoted: the treatment becomes the campaign']]
+  const lines: Array<[string, unknown, unknown]> = [['experiment', `${e.name} (running)`, 'promote started: Google applies the treatment to the campaign over a while']]
   const spends: string[] = []
   let record: Record<string, unknown> = {}
+  let treatment: { campaignId: string; settings: Record<string, unknown> } | null = null
   if (intra) {
     if (e.type === 'ADOPT_BROAD_MATCH_KEYWORDS') spends.push(`All of campaign "${base.name}"'s traffic uses broad match from then on: its ads can show on more searches.`)
     else spends.push(`The tested ${typeName(e.type)} feature serves all of campaign "${base.name}"'s traffic from then on.`)
@@ -464,17 +485,19 @@ export function promoteExperimentDraft(customer: string, currency: string, live:
     const diff = promotedSettings(base, live.treatment, currency)
     lines.push(...diff.lines)
     spends.push(`Applies every change of the treatment to campaign "${base.name}" for ALL its traffic — settings, bids, keywords and ads (the lines show the main settings; Nexus cannot list every difference).`, ...diff.spends)
-    record = diff.record
+    record = diff.from
+    treatment = { campaignId: live.treatment.campaignId, settings: diff.to }
   }
   const paused = base.status !== 'ENABLED'
   return draft({
-    summary: `Promote the experiment "${e.name}": Google applies the treatment to campaign "${base.name}".`,
+    summary: `Ask Google to promote the experiment "${e.name}": Google applies the treatment to campaign "${base.name}" over a while (not done when it answers).`,
     operations: [{ promoteExperiment: { resourceName: `${customer}/experiments/${e.experimentId}` } }],
     spendsMoney: spends.map((s) => (paused ? `${s}${pausedNote(base.name, base.status)}` : s)),
     warnings: [NOT_DONE_YET, `Google cannot undo a promote: to go back, change "${base.name}" back by hand (the "from" side of the lines is what it has now).`, 'The treatment stops serving once the promote is done.'],
-    stands: { experimentId: e.experimentId, status: e.status, promoteStatus: e.promoteStatus, arms: e.arms, base: { campaignId: base.campaignId, status: base.status, settings: record } },
+    stands: { experimentId: e.experimentId, status: e.status, promoteStatus: e.promoteStatus, arms: e.arms, base: { campaignId: base.campaignId, name: base.name, status: base.status, settings: record }, treatment },
     before: { experimentId: e.experimentId, campaignId: base.campaignId, settings: record },
-    after: { experimentId: e.experimentId, promoted: true },
+    // Started, not done: Google's long-running promote ends when google-ads-experiments reads promote_status COMPLETED.
+    after: { experimentId: e.experimentId, promoted: 'started' },
   }, lines)
 }
 
@@ -614,7 +637,7 @@ export function promoteCampaignDraftDraft(customer: string, currency: string, li
   const spends = [`Applies every change of the draft to campaign "${base.name}" — settings, bids, keywords and ads (the lines show the main settings; Nexus cannot list every difference).`, ...diff.spends]
   const paused = base.status !== 'ENABLED'
   return draft({
-    summary: `Promote the campaign draft "${d.name ?? d.draftId}": Google applies its changes to campaign "${base.name}".`,
+    summary: `Ask Google to promote the campaign draft "${d.name ?? d.draftId}": Google applies its changes to campaign "${base.name}" over a while (not done when it answers).`,
     operations: [{ promoteCampaignDraft: { resourceName: `${customer}/campaignDrafts/${d.draftId}` } }],
     spendsMoney: spends.map((s) => (paused ? `${s}${pausedNote(base.name, base.status)}` : s)),
     warnings: [
@@ -622,8 +645,12 @@ export function promoteCampaignDraftDraft(customer: string, currency: string, li
       'Google cannot undo a promote. If it fails part-way, Google marks the draft PROMOTE_FAILED and says it cannot be promoted again safely: the campaign is then put right by hand.',
       ...(d.experimentRunning ? ['An experiment runs on this draft (an older Google Ads trial).'] : []),
     ],
-    stands: { draftId: d.draftId, status: d.status, base: { campaignId: base.campaignId, status: base.status, settings: diff.record } },
-    before: { draftId: d.draftId, campaignId: base.campaignId, settings: diff.record },
-    after: { draftId: d.draftId, promoted: true },
-  }, [['campaign draft', `${d.name ?? d.draftId} (PROPOSED)`, 'promoted into the campaign'], ...diff.lines])
+    stands: {
+      draftId: d.draftId, status: d.status, base: { campaignId: base.campaignId, name: base.name, status: base.status, settings: diff.from },
+      draftCampaign: { campaignId: live.draftCampaign.campaignId, settings: diff.to },
+    },
+    before: { draftId: d.draftId, campaignId: base.campaignId, settings: diff.from },
+    // Started, not done: Google's long-running promote ends when the draft reads PROMOTED (or PROMOTE_FAILED).
+    after: { draftId: d.draftId, promoted: 'started' },
+  }, [['campaign draft', `${d.name ?? d.draftId} (PROPOSED)`, 'promote started: Google applies it to the campaign over a while'], ...diff.lines])
 }

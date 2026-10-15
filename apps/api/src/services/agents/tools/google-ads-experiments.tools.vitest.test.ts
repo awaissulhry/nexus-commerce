@@ -180,6 +180,11 @@ describe('schedule-google-experiment', () => {
     h.live.experiments = [{ ...SETUP, arms: [SETUP.arms[0], { ...SETUP.arms[1], trafficSplitPct: 60 }] }]
     const run = await tool('schedule-google-experiment').execute!(ask, approved(out.preview))
     expect(run.error).toMatch(/changed since this was approved/)
+    // The in-design campaign the SPENDS MONEY line names moved to another budget: not sent either.
+    h.live.experiments = [SETUP]
+    h.live.campaigns = [C21, { ...C22, budget: { ...BUDGET, budgetId: '19', name: 'Budget C' } }, C23]
+    const moved = await tool('schedule-google-experiment').execute!(ask, approved(out.preview))
+    expect(moved.error).toMatch(/changed since this was approved/)
     expect(h.action).toHaveBeenCalledTimes(1)
   })
 })
@@ -203,9 +208,17 @@ describe('end, promote and graduate', () => {
     const out = await tool('promote-google-experiment').handler({ experimentId: '31' }, asker)
     expect(out.ok).toBe(true)
     expect((out.preview as { spendsMoneyBecause: string[] }).spendsMoneyBecause).toContain('Raises the target CPA from EUR 9.00 to EUR 12.00.')
+    // The treatment campaign changed after the preview (a higher target CPA than the one approved): not sent.
+    const approvedTreatment = h.live.settings[23]
+    h.live.settings = { ...h.live.settings, 23: { ...approvedTreatment, targetCpaCents: 2500 } }
+    const moved = await tool('promote-google-experiment').execute!({ experimentId: '31' }, approved(out.preview))
+    expect(moved.error).toMatch(/changed since this was approved/)
+    expect(h.action).toHaveBeenCalledTimes(1)
+    h.live.settings = { ...h.live.settings, 23: approvedTreatment }
     h.action.mockResolvedValue({ responses: [{ experimentActionResult: { resourceName: EXP }, longRunningOperation: { resourceName: OP } }], ops: 1 })
     const run = await tool('promote-google-experiment').execute!({ experimentId: '31' }, approved(out.preview))
     expect(run.data).toMatchObject({ operation: OP, state: expect.stringMatching(/^Google started the promote: not done until/) })
+    expect(run.change!.after).toEqual({ experimentId: '31', promoted: 'started', accountId: 'g-1', customerId: '1234567890' })
   })
 
   it('graduate: ONE campaign onto ONE budget, SPENDS MONEY; undo pauses the graduated campaign through set-google-status', async () => {
@@ -253,6 +266,10 @@ describe('campaign drafts', () => {
     const out = await tool('promote-google-campaign-draft').handler({ draftId: '21~3' }, asker)
     expect(h.action.mock.calls[0].slice(1)).toEqual([[{ promoteCampaignDraft: { resourceName: `${CUSTOMER}/campaignDrafts/21~3` } }], { validateOnly: true }])
     expect((out.preview as { spendsMoneyBecause: string[] }).spendsMoneyBecause).toContain('Turns on the display network.')
+    // The draft campaign changed after the preview: not sent.
+    h.live.settings = { ...h.live.settings, 25: { ...h.live.settings[25], aiMax: true } }
+    expect((await tool('promote-google-campaign-draft').execute!({ draftId: '21~3' }, approved(out.preview))).error).toMatch(/changed since this was approved/)
+    h.live.settings = { ...h.live.settings, 25: { ...h.live.settings[25], aiMax: false } }
     h.action.mockResolvedValue({ responses: [{ longRunningOperation: { resourceName: OP } }], ops: 1 })
     const run = await tool('promote-google-campaign-draft').execute!({ draftId: '21~3' }, approved(out.preview))
     expect(run.data).toMatchObject({ draftId: '21~3', operation: OP, state: expect.stringMatching(/not done until google-ads-experiments shows the draft PROMOTED/) })

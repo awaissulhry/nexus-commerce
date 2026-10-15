@@ -803,7 +803,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       // end; a graduated campaign is paused; a campaign draft made is removed and its old name put back.
       'create-google-experiment': { before: { experimentId: null }, after: { experimentId: '11', name: 'Test A', type: 'SEARCH_CUSTOM', campaignId: '21', status: 'SETUP', accountId: 'g-1', customerId: '1234567890' } },
       'set-google-experiment': { before: { experimentId: '11', fields: { name: 'Test A', endDate: '2026-12-01' }, accountId: 'g-1' }, after: { experimentId: '11', fields: { name: 'Test B', endDate: '2026-12-15' }, accountId: 'g-1' } },
-      'schedule-google-experiment': { before: { experimentId: '11', scheduled: false }, after: { experimentId: '11', scheduled: true, accountId: 'g-1', customerId: '1234567890' } },
+      'schedule-google-experiment': { before: { experimentId: '11', scheduled: false }, after: { experimentId: '11', scheduled: 'started', accountId: 'g-1', customerId: '1234567890' } },
       'graduate-google-experiment': { before: { experimentId: '11', campaignId: '23', budgetId: '12' }, after: { experimentId: '11', campaignId: '23', budgetId: '14', accountId: 'g-1', customerId: '1234567890' } },
       'set-google-campaign-draft': { before: { action: 'rename', draftId: '21~3', name: 'Draft A' }, after: { action: 'rename', draftId: '21~3', name: 'Draft B', accountId: 'g-1', customerId: '1234567890' } },
       // L7 — products created (parent and a variation), and products binned.

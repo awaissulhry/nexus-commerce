@@ -258,7 +258,8 @@ const scheduleUndo: ToolUndo = {
     const account = await recordAccount(after)
     if (!account) return null
     const e = await liveExperiment(account.target, after.experimentId)
-    return { ...after, scheduled: e?.status === 'INITIATED' || e?.status === 'ENABLED' }
+    // Started (INITIATED: Google is making the experiment campaign) or made (ENABLED): either way what the run recorded.
+    return { ...after, scheduled: e?.status === 'INITIATED' || e?.status === 'ENABLED' ? 'started' : false }
   },
   request(change: ToolChange) {
     const after = (change.after ?? {}) as ScheduleRecord & { accountId?: string }

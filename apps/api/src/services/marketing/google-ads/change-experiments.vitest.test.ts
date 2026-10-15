@@ -139,7 +139,10 @@ describe('schedule-google-experiment and end-google-experiment', () => {
     expect(d.operations).toEqual([{ scheduleExperiment: { resourceName: `${CUSTOMER}/experiments/31` } }])
     expect(d.spendsMoney).toEqual(['From 2026-11-01 to 2026-11-30 the treatment "Treatment" (campaign "Search A [experiment]") serves 50 % of campaign "Search A"\'s traffic with the treatment\'s settings, on "Search A"\'s budget, shared by both arms (not raised).'])
     expect(d.warnings).toContain(NOT_DONE_YET)
-    expect(d.after).toEqual({ experimentId: '31', scheduled: true })
+    expect(d.summary).toMatch(/^Ask Google to schedule .*\(not done when it answers\)\.$/)
+    // Started, never recorded as done; the in-design campaign the line is worded from is stood on.
+    expect(d.after).toEqual({ experimentId: '31', scheduled: 'started' })
+    expect(d.stands).toMatchObject({ designs: [{ armId: '31~2', campaignId: '22', name: 'Search A [experiment]', budgetId: '11', budgetName: 'Budget A' }], base: { campaignId: '21', name: 'Search A' } })
   })
 
   it('schedule of a paused campaign\'s experiment: still a SPENDS MONEY line, saying nothing spends yet', () => {
@@ -184,6 +187,9 @@ describe('promote-google-experiment', () => {
     expect(d.warnings).toContain(NOT_DONE_YET)
     expect(d.warnings.join(' ')).toMatch(/Google cannot undo a promote/)
     expect(d.before).toMatchObject({ experimentId: '31', campaignId: '21', settings: { targetCpaCents: 900, searchPartners: false } })
+    // The SPENDS MONEY lines come from the treatment campaign too: the promote stands on it.
+    expect(d.stands).toMatchObject({ treatment: { campaignId: '23', settings: { targetCpaCents: 1200, searchPartners: true } } })
+    expect(d.after).toEqual({ experimentId: '31', promoted: 'started' })
   })
 
   it('broad match: the feature for all traffic is SPENDS MONEY; Performance Max types, a second promote and not-running ones refused', () => {
@@ -193,6 +199,8 @@ describe('promote-google-experiment', () => {
     expect(refusal(promoteExperimentDraft(CUSTOMER, 'EUR', { experimentId: '31', experiment: experiment({ type: 'PMAX_REPLACEMENT_SHOPPING', status: 'ENABLED' }), base: null, treatment: null }))).toMatch(/cannot promote a Performance Max versus Shopping experiment/)
     expect(refusal(promoteExperimentDraft(CUSTOMER, 'EUR', { experimentId: '31', experiment: { ...running, promoteStatus: 'IN_PROGRESS' }, base: settings('21', 'Search A'), treatment: null }))).toMatch(/promoting "Test A" already/)
     expect(refusal(promoteExperimentDraft(CUSTOMER, 'EUR', { experimentId: '31', experiment: experiment(), base: settings('21', 'Search A'), treatment: null }))).toMatch(/promotes an experiment that is running/)
+    // Ended: Google's guides name End and Promote as alternatives; an ended experiment is not promoted.
+    expect(refusal(promoteExperimentDraft(CUSTOMER, 'EUR', { experimentId: '31', experiment: { ...running, status: 'HALTED' }, base: settings('21', 'Search A'), treatment: null }))).toMatch(/ended \(HALTED\).*stopped without applying its changes/)
   })
 })
 
@@ -262,6 +270,8 @@ describe('campaign drafts', () => {
       'Turns on AI Max (wider matching, Google writes text). (Campaign "Search A" is PAUSED: nothing spends until it is enabled.)',
     ])
     expect(d.warnings).toContain(NOT_DONE_YET)
+    expect(d.stands).toMatchObject({ draftCampaign: { campaignId: '25', settings: { aiMax: true } } })
+    expect(d.after).toEqual({ draftId: '21~3', promoted: 'started' })
     expect(refusal(promoteCampaignDraftDraft(CUSTOMER, 'EUR', { draftId: '21~3', draft: D({ status: 'PROMOTE_FAILED' }), base: null, draftCampaign: null }))).toMatch(/cannot be promoted again safely/)
     expect(refusal(promoteCampaignDraftDraft(CUSTOMER, 'EUR', { draftId: '21~3', draft: D({ status: 'PROMOTING' }), base: null, draftCampaign: null }))).toMatch(/promoting "Draft A" already/)
   })

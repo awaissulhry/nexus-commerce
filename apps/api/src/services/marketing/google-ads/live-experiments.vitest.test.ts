@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({ rows: vi.fn() }))
 vi.mock('./write-client.js', () => ({ liveRows: h.rows }))
 
+import { LIVE_DRAFTS_QUERY, liveDrafts } from './live.js'
 import {
   ALL_ARMS_QUERY, CAMPAIGN_DRAFTS_QUERY, CAMPAIGN_NAMES_QUERY, campaignsByIdQuery, experimentArmsQuery, experimentQuery, EXPERIMENTS_LIST_QUERY,
   liveCampaignDrafts, liveExperiment, liveExperimentCampaigns, liveExperimentList, liveSettingsWithDrafts,
@@ -76,6 +77,14 @@ describe('how Google\'s rows read', () => {
     expect(h.rows).toHaveBeenCalledTimes(3)
   })
 
+  it('arms in one order whatever order Google sends them in (by arm id, numerically): a change stands on them', async () => {
+    const third = { experimentArm: { ...armRows[1].experimentArm, resourceName: 'customers/1234567890/experimentArms/31~10', name: 'Treatment 2' } }
+    h.rows.mockResolvedValueOnce([expRow()]).mockResolvedValueOnce([third, armRows[1], armRows[0]])
+    expect((await liveExperiment(target, '31'))!.arms.map((a) => a.armId)).toEqual(['31~1', '31~2', '31~10'])
+    h.rows.mockResolvedValueOnce([expRow()]).mockResolvedValueOnce([armRows[1], third, armRows[0]])
+    expect((await liveExperimentList(target))[0].arms.map((a) => a.armId)).toEqual(['31~1', '31~2', '31~10'])
+  })
+
   it('the list: the arms read once and given to their experiment; no experiment, no arms query', async () => {
     h.rows.mockResolvedValueOnce([expRow(), expRow({ resourceName: 'customers/1234567890/experiments/32', experimentId: '32', name: 'Test B' })]).mockResolvedValueOnce(armRows)
     const list = await liveExperimentList(target)
@@ -105,5 +114,13 @@ describe('how Google\'s rows read', () => {
     h.rows.mockResolvedValueOnce([])
     expect(await liveSettingsWithDrafts(target, '25')).toBeNull()
     expect(h.rows.mock.calls[1][1]).toMatch(/FROM campaign WHERE campaign\.id = 25 PARAMETERS include_drafts=true$/)
+  })
+})
+
+describe('google-ads-live view drafts (live.ts liveDrafts)', () => {
+  it('draftId is campaignId~draftId, as the draft tools take it (the bare draft id is unique only within its campaign)', async () => {
+    expect(LIVE_DRAFTS_QUERY).toMatch(/^SELECT campaign_draft\.resource_name, /)
+    h.rows.mockResolvedValueOnce([{ campaignDraft: { resourceName: 'customers/1234567890/campaignDrafts/21~3', draftId: '3', name: 'Draft A', status: 'PROPOSED', baseCampaign: 'customers/1234567890/campaigns/21', draftCampaign: 'customers/1234567890/campaigns/25' } }])
+    expect(await liveDrafts(target)).toEqual([{ draftId: '21~3', name: 'Draft A', status: 'PROPOSED', baseCampaignId: '21', draftCampaignId: '25', experimentRunning: false }])
   })
 })
