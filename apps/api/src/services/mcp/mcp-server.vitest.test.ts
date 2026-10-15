@@ -36,25 +36,27 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
-  'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'apply-harvest', 'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
-  'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label', 'cancel-order',
-  'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign', 'create-ad-group',
-  'create-ai-goal-campaigns',
-  'create-ebay-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'delete-listing', 'dispose-return-items',
-  'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing', 'google-ads-live', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund',
-  'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'promote-ebay-listings', 'publish-listing',
-  'publish-review', 'receive-stock', 'reconcile-stock-count', 'relist-listing', 'reopen-listing', 'replicate-ad-structure', 'reply-to-review', 'request-review', 'resend-prices',
-  'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign', 'resume-automation',
-  'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
-  'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
-  'set-ad-group', 'set-ads-brain', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule', 'set-campaign-budget', 'set-campaign-settings',
-  'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion', 'set-google-budget', 'set-google-negative-list',
-  'set-hourly-bid-plan',
-  'set-listing-price', 'set-listing-stock', 'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers',
-  'set-portfolio', 'set-price',
-  'set-promotion', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid', 'shipping-rates',
-  'shopify-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock', 'tune-ad-engine',
-  'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change', 'void-shipping-label',
+  'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'apply-harvest',
+  'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change', 'bulk-listing-price-change', 'bulk-listing-stock',
+  'bulk-price-change', 'buy-shipping-label', 'cancel-order', 'channel-identity-check', 'close-listing',
+  'confirm-shipment', 'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
+  'create-google-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'delete-listing',
+  'dispose-return-items', 'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing',
+  'google-ads-live', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund', 'link-channel-id',
+  'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'promote-ebay-listings', 'publish-listing',
+  'publish-review', 'receive-stock', 'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items',
+  'reopen-listing', 'replicate-ad-structure', 'reply-to-review', 'request-review', 'resend-prices', 'reserve-stock',
+  'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign', 'resume-automation',
+  'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now', 'save-channel-mapping',
+  'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message', 'set-ad-group',
+  'set-ads-brain', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule', 'set-campaign-budget',
+  'set-campaign-settings', 'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion',
+  'set-google-budget', 'set-google-campaign', 'set-google-negative-list', 'set-google-status', 'set-google-targeting',
+  'set-hourly-bid-plan', 'set-listing-price', 'set-listing-stock', 'set-master-prices', 'set-monthly-ad-budget',
+  'set-placement-multipliers', 'set-portfolio', 'set-price', 'set-promotion', 'set-shopify-content', 'set-stock',
+  'set-stock-policy', 'set-stock-source', 'set-target-bid', 'shipping-rates', 'shopify-content', 'submit-change-plan',
+  'suppress-campaign', 'sync-orders-now', 'transfer-stock', 'tune-ad-engine', 'turn-down-automation',
+  'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change', 'void-shipping-label',
 ]
 
 describe('MCP.7 — every tool, as Claude sees it', () => {
@@ -166,6 +168,7 @@ describe('C3 — the server and every change tool name the business', () => {
       // Google Ads changes (2026-10-15) — a person approves each, never a rule; Google checks it first; spend is marked.
       'Google Ads changes go through the set-google-… tools: each is a request a person approves in Nexus, never run by a rule',
       'what can make the account spend more is marked SPENDS MONEY in the preview',
+      'A new campaign is always made paused',
       // Google Ads step 1b — the rest of the Google Ads page, one view at a time.
       'and google-ad-details (one view at a time) its ad groups, keywords, negatives, search terms and the']) {
       expect(mcpInstructions(business), rule).toContain(rule)
