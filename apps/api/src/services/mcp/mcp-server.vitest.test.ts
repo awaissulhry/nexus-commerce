@@ -38,7 +38,8 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Google Ads G6 (2026-10-15) — assets of every type and their links at the account, campaigns and ad groups change the Google Ads account.
 // Google Ads G9 (2026-10-15) — experiments and campaign drafts change the Google Ads account; google-ads-experiments reads it live.
 // Google Ads G8a (2026-10-15) — conversion actions, goals and value rules change the Google Ads account; Shopify sales and their adjustments are sent to Google.
-
+// Google Ads G11 (2026-10-15) — Demand Gen, Display and App campaigns, their ad groups and ads, and video responsive ads change the Google Ads account.
+// Google Ads G10 (2026-10-16) — Performance Max campaigns are built, copied and changed, and customer acquisition is set, in the Google Ads account.
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
