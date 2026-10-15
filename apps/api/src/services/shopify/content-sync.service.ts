@@ -14,6 +14,7 @@ import { WorkspaceScopeError } from '../pim/workspace-destination.js'
 import { contentDestination, readContent, publicContent, object, digest, CONTENT_KEY, PUBLISH_KEY, type ContentScope } from './content-workspace.service.js'
 import { shopifyAdmin } from './admin-client.js'
 import { publishContent, readRemoteProduct, shortId, type ShopifyRemoteProduct } from './content-publisher.js'
+import { shopifySendText } from './listing-send-text.js'
 import { shopifySkuRenames, type ShopifySkuRename } from './variant-match.js'
 import { nativeListingValue } from './native-listing-value.js'
 import { assertPublishAllowed, isStillDraftListing, type PushLockListing, type PushRefusal } from '@nexus/shared/push-lock'
@@ -212,8 +213,8 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
     const reviewedInformation = preview.informationDraft ? await buildLinkedPlan(graphql, preview.informationDraft) : null
     const reviewedTranslations = preview.translationDraft ? await buildLinkedPlan(graphql, preview.translationDraft) : null
     const result = await publishContent(graphql, { identity: preview.identity,
-      title: listing.followMasterTitle ? current.family.name : listing.titleOverride ?? listing.title ?? current.family.name,
-      description: listing.followMasterDescription ? current.family.description ?? '' : listing.descriptionOverride ?? listing.description ?? current.family.description ?? '',
+      // The listing's own title and description (its pin in the store's main language), else the legacy columns or the family's.
+      ...shopifySendText(current.family, listing),
       // Wave 2 item 5 + D3 — the reviewed facts (`product-facts.ts`): what the sheet shows is what Shopify receives.
       vendor: preview.productFacts!.vendor, productType: preview.productFacts!.productType,
       ...(!preview.remote ? { templateSuffix: preview.productFacts!.templateSuffix } : {}),

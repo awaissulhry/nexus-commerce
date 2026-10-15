@@ -29,7 +29,7 @@ import prisma from '../../../db.js'
 import { factHash, type AgentTool, type PlanFacts, type PlanWrite, type ToolResult, type ToolUndo } from '../tool-types.js'
 import { PRODUCT_NOT_FOUND } from './live-product.js'
 import { NEXUS_ONLY } from './bulk.tools.js'
-import { channelNotHere, COORDINATE_CHANNELS, languageArg, languageOf, liveProductByRef, NOT_CONTENT_GROUPS, primaryLanguage } from './content.tools.js'
+import { COORDINATE_CHANNELS, languageArg, languageOf, liveProductByRef, NOT_CONTENT_GROUPS, primaryLanguage } from './content.tools.js'
 import { CONTENT_COLUMNS } from '../../pim/content-locale.js'
 import { contentField, isLocalizableContent, listingFollowsContent, resolveContent, type ContentProduct } from '../../pim/content-resolver.js'
 import { contentListing } from '../../pim/content-read.js'
@@ -671,8 +671,8 @@ const ATTRIBUTE_VALUE = z.union([
 const setListingContentInput = z.object({
   product: z.string().trim().min(1).max(191).describe('the product whose listing it is: a Nexus product id or a SKU (a parent or a variation)'),
   coordinate: z.object({
-    channel: z.preprocess(upperText, z.enum(COORDINATE_CHANNELS)).describe('AMAZON, EBAY or ETSY (a Shopify listing: set-shopify-content)'),
-    market: z.string().trim().toUpperCase().min(2).max(20).describe('the marketplace code, e.g. IT or DE; GLOBAL for Etsy'),
+    channel: z.preprocess(upperText, z.enum(COORDINATE_CHANNELS)).describe('AMAZON, EBAY, ETSY or SHOPIFY (Shopify: its own title and description only)'),
+    market: z.string().trim().toUpperCase().min(2).max(20).describe('the marketplace code, e.g. IT or DE; GLOBAL for Etsy and Shopify'),
     accountId: z.string().trim().min(1).max(64).optional().describe('the channel account, when the business has more than one'),
     aliasKey: z.string().trim().min(1).max(64).optional().describe('a second listing of the product on this coordinate (its alias key)'),
   }).describe('the one listing: channel + market'),
@@ -696,6 +696,8 @@ const setListingContentInput = z.object({
 })
 
 type ListingRow = NonNullable<Awaited<ReturnType<typeof findListing>>>
+/** The text a Shopify listing may keep as its own through this tool; the rest of its fields are set-shopify-content's. */
+const SHOPIFY_OWN_TEXT: ReadonlySet<string> = new Set(['title', 'description'])
 
 async function findListing(productId: string, channel: string, market: string, accountId: string | undefined, aliasKey: string) {
   const rows = await prisma.channelListing.findMany({
@@ -755,9 +757,6 @@ async function planListingContent(args: Record<string, unknown>, nothing: string
   const named = await liveProductByRef(String(args.product ?? ''))
   if (!named) return { error: PRODUCT_NOT_FOUND }
   const c = args.coordinate as { channel: string; market: string; accountId?: string; aliasKey?: string }
-  const elsewhere = channelNotHere(c.channel, 'A Shopify listing\'s store fields (metafields, vendor, tags, SEO) are changed with set-shopify-content; '
-    + 'its title and description follow the shared text (set-content) — a Shopify-only text is not available to Claude yet.')
-  if (elsewhere) return { error: `${elsewhere} ${nothing}` }
   const parsed = languageOf(String(args.language ?? ''))
   if ('error' in parsed) return { error: `${parsed.error} ${nothing}` }
   const language = parsed.language
@@ -773,6 +772,12 @@ async function planListingContent(args: Record<string, unknown>, nothing: string
   if (!pins.length && !follow.length && !codes.length) return { error: `Name what to change: pin, follow, attributes or dropAttributes. ${nothing}` }
   const both = follow.filter((field) => pins.includes(field as TextField))
   if (both.length) return { error: `${listed(both)} cannot be pinned and returned to the shared text in one change. ${nothing}` }
+  // A Shopify listing keeps only its own title and description here (the content writer's pin, which the Shopify
+  // publisher sends: content-sync.service.ts); its store fields are the Shopify sheet's (set-shopify-content).
+  if (c.channel === 'SHOPIFY') {
+    const notHere = [...new Set([...pins, ...follow].filter((field) => !SHOPIFY_OWN_TEXT.has(field))), ...(codes.length ? ['attributes'] : [])]
+    if (notHere.length) return { error: `A Shopify listing keeps only its own title and description here; ${listed(notHere)}: a Shopify listing's store fields (metafields, vendor, tags, SEO) are changed with set-shopify-content. ${nothing}` }
+  }
 
   const channelName = channelLabel(c.channel)
   const where = `${channelName} · ${c.market}`
@@ -1003,8 +1008,10 @@ const setListingContent: AgentTool = {
   // 2.3 — as set-content: re-based in a plan only on an earlier step's own write to its listing's text row.
   planRebase: () => ['basis'],
   description:
-    'Change what one listing (Amazon, eBay or Etsy + market; Etsy: GLOBAL) shows, without touching the shared text or any other listing: '
+    'Change what one listing (Amazon, eBay or Etsy + market; Etsy: GLOBAL; Shopify: GLOBAL) shows, without touching the shared text or any other listing: '
     + 'pin = text this listing keeps as its own; follow = fields it stops keeping, so they show the shared text again; '
+    + 'a Shopify listing keeps only its own title and description here (its store fields: set-shopify-content), and Shopify receives them '
+    + 'when the listing is synchronized from Nexus; '
     + 'attributes = its own channel attributes (Amazon attributes, eBay item specifics, Etsy attributes such as material), each with its type; '
     + 'dropAttributes = attributes it stops keeping its own value for. The '
     + 'language must be one of the market\'s. Refused when the product has no listing there yet (create it first), or '
@@ -1034,7 +1041,7 @@ const setListingContent: AgentTool = {
         ...(plan.unchanged.length ? { unchanged: plan.unchanged } : {}),
         ...(checked.warnings.length ? { warnings: checked.warnings } : {}),
         ...(hits.length ? { glossaryHits: hits } : {}),
-        note: `${NEXUS_ONLY} Only this listing changes: the shared text and the other listings stay as they are. Saved as reviewed text: approving it is its review.`,
+        note: `${NEXUS_ONLY} Only this listing changes: the shared text and the other listings stay as they are.${plan.coordinate.channel === 'SHOPIFY' ? ' Shopify only: Shopify receives this text when the listing is synchronized from Nexus (Review and synchronize).' : ''} Saved as reviewed text: approving it is its review.`,
       },
     }
   },
