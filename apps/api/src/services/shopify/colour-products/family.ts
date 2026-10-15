@@ -18,14 +18,20 @@ export function colourAxisOf(axes: ReadonlyArray<{ code: string; label: string }
  * `sizeMap`: the destination's size map (Nexus value → Shopify option value).
  */
 export async function loadColourPlan(rootId: string, options: { splitAxis?: string | null } & Pick<ColourPlanSettings, 'colourNames' | 'swatches' | 'sizeMap'> = {}): Promise<{ plan: ColourPlan; rootId: string; sku: string }> {
-  const { root, family, axes, unmapped } = await loadFamily(rootId)
+  const { root, family, axes, unmapped, valueTexts } = await loadFamily(rootId)
   const splitAxis = options.splitAxis !== undefined ? options.splitAxis : colourAxisOf(axes)
+  // A size is a Shopify option value as the product stores it — the text the Shopify publisher sends
+  // (`storedVariationValues`) — never the dictionary option's default label it matches: a stored "46" whose option is
+  // labelled otherwise ("EU 46", or a letter size that lists "46" as a synonym) must still pair with Shopify's "46". The
+  // split axis keeps the dictionary label (it names the colour product; it is no Shopify option).
+  const valueLabels = { ...family.valueLabels }
+  for (const [key, text] of Object.entries(valueTexts)) if (splitAxis === null || !key.startsWith(`${splitAxis}:`)) valueLabels[key] = text
   const plan = planColourProducts({
     familyId: root.id,
     axes: axes.map(axis => ({ code: axis.code, label: axis.label })),
     variants: family.variants.map(v => ({ productId: v.productId, sku: v.sku, values: v.values })),
     valueOrder: family.valueOrder,
-    valueLabels: family.valueLabels,
+    valueLabels,
     unmapped,
   }, { splitAxis, colourNames: options.colourNames, swatches: options.swatches, sizeMap: options.sizeMap })
   return { plan, rootId: root.id, sku: root.sku }
