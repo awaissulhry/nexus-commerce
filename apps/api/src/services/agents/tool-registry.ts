@@ -62,6 +62,7 @@ import { GOOGLE_ADS_EXPERIMENT_TOOLS } from './tools/google-ads-experiments.tool
 import { GOOGLE_ADS_CONVERSIONS_TOOLS } from './tools/google-ads-conversions.tools.js'
 import { GOOGLE_ADS_EDIT_TOOLS } from './tools/google-ads-edit.tools.js'
 import { GOOGLE_ADS_ASSETS_ALL_TOOLS } from './tools/google-ads-assets-all.tools.js'
+import { GOOGLE_ADS_CAMPAIGN_TYPES_TOOLS } from './tools/google-ads-campaign-types.tools.js'
 import { GOOGLE_ADS_AUDIENCES_TOOLS } from './tools/google-ads-audiences.tools.js'
 import { GOOGLE_ADS_LABELS_TOOLS } from './tools/google-ads-labels.tools.js'
 import { GOOGLE_ADS_RECOMMENDATIONS_TOOLS } from './tools/google-ads-recommendations.tools.js'
@@ -224,6 +225,7 @@ const ALL: AgentTool[] = [
   ...GOOGLE_ADS_CHANGE_TOOLS,
   // Programme 2 G12: Merchant Center — live read, product inputs, data sources and promotions (google-merchant-kit.ts).
   ...GOOGLE_ADS_MERCHANT_TOOLS,
+  ...GOOGLE_ADS_CAMPAIGN_TYPES_TOOLS,
   // G7 (2026-10-15): account and campaign exclusions, the account's negative keyword list, placement and brand lists.
   ...GOOGLE_ADS_EXCLUSIONS_TOOLS,
   // Programme 2 G8b: the account itself — settings, who may use it, its links and its billing.

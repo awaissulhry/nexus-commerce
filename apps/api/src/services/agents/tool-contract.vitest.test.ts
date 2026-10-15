@@ -753,6 +753,32 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { created: [], linked: [] },
         after: { created: [{ assetId: '301', type: 'CALL', fieldType: 'CALL', text: '+39 000 0000 (IT)' }], linked: [{ level: 'campaign', campaignId: '21', adGroupId: null, assetId: '301', fieldType: 'CALL', status: 'PAUSED', text: '+39 000 0000 (IT)' }], accountId: 'g-1', customerId: '1234567890' },
       },
+      // Programme 2 G11: a campaign it made is removed (with its own budget; new assets stay); what it added is removed;
+      // settings, targeting and ad fields go back as they were.
+      'create-google-demand-gen-campaign': {
+        before: { campaignId: null },
+        after: { kind: 'DEMAND_GEN', campaignId: '22', name: 'Shop B', ownBudgetId: '14', adGroups: [{ name: 'Group A', adGroupId: '52', op: 2 }], assets: [], ops: { campaign: 1, budget: 0, assets: [] }, accountId: 'g-1', customerId: '1234567890' },
+      },
+      'create-google-display-campaign': {
+        before: { campaignId: null },
+        after: { kind: 'DISPLAY', campaignId: '23', name: 'Shop C', adGroups: [{ name: 'Group A', adGroupId: '53', op: 1 }], assets: [{ type: 'IMAGE', assetId: '301', text: 'Image A (1200×628)' }], ops: { campaign: 0, assets: [3] }, accountId: 'g-1', customerId: '1234567890' },
+      },
+      'create-google-app-campaign': {
+        before: { campaignId: null },
+        after: { kind: 'APP', campaignId: '24', name: 'App A', ownBudgetId: '15', adGroups: [{ name: 'Group A', adGroupId: '54', op: 2 }], assets: [], ops: { campaign: 1, budget: 0, assets: [] }, accountId: 'g-1', customerId: '1234567890' },
+      },
+      'add-google-campaign-type-ads': {
+        before: { campaignId: '21', adGroups: [], ads: [] },
+        after: { campaignId: '21', adGroups: [{ name: 'Group C', adGroupId: '55', status: 'PAUSED', op: 0 }], ads: [{ adGroupId: '51', adId: '702', op: 2 }], assets: [], assetOps: [], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-campaign-type': {
+        before: { campaignId: '21', campaign: { name: 'Old', bidding: { strategy: 'TARGET_CPA', targetCpaCents: 900 }, budgetCents: 1000, endDate: 'none' }, adGroups: [{ adGroupId: '51', settings: { channels: { strategy: 'ALL_CHANNELS' }, optimizedTargeting: false, targetCpaCents: 0 }, added: [], removed: [] }] },
+        after: { campaignId: '21', campaign: { name: 'New', bidding: { strategy: 'TARGET_CPA', targetCpaCents: 1200 }, budgetCents: 1500, endDate: '2026-12-31' }, campaignAdded: [{ kind: 'location', value: '2250', exclude: false }], campaignRemoved: [], adGroups: [{ adGroupId: '51', settings: { channels: { selected: ['YOUTUBE_SHORTS'] }, optimizedTargeting: true, targetCpaCents: 1100 }, added: [{ kind: 'user-list', value: '301', exclude: false }], removed: [{ kind: 'location', value: '2380', exclude: true }] }], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'edit-google-campaign-type-ads': {
+        before: { ads: [{ id: '51~701', campaignId: '21', headlines: ['Old A'], breadcrumb1: null, logoImages: [{ assetId: '301' }] }] },
+        after: { ads: [{ id: '51~701', campaignId: '21', headlines: ['New A'], breadcrumb1: 'jackets', logoImages: [{ assetId: '302' }] }], accountId: 'g-1', customerId: '1234567890' },
+      },
       'set-google-asset-links': {
         before: { items: [] },
         after: { items: [{ level: 'account', campaignId: null, adGroupId: null, assetId: '302', fieldType: 'CALLOUT', text: 'Free returns', from: 'ENABLED', to: null }, { level: 'ad-group', campaignId: '21', adGroupId: '51', assetId: '303', fieldType: 'AD_IMAGE', text: 'Image A (1200×1200)', from: 'PAUSED', to: 'ENABLED' }], accountId: 'g-1', customerId: '1234567890' },
@@ -925,6 +951,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-account-settings', 'set-google-user-access', 'set-google-account-links', 'set-google-billing',
       'edit-google-rsa', 'edit-google-assets', 'set-google-urls', 'replace-google-keywords', 'move-google-ads',
       'add-google-assets', 'set-google-asset-links',
+      'create-google-demand-gen-campaign', 'create-google-display-campaign', 'create-google-app-campaign',
+      'add-google-campaign-type-ads', 'set-google-campaign-type', 'edit-google-campaign-type-ads',
       'create-google-experiment', 'set-google-experiment', 'schedule-google-experiment', 'end-google-experiment',
       'promote-google-experiment', 'graduate-google-experiment', 'set-google-campaign-draft', 'promote-google-campaign-draft',
       'set-google-conversion-actions', 'remove-google-conversion-actions', 'set-google-conversion-goals', 'set-google-value-rules',
