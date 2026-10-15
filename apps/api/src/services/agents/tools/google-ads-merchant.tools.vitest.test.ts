@@ -201,7 +201,7 @@ describe('set-google-merchant-data-sources', () => {
 })
 
 describe('set-google-merchant-promotions', () => {
-  const fields = { title: 'Ten off', type: 'PERCENT_OFF', percentOff: 10, products: 'all', startsAt: '2026-11-01T00:00:00Z', endsAt: '2099-11-08T00:00:00Z' }
+  const fields = { title: 'Ten off', type: 'PERCENT_OFF', percentOff: 10, appliesTo: 'all', startsAt: '2026-11-01T00:00:00Z', endsAt: '2099-11-08T00:00:00Z' }
 
   it('a new promotion: the price buyers see in its money line; ending it records the moment it was sent', async () => {
     const ask = { action: 'set', dataSourceId: '72', promotionId: 'PROMO-A', ...fields }

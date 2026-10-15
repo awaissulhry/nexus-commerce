@@ -29,7 +29,7 @@ export interface PromotionState {
   minimumPurchaseCents?: number
   currency?: string
   code?: string
-  products: 'all' | 'specific'
+  appliesTo: 'all' | 'specific'
   itemIds?: string[]
   excludedItemIds?: string[]
   brands?: string[]
@@ -42,7 +42,7 @@ export interface PromotionState {
   url?: string
 }
 export const PROMOTION_FIELDS = [
-  'title', 'type', 'percentOff', 'moneyOffCents', 'minimumPurchaseCents', 'currency', 'code', 'products', 'itemIds', 'excludedItemIds',
+  'title', 'type', 'percentOff', 'moneyOffCents', 'minimumPurchaseCents', 'currency', 'code', 'appliesTo', 'itemIds', 'excludedItemIds',
   'brands', 'productTypes', 'startsAt', 'endsAt', 'displayStartsAt', 'displayEndsAt', 'destinations', 'url',
 ] as const
 type Field = typeof PROMOTION_FIELDS[number]
@@ -91,9 +91,9 @@ export function promotionStateProblem(s: Partial<PromotionState>): string | null
   if (s.code !== undefined && !(typeof s.code === 'string' && /^[A-Za-z0-9_-]{1,20}$/.test(s.code))) return 'the code is 1 to 20 of A-Z, a-z, 0-9, - and _'
   if (s.type === 'FREE_SHIPPING_STANDARD' && !s.code) return 'a free shipping promotion needs a code (Google: "All shipping promotions must include a valid redemption code")'
   const filters = (['itemIds', 'brands', 'productTypes'] as const).filter((k) => s[k] !== undefined)
-  if (s.products === 'all' && (filters.length || s.excludedItemIds !== undefined)) return 'a promotion for all products names no items, brands or product types'
-  if (s.products === 'specific' && !filters.length) return 'a promotion for specific products names its items, brands or product types'
-  if (s.products !== 'all' && s.products !== 'specific') return 'products is all or specific'
+  if (s.appliesTo === 'all' && (filters.length || s.excludedItemIds !== undefined)) return 'a promotion for all products names no items, brands or product types'
+  if (s.appliesTo === 'specific' && !filters.length) return 'a promotion for specific products names its items, brands or product types'
+  if (s.appliesTo !== 'all' && s.appliesTo !== 'specific') return 'appliesTo is all or specific'
   if (!s.startsAt || !s.endsAt || Date.parse(s.startsAt) >= Date.parse(s.endsAt)) return 'the promotion has a start and an end after it'
   if (!!s.displayStartsAt !== !!s.displayEndsAt || (s.displayStartsAt && Date.parse(s.displayStartsAt) >= Date.parse(s.displayEndsAt!))) return 'the display period has a start and an end after it, or neither'
   if (s.url !== undefined && !(typeof s.url === 'string' && /^https:\/\/\S{1,1990}$/.test(s.url))) return 'the promotion page is an https link'
@@ -110,7 +110,7 @@ export function promotionAttributes(s: PromotionState): Record<string, unknown> 
     ...(s.minimumPurchaseCents !== undefined ? { minimumPurchaseAmount: micros(s.minimumPurchaseCents, s.currency!) } : {}),
     offerType: s.code ? 'GENERIC_CODE' : 'NO_CODE',
     ...(s.code ? { genericRedemptionCode: s.code } : {}),
-    productApplicability: s.products === 'all' ? 'ALL_PRODUCTS' : 'SPECIFIC_PRODUCTS',
+    productApplicability: s.appliesTo === 'all' ? 'ALL_PRODUCTS' : 'SPECIFIC_PRODUCTS',
     ...(s.itemIds ? { itemIdInclusion: s.itemIds } : {}),
     ...(s.excludedItemIds ? { itemIdExclusion: s.excludedItemIds } : {}),
     ...(s.brands ? { brandInclusion: s.brands } : {}),
@@ -180,7 +180,7 @@ export function promotionDraft(req: PromotionRequest, facts: PromotionFacts): Me
   }
   const lines = changeLines(names.map((f) => [f, recorded ? shown(f, recorded) : '(none)', shown(f, state)]))
   const record = { action: req.action, merchantCenterId: facts.merchantCenterId, dataSourceId: source.dataSourceId, key, promotionId: req.promotionId, targetCountry: country, contentLanguage: language }
-  const scope = state.products === 'all' ? 'all products' : [
+  const scope = state.appliesTo === 'all' ? 'all products' : [
     state.itemIds ? `${state.itemIds.length} item${state.itemIds.length === 1 ? '' : 's'}` : null,
     state.brands ? `brand ${state.brands.join(', ')}` : null,
     state.productTypes ? `product type ${state.productTypes.join(', ')}` : null,

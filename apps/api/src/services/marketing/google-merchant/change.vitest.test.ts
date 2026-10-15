@@ -177,7 +177,7 @@ describe('set-google-merchant-promotions (promotionDraft)', () => {
   const SOURCE = ds({ dataSourceId: '72', type: 'promotion', countries: ['IT'], contentLanguage: 'it' })
   const now = new Date('2026-10-16T10:00:00Z')
   const facts = (over: Partial<PromotionFacts> = {}): PromotionFacts => ({ merchantCenterId: M, dataSources: [SOURCE], nexusMade: new Set(['72']), live: null, recorded: null, now, ...over })
-  const fields = { title: 'Ten off', type: 'PERCENT_OFF', percentOff: 10, products: 'all', startsAt: '2026-11-01T00:00:00Z', endsAt: '2026-11-08T00:00:00Z' }
+  const fields = { title: 'Ten off', type: 'PERCENT_OFF', percentOff: 10, appliesTo: 'all', startsAt: '2026-11-01T00:00:00Z', endsAt: '2026-11-08T00:00:00Z' }
 
   it('a new promotion: the whole body, the price buyers see said as its money line; undo ends it', () => {
     const d = draftOf(promotionDraft({ action: 'set', dataSourceId: '72', promotionId: 'PROMO-A', fields }, facts()))

@@ -476,7 +476,7 @@ const promotionArgs = {
   minimumPurchaseCents: z.coerce.number().int().min(1).max(100_000_00).nullable().optional().describe('the least a buyer spends for it, in cents of currency (null takes it out)'),
   currency: z.preprocess(upper, z.string().regex(/^[A-Z]{3}$/)).nullable().optional().describe('the currency of the amounts (ISO 4217, e.g. EUR)'),
   code: z.string().trim().regex(/^[A-Za-z0-9_-]{1,20}$/).nullable().optional().describe('the coupon code buyers type at checkout (up to 20 characters); null = no code'),
-  products: z.preprocess(lower, z.enum(['all', 'specific'])).optional().describe('set: all products, or specific ones (itemIds, brands and/or productTypes)'),
+  appliesTo: z.preprocess(lower, z.enum(['all', 'specific'])).optional().describe('set: the promotion applies to all products, or specific ones (itemIds, brands and/or productTypes)'),
   itemIds: z.array(z.string().trim().min(1).max(50)).min(1).max(250).nullable().optional().describe('specific: the offer ids it applies to'),
   excludedItemIds: z.array(z.string().trim().min(1).max(50)).min(1).max(250).nullable().optional().describe('specific: offer ids it does not apply to'),
   brands: z.array(z.string().trim().min(1).max(70)).min(1).max(50).nullable().optional().describe('specific: the brands it applies to'),
