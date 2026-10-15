@@ -55,6 +55,7 @@ import { ADS_BRAIN_HOURS_TOOLS } from './tools/ads-brain-hours.tools.js'
 import { ADS_BRAIN_CONTROL_TOOLS } from './tools/ads-brain-control.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { GOOGLE_ADS_CHANGE_TOOLS } from './tools/google-ads-change.tools.js'
+import { GOOGLE_ADS_EXCLUSIONS_TOOLS } from './tools/google-ads-exclusions.tools.js'
 import { GOOGLE_ADS_EDIT_TOOLS } from './tools/google-ads-edit.tools.js'
 import { GOOGLE_ADS_AUDIENCES_TOOLS } from './tools/google-ads-audiences.tools.js'
 import { GOOGLE_ADS_LABELS_TOOLS } from './tools/google-ads-labels.tools.js'
@@ -216,6 +217,8 @@ const ALL: AgentTool[] = [
   // Google Ads changes (2026-10-15): the live read and the change tools (google-ads-kit.ts).
   ...GOOGLE_ADS_LIVE_TOOLS,
   ...GOOGLE_ADS_CHANGE_TOOLS,
+  // G7 (2026-10-15): account and campaign exclusions, the account's negative keyword list, placement and brand lists.
+  ...GOOGLE_ADS_EXCLUSIONS_TOOLS,
   ...GOOGLE_ADS_EDIT_TOOLS,
   // Programme 2 G2: audience segments and demographics of a campaign and its ad groups.
   ...GOOGLE_ADS_AUDIENCES_TOOLS,

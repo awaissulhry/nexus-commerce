@@ -36,6 +36,7 @@ import {
   type NumberLevel, type NumberOrder, type NumberSegment,
 } from '../../marketing/google-ads/live-numbers.js'
 import { checkedQuery, DEFAULT_QUERY_ROWS, MAX_QUERY_ROWS, type QueryNeed } from '../../marketing/google-ads/live-query.js'
+import { liveAccountExclusions, liveCampaignExclusions, liveExclusionLists } from '../../marketing/google-ads/live-exclusions.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
 /** Money keys of these tools' answers (some are in the shared registry too; named here so each tool states its own). */
@@ -55,6 +56,8 @@ const seesSpend = (ctx: ToolContext) => ctx.can(ADSPEND) || ctx.can(FIELDS.finan
 export const GOOGLE_LIVE_VIEWS = [
   'campaigns', 'campaign', 'budgets', 'negative-lists', 'product-groups', 'ads', 'assets', 'change-history', 'drafts', 'lookup',
   'account', 'conversions', 'labels', 'experiments', 'users', 'billing', 'links', 'bid-strategies', 'auto-apply',
+  // G7 (2026-10-15): exclusions of the account (and of one campaign), the account's negative keyword list, placement and brand lists.
+  'exclusions',
 ] as const
 type LiveView = typeof GOOGLE_LIVE_VIEWS[number]
 const NEEDS_CAMPAIGN: readonly LiveView[] = ['campaign', 'product-groups', 'ads']
@@ -254,6 +257,23 @@ async function liveView(args: Record<string, unknown>, ctx: ToolContext): Promis
           },
         }
       }
+      case 'exclusions': {
+        // G7: the account's own exclusions, its exclusion lists with where each is used (listId: what one holds), one campaign's.
+        const listId = text(args.listId)
+        const read = await liveExclusionLists(account.target, { ...(listId ? { listId } : {}), withAccount: true })
+        const own = read.account ?? await liveAccountExclusions(account.target)
+        if (listId && !read.lists.some((l) => l.listId === listId)) return { ok: false, error: `Exclusion list ${listId} is not in this account (or it is removed, or it is a campaign negative keyword list: view negative-lists).` }
+        const campaign = campaignId ? await liveCampaignExclusions(account.target, campaignId) : null
+        return {
+          ok: true,
+          data: {
+            // With listId only that list's links are read, so only that list is shown (the others would look unused).
+            ...base, accountExclusions: own, lists: listId ? read.lists.filter((l) => l.listId === listId) : read.lists,
+            ...(campaign ? { campaign: { campaignId, ...campaign } } : {}),
+            note: 'accountExclusions: what no campaign shows ads on (and its negative keyword list and placement lists, by listId). lists: the account negative keyword list (ACCOUNT_LEVEL_NEGATIVE_KEYWORDS), placement exclusion lists and brand lists, with the campaigns (exclude / include) and the account using each; listId: what one holds. campaignId: that campaign\'s own exclusions and brand lists. set-google-account-exclusions, set-google-campaign-exclusions and set-google-exclusion-list change them.',
+          },
+        }
+      }
       case 'links': {
         const read = await liveLinks(account.target)
         return {
@@ -285,10 +305,10 @@ const googleAdsLive: AgentTool = {
   restrictedFields: LIVE_MONEY,
   input: z.object({
     view: z.preprocess(lower, z.enum(GOOGLE_LIVE_VIEWS))
-      .describe('what to read: campaigns | campaign | budgets | negative-lists | product-groups | ads | assets | change-history | drafts | lookup | account | conversions | labels | experiments | users | billing | links | bid-strategies | auto-apply'),
+      .describe('what to read: campaigns | campaign | budgets | negative-lists | product-groups | ads | assets | change-history | drafts | lookup | account | conversions | labels | experiments | users | billing | links | bid-strategies | auto-apply | exclusions'),
     accountId: googleAccountArg,
-    campaignId: googleIdArg('the campaign; needed for views campaign, product-groups and ads; narrows assets').optional(),
-    listId: googleIdArg('one negative keyword list: view negative-lists then lists its keywords').optional(),
+    campaignId: googleIdArg('the campaign; needed for views campaign, product-groups and ads; narrows assets; view exclusions adds its exclusions').optional(),
+    listId: googleIdArg('one list: view negative-lists then lists its keywords; view exclusions what that exclusion or brand list holds').optional(),
     labelId: googleIdArg('one label: view labels then lists the campaigns, ad groups, ads and keywords that carry it').optional(),
     day: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('view change-history: the day (YYYY-MM-DD, the account\'s time zone; default today; Google keeps 30 days)'),
     lookup: z.preprocess(lower, z.enum(LOOKUPS)).optional()
@@ -316,7 +336,9 @@ const googleAdsLive: AgentTool = {
     + 'to the Google Ads account and open invitations (needs the users permission). billing: billing setups and account '
     + 'budgets (needs the ad-spend permission). links: Merchant Center and other product links, link invitations, YouTube '
     + 'links, GA4 properties. bid-strategies: portfolio bid strategies with targets, CPC ceilings and how many campaigns '
-    + 'use each. auto-apply: which kinds of Google recommendations Google applies by itself. Each view '
+    + 'use each. auto-apply: which kinds of Google recommendations Google applies by itself. exclusions: the account\'s '
+    + 'exclusions (websites, YouTube, apps, app categories, content labels, IP addresses), its negative keyword list, '
+    + 'placement and brand lists with where each is used (listId: what one holds; campaignId: that campaign\'s own). Each view '
     + 'costs one or a few operations of the account\'s daily Google Ads allowance: for numbers use google-ads-numbers '
     + '(live, today included) or google-ad-details (what Nexus stored). Amounts are minor units (cents) of the account '
     + 'currency; a person without the ad-spend money permission gets the same answer without them. Read only.',

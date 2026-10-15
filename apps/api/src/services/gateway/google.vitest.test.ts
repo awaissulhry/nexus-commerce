@@ -83,7 +83,7 @@ describe('Google: reads, and Google Ads mutates only', () => {
       'adGroupAdLabelOperation', 'adGroupAdOperation', 'adGroupBidModifierOperation', 'adGroupCriterionLabelOperation',
       'adGroupCriterionOperation', 'adGroupLabelOperation', 'adGroupOperation', 'adOperation', 'assetOperation',
       'biddingStrategyOperation', 'campaignAssetOperation', 'campaignBudgetOperation', 'campaignCriterionOperation',
-      'campaignLabelOperation', 'campaignOperation', 'campaignSharedSetOperation', 'labelOperation',
+      'campaignLabelOperation', 'campaignOperation', 'campaignSharedSetOperation', 'customerNegativeCriterionOperation', 'labelOperation',
       'recommendationSubscriptionOperation', 'sharedCriterionOperation', 'sharedSetOperation',
     ])
     // Its neighbours stay refused: an ad parameter (AdService's family), the account itself.
@@ -125,6 +125,27 @@ describe('Google: reads, and Google Ads mutates only', () => {
     expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: device, validateOnly: true }))).toMatchObject({ check: true })
     expect(googleKind('POST', MUTATE, { mutateOperations: device, validateOnly: true })).toBe('read')
     expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [{ campaignBidModifierOperation: { create: {} } }] }))).toEqual({ refusal: 'it holds an operation Nexus does not send (campaignBidModifierOperation)' })
+  })
+
+  it('G7: the account\'s exclusions (customerNegativeCriterionOperation) go through a mutate; the account itself does not', () => {
+    const exclude = [{ customerNegativeCriterionOperation: { create: { placementList: { sharedSet: 'customers/1234567890/sharedSets/41' } } } }]
+    expect(googleKind('POST', MUTATE, { mutateOperations: exclude, validateOnly: true })).toBe('read')
+    expect(googleKind('POST', MUTATE, { mutateOperations: exclude })).toBe('write')
+    expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [{ customerOperation: { update: {} } }] }))).toEqual({ refusal: 'it holds an operation Nexus does not send (customerOperation)' })
+  })
+
+  it('G7: Google Ads\' brand lookup (…/customers/{id}:suggestBrands) is a read; nothing else of its shape is', async () => {
+    const SUGGEST = `${GOOGLE_ADS_API_BASE}/customers/1234567890:suggestBrands`
+    expect(googleKind('POST', SUGGEST, { brandPrefix: 'Brand' })).toBe('read')
+    h.answers.push(() => new Response(JSON.stringify({ brands: [] }), { status: 200 }))
+    const res = await googleCall({ connectionId: 'g-1', operation: 'ads.suggestBrands', method: 'POST', url: SUGGEST, body: { brandPrefix: 'Brand' } })
+    expect(res.status).toBe(200)
+    expect(h.calls.map((c) => c.url)).toEqual([SUGGEST])
+    for (const url of [
+      `${GOOGLE_ADS_API_BASE}/customers/1234567890:suggestSomething`, `${GOOGLE_ADS_API_BASE}/customers/1234567890/x:suggestBrands`,
+      `${SUGGEST}?alt=json`, 'https://example.com/v25/customers/1234567890:suggestBrands',
+    ]) expect(googleKind('POST', url, {}), url).toBe('action')
+    expect(googleKind('PATCH', SUGGEST, {})).toBe('action')
   })
 
   it('a Google Ads account the business did not choose through this connection is refused, check or change', async () => {
