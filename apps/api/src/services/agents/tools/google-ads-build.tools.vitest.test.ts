@@ -76,6 +76,40 @@ describe('PR 6 tools', () => {
     expect(ops.find((o) => o.adGroupCriterionOperation?.create?.keyword)!.adGroupCriterionOperation.create).toMatchObject({ negative: true, keyword: { text: 'kids', matchType: 'PHRASE' } })
   })
 
+  it('build: a Shopping ad group\'s product groups as a tree of any shape (nodes) — checked against Google\'s rules, sent parents first; itemIds still works; both, or neither, refused', async () => {
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const shopping = (productGroups: unknown) => ({ campaigns: [{ type: 'SHOPPING', name: 'Shop Z', budget: { dailyBudgetCents: 500 }, shopping: { merchantId: '5' }, adGroups: [{ name: 'Group Z', productGroups }] }] })
+    const tree = { nodes: [
+      { split: 'BRAND' },
+      { parent: 0, value: 'Brand A', split: 'CUSTOM_LABEL_0' },
+      { parent: 1, value: 'top', bidCents: 40 },
+      { parent: 1, everythingElse: true, bidCents: 20 },
+      { parent: 0, everythingElse: true, excluded: true },
+    ] }
+    const build = tool('build-google-campaigns')
+    expect(build.input.safeParse(shopping(tree)).success).toBe(true)
+    const out = await build.handler(shopping(tree), asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    const ops = h.mutate.mock.calls[0][1] as Array<Record<string, any>>
+    const made = ops.map((o) => o.adGroupCriterionOperation?.create).filter((c) => c?.listingGroup)
+    expect(made.map((c) => [c.listingGroup.type, c.listingGroup.caseValue ?? null, c.negative ?? false, c.cpcBidMicros ?? null])).toEqual([
+      ['SUBDIVISION', null, false, null],
+      ['SUBDIVISION', { productBrand: { value: 'Brand A' } }, false, null],
+      ['UNIT', { productCustomAttribute: { index: 'INDEX0', value: 'top' } }, false, '400000'],
+      ['UNIT', { productCustomAttribute: { index: 'INDEX0' } }, false, '200000'],
+      ['UNIT', { productBrand: {} }, true, null],
+    ])
+    expect(made[1].listingGroup.parentAdGroupCriterion).toBe(made[0].resourceName)
+    expect(made[2].listingGroup.parentAdGroupCriterion).toBe(made[1].resourceName)
+    h.mutate.mockClear()
+    expect((await build.handler(shopping({ nodes: [{ split: 'BRAND' }, { parent: 0, value: 'A', bidCents: 5 }] }), asker)).error).toMatch(/Group Z": productGroups\.nodes\[0\] is split by brand without "everything else"/)
+    expect((await build.handler(shopping({ ...tree, itemIds: ['sku-1'], bidCents: 5 }), asker)).error).toMatch(/itemIds \(with bidCents\) or as nodes, not both/)
+    expect((await build.handler(shopping({ itemIds: ['sku-1'] }), asker)).error).toMatch(/give productGroups.itemIds with bidCents, or productGroups.nodes/)
+    expect(h.mutate).not.toHaveBeenCalled()
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    expect((await build.handler(shopping({ itemIds: ['sku-1'], bidCents: 5 }), asker)).ok).toBe(true)
+  })
+
   it('build: one Google check of the whole build; the run records the ids; undo removes the campaigns on the same account', async () => {
     const ask = { sharedBudgets: [{ ref: 'b', name: 'Shared Z', budgetCents: 1000 }], campaigns: [{ type: 'SEARCH', name: 'Search Z', budget: { ref: 'b' }, locations: [{ id: '2380' }] }] }
     h.mutate.mockResolvedValue({ responses: [], ops: 3, requestId: null })

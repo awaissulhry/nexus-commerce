@@ -6,7 +6,8 @@
  *   create-google-campaign   a Standard Shopping or Search campaign, ALWAYS paused, with its budget and targeting
  *   set-google-campaign      name, Shopping priority, bidding, dates, networks, location option, Google's automation
  *                            switches (AI Max, campaign broad match, text customization, final URL expansion), own budget
- *   set-google-targeting     locations, languages, ad schedule, audiences (observation only)
+ *   set-google-targeting     locations (with bid adjustments), radius, languages, ad schedule, devices (campaign and
+ *                            ad group), audiences (observation only; every kind and mode: set-google-audiences)
  *   set-google-status        pause (safe) or enable (SPENDS MONEY) campaigns, ad groups, keywords, ads
  *   remove-google-ads-items  delete — only when the person asked for that removal; never undone
  */
@@ -21,10 +22,11 @@ import {
   campaignCreateDraft, campaignCreateRecordAfterRun, campaignSettingsDraft, campaignSettingsNow, DAYS,
   type CampaignCreateRecord, type CampaignCreateRequest, type CampaignSettingsRecord, type CampaignSettingsRequest,
 } from '../../marketing/google-ads/change-campaigns.js'
-import { scheduleNow, targetingDraft, type TargetingRecord, type TargetingRequest } from '../../marketing/google-ads/change-targeting.js'
+import { scheduleNow, targetingDraft, targetingRecordAfterRun, type TargetingLive, type TargetingRecord, type TargetingRequest } from '../../marketing/google-ads/change-targeting.js'
 import { removeDraft, statusDraft, type EnableFacts, type RemoveRequest, type StatusRecord, type StatusRequest } from '../../marketing/google-ads/change-status.js'
 import { liveBudgets, liveCampaigns, liveCampaignSettings, liveNegativeLists, liveProductGroups } from '../../marketing/google-ads/live.js'
 import { liveCampaignCriteria, liveStatuses } from '../../marketing/google-ads/live-campaigns.js'
+import { DEVICES, liveAdGroupDevices, liveAdGroupTargetingState, liveSegmentNames, liveTargetingAdGroups, liveTargetingCriteria, type TargetingCriterion } from '../../marketing/google-ads/live-targeting.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
@@ -245,15 +247,36 @@ const setGoogleCampaign: AgentTool = {
 
 // ── set-google-targeting ────────────────────────────────────────────────────────────────────────────────────────
 
-const TARGETING_KEYS = ['addLocations', 'removeLocations', 'addLanguages', 'removeLanguages', 'schedule', 'clearSchedule', 'addAudiences', 'removeAudiences'] as const
+const TARGETING_KEYS = ['addLocations', 'removeLocations', 'addLanguages', 'removeLanguages', 'schedule', 'clearSchedule', 'addAudiences', 'removeAudiences', 'devices', 'locationBids', 'addRadius', 'removeRadius', 'clearAudienceSetting'] as const
 const targetingRequest = (a: Record<string, unknown>): TargetingRequest =>
   Object.fromEntries(TARGETING_KEYS.filter((k) => a[k] !== undefined).map((k) => [k, a[k]])) as TargetingRequest
 
+/**
+ * The campaign and its targeting criteria; its ad groups with their device adjustments when an ad group's device is
+ * asked; its ad groups with their audience criteria when interests change; the names of the interests added.
+ */
+async function targetingLive(account: Parameters<GoogleDraftBuilder>[0], campaignId: string, request: TargetingRequest): Promise<TargetingLive> {
+  const campaign = await liveCampaignSettings(account.target, campaignId)
+  const criteria = campaign ? await liveTargetingCriteria(account.target, campaignId) : []
+  const live: TargetingLive = { campaign, criteria }
+  if (!campaign) return live
+  if (request.devices?.some((d) => d.adGroupId)) {
+    live.adGroups = await liveTargetingAdGroups(account.target, campaignId)
+    live.adGroupDevices = await liveAdGroupDevices(account.target, campaignId)
+  }
+  if (request.addAudiences?.length || request.removeAudiences?.length || request.clearAudienceSetting) {
+    const state = await liveAdGroupTargetingState(account.target, campaignId)
+    live.adGroups = state.adGroups
+    live.adGroupCriteria = state.adGroupCriteria
+  }
+  if (request.addAudiences?.length) live.segmentNames = await liveSegmentNames(account.target, request.addAudiences.map((id) => ({ kind: 'USER_INTEREST' as const, id })))
+  return live
+}
+
 const buildTargeting = (args: Record<string, unknown>): GoogleDraftBuilder => async (account) => {
   const campaignId = String(args.campaignId)
-  const campaign = await liveCampaignSettings(account.target, campaignId)
-  const criteria = campaign ? await liveCampaignCriteria(account.target, campaignId) : []
-  return targetingDraft(customerResource(account.target), campaignId, targetingRequest(args), { campaign, criteria })
+  const request = targetingRequest(args)
+  return targetingDraft(customerResource(account.target), campaignId, request, await targetingLive(account, campaignId, request))
 }
 
 const geo = (s: string | null | undefined) => (s ?? '').split('/').pop() ?? ''
@@ -263,17 +286,31 @@ const targetingUndo: ToolUndo = {
     const after = (change.after ?? {}) as TargetingRecord & { accountId?: string; customerId?: string; schedule?: string[] | null }
     const account = await recordAccount(after)
     if (!account) return null
-    const criteria = await liveCampaignCriteria(account.target, after.campaignId)
-    const has = (type: string, id: string, negative = false) => criteria.some((k) => k.type === type && k.negative === negative && geo(type === 'LOCATION' ? k.location : type === 'LANGUAGE' ? k.language : k.audience) === id)
     const u = after.undo ?? {}
-    // What the change wrote still stands when what it added is there and what it removed is not.
+    // Only what tells whether it still stands: the campaign, its criteria, ad group devices when it set one.
+    const live = await targetingLive(account, after.campaignId, { devices: u.devices })
+    const criteria = live.criteria as TargetingCriterion[]
+    const has = (type: string, id: string, negative = false) => criteria.some((k) => k.type === type && k.negative === negative && geo(type === 'LOCATION' ? k.location : type === 'LANGUAGE' ? k.language : k.audience) === id)
+    const micro = (deg: number) => Math.round(deg * 1_000_000)
+    const radius = (id: string) => criteria.find((k) => k.type === 'PROXIMITY' && k.criterionId === id)
+    const factor = (bid: { id?: string; radiusId?: string }) => (bid.radiusId ? radius(bid.radiusId) : criteria.find((k) => k.type === 'LOCATION' && !k.negative && geo(k.location) === bid.id))?.bidModifier ?? 1
+    const deviceNow = (d: { device: string; adGroupId?: string }) => (d.adGroupId
+      ? live.adGroupDevices?.find((m) => m.adGroupId === d.adGroupId && m.device === d.device)?.bidModifier ?? null
+      : criteria.find((k) => k.type === 'DEVICE' && k.device === d.device)?.bidModifier ?? 1)
+    // What the change wrote still stands when what it added is there, what it removed is not, and what it set in place
+    // (bid adjustments, devices) still has the value it set.
     const holds = (u.removeLocations ?? []).every((l) => has('LOCATION', l.id, !!l.exclude))
       && (u.addLocations ?? []).every((l) => !has('LOCATION', l.id, !!l.exclude))
       && (u.removeLanguages ?? []).every((id) => has('LANGUAGE', id))
       && (u.addLanguages ?? []).every((id) => !has('LANGUAGE', id))
       && (u.removeAudiences ?? []).every((id) => has('USER_INTEREST', id))
       && (u.addAudiences ?? []).every((id) => !has('USER_INTEREST', id))
+      && (u.removeRadius ?? []).every((id) => !!radius(id))
+      && (u.addRadius ?? []).every((r) => !criteria.some((k) => k.type === 'PROXIMITY' && k.proximity?.latitudeMicro === micro(r.latitude ?? NaN) && k.proximity?.longitudeMicro === micro(r.longitude ?? NaN) && k.proximity?.radius === r.radius))
+      && (after.set?.locationBids ?? []).every((b) => factor(b) === b.bidModifier)
+      && (after.set?.devices ?? []).every((d) => (deviceNow(d) ?? null) === (d.bidModifier ?? (d.adGroupId ? null : 1)))
       && (after.schedule === undefined || JSON.stringify(scheduleKeys(scheduleNow(criteria))) === JSON.stringify(after.schedule))
+      && (after.set?.audienceSetting === undefined || audienceSettingNow(live.campaign) === after.set.audienceSetting)
     return holds ? after : { ...after, moved: true }
   },
   request(change: ToolChange) {
@@ -283,6 +320,12 @@ const targetingUndo: ToolUndo = {
   },
 }
 
+/** The campaign's audience setting as a targeting change records it. */
+function audienceSettingNow(campaign: TargetingLive['campaign']): 'OBSERVATION' | 'TARGETING' | 'NONE' {
+  const t = campaign?.audienceMode.find((r) => r.dimension === 'AUDIENCE')
+  return !t ? 'NONE' : t.observationOnly ? 'OBSERVATION' : 'TARGETING'
+}
+
 /** A schedule as sorted day@from-to keys (what a targeting change's record keeps of the schedule it set). */
 function scheduleKeys(slots: Array<{ days: string[]; from: string; to: string; bidModifier?: number }>): string[] {
   // Times as Google reads them back (08:00, not 8:00), and each slot's bid adjustment.
@@ -290,6 +333,29 @@ function scheduleKeys(slots: Array<{ days: string[]; from: string; to: string; b
   return slots.flatMap((s) => (s.days.map((d) => d.toUpperCase()).includes('ALL') ? [...DAYS] : s.days.map((d) => d.toUpperCase()))
     .map((d) => `${d}@${hhmm(s.from)}-${hhmm(s.to)}x${s.bidModifier ?? 1}`)).sort()
 }
+
+/** A bid factor, rounded to 4 decimals as Google's adjustments are read back (live-targeting factorOf): undo compares them. */
+const round4 = (v: number) => Math.round(v * 10_000) / 10_000
+const factorArg = z.coerce.number().min(0.1).max(10).transform(round4)
+const deviceTargetArg = z.object({
+  device: z.preprocess((v) => (typeof v === 'string' ? v.toUpperCase() : v), z.enum(DEVICES)).describe('MOBILE, DESKTOP, TABLET or CONNECTED_TV'),
+  bidModifier: z.union([z.null(), z.coerce.number().min(0).max(10).refine((v) => v === 0 || v >= 0.1, '0 (never on this device) or 0.1–10').transform(round4)])
+    .describe('a factor: 1.2 = +20 %, 0.5 = −50 %, 0 = never on this device (−100 %); null = no adjustment (an ad group: its own removed, the campaign\'s applies)'),
+  adGroupId: googleIdArg('an ad group of this campaign, for its own device adjustment (it replaces the campaign\'s for that device)').optional(),
+})
+const radiusArg = z.object({
+  latitude: z.coerce.number().min(-90).max(90).optional().describe('the centre\'s latitude in degrees (with longitude), or give address'),
+  longitude: z.coerce.number().min(-180).max(180).optional().describe('the centre\'s longitude in degrees'),
+  address: z.object({
+    street: z.string().trim().min(1).max(200).optional().describe('street and number'),
+    city: z.string().trim().min(1).max(100).optional().describe('city'),
+    postalCode: z.string().trim().min(1).max(20).optional().describe('postal code'),
+    countryCode: z.string().trim().regex(/^[A-Za-z]{2}$/).describe('two-letter country code'),
+  }).optional().describe('an address Google turns into the centre (instead of latitude / longitude)'),
+  radius: z.coerce.number().min(0.1).max(800).describe('the radius'),
+  units: z.enum(['KILOMETERS', 'MILES']).optional().describe('KILOMETERS (default) or MILES'),
+  bidModifier: factorArg.optional().describe('its bid adjustment as a factor (1.2 = +20 %)'),
+})
 
 const setGoogleTargeting: AgentTool = {
   ...common,
@@ -302,28 +368,41 @@ const setGoogleTargeting: AgentTool = {
     campaignId: googleIdArg('the campaign'),
     addLocations: z.array(locationArg).max(100).optional().describe('locations to target or exclude'),
     removeLocations: z.array(locationArg).max(100).optional().describe('locations to stop targeting (or excluding)'),
+    locationBids: z.array(z.object({
+      id: googleIdArg('a targeted location (geo target id)').optional(),
+      radiusId: googleIdArg('a targeted radius (its criterion id; google-ads-live view settings shows it)').optional(),
+      bidModifier: z.union([z.null(), factorArg]).describe('its bid adjustment as a factor (1.2 = +20 %, 0.8 = −20 %); null = none'),
+    })).max(100).optional().describe('change the bid adjustment of locations or radii the campaign already targets (id or radiusId, one of them)'),
+    addRadius: z.array(radiusArg).max(50).optional().describe('target a radius around a point or an address (Google cannot exclude a radius)'),
+    removeRadius: z.array(googleIdArg('a targeted radius (its criterion id)')).max(50).optional().describe('radii to stop targeting'),
     addLanguages: languageIdsArg.optional().describe('SEARCH: languages to add'),
     removeLanguages: languageIdsArg.optional().describe('SEARCH: languages to remove'),
     schedule: scheduleArg.optional().describe('the whole week\'s ad schedule from now (replaces what is there)'),
     clearSchedule: z.boolean().optional().describe('true = all day, every day (removes the schedule)'),
-    addAudiences: audienceIdsArg.optional().describe('audience segments to add in OBSERVATION'),
-    removeAudiences: audienceIdsArg.optional().describe('audience segments to remove'),
+    devices: z.array(deviceTargetArg).max(50).optional().describe('device bid adjustments of the campaign, or of one of its ad groups (adGroupId)'),
+    addAudiences: audienceIdsArg.optional().describe('interest segments to add in OBSERVATION (google-ads-live view lookup, lookup audiences)'),
+    removeAudiences: audienceIdsArg.optional().describe('observed interest segments to remove (exclusions and segments that narrow: set-google-audiences)'),
+    clearAudienceSetting: z.boolean().optional().describe('what undo uses: take off the audience setting (observation) that adding the first interest put on the campaign'),
     why: googleWhyArg,
   }),
   description:
-    'Change one Google Ads campaign\'s targeting (Search or Standard Shopping): targeted and excluded locations, languages '
-    + '(Search), the ad schedule (the whole week, replaced; or cleared = all day) and audience segments, added in '
-    + 'OBSERVATION only (they set bids, they never narrow who sees the ads). Ids come from google-ads-live view lookup. '
-    + 'What lets the ads reach more people is marked SPENDS MONEY — above all removing the last location or language. The '
-    + 'location option is set-google-campaign. Undo puts the targeting back.' + GOOGLE_CHANGE_RULES,
+    'Change one Google Ads campaign\'s targeting (Search or Standard Shopping): targeted and excluded locations, the bid '
+    + 'adjustment of a location or radius it already targets, radius targeting around a point or address, languages '
+    + '(Search), the ad schedule (the whole week, replaced; or cleared = all day), device bid adjustments (0 = never on '
+    + 'that device; at the campaign, or an ad group\'s own) and interest segments the campaign OBSERVES, added or removed '
+    + '(every kind of segment, exclusions, bid adjustments, ad groups and the targeting/observation mode: '
+    + 'set-google-audiences; demographics: set-google-demographics). Ids come from google-ads-live view lookup (lookup '
+    + 'locations / languages / audiences). What lets the ads reach more people or bid '
+    + 'more is marked SPENDS MONEY — above all removing the last location or language, a device shown again and a '
+    + 'raised bid adjustment. The location option is set-google-campaign. Undo puts the targeting back.' + GOOGLE_CHANGE_RULES,
   undo: targetingUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildTargeting(args)),
-  execute: (args, ctx) => runGoogleChange(args, ctx, buildTargeting(args), (draft) => {
-    const after = draft.after as TargetingRecord
+  execute: (args, ctx) => runGoogleChange(args, ctx, buildTargeting(args), (draft, responses) => {
+    const after = targetingRecordAfterRun(draft.after as TargetingRecord, responses)
     const asked = targetingRequest(args)
     const schedule = asked.clearSchedule ? [] : asked.schedule ? scheduleKeys(asked.schedule) : undefined
     // `before` names what undo puts back (a change record needs one); `after` adds the schedule it set, as keys.
-    return { data: { campaignId: args.campaignId }, before: { campaignId: after.campaignId, undo: after.undo }, after: { ...after, ...(schedule !== undefined ? { schedule } : {}) } }
+    return { data: { campaignId: args.campaignId, ...(after.undo.removeRadius?.length ? { radiusIds: after.undo.removeRadius } : {}) }, before: { campaignId: after.campaignId, undo: after.undo }, after: { ...after, ...(schedule !== undefined ? { schedule } : {}) } }
   }),
 }
 
@@ -346,7 +425,7 @@ async function statusLive(account: Parameters<GoogleDraftBuilder>[0], request: S
     const c = campaigns.find((x) => x.campaignId === i.id)
     if (!c || c.status === 'ENABLED') continue
     const criteria = await liveCampaignCriteria(account.target, c.campaignId)
-    if (!criteria.some((k) => k.type === 'LOCATION' && !k.negative)) facts.noLocation.push(c.campaignId)
+    if (!criteria.some((k) => (k.type === 'LOCATION' || k.type === 'PROXIMITY') && !k.negative)) facts.noLocation.push(c.campaignId)
     if (c.type === 'SHOPPING') {
       // "Everything else" left open, or "All products" alone as one advertised unit: both reach every other product.
       const open = (await liveProductGroups(account.target, c.campaignId)).filter((g) => g.kind === 'UNIT' && !g.excluded && (g.everythingElse || g.parentId === null)).length

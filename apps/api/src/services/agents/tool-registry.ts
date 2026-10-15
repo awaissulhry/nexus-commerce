@@ -56,7 +56,12 @@ import { ADS_BRAIN_CONTROL_TOOLS } from './tools/ads-brain-control.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { GOOGLE_ADS_CHANGE_TOOLS } from './tools/google-ads-change.tools.js'
 import { GOOGLE_ADS_EDIT_TOOLS } from './tools/google-ads-edit.tools.js'
+import { GOOGLE_ADS_AUDIENCES_TOOLS } from './tools/google-ads-audiences.tools.js'
+import { GOOGLE_ADS_LABELS_TOOLS } from './tools/google-ads-labels.tools.js'
+import { GOOGLE_ADS_RECOMMENDATIONS_TOOLS } from './tools/google-ads-recommendations.tools.js'
+import { GOOGLE_ADS_STRATEGY_TOOLS } from './tools/google-ads-strategies.tools.js'
 import { GOOGLE_ADS_PRODUCT_GROUPS_TOOLS } from './tools/google-ads-product-groups.tools.js'
+import { GOOGLE_ADS_SHOPPING_TOOLS } from './tools/google-ads-shopping.tools.js'
 import { GOOGLE_ADS_ADS_ASSETS_TOOLS } from './tools/google-ads-ads-assets.tools.js'
 import { GOOGLE_ADS_KEYWORDS_TOOLS } from './tools/google-ads-keywords.tools.js'
 import { GOOGLE_ADS_LIVE_TOOLS } from './tools/google-ads-live.tools.js'
@@ -212,6 +217,14 @@ const ALL: AgentTool[] = [
   ...GOOGLE_ADS_LIVE_TOOLS,
   ...GOOGLE_ADS_CHANGE_TOOLS,
   ...GOOGLE_ADS_EDIT_TOOLS,
+  // Programme 2 G2: audience segments and demographics of a campaign and its ad groups.
+  ...GOOGLE_ADS_AUDIENCES_TOOLS,
+  // G4 (2026-10-15): a Shopping campaign's inventory filter and Shopping settings.
+  ...GOOGLE_ADS_SHOPPING_TOOLS,
+  // G5 (2026-10-15): labels, Google's recommendations (apply / dismiss / auto-apply) and portfolio bid strategies.
+  ...GOOGLE_ADS_LABELS_TOOLS,
+  ...GOOGLE_ADS_RECOMMENDATIONS_TOOLS,
+  ...GOOGLE_ADS_STRATEGY_TOOLS,
   ...GOOGLE_ADS_CAMPAIGN_TOOLS,
   ...GOOGLE_ADS_PRODUCT_GROUPS_TOOLS,
   ...GOOGLE_ADS_ADS_ASSETS_TOOLS,

@@ -199,7 +199,9 @@ export function googleAdsMutateCustomer(method: string, url: string): string | n
 
 /**
  * The kinds of operation a Nexus Google Ads change may hold (MutateOperation's fields): budgets, campaigns, their
- * criteria, ad groups, their criteria, ads, assets and their campaign links, shared sets and their keywords and links.
+ * criteria, ad groups, their criteria, ads, assets and their campaign links, shared sets and their keywords and links;
+ * labels and their links to campaigns, ad groups, ads and keywords, portfolio bid strategies, and the auto-apply
+ * settings of Google's recommendations (G5, 2026-10-15; names checked in the v25 MutateOperation reference).
  * `adOperation` (AdService: an ad's content edited in place — a responsive search ad's texts, its URLs and tracking;
  * MutateOperation.ad_operation in v25, update only) is edit-google-rsa's and set-google-urls'.
  * Anything else in a mutate (a customer, a user, a conversion action …) is refused before anything is sent.
@@ -208,7 +210,73 @@ export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   'campaignBudgetOperation', 'campaignOperation', 'campaignCriterionOperation', 'adGroupOperation', 'adGroupCriterionOperation',
   'adGroupAdOperation', 'adOperation', 'assetOperation', 'campaignAssetOperation', 'sharedSetOperation', 'sharedCriterionOperation',
   'campaignSharedSetOperation',
+  // An ad group's device bid adjustment (AdGroupBidModifier; set-google-targeting, programme 2 G2).
+  'adGroupBidModifierOperation',
+  'labelOperation', 'campaignLabelOperation', 'adGroupLabelOperation', 'adGroupAdLabelOperation', 'adGroupCriterionLabelOperation',
+  'biddingStrategyOperation', 'recommendationSubscriptionOperation',
 ])
+
+/**
+ * Google: the second change Nexus sends (G5, 2026-10-15) — RecommendationService.ApplyRecommendation and
+ * DismissRecommendation (`POST https://googleads.googleapis.com/vNN/customers/{id}/recommendations:apply` / `:dismiss`),
+ * one customer, nothing else. Google has no validate_only for them (v25 ApplyRecommendationRequest and
+ * DismissRecommendationRequest: customer_id, operations, partial_failure only): each one is a real change.
+ */
+export function googleAdsRecommendationCall(method: string, url: string): { customer: string; action: 'apply' | 'dismiss' } | null {
+  if (method.toUpperCase() !== 'POST') return null
+  let parsed: URL
+  try { parsed = new URL(url) } catch { return null }
+  if (parsed.hostname !== 'googleads.googleapis.com' || parsed.search) return null
+  const match = /^\/v\d+\/customers\/(\d{1,20})\/recommendations:(apply|dismiss)$/.exec(parsed.pathname)
+  return match ? { customer: match[1], action: match[2] as 'apply' | 'dismiss' } : null
+}
+
+/**
+ * The apply parameters Nexus sends (ApplyRecommendationOperation's `apply_parameters`, v25, in REST's camelCase): the
+ * overrides a person may give for budgets, keywords and bidding targets. Any other is refused before anything is sent.
+ */
+export const GOOGLE_RECOMMENDATION_APPLY_PARAMETERS: ReadonlySet<string> = new Set([
+  'campaignBudget', 'keyword', 'targetCpaOptIn', 'targetRoasOptIn', 'raiseTargetCpa', 'lowerTargetRoas', 'moveUnusedBudget',
+  'useBroadMatchKeyword', 'setTargetCpa', 'setTargetRoas', 'forecastingSetTargetCpa', 'forecastingSetTargetRoas',
+  'raiseTargetCpaBidTooLow', 'raiseTargetCpaPerformanceBidTooLow', 'lowerTargetRoasPerformanceBidTooLow',
+])
+
+/** Google allows 100 operations per apply or dismiss request (v25 ApplyRecommendationRequest.operations). */
+export const GOOGLE_RECOMMENDATION_MAX_OPERATIONS = 100
+
+/**
+ * An apply / dismiss body as the gateway judges it, or why it is refused: a JSON object holding `operations` only (and
+ * `partialFailure: false` when said: all or nothing), 1 to 100 operations, each naming a recommendation of THIS customer
+ * by `resourceName` and, for an apply, at most one known apply parameter. No `validateOnly` (Google has none for these
+ * methods: a body that names it would read as a check and is refused). The parsed body is what is sent.
+ */
+export function googleRecommendationBodyOf(call: { customer: string; action: 'apply' | 'dismiss' }, body: unknown): { body: string } | { refusal: string } {
+  if (typeof body !== 'string') return { refusal: 'the body is not JSON text' }
+  let parsed: Record<string, unknown>
+  try { parsed = JSON.parse(body) } catch { return { refusal: 'the body is not JSON' } }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { refusal: 'the body is not a JSON object' }
+  const extra = Object.keys(parsed).filter((k) => k !== 'operations' && k !== 'partialFailure')
+  if (extra.length) return { refusal: `it names ${extra.join(', ')} (an apply or dismiss holds operations only; Google cannot check one first)` }
+  if (parsed.partialFailure !== undefined && parsed.partialFailure !== false) return { refusal: 'partialFailure is not false (Nexus sends all or nothing)' }
+  const operations = parsed.operations
+  if (!Array.isArray(operations) || operations.length === 0) return { refusal: 'it holds no operations' }
+  if (operations.length > GOOGLE_RECOMMENDATION_MAX_OPERATIONS) return { refusal: `it holds more than ${GOOGLE_RECOMMENDATION_MAX_OPERATIONS} operations` }
+  const prefix = `customers/${call.customer}/recommendations/`
+  for (const operation of operations) {
+    if (!operation || typeof operation !== 'object' || Array.isArray(operation)) return { refusal: 'an operation is not a JSON object' }
+    const op = operation as Record<string, unknown>
+    const name = op.resourceName
+    if (typeof name !== 'string' || !name.startsWith(prefix) || !/^[^\s'"\\/]{1,200}$/.test(name.slice(prefix.length))) {
+      return { refusal: 'an operation does not name a recommendation of this account' }
+    }
+    const params = Object.keys(op).filter((k) => k !== 'resourceName')
+    if (call.action === 'dismiss' && params.length) return { refusal: `a dismiss names ${params.join(', ')}` }
+    if (params.length > 1 || (params.length === 1 && !GOOGLE_RECOMMENDATION_APPLY_PARAMETERS.has(params[0]))) {
+      return { refusal: `an apply holds a parameter Nexus does not send (${params.join(', ')})` }
+    }
+  }
+  return { body: JSON.stringify(parsed) }
+}
 
 export interface GoogleMutateBody {
   /** True only for a body that asks Google to check it and change nothing. */
@@ -248,7 +316,8 @@ export function isGoogleValidateOnly(body: unknown): boolean {
  * Google: whether a call only reads. GET reads; so does a POST to a `…:search` / `…:searchStream` method
  * (Google Ads GAQL, Merchant reports), which takes its query in the body. Anything else — `…:mutate`,
  * `…:registerGcp`, PATCH, DELETE — is a change. The gateway lets through only a Google Ads mutate
- * (isGoogleAdsMutate): as a check when it is validate-only, else as a write under the publish mode.
+ * (isGoogleAdsMutate): as a check when it is validate-only, else as a write under the publish mode; and an apply or a
+ * dismiss of Google's recommendations (googleAdsRecommendationCall), always as a write under the publish mode.
  */
 export function googleCallKind(method: string, url: string): 'read' | 'action' {
   const m = method.toUpperCase()

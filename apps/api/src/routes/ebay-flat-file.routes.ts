@@ -90,6 +90,7 @@ import { tryResolveConnection } from '../services/connection-resolver.service.js
 import { LiveListingError, recordLiveListingsInTransaction } from '../services/pim/live-listing.service.js';
 import { loadSyncLedgers } from '../services/stock-pool/sync-ledgers.js';
 import { mediaPlanProducts, MEDIA_PLAN_REFUSAL } from '../services/images/media-plan-switch.js';
+import { NOT_STORE_PHOTO } from '../services/images/store-photos.js'
 
 // P1.2 — every eBay REST send in this file goes through the channel gateway (ebaySend).
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
@@ -273,6 +274,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
             where: { channel: 'EBAY' },
           },
           images: {
+            where: NOT_STORE_PHOTO,
             select: { url: true, sortOrder: true, type: true },
             orderBy: { sortOrder: 'asc' },
           },

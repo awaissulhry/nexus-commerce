@@ -5,8 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  ACCOUNT_DAILY_OPS, DEFAULT_GLOBAL_DAILY_OPS, WRITE_ACCOUNT_DAILY_OPS, addSpentOps, globalOpsCap, markQuotaExhausted, opsUsedLast24h, releaseOps, reserveOps,
-  setOpsBudgetRedisForTests, type OpsRedis,
+  ACCOUNT_DAILY_OPS, DEFAULT_GLOBAL_DAILY_OPS, WRITE_ACCOUNT_DAILY_OPS, addSpentOps, globalOpsCap, markQuotaExhausted, opsUsedLast24h, releaseOps, reserveOps, setOpsBudgetRedisForTests, type OpsRedis, LIVE_ACCOUNT_DAILY_OPS,
 } from './ops-budget.js'
 
 /** The Redis commands ops-budget uses, in memory. Every command yields once, so concurrent callers interleave. */
@@ -189,5 +188,19 @@ describe('Google Ads changes (2026-10-15): the account\'s change allowance', () 
     await addSpentOps('111', 5, r.reservedAt, 'write')
     expect(await reserveOps('111', 1935, at(1), 'write')).toMatchObject({ ok: true, usedAccount: 2000 })
     expect(await reserveOps('111', 1, at(2), 'write')).toMatchObject({ ok: false, reason: 'account_cap' })
+  })
+})
+
+describe('Programme 2, G1 review (2026-10-15): the live read tools\' own allowance', () => {
+  it('live reads draw on their own 600 per account, inside the global cap; the change allowance is untouched', async () => {
+    expect(LIVE_ACCOUNT_DAILY_OPS).toBe(600)
+    expect(await reserveOps('111', 600, T0, 'live')).toMatchObject({ ok: true, usedAccount: 600, capAccount: 600 })
+    const refused = await reserveOps('111', 1, at(1), 'live')
+    expect(refused).toMatchObject({ ok: false, reason: 'account_cap', usedAccount: 600, capAccount: 600 })
+    expect(refused.sentence).toMatch(/^The live Google Ads read is not sent: this account has used 600 of its 600 Google Ads operations for live reads \(their own allowance, so changes and the daily read always have theirs\) in the last 24 hours\. Try again later\.$/)
+    // A change and the daily read of the same account still have theirs.
+    expect(await reserveOps('111', 1500, at(2), 'write')).toMatchObject({ ok: true, usedAccount: 1500 })
+    expect(await reserveOps('111', 22, at(3))).toMatchObject({ ok: true, usedAccount: 22 })
+    expect(await opsUsedLast24h(null, at(4))).toEqual({ global: 2122, account: null })
   })
 })

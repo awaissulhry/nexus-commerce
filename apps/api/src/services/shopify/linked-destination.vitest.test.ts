@@ -3,7 +3,7 @@ import { linkedState, writeLinkedState } from './linked-products.service.js'
 import type { WorkspaceDestination } from '../pim/workspace-destination.js'
 describe('Shopify draft destination storage', () => {
   it('reads and creates only the requested store, market and listing alias', async () => {
-    const tx = { product: { findFirst: vi.fn().mockResolvedValue({ id: 'family', name: 'Family', children: [{ id: 'variant' }] }) }, channelListing: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() } }
+    const tx = { product: { findFirst: vi.fn().mockResolvedValue({ id: 'family', name: 'Family', children: [{ id: 'variant' }] }) }, channelListing: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() }, shopifyColourProduct: { count: vi.fn().mockResolvedValue(0) } }
     const destination = { productId: 'variant', familyId: 'family', accountId: 'store-b', marketplace: 'GLOBAL', aliasKey: 'alias-b', listing: null } as WorkspaceDestination
     const state = await linkedState(tx as any, destination)
     expect(tx.channelListing.findMany).toHaveBeenCalledWith({ where: { productId: { in: ['family', 'variant'] }, channel: 'SHOPIFY', channelConnectionId: 'store-b', marketplace: 'GLOBAL', aliasKey: 'alias-b' } })

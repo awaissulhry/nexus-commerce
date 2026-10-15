@@ -10,6 +10,7 @@ import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS, AXIS_SYNONYM_GROUPS, axisSy
 import { orderAxisValues } from './ebay-value-order.js'
 import { ebayAspectValues } from './ebay-aspect-values.js'
 import { isCompleteEbayLocation, resolveEbayItemLocation } from './ebay-account-defaults.js'
+import { NOT_STORE_PHOTO } from './images/store-photos.js'
 
 /** Incident #21 — "blank qty on a shared listing = whatever the pool allows".
  *  Callers' capQty implementations recognize this sentinel and return the pool
@@ -475,7 +476,7 @@ export async function createSharedListing(
             const poolParentIds = [...new Set(poolChildren.map((p) => p.parentId).filter((x): x is string => Boolean(x)))]
             if (poolParentIds.length) {
               const masters = await prisma.productImage.findMany({
-                where: { productId: { in: poolParentIds } },
+                where: { productId: { in: poolParentIds }, ...NOT_STORE_PHOTO },
                 orderBy: [{ productId: 'asc' }, { sortOrder: 'asc' }],
                 take: 12,
                 select: { url: true },
@@ -487,7 +488,7 @@ export async function createSharedListing(
             const ownProduct = await prisma.product.findFirst({ where: { sku: parentSku, deletedAt: null }, select: { id: true } })
             if (ownProduct) {
               const masters = await prisma.productImage.findMany({
-                where: { productId: ownProduct.id },
+                where: { productId: ownProduct.id, ...NOT_STORE_PHOTO },
                 orderBy: { sortOrder: 'asc' },
                 take: 12,
                 select: { url: true },

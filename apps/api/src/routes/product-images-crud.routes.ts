@@ -798,12 +798,12 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
   // "used in this product" on its side.
   fastify.post<{
     Params: { id: string }
-    Body: { assetId: string; type?: string; alt?: string | null }
+    Body: { assetId: string; type?: string; alt?: string | null; storeOnly?: boolean }
   }>(
     '/products/:id/images/import-from-dam',
     async (req, reply) => {
       const { id } = req.params
-      const { assetId, type, alt } = req.body ?? ({} as any)
+      const { assetId, type, alt, storeOnly } = req.body ?? ({} as any)
       if (!assetId) return reply.status(400).send({ error: 'ASSET_ID_REQUIRED' })
       if (type !== undefined && !VALID_TYPES.has(type)) {
         return reply.status(400).send({ error: 'INVALID_TYPE', validTypes: [...VALID_TYPES] })
@@ -844,10 +844,13 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ error: 'ASSET_NOT_IMAGE', assetType: asset.type })
       }
 
+      // A store photo (`storeOnly`): a Shopify store's own file, linked for that store's galleries only (`isStorePhotoId`).
+      if (storeOnly !== undefined && typeof storeOnly !== 'boolean') return reply.status(400).send({ error: 'STORE_ONLY_NOT_BOOLEAN' })
+      if (storeOnly && asset.storageProvider !== 'shopify') return reply.status(400).send({ error: 'STORE_ONLY_NEEDS_SHOPIFY_FILE' })
       if (asset.storageProvider === 'shopify') {
         const { attachShopifyImage, ShopifyMediaError } = await import('../services/shopify/media-library.service.js')
         try {
-          const result = await attachShopifyImage(id, asset, type ?? 'ALT', alt)
+          const result = await attachShopifyImage(id, asset, type ?? 'ALT', alt, { storeOnly: storeOnly === true })
           emitImagesUpdated(id, 'import-from-dam', { imageId: result.image.id, assetId: asset.id })
           return reply.code(result.reused ? 200 : 201).send(result)
         } catch (error) {

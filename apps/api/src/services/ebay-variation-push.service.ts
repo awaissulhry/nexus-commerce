@@ -45,6 +45,7 @@ export { AXIS_SYNONYM_GROUPS, axisSynonymKey }
 // existing importers.
 export { CONDITION_ID_TO_ENUM } from './ebay-condition.js';
 import { CONDITION_ID_TO_ENUM, EBAY_CONDITION_NOT_GUESSED } from './ebay-condition.js';
+import { NOT_STORE_PHOTO } from './images/store-photos.js'
 
 // ── Variation group push helper ────────────────────────────────────────
 
@@ -1055,7 +1056,7 @@ export async function pushVariationGroup(
       where: { sku: { in: variantSkus }, deletedAt: null },
       select: {
         sku: true,
-        images: { orderBy: { sortOrder: 'asc' }, select: { url: true } },
+        images: { where: NOT_STORE_PHOTO, orderBy: { sortOrder: 'asc' }, select: { url: true } },
       },
     })
     for (const p of piRows) {
@@ -3023,7 +3024,7 @@ export async function buildEbayFamilyRows(
     },
     include: {
       channelListings: { where: { channel: 'EBAY', ...(marketplace ? { marketplace } : {}), ...(destination ? { channelConnectionId: destination.channelConnectionId, aliasKey: destination.aliasKey ?? '' } : {}) } },
-      images: { select: { url: true, sortOrder: true, type: true }, orderBy: { sortOrder: 'asc' } },
+      images: { where: NOT_STORE_PHOTO, select: { url: true, sortOrder: true, type: true }, orderBy: { sortOrder: 'asc' } },
     },
     orderBy: { sku: 'asc' },
   })
