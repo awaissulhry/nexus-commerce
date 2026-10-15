@@ -27,6 +27,10 @@
  *                         enable_local, maximize_conversions.target_cpa_micros, maximize_conversion_value.target_roas.
  *                         (v25 has no campaign.url_expansion_opt_out: final URL expansion is the asset automation type
  *                         FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION — performance-max/optimizations.)
+ *                         Also (review, 2026-10-16) url_custom_parameters (selectable, not filterable),
+ *                         pmax_campaign_settings.brand_targeting_overrides.ignore_exclusions_for_shopping_ads,
+ *                         excluded_parent_asset_field_types, excluded_parent_asset_set_types; asset_group.tracking_url_template,
+ *                         final_url_suffix, url_custom_parameters (CustomParameter {key, value}) — all selectable.
  *   campaign_criterion    brand_list.shared_set, webpage.conditions (selectable, not filterable), webpage.criterion_name.
  *   goal                  goal_id, goal_type, new_customer_acquisition_goal_settings.value_settings.additional_value /
  *                         additional_high_lifetime_value. campaign_goal_config: campaign, goal, goal_type,
@@ -48,6 +52,8 @@ const num = (value: unknown): number | null => {
   return Number.isFinite(n) ? n : null
 }
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.map(String) : [])
+const parametersOf = (value: unknown): CustomParameter[] =>
+  (Array.isArray(value) ? value : []).map((p: Json) => ({ key: str(p?.key) ?? '', value: typeof p?.value === 'string' ? p.value : '' })).filter((p) => p.key)
 
 // ── assets ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -130,6 +136,8 @@ export interface PmaxSignal {
   approval: string | null
 }
 
+export interface CustomParameter { key: string; value: string }
+
 export interface PmaxAssetGroup {
   assetGroupId: string
   name: string
@@ -138,6 +146,9 @@ export interface PmaxAssetGroup {
   finalMobileUrls: string[]
   path1: string | null
   path2: string | null
+  trackingTemplate: string | null
+  finalUrlSuffix: string | null
+  customParameters: CustomParameter[]
   adStrength: string | null
   primaryStatus: string | null
   assets: PmaxLink[]
@@ -177,6 +188,12 @@ export interface PmaxCampaignLive {
   locationOption: string | null
   trackingTemplate: string | null
   finalUrlSuffix: string | null
+  customParameters: CustomParameter[]
+  /** Brand exclusions do not hold for Shopping ads (pmax_campaign_settings.brand_targeting_overrides). */
+  ignoreBrandExclusionsForShopping: boolean
+  /** Asset field types / asset set types the campaign does not inherit from the account. */
+  excludedParentAssetFieldTypes: string[]
+  excludedParentAssetSetTypes: string[]
   /** Google's automation switches as Google answered them (a type left out is at Google's default). */
   automation: Record<string, string>
   campaignAssets: PmaxLink[]
@@ -194,7 +211,8 @@ const SETTINGS = [
   'campaign.brand_guidelines.main_color', 'campaign.brand_guidelines.accent_color', 'campaign.brand_guidelines.predefined_font_family',
   'campaign.contains_eu_political_advertising', 'campaign.geo_target_type_setting.positive_geo_target_type',
   'campaign.tracking_url_template', 'campaign.final_url_suffix', 'campaign.asset_automation_settings',
-  'campaign_budget.id', 'campaign_budget.amount_micros', 'campaign_budget.explicitly_shared',
+  'campaign.url_custom_parameters', 'campaign.pmax_campaign_settings.brand_targeting_overrides.ignore_exclusions_for_shopping_ads',
+  'campaign.excluded_parent_asset_field_types', 'campaign.excluded_parent_asset_set_types', 'campaign_budget.id', 'campaign_budget.amount_micros', 'campaign_budget.explicitly_shared',
 ]
 
 export const pmaxSettingsQuery = (campaignId: string): string =>
@@ -215,7 +233,8 @@ export const pmaxCampaignAssetsQuery = (campaignId: string): string =>
 
 export const pmaxAssetGroupsQuery = (campaignId: string): string =>
   'SELECT campaign.id, asset_group.id, asset_group.name, asset_group.status, asset_group.final_urls, asset_group.final_mobile_urls, ' +
-  'asset_group.path1, asset_group.path2, asset_group.ad_strength, asset_group.primary_status FROM asset_group ' +
+  'asset_group.path1, asset_group.path2, asset_group.ad_strength, asset_group.primary_status, asset_group.tracking_url_template, ' +
+  'asset_group.final_url_suffix, asset_group.url_custom_parameters FROM asset_group ' +
   `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND asset_group.status != 'REMOVED'`
 
 export const pmaxGroupAssetsQuery = (campaignId: string): string =>
@@ -324,6 +343,10 @@ export function pmaxSettingsOf(row: Json): Omit<PmaxCampaignLive, 'campaignAsset
     locationOption: str(c.geoTargetTypeSetting?.positiveGeoTargetType),
     trackingTemplate: str(c.trackingUrlTemplate),
     finalUrlSuffix: str(c.finalUrlSuffix),
+    customParameters: parametersOf(c.urlCustomParameters),
+    ignoreBrandExclusionsForShopping: c.pmaxCampaignSettings?.brandTargetingOverrides?.ignoreExclusionsForShoppingAds === true,
+    excludedParentAssetFieldTypes: strings(c.excludedParentAssetFieldTypes),
+    excludedParentAssetSetTypes: strings(c.excludedParentAssetSetTypes),
     automation,
   }
 }
@@ -372,6 +395,9 @@ export async function livePmaxCampaign(target: GoogleAdsTarget, campaignId: stri
       finalMobileUrls: strings(g.finalMobileUrls),
       path1: str(g.path1),
       path2: str(g.path2),
+      trackingTemplate: str(g.trackingUrlTemplate),
+      finalUrlSuffix: str(g.finalUrlSuffix),
+      customParameters: parametersOf(g.urlCustomParameters),
       adStrength: str(g.adStrength),
       primaryStatus: str(g.primaryStatus),
       assets: groupAssets.filter((a) => a.assetGroupId === groupId).map((a) => a.link),

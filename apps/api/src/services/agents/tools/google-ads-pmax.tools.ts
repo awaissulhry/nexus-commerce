@@ -139,6 +139,11 @@ const biddingArg = z.object({
   targetRoas: z.coerce.number().min(0.01).max(1000).optional().describe('MAXIMIZE_CONVERSION_VALUE: a target return on ad spend as a ratio (3.5 = 350 %)'),
 })
 
+const customParametersArg = z.array(z.object({
+  key: z.string().trim().regex(/^[A-Za-z0-9]{1,16}$/).describe('its name (1 to 16 letters and digits; a URL uses it as {_name})'),
+  value: z.string().trim().min(1).max(250).describe('its value'),
+})).max(8).describe('custom parameters (up to 8)')
+
 const groupBuildArg = z.object({
   name: textArg(128, 'the asset group\'s name (unique in the campaign)'),
   finalUrls: z.array(urlArg('a final URL')).min(1).max(10).describe('final URLs (retail: the Merchant Center site)'),
@@ -146,8 +151,11 @@ const groupBuildArg = z.object({
   path1: z.string().trim().max(30).optional().describe('display path 1 (15 characters)'),
   path2: z.string().trim().max(30).optional().describe('display path 2 (15 characters, needs path1)'),
   status: z.enum(['ENABLED', 'PAUSED']).optional().describe('ENABLED (default; the campaign is paused) or PAUSED'),
+  trackingTemplate: z.string().trim().max(2048).optional().describe('the asset group\'s tracking template'),
+  finalUrlSuffix: z.string().trim().max(2048).optional().describe('the asset group\'s final URL suffix'),
+  customParameters: customParametersArg.optional(),
   assets: assetsArg.optional(),
-  products: z.array(pmaxTreeNodeArg).min(1).max(250).optional().describe('retail: the product tree as a flat list, the root first (default: "All products")'),
+  productGroups: z.array(pmaxTreeNodeArg).min(1).max(250).optional().describe('retail: the product group tree as a flat list, the root first (default: "All products")'),
   signals: signalsArg.optional(),
 })
 
@@ -186,6 +194,10 @@ const campaignBuildArg = z.object({
   negativeKeywords: z.array(z.object({ text: textArg(80, 'the negative keyword'), matchType: matchTypeArg })).max(250).optional().describe('campaign negative keywords'),
   trackingTemplate: z.string().trim().max(2048).optional().describe('tracking template'),
   finalUrlSuffix: z.string().trim().max(2048).optional().describe('final URL suffix'),
+  customParameters: customParametersArg.optional(),
+  ignoreBrandExclusionsForShopping: z.boolean().optional().describe('its brand exclusions do not hold for Shopping ads (default off)'),
+  excludedParentAssetFieldTypes: z.array(z.preprocess(upper, z.string().regex(/^[A-Z_]{3,40}$/))).max(30).optional().describe('asset field types the campaign does not inherit from the account (SITELINK, CALLOUT, …)'),
+  excludedParentAssetSetTypes: z.array(z.preprocess(upper, z.string().regex(/^[A-Z_]{3,60}$/))).max(30).optional().describe('asset set types the campaign does not inherit from the account'),
   assetGroups: z.array(groupBuildArg).max(20).optional().describe('asset groups'),
 })
 
@@ -355,7 +367,9 @@ const copyGooglePmax: AgentTool = {
     'Copy a live Performance Max campaign of the business\'s chosen account into a NEW campaign, made PAUSED, in one '
     + 'request: its own budget of the same amount, bidding, Merchant Center feed, locations, languages, schedule, brand '
     + 'guidelines with the same brand assets, every campaign asset, Google\'s automation switches as they are, URL and '
-    + 'brand exclusions, negative keywords, tracking, and every asset group with its final URLs, paths, status, assets (the '
+    + 'brand exclusions, negative keywords, tracking (templates, URL suffixes and custom parameters, of the campaign and of each '
+    + 'asset group), the brand targeting override for Shopping ads, the asset types it does not inherit, and every asset group '
+    + 'with its final URLs, paths, status, assets (the '
     + 'same assets linked again — Google\'s own automatically created ones are not), product tree and signals. What it '
     + 'cannot copy is named in the preview (the campaign\'s conversion goals and customer acquisition are never copied; an '
     + 'audience that belongs to one asset group stays there). Undo removes the copy.' + GOOGLE_CHANGE_RULES,
@@ -474,11 +488,11 @@ const pmaxUndo: ToolUndo = {
         if (remove.length) entry.removeAssets = remove
       }
       if ('tree' in g) {
-        if (!b.tree) entry.clearProducts = true
+        if (!b.tree) entry.clearProductGroups = true
         else {
           const spec = pmaxSpecOfSnapshot(b.tree)
           if ('refusal' in spec) return { refusal: `The product tree of asset group ${g.assetGroupId} before this change cannot be given again: ${spec.refusal}.` }
-          entry.products = spec
+          entry.productGroups = spec
         }
       }
       if ('signals' in g) {
@@ -508,8 +522,8 @@ const groupChangeArg = z.object({
   path2: z.string().trim().max(30).optional().describe('display path 2 (15 characters; "" clears it)'),
   addAssets: assetsArg.optional().describe('assets to add (Google\'s minimums and maximums are checked on what it holds after)'),
   removeAssets: z.array(assetRefArg).max(100).optional().describe('assets to unlink (they stay in the account)'),
-  products: z.array(pmaxTreeNodeArg).min(1).max(250).optional().describe('retail: the WHOLE product tree as it should be, the root first (what stays keeps its id)'),
-  clearProducts: z.boolean().optional().describe('retail: remove the whole product tree (the asset group then shows no products)'),
+  productGroups: z.array(pmaxTreeNodeArg).min(1).max(250).optional().describe('retail: the WHOLE product group tree as it should be, the root first (what stays keeps its id)'),
+  clearProductGroups: z.boolean().optional().describe('retail: remove the whole product group tree (the asset group then shows no products)'),
   addSignals: signalsArg.optional().describe('signals to add (SPENDS MONEY in an enabled campaign and asset group)'),
   removeSignals: z.object({
     audiences: z.array(googleIdArg('an audience signal\'s audience')).max(50).optional().describe('audience signals to remove'),
@@ -582,6 +596,7 @@ const acquisitionRequest = (args: Record<string, unknown>): AcquisitionRequest =
   campaignId: args.campaignId as string | undefined,
   mode: args.mode as AcquisitionRequest['mode'],
   valueOverride: args.valueOverride as AcquisitionRequest['valueOverride'],
+  clearValueOverride: args.clearValueOverride as boolean | undefined,
 })
 
 async function acquisitionLive(target: GoogleAdsTarget, campaignId: string | undefined) {
@@ -624,6 +639,7 @@ const acquisitionUndo: ToolUndo = {
       tool: 'set-google-customer-acquisition',
       args: {
         ...accountArgOf(after), campaignId: before.campaignId, mode: before.mode,
+        ...(before.mode === 'BID_HIGHER' && before.valueCents === null ? { clearValueOverride: true } : {}),
         ...(before.mode === 'BID_HIGHER' && before.valueCents !== null ? { valueOverride: { newCustomerValueCents: before.valueCents, ...(before.highValueCents !== null ? { highValueCents: before.highValueCents } : {}) } } : {}),
         why: 'undo of an earlier customer acquisition change',
       },
@@ -649,6 +665,7 @@ const setGoogleCustomerAcquisition: AgentTool = {
     campaignId: googleIdArg('a campaign (Performance Max, Search, Shopping …)').optional(),
     mode: z.enum(['BID_HIGHER', 'ONLY_NEW', 'OFF']).optional().describe('the campaign: BID_HIGHER (new and existing customers, new ones bid higher), ONLY_NEW (new customers only) or OFF (remove the campaign\'s own setting)'),
     valueOverride: valuesArg('BID_HIGHER: this campaign\'s own value of a new customer (else the account goal\'s)').optional(),
+    clearValueOverride: z.boolean().optional().describe('BID_HIGHER: take the campaign\'s own value off, so it bids with the account goal\'s (a higher one is SPENDS MONEY)'),
     why: googleWhyArg,
   }),
   description:

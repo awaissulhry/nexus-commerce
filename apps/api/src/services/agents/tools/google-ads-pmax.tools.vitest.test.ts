@@ -56,7 +56,8 @@ const link = (assetId: string, fieldType: string, text: string | null = null, ov
   assetId, fieldType, status: 'ENABLED', source: 'ADVERTISER', type: /IMAGE|LOGO/.test(fieldType) ? 'IMAGE' : 'TEXT', name: null, text, width: null, height: null, mimeType: null, youtubeId: null, callToAction: null, ...over,
 })
 const group = (): PmaxAssetGroup => ({
-  assetGroupId: '41', name: 'Group A', status: 'ENABLED', finalUrls: ['https://shop.example/'], finalMobileUrls: [], path1: null, path2: null, adStrength: 'GOOD', primaryStatus: 'ELIGIBLE',
+  assetGroupId: '41', name: 'Group A', status: 'ENABLED', finalUrls: ['https://shop.example/'], finalMobileUrls: [], path1: null, path2: null,
+  trackingTemplate: '{lpurl}?g=1', finalUrlSuffix: 'src=g', customParameters: [{ key: 'grp', value: 'a' }], adStrength: 'GOOD', primaryStatus: 'ELIGIBLE',
   assets: [
     link('301', 'HEADLINE', 'Race jackets'), link('302', 'HEADLINE', 'Leather suits'), link('303', 'HEADLINE', 'Fast delivery'), link('304', 'LONG_HEADLINE', 'Race-ready jackets'),
     link('305', 'DESCRIPTION', 'Free returns.'), link('306', 'DESCRIPTION', 'Hand-made suits.'), link('307', 'MARKETING_IMAGE'), link('308', 'SQUARE_MARKETING_IMAGE'),
@@ -73,7 +74,8 @@ const campaign = (): PmaxCampaignLive => ({
   campaignId: '21', name: 'PMax A', status: 'ENABLED', type: 'PERFORMANCE_MAX', biddingType: 'MAXIMIZE_CONVERSION_VALUE', targetCpaCents: null, targetRoas: 4,
   budget: { budgetId: '11', amountCents: 2500, shared: false }, start: '2026-01-01 00:00:00', end: null,
   retail: { merchantId: '555', feedLabel: 'IT', localInventory: false }, brandGuidelines: true, brandStyle: null, euPoliticalAds: 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
-  locationOption: 'PRESENCE', trackingTemplate: null, finalUrlSuffix: null,
+  locationOption: 'PRESENCE', trackingTemplate: null, finalUrlSuffix: null, customParameters: [{ key: 'camp', value: 'z' }], ignoreBrandExclusionsForShopping: true,
+  excludedParentAssetFieldTypes: ['CALLOUT'], excludedParentAssetSetTypes: [],
   automation: { FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION: 'OPTED_OUT', TEXT_ASSET_AUTOMATION: 'OPTED_IN' },
   campaignAssets: [link('201', 'BUSINESS_NAME', 'Shop A'), link('202', 'LOGO'), link('203', 'SITELINK', null, { type: 'SITELINK' })],
   criteria: [
@@ -164,6 +166,9 @@ describe('copy-google-pmax', () => {
     const ops = h.mutate.mock.calls[0][1] as Array<Record<string, any>>
     const created = ops.find((o) => o.campaignOperation).campaignOperation.create
     expect(created).toMatchObject({ name: 'PMax A copy', status: 'PAUSED', brandGuidelinesEnabled: true, maximizeConversionValue: { targetRoas: 4 }, shoppingSetting: { merchantId: '555', feedLabel: 'IT' } })
+    // Tracking at both levels, the brand targeting override for Shopping ads and the types it does not inherit.
+    expect(created).toMatchObject({ urlCustomParameters: [{ key: 'camp', value: 'z' }], pmaxCampaignSettings: { brandTargetingOverrides: { ignoreExclusionsForShoppingAds: true } }, excludedParentAssetFieldTypes: ['CALLOUT'] })
+    expect(ops.find((o) => o.assetGroupOperation).assetGroupOperation.create).toMatchObject({ trackingUrlTemplate: '{lpurl}?g=1', finalUrlSuffix: 'src=g', urlCustomParameters: [{ key: 'grp', value: 'a' }] })
     // Google's switches as the source has them; one Google left out is at its Performance Max default (on).
     expect(created.assetAutomationSettings).toEqual([
       { assetAutomationType: 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', assetAutomationStatus: 'OPTED_OUT' },
@@ -228,6 +233,21 @@ describe('set-google-pmax', () => {
     expect(await tool('set-google-pmax').undo!.current(run.change!)).not.toEqual(run.change!.after)
   })
 
+  it('undo of a search theme removal adds it back with its own text', async () => {
+    const live = campaign()
+    live.assetGroups[0].signals = [{ signalId: '41~703', audienceId: null, searchTheme: 'Moto Jacket', approval: 'APPROVED' }]
+    h.campaign = live
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const args = parsed('set-google-pmax', { campaignId: '21', assetGroups: [{ assetGroupId: '41', removeSignals: { searchThemes: ['moto jacket'] } }] })
+    const out = await tool('set-google-pmax').handler(args, asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    const run = await tool('set-google-pmax').execute!(args, approved(out.preview))
+    expect(run.ok, String(run.error)).toBe(true)
+    const undo = tool('set-google-pmax').undo!.request(run.change!) as { tool: string; args: { assetGroups: Array<Record<string, unknown>> } }
+    expect(undo.args.assetGroups[0]).toEqual({ assetGroupId: '41', addSignals: { searchThemes: ['Moto Jacket'] } })
+    expect(tool('set-google-pmax').input.safeParse(undo.args).success).toBe(true)
+  })
+
   it('a change that is not a Performance Max campaign, or that breaks Google\'s minimums, is refused before Google is asked', async () => {
     const search = campaign(); search.type = 'SEARCH'; h.campaign = search
     expect(await tool('set-google-pmax').handler(parsed('set-google-pmax', { campaignId: '21', automation: { finalUrlExpansion: false } }), asker)).toMatchObject({ ok: false, error: expect.stringMatching(/changes Performance Max campaigns/) })
@@ -258,5 +278,13 @@ describe('set-google-customer-acquisition', () => {
     const undo = tool('set-google-customer-acquisition').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
     expect(undo).toMatchObject({ tool: 'set-google-customer-acquisition', args: { accountId: 'g-1', campaignId: '21', mode: 'OFF' } })
     expect(tool('set-google-customer-acquisition').input.safeParse(undo.args).success).toBe(true)
+    // An override put on a campaign that bid with the account's value: undo takes the override off again.
+    const back = tool('set-google-customer-acquisition').undo!.request({
+      before: { kind: 'campaign', campaignId: '21', mode: 'BID_HIGHER', valueCents: null, highValueCents: null, accountId: 'g-1' },
+      after: { kind: 'campaign', campaignId: '21', mode: 'BID_HIGHER', valueCents: 700, highValueCents: null, accountId: 'g-1' },
+    }) as { tool: string; args: Record<string, unknown> }
+    expect(back.args).toMatchObject({ campaignId: '21', mode: 'BID_HIGHER', clearValueOverride: true })
+    expect(back.args.valueOverride).toBeUndefined()
+    expect(tool('set-google-customer-acquisition').input.safeParse(back.args).success).toBe(true)
   })
 })

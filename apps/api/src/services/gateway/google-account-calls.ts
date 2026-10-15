@@ -43,7 +43,8 @@
  *                                          proposedPurchaseOrderNumber (CREATE only) }
  *                                          + updateMask (UPDATE only) | remove "customers/{c}/accountBudgetProposals/{id}"
  *                                          (REMOVE: "a budget that hasn't started yet", like END only the budget)
- *   GoalOperation (G10)                    ONE of create { newCustomerAcquisitionGoalSettings { valueSettings { additionalValue,
+ *   GoalOperation (G10)                    ONE of create { goalType NEW_CUSTOMER_ACQUISITION (output only in the v25 reference,
+ *                                          set on create by Google's lifecycle-goals sample), newCustomerAcquisitionGoalSettings { valueSettings { additionalValue,
  *                                          additionalHighLifetimeValue? } } } | update { resourceName "customers/{c}/goals/{id}",
  *                                          newCustomerAcquisitionGoalSettings } + updateMask (those two value paths); no remove
  *   CampaignGoalConfigOperation (G10)      ONE of create { campaign, goal, campaignNewCustomerAcquisitionSettings { targetOption
@@ -233,7 +234,9 @@ function goalProblem(c: string, path: 'Goals:mutate' | 'CampaignGoalConfigs:muta
   if (path === 'Goals:mutate') {
     const goal = isObject(op.create) ? op.create : isObject(op.update) ? op.update : null
     if (!goal || onlyKeys(op, [isObject(op.create) ? 'create' : 'update', ...(isObject(op.update) ? ['updateMask'] : [])]).length) return 'the operation is not one create or one update of a goal'
-    if (onlyKeys(goal, ['resourceName', 'newCustomerAcquisitionGoalSettings']).length) return 'Nexus changes the new-customer acquisition goal only'
+    if (onlyKeys(goal, ['resourceName', 'newCustomerAcquisitionGoalSettings', ...(isObject(op.create) ? ['goalType'] : [])]).length) return 'Nexus changes the new-customer acquisition goal only'
+    // goal_type is output only in v25, but Google's lifecycle-goals sample sets it on create: only that value, only then.
+    if (isObject(op.create) && goal.goalType !== undefined && goal.goalType !== 'NEW_CUSTOMER_ACQUISITION') return 'a new goal is the new-customer acquisition goal'
     if (isObject(op.create) && goal.resourceName !== undefined) return 'a new goal names no resource'
     if (isObject(op.update) && (!goalName(goal.resourceName) || !masked(GOAL_MASK))) return 'the update does not name a goal of this account, or masks more than its two values'
     const settings = goal.newCustomerAcquisitionGoalSettings

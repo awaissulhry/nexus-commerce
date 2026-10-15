@@ -49,7 +49,7 @@ const retailBuild = (): PmaxBuildCampaign => ({
   assetGroups: [{
     name: 'Group A', finalUrls: ['https://shop.example/'], path1: 'jackets',
     assets: { ...GROUP_ASSETS, link: [{ assetId: '901', fieldType: 'YOUTUBE_VIDEO' }], callToAction: 'SHOP_NOW' },
-    products: [{ split: 'BRAND' }, { parent: 0, value: 'Brand A' }, { parent: 0, everythingElse: true, excluded: true }],
+    productGroups: [{ split: 'BRAND' }, { parent: 0, value: 'Brand A' }, { parent: 0, everythingElse: true, excluded: true }],
     signals: { audiences: ['71'], newAudiences: [{ name: 'Visitors Z', segments: [{ kind: 'USER_LIST', id: '301' }] }], searchThemes: ['moto jacket'] },
   }],
 })
@@ -134,8 +134,8 @@ describe('build-google-pmax builder', () => {
     expect(refusal({ brandAssets: { adBusinessName: 'Shop Z' } })).toMatch(/no logo \(brand guidelines need at least one square LOGO/)
     expect(refusal({ name: 'Shop A' })).toMatch(/already exists/)
     expect(refusal({ bidding: { strategy: 'PORTFOLIO', portfolioId: '81' } })).toMatch(/MAXIMIZE_CONVERSIONS .* only/)
-    expect(refusal({ assetGroups: [{ ...group, products: [{ split: 'CHANNEL_EXCLUSIVITY' }] }] })).toMatch(/not by channel exclusivity/)
-    expect(refusal({ assetGroups: [{ ...group, products: [{ split: 'BRAND' }, { parent: 0, value: 'Brand A' }] }] })).toMatch(/without "everything else"/)
+    expect(refusal({ assetGroups: [{ ...group, productGroups: [{ split: 'CHANNEL_EXCLUSIVITY' }] }] })).toMatch(/not by channel exclusivity/)
+    expect(refusal({ assetGroups: [{ ...group, productGroups: [{ split: 'BRAND' }, { parent: 0, value: 'Brand A' }] }] })).toMatch(/without "everything else"/)
     expect(refusal({}, { ...images, [imageSlot('c0:g0', 0)]: img(1200, 1200, 'e') })).toMatch(/landscape \(1\.91:1\)/)
     expect(refusal({ brandGuidelines: false })).toMatch(/with brand guidelines off the business name and logos go in each asset group/)
     expect(refusal({ brandExclusions: ['62'] })).toMatch(/brand list 62 is not a brand list/)
@@ -165,7 +165,8 @@ const node = (id: string, parentId: string | null, type: string, dimension: stri
   caseValue: dimension ? { [dimension]: value === null ? {} : { value } } : null,
 })
 const liveGroup = (over: Partial<PmaxAssetGroup> = {}): PmaxAssetGroup => ({
-  assetGroupId: '41', name: 'Group A', status: 'ENABLED', finalUrls: ['https://shop.example/'], finalMobileUrls: [], path1: null, path2: null, adStrength: 'GOOD', primaryStatus: 'ELIGIBLE',
+  assetGroupId: '41', name: 'Group A', status: 'ENABLED', finalUrls: ['https://shop.example/'], finalMobileUrls: [], path1: null, path2: null,
+  trackingTemplate: null, finalUrlSuffix: null, customParameters: [], adStrength: 'GOOD', primaryStatus: 'ELIGIBLE',
   assets: [
     link('301', 'HEADLINE', 'Race jackets'), link('302', 'HEADLINE', 'Leather suits'), link('303', 'HEADLINE', 'Fast delivery'),
     link('304', 'LONG_HEADLINE', 'Race-ready leather jackets'), link('305', 'DESCRIPTION', 'Free returns.'), link('306', 'DESCRIPTION', 'Hand-made leather suits for track days.'),
@@ -180,7 +181,8 @@ const liveCampaign = (over: Partial<PmaxCampaignLive> = {}): PmaxCampaignLive =>
   campaignId: '21', name: 'PMax A', status: 'ENABLED', type: 'PERFORMANCE_MAX', biddingType: 'MAXIMIZE_CONVERSION_VALUE', targetCpaCents: null, targetRoas: 4,
   budget: { budgetId: '11', amountCents: 2500, shared: false }, start: '2026-01-01 00:00:00', end: null,
   retail: { merchantId: '555', feedLabel: null, localInventory: false }, brandGuidelines: true, brandStyle: null, euPoliticalAds: 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
-  locationOption: 'PRESENCE', trackingTemplate: null, finalUrlSuffix: null,
+  locationOption: 'PRESENCE', trackingTemplate: null, finalUrlSuffix: null, customParameters: [], ignoreBrandExclusionsForShopping: false,
+  excludedParentAssetFieldTypes: [], excludedParentAssetSetTypes: [],
   automation: { FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION: 'OPTED_OUT', TEXT_ASSET_AUTOMATION: 'OPTED_IN', GENERATE_IMAGE_ENHANCEMENT: 'OPTED_IN' },
   campaignAssets: [link('201', 'BUSINESS_NAME', 'Shop A'), link('202', 'LOGO')],
   criteria: [
@@ -236,6 +238,31 @@ describe('set-google-pmax builder', () => {
     expect(d.warnings.join(' ')).toMatch(/final URL expansion.*the campaign is paused/)
   })
 
+  it('an automation change writes the switches asked and the types Google answered — never one Google left out', () => {
+    const d = pmaxChangeDraft(C, 'EUR', { campaignId: '21', automation: { imageEnhancement: false } }, changeLive({ campaign: liveCampaign({ automation: { TEXT_ASSET_AUTOMATION: 'OPTED_IN', GENERATE_IMAGE_EXTRACTION: 'OPTED_IN' } }) }))
+    if ('refusal' in d) throw new Error(d.refusal)
+    // Final URL expansion was left out by Google (its default): it is not written, so it cannot be turned on by the write.
+    expect(of(d.operations, 'campaignOperation')[0].update.assetAutomationSettings).toEqual([
+      { assetAutomationType: 'TEXT_ASSET_AUTOMATION', assetAutomationStatus: 'OPTED_IN' },
+      { assetAutomationType: 'GENERATE_IMAGE_ENHANCEMENT', assetAutomationStatus: 'OPTED_OUT' },
+    ])
+    const off = pmaxChangeDraft(C, 'EUR', { campaignId: '21', automation: { finalUrlExpansion: false } }, changeLive({ campaign: liveCampaign({ automation: {} }) }))
+    if ('refusal' in off) throw new Error(off.refusal)
+    expect(of(off.operations, 'campaignOperation')[0].update.assetAutomationSettings).toEqual([{ assetAutomationType: 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', assetAutomationStatus: 'OPTED_OUT' }])
+    expect((off.before as PmaxChangeRecord).campaign.automation).toEqual({ finalUrlExpansion: 'OPTED_IN' })
+  })
+
+  it('a search theme removed is recorded as Google holds it (its own text), matched without case', () => {
+    const live = changeLive({ campaign: liveCampaign({ assetGroups: [liveGroup({ signals: [{ signalId: '41~701', audienceId: null, searchTheme: 'Moto Jacket', approval: 'APPROVED' }] })] }) })
+    const d = pmaxChangeDraft(C, 'EUR', { campaignId: '21', assetGroups: [{ assetGroupId: '41', removeSignals: { searchThemes: ['moto jacket'] } }] }, live)
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(of(d.operations, 'assetGroupSignalOperation')).toEqual([{ remove: `${C}/assetGroupSignals/41~701` }])
+    expect((d.before as PmaxChangeRecord).groups[0].signals).toEqual(['t:Moto Jacket'])
+    expect((d.after as PmaxChangeRecord).groups[0].signals).toEqual([])
+    const again = pmaxChangeDraft(C, 'EUR', { campaignId: '21', assetGroups: [{ assetGroupId: '41', addSignals: { searchThemes: ['MOTO JACKET'] } }] }, live)
+    expect('refusal' in again && again.refusal).toMatch(/is already a signal/)
+  })
+
   it('refuses what Google would refuse, in words', () => {
     const refusal = (request: Parameters<typeof pmaxChangeDraft>[2], live = changeLive()) => { const d = pmaxChangeDraft(C, 'EUR', request, live); return 'refusal' in d ? d.refusal : 'accepted' }
     expect(refusal({ campaignId: '21', assetGroups: [{ assetGroupId: '41', removeAssets: [{ assetId: '303', fieldType: 'HEADLINE' }] }] })).toMatch(/2 headlines \(Google needs at least 3\)/)
@@ -262,7 +289,7 @@ describe('set-google-pmax builder', () => {
   })
 
   it('a product tree change: what stays keeps its id, removals leaves first, and more products advertised is SPENDS MONEY', () => {
-    const d = pmaxChangeDraft(C, 'EUR', { campaignId: '21', assetGroups: [{ assetGroupId: '41', products: [{ split: 'BRAND' }, { parent: 0, value: 'brand a' }, { parent: 0, value: 'Brand B' }, { parent: 0, everythingElse: true }] }] }, changeLive())
+    const d = pmaxChangeDraft(C, 'EUR', { campaignId: '21', assetGroups: [{ assetGroupId: '41', productGroups: [{ split: 'BRAND' }, { parent: 0, value: 'brand a' }, { parent: 0, value: 'Brand B' }, { parent: 0, everythingElse: true }] }] }, changeLive())
     if ('refusal' in d) throw new Error(d.refusal)
     const ops = of(d.operations, 'assetGroupListingGroupFilterOperation')
     // "everything else" goes from excluded to included: removed and made again; Brand B is new; the root and Brand A stay.
@@ -310,12 +337,33 @@ describe('listing group trees (Performance Max)', () => {
   })
 })
 
+describe('customer acquisition: what a campaign adds for a new customer, before and after', () => {
+  const campaign = { campaignId: '21', name: 'PMax A', status: 'ENABLED' }
+  const goal = { goalId: '81', resourceName: `${C}/goals/81`, eligibility: 'ELIGIBLE', valueCents: 900, highValueCents: 2000 }
+  const config = { resourceName: `${C}/campaignGoalConfigs/21~81`, goalId: '81', mode: 'TARGET_ALL', valueCents: 500, highValueCents: 1000 }
+  it('taking an override off makes the campaign bid with the account goal\'s value: a higher one is SPENDS MONEY', () => {
+    const d = acquisitionDraft(C, 'EUR', { campaignId: '21', mode: 'BID_HIGHER', clearValueOverride: true }, { goal, config, campaign })
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.operations[0]).toMatchObject({ accountCall: { body: { operations: [{ update: { campaignNewCustomerAcquisitionSettings: { targetOption: 'TARGET_ALL' } } }] } } })
+    expect(d.spendsMoney.join(' ')).toMatch(/Raises what "PMax A" adds for a new customer: EUR 5\.00 .* → EUR 9\.00 .*the account goal's value/)
+    expect(d.stands).toMatchObject({ goal: { id: '81', value: 900, high: 2000 } })
+    const lower = acquisitionDraft(C, 'EUR', { campaignId: '21', mode: 'BID_HIGHER', clearValueOverride: true }, { goal: { ...goal, valueCents: 300, highValueCents: 600 }, config, campaign })
+    if ('refusal' in lower) throw new Error(lower.refusal)
+    expect(lower.spendsMoney).toEqual([])
+  })
+  it('raising only the high-value amount is SPENDS MONEY too', () => {
+    const d = acquisitionDraft(C, 'EUR', { campaignId: '21', mode: 'BID_HIGHER', valueOverride: { newCustomerValueCents: 500, highValueCents: 1500 } }, { goal, config, campaign })
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.spendsMoney.join(' ')).toMatch(/EUR 10\.00 for a high-value one → EUR 5\.00 more per new customer, EUR 15\.00 for a high-value one/)
+  })
+})
+
 describe('customer acquisition', () => {
   const campaign = { campaignId: '21', name: 'PMax A', status: 'ENABLED' }
   it('the account goal: made when there is none, its raise SPENDS MONEY', () => {
     const d = acquisitionDraft(C, 'EUR', { accountGoal: { newCustomerValueCents: 500 } }, { goal: null, config: null, campaign: null })
     if ('refusal' in d) throw new Error(d.refusal)
-    expect(d.operations).toEqual([{ accountCall: { path: 'Goals:mutate', body: { operations: [{ create: { newCustomerAcquisitionGoalSettings: { valueSettings: { additionalValue: 5 } } } }] } } }])
+    expect(d.operations).toEqual([{ accountCall: { path: 'Goals:mutate', body: { operations: [{ create: { goalType: 'NEW_CUSTOMER_ACQUISITION', newCustomerAcquisitionGoalSettings: { valueSettings: { additionalValue: 5 } } } }] } } }])
     expect(d.spendsMoney).toHaveLength(1)
   })
   it('a campaign: BID_HIGHER makes its config (SPENDS MONEY when enabled), ONLY_NEW takes no override, OFF removes it', () => {
@@ -332,6 +380,7 @@ describe('customer acquisition', () => {
     expect(off.operations[0]).toEqual({ accountCall: { path: 'CampaignGoalConfigs:mutate', body: { operations: [{ remove: `${C}/campaignGoalConfigs/21~81` }] } } })
     expect(off.spendsMoney.join(' ')).toMatch(/no longer kept to new customers only/)
     expect(acquisitionDraft(C, 'EUR', { campaignId: '21', mode: 'BID_HIGHER' }, { goal: null, config: null, campaign })).toEqual({ refusal: expect.stringMatching(/no new-customer acquisition goal yet/) })
+    expect(acquisitionDraft(C, 'EUR', { accountGoal: { newCustomerValueCents: 900 } }, { goal: null, config: null, campaign: null })).toMatchObject({ operations: [{ accountCall: { body: { operations: [{ create: { goalType: 'NEW_CUSTOMER_ACQUISITION' } }] } } }] })
     expect(acquisitionDraft(C, 'EUR', { accountGoal: { newCustomerValueCents: 5 }, campaignId: '21', mode: 'OFF' }, { goal, config, campaign })).toEqual({ refusal: expect.stringMatching(/two requests/) })
   })
 })

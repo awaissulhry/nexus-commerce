@@ -438,7 +438,7 @@ export interface PmaxTreeSnap { parent: number | null; dim: Dimension | null; va
 export const pmaxSnapshot = (root: TNode | null): PmaxTreeSnap[] | null =>
   root ? snapshotOf(root).map((s) => ({ parent: s.parent, dim: s.dim, value: s.value, kind: s.kind, split: s.split, excluded: s.excluded })) : null
 
-/** A snapshot as the `products` argument that builds it again, or why it cannot be given. */
+/** A snapshot as the `productGroups` argument that builds it again, or why it cannot be given. */
 export function pmaxSpecOfSnapshot(snap: PmaxTreeSnap[]): PmaxTreeNode[] | { refusal: string } {
   const out: PmaxTreeNode[] = []
   for (const [i, s] of snap.entries()) {
@@ -545,7 +545,13 @@ export function pmaxTreeWidens(live: TNode | null, desired: TNode | null): strin
 // ── signals ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const signalKeyOfAudience = (audienceId: string) => `a:${audienceId}`
-export const signalKeyOfTheme = (text: string) => `t:${textKey(text).toLowerCase()}`
+/**
+ * A search theme as a record keeps it: its own text (undo gives it back as it was). Google compares themes without case,
+ * so Nexus does too (`sameSignal`).
+ */
+export const signalKeyOfTheme = (text: string) => `t:${textKey(text)}`
+/** Two signal keys name the same signal: an audience by id, a search theme by its text without case. */
+export const sameSignal = (key: string) => (key.startsWith('t:') ? key.toLowerCase() : key)
 const themeText = (key: string) => key.slice(2)
 
 export interface PlannedSignals { ops: GoogleMutateOperation[]; audienceOps: GoogleMutateOperation[]; added: string[]; lines: string[] }
@@ -557,12 +563,12 @@ export function planSignals(
 ): PlannedSignals {
   const out: PlannedSignals = { ops: [], audienceOps: [], added: [], lines: [] }
   if (!ask) return out
-  const have = new Set(existing)
+  const have = new Set(existing.map(sameSignal))
   const seen = new Set<string>()
   const add = (key: string, signal: Record<string, unknown>, line: string) => {
-    if (have.has(key)) { ctx.skipped.push(`${where}: ${line} is already a signal`); return }
-    if (seen.has(key)) return
-    seen.add(key)
+    if (have.has(sameSignal(key))) { ctx.skipped.push(`${where}: ${line} is already a signal`); return }
+    if (seen.has(sameSignal(key))) return
+    seen.add(sameSignal(key))
     out.ops.push({ assetGroupSignalOperation: { create: { assetGroup: groupRes, ...signal } } })
     out.added.push(key)
     out.lines.push(line)
@@ -612,9 +618,10 @@ export interface PmaxGroupChange {
   path2?: string
   addAssets?: PmaxAssetsAsk
   removeAssets?: AssetLinkRef[]
-  products?: PmaxTreeNode[]
-  /** Removes the whole product tree (the asset group then shows no products). */
-  clearProducts?: boolean
+  /** Retail: the whole product group tree as it should be. */
+  productGroups?: PmaxTreeNode[]
+  /** Removes the whole product group tree (the asset group then shows no products). */
+  clearProductGroups?: boolean
   addSignals?: PmaxSignalsAsk
   removeSignals?: { audiences?: string[]; searchThemes?: string[] }
   /** A new asset group in an ENABLED campaign is made PAUSED unless this (SPENDS MONEY). */
@@ -845,12 +852,14 @@ function buildPmaxChange(customer: string, currency: string, request: PmaxChange
     if (final.finalUrlExpansion === 'OPTED_IN' && final.textCustomization === 'OPTED_OUT') {
       refuse('Google keeps text customization on while final URL expansion is on ("There is no way to opt out of text asset automation and still use final URL expansion"): turn both off, or keep text customization on.')
     }
-    // The whole list is written (update mask asset_automation_settings): every other type Google answered keeps its status,
-    // except GENERATE_IMAGE_EXTRACTION, which follows the account ("can only be configured in the Google Ads web
-    // interface", docs/assets/asset-automation-settings).
+    // The whole list is written (update mask asset_automation_settings): the switches asked, and every type Google
+    // answered with its status — never a type Google left out (it stays at Google's default, so a switch nobody asked
+    // for is never written, let alone turned on). GENERATE_IMAGE_EXTRACTION follows the account ("can only be
+    // configured in the Google Ads web interface", docs/assets/asset-automation-settings): never written.
+    const written = AUTOMATION_KEYS.filter((k) => autoAsk[k] !== undefined || camp.automation[AUTOMATION_TYPES[k]] !== undefined)
     const others = Object.entries(camp.automation).filter(([t]) => !Object.values(AUTOMATION_TYPES).includes(t as never) && t !== 'GENERATE_IMAGE_EXTRACTION')
     fields.assetAutomationSettings = [
-      ...AUTOMATION_KEYS.map((k) => ({ assetAutomationType: AUTOMATION_TYPES[k], assetAutomationStatus: final[k] })),
+      ...written.map((k) => ({ assetAutomationType: AUTOMATION_TYPES[k], assetAutomationStatus: autoAsk[k] !== undefined ? final[k] : camp.automation[AUTOMATION_TYPES[k]] })),
       ...others.map(([t, st]) => ({ assetAutomationType: t, assetAutomationStatus: st })),
     ]
     mask.push('asset_automation_settings')
@@ -965,7 +974,7 @@ function buildPmaxChange(customer: string, currency: string, request: PmaxChange
     if (isNew) {
       newGroups += 1
       if (!g.name || !g.finalUrls?.length) refuse(`assetGroups[${gi}]: a new asset group needs a name and finalUrls (or give assetGroupId of an existing one).`)
-      if (g.removeAssets?.length || g.removeSignals || g.clearProducts) refuse(`assetGroups[${gi}]: a new asset group has nothing to remove.`)
+      if (g.removeAssets?.length || g.removeSignals || g.clearProductGroups) refuse(`assetGroups[${gi}]: a new asset group has nothing to remove.`)
     }
     const where = isNew ? `new asset group "${g.name!.trim()}"` : `asset group "${liveGroup!.name}"`
     const groupRes = isNew ? `${customer}/assetGroups/${temp()}` : `${customer}/assetGroups/${liveGroup!.assetGroupId}`
@@ -1061,12 +1070,12 @@ function buildPmaxChange(customer: string, currency: string, request: PmaxChange
     }
 
     // Its product tree.
-    if (g.products !== undefined || g.clearProducts || (isNew && retail)) {
-      if (!retail && (g.products?.length || g.clearProducts)) refuse(`${where}: "${camp.name}" has no Merchant Center feed: a product tree is for a retail Performance Max campaign.`)
-      if (g.products && g.clearProducts) refuse(`${where}: give products or clearProducts, not both.`)
+    if (g.productGroups !== undefined || g.clearProductGroups || (isNew && retail)) {
+      if (!retail && (g.productGroups?.length || g.clearProductGroups)) refuse(`${where}: "${camp.name}" has no Merchant Center feed: a product group tree is for a retail Performance Max campaign.`)
+      if (g.productGroups && g.clearProductGroups) refuse(`${where}: give productGroups or clearProductGroups, not both.`)
       const liveTree = isNew ? { root: null } : pmaxTreeOfLive(liveGroup!.tree)
       if ('refusal' in liveTree) refuse(`${where}: ${liveTree.refusal}.`)
-      const desired = g.clearProducts ? { root: null } : g.products?.length ? pmaxTreeOfSpec(g.products, `${where} products`) : { root: { dim: null, value: null, kind: 'UNIT' as const, split: null, excluded: false, bidCents: null, children: [] } as TNode }
+      const desired = g.clearProductGroups ? { root: null } : g.productGroups?.length ? pmaxTreeOfSpec(g.productGroups, `${where} productGroups`) : { root: { dim: null, value: null, kind: 'UNIT' as const, split: null, excluded: false, bidCents: null, children: [] } as TNode }
       if ('refusal' in desired) refuse(desired.refusal)
       const liveRoot = (liveTree as { root: TNode | null }).root
       const wantRoot = (desired as { root: TNode | null }).root
@@ -1077,11 +1086,11 @@ function buildPmaxChange(customer: string, currency: string, request: PmaxChange
         ops.push(...tree.removes, ...tree.creates)
         if (!isNew) {
           gb.tree = liveSnap; ga.tree = nowSnap
-          lines.push([`${where} products`, describePmaxTree(liveRoot), describePmaxTree(wantRoot)])
+          lines.push([`${where} product groups`, describePmaxTree(liveRoot), describePmaxTree(wantRoot)])
         }
         const widens = pmaxTreeWidens(liveRoot, wantRoot)
         if (widens.length && !isNew) spendOrWarn(`Advertises more products in ${where}: ${widens.slice(0, 5).join('; ')}${widens.length > 5 ? ` … (+${widens.length - 5})` : ''}`, serves)
-        if (g.clearProducts) warnings.push(`${where}: with no product tree it shows no products.`)
+        if (g.clearProductGroups) warnings.push(`${where}: with no product tree it shows no products.`)
       } else if (!isNew) skipped.push(`${where}: the product tree is already so`)
       if (isNew) ga.tree = nowSnap
     }
@@ -1092,11 +1101,15 @@ function buildPmaxChange(customer: string, currency: string, request: PmaxChange
     const removeSignals: string[] = []
     if (g.removeSignals && liveGroup) {
       const wanted = [...(g.removeSignals.audiences ?? []).map(signalKeyOfAudience), ...(g.removeSignals.searchThemes ?? []).map(signalKeyOfTheme)]
+      const done = new Set<string>()
       for (const key of sorted(wanted)) {
-        const sig = liveGroup.signals.find((x) => (x.audienceId ? signalKeyOfAudience(x.audienceId) : x.searchTheme ? signalKeyOfTheme(x.searchTheme) : '') === key)
+        const sig = liveGroup.signals.find((x) => sameSignal(x.audienceId ? signalKeyOfAudience(x.audienceId) : x.searchTheme ? signalKeyOfTheme(x.searchTheme) : '') === sameSignal(key))
         if (!sig) { skipped.push(`${where}: ${key.startsWith('a:') ? `audience ${key.slice(2)}` : `search theme "${themeText(key)}"`} is not a signal`); continue }
+        if (done.has(sig.signalId)) continue
+        done.add(sig.signalId)
         ops.push({ assetGroupSignalOperation: { remove: `${customer}/assetGroupSignals/${sig.signalId}` } })
-        removeSignals.push(key)
+        // The record keeps the signal as Google holds it (a theme's own text), so undo adds back exactly that.
+        removeSignals.push(sig.audienceId ? signalKeyOfAudience(sig.audienceId) : signalKeyOfTheme(sig.searchTheme ?? ''))
         lines.push([`${where} signal`, key.startsWith('a:') ? `audience ${key.slice(2)}` : `search theme "${sig.searchTheme}"`, '(removed)'])
       }
     }

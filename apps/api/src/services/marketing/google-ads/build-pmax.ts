@@ -24,7 +24,9 @@
  * A copy (`pmaxCampaignAsBuild`) reads the live campaign (live-pmax.ts) and gives it back as a build: settings, budget
  * amount, bidding, feed, criteria, Google's automation as it is, the brand's assets and every other campaign asset (the same
  * assets linked again), asset groups with their own assets (the same assets linked again, Google's own left out), their
- * product trees and signals. What it cannot copy is named (`notCopied`).
+ * product trees and signals, tracking (templates, URL suffixes, custom parameters, at the campaign and each asset group),
+ * the brand targeting override for Shopping ads and the asset types it does not inherit. What it cannot copy is named
+ * (`notCopied`).
  */
 import { changeLines, keywordTextProblem, money, plural, type GoogleChangeDraft } from './change-draft.js'
 import { httpsUrlProblem, widthProblem } from './change-ads.js'
@@ -34,11 +36,11 @@ import { MAX_BUILD_OPERATIONS, type BuildRecord } from './change-build.js'
 import {
   AUTOMATION_KEYS, AUTOMATION_TYPES, AssetMaker, automationNow, BRAND_FIELDS, BRAND_FONTS, brandCountProblems, countsOf, describePmaxTree, groupCountProblems,
   inKindOrder, MAX_ASSET_GROUPS, ownLinks, planAssets, planSignals, pmaxBiddingNow, pmaxSnapshot, pmaxSpecOfSnapshot, pmaxTreeOfLive,
-  pmaxTreeOfSpec, pmaxTreeOps, signalKeyOfTheme, SHORT_DESCRIPTION, urlExclusionKey, urlExclusionOfKey, urlExclusionsOf,
+  pmaxTreeOfSpec, pmaxTreeOps, sameSignal, signalKeyOfTheme, SHORT_DESCRIPTION, urlExclusionKey, urlExclusionOfKey, urlExclusionsOf,
   type AssetContext, type AutomationKey, type PmaxAssetsAsk, type PmaxGroupField, type PmaxSignalsAsk, type PmaxTreeNode, type PreparedImages, type UrlExclusion,
 } from './change-pmax.js'
 import { keywordKey, microsOfCents, type MatchType } from './live.js'
-import { livePmaxCampaign, type PmaxAsset, type PmaxAudience } from './live-pmax.js'
+import { livePmaxCampaign, type CustomParameter, type PmaxAsset, type PmaxAudience } from './live-pmax.js'
 import type { TNode } from './product-tree.js'
 import type { GoogleMutateOperation } from './write-client.js'
 import type { GoogleAdsTarget } from './types.js'
@@ -50,9 +52,12 @@ export interface PmaxBuildGroup {
   path1?: string
   path2?: string
   status?: 'ENABLED' | 'PAUSED'
+  trackingTemplate?: string
+  finalUrlSuffix?: string
+  customParameters?: CustomParameter[]
   assets?: PmaxAssetsAsk
-  /** Retail: the product tree (default: "All products" included). */
-  products?: PmaxTreeNode[]
+  /** Retail: the product group tree (default: "All products" included). */
+  productGroups?: PmaxTreeNode[]
   signals?: PmaxSignalsAsk
 }
 
@@ -81,6 +86,12 @@ export interface PmaxBuildCampaign {
   negativeKeywords?: Array<{ text: string; matchType: MatchType }>
   trackingTemplate?: string
   finalUrlSuffix?: string
+  customParameters?: CustomParameter[]
+  /** Brand exclusions do not hold for Shopping ads (pmax_campaign_settings.brand_targeting_overrides). */
+  ignoreBrandExclusionsForShopping?: boolean
+  /** Asset field types / asset set types the campaign does not inherit from the account (a copy keeps the source's). */
+  excludedParentAssetFieldTypes?: string[]
+  excludedParentAssetSetTypes?: string[]
   assetGroups: PmaxBuildGroup[]
 }
 
@@ -167,6 +178,14 @@ export function pmaxBuildDraft(customer: string, currency: string, campaigns: Pm
       ...(c.endDate ? { endDateTime: `${c.endDate} 23:59:59` } : {}),
       ...(c.trackingTemplate ? { trackingUrlTemplate: c.trackingTemplate } : {}),
       ...(c.finalUrlSuffix ? { finalUrlSuffix: c.finalUrlSuffix } : {}),
+      ...(c.customParameters?.length ? { urlCustomParameters: c.customParameters.map((p) => ({ key: p.key, value: p.value })) } : {}),
+      ...(c.ignoreBrandExclusionsForShopping ? { pmaxCampaignSettings: { brandTargetingOverrides: { ignoreExclusionsForShoppingAds: true } } } : {}),
+      ...(c.excludedParentAssetFieldTypes?.length ? { excludedParentAssetFieldTypes: c.excludedParentAssetFieldTypes } : {}),
+      ...(c.excludedParentAssetSetTypes?.length ? { excludedParentAssetSetTypes: c.excludedParentAssetSetTypes } : {}),
+    }
+    if (c.ignoreBrandExclusionsForShopping) warnings.push(`${where}: its brand exclusions do not hold for Shopping ads (ignore exclusions for Shopping ads).`)
+    for (const p of [...(c.customParameters ?? []), ...c.assetGroups.flatMap((g) => g.customParameters ?? [])]) {
+      if (!/^[A-Za-z0-9]{1,16}$/.test(p.key)) problems.push(`${where}: custom parameter "${p.key}" is not 1 to 16 letters and digits (Google's rule)`)
     }
     const campaignOp = { campaignOperation: { create: campaign } }
     ops.push(campaignOp); tags.push({ op: campaignOp, tag: `campaign:${name}` })
@@ -246,6 +265,8 @@ export function pmaxBuildDraft(customer: string, currency: string, campaigns: Pm
         resourceName: groupRes, campaign: campaignRes, name: gName, finalUrls: g.finalUrls.map((u) => u.trim()),
         ...(g.finalMobileUrls?.length ? { finalMobileUrls: g.finalMobileUrls.map((u) => u.trim()) } : {}),
         ...(g.path1?.trim() ? { path1: g.path1.trim() } : {}), ...(g.path2?.trim() ? { path2: g.path2.trim() } : {}),
+        ...(g.trackingTemplate ? { trackingUrlTemplate: g.trackingTemplate } : {}), ...(g.finalUrlSuffix ? { finalUrlSuffix: g.finalUrlSuffix } : {}),
+        ...(g.customParameters?.length ? { urlCustomParameters: g.customParameters.map((p) => ({ key: p.key, value: p.value })) } : {}),
         status: g.status ?? 'ENABLED',
       } } })
       totals.assetGroups += 1
@@ -263,15 +284,15 @@ export function pmaxBuildDraft(customer: string, currency: string, campaigns: Pm
       }))
       if (c.retail && !planned.length) warnings.push(`${gWhere} holds no asset: Google makes its ads from the Merchant Center feed (more assets reach more places).`)
       let treeWords = ''
-      if (g.products?.length && !c.retail) problems.push(`${gWhere}: a product tree is for a retail campaign (give retail.merchantId)`)
+      if (g.productGroups?.length && !c.retail) problems.push(`${gWhere}: a product group tree is for a retail campaign (give retail.merchantId)`)
       else if (c.retail) {
-        const tree = g.products?.length ? pmaxTreeOfSpec(g.products, `${gWhere} products`) : { root: { dim: null, value: null, kind: 'UNIT' as const, split: null, excluded: false, bidCents: null, children: [] } as TNode }
+        const tree = g.productGroups?.length ? pmaxTreeOfSpec(g.productGroups, `${gWhere} productGroups`) : { root: { dim: null, value: null, kind: 'UNIT' as const, split: null, excluded: false, bidCents: null, children: [] } as TNode }
         if ('refusal' in tree) problems.push(tree.refusal)
         else {
           const made = pmaxTreeOps(customer, groupRes, null, tree.root, temp)
           ops.push(...made.creates)
           totals.productGroups += made.creates.length
-          treeWords = `, products: ${describePmaxTree(tree.root)}`
+          treeWords = `, product groups: ${describePmaxTree(tree.root)}`
         }
       }
       const signals = planSignals(audienceCtx, gWhere, groupRes, null, g.signals, [])
@@ -399,7 +420,7 @@ export async function pmaxCampaignAsBuild(
       link.push({ assetId: l.assetId, fieldType: l.fieldType as PmaxGroupField })
       keep(l)
     }
-    let products: PmaxTreeNode[] | undefined
+    let productGroups: PmaxTreeNode[] | undefined
     if (c.retail) {
       const tree = pmaxTreeOfLive(g.tree)
       if ('refusal' in tree) return { refusal: `Asset group "${g.name}": ${tree.refusal}.` }
@@ -407,7 +428,7 @@ export async function pmaxCampaignAsBuild(
       if (snap) {
         const spec = pmaxSpecOfSnapshot(snap)
         if ('refusal' in spec) return { refusal: `Asset group "${g.name}": ${spec.refusal}.` }
-        products = spec
+        productGroups = spec
       } else notCopied.push(`asset group "${g.name}" has no product tree (the copy gets "All products")`)
     }
     const groupAudiences: string[] = []
@@ -417,7 +438,7 @@ export async function pmaxCampaignAsBuild(
       const scoped = s.audienceId ? audiences.find((a) => a.audienceId === s.audienceId) : undefined
       if (s.audienceId && scoped?.scope === 'ASSET_GROUP') notCopied.push(`audience ${scoped.name ?? s.audienceId} of "${g.name}" (it belongs to that asset group alone)`)
       else if (s.audienceId) groupAudiences.push(s.audienceId)
-      else if (s.searchTheme && !seenThemes.has(signalKeyOfTheme(s.searchTheme))) { seenThemes.add(signalKeyOfTheme(s.searchTheme)); searchThemes.push(s.searchTheme) }
+      else if (s.searchTheme && !seenThemes.has(sameSignal(signalKeyOfTheme(s.searchTheme)))) { seenThemes.add(sameSignal(signalKeyOfTheme(s.searchTheme))); searchThemes.push(s.searchTheme) }
       else if (!s.searchTheme) notCopied.push(`signal ${s.signalId} of "${g.name}"`)
     }
     assetGroups.push({
@@ -428,7 +449,10 @@ export async function pmaxCampaignAsBuild(
       ...(g.path2 ? { path2: g.path2 } : {}),
       status: g.status === 'PAUSED' ? 'PAUSED' : 'ENABLED',
       ...(link.length ? { assets: { link } } : {}),
-      ...(products ? { products } : {}),
+      ...(g.trackingTemplate ? { trackingTemplate: g.trackingTemplate } : {}),
+      ...(g.finalUrlSuffix ? { finalUrlSuffix: g.finalUrlSuffix } : {}),
+      ...(g.customParameters.length ? { customParameters: g.customParameters } : {}),
+      ...(productGroups ? { productGroups } : {}),
       ...(groupAudiences.length || searchThemes.length ? { signals: { ...(groupAudiences.length ? { audiences: groupAudiences } : {}), ...(searchThemes.length ? { searchThemes } : {}) } } : {}),
     })
   }
@@ -456,6 +480,10 @@ export async function pmaxCampaignAsBuild(
     negativeKeywords,
     ...(c.trackingTemplate ? { trackingTemplate: c.trackingTemplate } : {}),
     ...(c.finalUrlSuffix ? { finalUrlSuffix: c.finalUrlSuffix } : {}),
+    ...(c.customParameters.length ? { customParameters: c.customParameters } : {}),
+    ...(c.ignoreBrandExclusionsForShopping ? { ignoreBrandExclusionsForShopping: true } : {}),
+    ...(c.excludedParentAssetFieldTypes.length ? { excludedParentAssetFieldTypes: c.excludedParentAssetFieldTypes } : {}),
+    ...(c.excludedParentAssetSetTypes.length ? { excludedParentAssetSetTypes: c.excludedParentAssetSetTypes } : {}),
     assetGroups,
   }
   return { campaign, assets: [...assets.values()], notCopied }

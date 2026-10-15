@@ -33,6 +33,8 @@ beforeEach(() => {
         maximizeConversionValue: { targetRoas: 4 }, shoppingSetting: { merchantId: '555', feedLabel: 'IT' }, brandGuidelinesEnabled: true,
         assetAutomationSettings: [{ assetAutomationType: 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', assetAutomationStatus: 'OPTED_OUT' }],
         startDateTime: '2026-01-01 00:00:00', containsEuPoliticalAdvertising: 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
+        urlCustomParameters: [{ key: 'camp', value: 'z' }], pmaxCampaignSettings: { brandTargetingOverrides: { ignoreExclusionsForShoppingAds: true } },
+        excludedParentAssetFieldTypes: ['CALLOUT'],
       },
       campaignBudget: { id: '11', amountMicros: '25000000' },
     }],
@@ -44,7 +46,7 @@ beforeEach(() => {
     'ads.search.live.pmax-campaign-assets': [
       { campaignAsset: { fieldType: 'BUSINESS_NAME', status: 'ENABLED', source: 'ADVERTISER' }, asset: { id: '201', type: 'TEXT', textAsset: { text: 'Shop A' } } },
     ],
-    'ads.search.live.pmax-asset-groups': [{ assetGroup: { id: '41', name: 'Group A', status: 'ENABLED', finalUrls: ['https://shop.example/'] } }, { assetGroup: { id: '42', name: 'Group B', status: 'PAUSED' } }],
+    'ads.search.live.pmax-asset-groups': [{ assetGroup: { id: '41', name: 'Group A', status: 'ENABLED', finalUrls: ['https://shop.example/'], trackingUrlTemplate: '{lpurl}?g=1', finalUrlSuffix: 'src=g', urlCustomParameters: [{ key: 'grp', value: 'a' }] } }, { assetGroup: { id: '42', name: 'Group B', status: 'PAUSED' } }],
     'ads.search.live.pmax-asset-group-assets': [
       { assetGroup: { id: '41' }, assetGroupAsset: { fieldType: 'MARKETING_IMAGE', status: 'ENABLED', source: 'ADVERTISER' }, asset: { id: '307', type: 'IMAGE', imageAsset: { mimeType: 'IMAGE_PNG', fullSize: { widthPixels: '1200', heightPixels: '628' } } } },
       { assetGroup: { id: '41' }, assetGroupAsset: { fieldType: 'YOUTUBE_VIDEO', status: 'ENABLED', source: 'ADVERTISER' }, asset: { id: '901', type: 'YOUTUBE_VIDEO', youtubeVideoAsset: { youtubeVideoId: 'abcdefghijk' } } },
@@ -69,6 +71,7 @@ describe('livePmaxCampaign', () => {
       retail: { merchantId: '555', feedLabel: 'IT', localInventory: false }, brandGuidelines: true,
       automation: { FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION: 'OPTED_OUT' },
       campaignAssets: [{ assetId: '201', fieldType: 'BUSINESS_NAME', text: 'Shop A', source: 'ADVERTISER' }],
+      customParameters: [{ key: 'camp', value: 'z' }], ignoreBrandExclusionsForShopping: true, excludedParentAssetFieldTypes: ['CALLOUT'], excludedParentAssetSetTypes: [],
       notRead: [],
     })
     expect(c!.criteria).toEqual([
@@ -87,7 +90,8 @@ describe('livePmaxCampaign', () => {
       { signalId: '41~701', audienceId: '71', searchTheme: null, approval: null },
       { signalId: '41~702', audienceId: null, searchTheme: 'moto jacket', approval: 'APPROVED' },
     ])
-    expect(b).toMatchObject({ assetGroupId: '42', status: 'PAUSED', assets: [], tree: [], signals: [], finalUrls: [] })
+    expect(a).toMatchObject({ trackingTemplate: '{lpurl}?g=1', finalUrlSuffix: 'src=g', customParameters: [{ key: 'grp', value: 'a' }] })
+    expect(b).toMatchObject({ assetGroupId: '42', status: 'PAUSED', assets: [], tree: [], signals: [], finalUrls: [], trackingTemplate: null, customParameters: [] })
     expect(h.queries).toHaveLength(7)
   })
 

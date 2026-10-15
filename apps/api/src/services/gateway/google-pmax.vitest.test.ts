@@ -78,7 +78,7 @@ describe('Performance Max operations in a mutate', () => {
 
 /** Every body set-google-customer-acquisition sends (change-acquisition.ts). */
 const SENT: Array<[string, Record<string, unknown>]> = [
-  ['Goals:mutate', { operations: [{ create: { newCustomerAcquisitionGoalSettings: { valueSettings: { additionalValue: 5, additionalHighLifetimeValue: 12.5 } } } }] }],
+  ['Goals:mutate', { operations: [{ create: { goalType: 'NEW_CUSTOMER_ACQUISITION', newCustomerAcquisitionGoalSettings: { valueSettings: { additionalValue: 5, additionalHighLifetimeValue: 12.5 } } } }] }],
   ['Goals:mutate', { operations: [{ update: { resourceName: `${C}/goals/81`, newCustomerAcquisitionGoalSettings: { valueSettings: { additionalValue: 6 } } }, updateMask: 'new_customer_acquisition_goal_settings.value_settings.additional_value' }] }],
   ['CampaignGoalConfigs:mutate', { operations: [{ create: { campaign: `${C}/campaigns/21`, goal: `${C}/goals/81`, campaignNewCustomerAcquisitionSettings: { targetOption: 'TARGET_ALL', valueSettingsOverride: { additionalValue: 7 } } } }] }],
   ['CampaignGoalConfigs:mutate', { operations: [{ update: { resourceName: `${C}/campaignGoalConfigs/21~81`, campaignNewCustomerAcquisitionSettings: { targetOption: 'TARGET_SPECIFIC' } }, updateMask: 'campaign_new_customer_acquisition_settings.target_option,campaign_new_customer_acquisition_settings.value_settings_override.additional_value,campaign_new_customer_acquisition_settings.value_settings_override.additional_high_lifetime_value' }] }],
@@ -108,6 +108,8 @@ describe('customer acquisition: Goals and CampaignGoalConfigs', () => {
       ['Goals:mutate', { operations: [{ update: { resourceName: 'customers/999/goals/81', newCustomerAcquisitionGoalSettings: { valueSettings: { additionalValue: 6 } } }, updateMask: 'new_customer_acquisition_goal_settings.value_settings.additional_value' }] }],
       ['Goals:mutate', { operations: [{ update: { resourceName: `${C}/goals/81`, newCustomerAcquisitionGoalSettings: { valueSettings: { additionalValue: 6 } } }, updateMask: 'goal_type' }] }],
       ['Goals:mutate', { operations: [{ remove: `${C}/goals/81` }] }],
+      ['Goals:mutate', { operations: [{ create: { goalType: 'CUSTOMER_RETENTION', newCustomerAcquisitionGoalSettings: { valueSettings: { additionalValue: 5 } } } }] }],
+      ['Goals:mutate', { operations: [{ update: { resourceName: `${C}/goals/81`, goalType: 'NEW_CUSTOMER_ACQUISITION', newCustomerAcquisitionGoalSettings: { valueSettings: { additionalValue: 6 } } }, updateMask: 'new_customer_acquisition_goal_settings.value_settings.additional_value' }] }],
       ['Goals:mutate', { operations: [{ create: { newCustomerAcquisitionGoalSettings: { valueSettings: { additionalValue: 5 } } } }, { create: { newCustomerAcquisitionGoalSettings: { valueSettings: { additionalValue: 6 } } } }] }],
       ['Goals:mutate', { operations: [{ create: { newCustomerAcquisitionGoalSettings: { valueSettings: { additionalValue: -1 } } } }] }],
       ['CampaignGoalConfigs:mutate', { operations: [{ create: { campaign: 'customers/999/campaigns/21', goal: `${C}/goals/81`, campaignNewCustomerAcquisitionSettings: { targetOption: 'TARGET_ALL' } } }] }],
