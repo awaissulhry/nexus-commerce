@@ -411,3 +411,63 @@ describe('the size map — a Nexus size paired with the Shopify value it is on t
     ])
   })
 })
+
+/**
+ * An axis that is not on Shopify. XRACING-shaped (every id invented): Nexus has three axes — Color, Fit Type (every
+ * variant "Regular", there for Amazon) and Size Name (46 … 58); each Shopify colour product has ONE option, Size, with
+ * 46 … 58 and no SKUs. The operator's "Not on Shopify" for Fit Type (`sizeMap: { fit_type: null }`) leaves it out.
+ */
+describe('an axis not on Shopify — a one-value Nexus axis the store\'s products do not carry', () => {
+  const SIZES_EU = ['46', '48', '50', '52', '54', '56', '58']
+  const XRACING = (fits: (s: string) => string = () => 'fit:regular'): ColourPlanFamily => ({
+    familyId: 'xracing', axes: [{ code: 'color', label: 'Color' }, { code: 'fit_type', label: 'Fit Type' }, { code: 'size_name', label: 'Size Name' }],
+    variants: SIZES_EU.map(s => ({ productId: `p-nero-${s}`, sku: `XR-SUIT-NERO-${s}`, values: { color: 'color:nero', fit_type: fits(s), size_name: `size_name:${s}` } })),
+    valueOrder: { color: ['color:nero'], fit_type: ['fit:regular', 'fit:slim'], size_name: SIZES_EU.map(s => `size_name:${s}`) },
+    valueLabels: { 'color:nero': 'Nero', 'fit:regular': 'Regular', 'fit:slim': 'Slim', ...Object.fromEntries(SIZES_EU.map(s => [`size_name:${s}`, s])) }, unmapped: [],
+  })
+  const SHOPIFY_NERO: ColourCandidate = { id: 'gid://shopify/Product/900000000001', title: 'Xavia X suit', handle: 'xavia-x-suit', status: 'ACTIVE', colourName: 'Nero', group: [],
+    variants: SIZES_EU.map((s, i) => ({ id: `gid://shopify/ProductVariant/90000000010${i}`, sku: null, inventoryItemId: `gid://shopify/InventoryItem/90000000010${i}`, options: [s] })) }
+  const chosen = { 'color:nero': SHOPIFY_NERO.id }
+
+  it('without the choice nothing changes: Fit Type stays an option and no size pairs (the old "No size of … matches")', () => {
+    const plan = planColourProducts(XRACING(), { splitAxis: 'color' })
+    expect(plan.issues).toEqual([])
+    expect(plan.notOnShopify).toBeUndefined()
+    expect(plan.products[0].options.map(o => [o.axis, o.values])).toEqual([['fit_type', ['Regular']], ['size_name', SIZES_EU]])
+    const [match] = matchColourProducts(plan, [SHOPIFY_NERO], {}, chosen)
+    expect([match.variants.length, match.missing.length, match.extra.length]).toEqual([0, 7, 7])
+    // A size map that only pairs values keeps every axis, as before.
+    expect(planColourProducts(XRACING(), { splitAxis: 'color', sizeMap: { size_name: { '46': '46' } } }).products[0].options).toHaveLength(2)
+  })
+
+  it('"Not on Shopify" for the one-value Fit Type: every size is Size only, and all 7 of 7 pair with the store\'s sizes', () => {
+    const plan = planColourProducts(XRACING(), { splitAxis: 'color', sizeMap: { fit_type: null } })
+    expect(plan.issues).toEqual([])
+    expect(plan.notOnShopify).toEqual([{ axis: 'fit_type', name: 'Fit Type', value: 'Regular' }])
+    expect(plan.products[0].options).toEqual([{ axis: 'size_name', name: 'Size Name', values: SIZES_EU }])
+    expect(plan.products[0].variants[0]).toEqual({ productId: 'p-nero-46', sku: 'XR-SUIT-NERO-46', options: [{ name: 'Size Name', value: '46' }] })
+    const [match] = matchColourProducts(plan, [SHOPIFY_NERO], {}, chosen)
+    expect([match.variants.length, match.missing.length, match.extra.length, match.issues]).toEqual([7, 0, 0, []])
+    expect(match.skusToWrite).toHaveLength(7)
+    expect(match.skusToWrite[0]).toEqual({ shopifyVariantId: 'gid://shopify/ProductVariant/900000000100', sku: 'XR-SUIT-NERO-46' })
+    // With the size map's pairs for the other axis too.
+    const both = planColourProducts(XRACING(), { splitAxis: 'color', sizeMap: { fit_type: null, size_name: { '46': 'XS' } } })
+    expect(both.products[0].options[0].values[0]).toBe('XS')
+  })
+
+  it('an axis with two values is never left off: it stays an option and the family is refused with a plain sentence', () => {
+    const plan = planColourProducts(XRACING(s => s === '58' ? 'fit:slim' : 'fit:regular'), { splitAxis: 'color', sizeMap: { fit_type: null } })
+    expect(plan.notOnShopify).toBeUndefined()
+    expect(plan.products[0].options.map(o => o.axis)).toEqual(['fit_type', 'size_name'])
+    expect(plan.issues).toEqual([{ severity: 'error', code: 'not-on-shopify-several-values', productIds: [],
+      message: '"Fit Type" is set as not on Shopify, but this family has 2 Fit Type values ("Regular", "Slim"). Only an option with one value can be left off Shopify: pair it again in "Pair sizes…".' }])
+  })
+
+  it('the split axis is never an option, so a choice on it changes nothing; a family the choice empties is one Default Title', () => {
+    expect(planColourProducts(XRACING(), { splitAxis: 'color', sizeMap: { color: null } }).products[0].options).toHaveLength(2)
+    const onlyFit: ColourPlanFamily = { ...XRACING(), axes: [{ code: 'color', label: 'Color' }, { code: 'fit_type', label: 'Fit Type' }],
+      variants: [{ productId: 'p-nero', sku: 'XR-SUIT-NERO', values: { color: 'color:nero', fit_type: 'fit:regular' } }] }
+    const plan = planColourProducts(onlyFit, { splitAxis: 'color', sizeMap: { fit_type: null } })
+    expect([plan.issues, plan.products[0].options, plan.products[0].variants[0].options]).toEqual([[], [], []])
+  })
+})

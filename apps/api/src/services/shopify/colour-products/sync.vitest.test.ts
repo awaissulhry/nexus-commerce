@@ -381,3 +381,29 @@ it('size map: the identity check pairs EU sizes with letter sizes; a new size is
   expect((await rows()).find(r => r.product.sku.endsWith('-XS'))).toMatchObject({ platformAttributes: { variantId: '30' }, isPublished: true })
   state.calls = []; await run(); expect(state.calls).toEqual(['NexusColourPublications', 'NexusColourSyncRead'])
 })
+
+/**
+ * An axis not on Shopify in the sync. XRACING-shaped (invented): every Nexus size also has Fit Type "Regular" (there for
+ * Amazon); the linked Shopify colour has only Size. "Not on Shopify" for Fit Type (`sizeMap: { fit: null }`) leaves it
+ * out, so the identity check passes and a new size is created with Size only. Without it: refused before any write.
+ */
+it('an axis not on Shopify: the identity check passes and a new size carries only Size; without the choice it is refused as before', async () => {
+  state.family.axes = [{ code: 'color', label: 'Color' }, { code: 'fit', label: 'Fit Type' }, { code: 'size', label: 'Size' }]
+  state.family.variants = state.family.variants.map((v: any) => ({ ...v, values: { ...v.values, fit: 'fit:regular' } }))
+  state.family.valueLabels = { ...state.family.valueLabels, 'fit:regular': 'Regular' }
+  await expect(run()).rejects.toThrow('The Shopify option for Fit Type changed. Review the variation theme before syncing sizes.')
+  expect(state.stock).toEqual([])
+  expect(state.calls).not.toContain('NexusColourSizes')
+  const sizeMap = { fit: null }
+  await scoped(() => prisma.shopifyColourSync.upsert({ where: { colour_sync: { workspaceId: LEGACY_WORKSPACE_ID, familyId: state.d.familyId, channelConnectionId: state.d.accountId, marketplace: 'GLOBAL', aliasKey: '' } },
+    create: { familyId: state.d.familyId, channelConnectionId: state.d.accountId, marketplace: 'GLOBAL', aliasKey: '', sizeMap }, update: { sizeMap } }))
+  await run()
+  expect(state.stock).toHaveLength(2)
+  state.sizes = ['XS', 'S', 'M']; state.order = ['XS', 'S', 'M']; state.calls = []
+  await run()
+  expect(state.calls.filter(c => c === 'NexusColourSizes')).toHaveLength(1)
+  expect(state.remote.variants.nodes.at(-1)).toMatchObject({ sku: `COLOUR-${seq}-XS`, selectedOptions: [{ name: 'Size', value: 'XS' }] })
+  expect(state.remote.variants.nodes.at(-1).selectedOptions).toHaveLength(1)
+  expect(state.remote.options).toEqual([expect.objectContaining({ name: 'Size', values: ['XS', 'S', 'M'] })])
+  state.calls = []; await run(); expect(state.calls).toEqual(['NexusColourPublications', 'NexusColourSyncRead'])
+})

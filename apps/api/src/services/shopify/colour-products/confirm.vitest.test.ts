@@ -543,3 +543,79 @@ describe('Confirm keeps the store\'s swatch groups and names, and pairs sizes th
     })
   })
 })
+
+/**
+ * An axis not on Shopify. XRACING-shaped (every id invented): Nexus has Color, Fit Type ("Regular" on every variant,
+ * there for Amazon) and Size Name 46 … 58; the store's colour product has ONE option, Size, with 46 … 58 and no SKUs.
+ * The operator's "Not on Shopify" for Fit Type is saved in the size map (`{ fit_type: null }`, Nexus only).
+ */
+describe('XRACING — a one-value Nexus axis the store\'s products do not carry', () => {
+  const EU = ['46', '48', '50', '52', '54', '56', '58'], PRODUCT = 'gid://shopify/Product/900000000001'
+  const skuOf = (s: string) => `XR-SUIT-NERO-REG-${s}`
+  let xracing: ColourPlanFamily, galeFamily: ColourPlanFamily, famId = ''
+  const saveMap = (sizeMap: unknown) => scoped(() => saveColourSizeMap(ids.fam, { accountId: 'x' }, { sizeMap }))
+  const findNero = () => scoped(() => findColourProducts(ids.fam, { accountId: 'x' }, { choices: [{ valueKey: 'color:nero', shopifyProductId: PRODUCT }] }))
+  const proposalOf = async () => (await scoped(() => prisma.shopifyColourProduct.findMany({ where: { familyId: famId, valueKey: 'color:nero' } })))[0].proposal as any
+  /** The same family with one variant of another fit: Fit Type then has two values. */
+  const withSlim = (): ColourPlanFamily => ({ ...xracing, variants: xracing.variants.map(v => v.sku === skuOf('58') ? { ...v, values: { ...v.values, fit_type: 'fit:slim' } } : v),
+    valueLabels: { ...xracing.valueLabels, 'fit:slim': 'Slim' } })
+
+  beforeAll(async () => {
+    galeFamily = state.family
+    famId = (await scoped(() => prisma.product.create({ data: { sku: 'XR-SUIT', name: 'XR-SUIT', basePrice: 10, isParent: true } as never }))).id
+    for (const s of EU) ids[skuOf(s)] = (await scoped(() => prisma.product.create({ data: { sku: skuOf(s), name: skuOf(s), basePrice: 10, parentId: famId } as never }))).id
+    xracing = { familyId: famId, axes: [{ code: 'color', label: 'Color' }, { code: 'fit_type', label: 'Fit Type' }, { code: 'size_name', label: 'Size Name' }],
+      variants: EU.map(s => ({ productId: ids[skuOf(s)], sku: skuOf(s), values: { color: 'color:nero', fit_type: 'fit:regular', size_name: `size_name:${s}` } })),
+      valueOrder: { color: ['color:nero'], fit_type: ['fit:regular', 'fit:slim'], size_name: EU.map(s => `size_name:${s}`) },
+      valueLabels: { 'color:nero': 'Nero', 'fit:regular': 'Regular', ...Object.fromEntries(EU.map(s => [`size_name:${s}`, s])) }, unmapped: [] }
+  })
+  beforeEach(() => {
+    state.family = xracing
+    state.destination = { ...state.destination, familyId: famId }
+    state.store = [{ id: PRODUCT, title: 'Xavia X suit', handle: 'xavia-x-suit', status: 'ACTIVE', onlineStorePublished: true, colour: 'Nero', group: [], identity: null,
+      variants: EU.map((s, i) => ({ id: `gid://shopify/ProductVariant/90000000010${i}`, sku: '', inventoryItemId: `gid://shopify/InventoryItem/90000000010${i}`, option: s, stocked: true })) }]
+  })
+  afterEach(() => { state.family = galeFamily })
+
+  it('without the choice nothing pairs ("Regular / 46" against "46") and Confirm refuses, as before', async () => {
+    const found = await findNero()
+    expect(found.plan.products[0].sizes[0].options).toEqual(['Regular', '46'])
+    expect(found.plan.notOnShopify).toEqual([])
+    expect((await proposalOf()).variants).toEqual([])
+    await expect(confirm([{ valueKey: 'color:nero', shopifyProductId: PRODUCT }])).rejects.toThrow('No size of "Nero" matches a variant of "Xavia X suit".')
+    expect(state.mutations).toEqual([])
+  })
+
+  it('"Not on Shopify" for Fit Type: saved in Nexus only, Find pairs 7 of 7, Confirm links them with the Nexus SKUs; taking it back restores the option', async () => {
+    const saved = await saveMap({ fit_type: null })
+    expect(saved).toMatchObject({ sizeMapSaved: true, sizeMap: { fit_type: null } })
+    expect(saved.plan.notOnShopify).toEqual([{ axis: 'fit_type', name: 'Fit Type', value: 'Regular' }])
+    expect(saved.plan.products[0].options).toEqual([{ axis: 'size_name', name: 'Size Name', values: EU }])
+    expect(saved.plan.products[0].sizes[0]).toEqual({ productId: ids[skuOf('46')], sku: skuOf('46'), options: ['46'] })
+    expect(state.mutations).toEqual([])
+    expect((await scoped(() => prisma.shopifyColourSync.findMany({ where: { familyId: famId } })))[0].sizeMap).toEqual({ fit_type: null })
+    await findNero()
+    const proposal = await proposalOf()
+    expect([proposal.variants.length, proposal.missing.length, proposal.extra.length, proposal.issues]).toEqual([7, 0, 0, []])
+    const view = await confirm([{ valueKey: 'color:nero', shopifyProductId: PRODUCT }])
+    expect(view.confirmed[0]).toMatchObject({ sizesLinked: 7, skusWritten: 7, adoptOnly: true })
+    expect(state.mutations).toEqual(['NexusCreateDefinition', 'NexusColourIdentity', 'NexusColourWriteSkus'])
+    expect(productOf(PRODUCT).variants.map((v: any) => [v.option, v.sku])).toEqual(EU.map(s => [s, skuOf(s)]))
+    expect(await listingOf(skuOf('58'))).toMatchObject({ externalListingId: '900000000001', platformAttributes: { variantId: '900000000106' } })
+    // Saving the map without the choice makes Fit Type a Shopify option again.
+    const back = await saveMap({})
+    expect([back.sizeMap, back.plan.notOnShopify, back.plan.products[0].options.map((o: any) => o.axis)]).toEqual([{}, [], ['fit_type', 'size_name']])
+  })
+
+  it('an axis with two values is never left off: refused when saved; a stored choice the family outgrew stops Confirm', async () => {
+    state.family = withSlim()
+    await expect(saveMap({ fit_type: null })).rejects.toThrow('"Fit Type" has 2 values in this family ("Regular", "Slim"). Only an option with one value can be left off Shopify. Nothing was changed.')
+    expect((await scoped(() => prisma.shopifyColourSync.findMany({ where: { familyId: famId } })))[0]?.sizeMap ?? null).toBeNull()
+    state.family = xracing
+    await saveMap({ fit_type: null })
+    await findNero()
+    state.family = withSlim()
+    await expect(confirm([{ valueKey: 'color:nero', shopifyProductId: PRODUCT }])).rejects.toThrow('"Fit Type" is set as not on Shopify, but this family has 2 Fit Type values ("Regular", "Slim").')
+    expect(state.mutations).toEqual([])
+  })
+})

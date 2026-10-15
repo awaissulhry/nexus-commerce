@@ -84,18 +84,23 @@ export async function colourAdoptOnly(d: ColourCoordinate, db: Pick<Prisma.Trans
 
 /**
  * The destination's size map (`ShopifyColourSync.sizeMap`, size-map.service.ts): per native option axis, a Nexus value →
- * the Shopify option value it is on this store. Undefined when it has none; a stored value of another shape reads as none.
+ * the Shopify option value it is on this store, or `null` for an axis the operator left off Shopify (`ColourSizeMap`).
+ * Undefined when it has none; a stored value of another shape reads as none.
  */
-export async function colourSizeMap(d: ColourCoordinate, db: Pick<Prisma.TransactionClient, 'shopifyColourSync'> = prisma): Promise<Record<string, Record<string, string>> | undefined> {
+export async function colourSizeMap(d: ColourCoordinate, db: Pick<Prisma.TransactionClient, 'shopifyColourSync'> = prisma): Promise<SizeMap | undefined> {
   const row = await db.shopifyColourSync.findFirst({ where: coordinate(d), select: { sizeMap: true } })
   return parseSizeMap(row?.sizeMap)
 }
 
+/** `ColourSizeMap`, as the API reads and writes it. */
+export type SizeMap = Record<string, Record<string, string> | null>
 const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
-export function parseSizeMap(value: unknown): Record<string, Record<string, string>> | undefined {
+export function parseSizeMap(value: unknown): SizeMap | undefined {
   if (!isRecord(value)) return undefined
-  const out: Record<string, Record<string, string>> = {}
+  const out: SizeMap = {}
   for (const [axis, pairs] of Object.entries(value)) {
+    // Not on Shopify: the planner leaves the axis out only while it has one value in the family.
+    if (pairs === null) { out[axis] = null; continue }
     if (!isRecord(pairs)) continue
     const kept = Object.entries(pairs).filter((pair): pair is [string, string] => typeof pair[1] === 'string' && !!pair[1].trim())
     if (kept.length) out[axis] = Object.fromEntries(kept)

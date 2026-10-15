@@ -51,9 +51,27 @@ export interface ColourPlanSettings {
    * The size map: native axis code → { Nexus value → the Shopify option value it is on this store } ("44" → "XS"). A
    * value the map does not name is itself. Every product, Find's pairing, Confirm, the sync's size identity check, size
    * create and size order then read the mapped value; the Nexus value stays beside it (`nexusValue(s)`).
+   *
+   * An axis mapped to `null` is NOT ON SHOPIFY (the operator's choice in "Pair sizes…"): see `ColourSizeMap`.
    */
-  sizeMap?: Readonly<Record<string, Readonly<Record<string, string>>>>
+  sizeMap?: ColourSizeMap
 }
+
+/**
+ * The size map as stored (`ShopifyColourSync.sizeMap`): per native axis, its pairs, or `null` — the axis is not a
+ * Shopify option of this family on this store.
+ *
+ * The rule (explicit, never guessed): a native axis is left off Shopify only when the operator chose "Not on Shopify"
+ * for it AND it has exactly ONE value in the whole family (xracing: Fit Type "Regular" on every variant, there for
+ * Amazon; the store's products have only Size). Then every product's options, Find's pairing, Confirm, the sync's size
+ * identity check (`planColourVariants`), size create and size order leave it out — one value on every variant tells no
+ * two variants apart, so no size is lost. An automatic rule ("one value and no Shopify product shows it") was not
+ * chosen: a store that spells that value otherwise ("Regular Fit") would have its real second option hidden. An axis
+ * with two or more values is never left off: the choice is refused when saved, and a stored one that no longer fits
+ * (the family gained a value) is a plan error, so nothing reaches Shopify until a person pairs it again. Without the
+ * choice, every native axis is a Shopify option, exactly as before.
+ */
+export type ColourSizeMap = Readonly<Record<string, Readonly<Record<string, string>> | null>>
 
 /**
  * What the store shows for one colour (Feature 1, read by Find): the Shopify product, the products its colour list names
@@ -84,13 +102,17 @@ export interface ColourPlanProduct {
 export type ColourPlanIssueCode =
   | 'split-axis-unknown' | 'missing-value' | 'unmapped-split-value' | 'duplicate-variant' | 'too-many-options'
   | 'blank-option-name' | 'duplicate-option-name' | 'duplicate-option-value' | 'too-many-variants' | 'blank-colour-name' | 'duplicate-colour-name'
-  | 'too-many-products' | 'more-than-shown'
+  | 'too-many-products' | 'more-than-shown' | 'not-on-shopify-several-values'
 export interface ColourPlanIssue { severity: 'error' | 'warning'; code: ColourPlanIssueCode; message: string; productIds: string[]; key?: string }
+/** A native axis the size map leaves off Shopify (`ColourSizeMap`): its Nexus name and its one value in the family. */
+export interface ColourPlanAxisOff { axis: string; name: string; value: string }
 export interface ColourPlan {
   familyId: string
   mode: 'colour-products' | 'one-product'
   splitAxis: string | null
   products: ColourPlanProduct[]
+  /** The native axes that are no Shopify option of this family (`ColourSizeMap` null); absent when there are none. */
+  notOnShopify?: ColourPlanAxisOff[]
   /** True when the products are to be grouped: a swatch group of two or more colour products. A single colour needs no group. */
   grouped: boolean
   /** The swatch groups (value keys, in colour order): the store's groups (`swatchGroupsOf`), else one group of every colour. */
@@ -156,7 +178,19 @@ export function planColourProducts(family: ColourPlanFamily, settings: ColourPla
     issues.push({ severity: 'error', code: 'split-axis-unknown', message: `The family has no "${split}" axis to show as separate products.`, productIds: [] })
     return { familyId: family.familyId, mode: 'colour-products', splitAxis: split, products: [], grouped: false, swatchGroups: [], issues }
   }
-  const native = family.axes.filter(a => a.code !== split)
+  // The native axes: the Shopify options of every product. One the size map leaves off Shopify (`ColourSizeMap` null) is
+  // none, when it has exactly one value in the whole family; with more it stays an option and the family is refused.
+  const notOnShopify: ColourPlanAxisOff[] = []
+  const native = family.axes.filter(axis => {
+    if (axis.code === split) return false
+    if (settings.sizeMap?.[axis.code] !== null) return true
+    const values = [...new Set(ordered(family.variants.flatMap(v => v.values[axis.code]?.trim() ? [v.values[axis.code]] : []), family.valueOrder[axis.code]).map(label))]
+    if (values.length === 1) { notOnShopify.push({ axis: axis.code, name: axis.label, value: values[0] }); return false }
+    if (values.length > 1) issues.push({ severity: 'error', code: 'not-on-shopify-several-values', productIds: [],
+      message: `"${axis.label}" is set as not on Shopify, but this family has ${values.length} ${axis.label} values (${quoted(values)}). Only an option with one value can be left off Shopify: pair it again in "Pair sizes…".` })
+    return true
+  })
+  const off = notOnShopify.length ? { notOnShopify } : {}
   const optionName = (axis: ColourPlanAxis) => (settings.optionNames?.[axis.code] ?? axis.label).trim()
   // The size map: the value Shopify holds for a Nexus value of a native axis (itself when the map does not name it).
   const shopifyValue = (axis: string, key: string) => settings.sizeMap?.[axis]?.[label(key)]?.trim() || label(key)
@@ -255,10 +289,10 @@ export function planColourProducts(family: ColourPlanFamily, settings: ColourPla
       message: `Shopify can group at most ${SHOPIFY_LINKED_LIST_LIMIT} products; ${counted}.` })
     else if (largest > IMPACT_LINKED_SHOWN_LIMIT) issues.push({ severity: 'warning', code: 'more-than-shown', productIds: [],
       message: `The theme shows at most ${IMPACT_LINKED_SHOWN_LIMIT} colours; ${swatch.groups.length > 1 ? `one swatch group of this family has ${largest}` : `this family has ${largest}`}. The rest are grouped but not shown.` })
-    return { familyId: family.familyId, mode: 'colour-products', splitAxis: split, products, grouped: swatch.groups.some(g => g.length >= 2), swatchGroups: swatch.groups, issues }
+    return { familyId: family.familyId, mode: 'colour-products', splitAxis: split, products, ...off, grouped: swatch.groups.some(g => g.length >= 2), swatchGroups: swatch.groups, issues }
   }
 
-  return { familyId: family.familyId, mode: 'one-product', splitAxis: split, products, grouped: false, swatchGroups: [], issues }
+  return { familyId: family.familyId, mode: 'one-product', splitAxis: split, products, ...off, grouped: false, swatchGroups: [], issues }
 }
 
 // ── Find (PR 3): which Shopify product is each colour, and which variant each size ──────────────────────────────────

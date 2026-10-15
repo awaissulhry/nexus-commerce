@@ -62,7 +62,9 @@ export const readColourRemote = async (gql: ShopifyGraphql, id: string, publicat
 /**
  * Existing IDs are authoritative. Recovery of an unsaved create needs an exact SKU AND option tuple. The product's option
  * values are the store's (the plan applies the destination's size map: EU 44 → XS), so the identity check, a created
- * size and the size order all use the value Shopify holds; without a map each value is the Nexus one.
+ * size and the size order all use the value Shopify holds; without a map each value is the Nexus one. An axis the map
+ * leaves off Shopify (`ColourSizeMap` null: one value in the whole family) is no option of the plan's product: the
+ * identity check compares the remaining options with the store's, and a created size carries only those.
  */
 export function planColourVariants(product: ColourPlanProduct, remote: ColourRemoteProduct, mappings: ReadonlyMap<string, { variantId?: string; inventoryItemId?: string }>) {
   if (remote.variants.pageInfo.hasNextPage) throw new WorkspaceScopeError('This colour has more than 250 Shopify variants. Review it before syncing sizes.', 422)

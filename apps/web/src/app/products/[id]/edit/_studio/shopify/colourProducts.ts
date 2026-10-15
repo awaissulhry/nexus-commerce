@@ -29,8 +29,10 @@ export interface ColourProposal {
   issues: Array<{ code?: string; message: string }>
 }
 export interface ColourProductRow { id: string; valueKey: string; colourName: string | null; state: ColourState; shopifyProductId: string | null; remoteStatus: string | null; proposal: ColourProposal | null; swatchGroup?: string[] | null }
-/** The size map: native axis code → { Nexus value → Shopify option value }. */
-export type SizeMap = Record<string, Record<string, string>>
+/** The size map: native axis code → { Nexus value → Shopify option value }, or null: the axis is not on Shopify. */
+export type SizeMap = Record<string, Record<string, string> | null>
+/** A native axis the size map leaves off Shopify: its name and its one value in the family. */
+export interface AxisOff { axis: string; name: string; value: string }
 export interface ColourSettings { enabled: boolean; method: 'theme-metafields'; valueField: { namespace: string; key: string }; listField: { namespace: string; key: string }; revision: string }
 export interface ColourView {
   familyId: string; accountId: string; settings: ColourSettings
@@ -39,7 +41,9 @@ export interface ColourView {
     /** The axes whose value order the family sets (a dictionary attribute's); the others come A–Z by SKU. */
     orderedAxes?: string[]
     /** How many swatch groups the store shows this family's colours in. */
-    swatchGroups?: number }
+    swatchGroups?: number
+    /** The axes that are no Shopify option of this family (the operator's "Not on Shopify"); no size names them. */
+    notOnShopify?: AxisOff[] }
   sizeMap?: SizeMap
   colourProducts: ColourProductRow[]
   locations?: Array<{ id: string; name: string }>
@@ -102,15 +106,20 @@ export function colourRows(view: ColourView): ColourRowModel[] {
     })
     const matched = pairs.filter(p => p.shopify).length
     const shopifyOnly = sameAsProposal ? proposal!.extra.map(e => sizeName(e.options)) : []
+    // The Shopify sizes have fewer options than the Nexus ones and an option has one value in the family (xracing's Fit
+    // Type "Regular"): say it may be left off Shopify.
+    const fewer = sameAsProposal && proposal!.extra.length > 0 && proposal!.extra.every(e => e.options.length < (product.options?.length ?? 0))
+    const single = fewer ? (product.options ?? []).filter(o => new Set(view.plan.products.flatMap(p => p.options?.find(x => x.axis === o.axis)?.values ?? [])).size === 1) : []
+    const leaveOff = single.length ? ` ${single.map(o => `${o.name} has one value in this family ("${o.values[0]}")`).join('; ')}: if the Shopify product has no such option, choose "Not on Shopify" in "Pair sizes…".` : ''
     const noSizeMatch = sameAsProposal && sizes.length > 0 && matched === 0
-      ? `No size of "${product.nexusValue}" matches a size of "${proposal!.title ?? 'the Shopify product'}". Nexus sizes: ${sizes.map(s => sizeName(s.options)).join(', ')}. Shopify sizes: ${shopifyOnly.join(', ') || 'none'}.`
+      ? `No size of "${product.nexusValue}" matches a size of "${proposal!.title ?? 'the Shopify product'}". Nexus sizes: ${sizes.map(s => sizeName(s.options)).join(', ')}. Shopify sizes: ${shopifyOnly.join(', ') || 'none'}.${leaveOff}`
       : null
     return {
       key: product.key, name: product.nexusValue, row, proposal, status,
       product: shownId ? { id: shownId, title: (sameAsProposal ? proposal!.title : null) ?? `Shopify product ${short(shownId)}`, status: (sameAsProposal ? proposal!.status : null) ?? row?.remoteStatus ?? null,
         showsColour: sameAsProposal ? proposal!.shopifyColourName : row?.colourName ?? null, how: status === 'linked' ? 'Linked' : HOW[proposal?.method ?? ''] ?? 'Proposed' } : null,
       pairs, matched, shopifyOnly, noSizeMatch, chosenByOperator: !!proposal?.chosenProductId && status !== 'linked',
-      canPairSizes: sameAsProposal && (product.options?.length ?? 0) > 0 && (matched < pairs.length && shopifyOnly.length > 0 || Object.keys(view.sizeMap ?? {}).length > 0),
+      canPairSizes: sameAsProposal && ((product.options?.length ?? 0) > 0 || (view.plan.notOnShopify?.length ?? 0) > 0) && (matched < pairs.length && shopifyOnly.length > 0 || Object.keys(view.sizeMap ?? {}).length > 0),
     }
   })
 }
@@ -153,22 +162,41 @@ export function swatchGroupWords(view: ColourView, model: ColourRowModel): strin
   return `Group ${product.swatchGroup + 1} of ${count}: ${members.join(', ')}`
 }
 
-/** One native option of the family for the size map: each Nexus value, the Shopify value it is paired with, and the Shopify values to choose from. */
-export interface SizeMapAxis { axis: string; name: string; values: Array<{ nexus: string; shopify: string | null }>; choices: string[] }
+/**
+ * One native option of the family for the size map: each Nexus value, the Shopify value it is paired with, and the
+ * Shopify values to choose from. `oneValue`: the option has one value in the whole family, so it may be left off Shopify
+ * ("Not on Shopify"); `notOnShopify`: it is.
+ */
+export interface SizeMapAxis { axis: string; name: string; values: Array<{ nexus: string; shopify: string | null }>; choices: string[]; oneValue?: true; notOnShopify?: true }
+
+/** The Select value of "Not on Shopify" (never a Shopify size the store could hold). */
+export const NOT_ON_SHOPIFY = '__nexus-not-on-shopify__'
 
 /**
  * The size map for one colour's review: every native option of the family with all its Nexus values (the map is the
  * family's on this store), the pairing saved, and as choices the values this colour's Shopify product has that no size
- * pairs with yet, plus those already in the map.
+ * pairs with yet, plus those already in the map. An option left off Shopify comes after them, so it can be taken back.
  */
 export function sizeMapAxes(view: ColourView, model: ColourRowModel): SizeMapAxis[] {
   const product = view.plan.products.find(p => p.key === model.key)
   const extra = model.proposal?.shopifyProductId === model.product?.id ? model.proposal?.extra ?? [] : []
-  return (product?.options ?? []).map(option => {
+  const choicesOf = (saved: Record<string, string>) => [...new Set([...extra.flatMap(e => e.options), ...Object.values(saved)])].filter(Boolean)
+  const options = (product?.options ?? []).map((option): SizeMapAxis => {
     const values = [...new Set(view.plan.products.flatMap(p => p.options?.find(o => o.axis === option.axis)?.values ?? []))]
     const saved = view.sizeMap?.[option.axis] ?? {}
-    const choices = [...new Set([...extra.flatMap(e => e.options), ...Object.values(saved)])].filter(Boolean)
-    return { axis: option.axis, name: option.name, values: values.map(nexus => ({ nexus, shopify: saved[nexus] ?? null })), choices }
+    return { axis: option.axis, name: option.name, values: values.map(nexus => ({ nexus, shopify: saved[nexus] ?? null })), choices: choicesOf(saved), ...(values.length === 1 ? { oneValue: true } : {}) }
+  })
+  const off = (view.plan.notOnShopify ?? []).map((axis): SizeMapAxis => ({ axis: axis.axis, name: axis.name, values: [{ nexus: axis.value, shopify: null }], choices: choicesOf({}), oneValue: true, notOnShopify: true }))
+  return [...options, ...off]
+}
+
+/** The operator's choice for one value: a Shopify value, '' (the same as Nexus) or `NOT_ON_SHOPIFY` (a one-value option only). */
+export function pickSize(axes: readonly SizeMapAxis[], axis: string, nexus: string, choice: string): SizeMapAxis[] {
+  return axes.map(a => {
+    if (a.axis !== axis) return a
+    const { notOnShopify: _off, ...rest } = a
+    if (choice === NOT_ON_SHOPIFY) return a.oneValue ? { ...rest, notOnShopify: true, values: a.values.map(v => ({ ...v, shopify: null })) } : a
+    return { ...rest, values: a.values.map(v => v.nexus === nexus ? { ...v, shopify: choice || null } : v) }
   })
 }
 
@@ -176,10 +204,17 @@ export function sizeMapAxes(view: ColourView, model: ColourRowModel): SizeMapAxi
 export function sizeMapOf(axes: readonly SizeMapAxis[]): SizeMap {
   const out: SizeMap = {}
   for (const axis of axes) {
+    if (axis.notOnShopify) { out[axis.axis] = null; continue }
     const pairs = axis.values.filter(v => v.shopify && v.shopify !== v.nexus).map(v => [v.nexus, v.shopify!] as const)
     if (pairs.length) out[axis.axis] = Object.fromEntries(pairs)
   }
   return out
+}
+
+/** The options this family leaves off Shopify, in words (null: none). */
+export function notOnShopifyWords(view: ColourView): string | null {
+  const off = view.plan.notOnShopify ?? []
+  return off.length ? `Not a Shopify option: ${off.map(a => `${a.name} ("${a.value}", its only value in this family)`).join(', ')}. The Shopify sizes leave ${off.length === 1 ? 'it' : 'them'} out; change this in "Pair sizes…".` : null
 }
 
 /** Why Confirm cannot run for this colour now (empty: it can). `replace`: the operator ticked "Replace these SKUs". */
