@@ -25,13 +25,29 @@ import { googleCall } from '../../gateway/google.js'
 import type { GatewayNoAnswer, GatewayRefusal } from '../../gateway/gateway.js'
 import { DATA_MANAGER_INGEST_URL } from '../../gateway/channels.js'
 import { GOOGLE_ADS_API_BASE } from '../../google/api-version.js'
+import { GOOGLE_SCOPE } from '../../cx/connectors/google/scopes.js'
 import { failureFromGatewayRefusal, failureFromNoAnswer, localFailure, parseGoogleAdsFailure, type GoogleAdsFailure } from './errors.js'
 import { customerIdDigits } from './mappers.js'
 import { addSpentOps, markQuotaExhausted, releaseOps, reserveOps } from './ops-budget.js'
 import { customerResource, GoogleAdsWriteError, UNKNOWN_OUTCOME, type GoogleMutateOperation } from './write-client.js'
 import type { GoogleAdsTarget } from './types.js'
 
-export const DATA_MANAGER_SCOPE = 'https://www.googleapis.com/auth/datamanager'
+/** Asked for at every Google sign-in, but optional (cx/connectors/google/scopes.ts): a sign-in made before Nexus asked lacks it. */
+export const DATA_MANAGER_SCOPE = GOOGLE_SCOPE.data_manager
+
+/** What a person does when the Google sign-in lacks the Data Manager permission. */
+export const SALES_PERMISSION_MISSING = 'This Google sign-in does not allow Nexus to send sales to Google yet: sign in to Google again in Nexus once to allow sending sales (Settings › Channels › Google › Reconnect, and keep every permission Google shows ticked). Nothing was sent.'
+
+/**
+ * Why sales cannot be sent through this sign-in, from the permissions Google said it granted (ChannelConnection
+ * .grantedScopes: Google's own list at sign-in, renewed on every token refresh), or null. No list recorded = unknown:
+ * Google's own check decides (dataManagerFailure says it plainly).
+ */
+export function salesPermissionProblem(grantedScopes: readonly string[] | null | undefined): string | null {
+  if (!grantedScopes?.length) return null
+  return grantedScopes.includes(DATA_MANAGER_SCOPE) ? null : SALES_PERMISSION_MISSING
+}
+
 /** Google's limit per request (events, adjustments). */
 export const MAX_EVENTS_PER_REQUEST = 2000
 
@@ -65,7 +81,7 @@ export function dataManagerFailure(httpStatus: number, text: string, headers?: H
   const message = typeof error?.message === 'string' ? error.message : ''
   if (reason === 'ACCESS_TOKEN_SCOPE_INSUFFICIENT' || /insufficient authentication scopes/i.test(message)) {
     out.permissionDenied = true
-    out.sentence = `The Google sign-in has not given Nexus the Data Manager permission (${DATA_MANAGER_SCOPE}): Nexus must ask for it when Google is connected, and a person signs in to Google again. Nothing was sent.`
+    out.sentence = `Google says this sign-in lacks the Data Manager permission (${DATA_MANAGER_SCOPE}). ${SALES_PERMISSION_MISSING}`
   } else if (reason === 'SERVICE_DISABLED' || /has not been used in project|is disabled/i.test(message)) {
     out.permissionDenied = true
     out.sentence = 'The Data Manager API is not enabled in Nexus\'s Google Cloud project: enable it (Google Cloud console › APIs & Services › Data Manager API), then ask again. Nothing was sent.'

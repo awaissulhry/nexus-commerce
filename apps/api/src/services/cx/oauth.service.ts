@@ -23,7 +23,7 @@ import { logger } from '../../utils/logger.js'
 import { getChannelApp, type Environment } from './apps.service.js'
 import { ChannelAppConfigurationError } from './app-configuration-error.js'
 import { CredentialsDecryptError } from '../../lib/crypto.js'
-import { getChannelSpec, scopeDriftOf, type ChannelKey, type ConnectionIdentity } from './catalog.js'
+import { getChannelSpec, requestedScopesOf, scopeDriftOf, type ChannelKey, type ConnectionIdentity } from './catalog.js'
 import { recordConnectionEvent, type Actor } from './events.service.js'
 import { IdentityRefusal, placeGrant } from './identity.service.js'
 import { handleOf, storeGrant, withEbayGrantTransaction, type GrantResult } from './token.service.js'
@@ -220,9 +220,10 @@ export async function start(input: {
   })
 
   const approvedScopes = new Set(Array.isArray(app.extra.approvedScopes) ? app.extra.approvedScopes.filter((scope): scope is string => typeof scope === 'string') : [])
+  // Required and optional scopes (an optional one is asked for, never counted as drift), plus Shopify's approved review-gated ones.
   const requestedScopes = input.channelKey === 'SHOPIFY'
-    ? [...new Set([...spec.auth.requiredScopes, ...(spec.auth.reviewGatedScopes ?? []).filter(({ scope }) => approvedScopes.has(scope)).map(({ scope }) => scope)])]
-    : spec.auth.requiredScopes
+    ? [...new Set([...requestedScopesOf(spec), ...(spec.auth.reviewGatedScopes ?? []).filter(({ scope }) => approvedScopes.has(scope)).map(({ scope }) => scope)])]
+    : requestedScopesOf(spec)
   const params = new URLSearchParams({
     client_id: app.clientId,
     redirect_uri: redirectUri,
@@ -390,7 +391,7 @@ export async function complete(input: {
   }
   const grantedScopes = typeof token.scope === 'string'
     ? token.scope.split(/[\s,]+/).filter(Boolean)
-    : spec.auth.requiredScopes // channels that echo nothing (eBay code grant) grant exactly what was asked or fail
+    : requestedScopesOf(spec) // channels that echo nothing (eBay code grant) grant exactly what was asked or fail
   const metadata: Record<string, unknown> = {}
   for (const k of spec.auth.tokenResponseMetadata ?? []) if (token[k] !== undefined) metadata[k] = token[k]
   for (const k of spec.auth.callbackMetadata ?? []) if (input.query[k] !== undefined) metadata[k] = input.query[k]

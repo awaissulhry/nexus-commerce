@@ -427,11 +427,12 @@ describe('live reads (G6)', () => {
       return []
     }
     const view = await liveAssetLinksView({ connectionId: 'g-1', customerId: '1234567890', loginCustomerId: null } as never, '21')
-    expect(view.account).toMatchObject([{ level: 'account', assetId: '302', fieldType: 'CALL', status: 'PAUSED', asset: { label: '000 111 2222 (IT)' } }])
+    expect(view.accountLinks).toMatchObject([{ level: 'account', assetId: '302', fieldType: 'CALL', status: 'PAUSED', asset: { label: '000 111 2222 (IT)' } }])
     expect(view.campaigns).toMatchObject([{ level: 'campaign', campaignId: '21', assetId: '9', asset: { label: 'Free returns' } }])
     expect(view.adGroups).toEqual([])
     expect(view.locationSets).toEqual([{ assetSetId: '81', name: 'Shops', type: 'LOCATION_SYNC', parentAssetSetId: null, ownership: 'BUSINESS_OWNER', campaigns: [{ campaignId: '21', name: 'Search A' }] }])
-    expect(view.totals).toEqual({ account: 1, campaigns: 1, adGroups: 0 })
+    expect(view.totals).toEqual({ accountLinks: 1, campaigns: 1, adGroups: 0 })
+    expect(view).not.toHaveProperty('account')
     expect(view.notRead).toEqual([{ part: 'ad-groups', why: 'Google Ads refused the read' }])
     // campaignId narrows the campaign and ad group reads (the account's own links are always read).
     expect(rows.queries.find((q) => q.includes('FROM campaign_asset '))).toContain('AND campaign.id IN (21)')

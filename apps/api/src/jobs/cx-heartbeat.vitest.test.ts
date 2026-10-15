@@ -277,6 +277,20 @@ describe('runHeartbeatFor — ok', () => {
     expect(report.scopeDrift).toEqual(['s2', 's3'])
   })
 
+  it('an optional scope the grant lacks is not drift: a connection made before it was asked for stays connected', async () => {
+    fakeSpec.auth.optionalScopes = ['s4']
+    try {
+      heartbeat.mockResolvedValueOnce({ ok: true, latencyMs: 1 })
+      const row = seedRow({ grantedScopes: ['s1', 's2', 's3'] })
+      const report = await runHeartbeatFor(row)
+      expect(report).toMatchObject({ ok: true, authStatus: 'connected', scopeDrift: [] })
+      expect(rows.get(row.id)!.authStatus).toBe('connected')
+      expect(eventsOf('status_change', row.id)).toEqual([])
+    } finally {
+      delete fakeSpec.auth.optionalScopes
+    }
+  })
+
   it('rejects a different account identity without adopting its permissions or markets', async () => {
     heartbeat.mockResolvedValueOnce({ ok: true, latencyMs: 1, identity: { userId: 'OTHER' }, scopes: ['s1', 's2', 's3'] })
     fakeSpec.discoverScopes = discoverScopes

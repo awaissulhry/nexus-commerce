@@ -127,14 +127,14 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs() })
 
 describe('Google connect: start', () => {
-  it('sends the person to Google\'s consent page with offline access, a fresh consent, PKCE and the five permissions', async () => {
+  it('sends the person to Google\'s consent page with offline access, a fresh consent, PKCE, the five permissions and the optional Data Manager one', async () => {
     const s = await startInBusiness()
     const url = new URL(s.authorizeUrl)
     expect(`${url.origin}${url.pathname}`).toBe('https://accounts.google.com/o/oauth2/v2/auth')
     expect(Object.fromEntries(url.searchParams)).toEqual({
       client_id: CLIENT_ID,
       redirect_uri: 'https://api.example.test/api/cx/callback/google',
-      scope: 'https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/content https://www.googleapis.com/auth/analytics.readonly openid https://www.googleapis.com/auth/userinfo.email',
+      scope: 'https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/content https://www.googleapis.com/auth/analytics.readonly openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/datamanager',
       state: s.state,
       response_type: 'code',
       access_type: 'offline',
@@ -199,6 +199,22 @@ describe('Google connect: callback', () => {
     expect(result.scopeDrift).toEqual(['https://www.googleapis.com/auth/analytics.readonly'])
     expect(h.events.filter((e) => e.type === 'scope_drift')).toEqual([expect.objectContaining({ channelKey: 'GOOGLE', connectionId: result.connectionId, detail: expect.objectContaining({ missing: ['https://www.googleapis.com/auth/analytics.readonly'] }) })])
     expect(h.connections.get(result.connectionId)!.grantedScopes).not.toContain('https://www.googleapis.com/auth/analytics.readonly')
+  })
+
+  it('the Data Manager permission left unticked (or a sign-in from before Nexus asked for it): connected, no drift, no scope_drift event', async () => {
+    // ALL = the five required permissions only.
+    const result = await finishInBusiness(await startInBusiness())
+    expect(result.scopeDrift).toEqual([])
+    expect(h.events.filter((e) => e.type === 'scope_drift')).toEqual([])
+    expect(h.connections.get(result.connectionId)).toMatchObject({ isActive: true, authStatus: 'connected' })
+    expect(h.connections.get(result.connectionId)!.grantedScopes).not.toContain('https://www.googleapis.com/auth/datamanager')
+  })
+
+  it('a sign-in that ticks the Data Manager permission records it with the others', async () => {
+    tokenAnswer = () => json({ access_token: 'fixture-access-token', refresh_token: 'fixture-refresh-token', expires_in: 3599, scope: `${ALL} https://www.googleapis.com/auth/datamanager`, token_type: 'Bearer', id_token: idToken() })
+    const result = await finishInBusiness(await startInBusiness())
+    expect(result.scopeDrift).toEqual([])
+    expect(h.connections.get(result.connectionId)!.grantedScopes).toContain('https://www.googleapis.com/auth/datamanager')
   })
 
   it('a reconnect of the same Google login folds into the same connection', async () => {

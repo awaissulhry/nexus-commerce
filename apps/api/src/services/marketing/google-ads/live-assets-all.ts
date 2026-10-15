@@ -363,11 +363,12 @@ export async function liveLocationSets(target: GoogleAdsTarget): Promise<LiveLoc
 export const MAX_VIEW_LINKS = 300
 
 export interface LiveAssetLinksView {
-  account: LivePlaceLink[]
+  /** The account-level links (not `account`: every google-ads-live answer's `account` is the account it read). */
+  accountLinks: LivePlaceLink[]
   campaigns: LivePlaceLink[]
   adGroups: LivePlaceLink[]
   locationSets: LiveLocationSet[]
-  totals: { account: number; campaigns: number; adGroups: number }
+  totals: { accountLinks: number; campaigns: number; adGroups: number }
   notRead: Array<{ part: string; why: string }>
 }
 
@@ -389,8 +390,8 @@ export async function liveAssetLinksView(target: GoogleAdsTarget, campaignId?: s
   const locationSets = await part('location-sets', () => liveLocationSets(target))
   const cap = (links: LivePlaceLink[]) => links.sort(linkOrder).slice(0, MAX_VIEW_LINKS)
   return {
-    account: cap(account), campaigns: cap(campaigns), adGroups: cap(adGroups), locationSets,
-    totals: { account: account.length, campaigns: campaigns.length, adGroups: adGroups.length },
+    accountLinks: cap(account), campaigns: cap(campaigns), adGroups: cap(adGroups), locationSets,
+    totals: { accountLinks: account.length, campaigns: campaigns.length, adGroups: adGroups.length },
     notRead,
   }
 }

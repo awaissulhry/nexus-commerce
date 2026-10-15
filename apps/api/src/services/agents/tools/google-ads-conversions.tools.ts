@@ -44,8 +44,8 @@ import {
   adjustDraft, adjustRecordsAfterRun, MAX_UPLOAD_ORDERS, uploadDraft, uploadWindowProblem,
   type AdjustRecord, type AdjustRequest, type UploadRecord, type UploadRequest,
 } from '../../marketing/google-ads/conversion-upload.js'
-import { ingestSales, uploadAdjustments } from '../../marketing/google-ads/conversion-upload-client.js'
-import { MAX_ORDERS_READ, nexusSales, shopifyOrdersById, shopifyOrdersForUpload, uploadInFlight } from '../../marketing/google-ads/conversion-orders.js'
+import { ingestSales, salesPermissionProblem, uploadAdjustments } from '../../marketing/google-ads/conversion-upload-client.js'
+import { googleSignInScopes, MAX_ORDERS_READ, nexusSales, shopifyOrdersById, shopifyOrdersForUpload, uploadInFlight } from '../../marketing/google-ads/conversion-orders.js'
 import { localFailure } from '../../marketing/google-ads/errors.js'
 import { notRun } from './ads-change-kit.js'
 import { customerResource, GoogleAdsWriteError } from '../../marketing/google-ads/write-client.js'
@@ -444,6 +444,9 @@ const buildUpload = (args: Record<string, unknown>): GoogleDraftBuilder => async
   const now = new Date()
   const problem = uploadWindowProblem(request, now)
   if (problem) return { refusal: problem }
+  // A sign-in made before Nexus asked for the Data Manager permission: said before anything is read from Google.
+  const permission = salesPermissionProblem(await googleSignInScopes(account.target.connectionId))
+  if (permission) return { refusal: permission }
   const settings = await liveAccountSettings(account.target)
   if (!settings) return { refusal: 'Google did not answer with the account\'s conversion settings.' }
   const live = await conversionsOf(account)
@@ -532,8 +535,9 @@ const uploadGoogleSales: AgentTool = {
     + 'closed the Google Ads API\'s click-conversion upload to new users); Google checks them first (validateOnly) and '
     + 'refuses the whole request if one is wrong, then matches them to clicks in the background: Google gives no answer per '
     + 'sale, only counts per reason (Google Ads › Goals › Diagnostics; the answer gives Google\'s request id). Google takes '
-    + 'nothing until Nexus\'s Google sign-in carries the Data Manager permission and the Data Manager API is on in Nexus\'s '
-    + 'Google Cloud project: the preview says so when either is missing. Sales that count for automatic bidding are marked '
+    + 'nothing until Nexus\'s Google sign-in carries the Data Manager permission (a sign-in made before Nexus asked for it '
+    + 'lacks it: a person signs in to Google again in Nexus once) and the Data Manager API is on in Nexus\'s Google Cloud '
+    + 'project: the preview says so when either is missing. Sales that count for automatic bidding are marked '
     + 'SPENDS MONEY. Sending cannot be taken back; undo retracts the sales (adjust-google-sales).'
     + GOOGLE_CHANGE_RULES,
   undo: uploadUndo,

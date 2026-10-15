@@ -16,6 +16,8 @@
  *     tool runs, and an upload runs only when no OTHER upload of this business is executing, or executed without its
  *     record yet. Each run's claim is committed before its own check, so two at once can never both pass (both may
  *     refuse; a person approves again). Business-wide, stricter than per account (a business has one Ads account).
+ *   - The sign-in's permissions (googleSignInScopes): whether the Google connection may send sales at all (the optional
+ *     Data Manager permission, cx/connectors/google/scopes.ts).
  */
 import prisma from '../../../db.js'
 import type { UploadOrder } from './conversion-upload.js'
@@ -141,4 +143,13 @@ export async function nexusSales(customerId: string): Promise<NexusSales> {
     }
   }
   return out
+}
+
+/**
+ * The permissions the Google connection's sign-in carries (ChannelConnection.grantedScopes: Google's own list at sign-in,
+ * renewed on every token refresh), or null when Nexus has none recorded or the connection is not this business's Google.
+ */
+export async function googleSignInScopes(connectionId: string): Promise<string[] | null> {
+  const row = await prisma.channelConnection.findUnique({ where: { id: connectionId }, select: { channelType: true, grantedScopes: true } })
+  return row?.channelType === 'GOOGLE' && row.grantedScopes?.length ? row.grantedScopes : null
 }
