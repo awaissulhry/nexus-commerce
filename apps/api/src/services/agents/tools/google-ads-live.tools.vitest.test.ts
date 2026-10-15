@@ -128,6 +128,24 @@ describe('google-ads-live, new views', () => {
     expect(sent()[0]).toMatch(/FROM customer$/)
   })
 
+  it('asset-links: the account-level links are accountLinks; account stays the account it read, as in every view', async () => {
+    h.rows.mockImplementation(async (_target: unknown, query: string) => (query.includes('FROM customer_asset')
+      ? [{ customerAsset: { fieldType: 'CALL', status: 'PAUSED' }, asset: { id: '302', type: 'CALL', callAsset: { countryCode: 'IT', phoneNumber: '000 111 2222' } } }]
+      : []))
+    const out = await tool('google-ads-live').handler({ view: 'asset-links' }, everyone)
+    expect(out).toMatchObject({
+      ok: true,
+      data: {
+        view: 'asset-links',
+        account: { accountId: 'g-1', customerId: '1234567890', name: 'Shop', currency: 'EUR', timeZone: 'Europe/Rome' },
+        accountLinks: [{ level: 'account', assetId: '302', fieldType: 'CALL', status: 'PAUSED' }],
+        campaigns: [], adGroups: [], locationSets: [],
+        totals: { accountLinks: 1, campaigns: 0, adGroups: 0 },
+        note: expect.stringContaining('account links (accountLinks)'),
+      },
+    })
+  })
+
   it('lookup user-lists: no search word needed; Google\'s ids', async () => {
     h.rows.mockResolvedValue([{ userList: { id: '3', name: 'Buyers', type: 'REMARKETING' } }])
     const out = await tool('google-ads-live').handler({ view: 'lookup', lookup: 'user-lists' }, everyone)

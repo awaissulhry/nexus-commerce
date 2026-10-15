@@ -11,6 +11,8 @@ const h = vi.hoisted(() => ({
   ingest: vi.fn(),
   adjust: vi.fn(),
   inFlight: vi.fn(async (): Promise<string | null> => null),
+  /** The Google sign-in's permissions (ChannelConnection.grantedScopes); null = none recorded. */
+  scopes: null as string[] | null,
   enqueue: vi.fn(async () => ({ queued: true, reason: null })),
   live: {
     actions: [] as unknown[], accountGoals: [] as unknown[], campaignGoals: [] as unknown[], campaigns: [] as unknown[],
@@ -50,6 +52,7 @@ vi.mock('../../marketing/google-ads/conversion-orders.js', async (importActual) 
   shopifyOrdersById: vi.fn(async (ids: string[]) => new Map((structuredClone(h.live.orders) as Array<{ shopifyOrderId: string }>).filter((o) => ids.includes(o.shopifyOrderId)).map((o) => [o.shopifyOrderId, o]))),
   nexusSales: vi.fn(async () => ({ sent: h.live.sent, retracted: new Set<string>(), value: new Map([['72:5001', { valueCents: 4990, currency: 'EUR' }]]) })),
   uploadInFlight: h.inFlight,
+  googleSignInScopes: vi.fn(async () => h.scopes),
 }))
 vi.mock('../../marketing/google-ads/enqueue.js', () => ({ enqueueGoogleAdsSync: h.enqueue }))
 
@@ -77,6 +80,9 @@ const ORDER = {
   currency: 'EUR', email: 'jane.doe@example.com', metadata: { name: '#5001', currency: 'EUR', current_total_price: '49.90', landing_site: '/?gclid=Cj0KCQjw-test' },
 }
 
+/** A Google sign-in made before Nexus asked for the Data Manager permission (sending sales). */
+const SIGN_IN_SCOPES = ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/content', 'https://www.googleapis.com/auth/analytics.readonly', 'openid', 'https://www.googleapis.com/auth/userinfo.email']
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-15T12:00:00Z') })
   for (const f of [h.mutate, h.ingest, h.adjust]) f.mockReset()
@@ -91,6 +97,7 @@ beforeEach(() => {
   h.live.orders = [ORDER]
   h.live.sent = new Map()
   h.live.tags = new Map()
+  h.scopes = [...SIGN_IN_SCOPES, 'https://www.googleapis.com/auth/datamanager']
 })
 afterEach(() => { vi.useRealTimers() })
 
@@ -238,6 +245,39 @@ describe('upload-google-sales', () => {
     const run = await tool('upload-google-sales').execute!(ask, approved(preview))
     expect(run.error).toMatch(/No sale to send.*already sent/)
     expect(h.ingest).not.toHaveBeenCalled()
+  })
+
+  it('a sign-in without the Data Manager permission: the preview says to sign in again, before anything is read or checked', async () => {
+    h.scopes = [...SIGN_IN_SCOPES]
+    const { liveAccountSettings } = await import('../../marketing/google-ads/live-account.js')
+    vi.mocked(liveAccountSettings).mockClear()
+    const out = await tool('upload-google-sales').handler(ask, asker)
+    expect(out.ok).toBe(false)
+    expect(out.error).toBe('This Google sign-in does not allow Nexus to send sales to Google yet: sign in to Google again in Nexus once to allow sending sales (Settings › Channels › Google › Reconnect, and keep every permission Google shows ticked). Nothing was sent.')
+    expect(liveAccountSettings).not.toHaveBeenCalled()
+    expect(h.ingest).not.toHaveBeenCalled()
+    // Approved earlier, and the permission is still missing at the run: nothing is sent.
+    h.scopes = [...SIGN_IN_SCOPES, 'https://www.googleapis.com/auth/datamanager']
+    h.ingest.mockResolvedValue({ requestId: null, warnings: [] })
+    const preview = (await tool('upload-google-sales').handler(ask, asker)).preview
+    h.ingest.mockClear()
+    h.scopes = [...SIGN_IN_SCOPES]
+    const run = await tool('upload-google-sales').execute!(ask, approved(preview))
+    expect(run.ok).toBe(false)
+    expect(run.error).toMatch(/^Not run: This Google sign-in does not allow Nexus to send sales to Google yet: sign in to Google again in Nexus once/)
+    expect(h.ingest).not.toHaveBeenCalled()
+  })
+
+  it('no permissions recorded for the sign-in: Google\'s own check decides, and its 403 is said plainly', async () => {
+    h.scopes = null
+    const { GoogleAdsWriteError } = await import('../../marketing/google-ads/write-client.js')
+    const { dataManagerFailure } = await import('../../marketing/google-ads/conversion-upload-client.js')
+    const denied = JSON.stringify({ error: { code: 403, status: 'PERMISSION_DENIED', message: 'Request had insufficient authentication scopes.', details: [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'ACCESS_TOKEN_SCOPE_INSUFFICIENT' }] } })
+    h.ingest.mockRejectedValue(new GoogleAdsWriteError(dataManagerFailure(403, denied), 'datamanager.events.ingest.check', 'refused'))
+    const out = await tool('upload-google-sales').handler(ask, asker)
+    expect(h.ingest).toHaveBeenCalledTimes(1)
+    expect(out.ok).toBe(false)
+    expect(out.error).toMatch(/lacks the Data Manager permission .*sign in to Google again in Nexus once to allow sending sales/)
   })
 
   it('Google\'s refusal is said, and nothing is queued', async () => {

@@ -9,6 +9,8 @@ export const GOOGLE_SCOPE = {
   analytics: 'https://www.googleapis.com/auth/analytics.readonly',
   openid: 'openid',
   email: 'https://www.googleapis.com/auth/userinfo.email',
+  /** Data Manager API: sending the shop's sales to Google Ads (upload-google-sales). Optional, see below. */
+  data_manager: 'https://www.googleapis.com/auth/datamanager',
 } as const
 
 export const GOOGLE_REQUIRED_SCOPES: string[] = [
@@ -18,6 +20,13 @@ export const GOOGLE_REQUIRED_SCOPES: string[] = [
   GOOGLE_SCOPE.openid,
   GOOGLE_SCOPE.email,
 ]
+
+/**
+ * Asked for at every sign-in, never required (catalog.ts `optionalScopes`): a sign-in made before Nexus asked for it
+ * keeps reading and changing Google Ads as before, with no "reconnect" prompt; only sending sales needs it, and that
+ * tool says so (conversion-upload-client.ts `salesPermissionProblem`).
+ */
+export const GOOGLE_OPTIONAL_SCOPES: string[] = [GOOGLE_SCOPE.data_manager]
 
 /** The three Google products a connection can read, each behind its own permission. */
 export type GoogleProduct = 'ads' | 'merchant_center' | 'analytics'

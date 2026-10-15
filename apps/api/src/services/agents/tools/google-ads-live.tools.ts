@@ -152,7 +152,7 @@ async function liveView(args: Record<string, unknown>, ctx: ToolContext): Promis
           ok: true,
           data: {
             ...base, ...(campaignId ? { campaignId } : {}), ...links, ...notReadOf(notRead),
-            note: `Every level: account links serve in every campaign that shows the type, unless a campaign or ad group has its own. At most ${MAX_VIEW_LINKS} links per level are listed (totals counts all). Location sets come from a Business Profile linked in Google Ads.`,
+            note: `Every level: account links (accountLinks) serve in every campaign that shows the type, unless a campaign or ad group has its own. At most ${MAX_VIEW_LINKS} links per level are listed (totals counts all). Location sets come from a Business Profile linked in Google Ads.`,
           },
         }
       }
@@ -340,8 +340,8 @@ const googleAdsLive: AgentTool = {
     + 'negative-lists: the shared negative keyword lists and their campaigns (listId: its keywords). product-groups '
     + '(campaignId): the product group tree of every ad group, every Shopping dimension, with bids and exclusions (warns '
     + 'when an "everything else" group is NOT excluded). ads (campaignId): ads with text, URLs, strength and review. assets: campaign assets (sitelinks, '
-    + 'callouts, structured snippets …) with their review. asset-links: every asset link at the account, campaign and ad '
-    + 'group level, every type (images with size, business name, call, price, promotion, lead form, app link, sitelinks, '
+    + 'callouts, structured snippets …) with their review. asset-links: every asset link at the account (accountLinks), '
+    + 'campaign and ad group level, every type (images with size, business name, call, price, promotion, lead form, app link, sitelinks, '
     + 'callouts, snippets) with status and review, and the location asset sets (campaignId: that campaign and its ad '
     + 'groups, plus the account). change-history: Google\'s change history of one day (who, '
     + 'what; the e-mail of who needs the users permission). drafts: campaign drafts (draftId: campaignId~draftId). lookup (lookup + search): Google\'s ids of locations, languages and audience '

@@ -132,6 +132,12 @@ export interface AuthSpec {
   promptParam?: Record<string, string>
   /** Every scope we are eligible for — rule 4 (maximal scopes). */
   requiredScopes: string[]
+  /**
+   * Asked for at consent with `requiredScopes`, but not required: a grant without one is complete (no scope drift, so
+   * no "reconnect" prompt), and the feature that needs it says so itself. A connection made before a scope was added
+   * here keeps working as it is; its next sign-in asks for it.
+   */
+  optionalScopes?: string[]
   reviewGatedScopes?: { scope: string; reason: string }[]
   /** null = a non-expiring access token (Shopify custom-distribution offline grant). */
   accessTokenLifetimeSec?: number | null
@@ -214,7 +220,15 @@ export function listChannelSpecs(): ChannelSpec[] {
   return [...specs.values()]
 }
 
-/** `required − granted`, honouring eBay's rule that a manage scope implies its readonly twin. */
+/** What the consent asks for: the required scopes, then the optional ones. */
+export function requestedScopesOf(spec: ChannelSpec): string[] {
+  return [...new Set([...spec.auth.requiredScopes, ...(spec.auth.optionalScopes ?? [])])]
+}
+
+/**
+ * `required − granted`, honouring eBay's rule that a manage scope implies its readonly twin. Optional scopes never
+ * count: a grant without one is not drift.
+ */
 export function scopeDriftOf(spec: ChannelSpec, granted: string[]): string[] {
   const have = new Set(granted)
   const implied = new Set<string>()

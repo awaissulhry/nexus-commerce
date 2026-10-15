@@ -101,6 +101,8 @@ describe('the Google catalogue entry', () => {
       'openid',
       'https://www.googleapis.com/auth/userinfo.email',
     ])
+    // Sending sales (Data Manager API) is asked for at sign-in, but never required.
+    expect(googleSpec.auth.optionalScopes).toEqual(['https://www.googleapis.com/auth/datamanager'])
     expect(googleSpec.auth.authorizationParams).toEqual({ response_type: 'code', access_type: 'offline', prompt: 'consent' })
     expect(googleSpec.auth).toMatchObject({ pkce: true, tokenRequestAuth: 'body', scopeSeparator: ' ', refreshTokenRequired: true, identityRequired: true, rotatesRefreshToken: false, accessTokenLifetimeSec: 3600, refreshTokenLifetimeSec: null })
     expect(googleSpec.auth.authorizeUrl!({ region: null, environment: 'production' })).toBe('https://accounts.google.com/o/oauth2/v2/auth')
@@ -116,6 +118,12 @@ describe('the Google catalogue entry', () => {
     const granted = 'openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/content'.split(' ')
     expect(scopeDriftOf(googleSpec, granted)).toEqual(['https://www.googleapis.com/auth/analytics.readonly'])
     expect(scopeDriftOf(googleSpec, ALL_SCOPES)).toEqual([])
+  })
+
+  it('a sign-in made before Nexus asked for the Data Manager permission is complete: no drift, nothing to reconnect', () => {
+    expect(ALL_SCOPES).not.toContain('https://www.googleapis.com/auth/datamanager')
+    expect(scopeDriftOf(googleSpec, ALL_SCOPES)).toEqual([])
+    expect(scopeDriftOf(googleSpec, [...ALL_SCOPES, 'https://www.googleapis.com/auth/datamanager'])).toEqual([])
   })
 })
 

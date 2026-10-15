@@ -11,6 +11,8 @@
  *
  * - Consent at accounts.google.com with `access_type=offline` + `prompt=consent`: Google hands out a
  *   refresh token only on a consent, and a reconnect must get a new one. PKCE (S256) on top of the secret.
+ * - The consent asks for the required permissions (scopes.ts) and the optional Data Manager one (sending sales): a
+ *   sign-in without the optional one is complete, so a connection made before Nexus asked for it is not drift.
  * - Who consented comes from the `id_token` in the token answer (id-token.ts), so no call is needed at
  *   connect; the heartbeat asks Google's userinfo through the gateway.
  * - Discovery (discovery.ts) runs at connect and on demand, never on the heartbeat (Ads quota is scarce).
@@ -28,7 +30,7 @@ import { GatewayNoAnswer, GatewayRefusal } from '../../../gateway/gateway.js'
 import { GOOGLE_ADS_API_VERSION } from '../../../google/api-version.js'
 import { identityFromGoogleIdToken } from './id-token.js'
 import { discoverGoogleScopes } from './discovery.js'
-import { GOOGLE_REQUIRED_SCOPES } from './scopes.js'
+import { GOOGLE_OPTIONAL_SCOPES, GOOGLE_REQUIRED_SCOPES } from './scopes.js'
 
 export const GOOGLE_AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
@@ -90,6 +92,8 @@ export const googleSpec: ChannelSpec = {
     codeParamInCallback: 'code',
     pkce: true,
     requiredScopes: GOOGLE_REQUIRED_SCOPES,
+    // Sending sales (Data Manager API): asked for, not required — an older sign-in without it is not drift.
+    optionalScopes: GOOGLE_OPTIONAL_SCOPES,
     accessTokenLifetimeSec: 3600,
     // Google's refresh tokens do not expire by date (an app in "Testing" is the exception, and Google
     // then names the lifetime in the token answer).
