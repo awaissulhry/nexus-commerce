@@ -198,6 +198,7 @@ export async function liveListKeywords(target: GoogleAdsTarget, listId: string):
 const SETTINGS_FIELDS = [
   ...CAMPAIGN_FIELDS,
   'campaign.manual_cpc.enhanced_cpc_enabled', 'campaign.target_spend.cpc_bid_ceiling_micros', 'campaign.bidding_strategy',
+  'campaign.maximize_conversions.target_cpa_micros', 'campaign.maximize_conversion_value.target_roas',
   'campaign.network_settings.target_google_search', 'campaign.network_settings.target_search_network',
   'campaign.network_settings.target_content_network', 'campaign.network_settings.target_partner_search_network',
   'campaign.geo_target_type_setting.positive_geo_target_type', 'campaign.geo_target_type_setting.negative_geo_target_type',
@@ -436,6 +437,8 @@ export interface LiveCampaignDetail {
     assetAutomation: Array<{ type: string | null; status: string | null }>
     manualCpcEnhanced: boolean
     maxCpcCeilingCents: number | null
+    targetCpaCents: number | null
+    targetRoas: number | null
     biddingStrategyId: string | null
     localInventory: boolean
     trackingTemplate: string | null
@@ -451,6 +454,45 @@ export interface LiveCampaignDetail {
   assets: LiveAsset[]
   /** What Google answered for each part, and the parts it refused (a field it no longer knows, …). */
   notRead: Array<{ part: string; why: string }>
+}
+
+/** One campaign's settings, as the settings query reads them (liveCampaignSettingsQuery). */
+export function liveCampaignSettingsOf(row: Json): LiveCampaignDetail['campaign'] {
+  const c = row.campaign ?? {}
+  const base = liveCampaignOf(row)
+  const restrictions = Array.isArray(c.targetingSetting?.targetRestrictions) ? c.targetingSetting.targetRestrictions : []
+  const automation = Array.isArray(c.assetAutomationSettings) ? c.assetAutomationSettings : []
+  return {
+    ...base,
+    networks: {
+      googleSearch: bool(c.networkSettings?.targetGoogleSearch),
+      searchPartners: bool(c.networkSettings?.targetSearchNetwork),
+      display: bool(c.networkSettings?.targetContentNetwork),
+      partnerSearch: bool(c.networkSettings?.targetPartnerSearchNetwork),
+    },
+    locationOption: { include: str(c.geoTargetTypeSetting?.positiveGeoTargetType), exclude: str(c.geoTargetTypeSetting?.negativeGeoTargetType) },
+    audienceMode: restrictions.map((t: Json) => ({ dimension: str(t.targetingDimension), observationOnly: bool(t.bidOnly) })),
+    euPoliticalAds: str(c.containsEuPoliticalAdvertising),
+    aiMax: bool(c.aiMaxSetting?.enableAiMax),
+    keywordMatchType: str(c.keywordMatchType),
+    assetAutomation: automation.map((a: Json) => ({ type: str(a.assetAutomationType), status: str(a.assetAutomationStatus) })),
+    manualCpcEnhanced: bool(c.manualCpc?.enhancedCpcEnabled),
+    maxCpcCeilingCents: centsOfMicros(c.targetSpend?.cpcBidCeilingMicros),
+    targetCpaCents: centsOfMicros(c.maximizeConversions?.targetCpaMicros),
+    targetRoas: typeof c.maximizeConversionValue?.targetRoas === 'number' ? c.maximizeConversionValue.targetRoas : null,
+    biddingStrategyId: idOf(c.biddingStrategy),
+    localInventory: bool(c.shoppingSetting?.enableLocal),
+    trackingTemplate: str(c.trackingUrlTemplate),
+    finalUrlSuffix: str(c.finalUrlSuffix),
+    primaryStatusReasons: Array.isArray(c.primaryStatusReasons) ? c.primaryStatusReasons.map(String) : [],
+  }
+}
+
+/** One campaign's settings, live (one query); null when it does not exist or is removed. */
+export async function liveCampaignSettings(target: GoogleAdsTarget, campaignId: string): Promise<LiveCampaignDetail['campaign'] | null> {
+  const rows = await liveRows<Json>(target, liveCampaignSettingsQuery(gaqlId(campaignId, 'The campaign')), 'ads.search.live.campaign')
+  const row = rows[0]
+  return row && str(row.campaign?.status) !== 'REMOVED' ? liveCampaignSettingsOf(row) : null
 }
 
 /**
@@ -473,7 +515,6 @@ export async function liveCampaignDetail(target: GoogleAdsTarget, campaignId: st
       return []
     }
   }
-  const c = row.campaign ?? {}
   const base = liveCampaignOf(row)
   const criteria = await part('criteria', liveCampaignCriteriaQuery(id), liveCriterionOf)
   const lists = await part('negative-lists', liveCampaignListsQuery(id), (r) => ({ listId: str(r.sharedSet?.id) ?? '', name: str(r.sharedSet?.name), type: str(r.sharedSet?.type) }))
@@ -498,31 +539,8 @@ export async function liveCampaignDetail(target: GoogleAdsTarget, campaignId: st
   const assets = await part('assets', liveAssetsQuery(id), liveAssetOf)
   const by = (type: string) => criteria.filter((k) => k.type === type)
   const known = new Set(['LOCATION', 'LANGUAGE', 'AD_SCHEDULE', 'USER_INTEREST', 'USER_LIST', 'KEYWORD'])
-  const restrictions = Array.isArray(c.targetingSetting?.targetRestrictions) ? c.targetingSetting.targetRestrictions : []
-  const automation = Array.isArray(c.assetAutomationSettings) ? c.assetAutomationSettings : []
   return {
-    campaign: {
-      ...base,
-      networks: {
-        googleSearch: bool(c.networkSettings?.targetGoogleSearch),
-        searchPartners: bool(c.networkSettings?.targetSearchNetwork),
-        display: bool(c.networkSettings?.targetContentNetwork),
-        partnerSearch: bool(c.networkSettings?.targetPartnerSearchNetwork),
-      },
-      locationOption: { include: str(c.geoTargetTypeSetting?.positiveGeoTargetType), exclude: str(c.geoTargetTypeSetting?.negativeGeoTargetType) },
-      audienceMode: restrictions.map((t: Json) => ({ dimension: str(t.targetingDimension), observationOnly: bool(t.bidOnly) })),
-      euPoliticalAds: str(c.containsEuPoliticalAdvertising),
-      aiMax: bool(c.aiMaxSetting?.enableAiMax),
-      keywordMatchType: str(c.keywordMatchType),
-      assetAutomation: automation.map((a: Json) => ({ type: str(a.assetAutomationType), status: str(a.assetAutomationStatus) })),
-      manualCpcEnhanced: bool(c.manualCpc?.enhancedCpcEnabled),
-      maxCpcCeilingCents: centsOfMicros(c.targetSpend?.cpcBidCeilingMicros),
-      biddingStrategyId: idOf(c.biddingStrategy),
-      localInventory: bool(c.shoppingSetting?.enableLocal),
-      trackingTemplate: str(c.trackingUrlTemplate),
-      finalUrlSuffix: str(c.finalUrlSuffix),
-      primaryStatusReasons: Array.isArray(c.primaryStatusReasons) ? c.primaryStatusReasons.map(String) : [],
-    },
+    campaign: liveCampaignSettingsOf(row),
     criteria: {
       locations: by('LOCATION'),
       languages: by('LANGUAGE'),
