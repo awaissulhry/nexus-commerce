@@ -16,7 +16,8 @@ import {
   type GoogleDraftBuilder,
 } from './google-ads-kit.js'
 import {
-  MAX_ITEM_IDS, productGroupChangeDraft, productGroupRecordNow, productGroupUndoArgs, type ProductGroupChangeRecord, type ProductGroupRequest,
+  MAX_ITEM_IDS, productGroupChangeDraft, productGroupRecordAfterRun, productGroupRecordNow, productGroupUndoArgs, type ProductGroupChangeRecord,
+  type ProductGroupRequest,
 } from '../../marketing/google-ads/change-product-groups.js'
 import { liveProductGroupTree } from '../../marketing/google-ads/live-product-groups.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
@@ -106,16 +107,18 @@ const setGoogleProductGroups: AgentTool = {
   description:
     'The product groups of ONE Standard Shopping ad group of the business\'s chosen Google Ads account. Either rebuild the '
     + 'tree as "All products" split by item ID (itemIds with bidCents or itemBids, excludeItemIds): "everything else" (every '
-    + 'other product of the feed) is EXCLUDED unless includeEverythingElse gives it a bid, and a tree already there is '
-    + 'replaced in the same request; or change the product groups of the tree as it is: bids, exclude, include (by '
-    + 'criterionId, google-ads-live view product-groups). Bids are whole cents of the account\'s currency. The preview shows '
-    + 'the tree before → after and warns when "everything else" is not excluded; items that can now be advertised, bid '
-    + 'raises and an included "everything else" are marked SPENDS MONEY. Undo puts the old bids back, or rebuilds the old '
-    + 'tree when it was a single split by item ID (any other tree is put back by hand in Google Ads).' + GOOGLE_CHANGE_RULES,
+    + 'other product of the feed) is EXCLUDED unless includeEverythingElse gives it a bid. "All products" alone is replaced; '
+    + 'a split by item ID is changed in place (product groups that stay keep their ids and statistics); a deeper tree or a '
+    + 'split by another dimension is refused (remove it first in Google Ads). Or change the product groups of the tree as '
+    + 'it is: bids, exclude, include (by criterionId, google-ads-live view product-groups). Bids are whole cents of the '
+    + 'account\'s currency. The preview shows the tree before → after and warns when "everything else" is not excluded; '
+    + 'items that can now be advertised, bid raises and an included "everything else" are marked SPENDS MONEY. Undo puts '
+    + 'the old bids back and switches back what it excluded or advertised, or rebuilds the old tree when it was a single '
+    + 'split by item ID (any other tree is put back by hand in Google Ads).' + GOOGLE_CHANGE_RULES,
   undo: productGroupUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildProductGroups(args)),
-  execute: (args, ctx) => runGoogleChange(args, ctx, buildProductGroups(args), (draft) => {
-    const after = draft.after as ProductGroupChangeRecord
+  execute: (args, ctx) => runGoogleChange(args, ctx, buildProductGroups(args), (draft, responses) => {
+    const after = productGroupRecordAfterRun(draft.after as ProductGroupChangeRecord, responses)
     return { data: { campaignId: after.campaignId, adGroupId: after.adGroupId, tree: after.tree }, before: draft.before, after }
   }),
 }

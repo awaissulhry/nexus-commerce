@@ -6,7 +6,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  productGroupChangeDraft, productGroupRecordNow, productGroupUndoArgs, treeOf, type ProductGroupChangeRecord, type ProductGroupRequest,
+  productGroupChangeDraft, productGroupRecordAfterRun, productGroupRecordNow, productGroupUndoArgs, treeOf, type ProductGroupChangeRecord,
+  type ProductGroupRequest,
 } from './change-product-groups.js'
 import { productGroupNodeOf, type ProductGroupLiveState, type ShoppingAdGroupLive } from './live-product-groups.js'
 import type { GoogleChangeDraft } from './change-draft.js'
@@ -96,7 +97,7 @@ describe('rebuild: "All products" split by item ID', () => {
     })
   })
 
-  it('replaces a tree in the same request: the old root first (Google removes the whole tree with it); a raise over "All products" spends, paused campaign noted', () => {
+  it('"All products" alone is replaced in the same request (removing a lone unit is not recursive); a raise over it spends, paused campaign noted', () => {
     const d = draft(ask({ itemIds: ['sku-1', 'sku-3'], itemBids: [{ itemId: 'sku-1', bidCents: 60 }], bidCents: 30, excludeItemIds: ['sku-9'] }), live(ALL, adGroup('ENABLED', { status: 'PAUSED' })))
     expect(d.operations[0]).toEqual({ adGroupCriterionOperation: { remove: `${AGC}600` } })
     expect(d.operations[1]).toEqual({ adGroupCriterionOperation: { create: { resourceName: `${AGC}-1`, status: 'ENABLED', listingGroup: { type: 'SUBDIVISION' } } } })
@@ -105,20 +106,70 @@ describe('rebuild: "All products" split by item ID', () => {
     expect(d.spendsMoney).toEqual(['Raises the bid of 1 item in "Group A": "sku-1" EUR 0.50 → EUR 0.60 (the campaign is paused: nothing spends until it is enabled).'])
     expect(d.warnings).toEqual([
       'After this change only the items named here can be advertised in "Group A": everything else is excluded.',
-      'Replaces the whole product group tree of "Group A" (1 product group): the old tree is removed and the new one made in the same request, all or nothing. The new product groups get new ids, so their own statistics in Google Ads start from zero.',
+      'Replaces "All products" of "Group A" with the new tree in the same request: the new product groups get new ids, so their own statistics in Google Ads start from zero.',
     ])
     expect(d.changes['item "sku-3"']).toEqual({ from: 'in "All products", EUR 0.50 a click', to: 'EUR 0.30 a click' })
     expect(d.totals).toMatchObject({ units: 4, excluded: 2, itemsWithBid: 2 })
+    expect(d.totals).not.toHaveProperty('keepTheirIds')
     expect(d.before).toEqual({ campaignId: '21', adGroupId: '51', tree: { kind: 'all', bidCents: 50, excluded: false } })
   })
 
-  it('includeEverythingElse: "everything else" gets a bid — SPENDS MONEY in plain words, and the warning that it is NOT excluded', () => {
+  it('includeEverythingElse on a split by item ID: only "everything else" is made again (under the real root) — SPENDS MONEY in plain words, and the warning that it is NOT excluded', () => {
     const d = draft(ask({ itemIds: ['sku-1'], bidCents: 30, excludeItemIds: ['sku-2'], includeEverythingElse: { bidCents: 10 } }), live(ITEMS))
-    expect(d.operations[2]).toEqual({ adGroupCriterionOperation: { create: { resourceName: `${AGC}-2`, status: 'ENABLED', listingGroup: { type: 'UNIT', parentAdGroupCriterion: `${AGC}-1`, caseValue: { productItemId: {} } }, cpcBidMicros: '100000' } } })
+    expect(d.operations).toEqual([
+      { adGroupCriterionOperation: { remove: `${AGC}604` } },
+      { adGroupCriterionOperation: { create: { resourceName: `${AGC}-1`, status: 'ENABLED', listingGroup: { type: 'UNIT', parentAdGroupCriterion: `${AGC}601`, caseValue: { productItemId: {} } }, cpcBidMicros: '100000' } } },
+    ])
     expect(d.spendsMoney).toEqual(['Advertises every other product of the feed in "Group A" at EUR 0.10 a click: every product of the campaign\'s Merchant Center feed that this tree does not name can be advertised.'])
-    expect(d.warnings[0]).toBe('"Everything else" in "Group A" is NOT excluded: every product of the feed that the tree does not name can be advertised.')
+    expect(d.warnings).toEqual([
+      '"Everything else" in "Group A" is NOT excluded: every product of the feed that the tree does not name can be advertised.',
+      '1 product group switches between advertised and excluded: Google cannot switch one, so it is removed and made again in the same request (a new id; its own statistics in Google Ads start from zero). The product groups that stay keep their ids and statistics.',
+    ])
     expect(d.changes).toMatchObject({ '"everything else" (every other product of the feed)': { from: 'excluded', to: 'EUR 0.10 a click' } })
-    expect(d.totals).toMatchObject({ itemsUnchanged: 2 })
+    expect(d.totals).toMatchObject({ itemsUnchanged: 2, keepTheirIds: 3 })
+  })
+
+  it('a split by item ID is changed in place, never removed (Google refuses to remove a split while the request makes one): updates, then removes, then creates under the real root', () => {
+    const d = draft(ask({ itemIds: ['sku-1', 'sku-3'], itemBids: [{ itemId: 'sku-1', bidCents: 40 }], bidCents: 30 }), live(ITEMS))
+    expect(d.operations).toEqual([
+      { adGroupCriterionOperation: { update: { resourceName: `${AGC}602`, cpcBidMicros: '400000' }, updateMask: 'cpc_bid_micros' } },
+      { adGroupCriterionOperation: { remove: `${AGC}603` } },
+      { adGroupCriterionOperation: { create: { resourceName: `${AGC}-1`, status: 'ENABLED', listingGroup: { type: 'UNIT', parentAdGroupCriterion: `${AGC}601`, caseValue: { productItemId: { value: 'sku-3' } } }, cpcBidMicros: '300000' } } },
+    ])
+    expect(JSON.stringify(d.operations)).not.toContain(`"remove":"${AGC}601"`)
+    expect(d.spendsMoney).toEqual([
+      'Advertises 1 item in "Group A" that was not advertised there before, at EUR 0.30 a click: "sku-3".',
+      'Raises the bid of 1 item in "Group A": "sku-1" EUR 0.30 → EUR 0.40.',
+    ])
+    expect(d.changes['item "sku-2"']).toEqual({ from: 'excluded', to: 'not named: under everything else (excluded)' })
+    expect(d.warnings).toEqual([])
+    expect(d.summary).toBe('Google Ads product groups of "Group A": change the tree to "All products" split by item ID — 2 items with a bid, everything else excluded.')
+    expect(d.totals).toMatchObject({ operations: 3, keepTheirIds: 3 })
+  })
+
+  it('items that leave the split fall under an advertised "everything else": SPENDS MONEY when they were excluded or had a lower bid', () => {
+    const tree = [...ITEMS, node('605', '601', 'UNIT', { productItemId: { value: 'sku-4' } }, bid(5)), node('606', '601', 'UNIT', { productItemId: { value: 'sku-5' } }, bid(80))]
+    const d = draft(ask({ itemIds: ['sku-1'], bidCents: 30, includeEverythingElse: { bidCents: 10 } }), live(tree))
+    expect(d.spendsMoney).toEqual([
+      'Advertises every other product of the feed in "Group A" at EUR 0.10 a click: every product of the campaign\'s Merchant Center feed that this tree does not name can be advertised.',
+      '2 items leave the tree of "Group A" and are advertised under "everything else" at EUR 0.10 a click: "sku-2" excluded → EUR 0.10, "sku-4" EUR 0.05 → EUR 0.10.',
+    ])
+  })
+
+  it('a deeper tree, or a split by another dimension, is refused: Nexus never removes a split', () => {
+    const deep = [
+      node('801', null, 'SUBDIVISION', null),
+      node('802', '801', 'SUBDIVISION', { productBrand: { value: 'Brand A' } }),
+      node('803', '801', 'UNIT', { productBrand: {} }, NEG),
+      node('804', '802', 'UNIT', { productItemId: { value: 'sku-1' } }, bid(30)),
+      node('805', '802', 'UNIT', { productItemId: {} }, NEG),
+    ]
+    expect(productGroupChangeDraft(C, 'EUR', ask({ itemIds: ['sku-1'], bidCents: 30 }), live(deep))).toEqual({
+      refusal: 'The product groups of "Group A" have more than one level (5 product groups). Google cannot remove a split in the request that makes the new one, so Nexus does not rebuild this tree: remove it first in Google Ads, then build it here with itemIds.',
+    })
+    expect(productGroupChangeDraft(C, 'EUR', ask({ itemIds: ['sku-1'], bidCents: 30 }), live(BRANDS))).toEqual({
+      refusal: 'The tree of "Group A" splits by brand, not by item ID: remove it first in Google Ads, or change its product groups as they are (bids, exclude, include).',
+    })
   })
 
   it('the tree asked is already there: nothing to change (item ids compared without case)', () => {
@@ -160,7 +211,24 @@ describe('units: bids, exclude, include on the tree as it is', () => {
     })
     expect(d.warnings).toEqual(['Google cannot switch a product group between advertised and excluded, so these 2 are removed and made again in the same request: they get new ids and their own statistics in Google Ads start from zero.'])
     expect(d.totals).toMatchObject({ units: 3, excluded: 1, newlyExcluded: 1, newlyIncluded: 1 })
-    expect(d.after).not.toHaveProperty('bids')
+    // Each one made again is recorded with the operation whose result gives its new id (undo switches it back by that id).
+    expect(d.before).toMatchObject({ bids: [], switched: [{ criterionId: '703', excluded: false, bidCents: 20 }, { criterionId: '704', excluded: true, bidCents: null }] })
+    expect(d.after).toMatchObject({ bids: [], switched: [{ criterionId: 'op:2', excluded: true, bidCents: null }, { criterionId: 'op:3', excluded: false, bidCents: 25 }] })
+    const ran = productGroupRecordAfterRun(d.after as ProductGroupChangeRecord, [{}, {}, { adGroupCriterionResult: { resourceName: `${AGC}901` } }, { adGroupCriterionResult: { resourceName: `${AGC}902` } }])
+    expect(ran.switched).toEqual([{ criterionId: '901', excluded: true, bidCents: null }, { criterionId: '902', excluded: false, bidCents: 25 }])
+  })
+
+  it('"All products" alone can be excluded and advertised again (a lone unit, made again with no parent): advertising it is every product of the feed', () => {
+    const off = draft(ask({ exclude: ['600'] }), live(ALL))
+    expect(off.operations).toEqual([
+      { adGroupCriterionOperation: { remove: `${AGC}600` } },
+      { adGroupCriterionOperation: { create: { resourceName: `${AGC}-1`, status: 'ENABLED', listingGroup: { type: 'UNIT' }, negative: true } } },
+    ])
+    expect(off.warnings).toContain('Nothing can be advertised in "Group A" after this change: every product group of the tree is excluded.')
+    const excludedAll = [node('600', null, 'UNIT', null, NEG)]
+    const on = draft(ask({ include: [{ criterionId: '600', bidCents: 40 }] }), live(excludedAll))
+    expect(on.operations[1]).toEqual({ adGroupCriterionOperation: { create: { resourceName: `${AGC}-1`, status: 'ENABLED', listingGroup: { type: 'UNIT' }, cpcBidMicros: '400000' } } })
+    expect(on.spendsMoney).toEqual(['Advertises every product of the feed in "Group A" ("All products") at EUR 0.40 a click.'])
   })
 
   it('including "everything else" says it advertises every other product of the feed, and warns it is NOT excluded', () => {
@@ -204,7 +272,6 @@ describe('refused before anything is sent', () => {
     expect(refusal(ask({ bids: [{ criterionId: '999', bidCents: 2 }] }))).toMatch(/Product group 999 is not in ad group "Group A"/)
     expect(refusal(ask({ bids: [{ criterionId: '601', bidCents: 2 }] }))).toMatch(/is a subdivision/)
     expect(refusal(ask({ bids: [{ criterionId: '603', bidCents: 2 }] }))).toMatch(/is excluded: it has no bid\. Use include/)
-    expect(refusal(ask({ exclude: ['600'] }), live(ALL))).toMatch(/"All products" is the whole tree/)
     expect(refusal(ask({ exclude: ['602'], include: [{ criterionId: '602', bidCents: 3 }] }))).toBe('Product group 602 is named twice (exclude and include).')
     expect(refusal(ask({ exclude: ['603', '604'] }))).toBe('Nothing to change: item "sku-2" is already excluded. "everything else" (every other product of the feed) is already excluded.')
   })
@@ -228,6 +295,18 @@ describe('undo', () => {
     const after = rec({ kind: 'other', groups: 4, units: 3 }, [{ criterionId: '702', bidCents: 35 }])
     expect(productGroupUndoArgs({ before, after })).toEqual({ args: { campaignId: '21', adGroupId: '51', bids: [{ criterionId: '702', bidCents: 40 }] } })
   })
+  it('exclude / include put back by the ids Google gave the product groups they made again; bids by the same ids', () => {
+    const before = rec({ kind: 'other', groups: 4, units: 3 }, [{ criterionId: '702', bidCents: 40 }])
+    before.switched = [{ criterionId: '703', excluded: false, bidCents: 20 }, { criterionId: '704', excluded: true, bidCents: null }]
+    const after = rec({ kind: 'other', groups: 4, units: 3 }, [{ criterionId: '702', bidCents: 35 }])
+    after.switched = [{ criterionId: '901', excluded: true, bidCents: null }, { criterionId: '902', excluded: false, bidCents: 25 }]
+    expect(productGroupUndoArgs({ before, after })).toEqual({
+      args: { campaignId: '21', adGroupId: '51', bids: [{ criterionId: '702', bidCents: 40 }], exclude: ['902'], include: [{ criterionId: '901', bidCents: 20 }] },
+    })
+    after.switched[0].criterionId = null
+    expect(productGroupUndoArgs({ before, after })).toMatchObject({ refusal: expect.stringContaining('does not record the ids Google gave') })
+  })
+
   it('any other old tree is put back by hand; no old tree, nothing to rebuild', () => {
     expect(productGroupUndoArgs({ before: rec({ kind: 'all', bidCents: 50, excluded: false }), after: rec(tree([['a', 1]])) })).toEqual({ refusal: 'The product groups before this change were "All products" alone: put them back by hand in Google Ads.' })
     expect(productGroupUndoArgs({ before: rec({ kind: 'other', groups: 4, units: 3 }), after: rec(tree([['a', 1]])) })).toMatchObject({ refusal: expect.stringContaining('not a single split by item ID: put them back by hand in Google Ads') })

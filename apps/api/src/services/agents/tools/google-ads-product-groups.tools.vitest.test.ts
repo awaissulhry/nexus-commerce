@@ -74,23 +74,27 @@ describe('set-google-product-groups', () => {
     expect(MATERIAL_PREVIEW_FIELDS[tool.name]).toEqual(['basis', 'plan', 'reach'])
   })
 
-  it('preview: Google checks the whole new tree (validateOnly); "everything else" goes from advertised to EXCLUDED; the raise is SPENDS MONEY', async () => {
-    h.mutate.mockResolvedValue({ responses: [], ops: 5, requestId: null })
+  it('preview: Google checks the change (validateOnly); the split is changed in place — "everything else" goes from advertised to EXCLUDED; the raise is SPENDS MONEY', async () => {
+    h.mutate.mockResolvedValue({ responses: [], ops: 3, requestId: null })
     const out = await tool.handler(ask, asker)
     expect(out.ok).toBe(true)
     expect(h.mutate).toHaveBeenCalledTimes(1)
     expect(h.mutate.mock.calls[0][2]).toEqual({ validateOnly: true })
-    const ops = h.mutate.mock.calls[0][1] as unknown[]
-    expect(ops[0]).toEqual({ adGroupCriterionOperation: { remove: `${AGC}601` } })
-    expect(ops).toHaveLength(5)
+    // The root stays (Google never removes a split while the request makes one): "everything else" is made again
+    // excluded, the new item is made under the real root, sku-1 keeps its id and bid.
+    expect(h.mutate.mock.calls[0][1]).toEqual([
+      { adGroupCriterionOperation: { remove: `${AGC}603` } },
+      { adGroupCriterionOperation: { create: { resourceName: `${AGC}-1`, status: 'ENABLED', listingGroup: { type: 'UNIT', parentAdGroupCriterion: `${AGC}601`, caseValue: { productItemId: {} } }, negative: true } } },
+      { adGroupCriterionOperation: { create: { resourceName: `${AGC}-2`, status: 'ENABLED', listingGroup: { type: 'UNIT', parentAdGroupCriterion: `${AGC}601`, caseValue: { productItemId: { value: 'SKU-2' } } }, cpcBidMicros: '300000' } } },
+    ])
     expect(out.preview).toMatchObject({
       spendsMoney: true,
       spendsMoneyBecause: ['Raises the bid of 1 item in "Group A": "SKU-2" EUR 0.20 → EUR 0.30.'],
       changes: { '"everything else" (every other product of the feed)': { from: 'EUR 0.20 a click', to: 'excluded' } },
-      totals: { operations: 5, units: 3, excluded: 1, itemsWithBid: 2 },
+      totals: { operations: 3, units: 3, excluded: 1, itemsWithBid: 2, keepTheirIds: 2 },
       googleCheck: { checked: true, accepted: true },
       reach: { mode: 'live', accountId: 'g-1', customerId: '1234567890' },
-      operations: 5,
+      operations: 3,
     })
     expect((out.preview as { warnings: string[] }).warnings).toContain('After this change only the items named here can be advertised in "Group A": everything else is excluded.')
   })
@@ -120,10 +124,10 @@ describe('set-google-product-groups', () => {
   })
 
   it('runs as ONE request; the record names the account; undo rebuilds the hand-built tree (its "everything else" bid too) on that account', async () => {
-    h.mutate.mockResolvedValue({ responses: [], ops: 5, requestId: null })
+    h.mutate.mockResolvedValue({ responses: [], ops: 3, requestId: null })
     const preview = (await tool.handler(ask, asker)).preview
     h.mutate.mockReset()
-    h.mutate.mockResolvedValue({ responses: [{}, {}, {}, {}, {}], ops: 5, requestId: 'r' })
+    h.mutate.mockResolvedValue({ responses: [{}, { adGroupCriterionResult: { resourceName: `${AGC}703` } }, { adGroupCriterionResult: { resourceName: `${AGC}704` } }], ops: 3, requestId: 'r' })
     const run = await tool.execute!(ask, approved(preview))
     expect(run.ok).toBe(true)
     expect(h.mutate).toHaveBeenCalledTimes(1)
@@ -137,12 +141,12 @@ describe('set-google-product-groups', () => {
       },
     })
     expect(h.enqueue).toHaveBeenCalledWith({ customerId: '1234567890', kind: 'MANUAL' })
-    // Google now holds the new tree (new ids; it may answer the item ids in lower case): nothing moved since.
+    // Google now holds the changed tree (the root and sku-1 kept their ids; it may answer item ids in lower case).
     h.state.rows = [
-      row('701', null, 'SUBDIVISION', null),
-      row('702', '701', 'UNIT', { productItemId: {} }, { negative: true }),
-      row('703', '701', 'UNIT', { productItemId: { value: 'sku-1' } }, { cpcBidMicros: '300000' }),
-      row('704', '701', 'UNIT', { productItemId: { value: 'sku-2' } }, { cpcBidMicros: '300000' }),
+      row('601', null, 'SUBDIVISION', null),
+      row('602', '601', 'UNIT', { productItemId: { value: 'sku-1' } }, { cpcBidMicros: '300000' }),
+      row('703', '601', 'UNIT', { productItemId: {} }, { negative: true }),
+      row('704', '601', 'UNIT', { productItemId: { value: 'sku-2' } }, { cpcBidMicros: '300000' }),
     ]
     expect(await tool.undo!.current(run.change!)).toEqual(run.change!.after)
     const undo = tool.undo!.request(run.change!)
@@ -163,6 +167,22 @@ describe('set-google-product-groups', () => {
     const run = await tool.execute!(bids, approved(preview.preview))
     expect(run.change?.after).toMatchObject({ bids: [{ criterionId: '602', bidCents: 45 }], ...ACCOUNT })
     expect(tool.undo!.request(run.change!)).toMatchObject({ args: { accountId: 'g-1', campaignId: '21', adGroupId: '51', bids: [{ criterionId: '602', bidCents: 30 }] } })
+  })
+
+  it('exclude / include: the record keeps the ids Google gave the product groups it made again; undo switches them back by those ids', async () => {
+    const units = { campaignId: '21', adGroupId: '51', exclude: ['603'] }
+    h.mutate.mockResolvedValue({ responses: [], ops: 2, requestId: null })
+    const preview = (await tool.handler(units, asker)).preview
+    expect(preview).toMatchObject({ spendsMoney: false, totals: { newlyExcluded: 1 } })
+    h.mutate.mockResolvedValue({ responses: [{}, { adGroupCriterionResult: { resourceName: `${AGC}905` } }], ops: 2, requestId: null })
+    const run = await tool.execute!(units, approved(preview))
+    expect(run.change?.before).toMatchObject({ switched: [{ criterionId: '603', excluded: false, bidCents: 20 }] })
+    expect(run.change?.after).toMatchObject({ switched: [{ criterionId: '905', excluded: true, bidCents: null }], ...ACCOUNT })
+    h.state.rows = [...HAND_BUILT.slice(0, 2), row('905', '601', 'UNIT', { productItemId: {} }, { negative: true })]
+    expect(await tool.undo!.current(run.change!)).toEqual(run.change!.after)
+    const undo = tool.undo!.request(run.change!)
+    expect(undo).toMatchObject({ args: { accountId: 'g-1', campaignId: '21', adGroupId: '51', include: [{ criterionId: '905', bidCents: 20 }] } })
+    expect(tool.input.safeParse((undo as { args: unknown }).args).success).toBe(true)
   })
 
   it('not sent when the tree moved since it was approved', async () => {
