@@ -265,16 +265,16 @@ describe('matchColourProducts — Find: the Shopify product of each colour, the 
     expect(guessed.issues.map(i => i.code)).toContain('sku-differs')
   })
 
-  it('a Shopify SKU that differs only in letter case is matched and offered to record as the listing\'s SKU, never written', () => {
+  it('a Shopify SKU that differs only in letter case: Nexus writes its own spelling there (Shopify follows Nexus; nothing is recorded from Shopify)', () => {
     const lower = { ...black, variants: black.variants.map(v => v.options[0] === 'M' ? { ...v, sku: 'gale-jacket-black-men-m' } : v) }
     const [nero] = matchColourProducts(plan, [lower, yellow])
     expect(nero.issues).toEqual([])
     expect(nero.variants.find(v => v.productId === 'p-BLACK-M')).toMatchObject({ by: 'sku', shopifySku: 'gale-jacket-black-men-m' })
-    expect(nero.skusToRecord).toEqual([{ productId: 'p-BLACK-M', shopifyVariantId: `${black.id}/M`, sku: 'gale-jacket-black-men-m' }])
-    expect(nero.skusToWrite.map(s => s.sku)).not.toContain('GALE-JACKET-BLACK-MEN-M')
+    expect(nero.skusToWrite).toContainEqual({ shopifyVariantId: `${black.id}/M`, sku: 'GALE-JACKET-BLACK-MEN-M', from: 'gale-jacket-black-men-m' })
+    expect(nero).not.toHaveProperty('skusToRecord')
     // Surrounding spaces are not a case difference: nothing is offered (Confirm refuses it, as before).
     const spaced = { ...black, variants: black.variants.map(v => v.options[0] === 'M' ? { ...v, sku: ' GALE-JACKET-BLACK-MEN-M' } : v) }
-    expect(matchColourProducts(plan, [spaced, yellow])[0].skusToRecord).toEqual([])
+    expect(matchColourProducts(plan, [spaced, yellow])[0].skusToWrite.map(s => s.sku)).not.toContain('GALE-JACKET-BLACK-MEN-M')
   })
 
   it('a colour-only family: each product\'s one "Default Title" variant is its variant', () => {

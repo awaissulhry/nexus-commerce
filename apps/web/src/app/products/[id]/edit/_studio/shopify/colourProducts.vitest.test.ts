@@ -7,7 +7,7 @@ const proposal = (patch: Partial<ColourProposal> = {}): ColourProposal => ({
   method: 'operator', shopifyProductId: 'gid://shopify/Product/1', title: 'Jacket grey men', handle: 'jacket-grey-men', status: 'ACTIVE', shopifyColourName: 'Grey',
   variants: ['S', 'M'].map(s => ({ productId: `p-GREY-${s}`, sku: `JACKET-GREY-${s}`, shopifyVariantId: `v-${s}`, inventoryItemId: `i-${s}`, shopifySku: null, by: 'options' as const })),
   missing: [{ productId: 'p-GREY-L', sku: 'JACKET-GREY-L', options: ['L'] }], extra: [{ shopifyVariantId: 'v-XL', sku: null, options: ['XL'] }],
-  skusToWrite: [{ shopifyVariantId: 'v-S', sku: 'JACKET-GREY-S' }, { shopifyVariantId: 'v-M', sku: 'JACKET-GREY-M' }], skusToRecord: [], skusToReplace: [], chosenProductId: 'gid://shopify/Product/1', issues: [],
+  skusToWrite: [{ shopifyVariantId: 'v-S', sku: 'JACKET-GREY-S' }, { shopifyVariantId: 'v-M', sku: 'JACKET-GREY-M' }], skusToReplace: [], chosenProductId: 'gid://shopify/Product/1', issues: [],
   ...patch,
 })
 const view = (rows: ColourView['colourProducts'], sync = { linked: false, adoptOnly: false }): ColourView => ({
@@ -29,7 +29,7 @@ describe('colour rows', () => {
     expect(grey.pairs.map(p => [p.size, p.shopify?.by ?? null])).toEqual([['S', 'options'], ['M', 'options'], ['L', null]])
     expect(grey.shopifyOnly).toEqual(['XL'])
     expect(confirmBlockers(grey, false)).toEqual([])
-    expect(confirmWrites(grey, false)).toMatchObject({ product: 'Jacket grey men', skus: [{ size: 'S', sku: 'JACKET-GREY-S' }, { size: 'M', sku: 'JACKET-GREY-M' }], replaced: [], recorded: [] })
+    expect(confirmWrites(grey, false)).toMatchObject({ product: 'Jacket grey men', skus: [{ size: 'S', sku: 'JACKET-GREY-S' }, { size: 'M', sku: 'JACKET-GREY-M' }], replaced: [] })
     expect(black).toMatchObject({ status: 'none', product: null })
     expect(confirmBlockers(black, false)).toEqual(['Choose its Shopify product first.'])
   })
@@ -150,5 +150,15 @@ describe('the size map (MISANO: EU sizes in Nexus, letter sizes on Shopify)', ()
     // Every size paired and no map: nothing to pair.
     const [grey] = colourRows(view([row('color:grey', 'PROPOSED', proposal({ missing: [], extra: [] }))]))
     expect(grey.canPairSizes).toBe(false)
+  })
+})
+
+describe('a Shopify SKU in another letter case', () => {
+  it('is a SKU Nexus writes (its own spelling), shown with the one it replaces; nothing is recorded from Shopify', () => {
+    const p = proposal({ skusToWrite: [{ shopifyVariantId: 'v-S', sku: 'JACKET-GREY-S' }, { shopifyVariantId: 'v-M', sku: 'JACKET-GREY-M', from: 'jacket-grey-m' }] })
+    const [grey] = colourRows(view([row('color:grey', 'PROPOSED', p)]))
+    expect(confirmBlockers(grey, false)).toEqual([])
+    expect(confirmWrites(grey, false)).toEqual({ product: 'Jacket grey men', identity: expect.any(String), replaced: [],
+      skus: [{ size: 'S', sku: 'JACKET-GREY-S' }, { size: 'M', sku: 'JACKET-GREY-M', from: 'jacket-grey-m' }] })
   })
 })

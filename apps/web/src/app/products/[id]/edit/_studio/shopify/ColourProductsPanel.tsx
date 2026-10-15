@@ -119,7 +119,7 @@ function ColourRow({ model, group, busy, canEdit, canPublish, replace, onReplace
 }) {
   const p = model.proposal, sameProduct = !!model.product && p?.shopifyProductId === model.product.id
   const blockers = confirmBlockers(model, replace)
-  const toWrite = sameProduct ? p!.skusToWrite : [], toReplace = sameProduct ? p!.skusToReplace ?? [] : [], toRecord = sameProduct ? p!.skusToRecord ?? [] : []
+  const toWrite = sameProduct ? p!.skusToWrite : [], toReplace = sameProduct ? p!.skusToReplace ?? [] : []
   const tone = model.status === 'linked' ? 'success' : model.status === 'deleted' ? 'danger' : model.status === 'proposed' ? 'info' : 'neutral'
   const label = model.status === 'linked' ? 'Linked' : model.status === 'deleted' ? 'Deleted on Shopify' : model.status === 'proposed' ? 'Proposed' : 'No product'
   return <li className={styles.row}>
@@ -150,11 +150,7 @@ function ColourRow({ model, group, busy, canEdit, canPublish, replace, onReplace
       </ul>
     </Disclosure>}
     {toWrite.length > 0 && <Disclosure summary={`SKUs Nexus will write (${toWrite.length})`}>
-      <ul className={styles.list}>{toWrite.map(s => <li key={s.shopifyVariantId}>{s.sku}</li>)}</ul>
-    </Disclosure>}
-    {toRecord.length > 0 && <Disclosure summary={`SKUs recorded in Nexus as Shopify spells them (${toRecord.length})`}>
-      <p className={styles.hint}>These differ from the Nexus SKU only in letter case. Nothing is written to Shopify for them.</p>
-      <ul className={styles.list}>{toRecord.map(s => <li key={s.shopifyVariantId}>{s.sku}</li>)}</ul>
+      <ul className={styles.list}>{toWrite.map(s => <li key={s.shopifyVariantId}>{s.sku}{s.from ? ` (Shopify has ${s.from})` : ''}</li>)}</ul>
     </Disclosure>}
     {toReplace.length > 0 && <Banner tone="warning" title={`${toReplace.length} size${toReplace.length === 1 ? ' carries' : 's carry'} another SKU on Shopify`}>
       <ul className={styles.list}>{toReplace.map(r => <li key={r.shopifyVariantId}>{r.from} → {r.to}</li>)}</ul>
@@ -205,10 +201,9 @@ function ConfirmReview({ model, view, locations, replace, busy, onClose, onConfi
     <p><strong>Written to Shopify, on “{writes.product}”, then read back:</strong></p>
     <ul className={styles.list}>
       <li>{writes.identity}</li>
-      {writes.skus.length > 0 && <li>The SKU of {writes.skus.length} size{writes.skus.length === 1 ? '' : 's'} without one:<ul className={styles.list}>{writes.skus.map(s => <li key={`${s.size}-${s.sku}`}>{s.size}: {s.sku}</li>)}</ul></li>}
+      {writes.skus.length > 0 && <li>The Nexus SKU of {writes.skus.length} size{writes.skus.length === 1 ? '' : 's'} (missing on Shopify, or spelt there in another letter case):<ul className={styles.list}>{writes.skus.map(s => <li key={`${s.size}-${s.sku}`}>{s.size}: {s.sku}{s.from ? ` (replaces ${s.from})` : ''}</li>)}</ul></li>}
       {writes.replaced.length > 0 && <li>The SKU of {writes.replaced.length} size{writes.replaced.length === 1 ? '' : 's'}, replaced:<ul className={styles.list}>{writes.replaced.map(r => <li key={`${r.size}-${r.to}`}>{r.size}: {r.from} → {r.to}</li>)}</ul></li>}
     </ul>
-    {writes.recorded.length > 0 && <p>In Nexus only: {writes.recorded.length} size listing{writes.recorded.length === 1 ? '' : 's'} record{writes.recorded.length === 1 ? 's' : ''} the SKU as Shopify spells it ({writes.recorded.map(r => r.sku).join(', ')}).</p>}
     {fullSync
       ? <Banner tone="warning" title="This family runs the full sync">After linking, Nexus sends this colour's stock and keeps its sizes, size order and colour swatches in step with Nexus.</Banner>
       : <p><strong>Stock, prices, sizes and colour swatches are not changed.</strong> The size listings stay paused until you start the full sync.</p>}

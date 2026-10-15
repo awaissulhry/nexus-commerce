@@ -250,7 +250,7 @@ async function saveProposals(destination: Destination, plan: ColourPlan, matches
       const issues = [...match.issues, ...(elsewhere ? [{ code: 'linked-elsewhere', productIds: [], message: `"${candidate?.title}" is already the Shopify product of ${elsewhere.family.sku}.` }] : [])]
       const proposal = { at: at.toISOString(), method: match.method, shopifyProductId: match.shopifyProductId, title: candidate?.title ?? null, handle: candidate?.handle ?? null,
         status: candidate?.status ?? null, shopifyColourName: match.shopifyColourName, swatchGroup: candidate?.group ?? null, variants: match.variants, missing: match.missing, extra: match.extra, skusToWrite: match.skusToWrite,
-        skusToRecord: match.skusToRecord, skusToReplace: match.skusToReplace, chosenProductId: chosen[match.key] ?? null, issues }
+        skusToReplace: match.skusToReplace, chosenProductId: chosen[match.key] ?? null, issues }
       const row = rows.find(r => r.valueKey === match.key)
       // The colour's swatch group as the store shows it (Feature 1). A linked colour takes it only from its own product,
       // and keeps the group stored for it once the full sync runs (the link writer's then).

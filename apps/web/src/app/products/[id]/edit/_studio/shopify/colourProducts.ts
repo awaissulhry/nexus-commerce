@@ -20,8 +20,8 @@ export interface ColourProposal {
   variants: ColourMatchVariant[]
   missing: Array<{ productId: string; sku: string; options: string[] }>
   extra: Array<{ shopifyVariantId: string; sku: string | null; options: string[] }>
-  skusToWrite: Array<{ shopifyVariantId: string; sku: string }>
-  skusToRecord?: Array<{ productId: string; shopifyVariantId: string; sku: string }>
+  /** The Nexus SKUs Confirm writes: where the variant has none, or (`from`) has the same SKU in another letter case. */
+  skusToWrite: Array<{ shopifyVariantId: string; sku: string; from?: string }>
   skusToReplace?: Array<{ productId: string; shopifyVariantId: string; from: string; to: string }>
   chosenProductId?: string | null
   /** The product's colour list (`custom.variation_products`) as Find read it. */
@@ -200,9 +200,8 @@ export function confirmWrites(model: ColourRowModel, replace: boolean) {
   return {
     product: model.product?.title ?? '',
     identity: 'nexus.family_id — the Nexus identity of this colour (a hidden product field)',
-    skus: p.skusToWrite.map(s => ({ size: sizeOf(s.shopifyVariantId), sku: s.sku })),
+    skus: p.skusToWrite.map(s => ({ size: sizeOf(s.shopifyVariantId), sku: s.sku, ...(s.from ? { from: s.from } : {}) })),
     replaced: replace ? (p.skusToReplace ?? []).map(r => ({ size: sizeOf(r.shopifyVariantId), from: r.from, to: r.to })) : [],
-    recorded: (p.skusToRecord ?? []).map(r => ({ size: sizeOf(r.shopifyVariantId), sku: r.sku })),
   }
 }
 

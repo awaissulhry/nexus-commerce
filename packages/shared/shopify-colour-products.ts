@@ -288,13 +288,12 @@ export interface ColourMatch {
   missing: Array<{ productId: string; sku: string; options: string[] }>
   /** Shopify variants Nexus does not know. They stay exactly as they are: Nexus never deletes a variant. */
   extra: Array<{ shopifyVariantId: string; sku: string | null; options: string[] }>
-  /** Matched Shopify variants that have no SKU: confirming writes the Nexus SKU there (stock sync compares SKUs). */
-  skusToWrite: Array<{ shopifyVariantId: string; sku: string }>
   /**
-   * Matched Shopify variants whose SKU differs from the Nexus SKU only in letter case: confirming writes nothing to
-   * Shopify for them and records Shopify's SKU as the size listing's own SKU on this store (Nexus only).
+   * Matched Shopify variants whose SKU Nexus writes on Confirm (stock sync compares SKUs exactly): those with no SKU, and
+   * those whose SKU differs from the Nexus SKU only in letter case (`from`: Shopify's spelling). Shopify follows Nexus;
+   * a Shopify SKU is never copied into Nexus (the Owner: Nexus SKUs never change).
    */
-  skusToRecord: Array<{ productId: string; shopifyVariantId: string; sku: string }>
+  skusToWrite: Array<{ shopifyVariantId: string; sku: string; from?: string }>
   /**
    * In a product the operator chose: sizes paired by their option values whose Shopify variant carries another SKU (of
    * another colour, or with another prefix). Confirm replaces them with the Nexus SKUs on Shopify only when the
@@ -309,7 +308,7 @@ const valuesKey = (values: readonly string[]) => JSON.stringify(values.map(fold)
 /** Shopify names the only variant of a product without options "Default Title". */
 const DEFAULT_TITLE = 'Default Title'
 
-/** A SKU that differs from another only in letter case (no surrounding spaces): Shopify's can be recorded as is. */
+/** A SKU that differs from another only in letter case (no surrounding spaces): Nexus writes its own spelling over it. */
 const caseOnly = (shopify: string | null, nexus: string) => !!shopify && shopify !== nexus && shopify === shopify.trim() && shopify.toLocaleUpperCase('en') === nexus.trim().toLocaleUpperCase('en')
 
 /**
@@ -382,7 +381,7 @@ export function matchColourProducts(plan: ColourPlan, candidates: readonly Colou
   return plan.products.map(product => {
     const pick = chosen.get(product.key), candidate = pick ? byId.get(pick.id)! : null
     const issues = [...early.get(product.key) ?? []]
-    const variants: ColourMatchVariant[] = [], missing: ColourMatch['missing'] = [], skusToWrite: ColourMatch['skusToWrite'] = [], skusToRecord: ColourMatch['skusToRecord'] = []
+    const variants: ColourMatchVariant[] = [], missing: ColourMatch['missing'] = [], skusToWrite: ColourMatch['skusToWrite'] = []
     const skusToReplace: ColourMatch['skusToReplace'] = []
     const used = new Set<string>()
     for (const variant of product.variants) {
@@ -403,7 +402,7 @@ export function matchColourProducts(plan: ColourPlan, candidates: readonly Colou
           ? { code: 'sku-of-another-colour', productIds: [variant.productId], message: `In "${candidate.title}", the ${values.join(' / ') || 'only'} variant has SKU ${hit.sku}, a SKU of another colour in Nexus.` }
           : { code: 'sku-differs', productIds: [variant.productId], message: `In "${candidate.title}", the ${values.join(' / ') || 'only'} variant has SKU ${hit.sku}; Nexus has ${variant.sku}. Stock sync needs the same SKU. Change one of them.` })
       } else if (by === 'options') skusToWrite.push({ shopifyVariantId: hit.id, sku: variant.sku })
-      else if (caseOnly(hit.sku, variant.sku)) skusToRecord.push({ productId: variant.productId, shopifyVariantId: hit.id, sku: hit.sku! })
+      else if (caseOnly(hit.sku, variant.sku)) skusToWrite.push({ shopifyVariantId: hit.id, sku: variant.sku, from: hit.sku! })
       variants.push({ productId: variant.productId, sku: variant.sku, shopifyVariantId: hit.id, inventoryItemId: hit.inventoryItemId, shopifySku: hit.sku, by })
     }
     const extra = candidate ? candidate.variants.filter(sv => !used.has(sv.id)).map(sv => ({ shopifyVariantId: sv.id, sku: sv.sku, options: sv.options })) : []
@@ -413,6 +412,6 @@ export function matchColourProducts(plan: ColourPlan, candidates: readonly Colou
         message: `"${candidate!.title}" holds SKU ${sv.sku}, which is another colour in Nexus.` })
     }
     return { key: product.key, shopifyProductId: candidate?.id ?? null, method: pick?.method ?? null, shopifyColourName: candidate?.colourName ?? null,
-      variants, missing, extra, skusToWrite, skusToRecord, skusToReplace, issues }
+      variants, missing, extra, skusToWrite, skusToReplace, issues }
   })
 }

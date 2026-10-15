@@ -39,8 +39,7 @@ export interface ShopifyLinkDeps {
 
 export type ColourScope = { accountId?: string; market?: string; aliasKey?: string }
 interface ColourProposal { shopifyProductId?: string | null; title?: string | null; status?: string | null; variants?: Array<{ productId: string; sku: string; shopifyVariantId: string; inventoryItemId: string | null }>; skusToWrite?: unknown[];
-  /** Sizes whose Shopify SKU differs only in letter case: Confirm records Shopify's spelling as the listing's SKU. */
-  skusToRecord?: Array<{ productId: string; sku: string }>; issues?: Array<{ message: string }> }
+  issues?: Array<{ message: string }> }
 export interface ColourView {
   plan: { mode: string; products: Array<{ key: string; nexusValue: string }> }
   colourProducts: Array<{ id: string; valueKey: string; state: string; shopifyProductId: string | null; proposal: unknown }>
@@ -236,8 +235,9 @@ export async function proveShopifyColour(coordinate: Coordinate, rawId: string, 
   proof.title = proposal.title ?? null
   proof.channelStatus = proposal.status ?? null
   proof.status = statusOf(proposal.status)
-  // Each size under the SKU Shopify holds after Confirm: its own spelling when it differs only in letter case.
-  const sizes = (proposal.variants ?? []).map((v) => ({ productId: v.productId, sku: proposal.skusToRecord?.find((r) => r.productId === v.productId)?.sku ?? v.sku }))
+  // Each size under the SKU Shopify holds after Confirm: the Nexus SKU (Confirm writes it over a missing SKU or one in
+  // another letter case; a Shopify spelling is never recorded in Nexus — the Owner: Nexus SKUs never change).
+  const sizes = (proposal.variants ?? []).map((v) => ({ productId: v.productId, sku: v.sku }))
   proof.liveSkus = sizes.map((s) => s.sku)
   proof.matchedSkus = sizes.map((s) => s.sku)
   const issues = (proposal.issues ?? []).map((i) => i.message).filter(Boolean)
@@ -247,7 +247,7 @@ export async function proveShopifyColour(coordinate: Coordinate, rawId: string, 
   proof.reason = `Colour products matched it to "${name}".`
   const skusToWrite = Array.isArray(proposal.skusToWrite) ? proposal.skusToWrite.length : 0
   proof.colour = { valueKey: row.valueKey, name, shopifyProductId: gid('Product', id), sizes,
-    writes: `Link confirms "${name}": Nexus writes its identity on Shopify product ${id}${skusToWrite ? ` and the SKU of ${skusToWrite} variant${skusToWrite === 1 ? '' : 's'} that lack one` : ''}, reads it back, then links ${sizes.length} size${sizes.length === 1 ? '' : 's'}.` }
+    writes: `Link confirms "${name}": Nexus writes its identity on Shopify product ${id}${skusToWrite ? ` and the Nexus SKU on ${skusToWrite} variant${skusToWrite === 1 ? '' : 's'} that lack it (or hold it in another letter case)` : ''}, reads it back, then links ${sizes.length} size${sizes.length === 1 ? '' : 's'}.` }
   const family = await familyRowsOf(coordinate)
   const bySize = new Map(sizes.map((s) => [s.productId, s.sku]))
   for (const listing of family) {

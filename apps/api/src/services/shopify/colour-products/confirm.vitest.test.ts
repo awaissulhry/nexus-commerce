@@ -147,8 +147,8 @@ describe('Confirm — adopt the live Shopify product of each colour', () => {
     expect(black).toMatchObject({ state: 'LINKED', shopifyProductId: BLACK, colourName: 'Black', remoteStatus: 'ACTIVE' })
     expect(yellow).toMatchObject({ state: 'LINKED', shopifyProductId: YELLOW, colourName: 'Yellow' })
     expect(view.confirmed).toEqual([
-      { valueKey: 'color:black', name: 'Nero', shopifyProductId: BLACK, status: 'ACTIVE', identityWritten: true, skusWritten: 2, sizesLinked: 9, draftsCreated: 21, locationId: LOCATION, notStockedAt: [], adoptOnly: true, skusRecorded: 0, skusReplaced: 0 },
-      { valueKey: 'color:yellow', name: 'Giallo', shopifyProductId: YELLOW, status: 'ACTIVE', identityWritten: true, skusWritten: 9, sizesLinked: 9, draftsCreated: 0, locationId: LOCATION, notStockedAt: [], adoptOnly: true, skusRecorded: 0, skusReplaced: 0 },
+      { valueKey: 'color:black', name: 'Nero', shopifyProductId: BLACK, status: 'ACTIVE', identityWritten: true, skusWritten: 2, sizesLinked: 9, draftsCreated: 21, locationId: LOCATION, notStockedAt: [], adoptOnly: true, skusReplaced: 0 },
+      { valueKey: 'color:yellow', name: 'Giallo', shopifyProductId: YELLOW, status: 'ACTIVE', identityWritten: true, skusWritten: 9, sizesLinked: 9, draftsCreated: 0, locationId: LOCATION, notStockedAt: [], adoptOnly: true, skusReplaced: 0 },
     ])
     // What the stock and price sync read (offer-sync.service.ts): numeric ids, the location GID, a live row — which stays
     // PAUSED (adopt only, the default of a first Confirm): no stock is queued, no stock or price reaches Shopify.
@@ -377,15 +377,24 @@ describe('Adopt only, and Start full sync', () => {
     expect(await listingOf(skuOf('YELLOW', 'M'))).toMatchObject({ externalListingId: '102', syncPaused: true, platformAttributes: { variantId: '1023' } })
   })
 
-  it('a Shopify SKU that differs only in letter case: Confirm links it and records Shopify\'s SKU as the listing\'s own SKU, writing nothing to Shopify for it', async () => {
+  it('a Shopify SKU that differs only in letter case: Confirm writes the Nexus spelling onto Shopify and reads it back; no Nexus SKU changes', async () => {
     const lower = skuOf('BLACK', 'M').toLowerCase()
     productOf(BLACK).variants.find((v: any) => v.option === 'M').sku = lower
+    const productsBefore = await scoped(() => prisma.product.findMany({ where: { parentId: ids.fam }, select: { id: true, sku: true }, orderBy: { id: 'asc' } }))
     await find()
-    expect((await rowOf('color:black')).proposal).toMatchObject({ issues: [], skusToRecord: [{ productId: ids[skuOf('BLACK', 'M')], shopifyVariantId: variantGid(BLACK, 'M'), sku: lower }] })
+    const proposal = (await rowOf('color:black')).proposal as any
+    expect(proposal).toMatchObject({ issues: [] })
+    expect(proposal.skusToWrite).toContainEqual({ shopifyVariantId: variantGid(BLACK, 'M'), sku: skuOf('BLACK', 'M'), from: lower })
+    expect(proposal).not.toHaveProperty('skusToRecord')
     const view = await confirm([BOTH[0]])
-    expect(view.confirmed[0]).toMatchObject({ skusWritten: 2, skusRecorded: 1, sizesLinked: 9 })
-    expect(productOf(BLACK).variants.find((v: any) => v.option === 'M').sku).toBe(lower)
-    expect(await listingOf(skuOf('BLACK', 'M'))).toMatchObject({ channelSku: lower, liveChannelSku: lower, externalListingId: '101', syncPaused: true })
+    expect(view.confirmed[0]).toMatchObject({ skusWritten: 3, sizesLinked: 9 })
+    expect(view.confirmed[0]).not.toHaveProperty('skusRecorded')
+    // Shopify follows Nexus: the variant now holds the Nexus spelling (read back by Confirm).
+    expect(productOf(BLACK).variants.find((v: any) => v.option === 'M').sku).toBe(skuOf('BLACK', 'M'))
+    // Nothing from Shopify is recorded in Nexus: no listing SKU, no live SKU of Shopify's spelling, no product SKU changed.
+    expect(await listingOf(skuOf('BLACK', 'M'))).toMatchObject({ channelSku: null, liveChannelSku: null, externalListingId: '101', syncPaused: true })
+    expect(await scoped(() => prisma.product.findMany({ where: { parentId: ids.fam }, select: { id: true, sku: true }, orderBy: { id: 'asc' } }))).toEqual(productsBefore)
+    expect(await scoped(() => prisma.channelListing.count({ where: { channel: 'SHOPIFY', OR: [{ channelSku: lower }, { liveChannelSku: lower }] } }))).toBe(0)
     // Any other difference is still refused.
     state.store = liveStore()
     productOf(YELLOW).variants[1].sku = 'Y-OLD-S'
