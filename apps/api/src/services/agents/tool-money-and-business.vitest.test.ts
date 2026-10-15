@@ -404,6 +404,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'google-ads-live': () => ({ view: 'campaigns' }),
   'set-google-budget': () => ({ amounts: [{ budgetId: '11', budgetCents: 1000 }] }),
   'set-google-negative-list': () => ({ listId: '31', addKeywords: [{ text: 'gratis', matchType: 'PHRASE' }] }),
+  // PR 6: build, copy and the check of a build.
+  'build-google-campaigns': () => ({ campaigns: [{ type: 'SEARCH', name: 'Search Z', budget: { dailyBudgetCents: 500 } }] }),
+  'copy-google-campaign': () => ({ campaignId: '21', name: 'Copy Z' }),
+  'check-google-ads-build': () => ({ campaigns: [{ type: 'SEARCH', name: 'Search Z', budget: { dailyBudgetCents: 500 } }] }),
   'create-google-campaign': () => ({ type: 'SEARCH', name: 'Search A', dailyBudgetCents: 500 }),
   'set-google-campaign': () => ({ campaignId: '21', searchPartners: false }),
   'set-google-targeting': () => ({ campaignId: '21', addLocations: [{ id: '2380' }] }),

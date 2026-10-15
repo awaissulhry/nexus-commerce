@@ -852,6 +852,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-google-targeting': ['basis', 'plan', 'reach'],
   'set-google-status': ['basis', 'plan', 'reach'],
   'remove-google-ads-items': ['basis', 'plan', 'reach'],
+  'build-google-campaigns': ['basis', 'plan', 'reach'],
+  'copy-google-campaign': ['basis', 'plan', 'reach'],
   'set-google-product-groups': ['basis', 'plan', 'reach'],
   'create-google-rsa': ['basis', 'plan', 'reach'],
   'set-google-assets': ['basis', 'plan', 'reach'],

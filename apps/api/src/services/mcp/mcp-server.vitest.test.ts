@@ -37,9 +37,10 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 const OPEN_WORLD = [
   'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
   'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'apply-harvest',
-  'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change', 'bulk-listing-price-change', 'bulk-listing-stock',
-  'bulk-price-change', 'buy-shipping-label', 'cancel-order', 'channel-identity-check', 'close-listing',
-  'confirm-shipment', 'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
+  'archive-ads', 'build-google-campaigns', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
+  'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label', 'cancel-order',
+  'channel-identity-check', 'check-google-ads-build', 'close-listing', 'confirm-shipment', 'copy-google-campaign',
+  'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
   'create-google-campaign', 'create-google-rsa', 'create-negative-keyword', 'decide-automation-suggestions',
   'delete-listing', 'dispose-return-items', 'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads',
   'end-listing', 'google-ads-live', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund',

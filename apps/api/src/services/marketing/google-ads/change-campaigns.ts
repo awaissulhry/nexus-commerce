@@ -164,7 +164,8 @@ export interface CampaignCreateRequest {
   display?: boolean
   shopping?: { merchantId: string; feedLabel?: string; priority?: Priority; localInventory?: boolean }
   search?: { aiMax?: boolean; textCustomization?: boolean; finalUrlExpansion?: boolean }
-  locations?: Array<{ id: string; exclude?: boolean }>
+  /** `bidModifier`: a targeted location's bid adjustment (a copy keeps it). */
+  locations?: Array<{ id: string; exclude?: boolean; bidModifier?: number }>
   locationOption?: LocationOption
   languages?: string[]
   schedule?: ScheduleSlot[]
@@ -177,46 +178,39 @@ export interface CampaignCreateRecord { campaignId: string | null; name: string;
 const BUDGET_TEMP = -1
 const CAMPAIGN_TEMP = -2
 
-export function campaignCreateDraft(
-  customer: string,
-  currency: string,
-  r: CampaignCreateRequest,
-  live: { campaigns: LiveCampaign[]; budgets: LiveBudget[] },
-): GoogleChangeDraft | { refusal: string } {
-  const name = r.name.trim()
-  if (live.campaigns.some((c) => c.name.trim().toLowerCase() === name.toLowerCase())) {
-    return { refusal: `A campaign named "${name}" already exists in this account: Google refuses a second one. Choose another name.` }
+/**
+ * What makes a create request one Google cannot take, apart from the account (names, budgets): settings that do not go
+ * together, days, the feed label, the schedule. Null when none. Shared with the build (change-build.ts).
+ */
+export function campaignCreateProblem(r: CampaignCreateRequest): string | null {
+  if (r.type === 'SHOPPING' && !r.shopping) return 'A Shopping campaign needs shopping.merchantId (the Merchant Center account).'
+  if (r.type === 'SEARCH' && r.shopping) return 'shopping settings are for a Shopping campaign only.'
+  if (r.type === 'SHOPPING' && (r.search || r.languages?.length || r.display)) return 'A Standard Shopping campaign takes no search settings, languages or Display Network (its products come from the feed).'
+  if (r.bidding.strategy === 'PORTFOLIO' && !r.bidding.portfolioId) return 'A portfolio strategy needs bidding.portfolioId.'
+  if (r.search?.finalUrlExpansion && r.search.textCustomization === false) return 'Google turns text customization on with final URL expansion: ask for both, or neither.'
+  for (const d of [r.startDate, r.endDate]) if (d !== undefined && !DAY.test(d)) return `"${d}" is not a day (YYYY-MM-DD).`
+  if (r.startDate && r.endDate && r.endDate < r.startDate) return 'The end date is before the start date.'
+  if (r.shopping?.feedLabel && !/^[A-Z0-9_-]{1,20}$/.test(r.shopping.feedLabel)) return `The feed label "${r.shopping.feedLabel}" is not one Google takes (up to 20 of A–Z, 0–9, - and _).`
+  for (const l of r.locations ?? []) {
+    if (l.bidModifier !== undefined && (l.exclude || !(l.bidModifier >= 0.1 && l.bidModifier <= 10))) return `Location ${l.id}: a bid adjustment is for a targeted location, between 0.1 and 10.`
   }
-  if (!!r.budgetId === !!r.dailyBudgetCents) return { refusal: 'Give budgetId (an existing shared budget) or dailyBudgetCents (a budget of its own), one of them.' }
-  if (r.type === 'SHOPPING' && !r.shopping) return { refusal: 'A Shopping campaign needs shopping.merchantId (the Merchant Center account).' }
-  if (r.type === 'SEARCH' && r.shopping) return { refusal: 'shopping settings are for a Shopping campaign only.' }
-  if (r.type === 'SHOPPING' && (r.search || r.languages?.length || r.display)) return { refusal: 'A Standard Shopping campaign takes no search settings, languages or Display Network (its products come from the feed).' }
-  if (r.bidding.strategy === 'PORTFOLIO' && !r.bidding.portfolioId) return { refusal: 'A portfolio strategy needs bidding.portfolioId.' }
-  if (r.search?.finalUrlExpansion && r.search.textCustomization === false) return { refusal: 'Google turns text customization on with final URL expansion: ask for both, or neither.' }
-  for (const d of [r.startDate, r.endDate]) if (d !== undefined && !DAY.test(d)) return { refusal: `"${d}" is not a day (YYYY-MM-DD).` }
-  if (r.startDate && r.endDate && r.endDate < r.startDate) return { refusal: 'The end date is before the start date.' }
-  if (r.shopping?.feedLabel && !/^[A-Z0-9_-]{1,20}$/.test(r.shopping.feedLabel)) return { refusal: `The feed label "${r.shopping.feedLabel}" is not one Google takes (up to 20 of A–Z, 0–9, - and _).` }
+  const schedule = r.schedule?.length ? scheduleCriteria(r.schedule) : []
+  if ('refusal' in schedule) return schedule.refusal
+  return null
+}
+
+/**
+ * The campaign's create operation (ALWAYS paused) and its criteria (locations, languages, schedule, audiences), on a
+ * budget resource and a campaign resource name the caller chose (a temporary id). Shared with the build.
+ */
+export function campaignCreateOperations(customer: string, r: CampaignCreateRequest, budgetRes: string, campaignRes: string): { operations: GoogleMutateOperation[] } | { refusal: string } {
   const schedule = r.schedule?.length ? scheduleCriteria(r.schedule) : []
   if ('refusal' in schedule) return schedule
-  let budgetRes: string
-  let budgetText: string
   const ops: GoogleMutateOperation[] = []
-  if (r.budgetId) {
-    const b = live.budgets.find((x) => x.budgetId === r.budgetId)
-    if (!b) return { refusal: `Budget ${r.budgetId} is not in this account (or it is removed).` }
-    if (!b.shared) return { refusal: `Budget ${r.budgetId} is another campaign's own budget: use a shared budget, or dailyBudgetCents.` }
-    budgetRes = `${customer}/campaignBudgets/${b.budgetId}`
-    budgetText = `shared "${b.name ?? b.budgetId}" ${money(b.amountCents, currency)} a day`
-  } else {
-    budgetRes = `${customer}/campaignBudgets/${BUDGET_TEMP}`
-    budgetText = `its own ${money(r.dailyBudgetCents!, currency)} a day`
-    ops.push({ campaignBudgetOperation: { create: { resourceName: budgetRes, amountMicros: microsOfCents(r.dailyBudgetCents!), explicitlyShared: false, deliveryMethod: 'STANDARD' } } })
-  }
-  const campaignRes = `${customer}/campaigns/${CAMPAIGN_TEMP}`
   const optionInclude = r.locationOption ?? 'PRESENCE'
   const campaign: Record<string, unknown> = {
     resourceName: campaignRes,
-    name,
+    name: r.name.trim(),
     // Never ENABLED by Nexus: Google's default is ENABLED, so it is said every time.
     status: 'PAUSED',
     advertisingChannelType: r.type,
@@ -250,10 +244,51 @@ export function campaignCreateDraft(
   }
   if (r.audiences?.length) campaign.targetingSetting = { targetRestrictions: [{ targetingDimension: 'AUDIENCE', bidOnly: true }] }
   ops.push({ campaignOperation: { create: campaign } })
-  for (const l of r.locations ?? []) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, ...(l.exclude ? { negative: true } : {}), location: { geoTargetConstant: `geoTargetConstants/${l.id}` } } } })
+  for (const l of r.locations ?? []) {
+    ops.push({ campaignCriterionOperation: { create: {
+      campaign: campaignRes, ...(l.exclude ? { negative: true } : {}), location: { geoTargetConstant: `geoTargetConstants/${l.id}` },
+      ...(!l.exclude && l.bidModifier !== undefined && l.bidModifier !== 1 ? { bidModifier: l.bidModifier } : {}),
+    } } })
+  }
   for (const id of r.languages ?? []) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, language: { languageConstant: `languageConstants/${id}` } } } })
   for (const s of schedule) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, ...s } } })
   for (const id of r.audiences ?? []) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, userInterest: { userInterestCategory: `${customer}/userInterests/${id}` } } } })
+  return { operations: ops }
+}
+
+export function campaignCreateDraft(
+  customer: string,
+  currency: string,
+  r: CampaignCreateRequest,
+  live: { campaigns: LiveCampaign[]; budgets: LiveBudget[] },
+): GoogleChangeDraft | { refusal: string } {
+  const name = r.name.trim()
+  if (live.campaigns.some((c) => c.name.trim().toLowerCase() === name.toLowerCase())) {
+    return { refusal: `A campaign named "${name}" already exists in this account: Google refuses a second one. Choose another name.` }
+  }
+  if (!!r.budgetId === !!r.dailyBudgetCents) return { refusal: 'Give budgetId (an existing shared budget) or dailyBudgetCents (a budget of its own), one of them.' }
+  const problem = campaignCreateProblem(r)
+  if (problem) return { refusal: problem }
+  const schedule = r.schedule?.length ? scheduleCriteria(r.schedule) : []
+  if ('refusal' in schedule) return schedule
+  let budgetRes: string
+  let budgetText: string
+  const ops: GoogleMutateOperation[] = []
+  if (r.budgetId) {
+    const b = live.budgets.find((x) => x.budgetId === r.budgetId)
+    if (!b) return { refusal: `Budget ${r.budgetId} is not in this account (or it is removed).` }
+    if (!b.shared) return { refusal: `Budget ${r.budgetId} is another campaign's own budget: use a shared budget, or dailyBudgetCents.` }
+    budgetRes = `${customer}/campaignBudgets/${b.budgetId}`
+    budgetText = `shared "${b.name ?? b.budgetId}" ${money(b.amountCents, currency)} a day`
+  } else {
+    budgetRes = `${customer}/campaignBudgets/${BUDGET_TEMP}`
+    budgetText = `its own ${money(r.dailyBudgetCents!, currency)} a day`
+    ops.push({ campaignBudgetOperation: { create: { resourceName: budgetRes, amountMicros: microsOfCents(r.dailyBudgetCents!), explicitlyShared: false, deliveryMethod: 'STANDARD' } } })
+  }
+  const created = campaignCreateOperations(customer, r, budgetRes, `${customer}/campaigns/${CAMPAIGN_TEMP}`)
+  if ('refusal' in created) return created
+  ops.push(...created.operations)
+  const optionInclude = r.locationOption ?? 'PRESENCE'
 
   const warnings: string[] = ['It is made PAUSED: nothing spends until a person enables it (set-google-status, marked SPENDS MONEY).']
   if (!(r.locations ?? []).some((l) => !l.exclude)) warnings.push('No location is targeted: when enabled it can show in every country.')
