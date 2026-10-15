@@ -162,6 +162,9 @@ describe('set-google-exclusion-list', () => {
       { campaignCriterionOperation: { create: { campaign: 'customers/1234567890/campaigns/22', negative: true, brandList: { sharedSet: 'customers/1234567890/sharedSets/42' } } } },
     ])
     expect(out.preview).toMatchObject({ spendsMoney: false })
+    // Found through Google: Google's name, not labelled.
+    expect(JSON.stringify(out.preview)).toContain('Brand B (/m/0b2)')
+    expect(JSON.stringify(out.preview)).not.toContain('name as given')
     h.mutate.mockClear()
     const unclear = await tool('set-google-exclusion-list').handler({ listId: '42', addBrands: [{ name: 'Brand' }] }, asker)
     expect(unclear).toMatchObject({ ok: false, error: 'Google has no brand named exactly "Brand"; it suggests: Brand B = /m/0b2 (https://brand-b.example); Brand B Moto = /m/0b3. Give the one you mean by its entityId (or its exact name).' })
@@ -180,6 +183,9 @@ describe('set-google-exclusion-list', () => {
     const ask = { listId: '42', addBrands: [{ entityId: 'b-2', name: 'Brand B' }], removeBrands: ['b-1'], detachCampaignIds: ['21'] }
     const out = await tool('set-google-exclusion-list').handler(ask, asker)
     expect(out.preview).toMatchObject({ spendsMoney: true })
+    // A name given with the id is not Google's: shown as given.
+    expect(JSON.stringify(out.preview)).toContain('b-2 (name as given, not checked by Google: Brand B)')
+    expect(h.suggest).not.toHaveBeenCalled()
     h.mutate.mockResolvedValue({ responses: [{}, {}, {}], ops: 3, requestId: 'r' })
     const run = await tool('set-google-exclusion-list').execute!(ask, approved(out.preview))
     expect(run.ok).toBe(true)
@@ -196,6 +202,54 @@ describe('set-google-exclusion-list', () => {
       },
     })
     expect(tool('set-google-exclusion-list').input.safeParse(undo.args).success).toBe(true)
+  })
+
+  it('a list it made: before and after name Google\'s id; undo takes its content and links back out (the list stays); no id from Google: undo says so', async () => {
+    h.live.account = { items: [], keywordList: null, placementLists: [], other: [] }
+    h.live.lists = []
+    h.mutate.mockResolvedValue({ responses: [], ops: 4, requestId: null })
+    const make = { create: { name: 'Kids sites', type: 'NEGATIVE_PLACEMENTS' }, addItems: [{ kind: 'placement', value: 'kids.example' }], attachCampaigns: [{ campaignId: '22' }], attachToAccount: true }
+    const out = await tool('set-google-exclusion-list').handler(make, asker)
+    expect(out.ok).toBe(true)
+    expect(h.mutate.mock.calls[0][1]).toEqual([
+      { sharedSetOperation: { create: { resourceName: 'customers/1234567890/sharedSets/-1', name: 'Kids sites', type: 'NEGATIVE_PLACEMENTS' } } },
+      { sharedCriterionOperation: { create: { sharedSet: 'customers/1234567890/sharedSets/-1', placement: { url: 'kids.example' } } } },
+      { campaignSharedSetOperation: { create: { campaign: 'customers/1234567890/campaigns/22', sharedSet: 'customers/1234567890/sharedSets/-1' } } },
+      { customerNegativeCriterionOperation: { create: { placementList: { sharedSet: 'customers/1234567890/sharedSets/-1' } } } },
+    ])
+    h.mutate.mockResolvedValue({ responses: [{ sharedSetResult: { resourceName: 'customers/1234567890/sharedSets/49' } }, {}, {}, {}], ops: 4, requestId: 'r' })
+    const made = await tool('set-google-exclusion-list').execute!(make, approved(out.preview))
+    expect(made.ok).toBe(true)
+    expect(made.change!.before).toMatchObject({ listId: '49' })
+    expect(made.change!.after).toMatchObject({
+      listId: '49', created: true, addedItems: [{ kind: 'placement', value: 'kids.example' }], attached: [{ campaignId: '22', mode: 'exclude' }], accountAttached: true,
+    })
+    // The list as the change left it: undo may run; it takes the content and the links back out, and the list stays.
+    h.live.lists = [{
+      listId: '49', name: 'Kids sites', type: 'NEGATIVE_PLACEMENTS', itemCount: 1,
+      campaigns: [{ campaignId: '22', name: 'Search B', status: 'ENABLED', type: 'SEARCH', mode: 'exclude', criterionId: null }],
+      adGroups: [], account: { criterionId: '906' }, items: [{ kind: 'placement', value: 'kids.example', criterionId: '511', name: null }],
+    }]
+    expect(await tool('set-google-exclusion-list').undo!.current(made.change!)).toEqual(made.change!.after)
+    const undo = tool('set-google-exclusion-list').undo!.request(made.change!) as { tool: string; args: Record<string, unknown> }
+    expect(undo).toEqual({
+      tool: 'set-google-exclusion-list',
+      args: {
+        accountId: 'g-1', listId: '49', removeItems: [{ kind: 'placement', value: 'kids.example' }], detachCampaignIds: ['22'], detachFromAccount: true,
+        why: 'undo of an earlier exclusion list change (the list it made stays)',
+      },
+    })
+    expect(tool('set-google-exclusion-list').input.safeParse(undo.args).success).toBe(true)
+
+    // Google answered without the new list's id: the record says 'new' on both sides, and undo says why it cannot run.
+    h.live.lists = []
+    h.mutate.mockResolvedValue({ responses: [{}, {}, {}, {}], ops: 4, requestId: 'r' })
+    const noId = await tool('set-google-exclusion-list').execute!(make, approved(out.preview))
+    expect(noId.ok).toBe(true)
+    expect(noId.change!.before).toMatchObject({ listId: 'new' })
+    expect(noId.change!.after).toMatchObject({ listId: 'new', created: true })
+    expect(await tool('set-google-exclusion-list').undo!.current(noId.change!)).toEqual(noId.change!.after)
+    expect(tool('set-google-exclusion-list').undo!.request(noId.change!)).toEqual({ refusal: expect.stringMatching(/^Google did not return the list's id/) })
   })
 
   it('a placement list put on the account: undo takes it off; a link taken off since shows as moved (not undone over it)', async () => {

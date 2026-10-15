@@ -223,6 +223,76 @@ describe('exclusionListDraft', () => {
     expect(exclusionListDraft(C, { create: { name: 'New negatives', type: 'ACCOUNT_LEVEL_NEGATIVE_KEYWORDS' } }, STATE([]))).toMatchObject({ warnings: ['The new list is on no campaign and not on the account: it changes nothing until it is put somewhere (attachToAccount).'] })
   })
 
+  it('a brand inclusion on a campaign that already keeps to another brand list (on it or an ad group) SPENDS MONEY; the other lists stand', () => {
+    const OWN: LiveExclusionList = {
+      listId: '44', name: 'Own brands', type: 'BRANDS', itemCount: 1,
+      campaigns: [{ campaignId: '22', name: 'Display B', status: 'ENABLED', type: 'DISPLAY', mode: 'include', criterionId: '603' }],
+      adGroups: [], account: null,
+    }
+    const ask = { listId: '42', attachCampaigns: [{ campaignId: '22', mode: 'include' as const }] }
+    const d = exclusionListDraft(C, ask, STATE([BRANDS, OWN]))
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.operations).toEqual([{ campaignCriterionOperation: { create: { campaign: `${C}/campaigns/22`, negative: false, brandList: { sharedSet: `${C}/sharedSets/42` } } } }])
+    expect(d.spendsMoney).toEqual(['Adds brands "Display B" may show ads for: it already keeps to "Own brands" (44) on the campaign, and Google may take the brands of both, so it can show ads on searches about the brands of "Rivals" too.'])
+    expect(d.warnings).toEqual(['On a Search campaign Google takes a brand inclusion only with broad match (AI Max) on (its check says so).'])
+    expect(d.stands).toMatchObject({ otherInclusions: ['22:44@campaign'] })
+    // Another list kept to by one of its ad groups: the same; an exclusion elsewhere is not an inclusion.
+    const onAdGroup: LiveExclusionList = { ...OWN, campaigns: [{ ...OWN.campaigns[0], mode: 'exclude' }], adGroups: [{ adGroupId: '51', name: 'G', status: 'ENABLED', campaignId: '22', campaignStatus: 'PAUSED' }] }
+    const g = exclusionListDraft(C, ask, STATE([BRANDS, onAdGroup]))
+    if ('refusal' in g) throw new Error(g.refusal)
+    expect(g.spendsMoney).toEqual(['Adds brands "Display B" may show ads for: it already keeps to "Own brands" (44) on its ad group "G", and Google may take the brands of both, so it can show ads on searches about the brands of "Rivals" too.'])
+    expect(g.stands).toMatchObject({ otherInclusions: ['22:44@51'] })
+    // No other inclusion: it narrows (a warning) and nothing spends.
+    const alone = exclusionListDraft(C, ask, STATE([BRANDS]))
+    if ('refusal' in alone) throw new Error(alone.refusal)
+    expect(alone.spendsMoney).toEqual([])
+    expect(alone.warnings[0]).toBe('Keeps 1 campaign to the brands of "Rivals" (brand inclusion): their broad matching shows ads only on searches about those brands.')
+    expect(alone.stands).toMatchObject({ otherInclusions: ['22:'] })
+  })
+
+  it('a brand list kept to by ad groups: a brand added SPENDS MONEY (noted when nothing it reaches is enabled); a brand removed narrows them', () => {
+    const ON_AD_GROUPS: LiveExclusionList = {
+      ...BRANDS, campaigns: [],
+      adGroups: [{ adGroupId: '51', name: 'G', status: 'ENABLED', campaignId: '21', campaignStatus: 'ENABLED' }, { adGroupId: '52', name: 'H', status: 'PAUSED', campaignId: '21', campaignStatus: 'ENABLED' }],
+    }
+    const add = { listId: '42', addBrands: [{ entityId: 'b-2', name: 'Brand B' }] }
+    const d = exclusionListDraft(C, add, STATE([ON_AD_GROUPS]))
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.spendsMoney).toEqual(['Adds 1 brand (Brand B (b-2)) to "Rivals", which 2 campaigns or ad groups keep to: they can show ads on searches about more brands.'])
+    const pausedOnly = exclusionListDraft(C, add, STATE([{ ...ON_AD_GROUPS, adGroups: [{ ...ON_AD_GROUPS.adGroups[0], campaignStatus: 'PAUSED' }] }]))
+    if ('refusal' in pausedOnly) throw new Error(pausedOnly.refusal)
+    expect(pausedOnly.spendsMoney).toEqual(['Adds 1 brand (Brand B (b-2)) to "Rivals", which 1 campaign or ad group keeps to: they can show ads on searches about more brands (no campaign it reaches is enabled now: nothing spends until one is).'])
+    const removed = exclusionListDraft(C, { listId: '42', removeBrands: ['b-1'] }, STATE([ON_AD_GROUPS]))
+    if ('refusal' in removed) throw new Error(removed.refusal)
+    expect(removed.spendsMoney).toEqual([])
+    expect(removed.warnings).toEqual(['Removes 1 brand from "Rivals", which 2 campaigns or ad groups keep to: fewer searches show their ads.'])
+  })
+
+  it('a brand name given with its id is shown as given, not as Google\'s; a list still on the account does not widen when it leaves a campaign', () => {
+    const given = exclusionListDraft(C, { listId: '42', addBrands: [{ entityId: 'b-3', name: 'Brand C', nameAsGiven: true }] }, STATE([BRANDS]))
+    if ('refusal' in given) throw new Error(given.refusal)
+    expect(given.changes['"Rivals" brands added']).toEqual({ from: 1, to: 'b-3 (name as given, not checked by Google: Brand C)' })
+    expect(given.spendsMoney).toEqual(['Adds 1 brand (b-3 (name as given, not checked by Google: Brand C)) to "Rivals", which 1 campaign or ad group keeps to: they can show ads on searches about more brands (no campaign it reaches is enabled now: nothing spends until one is).'])
+    expect(given.after).toMatchObject({ addedBrands: [{ entityId: 'b-3', name: 'Brand C', nameAsGiven: true }] })
+    // Already in the list: Google's own name is shown.
+    expect(exclusionListDraft(C, { listId: '42', addBrands: [{ entityId: 'b-1', name: 'Wrong', nameAsGiven: true }] }, STATE([BRANDS])))
+      .toEqual({ refusal: 'Nothing to change: Brand A (b-1) is already in "Rivals".' })
+
+    const both: LiveExclusionList = { ...PLACEMENTS, account: { criterionId: '904' } }
+    const off = exclusionListDraft(C, { listId: '41', detachCampaignIds: ['22'] }, STATE([both]))
+    if ('refusal' in off) throw new Error(off.refusal)
+    expect(off.operations).toEqual([{ campaignSharedSetOperation: { remove: `${C}/campaignSharedSets/22~41` } }])
+    expect(off.spendsMoney).toEqual([])
+    expect(off.warnings).toEqual(['Takes "Bad sites" off 1 campaign: the list stays on the whole account, so they still exclude what it holds.'])
+    // Off the account in the same request: both widen.
+    const offBoth = exclusionListDraft(C, { listId: '41', detachCampaignIds: ['22'], detachFromAccount: true }, STATE([both]))
+    if ('refusal' in offBoth) throw new Error(offBoth.refusal)
+    expect(offBoth.spendsMoney).toEqual([
+      'Takes "Bad sites" off 1 campaign: they can show ads on what it excludes again.',
+      'Takes "Bad sites" off the account: every campaign can show ads on what it excludes again.',
+    ])
+  })
+
   it('names are unique per type; a rename is one update with the name mask; a new list on nothing says so', () => {
     expect(exclusionListDraft(C, { create: { name: 'bad SITES', type: 'NEGATIVE_PLACEMENTS' } }, STATE([PLACEMENTS]))).toMatchObject({ refusal: expect.stringMatching(/named "bad SITES" already exists/) })
     const sameNameOtherType = exclusionListDraft(C, { create: { name: 'Bad sites', type: 'BRANDS' } }, STATE([PLACEMENTS]))

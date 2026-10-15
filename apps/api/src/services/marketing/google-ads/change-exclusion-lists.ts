@@ -23,8 +23,9 @@
  *     brand is named by its id (BrandInfo.entity_id; set-google-exclusion-list finds it by name).
  *   - a list's items and links are made (create) and removed (by resource name), never updated.
  * Money: what narrows (more exclusions, a list put on, a brand restriction put on) is a warning. What widens is SPENDS
- * MONEY: an exclusion or keyword taken out of a list in use, a list taken off, a brand added to a list used as an
- * inclusion (more brands allowed), a brand restriction taken off.
+ * MONEY: an exclusion or keyword taken out of a list in use, a list taken off (unless it stays on the whole account), a
+ * brand added to a list used as an inclusion (more brands allowed), a brand restriction taken off, and a brand
+ * inclusion put on a campaign that already keeps to another brand list (Google may take the brands of both).
  */
 import { changeLines, keywordTextProblem, plural, type GoogleChangeDraft } from './change-draft.js'
 import type { ListKeyword } from './change-lists.js'
@@ -37,7 +38,11 @@ import {
 import type { GoogleMutateOperation } from './write-client.js'
 
 export type BrandMode = 'exclude' | 'include'
-export interface ListBrand { entityId: string; name: string | null }
+/**
+ * A brand by Google's id. `name` is Google's (a list's brand, or SuggestBrands' answer) unless `nameAsGiven`: then it is
+ * the name the request gave with the id, which Google did not check — shown as such, never as fact.
+ */
+export interface ListBrand { entityId: string; name: string | null; nameAsGiven?: true }
 
 export interface ExclusionListChangeRequest {
   listId?: string
@@ -89,7 +94,7 @@ const TYPE_WORD: Record<ExclusionListType, string> = {
 }
 const kw = (k: ListKeyword) => `${k.matchType === 'EXACT' ? `[${k.text}]` : k.matchType === 'PHRASE' ? `"${k.text}"` : k.text}`
 const someKeywords = (ks: ListKeyword[]) => ks.slice(0, 12).map(kw).join(', ') + (ks.length > 12 ? ` … (+${ks.length - 12})` : '')
-const brandWords = (b: ListBrand) => (b.name ? `${b.name} (${b.entityId})` : b.entityId)
+const brandWords = (b: ListBrand) => (!b.name ? b.entityId : b.nameAsGiven ? `${b.entityId} (name as given, not checked by Google: ${b.name})` : `${b.name} (${b.entityId})`)
 const someBrands = (bs: ListBrand[]) => bs.slice(0, 12).map(brandWords).join(', ') + (bs.length > 12 ? ` … (+${bs.length - 12})` : '')
 
 class ListRefusal extends Error {}
@@ -257,9 +262,14 @@ function buildListChange(customer: string, request: ExclusionListChangeRequest, 
       if (removeSet.has(id)) refuse(`Brand ${brandWords(b)} is both added and removed.`)
       if (seen.has(id)) continue
       seen.add(id)
-      if (inList.has(id)) { skipped.push(`${brandWords({ entityId: id, name: inList.get(id)!.name ?? b.name })} is already in "${listName}".`); continue }
+      if (inList.has(id)) {
+        // Google's name from the list when it has one; else the name as asked (labelled as such when unchecked).
+        const google = inList.get(id)!.name
+        skipped.push(`${brandWords(google ? { entityId: id, name: google } : { ...b, entityId: id })} is already in "${listName}".`)
+        continue
+      }
       operations.push({ sharedCriterionOperation: { create: { sharedSet: listRes, brand: { entityId: id } } } })
-      record.addedBrands.push({ entityId: id, name: b.name ?? null })
+      record.addedBrands.push({ entityId: id, name: b.name ?? null, ...(b.nameAsGiven && b.name ? { nameAsGiven: true as const } : {}) })
     }
     for (const id of removeSet) {
       const found = inList.get(id)
@@ -274,6 +284,19 @@ function buildListChange(customer: string, request: ExclusionListChangeRequest, 
   // ── where it acts ──
   const campaignById = new Map(live.campaigns.map((c) => [c.campaignId, c]))
   const usedBy = new Map((list?.campaigns ?? []).map((c) => [c.campaignId, c]))
+  /**
+   * A brand inclusion narrows a campaign only when it keeps to no other brand list yet: with another inclusion already on
+   * the campaign (or on one of its ad groups), Google may take the brands of both, so adding one can widen what it shows
+   * for (SPENDS MONEY). Read from the brand lists' links (every BRANDS list's campaigns and ad groups are read).
+   */
+  const otherInclusions = (campaignId: string) => live.lists
+    .filter((l) => l.type === 'BRANDS' && l.listId !== list?.listId)
+    .flatMap((l) => [
+      ...l.campaigns.filter((u) => u.campaignId === campaignId && u.mode === 'include').map(() => ({ listId: l.listId, name: l.name, where: 'the campaign', adGroupId: null as string | null })),
+      ...l.adGroups.filter((g) => g.campaignId === campaignId).map((g) => ({ listId: l.listId, name: l.name, where: `its ad group "${g.name}"`, adGroupId: g.adGroupId })),
+    ])
+  const widening: Array<{ campaignId: string; others: ReturnType<typeof otherInclusions> }> = []
+  const inclusionStands: string[] = []
   const attachedIds = new Set<string>()
   for (const a of attach) {
     const id = a.campaignId
@@ -293,6 +316,11 @@ function buildListChange(customer: string, request: ExclusionListChangeRequest, 
       if (now && now.mode === mode) { skipped.push(`"${listName}" is already on "${c!.name}" as an ${mode === 'exclude' ? 'exclusion' : 'inclusion'}.`); continue }
       if (now) refuse(`"${listName}" is on "${c!.name}" as an ${now.mode === 'exclude' ? 'exclusion' : 'inclusion'}: detach it first to use it the other way.`)
       operations.push({ campaignCriterionOperation: { create: { campaign: `${customer}/campaigns/${id}`, negative: mode === 'exclude', brandList: { sharedSet: listRes } } } })
+      if (mode === 'include') {
+        const others = otherInclusions(id)
+        inclusionStands.push(`${id}:${others.map((o) => `${o.listId}@${o.adGroupId ?? 'campaign'}`).sort().join(',')}`)
+        if (others.length) widening.push({ campaignId: id, others })
+      }
     }
     record.attached.push({ campaignId: id, mode })
     lines.push([`campaign "${c!.name}"`, `without "${listName}"`, type === 'BRANDS' ? (mode === 'exclude' ? `excludes the brands of "${listName}"` : `keeps to the brands of "${listName}"`) : `excludes what "${listName}" holds`])
@@ -355,7 +383,11 @@ function buildListChange(customer: string, request: ExclusionListChangeRequest, 
   }
   if (type === 'NEGATIVE_PLACEMENTS') {
     if (record.removedItems.length && inUse) spends.push(`Removes ${plural(record.removedItems.length, 'exclusion')} (${someExclusions(record.removedItems)}) from "${listName}", which ${whichUse}: ads can show there again${usersNote}.`)
-    if (record.detached.length) spends.push(`Takes "${listName}" off ${plural(record.detached.length, 'campaign')}: they can show ads on what it excludes again${notEnabledNote(record.detached.map((d) => campaignById.get(d.campaignId)?.status ?? null))}.`)
+    if (record.detached.length) {
+      // Still on the whole account: the account link keeps excluding what it holds, so nothing shows there yet.
+      if (accountUser) warnings.push(`Takes "${listName}" off ${plural(record.detached.length, 'campaign')}: the list stays on the whole account, so they still exclude what it holds.`)
+      else spends.push(`Takes "${listName}" off ${plural(record.detached.length, 'campaign')}: they can show ads on what it excludes again${notEnabledNote(record.detached.map((d) => campaignById.get(d.campaignId)?.status ?? null))}.`)
+    }
     if (record.accountDetached) spends.push(`Takes "${listName}" off the account: every campaign can show ads on what it excludes again${notEnabledNote(allStatuses)}.`)
     if (record.addedItems.length && inUse) warnings.push(`Adds ${plural(record.addedItems.length, 'exclusion')} to "${listName}", which ${whichUse}: no ads show there any more.`)
     if (record.attached.length || record.accountAttached) warnings.push(`Puts "${listName}" on ${record.accountAttached ? 'the account' : plural(record.attached.length, 'campaign')}: no ads show on what it excludes.`)
@@ -373,8 +405,15 @@ function buildListChange(customer: string, request: ExclusionListChangeRequest, 
     if (record.removedBrands.length && includeCount) warnings.push(`Removes ${plural(record.removedBrands.length, 'brand')} from "${listName}", which ${plural(includeCount, 'campaign or ad group', 'campaigns or ad groups')} keep${includeCount === 1 ? 's' : ''} to: fewer searches show their ads.`)
     const onExclude = record.attached.filter((a) => a.mode === 'exclude')
     const onInclude = record.attached.filter((a) => a.mode === 'include')
+    for (const w of widening) {
+      const c = campaignById.get(w.campaignId)!
+      const lists = w.others.map((o) => `"${o.name ?? o.listId}" (${o.listId}) on ${o.where}`).join(', ')
+      spends.push(`Adds brands "${c.name}" may show ads for: it already keeps to ${lists}, and Google may take the brands of both, so it can show ads on searches about the brands of "${listName}" too${notEnabledNote([c.status])}.`)
+    }
+    const narrowing = onInclude.filter((a) => !widening.some((w) => w.campaignId === a.campaignId))
     if (onExclude.length) warnings.push(`Excludes the brands of "${listName}" on ${plural(onExclude.length, 'campaign')}: no ads on searches about them.`)
-    if (onInclude.length) warnings.push(`Keeps ${plural(onInclude.length, 'campaign')} to the brands of "${listName}" (brand inclusion): their broad matching shows ads only on searches about those brands. On a Search campaign Google takes a brand inclusion only with broad match (AI Max) on (its check says so).`)
+    if (narrowing.length) warnings.push(`Keeps ${plural(narrowing.length, 'campaign')} to the brands of "${listName}" (brand inclusion): their broad matching shows ads only on searches about those brands.`)
+    if (onInclude.length) warnings.push('On a Search campaign Google takes a brand inclusion only with broad match (AI Max) on (its check says so).')
   }
   const putOn = type === 'BRANDS' ? 'attachCampaigns' : type === 'ACCOUNT_LEVEL_NEGATIVE_KEYWORDS' ? 'attachToAccount' : 'attachCampaigns or attachToAccount'
   if (!list && !record.attached.length && !record.accountAttached) warnings.push(`The new list is on no campaign and not on the account: it changes nothing until it is put somewhere (${putOn}).`)
@@ -425,6 +464,8 @@ function buildListChange(customer: string, request: ExclusionListChangeRequest, 
       adGroups: (list?.adGroups ?? []).map((g) => `${g.adGroupId}:${g.status}:${g.campaignStatus}`).sort(),
       account: onAccount?.criterionId ?? null,
       ...(request.attachToAccount || record.accountDetached || accountUser ? { accountKeywordList: live.account?.keywordList?.listId ?? null, enabled: allStatuses.some((s) => s === 'ENABLED') } : {}),
+      // A brand inclusion's SPENDS MONEY words stand on the other inclusion lists of each campaign it goes on.
+      ...(inclusionStands.length ? { otherInclusions: inclusionStands.sort() } : {}),
       asked: [...new Set([...attach.map((a) => a.campaignId), ...detach])].sort().map((id) => ({ id, status: campaignById.get(id)?.status ?? null, type: campaignById.get(id)?.type ?? null })),
       ...(request.name !== undefined || request.create ? { names: live.lists.filter((l) => l.type === type).map((l) => `${l.listId}:${l.name ?? ''}`).sort() } : {}),
     },

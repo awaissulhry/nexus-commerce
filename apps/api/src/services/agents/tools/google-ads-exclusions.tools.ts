@@ -194,7 +194,8 @@ async function resolveBrands(target: GoogleAdsTarget, asked: BrandAsk[]): Promis
   if (named.length > MAX_BRAND_NAMES) return { refusal: `${named.length} brands are given by name: Nexus finds at most ${MAX_BRAND_NAMES} by name in one request (each is a Google lookup). Give the others by entityId.` }
   const out: ListBrand[] = []
   for (const b of asked) {
-    if (b.entityId) { out.push({ entityId: b.entityId.trim(), name: b.name?.trim() || null }); continue }
+    // By id: no lookup, so a name given with it is not Google's — it is shown labelled as given, never as fact.
+    if (b.entityId) { const name = b.name?.trim() || null; out.push({ entityId: b.entityId.trim(), name, ...(name ? { nameAsGiven: true as const } : {}) }); continue }
     const name = (b.name ?? '').trim()
     const found = await suggestBrands(target, name)
     const exact = found.filter((s) => (s.name ?? '').trim().toLowerCase() === name.toLowerCase())
@@ -236,6 +237,8 @@ const buildList = (args: Record<string, unknown>): GoogleDraftBuilder => async (
 const listUndo: ToolUndo = {
   async current(change: ToolChange) {
     const after = (change.after ?? {}) as ExclusionListRecord & { accountId?: string; customerId?: string }
+    // A list it made whose id Google did not return: nothing to read; request() says why it cannot be put back.
+    if (after.created && !/^\d+$/.test(String(after.listId ?? ''))) return after
     if (!after.listId || !/^\d+$/.test(after.listId)) return null
     const account = await recordAccount(after)
     if (!account) return null
@@ -266,6 +269,9 @@ const listUndo: ToolUndo = {
   },
   request(change: ToolChange) {
     const after = (change.after ?? {}) as Partial<ExclusionListRecord> & { accountId?: string }
+    if (after.created && !/^\d+$/.test(String(after.listId ?? ''))) {
+      return { refusal: 'Google did not return the list\'s id when it made it, so Nexus cannot find the list to put it back (google-ads-live view exclusions lists it by name; set-google-exclusion-list with its listId changes it).' }
+    }
     if (!after.listId || !/^\d+$/.test(after.listId)) return { refusal: 'This change does not record the list it changed.' }
     if (after.renamed && !after.renamed.from) return { refusal: 'The list had no name before this change: there is no name to put back.' }
     const n = (xs?: unknown[]) => xs?.length ?? 0
@@ -319,7 +325,7 @@ const setGoogleExclusionList: AgentTool = {
     removeItems: exclusionsArg('NEGATIVE_PLACEMENTS: what to take out of the list'),
     addBrands: z.array(z.object({
       entityId: z.string().trim().min(1).max(100).optional().describe('the brand\'s Google id (a list\'s brands show it)'),
-      name: z.string().trim().min(1).max(100).optional().describe('or its exact name: Nexus asks Google for it (one lookup each, at most 20 by name); several or none named so: refused, with Google\'s suggestions and their ids'),
+      name: z.string().trim().min(1).max(100).optional().describe('or its exact name: Nexus asks Google for it (one lookup each, at most 20 by name); several or none named so: refused, with Google\'s suggestions and their ids. Given WITH entityId it is not looked up: shown as "name as given, not checked by Google"'),
     }).refine((b) => !!b.entityId || !!b.name, 'give entityId or name')).max(100).optional().describe('BRANDS: brands to add'),
     removeBrands: z.array(z.string().trim().min(1).max(100)).max(100).optional().describe('BRANDS: the ids (entityId) of brands to remove'),
     attachCampaigns: z.array(z.object({
@@ -347,8 +353,10 @@ const setGoogleExclusionList: AgentTool = {
   handler: (args, ctx) => googleChangePreview(args, ctx, buildList(args)),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildList(args), (draft, responses) => {
     const after = structuredClone(draft.after) as ExclusionListRecord
-    if (args.create) after.listId = createdExclusionListId(responses, { create: args.create as ExclusionListChangeRequest['create'] }) ?? 'new'
-    return { data: { listId: after.listId, type: after.type }, before: draft.before, after }
+    const before = structuredClone(draft.before) as { listId: string }
+    // A list it made: before and after both name Google's id ('new' stays only when Google did not return one).
+    if (args.create) before.listId = after.listId = createdExclusionListId(responses, { create: args.create as ExclusionListChangeRequest['create'] }) ?? 'new'
+    return { data: { listId: after.listId, type: after.type }, before, after }
   }),
 }
 
