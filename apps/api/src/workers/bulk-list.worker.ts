@@ -9,6 +9,7 @@ import { EbayCategoryService } from '../services/ebay-category.service.js'
 import { EbayService } from '../services/marketplaces/ebay.service.js'
 import prisma from '@nexus/database'
 import { logger } from '../utils/logger.js'
+import { NOT_STORE_PHOTO } from '../services/images/store-photos.js'
 
 /**
  * Bulk listing worker - processes products sequentially to respect eBay rate limits
@@ -75,7 +76,7 @@ export function initializeBulkListWorker() {
             where: { id: productId },
             include: {
               variations: true,
-              images: true,
+              images: { where: NOT_STORE_PHOTO },
             },
           })
 

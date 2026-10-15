@@ -10,13 +10,16 @@ import { readSheetGallerySources, reviewSheetGalleries, advanceSheetGallery, ver
 const productId = 'gid://shopify/Product/10', variantId = 'gid://shopify/ProductVariant/11', oldId = 'gid://shopify/MediaImage/1'
 const destination = { familyId: 'family', productId: 'family', accountId: 'store-a', aliasKey: 'alias-a', marketplace: 'GLOBAL' } as any
 const schema = { locales: [{ locale: 'en', primary: true }, { locale: 'fr', primary: false }], native: { scopes: ['write_files', 'write_products', 'write_translations'] } } as ShopifyStoreSchema
-let listings: any[], products: any[], files: any[], calls: any[], media: any[], variant: string[], uploaded: Map<string, any>, loseAssociation: boolean, failFile: boolean, jobDone: boolean
+let listings: any[], products: any[], files: any[], assets: any[], storeFiles: Map<string, any>, calls: any[], media: any[], variant: string[], uploaded: Map<string, any>, loseAssociation: boolean, failFile: boolean, jobDone: boolean
 const connection = (nodes: any[]) => ({ nodes, pageInfo: { hasNextPage: false, endCursor: null } })
-const tx = { product: { findMany: vi.fn(async () => products) }, channelListing: { findMany: vi.fn(async () => listings) }, productImage: { findMany: vi.fn(async () => files) } } as any
+const tx = { product: { findMany: vi.fn(async () => products) }, channelListing: { findMany: vi.fn(async () => listings) },
+  productImage: { findMany: vi.fn(async (args: any) => args.where?.sourceAssetId ? files.filter(f => args.where.id.in.includes(f.id) && f.sourceAssetId) : files) },
+  digitalAsset: { findMany: vi.fn(async (args: any) => assets.filter(a => args.where.id.in.includes(a.id) && a.storageProvider === args.where.storageProvider)) } } as any
 beforeEach(() => {
   products = [{ id: 'family', parentId: null, name: 'Family', localizedContent: {} }, { id: 'child', parentId: 'family', name: 'Child', localizedContent: {} }]
   files = [{ id: 'asset', productId: 'family', url: 'https://example.test/a.jpg', alt: 'Base alt', mediaType: 'IMAGE' }]
   listings = [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: { _productMediaLocales: writeMediaCollection({}, 'en', { version: 1, items: [{ assetId: 'asset', alt: '' }] }) } }]
+  assets = []; storeFiles = new Map()
   calls = []; media = [{ id: oldId, alt: 'Old', mediaContentType: 'IMAGE', status: 'READY' }]; variant = [oldId]; uploaded = new Map(); loseAssociation = false; failFile = false; jobDone = true
   vi.clearAllMocks()
 })
@@ -25,6 +28,7 @@ async function gql(query: string, variables: any = {}): Promise<any> {
   if (name === 'NexusInformationMedia') return { product: { media: connection(structuredClone(media)) } }
   if (name === 'NexusInformationMediaVariants') return { product: { variants: connection([{ id: variantId, title: 'Child', media: connection(variant.map(id => ({ id }))) }]) } }
   if (name === 'NexusSheetVariantMedia') return { productVariant: { id: variantId, product: { id: productId }, media: connection(variant.map(id => ({ id }))) } }
+  if (name === 'NexusStoreFile') return { node: storeFiles.get(variables.id) ?? null }
   if (name === 'NexusImage') return { files: { nodes: uploaded.has(variables.query.replace('filename:', '')) ? [uploaded.get(variables.query.replace('filename:', ''))] : [] } }
   if (name === 'NexusImageCreate') {
     const input = variables.files[0], file = { id: `gid://shopify/MediaImage/${uploaded.size + 20}`, fileStatus: 'READY', alt: input.alt, mediaContentType: 'IMAGE', status: 'READY' }
@@ -34,7 +38,7 @@ async function gql(query: string, variables: any = {}): Promise<any> {
   }
   if (name === 'NexusInformationFileReferences') {
     for (const file of variables.files) {
-      if (file.referencesToAdd) { expect(file.referencesToAdd).toEqual([productId]); media.push([...uploaded.values()].find(f => f.id === file.id)!) }
+      if (file.referencesToAdd) { expect(file.referencesToAdd).toEqual([productId]); media.push([...uploaded.values(), ...storeFiles.values()].find(f => f.id === file.id)!) }
       if (file.referencesToRemove) { expect(file.referencesToRemove).toEqual([productId]); media = media.filter(f => f.id !== file.id); variant = variant.filter(id => id !== file.id) }
     }
     if (loseAssociation) { loseAssociation = false; throw new Error('Lost association acknowledgement') }
@@ -106,6 +110,34 @@ describe('common Shopify gallery persistence and narrow synchronization', () => 
     expect(await advanceSheetGallery(gql, gallery, state, checkpoint)).toBe(true)
     await verifySheetGallery(gql, gallery, state!)
     expect(calls.filter(c => c.name === 'NexusInformationReorder')).toHaveLength(1)
+  })
+  it('sends a photo that already is a file of this store as that file: no upload, the gallery holds that very file', async () => {
+    const stored = 'gid://shopify/MediaImage/55'
+    files[0] = { ...files[0], sourceAssetId: 'dam-1', alt: null }
+    assets = [{ id: 'dam-1', storageProvider: 'shopify', storageId: stored, metadata: { shopifyAccountId: 'store-a' } }]
+    storeFiles.set(stored, { id: stored, fileStatus: 'READY', alt: '', mediaContentType: 'IMAGE', status: 'READY' })
+    const gallery = (await plan()).galleries[0]
+    expect(gallery.storeFiles).toEqual({ asset: stored })
+    let state: SheetGalleryProgress | undefined
+    expect(await advanceSheetGallery(gql, gallery, state, async next => { state = structuredClone(next) })).toBe(true)
+    await verifySheetGallery(gql, gallery, state!)
+    expect(calls.some(c => c.name === 'NexusImageCreate' || c.name === 'NexusImage')).toBe(false)
+    expect(media.map(m => m.id)).toEqual([stored])
+  })
+  it('uploads as before when the file is another store\'s, gone, or holds another alt text', async () => {
+    const stored = 'gid://shopify/MediaImage/55'
+    files[0] = { ...files[0], sourceAssetId: 'dam-1' }
+    // Another store's file: not offered for reuse at all.
+    assets = [{ id: 'dam-1', storageProvider: 'shopify', storageId: stored, metadata: { shopifyAccountId: 'store-b' } }]
+    expect((await plan()).galleries[0].storeFiles).toBeUndefined()
+    // This store's file, but its alt differs from the reviewed one: a copy, so another product's file never changes.
+    assets[0].metadata.shopifyAccountId = 'store-a'
+    storeFiles.set(stored, { id: stored, fileStatus: 'READY', alt: 'Store alt', mediaContentType: 'IMAGE', status: 'READY' })
+    const gallery = (await plan()).galleries[0]
+    expect(gallery.storeFiles).toEqual({ asset: stored })
+    expect(await advanceSheetGallery(gql, gallery, undefined, async () => {})).toBe(true)
+    expect(calls.filter(c => c.name === 'NexusImageCreate')).toHaveLength(1)
+    expect(media.map(m => m.id)).toEqual(['gid://shopify/MediaImage/20'])
   })
   it('writes one exact variant image and keeps other product attachments', async () => {
     listings[0].platformAttributes = { _nexusContentPublish: { variantIds: { child: variantId } } }
