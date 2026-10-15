@@ -37,13 +37,11 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Google Ads G8b (2026-10-15) — the account's settings, users, links and billing.
 // Google Ads G6 (2026-10-15) — assets of every type and their links at the account, campaigns and ad groups change the Google Ads account.
 // Google Ads G9 (2026-10-15) — experiments and campaign drafts change the Google Ads account; google-ads-experiments reads it live.
-
-const OPEN_WORLD = [
-  'add-ad-targets', 'add-google-assets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
 // Google Ads G8a (2026-10-15) — conversion actions, goals and value rules change the Google Ads account; Shopify sales and their adjustments are sent to Google.
 
 const OPEN_WORLD = [
-  'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales', 'advance-purchase-order',
+  'add-ad-targets', 'add-google-assets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
+  'advance-purchase-order',
   'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'apply-google-recommendations',
   'apply-harvest',
   'archive-ads', 'build-google-campaigns', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
