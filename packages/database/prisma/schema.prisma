@@ -22648,6 +22648,10 @@ model ShopifyColourProduct {
   /// When the link writer (PR 4) last read back this product's colour name and colour list equal to what Nexus wants.
   /// Null: never verified, or the last link run stopped before its read-back.
   linkVerifiedAt      DateTime?
+  /// The swatch group this product has on the store: the product GIDs of its colour list (`custom.variation_products`)
+  /// as Shopify held it when Find or Confirm read it ([] = in no group; null = never read). Find refreshes it until the
+  /// full sync runs with a group stored; from then on the link writer keeps each product in this group.
+  swatchGroup         Json?
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 
@@ -22677,6 +22681,9 @@ model ShopifyColourSync {
   /// writes nothing else to them — no stock, no sizes, no size order, no archive, no colour swatch fields — until an
   /// operator starts the full sync (`full-sync.service.ts`). False: the full sync runs (every family before this field).
   adoptOnly           Boolean           @default(false)
+  /// The size map: per native option axis code, a Nexus value → the Shopify option value it is on this store when they
+  /// differ (`{ "size": { "44": "XS" } }`). Null: no map; every value is itself on Shopify.
+  sizeMap             Json?
   updatedAt           DateTime          @updatedAt
 
   @@unique([workspaceId, familyId, channelConnectionId, marketplace, aliasKey], name: "colour_sync")

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { IMPACT_LINKED_SHOWN_LIMIT, matchColourProducts, planColourProducts, SHOPIFY_LINKED_LIST_LIMIT, SHOPIFY_VARIANT_LIMIT, type ColourCandidate, type ColourPlanFamily, type ColourPlanVariant } from './shopify-colour-products.js'
+import { IMPACT_LINKED_SHOWN_LIMIT, matchColourProducts, planColourProducts, SHOPIFY_LINKED_LIST_LIMIT, SHOPIFY_VARIANT_LIMIT, swatchGroupsOf, type ColourCandidate, type ColourPlanFamily, type ColourPlanVariant, type ColourSwatch } from './shopify-colour-products.js'
 
 // A GALE-shaped family: 2 colours × 10 sizes. Children arrive in SKU order, which is NOT the size order.
 const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL']
@@ -117,10 +117,13 @@ describe('planColourProducts — one Shopify product per colour', () => {
     expect(plan.issues[0].productIds).toHaveLength(10)
   })
 
-  it('two colours with the same Shopify name are refused', () => {
+  it('two colours with the same Shopify name are refused, each colour by its own key (neither name is the store\'s)', () => {
     const plan = planColourProducts(gale(), { ...COLOUR_SPLIT, colourNames: { 'color:black': 'Black', 'color:yellow': ' black' } })
-    expect(plan.issues).toEqual([expect.objectContaining({ code: 'duplicate-colour-name', message: '"Nero", "Giallo" would all be called "Black" on Shopify. Give each colour its own name.' })])
-    expect(plan.issues[0].productIds).toHaveLength(20)
+    expect(plan.issues).toEqual([
+      expect.objectContaining({ code: 'duplicate-colour-name', key: 'color:black', message: '"Nero" would be called "Black" on Shopify, like "Giallo" in the same swatch group. Give it its own name.' }),
+      expect.objectContaining({ code: 'duplicate-colour-name', key: 'color:yellow', message: '"Giallo" would be called "black" on Shopify, like "Nero" in the same swatch group. Give it its own name.' }),
+    ])
+    expect(plan.issues.map(i => i.productIds.length)).toEqual([10, 10])
   })
 
   it('Shopify option limits: at most 3 options, each with its own non-blank name', () => {
@@ -262,16 +265,16 @@ describe('matchColourProducts — Find: the Shopify product of each colour, the 
     expect(guessed.issues.map(i => i.code)).toContain('sku-differs')
   })
 
-  it('a Shopify SKU that differs only in letter case is matched and offered to record as the listing\'s SKU, never written', () => {
+  it('a Shopify SKU that differs only in letter case: Nexus writes its own spelling there (Shopify follows Nexus; nothing is recorded from Shopify)', () => {
     const lower = { ...black, variants: black.variants.map(v => v.options[0] === 'M' ? { ...v, sku: 'gale-jacket-black-men-m' } : v) }
     const [nero] = matchColourProducts(plan, [lower, yellow])
     expect(nero.issues).toEqual([])
     expect(nero.variants.find(v => v.productId === 'p-BLACK-M')).toMatchObject({ by: 'sku', shopifySku: 'gale-jacket-black-men-m' })
-    expect(nero.skusToRecord).toEqual([{ productId: 'p-BLACK-M', shopifyVariantId: `${black.id}/M`, sku: 'gale-jacket-black-men-m' }])
-    expect(nero.skusToWrite.map(s => s.sku)).not.toContain('GALE-JACKET-BLACK-MEN-M')
+    expect(nero.skusToWrite).toContainEqual({ shopifyVariantId: `${black.id}/M`, sku: 'GALE-JACKET-BLACK-MEN-M', from: 'gale-jacket-black-men-m' })
+    expect(nero).not.toHaveProperty('skusToRecord')
     // Surrounding spaces are not a case difference: nothing is offered (Confirm refuses it, as before).
     const spaced = { ...black, variants: black.variants.map(v => v.options[0] === 'M' ? { ...v, sku: ' GALE-JACKET-BLACK-MEN-M' } : v) }
-    expect(matchColourProducts(plan, [spaced, yellow])[0].skusToRecord).toEqual([])
+    expect(matchColourProducts(plan, [spaced, yellow])[0].skusToWrite.map(s => s.sku)).not.toContain('GALE-JACKET-BLACK-MEN-M')
   })
 
   it('a colour-only family: each product\'s one "Default Title" variant is its variant', () => {
@@ -281,5 +284,130 @@ describe('matchColourProducts — Find: the Shopify product of each colour, the 
     expect(colourOnly.products.map(p => p.options)).toEqual([[], []])
     expect([a.variants[0]?.shopifyVariantId, b.variants[0]?.shopifyVariantId]).toEqual(['c/1/v', 'c/2/v'])
     expect(a.skusToWrite).toEqual([{ shopifyVariantId: 'c/1/v', sku: 'CAP-BLACK' }])
+  })
+})
+
+/**
+ * Feature 1 — the store's swatch groups and names. REGAL (invented ids): Nexus colours "Nero | Uomo", "Nero | Donna",
+ * "Grigio | Uomo", "Grigio | Donna"; Shopify has two groups, men [Grey, Black] and women [Grey, Gray]. AIREON: one group
+ * of four (two jackets, two pants) whose names repeat, "Crema e Vino" and "Nero Neo" twice each.
+ */
+describe('swatch groups — each colour keeps the group and the name the store shows', () => {
+  const gid = (n: number) => `gid://shopify/Product/${n}`
+  const family = (colours: Array<[string, string]>): ColourPlanFamily => ({
+    familyId: 'f', axes: [{ code: 'color', label: 'Colore' }, { code: 'size', label: 'Taglia' }],
+    variants: colours.flatMap(([key]) => ['S', 'M'].map(s => ({ productId: `p-${key}-${s}`, sku: `${key}-${s}`, values: { color: key, size: size(s) } }))),
+    valueOrder: { color: colours.map(([key]) => key), size: ['S', 'M'].map(size) },
+    valueLabels: { ...Object.fromEntries(colours), 'size:s': 'S', 'size:m': 'M' }, unmapped: [],
+  })
+  const REGAL = family([['nero-uomo', 'Nero | Uomo'], ['nero-donna', 'Nero | Donna'], ['grigio-uomo', 'Grigio | Uomo'], ['grigio-donna', 'Grigio | Donna']])
+  const MEN = [gid(11), gid(12)], WOMEN = [gid(21), gid(22)]
+  const regalStore: Record<string, ColourSwatch> = {
+    'grigio-uomo': { shopifyProductId: gid(11), group: MEN, name: 'Grey' }, 'nero-uomo': { shopifyProductId: gid(12), group: MEN, name: 'Black' },
+    'grigio-donna': { shopifyProductId: gid(21), group: WOMEN, name: 'Grey' }, 'nero-donna': { shopifyProductId: gid(22), group: WOMEN, name: 'Gray' },
+  }
+  const storeNames = (store: Record<string, ColourSwatch>) => Object.fromEntries(Object.entries(store).map(([key, s]) => [key, s.name!]))
+
+  it('REGAL: two groups as the store has them; the names default to the store\'s, so "Grey" in both groups passes', () => {
+    const plan = planColourProducts(REGAL, { splitAxis: 'color', swatches: regalStore, colourNames: storeNames(regalStore) })
+    expect(plan.issues).toEqual([])
+    // Each group in the order the store lists it (men [Grey, Black]), not the Nexus colour order.
+    expect(plan.swatchGroups).toEqual([['grigio-uomo', 'nero-uomo'], ['grigio-donna', 'nero-donna']])
+    expect(plan.products.map(p => [p.key, p.colourName, p.swatchGroup])).toEqual([['nero-uomo', 'Black', 0], ['nero-donna', 'Gray', 1], ['grigio-uomo', 'Grey', 0], ['grigio-donna', 'Grey', 1]])
+    expect(plan.grouped).toBe(true)
+    // Without the store's groups the old rule holds: one group, and the two "Grey" are refused.
+    expect(codes(planColourProducts(REGAL, { splitAxis: 'color', colourNames: storeNames(regalStore) }))).toEqual(['duplicate-colour-name', 'duplicate-colour-name'])
+  })
+
+  it('a typed duplicate inside one group is refused for that colour only; the store\'s own names are never the cause', () => {
+    const plan = planColourProducts(REGAL, { splitAxis: 'color', swatches: regalStore, colourNames: { ...storeNames(regalStore), 'nero-donna': 'Grey' } })
+    expect(plan.issues).toEqual([expect.objectContaining({ severity: 'error', code: 'duplicate-colour-name', key: 'nero-donna', productIds: ['p-nero-donna-S', 'p-nero-donna-M'],
+      message: '"Nero | Donna" would be called "Grey" on Shopify, like "Grigio | Donna" in the same swatch group. Give it its own name.' })])
+    // The same name typed in the OTHER group is no duplicate there.
+    expect(planColourProducts(REGAL, { splitAxis: 'color', swatches: regalStore, colourNames: { ...storeNames(regalStore), 'nero-donna': 'Black' } }).issues).toEqual([])
+  })
+
+  it('AIREON: one group of four with the names the store repeats: adopted as they are', () => {
+    const AIREON = family([['crema-giacca', 'Crema e Vino | Giacca'], ['nero-giacca', 'Nero Neo | Giacca'], ['crema-pantaloni', 'Crema e Vino | Pantaloni'], ['nero-pantaloni', 'Nero Neo | Pantaloni']])
+    const group = [gid(31), gid(32), gid(33), gid(34)]
+    const store: Record<string, ColourSwatch> = {
+      'crema-giacca': { shopifyProductId: gid(31), group, name: 'Crema e Vino' }, 'nero-giacca': { shopifyProductId: gid(32), group, name: 'Nero Neo' },
+      'crema-pantaloni': { shopifyProductId: gid(33), group, name: 'Crema e Vino' }, 'nero-pantaloni': { shopifyProductId: gid(34), group, name: 'Nero Neo' },
+    }
+    const plan = planColourProducts(AIREON, { splitAxis: 'color', swatches: store, colourNames: storeNames(store) })
+    expect(plan.issues).toEqual([])
+    expect(plan.swatchGroups).toEqual([['crema-giacca', 'nero-giacca', 'crema-pantaloni', 'nero-pantaloni']])
+    // Renaming one jacket to the other jacket's name is Nexus's own duplicate: refused for it alone.
+    expect(planColourProducts(AIREON, { splitAxis: 'color', swatches: store, colourNames: { ...storeNames(store), 'crema-giacca': 'Nero Neo' } }).issues.map(i => [i.code, i.key]))
+      .toEqual([['duplicate-colour-name', 'crema-giacca']])
+  })
+
+  it('swatchGroupsOf: no group on the store = one group; a loose colour joins the only group; with two groups it is unplaced', () => {
+    expect(swatchGroupsOf(['a', 'b'], {})).toEqual({ groups: [['a', 'b']], unplaced: [] })
+    expect(swatchGroupsOf(['a', 'b', 'c'], { a: { shopifyProductId: gid(1), group: [gid(1), gid(2)] }, b: { shopifyProductId: gid(2), group: [gid(1), gid(2)] }, c: { shopifyProductId: gid(3), group: [] } }))
+      .toEqual({ groups: [['a', 'b', 'c']], unplaced: [] })
+    const two = { ...regalStore, extra: { shopifyProductId: gid(99), group: null } }
+    expect(swatchGroupsOf(['nero-uomo', 'extra', 'grigio-uomo', 'grigio-donna', 'nero-donna'], two))
+      .toEqual({ groups: [['grigio-uomo', 'nero-uomo'], ['grigio-donna', 'nero-donna']], unplaced: ['extra'] })
+    // The store's order inside a group; a colour new to the group (no list names it) comes last.
+    expect(swatchGroupsOf(['a', 'b', 'c'], { a: { shopifyProductId: gid(1), group: [gid(2), gid(1)] }, b: { shopifyProductId: gid(2), group: [gid(2), gid(1)] }, c: { shopifyProductId: gid(3), group: null } }))
+      .toEqual({ groups: [['b', 'a', 'c']], unplaced: [] })
+    // A product with no list of its own that another list names is in that group; a list of foreign products is a group of one.
+    expect(swatchGroupsOf(['a', 'b', 'c'], { a: { shopifyProductId: gid(1), group: [gid(1), gid(2)] }, b: { shopifyProductId: gid(2), group: null }, c: { shopifyProductId: gid(3), group: [gid(77)] } }))
+      .toEqual({ groups: [['a', 'b'], ['c']], unplaced: [] })
+  })
+
+  it('the group limits count per group', () => {
+    const many = family(Array.from({ length: IMPACT_LINKED_SHOWN_LIMIT + 2 }, (_, i) => [`c${i}`, `Colour ${i}`] as [string, string]))
+    const halves: Record<string, ColourSwatch> = Object.fromEntries(many.valueOrder.color.map((key, i) => {
+      const half = i % 2 ? 'odd' : 'even', members = many.valueOrder.color.flatMap((_, j) => (j % 2 ? 'odd' : 'even') === half ? [gid(j)] : [])
+      return [key, { shopifyProductId: gid(i), group: members }]
+    }))
+    expect(codes(planColourProducts(many, { splitAxis: 'color' }))).toEqual(['more-than-shown'])
+    expect(codes(planColourProducts(many, { splitAxis: 'color', swatches: halves }))).toEqual([])
+  })
+})
+
+/**
+ * Feature 2 — the size map. MISANO (invented ids): Nexus sizes EU 44–60 (Nero 44–60, Marrone 44–54); the Shopify option
+ * values are XS–5XL; no SKUs on Shopify.
+ */
+describe('the size map — a Nexus size paired with the Shopify value it is on the store', () => {
+  const EU = ['44', '46', '48', '50', '52', '54', '56', '58', '60'], LETTERS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL']
+  const MAP = { size: Object.fromEntries(EU.map((s, i) => [s, LETTERS[i]])) }
+  const MISANO: ColourPlanFamily = {
+    familyId: 'misano', axes: [{ code: 'color', label: 'Colore' }, { code: 'size', label: 'Taglia' }],
+    variants: [...EU.map(s => ({ productId: `p-nero-${s}`, sku: `MISANO-NERO-${s}`, values: { color: 'color:nero', size: `size:${s}` } })),
+      ...EU.slice(0, 6).map(s => ({ productId: `p-marrone-${s}`, sku: `MISANO-MARRONE-${s}`, values: { color: 'color:marrone', size: `size:${s}` } }))],
+    valueOrder: { color: ['color:nero', 'color:marrone'], size: EU.map(s => `size:${s}`) },
+    valueLabels: { 'color:nero': 'Nero', 'color:marrone': 'Marrone', ...Object.fromEntries(EU.map(s => [`size:${s}`, s])) }, unmapped: [],
+  }
+  const candidate = (id: string, colourName: string, values: string[]): ColourCandidate => ({ id, title: `MISANO ${colourName}`, handle: id, status: 'ACTIVE', colourName, group: [],
+    variants: values.map(v => ({ id: `${id}/${v}`, sku: null, inventoryItemId: `${id}/inv/${v}`, options: [v] })) })
+
+  it('MISANO: the plan holds the Shopify values (XS…5XL) with the Nexus ones beside them, and Find pairs every size', () => {
+    const plan = planColourProducts(MISANO, { splitAxis: 'color', sizeMap: MAP })
+    expect(plan.issues).toEqual([])
+    expect(plan.products[0].options).toEqual([{ axis: 'size', name: 'Taglia', values: LETTERS, nexusValues: EU }])
+    expect(plan.products[1].variants[0]).toEqual({ productId: 'p-marrone-44', sku: 'MISANO-MARRONE-44', options: [{ name: 'Taglia', value: 'XS', nexusValue: '44' }] })
+    const nero = candidate('gid://shopify/Product/41', 'Black', LETTERS), marrone = candidate('gid://shopify/Product/42', 'Brown', LETTERS.slice(0, 6))
+    const matches = matchColourProducts(plan, [nero, marrone], {}, { 'color:nero': nero.id, 'color:marrone': marrone.id })
+    expect(matches.map(m => [m.variants.length, m.missing.length, m.extra.length, m.issues.length])).toEqual([[9, 0, 0, 0], [6, 0, 0, 0]])
+    expect(matches[0].skusToWrite[0]).toEqual({ shopifyVariantId: `${nero.id}/XS`, sku: 'MISANO-NERO-44' })
+    // Without the map nothing pairs (the old refusal: "No size of … matches").
+    const unmapped = matchColourProducts(planColourProducts(MISANO, { splitAxis: 'color' }), [nero, marrone], {}, { 'color:nero': nero.id, 'color:marrone': marrone.id })
+    expect(unmapped.map(m => m.variants.length)).toEqual([0, 0])
+  })
+
+  it('a partial map pairs only what it names; two Nexus sizes on one Shopify value are refused', () => {
+    const partial = planColourProducts(MISANO, { splitAxis: 'color', sizeMap: { size: { '44': 'XS' } } })
+    expect(partial.products[1].options[0]).toEqual({ axis: 'size', name: 'Taglia', values: ['XS', '46', '48', '50', '52', '54'], nexusValues: EU.slice(0, 6) })
+    const clash = planColourProducts(MISANO, { splitAxis: 'color', sizeMap: { size: { '44': 'S', '46': ' s ' } } })
+    expect(clash.issues).toEqual([
+      expect.objectContaining({ code: 'duplicate-option-value', key: 'color:nero', message: 'The size map pairs "44", "46" with one Shopify Taglia value, "S". Pair each with its own value.' }),
+      expect.objectContaining({ code: 'duplicate-variant', key: 'color:nero' }),
+      expect.objectContaining({ code: 'duplicate-option-value', key: 'color:marrone' }),
+      expect.objectContaining({ code: 'duplicate-variant', key: 'color:marrone' }),
+    ])
   })
 })

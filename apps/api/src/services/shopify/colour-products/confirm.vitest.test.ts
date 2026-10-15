@@ -6,7 +6,7 @@
  *
  * Run: DATABASE_URL=postgresql://nexus@127.0.0.1:1/nexus_unit_test npx vitest run src/services/shopify/colour-products/confirm.vitest.test.ts
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { planColourProducts, type ColourPlanFamily } from '@nexus/shared/shopify-colour-products'
 
 const state = vi.hoisted(() => ({ db: null as any, destination: null as any, family: null as any, store: [] as any[], queries: [] as string[], mutations: [] as string[],
@@ -20,7 +20,7 @@ vi.mock('../content-workspace.service.js', () => ({ contentDestination: async ()
 vi.mock('../admin-client.js', async importOriginal => ({ ...await importOriginal<any>(), shopifyAdmin: async () => ({ graphql: async (query: string, variables: any) => shopify(query, variables) }) }))
 vi.mock('../../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: () => state.mode, acquireShopifyPublishToken: async () => ({ ok: true }) }))
 vi.mock('../../product-read-cache.service.js', () => ({ productReadCacheService: { refreshMany: async (ids: string[]) => { state.refreshed.push(...ids) } } }))
-vi.mock('./family.js', () => ({ loadColourPlan: async (_rootId: string, options: any = {}) => ({ plan: planColourProducts(state.family, { splitAxis: 'color', colourNames: options.colourNames }), rootId: state.family.familyId, sku: 'GALE-JACKET' }) }))
+vi.mock('./family.js', () => ({ loadColourPlan: async (_rootId: string, options: any = {}) => ({ plan: planColourProducts(state.family, { splitAxis: 'color', colourNames: options.colourNames, swatches: options.swatches, sizeMap: options.sizeMap }), rootId: state.family.familyId, sku: 'GALE-JACKET' }) }))
 
 const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL']
 const COLOURS = [{ key: 'color:black', label: 'Nero', sku: 'BLACK' }, { key: 'color:yellow', label: 'Giallo', sku: 'YELLOW' }]
@@ -92,6 +92,7 @@ import { confirmColourProducts, colourProductIdentity } from './confirm.service.
 import { DEFAULT_COLOUR_PRODUCT_SETTINGS } from './settings.js'
 import { startFullColourSync } from './full-sync.service.js'
 import { ADOPT_ONLY_LINK_REFUSED, linkColourProducts } from './link.service.js'
+import { saveColourSizeMap } from './size-map.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const ids: Record<string, string> = {}
@@ -146,8 +147,8 @@ describe('Confirm — adopt the live Shopify product of each colour', () => {
     expect(black).toMatchObject({ state: 'LINKED', shopifyProductId: BLACK, colourName: 'Black', remoteStatus: 'ACTIVE' })
     expect(yellow).toMatchObject({ state: 'LINKED', shopifyProductId: YELLOW, colourName: 'Yellow' })
     expect(view.confirmed).toEqual([
-      { valueKey: 'color:black', name: 'Nero', shopifyProductId: BLACK, status: 'ACTIVE', identityWritten: true, skusWritten: 2, sizesLinked: 9, draftsCreated: 21, locationId: LOCATION, notStockedAt: [], adoptOnly: true, skusRecorded: 0, skusReplaced: 0 },
-      { valueKey: 'color:yellow', name: 'Giallo', shopifyProductId: YELLOW, status: 'ACTIVE', identityWritten: true, skusWritten: 9, sizesLinked: 9, draftsCreated: 0, locationId: LOCATION, notStockedAt: [], adoptOnly: true, skusRecorded: 0, skusReplaced: 0 },
+      { valueKey: 'color:black', name: 'Nero', shopifyProductId: BLACK, status: 'ACTIVE', identityWritten: true, skusWritten: 2, sizesLinked: 9, draftsCreated: 21, locationId: LOCATION, notStockedAt: [], adoptOnly: true, skusReplaced: 0 },
+      { valueKey: 'color:yellow', name: 'Giallo', shopifyProductId: YELLOW, status: 'ACTIVE', identityWritten: true, skusWritten: 9, sizesLinked: 9, draftsCreated: 0, locationId: LOCATION, notStockedAt: [], adoptOnly: true, skusReplaced: 0 },
     ])
     // What the stock and price sync read (offer-sync.service.ts): numeric ids, the location GID, a live row — which stays
     // PAUSED (adopt only, the default of a first Confirm): no stock is queued, no stock or price reaches Shopify.
@@ -376,19 +377,169 @@ describe('Adopt only, and Start full sync', () => {
     expect(await listingOf(skuOf('YELLOW', 'M'))).toMatchObject({ externalListingId: '102', syncPaused: true, platformAttributes: { variantId: '1023' } })
   })
 
-  it('a Shopify SKU that differs only in letter case: Confirm links it and records Shopify\'s SKU as the listing\'s own SKU, writing nothing to Shopify for it', async () => {
+  it('a Shopify SKU that differs only in letter case: Confirm writes the Nexus spelling onto Shopify and reads it back; no Nexus SKU changes', async () => {
     const lower = skuOf('BLACK', 'M').toLowerCase()
     productOf(BLACK).variants.find((v: any) => v.option === 'M').sku = lower
+    const productsBefore = await scoped(() => prisma.product.findMany({ where: { parentId: ids.fam }, select: { id: true, sku: true }, orderBy: { id: 'asc' } }))
     await find()
-    expect((await rowOf('color:black')).proposal).toMatchObject({ issues: [], skusToRecord: [{ productId: ids[skuOf('BLACK', 'M')], shopifyVariantId: variantGid(BLACK, 'M'), sku: lower }] })
+    const proposal = (await rowOf('color:black')).proposal as any
+    expect(proposal).toMatchObject({ issues: [] })
+    expect(proposal.skusToWrite).toContainEqual({ shopifyVariantId: variantGid(BLACK, 'M'), sku: skuOf('BLACK', 'M'), from: lower })
+    expect(proposal).not.toHaveProperty('skusToRecord')
     const view = await confirm([BOTH[0]])
-    expect(view.confirmed[0]).toMatchObject({ skusWritten: 2, skusRecorded: 1, sizesLinked: 9 })
-    expect(productOf(BLACK).variants.find((v: any) => v.option === 'M').sku).toBe(lower)
-    expect(await listingOf(skuOf('BLACK', 'M'))).toMatchObject({ channelSku: lower, liveChannelSku: lower, externalListingId: '101', syncPaused: true })
+    expect(view.confirmed[0]).toMatchObject({ skusWritten: 3, sizesLinked: 9 })
+    expect(view.confirmed[0]).not.toHaveProperty('skusRecorded')
+    // Shopify follows Nexus: the variant now holds the Nexus spelling (read back by Confirm).
+    expect(productOf(BLACK).variants.find((v: any) => v.option === 'M').sku).toBe(skuOf('BLACK', 'M'))
+    // Nothing from Shopify is recorded in Nexus: no listing SKU, no live SKU of Shopify's spelling, no product SKU changed.
+    expect(await listingOf(skuOf('BLACK', 'M'))).toMatchObject({ channelSku: null, liveChannelSku: null, externalListingId: '101', syncPaused: true })
+    expect(await scoped(() => prisma.product.findMany({ where: { parentId: ids.fam }, select: { id: true, sku: true }, orderBy: { id: 'asc' } }))).toEqual(productsBefore)
+    expect(await scoped(() => prisma.channelListing.count({ where: { channel: 'SHOPIFY', OR: [{ channelSku: lower }, { liveChannelSku: lower }] } }))).toBe(0)
     // Any other difference is still refused.
     state.store = liveStore()
     productOf(YELLOW).variants[1].sku = 'Y-OLD-S'
     await find()
     await expect(confirm([BOTH[1]])).rejects.toThrow('the S variant has SKU Y-OLD-S; Nexus has GALE-JACKET-YELLOW-MEN-S.')
+  })
+})
+
+/**
+ * Feature 1 and 2 on families shaped like the live store (every id invented). REGAL: four Nexus colours, two swatch
+ * groups on Shopify (men [Grey, Black], women [Grey, Gray]). AIREON: one group of four whose names repeat. MISANO: EU
+ * sizes in Nexus, letter sizes on Shopify, no SKUs there.
+ */
+describe('Confirm keeps the store\'s swatch groups and names, and pairs sizes through the size map', () => {
+  const families: Record<string, { id: string; family: ColourPlanFamily }> = {}
+  const gale = () => state.family
+  let galeFamily: ColourPlanFamily
+  const pid = (n: number) => `gid://shopify/Product/${n}`
+  const shopProduct = (n: number, title: string, colour: string, group: number[], options: string[]) => ({ id: pid(n), title, handle: `p-${n}`, status: 'ACTIVE', onlineStorePublished: true, colour,
+    group: group.map(pid), identity: null as string | null,
+    variants: options.map((option, i) => ({ id: `gid://shopify/ProductVariant/${n}0${i}`, sku: '', inventoryItemId: `gid://shopify/InventoryItem/${n}0${i}`, option, stocked: true })) })
+  async function makeFamily(name: string, colours: Array<[string, string]>, sizesOf: (key: string) => string[]) {
+    const fam = await scoped(() => prisma.product.create({ data: { sku: name, name, basePrice: 10, isParent: true } as never }))
+    const variants: ColourPlanFamily['variants'][number][] = []
+    for (const [key] of colours) for (const s of sizesOf(key)) {
+      const sku = `${name}-${key.split(':')[1].toUpperCase()}-${s}`
+      ids[sku] = (await scoped(() => prisma.product.create({ data: { sku, name: sku, basePrice: 10, parentId: fam.id } as never }))).id
+      variants.push({ productId: ids[sku], sku, values: { color: key, size: `size:${s}` } })
+    }
+    const sizes = [...new Set(colours.flatMap(([key]) => sizesOf(key)))]
+    families[name] = { id: fam.id, family: { familyId: fam.id, axes: [{ code: 'color', label: 'Colore' }, { code: 'size', label: 'Taglia' }], variants,
+      valueOrder: { color: colours.map(([key]) => key), size: sizes.map(s => `size:${s}`) },
+      valueLabels: { ...Object.fromEntries(colours), ...Object.fromEntries(sizes.map(s => [`size:${s}`, s])) }, unmapped: [] } }
+  }
+  const use = (name: string) => { state.family = families[name].family; state.destination = { ...state.destination, familyId: families[name].id } }
+  const choose = (choices: Array<[string, number]>) => scoped(() => findColourProducts(ids.fam, { accountId: 'x' }, { choices: choices.map(([valueKey, n]) => ({ valueKey, shopifyProductId: pid(n) })) }))
+  const rowsByKey = async () => Object.fromEntries((await scoped(() => prisma.shopifyColourProduct.findMany({ where: { familyId: state.destination.familyId } }))).map(r => [r.valueKey, r]))
+  const EU = ['44', '46', '48', '50', '52', '54', '56', '58', '60'], LETTERS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL']
+
+  beforeAll(async () => {
+    galeFamily = gale()
+    await makeFamily('REGAL', [['color:nero-uomo', 'Nero | Uomo'], ['color:nero-donna', 'Nero | Donna'], ['color:grigio-uomo', 'Grigio | Uomo'], ['color:grigio-donna', 'Grigio | Donna']], () => ['S', 'M'])
+    await makeFamily('AIREON', [['color:crema-giacca', 'Crema e Vino | Giacca'], ['color:nero-giacca', 'Nero Neo | Giacca'], ['color:crema-pantaloni', 'Crema e Vino | Pantaloni'], ['color:nero-pantaloni', 'Nero Neo | Pantaloni']], () => ['S', 'M'])
+    await makeFamily('MISANO', [['color:nero', 'Nero'], ['color:marrone', 'Marrone']], key => key === 'color:nero' ? EU : EU.slice(0, 6))
+  })
+  afterEach(() => { state.family = galeFamily })
+
+  describe('REGAL — two swatch groups on the store', () => {
+    beforeEach(() => {
+      use('REGAL')
+      state.store = [shopProduct(201, 'REGAL men grey', 'Grey', [201, 202], ['S', 'M']), shopProduct(202, 'REGAL men black', 'Black', [201, 202], ['S', 'M']),
+        shopProduct(203, 'REGAL women grey', 'Grey', [203, 204], ['S', 'M']), shopProduct(204, 'REGAL women gray', 'Gray', [203, 204], ['S', 'M'])]
+    })
+    const ALL: Array<[string, number]> = [['color:nero-uomo', 202], ['color:nero-donna', 204], ['color:grigio-uomo', 201], ['color:grigio-donna', 203]]
+
+    it('names default to the store\'s; "Grey" in both groups passes; each colour stores its group; no swatch field is written', async () => {
+      const found = await choose(ALL)
+      expect(found.plan.issues).toEqual([])
+      expect(found.plan.swatchGroups).toBe(2)
+      expect(found.plan.products.map(p => [p.key, p.swatchGroup])).toEqual([['color:nero-uomo', 0], ['color:nero-donna', 1], ['color:grigio-uomo', 0], ['color:grigio-donna', 1]])
+      const view = await confirm(ALL.map(([valueKey, n]) => ({ valueKey, shopifyProductId: pid(n) })))
+      const rows = await rowsByKey()
+      expect(Object.fromEntries(Object.entries(rows).map(([key, r]) => [key, [r.state, r.colourName, r.swatchGroup]]))).toEqual({
+        'color:nero-uomo': ['LINKED', 'Black', [pid(201), pid(202)]], 'color:grigio-uomo': ['LINKED', 'Grey', [pid(201), pid(202)]],
+        'color:nero-donna': ['LINKED', 'Gray', [pid(203), pid(204)]], 'color:grigio-donna': ['LINKED', 'Grey', [pid(203), pid(204)]] })
+      expect(view.plan.issues).toEqual([])
+      expect(new Set(state.mutations)).toEqual(new Set(['NexusCreateDefinition', 'NexusColourIdentity', 'NexusColourWriteSkus']))
+      expect(state.store.map(p => [p.colour, p.group])).toEqual([['Grey', [pid(201), pid(202)]], ['Black', [pid(201), pid(202)]], ['Grey', [pid(203), pid(204)]], ['Gray', [pid(203), pid(204)]]])
+    })
+
+    it('a name typed equal to another colour\'s in the same group is refused, naming only that colour; the others confirm', async () => {
+      await choose(ALL)
+      await confirm([{ valueKey: 'color:nero-uomo', shopifyProductId: pid(202) }, { valueKey: 'color:grigio-uomo', shopifyProductId: pid(201) }])
+      state.mutations = []
+      const refusal = await confirm([{ valueKey: 'color:nero-donna', shopifyProductId: pid(204), colourName: 'Grey' }, { valueKey: 'color:grigio-donna', shopifyProductId: pid(203) }]).catch((e: Error) => e.message)
+      expect(refusal).toBe('"Nero | Donna" would be called "Grey" on Shopify, like "Grigio | Donna" in the same swatch group. Give it its own name. Nothing was changed.')
+      expect(state.mutations).toEqual([])
+      // The same name typed in the men's group is another group's: no duplicate there.
+      await confirm([{ valueKey: 'color:grigio-donna', shopifyProductId: pid(203) }])
+      await confirm([{ valueKey: 'color:nero-donna', shopifyProductId: pid(204), colourName: 'Black' }])
+      expect((await rowsByKey())['color:nero-donna']).toMatchObject({ state: 'LINKED', colourName: 'Black' })
+    })
+
+    it('a product whose colour name or colour list changed since Find: run Find again', async () => {
+      await choose(ALL)
+      productOf(pid(204)).colour = 'Charcoal'
+      await expect(confirm([{ valueKey: 'color:nero-donna', shopifyProductId: pid(204) }])).rejects.toThrow('"REGAL women gray" changed since Find, or Find proposed another product for "Nero | Donna". Run Find again.')
+      state.store = state.store.map(p => p.id === pid(204) ? { ...p, colour: 'Gray', group: [pid(203), pid(204), pid(201)] } : p)
+      await expect(confirm([{ valueKey: 'color:nero-donna', shopifyProductId: pid(204) }])).rejects.toThrow('changed since Find')
+      expect(state.mutations).toEqual([])
+    })
+  })
+
+  it('AIREON — one group whose names repeat (two jackets, two pants): adopted as the store shows them', async () => {
+    use('AIREON')
+    const group = [301, 302, 303, 304]
+    state.store = [shopProduct(301, 'AIREON jacket cream', 'Crema e Vino', group, ['S', 'M']), shopProduct(302, 'AIREON jacket black', 'Nero Neo', group, ['S', 'M']),
+      shopProduct(303, 'AIREON pants cream', 'Crema e Vino', group, ['S', 'M']), shopProduct(304, 'AIREON pants black', 'Nero Neo', group, ['S', 'M'])]
+    const all: Array<[string, number]> = [['color:crema-giacca', 301], ['color:nero-giacca', 302], ['color:crema-pantaloni', 303], ['color:nero-pantaloni', 304]]
+    await choose(all)
+    const view = await confirm(all.map(([valueKey, n]) => ({ valueKey, shopifyProductId: pid(n) })))
+    expect(view.plan.issues).toEqual([])
+    expect(Object.values(await rowsByKey()).map(r => [r.colourName, r.swatchGroup])).toEqual(expect.arrayContaining([['Crema e Vino', group.map(pid)], ['Nero Neo', group.map(pid)]]))
+    expect(state.store.map(p => p.colour)).toEqual(['Crema e Vino', 'Nero Neo', 'Crema e Vino', 'Nero Neo'])
+  })
+
+  describe('MISANO — EU sizes in Nexus, letter sizes on Shopify', () => {
+    const MAP = { size: Object.fromEntries(EU.map((s, i) => [s, LETTERS[i]])) }
+    const saveMap = (sizeMap: unknown) => scoped(() => saveColourSizeMap(ids.fam, { accountId: 'x' }, { sizeMap }))
+    beforeEach(() => {
+      use('MISANO')
+      state.store = [shopProduct(401, 'MISANO black', 'Black', [401, 402], LETTERS), shopProduct(402, 'MISANO brown', 'Brown', [401, 402], LETTERS.slice(0, 6))]
+    })
+
+    it('without a map nothing pairs and Confirm refuses; with it every size pairs, the SKUs land on the mapped variants', async () => {
+      await choose([['color:nero', 401], ['color:marrone', 402]])
+      expect(((await rowsByKey())['color:nero'].proposal as any).variants).toEqual([])
+      await expect(confirm([{ valueKey: 'color:nero', shopifyProductId: pid(401) }])).rejects.toThrow('No size of "Nero" matches a variant of "MISANO black".')
+      const saved = await saveMap(MAP)
+      expect(saved).toMatchObject({ sizeMapSaved: true, sizeMap: MAP })
+      expect(saved.plan.products[0].sizes[0]).toEqual({ productId: ids['MISANO-NERO-44'], sku: 'MISANO-NERO-44', options: ['44'], shopify: ['XS'] })
+      expect(saved.plan.products[0].options).toEqual([{ axis: 'size', name: 'Taglia', values: EU }])
+      expect(state.mutations).toEqual([])
+      await choose([['color:nero', 401], ['color:marrone', 402]])
+      const rows = await rowsByKey()
+      expect([(rows['color:nero'].proposal as any).variants.length, (rows['color:marrone'].proposal as any).variants.length]).toEqual([9, 6])
+      await confirm([{ valueKey: 'color:nero', shopifyProductId: pid(401) }, { valueKey: 'color:marrone', shopifyProductId: pid(402) }])
+      expect(productOf(pid(401)).variants.map((v: any) => [v.option, v.sku])).toEqual(LETTERS.map((l, i) => [l, `MISANO-NERO-${EU[i]}`]))
+      expect(await listingOf('MISANO-NERO-44')).toMatchObject({ externalListingId: '401', platformAttributes: { variantId: '40100', inventoryItemId: '40100' } })
+      expect(await listingOf('MISANO-MARRONE-54')).toMatchObject({ platformAttributes: { variantId: '40205' } })
+    })
+
+    it('the map is checked against the family, and saving the same map again changes nothing', async () => {
+      await expect(saveMap({ size: { '62': '6XL' } })).rejects.toThrow('"62" is not a value of this family. Reload, then pair the sizes again. Nothing was changed.')
+      await expect(saveMap({ color: { Nero: 'Black' } })).rejects.toThrow('"color" is not an option of this family\'s Shopify products.')
+      await expect(saveMap({ size: { '44': '  ' } })).rejects.toThrow('Every size needs a value.')
+      const misanoSync = async () => (await scoped(() => prisma.shopifyColourSync.findMany({ where: { familyId: state.destination.familyId } })))[0]
+      expect((await saveMap(MAP)).sizeMapSaved).toBe(true)
+      const { revision, dueAt } = await misanoSync()
+      expect(dueAt).not.toBeNull()
+      expect((await saveMap(MAP)).sizeMapSaved).toBe(false)
+      expect((await misanoSync()).revision).toBe(revision)
+      // A value paired with itself is no pairing; an empty map removes it.
+      expect((await saveMap({ size: { '44': '44' } })).sizeMap).toEqual({})
+      expect((await misanoSync()).sizeMap).toBeNull()
+    })
   })
 })

@@ -8,8 +8,8 @@ vi.mock('@nexus/database', async original => {
   return { ...await original<any>(), default: state.db.client, prisma: state.db.client }
 })
 vi.mock('../content-workspace.service.js', () => ({ contentDestination: async () => state.d, object: (v: any) => v ?? {} }))
-vi.mock('./family.js', () => ({ loadColourPlan: async () => ({ plan: planColourProducts({ ...state.family,
-  variants: state.family.variants.filter((v: any) => state.sizes.includes(v.optionsSize)), valueOrder: { size: state.order.map(s => `size:${s}`) } }, { splitAxis: 'color' }) }) }))
+vi.mock('./family.js', () => ({ loadColourPlan: async (_rootId: string, options: any = {}) => ({ plan: planColourProducts({ ...state.family,
+  variants: state.family.variants.filter((v: any) => state.sizes.includes(v.optionsSize)), valueOrder: { size: state.order.map(s => `size:${s}`) } }, { splitAxis: 'color', sizeMap: options.sizeMap }) }) }))
 vi.mock('../../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: () => state.mode }))
 vi.mock('../admin-client.js', async original => ({ ...await original<any>(), shopifyAdmin: async () => ({ graphql: shopify }) }))
 vi.mock('../offer-sync.service.js', () => ({ syncNativeShopifyOffer: async (item: any) => {
@@ -354,4 +354,30 @@ it('Start full sync turns the full sync back on: stock, the missing size, the si
   expect([...state.stock].sort()).toEqual(state.family.variants.map((v: any) => v.sku).sort())
   expect(state.linked).toBe(1)
   expect((await rows()).every(r => !r.syncPaused)).toBe(true)
+})
+
+/**
+ * Feature 2 — the size map in the sync. MISANO-shaped (invented): the Nexus sizes are EU 44 / 46 / 48, the Shopify ones
+ * XS / S / M; the colour was linked by its SKUs. The map pairs them, so the identity check passes and a new size is
+ * created, and the sizes ordered, under the Shopify value.
+ */
+it('size map: the identity check pairs EU sizes with letter sizes; a new size is created and ordered under its Shopify value; no map = refused as before', async () => {
+  state.family.valueLabels = { ...state.family.valueLabels, 'size:XS': '44', 'size:S': '46', 'size:M': '48' }
+  // Without a map the linked sizes read as "changed" (the old refusal), and nothing is sent.
+  await expect(run()).rejects.toThrow('Shopify changed the size identity or options')
+  expect(state.stock).toEqual([])
+  expect(state.calls).not.toContain('NexusColourSizes')
+  await scoped(() => prisma.shopifyColourSync.upsert({ where: { colour_sync: { workspaceId: LEGACY_WORKSPACE_ID, familyId: state.d.familyId, channelConnectionId: state.d.accountId, marketplace: 'GLOBAL', aliasKey: '' } },
+    create: { familyId: state.d.familyId, channelConnectionId: state.d.accountId, marketplace: 'GLOBAL', aliasKey: '', sizeMap: { size: { '44': 'XS', '46': 'S', '48': 'M' } } },
+    update: { sizeMap: { size: { '44': 'XS', '46': 'S', '48': 'M' } } } }))
+  await run()
+  expect(state.stock).toHaveLength(2)
+  // EU 44 is new in Nexus: created as XS, and the sizes ordered XS, S, M.
+  state.sizes = ['XS', 'S', 'M']; state.order = ['XS', 'S', 'M']; state.calls = []
+  await run()
+  expect(state.calls.filter(c => c === 'NexusColourSizes')).toHaveLength(1)
+  expect(state.remote.variants.nodes.at(-1)).toMatchObject({ sku: `COLOUR-${seq}-XS`, selectedOptions: [{ name: 'Size', value: 'XS' }] })
+  expect(state.remote.options[0].values).toEqual(['XS', 'S', 'M'])
+  expect((await rows()).find(r => r.product.sku.endsWith('-XS'))).toMatchObject({ platformAttributes: { variantId: '30' }, isPublished: true })
+  state.calls = []; await run(); expect(state.calls).toEqual(['NexusColourPublications', 'NexusColourSyncRead'])
 })

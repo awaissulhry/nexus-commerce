@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { planColourProducts } from '@nexus/shared/shopify-colour-products'
 import { planColourVariants, colourIsPublished, readOnlineStorePublication } from './variants.js'
 const wanted = () => ({ key: 'color:black', position: 0, nexusValue: 'Black', colourName: 'Black', colourNameSource: 'operator' as const,
   options: [{ axis: 'size', name: 'Taglia', values: ['XS', 'S', 'M'] }],
@@ -58,4 +59,19 @@ it('maps Size and Fit by name when Shopify has a different option order', () => 
   const plan = planColourVariants(p, r, new Map())
   expect(plan.matched).toHaveLength(2)
   expect(plan.missing[0].optionValues).toEqual([{ optionId: 'gid://shopify/ProductOption/1', name: 'XS' }, { optionId: 'gid://shopify/ProductOption/2', name: 'Regular' }])
+})
+it('size map: EU sizes pair with the letter variants by their Shopify value; the missing one is created and ordered under it', () => {
+  const misano = (sizeMap?: Record<string, Record<string, string>>) => planColourProducts({ familyId: 'f', axes: [{ code: 'color', label: 'Colore' }, { code: 'size', label: 'Taglia' }],
+    variants: ['44', '46', '48'].map(s => ({ productId: s, sku: `MISANO-${s}`, values: { color: 'color:nero', size: `size:${s}` } })),
+    valueOrder: { color: ['color:nero'], size: ['size:44', 'size:46', 'size:48'] }, valueLabels: { 'color:nero': 'Nero', 'size:44': '44', 'size:46': '46', 'size:48': '48' }, unmapped: [] },
+  { splitAxis: 'color', sizeMap }).products[0]
+  const r = { ...remote(), options: [{ id: 'gid://shopify/ProductOption/1', name: 'Size', values: ['S', 'M'] }],
+    variants: { nodes: [['46', 'S'], ['48', 'M']].map(([eu, letter], i) => ({ id: `gid://shopify/ProductVariant/${i + 1}`, sku: `MISANO-${eu}`, selectedOptions: [{ name: 'Size', value: letter }], inventoryItem: { id: `gid://shopify/InventoryItem/${i + 1}` } })), pageInfo: { hasNextPage: false } } }
+  const saved = new Map([['46', { variantId: '1', inventoryItemId: '1' }], ['48', { variantId: '2', inventoryItemId: '2' }]])
+  const planned = planColourVariants(misano({ size: { '44': 'XS', '46': 'S', '48': 'M' } }), r, saved)
+  expect(planned.matched.map(v => v.remote.id)).toEqual(['gid://shopify/ProductVariant/1', 'gid://shopify/ProductVariant/2'])
+  expect(planned.missing).toEqual([{ productId: '44', sku: 'MISANO-44', optionValues: [{ optionId: 'gid://shopify/ProductOption/1', name: 'XS' }] }])
+  expect(planned.order).toEqual([{ id: 'gid://shopify/ProductOption/1', values: [{ name: 'XS' }, { name: 'S' }, { name: 'M' }] }])
+  // No map: the sizes Shopify holds are not the Nexus values, so the stored ones read as changed (as before).
+  expect(() => planColourVariants(misano(), r, saved)).toThrow('MISANO-46: Shopify changed the size identity or options. Review the mapping.')
 })

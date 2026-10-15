@@ -38,14 +38,34 @@ export interface ColourPlanFamily {
 export interface ColourPlanSettings {
   /** The axis whose values become separate products; null keeps one product. */
   splitAxis: string | null
-  /** Axis code → the Shopify option name ("Taglia" → "Size"). Default: the axis label. */
+  /** Axis code → the Shopify option NAME ("Taglia" → "Size"). Default: the axis label. Names only; values: `sizeMap`. */
   optionNames?: Readonly<Record<string, string>>
   /** Split value key → the colour name the operator chose for Shopify ("Black"). Default: the Nexus value. */
   colourNames?: Readonly<Record<string, string>>
+  /**
+   * Split value key → what the store shows for that colour today (Find's read): its product, its swatch group and its
+   * colour name. Default: nothing known — the family's colours are one swatch group and no name is the store's.
+   */
+  swatches?: Readonly<Record<string, ColourSwatch>>
+  /**
+   * The size map: native axis code → { Nexus value → the Shopify option value it is on this store } ("44" → "XS"). A
+   * value the map does not name is itself. Every product, Find's pairing, Confirm, the sync's size identity check, size
+   * create and size order then read the mapped value; the Nexus value stays beside it (`nexusValue(s)`).
+   */
+  sizeMap?: Readonly<Record<string, Readonly<Record<string, string>>>>
 }
 
-export interface ColourPlanOption { axis: string; name: string; values: string[] }
-export interface ColourPlanProductVariant { productId: string; sku: string; options: Array<{ name: string; value: string }> }
+/**
+ * What the store shows for one colour (Feature 1, read by Find): the Shopify product, the products its colour list names
+ * (`custom.variation_products`, itself included on a well-formed group; null or empty: in no group), and the colour
+ * name it shows (`custom.variation_value`).
+ */
+export interface ColourSwatch { shopifyProductId: string | null; group: readonly string[] | null; name?: string | null }
+
+/** `values`: as Shopify holds them (the size map applied); `nexusValues`: the Nexus value of each, only when the map changed one. */
+export interface ColourPlanOption { axis: string; name: string; values: string[]; nexusValues?: string[] }
+/** Each option's `value` as Shopify holds it; `nexusValue` only when the size map pairs it with another value. */
+export interface ColourPlanProductVariant { productId: string; sku: string; options: Array<{ name: string; value: string; nexusValue?: string }> }
 export interface ColourPlanProduct {
   /** The split value key, or '' for a one-product family. The stable identity of this Shopify product in Nexus. */
   key: string
@@ -56,6 +76,8 @@ export interface ColourPlanProduct {
   /** What Shopify shows as this product's colour; '' for a one-product family. */
   colourName: string
   colourNameSource: 'operator' | 'nexus' | null
+  /** Its swatch group: an index into the plan's `swatchGroups`; null for a one-product family, or a colour no group takes. */
+  swatchGroup: number | null
   options: ColourPlanOption[]
   variants: ColourPlanProductVariant[]
 }
@@ -69,8 +91,10 @@ export interface ColourPlan {
   mode: 'colour-products' | 'one-product'
   splitAxis: string | null
   products: ColourPlanProduct[]
-  /** True when the products are to be grouped: two or more colour products. A single colour needs no group. */
+  /** True when the products are to be grouped: a swatch group of two or more colour products. A single colour needs no group. */
   grouped: boolean
+  /** The swatch groups (value keys, in colour order): the store's groups (`swatchGroupsOf`), else one group of every colour. */
+  swatchGroups: string[][]
   issues: ColourPlanIssue[]
 }
 
@@ -84,6 +108,45 @@ function ordered(keys: Iterable<string>, order: readonly string[] | undefined): 
   return unique.map((key, i) => ({ key, i })).sort((a, b) => (rank.get(a.key) ?? rank.size + a.i) - (rank.get(b.key) ?? rank.size + b.i)).map(e => e.key)
 }
 
+/**
+ * The store's swatch groups among these colours (Feature 1: each colour keeps the group it has on Shopify). Two colours
+ * are in one group when the colour list of either names the other's product. A colour whose product lists no group and
+ * that no list names is loose. With no group on the store at all, every colour is one group (Nexus groups the family, as
+ * before); with exactly one, a loose colour joins it (the simplest safe rule: a colour Nexus adds to a family the store
+ * shows as one group); with two or more, Nexus cannot tell which group a loose colour belongs to: it is `unplaced`, no
+ * group takes it, and the link writer refuses until the store puts it in one. Groups come in the order of their first
+ * colour. Inside a group, colours keep the order the store's lists hold them in (the Owner: the store stays as it is):
+ * the first stored list of the group, then any other member's list; a colour no list names (new to the group) comes
+ * last. A family the store does not group yet keeps the order given (the family's colour order).
+ */
+export function swatchGroupsOf(keys: readonly string[], swatches: Readonly<Record<string, ColourSwatch>> = {}): { groups: string[][]; unplaced: string[] } {
+  const unique = [...new Set(keys)]
+  const productOf = (key: string) => swatches[key]?.shopifyProductId || null
+  const lists = (key: string) => !!productOf(key) && (swatches[key]?.group?.length ?? 0) > 0
+  const keyOf = new Map<string, string>()
+  for (const key of unique) { const id = productOf(key); if (id && !keyOf.has(id)) keyOf.set(id, key) }
+  const parent = new Map(unique.map(key => [key, key]))
+  const root = (key: string): string => { let at = key; while (parent.get(at) !== at) at = parent.get(at)!; return at }
+  for (const key of unique.filter(lists)) for (const id of swatches[key]!.group!) {
+    const other = keyOf.get(id)
+    if (other && root(other) !== root(key)) parent.set(root(other), root(key))
+  }
+  const listed = new Set(unique.filter(lists).map(root))
+  const components = new Map<string, string[]>()
+  for (const key of unique) if (listed.has(root(key))) components.set(root(key), [...components.get(root(key)) ?? [], key])
+  const loose = unique.filter(key => !listed.has(root(key)))
+  // The store's order: every id the members' lists name, in list order (members in the order given), first seen first.
+  const inStoreOrder = (members: string[]) => {
+    const order = [...new Set(members.flatMap(key => lists(key) ? swatches[key]!.group! : []))]
+    const rank = (key: string) => { const i = order.indexOf(productOf(key) ?? ''); return i < 0 ? order.length : i }
+    return members.map((key, i) => ({ key, i })).sort((a, b) => rank(a.key) - rank(b.key) || a.i - b.i).map(e => e.key)
+  }
+  const groups = [...components.values()]
+  if (!groups.length) return { groups: unique.length ? [unique] : [], unplaced: [] }
+  if (groups.length === 1) return { groups: [inStoreOrder(unique.filter(key => groups[0].includes(key) || loose.includes(key)))], unplaced: [] }
+  return { groups: groups.map(inStoreOrder), unplaced: loose }
+}
+
 /** The Shopify products of one family on one store, with every problem that would stop them from being published. */
 export function planColourProducts(family: ColourPlanFamily, settings: ColourPlanSettings): ColourPlan {
   const issues: ColourPlanIssue[] = []
@@ -91,10 +154,12 @@ export function planColourProducts(family: ColourPlanFamily, settings: ColourPla
   const split = settings.splitAxis
   if (split !== null && !family.axes.some(a => a.code === split)) {
     issues.push({ severity: 'error', code: 'split-axis-unknown', message: `The family has no "${split}" axis to show as separate products.`, productIds: [] })
-    return { familyId: family.familyId, mode: 'colour-products', splitAxis: split, products: [], grouped: false, issues }
+    return { familyId: family.familyId, mode: 'colour-products', splitAxis: split, products: [], grouped: false, swatchGroups: [], issues }
   }
   const native = family.axes.filter(a => a.code !== split)
   const optionName = (axis: ColourPlanAxis) => (settings.optionNames?.[axis.code] ?? axis.label).trim()
+  // The size map: the value Shopify holds for a Nexus value of a native axis (itself when the map does not name it).
+  const shopifyValue = (axis: string, key: string) => settings.sizeMap?.[axis]?.[label(key)]?.trim() || label(key)
 
   // Every variant needs a value on every axis: without one it has no place in any product.
   const complete = family.variants.filter(variant => {
@@ -125,29 +190,38 @@ export function planColourProducts(family: ColourPlanFamily, settings: ColourPla
       }
       return 0
     })
-    // Shopify tells variants and values apart by their text, so two keys with the same text are the same value there.
+    // Shopify tells variants and values apart by their text, so two keys with the same text are the same value there
+    // (also two Nexus values the size map pairs with one Shopify value).
     for (const option of options) {
       const byText = new Map<string, string[]>()
-      for (const value of option.values) byText.set(fold(label(value)), [...byText.get(fold(label(value))) ?? [], value])
+      for (const value of option.values) byText.set(fold(shopifyValue(option.axis, value)), [...byText.get(fold(shopifyValue(option.axis, value))) ?? [], value])
       for (const same of byText.values()) if (same.length > 1) issues.push({ severity: 'error', code: 'duplicate-option-value', key,
         productIds: variants.filter(v => same.includes(v.values[option.axis])).map(v => v.productId),
-        message: `${option.name} would list ${quoted(same.map(label))} as separate values, but Shopify reads them as one. Use one spelling.` })
+        message: same.some(value => shopifyValue(option.axis, value) !== label(value))
+          ? `The size map pairs ${quoted(same.map(label))} with one Shopify ${option.name} value, "${shopifyValue(option.axis, same[0])}". Pair each with its own value.`
+          : `${option.name} would list ${quoted(same.map(label))} as separate values, but Shopify reads them as one. Use one spelling.` })
     }
     const combinations = new Map<string, ColourPlanVariant[]>()
     for (const variant of sorted) {
-      const combination = JSON.stringify(options.map(o => fold(label(variant.values[o.axis]))))
+      const combination = JSON.stringify(options.map(o => fold(shopifyValue(o.axis, variant.values[o.axis]))))
       combinations.set(combination, [...combinations.get(combination) ?? [], variant])
     }
     for (const same of combinations.values()) if (same.length > 1) issues.push({ severity: 'error', code: 'duplicate-variant', key, productIds: same.map(v => v.productId),
-      message: `${same.map(v => v.sku).join(' and ')} have the same ${[...(split === null ? [] : [label(key)]), ...options.map(o => label(same[0].values[o.axis]))].join(' / ') || 'values'}. Each variant needs its own combination.` })
+      message: `${same.map(v => v.sku).join(' and ')} have the same ${[...(split === null ? [] : [label(key)]), ...options.map(o => shopifyValue(o.axis, same[0].values[o.axis]))].join(' / ') || 'values'}. Each variant needs its own combination.` })
     if (sorted.length > SHOPIFY_VARIANT_LIMIT) issues.push({ severity: 'error', code: 'too-many-variants', key, productIds: [],
       message: `${split === null ? 'This product' : `"${label(key)}"`} has ${sorted.length} variants; Nexus publishes at most ${SHOPIFY_VARIANT_LIMIT} per Shopify product.` })
     const chosen = split === null ? undefined : settings.colourNames?.[key]?.trim()
     return {
       key, position, nexusValue: split === null ? '' : label(key),
-      colourName: split === null ? '' : chosen || label(key).trim(), colourNameSource: split === null ? null : chosen ? 'operator' : 'nexus',
-      options: options.map(o => ({ ...o, values: o.values.map(label) })),
-      variants: sorted.map(v => ({ productId: v.productId, sku: v.sku, options: options.map(o => ({ name: o.name, value: label(v.values[o.axis]) })) })),
+      colourName: split === null ? '' : chosen || label(key).trim(), colourNameSource: split === null ? null : chosen ? 'operator' : 'nexus', swatchGroup: null,
+      options: options.map(o => {
+        const values = o.values.map(value => shopifyValue(o.axis, value)), nexusValues = o.values.map(label)
+        return { ...o, values, ...(values.some((value, i) => value !== nexusValues[i]) ? { nexusValues } : {}) }
+      }),
+      variants: sorted.map(v => ({ productId: v.productId, sku: v.sku, options: options.map(o => {
+        const value = shopifyValue(o.axis, v.values[o.axis]), nexusValue = label(v.values[o.axis])
+        return { name: o.name, value, ...(value !== nexusValue ? { nexusValue } : {}) }
+      }) })),
     }
   })
 
@@ -159,17 +233,32 @@ export function planColourProducts(family: ColourPlanFamily, settings: ColourPla
         message: `"${product.nexusValue}" is not an option of the attribute yet. Add it (or map it) first, so its Shopify product keeps its identity when the value is renamed.` })
       if (!product.colourName) issues.push({ severity: 'error', code: 'blank-colour-name', key: product.key, productIds: ids, message: `Name the colour of the "${product.nexusValue}" product for Shopify.` })
     }
-    const byName = new Map<string, ColourPlanProduct[]>()
-    for (const product of products.filter(p => p.colourName)) byName.set(fold(product.colourName), [...byName.get(fold(product.colourName)) ?? [], product])
-    for (const same of byName.values()) if (same.length > 1) issues.push({ severity: 'error', code: 'duplicate-colour-name', productIds: same.flatMap(p => groups.get(p.key)!.map(v => v.productId)),
-      message: `${quoted(same.map(p => p.nexusValue))} would all be called "${same[0].colourName}" on Shopify. Give each colour its own name.` })
-    if (products.length > SHOPIFY_LINKED_LIST_LIMIT) issues.push({ severity: 'error', code: 'too-many-products', productIds: [],
-      message: `Shopify can group at most ${SHOPIFY_LINKED_LIST_LIMIT} products; this family has ${products.length} colours.` })
-    else if (products.length > IMPACT_LINKED_SHOWN_LIMIT) issues.push({ severity: 'warning', code: 'more-than-shown', productIds: [],
-      message: `The theme shows at most ${IMPACT_LINKED_SHOWN_LIMIT} colours; this family has ${products.length}. The rest are grouped but not shown.` })
+    // Feature 1 — each colour keeps the swatch group it has on the store. A name repeats freely across groups, and
+    // inside one group when the store already shows it that way (adopting what the store shows); Nexus refuses only a
+    // repeat it would create itself: a colour whose name equals another's in its group and is not the name its own
+    // product shows. The refusal names that colour (its key), so it stops that colour only.
+    const swatch = swatchGroupsOf(products.map(p => p.key), settings.swatches)
+    swatch.groups.forEach((members, index) => { for (const product of products) if (members.includes(product.key)) product.swatchGroup = index })
+    const storeName = (key: string) => settings.swatches?.[key]?.name?.trim() ?? null
+    for (const members of swatch.groups) {
+      const byName = new Map<string, ColourPlanProduct[]>()
+      for (const product of products.filter(p => p.colourName && members.includes(p.key))) byName.set(fold(product.colourName), [...byName.get(fold(product.colourName)) ?? [], product])
+      for (const same of byName.values()) if (same.length > 1) for (const product of same) {
+        if (product.colourName === storeName(product.key)) continue
+        issues.push({ severity: 'error', code: 'duplicate-colour-name', key: product.key, productIds: groups.get(product.key)!.map(v => v.productId),
+          message: `"${product.nexusValue}" would be called "${product.colourName}" on Shopify, like ${quoted(same.filter(o => o !== product).map(o => o.nexusValue))} in the same swatch group. Give it its own name.` })
+      }
+    }
+    const largest = Math.max(0, ...swatch.groups.map(g => g.length))
+    const counted = swatch.groups.length > 1 ? `one swatch group of this family has ${largest} colours` : `this family has ${largest} colours`
+    if (largest > SHOPIFY_LINKED_LIST_LIMIT) issues.push({ severity: 'error', code: 'too-many-products', productIds: [],
+      message: `Shopify can group at most ${SHOPIFY_LINKED_LIST_LIMIT} products; ${counted}.` })
+    else if (largest > IMPACT_LINKED_SHOWN_LIMIT) issues.push({ severity: 'warning', code: 'more-than-shown', productIds: [],
+      message: `The theme shows at most ${IMPACT_LINKED_SHOWN_LIMIT} colours; ${swatch.groups.length > 1 ? `one swatch group of this family has ${largest}` : `this family has ${largest}`}. The rest are grouped but not shown.` })
+    return { familyId: family.familyId, mode: 'colour-products', splitAxis: split, products, grouped: swatch.groups.some(g => g.length >= 2), swatchGroups: swatch.groups, issues }
   }
 
-  return { familyId: family.familyId, mode: split === null ? 'one-product' : 'colour-products', splitAxis: split, products, grouped: split !== null && products.length >= 2, issues }
+  return { familyId: family.familyId, mode: 'one-product', splitAxis: split, products, grouped: false, swatchGroups: [], issues }
 }
 
 // ── Find (PR 3): which Shopify product is each colour, and which variant each size ──────────────────────────────────
@@ -199,13 +288,12 @@ export interface ColourMatch {
   missing: Array<{ productId: string; sku: string; options: string[] }>
   /** Shopify variants Nexus does not know. They stay exactly as they are: Nexus never deletes a variant. */
   extra: Array<{ shopifyVariantId: string; sku: string | null; options: string[] }>
-  /** Matched Shopify variants that have no SKU: confirming writes the Nexus SKU there (stock sync compares SKUs). */
-  skusToWrite: Array<{ shopifyVariantId: string; sku: string }>
   /**
-   * Matched Shopify variants whose SKU differs from the Nexus SKU only in letter case: confirming writes nothing to
-   * Shopify for them and records Shopify's SKU as the size listing's own SKU on this store (Nexus only).
+   * Matched Shopify variants whose SKU Nexus writes on Confirm (stock sync compares SKUs exactly): those with no SKU, and
+   * those whose SKU differs from the Nexus SKU only in letter case (`from`: Shopify's spelling). Shopify follows Nexus;
+   * a Shopify SKU is never copied into Nexus (the Owner: Nexus SKUs never change).
    */
-  skusToRecord: Array<{ productId: string; shopifyVariantId: string; sku: string }>
+  skusToWrite: Array<{ shopifyVariantId: string; sku: string; from?: string }>
   /**
    * In a product the operator chose: sizes paired by their option values whose Shopify variant carries another SKU (of
    * another colour, or with another prefix). Confirm replaces them with the Nexus SKUs on Shopify only when the
@@ -220,7 +308,7 @@ const valuesKey = (values: readonly string[]) => JSON.stringify(values.map(fold)
 /** Shopify names the only variant of a product without options "Default Title". */
 const DEFAULT_TITLE = 'Default Title'
 
-/** A SKU that differs from another only in letter case (no surrounding spaces): Shopify's can be recorded as is. */
+/** A SKU that differs from another only in letter case (no surrounding spaces): Nexus writes its own spelling over it. */
 const caseOnly = (shopify: string | null, nexus: string) => !!shopify && shopify !== nexus && shopify === shopify.trim() && shopify.toLocaleUpperCase('en') === nexus.trim().toLocaleUpperCase('en')
 
 /**
@@ -293,7 +381,7 @@ export function matchColourProducts(plan: ColourPlan, candidates: readonly Colou
   return plan.products.map(product => {
     const pick = chosen.get(product.key), candidate = pick ? byId.get(pick.id)! : null
     const issues = [...early.get(product.key) ?? []]
-    const variants: ColourMatchVariant[] = [], missing: ColourMatch['missing'] = [], skusToWrite: ColourMatch['skusToWrite'] = [], skusToRecord: ColourMatch['skusToRecord'] = []
+    const variants: ColourMatchVariant[] = [], missing: ColourMatch['missing'] = [], skusToWrite: ColourMatch['skusToWrite'] = []
     const skusToReplace: ColourMatch['skusToReplace'] = []
     const used = new Set<string>()
     for (const variant of product.variants) {
@@ -314,7 +402,7 @@ export function matchColourProducts(plan: ColourPlan, candidates: readonly Colou
           ? { code: 'sku-of-another-colour', productIds: [variant.productId], message: `In "${candidate.title}", the ${values.join(' / ') || 'only'} variant has SKU ${hit.sku}, a SKU of another colour in Nexus.` }
           : { code: 'sku-differs', productIds: [variant.productId], message: `In "${candidate.title}", the ${values.join(' / ') || 'only'} variant has SKU ${hit.sku}; Nexus has ${variant.sku}. Stock sync needs the same SKU. Change one of them.` })
       } else if (by === 'options') skusToWrite.push({ shopifyVariantId: hit.id, sku: variant.sku })
-      else if (caseOnly(hit.sku, variant.sku)) skusToRecord.push({ productId: variant.productId, shopifyVariantId: hit.id, sku: hit.sku! })
+      else if (caseOnly(hit.sku, variant.sku)) skusToWrite.push({ shopifyVariantId: hit.id, sku: variant.sku, from: hit.sku! })
       variants.push({ productId: variant.productId, sku: variant.sku, shopifyVariantId: hit.id, inventoryItemId: hit.inventoryItemId, shopifySku: hit.sku, by })
     }
     const extra = candidate ? candidate.variants.filter(sv => !used.has(sv.id)).map(sv => ({ shopifyVariantId: sv.id, sku: sv.sku, options: sv.options })) : []
@@ -324,6 +412,6 @@ export function matchColourProducts(plan: ColourPlan, candidates: readonly Colou
         message: `"${candidate!.title}" holds SKU ${sv.sku}, which is another colour in Nexus.` })
     }
     return { key: product.key, shopifyProductId: candidate?.id ?? null, method: pick?.method ?? null, shopifyColourName: candidate?.colourName ?? null,
-      variants, missing, extra, skusToWrite, skusToRecord, skusToReplace, issues }
+      variants, missing, extra, skusToWrite, skusToReplace, issues }
   })
 }

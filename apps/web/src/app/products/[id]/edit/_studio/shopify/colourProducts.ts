@@ -6,8 +6,13 @@
 import { compareGarmentSizes } from '@nexus/shared/garment-size-order'
 
 export type ColourState = 'NOT_FOUND' | 'PROPOSED' | 'LINKED' | 'DELETED'
-export interface ColourSize { productId: string; sku: string; options: string[] }
-export interface ColourPlanProduct { key: string; position: number; nexusValue: string; colourName: string; variants: number; sizes?: ColourSize[]; options?: Array<{ axis: string; name: string; values: string[] }> }
+/** A size as Nexus names it; `shopify`: the values the size map pairs it with on this store, when they differ. */
+export interface ColourSize { productId: string; sku: string; options: string[]; shopify?: string[] }
+export interface ColourPlanProduct {
+  key: string; position: number; nexusValue: string; colourName: string; variants: number; sizes?: ColourSize[]; options?: Array<{ axis: string; name: string; values: string[] }>
+  /** Its swatch group on the store (an index; null: in no group of a family the store splits into several). */
+  swatchGroup?: number | null
+}
 export interface ColourMatchVariant { productId: string; sku: string; shopifyVariantId: string; inventoryItemId: string | null; shopifySku: string | null; by: 'sku' | 'options' }
 export interface ColourProposal {
   method: 'linked' | 'operator' | 'sku' | 'name' | 'group' | null
@@ -15,20 +20,27 @@ export interface ColourProposal {
   variants: ColourMatchVariant[]
   missing: Array<{ productId: string; sku: string; options: string[] }>
   extra: Array<{ shopifyVariantId: string; sku: string | null; options: string[] }>
-  skusToWrite: Array<{ shopifyVariantId: string; sku: string }>
-  skusToRecord?: Array<{ productId: string; shopifyVariantId: string; sku: string }>
+  /** The Nexus SKUs Confirm writes: where the variant has none, or (`from`) has the same SKU in another letter case. */
+  skusToWrite: Array<{ shopifyVariantId: string; sku: string; from?: string }>
   skusToReplace?: Array<{ productId: string; shopifyVariantId: string; from: string; to: string }>
   chosenProductId?: string | null
+  /** The product's colour list (`custom.variation_products`) as Find read it. */
+  swatchGroup?: string[] | null
   issues: Array<{ code?: string; message: string }>
 }
-export interface ColourProductRow { id: string; valueKey: string; colourName: string | null; state: ColourState; shopifyProductId: string | null; remoteStatus: string | null; proposal: ColourProposal | null }
+export interface ColourProductRow { id: string; valueKey: string; colourName: string | null; state: ColourState; shopifyProductId: string | null; remoteStatus: string | null; proposal: ColourProposal | null; swatchGroup?: string[] | null }
+/** The size map: native axis code → { Nexus value → Shopify option value }. */
+export type SizeMap = Record<string, Record<string, string>>
 export interface ColourSettings { enabled: boolean; method: 'theme-metafields'; valueField: { namespace: string; key: string }; listField: { namespace: string; key: string }; revision: string }
 export interface ColourView {
   familyId: string; accountId: string; settings: ColourSettings
   sync?: { linked: boolean; adoptOnly: boolean }
   plan: { mode: 'colour-products' | 'one-product'; splitAxis: string | null; issues: Array<{ severity: 'error' | 'warning'; message: string; key?: string }>; products: ColourPlanProduct[]
     /** The axes whose value order the family sets (a dictionary attribute's); the others come A–Z by SKU. */
-    orderedAxes?: string[] }
+    orderedAxes?: string[]
+    /** How many swatch groups the store shows this family's colours in. */
+    swatchGroups?: number }
+  sizeMap?: SizeMap
   colourProducts: ColourProductRow[]
   locations?: Array<{ id: string; name: string }>
 }
@@ -37,8 +49,8 @@ export interface StoreProduct {
   linkedTo: { familySku: string; valueKey: string; state: string; thisFamily: boolean } | null
 }
 
-/** One size of a colour and the Shopify variant it pairs with (null: not on that product). */
-export interface SizePair { productId: string; size: string; sku: string; shopify: { sku: string | null; by: 'sku' | 'options' } | null }
+/** One size of a colour and the Shopify variant it pairs with (null: not on that product). `shopifySize`: its size on Shopify through the size map. */
+export interface SizePair { productId: string; size: string; shopifySize?: string; sku: string; shopify: { sku: string | null; by: 'sku' | 'options' } | null }
 
 export interface ColourRowModel {
   key: string; name: string; row: ColourProductRow | null; proposal: ColourProposal | null
@@ -51,6 +63,8 @@ export interface ColourRowModel {
   /** "No size of … matches": the Nexus and the Shopify size names side by side, for a product none of whose sizes pair. */
   noSizeMatch: string | null
   chosenByOperator: boolean
+  /** Sizes are left on both sides (or a size map exists): the operator may pair them ("Pair sizes…"). */
+  canPairSizes: boolean
 }
 
 const sizeName = (options: readonly string[]) => options.join(' / ') || 'One size'
@@ -84,7 +98,7 @@ export function colourRows(view: ColourView): ColourRowModel[] {
     const sizes = sizesInOrder(product, view.plan.orderedAxes)
     const pairs: SizePair[] = sizes.map(size => {
       const hit = sameAsProposal ? proposal!.variants.find(v => v.productId === size.productId) : undefined
-      return { productId: size.productId, size: sizeName(size.options), sku: hit?.sku ?? size.sku, shopify: hit ? { sku: hit.shopifySku, by: hit.by } : null }
+      return { productId: size.productId, size: sizeName(size.options), ...(size.shopify ? { shopifySize: sizeName(size.shopify) } : {}), sku: hit?.sku ?? size.sku, shopify: hit ? { sku: hit.shopifySku, by: hit.by } : null }
     })
     const matched = pairs.filter(p => p.shopify).length
     const shopifyOnly = sameAsProposal ? proposal!.extra.map(e => sizeName(e.options)) : []
@@ -96,8 +110,76 @@ export function colourRows(view: ColourView): ColourRowModel[] {
       product: shownId ? { id: shownId, title: (sameAsProposal ? proposal!.title : null) ?? `Shopify product ${short(shownId)}`, status: (sameAsProposal ? proposal!.status : null) ?? row?.remoteStatus ?? null,
         showsColour: sameAsProposal ? proposal!.shopifyColourName : row?.colourName ?? null, how: status === 'linked' ? 'Linked' : HOW[proposal?.method ?? ''] ?? 'Proposed' } : null,
       pairs, matched, shopifyOnly, noSizeMatch, chosenByOperator: !!proposal?.chosenProductId && status !== 'linked',
+      canPairSizes: sameAsProposal && (product.options?.length ?? 0) > 0 && (matched < pairs.length && shopifyOnly.length > 0 || Object.keys(view.sizeMap ?? {}).length > 0),
     }
   })
+}
+
+const fold = (text: string) => text.trim().toLocaleLowerCase('en')
+
+/** The colour's name on Shopify before the operator types one: the name it has in Nexus, else the one its product shows today. */
+export function defaultColourName(model: ColourRowModel): string {
+  return model.row?.colourName ?? model.proposal?.shopifyColourName ?? model.name
+}
+
+/**
+ * The name Confirm sends: the typed one, except the Nexus value left as it is on a colour that has no name yet (Confirm
+ * then keeps none, and the colour follows its Nexus value).
+ */
+export function colourNameToSend(model: ColourRowModel, typed: string): string | undefined {
+  const name = typed.trim()
+  return !name || model.row?.colourName == null && model.proposal?.shopifyColourName == null && name === model.name ? undefined : name
+}
+
+/**
+ * Why a typed colour name would be refused (as Confirm refuses it), or null. A name may repeat across swatch groups, and
+ * inside one when it is the name the product shows on the store today; a repeat Nexus would create is not allowed.
+ */
+export function colourNameClash(view: ColourView, model: ColourRowModel, name: string): string | null {
+  const typed = name.trim(), product = view.plan.products.find(p => p.key === model.key)
+  if (!typed || !product || product.swatchGroup === null) return null
+  if (typed === model.proposal?.shopifyColourName?.trim()) return null
+  const group = product.swatchGroup ?? 0
+  const others = view.plan.products.filter(p => p.key !== model.key && (p.swatchGroup ?? 0) === group && p.swatchGroup !== null && fold(p.colourName) === fold(typed))
+  return others.length ? `"${model.name}" would be called "${typed}" on Shopify, like ${others.map(o => `"${o.nexusValue}"`).join(', ')} in the same swatch group. Give it its own name.` : null
+}
+
+/** The colour's swatch group in words, when the store shows the family in several (else null: one group, nothing to say). */
+export function swatchGroupWords(view: ColourView, model: ColourRowModel): string | null {
+  const count = view.plan.swatchGroups ?? 1, product = view.plan.products.find(p => p.key === model.key)
+  if (count < 2 || !product) return null
+  if (product.swatchGroup === null || product.swatchGroup === undefined) return `In no group on the store (the family has ${count})`
+  const members = view.plan.products.filter(p => p.swatchGroup === product.swatchGroup).map(p => p.nexusValue)
+  return `Group ${product.swatchGroup + 1} of ${count}: ${members.join(', ')}`
+}
+
+/** One native option of the family for the size map: each Nexus value, the Shopify value it is paired with, and the Shopify values to choose from. */
+export interface SizeMapAxis { axis: string; name: string; values: Array<{ nexus: string; shopify: string | null }>; choices: string[] }
+
+/**
+ * The size map for one colour's review: every native option of the family with all its Nexus values (the map is the
+ * family's on this store), the pairing saved, and as choices the values this colour's Shopify product has that no size
+ * pairs with yet, plus those already in the map.
+ */
+export function sizeMapAxes(view: ColourView, model: ColourRowModel): SizeMapAxis[] {
+  const product = view.plan.products.find(p => p.key === model.key)
+  const extra = model.proposal?.shopifyProductId === model.product?.id ? model.proposal?.extra ?? [] : []
+  return (product?.options ?? []).map(option => {
+    const values = [...new Set(view.plan.products.flatMap(p => p.options?.find(o => o.axis === option.axis)?.values ?? []))]
+    const saved = view.sizeMap?.[option.axis] ?? {}
+    const choices = [...new Set([...extra.flatMap(e => e.options), ...Object.values(saved)])].filter(Boolean)
+    return { axis: option.axis, name: option.name, values: values.map(nexus => ({ nexus, shopify: saved[nexus] ?? null })), choices }
+  })
+}
+
+/** The size map to save from the operator's choices (a value paired with itself, or with nothing, is no pairing). */
+export function sizeMapOf(axes: readonly SizeMapAxis[]): SizeMap {
+  const out: SizeMap = {}
+  for (const axis of axes) {
+    const pairs = axis.values.filter(v => v.shopify && v.shopify !== v.nexus).map(v => [v.nexus, v.shopify!] as const)
+    if (pairs.length) out[axis.axis] = Object.fromEntries(pairs)
+  }
+  return out
 }
 
 /** Why Confirm cannot run for this colour now (empty: it can). `replace`: the operator ticked "Replace these SKUs". */
@@ -118,9 +200,8 @@ export function confirmWrites(model: ColourRowModel, replace: boolean) {
   return {
     product: model.product?.title ?? '',
     identity: 'nexus.family_id — the Nexus identity of this colour (a hidden product field)',
-    skus: p.skusToWrite.map(s => ({ size: sizeOf(s.shopifyVariantId), sku: s.sku })),
+    skus: p.skusToWrite.map(s => ({ size: sizeOf(s.shopifyVariantId), sku: s.sku, ...(s.from ? { from: s.from } : {}) })),
     replaced: replace ? (p.skusToReplace ?? []).map(r => ({ size: sizeOf(r.shopifyVariantId), from: r.from, to: r.to })) : [],
-    recorded: (p.skusToRecord ?? []).map(r => ({ size: sizeOf(r.shopifyVariantId), sku: r.sku })),
   }
 }
 
@@ -135,7 +216,7 @@ export function syncWords(view: ColourView): { label: string; tone: 'neutral' | 
 export function fullSyncEffects(view: ColourView): string[] {
   const field = (f: { namespace: string; key: string }) => `${f.namespace}.${f.key}`
   return [
-    `Colour swatches: Nexus rewrites ${field(view.settings.valueField)} (the colour name) and ${field(view.settings.listField)} (the colour list) on every linked product of this family — one swatch group with every colour of this family, in the Nexus colour order. The names and groups the store has today (for example men's and women's colours apart) are replaced.`,
+    `Colour swatches: Nexus writes ${field(view.settings.valueField)} (the colour name) and ${field(view.settings.listField)} (the colour list) on every linked product of this family. Each product keeps the swatch group it has on the store today (for example men's and women's colours stay apart): each group gets one list of its own linked colours, in the order the store lists them today (a colour new to the group goes last; only colours the store does not group yet follow the Nexus colour order), and each product the colour name shown here (by default the one the store showed). A colour in no group joins the family's group when the store shows one; with several groups it waits until the store puts it in one.`,
     'Stock and prices: every linked size receives its Nexus stock, and its size listing follows the regular Nexus stock and price sync like any live Shopify listing.',
     'Sizes: a size Nexus has and the product lacks is created (at zero stock, at the listing\'s price); the sizes are put in the Nexus order.',
     'Archive: a colour this family no longer has is archived on Shopify.',

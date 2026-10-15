@@ -11,3 +11,5 @@
 /* The full sync review's acknowledgement takes the footer's first line, so Cancel and Start full sync stay together on
    the next (beside them the long label pushed Start alone onto a second line). */
 .ack { flex: 1 1 100%; min-width: 0; }
+/* "Pair sizes…": one field per Nexus size, as many per line as fit. */
+.sizeMap { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: var(--nds-space-8) var(--nds-space-12); }

@@ -354,17 +354,18 @@ describe('Shopify colour products: the root row is the door; Check runs Find, Li
     expect(await inside(() => db().channelListingSnapshot.count({ where: { channelListingId: ids.cRedS, label: 'before link-channel-id (8100)' } }))).toBe(1)
   }, TIMEOUT)
 
-  it('Link: a size whose Shopify SKU differs only in letter case is recorded as Shopify spells it, never back as the Nexus SKU', async () => {
+  it('Link: a size whose Shopify SKU differs only in letter case is recorded under the Nexus SKU Confirm wrote over it; no Nexus SKU changes', async () => {
     colour.view = view('8100')
     const proposal = colour.view.colourProducts[0].proposal as Record<string, unknown>
-    proposal.skusToRecord = [{ productId: ids['SHC-JKT-RED-S'], shopifyVariantId: 'gid://shopify/ProductVariant/95', sku: 'shc-jkt-red-s' }]
+    proposal.skusToWrite = [{ shopifyVariantId: 'gid://shopify/ProductVariant/95', sku: 'SHC-JKT-RED-S', from: 'shc-jkt-red-s' }]
     colour.onConfirm = async () => {
-      await inside(() => db().channelListing.update({ where: { id: ids.cRedS }, data: { externalListingId: '8100', listingStatus: 'ACTIVE', isPublished: true, liveChannelSku: 'shc-jkt-red-s',
+      await inside(() => db().channelListing.update({ where: { id: ids.cRedS }, data: { externalListingId: '8100', listingStatus: 'ACTIVE', isPublished: true,
         platformAttributes: { shopifyColourProductId: 'cp-red', shopifyProductId: '8100', variantId: '95', inventoryItemId: '75' } } }))
     }
+    const before = await one('cRedS')
     const out = await inside(async () => linkSheetChannelId(ids.cRoot, { externalId: '8100', ...(await fenceOf('cRoot')) }, ids.user, shopifyDeps(true)))
     expect(out).toMatchObject({ ok: true })
-    expect(await one('cRedS')).toMatchObject({ externalListingId: '8100', liveChannelSku: 'shc-jkt-red-s' })
+    expect(await one('cRedS')).toMatchObject({ externalListingId: '8100', liveChannelSku: 'SHC-JKT-RED-S', channelSku: before.channelSku })
   }, TIMEOUT)
 
   it('Clear on a colour product is refused (colour products own its links); nothing changes', async () => {

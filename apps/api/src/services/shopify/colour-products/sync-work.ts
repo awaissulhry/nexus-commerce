@@ -82,6 +82,27 @@ export async function colourAdoptOnly(d: ColourCoordinate, db: Pick<Prisma.Trans
   return row?.adoptOnly === true
 }
 
+/**
+ * The destination's size map (`ShopifyColourSync.sizeMap`, size-map.service.ts): per native option axis, a Nexus value →
+ * the Shopify option value it is on this store. Undefined when it has none; a stored value of another shape reads as none.
+ */
+export async function colourSizeMap(d: ColourCoordinate, db: Pick<Prisma.TransactionClient, 'shopifyColourSync'> = prisma): Promise<Record<string, Record<string, string>> | undefined> {
+  const row = await db.shopifyColourSync.findFirst({ where: coordinate(d), select: { sizeMap: true } })
+  return parseSizeMap(row?.sizeMap)
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
+export function parseSizeMap(value: unknown): Record<string, Record<string, string>> | undefined {
+  if (!isRecord(value)) return undefined
+  const out: Record<string, Record<string, string>> = {}
+  for (const [axis, pairs] of Object.entries(value)) {
+    if (!isRecord(pairs)) continue
+    const kept = Object.entries(pairs).filter((pair): pair is [string, string] => typeof pair[1] === 'string' && !!pair[1].trim())
+    if (kept.length) out[axis] = Object.fromEntries(kept)
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 /** Sets the destination's adopt-only mark (inside the caller's transaction). */
 export async function setColourAdoptOnly(db: Pick<Prisma.TransactionClient, 'shopifyColourSync'>, d: ColourCoordinate, adoptOnly: boolean) {
   await db.shopifyColourSync.updateMany({ where: coordinate(d), data: { adoptOnly } })

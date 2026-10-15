@@ -60,6 +60,9 @@ export async function loadFamily(rootId: string) {
     options: { orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }], select: { id: true, code: true, label: true, metadata: true, synonyms: true, sortOrder: true, archivedAt: true } },
   } }) : []
   const valueLabels: Record<string, string> = {}
+  // The text the products store for each value (the first child's, by SKU): what the Shopify publisher sends as an option
+  // value, which can differ from the dictionary option's default label ("46" stored, the option labelled otherwise).
+  const valueTexts: Record<string, string> = {}
   const unmapped = new Set<string>()
   const variants: MediaFamily['variants'] = root.children.map(child => {
     const stored = storedVariationValues(child, labels)
@@ -71,6 +74,7 @@ export async function loadFamily(rootId: string) {
       if (!value.mapped) unmapped.add(value.key)
       values[code] = value.key
       valueLabels[value.key] ??= value.label
+      valueTexts[value.key] ??= text
     })
     return { productId: child.id, sku: child.sku, values, included: true }
   })
@@ -84,7 +88,7 @@ export async function loadFamily(rootId: string) {
   }))
   const colour = codes.find((code, i) => isColour(labels[i], code))
   const family: MediaFamily = { productId: root.id, variants, defaultAxis: colour ?? codes[0] ?? null, valueOrder, valueLabels }
-  return { root, family, attributes, axes: codes.map((code, i) => ({ code, label: labels[i], dictionary: root.variationAxisCodes[i] === code, values: valueOrder[code].map(key => ({ key, label: valueLabels[key] })) })), unmapped: [...unmapped] }
+  return { root, family, attributes, axes: codes.map((code, i) => ({ code, label: labels[i], dictionary: root.variationAxisCodes[i] === code, values: valueOrder[code].map(key => ({ key, label: valueLabels[key] })) })), unmapped: [...unmapped], valueTexts }
 }
 
 export async function loadLibrary(productIds: string[]) {
