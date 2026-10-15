@@ -9,7 +9,8 @@
  *   set-google-demographics  age, gender, parental status, household income: excluded or shown, bid adjustments per ad
  *                            group (change-demographics.ts)
  *
- * Ids of user lists, custom and combined segments come from the google-ads-live lookups; interests and life events too.
+ * Ids come from google-ads-live view lookup, lookup user-lists / custom-audiences / combined-audiences / audiences
+ * (interests) / life-events; the preview names each new segment, read live, and refuses an id Google does not know.
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
@@ -18,7 +19,7 @@ import { googleAccountArg, googleChangePreview, googleIdArg, googleWhyArg, GOOGL
 import { audienceDraft, audienceRecordHolds, type AudienceLive, type AudienceRecord, type AudienceRequest } from '../../marketing/google-ads/change-audiences.js'
 import { demographicRecordHolds, demographicsDraft, type DemographicRecord, type DemographicRequest } from '../../marketing/google-ads/change-demographics.js'
 import { liveCampaignSettings } from '../../marketing/google-ads/live.js'
-import { AUDIENCE_KINDS, DEMOGRAPHIC_DIMENSIONS, DEMOGRAPHIC_VALUES, liveAdGroupTargetingState, liveTargetingCriteria } from '../../marketing/google-ads/live-targeting.js'
+import { AUDIENCE_KINDS, DEMOGRAPHIC_DIMENSIONS, DEMOGRAPHIC_VALUES, liveAdGroupTargetingState, liveSegmentNames, liveTargetingCriteria, type AudienceKind } from '../../marketing/google-ads/live-targeting.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
 import type { GoogleChangeAccount } from '../../marketing/google-ads/change-account.js'
 
@@ -33,23 +34,30 @@ const common = {
   reversibility: 'full' as const,
 }
 
-/** The campaign, its targeting criteria, its ad groups and their audience and demographic criteria (four reads). */
-async function audienceLive(account: GoogleChangeAccount, campaignId: string): Promise<AudienceLive> {
+/**
+ * The campaign, its targeting criteria, its ad groups and their audience and demographic criteria (four reads), and the
+ * names of the segments a request adds (one read per kind).
+ */
+async function audienceLive(account: GoogleChangeAccount, campaignId: string, adds: Array<{ kind: AudienceKind; id: string }> = []): Promise<AudienceLive> {
   const campaign = await liveCampaignSettings(account.target, campaignId)
   if (!campaign) return { campaign: null, criteria: [], adGroups: [], adGroupCriteria: [] }
   const criteria = await liveTargetingCriteria(account.target, campaignId)
-  return { campaign, criteria, ...(await liveAdGroupTargetingState(account.target, campaignId)) }
+  return {
+    campaign, criteria, ...(await liveAdGroupTargetingState(account.target, campaignId)),
+    ...(adds.length ? { segmentNames: await liveSegmentNames(account.target, adds) } : {}),
+  }
 }
 
 const upper = (v: unknown) => (typeof v === 'string' ? v.trim().toUpperCase() : v)
-const factorArg = z.coerce.number().min(0.1).max(10)
+/** A bid factor, rounded to 4 decimals as Google's adjustments are read back (live-targeting factorOf): undo compares them. */
+const factorArg = z.coerce.number().min(0.1).max(10).transform((v) => Math.round(v * 10_000) / 10_000)
 const adGroupArg = googleIdArg('an ad group of this campaign (none = the campaign itself)').optional()
 
 // ── set-google-audiences ────────────────────────────────────────────────────────────────────────────────────────
 
 const kindArg = z.preprocess(upper, z.enum(AUDIENCE_KINDS))
   .describe('USER_LIST (your data: website visitors, customer lists), USER_INTEREST (affinity or in-market), CUSTOM_AUDIENCE, COMBINED_AUDIENCE or LIFE_EVENT')
-const audienceIdArg = googleIdArg('the segment (user list, interest, custom or combined segment, or life event id; google-ads-live lookups find them)')
+const audienceIdArg = googleIdArg('the segment\'s id: google-ads-live view lookup, lookup user-lists / custom-audiences / combined-audiences / audiences / life-events')
 
 const audienceRequest = (a: Record<string, unknown>): AudienceRequest => ({
   ...(a.add !== undefined ? { add: a.add as AudienceRequest['add'] } : {}),
@@ -58,8 +66,11 @@ const audienceRequest = (a: Record<string, unknown>): AudienceRequest => ({
   ...(a.modes !== undefined ? { modes: a.modes as AudienceRequest['modes'] } : {}),
 })
 
-const buildAudiences = (args: Record<string, unknown>): GoogleDraftBuilder => async (account) =>
-  audienceDraft(customerResource(account.target), String(args.campaignId), audienceRequest(args), await audienceLive(account, String(args.campaignId)))
+const buildAudiences = (args: Record<string, unknown>): GoogleDraftBuilder => async (account) => {
+  const request = audienceRequest(args)
+  const live = await audienceLive(account, String(args.campaignId), (request.add ?? []).map((a) => ({ kind: a.kind, id: a.id })))
+  return audienceDraft(customerResource(account.target), String(args.campaignId), request, live)
+}
 
 const audiencesUndo: ToolUndo = {
   async current(change: ToolChange) {
@@ -114,7 +125,9 @@ const setGoogleAudiences: AgentTool = {
   description:
     'Change the audience segments of one Google Ads campaign (Search or Standard Shopping), at the campaign or at its ad '
     + 'groups: user lists (your data: website visitors, customer lists), interests (affinity, in-market), custom and '
-    + 'combined segments and life events — add, exclude, remove, change their bid adjustments, and set whether they only '
+    + 'combined segments and life events (ids: google-ads-live view lookup, lookup user-lists / custom-audiences / '
+    + 'combined-audiences / audiences / life-events; the preview names each new one) — add, exclude, remove, change '
+    + 'their bid adjustments, and set whether they only '
     + 'adjust bids (OBSERVATION) or narrow who sees the ads (TARGETING). New segments go in OBSERVATION where nothing '
     + 'narrows yet; where segments narrow, the mode must be named. Google keeps segments of a kind at the campaign or at '
     + 'its ad groups, not both (its check says so). Removing an exclusion, TARGETING → OBSERVATION, more segments in '

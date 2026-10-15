@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
   mutate: vi.fn(),
-  live: { settings: null as unknown, criteria: [] as unknown[], adGroups: [] as unknown[], adGroupCriteria: [] as unknown[], adGroupDevices: [] as unknown[] },
+  live: { settings: null as unknown, criteria: [] as unknown[], adGroups: [] as unknown[], adGroupCriteria: [] as unknown[], adGroupDevices: [] as unknown[], names: {} as Record<string, unknown> },
 }))
 vi.mock('../../marketing/google-ads/change-account.js', () => ({
   googleChangeAccount: vi.fn(async () => ({
@@ -25,6 +25,7 @@ vi.mock('../../marketing/google-ads/live-targeting.js', async (importActual) => 
   liveTargetingAdGroups: vi.fn(async () => structuredClone(h.live.adGroups)),
   liveAdGroupDevices: vi.fn(async () => structuredClone(h.live.adGroupDevices)),
   liveAdGroupTargetingState: vi.fn(async () => ({ adGroups: structuredClone(h.live.adGroups), adGroupCriteria: structuredClone(h.live.adGroupCriteria) })),
+  liveSegmentNames: vi.fn(async () => structuredClone(h.live.names)),
 }))
 vi.mock('../../marketing/google-ads/write-client.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/write-client.js')>()),
@@ -56,6 +57,7 @@ beforeEach(() => {
   h.live.adGroups = [AG]
   h.live.adGroupCriteria = []
   h.live.adGroupDevices = []
+  h.live.names = { 'USER_LIST|301': { name: 'Site visitors', status: 'OPEN' }, 'USER_INTEREST|80000': { name: 'Motorcycles', status: null } }
 })
 
 /** Preview (Google's check), then the approved run; returns the run. */
@@ -96,6 +98,24 @@ describe('the audience and demographics tools', () => {
     expect(await tool('set-google-audiences').undo!.current(change)).toEqual(change.after)
     h.live.adGroupCriteria = []
     expect(await tool('set-google-audiences').undo!.current(change)).toMatchObject({ moved: true })
+  })
+
+  it('bid factors are rounded to 4 decimals on the way in, as Google\'s are read back (undo never sees a false "moved")', () => {
+    expect(tool('set-google-audiences').input.parse({ campaignId: '21', bids: [{ kind: 'USER_LIST', id: '301', bidModifier: 1.234567 }] })).toMatchObject({ bids: [{ bidModifier: 1.2346 }] })
+    expect(tool('set-google-demographics').input.parse({ campaignId: '21', changes: [{ dimension: 'GENDER', value: 'MALE', adGroupId: '51', bidModifier: '0.333333' }] })).toMatchObject({ changes: [{ bidModifier: 0.3333 }] })
+    expect(tool('set-google-targeting').input.parse({ campaignId: '21', devices: [{ device: 'MOBILE', bidModifier: 1.000049 }], locationBids: [{ id: '2380', bidModifier: 1.23456 }] }))
+      .toMatchObject({ devices: [{ bidModifier: 1 }], locationBids: [{ bidModifier: 1.2346 }] })
+  })
+
+  it('set-google-targeting interests: reads the ad groups\' segments, and refuses observation that would widen an ad group', async () => {
+    h.live.adGroupCriteria = [{ adGroupId: '51', criterionId: '9', type: 'USER_LIST', negative: false, name: null, bidModifier: null, segment: { kind: 'USER_LIST', id: '301' } }]
+    h.mutate.mockResolvedValue(ok())
+    const refused = await tool('set-google-targeting').handler({ campaignId: '21', addAudiences: ['80000'] }, asker)
+    expect(refused).toMatchObject({ ok: false, error: expect.stringContaining('at the campaign or its ad groups') })
+    expect(h.mutate).not.toHaveBeenCalled()
+    h.live.adGroupCriteria = []
+    const out = await tool('set-google-targeting').handler({ campaignId: '21', addAudiences: ['80000'] }, asker)
+    expect(out).toMatchObject({ ok: true, preview: { changes: { 'interest "Motorcycles" (80000)': { from: '—', to: 'observed' } } } })
   })
 
   it('set-google-demographics: refused without a Google check when every group would go; undo restores the exact criteria', async () => {

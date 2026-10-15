@@ -109,6 +109,17 @@ describe('the campaign tools', () => {
     expect((out.preview as { warnings: string[] }).warnings).toContain('"Shop A" targets no location: it can show in every country.')
   })
 
+  it('set-google-status ENABLE: a campaign that targets only a radius targets a place (no "targets no location" warning)', async () => {
+    h.live.criteria = [{ criterionId: '8', type: 'PROXIMITY', negative: false, name: null, bidModifier: null }]
+    h.mutate.mockResolvedValue(ok)
+    const out = await tool('set-google-status').handler({ items: [{ kind: 'campaign', id: '21' }], status: 'ENABLED' }, asker)
+    expect(out.ok).toBe(true)
+    expect(JSON.stringify((out.preview as { warnings?: string[] }).warnings ?? [])).not.toContain('targets no location')
+    h.live.criteria = []
+    const none = await tool('set-google-status').handler({ items: [{ kind: 'campaign', id: '21' }], status: 'ENABLED' }, asker)
+    expect((none.preview as { warnings: string[] }).warnings).toContain('"Shop A" targets no location: it can show in every country.')
+  })
+
   it('remove-google-ads-items: only with confirmRemove true (the person\'s ask)', () => {
     const input = tool('remove-google-ads-items').input
     expect(input.safeParse({ items: [{ kind: 'campaign', id: '21' }] }).success).toBe(false)

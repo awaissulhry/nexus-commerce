@@ -21,7 +21,7 @@
  */
 import { changeLines, plural, type GoogleChangeDraft } from './change-draft.js'
 import {
-  adjustmentWords, DEMOGRAPHIC_DIMENSIONS, DEMOGRAPHIC_FIELD, DEMOGRAPHIC_VALUES, SMART_BIDDING, type DemographicDimension,
+  adjustmentWords, DEMOGRAPHIC_DIMENSIONS, DEMOGRAPHIC_FIELD, DEMOGRAPHIC_VALUES, smartBiddingWords, type DemographicDimension,
 } from './live-targeting.js'
 import type { AudienceLive } from './change-audiences.js'
 import type { GoogleMutateOperation } from './write-client.js'
@@ -112,6 +112,8 @@ export function demographicsDraft(customer: string, campaignId: string, ask: Dem
   const state = new Map(before)
   const touched = new Set<string>()
   const skipped: string[] = []
+  /** Said in the warnings: a group shown at an ad group while the campaign still excludes it. */
+  const notes: string[] = []
   const seen = new Set<string>()
   const put = (k: string, s: State | null) => { if (s) state.set(k, s); else state.delete(k); touched.add(k) }
 
@@ -136,24 +138,35 @@ export function demographicsDraft(customer: string, campaignId: string, ask: Dem
       else put(k, { kind: 'NEG', bidModifier: null })
       continue
     }
-    // Shown (with or without a bid adjustment).
+    // Shown (with or without a bid adjustment). A group the campaign excludes stays hidden at every ad group.
+    const campaignHides = state.get(keyOf('', ch.dimension, ch.value))?.kind === 'NEG'
+    const hidden = `${what}: the campaign excludes it, so it stays hidden there until the campaign shows it again (this tool without adGroupId).`
     const wasExcluded = cur?.kind === 'NEG'
     if (wasExcluded) put(k, null)
     const positives = values(ch.dimension).some((v) => state.get(keyOf(level, ch.dimension, v))?.kind === 'POS')
     const m = ch.bidModifier === undefined ? undefined : noAdjustment(ch.bidModifier)
     if (positives) {
       const now = state.get(k)
-      if (now?.kind === 'POS' && (m === undefined || noAdjustment(now.bidModifier) === m)) { if (!wasExcluded) skipped.push(`${what} is already shown${m === undefined ? '' : ` with this adjustment (${adjustmentWords(m)})`}.`) }
-      else put(k, { kind: 'POS', bidModifier: m !== undefined ? m : now?.kind === 'POS' ? now.bidModifier : null })
+      if (now?.kind === 'POS' && (m === undefined || noAdjustment(now.bidModifier) === m)) {
+        if (!wasExcluded) skipped.push(campaignHides ? hidden : `${what} is already shown${m === undefined ? '' : ` with this adjustment (${adjustmentWords(m)})`}.`)
+        else if (campaignHides) notes.push(hidden)
+      } else {
+        put(k, { kind: 'POS', bidModifier: m !== undefined ? m : now?.kind === 'POS' ? now.bidModifier : null })
+        if (campaignHides) notes.push(hidden)
+      }
     } else if (m !== undefined && m !== null) {
-      // Every group of the dimension the ad group shows gets a positive criterion (this one with its adjustment), so
-      // the dimension is not narrowed to this group.
+      // Every group of the dimension (unknown too) gets a positive criterion at the ad group, this one with its
+      // adjustment, so the dimension is not narrowed to this group; only the ad group's own exclusions stay out. A
+      // group the campaign excludes gets one too: the campaign's exclusion still applies on top, and the ad group
+      // keeps it the day the campaign shows it again.
       for (const v of values(ch.dimension)) {
         const kv = keyOf(level, ch.dimension, v)
-        if (state.get(kv)?.kind === 'NEG' || state.get(keyOf('', ch.dimension, v))?.kind === 'NEG') continue
+        if (state.get(kv)?.kind === 'NEG') continue
         put(kv, { kind: 'POS', bidModifier: v === ch.value ? m : null })
       }
-    } else if (!wasExcluded) skipped.push(`${what} is already shown${m === null ? ' with no adjustment' : ''}.`)
+      if (campaignHides) notes.push(hidden)
+    } else if (!wasExcluded) skipped.push(campaignHides ? hidden : `${what} is already shown${m === null ? ' with no adjustment' : ''}.`)
+    else if (campaignHides) notes.push(hidden)
   }
   for (const r of ask.restore ?? []) {
     const level = r.adGroupId ?? ''
@@ -212,7 +225,7 @@ export function demographicsDraft(customer: string, campaignId: string, ask: Dem
   // Who sees the ads and what it bids, per level and dimension changed.
   const lines: Array<[string, unknown, unknown]> = []
   const spends: string[] = []
-  const warnings: string[] = []
+  const warnings: string[] = [...notes]
   let adjusted = false
   const changedDims = new Set(set.map((x) => `${x.adGroupId ?? ''}|${x.dimension}`))
   const describe = (s: Map<string, State>, level: string, dimension: DemographicDimension) => {
@@ -234,7 +247,8 @@ export function demographicsDraft(customer: string, campaignId: string, ask: Dem
     if (raised.length) spends.push(`${w}: bids more for ${raised.map((v) => `${valueWords(dimension, v)} (${adjustmentWords(factorAt(before, level, dimension, v))} → ${adjustmentWords(factorAt(state, level, dimension, v))})`).join(', ')}${whereNote(level)}.`)
     if (on1.some((v) => factorAt(state, level, dimension, v) !== 1)) adjusted = true
   }
-  if (adjusted && c.bidding && SMART_BIDDING.has(c.bidding)) warnings.push(`"${c.name}" bids with ${c.bidding}: Google's Smart Bidding does not use demographic bid adjustments (exclusions still apply).`)
+  const smart = adjusted ? smartBiddingWords(c, 'other') : null
+  if (smart) warnings.push(smart.replace('these bid adjustments', 'demographic bid adjustments'))
 
   const { changes, more } = changeLines(lines)
   const record: DemographicRecord = { campaignId: c.campaignId, restore, set }

@@ -18,6 +18,12 @@
  * - Radius (proximity) targeting: campaign level, positive only (Google cannot exclude a radius: location guide), a geo
  *   point (micro degrees) or an address Google geocodes, a radius and KILOMETERS or MILES (default KILOMETERS).
  *
+ * Interests (addAudiences / removeAudiences) are a shorthand for targeted interest segments the campaign OBSERVES: they
+ * change no one's reach. Exclusions, segments that narrow (TARGETING, said or Google's default), segments with a bid
+ * adjustment and anything at the ad groups are set-google-audiences', whose undo and money lines cover them. Adding the
+ * first interest sets the campaign's audience setting to OBSERVATION only when no segment narrows anywhere in the
+ * campaign (else that would widen who sees the ads); undo takes that setting off again (clearAudienceSetting).
+ *
  * Money: what lets the ads show to more people is in `spendsMoney` — a new targeted location, radius or language, an
  * exclusion removed, more hours in the schedule, a device shown again, any bid adjustment raised, and above all removing
  * the LAST targeted location or language (then the ads can show everywhere / in every language).
@@ -25,7 +31,10 @@
 import { changeLines, plural, type GoogleChangeDraft } from './change-draft.js'
 import { scheduleCriteria, type ScheduleCriterion, type ScheduleSlot } from './change-campaigns.js'
 import type { LiveCampaignDetail, LiveCriterion } from './live.js'
-import { adjustmentWords, AUDIENCE_KINDS, SMART_BIDDING, type AdGroupDeviceModifier, type Device, type TargetingAdGroup, type TargetingCriterion } from './live-targeting.js'
+import {
+  adjustmentWords, AUDIENCE_KINDS, smartBiddingWords,
+  type AdGroupDeviceModifier, type AdGroupTargetingCriterion, type Device, type SegmentName, type TargetingAdGroup, type TargetingCriterion,
+} from './live-targeting.js'
 import type { GoogleMutateOperation, GoogleMutateResponse } from './write-client.js'
 
 /** A radius around a point (latitude / longitude in degrees) or around an address Google geocodes. */
@@ -60,6 +69,8 @@ export interface TargetingRequest {
   addRadius?: RadiusSpec[]
   /** Radius criteria to remove, by criterion id. */
   removeRadius?: string[]
+  /** What undo uses: take off the campaign's audience setting (OBSERVATION) that adding the first interest put there. */
+  clearAudienceSetting?: boolean
 }
 
 /**
@@ -70,16 +81,26 @@ export interface TargetingRequest {
 export interface TargetingRecord {
   campaignId: string
   undo: TargetingRequest
-  set?: { devices?: Array<{ device: string; adGroupId?: string; bidModifier: number | null }>; locationBids?: Array<{ id?: string; radiusId?: string; bidModifier: number }> }
+  set?: {
+    devices?: Array<{ device: string; adGroupId?: string; bidModifier: number | null }>
+    locationBids?: Array<{ id?: string; radiusId?: string; bidModifier: number }>
+    /** The campaign's audience setting it wrote (adding the first interest, or undo taking it off). */
+    audienceSetting?: 'OBSERVATION' | 'NONE'
+  }
   radiusOps?: number[]
 }
 
-/** The live state a targeting change stands on (ad groups and their device adjustments only when an ad group is named). */
+/**
+ * The live state a targeting change stands on: ad groups and their device adjustments when an ad group's device is
+ * named; ad groups and their audience criteria when interests change; the names of the interests added.
+ */
 export interface TargetingLive {
   campaign: LiveCampaignDetail['campaign'] | null
   criteria: Array<LiveCriterion | TargetingCriterion>
   adGroups?: TargetingAdGroup[]
   adGroupDevices?: AdGroupDeviceModifier[]
+  adGroupCriteria?: AdGroupTargetingCriterion[]
+  segmentNames?: Record<string, SegmentName>
 }
 
 const geoId = (c: LiveCriterion) => (c.location ?? '').split('/').pop() ?? ''
@@ -156,7 +177,8 @@ export function targetingDraft(
   const radii = criteria.filter((k) => k.type === 'PROXIMITY' && k.proximity)
   const languages = criteria.filter((k) => k.type === 'LANGUAGE')
   const audiences = criteria.filter((k) => k.type === 'USER_INTEREST')
-  let adjusted = false
+  let adjustedDevice = false
+  let adjustedPlace = false
 
   // Locations
   const addedLoc: Array<{ id: string; exclude?: boolean }> = []
@@ -245,7 +267,7 @@ export function targetingDraft(
     if (to > from) spends.push(`Raises the bid adjustment of ${found.name ?? (b.id ? `location ${b.id}` : `radius ${b.radiusId}`)} (${adjustmentWords(from)} → ${adjustmentWords(to)})${note}.`)
     ;(undo.locationBids ??= []).push({ ...(b.id ? { id: b.id } : { radiusId: b.radiusId }), bidModifier: found.bidModifier === 1 ? null : found.bidModifier })
     ;(set.locationBids ??= []).push({ ...(b.id ? { id: b.id } : { radiusId: b.radiusId }), bidModifier: to })
-    adjusted = true
+    adjustedPlace = true
   }
 
   // Devices: the campaign's device criteria (never removed; ×1 = no adjustment), an ad group's own adjustment.
@@ -274,7 +296,7 @@ export function targetingDraft(
     if (to > from) spends.push(from === 0 ? `Shows the ads on ${deviceWords(d.device)} again (they were excluded)${note}.` : `Raises the ${deviceWords(d.device)} bid adjustment (${adjustmentWords(from)} → ${adjustmentWords(to)})${note}.`)
     ;(undo.devices ??= []).push({ device: d.device, bidModifier: k?.bidModifier === undefined || k.bidModifier === 1 ? null : k.bidModifier })
     ;(set.devices ??= []).push({ device: d.device, bidModifier: to })
-    if (to !== 0) adjusted = true
+    if (to !== 0) adjustedDevice = true
   }
   const groupDevices = (ask.devices ?? []).filter((x) => x.adGroupId)
   if (groupDevices.length) {
@@ -301,12 +323,16 @@ export function targetingDraft(
       if (effectiveTo > effectiveFrom) spends.push(effectiveFrom === 0 ? `Shows the ads of ad group "${ag.name}" on ${deviceWords(d.device)} again${agNote}.` : `Raises the ${deviceWords(d.device)} bid adjustment of ad group "${ag.name}" (${adjustmentWords(effectiveFrom)} → ${adjustmentWords(effectiveTo)})${agNote}.`)
       ;(undo.devices ??= []).push({ device: d.device, adGroupId: ag.adGroupId, bidModifier: from })
       ;(set.devices ??= []).push({ device: d.device, adGroupId: ag.adGroupId, bidModifier: to })
-      if (to !== null && to !== 0) adjusted = true
+      if (to !== null && to !== 0) adjustedDevice = true
     }
   }
-  if (adjusted && c.bidding && SMART_BIDDING.has(c.bidding)) {
-    warnings.push(`"${c.name}" bids with ${c.bidding}: Google's Smart Bidding does not use these bid adjustments (only a −100 % device opt-out), until the campaign bids another way.`)
-  }
+  // Smart Bidding (Google Ads Help 2732132): a device adjustment is −100 % only, or changes the CPA target; location
+  // and radius adjustments are not used.
+  const adjustedNewPlace = (ask.addLocations ?? []).some((l) => !l.exclude && l.bidModifier !== undefined && l.bidModifier !== 1) || (ask.addRadius ?? []).some((r) => r.bidModifier !== undefined && r.bidModifier !== 1)
+  const smartDevice = adjustedDevice ? smartBiddingWords(c, 'device') : null
+  const placeWords = adjustedPlace || adjustedNewPlace ? smartBiddingWords(c, 'other') : null
+  if (smartDevice) warnings.push(smartDevice)
+  if (placeWords) warnings.push(placeWords.replace('these bid adjustments', 'location and radius bid adjustments'))
 
   // Languages
   const addedLang: string[] = []
@@ -357,40 +383,65 @@ export function targetingDraft(
     }
   }
 
-  // Audiences (observation only)
+  // Interests (observation only): set-google-targeting adds and removes targeted interest segments the campaign OBSERVES —
+  // nothing that changes who sees the ads. The rest is set-google-audiences.
+  const campaignAudience = c.audienceMode.find((t) => t.dimension === 'AUDIENCE')
+  const observes = campaignAudience?.observationOnly === true
+  const toAudiences = 'use set-google-audiences, which names the mode and keeps the money lines and undo exact'
   const addedAud: string[] = []
   for (const id of [...new Set(ask.addAudiences ?? [])]) {
-    if (audiences.some((k) => audienceId(k) === id)) { skipped.push(`Audience ${id} is already on "${c.name}".`); continue }
+    if (audiences.some((k) => audienceId(k) === id && k.negative)) return { refusal: `Interest ${id} is excluded from "${c.name}": ${toAudiences}.` }
+    if (audiences.some((k) => audienceId(k) === id)) { skipped.push(`Interest ${id} is already on "${c.name}".`); continue }
+    if (live.segmentNames && !live.segmentNames[`USER_INTEREST|${id}`]) return { refusal: `Interest ${id} is not one of Google's interest segments (google-ads-live view lookup, lookup audiences, finds them).` }
     ops.push({ campaignCriterionOperation: { create: { campaign: res, userInterest: { userInterestCategory: `${customer}/userInterests/${id}` } } } })
     addedAud.push(id)
+    lines.push([`interest "${live.segmentNames?.[`USER_INTEREST|${id}`]?.name ?? id}" (${id})`, '—', 'observed'])
   }
   const removedAud: string[] = []
   for (const id of [...new Set(ask.removeAudiences ?? [])]) {
-    const found = audiences.find((k) => audienceId(k) === id)
-    if (!found) { skipped.push(`Audience ${id} is not on "${c.name}".`); continue }
+    const found = audiences.find((k) => audienceId(k) === id && !k.negative)
+    if (!found) {
+      if (audiences.some((k) => audienceId(k) === id && k.negative)) return { refusal: `Interest ${id} is an exclusion of "${c.name}": removing it lets more people see the ads — ${toAudiences}.` }
+      skipped.push(`Interest ${id} is not on "${c.name}".`)
+      continue
+    }
+    if (!observes) return { refusal: `"${c.name}" uses its audiences as TARGETING (they narrow who sees the ads), so removing interest ${id} changes who sees them: ${toAudiences}.` }
+    if (found.bidModifier !== null && found.bidModifier !== 1) return { refusal: `Interest ${id} has a bid adjustment (${adjustmentWords(found.bidModifier)}): ${toAudiences}, whose undo puts it back with it.` }
     ops.push({ campaignCriterionOperation: { remove: crit(found.criterionId) } })
     removedAud.push(id)
   }
-  if (addedAud.length) {
-    const audienceMode = c.audienceMode.find((t) => t.dimension === 'AUDIENCE')
-    // Nexus adds audiences in observation only, and never turns targeting into observation by itself (that widens who
-    // sees the ads, and an undo could not put the narrowing back).
-    if (audienceMode && !audienceMode.observationOnly) {
-      return { refusal: `"${c.name}" sets its audiences to TARGETING (they narrow who sees the ads). set-google-targeting adds audiences in observation only: use set-google-audiences, which names the mode, or leave the audiences as they are.` }
-    }
-    // No audience setting: Google's default is TARGETING, so audiences already on the campaign narrow who sees the ads.
-    // Turning that into observation would widen it: never by itself (set-google-audiences names the mode).
-    if (!audienceMode && criteria.some((k) => (AUDIENCE_KINDS as readonly string[]).includes(k.type ?? '') && !k.negative)) {
-      return { refusal: `"${c.name}" has audiences and no audience setting, so Google uses them as TARGETING (they narrow who sees the ads). set-google-targeting adds audiences in observation only: use set-google-audiences, which names the mode.` }
-    }
-    if (!audienceMode) {
-      const others = c.audienceMode.map((t) => ({ targetingDimension: t.dimension, bidOnly: t.observationOnly }))
-      ops.unshift({ campaignOperation: { update: { resourceName: res, targetingSetting: { targetRestrictions: [...others, { targetingDimension: 'AUDIENCE', bidOnly: true }] } }, updateMask: 'targeting_setting.target_restrictions' } })
-    }
-    undo.removeAudiences = addedAud
+  if (addedAud.length && !observes) {
+    // Adding interests in observation means the campaign's audience setting becomes OBSERVATION. Where segments narrow
+    // now (TARGETING said, or no setting with segments at the campaign or an ad group: Google's default is TARGETING),
+    // that widens who sees the ads: never by itself.
+    if (campaignAudience) return { refusal: `"${c.name}" sets its audiences to TARGETING (they narrow who sees the ads). set-google-targeting adds interests in observation only: ${toAudiences}.` }
+    const narrowing = criteria.some((k) => (AUDIENCE_KINDS as readonly string[]).includes(k.type ?? '') && !k.negative)
+      || (live.adGroupCriteria ?? []).some((k) => k.segment && !k.negative)
+    if (narrowing) return { refusal: `"${c.name}" has audience segments (at the campaign or its ad groups) and no audience setting, so Google uses them as TARGETING (they narrow who sees the ads); setting the campaign to observation would widen that. ${toAudiences[0].toUpperCase()}${toAudiences.slice(1)}.` }
+    const own = (live.adGroups ?? []).filter((a) => a.audienceMode.length)
+    if (!c.audienceMode.length && own.length) return { refusal: `Ad groups of "${c.name}" (${own.slice(0, 3).map((a) => `"${a.name}"`).join(', ')}) hold their own audience setting, and Google keeps it on the campaign or its ad groups, not both: ${toAudiences}.` }
+    const others = c.audienceMode.map((t) => ({ targetingDimension: t.dimension, bidOnly: t.observationOnly }))
+    ops.unshift({ campaignOperation: { update: { resourceName: res, targetingSetting: { targetRestrictions: [...others, { targetingDimension: 'AUDIENCE', bidOnly: true }] } }, updateMask: 'targeting_setting.target_restrictions' } })
+    lines.push(['audience setting', 'none (Google: targeting)', 'observation (bids only)'])
+    set.audienceSetting = 'OBSERVATION'
+    undo.clearAudienceSetting = true
   }
+  if (ask.clearAudienceSetting) {
+    // Undo of the above: no segment may be left that would then narrow (the setting is Google's TARGETING without it).
+    if (!campaignAudience) skipped.push(`"${c.name}" has no audience setting.`)
+    else {
+      const left = criteria.filter((k) => (AUDIENCE_KINDS as readonly string[]).includes(k.type ?? '') && !k.negative && !removedAud.includes(audienceId(k))).length
+        + addedAud.length + (live.adGroupCriteria ?? []).filter((k) => k.segment && !k.negative).length
+      if (left) return { refusal: `"${c.name}" still has ${plural(left, 'audience segment')}: without its setting Google would use them as TARGETING (they would narrow who sees the ads). ${toAudiences[0].toUpperCase()}${toAudiences.slice(1)}.` }
+      const others = c.audienceMode.filter((t) => t.dimension !== 'AUDIENCE').map((t) => ({ targetingDimension: t.dimension, bidOnly: t.observationOnly }))
+      ops.push({ campaignOperation: { update: { resourceName: res, targetingSetting: { targetRestrictions: others } }, updateMask: 'targeting_setting.target_restrictions' } })
+      lines.push(['audience setting', campaignAudience.observationOnly ? 'observation (bids only)' : 'targeting (narrows who sees the ads)', 'none (Google: targeting)'])
+      set.audienceSetting = 'NONE'
+    }
+  }
+  if (addedAud.length) undo.removeAudiences = addedAud
   if (removedAud.length) undo.addAudiences = removedAud
-  if (addedAud.length || removedAud.length) lines.push(['audiences (observation)', audiences.length, audiences.length + addedAud.length - removedAud.length])
+  if (addedAud.length || removedAud.length) lines.push(['interests (observation)', audiences.filter((k) => !k.negative).length, audiences.filter((k) => !k.negative).length + addedAud.length - removedAud.length])
 
   if (!ops.length) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
   const { changes } = changeLines(lines)

@@ -22,11 +22,11 @@ import {
   campaignCreateDraft, campaignCreateRecordAfterRun, campaignSettingsDraft, campaignSettingsNow, DAYS,
   type CampaignCreateRecord, type CampaignCreateRequest, type CampaignSettingsRecord, type CampaignSettingsRequest,
 } from '../../marketing/google-ads/change-campaigns.js'
-import { scheduleNow, targetingDraft, targetingRecordAfterRun, type TargetingRecord, type TargetingRequest } from '../../marketing/google-ads/change-targeting.js'
+import { scheduleNow, targetingDraft, targetingRecordAfterRun, type TargetingLive, type TargetingRecord, type TargetingRequest } from '../../marketing/google-ads/change-targeting.js'
 import { removeDraft, statusDraft, type EnableFacts, type RemoveRequest, type StatusRecord, type StatusRequest } from '../../marketing/google-ads/change-status.js'
 import { liveBudgets, liveCampaigns, liveCampaignSettings, liveNegativeLists, liveProductGroups } from '../../marketing/google-ads/live.js'
 import { liveCampaignCriteria, liveStatuses } from '../../marketing/google-ads/live-campaigns.js'
-import { DEVICES, liveAdGroupDevices, liveTargetingAdGroups, liveTargetingCriteria } from '../../marketing/google-ads/live-targeting.js'
+import { DEVICES, liveAdGroupDevices, liveAdGroupTargetingState, liveSegmentNames, liveTargetingAdGroups, liveTargetingCriteria, type TargetingCriterion } from '../../marketing/google-ads/live-targeting.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
@@ -247,23 +247,36 @@ const setGoogleCampaign: AgentTool = {
 
 // ── set-google-targeting ────────────────────────────────────────────────────────────────────────────────────────
 
-const TARGETING_KEYS = ['addLocations', 'removeLocations', 'addLanguages', 'removeLanguages', 'schedule', 'clearSchedule', 'addAudiences', 'removeAudiences', 'devices', 'locationBids', 'addRadius', 'removeRadius'] as const
+const TARGETING_KEYS = ['addLocations', 'removeLocations', 'addLanguages', 'removeLanguages', 'schedule', 'clearSchedule', 'addAudiences', 'removeAudiences', 'devices', 'locationBids', 'addRadius', 'removeRadius', 'clearAudienceSetting'] as const
 const targetingRequest = (a: Record<string, unknown>): TargetingRequest =>
   Object.fromEntries(TARGETING_KEYS.filter((k) => a[k] !== undefined).map((k) => [k, a[k]])) as TargetingRequest
 
-/** The campaign, its targeting criteria, and (only when an ad group's device adjustment is asked) its ad groups. */
-async function targetingLive(account: Parameters<GoogleDraftBuilder>[0], campaignId: string, withAdGroups: boolean) {
+/**
+ * The campaign and its targeting criteria; its ad groups with their device adjustments when an ad group's device is
+ * asked; its ad groups with their audience criteria when interests change; the names of the interests added.
+ */
+async function targetingLive(account: Parameters<GoogleDraftBuilder>[0], campaignId: string, request: TargetingRequest): Promise<TargetingLive> {
   const campaign = await liveCampaignSettings(account.target, campaignId)
   const criteria = campaign ? await liveTargetingCriteria(account.target, campaignId) : []
-  if (!campaign || !withAdGroups) return { campaign, criteria }
-  return { campaign, criteria, adGroups: await liveTargetingAdGroups(account.target, campaignId), adGroupDevices: await liveAdGroupDevices(account.target, campaignId) }
+  const live: TargetingLive = { campaign, criteria }
+  if (!campaign) return live
+  if (request.devices?.some((d) => d.adGroupId)) {
+    live.adGroups = await liveTargetingAdGroups(account.target, campaignId)
+    live.adGroupDevices = await liveAdGroupDevices(account.target, campaignId)
+  }
+  if (request.addAudiences?.length || request.removeAudiences?.length || request.clearAudienceSetting) {
+    const state = await liveAdGroupTargetingState(account.target, campaignId)
+    live.adGroups = state.adGroups
+    live.adGroupCriteria = state.adGroupCriteria
+  }
+  if (request.addAudiences?.length) live.segmentNames = await liveSegmentNames(account.target, request.addAudiences.map((id) => ({ kind: 'USER_INTEREST' as const, id })))
+  return live
 }
 
 const buildTargeting = (args: Record<string, unknown>): GoogleDraftBuilder => async (account) => {
   const campaignId = String(args.campaignId)
   const request = targetingRequest(args)
-  const live = await targetingLive(account, campaignId, !!request.devices?.some((d) => d.adGroupId))
-  return targetingDraft(customerResource(account.target), campaignId, request, live)
+  return targetingDraft(customerResource(account.target), campaignId, request, await targetingLive(account, campaignId, request))
 }
 
 const geo = (s: string | null | undefined) => (s ?? '').split('/').pop() ?? ''
@@ -274,8 +287,9 @@ const targetingUndo: ToolUndo = {
     const account = await recordAccount(after)
     if (!account) return null
     const u = after.undo ?? {}
-    const live = await targetingLive(account, after.campaignId, !!u.devices?.some((d) => d.adGroupId))
-    const criteria = live.criteria
+    // Only what tells whether it still stands: the campaign, its criteria, ad group devices when it set one.
+    const live = await targetingLive(account, after.campaignId, { devices: u.devices })
+    const criteria = live.criteria as TargetingCriterion[]
     const has = (type: string, id: string, negative = false) => criteria.some((k) => k.type === type && k.negative === negative && geo(type === 'LOCATION' ? k.location : type === 'LANGUAGE' ? k.language : k.audience) === id)
     const micro = (deg: number) => Math.round(deg * 1_000_000)
     const radius = (id: string) => criteria.find((k) => k.type === 'PROXIMITY' && k.criterionId === id)
@@ -296,6 +310,7 @@ const targetingUndo: ToolUndo = {
       && (after.set?.locationBids ?? []).every((b) => factor(b) === b.bidModifier)
       && (after.set?.devices ?? []).every((d) => (deviceNow(d) ?? null) === (d.bidModifier ?? (d.adGroupId ? null : 1)))
       && (after.schedule === undefined || JSON.stringify(scheduleKeys(scheduleNow(criteria))) === JSON.stringify(after.schedule))
+      && (after.set?.audienceSetting === undefined || audienceSettingNow(live.campaign) === after.set.audienceSetting)
     return holds ? after : { ...after, moved: true }
   },
   request(change: ToolChange) {
@@ -303,6 +318,12 @@ const targetingUndo: ToolUndo = {
     if (!after.campaignId || !after.undo || !Object.keys(after.undo).length) return { refusal: 'This change does not record what it replaced.' }
     return { tool: 'set-google-targeting', args: { ...(after.accountId ? { accountId: after.accountId } : {}), campaignId: after.campaignId, ...after.undo, why: 'undo of an earlier targeting change' } }
   },
+}
+
+/** The campaign's audience setting as a targeting change records it. */
+function audienceSettingNow(campaign: TargetingLive['campaign']): 'OBSERVATION' | 'TARGETING' | 'NONE' {
+  const t = campaign?.audienceMode.find((r) => r.dimension === 'AUDIENCE')
+  return !t ? 'NONE' : t.observationOnly ? 'OBSERVATION' : 'TARGETING'
 }
 
 /** A schedule as sorted day@from-to keys (what a targeting change's record keeps of the schedule it set). */
@@ -313,10 +334,12 @@ function scheduleKeys(slots: Array<{ days: string[]; from: string; to: string; b
     .map((d) => `${d}@${hhmm(s.from)}-${hhmm(s.to)}x${s.bidModifier ?? 1}`)).sort()
 }
 
-const factorArg = z.coerce.number().min(0.1).max(10)
+/** A bid factor, rounded to 4 decimals as Google's adjustments are read back (live-targeting factorOf): undo compares them. */
+const round4 = (v: number) => Math.round(v * 10_000) / 10_000
+const factorArg = z.coerce.number().min(0.1).max(10).transform(round4)
 const deviceTargetArg = z.object({
   device: z.preprocess((v) => (typeof v === 'string' ? v.toUpperCase() : v), z.enum(DEVICES)).describe('MOBILE, DESKTOP, TABLET or CONNECTED_TV'),
-  bidModifier: z.union([z.null(), z.coerce.number().min(0).max(10).refine((v) => v === 0 || v >= 0.1, '0 (never on this device) or 0.1–10')])
+  bidModifier: z.union([z.null(), z.coerce.number().min(0).max(10).refine((v) => v === 0 || v >= 0.1, '0 (never on this device) or 0.1–10').transform(round4)])
     .describe('a factor: 1.2 = +20 %, 0.5 = −50 %, 0 = never on this device (−100 %); null = no adjustment (an ad group: its own removed, the campaign\'s applies)'),
   adGroupId: googleIdArg('an ad group of this campaign, for its own device adjustment (it replaces the campaign\'s for that device)').optional(),
 })
@@ -357,17 +380,19 @@ const setGoogleTargeting: AgentTool = {
     schedule: scheduleArg.optional().describe('the whole week\'s ad schedule from now (replaces what is there)'),
     clearSchedule: z.boolean().optional().describe('true = all day, every day (removes the schedule)'),
     devices: z.array(deviceTargetArg).max(50).optional().describe('device bid adjustments of the campaign, or of one of its ad groups (adGroupId)'),
-    addAudiences: audienceIdsArg.optional().describe('audience segments to add in OBSERVATION'),
-    removeAudiences: audienceIdsArg.optional().describe('audience segments to remove'),
+    addAudiences: audienceIdsArg.optional().describe('interest segments to add in OBSERVATION (google-ads-live view lookup, lookup audiences)'),
+    removeAudiences: audienceIdsArg.optional().describe('observed interest segments to remove (exclusions and segments that narrow: set-google-audiences)'),
+    clearAudienceSetting: z.boolean().optional().describe('what undo uses: take off the audience setting (observation) that adding the first interest put on the campaign'),
     why: googleWhyArg,
   }),
   description:
     'Change one Google Ads campaign\'s targeting (Search or Standard Shopping): targeted and excluded locations, the bid '
     + 'adjustment of a location or radius it already targets, radius targeting around a point or address, languages '
     + '(Search), the ad schedule (the whole week, replaced; or cleared = all day), device bid adjustments (0 = never on '
-    + 'that device; at the campaign, or an ad group\'s own) and interest segments added in OBSERVATION only (every kind '
-    + 'of audience, exclusions and the targeting/observation mode: set-google-audiences; demographics: '
-    + 'set-google-demographics). Ids come from google-ads-live view lookup. What lets the ads reach more people or bid '
+    + 'that device; at the campaign, or an ad group\'s own) and interest segments the campaign OBSERVES, added or removed '
+    + '(every kind of segment, exclusions, bid adjustments, ad groups and the targeting/observation mode: '
+    + 'set-google-audiences; demographics: set-google-demographics). Ids come from google-ads-live view lookup (lookup '
+    + 'locations / languages / audiences). What lets the ads reach more people or bid '
     + 'more is marked SPENDS MONEY — above all removing the last location or language, a device shown again and a '
     + 'raised bid adjustment. The location option is set-google-campaign. Undo puts the targeting back.' + GOOGLE_CHANGE_RULES,
   undo: targetingUndo,

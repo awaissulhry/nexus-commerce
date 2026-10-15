@@ -15,6 +15,10 @@
  *   display_name; ad_group and campaign are attributed resources.
  * - ad_group_bid_modifier: criterion_id, bid_modifier, device.type; ad_group and campaign are attributed resources.
  * - ad_group: id, name, status, targeting_setting.target_restrictions (selectable, NOT filterable).
+ * - The segments' own names (the preview names each new one; an id Google does not know is refused): user_list.{id, name,
+ *   membership_status}, custom_audience.{id, name, status}, combined_audience.{id, name, status}, user_interest.{
+ *   user_interest_id, name}, life_event.{id, name} — selectable and filterable. Enums (rpc/v25): CustomAudienceStatus and
+ *   CombinedAudienceStatus ENABLED / REMOVED, UserListMembershipStatus OPEN / CLOSED.
  * Every field of another resource named in a WHERE is in the SELECT too (Google refused a WHERE on campaign.status
  * without it, #639). Enum values (rpc/v25): CriterionType, Device, AgeRangeType, GenderType, ParentalStatusType,
  * IncomeRangeType, ProximityRadiusUnits, TargetingDimension.
@@ -254,5 +258,52 @@ export function adjustmentWords(factor: number | null | undefined): string {
   return `${pct > 0 ? '+' : '−'}${Math.abs(pct)} %`
 }
 
-/** Bidding strategies that ignore manual bid adjustments (Google Ads Help 2732132: only a −100 % device opt-out counts). */
+/** Bidding strategies that do not use manual bid adjustments (Google Ads Help 2732132, "Automated bidding"). */
 export const SMART_BIDDING = new Set(['MAXIMIZE_CONVERSIONS', 'MAXIMIZE_CONVERSION_VALUE', 'TARGET_CPA', 'TARGET_ROAS'])
+
+/**
+ * What Google does with a campaign's bid adjustments under Smart Bidding (Google Ads Help 2732132): location, schedule,
+ * audience and demographic adjustments are not used; a device adjustment is used as −100 % (opt out) only — except with
+ * a CPA target (Target CPA, or Maximize conversions with a target CPA), where it changes the CPA target for that device.
+ * Null when the campaign does not use Smart Bidding.
+ */
+export function smartBiddingWords(campaign: { name: string; bidding: string | null; targetCpaCents?: number | null }, kind: 'device' | 'other'): string | null {
+  if (!campaign.bidding || !SMART_BIDDING.has(campaign.bidding)) return null
+  const cpaTarget = campaign.bidding === 'TARGET_CPA' || (campaign.bidding === 'MAXIMIZE_CONVERSIONS' && (campaign.targetCpaCents ?? null) !== null)
+  if (kind === 'device') {
+    return cpaTarget
+      ? `"${campaign.name}" bids with ${campaign.bidding} and a CPA target: Google applies a device bid adjustment to the CPA target for that device, not to the bids (−100 % still opts out).`
+      : `"${campaign.name}" bids with ${campaign.bidding}: Google's Smart Bidding uses a device bid adjustment only as −100 % (opt out); other device adjustments are not used.`
+  }
+  return `"${campaign.name}" bids with ${campaign.bidding}: Google's Smart Bidding does not use these bid adjustments (exclusions and targeting still apply).`
+}
+
+// ── the segments' own names ────────────────────────────────────────────────────────────────────────────────────
+
+export interface SegmentName { name: string | null; status: string | null }
+
+const SEGMENT_QUERY: Record<AudienceKind, (ids: string) => string> = {
+  USER_LIST: (ids) => `SELECT user_list.id, user_list.name, user_list.membership_status FROM user_list WHERE user_list.id IN (${ids})`,
+  USER_INTEREST: (ids) => `SELECT user_interest.user_interest_id, user_interest.name FROM user_interest WHERE user_interest.user_interest_id IN (${ids})`,
+  CUSTOM_AUDIENCE: (ids) => `SELECT custom_audience.id, custom_audience.name, custom_audience.status FROM custom_audience WHERE custom_audience.id IN (${ids})`,
+  COMBINED_AUDIENCE: (ids) => `SELECT combined_audience.id, combined_audience.name, combined_audience.status FROM combined_audience WHERE combined_audience.id IN (${ids})`,
+  LIFE_EVENT: (ids) => `SELECT life_event.id, life_event.name FROM life_event WHERE life_event.id IN (${ids})`,
+}
+
+export const liveSegmentNamesQuery = (kind: AudienceKind, ids: string[]): string =>
+  SEGMENT_QUERY[kind]([...new Set(ids)].map((id) => gaqlId(id, 'The segment')).join(', '))
+
+/** The names of audience segments by `KIND|id` (one query per kind asked); a segment Google does not return is missing. */
+export async function liveSegmentNames(target: GoogleAdsTarget, refs: Array<{ kind: AudienceKind; id: string }>): Promise<Record<string, SegmentName>> {
+  const out: Record<string, SegmentName> = {}
+  for (const kind of AUDIENCE_KINDS) {
+    const ids = refs.filter((r) => r.kind === kind).map((r) => r.id)
+    if (!ids.length) continue
+    for (const r of await liveRows<Json>(target, liveSegmentNamesQuery(kind, ids), 'ads.search.live.segment-names')) {
+      const row = kind === 'USER_LIST' ? r.userList : kind === 'USER_INTEREST' ? r.userInterest : kind === 'CUSTOM_AUDIENCE' ? r.customAudience : kind === 'COMBINED_AUDIENCE' ? r.combinedAudience : r.lifeEvent
+      const id = str(kind === 'USER_INTEREST' ? row?.userInterestId : row?.id)
+      if (id) out[`${kind}|${id}`] = { name: str(row?.name), status: str(row?.membershipStatus ?? row?.status) }
+    }
+  }
+  return out
+}

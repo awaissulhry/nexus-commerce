@@ -26,8 +26,8 @@
 import { changeLines, plural, type GoogleChangeDraft } from './change-draft.js'
 import type { LiveCampaignDetail } from './live.js'
 import {
-  adjustmentWords, audienceCriterion, SMART_BIDDING,
-  type AdGroupTargetingCriterion, type AudienceKind, type AudienceRestriction, type TargetingAdGroup, type TargetingCriterion,
+  adjustmentWords, audienceCriterion, smartBiddingWords,
+  type AdGroupTargetingCriterion, type AudienceKind, type AudienceRestriction, type SegmentName, type TargetingAdGroup, type TargetingCriterion,
 } from './live-targeting.js'
 import type { GoogleMutateOperation } from './write-client.js'
 
@@ -52,6 +52,8 @@ export interface AudienceLive {
   criteria: TargetingCriterion[]
   adGroups: TargetingAdGroup[]
   adGroupCriteria: AdGroupTargetingCriterion[]
+  /** The names of the segments a request adds, by `KIND|id` (live-targeting liveSegmentNames); a missing one is unknown to Google. */
+  segmentNames?: Record<string, SegmentName>
 }
 
 /** One audience criterion as Nexus compares it ('' = the campaign level). */
@@ -61,6 +63,10 @@ const KIND_WORDS: Record<AudienceKind, string> = {
   USER_LIST: 'your data segment', USER_INTEREST: 'interest segment', CUSTOM_AUDIENCE: 'custom segment', COMBINED_AUDIENCE: 'combined segment', LIFE_EVENT: 'life event',
 }
 const POSITIVE_ONLY = new Set<AudienceKind>(['CUSTOM_AUDIENCE', 'COMBINED_AUDIENCE'])
+/** The google-ads-live lookup that finds each kind's ids (view lookup). */
+export const LOOKUP: Record<AudienceKind, string> = {
+  USER_LIST: 'user-lists', USER_INTEREST: 'audiences', CUSTOM_AUDIENCE: 'custom-audiences', COMBINED_AUDIENCE: 'combined-audiences', LIFE_EVENT: 'life-events',
+}
 const keyOf = (level: string, kind: string, id: string) => `${level}|${kind}|${id}`
 
 export function segmentsOf(live: Pick<AudienceLive, 'criteria' | 'adGroupCriteria'>): Segment[] {
@@ -149,6 +155,9 @@ export function audienceDraft(customer: string, campaignId: string, ask: Audienc
     if (a.exclude && a.bidModifier !== undefined) return { refusal: `${KIND_WORDS[a.kind]} ${a.id}: an excluded audience has no bid adjustment.` }
     if (a.bidModifier !== undefined && !(a.bidModifier >= 0.1 && a.bidModifier <= 10)) return { refusal: `${KIND_WORDS[a.kind]} ${a.id}: a bid adjustment is between 0.1 and 10.` }
     if (findNow(level, a.kind, a.id, !!a.exclude)) { skipped.push(`${KIND_WORDS[a.kind]} ${a.id} is already ${a.exclude ? 'excluded' : 'on'} ${where(level)}.`); continue }
+    const known = (live.segmentNames ?? {})[`${a.kind}|${a.id}`]
+    if (!known) return { refusal: `${KIND_WORDS[a.kind]} ${a.id} is not in this Google Ads account (or not one of Google's segments): google-ads-live view lookup, lookup ${LOOKUP[a.kind]}, finds the ids.` }
+    if (known.status === 'REMOVED') return { refusal: `${KIND_WORDS[a.kind]} "${known.name ?? a.id}" (${a.id}) is removed in Google Ads: Google cannot target it.` }
     if (findNow(level, a.kind, a.id, !a.exclude)) return { refusal: `${KIND_WORDS[a.kind]} ${a.id} is already ${a.exclude ? 'targeted or observed' : 'excluded'} ${where(level)}: remove it in the same request (remove).` }
     const body = {
       ...(a.exclude ? { negative: true } : {}),
@@ -158,7 +167,7 @@ export function audienceDraft(customer: string, campaignId: string, ask: Audienc
     ops.push(level === ''
       ? { campaignCriterionOperation: { create: { campaign: res, ...body } } }
       : { adGroupCriterionOperation: { create: { adGroup: `${customer}/adGroups/${level}`, ...body } } })
-    added.push({ level, kind: a.kind, id: a.id, negative: !!a.exclude, bidModifier: a.bidModifier ?? null, criterionId: '', name: null })
+    added.push({ level, kind: a.kind, id: a.id, negative: !!a.exclude, bidModifier: a.bidModifier ?? null, criterionId: '', name: known.name })
     undo.remove.push({ ...ref(level, a.kind, a.id), ...(a.exclude ? { exclude: true } : {}) })
     set.add.push({ ...ref(level, a.kind, a.id), ...(a.exclude ? { exclude: true } : {}), ...(a.bidModifier !== undefined && a.bidModifier !== 1 ? { bidModifier: a.bidModifier } : {}) })
   }
@@ -258,6 +267,12 @@ export function audienceDraft(customer: string, campaignId: string, ask: Audienc
   ops.unshift(...modeOps.clears, ...modeOps.campaign)
   ops.push(...modeOps.sets)
 
+  // Each new segment by its name, as it will be.
+  for (const s of added) {
+    const how = s.negative ? 'excluded' : `${effectiveMode(s.level, campaignAfter, groupsAfter) === 'OBSERVATION' ? 'observed' : 'targeted'}${s.bidModifier !== null && s.bidModifier !== 1 ? `, ${adjustmentWords(s.bidModifier)}` : ''}`
+    lines.push([`${KIND_WORDS[s.kind]} "${s.name ?? s.id}" (${s.id}), ${where(s.level)}`, '—', how])
+  }
+
   // ── who sees the ads, and what it bids: per level ──
   const after = [
     ...before.filter((s) => !removed.has(segKey(s))).map((s) => ({ ...s, bidModifier: bidTo.has(keyOf(s.level, s.kind, s.id)) ? bidTo.get(keyOf(s.level, s.kind, s.id))! : s.bidModifier })),
@@ -295,9 +310,8 @@ export function audienceDraft(customer: string, campaignId: string, ask: Audienc
     if (mode1 === 'OBSERVATION') for (const [k, m0] of pos0) if (!pos1.has(k) && m0 < 1) raised += 1
     if (raised) spends.push(`${w}: bids more for people in ${plural(raised, 'audience')}${wn}.`)
   }
-  if (adjusted && c.bidding && SMART_BIDDING.has(c.bidding)) {
-    warnings.push(`"${c.name}" bids with ${c.bidding}: Google's Smart Bidding does not use audience bid adjustments (the audiences still narrow or are observed as set).`)
-  }
+  const smart = adjusted ? smartBiddingWords(c, 'other') : null
+  if (smart) warnings.push(smart.replace('these bid adjustments', 'audience bid adjustments'))
 
   if (!ops.length) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
   const { changes, more } = changeLines(lines)

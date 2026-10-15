@@ -77,7 +77,16 @@ describe('targetingDraft — devices, location and radius bid adjustments, radiu
     expect(targetingDraft(C, '21', { devices: [{ device: 'MOBILE', bidModifier: 0 }] }, live(now))).toMatchObject({ refusal: expect.stringContaining('could show nowhere') })
     const smart = targetingDraft(C, '21', { devices: [{ device: 'MOBILE', bidModifier: 1.2 }] }, live([], { bidding: 'MAXIMIZE_CONVERSIONS' }))
     if ('refusal' in smart) throw new Error(smart.refusal)
-    expect(smart.warnings.join(' ')).toMatch(/Smart Bidding does not use these bid adjustments/)
+    expect(smart.warnings).toEqual(['"Search A" bids with MAXIMIZE_CONVERSIONS: Google\'s Smart Bidding uses a device bid adjustment only as −100 % (opt out); other device adjustments are not used.'])
+    // With a CPA target, a device adjustment changes the CPA target for that device (Google Ads Help 2732132).
+    for (const over of [{ bidding: 'TARGET_CPA' }, { bidding: 'MAXIMIZE_CONVERSIONS', targetCpaCents: 900 }]) {
+      const cpa = targetingDraft(C, '21', { devices: [{ device: 'MOBILE', bidModifier: 1.2 }], locationBids: [{ id: '2380', bidModifier: 1.1 }] }, live([crit('7', 'LOCATION', { location: 'geoTargetConstants/2380' })], over))
+      if ('refusal' in cpa) throw new Error(cpa.refusal)
+      expect(cpa.warnings).toEqual([
+        `"Search A" bids with ${over.bidding} and a CPA target: Google applies a device bid adjustment to the CPA target for that device, not to the bids (−100 % still opts out).`,
+        `"Search A" bids with ${over.bidding}: Google's Smart Bidding does not use location and radius bid adjustments (exclusions and targeting still apply).`,
+      ])
+    }
   })
 
   it('an ad group\'s own device adjustment: create, update, remove (follow the campaign); refused while the campaign opts out', () => {
@@ -133,14 +142,61 @@ describe('targetingDraft — devices, location and radius bid adjustments, radiu
     expect(targetingDraft(C, '21', { addRadius: [{ latitude: 10.5, radius: 10 }] }, live([]))).toMatchObject({ refusal: expect.stringContaining('both latitude and longitude') })
   })
 
-  it('set-google-targeting never turns audiences that narrow into observation by itself', () => {
-    expect(targetingDraft(C, '21', { addAudiences: ['80000'] }, live([crit('5', 'USER_LIST', { segment: { kind: 'USER_LIST', id: '301' } })])))
+  const names = { segmentNames: { 'USER_INTEREST|80000': { name: 'Motorcycles', status: null } } }
+  const interest = (extra: Partial<TargetingCriterion> = {}) => crit('5', 'USER_INTEREST', { audience: `${C}/userInterests/80000`, segment: { kind: 'USER_INTEREST', id: '80000' }, ...extra })
+  const OBSERVES = { audienceMode: [{ dimension: 'AUDIENCE', observationOnly: true }] }
+
+  it('interests: never turns segments that narrow into observation by itself — at the campaign or at an ad group', () => {
+    expect(targetingDraft(C, '21', { addAudiences: ['80000'] }, live([crit('5', 'USER_LIST', { segment: { kind: 'USER_LIST', id: '301' } })], {}, { ...names, adGroups: [], adGroupCriteria: [] })))
       .toMatchObject({ refusal: expect.stringContaining('set-google-audiences') })
+    // An ad group's segment with no setting is TARGETING (Google's default): observation at the campaign would widen it.
+    const agSegment = { adGroupId: '51', criterionId: '9', type: 'USER_LIST', negative: false, name: null, bidModifier: null, segment: { kind: 'USER_LIST' as const, id: '301' } }
+    expect(targetingDraft(C, '21', { addAudiences: ['80000'] }, live([], {}, { ...names, adGroups: [AG], adGroupCriteria: [agSegment] })))
+      .toMatchObject({ refusal: expect.stringContaining('at the campaign or its ad groups') })
+    // An ad group with its own setting: Google keeps it on one level.
+    expect(targetingDraft(C, '21', { addAudiences: ['80000'] }, live([], {}, { ...names, adGroups: [{ ...AG, audienceMode: [{ dimension: 'AUDIENCE', observationOnly: true }] }], adGroupCriteria: [] })))
+      .toMatchObject({ refusal: expect.stringContaining('not both') })
+    // An id Google does not know is refused; a known one is named in the preview.
+    expect(targetingDraft(C, '21', { addAudiences: ['80001'] }, live([], {}, { ...names, adGroups: [], adGroupCriteria: [] }))).toMatchObject({ refusal: expect.stringContaining('lookup audiences') })
+  })
+
+  it('interests: the first one sets observation where nothing narrows, and undo takes that setting off again', () => {
+    const d = targetingDraft(C, '21', { addAudiences: ['80000'] }, live([], {}, { ...names, adGroups: [AG], adGroupCriteria: [] }))
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.changes).toMatchObject({ 'interest "Motorcycles" (80000)': { from: '—', to: 'observed' }, 'audience setting': { from: 'none (Google: targeting)', to: 'observation (bids only)' } })
+    expect(d.after).toMatchObject({ undo: { removeAudiences: ['80000'], clearAudienceSetting: true }, set: { audienceSetting: 'OBSERVATION' } })
+    const back = targetingDraft(C, '21', { removeAudiences: ['80000'], clearAudienceSetting: true }, live([interest()], OBSERVES, { adGroups: [AG], adGroupCriteria: [] }))
+    if ('refusal' in back) throw new Error(back.refusal)
+    expect(back.operations).toEqual([
+      { campaignCriterionOperation: { remove: `${C}/campaignCriteria/21~5` } },
+      { campaignOperation: { update: { resourceName: `${C}/campaigns/21`, targetingSetting: { targetRestrictions: [] } }, updateMask: 'targeting_setting.target_restrictions' } },
+    ])
+    expect(back.spendsMoney).toEqual([])
+    // A segment left would then narrow: refused.
+    expect(targetingDraft(C, '21', { clearAudienceSetting: true }, live([interest()], OBSERVES, { adGroups: [AG], adGroupCriteria: [] }))).toMatchObject({ refusal: expect.stringContaining('still has 1 audience segment') })
+  })
+
+  it('interests: removes only an observed, unadjusted interest; an exclusion, TARGETING and a bid adjustment go to set-google-audiences', () => {
+    const extra = { adGroups: [AG], adGroupCriteria: [] }
+    const d = targetingDraft(C, '21', { removeAudiences: ['80000'] }, live([interest()], OBSERVES, extra))
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.operations).toEqual([{ campaignCriterionOperation: { remove: `${C}/campaignCriteria/21~5` } }])
+    expect(d.spendsMoney).toEqual([])
+    expect(d.after).toMatchObject({ undo: { addAudiences: ['80000'] } })
+    expect(targetingDraft(C, '21', { removeAudiences: ['80000'] }, live([interest({ negative: true })], OBSERVES, extra))).toMatchObject({ refusal: expect.stringContaining('is an exclusion') })
+    expect(targetingDraft(C, '21', { removeAudiences: ['80000'] }, live([interest()], {}, extra))).toMatchObject({ refusal: expect.stringContaining('TARGETING') })
+    expect(targetingDraft(C, '21', { removeAudiences: ['80000'] }, live([interest()], { audienceMode: [{ dimension: 'AUDIENCE', observationOnly: false }] }, extra))).toMatchObject({ refusal: expect.stringContaining('TARGETING') })
+    expect(targetingDraft(C, '21', { removeAudiences: ['80000'] }, live([interest({ bidModifier: 0.8 })], OBSERVES, extra))).toMatchObject({ refusal: expect.stringContaining('bid adjustment') })
+    expect(targetingDraft(C, '21', { addAudiences: ['80000'] }, live([interest({ negative: true })], OBSERVES, { ...extra, ...names }))).toMatchObject({ refusal: expect.stringContaining('is excluded') })
   })
 })
 
 describe('audienceDraft', () => {
-  const live = (over: Partial<AudienceLive> = {}, camp: Partial<LiveCampaignDetail['campaign']> = {}): AudienceLive => ({ campaign: campaign(camp), criteria: [], adGroups: [AG, AG2], adGroupCriteria: [], ...over })
+  const NAMES = {
+    'USER_LIST|301': { name: 'Site visitors', status: 'OPEN' }, 'LIFE_EVENT|444': { name: 'Moving soon', status: null }, 'CUSTOM_AUDIENCE|601': { name: 'Riders', status: 'ENABLED' },
+    'USER_INTEREST|80000': { name: 'Motorcycles', status: null }, 'COMBINED_AUDIENCE|7': { name: 'Riders and visitors', status: 'ENABLED' }, 'CUSTOM_AUDIENCE|602': { name: 'Old', status: 'REMOVED' },
+  }
+  const live = (over: Partial<AudienceLive> = {}, camp: Partial<LiveCampaignDetail['campaign']> = {}): AudienceLive => ({ campaign: campaign(camp), criteria: [], adGroups: [AG, AG2], adGroupCriteria: [], segmentNames: NAMES, ...over })
   const seg = (kind: AudienceKind, id: string) => ({ segment: { kind, id } })
 
   it('a first segment where nothing narrows goes in OBSERVATION: the setting is set in the same request (first), every kind\'s resource name', () => {
@@ -155,6 +211,17 @@ describe('audienceDraft', () => {
     expect(d.spendsMoney).toEqual(['"Search A": bids more for people in 1 audience.'])
     expect(d.warnings).toEqual([])
     expect(d.after).toMatchObject({ undo: { remove: [{ kind: 'USER_LIST', id: '301' }, { kind: 'LIFE_EVENT', id: '444' }, { kind: 'CUSTOM_AUDIENCE', id: '601' }], modes: [{ mode: 'NONE' }] } })
+    // Each new segment by its name, read live.
+    expect(d.changes).toMatchObject({
+      'your data segment "Site visitors" (301), "Search A"': { from: '—', to: 'observed, +20 %' },
+      'life event "Moving soon" (444), "Search A"': { from: '—', to: 'observed' },
+    })
+  })
+
+  it('an id Google does not know, or a removed segment, is refused before Google is asked', () => {
+    expect(audienceDraft(C, '21', { add: [{ kind: 'USER_LIST', id: '399' }] }, live())).toMatchObject({ refusal: expect.stringContaining('lookup user-lists') })
+    expect(audienceDraft(C, '21', { add: [{ kind: 'LIFE_EVENT', id: '445' }] }, live())).toMatchObject({ refusal: expect.stringContaining('lookup life-events') })
+    expect(audienceDraft(C, '21', { add: [{ kind: 'CUSTOM_AUDIENCE', id: '602' }] }, live())).toMatchObject({ refusal: expect.stringContaining('is removed') })
   })
 
   it('where segments narrow (TARGETING, said or Google\'s default), the mode must be named; TARGETING → OBSERVATION is SPENDS MONEY', () => {
@@ -225,10 +292,13 @@ describe('demographicsDraft', () => {
     ({ campaign: campaign(camp), criteria, adGroups: [AG, AG2], adGroupCriteria })
   const age = (adGroupId: string, value: string, extra: Partial<AdGroupTargetingCriterion> = {}) => agCrit(adGroupId, `c-${value}`, 'AGE_RANGE', { demographic: { dimension: 'AGE_RANGE', value }, ...extra })
 
-  it('a bid adjustment on one age group keeps every other group shown: a positive criterion for each (the excluded one left out)', () => {
-    const d = demographicsDraft(C, '21', { changes: [{ dimension: 'AGE_RANGE', value: 'AGE_RANGE_25_34', adGroupId: '51', bidModifier: 1.3 }] }, live([age('51', 'AGE_RANGE_65_UP', { negative: true })]))
+  it('a bid adjustment on one age group keeps every other group shown: a positive criterion for each (the ad group\'s own exclusion left out, the campaign\'s kept)', () => {
+    const campaignExcludes = crit('c1', 'AGE_RANGE', { negative: true, demographic: { dimension: 'AGE_RANGE', value: 'AGE_RANGE_18_24' } })
+    const d = demographicsDraft(C, '21', { changes: [{ dimension: 'AGE_RANGE', value: 'AGE_RANGE_25_34', adGroupId: '51', bidModifier: 1.3 }] }, live([age('51', 'AGE_RANGE_65_UP', { negative: true })], [campaignExcludes]))
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations).toHaveLength(6)
+    // The group the campaign excludes gets its ad group criterion too (the campaign's exclusion still applies on top).
+    expect(d.operations).toContainEqual({ adGroupCriterionOperation: { create: { adGroup: `${C}/adGroups/51`, ageRange: { type: 'AGE_RANGE_18_24' } } } })
     expect(d.operations).toContainEqual({ adGroupCriterionOperation: { create: { adGroup: `${C}/adGroups/51`, bidModifier: 1.3, ageRange: { type: 'AGE_RANGE_25_34' } } } })
     expect(d.operations).toContainEqual({ adGroupCriterionOperation: { create: { adGroup: `${C}/adGroups/51`, ageRange: { type: 'AGE_RANGE_UNDETERMINED' } } } })
     expect(d.operations).not.toContainEqual(expect.objectContaining({ adGroupCriterionOperation: { create: expect.objectContaining({ ageRange: { type: 'AGE_RANGE_65_UP' } }) } }))
@@ -237,6 +307,18 @@ describe('demographicsDraft', () => {
     // Undo removes exactly the criteria it made.
     expect((d.after as DemographicRecord).restore).toHaveLength(6)
     expect((d.after as DemographicRecord).restore.every((r) => r.criterion === 'NONE')).toBe(true)
+  })
+
+  it('a group the campaign excludes is not "already shown" at an ad group: the preview says the campaign still hides it', () => {
+    const campaignExcludes = crit('c1', 'GENDER', { negative: true, demographic: { dimension: 'GENDER', value: 'MALE' } })
+    expect(demographicsDraft(C, '21', { changes: [{ dimension: 'GENDER', value: 'MALE', adGroupId: '51' }] }, live([], [campaignExcludes])))
+      .toMatchObject({ refusal: expect.stringContaining('the campaign excludes it, so it stays hidden there') })
+    const adGroupToo = [agCrit('51', 'g2', 'GENDER', { negative: true, demographic: { dimension: 'GENDER', value: 'MALE' } })]
+    const d = demographicsDraft(C, '21', { changes: [{ dimension: 'GENDER', value: 'MALE', adGroupId: '51' }] }, live(adGroupToo, [campaignExcludes]))
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.operations).toEqual([{ adGroupCriterionOperation: { remove: `${C}/adGroupCriteria/51~g2` } }])
+    expect(d.spendsMoney).toEqual([])
+    expect(d.warnings).toContain('male at ad group "Jackets": the campaign excludes it, so it stays hidden there until the campaign shows it again (this tool without adGroupId).')
   })
 
   it('exclude at an ad group (a targeted group: remove + create negative); the campaign only excludes; excluding every group is refused', () => {
