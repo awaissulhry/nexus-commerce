@@ -214,6 +214,9 @@ export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   'adGroupBidModifierOperation',
   'labelOperation', 'campaignLabelOperation', 'adGroupLabelOperation', 'adGroupAdLabelOperation', 'adGroupCriterionLabelOperation',
   'biddingStrategyOperation', 'recommendationSubscriptionOperation',
+  // G7 (2026-10-15): the account's own exclusions and the lists on the whole account (CustomerNegativeCriterion: create
+  // or remove only; MutateOperation.customer_negative_criterion_operation in v25).
+  'customerNegativeCriterionOperation',
 ])
 
 /**
@@ -314,7 +317,8 @@ export function isGoogleValidateOnly(body: unknown): boolean {
 
 /**
  * Google: whether a call only reads. GET reads; so does a POST to a `…:search` / `…:searchStream` method
- * (Google Ads GAQL, Merchant reports), which takes its query in the body. Anything else — `…:mutate`,
+ * (Google Ads GAQL, Merchant reports), which takes its query in the body, and Google Ads' brand lookup
+ * (isGoogleAdsBrandSuggestion, G7). Anything else — `…:mutate`,
  * `…:registerGcp`, PATCH, DELETE — is a change. The gateway lets through only a Google Ads mutate
  * (isGoogleAdsMutate): as a check when it is validate-only, else as a write under the publish mode; and an apply or a
  * dismiss of Google's recommendations (googleAdsRecommendationCall), always as a write under the publish mode.
@@ -325,7 +329,20 @@ export function googleCallKind(method: string, url: string): 'read' | 'action' {
   if (m !== 'POST') return 'action'
   let pathname: string
   try { pathname = new URL(url).pathname } catch { return 'action' }
+  if (isGoogleAdsBrandSuggestion(m, url)) return 'read'
   return /:(search|searchStream)$/.test(pathname) ? 'read' : 'action'
+}
+
+/**
+ * G7 (2026-10-15): BrandSuggestionService.SuggestBrands (`POST https://googleads.googleapis.com/vNN/customers/{id}
+ * :suggestBrands`, body brand_prefix / selected_brands; googleapis brand_suggestion_service.proto v25) only looks brands
+ * up by name, so it goes as a read. Exactly that path on the Google Ads host; any other `:suggest…` stays refused.
+ */
+export function isGoogleAdsBrandSuggestion(method: string, url: string): boolean {
+  if (method.toUpperCase() !== 'POST') return false
+  let parsed: URL
+  try { parsed = new URL(url) } catch { return false }
+  return parsed.hostname === 'googleads.googleapis.com' && !parsed.search && /^\/v\d+\/customers\/\d{1,20}:suggestBrands$/.test(parsed.pathname)
 }
 
 /**

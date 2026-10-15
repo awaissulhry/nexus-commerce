@@ -98,6 +98,29 @@ describe('google-ads-live, new views', () => {
     expect(await tool('google-ads-live').handler({ view: 'auto-apply' }, everyone)).toMatchObject({ ok: true, data: { items: [{ type: 'KEYWORD', status: 'PAUSED' }] } })
   })
 
+  it('G7 exclusions: the account\'s own, its lists with who uses them (listId: what one holds), one campaign\'s', async () => {
+    h.rows.mockImplementation(async (_t: unknown, q: string) => {
+      if (q.includes('FROM shared_set')) return [{ sharedSet: { id: '41', name: 'Bad sites', type: 'NEGATIVE_PLACEMENTS', memberCount: '1' } }]
+      if (q.includes('FROM customer_negative_criterion')) return [{ customerNegativeCriterion: { id: '904', placementList: { sharedSet: 'customers/1234567890/sharedSets/41' } } }, { customerNegativeCriterion: { id: '905', contentLabel: { type: 'TRAGEDY' } } }]
+      if (q.includes('FROM campaign_shared_set')) return []
+      if (q.includes('FROM shared_criterion')) return [{ sharedCriterion: { criterionId: '501', placement: { url: 'spam.example' } } }]
+      if (q.includes('FROM campaign_criterion')) return [{ campaignCriterion: { criterionId: '61', negative: true, ipBlock: { ipAddress: '192.0.2.1' } } }]
+      return []
+    })
+    const out = await tool('google-ads-live').handler({ view: 'exclusions', listId: '41', campaignId: '21' }, everyone)
+    expect(out).toMatchObject({
+      ok: true,
+      data: {
+        view: 'exclusions',
+        accountExclusions: { items: [{ kind: 'content-label', value: 'TRAGEDY' }], placementLists: [{ criterionId: '904', listId: '41' }] },
+        lists: [{ listId: '41', type: 'NEGATIVE_PLACEMENTS', account: { criterionId: '904' }, items: [{ kind: 'placement', value: 'spam.example' }] }],
+        campaign: { campaignId: '21', items: [{ kind: 'ip-block', value: '192.0.2.1' }] },
+      },
+    })
+    expect(sent().filter((q) => q.includes('FROM customer_negative_criterion'))).toHaveLength(1)
+    expect(await tool('google-ads-live').handler({ view: 'exclusions', listId: '49' }, everyone)).toMatchObject({ ok: false, error: expect.stringMatching(/^Exclusion list 49 is not in this account/) })
+  })
+
   it('account: the settings, read live', async () => {
     h.rows.mockResolvedValue([{ customer: { id: '1234567890', autoTaggingEnabled: true, timeZone: 'Europe/Rome', currencyCode: 'EUR' } }])
     const out = await tool('google-ads-live').handler({ view: 'account' }, everyone)

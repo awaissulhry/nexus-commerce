@@ -703,6 +703,14 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-demographics': { before: { campaignId: '21', restore: [] }, after: { campaignId: '21', restore: [{ dimension: 'AGE_RANGE', value: 'AGE_RANGE_18_24', adGroupId: '51', criterion: 'NONE' }, { dimension: 'GENDER', value: 'MALE', criterion: 'EXCLUDED' }], set: [], accountId: 'g-1' } },
       'set-google-status': { before: { items: [{ kind: 'campaign', id: '21', status: 'PAUSED' }], accountId: 'g-1' }, after: { items: [{ kind: 'campaign', id: '21', status: 'ENABLED' }], accountId: 'g-1' } },
       'set-google-negative-list': { before: { listId: '31', keywords: [], campaigns: [] }, after: { listId: '31', added: [{ text: 'cheap', matchType: 'PHRASE' }], removed: [], attached: ['21'], detached: [] } },
+      // G7: exclusions go back exactly (what was added is taken out, what was removed is excluded again); a list's content,
+      // name and links go back (a list it made stays).
+      'set-google-account-exclusions': { before: { removed: [{ kind: 'ip-block', value: '192.0.2.0/24' }] }, after: { added: [{ kind: 'placement', value: 'example.com' }], removed: [{ kind: 'ip-block', value: '192.0.2.0/24' }], accountId: 'g-1', customerId: '1234567890' } },
+      'set-google-campaign-exclusions': { before: { campaignId: '21', removed: [] }, after: { campaignId: '21', added: [{ kind: 'content-label', value: 'TRAGEDY' }], removed: [], accountId: 'g-1', customerId: '1234567890' } },
+      'set-google-exclusion-list': {
+        before: { listId: '41', type: 'BRANDS', removedKeywords: [], removedItems: [], removedBrands: [{ entityId: 'b-2', name: 'Brand B' }], detached: [] },
+        after: { listId: '41', type: 'BRANDS', addedKeywords: [], removedKeywords: [], addedItems: [], removedItems: [], addedBrands: [{ entityId: 'b-1', name: 'Brand A' }], removedBrands: [{ entityId: 'b-2', name: 'Brand B' }], attached: [{ campaignId: '21', mode: 'exclude' }], detached: [], accountId: 'g-1', customerId: '1234567890' },
+      },
       // Programme 2 G3: texts, URLs and tracking go back in place; a replacement or a move goes back the same way.
       'edit-google-rsa': {
         before: { ads: [{ id: '51~701', campaignId: '21', headlines: [{ text: 'Old A', pin: 'HEADLINE_1' }, { text: 'Old B' }, { text: 'Old C' }], path1: null, finalUrl: 'https://shop.example/a' }], accountId: 'g-1', customerId: '1234567890' },
@@ -840,6 +848,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-google-campaign', 'set-google-campaign', 'set-google-targeting', 'set-google-status', 'set-google-audiences', 'set-google-demographics',
       'remove-google-ads-items', 'set-google-product-groups', 'create-google-rsa', 'set-google-assets',
       'set-google-ad-groups', 'set-google-keywords', 'set-google-negatives', 'build-google-campaigns', 'copy-google-campaign',
+      'set-google-account-exclusions', 'set-google-campaign-exclusions', 'set-google-exclusion-list',
       'set-google-inventory-filter', 'set-google-shopping-settings',
       'set-google-labels', 'remove-google-labels', 'apply-google-recommendations', 'dismiss-google-recommendations',
       'set-google-auto-apply', 'set-google-bid-strategy', 'remove-google-bid-strategy',
