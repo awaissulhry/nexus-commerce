@@ -406,6 +406,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-google-targeting': () => ({ campaignId: '21', addLocations: [{ id: '2380' }] }),
   'set-google-status': () => ({ items: [{ kind: 'campaign', id: '21' }], status: 'PAUSED' }),
   'remove-google-ads-items': () => ({ items: [{ kind: 'campaign', id: '21' }], confirmRemove: true }),
+  'set-google-product-groups': () => ({ campaignId: '21', adGroupId: '51', itemIds: ['sku-1'], bidCents: 30 }),
   // L2 — listing reads: where each listing lives, its stock and price per market, its photo plan.
   'listing-coordinates': (ids) => ({ productId: ids.productId }),
   'listing-matrix': (ids) => ({ productId: ids.productId }),

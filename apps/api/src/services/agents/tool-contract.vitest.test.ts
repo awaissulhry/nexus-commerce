@@ -700,6 +700,11 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-targeting': { before: { campaignId: '21', undo: {} }, after: { campaignId: '21', undo: { removeLocations: [{ id: '2380' }], schedule: [{ days: ['MONDAY'], from: '08:00', to: '24:00' }] }, accountId: 'g-1' } },
       'set-google-status': { before: { items: [{ kind: 'campaign', id: '21', status: 'PAUSED' }], accountId: 'g-1' }, after: { items: [{ kind: 'campaign', id: '21', status: 'ENABLED' }], accountId: 'g-1' } },
       'set-google-negative-list': { before: { listId: '31', keywords: [], campaigns: [] }, after: { listId: '31', added: [{ text: 'cheap', matchType: 'PHRASE' }], removed: [], attached: ['21'], detached: [] } },
+      // A Shopping ad group's product groups: the tree split by item ID it replaced is built again.
+      'set-google-product-groups': {
+        before: { campaignId: '21', adGroupId: '51', tree: { kind: 'items', items: [{ itemId: 'sku-1', bidCents: 30, excluded: false }, { itemId: 'sku-2', bidCents: null, excluded: true }], everythingElse: { bidCents: null, excluded: true } } },
+        after: { campaignId: '21', adGroupId: '51', tree: { kind: 'items', items: [{ itemId: 'sku-1', bidCents: 40, excluded: false }], everythingElse: { bidCents: null, excluded: true } } },
+      },
       // L7 — products created (parent and a variation), and products binned.
       'create-product': { before: { products: [] }, after: { products: [{ id: 'p1', deleted: false }, { id: 'p2', deleted: false }] } },
       'create-variations': { before: { products: [] }, after: { products: [{ id: 'p3', deleted: false }] } },
@@ -772,8 +777,9 @@ describe('C1 — every registered tool keeps the contract', () => {
     // Refunds, fiscal numbers, messages, publishing, eBay and Google ads and Amazon spend: a person approves each in Nexus.
     const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
-      'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list', 'create-google-campaign',
-      'set-google-campaign', 'set-google-targeting', 'set-google-status', 'remove-google-ads-items']) {
+      'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list',
+      'create-google-campaign', 'set-google-campaign', 'set-google-targeting', 'set-google-status',
+      'remove-google-ads-items', 'set-google-product-groups']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
