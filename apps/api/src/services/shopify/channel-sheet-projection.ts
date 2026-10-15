@@ -7,6 +7,7 @@ import type { ShopifyLinkedDraft, ShopifyLinkedWorkspace, ShopifyStoreSchema } f
 import type { StudioSheet, StudioRow } from '../pim/studio-sheet.service.js'
 import { shopifyInventoryHeldReason } from '../pim/shopify-inventory-hold.js'
 import { SHOPIFY_STATUS_FROM_STATUS_COLUMN } from '@nexus/shared/listing-actions'
+import { listingShopifyProductId, shopifyProductOwners } from './product-owner-row.js'
 const object = (value: unknown): Record<string, any> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 const linkedDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 type ListingIdentity = { id: string; productId: string; externalListingId: string | null; platformAttributes: unknown }
@@ -50,7 +51,7 @@ export function withShopifyCreateStatus(rows: StudioRow[], columns: Array<{ key:
     return { ...row, values, readiness }
   })
 }
-/** Shopify's value as a person reads it: a weight as "1.2 kg", a list as its items, nothing as "no value". */
+/** Shopify's value as a person reads it: a weight as "1.2 kg", a list as its items, a description as its text, nothing as "no value". */
 function shopifyValueWords(field: InformationField, value: string | null): string {
   if (value == null || value === '') return 'no value'
   try {
@@ -58,7 +59,16 @@ function shopifyValueWords(field: InformationField, value: string | null): strin
     if (!field.definition && field.id === 'weight' && parsed && typeof parsed === 'object') return `${parsed.value} ${shopifyWeightSymbol(parsed.unit)}`
     if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) return parsed.length ? parsed.join(', ') : 'no value'
   } catch { /* plain text */ }
-  return value.length > 80 ? `${value.slice(0, 79)}…` : value
+  const text = !field.definition && field.id === 'descriptionHtml' ? value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || 'no value' : value
+  return text.length > 80 ? `${text.slice(0, 79)}…` : text
+}
+const valueText = (value: unknown) => value == null ? null : typeof value === 'string' ? value : JSON.stringify(value)
+/** A Nexus value and Shopify's are the same value: a weight in grams (1.2 kg equals 1200 g), a JSON value in any key order. */
+function sameShopifyValue(field: InformationField, text: string | null, shopify: string | null): boolean {
+  const grams = !field.definition && field.id === 'weight' ? shopifyWeightGrams(text) : null
+  // A JSON value in another key order, spacing or number spelling is the same value (`shopifyValuesEqual`): no mark.
+  return grams !== null ? grams === shopifyWeightGrams(shopify) : (text ?? '') === (shopify ?? '') || nativeValuesEqual(field.id, text, shopify)
+    || field.type === 'json' && shopifyValuesEqual(field.type, text, shopify)
 }
 /**
  * A live cell that follows Shared while Shopify keeps another value: the value Shopify has and why it stays. A weight is
@@ -66,13 +76,29 @@ function shopifyValueWords(field: InformationField, value: string | null): strin
  */
 export function liveSharedDivergence(field: InformationField, shared: unknown, shopify: string | null): { publishesAs: string | null; note: string } | null {
   if (!field.definition && SENT_FROM_SHARED.has(field.id)) return null
-  const text = shared == null ? null : typeof shared === 'string' ? shared : JSON.stringify(shared)
-  const sharedGrams = !field.definition && field.id === 'weight' ? shopifyWeightGrams(text) : null
-  // A JSON value in another key order, spacing or number spelling is the same value (`shopifyValuesEqual`): no mark.
-  const same = sharedGrams !== null ? sharedGrams === shopifyWeightGrams(shopify) : (text ?? '') === (shopify ?? '') || nativeValuesEqual(field.id, text, shopify)
-    || field.type === 'json' && shopifyValuesEqual(field.type, text, shopify)
-  if (same) return null
+  if (sameShopifyValue(field, valueText(shared), shopify)) return null
   return { publishesAs: shopify, note: `Shopify keeps ${shopifyValueWords(field, shopify)}. Shared changes are not sent to a product already on Shopify; enter the value here to send it.` }
+}
+
+/**
+ * An adopted colour product (`colour-products/confirm.service.ts`): Nexus links the store's product and holds nothing
+ * of it. Its title and description and its price, vendor and product type cells show the STORE's value, read live,
+ * while Nexus holds no value of its own for that listing (a pin, a saved draft, an edit waiting). Showing it sends
+ * nothing and makes nothing sendable.
+ */
+const COLOUR_STORE_FIELDS = new Set(['title', 'descriptionHtml', 'vendor', 'productType', 'price'])
+/** Nexus holds a content pin for this listing (the content resolver's `pin` tier, not a following snapshot). */
+const contentPinned = (cell: { tier?: string; follows?: boolean | null } | undefined) => cell?.tier === 'pin' && cell.follows === false
+/**
+ * The note on such a cell when the Nexus value differs from the store's: what Shopify keeps and what Nexus holds.
+ * `nexusValue` is the Nexus value, so the cell's pop-up can name both. Null when they agree.
+ */
+export function colourStoreDivergence(field: InformationField, nexus: unknown, shopify: string | null): { publishesAs: string | null; note: string; nexusValue: unknown } | null {
+  const text = valueText(nexus)
+  if (sameShopifyValue(field, text, shopify)) return null
+  // A text in quotes (a title ends with its own full stop); a price and "no value" as they are.
+  const say = (value: string | null) => { const words = shopifyValueWords(field, value); return words === 'no value' || field.id === 'price' ? words : `“${words}”` }
+  return { publishesAs: shopify, nexusValue: nexus ?? null, note: `Shopify keeps ${say(shopify)}. Nexus holds ${say(text)}; this colour product shows the store’s value.` }
 }
 
 function pendingRecord(draft: ShopifyLinkedDraft, ownerId: string, field: InformationField, locale?: string) {
@@ -115,15 +141,13 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
     const listing = listings.find(listing => listing.productId === row.id), pa = object(listing?.platformAttributes)
     const variantId = gid('ProductVariant', pa.variantId) ?? gid('ProductVariant', variantIds[row.id])
     const variant = variantId ? owners.get(variantId) : undefined
-    const productId = gid('Product', listing?.externalListingId) ?? gid('Product', pa.shopifyProductId) ?? variant?.productId
-    return [row.id, { product: productId ? owners.get(productId) : undefined, variant }]
+    const productId = listingShopifyProductId(listing) ?? variant?.productId
+    // An adopted colour product (`colour-products/confirm.service.ts`): this size listing is linked to its colour.
+    return [row.id, { product: productId ? owners.get(productId) : undefined, variant, colour: typeof pa.shopifyColourProductId === 'string' && !!pa.shopifyColourProductId }]
   }))
-  // One canonical Nexus row owns product-level fields when several Nexus variants share a product.
-  const productRows = new Map<string, string>()
-  for (const row of [...baseRows].sort((a, b) => Number(!!a.parentId) - Number(!!b.parentId))) {
-    const product = identities.get(row.id)?.product
-    if (product && !productRows.has(product.id)) productRows.set(product.id, row.id)
-  }
+  // One canonical Nexus row owns product-level fields when several Nexus variants share a product — the rule the Shopify
+  // product CSV import records them by (`product-owner-row.ts`).
+  const productRows = new Map([...shopifyProductOwners(baseRows, row => identities.get(row.id)?.product?.id, row => !!row.parentId)].map(([product, row]) => [product, row.id]))
   return baseRows.map(shared => {
     const identity = identities.get(shared.id)!
     if (!identity.product && !identity.variant) return shared
@@ -183,19 +207,29 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
       // points to Qty — the read set it (`studio-sheet`); this projection rebuilds the cell, so it applies the same rule.
       const stockHeld = field.id === 'inventory' && !row.isParent ? shopifyInventoryHeldReason(row) : null
       const reason = stockHeld ?? (pin && pin.type !== field.type ? 'This definition changed type. The saved override is preserved; review and migrate it before editing.' : informationRestriction(remote, field, workspace.draft, active(workspace)))
+      // An adopted colour product shows the store's value of these fields while Nexus holds none of its own here.
+      const colourStore = identity.colour && !field.definition && COLOUR_STORE_FIELDS.has(field.id)
       // The common content writer owns these values, source facts and save tokens. A provider read must not
       // replace a confirmed Nexus pin (including a blank). Keep older pending Shopify drafts visible for review.
       if (!rule && base?.contentAcknowledgement && pending === undefined && !pin) {
-        row.values[column.key] = { ...base, shopifyWrite: undefined, editable: !reason, writable: !reason, writeBlockedReason: reason }
+        // A colour product's title or description with no Nexus pin for this listing: the store's text, with a note when
+        // Nexus's text differs. The content writer stays the cell's writer (an edit saves a pin, which this cell then shows).
+        const store = colourStore && !contentPinned(base) ? { value: baseline, divergence: colourStoreDivergence(field, base.value, baseline) ?? base.divergence } : null
+        if (store) refreshed.add(column.key)
+        row.values[column.key] = { ...base, ...store, shopifyWrite: undefined, editable: !reason, writable: !reason, writeBlockedReason: reason }
         continue
       }
-      const value = pending !== undefined ? pending : pin ? pin.value : sharedValue ? sharedValue.value : mapped ? informationSheetValue(field, base.value) : baseline
       const ownValue = !sharedValue && (pending !== undefined || !!pin || !mapped)
       // Remaining fields are provider-owned facts. Only the content resolver above assigns language readiness.
       const pinned = excluded || !!pin || pending !== undefined && !saved?.inherited || !rule && !saved && !!base?.pinned
+      // A colour product's Shared value with no Nexus value of the listing's own: the cell shows the store's value instead.
+      const storeShown = colourStore && mapped && !pinned && pending === undefined && !pin && !sharedValue
+      const value = pending !== undefined ? pending : pin ? pin.value : sharedValue ? sharedValue.value : mapped && !storeShown ? informationSheetValue(field, base.value) : baseline
       // S1 item 5 (f) — this cell shows the Shared value of a product Shopify already holds; Shopify keeps its own value.
-      // A pending edit or a pin is the operator's own value, so it carries no mark.
-      const keeps = mapped && !pinned && pending === undefined && !pin && !sharedValue ? liveSharedDivergence(field, value, baseline) : null
+      // A pending edit or a pin is the operator's own value, so it carries no mark. A colour product's cell shows the
+      // store's value and names the Shared value Nexus holds when it differs.
+      const keeps = storeShown ? colourStoreDivergence(field, informationSheetValue(field, base.value), baseline)
+        : mapped && !pinned && pending === undefined && !pin && !sharedValue ? liveSharedDivergence(field, value, baseline) : null
       row.values[column.key] = { ...base,
         ...(rule ? { contentAddress: undefined, contentAcknowledgement: undefined, contentVersion: undefined, contentAcknowledged: undefined,
           tier: undefined, language: undefined, requested: undefined, provenance: undefined, translation: undefined } : {}),

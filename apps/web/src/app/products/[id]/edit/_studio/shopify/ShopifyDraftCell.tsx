@@ -149,9 +149,18 @@ export function CellPanel({ anchor, label, onSave, onCancel, children, footer }:
  * `channel-sheet-projection.ts`). Both facts are shown: the value kept here and the value Shopify receives on publish —
  * also when they are equal, because the conflict is the rule, not the text. Showing them writes nothing.
  * `follows` (S1 item 5 f): the cell follows Shared on a product Shopify already holds, and Shopify keeps its own value.
+ * `divergence.nexusValue`: an adopted colour product's cell shows Shopify's own value; the banner names the Nexus value.
  */
 export function ShopifyDivergenceBanner({ type, kept, divergence, follows = false, names }: { type: string; kept: string | null; divergence: StudioCellValue['divergence']; follows?: boolean; names?: Record<string, string> }) {
   if (!divergence) return null
+  // An adopted colour product: the cell shows Shopify's own value, and Nexus holds another one.
+  if (divergence.nexusValue !== undefined) return <Banner tone="warning" title="Shopify keeps its own value">
+    <KeyValue dense items={[
+      { label: 'Shopify has, shown here', value: informationValueLabel(type, kept, names) },
+      { label: 'Nexus holds', value: informationValueLabel(type, shopifyRawValue(divergence.nexusValue), names) },
+    ]} />
+    <p>{divergence.note}</p>
+  </Banner>
   if (follows) return <Banner tone="warning" title="Shopify keeps its own value">
     <KeyValue dense items={[
       { label: 'Shared value, shown here', value: informationValueLabel(type, kept, names) },

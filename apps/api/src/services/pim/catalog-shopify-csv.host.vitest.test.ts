@@ -64,3 +64,27 @@ it('reads only the product group on the product sheet, in its own store', () => 
   expect(sheet.exclusions.some(e => e.message === 'Outside this product; use Catalog import')).toBe(true)
   await expect(resolveShopifyCsv(table, { productId: 'nope' })).rejects.toThrow('This product is unavailable')
 }))
+
+it('reads an adopted colour family: each size’s own SKU and colour link, in the sheet’s row order', () => scoped(async () => {
+  const { shopifyStoreTargets } = await import('./catalog-shopify-csv.js')
+  const { SHOPIFY_COLOUR_ROWS } = await import('./catalog-transfer-test/shopify-csv-fixtures.js')
+  const ride = await prisma.product.create({ data: { id: 'p-ACME-RIDE', sku: 'ACME-RIDE', name: 'Ride', basePrice: 10, isParent: true } })
+  // Created out of SKU order: the targets come back by SKU, as the product sheet reads the family.
+  for (const [sku, colour, shopifyProduct] of [['ACME-RIDE-RED-S', 'c-red', '102'], ['ACME-RIDE-BLK-S', 'c-black', '101'], ['ACME-RIDE-RED-M', 'c-red', '102'], ['ACME-RIDE-BLK-M', 'c-black', '101']]) {
+    await prisma.product.create({ data: { id: `p-${sku}`, sku, name: sku, basePrice: 10, parentId: ride.id } })
+    await prisma.channelListing.create({ data: { productId: `p-${sku}`, channel: 'SHOPIFY', channelConnectionId: store, channelMarket: 'SHOPIFY_GLOBAL', marketplace: 'GLOBAL', region: 'GLOBAL',
+      externalListingId: shopifyProduct, syncPaused: true, ...(sku === 'ACME-RIDE-RED-S' ? { channelSku: 'acme-ride-red-s', liveChannelSku: 'acme-ride-red-s' } : {}),
+      platformAttributes: { shopifyColourProductId: colour, shopifyProductId: shopifyProduct, variantId: `${shopifyProduct}1` } } })
+  }
+  await prisma.channelListing.create({ data: { productId: ride.id, channel: 'SHOPIFY', channelConnectionId: store, channelMarket: 'SHOPIFY_GLOBAL', marketplace: 'GLOBAL', region: 'GLOBAL', platformAttributes: {} } })
+  const targets = (await shopifyStoreTargets(prisma, store)).filter(t => t.sku.startsWith('ACME-RIDE'))
+  expect(targets.map(t => [t.sku, t.colourProductId ?? null, t.shopifyProductId ?? null, t.listingSkus])).toEqual([
+    ['ACME-RIDE', null, null, []],
+    ['ACME-RIDE-BLK-M', 'c-black', 'gid://shopify/Product/101', []], ['ACME-RIDE-BLK-S', 'c-black', 'gid://shopify/Product/101', []],
+    ['ACME-RIDE-RED-M', 'c-red', 'gid://shopify/Product/102', []], ['ACME-RIDE-RED-S', 'c-red', 'gid://shopify/Product/102', ['acme-ride-red-s']],
+  ])
+  const read = await resolveShopifyCsv(readShopifyCsv(csvOf(SHOPIFY_CLASSIC_HEADERS, SHOPIFY_COLOUR_ROWS)), { accountId: store })
+  expect(read.issues).toEqual([])
+  expect(read.rows.filter(r => r.field === 'title').map(r => [r.sku, r.value])).toEqual([['ACME-RIDE-BLK-M', 'Ride jacket – Black'], ['ACME-RIDE-RED-M', 'Ride jacket – Red']])
+  expect(read.rows.find(r => r.sku === 'ACME-RIDE-RED-S' && r.field === 'price')).toMatchObject({ value: 199, fileSku: 'acme-ride-red-s' })
+}))

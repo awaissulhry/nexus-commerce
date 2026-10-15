@@ -78,6 +78,19 @@ describe('Shopify keeps its own value', () => {
   })
 })
 
+/* An adopted colour product: the cell shows Shopify's own value, and Nexus holds another one. */
+describe('an adopted colour product keeps the store’s value', () => {
+  const note = 'Shopify keeps “ACME”. Nexus holds “Xavia”; this colour product shows the store’s value.'
+  const html = () => renderToStaticMarkup(createElement(ShopifyDivergenceBanner, { type: label.type, kept: 'ACME', follows: true, divergence: { publishesAs: 'ACME', nexusValue: 'Xavia', note } }))
+  it('names the store’s value shown here and the value Nexus holds — never the Shared value as the one shown', () => {
+    expect(html()).toContain('Shopify keeps its own value')
+    expect(html()).toContain('<dt>Shopify has, shown here</dt><dd>ACME</dd>')
+    expect(html()).toContain('<dt>Nexus holds</dt><dd>Xavia</dd>')
+    expect(html()).toContain(note)
+    expect(html()).not.toContain('Shared value, shown here')
+  })
+})
+
 describe('reading or cancelling the pop-up writes nothing', () => {
   const base = { schema, locked: false, translated: false, contentWrite: false, hasSession: true }
   it.each([['different', 'Saved separate label', label], ['equal', 'false', flag]] as const)('a %s-value conflict closed unchanged is not committed', (_kind, kept, field) => {
