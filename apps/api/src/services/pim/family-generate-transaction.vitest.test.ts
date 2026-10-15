@@ -85,3 +85,23 @@ it('S9: a SKU another product\'s listing holds is skipped in the preview and ref
   await expect(generateCombinations({ ...input(), dryRun: false, previewToken: clean.previewToken })).rejects.toThrow(sentence)
   expect(fixture.created).toEqual([])
 })
+
+// 2026-10-15 (MISANO) — an approval keeps its args as jsonb, which re-orders object keys: the re-check and the run read
+// `{ Taglia, Colore }` where the preview read `{ Colore, Taglia }`. The token is canonical, so the same plan is the same plan.
+it('the preview token does not depend on the key order of the plan (a jsonb round trip of the approved args)', async () => {
+  const preview = await generateCombinations({ ...input(), valueCodes: { Colore: { Nero: 'NERO' }, Taglia: { L: 'L' } } }) as GenerateDryRun
+  const reordered = { ...input(), axisValues: { Taglia: ['M', 'L'], Colore: ['Nero'] }, valueCodes: { Taglia: { L: 'L' }, Colore: { Nero: 'NERO' } } }
+  expect((await generateCombinations(reordered) as GenerateDryRun).previewToken).toBe(preview.previewToken)
+  await generateCombinations({ ...reordered, dryRun: false, previewToken: preview.previewToken })
+  expect(fixture.created).toEqual([expect.objectContaining({ sku: 'P-NERO-L' })])
+  // The ORDER of an axis's values is the order rows are created in: it still counts.
+  expect((await generateCombinations({ ...input(), axisValues: { Colore: ['Nero'], Taglia: ['L', 'M'] } }) as GenerateDryRun).previewToken).not.toBe(preview.previewToken)
+})
+
+it('a stock movement (totalStock, no version) does not move the token; a member\'s version does', async () => {
+  const preview = await generateCombinations(input()) as GenerateDryRun
+  fixture.children[0].totalStock = 3
+  expect((await generateCombinations(input()) as GenerateDryRun).previewToken).toBe(preview.previewToken)
+  fixture.children[0].version++
+  expect((await generateCombinations(input()) as GenerateDryRun).previewToken).not.toBe(preview.previewToken)
+})
