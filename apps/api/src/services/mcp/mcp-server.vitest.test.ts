@@ -38,20 +38,23 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Google Ads G6 (2026-10-15) — assets of every type and their links at the account, campaigns and ad groups change the Google Ads account.
 // Google Ads G9 (2026-10-15) — experiments and campaign drafts change the Google Ads account; google-ads-experiments reads it live.
 // Google Ads G8a (2026-10-15) — conversion actions, goals and value rules change the Google Ads account; Shopify sales and their adjustments are sent to Google.
+// Google Ads G11 (2026-10-15) — Demand Gen, Display and App campaigns, their ad groups and ads, and video responsive ads change the Google Ads account.
 
 const OPEN_WORLD = [
-  'add-ad-targets', 'add-google-assets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
+  'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
   'advance-purchase-order',
   'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'apply-google-recommendations',
   'apply-harvest',
   'archive-ads', 'build-google-campaigns', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
   'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label', 'cancel-order',
   'channel-identity-check', 'check-google-ads-build', 'close-listing', 'confirm-shipment', 'copy-google-campaign',
-  'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
-  'create-google-campaign', 'create-google-experiment', 'create-google-rsa', 'create-negative-keyword', 'decide-automation-suggestions',
+  'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign', 'create-google-app-campaign',
+  'create-google-campaign', 'create-google-demand-gen-campaign', 'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-negative-keyword', 'decide-automation-suggestions',
   'delete-listing', 'dismiss-google-recommendations', 'dispose-return-items', 'ebay-categories',
-  'ebay-keywords-change', 'edit-google-assets', 'edit-google-rsa', 'email-supplier', 'enable-ads', 'end-google-experiment', 'end-listing',
-  'google-ads-experiments', 'google-ads-live', 'google-ads-numbers', 'google-ads-query', 'google-merchant-live', 'graduate-google-experiment', 'graduate-keyword', 'harvest-search-term',
+  'ebay-keywords-change', 'edit-google-assets', 'edit-google-campaign-type-ads', 'edit-google-rsa', 'email-supplier',
+  'enable-ads', 'end-google-experiment', 'end-listing', 'google-ads-experiments', 'google-ads-live',
+  'google-ads-numbers', 'google-ads-query', 'google-merchant-live', 'graduate-google-experiment', 'graduate-keyword',
+  'harvest-search-term',
   'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
@@ -65,7 +68,7 @@ const OPEN_WORLD = [
   'set-ebay-price-promotion', 'set-google-account-exclusions', 'set-google-account-links',
   'set-google-account-settings', 'set-google-ad-groups', 'set-google-asset-links', 'set-google-assets',
   'set-google-audiences', 'set-google-auto-apply', 'set-google-bid-strategy', 'set-google-billing',
-  'set-google-budget', 'set-google-campaign', 'set-google-campaign-draft', 'set-google-campaign-exclusions',
+  'set-google-budget', 'set-google-campaign', 'set-google-campaign-draft', 'set-google-campaign-exclusions', 'set-google-campaign-type',
   'set-google-conversion-actions', 'set-google-conversion-goals', 'set-google-demographics',
   'set-google-exclusion-list', 'set-google-experiment', 'set-google-inventory-filter', 'set-google-keywords',
   'set-google-labels', 'set-google-merchant-data-sources', 'set-google-merchant-products', 'set-google-merchant-promotions',

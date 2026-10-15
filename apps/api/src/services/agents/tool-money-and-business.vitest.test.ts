@@ -169,6 +169,7 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'edit-google-rsa': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-edit.tools test)',
   'edit-google-assets': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-edit.tools test)',
   'add-google-assets': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-assets-all.tools test)',
+  'edit-google-campaign-type-ads': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-campaign-types.tools test)',
   'set-google-asset-links': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-assets-all.tools test)',
   'set-google-urls': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-edit.tools test)',
   'move-google-ads': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-edit.tools test)',
@@ -474,6 +475,13 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'add-google-assets': () => ({ callouts: ['Free returns'], linkTo: [{ level: 'account' }] }),
   'set-google-asset-links': () => ({ items: [{ level: 'campaign', campaignId: '21', assetId: '9', fieldType: 'CALLOUT', action: 'pause' }] }),
   'set-google-urls': () => ({ items: [{ level: 'campaign', id: '21', finalUrlSuffix: 'src=google' }] }),
+  // Programme 2 G11 — Demand Gen, Display and App campaigns: no Google Ads account here either (google-ads-campaign-types.tools test).
+  'create-google-demand-gen-campaign': () => ({ name: 'Shop DG', dailyBudgetCents: 2000, bidding: { strategy: 'MAXIMIZE_CLICKS' }, adGroups: [{ name: 'Group A' }] }),
+  'create-google-display-campaign': () => ({ name: 'Shop Display', dailyBudgetCents: 2000, adGroups: [{ name: 'Group A', defaultBidCents: 30 }] }),
+  'create-google-app-campaign': () => ({ name: 'Shop App', dailyBudgetCents: 2000, app: { appId: 'com.example.app', appStore: 'GOOGLE_APP_STORE', goal: 'OPTIMIZE_INSTALLS_WITHOUT_TARGET_INSTALL_COST' }, adGroups: [{ name: 'Group A' }] }),
+  'add-google-campaign-type-ads': () => ({ campaignId: '21', adGroups: [{ name: 'Group B' }] }),
+  'set-google-campaign-type': () => ({ campaignId: '21', name: 'Shop New' }),
+  'edit-google-campaign-type-ads': () => ({ ads: [{ id: '51~701', headlines: ['New A'] }] }),
   'replace-google-keywords': () => ({ campaignId: '21', keywords: [{ keywordId: '51~601', matchType: 'PHRASE' }], confirmRemove: true }),
   'move-google-ads': () => ({ campaignId: '21', adGroupId: '51', toAdGroupId: '52', adIds: ['701'], confirmRemove: true }),
   // G5 — labels, Google's recommendations and portfolio bid strategies: no Google Ads account here either (their own tests).

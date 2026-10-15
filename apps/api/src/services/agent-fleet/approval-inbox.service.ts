@@ -851,6 +851,13 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-google-merchant-products': ['basis', 'plan', 'reach'],
   'set-google-merchant-data-sources': ['basis', 'plan', 'reach'],
   'set-google-merchant-promotions': ['basis', 'plan', 'reach'],
+  // Programme 2 G11 — Demand Gen, Display and App campaigns, their ad groups and ads, video responsive ads (google-ads-campaign-types.tools.ts).
+  'create-google-demand-gen-campaign': ['basis', 'plan', 'reach'],
+  'create-google-display-campaign': ['basis', 'plan', 'reach'],
+  'create-google-app-campaign': ['basis', 'plan', 'reach'],
+  'add-google-campaign-type-ads': ['basis', 'plan', 'reach'],
+  'set-google-campaign-type': ['basis', 'plan', 'reach'],
+  'edit-google-campaign-type-ads': ['basis', 'plan', 'reach'],
   // G7: exclusions (account, campaign) and exclusion / brand lists (google-ads-exclusions.tools.ts).
   'set-google-account-exclusions': ['basis', 'plan', 'reach'],
   'set-google-campaign-exclusions': ['basis', 'plan', 'reach'],
