@@ -16,6 +16,7 @@ import { __rateTest, defaultsFor, GOOGLE_BUCKETS, bucketKey } from './rate.js'
 import { gatewayCall, GatewayRefusal } from './gateway.js'
 import { googleCall, googleKind } from './google.js'
 import { apiVersionOf, bucketGroupOf, GOOGLE_ADS_MUTATE_KINDS, googleMutateBodyOf, publishModeOf } from './channels.js'
+import { GOOGLE_ACCOUNT_CALL_PATHS, GOOGLE_ACCOUNT_CHECKABLE } from './google-account-calls.js'
 import { classifyChannelAnswer } from './vocabulary.js'
 import { ledgerSafeBody } from './redact.js'
 import { googleRateReading } from '../cx/rate-readings.js'
@@ -83,15 +84,28 @@ describe('Google: reads, and Google Ads mutates only', () => {
       'adGroupAdLabelOperation', 'adGroupAdOperation', 'adGroupBidModifierOperation', 'adGroupCriterionLabelOperation',
       'adGroupCriterionOperation', 'adGroupLabelOperation', 'adGroupOperation', 'adOperation', 'assetOperation',
       'biddingStrategyOperation', 'campaignAssetOperation', 'campaignBudgetOperation', 'campaignCriterionOperation',
-      'campaignLabelOperation', 'campaignOperation', 'campaignSharedSetOperation', 'customerNegativeCriterionOperation', 'labelOperation',
+      'campaignLabelOperation', 'campaignOperation', 'campaignSharedSetOperation',
+      'customerNegativeCriterionOperation', 'customerOperation', 'labelOperation',
       'recommendationSubscriptionOperation', 'sharedCriterionOperation', 'sharedSetOperation',
     ])
-    // Its neighbours stay refused: an ad parameter (AdService's family), the account itself.
+    // Its neighbours stay refused: an ad parameter (AdService's family), a customer operation that is not exactly an
+    // update of the account's settings (G8b: google-account-calls.vitest.test.ts).
     for (const op of [{ adParameterOperation: { create: {} } }, { customerOperation: { update: {} } }]) {
       const err = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: [op], validateOnly: true } }).catch((e) => e)
       expect(err).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY' })
     }
     expect(h.calls).toHaveLength(2)
+  })
+
+  it('the Google Ads methods besides Mutate that Nexus sends (G8b: the account\'s users, links, billing) are exactly these', () => {
+    // Bodies, customers and refusals: google-account-calls.vitest.test.ts. A new method is a new line here, on purpose.
+    expect([...GOOGLE_ACCOUNT_CALL_PATHS].sort()).toEqual([
+      'accountBudgetProposals:mutate', 'billingSetups:mutate', 'customerUserAccessInvitations:mutate', 'customerUserAccesses:mutate',
+      'dataLinks:create', 'dataLinks:remove', 'dataLinks:update', 'productLinkInvitations:remove', 'productLinkInvitations:update',
+      'productLinks:create', 'productLinks:remove',
+    ])
+    // Only these two have validate_only (v25 RemoveProductLinkRequest, MutateAccountBudgetProposalRequest).
+    expect([...GOOGLE_ACCOUNT_CHECKABLE].sort()).toEqual(['accountBudgetProposals:mutate', 'productLinks:remove'])
   })
 
   it('what is sent is the body as judged: a duplicate key collapses before sending', async () => {
@@ -105,11 +119,11 @@ describe('Google: reads, and Google Ads mutates only', () => {
     const tries = [
       // another Google API
       googleCall({ connectionId: 'g-1', operation: 'merchant.registerGcp', method: 'POST', url: 'https://merchantapi.googleapis.com/accounts/v1/accounts/1/developerRegistration:registerGcp', body: {} }),
-      // another Google Ads service (only GoogleAdsService.Mutate)
-      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/customerUserAccessInvitations:mutate`, body: { operations: [] } }),
+      // another Google Ads service: a new account (CustomerService.CreateCustomerClient) is never sent
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890:createCustomerClient`, body: { customerClient: { descriptiveName: 'Shop B' } } }),
       googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/campaigns:mutate`, body: { operations: [] } }),
-      // a kind of operation Nexus never sends
-      googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: [{ customerOperation: { update: {} } }] } }),
+      // a kind of operation Nexus never sends (a customer create: CustomerOperation has no create)
+      googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: [{ customerOperation: { create: { descriptiveName: 'Shop B' } } }] } }),
       // snake_case Google also reads
       googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: OPS, validateOnly: true, validate_only: false } }),
       // a query string
@@ -127,11 +141,12 @@ describe('Google: reads, and Google Ads mutates only', () => {
     expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [{ campaignBidModifierOperation: { create: {} } }] }))).toEqual({ refusal: 'it holds an operation Nexus does not send (campaignBidModifierOperation)' })
   })
 
-  it('G7: the account\'s exclusions (customerNegativeCriterionOperation) go through a mutate; the account itself does not', () => {
+  it('G7: the account\'s exclusions (customerNegativeCriterionOperation) go through a mutate; a bare customer operation does not', () => {
     const exclude = [{ customerNegativeCriterionOperation: { create: { placementList: { sharedSet: 'customers/1234567890/sharedSets/41' } } } }]
     expect(googleKind('POST', MUTATE, { mutateOperations: exclude, validateOnly: true })).toBe('read')
     expect(googleKind('POST', MUTATE, { mutateOperations: exclude })).toBe('write')
-    expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [{ customerOperation: { update: {} } }] }))).toEqual({ refusal: 'it holds an operation Nexus does not send (customerOperation)' })
+    // G8b allows only an update of the account's own settings fields (google-account-calls.ts); a bare one is refused.
+    expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [{ customerOperation: { update: {} } }] }))).toEqual({ refusal: 'the customer update does not name this account' })
   })
 
   it('G7: Google Ads\' brand lookup (…/customers/{id}:suggestBrands) is a read; nothing else of its shape is', async () => {

@@ -164,8 +164,12 @@ export type GoogleCheckOutcome =
   | { status: 'refused'; why: string }
   | { status: 'not-checked'; why: string }
 
+/** Google's check of a change: a validate-only mutate, or (a checkable GoogleSender) its own method's validate_only. */
+export type GoogleChecker = (target: GoogleAdsTarget, operations: GoogleMutateOperation[]) => Promise<unknown>
+const mutateCheck: GoogleChecker = (target, operations) => mutateGoogleAds(target, operations, { validateOnly: true })
+
 /** Build from the live state and let Google check it (or reuse its acceptance of the same plan in the last 30 minutes). */
-export async function googleCheck(args: Record<string, unknown>, build: GoogleDraftBuilder): Promise<GoogleCheckOutcome> {
+export async function googleCheck(args: Record<string, unknown>, build: GoogleDraftBuilder, check: GoogleChecker = mutateCheck): Promise<GoogleCheckOutcome> {
   const built = await draftFor(args, build)
   if ('refusal' in built) return { status: 'refused', why: built.refusal }
   const { account, draft } = built
@@ -175,7 +179,7 @@ export async function googleCheck(args: Record<string, unknown>, build: GoogleDr
     return { status: 'accepted', preview: previewOf(account, draft, { checked: true, accepted: true, sentence: `Google checked this exact change at ${at.slice(11, 16)} UTC (validate_only) and would accept it: ${draft.operations.length} operation${draft.operations.length === 1 ? '' : 's'}.` }) }
   }
   try {
-    await mutateGoogleAds(account.target, draft.operations, { validateOnly: true })
+    await check(account.target, draft.operations)
   } catch (err) {
     // Google answered (refused): judged. Anything else (nothing sent, no answer): not checked.
     const judged = err instanceof GoogleAdsWriteError && err.outcome === 'refused'
@@ -196,11 +200,17 @@ export async function googleCheck(args: Record<string, unknown>, build: GoogleDr
 export interface GoogleSender {
   notChecked: string
   send: (target: GoogleAdsTarget, operations: GoogleMutateOperation[]) => Promise<{ responses: GoogleMutateResponse[] }>
+  /**
+   * G8b: a method that is not a mutate but HAS validate_only (removing a Merchant Center link, an account budget
+   * proposal): Google checks the change with it as a mutate is checked (rejects like mutateGoogleAds). `notChecked` is
+   * then unused.
+   */
+  check?: GoogleChecker
 }
 
 /** The dry run of a Google Ads change tool: build from the live state, let Google check it (not on a re-check), preview. */
 export async function googleChangePreview(args: Record<string, unknown>, ctx: ToolContext, build: GoogleDraftBuilder, sender?: GoogleSender): Promise<ToolResult> {
-  if (sender) {
+  if (sender && !sender.check) {
     const built = await draftFor(args, build)
     if ('refusal' in built) return { ok: false, error: built.refusal }
     return { ok: true, preview: previewOf(built.account, built.draft, { checked: false, sentence: sender.notChecked }) }
@@ -210,7 +220,7 @@ export async function googleChangePreview(args: Record<string, unknown>, ctx: To
     if ('refusal' in built) return { ok: false, error: built.refusal }
     return { ok: true, preview: previewOf(built.account, built.draft, { checked: false, sentence: 'Re-check before running: the live facts were read again; Google was not asked to check it twice.' }) }
   }
-  const out = await googleCheck(args, build)
+  const out = await googleCheck(args, build, sender?.check)
   if (out.status === 'accepted') return { ok: true, preview: out.preview }
   return { ok: false, error: out.status === 'refused' && !out.why.startsWith('Google Ads refused') ? out.why : `Not queued: ${out.why}` }
 }

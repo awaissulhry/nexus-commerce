@@ -851,6 +851,11 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-google-account-exclusions': ['basis', 'plan', 'reach'],
   'set-google-campaign-exclusions': ['basis', 'plan', 'reach'],
   'set-google-exclusion-list': ['basis', 'plan', 'reach'],
+  // Programme 2 G8b — the account's settings, users, links and billing (google-ads-account.tools.ts).
+  'set-google-account-settings': ['basis', 'plan', 'reach'],
+  'set-google-user-access': ['basis', 'plan', 'reach'],
+  'set-google-account-links': ['basis', 'plan', 'reach'],
+  'set-google-billing': ['basis', 'plan', 'reach'],
   // Programme 2 G3 — edit in place, URLs and tracking, replace / move (google-ads-edit.tools.ts).
   'edit-google-rsa': ['basis', 'plan', 'reach'],
   'edit-google-assets': ['basis', 'plan', 'reach'],

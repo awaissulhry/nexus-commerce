@@ -5,7 +5,8 @@
  * - Reads, and two kinds of change: `googleKind` says read for a GET or a POST to `…:search` / `…:searchStream`,
  *   and for a Google Ads `…:mutate` that only asks Google to check it (`validateOnly: true`); write for a real
  *   Google Ads mutate (2026-10-15: every one a change a person approved in Nexus) and for an apply or a dismiss of
- *   Google's recommendations (`…/recommendations:apply|:dismiss`, G5: Google cannot check those). The gateway refuses every other
+ *   Google's recommendations (`…/recommendations:apply|:dismiss`, G5: Google cannot check those), and the account's
+ *   users, links and billing (G8b, google-account-calls.ts: a write, or a read when validate-only). The gateway refuses every other
  *   Google call (`GOOGLE_READ_ONLY`), with its ledger row, and holds real writes to the publish mode
  *   (`NEXUS_GOOGLE_ADS_WRITES=off` refuses them). A write is never retried by the gateway: it could apply twice.
  * - The account's own token as `Authorization: Bearer` (the gateway refreshes it under the lease).
@@ -16,6 +17,7 @@
  */
 import { gatewayFetch } from './gateway.js'
 import { googleAdsRecommendationCall, googleCallKind, isGoogleAdsMutate, isGoogleValidateOnly } from './channels.js'
+import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 
 export interface GoogleCallRequest {
   connectionId: string
@@ -37,6 +39,13 @@ export function googleKind(method: string, url: string, body?: unknown): 'read' 
   if (googleCallKind(method, url) === 'read') return 'read'
   // G5: applying or dismissing Google's recommendations — Google has no check for it, so always a real write.
   if (googleAdsRecommendationCall(method, url)) return 'write'
+  // G8b: the account's users, links and billing — a write, or a read when it only asks Google to check it (validateOnly,
+  // on the methods that have it); a body the gateway would refuse goes as a write and is refused there.
+  const account = googleAdsAccountCall(method, url)
+  if (account) {
+    const judged = googleAccountCallBodyOf(account, body === undefined ? undefined : JSON.stringify(body))
+    return !('refusal' in judged) && judged.check ? 'read' : 'write'
+  }
   if (!isGoogleAdsMutate(method, url)) return 'action'
   return isGoogleValidateOnly(body === undefined ? undefined : JSON.stringify(body)) ? 'read' : 'write'
 }

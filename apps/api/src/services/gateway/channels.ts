@@ -10,6 +10,7 @@ import { getEtsyPublishMode } from '../etsy-publish-gate.service.js'
 import { tryGetChannelSpec, type ChannelKey, type RateLimitReading } from '../cx/catalog.js'
 import { amazonAdsRateReading, amazonSpRateReading, ebayRateReading, etsyRateReading, googleRateReading, shopifyRateReading } from '../cx/rate-readings.js'
 import type { GatewayChannel } from './vocabulary.js'
+import { customerOperationProblem } from './google-account-calls.js'
 import prisma from '../../db.js'
 import { languageTag, marketLanguages } from '../pim/market-languages.js'
 import { normalizeLanguage } from '../pim/content-language.js'
@@ -204,7 +205,8 @@ export function googleAdsMutateCustomer(method: string, url: string): string | n
  * settings of Google's recommendations (G5, 2026-10-15; names checked in the v25 MutateOperation reference).
  * `adOperation` (AdService: an ad's content edited in place — a responsive search ad's texts, its URLs and tracking;
  * MutateOperation.ad_operation in v25, update only) is edit-google-rsa's and set-google-urls'.
- * Anything else in a mutate (a customer, a user, a conversion action …) is refused before anything is sent.
+ * `customerOperation` (G8b) is set-google-account-settings': an update of the account's own settings only.
+ * Anything else in a mutate (a user, a conversion action …) is refused before anything is sent.
  */
 export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   'campaignBudgetOperation', 'campaignOperation', 'campaignCriterionOperation', 'adGroupOperation', 'adGroupCriterionOperation',
@@ -217,6 +219,9 @@ export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   // G7 (2026-10-15): the account's own exclusions and the lists on the whole account (CustomerNegativeCriterion: create
   // or remove only; MutateOperation.customer_negative_criterion_operation in v25).
   'customerNegativeCriterionOperation',
+  // G8b: the account's own settings — an UPDATE of exactly the fields set-google-account-settings writes, never a create
+  // or a remove (customerOperationProblem, google-account-calls.ts).
+  'customerOperation',
 ])
 
 /**
@@ -292,8 +297,9 @@ export interface GoogleMutateBody {
  * A GoogleAdsService.Mutate body as the gateway judges it, or why it is refused: JSON, `mutateOperations` a list of
  * known kinds (one kind per operation), and `validateOnly` a boolean said once in camelCase (Google also reads
  * `validate_only`: a body that names it is refused). Duplicate keys collapse in the parse; the parsed body is what is sent.
+ * A `customerOperation` updates THIS customer (`customer`, the URL's, when the gateway judges it) and nothing else.
  */
-export function googleMutateBodyOf(body: unknown): GoogleMutateBody | { refusal: string } {
+export function googleMutateBodyOf(body: unknown, customer?: string | null): GoogleMutateBody | { refusal: string } {
   if (typeof body !== 'string') return { refusal: 'the body is not JSON text' }
   let parsed: Record<string, unknown>
   try { parsed = JSON.parse(body) } catch { return { refusal: 'the body is not JSON' } }
@@ -305,6 +311,10 @@ export function googleMutateBodyOf(body: unknown): GoogleMutateBody | { refusal:
   for (const operation of operations) {
     const kinds = operation && typeof operation === 'object' ? Object.keys(operation) : []
     if (kinds.length !== 1 || !GOOGLE_ADS_MUTATE_KINDS.has(kinds[0])) return { refusal: `it holds an operation Nexus does not send (${kinds.join(', ') || 'none'})` }
+    if (kinds[0] === 'customerOperation') {
+      const problem = customerOperationProblem((operation as Record<string, unknown>).customerOperation, customer)
+      if (problem) return { refusal: problem }
+    }
   }
   return { check: parsed.validateOnly === true, body: JSON.stringify(parsed) }
 }

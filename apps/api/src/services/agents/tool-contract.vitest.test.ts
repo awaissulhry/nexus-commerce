@@ -772,6 +772,24 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { strategies: [{ strategyId: '81', name: 'Old', targetCpaCents: 900, maxCpcCents: null }], accountId: 'g-1', customerId: '1234567890' },
         after: { strategies: [{ strategyId: '81', name: 'New', targetCpaCents: 1200, maxCpcCents: 80 }], accountId: 'g-1', customerId: '1234567890' },
       },
+      // G8b: account settings go back as they were; an invitation is cancelled (a removed person invited again); a Merchant
+      // Center link is unlinked; an account budget proposal is cancelled while Google has not reviewed it.
+      'set-google-account-settings': {
+        before: { settings: { autoTagging: true, trackingTemplate: null }, accountId: 'g-1', customerId: '1234567890' },
+        after: { settings: { autoTagging: false, trackingTemplate: '{lpurl}?src=a' }, accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-user-access': {
+        before: { action: 'invite', email: 'person@example.com', role: 'STANDARD', userId: null, invitationId: null, present: false, accountId: 'g-1' },
+        after: { action: 'invite', email: 'person@example.com', role: 'STANDARD', userId: null, invitationId: '71', present: true, accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-account-links': {
+        before: { action: 'link-merchant-center', merchantCenterId: '555', state: 'none', accountId: 'g-1' },
+        after: { action: 'link-merchant-center', merchantCenterId: '555', state: 'linked', accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-billing': {
+        before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
+        after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
+      },
       // L7 — products created (parent and a variation), and products binned.
       'create-product': { before: { products: [] }, after: { products: [{ id: 'p1', deleted: false }, { id: 'p2', deleted: false }] } },
       'create-variations': { before: { products: [] }, after: { products: [{ id: 'p3', deleted: false }] } },
@@ -852,6 +870,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-inventory-filter', 'set-google-shopping-settings',
       'set-google-labels', 'remove-google-labels', 'apply-google-recommendations', 'dismiss-google-recommendations',
       'set-google-auto-apply', 'set-google-bid-strategy', 'remove-google-bid-strategy',
+      'set-google-account-settings', 'set-google-user-access', 'set-google-account-links', 'set-google-billing',
       'edit-google-rsa', 'edit-google-assets', 'set-google-urls', 'replace-google-keywords', 'move-google-ads']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }

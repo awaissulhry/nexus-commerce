@@ -176,6 +176,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'remove-google-labels': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-labels.tools test)',
   'dismiss-google-recommendations': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-recommendations.tools test)',
   'set-google-auto-apply': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-recommendations.tools test)',
+  'set-google-account-settings': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-account.tools test)',
+  'set-google-user-access': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-account.tools test)',
+  'set-google-account-links': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-account.tools test)',
   'set-harvest-rules': 'the seeded rule is not a harvest rule, so there is nothing to archive (tools/ads-harvest-postgres test)',
   'set-harvest-sources': 'the seeded ad group feeds no terms to harvest (a manual campaign with no ad product), so it is no source (tools/ads-harvest-postgres test)',
 }
@@ -461,6 +464,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'apply-google-recommendations': () => ({ recommendations: [{ recommendationId: 'r-1', budgetCents: 1500 }] }),
   'dismiss-google-recommendations': () => ({ recommendationIds: ['r-1'] }),
   'set-google-auto-apply': () => ({ types: [{ type: 'KEYWORD', status: 'PAUSED' }] }),
+  'set-google-account-settings': () => ({ autoTagging: true }),
+  'set-google-user-access': () => ({ action: 'change-role', userId: '61', role: 'READ_ONLY' }),
+  'set-google-account-links': () => ({ action: 'link-merchant-center', merchantCenterId: '555' }),
+  'set-google-billing': () => ({ action: 'change-account-budget', accountBudgetId: '91', spendingLimitCents: 50000 }),
   'set-google-bid-strategy': () => ({ change: [{ strategyId: '81', targetCpaCents: 1200 }] }),
   'remove-google-bid-strategy': () => ({ strategyIds: ['81'], confirmRemove: true }),
   // L2 — listing reads: where each listing lives, its stock and price per market, its photo plan.

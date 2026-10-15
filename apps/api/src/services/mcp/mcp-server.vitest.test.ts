@@ -34,6 +34,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // FBA shipment drafts (Owner 2026-10-08) — plan-fba-shipment fills a draft in Nexus only; a person's "Send to Amazon" reaches Amazon.
 // Ads autonomy (auto-undo, A19) — undo-worse-ad-change puts a bid, budget or placement back at Amazon.
 // Google Ads G5 (2026-10-15) — labels, Google's recommendations (apply, dismiss, auto-apply) and portfolio bid strategies change the Google Ads account.
+// Google Ads G8b (2026-10-15) — the account's settings, users, links and billing.
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
@@ -57,11 +58,13 @@ const OPEN_WORLD = [
   'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
   'set-ad-group', 'set-ads-brain', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule',
   'set-campaign-budget', 'set-campaign-settings', 'set-ebay-ad-rates', 'set-ebay-campaign-budget',
-  'set-ebay-price-promotion', 'set-google-account-exclusions', 'set-google-ad-groups', 'set-google-assets', 'set-google-audiences',
-  'set-google-auto-apply', 'set-google-bid-strategy', 'set-google-budget', 'set-google-campaign', 'set-google-campaign-exclusions',
-  'set-google-demographics', 'set-google-exclusion-list', 'set-google-inventory-filter', 'set-google-keywords', 'set-google-labels',
+  'set-ebay-price-promotion', 'set-google-account-exclusions', 'set-google-account-links',
+  'set-google-account-settings', 'set-google-ad-groups', 'set-google-assets', 'set-google-audiences',
+  'set-google-auto-apply', 'set-google-bid-strategy', 'set-google-billing', 'set-google-budget', 'set-google-campaign',
+  'set-google-campaign-exclusions', 'set-google-demographics', 'set-google-exclusion-list',
+  'set-google-inventory-filter', 'set-google-keywords', 'set-google-labels',
   'set-google-negative-list', 'set-google-negatives', 'set-google-product-groups', 'set-google-shopping-settings',
-  'set-google-status', 'set-google-targeting', 'set-google-urls', 'set-hourly-bid-plan', 'set-listing-price',
+  'set-google-status', 'set-google-targeting', 'set-google-urls', 'set-google-user-access', 'set-hourly-bid-plan', 'set-listing-price',
   'set-listing-stock',
   'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
   'set-promotion', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
