@@ -34,6 +34,16 @@ export const NEVER_FOR_CHANGES = [
   F.jobsManage,
 ] as const
 
+/**
+ * The Owner's narrow exception (2026-10-15, "Allow them for Google Ads"): these Google Ads change tools may need exactly
+ * these "never" permissions — who may use the business's Google Ads account, and its links to Merchant Center and
+ * YouTube. Each must always wait for a person's approval in Nexus (alwaysAsk, ask at most, never by rule). Nothing else.
+ */
+export const NEVER_EXCEPTIONS: Readonly<Record<string, readonly string[]>> = {
+  'set-google-user-access': [F.usersManage, F.adsConnect],
+  'set-google-account-links': [F.adsConnect],
+}
+
 /** 09 §2: no tool at all, read or change, requires one of these. */
 export const NEVER_FOR_ANY = [F.settingsSecurityManage, F.settingsApikeysManage, F.settingsWebhooksManage, F.settingsPrivacyManage] as const
 
@@ -41,7 +51,7 @@ function neverProblems(tool: Pick<AgentTool, 'name' | 'readOnly' | 'requires'>):
   const problems: string[] = []
   for (const permission of tool.requires) {
     if ((NEVER_FOR_ANY as readonly string[]).includes(permission)) problems.push(`${tool.name} requires ${permission}: no tool may`)
-    else if (!tool.readOnly && (NEVER_FOR_CHANGES as readonly string[]).includes(permission)) {
+    else if (!tool.readOnly && (NEVER_FOR_CHANGES as readonly string[]).includes(permission) && !NEVER_EXCEPTIONS[tool.name]?.includes(permission)) {
       problems.push(`${tool.name} changes something and requires ${permission}: never for Claude`)
     }
   }
@@ -65,6 +75,19 @@ describe('P1 — never for Claude', () => {
   it('no registered tool breaks it', () => {
     expect(listTools().length).toBeGreaterThan(20)
     expect(listTools().flatMap(neverProblems)).toEqual([])
+  })
+
+  it('the Owner\'s Google Ads exception is exactly two tools, each a change a person always approves', () => {
+    expect(Object.keys(NEVER_EXCEPTIONS).sort()).toEqual(['set-google-account-links', 'set-google-user-access'])
+    for (const name of Object.keys(NEVER_EXCEPTIONS)) {
+      const tool = listTools().find((t) => t.name === name)
+      expect(tool, name).toBeDefined()
+      expect(tool).toMatchObject({ readOnly: false, alwaysAsk: true, maxClaudeTrust: 'ask', requiresApprovalDefault: true })
+      // Never one of the four no-tool-at-all permissions.
+      expect(NEVER_EXCEPTIONS[name].some((p) => (NEVER_FOR_ANY as readonly string[]).includes(p))).toBe(false)
+    }
+    // Another tool needing the same permission is still refused.
+    expect(neverProblems({ name: 'probe-tool', readOnly: false, requires: [F.usersManage] } as unknown as AgentTool)).toHaveLength(1)
   })
 
   it('the check can fail: a change tool needing a never permission, and any tool needing a security one', () => {
