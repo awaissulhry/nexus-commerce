@@ -58,6 +58,14 @@ const OPEN_WORLD = [
   'set-placement-multipliers', 'set-portfolio', 'set-price', 'set-promotion', 'set-shopify-content', 'set-stock',
   'set-stock-policy', 'set-stock-source', 'set-target-bid', 'shipping-rates', 'shopify-content',
   'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock', 'tune-ad-engine',
+  'set-ad-group', 'set-ads-brain', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule', 'set-campaign-budget', 'set-campaign-settings',
+  'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion', 'set-google-ad-groups', 'set-google-budget', 'set-google-keywords',
+  'set-google-negative-list', 'set-google-negatives',
+  'set-hourly-bid-plan',
+  'set-listing-price', 'set-listing-stock', 'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers',
+  'set-portfolio', 'set-price',
+  'set-promotion', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid', 'shipping-rates',
+  'shopify-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock', 'tune-ad-engine',
   'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change', 'void-shipping-label',
 ]
 
