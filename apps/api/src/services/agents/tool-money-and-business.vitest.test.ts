@@ -153,6 +153,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'harvest-destinations': 'a product\'s harvest places are its own Sponsored Products campaigns, and the seeded campaign carries no ad product, so the product owns none here (tools/ads-harvest-postgres test)',
   'google-ads-live': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-change.tools test)',
   'set-google-negative-list': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-change.tools test)',
+  'set-google-targeting': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-campaigns.tools test)',
+  'set-google-status': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-campaigns.tools test)',
+  'remove-google-ads-items': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-campaigns.tools test)',
   'set-harvest-rules': 'the seeded rule is not a harvest rule, so there is nothing to archive (tools/ads-harvest-postgres test)',
   'set-harvest-sources': 'the seeded ad group feeds no terms to harvest (a manual campaign with no ad product), so it is no source (tools/ads-harvest-postgres test)',
 }
@@ -398,6 +401,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'google-ads-live': () => ({ view: 'campaigns' }),
   'set-google-budget': () => ({ amounts: [{ budgetId: '11', budgetCents: 1000 }] }),
   'set-google-negative-list': () => ({ listId: '31', addKeywords: [{ text: 'gratis', matchType: 'PHRASE' }] }),
+  'create-google-campaign': () => ({ type: 'SEARCH', name: 'Search A', dailyBudgetCents: 500 }),
+  'set-google-campaign': () => ({ campaignId: '21', searchPartners: false }),
+  'set-google-targeting': () => ({ campaignId: '21', addLocations: [{ id: '2380' }] }),
+  'set-google-status': () => ({ items: [{ kind: 'campaign', id: '21' }], status: 'PAUSED' }),
+  'remove-google-ads-items': () => ({ items: [{ kind: 'campaign', id: '21' }], confirmRemove: true }),
   // L2 — listing reads: where each listing lives, its stock and price per market, its photo plan.
   'listing-coordinates': (ids) => ({ productId: ids.productId }),
   'listing-matrix': (ids) => ({ productId: ids.productId }),

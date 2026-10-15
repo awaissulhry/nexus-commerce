@@ -114,7 +114,7 @@ describe('listChangeDraft', () => {
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations).toEqual([{ sharedCriterionOperation: { remove: `${C}/sharedCriteria/31~402` } }])
     expect(d.skipped).toEqual(['"Gratis" is already in "List A".', '"List A" is already on "C1".'])
-    expect(d.warnings[0]).toMatch(/lets more searches show the ads/)
+    expect(d.spendsMoney).toEqual(['Removes 1 negative keyword from "List A", which 1 campaign use: more searches can show their ads (no campaign it reaches is enabled now: nothing spends until one is).'])
     const off = listChangeDraft(C, { listId: '31', detachCampaignIds: ['21'] }, LISTS)
     if ('refusal' in off) throw new Error(off.refusal)
     expect(off.operations).toEqual([{ campaignSharedSetOperation: { remove: `${C}/campaignSharedSets/21~31` } }])

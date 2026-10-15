@@ -3,7 +3,8 @@
  * to campaigns and take it off them. One atomic request.
  *
  * Money: a negative keyword stops ads from showing for a search. Removing one, or taking a list off a campaign, lets
- * more searches reach the ads: said in the warnings. Nothing here raises a budget or a bid.
+ * more searches reach the ads: SPENDS MONEY (with a note when no campaign it reaches is enabled). Nothing here raises a
+ * budget or a bid.
  */
 import { changeLines, keywordTextProblem, plural, type GoogleChangeDraft } from './change-draft.js'
 import { keywordKey, type LiveCampaign, type LiveNegativeList, type MatchType } from './live.js'
@@ -94,9 +95,12 @@ export function listChangeDraft(customer: string, request: ListChangeRequest, li
     record.removed.push({ text: found.text, matchType: found.matchType })
   }
   if (record.added.length) lines.push([`"${listName}" keywords added`, list ? list.keywordCount : 0, record.added.slice(0, 12).map(kw).join(', ') + (record.added.length > 12 ? ` … (+${record.added.length - 12})` : '')])
+  // Fewer negatives let more searches show the ads: SPENDS MONEY for the campaigns the list is on (2026-10-15 review).
+  const spends: string[] = []
+  const pausedNote = (statuses: Array<string | null>) => (statuses.some((s) => s === 'ENABLED') ? '' : ' (no campaign it reaches is enabled now: nothing spends until one is)')
   if (record.removed.length) {
     lines.push([`"${listName}" keywords removed`, record.removed.slice(0, 12).map(kw).join(', ') + (record.removed.length > 12 ? ` … (+${record.removed.length - 12})` : ''), '(removed)'])
-    warnings.push(`Removing ${plural(record.removed.length, 'negative keyword')} lets more searches show the ads of the campaigns this list is on.`)
+    if (list && list.campaigns.length) spends.push(`Removes ${plural(record.removed.length, 'negative keyword')} from "${listName}", which ${plural(list.campaigns.length, 'campaign')} use: more searches can show their ads${pausedNote(list.campaigns.map((c) => c.status))}.`)
   }
 
   const attachedNow = new Set(list?.campaigns.map((c) => c.campaignId) ?? [])
@@ -117,7 +121,7 @@ export function listChangeDraft(customer: string, request: ListChangeRequest, li
     record.detached.push(id)
     lines.push([`campaign "${c.name}"`, `uses "${listName}"`, 'without the list'])
   }
-  if (record.detached.length) warnings.push(`Taking "${listName}" off ${plural(record.detached.length, 'campaign')} lets more searches show their ads.`)
+  if (record.detached.length) spends.push(`Takes "${listName}" off ${plural(record.detached.length, 'campaign')}: more searches can show their ads${pausedNote(record.detached.map((id) => campaignById.get(id)?.status ?? null))}.`)
 
   if (operations.length === 0) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
   const { changes, more } = changeLines(lines)
@@ -139,11 +143,13 @@ export function listChangeDraft(customer: string, request: ListChangeRequest, li
       ...(more ? { linesNotShown: more } : {}),
     },
     warnings,
-    spendsMoney: [],
+    spendsMoney: spends,
     skipped,
     operations,
     stands: {
       listId: list?.listId ?? null,
+      // The SPENDS MONEY words stand on whether the campaigns the list reaches are enabled.
+      reaches: list ? list.campaigns.map((c) => `${c.campaignId}:${c.status}`).sort() : null,
       keywords: list ? [...inList.keys()].sort() : null,
       campaigns: list ? [...attachedNow].sort() : null,
       asked: [...new Set([...attach, ...detach])].sort().map((id) => ({ id, status: campaignById.get(id)?.status ?? null })),

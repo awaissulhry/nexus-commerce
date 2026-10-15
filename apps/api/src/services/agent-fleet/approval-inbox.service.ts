@@ -847,6 +847,11 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // Google Ads changes (2026-10-15): the live facts it stands on, the exact operations it sends, where it lands (google-ads-kit.ts).
   'set-google-budget': ['basis', 'plan', 'reach'],
   'set-google-negative-list': ['basis', 'plan', 'reach'],
+  'create-google-campaign': ['basis', 'plan', 'reach'],
+  'set-google-campaign': ['basis', 'plan', 'reach'],
+  'set-google-targeting': ['basis', 'plan', 'reach'],
+  'set-google-status': ['basis', 'plan', 'reach'],
+  'remove-google-ads-items': ['basis', 'plan', 'reach'],
   // A10 — what the undo restores (each write and the value it puts back), the negatives it retires, where it lands.
   'undo-ad-change': ['source', 'rows', 'negatives', 'reach'],
   /* ADS AUTONOMY — auto-undo's one undo: the judgement it carries out, what goes back (from → to) and where it lands. */

@@ -13,6 +13,7 @@ import { GoogleAdsReadError } from '../../marketing/google-ads/errors.js'
 import {
   liveAds, liveAssets, liveBudgets, liveCampaignDetail, liveCampaigns, liveChangeHistory, liveDrafts, liveNegativeLists, liveProductGroups,
 } from '../../marketing/google-ads/live.js'
+import { liveLookup, type LookupKind } from '../../marketing/google-ads/live-campaigns.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
 /** Money keys of this tool's answer (the shared registry names none of them). */
@@ -20,7 +21,7 @@ const LIVE_MONEY = {
   amountCents: ADSPEND, cpcBidCents: ADSPEND, effectiveCpcBidCents: ADSPEND, bidCents: ADSPEND, maxCpcCeilingCents: ADSPEND,
 } as const
 
-export const GOOGLE_LIVE_VIEWS = ['campaigns', 'campaign', 'budgets', 'negative-lists', 'product-groups', 'ads', 'assets', 'change-history', 'drafts'] as const
+export const GOOGLE_LIVE_VIEWS = ['campaigns', 'campaign', 'budgets', 'negative-lists', 'product-groups', 'ads', 'assets', 'change-history', 'drafts', 'lookup'] as const
 type LiveView = typeof GOOGLE_LIVE_VIEWS[number]
 const NEEDS_CAMPAIGN: readonly LiveView[] = ['campaign', 'product-groups', 'ads']
 const MAX_CHANGES = 200
@@ -92,6 +93,13 @@ async function liveView(args: Record<string, unknown>): Promise<ToolResult> {
           },
         }
       }
+      case 'lookup': {
+        const kind = args.lookup as LookupKind | undefined
+        const search = typeof args.search === 'string' ? args.search : ''
+        if (!kind || !search.trim()) return { ok: false, error: 'view lookup needs lookup (locations, languages or audiences) and search (a word of the name).' }
+        const items = await liveLookup(account.target, kind, search)
+        return { ok: true, data: { ...base, lookup: kind, search, items, total: items.length, note: 'Google\'s own ids: pass them to create-google-campaign or set-google-targeting.' } }
+      }
       case 'drafts': {
         const items = await liveDrafts(account.target)
         return {
@@ -120,11 +128,13 @@ const googleAdsLive: AgentTool = {
   restrictedFields: LIVE_MONEY,
   input: z.object({
     view: z.preprocess(lower, z.enum(GOOGLE_LIVE_VIEWS))
-      .describe('what to read: campaigns | campaign | budgets | negative-lists | product-groups | ads | assets | change-history | drafts'),
+      .describe('what to read: campaigns | campaign | budgets | negative-lists | product-groups | ads | assets | change-history | drafts | lookup'),
     accountId: googleAccountArg,
     campaignId: googleIdArg('the campaign; needed for views campaign, product-groups and ads; narrows assets').optional(),
     listId: googleIdArg('one negative keyword list: view negative-lists then lists its keywords').optional(),
     day: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('view change-history: the day (YYYY-MM-DD, the account\'s time zone; default today; Google keeps 30 days)'),
+    lookup: z.enum(['locations', 'languages', 'audiences']).optional().describe('view lookup: what to find — locations (countries, regions, cities), languages, audiences (in-market and affinity segments)'),
+    search: z.string().trim().min(1).max(80).optional().describe('view lookup: a word of the name (e.g. Italy, Italian, Motorcycles)'),
   }),
   description:
     'Google Ads, read LIVE from Google now (not from Nexus\'s daily read): the business\'s chosen Google Ads account as it '
@@ -138,7 +148,8 @@ const googleAdsLive: AgentTool = {
     + '(campaignId): the product group tree with bids and exclusions (warns when an "everything else" group is NOT '
     + 'excluded). ads (campaignId): ads with text, URLs, strength and review. assets: campaign assets (sitelinks, '
     + 'callouts, structured snippets …) with their review. change-history: Google\'s change history of one day (who, '
-    + 'what). drafts: campaign drafts. Each view costs one or a few operations of the account\'s daily Google Ads '
+    + 'what). drafts: campaign drafts. lookup (lookup + search): Google\'s ids of locations, languages and audience '
+    + 'segments whose name holds the word, for the change tools. Each view costs one or a few operations of the account\'s daily Google Ads '
     + 'allowance: for numbers (cost, clicks, conversions) use google-ad-details and ad-campaigns with channel google, '
     + 'which read what Nexus stored. Amounts are minor units (cents) of the account currency; a person without the '
     + 'ad-spend money permission gets the same answer without them. Read only.',

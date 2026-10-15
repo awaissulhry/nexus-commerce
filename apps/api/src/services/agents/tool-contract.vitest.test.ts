@@ -694,6 +694,11 @@ describe('C1 — every registered tool keeps the contract', () => {
       // Google Ads (2026-10-15): budgets and campaigns go back to the amounts and budgets they had; a list's keywords and
       // campaigns go back as they were (a budget or list a change made stays).
       'set-google-budget': { before: { amounts: [{ budgetId: '11', budgetCents: 1000 }], campaigns: [{ campaignId: '21', budgetId: '12' }], accountId: 'g-1', customerId: '1234567890' }, after: { amounts: [{ budgetId: '11', budgetCents: 2000 }], campaigns: [{ campaignId: '21', budgetId: '11' }], accountId: 'g-1', customerId: '1234567890' } },
+      // PR 2: a campaign made is removed; settings, targeting and statuses go back as they were.
+      'create-google-campaign': { before: { campaignId: null }, after: { campaignId: '21', name: 'Shop A', accountId: 'g-1', customerId: '1234567890' } },
+      'set-google-campaign': { before: { campaignId: '21', settings: { searchPartners: false, dailyBudgetCents: 700 }, accountId: 'g-1' }, after: { campaignId: '21', settings: { searchPartners: true, dailyBudgetCents: 900 }, accountId: 'g-1' } },
+      'set-google-targeting': { before: { campaignId: '21', undo: {} }, after: { campaignId: '21', undo: { removeLocations: [{ id: '2380' }], schedule: [{ days: ['MONDAY'], from: '08:00', to: '24:00' }] }, accountId: 'g-1' } },
+      'set-google-status': { before: { items: [{ kind: 'campaign', id: '21', status: 'PAUSED' }], accountId: 'g-1' }, after: { items: [{ kind: 'campaign', id: '21', status: 'ENABLED' }], accountId: 'g-1' } },
       'set-google-negative-list': { before: { listId: '31', keywords: [], campaigns: [] }, after: { listId: '31', added: [{ text: 'cheap', matchType: 'PHRASE' }], removed: [], attached: ['21'], detached: [] } },
       // L7 — products created (parent and a variation), and products binned.
       'create-product': { before: { products: [] }, after: { products: [{ id: 'p1', deleted: false }, { id: 'p2', deleted: false }] } },
@@ -767,7 +772,8 @@ describe('C1 — every registered tool keeps the contract', () => {
     // Refunds, fiscal numbers, messages, publishing, eBay and Google ads and Amazon spend: a person approves each in Nexus.
     const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
-      'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list']) {
+      'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list', 'create-google-campaign',
+      'set-google-campaign', 'set-google-targeting', 'set-google-status', 'remove-google-ads-items']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
