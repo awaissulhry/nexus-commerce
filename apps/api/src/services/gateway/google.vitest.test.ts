@@ -11,7 +11,7 @@ vi.mock('./ledger.js', () => import('../../test-support/gateway-stubs.js').then(
 vi.mock('../cx/token.service.js', () => ({ getAccessToken: vi.fn(async () => 'google-access-token') }))
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 
-import { gatewayAccounts, gatewayLedger } from '../../test-support/gateway-stubs.js'
+import { gatewayAccounts, gatewayGoogleUnlinked, gatewayLedger } from '../../test-support/gateway-stubs.js'
 import { __rateTest, defaultsFor, GOOGLE_BUCKETS, bucketKey } from './rate.js'
 import { gatewayCall, GatewayRefusal } from './gateway.js'
 import { googleCall, googleKind } from './google.js'
@@ -22,12 +22,13 @@ import { googleRateReading } from '../cx/rate-readings.js'
 import { GOOGLE_ADS_API_BASE, GOOGLE_ADS_API_VERSION } from '../google/api-version.js'
 
 const SEARCH = `${GOOGLE_ADS_API_BASE}/customers/1234567890/googleAds:search`
-const MUTATE = `${GOOGLE_ADS_API_BASE}/customers/1234567890/campaigns:mutate`
+const MUTATE = `${GOOGLE_ADS_API_BASE}/customers/1234567890/googleAds:mutate`
+const OPS = [{ campaignBudgetOperation: { update: { resourceName: 'customers/1234567890/campaignBudgets/1', amountMicros: '10000' }, updateMask: 'amount_micros' } }]
 const headersOf = (i = 0) => h.calls[i].init.headers as Record<string, string>
 
 beforeEach(() => {
   __rateTest.useMemory()
-  h.calls = []; h.answers = []; gatewayLedger.length = 0
+  h.calls = []; h.answers = []; gatewayLedger.length = 0; gatewayGoogleUnlinked.clear()
   for (const id of Object.keys(gatewayAccounts)) delete gatewayAccounts[id]
   vi.stubEnv('GOOGLE_ADS_DEVELOPER_TOKEN', '')
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
@@ -48,9 +49,9 @@ describe('Google: reads, and Google Ads mutates only', () => {
     expect(gatewayLedger).toEqual([expect.objectContaining({ channel: 'GOOGLE', connectionId: 'g-1', operation: 'ads.search', outcome: 'sent', success: true, apiVersion: GOOGLE_ADS_API_VERSION })])
   })
 
-  it('a Google Ads mutate is a write: sent once (never retried), its ledger row, under the publish mode', async () => {
+  it('GoogleAdsService.Mutate is a write: sent once (never retried), its ledger row, under the publish mode', async () => {
     h.answers.push(() => new Response('{}', { status: 503 }))
-    const res = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { operations: [] } })
+    const res = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: OPS } })
     expect(res.status).toBe(503)
     expect(h.calls).toHaveLength(1)
     expect(gatewayLedger).toEqual([expect.objectContaining({ channel: 'GOOGLE', operation: 'ads.mutate', outcome: 'sent', success: false })])
@@ -60,33 +61,55 @@ describe('Google: reads, and Google Ads mutates only', () => {
   it('NEXUS_GOOGLE_ADS_WRITES=off: a real mutate is refused before anything is sent; a validate-only check still goes', async () => {
     vi.stubEnv('NEXUS_GOOGLE_ADS_WRITES', 'off')
     expect(publishModeOf('GOOGLE')).toBe('gated')
-    const err = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { operations: [] } }).catch((e) => e)
+    const err = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: OPS } }).catch((e) => e)
     expect(err).toBeInstanceOf(GatewayRefusal)
     expect(err).toMatchObject({ outcome: 'gated', code: 'PUBLISH_GATED' })
     expect(h.calls).toHaveLength(0)
-    const check = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate.check', method: 'POST', url: MUTATE, body: { operations: [], validateOnly: true } })
+    const check = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate.check', method: 'POST', url: MUTATE, body: { mutateOperations: OPS, validateOnly: true } })
     expect(check.status).toBe(200)
     expect(h.calls).toHaveLength(1)
     expect(gatewayLedger.map((r) => r.outcome)).toEqual(['gated', 'sent'])
   })
 
+  it('what is sent is the body as judged: a duplicate key collapses before sending', async () => {
+    const raw = `{"validateOnly":false,"mutateOperations":${JSON.stringify(OPS)},"validateOnly":true}`
+    await gatewayCall({ channel: 'GOOGLE', operation: 'ads.mutate.check', kind: 'read', connectionId: 'g-1', url: MUTATE, method: 'POST', body: raw })
+    expect(JSON.parse(String(h.calls[0].init.body))).toEqual({ mutateOperations: OPS, validateOnly: true })
+    expect(String(h.calls[0].init.body).match(/validateOnly/g)).toHaveLength(1)
+  })
+
   it('every other Google change is refused before anything is sent, with its one ledger row', async () => {
-    const register = await googleCall({ connectionId: 'g-1', operation: 'merchant.registerGcp', method: 'POST', url: 'https://merchantapi.googleapis.com/accounts/v1/accounts/1/developerRegistration:registerGcp', body: {} }).catch((e) => e)
-    expect(register).toBeInstanceOf(GatewayRefusal)
-    expect(register).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY', statusCode: 403 })
-    expect(register.message).toMatch(/^Nothing was sent to Google/)
-    const merchantMutate = await googleCall({ connectionId: 'g-1', operation: 'merchant.x', method: 'POST', url: 'https://merchantapi.googleapis.com/v1/customers/1/products:mutate', body: {} }).catch((e) => e)
-    expect(merchantMutate).toMatchObject({ code: 'GOOGLE_READ_ONLY' })
-    const withQuery = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: `${MUTATE}?x=1`, body: {} }).catch((e) => e)
-    expect(withQuery).toMatchObject({ code: 'GOOGLE_READ_ONLY' })
+    const tries = [
+      // another Google API
+      googleCall({ connectionId: 'g-1', operation: 'merchant.registerGcp', method: 'POST', url: 'https://merchantapi.googleapis.com/accounts/v1/accounts/1/developerRegistration:registerGcp', body: {} }),
+      // another Google Ads service (only GoogleAdsService.Mutate)
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/customerUserAccessInvitations:mutate`, body: { operations: [] } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/campaigns:mutate`, body: { operations: [] } }),
+      // a kind of operation Nexus never sends
+      googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: [{ customerOperation: { update: {} } }] } }),
+      // snake_case Google also reads
+      googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: OPS, validateOnly: true, validate_only: false } }),
+      // a query string
+      googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: `${MUTATE}?x=1`, body: { mutateOperations: OPS } }),
+    ]
+    for (const t of tries) expect(await t.catch((e) => e)).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY', statusCode: 403 })
     expect(h.calls).toHaveLength(0)
-    expect(gatewayLedger).toEqual([0, 1, 2].map(() => expect.objectContaining({ channel: 'GOOGLE', outcome: 'refused', errorCode: 'GOOGLE_READ_ONLY', success: false, statusCode: null })))
+    expect(gatewayLedger).toEqual(tries.map(() => expect.objectContaining({ channel: 'GOOGLE', outcome: 'refused', errorCode: 'GOOGLE_READ_ONLY', success: false, statusCode: null })))
+  })
+
+  it('a Google Ads account the business did not choose through this connection is refused, check or change', async () => {
+    gatewayGoogleUnlinked.add('g-1:1234567890')
+    for (const body of [{ mutateOperations: OPS }, { mutateOperations: OPS, validateOnly: true }]) {
+      const err = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body }).catch((e) => e)
+      expect(err).toMatchObject({ outcome: 'refused', code: 'GOOGLE_ACCOUNT_NOT_CHOSEN' })
+    }
+    expect(h.calls).toHaveLength(0)
   })
 
   it('a change declared as a read is still refused (the gateway checks the method, path and body too)', async () => {
-    const err = await gatewayCall({ channel: 'GOOGLE', operation: 'ads.sneaky', kind: 'read', connectionId: 'g-1', url: MUTATE, method: 'POST', body: '{}' }).catch((e) => e)
+    const err = await gatewayCall({ channel: 'GOOGLE', operation: 'ads.sneaky', kind: 'read', connectionId: 'g-1', url: MUTATE, method: 'POST', body: JSON.stringify({ mutateOperations: OPS }) }).catch((e) => e)
     expect(err).toMatchObject({ code: 'GOOGLE_READ_ONLY' })
-    const notReallyCheck = await gatewayCall({ channel: 'GOOGLE', operation: 'ads.sneaky', kind: 'read', connectionId: 'g-1', url: MUTATE, method: 'POST', body: '{"validateOnly":"true"}' }).catch((e) => e)
+    const notReallyCheck = await gatewayCall({ channel: 'GOOGLE', operation: 'ads.sneaky', kind: 'read', connectionId: 'g-1', url: MUTATE, method: 'POST', body: JSON.stringify({ mutateOperations: OPS, validateOnly: 'true' }) }).catch((e) => e)
     expect(notReallyCheck).toMatchObject({ code: 'GOOGLE_READ_ONLY' })
     const put = await gatewayCall({ channel: 'GOOGLE', operation: 'merchant.put', kind: 'read', connectionId: 'g-1', url: 'https://merchantapi.googleapis.com/accounts/v1/accounts/1', method: 'PATCH', body: '{}' }).catch((e) => e)
     expect(put).toMatchObject({ code: 'GOOGLE_READ_ONLY' })
@@ -101,9 +124,9 @@ describe('Google: reads, and Google Ads mutates only', () => {
     expect(googleKind('POST', SEARCH)).toBe('read')
     expect(googleKind('POST', `${GOOGLE_ADS_API_BASE}/customers/1/googleAds:searchStream`)).toBe('read')
     expect(googleKind('POST', 'https://merchantapi.googleapis.com/reports/v1/accounts/1/reports:search')).toBe('read')
-    expect(googleKind('POST', MUTATE, { operations: [] })).toBe('write')
-    expect(googleKind('POST', `${GOOGLE_ADS_API_BASE}/customers/1/googleAds:mutate`, { mutateOperations: [], validateOnly: true })).toBe('read')
-    expect(googleKind('POST', `${GOOGLE_ADS_API_BASE}/customers/1/googleAds:mutate`, { mutateOperations: [], validateOnly: false })).toBe('write')
+    expect(googleKind('POST', MUTATE, { mutateOperations: OPS })).toBe('write')
+    expect(googleKind('POST', MUTATE, { mutateOperations: OPS, validateOnly: true })).toBe('read')
+    expect(googleKind('POST', `${GOOGLE_ADS_API_BASE}/customers/1/campaigns:mutate`, { operations: [] })).toBe('action')
     expect(googleKind('POST', `${GOOGLE_ADS_API_BASE}/customers/abc/googleAds:mutate`)).toBe('action')
     expect(googleKind('POST', `${SEARCH}x`)).toBe('action')
     expect(googleKind('DELETE', SEARCH)).toBe('action')

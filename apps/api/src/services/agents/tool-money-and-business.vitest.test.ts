@@ -396,7 +396,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // each answers why there is nothing to read or change, before any Google call (google-ads-change.tools.vitest.test.ts
   // runs them on an account).
   'google-ads-live': () => ({ view: 'campaigns' }),
-  'set-google-budget': () => ({ amounts: [{ budgetId: '11', amountCents: 1000 }] }),
+  'set-google-budget': () => ({ amounts: [{ budgetId: '11', budgetCents: 1000 }] }),
   'set-google-negative-list': () => ({ listId: '31', addKeywords: [{ text: 'gratis', matchType: 'PHRASE' }] }),
   // L2 — listing reads: where each listing lives, its stock and price per market, its photo plan.
   'listing-coordinates': (ids) => ({ productId: ids.productId }),

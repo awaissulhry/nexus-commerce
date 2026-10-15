@@ -105,7 +105,7 @@ describe('mutateGoogleAds — one atomic request', () => {
     h.answers.push(() => { throw new TypeError('fetch failed') })
     const err = await mutateGoogleAds(TARGET, OPS, { validateOnly: false, sleep }).catch((e) => e)
     expect(err).toMatchObject({ outcome: 'unknown' })
-    expect(err.message).toMatch(/nobody knows whether the change was made/)
+    expect(err.message).toMatch(/did not confirm whether it made the change/)
     expect(h.calls).toHaveLength(1)
   })
 
@@ -127,11 +127,11 @@ describe('mutateGoogleAds — one atomic request', () => {
     expect(out.ops).toBe(4)
   })
 
-  it('a 5xx answer to a change: refused, not retried, "made none of the change"', async () => {
+  it('a 5xx answer to a change: Google may have made it — unknown, never sent again', async () => {
     h.answers.push(googleFailure(500, 'INTERNAL', [{ errorCode: { internalError: 'TRANSIENT_ERROR' }, message: 'Try again.' }]))
     const err = await mutateGoogleAds(TARGET, OPS, { validateOnly: false, sleep }).catch((e) => e)
-    expect(err).toMatchObject({ outcome: 'refused' })
-    expect(err.message).toMatch(/made none of the change/)
+    expect(err).toMatchObject({ outcome: 'unknown' })
+    expect(err.message).toMatch(/did not confirm whether it made the change/)
     expect(h.calls).toHaveLength(1)
   })
 

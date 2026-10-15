@@ -11,9 +11,9 @@ import type { GoogleMutateOperation } from './write-client.js'
 
 export interface BudgetChangeRequest {
   /** A new SHARED budget. */
-  create?: { name: string; amountCents: number }
+  create?: { name: string; budgetCents: number }
   /** New daily amounts of existing budgets. */
-  amounts?: Array<{ budgetId: string; amountCents: number }>
+  amounts?: Array<{ budgetId: string; budgetCents: number }>
   /** Which budget each campaign uses: an existing one (`budgetId`), the new one (`budgetId: 'new'`), or a new budget of its own (`ownBudgetCents`). */
   campaigns?: Array<{ campaignId: string; budgetId?: string; ownBudgetCents?: number }>
 }
@@ -25,10 +25,35 @@ export interface BudgetLiveState {
 
 /** What the change replaced and wrote: amounts per budget, and the budget each campaign was on. */
 export interface BudgetChangeRecord {
-  amounts: Array<{ budgetId: string; amountCents: number | null }>
+  amounts: Array<{ budgetId: string; budgetCents: number | null }>
   campaigns: Array<{ campaignId: string; budgetId: string | null }>
   /** A budget the change made (its id is known after it ran; `new` before). */
   createdBudgetId?: string | null
+}
+
+/**
+ * What the budgets of the ENABLED campaigns add up to a day (each budget once, however many campaigns share it): the
+ * account's daily spending cap. `budgetOf` gives a campaign's budget id; `amountOf` a budget's amount; `ownOf` the
+ * amount of a budget of its own a campaign gets (counted per campaign).
+ */
+function enabledDailyTotal(
+  campaigns: LiveCampaign[],
+  budgetOf: (c: LiveCampaign) => string | null,
+  amountOf: (budgetId: string) => number | null,
+  ownOf: (c: LiveCampaign) => number | null = () => null,
+): number {
+  const counted = new Set<string>()
+  let total = 0
+  for (const c of campaigns) {
+    if (c.status !== 'ENABLED') continue
+    const own = ownOf(c)
+    if (own !== null) { total += own; continue }
+    const id = budgetOf(c)
+    if (!id || counted.has(id)) continue
+    counted.add(id)
+    total += amountOf(id) ?? 0
+  }
+  return total
 }
 
 export const NEW_BUDGET = 'new'
@@ -64,10 +89,10 @@ export function budgetChangeDraft(
     }
     operations.push({
       campaignBudgetOperation: {
-        create: { resourceName: budgetRes(NEW_BUDGET_TEMP_ID), name, amountMicros: microsOfCents(request.create.amountCents), explicitlyShared: true, deliveryMethod: 'STANDARD' },
+        create: { resourceName: budgetRes(NEW_BUDGET_TEMP_ID), name, amountMicros: microsOfCents(request.create.budgetCents), explicitlyShared: true, deliveryMethod: 'STANDARD' },
       },
     })
-    lines.push([`new shared budget "${name}"`, '(none)', `${money(request.create.amountCents, currency)} a day`])
+    lines.push([`new shared budget "${name}"`, '(none)', `${money(request.create.budgetCents, currency)} a day`])
     after.createdBudgetId = NEW_BUDGET
   }
 
@@ -79,24 +104,24 @@ export function budgetChangeDraft(
     seenAmounts.add(a.budgetId)
     const b = budgetById.get(a.budgetId)
     if (!b) return { refusal: `Budget ${a.budgetId} is not in this account (or it is removed). google-ads-live view budgets lists them.` }
-    if (b.amountCents === a.amountCents) { skipped.push(`"${b.name ?? b.budgetId}" is already ${money(a.amountCents, currency)} a day.`); continue }
+    if (b.amountCents === a.budgetCents) { skipped.push(`"${b.name ?? b.budgetId}" is already ${money(a.budgetCents, currency)} a day.`); continue }
     operations.push({
-      campaignBudgetOperation: { update: { resourceName: budgetRes(b.budgetId), amountMicros: microsOfCents(a.amountCents) }, updateMask: 'amount_micros' },
+      campaignBudgetOperation: { update: { resourceName: budgetRes(b.budgetId), amountMicros: microsOfCents(a.budgetCents) }, updateMask: 'amount_micros' },
     })
-    amountAfter.set(b.budgetId, a.amountCents)
-    lines.push([`budget "${b.name ?? b.budgetId}"`, `${money(b.amountCents, currency)} a day`, `${money(a.amountCents, currency)} a day`])
-    before.amounts.push({ budgetId: b.budgetId, amountCents: b.amountCents })
-    after.amounts.push({ budgetId: b.budgetId, amountCents: a.amountCents })
-    if (b.amountCents === null || a.amountCents > b.amountCents) {
+    amountAfter.set(b.budgetId, a.budgetCents)
+    lines.push([`budget "${b.name ?? b.budgetId}"`, `${money(b.amountCents, currency)} a day`, `${money(a.budgetCents, currency)} a day`])
+    before.amounts.push({ budgetId: b.budgetId, budgetCents: b.amountCents })
+    after.amounts.push({ budgetId: b.budgetId, budgetCents: a.budgetCents })
+    if (b.amountCents === null || a.budgetCents > b.amountCents) {
       const enabled = b.campaigns.filter((c) => c.status === 'ENABLED').length
-      spends.push(`Raises "${b.name ?? b.budgetId}" from ${money(b.amountCents, currency)} to ${money(a.amountCents, currency)} a day${enabled === 0 ? ' (no campaign on it is enabled now: nothing spends until one is)' : ` (${plural(enabled, 'enabled campaign')} on it)`}.`)
+      spends.push(`Raises "${b.name ?? b.budgetId}" from ${money(b.amountCents, currency)} to ${money(a.budgetCents, currency)} a day${enabled === 0 ? ' (no campaign on it is enabled now: nothing spends until one is)' : ` (${plural(enabled, 'enabled campaign')} on it)`}.`)
     }
   }
 
   // 3. which budget each campaign uses
   let ownTempId = NEW_BUDGET_TEMP_ID - 1
   const seenCampaigns = new Set<string>()
-  const amountOf = (budgetId: string): number | null => (budgetId === NEW_BUDGET ? request.create!.amountCents : amountAfter.get(budgetId) ?? budgetById.get(budgetId)?.amountCents ?? null)
+  const amountOf = (budgetId: string): number | null => (budgetId === NEW_BUDGET ? request.create!.budgetCents : amountAfter.get(budgetId) ?? budgetById.get(budgetId)?.amountCents ?? null)
   for (const m of moves) {
     if (seenCampaigns.has(m.campaignId)) return { refusal: `Campaign ${m.campaignId} is named twice in campaigns.` }
     seenCampaigns.add(m.campaignId)
@@ -115,7 +140,7 @@ export function budgetChangeDraft(
       if (m.budgetId === NEW_BUDGET) {
         if (!request.create) return { refusal: `Campaign "${c.name}": budgetId "new" needs create (the new shared budget).` }
         toRes = budgetRes(NEW_BUDGET_TEMP_ID)
-        toCents = request.create.amountCents
+        toCents = request.create.budgetCents
         toLabel = `new shared "${request.create.name.trim()}" ${money(toCents, currency)}`
       } else {
         const b = budgetById.get(m.budgetId!)
@@ -144,10 +169,26 @@ export function budgetChangeDraft(
     if (c.budget?.shared) warnings.push(`"${c.name}" leaves the shared budget "${c.budget.name ?? fromId}"; the other campaigns on it keep it.`)
   }
 
+  // The whole account: what the budgets of ENABLED campaigns add up to a day, before and after. A campaign leaving a
+  // shared budget for one of its own, or moving to a budget no enabled campaign used, raises it without any one budget
+  // going up.
+  const capBefore = enabledDailyTotal(live.campaigns, (c) => c.budget?.budgetId ?? null, (id) => budgetById.get(id)?.amountCents ?? null)
+  const movedTo = new Map(after.campaigns.map((c) => [c.campaignId, c.budgetId]))
+  const ownCents = new Map(moves.filter((m) => m.ownBudgetCents !== undefined).map((m) => [m.campaignId, m.ownBudgetCents!]))
+  const capAfter = enabledDailyTotal(
+    live.campaigns,
+    (c) => movedTo.get(c.campaignId) ?? c.budget?.budgetId ?? null,
+    (id) => (id.startsWith(OWN_BUDGET) ? null : amountOf(id)),
+    (c) => ownCents.get(c.campaignId) ?? null,
+  )
+  if (capAfter > capBefore) {
+    spends.push(`In all, the daily budgets of the enabled campaigns rise from ${money(capBefore, currency)} to ${money(capAfter, currency)}.`)
+  }
+
   if (operations.length === 0) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
   const { changes, more } = changeLines(lines)
   const parts: string[] = []
-  if (request.create) parts.push(`make the shared budget "${request.create.name.trim()}" (${money(request.create.amountCents, currency)} a day)`)
+  if (request.create) parts.push(`make the shared budget "${request.create.name.trim()}" (${money(request.create.budgetCents, currency)} a day)`)
   if (after.amounts.length) parts.push(`set the daily amount of ${plural(after.amounts.length, 'budget')}`)
   if (after.campaigns.length) parts.push(`put ${plural(after.campaigns.length, 'campaign')} on ${after.campaigns.every((c) => c.budgetId === after.campaigns[0].budgetId) && after.campaigns[0].budgetId ? 'the budget asked' : 'the budgets asked'}`)
   const touched = new Set([...amounts.map((a) => a.budgetId), ...moves.map((m) => m.budgetId).filter((id): id is string => !!id && id !== NEW_BUDGET)])
@@ -160,10 +201,12 @@ export function budgetChangeDraft(
     skipped,
     operations,
     stands: {
+      // Each budget the change reads or writes, with the campaigns on it and whether they are enabled (the preview's
+      // "nothing spends until one is" stands on it). A create stands on nothing more: a taken name is refused anyway.
       budgets: live.budgets.filter((b) => touched.has(b.budgetId) || moves.some((m) => campaignById.get(m.campaignId)?.budget?.budgetId === b.budgetId))
-        .map((b) => ({ budgetId: b.budgetId, amountCents: b.amountCents, shared: b.shared, usedBy: b.usedBy })).sort((x, y) => x.budgetId.localeCompare(y.budgetId)),
+        .map((b) => ({ budgetId: b.budgetId, amountCents: b.amountCents, shared: b.shared, usedBy: b.usedBy, campaigns: b.campaigns.map((c) => `${c.campaignId}:${c.status}`).sort() }))
+        .sort((x, y) => x.budgetId.localeCompare(y.budgetId)),
       campaigns: moves.map((m) => campaignById.get(m.campaignId)).filter(Boolean).map((c) => ({ campaignId: c!.campaignId, budgetId: c!.budget?.budgetId ?? null, status: c!.status })),
-      names: request.create ? live.budgets.map((b) => (b.name ?? '').toLowerCase()).sort() : undefined,
     },
     before,
     after,

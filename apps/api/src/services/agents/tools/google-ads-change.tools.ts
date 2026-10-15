@@ -10,18 +10,18 @@ import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
 import {
-  googleAccountArg, googleCentsArg, googleChangePreview, googleIdArg, googleWhyArg, GOOGLE_CHANGE_RULES, matchTypeArg, runGoogleChange,
+  googleAccountArg, googleCentsArg, googleChangePreview, googleIdArg, googleWhyArg, GOOGLE_CHANGE_RULES, matchTypeArg, recordAccount, runGoogleChange,
   type GoogleDraftBuilder,
 } from './google-ads-kit.js'
 import { budgetChangeDraft, budgetRecordAfterRun, type BudgetChangeRecord, type BudgetChangeRequest } from '../../marketing/google-ads/change-budgets.js'
 import { createdListId, listChangeDraft, type ListChangeRecord, type ListChangeRequest } from '../../marketing/google-ads/change-lists.js'
 import { keywordKey, liveBudgets, liveCampaigns, liveNegativeLists } from '../../marketing/google-ads/live.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
-import { googleChangeAccount } from '../../marketing/google-ads/change-account.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
 /** Money keys of these tools' previews and answers (the shared registry names none of them). */
-const GOOGLE_CHANGE_MONEY = { changes: ADSPEND, spendsMoneyBecause: ADSPEND, amountCents: ADSPEND, ownBudgetCents: ADSPEND } as const
+/** Money keys of set-google-budget's previews and answers: its sentences quote amounts, so they are money too. */
+const GOOGLE_BUDGET_MONEY = { changes: ADSPEND, spendsMoneyBecause: ADSPEND, warnings: ADSPEND, summary: ADSPEND, ownBudgetCents: ADSPEND } as const
 
 // ── set-google-budget ───────────────────────────────────────────────────────────────────────────────────────────
 
@@ -39,20 +39,22 @@ const buildBudget = (args: Record<string, unknown>): GoogleDraftBuilder => async
 
 const budgetUndo: ToolUndo = {
   async current(change: ToolChange) {
-    const after = (change.after ?? {}) as BudgetChangeRecord
-    const account = await googleChangeAccount()
-    if ('refusal' in account) return null
+    const after = (change.after ?? {}) as BudgetChangeRecord & { accountId?: string; customerId?: string }
+    const account = await recordAccount(after)
+    if (!account) return null
     const campaigns = await liveCampaigns(account.target)
     const budgets = await liveBudgets(account.target, campaigns)
     return {
-      amounts: (after.amounts ?? []).map((a) => ({ budgetId: a.budgetId, amountCents: budgets.find((b) => b.budgetId === a.budgetId)?.amountCents ?? null })),
+      amounts: (after.amounts ?? []).map((a) => ({ budgetId: a.budgetId, budgetCents: budgets.find((b) => b.budgetId === a.budgetId)?.amountCents ?? null })),
       campaigns: (after.campaigns ?? []).map((c) => ({ campaignId: c.campaignId, budgetId: campaigns.find((x) => x.campaignId === c.campaignId)?.budget?.budgetId ?? null })),
       ...('createdBudgetId' in after ? { createdBudgetId: after.createdBudgetId } : {}),
+      accountId: account.accountId,
+      customerId: account.customerId,
     }
   },
   request(change: ToolChange) {
-    const before = (change.before ?? {}) as BudgetChangeRecord
-    const amounts = (before.amounts ?? []).filter((a) => typeof a.amountCents === 'number' && a.amountCents > 0)
+    const before = (change.before ?? {}) as BudgetChangeRecord & { accountId?: string }
+    const amounts = (before.amounts ?? []).filter((a) => typeof a.budgetCents === 'number' && a.budgetCents > 0)
     if (amounts.length !== (before.amounts ?? []).length) return { refusal: 'This change does not record every amount it replaced.' }
     const campaigns = before.campaigns ?? []
     if (campaigns.some((c) => !c.budgetId)) return { refusal: 'A campaign of this change had no budget before it: there is nothing to put back.' }
@@ -61,6 +63,7 @@ const budgetUndo: ToolUndo = {
     return {
       tool: 'set-google-budget',
       args: {
+        ...(before.accountId ? { accountId: before.accountId } : {}),
         ...(amounts.length ? { amounts } : {}),
         ...(campaigns.length ? { campaigns: campaigns.map((c) => ({ campaignId: c.campaignId, budgetId: c.budgetId! })) } : {}),
         why: `undo of an earlier budget change${created ? ' (the budget it made stays, unused: it spends nothing)' : ''}`,
@@ -81,16 +84,16 @@ const setGoogleBudget: AgentTool = {
   reversibility: 'full',
   maxClaudeTrust: 'ask',
   requires: [F.adsBudgetsEdit, ADSPEND],
-  restrictedFields: GOOGLE_CHANGE_MONEY,
+  restrictedFields: GOOGLE_BUDGET_MONEY,
   input: z.object({
     accountId: googleAccountArg,
     create: z.object({
       name: z.string().trim().min(1).max(255).describe('the new shared budget\'s name (unique in the account)'),
-      amountCents: googleCentsArg('its daily amount'),
+      budgetCents: googleCentsArg('its daily amount'),
     }).optional().describe('make a new SHARED budget (several campaigns can use it); it spends nothing until an enabled campaign uses it'),
     amounts: z.array(z.object({
       budgetId: googleIdArg('the budget'),
-      amountCents: googleCentsArg('its new daily amount'),
+      budgetCents: googleCentsArg('its new daily amount'),
     })).max(20).optional().describe('new daily amounts of existing budgets (shared or a campaign\'s own); a raise is marked SPENDS MONEY'),
     campaigns: z.array(z.object({
       campaignId: googleIdArg('the campaign'),
@@ -133,16 +136,18 @@ const buildList = (args: Record<string, unknown>): GoogleDraftBuilder => async (
 
 const listUndo: ToolUndo = {
   async current(change: ToolChange) {
-    const after = (change.after ?? {}) as ListChangeRecord
+    const after = (change.after ?? {}) as ListChangeRecord & { accountId?: string; customerId?: string }
     if (!after.listId || !/^\d+$/.test(after.listId)) return null
-    const account = await googleChangeAccount()
-    if ('refusal' in account) return null
+    const account = await recordAccount(after)
+    if (!account) return null
     const list = (await liveNegativeLists(account.target, after.listId)).find((l) => l.listId === after.listId)
     if (!list) return null
     const has = new Set((list.keywords ?? []).map((k) => keywordKey(k.text, k.matchType)))
     const on = new Set(list.campaigns.map((c) => c.campaignId))
     return {
       ...after,
+      accountId: account.accountId,
+      customerId: account.customerId,
       added: after.added.filter((k) => has.has(keywordKey(k.text, k.matchType))),
       removed: after.removed.filter((k) => !has.has(keywordKey(k.text, k.matchType))),
       attached: after.attached.filter((id) => on.has(id)),
@@ -150,7 +155,7 @@ const listUndo: ToolUndo = {
     }
   },
   request(change: ToolChange) {
-    const after = (change.after ?? {}) as ListChangeRecord
+    const after = (change.after ?? {}) as ListChangeRecord & { accountId?: string }
     if (!after.listId || !/^\d+$/.test(after.listId)) return { refusal: 'This change does not record the list it changed.' }
     if (!after.added.length && !after.removed.length && !after.attached.length && !after.detached.length) {
       return { refusal: 'This change only made the list: there is nothing to put back (an empty list that no campaign uses does nothing).' }
@@ -158,6 +163,7 @@ const listUndo: ToolUndo = {
     return {
       tool: 'set-google-negative-list',
       args: {
+        ...(after.accountId ? { accountId: after.accountId } : {}),
         listId: after.listId,
         ...(after.removed.length ? { addKeywords: after.removed } : {}),
         ...(after.added.length ? { removeKeywords: after.added } : {}),

@@ -16,8 +16,8 @@
  *   nothing.
  * - Retries: a check is retried like a read (temporary problem: 3 times; slow down: once). A real change is retried
  *   only when Google said "slow down" (it applied nothing). When Google does not answer at all, nobody knows whether
- *   the change happened: `GoogleAdsWriteError.outcome` is `unknown` and the person checks the account before asking
- *   again — never sent twice by Nexus.
+ *   the change happened, nor when Google fails on its side (5xx): `GoogleAdsWriteError.outcome` is `unknown` — never
+ *   sent again by Nexus; a second approval reads the account first and sends only what is not there.
  * Never logs a token, a request body or a row.
  */
 import { googleCall } from '../../gateway/google.js'
@@ -65,7 +65,7 @@ export interface GoogleAdsMutateResult {
  * A change Google did not make, or one nobody knows the outcome of:
  *   not_sent   Nexus sent nothing (the allowance, the gateway's rules, a lost sign-in, writes switched off)
  *   refused    Google answered with an error; the request was all or nothing, so it changed nothing
- *   unknown    Google did not answer: the change may or may not have happened — check the account before asking again
+ *   unknown    Google did not answer, or failed on its side: the change may or may not have happened (UNKNOWN_OUTCOME)
  */
 export class GoogleAdsWriteError extends Error {
   constructor(
@@ -78,6 +78,11 @@ export class GoogleAdsWriteError extends Error {
     this.name = 'GoogleAdsWriteError'
   }
 }
+
+/** What a person reads when nobody knows whether Google made a change. */
+export const UNKNOWN_OUTCOME = 'Sent to Google, but Google did not confirm whether it made the change. Nexus never sends it again '
+  + 'by itself. Approving this request again first reads the account: the change is sent only if it is not there. '
+  + 'google-ads-live shows the account now.'
 
 const isRefusal = (err: unknown): err is GatewayRefusal => err instanceof Error && err.name === 'GatewayRefusal'
 const isNoAnswer = (err: unknown): err is GatewayNoAnswer => err instanceof Error && err.name === 'GatewayNoAnswer'
@@ -179,15 +184,11 @@ export async function mutateGoogleAds(
     }
     await settle()
     const spent = reached * operations.length
-    if (!answered && !options.validateOnly) {
-      const unknown: GoogleAdsFailure = {
-        ...failure,
-        sentence: 'Google Ads did not answer, so nobody knows whether the change was made. Read the account (google-ads-live) before asking for it again.',
-      }
+    // A real change with no answer, or a server-side failure (5xx, INTERNAL, DEADLINE_EXCEEDED …): Google may have
+    // committed it before failing to say so. Nobody knows; it is never sent again by Nexus.
+    if (!options.validateOnly && (!answered || failure.retryKind === 'transient')) {
+      const unknown: GoogleAdsFailure = { ...failure, sentence: UNKNOWN_OUTCOME }
       throw new GoogleAdsWriteError(unknown, operation, 'unknown', spent)
-    }
-    if (failure.retryKind === 'transient' && !options.validateOnly) {
-      failure = { ...failure, sentence: 'Google Ads had a temporary problem and made none of the change. Ask for it again in a few minutes.' }
     }
     throw new GoogleAdsWriteError(failure, operation, answered ? 'refused' : 'not_sent', spent)
   }

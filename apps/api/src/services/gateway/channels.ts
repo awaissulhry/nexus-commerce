@@ -179,25 +179,67 @@ export function googleAdsWritesMode(): PublishMode {
 }
 
 /**
- * Google: the one change Nexus sends — a Google Ads `…:mutate` (POST to the Google Ads host, one customer, one
- * service). Merchant Center, Analytics and every other Google method stay read only.
+ * Google: the one change Nexus sends — GoogleAdsService.Mutate (`POST https://googleads.googleapis.com/vNN/customers/
+ * {id}/googleAds:mutate`), one customer, nothing else. Merchant Center, Analytics and every other Google method (account
+ * invitations, billing, client links …) stay out.
  */
 export function isGoogleAdsMutate(method: string, url: string): boolean {
-  if (method.toUpperCase() !== 'POST') return false
+  return googleAdsMutateCustomer(method, url) !== null
+}
+
+/** The customer id of a GoogleAdsService.Mutate URL, or null when the call is not one. */
+export function googleAdsMutateCustomer(method: string, url: string): string | null {
+  if (method.toUpperCase() !== 'POST') return null
   let parsed: URL
-  try { parsed = new URL(url) } catch { return false }
-  return parsed.hostname === 'googleads.googleapis.com' && !parsed.search && /^\/v\d+\/customers\/\d{1,20}\/[A-Za-z]+:mutate$/.test(parsed.pathname)
+  try { parsed = new URL(url) } catch { return null }
+  if (parsed.hostname !== 'googleads.googleapis.com' || parsed.search) return null
+  const match = /^\/v\d+\/customers\/(\d{1,20})\/googleAds:mutate$/.exec(parsed.pathname)
+  return match ? match[1] : null
+}
+
+/**
+ * The kinds of operation a Nexus Google Ads change may hold (MutateOperation's fields): budgets, campaigns, their
+ * criteria, ad groups, their criteria, ads, assets and their campaign links, shared sets and their keywords and links.
+ * Anything else in a mutate (a customer, a user, a conversion action …) is refused before anything is sent.
+ */
+export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
+  'campaignBudgetOperation', 'campaignOperation', 'campaignCriterionOperation', 'adGroupOperation', 'adGroupCriterionOperation',
+  'adGroupAdOperation', 'assetOperation', 'campaignAssetOperation', 'sharedSetOperation', 'sharedCriterionOperation',
+  'campaignSharedSetOperation',
+])
+
+export interface GoogleMutateBody {
+  /** True only for a body that asks Google to check it and change nothing. */
+  check: boolean
+  /** The body as it is sent: the parsed JSON written again, so what was judged is what goes. */
+  body: string
+}
+
+/**
+ * A GoogleAdsService.Mutate body as the gateway judges it, or why it is refused: JSON, `mutateOperations` a list of
+ * known kinds (one kind per operation), and `validateOnly` a boolean said once in camelCase (Google also reads
+ * `validate_only`: a body that names it is refused). Duplicate keys collapse in the parse; the parsed body is what is sent.
+ */
+export function googleMutateBodyOf(body: unknown): GoogleMutateBody | { refusal: string } {
+  if (typeof body !== 'string') return { refusal: 'the body is not JSON text' }
+  let parsed: Record<string, unknown>
+  try { parsed = JSON.parse(body) } catch { return { refusal: 'the body is not JSON' } }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { refusal: 'the body is not a JSON object' }
+  if ('validate_only' in parsed || 'mutate_operations' in parsed || 'partial_failure' in parsed) return { refusal: 'the body names a field in snake_case' }
+  if (parsed.validateOnly !== undefined && typeof parsed.validateOnly !== 'boolean') return { refusal: 'validateOnly is not true or false' }
+  const operations = parsed.mutateOperations
+  if (!Array.isArray(operations) || operations.length === 0) return { refusal: 'it holds no mutateOperations' }
+  for (const operation of operations) {
+    const kinds = operation && typeof operation === 'object' ? Object.keys(operation) : []
+    if (kinds.length !== 1 || !GOOGLE_ADS_MUTATE_KINDS.has(kinds[0])) return { refusal: `it holds an operation Nexus does not send (${kinds.join(', ') || 'none'})` }
+  }
+  return { check: parsed.validateOnly === true, body: JSON.stringify(parsed) }
 }
 
 /** Google: a mutate body that only asks Google to check it (`validateOnly: true`): Google changes nothing. */
 export function isGoogleValidateOnly(body: unknown): boolean {
-  if (typeof body !== 'string') return false
-  try {
-    const parsed = JSON.parse(body) as { validateOnly?: unknown } | null
-    return parsed !== null && typeof parsed === 'object' && parsed.validateOnly === true
-  } catch {
-    return false
-  }
+  const judged = googleMutateBodyOf(body)
+  return !('refusal' in judged) && judged.check
 }
 
 /**

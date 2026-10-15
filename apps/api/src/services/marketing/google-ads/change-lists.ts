@@ -146,7 +146,6 @@ export function listChangeDraft(customer: string, request: ListChangeRequest, li
       listId: list?.listId ?? null,
       keywords: list ? [...inList.keys()].sort() : null,
       campaigns: list ? [...attachedNow].sort() : null,
-      names: request.create ? live.lists.map((l) => (l.name ?? '').toLowerCase()).sort() : undefined,
       asked: [...new Set([...attach, ...detach])].sort().map((id) => ({ id, status: campaignById.get(id)?.status ?? null })),
     },
     before: { listId: record.listId, keywords: record.removed, campaigns: record.detached },

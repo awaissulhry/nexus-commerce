@@ -56,7 +56,7 @@ beforeEach(() => {
 })
 
 describe('set-google-budget', () => {
-  const ask = { create: { name: 'Shared C', amountCents: 1500 }, campaigns: [{ campaignId: '21', budgetId: 'new' }, { campaignId: '23', budgetId: 'new' }] }
+  const ask = { create: { name: 'Shared C', budgetCents: 1500 }, campaigns: [{ campaignId: '21', budgetId: 'new' }, { campaignId: '23', budgetId: 'new' }] }
 
   it('is a Nexus change a person approves: alwaysAsk, ask at most, reaches Google, its re-check fields declared', () => {
     for (const t of GOOGLE_ADS_CHANGE_TOOLS) {
@@ -74,8 +74,14 @@ describe('set-google-budget', () => {
     expect(h.mutate.mock.calls[0][1]).toHaveLength(3)
     expect(out.preview).toMatchObject({
       spendsMoney: true,
-      spendsMoneyBecause: ['Gives "Search B" a bigger daily budget: EUR 7.00 → EUR 15.00.'],
-      warnings: ['SPENDS MONEY (your decision): Gives "Search B" a bigger daily budget: EUR 7.00 → EUR 15.00.'],
+      spendsMoneyBecause: [
+        'Gives "Search B" a bigger daily budget: EUR 7.00 → EUR 15.00.',
+        'In all, the daily budgets of the enabled campaigns rise from EUR 7.00 to EUR 15.00.',
+      ],
+      warnings: [
+        'SPENDS MONEY (your decision): Gives "Search B" a bigger daily budget: EUR 7.00 → EUR 15.00.',
+        'SPENDS MONEY (your decision): In all, the daily budgets of the enabled campaigns rise from EUR 7.00 to EUR 15.00.',
+      ],
       googleCheck: { checked: true, accepted: true },
       reach: { mode: 'live', accountId: 'g-1', customerId: '1234567890' },
       operations: 3,
@@ -109,15 +115,34 @@ describe('set-google-budget', () => {
     expect(run.ok).toBe(true)
     expect(h.mutate).toHaveBeenCalledTimes(1)
     expect(h.mutate.mock.calls[0][2]).toMatchObject({ validateOnly: false })
+    const account = { accountId: 'g-1', customerId: '1234567890' }
     expect(run.change).toEqual({
-      before: { amounts: [], campaigns: [{ campaignId: '21', budgetId: '12' }, { campaignId: '23', budgetId: '13' }] },
-      after: { amounts: [], campaigns: [{ campaignId: '21', budgetId: '99' }, { campaignId: '23', budgetId: '99' }], createdBudgetId: '99' },
+      before: { amounts: [], campaigns: [{ campaignId: '21', budgetId: '12' }, { campaignId: '23', budgetId: '13' }], ...account },
+      after: { amounts: [], campaigns: [{ campaignId: '21', budgetId: '99' }, { campaignId: '23', budgetId: '99' }], createdBudgetId: '99', ...account },
     })
     expect(h.enqueue).toHaveBeenCalledWith({ customerId: '1234567890', kind: 'MANUAL' })
     // Undo moves the campaigns back to their own budgets, through the same tool.
     const undo = tool('set-google-budget').undo!.request(run.change!)
-    expect(undo).toMatchObject({ tool: 'set-google-budget', args: { campaigns: [{ campaignId: '21', budgetId: '12' }, { campaignId: '23', budgetId: '13' }] } })
+    expect(undo).toMatchObject({ tool: 'set-google-budget', args: { accountId: 'g-1', campaigns: [{ campaignId: '21', budgetId: '12' }, { campaignId: '23', budgetId: '13' }] } })
     expect(tool('set-google-budget').input.safeParse((undo as { args: unknown }).args).success).toBe(true)
+  })
+
+  it('never by a rule: a run the business\'s rule decided is refused before anything is sent', async () => {
+    h.mutate.mockResolvedValue({ responses: [], ops: 3, requestId: null })
+    const preview = (await tool('set-google-budget').handler(ask, asker)).preview
+    h.mutate.mockClear()
+    const byRule = await tool('set-google-budget').execute!(ask, { ...approved(preview), approvedByPerson: false, decidedVia: 'auto' })
+    expect(byRule.error).toMatch(/only when a person approved it, never by a rule/)
+    expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('Google did not confirm: "Not confirmed", never "Not run"', async () => {
+    h.mutate.mockResolvedValue({ responses: [], ops: 3, requestId: null })
+    const preview = (await tool('set-google-budget').handler(ask, asker)).preview
+    h.mutate.mockReset()
+    h.mutate.mockRejectedValue(new GoogleAdsWriteError({ ...localFailure('x', 'TIMEOUT') }, 'ads.mutate', 'unknown', 3))
+    const run = await tool('set-google-budget').execute!(ask, approved(preview))
+    expect(run.error).toBe('Not confirmed: x')
   })
 
   it('not sent when the account moved since it was approved', async () => {
@@ -153,7 +178,7 @@ describe('set-google-negative-list', () => {
     expect(preview).toMatchObject({ spendsMoney: false, operations: 2, totals: { keywordsAdded: 1, campaignsAttached: 1 } })
     h.mutate.mockResolvedValue({ responses: [{}, {}], ops: 2, requestId: null })
     const run = await tool('set-google-negative-list').execute!(ask, approved(preview))
-    expect(run.change?.after).toEqual({ listId: '31', added: [{ text: 'cheap', matchType: 'PHRASE' }], removed: [], attached: ['21'], detached: [] })
+    expect(run.change?.after).toEqual({ listId: '31', added: [{ text: 'cheap', matchType: 'PHRASE' }], removed: [], attached: ['21'], detached: [], accountId: 'g-1', customerId: '1234567890' })
     // Now the list holds the keyword and is on C1: nothing moved since, so undo may run.
     h.live.lists = [{ listId: '31', name: 'Negativi', keywordCount: 2, campaigns: [{ campaignId: '21', name: C1.name, status: 'PAUSED' }], keywords: [{ criterionId: '401', text: 'gratis', matchType: 'PHRASE' }, { criterionId: '402', text: 'cheap', matchType: 'PHRASE' }] }]
     expect(await tool('set-google-negative-list').undo!.current(run.change!)).toEqual(run.change!.after)

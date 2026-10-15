@@ -165,7 +165,7 @@ describe('C3 — the server and every change tool name the business', () => {
       'Google Ads: ads-overview and ad-campaigns with channel google read the Google Ads account a person chose',
       // Google Ads changes (2026-10-15) — a person approves each, never a rule; Google checks it first; spend is marked.
       'Google Ads changes go through the set-google-… tools: each is a request a person approves in Nexus, never run by a rule',
-      'what can spend more (an enable, a budget or bid raise) is marked SPENDS MONEY in the preview',
+      'what can make the account spend more is marked SPENDS MONEY in the preview',
       // Google Ads step 1b — the rest of the Google Ads page, one view at a time.
       'and google-ad-details (one view at a time) its ad groups, keywords, negatives, search terms and the']) {
       expect(mcpInstructions(business), rule).toContain(rule)

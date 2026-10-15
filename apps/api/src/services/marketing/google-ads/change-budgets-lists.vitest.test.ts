@@ -25,7 +25,7 @@ const BUDGETS: BudgetLiveState = {
 
 describe('budgetChangeDraft', () => {
   it('a new shared budget and two campaigns on it: one request, the new budget first with a temporary id', () => {
-    const d = budgetChangeDraft(C, 'EUR', { create: { name: 'Shared B', amountCents: 1500 }, campaigns: [{ campaignId: '21', budgetId: 'new' }, { campaignId: '22', budgetId: 'new' }] }, BUDGETS)
+    const d = budgetChangeDraft(C, 'EUR', { create: { name: 'Shared B', budgetCents: 1500 }, campaigns: [{ campaignId: '21', budgetId: 'new' }, { campaignId: '22', budgetId: 'new' }] }, BUDGETS)
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations).toEqual([
       { campaignBudgetOperation: { create: { resourceName: `${C}/campaignBudgets/-1`, name: 'Shared B', amountMicros: '15000000', explicitlyShared: true, deliveryMethod: 'STANDARD' } } },
@@ -33,7 +33,10 @@ describe('budgetChangeDraft', () => {
       { campaignOperation: { update: { resourceName: `${C}/campaigns/22`, campaignBudget: `${C}/campaignBudgets/-1` }, updateMask: 'campaign_budget' } },
     ])
     // C2 had EUR 7.00 of its own and gets EUR 15.00: a raise; C1 stays at EUR 15.00.
-    expect(d.spendsMoney).toEqual(['Gives "C2" a bigger daily budget: EUR 7.00 → EUR 15.00.'])
+    expect(d.spendsMoney).toEqual([
+      'Gives "C2" a bigger daily budget: EUR 7.00 → EUR 15.00.',
+      'In all, the daily budgets of the enabled campaigns rise from EUR 7.00 to EUR 15.00.',
+    ])
     expect(d.warnings).toEqual(['"C1" leaves the shared budget "Shared IT"; the other campaigns on it keep it.'])
     expect(d.changes['new shared budget "Shared B"']).toEqual({ from: '(none)', to: 'EUR 15.00 a day' })
     expect(d.summary).toBe('Google Ads budgets: make the shared budget "Shared B" (EUR 15.00 a day); put 2 campaigns on the budget asked.')
@@ -43,11 +46,11 @@ describe('budgetChangeDraft', () => {
   })
 
   it('a raise is SPENDS MONEY (with the campaigns it reaches); a cut is not; an unchanged amount is skipped', () => {
-    const d = budgetChangeDraft(C, 'EUR', { amounts: [{ budgetId: '11', amountCents: 2500 }, { budgetId: '12', amountCents: 500 }] }, BUDGETS)
+    const d = budgetChangeDraft(C, 'EUR', { amounts: [{ budgetId: '11', budgetCents: 2500 }, { budgetId: '12', budgetCents: 500 }] }, BUDGETS)
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations[0]).toEqual({ campaignBudgetOperation: { update: { resourceName: `${C}/campaignBudgets/11`, amountMicros: '25000000' }, updateMask: 'amount_micros' } })
     expect(d.spendsMoney).toEqual(['Raises "Shared IT" from EUR 15.00 to EUR 25.00 a day (no campaign on it is enabled now: nothing spends until one is).'])
-    const same = budgetChangeDraft(C, 'EUR', { amounts: [{ budgetId: '11', amountCents: 1500 }] }, BUDGETS)
+    const same = budgetChangeDraft(C, 'EUR', { amounts: [{ budgetId: '11', budgetCents: 1500 }] }, BUDGETS)
     expect(same).toEqual({ refusal: 'Nothing to change: "Shared IT" is already EUR 15.00 a day.' })
   })
 
@@ -60,10 +63,23 @@ describe('budgetChangeDraft', () => {
     expect(after.campaigns).toEqual([{ campaignId: '21', budgetId: '55' }])
   })
 
+  it('the whole account: an ENABLED campaign leaving a shared budget for a smaller one of its own still raises the total', () => {
+    const shared: BudgetLiveState = {
+      budgets: [{ budgetId: '11', name: 'Shared IT', amountCents: 10000, shared: true, deliveryMethod: 'STANDARD', period: 'DAILY', usedBy: 2, campaigns: [{ campaignId: '21', name: 'C1', status: 'ENABLED' }, { campaignId: '22', name: 'C2', status: 'ENABLED' }] }],
+      campaigns: [
+        campaign('21', 'C1', 'ENABLED', { budgetId: '11', name: 'Shared IT', amountCents: 10000, shared: true }),
+        campaign('22', 'C2', 'ENABLED', { budgetId: '11', name: 'Shared IT', amountCents: 10000, shared: true }),
+      ],
+    }
+    const d = budgetChangeDraft(C, 'EUR', { campaigns: [{ campaignId: '21', ownBudgetCents: 5000 }] }, shared)
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.spendsMoney).toEqual(['In all, the daily budgets of the enabled campaigns rise from EUR 100.00 to EUR 150.00.'])
+  })
+
   it('refused before anything is sent', () => {
     expect(budgetChangeDraft(C, 'EUR', {}, BUDGETS)).toEqual({ refusal: 'Say what to change: create, amounts or campaigns.' })
-    expect(budgetChangeDraft(C, 'EUR', { create: { name: 'shared it', amountCents: 100 } }, BUDGETS)).toMatchObject({ refusal: expect.stringContaining('already exists') })
-    expect(budgetChangeDraft(C, 'EUR', { amounts: [{ budgetId: '99', amountCents: 100 }] }, BUDGETS)).toMatchObject({ refusal: expect.stringContaining('not in this account') })
+    expect(budgetChangeDraft(C, 'EUR', { create: { name: 'shared it', budgetCents: 100 } }, BUDGETS)).toMatchObject({ refusal: expect.stringContaining('already exists') })
+    expect(budgetChangeDraft(C, 'EUR', { amounts: [{ budgetId: '99', budgetCents: 100 }] }, BUDGETS)).toMatchObject({ refusal: expect.stringContaining('not in this account') })
     expect(budgetChangeDraft(C, 'EUR', { campaigns: [{ campaignId: '21', budgetId: 'new' }] }, BUDGETS)).toMatchObject({ refusal: expect.stringContaining('needs create') })
     expect(budgetChangeDraft(C, 'EUR', { campaigns: [{ campaignId: '21', budgetId: '12' }] }, BUDGETS)).toMatchObject({ refusal: expect.stringContaining('own budget of another campaign') })
     expect(budgetChangeDraft(C, 'EUR', { campaigns: [{ campaignId: '21', budgetId: '11', ownBudgetCents: 5 }] }, BUDGETS)).toMatchObject({ refusal: expect.stringContaining('not both') })

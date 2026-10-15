@@ -693,7 +693,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'ebay-keywords-change': { before: { ebayCampaignId: 'e1', bids: { k1: 40 }, changeSetId: 'ap1' }, after: { ebayCampaignId: 'e1', bids: { k1: 55, k2: 30 }, added: ['k2'], negatives: 1 } },
       // Google Ads (2026-10-15): budgets and campaigns go back to the amounts and budgets they had; a list's keywords and
       // campaigns go back as they were (a budget or list a change made stays).
-      'set-google-budget': { before: { amounts: [{ budgetId: '11', amountCents: 1000 }], campaigns: [{ campaignId: '21', budgetId: '12' }] }, after: { amounts: [{ budgetId: '11', amountCents: 2000 }], campaigns: [{ campaignId: '21', budgetId: '11' }] } },
+      'set-google-budget': { before: { amounts: [{ budgetId: '11', budgetCents: 1000 }], campaigns: [{ campaignId: '21', budgetId: '12' }], accountId: 'g-1', customerId: '1234567890' }, after: { amounts: [{ budgetId: '11', budgetCents: 2000 }], campaigns: [{ campaignId: '21', budgetId: '11' }], accountId: 'g-1', customerId: '1234567890' } },
       'set-google-negative-list': { before: { listId: '31', keywords: [], campaigns: [] }, after: { listId: '31', added: [{ text: 'cheap', matchType: 'PHRASE' }], removed: [], attached: ['21'], detached: [] } },
       // L7 — products created (parent and a variation), and products binned.
       'create-product': { before: { products: [] }, after: { products: [{ id: 'p1', deleted: false }, { id: 'p2', deleted: false }] } },

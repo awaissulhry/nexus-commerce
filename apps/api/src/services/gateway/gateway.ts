@@ -30,13 +30,13 @@
 import { createHash } from 'node:crypto'
 import { withSpan } from '../../utils/otel-setup.js'
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
-import { accountStatusOf } from './account.js'
+import { accountStatusOf, googleAdsCustomerLinked } from './account.js'
 import { writeLedgerRow } from './ledger.js'
 import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
 import { ebaySignatureAppliesTo } from '../cx/connectors/ebay/signing.js'
 import {
-  apiVersionOf, authHeadersOf, bucketGroupOf, ebayMarketHeaders, googleCallKind, isGoogleAdsMutate, isGoogleValidateOnly, MarketUnconfigured, publishModeOf, rateReadingOf, sandboxUrlOf, shopifyGraphqlBodyOf,
+  apiVersionOf, authHeadersOf, bucketGroupOf, ebayMarketHeaders, googleAdsMutateCustomer, googleCallKind, googleMutateBodyOf, MarketUnconfigured, publishModeOf, rateReadingOf, sandboxUrlOf, shopifyGraphqlBodyOf,
 } from './channels.js'
 import { bucketKey, observeRate, takeToken } from './rate.js'
 import { ledgerSafeBody } from './redact.js'
@@ -207,19 +207,26 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   }
 
   // 1c. Google — Nexus READS Google (Ads, Merchant Center, Analytics) and changes only Google Ads, through one
-  // method: a Google Ads `…:mutate` (isGoogleAdsMutate). A validate-only mutate is a check (Google changes
-  // nothing) and goes as a read; a real one goes as a write, under the publish mode (step 3). Every other call
-  // is refused here, before the account, the token or the network: by the kind the caller declared AND by the
-  // method, path and body themselves (a real mutate declared as a read is still a change). The refusal has its
-  // ledger row like every other.
+  // method: GoogleAdsService.Mutate (googleAdsMutateCustomer), holding only the kinds of operation Nexus sends, for a
+  // customer the business chose through this connection. A validate-only mutate is a check (Google changes nothing)
+  // and goes as a read; a real one goes as a write, under the publish mode (step 3). What is sent is the body as it
+  // was judged (googleMutateBodyOf). Every other call is refused here, before the token or the network: by the kind
+  // the caller declared AND by the method, path and body themselves (a real mutate declared as a read is still a
+  // change). The refusal has its ledger row like every other.
+  let googleBody: string | null = null
   if (req.channel === 'GOOGLE') {
-    const mutate = isGoogleAdsMutate(req.method, req.url)
-    const check = mutate && isGoogleValidateOnly(req.body)
-    const allowed = req.kind === 'read'
-      ? googleCallKind(req.method, req.url) === 'read' || check
-      : req.kind === 'write' && mutate && !check
-    if (!allowed) {
-      return refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: Nexus only reads Google and changes Google Ads only through a mutate, and this call is neither (${req.method} ${safePath(req.url)}).`, 403)
+    const customer = googleAdsMutateCustomer(req.method, req.url)
+    const readOnly = (detail: string) => refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: Nexus only reads Google and changes Google Ads only through a mutate, and this call is neither (${req.method} ${safePath(req.url)}${detail}).`, 403)
+    if (customer === null) {
+      if (req.kind !== 'read' || googleCallKind(req.method, req.url) !== 'read') return readOnly('')
+    } else {
+      const judged = googleMutateBodyOf(req.body)
+      if ('refusal' in judged) return readOnly(`: ${judged.refusal}`)
+      if (req.kind !== (judged.check ? 'read' : 'write')) return readOnly(': the kind declared is not the body\'s')
+      if (!req.connectionId || !(await googleAdsCustomerLinked(req.connectionId, customer))) {
+        return refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: Google Ads account ${customer} is not the account this business chose through this Google connection.`, 403)
+      }
+      googleBody = judged.body
     }
   }
 
@@ -336,7 +343,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     try {
       // Never follow a redirect: a channel call carries its token in a header, and a custom token header
       // (x-amz-access-token, X-Shopify-Access-Token) would travel to the redirect's host.
-      const res = await fetch(url, { method: req.method, headers, body: (req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
+      const res = await fetch(url, { method: req.method, headers, body: (googleBody ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
       status = res.status
       responseHeaders = res.headers
       text = await res.text()
