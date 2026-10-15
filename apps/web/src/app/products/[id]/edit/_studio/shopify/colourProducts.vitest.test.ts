@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { colourNameClash, colourNameToSend, colourRows, confirmBlockers, confirmWrites, defaultColourName, fullSyncEffects, sizeMapAxes, sizeMapOf, sizesInOrder, swatchGroupWords, syncWords, type ColourProposal, type ColourView } from './colourProducts'
+import { colourNameClash, colourNameToSend, colourRows, confirmBlockers, confirmWrites, defaultColourName, fullSyncEffects, NOT_ON_SHOPIFY, notOnShopifyWords, pickSize, sizeMapAxes, sizeMapOf, sizesInOrder, swatchGroupWords, syncWords, type ColourProposal, type ColourView } from './colourProducts'
 
 // An invented family: two colours × three sizes; every id is made up.
 const sizes = (colour: string) => ['S', 'M', 'L'].map(s => ({ productId: `p-${colour}-${s}`, sku: `JACKET-${colour}-${s}`, options: [s] }))
@@ -160,5 +160,45 @@ describe('a Shopify SKU in another letter case', () => {
     expect(confirmBlockers(grey, false)).toEqual([])
     expect(confirmWrites(grey, false)).toEqual({ product: 'Jacket grey men', identity: expect.any(String), replaced: [],
       skus: [{ size: 'S', sku: 'JACKET-GREY-S' }, { size: 'M', sku: 'JACKET-GREY-M', from: 'jacket-grey-m' }] })
+  })
+})
+
+describe('an option not on Shopify (XRACING, invented: Fit Type "Regular" on every size, the store has Size only)', () => {
+  const eu = ['46', '48', '50']
+  const extra = eu.map(s => ({ shopifyVariantId: `v-${s}`, sku: null, options: [s] }))
+  const fit = { axis: 'fit_type', name: 'Fit Type', values: ['Regular'] }, size = { axis: 'size_name', name: 'Size Name', values: eu }
+  const xracing = (off: boolean): ColourView => ({ ...view([row('color:nero', 'PROPOSED', off
+    ? proposal({ variants: eu.map(s => ({ productId: `p-${s}`, sku: `XR-${s}`, shopifyVariantId: `v-${s}`, inventoryItemId: `i-${s}`, shopifySku: null, by: 'options' as const })), missing: [], extra: [] })
+    : proposal({ variants: [], skusToWrite: [], missing: [], extra }))]), sizeMap: off ? { fit_type: null } : {},
+  plan: { mode: 'colour-products', splitAxis: 'color', issues: [], orderedAxes: ['fit_type', 'size_name'], ...(off ? { notOnShopify: [{ axis: 'fit_type', name: 'Fit Type', value: 'Regular' }] } : {}), products: [
+    { key: 'color:nero', position: 0, nexusValue: 'Nero', colourName: 'Nero', variants: 3, options: off ? [size] : [fit, size],
+      sizes: eu.map(s => ({ productId: `p-${s}`, sku: `XR-${s}`, options: off ? [s] : ['Regular', s] })) },
+  ] } })
+
+  it('without the choice: no size matches, "Pair sizes…" offers "Not on Shopify" for the one-value Fit Type only; choosing it saves null', () => {
+    const [nero] = colourRows(xracing(false))
+    expect(nero.noSizeMatch).toBe('No size of "Nero" matches a size of "Jacket grey men". Nexus sizes: Regular / 46, Regular / 48, Regular / 50. Shopify sizes: 46, 48, 50.'
+      + ' Fit Type has one value in this family ("Regular"): if the Shopify product has no such option, choose "Not on Shopify" in "Pair sizes…".')
+    expect(nero.canPairSizes).toBe(true)
+    const axes = sizeMapAxes(xracing(false), nero)
+    expect(axes.map(a => [a.axis, a.oneValue ?? false, a.notOnShopify ?? false])).toEqual([['fit_type', true, false], ['size_name', false, false]])
+    const picked = pickSize(axes, 'fit_type', 'Regular', NOT_ON_SHOPIFY)
+    expect(sizeMapOf(picked)).toEqual({ fit_type: null })
+    // Never for an option with more values.
+    expect(pickSize(axes, 'size_name', '46', NOT_ON_SHOPIFY)).toEqual(axes)
+    expect(notOnShopifyWords(xracing(false))).toBeNull()
+  })
+
+  it('with the choice: every size pairs by Size alone, the panel says so, and "Pair sizes…" can take it back', () => {
+    const v = xracing(true)
+    const [nero] = colourRows(v)
+    expect([nero.matched, nero.pairs.length, nero.noSizeMatch, nero.pairs[0].size]).toEqual([3, 3, null, '46'])
+    expect(confirmBlockers(nero, false)).toEqual([])
+    expect(nero.canPairSizes).toBe(true)
+    expect(notOnShopifyWords(v)).toBe('Not a Shopify option: Fit Type ("Regular", its only value in this family). The Shopify sizes leave it out; change this in "Pair sizes…".')
+    const axes = sizeMapAxes(v, nero)
+    expect(axes.at(-1)).toEqual({ axis: 'fit_type', name: 'Fit Type', values: [{ nexus: 'Regular', shopify: null }], choices: [], oneValue: true, notOnShopify: true })
+    expect(sizeMapOf(axes)).toEqual({ fit_type: null })
+    expect(sizeMapOf(pickSize(axes, 'fit_type', 'Regular', ''))).toEqual({})
   })
 })

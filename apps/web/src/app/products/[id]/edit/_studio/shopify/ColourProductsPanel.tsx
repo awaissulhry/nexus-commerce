@@ -4,8 +4,8 @@ import { Link2, RefreshCw, Search } from 'lucide-react'
 import { AsyncListboxPanel, Banner, Card, Disclosure, Field, KeyValue, Modal, Thumbnail, type ListboxPanelOption } from '@/design-system/components'
 import { Button, Checkbox, Input, Pill, Select, Toggle } from '@/design-system/primitives'
 import { linkedEndpoint, linkedRequest } from './api'
-import { colourNameClash, colourNameToSend, colourRows, confirmBlockers, confirmWrites, defaultColourName, fullSyncEffects, sizeMapAxes, sizeMapOf, swatchGroupWords, syncWords,
-  type ColourRowModel, type ColourView, type SizeMapAxis, type StoreProduct } from './colourProducts'
+import { colourNameClash, colourNameToSend, colourRows, confirmBlockers, confirmWrites, defaultColourName, fullSyncEffects, NOT_ON_SHOPIFY, notOnShopifyWords, pickSize, sizeMapAxes, sizeMapOf,
+  swatchGroupWords, syncWords, type ColourRowModel, type ColourView, type SizeMapAxis, type StoreProduct } from './colourProducts'
 import styles from './colourProducts.module.css'
 
 /**
@@ -13,8 +13,9 @@ import styles from './colourProducts.module.css'
  * row per Nexus colour — its Shopify product (Find's proposal, or the one the operator chooses), the sizes it pairs, the
  * SKUs Nexus will write — and Confirm with a review of exactly what is written to Shopify, and the colour's name on
  * Shopify (by default the one its product shows). Sizes that Nexus and Shopify name differently (EU 44 / XS) are paired
- * in "Pair sizes…" (the family's size map on this store). Linking is adopt only: after it, "Start full sync" (with its
- * own review) is the operator's explicit step to stock, sizes and colour swatches.
+ * in "Pair sizes…" (the family's size map on this store), where an option with one value in the whole family (Fit Type
+ * "Regular", there for Amazon) can be set "Not on Shopify" when the store's products lack it. Linking is adopt only:
+ * after it, "Start full sync" (with its own review) is the operator's explicit step to stock, sizes and colour swatches.
  */
 export function ColourProductsPanel({ linkedPath, canEdit, canPublish }: { linkedPath: string; canEdit: boolean; canPublish: boolean }) {
   const path = linkedPath.replace('/shopify-linked?', '/shopify-colour-products?')
@@ -47,7 +48,7 @@ export function ColourProductsPanel({ linkedPath, canEdit, canPublish }: { linke
 
   if (!view) return <Card header="Colour products" headingLevel={3}>{error ? <Banner tone="danger" action={<Button size="sm" onClick={() => void load()}>Try again</Button>}>{error}</Banner> : <p role="status">Loading colour products…</p>}</Card>
   if (view.plan.mode !== 'colour-products') return null
-  const rows = colourRows(view), state = syncWords(view)
+  const rows = colourRows(view), state = syncWords(view), off = notOnShopifyWords(view)
   const planErrors = view.plan.issues.filter(i => i.severity === 'error')
   return <Card header="Colour products" headingLevel={3} description="Each colour of this family is its own Shopify product, as on the store's colour swatches."
     headerAction={<Pill tone={state.tone}>{state.label}</Pill>}>
@@ -62,6 +63,7 @@ export function ColourProductsPanel({ linkedPath, canEdit, canPublish }: { linke
         </span>
       </div>
       <p className={styles.hint}>{state.text}</p>
+      {off && <p className={styles.hint}>{off}</p>}
       {!view.settings.enabled && <Banner tone="warning">Colour products are off for this store. Find works; Confirm needs them on.</Banner>}
       {error && <Banner tone="danger" title="Nothing more was done">{error}</Banner>}
       {notice && <Banner tone="success">{notice}</Banner>}
@@ -219,16 +221,17 @@ function ConfirmReview({ model, view, locations, replace, busy, onClose, onConfi
 /** "Pair sizes…": each Nexus size of the family with the Shopify value it is on this store (the size map; Nexus only). */
 function SizeMapReview({ model, axes, busy, onClose, onSave }: { model: ColourRowModel; axes: SizeMapAxis[]; busy: boolean; onClose(): void; onSave(sizeMap: ReturnType<typeof sizeMapOf>): void }) {
   const [edited, setEdited] = useState(axes)
-  const pick = (axis: string, nexus: string, shopify: string) => setEdited(list => list.map(a => a.axis !== axis ? a : { ...a, values: a.values.map(v => v.nexus === nexus ? { ...v, shopify: shopify || null } : v) }))
+  const pick = (axis: string, nexus: string, choice: string) => setEdited(list => pickSize(list, axis, nexus, choice))
   return <Modal open onClose={onClose} title={`Pair the sizes of "${model.name}" with "${model.product?.title ?? 'its Shopify product'}"`} size="lg" readable
     footer={<><Button disabled={busy} onClick={onClose}>Cancel</Button><Button variant="primary" disabled={busy} onClick={() => onSave(sizeMapOf(edited))}>{busy ? 'Saving…' : 'Save and find again'}</Button></>}>
-    <p>Where Nexus and Shopify name a size differently (EU 44 is XS on the store), choose the Shopify size of each. The pairing is the family's on this store: Find, Confirm and the colour sync then pair, add and order the sizes by it. Saving writes nothing to Shopify.</p>
+    <p>Where Nexus and Shopify name a size differently (EU 44 is XS on the store), choose the Shopify size of each. An option with one value in the whole family that the store's products do not have (a fit only Amazon needs) can be set to “Not on Shopify”. The pairing is the family's on this store: Find, Confirm and the colour sync then pair, add and order the sizes by it. Saving writes nothing to Shopify.</p>
     {edited.map(axis => <section key={axis.axis} aria-label={axis.name}>
       <p><strong>{axis.name}</strong></p>
       <div className={styles.sizeMap}>
-        {axis.values.map(v => <Field key={v.nexus} label={`${axis.name} ${v.nexus}`}>
-          <Select size="sm" value={v.shopify ?? ''} disabled={busy} onChange={e => pick(axis.axis, v.nexus, e.target.value)}>
+        {axis.values.map(v => <Field key={v.nexus} label={`${axis.name} ${v.nexus}`} hint={axis.oneValue ? 'The only value of this family.' : undefined}>
+          <Select size="sm" value={axis.notOnShopify ? NOT_ON_SHOPIFY : v.shopify ?? ''} disabled={busy} onChange={e => pick(axis.axis, v.nexus, e.target.value)}>
             <option value="">Same as Nexus ({v.nexus})</option>
+            {axis.oneValue && <option value={NOT_ON_SHOPIFY}>Not on Shopify</option>}
             {axis.choices.filter(c => c !== v.nexus).map(c => <option key={c} value={c}>{c}</option>)}
           </Select>
         </Field>)}
