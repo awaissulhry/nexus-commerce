@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  centsOfMicros, liveAdOf, liveAssetOf, liveCampaignOf, liveChangeHistoryQuery, liveCriterionOf, liveListKeywordsQuery, liveProductGroupOf,
+  centsOfMicros, liveAdOf, liveAssetOf, liveAssetsQuery, liveCampaignOf, liveChangeHistoryQuery, liveCriterionOf, liveListKeywordsQuery, liveProductGroupOf,
   liveProductGroupsQuery, microsOfCents, priorityName,
 } from './live.js'
 
@@ -14,6 +14,11 @@ describe('live queries', () => {
     expect(liveProductGroupsQuery('1001')).toContain('WHERE campaign.id = 1001 AND ad_group_criterion.type = \'LISTING_GROUP\'')
     expect(() => liveProductGroupsQuery('1 OR 1=1')).toThrow(/Nothing was sent/)
     expect(() => liveListKeywordsQuery('abc')).toThrow(/Nothing was sent/)
+  })
+
+  it('assets: campaign.status is selected, because Google refuses the filter on it otherwise', () => {
+    expect(liveAssetsQuery('1001')).toMatch(/^SELECT campaign\.id, campaign\.status, /)
+    expect(liveAssetsQuery()).toContain("campaign.status != 'REMOVED'")
   })
 
   it('change history: one day, newest first, a LIMIT', () => {

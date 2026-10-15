@@ -256,7 +256,8 @@ export const liveCampaignListsQuery = (campaignId: string): string =>
   `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND campaign_shared_set.status = 'ENABLED'`
 
 export const liveAssetsQuery = (campaignId?: string): string =>
-  'SELECT campaign.id, campaign_asset.field_type, campaign_asset.status, campaign_asset.primary_status, ' +
+  // Google refuses a filter on campaign.status here unless campaign.status is selected too (read 2026-10-15).
+  'SELECT campaign.id, campaign.status, campaign_asset.field_type, campaign_asset.status, campaign_asset.primary_status, ' +
   'campaign_asset.primary_status_reasons, asset.id, asset.type, asset.name, asset.final_urls, ' +
   'asset.sitelink_asset.link_text, asset.sitelink_asset.description1, asset.sitelink_asset.description2, ' +
   'asset.callout_asset.callout_text, asset.structured_snippet_asset.header, asset.structured_snippet_asset.values, ' +
