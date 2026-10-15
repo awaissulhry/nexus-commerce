@@ -340,7 +340,7 @@ describe('Google Ads 1b — google-ad-details: every view, from the page\'s own 
       const answer = await call({ view: name })
       expect(answer.ok, `${name}: ${answer.error}`).toBe(true)
       expect(answer.data).toMatchObject({
-        channel: 'google', view: name, writes: { mode: 'none', text: expect.stringContaining('a person makes every change in Google Ads') },
+        channel: 'google', view: name, writes: { mode: 'approval', text: expect.stringContaining('each is a request a person approves in Nexus') },
         account: { accountId: 'conn-g-a', name: 'Test Google advertiser', googleAdsAccount: { customerId: '9080706050', currency: 'EUR' } },
       })
       expect(answer.data!.empty, name).toBeUndefined()

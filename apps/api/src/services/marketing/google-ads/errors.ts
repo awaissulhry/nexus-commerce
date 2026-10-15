@@ -19,6 +19,16 @@ export interface GoogleAdsErrorCode {
   /** The enum value, e.g. "RESOURCE_EXHAUSTED". */
   code: string
   message: string | null
+  /**
+   * A change (mutate): where in the request Google found it, as Google names the fields
+   * ("mutate_operations[3].ad_group_ad_operation.create.ad.responsive_search_ad.headlines[2].text"); null when Google
+   * names no place (a read, or a failure of the whole request).
+   */
+  path?: string | null
+  /** A change: the index of the operation it is about (the first `[n]` of the path); null when none. */
+  operationIndex?: number | null
+  /** A change: the value Google refused, when it says (`trigger`). */
+  trigger?: string | null
 }
 
 export interface GoogleAdsFailure {
@@ -115,6 +125,24 @@ function base(origin: GoogleAdsFailure['origin'], httpStatus: number): GoogleAds
   }
 }
 
+/**
+ * Where a change's error is (GoogleAdsError.location.fieldPathElements[{ fieldName, index }]) and the value it refused
+ * (GoogleAdsError.trigger, a Value: `{ stringValue }`, `{ int64Value }` …).
+ */
+function errorPlace(item: Record<string, unknown>): { path: string | null; operationIndex: number | null; trigger: string | null } {
+  const elements = record(item.location) && Array.isArray(item.location.fieldPathElements) ? item.location.fieldPathElements : []
+  const parts: string[] = []
+  let operationIndex: number | null = null
+  for (const element of elements) {
+    if (!record(element) || typeof element.fieldName !== 'string') continue
+    const index = element.index === undefined || element.index === null ? null : Number(element.index)
+    if (operationIndex === null && index !== null && Number.isInteger(index)) operationIndex = index
+    parts.push(index !== null && Number.isInteger(index) ? `${element.fieldName}[${index}]` : element.fieldName)
+  }
+  const trigger = record(item.trigger) ? Object.values(item.trigger).find((v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') : undefined
+  return { path: parts.length ? parts.join('.') : null, operationIndex, trigger: trigger === undefined ? null : clip(String(trigger)) }
+}
+
 /** Google's error answer → what it means. `body` is the answer's text; `headers` give the request-id when the body has none. */
 export function parseGoogleAdsFailure(httpStatus: number, body: string, headers?: Headers | null): GoogleAdsFailure {
   const out = base('google', httpStatus)
@@ -136,7 +164,9 @@ export function parseGoogleAdsFailure(httpStatus: number, body: string, headers?
       if (!record(item) || !record(item.errorCode)) continue
       const [group, code] = Object.entries(item.errorCode).find(([, v]) => typeof v === 'string') ?? []
       if (typeof group === 'string' && typeof code === 'string') {
-        out.errors.push({ group, code, message: typeof item.message === 'string' ? item.message : null })
+        const place = errorPlace(item)
+        // A read's errors name no place: their shape stays { group, code, message }.
+        out.errors.push({ group, code, message: typeof item.message === 'string' ? item.message : null, ...(place.path || place.trigger ? place : {}) })
       }
       const quotaDetails = record(item.details) && record(item.details.quotaErrorDetails) ? item.details.quotaErrorDetails : null
       if (quotaDetails) retryDelayMs = durationMs(quotaDetails.retryDelay) ?? retryDelayMs

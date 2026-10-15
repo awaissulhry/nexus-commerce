@@ -36,7 +36,7 @@ import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
 import { ebaySignatureAppliesTo } from '../cx/connectors/ebay/signing.js'
 import {
-  apiVersionOf, authHeadersOf, bucketGroupOf, ebayMarketHeaders, googleCallKind, MarketUnconfigured, publishModeOf, rateReadingOf, sandboxUrlOf, shopifyGraphqlBodyOf,
+  apiVersionOf, authHeadersOf, bucketGroupOf, ebayMarketHeaders, googleCallKind, isGoogleAdsMutate, isGoogleValidateOnly, MarketUnconfigured, publishModeOf, rateReadingOf, sandboxUrlOf, shopifyGraphqlBodyOf,
 } from './channels.js'
 import { bucketKey, observeRate, takeToken } from './rate.js'
 import { ledgerSafeBody } from './redact.js'
@@ -206,12 +206,21 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     }
   }
 
-  // 1c. Google, step 1 — Nexus only READS Google (Ads, Merchant Center, Analytics). Every other call is
-  // refused here, before the account, the token or the network: by the kind the caller declared AND by
-  // the method and path themselves (a `…:mutate` declared as a read is still a change). The refusal has
-  // its ledger row like every other. Writes come with step 2, through change plans and validate_only.
-  if (req.channel === 'GOOGLE' && (req.kind !== 'read' || googleCallKind(req.method, req.url) !== 'read')) {
-    return refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: Nexus only reads Google for now, and this call would change something (${req.method} ${safePath(req.url)}).`, 403)
+  // 1c. Google — Nexus READS Google (Ads, Merchant Center, Analytics) and changes only Google Ads, through one
+  // method: a Google Ads `…:mutate` (isGoogleAdsMutate). A validate-only mutate is a check (Google changes
+  // nothing) and goes as a read; a real one goes as a write, under the publish mode (step 3). Every other call
+  // is refused here, before the account, the token or the network: by the kind the caller declared AND by the
+  // method, path and body themselves (a real mutate declared as a read is still a change). The refusal has its
+  // ledger row like every other.
+  if (req.channel === 'GOOGLE') {
+    const mutate = isGoogleAdsMutate(req.method, req.url)
+    const check = mutate && isGoogleValidateOnly(req.body)
+    const allowed = req.kind === 'read'
+      ? googleCallKind(req.method, req.url) === 'read' || check
+      : req.kind === 'write' && mutate && !check
+    if (!allowed) {
+      return refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: Nexus only reads Google and changes Google Ads only through a mutate, and this call is neither (${req.method} ${safePath(req.url)}).`, 403)
+    }
   }
 
   // 2. status
