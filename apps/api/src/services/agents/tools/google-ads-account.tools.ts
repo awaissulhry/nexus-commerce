@@ -119,7 +119,7 @@ const setGoogleAccountSettings: AgentTool = {
   name: 'set-google-account-settings',
   title: 'Change Google Ads account settings',
   reversibility: 'full',
-  requires: [F.adsCampaignsManage, F.adsConnect],
+  requires: [F.adsCampaignsManage],
   input: z.object({
     accountId: googleAccountArg,
     autoTagging: z.boolean().optional().describe('auto-tagging (the gclid on ad clicks); OFF breaks Google Ads conversion tracking (a warning)'),
@@ -355,7 +355,7 @@ const setGoogleBilling: AgentTool = {
   name: 'set-google-billing',
   title: 'Change Google Ads billing',
   reversibility: 'partial',
-  requires: [F.adsBudgetsEdit, F.adsConnect, ADSPEND],
+  requires: [F.adsBudgetsEdit, ADSPEND],
   restrictedFields: BILLING_MONEY,
   input: z.object({
     accountId: googleAccountArg,
