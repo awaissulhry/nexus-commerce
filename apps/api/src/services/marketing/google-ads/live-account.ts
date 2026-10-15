@@ -316,9 +316,13 @@ export const EXPERIMENTS_QUERY =
   'experiment.start_date, experiment.end_date, experiment.suffix, experiment.promote_status FROM experiment ' +
   "WHERE experiment.status != 'REMOVED'"
 
+/**
+ * G9 (2026-10-15): `PARAMETERS include_drafts=true` — Google returns in-design (and draft) campaigns only with it (its
+ * guide "System-managed experiments", step 3), so a treatment not scheduled yet shows its in-design campaign.
+ */
 export const EXPERIMENT_ARMS_QUERY =
   'SELECT experiment_arm.experiment, experiment_arm.name, experiment_arm.control, experiment_arm.traffic_split, ' +
-  'experiment_arm.campaigns, experiment_arm.in_design_campaigns FROM experiment_arm'
+  'experiment_arm.campaigns, experiment_arm.in_design_campaigns FROM experiment_arm PARAMETERS include_drafts=true'
 
 export interface LiveExperiment {
   experimentId: string | null

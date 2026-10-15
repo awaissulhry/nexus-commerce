@@ -29,6 +29,10 @@ describe('the queries', () => {
     lifeEvents: accountLookupQuery('life-events', 'moving'),
   }
 
+  it('experiment arms ask for Google\'s drafts, so a treatment not scheduled yet shows its in-design campaign (G9)', () => {
+    expect(EXPERIMENT_ARMS_QUERY.endsWith(' FROM experiment_arm PARAMETERS include_drafts=true')).toBe(true)
+  })
+
   it('every field filtered on that is not of the FROM resource is selected', () => {
     for (const [name, q] of Object.entries(all)) {
       const from = /FROM (\w+)/.exec(q)![1]

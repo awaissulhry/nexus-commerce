@@ -37,7 +37,7 @@ import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
 import { ebaySignatureAppliesTo } from '../cx/connectors/ebay/signing.js'
 import {
-  apiVersionOf, authHeadersOf, bucketGroupOf, ebayMarketHeaders, googleAdsMutateCustomer, googleAdsRecommendationCall, googleCallKind, googleMutateBodyOf, googleRecommendationBodyOf, MarketUnconfigured, publishModeOf, rateReadingOf, sandboxUrlOf, shopifyGraphqlBodyOf,
+  apiVersionOf, authHeadersOf, bucketGroupOf, ebayMarketHeaders, googleAdsExperimentCall, googleAdsMutateCustomer, googleAdsRecommendationCall, googleCallKind, googleExperimentBodyOf, googleMutateBodyOf, googleRecommendationBodyOf, MarketUnconfigured, publishModeOf, rateReadingOf, sandboxUrlOf, shopifyGraphqlBodyOf,
 } from './channels.js'
 import { bucketKey, observeRate, takeToken } from './rate.js'
 import { ledgerSafeBody } from './redact.js'
@@ -219,18 +219,30 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // always goes as a write, under the publish mode.
   // G8b (2026-10-15): the account's users, links and billing — each its own Google Ads method (googleAdsAccountCall),
   // its body judged to exactly what the account tools send (googleAccountCallBodyOf); a validate-only one is a check.
+  // G9 (2026-10-15): an experiment's schedule / end / promote / graduate and a campaign draft's promote
+  // (googleAdsExperimentCall), judged by googleExperimentBodyOf; Google has validate_only for each, so like a mutate a
+  // check goes as a read and a real one as a write.
   let googleBody: string | null = null
   if (req.channel === 'GOOGLE') {
     const customer = googleAdsMutateCustomer(req.method, req.url)
     const recommendation = customer === null ? googleAdsRecommendationCall(req.method, req.url) : null
     const accountCall = customer === null && recommendation === null ? googleAdsAccountCall(req.method, req.url) : null
-    const readOnly = (detail: string) => refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: Nexus only reads Google and changes Google Ads only through a mutate (or an apply or dismiss of its recommendations, or an account call of its users, links and billing), and this call is none of them (${req.method} ${safePath(req.url)}${detail}).`, 403)
+    const experiment = customer === null && recommendation === null && accountCall === null ? googleAdsExperimentCall(req.method, req.url) : null
+    const readOnly = (detail: string) => refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: Nexus only reads Google and changes Google Ads only through a mutate (or an apply or dismiss of its recommendations, an account call of its users, links and billing, or an experiment or campaign draft action), and this call is none of them (${req.method} ${safePath(req.url)}${detail}).`, 403)
     if (accountCall) {
       const judged = googleAccountCallBodyOf(accountCall, req.body)
       if ('refusal' in judged) return readOnly(`: ${judged.refusal}`)
       if (req.kind !== (judged.check ? 'read' : 'write')) return readOnly(': the kind declared is not the body\'s')
       if (!req.connectionId || !(await googleAdsCustomerLinked(req.connectionId, accountCall.customer))) {
         return refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: Google Ads account ${accountCall.customer} is not the account this business chose through this Google connection.`, 403)
+      }
+      googleBody = judged.body
+    } else if (experiment) {
+      const judged = googleExperimentBodyOf(experiment, req.body)
+      if ('refusal' in judged) return readOnly(`: ${judged.refusal}`)
+      if (req.kind !== (judged.check ? 'read' : 'write')) return readOnly(': the kind declared is not the body\'s')
+      if (!req.connectionId || !(await googleAdsCustomerLinked(req.connectionId, experiment.customer))) {
+        return refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: Google Ads account ${experiment.customer} is not the account this business chose through this Google connection.`, 403)
       }
       googleBody = judged.body
     } else if (recommendation) {

@@ -5,8 +5,10 @@
  * - Reads, and two kinds of change: `googleKind` says read for a GET or a POST to `…:search` / `…:searchStream`,
  *   and for a Google Ads `…:mutate` that only asks Google to check it (`validateOnly: true`); write for a real
  *   Google Ads mutate (2026-10-15: every one a change a person approved in Nexus) and for an apply or a dismiss of
- *   Google's recommendations (`…/recommendations:apply|:dismiss`, G5: Google cannot check those), and the account's
- *   users, links and billing (G8b, google-account-calls.ts: a write, or a read when validate-only). The gateway refuses every other
+ *   Google's recommendations (`…/recommendations:apply|:dismiss`, G5: Google cannot check those), the account's
+ *   users, links and billing (G8b, google-account-calls.ts: a write, or a read when validate-only), and G9: an
+ *   experiment's `:scheduleExperiment` / `:endExperiment` / `:promoteExperiment` / `:graduateExperiment` and a campaign
+ *   draft's `:promote`, read when validate-only (Google's check), else write. The gateway refuses every other
  *   Google call (`GOOGLE_READ_ONLY`), with its ledger row, and holds real writes to the publish mode
  *   (`NEXUS_GOOGLE_ADS_WRITES=off` refuses them). A write is never retried by the gateway: it could apply twice.
  * - The account's own token as `Authorization: Bearer` (the gateway refreshes it under the lease).
@@ -16,7 +18,7 @@
  * - A body is sent as JSON.
  */
 import { gatewayFetch } from './gateway.js'
-import { googleAdsRecommendationCall, googleCallKind, isGoogleAdsMutate, isGoogleValidateOnly } from './channels.js'
+import { googleAdsExperimentCall, googleAdsRecommendationCall, googleCallKind, googleExperimentBodyOf, isGoogleAdsMutate, isGoogleValidateOnly } from './channels.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 
 export interface GoogleCallRequest {
@@ -44,6 +46,12 @@ export function googleKind(method: string, url: string, body?: unknown): 'read' 
   const account = googleAdsAccountCall(method, url)
   if (account) {
     const judged = googleAccountCallBodyOf(account, body === undefined ? undefined : JSON.stringify(body))
+    return !('refusal' in judged) && judged.check ? 'read' : 'write'
+  }
+  // G9: an experiment's or a campaign draft's action — like a mutate, a check when validate-only, else a write.
+  const experiment = googleAdsExperimentCall(method, url)
+  if (experiment) {
+    const judged = googleExperimentBodyOf(experiment, body === undefined ? undefined : JSON.stringify(body))
     return !('refusal' in judged) && judged.check ? 'read' : 'write'
   }
   if (!isGoogleAdsMutate(method, url)) return 'action'

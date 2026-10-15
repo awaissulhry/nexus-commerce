@@ -194,7 +194,7 @@ async function liveView(args: Record<string, unknown>, ctx: ToolContext): Promis
         const items = await liveDrafts(account.target)
         return {
           ok: true,
-          data: { ...base, items, total: items.length, note: 'Campaign drafts (Drafts & experiments). The "Drafts in progress" of Google\'s campaign creation pages are not in the Google Ads API.' },
+          data: { ...base, items, total: items.length, note: 'Campaign drafts (Drafts & experiments). draftId is campaignId~draftId, as set-google-campaign-draft and promote-google-campaign-draft take it. The "Drafts in progress" of Google\'s campaign creation pages are not in the Google Ads API.' },
         }
       }
       case 'account': {
@@ -344,12 +344,12 @@ const googleAdsLive: AgentTool = {
     + 'group level, every type (images with size, business name, call, price, promotion, lead form, app link, sitelinks, '
     + 'callouts, snippets) with status and review, and the location asset sets (campaignId: that campaign and its ad '
     + 'groups, plus the account). change-history: Google\'s change history of one day (who, '
-    + 'what; the e-mail of who needs the users permission). drafts: campaign drafts. lookup (lookup + search): Google\'s ids of locations, languages and audience '
+    + 'what; the e-mail of who needs the users permission). drafts: campaign drafts (draftId: campaignId~draftId). lookup (lookup + search): Google\'s ids of locations, languages and audience '
     + 'segments whose name holds the word, Google\'s life events, and this account\'s own user lists, custom audiences and '
     + 'combined audiences, for the change tools. account: auto-tagging, tracking template, final URL suffix, time zone, currency, conversion '
     + 'tracking, the EU political ads declaration. conversions: conversion actions (category, primary or secondary, '
     + 'value, counting, windows, attribution, GA4 source), the account\'s goals and each campaign\'s goals. labels: the '
-    + 'labels (labelId: what carries it). experiments: experiments with their arms and campaigns. users: who has access '
+    + 'labels (labelId: what carries it). experiments: experiments with their arms and campaigns (in-design ones included). users: who has access '
     + 'to the Google Ads account and open invitations (needs the users permission). billing: billing setups and account '
     + 'budgets (needs the ad-spend permission). links: Merchant Center and other product links, link invitations, YouTube '
     + 'links, GA4 properties. bid-strategies: portfolio bid strategies with targets, CPC ceilings and how many campaigns '
