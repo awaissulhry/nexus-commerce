@@ -212,6 +212,68 @@ describe('matchColourProducts — Find: the Shopify product of each colour, the 
     expect(giallo.skusToWrite.map(s => s.sku)).not.toContain('GALE-JACKET-YELLOW-MEN-L')
   })
 
+  it('the operator\'s chosen product outranks the name and group guesses; its sizes still match by SKU, then by option', () => {
+    // A store that holds men's and women's colours in one group: no SKUs, the same colour names, so nothing is guessed.
+    const noSkus = { ...black, variants: black.variants.map(v => ({ ...v, sku: null })) }
+    const group = [...black.group, 'gid://shopify/Product/black-women']
+    const women = { ...noSkus, id: 'gid://shopify/Product/black-women', title: 'GALE jacket women', group }
+    const yellowOfGroup = { ...yellow, group }
+    const named = planColourProducts(gale(), { ...COLOUR_SPLIT, colourNames: { 'color:black': 'Black', 'color:yellow': 'Yellow' } })
+    expect(matchColourProducts(named, [noSkus, women, yellowOfGroup])[0]).toMatchObject({ shopifyProductId: null, method: null })
+    const [nero, giallo] = matchColourProducts(named, [noSkus, women, yellowOfGroup], {}, { 'color:black': noSkus.id })
+    expect(nero).toMatchObject({ shopifyProductId: noSkus.id, method: 'operator', issues: [] })
+    expect(nero.skusToWrite).toHaveLength(9)
+    expect(giallo).toMatchObject({ shopifyProductId: yellow.id, method: 'name' })
+    // By SKU first: the chosen product's SKUs pair with their sizes, the SKU-less ones by option values.
+    const [chosen] = matchColourProducts(plan, [black, yellow], {}, { 'color:black': black.id })
+    expect(chosen.variants.filter(v => v.by === 'sku')).toHaveLength(7)
+    expect(chosen.skusToWrite.map(s => s.sku)).toEqual(['GALE-JACKET-BLACK-MEN-S', 'GALE-JACKET-BLACK-MEN-3XL'])
+    // A choice outranks the SKUs too, but a colour whose SKUs sit in another product is an issue, never a silent pick.
+    const [elsewhere] = matchColourProducts(plan, [black, yellow], {}, { 'color:black': yellow.id })
+    expect(elsewhere).toMatchObject({ shopifyProductId: yellow.id, method: 'operator', issues: [expect.objectContaining({ code: 'sku-outside-choice' })] })
+    // An existing link still wins; a chosen product the store does not return is named.
+    expect(matchColourProducts(plan, [black, yellow], { 'color:black': black.id }, { 'color:black': yellow.id })[0].method).toBe('linked')
+    expect(matchColourProducts(plan, [black, yellow], {}, { 'color:yellow': 'gid://shopify/Product/404' })[1].issues.map(i => i.code)).toEqual(['chosen-not-found'])
+  })
+
+  it('a chosen product whose sizes carry other SKUs (another colour\'s, another prefix): offered for replacement, never a claim', () => {
+    // The store's Yellow product holds the Black SKUs; Black's own product holds none.
+    const blackNoSkus = { ...black, variants: black.variants.map(v => ({ ...v, sku: null })) }
+    const yellowWithBlack = { ...yellow, variants: yellow.variants.map(v => ({ ...v, sku: `GALE-JACKET-BLACK-MEN-${v.options[0]}` })) }
+    // Without a choice the Black SKUs pull Black onto the Yellow product, and Yellow's own sizes say so.
+    expect(matchColourProducts(plan, [blackNoSkus, yellowWithBlack])[0]).toMatchObject({ shopifyProductId: yellowWithBlack.id, method: 'sku' })
+    const [nero, giallo] = matchColourProducts(plan, [blackNoSkus, yellowWithBlack], {}, { 'color:yellow': yellowWithBlack.id, 'color:black': blackNoSkus.id })
+    expect(giallo).toMatchObject({ shopifyProductId: yellowWithBlack.id, method: 'operator', issues: [], skusToWrite: [] })
+    expect(giallo.skusToReplace).toHaveLength(9)
+    expect(giallo.skusToReplace[0]).toEqual({ productId: 'p-YELLOW-XS', shopifyVariantId: `${yellow.id}/XS`, from: 'GALE-JACKET-BLACK-MEN-XS', to: 'GALE-JACKET-YELLOW-MEN-XS' })
+    // The product chosen for Yellow is not Black's by its SKUs, and Black's SKUs there are Yellow's to replace.
+    expect(nero).toMatchObject({ shopifyProductId: blackNoSkus.id, method: 'operator', issues: [] })
+    expect(nero.skusToWrite).toHaveLength(9)
+    // Only Yellow chosen: Black is not pulled onto it by its SKUs; the group's one product left is Black's.
+    expect(matchColourProducts(plan, [blackNoSkus, yellowWithBlack], {}, { 'color:yellow': yellowWithBlack.id })[0]).toMatchObject({ shopifyProductId: blackNoSkus.id, method: 'group', issues: [] })
+    // A prefix-only difference is the same offer.
+    const prefixed = { ...black, variants: black.variants.map(v => ({ ...v, sku: `IT-GALE-JACKET-BLACK-MEN-${v.options[0]}` })) }
+    const [prefixedNero] = matchColourProducts(plan, [prefixed, yellow], {}, { 'color:black': prefixed.id })
+    expect(prefixedNero.issues).toEqual([])
+    expect(prefixedNero.skusToReplace.map(r => `${r.from}>${r.to}`)).toContain('IT-GALE-JACKET-BLACK-MEN-M>GALE-JACKET-BLACK-MEN-M')
+    // Not chosen by the operator: the same difference stays an issue, nothing is offered.
+    const [guessed] = matchColourProducts(plan, [prefixed, yellow], { 'color:black': prefixed.id })
+    expect(guessed.skusToReplace).toEqual([])
+    expect(guessed.issues.map(i => i.code)).toContain('sku-differs')
+  })
+
+  it('a Shopify SKU that differs only in letter case is matched and offered to record as the listing\'s SKU, never written', () => {
+    const lower = { ...black, variants: black.variants.map(v => v.options[0] === 'M' ? { ...v, sku: 'gale-jacket-black-men-m' } : v) }
+    const [nero] = matchColourProducts(plan, [lower, yellow])
+    expect(nero.issues).toEqual([])
+    expect(nero.variants.find(v => v.productId === 'p-BLACK-M')).toMatchObject({ by: 'sku', shopifySku: 'gale-jacket-black-men-m' })
+    expect(nero.skusToRecord).toEqual([{ productId: 'p-BLACK-M', shopifyVariantId: `${black.id}/M`, sku: 'gale-jacket-black-men-m' }])
+    expect(nero.skusToWrite.map(s => s.sku)).not.toContain('GALE-JACKET-BLACK-MEN-M')
+    // Surrounding spaces are not a case difference: nothing is offered (Confirm refuses it, as before).
+    const spaced = { ...black, variants: black.variants.map(v => v.options[0] === 'M' ? { ...v, sku: ' GALE-JACKET-BLACK-MEN-M' } : v) }
+    expect(matchColourProducts(plan, [spaced, yellow])[0].skusToRecord).toEqual([])
+  })
+
   it('a colour-only family: each product\'s one "Default Title" variant is its variant', () => {
     const colourOnly = planColourProducts(gale({ axes: [{ code: 'color', label: 'Colore' }], variants: COLOURS.map(c => ({ productId: `p-${c.sku}`, sku: `CAP-${c.sku}`, values: { color: c.key } })) }), COLOUR_SPLIT)
     const cap = (id: string, colourName: string): ColourCandidate => ({ id, title: 'Cap', handle: id, status: 'ACTIVE', colourName, group: [], variants: [{ id: `${id}/v`, sku: null, inventoryItemId: null, options: ['Default Title'] }] })

@@ -10911,6 +10911,7 @@ CREATE TABLE "ShopifyColourSync" (
     "leaseToken" TEXT,
     "leaseUntil" TIMESTAMP(3),
     "lastError" TEXT,
+    "adoptOnly" BOOLEAN NOT NULL DEFAULT false,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ShopifyColourSync_pkey" PRIMARY KEY ("id")

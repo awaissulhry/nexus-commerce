@@ -72,6 +72,21 @@ export async function finishColourSync(claim: ColourClaim, done: boolean, error?
   })
 }
 
+/**
+ * Adopt only (`ShopifyColourSync.adoptOnly`): Confirm linked the family's colours on this destination, and Nexus writes
+ * nothing else to those Shopify products — no stock, no sizes, no size order, no archive, no colour swatch fields — until
+ * an operator starts the full sync. Read fresh, never from a claim: Confirm and Start full sync change it under the lock.
+ */
+export async function colourAdoptOnly(d: ColourCoordinate, db: Pick<Prisma.TransactionClient, 'shopifyColourSync'> = prisma): Promise<boolean> {
+  const row = await db.shopifyColourSync.findFirst({ where: coordinate(d), select: { adoptOnly: true } })
+  return row?.adoptOnly === true
+}
+
+/** Sets the destination's adopt-only mark (inside the caller's transaction). */
+export async function setColourAdoptOnly(db: Pick<Prisma.TransactionClient, 'shopifyColourSync'>, d: ColourCoordinate, adoptOnly: boolean) {
+  await db.shopifyColourSync.updateMany({ where: coordinate(d), data: { adoptOnly } })
+}
+
 export async function withColourSyncLock<T>(d: ColourCoordinate, work: () => Promise<T>): Promise<T> {
   const current = active.getStore()
   if (current) {

@@ -11,6 +11,18 @@
  * stock sync use (`offer-sync.service.ts`), and the colour product row becomes LINKED.
  *
  * It never adds, removes or reorders a variant, and never writes the grouping fields (that is the link writer, PR 4).
+ *
+ * Adopt only (the default; `ShopifyColourSync.adoptOnly`): a family's first Confirm on a destination, and every Confirm
+ * while it is adopt-only, links and nothing more. Its size listings stay paused (`syncPaused`, also the drafts it makes:
+ * `shopifyColourAdoptPaused` marks the ones it paused), no stock is queued, and the colour sync then only reads and
+ * verifies — no stock, sizes, size order, archive or colour swatch fields — until an operator starts the full sync
+ * (`full-sync.service.ts`). A family already in full sync confirms a new colour exactly as before.
+ *
+ * A size whose Shopify SKU differs from the Nexus SKU only in letter case (Find's `skusToRecord`) is linked as it is:
+ * Shopify's SKU becomes the size listing's own SKU on this store (`setChannelSku`, recorded live), and nothing is written
+ * to Shopify for it. In a product the operator chose, sizes paired by option values whose variants carry other SKUs
+ * (another colour's, another prefix: Find's `skusToReplace`) are refused unless the operator asks to replace them
+ * (`replaceSkus`): then the Nexus SKUs are written there with the missing ones, and read back.
  */
 import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
@@ -27,11 +39,12 @@ import { productReadCacheService } from '../../product-read-cache.service.js'
 import { logger } from '../../../utils/logger.js'
 import { readColourProductSettings } from './settings.js'
 import { loadColourPlan } from './family.js'
-import { claimedElsewhere, colourProductsView, gatherCandidates, linkedProducts, rowsWhere, type Destination } from './find.service.js'
-import { commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
+import { claimedElsewhere, colourProductsView, gatherCandidates, linkedProducts, operatorChoices, rowsWhere, type Destination } from './find.service.js'
+import { colourAdoptOnly, commitColourSyncChange, guardedColourGraphql, setColourAdoptOnly, withColourSyncLock } from './sync-work.js'
 import { colourIsPublished, readOnlineStorePublication } from './variants.js'
 import { listingSkuRefusal, withListingSkus } from './listing-skus.js'
-import { confirmLiveChannelSku } from '../../listings/channel-sku.js'
+import { ChannelSkuError, channelSkuProblem, confirmLiveChannelSku, setChannelSku } from '../../listings/channel-sku.js'
+import { productUsingSku } from '../../identity/identity-write-guards.js'
 
 const productGid = /^gid:\/\/shopify\/Product\/\d+$/
 const locationGid = /^gid:\/\/shopify\/Location\/\d+$/
@@ -43,6 +56,8 @@ const confirmBodySchema = z.object({
     colourName: z.string().trim().min(1, 'Name the colour, or leave the name out.').max(255).optional(),
     /** Where this colour's stock is counted. Default: the store's only active location. */
     locationId: z.string().regex(locationGid, 'Choose a Shopify location.').optional(),
+    /** The operator reviewed Find's `skusToReplace` and asks Nexus to write its SKUs over them on Shopify. */
+    replaceSkus: z.boolean().optional(),
   }).strict()).min(1, 'Choose at least one colour to confirm.').max(SHOPIFY_LINKED_LIST_LIMIT),
 }).strict().superRefine((body, ctx) => {
   if (new Set(body.colours.map(c => c.valueKey)).size !== body.colours.length) ctx.addIssue({ code: 'custom', message: 'Name each colour once.' })
@@ -60,11 +75,22 @@ const READ_BACK = `query NexusColourReadBack($id:ID!,$location:ID!,$publication:
   variants(first:250) { nodes { id sku inventoryItem { id inventoryLevel(locationId:$location) { id } } } } } }`
 
 type Row = Awaited<ReturnType<typeof prisma.shopifyColourProduct.findMany>>[number]
-interface StoredProposal { shopifyProductId?: string | null; shopifyColourName?: string | null; variants?: ColourMatchVariant[]; skusToWrite?: Array<{ shopifyVariantId: string; sku: string }> }
+type SkuToRecord = { productId: string; shopifyVariantId: string; sku: string }
+type SkuToReplace = { productId: string; shopifyVariantId: string; from: string; to: string }
+interface StoredProposal { shopifyProductId?: string | null; shopifyColourName?: string | null; variants?: ColourMatchVariant[]; skusToWrite?: Array<{ shopifyVariantId: string; sku: string }>; skusToRecord?: SkuToRecord[]; skusToReplace?: SkuToReplace[] }
 interface Adoption {
   row: Row; name: string; title: string; shopifyProductId: string; identity: string; identityWritten: boolean
   colourName: string | null; locationId: string; variants: ColourMatchVariant[]; skusToWrite: Array<{ shopifyVariantId: string; sku: string }>
+  /** Sizes whose Shopify SKU differs only in letter case: Shopify's SKU is recorded as the listing's own (Nexus only). */
+  skusToRecord: SkuToRecord[]
+  /** Variants whose other SKU the operator asked to replace with the Nexus SKU (written with `skusToWrite`). */
+  skusToReplace: SkuToReplace[]
 }
+
+/** The adopt-only listing fields: paused, and marked when this link paused it (a draft, or a row that was running). */
+export const ADOPT_PAUSED_KEY = 'shopifyColourAdoptPaused'
+/** The SKU Shopify holds for a matched size: its own when only the letter case differs, else the Nexus SKU. */
+const shopifySkuOf = (a: Pick<Adoption, 'skusToRecord'>, v: ColourMatchVariant) => a.skusToRecord.find(r => r.shopifyVariantId === v.shopifyVariantId)?.sku ?? v.sku
 
 /** The pairing the operator confirms: each Nexus size with one Shopify variant and its inventory item. */
 const pairing = (variants: readonly ColourMatchVariant[] = []) => JSON.stringify(variants.map(v => [v.productId, v.shopifyVariantId, v.inventoryItemId]).sort())
@@ -96,8 +122,10 @@ async function confirmDestination(destination: Destination, input: z.infer<typeo
   const graphql = guardedColourGraphql((await shopifyAdmin(destination.accountId)).graphql)
   const publication = await readOnlineStorePublication(graphql)
   const linked = linkedProducts(rows)
-  const candidates = await gatherCandidates(graphql, settings, plan, [...Object.values(linked), ...input.colours.map(c => c.shopifyProductId)])
-  const matches = matchColourProducts(plan, candidates, linked)
+  // The operator's choices Find kept: the fresh match is then the one Find proposed.
+  const chosen = operatorChoices(rows)
+  const candidates = await gatherCandidates(graphql, settings, plan, [...Object.values(linked), ...Object.values(chosen), ...input.colours.map(c => c.shopifyProductId)])
+  const matches = matchColourProducts(plan, candidates, linked, chosen)
   const claimed = await claimedElsewhere(destination, input.colours.map(c => c.shopifyProductId))
   const read = await graphql(CONFIRM_READ, { ids: input.colours.map(c => c.shopifyProductId) })
   const remote = new Map<string, { title: string; status: string; identity: string | null }>((read.nodes ?? []).filter((n: any) => n?.id).map((n: any) => [n.id, { title: n.title, status: n.status, identity: n.identity?.value ?? null }]))
@@ -107,7 +135,7 @@ async function confirmDestination(destination: Destination, input: z.infer<typeo
   if (definition && !definition.capabilities?.uniqueValues?.enabled) throw new WorkspaceScopeError('The Shopify field “Nexus family identity” (nexus.family_id) does not require unique values. Turn on “Unique values” for it in Shopify (Settings → Custom data → Products), then confirm again. Nothing was changed.', 422)
 
   const childIds = plan.products.flatMap(p => p.variants.map(v => v.productId))
-  const listings = await prisma.channelListing.findMany({ where: { productId: { in: childIds }, ...listingCoordinate(destination) }, select: { productId: true, externalListingId: true, platformAttributes: true } })
+  const listings = await prisma.channelListing.findMany({ where: { productId: { in: childIds }, ...listingCoordinate(destination) }, select: { id: true, productId: true, externalListingId: true, platformAttributes: true } })
   const problems: string[] = []
   const adoptions: Adoption[] = []
   for (const colour of input.colours) {
@@ -120,7 +148,9 @@ async function confirmDestination(destination: Destination, input: z.infer<typeo
     if (row.state === 'LINKED' && row.shopifyProductId !== colour.shopifyProductId) problems.push(`"${name}" is already linked to another Shopify product.`)
     else if (!shopify) problems.push(`The Shopify product chosen for "${name}" no longer exists. Run Find again.`)
     else if (proposal.shopifyProductId !== colour.shopifyProductId || fresh.shopifyProductId !== colour.shopifyProductId || pairing(fresh.variants) !== pairing(proposal.variants)
-      || fresh.skusToWrite.some(s => !proposal.skusToWrite?.some(p => p.shopifyVariantId === s.shopifyVariantId && p.sku === s.sku))) {
+      || fresh.skusToWrite.some(s => !proposal.skusToWrite?.some(p => p.shopifyVariantId === s.shopifyVariantId && p.sku === s.sku))
+      || fresh.skusToRecord.some(s => !proposal.skusToRecord?.some(p => p.shopifyVariantId === s.shopifyVariantId && p.sku === s.sku))
+      || fresh.skusToReplace.some(s => !proposal.skusToReplace?.some(p => p.shopifyVariantId === s.shopifyVariantId && p.from === s.from && p.to === s.to))) {
       problems.push(`"${shopify.title}" changed since Find, or Find proposed another product for "${name}". Run Find again.`)
     }
     // The checks of the product and its sizes, only when it is the product the fresh match gives this colour.
@@ -131,9 +161,14 @@ async function confirmDestination(destination: Destination, input: z.infer<typeo
     if (same && !sizes.length) problems.push(`No size of "${name}" matches a variant of "${shopify.title}".`)
     const identity = colourProductIdentity(row)
     if (same && shopify.identity && shopify.identity !== identity) problems.push(`"${shopify.title}" already carries another Nexus identity (${shopify.identity}). It belongs to another Nexus product or colour.`)
+    const record = same ? fresh.skusToRecord : [], replace = same ? fresh.skusToReplace : []
+    if (replace.length && !colour.replaceSkus) problems.push(`In "${shopify.title}", ${replace.length} ${replace.length === 1 ? 'size carries another SKU' : 'sizes carry other SKUs'} (${replace.map(r => `${r.from} → ${r.to}`).join(', ')}). Choose to replace ${replace.length === 1 ? 'it' : 'them'} with the Nexus SKUs on Shopify, or change ${replace.length === 1 ? 'it' : 'them'} in Shopify.`)
     for (const v of sizes) {
-      // Stock sync compares the SKUs exactly; the matcher compares them without case or spaces.
-      if (v.by === 'sku' && v.shopifySku !== v.sku) problems.push(`In "${shopify?.title ?? name}", a variant has SKU ${v.shopifySku}; Nexus has ${v.sku}. Stock sync needs exactly the same SKU. Change one of them.`)
+      // Stock sync compares the SKUs exactly; the matcher compares them without case or spaces. A difference in letter
+      // case only is recorded as the listing's own SKU (Find's `skusToRecord`); any other difference is refused.
+      const recorded = record.find(r => r.shopifyVariantId === v.shopifyVariantId && r.sku === v.shopifySku)
+      if (v.by === 'sku' && v.shopifySku !== v.sku && !recorded) problems.push(`In "${shopify?.title ?? name}", a variant has SKU ${v.shopifySku}; Nexus has ${v.sku}. Stock sync needs exactly the same SKU. Change one of them.`)
+      if (recorded) problems.push(...await recordRefusal(listings.find(l => l.productId === v.productId), v.productId, recorded.sku))
       if (!v.inventoryItemId) problems.push(`In "${shopify?.title ?? name}", the variant of ${v.sku} has no inventory item.`)
       const listing = listings.find(l => l.productId === v.productId), pa = object(listing?.platformAttributes)
       const tiedProduct = pa.shopifyProductId ?? listing?.externalListingId
@@ -144,9 +179,11 @@ async function confirmDestination(destination: Destination, input: z.infer<typeo
     if (!locationId) problems.push(locations.length ? `The store has ${locations.length} active locations. Choose where the stock of "${name}" is counted.` : 'The Shopify store has no active location.')
     else if (!locations.includes(locationId)) problems.push(`The location chosen for "${name}" is not an active location of the store.`)
     if (problems.length === before && same && locationId) adoptions.push({ row, name, title: shopify.title, shopifyProductId: colour.shopifyProductId, identity, identityWritten: shopify.identity !== identity,
-      colourName: nameOf(colour), locationId, variants: sizes, skusToWrite: fresh.skusToWrite })
+      colourName: nameOf(colour), locationId, variants: sizes, skusToWrite: fresh.skusToWrite, skusToRecord: record, skusToReplace: colour.replaceSkus ? replace : [] })
   }
   if (problems.length) throw new WorkspaceScopeError(`${[...new Set(problems)].join(' ')} Nothing was changed.`, 409)
+  // Adopt only, unless this family already runs the full sync on this destination (an operator started it).
+  const adoptOnly = !rows.some(r => r.state === 'LINKED' && r.shopifyProductId) || await colourAdoptOnly(destination)
 
   if (!definition) checked((await graphql(`mutation NexusCreateDefinition($definition:MetafieldDefinitionInput!) { metafieldDefinitionCreate(definition:$definition) { createdDefinition { id } userErrors { field message } } }`,
     { definition: { namespace: 'nexus', key: 'family_id', name: 'Nexus family identity', type: 'id', ownerType: 'PRODUCT', access: { storefront: 'PUBLIC_READ' }, validations: [], capabilities: { uniqueValues: { enabled: true } } } })).metafieldDefinitionCreate, 'Create metafield definition')
@@ -154,7 +191,7 @@ async function confirmDestination(destination: Destination, input: z.infer<typeo
   try {
     for (const adoption of adoptions) {
       try {
-        confirmed.push(await adopt(graphql, destination, adoption, publication))
+        confirmed.push(await adopt(graphql, destination, adoption, publication, adoptOnly))
       } catch (error) {
         const done = confirmed.length ? ` ${confirmed.map(c => `"${c.name}"`).join(', ')} ${confirmed.length === 1 ? 'is' : 'are'} confirmed.` : ''
         if (error instanceof WorkspaceScopeError) throw new WorkspaceScopeError(`${error.message}${done}`, error.statusCode)
@@ -169,20 +206,37 @@ async function confirmDestination(destination: Destination, input: z.infer<typeo
   return { ...await colourProductsView(destination, plan, settings), confirmed }
 }
 
+/**
+ * Why Shopify's SKU cannot become this size listing's own SKU, before anything is written: the checks `setChannelSku`
+ * makes (a dry run on an existing listing; on one Confirm will create, the SKU rule and the other products' SKUs).
+ */
+async function recordRefusal(listing: { id: string } | undefined, productId: string, sku: string): Promise<string[]> {
+  if (listing) {
+    try { await prisma.$transaction(tx => setChannelSku(tx, { listingId: listing.id, sku, actorId: null, dryRun: true })); return [] }
+    catch (error) { if (error instanceof ChannelSkuError) return [`Shopify's SKU ${sku} cannot be recorded for this size: ${error.message}`]; throw error }
+  }
+  const problem = channelSkuProblem(sku)
+  if (problem) return [`Shopify's SKU ${sku} cannot be recorded for this size: ${problem}`]
+  const other = await productUsingSku(sku, productId)
+  return other ? [`Shopify's SKU ${sku} cannot be recorded for this size: it is the SKU of another product (${other.sku}) in this business.`] : []
+}
+
 const listingCoordinate = (d: Destination) => ({ channel: 'SHOPIFY', marketplace: d.marketplace, channelConnectionId: d.accountId, aliasKey: d.aliasKey ?? '' })
 
 /** One colour: the identity and the missing SKUs on Shopify, read back; then its listings and row in one transaction. */
-async function adopt(graphql: ShopifyGraphql, destination: Destination, a: Adoption, publication: string) {
+async function adopt(graphql: ShopifyGraphql, destination: Destination, a: Adoption, publication: string, adoptOnly: boolean) {
   if (a.identityWritten) checked((await graphql(`mutation NexusColourIdentity($metafields:[MetafieldsSetInput!]!) { metafieldsSet(metafields:$metafields) { metafields { id } userErrors { field message } } }`,
     { metafields: [{ ownerId: a.shopifyProductId, namespace: 'nexus', key: 'family_id', type: 'id', value: a.identity }] })).metafieldsSet, 'Set the Nexus identity')
-  if (a.skusToWrite.length) checked((await graphql(`mutation NexusColourWriteSkus($productId:ID!,$variants:[ProductVariantsBulkInput!]!) { productVariantsBulkUpdate(productId:$productId,variants:$variants) { userErrors { field message } } }`,
-    { productId: a.shopifyProductId, variants: a.skusToWrite.map(s => ({ id: s.shopifyVariantId, inventoryItem: { sku: s.sku } })) })).productVariantsBulkUpdate, 'Write the Nexus SKUs')
+  // The missing SKUs, and — when the operator asked — the Nexus SKUs over the other ones (each read back below).
+  const skus = [...a.skusToWrite, ...a.skusToReplace.map(r => ({ shopifyVariantId: r.shopifyVariantId, sku: r.to }))]
+  if (skus.length) checked((await graphql(`mutation NexusColourWriteSkus($productId:ID!,$variants:[ProductVariantsBulkInput!]!) { productVariantsBulkUpdate(productId:$productId,variants:$variants) { userErrors { field message } } }`,
+    { productId: a.shopifyProductId, variants: skus.map(s => ({ id: s.shopifyVariantId, inventoryItem: { sku: s.sku } })) })).productVariantsBulkUpdate, 'Write the Nexus SKUs')
 
   const back = (await graphql(READ_BACK, { id: a.shopifyProductId, location: a.locationId, publication })).product
   if (!back) throw new WorkspaceScopeError(`"${a.title}" could not be read back from Shopify.`, 502)
   if (back.identity?.value !== a.identity) throw new WorkspaceScopeError(`Shopify did not keep the Nexus identity on "${a.title}".`, 502)
   const remoteVariants = new Map<string, any>(back.variants.nodes.map((v: any) => [v.id, v]))
-  const wrong = a.variants.filter(v => remoteVariants.get(v.shopifyVariantId)?.sku !== v.sku || remoteVariants.get(v.shopifyVariantId)?.inventoryItem?.id !== v.inventoryItemId)
+  const wrong = a.variants.filter(v => remoteVariants.get(v.shopifyVariantId)?.sku !== shopifySkuOf(a, v) || remoteVariants.get(v.shopifyVariantId)?.inventoryItem?.id !== v.inventoryItemId)
   if (wrong.length) throw new WorkspaceScopeError(`Shopify read back other SKUs for ${wrong.map(v => v.sku).join(', ')} on "${a.title}".`, 502)
   const notStocked = a.variants.filter(v => !remoteVariants.get(v.shopifyVariantId)?.inventoryItem?.inventoryLevel).map(v => v.sku)
   const isPublished = colourIsPublished(back)
@@ -193,6 +247,7 @@ async function adopt(graphql: ShopifyGraphql, destination: Destination, a: Adopt
     await commitColourSyncChange(async tx => {
       const row = await tx.shopifyColourProduct.findUnique({ where: { id: a.row.id } })
       if (!row || row.updatedAt.getTime() !== a.row.updatedAt.getTime()) throw new WorkspaceScopeError(`"${a.name}" changed while it was confirmed. Run Find again.`, 409)
+      if (adoptOnly) await setColourAdoptOnly(tx, destination, true)
       const ensured = await ensureDraftListings(tx, { channel: 'SHOPIFY', market: destination.marketplace, accountId: destination.accountId, aliasKey: destination.aliasKey ?? '', productIds, family: true })
       draftsCreated = ensured.filter(e => e.created).length
       const listings = await tx.channelListing.findMany({ where: { productId: { in: productIds }, ...listingCoordinate(destination) }, include: { product: { select: { sku: true } } } })
@@ -201,26 +256,35 @@ async function adopt(graphql: ShopifyGraphql, destination: Destination, a: Adopt
         if (!listing) throw new WorkspaceScopeError(`The Shopify listing of ${v.sku} is missing.`, 409)
         const pa = object(listing.platformAttributes), tied = pa.shopifyProductId ?? listing.externalListingId
         if ((tied && String(tied) !== shortId(a.shopifyProductId)) || (pa.variantId && String(pa.variantId) !== shortId(v.shopifyVariantId))) throw new WorkspaceScopeError(`${v.sku} became the listing of another Shopify product while it was confirmed.`, 409)
+        // Adopt only: the row stays (or becomes) paused, so no stock, price or publish reaches this Shopify product; the
+        // mark names the rows this link paused (a draft, or a row that was running), which Start full sync resumes.
+        const adoptPaused = adoptOnly && (pa[ADOPT_PAUSED_KEY] === true || isStillDraftListing(listing) || !listing.syncPaused)
         await tx.channelListing.update({ where: { id: listing.id }, data: {
           platformAttributes: { ...pa, nexusFamilyId: destination.familyId, shopifyColourProductId: a.row.id, shopifyProductId: shortId(a.shopifyProductId), variantId: shortId(v.shopifyVariantId),
             inventoryItemId: shortId(v.inventoryItemId!), inventoryLocationId: a.locationId,
-            shopifyColourStockPending: true, shopifyColourRetired: false } as Prisma.InputJsonValue,
+            ...(adoptOnly ? { [ADOPT_PAUSED_KEY]: adoptPaused } : { shopifyColourStockPending: true }), shopifyColourRetired: false } as Prisma.InputJsonValue,
           externalListingId: shortId(a.shopifyProductId), platformProductId: shortId(a.shopifyProductId), isPublished, listingStatus: isPublished ? 'ACTIVE' : 'INACTIVE',
-          // A draft this confirm made real loses the pause that kept it inert (as a publish does); any other row keeps its own.
-          ...(isStillDraftListing(listing) ? { syncPaused: false } : {}), version: { increment: 1 },
+          // Full sync: a draft this confirm made real loses the pause that kept it inert (as a publish does); any other
+          // row keeps its own.
+          ...(adoptOnly ? { syncPaused: true } : isStillDraftListing(listing) ? { syncPaused: false } : {}), version: { increment: 1 },
         } })
+        // Letter case only: Shopify's SKU becomes this listing's own SKU here (Nexus only; nothing is sent to Shopify).
+        const recorded = a.skusToRecord.find(r => r.shopifyVariantId === v.shopifyVariantId)
+        if (recorded) await setChannelSku(tx, { listingId: listing.id, sku: recorded.sku, actorId: null, reason: 'The SKU Shopify holds (colour products Confirm)' })
         // S5 — Shopify read this size back under its SKU above: when that is the listing's own SKU (or one was recorded
         // before), it is the SKU Shopify holds now. A size under its product SKU writes nothing.
-        if (v.sku !== listing.product?.sku || listing.liveChannelSku) await confirmLiveChannelSku(tx, listing.id, v.sku)
+        const held = shopifySkuOf(a, v)
+        if (held !== listing.product?.sku || listing.liveChannelSku) await confirmLiveChannelSku(tx, listing.id, held)
       }
       await tx.shopifyColourProduct.update({ where: { id: a.row.id }, data: { state: 'LINKED', shopifyProductId: a.shopifyProductId, colourName: a.colourName, remoteStatus: back.status, checkedAt: new Date() } })
     })
   } catch (error) {
     if (error instanceof DraftListingError) throw new WorkspaceScopeError(error.message, error.statusCode)
+    if (error instanceof ChannelSkuError) throw new WorkspaceScopeError(error.message, error.statusCode)
     if ((error as { code?: string }).code === 'P2002') throw new WorkspaceScopeError(`"${a.title}" is already the Shopify product of another colour of this store.`, 409)
     throw error
   }
   await productReadCacheService.refreshMany([destination.familyId, ...productIds]).catch(err => logger.warn('[shopify-colour-confirm] product read cache refresh failed', { familyId: destination.familyId, error: err instanceof Error ? err.message : String(err) }))
   return { valueKey: a.row.valueKey, name: a.name, shopifyProductId: a.shopifyProductId, status: back.status as string, identityWritten: a.identityWritten, skusWritten: a.skusToWrite.length,
-    sizesLinked: a.variants.length, draftsCreated, locationId: a.locationId, notStockedAt: notStocked }
+    sizesLinked: a.variants.length, draftsCreated, locationId: a.locationId, notStockedAt: notStocked, adoptOnly, skusRecorded: a.skusToRecord.length, skusReplaced: a.skusToReplace.length }
 }

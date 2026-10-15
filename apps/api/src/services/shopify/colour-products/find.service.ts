@@ -5,6 +5,10 @@
  *
  * Where it looks: the products already linked, the products holding the family's SKUs, one product the operator names,
  * and every member of those products' groups (one product of a group names the rest — the live GALE Yellow has no SKUs).
+ *
+ * The operator may choose the Shopify product of a colour (`choices`): that choice outranks every guess (name, group,
+ * SKUs) and is kept on the colour's proposal (`chosenProductId`), so the next Find and Confirm match the same way; a
+ * choice of `null` lets Find guess again. The sizes are still matched inside it by SKU, then by option values.
  */
 import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
@@ -15,14 +19,20 @@ import { contentDestination, type ContentScope } from '../content-workspace.serv
 import { WorkspaceScopeError } from '../../pim/workspace-destination.js'
 import { readColourProductSettings, type ColourProductSettings } from './settings.js'
 import { loadColourPlan } from './family.js'
-import { commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
+import { colourAdoptOnly, commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
 import { listingSkuRefusal, withListingSkus } from './listing-skus.js'
 
 /** The most Shopify products one Find reads (a group plus the products holding the family's SKUs). */
 export const FIND_PRODUCT_LIMIT = 100
 const SKU_BATCH = 25, READ_BATCH = 50
 const productGid = /^gid:\/\/shopify\/Product\/\d+$/
-const findBodySchema = z.object({ sourceProductId: z.string().regex(productGid, 'Choose a Shopify product.').optional() }).strict()
+const findBodySchema = z.object({
+  sourceProductId: z.string().regex(productGid, 'Choose a Shopify product.').optional(),
+  /** The operator's Shopify product per colour; null withdraws an earlier choice. */
+  choices: z.array(z.object({ valueKey: z.string().min(1).max(255), shopifyProductId: z.string().regex(productGid, 'Choose a Shopify product.').nullable() }).strict()).max(256).optional(),
+}).strict().superRefine((body, ctx) => {
+  if (body.choices && new Set(body.choices.map(c => c.valueKey)).size !== body.choices.length) ctx.addIssue({ code: 'custom', message: 'Choose one Shopify product per colour.' })
+})
 const skuKey = (sku: string | null | undefined) => (sku ?? '').trim().toLocaleUpperCase('en')
 
 /**
@@ -66,10 +76,18 @@ export const rowsWhere = (d: Destination) => ({ familyId: d.familyId, channelCon
 /** What the sheet and the review show: the plan, the store switch and the rows. No Shopify call. */
 export async function colourProductsView(destination: Destination, plan: ColourPlan, settings: Awaited<ReturnType<typeof readColourProductSettings>>) {
   const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(destination), orderBy: { createdAt: 'asc' } })
+  const linked = rows.some(r => r.state === 'LINKED' && r.shopifyProductId)
+  // The axes whose value order the family sets: a dictionary attribute's (its saved order, else its options' order). A
+  // free-text axis has none but first use, A–Z by SKU (loadFamily); the panel shows such sizes in garment size order.
+  const family = await prisma.product.findUnique({ where: { id: destination.familyId }, select: { variationAxisCodes: true } })
+  const orderedAxes = (family?.variationAxisCodes ?? []).filter(Boolean)
   return {
     familyId: destination.familyId, accountId: destination.accountId, settings,
-    plan: { mode: plan.mode, splitAxis: plan.splitAxis, grouped: plan.grouped, issues: plan.issues,
-      products: plan.products.map(p => ({ key: p.key, position: p.position, nexusValue: p.nexusValue, colourName: p.colourName, colourNameSource: p.colourNameSource, options: p.options, variants: p.variants.length })) },
+    // Adopt only: the colours are linked and Nexus writes nothing else to them until "Start full sync".
+    sync: { linked, adoptOnly: linked && await colourAdoptOnly(destination) },
+    plan: { mode: plan.mode, splitAxis: plan.splitAxis, grouped: plan.grouped, issues: plan.issues, orderedAxes,
+      products: plan.products.map(p => ({ key: p.key, position: p.position, nexusValue: p.nexusValue, colourName: p.colourName, colourNameSource: p.colourNameSource, options: p.options, variants: p.variants.length,
+        sizes: p.variants.map(v => ({ productId: v.productId, sku: v.sku, options: v.options.map(o => o.value) })) })) },
     colourProducts: rows.map(r => ({ id: r.id, valueKey: r.valueKey, colourName: r.colourName, state: r.state, shopifyProductId: r.shopifyProductId, remoteStatus: r.remoteStatus,
       checkedAt: r.checkedAt?.toISOString() ?? null, linkVerifiedAt: r.linkVerifiedAt?.toISOString() ?? null, proposal: r.proposal })),
   }
@@ -82,7 +100,7 @@ export async function colourProductsView(destination: Destination, plan: ColourP
  */
 export async function planFor(destination: Destination) {
   const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(destination),
-    select: { id: true, valueKey: true, colourName: true, state: true, shopifyProductId: true, createdAt: true, linkVerifiedAt: true } })
+    select: { id: true, valueKey: true, colourName: true, state: true, shopifyProductId: true, createdAt: true, linkVerifiedAt: true, proposal: true } })
   const colourNames = Object.fromEntries(rows.filter(r => r.colourName).map(r => [r.valueKey, r.colourName!]))
   const [settings, { plan: familyPlan }] = await Promise.all([readColourProductSettings(destination.accountId), loadColourPlan(destination.familyId, { colourNames })])
   const { plan, problems: skuProblems } = await withListingSkus(destination, familyPlan)
@@ -106,13 +124,67 @@ async function findDestination(destination: Destination, input: z.infer<typeof f
   const { rows, settings, plan, skuProblems } = await planFor(destination)
   if (plan.mode !== 'colour-products' || !plan.splitAxis) return colourProductsView(destination, plan, settings)
   if (skuProblems.length) throw new WorkspaceScopeError(listingSkuRefusal(skuProblems), 409)
+  const unknown = (input.choices ?? []).filter(c => !plan.products.some(p => p.key === c.valueKey))
+  if (unknown.length) throw new WorkspaceScopeError(`${unknown.map(c => `"${c.valueKey}"`).join(', ')} ${unknown.length === 1 ? 'is' : 'are'} not a colour of this family. Reload, then choose again.`, 409)
   const graphql = guardedColourGraphql((await shopifyAdmin(destination.accountId)).graphql)
   const linked = linkedProducts(rows)
-  const candidates = await gatherCandidates(graphql, settings, plan, [...Object.values(linked), ...(input.sourceProductId ? [input.sourceProductId] : [])])
-  const matches = matchColourProducts(plan, candidates, linked)
+  const chosen = operatorChoices(rows, input.choices)
+  const candidates = await gatherCandidates(graphql, settings, plan, [...Object.values(linked), ...Object.values(chosen), ...(input.sourceProductId ? [input.sourceProductId] : [])])
+  const matches = matchColourProducts(plan, candidates, linked, chosen)
   const claimed = await claimedElsewhere(destination, matches.map(m => m.shopifyProductId).filter((id): id is string => !!id))
-  await saveProposals(destination, plan, matches, candidates, claimed)
-  return colourProductsView(destination, plan, settings)
+  // The store's active locations, for the review: with more than one, the operator says where a colour's stock counts.
+  const locations = ((await graphql(`query NexusColourLocations { locations(first:250) { nodes { id name isActive } } }`)).locations?.nodes ?? [])
+    .filter((l: any) => l?.isActive !== false && /^gid:\/\/shopify\/Location\/\d+$/.test(l?.id ?? '')).map((l: any) => ({ id: l.id as string, name: String(l.name ?? '') }))
+  await saveProposals(destination, plan, matches, candidates, claimed, chosen)
+  return { ...await colourProductsView(destination, plan, settings), locations }
+}
+
+/**
+ * The operator's product per colour: the choices kept on the proposals of colours not linked yet, then this request's
+ * (null withdraws one). Confirm passes the same set, so its fresh match is the one Find proposed.
+ */
+export function operatorChoices(rows: ReadonlyArray<{ valueKey: string; state: string; proposal: unknown }>, choices: ReadonlyArray<{ valueKey: string; shopifyProductId?: string | null }> = []): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const row of rows) {
+    const id = (row.proposal as { chosenProductId?: unknown } | null)?.chosenProductId
+    if (row.state !== 'LINKED' && typeof id === 'string' && productGid.test(id)) out[row.valueKey] = id
+  }
+  for (const choice of choices) {
+    if (choice.shopifyProductId) out[choice.valueKey] = choice.shopifyProductId
+    else delete out[choice.valueKey]
+  }
+  return out
+}
+
+const storeSearchSchema = z.object({ query: z.string().trim().max(200).optional(), cursor: z.string().max(1000).optional() }).passthrough()
+const STORE_PRODUCTS = `query NexusColourStoreProducts($query:String,$after:String,$vns:String!,$vkey:String!) {
+  products(first:25,after:$after,query:$query,sortKey:TITLE) { nodes { id title handle status featuredMedia { preview { image { url } } }
+    colour: metafield(namespace:$vns,key:$vkey) { value } variantsCount { count } variants(first:5) { nodes { sku } } }
+  pageInfo { hasNextPage endCursor } } }`
+
+/**
+ * The store's products for the operator to choose a colour's product from, by title (Shopify's own product search): each
+ * with its status, image, the colour it shows today (the store's colour field, `custom.variation_value`), its number of
+ * variants, a SKU it holds, and the Nexus colour it is already linked to. Reads Shopify; writes nothing.
+ */
+export async function searchColourStoreProducts(productId: string, scope: ContentScope, raw: unknown) {
+  const input = storeSearchSchema.parse(raw ?? {})
+  const destination = await contentDestination(productId, scope)
+  const settings = await readColourProductSettings(destination.accountId)
+  const graphql = (await shopifyAdmin(destination.accountId)).graphql
+  const data = await graphql(STORE_PRODUCTS, { query: input.query || null, after: input.cursor || null, vns: settings.valueField.namespace, vkey: settings.valueField.key })
+  const nodes: any[] = (data.products?.nodes ?? []).filter((n: any) => n?.id && productGid.test(n.id))
+  const claims = nodes.length ? await prisma.shopifyColourProduct.findMany({ where: { channelConnectionId: destination.accountId, shopifyProductId: { in: nodes.map(n => n.id) } },
+    select: { shopifyProductId: true, valueKey: true, state: true, familyId: true, family: { select: { sku: true } } } }) : []
+  return {
+    items: nodes.map(n => {
+      const claim = claims.find(c => c.shopifyProductId === n.id)
+      return { id: n.id as string, title: n.title as string, handle: n.handle as string, status: n.status as string, image: n.featuredMedia?.preview?.image?.url ?? null,
+        colourName: n.colour?.value ?? null, variants: n.variantsCount?.count ?? null, sampleSku: n.variants?.nodes?.find((v: any) => v?.sku)?.sku ?? null,
+        linkedTo: claim ? { familySku: claim.family.sku, valueKey: claim.valueKey, state: claim.state, thisFamily: claim.familyId === destination.familyId } : null }
+    }),
+    cursor: data.products?.pageInfo?.hasNextPage ? data.products.pageInfo.endCursor ?? null : null,
+  }
 }
 
 /** Value key → Shopify product, for the colours already confirmed. */
@@ -138,7 +210,8 @@ export function claimedElsewhere(destination: Destination, shopifyProductIds: re
     select: { shopifyProductId: true, family: { select: { sku: true } } } })
 }
 
-async function saveProposals(destination: Destination, plan: ColourPlan, matches: ColourMatch[], candidates: ColourCandidate[], claimed: Array<{ shopifyProductId: string | null; family: { sku: string } }>) {
+async function saveProposals(destination: Destination, plan: ColourPlan, matches: ColourMatch[], candidates: ColourCandidate[], claimed: Array<{ shopifyProductId: string | null; family: { sku: string } }>,
+  chosen: Readonly<Record<string, string>>) {
   const at = new Date()
   await commitColourSyncChange(async tx => {
     const rows = await tx.shopifyColourProduct.findMany({ where: rowsWhere(destination) })
@@ -147,7 +220,8 @@ async function saveProposals(destination: Destination, plan: ColourPlan, matches
       const elsewhere = claimed.find(c => c.shopifyProductId && c.shopifyProductId === match.shopifyProductId)
       const issues = [...match.issues, ...(elsewhere ? [{ code: 'linked-elsewhere', productIds: [], message: `"${candidate?.title}" is already the Shopify product of ${elsewhere.family.sku}.` }] : [])]
       const proposal = { at: at.toISOString(), method: match.method, shopifyProductId: match.shopifyProductId, title: candidate?.title ?? null, handle: candidate?.handle ?? null,
-        status: candidate?.status ?? null, shopifyColourName: match.shopifyColourName, variants: match.variants, missing: match.missing, extra: match.extra, skusToWrite: match.skusToWrite, issues }
+        status: candidate?.status ?? null, shopifyColourName: match.shopifyColourName, variants: match.variants, missing: match.missing, extra: match.extra, skusToWrite: match.skusToWrite,
+        skusToRecord: match.skusToRecord, skusToReplace: match.skusToReplace, chosenProductId: chosen[match.key] ?? null, issues }
       const row = rows.find(r => r.valueKey === match.key)
       const data = { splitAxis: plan.splitAxis!, proposal: proposal as unknown as Prisma.InputJsonValue, remoteStatus: candidate?.status ?? null, checkedAt: at,
         state: row?.state === 'LINKED' ? 'LINKED' : match.shopifyProductId && !elsewhere ? 'PROPOSED' : 'NOT_FOUND' }

@@ -44,13 +44,20 @@ function shopify(query: string, variables: any) {
     const nodes = state.store.flatMap(p => p.variants.nodes.filter((v: any) => v.sku && asked.some(a => v.sku.startsWith(a))).map((v: any) => ({ sku: v.sku, product: { id: p.id } })))
     return { productVariants: { nodes } }
   }
+  if (query.includes('NexusColourLocations')) return { locations: { nodes: [{ id: 'gid://shopify/Location/7', name: 'Warehouse', isActive: true }, { id: 'gid://shopify/Location/8', name: 'Closed', isActive: false }] } }
+  if (query.includes('NexusColourStoreProducts')) {
+    state.read.push(['search', variables.query ?? '', variables.vns, variables.vkey])
+    const nodes = state.store.filter(p => !variables.query || p.title.toLowerCase().includes(String(variables.query).toLowerCase()))
+      .map(p => ({ id: p.id, title: p.title, handle: p.handle, status: p.status, featuredMedia: null, colour: p.colour, variantsCount: { count: p.variants.nodes.length }, variants: { nodes: p.variants.nodes.slice(0, 5) } }))
+    return { products: { nodes, pageInfo: { hasNextPage: false, endCursor: null } } }
+  }
   if (query.includes('NexusColourCandidates')) { state.read.push([...variables.ids]); return { nodes: variables.ids.map((id: string) => state.store.find(p => p.id === id) ?? null) } }
   throw new Error(`unexpected query ${query.slice(0, 60)}`)
 }
 
 import prisma from '../../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
-import { findColourProducts, readColourProducts } from './find.service.js'
+import { findColourProducts, readColourProducts, searchColourStoreProducts } from './find.service.js'
 import { readColourProductSettings, saveColourProductSettings, DEFAULT_COLOUR_PRODUCT_SETTINGS } from './settings.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -87,6 +94,8 @@ describe('Find — the live Shopify product of each colour', () => {
     expect(state.read).toEqual([[BLACK], [YELLOW]])
     expect(view.colourProducts.map(c => [c.valueKey, c.state])).toEqual([['color:black', 'PROPOSED'], ['color:yellow', 'PROPOSED']])
     expect(view.plan).toMatchObject({ mode: 'colour-products', splitAxis: 'color', grouped: true })
+    // The store's active locations, for the review's stock location.
+    expect(view.locations).toEqual([{ id: 'gid://shopify/Location/7', name: 'Warehouse' }])
   })
 
   it('a confirmed link stays confirmed; Find refreshes its proposal and reads the linked product even with no SKU in the store', async () => {
@@ -119,6 +128,44 @@ describe('Find — the live Shopify product of each colour', () => {
     await expect(scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, { sourceProductId: 'not-a-gid' }))).rejects.toThrow('Choose a Shopify product.')
   })
 
+  it('the operator\'s chosen product outranks the guesses, is kept for the next Find, and a null choice withdraws it', async () => {
+    // No SKU anywhere and the colour names the store shows match no Nexus name: Find has nothing to guess from.
+    state.store = state.store.map(p => ({ ...p, colour: { value: 'Unknown' }, variants: { ...p.variants, nodes: p.variants.nodes.map((v: any) => ({ ...v, sku: '' })) } }))
+    await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, {}))
+    expect((await rows()).map(r => r.state)).toEqual(['NOT_FOUND', 'NOT_FOUND'])
+    const view = await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, { choices: [{ valueKey: 'color:black', shopifyProductId: BLACK }] }))
+    let r = await byKey()
+    expect(r['color:black']).toMatchObject({ state: 'PROPOSED', proposal: expect.objectContaining({ method: 'operator', chosenProductId: BLACK, shopifyProductId: BLACK, issues: [] }) })
+    // Its sizes still match by option values, with every SKU Nexus will write listed for the review.
+    expect((r['color:black'].proposal as any).skusToWrite).toHaveLength(9)
+    expect((r['color:black'].proposal as any).missing.map((m: any) => m.sku)).toEqual(['GALE-JACKET-BLACK-MEN-XXS'])
+    // The chosen product's group names the rest: Yellow is the one colour and the one product left.
+    expect(r['color:yellow'].proposal).toMatchObject({ method: 'group', shopifyProductId: YELLOW, chosenProductId: null })
+    expect(view.plan.products[0].sizes).toHaveLength(10)
+    expect(view.sync).toEqual({ linked: false, adoptOnly: false })
+    // Kept: a Find without choices proposes it again; null withdraws it.
+    await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, {}))
+    expect((await byKey())['color:black'].proposal).toMatchObject({ method: 'operator', chosenProductId: BLACK })
+    await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, { choices: [{ valueKey: 'color:black', shopifyProductId: null }] }))
+    r = await byKey()
+    expect([r['color:black'].state, (r['color:black'].proposal as any).chosenProductId]).toEqual(['NOT_FOUND', null])
+    // A colour this family does not have, or a choice that is not a Shopify product, is refused.
+    await expect(scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, { choices: [{ valueKey: 'color:green', shopifyProductId: BLACK }] }))).rejects.toThrow('"color:green" is not a colour of this family.')
+    await expect(scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, { choices: [{ valueKey: 'color:black', shopifyProductId: '101' }] }))).rejects.toThrow('Choose a Shopify product.')
+  })
+
+  it('the store search for the picker: status, the colour the product shows, its sizes, a SKU, and whose colour it already is', async () => {
+    await scoped(() => prisma.shopifyColourProduct.create({ data: { familyId: ids.other, channelConnectionId: ids.account, splitAxis: 'color', valueKey: 'color:black', state: 'LINKED', shopifyProductId: BLACK } }))
+    const page = await scoped(() => searchColourStoreProducts('p-BLACK-M', { accountId: 'x' }, { accountId: 'x', query: 'gale' }))
+    expect(state.read).toEqual([['search', 'gale', 'custom', 'variation_value']])
+    expect(page.cursor).toBeNull()
+    expect(page.items.map(i => i.id)).toEqual([BLACK, YELLOW, NOISE])
+    expect(page.items[0]).toEqual({ id: BLACK, title: 'GALE jacket', handle: '101', status: 'ACTIVE', image: null, colourName: 'Black', variants: 9, sampleSku: 'GALE-JACKET-BLACK-MEN-XS',
+      linkedTo: { familySku: 'OTHER-JACKET', valueKey: 'color:black', state: 'LINKED', thisFamily: false } })
+    expect(page.items[1]).toMatchObject({ colourName: 'Yellow', sampleSku: null, linkedTo: null })
+    expect(state.queries.some(q => q === 'mutation')).toBe(false)
+  })
+
   it('a family that stays one product asks Shopify nothing', async () => {
     split.value = null
     const view = await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, {}))
@@ -126,6 +173,14 @@ describe('Find — the live Shopify product of each colour', () => {
     expect(state.queries).toEqual([])
     expect(await rows()).toEqual([])
     expect((await scoped(() => readColourProducts('p-BLACK-M', { accountId: 'x' }))).plan.mode).toBe('one-product')
+  })
+
+  it('the view names the axes whose value order the family sets (a dictionary axis); a free-text axis is not one', async () => {
+    const ordered = async () => (await scoped(() => readColourProducts('p-BLACK-M', { accountId: 'x' }))).plan.orderedAxes
+    expect(await ordered()).toEqual([])
+    await scoped(() => prisma.product.update({ where: { id: ids.fam }, data: { variationAxisCodes: ['', 'size'] } as never }))
+    try { expect(await ordered()).toEqual(['size']) }
+    finally { await scoped(() => prisma.product.update({ where: { id: ids.fam }, data: { variationAxisCodes: [] } as never })) }
   })
 })
 

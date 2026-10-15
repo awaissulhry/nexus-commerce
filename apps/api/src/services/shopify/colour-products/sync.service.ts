@@ -11,10 +11,10 @@ import { shopifyAdmin, assertShopifyResult as checked, type ShopifyGraphql } fro
 import { contentDestination, object, type ContentScope } from '../content-workspace.service.js'
 import { shortId } from '../content-publisher.js'
 import { syncNativeShopifyOffer } from '../offer-sync.service.js'
-import { colourProductIdentity } from './confirm.service.js'
+import { ADOPT_PAUSED_KEY, colourProductIdentity } from './confirm.service.js'
 import { linkColourProducts } from './link.service.js'
 import { planFor, rowsWhere, type Destination } from './find.service.js'
-import { assertColourSyncCurrent, commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
+import { assertColourSyncCurrent, colourAdoptOnly, commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
 import { colourIsPublished, readOnlineStorePublication, readColourRemote, planColourVariants, COLOUR_SIZE_CREATE, COLOUR_SIZE_ORDER, type ColourRemoteProduct } from './variants.js'
 import { NO_LISTING_PRICE_FACTS, listingMarketCurrency, listingSendPrice } from '../../pim/follower-price.js'
 import { marketCurrencyRows } from '../../pim/market-currency.js'
@@ -25,7 +25,13 @@ import { listingSkuRefusal } from './listing-skus.js'
 const listingWhere = (d: Destination) => ({ channel: 'SHOPIFY', marketplace: d.marketplace, channelConnectionId: d.accountId, aliasKey: d.aliasKey ?? '' })
 const ownedListings = (d: Destination, row: ShopifyColourProduct) => prisma.channelListing.findMany({ where: { ...listingWhere(d), platformAttributes: { path: ['shopifyColourProductId'], equals: row.id } }, include: { product: true }, orderBy: { id: 'asc' } })
 
-/** Reconcile only already confirmed colour products. Creating a new colour remains an explicit action (PR 6). */
+/**
+ * Reconcile only already confirmed colour products. Creating a new colour remains an explicit action (PR 6).
+ *
+ * Adopt only (`colourAdoptOnly`): the run only reads — each linked product's identity is verified, a product proven
+ * deleted is forgotten, and each size's ids and status are mirrored in Nexus (a size it newly maps stays paused). It
+ * sends no stock, creates and orders no size, archives no colour and writes no colour swatch field (no link writer).
+ */
 export async function syncColourProducts(productId: string, scope: ContentScope) {
   if (getShopifyPublishMode() !== 'live') throw new WorkspaceScopeError('Shopify writes are switched off on this server.', 409)
   const d = await contentDestination(productId, scope, true)
@@ -39,6 +45,7 @@ export async function syncColourProducts(productId: string, scope: ContentScope)
     if (!retiredRoot && skuProblems.length) throw new WorkspaceScopeError(listingSkuRefusal(skuProblems))
     const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(d), orderBy: { id: 'asc' } })
     if (!rows.some(r => r.shopifyProductId && ['LINKED', 'NOT_FOUND'].includes(r.state))) return { checked: 0, waiting: retiredRoot ? [] : plan.products.map(p => p.key) }
+    const adoptOnly = await colourAdoptOnly(d)
     const gql = guardedColourGraphql((await shopifyAdmin(d.accountId)).graphql)
     const publication = await readOnlineStorePublication(gql)
     let checkedCount = 0
@@ -55,26 +62,28 @@ export async function syncColourProducts(productId: string, scope: ContentScope)
         if (remote.id !== row.shopifyProductId || remote.identity?.value !== colourProductIdentity(row))
           throw new WorkspaceScopeError(`The Shopify identity of ${row.colourName ?? row.valueKey} changed. No size was changed.`)
         const wanted = retiredRoot ? undefined : plan.products.find(p => p.key === row.valueKey)
-        errors.push(...await syncOneColour(gql, d, row, remote, publication, wanted))
+        errors.push(...await syncOneColour(gql, d, row, remote, publication, wanted, adoptOnly))
         checkedCount++
       } catch (error) { errors.push(`${row.colourName ?? row.valueKey}: ${error instanceof Error ? error.message : String(error)}`) }
     }
     const waiting = retiredRoot ? [] : plan.products.filter(p => !rows.some(r => r.valueKey === p.key && r.state === 'LINKED' && r.shopifyProductId)).map(p => p.key)
-    if (!errors.length && !retiredRoot && !waiting.length) await linkColourProducts(d.familyId, { accountId: d.accountId, market: d.marketplace, aliasKey: d.aliasKey ?? '' })
+    // Adopt only: the colour swatch fields (`custom.variation_value` / `variation_products`) stay as the store has them.
+    if (!adoptOnly && !errors.length && !retiredRoot && !waiting.length) await linkColourProducts(d.familyId, { accountId: d.accountId, market: d.marketplace, aliasKey: d.aliasKey ?? '' })
     await productReadCacheService.refreshMany([d.familyId]).catch(() => undefined)
     if (errors.length) throw new WorkspaceScopeError(errors.join(' '))
-    return { checked: checkedCount, waiting }
+    return { checked: checkedCount, waiting, adoptOnly }
   })
 }
 
-async function syncOneColour(gql: ShopifyGraphql, d: Destination, row: ShopifyColourProduct, first: ColourRemoteProduct, publication: string, wanted?: ColourPlanProduct) {
+async function syncOneColour(gql: ShopifyGraphql, d: Destination, row: ShopifyColourProduct, first: ColourRemoteProduct, publication: string, wanted: ColourPlanProduct | undefined, adoptOnly: boolean) {
   let remote = first
   const old = await ownedListings(d, row)
   const mapped = new Map(old.map(l => [l.productId, object(l.platformAttributes)]))
   const planned = wanted ? planColourVariants(wanted, remote, mapped) : null
   const errors: string[] = []
-  let held = false
-  if (planned?.missing.length || planned?.reordered || !wanted && remote.status !== 'ARCHIVED') {
+  // Adopt only: no size is created or ordered and no colour archived, so nothing is held either.
+  let held = adoptOnly
+  if (!adoptOnly && (planned?.missing.length || planned?.reordered || !wanted && remote.status !== 'ARCHIVED')) {
     const listing = old.find(l => assertPushAllowed(l) || l.syncLocked)
     held = !!listing
     if (listing) errors.push(`${listing.product.sku}: sync is paused. Resume it before changing its Shopify sizes.`)
@@ -115,6 +124,7 @@ async function syncOneColour(gql: ShopifyGraphql, d: Destination, row: ShopifyCo
   }
   const final = wanted ? planColourVariants(wanted, remote, mapped) : null
   if (!held && final?.missing.length) throw new WorkspaceScopeError('Shopify did not return every new size. The next run checks before creating anything again.', 502)
+  // (Adopt only: `held` is true, so neither the check above nor the size order below runs.)
   if (!held && final?.reordered) {
     checked((await gql(COLOUR_SIZE_ORDER, { id: remote.id, options: final.order })).productOptionsReorder, 'Order Shopify sizes')
     remote = await readColourRemote(gql, remote.id, publication) ?? (() => { throw new WorkspaceScopeError('The colour disappeared during size order verification.') })()
@@ -132,14 +142,18 @@ async function syncOneColour(gql: ShopifyGraphql, d: Destination, row: ShopifyCo
       if (variant && (pa.shopifyColourProductId && pa.shopifyColourProductId !== row.id
         || listing.externalListingId && listing.externalListingId !== shortId(remote.id))) throw new WorkspaceScopeError('A size became another Shopify listing while sync was running.')
       const published = !retired && colourIsPublished(remote)
+      // Adopt only: a size newly mapped here stays paused like the ones Confirm linked (marked when this run paused it);
+      // no stock is queued — Start full sync queues every size's stock.
+      const adoptPause = adoptOnly && !!variant && !pa.variantId && (isStillDraftListing(listing) || !listing.syncPaused)
       const next = { ...pa, nexusFamilyId: d.familyId, shopifyColourProductId: row.id,
         ...(variant ? { shopifyProductId: shortId(remote.id), variantId: shortId(variant.id), inventoryItemId: shortId(variant.inventoryItem.id), inventoryLocationId: pa.inventoryLocationId ?? locations[0] } : {}),
-        shopifyColourRetired: retired, shopifyColourStockPending: pa.shopifyColourStockPending === true || (!pa.variantId && !!variant)
+        ...(adoptPause ? { [ADOPT_PAUSED_KEY]: true } : {}),
+        shopifyColourRetired: retired, shopifyColourStockPending: adoptOnly ? pa.shopifyColourStockPending === true : pa.shopifyColourStockPending === true || (!pa.variantId && !!variant)
           || published && !listing.isPublished || retired && pa.shopifyColourRetired !== true || !retired && pa.shopifyColourRetired === true }
       if (JSON.stringify(pa) !== JSON.stringify(next) || listing.isPublished !== published) await tx.channelListing.update({ where: { id: listing.id }, data: {
         platformAttributes: next as Prisma.InputJsonValue, isPublished: published, listingStatus: listing.listingStatus.trim().toUpperCase() === 'ENDED' ? 'ENDED' : published ? 'ACTIVE' : 'INACTIVE',
         ...(variant ? { externalListingId: shortId(remote.id), platformProductId: shortId(remote.id) } : {}),
-        ...(variant && isStillDraftListing(listing) ? { syncPaused: false } : {}), version: { increment: 1 },
+        ...(adoptPause ? { syncPaused: true } : !adoptOnly && variant && isStillDraftListing(listing) ? { syncPaused: false } : {}), version: { increment: 1 },
       } })
       // S5 — Shopify read this size back under its SKU (matched by its id or by that SKU): when it is the listing's own
       // SKU (or one was recorded before), that is the SKU Shopify holds now. A size under its product SKU writes nothing.
@@ -148,7 +162,8 @@ async function syncOneColour(gql: ShopifyGraphql, d: Destination, row: ShopifyCo
     await tx.shopifyColourProduct.update({ where: { id: row.id }, data: { remoteStatus: remote.status, checkedAt: new Date() } })
   })
   // The pending bit is saved before sending stock. A failure never disappears merely because status is now Active.
-  for (const listing of await ownedListings(d, row)) {
+  // Adopt only: no stock is sent; the pending bits wait for Start full sync.
+  for (const listing of adoptOnly ? [] : await ownedListings(d, row)) {
     const pa = object(listing.platformAttributes)
     if (!pa.shopifyColourStockPending || !listing.isPublished && !pa.shopifyColourRetired) continue
     try {
