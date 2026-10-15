@@ -9,7 +9,7 @@ vi.mock('../pim/channel-specs/shopify.js', () => ({ readShopifyMappingSchema: vi
 vi.mock('./linked-shared-content.service.js', () => ({ resolveSharedContent: vi.fn() }))
 vi.mock('./information-gateway.js', () => ({ readInformation: vi.fn(), readInformationNativeOwners: vi.fn(), verifyInformationPlan: vi.fn(), applyNativeEdit: vi.fn(), advanceMediaOrder: vi.fn() }))
 vi.mock('./information-translations.js', () => ({ verifyTranslationEdits: vi.fn() }))
-vi.mock('./channel-sheet-media.js', () => ({ readSheetGallerySources: vi.fn(), reviewSheetGalleries: vi.fn(), advanceSheetGallery: vi.fn(), verifySheetGallery: vi.fn(), SHEET_MEDIA_SYNC: '_sheetMedia' }))
+vi.mock('./channel-sheet-media.js', () => ({ planGalleryFamily: vi.fn(async () => false), readSheetGallerySources: vi.fn(), reviewSheetGalleries: vi.fn(), advanceSheetGallery: vi.fn(), verifySheetGallery: vi.fn(), SHEET_MEDIA_SYNC: '_sheetMedia' }))
 import { advanceLinkedSync } from './linked-products.service.js'
 const locks = [{ syncPaused: true }, { offerClosedAt: new Date() }, ...['HELD','WITHDRAWN','ENDED','DISCONTINUED','RELEASED'].map(presenceIntent => ({ presenceIntent }))]
 beforeEach(() => { vi.clearAllMocks(); s.rows = [{ id: 'listing', productId: 'family', version: 1, platformAttributes: { _nexusLinkedProductsOperation: { id: 'operation', status: 'RUNNING', changes: [], verification: [], completed: 0, schemaRevision: 'schema', lease: null, leaseUntil: 0 } } }, { id: 'child-listing', productId: 'child', version: 1, platformAttributes: {} }]; s.next.mockRejectedValue(new Error('NEXT_REVIEW_REACHED')); s.writes.mockResolvedValue({ count: 1 }) })

@@ -10,6 +10,7 @@ import prisma from '../../db.js'
 import { getLiveEbayItemIds } from './ebay-listing-index.service.js'
 import { EBAY_MANAGED_STATUSES } from '../ads-core/campaign-status.js'
 import { EBAY_MARKETPLACE_SHORT } from '../ads-core/ebay-marketplace.js'
+import { NOT_STORE_PHOTO } from '../images/store-photos.js'
 
 export interface BuilderTemplate {
   key: string; label: string; strategy: 'CPS' | 'CPC'
@@ -78,7 +79,7 @@ export async function buildListingPlan(opts: {
   const [prods, mains] = pids.length
     ? await Promise.all([
         prisma.product.findMany({ where: { id: { in: pids } }, select: { id: true, name: true, sku: true } }),
-        prisma.productImage.findMany({ where: { productId: { in: pids }, type: 'MAIN' }, orderBy: { sortOrder: 'asc' }, select: { productId: true, url: true } }),
+        prisma.productImage.findMany({ where: { productId: { in: pids }, type: 'MAIN', ...NOT_STORE_PHOTO }, orderBy: { sortOrder: 'asc' }, select: { productId: true, url: true } }),
       ])
     : [[], []]
   const prodBy = new Map(prods.map((x) => [x.id, x]))

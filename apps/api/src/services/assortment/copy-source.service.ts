@@ -25,6 +25,7 @@ import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
 import { contentLanguages } from '../pim/content-read.js'
 import { classifyRow, type ColumnStorage } from './field-groups.js'
 import type { FieldGroup } from './share-rules.js'
+import { NOT_STORE_PHOTO } from '../images/store-photos.js'
 
 export interface AuthorisedSource {
   shareId: string
@@ -330,7 +331,7 @@ async function readInOwner(source: AuthorisedSource, ids: string[], market: stri
     .sort((a, b) => a.path.length - b.path.length || a.path.join('/').localeCompare(b.path.join('/')))
 
   const images = ids.length === 0 ? [] : await prisma.productImage.findMany({
-    where: { productId: { in: ids } },
+    where: { productId: { in: ids }, ...NOT_STORE_PHOTO },
     select: { id: true, productId: true, url: true, publicId: true, sourceAssetId: true, alt: true, type: true, mediaType: true, isPrimary: true, sortOrder: true, width: true, height: true, mimeType: true, fileSize: true, contentHash: true, languageTag: true, versionGroupId: true },
     orderBy: [{ productId: 'asc' }, { sortOrder: 'asc' }],
   })

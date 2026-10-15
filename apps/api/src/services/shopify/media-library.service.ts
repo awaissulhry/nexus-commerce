@@ -3,6 +3,7 @@ import { shopifyTransport } from '../gateway/shopify.js'
 import { workspaceIdForQuery, workspaceKey } from '@nexus/database/workspace-context'
 import type { ShopifyFile, ShopifyMediaSource, MediaSourcesResponse, ShopifyFilesResponse, ShopifyFileReference } from '@nexus/shared/shopify-media'
 import { shopifyFileQuerySchema, SHOPIFY_UPLOAD_MAX_BYTES } from '@nexus/shared/shopify-media'
+import { STORE_PHOTO_ID_PREFIX } from '@nexus/shared/product-media'
 import prisma from '../../db.js'
 import { isOwnConnection, listActiveConnections, resolveConnection, type ConnectionRow } from '../connection-resolver.service.js'
 import { shopifyShopDomain } from '../cx/connectors/shopify/auth.js'
@@ -149,16 +150,20 @@ export async function uploadReadyShopifyAsset(accountId: string, buffer: Buffer,
 }
 
 /** Revalidate the remote file before use; deterministic IDs make concurrent imports safe. */
-export async function attachShopifyImage(productId: string, asset: { id: string; storageId: string; metadata: unknown }, type: string, alt?: string | null) {
-  return attachShopifyMedia(productId, asset, type, alt, 'image')
+export async function attachShopifyImage(productId: string, asset: { id: string; storageId: string; metadata: unknown }, type: string, alt?: string | null, options: AttachOptions = {}) {
+  return attachShopifyMedia(productId, asset, type, alt, 'image', options)
 }
 
-export async function attachShopifyMedia(productId: string, asset: { id: string; storageId: string; metadata: unknown }, type: string, alt: string | null | undefined, expectedType: 'image' | 'video') {
+/** `storeOnly`: a store photo (`isStorePhotoId`) — linked for the store's own galleries, never part of a default photo list.
+ *  A row the product already holds for this file keeps what it is. */
+export interface AttachOptions { storeOnly?: boolean }
+
+export async function attachShopifyMedia(productId: string, asset: { id: string; storageId: string; metadata: unknown }, type: string, alt: string | null | undefined, expectedType: 'image' | 'video', options: AttachOptions = {}) {
   const accountId = (asset.metadata as { shopifyAccountId?: string } | null)?.shopifyAccountId
   if (!accountId) throw new ShopifyMediaError('The Shopify source account is missing. Load this file from the Shopify library again.')
   const file = await getShopifyFile(accountId, asset.storageId)
   if (file.type !== expectedType || !file.url || file.status !== 'READY') throw new ShopifyMediaError('This Shopify media is unavailable or still processing.')
-  const id = stableId('shopify_image', productId, asset.id)
+  const id = stableId(options.storeOnly ? STORE_PHOTO_ID_PREFIX.slice(0, -1) : 'shopify_image', productId, asset.id)
   return prisma.$transaction(async tx => {
     const existing = await tx.productImage.findFirst({ where: { productId, OR: [{ id }, { sourceAssetId: asset.id }] } })
     const max = await tx.productImage.aggregate({ where: { productId }, _max: { sortOrder: true } })

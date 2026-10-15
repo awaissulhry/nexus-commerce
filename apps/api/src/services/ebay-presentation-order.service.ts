@@ -11,6 +11,7 @@ import { mappingToken, MappingConflict } from './pim/mapping/revision-token.js'
 import { ORDER_RECEIPT } from './ebay-presentation-consumer.service.js'
 import { normalizeMarket } from './ebay-image-axis-preference.service.js'
 import { isOwnAxisKey } from '@nexus/shared/variation-mapping'
+import { NOT_STORE_PHOTO } from './images/store-photos.js'
 
 /**
  * 2.4 — the order's inputs MOVED (its token or the listing version differs from what the caller reviewed), as opposed to
@@ -76,7 +77,7 @@ export async function presentationOrderInputs(destination: PresentationDestinati
   const imageProducts = [...new Set([...ids, ...members.flatMap(m => [m.id, m.parentId].filter((id): id is string => !!id))])]
   const [images, masterImages, themes, valueMaps, sizeScales] = await Promise.all([
     db.listingImage.findMany({ where: { productId: { in: imageProducts }, platform: 'EBAY', mediaType: 'IMAGE', OR: [{ marketplace }, { marketplace: null }] }, orderBy: { id: 'asc' } }),
-    db.productImage.findMany({ where: { productId: { in: imageProducts } }, orderBy: { id: 'asc' } }),
+    db.productImage.findMany({ where: { productId: { in: imageProducts }, ...NOT_STORE_PHOTO }, orderBy: { id: 'asc' } }),
     db.ebayDescriptionTheme.findMany({ orderBy: { id: 'asc' } }),
     db.fieldValueMap.findMany({ where: { channel: 'EBAY', marketplace: { in: [marketplace, '*'] } }, orderBy: { id: 'asc' } }),
     db.sizeScaleMap.findMany({ orderBy: { id: 'asc' } }),

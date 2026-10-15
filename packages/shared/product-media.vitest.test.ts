@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { followsMainListingPhotos, PRODUCT_MEDIA_KEY, productMediaCollectionSchema, productMediaQuerySchema, readMediaCollection, resolveMediaCollection, writeMediaCollection } from './product-media'
+import { followsMainListingPhotos, isStorePhotoId, PRODUCT_MEDIA_KEY, STORE_PHOTO_ID_PREFIX, productMediaCollectionSchema, productMediaQuerySchema, readMediaCollection, resolveMediaCollection, writeMediaCollection } from './product-media'
 const gallery = (ids: string[]) => ({ version: 1 as const, items: ids.map(assetId => ({ assetId })) })
 const content = (locale: string, ids: string[]) => ({ [locale]: { [PRODUCT_MEDIA_KEY]: gallery(ids) } })
 const base = { locale: 'it', own: {}, ownIds: ['own'], parentIds: ['parent'] }
@@ -14,6 +14,19 @@ describe('Product media locale and scope contract', () => {
     expect(resolveMediaCollection({ ...base, own: content('it', []) }).collection.items).toEqual([])
     expect(resolveMediaCollection({ ...base, parent: content('it', ['parent-localized']) }).collection).toEqual(gallery(['own']))
     expect(resolveMediaCollection({ ...base, ownIds: [], parent: content('it', ['parent-localized']) }).collection).toEqual(gallery(['parent-localized']))
+  })
+  it('never puts a store photo in a default list, but keeps it where a saved list names it', () => {
+    const store = `${STORE_PHOTO_ID_PREFIX}abc`
+    expect(isStorePhotoId(store)).toBe(true)
+    expect(isStorePhotoId('shopify_image_abc')).toBe(false)
+    // The library default skips it: the product's other photos only.
+    expect(resolveMediaCollection({ ...base, ownIds: ['own', store] }).collection).toEqual(gallery(['own']))
+    // A row whose only own photo is a store photo still shows its parent's photos (saved list, else library).
+    expect(resolveMediaCollection({ ...base, ownIds: [store] }).collection).toEqual(gallery(['parent']))
+    expect(resolveMediaCollection({ ...base, ownIds: [store], parent: content('it', ['parent-localized']) }).collection).toEqual(gallery(['parent-localized']))
+    expect(resolveMediaCollection({ ...base, ownIds: [], parentIds: ['parent', store] }).collection).toEqual(gallery(['parent']))
+    // A saved list is sent as saved.
+    expect(resolveMediaCollection({ ...base, ownIds: ['own', store], own: content('it', [store, 'own']) }).collection).toEqual(gallery([store, 'own']))
   })
   it('changes only the selected language and keeps unrelated localized content', () => {
     const before = { ...content('de', ['german']), it: { title: 'Giacca', [PRODUCT_MEDIA_KEY]: gallery(['old']) }, en: { description: 'Jacket' } }

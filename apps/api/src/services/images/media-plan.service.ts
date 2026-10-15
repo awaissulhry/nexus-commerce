@@ -175,11 +175,20 @@ export interface MediaChannelValues { byProduct: Record<string, Record<string, s
 async function loadMediaContext(rootId: string) {
   const { root, family, axes, unmapped } = await loadFamily(rootId)
   const ids = [root.id, ...root.children.map(c => c.id)]
-  const [library, rows, { destinations, mainLanguage }] = await Promise.all([
+  const [library, rows, loaded, colourProducts] = await Promise.all([
     loadLibrary(ids),
     prisma.productMediaPlan.findMany({ where: { productId: rootId }, select: { layer: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true, plan: true, revision: true, updatedAt: true } }),
     loadDestinations(ids),
+    prisma.shopifyColourProduct.findMany({ where: { familyId: rootId, state: 'LINKED', shopifyProductId: { not: null } }, select: { channelConnectionId: true, aliasKey: true, valueKey: true, colourName: true, shopifyProductId: true } }),
   ])
+  const { mainLanguage } = loaded
+  // A store that shows each colour as its own product (colour products): each one's gallery is its own (`ShopifyProductLayout`).
+  const valueIndex = (key: string) => { const order = family.valueOrder[key.slice(0, key.indexOf(':'))] ?? []; const i = order.indexOf(key); return i < 0 ? order.length : i }
+  const destinations = loaded.destinations.map(d => {
+    const own = d.channel === 'SHOPIFY' ? colourProducts.filter(c => c.channelConnectionId === d.accountId && c.aliasKey === (d.alias?.id ?? '')) : []
+    return own.length ? { ...d, shopifyProducts: own.sort((a, b) => valueIndex(a.valueKey) - valueIndex(b.valueKey) || a.valueKey.localeCompare(b.valueKey))
+      .map(c => ({ productId: c.shopifyProductId!, valueKey: c.valueKey, label: c.colourName?.trim() || family.valueLabels[c.valueKey] || c.valueKey.split(':').slice(1).join(':') })) } : d
+  })
   const layers = rows.map(r => ({ key: mediaLayerKey({ layer: r.layer as MediaLayer, channel: r.channel, marketplace: r.marketplace, accountId: r.channelConnectionId, aliasKey: r.aliasKey }),
     layer: r.layer as MediaLayer, channel: r.channel, marketplace: r.marketplace, accountId: r.channelConnectionId, aliasKey: r.aliasKey, plan: readPlan(r.plan), revision: r.revision, updatedAt: r.updatedAt }))
   const assets = new Map<string, MediaAsset>(library.map(a => [a.id, { id: a.id, url: a.url, mediaType: a.mediaType, width: a.width, height: a.height, mimeType: a.mimeType, fileSize: a.fileSize, languageTag: a.languageTag, versionGroupId: a.versionGroupId, label: a.label }]))

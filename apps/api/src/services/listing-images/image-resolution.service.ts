@@ -24,6 +24,7 @@
  */
 
 import type { PrismaClient } from '@nexus/database'
+import { NOT_STORE_PHOTO } from '../images/store-photos.js'
 
 export type ImageScope = 'GLOBAL' | 'PLATFORM' | 'MARKETPLACE'
 export type ImageRole =
@@ -163,7 +164,7 @@ export class ImageResolutionService {
     // a smaller set of columns; we map type→role and use createdAt
     // ordering as the implicit position.
     const masterRows = await this.prisma.productImage.findMany({
-      where: { productId: opts.productId, mediaType: 'IMAGE' },
+      where: { productId: opts.productId, mediaType: 'IMAGE', ...NOT_STORE_PHOTO },
       orderBy: [{ type: 'asc' }, { createdAt: 'asc' }],
     })
     if (masterRows.length === 0) return []
