@@ -141,11 +141,12 @@ describe('Google: reads, and Google Ads mutates only', () => {
     expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [{ campaignBidModifierOperation: { create: {} } }] }))).toEqual({ refusal: 'it holds an operation Nexus does not send (campaignBidModifierOperation)' })
   })
 
-  it('G7: the account\'s exclusions (customerNegativeCriterionOperation) go through a mutate; the account itself does not', () => {
+  it('G7: the account\'s exclusions (customerNegativeCriterionOperation) go through a mutate; a bare customer operation does not', () => {
     const exclude = [{ customerNegativeCriterionOperation: { create: { placementList: { sharedSet: 'customers/1234567890/sharedSets/41' } } } }]
     expect(googleKind('POST', MUTATE, { mutateOperations: exclude, validateOnly: true })).toBe('read')
     expect(googleKind('POST', MUTATE, { mutateOperations: exclude })).toBe('write')
-    expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [{ customerOperation: { update: {} } }] }))).toEqual({ refusal: 'it holds an operation Nexus does not send (customerOperation)' })
+    // G8b allows only an update of the account's own settings fields (google-account-calls.ts); a bare one is refused.
+    expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [{ customerOperation: { update: {} } }] }))).toEqual({ refusal: 'the customer update does not name this account' })
   })
 
   it('G7: Google Ads\' brand lookup (…/customers/{id}:suggestBrands) is a read; nothing else of its shape is', async () => {
