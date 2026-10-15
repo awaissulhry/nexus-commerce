@@ -15,7 +15,7 @@ export function colourAxisOf(axes: ReadonlyArray<{ code: string; label: string }
  * The family's Shopify colour products. `splitAxis`: the axis whose values become separate products — the operator's
  * choice when there is one, else the colour axis; a family without one stays one product. `colourNames`: the operator's
  * Shopify colour names, by value key. `swatches`: what the store shows for each colour (its swatch group and name).
- * `sizeMap`: the destination's size map (Nexus value → Shopify option value).
+ * `sizeMap`: the destination's size map (Nexus value → Shopify option value; null: an axis not on Shopify).
  */
 export async function loadColourPlan(rootId: string, options: { splitAxis?: string | null } & Pick<ColourPlanSettings, 'colourNames' | 'swatches' | 'sizeMap'> = {}): Promise<{ plan: ColourPlan; rootId: string; sku: string }> {
   const { root, family, axes, unmapped, valueTexts } = await loadFamily(rootId)

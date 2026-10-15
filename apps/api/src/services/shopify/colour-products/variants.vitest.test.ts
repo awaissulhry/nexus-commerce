@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { planColourProducts } from '@nexus/shared/shopify-colour-products'
+import { planColourProducts, type ColourSizeMap } from '@nexus/shared/shopify-colour-products'
 import { planColourVariants, colourIsPublished, readOnlineStorePublication } from './variants.js'
 const wanted = () => ({ key: 'color:black', position: 0, nexusValue: 'Black', colourName: 'Black', colourNameSource: 'operator' as const,
   options: [{ axis: 'size', name: 'Taglia', values: ['XS', 'S', 'M'] }],
@@ -74,4 +74,25 @@ it('size map: EU sizes pair with the letter variants by their Shopify value; the
   expect(planned.order).toEqual([{ id: 'gid://shopify/ProductOption/1', values: [{ name: 'XS' }, { name: 'S' }, { name: 'M' }] }])
   // No map: the sizes Shopify holds are not the Nexus values, so the stored ones read as changed (as before).
   expect(() => planColourVariants(misano(), r, saved)).toThrow('MISANO-46: Shopify changed the size identity or options. Review the mapping.')
+})
+it('an axis not on Shopify (XRACING, invented ids: Fit Type "Regular" on every variant, the store has Size only): the identity check passes, a new size is Size only; no choice = refused as before', () => {
+  const xracing = (sizeMap?: ColourSizeMap) => planColourProducts({ familyId: 'f', axes: [{ code: 'color', label: 'Color' }, { code: 'fit_type', label: 'Fit Type' }, { code: 'size_name', label: 'Size Name' }],
+    variants: ['46', '48', '50'].map(s => ({ productId: s, sku: `XR-SUIT-NERO-${s}`, values: { color: 'color:nero', fit_type: 'fit:regular', size_name: `size_name:${s}` } })),
+    valueOrder: { color: ['color:nero'], fit_type: ['fit:regular'], size_name: ['size_name:46', 'size_name:48', 'size_name:50'] },
+    valueLabels: { 'color:nero': 'Nero', 'fit:regular': 'Regular', 'size_name:46': '46', 'size_name:48': '48', 'size_name:50': '50' }, unmapped: [] },
+  { splitAxis: 'color', sizeMap }).products[0]
+  const option = 'gid://shopify/ProductOption/900000000001'
+  const r = { ...remote(), options: [{ id: option, name: 'Size', values: ['48', '50'] }],
+    variants: { nodes: ['48', '50'].map((s, i) => ({ id: `gid://shopify/ProductVariant/90000000010${i}`, sku: `XR-SUIT-NERO-${s}`, selectedOptions: [{ name: 'Size', value: s }], inventoryItem: { id: `gid://shopify/InventoryItem/90000000010${i}` } })), pageInfo: { hasNextPage: false } } }
+  const saved = new Map([['48', { variantId: '900000000100', inventoryItemId: '900000000100' }], ['50', { variantId: '900000000101', inventoryItemId: '900000000101' }]])
+  const planned = planColourVariants(xracing({ fit_type: null }), r, saved)
+  expect(planned.matched.map(v => v.remote.id)).toEqual(['gid://shopify/ProductVariant/900000000100', 'gid://shopify/ProductVariant/900000000101'])
+  expect(planned.missing).toEqual([{ productId: '46', sku: 'XR-SUIT-NERO-46', optionValues: [{ optionId: option, name: '46' }] }])
+  expect(planned.order).toEqual([{ id: option, values: [{ name: '46' }, { name: '48' }, { name: '50' }] }])
+  // Without the choice Fit Type is a Shopify option the store does not have: refused before any write, as before.
+  expect(() => planColourVariants(xracing(), r, saved)).toThrow('The Shopify option for Fit Type changed. Review the variation theme before syncing sizes.')
+  // The choice on a store whose product DOES carry Fit: the option axes differ, refused.
+  const withFit = { ...r, options: [{ id: 'gid://shopify/ProductOption/900000000002', name: 'Fit', values: ['Regular'] }, ...r.options],
+    variants: { ...r.variants, nodes: r.variants.nodes.map(v => ({ ...v, selectedOptions: [{ name: 'Fit', value: 'Regular' }, ...v.selectedOptions] })) } }
+  expect(() => planColourVariants(xracing({ fit_type: null }), withFit, saved)).toThrow('The Shopify option axes differ from the confirmed family. Review the variation theme.')
 })

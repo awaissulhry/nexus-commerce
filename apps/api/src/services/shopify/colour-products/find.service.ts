@@ -9,7 +9,8 @@
  * The operator may choose the Shopify product of a colour (`choices`): that choice outranks every guess (name, group,
  * SKUs) and is kept on the colour's proposal (`chosenProductId`), so the next Find and Confirm match the same way; a
  * choice of `null` lets Find guess again. The sizes are still matched inside it by SKU, then by option values (through
- * the destination's size map: `ShopifyColourSync.sizeMap`, size-map.service.ts).
+ * the destination's size map: `ShopifyColourSync.sizeMap`, size-map.service.ts; an axis it leaves off Shopify is no
+ * option value of any size).
  *
  * Feature 1 — each colour keeps the swatch group its product has on the store: Find stores the product's colour list
  * (`ShopifyColourProduct.swatchGroup`) with its proposal, and Confirm stores it again from its fresh read. While the
@@ -108,8 +109,9 @@ export async function colourProductsView(destination: Destination, plan: ColourP
     familyId: destination.familyId, accountId: destination.accountId, settings,
     // Adopt only: the colours are linked and Nexus writes nothing else to them until "Start full sync".
     sync: { linked, adoptOnly: linked && await colourAdoptOnly(destination) },
-    // Sizes as Nexus names them; `shopify` beside a size the size map pairs with another Shopify value.
-    plan: { mode: plan.mode, splitAxis: plan.splitAxis, grouped: plan.grouped, issues: plan.issues, orderedAxes, swatchGroups: plan.swatchGroups.length,
+    // Sizes as Nexus names them; `shopify` beside a size the size map pairs with another Shopify value. `notOnShopify`:
+    // the axes the size map leaves off Shopify (no size names them), for "Pair sizes…" to show and change.
+    plan: { mode: plan.mode, splitAxis: plan.splitAxis, grouped: plan.grouped, issues: plan.issues, orderedAxes, swatchGroups: plan.swatchGroups.length, notOnShopify: plan.notOnShopify ?? [],
       products: plan.products.map(p => ({ key: p.key, position: p.position, nexusValue: p.nexusValue, colourName: p.colourName, colourNameSource: p.colourNameSource, swatchGroup: p.swatchGroup,
         options: p.options.map(o => ({ axis: o.axis, name: o.name, values: o.nexusValues ?? o.values })), variants: p.variants.length,
         sizes: p.variants.map(v => ({ productId: v.productId, sku: v.sku, options: v.options.map(o => o.nexusValue ?? o.value),
