@@ -327,6 +327,12 @@ export interface ToolResult {
    */
   confirm?: { approvalId: string; planHash: string; code: string }
   /**
+   * G4 (2026-10-15) — `execute`: this run is one step of a change that needs more requests (a Google Shopping tree that
+   * must lose a split before the rest is made). When it is the undo of an earlier change, that change is NOT marked undone
+   * by it: the last step completes the undo (change-record.service.ts).
+   */
+  stepsLeft?: number
+  /**
    * W4-1 — a journal tool's dry run only: this call is a journal entry (AgentTool.journal), so Claude's door runs it at
    * once. Without it, a call of a journal tool is a request like any change (report-ads-run's withdraw).
    */

@@ -28,8 +28,9 @@ import type { GoogleMutateOperation, GoogleMutateResponse } from './write-client
 export interface BuildKeyword { text: string; matchType: MatchType; bidCents?: number; status?: 'ENABLED' | 'PAUSED' }
 export interface BuildNegative { text: string; matchType: MatchType }
 /**
- * A product group node to make again as it is (a copy): its parent by index in the list, its case value as Google reads
- * it, and whether it is the rest of its parent's dimension ("everything else": the dimension with no value).
+ * A product group node: one to make again as it is (a copy), or of a tree a person gave (product-tree.ts buildNodesOfSpec
+ * checks it against Google's rules first): its parent by index in the list, its case value as Google takes it, and
+ * whether it is the rest of its parent's dimension ("everything else": the dimension with no value).
  */
 export interface BuildProductNode { parent: number | null; kind: 'SUBDIVISION' | 'UNIT'; caseValue: Record<string, unknown> | null; excluded: boolean; bidCents: number | null; rest: boolean }
 export type BuildProductGroups =

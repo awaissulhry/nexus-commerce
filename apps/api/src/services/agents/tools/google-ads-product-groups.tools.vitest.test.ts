@@ -185,6 +185,61 @@ describe('set-google-product-groups', () => {
     expect(tool.input.safeParse((undo as { args: unknown }).args).success).toBe(true)
   })
 
+  it('a tree of any shape: subdivide a unit by brand; the record keeps the whole tree with Google\'s ids; undo asks for the old tree in two steps, and its args pass the tool\'s own schema', async () => {
+    const split = { campaignId: '21', adGroupId: '51', subdivide: [{ criterionId: '602', split: 'BRAND', children: [{ value: 'Brand A', bidCents: 35 }], everythingElse: { excluded: true } }] }
+    expect(tool.input.safeParse(split).success).toBe(true)
+    h.mutate.mockResolvedValue({ responses: [], ops: 4, requestId: null })
+    const preview = (await tool.handler(split, asker)).preview as Record<string, unknown>
+    expect(h.mutate.mock.calls[0][1]).toEqual([
+      { adGroupCriterionOperation: { remove: `${AGC}602` } },
+      { adGroupCriterionOperation: { create: { resourceName: `${AGC}-1`, status: 'ENABLED', listingGroup: { type: 'SUBDIVISION', parentAdGroupCriterion: `${AGC}601`, caseValue: { productItemId: { value: 'sku-1' } } } } } },
+      { adGroupCriterionOperation: { create: { resourceName: `${AGC}-2`, status: 'ENABLED', listingGroup: { type: 'UNIT', parentAdGroupCriterion: `${AGC}-1`, caseValue: { productBrand: { value: 'Brand A' } } }, cpcBidMicros: '350000' } } },
+      { adGroupCriterionOperation: { create: { resourceName: `${AGC}-3`, status: 'ENABLED', listingGroup: { type: 'UNIT', parentAdGroupCriterion: `${AGC}-1`, caseValue: { productBrand: {} } }, negative: true } } },
+    ])
+    expect(preview.spendsMoneyBecause).toEqual(['Raises the bid of 1 product group in "Group A": item "sku-1" › brand "Brand A" EUR 0.30 → EUR 0.35.'])
+    h.mutate.mockReset()
+    h.mutate.mockResolvedValue({ responses: [{}, { adGroupCriterionResult: { resourceName: `${AGC}710` } }, { adGroupCriterionResult: { resourceName: `${AGC}711` } }, { adGroupCriterionResult: { resourceName: `${AGC}712` } }], ops: 4, requestId: 'r' })
+    const run = await tool.execute!(split, approved(preview))
+    expect(run.ok).toBe(true)
+    const after = run.change!.after as { nodes: Array<{ id: string }> }
+    expect(after.nodes.map((n) => n.id)).toEqual(['601', '710', '711', '712', '603'])
+    h.state.rows = [
+      HAND_BUILT[0],
+      row('710', '601', 'SUBDIVISION', { productItemId: { value: 'sku-1' } }),
+      row('711', '710', 'UNIT', { productBrand: { value: 'Brand A' } }, { cpcBidMicros: '350000' }),
+      row('712', '710', 'UNIT', { productBrand: {} }, { negative: true }),
+      HAND_BUILT[2],
+    ]
+    expect(await tool.undo!.current(run.change!)).toEqual(run.change!.after)
+    const undo = tool.undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
+    expect(undo.args).toMatchObject({ accountId: 'g-1', campaignId: '21', adGroupId: '51', inTwoSteps: true, tree: [{ split: 'ITEM_ID' }, { parent: 0, value: 'sku-1', bidCents: 30 }, { parent: 0, everythingElse: true, bidCents: 20 }] })
+    expect(tool.input.safeParse(undo.args).success).toBe(true)
+    // The undo's step 1: sku-1 is the only named item, so the whole tree goes (a split never keeps only "everything else").
+    h.mutate.mockReset()
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const back = await tool.handler(undo.args, asker)
+    expect(h.mutate.mock.calls[0][1]).toEqual([{ adGroupCriterionOperation: { remove: `${AGC}601` } }])
+    expect(back.preview).toMatchObject({ totals: { step: 1, steps: 2 } })
+    // It runs with a step left: the change it undoes is not undone by it (change-record.service.ts reads stepsLeft).
+    h.mutate.mockResolvedValue({ responses: [{}], ops: 1, requestId: 'r' })
+    const step1 = await tool.execute!(undo.args, approved(back.preview))
+    expect(step1).toMatchObject({ ok: true, stepsLeft: 1, data: { step: 1, steps: 2, next: expect.stringMatching(/^Step 2 still to ask/) } })
+    // Between the steps the original change still reads as it wrote it, so the same undo can be asked again for step 2.
+    h.state.rows = []
+    expect(await tool.undo!.current(run.change!)).toEqual(run.change!.after)
+    h.mutate.mockReset()
+    h.mutate.mockResolvedValue({ responses: [], ops: 3, requestId: null })
+    // The undo asked again gives the same request (pure, from the record): now it is step 2.
+    expect(tool.undo!.request(run.change!)).toEqual(undo)
+    const step2 = await tool.handler(undo.args, asker)
+    expect(step2.preview).not.toMatchObject({ totals: { step: 1 } })
+    expect((h.mutate.mock.calls[0][1] as unknown[]).length).toBe(3)
+    h.mutate.mockResolvedValue({ responses: [{ adGroupCriterionResult: { resourceName: `${AGC}801` } }, { adGroupCriterionResult: { resourceName: `${AGC}802` } }, { adGroupCriterionResult: { resourceName: `${AGC}803` } }], ops: 3, requestId: 'r' })
+    const done = await tool.execute!(undo.args, approved(step2.preview))
+    expect(done.ok).toBe(true)
+    expect(done).not.toHaveProperty('stepsLeft')
+  })
+
   it('not sent when the tree moved since it was approved', async () => {
     h.mutate.mockResolvedValue({ responses: [], ops: 5, requestId: null })
     const preview = (await tool.handler(ask, asker)).preview

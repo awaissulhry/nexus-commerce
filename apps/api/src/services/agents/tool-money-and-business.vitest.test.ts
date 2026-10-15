@@ -161,6 +161,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'create-google-rsa': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-ads-assets.tools test)',
   'set-google-assets': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-ads-assets.tools test)',
   'set-google-negatives': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-keywords.tools test)',
+  'set-google-inventory-filter': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-shopping.tools test)',
+  'set-google-shopping-settings': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-shopping.tools test)',
   'set-google-labels': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-labels.tools test)',
   'remove-google-labels': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-labels.tools test)',
   'dismiss-google-recommendations': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-recommendations.tools test)',
@@ -423,6 +425,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-google-status': () => ({ items: [{ kind: 'campaign', id: '21' }], status: 'PAUSED' }),
   'remove-google-ads-items': () => ({ items: [{ kind: 'campaign', id: '21' }], confirmRemove: true }),
   'set-google-product-groups': () => ({ campaignId: '21', adGroupId: '51', itemIds: ['sku-1'], bidCents: 30 }),
+  // G4: a Shopping campaign's inventory filter and Shopping settings (google-ads-shopping.tools test).
+  'set-google-inventory-filter': () => ({ campaignId: '21', filter: [{ dimension: 'BRAND', value: 'Brand A' }] }),
+  'set-google-shopping-settings': () => ({ campaignId: '21', localInventory: false }),
   'create-google-rsa': () => ({ campaignId: '21', adGroupId: '51', pauseAdIds: ['701'] }),
   'set-google-assets': () => ({ campaignId: '21', callouts: ['Free returns'] }),
   // Google Ads changes PR 3 — ad groups, keywords, negatives: no Google Ads account here either (google-ads-keywords.tools test).
