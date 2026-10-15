@@ -18,8 +18,9 @@
  *   A field in the update mask but not in the body is cleared (v25 facts): that is how a template or suffix is taken away.
  * The tracking template and suffix follow Google's URL rules as G3 checks them (change-urls.ts urlItemProblems).
  *
- * Money: none of these raises a bid or a budget (no SPENDS MONEY). Auto-tagging OFF breaks conversion tracking, a
- * tracking change can break the tracking of every click, EXPANDED inventory shows video ads on more content: warnings.
+ * Money: none of these raises a bid or a budget. A WIDER video brand safety level (LIMITED → STANDARD → EXPANDED, Google's
+ * three tiers) lets video ads show on more content, so they can spend more: SPENDS MONEY. Auto-tagging OFF breaks
+ * conversion tracking and a tracking change can break the tracking of every click: warnings.
  */
 import { changeLines, type GoogleChangeDraft } from './change-draft.js'
 import { urlItemProblems } from './change-urls.js'
@@ -27,6 +28,8 @@ import type { LiveAdminSettings } from './live-account-admin.js'
 
 export const BRAND_SAFETY = ['EXPANDED_INVENTORY', 'STANDARD_INVENTORY', 'LIMITED_INVENTORY'] as const
 export type BrandSafety = typeof BRAND_SAFETY[number]
+/** How much content each tier shows video ads on (BrandSafetySuitability v25: limited ⊂ standard ⊂ expanded). */
+const BRAND_SAFETY_REACH: Record<string, number> = { LIMITED_INVENTORY: 0, STANDARD_INVENTORY: 1, EXPANDED_INVENTORY: 2 }
 
 export interface AccountSettingsRequest {
   autoTagging?: boolean
@@ -142,6 +145,14 @@ export function accountSettingsDraft(customer: string, request: AccountSettingsR
   const conversionReporting = after.settings.callConversionReporting ?? live.callConversionReporting
   if (after.settings.callConversionActionId && !conversionReporting) warnings.push('The call conversion action counts only while call conversion reporting is on (Google\'s rule); it is off.')
   if (after.settings.videoBrandSafety === 'EXPANDED_INVENTORY') warnings.push('Expanded inventory: video ads can show on more content, including content with strong language or violence (Google\'s description).')
+  const spendsMoney: string[] = []
+  const safetyTo = after.settings.videoBrandSafety
+  if (typeof safetyTo === 'string') {
+    const from = before.settings.videoBrandSafety
+    // An unknown level now counts as narrower than EXPANDED (the widest).
+    const wider = typeof from === 'string' && from in BRAND_SAFETY_REACH ? BRAND_SAFETY_REACH[safetyTo] > BRAND_SAFETY_REACH[from] : safetyTo === 'EXPANDED_INVENTORY'
+    if (wider) spendsMoney.push(`Video brand safety ${String(from ?? '(not set)')} → ${safetyTo}: video ads can show on more content, so they can spend more.`)
+  }
   if (live.manager) warnings.push('This is a manager account: its own settings change, not those of the accounts it manages.')
 
   const { changes, more } = changeLines(lines)
@@ -150,7 +161,7 @@ export function accountSettingsDraft(customer: string, request: AccountSettingsR
     changes,
     totals: { settings: lines.length, ...(more ? { notShown: more } : {}) },
     warnings,
-    spendsMoney: [],
+    spendsMoney,
     skipped,
     operations: [{ customerOperation: { update, updateMask: mask.join(',') } }],
     stands: { customer, settings: before.settings },

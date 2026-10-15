@@ -19,6 +19,7 @@ import { setOpsBudgetRedisForTests, type OpsRedis } from './ops-budget.js'
 import { ACCOUNT_RESULT, ACCOUNT_REVIEW, checkAccountOperations, sendAccountCall, sendAccountOperations } from './account-client.js'
 import { GoogleAdsWriteError, UNKNOWN_OUTCOME, writeErrorSentence } from './write-client.js'
 import type { GoogleAdsTarget } from './types.js'
+import { livePaymentsAccounts, PAYMENTS_NOT_LISTED } from './live-account-admin.js'
 
 class MemoryRedis implements OpsRedis {
   status = 'ready'
@@ -97,5 +98,30 @@ describe('sendAccountCall', () => {
     const two = await sendAccountOperations(TARGET, [{ accountCall: INVITE }, { accountCall: INVITE }]).catch((e) => e)
     expect(two).toMatchObject({ outcome: 'not_sent', failure: { code: 'NOT_ONE_ACCOUNT_CALL' } })
     expect(h.calls).toHaveLength(1)
+  })
+})
+
+describe('livePaymentsAccounts (review fixes: a billing setup only for a payments account Google lists)', () => {
+  it('ONE GET of PaymentsAccountService.ListPaymentsAccounts, a read (it goes with writes switched off); the ids Google lists', async () => {
+    vi.stubEnv('NEXUS_GOOGLE_ADS_WRITES', 'off')
+    h.answers.push(() => new Response(JSON.stringify({ paymentsAccounts: [
+      { resourceName: `${C}/paymentsAccounts/1111-2222-3333-4444`, paymentsAccountId: '1111-2222-3333-4444', name: 'Payer A', currencyCode: 'EUR' },
+      { resourceName: `${C}/paymentsAccounts/1111-2222-3333-5555`, name: 'Payer B' },
+    ] }), { status: 200 }))
+    expect(await livePaymentsAccounts(TARGET)).toEqual([
+      { paymentsAccountId: '1111-2222-3333-4444', name: 'Payer A' },
+      { paymentsAccountId: '1111-2222-3333-5555', name: 'Payer B' },
+    ])
+    expect(h.calls).toHaveLength(1)
+    expect(h.calls[0].url).toBe(`${GOOGLE_ADS_API_BASE}/${C}/paymentsAccounts`)
+    expect(h.calls[0].init.method).toBe('GET')
+    expect(gatewayLedger.map((r) => [r.operation, r.outcome])).toEqual([['ads.paymentsAccounts.list', 'sent']])
+  })
+
+  it('refused at the Explorer access level: rejects with a plain sentence, never an empty list', async () => {
+    h.answers.push(denied('SERVICE_ACCESS_DENIED'))
+    const err = await livePaymentsAccounts(TARGET).catch((e) => e)
+    expect(err).toMatchObject({ name: 'GoogleAdsReadError' })
+    expect(err.message).toBe(`${PAYMENTS_NOT_LISTED} (Google: SERVICE_ACCESS_DENIED.)`)
   })
 })

@@ -54,6 +54,8 @@ const SENT: Array<[string, Record<string, unknown>]> = [
   ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'CREATE', billingSetup: `${C}/billingSetups/81`, proposedName: 'Budget A', proposedStartTimeType: 'NOW', proposedEndTimeType: 'FOREVER', proposedSpendingLimitMicros: '500000000' } } }],
   ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'UPDATE', accountBudget: `${C}/accountBudgets/91`, proposedSpendingLimitMicros: '600000000' }, updateMask: 'proposed_spending_limit_micros' } }],
   ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'END', accountBudget: `${C}/accountBudgets/91` } } }],
+  ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'REMOVE', accountBudget: `${C}/accountBudgets/92` } } }],
+  ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'CREATE', billingSetup: `${C}/billingSetups/81`, proposedName: 'Budget B', proposedStartDateTime: '2099-01-01 00:00:00', proposedEndTimeType: 'FOREVER', proposedSpendingLimitType: 'INFINITE', proposedPurchaseOrderNumber: 'PO-1' } } }],
   ['accountBudgetProposals:mutate', { operation: { remove: `${C}/accountBudgetProposals/95` } }],
 ]
 
@@ -141,7 +143,10 @@ describe('the account calls: users, links and billing', () => {
       ['dataLinks:create', { dataLink: { youtubeVideo: { channelId: 'not-a-channel', videoId: 'abcdefghijk' } } }],
       ['dataLinks:update', { resourceName: `${C}/dataLinks/43`, dataLinkStatus: 'ENABLED' }],
       ['billingSetups:mutate', { operation: { create: { paymentsAccountInfo: { paymentsAccountName: 'New', paymentsProfileId: '1111-2222-3333' }, startTimeType: 'NOW' } } }],
-      ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'REMOVE', accountBudget: `${C}/accountBudgets/91` } } }],
+      ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'REMOVE', accountBudget: `${C}/accountBudgets/91`, proposedName: 'x' } } }],
+      ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'REMOVE', accountBudget: `${C}/accountBudgets/91` }, updateMask: 'proposed_name' } }],
+      ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'UPDATE', accountBudget: `${C}/accountBudgets/91`, proposedPurchaseOrderNumber: 'PO-1' }, updateMask: 'proposed_name' } }],
+      ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'REMOVE', accountBudget: 'customers/999/accountBudgets/91' } } }],
       ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'UPDATE', accountBudget: `${C}/accountBudgets/91`, proposedSpendingLimitMicros: '600000000' } } }],
       ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'UPDATE', accountBudget: `${C}/accountBudgets/91`, proposedNotes: 'x' }, updateMask: 'proposed_notes' } }],
       ['accountBudgetProposals:mutate', { operation: { create: { proposalType: 'CREATE', billingSetup: `${C}/billingSetups/81`, proposedName: 'Budget A', proposedStartTimeType: 'NOW', proposedEndTimeType: 'FOREVER', proposedSpendingLimitMicros: '5000001' } } }],

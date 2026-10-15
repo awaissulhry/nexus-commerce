@@ -25,16 +25,28 @@
  *     SPENDING_LIMIT_LOWER_THAN_ACCRUED_COST_NOT_ALLOWED, PENDING_UPDATE_PROPOSAL_EXISTS, CANNOT_END_INACTIVE_BUDGET.
  *   - Both services are not allowed at the Explorer access level (docs/api-policy/access-levels).
  *
+ *   - Review fixes (2026-10-15, curl of reference/rpc/v25/AccountBudgetProposalType and AccountBudgetProposal):
+ *     REMOVE "Identifies a request to remove a budget that hasn't started yet" (END: "a budget that has already
+ *     started"; AccountBudgetProposalError CANNOT_REMOVE_RUNNING_BUDGET, CANNOT_REMOVE_UNAPPROVED_BUDGET,
+ *     FIELD_MASK_NOT_ALLOWED "for create/end/remove proposals"); proposed_purchase_order_number (string, Immutable: "a
+ *     value that enables the user to help them reference this budget in their monthly invoices"; error
+ *     PURCHASE_ORDER_NUMBER_REQUIRED on some accounts) — Nexus sets it on a new budget only.
+ *   - The payments account of a new billing setup must be one Google lists for this account (PaymentsAccountService
+ *     .ListPaymentsAccounts, live-account-admin.ts livePaymentsAccounts): an id never crosses accounts or businesses.
+ *
  * Money (Owner's rule): a new account budget, a higher spending limit, no limit, a later end and a billing setup are
- * SPENDS MONEY; a lower limit or an end stops ads (warnings). Amounts are cents of the account's currency.
+ * SPENDS MONEY; so is cancelling a waiting proposal that would have ended the budget, lowered its limit, moved its end
+ * earlier or removed it (the budget keeps running as it is). A lower limit or an end stops ads (warnings). Removing a
+ * budget that has not started raises nothing. Amounts are cents of the account's currency.
  */
 import { changeLines, money, type GoogleChangeDraft } from './change-draft.js'
 import { ACCOUNT_CALL } from './account-client.js'
 import { microsOfCents } from './live.js'
-import type { LiveAccountBudget, LiveBillingState } from './live-account-admin.js'
+import { paymentsDigits, type LiveAccountBudget, type LiveBillingState, type LiveBudgetProposal } from './live-account-admin.js'
 
 export const BILLING_ACTIONS = [
-  'create-billing-setup', 'cancel-billing-setup', 'propose-account-budget', 'change-account-budget', 'end-account-budget', 'cancel-proposal', 'add-payment-card',
+  'create-billing-setup', 'cancel-billing-setup', 'propose-account-budget', 'change-account-budget', 'end-account-budget', 'remove-account-budget',
+  'cancel-proposal', 'add-payment-card',
 ] as const
 export type BillingAction = typeof BILLING_ACTIONS[number]
 
@@ -54,6 +66,10 @@ export interface BillingRequest {
   /** A change: take the budget's end date away (it runs until it is ended). */
   noEnd?: boolean
   confirmEnd?: boolean
+  /** remove-account-budget: must be true. */
+  confirmRemove?: boolean
+  /** propose-account-budget: the purchase order number on the monthly invoices (optional). */
+  purchaseOrderNumber?: string
 }
 
 export interface BillingRecord {
@@ -63,7 +79,7 @@ export interface BillingRecord {
   accountBudgetId?: string | null
   proposalId?: string | null
   /** A budget's values the change wrote (before: what they were). */
-  budget?: { name: string | null; spendingLimitCents: number | null; unlimited: boolean; endDate: string | null } | null
+  budget?: { name: string | null; spendingLimitCents: number | null; unlimited: boolean; endDate: string | null; startDate?: string | null } | null
   state: string
 }
 
@@ -87,6 +103,30 @@ function draftOf(summary: string, lines: Array<[string, unknown, unknown]>, path
 
 const budgetOf = (b: LiveAccountBudget) => ({ name: b.name, spendingLimitCents: b.spendingLimitCents, unlimited: b.spendingLimitType === 'INFINITE', endDate: b.endType === 'FOREVER' ? null : day(b.end) })
 
+/** A budget that is approved and has not started yet (Google removes it with REMOVE; a started one is ended with END). */
+const notStarted = (b: LiveAccountBudget, today: string): boolean => (day(b.start) ?? '') > today
+
+/** The waiting proposals, as facts (a new one or a cancel stands on them). */
+const pendingFacts = (live: LiveBillingState) => live.proposals.map((p) => `${p.proposalId}:${p.type}:${p.billingSetupId ?? p.accountBudgetId ?? ''}`).sort()
+
+/** Where a cancel of a waiting proposal keeps the account spending (it would have ended, lowered, shortened or removed the budget). */
+function cancelKeepsSpending(p: LiveBudgetProposal, budget: LiveAccountBudget | undefined, currency: string): string | null {
+  const name = budget?.name ? `"${budget.name}"` : `account budget ${p.accountBudgetId ?? '?'}`
+  if (p.type === 'END') return `The proposal would have ended ${name}: cancelling it keeps the budget running, so the account keeps spending.`
+  if (p.type === 'REMOVE') return `The proposal would have removed ${name} before it starts: cancelling it keeps the budget, so the account spends from its start.`
+  if (p.type !== 'UPDATE' || !budget) return null
+  const was = budgetOf(budget)
+  const reasons: string[] = []
+  if (p.spendingLimitType !== 'INFINITE' && p.spendingLimitCents !== null && (was.unlimited || (was.spendingLimitCents !== null && p.spendingLimitCents < was.spendingLimitCents))) {
+    reasons.push(`its spending limit stays ${limitWords(was.spendingLimitCents, was.unlimited, currency)} instead of ${money(p.spendingLimitCents, currency)}`)
+  }
+  const proposedEnd = p.endType === 'NOW' ? '0000-00-00' : day(p.end)
+  if (proposedEnd && p.endType !== 'FOREVER' && (was.endDate === null || proposedEnd < was.endDate)) {
+    reasons.push(`it keeps running ${was.endDate ? `to ${was.endDate}` : 'with no end'} instead of ending ${p.endType === 'NOW' ? 'now' : `on ${proposedEnd}`}`)
+  }
+  return reasons.length ? `Cancelling the proposal keeps ${name} as it is: ${reasons.join('; ')}.` : null
+}
+
 /** The active budget (approved, started, not ended) — Google allows one per account. */
 function activeBudget(live: LiveBillingState, today: string): LiveAccountBudget | null {
   return live.budgets.find((b) => b.status === 'APPROVED' && (day(b.start) ?? '') <= today && (b.endType === 'FOREVER' || (day(b.end) ?? '9999') >= today)) ?? null
@@ -95,7 +135,11 @@ function activeBudget(live: LiveBillingState, today: string): LiveAccountBudget 
 /**
  * `today`: YYYY-MM-DD in the account's time zone (Google reads every date of a proposal in it). `currency`: the account's.
  */
-export function billingDraft(customer: string, currency: string, today: string, request: BillingRequest, live: LiveBillingState): GoogleChangeDraft | { refusal: string } {
+export function billingDraft(
+  customer: string, currency: string, today: string, request: BillingRequest, live: LiveBillingState,
+  /** create-billing-setup: the payments accounts Google lists for this account (livePaymentsAccounts). */
+  paymentsAccounts?: string[] | null,
+): GoogleChangeDraft | { refusal: string } {
   if (request.action === 'add-payment-card') return { refusal: NO_CARD }
   for (const [what, d] of [['start date', request.startDate], ['end date', request.endDate]] as const) {
     if (d !== undefined && (!DATE.test(d) || Number.isNaN(Date.parse(`${d}T00:00:00Z`)))) return { refusal: `The ${what} is not a date (YYYY-MM-DD).` }
@@ -108,14 +152,18 @@ export function billingDraft(customer: string, currency: string, today: string, 
     case 'create-billing-setup': {
       const pa = (request.paymentsAccountId ?? '').trim()
       if (!/^\d{4}-\d{4}-\d{4}-\d{4}$/.test(pa)) return { refusal: 'Give the payments account id (16 digits as 1234-5678-9012-3456, from Google Ads › Billing › Settings). Nexus cannot make a new payments account or add a card.' }
+      if (!paymentsAccounts) return { refusal: 'Nexus could not read the payments accounts this Google Ads account may use, so it makes no billing setup. Nothing was changed.' }
+      if (!paymentsAccounts.some((id) => paymentsDigits(id) === paymentsDigits(pa))) {
+        return { refusal: `Payments account ${pa} is not one Google lists for this Google Ads account${paymentsAccounts.length ? ` (it lists ${paymentsAccounts.join(', ')})` : ' (it lists none)'}: Nexus uses only those, so an id never crosses accounts. Nothing was changed.` }
+      }
       if (approvedSetups.length && request.startDate === undefined) return { refusal: 'This account already has an approved billing setup: a new one starts on a future date (startDate), when the current one ends.' }
-      if (live.setups.some((s) => s.paymentsAccountId === pa && s.status !== 'CANCELLED' && (!s.end || day(s.end)! >= today))) return { refusal: `Payments account ${pa} already pays for this account (Google refuses a change to the same payments account).` }
+      if (live.setups.some((s) => paymentsDigits(s.paymentsAccountId) === paymentsDigits(pa) && s.status !== 'CANCELLED' && (!s.end || day(s.end)! >= today))) return { refusal: `Payments account ${pa} already pays for this account (Google refuses a change to the same payments account).` }
       const start = request.startDate ? { startDateTime: `${request.startDate} 00:00:00` } : { startTimeType: 'NOW' }
       return draftOf(
         `Make a billing setup: payments account ${pa} pays for the Google Ads account from ${request.startDate ?? 'now'}.`,
         [['Billing setup', approvedSetups.map((s) => s.paymentsAccountName ?? s.paymentsAccountId).join(', ') || '(none)', `payments account ${pa} from ${request.startDate ?? 'now'}`]],
         'billingSetups:mutate', { operation: { create: { paymentsAccount: `${customer}/paymentsAccounts/${pa}`, ...start } } },
-        { setups: live.setups.map((s) => `${s.billingSetupId}:${s.status}:${s.paymentsAccountId}`).sort() },
+        { setups: live.setups.map((s) => `${s.billingSetupId}:${s.status}:${s.paymentsAccountId}`).sort(), paymentsAccountListed: true },
         { action: 'create-billing-setup', paymentsAccountId: pa, billingSetupId: null, state: 'none' },
         { action: 'create-billing-setup', paymentsAccountId: pa, billingSetupId: null, state: 'PENDING' },
         ['Google approves a billing setup before it takes effect (PENDING until then).'],
@@ -150,6 +198,10 @@ export function billingDraft(customer: string, currency: string, today: string, 
           : 'This account shows no billing setup: account budgets through the API need an account on monthly invoicing. An account that pays by card sets its spending in Google Ads › Billing.' }
       }
       if (setup.status === 'CANCELLED') return { refusal: `Billing setup ${setupId} is cancelled.` }
+      const waiting = live.proposals.find((p) => p.type === 'CREATE' && p.billingSetupId === setupId)
+      if (waiting) return { refusal: `A new account budget for billing setup ${setupId} is already waiting for Google's review (proposal ${waiting.proposalId}${waiting.name ? `, "${waiting.name}"` : ''}): wait for it, or cancel it first (cancel-proposal).` }
+      const po = request.purchaseOrderNumber?.trim()
+      if (request.purchaseOrderNumber !== undefined && (!po || po.length > 255 || /[\r\n]/.test(po))) return { refusal: 'The purchase order number is 1 to 255 characters on one line.' }
       if (request.endDate !== undefined && request.endDate < (request.startDate ?? today)) return { refusal: 'The end date is before the start.' }
       const start = request.startDate ?? today
       const active = activeBudget(live, today)
@@ -165,16 +217,17 @@ export function billingDraft(customer: string, currency: string, today: string, 
         `Propose a new account budget "${name}": ${words}, from ${request.startDate ?? 'now'} ${request.endDate ? `to ${request.endDate}` : 'until it is ended'}, billed to setup ${setupId}.`,
         [['Account budget', '(none)', `"${name}": ${words}, ${request.startDate ?? 'now'} → ${request.endDate ?? 'no end'}`]],
         'accountBudgetProposals:mutate',
-        { operation: { create: { proposalType: 'CREATE', billingSetup: `${customer}/billingSetups/${setupId}`, proposedName: name, ...startBody, ...end, ...limit } } },
-        { billingSetupId: setupId, setupStatus: setup.status, budgets: live.budgets.map((b) => `${b.accountBudgetId}:${b.status}:${b.end ?? b.endType}`).sort() },
+        { operation: { create: { proposalType: 'CREATE', billingSetup: `${customer}/billingSetups/${setupId}`, proposedName: name, ...startBody, ...end, ...limit, ...(po ? { proposedPurchaseOrderNumber: po } : {}) } } },
+        { billingSetupId: setupId, setupStatus: setup.status, budgets: live.budgets.map((b) => `${b.accountBudgetId}:${b.status}:${b.end ?? b.endType}`).sort(), pending: pendingFacts(live) },
         { action: 'propose-account-budget', billingSetupId: setupId, proposalId: null, budget: null, state: 'none' },
-        { action: 'propose-account-budget', billingSetupId: setupId, proposalId: null, budget: { name, spendingLimitCents: request.spendingLimitCents ?? null, unlimited, endDate: request.endDate ?? null }, state: 'PENDING' },
+        { action: 'propose-account-budget', billingSetupId: setupId, proposalId: null, budget: { name, spendingLimitCents: request.spendingLimitCents ?? null, unlimited, endDate: request.endDate ?? null, startDate: request.startDate ?? null }, state: 'PENDING' },
         [REVIEWED],
         [`A new account budget lets the account spend ${unlimited ? 'with no limit' : `up to ${words}`} from ${request.startDate ?? 'now'} ${request.endDate ? `to ${request.endDate}` : 'until it is ended'}.`],
       )
     }
     case 'change-account-budget':
-    case 'end-account-budget': {
+    case 'end-account-budget':
+    case 'remove-account-budget': {
       const id = (request.accountBudgetId ?? '').trim()
       const budget = live.budgets.find((b) => b.accountBudgetId === id)
       if (!budget) return { refusal: `Account budget ${id || '(none given)'} is not in this account (google-ads-live view billing lists them).` }
@@ -183,8 +236,29 @@ export function billingDraft(customer: string, currency: string, today: string, 
       const was = budgetOf(budget)
       const ended = budget.endType !== 'FOREVER' && (day(budget.end) ?? '9999') < today
       if (ended) return { refusal: `Account budget ${id} ended on ${day(budget.end)}: an ended budget is not changed (propose a new one).` }
-      const stands = { accountBudgetId: id, status: budget.status, ...was, start: budget.start, servedCents: budget.amountServedCents }
+      // What was served grows while ads run: never a fact (a re-check would call every change "moved"). A change of the limit
+      // stands only on whether the new limit is at least what was served (it is refused below otherwise).
+      const stands = {
+        accountBudgetId: id, status: budget.status, ...was, start: budget.start,
+        ...(request.action === 'change-account-budget' && request.spendingLimitCents !== undefined
+          ? { limitAtLeastServed: budget.amountServedCents === null || request.spendingLimitCents >= budget.amountServedCents } : {}),
+      }
+      const label = `"${budget.name ?? id}"`
+      if (request.action === 'remove-account-budget') {
+        if (!notStarted(budget, today)) return { refusal: `Account budget ${label} started on ${day(budget.start) ?? '?'}: Google removes only a budget that has not started (a running one is ended: end-account-budget).` }
+        if (request.confirmRemove !== true) return { refusal: `Removing account budget ${label} needs confirmRemove: true: it will not start on ${day(budget.start)}, and it cannot come back (a new one is proposed).` }
+        return draftOf(
+          `Remove the account budget ${label} before it starts (${day(budget.start)}).`,
+          [[`Account budget ${label}`, `${limitWords(was.spendingLimitCents, was.unlimited, currency)}, from ${day(budget.start)} to ${was.endDate ?? 'no end'}`, '(removed)']],
+          'accountBudgetProposals:mutate', { operation: { create: { proposalType: 'REMOVE', accountBudget: `${customer}/accountBudgets/${id}` } } },
+          stands,
+          { action: 'remove-account-budget', accountBudgetId: id, budget: { ...was, startDate: day(budget.start) }, state: 'APPROVED' },
+          { action: 'remove-account-budget', accountBudgetId: id, budget: { ...was, startDate: day(budget.start) }, state: 'REMOVED' },
+          [`The budget will not start on ${day(budget.start)}: if no other budget covers that time, the account's ads do not serve then. A removed budget cannot come back (propose a new one).`, REVIEWED],
+        )
+      }
       if (request.action === 'end-account-budget') {
+        if (notStarted(budget, today)) return { refusal: `Account budget ${label} has not started (it starts on ${day(budget.start)}): Google ends only a running budget; remove it before it starts (remove-account-budget).` }
         if (request.confirmEnd !== true) return { refusal: `Ending account budget "${budget.name ?? id}" needs confirmEnd: true: from then on the account has no budget and ALL its ads stop.` }
         return draftOf(
           `End the account budget "${budget.name ?? id}" now.`,
@@ -250,17 +324,20 @@ export function billingDraft(customer: string, currency: string, today: string, 
       if (!proposal) {
         // google-ads-live view billing shows a budget's pending proposal without its id: the refusal names the waiting ones.
         const waiting = live.proposals.map((p) => `${p.proposalId} (${p.type ?? '?'}${p.name ? `, "${p.name}"` : ''})`)
-        return { refusal: `Proposal ${id || '(none given)'} is not waiting in this account (only a PENDING proposal is cancelled; Google may have decided it already). `
+        return { refusal: `Proposal ${id || '(none given)'} is not waiting in this account (only a PENDING proposal is cancelled; Google may have decided it already: `
+          + 'an approved new budget is removed before it starts with remove-account-budget, or ended once it runs with end-account-budget). '
           + (waiting.length ? `Waiting now: ${waiting.join(', ')}.` : 'No proposal is waiting now.') }
       }
+      const keeps = cancelKeepsSpending(proposal, live.budgets.find((b) => b.accountBudgetId === proposal.accountBudgetId), currency)
       return draftOf(
         `Cancel the account budget proposal ${id} (${proposal.type ?? '?'}${proposal.name ? `, "${proposal.name}"` : ''}) before Google applies it.`,
         [[`Proposal ${id}`, 'waiting for Google\'s review', '(cancelled)']],
         'accountBudgetProposals:mutate', { operation: { remove: `${customer}/accountBudgetProposals/${id}` } },
-        { proposalId: id, status: proposal.status, type: proposal.type },
+        { proposalId: id, status: proposal.status, type: proposal.type, pending: pendingFacts(live) },
         { action: 'cancel-proposal', proposalId: id, accountBudgetId: proposal.accountBudgetId, state: 'PENDING' },
         { action: 'cancel-proposal', proposalId: id, accountBudgetId: proposal.accountBudgetId, state: 'CANCELLED' },
         ['The account budget stays as it was. Google usually applies a proposal within minutes: if it already did, Google refuses the cancel.'],
+        keeps ? [keeps] : [],
       )
     }
   }
@@ -269,7 +346,8 @@ export function billingDraft(customer: string, currency: string, today: string, 
 
 /** Whether Google can check this billing change first (an account budget proposal has validate_only). */
 export const billingCheckable = (action: BillingAction | undefined): boolean =>
-  action === 'propose-account-budget' || action === 'change-account-budget' || action === 'end-account-budget' || action === 'cancel-proposal'
+  action === 'propose-account-budget' || action === 'change-account-budget' || action === 'end-account-budget' || action === 'remove-account-budget'
+  || action === 'cancel-proposal'
 
 /** What is there now, in the shape of the change's `after` (undo's "current"). */
 export function billingNow(after: BillingRecord, live: LiveBillingState): BillingRecord {
@@ -300,7 +378,9 @@ export function billingUndo(before: BillingRecord, after: BillingRecord): { args
     case 'propose-account-budget':
       return after.proposalId
         ? { args: { action: 'cancel-proposal', proposalId: after.proposalId } }
-        : { refusal: 'This change does not record the proposal Google made: cancel it in Google Ads › Billing (once Google approved it, end the budget with end-account-budget).' }
+        : { refusal: `This change does not record the proposal Google made: cancel it in Google Ads › Billing while it waits. Once Google approved it, ${after.budget?.startDate
+          ? `remove the budget with remove-account-budget before it starts (${after.budget.startDate}); from then on, end it with end-account-budget.`
+          : 'it starts at once: end it with end-account-budget.'}` }
     case 'change-account-budget': {
       const b = before.budget
       if (!b || !after.accountBudgetId) return { refusal: 'This change does not record the budget values it replaced.' }
@@ -313,6 +393,8 @@ export function billingUndo(before: BillingRecord, after: BillingRecord): { args
     }
     case 'end-account-budget':
       return { refusal: 'An ended account budget cannot be restarted (Google\'s rule): propose a new one (propose-account-budget).' }
+    case 'remove-account-budget':
+      return { refusal: 'A removed account budget cannot come back (Google\'s rule): propose it again (propose-account-budget).' }
     case 'cancel-billing-setup':
       return { refusal: 'A cancelled billing setup cannot come back (Google\'s rule): make a new one (create-billing-setup).' }
     case 'cancel-proposal':

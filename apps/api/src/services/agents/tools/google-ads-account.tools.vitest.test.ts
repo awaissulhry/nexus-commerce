@@ -14,7 +14,8 @@ const h = vi.hoisted(() => ({
   check: vi.fn(),
   enqueue: vi.fn(async () => ({ queued: true, reason: null })),
   reads: { settings: 0, access: 0, links: 0, billing: 0 },
-  live: { settings: null as unknown, access: null as unknown, links: null as unknown, billing: null as unknown },
+  live: { settings: null as unknown, access: null as unknown, links: null as unknown, billing: null as unknown, payments: [] as unknown[] },
+  paymentsRefusal: null as Error | null,
 }))
 vi.mock('../../marketing/google-ads/change-account.js', () => ({
   googleChangeAccount: vi.fn(async () => ({
@@ -27,6 +28,7 @@ vi.mock('../../marketing/google-ads/live-account-admin.js', async (importActual)
   liveAccessState: vi.fn(async () => { h.reads.access += 1; return structuredClone(h.live.access) }),
   liveLinkState: vi.fn(async () => { h.reads.links += 1; return structuredClone(h.live.links) }),
   liveBillingState: vi.fn(async () => { h.reads.billing += 1; return structuredClone(h.live.billing) }),
+  livePaymentsAccounts: vi.fn(async () => { if (h.paymentsRefusal) throw h.paymentsRefusal; return structuredClone(h.live.payments) }),
 }))
 vi.mock('../../marketing/google-ads/account-client.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/account-client.js')>()),
@@ -44,7 +46,7 @@ import { GOOGLE_ADS_ACCOUNT_TOOLS } from './google-ads-account.tools.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
 import { accessRefusal } from '../../marketing/google-ads/account-client.js'
 import { adminSettingsOf } from '../../marketing/google-ads/live-account-admin.js'
-import { parseGoogleAdsFailure } from '../../marketing/google-ads/errors.js'
+import { GoogleAdsReadError, localFailure, parseGoogleAdsFailure } from '../../marketing/google-ads/errors.js'
 import { GoogleAdsWriteError } from '../../marketing/google-ads/write-client.js'
 import type { ToolContext } from '../tool-types.js'
 
@@ -74,7 +76,9 @@ beforeEach(() => {
     invitations: [],
     nexusLogin: 'owner@example.com',
   }
-  h.live.links = { merchantLinks: [{ linkId: '41', merchantCenterId: '555' }], invitations: [], videos: [] }
+  h.live.links = { merchantLinks: [{ linkId: '41', merchantCenterId: '555' }], invitations: [], videos: [], chosenMerchantCenterIds: ['555', '558'] }
+  h.live.payments = [{ paymentsAccountId: '1111-2222-3333-4444', name: 'Payer A' }, { paymentsAccountId: '1111-2222-3333-5555', name: 'Payer B' }]
+  h.paymentsRefusal = null
   h.live.billing = {
     setups: [{ billingSetupId: '81', status: 'APPROVED', paymentsAccountId: '1111-2222-3333-4444', paymentsAccountName: 'Payer A', start: '2026-01-01 00:00:00', end: null }],
     budgets: [], proposals: [],
@@ -191,9 +195,19 @@ describe('set-google-account-links', () => {
     expect(h.check.mock.calls[0][1]).toEqual([{ accountCall: { path: 'productLinks:remove', body: { resourceName: `${C}/productLinks/41` } } }])
     expect(unlink.preview).toMatchObject({ googleCheck: { checked: true } })
     const link = await tool('set-google-account-links').handler({ action: 'link-merchant-center', merchantCenterId: '558' }, asker)
-    expect(link.preview).toMatchObject({ googleCheck: { checked: false, sentence: expect.stringMatching(/^Google cannot check this link change first/) } })
+    expect(link.preview).toMatchObject({ googleCheck: { checked: false, sentence: expect.stringMatching(/^Google cannot check this link change first/) }, spendsMoney: true })
     expect(h.check).toHaveBeenCalledTimes(1)
     expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('a Merchant Center account this business did not choose is refused, in the preview and again at the run', async () => {
+    const other = await tool('set-google-account-links').handler({ action: 'link-merchant-center', merchantCenterId: '559' }, asker)
+    expect(other).toMatchObject({ ok: false, error: expect.stringMatching(/not the Merchant Center account this business chose in Nexus/) })
+    const preview = (await tool('set-google-account-links').handler({ action: 'link-merchant-center', merchantCenterId: '558' }, asker)).preview
+    h.live.links = { ...(h.live.links as object), chosenMerchantCenterIds: ['555'] }
+    const run = await tool('set-google-account-links').execute!({ action: 'link-merchant-center', merchantCenterId: '558' }, approved(preview))
+    expect(run).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: Merchant Center 558 is not the Merchant Center account this business chose/) })
+    expect(h.send).not.toHaveBeenCalled()
   })
 
   it('GA4, a YouTube channel and a Business Profile: answered in words, before anything is read or sent', async () => {
@@ -243,6 +257,15 @@ describe('set-google-billing', () => {
     expect(h.send).toHaveBeenCalledTimes(1)
     expect(run.change!.after).toMatchObject({ action: 'propose-account-budget', proposalId: '95', state: 'PENDING' })
     expect(tool('set-google-billing').undo!.request(run.change!)).toMatchObject({ tool: 'set-google-billing', args: { action: 'cancel-proposal', proposalId: '95' } })
+  })
+
+  it('a billing setup only for a payments account Google lists for this account; an unreadable list refuses it', async () => {
+    const other = await tool('set-google-billing').handler({ action: 'create-billing-setup', paymentsAccountId: '1111-2222-3333-6666', startDate: '2099-01-01' }, asker)
+    expect(other).toMatchObject({ ok: false, error: expect.stringMatching(/^Payments account 1111-2222-3333-6666 is not one Google lists for this Google Ads account/) })
+    h.paymentsRefusal = new GoogleAdsReadError(localFailure('Google did not let Nexus list the payments accounts.', 'SERVICE_ACCESS_DENIED'), 'ads.paymentsAccounts.list')
+    const unread = await tool('set-google-billing').handler({ action: 'create-billing-setup', paymentsAccountId: '1111-2222-3333-5555', startDate: '2099-01-01' }, asker)
+    expect(unread).toMatchObject({ ok: false, error: 'Nexus could not read the Google Ads account: Google did not let Nexus list the payments accounts.' })
+    expect(h.send).not.toHaveBeenCalled()
   })
 
   it('a billing setup is not checked first (no validate_only); refused at the Explorer access level, the preview says so plainly', async () => {

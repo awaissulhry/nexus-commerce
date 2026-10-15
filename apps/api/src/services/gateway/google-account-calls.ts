@@ -33,10 +33,12 @@
  *                                          REVOKED (a request this account sent) | ENABLED / REJECTED (a creator's request)
  *   BillingSetupOperation                  create { paymentsAccount "customers/{c}/paymentsAccounts/{1234-5678-9012-3456}",
  *                                          startTimeType NOW | startDateTime } | remove "customers/{c}/billingSetups/{id}"
- *   AccountBudgetProposalOperation         create { proposalType CREATE | UPDATE | END, billingSetup, accountBudget, proposedName,
+ *   AccountBudgetProposalOperation         create { proposalType CREATE | UPDATE | END | REMOVE, billingSetup, accountBudget, proposedName,
  *                                          proposedStartTimeType NOW | proposedStartDateTime, proposedEndTimeType NOW | FOREVER |
- *                                          proposedEndDateTime, proposedSpendingLimitMicros | proposedSpendingLimitType INFINITE }
+ *                                          proposedEndDateTime, proposedSpendingLimitMicros | proposedSpendingLimitType INFINITE,
+ *                                          proposedPurchaseOrderNumber (CREATE only) }
  *                                          + updateMask (UPDATE only) | remove "customers/{c}/accountBudgetProposals/{id}"
+ *                                          (REMOVE: "a budget that hasn't started yet", like END only the budget)
  */
 
 const HOST = 'googleads.googleapis.com'
@@ -192,7 +194,7 @@ function problemOf(call: GoogleAccountCall, body: Json): string | null {
 
 function proposalProblem(c: string, p: Json, mask: unknown): string | null {
   const allowed = ['proposalType', 'billingSetup', 'accountBudget', 'proposedName', 'proposedStartTimeType', 'proposedStartDateTime',
-    'proposedEndTimeType', 'proposedEndDateTime', 'proposedSpendingLimitMicros', 'proposedSpendingLimitType']
+    'proposedEndTimeType', 'proposedEndDateTime', 'proposedSpendingLimitMicros', 'proposedSpendingLimitType', 'proposedPurchaseOrderNumber']
   const extra = onlyKeys(p, allowed)
   if (extra.length) return `the proposal names ${extra.join(', ')}`
   const dateTime = (v: unknown) => v === undefined || (typeof v === 'string' && GOOGLE_DATE_TIME_RE.test(v))
@@ -205,6 +207,9 @@ function proposalProblem(c: string, p: Json, mask: unknown): string | null {
   }
   if (p.proposedSpendingLimitMicros !== undefined && p.proposedSpendingLimitType !== undefined) return 'it names a spending limit and an unlimited one'
   if (p.proposedName !== undefined && !text(p.proposedName, 255)) return 'the budget name is not 1 to 255 characters on one line'
+  if (p.proposedPurchaseOrderNumber !== undefined && (p.proposalType !== 'CREATE' || !text(p.proposedPurchaseOrderNumber, 255))) {
+    return 'a purchase order number is 1 to 255 characters on one line, on a new budget only'
+  }
   const budget = ownName(c, 'accountBudgets', ID)
   switch (p.proposalType) {
     case 'CREATE':
@@ -223,11 +228,12 @@ function proposalProblem(c: string, p: Json, mask: unknown): string | null {
       return null
     }
     case 'END':
-      if (mask !== undefined) return 'an end takes no updateMask'
-      if (!budget(p.accountBudget) || Object.keys(p).length !== 2) return 'an end names one account budget of this account and nothing else'
+    case 'REMOVE':
+      if (mask !== undefined) return `${p.proposalType === 'END' ? 'an end' : 'a removal'} takes no updateMask`
+      if (!budget(p.accountBudget) || Object.keys(p).length !== 2) return `${p.proposalType === 'END' ? 'an end' : 'a removal'} names one account budget of this account and nothing else`
       return null
     default:
-      return 'the proposal type is not CREATE, UPDATE or END'
+      return 'the proposal type is not CREATE, UPDATE, END or REMOVE'
   }
 }
 

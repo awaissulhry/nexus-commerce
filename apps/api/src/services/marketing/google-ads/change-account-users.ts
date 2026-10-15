@@ -24,8 +24,9 @@
  *
  * Personal data: a person's e-mail address is shown only MASKED in what the change shows (summary, changes, warnings:
  * "p***@example.com" and Google's user id): a preview is kept with the approval, and the Approvals page shows it to
- * everyone who sees approvals. The full address is only in an invitation's own request (Google needs it) and in the
- * change record undo reads (to invite a removed person again); the tool needs users.manage to ask for or approve it.
+ * everyone who sees approvals. The full address is in the request's arguments (an invitation needs it) and in the change
+ * record undo reads (to invite a removed person again): people who can see Approvals can open both. Asking for or
+ * approving the change needs users.manage.
  */
 import { ACCESS_ROLES, EMAIL_RE, type AccessRole } from '../../gateway/google-account-calls.js'
 import { maskEmail } from '../../orders/buyer-mask.js'

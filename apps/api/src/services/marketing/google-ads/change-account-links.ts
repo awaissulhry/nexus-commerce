@@ -33,7 +33,12 @@
  *                     content and analytics.readonly, not business.manage, so it cannot make that link (checked
  *                     2026-10-15, curl).
  *
- * Money: no link spends by itself. Unlinking Merchant Center stops product ads (a warning, and confirmUnlink).
+ * Ids never cross businesses (Owner's rule): a Merchant Center account is linked or accepted only when it is the one THIS
+ * business chose in Nexus (GoogleAccountLink product MERCHANT; the global unique index on (product, externalId) means no
+ * other business holds it). The chosen ids are in the facts the run re-checks.
+ *
+ * Money: linking or accepting a Merchant Center account can make enabled Shopping and Performance Max campaigns that use
+ * it serve product ads again — SPENDS MONEY, always said. Unlinking stops product ads (a warning, and confirmUnlink).
  */
 import { YOUTUBE_CHANNEL_RE, YOUTUBE_VIDEO_RE } from '../../gateway/google-account-calls.js'
 import { changeLines, type GoogleChangeDraft } from './change-draft.js'
@@ -93,10 +98,22 @@ export const NOT_CHECKED_LINKS = 'Google cannot check this link change first (it
 
 const call = (path: string, body: Record<string, unknown>) => [{ [ACCOUNT_CALL]: { path, body } }]
 
-function draftOf(summary: string, line: [string, unknown, unknown], operations: GoogleChangeDraft['operations'], stands: unknown, before: LinkRecord, after: LinkRecord, warnings: string[] = []): GoogleChangeDraft {
+function draftOf(summary: string, line: [string, unknown, unknown], operations: GoogleChangeDraft['operations'], stands: unknown, before: LinkRecord, after: LinkRecord, warnings: string[] = [], spendsMoney: string[] = []): GoogleChangeDraft {
   const { changes } = changeLines([line])
-  return { summary, changes, totals: { links: 1 }, warnings, spendsMoney: [], skipped: [], operations, stands, before, after }
+  return { summary, changes, totals: { links: 1 }, warnings, spendsMoney, skipped: [], operations, stands, before, after }
 }
+
+/** Why a Merchant Center account may not be linked to this business's Google Ads account, or null (it is the one chosen). */
+function notChosen(id: string, live: LiveLinkState): string | null {
+  if (live.chosenMerchantCenterIds.includes(id)) return null
+  if (!live.chosenMerchantCenterIds.length) {
+    return `This business has not chosen a Merchant Center account in Nexus: choose it first (Settings › Channels › Google › Choose accounts), then link it. Nothing was changed.`
+  }
+  return `Merchant Center ${id} is not the Merchant Center account this business chose in Nexus (${live.chosenMerchantCenterIds.join(', ')}): Nexus links only that one, so ids never cross businesses. Nothing was changed.`
+}
+
+/** The SPENDS MONEY line of a Merchant Center link (or an accepted request). */
+const productAdsServe = (id: string) => `Linking Merchant Center ${id} lets enabled Shopping and Performance Max campaigns that use it show product ads (again): they can spend.`
 
 export function linkDraft(customer: string, request: LinkRequest, live: LiveLinkState): GoogleChangeDraft | { refusal: string } {
   const cannot = CANNOT[request.action]
@@ -109,15 +126,17 @@ export function linkDraft(customer: string, request: LinkRequest, live: LiveLink
       if (live.merchantLinks.some((l) => l.merchantCenterId === id)) return { refusal: `Merchant Center ${id} is already linked to this account.` }
       const open = mcInvitations.find((i) => i.merchantCenterId === id && (i.status === 'PENDING_APPROVAL' || i.status === 'REQUESTED'))
       if (open) return { refusal: `Merchant Center ${id} already sent a link request (${open.invitationId}, ${open.status}): accept it (accept-merchant-request).` }
+      const chosen = notChosen(id, live)
+      if (chosen) return { refusal: chosen }
       return draftOf(
         `Link Merchant Center account ${id} to the Google Ads account (a direct link).`,
         [`Merchant Center ${id}`, '(not linked)', 'linked'],
         call('productLinks:create', { productLink: { merchantCenter: { merchantCenterId: id } } }),
-        { merchantCenterId: id, linked: false },
+        { merchantCenterId: id, linked: false, chosen: live.chosenMerchantCenterIds },
         { action: 'link-merchant-center', merchantCenterId: id, state: 'none' },
         { action: 'link-merchant-center', merchantCenterId: id, state: 'linked' },
-        ['A direct link needs the Google login Nexus uses to be an administrator of BOTH accounts; otherwise Google refuses it: send the request from Merchant Center and accept it here (accept-merchant-request).',
-          'Its products can then serve in Shopping and Performance Max campaigns that use this Merchant Center (only enabled campaigns spend).'],
+        ['A direct link needs the Google login Nexus uses to be an administrator of BOTH accounts; otherwise Google refuses it: send the request from Merchant Center and accept it here (accept-merchant-request).'],
+        [productAdsServe(id)],
       )
     }
     case 'accept-merchant-request':
@@ -140,16 +159,18 @@ export function linkDraft(customer: string, request: LinkRequest, live: LiveLink
       }
       if (invitation.status !== 'PENDING_APPROVAL') return { refusal: `Request ${id} from Merchant Center ${mc} is ${invitation.status ?? 'not waiting'}: only a request waiting for this account (PENDING_APPROVAL) is accepted or rejected.` }
       const accept = request.action === 'accept-merchant-request'
+      // Accepting links it: only the Merchant Center this business chose (rejecting another one's request is always allowed).
+      const chosen = accept ? notChosen(mc, live) : null
+      if (chosen) return { refusal: chosen }
       return draftOf(
         `${accept ? 'Accept' : 'Reject'} the link request of Merchant Center account ${mc}.`,
         [`Link request ${id} (Merchant Center ${mc})`, 'waiting', accept ? 'accepted (linked)' : 'rejected'],
         call('productLinkInvitations:update', { resourceName: `${customer}/productLinkInvitations/${id}`, productLinkInvitationStatus: accept ? 'ACCEPTED' : 'REJECTED' }),
-        { invitationId: id, status: invitation.status },
+        { invitationId: id, status: invitation.status, ...(accept ? { chosen: live.chosenMerchantCenterIds } : {}) },
         { action: request.action, invitationId: id, merchantCenterId: mc, state: 'pending' },
         { action: request.action, invitationId: id, merchantCenterId: mc, state: accept ? 'linked' : 'rejected' },
-        accept
-          ? ['Its products can then serve in Shopping and Performance Max campaigns that use this Merchant Center (only enabled campaigns spend).']
-          : ['A rejected request cannot be accepted later (Google\'s rule): Merchant Center has to send a new one.'],
+        accept ? [] : ['A rejected request cannot be accepted later (Google\'s rule): Merchant Center has to send a new one.'],
+        accept ? [productAdsServe(mc)] : [],
       )
     }
     case 'unlink-merchant-center': {

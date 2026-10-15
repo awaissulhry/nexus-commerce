@@ -28,7 +28,7 @@ import { accountSettingsDraft, BRAND_SAFETY, settingsNow, settingsUndoArgs, type
 import { NOT_CHECKED_USERS, USER_ACCESS_ACTIONS, userAccessDraft, userAccessNow, userAccessUndo, type UserAccessRecord, type UserAccessRequest } from '../../marketing/google-ads/change-account-users.js'
 import { CANNOT, LINK_ACTIONS, linkCheckable, linkDraft, linkNow, linkUndo, NOT_CHECKED_LINKS, type LinkRecord, type LinkRequest } from '../../marketing/google-ads/change-account-links.js'
 import { BILLING_ACTIONS, billingCheckable, billingDraft, billingNow, billingUndo, NO_CARD, NOT_CHECKED_BILLING, type BillingRecord, type BillingRequest } from '../../marketing/google-ads/change-account-billing.js'
-import { liveAccessState, liveAdminSettings, liveBillingState, liveLinkState } from '../../marketing/google-ads/live-account-admin.js'
+import { liveAccessState, liveAdminSettings, liveBillingState, liveLinkState, livePaymentsAccounts } from '../../marketing/google-ads/live-account-admin.js'
 import { idOf } from '../../marketing/google-ads/live.js'
 import { customerResource, type GoogleMutateResponse } from '../../marketing/google-ads/write-client.js'
 
@@ -200,9 +200,10 @@ const setGoogleUserAccess: AgentTool = {
   description:
     'Who may use the business\'s chosen Google Ads account (google-ads-live view users lists people and invitations): invite a person '
     + 'with a role (Google e-mails them; they accept), cancel a pending invitation, change a person\'s role, or remove a person\'s '
-    + 'access (only with confirmRemove: true). A security change: the preview names the person and the role plainly — the person by '
-    + 'a masked e-mail address (p***@example.com) and Google\'s user or invitation id, because the preview is kept with the approval; '
-    + 'the full address is only in an invitation\'s own request. Nexus '
+    + 'access (only with confirmRemove: true). A security change: the preview names the role plainly and the person by a masked '
+    + 'e-mail address (p***@example.com) and Google\'s user or invitation id. The full address is in the request\'s arguments (an '
+    + 'invitation needs it) and in the change record (undo invites a removed person again), which people who can see Approvals '
+    + 'can open. Nexus '
     + 'never removes or demotes the last administrator, nor the Google login Nexus signs in with. Google may hold a change for a '
     + 'second administrator\'s approval (multi-party approval): the answer says so. At Google\'s Explorer access level Google does not '
     + 'allow user management through the API: it then refuses when the change runs, and the answer says so. Undo: an invitation is '
@@ -282,7 +283,9 @@ const setGoogleAccountLinks: AgentTool = {
   }),
   description:
     'Links of the business\'s chosen Google Ads account (google-ads-live view links shows them): Merchant Center — link an account '
-    + 'directly (the Google login Nexus uses must be an administrator of both), accept or reject the link request Merchant Center sent, '
+    + 'directly (the Google login Nexus uses must be an administrator of both), accept or reject the link request Merchant Center sent '
+    + '(linking or accepting only the Merchant Center account this business chose in Nexus: ids never cross businesses; SPENDS MONEY, '
+    + 'as enabled Shopping and Performance Max campaigns that use it can show product ads), '
     + 'remove a request, unlink (confirmUnlink: Shopping and Performance Max product ads stop); YouTube — ask a channel to link a video, '
     + 'take a request back, accept or reject a creator\'s request, remove a linked video. Not possible, and answered so in words: '
     + 'SENDING a Merchant Center request (it comes from Merchant Center), Google Analytics 4 (the Analytics Admin API with the '
@@ -316,10 +319,16 @@ const billingRequest = (args: Record<string, unknown>): BillingRequest => ({
   endDate: args.endDate as string | undefined,
   noEnd: args.noEnd as boolean | undefined,
   confirmEnd: args.confirmEnd as boolean | undefined,
+  confirmRemove: args.confirmRemove as boolean | undefined,
+  purchaseOrderNumber: args.purchaseOrderNumber as string | undefined,
 })
 
-const buildBilling = (args: Record<string, unknown>): GoogleDraftBuilder => async (account) =>
-  billingDraft(customerResource(account.target), account.currency, accountToday(account.timeZone), billingRequest(args), await liveBillingState(account.target))
+const buildBilling = (args: Record<string, unknown>): GoogleDraftBuilder => async (account) => {
+  const request = billingRequest(args)
+  // A new billing setup only for a payments account Google lists for this account (read strictly: a refusal refuses it).
+  const payments = request.action === 'create-billing-setup' ? (await livePaymentsAccounts(account.target)).map((a) => a.paymentsAccountId) : null
+  return billingDraft(customerResource(account.target), account.currency, accountToday(account.timeZone), request, await liveBillingState(account.target), payments)
+}
 
 const billingSender = (args: Record<string, unknown>) => accountSender(NOT_CHECKED_BILLING, billingCheckable(args.action as BillingRequest['action']))
 
@@ -352,9 +361,10 @@ const setGoogleBilling: AgentTool = {
     accountId: googleAccountArg,
     action: z.enum(BILLING_ACTIONS).describe(
       'create-billing-setup (paymentsAccountId, startDate), cancel-billing-setup (billingSetupId), propose-account-budget (name, '
-      + 'spendingLimitCents or unlimited, startDate, endDate, billingSetupId), change-account-budget (accountBudgetId + name / '
-      + 'spendingLimitCents / unlimited / endDate / noEnd), end-account-budget (accountBudgetId + confirmEnd), cancel-proposal '
-      + '(proposalId); add-payment-card answers that no API can'),
+      + 'spendingLimitCents or unlimited, startDate, endDate, billingSetupId, purchaseOrderNumber), change-account-budget (accountBudgetId + '
+      + 'name / spendingLimitCents / unlimited / endDate / noEnd), end-account-budget (a running budget: accountBudgetId + confirmEnd), '
+      + 'remove-account-budget (one that has not started: accountBudgetId + confirmRemove), cancel-proposal (proposalId); add-payment-card '
+      + 'answers that no API can'),
     paymentsAccountId: z.string().trim().regex(/^\d{4}-\d{4}-\d{4}-\d{4}$/, 'a payments account id 1234-5678-9012-3456').optional()
       .describe('create-billing-setup: an EXISTING payments account (Google Ads › Billing › Settings), as 1234-5678-9012-3456'),
     billingSetupId: googleIdArg('the billing setup (google-ads-live view billing)').optional(),
@@ -367,17 +377,21 @@ const setGoogleBilling: AgentTool = {
     endDate: DAY.optional().describe('the last day, YYYY-MM-DD in the account\'s time zone; absent on a new budget = until it is ended'),
     noEnd: z.boolean().optional().describe('change-account-budget: take the end date away (it runs until it is ended)'),
     confirmEnd: z.boolean().optional().describe('end-account-budget: must be true (ALL ads of the account stop)'),
+    confirmRemove: z.boolean().optional().describe('remove-account-budget: must be true (the budget will not start, and cannot come back)'),
+    purchaseOrderNumber: z.string().trim().min(1).max(255).optional().describe('propose-account-budget: the purchase order number shown on the monthly invoices (optional)'),
     why: googleWhyArg,
   }),
   description:
     'Billing of the business\'s chosen Google Ads account, as far as the Google Ads API allows (google-ads-live view billing shows it): '
-    + 'make a billing setup for an EXISTING payments account or cancel one that has not started; propose a new account budget (a '
-    + 'spending limit in cents of the account\'s currency, or unlimited, with a start and an end), change one (name, limit, end), end '
-    + 'one (confirmEnd: ALL ads stop), or cancel a proposal before Google reviews it (Google reviews every proposal, usually within an '
+    + 'make a billing setup for an EXISTING payments account that Google lists for this account, or cancel one that has not started; '
+    + 'propose a new account budget (a spending limit in cents of the account\'s currency, or unlimited, with a start, an end and an '
+    + 'optional purchase order number), change one (name, limit, end), end a running one (confirmEnd: ALL ads stop), remove one that has '
+    + 'not started (confirmRemove), or cancel a proposal before Google reviews it (Google reviews every proposal, usually within an '
     + 'hour). Only for an account on monthly invoicing; at Google\'s Explorer access level Google refuses these services and the '
     + 'answer says so. No API can add a payment card (add-payment-card answers so). A new budget, a higher limit, no limit, a later '
-    + 'end and a billing setup are SPENDS MONEY. Undo: a billing setup or a proposal is cancelled (while it waits), a changed budget '
-    + 'set back; an ended budget or a cancelled setup cannot come back. Google checks an account budget change first (validate_only); '
+    + 'end, a billing setup, and cancelling a waiting proposal that would have ended, lowered, shortened or removed a budget are SPENDS '
+    + 'MONEY. Undo: a billing setup or a proposal is cancelled (while it waits), a changed budget '
+    + 'set back; an ended or removed budget or a cancelled setup cannot come back. Google checks an account budget change first (validate_only); '
     + 'it cannot check a billing setup first (no validate_only).' + GOOGLE_PARTLY_CHECKED_RULES,
   undo: billingUndoSpec,
   handler: async (args, ctx) => noCard(args) ?? googleChangePreview(args, ctx, buildBilling(args), billingSender(args)),

@@ -8,7 +8,7 @@ import { accountSettingsDraft, AUTO_TAGGING_OFF, settingsNow, settingsUndoArgs, 
 import { ACCESS_LEVEL_NOTE, userAccessDraft, userAccessNow, userAccessUndo, type UserAccessRecord } from './change-account-users.js'
 import { CANNOT, linkDraft, linkNow, linkUndo, type LinkRecord } from './change-account-links.js'
 import { billingDraft, billingNow, billingUndo, NO_CARD, type BillingRecord } from './change-account-billing.js'
-import { adminSettingsOf, type LiveAccessState, type LiveBillingState, type LiveLinkState } from './live-account-admin.js'
+import { adminSettingsOf, type LiveAccessState, type LiveBillingState, type LiveBudgetProposal, type LiveLinkState } from './live-account-admin.js'
 import type { GoogleChangeDraft } from './change-draft.js'
 
 const C = 'customers/1234567890'
@@ -47,6 +47,11 @@ describe('accountSettingsDraft', () => {
       updateMask: 'call_reporting_setting.call_reporting_enabled,call_reporting_setting.call_conversion_action,video_brand_safety_suitability',
     } }])
     expect(d.warnings.join(' ')).toMatch(/Call reporting OFF.*only while call conversion reporting is on.*Expanded inventory/)
+    // STANDARD → EXPANDED shows video ads on more content: SPENDS MONEY. Narrower is not; nor is anything else here.
+    expect(d.spendsMoney).toEqual(['Video brand safety STANDARD_INVENTORY → EXPANDED_INVENTORY: video ads can show on more content, so they can spend more.'])
+    expect(ok(accountSettingsDraft(C, { videoBrandSafety: 'STANDARD_INVENTORY' }, { ...SETTINGS, videoBrandSafety: 'LIMITED_INVENTORY' })).spendsMoney).toHaveLength(1)
+    expect(ok(accountSettingsDraft(C, { videoBrandSafety: 'LIMITED_INVENTORY' }, SETTINGS)).spendsMoney).toEqual([])
+    expect(ok(accountSettingsDraft(C, { videoBrandSafety: 'EXPANDED_INVENTORY' }, { ...SETTINGS, videoBrandSafety: null })).spendsMoney).toHaveLength(1)
   })
 
   it('refuses Google\'s URL rules, an empty name and nothing to change, before anything is sent', () => {
@@ -144,6 +149,7 @@ const LINKS: LiveLinkState = {
     { linkId: '43~44', status: 'REQUESTED', channelId: 'UCabcdefghijklmnopqrstuv', videoId: 'abcdefghijk' },
     { linkId: '43~46', status: 'PENDING_APPROVAL', channelId: 'UCabcdefghijklmnopqrstuv', videoId: 'bcdefghijkl' },
   ],
+  chosenMerchantCenterIds: ['555', '556', '558'],
 }
 
 describe('linkDraft', () => {
@@ -151,8 +157,10 @@ describe('linkDraft', () => {
     const link = ok(linkDraft(C, { action: 'link-merchant-center', merchantCenterId: '558' }, LINKS))
     expect(link.operations).toEqual([{ accountCall: { path: 'productLinks:create', body: { productLink: { merchantCenter: { merchantCenterId: '558' } } } } }])
     expect(link.warnings[0]).toMatch(/administrator of BOTH accounts/)
+    expect(link.spendsMoney).toEqual(['Linking Merchant Center 558 lets enabled Shopping and Performance Max campaigns that use it show product ads (again): they can spend.'])
     const accept = ok(linkDraft(C, { action: 'accept-merchant-request', invitationId: '42' }, LINKS))
     expect(accept.operations).toEqual([{ accountCall: { path: 'productLinkInvitations:update', body: { resourceName: `${C}/productLinkInvitations/42`, productLinkInvitationStatus: 'ACCEPTED' } } }])
+    expect(accept.spendsMoney).toEqual([expect.stringMatching(/^Linking Merchant Center 556 lets enabled Shopping and Performance Max campaigns/)])
     expect(refusal(linkDraft(C, { action: 'unlink-merchant-center', merchantCenterId: '555' }, LINKS))).toMatch(/needs confirmUnlink: true/)
     const unlink = ok(linkDraft(C, { action: 'unlink-merchant-center', merchantCenterId: '555', confirmUnlink: true }, LINKS))
     expect(unlink.operations).toEqual([{ accountCall: { path: 'productLinks:remove', body: { resourceName: `${C}/productLinks/41` } } }])
@@ -160,6 +168,20 @@ describe('linkDraft', () => {
     expect(refusal(linkDraft(C, { action: 'link-merchant-center', merchantCenterId: '555' }, LINKS))).toMatch(/already linked/)
     expect(refusal(linkDraft(C, { action: 'link-merchant-center', merchantCenterId: '556' }, LINKS))).toMatch(/already sent a link request \(42/)
     expect(refusal(linkDraft(C, { action: 'accept-merchant-request', invitationId: '45' }, LINKS))).toMatch(/is REJECTED/)
+  })
+
+  it('ids never cross businesses: only the Merchant Center this business chose is linked or accepted; the chosen ids are facts', () => {
+    expect(refusal(linkDraft(C, { action: 'link-merchant-center', merchantCenterId: '559' }, LINKS))).toBe('Merchant Center 559 is not the Merchant Center account this business chose in Nexus (555, 556, 558): Nexus links only that one, so ids never cross businesses. Nothing was changed.')
+    expect(refusal(linkDraft(C, { action: 'link-merchant-center', merchantCenterId: '558' }, { ...LINKS, chosenMerchantCenterIds: [] }))).toMatch(/^This business has not chosen a Merchant Center account in Nexus: choose it first/)
+    expect(refusal(linkDraft(C, { action: 'accept-merchant-request', invitationId: '42' }, { ...LINKS, chosenMerchantCenterIds: ['558'] }))).toMatch(/Merchant Center 556 is not the Merchant Center account this business chose/)
+    // Rejecting another account's request crosses nothing: allowed, and it spends nothing.
+    expect(ok(linkDraft(C, { action: 'reject-merchant-request', invitationId: '42' }, { ...LINKS, chosenMerchantCenterIds: [] })).spendsMoney).toEqual([])
+    // A run re-checks the choice: a different chosen list is a different basis.
+    const a = ok(linkDraft(C, { action: 'link-merchant-center', merchantCenterId: '558' }, LINKS))
+    const b = ok(linkDraft(C, { action: 'link-merchant-center', merchantCenterId: '558' }, { ...LINKS, chosenMerchantCenterIds: ['558'] }))
+    expect(a.stands).not.toEqual(b.stands)
+    // The undo of an unlink is a link: the same rule and the same SPENDS MONEY line.
+    expect(linkUndo({ action: 'unlink-merchant-center', merchantCenterId: '558', state: 'linked' }, { action: 'unlink-merchant-center', merchantCenterId: '558', state: 'none' })).toEqual({ args: { action: 'link-merchant-center', merchantCenterId: '558' } })
   })
 
   it('YouTube: a request, taking it back, accepting a creator\'s request; ids checked', () => {
@@ -200,8 +222,10 @@ const BILLING: LiveBillingState = {
     accountBudgetId: '91', name: 'Budget A', status: 'APPROVED', billingSetupId: '81', start: '2026-01-01 00:00:00', end: null, endType: 'FOREVER',
     spendingLimitCents: 500000, spendingLimitType: null, amountServedCents: 120000, pending: null,
   }],
-  proposals: [{ proposalId: '95', status: 'PENDING', type: 'UPDATE', accountBudgetId: '91', billingSetupId: '81', name: 'Budget A', spendingLimitCents: 600000, spendingLimitType: null, createdAt: '2026-10-15 10:00:00' }],
+  proposals: [{ proposalId: '95', status: 'PENDING', type: 'UPDATE', accountBudgetId: '91', billingSetupId: '81', name: 'Budget A', spendingLimitCents: 600000, spendingLimitType: null, createdAt: '2026-10-15 10:00:00', end: null, endType: null }],
 }
+const PAYMENTS = ['1111-2222-3333-4444', '1111-2222-3333-5555']
+const proposal = (p: Partial<LiveBudgetProposal>): LiveBudgetProposal => ({ ...BILLING.proposals[0], ...p })
 const TODAY = '2026-10-15'
 
 describe('billingDraft', () => {
@@ -247,11 +271,65 @@ describe('billingDraft', () => {
     expect(cancel.operations).toEqual([{ accountCall: { path: 'accountBudgetProposals:mutate', body: { operation: { remove: `${C}/accountBudgetProposals/95` } } } }])
     // A wrong or missing id: the refusal names the proposals waiting now (the billing view shows them without an id).
     expect(refusal(billingDraft(C, 'EUR', TODAY, { action: 'cancel-proposal', proposalId: '96' }, BILLING))).toMatch(/Waiting now: 95 \(UPDATE, "Budget A"\)\.$/)
-    expect(refusal(billingDraft(C, 'EUR', TODAY, { action: 'create-billing-setup', paymentsAccountId: '1111-2222-3333-5555' }, BILLING))).toMatch(/already has an approved billing setup/)
-    const setup = ok(billingDraft(C, 'EUR', TODAY, { action: 'create-billing-setup', paymentsAccountId: '1111-2222-3333-5555', startDate: '2026-12-01' }, BILLING))
+    expect(refusal(billingDraft(C, 'EUR', TODAY, { action: 'create-billing-setup', paymentsAccountId: '1111-2222-3333-5555' }, BILLING, PAYMENTS))).toMatch(/already has an approved billing setup/)
+    const setup = ok(billingDraft(C, 'EUR', TODAY, { action: 'create-billing-setup', paymentsAccountId: '1111-2222-3333-5555', startDate: '2026-12-01' }, BILLING, PAYMENTS))
     expect(setup.operations).toEqual([{ accountCall: { path: 'billingSetups:mutate', body: { operation: { create: { paymentsAccount: `${C}/paymentsAccounts/1111-2222-3333-5555`, startDateTime: '2026-12-01 00:00:00' } } } } }])
     expect(setup.spendsMoney).toHaveLength(1)
     expect(refusal(billingDraft(C, 'EUR', TODAY, { action: 'cancel-billing-setup', billingSetupId: '81' }, BILLING))).toMatch(/Google cancels only a pending setup/)
+  })
+
+  it('a billing setup only for a payments account Google lists for this account (ids never cross accounts)', () => {
+    const ask = { action: 'create-billing-setup' as const, paymentsAccountId: '1111-2222-3333-6666', startDate: '2026-12-01' }
+    expect(refusal(billingDraft(C, 'EUR', TODAY, ask, BILLING, PAYMENTS))).toBe('Payments account 1111-2222-3333-6666 is not one Google lists for this Google Ads account (it lists 1111-2222-3333-4444, 1111-2222-3333-5555): Nexus uses only those, so an id never crosses accounts. Nothing was changed.')
+    expect(refusal(billingDraft(C, 'EUR', TODAY, ask, BILLING, null))).toMatch(/could not read the payments accounts/)
+    // Google may write the id as 16 digits: the same account.
+    ok(billingDraft(C, 'EUR', TODAY, { ...ask, paymentsAccountId: '1111-2222-3333-5555' }, BILLING, ['1111222233335555']))
+  })
+
+  it('what was served is no fact: a change or an end is not "moved" while ads keep serving; only "new limit ≥ served" is', () => {
+    const later = { ...BILLING, budgets: [{ ...BILLING.budgets[0], amountServedCents: 130000 }] }
+    const ask = { action: 'change-account-budget' as const, accountBudgetId: '91', spendingLimitCents: 300000 }
+    const a = ok(billingDraft(C, 'EUR', TODAY, ask, BILLING))
+    expect(ok(billingDraft(C, 'EUR', TODAY, ask, later)).stands).toEqual(a.stands)
+    expect(a.stands).toMatchObject({ limitAtLeastServed: true })
+    expect(JSON.stringify(a.stands)).not.toMatch(/served(Cents)?"?:\s*1/)
+    const end = { action: 'end-account-budget' as const, accountBudgetId: '91', confirmEnd: true }
+    expect(ok(billingDraft(C, 'EUR', TODAY, end, later)).stands).toEqual(ok(billingDraft(C, 'EUR', TODAY, end, BILLING)).stands)
+  })
+
+  it('cancelling a waiting proposal that would end, lower, shorten or remove the budget: SPENDS MONEY (it keeps running as it is)', () => {
+    const cancel = (p: Partial<LiveBudgetProposal>) => ok(billingDraft(C, 'EUR', TODAY, { action: 'cancel-proposal', proposalId: '95' }, { ...BILLING, proposals: [proposal(p)] })).spendsMoney
+    // Proposal 95 raises the limit (EUR 5000 → 6000): cancelling it spends nothing more.
+    expect(cancel({})).toEqual([])
+    expect(cancel({ type: 'END' })).toEqual(['The proposal would have ended "Budget A": cancelling it keeps the budget running, so the account keeps spending.'])
+    expect(cancel({ spendingLimitCents: 300000 })).toEqual(['Cancelling the proposal keeps "Budget A" as it is: its spending limit stays EUR 5000.00 instead of EUR 3000.00.'])
+    expect(cancel({ spendingLimitCents: null, end: '2026-10-31 23:59:59' })).toEqual(['Cancelling the proposal keeps "Budget A" as it is: it keeps running with no end instead of ending on 2026-10-31.'])
+    expect(cancel({ type: 'REMOVE' })).toEqual([expect.stringMatching(/would have removed "Budget A" before it starts/)])
+    expect(cancel({ type: 'CREATE', accountBudgetId: null })).toEqual([])
+  })
+
+  it('REMOVE: an approved budget that has not started (confirmRemove); a running one is ended, a not-started one is not', () => {
+    const future = { ...BILLING, budgets: [{ ...BILLING.budgets[0], accountBudgetId: '92', start: '2026-11-01 00:00:00', amountServedCents: 0 }], proposals: [] }
+    expect(refusal(billingDraft(C, 'EUR', TODAY, { action: 'remove-account-budget', accountBudgetId: '92' }, future))).toMatch(/needs confirmRemove: true/)
+    const d = ok(billingDraft(C, 'EUR', TODAY, { action: 'remove-account-budget', accountBudgetId: '92', confirmRemove: true }, future))
+    expect(d.operations).toEqual([{ accountCall: { path: 'accountBudgetProposals:mutate', body: { operation: { create: { proposalType: 'REMOVE', accountBudget: `${C}/accountBudgets/92` } } } } }])
+    expect(d.spendsMoney).toEqual([])
+    expect(billingUndo(d.before as BillingRecord, d.after as BillingRecord)).toEqual({ refusal: expect.stringMatching(/removed account budget cannot come back/) })
+    expect(refusal(billingDraft(C, 'EUR', TODAY, { action: 'end-account-budget', accountBudgetId: '92', confirmEnd: true }, future))).toMatch(/has not started .*remove-account-budget/)
+    expect(refusal(billingDraft(C, 'EUR', TODAY, { action: 'remove-account-budget', accountBudgetId: '91', confirmRemove: true }, BILLING))).toMatch(/started on 2026-01-01.*end-account-budget/)
+  })
+
+  it('a new budget: refused while a new one waits on that billing setup; a purchase order number goes with it; undo names REMOVE or END', () => {
+    const open = { ...BILLING, budgets: [], proposals: [proposal({ proposalId: '96', type: 'CREATE', accountBudgetId: null, name: 'Budget B' })] }
+    expect(refusal(billingDraft(C, 'EUR', TODAY, { action: 'propose-account-budget', name: 'Budget C', spendingLimitCents: 100000 }, open))).toBe('A new account budget for billing setup 81 is already waiting for Google\'s review (proposal 96, "Budget B"): wait for it, or cancel it first (cancel-proposal).')
+    const free = { ...BILLING, budgets: [], proposals: [] }
+    const d = ok(billingDraft(C, 'EUR', TODAY, { action: 'propose-account-budget', name: 'Budget C', spendingLimitCents: 100000, startDate: '2026-11-01', purchaseOrderNumber: 'PO-1' }, free))
+    expect(d.operations[0]).toMatchObject({ accountCall: { body: { operation: { create: { proposalType: 'CREATE', proposedPurchaseOrderNumber: 'PO-1' } } } } })
+    // The waiting proposals are facts: a new one appearing moves the basis.
+    expect(d.stands).not.toEqual(ok(billingDraft(C, 'EUR', TODAY, { action: 'propose-account-budget', name: 'Budget C', spendingLimitCents: 100000, startDate: '2026-11-01', purchaseOrderNumber: 'PO-1' }, { ...free, proposals: [proposal({ proposalId: '97', type: 'END' })] })).stands)
+    const after = { ...(d.after as BillingRecord), proposalId: null }
+    expect(billingUndo(d.before as BillingRecord, after)).toEqual({ refusal: expect.stringMatching(/remove the budget with remove-account-budget before it starts \(2026-11-01\); from then on, end it with end-account-budget/) })
+    expect(billingUndo(d.before as BillingRecord, { ...after, budget: { ...after.budget!, startDate: null } })).toEqual({ refusal: expect.stringMatching(/it starts at once: end it with end-account-budget/) })
   })
 
   it('undo of a proposal: cancel it while Google has not decided', () => {

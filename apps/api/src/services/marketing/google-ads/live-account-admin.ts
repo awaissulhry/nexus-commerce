@@ -12,15 +12,34 @@
  * STANDARD_INVENTORY | LIMITED_INVENTORY). Added to G1's account budget query:
  * account_budget.pending_proposal.account_budget_proposal. account_budget_proposal: id, status (ENUM PENDING |
  * APPROVED_HELD | APPROVED | CANCELLED | REJECTED), proposal_type (CREATE | UPDATE | END | REMOVE), account_budget,
- * billing_setup, proposed_name, proposed_spending_limit_micros, proposed_spending_limit_type, creation_date_time.
+ * billing_setup, proposed_name, proposed_spending_limit_micros, proposed_spending_limit_type, creation_date_time,
+ * proposed_end_date_time (DATE), proposed_end_time_type (ENUM TimeType FOREVER | NOW) — all Selectable (review fixes,
+ * 2026-10-15, curl of fields/v25/account_budget_proposal).
+ *
+ * Two reads that are not GAQL:
+ *   - the Merchant Center accounts THIS business chose in Nexus (GoogleAccountLink product MERCHANT, read through the
+ *     workspace-scoped client: only this business's rows). A Merchant Center id never crosses businesses (Owner's rule),
+ *     so the link tool links or accepts only one of these.
+ *   - the payments accounts this Google Ads account may use for a billing setup: PaymentsAccountService
+ *     .ListPaymentsAccounts, `GET /v25/customers/{customer_id}/paymentsAccounts` (googleapis v25
+ *     payments_account_service.proto; answer ListPaymentsAccountsResponse { payments_accounts[] PaymentsAccount
+ *     { payments_account_id "A 16 digit ID", name, currency_code, … } }, reference/rpc/v25, curl 2026-10-15). A GET is a
+ *     read on the gateway already (googleCallKind): no new path. Google does not allow this service at the Explorer access
+ *     level (docs/api-policy/access-levels): a refusal is a refusal of the billing setup, said plainly.
  */
 import prisma from '../../../db.js'
+import { googleCall } from '../../gateway/google.js'
+import type { GatewayNoAnswer, GatewayRefusal } from '../../gateway/gateway.js'
+import { GOOGLE_ADS_API_BASE } from '../../google/api-version.js'
+import { failureFromGatewayRefusal, failureFromNoAnswer, GoogleAdsReadError, localFailure, parseGoogleAdsFailure, type GoogleAdsFailure } from './errors.js'
+import { customerIdDigits } from './mappers.js'
+import { markQuotaExhausted, releaseOps, reserveOps } from './ops-budget.js'
 import {
   ACCOUNT_BUDGETS_QUERY, ACCOUNT_SETTINGS_QUERY, accountSettingsOf, BILLING_SETUPS_QUERY, DATA_LINKS_QUERY, PRODUCT_LINK_INVITATIONS_QUERY,
   PRODUCT_LINKS_QUERY, USER_ACCESS_QUERY, USER_INVITATIONS_QUERY, type LiveAccountSettings,
 } from './live-account.js'
 import { centsOfMicros, idOf } from './live.js'
-import { liveRows } from './write-client.js'
+import { customerResource, liveRows } from './write-client.js'
 import type { GoogleAdsTarget } from './types.js'
 
 type Json = Record<string, any>
@@ -95,7 +114,17 @@ export interface LiveMerchantLink { linkId: string; merchantCenterId: string }
 export interface LiveLinkInvitation { invitationId: string; type: string | null; status: string | null; merchantCenterId: string | null }
 /** A YouTube video link; `linkId` is `{product_link_id}~{data_link_id}` (DataLink's resource name ends with it). */
 export interface LiveVideoLink { linkId: string; status: string | null; channelId: string | null; videoId: string | null }
-export interface LiveLinkState { merchantLinks: LiveMerchantLink[]; invitations: LiveLinkInvitation[]; videos: LiveVideoLink[] }
+export interface LiveLinkState {
+  merchantLinks: LiveMerchantLink[]; invitations: LiveLinkInvitation[]; videos: LiveVideoLink[]
+  /** The Merchant Center account ids THIS business chose in Nexus (Settings › Channels › Google), sorted. */
+  chosenMerchantCenterIds: string[]
+}
+
+/** The Merchant Center accounts this business chose in Nexus (its GoogleAccountLink rows, product MERCHANT). */
+export async function chosenMerchantCenterIds(): Promise<string[]> {
+  const rows = await prisma.googleAccountLink.findMany({ where: { product: 'MERCHANT' }, select: { externalId: true } })
+  return [...new Set(rows.map((r) => r.externalId.trim()).filter((id) => /^\d{1,20}$/.test(id)))].sort()
+}
 
 export async function liveLinkState(target: GoogleAdsTarget): Promise<LiveLinkState> {
   const merchantLinks = (await liveRows<Json>(target, PRODUCT_LINKS_QUERY, 'ads.search.live.product-links')).flatMap((r) => {
@@ -117,7 +146,7 @@ export async function liveLinkState(target: GoogleAdsTarget): Promise<LiveLinkSt
       ? [{ linkId: `${product}~${data}`, status: str(d.status), channelId: str(d.youtubeVideo?.channelId), videoId: str(d.youtubeVideo?.videoId) }]
       : []
   })
-  return { merchantLinks, invitations, videos }
+  return { merchantLinks, invitations, videos, chosenMerchantCenterIds: await chosenMerchantCenterIds() }
 }
 
 // ── billing ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -128,7 +157,8 @@ export const PENDING_PROPOSALS_QUERY =
   'SELECT account_budget_proposal.id, account_budget_proposal.status, account_budget_proposal.proposal_type, ' +
   'account_budget_proposal.account_budget, account_budget_proposal.billing_setup, account_budget_proposal.proposed_name, ' +
   'account_budget_proposal.proposed_spending_limit_micros, account_budget_proposal.proposed_spending_limit_type, ' +
-  "account_budget_proposal.creation_date_time FROM account_budget_proposal WHERE account_budget_proposal.status = 'PENDING'"
+  'account_budget_proposal.creation_date_time, account_budget_proposal.proposed_end_date_time, account_budget_proposal.proposed_end_time_type ' +
+  "FROM account_budget_proposal WHERE account_budget_proposal.status = 'PENDING'"
 
 export interface LiveBillingSetup {
   billingSetupId: string; status: string | null; paymentsAccountId: string | null; paymentsAccountName: string | null; start: string | null; end: string | null
@@ -143,6 +173,8 @@ export interface LiveAccountBudget {
 export interface LiveBudgetProposal {
   proposalId: string; status: string | null; type: string | null; accountBudgetId: string | null; billingSetupId: string | null
   name: string | null; spendingLimitCents: number | null; spendingLimitType: string | null; createdAt: string | null
+  /** The proposed end: a date-time, or endType FOREVER / NOW; both null when the proposal does not change it. */
+  end: string | null; endType: string | null
 }
 export interface LiveBillingState { setups: LiveBillingSetup[]; budgets: LiveAccountBudget[]; proposals: LiveBudgetProposal[] }
 
@@ -173,8 +205,61 @@ export async function liveBillingState(target: GoogleAdsTarget): Promise<LiveBil
     return proposalId ? [{
       proposalId, status: str(p.status), type: str(p.proposalType), accountBudgetId: idOf(p.accountBudget), billingSetupId: idOf(p.billingSetup),
       name: str(p.proposedName), spendingLimitCents: centsOfMicros(p.proposedSpendingLimitMicros), spendingLimitType: str(p.proposedSpendingLimitType),
-      createdAt: str(p.creationDateTime),
+      createdAt: str(p.creationDateTime), end: str(p.proposedEndDateTime), endType: str(p.proposedEndTimeType),
     }] : []
   })
   return { setups, budgets, proposals }
+}
+
+// ── payments accounts ────────────────────────────────────────────────────────────────────────────────────────────
+
+const isRefusal = (err: unknown): err is GatewayRefusal => err instanceof Error && err.name === 'GatewayRefusal'
+const isNoAnswer = (err: unknown): err is GatewayNoAnswer => err instanceof Error && err.name === 'GatewayNoAnswer'
+/** A payments account id as Google writes it in one place or another ("1234-5678-9012-3456" or 16 digits): digits only. */
+export const paymentsDigits = (id: string | null | undefined): string => (id ?? '').replace(/\D/g, '')
+
+export const PAYMENTS_NOT_LISTED = 'Google did not let Nexus list the payments accounts this Google Ads account may use, so Nexus cannot check that the '
+  + 'payments account belongs to it and makes no billing setup. At the Explorer access level Google does not allow PaymentsAccountService (nor '
+  + 'billing setups) through the API (developers.google.com/google-ads/api/docs/api-policy/access-levels); do it in Google Ads › Billing › Settings.'
+
+/**
+ * The payments accounts this Google Ads account may use for a billing setup (ids as Google writes them). ONE GET through
+ * the gateway, one operation of the account's allowance; read STRICTLY: a refusal rejects (GoogleAdsReadError), never [].
+ */
+export async function livePaymentsAccounts(target: GoogleAdsTarget): Promise<Array<{ paymentsAccountId: string; name: string | null }>> {
+  const operation = 'ads.paymentsAccounts.list'
+  const customer = customerResource(target)
+  const customerId = customer.slice('customers/'.length)
+  const login = target.loginCustomerId ? customerIdDigits(target.loginCustomerId) : null
+  const reservation = await reserveOps(customerId, 1, new Date(), 'write')
+  if (!reservation.ok) throw new GoogleAdsReadError(localFailure(reservation.sentence, reservation.reason ?? 'OPS_REFUSED'), operation)
+  let reached = false
+  let failure: GoogleAdsFailure
+  try {
+    const response = await googleCall({
+      connectionId: target.connectionId, operation, method: 'GET', url: `${GOOGLE_ADS_API_BASE}/${customer}/paymentsAccounts`,
+      loginCustomerId: login, maxTransientRetries: 0, max429Retries: 0, timeoutMs: 30_000,
+    })
+    reached = true
+    const text = await response.text()
+    if (response.ok) {
+      let parsed: { paymentsAccounts?: unknown } = {}
+      try { parsed = text ? JSON.parse(text) : {} } catch { throw new GoogleAdsReadError(localFailure('Google Ads answered with something Nexus cannot read.', 'UNREADABLE_ANSWER'), operation, 1) }
+      const list = Array.isArray(parsed.paymentsAccounts) ? parsed.paymentsAccounts as Json[] : []
+      return list.flatMap((a) => {
+        const id = str(a?.paymentsAccountId) ?? idOf(a?.resourceName)
+        return id ? [{ paymentsAccountId: id, name: str(a?.name) }] : []
+      })
+    }
+    failure = parseGoogleAdsFailure(response.status, text, response.headers)
+  } catch (err) {
+    if (err instanceof GoogleAdsReadError) throw err
+    if (isRefusal(err)) failure = failureFromGatewayRefusal(err)
+    else if (isNoAnswer(err)) { reached = true; failure = failureFromNoAnswer(err) } else throw err
+  } finally {
+    if (!reached) await releaseOps(customerId, 1, reservation.reservedAt, 'write').catch(() => undefined)
+  }
+  if (failure.quotaExhausted) await markQuotaExhausted()
+  const shown = failure.permissionDenied ? { ...failure, sentence: `${PAYMENTS_NOT_LISTED} (Google: ${failure.errors[0]?.code ?? failure.status ?? `HTTP ${failure.httpStatus}`}.)` } : failure
+  throw new GoogleAdsReadError(shown, operation, reached ? 1 : 0)
 }
