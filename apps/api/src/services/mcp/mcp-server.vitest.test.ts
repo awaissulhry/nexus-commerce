@@ -36,6 +36,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Google Ads G5 (2026-10-15) — labels, Google's recommendations (apply, dismiss, auto-apply) and portfolio bid strategies change the Google Ads account.
 // Google Ads G8b (2026-10-15) — the account's settings, users, links and billing.
 // Google Ads G6 (2026-10-15) — assets of every type and their links at the account, campaigns and ad groups change the Google Ads account.
+// Google Ads G9 (2026-10-15) — experiments and campaign drafts change the Google Ads account; google-ads-experiments reads it live.
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-google-assets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
@@ -45,25 +46,26 @@ const OPEN_WORLD = [
   'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label', 'cancel-order',
   'channel-identity-check', 'check-google-ads-build', 'close-listing', 'confirm-shipment', 'copy-google-campaign',
   'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
-  'create-google-campaign', 'create-google-rsa', 'create-negative-keyword', 'decide-automation-suggestions',
+  'create-google-campaign', 'create-google-experiment', 'create-google-rsa', 'create-negative-keyword', 'decide-automation-suggestions',
   'delete-listing', 'dismiss-google-recommendations', 'dispose-return-items', 'ebay-categories',
-  'ebay-keywords-change', 'edit-google-assets', 'edit-google-rsa', 'email-supplier', 'enable-ads', 'end-listing',
-  'google-ads-live', 'google-ads-numbers', 'google-ads-query', 'graduate-keyword', 'harvest-search-term',
+  'ebay-keywords-change', 'edit-google-assets', 'edit-google-rsa', 'email-supplier', 'enable-ads', 'end-google-experiment', 'end-listing',
+  'google-ads-experiments', 'google-ads-live', 'google-ads-numbers', 'google-ads-query', 'graduate-google-experiment', 'graduate-keyword', 'harvest-search-term',
   'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
-  'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'publish-listing', 'publish-review', 'receive-stock',
+  'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
   'remove-google-labels', 'reopen-listing', 'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
   'request-review',
   'resend-prices', 'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign',
   'resume-automation', 'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
-  'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
+  'save-channel-mapping', 'save-price-rule', 'schedule-google-experiment', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
   'set-ad-group', 'set-ads-brain', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule',
   'set-campaign-budget', 'set-campaign-settings', 'set-ebay-ad-rates', 'set-ebay-campaign-budget',
   'set-ebay-price-promotion', 'set-google-account-exclusions', 'set-google-account-links',
   'set-google-account-settings', 'set-google-ad-groups', 'set-google-asset-links', 'set-google-assets',
   'set-google-audiences', 'set-google-auto-apply', 'set-google-bid-strategy', 'set-google-billing',
-  'set-google-budget', 'set-google-campaign', 'set-google-campaign-exclusions', 'set-google-demographics',
-  'set-google-exclusion-list', 'set-google-inventory-filter', 'set-google-keywords', 'set-google-labels',
+  'set-google-budget', 'set-google-campaign', 'set-google-campaign-draft', 'set-google-campaign-exclusions',
+  'set-google-demographics', 'set-google-exclusion-list', 'set-google-experiment', 'set-google-inventory-filter',
+  'set-google-keywords', 'set-google-labels',
   'set-google-negative-list', 'set-google-negatives', 'set-google-product-groups', 'set-google-shopping-settings',
   'set-google-status', 'set-google-targeting', 'set-google-urls', 'set-google-user-access', 'set-hourly-bid-plan', 'set-listing-price',
   'set-listing-stock',

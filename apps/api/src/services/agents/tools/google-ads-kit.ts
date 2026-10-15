@@ -193,17 +193,20 @@ export async function googleCheck(args: Record<string, unknown>, build: GoogleDr
 }
 
 /**
- * A change that is not a GoogleAdsService.Mutate (RecommendationService apply / dismiss): Google has no validate_only for
- * it, so the preview is built on the live state alone and says why Google did not check it (`notChecked`); the run sends
- * the draft's operations with `send`, which fails as mutateGoogleAds does (a GoogleAdsWriteError with its outcome).
+ * A change that is not a GoogleAdsService.Mutate. RecommendationService apply / dismiss: Google has no validate_only for
+ * it, so the preview is built on the live state alone and says why Google did not check it (`notChecked`). G9: an
+ * experiment's schedule / end / promote / graduate and a campaign draft's promote have validate_only on their own
+ * endpoint (`check`): the preview is built on Google's check like a mutate's. The run sends the draft's operations with
+ * `send`; both fail as mutateGoogleAds does (a GoogleAdsWriteError with its outcome).
  */
 export interface GoogleSender {
-  notChecked: string
+  /** Google cannot check it first: the sentence the preview says instead. Not read when `check` is set. */
+  notChecked?: string
   send: (target: GoogleAdsTarget, operations: GoogleMutateOperation[]) => Promise<{ responses: GoogleMutateResponse[] }>
   /**
-   * G8b: a method that is not a mutate but HAS validate_only (removing a Merchant Center link, an account budget
-   * proposal): Google checks the change with it as a mutate is checked (rejects like mutateGoogleAds). `notChecked` is
-   * then unused.
+   * A method that is not a mutate but HAS validate_only (G8b: removing a Merchant Center link, an account budget
+   * proposal; G9: an experiment's or a campaign draft's action): Google's check of exactly what `send` sends, as a
+   * mutate is checked (rejects like mutateGoogleAds). `notChecked` is then unused.
    */
   check?: GoogleChecker
 }
@@ -213,7 +216,7 @@ export async function googleChangePreview(args: Record<string, unknown>, ctx: To
   if (sender && !sender.check) {
     const built = await draftFor(args, build)
     if ('refusal' in built) return { ok: false, error: built.refusal }
-    return { ok: true, preview: previewOf(built.account, built.draft, { checked: false, sentence: sender.notChecked }) }
+    return { ok: true, preview: previewOf(built.account, built.draft, { checked: false, sentence: sender.notChecked ?? 'Google cannot check this change first.' }) }
   }
   if (isRecheck(ctx)) {
     const built = await draftFor(args, build)

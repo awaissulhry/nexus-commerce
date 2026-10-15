@@ -225,7 +225,73 @@ export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   // An asset linked at an ad group or at the account (AdGroupAsset / CustomerAsset; add-google-assets and
   // set-google-asset-links, programme 2 G6; MutateOperation.ad_group_asset_operation / customer_asset_operation in v25).
   'adGroupAssetOperation', 'customerAssetOperation',
+  // G9 (2026-10-15): experiments, their arms and campaign drafts (v25 MutateOperation.experiment_operation,
+  // experiment_arm_operation, campaign_draft_operation).
+  'experimentOperation', 'experimentArmOperation', 'campaignDraftOperation',
 ])
+
+/**
+ * Google: the third change Nexus sends (G9, 2026-10-15) — ExperimentService's actions on ONE experiment and
+ * CampaignDraftService's promote of ONE draft, each on its exact path, one customer, nothing else:
+ *   POST /vNN/customers/{id}/experiments/{experimentId}:scheduleExperiment | :endExperiment | :promoteExperiment | :graduateExperiment
+ *   POST /vNN/customers/{id}/campaignDrafts/{baseCampaignId}~{draftId}:promote
+ * Checked 2026-10-15 in the v25 protos the v25 reference links (googleapis google/ads/googleads/v25/services/
+ * experiment_service.proto and campaign_draft_service.proto, `google.api.http` with `body: "*"`; the same paths and
+ * request bodies in Google Ads' v25 REST discovery document, customers.experiments.* and customers.campaignDrafts.promote):
+ * EVERY one of these requests has validate_only, so a check goes as a read (Google changes nothing) and a real one as a
+ * write under the publish mode. Their async errors and long-running operations are read with GETs (reads).
+ */
+export type GoogleExperimentAction = 'scheduleExperiment' | 'endExperiment' | 'promoteExperiment' | 'graduateExperiment' | 'promoteCampaignDraft'
+
+export function googleAdsExperimentCall(method: string, url: string): { customer: string; action: GoogleExperimentAction } | null {
+  if (method.toUpperCase() !== 'POST') return null
+  let parsed: URL
+  try { parsed = new URL(url) } catch { return null }
+  if (parsed.hostname !== 'googleads.googleapis.com' || parsed.search) return null
+  const experiment = /^\/v\d+\/customers\/(\d{1,20})\/experiments\/\d{1,20}:(scheduleExperiment|endExperiment|promoteExperiment|graduateExperiment)$/.exec(parsed.pathname)
+  if (experiment) return { customer: experiment[1], action: experiment[2] as GoogleExperimentAction }
+  const draft = /^\/v\d+\/customers\/(\d{1,20})\/campaignDrafts\/\d{1,20}~\d{1,20}:promote$/.exec(parsed.pathname)
+  return draft ? { customer: draft[1], action: 'promoteCampaignDraft' } : null
+}
+
+/**
+ * The most experiment campaigns one graduate maps to a budget: GraduateExperimentRequest.campaign_budget_mappings, "The
+ * maximum size is one" (v25 reference, 2026-10-15).
+ */
+export const GOOGLE_GRADUATE_MAX_MAPPINGS = 1
+
+/**
+ * An experiment / draft action body as the gateway judges it, or why it is refused: a JSON object holding `validateOnly`
+ * (a boolean, camelCase only) and, for a graduate only, `campaignBudgetMappings` — exactly one `{ experimentCampaign,
+ * campaignBudget }`, a campaign and a budget of THIS customer (GraduateExperimentRequest.campaign_budget_mappings,
+ * CampaignBudgetMapping). Nothing else. The parsed body is what is sent.
+ */
+export function googleExperimentBodyOf(call: { customer: string; action: GoogleExperimentAction }, body: unknown): GoogleMutateBody | { refusal: string } {
+  if (typeof body !== 'string') return { refusal: 'the body is not JSON text' }
+  let parsed: Record<string, unknown>
+  try { parsed = JSON.parse(body) } catch { return { refusal: 'the body is not JSON' } }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { refusal: 'the body is not a JSON object' }
+  const allowed = call.action === 'graduateExperiment' ? ['validateOnly', 'campaignBudgetMappings'] : ['validateOnly']
+  const extra = Object.keys(parsed).filter((k) => !allowed.includes(k))
+  if (extra.length) return { refusal: `it names ${extra.join(', ')} (an experiment or draft action holds ${allowed.join(' and ')} only)` }
+  if (parsed.validateOnly !== undefined && typeof parsed.validateOnly !== 'boolean') return { refusal: 'validateOnly is not true or false' }
+  if (call.action === 'graduateExperiment') {
+    const mappings = parsed.campaignBudgetMappings
+    if (!Array.isArray(mappings) || mappings.length === 0) return { refusal: 'a graduate names no campaignBudgetMappings' }
+    if (mappings.length > GOOGLE_GRADUATE_MAX_MAPPINGS) return { refusal: `a graduate maps more than ${GOOGLE_GRADUATE_MAX_MAPPINGS} campaign` }
+    const campaign = new RegExp(`^customers/${call.customer}/campaigns/\\d{1,20}$`)
+    const budget = new RegExp(`^customers/${call.customer}/campaignBudgets/\\d{1,20}$`)
+    for (const mapping of mappings) {
+      const m = (mapping && typeof mapping === 'object' && !Array.isArray(mapping) ? mapping : {}) as Record<string, unknown>
+      const keys = Object.keys(m).sort().join(',')
+      if (keys !== 'campaignBudget,experimentCampaign' || typeof m.experimentCampaign !== 'string' || typeof m.campaignBudget !== 'string'
+        || !campaign.test(m.experimentCampaign) || !budget.test(m.campaignBudget)) {
+        return { refusal: 'a campaign budget mapping does not name a campaign and a budget of this account' }
+      }
+    }
+  }
+  return { check: parsed.validateOnly === true, body: JSON.stringify(parsed) }
+}
 
 /**
  * Google: the second change Nexus sends (G5, 2026-10-15) — RecommendationService.ApplyRecommendation and
@@ -333,8 +399,10 @@ export function isGoogleValidateOnly(body: unknown): boolean {
  * (Google Ads GAQL, Merchant reports), which takes its query in the body, and Google Ads' brand lookup
  * (isGoogleAdsBrandSuggestion, G7). Anything else — `…:mutate`,
  * `…:registerGcp`, PATCH, DELETE — is a change. The gateway lets through only a Google Ads mutate
- * (isGoogleAdsMutate): as a check when it is validate-only, else as a write under the publish mode; and an apply or a
- * dismiss of Google's recommendations (googleAdsRecommendationCall), always as a write under the publish mode.
+ * (isGoogleAdsMutate): as a check when it is validate-only, else as a write under the publish mode; an apply or a
+ * dismiss of Google's recommendations (googleAdsRecommendationCall), always as a write under the publish mode; and an
+ * experiment's schedule / end / promote / graduate or a campaign draft's promote (googleAdsExperimentCall, G9), like a
+ * mutate: a check when validate-only, else a write.
  */
 export function googleCallKind(method: string, url: string): 'read' | 'action' {
   const m = method.toUpperCase()

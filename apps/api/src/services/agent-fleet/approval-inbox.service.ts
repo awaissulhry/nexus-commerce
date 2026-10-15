@@ -859,6 +859,15 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],
+  // Programme 2 G9 — experiments and campaign drafts (google-ads-experiments.tools.ts).
+  'create-google-experiment': ['basis', 'plan', 'reach'],
+  'set-google-experiment': ['basis', 'plan', 'reach'],
+  'schedule-google-experiment': ['basis', 'plan', 'reach'],
+  'end-google-experiment': ['basis', 'plan', 'reach'],
+  'promote-google-experiment': ['basis', 'plan', 'reach'],
+  'graduate-google-experiment': ['basis', 'plan', 'reach'],
+  'set-google-campaign-draft': ['basis', 'plan', 'reach'],
+  'promote-google-campaign-draft': ['basis', 'plan', 'reach'],
   // Programme 2 G3 — edit in place, URLs and tracking, replace / move (google-ads-edit.tools.ts).
   'edit-google-rsa': ['basis', 'plan', 'reach'],
   'edit-google-assets': ['basis', 'plan', 'reach'],

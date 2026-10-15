@@ -15,7 +15,7 @@ import { gatewayAccounts, gatewayGoogleUnlinked, gatewayLedger } from '../../tes
 import { __rateTest, defaultsFor, GOOGLE_BUCKETS, bucketKey } from './rate.js'
 import { gatewayCall, GatewayRefusal } from './gateway.js'
 import { googleCall, googleKind } from './google.js'
-import { apiVersionOf, bucketGroupOf, GOOGLE_ADS_MUTATE_KINDS, googleMutateBodyOf, publishModeOf } from './channels.js'
+import { apiVersionOf, bucketGroupOf, GOOGLE_ADS_MUTATE_KINDS, googleAdsExperimentCall, googleMutateBodyOf, publishModeOf } from './channels.js'
 import { GOOGLE_ACCOUNT_CALL_PATHS, GOOGLE_ACCOUNT_CHECKABLE } from './google-account-calls.js'
 import { classifyChannelAnswer } from './vocabulary.js'
 import { ledgerSafeBody } from './redact.js'
@@ -84,8 +84,9 @@ describe('Google: reads, and Google Ads mutates only', () => {
       'adGroupAdLabelOperation', 'adGroupAdOperation', 'adGroupAssetOperation', 'adGroupBidModifierOperation', 'adGroupCriterionLabelOperation',
       'adGroupCriterionOperation', 'adGroupLabelOperation', 'adGroupOperation', 'adOperation', 'assetOperation',
       'biddingStrategyOperation', 'campaignAssetOperation', 'campaignBudgetOperation', 'campaignCriterionOperation',
-      'campaignLabelOperation', 'campaignOperation', 'campaignSharedSetOperation',
-      'customerAssetOperation', 'customerNegativeCriterionOperation', 'customerOperation', 'labelOperation',
+      'campaignDraftOperation', 'campaignLabelOperation', 'campaignOperation', 'campaignSharedSetOperation',
+      'customerAssetOperation', 'customerNegativeCriterionOperation', 'customerOperation', 'experimentArmOperation',
+      'experimentOperation', 'labelOperation',
       'recommendationSubscriptionOperation', 'sharedCriterionOperation', 'sharedSetOperation',
     ])
     // Its neighbours stay refused: an ad parameter (AdService's family), a customer operation that is not exactly an
@@ -296,6 +297,99 @@ describe('Google Ads G5: the new mutate kinds, and applying / dismissing recomme
     const err = await googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: APPLY, body: { operations: [{ resourceName: REC }] } }).catch((e) => e)
     expect(err).toMatchObject({ outcome: 'refused', code: 'GOOGLE_ACCOUNT_NOT_CHOSEN' })
     expect(h.calls).toHaveLength(0)
+  })
+})
+
+describe('Google Ads G9: experiments, their arms and campaign drafts (a mutate), and the experiment / draft actions', () => {
+  const EXP = `${GOOGLE_ADS_API_BASE}/customers/1234567890/experiments/11`
+  const DRAFT = `${GOOGLE_ADS_API_BASE}/customers/1234567890/campaignDrafts/21~3`
+  const MAPPING = { experimentCampaign: 'customers/1234567890/campaigns/23', campaignBudget: 'customers/1234567890/campaignBudgets/14' }
+
+  it('an experiment with its arms and a campaign draft go through a mutate (check and change)', async () => {
+    const ops = [
+      { experimentOperation: { create: { resourceName: 'customers/1234567890/experiments/-1', name: 'Test A', type: 'SEARCH_CUSTOM', status: 'SETUP', suffix: ' [experiment]' } } },
+      { experimentArmOperation: { create: { experiment: 'customers/1234567890/experiments/-1', name: 'Control', control: true, trafficSplit: 50, campaigns: ['customers/1234567890/campaigns/21'] } } },
+      { experimentArmOperation: { create: { experiment: 'customers/1234567890/experiments/-1', name: 'Treatment', control: false, trafficSplit: 50 } } },
+      { campaignDraftOperation: { create: { baseCampaign: 'customers/1234567890/campaigns/21', name: 'Draft A' } } },
+    ]
+    await googleCall({ connectionId: 'g-1', operation: 'ads.mutate.check', method: 'POST', url: MUTATE, body: { mutateOperations: ops, validateOnly: true } })
+    await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: ops } })
+    expect(h.calls).toHaveLength(2)
+    expect(gatewayLedger.map((r) => r.outcome)).toEqual(['sent', 'sent'])
+  })
+
+  it('schedule / end / promote / graduate and a draft\'s promote: a check (validateOnly) is a read, a real one a write, each on its exact path', async () => {
+    const calls: Array<[string, Record<string, unknown>]> = [
+      [`${EXP}:scheduleExperiment`, {}], [`${EXP}:endExperiment`, {}], [`${EXP}:promoteExperiment`, {}],
+      [`${EXP}:graduateExperiment`, { campaignBudgetMappings: [MAPPING] }], [`${DRAFT}:promote`, {}],
+    ]
+    for (const [url, body] of calls) {
+      expect(googleKind('POST', url, { ...body, validateOnly: true })).toBe('read')
+      expect(googleKind('POST', url, { ...body, validateOnly: false })).toBe('write')
+      expect(googleKind('POST', url, body)).toBe('write')
+      await googleCall({ connectionId: 'g-1', operation: 'ads.experiments.check', method: 'POST', url, body: { ...body, validateOnly: true } })
+      await googleCall({ connectionId: 'g-1', operation: 'ads.experiments.action', method: 'POST', url, body: { ...body, validateOnly: false } })
+    }
+    expect(h.calls.map((c) => c.url)).toEqual(calls.flatMap(([url]) => [url, url]))
+    expect(JSON.parse(String(h.calls[7].init.body))).toEqual({ campaignBudgetMappings: [MAPPING], validateOnly: false })
+    expect(gatewayLedger.every((r) => r.outcome === 'sent')).toBe(true)
+    expect(googleAdsExperimentCall('POST', `${DRAFT}:promote`)).toEqual({ customer: '1234567890', action: 'promoteCampaignDraft' })
+  })
+
+  it('NEXUS_GOOGLE_ADS_WRITES=off: a real action is refused before anything is sent; Google\'s check still goes', async () => {
+    vi.stubEnv('NEXUS_GOOGLE_ADS_WRITES', 'off')
+    const err = await googleCall({ connectionId: 'g-1', operation: 'ads.experiments.scheduleExperiment', method: 'POST', url: `${EXP}:scheduleExperiment`, body: { validateOnly: false } }).catch((e) => e)
+    expect(err).toMatchObject({ outcome: 'gated', code: 'PUBLISH_GATED' })
+    expect(h.calls).toHaveLength(0)
+    const check = await googleCall({ connectionId: 'g-1', operation: 'ads.experiments.scheduleExperiment.check', method: 'POST', url: `${EXP}:scheduleExperiment`, body: { validateOnly: true } })
+    expect(check.status).toBe(200)
+    expect(h.calls).toHaveLength(1)
+  })
+
+  it('every other experiment / draft body, path or declared kind is refused before anything is sent', async () => {
+    const tries = [
+      // a field Nexus never sends, snake_case, a non-boolean check, mappings on another action
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${EXP}:endExperiment`, body: { validateOnly: false, experiment: 'customers/1/experiments/11' } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${EXP}:endExperiment`, body: { validate_only: true } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${EXP}:promoteExperiment`, body: { validateOnly: 'true' } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${EXP}:scheduleExperiment`, body: { campaignBudgetMappings: [MAPPING] } }),
+      // a graduate with no mapping, two mappings (Google: at most one), another customer's campaign or budget, an extra key
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${EXP}:graduateExperiment`, body: { campaignBudgetMappings: [] } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${EXP}:graduateExperiment`, body: { campaignBudgetMappings: [MAPPING, MAPPING] } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${EXP}:graduateExperiment`, body: { campaignBudgetMappings: [{ ...MAPPING, experimentCampaign: 'customers/999/campaigns/23' }] } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${EXP}:graduateExperiment`, body: { campaignBudgetMappings: [{ ...MAPPING, campaignBudget: 'customers/999/campaignBudgets/14' }] } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${EXP}:graduateExperiment`, body: { campaignBudgetMappings: [{ ...MAPPING, x: 1 }] } }),
+      // other ExperimentService / CampaignDraftService / Operations methods, a query string, a non-numeric id
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/experiments:mutate`, body: { operations: [] } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/campaignDrafts:mutate`, body: { operations: [] } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/operations/op-1:cancel`, body: {} }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'DELETE', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/operations/op-1` }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${EXP}:endExperiment?x=1`, body: { validateOnly: false } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/experiments/abc:endExperiment`, body: { validateOnly: false } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/campaignDrafts/3:promote`, body: { validateOnly: false } }),
+      // a real action declared as a read, a check declared as a write
+      gatewayCall({ channel: 'GOOGLE', operation: 'ads.sneaky', kind: 'read', connectionId: 'g-1', url: `${EXP}:endExperiment`, method: 'POST', body: JSON.stringify({ validateOnly: false }) }),
+      gatewayCall({ channel: 'GOOGLE', operation: 'ads.sneaky', kind: 'write', connectionId: 'g-1', url: `${EXP}:endExperiment`, method: 'POST', body: JSON.stringify({ validateOnly: true }) }),
+    ]
+    for (const t of tries) expect(await t.catch((e) => e)).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY' })
+    expect(h.calls).toHaveLength(0)
+  })
+
+  it('an action on an account the business did not choose through this connection is refused, check or change', async () => {
+    gatewayGoogleUnlinked.add('g-1:1234567890')
+    for (const body of [{ validateOnly: true }, { validateOnly: false }]) {
+      const err = await googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${EXP}:endExperiment`, body }).catch((e) => e)
+      expect(err).toMatchObject({ outcome: 'refused', code: 'GOOGLE_ACCOUNT_NOT_CHOSEN' })
+    }
+    expect(h.calls).toHaveLength(0)
+  })
+
+  it('the long-running operation and the async errors are GETs: reads', async () => {
+    expect(googleKind('GET', `${GOOGLE_ADS_API_BASE}/customers/1234567890/operations/op-1`)).toBe('read')
+    expect(googleKind('GET', `${EXP}:listExperimentAsyncErrors`)).toBe('read')
+    expect(googleKind('GET', `${DRAFT}:listAsyncErrors`)).toBe('read')
+    await googleCall({ connectionId: 'g-1', operation: 'ads.operations.get', method: 'GET', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/operations/op-1` })
+    expect(gatewayLedger).toEqual([expect.objectContaining({ operation: 'ads.operations.get', outcome: 'sent', success: true })])
   })
 })
 

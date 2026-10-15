@@ -799,6 +799,13 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
       },
+      // G9: an experiment made is removed (never scheduled) or ended; its name and days go back; a schedule is undone by an
+      // end; a graduated campaign is paused; a campaign draft made is removed and its old name put back.
+      'create-google-experiment': { before: { experimentId: null }, after: { experimentId: '11', name: 'Test A', type: 'SEARCH_CUSTOM', campaignId: '21', status: 'SETUP', accountId: 'g-1', customerId: '1234567890' } },
+      'set-google-experiment': { before: { experimentId: '11', fields: { name: 'Test A', endDate: '2026-12-01' }, accountId: 'g-1' }, after: { experimentId: '11', fields: { name: 'Test B', endDate: '2026-12-15' }, accountId: 'g-1' } },
+      'schedule-google-experiment': { before: { experimentId: '11', scheduled: false }, after: { experimentId: '11', scheduled: true, accountId: 'g-1', customerId: '1234567890' } },
+      'graduate-google-experiment': { before: { experimentId: '11', campaignId: '23', budgetId: '12' }, after: { experimentId: '11', campaignId: '23', budgetId: '14', accountId: 'g-1', customerId: '1234567890' } },
+      'set-google-campaign-draft': { before: { action: 'rename', draftId: '21~3', name: 'Draft A' }, after: { action: 'rename', draftId: '21~3', name: 'Draft B', accountId: 'g-1', customerId: '1234567890' } },
       // L7 — products created (parent and a variation), and products binned.
       'create-product': { before: { products: [] }, after: { products: [{ id: 'p1', deleted: false }, { id: 'p2', deleted: false }] } },
       'create-variations': { before: { products: [] }, after: { products: [{ id: 'p3', deleted: false }] } },
@@ -881,7 +888,9 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-auto-apply', 'set-google-bid-strategy', 'remove-google-bid-strategy',
       'set-google-account-settings', 'set-google-user-access', 'set-google-account-links', 'set-google-billing',
       'edit-google-rsa', 'edit-google-assets', 'set-google-urls', 'replace-google-keywords', 'move-google-ads',
-      'add-google-assets', 'set-google-asset-links']) {
+      'add-google-assets', 'set-google-asset-links',
+      'create-google-experiment', 'set-google-experiment', 'schedule-google-experiment', 'end-google-experiment',
+      'promote-google-experiment', 'graduate-google-experiment', 'set-google-campaign-draft', 'promote-google-campaign-draft']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
