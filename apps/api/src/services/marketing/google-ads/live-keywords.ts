@@ -4,16 +4,32 @@
  * account's change allowance (write-client.ts `liveRows`). The queries are live.ts's own (their fields were checked
  * against Google's v25 field reference with live.ts); this file only reads their rows.
  *
+ * Rows come back in Google's order; every list here is sorted by id, so a change built from them (its operations, the
+ * `plan` an approval stands on) does not depend on that order.
+ *
  * A keyword without a max CPC of its own uses its ad group's default: Google leaves `cpc_bid_micros` out of the row (an
  * absent or zero bid reads as "none of its own" here) and `effective_cpc_bid_micros` holds the bid it uses.
  */
-import { centsOfMicros, liveAdGroupsQuery, liveCampaignCriteriaQuery, liveCriterionOf, liveKeywordsQuery, type MatchType } from './live.js'
+import { centsOfMicros, gaqlId, liveAdGroupsQuery, liveCampaignCriteriaQuery, liveCriterionOf, liveKeywordsQuery, type MatchType } from './live.js'
 import { liveRows } from './write-client.js'
 import type { GoogleAdsTarget } from './types.js'
 
 type Json = Record<string, any>
 
 const str = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : typeof value === 'number' ? String(value) : null)
+/** Google ids (digits, or `adGroupId~criterionId`) in number order. */
+export function byGoogleId(a: string, b: string): number {
+  const x = a.split('~')
+  const y = b.split('~')
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const p = x[i] ?? ''
+    const q = y[i] ?? ''
+    if (p.length !== q.length) return p.length - q.length
+    if (p !== q) return p < q ? -1 : 1
+  }
+  return 0
+}
+
 /** A max CPC of its own: absent or 0 = none (it uses its ad group's default). */
 const ownBid = (micros: unknown): number | null => {
   const cents = centsOfMicros(micros)
@@ -72,12 +88,12 @@ export function liveKeywordOf(row: Json): LiveKeyword {
 
 /** The campaign's ad groups that are not removed. One query. */
 export async function liveAdGroups(target: GoogleAdsTarget, campaignId: string): Promise<LiveAdGroup[]> {
-  return (await liveRows<Json>(target, liveAdGroupsQuery(campaignId), 'ads.search.live.ad-groups')).map(liveAdGroupOf)
+  return (await liveRows<Json>(target, liveAdGroupsQuery(campaignId), 'ads.search.live.ad-groups')).map(liveAdGroupOf).sort((a, b) => byGoogleId(a.adGroupId, b.adGroupId))
 }
 
 /** The campaign's keywords and ad group negative keywords (not removed, in ad groups not removed). One query. */
 export async function liveKeywords(target: GoogleAdsTarget, campaignId: string): Promise<LiveKeyword[]> {
-  return (await liveRows<Json>(target, liveKeywordsQuery(campaignId), 'ads.search.live.keywords')).map(liveKeywordOf)
+  return (await liveRows<Json>(target, liveKeywordsQuery(campaignId), 'ads.search.live.keywords')).map(liveKeywordOf).sort((a, b) => byGoogleId(a.keywordId, b.keywordId))
 }
 
 /** The campaign's own negative keywords (campaign criteria; not its shared lists). One query. */
@@ -86,4 +102,19 @@ export async function liveCampaignNegatives(target: GoogleAdsTarget, campaignId:
   return rows.map(liveCriterionOf)
     .filter((c) => c.type === 'KEYWORD' && c.negative && c.keyword)
     .map((c) => ({ criterionId: c.criterionId, text: c.keyword!.text, matchType: (c.keyword!.matchType ?? 'BROAD') as MatchType }))
+    .sort((a, b) => byGoogleId(a.criterionId, b.criterionId))
+}
+
+/**
+ * The campaign's keyword match type: BROAD makes every keyword of the campaign act as broad match, whatever its own match
+ * type. Checked 2026-10-15 in Google's v25 field reference (fields/v25/campaign): `campaign.keyword_match_type`,
+ * selectable, enum CampaignKeywordMatchType BROAD / UNKNOWN / UNSPECIFIED; v25 can no longer set it
+ * (CampaignError.CANNOT_SET_CAMPAIGN_KEYWORD_MATCH_TYPE), but an older campaign may hold BROAD. One query.
+ */
+export const liveKeywordMatchTypeQuery = (campaignId: string): string =>
+  `SELECT campaign.id, campaign.keyword_match_type FROM campaign WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')}`
+
+export async function liveCampaignKeywordMatchType(target: GoogleAdsTarget, campaignId: string): Promise<string | null> {
+  const rows = await liveRows<Json>(target, liveKeywordMatchTypeQuery(campaignId), 'ads.search.live.match-type')
+  return str(rows[0]?.campaign?.keywordMatchType)
 }

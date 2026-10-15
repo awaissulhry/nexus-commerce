@@ -81,6 +81,26 @@ describe('adGroupChangeDraft', () => {
     if ('refusal' in d) throw new Error(d.refusal)
     expect((d.operations[0] as { adGroupOperation: { create: { status: string } } }).adGroupOperation.create.status).toBe('ENABLED')
     expect(d.spendsMoney).toEqual(['The new ad group "Group B" is made ENABLED in the enabled campaign "Search B": it can show ads (default max CPC EUR 0.40).'])
+    // A Shopping ad group serves only once its product groups exist: the sentence says so.
+    const shop = adGroupChangeDraft(C, 'EUR', { campaignId: '23', create: [{ name: 'Group X', defaultBidCents: 25 }], enable: true }, live('23', []))
+    if ('refusal' in shop) throw new Error(shop.refusal)
+    expect(shop.spendsMoney).toEqual(['The new ad group "Group X" is made ENABLED in the enabled campaign "Shop C": it can show ads once its product groups exist (default max CPC EUR 0.25).'])
+  })
+
+  it('renames go before creates (a name a rename frees can be taken); stands holds every name and only the named groups in full', () => {
+    const d = adGroupChangeDraft(C, 'EUR', { campaignId: '21', create: [{ name: 'Group A', defaultBidCents: 30 }], change: [{ adGroupId: '51', name: 'Group A old' }] },
+      live('21', [group('52', 'Group B', 'ENABLED', 30), group('51', 'Group A', 'ENABLED', 30)]))
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.operations).toEqual([
+      { adGroupOperation: { update: { resourceName: `${C}/adGroups/51`, name: 'Group A old' }, updateMask: 'name' } },
+      { adGroupOperation: { create: { resourceName: `${C}/adGroups/-1`, campaign: `${C}/campaigns/21`, name: 'Group A', type: 'SEARCH_STANDARD', status: 'ENABLED', cpcBidMicros: '300000' } } },
+    ])
+    expect((d.after as AdGroupChangeRecord).created![0].adGroupId).toBe('new:1')
+    expect(d.stands).toEqual({
+      campaign: { campaignId: '21', status: 'PAUSED', type: 'SEARCH', subType: null, bidding: 'MANUAL_CPC' },
+      names: ['group a', 'group b'],
+      adGroups: [{ adGroupId: '51', name: 'Group A', status: 'ENABLED', type: 'SEARCH_STANDARD', cpcBidCents: 30 }],
+    })
   })
 
   it('a rename and a default bid raise: one update with both fields in the mask; the raise spends money; records for undo', () => {
@@ -214,12 +234,42 @@ describe('keywordChangeDraft', () => {
     expect(keywordChangeDraft(C, 'EUR', { campaignId: '22', bulk: { percent: -10, bidCents: 5 } }, live())).toMatchObject({ refusal: expect.stringContaining('one of them') })
   })
 
-  it('removeAdded removes only what the undone change added', () => {
-    const d = keywordChangeDraft(C, 'EUR', { campaignId: '22', removeAdded: ['51~602'] }, live(CAMPAIGNS, { addedByChange: ['51~602'] }))
+  it('removeAdded removes only what the undone change added, and only while it is still as that change made it', () => {
+    const made = { keywordId: '51~602', adGroupId: '51', text: 'other term', matchType: 'PHRASE' as const, bidCents: null, status: 'ENABLED' }
+    const d = keywordChangeDraft(C, 'EUR', { campaignId: '22', removeAdded: ['51~602'] }, live(CAMPAIGNS, { addedByChange: [made] }))
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations).toEqual([{ adGroupCriterionOperation: { remove: `${C}/adGroupCriteria/51~602` } }])
     expect(d.before).toMatchObject({ removed: [{ keywordId: '51~602', adGroupId: '51', text: 'other term', matchType: 'PHRASE', bidCents: null, status: 'ENABLED' }] })
-    expect(keywordChangeDraft(C, 'EUR', { campaignId: '22', removeAdded: ['51~601'] }, live(CAMPAIGNS, { addedByChange: ['51~602'] }))).toMatchObject({ refusal: expect.stringContaining('was not added by the change this undoes') })
+    expect(keywordChangeDraft(C, 'EUR', { campaignId: '22', removeAdded: ['51~601'] }, live(CAMPAIGNS, { addedByChange: [made] }))).toMatchObject({ refusal: expect.stringContaining('was not added by the change this undoes') })
+    // Someone paused it and gave it a bid since: removing it would overwrite that — refused, saying what moved.
+    expect(keywordChangeDraft(C, 'EUR', { campaignId: '22', removeAdded: ['51~602'] }, live(CAMPAIGNS, { addedByChange: [{ ...made, status: 'PAUSED', bidCents: 25 }] })))
+      .toEqual({ refusal: 'Not removed: a keyword the undone change added moved since it ran — "other term" (51~602): status PAUSED → ENABLED, max CPC EUR 0.25 → its ad group\'s default EUR 0.40. Removing it would overwrite that later change.' })
+  })
+
+  it('an undo puts a keyword back with the status it had; an explicit ENABLED in an enabled campaign spends money', () => {
+    const d = keywordChangeDraft(C, 'EUR', { campaignId: '22', add: [{ adGroupId: '51', text: 'kept paused', matchType: 'EXACT', status: 'PAUSED' }, { adGroupId: '51', text: 'kept on', matchType: 'EXACT', status: 'ENABLED' }] }, live())
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.operations.map((o) => (o as { adGroupCriterionOperation: { create: { status: string } } }).adGroupCriterionOperation.create.status)).toEqual(['PAUSED', 'ENABLED'])
+    expect(d.spendsMoney).toEqual(['Adds 1 keyword that can show ads at once: ENABLED, in the enabled ad group "Group A" of the enabled campaign "Search B".'])
+    expect(d.warnings).toEqual([])
+    expect(d.summary).toBe('Google Ads keywords in "Search B": add 2 keywords (PAUSED and ENABLED).')
+  })
+
+  it('a campaign set to broad match for all keywords: adding needs allowBroad, and the preview says every new keyword acts as broad', () => {
+    const ask = { campaignId: '22', add: [{ adGroupId: '51', text: 'new term', matchType: 'EXACT' as const }] }
+    expect(keywordChangeDraft(C, 'EUR', ask, live(CAMPAIGNS, { keywordMatchType: 'BROAD' }))).toMatchObject({ refusal: expect.stringContaining('its keyword match type is BROAD') })
+    const d = keywordChangeDraft(C, 'EUR', { ...ask, allowBroad: true }, live(CAMPAIGNS, { keywordMatchType: 'BROAD' }))
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.warnings[0]).toBe('Campaign "Search B" is set to broad match for all its keywords (keyword match type BROAD): every new keyword acts as broad match, whatever its own match type, and matches many more searches.')
+    expect(d.stands).toMatchObject({ keywordMatchType: 'BROAD' })
+  })
+
+  it('the operations follow the keywords\' ids, never Google\'s row order', () => {
+    const forward = keywordChangeDraft(C, 'EUR', { campaignId: '21', bulk: { percent: 10 } }, live())
+    const backward = keywordChangeDraft(C, 'EUR', { campaignId: '21', bulk: { percent: 10 } }, { ...live(), keywords: [...KEYWORDS].reverse() })
+    if ('refusal' in forward || 'refusal' in backward) throw new Error('refused')
+    expect(backward.operations).toEqual(forward.operations)
+    expect(backward.stands).toEqual(forward.stands)
   })
 })
 
@@ -242,8 +292,8 @@ describe('negativeChangeDraft', () => {
       { adGroupCriterionOperation: { remove: `${C}/adGroupCriteria/51~701` } },
     ])
     expect(d.skipped).toEqual(['"Cheap" is already a negative keyword of campaign "Search B".', '[cheap] is not a negative keyword of campaign "Search B".'])
-    expect(d.spendsMoney).toEqual([])
-    expect(d.warnings).toEqual(['Removing 1 negative keyword lets more searches show ads of campaign "Search B".'])
+    expect(d.spendsMoney).toEqual(['Removes 1 negative keyword: more searches can show the ads of campaign "Search B".'])
+    expect(d.warnings).toEqual([])
     const after = negativeRecordAfterRun(d.after as NegativeChangeRecord, [
       { campaignCriterionResult: { resourceName: `${C}/campaignCriteria/22~911` } }, { adGroupCriterionResult: { resourceName: `${C}/adGroupCriteria/51~712` } }, {},
     ])
@@ -255,6 +305,16 @@ describe('negativeChangeDraft', () => {
     const off = negativeChangeDraft(C, { campaignId: '22', remove: [{ text: 'cheap', matchType: 'PHRASE' }] }, live)
     if ('refusal' in off) throw new Error(off.refusal)
     expect(off.operations).toEqual([{ campaignCriterionOperation: { remove: `${C}/campaignCriteria/22~901` } }])
+    // A paused campaign: still named, with "nothing spends until it is enabled".
+    const paused = negativeChangeDraft(C, { campaignId: '21', remove: [{ text: 'cheap', matchType: 'PHRASE' }] }, live)
+    if ('refusal' in paused) throw new Error(paused.refusal)
+    expect(paused.spendsMoney).toEqual(['Removes 1 negative keyword: more searches can show the ads of campaign "Search A" (the campaign is paused: nothing spends until it is enabled).'])
+    // What it stands on: the negatives and the keywords of each place it touches.
+    expect(off.stands).toEqual({
+      campaign: { campaignId: '22', status: 'ENABLED', type: 'SEARCH' },
+      negatives: [{ level: 'campaign', keys: ['PHRASE:cheap#901'] }],
+      positives: [{ level: 'campaign', keys: ['51~601#EXACT:test term'] }],
+    })
   })
 
   it('a negative that matches a keyword of the campaign is named; a Shopping campaign takes negatives too', () => {

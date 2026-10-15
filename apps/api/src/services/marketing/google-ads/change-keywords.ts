@@ -21,12 +21,15 @@
  * Money (Owner's rules): a bid raise is named in `spendsMoney` (how many, from → to for up to 20). New keywords inside
  * a campaign that is not ENABLED are made ENABLED (nothing serves); inside an ENABLED campaign they are made PAUSED
  * unless the request says `enable: true` — new keywords that can serve at once (ENABLED, in an ENABLED ad group of the
- * ENABLED campaign) are named in `spendsMoney`. Removing a negative keyword lets more searches show ads: a warning.
+ * ENABLED campaign) are named in `spendsMoney`. Removing a negative keyword lets more searches show ads: also named in
+ * `spendsMoney` (with "nothing spends until it is enabled" when the campaign is not enabled). A campaign whose keyword
+ * match type is BROAD makes every keyword it holds act as broad match: adding keywords there needs allowBroad.
+ * Every list read from Google is used in id order, so the operations (and the approved `plan`) never follow row order.
  */
 import { changeLines, keywordTextProblem, money, plural, type GoogleChangeDraft } from './change-draft.js'
 import { biddingNote, campaignPausedNote, changeableCampaign, raiseSentence, raiseTotal } from './change-ad-groups.js'
 import { idOf, keywordKey, microsOfCents, type LiveCampaign, type MatchType } from './live.js'
-import type { LiveAdGroup, LiveCampaignNegative, LiveKeyword } from './live-keywords.js'
+import { byGoogleId, type LiveAdGroup, type LiveCampaignNegative, type LiveKeyword } from './live-keywords.js'
 import type { GoogleMutateOperation, GoogleMutateResponse } from './write-client.js'
 
 /** The most keyword operations one change sends (adds, bid changes and removals together). */
@@ -41,7 +44,7 @@ const lower = (s: string | null) => String(s ?? 'not enabled').toLowerCase()
 export interface KeywordChangeRequest {
   campaignId: string
   /** Keywords to add to Search ad groups of the campaign; a max CPC of its own, or the ad group's default. */
-  add?: Array<{ adGroupId: string; text: string; matchType: MatchType; bidCents?: number }>
+  add?: Array<{ adGroupId: string; text: string; matchType: MatchType; bidCents?: number; status?: 'ENABLED' | 'PAUSED' }>
   /** New max CPCs of keywords by id (`adGroupId~criterionId`); null = no bid of its own (its ad group's default). */
   bids?: Array<{ keywordId: string; bidCents: number | null }>
   /** New max CPCs of every keyword a filter matches: a new bid, or a percent of the bid each uses now. */
@@ -59,8 +62,10 @@ export interface KeywordLiveState {
   adGroups: LiveAdGroup[]
   /** The campaign's keywords and ad group negatives (live-keywords.ts). */
   keywords: LiveKeyword[]
-  /** For removeAdded: the keyword ids the earlier change (the one undone) added, read from its record. */
-  addedByChange?: string[]
+  /** For removeAdded: the keywords the earlier change (the one undone) added, as its record holds them. */
+  addedByChange?: KeywordRecordEntry[]
+  /** For add: the campaign's keyword match type (BROAD = every keyword acts as broad match). */
+  keywordMatchType?: string | null
 }
 
 export interface KeywordRecordEntry { keywordId: string; adGroupId: string; text: string; matchType: MatchType; bidCents: number | null; status: string }
@@ -87,7 +92,8 @@ export function keywordChangeDraft(customer: string, currency: string, request: 
   const { campaign, kind } = picked
   if (kind !== 'SEARCH') return { refusal: `Campaign "${campaign.name}" is a Shopping campaign: it has no keywords (its negative keywords: set-google-negatives; its bids are on product groups).` }
   const groupById = new Map(live.adGroups.map((g) => [g.adGroupId, g]))
-  const positives = live.keywords.filter((k) => !k.negative)
+  // In id order (never Google's row order): the operations, and so the approved `plan`, do not move with it.
+  const positives = live.keywords.filter((k) => !k.negative).sort((a, b) => byGoogleId(a.keywordId, b.keywordId))
   const keywordById = new Map(positives.map((k) => [k.keywordId, k]))
   const operations: GoogleMutateOperation[] = []
   const lines: Array<[string, unknown, unknown]> = []
@@ -104,15 +110,26 @@ export function keywordChangeDraft(customer: string, currency: string, request: 
   // 1. removals (only the undo of an earlier change: the keywords it added)
   const removing = new Set<string>()
   if (removes.length) {
-    const allowed = new Set(live.addedByChange ?? [])
-    for (const id of [...new Set(removes)]) {
-      if (!allowed.has(id)) return { refusal: `Keyword ${id} was not added by the change this undoes: removeAdded removes only what that change added, nothing else.` }
+    const allowed = new Map((live.addedByChange ?? []).map((a) => [a.keywordId, a]))
+    const moved: string[] = []
+    for (const id of [...new Set(removes)].sort(byGoogleId)) {
+      const wrote = allowed.get(id)
+      if (!wrote) return { refusal: `Keyword ${id} was not added by the change this undoes: removeAdded removes only what that change added, nothing else.` }
       const k = keywordById.get(id)
       if (!k) { skipped.push(`Keyword ${id} is no longer in the campaign.`); continue }
+      // Undo's "nothing moved since": only a keyword still as that change made it is removed.
+      const diff = [
+        ...(k.status !== wrote.status ? [`status ${wrote.status} → ${k.status ?? '(none)'}`] : []),
+        ...(k.cpcBidCents !== wrote.bidCents ? [`max CPC ${bidWords(k, wrote.bidCents)} → ${bidWords(k, k.cpcBidCents)}`] : []),
+      ]
+      if (diff.length) { moved.push(`${kw(k.text, k.matchType)} (${id}): ${diff.join(', ')}`); continue }
       operations.push({ adGroupCriterionOperation: { remove: `${customer}/adGroupCriteria/${id}` } })
       removing.add(id)
       before.removed = [...(before.removed ?? []), { keywordId: id, adGroupId: k.adGroupId, text: k.text, matchType: k.matchType, bidCents: k.cpcBidCents, status: k.status ?? 'ENABLED' }]
       lines.push([`${kw(k.text, k.matchType)} in ${groupName(k.adGroupId)}`, k.status ?? 'in the ad group', '(removed)'])
+    }
+    if (moved.length) {
+      return { refusal: `Not removed: ${moved.length === 1 ? 'a keyword' : `${moved.length} keywords`} the undone change added moved since it ran — ${moved.join('; ')}. Removing ${moved.length === 1 ? 'it' : 'them'} would overwrite that later change.` }
     }
     if (removing.size) warnings.push(`Removes ${plural(removing.size, 'keyword')} that the undone change added: they stop showing ads (a removed keyword cannot be enabled again, only added anew).`)
   }
@@ -180,12 +197,19 @@ export function keywordChangeDraft(customer: string, currency: string, request: 
 
   // 3. new keywords
   const on = campaign.status === 'ENABLED'
-  const status = !on || request.enable ? 'ENABLED' : 'PAUSED'
+  const byRule = !on || request.enable ? 'ENABLED' : 'PAUSED'
+  if (adds.length && live.keywordMatchType === 'BROAD') {
+    if (!request.allowBroad) {
+      return { refusal: `Campaign "${campaign.name}" is set to broad match for all its keywords (its keyword match type is BROAD): every keyword added there acts as broad match, whatever its own match type. Add keywords to it only with allowBroad: true.` }
+    }
+    warnings.push(`Campaign "${campaign.name}" is set to broad match for all its keywords (keyword match type BROAD): every new keyword acts as broad match, whatever its own match type, and matches many more searches.`)
+  }
   const existing = new Map<string, Set<string>>()
   for (const k of positives) existing.set(k.adGroupId, (existing.get(k.adGroupId) ?? new Set()).add(keywordKey(k.text, k.matchType)))
   const seen = new Set<string>()
   const added: KeywordRecordEntry[] = []
   let broad = 0
+  let pausedByRule = 0
   for (const a of adds) {
     const g = groupById.get(a.adGroupId)
     if (!g) return { refusal: `Ad group ${a.adGroupId} is not in campaign "${campaign.name}" (or it is removed). google-ads-live view campaign lists its ad groups.` }
@@ -199,6 +223,9 @@ export function keywordChangeDraft(customer: string, currency: string, request: 
     seen.add(`${g.adGroupId}|${key}`)
     if (existing.get(g.adGroupId)?.has(key)) { skipped.push(`${kw(text, a.matchType)} is already in ad group "${g.name}".`); continue }
     if (a.matchType === 'BROAD') broad += 1
+    // An undo puts a keyword back with the status it had; anything else follows the rule above.
+    const status = a.status ?? byRule
+    if (!a.status && status === 'PAUSED') pausedByRule += 1
     added.push({ keywordId: `${NEW}${operations.length}`, adGroupId: g.adGroupId, text, matchType: a.matchType, bidCents: a.bidCents ?? null, status })
     operations.push({
       adGroupCriterionOperation: {
@@ -209,16 +236,17 @@ export function keywordChangeDraft(customer: string, currency: string, request: 
   }
   if (added.length) {
     after.added = added
-    if (on && request.enable) {
-      const serving = added.filter((a) => groupById.get(a.adGroupId)?.status === 'ENABLED')
+    const enabledNew = added.filter((a) => a.status === 'ENABLED')
+    if (on) {
+      const serving = enabledNew.filter((a) => groupById.get(a.adGroupId)?.status === 'ENABLED')
       if (serving.length) {
         const groups = [...new Set(serving.map((a) => a.adGroupId))]
         spends.push(`Adds ${plural(serving.length, 'keyword')} that can show ads at once: ENABLED, in ${groups.length === 1 ? `the enabled ad group ${groupName(groups[0])}` : `${groups.length} enabled ad groups`} of the enabled campaign "${campaign.name}".`)
       }
-      if (serving.length < added.length) warnings.push(`${plural(added.length - serving.length, 'new keyword')} ${added.length - serving.length === 1 ? 'is' : 'are'} ENABLED in a paused ad group: ${added.length - serving.length === 1 ? 'it shows' : 'they show'} no ads until the ad group is enabled.`)
-    } else if (on) {
-      warnings.push(`New keywords are made PAUSED because the campaign "${campaign.name}" is enabled: they show no ads until a person enables them (or ask again with enable: true).`)
-    } else {
+      const idle = enabledNew.length - serving.length
+      if (idle) warnings.push(`${plural(idle, 'new keyword')} ${idle === 1 ? 'is' : 'are'} ENABLED in a paused ad group: ${idle === 1 ? 'it shows' : 'they show'} no ads until the ad group is enabled.`)
+      if (pausedByRule) warnings.push(`${pausedByRule === added.length ? 'New keywords are' : `${plural(pausedByRule, 'new keyword')} are`} made PAUSED because the campaign "${campaign.name}" is enabled: they show no ads until a person enables them (or ask again with enable: true).`)
+    } else if (enabledNew.length) {
       warnings.push(`New keywords are made ENABLED: the campaign "${campaign.name}" is ${lower(campaign.status)}, so they show no ads until it is enabled.`)
     }
     if (broad) warnings.push(`${plural(broad, 'BROAD match keyword')}: ${broad === 1 ? 'it matches' : 'they match'} many more searches than EXACT or PHRASE (and can spend on them).`)
@@ -231,7 +259,8 @@ export function keywordChangeDraft(customer: string, currency: string, request: 
   if (operations.length === 0) return { refusal: `Nothing to change: ${skipped.join(' ') || 'no keyword is changed.'}` }
   const { changes, more } = changeLines(lines)
   const parts: string[] = []
-  if (added.length) parts.push(`add ${plural(added.length, 'keyword')} (${status})`)
+  const statuses = [...new Set(added.map((a) => a.status))]
+  if (added.length) parts.push(`add ${plural(added.length, 'keyword')} (${statuses.length === 1 ? statuses[0] : statuses.join(' and ')})`)
   if (after.bids.length) parts.push(`change the max CPC of ${plural(after.bids.length, 'keyword')} (${raises.length} up, ${lowered} down)`)
   if (removing.size) parts.push(`remove ${plural(removing.size, 'keyword')} the undone change added`)
   const involvedGroups = new Set([...adds.map((a) => a.adGroupId), ...[...target.values()].map((t) => t.k.adGroupId), ...[...removing].map((id) => keywordById.get(id)!.adGroupId)])
@@ -254,10 +283,11 @@ export function keywordChangeDraft(customer: string, currency: string, request: 
     stands: {
       campaign: { campaignId: campaign.campaignId, status: campaign.status, type: campaign.type, bidding: campaign.bidding },
       adGroups: live.adGroups.filter((g) => involvedGroups.has(g.adGroupId))
-        .map((g) => ({ adGroupId: g.adGroupId, status: g.status, type: g.type, cpcBidCents: g.cpcBidCents })).sort((x, y) => x.adGroupId.localeCompare(y.adGroupId)),
+        .map((g) => ({ adGroupId: g.adGroupId, status: g.status, type: g.type, cpcBidCents: g.cpcBidCents })).sort((x, y) => byGoogleId(x.adGroupId, y.adGroupId)),
       keywords: positives.filter((k) => involvedKeywords.has(k.keywordId))
-        .map((k) => ({ keywordId: k.keywordId, status: k.status, cpcBidCents: k.cpcBidCents, effectiveCpcBidCents: k.effectiveCpcBidCents })).sort((x, y) => x.keywordId.localeCompare(y.keywordId)),
-      existing: [...new Set(adds.map((a) => a.adGroupId))].sort().map((id) => ({ adGroupId: id, keywords: [...(existing.get(id) ?? [])].sort() })),
+        .map((k) => ({ keywordId: k.keywordId, status: k.status, cpcBidCents: k.cpcBidCents, effectiveCpcBidCents: k.effectiveCpcBidCents })),
+      existing: [...new Set(adds.map((a) => a.adGroupId))].sort(byGoogleId).map((id) => ({ adGroupId: id, keywords: [...(existing.get(id) ?? [])].sort() })),
+      ...(adds.length ? { keywordMatchType: live.keywordMatchType ?? null } : {}),
     },
     before,
     after,
@@ -325,8 +355,9 @@ export function negativeChangeDraft(customer: string, request: NegativeChangeReq
   const at = (level: string) => negativesAt.get(level) ?? negativesAt.set(level, new Map()).get(level)!
   for (const n of live.campaignNegatives) at('').set(keywordKey(n.text, n.matchType), n)
   for (const k of live.keywords) if (k.negative) at(k.adGroupId).set(keywordKey(k.text, k.matchType), { criterionId: k.criterionId, text: k.text, matchType: k.matchType })
+  const positives = live.keywords.filter((k) => !k.negative).sort((a, b) => byGoogleId(a.keywordId, b.keywordId))
   const positivesByText = new Map<string, LiveKeyword[]>()
-  for (const k of live.keywords) if (!k.negative) positivesByText.set(keywordKey(k.text, ''), [...(positivesByText.get(keywordKey(k.text, '')) ?? []), k])
+  for (const k of positives) positivesByText.set(keywordKey(k.text, ''), [...(positivesByText.get(keywordKey(k.text, '')) ?? []), k])
 
   const operations: GoogleMutateOperation[] = []
   const lines: Array<[string, unknown, unknown]> = []
@@ -383,7 +414,8 @@ export function negativeChangeDraft(customer: string, request: NegativeChangeReq
     record.removed.push({ adGroupId: level || null, text: found.text, matchType: found.matchType })
     lines.push([`negative ${kw(found.text, found.matchType)} at ${where(level || null)}`, 'a negative keyword', '(removed)'])
   }
-  if (record.removed.length) warnings.push(`Removing ${plural(record.removed.length, 'negative keyword')} lets more searches show ads of campaign "${campaign.name}".`)
+  // Owner's rule (2026-10-15): a removed negative lets more searches show the ads — it can spend more.
+  const spends = record.removed.length ? [`Removes ${plural(record.removed.length, 'negative keyword')}: more searches can show the ads of campaign "${campaign.name}"${campaignPausedNote(campaign)}.`] : []
 
   if (operations.length === 0) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
   const { changes, more } = changeLines(lines)
@@ -396,12 +428,14 @@ export function negativeChangeDraft(customer: string, request: NegativeChangeReq
     changes,
     totals: { operations: operations.length, negativesAdded: record.added.length, negativesRemoved: record.removed.length, ...(more ? { linesNotShown: more } : {}) },
     warnings,
-    spendsMoney: [],
+    spendsMoney: spends,
     skipped,
     operations,
     stands: {
       campaign: { campaignId: campaign.campaignId, status: campaign.status, type: campaign.type },
       negatives: levels.map((level) => ({ level: level || 'campaign', keys: [...at(level).entries()].map(([key, n]) => `${key}#${n.criterionId}`).sort() })),
+      // The keywords each touched place holds (the "blocks a keyword" warning stands on them).
+      positives: levels.map((level) => ({ level: level || 'campaign', keys: positives.filter((k) => !level || k.adGroupId === level).map((k) => `${k.keywordId}#${keywordKey(k.text, k.matchType)}`) })),
     },
     before: { campaignId: campaign.campaignId, negatives: record.removed },
     after: record,

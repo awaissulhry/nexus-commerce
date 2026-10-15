@@ -12,7 +12,7 @@ const h = vi.hoisted(() => ({
   mutate: vi.fn(),
   enqueue: vi.fn(async () => ({ queued: true, reason: null })),
   findChange: vi.fn(),
-  live: { campaigns: [] as unknown[], adGroups: [] as unknown[], keywords: [] as unknown[], negatives: [] as unknown[] },
+  live: { campaigns: [] as unknown[], adGroups: [] as unknown[], keywords: [] as unknown[], negatives: [] as unknown[], matchType: null as string | null },
 }))
 vi.mock('../../../db.js', () => ({ default: { agentChange: { findFirst: h.findChange } } }))
 vi.mock('../../marketing/google-ads/change-account.js', () => ({
@@ -29,6 +29,7 @@ vi.mock('../../marketing/google-ads/live-keywords.js', async (importActual) => (
   liveAdGroups: vi.fn(async () => structuredClone(h.live.adGroups)),
   liveKeywords: vi.fn(async () => structuredClone(h.live.keywords)),
   liveCampaignNegatives: vi.fn(async () => structuredClone(h.live.negatives)),
+  liveCampaignKeywordMatchType: vi.fn(async () => h.live.matchType),
 }))
 vi.mock('../../marketing/google-ads/write-client.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/write-client.js')>()),
@@ -62,6 +63,7 @@ beforeEach(() => {
   h.live.adGroups = [GROUP_A]
   h.live.keywords = [KW_1]
   h.live.negatives = [{ criterionId: '901', text: 'cheap', matchType: 'PHRASE' }]
+  h.live.matchType = null
 })
 
 const pick = (p: unknown) => { const { basis, plan, reach } = p as Record<string, unknown>; return { basis, plan, reach } }
@@ -153,6 +155,35 @@ describe('set-google-keywords', () => {
     expect(other).toMatchObject({ ok: false, error: expect.stringContaining('was not added by the change this undoes') })
     h.findChange.mockResolvedValue(null)
     expect(await tool('set-google-keywords').handler({ campaignId: '22', removeAdded: ['51~601'], undoOf: 'ch-9' }, asker)).toMatchObject({ ok: false, error: expect.stringContaining('is not a set-google-keywords change of this business') })
+    // The change was undone already.
+    const made = { keywordId: '51~601', adGroupId: '51', text: 'test term', matchType: 'EXACT', bidCents: 30, status: 'ENABLED' }
+    h.findChange.mockResolvedValue({ after: { campaignId: '22', bids: [], added: [made], ...ACCOUNT }, undoneAt: new Date('2026-10-15T10:00:00Z') })
+    expect(await tool('set-google-keywords').handler({ campaignId: '22', removeAdded: ['51~601'], undoOf: 'ch-1' }, asker)).toMatchObject({ ok: false, error: 'Change ch-1 was undone already.' })
+    // The change added keywords to another campaign.
+    h.findChange.mockResolvedValue({ after: { campaignId: '29', bids: [], added: [made], ...ACCOUNT }, undoneAt: null })
+    expect(await tool('set-google-keywords').handler({ campaignId: '22', removeAdded: ['51~601'], undoOf: 'ch-1' }, asker)).toMatchObject({ ok: false, error: 'Change ch-1 added keywords to another campaign or account.' })
+    // The keyword moved since that change made it (a person paused it): removing it would overwrite that.
+    h.findChange.mockResolvedValue({ after: { campaignId: '22', bids: [], added: [made], ...ACCOUNT }, undoneAt: null })
+    h.live.keywords = [{ ...KW_1, status: 'PAUSED' }]
+    expect(await tool('set-google-keywords').handler({ campaignId: '22', removeAdded: ['51~601'], undoOf: 'ch-1' }, asker)).toMatchObject({ ok: false, error: expect.stringContaining('moved since it ran — [test term] (51~601): status ENABLED → PAUSED') })
+    expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('the undo of a removal adds each keyword back with the status it had', () => {
+    const change = {
+      before: { campaignId: '22', bids: [], removed: [{ keywordId: '51~777', adGroupId: '51', text: 'new term', matchType: 'PHRASE', bidCents: null, status: 'PAUSED' }], ...ACCOUNT },
+      after: { campaignId: '22', bids: [], ...ACCOUNT },
+    }
+    const undo = tool('set-google-keywords').undo!.request(change) as { tool: string; args: Record<string, unknown> }
+    expect(undo.args).toMatchObject({ accountId: 'g-1', campaignId: '22', add: [{ adGroupId: '51', text: 'new term', matchType: 'PHRASE', status: 'PAUSED' }] })
+    expect(undo.args).not.toHaveProperty('enable')
+    expect(tool('set-google-keywords').input.safeParse(undo.args).success).toBe(true)
+  })
+
+  it('a campaign set to broad match for all keywords: an add is refused without allowBroad (read live)', async () => {
+    h.live.matchType = 'BROAD'
+    const out = await tool('set-google-keywords').handler({ campaignId: '22', add: [{ adGroupId: '51', text: 'new term', matchType: 'EXACT' }] }, asker)
+    expect(out).toMatchObject({ ok: false, error: expect.stringContaining('its keyword match type is BROAD') })
     expect(h.mutate).not.toHaveBeenCalled()
   })
 
@@ -214,7 +245,7 @@ describe('set-google-negatives', () => {
     const ask = { campaignId: '22', add: [{ text: 'used', matchType: 'PHRASE' }], remove: [{ text: 'free', matchType: 'EXACT', adGroupId: '51' }] }
     h.mutate.mockResolvedValue({ responses: [], ops: 2, requestId: null })
     const out = await tool('set-google-negatives').handler(ask, asker)
-    expect(out.preview).toMatchObject({ spendsMoney: false, warnings: ['Removing 1 negative keyword lets more searches show ads of campaign "Search B".'], operations: 2 })
+    expect(out.preview).toMatchObject({ spendsMoney: true, spendsMoneyBecause: ['Removes 1 negative keyword: more searches can show the ads of campaign "Search B".'], operations: 2 })
     h.mutate.mockResolvedValue({ responses: [{ campaignCriterionResult: { resourceName: `${C}/campaignCriteria/22~911` } }, {}], ops: 2, requestId: 'r' })
     const run = await tool('set-google-negatives').execute!(ask, approved(out.preview))
     expect(run.change!.after).toEqual({

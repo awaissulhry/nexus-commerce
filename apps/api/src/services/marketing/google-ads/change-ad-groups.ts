@@ -19,7 +19,7 @@
  */
 import { changeLines, money, plural, type GoogleChangeDraft } from './change-draft.js'
 import { idOf, microsOfCents, type LiveCampaign } from './live.js'
-import type { LiveAdGroup } from './live-keywords.js'
+import { byGoogleId, type LiveAdGroup } from './live-keywords.js'
 import type { GoogleMutateOperation, GoogleMutateResponse } from './write-client.js'
 
 // ── shared by the ad group, keyword and negative keyword changes ───────────────────────────────────────────────────
@@ -141,38 +141,7 @@ export function adGroupChangeDraft(customer: string, currency: string, request: 
     }
   }
 
-  // 2. new ad groups (a Shopping one with its product ad, in the same request)
-  const on = campaign.status === 'ENABLED'
-  const status = !on || request.enable ? 'ENABLED' : 'PAUSED'
-  const type = kind === 'SEARCH' ? 'SEARCH_STANDARD' : 'SHOPPING_PRODUCT_ADS'
-  const made: NonNullable<AdGroupChangeRecord['created']> = []
-  creates.forEach((c, i) => {
-    const temp = -(i + 1)
-    const name = c.name.trim()
-    const entry: NonNullable<AdGroupChangeRecord['created']>[number] = { adGroupId: `${NEW}${operations.length}`, name, type, status, defaultBidCents: c.defaultBidCents }
-    operations.push({ adGroupOperation: { create: { resourceName: groupRes(temp), campaign: campaignRes, name, type, status, cpcBidMicros: microsOfCents(c.defaultBidCents) } } })
-    if (kind === 'SHOPPING') {
-      entry.adId = `${NEW}${operations.length}`
-      operations.push({ adGroupAdOperation: { create: { adGroup: groupRes(temp), status: 'ENABLED', ad: { shoppingProductAd: {} } } } })
-    }
-    made.push(entry)
-    lines.push([`new ad group "${name}"`, '(none)', `${status}, default max CPC ${money(c.defaultBidCents, currency)}${kind === 'SHOPPING' ? ', with its product ad' : ''}`])
-  })
-  if (made.length) {
-    after.created = made
-    if (on && request.enable) {
-      spends.push(`${made.length === 1 ? `The new ad group "${made[0].name}" is` : `${made.length} new ad groups (${made.slice(0, 20).map((m) => `"${m.name}"`).join(', ')}${made.length > 20 ? ' …' : ''}) are`} made ENABLED in the enabled campaign "${campaign.name}": ${made.length === 1 ? 'it' : 'they'} can show ads (default max CPC ${[...new Set(made.map((m) => money(m.defaultBidCents, currency)))].join(' / ')}).`)
-    } else if (on) {
-      warnings.push(`New ad groups are made PAUSED because the campaign "${campaign.name}" is enabled: they show no ads until a person enables them (or ask again with enable: true).`)
-    } else {
-      warnings.push(`New ad groups are made ENABLED: the campaign "${campaign.name}" is ${String(campaign.status ?? 'not enabled').toLowerCase()}, so they show no ads until it is enabled.`)
-    }
-    if (kind === 'SHOPPING') warnings.push('Each new Shopping ad group gets its product ad in this request, but no product groups: those are set in a separate change.')
-  } else if (request.enable) {
-    warnings.push('enable: true changes nothing here: it applies to new ad groups only.')
-  }
-
-  // 3. renames and default max CPCs
+  // 2. renames and default max CPCs — sent before the new ad groups, so a name a rename frees can be taken by one
   const raises: Array<{ label: string; from: string; to: string; fromCents: number | null; toCents: number; servingNote: string }> = []
   for (const c of changes) {
     const g = groupById.get(c.adGroupId)!
@@ -217,6 +186,37 @@ export function adGroupChangeDraft(customer: string, currency: string, request: 
     const total = raiseTotal('default max CPCs', plural(raises.length, 'ad group'), raises, currency)
     if (total) spends.push(total)
   }
+  // 3. new ad groups (a Shopping one with its product ad, in the same request)
+  const on = campaign.status === 'ENABLED'
+  const status = !on || request.enable ? 'ENABLED' : 'PAUSED'
+  const type = kind === 'SEARCH' ? 'SEARCH_STANDARD' : 'SHOPPING_PRODUCT_ADS'
+  const made: NonNullable<AdGroupChangeRecord['created']> = []
+  creates.forEach((c, i) => {
+    const temp = -(i + 1)
+    const name = c.name.trim()
+    const entry: NonNullable<AdGroupChangeRecord['created']>[number] = { adGroupId: `${NEW}${operations.length}`, name, type, status, defaultBidCents: c.defaultBidCents }
+    operations.push({ adGroupOperation: { create: { resourceName: groupRes(temp), campaign: campaignRes, name, type, status, cpcBidMicros: microsOfCents(c.defaultBidCents) } } })
+    if (kind === 'SHOPPING') {
+      entry.adId = `${NEW}${operations.length}`
+      operations.push({ adGroupAdOperation: { create: { adGroup: groupRes(temp), status: 'ENABLED', ad: { shoppingProductAd: {} } } } })
+    }
+    made.push(entry)
+    lines.push([`new ad group "${name}"`, '(none)', `${status}, default max CPC ${money(c.defaultBidCents, currency)}${kind === 'SHOPPING' ? ', with its product ad' : ''}`])
+  })
+  if (made.length) {
+    after.created = made
+    if (on && request.enable) {
+      spends.push(`${made.length === 1 ? `The new ad group "${made[0].name}" is` : `${made.length} new ad groups (${made.slice(0, 20).map((m) => `"${m.name}"`).join(', ')}${made.length > 20 ? ' …' : ''}) are`} made ENABLED in the enabled campaign "${campaign.name}": ${made.length === 1 ? 'it' : 'they'} can show ads${kind === 'SHOPPING' ? ` once ${made.length === 1 ? 'its' : 'their'} product groups exist` : ''} (default max CPC ${[...new Set(made.map((m) => money(m.defaultBidCents, currency)))].join(' / ')}).`)
+    } else if (on) {
+      warnings.push(`New ad groups are made PAUSED because the campaign "${campaign.name}" is enabled: they show no ads until a person enables them (or ask again with enable: true).`)
+    } else {
+      warnings.push(`New ad groups are made ENABLED: the campaign "${campaign.name}" is ${String(campaign.status ?? 'not enabled').toLowerCase()}, so they show no ads until it is enabled.`)
+    }
+    if (kind === 'SHOPPING') warnings.push('Each new Shopping ad group gets its product ad in this request, but no product groups: those are set in a separate change.')
+  } else if (request.enable) {
+    warnings.push('enable: true changes nothing here: it applies to new ad groups only.')
+  }
+
   const bidNote = made.length || after.adGroups.some((g) => g.defaultBidCents !== undefined) ? biddingNote(campaign, 'the ad groups\' default max CPCs') : null
   if (bidNote) warnings.push(bidNote)
 
@@ -238,8 +238,11 @@ export function adGroupChangeDraft(customer: string, currency: string, request: 
     operations,
     stands: {
       campaign: { campaignId: campaign.campaignId, status: campaign.status, type: campaign.type, subType: campaign.subType, bidding: campaign.bidding },
-      adGroups: live.adGroups.map((g) => ({ adGroupId: g.adGroupId, name: g.name, status: g.status, type: g.type, cpcBidCents: g.cpcBidCents }))
-        .sort((x, y) => x.adGroupId.localeCompare(y.adGroupId)),
+      // Every name (the duplicate check stands on them); the full fields only of the ad groups the change names.
+      names: live.adGroups.map((g) => nameKey(g.name)).sort(),
+      adGroups: live.adGroups.filter((g) => seenChange.has(g.adGroupId))
+        .map((g) => ({ adGroupId: g.adGroupId, name: g.name, status: g.status, type: g.type, cpcBidCents: g.cpcBidCents }))
+        .sort((x, y) => byGoogleId(x.adGroupId, y.adGroupId)),
     },
     before,
     after,

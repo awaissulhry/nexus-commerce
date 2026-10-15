@@ -21,10 +21,10 @@ import {
 import { adGroupChangeDraft, adGroupRecordAfterRun, type AdGroupChangeRecord, type AdGroupChangeRequest } from '../../marketing/google-ads/change-ad-groups.js'
 import {
   keywordChangeDraft, keywordRecordAfterRun, MAX_KEYWORD_OPERATIONS, negativeChangeDraft, negativeRecordAfterRun,
-  type KeywordChangeRecord, type KeywordChangeRequest, type NegativeChangeRecord, type NegativeChangeRequest, type NegativeRecordEntry,
+  type KeywordChangeRecord, type KeywordChangeRequest, type KeywordRecordEntry, type NegativeChangeRecord, type NegativeChangeRequest, type NegativeRecordEntry,
 } from '../../marketing/google-ads/change-keywords.js'
 import { keywordKey, liveCampaigns } from '../../marketing/google-ads/live.js'
-import { liveAdGroups, liveCampaignNegatives, liveKeywords } from '../../marketing/google-ads/live-keywords.js'
+import { liveAdGroups, liveCampaignKeywordMatchType, liveCampaignNegatives, liveKeywords } from '../../marketing/google-ads/live-keywords.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
@@ -177,7 +177,7 @@ const keywordRequest = (args: Record<string, unknown>): KeywordChangeRequest => 
  * removeAdded is the undo of an earlier keyword change only: the keyword ids that change's record says it added (in
  * this business — the record is read under the caller's business), while it is not undone yet.
  */
-async function keywordsAddedBy(changeId: unknown, campaignId: string, customerId: string): Promise<string[] | { refusal: string }> {
+async function keywordsAddedBy(changeId: unknown, campaignId: string, customerId: string): Promise<KeywordRecordEntry[] | { refusal: string }> {
   if (typeof changeId !== 'string' || !changeId.trim()) {
     return { refusal: 'removeAdded is only the undo of an earlier set-google-keywords change (undo-change asks for it with undoOf): this tool removes no other keyword.' }
   }
@@ -186,12 +186,13 @@ async function keywordsAddedBy(changeId: unknown, campaignId: string, customerId
   if (row.undoneAt) return { refusal: `Change ${changeId} was undone already.` }
   const after = (row.after ?? {}) as Partial<KeywordChangeRecord> & OnAccount
   if (after.campaignId !== campaignId || (after.customerId && after.customerId !== customerId)) return { refusal: `Change ${changeId} added keywords to another campaign or account.` }
-  return (after.added ?? []).map((a) => a.keywordId)
+  // Each as that change made it (status, max CPC): the draft removes a keyword only while it is still so.
+  return after.added ?? []
 }
 
 const buildKeywords = (args: Record<string, unknown>): GoogleDraftBuilder => async (account) => {
   const request = keywordRequest(args)
-  let addedByChange: string[] | undefined
+  let addedByChange: KeywordRecordEntry[] | undefined
   if (request.removeAdded?.length) {
     const added = await keywordsAddedBy(args.undoOf, request.campaignId, account.customerId)
     if ('refusal' in added) return added
@@ -200,7 +201,8 @@ const buildKeywords = (args: Record<string, unknown>): GoogleDraftBuilder => asy
   const { campaigns, there } = await campaignParts(account, request.campaignId)
   const adGroups = there ? await liveAdGroups(account.target, request.campaignId) : []
   const keywords = there ? await liveKeywords(account.target, request.campaignId) : []
-  return keywordChangeDraft(customerResource(account.target), account.currency, request, { campaigns, adGroups, keywords, addedByChange })
+  const keywordMatchType = there && request.add?.length ? await liveCampaignKeywordMatchType(account.target, request.campaignId) : null
+  return keywordChangeDraft(customerResource(account.target), account.currency, request, { campaigns, adGroups, keywords, addedByChange, keywordMatchType })
 }
 
 const keywordUndo: ToolUndo = {
@@ -234,9 +236,9 @@ const keywordUndo: ToolUndo = {
         // Removing what THIS change added — the one removal the keyword tool makes, checked against this change's record.
         ...(added.length ? { removeAdded: added.map((a) => a.keywordId), ...(change.id ? { undoOf: change.id } : {}) } : {}),
         ...(readd.length ? {
-          add: readd.map((k) => ({ adGroupId: k.adGroupId, text: k.text, matchType: k.matchType, ...(k.bidCents !== null ? { bidCents: k.bidCents } : {}) })),
+          // Each back with the status it had (a PAUSED one comes back PAUSED).
+          add: readd.map((k) => ({ adGroupId: k.adGroupId, text: k.text, matchType: k.matchType, status: k.status === 'PAUSED' ? 'PAUSED' : 'ENABLED', ...(k.bidCents !== null ? { bidCents: k.bidCents } : {}) })),
           ...(readd.some((k) => k.matchType === 'BROAD') ? { allowBroad: true } : {}),
-          ...(readd.some((k) => k.status === 'ENABLED') ? { enable: true } : {}),
         } : {}),
         why: `undo of an earlier keyword change${bids.length ? ': max CPCs back' : ''}${added.length ? `${bids.length ? ';' : ':'} the ${added.length === 1 ? 'keyword' : `${added.length} keywords`} it added removed` : ''}${readd.length ? `; the ${readd.length === 1 ? 'keyword' : `${readd.length} keywords`} it removed added again` : ''}`,
       },
@@ -255,7 +257,8 @@ const setGoogleKeywords: AgentTool = {
   openWorld: true,
   reversibility: 'full',
   maxClaudeTrust: 'ask',
-  requires: [F.adsBidsEdit, ADSPEND],
+  // Bids, and adding keywords (campaign management); a bid cannot be judged without the ad spend.
+  requires: [F.adsBidsEdit, F.adsCampaignsManage, ADSPEND],
   restrictedFields: GOOGLE_BID_MONEY,
   input: z.object({
     accountId: googleAccountArg,
@@ -265,6 +268,7 @@ const setGoogleKeywords: AgentTool = {
       text: z.string().trim().min(1).max(80).describe('the keyword (at most 80 characters, 10 words)'),
       matchType: matchTypeArg,
       bidCents: googleCentsArg('its own max CPC (left out: it uses its ad group\'s default)').optional(),
+      status: z.enum(['ENABLED', 'PAUSED']).optional().describe('only the undo of a keyword removal: the status it had (left out: PAUSED in an enabled campaign unless enable, else ENABLED)'),
     })).max(MAX_KEYWORD_OPERATIONS).optional().describe('keywords to add, EXACT or PHRASE (BROAD only with allowBroad); one already in its ad group (same text and match type) is skipped'),
     bids: z.array(z.object({
       keywordId: keywordIdArg,
@@ -288,7 +292,8 @@ const setGoogleKeywords: AgentTool = {
   }),
   description:
     'Keywords of one Search campaign of the business\'s chosen Google Ads account: add keywords to its ad groups (add: '
-    + 'EXACT or PHRASE; BROAD refused unless allowBroad; each with its own max CPC or its ad group\'s default; one already '
+    + 'EXACT or PHRASE; BROAD refused unless allowBroad, as is any add to a campaign set to broad match for all its '
+    + 'keywords; each with its own max CPC or its ad group\'s default; one already '
     + 'there is skipped), change max CPCs of keywords by id (bids), and change the max CPCs of every keyword a filter '
     + `matches (bulk: a new bid or a percent, rounded to whole cents, at least 1 cent). At most ${MAX_KEYWORD_OPERATIONS} `
     + 'keywords in one request. Amounts are minor units (cents) of the account\'s currency. A raise is marked SPENDS MONEY '
@@ -391,8 +396,8 @@ const setGoogleNegatives: AgentTool = {
   description:
     'Negative keywords of one Search or Standard Shopping campaign of the business\'s chosen Google Ads account, at the '
     + 'campaign (no adGroupId) or in one of its ad groups (adGroupId): add and remove them, EXACT, PHRASE or BROAD, in one '
-    + 'request. (Shared negative keyword lists: set-google-negative-list.) Removing one lets more searches show the ads '
-    + '(said in the warnings); a negative that matches a keyword of the campaign is named. Undo removes what it added and '
+    + 'request. (Shared negative keyword lists: set-google-negative-list.) Removing one lets more searches show the ads: '
+    + 'marked SPENDS MONEY; a negative that matches a keyword of the campaign is named. Undo removes what it added and '
     + 'adds back what it removed.' + GOOGLE_CHANGE_RULES,
   undo: negativeUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildNegatives(args)),
