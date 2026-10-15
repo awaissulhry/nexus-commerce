@@ -19,3 +19,13 @@ export async function googleAdsCustomerLinked(connectionId: string, customerId: 
   const link = await prisma.googleAccountLink.findFirst({ where: { connectionId, product: 'ADS', externalId: customerId }, select: { id: true } })
   return link !== null
 }
+
+/**
+ * Merchant Center (G12, 2026-10-16): is this Merchant Center account the one a person chose for the business, through this
+ * Google connection (its GoogleAccountLink, product MERCHANT)? Read in the business the call runs in (row-level security),
+ * so an account another business chose is never one: a Merchant Center id never crosses businesses.
+ */
+export async function googleMerchantAccountLinked(connectionId: string, merchantId: string): Promise<boolean> {
+  const link = await prisma.googleAccountLink.findFirst({ where: { connectionId, product: 'MERCHANT', externalId: merchantId }, select: { id: true } })
+  return link !== null
+}

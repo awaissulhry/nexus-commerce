@@ -10,6 +10,8 @@
  *   experiment's `:scheduleExperiment` / `:endExperiment` / `:promoteExperiment` / `:graduateExperiment` and a campaign
  *   draft's `:promote`, and G8a: sales sent to a conversion action (Data Manager API `events:ingest`) and their
  *   adjustments (`…:uploadConversionAdjustments`) — each a read when validate-only (Google's check), else a write.
+ *   G12: a Merchant Center change (google-merchant-calls.ts: product inputs into a data source, data sources, promotions)
+ *   — always a write: the Merchant API has no check.
  *   The gateway refuses every other
  *   Google call (`GOOGLE_READ_ONLY`), with its ledger row, and holds real writes to the publish mode
  *   (`NEXUS_GOOGLE_ADS_WRITES=off` refuses them). A write is never retried by the gateway: it could apply twice.
@@ -22,11 +24,13 @@
 import { gatewayFetch } from './gateway.js'
 import { googleAdjustmentBodyOf, googleAdsAdjustmentCall, googleAdsExperimentCall, googleAdsRecommendationCall, googleCallKind, googleDataManagerBodyOf, googleExperimentBodyOf, isGoogleAdsMutate, isGoogleDataManagerIngest, isGoogleValidateOnly } from './channels.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
+import { googleMerchantCall } from './google-merchant-calls.js'
 
 export interface GoogleCallRequest {
   connectionId: string
   operation: string            // 'ads.search' | 'ads.listAccessibleCustomers' | 'merchant.accounts.list' | 'analytics.accountSummaries.list' | 'identity.userinfo' …
-  method: 'GET' | 'POST'
+  /** PATCH and DELETE only for a Merchant Center change (G12, google-merchant-calls.ts); the gateway refuses them elsewhere. */
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   url: string                  // absolute production URL
   body?: unknown               // googleCall JSON-encodes it
   loginCustomerId?: string | null   // digits only; header sent only when set
@@ -41,6 +45,9 @@ export interface GoogleCallRequest {
  */
 export function googleKind(method: string, url: string, body?: unknown): 'read' | 'write' | 'action' {
   if (googleCallKind(method, url) === 'read') return 'read'
+  // G12: a Merchant Center change (product inputs, data sources, promotions) — the Merchant API has no check for any of
+  // them (no validate_only), so always a real write, under the publish mode.
+  if (googleMerchantCall(method, url)) return 'write'
   // G5: applying or dismissing Google's recommendations — Google has no check for it, so always a real write.
   if (googleAdsRecommendationCall(method, url)) return 'write'
   // G8b: the account's users, links and billing — a write, or a read when it only asks Google to check it (validateOnly,

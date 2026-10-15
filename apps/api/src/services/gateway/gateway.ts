@@ -30,7 +30,8 @@
 import { createHash } from 'node:crypto'
 import { withSpan } from '../../utils/otel-setup.js'
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
-import { accountStatusOf, googleAdsCustomerLinked } from './account.js'
+import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked } from './account.js'
+import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { writeLedgerRow } from './ledger.js'
 import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
@@ -226,15 +227,36 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // isGoogleDataManagerIngest) and their adjustments (ConversionAdjustmentUploadService, googleAdsAdjustmentCall), each
   // judged (googleDataManagerBodyOf, googleAdjustmentBodyOf): a check when validate-only, else a write under the publish
   // mode; for the account the business chose through this connection only.
+  // G12 (2026-10-16): Merchant Center — the changes the Merchant tools send (googleMerchantCall: product inputs into a data
+  // source, data sources, promotions), each body judged to exactly what they send (googleMerchantCallBodyOf); the Merchant
+  // API has no check, so each is a write under the publish mode. Reads and changes alike go only to a Merchant Center
+  // account this business chose through this connection (googleMerchantAccountLinked): an id never crosses businesses.
   let googleBody: string | null = null
-  if (req.channel === 'GOOGLE') {
+  const merchant = req.channel === 'GOOGLE' ? googleMerchantCall(req.method, req.url) : null
+  if (merchant) {
+    const judged = googleMerchantCallBodyOf(merchant, req.body)
+    if ('refusal' in judged) {
+      return refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: this Merchant Center change is not one Nexus sends (${req.method} ${safePath(req.url)}: ${judged.refusal}).`, 403)
+    }
+    if (req.kind !== 'write') return refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: a Merchant Center change is a write (${req.method} ${safePath(req.url)}: the kind declared is not the call's).`, 403)
+    if (!req.connectionId || !(await googleMerchantAccountLinked(req.connectionId, merchant.account))) {
+      return refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: Merchant Center account ${merchant.account} is not the Merchant Center account this business chose through this Google connection.`, 403)
+    }
+    googleBody = judged.body
+  } else if (req.channel === 'GOOGLE') {
+    const merchantRead = googleCallKind(req.method, req.url) === 'read' ? merchantReadAccount(req.url) : null
+    if (merchantRead && (!req.connectionId || !(await googleMerchantAccountLinked(req.connectionId, merchantRead)))) {
+      return refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: Merchant Center account ${merchantRead} is not the Merchant Center account this business chose through this Google connection.`, 403)
+    }
+  }
+  if (req.channel === 'GOOGLE' && !merchant) {
     const customer = googleAdsMutateCustomer(req.method, req.url)
     const recommendation = customer === null ? googleAdsRecommendationCall(req.method, req.url) : null
     const accountCall = customer === null && recommendation === null ? googleAdsAccountCall(req.method, req.url) : null
     const experiment = customer === null && recommendation === null && accountCall === null ? googleAdsExperimentCall(req.method, req.url) : null
     const adjustment = customer === null && !recommendation && !accountCall && !experiment ? googleAdsAdjustmentCall(req.method, req.url) : null
     const ingest = customer === null && !recommendation && !accountCall && !experiment && !adjustment && isGoogleDataManagerIngest(req.method, req.url)
-    const readOnly = (detail: string) => refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: Nexus only reads Google and changes Google Ads only through a mutate (or an apply or dismiss of its recommendations, an account call of its users, links and billing, an experiment or campaign draft action, or sales sent to a conversion action and their adjustments), and this call is none of them (${req.method} ${safePath(req.url)}${detail}).`, 403)
+    const readOnly = (detail: string) => refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: Nexus only reads Google and changes Google Ads only through a mutate (or an apply or dismiss of its recommendations, an account call of its users, links and billing, an experiment or campaign draft action, sales sent to a conversion action and their adjustments, or a Merchant Center product input, data source or promotion), and this call is none of them (${req.method} ${safePath(req.url)}${detail}).`, 403)
     const notChosen = (id: string) => refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: Google Ads account ${id} is not the account this business chose through this Google connection.`, 403)
     if (accountCall) {
       const judged = googleAccountCallBodyOf(accountCall, req.body)

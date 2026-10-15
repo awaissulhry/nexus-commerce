@@ -57,6 +57,7 @@ import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { GOOGLE_ADS_CHANGE_TOOLS } from './tools/google-ads-change.tools.js'
 import { GOOGLE_ADS_EXCLUSIONS_TOOLS } from './tools/google-ads-exclusions.tools.js'
 import { GOOGLE_ADS_ACCOUNT_TOOLS } from './tools/google-ads-account.tools.js'
+import { GOOGLE_ADS_MERCHANT_TOOLS } from './tools/google-ads-merchant.tools.js'
 import { GOOGLE_ADS_EXPERIMENT_TOOLS } from './tools/google-ads-experiments.tools.js'
 import { GOOGLE_ADS_CONVERSIONS_TOOLS } from './tools/google-ads-conversions.tools.js'
 import { GOOGLE_ADS_EDIT_TOOLS } from './tools/google-ads-edit.tools.js'
@@ -221,6 +222,8 @@ const ALL: AgentTool[] = [
   // Google Ads changes (2026-10-15): the live read and the change tools (google-ads-kit.ts).
   ...GOOGLE_ADS_LIVE_TOOLS,
   ...GOOGLE_ADS_CHANGE_TOOLS,
+  // Programme 2 G12: Merchant Center — live read, product inputs, data sources and promotions (google-merchant-kit.ts).
+  ...GOOGLE_ADS_MERCHANT_TOOLS,
   // G7 (2026-10-15): account and campaign exclusions, the account's negative keyword list, placement and brand lists.
   ...GOOGLE_ADS_EXCLUSIONS_TOOLS,
   // Programme 2 G8b: the account itself — settings, who may use it, its links and its billing.
