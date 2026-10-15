@@ -81,11 +81,11 @@ describe('Google: reads, and Google Ads mutates only', () => {
     expect(h.calls.map((c) => JSON.parse(String(c.init.body)))).toEqual([{ mutateOperations: AD_EDIT, validateOnly: true }, { mutateOperations: AD_EDIT }])
     expect(gatewayLedger.map((r) => r.outcome)).toEqual(['sent', 'sent'])
     expect([...GOOGLE_ADS_MUTATE_KINDS].sort()).toEqual([
-      'adGroupAdLabelOperation', 'adGroupAdOperation', 'adGroupBidModifierOperation', 'adGroupCriterionLabelOperation',
+      'adGroupAdLabelOperation', 'adGroupAdOperation', 'adGroupAssetOperation', 'adGroupBidModifierOperation', 'adGroupCriterionLabelOperation',
       'adGroupCriterionOperation', 'adGroupLabelOperation', 'adGroupOperation', 'adOperation', 'assetOperation',
       'biddingStrategyOperation', 'campaignAssetOperation', 'campaignBudgetOperation', 'campaignCriterionOperation',
       'campaignLabelOperation', 'campaignOperation', 'campaignSharedSetOperation',
-      'customerNegativeCriterionOperation', 'customerOperation', 'labelOperation',
+      'customerAssetOperation', 'customerNegativeCriterionOperation', 'customerOperation', 'labelOperation',
       'recommendationSubscriptionOperation', 'sharedCriterionOperation', 'sharedSetOperation',
     ])
     // Its neighbours stay refused: an ad parameter (AdService's family), a customer operation that is not exactly an
@@ -106,6 +106,24 @@ describe('Google: reads, and Google Ads mutates only', () => {
     ])
     // Only these two have validate_only (v25 RemoveProductLinkRequest, MutateAccountBudgetProposalRequest).
     expect([...GOOGLE_ACCOUNT_CHECKABLE].sort()).toEqual(['accountBudgetProposals:mutate', 'productLinks:remove'])
+  })
+
+  it('G6: an asset linked at an ad group or at the account (adGroupAssetOperation, customerAssetOperation) goes, check and change; asset set links stay refused', async () => {
+    const LINKS = [
+      { adGroupAssetOperation: { create: { adGroup: 'customers/1234567890/adGroups/51', asset: 'customers/1234567890/assets/301', fieldType: 'CALLOUT' } } },
+      { customerAssetOperation: { update: { resourceName: 'customers/1234567890/customerAssets/302~CALL', status: 'PAUSED' }, updateMask: 'status' } },
+    ]
+    const check = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate.check', method: 'POST', url: MUTATE, body: { mutateOperations: LINKS, validateOnly: true } })
+    expect(check.status).toBe(200)
+    const run = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: LINKS } })
+    expect(run.status).toBe(200)
+    expect(h.calls).toHaveLength(2)
+    // Nexus sends no asset set (location) operation: refused before anything is sent.
+    for (const op of [{ assetSetOperation: { create: {} } }, { campaignAssetSetOperation: { create: {} } }]) {
+      const err = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: [op], validateOnly: true } }).catch((e) => e)
+      expect(err).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY' })
+    }
+    expect(h.calls).toHaveLength(2)
   })
 
   it('what is sent is the body as judged: a duplicate key collapses before sending', async () => {

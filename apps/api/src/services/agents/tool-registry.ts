@@ -58,6 +58,7 @@ import { GOOGLE_ADS_CHANGE_TOOLS } from './tools/google-ads-change.tools.js'
 import { GOOGLE_ADS_EXCLUSIONS_TOOLS } from './tools/google-ads-exclusions.tools.js'
 import { GOOGLE_ADS_ACCOUNT_TOOLS } from './tools/google-ads-account.tools.js'
 import { GOOGLE_ADS_EDIT_TOOLS } from './tools/google-ads-edit.tools.js'
+import { GOOGLE_ADS_ASSETS_ALL_TOOLS } from './tools/google-ads-assets-all.tools.js'
 import { GOOGLE_ADS_AUDIENCES_TOOLS } from './tools/google-ads-audiences.tools.js'
 import { GOOGLE_ADS_LABELS_TOOLS } from './tools/google-ads-labels.tools.js'
 import { GOOGLE_ADS_RECOMMENDATIONS_TOOLS } from './tools/google-ads-recommendations.tools.js'
@@ -222,6 +223,8 @@ const ALL: AgentTool[] = [
   ...GOOGLE_ADS_EXCLUSIONS_TOOLS,
   // Programme 2 G8b: the account itself — settings, who may use it, its links and its billing.
   ...GOOGLE_ADS_ACCOUNT_TOOLS,
+  // Programme 2 G6: assets of every type, linked at the account, campaigns and ad groups.
+  ...GOOGLE_ADS_ASSETS_ALL_TOOLS,
   ...GOOGLE_ADS_EDIT_TOOLS,
   // Programme 2 G2: audience segments and demographics of a campaign and its ad groups.
   ...GOOGLE_ADS_AUDIENCES_TOOLS,

@@ -37,6 +37,7 @@ import {
 } from '../../marketing/google-ads/live-numbers.js'
 import { checkedQuery, DEFAULT_QUERY_ROWS, MAX_QUERY_ROWS, type QueryNeed } from '../../marketing/google-ads/live-query.js'
 import { liveAccountExclusions, liveCampaignExclusions, liveExclusionLists } from '../../marketing/google-ads/live-exclusions.js'
+import { liveAssetLinksView, MAX_VIEW_LINKS } from '../../marketing/google-ads/live-assets-all.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
 /** Money keys of these tools' answers (some are in the shared registry too; named here so each tool states its own). */
@@ -58,6 +59,8 @@ export const GOOGLE_LIVE_VIEWS = [
   'account', 'conversions', 'labels', 'experiments', 'users', 'billing', 'links', 'bid-strategies', 'auto-apply',
   // G7 (2026-10-15): exclusions of the account (and of one campaign), the account's negative keyword list, placement and brand lists.
   'exclusions',
+  // Programme 2 G6: every asset link (account, campaigns, ad groups), every asset type, and the location asset sets.
+  'asset-links',
 ] as const
 type LiveView = typeof GOOGLE_LIVE_VIEWS[number]
 const NEEDS_CAMPAIGN: readonly LiveView[] = ['campaign', 'product-groups', 'ads']
@@ -141,6 +144,17 @@ async function liveView(args: Record<string, unknown>, ctx: ToolContext): Promis
       case 'assets': {
         const items = await liveAssets(account.target, campaignId)
         return { ok: true, data: { ...base, ...(campaignId ? { campaignId } : {}), items, total: items.length } }
+      }
+      case 'asset-links': {
+        const read = await liveAssetLinksView(account.target, campaignId)
+        const { notRead, ...links } = read
+        return {
+          ok: true,
+          data: {
+            ...base, ...(campaignId ? { campaignId } : {}), ...links, ...notReadOf(notRead),
+            note: `Every level: account links serve in every campaign that shows the type, unless a campaign or ad group has its own. At most ${MAX_VIEW_LINKS} links per level are listed (totals counts all). Location sets come from a Business Profile linked in Google Ads.`,
+          },
+        }
       }
       case 'change-history': {
         const day = text(args.day) ?? new Intl.DateTimeFormat('en-CA', { timeZone: account.timeZone ?? 'UTC' }).format(new Date())
@@ -305,9 +319,9 @@ const googleAdsLive: AgentTool = {
   restrictedFields: LIVE_MONEY,
   input: z.object({
     view: z.preprocess(lower, z.enum(GOOGLE_LIVE_VIEWS))
-      .describe('what to read: campaigns | campaign | budgets | negative-lists | product-groups | ads | assets | change-history | drafts | lookup | account | conversions | labels | experiments | users | billing | links | bid-strategies | auto-apply | exclusions'),
+      .describe('what to read: campaigns | campaign | budgets | negative-lists | product-groups | ads | assets | asset-links | change-history | drafts | lookup | account | conversions | labels | experiments | users | billing | links | bid-strategies | auto-apply | exclusions'),
     accountId: googleAccountArg,
-    campaignId: googleIdArg('the campaign; needed for views campaign, product-groups and ads; narrows assets; view exclusions adds its exclusions').optional(),
+    campaignId: googleIdArg('the campaign; needed for views campaign, product-groups and ads; narrows assets and asset-links; view exclusions adds its exclusions').optional(),
     listId: googleIdArg('one list: view negative-lists then lists its keywords; view exclusions what that exclusion or brand list holds').optional(),
     labelId: googleIdArg('one label: view labels then lists the campaigns, ad groups, ads and keywords that carry it').optional(),
     day: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('view change-history: the day (YYYY-MM-DD, the account\'s time zone; default today; Google keeps 30 days)'),
@@ -326,7 +340,10 @@ const googleAdsLive: AgentTool = {
     + 'negative-lists: the shared negative keyword lists and their campaigns (listId: its keywords). product-groups '
     + '(campaignId): the product group tree of every ad group, every Shopping dimension, with bids and exclusions (warns '
     + 'when an "everything else" group is NOT excluded). ads (campaignId): ads with text, URLs, strength and review. assets: campaign assets (sitelinks, '
-    + 'callouts, structured snippets …) with their review. change-history: Google\'s change history of one day (who, '
+    + 'callouts, structured snippets …) with their review. asset-links: every asset link at the account, campaign and ad '
+    + 'group level, every type (images with size, business name, call, price, promotion, lead form, app link, sitelinks, '
+    + 'callouts, snippets) with status and review, and the location asset sets (campaignId: that campaign and its ad '
+    + 'groups, plus the account). change-history: Google\'s change history of one day (who, '
     + 'what; the e-mail of who needs the users permission). drafts: campaign drafts. lookup (lookup + search): Google\'s ids of locations, languages and audience '
     + 'segments whose name holds the word, Google\'s life events, and this account\'s own user lists, custom audiences and '
     + 'combined audiences, for the change tools. account: auto-tagging, tracking template, final URL suffix, time zone, currency, conversion '

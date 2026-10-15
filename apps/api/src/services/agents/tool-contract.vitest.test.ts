@@ -748,6 +748,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { campaignId: '21', adGroupId: '51', ads: [], accountId: 'g-1', customerId: '1234567890' },
         after: { campaignId: '21', adGroupId: '51', created: [{ adId: '701', status: 'ENABLED' }], paused: [], accountId: 'g-1', customerId: '1234567890' },
       },
+      // Programme 2 G6: the links it made are taken off (the assets stay in the account); every link goes back as it was.
+      'add-google-assets': {
+        before: { created: [], linked: [] },
+        after: { created: [{ assetId: '301', type: 'CALL', fieldType: 'CALL', text: '+39 000 0000 (IT)' }], linked: [{ level: 'campaign', campaignId: '21', adGroupId: null, assetId: '301', fieldType: 'CALL', status: 'PAUSED', text: '+39 000 0000 (IT)' }], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-asset-links': {
+        before: { items: [] },
+        after: { items: [{ level: 'account', campaignId: null, adGroupId: null, assetId: '302', fieldType: 'CALLOUT', text: 'Free returns', from: 'ENABLED', to: null }, { level: 'ad-group', campaignId: '21', adGroupId: '51', assetId: '303', fieldType: 'AD_IMAGE', text: 'Image A (1200×1200)', from: 'PAUSED', to: 'ENABLED' }], accountId: 'g-1', customerId: '1234567890' },
+      },
       'set-google-assets': {
         before: { campaignId: '21', links: [{ assetId: '10', fieldType: 'CALLOUT', text: 'Gift wrap', status: 'PAUSED' }], accountId: 'g-1', customerId: '1234567890' },
         after: { campaignId: '21', linked: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free returns', status: 'ENABLED' }], unlinked: [{ assetId: '10', fieldType: 'CALLOUT', text: 'Gift wrap', status: 'PAUSED' }], accountId: 'g-1', customerId: '1234567890' },
@@ -871,7 +880,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-labels', 'remove-google-labels', 'apply-google-recommendations', 'dismiss-google-recommendations',
       'set-google-auto-apply', 'set-google-bid-strategy', 'remove-google-bid-strategy',
       'set-google-account-settings', 'set-google-user-access', 'set-google-account-links', 'set-google-billing',
-      'edit-google-rsa', 'edit-google-assets', 'set-google-urls', 'replace-google-keywords', 'move-google-ads']) {
+      'edit-google-rsa', 'edit-google-assets', 'set-google-urls', 'replace-google-keywords', 'move-google-ads',
+      'add-google-assets', 'set-google-asset-links']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

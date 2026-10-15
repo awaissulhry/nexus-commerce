@@ -168,6 +168,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-google-negatives': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-keywords.tools test)',
   'edit-google-rsa': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-edit.tools test)',
   'edit-google-assets': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-edit.tools test)',
+  'add-google-assets': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-assets-all.tools test)',
+  'set-google-asset-links': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-assets-all.tools test)',
   'set-google-urls': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-edit.tools test)',
   'move-google-ads': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-edit.tools test)',
   'set-google-inventory-filter': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-shopping.tools test)',
@@ -455,6 +457,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // Programme 2 G3 — edit in place, URLs and tracking, replace and move: no Google Ads account here either (google-ads-edit.tools test).
   'edit-google-rsa': () => ({ ads: [{ id: '51~701', finalUrl: 'https://shop.example/a' }] }),
   'edit-google-assets': () => ({ assets: [{ assetId: '9', calloutText: 'Free returns' }] }),
+  // Programme 2 G6 — assets of every type at every level: no Google Ads account here either (google-ads-assets-all.tools test).
+  'add-google-assets': () => ({ callouts: ['Free returns'], linkTo: [{ level: 'account' }] }),
+  'set-google-asset-links': () => ({ items: [{ level: 'campaign', campaignId: '21', assetId: '9', fieldType: 'CALLOUT', action: 'pause' }] }),
   'set-google-urls': () => ({ items: [{ level: 'campaign', id: '21', finalUrlSuffix: 'src=google' }] }),
   'replace-google-keywords': () => ({ campaignId: '21', keywords: [{ keywordId: '51~601', matchType: 'PHRASE' }], confirmRemove: true }),
   'move-google-ads': () => ({ campaignId: '21', adGroupId: '51', toAdGroupId: '52', adIds: ['701'], confirmRemove: true }),

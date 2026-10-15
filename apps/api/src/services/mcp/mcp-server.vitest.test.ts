@@ -35,9 +35,10 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Ads autonomy (auto-undo, A19) — undo-worse-ad-change puts a bid, budget or placement back at Amazon.
 // Google Ads G5 (2026-10-15) — labels, Google's recommendations (apply, dismiss, auto-apply) and portfolio bid strategies change the Google Ads account.
 // Google Ads G8b (2026-10-15) — the account's settings, users, links and billing.
+// Google Ads G6 (2026-10-15) — assets of every type and their links at the account, campaigns and ad groups change the Google Ads account.
 
 const OPEN_WORLD = [
-  'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
+  'add-ad-targets', 'add-google-assets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
   'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'apply-google-recommendations',
   'apply-harvest',
   'archive-ads', 'build-google-campaigns', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
@@ -59,10 +60,10 @@ const OPEN_WORLD = [
   'set-ad-group', 'set-ads-brain', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule',
   'set-campaign-budget', 'set-campaign-settings', 'set-ebay-ad-rates', 'set-ebay-campaign-budget',
   'set-ebay-price-promotion', 'set-google-account-exclusions', 'set-google-account-links',
-  'set-google-account-settings', 'set-google-ad-groups', 'set-google-assets', 'set-google-audiences',
-  'set-google-auto-apply', 'set-google-bid-strategy', 'set-google-billing', 'set-google-budget', 'set-google-campaign',
-  'set-google-campaign-exclusions', 'set-google-demographics', 'set-google-exclusion-list',
-  'set-google-inventory-filter', 'set-google-keywords', 'set-google-labels',
+  'set-google-account-settings', 'set-google-ad-groups', 'set-google-asset-links', 'set-google-assets',
+  'set-google-audiences', 'set-google-auto-apply', 'set-google-bid-strategy', 'set-google-billing',
+  'set-google-budget', 'set-google-campaign', 'set-google-campaign-exclusions', 'set-google-demographics',
+  'set-google-exclusion-list', 'set-google-inventory-filter', 'set-google-keywords', 'set-google-labels',
   'set-google-negative-list', 'set-google-negatives', 'set-google-product-groups', 'set-google-shopping-settings',
   'set-google-status', 'set-google-targeting', 'set-google-urls', 'set-google-user-access', 'set-hourly-bid-plan', 'set-listing-price',
   'set-listing-stock',
