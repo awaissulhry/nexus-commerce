@@ -15,7 +15,7 @@ import { gatewayAccounts, gatewayGoogleUnlinked, gatewayLedger } from '../../tes
 import { __rateTest, defaultsFor, GOOGLE_BUCKETS, bucketKey } from './rate.js'
 import { gatewayCall, GatewayRefusal } from './gateway.js'
 import { googleCall, googleKind } from './google.js'
-import { apiVersionOf, bucketGroupOf, publishModeOf } from './channels.js'
+import { apiVersionOf, bucketGroupOf, GOOGLE_ADS_MUTATE_KINDS, publishModeOf } from './channels.js'
 import { classifyChannelAnswer } from './vocabulary.js'
 import { ledgerSafeBody } from './redact.js'
 import { googleRateReading } from '../cx/rate-readings.js'
@@ -69,6 +69,27 @@ describe('Google: reads, and Google Ads mutates only', () => {
     expect(check.status).toBe(200)
     expect(h.calls).toHaveLength(1)
     expect(gatewayLedger.map((r) => r.outcome)).toEqual(['gated', 'sent'])
+  })
+
+  it('an ad edited in place (adOperation: AdService, v25 MutateOperation.ad_operation) goes, check and change; the kinds are exactly what the tools send', async () => {
+    const AD_EDIT = [{ adOperation: { update: { resourceName: 'customers/1234567890/ads/701', finalUrls: ['https://shop.example/a'] }, updateMask: 'final_urls' } }]
+    const check = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate.check', method: 'POST', url: MUTATE, body: { mutateOperations: AD_EDIT, validateOnly: true } })
+    expect(check.status).toBe(200)
+    const run = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: AD_EDIT } })
+    expect(run.status).toBe(200)
+    expect(h.calls.map((c) => JSON.parse(String(c.init.body)))).toEqual([{ mutateOperations: AD_EDIT, validateOnly: true }, { mutateOperations: AD_EDIT }])
+    expect(gatewayLedger.map((r) => r.outcome)).toEqual(['sent', 'sent'])
+    expect([...GOOGLE_ADS_MUTATE_KINDS].sort()).toEqual([
+      'adGroupAdOperation', 'adGroupCriterionOperation', 'adGroupOperation', 'adOperation', 'assetOperation', 'campaignAssetOperation',
+      'campaignBudgetOperation', 'campaignCriterionOperation', 'campaignOperation', 'campaignSharedSetOperation', 'sharedCriterionOperation',
+      'sharedSetOperation',
+    ])
+    // Its neighbours in AdService's family stay refused: an ad parameter, an ad label.
+    for (const op of [{ adParameterOperation: { create: {} } }, { adGroupAdLabelOperation: { create: {} } }]) {
+      const err = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: [op], validateOnly: true } }).catch((e) => e)
+      expect(err).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY' })
+    }
+    expect(h.calls).toHaveLength(2)
   })
 
   it('what is sent is the body as judged: a duplicate key collapses before sending', async () => {

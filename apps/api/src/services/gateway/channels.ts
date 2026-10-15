@@ -200,11 +200,13 @@ export function googleAdsMutateCustomer(method: string, url: string): string | n
 /**
  * The kinds of operation a Nexus Google Ads change may hold (MutateOperation's fields): budgets, campaigns, their
  * criteria, ad groups, their criteria, ads, assets and their campaign links, shared sets and their keywords and links.
+ * `adOperation` (AdService: an ad's content edited in place — a responsive search ad's texts, its URLs and tracking;
+ * MutateOperation.ad_operation in v25, update only) is edit-google-rsa's and set-google-urls'.
  * Anything else in a mutate (a customer, a user, a conversion action …) is refused before anything is sent.
  */
 export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   'campaignBudgetOperation', 'campaignOperation', 'campaignCriterionOperation', 'adGroupOperation', 'adGroupCriterionOperation',
-  'adGroupAdOperation', 'assetOperation', 'campaignAssetOperation', 'sharedSetOperation', 'sharedCriterionOperation',
+  'adGroupAdOperation', 'adOperation', 'assetOperation', 'campaignAssetOperation', 'sharedSetOperation', 'sharedCriterionOperation',
   'campaignSharedSetOperation',
 ])
 

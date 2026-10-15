@@ -176,6 +176,17 @@ function pinProblems(where: string, items: RsaText[], family: 'headline' | 'desc
 /** Every rule one ad breaks, each naming the ad, the text and how long it is. */
 export function rsaProblems(ad: RsaAd, n: number): string[] {
   const where = `ad ${n}`
+  const problems = rsaTextProblems(ad, where)
+  const url = httpsUrlProblem(where, ad.finalUrl)
+  if (url) problems.push(url)
+  return problems
+}
+
+/**
+ * Every rule an ad's texts break — how many headlines and descriptions, their lengths, duplicates, pins, path1 / path2 —
+ * not its final URL (an edit checks a URL only when it changes it: change-edit-ads.ts).
+ */
+export function rsaTextProblems(ad: Pick<RsaAd, 'headlines' | 'descriptions' | 'path1' | 'path2'>, where: string): string[] {
   const problems: string[] = []
   const L = RSA_LIMITS
   const count = (items: RsaText[], word: string, min: number, max: number) => {
@@ -204,13 +215,13 @@ export function rsaProblems(ad: RsaAd, n: number): string[] {
   if (path2 && !path1) problems.push(`${where}: path2 needs path1 (Google shows path2 only after path1)`)
   if (path1) { const p = widthProblem(`${where}, path1`, path1, L.pathWidth); if (p) problems.push(p) }
   if (path2) { const p = widthProblem(`${where}, path2`, path2, L.pathWidth); if (p) problems.push(p) }
-  const url = httpsUrlProblem(where, ad.finalUrl)
-  if (url) problems.push(url)
   return problems
 }
 
-const textAsset = (t: RsaText) => ({ text: t.text.trim(), ...(t.pin ? { pinnedField: t.pin } : {}) })
-const shown = (items: RsaText[]) => items.map((t) => `${t.text.trim()}${t.pin ? ` [${PIN_SHORT[t.pin]}]` : ''}`).join(' | ')
+/** A headline or description as Google takes it (AdTextAsset: text, pinned_field). */
+export const textAsset = (t: RsaText) => ({ text: t.text.trim(), ...(t.pin ? { pinnedField: t.pin } : {}) })
+/** Texts as a person reads them: "Moto Jackets [H1] | Free Returns". */
+export const shown = (items: RsaText[]) => items.map((t) => `${t.text.trim()}${t.pin ? ` [${PIN_SHORT[t.pin]}]` : ''}`).join(' | ')
 function displayPath(ad: RsaAd): string {
   const path = [ad.path1?.trim(), ad.path2?.trim()].filter(Boolean).join('/')
   if (!path) return ad.finalUrl.trim()

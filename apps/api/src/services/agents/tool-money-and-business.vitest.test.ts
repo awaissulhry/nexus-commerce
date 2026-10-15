@@ -159,6 +159,10 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'create-google-rsa': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-ads-assets.tools test)',
   'set-google-assets': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-ads-assets.tools test)',
   'set-google-negatives': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-keywords.tools test)',
+  'edit-google-rsa': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-edit.tools test)',
+  'edit-google-assets': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-edit.tools test)',
+  'set-google-urls': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-edit.tools test)',
+  'move-google-ads': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-edit.tools test)',
   'set-harvest-rules': 'the seeded rule is not a harvest rule, so there is nothing to archive (tools/ads-harvest-postgres test)',
   'set-harvest-sources': 'the seeded ad group feeds no terms to harvest (a manual campaign with no ad product), so it is no source (tools/ads-harvest-postgres test)',
 }
@@ -420,6 +424,12 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-google-ad-groups': () => ({ campaignId: '21', change: [{ adGroupId: '51', defaultBidCents: 40 }] }),
   'set-google-keywords': () => ({ campaignId: '21', bids: [{ keywordId: '51~601', bidCents: 40 }] }),
   'set-google-negatives': () => ({ campaignId: '21', add: [{ text: 'gratis', matchType: 'PHRASE' }] }),
+  // Programme 2 G3 — edit in place, URLs and tracking, replace and move: no Google Ads account here either (google-ads-edit.tools test).
+  'edit-google-rsa': () => ({ ads: [{ id: '51~701', finalUrl: 'https://shop.example/a' }] }),
+  'edit-google-assets': () => ({ assets: [{ assetId: '9', calloutText: 'Free returns' }] }),
+  'set-google-urls': () => ({ items: [{ level: 'campaign', id: '21', finalUrlSuffix: 'src=google' }] }),
+  'replace-google-keywords': () => ({ campaignId: '21', keywords: [{ keywordId: '51~601', matchType: 'PHRASE' }], confirmRemove: true }),
+  'move-google-ads': () => ({ campaignId: '21', adGroupId: '51', toAdGroupId: '52', adIds: ['701'], confirmRemove: true }),
   // L2 — listing reads: where each listing lives, its stock and price per market, its photo plan.
   'listing-coordinates': (ids) => ({ productId: ids.productId }),
   'listing-matrix': (ids) => ({ productId: ids.productId }),

@@ -1,6 +1,11 @@
 /**
- * Google Ads changes (2026-10-15) — budgets: make a shared budget, change a budget's daily amount, and put campaigns on a
- * budget (a shared one, the new one, or a new budget of their own: "detach"). One atomic request.
+ * Google Ads changes (2026-10-15) — budgets: make a shared budget, change a budget's daily amount, rename a shared budget,
+ * and put campaigns on a budget (a shared one, the new one, or a new budget of their own: "detach"). One atomic request.
+ *
+ * Rename (programme 2 group G3, checked 2026-10-15 in the v25 reference rpc/v25/CampaignBudget): `name` is mutable; "every
+ * explicitly shared campaign budget must have a non-null, non-empty name"; "Campaign budgets that are not explicitly
+ * shared derive their name from the attached campaign's name" (so only a shared budget is renamed here); "between 1 and
+ * 255, inclusive, in UTF-8 bytes, (trimmed)". Update mask `name`.
  *
  * Money: a raise of a daily amount, and a campaign moved onto a bigger budget, can make the account spend more — each is
  * named in `spendsMoney` (the person's decision). A new budget spends nothing until a campaign that is ENABLED uses it.
@@ -14,6 +19,8 @@ export interface BudgetChangeRequest {
   create?: { name: string; budgetCents: number }
   /** New daily amounts of existing budgets. */
   amounts?: Array<{ budgetId: string; budgetCents: number }>
+  /** New names of shared budgets. */
+  renames?: Array<{ budgetId: string; name: string }>
   /** Which budget each campaign uses: an existing one (`budgetId`), the new one (`budgetId: 'new'`), or a new budget of its own (`ownBudgetCents`). */
   campaigns?: Array<{ campaignId: string; budgetId?: string; ownBudgetCents?: number }>
 }
@@ -27,6 +34,8 @@ export interface BudgetLiveState {
 export interface BudgetChangeRecord {
   amounts: Array<{ budgetId: string; budgetCents: number | null }>
   campaigns: Array<{ campaignId: string; budgetId: string | null }>
+  /** Shared budgets renamed: before the old name, after the new one (only when the change renames). */
+  names?: Array<{ budgetId: string; name: string | null }>
   /** A budget the change made (its id is known after it ran; `new` before). */
   createdBudgetId?: string | null
 }
@@ -69,7 +78,8 @@ export function budgetChangeDraft(
 ): GoogleChangeDraft | { refusal: string } {
   const amounts = request.amounts ?? []
   const moves = request.campaigns ?? []
-  if (!request.create && amounts.length === 0 && moves.length === 0) return { refusal: 'Say what to change: create, amounts or campaigns.' }
+  const renames = request.renames ?? []
+  if (!request.create && amounts.length === 0 && moves.length === 0 && renames.length === 0) return { refusal: 'Say what to change: create, amounts, renames or campaigns.' }
   const budgetById = new Map(live.budgets.map((b) => [b.budgetId, b]))
   const campaignById = new Map(live.campaigns.map((c) => [c.campaignId, c]))
   const operations: GoogleMutateOperation[] = []
@@ -81,10 +91,32 @@ export function budgetChangeDraft(
   const after: BudgetChangeRecord = { amounts: [], campaigns: [] }
   const budgetRes = (id: string | number) => `${customer}/campaignBudgets/${id}`
 
+  // 0. new names of shared budgets: Google refuses a name another budget has (after this change), and an empty one
+  const renameTo = new Map<string, string>()
+  const renameSeen = new Set<string>()
+  for (const r of renames) {
+    if (renameSeen.has(r.budgetId)) return { refusal: `Budget ${r.budgetId} is named twice in renames.` }
+    renameSeen.add(r.budgetId)
+    const b = budgetById.get(r.budgetId)
+    if (!b) return { refusal: `Budget ${r.budgetId} is not in this account (or it is removed). google-ads-live view budgets lists them.` }
+    if (!b.shared) return { refusal: `Budget ${r.budgetId} is a campaign's own budget: Google names it after its campaign (rename the campaign: set-google-campaign).` }
+    const name = r.name.trim()
+    const bytes = new TextEncoder().encode(name).length
+    if (bytes < 1 || bytes > 255) return { refusal: `The budget name "${name.slice(0, 40)}" is ${bytes} bytes long: Google takes 1 to 255 (UTF-8).` }
+    if (name === (b.name ?? '').trim()) { skipped.push(`Shared budget "${name}" (${b.budgetId}) already has that name.`); continue }
+    renameTo.set(b.budgetId, name)
+  }
+  const nameKeyAfter = (b: LiveBudget) => (renameTo.get(b.budgetId) ?? b.name ?? '').trim().toLowerCase()
+  for (const [budgetId, name] of renameTo) {
+    if (live.budgets.some((b) => b.budgetId !== budgetId && nameKeyAfter(b) === name.toLowerCase())) {
+      return { refusal: `A budget named "${name}" would then exist twice in this account: Google refuses that. Choose another name.` }
+    }
+  }
+
   // 1. the new shared budget
   if (request.create) {
     const name = request.create.name.trim()
-    if (live.budgets.some((b) => (b.name ?? '').trim().toLowerCase() === name.toLowerCase())) {
+    if (live.budgets.some((b) => nameKeyAfter(b) === name.toLowerCase())) {
       return { refusal: `A budget named "${name}" already exists in this account: Google refuses a second one. Use its budgetId, or another name.` }
     }
     operations.push({
@@ -97,6 +129,7 @@ export function budgetChangeDraft(
   }
 
   // 2. new daily amounts
+  const renamedWithAmount = new Set<string>()
   const amountAfter = new Map<string, number>()
   const seenAmounts = new Set<string>()
   for (const a of amounts) {
@@ -105,8 +138,11 @@ export function budgetChangeDraft(
     const b = budgetById.get(a.budgetId)
     if (!b) return { refusal: `Budget ${a.budgetId} is not in this account (or it is removed). google-ads-live view budgets lists them.` }
     if (b.amountCents === a.budgetCents) { skipped.push(`"${b.name ?? b.budgetId}" is already ${money(a.budgetCents, currency)} a day.`); continue }
+    // A budget renamed too is ONE update (amount and name), never two operations on one budget.
+    const newName = renameTo.get(b.budgetId)
+    if (newName) renamedWithAmount.add(b.budgetId)
     operations.push({
-      campaignBudgetOperation: { update: { resourceName: budgetRes(b.budgetId), amountMicros: microsOfCents(a.budgetCents) }, updateMask: 'amount_micros' },
+      campaignBudgetOperation: { update: { resourceName: budgetRes(b.budgetId), amountMicros: microsOfCents(a.budgetCents), ...(newName ? { name: newName } : {}) }, updateMask: newName ? 'amount_micros,name' : 'amount_micros' },
     })
     amountAfter.set(b.budgetId, a.budgetCents)
     lines.push([`budget "${b.name ?? b.budgetId}"`, `${money(b.amountCents, currency)} a day`, `${money(a.budgetCents, currency)} a day`])
@@ -116,6 +152,16 @@ export function budgetChangeDraft(
       const enabled = b.campaigns.filter((c) => c.status === 'ENABLED').length
       spends.push(`Raises "${b.name ?? b.budgetId}" from ${money(b.amountCents, currency)} to ${money(a.budgetCents, currency)} a day${enabled === 0 ? ' (no campaign on it is enabled now: nothing spends until one is)' : ` (${plural(enabled, 'enabled campaign')} on it)`}.`)
     }
+  }
+
+  // 2b. the names
+  if (renameTo.size) { before.names = []; after.names = [] }
+  for (const [budgetId, name] of renameTo) {
+    const b = budgetById.get(budgetId)!
+    if (!renamedWithAmount.has(budgetId)) operations.push({ campaignBudgetOperation: { update: { resourceName: budgetRes(budgetId), name }, updateMask: 'name' } })
+    lines.push([`shared budget "${b.name ?? budgetId}" name`, b.name ?? '(none)', name])
+    before.names!.push({ budgetId, name: b.name })
+    after.names!.push({ budgetId, name })
   }
 
   // 3. which budget each campaign uses
@@ -190,8 +236,9 @@ export function budgetChangeDraft(
   const parts: string[] = []
   if (request.create) parts.push(`make the shared budget "${request.create.name.trim()}" (${money(request.create.budgetCents, currency)} a day)`)
   if (after.amounts.length) parts.push(`set the daily amount of ${plural(after.amounts.length, 'budget')}`)
+  if (renameTo.size) parts.push(`rename ${plural(renameTo.size, 'shared budget')}`)
   if (after.campaigns.length) parts.push(`put ${plural(after.campaigns.length, 'campaign')} on ${after.campaigns.every((c) => c.budgetId === after.campaigns[0].budgetId) && after.campaigns[0].budgetId ? 'the budget asked' : 'the budgets asked'}`)
-  const touched = new Set([...amounts.map((a) => a.budgetId), ...moves.map((m) => m.budgetId).filter((id): id is string => !!id && id !== NEW_BUDGET)])
+  const touched = new Set([...amounts.map((a) => a.budgetId), ...renameTo.keys(), ...moves.map((m) => m.budgetId).filter((id): id is string => !!id && id !== NEW_BUDGET)])
   return {
     summary: `Google Ads budgets: ${parts.join('; ')}.`,
     changes,
@@ -207,6 +254,8 @@ export function budgetChangeDraft(
         .map((b) => ({ budgetId: b.budgetId, amountCents: b.amountCents, shared: b.shared, usedBy: b.usedBy, campaigns: b.campaigns.map((c) => `${c.campaignId}:${c.status}`).sort() }))
         .sort((x, y) => x.budgetId.localeCompare(y.budgetId)),
       campaigns: moves.map((m) => campaignById.get(m.campaignId)).filter(Boolean).map((c) => ({ campaignId: c!.campaignId, budgetId: c!.budget?.budgetId ?? null, status: c!.status })),
+      // A rename stands on every budget's name (the duplicate check), and on the old name of each it renames.
+      ...(renames.length ? { names: live.budgets.map((b) => `${b.budgetId}:${b.name ?? ''}`).sort() } : {}),
     },
     before,
     after,
@@ -228,6 +277,7 @@ export function budgetRecordAfterRun(after: BudgetChangeRecord, responses: Array
   return {
     amounts: after.amounts.map((a) => ({ ...a })),
     campaigns: after.campaigns.map((c) => ({ campaignId: c.campaignId, budgetId: resolve(c.budgetId) })),
+    ...(after.names ? { names: after.names.map((n) => ({ ...n })) } : {}),
     ...(made !== undefined ? { createdBudgetId: made } : {}),
   }
 }

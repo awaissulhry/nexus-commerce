@@ -5,6 +5,7 @@
  * (google-ads-kit.ts). Never by rule.
  *
  *   set-google-ad-groups   make ad groups (a Shopping one with its product ad), rename them, change their default max CPC
+ *                          and their ad rotation
  *   set-google-keywords    add keywords to Search ad groups, change max CPCs by keyword or by a filter
  *   set-google-negatives   add and remove negative keywords of a campaign and of its ad groups
  *
@@ -18,13 +19,14 @@ import {
   googleAccountArg, googleCentsArg, googleChangePreview, googleIdArg, googleWhyArg, GOOGLE_CHANGE_RULES, matchTypeArg, recordAccount, runGoogleChange,
   type GoogleDraftBuilder,
 } from './google-ads-kit.js'
-import { adGroupChangeDraft, adGroupRecordAfterRun, type AdGroupChangeRecord, type AdGroupChangeRequest } from '../../marketing/google-ads/change-ad-groups.js'
+import { AD_ROTATIONS, adGroupChangeDraft, adGroupRecordAfterRun, type AdGroupChangeRecord, type AdGroupChangeRequest } from '../../marketing/google-ads/change-ad-groups.js'
 import {
   keywordChangeDraft, keywordRecordAfterRun, MAX_KEYWORD_OPERATIONS, negativeChangeDraft, negativeRecordAfterRun,
   type KeywordChangeRecord, type KeywordChangeRequest, type KeywordRecordEntry, type NegativeChangeRecord, type NegativeChangeRequest, type NegativeRecordEntry,
 } from '../../marketing/google-ads/change-keywords.js'
 import { keywordKey, liveCampaigns } from '../../marketing/google-ads/live.js'
 import { liveAdGroups, liveCampaignKeywordMatchType, liveCampaignNegatives, liveKeywords } from '../../marketing/google-ads/live-keywords.js'
+import { liveAdGroupRotations } from '../../marketing/google-ads/live-edit.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
@@ -62,7 +64,9 @@ const buildAdGroups = (args: Record<string, unknown>): GoogleDraftBuilder => asy
   const request = adGroupRequest(args)
   const { campaigns, there } = await campaignParts(account, request.campaignId)
   const adGroups = there ? await liveAdGroups(account.target, request.campaignId) : []
-  return adGroupChangeDraft(customerResource(account.target), account.currency, request, { campaigns, adGroups })
+  // The ad rotation is read only when a change sets one (one query).
+  const rotations = there && request.change?.some((c) => c.adRotation !== undefined) ? await liveAdGroupRotations(account.target, request.campaignId) : undefined
+  return adGroupChangeDraft(customerResource(account.target), account.currency, request, { campaigns, adGroups, rotations })
 }
 
 const adGroupUndo: ToolUndo = {
@@ -71,6 +75,7 @@ const adGroupUndo: ToolUndo = {
     const account = await recordAccount(after)
     if (!account) return null
     const groups = new Map((await liveAdGroups(account.target, after.campaignId)).map((g) => [g.adGroupId, g]))
+    const rotations = (after.adGroups ?? []).some((a) => 'adRotation' in a) ? await liveAdGroupRotations(account.target, after.campaignId) : {}
     return {
       ...after,
       accountId: account.accountId,
@@ -81,6 +86,7 @@ const adGroupUndo: ToolUndo = {
           adGroupId: a.adGroupId,
           ...('name' in a ? { name: g ? g.name : '(removed)' } : {}),
           ...('defaultBidCents' in a ? { defaultBidCents: g ? g.cpcBidCents : '(removed)' } : {}),
+          ...('adRotation' in a ? { adRotation: g ? rotations[a.adGroupId] ?? null : '(removed)' } : {}),
         }
       }),
     }
@@ -89,8 +95,14 @@ const adGroupUndo: ToolUndo = {
     const before = (change.before ?? {}) as AdGroupChangeRecord & OnAccount
     const created = ((change.after ?? {}) as AdGroupChangeRecord).created ?? []
     const back = (before.adGroups ?? [])
-      .map((g) => ({ adGroupId: g.adGroupId, ...(g.name !== undefined ? { name: g.name } : {}), ...(typeof g.defaultBidCents === 'number' ? { defaultBidCents: g.defaultBidCents } : {}) }))
-      .filter((g) => 'name' in g || 'defaultBidCents' in g)
+      .map((g) => ({
+        adGroupId: g.adGroupId,
+        ...(g.name !== undefined ? { name: g.name } : {}),
+        ...(typeof g.defaultBidCents === 'number' ? { defaultBidCents: g.defaultBidCents } : {}),
+        // A rotation Google left unset (null) has nothing to name: it is not put back.
+        ...((AD_ROTATIONS as readonly string[]).includes(g.adRotation ?? '') ? { adRotation: g.adRotation } : {}),
+      }))
+      .filter((g) => 'name' in g || 'defaultBidCents' in g || 'adRotation' in g)
     const noBid = (before.adGroups ?? []).filter((g) => g.defaultBidCents === null).length
     const made = `${created.length === 1 ? 'ad group' : `${created.length} ad groups`} (${created.slice(0, 3).map((c) => `"${c.name}"`).join(', ')}${created.length > 3 ? ' …' : ''})`
     if (!back.length) {
@@ -106,7 +118,7 @@ const adGroupUndo: ToolUndo = {
         ...onAccount(before),
         campaignId: before.campaignId,
         change: back,
-        why: `undo of an earlier ad group change: names and default max CPCs back${created.length ? `; the ${made} it made stay${created.length === 1 ? 's' : ''} (pause or remove ${created.length === 1 ? 'it' : 'them'})` : ''}${noBid ? `; ${noBid} had no default max CPC before and keep the one it set` : ''}`.slice(0, 300),
+        why: `undo of an earlier ad group change: names, default max CPCs and ad rotation back${created.length ? `; the ${made} it made stay${created.length === 1 ? 's' : ''} (pause or remove ${created.length === 1 ? 'it' : 'them'})` : ''}${noBid ? `; ${noBid} had no default max CPC before and keep the one it set` : ''}`.slice(0, 300),
       },
     }
   },
@@ -137,17 +149,20 @@ const setGoogleAdGroups: AgentTool = {
       adGroupId: googleIdArg('the ad group'),
       name: z.string().trim().min(1).max(254).optional().describe('its new name (unique in the campaign)'),
       defaultBidCents: googleCentsArg('its new default max CPC').optional(),
-    })).max(100).optional().describe('existing ad groups of the campaign: a new name, a new default max CPC, or both'),
+      adRotation: z.preprocess((v) => (typeof v === 'string' ? v.trim().toUpperCase() : v), z.enum(AD_ROTATIONS)).optional()
+        .describe('how its ads take turns: OPTIMIZE (the ads Google expects to do best show more often) or ROTATE_FOREVER ("Do not optimize": evenly, indefinitely; under Smart Bidding Google always optimizes)'),
+    })).max(100).optional().describe('existing ad groups of the campaign: a new name, a new default max CPC, a new ad rotation'),
     enable: z.boolean().optional().describe('only in an ENABLED campaign: make the new ad groups ENABLED, so they can spend at once (SPENDS MONEY); without it they are made PAUSED. In a campaign that is not enabled they are made ENABLED (nothing serves until the campaign is)'),
     why: googleWhyArg,
   }),
   description:
     'Ad groups of one Search or Standard Shopping campaign of the business\'s chosen Google Ads account: make ad groups '
     + '(create: a name and a default max CPC; a Shopping ad group gets its product ad in the same request, its product '
-    + 'groups are a separate change), rename them and change their default max CPC (change). All in one request. Amounts '
+    + 'groups are a separate change), rename them, change their default max CPC and their ad rotation (change: OPTIMIZE or '
+    + 'ROTATE_FOREVER). All in one request. Amounts '
     + 'are minor units (cents) of the account\'s currency. A new ad group in an enabled campaign is made PAUSED unless '
     + 'enable is true (SPENDS MONEY); a default max CPC raise is marked SPENDS MONEY. Two ad groups with one name in a '
-    + 'campaign are refused before anything is sent. Undo puts names and default max CPCs back; an ad group it made stays '
+    + 'campaign are refused before anything is sent. Undo puts names, default max CPCs and ad rotation back; an ad group it made stays '
     + '(pause or remove it).' + GOOGLE_CHANGE_RULES,
   undo: adGroupUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildAdGroups(args)),

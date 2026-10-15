@@ -186,3 +186,59 @@ describe('set-google-negative-list', () => {
     expect(undo).toMatchObject({ tool: 'set-google-negative-list', args: { listId: '31', removeKeywords: [{ text: 'cheap', matchType: 'PHRASE' }], detachCampaignIds: ['21'] } })
   })
 })
+
+describe('renames (programme 2 G3): a shared budget and a negative keyword list', () => {
+  const SHARED = { budgetId: '14', name: 'Shared A', amountCents: 1000, shared: true, deliveryMethod: 'STANDARD', period: 'DAILY', usedBy: 0, campaigns: [] }
+
+  it('set-google-budget renames a shared budget (one update, mask name); undo names it back through the same tool', async () => {
+    h.live.budgets = [...h.live.budgets, SHARED]
+    const ask = { renames: [{ budgetId: '14', name: 'Shared B' }] }
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const preview = (await tool('set-google-budget').handler(ask, asker)).preview
+    expect(preview).toMatchObject({ spendsMoney: false, operations: 1, summary: 'Google Ads budgets: rename 1 shared budget.' })
+    expect(h.mutate.mock.calls[0][1]).toEqual([{ campaignBudgetOperation: { update: { resourceName: 'customers/1234567890/campaignBudgets/14', name: 'Shared B' }, updateMask: 'name' } }])
+    h.mutate.mockReset()
+    h.mutate.mockResolvedValue({ responses: [{}], ops: 1, requestId: 'r' })
+    const run = await tool('set-google-budget').execute!(ask, approved(preview))
+    const account = { accountId: 'g-1', customerId: '1234567890' }
+    expect(run.change).toEqual({
+      before: { amounts: [], campaigns: [], names: [{ budgetId: '14', name: 'Shared A' }], ...account },
+      after: { amounts: [], campaigns: [], names: [{ budgetId: '14', name: 'Shared B' }], ...account },
+    })
+    h.live.budgets = [...h.live.budgets.slice(0, 2), { ...SHARED, name: 'Shared B' }]
+    expect(await tool('set-google-budget').undo!.current(run.change!)).toEqual(run.change!.after)
+    const undo = tool('set-google-budget').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
+    expect(undo).toMatchObject({ tool: 'set-google-budget', args: { accountId: 'g-1', renames: [{ budgetId: '14', name: 'Shared A' }] } })
+    expect(tool('set-google-budget').input.safeParse(undo.args).success).toBe(true)
+  })
+
+  it('a campaign\'s own budget is not renamed, and a name another budget has is refused — before Google is asked', async () => {
+    h.live.budgets = [...h.live.budgets, SHARED, { ...SHARED, budgetId: '15', name: 'Shared Z' }]
+    const own = await tool('set-google-budget').handler({ renames: [{ budgetId: '12', name: 'X' }] }, asker)
+    expect(own.error).toMatch(/a campaign's own budget: Google names it after its campaign/)
+    const taken = await tool('set-google-budget').handler({ renames: [{ budgetId: '14', name: 'shared z' }] }, asker)
+    expect(taken.error).toMatch(/would then exist twice/)
+    expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('set-google-negative-list renames a list (mask name); undo names it back', async () => {
+    const ask = { listId: '31', name: 'Negativi IT' }
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const preview = (await tool('set-google-negative-list').handler(ask, asker)).preview
+    expect(preview).toMatchObject({ spendsMoney: false, operations: 1, summary: 'Google Ads negative keyword list "Negativi": rename it to "Negativi IT".' })
+    expect(h.mutate.mock.calls[0][1]).toEqual([{ sharedSetOperation: { update: { resourceName: 'customers/1234567890/sharedSets/31', name: 'Negativi IT' }, updateMask: 'name' } }])
+    h.mutate.mockResolvedValue({ responses: [{}], ops: 1, requestId: 'r' })
+    const run = await tool('set-google-negative-list').execute!(ask, approved(preview))
+    expect(run.change?.before).toMatchObject({ listId: '31', name: 'Negativi' })
+    expect(run.change?.after).toMatchObject({ listId: '31', renamed: { from: 'Negativi', to: 'Negativi IT' } })
+    h.live.lists = [{ ...(h.live.lists[0] as object), name: 'Negativi IT' }]
+    expect(await tool('set-google-negative-list').undo!.current(run.change!)).toEqual(run.change!.after)
+    const undo = tool('set-google-negative-list').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
+    expect(undo).toMatchObject({ tool: 'set-google-negative-list', args: { listId: '31', name: 'Negativi' } })
+    expect(tool('set-google-negative-list').input.safeParse(undo.args).success).toBe(true)
+    // A name another list has is refused; a new list takes its name from create, not from name.
+    h.live.lists = [...h.live.lists, { listId: '32', name: 'Brand', keywordCount: 0, campaigns: [], keywords: [] }]
+    expect((await tool('set-google-negative-list').handler({ listId: '31', name: 'brand' }, asker)).error).toMatch(/already exists/)
+    expect((await tool('set-google-negative-list').handler({ create: { name: 'New' }, name: 'X' }, asker)).error).toMatch(/name renames an existing list/)
+  })
+})

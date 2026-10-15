@@ -847,6 +847,12 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // Google Ads changes (2026-10-15): the live facts it stands on, the exact operations it sends, where it lands (google-ads-kit.ts).
   'set-google-budget': ['basis', 'plan', 'reach'],
   'set-google-negative-list': ['basis', 'plan', 'reach'],
+  // Programme 2 G3 — edit in place, URLs and tracking, replace / move (google-ads-edit.tools.ts).
+  'edit-google-rsa': ['basis', 'plan', 'reach'],
+  'edit-google-assets': ['basis', 'plan', 'reach'],
+  'set-google-urls': ['basis', 'plan', 'reach'],
+  'replace-google-keywords': ['basis', 'plan', 'reach'],
+  'move-google-ads': ['basis', 'plan', 'reach'],
   'create-google-campaign': ['basis', 'plan', 'reach'],
   'set-google-campaign': ['basis', 'plan', 'reach'],
   'set-google-targeting': ['basis', 'plan', 'reach'],
