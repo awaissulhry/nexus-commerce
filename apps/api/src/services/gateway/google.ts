@@ -2,13 +2,15 @@
  * Google on the gateway (2026-10-13, Google Ads step 1): the ONE way Nexus calls Google Ads, Merchant
  * Center, Analytics and the sign-in's userinfo. A `fetch`-shaped answer (`Response`), like `gatewayFetch`.
  *
- * - Reads, and two kinds of change: `googleKind` says read for a GET or a POST to `…:search` / `…:searchStream`,
+ * - Reads, and the changes Nexus sends: `googleKind` says read for a GET or a POST to `…:search` / `…:searchStream`,
  *   and for a Google Ads `…:mutate` that only asks Google to check it (`validateOnly: true`); write for a real
  *   Google Ads mutate (2026-10-15: every one a change a person approved in Nexus) and for an apply or a dismiss of
  *   Google's recommendations (`…/recommendations:apply|:dismiss`, G5: Google cannot check those), the account's
- *   users, links and billing (G8b, google-account-calls.ts: a write, or a read when validate-only), and G9: an
+ *   users, links and billing (G8b, google-account-calls.ts: a write, or a read when validate-only), G9: an
  *   experiment's `:scheduleExperiment` / `:endExperiment` / `:promoteExperiment` / `:graduateExperiment` and a campaign
- *   draft's `:promote`, read when validate-only (Google's check), else write. The gateway refuses every other
+ *   draft's `:promote`, and G8a: sales sent to a conversion action (Data Manager API `events:ingest`) and their
+ *   adjustments (`…:uploadConversionAdjustments`) — each a read when validate-only (Google's check), else a write.
+ *   The gateway refuses every other
  *   Google call (`GOOGLE_READ_ONLY`), with its ledger row, and holds real writes to the publish mode
  *   (`NEXUS_GOOGLE_ADS_WRITES=off` refuses them). A write is never retried by the gateway: it could apply twice.
  * - The account's own token as `Authorization: Bearer` (the gateway refreshes it under the lease).
@@ -18,7 +20,7 @@
  * - A body is sent as JSON.
  */
 import { gatewayFetch } from './gateway.js'
-import { googleAdsExperimentCall, googleAdsRecommendationCall, googleCallKind, googleExperimentBodyOf, isGoogleAdsMutate, isGoogleValidateOnly } from './channels.js'
+import { googleAdjustmentBodyOf, googleAdsAdjustmentCall, googleAdsExperimentCall, googleAdsRecommendationCall, googleCallKind, googleDataManagerBodyOf, googleExperimentBodyOf, isGoogleAdsMutate, isGoogleDataManagerIngest, isGoogleValidateOnly } from './channels.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 
 export interface GoogleCallRequest {
@@ -54,8 +56,15 @@ export function googleKind(method: string, url: string, body?: unknown): 'read' 
     const judged = googleExperimentBodyOf(experiment, body === undefined ? undefined : JSON.stringify(body))
     return !('refusal' in judged) && judged.check ? 'read' : 'write'
   }
+  // G8a: sales sent to a conversion action (Data Manager API) and their adjustments: a check when validate-only.
+  const json = body === undefined ? undefined : JSON.stringify(body)
+  const adjustment = googleAdsAdjustmentCall(method, url)
+  if (adjustment || isGoogleDataManagerIngest(method, url)) {
+    const judged = adjustment ? googleAdjustmentBodyOf(adjustment, json) : googleDataManagerBodyOf(json)
+    return 'refusal' in judged ? 'write' : judged.check ? 'read' : 'write'
+  }
   if (!isGoogleAdsMutate(method, url)) return 'action'
-  return isGoogleValidateOnly(body === undefined ? undefined : JSON.stringify(body)) ? 'read' : 'write'
+  return isGoogleValidateOnly(json) ? 'read' : 'write'
 }
 
 const GOOGLE_ADS_HOST = 'googleads.googleapis.com'

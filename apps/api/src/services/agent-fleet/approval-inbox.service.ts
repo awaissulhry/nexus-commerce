@@ -868,6 +868,13 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'graduate-google-experiment': ['basis', 'plan', 'reach'],
   'set-google-campaign-draft': ['basis', 'plan', 'reach'],
   'promote-google-campaign-draft': ['basis', 'plan', 'reach'],
+  // Programme 2 G8a — conversion actions, goals, value rules, sales sent to Google and their adjustments (google-ads-conversions.tools.ts).
+  'set-google-conversion-actions': ['basis', 'plan', 'reach'],
+  'remove-google-conversion-actions': ['basis', 'plan', 'reach'],
+  'set-google-conversion-goals': ['basis', 'plan', 'reach'],
+  'set-google-value-rules': ['basis', 'plan', 'reach'],
+  'upload-google-sales': ['basis', 'plan', 'reach'],
+  'adjust-google-sales': ['basis', 'plan', 'reach'],
   // Programme 2 G3 — edit in place, URLs and tracking, replace / move (google-ads-edit.tools.ts).
   'edit-google-rsa': ['basis', 'plan', 'reach'],
   'edit-google-assets': ['basis', 'plan', 'reach'],

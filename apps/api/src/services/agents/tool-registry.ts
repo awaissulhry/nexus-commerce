@@ -58,6 +58,7 @@ import { GOOGLE_ADS_CHANGE_TOOLS } from './tools/google-ads-change.tools.js'
 import { GOOGLE_ADS_EXCLUSIONS_TOOLS } from './tools/google-ads-exclusions.tools.js'
 import { GOOGLE_ADS_ACCOUNT_TOOLS } from './tools/google-ads-account.tools.js'
 import { GOOGLE_ADS_EXPERIMENT_TOOLS } from './tools/google-ads-experiments.tools.js'
+import { GOOGLE_ADS_CONVERSIONS_TOOLS } from './tools/google-ads-conversions.tools.js'
 import { GOOGLE_ADS_EDIT_TOOLS } from './tools/google-ads-edit.tools.js'
 import { GOOGLE_ADS_ASSETS_ALL_TOOLS } from './tools/google-ads-assets-all.tools.js'
 import { GOOGLE_ADS_AUDIENCES_TOOLS } from './tools/google-ads-audiences.tools.js'
@@ -228,6 +229,8 @@ const ALL: AgentTool[] = [
   ...GOOGLE_ADS_ASSETS_ALL_TOOLS,
   // G9 (2026-10-15): experiments and campaign drafts (schedule, end, promote, graduate) and their live read.
   ...GOOGLE_ADS_EXPERIMENT_TOOLS,
+  // Programme 2 G8a: conversion actions, goals, value rules, Shopify sales sent to Google and their adjustments.
+  ...GOOGLE_ADS_CONVERSIONS_TOOLS,
   ...GOOGLE_ADS_EDIT_TOOLS,
   // Programme 2 G2: audience segments and demographics of a campaign and its ad groups.
   ...GOOGLE_ADS_AUDIENCES_TOOLS,

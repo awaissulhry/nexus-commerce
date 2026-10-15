@@ -194,10 +194,10 @@ export async function googleCheck(args: Record<string, unknown>, build: GoogleDr
 
 /**
  * A change that is not a GoogleAdsService.Mutate. RecommendationService apply / dismiss: Google has no validate_only for
- * it, so the preview is built on the live state alone and says why Google did not check it (`notChecked`). G9: an
- * experiment's schedule / end / promote / graduate and a campaign draft's promote have validate_only on their own
- * endpoint (`check`): the preview is built on Google's check like a mutate's. The run sends the draft's operations with
- * `send`; both fail as mutateGoogleAds does (a GoogleAdsWriteError with its outcome).
+ * it, so the preview is built on the live state alone and says why Google did not check it (`notChecked`). G8b, G9 and
+ * G8a calls have validate_only on their own endpoint (`check`): the preview is built on Google's check like a mutate's.
+ * The run sends the draft's operations with `send`; both fail as mutateGoogleAds does (a GoogleAdsWriteError with its
+ * outcome).
  */
 export interface GoogleSender {
   /** Google cannot check it first: the sentence the preview says instead. Not read when `check` is set. */
@@ -205,8 +205,9 @@ export interface GoogleSender {
   send: (target: GoogleAdsTarget, operations: GoogleMutateOperation[]) => Promise<{ responses: GoogleMutateResponse[] }>
   /**
    * A method that is not a mutate but HAS validate_only (G8b: removing a Merchant Center link, an account budget
-   * proposal; G9: an experiment's or a campaign draft's action): Google's check of exactly what `send` sends, as a
-   * mutate is checked (rejects like mutateGoogleAds). `notChecked` is then unused.
+   * proposal; G9: an experiment's or a campaign draft's action; G8a: sales sent to a conversion action and their
+   * adjustments): Google's check of exactly what `send` sends, as a mutate is checked (rejects like mutateGoogleAds).
+   * `notChecked` is then unused.
    */
   check?: GoogleChecker
 }
