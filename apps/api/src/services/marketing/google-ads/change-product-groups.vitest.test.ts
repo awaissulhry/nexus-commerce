@@ -307,10 +307,11 @@ describe('undo', () => {
     expect(productGroupUndoArgs({ before, after })).toMatchObject({ refusal: expect.stringContaining('does not record the ids Google gave') })
   })
 
-  it('any other old tree is put back by hand; no old tree, nothing to rebuild', () => {
-    expect(productGroupUndoArgs({ before: rec({ kind: 'all', bidCents: 50, excluded: false }), after: rec(tree([['a', 1]])) })).toEqual({ refusal: 'The product groups before this change were "All products" alone: put them back by hand in Google Ads.' })
+  it('"All products" alone comes back as the whole tree in two steps (a unit where a split stands); no old tree: the tree is removed; any other old tree by hand', () => {
+    expect(productGroupUndoArgs({ before: rec({ kind: 'all', bidCents: 50, excluded: false }), after: rec(tree([['a', 1]])) })).toEqual({ args: { campaignId: '21', adGroupId: '51', tree: [{ bidCents: 50 }], inTwoSteps: true } })
+    expect(productGroupUndoArgs({ before: rec({ kind: 'all', bidCents: null, excluded: true }), after: rec(tree([['a', 1]])) })).toEqual({ args: { campaignId: '21', adGroupId: '51', tree: [{ excluded: true }], inTwoSteps: true } })
     expect(productGroupUndoArgs({ before: rec({ kind: 'other', groups: 4, units: 3 }), after: rec(tree([['a', 1]])) })).toMatchObject({ refusal: expect.stringContaining('not a single split by item ID: put them back by hand in Google Ads') })
-    expect(productGroupUndoArgs({ before: rec({ kind: 'none' }), after: rec(tree([['a', 1]])) })).toMatchObject({ refusal: expect.stringContaining('no product groups before this change') })
+    expect(productGroupUndoArgs({ before: rec({ kind: 'none' }), after: rec(tree([['a', 1]])) })).toEqual({ args: { campaignId: '21', adGroupId: '51', removeTree: true } })
   })
   it('what Google holds now reads in the shape of the record: an id Google answers in another case is the same item', () => {
     const after = rec(tree([['SKU-1', 30], ['sku-2', null]]))

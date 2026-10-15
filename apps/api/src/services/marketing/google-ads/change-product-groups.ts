@@ -10,6 +10,10 @@
  *             changed in place — its root and the units that stay keep their ids and statistics; a deeper tree, or a
  *             split by another dimension, is refused (remove it first in Google Ads).
  *   units     bids (change the bid of existing units), exclude / include (existing units) — the tree stays as it is.
+ *   any tree  (G4, change-product-tree.ts) the whole tree of any shape (`tree`: brand, category and product type levels
+ *             1–5, custom labels 0–4, condition, channel, channel exclusivity, item id, nested), or edits of the tree
+ *             as it is (add, subdivide, remove, removeTree, with bids / exclude / include) — Google's listing group rules
+ *             and the two-step removal are in product-tree.ts.
  *
  * Google's rules for a listing group tree, checked 2026-10-15 (curl):
  *   - developers.google.com/google-ads/api/docs/shopping-ads/create-listing-groups: a node is a SUBDIVISION or a UNIT;
@@ -42,13 +46,15 @@ import { microsOfCents } from './live.js'
 import type { ProductGroupLiveState, ProductGroupNode, ShoppingAdGroupLive } from './live-product-groups.js'
 import { productItemKey } from './mappers.js'
 import type { GoogleMutateOperation } from './write-client.js'
+import { isTreeChange, treeChangeDraft, treeRecordAfterRun, treeRecordNow, treeUndoArgs, type TreeChangeRecord, type TreeChangeRequest } from './change-product-tree.js'
+import { liveNodesOf, treeOfSnapshot, type TreeSnapNode } from './product-tree.js'
 
 /** At most this many item ids in one request (the tool's limit; Google allows far more product groups per ad group). */
 export const MAX_ITEM_IDS = 250
 /** Merchant Center's limit for an item id. */
 export const MAX_ITEM_ID_LENGTH = 50
 
-export interface ProductGroupRequest {
+export interface ProductGroupRequest extends TreeChangeRequest {
   campaignId: string
   adGroupId: string
   /** rebuild: the item ids that get a unit with a bid. */
@@ -95,7 +101,12 @@ export interface ProductGroupChangeRecord {
   tree: ProductGroupTree
   bids?: Array<{ criterionId: string; bidCents: number | null }>
   switched?: SwitchedUnit[]
+  /** A change of any tree (change-product-tree.ts): the whole tree, as a snapshot with ids. */
+  nodes?: TreeSnapNode[]
 }
+
+/** The summary of a snapshot, in the shape every record keeps (`tree`). */
+const treeOfSnap = (nodes: TreeSnapNode[]): ProductGroupTree => treeOf(liveNodesOf(treeOfSnapshot(nodes)))
 
 const ITEM = 'productItemId'
 const REST_LABEL = '"everything else" (every other product of the feed)'
@@ -187,6 +198,10 @@ function spelledAs(tree: ProductGroupTree, like: ProductGroupTree | undefined): 
 
 /** The record of an ad group's product groups as they are now, in the shape of a change's `after` (undo compares them). */
 export function productGroupRecordNow(after: ProductGroupChangeRecord, nodes: ProductGroupNode[]): ProductGroupChangeRecord {
+  if (after.nodes) {
+    const now = treeRecordNow(after.nodes, nodes)
+    return { campaignId: after.campaignId, adGroupId: after.adGroupId, tree: spelledAs(treeOfSnap(now), after.tree), nodes: now }
+  }
   const byId = new Map(nodes.map((n) => [n.criterionId, n]))
   return {
     campaignId: after.campaignId,
@@ -204,6 +219,7 @@ export function productGroupRecordNow(after: ProductGroupChangeRecord, nodes: Pr
 
 /** The record of a run: each product group it made again, with the id Google gave it (the result of the operation that made it). */
 export function productGroupRecordAfterRun(after: ProductGroupChangeRecord, responses: Array<Record<string, { resourceName?: string } | undefined>>): ProductGroupChangeRecord {
+  if (after.nodes) return { ...after, nodes: treeRecordAfterRun(after.nodes, responses) }
   if (!after.switched) return after
   return {
     ...after,
@@ -321,16 +337,26 @@ export function productGroupChangeDraft(
   if (ag.type && ag.type !== 'SHOPPING_PRODUCT_ADS') return { refusal: `Ad group "${ag.name}" is a ${ag.type} ad group: only a Standard Shopping ad group's product groups are changed here.` }
   const rebuild = !!(request.itemIds?.length || request.excludeItemIds?.length || request.itemBids?.length || request.includeEverythingElse || request.bidCents !== undefined)
   const units = !!(request.bids?.length || request.exclude?.length || request.include?.length)
+  const anyTree = isTreeChange(request)
   if (rebuild && units) return { refusal: 'Either rebuild the tree (itemIds, bidCents, itemBids, excludeItemIds, includeEverythingElse) or change its product groups as they are (bids, exclude, include), not both in one request.' }
-  if (!rebuild && !units) return { refusal: 'Say what to change: itemIds (a new tree split by item ID), or bids, exclude or include (product groups of the tree as it is).' }
+  if (rebuild && anyTree) return { refusal: 'Either rebuild the tree split by item ID (itemIds, bidCents, itemBids, excludeItemIds, includeEverythingElse), or give the whole tree (tree), or edit the tree as it is (add, subdivide, remove, removeTree) — one way in one request.' }
+  if (!rebuild && !units && !anyTree) return { refusal: 'Say what to change: itemIds (a new tree split by item ID), tree (the whole tree, any shape), add / subdivide / remove / removeTree (the tree as it is), or bids, exclude or include (its product groups).' }
   const base = `${customer}/adGroupCriteria/${ag.adGroupId}~`
   const ctx: Ctx = { customer, currency, ag, nodes: live.nodes, crit: (id) => `${base}${id}` }
-  const draft = rebuild ? rebuildDraft(ctx, request) : unitsDraft(ctx, request)
+  const draft = anyTree ? anyTreeDraft(ctx, request) : rebuild ? rebuildDraft(ctx, request) : unitsDraft(ctx, request)
   if ('refusal' in draft) return draft
   if (ag.campaign.bidding && ag.campaign.bidding !== 'MANUAL_CPC' && draft.operations.some((op) => JSON.stringify(op).includes('"cpcBidMicros"'))) {
     draft.warnings.push(`The campaign bids with ${ag.campaign.bidding}, not Manual CPC: Google may not use the bids set here.`)
   }
   return draft
+}
+
+/** A change of any tree (change-product-tree.ts), its records in the shape every product group change keeps. */
+function anyTreeDraft(ctx: Ctx, request: ProductGroupRequest): GoogleChangeDraft | { refusal: string } {
+  const draft = treeChangeDraft({ currency: ctx.currency, ag: ctx.ag, nodes: ctx.nodes, crit: ctx.crit, stands: standsOf(ctx) }, request)
+  if ('refusal' in draft) return draft
+  const record = (r: TreeChangeRecord): ProductGroupChangeRecord => ({ campaignId: r.campaignId, adGroupId: r.adGroupId, tree: treeOfSnap(r.nodes), nodes: r.nodes })
+  return { ...draft, before: record(draft.before as TreeChangeRecord), after: record(draft.after as TreeChangeRecord) }
 }
 
 /** The facts a change stands on: the campaign, the ad group and every node of its tree (checked again before it runs). */
@@ -688,6 +714,10 @@ export function productGroupUndoArgs(change: { before: unknown; after: unknown }
   const after = change.after as ProductGroupChangeRecord | null
   if (!before?.campaignId || !before.adGroupId || !before.tree) return { refusal: 'This change does not record the product groups it replaced.' }
   const base = { campaignId: before.campaignId, adGroupId: before.adGroupId }
+  if (before.nodes) {
+    const undo = treeUndoArgs(before.nodes)
+    return 'refusal' in undo ? undo : { args: { ...base, ...undo.args } }
+  }
   if (before.bids || before.switched) {
     const bids = before.bids ?? []
     if (bids.some((b) => badBid(b.bidCents))) return { refusal: 'A product group of this change had no bid of its own before it: put it back by hand in Google Ads.' }
@@ -710,10 +740,14 @@ export function productGroupUndoArgs(change: { before: unknown; after: unknown }
     }
   }
   const tree = before.tree
-  if (tree.kind === 'none') return { refusal: 'The ad group had no product groups before this change, so there is no tree to put back. To stop it, pause the ad group (or remove its tree in Google Ads).' }
-  if (tree.kind !== 'items') {
-    return { refusal: `The product groups before this change were ${tree.kind === 'all' ? '"All products" alone' : 'not a single split by item ID'}: put them back by hand in Google Ads.` }
+  // A rebuild that made the first tree of the ad group: undo removes it (removals only).
+  if (tree.kind === 'none') return { args: { ...base, removeTree: true } }
+  // "All products" alone again: a unit where a split now stands — two steps (remove the split, then make the unit).
+  if (tree.kind === 'all') {
+    if (!tree.excluded && badBid(tree.bidCents)) return { refusal: '"All products" had no bid of its own before this change (Google set its bids): put it back by hand in Google Ads.' }
+    return { args: { ...base, tree: [tree.excluded ? { excluded: true } : { bidCents: tree.bidCents }], inTwoSteps: true } }
   }
+  if (tree.kind !== 'items') return { refusal: 'The product groups before this change were not a single split by item ID: put them back by hand in Google Ads.' }
   if (!tree.items.length || tree.items.length > MAX_ITEM_IDS) return { refusal: `The tree before this change had ${plural(tree.items.length, 'item')}: put it back by hand in Google Ads.` }
   const on = tree.items.filter((i) => !i.excluded)
   const off = tree.items.filter((i) => i.excluded)
