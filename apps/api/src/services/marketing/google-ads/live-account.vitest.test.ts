@@ -26,6 +26,7 @@ describe('the queries', () => {
     PRODUCT_LINKS_QUERY, PRODUCT_LINK_INVITATIONS_QUERY, DATA_LINKS_QUERY,
     ...Object.fromEntries(Object.entries(labelUsesQueries('77')).map(([k, q]) => [`label ${k}`, q])),
     userLists: accountLookupQuery('user-lists', 'moto'), customAudiences: accountLookupQuery('custom-audiences'), combined: accountLookupQuery('combined-audiences', 'x'),
+    lifeEvents: accountLookupQuery('life-events', 'moving'),
   }
 
   it('every field filtered on that is not of the FROM resource is selected', () => {
@@ -46,6 +47,8 @@ describe('the queries', () => {
     expect(accountLookupQuery('custom-audiences', '100%_off')).toContain("LIKE '%100  off%'")
     expect(accountLookupQuery('combined-audiences')).not.toContain('LIKE')
     expect(accountLookupQuery('user-lists')).toMatch(/LIMIT 200$/)
+    expect(accountLookupQuery('life-events')).toBe('SELECT life_event.id, life_event.name, life_event.parent, life_event.launched_to_all, life_event.availabilities FROM life_event ORDER BY life_event.name LIMIT 200')
+    expect(accountLookupQuery('life-events', "moving' OR '1")).toContain("FROM life_event WHERE life_event.name LIKE '%moving  OR  1%' ORDER BY")
   })
 })
 
@@ -142,5 +145,10 @@ describe('the rows', () => {
     expect(accountLookupRowOf('user-lists', { userList: { id: '3', name: 'Buyers 180d', type: 'REMARKETING', sizeRangeForSearch: 'ONE_THOUSAND_TO_TEN_THOUSAND', eligibleForSearch: true, membershipLifeSpan: '180' } }))
       .toMatchObject({ id: '3', name: 'Buyers 180d', sizeForSearch: 'ONE_THOUSAND_TO_TEN_THOUSAND', eligibleForSearch: true, eligibleForDisplay: false, membershipDays: 180 })
     expect(accountLookupRowOf('combined-audiences', { combinedAudience: { id: '4', name: 'Riders' } })).toEqual({ id: '4', name: 'Riders', type: 'COMBINED', description: null })
+    expect(accountLookupRowOf('life-events', { lifeEvent: {
+      id: '5', name: 'Recently moved', parent: 'lifeEvents/1', launchedToAll: true,
+      availabilities: [{ channel: { availabilityMode: 'CHANNEL_TYPE', advertisingChannelType: 'DISPLAY' } }, { channel: { availabilityMode: 'CHANNEL_TYPE_AND_SUBTYPES', advertisingChannelType: 'VIDEO' } }, { channel: { availabilityMode: 'CHANNEL_TYPE', advertisingChannelType: 'DISPLAY' } }],
+    } })).toEqual({ id: '5', name: 'Recently moved', type: 'LIFE_EVENT', description: null, parentId: '1', launchedToAll: true, channels: ['DISPLAY', 'VIDEO'] })
+    expect(accountLookupRowOf('life-events', { lifeEvent: { id: '6', availabilities: [{ channel: { availabilityMode: 'ALL_CHANNELS' } }] } }).channels).toEqual(['ALL'])
   })
 })

@@ -111,6 +111,10 @@ describe('google-ads-live, new views', () => {
     expect(out).toMatchObject({ ok: true, data: { lookup: 'user-lists', items: [{ id: '3', name: 'Buyers' }] } })
     expect(sent()[0]).toContain('FROM user_list')
     expect((await tool('google-ads-live').handler({ view: 'lookup', lookup: 'locations' }, everyone)).ok).toBe(false)
+    h.rows.mockResolvedValue([{ lifeEvent: { id: '5', name: 'Recently moved', launchedToAll: true, availabilities: [{ channel: { availabilityMode: 'ALL_CHANNELS' } }] } }])
+    const life = await tool('google-ads-live').handler({ view: 'lookup', lookup: 'life-events' }, everyone)
+    expect(life).toMatchObject({ ok: true, data: { lookup: 'life-events', items: [{ id: '5', name: 'Recently moved', type: 'LIFE_EVENT', channels: ['ALL'] }], note: expect.stringContaining('LIFE_EVENT') } })
+    expect(sent().at(-1)).toMatch(/FROM life_event ORDER BY life_event\.name LIMIT 200$/)
   })
 })
 

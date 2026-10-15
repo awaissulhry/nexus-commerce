@@ -60,7 +60,7 @@ type LiveView = typeof GOOGLE_LIVE_VIEWS[number]
 const NEEDS_CAMPAIGN: readonly LiveView[] = ['campaign', 'product-groups', 'ads']
 const MAX_CHANGES = 200
 const GOOGLE_LOOKUPS = ['locations', 'languages', 'audiences'] as const
-const ACCOUNT_LOOKUPS = ['user-lists', 'custom-audiences', 'combined-audiences'] as const
+const ACCOUNT_LOOKUPS = ['user-lists', 'custom-audiences', 'combined-audiences', 'life-events'] as const
 const LOOKUPS = [...GOOGLE_LOOKUPS, ...ACCOUNT_LOOKUPS] as const
 
 const lower = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v)
@@ -163,11 +163,13 @@ async function liveView(args: Record<string, unknown>, ctx: ToolContext): Promis
             ok: true,
             data: {
               ...base, lookup: kind, ...(search ? { search } : {}), items, total: items.length,
-              note: 'This account\'s own audiences (enabled), at most 200: their ids are what the targeting tools take.',
+              note: kind === 'life-events'
+                ? 'Google\'s life events, at most 200: their ids are what the audience tools take as LIFE_EVENT; channels says where each can serve (ALL = every channel).'
+                : 'This account\'s own audiences (enabled), at most 200: their ids are what the targeting tools take.',
             },
           }
         }
-        if (!kind || !search) return { ok: false, error: 'view lookup needs lookup (locations, languages, audiences, user-lists, custom-audiences or combined-audiences) and, for the first three, search (a word of the name).' }
+        if (!kind || !search) return { ok: false, error: 'view lookup needs lookup (locations, languages, audiences, user-lists, custom-audiences, combined-audiences or life-events) and, for the first three, search (a word of the name).' }
         const items = await liveLookup(account.target, kind as LookupKind, search)
         return { ok: true, data: { ...base, lookup: kind, search, items, total: items.length, note: 'Google\'s own ids: pass them to create-google-campaign or set-google-targeting.' } }
       }
@@ -290,8 +292,8 @@ const googleAdsLive: AgentTool = {
     labelId: googleIdArg('one label: view labels then lists the campaigns, ad groups, ads and keywords that carry it').optional(),
     day: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('view change-history: the day (YYYY-MM-DD, the account\'s time zone; default today; Google keeps 30 days)'),
     lookup: z.preprocess(lower, z.enum(LOOKUPS)).optional()
-      .describe('view lookup: what to find — locations (countries, regions, cities), languages, audiences (in-market and affinity segments), or this account\'s own user-lists (remarketing, customer lists), custom-audiences, combined-audiences'),
-    search: z.string().trim().min(1).max(80).optional().describe('view lookup: a word of the name (e.g. Italy, Italian, Motorcycles); needed for locations, languages and audiences, optional for the account\'s own lists'),
+      .describe('view lookup: what to find — locations (countries, regions, cities), languages, audiences (in-market and affinity segments), life-events (moving, marriage, …), or this account\'s own user-lists (remarketing, customer lists), custom-audiences, combined-audiences'),
+    search: z.string().trim().min(1).max(80).optional().describe('view lookup: a word of the name (e.g. Italy, Italian, Motorcycles); needed for locations, languages and audiences, optional for life-events and the account\'s own lists'),
   }),
   description:
     'Google Ads, read LIVE from Google now (not from Nexus\'s daily read): the business\'s chosen Google Ads account as it '
@@ -306,8 +308,8 @@ const googleAdsLive: AgentTool = {
     + 'when an "everything else" group is NOT excluded). ads (campaignId): ads with text, URLs, strength and review. assets: campaign assets (sitelinks, '
     + 'callouts, structured snippets …) with their review. change-history: Google\'s change history of one day (who, '
     + 'what; the e-mail of who needs the users permission). drafts: campaign drafts. lookup (lookup + search): Google\'s ids of locations, languages and audience '
-    + 'segments whose name holds the word, and this account\'s own user lists, custom audiences and combined audiences, '
-    + 'for the change tools. account: auto-tagging, tracking template, final URL suffix, time zone, currency, conversion '
+    + 'segments whose name holds the word, Google\'s life events, and this account\'s own user lists, custom audiences and '
+    + 'combined audiences, for the change tools. account: auto-tagging, tracking template, final URL suffix, time zone, currency, conversion '
     + 'tracking, the EU political ads declaration. conversions: conversion actions (category, primary or secondary, '
     + 'value, counting, windows, attribution, GA4 source), the account\'s goals and each campaign\'s goals. labels: the '
     + 'labels (labelId: what carries it). experiments: experiments with their arms and campaigns. users: who has access '

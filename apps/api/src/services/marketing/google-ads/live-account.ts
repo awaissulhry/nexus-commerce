@@ -501,15 +501,26 @@ export async function liveLinks(target: GoogleAdsTarget): Promise<LiveLinks> {
   return { productLinks, invitations, youtube, ga4Properties: [...byProperty.values()], notRead }
 }
 
-// ── lookups: the account's own audiences ─────────────────────────────────────────────────────────────────────────
+// ── lookups: the account's own audiences, and Google's life events ──────────────────────────────────────────────────
 
-export type AccountLookupKind = 'user-lists' | 'custom-audiences' | 'combined-audiences'
+/**
+ * life-events (review, 2026-10-15): Google's life events (life_event), whose ids the audience tools take as LIFE_EVENT.
+ * Checked in fields/v25/life_event (curl): id, name, parent, launched_to_all are Selectable and Filterable;
+ * availabilities is Selectable, repeated, not Filterable — a CriterionCategoryAvailability whose channel
+ * (reference/rpc/v25/CriterionCategoryChannelAvailability) has availability_mode ALL_CHANNELS, or an
+ * advertising_channel_type it is available to. Only life_event.name is filtered on (a search word), and it is selected.
+ */
+export type AccountLookupKind = 'user-lists' | 'custom-audiences' | 'combined-audiences' | 'life-events'
 export const ACCOUNT_LOOKUP_LIMIT = 200
 
-/** A GAQL LIKE literal for a word of a name: quotes and backslashes dropped, LIKE's own wildcards taken out. */
-function nameLike(field: string, search?: string | null): string {
+/** A GAQL LIKE condition for a word of a name: quotes and backslashes dropped, LIKE's own wildcards taken out. */
+function nameCondition(field: string, search?: string | null): string | null {
   const cleaned = (search ?? '').trim().slice(0, 80).replace(/[\\'"]/g, ' ').replace(/[%_[\]]/g, ' ').trim()
-  return cleaned ? ` AND ${field} LIKE '%${cleaned}%'` : ''
+  return cleaned ? `${field} LIKE '%${cleaned}%'` : null
+}
+const nameLike = (field: string, search?: string | null): string => {
+  const condition = nameCondition(field, search)
+  return condition ? ` AND ${condition}` : ''
 }
 
 /** The account's user lists, custom audiences or combined audiences (enabled), optionally those whose name holds `search`. */
@@ -526,6 +537,11 @@ export function accountLookupQuery(kind: AccountLookupKind, search?: string | nu
     case 'combined-audiences':
       return 'SELECT combined_audience.id, combined_audience.name, combined_audience.status, combined_audience.description ' +
         `FROM combined_audience WHERE combined_audience.status = 'ENABLED'${nameLike('combined_audience.name', search)} ORDER BY combined_audience.name LIMIT ${ACCOUNT_LOOKUP_LIMIT}`
+    case 'life-events': {
+      const condition = nameCondition('life_event.name', search)
+      return 'SELECT life_event.id, life_event.name, life_event.parent, life_event.launched_to_all, life_event.availabilities FROM life_event ' +
+        `${condition ? `WHERE ${condition} ` : ''}ORDER BY life_event.name LIMIT ${ACCOUNT_LOOKUP_LIMIT}`
+    }
   }
 }
 
@@ -541,9 +557,24 @@ export interface AccountLookupRow {
   eligibleForDisplay?: boolean
   membershipStatus?: string | null
   membershipDays?: number | null
+  /** Life events: the broader life event it belongs to, whether Google launched it to every account, where it can serve. */
+  parentId?: string | null
+  launchedToAll?: boolean
+  /** Channel types it is available to (ALL = every channel), from Google's availabilities. */
+  channels?: string[]
 }
 
 export function accountLookupRowOf(kind: AccountLookupKind, row: Json): AccountLookupRow {
+  if (kind === 'life-events') {
+    const l = row.lifeEvent ?? {}
+    const channels = new Set<string>()
+    for (const a of Array.isArray(l.availabilities) ? l.availabilities : []) {
+      const c = a?.channel ?? {}
+      if (c.availabilityMode === 'ALL_CHANNELS') channels.add('ALL')
+      else if (str(c.advertisingChannelType)) channels.add(str(c.advertisingChannelType)!)
+    }
+    return { id: str(l.id), name: str(l.name), type: 'LIFE_EVENT', description: null, parentId: tail(l.parent), launchedToAll: bool(l.launchedToAll), channels: [...channels] }
+  }
   if (kind === 'user-lists') {
     const u = row.userList ?? {}
     return {
