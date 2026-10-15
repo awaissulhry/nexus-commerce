@@ -83,7 +83,8 @@ describe('Google: reads, and Google Ads mutates only', () => {
     expect([...GOOGLE_ADS_MUTATE_KINDS].sort()).toEqual([
       'adGroupAdLabelOperation', 'adGroupAdOperation', 'adGroupAssetOperation', 'adGroupBidModifierOperation',
       'adGroupCriterionLabelOperation', 'adGroupCriterionOperation', 'adGroupLabelOperation', 'adGroupOperation',
-      'adOperation', 'assetOperation', 'biddingStrategyOperation', 'campaignAssetOperation', 'campaignBudgetOperation',
+      'adOperation', 'assetGroupAssetOperation', 'assetGroupListingGroupFilterOperation', 'assetGroupOperation', 'assetGroupSignalOperation',
+      'assetOperation', 'audienceOperation', 'biddingStrategyOperation', 'campaignAssetOperation', 'campaignBudgetOperation',
       'campaignConversionGoalOperation', 'campaignCriterionOperation', 'campaignDraftOperation',
       'campaignLabelOperation', 'campaignOperation', 'campaignSharedSetOperation', 'conversionActionOperation',
       'conversionGoalCampaignConfigOperation', 'conversionValueRuleOperation', 'conversionValueRuleSetOperation',
@@ -103,12 +104,14 @@ describe('Google: reads, and Google Ads mutates only', () => {
   it('the Google Ads methods besides Mutate that Nexus sends (G8b: the account\'s users, links, billing) are exactly these', () => {
     // Bodies, customers and refusals: google-account-calls.vitest.test.ts. A new method is a new line here, on purpose.
     expect([...GOOGLE_ACCOUNT_CALL_PATHS].sort()).toEqual([
+      'CampaignGoalConfigs:mutate', 'Goals:mutate',
       'accountBudgetProposals:mutate', 'billingSetups:mutate', 'customerUserAccessInvitations:mutate', 'customerUserAccesses:mutate',
       'dataLinks:create', 'dataLinks:remove', 'dataLinks:update', 'productLinkInvitations:remove', 'productLinkInvitations:update',
       'productLinks:create', 'productLinks:remove',
     ])
-    // Only these two have validate_only (v25 RemoveProductLinkRequest, MutateAccountBudgetProposalRequest).
-    expect([...GOOGLE_ACCOUNT_CHECKABLE].sort()).toEqual(['accountBudgetProposals:mutate', 'productLinks:remove'])
+    // Only these have validate_only (v25 RemoveProductLinkRequest, MutateAccountBudgetProposalRequest; G10: MutateGoalsRequest,
+    // MutateCampaignGoalConfigsRequest).
+    expect([...GOOGLE_ACCOUNT_CHECKABLE].sort()).toEqual(['CampaignGoalConfigs:mutate', 'Goals:mutate', 'accountBudgetProposals:mutate', 'productLinks:remove'])
   })
 
   it('G6: an asset linked at an ad group or at the account (adGroupAssetOperation, customerAssetOperation) goes, check and change; asset set links stay refused', async () => {

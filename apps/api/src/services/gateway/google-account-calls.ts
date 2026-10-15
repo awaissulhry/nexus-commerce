@@ -16,6 +16,10 @@
  *   /v25/customers/{customer_id}/dataLinks:create | :update | :remove   DataLinkService (no validate_only)
  *   /v25/customers/{customer_id}/billingSetups:mutate                   MutateBillingSetup (no validate_only)
  *   /v25/customers/{customer_id}/accountBudgetProposals:mutate          MutateAccountBudgetProposal (validate_only)
+ *   /v25/customers/{customer_id}/Goals:mutate                         MutateGoals (validate_only) — G10 (2026-10-16)
+ *   /v25/customers/{customer_id}/CampaignGoalConfigs:mutate           MutateCampaignGoalConfigs (validate_only) — G10
+ *   (the two goal paths are written with a capital letter in the v25 protos' HTTP bindings and in the v25 discovery
+ *   document, googleads.googleapis.com/$discovery/rest?version=v25, read 2026-10-16)
  * Not here, on purpose: CustomerService.CreateCustomerClient (`customers/{id}:createCustomerClient`, a new account) and
  * ProductLinkInvitationService.CreateProductLinkInvitation (Google Ads cannot invite a Merchant Center account: on
  * ProductLinkInvitation v25 `merchant_center` is OUTPUT_ONLY; the request comes from Merchant Center).
@@ -39,6 +43,13 @@
  *                                          proposedPurchaseOrderNumber (CREATE only) }
  *                                          + updateMask (UPDATE only) | remove "customers/{c}/accountBudgetProposals/{id}"
  *                                          (REMOVE: "a budget that hasn't started yet", like END only the budget)
+ *   GoalOperation (G10)                    ONE of create { newCustomerAcquisitionGoalSettings { valueSettings { additionalValue,
+ *                                          additionalHighLifetimeValue? } } } | update { resourceName "customers/{c}/goals/{id}",
+ *                                          newCustomerAcquisitionGoalSettings } + updateMask (those two value paths); no remove
+ *   CampaignGoalConfigOperation (G10)      ONE of create { campaign, goal, campaignNewCustomerAcquisitionSettings { targetOption
+ *                                          TARGET_ALL | TARGET_SPECIFIC, valueSettingsOverride? } } | update { resourceName
+ *                                          "customers/{c}/campaignGoalConfigs/{campaign}~{goal}", campaignNewCustomerAcquisitionSettings }
+ *                                          + updateMask (target_option and the override's two value paths) | remove (that name)
  */
 
 const HOST = 'googleads.googleapis.com'
@@ -48,11 +59,13 @@ export const GOOGLE_ACCOUNT_CALL_PATHS = [
   'productLinks:create', 'productLinks:remove', 'productLinkInvitations:update', 'productLinkInvitations:remove',
   'dataLinks:create', 'dataLinks:update', 'dataLinks:remove',
   'billingSetups:mutate', 'accountBudgetProposals:mutate',
+  // G10 (2026-10-16): the account's new-customer acquisition goal and a campaign's use of it (set-google-customer-acquisition).
+  'Goals:mutate', 'CampaignGoalConfigs:mutate',
 ] as const
 export type GoogleAccountCallPath = typeof GOOGLE_ACCOUNT_CALL_PATHS[number]
 
-/** The two of them Google can check first (their request has validate_only). */
-export const GOOGLE_ACCOUNT_CHECKABLE: ReadonlySet<GoogleAccountCallPath> = new Set(['productLinks:remove', 'accountBudgetProposals:mutate'])
+/** The ones Google can check first (their request has validate_only). */
+export const GOOGLE_ACCOUNT_CHECKABLE: ReadonlySet<GoogleAccountCallPath> = new Set(['productLinks:remove', 'accountBudgetProposals:mutate', 'Goals:mutate', 'CampaignGoalConfigs:mutate'])
 
 export interface GoogleAccountCall { customer: string; path: GoogleAccountCallPath }
 
@@ -180,6 +193,9 @@ function problemOf(call: GoogleAccountCall, body: Json): string | null {
       const starts = (create.startTimeType === 'NOW' ? 1 : 0) + (typeof create.startDateTime === 'string' && GOOGLE_DATE_TIME_RE.test(create.startDateTime) ? 1 : 0)
       return starts === 1 && Object.keys(create).length === 2 ? null : 'the start is not NOW or one date-time'
     }
+    case 'Goals:mutate':
+    case 'CampaignGoalConfigs:mutate':
+      return goalProblem(c, call.path, body)
     case 'accountBudgetProposals:mutate': {
       if (onlyKeys(body, ['operation', 'validateOnly']).length) return 'it names more than one operation and validateOnly'
       if (body.validateOnly !== undefined && typeof body.validateOnly !== 'boolean') return 'validateOnly is not true or false'
@@ -190,6 +206,54 @@ function problemOf(call: GoogleAccountCall, body: Json): string | null {
       return proposalProblem(c, op.create, op.updateMask)
     }
   }
+}
+
+const GOAL_VALUE = 'new_customer_acquisition_goal_settings.value_settings'
+const CAMPAIGN_NCA = 'campaign_new_customer_acquisition_settings'
+const GOAL_MASK: ReadonlySet<string> = new Set([`${GOAL_VALUE}.additional_value`, `${GOAL_VALUE}.additional_high_lifetime_value`])
+const CONFIG_MASK: ReadonlySet<string> = new Set([`${CAMPAIGN_NCA}.target_option`, `${CAMPAIGN_NCA}.value_settings_override.additional_value`, `${CAMPAIGN_NCA}.value_settings_override.additional_high_lifetime_value`])
+const amount = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0
+
+/** A value settings message as set-google-customer-acquisition sends it (additive values only), or why not. */
+function valueSettingsProblem(v: unknown): string | null {
+  if (!isObject(v)) return 'the value settings are not one'
+  if (onlyKeys(v, ['additionalValue', 'additionalHighLifetimeValue']).length) return 'the value settings name more than the two additional values'
+  return amount(v.additionalValue) && (v.additionalHighLifetimeValue === undefined || amount(v.additionalHighLifetimeValue)) ? null : 'a value is not a number of 0 or more'
+}
+
+/** G10: the account's new-customer acquisition goal, a campaign's config of it — exactly what the tool sends. */
+function goalProblem(c: string, path: 'Goals:mutate' | 'CampaignGoalConfigs:mutate', body: Json): string | null {
+  if (onlyKeys(body, ['operations', 'validateOnly']).length) return 'it names more than one operation and validateOnly'
+  if (body.validateOnly !== undefined && typeof body.validateOnly !== 'boolean') return 'validateOnly is not true or false'
+  if (!Array.isArray(body.operations) || body.operations.length !== 1 || !isObject(body.operations[0])) return 'it is not ONE operation'
+  const op = body.operations[0]
+  const goalName = ownName(c, 'goals', ID)
+  const configName = ownName(c, 'campaignGoalConfigs', /^\d{1,20}~\d{1,20}$/)
+  const masked = (allowed: ReadonlySet<string>) => typeof op.updateMask === 'string' && op.updateMask.split(',').every((x) => allowed.has(x))
+  if (path === 'Goals:mutate') {
+    const goal = isObject(op.create) ? op.create : isObject(op.update) ? op.update : null
+    if (!goal || onlyKeys(op, [isObject(op.create) ? 'create' : 'update', ...(isObject(op.update) ? ['updateMask'] : [])]).length) return 'the operation is not one create or one update of a goal'
+    if (onlyKeys(goal, ['resourceName', 'newCustomerAcquisitionGoalSettings']).length) return 'Nexus changes the new-customer acquisition goal only'
+    if (isObject(op.create) && goal.resourceName !== undefined) return 'a new goal names no resource'
+    if (isObject(op.update) && (!goalName(goal.resourceName) || !masked(GOAL_MASK))) return 'the update does not name a goal of this account, or masks more than its two values'
+    const settings = goal.newCustomerAcquisitionGoalSettings
+    if (!isObject(settings) || onlyKeys(settings, ['valueSettings']).length) return 'the goal settings are not the value settings'
+    return valueSettingsProblem(settings.valueSettings)
+  }
+  if ('remove' in op) return Object.keys(op).length === 1 && configName(op.remove) ? null : 'the remove does not name a campaign goal config of this account'
+  const config = isObject(op.create) ? op.create : isObject(op.update) ? op.update : null
+  if (!config || onlyKeys(op, [isObject(op.create) ? 'create' : 'update', ...(isObject(op.update) ? ['updateMask'] : [])]).length) return 'the operation is not one create, update or remove of a campaign goal config'
+  if (isObject(op.create)) {
+    if (onlyKeys(config, ['campaign', 'goal', 'campaignNewCustomerAcquisitionSettings']).length) return 'a new config names more than its campaign, goal and new-customer settings'
+    if (!ownName(c, 'campaigns', ID)(config.campaign) || !goalName(config.goal)) return 'it does not name a campaign and a goal of this account'
+  } else {
+    if (onlyKeys(config, ['resourceName', 'campaignNewCustomerAcquisitionSettings']).length) return 'the update names more than the new-customer settings'
+    if (!configName(config.resourceName) || !masked(CONFIG_MASK)) return 'the update does not name a campaign goal config of this account, or masks more than its new-customer settings'
+  }
+  const s = config.campaignNewCustomerAcquisitionSettings
+  if (!isObject(s) || onlyKeys(s, ['targetOption', 'valueSettingsOverride']).length) return 'the new-customer settings are not a target option and a value override'
+  if (s.targetOption !== 'TARGET_ALL' && s.targetOption !== 'TARGET_SPECIFIC') return 'the target option is not TARGET_ALL or TARGET_SPECIFIC'
+  return s.valueSettingsOverride === undefined ? null : valueSettingsProblem(s.valueSettingsOverride)
 }
 
 function proposalProblem(c: string, p: Json, mask: unknown): string | null {

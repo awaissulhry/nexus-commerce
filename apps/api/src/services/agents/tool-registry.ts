@@ -55,6 +55,7 @@ import { ADS_BRAIN_HOURS_TOOLS } from './tools/ads-brain-hours.tools.js'
 import { ADS_BRAIN_CONTROL_TOOLS } from './tools/ads-brain-control.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { GOOGLE_ADS_CHANGE_TOOLS } from './tools/google-ads-change.tools.js'
+import { GOOGLE_ADS_PMAX_TOOLS } from './tools/google-ads-pmax.tools.js'
 import { GOOGLE_ADS_EXCLUSIONS_TOOLS } from './tools/google-ads-exclusions.tools.js'
 import { GOOGLE_ADS_ACCOUNT_TOOLS } from './tools/google-ads-account.tools.js'
 import { GOOGLE_ADS_MERCHANT_TOOLS } from './tools/google-ads-merchant.tools.js'
@@ -226,6 +227,9 @@ const ALL: AgentTool[] = [
   // Programme 2 G12: Merchant Center — live read, product inputs, data sources and promotions (google-merchant-kit.ts).
   ...GOOGLE_ADS_MERCHANT_TOOLS,
   ...GOOGLE_ADS_CAMPAIGN_TYPES_TOOLS,
+  // Programme 2 G10: Performance Max — build, copy and change (asset groups, assets, product trees, signals, exclusions,
+  // brand assets, Google's automation) and customer acquisition.
+  ...GOOGLE_ADS_PMAX_TOOLS,
   // G7 (2026-10-15): account and campaign exclusions, the account's negative keyword list, placement and brand lists.
   ...GOOGLE_ADS_EXCLUSIONS_TOOLS,
   // Programme 2 G8b: the account itself — settings, who may use it, its links and its billing.

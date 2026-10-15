@@ -232,7 +232,25 @@ export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   // conversion goals, a campaign's goal level, conversion value rules and rule sets.
   'conversionActionOperation', 'customerConversionGoalOperation', 'campaignConversionGoalOperation',
   'conversionGoalCampaignConfigOperation', 'conversionValueRuleOperation', 'conversionValueRuleSetOperation',
+  // G10 (2026-10-16): Performance Max — asset groups, their assets, listing group filters and signals, and audiences made
+  // for audience signals (v25 MutateOperation.asset_group_operation, asset_group_asset_operation,
+  // asset_group_listing_group_filter_operation, asset_group_signal_operation, audience_operation). PMAX_OPERATION_ACTIONS
+  // narrows them to what set-google-pmax and build-google-pmax send.
+  'assetGroupOperation', 'assetGroupAssetOperation', 'assetGroupListingGroupFilterOperation', 'assetGroupSignalOperation', 'audienceOperation',
 ])
+
+/**
+ * G10: the actions Nexus sends for the Performance Max kinds — never an asset group removed (Google refuses to remove
+ * the last one, and no tool asks), never an audience changed or removed (an audience is made for a signal, and only
+ * made), never a listing group filter or signal updated (made and removed only).
+ */
+export const PMAX_OPERATION_ACTIONS: Readonly<Record<string, readonly string[]>> = {
+  assetGroupOperation: ['create', 'update'],
+  assetGroupAssetOperation: ['create', 'remove'],
+  assetGroupListingGroupFilterOperation: ['create', 'remove'],
+  assetGroupSignalOperation: ['create', 'remove'],
+  audienceOperation: ['create'],
+}
 
 // ── G8a: sales sent to Google, and their adjustments ────────────────────────────────────────────────────────────
 
@@ -549,6 +567,12 @@ export function googleMutateBodyOf(body: unknown, customer?: string | null): Goo
     if (kinds[0] === 'customerOperation') {
       const problem = customerOperationProblem((operation as Record<string, unknown>).customerOperation, customer)
       if (problem) return { refusal: problem }
+    }
+    const allowed = PMAX_OPERATION_ACTIONS[kinds[0]]
+    if (allowed) {
+      const inner = (operation as Record<string, unknown>)[kinds[0]]
+      const actions = inner && typeof inner === 'object' ? Object.keys(inner).filter((k) => k !== 'updateMask') : []
+      if (actions.length !== 1 || !allowed.includes(actions[0])) return { refusal: `it holds a ${kinds[0]} ${actions.join('/') || 'without an action'} (Nexus sends ${allowed.join(' or ')} only)` }
     }
   }
   return { check: parsed.validateOnly === true, body: JSON.stringify(parsed) }

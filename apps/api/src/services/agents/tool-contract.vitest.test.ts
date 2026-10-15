@@ -743,6 +743,15 @@ describe('C1 — every registered tool keeps the contract', () => {
       // PR 6: a build (or a copy) is undone by removing the campaigns it made (its budgets and lists stay, unused).
       'build-google-campaigns': { before: { campaigns: [], accountId: 'g-1' }, after: { campaigns: [{ name: 'Shop B', campaignId: '22', op: 1 }], sharedBudgets: [], negativeLists: [], accountId: 'g-1', customerId: '1234567890' } },
       'copy-google-campaign': { before: { campaigns: [], accountId: 'g-1' }, after: { campaigns: [{ name: 'Shop A copy', campaignId: '23', op: 0 }], sharedBudgets: [], negativeLists: [], accountId: 'g-1', customerId: '1234567890' } },
+      // Programme 2 G10: a Performance Max build or copy is undone by removing its campaigns and their own budgets; a change
+      // goes back part by part (an asset group it made is paused); customer acquisition goes back to its old value or mode.
+      'build-google-pmax': { before: { campaigns: [], accountId: 'g-1' }, after: { campaigns: [{ name: 'PMax Z', campaignId: '24', op: 1, ownBudgetOp: 0, ownBudgetId: '14' }], sharedBudgets: [], negativeLists: [], accountId: 'g-1', customerId: '1234567890' } },
+      'copy-google-pmax': { before: { campaigns: [], accountId: 'g-1' }, after: { campaigns: [{ name: 'PMax copy', campaignId: '25', op: 1, ownBudgetOp: 0, ownBudgetId: '15' }], sharedBudgets: [], negativeLists: [], accountId: 'g-1', customerId: '1234567890' } },
+      'set-google-pmax': {
+        before: { campaignId: '21', campaign: { automation: { finalUrlExpansion: 'OPTED_OUT' }, brandExclusions: [] }, groups: [{ assetGroupId: '41', status: 'PAUSED', links: ['301~HEADLINE'], signals: ['t:moto jacket'] }], accountId: 'g-1' },
+        after: { campaignId: '21', campaign: { automation: { finalUrlExpansion: 'OPTED_IN' }, brandExclusions: ['61'] }, groups: [{ assetGroupId: '41', status: 'ENABLED', links: ['301~HEADLINE', '302~HEADLINE'], signals: ['a:71', 't:moto jacket'] }, { assetGroupId: '42', created: true, status: 'ENABLED', name: 'Group Z' }], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-customer-acquisition': { before: { kind: 'campaign', campaignId: '21', mode: 'OFF', valueCents: null, highValueCents: null, accountId: 'g-1' }, after: { kind: 'campaign', campaignId: '21', mode: 'BID_HIGHER', valueCents: 500, highValueCents: null, accountId: 'g-1', customerId: '1234567890' } },
       // PR 5: the responsive search ads it made are paused again; the assets it linked are unlinked (they stay in the account).
       'create-google-rsa': {
         before: { campaignId: '21', adGroupId: '51', ads: [], accountId: 'g-1', customerId: '1234567890' },
@@ -941,6 +950,7 @@ describe('C1 — every registered tool keeps the contract', () => {
     const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
       'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list',
+      'build-google-pmax', 'copy-google-pmax', 'set-google-pmax', 'set-google-customer-acquisition',
       'create-google-campaign', 'set-google-campaign', 'set-google-targeting', 'set-google-status', 'set-google-audiences', 'set-google-demographics',
       'remove-google-ads-items', 'set-google-product-groups', 'create-google-rsa', 'set-google-assets',
       'set-google-ad-groups', 'set-google-keywords', 'set-google-negatives', 'build-google-campaigns', 'copy-google-campaign',
