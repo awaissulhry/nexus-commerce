@@ -697,7 +697,10 @@ describe('C1 — every registered tool keeps the contract', () => {
       // PR 2: a campaign made is removed; settings, targeting and statuses go back as they were.
       'create-google-campaign': { before: { campaignId: null }, after: { campaignId: '21', name: 'Shop A', accountId: 'g-1', customerId: '1234567890' } },
       'set-google-campaign': { before: { campaignId: '21', settings: { searchPartners: false, dailyBudgetCents: 700 }, accountId: 'g-1' }, after: { campaignId: '21', settings: { searchPartners: true, dailyBudgetCents: 900 }, accountId: 'g-1' } },
-      'set-google-targeting': { before: { campaignId: '21', undo: {} }, after: { campaignId: '21', undo: { removeLocations: [{ id: '2380' }], schedule: [{ days: ['MONDAY'], from: '08:00', to: '24:00' }] }, accountId: 'g-1' } },
+      'set-google-targeting': { before: { campaignId: '21', undo: {} }, after: { campaignId: '21', undo: { removeLocations: [{ id: '2380' }], schedule: [{ days: ['MONDAY'], from: '08:00', to: '24:00' }], devices: [{ device: 'MOBILE', bidModifier: null }, { device: 'TABLET', adGroupId: '51', bidModifier: 0.8 }], locationBids: [{ id: '2380', bidModifier: 1.2 }], removeRadius: ['77'], addRadius: [{ latitude: 10.5, longitude: 20.25, radius: 10, units: 'KILOMETERS' }] }, accountId: 'g-1' } },
+      // Programme 2 G2: audiences and demographics go back exactly as they were (segments, adjustments, settings, criteria).
+      'set-google-audiences': { before: { campaignId: '21', undo: {} }, after: { campaignId: '21', undo: { remove: [{ kind: 'USER_LIST', id: '301', adGroupId: '51' }], add: [{ kind: 'USER_INTEREST', id: '80000', exclude: true }], bids: [{ kind: 'USER_LIST', id: '302', bidModifier: null }], modes: [{ mode: 'NONE' }] }, set: {}, accountId: 'g-1' } },
+      'set-google-demographics': { before: { campaignId: '21', restore: [] }, after: { campaignId: '21', restore: [{ dimension: 'AGE_RANGE', value: 'AGE_RANGE_18_24', adGroupId: '51', criterion: 'NONE' }, { dimension: 'GENDER', value: 'MALE', criterion: 'EXCLUDED' }], set: [], accountId: 'g-1' } },
       'set-google-status': { before: { items: [{ kind: 'campaign', id: '21', status: 'PAUSED' }], accountId: 'g-1' }, after: { items: [{ kind: 'campaign', id: '21', status: 'ENABLED' }], accountId: 'g-1' } },
       'set-google-negative-list': { before: { listId: '31', keywords: [], campaigns: [] }, after: { listId: '31', added: [{ text: 'cheap', matchType: 'PHRASE' }], removed: [], attached: ['21'], detached: [] } },
       // A Shopping ad group's product groups: the tree split by item ID it replaced is built again.
@@ -795,7 +798,7 @@ describe('C1 — every registered tool keeps the contract', () => {
     const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
       'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list',
-      'create-google-campaign', 'set-google-campaign', 'set-google-targeting', 'set-google-status',
+      'create-google-campaign', 'set-google-campaign', 'set-google-targeting', 'set-google-status', 'set-google-audiences', 'set-google-demographics',
       'remove-google-ads-items', 'set-google-product-groups', 'create-google-rsa', 'set-google-assets',
       'set-google-ad-groups', 'set-google-keywords', 'set-google-negatives', 'build-google-campaigns', 'copy-google-campaign']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)

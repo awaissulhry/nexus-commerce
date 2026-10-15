@@ -15,7 +15,7 @@ import { gatewayAccounts, gatewayGoogleUnlinked, gatewayLedger } from '../../tes
 import { __rateTest, defaultsFor, GOOGLE_BUCKETS, bucketKey } from './rate.js'
 import { gatewayCall, GatewayRefusal } from './gateway.js'
 import { googleCall, googleKind } from './google.js'
-import { apiVersionOf, bucketGroupOf, publishModeOf } from './channels.js'
+import { apiVersionOf, bucketGroupOf, googleMutateBodyOf, publishModeOf } from './channels.js'
 import { classifyChannelAnswer } from './vocabulary.js'
 import { ledgerSafeBody } from './redact.js'
 import { googleRateReading } from '../cx/rate-readings.js'
@@ -95,6 +95,13 @@ describe('Google: reads, and Google Ads mutates only', () => {
     for (const t of tries) expect(await t.catch((e) => e)).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY', statusCode: 403 })
     expect(h.calls).toHaveLength(0)
     expect(gatewayLedger).toEqual(tries.map(() => expect.objectContaining({ channel: 'GOOGLE', outcome: 'refused', errorCode: 'GOOGLE_READ_ONLY', success: false, statusCode: null })))
+  })
+
+  it('an ad group\'s device bid adjustment (adGroupBidModifierOperation) is a kind Nexus sends; a campaign bid modifier is not', () => {
+    const device = [{ adGroupBidModifierOperation: { create: { adGroup: 'customers/1234567890/adGroups/51', device: { type: 'MOBILE' }, bidModifier: 1.2 } } }]
+    expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: device, validateOnly: true }))).toMatchObject({ check: true })
+    expect(googleKind('POST', MUTATE, { mutateOperations: device, validateOnly: true })).toBe('read')
+    expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [{ campaignBidModifierOperation: { create: {} } }] }))).toEqual({ refusal: 'it holds an operation Nexus does not send (campaignBidModifierOperation)' })
   })
 
   it('a Google Ads account the business did not choose through this connection is refused, check or change', async () => {
