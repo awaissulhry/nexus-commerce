@@ -23,6 +23,7 @@ import type { GoogleChangeDraft } from '../../marketing/google-ads/change-draft.
 import { GoogleAdsWriteError, mutateGoogleAds, writeErrorSentence, type GoogleMutateResponse } from '../../marketing/google-ads/write-client.js'
 import { GoogleAdsReadError } from '../../marketing/google-ads/errors.js'
 import { googleAdsWritesMode } from '../../gateway/channels.js'
+import { googleAdsRedis, timed } from '../../marketing/google-ads/ops-budget.js'
 
 // ── arguments ───────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -125,23 +126,66 @@ function previewOf(account: GoogleChangeAccount, draft: GoogleChangeDraft, check
   }
 }
 
-/** The dry run of a Google Ads change tool: build from the live state, let Google check it (not on a re-check), preview. */
-export async function googleChangePreview(args: Record<string, unknown>, ctx: ToolContext, build: GoogleDraftBuilder): Promise<ToolResult> {
+/** How long Google's acceptance of an exact plan is remembered: the same plan within it is not checked (and paid) twice. */
+export const CHECK_MEMORY_MS = 30 * 60_000
+const checkKey = (customerId: string, plan: string) => `nexus:gads:checked:${customerId}:${plan}`
+
+async function rememberedCheck(customerId: string, plan: string): Promise<string | null> {
+  try {
+    const redis = await googleAdsRedis()
+    return redis ? await timed(redis.get(checkKey(customerId, plan))) : null
+  } catch { return null }
+}
+async function rememberCheck(customerId: string, plan: string): Promise<void> {
+  try {
+    const redis = await googleAdsRedis()
+    if (redis) await timed(redis.set(checkKey(customerId, plan), new Date().toISOString(), 'PX', CHECK_MEMORY_MS))
+  } catch { /* a check not remembered is only made again */ }
+}
+
+/**
+ * The outcome of Google's check of a change: accepted (with the preview), refused by Google or by Nexus's own checks
+ * (`why`), or not checked at all (`notChecked`: the allowance, Redis, a read that failed — nothing was judged).
+ */
+export type GoogleCheckOutcome =
+  | { status: 'accepted'; preview: GooglePreview }
+  | { status: 'refused'; why: string }
+  | { status: 'not-checked'; why: string }
+
+/** Build from the live state and let Google check it (or reuse its acceptance of the same plan in the last 30 minutes). */
+export async function googleCheck(args: Record<string, unknown>, build: GoogleDraftBuilder): Promise<GoogleCheckOutcome> {
   const built = await draftFor(args, build)
-  if ('refusal' in built) return { ok: false, error: built.refusal }
+  if ('refusal' in built) return { status: 'refused', why: built.refusal }
   const { account, draft } = built
-  if (isRecheck(ctx)) {
-    return { ok: true, preview: previewOf(account, draft, { checked: false, sentence: 'Re-check before running: the live facts were read again; Google was not asked to check it twice.' }) }
+  const plan = factHash(draft.operations)
+  const at = await rememberedCheck(account.customerId, plan)
+  if (at) {
+    return { status: 'accepted', preview: previewOf(account, draft, { checked: true, accepted: true, sentence: `Google checked this exact change at ${at.slice(11, 16)} UTC (validate_only) and would accept it: ${draft.operations.length} operation${draft.operations.length === 1 ? '' : 's'}.` }) }
   }
   try {
     await mutateGoogleAds(account.target, draft.operations, { validateOnly: true })
   } catch (err) {
-    return { ok: false, error: `Not queued: ${writeErrorSentence(err)}` }
+    // Google answered (refused): judged. Anything else (nothing sent, no answer): not checked.
+    const judged = err instanceof GoogleAdsWriteError && err.outcome === 'refused'
+    return judged ? { status: 'refused', why: writeErrorSentence(err) } : { status: 'not-checked', why: writeErrorSentence(err) }
   }
+  await rememberCheck(account.customerId, plan)
   return {
-    ok: true,
+    status: 'accepted',
     preview: previewOf(account, draft, { checked: true, accepted: true, sentence: `Google checked this change (validate_only) and would accept it: ${draft.operations.length} operation${draft.operations.length === 1 ? '' : 's'}.` }),
   }
+}
+
+/** The dry run of a Google Ads change tool: build from the live state, let Google check it (not on a re-check), preview. */
+export async function googleChangePreview(args: Record<string, unknown>, ctx: ToolContext, build: GoogleDraftBuilder): Promise<ToolResult> {
+  if (isRecheck(ctx)) {
+    const built = await draftFor(args, build)
+    if ('refusal' in built) return { ok: false, error: built.refusal }
+    return { ok: true, preview: previewOf(built.account, built.draft, { checked: false, sentence: 'Re-check before running: the live facts were read again; Google was not asked to check it twice.' }) }
+  }
+  const out = await googleCheck(args, build)
+  if (out.status === 'accepted') return { ok: true, preview: out.preview }
+  return { ok: false, error: out.status === 'refused' && !out.why.startsWith('Google Ads refused') ? out.why : `Not queued: ${out.why}` }
 }
 
 // ── run ─────────────────────────────────────────────────────────────────────────────────────────────────────────

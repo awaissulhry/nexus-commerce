@@ -60,6 +60,7 @@ import { GOOGLE_ADS_ADS_ASSETS_TOOLS } from './tools/google-ads-ads-assets.tools
 import { GOOGLE_ADS_KEYWORDS_TOOLS } from './tools/google-ads-keywords.tools.js'
 import { GOOGLE_ADS_LIVE_TOOLS } from './tools/google-ads-live.tools.js'
 import { GOOGLE_ADS_CAMPAIGN_TOOLS } from './tools/google-ads-campaigns.tools.js'
+import { GOOGLE_ADS_BUILD_TOOLS } from './tools/google-ads-build.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -212,6 +213,8 @@ const ALL: AgentTool[] = [
   ...GOOGLE_ADS_CAMPAIGN_TOOLS,
   ...GOOGLE_ADS_PRODUCT_GROUPS_TOOLS,
   ...GOOGLE_ADS_ADS_ASSETS_TOOLS,
+  // PR 6: build, copy and check a whole structure in one request.
+  ...GOOGLE_ADS_BUILD_TOOLS,
   // Google Ads changes PR 3 (2026-10-15): ad groups, keywords and negative keywords of a campaign.
   ...GOOGLE_ADS_KEYWORDS_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).

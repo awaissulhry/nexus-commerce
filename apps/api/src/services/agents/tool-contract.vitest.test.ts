@@ -705,6 +705,9 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { campaignId: '21', adGroupId: '51', tree: { kind: 'items', items: [{ itemId: 'sku-1', bidCents: 30, excluded: false }, { itemId: 'sku-2', bidCents: null, excluded: true }], everythingElse: { bidCents: null, excluded: true } } },
         after: { campaignId: '21', adGroupId: '51', tree: { kind: 'items', items: [{ itemId: 'sku-1', bidCents: 40, excluded: false }], everythingElse: { bidCents: null, excluded: true } } },
       },
+      // PR 6: a build (or a copy) is undone by removing the campaigns it made (its budgets and lists stay, unused).
+      'build-google-campaigns': { before: { campaigns: [], accountId: 'g-1' }, after: { campaigns: [{ name: 'Shop B', campaignId: '22', op: 1 }], sharedBudgets: [], negativeLists: [], accountId: 'g-1', customerId: '1234567890' } },
+      'copy-google-campaign': { before: { campaigns: [], accountId: 'g-1' }, after: { campaigns: [{ name: 'Shop A copy', campaignId: '23', op: 0 }], sharedBudgets: [], negativeLists: [], accountId: 'g-1', customerId: '1234567890' } },
       // PR 5: the responsive search ads it made are paused again; the assets it linked are unlinked (they stay in the account).
       'create-google-rsa': {
         before: { campaignId: '21', adGroupId: '51', ads: [], accountId: 'g-1', customerId: '1234567890' },
@@ -794,7 +797,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list',
       'create-google-campaign', 'set-google-campaign', 'set-google-targeting', 'set-google-status',
       'remove-google-ads-items', 'set-google-product-groups', 'create-google-rsa', 'set-google-assets',
-      'set-google-ad-groups', 'set-google-keywords', 'set-google-negatives']) {
+      'set-google-ad-groups', 'set-google-keywords', 'set-google-negatives', 'build-google-campaigns', 'copy-google-campaign']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
