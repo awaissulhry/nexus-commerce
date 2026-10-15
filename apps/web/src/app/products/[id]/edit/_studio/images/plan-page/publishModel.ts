@@ -22,9 +22,10 @@ export type PhotoCheck =
   | { kind: 'ready'; summary: string; send: EbaySend | AmazonSend; note?: string }
 
 /** Why this window does not send to a destination, or null when it can. */
-export function unsupportedReason(d: Pick<MediaDestinationRow, 'channel' | 'targetable' | 'refusal' | 'accountActive'>): string | null {
+export function unsupportedReason(d: Pick<MediaDestinationRow, 'channel' | 'targetable' | 'refusal' | 'accountActive' | 'shopifyProducts'>): string | null {
   if (!d.targetable) return d.refusal ?? 'This destination cannot receive photos.'
   if (!d.accountActive) return 'This account is paused. Reconnect it before publishing.'
+  if (d.channel === 'SHOPIFY' && d.shopifyProducts?.length) return 'Each colour is its own Shopify product: its photos go with the next Shopify product-sheet sync (Review, then Synchronize).'
   if (d.channel === 'SHOPIFY') return 'Shopify sends the whole product: its photos go with the next Shopify publish.'
   if (d.channel === 'ETSY') return 'Publishing to Etsy comes in a later step.'
   return null

@@ -152,6 +152,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'retire-ads-writers': 'a retirement needs a product enrolled in the brain with every lever AUTO or the Owner\'s choice under the live server switch, which this seed has not (brain/retire-postgres test)',
   'harvest-destinations': 'a product\'s harvest places are its own Sponsored Products campaigns, and the seeded campaign carries no ad product, so the product owns none here (tools/ads-harvest-postgres test)',
   'google-ads-live': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-change.tools test)',
+  'google-ads-numbers': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-live.tools test)',
+  'google-ads-query': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-live.tools test)',
   'set-google-negative-list': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-change.tools test)',
   'set-google-targeting': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-campaigns.tools test)',
   'set-google-audiences': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-audiences.tools test)',
@@ -161,6 +163,12 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'create-google-rsa': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-ads-assets.tools test)',
   'set-google-assets': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-ads-assets.tools test)',
   'set-google-negatives': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-keywords.tools test)',
+  'set-google-inventory-filter': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-shopping.tools test)',
+  'set-google-shopping-settings': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-shopping.tools test)',
+  'set-google-labels': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-labels.tools test)',
+  'remove-google-labels': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-labels.tools test)',
+  'dismiss-google-recommendations': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-recommendations.tools test)',
+  'set-google-auto-apply': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-recommendations.tools test)',
   'set-harvest-rules': 'the seeded rule is not a harvest rule, so there is nothing to archive (tools/ads-harvest-postgres test)',
   'set-harvest-sources': 'the seeded ad group feeds no terms to harvest (a manual campaign with no ad product), so it is no source (tools/ads-harvest-postgres test)',
 }
@@ -404,6 +412,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // each answers why there is nothing to read or change, before any Google call (google-ads-change.tools.vitest.test.ts
   // runs them on an account).
   'google-ads-live': () => ({ view: 'campaigns' }),
+  // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
+  'google-ads-numbers': () => ({ level: 'campaign' }),
+  'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),
   'set-google-budget': () => ({ amounts: [{ budgetId: '11', budgetCents: 1000 }] }),
   'set-google-negative-list': () => ({ listId: '31', addKeywords: [{ text: 'gratis', matchType: 'PHRASE' }] }),
   // PR 6: build, copy and the check of a build.
@@ -419,12 +430,23 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-google-status': () => ({ items: [{ kind: 'campaign', id: '21' }], status: 'PAUSED' }),
   'remove-google-ads-items': () => ({ items: [{ kind: 'campaign', id: '21' }], confirmRemove: true }),
   'set-google-product-groups': () => ({ campaignId: '21', adGroupId: '51', itemIds: ['sku-1'], bidCents: 30 }),
+  // G4: a Shopping campaign's inventory filter and Shopping settings (google-ads-shopping.tools test).
+  'set-google-inventory-filter': () => ({ campaignId: '21', filter: [{ dimension: 'BRAND', value: 'Brand A' }] }),
+  'set-google-shopping-settings': () => ({ campaignId: '21', localInventory: false }),
   'create-google-rsa': () => ({ campaignId: '21', adGroupId: '51', pauseAdIds: ['701'] }),
   'set-google-assets': () => ({ campaignId: '21', callouts: ['Free returns'] }),
   // Google Ads changes PR 3 — ad groups, keywords, negatives: no Google Ads account here either (google-ads-keywords.tools test).
   'set-google-ad-groups': () => ({ campaignId: '21', change: [{ adGroupId: '51', defaultBidCents: 40 }] }),
   'set-google-keywords': () => ({ campaignId: '21', bids: [{ keywordId: '51~601', bidCents: 40 }] }),
   'set-google-negatives': () => ({ campaignId: '21', add: [{ text: 'gratis', matchType: 'PHRASE' }] }),
+  // G5 — labels, Google's recommendations and portfolio bid strategies: no Google Ads account here either (their own tests).
+  'set-google-labels': () => ({ create: [{ name: 'Label Z' }] }),
+  'remove-google-labels': () => ({ labelIds: ['61'], confirmRemove: true }),
+  'apply-google-recommendations': () => ({ recommendations: [{ recommendationId: 'r-1', budgetCents: 1500 }] }),
+  'dismiss-google-recommendations': () => ({ recommendationIds: ['r-1'] }),
+  'set-google-auto-apply': () => ({ types: [{ type: 'KEYWORD', status: 'PAUSED' }] }),
+  'set-google-bid-strategy': () => ({ change: [{ strategyId: '81', targetCpaCents: 1200 }] }),
+  'remove-google-bid-strategy': () => ({ strategyIds: ['81'], confirmRemove: true }),
   // L2 — listing reads: where each listing lives, its stock and price per market, its photo plan.
   'listing-coordinates': (ids) => ({ productId: ids.productId }),
   'listing-matrix': (ids) => ({ productId: ids.productId }),

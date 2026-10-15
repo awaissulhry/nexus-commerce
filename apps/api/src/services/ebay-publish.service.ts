@@ -5,6 +5,7 @@ import { EbayService } from "./marketplaces/ebay.service.js";
 import prisma from "@nexus/database";
 import { publishListingEvent } from "./listing-events.service.js";
 import { sellableQuantity } from "./stock-pool/sync-ledgers.js";
+import { NOT_STORE_PHOTO } from './images/store-photos.js'
 
 export interface PublishResult {
   success: boolean;
@@ -145,7 +146,7 @@ export class EbayPublishService {
         product: {
           include: {
             variations: true,
-            images: true,
+            images: { where: NOT_STORE_PHOTO },
           },
         },
       },

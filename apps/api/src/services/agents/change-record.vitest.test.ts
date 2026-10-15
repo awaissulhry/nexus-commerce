@@ -45,6 +45,8 @@ vi.mock('../pim/readiness-index.service.js', async () => (await import('../../te
 import { runOrQueueTool } from './approval-gate.service.js'
 import type { UserPrincipal } from './call-tool.js'
 import { commitScheduledApproval, scheduleApproval } from '../agent-fleet/approval-inbox.service.js'
+import { recordExecutedChange } from './change-record.service.js'
+import { getTool } from './tool-registry.js'
 
 const A = LEGACY_WORKSPACE_ID
 const B = 'c2_change_record_bravo'
@@ -274,6 +276,23 @@ describe('C2 — one undo at a time, and only what can be undone', { timeout: DB
     const third = await ask(ALL(), 'undo-change', { changeId: change.id })
     expect(third).toMatchObject({ ok: false })
     expect(third.error).toContain('already undone')
+  })
+
+  it('G4 — a run with steps left (step 1 of a two-step undo) undoes nothing yet; the last step undoes the change', async () => {
+    const approvalId = await askAndRun('set-price', { productId: ids.price, price: 130 })
+    const change = await changeOf(approvalId)
+    const undo = await ask(ALL(), 'undo-change', { changeId: change.id })
+    expect(undo, undo.error).toMatchObject({ ok: true, mode: 'queued' })
+    // Step 1, as the gate records a run that says it has a step left.
+    await inside(() => recordExecutedChange({
+      approvalId: undo.approvalId!, tool: getTool('set-price')!, raw: { ok: true, change: { before: { price: 130 }, after: { price: 130 } }, stepsLeft: 1 },
+      via: 'app', oauthGrantId: null, executedByUserId: ids.approver,
+    }))
+    expect((await changeOf(approvalId)).undoneAt).toBeNull()
+    // The last step (no step left): now the change is undone.
+    expect(await approveAndRun(undo.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await changeOf(approvalId)).undoneAt).toBeInstanceOf(Date)
+    expect(await priceOf(ids.price)).toBe(100)
   })
 
   it('a change of a tool without an undo says so', async () => {

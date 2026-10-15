@@ -708,6 +708,9 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { campaignId: '21', adGroupId: '51', tree: { kind: 'items', items: [{ itemId: 'sku-1', bidCents: 30, excluded: false }, { itemId: 'sku-2', bidCents: null, excluded: true }], everythingElse: { bidCents: null, excluded: true } } },
         after: { campaignId: '21', adGroupId: '51', tree: { kind: 'items', items: [{ itemId: 'sku-1', bidCents: 40, excluded: false }], everythingElse: { bidCents: null, excluded: true } } },
       },
+      // G4: an inventory filter and Shopping settings go back as they were (a cleared filter is set again).
+      'set-google-inventory-filter': { before: { campaignId: '21', filter: [{ dimension: 'BRAND', value: 'Brand A' }], criterionId: '61', accountId: 'g-1' }, after: { campaignId: '21', filter: [], criterionId: null, accountId: 'g-1' } },
+      'set-google-shopping-settings': { before: { campaignId: '21', settings: { feedLabel: 'IT', localInventory: false }, accountId: 'g-1' }, after: { campaignId: '21', settings: { feedLabel: null, localInventory: true }, accountId: 'g-1' } },
       // PR 6: a build (or a copy) is undone by removing the campaigns it made (its budgets and lists stay, unused).
       'build-google-campaigns': { before: { campaigns: [], accountId: 'g-1' }, after: { campaigns: [{ name: 'Shop B', campaignId: '22', op: 1 }], sharedBudgets: [], negativeLists: [], accountId: 'g-1', customerId: '1234567890' } },
       'copy-google-campaign': { before: { campaigns: [], accountId: 'g-1' }, after: { campaigns: [{ name: 'Shop A copy', campaignId: '23', op: 0 }], sharedBudgets: [], negativeLists: [], accountId: 'g-1', customerId: '1234567890' } },
@@ -725,6 +728,21 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-ad-groups': { before: { campaignId: '21', adGroups: [{ adGroupId: '51', name: 'Group A', defaultBidCents: 30 }], accountId: 'g-1', customerId: '1234567890' }, after: { campaignId: '21', adGroups: [{ adGroupId: '51', name: 'Group B', defaultBidCents: 40 }], created: [{ adGroupId: '52', name: 'Group C', type: 'SEARCH_STANDARD', status: 'PAUSED', defaultBidCents: 30 }], accountId: 'g-1', customerId: '1234567890' } },
       'set-google-keywords': { before: { campaignId: '21', bids: [{ keywordId: '51~601', bidCents: null }], accountId: 'g-1', customerId: '1234567890' }, after: { campaignId: '21', bids: [{ keywordId: '51~601', bidCents: 45 }], added: [{ keywordId: '51~602', adGroupId: '51', text: 'test term', matchType: 'EXACT', bidCents: null, status: 'PAUSED' }], accountId: 'g-1', customerId: '1234567890' } },
       'set-google-negatives': { before: { campaignId: '21', negatives: [], accountId: 'g-1', customerId: '1234567890' }, after: { campaignId: '21', added: [{ adGroupId: null, text: 'cheap', matchType: 'PHRASE', criterionId: '901' }], removed: [{ adGroupId: '51', text: 'free', matchType: 'EXACT' }], accountId: 'g-1', customerId: '1234567890' } },
+      // G5: labels' names and links go back (a label it made stays); a budget recommendation's old daily amount is set
+      // again (set-google-budget); auto-apply goes back on or off; a bid strategy's old targets and limits go back.
+      'set-google-labels': {
+        before: { created: [], edited: [{ labelId: '61', name: 'Old', description: null, color: '#ff0000' }], attached: [], detached: [], accountId: 'g-1', customerId: '1234567890' },
+        after: { created: [{ labelId: '62', name: 'Fresh' }], edited: [{ labelId: '61', name: 'New', description: 'x', color: null }], attached: [{ labelId: '62', kind: 'campaign', id: '21' }], detached: [{ labelId: '61', kind: 'keyword', id: '51~601' }], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'apply-google-recommendations': {
+        before: { applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignIds: ['21'], budgetId: '11', budgetCents: 1000 }], accountId: 'g-1', customerId: '1234567890' },
+        after: { applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignIds: ['21'], budgetId: '11', budgetCents: 1500 }], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-auto-apply': { before: { types: [{ type: 'KEYWORD', status: null }], accountId: 'g-1' }, after: { types: [{ type: 'KEYWORD', status: 'ENABLED' }], accountId: 'g-1' } },
+      'set-google-bid-strategy': {
+        before: { strategies: [{ strategyId: '81', name: 'Old', targetCpaCents: 900, maxCpcCents: null }], accountId: 'g-1', customerId: '1234567890' },
+        after: { strategies: [{ strategyId: '81', name: 'New', targetCpaCents: 1200, maxCpcCents: 80 }], accountId: 'g-1', customerId: '1234567890' },
+      },
       // L7 — products created (parent and a variation), and products binned.
       'create-product': { before: { products: [] }, after: { products: [{ id: 'p1', deleted: false }, { id: 'p2', deleted: false }] } },
       'create-variations': { before: { products: [] }, after: { products: [{ id: 'p3', deleted: false }] } },
@@ -800,7 +818,10 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list',
       'create-google-campaign', 'set-google-campaign', 'set-google-targeting', 'set-google-status', 'set-google-audiences', 'set-google-demographics',
       'remove-google-ads-items', 'set-google-product-groups', 'create-google-rsa', 'set-google-assets',
-      'set-google-ad-groups', 'set-google-keywords', 'set-google-negatives', 'build-google-campaigns', 'copy-google-campaign']) {
+      'set-google-ad-groups', 'set-google-keywords', 'set-google-negatives', 'build-google-campaigns', 'copy-google-campaign',
+      'set-google-inventory-filter', 'set-google-shopping-settings',
+      'set-google-labels', 'remove-google-labels', 'apply-google-recommendations', 'dismiss-google-recommendations',
+      'set-google-auto-apply', 'set-google-bid-strategy', 'remove-google-bid-strategy']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

@@ -69,6 +69,17 @@ function AmazonPreview({ layout, url, name }: PreviewProps & { layout: AmazonMed
 
 function ShopifyPreview({ read, layout, url, name }: PreviewProps & { read: MediaRead; layout: ShopifyMediaLayout }) {
   const rows = read.family.variants.filter(v => v.productId in layout.variantImages)
+  // The store shows each colour as its own product: what each one receives, one block per colour product.
+  if (layout.products?.length) return <div className={styles.preview}>
+    <p className={styles.muted}>Each colour is its own Shopify product. A colour with its own Shopify photos here goes with the next Shopify sync; any other colour keeps its store photos.</p>
+    <ul className={styles.previewGroups} aria-label="Shopify colour products">
+      {layout.products.map(p => <li key={p.productId} className={styles.previewGroup}>
+        <span className={styles.previewSkus}>{p.label} · {p.managed ? `${p.media.length} photo${p.media.length === 1 ? '' : 's'} from Nexus` : 'store photos stay'}</span>
+        {p.managed && <Strip ids={p.media} url={url} name={name} label={`${p.label} photos`} />}
+        {p.checks.filter(c => c.severity === 'error').map(c => <p key={`${c.code}:${c.message}`} className={styles.muted}>{c.message}</p>)}
+      </li>)}
+    </ul>
+  </div>
   return <div className={styles.preview}>
     <Strip ids={layout.media} url={url} name={name} label="Product media" />
     {rows.length > 0 && <DataGrid ariaLabel="Variant images" rows={rows} rowKey={v => v.productId} columns={[

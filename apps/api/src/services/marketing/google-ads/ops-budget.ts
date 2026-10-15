@@ -31,8 +31,18 @@ export const ACCOUNT_DAILY_OPS = 100
  */
 export const WRITE_ACCOUNT_DAILY_OPS = 2000
 
-/** Which allowance a reservation draws on: the daily read's, or the changes'. Both count against the global cap. */
-export type OpsLane = 'read' | 'write'
+/**
+ * Programme 2, G1 (2026-10-15): what the read-only live tools (google-ads-live, google-ads-numbers, google-ads-query) may
+ * spend per account in 24 hours. Their own allowance, smaller than the changes', so reading can never use up what an
+ * approved change or the daily read needs. Inside the global cap.
+ */
+export const LIVE_ACCOUNT_DAILY_OPS = 600
+
+/**
+ * Which allowance a reservation draws on: the daily read's, the changes' (a change's check, the live reads it stands
+ * on, the change itself), or the read-only live tools'. All count against the global cap.
+ */
+export type OpsLane = 'read' | 'write' | 'live'
 export const QUOTA_EXHAUSTED_HOLD_MS = 60 * 60_000
 
 const PREFIX = 'nexus:gads:ops'
@@ -89,9 +99,14 @@ export function globalOpsCap(): number {
 
 const hourOf = (at: Date): string => at.toISOString().slice(0, 13).replace(/[-T]/g, '')
 const globalKey = (hour: string) => `${PREFIX}:${hour}`
-const accountKey = (account: string, hour: string, lane: OpsLane = 'read') => `${PREFIX}:${lane === 'write' ? 'acctw' : 'acct'}:${account}:${hour}`
-const capOf = (lane: OpsLane) => (lane === 'write' ? WRITE_ACCOUNT_DAILY_OPS : ACCOUNT_DAILY_OPS)
-const notStarted = (lane: OpsLane) => (lane === 'write' ? 'The Google Ads change is not checked or sent' : 'The Google Ads read is not started')
+const LANE_KEY: Record<OpsLane, string> = { read: 'acct', write: 'acctw', live: 'acctl' }
+const accountKey = (account: string, hour: string, lane: OpsLane = 'read') => `${PREFIX}:${LANE_KEY[lane]}:${account}:${hour}`
+const capOf = (lane: OpsLane) => (lane === 'write' ? WRITE_ACCOUNT_DAILY_OPS : lane === 'live' ? LIVE_ACCOUNT_DAILY_OPS : ACCOUNT_DAILY_OPS)
+const notStarted = (lane: OpsLane) => (lane === 'write' ? 'The Google Ads change is not checked or sent' : lane === 'live' ? 'The live Google Ads read is not sent' : 'The Google Ads read is not started')
+/** What a person reads after the sentence of a refused reservation. */
+const later = (lane: OpsLane) => (lane === 'write' ? 'Ask again later.' : lane === 'live' ? 'Try again later.' : 'It tries again later.')
+/** What the account's own allowance is called in that sentence. */
+const laneOps = (lane: OpsLane) => (lane === 'write' ? 'change operations' : lane === 'live' ? 'operations for live reads (their own allowance, so changes and the daily read always have theirs)' : 'operations')
 const lastHours = (now: Date): string[] => Array.from({ length: HOURS }, (_, i) => hourOf(new Date(now.getTime() - i * 3_600_000)))
 const sum = (values: Array<string | null>) => values.reduce((total, v) => total + (Number(v) || 0), 0)
 
@@ -155,7 +170,7 @@ export async function reserveOps(account: string | null, ops: number, now: Date 
     const until: string | null = await timed(redis.get(EXHAUSTED_KEY))
     const untilDate = until ? new Date(until) : null
     if (untilDate && untilDate.getTime() > now.getTime()) {
-      return result({ reason: 'quota_exhausted', exhaustedUntil: untilDate, retryAt: untilDate, sentence: `${what}: Google said today's Google Ads API allowance is used up. ${lane === 'write' ? 'Ask again later.' : 'Nexus tries again later.'}` })
+      return result({ reason: 'quota_exhausted', exhaustedUntil: untilDate, retryAt: untilDate, sentence: `${what}: Google said today's Google Ads API allowance is used up. ${lane === 'read' ? 'Nexus tries again later.' : later(lane)}` })
     }
     if (want === 0) return result({ ok: true })
     const hour = hourOf(now)
@@ -188,8 +203,8 @@ export async function reserveOps(account: string | null, ops: number, now: Date 
         usedGlobal: usedGlobal - want,
         usedAccount: usedAccount === null ? null : usedAccount - want,
         sentence: overGlobal
-          ? `${what}: Nexus has used ${usedGlobal - want} of its ${capGlobal} Google Ads operations in the last 24 hours. ${lane === 'write' ? 'Ask again later.' : 'It tries again later.'}`
-          : `${what}: this account has used ${usedAccount - want} of its ${capAccount} Google Ads ${lane === 'write' ? 'change ' : ''}operations in the last 24 hours. ${lane === 'write' ? 'Ask again later.' : 'It tries again later.'}`,
+          ? `${what}: Nexus has used ${usedGlobal - want} of its ${capGlobal} Google Ads operations in the last 24 hours. ${later(lane)}`
+          : `${what}: this account has used ${usedAccount - want} of its ${capAccount} Google Ads ${laneOps(lane)} in the last 24 hours. ${later(lane)}`,
       })
     }
     return result({ ok: true, ops: want, usedGlobal, usedAccount })

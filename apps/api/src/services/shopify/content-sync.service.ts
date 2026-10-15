@@ -25,6 +25,7 @@ import { readShopifyCreateChoice } from './create-status.js'
 import { SHOPIFY_CREATE_NOT_LISTED, type ShopifyCreateStatus } from '@nexus/shared/listing-actions'
 import { liveChannelSku } from '../listings/channel-sku.pure.js'
 import { confirmLiveChannelSku } from '../listings/channel-sku.js'
+import { shopifyStoreFiles } from './store-files.js'
 
 /**
  * S10 (per-channel SKU) — by Nexus variant id, the SKU Shopify HOLDS for each variant this family sends: its listing's
@@ -221,6 +222,7 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
       reconcileGallery: await isOnMediaPlan(current.family.id) || current.listings.some(l => Object.keys(object(object(l.platformAttributes)._productMediaLocales)).length > 0),
       managedMediaIds: current.publish.status !== 'VERIFIED' && Array.isArray(current.publish.managedMediaIds) ? current.publish.managedMediaIds : Object.values(object(current.publish.mediaIds)).filter((id): id is string => typeof id === 'string'),
       galleryOperation: current.publish.galleryOperation,
+      storeFiles: await shopifyStoreFiles(prisma, destination.accountId, (current.draft.assets ?? []).map(asset => asset.id)),
       locationId: input.locationId, remote: preview.remote, confirmActive: input.confirmActive === true,
       variantFacts: preview.inheritedInformation,
       // S10 — a variant renamed in Nexus is found by the SKU Shopify still holds, and renamed in place.

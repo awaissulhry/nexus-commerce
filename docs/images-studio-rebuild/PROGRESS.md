@@ -371,9 +371,28 @@ gained an empty plan table; the query-count guard holds), web studio 161 files /
 | Shopify (0 listings today) | content document gallery = plan media in order, one photo per variant; gallery reconcile on | blocking checks refuse; Nexus's 50-per-gallery rule is a check |
 | Older paths | refuse plan families with one sentence (legacy Amazon feed, legacy eBay publishes, eBay flat-file full push, schedules, older editors) | — |
 
-**Known limits (by design, later steps):** linked (existing) Shopify products do not sync photos from the plan yet —
-their older sheet-gallery sync refuses plan families; Etsy publishing is P5; the page read still shows Shared value
-names (the publishers already use each market's own names).
+**Known limits (by design, later steps):** a linked (existing) Shopify product that is NOT a colour product (one product for
+the whole family) does not sync photos from the plan yet; Etsy publishing is P5; the page read still shows Shared value
+names (the publishers already use each market's own names). Colour products: see "Shopify colour products" below.
+
+## Shopify colour products and store photos (2026-10-15)
+- **One editor — the Media page.** When the store shows each colour as its own product (linked `ShopifyColourProduct`
+  rows), the Shopify destination lists them (`shopifyProducts`) and its layout gives each one its own gallery
+  (`ShopifyProductLayout`, `projectShopify`): the colour's set, then the Common photos it does not hold yet.
+- **Managed only when set for Shopify.** A colour product is sent only when its colour's set is owned on the Shopify layer
+  or this store's layer, and the picture axis is the colour axis. Shared (Amazon/eBay) photos alone never reach a
+  colour product: the store keeps its photos. To mirror the store exactly, own Common on the Shopify layer as empty.
+- **Sent by the reviewed sheet gallery sync** (`channel-sheet-media.ts` `planSheetGalleries`): one gallery per managed
+  colour product, recorded on the row that holds the product's fields (`shopifyProductOwners`); the product sheet's review
+  shows it (Review, then Synchronize). An older sheet gallery draft on a plan family is refused. Native variant images of
+  a colour product are not sent (left as they are).
+- **No duplicate files.** A photo that already is a file of the same store (linked from its Files or uploaded there by
+  Nexus) is sent as that file (`shopifyStoreFiles`, `publishContentImages`), unless its alt text differs or an alt
+  translation must be written — then a copy, as before, so a file another product shows never changes.
+- **Store photos stay on the store.** A photo linked from the store for its own galleries (`import-from-dam` with
+  `storeOnly`) gets a `shopify_store_` id: it never joins a default "every photo" list (`resolveMediaCollection`) and the
+  older all-photos reads leave it out (`NOT_STORE_PHOTO`), so it reaches Amazon, eBay or another business only where a
+  list or a set names it.
 
 ## P2a — publisher helper (not yet merged)
 - `mediaLayoutFor(...)`: the layout one destination must receive, computed by the same loader and projection as the

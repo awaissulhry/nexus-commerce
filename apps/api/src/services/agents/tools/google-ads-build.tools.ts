@@ -21,6 +21,8 @@ import { campaignAsBuild, listAsBuild } from '../../marketing/google-ads/build-c
 import { DAYS } from '../../marketing/google-ads/change-campaigns.js'
 import { liveBudgets, liveCampaigns, liveNegativeLists } from '../../marketing/google-ads/live.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
+import { buildNodesOfSpec, MAX_TREE_NODES } from '../../marketing/google-ads/product-tree.js'
+import { treeNodeArg } from './google-ads-product-groups.tools.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
 const BUILD_MONEY = { changes: ADSPEND, warnings: ADSPEND, spendsMoneyBecause: ADSPEND, dailyBudgetCents: ADSPEND, defaultBidCents: ADSPEND, maxCpcCents: ADSPEND, targetCpaCents: ADSPEND, targetRoas: ADSPEND } as const
@@ -104,11 +106,12 @@ const campaignArg = z.object({
     keywords: z.array(z.object({ text: textArg(80, 'the keyword'), matchType: matchTypeArg, bidCents: googleCentsArg('its max CPC').optional(), status: statusArg })).max(250).optional().describe('SEARCH: keywords'),
     negatives: z.array(negativeArg).max(250).optional().describe('ad-group negative keywords'),
     productGroups: z.object({
-      itemIds: z.array(textArg(50, 'an item id of the feed')).min(1).max(250).describe('item ids to advertise'),
-      bidCents: googleCentsArg('the bid of each item'),
+      itemIds: z.array(textArg(50, 'an item id of the feed')).min(1).max(250).optional().describe('item ids to advertise (with bidCents)'),
+      bidCents: googleCentsArg('the bid of each item').optional(),
       itemBids: z.array(z.object({ itemId: textArg(50, 'an item id'), bidCents: googleCentsArg('its bid') })).max(250).optional().describe('bids of single items'),
       includeEverythingElse: z.object({ bidCents: googleCentsArg('its bid') }).optional().describe('ALSO advertise every other product of the feed (default: excluded)'),
-    }).optional().describe('SHOPPING: product groups split by item id; "everything else" EXCLUDED'),
+      nodes: z.array(treeNodeArg).max(MAX_TREE_NODES).optional().describe('OR a tree of any shape, as set-google-product-groups tree: the root first, each product group naming its parent by index'),
+    }).optional().describe('SHOPPING: product groups — split by item id (itemIds + bidCents; "everything else" EXCLUDED unless includeEverythingElse), or any tree (nodes)'),
     ads: z.array(z.object({
       headlines: z.array(z.object({ text: textArg(60, 'a headline (30 wide)'), pin: pinArg })).min(3).max(15).describe('3–15 headlines'),
       descriptions: z.array(z.object({ text: textArg(180, 'a description (90 wide)'), pin: pinArg })).min(2).max(4).describe('2–4 descriptions'),
@@ -151,6 +154,26 @@ const buildInput = {
 
 type CampaignArgs = z.infer<typeof campaignArg>
 
+/** The ad groups as the build takes them: a product group tree given as nodes is checked against Google's rules and turned into the build's own nodes. */
+function adGroupsOf(campaign: string, groups: CampaignArgs['adGroups']): NonNullable<BuildCampaign['adGroups']> | { refusal: string } {
+  const out: NonNullable<BuildCampaign['adGroups']> = []
+  for (const g of groups ?? []) {
+    const pg = g.productGroups
+    if (!pg) { out.push(g as NonNullable<BuildCampaign['adGroups']>[number]); continue }
+    const where = `Campaign "${campaign}", ad group "${g.name}"`
+    if (pg.nodes?.length) {
+      if (pg.itemIds?.length || pg.bidCents !== undefined || pg.itemBids?.length || pg.includeEverythingElse) return { refusal: `${where}: give productGroups as itemIds (with bidCents) or as nodes, not both.` }
+      const nodes = buildNodesOfSpec(pg.nodes)
+      if ('refusal' in nodes) return { refusal: `${where}: ${nodes.refusal}` }
+      out.push({ ...(g as NonNullable<BuildCampaign['adGroups']>[number]), productGroups: { nodes } })
+      continue
+    }
+    if (!pg.itemIds?.length || pg.bidCents === undefined) return { refusal: `${where}: give productGroups.itemIds with bidCents, or productGroups.nodes (a tree of any shape).` }
+    out.push(g as NonNullable<BuildCampaign['adGroups']>[number])
+  }
+  return out
+}
+
 /** The build as asked, with every copyOf read live and expanded. */
 async function specOf(account: Parameters<GoogleDraftBuilder>[0], args: Record<string, unknown>): Promise<{ spec: BuildSpec; notCopied: string[] } | { refusal: string }> {
   const notCopied: string[] = []
@@ -173,14 +196,21 @@ async function specOf(account: Parameters<GoogleDraftBuilder>[0], args: Record<s
       if ('refusal' in copied) return copied
       notCopied.push(...copied.notCopied.map((n) => `"${raw.name}": ${n}`))
       const { copyOf: _c, name: _n, budget: _b, startDate: _s, endDate: _e, negativeLists: _l, type: _t, ...rest } = raw
-      campaigns.push({ ...copied.campaign, ...(rest as Partial<BuildCampaign>) })
+      const { adGroups: given, ...others } = rest
+      const adGroups = given ? adGroupsOf(raw.name, given) : copied.campaign.adGroups ?? []
+      if (!Array.isArray(adGroups)) return adGroups
+      campaigns.push({ ...copied.campaign, ...(others as Partial<BuildCampaign>), adGroups })
       continue
     }
     if (!raw.type) return { refusal: `Campaign "${raw.name}": give type (SHOPPING or SEARCH) or copyOf.` }
     if (!budget) return { refusal: `Campaign "${raw.name}": give its budget.` }
     const { copyOf: _c, budget: _b, negativeLists, ...rest } = raw
+    const adGroups = adGroupsOf(raw.name, rest.adGroups)
+    if (!Array.isArray(adGroups)) return adGroups
+    const { adGroups: _g, ...others } = rest
     campaigns.push({
-      ...(rest as unknown as BuildCampaign),
+      ...(others as unknown as BuildCampaign),
+      ...(rest.adGroups ? { adGroups } : {}),
       type: raw.type,
       budget,
       bidding: raw.bidding ?? { strategy: 'MANUAL_CPC' },
@@ -243,7 +273,7 @@ const buildGoogleCampaigns: AgentTool = {
     + 'PAUSED — with budget, bidding, networks, Google\'s automation (off unless asked), locations, location option, '
     + 'languages, schedule, audiences in observation, campaign negatives and lists, ad groups with bids, keywords with '
     + 'bids (no BROAD unless allowBroad), ad-group negatives, Shopping product groups by item id ("everything else" '
-    + 'excluded unless asked), responsive search ads, sitelinks, callouts and structured snippets. A campaign may be a '
+    + 'excluded unless asked) or as a tree of any shape (nodes), responsive search ads, sitelinks, callouts and structured snippets. A campaign may be a '
     + 'copy of a live one (copyOf). Parts point at each other by ref. Use it, not a change plan, when new parts point at '
     + 'new parts. At most 900 operations (its check and its run fit the daily allowance). Undo removes what it made.' + GOOGLE_CHANGE_RULES,
   undo: buildUndo,

@@ -7,6 +7,7 @@
  */
 
 import { buildFlatRow } from './ebay-variation-push.service.js'
+import { NOT_STORE_PHOTO } from './images/store-photos.js'
 
 // ── pure helpers ─────────────────────────────────────────────────────────────
 
@@ -144,7 +145,7 @@ export interface SharedMembershipPrismaLike {
       where: { id: { in: string[] } }
       include: {
         channelListings: { where: { channel: string } }
-        images: { select: { url: boolean; sortOrder: boolean; type: boolean }; orderBy: { sortOrder: string } }
+        images: { where: typeof NOT_STORE_PHOTO; select: { url: boolean; sortOrder: boolean; type: boolean }; orderBy: { sortOrder: string } }
       }
     }): Promise<ChildProduct[]>
   }
@@ -203,7 +204,7 @@ export async function loadSharedMembershipRows(
       where: { id: { in: childProductIds } },
       include: {
         channelListings: { where: { channel: 'EBAY' } },
-        images: { select: { url: true, sortOrder: true, type: true }, orderBy: { sortOrder: 'asc' } },
+        images: { where: NOT_STORE_PHOTO, select: { url: true, sortOrder: true, type: true }, orderBy: { sortOrder: 'asc' } },
       },
     })
     for (const p of childProducts) {
