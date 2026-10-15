@@ -142,6 +142,28 @@ describe('Shopify and Etsy layouts', () => {
     expect(out.media).toEqual(['cover', 'detail', 'chart-it', 'n1', 'n2', 'g1', 'g2'])
     expect(out.variantImages).toEqual({ 'y-m': 'g1', 'b-m': 'cover', 'b-l': 'cover' })
   })
+  it('Shopify colour products: a colour with its own Shopify set gets exactly that set, then Common; the others stay untouched', () => {
+    const colours = { ...shopify, shopifyProducts: [{ productId: 'gid://shopify/Product/1', valueKey: 'color:black', label: 'Black' }, { productId: 'gid://shopify/Product/2', valueKey: 'color:yellow', label: 'Yellow' }] }
+    const lib = library(...assets.values(), asset('store-b1'), asset('store-b2'), asset('life'))
+    // Shared (Amazon/eBay) only: no colour product is managed — the store keeps its photos.
+    const follows = projectShopify(stack, family, lib, colours)
+    expect(follows.products?.map(p => [p.label, p.managed, p.media])).toEqual([['Black', false, []], ['Yellow', false, []]])
+    // The Shopify layer owns Black's set and an empty Common: Black gets exactly the store's photos, in order.
+    const channel = plan({ common: [], values: { 'color:black': ids('store-b2', 'store-b1') } })
+    const own = projectShopify({ shared, channel }, family, lib, colours)
+    expect(own.products?.map(p => [p.label, p.managed, p.media])).toEqual([['Black', true, ['store-b2', 'store-b1']], ['Yellow', false, []]])
+    // Common photos the colour does not hold yet come after its own.
+    const withCommon = projectShopify({ shared, channel: plan({ common: ids('life', 'store-b1'), values: { 'color:black': ids('store-b2', 'store-b1') } }) }, family, lib, colours)
+    expect(withCommon.products?.[0].media).toEqual(['store-b2', 'store-b1', 'life'])
+    // The family layout is unchanged by the colour products.
+    expect(own.media).toEqual(projectShopify({ shared, channel }, family, lib, shopify).media)
+    expect(projectShopify({ shared, channel }, family, lib, shopify).products).toBeUndefined()
+  })
+  it('Shopify colour products: a Shopify colour set on another picture axis is refused, never sent', () => {
+    const colours = { ...shopify, shopifyProducts: [{ productId: 'gid://shopify/Product/1', valueKey: 'color:black', label: 'Black' }] }
+    const out = projectShopify({ shared, channel: plan({ values: { 'color:black': ids('n1') } }, 'size') }, family, assets, colours)
+    expect(out.products?.[0]).toMatchObject({ managed: false, media: [], checks: [{ severity: 'error', code: 'colour-product-axis' }] })
+  })
   it('Etsy: 20 photos, the rest named; one photo per option; its main photo must be among the 20', () => {
     const etsy: MediaDestination = { channel: 'ETSY', market: 'GLOBAL', languages: ['it'], mainLanguage: 'it', axisName: 'Colore', valueNames: {} }
     const lib = library(...assets.values(), ...Array.from({ length: 20 }, (_, i) => asset(`c${i}`)))

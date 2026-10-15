@@ -316,3 +316,29 @@ describe('media plan edit — dry run and expected revision', () => {
     expect(applied.revision).toBe(dry.revision + 1)
   })
 })
+
+describe('Shopify colour products (the store shows each colour as its own product)', () => {
+  it('lists the linked colour products on the Shopify destination; a colour gets its own gallery once a Shopify layer owns its set', async () => {
+    await scoped(async () => {
+      ids.shopify = (await prisma.channelConnection.create({ data: { channelType: 'SHOPIFY', accountLabel: 'Xavia store', isActive: true, externalAccountId: 'shop', authStatus: 'connected', managedBy: 'oauth', region: 'xavia.myshopify.com' } as never })).id
+      for (const p of [ids.root, ids.nm, ids.gm]) await prisma.channelListing.create({ data: { productId: p, channel: 'SHOPIFY', marketplace: 'GLOBAL', channelMarket: 'SHOPIFY_GLOBAL', region: 'GLOBAL', channelConnectionId: ids.shopify } as never })
+      await prisma.shopifyColourProduct.create({ data: { familyId: ids.root, channelConnectionId: ids.shopify, splitAxis: 'color', valueKey: 'color:black', colourName: 'Black', shopifyProductId: 'gid://shopify/Product/1', state: 'LINKED' } as never })
+      await prisma.shopifyColourProduct.create({ data: { familyId: ids.root, channelConnectionId: ids.shopify, splitAxis: 'color', valueKey: 'color:yellow', shopifyProductId: 'gid://shopify/Product/2', state: 'LINKED' } as never })
+      // Not linked yet: no gallery of its own.
+      await prisma.shopifyColourProduct.create({ data: { familyId: ids.root, channelConnectionId: ids.shopify, splitAxis: 'color', valueKey: 'color:red', state: 'NOT_FOUND' } as never })
+    })
+    const key = `LISTING:SHOPIFY:GLOBAL:${ids.shopify}:`
+    const read = await scoped(() => readMediaWorkspace(ids.root))
+    // The family's value order (yellow first); the operator's colour name, else the value's.
+    expect(read.destinations.find(d => d.key === key)?.shopifyProducts).toEqual([
+      { productId: 'gid://shopify/Product/2', valueKey: 'color:yellow', label: 'Giallo' }, { productId: 'gid://shopify/Product/1', valueKey: 'color:black', label: 'Black' }])
+    // Shared photos alone (Amazon, eBay) never make a colour product's gallery: the store keeps its photos.
+    expect((read.layouts[key] as any).products.map((p: any) => [p.label, p.managed, p.media])).toEqual([['Giallo', false, []], ['Black', false, []]])
+    await scoped(() => applyMediaPlanOps(ids.root, { address: { layer: 'CHANNEL', channel: 'SHOPIFY' }, ops: [
+      { op: 'replace', set: 'common', assetIds: [] }, { op: 'replace', set: 'value:color:black', assetIds: [img.n1, img.cover] }] }, null))
+    const out = await scoped(() => mediaLayoutFor({ productId: ids.root, channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: ids.shopify }))
+    expect((out!.layout as any).products.map((p: any) => [p.label, p.managed, p.media])).toEqual([['Giallo', false, []], ['Black', true, [img.n1, img.cover]]])
+    // eBay and Amazon read nothing new.
+    expect((await scoped(() => readMediaWorkspace(ids.root))).destinations.filter(d => d.channel !== 'SHOPIFY').every(d => !('shopifyProducts' in d))).toBe(true)
+  })
+})

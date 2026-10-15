@@ -10,6 +10,8 @@ const fixture = vi.hoisted(() => {
     // Stock and price leave through this queue; nothing on the linked path may write it (asserted by the pause tests).
     outboundSyncQueue: Object.fromEntries(['create', 'createMany', 'upsert', 'update', 'updateMany'].map(verb => [verb, async (args: any) => { data.queue.push({ verb, args }); return { count: 0 } }])),
     marketplace: { findFirst: async ({ where }: any) => where.channel === 'SHOPIFY' && where.code === 'GLOBAL' ? { id: 'global', currency: 'EUR' } : null },
+    // No colour products here: the media plan's colour galleries are channel-sheet-media-plan.vitest.test.ts.
+    shopifyColourProduct: { count: async () => 0 },
     channelListing: {
       findMany: async ({ where }: any) => structuredClone(data.listings.filter(row => match(row, where))),
       findUnique: async ({ where }: any) => structuredClone(data.listings.find(row => match(row, where)) ?? null),

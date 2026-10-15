@@ -16,7 +16,7 @@ import { resolveSharedContent } from './linked-shared-content.service.js'
 import { readInformation, readInformationNativeOwners, verifyInformationPlan, applyNativeEdit, advanceMediaOrder } from './information-gateway.js'
 import { informationRegistry, nativeValuesEqual, nativeEditVerified, nativeSchemaError, type NativeEdit, type MediaOrderEdit } from '@nexus/shared/shopify-information'
 import { verifyTranslationEdits } from './information-translations.js'
-import { readSheetGallerySources, reviewSheetGalleries, advanceSheetGallery, verifySheetGallery, SHEET_MEDIA_SYNC, type SheetGalleryProgress } from './channel-sheet-media.js'
+import { readSheetGallerySources, reviewSheetGalleries, advanceSheetGallery, verifySheetGallery, planGalleryFamily, SHEET_MEDIA_SYNC, type SheetGalleryProgress } from './channel-sheet-media.js'
 
 export const AUTOMATION_KEY = '_nexusLinkedAutomation'
 const pausedAutomation = (): ShopifyLinkedAutomation => ({ mode: 'PAUSED', status: 'IDLE', lastCheckedAt: null, lastVerifiedAt: null, message: null, changes: 0 })
@@ -57,7 +57,8 @@ export async function linkedState(tx: Tx, destination: WorkspaceDestination) {
   const revision = linkedDigest([destination.accountId, destination.familyId, listing?.id, listing?.version, parsed.data, operation])
   const suggestedProductIds = [...new Set(listings.map(l => l.externalListingId).filter((id): id is string => !!id && /^(gid:\/\/shopify\/Product\/)?\d+$/.test(id)).map(id => id.startsWith('gid:') ? id : `gid://shopify/Product/${id}`))]
   const workspace: ShopifyLinkedWorkspace = { productId: destination.productId, familyId: family.id, name: family.name,
-    hasSheetMedia: listings.some(l => { const attrs = object(l.platformAttributes); return !!attrs._productMediaLocales || !!attrs[SHEET_MEDIA_SYNC] }),
+    // A sheet gallery draft or an earlier gallery sync, or colour products whose photos come from the media plan.
+    hasSheetMedia: listings.some(l => { const attrs = object(l.platformAttributes); return !!attrs._productMediaLocales || !!attrs[SHEET_MEDIA_SYNC] }) || await planGalleryFamily(tx, destination),
     ...(listings.some(l => l.syncPaused) ? { syncPaused: true } : {}),
     destination: { accountId: destination.accountId, listingId: listing?.id ?? null, market: destination.marketplace }, revision, draft: parsed.data, suggestedProductIds, automation: { ...pausedAutomation(), ...object(pa[AUTOMATION_KEY]) },
     operation: operation ? { id: operation.id, status: operation.status, completed: operation.completed, total: operationTotal(operation), error: operation.error, ...(operation.sheetGalleries?.length ? { includesSheetMedia: true } : {}) } : null }
