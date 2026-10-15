@@ -143,4 +143,13 @@ describe('a divergence says who holds the other value', () => {
     expect(shopifyKeepsOwnValue(masterTwin)).toBe(false)
     expect(words(masterTwin).description).toBe(`Publishes another value: ${twin}`)
   })
+  it('an adopted colour product shows the store’s value: its note stands alone, with or without a Shopify write address', () => {
+    const note = 'Shopify keeps “Ride jacket – Black”. Nexus holds “Giacca Ride nera”; this colour product shows the store’s value.'
+    // The title: written through the content writer, so no Shopify write address.
+    const title = cell({ source: 'master', layer: 'master', pinned: false, inherited: true, divergence: { publishesAs: 'Ride jacket – Black', nexusValue: 'Giacca Ride nera', note } })
+    expect(shopifyKeepsOwnValue(title)).toBe(false)
+    expect(words(title)).toEqual({ kind: 'warning', label: provenanceLabel('attention'), description: note })
+    const vendor = cell({ source: 'master', layer: 'master', pinned: false, inherited: true, shopifyWrite: write, divergence: { publishesAs: 'ACME', nexusValue: 'Xavia', note } })
+    expect(words(vendor).description).toBe(note)
+  })
 })

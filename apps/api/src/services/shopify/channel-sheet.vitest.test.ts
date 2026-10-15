@@ -598,3 +598,69 @@ describe('a JSON product field mapped from Master', () => {
     expect(liveSharedDivergence(json(), { ...garment, chest: 54 }, s.snapshot.rows[0].fields.at(-1).value)).toMatchObject({ note: expect.stringContaining('Shopify keeps') })
   })
 })
+
+/*
+ * An adopted colour product (`colour-products/confirm.service.ts`): the size listing is linked to its colour and names its
+ * Shopify product; Nexus holds nothing of the store's. Its title, description, price, vendor and product type show the
+ * STORE's value while Nexus holds no value of its own for the listing, with a note when Nexus's differs.
+ */
+describe('an adopted colour product shows the store’s value', () => {
+  // The family row is tied to no Shopify product (a colour family's products are its colours): the size owns product 10.
+  const colourListings = [{ id: 'listing-a', productId: 'family', externalListingId: null, platformAttributes: {} },
+    { id: 'variant-listing', productId: 'child', externalListingId: '10', platformAttributes: { shopifyColourProductId: 'c-black', shopifyProductId: '10', variantId: '11', nexusFamilyId: 'family' } }]
+  const content = (value: unknown, extra: Record<string, unknown> = {}) => ({ value, writable: false, editable: false, writeTarget: 'channelListing', source: 'master', layer: 'master', mapped: null,
+    pinned: false, inherited: true, follows: true, tier: 'source', language: 'it', requested: 'en', provenance: { member: 'inherited', from: 'Italian · source' },
+    contentAddress: { tier: 'pin', language: 'en' }, contentAcknowledgement: { pin: { address: { tier: 'pin', language: 'en' } } }, contentVersion: 0, ...extra })
+  const colourPage = (child: Record<string, unknown>) => {
+    const base = page()
+    base.rows[1].values = { ...base.rows[1].values, ...child }
+    return base
+  }
+  const project = (base: any, listings: any[] = colourListings) => projectShopifyChannelSheet(base, s.workspace, s.snapshot, s.schema, listings, 'alias-a')[1].values
+  beforeEach(() => { Object.assign(s.snapshot.rows[0].values, { descriptionHtml: '<p>The <b>black</b> ride jacket.</p>', productType: 'Jacket' }) })
+
+  it('title and description: the store’s text, with a note naming the Nexus text; the content writer stays its writer, nothing sendable', () => {
+    const values = project(colourPage({ title: content('Giacca Ride nera'), descriptionHtml: content('<p>La giacca nera.</p>') }))
+    expect(values.title).toMatchObject({ value: 'Listed title', editable: true, writable: true, contentAddress: { tier: 'pin', language: 'en' },
+      divergence: { publishesAs: 'Listed title', nexusValue: 'Giacca Ride nera', note: 'Shopify keeps “Listed title”. Nexus holds “Giacca Ride nera”; this colour product shows the store’s value.' } })
+    expect(values.title.shopifyWrite).toBeUndefined()
+    expect(values.descriptionHtml).toMatchObject({ value: '<p>The <b>black</b> ride jacket.</p>',
+      divergence: { note: 'Shopify keeps “The black ride jacket.”. Nexus holds “La giacca nera.”; this colour product shows the store’s value.' } })
+    expect(values.descriptionHtml.shopifyWrite).toBeUndefined()
+    // The same text in Nexus and in the store: no note.
+    expect(project(colourPage({ title: content('Listed title') })).title.divergence).toBeUndefined()
+  })
+
+  it('a Nexus pin for the listing (an import’s, an operator’s) is what the cell shows', () => {
+    const pinned = content('Ride jacket – Black', { tier: 'pin', follows: false, pinned: true, inherited: false, provenance: { member: 'pinned', from: 'English · Shopify · pin' } })
+    const values = project(colourPage({ title: pinned }))
+    expect(values.title).toMatchObject({ value: 'Ride jacket – Black', pinned: true, tier: 'pin' })
+    expect(values.title.divergence).toBeUndefined()
+    // A following snapshot is not a pin: the store's text.
+    expect(project(colourPage({ title: content('Old snapshot', { tier: 'pin', follows: true }) })).title).toMatchObject({ value: 'Listed title', divergence: { nexusValue: 'Old snapshot' } })
+  })
+
+  it('vendor, product type and price: the store’s value instead of the Shared one, with a note; a Nexus value of the listing’s own is kept', () => {
+    const mapped = (value: unknown, extra: Record<string, unknown> = {}) => ({ value, writable: true, editable: true, writeTarget: 'channelListing', source: 'master', layer: 'master', mapped: { status: 'mapped', value }, ...extra })
+    const values = project(colourPage({ vendor: mapped('Shared vendor'), productType: mapped('Jacket'), price: mapped(189) }))
+    expect(values.vendor).toMatchObject({ value: 'Vendor', shopifyWrite: { ownerId: product, baseline: 'Vendor' },
+      divergence: { publishesAs: 'Vendor', nexusValue: 'Shared vendor', note: 'Shopify keeps “Vendor”. Nexus holds “Shared vendor”; this colour product shows the store’s value.' } })
+    expect(values.productType).toMatchObject({ value: 'Jacket' })
+    expect(values.productType.divergence).toBeUndefined()
+    expect(values.price).toMatchObject({ value: '0.00', shopifyWrite: { ownerId: variant }, divergence: { nexusValue: 189, note: 'Shopify keeps 0.00. Nexus holds 189; this colour product shows the store’s value.' } })
+    // A price the listing holds itself (an import records one per size): the Nexus value, as before.
+    expect(project(colourPage({ price: mapped(189, { pinned: true, layer: 'channel' }) })).price).toMatchObject({ value: 189, pinned: true })
+    // An operator's edit waiting for synchronization: shown, no note.
+    s.workspace.draft.nativeEdits = [{ ownerId: product, productId: product, ownerLabel: 'Listed title', field: 'vendor', value: 'Vendor', nextValue: 'Edited vendor' }]
+    expect(project(colourPage({ vendor: mapped('Shared vendor') })).vendor).toMatchObject({ value: 'Edited vendor', unsentDraft: true })
+  })
+
+  it('a product that is not an adopted colour product shows the Nexus values exactly as before', () => {
+    const plain = colourListings.map(l => ({ ...l, platformAttributes: { variantId: '11' } }))
+    const values = project(colourPage({ title: content('Giacca Ride nera'), vendor: { ...page().rows[1].values.vendor } }), plain)
+    expect(values.title).toMatchObject({ value: 'Giacca Ride nera', tier: 'source' })
+    expect(values.title.divergence).toBeUndefined()
+    expect(values.vendor).toMatchObject({ value: 'Shared vendor' })
+    expect(values.vendor.divergence).toBeUndefined()
+  })
+})

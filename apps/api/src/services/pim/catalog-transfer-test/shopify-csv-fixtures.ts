@@ -55,3 +55,17 @@ export const SHOPIFY_SAMPLE_ROWS: Record<string, string>[] = [
 ]
 
 export const shopifySampleCsv = (options?: Parameters<typeof csvOf>[2]) => csvOf(SHOPIFY_CLASSIC_HEADERS, SHOPIFY_SAMPLE_ROWS, options)
+
+/**
+ * An adopted colour family (one Shopify product per colour): ACME-RIDE in black and in red, sizes S and M. Shopify sells
+ * the red S as `acme-ride-red-s` — a case-only difference its Confirm recorded as the listing's own SKU.
+ */
+const colourProduct = { Vendor: 'ACME', Type: 'Jacket', Published: 'true', Status: 'active', 'Option1 Name': 'Size' }
+export const SHOPIFY_COLOUR_ROWS: Record<string, string>[] = [
+  { Handle: 'acme-ride-black', Title: 'Ride jacket – Black', 'Body (HTML)': '<p>The black ride jacket.</p>', Tags: 'Jackets, Black', ...colourProduct,
+    'Option1 Value': 'S', 'Variant SKU': 'ACME-RIDE-BLK-S', ...variant, 'Variant Price': '189.00', 'Variant Compare At Price': '229.00', 'SEO Title': 'Ride jacket black' },
+  { Handle: 'acme-ride-black', 'Option1 Value': 'M', 'Variant SKU': 'ACME-RIDE-BLK-M', ...variant, 'Variant Price': '189.00' },
+  { Handle: 'acme-ride-red', Title: 'Ride jacket – Red', 'Body (HTML)': '<p>The red ride jacket.</p>', Tags: 'Jackets, Red', ...colourProduct,
+    'Option1 Value': 'S', 'Variant SKU': 'acme-ride-red-s', ...variant, 'Variant Price': '199.00', 'Variant Compare At Price': '239.00' },
+  { Handle: 'acme-ride-red', 'Option1 Value': 'M', 'Variant SKU': 'ACME-RIDE-RED-M', ...variant, 'Variant Price': '199.00' },
+]

@@ -193,8 +193,9 @@ export interface StudioCellValue extends Omit<SheetCellValue, 'requestedLocale' 
    * Set only when another layer holds a DIFFERENT non-blank value for this key
    * (#674). The cell shows — and edits — the layer the write targets; this names
    * the other one and what it means, rather than the sheet silently choosing.
+   * `nexusValue`: set when the cell shows Shopify's own value (an adopted colour product) and Nexus holds this other one.
    */
-  divergence?: { publishesAs: unknown; note: string }
+  divergence?: { publishesAs: unknown; note: string; nexusValue?: unknown }
   formula?: string
   /**
    * Why the last evaluation produced no value. `formula` present WITH

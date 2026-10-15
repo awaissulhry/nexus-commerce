@@ -6,6 +6,7 @@ import type { ChannelFieldSpec, ChannelSpec } from './channel-specs/types.js'
 import type { SourceExclusion } from './catalog-source-mapping.js'
 import { shopifyChannelKeyOf, shopifyColumnOf, shopifyMetafieldTarget, type ShopifyColumnInfo } from '../channel-mapping/shopify-draft.js'
 import { ignoredReason, unmappedReason, type ReaderMapping } from '../channel-mapping/decisions.js'
+import { listingShopifyProductId, shopifyProductOwners } from '../shopify/product-owner-row.js'
 
 /**
  * NCF (`docs/studies/native-channel-files.md` §2, §3) — Shopify's own product CSV (admin → Products → Export).
@@ -18,6 +19,10 @@ import { ignoredReason, unmappedReason, type ReaderMapping } from '../channel-ma
  * Nexus links the product to, the variant fields on each variant's Shopify listing, the price and the compare-at price
  * through the one price door (record-only), and Shopify's own identity of the product (handle, status, option names
  * and values: `shopifyCsvIdentity`) so an export can write them back unchanged.
+ * An adopted colour family (one Shopify product per colour, `shopify/colour-products/confirm.service.ts`): each colour's
+ * product is found by its sizes' SKUs (the listing's own channel SKU too, so a case-only difference matches), its
+ * product fields go on the size row the product sheet shows them on (`shopify/product-owner-row.ts`), and its variant
+ * rows on the sizes linked to that colour. Nothing is sent to Shopify: prices stay record-only per size.
  * What it NEVER writes, each cell with its reason: stock and inventory, status and publication, pictures, the
  * variant structure, variant metafields, and anything of a product or handle Nexus does not know.
  *
@@ -118,8 +123,19 @@ export interface ShopifyCsvTarget {
   version: number
   /** The handles Nexus knows this listing by (its recorded Shopify identity, its handle field, a linked product). */
   handles: string[]
-  /** The SKU Shopify sells the variant as, when Nexus holds one that differs from the product SKU. */
-  listingSku?: string | null
+  /**
+   * The SKUs Shopify may sell the variant as, when Nexus holds ones that differ from the product SKU: the listing's own
+   * channel SKU (`channelSku`, and `liveChannelSku`, the one Shopify confirmed — e.g. a case-only difference a colour
+   * product's Confirm recorded) and the older stores (`sku`, `sellerSku`).
+   */
+  listingSkus?: string[]
+  /** The Shopify product this listing is tied to (GID), as the product sheet reads it (`listingShopifyProductId`). */
+  shopifyProductId?: string | null
+  /**
+   * An adopted colour product (`shopify/colour-products/confirm.service.ts`): the colour product this size listing is
+   * linked to (`platformAttributes.shopifyColourProductId`), while the listing is still tied to its Shopify product.
+   */
+  colourProductId?: string | null
 }
 export interface ShopifyCsvOptions {
   accountId: string
@@ -155,6 +171,9 @@ const csvMetafieldType = (type: string) => CSV_METAFIELD_TYPES.has(type.replace(
 
 const MEDIA = 'Pictures are not imported: Shopify keeps its media, and Nexus manages pictures in the media workspace.'
 const NO_SKU = 'This Shopify variant has no SKU. Nexus matches variants by SKU: give it its SKU in Shopify, export the file again, then import.'
+const KEEPS_SKUS = 'Nexus keeps its own SKUs: a file never changes one.'
+/** The Shopify fields that are a SKU: never written from a file. */
+const SKU_FIELDS = new Set(['sku'])
 const COLD_STORE = 'This store’s field list (its metafield definitions) is not loaded in Nexus, so its metafield columns cannot be read. Open a product’s Shopify tab once to load it, then import again.'
 
 export function mapShopifyCsv(table: ShopifyCsvTable, targets: readonly ShopifyCsvTarget[], options: ShopifyCsvOptions): ShopifyCsvResult {
@@ -171,6 +190,8 @@ export function mapShopifyCsv(table: ShopifyCsvTable, targets: readonly ShopifyC
   const source = (header: string) => ({ sheet: 'CSV', column: header })
   const acc = options.accountId
   const skuOfListing = (t: ShopifyCsvTarget) => t.sku
+  /** Every SKU a listing may be sold as in this store. */
+  const skusOf = (t: ShopifyCsvTarget) => [t.sku, ...t.listingSkus ?? []]
 
   /** Refuse (or skip) every filled cell of a record with one reason, and one issue for the record. */
   const decideRecord = (rec: Record_, outcome: 'refused' | 'skipped-row', field: string, message: string, sku: string) => {
@@ -190,7 +211,28 @@ export function mapShopifyCsv(table: ShopifyCsvTable, targets: readonly ShopifyC
   // Pass 1 — which Nexus listing each Shopify product is. Nothing unknown is created or guessed.
   const store = targets.filter(t => t.accountId === acc)
   const productOf = new Map<string, ShopifyCsvTarget | string>()
+  // An adopted colour family is several Shopify products, one per colour: each is found by its sizes' SKUs (Confirm
+  // matched them exactly) and its product-level fields go on the Nexus row the product sheet shows them on.
+  const colourOf = new Map<string, string>()
+  const ownerKey = (t: ShopifyCsvTarget) => t.shopifyProductId ? JSON.stringify([t.aliasKey, t.shopifyProductId]) : null
+  const owners = shopifyProductOwners(store, ownerKey, t => t.parentSku !== null)
+  const colourProductOf = (handle: string, recs: Record_[]): { colour: string; owner: ShopifyCsvTarget } | string | null => {
+    const hits = [...new Set(recs.map(r => v(r, skuH)).filter(Boolean))].map(sku => ({ sku, listings: store.filter(t => skusOf(t).includes(sku)) })).filter(h => h.listings.length)
+    const colours = [...new Set(hits.flatMap(h => h.listings.map(t => t.colourProductId)).filter((c): c is string => !!c))]
+    if (!colours.length) return null
+    const outside = hits.filter(h => !h.listings.some(t => t.colourProductId === colours[0])).map(h => h.sku)
+    if (colours.length > 1 || outside.length) return `The variant SKUs of Shopify product ${handle} (${hits.map(h => h.sku).join(', ')}) are not the sizes of one Nexus colour product${colours.length === 1 ? `: ${outside.join(', ')} ${outside.length === 1 ? 'is' : 'are'} not linked to it` : ''}. Correct the SKUs in Shopify, or confirm the colour again in Colour products, then import.`
+    const size = hits[0].listings.find(t => t.colourProductId === colours[0])!
+    const owner = ownerKey(size) ? owners.get(ownerKey(size)!) : undefined
+    return owner ? { colour: colours[0], owner } : `Nexus holds no Shopify product for the colour of ${size.sku}. Confirm the colour again in Colour products, then import.`
+  }
   for (const [handle, recs] of groups) {
+    const colour = colourProductOf(handle, recs)
+    if (colour) {
+      if (typeof colour === 'string') productOf.set(handle, colour)
+      else { productOf.set(handle, colour.owner); colourOf.set(handle, colour.colour) }
+      continue
+    }
     const known = store.filter(t => t.handles.includes(handle))
     if (known.length > 1) { productOf.set(handle, `Several Nexus listings are linked to Shopify product ${handle} in this store (${known.map(skuOfListing).join(', ')}). Keep one link, then import again.`); continue }
     if (known.length === 1) { productOf.set(handle, known[0]); continue }
@@ -216,7 +258,8 @@ export function mapShopifyCsv(table: ShopifyCsvTable, targets: readonly ShopifyC
     }
     productOf.set(handle, `Nexus does not link a Shopify product with the handle ${handle} in this store${roots.length > 1 ? ', and its variant SKUs belong to several Nexus products' : ''}. Publish or link the product first: an import never creates products.`)
   }
-  // Two Shopify products on one Nexus listing: neither can be applied as "the" product.
+  // Two Shopify products on one Nexus listing: neither can be applied as "the" product. (A colour family passes: each
+  // colour's product-level fields have their own owning row.)
   const byListing = new Map<string, string[]>()
   for (const [handle, p] of productOf) if (typeof p !== 'string') byListing.set(p.id, [...byListing.get(p.id) ?? [], handle])
   for (const [, handles] of byListing) if (handles.length > 1) for (const h of handles) productOf.set(h, `Shopify products ${handles.join(', ')} are all linked to one Nexus listing (${(productOf.get(h) as ShopifyCsvTarget).sku}). Keep one link, then import again.`)
@@ -226,15 +269,18 @@ export function mapShopifyCsv(table: ShopifyCsvTable, targets: readonly ShopifyC
   for (const [handle, recs] of groups) {
     const product = productOf.get(handle)
     if (typeof product !== 'object') continue
+    // A colour product's variants are the sizes linked to that colour; any other product's, its own listing and its children.
+    const colour = colourOf.get(handle)
     for (const rec of recs.filter(isVariantRow)) {
       const sku = v(rec, skuH)
       if (!sku) { variantOf.set(rec, NO_SKU); continue }
-      const candidates = store.filter(t => t.aliasKey === product.aliasKey && (t.sku === sku || t.listingSku === sku) && (t.id === product.id || t.parentSku === product.sku))
+      const candidates = store.filter(t => skusOf(t).includes(sku) && (colour ? t.colourProductId === colour
+        : t.aliasKey === product.aliasKey && (t.id === product.id || t.parentSku === product.sku)))
       if (candidates.length === 1) { variantOf.set(rec, candidates[0]); continue }
       if (candidates.length > 1) { variantOf.set(rec, `Several Nexus listings match ${sku} in this store; resolve the duplicate first.`); continue }
       const p = options.products?.get(sku)
       variantOf.set(rec, !p ? `${sku} is not a Nexus product. Create it first, then import this file again.`
-        : p.sku !== product.sku && p.parentSku !== product.sku ? `${sku} belongs to Nexus product ${p.parentSku ?? p.sku}, not to ${product.sku}, which Shopify product ${handle} is linked to.`
+        : !colour && p.sku !== product.sku && p.parentSku !== product.sku ? `${sku} belongs to Nexus product ${p.parentSku ?? p.sku}, not to ${product.sku}, which Shopify product ${handle} is linked to.`
         : `Nexus holds no Shopify listing of ${sku} in this store. Publish it to Shopify from Nexus first: an import never creates listings.`)
     }
   }
@@ -287,6 +333,9 @@ export function mapShopifyCsv(table: ShopifyCsvTable, targets: readonly ShopifyC
         if (level === 'product' && !isFirst) { refuse(product.sku, header, 'Shopify reads product fields from the first row of each product; this row repeats one. Remove it and import again.'); continue }
         if (level === 'variant' && typeof variant !== 'object') { refuse(who, header, typeof variant === 'string' ? variant : NO_SKU); continue }
         const target = owner!
+        // Nexus keeps the SKUs it holds (Owner, 2026-10-15): the SKU column only names the variant, whatever a mapping
+        // version says, and no column is written to a SKU field. A file never changes a product's or a listing's SKU.
+        if (column.kind === 'column' && column.column.role === 'sku') { exclude(target.sku, header, `The variant’s identity: matched to Nexus product ${target.sku}${raw.trim() !== target.sku ? ` (Shopify sells it as ${raw.trim()})` : ''}. ${KEEPS_SKUS}`); continue }
         // The mapping version decides first: an Owner's decision wins over the rules below.
         let ownerField: string | null = null
         if (options.mapping) {
@@ -297,6 +346,7 @@ export function mapShopifyCsv(table: ShopifyCsvTable, targets: readonly ShopifyC
           if (decision.decidedBy === 'owner' && decision.targetKind === 'channelField' && decision.targetKey) ownerField = decision.targetKey
         }
         if (ownerField) {
+          if (SKU_FIELDS.has(ownerField)) { exclude(who, header, `${options.mapping!.label} maps this column to the SKU. ${KEEPS_SKUS}`); continue }
           const field = specField(options, ownerField)
           const typed = field ? typedValue(field, raw) : { error: `${options.mapping!.label} maps this column to ${ownerField}, which this store's Shopify fields do not declare.` }
           if ('error' in typed) refuse(who, header, typed.error); else emit(target, header, field!.key, typed.value, field!.key === 'category' ? 'Listings' : 'Overrides', fileSku)
@@ -318,7 +368,6 @@ export function mapShopifyCsv(table: ShopifyCsvTable, targets: readonly ShopifyC
         }
         const c = column.column
         switch (c.role) {
-          case 'sku': exclude(target.sku, header, `The variant’s identity: matched to Nexus product ${target.sku}${raw.trim() !== target.sku ? ` (Shopify sells it as ${raw.trim()})` : ''}.`); break
           case 'option': exclude(who, header, `Variant structure is not imported.${noted}`); break
           case 'lifecycle': exclude(who, header, c.header === 'Status' ? `Listing lifecycle is not imported (Status "${raw.trim()}").${noted}` : `Publication is not imported (Published "${raw.trim()}"); Shopify keeps it.`); break
           case 'stock': exclude(who, header, `Stock is never imported from a file: the stock ledger owns it. File value: ${raw.trim()}`); break
@@ -444,10 +493,15 @@ async function chooseStore(prisma: Db, requested: string | undefined, productId:
   throw new Error(stores.length ? 'Choose the Shopify store this file belongs to: Shopify’s file does not name its store.' : 'No Shopify store is connected. Connect the store first.')
 }
 
-/** Every Shopify listing of the store, with the handles Nexus knows it by. */
+/**
+ * Every Shopify listing of the store, with the handles and SKUs Nexus knows it by, in the product sheet's row order (by
+ * product SKU, as the sheet reads a family): the order that decides which row owns a Shopify product's fields.
+ */
 export async function shopifyStoreTargets(prisma: Db, accountId: string): Promise<ShopifyCsvTarget[]> {
   const listings = await prisma.channelListing.findMany({ where: { channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: accountId },
-    select: { id: true, aliasKey: true, version: true, externalListingId: true, platformAttributes: true, product: { select: { sku: true, deletedAt: true, parent: { select: { sku: true } } } } } })
+    select: { id: true, aliasKey: true, version: true, externalListingId: true, platformAttributes: true, channelSku: true, liveChannelSku: true,
+      product: { select: { sku: true, deletedAt: true, parent: { select: { sku: true } } } } },
+    orderBy: [{ product: { sku: 'asc' } }, { id: 'asc' }] })
   const live = listings.filter(l => l.product && !l.product.deletedAt)
   // A linked-products workspace names the Shopify products (and their handles) a family is linked to.
   const memberHandles = new Map<string, string>()
@@ -456,8 +510,10 @@ export async function shopifyStoreTargets(prisma: Db, accountId: string): Promis
     const pa = record(l.platformAttributes)
     const handles = [readShopifyCsvIdentity(pa)?.handle, typeof pa.handle === 'string' ? pa.handle : null, memberHandles.get(numericId(l.externalListingId) ?? '')]
       .filter((h): h is string => !!h && !!h.trim())
-    const listingSku = [pa.sku, pa.sellerSku].find((x): x is string => typeof x === 'string' && !!x.trim() && x !== l.product!.sku) ?? null
-    return { id: l.id, sku: l.product!.sku, parentSku: l.product!.parent?.sku ?? null, accountId, aliasKey: l.aliasKey, version: l.version, handles: [...new Set(handles)], listingSku }
+    const listingSkus = [...new Set([l.channelSku, l.liveChannelSku, pa.sku, pa.sellerSku].filter((x): x is string => typeof x === 'string' && !!x.trim() && x !== l.product!.sku))]
+    const shopifyProductId = listingShopifyProductId(l)
+    const colourProductId = typeof pa.shopifyColourProductId === 'string' && pa.shopifyColourProductId && shopifyProductId ? pa.shopifyColourProductId : null
+    return { id: l.id, sku: l.product!.sku, parentSku: l.product!.parent?.sku ?? null, accountId, aliasKey: l.aliasKey, version: l.version, handles: [...new Set(handles)], listingSkus, shopifyProductId, colourProductId }
   })
 }
 

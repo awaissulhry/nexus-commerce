@@ -324,8 +324,11 @@ export interface StudioCellValue extends importContentWriteFacts, AmazonOfferCel
   translation?: importResolvedContent['translation']
 
   resettable?: boolean
-  /** The server's note that publishing uses another layer's value than the one this cell shows (API `StudioCellValue`). */
-  divergence?: { publishesAs: unknown; note: string }
+  /**
+   * The server's note that publishing uses another layer's value than the one this cell shows (API `StudioCellValue`).
+   * `nexusValue`: the cell shows Shopify's own value (an adopted colour product) and Nexus holds this other one.
+   */
+  divergence?: { publishesAs: unknown; note: string; nexusValue?: unknown }
   shopifyWrite?: import('@nexus/shared/shopify-information').ShopifySheetWrite
   value: unknown
   source: ChannelValueSource
