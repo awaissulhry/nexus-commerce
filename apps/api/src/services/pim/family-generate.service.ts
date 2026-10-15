@@ -16,7 +16,7 @@
  *     clean up, because it looks exactly like a family someone half-built on purpose.
  */
 import prisma from '../../db.js'
-import { createHash } from 'node:crypto'
+import { basisOf, pickFields } from '../automation/row-basis.js'
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 import { ProductRelationshipError, relationshipTransaction } from './product-relationship.service.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
@@ -195,6 +195,26 @@ export function nearestSibling(
   return first ? { id: first.id, sku: first.sku } : null
 }
 
+/**
+ * The members' fields a generate plan stands on: what the plan reads (SKUs, axis values) and what a new row copies from
+ * its nearest sibling (name, price, type). NOT `totalStock`: a stock movement writes it without a version, and a new
+ * variation starts at stock 0 whatever its sibling holds — so a sale between the preview and the approval is no change.
+ */
+const GENERATE_BASIS_FIELDS = ['id', 'sku', 'name', 'status', 'version', 'categoryAttributes', 'variantAttributes', 'basePrice', 'productType'] as const
+
+/**
+ * The preview token: a fingerprint of the family and the plan, the same wherever it is computed. Canonical, keys sorted at
+ * every depth (`basisOf`): an approval keeps its args as jsonb, which re-orders object keys (`{"Color","Size"}` comes back
+ * `{"Size","Color"}`), so the approval re-check and the run read the args in another key order than the preview did —
+ * and a key-order-sensitive hash refused every approved create-variations as "the facts moved" (2026-10-15, MISANO).
+ * Arrays keep their order: the order of an axis's values is the order rows are created in. Pure.
+ */
+export function generatePreviewToken(parent: Record<string, unknown>, children: ReadonlyArray<Record<string, unknown>>,
+  plan: Pick<GenerateInput, 'axisValues' | 'skuPattern' | 'valueCodes'>): string {
+  const members = [...children].sort((a, b) => String(a.id).localeCompare(String(b.id))).map((child) => pickFields(child, GENERATE_BASIS_FIELDS))
+  return `generate:${basisOf({ parent: pickFields(parent, GENERATE_BASIS_FIELDS), members, axisValues: plan.axisValues, skuPattern: plan.skuPattern, valueCodes: plan.valueCodes ?? {} })}`
+}
+
 export async function generateCombinations(input: GenerateInput): Promise<GenerateDryRun | GenerateResult> {
   const root = await resolveFamilyRoot(input.productId)
   if (!Number.isSafeInteger(input.version) || input.version < 0) {
@@ -213,7 +233,7 @@ export async function generateCombinations(input: GenerateInput): Promise<Genera
     orderBy: { sku: 'asc' },
   })
   const parentRow = await prisma.product.findUniqueOrThrow({ where: { id: root.id }, select: FAMILY_MEMBER_SELECT })
-  const previewToken = createHash('sha256').update(JSON.stringify({ parent: parentRow, children, axisValues: input.axisValues, skuPattern: input.skuPattern, valueCodes: input.valueCodes ?? {} })).digest('hex')
+  const previewToken = generatePreviewToken(parentRow, children, input)
   if (!input.dryRun && input.previewToken !== previewToken) throw new ProductRelationshipError('This family or plan changed after preview. Check the combinations again before creating.')
   const declared = (root.variationAxes ?? []) as string[]
   const axes = buildFamilyAxes(declared, [parentRow, ...children])
