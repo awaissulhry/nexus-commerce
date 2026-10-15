@@ -695,6 +695,46 @@ export async function applyStockMovementInTx(
   }
 }
 
+/**
+ * A first count of 0 (2026-10-16): a person sets on-hand to 0 at an own location where the product has NO level yet
+ * (never counted there). No unit moves, so applyStockMovementInTx cannot book it (change must be non-zero); yet the
+ * count is news for the listings: with no level the product's ledger is empty, its listings resolve UNCOUNTED and are
+ * never sent a number (the P0 guard in cascadeQuantityToListings), so a channel keeps what it showed — on Shopify the
+ * store's own placeholder stock. Here, under the same lock: the level at 0, a 0-unit audit movement (as a case-only
+ * count writes), the same cascade (the listings now FOLLOW 0) and the same fact. A level that already exists is
+ * refused: that is an ordinary 0 → 0, nothing to book. The caller runs `afterStockMovementCommit` after its commit.
+ */
+export async function recordFirstZeroCountInTx(
+  tx: Prisma.TransactionClient,
+  input: { productId: string; locationId: string; reason: MovementReason; notes?: string; actor?: string },
+): Promise<StockMovementTxResult> {
+  const { productId, locationId, reason, notes, actor } = input
+  await lockProductStock(tx, [productId])
+  const target = await tx.stockLocation.findUnique({ where: { id: locationId }, select: { type: true } })
+  const refusal = protectedLocationRefusal(reason, locationId, target?.type)
+  if (refusal) throw refusal
+  if (target?.type !== 'WAREHOUSE') throw new Error('recordFirstZeroCount: a first count is booked at an own warehouse only')
+  const existing = await tx.stockLevel.findFirst({ where: { locationId, productId, variationId: null }, select: { id: true } })
+  if (existing) throw new Error('recordFirstZeroCount: the product already has a level at this location')
+
+  await tx.stockLevel.create({
+    data: { locationId, productId, variationId: null, quantity: 0, reserved: 0, available: 0, syncStatus: 'SYNCED', lastSyncedAt: new Date() },
+  })
+  const newTotalStock = await recomputeProductTotalStock(tx, productId)
+  const movement = await tx.stockMovement.create({
+    data: {
+      productId, variationId: null, warehouseId: null, locationId, change: 0, balanceAfter: 0, quantityBefore: 0, reason,
+      notes: notes ? `First count: 0 · ${notes}` : 'First count: 0', actor: actor ?? null,
+    },
+  })
+  const cascade = await cascadeQuantityToListings(tx, { productId, newTotalStock, reason, change: 0, actor })
+  await publishEvent(tx, 'inventory.stock_changed', {
+    productId, locationId, movementId: movement.id, change: 0, quantityBefore: 0, quantityAfter: 0, available: 0,
+    poolTotal: newTotalStock, reason: String(reason), orderId: null,
+  })
+  return { movement, cascade, stockout: { resolvedLocationId: locationId, prevAvailable: 0, nextAvailable: 0 } }
+}
+
 export async function applyStockMovement(input: StockMovementInput) {
   if (input.change === 0) throw new Error('applyStockMovement: change must be non-zero')
   // P0/B4 — run inside the caller's tx if supplied; otherwise open our own.

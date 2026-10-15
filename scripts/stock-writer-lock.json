@@ -2,9 +2,9 @@
   "_rule": "Read scripts/check-stock-writer-lock.mjs. Every file that writes StockLevel is listed with its exact number of write sites. lock=true files must call lockProductStock( first in each writing transaction. Database functions that write StockLevel are listed under sqlFunctions and must take the product lock (FOR NO KEY UPDATE on \"Product\") before their first write.",
   "files": {
     "apps/api/src/services/stock-movement.service.ts": {
-      "writes": 2,
+      "writes": 3,
       "lock": true,
-      "why": "applyStockMovementInTx: the level update or create, after lockProductStock(tx, [productId])."
+      "why": "applyStockMovementInTx: the level update or create, after lockProductStock(tx, [productId]). recordFirstZeroCountInTx: the first level at 0 of a never-counted product, after lockProductStock(tx, [productId])."
     },
     "apps/api/src/services/stock-level.service.ts": {
       "writes": 3,

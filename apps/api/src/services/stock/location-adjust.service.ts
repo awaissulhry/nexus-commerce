@@ -17,7 +17,7 @@
  * (`setFbmOnHand`) follows the same rule over the product's non-FBA total.
  */
 import prisma from '../../db.js'
-import { afterStockMovementCommit, applyStockMovementInTx, type StockMovementTxResult } from '../stock-movement.service.js'
+import { afterStockMovementCommit, applyStockMovementInTx, recordFirstZeroCountInTx, type StockMovementTxResult } from '../stock-movement.service.js'
 import { checkSeenOnHand, computeLocationAdjustment, LocationAdjustmentError } from '../location-adjustment.js'
 import { summarizeProductStock } from '../stock-summary.js'
 import { lockProductStock } from '../stock-lock.js'
@@ -69,6 +69,8 @@ export async function adjustOneLocation(input: AdjustOneLocationInput) {
         expected,
       })
       if (!adj.noop) moved = await applyStockMovementInTx(tx, { productId, locationId, change: adj.change, reason, notes, actor })
+      // 0 where the product has no level yet: a first count, not a no-op — its listings leave UNCOUNTED and follow 0.
+      else if (!existing && value === 0 && location.type === 'WAREHOUSE') moved = await recordFirstZeroCountInTx(tx, { productId, locationId, reason, notes, actor })
     }
     // Checked against the units AFTER the movement above; a refusal (CaseCountError) rolls the units back with it.
     const counted = cases === undefined ? null : await setCasesInTx(tx, { productId, locationId, cases, reason, notes, actor })
