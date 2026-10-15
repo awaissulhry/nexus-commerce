@@ -34,9 +34,9 @@ export function publishModeOf(channel: GatewayChannel): PublishMode {
     // world but not of the code: the connected-account client was read-only, so nothing could use it.
     // P4.6 puts writes on that client, so the literal becomes an ungated live write path.
     case 'ETSY': return getEtsyPublishMode()
-    // Google (step 1): Nexus only reads Google. Writes have no switch to turn on — the gateway refuses
-    // every Google call that is not a read (GOOGLE_READ_ONLY), whatever this says.
-    case 'GOOGLE': return 'gated'
+    // Google Ads writes (Owner 2026-10-15, pick A): live — each one is a change a person approved in Nexus.
+    // The gateway still refuses every other Google change (googleCallKind); NEXUS_GOOGLE_ADS_WRITES=off is the brake.
+    case 'GOOGLE': return googleAdsWritesMode()
   }
 }
 
@@ -170,9 +170,83 @@ export function googleHostGroup(url: string): 'ads' | 'merchant' | 'analytics' |
 }
 
 /**
+ * Google Ads writes (Owner 2026-10-15, pick A): `live` — every Google Ads change Nexus sends is one a person approved in
+ * Nexus, and that approval is the gate. `NEXUS_GOOGLE_ADS_WRITES=off` is the brake: real writes are then refused before
+ * anything is sent (`gated`); a check Google only validates (`validateOnly`) still runs, as it changes nothing.
+ */
+export function googleAdsWritesMode(): PublishMode {
+  return process.env.NEXUS_GOOGLE_ADS_WRITES?.trim().toLowerCase() === 'off' ? 'gated' : 'live'
+}
+
+/**
+ * Google: the one change Nexus sends — GoogleAdsService.Mutate (`POST https://googleads.googleapis.com/vNN/customers/
+ * {id}/googleAds:mutate`), one customer, nothing else. Merchant Center, Analytics and every other Google method (account
+ * invitations, billing, client links …) stay out.
+ */
+export function isGoogleAdsMutate(method: string, url: string): boolean {
+  return googleAdsMutateCustomer(method, url) !== null
+}
+
+/** The customer id of a GoogleAdsService.Mutate URL, or null when the call is not one. */
+export function googleAdsMutateCustomer(method: string, url: string): string | null {
+  if (method.toUpperCase() !== 'POST') return null
+  let parsed: URL
+  try { parsed = new URL(url) } catch { return null }
+  if (parsed.hostname !== 'googleads.googleapis.com' || parsed.search) return null
+  const match = /^\/v\d+\/customers\/(\d{1,20})\/googleAds:mutate$/.exec(parsed.pathname)
+  return match ? match[1] : null
+}
+
+/**
+ * The kinds of operation a Nexus Google Ads change may hold (MutateOperation's fields): budgets, campaigns, their
+ * criteria, ad groups, their criteria, ads, assets and their campaign links, shared sets and their keywords and links.
+ * Anything else in a mutate (a customer, a user, a conversion action …) is refused before anything is sent.
+ */
+export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
+  'campaignBudgetOperation', 'campaignOperation', 'campaignCriterionOperation', 'adGroupOperation', 'adGroupCriterionOperation',
+  'adGroupAdOperation', 'assetOperation', 'campaignAssetOperation', 'sharedSetOperation', 'sharedCriterionOperation',
+  'campaignSharedSetOperation',
+])
+
+export interface GoogleMutateBody {
+  /** True only for a body that asks Google to check it and change nothing. */
+  check: boolean
+  /** The body as it is sent: the parsed JSON written again, so what was judged is what goes. */
+  body: string
+}
+
+/**
+ * A GoogleAdsService.Mutate body as the gateway judges it, or why it is refused: JSON, `mutateOperations` a list of
+ * known kinds (one kind per operation), and `validateOnly` a boolean said once in camelCase (Google also reads
+ * `validate_only`: a body that names it is refused). Duplicate keys collapse in the parse; the parsed body is what is sent.
+ */
+export function googleMutateBodyOf(body: unknown): GoogleMutateBody | { refusal: string } {
+  if (typeof body !== 'string') return { refusal: 'the body is not JSON text' }
+  let parsed: Record<string, unknown>
+  try { parsed = JSON.parse(body) } catch { return { refusal: 'the body is not JSON' } }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { refusal: 'the body is not a JSON object' }
+  if ('validate_only' in parsed || 'mutate_operations' in parsed || 'partial_failure' in parsed) return { refusal: 'the body names a field in snake_case' }
+  if (parsed.validateOnly !== undefined && typeof parsed.validateOnly !== 'boolean') return { refusal: 'validateOnly is not true or false' }
+  const operations = parsed.mutateOperations
+  if (!Array.isArray(operations) || operations.length === 0) return { refusal: 'it holds no mutateOperations' }
+  for (const operation of operations) {
+    const kinds = operation && typeof operation === 'object' ? Object.keys(operation) : []
+    if (kinds.length !== 1 || !GOOGLE_ADS_MUTATE_KINDS.has(kinds[0])) return { refusal: `it holds an operation Nexus does not send (${kinds.join(', ') || 'none'})` }
+  }
+  return { check: parsed.validateOnly === true, body: JSON.stringify(parsed) }
+}
+
+/** Google: a mutate body that only asks Google to check it (`validateOnly: true`): Google changes nothing. */
+export function isGoogleValidateOnly(body: unknown): boolean {
+  const judged = googleMutateBodyOf(body)
+  return !('refusal' in judged) && judged.check
+}
+
+/**
  * Google: whether a call only reads. GET reads; so does a POST to a `…:search` / `…:searchStream` method
  * (Google Ads GAQL, Merchant reports), which takes its query in the body. Anything else — `…:mutate`,
- * `…:registerGcp`, PATCH, DELETE — is a change. The gateway refuses every Google change in step 1.
+ * `…:registerGcp`, PATCH, DELETE — is a change. The gateway lets through only a Google Ads mutate
+ * (isGoogleAdsMutate): as a check when it is validate-only, else as a write under the publish mode.
  */
 export function googleCallKind(method: string, url: string): 'read' | 'action' {
   const m = method.toUpperCase()

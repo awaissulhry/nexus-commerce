@@ -691,6 +691,10 @@ describe('C1 — every registered tool keeps the contract', () => {
       'promote-ebay-listings': { before: { ebayCampaignId: 'e1', promoted: [], changeSetId: 'ap1' }, after: { ebayCampaignId: 'e1', rates: { '110000000001': 5 } } },
       'set-ebay-campaign-budget': { before: { ebayCampaignId: 'e1', dailyBudgetCents: 1000, changeSetId: 'ap1' }, after: { ebayCampaignId: 'e1', dailyBudgetCents: 1500 } },
       'ebay-keywords-change': { before: { ebayCampaignId: 'e1', bids: { k1: 40 }, changeSetId: 'ap1' }, after: { ebayCampaignId: 'e1', bids: { k1: 55, k2: 30 }, added: ['k2'], negatives: 1 } },
+      // Google Ads (2026-10-15): budgets and campaigns go back to the amounts and budgets they had; a list's keywords and
+      // campaigns go back as they were (a budget or list a change made stays).
+      'set-google-budget': { before: { amounts: [{ budgetId: '11', budgetCents: 1000 }], campaigns: [{ campaignId: '21', budgetId: '12' }], accountId: 'g-1', customerId: '1234567890' }, after: { amounts: [{ budgetId: '11', budgetCents: 2000 }], campaigns: [{ campaignId: '21', budgetId: '11' }], accountId: 'g-1', customerId: '1234567890' } },
+      'set-google-negative-list': { before: { listId: '31', keywords: [], campaigns: [] }, after: { listId: '31', added: [{ text: 'cheap', matchType: 'PHRASE' }], removed: [], attached: ['21'], detached: [] } },
       // L7 — products created (parent and a variation), and products binned.
       'create-product': { before: { products: [] }, after: { products: [{ id: 'p1', deleted: false }, { id: 'p2', deleted: false }] } },
       'create-variations': { before: { products: [] }, after: { products: [{ id: 'p3', deleted: false }] } },
@@ -760,10 +764,10 @@ describe('C1 — every registered tool keeps the contract', () => {
       .filter((t) => !AD_STRATEGY_AUTO.includes(t.name) && !(t.name in ALWAYS_ASK_ABOVE_ASK))
       .map((t) => t.name)
     expect(outside).toEqual([])
-    // Refunds, fiscal numbers, messages, publishing, eBay ads and Amazon spend: a person approves each in Nexus.
+    // Refunds, fiscal numbers, messages, publishing, eBay and Google ads and Amazon spend: a person approves each in Nexus.
     const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
-      'set-ebay-ad-rates', 'set-ebay-campaign-budget']) {
+      'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

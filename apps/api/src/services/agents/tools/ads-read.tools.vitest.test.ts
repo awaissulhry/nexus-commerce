@@ -592,7 +592,7 @@ describe('A13 gap — ad-changes and ad-recommendations on eBay', () => {
   })
 })
 
-// ── Google Ads (step 1a, read only) ──────────────────────────────────────────────────────────────────
+// ── Google Ads (step 1a: stored data) ──────────────────────────────────────────────────────────────────
 
 describe('Google Ads step 1a — ads-overview and ad-campaigns on Google, read only', () => {
   const day = (n: number) => addAccountDays(G_YESTERDAY, -n)
@@ -600,7 +600,7 @@ describe('Google Ads step 1a — ads-overview and ad-campaigns on Google, read o
   it('the overview of the chosen account: its currency, the days read and not read, totals, the campaigns that cost most, no writes', async () => {
     const data = (await call('ads-overview', { channel: 'google' })).data!
     expect(data).toMatchObject({
-      channel: 'google', writes: { mode: 'none', note: 'No Nexus tool changes Google Ads yet; changes are made in Google Ads.' },
+      channel: 'google', writes: { mode: 'approval', note: expect.stringContaining('each is a request a person approves in Nexus') },
       currency: 'EUR', timeZone: 'Europe/Rome', dataAsOf: '2026-10-12T06:30:00.000Z',
       account: { accountId: 'conn-g-a', name: 'Test Google advertiser', state: 'ok', googleAdsAccount: { customerId: '9080706050', currency: 'EUR' } },
       window: { from: day(6), to: G_YESTERDAY, days: 7, provisionalFrom: day(6) },
@@ -624,7 +624,7 @@ describe('Google Ads step 1a — ads-overview and ad-campaigns on Google, read o
 
   it('each campaign with its Nexus and Google ids, account, type in words, budget and window numbers; pages and filters', async () => {
     const data = (await call('ad-campaigns', { channel: 'google', limit: 100 })).data!
-    expect(data).toMatchObject({ channel: 'google', writes: { mode: 'none' }, currency: 'EUR', total: 3, nextCursor: null })
+    expect(data).toMatchObject({ channel: 'google', writes: { mode: 'approval' }, currency: 'EUR', total: 3, nextCursor: null })
     expect(ids(data.items, 'campaignId')).toEqual([gIds.alpha, gIds.bravo, gIds.charlie]) // by name
     expect(data.items[0]).toEqual({
       campaignId: gIds.alpha, externalCampaignId: '701', name: 'Google alpha search', account: { accountId: 'conn-g-a', name: 'Test Google advertiser' },

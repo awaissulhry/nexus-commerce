@@ -54,6 +54,8 @@ import { ADS_BRAIN_HOURS_TOOLS } from './tools/ads-brain-hours.tools.js'
 // One brain — the Owner's control of a product's brain (enroll, levels, locks, exclusions, values, leave).
 import { ADS_BRAIN_CONTROL_TOOLS } from './tools/ads-brain-control.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
+import { GOOGLE_ADS_CHANGE_TOOLS } from './tools/google-ads-change.tools.js'
+import { GOOGLE_ADS_LIVE_TOOLS } from './tools/google-ads-live.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -200,6 +202,9 @@ const ALL: AgentTool[] = [
   // One brain — set-ads-brain: the Owner's control of a product's brain; a lever to AUTO needs the approver's code.
   ...ADS_BRAIN_CONTROL_TOOLS,
   ...EBAY_AD_TOOLS,
+  // Google Ads changes (2026-10-15): the live read and the change tools (google-ads-kit.ts).
+  ...GOOGLE_ADS_LIVE_TOOLS,
+  ...GOOGLE_ADS_CHANGE_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

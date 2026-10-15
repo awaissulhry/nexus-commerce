@@ -41,14 +41,15 @@ const OPEN_WORLD = [
   'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign', 'create-ad-group',
   'create-ai-goal-campaigns',
   'create-ebay-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'delete-listing', 'dispose-return-items',
-  'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund',
+  'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing', 'google-ads-live', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund',
   'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'promote-ebay-listings', 'publish-listing',
   'publish-review', 'receive-stock', 'reconcile-stock-count', 'relist-listing', 'reopen-listing', 'replicate-ad-structure', 'reply-to-review', 'request-review', 'resend-prices',
   'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign', 'resume-automation',
   'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
   'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
   'set-ad-group', 'set-ads-brain', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule', 'set-campaign-budget', 'set-campaign-settings',
-  'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion', 'set-hourly-bid-plan',
+  'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion', 'set-google-budget', 'set-google-negative-list',
+  'set-hourly-bid-plan',
   'set-listing-price', 'set-listing-stock', 'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers',
   'set-portfolio', 'set-price',
   'set-promotion', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid', 'shipping-rates',
@@ -160,10 +161,12 @@ describe('C3 — the server and every change tool name the business', () => {
       "only with enable-ads includePeoplesPauses and a person's approval, never by rule",
       // Platform health watchdog (2026-10-07) — the daily checks are read first in an unattended run.
       'read platform-health-checks first in a daily or unattended run',
-      // Google Ads step 1a — read only, through the two ad reads; never a step of a change plan.
-      'Google Ads is read only: ads-overview and ad-campaigns with channel google read the Google Ads account a person chose',
-      'no tool changes Google Ads, so never put a Google step in a change plan',
-      // Google Ads step 1b — the rest of the Google Ads page, one view at a time, still read only.
+      // Google Ads step 1a — the two ad reads.
+      'Google Ads: ads-overview and ad-campaigns with channel google read the Google Ads account a person chose',
+      // Google Ads changes (2026-10-15) — a person approves each, never a rule; Google checks it first; spend is marked.
+      'Google Ads changes go through the set-google-… tools: each is a request a person approves in Nexus, never run by a rule',
+      'what can make the account spend more is marked SPENDS MONEY in the preview',
+      // Google Ads step 1b — the rest of the Google Ads page, one view at a time.
       'and google-ad-details (one view at a time) its ad groups, keywords, negatives, search terms and the']) {
       expect(mcpInstructions(business), rule).toContain(rule)
     }

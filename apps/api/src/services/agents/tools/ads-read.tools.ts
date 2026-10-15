@@ -248,7 +248,7 @@ const channelArg = z.preprocess(lower, z.enum(CHANNELS)).default('amazon')
 const READ_CHANNELS = ['amazon', 'ebay', 'google'] as const
 type ReadChannel = (typeof READ_CHANNELS)[number]
 const readChannelArg = z.preprocess(lower, z.enum(READ_CHANNELS)).default('amazon')
-  .describe('amazon (default), ebay (Promoted Listings) or google (Google Ads, read only)')
+  .describe('amazon (default), ebay (Promoted Listings) or google (Google Ads)')
 const googleAccountArg = z.string().trim().min(1).max(64).optional()
   .describe('Google only: the Google account to read, by its connectionId (channel-connections); default the business\'s chosen Google Ads account')
 const limitArg = z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).optional()
@@ -566,25 +566,29 @@ export async function amazonOverview(args: { market?: string; days: number }) {
   }
 }
 
-// ── Google Ads (step 1a, read only) ────────────────────────────────────────────────────────────────
+// ── Google Ads (step 1a: these tools read what Nexus stored) ─────────────────────────────────────
 
-/** No Nexus tool changes Google Ads in step 1a; the gateway refuses every Google write anyway. */
-const GOOGLE_WRITES = { mode: 'none', note: 'No Nexus tool changes Google Ads yet; changes are made in Google Ads.' } as const
+/** 2026-10-15 — Google Ads changes go through the Google Ads change tools, each a request a person approves in Nexus. */
+const GOOGLE_WRITES = {
+  mode: 'approval',
+  note: 'Google Ads changes go through the Nexus Google Ads change tools (set-google-…): each is a request a person approves in Nexus. google-ads-live reads the account live.',
+} as const
 const GOOGLE_PROVISIONAL_NOTE = 'Google can still add late conversions to the last 14 days (Nexus re-reads them every day): figures on or after provisionalFrom may still change.'
 const GOOGLE_COUNTING = 'Cost, conversions and conversion value as Google counts them (its attribution and conversion actions; days in the '
   + 'account\'s time zone). Conversions can be fractional. Google Ads has no sales, orders or ACoS: never name them for it.'
 const GOOGLE_STATUSES: readonly string[] = ['ENABLED', 'PAUSED', 'REMOVED']
-const GOOGLE_OVERVIEW_WORDS = ' Google (channel google, read only): the Google Ads account a person chose for this business (accountId: its '
+const GOOGLE_OVERVIEW_WORDS = ' Google (channel google): the Google Ads account a person chose for this business (accountId: its '
   + 'connectionId from channel-connections, only when there is more than one): impressions, clicks, cost (as spendCents), conversions, '
   + 'conversion value and ROAS as Google counts them, for the window and for the window before (previous: only when Nexus read every '
   + 'day of both windows, else null: never work out a change from totals that leave days out), each day (a day Nexus has not read has read false and no numbers, never 0; the last 14 days provisional), the '
   + 'campaigns that cost most, the account\'s state in words, and coverage.missingDays. Read per account, never per market. dataAsOf '
-  + 'is when Nexus last read the account from Google. No tool changes Google Ads (writes.mode none): say what you would change and '
-  + 'that a person makes it in Google Ads; never put a Google step in a change plan.'
-const GOOGLE_CAMPAIGN_WORDS = ' Google (channel google, read only): per campaign its Nexus and Google ids, account, status (ENABLED, '
+  + 'is when Nexus last read the account from Google. Changes go through the Google Ads change tools (set-google-…), each a request '
+  + 'a person approves in Nexus (writes.mode approval); google-ads-live reads the account live from Google.'
+const GOOGLE_CAMPAIGN_WORDS = ' Google (channel google): per campaign its Nexus and Google ids, account, status (ENABLED, '
   + 'PAUSED, REMOVED; null when Nexus has its numbers but has not read its settings yet) and serving status, type (Search, Shopping, Performance Max, …), bidding strategy, daily budget (budgetShared), '
   + 'currency, and impressions, clicks, conversions, cost (as spendCents), conversion value and ROAS over the window (metrics null '
-  + 'when Nexus read no day of it); writes.mode is none.'
+  + 'when Nexus read no day of it); writes.mode approval: changes go through the Google Ads change tools (set-google-…), each a '
+  + 'request a person approves in Nexus.'
 
 interface GoogleArgs { channel: ReadChannel; market?: string; accountId?: string; status?: string }
 
@@ -2129,7 +2133,10 @@ const GOOGLE_DETAIL_MONEY = {
 } as const
 
 /** Never under `note`: AD_MONEY strips that key as prose that quotes amounts. */
-const GOOGLE_DETAIL_WRITES = { mode: 'none', text: 'No Nexus tool changes Google Ads: a person makes every change in Google Ads.' } as const
+const GOOGLE_DETAIL_WRITES = {
+  mode: 'approval',
+  text: 'Google Ads changes go through the Nexus Google Ads change tools (set-google-…): each is a request a person approves in Nexus. Google\'s recommendations are not applied by Nexus.',
+} as const
 const GOOGLE_DETAIL_DAYS = 30
 /** The most rows one call reads from a list service; beyond it the answer says how many it left out. */
 const GOOGLE_DETAIL_READ_CAP = 2000
@@ -2444,8 +2451,9 @@ const googleAdDetailsTool: AgentTool = {
     + 'yet says so (readAt null): say "not read yet", never 0; a day outside a read range has no numbers (coverage). '
     + GOOGLE_COUNTING + ' Amounts are minor units (cents) of the account\'s currency, never converted; a person without '
     + 'the ad-spend money permission gets the same answer without the amounts (bids, targets, impact and an alert\'s '
-    + 'numbers too).' + PAGING + ' No tool changes Google Ads (writes.mode none): say what you would change and that a '
-    + 'person makes it in Google Ads; never put a Google step in a change plan.',
+    + 'numbers too).' + PAGING + ' This tool reads what Nexus stored; changes go through the Google Ads change tools '
+    + '(set-google-…, writes.mode approval), each a request a person approves in Nexus, and google-ads-live reads the '
+    + 'account live from Google. Nexus applies none of Google\'s recommendations.',
   handler: (args) => listTool('google-ad-details', async () => {
     const a = args as unknown as GoogleDetailArgs
     const refused = googleDetailRefusal(a)

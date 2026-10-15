@@ -22,6 +22,15 @@
 
 export const DEFAULT_GLOBAL_DAILY_OPS = 2400
 export const ACCOUNT_DAILY_OPS = 100
+/**
+ * Google Ads changes (2026-10-15): what one account may spend in 24 hours on changes — Google's checks of a change
+ * (validate-only, counted as Google does not say they are free), the live reads a change stands on, and the changes
+ * themselves. Inside the global cap. Rebuilding a whole small account (≈ 450 operations) is checked and sent within it.
+ */
+export const WRITE_ACCOUNT_DAILY_OPS = 1500
+
+/** Which allowance a reservation draws on: the daily read's, or the changes'. Both count against the global cap. */
+export type OpsLane = 'read' | 'write'
 export const QUOTA_EXHAUSTED_HOLD_MS = 60 * 60_000
 
 const PREFIX = 'nexus:gads:ops'
@@ -78,7 +87,9 @@ export function globalOpsCap(): number {
 
 const hourOf = (at: Date): string => at.toISOString().slice(0, 13).replace(/[-T]/g, '')
 const globalKey = (hour: string) => `${PREFIX}:${hour}`
-const accountKey = (account: string, hour: string) => `${PREFIX}:acct:${account}:${hour}`
+const accountKey = (account: string, hour: string, lane: OpsLane = 'read') => `${PREFIX}:${lane === 'write' ? 'acctw' : 'acct'}:${account}:${hour}`
+const capOf = (lane: OpsLane) => (lane === 'write' ? WRITE_ACCOUNT_DAILY_OPS : ACCOUNT_DAILY_OPS)
+const notStarted = (lane: OpsLane) => (lane === 'write' ? 'The Google Ads change is not checked or sent' : 'The Google Ads read is not started')
 const lastHours = (now: Date): string[] => Array.from({ length: HOURS }, (_, i) => hourOf(new Date(now.getTime() - i * 3_600_000)))
 const sum = (values: Array<string | null>) => values.reduce((total, v) => total + (Number(v) || 0), 0)
 
@@ -123,24 +134,26 @@ export interface OpsReservation {
 
 /**
  * Reserve `ops` operations for one read (`account` = the Google Ads customer id; null = connect-flow calls that
- * belong to no account yet, which count against the global cap only).
+ * belong to no account yet, which count against the global cap only), or for a change (`lane` write: the account's
+ * change allowance, WRITE_ACCOUNT_DAILY_OPS).
  */
-export async function reserveOps(account: string | null, ops: number, now: Date = new Date()): Promise<OpsReservation> {
+export async function reserveOps(account: string | null, ops: number, now: Date = new Date(), lane: OpsLane = 'read'): Promise<OpsReservation> {
   const capGlobal = globalOpsCap()
-  const capAccount = ACCOUNT_DAILY_OPS
+  const capAccount = capOf(lane)
+  const what = notStarted(lane)
   const result = (fields: Partial<OpsReservation>): OpsReservation => ({
     ok: false, reason: null, ops: 0, reservedAt: now, usedGlobal: null, usedAccount: null, capGlobal, capAccount, exhaustedUntil: null, retryAt: null, sentence: '', ...fields,
   })
   const want = Math.max(0, Math.floor(ops))
   const redis = await client().catch(() => null)
   if (!redis || redis.status === 'end' || redis.status === 'close') {
-    return result({ reason: 'redis_unavailable', sentence: 'The Google Ads read is not started: Nexus cannot count its Google Ads allowance right now (Redis is not available).' })
+    return result({ reason: 'redis_unavailable', sentence: `${what}: Nexus cannot count its Google Ads allowance right now (Redis is not available).` })
   }
   try {
     const until: string | null = await timed(redis.get(EXHAUSTED_KEY))
     const untilDate = until ? new Date(until) : null
     if (untilDate && untilDate.getTime() > now.getTime()) {
-      return result({ reason: 'quota_exhausted', exhaustedUntil: untilDate, retryAt: untilDate, sentence: 'The Google Ads read is not started: Google said today\'s Google Ads API allowance is used up. Nexus tries again later.' })
+      return result({ reason: 'quota_exhausted', exhaustedUntil: untilDate, retryAt: untilDate, sentence: `${what}: Google said today's Google Ads API allowance is used up. ${lane === 'write' ? 'Ask again later.' : 'Nexus tries again later.'}` })
     }
     if (want === 0) return result({ ok: true })
     const hour = hourOf(now)
@@ -148,18 +161,18 @@ export async function reserveOps(account: string | null, ops: number, now: Date 
     await timed(redis.incrby(globalKey(hour), want))
     await timed(redis.expire(globalKey(hour), BUCKET_TTL_SEC))
     if (account) {
-      await timed(redis.incrby(accountKey(account, hour), want))
-      await timed(redis.expire(accountKey(account, hour), BUCKET_TTL_SEC))
+      await timed(redis.incrby(accountKey(account, hour, lane), want))
+      await timed(redis.expire(accountKey(account, hour, lane), BUCKET_TTL_SEC))
     }
     const globalHours: Array<string | null> = await timed(redis.mget(...hours.map(globalKey)))
-    const accountHours: Array<string | null> | null = account ? await timed(redis.mget(...hours.map((h) => accountKey(account, h)))) : null
+    const accountHours: Array<string | null> | null = account ? await timed(redis.mget(...hours.map((h) => accountKey(account, h, lane)))) : null
     const usedGlobal = sum(globalHours)
     const usedAccount = accountHours ? sum(accountHours) : null
     const overGlobal = usedGlobal > capGlobal
     const overAccount = usedAccount !== null && usedAccount > capAccount
     if (overGlobal || overAccount) {
       await timed(redis.decrby(globalKey(hour), want))
-      if (account) await timed(redis.decrby(accountKey(account, hour), want))
+      if (account) await timed(redis.decrby(accountKey(account, hour, lane), want))
       // This request was counted in the current hour's bucket: leave it out when asking when it would fit.
       const without = (hourly: Array<string | null>) => [String((Number(hourly[0]) || 0) - want), ...hourly.slice(1)]
       const globalFits = freesUpAt(without(globalHours), want, capGlobal, now)
@@ -173,18 +186,18 @@ export async function reserveOps(account: string | null, ops: number, now: Date 
         usedGlobal: usedGlobal - want,
         usedAccount: usedAccount === null ? null : usedAccount - want,
         sentence: overGlobal
-          ? `The Google Ads read is not started: Nexus has used ${usedGlobal - want} of its ${capGlobal} Google Ads operations in the last 24 hours. It tries again later.`
-          : `The Google Ads read is not started: this account has used ${usedAccount - want} of its ${capAccount} Google Ads operations in the last 24 hours. It tries again later.`,
+          ? `${what}: Nexus has used ${usedGlobal - want} of its ${capGlobal} Google Ads operations in the last 24 hours. ${lane === 'write' ? 'Ask again later.' : 'It tries again later.'}`
+          : `${what}: this account has used ${usedAccount - want} of its ${capAccount} Google Ads ${lane === 'write' ? 'change ' : ''}operations in the last 24 hours. ${lane === 'write' ? 'Ask again later.' : 'It tries again later.'}`,
       })
     }
     return result({ ok: true, ops: want, usedGlobal, usedAccount })
   } catch {
-    return result({ reason: 'redis_unavailable', sentence: 'The Google Ads read is not started: Nexus cannot count its Google Ads allowance right now (Redis did not answer).' })
+    return result({ reason: 'redis_unavailable', sentence: `${what}: Nexus cannot count its Google Ads allowance right now (Redis did not answer).` })
   }
 }
 
 /** Give back operations a run reserved and did not spend (to the hour they were counted in). Never throws. */
-export async function releaseOps(account: string | null, ops: number, reservedAt: Date): Promise<void> {
+export async function releaseOps(account: string | null, ops: number, reservedAt: Date, lane: OpsLane = 'read'): Promise<void> {
   const give = Math.max(0, Math.floor(ops))
   if (give === 0) return
   try {
@@ -192,7 +205,7 @@ export async function releaseOps(account: string | null, ops: number, reservedAt
     if (!redis) return
     const hour = hourOf(reservedAt)
     await timed(redis.decrby(globalKey(hour), give))
-    if (account) await timed(redis.decrby(accountKey(account, hour), give))
+    if (account) await timed(redis.decrby(accountKey(account, hour, lane), give))
   } catch { /* an unreturned operation only makes the next reservation stricter */ }
 }
 
@@ -201,7 +214,7 @@ export async function releaseOps(account: string | null, ops: number, reservedAt
  * they are added to the hour's buckets as they are — never refused, never given back, even over a cap (the next
  * reservation then waits longer). Counted in the reservation's hour, like `releaseOps`. Never throws.
  */
-export async function addSpentOps(account: string | null, ops: number, reservedAt: Date): Promise<void> {
+export async function addSpentOps(account: string | null, ops: number, reservedAt: Date, lane: OpsLane = 'read'): Promise<void> {
   const spent = Math.max(0, Math.floor(ops))
   if (spent === 0) return
   try {
@@ -211,8 +224,8 @@ export async function addSpentOps(account: string | null, ops: number, reservedA
     await timed(redis.incrby(globalKey(hour), spent))
     await timed(redis.expire(globalKey(hour), BUCKET_TTL_SEC))
     if (account) {
-      await timed(redis.incrby(accountKey(account, hour), spent))
-      await timed(redis.expire(accountKey(account, hour), BUCKET_TTL_SEC))
+      await timed(redis.incrby(accountKey(account, hour, lane), spent))
+      await timed(redis.expire(accountKey(account, hour, lane), BUCKET_TTL_SEC))
     }
   } catch { /* Redis is down: the next reservation is refused anyway */ }
 }

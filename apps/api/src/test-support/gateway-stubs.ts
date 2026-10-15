@@ -11,11 +11,14 @@ import type { GatewayAccountState } from '../services/gateway/account.js'
 import type { GatewayLedgerRow } from '../services/outbound-api-call-log.service.js'
 
 export const gatewayAccounts: Record<string, GatewayAccountState | null> = {}
+/** Google Ads customers NOT chosen for their connection's business (`${connectionId}:${customerId}`); every other is. */
+export const gatewayGoogleUnlinked = new Set<string>()
 export const gatewayLedger: GatewayLedgerRow[] = []
 
 export const accountModule = {
   accountStatusOf: async (id: string): Promise<GatewayAccountState | null> =>
     id in gatewayAccounts ? gatewayAccounts[id] : { authStatus: 'connected', isActive: true, displayName: `Test account ${id}` },
+  googleAdsCustomerLinked: async (connectionId: string, customerId: string): Promise<boolean> => !gatewayGoogleUnlinked.has(`${connectionId}:${customerId}`),
 }
 export const ledgerModule = {
   writeLedgerRow: async (row: GatewayLedgerRow): Promise<void> => { gatewayLedger.push(row) },

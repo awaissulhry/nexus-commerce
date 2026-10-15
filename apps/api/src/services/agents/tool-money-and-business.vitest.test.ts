@@ -151,6 +151,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-bid-brain-enrollment': 'a campaign goes LIVE under the bid brain only from the live-write allowlist, which the seeded campaign is not on (bid-brain/live-postgres test)',
   'retire-ads-writers': 'a retirement needs a product enrolled in the brain with every lever AUTO or the Owner\'s choice under the live server switch, which this seed has not (brain/retire-postgres test)',
   'harvest-destinations': 'a product\'s harvest places are its own Sponsored Products campaigns, and the seeded campaign carries no ad product, so the product owns none here (tools/ads-harvest-postgres test)',
+  'google-ads-live': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-change.tools test)',
+  'set-google-negative-list': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-change.tools test)',
   'set-harvest-rules': 'the seeded rule is not a harvest rule, so there is nothing to archive (tools/ads-harvest-postgres test)',
   'set-harvest-sources': 'the seeded ad group feeds no terms to harvest (a manual campaign with no ad product), so it is no source (tools/ads-harvest-postgres test)',
 }
@@ -390,6 +392,12 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // Google Ads step 1b — the Google ad details: no business here has a Google sign-in, so each answers why there is
   // nothing to read (no money, nothing of the other business); google-ad-details.vitest.test.ts reads every view.
   'google-ad-details': () => ({ view: 'keywords' }),
+  // Google Ads changes (2026-10-15) — the live read and the change tools: no business here has a Google Ads account, so
+  // each answers why there is nothing to read or change, before any Google call (google-ads-change.tools.vitest.test.ts
+  // runs them on an account).
+  'google-ads-live': () => ({ view: 'campaigns' }),
+  'set-google-budget': () => ({ amounts: [{ budgetId: '11', budgetCents: 1000 }] }),
+  'set-google-negative-list': () => ({ listId: '31', addKeywords: [{ text: 'gratis', matchType: 'PHRASE' }] }),
   // L2 — listing reads: where each listing lives, its stock and price per market, its photo plan.
   'listing-coordinates': (ids) => ({ productId: ids.productId }),
   'listing-matrix': (ids) => ({ productId: ids.productId }),
