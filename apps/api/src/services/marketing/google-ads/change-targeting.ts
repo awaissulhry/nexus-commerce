@@ -10,12 +10,13 @@
  * show everywhere / in every language).
  */
 import { changeLines, plural, type GoogleChangeDraft } from './change-draft.js'
-import { scheduleCriteria, type ScheduleSlot } from './change-campaigns.js'
+import { scheduleCriteria, type ScheduleCriterion, type ScheduleSlot } from './change-campaigns.js'
 import type { LiveCampaignDetail, LiveCriterion } from './live.js'
 import type { GoogleMutateOperation } from './write-client.js'
 
 export interface TargetingRequest {
-  addLocations?: Array<{ id: string; exclude?: boolean }>
+  /** `bidModifier`: a targeted location's bid adjustment (undo puts a removed location back with its own). */
+  addLocations?: Array<{ id: string; exclude?: boolean; bidModifier?: number }>
   removeLocations?: Array<{ id: string; exclude?: boolean }>
   addLanguages?: string[]
   removeLanguages?: string[]
@@ -34,17 +35,21 @@ const languageId = (c: LiveCriterion) => (c.language ?? '').split('/').pop() ?? 
 const audienceId = (c: LiveCriterion) => (c.audience ?? '').split('/').pop() ?? ''
 const MINUTES: Record<string, number> = { ZERO: 0, FIFTEEN: 15, THIRTY: 30, FORTY_FIVE: 45 }
 
-/** The schedule criteria now, as slots (one per day and time span). */
+/** The schedule criteria now, as slots (one per day and time span), with their bid adjustments. */
 export function scheduleNow(criteria: LiveCriterion[]): ScheduleSlot[] {
-  return criteria.filter((c) => c.type === 'AD_SCHEDULE' && c.schedule).map((c) => ({ days: [c.schedule!.day ?? ''], from: c.schedule!.from, to: c.schedule!.to }))
+  return criteria.filter((c) => c.type === 'AD_SCHEDULE' && c.schedule).map((c) => ({
+    days: [c.schedule!.day ?? ''], from: c.schedule!.from, to: c.schedule!.to,
+    ...(c.bidModifier !== null && c.bidModifier !== 1 ? { bidModifier: c.bidModifier } : {}),
+  }))
 }
 
 /** Minutes a week the ads may show: a week (10,080) when there is no schedule. */
-function weeklyMinutes(rows: Array<{ startHour: number; startMinute: string; endHour: number; endMinute: string }>): number {
+function weeklyMinutes(rows: ScheduleCriterion[]): number {
   if (!rows.length) return 7 * 24 * 60
-  return rows.reduce((sum, r) => sum + (r.endHour * 60 + MINUTES[r.endMinute]) - (r.startHour * 60 + MINUTES[r.startMinute]), 0)
+  return rows.reduce((sum, { adSchedule: r }) => sum + (r.endHour * 60 + MINUTES[r.endMinute]) - (r.startHour * 60 + MINUTES[r.startMinute]), 0)
 }
-const scheduleKey = (r: { dayOfWeek: string; startHour: number; startMinute: string; endHour: number; endMinute: string }) => `${r.dayOfWeek}@${r.startHour}:${r.startMinute}-${r.endHour}:${r.endMinute}`
+const slotKey = ({ adSchedule: r }: ScheduleCriterion) => `${r.dayOfWeek}@${r.startHour}:${r.startMinute}-${r.endHour}:${r.endMinute}`
+const scheduleKey = (row: ScheduleCriterion) => `${slotKey(row)}x${row.bidModifier ?? 1}`
 
 export function targetingDraft(
   customer: string,
@@ -75,7 +80,8 @@ export function targetingDraft(
   for (const l of ask.addLocations ?? []) {
     if (locations.some((k) => geoId(k) === l.id && k.negative === !!l.exclude)) { skipped.push(`Location ${l.id} is already ${l.exclude ? 'excluded' : 'targeted'}.`); continue }
     if (locations.some((k) => geoId(k) === l.id && k.negative !== !!l.exclude)) return { refusal: `Location ${l.id} is already ${l.exclude ? 'targeted' : 'excluded'}: remove it first (removeLocations), in the same request.`.replace(', in the same request', '') }
-    ops.push({ campaignCriterionOperation: { create: { campaign: res, ...(l.exclude ? { negative: true } : {}), location: { geoTargetConstant: `geoTargetConstants/${l.id}` } } } })
+    if (l.bidModifier !== undefined && (l.exclude || !(l.bidModifier >= 0.1 && l.bidModifier <= 10))) return { refusal: `Location ${l.id}: a bid adjustment is for a targeted location, between 0.1 and 10.` }
+    ops.push({ campaignCriterionOperation: { create: { campaign: res, ...(l.exclude ? { negative: true } : {}), location: { geoTargetConstant: `geoTargetConstants/${l.id}` }, ...(l.bidModifier !== undefined && l.bidModifier !== 1 ? { bidModifier: l.bidModifier } : {}) } } })
     addedLoc.push({ id: l.id, ...(l.exclude ? { exclude: true } : {}) })
   }
   const removedLoc: Array<{ id: string; exclude?: boolean }> = []
@@ -83,7 +89,7 @@ export function targetingDraft(
     const found = locations.find((k) => geoId(k) === l.id && k.negative === !!l.exclude)
     if (!found) { skipped.push(`Location ${l.id} is not ${l.exclude ? 'excluded' : 'targeted'} in "${c.name}".`); continue }
     ops.push({ campaignCriterionOperation: { remove: crit(found.criterionId) } })
-    removedLoc.push({ id: l.id, ...(l.exclude ? { exclude: true } : {}) })
+    removedLoc.push({ id: l.id, ...(l.exclude ? { exclude: true } : {}), ...(found.bidModifier !== null && found.bidModifier !== 1 ? { bidModifier: found.bidModifier } : {}) })
   }
   const targetedBefore = locations.filter((k) => !k.negative).length
   const targetedAfter = targetedBefore + addedLoc.filter((l) => !l.exclude).length - removedLoc.filter((l) => !l.exclude).length
@@ -132,9 +138,13 @@ export function targetingDraft(
     if (same) skipped.push(`"${c.name}" already has this schedule.`)
     else {
       for (const k of nowRows) ops.push({ campaignCriterionOperation: { remove: crit(k.criterionId) } })
-      for (const s of wanted) ops.push({ campaignCriterionOperation: { create: { campaign: res, adSchedule: s } } })
+      for (const s of wanted) ops.push({ campaignCriterionOperation: { create: { campaign: res, ...s } } })
       const before = weeklyMinutes(nowCriteria)
       const after = weeklyMinutes(wanted)
+      // A slot that stays with a higher bid adjustment (or loses a lowering one) bids more at the same hours.
+      const oldModifier = new Map(nowCriteria.map((r) => [slotKey(r), r.bidModifier ?? 1]))
+      const raised = wanted.filter((r) => oldModifier.has(slotKey(r)) && (r.bidModifier ?? 1) > oldModifier.get(slotKey(r))!).length
+      if (raised) spends.push(`Raises the bid adjustment of ${plural(raised, 'schedule slot')}${note}.`)
       lines.push(['ad schedule', nowCriteria.length ? `${nowCriteria.length} slots, ${Math.round(before / 60)} h a week` : 'all day, every day', wanted.length ? `${wanted.length} slots, ${Math.round(after / 60)} h a week` : 'all day, every day'])
       if (after > before) spends.push(`The ads may show ${Math.round((after - before) / 60)} more hours a week${note}.`)
       if (nowCriteria.length) undo.schedule = nowSlots
@@ -158,10 +168,14 @@ export function targetingDraft(
   }
   if (addedAud.length) {
     const audienceMode = c.audienceMode.find((t) => t.dimension === 'AUDIENCE')
-    if (!audienceMode || !audienceMode.observationOnly) {
-      const others = c.audienceMode.filter((t) => t.dimension !== 'AUDIENCE').map((t) => ({ targetingDimension: t.dimension, bidOnly: t.observationOnly }))
+    // Nexus adds audiences in observation only, and never turns targeting into observation by itself (that widens who
+    // sees the ads, and an undo could not put the narrowing back).
+    if (audienceMode && !audienceMode.observationOnly) {
+      return { refusal: `"${c.name}" sets its audiences to TARGETING (they narrow who sees the ads). Nexus adds audiences in observation only: change the audience setting in Google Ads first, or leave the audiences as they are.` }
+    }
+    if (!audienceMode) {
+      const others = c.audienceMode.map((t) => ({ targetingDimension: t.dimension, bidOnly: t.observationOnly }))
       ops.unshift({ campaignOperation: { update: { resourceName: res, targetingSetting: { targetRestrictions: [...others, { targetingDimension: 'AUDIENCE', bidOnly: true }] } }, updateMask: 'targeting_setting.target_restrictions' } })
-      if (audienceMode && !audienceMode.observationOnly) warnings.push('The campaign\'s audiences were set to TARGETING (they narrowed who sees the ads): they become OBSERVATION, so more people can see them.')
     }
     undo.removeAudiences = addedAud
   }

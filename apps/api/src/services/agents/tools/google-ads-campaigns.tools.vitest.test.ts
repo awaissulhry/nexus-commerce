@@ -82,7 +82,7 @@ describe('the campaign tools', () => {
     expect(run.ok).toBe(true)
     expect(run.change?.after).toEqual({ campaignId: '99', name: 'Search B', ownBudgetId: '55', accountId: 'g-1', customerId: '1234567890' })
     const undo = tool('create-google-campaign').undo!.request(run.change!)
-    expect(undo).toEqual({ tool: 'remove-google-ads-items', args: { accountId: 'g-1', items: [{ kind: 'campaign', id: '99' }], confirmRemove: true, why: 'undo of an earlier campaign create' } })
+    expect(undo).toEqual({ tool: 'remove-google-ads-items', args: { accountId: 'g-1', items: [{ kind: 'campaign', id: '99' }, { kind: 'budget', id: '55' }], confirmRemove: true, why: 'undo of an earlier campaign create' } })
     expect(tool('remove-google-ads-items').input.safeParse((undo as { args: unknown }).args).success).toBe(true)
   })
 
@@ -111,7 +111,7 @@ describe('the campaign tools', () => {
   it('every undo request parses as its tool\'s own arguments', () => {
     const samples: Record<string, { before: unknown; after: unknown }> = {
       'set-google-campaign': { before: { campaignId: '21', settings: { searchPartners: false, bidding: { strategy: 'MANUAL_CPC' }, endDate: 'none' }, accountId: 'g-1' }, after: { campaignId: '21', settings: {}, accountId: 'g-1' } },
-      'set-google-targeting': { before: null, after: { campaignId: '21', undo: { addLocations: [{ id: '2380', exclude: true }], clearSchedule: true, removeAudiences: ['80000'] }, accountId: 'g-1' } },
+      'set-google-targeting': { before: { campaignId: '21', undo: {} }, after: { campaignId: '21', undo: { addLocations: [{ id: '2380', bidModifier: 1.2 }, { id: '2250', exclude: true }], schedule: [{ days: ['MONDAY'], from: '00:00', to: '08:00', bidModifier: 0.1 }], removeAudiences: ['80000'] }, accountId: 'g-1' } },
       'set-google-status': { before: { items: [{ kind: 'keyword', id: '51~601', status: 'PAUSED' }], accountId: 'g-1' }, after: { items: [], accountId: 'g-1' } },
     }
     for (const [name, change] of Object.entries(samples)) {

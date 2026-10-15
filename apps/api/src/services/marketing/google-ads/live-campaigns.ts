@@ -29,6 +29,8 @@ export interface LiveStatusItem {
   campaignName: string
   campaignStatus: string | null
   adGroupStatus: string | null
+  /** A keyword: true when it is a negative keyword (removing one lets more searches show the ads). */
+  negative?: boolean
 }
 
 const inList = (ids: string[], what: string) => ids.map((id) => gaqlId(id, what)).join(', ')
@@ -78,7 +80,7 @@ export async function liveStatuses(target: GoogleAdsTarget, ask: { adGroups: str
       if (!wanted.has(id)) continue
       const k = r.adGroupCriterion?.keyword ?? {}
       out.push({
-        kind: 'keyword', id, name: `${str(k.text) ?? ''} (${str(k.matchType) ?? '?'}${r.adGroupCriterion?.negative ? ', negative' : ''})`, status: str(r.adGroupCriterion?.status),
+        kind: 'keyword', id, name: `${str(k.text) ?? ''} (${str(k.matchType) ?? '?'}${r.adGroupCriterion?.negative ? ', negative' : ''})`, status: str(r.adGroupCriterion?.status), negative: r.adGroupCriterion?.negative === true,
         campaignId: str(r.campaign?.id) ?? '', campaignName: str(r.campaign?.name) ?? '', campaignStatus: str(r.campaign?.status), adGroupStatus: str(r.adGroup?.status),
       })
     }

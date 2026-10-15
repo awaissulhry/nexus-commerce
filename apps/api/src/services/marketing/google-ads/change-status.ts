@@ -136,7 +136,11 @@ export function removeDraft(
   const lines: Array<[string, unknown, unknown]> = []
   const seen = new Set<string>()
   const removed: Array<{ kind: RemoveKind; id: string; name: string }> = []
-  for (const item of request.items) {
+  const spends: string[] = []
+  // Google needs what uses a budget or list gone before the budget or list itself: campaigns, ad groups, keywords and ads
+  // first, budgets and lists last.
+  const last = (k: RemoveKind) => (k === 'budget' || k === 'negative-list' ? 1 : 0)
+  for (const item of [...request.items].sort((a, b) => last(a.kind) - last(b.kind))) {
     const key = `${item.kind}:${item.id}`
     if (seen.has(key)) continue
     seen.add(key)
@@ -156,6 +160,9 @@ export function removeDraft(
       const now = itemNow(item.kind, item.id, live.campaigns, live.items)
       if (!now) return { refusal: `${KIND_WORD[item.kind]} ${item.id} is not in this account (or it is already removed).` }
       name = now.name
+      if (item.kind === 'keyword' && now.negative) {
+        spends.push(`Removes the negative keyword ${now.name} from "${now.campaignName}": more searches can show the ads${now.campaignStatus === 'ENABLED' ? '' : ' (the campaign is paused: nothing spends until it is enabled)'}.`)
+      }
     }
     const { op, resource } = itemResource(customer, item.kind, item.id)
     ops.push({ [op]: { remove: resource } })
@@ -168,7 +175,7 @@ export function removeDraft(
     changes,
     totals: { operations: ops.length, removed: removed.length, ...(more ? { linesNotShown: more } : {}) },
     warnings: ['A removal cannot be undone: Google keeps a removed item only as history, and it cannot be enabled again.'],
-    spendsMoney: [],
+    spendsMoney: spends,
     skipped: [],
     operations: ops,
     stands: { removed: removed.map((r) => `${r.kind}:${r.id}`).sort(), budgets: live.budgets.filter((b) => removed.some((r) => r.kind === 'budget' && r.id === b.budgetId)).map((b) => b.usedBy), lists: live.lists.filter((l) => removed.some((r) => r.kind === 'negative-list' && r.id === l.listId)).map((l) => l.campaigns.length) },

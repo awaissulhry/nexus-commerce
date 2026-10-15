@@ -697,7 +697,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       // PR 2: a campaign made is removed; settings, targeting and statuses go back as they were.
       'create-google-campaign': { before: { campaignId: null }, after: { campaignId: '21', name: 'Shop A', accountId: 'g-1', customerId: '1234567890' } },
       'set-google-campaign': { before: { campaignId: '21', settings: { searchPartners: false, dailyBudgetCents: 700 }, accountId: 'g-1' }, after: { campaignId: '21', settings: { searchPartners: true, dailyBudgetCents: 900 }, accountId: 'g-1' } },
-      'set-google-targeting': { before: null, after: { campaignId: '21', undo: { removeLocations: [{ id: '2380' }], schedule: [{ days: ['MONDAY'], from: '08:00', to: '24:00' }] }, accountId: 'g-1' } },
+      'set-google-targeting': { before: { campaignId: '21', undo: {} }, after: { campaignId: '21', undo: { removeLocations: [{ id: '2380' }], schedule: [{ days: ['MONDAY'], from: '08:00', to: '24:00' }] }, accountId: 'g-1' } },
       'set-google-status': { before: { items: [{ kind: 'campaign', id: '21', status: 'PAUSED' }], accountId: 'g-1' }, after: { items: [{ kind: 'campaign', id: '21', status: 'ENABLED' }], accountId: 'g-1' } },
       'set-google-negative-list': { before: { listId: '31', keywords: [], campaigns: [] }, after: { listId: '31', added: [{ text: 'cheap', matchType: 'PHRASE' }], removed: [], attached: ['21'], detached: [] } },
       // L7 — products created (parent and a variation), and products binned.

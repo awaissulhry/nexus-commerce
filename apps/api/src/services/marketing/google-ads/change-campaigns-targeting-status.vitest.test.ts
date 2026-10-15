@@ -106,12 +106,37 @@ describe('campaignSettingsDraft', () => {
     expect(d.before).toMatchObject({ campaignId: '21', settings: { searchPartners: false, bidding: { strategy: 'MANUAL_CPC' }, dailyBudgetCents: 700 } })
   })
 
-  it('campaign broad match off clears the field (in the mask, no value); text customization stays on with URL expansion', () => {
-    const d = campaignSettingsDraft(C, 'EUR', '21', { broadMatch: false }, live({ keywordMatchType: 'BROAD' }))
+  it('AI Max off turns text customization and final URL expansion off in the same request; URL expansion alone turns text on', () => {
+    const on = [{ type: 'TEXT_ASSET_AUTOMATION', status: 'OPTED_IN' }, { type: 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', status: 'OPTED_IN' }]
+    const d = campaignSettingsDraft(C, 'EUR', '21', { aiMax: false }, live({ aiMax: true, assetAutomation: on }))
     if ('refusal' in d) throw new Error(d.refusal)
-    expect(d.operations[0]).toEqual({ campaignOperation: { update: { resourceName: `${C}/campaigns/21` }, updateMask: 'keyword_match_type' } })
+    expect(d.operations[0]).toEqual({ campaignOperation: {
+      update: { resourceName: `${C}/campaigns/21`, aiMaxSetting: { enableAiMax: false }, assetAutomationSettings: [
+        { assetAutomationType: 'TEXT_ASSET_AUTOMATION', assetAutomationStatus: 'OPTED_OUT' },
+        { assetAutomationType: 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', assetAutomationStatus: 'OPTED_OUT' },
+      ] },
+      updateMask: 'ai_max_setting.enable_ai_max,asset_automation_settings',
+    } })
+    expect(d.warnings).toContain('AI Max off also turns off text customization and final URL expansion: they serve only with AI Max.')
+    const url = campaignSettingsDraft(C, 'EUR', '21', { finalUrlExpansion: true }, live({ aiMax: true }))
+    if ('refusal' in url) throw new Error(url.refusal)
+    expect((url.operations[0] as any).campaignOperation.update.assetAutomationSettings[0].assetAutomationStatus).toBe('OPTED_IN')
     expect(campaignSettingsDraft(C, 'EUR', '21', { textCustomization: false }, live({ assetAutomation: [{ type: 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', status: 'OPTED_IN' }] })))
       .toMatchObject({ refusal: expect.stringContaining('final URL expansion') })
+  })
+
+  it('bidding: a leaf mask path even without a target (a message path is refused by Google); a portfolio reads as one; an unnamed strategy is refused', () => {
+    const d = campaignSettingsDraft(C, 'EUR', '21', { bidding: { strategy: 'MAXIMIZE_CONVERSIONS' } }, live())
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.operations[0]).toEqual({ campaignOperation: { update: { resourceName: `${C}/campaigns/21`, maximizeConversions: {} }, updateMask: 'maximize_conversions.target_cpa_micros' } })
+    expect(campaignSettingsDraft(C, 'EUR', '21', { bidding: { strategy: 'PORTFOLIO', portfolioId: '77' } }, live({ bidding: 'MAXIMIZE_CONVERSIONS', biddingStrategyId: '77' })))
+      .toMatchObject({ refusal: expect.stringContaining('Nothing to change') })
+    expect(campaignSettingsDraft(C, 'EUR', '21', { bidding: { strategy: 'MANUAL_CPC' } }, live({ bidding: 'TARGET_ROAS' })))
+      .toMatchObject({ refusal: expect.stringContaining('cannot name') })
+    const manual = campaignSettingsDraft(C, 'EUR', '21', { bidding: { strategy: 'MANUAL_CPC', maxCpcCents: 99 } }, live({ bidding: 'TARGET_SPEND' }))
+    if ('refusal' in manual) throw new Error(manual.refusal)
+    expect(manual.spendsMoney[0]).toMatch(/^Manual CPC from now/)
+    expect((manual.after as any).settings.bidding).toEqual({ strategy: 'MANUAL_CPC' })
   })
 
   it('refused: a shared budget, Shopping-only and Search-only settings, nothing to change', () => {
@@ -146,11 +171,25 @@ describe('targetingDraft', () => {
     expect(d.after).toMatchObject({ undo: { schedule: [{ days: ['MONDAY'], from: '08:00', to: '12:00' }] } })
   })
 
-  it('audiences go in OBSERVATION: targeting turns to observation when it was targeting (a warning)', () => {
-    const d = targetingDraft(C, '21', { addAudiences: ['80000'] }, { campaign: settings({ audienceMode: [{ dimension: 'AUDIENCE', observationOnly: false }] }), criteria: [] })
+  it('audiences go in OBSERVATION; a campaign whose audiences TARGET is refused (Nexus never widens it by itself)', () => {
+    const d = targetingDraft(C, '21', { addAudiences: ['80000'] }, { campaign: settings(), criteria: [] })
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations[0]).toEqual({ campaignOperation: { update: { resourceName: `${C}/campaigns/21`, targetingSetting: { targetRestrictions: [{ targetingDimension: 'AUDIENCE', bidOnly: true }] } }, updateMask: 'targeting_setting.target_restrictions' } })
-    expect(d.warnings[0]).toMatch(/become OBSERVATION/)
+    expect(targetingDraft(C, '21', { addAudiences: ['80000'] }, { campaign: settings({ audienceMode: [{ dimension: 'AUDIENCE', observationOnly: false }] }), criteria: [] }))
+      .toMatchObject({ refusal: expect.stringContaining('TARGETING') })
+  })
+
+  it('schedule bid adjustments: kept, compared, a raise is SPENDS MONEY; a removed location comes back with its own', () => {
+    const now = [crit('8', 'AD_SCHEDULE', { schedule: { day: 'MONDAY', from: '00:00', to: '08:00' }, bidModifier: 0.1 })]
+    const d = targetingDraft(C, '21', { schedule: [{ days: ['MONDAY'], from: '00:00', to: '08:00' }] }, live(now))
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.spendsMoney).toEqual(['Raises the bid adjustment of 1 schedule slot.'])
+    expect(d.after).toMatchObject({ undo: { schedule: [{ days: ['MONDAY'], from: '00:00', to: '08:00', bidModifier: 0.1 }] } })
+    const same = targetingDraft(C, '21', { schedule: [{ days: ['MONDAY'], from: '00:00', to: '08:00', bidModifier: 0.1 }] }, live(now))
+    expect(same).toMatchObject({ refusal: expect.stringContaining('already has this schedule') })
+    const loc = targetingDraft(C, '21', { removeLocations: [{ id: '2380' }] }, live([crit('7', 'LOCATION', { location: 'geoTargetConstants/2380', bidModifier: 1.2 }), crit('9', 'LOCATION', { location: 'geoTargetConstants/2250' })]))
+    if ('refusal' in loc) throw new Error(loc.refusal)
+    expect(loc.after).toMatchObject({ undo: { addLocations: [{ id: '2380', bidModifier: 1.2 }] } })
   })
 })
 
@@ -181,6 +220,16 @@ describe('statusDraft / removeDraft', () => {
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations).toEqual([{ adGroupCriterionOperation: { update: { resourceName: `${C}/adGroupCriteria/51~601`, status: 'ENABLED' }, updateMask: 'status' } }])
     expect(d.spendsMoney).toEqual(['Enables the keyword "jacket (EXACT)" (nothing serves until its campaign is enabled too).'])
+  })
+
+  it('remove: a negative keyword removed is SPENDS MONEY; budgets go after campaigns', () => {
+    const d = removeDraft(C, { items: [{ kind: 'budget', id: '12' }, { kind: 'campaign', id: '21' }, { kind: 'keyword', id: '51~9' }] }, {
+      campaigns, budgets: [OWN], lists: [],
+      items: [{ kind: 'keyword', id: '51~9', name: 'cheap (PHRASE, negative)', status: 'ENABLED', campaignId: '23', campaignName: 'Search B', campaignStatus: 'ENABLED', adGroupStatus: 'ENABLED', negative: true }],
+    })
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.operations.map((o) => Object.keys(o)[0])).toEqual(['campaignOperation', 'adGroupCriterionOperation', 'campaignBudgetOperation'])
+    expect(d.spendsMoney).toEqual(['Removes the negative keyword cheap (PHRASE, negative) from "Search B": more searches can show the ads.'])
   })
 
   it('remove: never undone (said); a budget or list in use is refused', () => {

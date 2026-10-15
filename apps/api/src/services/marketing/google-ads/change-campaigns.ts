@@ -8,8 +8,11 @@
  * CONTAINS_EU_POLITICAL_ADVERTISING); start_date_time / end_date_time "yyyy-MM-dd HH:mm:ss" in the account's time zone
  * (00:00:00 / 23:59:59 for whole days; an end cleared = runs on); shopping_setting.campaign_priority 0–2 (required for
  * Shopping), merchant_id required on create and immutable, feed_label ≤ 20 of A–Z 0–9 - _; geo_target_type_setting
- * PRESENCE | PRESENCE_OR_INTEREST | SEARCH_INTEREST; keyword_match_type BROAD = campaign broad match (cleared = off);
- * ai_max_setting.enable_ai_max; asset_automation_settings with TEXT_ASSET_AUTOMATION (text customization) and
+ * PRESENCE | PRESENCE_OR_INTEREST | SEARCH_INTEREST; keyword_match_type can no longer be SET in v25
+ * (CampaignError.CANNOT_SET_CAMPAIGN_KEYWORD_MATCH_TYPE: "Cannot set a campaign level match type") — Nexus only reads it;
+ * ai_max_setting.enable_ai_max is the master switch of AI Max ("if false or cleared, no AI Max features serve"; whether text
+ * customization needs it depends on the campaign: AiMaxSetting.bundling_required, so Google's check decides);
+ * asset_automation_settings with TEXT_ASSET_AUTOMATION (text customization) and
  * FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION ("Enabling final URL expansion also enables text asset automation"),
  * OPTED_IN | OPTED_OUT. An update mask lists snake_case paths; a path in the mask with no value in the body is cleared.
  */
@@ -21,7 +24,10 @@ export type Priority = 'LOW' | 'MEDIUM' | 'HIGH'
 export type LocationOption = 'PRESENCE' | 'PRESENCE_OR_INTEREST'
 export type Strategy = 'MANUAL_CPC' | 'MAXIMIZE_CLICKS' | 'MAXIMIZE_CONVERSIONS' | 'MAXIMIZE_CONVERSION_VALUE' | 'PORTFOLIO'
 export interface Bidding { strategy: Strategy; maxCpcCents?: number; targetCpaCents?: number; targetRoas?: number; portfolioId?: string }
-export interface ScheduleSlot { days: string[]; from: string; to: string }
+/** A schedule slot; `bidModifier` is the slot's bid adjustment (1.2 = +20 %, 0.1 = −90 %), none = no adjustment. */
+export interface ScheduleSlot { days: string[]; from: string; to: string; bidModifier?: number }
+/** One schedule criterion: Google's AdScheduleInfo and the criterion's bid adjustment (a CampaignCriterion field). */
+export interface ScheduleCriterion { adSchedule: { dayOfWeek: string; startHour: number; startMinute: string; endHour: number; endMinute: string }; bidModifier?: number }
 
 export const PRIORITY_NUMBER: Record<Priority, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 }
 export const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'] as const
@@ -44,10 +50,12 @@ export function biddingFields(customer: string, b: Bidding): Record<string, unkn
 /** The update mask paths of a bidding message (biddingFields). */
 export function biddingMask(b: Bidding): string[] {
   switch (b.strategy) {
+    // Always a leaf path: a message path that has sub-fields is refused (FieldMaskError.FIELD_HAS_SUBFIELDS). The leaf with
+    // no value in the body switches the strategy and clears that target.
     case 'MANUAL_CPC': return ['manual_cpc.enhanced_cpc_enabled']
-    case 'MAXIMIZE_CLICKS': return [b.maxCpcCents ? 'target_spend.cpc_bid_ceiling_micros' : 'target_spend']
-    case 'MAXIMIZE_CONVERSIONS': return [b.targetCpaCents ? 'maximize_conversions.target_cpa_micros' : 'maximize_conversions']
-    case 'MAXIMIZE_CONVERSION_VALUE': return [b.targetRoas ? 'maximize_conversion_value.target_roas' : 'maximize_conversion_value']
+    case 'MAXIMIZE_CLICKS': return ['target_spend.cpc_bid_ceiling_micros']
+    case 'MAXIMIZE_CONVERSIONS': return ['maximize_conversions.target_cpa_micros']
+    case 'MAXIMIZE_CONVERSION_VALUE': return ['maximize_conversion_value.target_roas']
     case 'PORTFOLIO': return ['bidding_strategy']
   }
 }
@@ -64,13 +72,27 @@ export function biddingText(b: Bidding, currency: string): string {
 }
 
 /** The bidding a campaign has now, from its settings. */
+/** The bidding a campaign has now, from its settings; null when Nexus cannot name it (TARGET_ROAS, TARGET_CPA, …). */
 export function biddingNow(c: LiveCampaignDetail['campaign']): Bidding | null {
+  // A portfolio strategy first, whatever its type.
+  if (c.biddingStrategyId) return { strategy: 'PORTFOLIO', portfolioId: c.biddingStrategyId }
   switch (c.bidding) {
-    case 'MANUAL_CPC': return c.biddingStrategyId ? { strategy: 'PORTFOLIO', portfolioId: c.biddingStrategyId } : { strategy: 'MANUAL_CPC' }
-    case 'TARGET_SPEND': return c.biddingStrategyId ? { strategy: 'PORTFOLIO', portfolioId: c.biddingStrategyId } : { strategy: 'MAXIMIZE_CLICKS', ...(c.maxCpcCeilingCents ? { maxCpcCents: c.maxCpcCeilingCents } : {}) }
+    case 'MANUAL_CPC': return { strategy: 'MANUAL_CPC' }
+    case 'TARGET_SPEND': return { strategy: 'MAXIMIZE_CLICKS', ...(c.maxCpcCeilingCents ? { maxCpcCents: c.maxCpcCeilingCents } : {}) }
     case 'MAXIMIZE_CONVERSIONS': return { strategy: 'MAXIMIZE_CONVERSIONS', ...(c.targetCpaCents ? { targetCpaCents: c.targetCpaCents } : {}) }
     case 'MAXIMIZE_CONVERSION_VALUE': return { strategy: 'MAXIMIZE_CONVERSION_VALUE', ...(c.targetRoas ? { targetRoas: c.targetRoas } : {}) }
-    default: return c.biddingStrategyId ? { strategy: 'PORTFOLIO', portfolioId: c.biddingStrategyId } : null
+    default: return null
+  }
+}
+
+/** A bidding with only the fields its strategy uses (an extra field would read as a change forever). */
+export function biddingClean(b: Bidding): Bidding {
+  switch (b.strategy) {
+    case 'MANUAL_CPC': return { strategy: 'MANUAL_CPC' }
+    case 'MAXIMIZE_CLICKS': return { strategy: b.strategy, ...(b.maxCpcCents ? { maxCpcCents: b.maxCpcCents } : {}) }
+    case 'MAXIMIZE_CONVERSIONS': return { strategy: b.strategy, ...(b.targetCpaCents ? { targetCpaCents: b.targetCpaCents } : {}) }
+    case 'MAXIMIZE_CONVERSION_VALUE': return { strategy: b.strategy, ...(b.targetRoas ? { targetRoas: b.targetRoas } : {}) }
+    case 'PORTFOLIO': return { strategy: b.strategy, portfolioId: b.portfolioId }
   }
 }
 
@@ -84,8 +106,8 @@ export function timeOf(value: string, isEnd: boolean): [number, string] | null {
 }
 
 /** Ad schedule slots → one criterion per day and slot, or why not. Days: MONDAY … SUNDAY, or ALL. */
-export function scheduleCriteria(slots: ScheduleSlot[]): Array<{ dayOfWeek: string; startHour: number; startMinute: string; endHour: number; endMinute: string }> | { refusal: string } {
-  const out: Array<{ dayOfWeek: string; startHour: number; startMinute: string; endHour: number; endMinute: string }> = []
+export function scheduleCriteria(slots: ScheduleSlot[]): ScheduleCriterion[] | { refusal: string } {
+  const out: ScheduleCriterion[] = []
   for (const slot of slots) {
     const from = timeOf(slot.from, false)
     const to = timeOf(slot.to, true)
@@ -97,7 +119,8 @@ export function scheduleCriteria(slots: ScheduleSlot[]): Array<{ dayOfWeek: stri
     const list = days.includes('ALL') ? [...DAYS] : days
     for (const day of list) {
       if (!(DAYS as readonly string[]).includes(day)) return { refusal: `"${day}" is not a day (MONDAY … SUNDAY, or ALL).` }
-      out.push({ dayOfWeek: day, startHour: from[0], startMinute: from[1], endHour: to[0], endMinute: to[1] })
+      if (slot.bidModifier !== undefined && !(slot.bidModifier >= 0.1 && slot.bidModifier <= 10)) return { refusal: `A schedule bid adjustment of ${slot.bidModifier} is outside what Google takes (0.1 – 10).` }
+      out.push({ adSchedule: { dayOfWeek: day, startHour: from[0], startMinute: from[1], endHour: to[0], endMinute: to[1] }, ...(slot.bidModifier !== undefined && slot.bidModifier !== 1 ? { bidModifier: slot.bidModifier } : {}) })
     }
   }
   if (out.length > 6 * 7) return { refusal: 'Google allows at most 6 schedule slots a day.' }
@@ -109,7 +132,7 @@ export function scheduleCriteria(slots: ScheduleSlot[]): Array<{ dayOfWeek: stri
  * instead of another one), a higher max CPC ceiling (or none), a higher target CPA, a lower target ROAS.
  */
 export function biddingSpends(from: Bidding | null, to: Bidding, currency: string): string | null {
-  if (to.strategy === 'MANUAL_CPC') return null
+  if (to.strategy === 'MANUAL_CPC') return from && from.strategy !== 'MANUAL_CPC' ? 'Manual CPC from now: the keyword and ad group bids stored in the campaign set the cost per click' : null
   if (!from || from.strategy !== to.strategy) return `Google sets the bids from now (${biddingText(to, currency)}): cost per click can rise`
   if (to.strategy === 'MAXIMIZE_CLICKS' && from.maxCpcCents !== undefined && (to.maxCpcCents === undefined || to.maxCpcCents > from.maxCpcCents)) {
     return `Raises the max CPC ceiling ${money(from.maxCpcCents, currency)} → ${to.maxCpcCents ? money(to.maxCpcCents, currency) : 'no ceiling'}`
@@ -140,7 +163,7 @@ export interface CampaignCreateRequest {
   searchPartners?: boolean
   display?: boolean
   shopping?: { merchantId: string; feedLabel?: string; priority?: Priority; localInventory?: boolean }
-  search?: { aiMax?: boolean; broadMatch?: boolean; textCustomization?: boolean; finalUrlExpansion?: boolean }
+  search?: { aiMax?: boolean; textCustomization?: boolean; finalUrlExpansion?: boolean }
   locations?: Array<{ id: string; exclude?: boolean }>
   locationOption?: LocationOption
   languages?: string[]
@@ -220,7 +243,6 @@ export function campaignCreateDraft(
   } else {
     const s = r.search ?? {}
     campaign.aiMaxSetting = { enableAiMax: s.aiMax === true }
-    if (s.broadMatch) campaign.keywordMatchType = 'BROAD'
     campaign.assetAutomationSettings = [
       { assetAutomationType: 'TEXT_ASSET_AUTOMATION', assetAutomationStatus: s.textCustomization || s.finalUrlExpansion ? 'OPTED_IN' : 'OPTED_OUT' },
       { assetAutomationType: 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', assetAutomationStatus: s.finalUrlExpansion ? 'OPTED_IN' : 'OPTED_OUT' },
@@ -230,15 +252,15 @@ export function campaignCreateDraft(
   ops.push({ campaignOperation: { create: campaign } })
   for (const l of r.locations ?? []) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, ...(l.exclude ? { negative: true } : {}), location: { geoTargetConstant: `geoTargetConstants/${l.id}` } } } })
   for (const id of r.languages ?? []) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, language: { languageConstant: `languageConstants/${id}` } } } })
-  for (const s of schedule) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, adSchedule: s } } })
+  for (const s of schedule) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, ...s } } })
   for (const id of r.audiences ?? []) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, userInterest: { userInterestCategory: `${customer}/userInterests/${id}` } } } })
 
   const warnings: string[] = ['It is made PAUSED: nothing spends until a person enables it (set-google-status, marked SPENDS MONEY).']
   if (!(r.locations ?? []).some((l) => !l.exclude)) warnings.push('No location is targeted: when enabled it can show in every country.')
   if (r.searchPartners) warnings.push('Search partners are on: ads can also show on Google\'s search partner sites.')
   if (r.type === 'SEARCH' && r.display) warnings.push('The Display Network is on: ads can also show on websites and apps.')
-  if (r.type === 'SEARCH' && (r.search?.aiMax || r.search?.broadMatch || r.search?.textCustomization || r.search?.finalUrlExpansion)) {
-    warnings.push(`Google acts on its own in this campaign: ${[r.search?.aiMax && 'AI Max', r.search?.broadMatch && 'campaign broad match', (r.search?.textCustomization || r.search?.finalUrlExpansion) && 'text customization', r.search?.finalUrlExpansion && 'final URL expansion'].filter(Boolean).join(', ')}.`)
+  if (r.type === 'SEARCH' && (r.search?.aiMax || r.search?.textCustomization || r.search?.finalUrlExpansion)) {
+    warnings.push(`Google acts on its own in this campaign: ${[r.search?.aiMax && 'AI Max', (r.search?.textCustomization || r.search?.finalUrlExpansion) && 'text customization', r.search?.finalUrlExpansion && 'final URL expansion'].filter(Boolean).join(', ')}.`)
   }
   if (optionInclude === 'PRESENCE_OR_INTEREST') warnings.push('Location option "presence or interest": people outside the locations who show interest in them can see the ads.')
   const lines: Array<[string, unknown, unknown]> = [
@@ -248,7 +270,7 @@ export function campaignCreateDraft(
     ['networks', '(none)', ['Google Search', r.searchPartners && 'search partners', r.type === 'SEARCH' && r.display && 'Display'].filter(Boolean).join(', ')],
   ]
   if (r.type === 'SHOPPING') lines.push(['Shopping', '(none)', `Merchant Center ${r.shopping!.merchantId}${r.shopping!.feedLabel ? `, feed label ${r.shopping!.feedLabel}` : ''}, priority ${r.shopping!.priority ?? 'LOW'}${r.shopping!.localInventory ? ', local products' : ''}`])
-  else lines.push(['Google on its own', '(none)', `AI Max ${r.search?.aiMax ? 'on' : 'off'}, broad match ${r.search?.broadMatch ? 'on' : 'off'}, text customization ${r.search?.textCustomization || r.search?.finalUrlExpansion ? 'on' : 'off'}, final URL expansion ${r.search?.finalUrlExpansion ? 'on' : 'off'}`])
+  else lines.push(['Google on its own', '(none)', `AI Max ${r.search?.aiMax ? 'on' : 'off'}, text customization ${r.search?.textCustomization || r.search?.finalUrlExpansion ? 'on' : 'off'}, final URL expansion ${r.search?.finalUrlExpansion ? 'on' : 'off'}`])
   lines.push(['locations', '(none)', `${(r.locations ?? []).filter((l) => !l.exclude).length} targeted, ${(r.locations ?? []).filter((l) => l.exclude).length} excluded · ${optionInclude === 'PRESENCE' ? 'presence only' : 'presence or interest'}`])
   if (r.type === 'SEARCH') lines.push(['languages', '(none)', (r.languages ?? []).length ? (r.languages ?? []).join(', ') : 'all'])
   lines.push(['schedule', '(none)', schedule.length ? `${schedule.length} slot${schedule.length === 1 ? '' : 's'}` : 'all day, every day'])
@@ -289,7 +311,6 @@ export interface CampaignSettingsRequest {
   searchPartners?: boolean
   display?: boolean
   aiMax?: boolean
-  broadMatch?: boolean
   textCustomization?: boolean
   finalUrlExpansion?: boolean
   locationOption?: LocationOption
@@ -317,10 +338,10 @@ export function campaignSettingsNow(c: LiveCampaignDetail['campaign'], budget: L
     searchPartners: c.networks.searchPartners,
     locationOption: (c.locationOption.include === 'PRESENCE_OR_INTEREST' ? 'PRESENCE_OR_INTEREST' : 'PRESENCE'),
   }
+  // AI Max: Search and Shopping (AiMaxSetting "Supported in Search and Shopping campaigns").
+  now.aiMax = c.aiMax
   if (c.type === 'SEARCH') {
     now.display = c.networks.display
-    now.aiMax = c.aiMax
-    now.broadMatch = c.keywordMatchType === 'BROAD'
     now.textCustomization = automationOn(c, 'TEXT_ASSET_AUTOMATION')
     now.finalUrlExpansion = automationOn(c, 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION')
   }
@@ -332,19 +353,22 @@ export function campaignSettingsDraft(
   customer: string,
   currency: string,
   campaignId: string,
-  ask: CampaignSettingsRequest,
+  asked: CampaignSettingsRequest,
   live: { campaign: LiveCampaignDetail['campaign'] | null; budget: LiveBudget | null; campaigns: LiveCampaign[] },
 ): GoogleChangeDraft | { refusal: string } {
   const c = live.campaign
   if (!c) return { refusal: `Campaign ${campaignId} is not in this account (or it is removed).` }
   const now = campaignSettingsNow(c, live.budget)
+  let ask: CampaignSettingsRequest = { ...asked }
   const isSearch = c.type === 'SEARCH'
   const isShopping = c.type === 'SHOPPING'
   if (!isSearch && !isShopping) return { refusal: `"${c.name}" is a ${c.type ?? 'campaign'} campaign: Nexus changes the settings of Search and Standard Shopping campaigns.` }
   if (ask.priority && !isShopping) return { refusal: 'priority is for a Shopping campaign.' }
-  if (!isSearch && (ask.display !== undefined || ask.aiMax !== undefined || ask.broadMatch !== undefined || ask.textCustomization !== undefined || ask.finalUrlExpansion !== undefined)) {
-    return { refusal: 'display, aiMax, broadMatch, textCustomization and finalUrlExpansion are Search campaign settings.' }
+  if (!isSearch && (ask.display !== undefined || ask.textCustomization !== undefined || ask.finalUrlExpansion !== undefined)) {
+    return { refusal: 'display, textCustomization and finalUrlExpansion are Search campaign settings.' }
   }
+  if (ask.bidding && !now.bidding) return { refusal: `"${c.name}" bids with ${c.bidding ?? 'a strategy'} that Nexus cannot name: change its bidding in Google Ads.` }
+  if (ask.bidding) ask = { ...ask, bidding: biddingClean(ask.bidding) }
   if (ask.dailyBudgetCents !== undefined && (!live.budget || live.budget.shared)) {
     return { refusal: `"${c.name}" uses a shared budget: change its amount with set-google-budget (every campaign on it changes), or give the campaign its own budget there.` }
   }
@@ -356,6 +380,15 @@ export function campaignSettingsDraft(
       return { refusal: `Another campaign is named "${name}": Google refuses two campaigns with one name.` }
     }
   }
+  // AI Max off turns its features off with it (they cannot serve without it); final URL expansion turns text
+  // customization on (Google: "Enabling final URL expansion also enables text asset automation").
+  const aiMaxOff = ask.aiMax === false && now.aiMax === true
+  if (aiMaxOff && isSearch) {
+    if (ask.textCustomization === true || ask.finalUrlExpansion === true) return { refusal: 'AI Max off with text customization or final URL expansion on cannot serve: turn them off too, or keep AI Max on.' }
+    if (now.textCustomization) ask = { ...ask, textCustomization: false }
+    if (now.finalUrlExpansion) ask = { ...ask, finalUrlExpansion: false }
+  }
+  if (ask.finalUrlExpansion === true && ask.textCustomization === undefined && !now.textCustomization) ask = { ...ask, textCustomization: true }
   const textOn = ask.textCustomization ?? now.textCustomization
   const urlOn = ask.finalUrlExpansion ?? now.finalUrlExpansion
   if (urlOn && textOn === false) return { refusal: 'Google keeps text customization on while final URL expansion is on: turn both off, or keep text customization on.' }
@@ -417,13 +450,7 @@ export function campaignSettingsDraft(
     mask.push('ai_max_setting.enable_ai_max')
     lines.push(['AI Max', now.aiMax ? 'on' : 'off', ask.aiMax ? 'on' : 'off'])
     if (ask.aiMax) spends.push(`Turns on AI Max: Google matches more searches on its own${note}.`)
-  }
-  if (changed('broadMatch')) {
-    record('broadMatch')
-    if (ask.broadMatch) fields.keywordMatchType = 'BROAD'
-    mask.push('keyword_match_type')
-    lines.push(['campaign broad match', now.broadMatch ? 'on' : 'off', ask.broadMatch ? 'on' : 'off'])
-    if (ask.broadMatch) spends.push(`Turns on campaign broad match: every keyword matches broadly${note}.`)
+    if (aiMaxOff && (now.textCustomization || now.finalUrlExpansion)) warnings.push('AI Max off also turns off text customization and final URL expansion: they serve only with AI Max.')
   }
   if (changed('textCustomization') || changed('finalUrlExpansion')) {
     if (changed('textCustomization')) record('textCustomization')
@@ -435,6 +462,7 @@ export function campaignSettingsDraft(
     mask.push('asset_automation_settings')
     lines.push(['text customization / final URL expansion', `${now.textCustomization ? 'on' : 'off'} / ${now.finalUrlExpansion ? 'on' : 'off'}`, `${textOn || urlOn ? 'on' : 'off'} / ${urlOn ? 'on' : 'off'}`])
     if (urlOn && !now.finalUrlExpansion) spends.push(`Turns on final URL expansion: Google picks landing pages and writes text on its own${note}.`)
+    if ((textOn || urlOn) && !(ask.aiMax ?? now.aiMax)) warnings.push('Text customization and final URL expansion are AI Max features: Google may need AI Max on for this campaign (its check says).')
   }
   if (changed('locationOption')) {
     record('locationOption')

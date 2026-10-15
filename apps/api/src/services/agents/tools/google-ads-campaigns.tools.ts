@@ -56,10 +56,12 @@ const scheduleArg = z.array(z.object({
   days: z.array(z.preprocess((v) => (typeof v === 'string' ? v.toUpperCase() : v), z.enum([...DAYS, 'ALL']))).min(1).max(7).describe('MONDAY … SUNDAY, or ALL'),
   from: z.string().trim().regex(/^\d{1,2}:\d{2}$/).describe('start, HH:MM (minutes 00, 15, 30 or 45)'),
   to: z.string().trim().regex(/^\d{1,2}:\d{2}$/).describe('end, HH:MM (24:00 = midnight)'),
+  bidModifier: z.coerce.number().min(0.1).max(10).optional().describe('the slot\'s bid adjustment as a factor (1.2 = +20 %, 0.5 = −50 %); none = no adjustment'),
 })).max(42)
 const locationArg = z.object({
   id: googleIdArg('the location (a geo target id; google-ads-live view lookup lookup locations finds it)'),
   exclude: z.boolean().optional().describe('true = excluded location'),
+  bidModifier: z.coerce.number().min(0.1).max(10).optional().describe('a targeted location\'s bid adjustment as a factor (1.2 = +20 %)'),
 })
 const languageIdsArg = z.array(googleIdArg('a language (google-ads-live view lookup lookup languages finds it)')).max(50)
 const audienceIdsArg = z.array(googleIdArg('an audience segment (in-market or affinity; google-ads-live view lookup lookup audiences finds it)')).max(50)
@@ -105,7 +107,13 @@ const createUndo: ToolUndo = {
     if (!after.campaignId) return { refusal: 'This change does not record the campaign it made.' }
     return {
       tool: 'remove-google-ads-items',
-      args: { ...(after.accountId ? { accountId: after.accountId } : {}), items: [{ kind: 'campaign', id: after.campaignId }], confirmRemove: true, why: 'undo of an earlier campaign create' },
+      args: {
+        ...(after.accountId ? { accountId: after.accountId } : {}),
+        // The campaign, and the budget of its own the create made (Nexus removes campaigns before budgets).
+        items: [{ kind: 'campaign', id: after.campaignId }, ...(after.ownBudgetId ? [{ kind: 'budget', id: after.ownBudgetId }] : [])],
+        confirmRemove: true,
+        why: 'undo of an earlier campaign create',
+      },
     }
   },
 }
@@ -136,10 +144,9 @@ const createGoogleCampaign: AgentTool = {
     }).optional().describe('SHOPPING: the Merchant Center feed and priority'),
     search: z.object({
       aiMax: z.boolean().optional().describe('AI Max (default off)'),
-      broadMatch: z.boolean().optional().describe('campaign-level broad match (default off)'),
-      textCustomization: z.boolean().optional().describe('text customization / automatically created text (default off)'),
+      textCustomization: z.boolean().optional().describe('text customization / automatically created text (default off; an AI Max feature)'),
       finalUrlExpansion: z.boolean().optional().describe('final URL expansion (default off; turns text customization on)'),
-    }).optional().describe('SEARCH: what Google may do on its own (all off by default)'),
+    }).optional().describe('SEARCH: what Google may do on its own (all off by default). Campaign-level broad match cannot be set in Google Ads API v25.'),
     locations: z.array(locationArg).max(100).optional().describe('targeted and excluded locations'),
     locationOption: z.enum(['PRESENCE', 'PRESENCE_OR_INTEREST']).optional().describe('PRESENCE (default: people in or regularly in the locations) or PRESENCE_OR_INTEREST'),
     languages: languageIdsArg.optional().describe('SEARCH: languages (none = all)'),
@@ -150,8 +157,8 @@ const createGoogleCampaign: AgentTool = {
   }),
   description:
     'Make a Google Ads campaign in the business\'s chosen account: Standard Shopping (Merchant Center id, feed label, '
-    + 'priority) or Search (networks, languages, and what Google may do on its own: AI Max, campaign broad match, text '
-    + 'customization, final URL expansion — all OFF unless asked), with its budget (a shared budgetId or its own '
+    + 'priority) or Search (networks, languages, and what Google may do on its own: AI Max, text customization, final URL '
+    + 'expansion — all OFF unless asked), with its budget (a shared budgetId or its own '
     + 'dailyBudgetCents), bidding (Manual CPC by default, or a named strategy), dates, locations with the location option '
     + '(presence only by default), ad schedule and audiences in observation — in one request. It is ALWAYS made PAUSED: '
     + 'enabling it is set-google-status, the person\'s decision (SPENDS MONEY). Ad groups, keywords, product groups and '
@@ -166,7 +173,7 @@ const createGoogleCampaign: AgentTool = {
 
 // ── set-google-campaign ─────────────────────────────────────────────────────────────────────────────────────────
 
-const SETTINGS_KEYS = ['name', 'priority', 'bidding', 'startDate', 'endDate', 'searchPartners', 'display', 'aiMax', 'broadMatch', 'textCustomization', 'finalUrlExpansion', 'locationOption', 'dailyBudgetCents'] as const
+const SETTINGS_KEYS = ['name', 'priority', 'bidding', 'startDate', 'endDate', 'searchPartners', 'display', 'aiMax', 'textCustomization', 'finalUrlExpansion', 'locationOption', 'dailyBudgetCents'] as const
 const settingsRequest = (a: Record<string, unknown>): CampaignSettingsRequest =>
   Object.fromEntries(SETTINGS_KEYS.filter((k) => a[k] !== undefined).map((k) => [k, a[k]])) as CampaignSettingsRequest
 
@@ -217,8 +224,7 @@ const setGoogleCampaign: AgentTool = {
     endDate: z.string().trim().regex(/^(\d{4}-\d{2}-\d{2}|none)$/).optional().describe('last day (YYYY-MM-DD), or none (runs on)'),
     searchPartners: z.boolean().optional().describe('Google search partners on or off'),
     display: z.boolean().optional().describe('SEARCH: the Display Network on or off'),
-    aiMax: z.boolean().optional().describe('SEARCH: AI Max on or off'),
-    broadMatch: z.boolean().optional().describe('SEARCH: campaign-level broad match on or off'),
+    aiMax: z.boolean().optional().describe('AI Max on or off (Search and Shopping; off also turns text customization and final URL expansion off)'),
     textCustomization: z.boolean().optional().describe('SEARCH: text customization on or off'),
     finalUrlExpansion: z.boolean().optional().describe('SEARCH: final URL expansion on or off'),
     locationOption: z.enum(['PRESENCE', 'PRESENCE_OR_INTEREST']).optional().describe('the location option'),
@@ -228,7 +234,7 @@ const setGoogleCampaign: AgentTool = {
   description:
     'Change one Google Ads campaign\'s settings (Search or Standard Shopping): name, Shopping priority, bidding (strategy, '
     + 'max CPC ceiling, target CPA or ROAS, a portfolio), start and end, search partners, Display Network, the location '
-    + 'option, what Google does on its own (AI Max, campaign broad match, text customization, final URL expansion), and '
+    + 'option, what Google does on its own (AI Max, text customization, final URL expansion), and '
     + 'the amount of its own budget. Only what is named changes; the preview shows each from → to. Turning on anything '
     + 'that reaches more people, Google taking over bids, a higher ceiling or budget, and running longer are marked '
     + 'SPENDS MONEY. Status: set-google-status. Undo puts the old settings back.' + GOOGLE_CHANGE_RULES,
@@ -278,8 +284,11 @@ const targetingUndo: ToolUndo = {
 }
 
 /** A schedule as sorted day@from-to keys (what a targeting change's record keeps of the schedule it set). */
-function scheduleKeys(slots: Array<{ days: string[]; from: string; to: string }>): string[] {
-  return slots.flatMap((s) => (s.days.includes('ALL') ? [...DAYS] : s.days).map((d) => `${d}@${s.from}-${s.to}`)).sort()
+function scheduleKeys(slots: Array<{ days: string[]; from: string; to: string; bidModifier?: number }>): string[] {
+  // Times as Google reads them back (08:00, not 8:00), and each slot's bid adjustment.
+  const hhmm = (t: string) => { const [h, m] = t.trim().split(':'); return `${h.padStart(2, '0')}:${m}` }
+  return slots.flatMap((s) => (s.days.map((d) => d.toUpperCase()).includes('ALL') ? [...DAYS] : s.days.map((d) => d.toUpperCase()))
+    .map((d) => `${d}@${hhmm(s.from)}-${hhmm(s.to)}x${s.bidModifier ?? 1}`)).sort()
 }
 
 const setGoogleTargeting: AgentTool = {
@@ -313,7 +322,8 @@ const setGoogleTargeting: AgentTool = {
     const after = draft.after as TargetingRecord
     const asked = targetingRequest(args)
     const schedule = asked.clearSchedule ? [] : asked.schedule ? scheduleKeys(asked.schedule) : undefined
-    return { data: { campaignId: args.campaignId }, before: null, after: { ...after, ...(schedule !== undefined ? { schedule } : {}) } }
+    // `before` names what undo puts back (a change record needs one); `after` adds the schedule it set, as keys.
+    return { data: { campaignId: args.campaignId }, before: { campaignId: after.campaignId, undo: after.undo }, after: { ...after, ...(schedule !== undefined ? { schedule } : {}) } }
   }),
 }
 
@@ -338,7 +348,8 @@ async function statusLive(account: Parameters<GoogleDraftBuilder>[0], request: S
     const criteria = await liveCampaignCriteria(account.target, c.campaignId)
     if (!criteria.some((k) => k.type === 'LOCATION' && !k.negative)) facts.noLocation.push(c.campaignId)
     if (c.type === 'SHOPPING') {
-      const open = (await liveProductGroups(account.target, c.campaignId)).filter((g) => g.kind === 'UNIT' && g.everythingElse && !g.excluded).length
+      // "Everything else" left open, or "All products" alone as one advertised unit: both reach every other product.
+      const open = (await liveProductGroups(account.target, c.campaignId)).filter((g) => g.kind === 'UNIT' && !g.excluded && (g.everythingElse || g.parentId === null)).length
       if (open) facts.openEverythingElse[c.campaignId] = open
     }
   }
