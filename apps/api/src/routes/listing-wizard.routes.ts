@@ -61,6 +61,7 @@ import {
 import { publishListingEvent } from '../services/listing-events.service.js'
 import { listActiveConnections } from '../services/connection-resolver.service.js'
 import { resolveListingCategory } from '../services/pim/mapping/category-mapping.service.js'
+import { NOT_STORE_PHOTO } from '../services/images/store-photos.js'
 
 const amazonService = new AmazonService()
 const categorySchemaService = new CategorySchemaService(
@@ -2121,7 +2122,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Master gallery first — sorted MAIN-first for the inline UI.
       const rows = await prisma.productImage.findMany({
-        where: { productId: wizard.productId },
+        where: { productId: wizard.productId, ...NOT_STORE_PHOTO },
         orderBy: [{ type: 'asc' }, { createdAt: 'asc' }],
         select: { id: true, url: true, alt: true, type: true },
       })

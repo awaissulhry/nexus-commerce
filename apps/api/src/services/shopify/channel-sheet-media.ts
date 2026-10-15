@@ -10,6 +10,7 @@ import { readInformationMedia, advanceMediaOrder } from './information-gateway.j
 import { mediaRemovalVariants } from './information-media-membership.js'
 import { publishContentImages, publishTranslations } from './content-publisher.js'
 import { isOnMediaPlan } from '../images/media-plan-switch.js'
+import { shopifyStoreFiles } from './store-files.js'
 
 export const SHEET_MEDIA_SYNC = '_nexusSheetMediaSync'
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
@@ -77,6 +78,12 @@ export async function readSheetGallerySources(tx: Prisma.TransactionClient, dest
     if (Object.values(localized).some(value => { const items = object(object(value)._productMedia).items; return Array.isArray(items) && items.some((i: any) => i.captions?.length || i.transcript !== undefined) })) warnings.push(`${product.name}: captions and transcripts remain in Nexus. Shopify's native file mutations do not accept these fields; the theme content publication handles them separately.`)
     galleries.push({ listingId: listing.id, nexusProductId: product.id, productId, ...(ownerVariant ? { variantId: ownerVariant } : {}), ownerLabel: product.name, locale, assets, signature, value: [] })
   }
+  // The photos that already are files of this store are sent as those files (no copy); the review shows which.
+  const storeFiles = await shopifyStoreFiles(tx, destination.accountId, galleries.flatMap(g => g.assets.map(a => a.id)))
+  for (const gallery of galleries) {
+    const own = Object.fromEntries(gallery.assets.flatMap(a => storeFiles[a.id] ? [[a.id, storeFiles[a.id]]] : []))
+    if (Object.keys(own).length) gallery.storeFiles = own
+  }
   return { galleries, warnings, revision: digest(signatures.sort((a: any, b: any) => a[0].localeCompare(b[0]))) }
 }
 
@@ -105,7 +112,7 @@ export async function advanceSheetGallery(gql: ShopifyGraphql, gallery: ShopifyS
     const current = (await readInformationMedia(gql, gallery.productId)).map(m => m.id)
     if (!same(current, gallery.value)) throw new WorkspaceScopeError(`${gallery.ownerLabel}: Shopify gallery changed after review. No associations were changed.`, 409)
     const content = { ...emptyShopifyContent([]), assets: gallery.assets }
-    const mediaIds = await publishContentImages(gql, content, async patch => save({ mediaIds: patch.mediaIds as Record<string, string> }), gallery.listingId)
+    const mediaIds = await publishContentImages(gql, content, async patch => save({ mediaIds: patch.mediaIds as Record<string, string> }), gallery.listingId, gallery.storeFiles)
     const ids = gallery.assets.map(a => mediaIds[a.id])
     if (new Set(ids).size !== ids.length) throw new WorkspaceScopeError('Two selected library files resolve to one Shopify file. Keep one copy in the gallery.', 422)
     const nextValue = gallery.variantId ? [...gallery.value, ...ids.filter(id => !gallery.value.includes(id))] : ids

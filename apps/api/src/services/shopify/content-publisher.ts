@@ -116,20 +116,35 @@ export async function ensureContentDefinitions(gql: ShopifyGraphql, content: Sho
 }
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
-export async function publishContentImages(gql: ShopifyGraphql, content: ShopifyContent, checkpoint: (patch: Record<string, unknown>) => Promise<void>, identity?: string) {
+/**
+ * A photo that already is a file of this store (`storeFiles`: library row id → file id, `shopifyStoreFiles`) is sent as that
+ * file — never uploaded again — while Shopify still holds it, of the photo's type, with the reviewed alt text and no alt
+ * translation to write. A file is shared by every product that shows it: a different alt or a translation would change it
+ * for the others, so that photo takes the copy path below instead. Null = upload as before.
+ */
+async function reusableStoreFile(gql: ShopifyGraphql, asset: ShopifyContent['assets'][number], fileId: string | undefined, ownerType: string) {
+  if (!fileId?.startsWith(`gid://shopify/${ownerType}/`) || Object.keys(asset.translations ?? {}).length) return null
+  const { node } = await gql(`query NexusStoreFile($id:ID!) { node(id:$id) { ... on File { id fileStatus alt } } }`, { id: fileId })
+  return node?.id === fileId && node.fileStatus !== 'FAILED' && (node.alt ?? '') === (asset.alt ?? '') ? node as { id: string; fileStatus: string } : null
+}
+
+export async function publishContentImages(gql: ShopifyGraphql, content: ShopifyContent, checkpoint: (patch: Record<string, unknown>) => Promise<void>, identity?: string, storeFiles: Readonly<Record<string, string>> = {}) {
   const ids: Record<string, string> = {}
   for (const asset of content.assets) {
-    // Content includes alt so one family's alt change never mutates another family's reused file.
-    const ext = new URL(asset.url).pathname.match(/\.(jpe?g|png|webp|gif|avif|mp4|mov|webm|glb|usdz)$/i)?.[1]?.toLowerCase() ?? (asset.type === 'VIDEO' ? 'mp4' : asset.type === 'MODEL_3D' ? 'glb' : 'jpg')
-    const filename = `nexus-${hash([asset.url, asset.alt, ...(identity ? [identity, asset.translations] : [])]).slice(0, 40)}.${ext}`
-    const { files } = await gql(`query NexusImage($query:String!) { files(first:2,query:$query) { nodes { id fileStatus ... on MediaImage { image { url } } } } }`, { query: `filename:${filename}` })
-    if (files.nodes.length > 1) throw new Error(`Image identity is ambiguous: ${asset.id}.`)
-    let file = files.nodes[0]
-    if (!file) {
-      const result = checked((await gql(`mutation NexusImageCreate($files:[FileCreateInput!]!) { fileCreate(files:$files) { files { id fileStatus } userErrors { field message } } }`, { files: [{ originalSource: asset.url, contentType: asset.type ?? 'IMAGE', filename, alt: asset.alt, duplicateResolutionMode: 'RAISE_ERROR' }] })).fileCreate, 'Create media')
-      file = result.files[0]
-    }
     const ownerType = asset.type === 'VIDEO' ? 'Video' : asset.type === 'MODEL_3D' ? 'Model3d' : 'MediaImage'
+    let file = await reusableStoreFile(gql, asset, storeFiles[asset.id], ownerType)
+    if (!file) {
+      // Content includes alt so one family's alt change never mutates another family's reused file.
+      const ext = new URL(asset.url).pathname.match(/\.(jpe?g|png|webp|gif|avif|mp4|mov|webm|glb|usdz)$/i)?.[1]?.toLowerCase() ?? (asset.type === 'VIDEO' ? 'mp4' : asset.type === 'MODEL_3D' ? 'glb' : 'jpg')
+      const filename = `nexus-${hash([asset.url, asset.alt, ...(identity ? [identity, asset.translations] : [])]).slice(0, 40)}.${ext}`
+      const { files } = await gql(`query NexusImage($query:String!) { files(first:2,query:$query) { nodes { id fileStatus ... on MediaImage { image { url } } } } }`, { query: `filename:${filename}` })
+      if (files.nodes.length > 1) throw new Error(`Image identity is ambiguous: ${asset.id}.`)
+      file = files.nodes[0]
+      if (!file) {
+        const result = checked((await gql(`mutation NexusImageCreate($files:[FileCreateInput!]!) { fileCreate(files:$files) { files { id fileStatus } userErrors { field message } } }`, { files: [{ originalSource: asset.url, contentType: asset.type ?? 'IMAGE', filename, alt: asset.alt, duplicateResolutionMode: 'RAISE_ERROR' }] })).fileCreate, 'Create media')
+        file = result.files[0]
+      }
+    }
     if (!file?.id?.startsWith(`gid://shopify/${ownerType}/`)) throw new Error(`Shopify did not return the expected ${asset.type ?? 'IMAGE'} file for ${asset.id}.`)
     ids[asset.id] = file.id
     await checkpoint({ mediaIds: { ...ids } })
@@ -290,6 +305,8 @@ export function newVariantFacts(facts: Partial<Record<InheritedInformationField,
 }
 
 export interface PublishContentInput { identity: string; title: string; description: string; vendor: string; productType: string; tags?: string[]; content: ShopifyContent; variants: ContentVariant[]; locationId: string; remote: ShopifyRemoteProduct | null; confirmActive?: boolean; managedMediaIds?: string[]; reconcileGallery?: boolean; galleryOperation?: ContentGalleryOperation
+  /** The photos that already are files of this store (`shopifyStoreFiles`): sent as those files, never uploaded again. */
+  storeFiles?: Record<string, string>
   /** S1 item 5 — reviewed Shared values for variants Shopify does not hold yet, by Nexus variant id (`inherited-information.ts`). */
   variantFacts?: InheritedInformationValues
   /**
@@ -321,7 +338,7 @@ export async function publishContent(gql: ShopifyGraphql, input: PublishContentI
     observedStock[variant.id] = quantity
   }
   await ensureContentDefinitions(gql, content)
-  const mediaIds = await publishContentImages(gql, content, checkpoint)
+  const mediaIds = await publishContentImages(gql, content, checkpoint, undefined, input.storeFiles)
   const metaobjectIds = await publishMetaobjects(gql, content, mediaIds)
   const resolved = variants.map(v => ({ variant: v, content: resolveShopifyContent(content, v) }))
   const family = resolveShopifyContent(content, null)

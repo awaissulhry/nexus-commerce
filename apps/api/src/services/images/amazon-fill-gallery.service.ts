@@ -17,6 +17,7 @@
 import prisma from '../../db.js'
 import { resolveSlotTaxonomy } from './amazon-slot-taxonomy.service.js'
 import { slotToRole } from './amazon-adopt.service.js'
+import { NOT_STORE_PHOTO } from './store-photos.js'
 
 export interface GalleryImage {
   id: string
@@ -82,7 +83,7 @@ export async function fillSlotsFromGallery(opts: {
 
   const gallery = await prisma.productImage.findMany({
     // MM — only IMAGE media fills image slots; videos never map into MAIN/PT.
-    where: { productId: opts.productId, mediaType: 'IMAGE' },
+    where: { productId: opts.productId, mediaType: 'IMAGE', ...NOT_STORE_PHOTO },
     select: { id: true, url: true, type: true, isPrimary: true, sortOrder: true },
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
   })
