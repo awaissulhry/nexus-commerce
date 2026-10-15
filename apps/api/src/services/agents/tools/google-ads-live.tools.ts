@@ -10,6 +10,10 @@
  *     hour, day of week, device or network (live-numbers.ts);
  *   - google-ads-query: one GAQL SELECT a caller writes, on this business's account only, LIMIT ≤ 1,000
  *     (live-query.ts) — the catch-all, so no read is ever missing.
+ * Review (2026-10-15): views bid-strategies and auto-apply; product-groups reads every Shopping dimension
+ * (live-views.ts); every Google call of these tools draws on their own allowance (asLiveRead: ops-budget.ts
+ * LIVE_ACCOUNT_DAILY_OPS), never the changes'. People's e-mail addresses (change history, users, a query on them) need
+ * users.manage; the spend ranking, billing and Google's cost / profit / revenue metrics need their money permissions.
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -18,10 +22,11 @@ import { googleAccountArg, googleIdArg } from './google-ads-kit.js'
 import { googleChangeAccount, type GoogleChangeAccount } from '../../marketing/google-ads/change-account.js'
 import { GoogleAdsReadError } from '../../marketing/google-ads/errors.js'
 import { customerIdDigits } from '../../marketing/google-ads/mappers.js'
-import { liveRows } from '../../marketing/google-ads/write-client.js'
+import { asLiveRead, liveRows } from '../../marketing/google-ads/write-client.js'
 import {
-  liveAds, liveAssets, liveBudgets, liveCampaignDetail, liveCampaigns, liveChangeHistory, liveDrafts, liveNegativeLists, liveProductGroups,
+  liveAds, liveAssets, liveBudgets, liveCampaignDetail, liveCampaigns, liveChangeHistory, liveDrafts, liveNegativeLists,
 } from '../../marketing/google-ads/live.js'
+import { liveAutoApply, liveBidStrategies, liveCampaignProductGroups } from '../../marketing/google-ads/live-views.js'
 import { liveLookup, type LookupKind } from '../../marketing/google-ads/live-campaigns.js'
 import {
   liveAccountLookup, liveAccountSettings, liveBilling, liveConversions, liveExperiments, liveLabels, liveLinks, liveUsers, type AccountLookupKind,
@@ -30,7 +35,7 @@ import {
   liveNumbers, MAX_NUMBER_ROWS, NUMBER_LEVEL_SPECS, NUMBER_LEVELS, NUMBER_ORDERS, NUMBER_SEGMENTS, numbersTotals, numbersWindow,
   type NumberLevel, type NumberOrder, type NumberSegment,
 } from '../../marketing/google-ads/live-numbers.js'
-import { checkedQuery, DEFAULT_QUERY_ROWS, MAX_QUERY_ROWS, PEOPLE_RESOURCES } from '../../marketing/google-ads/live-query.js'
+import { checkedQuery, DEFAULT_QUERY_ROWS, MAX_QUERY_ROWS, type QueryNeed } from '../../marketing/google-ads/live-query.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
 /** Money keys of these tools' answers (some are in the shared registry too; named here so each tool states its own). */
@@ -40,11 +45,16 @@ const LIVE_MONEY = {
   spendCents: ADSPEND, avgCpcCents: ADSPEND, conversionValueCents: ADSPEND, costPerConversionCents: ADSPEND, roas: ADSPEND,
   // G1 — a conversion action's default value; the account budget's limits and what it served.
   defaultValueCents: ADSPEND, spendingLimitCents: ADSPEND, adjustedSpendingLimitCents: ADSPEND, amountServedCents: ADSPEND, adjustmentsCents: ADSPEND,
+  // Review — bid strategy targets and floors (a campaign's own targets in view campaign too).
+  targetCpaCents: ADSPEND, targetRoas: ADSPEND, cpcFloorCents: ADSPEND,
 } as const
+
+/** The caller may see ad spend: the ad-spend permission, or every money permission. */
+const seesSpend = (ctx: ToolContext) => ctx.can(ADSPEND) || ctx.can(FIELDS.financialsView)
 
 export const GOOGLE_LIVE_VIEWS = [
   'campaigns', 'campaign', 'budgets', 'negative-lists', 'product-groups', 'ads', 'assets', 'change-history', 'drafts', 'lookup',
-  'account', 'conversions', 'labels', 'experiments', 'users', 'billing', 'links',
+  'account', 'conversions', 'labels', 'experiments', 'users', 'billing', 'links', 'bid-strategies', 'auto-apply',
 ] as const
 type LiveView = typeof GOOGLE_LIVE_VIEWS[number]
 const NEEDS_CAMPAIGN: readonly LiveView[] = ['campaign', 'product-groups', 'ads']
@@ -81,6 +91,10 @@ async function liveView(args: Record<string, unknown>, ctx: ToolContext): Promis
   if (view === 'users' && !ctx.can(F.usersManage)) {
     return { ok: false, error: `view users lists the e-mail addresses of the people with access to the Google Ads account: it needs the ${F.usersManage} permission.` }
   }
+  // Billing names the payments account and profile and the account budget's limits: the ad-spend permission.
+  if (view === 'billing' && !seesSpend(ctx)) {
+    return { ok: false, error: `view billing shows the payments account and the account budget: it needs the ${ADSPEND} permission.` }
+  }
   const account = await googleChangeAccount(text(args.accountId) ?? null)
   if ('refusal' in account) return { ok: false, error: account.refusal }
   const base = { account: accountOf(account), view, readAt: new Date().toISOString(), source: SOURCE }
@@ -106,7 +120,8 @@ async function liveView(args: Record<string, unknown>, ctx: ToolContext): Promis
         return { ok: true, data: { ...base, items, total: items.length, ...(listId ? {} : { note: 'Name one list (listId) for its keywords.' }) } }
       }
       case 'product-groups': {
-        const items = await liveProductGroups(account.target, campaignId!)
+        // Every Shopping dimension (condition, category, channel … too): a node of another dimension is never read as "everything else".
+        const items = await liveCampaignProductGroups(account.target, campaignId!)
         const open = items.filter((g) => g.everythingElse && !g.excluded && g.kind === 'UNIT')
         return {
           ok: true,
@@ -127,13 +142,15 @@ async function liveView(args: Record<string, unknown>, ctx: ToolContext): Promis
       case 'change-history': {
         const day = text(args.day) ?? new Intl.DateTimeFormat('en-CA', { timeZone: account.timeZone ?? 'UTC' }).format(new Date())
         const all = await liveChangeHistory(account.target, day)
-        const items = all.slice(0, MAX_CHANGES)
+        // Who made a change is an e-mail address: shown with the users permission; otherwise only that a person did.
+        const showsPeople = ctx.can(F.usersManage)
+        const items = all.slice(0, MAX_CHANGES).map((c) => (showsPeople ? c : { ...c, by: c.by ? 'a person' : null }))
         return {
           ok: true,
           data: {
             ...base, day, items, total: all.length,
             ...(all.length > items.length ? { truncated: `Showing the newest ${items.length} of ${all.length} changes.` } : {}),
-            note: 'Google keeps 30 days of change history; a change can take up to 3 minutes to appear.',
+            note: `Google keeps 30 days of change history; a change can take up to 3 minutes to appear.${showsPeople ? '' : ` Who made each change (an e-mail address) needs the ${F.usersManage} permission; client says through what (the Google Ads website, the API …).`}`,
           },
         }
       }
@@ -215,6 +232,26 @@ async function liveView(args: Record<string, unknown>, ctx: ToolContext): Promis
           },
         }
       }
+      case 'bid-strategies': {
+        const items = await liveBidStrategies(account.target)
+        return {
+          ok: true,
+          data: {
+            ...base, items, total: items.length,
+            note: 'Portfolio bid strategies (shared by campaigns). TARGET_SPEND is Maximize clicks; targetRoas 4 = 400%; impressionShare.targetPct is the share of impressions it aims for.',
+          },
+        }
+      }
+      case 'auto-apply': {
+        const items = await liveAutoApply(account.target)
+        return {
+          ok: true,
+          data: {
+            ...base, items, total: items.length,
+            note: 'ENABLED: Google applies this kind of recommendation by itself, without a person. PAUSED: it no longer does. A kind not listed was never switched on.',
+          },
+        }
+      }
       case 'links': {
         const read = await liveLinks(account.target)
         return {
@@ -246,7 +283,7 @@ const googleAdsLive: AgentTool = {
   restrictedFields: LIVE_MONEY,
   input: z.object({
     view: z.preprocess(lower, z.enum(GOOGLE_LIVE_VIEWS))
-      .describe('what to read: campaigns | campaign | budgets | negative-lists | product-groups | ads | assets | change-history | drafts | lookup | account | conversions | labels | experiments | users | billing | links'),
+      .describe('what to read: campaigns | campaign | budgets | negative-lists | product-groups | ads | assets | change-history | drafts | lookup | account | conversions | labels | experiments | users | billing | links | bid-strategies | auto-apply'),
     accountId: googleAccountArg,
     campaignId: googleIdArg('the campaign; needed for views campaign, product-groups and ads; narrows assets').optional(),
     listId: googleIdArg('one negative keyword list: view negative-lists then lists its keywords').optional(),
@@ -265,29 +302,40 @@ const googleAdsLive: AgentTool = {
     + 'keywords and lists, ad groups with bids, keywords with bids, product groups, ads with their review, campaign assets '
     + 'with their review (a part Google refuses is listed in notRead). budgets: every budget with the campaigns on it. '
     + 'negative-lists: the shared negative keyword lists and their campaigns (listId: its keywords). product-groups '
-    + '(campaignId): the product group tree with bids and exclusions (warns when an "everything else" group is NOT '
-    + 'excluded). ads (campaignId): ads with text, URLs, strength and review. assets: campaign assets (sitelinks, '
+    + '(campaignId): the product group tree of every ad group, every Shopping dimension, with bids and exclusions (warns '
+    + 'when an "everything else" group is NOT excluded). ads (campaignId): ads with text, URLs, strength and review. assets: campaign assets (sitelinks, '
     + 'callouts, structured snippets …) with their review. change-history: Google\'s change history of one day (who, '
-    + 'what). drafts: campaign drafts. lookup (lookup + search): Google\'s ids of locations, languages and audience '
+    + 'what; the e-mail of who needs the users permission). drafts: campaign drafts. lookup (lookup + search): Google\'s ids of locations, languages and audience '
     + 'segments whose name holds the word, and this account\'s own user lists, custom audiences and combined audiences, '
     + 'for the change tools. account: auto-tagging, tracking template, final URL suffix, time zone, currency, conversion '
     + 'tracking, the EU political ads declaration. conversions: conversion actions (category, primary or secondary, '
     + 'value, counting, windows, attribution, GA4 source), the account\'s goals and each campaign\'s goals. labels: the '
     + 'labels (labelId: what carries it). experiments: experiments with their arms and campaigns. users: who has access '
     + 'to the Google Ads account and open invitations (needs the users permission). billing: billing setups and account '
-    + 'budgets. links: Merchant Center and other product links, link invitations, YouTube links, GA4 properties. Each view '
+    + 'budgets (needs the ad-spend permission). links: Merchant Center and other product links, link invitations, YouTube '
+    + 'links, GA4 properties. bid-strategies: portfolio bid strategies with targets, CPC ceilings and how many campaigns '
+    + 'use each. auto-apply: which kinds of Google recommendations Google applies by itself. Each view '
     + 'costs one or a few operations of the account\'s daily Google Ads allowance: for numbers use google-ads-numbers '
     + '(live, today included) or google-ad-details (what Nexus stored). Amounts are minor units (cents) of the account '
     + 'currency; a person without the ad-spend money permission gets the same answer without them. Read only.',
-  handler: (args, ctx) => liveView(args, ctx),
+  handler: (args, ctx) => asLiveRead(() => liveView(args, ctx)),
 }
 
 // ── google-ads-numbers ───────────────────────────────────────────────────────────────────────────────────────────
 
-async function numbersView(args: Record<string, unknown>): Promise<ToolResult> {
+/** Sorting by these ranks the rows by money: only for a person who may see ad spend. */
+const MONEY_ORDERS: readonly NumberOrder[] = ['cost', 'conversion-value']
+
+async function numbersView(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   const level = args.level as NumberLevel
   const spec = NUMBER_LEVEL_SPECS[level]
   if (!spec) return { ok: false, error: `Unknown level ${String(level)}.` }
+  const spend = seesSpend(ctx)
+  const asked = args.orderBy as NumberOrder | undefined
+  if (asked && MONEY_ORDERS.includes(asked) && !spend) {
+    return { ok: false, error: `orderBy ${asked} ranks the rows by money: it needs the ${ADSPEND} permission. Nothing was sent.` }
+  }
+  const orderBy: NumberOrder = asked ?? (spend ? 'cost' : 'impressions')
   const segments = [...new Set((Array.isArray(args.segments) ? args.segments : []) as NumberSegment[])]
   const bad = segments.filter((s) => !spec.segments.includes(s))
   if (bad.length) return { ok: false, error: `Google cannot split ${spec.what} by ${bad.join(', ')}: only campaigns and ad groups have numbers per hour. Nothing was sent.` }
@@ -302,7 +350,6 @@ async function numbersView(args: Record<string, unknown>): Promise<ToolResult> {
     const window = numbersWindow(timeZone, { from: text(args.from), to: text(args.to) })
     if ('refusal' in window) return { ok: false, error: window.refusal }
     const campaignId = text(args.campaignId)
-    const orderBy = (args.orderBy as NumberOrder | undefined) ?? 'cost'
     const limit = Number(args.limit ?? 100)
     const read = await liveNumbers(account.target, { level, window, segments, campaignId, adGroupId, orderBy, limit })
     const notes = [
@@ -311,14 +358,15 @@ async function numbersView(args: Record<string, unknown>): Promise<ToolResult> {
     ]
     if (window.includesToday) notes.unshift(`Today (${window.today}, ${timeZone}) is still running: Google adds today's clicks and cost through the day and conversions later, each counted on the day of the click.`)
     if (spec.impressionShare.length) notes.push('impressionShare is in percent of the impressions the ads could have had; Google writes a share under 10% as 9.99 and a lost share over 90% as 90.01.')
-    if (read.truncated) notes.push(`The read stopped at its limit (${limit} rows): there may be more, and the totals cover only the rows shown. Raise limit (at most ${MAX_NUMBER_ROWS}) or narrow by campaignId or adGroupId.`)
+    if (spec.overlapping) notes.push(`No totals: one impression can count under several ${spec.what}, so their rows do not add up to the campaign's numbers (level campaign has those).`)
+    if (read.truncated) notes.push(`The read stopped at its limit (${limit} rows): there may be more${spec.overlapping ? '' : ', and the totals cover only the rows shown'}. Raise limit (at most ${MAX_NUMBER_ROWS}) or narrow by campaignId or adGroupId.`)
     return {
       ok: true,
       data: {
         account: accountOf({ ...account, timeZone }), readAt: new Date().toISOString(), source: SOURCE,
         level, what: spec.what, window, ...(segments.length ? { segments } : {}),
         ...(campaignId ? { campaignId } : {}), ...(adGroupId ? { adGroupId } : {}),
-        rows: read.rows, total: read.rows.length, totals: numbersTotals(read.rows), ...(read.truncated ? { truncated: true } : {}),
+        rows: read.rows, total: read.rows.length, ...(spec.overlapping ? {} : { totals: numbersTotals(read.rows) }), ...(read.truncated ? { truncated: true } : {}),
         ...notReadOf(read.notRead), notes, gaql: read.query,
       },
     }
@@ -349,27 +397,38 @@ const googleAdsNumbers: AgentTool = {
       .describe('split the numbers by: day | hour (campaign and ad-group only) | day-of-week | device | network; each split multiplies the rows'),
     campaignId: googleIdArg('only this campaign').optional(),
     adGroupId: googleIdArg('only this ad group (levels with ad groups)').optional(),
-    orderBy: z.preprocess(lower, z.enum(NUMBER_ORDERS)).optional().describe('most first by: cost (default) | clicks | impressions | conversions | conversion-value'),
+    orderBy: z.preprocess(lower, z.enum(NUMBER_ORDERS)).optional().describe('most first by: cost | clicks | impressions | conversions | conversion-value (default cost; impressions for a person without the ad-spend permission, who cannot sort by cost or conversion-value)'),
     limit: z.coerce.number().int().min(1).max(MAX_NUMBER_ROWS).optional().describe(`rows at most (default 100, at most ${MAX_NUMBER_ROWS})`),
     accountId: googleAccountArg,
   }),
   description:
     'Google Ads numbers read LIVE from Google now, for any window of account days up to and including TODAY (the daily '
     + 'read Nexus stores ends yesterday): impressions, clicks, CTR, cost, average CPC, conversions, conversion value, and '
-    + 'search impression share with what it lost to budget and to rank where Google gives it (campaigns, ad groups, '
-    + 'keywords, products). Levels: campaign, ad-group, keyword, ad, asset (sitelinks, callouts … linked to campaigns), '
+    + 'search impression share where Google gives it: with what it lost to rank (campaigns, ad groups, keywords, products) '
+    + 'and to budget (campaigns and products only). Levels: campaign, ad-group, keyword, ad, asset (sitelinks, callouts … linked to campaigns), '
     + 'ad-group-asset, asset-group-asset (Performance Max), product (Shopping and Performance Max, by item id), '
     + 'search-term, location (with Google\'s place names, and whether people were there or searched for it), age, gender, '
     + 'audience, ad-group-audience. Optional splits: day, hour (campaign and ad-group only, as Google allows), day-of-week, '
     + 'device, network. Narrow by campaignId and adGroupId; the most expensive rows first (orderBy), at most 1,000 rows, '
-    + 'with totals. Ids in the rows are the ones the change tools take (keywordId and adId are adGroupId~id). One '
+    + 'with totals (not for assets, audiences and locations, where one impression counts in several rows). Ids in the rows are the ones the change tools take (keywordId and adId are adGroupId~id). One '
     + 'operation of the account\'s daily Google Ads allowance (two for locations). Amounts are minor units (cents) of the '
     + 'account currency; a person without the ad-spend money permission gets the same answer without cost, value and '
     + 'the ratios built on them. Read only.',
-  handler: (args) => numbersView(args),
+  handler: (args, ctx) => asLiveRead(() => numbersView(args, ctx)),
 }
 
 // ── google-ads-query ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The permission each kind of sensitive field of a query needs (beyond the tool's own). */
+const NEED_PERMISSION: Record<QueryNeed, (typeof F)[keyof typeof F] | (typeof FIELDS)[keyof typeof FIELDS]> = {
+  people: F.usersManage, costs: FIELDS.financialsCostsView, margins: FIELDS.financialsMarginsView, revenue: FIELDS.financialsRevenueView,
+}
+const NEED_WHAT: Record<QueryNeed, string> = {
+  people: 'name or reach people (e-mail addresses, leads, their messages)',
+  costs: 'is the cost of goods sold',
+  margins: 'is gross profit',
+  revenue: 'is revenue',
+}
 
 /** The most text one answer carries; past it, rows are cut and the answer says so. */
 const MAX_ANSWER_CHARS = 400_000
@@ -381,8 +440,10 @@ async function queryView(args: Record<string, unknown>, ctx: ToolContext): Promi
   if (!customerId) return { ok: false, error: 'The Google Ads account id is not a customer id. Nothing was sent.' }
   const checked = checkedQuery(String(args.query ?? ''), customerId, Number(args.limit ?? DEFAULT_QUERY_ROWS))
   if ('refusal' in checked) return { ok: false, error: checked.refusal }
-  if (PEOPLE_RESOURCES.has(checked.from) && !ctx.can(F.usersManage)) {
-    return { ok: false, error: `${checked.from} lists the e-mail addresses of the people with access to the Google Ads account: it needs the ${F.usersManage} permission. Nothing was sent.` }
+  for (const [need, fields] of Object.entries(checked.needs) as Array<[QueryNeed, string[]]>) {
+    const permission = NEED_PERMISSION[need]
+    const allowed = need === 'people' ? ctx.can(permission) : ctx.can(permission) || ctx.can(FIELDS.financialsView)
+    if (!allowed) return { ok: false, error: `${fields.join(', ')} ${NEED_WHAT[need]}: the query needs the ${permission} permission. Nothing was sent.` }
   }
   try {
     const rows = await liveRows<Record<string, unknown>>(account.target, checked.query, 'ads.search.live.query')
@@ -430,11 +491,13 @@ const googleAdsQuery: AgentTool = {
     'Run ONE Google Ads Query Language (GAQL) query, read only, LIVE on this business\'s chosen Google Ads account, and '
     + 'get Google\'s rows as Google gives them — the catch-all for any read the other Google Ads tools do not offer '
     + '(google-ads-live, google-ads-numbers and google-ad-details first). Only SELECT … FROM …; it never changes anything. '
-    + 'Only this account: a query naming another customer id is refused. At most 1,000 rows (a LIMIT is added or '
+    + 'Only this account: a query on another account\'s resources or customer id is refused (link fields that name a '
+    + 'linked account are fine). People\'s e-mail addresses and leads need the users permission; Google\'s cost of goods, '
+    + 'gross profit and revenue metrics need the matching money permission. At most 1,000 rows (a LIMIT is added or '
     + 'lowered). Google\'s rules apply: a segment in WHERE must be selected too (core date segments excepted), and a '
     + 'selected segments.date needs a finite date range. Money fields are Google\'s micros (÷ 10,000 = cents); the tool '
     + 'needs the ad-spend money permission. One operation of the account\'s daily Google Ads allowance per query.',
-  handler: (args, ctx) => queryView(args, ctx),
+  handler: (args, ctx) => asLiveRead(() => queryView(args, ctx)),
 }
 
 export const GOOGLE_ADS_LIVE_TOOLS: AgentTool[] = [googleAdsLive, googleAdsNumbers, googleAdsQuery]

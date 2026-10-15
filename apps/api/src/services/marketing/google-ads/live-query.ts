@@ -6,8 +6,13 @@
  * What is checked before anything is sent (a refusal sends nothing):
  *   - one SELECT … FROM … statement (no `;`, quotes closed); GAQL has no write statement, and the search endpoint only
  *     reads, but anything that is not a SELECT is refused here first;
- *   - no other Google Ads account: a `customers/<id>` resource name or a `customer.id` condition must name this
- *     account (the search itself always goes to this account's own URL);
+ *   - no other Google Ads account: a resource name of something inside an account (`customers/<id>/campaigns/…`), a
+ *     `customer.id` condition and a `customer.resource_name` condition must name this account (the search itself always
+ *     goes to this account's own URL). A bare `customers/<id>` elsewhere is a link to another account — a conversion
+ *     action's owner, a manager link, a product link — and is accepted;
+ *   - what needs more than the tool's own permissions is named (`needs`) for the tool to check: fields that name or
+ *     reach people (change_event.user_email, customer_user_access*, lead_form_submission_data, local_services_lead*),
+ *     and Google's cost of goods, gross profit and revenue metrics;
  *   - a LIMIT of at most 1,000 rows: added when missing, lowered when higher;
  *   - Google's date rule (developers.google.com/google-ads/api/docs/reporting/segmentation, "Rules for core date segment
  *     fields"): when segments.date, .week, .month, .quarter or .year is SELECTED, the WHERE must hold a finite range of
@@ -23,6 +28,9 @@ const MAX_QUERY_LENGTH = 20_000
 
 const CORE_DATE = /\bsegments\.(?:date|week|month|quarter|year)\b/i
 
+/** What a query reads beyond ads numbers: the fields that name or reach people, and cost / profit / revenue metrics. */
+export type QueryNeed = 'people' | 'costs' | 'margins' | 'revenue'
+
 export interface CheckedQuery {
   query: string
   /** FROM resource, lower case. */
@@ -30,7 +38,21 @@ export interface CheckedQuery {
   limit: number
   /** What Nexus changed in the text (a LIMIT added or lowered). */
   notes: string[]
+  /** Each kind of sensitive field the query names, with the fields (empty when none). */
+  needs: Partial<Record<QueryNeed, string[]>>
 }
+
+/** FROM resources that list people (e-mail addresses, leads' contact details, their messages). */
+export const PEOPLE_RESOURCES = new Set([
+  'customer_user_access', 'customer_user_access_invitation', 'lead_form_submission_data', 'local_services_lead', 'local_services_lead_conversation',
+])
+const PEOPLE_FIELDS = /\b(?:change_event\.user_email|(?:customer_user_access(?:_invitation)?|lead_form_submission_data|local_services_lead(?:_conversation)?)\.[a-z0-9_.]+)\b/gi
+/** Google's metrics from the cart data (v25 metrics page): cost of goods, gross profit (and margin), revenue. */
+const MONEY_METRICS: Array<[QueryNeed, RegExp]> = [
+  ['costs', /\bmetrics\.[a-z_]*cost_of_goods_sold_micros\b/gi],
+  ['margins', /\bmetrics\.[a-z_]*gross_profit_(?:micros|margin)\b/gi],
+  ['revenue', /\bmetrics\.[a-z_]*revenue_micros\b/gi],
+]
 
 /**
  * Each quoted literal with its inside blanked out (same length, so a position found in the masked text is the same
@@ -72,12 +94,20 @@ export function checkedQuery(text: string, customerId: string, defaultLimit: num
   const from = /\sFROM\s+([a-z_]+)\b/i.exec(q)
   if (!from) return refuse('The query has no FROM resource.')
 
-  // Another account: resource names in literals and customer.id conditions must name this one.
+  // Another account: a resource inside another account, or a condition on the account itself, is refused. A bare
+  // `customers/<id>` (a link field: conversion_action.owner_customer, customer_manager_link.manager_customer,
+  // product_link.google_ads.customer, …) names a linked account and is accepted.
   const own = String(customerId).replace(/-/g, '')
   const named = new Set<string>()
-  for (const literal of m.literals) for (const hit of literal.matchAll(/customers\/(\d+)/g)) named.add(hit[1])
+  for (const literal of m.literals) for (const hit of literal.matchAll(/customers\/(\d+)\/[A-Za-z]/g)) named.add(hit[1])
   const cond = /\bcustomer\.id\s*(?:=|!=|<>|>=|<=|>|<|\bNOT\s+IN\b|\bIN\b)\s*(\([^)]*\)|\d+)/gi
   for (const hit of q.matchAll(cond)) for (const id of hit[1].matchAll(/\d+/g)) named.add(id[0])
+  // customer.resource_name = 'customers/<id>' (or IN (…)): the masked text keeps positions, the query holds the values.
+  const nameCond = /\bcustomer\.resource_name\s*(?:=|!=|<>|\bNOT\s+IN\b|\bIN\b)\s*(\([^)]*\)|'x*'|"x*")/gi
+  for (const hit of q.matchAll(nameCond)) {
+    const at = hit.index + hit[0].length - hit[1].length
+    for (const id of query.slice(at, at + hit[1].length).matchAll(/customers\/(\d+)/g)) named.add(id[1])
+  }
   const other = [...named].filter((id) => id !== own)
   if (other.length) return refuse(`The query names another Google Ads account (${other.join(', ')}): google-ads-query reads only this business's chosen account.`)
 
@@ -115,8 +145,14 @@ export function checkedQuery(text: string, customerId: string, defaultLimit: num
     out = params ? `${query.slice(0, params.index)} LIMIT ${limit}${query.slice(params.index)}` : `${query} LIMIT ${limit}`
     notes.push(`LIMIT ${limit} added.`)
   }
-  return { query: out, from: from[1].toLowerCase(), limit, notes }
+  const needs: CheckedQuery['needs'] = {}
+  const fromName = from[1].toLowerCase()
+  const people = [...new Set([...q.matchAll(PEOPLE_FIELDS)].map((hit) => hit[0].toLowerCase()))]
+  if (PEOPLE_RESOURCES.has(fromName) && !people.length) people.push(fromName)
+  if (people.length) needs.people = people
+  for (const [need, pattern] of MONEY_METRICS) {
+    const fields = [...new Set([...q.matchAll(pattern)].map((hit) => hit[0].toLowerCase()))]
+    if (fields.length) needs[need] = fields
+  }
+  return { query: out, from: fromName, limit, notes, needs }
 }
-
-/** FROM resources that list people (e-mail addresses): they need the users permission too. */
-export const PEOPLE_RESOURCES = new Set(['customer_user_access', 'customer_user_access_invitation'])

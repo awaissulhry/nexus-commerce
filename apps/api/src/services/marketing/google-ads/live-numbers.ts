@@ -7,15 +7,18 @@
  *
  * Checked on 2026-10-15 against Google's v25 field reference (https://developers.google.com/google-ads/api/fields/v25/
  * <resource>, fetched with curl and parsed): every FROM resource below exists; every selected field is Selectable and
- * usable with its FROM resource (on that resource's page, or a field of one of its attributed or segmenting resources);
- * every WHERE field is Filterable; every ORDER BY field is Sortable; and each segment's "Selectable with" list names
- * every metric and segment selected with it. Facts the levels below stand on, from those pages:
+ * usable with its FROM resource — a segment or metric only when the FROM resource's own page marks it usable "when
+ * <resource> is specified in the FROM clause" (the page's filter; a metric's own "Selectable with" list is not enough),
+ * a resource field when it is on that page or on one of its attributed or segmenting resources; every WHERE field is
+ * Filterable; every ORDER BY field is Sortable; and each segment's "Selectable with" list names every metric and
+ * segment selected with it. Facts the levels below stand on, from those pages:
  *   - segments.hour is usable only with FROM campaign and FROM ad_group (not keyword_view, ad_group_ad, the asset
  *     views, shopping_performance_view, campaign_search_term_view, geographic_view, age_range_view, gender_view or the
  *     audience views).
  *   - impression share (metrics.search_impression_share, …_top_…, …_absolute_top_…, …_budget_lost_…, …_rank_lost_…):
- *     campaign, ad_group and keyword_view have all five; shopping_performance_view all but search_top_impression_share;
- *     gender_view only search_impression_share; the other views none. segments.product_title cannot be selected with
+ *     campaign has all five; ad_group and keyword_view all but search_budget_lost_impression_share (their FROM marker is
+ *     empty); shopping_performance_view all but search_top_impression_share; gender_view only search_impression_share;
+ *     the other views none. segments.product_title cannot be selected with
  *     any impression share (its "Selectable with" names none; product_item_id and product_brand can): a product read
  *     selects item id and brand with the shares, and a second query (item id + title only) names the products.
  *   - campaign (and ad_group) are SEGMENTING resources of campaign_asset, ad_group_asset, shopping_performance_view,
@@ -90,6 +93,11 @@ interface LevelSpec {
   adGroup: 'always' | 'when-filtered' | null
   segments: readonly NumberSegment[]
   impressionShare: readonly string[]
+  /**
+   * One impression can count in several rows (an ad shows with several assets; a person is in several audiences; a
+   * place and the place around it): the rows are not summed.
+   */
+  overlapping?: true
 }
 
 const CAMPAIGN = ['campaign.id', 'campaign.name']
@@ -102,12 +110,12 @@ export const NUMBER_LEVEL_SPECS: Record<NumberLevel, LevelSpec> = {
   },
   'ad-group': {
     from: 'ad_group', what: 'ad groups', fields: [...CAMPAIGN, ...AD_GROUP, 'ad_group.status'],
-    adGroup: 'always', segments: ALL_SEGMENTS, impressionShare: IS_ALL,
+    adGroup: 'always', segments: ALL_SEGMENTS, impressionShare: [IS.search, IS.top, IS.absoluteTop, IS.lostToRank],
   },
   keyword: {
     from: 'keyword_view', what: 'keywords',
     fields: [...CAMPAIGN, ...AD_GROUP, 'ad_group_criterion.criterion_id', 'ad_group_criterion.keyword.text', 'ad_group_criterion.keyword.match_type', 'ad_group_criterion.status'],
-    adGroup: 'always', segments: NO_HOUR, impressionShare: IS_ALL,
+    adGroup: 'always', segments: NO_HOUR, impressionShare: [IS.search, IS.top, IS.absoluteTop, IS.lostToRank],
   },
   ad: {
     from: 'ad_group_ad', what: 'ads', fields: [...CAMPAIGN, ...AD_GROUP, 'ad_group_ad.ad.id', 'ad_group_ad.ad.type', 'ad_group_ad.status'],
@@ -115,16 +123,16 @@ export const NUMBER_LEVEL_SPECS: Record<NumberLevel, LevelSpec> = {
   },
   asset: {
     from: 'campaign_asset', what: 'assets linked to campaigns', fields: [...CAMPAIGN, 'campaign_asset.field_type', 'campaign_asset.status', ...ASSET_FIELDS],
-    adGroup: null, segments: NO_HOUR, impressionShare: [],
+    adGroup: null, segments: NO_HOUR, impressionShare: [], overlapping: true,
   },
   'ad-group-asset': {
     from: 'ad_group_asset', what: 'assets linked to ad groups', fields: [...CAMPAIGN, ...AD_GROUP, 'ad_group_asset.field_type', 'ad_group_asset.status', ...ASSET_FIELDS],
-    adGroup: 'always', segments: NO_HOUR, impressionShare: [],
+    adGroup: 'always', segments: NO_HOUR, impressionShare: [], overlapping: true,
   },
   'asset-group-asset': {
     from: 'asset_group_asset', what: 'assets of Performance Max asset groups',
     fields: [...CAMPAIGN, 'asset_group.id', 'asset_group.name', 'asset_group_asset.field_type', 'asset_group_asset.status', ...ASSET_FIELDS],
-    adGroup: null, segments: NO_HOUR, impressionShare: [],
+    adGroup: null, segments: NO_HOUR, impressionShare: [], overlapping: true,
   },
   product: {
     from: 'shopping_performance_view', what: 'products (Shopping and Performance Max)',
@@ -138,7 +146,7 @@ export const NUMBER_LEVEL_SPECS: Record<NumberLevel, LevelSpec> = {
   location: {
     from: 'geographic_view', what: 'locations (where people were, or the place they searched for)',
     fields: [...CAMPAIGN, 'geographic_view.country_criterion_id', 'geographic_view.location_type', 'segments.geo_target_most_specific_location'],
-    adGroup: 'when-filtered', segments: NO_HOUR, impressionShare: [],
+    adGroup: 'when-filtered', segments: NO_HOUR, impressionShare: [], overlapping: true,
   },
   age: {
     from: 'age_range_view', what: 'age ranges', fields: [...CAMPAIGN, ...AD_GROUP, 'ad_group_criterion.criterion_id', 'ad_group_criterion.age_range.type'],
@@ -151,12 +159,12 @@ export const NUMBER_LEVEL_SPECS: Record<NumberLevel, LevelSpec> = {
   audience: {
     from: 'campaign_audience_view', what: 'audiences set on campaigns',
     fields: [...CAMPAIGN, 'campaign_criterion.criterion_id', 'campaign_criterion.type', 'campaign_criterion.display_name', 'campaign_criterion.bid_modifier'],
-    adGroup: null, segments: NO_HOUR, impressionShare: [],
+    adGroup: null, segments: NO_HOUR, impressionShare: [], overlapping: true,
   },
   'ad-group-audience': {
     from: 'ad_group_audience_view', what: 'audiences set on ad groups',
     fields: [...CAMPAIGN, ...AD_GROUP, 'ad_group_criterion.criterion_id', 'ad_group_criterion.type', 'ad_group_criterion.display_name', 'ad_group_criterion.bid_modifier'],
-    adGroup: 'always', segments: NO_HOUR, impressionShare: [],
+    adGroup: 'always', segments: NO_HOUR, impressionShare: [], overlapping: true,
   },
 }
 

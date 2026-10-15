@@ -25,7 +25,9 @@ import type { ToolContext } from '../tool-types.js'
 
 const tool = (name: string) => GOOGLE_ADS_LIVE_TOOLS.find((t) => t.name === name)!
 const everyone: ToolContext = { can: () => true, via: 'claude', userId: 'u-1' }
-const without = (permission: string): ToolContext => ({ can: (p) => p !== permission, via: 'claude', userId: 'u-2' })
+const without = (...permissions: string[]): ToolContext => ({ can: (p) => !permissions.includes(p), via: 'claude', userId: 'u-2' })
+/** Holds the ads permissions but no money permission at all. */
+const noMoney = without(FIELDS.financialsView, FIELDS.financialsAdspendView, FIELDS.financialsCostsView, FIELDS.financialsMarginsView, FIELDS.financialsRevenueView)
 const sent = () => h.rows.mock.calls.map((c) => String(c[1]))
 
 beforeEach(() => { h.rows.mockReset() })
@@ -46,7 +48,7 @@ describe('registration', () => {
   })
 
   it('google-ads-live knows the new views and the account\'s own audience lookups', () => {
-    expect(GOOGLE_LIVE_VIEWS).toEqual(expect.arrayContaining(['account', 'conversions', 'labels', 'experiments', 'users', 'billing', 'links']))
+    expect(GOOGLE_LIVE_VIEWS).toEqual(expect.arrayContaining(['account', 'conversions', 'labels', 'experiments', 'users', 'billing', 'links', 'bid-strategies', 'auto-apply']))
     expect(tool('google-ads-live').input.safeParse({ view: 'lookup', lookup: 'user-lists' }).success).toBe(true)
     expect(tool('google-ads-live').input.safeParse({ view: 'lookup', lookup: 'custom-audiences', search: 'moto' }).success).toBe(true)
   })
@@ -59,6 +61,41 @@ describe('google-ads-live, new views', () => {
     expect(h.rows).not.toHaveBeenCalled()
     h.rows.mockResolvedValue([])
     expect((await tool('google-ads-live').handler({ view: 'users' }, everyone)).ok).toBe(true)
+  })
+
+  it('billing needs the ad-spend permission: refused before any Google call', async () => {
+    expect(await tool('google-ads-live').handler({ view: 'billing' }, noMoney)).toMatchObject({ ok: false, error: expect.stringContaining(FIELDS.financialsAdspendView) })
+    expect(h.rows).not.toHaveBeenCalled()
+  })
+
+  it('change history: who made a change (an e-mail) only with the users permission; otherwise "a person"', async () => {
+    const row = { changeEvent: { changeDateTime: '2026-10-15 10:00:00', userEmail: 'someone@example.com', clientType: 'GOOGLE_ADS_WEB_CLIENT' } }
+    h.rows.mockResolvedValue([row])
+    const hidden = await tool('google-ads-live').handler({ view: 'change-history', day: '2026-10-15' }, without(F.usersManage))
+    expect((hidden.data as any).items[0]).toMatchObject({ by: 'a person', client: 'GOOGLE_ADS_WEB_CLIENT' })
+    expect(JSON.stringify(hidden.data)).not.toContain('someone@example.com')
+    const shown = await tool('google-ads-live').handler({ view: 'change-history', day: '2026-10-15' }, everyone)
+    expect((shown.data as any).items[0]).toMatchObject({ by: 'someone@example.com' })
+  })
+
+  it('product-groups: every Shopping dimension, so a condition node is not "everything else"', async () => {
+    h.rows.mockResolvedValue([
+      { adGroup: { id: '51' }, adGroupCriterion: { criterionId: '601', listingGroup: { type: 'SUBDIVISION' } } },
+      { adGroup: { id: '51' }, adGroupCriterion: { criterionId: '602', listingGroup: { type: 'UNIT', parentAdGroupCriterion: 'customers/1/adGroupCriteria/51~601', caseValue: { productCondition: { condition: 'NEW' } } } } },
+      { adGroup: { id: '51' }, adGroupCriterion: { criterionId: '603', listingGroup: { type: 'UNIT', parentAdGroupCriterion: 'customers/1/adGroupCriteria/51~601', caseValue: { productCondition: {} } } } },
+    ])
+    const out = await tool('google-ads-live').handler({ view: 'product-groups', campaignId: '21' }, everyone)
+    expect(sent()[0]).toContain('case_value.product_condition.condition')
+    expect((out.data as any).items.map((i: any) => [i.criterionId, i.value, i.everythingElse])).toEqual([['601', null, false], ['602', 'NEW', false], ['603', null, true]])
+    expect((out.data as any).warning).toMatch(/^1 "everything else" product group is NOT excluded/)
+  })
+
+  it('bid-strategies and auto-apply', async () => {
+    h.rows.mockResolvedValue([{ biddingStrategy: { id: '81', name: 'Portfolio A', type: 'TARGET_SPEND', targetSpend: { cpcBidCeilingMicros: '800000' } } }])
+    expect(await tool('google-ads-live').handler({ view: 'bid-strategies' }, everyone)).toMatchObject({ ok: true, data: { items: [{ strategyId: '81', maxCpcCeilingCents: 80 }] } })
+    expect(sent()[0]).toContain('FROM bidding_strategy')
+    h.rows.mockResolvedValue([{ recommendationSubscription: { type: 'KEYWORD', status: 'PAUSED' } }])
+    expect(await tool('google-ads-live').handler({ view: 'auto-apply' }, everyone)).toMatchObject({ ok: true, data: { items: [{ type: 'KEYWORD', status: 'PAUSED' }] } })
   })
 
   it('account: the settings, read live', async () => {
@@ -101,6 +138,26 @@ describe('google-ads-numbers', () => {
     for (const key of ['spendCents', 'costPerConversionCents', 'roas', 'conversionValueCents']) expect(seen.totals).not.toHaveProperty(key)
   })
 
+  it('without the ad-spend permission: sorted by impressions, and a sort by cost or conversion value is refused (the ranking is money)', async () => {
+    h.rows.mockResolvedValue([])
+    expect((await tool('google-ads-numbers').handler({ level: 'keyword', from: '2026-10-01', to: '2026-10-02' }, noMoney)).ok).toBe(true)
+    expect(sent()[0]).toMatch(/ORDER BY metrics\.impressions DESC LIMIT 100$/)
+    for (const orderBy of ['cost', 'conversion-value']) {
+      expect(await tool('google-ads-numbers').handler({ level: 'keyword', orderBy }, noMoney))
+        .toMatchObject({ ok: false, error: `orderBy ${orderBy} ranks the rows by money: it needs the ${FIELDS.financialsAdspendView} permission. Nothing was sent.` })
+    }
+    expect(h.rows).toHaveBeenCalledTimes(1)
+    expect((await tool('google-ads-numbers').handler({ level: 'keyword', from: '2026-10-01', to: '2026-10-02' }, everyone)).ok).toBe(true)
+    expect(sent()[1]).toMatch(/ORDER BY metrics\.cost_micros DESC, metrics\.impressions DESC LIMIT 100$/)
+  })
+
+  it('no totals where one impression counts in several rows (assets, audiences, locations)', async () => {
+    h.rows.mockResolvedValue([{ campaign: { id: '21' }, campaignAsset: { fieldType: 'SITELINK' }, asset: { id: '9' }, metrics: { impressions: '5' } }])
+    const out = await tool('google-ads-numbers').handler({ level: 'asset', from: '2026-10-01', to: '2026-10-02' }, everyone)
+    expect(out.data).not.toHaveProperty('totals')
+    expect((out.data as any).notes).toEqual(expect.arrayContaining([expect.stringMatching(/^No totals: one impression can count under several assets/)]))
+  })
+
   it('refuses before any Google call: hour below ad groups, an ad group where there is none, a day after today', async () => {
     expect(await tool('google-ads-numbers').handler({ level: 'keyword', segments: ['hour'] }, everyone)).toMatchObject({ ok: false, error: expect.stringMatching(/cannot split keywords by hour/) })
     expect(await tool('google-ads-numbers').handler({ level: 'campaign', adGroupId: '51' }, everyone)).toMatchObject({ ok: false, error: expect.stringMatching(/not read per ad group/) })
@@ -129,6 +186,27 @@ describe('google-ads-query', () => {
     expect(await tool('google-ads-query').handler({ query: 'SELECT customer.id FROM customer WHERE customer.id = 999' }, everyone)).toMatchObject({ ok: false, error: expect.stringMatching(/another Google Ads account/) })
     expect(await tool('google-ads-query').handler({ query: 'SELECT customer_user_access.email_address FROM customer_user_access' }, without(F.usersManage)))
       .toMatchObject({ ok: false, error: expect.stringContaining(F.usersManage) })
+    expect(await tool('google-ads-query').handler({ query: "SELECT change_event.user_email FROM change_event WHERE change_event.change_date_time >= '2026-10-10'" }, without(F.usersManage)))
+      .toMatchObject({ ok: false, error: expect.stringMatching(/^change_event\.user_email name or reach people/) })
     expect(h.rows).not.toHaveBeenCalled()
+  })
+
+  it('cost of goods, gross profit and revenue need their own money permissions (or every money permission)', async () => {
+    const q = 'SELECT campaign.id, metrics.gross_profit_micros FROM campaign WHERE segments.date DURING LAST_7_DAYS'
+    expect(await tool('google-ads-query').handler({ query: q }, without(FIELDS.financialsView, FIELDS.financialsMarginsView)))
+      .toMatchObject({ ok: false, error: `metrics.gross_profit_micros is gross profit: the query needs the ${FIELDS.financialsMarginsView} permission. Nothing was sent.` })
+    expect(await tool('google-ads-query').handler({ query: 'SELECT campaign.id, metrics.revenue_micros FROM campaign' }, without(FIELDS.financialsView, FIELDS.financialsRevenueView)))
+      .toMatchObject({ ok: false, error: expect.stringContaining(FIELDS.financialsRevenueView) })
+    expect(await tool('google-ads-query').handler({ query: 'SELECT campaign.id, metrics.cost_of_goods_sold_micros FROM campaign' }, without(FIELDS.financialsView, FIELDS.financialsCostsView)))
+      .toMatchObject({ ok: false, error: expect.stringContaining(FIELDS.financialsCostsView) })
+    expect(h.rows).not.toHaveBeenCalled()
+    h.rows.mockResolvedValue([])
+    expect((await tool('google-ads-query').handler({ query: q }, without(FIELDS.financialsMarginsView))).ok).toBe(true)
+  })
+
+  it('accepts a link field that names a linked account', async () => {
+    h.rows.mockResolvedValue([])
+    const out = await tool('google-ads-query').handler({ query: "SELECT conversion_action.id FROM conversion_action WHERE conversion_action.owner_customer = 'customers/999'" }, everyone)
+    expect(out.ok).toBe(true)
   })
 })

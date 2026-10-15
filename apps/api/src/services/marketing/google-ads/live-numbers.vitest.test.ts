@@ -46,6 +46,21 @@ describe('the query', () => {
     expect(q).toContain('metrics.search_budget_lost_impression_share')
   })
 
+  it('impression share lost to budget only where Google has it in FROM: campaign and product, never ad group or keyword', () => {
+    expect(numbersQuery({ level: 'campaign', window })).toContain('metrics.search_budget_lost_impression_share')
+    expect(numbersQuery({ level: 'product', window })).toContain('metrics.search_budget_lost_impression_share')
+    for (const level of ['ad-group', 'keyword'] as const) {
+      const q = numbersQuery({ level, window })
+      expect(q, level).not.toContain('metrics.search_budget_lost_impression_share')
+      expect(q, level).toContain('metrics.search_rank_lost_impression_share')
+    }
+  })
+
+  it('levels where one impression counts in several rows are marked: no totals there', () => {
+    const overlapping = NUMBER_LEVELS.filter((l) => NUMBER_LEVEL_SPECS[l].overlapping)
+    expect(overlapping).toEqual(['asset', 'ad-group-asset', 'asset-group-asset', 'location', 'audience', 'ad-group-audience'])
+  })
+
   it('ids are digits, dates are days, the LIMIT is 1 … 1000 — or nothing is sent', () => {
     expect(() => numbersQuery({ level: 'campaign', window, campaignId: '21 OR 1=1' })).toThrow(/Nothing was sent/)
     expect(() => numbersQuery({ level: 'keyword', window, adGroupId: 'abc' })).toThrow(/Nothing was sent/)
