@@ -140,6 +140,81 @@ describe('Google: reads, and Google Ads mutates only', () => {
   })
 })
 
+describe('Google Ads G5: the new mutate kinds, and applying / dismissing recommendations', () => {
+  const APPLY = `${GOOGLE_ADS_API_BASE}/customers/1234567890/recommendations:apply`
+  const DISMISS = `${GOOGLE_ADS_API_BASE}/customers/1234567890/recommendations:dismiss`
+  const REC = 'customers/1234567890/recommendations/r-1'
+
+  it('labels, their links, portfolio bid strategies and auto-apply settings go through a mutate (check and change)', async () => {
+    const ops = [
+      { labelOperation: { create: { resourceName: 'customers/1234567890/labels/-1', name: 'Label A' } } },
+      { campaignLabelOperation: { create: { campaign: 'customers/1234567890/campaigns/21', label: 'customers/1234567890/labels/-1' } } },
+      { adGroupLabelOperation: { remove: 'customers/1234567890/adGroupLabels/51~61' } },
+      { adGroupAdLabelOperation: { remove: 'customers/1234567890/adGroupAdLabels/51~701~61' } },
+      { adGroupCriterionLabelOperation: { remove: 'customers/1234567890/adGroupCriterionLabels/51~601~61' } },
+      { biddingStrategyOperation: { create: { name: 'Strategy A', targetSpend: {} } } },
+      { recommendationSubscriptionOperation: { create: { type: 'KEYWORD', status: 'PAUSED' } } },
+    ]
+    await googleCall({ connectionId: 'g-1', operation: 'ads.mutate.check', method: 'POST', url: MUTATE, body: { mutateOperations: ops, validateOnly: true } })
+    await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: ops } })
+    expect(h.calls).toHaveLength(2)
+    expect(gatewayLedger.map((r) => r.outcome)).toEqual(['sent', 'sent'])
+  })
+
+  it('an apply and a dismiss are writes (Google has no check for them): sent once, the body as judged, their ledger rows', async () => {
+    expect(googleKind('POST', APPLY, { operations: [{ resourceName: REC }] })).toBe('write')
+    expect(googleKind('POST', DISMISS, { operations: [{ resourceName: REC }] })).toBe('write')
+    h.answers.push(() => new Response('{}', { status: 503 }))
+    const res = await googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: APPLY, body: { operations: [{ resourceName: REC, campaignBudget: { newBudgetAmountMicros: '15000000' } }], partialFailure: false } })
+    expect(res.status).toBe(503)
+    await googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.dismiss', method: 'POST', url: DISMISS, body: { operations: [{ resourceName: REC }] } })
+    expect(h.calls).toHaveLength(2)
+    expect(JSON.parse(String(h.calls[0].init.body))).toEqual({ operations: [{ resourceName: REC, campaignBudget: { newBudgetAmountMicros: '15000000' } }], partialFailure: false })
+    expect(gatewayLedger).toEqual([
+      expect.objectContaining({ channel: 'GOOGLE', operation: 'ads.recommendations.apply', outcome: 'sent', success: false }),
+      expect.objectContaining({ channel: 'GOOGLE', operation: 'ads.recommendations.dismiss', outcome: 'sent', success: true }),
+    ])
+  })
+
+  it('NEXUS_GOOGLE_ADS_WRITES=off: an apply is refused before anything is sent', async () => {
+    vi.stubEnv('NEXUS_GOOGLE_ADS_WRITES', 'off')
+    const err = await googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: APPLY, body: { operations: [{ resourceName: REC }] } }).catch((e) => e)
+    expect(err).toMatchObject({ outcome: 'gated', code: 'PUBLISH_GATED' })
+    expect(h.calls).toHaveLength(0)
+  })
+
+  it('every other apply / dismiss body, path or declared kind is refused before anything is sent', async () => {
+    const tries = [
+      // another customer's recommendation
+      googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: APPLY, body: { operations: [{ resourceName: 'customers/999/recommendations/r-1' }] } }),
+      // a parameter Nexus never sends, two parameters, a dismiss with a parameter
+      googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: APPLY, body: { operations: [{ resourceName: REC, sitelinkAsset: {} }] } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: APPLY, body: { operations: [{ resourceName: REC, keyword: {}, campaignBudget: {} }] } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.dismiss', method: 'POST', url: DISMISS, body: { operations: [{ resourceName: REC, campaignBudget: {} }] } }),
+      // a "check" Google does not have, partial failure, snake_case, no operations, more than 100
+      googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: APPLY, body: { operations: [{ resourceName: REC }], validateOnly: true } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: APPLY, body: { operations: [{ resourceName: REC }], partialFailure: true } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: APPLY, body: { operations: [{ resource_name: REC }] } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: APPLY, body: { operations: [] } }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: APPLY, body: { operations: Array.from({ length: 101 }, (_, i) => ({ resourceName: `${REC}${i}` })) } }),
+      // another RecommendationService method, a query string
+      googleCall({ connectionId: 'g-1', operation: 'ads.x', method: 'POST', url: `${GOOGLE_ADS_API_BASE}/customers/1234567890/recommendations:generate`, body: {} }),
+      googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: `${APPLY}?x=1`, body: { operations: [{ resourceName: REC }] } }),
+      // an apply declared as a read
+      gatewayCall({ channel: 'GOOGLE', operation: 'ads.sneaky', kind: 'read', connectionId: 'g-1', url: APPLY, method: 'POST', body: JSON.stringify({ operations: [{ resourceName: REC }] }) }),
+    ]
+    for (const t of tries) expect(await t.catch((e) => e)).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY' })
+    expect(h.calls).toHaveLength(0)
+  })
+
+  it('an apply for an account the business did not choose through this connection is refused', async () => {
+    gatewayGoogleUnlinked.add('g-1:1234567890')
+    const err = await googleCall({ connectionId: 'g-1', operation: 'ads.recommendations.apply', method: 'POST', url: APPLY, body: { operations: [{ resourceName: REC }] } }).catch((e) => e)
+    expect(err).toMatchObject({ outcome: 'refused', code: 'GOOGLE_ACCOUNT_NOT_CHOSEN' })
+    expect(h.calls).toHaveLength(0)
+  })
+})
+
 describe('Google headers', () => {
   it('no developer-token and no login-customer-id unless they apply', async () => {
     await googleCall({ connectionId: 'g-1', operation: 'ads.listAccessibleCustomers', method: 'GET', url: `${GOOGLE_ADS_API_BASE}/customers:listAccessibleCustomers` })

@@ -847,6 +847,14 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // Google Ads changes (2026-10-15): the live facts it stands on, the exact operations it sends, where it lands (google-ads-kit.ts).
   'set-google-budget': ['basis', 'plan', 'reach'],
   'set-google-negative-list': ['basis', 'plan', 'reach'],
+  // G5: labels, Google's recommendations (apply / dismiss: re-read before running, Google has no check) and bid strategies.
+  'set-google-labels': ['basis', 'plan', 'reach'],
+  'remove-google-labels': ['basis', 'plan', 'reach'],
+  'apply-google-recommendations': ['basis', 'plan', 'reach'],
+  'dismiss-google-recommendations': ['basis', 'plan', 'reach'],
+  'set-google-auto-apply': ['basis', 'plan', 'reach'],
+  'set-google-bid-strategy': ['basis', 'plan', 'reach'],
+  'remove-google-bid-strategy': ['basis', 'plan', 'reach'],
   'create-google-campaign': ['basis', 'plan', 'reach'],
   'set-google-campaign': ['basis', 'plan', 'reach'],
   'set-google-targeting': ['basis', 'plan', 'reach'],

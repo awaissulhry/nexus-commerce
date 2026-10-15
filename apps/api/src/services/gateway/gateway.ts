@@ -36,7 +36,7 @@ import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
 import { ebaySignatureAppliesTo } from '../cx/connectors/ebay/signing.js'
 import {
-  apiVersionOf, authHeadersOf, bucketGroupOf, ebayMarketHeaders, googleAdsMutateCustomer, googleCallKind, googleMutateBodyOf, MarketUnconfigured, publishModeOf, rateReadingOf, sandboxUrlOf, shopifyGraphqlBodyOf,
+  apiVersionOf, authHeadersOf, bucketGroupOf, ebayMarketHeaders, googleAdsMutateCustomer, googleAdsRecommendationCall, googleCallKind, googleMutateBodyOf, googleRecommendationBodyOf, MarketUnconfigured, publishModeOf, rateReadingOf, sandboxUrlOf, shopifyGraphqlBodyOf,
 } from './channels.js'
 import { bucketKey, observeRate, takeToken } from './rate.js'
 import { ledgerSafeBody } from './redact.js'
@@ -213,11 +213,23 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // was judged (googleMutateBodyOf). Every other call is refused here, before the token or the network: by the kind
   // the caller declared AND by the method, path and body themselves (a real mutate declared as a read is still a
   // change). The refusal has its ledger row like every other.
+  // G5 (2026-10-15): the one other Google Ads change — applying or dismissing Google's recommendations
+  // (googleAdsRecommendationCall), judged the same way (googleRecommendationBodyOf); Google has no check for it, so it
+  // always goes as a write, under the publish mode.
   let googleBody: string | null = null
   if (req.channel === 'GOOGLE') {
     const customer = googleAdsMutateCustomer(req.method, req.url)
-    const readOnly = (detail: string) => refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: Nexus only reads Google and changes Google Ads only through a mutate, and this call is neither (${req.method} ${safePath(req.url)}${detail}).`, 403)
-    if (customer === null) {
+    const recommendation = customer === null ? googleAdsRecommendationCall(req.method, req.url) : null
+    const readOnly = (detail: string) => refuse('refused', 'GOOGLE_READ_ONLY', `Nothing was sent to Google: Nexus only reads Google and changes Google Ads only through a mutate (or an apply or dismiss of its recommendations), and this call is none of them (${req.method} ${safePath(req.url)}${detail}).`, 403)
+    if (recommendation) {
+      const judged = googleRecommendationBodyOf(recommendation, req.body)
+      if ('refusal' in judged) return readOnly(`: ${judged.refusal}`)
+      if (req.kind !== 'write') return readOnly(': the kind declared is not the body\'s')
+      if (!req.connectionId || !(await googleAdsCustomerLinked(req.connectionId, recommendation.customer))) {
+        return refuse('refused', 'GOOGLE_ACCOUNT_NOT_CHOSEN', `Nothing was sent to Google: Google Ads account ${recommendation.customer} is not the account this business chose through this Google connection.`, 403)
+      }
+      googleBody = judged.body
+    } else if (customer === null) {
       if (req.kind !== 'read' || googleCallKind(req.method, req.url) !== 'read') return readOnly('')
     } else {
       const judged = googleMutateBodyOf(req.body)
