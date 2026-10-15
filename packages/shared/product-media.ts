@@ -2,6 +2,13 @@ import { normalizeLanguage, languageEntry } from './content-language.js'
 import { z } from 'zod'
 
 export const PRODUCT_MEDIA_KEY = '_productMedia'
+/**
+ * A photo linked from a Shopify store's Files for that store's own galleries (the Shopify photo backfill): its library row
+ * id starts with this. It shows in the library and goes wherever a saved list or a photo-plan set names it, but it never
+ * joins a default "every photo of the product" list — such a default would send the store's photos to Amazon or eBay.
+ */
+export const STORE_PHOTO_ID_PREFIX = 'shopify_store_'
+export const isStorePhotoId = (id: string) => id.startsWith(STORE_PHOTO_ID_PREFIX)
 export const mediaLocaleSchema = z.string().min(2).max(64).refine(value => {
   try { return !!normalizeLanguage(value) } catch { return false }
 }, 'Choose a valid language tag.').transform(value => normalizeLanguage(value))
@@ -85,8 +92,12 @@ export function writeMediaCollection(content: unknown, locale: string, collectio
   return { ...root, [locale]: language }
 }
 
-/** Exact language, neutral language, then shared product; an explicit empty gallery is an override. */
+/**
+ * Exact language, neutral language, then shared product; an explicit empty gallery is an override. With no saved list the
+ * product's library is the list (its own files, else its parent's) — store photos (`isStorePhotoId`) excepted.
+ */
 export function resolveMediaCollection(input: { locale: string; own: unknown; shared?: unknown; parent?: unknown; ownIds: string[]; parentIds: string[] }) {
+  const ownIds = input.ownIds.filter(id => !isStorePhotoId(id)), parentIds = input.parentIds.filter(id => !isStorePhotoId(id))
   const exact = readMediaCollection(input.own, input.locale)
   if (exact) return { collection: exact, source: 'locale' as const, hasOverride: true }
   const neutral = input.locale === 'und' ? undefined : readMediaCollection(input.own, 'und')
@@ -95,10 +106,10 @@ export function resolveMediaCollection(input: { locale: string; own: unknown; sh
     const shared = readMediaCollection(input.shared, input.locale) ?? readMediaCollection(input.shared, 'und')
     if (shared) return { collection: shared, source: 'shared' as const, hasOverride: false }
   }
-  if (!input.ownIds.length && input.parent !== undefined) {
+  if (!ownIds.length && input.parent !== undefined) {
     const parent = readMediaCollection(input.parent, input.locale) ?? readMediaCollection(input.parent, 'und')
     if (parent) return { collection: parent, source: 'parent' as const, hasOverride: false }
   }
-  return { collection: { version: 1 as const, items: (input.ownIds.length ? input.ownIds : input.parentIds).map(assetId => ({ assetId })) },
-    source: input.shared !== undefined ? 'shared' as const : input.ownIds.length || !input.parentIds.length ? 'library' as const : 'parent' as const, hasOverride: false }
+  return { collection: { version: 1 as const, items: (ownIds.length ? ownIds : parentIds).map(assetId => ({ assetId })) },
+    source: input.shared !== undefined ? 'shared' as const : ownIds.length || !parentIds.length ? 'library' as const : 'parent' as const, hasOverride: false }
 }

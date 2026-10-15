@@ -20,6 +20,7 @@
  *   sent again by Nexus; a second approval reads the account first and sends only what is not there.
  * Never logs a token, a request body or a row.
  */
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { googleCall } from '../../gateway/google.js'
 import type { GatewayNoAnswer, GatewayRefusal } from '../../gateway/gateway.js'
 import { GOOGLE_ADS_API_BASE } from '../../google/api-version.js'
@@ -27,7 +28,7 @@ import {
   failureFromGatewayRefusal, failureFromNoAnswer, GoogleAdsReadError, localFailure, parseGoogleAdsFailure, type GoogleAdsFailure,
 } from './errors.js'
 import { customerIdDigits } from './mappers.js'
-import { addSpentOps, markQuotaExhausted, releaseOps, reserveOps } from './ops-budget.js'
+import { addSpentOps, markQuotaExhausted, releaseOps, reserveOps, type OpsLane } from './ops-budget.js'
 import { searchRows } from './read-client.js'
 import type { GoogleAdsTarget } from './types.js'
 
@@ -194,14 +195,26 @@ export async function mutateGoogleAds(
   }
 }
 
+const liveReadScope = new AsyncLocalStorage<true>()
+
+/**
+ * Programme 2, G1: run `work` as a read-only live tool's read. Every `liveRows` inside it (live.ts, live-account.ts,
+ * live-numbers.ts …) draws on the live tools' own allowance (ops-budget.ts LIVE_ACCOUNT_DAILY_OPS) instead of the
+ * changes', so reading can never use up what an approved change needs.
+ */
+export function asLiveRead<T>(work: () => Promise<T>): Promise<T> {
+  return liveReadScope.run(true, work)
+}
+
 /**
  * A live read a change stands on (its "now"), on the account's change allowance: one operation per query, reserved
- * first. Rows as Google sends them.
+ * first. Inside `asLiveRead` (the read-only live tools), on their own allowance instead. Rows as Google sends them.
  */
 export async function liveRows<Row>(target: GoogleAdsTarget, query: string, operation = 'ads.search.live'): Promise<Row[]> {
   const customerId = customerIdDigits(target.customerId)
   if (!customerId) throw new GoogleAdsReadError(localFailure('The Google Ads account id is not a customer id. Nothing was sent.', 'INVALID_CUSTOMER_ID'), operation)
-  const reservation = await reserveOps(customerId, 1, new Date(), 'write')
+  const lane: OpsLane = liveReadScope.getStore() ? 'live' : 'write'
+  const reservation = await reserveOps(customerId, 1, new Date(), lane)
   if (!reservation.ok) throw new GoogleAdsReadError(localFailure(reservation.sentence, reservation.reason ?? 'OPS_REFUSED'), operation)
   let spent = 0
   try {
@@ -212,8 +225,8 @@ export async function liveRows<Row>(target: GoogleAdsTarget, query: string, oper
     spent = err instanceof GoogleAdsReadError ? err.opsSpent : 1
     throw err
   } finally {
-    if (spent === 0) await releaseOps(customerId, 1, reservation.reservedAt, 'write')
-    else if (spent > 1) await addSpentOps(customerId, spent - 1, reservation.reservedAt, 'write')
+    if (spent === 0) await releaseOps(customerId, 1, reservation.reservedAt, lane)
+    else if (spent > 1) await addSpentOps(customerId, spent - 1, reservation.reservedAt, lane)
   }
 }
 

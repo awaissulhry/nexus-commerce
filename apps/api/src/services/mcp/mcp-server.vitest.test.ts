@@ -45,7 +45,7 @@ const OPEN_WORLD = [
   'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
   'create-google-campaign', 'create-google-rsa', 'create-negative-keyword', 'decide-automation-suggestions',
   'delete-listing', 'dismiss-google-recommendations', 'dispose-return-items', 'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads',
-  'end-listing', 'google-ads-live', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund',
+  'end-listing', 'google-ads-live', 'google-ads-numbers', 'google-ads-query', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund',
   'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'promote-ebay-listings',
   'publish-listing', 'publish-review', 'receive-stock', 'reconcile-stock-count', 'relist-listing',
   'remove-google-ads-items', 'remove-google-bid-strategy', 'remove-google-labels', 'reopen-listing', 'replicate-ad-structure', 'reply-to-review', 'request-review',

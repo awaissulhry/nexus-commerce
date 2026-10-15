@@ -172,6 +172,8 @@ export interface ShopifySheetGallery {
   listingId: string; nexusProductId: string; productId: string; variantId?: string; ownerLabel: string
   signature: string; assets: import('./shopify-content.js').ShopifyContent['assets']; locale: string
   value: string[]; variantValue?: string[]; affectedVariants?: MediaOrderEdit['affectedVariants']
+  /** Gallery photos that already are files of this store (photo id → file id): sent as those files, never uploaded again. */
+  storeFiles?: Record<string, string>
 }
 export interface ShopifyLinkedDiscovery {
   draft: ShopifyLinkedDraft | null; candidates: { namespace: string; key: string; name: string; linkedProducts: number }[]; reasons: string[]

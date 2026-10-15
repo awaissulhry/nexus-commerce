@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client'
 import { readMediaCollection, resolveMediaCollection } from '@nexus/shared/product-media'
 import { emptyShopifyContent, type ShopifyContent } from '@nexus/shared/shopify-content'
 import type { ShopifySheetGallery, ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
+import type { ShopifyMediaLayout } from '@nexus/shared/media-plan-channels'
 import type { MediaOrderEdit } from '@nexus/shared/shopify-information'
 import { WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
 import { object, digest } from './content-workspace.service.js'
@@ -10,6 +11,9 @@ import { readInformationMedia, advanceMediaOrder } from './information-gateway.j
 import { mediaRemovalVariants } from './information-media-membership.js'
 import { publishContentImages, publishTranslations } from './content-publisher.js'
 import { isOnMediaPlan } from '../images/media-plan-switch.js'
+import { shopifyStoreFiles } from './store-files.js'
+import { mediaLayoutFor } from '../images/media-plan.service.js'
+import { listingShopifyProductId, shopifyProductOwners } from './product-owner-row.js'
 
 export const SHEET_MEDIA_SYNC = '_nexusSheetMediaSync'
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
@@ -17,16 +21,15 @@ const gid = (kind: string, value: unknown): string | undefined => typeof value =
 
 /** Batched Nexus reads, shared media resolution and exact persisted listing identities. */
 export async function readSheetGallerySources(tx: Prisma.TransactionClient, destination: WorkspaceDestination, schema: ShopifyStoreSchema) {
-  const products = await tx.product.findMany({ where: { OR: [{ id: destination.familyId }, { parentId: destination.familyId }], deletedAt: null }, select: { id: true, parentId: true, name: true, localizedContent: true } })
+  const products = await tx.product.findMany({ where: { OR: [{ id: destination.familyId }, { parentId: destination.familyId }], deletedAt: null }, select: { id: true, parentId: true, name: true, sku: true, localizedContent: true } })
   const [listings, files] = await Promise.all([
     tx.channelListing.findMany({ where: { productId: { in: products.map(p => p.id) }, channel: 'SHOPIFY', marketplace: destination.marketplace, channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '' } }),
     tx.productImage.findMany({ where: { productId: { in: products.map(p => p.id) } }, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] }),
   ])
   const locale = schema.locales.find(l => l.primary)?.locale
   if (!locale) throw new WorkspaceScopeError('The Shopify primary language could not be read. Refresh store capabilities.', 422)
-  // Images rebuild P2f — a media-plan family's linked-product photos are not synced from the older sheet galleries (that
-  // would overwrite the plan); syncing a linked product's photos from the plan is a later step.
-  const onPlan = await isOnMediaPlan(destination.familyId)
+  // Images rebuild P2f — a media-plan family's linked-product photos come from the plan, never from the older sheet galleries.
+  if (await isOnMediaPlan(destination.familyId)) return withStoreFiles(tx, destination, await planSheetGalleries(tx, destination, products, listings, files, locale))
   const root = products.find(p => p.id === destination.familyId), rootListing = listings.find(l => l.productId === destination.familyId)
   const published = object(object(rootListing?.platformAttributes)._nexusContentPublish)
   const galleries: ShopifySheetGallery[] = [], signatures: unknown[] = [], warnings: string[] = []
@@ -34,7 +37,6 @@ export async function readSheetGallerySources(tx: Prisma.TransactionClient, dest
   for (const listing of listings.sort((a, b) => Number(b.productId === destination.familyId) - Number(a.productId === destination.familyId) || a.id.localeCompare(b.id))) {
     const pa = object(listing.platformAttributes), localized = object(pa._productMediaLocales), previous = object(pa[SHEET_MEDIA_SYNC])
     if (!Object.keys(localized).some(l => readMediaCollection(localized, l)) && !previous.signature) continue
-    if (onPlan) throw new WorkspaceScopeError('This product\'s photos are managed on the Media page. Syncing a linked Shopify product\'s photos from the plan comes in a later step; its older sheet gallery is not sent.', 409)
     const product = products.find(p => p.id === listing.productId)!
     const ownFiles = files.filter(f => f.productId === product.id), parentFiles = product.parentId ? files.filter(f => f.productId === product.parentId) : []
     const base = resolveMediaCollection({ locale, own: localized, shared: product.localizedContent, parent: product.parentId ? root?.localizedContent : undefined, ownIds: ownFiles.map(f => f.id), parentIds: parentFiles.map(f => f.id) }).collection
@@ -77,7 +79,68 @@ export async function readSheetGallerySources(tx: Prisma.TransactionClient, dest
     if (Object.values(localized).some(value => { const items = object(object(value)._productMedia).items; return Array.isArray(items) && items.some((i: any) => i.captions?.length || i.transcript !== undefined) })) warnings.push(`${product.name}: captions and transcripts remain in Nexus. Shopify's native file mutations do not accept these fields; the theme content publication handles them separately.`)
     galleries.push({ listingId: listing.id, nexusProductId: product.id, productId, ...(ownerVariant ? { variantId: ownerVariant } : {}), ownerLabel: product.name, locale, assets, signature, value: [] })
   }
-  return { galleries, warnings, revision: digest(signatures.sort((a: any, b: any) => a[0].localeCompare(b[0]))) }
+  return withStoreFiles(tx, destination, { galleries, warnings, revision: digest(signatures.sort((a: any, b: any) => a[0].localeCompare(b[0]))) })
+}
+
+type GallerySources = { galleries: ShopifySheetGallery[]; warnings: string[]; revision: string }
+/** The photos that already are files of this store are sent as those files (no copy); the review shows which. */
+async function withStoreFiles(tx: Prisma.TransactionClient, destination: WorkspaceDestination, sources: GallerySources): Promise<GallerySources> {
+  const storeFiles = await shopifyStoreFiles(tx, destination.accountId, sources.galleries.flatMap(g => g.assets.map(a => a.id)))
+  for (const gallery of sources.galleries) {
+    const own = Object.fromEntries(gallery.assets.flatMap(a => storeFiles[a.id] ? [[a.id, storeFiles[a.id]]] : []))
+    if (Object.keys(own).length) gallery.storeFiles = own
+  }
+  return sources
+}
+
+const colourProductsWhere = (destination: WorkspaceDestination) => ({ familyId: destination.familyId, channelConnectionId: destination.accountId, marketplace: destination.marketplace,
+  aliasKey: destination.aliasKey ?? '', state: 'LINKED', shopifyProductId: { not: null } })
+
+/** Whether this store's colour products of a media-plan family take their photos from the plan (the review then reads them). */
+export async function planGalleryFamily(tx: Prisma.TransactionClient, destination: WorkspaceDestination): Promise<boolean> {
+  return !!(await tx.shopifyColourProduct.count({ where: colourProductsWhere(destination) })) && isOnMediaPlan(destination.familyId)
+}
+
+/**
+ * A media-plan family whose store shows each colour as its own product: each colour product the plan manages gets the
+ * plan's gallery (`ShopifyProductLayout`, the Media page's Shopify view), through the same reviewed gallery sync, recorded on
+ * the row that holds that product's fields (`shopifyProductOwners`). A colour product the plan does not manage is never
+ * touched. An older sheet gallery draft is refused: the Media page is the one editor.
+ */
+async function planSheetGalleries(tx: Prisma.TransactionClient, destination: WorkspaceDestination, products: Array<{ id: string; parentId: string | null; name: string; sku: string }>,
+  listings: Array<{ id: string; productId: string; externalListingId: string | null; platformAttributes: unknown }>, files: Array<{ id: string; url: string; alt: string | null; mediaType: string | null }>, locale: string): Promise<GallerySources> {
+  for (const listing of listings) {
+    const localized = object(object(listing.platformAttributes)._productMediaLocales)
+    if (Object.keys(localized).some(l => readMediaCollection(localized, l))) throw new WorkspaceScopeError('This product\'s photos are managed on the Media page: its older Shopify sheet gallery is not sent. Set each colour product\'s photos on the Media page (Shopify), then clear the sheet gallery.', 409)
+  }
+  const none: GallerySources = { galleries: [], warnings: [], revision: digest([]) }
+  if (!(await tx.shopifyColourProduct.count({ where: colourProductsWhere(destination) }))) return none
+  const plan = await mediaLayoutFor({ productId: destination.familyId, channel: 'SHOPIFY', marketplace: destination.marketplace, accountId: destination.accountId, aliasKey: destination.aliasKey ?? '' })
+  const managed = ((plan?.layout as ShopifyMediaLayout | undefined)?.products ?? []).filter(p => p.managed)
+  if (!managed.length) return none
+  const productOf = new Map(products.map(p => [p.id, p]))
+  const rows = [...listings].sort((a, b) => (productOf.get(a.productId)?.sku ?? '').localeCompare(productOf.get(b.productId)?.sku ?? '') || a.id.localeCompare(b.id))
+  const ownerOf = shopifyProductOwners(rows, l => listingShopifyProductId(l), l => !!productOf.get(l.productId)?.parentId)
+  const root = productOf.get(destination.familyId)
+  const galleries: ShopifySheetGallery[] = [], signatures: unknown[] = []
+  for (const product of managed) {
+    const errors = product.checks.filter(c => c.severity === 'error')
+    if (errors.length) throw new WorkspaceScopeError(`${product.label}: ${errors.map(e => e.message).join(' ')}`, 422)
+    const listing = ownerOf.get(product.productId)
+    if (!listing) throw new WorkspaceScopeError(`${product.label}: no Nexus row holds this Shopify product. Confirm the colour product again, then review.`, 409)
+    const assets: ShopifyContent['assets'] = product.media.map(id => {
+      const file = files.find(f => f.id === id)
+      if (!file) throw new WorkspaceScopeError(`${product.label}: a photo in the plan is no longer in this product's library. Review the Media page.`, 422)
+      if (!file.url.startsWith('https://')) throw new WorkspaceScopeError(`${product.label}: Shopify requires a public HTTPS media source.`, 422)
+      const type = file.mediaType === 'VIDEO' ? 'VIDEO' as const : file.mediaType === 'MODEL3D' || file.mediaType === 'MODEL_3D' ? 'MODEL_3D' as const : 'IMAGE' as const
+      return { id, url: file.url, type, alt: file.alt ?? '', translations: {} }
+    })
+    const signature = digest([destination.accountId, listing.id, product.productId, locale, assets, 'media-plan'])
+    signatures.push([listing.id, signature])
+    if (signature === object(object(listing.platformAttributes)[SHEET_MEDIA_SYNC]).signature) continue
+    galleries.push({ listingId: listing.id, nexusProductId: listing.productId, productId: product.productId, ownerLabel: `${root?.name ?? 'Family'} · ${product.label}`, locale, assets, signature, value: [] })
+  }
+  return { galleries, warnings: [], revision: digest(signatures.sort((a: any, b: any) => a[0].localeCompare(b[0]))) }
 }
 
 async function variantMedia(gql: ShopifyGraphql, gallery: ShopifySheetGallery) {
@@ -105,7 +168,7 @@ export async function advanceSheetGallery(gql: ShopifyGraphql, gallery: ShopifyS
     const current = (await readInformationMedia(gql, gallery.productId)).map(m => m.id)
     if (!same(current, gallery.value)) throw new WorkspaceScopeError(`${gallery.ownerLabel}: Shopify gallery changed after review. No associations were changed.`, 409)
     const content = { ...emptyShopifyContent([]), assets: gallery.assets }
-    const mediaIds = await publishContentImages(gql, content, async patch => save({ mediaIds: patch.mediaIds as Record<string, string> }), gallery.listingId)
+    const mediaIds = await publishContentImages(gql, content, async patch => save({ mediaIds: patch.mediaIds as Record<string, string> }), gallery.listingId, gallery.storeFiles)
     const ids = gallery.assets.map(a => mediaIds[a.id])
     if (new Set(ids).size !== ids.length) throw new WorkspaceScopeError('Two selected library files resolve to one Shopify file. Keep one copy in the gallery.', 422)
     const nextValue = gallery.variantId ? [...gallery.value, ...ids.filter(id => !gallery.value.includes(id))] : ids

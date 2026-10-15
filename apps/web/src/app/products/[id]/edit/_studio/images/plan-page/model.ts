@@ -1,7 +1,7 @@
 import { applyMediaOps, knownSetRefs, resolveAxis, resolveSet, resolveSwatch, type MediaLayer, type MediaOp, type MediaPlan, type MediaPlanStack, type MediaSetRef, type MediaSource } from '@nexus/shared/media-plan'
 import { parseMediaFileName } from '@nexus/shared/media-plan-files'
 import { aliasMarkGlyph } from '@/design-system/primitives'
-import { AMAZON_SAFETY_SLOTS, AMAZON_SLOTS, MEDIA_LIMITS, duplicateListingChecks, pickVersion, projectMediaDestination, type ChannelMediaLayout, type MediaAsset, type MediaCheck, type MediaFamily } from '@nexus/shared/media-plan-channels'
+import { AMAZON_SAFETY_SLOTS, AMAZON_SLOTS, MEDIA_LIMITS, duplicateListingChecks, pickVersion, projectMediaDestination, type ChannelMediaLayout, type MediaAsset, type MediaCheck, type MediaFamily, type ShopifyColourProductTarget } from '@nexus/shared/media-plan-channels'
 
 /**
  * Images rebuild P3b — the Media page's view of one family's photo plan (docs/images-studio-rebuild/PLAN.md §5).
@@ -36,6 +36,8 @@ export interface MediaDestinationRow {
   productIds: string[]; targetable: boolean; refusal: string | null; api?: 'TRADING' | 'INVENTORY'
   /** ★ ①②③ position (DS AliasMark) when the account and market hold more than one listing of the family; else null. */
   listingMark?: number | null
+  /** Shopify: the store shows each colour as its own product — each gets its own gallery (`ShopifyProductLayout`). */
+  shopifyProducts?: ShopifyColourProductTarget[]
 }
 export interface MediaAxis { code: string; label: string; dictionary: boolean; values: Array<{ key: string; label: string }> }
 export interface MediaRead {
@@ -408,6 +410,7 @@ export function checkCounts(checks: readonly MediaCheck[]) {
 export function layoutSummary(channel: MediaChannel, layout: ChannelMediaLayout): string {
   if (channel === 'EBAY' && 'gallery' in layout) return `Gallery ${layout.gallery.length}${layout.sets.length ? ` · ${layout.sets.length} ${layout.axisName ?? 'value'} set${layout.sets.length > 1 ? 's' : ''}` : ''}`
   if (channel === 'AMAZON' && 'items' in layout) return `${layout.items.length} SKU${layout.items.length === 1 ? '' : 's'} · up to ${Math.max(0, ...layout.items.map(i => Object.keys(i.slots).length))} slots${layout.safety.length ? ` · ${layout.safety.length} safety` : ''}`
+  if (channel === 'SHOPIFY' && 'media' in layout && layout.products?.length) return `${layout.products.filter(p => p.managed).length} of ${layout.products.length} colour products from Nexus`
   if (channel === 'SHOPIFY' && 'media' in layout) return `${layout.media.length} media · ${Object.values(layout.variantImages).filter(Boolean).length} variant images`
   if ('images' in layout) return `${layout.images.length} photos · ${layout.variationImages.length} option photos`
   return ''

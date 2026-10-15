@@ -15,6 +15,7 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { assertListingContentReviewed } from './pim/publish-review-gate.js'
+import { NOT_STORE_PHOTO } from './images/store-photos.js'
 
 /**
  * For each listing in `listingIds` that has _autoPublishContent=true,
@@ -44,7 +45,7 @@ export async function enqueueContentSyncIfEnabled(listingIds: string[]): Promise
             id: true,
             name: true,
             description: true,
-            images: { select: { url: true }, orderBy: { createdAt: 'asc' }, take: 10 },
+            images: { where: NOT_STORE_PHOTO, select: { url: true }, orderBy: { createdAt: 'asc' }, take: 10 },
           },
         },
       },

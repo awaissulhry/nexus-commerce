@@ -53,7 +53,11 @@ export interface MediaDestination {
   valueNames: Record<string, string>
   /** How this destination names the picture axis ("Colore", "Farbe"). */
   axisName: string | null
+  /** Shopify only: the store shows each colour of the family as its own product (`ShopifyProductLayout`). */
+  shopifyProducts?: readonly ShopifyColourProductTarget[]
 }
+/** One linked Shopify colour product of the family: the product (GID), its value of the split axis, and its colour name. */
+export interface ShopifyColourProductTarget { productId: string; valueKey: string; label: string }
 
 export type MediaCheckSeverity = 'error' | 'warning'
 export interface MediaCheck { severity: MediaCheckSeverity; code: string; message: string; set?: MediaSetRef; assetId?: string }
@@ -229,7 +233,14 @@ export function amazonSlotsFor(layout: Pick<AmazonMediaLayout, 'items' | 'parent
 
 // ── Shopify ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export interface ShopifyMediaLayout { media: string[]; variantImages: Record<string, string | null>; checks: MediaCheck[] }
+export interface ShopifyMediaLayout { media: string[]; variantImages: Record<string, string | null>; checks: MediaCheck[]; products?: ShopifyProductLayout[] }
+/**
+ * The gallery of one Shopify colour product (the family shows each colour as its own product): its colour's photos, then
+ * the Common ones it does not hold yet. `managed`: the colour's set is the Shopify one (owned on the Shopify layer or this
+ * store's layer) and the picture axis is the colour axis — only then does a sync send this gallery; otherwise the store
+ * keeps the product's photos as they are. Native variant images of a colour product are not sent (left as they are).
+ */
+export interface ShopifyProductLayout { productId: string; valueKey: string; label: string; managed: boolean; media: string[]; checks: MediaCheck[] }
 
 export function projectShopify(stack: MediaPlanStack, family: MediaFamily, assets: ReadonlyMap<string, MediaAsset>, destination: MediaDestination): ShopifyMediaLayout {
   const ctx: Context = { stack, family, assets, destination, checks: [] }
@@ -247,14 +258,38 @@ export function projectShopify(stack: MediaPlanStack, family: MediaFamily, asset
     ids.forEach(id => { if (!media.includes(id)) media.push(id) })
     variantImages[variant.productId] = ids.find(id => assets.get(id)?.mediaType === 'IMAGE') ?? null
   }
+  shopifyGalleryChecks(ctx, media)
+  const products = destination.shopifyProducts?.length ? projectShopifyProducts(stack, family, assets, destination, axis) : undefined
+  return { media, variantImages, checks: ctx.checks, ...(products ? { products } : {}) }
+}
+
+function shopifyGalleryChecks(ctx: Context, media: string[]) {
   if (media.length > MEDIA_LIMITS.SHOPIFY.media) ctx.checks.push({ severity: 'error', code: 'over-limit', message: `Shopify allows ${MEDIA_LIMITS.SHOPIFY.media} media per product; this has ${media.length}.` })
   else if (media.length > MEDIA_LIMITS.SHOPIFY.storefrontGallery) ctx.checks.push({ severity: 'error', code: 'over-limit', message: `Nexus publishes at most ${MEDIA_LIMITS.SHOPIFY.storefrontGallery} photos in a Shopify gallery; this has ${media.length}.` })
   for (const id of media) {
-    const a = assets.get(id)
+    const a = ctx.assets.get(id)
     if (a?.width && a.height && a.width * a.height > MEDIA_LIMITS.SHOPIFY.maxPixels) ctx.checks.push({ severity: 'error', code: 'too-large', assetId: id, message: `${name(ctx, id)} is over 20 megapixels — Shopify refuses it.` })
     if (a?.fileSize && a.fileSize > MEDIA_LIMITS.SHOPIFY.maxBytes) ctx.checks.push({ severity: 'error', code: 'too-large', assetId: id, message: `${name(ctx, id)} is over 20 MB — Shopify refuses it.` })
   }
-  return { media, variantImages, checks: ctx.checks }
+}
+
+/** Each linked colour product's own gallery (`ShopifyProductLayout`), with its own checks, in the order given. */
+function projectShopifyProducts(stack: MediaPlanStack, family: MediaFamily, assets: ReadonlyMap<string, MediaAsset>, destination: MediaDestination, axis: string | null): ShopifyProductLayout[] {
+  const kinds = new Set(['IMAGE', 'VIDEO', 'MODEL3D', 'MODEL_3D'])
+  return (destination.shopifyProducts ?? []).map(product => {
+    const ctx: Context = { stack, family, assets, destination, checks: [] }
+    const ref: MediaSetRef = `value:${product.valueKey}`
+    const set = resolveSet(stack, ref)
+    const shopifySet = set.source === 'CHANNEL' || set.source === 'LISTING'
+    const onAxis = axis !== null && valueKeyAttribute(product.valueKey) === axis
+    if (shopifySet && !onAxis) ctx.checks.push({ severity: 'error', code: 'colour-product-axis', set: ref,
+      message: `Each colour is its own Shopify product: set the picture axis to the colour so ${product.label} gets its colour's photos.` })
+    const managed = shopifySet && onAxis
+    const media = managed ? pickAll(ctx, set.items, ref, kinds) : []
+    if (managed) for (const id of pickAll(ctx, resolveSet(stack, 'common').items, 'common', kinds)) if (!media.includes(id)) media.push(id)
+    if (managed) shopifyGalleryChecks(ctx, media)
+    return { productId: product.productId, valueKey: product.valueKey, label: product.label, managed, media, checks: ctx.checks }
+  })
 }
 
 // ── Etsy ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -290,6 +325,8 @@ export interface MediaDestinationTarget {
   channel: MediaDestination['channel']; marketplace: string; languages: string[]; api?: 'TRADING' | 'INVENTORY'; productIds: readonly string[]
   /** A listing alias (null or absent = the main listing). */
   alias?: { id: string } | null
+  /** Shopify: the family's linked colour products on this store. */
+  shopifyProducts?: readonly ShopifyColourProductTarget[]
 }
 export type ChannelMediaLayout = EbayMediaLayout | AmazonMediaLayout | ShopifyMediaLayout | EtsyMediaLayout
 
@@ -304,7 +341,8 @@ export function projectMediaDestination(input: {
   const { axis } = resolveAxis(input.stack, input.family.defaultAxis)
   const t = input.target
   const destination: MediaDestination = { channel: t.channel, market: t.marketplace, languages: t.languages, mainLanguage: input.mainLanguage, api: t.api, alias: !!t.alias,
-    valueNames: input.valueNames ?? input.family.valueLabels, axisName: input.axisName !== undefined ? input.axisName : input.axes.find(a => a.code === axis)?.label ?? null }
+    valueNames: input.valueNames ?? input.family.valueLabels, axisName: input.axisName !== undefined ? input.axisName : input.axes.find(a => a.code === axis)?.label ?? null,
+    ...(t.shopifyProducts?.length ? { shopifyProducts: t.shopifyProducts } : {}) }
   // A destination shows only the variants listed (and not excluded) on it; a publisher may narrow that to its review.
   const listed = new Set(input.includedIds ?? t.productIds)
   const family: MediaFamily = { ...input.family, variants: input.family.variants.map(v => ({ ...v, included: listed.has(v.productId) })) }
