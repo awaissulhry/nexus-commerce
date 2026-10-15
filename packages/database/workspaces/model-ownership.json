@@ -505,6 +505,7 @@
     "StockPoolTask",
     "EtsyReceiptIngest",
     "EtsyReceiptRefusal",
+    "ShopifyOrderIngest",
     "CommandReceipt",
     "ChannelMappingSet",
     "ChannelMappingField",

@@ -2809,6 +2809,12 @@
           "relationFromFields": []
         },
         {
+          "name": "shopifyOrderIngest",
+          "kind": "object",
+          "type": "ShopifyOrderIngest",
+          "relationFromFields": []
+        },
+        {
           "name": "googleAccountLinks",
           "kind": "object",
           "type": "GoogleAccountLink",
@@ -7544,6 +7550,20 @@
     },
     {
       "name": "EtsyReceiptIngest",
+      "fields": [
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ShopifyOrderIngest",
       "fields": [
         {
           "name": "connection",
