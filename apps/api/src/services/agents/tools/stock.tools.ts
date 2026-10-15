@@ -87,10 +87,10 @@ async function productsById(ids: string[]): Promise<Map<string, ProductRow> | Re
   return byId
 }
 
-/** A product's own level at a location (the master row: no variation). */
+/** A product's own level at a location (the master row: no variation). `exists` false = never counted there. */
 export async function levelOf(productId: string, locationId: string) {
   const row = await prisma.stockLevel.findFirst({ where: { productId, locationId, variationId: null }, select: { quantity: true, reserved: true, available: true } })
-  return { quantity: row?.quantity ?? 0, reserved: row?.reserved ?? 0, available: row?.available ?? 0 }
+  return { quantity: row?.quantity ?? 0, reserved: row?.reserved ?? 0, available: row?.available ?? 0, exists: !!row }
 }
 
 const NOT_YET = 'Nothing changes until a person approves this in Nexus.'
@@ -100,7 +100,8 @@ const CASCADE = 'Listings that follow stock are updated and queued to their chan
 
 const SET_STOCK_MAX = 250
 
-interface SetStockLine { productId: string; sku: string; name: string; locationId: string; location: string; locationName: string; from: number; reserved: number; to: number; pooled: boolean }
+/** `firstCount`: 0 where the product has no level yet — booked as a first count (recordFirstZeroCountInTx), never a no-op. */
+interface SetStockLine { productId: string; sku: string; name: string; locationId: string; location: string; locationName: string; from: number; reserved: number; to: number; pooled: boolean; firstCount: boolean }
 
 async function planSetStock(args: Record<string, unknown>): Promise<{ lines: SetStockLine[]; unchanged: SetStockLine[]; reason: AdjustReason; note: string | null } | Refusal> {
   const items = (args.items ?? []) as Array<{ productId: string; location: string; quantity: number }>
@@ -120,8 +121,9 @@ async function planSetStock(args: Record<string, unknown>): Promise<{ lines: Set
     const level = await levelOf(product.id, location.id)
     try {
       const adj = computeLocationAdjustment({ locationType: location.type, currentQuantity: level.quantity, currentReserved: level.reserved, value: item.quantity })
-      const line = { productId: product.id, sku: product.sku, name: product.name, locationId: location.id, location: location.code, locationName: location.name, from: level.quantity, reserved: level.reserved, to: item.quantity, pooled: pooled.has(product.id) }
-      ;(adj.noop ? unchanged : lines).push(line)
+      const firstCount = adj.noop && !level.exists && item.quantity === 0 && location.type === 'WAREHOUSE'
+      const line = { productId: product.id, sku: product.sku, name: product.name, locationId: location.id, location: location.code, locationName: location.name, from: level.quantity, reserved: level.reserved, to: item.quantity, pooled: pooled.has(product.id), firstCount }
+      ;(adj.noop && !firstCount ? unchanged : lines).push(line)
     } catch (error) {
       if (error instanceof LocationAdjustmentError) problems.push(`${product.sku} at ${location.code}: ${error.message}`)
       else throw error
@@ -136,17 +138,20 @@ async function planSetStock(args: Record<string, unknown>): Promise<{ lines: Set
 function previewSetStock(plan: Exclude<Awaited<ReturnType<typeof planSetStock>>, Refusal>) {
   const up = plan.lines.filter((l) => l.to > l.from).reduce((s, l) => s + (l.to - l.from), 0)
   const down = plan.lines.filter((l) => l.to < l.from).reduce((s, l) => s + (l.from - l.to), 0)
+  const first = plan.lines.filter((l) => l.firstCount).length
   return {
     action: 'set-stock',
-    effect: `On-hand set on ${plural(plan.lines.length, 'row')}${plan.unchanged.length ? ` (${plan.unchanged.length} already at that count)` : ''}: ${up} units up, ${down} down. ${CASCADE}`,
+    effect: `On-hand set on ${plural(plan.lines.length, 'row')}${plan.unchanged.length ? ` (${plan.unchanged.length} already at that count)` : ''}: ${up} units up, ${down} down.${first ? ` ${plural(first, 'row')} never counted there ${first === 1 ? 'is' : 'are'} recorded as counted at 0 for the first time: ${first === 1 ? 'its' : 'their'} listings stop being uncounted and follow 0.` : ''} ${CASCADE}`,
     reason: plan.reason,
     changes: plan.lines.slice(0, PREVIEW_LINES).map((l) => ({
       sku: l.sku, name: l.name, location: l.location, locationName: l.locationName, from: l.from, to: l.to, delta: l.to - l.from, reserved: l.reserved,
+      ...(l.firstCount ? { firstCount: true } : {}),
       ...(l.pooled ? { note: 'sells from shared stock: its listings follow that stock, not this count' } : {}),
     })),
     ...(plan.lines.length > PREVIEW_LINES ? { moreChanges: plan.lines.length - PREVIEW_LINES } : {}),
     totals: { rows: plan.lines.length, unchanged: plan.unchanged.length, unitsUp: up, unitsDown: down },
-    basis: basisOf(plan.lines.map((l) => [l.productId, l.locationId, l.from, l.to])),
+    // A first count says so in its fact: a level created since the preview (0 → 0, nothing to book) moves the basis.
+    basis: basisOf(plan.lines.map((l) => (l.firstCount ? [l.productId, l.locationId, l.from, l.to, 'first'] : [l.productId, l.locationId, l.from, l.to]))),
     note: `${NOT_YET} Each row is one audited movement (${plan.reason}) to exactly the count shown; a row whose count moved since you approved it stops the run. ${CASCADE} Amazon FBA and Shopify locations are never changed here.`,
   }
 }

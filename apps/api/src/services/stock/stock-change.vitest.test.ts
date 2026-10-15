@@ -247,6 +247,44 @@ describe("08 S6 — Claude's stock changes, approved, run and undone", { timeout
     expect((await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: queued.approvalId! } }))).status).toBe('pending')
   })
 
+  it('set-stock 0 on a never-counted product: a first count — the level is written at 0 and its listings leave uncounted and follow 0', async () => {
+    const never = await inside(async () => {
+      const product = await db().product.create({ data: { sku: 'TEST-SKU-S6-NEVER', name: 'Test never counted', basePrice: '10.00' } })
+      const shop = await db().channelConnection.create({ data: { channelType: 'SHOPIFY', accountLabel: 'TEST-S6-SHOP', isActive: true } })
+      const ebay = await db().channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 'TEST-S6-EBAY', isActive: true } })
+      const listing = (channel: string, connectionId: string, market: string, quantity: number | null) => db().channelListing.create({ data: {
+        productId: product.id, channel, channelConnectionId: connectionId, channelMarket: `${channel}_${market}`, marketplace: market, region: market,
+        price: 10, followMasterPrice: true, quantity, followMasterQuantity: true, stockBuffer: 0, fulfillmentMethod: 'FBM',
+        externalListingId: `TEST-S6-${channel}-1`, listingStatus: 'ACTIVE', isPublished: true,
+      } as never })
+      return { id: product.id, shopify: (await listing('SHOPIFY', shop.id, 'GLOBAL', null)).id, ebay: (await listing('EBAY', ebay.id, 'IT', 3)).id }
+    })
+    expect(await level(never.id, ids.main)).toBeNull()
+
+    const queued = await ask('set-stock', { items: [{ productId: never.id, location: 'TEST-MAIN', quantity: 0 }], reason: 'INVENTORY_COUNT' })
+    expect(queued, queued.error).toMatchObject({ ok: true, mode: 'queued', preview: {
+      effect: expect.stringContaining('recorded as counted at 0 for the first time'),
+      changes: [{ sku: 'TEST-SKU-S6-NEVER', location: 'TEST-MAIN', from: 0, to: 0, delta: 0, firstCount: true }], totals: { rows: 1, unchanged: 0 },
+    } })
+    expect(await level(never.id, ids.main)).toBeNull() // nothing before a person approves
+    const ran = await approveAndRun(queued.approvalId!)
+    expect(ran, ran.error).toMatchObject({ ok: true, status: 'executed' })
+
+    expect(await level(never.id, ids.main)).toMatchObject({ quantity: 0, reserved: 0, available: 0 })
+    const movements = await inside(() => db().stockMovement.findMany({ where: { productId: never.id } }))
+    expect(movements).toMatchObject([{ change: 0, quantityBefore: 0, balanceAfter: 0, reason: 'INVENTORY_COUNT', locationId: ids.main, notes: expect.stringContaining('First count: 0') }])
+    const listings = await inside(() => db().channelListing.findMany({ where: { productId: never.id }, select: { id: true, quantity: true } }))
+    expect(Object.fromEntries(listings.map((l) => [l.id, l.quantity]))).toEqual({ [never.shopify]: 0, [never.ebay]: 0 })
+    const pushes = await inside(() => db().outboundSyncQueue.findMany({ where: { productId: never.id, syncType: 'QUANTITY_UPDATE', syncStatus: 'PENDING' }, select: { channelListingId: true, payload: true } }))
+    expect(pushes.map((p) => [p.channelListingId, (p.payload as { quantity: number }).quantity]).sort()).toEqual([[never.ebay, 0], [never.shopify, 0]].sort())
+
+    // Counted now: a second 0 is an ordinary 0 → 0, nothing to book.
+    expect(await ask('set-stock', { items: [{ productId: never.id, location: 'TEST-MAIN', quantity: 0 }] })).toMatchObject({ ok: false, error: expect.stringContaining('Nothing to change') })
+    // A movement of no units is still refused everywhere else.
+    const { applyStockMovement } = await import('../stock-movement.service.js')
+    await expect(inside(() => applyStockMovement({ productId: never.id, locationId: ids.main, change: 0, reason: 'MANUAL_ADJUSTMENT' }))).rejects.toThrow('change must be non-zero')
+  })
+
   it('transfer-stock: moves units in one transaction; refuses more than is available and FBA; undo moves them back', async () => {
     expect(await ask('transfer-stock', { items: [{ productId: ids.jacket, fromLocation: 'TEST-MAIN', toLocation: 'TEST-FBA', quantity: 1 }] })).toMatchObject({ ok: false, error: expect.stringContaining('Amazon FBA stock') })
     expect(await ask('transfer-stock', { items: [{ productId: ids.jacket, fromLocation: 'TEST-MAIN', toLocation: 'TEST-SECOND', quantity: 999 }] })).toMatchObject({ ok: false, error: expect.stringContaining('available at TEST-MAIN') })
