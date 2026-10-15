@@ -25,9 +25,11 @@ export const ACCOUNT_DAILY_OPS = 100
 /**
  * Google Ads changes (2026-10-15): what one account may spend in 24 hours on changes — Google's checks of a change
  * (validate-only, counted as Google does not say they are free), the live reads a change stands on, and the changes
- * themselves. Inside the global cap. Rebuilding a whole small account (≈ 450 operations) is checked and sent within it.
+ * themselves. Inside the global cap. A build of up to 900 operations (change-build.ts MAX_BUILD_OPERATIONS) is checked
+ * and sent within it (Google's acceptance of a plan is remembered for 30 minutes, so a check and the request right after it
+ * pay once).
  */
-export const WRITE_ACCOUNT_DAILY_OPS = 1500
+export const WRITE_ACCOUNT_DAILY_OPS = 2000
 
 /** Which allowance a reservation draws on: the daily read's, or the changes'. Both count against the global cap. */
 export type OpsLane = 'read' | 'write'

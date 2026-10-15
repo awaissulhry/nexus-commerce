@@ -154,7 +154,8 @@ export function removeDraft(
     } else if (item.kind === 'negative-list') {
       const l = live.lists.find((x) => x.listId === item.id)
       if (!l) return { refusal: `Negative keyword list ${item.id} is not in this account (or it is removed).` }
-      if (l.campaigns.length) return { refusal: `The list "${l.name ?? l.listId}" is on ${plural(l.campaigns.length, 'campaign')}: take it off first (set-google-negative-list detachCampaignIds).` }
+      const users = l.campaigns.filter((c) => !request.items.some((i) => i.kind === 'campaign' && i.id === c.campaignId))
+      if (users.length) return { refusal: `The list "${l.name ?? l.listId}" is on ${plural(users.length, 'campaign')}: take it off first (set-google-negative-list detachCampaignIds), or remove those campaigns in the same request.` }
       name = l.name ?? `list ${l.listId}`
     } else {
       const now = itemNow(item.kind, item.id, live.campaigns, live.items)

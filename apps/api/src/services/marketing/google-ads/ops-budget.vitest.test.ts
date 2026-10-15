@@ -166,10 +166,10 @@ describe('the Google Ads operations allowance', () => {
 })
 
 describe('Google Ads changes (2026-10-15): the account\'s change allowance', () => {
-  it('a change draws on its own per-account allowance (1,500), inside the global cap; the read allowance is untouched', async () => {
-    expect(WRITE_ACCOUNT_DAILY_OPS).toBe(1500)
+  it('a change draws on its own per-account allowance (2,000), inside the global cap; the read allowance is untouched', async () => {
+    expect(WRITE_ACCOUNT_DAILY_OPS).toBe(2000)
     const write = await reserveOps('111', 450, T0, 'write')
-    expect(write).toMatchObject({ ok: true, ops: 450, usedAccount: 450, capAccount: 1500 })
+    expect(write).toMatchObject({ ok: true, ops: 450, usedAccount: 450, capAccount: 2000 })
     // The daily read of the same account still has its own 100.
     expect(await reserveOps('111', 22, at(1))).toMatchObject({ ok: true, usedAccount: 22, capAccount: 100 })
     // Both count against the global cap.
@@ -177,17 +177,17 @@ describe('Google Ads changes (2026-10-15): the account\'s change allowance', () 
   })
 
   it('refused past the change allowance, in words about a change (nothing checked or sent)', async () => {
-    expect(await reserveOps('111', 1400, T0, 'write')).toMatchObject({ ok: true })
+    expect(await reserveOps('111', 1900, T0, 'write')).toMatchObject({ ok: true })
     const refused = await reserveOps('111', 200, at(1), 'write')
-    expect(refused).toMatchObject({ ok: false, reason: 'account_cap', usedAccount: 1400, capAccount: 1500 })
-    expect(refused.sentence).toMatch(/^The Google Ads change is not checked or sent: this account has used 1400 of its 1500 Google Ads change operations/)
+    expect(refused).toMatchObject({ ok: false, reason: 'account_cap', usedAccount: 1900, capAccount: 2000 })
+    expect(refused.sentence).toMatch(/^The Google Ads change is not checked or sent: this account has used 1900 of its 2000 Google Ads change operations/)
   })
 
   it('release and spent-beyond go back to the change allowance they came from', async () => {
     const r = await reserveOps('111', 100, T0, 'write')
     await releaseOps('111', 40, r.reservedAt, 'write')
     await addSpentOps('111', 5, r.reservedAt, 'write')
-    expect(await reserveOps('111', 1435, at(1), 'write')).toMatchObject({ ok: true, usedAccount: 1500 })
+    expect(await reserveOps('111', 1935, at(1), 'write')).toMatchObject({ ok: true, usedAccount: 2000 })
     expect(await reserveOps('111', 1, at(2), 'write')).toMatchObject({ ok: false, reason: 'account_cap' })
   })
 })

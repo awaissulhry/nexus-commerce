@@ -35,7 +35,7 @@ Say each with its grain (campaign, keyword, search query, ASIN), its window (a d
 
 ## 1. Per market: read
 
-Ask which channel (`amazon`, the default, `ebay` or `google`) and markets, or take every market with spend. Google Ads is read per account, not per market: see "Google Ads (read only)" below.
+Ask which channel (`amazon`, the default, `ebay` or `google`) and markets, or take every market with spend. Google Ads is read per account, not per market: see "Google Ads" below.
 
 1. `ads-overview` (`channel`, `market`, `days`: 7 by default): spend, sales, ACoS, ROAS, against the period before; top spenders; the automation dial; data feed health. eBay: pacing against the monthly ceilings and findings (rates above break-even, missing costs, unpromoted listings). This eBay read also checks the ceilings: a market at its monthly ceiling halts every eBay ad write of the business until a person resumes it — say so if it happens.
 2. `ad-campaigns` (`channel`, `market`, `status`, `days`): Amazon per campaign budget, `targetAcos` (a fraction), ACoS, `liveWrites`, suppressed bids, pins. eBay per campaign funding model, campaign rate (`bidPercentage`), daily budget (Priority), `automation` (posture, rules), account; eBay statuses are RUNNING, PAUSED, SYSTEM_PAUSED, ENDED, SUSPENDED, SCHEDULED.
@@ -48,9 +48,10 @@ Ask which channel (`amazon`, the default, `ebay` or `google`) and markets, or ta
 
 `ad-search-terms` and `ad-targets` read Amazon data only: they take no `channel`, and a call with one is refused. eBay: `ebay-ad-details` (`view`: `listings`, `ad-groups` or `keywords`; `campaignId`, `market`, `adGroupId`, `search`, `days`, `limit`, `cursor`) reads each promoted listing's ad rate and break-even rate (`rateNote` says why `set-ebay-ad-rates` cannot change a campaign's rates), a Priority campaign's ad groups, and its keywords with bids and metrics, under the ids `set-ebay-ad-rates` and `ebay-keywords-change` take (`ebayCampaignId`, `ebayItemId`, `ebayAdGroupId`, `ebayKeywordId`). No tool reads eBay search terms. Never call a change tool just to look (it queues a request).
 
-### Google Ads (read only)
+### Google Ads
 
-Nexus reads the Google Ads account a person chose for the business and changes nothing in Google Ads.
+Nexus reads the Google Ads account a person chose for the business. These numbers come from what Nexus stored (read once
+a day); `google-ads-live` reads the account live from Google when a change is planned or checked.
 
 - Read `ads-overview` and `ad-campaigns` with `channel: "google"` (`days`; `status`, `search`; `accountId` only when the business has more than one Google account; never `market`). `ad-search-terms`, `ad-targets`, `ad-changes` and `ad-recommendations` do not read Google.
 - Then `google-ad-details`, one `view` at a time (`campaignId`, `days`, `search`, `limit`, `cursor`; `accountId` as above):
@@ -58,12 +59,12 @@ Nexus reads the Google Ads account a person chose for the business and changes n
   - `search-terms`: the search terms with at least one click, by cost. Google does not list a search with no click. `brand-split`: cost, clicks and conversions split into brand, not brand and "not in the search-term list", per campaign type. Brand means one of the business's protected terms for every market (`brandTerms`; a person sets them in Nexus, Marketing › Ads › Rules & automation › Control room › Limits). With none set, `brand` is null: say "not marked", never "not brand".
   - `keywords` (by cost), `ad-groups`, `negatives`, `asset-groups` (Performance Max) and `products` (Shopping: the status at Google and why, and the Nexus product with the same SKU).
   - `acts-on-its-own` — what Google acts on by itself: the recommendation types it applies on its own (auto-apply), and per campaign AI Max, broad match, search partners, display expansion, final URL expansion, text customization, dynamic search ads and brand exclusions. A flag that is null is not read yet, never "off". It also lists the changes made outside Nexus and who made them. Changes made with Google Ads Editor never show there.
-  - `recommendations`: Google's own, with their expected effect. Read only: Nexus applies and dismisses none. A person decides them in Google Ads.
+  - `recommendations`: Google's own, with their expected effect. Nexus applies and dismisses none: say which one you would follow, and make it with a Google Ads change tool if the person agrees.
   - `disapprovals`: disapproved or limited ads, and products that are not eligible or limited, with Google's reasons.
 - A part whose `readAt` is null is not read yet: say "not read yet", never 0.
 - The numbers are cost, conversions and conversion value as Google counts them (Google's attribution and conversion actions, days in the account's time zone). Never call them sales, orders or ACoS; return on ad spend is conversion value ÷ cost.
 - Conversions can be fractional, and the last 14 days can still rise as Google adds late conversions (`provisionalFrom`). A day with `read: false` has no numbers: say "not read", never 0, and name `coverage.missingDays`. `previous` is there only when Nexus read every day of the window before.
-- Nexus changes nothing in Google Ads (`writes.mode` is none). Say what you would change and why, and that a person makes the change in Google Ads; never put a Google step in a change plan.
+- Changes go through the Google Ads change tools (`writes.mode` approval): `set-google-negatives`, `set-google-negative-list`, `set-google-keywords` (bids, bulk bid change), `set-google-status` (pause; enabling is SPENDS MONEY), `set-google-budget`, `set-google-campaign`, `set-google-targeting`, `set-google-product-groups`, … Each is a request a person approves in Nexus, never run by a rule; Google checks it first. Several changes to EXISTING things go in one change plan; new things that point at new things (a campaign and its parts) are one `build-google-campaigns` call. The preview marks what can spend more (SPENDS MONEY): repeat those lines to the person.
 
 ## 2. Explain
 

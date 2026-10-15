@@ -705,6 +705,9 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { campaignId: '21', adGroupId: '51', tree: { kind: 'items', items: [{ itemId: 'sku-1', bidCents: 30, excluded: false }, { itemId: 'sku-2', bidCents: null, excluded: true }], everythingElse: { bidCents: null, excluded: true } } },
         after: { campaignId: '21', adGroupId: '51', tree: { kind: 'items', items: [{ itemId: 'sku-1', bidCents: 40, excluded: false }], everythingElse: { bidCents: null, excluded: true } } },
       },
+      // PR 6: a build (or a copy) is undone by removing the campaigns it made (its budgets and lists stay, unused).
+      'build-google-campaigns': { before: { campaigns: [], accountId: 'g-1' }, after: { campaigns: [{ name: 'Shop B', campaignId: '22', op: 1 }], sharedBudgets: [], negativeLists: [], accountId: 'g-1', customerId: '1234567890' } },
+      'copy-google-campaign': { before: { campaigns: [], accountId: 'g-1' }, after: { campaigns: [{ name: 'Shop A copy', campaignId: '23', op: 0 }], sharedBudgets: [], negativeLists: [], accountId: 'g-1', customerId: '1234567890' } },
       // PR 5: the responsive search ads it made are paused again; the assets it linked are unlinked (they stay in the account).
       'create-google-rsa': {
         before: { campaignId: '21', adGroupId: '51', ads: [], accountId: 'g-1', customerId: '1234567890' },
@@ -714,6 +717,11 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { campaignId: '21', links: [{ assetId: '10', fieldType: 'CALLOUT', text: 'Gift wrap', status: 'PAUSED' }], accountId: 'g-1', customerId: '1234567890' },
         after: { campaignId: '21', linked: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free returns', status: 'ENABLED' }], unlinked: [{ assetId: '10', fieldType: 'CALLOUT', text: 'Gift wrap', status: 'PAUSED' }], accountId: 'g-1', customerId: '1234567890' },
       },
+      // Google Ads PR 3: ad group names and default bids go back (an ad group it made stays); keyword bids go back and the
+      // keywords it added are removed again; negatives it added are removed and the ones it removed added back.
+      'set-google-ad-groups': { before: { campaignId: '21', adGroups: [{ adGroupId: '51', name: 'Group A', defaultBidCents: 30 }], accountId: 'g-1', customerId: '1234567890' }, after: { campaignId: '21', adGroups: [{ adGroupId: '51', name: 'Group B', defaultBidCents: 40 }], created: [{ adGroupId: '52', name: 'Group C', type: 'SEARCH_STANDARD', status: 'PAUSED', defaultBidCents: 30 }], accountId: 'g-1', customerId: '1234567890' } },
+      'set-google-keywords': { before: { campaignId: '21', bids: [{ keywordId: '51~601', bidCents: null }], accountId: 'g-1', customerId: '1234567890' }, after: { campaignId: '21', bids: [{ keywordId: '51~601', bidCents: 45 }], added: [{ keywordId: '51~602', adGroupId: '51', text: 'test term', matchType: 'EXACT', bidCents: null, status: 'PAUSED' }], accountId: 'g-1', customerId: '1234567890' } },
+      'set-google-negatives': { before: { campaignId: '21', negatives: [], accountId: 'g-1', customerId: '1234567890' }, after: { campaignId: '21', added: [{ adGroupId: null, text: 'cheap', matchType: 'PHRASE', criterionId: '901' }], removed: [{ adGroupId: '51', text: 'free', matchType: 'EXACT' }], accountId: 'g-1', customerId: '1234567890' } },
       // L7 — products created (parent and a variation), and products binned.
       'create-product': { before: { products: [] }, after: { products: [{ id: 'p1', deleted: false }, { id: 'p2', deleted: false }] } },
       'create-variations': { before: { products: [] }, after: { products: [{ id: 'p3', deleted: false }] } },
@@ -788,7 +796,8 @@ describe('C1 — every registered tool keeps the contract', () => {
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
       'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list',
       'create-google-campaign', 'set-google-campaign', 'set-google-targeting', 'set-google-status',
-      'remove-google-ads-items', 'set-google-product-groups', 'create-google-rsa', 'set-google-assets']) {
+      'remove-google-ads-items', 'set-google-product-groups', 'create-google-rsa', 'set-google-assets',
+      'set-google-ad-groups', 'set-google-keywords', 'set-google-negatives', 'build-google-campaigns', 'copy-google-campaign']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
