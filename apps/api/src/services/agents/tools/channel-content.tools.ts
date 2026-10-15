@@ -296,7 +296,7 @@ async function planShopifyContent(args: Record<string, unknown>, nothing: string
     const write = cell.shopifyWrite
     if (!write) {
       refusals.push(cell.contentAcknowledgement || cell.contentAddress
-        ? `${name}: the listing's text follows the shared text — change it with set-content`
+        ? `${name}: the listing's title and description are text — this listing's own with set-listing-content (SHOPIFY, GLOBAL), the shared text with set-content`
         : `${name}: the Shopify sheet does not write this field`)
       continue
     }
@@ -386,8 +386,8 @@ const setShopifyContent: AgentTool = {
     "Change a Shopify listing's store fields — metafields, vendor, tags, product type, category, SEO title and "
     + 'description — in the listing\'s Nexus draft, through the Shopify sheet\'s own writer; reset drops a field\'s draft '
     + 'value. Shopify changes only when a person reviews and sends the draft in the Nexus product studio (Review and '
-    + 'synchronize): no Claude tool and no sync sends a draft with unreviewed changes. The listing\'s title and description follow the '
-    + 'shared text (set-content). Refused when Nexus has no copy of the store\'s field list (the metafields would be '
+    + 'synchronize): no Claude tool and no sync sends a draft with unreviewed changes. The listing\'s title and description are text: '
+    + 'its own with set-listing-content (SHOPIFY, GLOBAL), the shared text with set-content. Refused when Nexus has no copy of the store\'s field list (the metafields would be '
     + 'invisible), when the product has no Shopify listing yet, and for a field that cannot be edited (the reason is '
     + 'given). Give englishMeaning for every text set unless the store language is en. A person approves it in Nexus.',
   async handler(args): Promise<ToolResult> {

@@ -14,6 +14,9 @@
  *   undo       a new set-listing-content that puts the listing's own text back (or follows again)
  *   Etsy       (E5b) the Etsy sheet's own cells: a title pin on the Etsy listing; tags (keywords) and materials as the
  *              sheet gives them; a listing setting (shipping profile) refused
+ *   Shopify    (2026-10-16) the listing's own title and description: saved as its pin, sent by the Shopify publisher
+ *              (`shopifySendText`) instead of the shared text; follow sends the shared text again; bullets, keywords
+ *              and attributes are set-shopify-content's. The store's live read is stood in for (identity enrichment).
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -39,6 +42,9 @@ vi.mock('../../product-read-cache.service.js', () => ({
   FACE_IMAGE_ORDER_BY: [], FACE_IMAGE_SELECT: { url: true }, pickFaceImage: () => null,
 }))
 vi.mock('../../pim/readiness-index.service.js', async () => (await import('../../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
+// The product sheet's Shopify scope reads the store live (a sealed channel login): its enrichment is stood in for by the
+// common sheet itself, whose Title and Description cells are the content writer's (the projection keeps them so).
+vi.mock('../../shopify/channel-sheet.service.js', () => ({ enrichShopifyChannelSheet: async (page: unknown) => page }))
 
 import { callTool, ToolAccessError, type UserPrincipal } from '../call-tool.js'
 import { runOrQueueTool } from '../approval-gate.service.js'
@@ -57,7 +63,7 @@ const ALL = () => person(EVERYTHING)
 
 type Data = Record<string, any>
 const db = () => database.client
-const accounts = { amazon: '', ebay: '', etsy: '' }
+const accounts = { amazon: '', ebay: '', etsy: '', shopify: '' }
 
 async function ask(tool: string, args: Record<string, unknown>, who = ALL()) {
   const run = await inside(() => db().agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'running', userId: approverId, via: 'claude' } }))
@@ -121,7 +127,7 @@ beforeAll(async () => {
   const membership = await db().workspaceMembership.create({ data: { workspaceId: A, userId: user.id, status: 'active' } })
   await db().workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
   await inside(async () => {
-    for (const [channel, code, language] of [['AMAZON', 'IT', 'it'], ['AMAZON', 'DE', 'de'], ['EBAY', 'DE', 'de'], ['EBAY', 'IT', 'it'], ['ETSY', 'GLOBAL', 'en']] as const) {
+    for (const [channel, code, language] of [['AMAZON', 'IT', 'it'], ['AMAZON', 'DE', 'de'], ['EBAY', 'DE', 'de'], ['EBAY', 'IT', 'it'], ['ETSY', 'GLOBAL', 'en'], ['SHOPIFY', 'GLOBAL', 'en']] as const) {
       await db().marketplace.create({ data: { channel, code, name: `${channel} ${code}`, currency: 'EUR', region: 'EU', language, languages: [language], marketplaceId: `TEST_${channel}_${code}` } as never })
     }
     // Amazon's cached rules for the jacket on DE: text, bullets, and a fit read-only on a listing Amazon already has.
@@ -146,6 +152,7 @@ beforeAll(async () => {
     accounts.ebay = (await db().channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 't7-ebay', isActive: true, isPrimary: true, externalAccountId: 'EBAY-TEST-T7' } as never })).id
     // E5b — an Etsy shop (fake id; the repo is public).
     accounts.etsy = (await db().channelConnection.create({ data: { channelType: 'ETSY', accountLabel: 't7-etsy', isActive: true, isPrimary: true, externalAccountId: '90000001' } as never })).id
+    accounts.shopify = (await db().channelConnection.create({ data: { channelType: 'SHOPIFY', accountLabel: 't7-shopify', isActive: true, isPrimary: true, externalAccountId: 'test-t7.myshopify.com' } as never })).id
   })
 }, 120_000)
 
@@ -353,5 +360,50 @@ describe('T7 — set-listing-content', { timeout: 30_000 }, () => {
       expect(await preview({ product: product.id, coordinate: ETSY, language: 'en', attributes: { shipping_profile_id: 1 } }))
         .toMatchObject({ ok: false, error: expect.stringMatching(/shipping_profile_id: a listing setting/) })
     })
+  })
+
+  it("Shopify: the listing's own title and description are saved as its pin and sent by the publisher; follow sends the shared text again", async () => {
+    const { parent, amazonDe } = await seed('TEST-SKU-T7-SHOP')
+    const shopify = await inside(() => db().channelListing.create({ data: {
+      productId: parent.id, channel: 'SHOPIFY', marketplace: 'GLOBAL', region: 'GLOBAL', channelMarket: 'SHOPIFY_GLOBAL', channelConnectionId: accounts.shopify, aliasKey: '',
+      listingStatus: 'DRAFT', isPublished: false, externalListingId: '9000000002', syncPaused: true,
+    } as never }))
+    const SHOP = { channel: 'SHOPIFY', market: 'GLOBAL' }
+    const html = '<ul>\n<li>Pair of two, left and right knee.</li>\n</ul>'
+    const { shopifySendText } = await import('../../shopify/listing-send-text.js')
+    const sent = async () => {
+      const listing = await inside(() => db().channelListing.findUniqueOrThrow({ where: { id: shopify.id }, include: { translations: true } }))
+      const family = await productOf(parent.id)
+      return shopifySendText(family, { ...listing, languages: ['en'] })
+    }
+    // Before: the publisher sends the shared (source) text.
+    expect(await sent()).toEqual({ title: 'TEST-SKU-T7-SHOP giacca', description: 'Giacca da moto in pelle.' })
+
+    const { approvalId, preview: p } = await queued({ product: parent.sku, coordinate: SHOP, language: 'en', pin: { title: 'Knee Sliders', description: html } })
+    expect(p).toMatchObject({
+      action: 'set-listing-content', listing: 'Shopify · GLOBAL · TEST-SKU-T7-SHOP', language: 'en',
+      changes: { title: { kind: 'pin', from: 'TEST-SKU-T7-SHOP giacca', to: 'Knee Sliders' }, description: { kind: 'pin', to: html } },
+      reach: { otherListingsChange: false }, note: expect.stringContaining('Shopify only'),
+    })
+    expect(await approveAndRun(approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await inside(() => db().channelListingTranslation.findFirst({ where: { channelListingId: shopify.id, language: 'en' } })))
+      .toMatchObject({ name: 'Knee Sliders', description: html, source: 'manual' })
+    // The shared text and the other listings do not move; nothing is queued to a channel.
+    expect(await productOf(parent.id)).toMatchObject({ name: 'TEST-SKU-T7-SHOP giacca', description: 'Giacca da moto in pelle.' })
+    expect(await translationOf(amazonDe.id)).toMatchObject({ name: 'Amazon-Titel' })
+    expect(await queueRows([parent.id])).toBe(0)
+    // What a Nexus publish sends to Shopify now: the listing's own text.
+    expect(await sent()).toEqual({ title: 'Knee Sliders', description: html })
+
+    // Bullets, keywords and attributes of a Shopify listing are not this tool's.
+    expect(await preview({ product: parent.id, coordinate: SHOP, language: 'en', pin: { bulletPoints: ['x'] } }))
+      .toMatchObject({ ok: false, error: expect.stringMatching(/bulletPoints: a Shopify listing's store fields .* set-shopify-content/) })
+    expect(await preview({ product: parent.id, coordinate: SHOP, language: 'en', attributes: { vendor: 'X' } }))
+      .toMatchObject({ ok: false, error: expect.stringMatching(/attributes: a Shopify listing's store fields .* set-shopify-content/) })
+
+    // Follow: the publisher sends the shared text again.
+    const back = await queued({ product: parent.id, coordinate: SHOP, language: 'en', follow: ['title', 'description'] })
+    expect(await approveAndRun(back.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await sent()).toEqual({ title: 'TEST-SKU-T7-SHOP giacca', description: 'Giacca da moto in pelle.' })
   })
 })
