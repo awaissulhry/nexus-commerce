@@ -53,8 +53,10 @@ interface TypeRule {
 const BIDDING = 'Google sets every bid itself from now (it can bid higher than today)'
 export const RECOMMENDATION_TYPES: Readonly<Record<string, TypeRule>> = {
   CAMPAIGN_BUDGET: { does: 'sets the daily budget Google recommends', spends: 'budget', param: 'campaignBudget', overrides: ['budgetCents'] },
-  FORECASTING_CAMPAIGN_BUDGET: { does: 'sets the daily budget Google recommends ahead of expected traffic', spends: 'budget' },
-  MARGINAL_ROI_CAMPAIGN_BUDGET: { does: 'sets the daily budget Google recommends for a better return', spends: 'budget' },
+  // Google's reference names campaign_budget "for a campaign budget recommendation" and does not rule it out for these two:
+  // Nexus sends your amount, and the preview says Google may refuse it (an apply is all or nothing: nothing changes then).
+  FORECASTING_CAMPAIGN_BUDGET: { does: 'sets the daily budget Google recommends ahead of expected traffic', spends: 'budget', param: 'campaignBudget', overrides: ['budgetCents'] },
+  MARGINAL_ROI_CAMPAIGN_BUDGET: { does: 'sets the daily budget Google recommends for a better return', spends: 'budget', param: 'campaignBudget', overrides: ['budgetCents'] },
   MOVE_UNUSED_BUDGET: { does: 'moves unused daily budget from another budget to this campaign\'s budget', spends: 'always', param: 'moveUnusedBudget', overrides: ['budgetCents'] },
   KEYWORD: { does: 'adds the keyword Google suggests (Google adds it ENABLED)', spends: 'always', param: 'keyword', overrides: ['matchType', 'bidCents'] },
   USE_BROAD_MATCH_KEYWORD: { does: 'turns the campaign\'s keywords to broad match (more searches show the ads)', spends: 'always', param: 'useBroadMatchKeyword', overrides: ['budgetCents'] },
@@ -107,8 +109,14 @@ export const AUTO_APPLY_TYPES = [
   'RAISE_TARGET_CPA', 'RESPONSIVE_SEARCH_AD', 'RESPONSIVE_SEARCH_AD_IMPROVE_AD_STRENGTH', 'SEARCH_PARTNERS_OPT_IN', 'SET_TARGET_CPA',
   'SET_TARGET_ROAS', 'TARGET_CPA_OPT_IN', 'TARGET_ROAS_OPT_IN', 'USE_BROAD_MATCH_KEYWORD',
 ] as const
-/** Auto-apply types that can make the account spend more by themselves when on (new ads count: Google adds them enabled). */
+/**
+ * Auto-apply types that CANNOT make the account spend more by themselves when on (ad rotation, rewriting an ad's text).
+ * Every other type can (new ads count: Google adds them enabled).
+ */
 const AUTO_APPLY_SAFE = new Set(['OPTIMIZE_AD_ROTATION', 'RESPONSIVE_SEARCH_AD_IMPROVE_AD_STRENGTH'])
+
+/** What a person reads for every type whose auto-apply goes on (a warning, and in spendsMoney where the type spends). */
+export const AUTO_APPLY_ON = 'From now on Google applies these recommendations by itself, with no approval in Nexus. Turn it off with set-google-auto-apply.'
 
 /** A Google type in words (`TARGET_CPA_OPT_IN` → "target CPA opt in"). */
 const words = (type: string) => type.toLowerCase().replace(/_/g, ' ').replace(/\b(cpa|roas|roi)\b/g, (m) => m.toUpperCase())
@@ -135,7 +143,7 @@ export interface ApplyLiveState {
 }
 
 /** One applied recommendation, as the record keeps it; a budget one with the amount it replaced (before) and wrote (after). */
-export interface AppliedRecord { recommendationId: string; type: string; campaignId: string | null; budgetId?: string; budgetCents?: number | null }
+export interface AppliedRecord { recommendationId: string; type: string; campaignIds: string[]; budgetId?: string; budgetCents?: number | null }
 export interface ApplyRecord { applied: AppliedRecord[] }
 
 /** The budget types whose apply Nexus can put back exactly (the daily amount they replaced). */
@@ -227,10 +235,15 @@ export function applyDraft(customer: string, currency: string, request: ApplyReq
     if (param && 'refusal' in param) return { refusal: param.refusal as string }
     operations.push({ resourceName: rec.resourceName, ...(param ?? {}) })
 
-    const campaign = rec.campaignId ? campaignById.get(rec.campaignId) ?? null : null
-    const where = campaign ? `campaign "${campaign.name}"` : rec.budgetId ? `budget ${rec.budgetId}` : 'the account'
-    const idle = campaign && campaign.status !== 'ENABLED' ? ` (the campaign is ${String(campaign.status ?? 'not enabled').toLowerCase()}: nothing spends until it is enabled)` : ''
-    const record: AppliedRecord = { recommendationId: rec.recommendationId, type: rec.type, campaignId: rec.campaignId }
+    const campaigns = rec.campaignIds.map((id) => campaignById.get(id)).filter((c): c is LiveCampaign => !!c)
+    const campaign = campaigns.length === 1 ? campaigns[0] : null
+    const where = campaigns.length === 1 ? `campaign "${campaigns[0].name}"`
+      : campaigns.length > 1 ? `campaigns ${campaigns.map((c) => `"${c.name}"`).join(', ')}`
+        : rec.budgetId ? `budget ${rec.budgetId}` : 'the account'
+    const idle = campaigns.length && campaigns.every((c) => c.status !== 'ENABLED')
+      ? ` (${campaigns.length === 1 ? `the campaign is ${String(campaigns[0].status ?? 'not enabled').toLowerCase()}` : 'no campaign of it is enabled'}: nothing spends until ${campaigns.length === 1 ? 'it is' : 'one is'} enabled)`
+      : ''
+    const record: AppliedRecord = { recommendationId: rec.recommendationId, type: rec.type, campaignIds: rec.campaignIds }
     const beforeRecord: AppliedRecord = { ...record }
     let to = rule.does
     if (rule.spends === 'budget' || rule.param === 'campaignBudget') {
@@ -252,15 +265,18 @@ export function applyDraft(customer: string, currency: string, request: ApplyReq
       const detail = describe(rec, overrides, currency)
       lines.push([`${words(rec.type)} (${where})`, 'as now', detail ? `${rule.does}: ${detail}` : rule.does])
       if (rule.spends === 'always') spends.push(`${capital(words(rec.type))} on ${where}: ${rule.does}${detail ? ` (${detail})` : ''}${idle}.`)
-      if (rule.spends === 'new-ad' && campaign?.status === 'ENABLED') spends.push(`${capital(words(rec.type))} on ${where}: ${rule.does}; it can serve at once.`)
+      if (rule.spends === 'new-ad' && campaigns.some((c) => c.status === 'ENABLED')) spends.push(`${capital(words(rec.type))} on ${where}: ${rule.does}; it can serve at once.`)
       if (rule.spends === null) warnings.push(`${capital(words(rec.type))} on ${where}: ${rule.does}.`)
       if (overrides.budgetCents !== undefined && rule.param !== 'moveUnusedBudget') {
         const current = campaign?.budget?.amountCents ?? null
         if (current === null || overrides.budgetCents > current) spends.push(`Sets the daily budget of ${where} to ${money(overrides.budgetCents, currency)} (now ${money(current, currency)})${idle}.`)
       }
     }
-    const cost = rec.impact ? [rec.impact.base.costCents, rec.impact.potential.costCents] : null
-    if (cost && cost[0] !== null && cost[1] !== null && cost[1] > cost[0]) {
+    if (overrides.budgetCents !== undefined && (rec.type === 'FORECASTING_CAMPAIGN_BUDGET' || rec.type === 'MARGINAL_ROI_CAMPAIGN_BUDGET')) {
+      warnings.push(`Your amount for a ${words(rec.type)} recommendation: Google's reference names the budget override for a campaign budget recommendation and does not say it for this type. If Google refuses it, nothing changes.`)
+    }
+    if (costUp(rec)) {
+      const cost = [rec.impact!.base.costCents, rec.impact!.potential.costCents]
       spends.push(`Google estimates the weekly cost of ${where} goes from ${money(cost[0], currency)} to ${money(cost[1], currency)} (Google's estimate).`)
     }
     if (rec.dismissed) warnings.push(`Recommendation ${rec.recommendationId} was dismissed; Google lets it be applied anyway.`)
@@ -282,10 +298,13 @@ export function applyDraft(customer: string, currency: string, request: ApplyReq
     skipped: [],
     operations,
     stands: {
-      // Each recommendation as it is now (not Google's estimates, which move), and what it changes as it is now.
-      recommendations: live.recommendations.filter((r) => seen.has(r.recommendationId)).map(({ impact: _impact, ...r }) => r)
+      // Each recommendation as it is now, and what it changes as it is now. Google's estimates move, so only whether its
+      // cost estimate goes up (a SPENDS MONEY line stands on it), never the numbers; nor the CPC Google merely suggests for
+      // a keyword (sent only as your override).
+      recommendations: live.recommendations.filter((r) => seen.has(r.recommendationId))
+        .map(({ impact, keyword, ...r }) => ({ ...r, keyword: keyword ? { text: keyword.text, matchType: keyword.matchType } : null, costUp: costUp({ impact }) }))
         .sort((a, b) => a.recommendationId.localeCompare(b.recommendationId)),
-      campaigns: [...new Set(live.recommendations.filter((r) => seen.has(r.recommendationId)).map((r) => r.campaignId).filter((x): x is string => !!x))].sort()
+      campaigns: [...new Set(live.recommendations.filter((r) => seen.has(r.recommendationId)).flatMap((r) => r.campaignIds))].sort()
         .map((id) => ({ campaignId: id, status: campaignById.get(id)?.status ?? null, budgetCents: campaignById.get(id)?.budget?.amountCents ?? null })),
       budgets: [...budgetsTouched].sort().map((id) => ({ budgetId: id, amountCents: budgetById.get(id)?.amountCents ?? null, campaigns: budgetById.get(id)?.campaigns.map((c) => `${c.campaignId}:${c.status}`).sort() ?? [] })),
       detailsRead: live.detailsRead,
@@ -296,6 +315,13 @@ export function applyDraft(customer: string, currency: string, request: ApplyReq
 }
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+/** Google estimates the weekly cost goes up when it is applied. */
+function costUp(rec: Pick<LiveRecommendation, 'impact'>): boolean {
+  const base = rec.impact?.base.costCents
+  const potential = rec.impact?.potential.costCents
+  return base !== null && base !== undefined && potential !== null && potential !== undefined && potential > base
+}
 
 /** What a recommendation sets, in words, with the person's overrides (or Google's values). */
 function describe(rec: LiveRecommendation, o: ApplyOverrides, currency: string): string | null {
@@ -323,12 +349,12 @@ function describe(rec: LiveRecommendation, o: ApplyOverrides, currency: string):
 
 // ── dismiss ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export interface DismissRecord { recommendations: Array<{ recommendationId: string; type: string; campaignId: string | null; dismissed: boolean }> }
+export interface DismissRecord { recommendations: Array<{ recommendationId: string; type: string; campaignIds: string[]; dismissed: boolean }> }
 
 export function dismissDraft(request: { recommendationIds: string[] }, live: { recommendations: LiveRecommendation[]; campaigns: LiveCampaign[] }): GoogleChangeDraft | { refusal: string } {
   if (!request.recommendationIds.length) return { refusal: 'Name at least one recommendation (google-ad-details view recommendations lists them).' }
   const byId = new Map(live.recommendations.map((r) => [r.recommendationId, r]))
-  const campaignName = (id: string | null) => (id ? live.campaigns.find((c) => c.campaignId === id)?.name ?? id : null)
+  const campaignNames = (ids: string[]) => ids.map((id) => `"${live.campaigns.find((c) => c.campaignId === id)?.name ?? id}"`)
   const operations: GoogleMutateOperation[] = []
   const lines: Array<[string, unknown, unknown]> = []
   const skipped: string[] = []
@@ -342,10 +368,10 @@ export function dismissDraft(request: { recommendationIds: string[] }, live: { r
     if (type && rec.type !== type) return { refusal: `Google dismisses one type of recommendation per request: this asks for ${words(type)} and ${words(rec.type)}. Ask for each type on its own.` }
     type = rec.type
     operations.push({ resourceName: rec.resourceName })
-    const where = campaignName(rec.campaignId)
-    lines.push([`${words(rec.type)}${where ? ` (campaign "${where}")` : ''}`, 'open', 'dismissed'])
-    before.recommendations.push({ recommendationId: id, type: rec.type, campaignId: rec.campaignId, dismissed: false })
-    after.recommendations.push({ recommendationId: id, type: rec.type, campaignId: rec.campaignId, dismissed: true })
+    const where = campaignNames(rec.campaignIds)
+    lines.push([`${words(rec.type)}${where.length ? ` (${where.length === 1 ? 'campaign' : 'campaigns'} ${where.join(', ')})` : ''}`, 'open', 'dismissed'])
+    before.recommendations.push({ recommendationId: id, type: rec.type, campaignIds: rec.campaignIds, dismissed: false })
+    after.recommendations.push({ recommendationId: id, type: rec.type, campaignIds: rec.campaignIds, dismissed: true })
   }
   if (!operations.length) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
   const { changes, more } = changeLines(lines)
@@ -390,9 +416,9 @@ export function autoApplyDraft(customer: string, request: { types: Array<{ type:
     lines.push([`auto-apply of ${words(t.type)}`, nowStatus === 'ENABLED' ? 'on' : nowStatus === 'PAUSED' ? 'off (paused)' : 'off (never set)', t.status === 'ENABLED' ? 'ON' : 'off (paused)'])
     before.types.push({ type: t.type, status: nowStatus })
     after.types.push({ type: t.type, status: t.status })
-    if (t.status === 'ENABLED') {
+    if (t.status === 'ENABLED' && !AUTO_APPLY_SAFE.has(t.type)) {
       const rule = RECOMMENDATION_TYPES[t.type]
-      if (!AUTO_APPLY_SAFE.has(t.type)) spends.push(`Lets Google apply its ${words(t.type)} recommendations BY ITSELF from now, with no person approving each${rule ? `: it ${rule.does}` : ''}.`)
+      spends.push(`${capital(words(t.type))} (auto-apply ON)${rule ? `: it ${rule.does}` : ''}. ${AUTO_APPLY_ON}`)
     }
   }
   if (!operations.length) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
@@ -402,7 +428,9 @@ export function autoApplyDraft(customer: string, request: { types: Array<{ type:
     summary: `Google Ads auto-apply: ${[on && `turn ON for ${plural(on, 'type')}`, after.types.length - on && `turn off for ${plural(after.types.length - on, 'type')}`].filter(Boolean).join(', ')}.`,
     changes,
     totals: { operations: operations.length, on, off: after.types.length - on, ...(more ? { linesNotShown: more } : {}) },
-    warnings: on ? ['Google applies what auto-apply allows without asking Nexus; google-ad-details view acts-on-its-own shows what it did.'] : [],
+    warnings: on
+      ? [`Auto-apply ON for ${after.types.filter((t) => t.status === 'ENABLED').map((t) => words(t.type)).join(', ')}. ${AUTO_APPLY_ON}`, 'google-ad-details view acts-on-its-own shows what Google applied by itself.']
+      : [],
     spendsMoney: spends,
     skipped,
     operations,

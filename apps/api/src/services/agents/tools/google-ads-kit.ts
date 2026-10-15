@@ -50,6 +50,17 @@ export const GOOGLE_CHANGE_RULES =
   + 'person\'s decision), and the operations it costs (the account has a daily Google Ads allowance). One request, all '
   + 'or nothing; a change sent to Google has no cancel window.'
 
+/**
+ * The sentence the description of a change Google cannot check first ends with (a GoogleSender tool: applying or
+ * dismissing Google's recommendations — RecommendationService has no validate_only).
+ */
+export const GOOGLE_UNCHECKED_CHANGE_RULES =
+  ' Nothing changes until a person approves it in Nexus (Approvals); it then runs as that person, never by a rule. '
+  + 'Google CANNOT check this change first (it has no validate_only for it): the preview is built from the live account, '
+  + 'and when the approved change runs Nexus reads it again and sends it only if nothing it stands on moved. The preview '
+  + 'says what changes, what can make the account spend more (spendsMoney — the person\'s decision), and the operations '
+  + 'it costs. One request, all or nothing; a change sent to Google has no cancel window.'
+
 // ── where it lands ──────────────────────────────────────────────────────────────────────────────────────────────
 
 export interface GoogleReach { mode: 'live' | 'off'; accountId: string; customerId: string }

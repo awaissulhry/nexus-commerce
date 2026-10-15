@@ -15,7 +15,7 @@ import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
 import {
-  googleAccountArg, googleCentsArg, googleChangePreview, googleWhyArg, GOOGLE_CHANGE_RULES, matchTypeArg, recordAccount, runGoogleChange,
+  googleAccountArg, googleCentsArg, googleChangePreview, googleWhyArg, GOOGLE_CHANGE_RULES, GOOGLE_UNCHECKED_CHANGE_RULES, matchTypeArg, recordAccount, runGoogleChange,
   type GoogleDraftBuilder, type GoogleSender,
 } from './google-ads-kit.js'
 import {
@@ -124,7 +124,7 @@ const applyGoogleRecommendations: AgentTool = {
     + 'target ROAS, new keywords or ads that can serve, and wider networks or match types are marked SPENDS MONEY. '
     + 'Types that make new campaigns (Performance Max upgrades, catch-all Shopping) are refused: Nexus makes new '
     + 'campaigns paused. Undo: Google cannot un-apply; for a budget recommendation undo sets the old daily amount again, '
-    + 'any other type is changed back by hand.' + GOOGLE_CHANGE_RULES,
+    + 'any other type is changed back by hand.' + GOOGLE_UNCHECKED_CHANGE_RULES,
   undo: applyUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildApply(args), applySender),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildApply(args), (draft, responses) => ({
@@ -164,7 +164,7 @@ const dismissGoogleRecommendations: AgentTool = {
     'Dismiss Google\'s recommendations in the business\'s chosen Google Ads account (ids from google-ad-details view '
     + 'recommendations), all of ONE type per request. Nothing in the account changes. Google cannot check a dismiss first '
     + '(no validate_only); when it runs Nexus reads each recommendation again and sends it only if it is still there. A '
-    + 'dismiss cannot be undone, but Google still lets a dismissed recommendation be applied.' + GOOGLE_CHANGE_RULES,
+    + 'dismiss cannot be undone, but Google still lets a dismissed recommendation be applied.' + GOOGLE_UNCHECKED_CHANGE_RULES,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildDismiss(args), dismissSender),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildDismiss(args), (draft) => ({
     data: { dismissed: (draft.after as { recommendations: unknown[] }).recommendations.length },
@@ -223,7 +223,8 @@ const setGoogleAutoApply: AgentTool = {
   }),
   description:
     'Switch Google\'s auto-apply on or off per recommendation type in the business\'s chosen Google Ads account (the '
-    + 'types Google auto-applies). Turning it ON lets Google apply that type BY ITSELF, with no person approving each: '
+    + 'types Google auto-applies). Turning it ON means: from now on Google applies these recommendations by itself, with '
+    + 'no approval in Nexus (the preview says so plainly); '
     + 'for a type that can raise bids or budgets, hand bidding to Google, add keywords or ads, or widen networks and '
     + 'match types it is marked SPENDS MONEY. Turning it off (PAUSED) is a safe step. Google never deletes a setting; '
     + 'undo puts the old on/off back (one never set goes to off).' + GOOGLE_CHANGE_RULES,

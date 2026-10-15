@@ -50,7 +50,7 @@ const approved = (preview: unknown): ToolContext => ({ can: () => true, via: 'cl
 const C1 = { campaignId: '21', name: 'Search A', status: 'ENABLED', servingStatus: null, primaryStatus: null, type: 'SEARCH', subType: null, bidding: 'MANUAL_CPC', start: null, end: null, shopping: null, budget: { budgetId: '11', name: 'Budget A', amountCents: 1000, shared: false } }
 const B1 = { budgetId: '11', name: 'Budget A', amountCents: 1000, shared: false, deliveryMethod: 'STANDARD', period: 'DAILY', usedBy: 1, campaigns: [{ campaignId: '21', name: 'Search A', status: 'ENABLED' }] }
 const REC = {
-  recommendationId: 'r-1', resourceName: 'customers/1234567890/recommendations/r-1', type: 'CAMPAIGN_BUDGET', dismissed: false, campaignId: '21', adGroupId: null,
+  recommendationId: 'r-1', resourceName: 'customers/1234567890/recommendations/r-1', type: 'CAMPAIGN_BUDGET', dismissed: false, campaignIds: ['21'], adGroupId: null,
   budgetId: '11', impact: null, budget: { currentCents: 1000, recommendedCents: 1800 }, excessBudgetId: null, keyword: null, targetCpaCents: null, targetRoas: null,
   adjustment: null, requiredBudgetCents: null, broadMatchKeywords: null,
 }
@@ -68,6 +68,14 @@ beforeEach(() => {
 
 describe('apply-google-recommendations', () => {
   const ask = { recommendations: [{ recommendationId: 'r-1' }] }
+
+  it('apply and dismiss say Google cannot check them first; auto-apply (a mutate) says Google checks it', () => {
+    for (const name of ['apply-google-recommendations', 'dismiss-google-recommendations']) {
+      expect(tool(name).description).toContain('Google CANNOT check this change first')
+      expect(tool(name).description).not.toContain('Google checks the change first')
+    }
+    expect(tool('set-google-auto-apply').description).toContain('Google checks the change first (validate_only)')
+  })
 
   it('is a Nexus change a person approves; partly reversible; its re-check fields declared', () => {
     for (const t of GOOGLE_ADS_RECOMMENDATIONS_TOOLS) {
@@ -105,8 +113,8 @@ describe('apply-google-recommendations', () => {
     expect(h.send.mock.calls[0].slice(1)).toEqual(['apply', [{ resourceName: REC.resourceName }]])
     expect(h.mutate).not.toHaveBeenCalled()
     expect(run.change).toEqual({
-      before: { applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignId: '21', budgetId: '11', budgetCents: 1000 }], accountId: 'g-1', customerId: '1234567890' },
-      after: { applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignId: '21', budgetId: '11', budgetCents: 1800 }], accountId: 'g-1', customerId: '1234567890' },
+      before: { applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignIds: ['21'], budgetId: '11', budgetCents: 1000 }], accountId: 'g-1', customerId: '1234567890' },
+      after: { applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignIds: ['21'], budgetId: '11', budgetCents: 1800 }], accountId: 'g-1', customerId: '1234567890' },
     })
     h.live.budgets = [{ ...B1, amountCents: 1800 }]
     expect(await tool('apply-google-recommendations').undo!.current(run.change!)).toEqual(run.change!.after)
@@ -128,7 +136,7 @@ describe('apply-google-recommendations', () => {
   })
 
   it('the undo of another type is refused with the reason (Google cannot un-apply)', () => {
-    const change = { before: { applied: [{ recommendationId: 'r-2', type: 'KEYWORD', campaignId: '21' }], accountId: 'g-1' }, after: { applied: [{ recommendationId: 'r-2', type: 'KEYWORD', campaignId: '21' }], accountId: 'g-1' } }
+    const change = { before: { applied: [{ recommendationId: 'r-2', type: 'KEYWORD', campaignIds: ['21'] }], accountId: 'g-1' }, after: { applied: [{ recommendationId: 'r-2', type: 'KEYWORD', campaignIds: ['21'] }], accountId: 'g-1' } }
     expect(tool('apply-google-recommendations').undo!.request(change)).toEqual({ refusal: expect.stringMatching(/Google cannot un-apply a recommendation, and a keyword one/) })
   })
 })

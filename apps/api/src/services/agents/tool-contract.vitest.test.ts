@@ -729,8 +729,8 @@ describe('C1 — every registered tool keeps the contract', () => {
         after: { created: [{ labelId: '62', name: 'Fresh' }], edited: [{ labelId: '61', name: 'New', description: 'x', color: null }], attached: [{ labelId: '62', kind: 'campaign', id: '21' }], detached: [{ labelId: '61', kind: 'keyword', id: '51~601' }], accountId: 'g-1', customerId: '1234567890' },
       },
       'apply-google-recommendations': {
-        before: { applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignId: '21', budgetId: '11', budgetCents: 1000 }], accountId: 'g-1', customerId: '1234567890' },
-        after: { applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignId: '21', budgetId: '11', budgetCents: 1500 }], accountId: 'g-1', customerId: '1234567890' },
+        before: { applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignIds: ['21'], budgetId: '11', budgetCents: 1000 }], accountId: 'g-1', customerId: '1234567890' },
+        after: { applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignIds: ['21'], budgetId: '11', budgetCents: 1500 }], accountId: 'g-1', customerId: '1234567890' },
       },
       'set-google-auto-apply': { before: { types: [{ type: 'KEYWORD', status: null }], accountId: 'g-1' }, after: { types: [{ type: 'KEYWORD', status: 'ENABLED' }], accountId: 'g-1' } },
       'set-google-bid-strategy': {

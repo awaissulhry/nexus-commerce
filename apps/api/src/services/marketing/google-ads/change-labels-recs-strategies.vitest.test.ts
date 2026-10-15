@@ -96,7 +96,7 @@ describe('labels', () => {
 // ── recommendations ─────────────────────────────────────────────────────────────────────────────────────────────
 
 const rec = (over: Partial<LiveRecommendation>): LiveRecommendation => ({
-  recommendationId: 'r-1', resourceName: `${CUSTOMER}/recommendations/r-1`, type: 'CAMPAIGN_BUDGET', dismissed: false, campaignId: '21', adGroupId: null,
+  recommendationId: 'r-1', resourceName: `${CUSTOMER}/recommendations/r-1`, type: 'CAMPAIGN_BUDGET', dismissed: false, campaignIds: ['21'], adGroupId: null,
   budgetId: '11', impact: null, budget: null, excessBudgetId: null, keyword: null, targetCpaCents: null, targetRoas: null, adjustment: null,
   requiredBudgetCents: null, broadMatchKeywords: null, ...over,
 })
@@ -114,11 +114,12 @@ describe('apply recommendations', () => {
       'Raises the daily budget "Budget A" from EUR 10.00 to EUR 18.00 (1 enabled campaign on it).',
       'Google estimates the weekly cost of campaign "Search A" goes from EUR 70.00 to EUR 90.00 (Google\'s estimate).',
     ])
-    expect(out.before).toEqual({ applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignId: '21', budgetId: '11', budgetCents: 1000 }] })
-    expect(out.after).toEqual({ applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignId: '21', budgetId: '11', budgetCents: 1800 }] })
+    expect(out.before).toEqual({ applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignIds: ['21'], budgetId: '11', budgetCents: 1000 }] })
+    expect(out.after).toEqual({ applied: [{ recommendationId: 'r-1', type: 'CAMPAIGN_BUDGET', campaignIds: ['21'], budgetId: '11', budgetCents: 1800 }] })
     expect(out.warnings).toContain('Google cannot un-apply a recommendation; undo here sets the old daily amount again.')
-    // Google's estimates move: they are not part of what the run stands on.
+    // Google's estimates move: the run stands on whether the cost estimate goes up (a SPENDS MONEY line), never on its numbers.
     expect(JSON.stringify(out.stands)).not.toMatch(/costCents/)
+    expect((out.stands as { recommendations: Array<{ costUp: boolean }> }).recommendations[0].costUp).toBe(true)
   })
 
   it('your own amount goes in campaign_budget; a lower amount spends nothing more', () => {
@@ -129,14 +130,19 @@ describe('apply recommendations', () => {
   })
 
   it('a keyword with your match type and bid: the ad group is the recommendation\'s; Google adds it enabled — SPENDS MONEY', () => {
-    const out = draft(applyDraft(CUSTOMER, 'EUR', { items: [{ recommendationId: 'r-2', matchType: 'EXACT', bidCents: 45 }] }, live([rec({ recommendationId: 'r-2', resourceName: `${CUSTOMER}/recommendations/r-2`, type: 'KEYWORD', budgetId: null, adGroupId: '51', keyword: { text: 'trail boots', matchType: 'BROAD', bidCents: 60 } })])))
+    const keywordRec = rec({ recommendationId: 'r-2', resourceName: `${CUSTOMER}/recommendations/r-2`, type: 'KEYWORD', budgetId: null, adGroupId: '51', keyword: { text: 'trail boots', matchType: 'BROAD', bidCents: 60 } })
+    const out = draft(applyDraft(CUSTOMER, 'EUR', { items: [{ recommendationId: 'r-2', matchType: 'EXACT', bidCents: 45 }] }, live([keywordRec])))
     expect(out.operations).toEqual([{ resourceName: `${CUSTOMER}/recommendations/r-2`, keyword: { adGroup: `${CUSTOMER}/adGroups/51`, matchType: 'EXACT', cpcBidMicros: '450000' } }])
     expect(out.spendsMoney[0]).toBe('Keyword on campaign "Search A": adds the keyword Google suggests (Google adds it ENABLED) ("trail boots" EXACT, max CPC EUR 0.45).')
     expect(out.warnings.at(-1)).toMatch(/Nexus cannot put this one back/)
+    // The CPC Google only suggests is not something the run stands on: a new suggestion does not stop the approved change.
+    const again = draft(applyDraft(CUSTOMER, 'EUR', { items: [{ recommendationId: 'r-2', matchType: 'EXACT', bidCents: 45 }] }, live([{ ...keywordRec, keyword: { text: 'trail boots', matchType: 'BROAD', bidCents: 70 } }])))
+    expect(again.stands).toEqual(out.stands)
   })
 
   it('refuses: two types in one request, a type that makes campaigns, an override the type does not take, a recommendation Google withdrew', () => {
     const two = [rec({}), rec({ recommendationId: 'r-2', resourceName: `${CUSTOMER}/recommendations/r-2`, type: 'KEYWORD', budgetId: null })]
+    expect(refusal(applyDraft(CUSTOMER, 'EUR', { items: [{ recommendationId: 'r-1', multiplier: 2 }] }, live([rec({})])))).toMatch(/takes budgetCents \(not multiplier\)/)
     expect(refusal(applyDraft(CUSTOMER, 'EUR', { items: [{ recommendationId: 'r-1' }, { recommendationId: 'r-2' }] }, live(two)))).toMatch(/one type of recommendation per request/)
     expect(refusal(applyDraft(CUSTOMER, 'EUR', { items: [{ recommendationId: 'r-1' }] }, live([rec({ type: 'PERFORMANCE_MAX_OPT_IN' })])))).toMatch(/Nexus does not apply.*paused/)
     expect(refusal(applyDraft(CUSTOMER, 'EUR', { items: [{ recommendationId: 'r-1' }] }, live([rec({ type: 'SHOPPING_ADD_GTIN' })])))).toMatch(/does not say what applying it changes/)
@@ -150,6 +156,16 @@ describe('apply recommendations', () => {
     expect(out.spendsMoney[0]).toMatch(/^Target CPA opt in on campaign "Search A": switches the campaign to Target CPA bidding.*target CPA EUR 12.00\) \(the campaign is paused: nothing spends until it is enabled\)\.$/)
   })
 
+  it('a forecasting budget recommendation takes your amount too; the preview says Google may refuse it, and names its campaigns', () => {
+    const forecast = rec({ type: 'FORECASTING_CAMPAIGN_BUDGET', campaignIds: ['21', '22'], budget: { currentCents: 1000, recommendedCents: 1600 } })
+    const campaigns = [campaign('21', 'Search A', 'PAUSED', { budgetId: '11', name: 'Budget A', amountCents: 1000, shared: true }), campaign('22', 'Search B', 'PAUSED', { budgetId: '11', name: 'Budget A', amountCents: 1000, shared: true })]
+    const out = draft(applyDraft(CUSTOMER, 'EUR', { items: [{ recommendationId: 'r-1', budgetCents: 1200 }] }, live([forecast], { campaigns })))
+    expect(out.operations).toEqual([{ resourceName: `${CUSTOMER}/recommendations/r-1`, campaignBudget: { newBudgetAmountMicros: '12000000' } }])
+    expect(out.changes).toEqual({ 'budget "Budget A" (campaigns "Search A", "Search B")': { from: 'EUR 10.00 a day', to: 'daily budget EUR 12.00 (your amount)' } })
+    expect(out.warnings[0]).toMatch(/^Your amount for a forecasting campaign budget recommendation: .*If Google refuses it, nothing changes\.$/)
+    expect((out.stands as { campaigns: Array<{ campaignId: string }> }).campaigns.map((c) => c.campaignId)).toEqual(['21', '22'])
+  })
+
   it('moving unused budget is SPENDS MONEY; your amount goes in move_unused_budget', () => {
     const out = draft(applyDraft(CUSTOMER, 'EUR', { items: [{ recommendationId: 'r-1', budgetCents: 300 }] }, live([rec({ type: 'MOVE_UNUSED_BUDGET', excessBudgetId: '12', budget: { currentCents: 1000, recommendedCents: 1500 } })])))
     expect(out.operations).toEqual([{ resourceName: `${CUSTOMER}/recommendations/r-1`, moveUnusedBudget: { budgetMicrosToMove: '3000000' } }])
@@ -159,6 +175,7 @@ describe('apply recommendations', () => {
   it('dismiss: one type per request, an already dismissed one is skipped, nothing spends', () => {
     const out = draft(dismissDraft({ recommendationIds: ['r-1', 'r-2'] }, { recommendations: [rec({}), rec({ recommendationId: 'r-2', dismissed: true })], campaigns: [campaign('21', 'Search A')] }))
     expect(out.operations).toEqual([{ resourceName: `${CUSTOMER}/recommendations/r-1` }])
+    expect(out.changes).toEqual({ 'campaign budget (campaign "Search A")': { from: 'open', to: 'dismissed' } })
     expect(out.skipped).toEqual(['Recommendation r-2 (campaign budget) is already dismissed.'])
     expect(out.spendsMoney).toEqual([])
   })
@@ -170,21 +187,26 @@ describe('apply recommendations', () => {
       { recommendationSubscriptionOperation: { update: { resourceName: `${CUSTOMER}/recommendationSubscriptions/SET_TARGET_CPA`, status: 'PAUSED' }, updateMask: 'status' } },
     ])
     expect(out.skipped).toEqual(['Auto-apply of optimize ad rotation is already off.'])
-    expect(out.spendsMoney).toEqual(['Lets Google apply its keyword recommendations BY ITSELF from now, with no person approving each: it adds the keyword Google suggests (Google adds it ENABLED).'])
+    expect(out.spendsMoney).toEqual(['Keyword (auto-apply ON): it adds the keyword Google suggests (Google adds it ENABLED). From now on Google applies these recommendations by itself, with no approval in Nexus. Turn it off with set-google-auto-apply.'])
+    expect(out.warnings[0]).toBe('Auto-apply ON for keyword. From now on Google applies these recommendations by itself, with no approval in Nexus. Turn it off with set-google-auto-apply.')
+    // A type that cannot spend by itself still says it plainly, as a warning (not in spendsMoney).
+    const rotation = draft(autoApplyDraft(CUSTOMER, { types: [{ type: 'OPTIMIZE_AD_ROTATION', status: 'ENABLED' }] }, { subscriptions: [] }))
+    expect(rotation.spendsMoney).toEqual([])
+    expect(rotation.warnings[0]).toBe('Auto-apply ON for optimize ad rotation. From now on Google applies these recommendations by itself, with no approval in Nexus. Turn it off with set-google-auto-apply.')
     expect(out.before).toEqual({ types: [{ type: 'KEYWORD', status: null }, { type: 'SET_TARGET_CPA', status: 'ENABLED' }] })
     expect(refusal(autoApplyDraft(CUSTOMER, { types: [{ type: 'CAMPAIGN_BUDGET', status: 'ENABLED' }] }, { subscriptions: [] }))).toMatch(/does not auto-apply campaign budget/)
   })
 
   it('maps a recommendation with its details; the query names them by resource name', () => {
     const r = liveRecommendationOf({ recommendation: {
-      resourceName: `${CUSTOMER}/recommendations/r-3`, type: 'MOVE_UNUSED_BUDGET', campaign: `${CUSTOMER}/campaigns/21`, campaignBudget: `${CUSTOMER}/campaignBudgets/11`,
+      resourceName: `${CUSTOMER}/recommendations/r-3`, type: 'MOVE_UNUSED_BUDGET', campaigns: [`${CUSTOMER}/campaigns/22`, `${CUSTOMER}/campaigns/21`], campaignBudget: `${CUSTOMER}/campaignBudgets/11`,
       moveUnusedBudgetRecommendation: { excessCampaignBudget: `${CUSTOMER}/campaignBudgets/12`, budgetRecommendation: { currentBudgetAmountMicros: '10000000', recommendedBudgetAmountMicros: '12000000' } },
       impact: { baseMetrics: { costMicros: '5000000' }, potentialMetrics: { costMicros: '6000000', clicks: 3 } },
     } })
-    expect(r).toMatchObject({ recommendationId: 'r-3', campaignId: '21', budgetId: '11', excessBudgetId: '12', budget: { currentCents: 1000, recommendedCents: 1200 }, impact: { base: { costCents: 500 }, potential: { costCents: 600, clicks: 3 } } })
+    expect(r).toMatchObject({ recommendationId: 'r-3', campaignIds: ['21', '22'], budgetId: '11', excessBudgetId: '12', budget: { currentCents: 1000, recommendedCents: 1200 }, impact: { base: { costCents: 500 }, potential: { costCents: 600, clicks: 3 } } })
     expect(liveRecommendationsQuery([`${CUSTOMER}/recommendations/r-3`], false)).toBe(
-      'SELECT recommendation.resource_name, recommendation.type, recommendation.dismissed, recommendation.campaign, recommendation.ad_group, '
-      + `recommendation.campaign_budget FROM recommendation WHERE recommendation.resource_name IN ('${CUSTOMER}/recommendations/r-3')`,
+      'SELECT recommendation.resource_name, recommendation.type, recommendation.dismissed, recommendation.campaign, recommendation.campaigns, '
+      + `recommendation.ad_group, recommendation.campaign_budget FROM recommendation WHERE recommendation.resource_name IN ('${CUSTOMER}/recommendations/r-3')`,
     )
   })
 })

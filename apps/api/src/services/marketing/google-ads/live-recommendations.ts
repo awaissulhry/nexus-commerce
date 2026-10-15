@@ -4,7 +4,8 @@
  * per part, on the account's change allowance (write-client.ts `liveRows`).
  *
  * Fields checked on 2026-10-15 in https://developers.google.com/google-ads/api/fields/v25/recommendation: resource_name,
- * type, dismissed, campaign, ad_group, campaign_budget (selectable; resource_name filterable); impact and every
+ * type, dismissed, campaign, campaigns (repeated; the budget types carry their campaigns there, not in campaign), ad_group,
+ * campaign_budget (selectable; resource_name filterable); impact and every
  * `*_recommendation` detail below are MESSAGE fields, selectable whole only (not filterable). The detail messages
  * (reference rpc/v25/Recommendation.*): CampaignBudgetRecommendation {current_budget_amount_micros,
  * recommended_budget_amount_micros}, KeywordRecommendation {keyword, recommended_cpc_bid_micros},
@@ -40,7 +41,11 @@ export interface LiveRecommendation {
   resourceName: string
   type: string
   dismissed: boolean
-  campaignId: string | null
+  /**
+   * The campaigns it is about: `recommendation.campaign` for most types, `recommendation.campaigns[]` for the budget types
+   * (CAMPAIGN_BUDGET, FORECASTING_CAMPAIGN_BUDGET, MARGINAL_ROI_CAMPAIGN_BUDGET, MOVE_UNUSED_BUDGET — v25 Recommendation).
+   */
+  campaignIds: string[]
   adGroupId: string | null
   /** The budget it changes (CAMPAIGN_BUDGET, FORECASTING_CAMPAIGN_BUDGET, MARGINAL_ROI_CAMPAIGN_BUDGET, MOVE_UNUSED_BUDGET). */
   budgetId: string | null
@@ -72,7 +77,10 @@ const DETAILS = [
   'recommendation.set_target_roas_recommendation', 'recommendation.forecasting_set_target_cpa_recommendation',
   'recommendation.forecasting_set_target_roas_recommendation',
 ]
-const BASIC = ['recommendation.resource_name', 'recommendation.type', 'recommendation.dismissed', 'recommendation.campaign', 'recommendation.ad_group', 'recommendation.campaign_budget']
+const BASIC = [
+  'recommendation.resource_name', 'recommendation.type', 'recommendation.dismissed', 'recommendation.campaign', 'recommendation.campaigns',
+  'recommendation.ad_group', 'recommendation.campaign_budget',
+]
 
 /** The recommendations of these resource names, with their details (`details` false: only what every type has). */
 export function liveRecommendationsQuery(resourceNames: string[], details = true): string {
@@ -98,7 +106,7 @@ export function liveRecommendationOf(row: Json): LiveRecommendation {
     resourceName,
     type: str(r.type) ?? 'UNKNOWN',
     dismissed: r.dismissed === true,
-    campaignId: idOf(r.campaign),
+    campaignIds: [...new Set([idOf(r.campaign), ...(Array.isArray(r.campaigns) ? r.campaigns.map(idOf) : [])].filter((id): id is string => !!id))].sort(),
     adGroupId: idOf(r.adGroup),
     budgetId: idOf(r.campaignBudget),
     impact: r.impact && (r.impact.baseMetrics || r.impact.potentialMetrics) ? { base: metrics(r.impact.baseMetrics), potential: metrics(r.impact.potentialMetrics) } : null,
