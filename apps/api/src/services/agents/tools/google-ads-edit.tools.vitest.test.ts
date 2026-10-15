@@ -3,8 +3,9 @@
  * replace-google-keywords and move-google-ads as the approval gate uses them (Google, the account and the live reads are
  * stand-ins): the preview is built on Google's check (validate_only); a request Nexus can see is wrong is refused before
  * anything is read or sent; a run happens only as a request a person approved, as ONE request with validateOnly false, and
- * its record holds the ids Google gave what it made; undo puts back the old texts, URLs and places exactly — and a
- * replacement or a move, being removals, are asked for only with confirmRemove.
+ * its record holds the ids Google gave what it made; undo puts back the old texts, URLs and places exactly — every undo
+ * request passes its target tool's own draft, not only its input — and a replacement or a move, being removals, are asked
+ * for only with confirmRemove.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -14,6 +15,7 @@ const h = vi.hoisted(() => ({
   live: {
     campaigns: [] as unknown[], campaignAssets: [] as unknown[], places: {} as Record<string, unknown>, adGroups: [] as unknown[],
     ads: [] as unknown[], campaignUrls: [] as unknown[], adGroupUrls: [] as unknown[], keywords: [] as unknown[], assets: [] as unknown[], links: [] as unknown[],
+    byId: [] as unknown[], matchType: null as string | null,
   },
   reads: vi.fn(),
 }))
@@ -30,11 +32,12 @@ vi.mock('../../marketing/google-ads/live.js', async (importActual) => ({
 vi.mock('../../marketing/google-ads/live-ads-assets.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/live-ads-assets.js')>()),
   liveAdGroupPlace: vi.fn(async (_t: unknown, _c: string, adGroupId: string) => structuredClone(h.live.places[adGroupId] ?? null)),
+  liveAssetsById: vi.fn(async () => structuredClone(h.live.byId)),
 }))
 vi.mock('../../marketing/google-ads/live-keywords.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/live-keywords.js')>()),
   liveAdGroups: vi.fn(async () => structuredClone(h.live.adGroups)),
-  liveCampaignKeywordMatchType: vi.fn(async () => null),
+  liveCampaignKeywordMatchType: vi.fn(async () => h.live.matchType),
 }))
 vi.mock('../../marketing/google-ads/live-edit.js', async (importActual) => {
   const read = <T>(what: string, value: () => T) => { h.reads(what); return structuredClone(value()) }
@@ -74,7 +77,7 @@ const CAMPAIGN = { campaignId: '21', name: 'Search A', status: 'ENABLED', servin
 const place = (adGroupId: string) => ({ campaign: { campaignId: '21', name: 'Search A', status: 'ENABLED', type: 'SEARCH' }, adGroup: { adGroupId, name: `Group ${adGroupId}`, status: 'PAUSED', type: 'SEARCH_STANDARD' } })
 const ad = (adGroupId: string, adId: string, over: Record<string, unknown> = {}) => ({
   id: `${adGroupId}~${adId}`, adId, adGroupId, adGroupName: `Group ${adGroupId}`, adGroupStatus: 'PAUSED', campaignId: '21', campaignName: 'Search A', campaignStatus: 'ENABLED',
-  campaignType: 'SEARCH', status: 'PAUSED', type: 'RESPONSIVE_SEARCH_AD',
+  campaignType: 'SEARCH', status: 'PAUSED', type: 'RESPONSIVE_SEARCH_AD', approval: 'APPROVED',
   headlines: [{ text: 'Moto Jackets', pin: null }, { text: 'Free Returns', pin: null }, { text: 'Shop A', pin: null }],
   descriptions: [{ text: 'Leather jackets.', pin: null }, { text: 'Ships in 24 hours.', pin: null }],
   path1: null, path2: null, finalUrls: ['https://shop.example/a'], finalMobileUrls: [], urls: NO_URLS, ...over,
@@ -96,7 +99,9 @@ beforeEach(() => {
   h.live.campaignUrls = [{ campaignId: '21', name: 'Search A', status: 'ENABLED', urls: { ...NO_URLS, trackingTemplate: '{lpurl}?old=1' } }]
   h.live.adGroupUrls = []
   h.live.keywords = [keyword('51~601', 'moto jacket', 'EXACT', { finalUrls: ['https://shop.example/k'] })]
-  h.live.assets = [{ assetId: '9', type: 'CALLOUT', source: 'ADVERTISER', name: null, finalUrls: [], finalMobileUrls: [], calloutText: 'Free returns' }]
+  h.live.assets = [{ assetId: '9', type: 'CALLOUT', source: 'ADVERTISER', name: null, finalUrls: [], finalMobileUrls: [], urls: NO_URLS, calloutText: 'Free returns' }]
+  h.live.byId = [{ assetId: '9', type: 'CALLOUT', text: 'Free returns', finalUrls: [] }]
+  h.live.matchType = null
   h.live.links = [{ assetId: '9', level: 'campaign', fieldType: 'CALLOUT', status: 'ENABLED', campaignId: '21', campaignName: 'Search A', campaignStatus: 'ENABLED' }]
   h.live.campaignAssets = [{ campaignId: '21', assetId: '9', fieldType: 'CALLOUT', type: 'CALLOUT', status: 'ENABLED' }]
 })
@@ -116,6 +121,21 @@ async function previewAndRun(name: string, args: Record<string, unknown>, respon
   expect(h.mutate.mock.calls[0][2]).toMatchObject({ validateOnly: false })
   expect(h.mutate.mock.calls[0][1]).toEqual(sent)
   return { preview: out.preview as Record<string, unknown>, sent, run }
+}
+
+const TARGETS = [...GOOGLE_ADS_EDIT_TOOLS, ...GOOGLE_ADS_ADS_ASSETS_TOOLS]
+/**
+ * An undo request as the gate takes it: parsed by its TARGET tool's input and built by that tool's draft on the account as
+ * it is after the run — accepted (not only valid arguments). Returns the undo's preview and what it would send.
+ */
+async function undoDraft(undo: { tool: string; args: Record<string, unknown> }) {
+  const target = TARGETS.find((t) => t.name === undo.tool)!
+  const args = target.input.parse(undo.args) as Record<string, unknown>
+  h.mutate.mockReset()
+  h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+  const out = await target.handler(args, asker)
+  expect(out.error, `${undo.tool}: the undo request passes its draft`).toBeUndefined()
+  return { preview: out.preview as Record<string, unknown>, sent: h.mutate.mock.calls[0][1] as unknown[] }
 }
 
 describe('the G3 tools', () => {
@@ -152,6 +172,7 @@ describe('edit-google-rsa', () => {
     const undo = tool('edit-google-rsa').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
     expect(undo).toMatchObject({ tool: 'edit-google-rsa', args: { accountId: 'g-1', ads: [{ id: '51~701', headlines: [{ text: 'Moto Jackets' }, { text: 'Free Returns' }, { text: 'Shop A' }] }] } })
     expect(tool('edit-google-rsa').input.safeParse(undo.args).success).toBe(true)
+    expect((await undoDraft(undo)).sent).toEqual([{ adOperation: { update: { resourceName: `${C}/ads/701`, responsiveSearchAd: { headlines: [{ text: 'Moto Jackets' }, { text: 'Free Returns' }, { text: 'Shop A' }] } }, updateMask: 'responsive_search_ad.headlines' } }])
     // Edited again since: undo would overwrite that later change.
     h.live.ads = [ad('51', '701')]
     expect(await tool('edit-google-rsa').undo!.current(run.change!)).not.toEqual(after)
@@ -178,6 +199,7 @@ describe('edit-google-assets', () => {
     const undo = tool('edit-google-assets').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
     expect(undo).toMatchObject({ tool: 'edit-google-assets', args: { assets: [{ assetId: '9', calloutText: 'Free returns' }] } })
     expect(tool('edit-google-assets').input.safeParse(undo.args).success).toBe(true)
+    expect((await undoDraft(undo)).sent).toEqual([{ assetOperation: { update: { resourceName: `${C}/assets/9`, calloutAsset: { calloutText: 'Free returns' } }, updateMask: 'callout_asset.callout_text' } }])
   })
 
   it('replaced in one campaign: the new asset\'s id from Google; undo links the old one again and unlinks the new one (set-google-assets)', async () => {
@@ -188,7 +210,10 @@ describe('edit-google-assets', () => {
     expect(await tool('edit-google-assets').undo!.current(run.change!)).toEqual(run.change!.after)
     const undo = tool('edit-google-assets').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
     expect(undo).toMatchObject({ tool: 'set-google-assets', args: { campaignId: '21', linkAssets: [{ assetId: '9', fieldType: 'CALLOUT', status: 'ENABLED' }], unlinkAssets: [{ assetId: '321', fieldType: 'CALLOUT' }] } })
-    expect(GOOGLE_ADS_ADS_ASSETS_TOOLS.find((t) => t.name === 'set-google-assets')!.input.safeParse(undo.args).success).toBe(true)
+    expect((await undoDraft(undo)).sent).toEqual([
+      { campaignAssetOperation: { create: { campaign: `${C}/campaigns/21`, asset: `${C}/assets/9`, fieldType: 'CALLOUT' } } },
+      { campaignAssetOperation: { remove: `${C}/campaignAssets/21~321~CALLOUT` } },
+    ])
   })
 })
 
@@ -214,6 +239,10 @@ describe('set-google-urls', () => {
     const undo = tool('set-google-urls').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
     expect(undo.args.items).toEqual([{ level: 'campaign', id: '21', trackingTemplate: '{lpurl}?old=1', finalUrlSuffix: null }, { level: 'keyword', id: '51~601', finalUrl: 'https://shop.example/k' }])
     expect(tool('set-google-urls').input.safeParse(undo.args).success).toBe(true)
+    expect((await undoDraft(undo)).sent).toEqual([
+      { campaignOperation: { update: { resourceName: `${C}/campaigns/21`, trackingUrlTemplate: '{lpurl}?old=1' }, updateMask: 'tracking_url_template,final_url_suffix' } },
+      { adGroupCriterionOperation: { update: { resourceName: `${C}/adGroupCriteria/51~601`, finalUrls: ['https://shop.example/k'] }, updateMask: 'final_urls' } },
+    ])
   })
 })
 
@@ -228,11 +257,40 @@ describe('replace-google-keywords', () => {
     // Paused, in a paused ad group: it cannot serve; a wider match type is still said.
     expect(preview.spendsMoneyBecause).toEqual(['1 replacement has a wider match type, so it matches more searches: [moto jacket] → "moto jacket".'])
     expect(run.data).toEqual(expect.objectContaining({ replaced: [{ from: '51~601', to: '51~602', text: 'moto jacket', matchType: 'PHRASE', adGroupId: '51', status: 'PAUSED' }] }))
+    expect(run.change?.after).toMatchObject({ replaced: [{ status: 'PAUSED', fromStatus: 'PAUSED' }] })
     h.live.keywords = [keyword('51~602', 'moto jacket', 'PHRASE', { finalUrls: ['https://shop.example/k'] })]
     expect(await tool('replace-google-keywords').undo!.current(run.change!)).toEqual(run.change!.after)
     const undo = tool('replace-google-keywords').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
-    expect(undo).toMatchObject({ tool: 'replace-google-keywords', args: { campaignId: '21', keywords: [{ keywordId: '51~602', matchType: 'EXACT' }], confirmRemove: true } })
-    expect(tool('replace-google-keywords').input.safeParse(undo.args).success).toBe(true)
+    expect(undo).toMatchObject({ tool: 'replace-google-keywords', args: { campaignId: '21', keywords: [{ keywordId: '51~602', matchType: 'EXACT', status: 'PAUSED' }], confirmRemove: true } })
+    expect(undo.args.enable).toBeUndefined()
+    expect((await undoDraft(undo)).sent).toEqual([
+      { adGroupCriterionOperation: { remove: `${C}/adGroupCriteria/51~602` } },
+      { adGroupCriterionOperation: { create: { adGroup: `${C}/adGroups/51`, status: 'PAUSED', keyword: { text: 'moto jacket', matchType: 'EXACT' }, cpcBidMicros: '300000', finalUrls: ['https://shop.example/k'] } } },
+    ])
+  })
+
+  it('an enabled keyword in an enabled ad group of the enabled campaign: PAUSED without enable; its undo gives it back ENABLED (enable, SPENDS MONEY said)', async () => {
+    h.live.adGroups = [{ adGroupId: '51', name: 'Group 51', status: 'ENABLED', type: 'SEARCH_STANDARD', cpcBidCents: 40 }]
+    h.live.keywords = [keyword('51~601', 'moto jacket', 'EXACT', { status: 'ENABLED', adGroupStatus: 'ENABLED' })]
+    const ask = parsed('replace-google-keywords', { campaignId: '21', keywords: [{ keywordId: '51~601', text: 'moto jackets' }], confirmRemove: true })
+    const { preview, run } = await previewAndRun('replace-google-keywords', ask, [{}, { adGroupCriterionResult: { resourceName: `${C}/adGroupCriteria/51~603` } }])
+    expect(preview.warnings).toEqual(expect.arrayContaining([expect.stringContaining('the old keyword\'s traffic stops until a person enables the new one')]))
+    h.live.keywords = [keyword('51~603', 'moto jackets', 'EXACT', { status: 'PAUSED', adGroupStatus: 'ENABLED' })]
+    const undo = tool('replace-google-keywords').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
+    expect(undo.args).toMatchObject({ keywords: [{ keywordId: '51~603', text: 'moto jacket', status: 'ENABLED' }], enable: true })
+    const back = await undoDraft(undo)
+    expect((back.sent[1] as any).adGroupCriterionOperation.create.status).toBe('ENABLED')
+    expect(back.preview.spendsMoney).toBe(true)
+  })
+
+  it('in a campaign set to broad match the change needed allowBroad, and so does its undo', async () => {
+    h.live.matchType = 'BROAD'
+    const ask = parsed('replace-google-keywords', { campaignId: '21', keywords: [{ keywordId: '51~601', text: 'moto jackets' }], allowBroad: true, confirmRemove: true })
+    const { run } = await previewAndRun('replace-google-keywords', ask, [{}, { adGroupCriterionResult: { resourceName: `${C}/adGroupCriteria/51~603` } }])
+    h.live.keywords = [keyword('51~603', 'moto jackets', 'EXACT', { finalUrls: ['https://shop.example/k'] })]
+    const undo = tool('replace-google-keywords').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
+    expect(undo.args.allowBroad).toBe(true)
+    await undoDraft(undo)
   })
 })
 
@@ -246,7 +304,10 @@ describe('move-google-ads', () => {
     h.live.ads = [ad('52', '901')]
     expect(await tool('move-google-ads').undo!.current(run.change!)).toEqual(run.change!.after)
     const undo = tool('move-google-ads').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
-    expect(undo).toMatchObject({ tool: 'move-google-ads', args: { campaignId: '21', adGroupId: '52', toAdGroupId: '51', adIds: ['901'], confirmRemove: true } })
+    expect(undo).toMatchObject({ tool: 'move-google-ads', args: { campaignId: '21', adGroupId: '52', toAdGroupId: '51', adIds: ['901'], statusOf: [{ adId: '901', status: 'PAUSED' }], confirmRemove: true } })
     expect(tool('move-google-ads').input.safeParse(undo.args).success).toBe(true)
+    const back = await undoDraft(undo)
+    expect(back.sent[1]).toEqual({ adGroupAdOperation: { remove: `${C}/adGroupAds/52~901` } })
+    expect((back.sent[0] as any).adGroupAdOperation.create).toMatchObject({ adGroup: `${C}/adGroups/51`, status: 'PAUSED' })
   })
 })

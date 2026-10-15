@@ -104,7 +104,12 @@ const adGroupUndo: ToolUndo = {
       }))
       .filter((g) => 'name' in g || 'defaultBidCents' in g || 'adRotation' in g)
     const noBid = (before.adGroups ?? []).filter((g) => g.defaultBidCents === null).length
+    // A rotation Google left unset before (null, UNSPECIFIED) cannot be sent back: said, never skipped in silence.
+    const noRotation = (before.adGroups ?? []).filter((g) => 'adRotation' in g && !(AD_ROTATIONS as readonly string[]).includes(g.adRotation ?? '')).length
     const made = `${created.length === 1 ? 'ad group' : `${created.length} ad groups`} (${created.slice(0, 3).map((c) => `"${c.name}"`).join(', ')}${created.length > 3 ? ' …' : ''})`
+    if (!back.length && noRotation) {
+      return { refusal: `The ${noRotation === 1 ? 'ad group' : `${noRotation} ad groups`} this change set had no ad rotation of ${noRotation === 1 ? 'its' : 'their'} own before (Google's default): there is no value to put back. Set one with set-google-ad-groups (adRotation OPTIMIZE or ROTATE_FOREVER).` }
+    }
     if (!back.length) {
       return {
         refusal: created.length
@@ -118,7 +123,7 @@ const adGroupUndo: ToolUndo = {
         ...onAccount(before),
         campaignId: before.campaignId,
         change: back,
-        why: `undo of an earlier ad group change: names, default max CPCs and ad rotation back${created.length ? `; the ${made} it made stay${created.length === 1 ? 's' : ''} (pause or remove ${created.length === 1 ? 'it' : 'them'})` : ''}${noBid ? `; ${noBid} had no default max CPC before and keep the one it set` : ''}`.slice(0, 300),
+        why: `undo of an earlier ad group change: names, default max CPCs and ad rotation back${noRotation ? `; ${noRotation} had no ad rotation set before (Google's default) and keep the one it set` : ''}${noBid ? `; ${noBid} had no default max CPC before and keep the one it set` : ''}${created.length ? `; the ${made} it made stay${created.length === 1 ? 's' : ''} (pause or remove ${created.length === 1 ? 'it' : 'them'})` : ''}`.slice(0, 300),
       },
     }
   },

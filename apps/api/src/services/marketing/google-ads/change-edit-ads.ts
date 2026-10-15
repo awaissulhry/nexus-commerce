@@ -2,11 +2,15 @@
  * Google Ads changes (2026-10-15, programme 2 group G3) — responsive search ads changed where they are:
  *
  *   rsaEditDraft   edit ads IN PLACE (headlines, descriptions, pins, path1 / path2, final URL, final mobile URL): the ad
- *                  keeps its id, so Google's reports keep its numbers under it. Google reviews the changed ad again.
+ *                  keeps its id, so Google's reports keep its numbers under it. Google reviews the changed ad again — so
+ *                  an ENABLED ad of an enabled ad group and campaign that Google has not approved now (disapproved,
+ *                  limited) can start serving once the new text is approved: SPENDS MONEY (2026-10-15 review).
  *   adMoveDraft    move ads from one ad group to another of the same Search campaign: Google cannot move an ad, so it is
  *                  the same ad made in the other ad group and the old one removed, in ONE request. The numbers stay with
  *                  the removed ad (Google keeps it as history only); the new ad starts from nothing. A removal: only when
- *                  the person asked (the tool's confirmRemove).
+ *                  the person asked (the tool's confirmRemove). Owner's rule for anything new: an enabled ad moved into an
+ *                  ENABLED ad group of the ENABLED campaign is made PAUSED unless the request says `enable: true` (then
+ *                  SPENDS MONEY); elsewhere it keeps its status.
  *
  * Checked 2026-10-15 in Google's v25 reference (curl of developers.google.com/google-ads/api/reference/rpc/v25/…):
  *   MutateOperation     has `ad_operation` (AdOperation, "An ad mutate operation"); its result is `ad_result`
@@ -190,6 +194,10 @@ export function rsaEditDraft(customer: string, request: RsaEditRequest, live: { 
   if (!operations.length) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
 
   const n = after.ads.length
+  // An edit sends the ad to Google's review again: one Google does not approve now, enabled where it can serve, may start
+  // serving once the new text is approved.
+  const spendsMoney = live.ads.filter((a) => touched.has(a.id) && a.status === 'ENABLED' && a.adGroupStatus === 'ENABLED' && a.campaignStatus === 'ENABLED' && a.approval !== 'APPROVED')
+    .map((a) => `Ad ${a.id} ("${clip(a.headlines[0]?.text ?? '', 30)}") is ENABLED in the enabled ad group "${a.adGroupName}" of the enabled campaign "${a.campaignName}", and Google has not approved it now (${a.approval ?? 'no verdict'}): the edit sends it to review again, and once approved it shows (and spends).`)
   warnings.unshift(`Each ad keeps its id, so its numbers stay with it. Google reviews ${n === 1 ? 'the changed ad' : `the ${n} changed ads`} again: google-ads-live view ads shows the review.`)
   const urlsChanged = after.ads.filter((a) => a.finalUrl !== undefined).length
   if (urlsChanged) warnings.push(`${plural(urlsChanged, 'ad')} ${urlsChanged === 1 ? 'leads' : 'lead'} to another page from now (final URL).`)
@@ -200,11 +208,11 @@ export function rsaEditDraft(customer: string, request: RsaEditRequest, live: { 
     changes,
     totals: { operations: operations.length, ads: n, ...(more ? { linesNotShown: more } : {}) },
     warnings,
-    spendsMoney: [],
+    spendsMoney,
     skipped,
     operations,
-    // Each edited ad as it is now (the from side, and the record undo reads).
-    stands: live.ads.filter((a) => touched.has(a.id)).map((a) => ({ ...rsaNow(a), status: a.status, type: a.type })),
+    // Each edited ad as it is now (the from side, and the record undo reads), with what the SPENDS MONEY words stand on.
+    stands: live.ads.filter((a) => touched.has(a.id)).map((a) => ({ ...rsaNow(a), status: a.status, type: a.type, approval: a.approval, adGroupStatus: a.adGroupStatus, campaignStatus: a.campaignStatus })),
     before,
     after,
   }
@@ -219,6 +227,10 @@ export interface AdMoveRequest {
   toAdGroupId: string
   /** The ads (their ad ids in adGroupId). */
   adIds: string[]
+  /** An enabled ad moved into an enabled ad group of the enabled campaign stays ENABLED only with this (SPENDS MONEY). */
+  enable?: boolean
+  /** Only the undo of an earlier move: the status each ad had before it (by its ad id in adGroupId). */
+  statusOf?: Record<string, 'ENABLED' | 'PAUSED'>
 }
 
 export interface AdMoveLiveState {
@@ -232,8 +244,8 @@ export interface AdMoveRecord {
   campaignId: string
   fromAdGroupId: string
   toAdGroupId: string
-  /** Each moved ad: its id in the ad group it left, its new id (`op:<index>` until Google gave it), its status. */
-  moved: Array<{ fromAdId: string; toAdId: string; status: string }>
+  /** Each moved ad: its id in the ad group it left, its new id (`op:<index>` until Google gave it), its new status, the status it had. */
+  moved: Array<{ fromAdId: string; toAdId: string; status: string; fromStatus: string }>
 }
 export interface AdMoveBefore { campaignId: string; fromAdGroupId: string; toAdGroupId: string; ads: Array<{ adId: string; status: string | null }> }
 
@@ -277,8 +289,16 @@ export function adMoveDraft(customer: string, request: AdMoveRequest, live: AdMo
     if (ad.status !== 'ENABLED' && ad.status !== 'PAUSED') return { refusal: `Ad ${adId} is ${String(ad.status ?? 'in an unknown state').toLowerCase()}: only an enabled or paused ad is moved.` }
     moving.push(ad)
   }
+  // The status each new ad gets: the one it had (or, for an undo, the one the record says), but PAUSED where it would
+  // serve at once (enabled ad group of the enabled campaign) unless the request says enable (Owner's rule for new things).
+  const serves = campaign.status === 'ENABLED' && to.adGroup.status === 'ENABLED'
+  const statusOf = new Map(moving.map((a) => {
+    const wanted = request.statusOf?.[a.adId] ?? (a.status as 'ENABLED' | 'PAUSED')
+    return [a.adId, wanted === 'ENABLED' && serves && !request.enable ? 'PAUSED' : wanted] as const
+  }))
+  const pausedByRule = moving.filter((a) => (request.statusOf?.[a.adId] ?? a.status) === 'ENABLED' && statusOf.get(a.adId) === 'PAUSED')
   const enabledThere = live.toAds.filter((a) => a.status === 'ENABLED' && a.type === 'RESPONSIVE_SEARCH_AD').length
-  const enabledMoving = moving.filter((a) => a.status === 'ENABLED').length
+  const enabledMoving = moving.filter((a) => statusOf.get(a.adId) === 'ENABLED').length
   if (enabledMoving && enabledThere + enabledMoving > RSA_LIMITS.enabledPerAdGroup) {
     return { refusal: `Google allows ${RSA_LIMITS.enabledPerAdGroup} enabled responsive search ads per ad group: "${to.adGroup.name}" has ${enabledThere} and this would move ${enabledMoving} enabled ones in. Pause some first (set-google-status), or move fewer.` }
   }
@@ -288,19 +308,22 @@ export function adMoveDraft(customer: string, request: AdMoveRequest, live: AdMo
   const record: AdMoveRecord = { campaignId: campaign.campaignId, fromAdGroupId: from.adGroup.adGroupId, toAdGroupId: to.adGroup.adGroupId, moved: [] }
   // The new ads first (a failure leaves the old ones: all or nothing anyway), the removals after.
   for (const ad of moving) {
-    operations.push({ adGroupAdOperation: { create: { adGroup: `${customer}/adGroups/${to.adGroup.adGroupId}`, status: ad.status, ad: adCopy(ad) } } })
-    record.moved.push({ fromAdId: ad.adId, toAdId: `${OP}${operations.length - 1}`, status: ad.status! })
-    lines.push([`ad ${ad.adId} ("${clip(ad.headlines[0]?.text ?? '', 30)}")`, `in "${from.adGroup.name}", ${ad.status}`, `in "${to.adGroup.name}", ${ad.status} (a new ad)`])
+    const status = statusOf.get(ad.adId)!
+    operations.push({ adGroupAdOperation: { create: { adGroup: `${customer}/adGroups/${to.adGroup.adGroupId}`, status, ad: adCopy(ad) } } })
+    record.moved.push({ fromAdId: ad.adId, toAdId: `${OP}${operations.length - 1}`, status, fromStatus: ad.status! })
+    lines.push([`ad ${ad.adId} ("${clip(ad.headlines[0]?.text ?? '', 30)}")`, `in "${from.adGroup.name}", ${ad.status}`, `in "${to.adGroup.name}", ${status} (a new ad)`])
   }
   for (const ad of moving) operations.push({ adGroupAdOperation: { remove: `${customer}/adGroupAds/${from.adGroup.adGroupId}~${ad.adId}` } })
 
   const warnings = [
-    `Google cannot move an ad: each is made again in "${to.adGroup.name}" (a new ad id) and REMOVED from "${from.adGroup.name}" in this one request. The numbers (clicks, cost, conversions) stay with the removed ${moving.length === 1 ? 'ad' : 'ads'}, which Google keeps only as history; the new ${moving.length === 1 ? 'one starts' : 'ones start'} from nothing and Google reviews ${moving.length === 1 ? 'it' : 'them'}.`,
+    `Google cannot move an ad: each is made again in "${to.adGroup.name}" (a new ad id) and REMOVED from "${from.adGroup.name}" in this one request. The numbers (clicks, cost, conversions) and labels stay with the removed ${moving.length === 1 ? 'ad' : 'ads'}, which Google keeps only as history (labels are not carried over); the new ${moving.length === 1 ? 'one starts' : 'ones start'} from nothing and Google reviews ${moving.length === 1 ? 'it' : 'them'}.`,
   ]
+  if (pausedByRule.length) {
+    warnings.push(`${plural(pausedByRule.length, 'enabled ad')} ${pausedByRule.length === 1 ? 'is' : 'are'} made PAUSED in "${to.adGroup.name}" (the campaign and that ad group are enabled): ${pausedByRule.length === 1 ? 'its' : 'their'} traffic stops until a person enables ${pausedByRule.length === 1 ? 'it' : 'them'} (set-google-status), or ask again with enable: true (SPENDS MONEY).`)
+  }
   const leftEnabled = live.fromAds.filter((a) => a.status === 'ENABLED' && !moving.some((m) => m.adId === a.adId)).length
   if (leftEnabled === 0) warnings.push(`"${from.adGroup.name}" has no enabled ad left: it shows no ads until one is enabled or made.`)
   const spendsMoney: string[] = []
-  const serves = campaign.status === 'ENABLED' && to.adGroup.status === 'ENABLED'
   if (enabledMoving && serves) {
     spendsMoney.push(`Moves ${plural(enabledMoving, 'enabled ad')} into the enabled ad group "${to.adGroup.name}" of the enabled campaign "${campaign.name}": ${enabledMoving === 1 ? 'it shows' : 'they show'} (and spend${enabledMoving === 1 ? 's' : ''}) there as soon as Google approves ${enabledMoving === 1 ? 'it' : 'them'}.`)
   }

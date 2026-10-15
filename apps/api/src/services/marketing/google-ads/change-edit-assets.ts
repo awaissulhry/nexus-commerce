@@ -7,7 +7,8 @@
  *                       (campaigns, ad groups, the account) — the preview names each place.
  *   replace in ONE campaign (onlyInCampaignId)  a new asset with the edited text is made and linked to that campaign with
  *                       the old link's status, and the old one is unlinked there; the old asset keeps its numbers and stays
- *                       wherever else it is linked. This is also the way for an asset Google made (automatically created):
+ *                       wherever else it is linked. The new asset copies the old one's final mobile URLs and its tracking
+ *                       (tracking_url_template, final_url_suffix, url_custom_parameters). This is also the way for an asset Google made (automatically created):
  *                       Google does not let it be changed.
  *
  * Checked 2026-10-15 in Google's v25 reference and guides (curl of developers.google.com/google-ads/api/…):
@@ -200,7 +201,7 @@ export function assetEditDraft(customer: string, request: AssetEditRequest, live
   const lines: Array<[string, unknown, unknown]> = []
   const warnings: string[] = []
   const stands = {
-    assets: work.map((p) => ({ ...p.now, source: p.asset.source, finalMobileUrls: p.asset.finalMobileUrls })),
+    assets: work.map((p) => ({ ...p.now, source: p.asset.source, finalMobileUrls: p.asset.finalMobileUrls, urls: p.asset.urls })),
     links: live.links.filter((l) => work.some((p) => p.asset.assetId === l.assetId)).map((l) => `${l.assetId}~${l.level}~${l.campaignId ?? ''}~${l.adGroupId ?? ''}~${l.fieldType}~${l.status}`),
   }
 
@@ -216,11 +217,17 @@ export function assetEditDraft(customer: string, request: AssetEditRequest, live
     for (const p of work) {
       const resourceName = `${customer}/assets/${temp--}`
       const n = p.next
+      // The old asset's tracking goes with the new one (sales tracking may rest on it).
+      const tracking = {
+        ...(p.asset.urls.trackingTemplate ? { trackingUrlTemplate: p.asset.urls.trackingTemplate } : {}),
+        ...(p.asset.urls.finalUrlSuffix ? { finalUrlSuffix: p.asset.urls.finalUrlSuffix } : {}),
+        ...(p.asset.urls.customParameters.length ? { urlCustomParameters: p.asset.urls.customParameters } : {}),
+      }
       const body: Record<string, unknown> = n.type === 'SITELINK'
         ? { finalUrls: [n.finalUrl], ...(p.asset.finalMobileUrls.length ? { finalMobileUrls: p.asset.finalMobileUrls } : {}), sitelinkAsset: { linkText: n.linkText, ...(n.description1 && n.description2 ? { description1: n.description1, description2: n.description2 } : {}) } }
         : n.type === 'CALLOUT' ? { calloutAsset: { calloutText: n.calloutText } }
           : { structuredSnippetAsset: { header: n.header, values: n.values } }
-      operations.push({ assetOperation: { create: { resourceName, ...body } } })
+      operations.push({ assetOperation: { create: { resourceName, ...tracking, ...body } } })
       const status: AssetLinkStatus = p.link!.status === 'PAUSED' ? 'PAUSED' : 'ENABLED'
       linkOps.push({ campaignAssetOperation: { create: { campaign: campaignRes, asset: resourceName, fieldType: n.type, ...(status === 'PAUSED' ? { status } : {}) } } })
       unlinkOps.push({ campaignAssetOperation: { remove: `${customer}/campaignAssets/${replaceIn}~${p.asset.assetId}~${n.type}` } })
@@ -230,7 +237,7 @@ export function assetEditDraft(customer: string, request: AssetEditRequest, live
       if (p.asset.source === 'AUTOMATICALLY_CREATED') warnings.push(`Asset ${p.asset.assetId} was made by Google: it cannot be changed, so it is replaced in "${campaignName}".`)
     }
     operations.push(...linkOps, ...unlinkOps)
-    warnings.unshift(`In "${campaignName}" each asset is replaced by a new one with the edited text (linked with the old link's status) and the old one is unlinked there, in this one request. The old asset keeps its numbers and stays in the account and wherever else it is linked; the new one starts from nothing and Google reviews it. A start or end date or a schedule the old asset has is not copied.`)
+    warnings.unshift(`In "${campaignName}" each asset is replaced by a new one with the edited text (linked with the old link's status; its URLs and tracking copied) and the old one is unlinked there, in this one request. The old asset keeps its numbers and stays in the account and wherever else it is linked; the new one starts from nothing and Google reviews it. A start or end date or a schedule the old asset has is not copied.`)
     warnings.push(...tagNotes)
     const { changes, more } = changeLines(lines)
     return {
@@ -274,7 +281,8 @@ export function assetEditDraft(customer: string, request: AssetEditRequest, live
     after.assets.push(is)
     const places = live.links.filter((l) => l.assetId === p.asset.assetId)
     if (!places.length) warnings.push(`Asset ${p.asset.assetId} ("${assetLabel(p.now)}") is linked nowhere: the edit shows nowhere until it is linked.`)
-    else if (places.length > 1 || places[0].level !== 'campaign') {
+    else if (places.length === 1) warnings.push(`Asset ${p.asset.assetId} ("${assetLabel(p.now)}") is linked in one place — ${placeOf(places[0])}: the edit changes it there.`)
+    else {
       warnings.push(`Asset ${p.asset.assetId} ("${assetLabel(p.now)}") is linked in ${plural(places.length, 'place')} — ${places.slice(0, 8).map(placeOf).join(', ')}${places.length > 8 ? ' …' : ''}: the edit changes it in all of them. To change it in one campaign only, ask with onlyInCampaignId.`)
     }
   }

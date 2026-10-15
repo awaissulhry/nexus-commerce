@@ -6,6 +6,10 @@
  * cost, conversions, Quality Score history) and labels stay with the removed keyword, which Google keeps only as history.
  * A removal: only when the person asked for it (the tool's confirmRemove).
  *
+ * Criterion ids (docs/concepts/api-structure, read 2026-10-15): "(AdGroupId, CriterionId) pair is globally unique";
+ * Google does not say whether a keyword made again with a text and match type the ad group held before (an undo) gets
+ * that id — and its numbers — back. The preview says "may".
+ *
  * Checked 2026-10-15 in Google's v25 reference (curl of developers.google.com/google-ads/api/reference/rpc/v25/…):
  *   AdGroupCriterion    `ad_group` immutable, `keyword` (KeywordInfo) immutable; `status`, `cpc_bid_micros`, `final_urls`,
  *                       `final_mobile_urls`, `tracking_url_template`, `final_url_suffix`, `url_custom_parameters` are set
@@ -14,9 +18,10 @@
  * Operations: the removals first, then the new keywords — so a keyword can take the place of one this same request removes
  * (Google applies a request's operations in order, all or nothing).
  *
- * Money (Owner's rules): a new keyword that can serve at once (ENABLED, in an enabled ad group of the enabled campaign)
- * is SPENDS MONEY, as for any keyword added; so is a wider match type (it matches more searches), and a keyword that uses
- * its ad group's default max CPC moved to an ad group whose default is higher.
+ * Money (Owner's rules): a new keyword in an ENABLED ad group of the ENABLED campaign is made PAUSED unless the request
+ * says `enable: true` — then it keeps ENABLED and can serve at once: SPENDS MONEY, as for any keyword added. Elsewhere it
+ * keeps the old one's status (nothing serves there yet). A wider match type (it matches more searches) and a keyword that
+ * uses its ad group's default max CPC moved to an ad group whose default is higher are SPENDS MONEY too.
  */
 import { changeLines, keywordTextProblem, money, plural, type GoogleChangeDraft } from './change-draft.js'
 import { biddingNote, campaignPausedNote, changeableCampaign, raiseSentence } from './change-ad-groups.js'
@@ -27,9 +32,12 @@ import type { GoogleMutateOperation, GoogleMutateResponse } from './write-client
 
 export interface KeywordReplaceRequest {
   campaignId: string
-  keywords: Array<{ keywordId: string; text?: string; matchType?: MatchType; toAdGroupId?: string }>
+  /** `status`: only the undo of an earlier replacement — the status the keyword had before it. */
+  keywords: Array<{ keywordId: string; text?: string; matchType?: MatchType; toAdGroupId?: string; status?: 'ENABLED' | 'PAUSED' }>
   /** A BROAD match keyword (or a campaign set to broad match for all its keywords) only with this. */
   allowBroad?: boolean
+  /** In an enabled ad group of the enabled campaign, an enabled keyword's replacement stays ENABLED only with this (SPENDS MONEY). */
+  enable?: boolean
 }
 
 export interface KeywordReplaceLiveState {
@@ -46,7 +54,10 @@ export interface KeywordRef { keywordId: string; adGroupId: string; text: string
 /** What a replacement wrote: the keyword removed, the one made (`new:<operation index>` until Google gave its id), what it kept. */
 export interface KeywordReplaceRecord {
   campaignId: string
-  replaced: Array<{ from: KeywordRef; to: KeywordRef; status: string; bidCents: number | null }>
+  /** status: the new keyword's; fromStatus: the old one's (undo gives it back). */
+  replaced: Array<{ from: KeywordRef; to: KeywordRef; status: string; fromStatus: string; bidCents: number | null }>
+  /** The change needed allowBroad (a BROAD keyword, or a campaign set to broad match): its undo needs it too. */
+  allowBroad?: true
 }
 export interface KeywordReplaceBefore { campaignId: string; removed: Array<KeywordRef & { status: string | null; bidCents: number | null }> }
 
@@ -82,7 +93,7 @@ export function keywordReplaceDraft(customer: string, currency: string, request:
   const groupName = (id: string) => `"${groupById.get(id)?.name ?? id}"`
 
   // 1. what each becomes; every problem is refused before anything is sent
-  const plans: Array<{ old: LiveKeywordUrls; to: KeywordRef }> = []
+  const plans: Array<{ old: LiveKeywordUrls; to: KeywordRef; wanted: 'ENABLED' | 'PAUSED' }> = []
   const seen = new Set<string>()
   for (const a of asked) {
     if (seen.has(a.keywordId)) return { refusal: `Keyword ${a.keywordId} is named twice.` }
@@ -102,7 +113,7 @@ export function keywordReplaceDraft(customer: string, currency: string, request:
     if (adGroupId === old.adGroupId && keywordKey(text, matchType) === keywordKey(old.text, old.matchType)) {
       return { refusal: `Keyword ${kw(old.text, old.matchType)} (${a.keywordId}) would stay the same keyword in the same ad group (Google compares keywords without case): nothing to replace.` }
     }
-    plans.push({ old, to: { keywordId: '', adGroupId, text, matchType } })
+    plans.push({ old, to: { keywordId: '', adGroupId, text, matchType }, wanted: a.status ?? (old.status as 'ENABLED' | 'PAUSED') })
   }
   if (live.keywordMatchType === 'BROAD' && !request.allowBroad) {
     return { refusal: `Campaign "${campaign.name}" is set to broad match for all its keywords (its keyword match type is BROAD): every keyword added there acts as broad match. Replace keywords in it only with allowBroad: true.` }
@@ -122,31 +133,35 @@ export function keywordReplaceDraft(customer: string, currency: string, request:
   // 2. the operations: removals first, then the new keywords
   const operations: GoogleMutateOperation[] = []
   const lines: Array<[string, unknown, unknown]> = []
-  const record: KeywordReplaceRecord = { campaignId: campaign.campaignId, replaced: [] }
+  const record: KeywordReplaceRecord = { campaignId: campaign.campaignId, replaced: [], ...(request.allowBroad ? { allowBroad: true as const } : {}) }
   const before: KeywordReplaceBefore = { campaignId: campaign.campaignId, removed: [] }
   for (const p of plans) operations.push({ adGroupCriterionOperation: { remove: `${customer}/adGroupCriteria/${p.old.id}` } })
   const bidOf = (k: LiveKeywordUrls, adGroupId: string) => k.cpcBidCents ?? groupById.get(adGroupId)?.cpcBidCents ?? null
   const serving: string[] = []
+  const pausedByRule: string[] = []
   const wider: string[] = []
   const raises: Array<{ label: string; from: string; to: string }> = []
   for (const p of plans) {
     const { old, to } = p
-    const status = old.status as 'ENABLED' | 'PAUSED'
+    // Where it would serve at once (an enabled ad group of the enabled campaign), ENABLED only when the request says enable.
+    const servesThere = campaign.status === 'ENABLED' && groupById.get(to.adGroupId)?.status === 'ENABLED'
+    const status = p.wanted === 'ENABLED' && servesThere && !request.enable ? 'PAUSED' : p.wanted
     to.keywordId = `${NEW}${operations.length}`
     operations.push({ adGroupCriterionOperation: { create: { adGroup: `${customer}/adGroups/${to.adGroupId}`, status, keyword: { text: to.text, matchType: to.matchType }, ...keptFields(old) } } })
     const from: KeywordRef = { keywordId: old.id, adGroupId: old.adGroupId, text: old.text, matchType: old.matchType }
-    record.replaced.push({ from, to, status, bidCents: old.cpcBidCents })
+    record.replaced.push({ from, to, status, fromStatus: old.status ?? status, bidCents: old.cpcBidCents })
     before.removed.push({ ...from, status: old.status, bidCents: old.cpcBidCents })
     const moved = to.adGroupId !== old.adGroupId
     const bidNow = bidOf(old, old.adGroupId)
     const bidThen = bidOf(old, to.adGroupId)
     lines.push([
       `${kw(old.text, old.matchType)} in ${groupName(old.adGroupId)}`,
-      `${status}, max CPC ${money(bidNow, currency)}${old.cpcBidCents === null ? ' (its ad group\'s default)' : ''}`,
+      `${old.status}, max CPC ${money(bidNow, currency)}${old.cpcBidCents === null ? ' (its ad group\'s default)' : ''}`,
       `REMOVED; new ${kw(to.text, to.matchType)}${moved ? ` in ${groupName(to.adGroupId)}` : ''}, ${status}, max CPC ${money(bidThen, currency)}${old.cpcBidCents === null ? ' (its ad group\'s default)' : ''}`,
     ])
     const label = `${kw(old.text, old.matchType)} → ${kw(to.text, to.matchType)}${moved ? ` (${groupName(to.adGroupId)})` : ''}`
-    if (status === 'ENABLED' && campaign.status === 'ENABLED' && groupById.get(to.adGroupId)?.status === 'ENABLED') serving.push(label)
+    if (status === 'ENABLED' && servesThere) serving.push(label)
+    if (p.wanted === 'ENABLED' && status === 'PAUSED') pausedByRule.push(label)
     if ((REACH[to.matchType] ?? 2) > (REACH[old.matchType] ?? 2)) wider.push(label)
     if (bidThen !== null && (bidNow === null || bidThen > bidNow)) raises.push({ label, from: money(bidNow, currency), to: money(bidThen, currency) })
   }
@@ -157,8 +172,11 @@ export function keywordReplaceDraft(customer: string, currency: string, request:
   if (wider.length) spendsMoney.push(`${plural(wider.length, 'replacement')} ${wider.length === 1 ? 'has' : 'have'} a wider match type, so ${wider.length === 1 ? 'it matches' : 'they match'} more searches: ${wider.slice(0, 10).join('; ')}${wider.length > 10 ? ` (+${wider.length - 10} more)` : ''}${campaignPausedNote(campaign)}.`)
   if (raises.length) spendsMoney.push(raiseSentence('max CPC', plural(raises.length, 'keyword'), raises, ` (each uses the default max CPC of the ad group it moves to)${campaignPausedNote(campaign)}`))
   const warnings = [
-    `Google cannot change a keyword's text or match type, nor move it: each is added anew (its max CPC of its own, status, final URLs and tracking kept) and the old one REMOVED, in this one request. The numbers (clicks, cost, conversions, Quality Score history) and labels stay with the removed ${n === 1 ? 'keyword' : 'keywords'}, which Google keeps only as history; the new ${n === 1 ? 'one starts' : 'ones start'} from nothing. Undo replaces back the same way (new ids again).`,
+    `Google cannot change a keyword's text or match type, nor move it: each is added anew (its max CPC of its own, final URLs and tracking kept) and the old one REMOVED, in this one request. The numbers (clicks, cost, conversions, Quality Score history) and labels stay with the removed ${n === 1 ? 'keyword' : 'keywords'}, which Google keeps only as history; the new ${n === 1 ? 'one starts' : 'ones start'} its own (a text and match type the ad group held before may get that keyword's id and numbers back — Google does not say). Undo replaces back the same way.`,
   ]
+  if (pausedByRule.length) {
+    warnings.push(`${plural(pausedByRule.length, 'replacement')} of an enabled keyword ${pausedByRule.length === 1 ? 'is' : 'are'} made PAUSED (the campaign and the ad group are enabled): the old keyword's traffic stops until a person enables the new one (set-google-status), or ask again with enable: true (SPENDS MONEY) — ${pausedByRule.slice(0, 10).join('; ')}${pausedByRule.length > 10 ? ` (+${pausedByRule.length - 10} more)` : ''}.`)
+  }
   if (live.keywordMatchType === 'BROAD') warnings.push(`Campaign "${campaign.name}" is set to broad match for all its keywords: every new keyword acts as broad match, whatever its own match type.`)
   const bidNote = biddingNote(campaign, 'the keywords\' max CPCs')
   if (bidNote) warnings.push(bidNote)

@@ -286,6 +286,15 @@ describe('set-google-ad-groups — ad rotation (programme 2 G3)', () => {
     expect(tool('set-google-ad-groups').input.safeParse(undo.args).success).toBe(true)
   })
 
+  it('an old rotation Google left unset is said, never skipped in silence: alone it is refused, with a name it is in the why', () => {
+    const only = { before: { campaignId: '22', adGroups: [{ adGroupId: '51', adRotation: null }], ...ACCOUNT }, after: { campaignId: '22', adGroups: [{ adGroupId: '51', adRotation: 'ROTATE_FOREVER' }], ...ACCOUNT } }
+    expect(tool('set-google-ad-groups').undo!.request(only)).toEqual({ refusal: 'The ad group this change set had no ad rotation of its own before (Google\'s default): there is no value to put back. Set one with set-google-ad-groups (adRotation OPTIMIZE or ROTATE_FOREVER).' })
+    const both = { before: { campaignId: '22', adGroups: [{ adGroupId: '51', name: 'Group A', adRotation: 'UNSPECIFIED' }], ...ACCOUNT }, after: { campaignId: '22', adGroups: [{ adGroupId: '51', name: 'Group Z', adRotation: 'OPTIMIZE' }], ...ACCOUNT } }
+    const undo = tool('set-google-ad-groups').undo!.request(both) as { tool: string; args: Record<string, unknown> }
+    expect(undo.args.change).toEqual([{ adGroupId: '51', name: 'Group A' }])
+    expect(undo.args.why).toContain('1 had no ad rotation set before (Google\'s default) and keep the one it set')
+  })
+
   it('under Smart Bidding the warning says Google always optimizes; the same rotation is skipped', async () => {
     h.live.campaigns = [{ ...SEARCH, bidding: 'MAXIMIZE_CONVERSIONS' }, SHOP]
     h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })

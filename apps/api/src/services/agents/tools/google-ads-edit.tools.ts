@@ -143,7 +143,9 @@ const editGoogleRsa: AgentTool = {
     + 'descriptions (each with its pin, or none), path1 / path2, the final URL and a final mobile URL. The ad keeps its id, '
     + 'so its numbers stay with it; Google reviews the changed ad again (google-ads-live view ads). Only the fields given '
     + `change. Every length, duplicate, pin or path problem is refused before the preview (same rules as create-google-rsa). `
-    + 'Other ad types are refused. Nothing here spends money. Undo puts the old texts and URLs back exactly.' + GOOGLE_CHANGE_RULES,
+    + 'Other ad types are refused. An ENABLED ad of an enabled ad group and campaign that Google has not approved now goes '
+    + 'back to review and can start serving once approved: marked SPENDS MONEY. Undo puts the old texts and URLs back '
+    + 'exactly.' + GOOGLE_CHANGE_RULES,
   undo: rsaEditUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildRsaEdit(args)),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildRsaEdit(args), (draft) => {
@@ -381,6 +383,7 @@ const replaceRequest = (args: Record<string, unknown>): KeywordReplaceRequest =>
   campaignId: String(args.campaignId ?? ''),
   keywords: (args.keywords as KeywordReplaceRequest['keywords']) ?? [],
   allowBroad: args.allowBroad === true,
+  enable: args.enable === true,
 })
 
 const buildReplace = (args: Record<string, unknown>): GoogleDraftBuilder => async (account) => {
@@ -417,6 +420,8 @@ const replaceUndo: ToolUndo = {
     const replaced = after.replaced ?? []
     if (!replaced.length) return { refusal: 'This change replaced no keyword: there is nothing to put back.' }
     if (replaced.some((r) => !PAIR.test(r.to.keywordId))) return { refusal: 'This change does not record the id Google gave every keyword it added.' }
+    // Each old keyword comes back with the status it had; an enabled one where it serves needs enable (SPENDS MONEY, said).
+    const statusOf = (r: KeywordReplaceRecord['replaced'][number]) => (r.fromStatus === 'PAUSED' ? 'PAUSED' : r.fromStatus === 'ENABLED' ? 'ENABLED' : r.status === 'PAUSED' ? 'PAUSED' : 'ENABLED')
     return {
       tool: 'replace-google-keywords',
       args: {
@@ -427,8 +432,11 @@ const replaceUndo: ToolUndo = {
           ...(r.from.text !== r.to.text ? { text: r.from.text } : {}),
           ...(r.from.matchType !== r.to.matchType ? { matchType: r.from.matchType } : {}),
           ...(r.from.adGroupId !== r.to.adGroupId ? { toAdGroupId: r.from.adGroupId } : {}),
+          status: statusOf(r),
         })),
-        ...(replaced.some((r) => r.from.matchType === 'BROAD') ? { allowBroad: true } : {}),
+        // A change that needed allowBroad (a BROAD keyword, a campaign set to broad match) needs it to go back too.
+        ...(after.allowBroad || replaced.some((r) => r.from.matchType === 'BROAD') ? { allowBroad: true } : {}),
+        ...(replaced.some((r) => statusOf(r) === 'ENABLED') ? { enable: true } : {}),
         // The person asked for this undo: replacing back removes the keywords the change added (their numbers stay with them).
         confirmRemove: true,
         why: 'undo of an earlier keyword replacement: the old texts, match types and ad groups back (as new keywords)',
@@ -453,18 +461,22 @@ const replaceGoogleKeywords: AgentTool = {
       text: z.string().trim().min(1).max(80).optional().describe('its new text (at most 80 characters, 10 words); left out = the same'),
       matchType: matchTypeArg.optional().describe('its new match type: EXACT, PHRASE or BROAD (BROAD only with allowBroad); left out = the same'),
       toAdGroupId: googleIdArg('another standard Search ad group of the same campaign').optional().describe('move it into this ad group (same campaign); left out = the same ad group'),
+      status: z.enum(['ENABLED', 'PAUSED']).optional().describe('only the undo of an earlier replacement: the status the keyword had before it (left out: the status of the keyword it replaces)'),
     })).min(1).max(MAX_REPLACE_KEYWORDS).describe(`keywords to replace or move (1 to ${MAX_REPLACE_KEYWORDS}); each changes text, match type, ad group or several`),
     allowBroad: z.boolean().optional().describe('true allows a BROAD match result (it matches many more searches)'),
+    enable: z.boolean().optional().describe('only in an enabled ad group of an ENABLED campaign: keep an enabled keyword\'s replacement ENABLED, so it serves at once (SPENDS MONEY); without it the replacement is made PAUSED there and the old keyword\'s traffic stops until a person enables it. Elsewhere the status is kept'),
     confirmRemove: z.literal(true).describe('true: the person asked for this — each old keyword is REMOVED (its numbers stay with it)'),
     why: googleWhyArg,
   }),
   description:
     'Change a keyword\'s text, match type or ad group (within ONE Search campaign) — which Google cannot change: each is '
-    + 'added anew with the old one\'s own max CPC, status, final URLs and tracking, and the old one is REMOVED, in one '
-    + 'request. Use it ONLY when the person asked for that replacement (confirmRemove true). The numbers (clicks, cost, '
-    + 'conversions, Quality Score history) and labels stay with the removed keyword; the new one starts from nothing. A '
-    + 'new keyword that can serve at once, a wider match type, and a higher ad group default max CPC are marked SPENDS '
-    + 'MONEY. Undo replaces back the same way (new keywords again).' + GOOGLE_CHANGE_RULES,
+    + 'added anew with the old one\'s own max CPC, final URLs and tracking, and the old one is REMOVED, in one request. Use '
+    + 'it ONLY when the person asked for that replacement (confirmRemove true). The numbers (clicks, cost, conversions, '
+    + 'Quality Score history) and labels stay with the removed keyword; the new one starts its own. Status: in an enabled '
+    + 'ad group of an ENABLED campaign the replacement of an enabled keyword is made PAUSED (its traffic stops until a '
+    + 'person enables it) unless enable is true (SPENDS MONEY); elsewhere the status is kept. A wider match type and a '
+    + 'higher ad group default max CPC are marked SPENDS MONEY too. Undo replaces back the same way, each with the status '
+    + 'it had.' + GOOGLE_CHANGE_RULES,
   undo: replaceUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildReplace(args)),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildReplace(args), (draft, responses) => {
@@ -487,7 +499,10 @@ const buildMove = (args: Record<string, unknown>): GoogleDraftBuilder => async (
   const to = from ? await liveAdGroupPlace(account.target, campaignId, toAdGroupId) : null
   const fromAds = from && to ? await liveAdGroupAds(account.target, adGroupId) : []
   const toAds = from && to ? await liveAdGroupAds(account.target, toAdGroupId) : []
-  return adMoveDraft(customerResource(account.target), { campaignId, adGroupId, toAdGroupId, adIds: (args.adIds as string[] | undefined) ?? [] }, { from, to, fromAds, toAds })
+  const statusOf = Object.fromEntries(((args.statusOf as Array<{ adId: string; status: 'ENABLED' | 'PAUSED' }> | undefined) ?? []).map((s) => [s.adId, s.status]))
+  return adMoveDraft(customerResource(account.target), {
+    campaignId, adGroupId, toAdGroupId, adIds: (args.adIds as string[] | undefined) ?? [], enable: args.enable === true, statusOf,
+  }, { from, to, fromAds, toAds })
 }
 
 const moveUndo: ToolUndo = {
@@ -516,6 +531,9 @@ const moveUndo: ToolUndo = {
         adGroupId: after.toAdGroupId,
         toAdGroupId: after.fromAdGroupId,
         adIds: moved.map((m) => m.toAdId),
+        // Each ad goes back with the status it had; an enabled one where it serves needs enable (SPENDS MONEY, said).
+        statusOf: moved.map((m) => ({ adId: m.toAdId, status: (m.fromStatus ?? m.status) === 'PAUSED' ? 'PAUSED' : 'ENABLED' })),
+        ...(moved.some((m) => (m.fromStatus ?? m.status) !== 'PAUSED') ? { enable: true } : {}),
         // The person asked for this undo: moving back removes the ads the change made (their numbers stay with them).
         confirmRemove: true,
         why: 'undo of an earlier ad move: the ads back in their ad group (as new ads)',
@@ -537,16 +555,22 @@ const moveGoogleAds: AgentTool = {
     adGroupId: googleIdArg('the ad group the ads are in now'),
     toAdGroupId: googleIdArg('the standard Search ad group of the same campaign they move to'),
     adIds: z.array(googleIdArg('an ad of adGroupId')).min(1).max(MAX_MOVE_ADS).describe(`the responsive search ads to move (1 to ${MAX_MOVE_ADS})`),
+    enable: z.boolean().optional().describe('only into an enabled ad group of an ENABLED campaign: keep an enabled ad ENABLED there, so it serves at once (SPENDS MONEY); without it the moved ad is made PAUSED there and its traffic stops until a person enables it. Elsewhere the status is kept'),
+    statusOf: z.array(z.object({
+      adId: googleIdArg('an ad of adGroupId'),
+      status: z.enum(['ENABLED', 'PAUSED']).describe('the status it had'),
+    })).max(MAX_MOVE_ADS).optional().describe('only the undo of an earlier move: the status each ad had before it (left out: its status now)'),
     confirmRemove: z.literal(true).describe('true: the person asked for this — each ad is REMOVED from its ad group (its numbers stay with it)'),
     why: googleWhyArg,
   }),
   description:
     'Move responsive search ads from one ad group to another of the same Search campaign. Google cannot move an ad: each '
-    + 'is made again in the other ad group (same texts, pins, paths, URLs and tracking, same status) and REMOVED from its '
-    + 'ad group, in one request. Use it ONLY when the person asked for that move (confirmRemove true). The numbers stay '
-    + 'with the removed ads; the new ones start from nothing and Google reviews them. Google allows 3 enabled responsive '
-    + 'search ads per ad group. An enabled ad moved into an enabled ad group of the enabled campaign is marked SPENDS '
-    + 'MONEY. Undo moves them back the same way (new ads again).' + GOOGLE_CHANGE_RULES,
+    + 'is made again in the other ad group (same texts, pins, paths, URLs and tracking) and REMOVED from its ad group, in '
+    + 'one request. Use it ONLY when the person asked for that move (confirmRemove true). The numbers and labels stay with '
+    + 'the removed ads (labels are not carried over); the new ones start from nothing and Google reviews them. Status: an '
+    + 'enabled ad moved into an enabled ad group of an ENABLED campaign is made PAUSED there (its traffic stops until a '
+    + 'person enables it) unless enable is true (SPENDS MONEY); elsewhere the status is kept. Google allows 3 enabled '
+    + 'responsive search ads per ad group. Undo moves them back the same way, each with the status it had.' + GOOGLE_CHANGE_RULES,
   undo: moveUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildMove(args)),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildMove(args), (draft, responses) => {

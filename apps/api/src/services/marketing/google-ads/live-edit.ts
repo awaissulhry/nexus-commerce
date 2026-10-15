@@ -10,7 +10,8 @@
  * descriptions are selectable, NOT filterable, and never filtered here).
  *   ad_group_ad         ad_group_ad.ad.id, .status, .ad.type, .ad.final_urls, .ad.final_mobile_urls, .ad.tracking_url_template,
  *                       .ad.final_url_suffix, .ad.url_custom_parameters, .ad.responsive_search_ad.headlines / descriptions /
- *                       path1 / path2; attributed resources ad_group, campaign.
+ *                       path1 / path2, .policy_summary.approval_status (PolicyApprovalStatus APPROVED, APPROVED_LIMITED,
+ *                       AREA_OF_INTEREST_ONLY, DISAPPROVED); attributed resources ad_group, campaign.
  *   ad_group_criterion  criterion_id, status, negative, type, keyword.text, keyword.match_type, cpc_bid_micros,
  *                       effective_cpc_bid_micros, final_urls, final_mobile_urls, tracking_url_template, final_url_suffix,
  *                       url_custom_parameters; attributed resources ad_group, campaign.
@@ -19,7 +20,8 @@
  *   campaign            id, name, status, advertising_channel_type, tracking_url_template, final_url_suffix,
  *                       url_custom_parameters.
  *   asset               id, type, source (AssetSource ADVERTISER / AUTOMATICALLY_CREATED), name, final_urls,
- *                       final_mobile_urls, sitelink_asset.link_text / description1 / description2, callout_asset.callout_text,
+ *                       final_mobile_urls, tracking_url_template, final_url_suffix, url_custom_parameters,
+ *                       sitelink_asset.link_text / description1 / description2, callout_asset.callout_text,
  *                       structured_snippet_asset.header / values.
  *   campaign_asset, ad_group_asset, customer_asset  field_type, status; asset is an attributed resource of each;
  *                       campaign and ad_group are SEGMENTING resources of campaign_asset / ad_group_asset.
@@ -89,6 +91,8 @@ export interface LiveEditAd {
   campaignType: string | null
   status: string | null
   type: string | null
+  /** Google's policy verdict (APPROVED, APPROVED_LIMITED, DISAPPROVED, …): an edit sends the ad to review again. */
+  approval: string | null
   headlines: LiveAdText[]
   descriptions: LiveAdText[]
   path1: string | null
@@ -104,7 +108,7 @@ const AD_FIELDS = [
   'ad_group_ad.ad.final_mobile_urls', 'ad_group_ad.ad.tracking_url_template', 'ad_group_ad.ad.final_url_suffix',
   'ad_group_ad.ad.url_custom_parameters', 'ad_group_ad.ad.responsive_search_ad.headlines',
   'ad_group_ad.ad.responsive_search_ad.descriptions', 'ad_group_ad.ad.responsive_search_ad.path1',
-  'ad_group_ad.ad.responsive_search_ad.path2',
+  'ad_group_ad.ad.responsive_search_ad.path2', 'ad_group_ad.policy_summary.approval_status',
 ]
 
 /** Ads by `adGroupId~adId` (not removed); the query asks for every pair's ad group and ad, the rows are matched exactly. */
@@ -144,6 +148,7 @@ export function liveEditAdOf(row: Json): LiveEditAd {
     campaignType: str(c.advertisingChannelType),
     status: str(aga.status),
     type: str(ad.type),
+    approval: str(aga.policySummary?.approvalStatus),
     headlines: adTexts(rsa.headlines),
     descriptions: adTexts(rsa.descriptions),
     path1: str(rsa.path1),
@@ -285,6 +290,8 @@ export interface LiveEditAsset {
   name: string | null
   finalUrls: string[]
   finalMobileUrls: string[]
+  /** Tracking template, final URL suffix, custom parameters: a replacement asset copies them. */
+  urls: LiveUrlFields
   linkText?: string | null
   description1?: string | null
   description2?: string | null
@@ -295,7 +302,7 @@ export interface LiveEditAsset {
 
 export const liveEditAssetsQuery = (assetIds: string[]): string =>
   'SELECT asset.id, asset.type, asset.source, asset.name, asset.final_urls, asset.final_mobile_urls, ' +
-  'asset.sitelink_asset.link_text, asset.sitelink_asset.description1, asset.sitelink_asset.description2, ' +
+  'asset.tracking_url_template, asset.final_url_suffix, asset.url_custom_parameters, asset.sitelink_asset.link_text, asset.sitelink_asset.description1, asset.sitelink_asset.description2, ' +
   'asset.callout_asset.callout_text, asset.structured_snippet_asset.header, asset.structured_snippet_asset.values ' +
   `FROM asset WHERE asset.id IN (${inList(bounded(assetIds, 'assets'), 'The asset')})`
 
@@ -308,6 +315,7 @@ export function liveEditAssetOf(row: Json): LiveEditAsset {
     name: str(a.name),
     finalUrls: strings(a.finalUrls),
     finalMobileUrls: strings(a.finalMobileUrls),
+    urls: urlFieldsOf(a),
   }
   if (a.sitelinkAsset) Object.assign(out, { linkText: str(a.sitelinkAsset.linkText), description1: str(a.sitelinkAsset.description1), description2: str(a.sitelinkAsset.description2) })
   if (a.calloutAsset) out.calloutText = str(a.calloutAsset.calloutText)
@@ -334,7 +342,7 @@ export const liveAssetCampaignLinksQuery = (assetIds: string[]): string =>
 export const liveAssetAdGroupLinksQuery = (assetIds: string[]): string =>
   'SELECT asset.id, campaign.id, campaign.name, campaign.status, ad_group.id, ad_group.name, ad_group.status, ad_group_asset.field_type, ' +
   `ad_group_asset.status FROM ad_group_asset WHERE asset.id IN (${inList(bounded(assetIds, 'assets'), 'The asset')}) ` +
-  "AND ad_group_asset.status != 'REMOVED' AND ad_group.status != 'REMOVED'"
+  "AND ad_group_asset.status != 'REMOVED' AND ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'"
 
 export const liveAssetAccountLinksQuery = (assetIds: string[]): string =>
   'SELECT asset.id, customer_asset.field_type, customer_asset.status FROM customer_asset ' +

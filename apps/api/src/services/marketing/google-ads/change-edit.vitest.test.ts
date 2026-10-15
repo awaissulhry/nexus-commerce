@@ -24,7 +24,7 @@ const NO_URLS = { trackingTemplate: null, finalUrlSuffix: null, customParameters
 
 const ad = (adGroupId: string, adId: string, over: Partial<LiveEditAd> = {}): LiveEditAd => ({
   id: `${adGroupId}~${adId}`, adId, adGroupId, adGroupName: `Group ${adGroupId}`, adGroupStatus: 'ENABLED', campaignId: '21', campaignName: 'Search A',
-  campaignStatus: 'ENABLED', campaignType: 'SEARCH', status: 'ENABLED', type: 'RESPONSIVE_SEARCH_AD',
+  campaignStatus: 'ENABLED', campaignType: 'SEARCH', status: 'ENABLED', type: 'RESPONSIVE_SEARCH_AD', approval: 'APPROVED',
   headlines: [{ text: 'Moto Jackets', pin: 'HEADLINE_1' }, { text: 'Free Returns', pin: null }, { text: 'Shop A', pin: null }],
   descriptions: [{ text: 'Leather jackets.', pin: null }, { text: 'Ships in 24 hours.', pin: null }],
   path1: 'jackets', path2: 'leather', finalUrls: ['https://shop.example/a'], finalMobileUrls: [], urls: NO_URLS, ...over,
@@ -73,6 +73,7 @@ describe('live-edit.ts — the queries', () => {
       adGroup: { id: '51', name: 'Group A', status: 'ENABLED' },
       adGroupAd: {
         status: 'PAUSED',
+        policySummary: { approvalStatus: 'DISAPPROVED' },
         ad: {
           id: '701', type: 'RESPONSIVE_SEARCH_AD', finalUrls: ['https://shop.example/a'], finalMobileUrls: ['https://m.shop.example/a'],
           trackingUrlTemplate: '{lpurl}?t=1', urlCustomParameters: [{ key: 'z', value: '2' }, { key: 'a', value: '1' }],
@@ -81,13 +82,13 @@ describe('live-edit.ts — the queries', () => {
       },
     }
     expect(liveEditAdOf(row)).toMatchObject({
-      id: '51~701', adId: '701', status: 'PAUSED', headlines: [{ text: 'H1', pin: 'HEADLINE_1' }], descriptions: [{ text: 'D1', pin: null }], path1: 'p', path2: null,
+      id: '51~701', adId: '701', status: 'PAUSED', approval: 'DISAPPROVED', headlines: [{ text: 'H1', pin: 'HEADLINE_1' }], descriptions: [{ text: 'D1', pin: null }], path1: 'p', path2: null,
       finalMobileUrls: ['https://m.shop.example/a'], urls: { trackingTemplate: '{lpurl}?t=1', finalUrlSuffix: null, customParameters: [{ key: 'a', value: '1' }, { key: 'z', value: '2' }] },
     })
     const kw = liveKeywordUrlsOf({ adGroup: { id: '51' }, adGroupCriterion: { criterionId: '601', keyword: { text: 'x', matchType: 'EXACT' }, cpcBidMicros: '0', finalUrls: ['https://shop.example/k'] } })
     expect(kw).toMatchObject({ id: '51~601', cpcBidCents: null, finalUrls: ['https://shop.example/k'], urls: NO_URLS })
     expect(liveEditAssetOf({ asset: { id: '9', type: 'SITELINK', source: 'ADVERTISER', finalUrls: ['https://shop.example/s'], sitelinkAsset: { linkText: 'Sale' } } }))
-      .toEqual({ assetId: '9', type: 'SITELINK', source: 'ADVERTISER', name: null, finalUrls: ['https://shop.example/s'], finalMobileUrls: [], linkText: 'Sale', description1: null, description2: null })
+      .toEqual({ assetId: '9', type: 'SITELINK', source: 'ADVERTISER', name: null, finalUrls: ['https://shop.example/s'], finalMobileUrls: [], urls: NO_URLS, linkText: 'Sale', description1: null, description2: null })
   })
 })
 
@@ -131,6 +132,16 @@ describe('rsaEditDraft — a responsive search ad edited in place', () => {
     expect(text).toContain('is not an https address')
   })
 
+  it('an ENABLED ad Google has not approved, in an enabled ad group and campaign, goes back to review: SPENDS MONEY; an approved one does not', () => {
+    const edit = { ads: [{ id: '51~701', finalUrl: 'https://shop.example/b' }] }
+    const d = rsaEditDraft(C, edit, { ads: [ad('51', '701', { approval: 'DISAPPROVED' })] })
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.spendsMoney).toEqual(['Ad 51~701 ("Moto Jackets") is ENABLED in the enabled ad group "Group 51" of the enabled campaign "Search A", and Google has not approved it now (DISAPPROVED): the edit sends it to review again, and once approved it shows (and spends).'])
+    expect(d.stands).toEqual([expect.objectContaining({ approval: 'DISAPPROVED', adGroupStatus: 'ENABLED', campaignStatus: 'ENABLED' })])
+    expect((rsaEditDraft(C, edit, live) as { spendsMoney: string[] }).spendsMoney).toEqual([])
+    expect((rsaEditDraft(C, edit, { ads: [ad('51', '701', { approval: 'DISAPPROVED', adGroupStatus: 'PAUSED' })] }) as { spendsMoney: string[] }).spendsMoney).toEqual([])
+  })
+
   it('an ad that is not there, not a responsive search ad, or already so', () => {
     expect(rsaEditDraft(C, { ads: [{ id: '51~799', finalUrl: 'https://shop.example/b' }] }, live)).toEqual({ refusal: expect.stringContaining('Ad 51~799 is not in this account') })
     expect(rsaEditDraft(C, { ads: [{ id: '51~701', finalUrl: 'https://shop.example/b' }] }, { ads: [ad('51', '701', { type: 'SHOPPING_PRODUCT_AD' })] })).toEqual({ refusal: expect.stringContaining('Nexus edits responsive search ads only') })
@@ -145,8 +156,23 @@ describe('adMoveDraft — ads into another ad group (made again there, removed h
   const tracked = ad('51', '701', { urls: { trackingTemplate: '{lpurl}?t=1', finalUrlSuffix: 'src=g', customParameters: [{ key: 'k', value: 'v' }] } })
   const live: AdMoveLiveState = { from: place('51'), to: place('52'), fromAds: [tracked, ad('51', '702')], toAds: [ad('52', '801')] }
 
-  it('the new ad first (texts, pins, paths, URLs, tracking, its status), the removal after; SPENDS MONEY into an enabled ad group', () => {
+  it('into an enabled ad group of the enabled campaign: made PAUSED unless enable, and the preview says the traffic stops', () => {
     const d = adMoveDraft(C, { campaignId: '21', adGroupId: '51', toAdGroupId: '52', adIds: ['701'] }, live)
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect((d.operations[0] as any).adGroupAdOperation.create.status).toBe('PAUSED')
+    expect(d.spendsMoney).toEqual([])
+    expect(d.warnings).toContain('1 enabled ad is made PAUSED in "Group 52" (the campaign and that ad group are enabled): its traffic stops until a person enables it (set-google-status), or ask again with enable: true (SPENDS MONEY).')
+    expect(d.warnings[0]).toContain('labels are not carried over')
+    expect(d.after).toMatchObject({ moved: [{ fromAdId: '701', toAdId: 'op:0', status: 'PAUSED', fromStatus: 'ENABLED' }] })
+    // Into a paused ad group it keeps its status (nothing serves there yet); an undo gives the status the record says.
+    const quiet = adMoveDraft(C, { campaignId: '21', adGroupId: '51', toAdGroupId: '52', adIds: ['701'] }, { ...live, to: place('52', 'PAUSED') })
+    expect((quiet as any).operations[0].adGroupAdOperation.create.status).toBe('ENABLED')
+    const back = adMoveDraft(C, { campaignId: '21', adGroupId: '51', toAdGroupId: '52', adIds: ['702'], statusOf: { 702: 'PAUSED' } }, live)
+    expect((back as any).operations[0].adGroupAdOperation.create.status).toBe('PAUSED')
+  })
+
+  it('enable: the new ad first (texts, pins, paths, URLs, tracking, ENABLED), the removal after; SPENDS MONEY into an enabled ad group', () => {
+    const d = adMoveDraft(C, { campaignId: '21', adGroupId: '51', toAdGroupId: '52', adIds: ['701'], enable: true }, live)
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations).toEqual([
       {
@@ -168,14 +194,14 @@ describe('adMoveDraft — ads into another ad group (made again there, removed h
       { adGroupAdOperation: { remove: `${C}/adGroupAds/51~701` } },
     ])
     expect(d.spendsMoney).toEqual(['Moves 1 enabled ad into the enabled ad group "Group 52" of the enabled campaign "Search A": it shows (and spends) there as soon as Google approves it.'])
-    expect(d.warnings[0]).toMatch(/The numbers \(clicks, cost, conversions\) stay with the removed ad/)
-    expect(d.after).toEqual({ campaignId: '21', fromAdGroupId: '51', toAdGroupId: '52', moved: [{ fromAdId: '701', toAdId: 'op:0', status: 'ENABLED' }] })
-    expect(adMoveRecordAfterRun(d.after as never, [{ adGroupAdResult: { resourceName: `${C}/adGroupAds/52~901` } }, {}]).moved).toEqual([{ fromAdId: '701', toAdId: '901', status: 'ENABLED' }])
+    expect(d.warnings[0]).toMatch(/The numbers \(clicks, cost, conversions\) and labels stay with the removed ad/)
+    expect(d.after).toEqual({ campaignId: '21', fromAdGroupId: '51', toAdGroupId: '52', moved: [{ fromAdId: '701', toAdId: 'op:0', status: 'ENABLED', fromStatus: 'ENABLED' }] })
+    expect(adMoveRecordAfterRun(d.after as never, [{ adGroupAdResult: { resourceName: `${C}/adGroupAds/52~901` } }, {}]).moved).toEqual([{ fromAdId: '701', toAdId: '901', status: 'ENABLED', fromStatus: 'ENABLED' }])
   })
 
   it('Google\'s 3 enabled ads per ad group, the same ad group, and an ad not there are refused', () => {
     const full = { ...live, toAds: [ad('52', '801'), ad('52', '802'), ad('52', '803')] }
-    expect(adMoveDraft(C, { campaignId: '21', adGroupId: '51', toAdGroupId: '52', adIds: ['701'] }, full)).toEqual({ refusal: expect.stringContaining('Google allows 3 enabled responsive search ads per ad group') })
+    expect(adMoveDraft(C, { campaignId: '21', adGroupId: '51', toAdGroupId: '52', adIds: ['701'], enable: true }, full)).toEqual({ refusal: expect.stringContaining('Google allows 3 enabled responsive search ads per ad group') })
     expect(adMoveDraft(C, { campaignId: '21', adGroupId: '51', toAdGroupId: '51', adIds: ['701'] }, live)).toEqual({ refusal: expect.stringContaining('already') })
     expect(adMoveDraft(C, { campaignId: '21', adGroupId: '51', toAdGroupId: '52', adIds: ['799'] }, live)).toEqual({ refusal: expect.stringContaining('Ad 799 is not in ad group "Group 51"') })
   })
@@ -260,8 +286,21 @@ describe('keywordReplaceDraft — a new text, match type or ad group: added anew
     keywordMatchType: null,
   }
 
-  it('EXACT → PHRASE in place: the removal first, then the new keyword with the old max CPC, status, URLs and tracking; SPENDS MONEY (can serve, wider)', () => {
+  it('in an enabled ad group of the enabled campaign the replacement is made PAUSED unless enable; the preview says the traffic stops', () => {
     const d = keywordReplaceDraft(C, 'EUR', { campaignId: '21', keywords: [{ keywordId: '51~601', matchType: 'PHRASE' }] }, live)
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect((d.operations[1] as any).adGroupCriterionOperation.create.status).toBe('PAUSED')
+    expect(d.spendsMoney).toEqual(['1 replacement has a wider match type, so it matches more searches: [moto jacket] → "moto jacket".'])
+    expect(d.warnings).toContain('1 replacement of an enabled keyword is made PAUSED (the campaign and the ad group are enabled): the old keyword\'s traffic stops until a person enables the new one (set-google-status), or ask again with enable: true (SPENDS MONEY) — [moto jacket] → "moto jacket".')
+    expect(d.warnings[0]).toContain('may get that keyword\'s id and numbers back')
+    expect(d.after).toMatchObject({ replaced: [{ status: 'PAUSED', fromStatus: 'ENABLED' }] })
+    // The undo form: the status the record says, ENABLED with enable.
+    const back = keywordReplaceDraft(C, 'EUR', { campaignId: '21', keywords: [{ keywordId: '51~601', matchType: 'PHRASE', status: 'ENABLED' }], enable: true }, live)
+    expect((back as any).operations[1].adGroupCriterionOperation.create.status).toBe('ENABLED')
+  })
+
+  it('enable, EXACT → PHRASE in place: the removal first, then the new keyword with the old max CPC, status, URLs and tracking; SPENDS MONEY (can serve, wider)', () => {
+    const d = keywordReplaceDraft(C, 'EUR', { campaignId: '21', keywords: [{ keywordId: '51~601', matchType: 'PHRASE' }], enable: true }, live)
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations).toEqual([
       { adGroupCriterionOperation: { remove: `${C}/adGroupCriteria/51~601` } },
@@ -271,7 +310,7 @@ describe('keywordReplaceDraft — a new text, match type or ad group: added anew
       'Adds 1 keyword that can show ads at once (each in place of a removed one): ENABLED, in enabled ad groups of the enabled campaign "Search A" — [moto jacket] → "moto jacket".',
       '1 replacement has a wider match type, so it matches more searches: [moto jacket] → "moto jacket".',
     ])
-    expect(d.after).toEqual({ campaignId: '21', replaced: [{ from: { keywordId: '51~601', adGroupId: '51', text: 'moto jacket', matchType: 'EXACT' }, to: { keywordId: 'new:1', adGroupId: '51', text: 'moto jacket', matchType: 'PHRASE' }, status: 'ENABLED', bidCents: 35 }] })
+    expect(d.after).toEqual({ campaignId: '21', replaced: [{ from: { keywordId: '51~601', adGroupId: '51', text: 'moto jacket', matchType: 'EXACT' }, to: { keywordId: 'new:1', adGroupId: '51', text: 'moto jacket', matchType: 'PHRASE' }, status: 'ENABLED', fromStatus: 'ENABLED', bidCents: 35 }] })
     const ran = keywordReplaceRecordAfterRun(d.after as never, [{}, { adGroupCriterionResult: { resourceName: `${C}/adGroupCriteria/51~777` } }])
     expect(ran.replaced[0].to.keywordId).toBe('51~777')
   })
@@ -279,7 +318,7 @@ describe('keywordReplaceDraft — a new text, match type or ad group: added anew
   it('moved into an ad group with a higher default max CPC: the raise is said (SPENDS MONEY)', () => {
     const d = keywordReplaceDraft(C, 'EUR', { campaignId: '21', keywords: [{ keywordId: '51~602', toAdGroupId: '52' }] }, live)
     if ('refusal' in d) throw new Error(d.refusal)
-    expect(d.operations[1]).toEqual({ adGroupCriterionOperation: { create: { adGroup: `${C}/adGroups/52`, status: 'ENABLED', keyword: { text: 'leather jacket', matchType: 'PHRASE' } } } })
+    expect(d.operations[1]).toEqual({ adGroupCriterionOperation: { create: { adGroup: `${C}/adGroups/52`, status: 'PAUSED', keyword: { text: 'leather jacket', matchType: 'PHRASE' } } } })
     expect(d.spendsMoney.join(' ')).toContain('Raises the max CPC of 1 keyword: "leather jacket" → "leather jacket" ("Group B") EUR 0.40 → EUR 0.60')
   })
 
@@ -288,6 +327,11 @@ describe('keywordReplaceDraft — a new text, match type or ad group: added anew
     expect(keywordReplaceDraft(C, 'EUR', { campaignId: '21', keywords: [{ keywordId: '51~601', text: 'leather jacket', matchType: 'PHRASE' }] }, live)).toEqual({ refusal: expect.stringContaining('already holds "leather jacket"') })
     expect(keywordReplaceDraft(C, 'EUR', { campaignId: '21', keywords: [{ keywordId: '51~601', matchType: 'BROAD' }] }, live)).toEqual({ refusal: expect.stringContaining('BROAD only with allowBroad') })
     expect(keywordReplaceDraft(C, 'EUR', { campaignId: '21', keywords: [{ keywordId: '51~601', matchType: 'PHRASE' }] }, { ...live, keywords: [kw('51~601', 'x', 'EXACT', { negative: true })] })).toEqual({ refusal: expect.stringContaining('or a negative keyword') })
+  })
+
+  it('allowBroad is recorded, so the undo of a change in a broad-match campaign can ask for it again', () => {
+    const d = keywordReplaceDraft(C, 'EUR', { campaignId: '21', keywords: [{ keywordId: '51~601', text: 'moto jackets' }], allowBroad: true }, { ...live, keywordMatchType: 'BROAD' })
+    expect((d as { after: unknown }).after).toMatchObject({ allowBroad: true })
   })
 
   it('a keyword may take the place of one the same request removes (removals go first)', () => {
@@ -301,9 +345,9 @@ describe('keywordReplaceDraft — a new text, match type or ad group: added anew
 describe('assetEditDraft — sitelinks, callouts and snippets in place, or replaced in one campaign', () => {
   const live: AssetEditLiveState = {
     assets: [
-      { assetId: '9', type: 'SITELINK', source: 'ADVERTISER', name: null, finalUrls: ['https://shop.example/s'], finalMobileUrls: [], linkText: 'Sale', description1: 'Up to 30% off', description2: 'This week only' },
-      { assetId: '10', type: 'CALLOUT', source: 'AUTOMATICALLY_CREATED', name: null, finalUrls: [], finalMobileUrls: [], calloutText: 'Fast shipping' },
-      { assetId: '11', type: 'STRUCTURED_SNIPPET', source: 'ADVERTISER', name: null, finalUrls: [], finalMobileUrls: [], header: 'Tipi', values: ['Giacche', 'Guanti', 'Caschi'] },
+      { assetId: '9', type: 'SITELINK', source: 'ADVERTISER', name: null, finalUrls: ['https://shop.example/s'], finalMobileUrls: [], urls: NO_URLS, linkText: 'Sale', description1: 'Up to 30% off', description2: 'This week only' },
+      { assetId: '10', type: 'CALLOUT', source: 'AUTOMATICALLY_CREATED', name: null, finalUrls: [], finalMobileUrls: [], urls: { trackingTemplate: '{lpurl}?a=1', finalUrlSuffix: 'src=g', customParameters: [{ key: 'k', value: 'v' }] }, calloutText: 'Fast shipping' },
+      { assetId: '11', type: 'STRUCTURED_SNIPPET', source: 'ADVERTISER', name: null, finalUrls: [], finalMobileUrls: [], urls: NO_URLS, header: 'Tipi', values: ['Giacche', 'Guanti', 'Caschi'] },
     ],
     links: [
       { assetId: '9', level: 'campaign', fieldType: 'SITELINK', status: 'ENABLED', campaignId: '21', campaignName: 'Search A', campaignStatus: 'ENABLED' },
@@ -328,6 +372,8 @@ describe('assetEditDraft — sitelinks, callouts and snippets in place, or repla
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations).toEqual([{ assetOperation: { update: { resourceName: `${C}/assets/11`, structuredSnippetAsset: { header: 'Modelli', values: ['Giacche', 'Guanti', 'Stivali'] } }, updateMask: 'structured_snippet_asset.header,structured_snippet_asset.values' } }])
     expect(d.before).toEqual({ mode: 'edit', assets: [{ assetId: '11', type: 'STRUCTURED_SNIPPET', header: 'Tipi', language: 'it', values: ['Giacche', 'Guanti', 'Caschi'] }] })
+    // Linked in one campaign: that place is named too.
+    expect(d.warnings).toContain('Asset 11 ("Tipi: Giacche, Guanti, Caschi") is linked in one place — campaign "Search A": the edit changes it there.')
   })
 
   it('an asset Google made cannot be changed in place; replaced in one campaign: new asset, its link (the old link\'s status), the old link off', () => {
@@ -335,7 +381,8 @@ describe('assetEditDraft — sitelinks, callouts and snippets in place, or repla
     const d = assetEditDraft(C, { assets: [{ assetId: '10', calloutText: 'Free shipping' }], onlyInCampaignId: '21' }, live)
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations).toEqual([
-      { assetOperation: { create: { resourceName: `${C}/assets/-1`, calloutAsset: { calloutText: 'Free shipping' } } } },
+      // The old asset's tracking goes with the new one.
+      { assetOperation: { create: { resourceName: `${C}/assets/-1`, trackingUrlTemplate: '{lpurl}?a=1', finalUrlSuffix: 'src=g', urlCustomParameters: [{ key: 'k', value: 'v' }], calloutAsset: { calloutText: 'Free shipping' } } } },
       { campaignAssetOperation: { create: { campaign: `${C}/campaigns/21`, asset: `${C}/assets/-1`, fieldType: 'CALLOUT', status: 'PAUSED' } } },
       { campaignAssetOperation: { remove: `${C}/campaignAssets/21~10~CALLOUT` } },
     ])
