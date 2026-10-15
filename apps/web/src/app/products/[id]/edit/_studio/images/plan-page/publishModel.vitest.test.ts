@@ -46,6 +46,7 @@ describe('Review & publish photos', () => {
   })
   it('this window never sends to Shopify (whole product) or Etsy, nor to a paused account', () => {
     expect(unsupportedReason({ channel: 'SHOPIFY', targetable: true, refusal: null, accountActive: true })).toMatch(/whole product/)
+    expect(unsupportedReason({ channel: 'SHOPIFY', targetable: true, refusal: null, accountActive: true, shopifyProducts: [{ productId: 'gid://shopify/Product/1', valueKey: 'color:black', label: 'Black' }] })).toMatch(/product-sheet sync/)
     expect(unsupportedReason({ channel: 'EBAY', targetable: true, refusal: null, accountActive: false })).toMatch(/paused/)
     expect(unsupportedReason({ channel: 'EBAY', targetable: true, refusal: null, accountActive: true })).toBeNull()
     expect(ebayOutcome({ id: 'x', status: 'FAILED', message: 'Failed', results: [{ sku: 'GALE', status: 'FAILED', message: 'eBay: invalid picture URL' }] }))

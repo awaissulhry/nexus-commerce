@@ -2,9 +2,10 @@
  * Google on the gateway (2026-10-13, Google Ads step 1): the ONE way Nexus calls Google Ads, Merchant
  * Center, Analytics and the sign-in's userinfo. A `fetch`-shaped answer (`Response`), like `gatewayFetch`.
  *
- * - Reads, and one kind of change: `googleKind` says read for a GET or a POST to `…:search` / `…:searchStream`,
+ * - Reads, and two kinds of change: `googleKind` says read for a GET or a POST to `…:search` / `…:searchStream`,
  *   and for a Google Ads `…:mutate` that only asks Google to check it (`validateOnly: true`); write for a real
- *   Google Ads mutate (2026-10-15: every one a change a person approved in Nexus). The gateway refuses every other
+ *   Google Ads mutate (2026-10-15: every one a change a person approved in Nexus) and for an apply or a dismiss of
+ *   Google's recommendations (`…/recommendations:apply|:dismiss`, G5: Google cannot check those). The gateway refuses every other
  *   Google call (`GOOGLE_READ_ONLY`), with its ledger row, and holds real writes to the publish mode
  *   (`NEXUS_GOOGLE_ADS_WRITES=off` refuses them). A write is never retried by the gateway: it could apply twice.
  * - The account's own token as `Authorization: Bearer` (the gateway refreshes it under the lease).
@@ -14,7 +15,7 @@
  * - A body is sent as JSON.
  */
 import { gatewayFetch } from './gateway.js'
-import { googleCallKind, isGoogleAdsMutate, isGoogleValidateOnly } from './channels.js'
+import { googleAdsRecommendationCall, googleCallKind, isGoogleAdsMutate, isGoogleValidateOnly } from './channels.js'
 
 export interface GoogleCallRequest {
   connectionId: string
@@ -34,6 +35,8 @@ export interface GoogleCallRequest {
  */
 export function googleKind(method: string, url: string, body?: unknown): 'read' | 'write' | 'action' {
   if (googleCallKind(method, url) === 'read') return 'read'
+  // G5: applying or dismissing Google's recommendations — Google has no check for it, so always a real write.
+  if (googleAdsRecommendationCall(method, url)) return 'write'
   if (!isGoogleAdsMutate(method, url)) return 'action'
   return isGoogleValidateOnly(body === undefined ? undefined : JSON.stringify(body)) ? 'read' : 'write'
 }

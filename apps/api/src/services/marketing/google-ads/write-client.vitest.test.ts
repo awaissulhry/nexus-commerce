@@ -16,7 +16,7 @@ import { gatewayAccounts, gatewayLedger } from '../../../test-support/gateway-st
 import { __rateTest } from '../../gateway/rate.js'
 import { GOOGLE_ADS_API_BASE } from '../../google/api-version.js'
 import { opsUsedLast24h, setOpsBudgetRedisForTests, type OpsRedis } from './ops-budget.js'
-import { GoogleAdsWriteError, liveRows, MAX_MUTATE_OPERATIONS, mutateGoogleAds, writeErrorSentence } from './write-client.js'
+import { asLiveRead, GoogleAdsWriteError, liveRows, MAX_MUTATE_OPERATIONS, mutateGoogleAds, writeErrorSentence } from './write-client.js'
 import type { GoogleAdsTarget } from './types.js'
 
 class MemoryRedis implements OpsRedis {
@@ -158,5 +158,15 @@ describe('liveRows — a read a change stands on', () => {
     expect(h.calls[0].url).toBe(`${GOOGLE_ADS_API_BASE}/customers/1234567890/googleAds:search`)
     expect(gatewayLedger).toEqual([expect.objectContaining({ operation: 'ads.search.live', outcome: 'sent' })])
     expect(await opsUsedLast24h('1234567890')).toEqual({ global: 1, account: 0 })
+  })
+  it('inside asLiveRead (the read-only live tools): the live tools\' own allowance, never the changes\'', async () => {
+    h.answers.push(() => new Response(JSON.stringify({ results: [] }), { status: 200 }))
+    await asLiveRead(() => liveRows(TARGET, 'SELECT campaign.id FROM campaign'))
+    const counted = [...redis.values.entries()].filter(([, v]) => Number(v) > 0).map(([k]) => k.replace(/:\d{10}$/, ''))
+    expect(counted.sort()).toEqual(['nexus:gads:ops', 'nexus:gads:ops:acctl:1234567890'])
+    // Outside it, a read a change stands on stays on the change allowance.
+    h.answers.push(() => new Response(JSON.stringify({ results: [] }), { status: 200 }))
+    await liveRows(TARGET, 'SELECT campaign.id FROM campaign')
+    expect([...redis.values.keys()].some((k) => k.startsWith('nexus:gads:ops:acctw:1234567890:'))).toBe(true)
   })
 })

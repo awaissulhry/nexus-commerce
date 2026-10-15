@@ -28,6 +28,7 @@ import {
   type DescriptionRenderData,
   type DescriptionGalleryGroup,
 } from './ebay-description-render.js'
+import { NOT_STORE_PHOTO } from './images/store-photos.js'
 
 export interface RenderListingDescriptionArgs {
   channelConnectionId?: string | null
@@ -324,7 +325,7 @@ async function loadGalleriesForProduct(prisma: PrismaClient, productId: string, 
   if (shared.length === 0 && groups.size === 0) {
     // nothing curated for eBay — fall back to the master gallery
     const master = await prisma.productImage.findMany({
-      where: { productId },
+      where: { productId, ...NOT_STORE_PHOTO },
       orderBy: { sortOrder: 'asc' },
       select: { url: true },
       take: 12,

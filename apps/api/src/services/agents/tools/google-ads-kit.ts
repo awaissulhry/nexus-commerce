@@ -20,7 +20,8 @@ import { factHash, type ToolContext, type ToolResult } from '../tool-types.js'
 import { approvedRun, canonical, notRun } from './ads-change-kit.js'
 import { googleChangeAccount, type GoogleChangeAccount } from '../../marketing/google-ads/change-account.js'
 import type { GoogleChangeDraft } from '../../marketing/google-ads/change-draft.js'
-import { GoogleAdsWriteError, mutateGoogleAds, writeErrorSentence, type GoogleMutateResponse } from '../../marketing/google-ads/write-client.js'
+import { GoogleAdsWriteError, mutateGoogleAds, writeErrorSentence, type GoogleMutateOperation, type GoogleMutateResponse } from '../../marketing/google-ads/write-client.js'
+import type { GoogleAdsTarget } from '../../marketing/google-ads/types.js'
 import { GoogleAdsReadError } from '../../marketing/google-ads/errors.js'
 import { googleAdsWritesMode } from '../../gateway/channels.js'
 import { googleAdsRedis, timed } from '../../marketing/google-ads/ops-budget.js'
@@ -48,6 +49,17 @@ export const GOOGLE_CHANGE_RULES =
   + 'what changes (from → to), what can make the account spend more (spendsMoney: enabling, a budget or bid raise — the '
   + 'person\'s decision), and the operations it costs (the account has a daily Google Ads allowance). One request, all '
   + 'or nothing; a change sent to Google has no cancel window.'
+
+/**
+ * The sentence the description of a change Google cannot check first ends with (a GoogleSender tool: applying or
+ * dismissing Google's recommendations — RecommendationService has no validate_only).
+ */
+export const GOOGLE_UNCHECKED_CHANGE_RULES =
+  ' Nothing changes until a person approves it in Nexus (Approvals); it then runs as that person, never by a rule. '
+  + 'Google CANNOT check this change first (it has no validate_only for it): the preview is built from the live account, '
+  + 'and when the approved change runs Nexus reads it again and sends it only if nothing it stands on moved. The preview '
+  + 'says what changes, what can make the account spend more (spendsMoney — the person\'s decision), and the operations '
+  + 'it costs. One request, all or nothing; a change sent to Google has no cancel window.'
 
 // ── where it lands ──────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -176,8 +188,23 @@ export async function googleCheck(args: Record<string, unknown>, build: GoogleDr
   }
 }
 
+/**
+ * A change that is not a GoogleAdsService.Mutate (RecommendationService apply / dismiss): Google has no validate_only for
+ * it, so the preview is built on the live state alone and says why Google did not check it (`notChecked`); the run sends
+ * the draft's operations with `send`, which fails as mutateGoogleAds does (a GoogleAdsWriteError with its outcome).
+ */
+export interface GoogleSender {
+  notChecked: string
+  send: (target: GoogleAdsTarget, operations: GoogleMutateOperation[]) => Promise<{ responses: GoogleMutateResponse[] }>
+}
+
 /** The dry run of a Google Ads change tool: build from the live state, let Google check it (not on a re-check), preview. */
-export async function googleChangePreview(args: Record<string, unknown>, ctx: ToolContext, build: GoogleDraftBuilder): Promise<ToolResult> {
+export async function googleChangePreview(args: Record<string, unknown>, ctx: ToolContext, build: GoogleDraftBuilder, sender?: GoogleSender): Promise<ToolResult> {
+  if (sender) {
+    const built = await draftFor(args, build)
+    if ('refusal' in built) return { ok: false, error: built.refusal }
+    return { ok: true, preview: previewOf(built.account, built.draft, { checked: false, sentence: sender.notChecked }) }
+  }
   if (isRecheck(ctx)) {
     const built = await draftFor(args, build)
     if ('refusal' in built) return { ok: false, error: built.refusal }
@@ -206,6 +233,7 @@ export async function runGoogleChange(
   ctx: ToolContext,
   build: GoogleDraftBuilder,
   finish: (draft: GoogleChangeDraft, responses: GoogleMutateResponse[]) => GoogleRunOutcome,
+  sender?: GoogleSender,
 ): Promise<ToolResult> {
   const run = approvedRun(ctx, String(args.why ?? ''))
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
@@ -227,7 +255,9 @@ export async function runGoogleChange(
   }
   let responses: GoogleMutateResponse[]
   try {
-    responses = (await mutateGoogleAds(account.target, draft.operations, { validateOnly: false, operation: 'ads.mutate' })).responses
+    responses = (sender
+      ? await sender.send(account.target, draft.operations)
+      : await mutateGoogleAds(account.target, draft.operations, { validateOnly: false, operation: 'ads.mutate' })).responses
   } catch (err) {
     // Unknown outcome: the request goes back to waiting, and approving it again re-reads the account first (`basis`),
     // so the change is sent again only when it is not there.

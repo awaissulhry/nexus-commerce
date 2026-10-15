@@ -4,7 +4,7 @@ import { applyMediaOps, type MediaPlan } from '@nexus/shared/media-plan'
 import {
   amazonMarketKey, amazonMarketLayout, amazonOwnMarkets, rowReset, viewKey, viewStack, wordList,
   applyLocal, compareDestinations, computeLayouts, copyFromOps, defaultKeep, destinationCells, destinationLabel, filterLibrary, guessLanguage, photoPlacements, photoSource, sharedPlacements, versionLanguages, followAllOps, libraryUsage, setRows, gridShape, isCodeName, ownerLabel, readableNames, scopeDestinationKey, siblingListings, slotLabel,
-  shownVersion, assetMap, viewAddress, withLayer, type LibraryAsset, type MediaDestinationRow, type MediaRead,
+  shownVersion, assetMap, layoutSummary, viewAddress, withLayer, type LibraryAsset, type MediaDestinationRow, type MediaRead,
 } from './model'
 
 const ids = (...list: string[]) => list.map(assetId => ({ assetId }))
@@ -243,5 +243,13 @@ describe('Amazon photos per market (2026-09-29, option 3): All Amazon markets, o
     expect(de.items.map(i => `${i.sku}:${Object.values(i.slots).join('+')}`)).toEqual(['T-NERO:n1+cover+chart-de', 'T-GIALLO:g1+cover+chart-de'])
     const all = computeLayouts(r)[AMAZON] as typeof de
     expect(all.items.map(i => `${i.sku}:${Object.values(i.slots).join('+')}`)).toEqual(['T-NERO:cover+n1+chart-it', 'T-GIALLO:g1+cover+chart-it'])
+  })
+})
+
+describe('layoutSummary — Shopify colour products', () => {
+  it('counts the colour products whose photos come from Nexus', () => {
+    const product = (managed: boolean) => ({ productId: `gid://shopify/Product/${managed ? 1 : 2}`, valueKey: 'color:black', label: 'Black', managed, media: managed ? ['a'] : [], checks: [] })
+    expect(layoutSummary('SHOPIFY', { media: ['a'], variantImages: {}, checks: [], products: [product(true), product(false)] })).toBe('1 of 2 colour products from Nexus')
+    expect(layoutSummary('SHOPIFY', { media: ['a'], variantImages: { v: 'a' }, checks: [] })).toBe('1 media · 1 variant images')
   })
 })

@@ -78,6 +78,7 @@ interface SubmissionResult {
 
 export { buildRow, COCKPIT_EXPANDED_FIELDS } from '../services/amazon/cockpit-publish-row.js'
 import { buildRow, COCKPIT_EXPANDED_FIELDS } from '../services/amazon/cockpit-publish-row.js'
+import { NOT_STORE_PHOTO } from '../services/images/store-photos.js'
 
 export default async function amazonCockpitPublishRoutes(
   fastify: FastifyInstance,
@@ -122,6 +123,7 @@ export default async function amazonCockpitPublishRoutes(
       where: { id },
       include: {
         images: {
+          where: NOT_STORE_PHOTO,
           select: { url: true, isPrimary: true, sortOrder: true, type: true },
         },
       },

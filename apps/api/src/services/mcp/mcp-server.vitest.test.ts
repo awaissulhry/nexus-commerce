@@ -33,28 +33,31 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Ads autonomy W3-1 — apply-ad-recommendations asks for a plan whose steps reach Amazon.
 // FBA shipment drafts (Owner 2026-10-08) — plan-fba-shipment fills a draft in Nexus only; a person's "Send to Amazon" reaches Amazon.
 // Ads autonomy (auto-undo, A19) — undo-worse-ad-change puts a bid, budget or placement back at Amazon.
+// Google Ads G5 (2026-10-15) — labels, Google's recommendations (apply, dismiss, auto-apply) and portfolio bid strategies change the Google Ads account.
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
-  'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'apply-harvest',
+  'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'apply-google-recommendations',
+  'apply-harvest',
   'archive-ads', 'build-google-campaigns', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
   'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label', 'cancel-order',
   'channel-identity-check', 'check-google-ads-build', 'close-listing', 'confirm-shipment', 'copy-google-campaign',
   'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
   'create-google-campaign', 'create-google-rsa', 'create-negative-keyword', 'decide-automation-suggestions',
-  'delete-listing', 'dispose-return-items', 'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads',
-  'end-listing', 'google-ads-live', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund',
+  'delete-listing', 'dismiss-google-recommendations', 'dispose-return-items', 'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads',
+  'end-listing', 'google-ads-live', 'google-ads-numbers', 'google-ads-query', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund',
   'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'promote-ebay-listings',
   'publish-listing', 'publish-review', 'receive-stock', 'reconcile-stock-count', 'relist-listing',
-  'remove-google-ads-items', 'reopen-listing', 'replicate-ad-structure', 'reply-to-review', 'request-review',
+  'remove-google-ads-items', 'remove-google-bid-strategy', 'remove-google-labels', 'reopen-listing', 'replicate-ad-structure', 'reply-to-review', 'request-review',
   'resend-prices', 'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign',
   'resume-automation', 'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
   'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
   'set-ad-group', 'set-ads-brain', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule',
   'set-campaign-budget', 'set-campaign-settings', 'set-ebay-ad-rates', 'set-ebay-campaign-budget',
-  'set-ebay-price-promotion', 'set-google-ad-groups', 'set-google-assets', 'set-google-budget', 'set-google-campaign',
-  'set-google-inventory-filter', 'set-google-keywords', 'set-google-negative-list', 'set-google-negatives', 'set-google-product-groups',
-  'set-google-shopping-settings',
+  'set-ebay-price-promotion', 'set-google-ad-groups', 'set-google-assets', 'set-google-auto-apply',
+  'set-google-bid-strategy', 'set-google-budget', 'set-google-campaign', 'set-google-inventory-filter',
+  'set-google-keywords', 'set-google-labels', 'set-google-negative-list', 'set-google-negatives',
+  'set-google-product-groups', 'set-google-shopping-settings',
   'set-google-status', 'set-google-targeting', 'set-hourly-bid-plan', 'set-listing-price', 'set-listing-stock',
   'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
   'set-promotion', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',

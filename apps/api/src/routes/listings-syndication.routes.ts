@@ -36,6 +36,7 @@ import { permissionCheckerFor } from './studio-matrix.routes.js'
 import { adjustmentPercentProblem, normalisePricingRule, PRICING_RULE_REFUSAL } from '@nexus/shared/listing-price'
 import { connectionLabel, connectionLabelDirectory } from '../services/connection-label.js'
 import { ebayMarkdownBenefit } from '../services/ebay-markdown-benefit.js'
+import { NOT_STORE_PHOTO } from '../services/images/store-photos.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -958,7 +959,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
             select: {
               id: true, sku: true, name: true, basePrice: true, totalStock: true,
               amazonAsin: true, brand: true,
-              images: { select: { url: true } },
+              images: { where: NOT_STORE_PHOTO, select: { url: true } },
             },
           },
         },
