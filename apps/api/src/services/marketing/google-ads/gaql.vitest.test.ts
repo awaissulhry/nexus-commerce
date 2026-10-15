@@ -199,8 +199,8 @@ describe('Google Ads step 1b queries (v25 field names)', () => {
     )
     // recommendation.impact is Selectable only whole: its leaves are not query fields (Google answers UNRECOGNIZED_FIELD).
     expect(RECOMMENDATIONS_QUERY).toBe(
-      'SELECT recommendation.resource_name, recommendation.type, recommendation.campaign, recommendation.ad_group, ' +
-      'recommendation.dismissed, recommendation.impact FROM recommendation',
+      'SELECT recommendation.resource_name, recommendation.type, recommendation.campaign, recommendation.campaigns, ' +
+      'recommendation.ad_group, recommendation.dismissed, recommendation.impact FROM recommendation',
     )
     expect(RECOMMENDATIONS_QUERY_WITHOUT_IMPACT).toBe(RECOMMENDATIONS_QUERY.replace(', recommendation.impact', ''))
   })

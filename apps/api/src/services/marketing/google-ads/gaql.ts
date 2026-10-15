@@ -268,12 +268,14 @@ export const ACCOUNT_NEGATIVE_LIST_LINKS_QUERY =
  * that is Selectable only whole: its leaves (impact.base_metrics.clicks, …) are not query fields, and Google refuses a
  * query naming one (UNRECOGNIZED_FIELD). See https://developers.google.com/google-ads/api/fields/v25/recommendation.
  * The answer carries impact.baseMetrics / impact.potentialMetrics with whichever metrics Google estimated.
+ * The budget types (CAMPAIGN_BUDGET, FORECASTING_CAMPAIGN_BUDGET, MARGINAL_ROI_CAMPAIGN_BUDGET, MOVE_UNUSED_BUDGET) leave
+ * recommendation.campaign empty and name their campaigns in recommendation.campaigns (repeated; same page).
  */
 export const RECOMMENDATIONS_QUERY =
-  'SELECT recommendation.resource_name, recommendation.type, recommendation.campaign, recommendation.ad_group, ' +
-  'recommendation.dismissed, recommendation.impact FROM recommendation'
+  'SELECT recommendation.resource_name, recommendation.type, recommendation.campaign, recommendation.campaigns, ' +
+  'recommendation.ad_group, recommendation.dismissed, recommendation.impact FROM recommendation'
 
 /** The same without the impact, sent only if Google refuses the first text: the impact is then not read. */
 export const RECOMMENDATIONS_QUERY_WITHOUT_IMPACT =
-  'SELECT recommendation.resource_name, recommendation.type, recommendation.campaign, recommendation.ad_group, ' +
-  'recommendation.dismissed FROM recommendation'
+  'SELECT recommendation.resource_name, recommendation.type, recommendation.campaign, recommendation.campaigns, ' +
+  'recommendation.ad_group, recommendation.dismissed FROM recommendation'

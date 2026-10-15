@@ -381,6 +381,8 @@ export interface GoogleAdsRecommendationRow {
     resourceName?: string
     type?: string
     campaign?: string
+    /** The budget types name their campaigns here, not in `campaign`. */
+    campaigns?: string[]
     adGroup?: string
     dismissed?: boolean
     impact?: { baseMetrics?: GoogleAdsRecommendationMetricsJson; potentialMetrics?: GoogleAdsRecommendationMetricsJson }
