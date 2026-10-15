@@ -230,6 +230,7 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   'sheet-delete-rows': { part: '02', feature: 1, also: 'the product sheet\'s row delete: to the recycle bin with Undo, extra listings archived; the hard delete stays excluded (#13)' },
   'sheet-transfer': { part: '09', feature: 68 },
   'shopify-media': { part: '09', feature: 67 },
+  'shopify-order-import': { excluded: 'connect, reconnect, revoke, disconnect, refresh, app secrets: the account holder signs in in the browser (09 §2); starting Shopify order import sets the account\'s start date once and registers its webhooks', feature: 51 },
   'shopify-shadow-report': { excluded: 'platform operations (job monitor, queues, telemetry, circuit breakers) are platform-wide, not one business (09 §2)', feature: 80 },
   'shopify-webhooks': { excluded: 'webhook receivers and health checks: machine to machine, nothing for a person or Claude', feature: 82 },
   'stock-pool': { part: '08', feature: 34, also: 'pool grants to another business: read only, 09 (#52); every sharing change is never for Claude' },

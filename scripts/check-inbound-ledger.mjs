@@ -39,6 +39,21 @@ const UNREPLAYABLE = {
   AMAZON: '*',
 }
 
+/**
+ * Shopify event types a receiver still listens for but Nexus never registers per shop, each with the reason
+ * (2026-10-15: registration subscribes only what Shopify order import needs). A receiver stays so a delivery from a
+ * subscription made elsewhere, or a mandatory privacy notice configured with the app, is still verified and recorded.
+ */
+const RECEIVED_NOT_REGISTERED = {
+  'product/update': 'Shopify follows Nexus: a Shopify title never renames a Nexus product. Kept for a subscription a person left on the shop.',
+  'product/delete': 'Shopify follows Nexus: not registered by order import. Kept for a subscription a person left on the shop.',
+  'inventory/update': 'Nexus stock counts are not set from Shopify. Kept for a subscription a person left on the shop.',
+  'app/scopes_update': 'Not needed by order import; kept for a subscription made before it.',
+  'customers/data_request': 'A privacy topic: configured with the app, not registered per shop.',
+  'customers/redact': 'A privacy topic: configured with the app, not registered per shop.',
+  'shop/redact': 'A privacy topic: configured with the app, not registered per shop.',
+}
+
 function walk(dir, out = [], extensions = /\.(ts|mts)$/) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name)
@@ -119,7 +134,8 @@ if (seedOrphan) {
 // told, the path it is delivered to, and the `eventType` written to the ledger. They
 // live in two files, and two lists of the same thing drift: that is exactly how
 // `refunds/create` was written while `refund/create` was listed, leaving no refund
-// replayable and nothing saying so. Both sides are derived from source here.
+// replayable and nothing saying so. Both sides are derived from source here. A receiver
+// Nexus deliberately does not register is named in RECEIVED_NOT_REGISTERED with its reason.
 const registrationSource = fs.readFileSync(path.join(apiSrc, 'services/shopify/webhook-registration.service.ts'), 'utf8')
 const registered = new Map() // eventType -> path
 for (const m of registrationSource.matchAll(/topic:\s*'[A-Z_]+',\s*path:\s*'([^']+)',\s*eventType:\s*'([^']+)'/g)) {
@@ -134,7 +150,7 @@ for (const file of files) {
 }
 for (const [eventType, receiverPath] of receiverPaths) {
   if (!registered.has(eventType)) {
-    failures.push(`SHOPIFY/${eventType} is received at ${receiverPath} but Shopify is never told to send it. Add it to services/shopify/webhook-registration.service.ts.`)
+    if (!RECEIVED_NOT_REGISTERED[eventType]) failures.push(`SHOPIFY/${eventType} is received at ${receiverPath} but Shopify is never told to send it. Add it to services/shopify/webhook-registration.service.ts, or name it in RECEIVED_NOT_REGISTERED here with the reason.`)
   } else if (registered.get(eventType) !== receiverPath) {
     failures.push(`SHOPIFY/${eventType} is received at ${receiverPath} but registered at ${registered.get(eventType)}. Shopify would deliver to a path nothing listens on.`)
   }
@@ -143,6 +159,10 @@ for (const [eventType, registeredPath] of registered) {
   if (!receiverPaths.has(eventType)) {
     failures.push(`SHOPIFY/${eventType} is registered at ${registeredPath} but no receiver listens there.`)
   }
+}
+for (const eventType of Object.keys(RECEIVED_NOT_REGISTERED)) {
+  if (registered.has(eventType)) failures.push(`SHOPIFY/${eventType} is registered with Shopify and also named in RECEIVED_NOT_REGISTERED. Remove the stale entry.`)
+  else if (!receiverPaths.has(eventType)) failures.push(`SHOPIFY/${eventType} is named in RECEIVED_NOT_REGISTERED but no receiver listens for it. Remove the stale entry.`)
 }
 
 // ── Rule 4: an account's auth status changes through ONE state machine ─────────
@@ -197,4 +217,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`  - ${failure}`)
   process.exit(1)
 }
-console.log('[inbound-ledger] OK — no inbound event is deleted, every written event type is replayable or named, what we receive is what Shopify is told to send, and no account status is written by hand.')
+console.log('[inbound-ledger] OK — no inbound event is deleted, every written event type is replayable or named, what we receive is what Shopify is told to send (or named with its reason), and no account status is written by hand.')

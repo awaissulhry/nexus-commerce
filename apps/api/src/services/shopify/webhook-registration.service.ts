@@ -2,6 +2,12 @@ import { publicApiOrigin } from '../public-api-origin.js'
 /**
  * P2.4 — register Nexus's Shopify webhooks with each connected shop, and reconcile.
  *
+ * 2026-10-15 — only what Shopify order import needs: the order topics and app/uninstalled, and only for an account
+ * whose order import was started (it has its start date, order-ingest-switch.ts). No product topics (Shopify follows
+ * Nexus: products/update would rename Nexus products, products/delete deactivate them), no inventory_levels/update (it
+ * would set Nexus counts from Shopify's), no privacy topics (configured with the app, not per shop). A subscription of
+ * any other topic already on the shop is listed in the result (`leftInPlace`) and never deleted: a person decides.
+ *
  * Nothing registered them. `ensureShopifySchemaSubscriptions` registers three metafield
  * topics and nothing else, so the seven product/order receivers — and now the five
  * lifecycle and privacy ones — existed as routes that Shopify had never been told
@@ -20,7 +26,7 @@ import { publicApiOrigin } from '../public-api-origin.js'
 import { shopifyAdmin } from './admin-client.js'
 import { collectShopifyPages } from './linked-products-gateway.js'
 import { logger } from '../../utils/logger.js'
-import { SHOPIFY_WEBHOOKS_OFF_MESSAGE, shopifyOrderIngestEnabled } from './order-ingest-switch.js'
+import { SHOPIFY_ORDER_IMPORT_NOT_STARTED_MESSAGE, SHOPIFY_WEBHOOKS_OFF_MESSAGE, shopifyOrderIngestEnabled, shopifyOrderIngestStart } from './order-ingest-switch.js'
 
 /**
  * Shopify's topic enum, the path we receive it on, and the `eventType` written to the
@@ -34,36 +40,18 @@ export interface ShopifyTopicRegistration {
   path: string
   /** What the receiver writes to `WebhookEvent.eventType`. */
   eventType: string
-  /**
-   * Some topics are configured in the Partner Dashboard rather than by the Admin API.
-   * Rather than guess which, the registration is ATTEMPTED and Shopify's own answer is
-   * recorded per topic — the same discipline P2.2 and P2.3 arrived at.
-   */
-  note?: string
 }
 
+/**
+ * The topics Shopify order import registers, and only these. orders/updated also carries a payment, a cancellation and
+ * a fulfilment status change, so no orders/paid, orders/cancelled or orders/fulfilled subscription is needed.
+ */
 export const SHOPIFY_TOPIC_REGISTRATIONS: ShopifyTopicRegistration[] = [
-  { topic: 'PRODUCTS_UPDATE', path: '/webhooks/shopify/products/update', eventType: 'product/update' },
-  { topic: 'PRODUCTS_DELETE', path: '/webhooks/shopify/products/delete', eventType: 'product/delete' },
-  { topic: 'INVENTORY_LEVELS_UPDATE', path: '/webhooks/shopify/inventory/update', eventType: 'inventory/update' },
   { topic: 'ORDERS_CREATE', path: '/webhooks/shopify/orders/create', eventType: 'order/create' },
   { topic: 'ORDERS_UPDATED', path: '/webhooks/shopify/orders/update', eventType: 'order/update' },
   { topic: 'FULFILLMENTS_CREATE', path: '/webhooks/shopify/fulfillments/create', eventType: 'fulfillment/create' },
   { topic: 'REFUNDS_CREATE', path: '/webhooks/shopify/refunds/create', eventType: 'refunds/create' },
   { topic: 'APP_UNINSTALLED', path: '/webhooks/shopify/app/uninstalled', eventType: 'app/uninstalled' },
-  { topic: 'APP_SCOPES_UPDATE', path: '/webhooks/shopify/app/scopes_update', eventType: 'app/scopes_update' },
-  {
-    topic: 'CUSTOMERS_DATA_REQUEST', path: '/webhooks/shopify/customers/data_request', eventType: 'customers/data_request',
-    note: 'Shopify may require the privacy topics to be set in the Partner Dashboard; the attempt records its own answer.',
-  },
-  {
-    topic: 'CUSTOMERS_REDACT', path: '/webhooks/shopify/customers/redact', eventType: 'customers/redact',
-    note: 'Shopify may require the privacy topics to be set in the Partner Dashboard; the attempt records its own answer.',
-  },
-  {
-    topic: 'SHOP_REDACT', path: '/webhooks/shopify/shop/redact', eventType: 'shop/redact',
-    note: 'Shopify may require the privacy topics to be set in the Partner Dashboard; the attempt records its own answer.',
-  },
 ]
 
 export interface TopicOutcome {
@@ -73,12 +61,28 @@ export interface TopicOutcome {
   detail?: string
 }
 
+/** A subscription of this app on the shop whose topic is not one order import registers. Never deleted here. */
+export interface LeftInPlaceSubscription {
+  topic: string
+  callbackUrl?: string
+  detail: string
+}
+
 export interface ShopifyRegistrationResult {
   accountId: string
   live: boolean
   reason?: string
   base?: string
   perTopic: TopicOutcome[]
+  leftInPlace?: LeftInPlaceSubscription[]
+}
+
+const WRITES_NEXUS_TOPIC = /^(PRODUCTS|INVENTORY_LEVELS|INVENTORY_ITEMS)_/
+
+function leftInPlaceDetail(topic: string): string {
+  return WRITES_NEXUS_TOPIC.test(topic)
+    ? 'A product or inventory topic, which order import does not register. While it exists Shopify keeps sending it to Nexus. Left in place: a person decides whether to delete it in Shopify.'
+    : 'Not an order topic. Left in place.'
 }
 
 /** The public HTTPS origin Shopify must be able to reach. */
@@ -97,6 +101,8 @@ function publicOrigin(): { origin: string } | { error: string } {
 export async function ensureShopifyWebhookSubscriptions(accountId: string): Promise<ShopifyRegistrationResult> {
   // Registration starts Shopify order ingest; every caller (route, job, script) is refused until it is on.
   if (!shopifyOrderIngestEnabled()) return { accountId, live: false, reason: SHOPIFY_WEBHOOKS_OFF_MESSAGE, perTopic: [] }
+  // Without its start date an account would receive orders it must not import: registered only after the start.
+  if (!(await shopifyOrderIngestStart(accountId))) return { accountId, live: false, reason: SHOPIFY_ORDER_IMPORT_NOT_STARTED_MESSAGE, perTopic: [] }
   const origin = publicOrigin()
   if ('error' in origin) return { accountId, live: false, reason: origin.error, perTopic: [] }
 
@@ -134,19 +140,25 @@ export async function ensureShopifyWebhookSubscriptions(accountId: string): Prom
       if (result?.webhookSubscription?.id && !result.userErrors?.length) {
         perTopic.push({ topic: row.topic, status: 'created', callbackUrl })
       } else {
-        // Shopify's own answer, kept verbatim. For the privacy topics this is where we
-        // learn whether the Admin API accepts them at all.
+        // Shopify's own answer, kept verbatim.
         perTopic.push({
           topic: row.topic, status: 'refused',
-          detail: [result?.userErrors?.map((e: { message: string }) => e.message).join('; '), row.note].filter(Boolean).join(' — '),
+          detail: result?.userErrors?.map((e: { message: string }) => e.message).join('; '),
         })
       }
     } catch (error) {
-      perTopic.push({
-        topic: row.topic, status: 'refused',
-        detail: [error instanceof Error ? error.message : String(error), row.note].filter(Boolean).join(' — '),
-      })
+      perTopic.push({ topic: row.topic, status: 'refused', detail: error instanceof Error ? error.message : String(error) })
     }
+  }
+
+  const registered = new Set(SHOPIFY_TOPIC_REGISTRATIONS.map((row) => row.topic))
+  const leftInPlace = existing
+    .filter((s) => !registered.has(s.topic))
+    .map((s) => ({ topic: s.topic, callbackUrl: s.endpoint?.callbackUrl, detail: leftInPlaceDetail(s.topic) }))
+  if (leftInPlace.some((s) => WRITES_NEXUS_TOPIC.test(s.topic))) {
+    logger.warn('[shopify-webhooks] product or inventory subscriptions are on the shop; left in place for a person to decide', {
+      accountId, topics: leftInPlace.filter((s) => WRITES_NEXUS_TOPIC.test(s.topic)).map((s) => s.topic).join(' '),
+    })
   }
 
   const refused = perTopic.filter((t) => t.status === 'refused')
@@ -155,5 +167,5 @@ export async function ensureShopifyWebhookSubscriptions(accountId: string): Prom
       accountId, refused: refused.map((t) => `${t.topic}: ${t.detail}`).join(' | '),
     })
   }
-  return { accountId, live: true, base: origin.origin, perTopic }
+  return { accountId, live: true, base: origin.origin, perTopic, leftInPlace }
 }

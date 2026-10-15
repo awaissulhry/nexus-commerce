@@ -16,7 +16,7 @@ import { registerShopifySchemaWebhook } from '../services/shopify/schema-sync.se
 import type { FastifyInstance } from "fastify";
 import prisma from "../db.js";
 import { WebhookValidator, registerRawJsonParser } from "../utils/webhook.js";
-import { inboundNotRecorded, recordInbound } from "../services/cx/ingress/ledger.js";
+import { InboundDeferred, inboundNotRecorded, recordInbound } from "../services/cx/ingress/ledger.js";
 import { claimInbound, runWithInboundClaim } from '../services/cx/ingress/claims.js';
 import { legacyIngress, verifiedChannelWorkspace, withIngressWorkspace } from "../lib/workspace-ingress.js";
 import { inboundHandlerFor } from "../services/cx/ingress/handlers.js";
@@ -35,6 +35,7 @@ import { resolveByShopifyId } from "../services/shopify-locations.service.js";
 // (CS.2 — drift threshold + auto-apply / review-needed gating).
 import { logger } from "../utils/logger.js";
 import { matchInboundSku, shopifyVariantListingStore } from "../services/listings/channel-sku-inbound.js";
+import { shopifyOrderIngressGate, type ShopifyOrderEventType, type ShopifyOrderGate } from "../services/shopify/order-ingest-switch.js";
 
 interface ShopifyWebhookPayload {
   id: string;
@@ -58,50 +59,22 @@ function parseShopifyTriggeredAt(request: { headers: Record<string, unknown> }):
 }
 
 /**
- * Process product update webhook
+ * Process product update webhook.
+ *
+ * 2026-10-15 — Shopify follows Nexus: a Shopify product edit NEVER renames a Nexus product. The legacy path here copied
+ * the Shopify title into `Product.name` for a product whose old `shopifyProductId` column matched, which would overwrite
+ * the Nexus names (Italian) with the store's English titles. Order import registers no product topic, so this receives
+ * nothing; a stray delivery (a subscription left on the shop) only marks a content-managed listing for review, which
+ * changes no product, and is otherwise acknowledged with one log line.
  */
 export async function handleProductUpdate(payload: ShopifyWebhookPayload): Promise<void> {
   try {
     const product = payload as any;
     const shopifyProductId = String(product.id);
 
-    console.log(`[ShopifyWebhooks] Processing product update: ${shopifyProductId}`);
-
     if (await recordManagedContentChange(shopifyProductId, product.updated_at)) return;
 
-    // Find product in database
-    const dbProduct = await (prisma as any).product.findFirst({
-      where: { shopifyProductId },
-    });
-
-    if (!dbProduct) {
-      console.log(`[ShopifyWebhooks] Product ${shopifyProductId} not found in database`);
-      return;
-    }
-
-    // Update product details
-    await (prisma as any).product.update({
-      where: { id: dbProduct.id },
-      data: {
-        name: product.title,
-        updatedAt: new Date(),
-      },
-    });
-
-    // P-RT.2 — fan out to ProductEvent timeline + SSE listing-events
-    // bus so /products + /products/[id]/edit refresh within ~250ms
-    // instead of waiting for the 30s usePolledList tick. emit() writes
-    // the audit row AND publishes product.updated to the bus via the
-    // ssePayloadFor mapping (P-RT.1).
-    void productEventService.emit({
-      aggregateId: dbProduct.id,
-      aggregateType: 'Product',
-      eventType: 'PRODUCT_UPDATED',
-      data: { shopifyProductId, title: product.title },
-      metadata: { source: 'WEBHOOK', shopifyProductId, channel: 'SHOPIFY' },
-    });
-
-    console.log(`[ShopifyWebhooks] Product ${shopifyProductId} updated successfully`);
+    logger.info('[ShopifyWebhooks] products/update acknowledged, nothing written: a Shopify title never renames a Nexus product', { shopifyProductId });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[ShopifyWebhooks] Failed to process product update:", message);
@@ -919,6 +892,33 @@ export async function handleFulfillmentCreate(payload: ShopifyWebhookPayload): P
 
 
 /**
+ * Shopify order import's start date (T0), at the one door every order topic passes: the receiver below and the replay
+ * registry (services/cx/ingress/handlers.ts) both take these, never the bare writers above. The gate holds the webhook
+ * while the server switch is off, and acknowledges and ignores it (no order, no hold, no stock movement) when the account
+ * has no start date or the order was created before it (services/shopify/order-ingest-switch.ts). An order created at or
+ * after the start date goes to the writer unchanged.
+ */
+type ShopifyOrderWriter = (payload: ShopifyWebhookPayload, context?: { connectionId?: string | null }) => Promise<unknown>;
+
+function fromStartDate(eventType: ShopifyOrderEventType, write: ShopifyOrderWriter) {
+  return async (payload: ShopifyWebhookPayload, context?: { connectionId?: string | null }): Promise<unknown> => {
+    const verdict = await shopifyOrderIngressGate(eventType, payload, context?.connectionId);
+    if (verdict.admit) return write(payload, context);
+    const gate = verdict as Extract<ShopifyOrderGate, { admit: false }>; // the api tsconfig is not strict: no narrowing
+    const body = payload as { id?: unknown; order_id?: unknown };
+    logger.info(`[ShopifyWebhooks] ${eventType} acknowledged, nothing written: ${gate.sentence}`, {
+      eventType, skip: gate.code, shopifyOrderId: String(body?.order_id ?? body?.id ?? ''), connectionId: context?.connectionId ?? null,
+    });
+    return { ignored: gate.code };
+  };
+}
+
+export const ingestShopifyOrderCreate = fromStartDate('order/create', handleOrderCreate);
+export const ingestShopifyOrderUpdate = fromStartDate('order/update', handleOrderUpdate);
+export const ingestShopifyFulfillmentCreate = fromStartDate('fulfillment/create', handleFulfillmentCreate);
+export const ingestShopifyRefundCreate = fromStartDate('refunds/create', handleRefundCreate);
+
+/**
  * P2.4 — the app lifecycle and privacy topics.
  *
  * `spec.ts` has declared these five as Shopify's lifecycle topics since the connector
@@ -1237,6 +1237,9 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
           const extra = result && typeof result === "object" ? (result as Record<string, unknown>) : {};
           return reply.send({ success: true, ...extra });
         } catch (error) {
+          // A hold (Shopify order import switched off) is recorded and rescheduled by the claim without spending an
+          // attempt: answered 200, so Shopify does not retry it and does not count it as a failing subscription.
+          if (error instanceof InboundDeferred) return reply.send({ success: true, held: true });
           const message = error instanceof Error ? error.message : String(error);
           logger.error(`[ShopifyWebhooks] ${eventType} failed`, { error: message });
           return reply.status(500).send({ success: false, error: message });
@@ -1251,10 +1254,11 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
   receiveShopify("/webhooks/shopify/products/update", "product/update", handleProductUpdate);
   receiveShopify("/webhooks/shopify/products/delete", "product/delete", handleProductDelete);
   receiveShopify("/webhooks/shopify/inventory/update", "inventory/update", handleInventoryUpdate);
-  receiveShopify("/webhooks/shopify/orders/create", "order/create", handleOrderCreate);
-  receiveShopify("/webhooks/shopify/orders/update", "order/update", handleOrderUpdate);
-  receiveShopify("/webhooks/shopify/fulfillments/create", "fulfillment/create", handleFulfillmentCreate);
-  receiveShopify("/webhooks/shopify/refunds/create", "refunds/create", handleRefundCreate);
+  // The order topics pass Shopify order import's start date first (fromStartDate).
+  receiveShopify("/webhooks/shopify/orders/create", "order/create", ingestShopifyOrderCreate);
+  receiveShopify("/webhooks/shopify/orders/update", "order/update", ingestShopifyOrderUpdate);
+  receiveShopify("/webhooks/shopify/fulfillments/create", "fulfillment/create", ingestShopifyFulfillmentCreate);
+  receiveShopify("/webhooks/shopify/refunds/create", "refunds/create", ingestShopifyRefundCreate);
 
   // P2.4 — the lifecycle and privacy topics, on Shopify's own topic paths.
   receiveShopify("/webhooks/shopify/app/uninstalled", "app/uninstalled", handleAppUninstalled, { lifecycle: true });

@@ -29,8 +29,9 @@ export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
     method, url: `/products/:productId/shopify-linked${suffix}`, bodyLimit: 10 * 1024 * 1024,
     handler: async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store')
-      // Registering the twelve topics starts Shopify order ingest with no start time (T0): refused, before any
-      // lookup, until the order-ingest switch is on. The products.edit permission check still runs first.
+      // Registering the order topics is part of Shopify order import: refused, before any lookup, until the
+      // order-ingest switch is on (the service also refuses an account with no start date). The products.edit
+      // permission check still runs first.
       if (suffix === '/webhook-subscriptions' && !shopifyOrderIngestEnabled()) return reply.code(409).send({ error: SHOPIFY_WEBHOOKS_OFF_MESSAGE, code: SHOPIFY_WEBHOOKS_OFF_CODE })
       try {
         const query = querySchema.parse(request.query), id = request.params.productId
@@ -66,9 +67,9 @@ export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
         }
         if (suffix === '/schema-subscriptions') return await ensureShopifySchemaSubscriptions(destination.accountId)
         if (suffix === '/enable-field') return await enableShopifyCategoryField(id, query, request.body)
-        // P2.4 — the OTHER twelve. `schema-subscriptions` registers three metafield
-        // topics; nothing registered the product, order, lifecycle or privacy topics,
-        // so Shopify had never been told to send anything the main receivers listen for.
+        // P2.4 — `schema-subscriptions` registers three metafield topics; this one the order topics and
+        // app/uninstalled, only for an account whose Shopify order import was started (it has its start date).
+        // Starting it is POST /api/shopify/order-import/:accountId/start.
         if (suffix === '/webhook-subscriptions') {
           const { ensureShopifyWebhookSubscriptions } = await import('../../services/shopify/webhook-registration.service.js')
           return await ensureShopifyWebhookSubscriptions(destination.accountId)
