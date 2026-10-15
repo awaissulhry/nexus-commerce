@@ -72,10 +72,13 @@ describe('the PR 5 tools', () => {
   it('are Nexus changes a person approves: alwaysAsk, ask at most, reach Google, re-check fields declared, no money', () => {
     expect(GOOGLE_ADS_ADS_ASSETS_TOOLS.map((t) => t.name)).toEqual(['create-google-rsa', 'set-google-assets'])
     for (const t of GOOGLE_ADS_ADS_ASSETS_TOOLS) {
-      expect(t).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'ask', openWorld: true, readOnly: false, riskTier: 'high', requiresApprovalDefault: true, reversibility: 'full' })
+      expect(t).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'ask', openWorld: true, readOnly: false, riskTier: 'high', requiresApprovalDefault: true })
       expect(MATERIAL_PREVIEW_FIELDS[t.name]).toEqual(['basis', 'plan', 'reach'])
       expect(t.restrictedFields).toBeUndefined()
     }
+    // Undo of an ad made pauses it (Google keeps it); a pause is not undone by the tool: partial.
+    expect(tool('create-google-rsa').reversibility).toBe('partial')
+    expect(tool('set-google-assets').reversibility).toBe('full')
   })
 })
 
@@ -134,6 +137,12 @@ describe('create-google-rsa', () => {
       .toMatchObject({ refusal: expect.stringContaining('showing them again is an enable') })
   })
 
+  it('undo of a run Google never gave an id for: "now" passes it through, and the request says why it cannot undo', async () => {
+    const change = { before: { campaignId: '21', adGroupId: '51', ads: [], ...ACCOUNT }, after: { campaignId: '21', adGroupId: '51', created: [{ adId: 'op:0', status: 'ENABLED' }], paused: [], ...ACCOUNT } }
+    expect(await tool('create-google-rsa').undo!.current(change)).toEqual(change.after)
+    expect(tool('create-google-rsa').undo!.request(change)).toEqual({ refusal: 'This change does not record the ids Google gave the ads it made: pause them in Google Ads.' })
+  })
+
   it('never by a rule: a run the business\'s rule decided is refused before anything is sent', async () => {
     const ask = parsed('create-google-rsa', { campaignId: '21', adGroupId: '51', ads: [AD] })
     h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
@@ -146,7 +155,7 @@ describe('create-google-rsa', () => {
 })
 
 describe('set-google-assets', () => {
-  const ask = parsed('set-google-assets', { campaignId: '21', callouts: ['Ships in 24h', 'free returns'], unlinkAssets: [{ assetId: '9', fieldType: 'callout' }] })
+  const ask = parsed('set-google-assets', { campaignId: '21', callouts: ['Ships in 24h', 'Free Returns'], unlinkAssets: [{ assetId: '9', fieldType: 'callout' }] })
 
   it('makes and links, unlinks; runs as ONE request; undo unlinks what it linked and links again what it unlinked', async () => {
     h.mutate.mockResolvedValue({ responses: [], ops: 3, requestId: null })
@@ -154,7 +163,7 @@ describe('set-google-assets', () => {
     expect(preview).toMatchObject({
       spendsMoney: false,
       operations: 3,
-      skipped: ['A callout "free returns" is already linked to "Search A".'],
+      skipped: ['Callout "Free Returns" is already linked to "Search A".'],
       warnings: ['Unlinking 1 asset from "Search A": its ads show without it (the asset stays in the account).'],
     })
     h.mutate.mockReset()
@@ -166,14 +175,14 @@ describe('set-google-assets', () => {
       { campaignAssetOperation: { create: { campaign: 'customers/1234567890/campaigns/21', asset: 'customers/1234567890/assets/-1', fieldType: 'CALLOUT' } } },
       { campaignAssetOperation: { remove: 'customers/1234567890/campaignAssets/21~9~CALLOUT' } },
     ])
-    const after = { campaignId: '21', linked: [{ assetId: '301', fieldType: 'CALLOUT', text: 'Ships in 24h' }], unlinked: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free Returns' }], ...ACCOUNT }
-    expect(run.change).toEqual({ before: { campaignId: '21', links: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free Returns' }], ...ACCOUNT }, after })
+    const after = { campaignId: '21', linked: [{ assetId: '301', fieldType: 'CALLOUT', text: 'Ships in 24h', status: 'ENABLED' }], unlinked: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free Returns', status: 'ENABLED' }], ...ACCOUNT }
+    expect(run.change).toEqual({ before: { campaignId: '21', links: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free Returns', status: 'ENABLED' }], ...ACCOUNT }, after })
     expect(run.data).toMatchObject({ linked: after.linked, review: expect.stringContaining('google-ads-live view assets') })
     // Now 301 is linked and 9 is not: nothing moved since, so undo may run.
     h.live.assets = [{ ...(h.live.assets[0] as object), assetId: '301', text: 'Ships in 24h' }]
     expect(await tool('set-google-assets').undo!.current(run.change!)).toEqual(after)
     const undo = tool('set-google-assets').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
-    expect(undo).toMatchObject({ tool: 'set-google-assets', args: { accountId: 'g-1', campaignId: '21', unlinkAssets: [{ assetId: '301', fieldType: 'CALLOUT' }], linkAssets: [{ assetId: '9', fieldType: 'CALLOUT' }] } })
+    expect(undo).toMatchObject({ tool: 'set-google-assets', args: { accountId: 'g-1', campaignId: '21', unlinkAssets: [{ assetId: '301', fieldType: 'CALLOUT' }], linkAssets: [{ assetId: '9', fieldType: 'CALLOUT', status: 'ENABLED' }] } })
     expect(tool('set-google-assets').input.safeParse(undo.args).success).toBe(true)
   })
 

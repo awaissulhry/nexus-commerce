@@ -4,7 +4,7 @@
  * / header problem refused before anything is sent, what is skipped, and the record undo reads (ids by operation index).
  */
 import { describe, expect, it } from 'vitest'
-import { adsChangeDraft, adsRecordAfterRun, displayWidth, type AdsLiveState, type RsaAd } from './change-ads.js'
+import { adsChangeDraft, adsRecordAfterRun, displayWidth, tagWarning, uncountedTags, type AdsLiveState, type RsaAd } from './change-ads.js'
 import { assetsChangeDraft, assetsRecordAfterRun, snippetHeader, type AssetsLiveState } from './change-assets.js'
 import { liveAccountAssetOf, liveAdGroupPlaceOf, liveAdGroupPlaceQuery, liveAssetsByIdQuery } from './live-ads-assets.js'
 import type { LiveAd, LiveAsset, LiveCampaign } from './live.js'
@@ -35,6 +35,18 @@ describe('displayWidth — the length Google counts', () => {
     expect(displayWidth('한국어 ok')).toBe(9)
     expect(displayWidth('Ｗ')).toBe(2)
     expect(displayWidth('{KeyWord:Moto jackets}')).toBe(12)
+  })
+
+  it('NFC first: a letter and its combining accent are one character', () => {
+    expect(displayWidth(`Perche${String.fromCharCode(0x301)}`)).toBe(6)
+  })
+
+  it('a tag without default text counts 0 and is named: Google\'s check judges it', () => {
+    expect(displayWidth('{LOCATION(City)} jackets')).toBe(8)
+    expect(displayWidth('Sale ends {COUNTDOWN("2026/10/20 12:00:00")}')).toBe(10)
+    expect(uncountedTags('{KeyWord:Moto} in {LOCATION(City)}')).toEqual(['{LOCATION(City)}'])
+    expect(tagWarning('ad 1, headline 2', 'Moto in {LOCATION(City)}')).toBe('ad 1, headline 2: Nexus did not count {LOCATION(City)} (a tag without default text); Google\'s check judges its length.')
+    expect(tagWarning('ad 1, headline 2', 'Moto')).toBeNull()
   })
 })
 
@@ -91,6 +103,18 @@ describe('adsChangeDraft — make responsive search ads', () => {
     if ('refusal' in on) throw new Error(on.refusal)
     expect((on.operations[0] as any).adGroupAdOperation.create.status).toBe('ENABLED')
     expect(on.spendsMoney).toEqual(['Makes 1 responsive search ad ENABLED in the enabled ad group "Jackets" of campaign "Search A": it shows (and spends) as soon as Google approves it.'])
+    // An enabled campaign with a paused ad group: still PAUSED by default (enabling the ad group later switches on nothing
+    // unseen); enable: true is SPENDS MONEY, with the note that nothing serves until the ad group is enabled.
+    const groupOff: AdsLiveState = { place: place('ENABLED', 'PAUSED'), ads: [] }
+    const quiet = adsChangeDraft(C, { campaignId: '21', adGroupId: '51', ads: [AD] }, groupOff)
+    if ('refusal' in quiet) throw new Error(quiet.refusal)
+    expect((quiet.operations[0] as any).adGroupAdOperation.create.status).toBe('PAUSED')
+    expect(quiet.spendsMoney).toEqual([])
+    expect(quiet.warnings).toEqual(['The new ads are made PAUSED: campaign "Search A" is enabled, so enabled ads would show as soon as ad group "Jackets" is enabled. Ask with enable: true to make them enabled (that spends money).'])
+    const loud = adsChangeDraft(C, { campaignId: '21', adGroupId: '51', ads: [AD, AD], enable: true }, groupOff)
+    if ('refusal' in loud) throw new Error(loud.refusal)
+    expect((loud.operations[0] as any).adGroupAdOperation.create.status).toBe('ENABLED')
+    expect(loud.spendsMoney).toEqual(['Makes 2 responsive search ads ENABLED in ad group "Jackets" of the enabled campaign "Search A": the ad group is paused, so nothing serves until it is enabled; then they show (and spend).'])
     const off = adsChangeDraft(C, { campaignId: '21', adGroupId: '51', ads: [AD], enable: false }, paused)
     if ('refusal' in off) throw new Error(off.refusal)
     expect((off.operations[0] as any).adGroupAdOperation.create.status).toBe('PAUSED')
@@ -101,8 +125,8 @@ describe('adsChangeDraft — make responsive search ads', () => {
     const bad: RsaAd = {
       headlines: [
         { text: 'A headline that is far too long!' }, // 32
-        { text: 'free returns', pin: 'DESCRIPTION_1' },
-        { text: 'Free  Returns' },
+        { text: 'Free returns', pin: 'DESCRIPTION_1' },
+        { text: 'Free  returns' },
         { text: '日本語のとても長い見出しです日本語の' }, // 18 wide characters = 36
       ],
       descriptions: [{ text: 'x'.repeat(91) }],
@@ -118,12 +142,19 @@ describe('adsChangeDraft — make responsive search ads', () => {
       'ad 2, headline 4 "日本語のとても長い見出しです日本語の" is 36 characters long (a double-width character counts 2): Google allows 30',
       'ad 2, description 1 "' ,
       'is 91 characters long: Google allows 90',
-      'ad 2, headline 3 "Free  Returns" repeats headline 2 (Google refuses duplicates)',
+      'ad 2, headline 3 "Free  returns" repeats headline 2 exactly (Google refuses duplicates)',
       'ad 2, headline 2: pin DESCRIPTION_1 is not a headline position (HEADLINE_1, HEADLINE_2, HEADLINE_3)',
       'ad 2: path2 needs path1',
       'ad 2: "http://shop.example/jackets" is not an https address',
     ]) expect(d.refusal).toContain(part)
     expect(d.refusal).not.toContain('ad 1')
+  })
+
+  it('only exact duplicates are refused (case counts: Google\'s check judges the rest); a tag without default text is a warning', () => {
+    const cased: RsaAd = { ...AD, headlines: [{ text: '{LOCATION(City)} Jackets' }, { text: 'Moto jackets' }, { text: 'MOTO JACKETS' }] }
+    const d = adsChangeDraft(C, { campaignId: '21', adGroupId: '51', ads: [cased] }, paused)
+    if ('refusal' in d) throw new Error(d.refusal)
+    expect(d.warnings).toContain('ad 1, headline 1: Nexus did not count {LOCATION(City)} (a tag without default text); Google\'s check judges its length.')
   })
 
   it('pins that leave headline 1, headline 2 or description 1 with nothing to show are refused', () => {
@@ -222,7 +253,11 @@ describe('assetsChangeDraft', () => {
     expect(d.changes['structured snippet "Stili: Racing, Touring, Urban"']).toEqual({ from: '(none)', to: 'new, linked — Racing, Touring, Urban' })
     expect(d.after).toEqual({
       campaignId: '21',
-      linked: [{ assetId: 'op:0', fieldType: 'SITELINK', text: 'Contact' }, { assetId: 'op:1', fieldType: 'CALLOUT', text: 'Ships in 24h' }, { assetId: 'op:2', fieldType: 'STRUCTURED_SNIPPET', text: 'Stili: Racing, Touring, Urban' }],
+      linked: [
+        { assetId: 'op:0', fieldType: 'SITELINK', text: 'Contact', status: 'ENABLED' },
+        { assetId: 'op:1', fieldType: 'CALLOUT', text: 'Ships in 24h', status: 'ENABLED' },
+        { assetId: 'op:2', fieldType: 'STRUCTURED_SNIPPET', text: 'Stili: Racing, Touring, Urban', status: 'ENABLED' },
+      ],
       unlinked: [],
     })
     const after = assetsRecordAfterRun(d.after as never, [
@@ -231,25 +266,27 @@ describe('assetsChangeDraft', () => {
     expect(after.linked.map((l) => l.assetId)).toEqual(['301', '302', '303'])
   })
 
-  it('already linked with the same text (or asked twice): skipped, not made twice', () => {
+  it('already linked with the same text, or named twice in the request: skipped, not made twice (case counts)', () => {
+    const live: AssetsLiveState = { ...ASSETS, linked: ASSETS.linked.map((a) => (a.assetId === '9' ? { ...a, status: 'PAUSED' } : a)) }
     const d = assetsChangeDraft(C, {
       campaignId: '21',
-      callouts: ['free returns', 'Gift wrap', 'Gift  wrap'],
-      sitelinks: [{ linkText: 'SIZE GUIDE', finalUrl: 'https://shop.example/size' }],
+      callouts: ['Free Returns', 'Gift wrap', 'Gift  wrap', 'free returns'],
+      sitelinks: [{ linkText: 'Size guide', finalUrl: 'https://shop.example/other' }],
       structuredSnippets: [{ header: 'Tipi', language: 'it', values: ['Stivali', 'Giacche', 'Guanti'] }],
-    }, ASSETS)
+    }, live)
     if ('refusal' in d) throw new Error(d.refusal)
-    expect(d.operations).toHaveLength(2)
+    expect(d.operations).toHaveLength(4)
     expect(d.skipped).toEqual([
-      'A sitelink "SIZE GUIDE" is already linked to "Search A".',
-      'A callout "free returns" is already linked to "Search A".',
-      'A callout "Gift  wrap" is already linked to "Search A".',
-      'A structured snippet "Tipi: Stivali, Giacche, Guanti" is already linked to "Search A".',
+      'Sitelink "Size guide": the same link text is already linked to "Search A" (URL https://shop.example/size).',
+      'Callout "Free Returns" is already linked to "Search A" (its link is paused).',
+      'Callout "Gift  wrap" is named twice in this request.',
+      'Structured snippet "Tipi: Stivali, Giacche, Guanti" is already linked to "Search A".',
     ])
+    expect((d.after as { linked: Array<{ text: string }> }).linked.map((l) => l.text)).toEqual(['Gift wrap', 'free returns'])
   })
 
   it('unlink removes the campaign link (not the asset) and says the ads show without it; link again an existing asset', () => {
-    const live: AssetsLiveState = { ...ASSETS, assets: [{ assetId: '12', type: 'CALLOUT', text: 'Made in Italy', finalUrls: [] }] }
+    const live: AssetsLiveState = { ...ASSETS, linked: ASSETS.linked.map((a) => (a.assetId === '9' ? { ...a, status: 'PAUSED' } : a)), assets: [{ assetId: '12', type: 'CALLOUT', text: 'Made in Italy', finalUrls: [] }] }
     const d = assetsChangeDraft(C, { campaignId: '21', unlinkAssets: [{ assetId: '9', fieldType: 'CALLOUT' }, { assetId: '10', fieldType: 'CALLOUT' }], linkAssets: [{ assetId: '12', fieldType: 'CALLOUT' }] }, live)
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations).toEqual([
@@ -257,14 +294,22 @@ describe('assetsChangeDraft', () => {
       { campaignAssetOperation: { remove: `${C}/campaignAssets/21~9~CALLOUT` } },
     ])
     expect(d.skipped).toEqual(['Asset 10 is not linked to "Search A" as a callout.'])
-    expect(d.warnings).toEqual(['Unlinking 1 asset from "Search A": its ads show without it (the asset stays in the account).'])
-    expect(d.changes['callout "Free Returns" (asset 9)']).toEqual({ from: 'linked', to: 'unlinked (the ads show without it)' })
-    expect(d.before).toEqual({ campaignId: '21', links: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free Returns' }] })
-    expect(d.after).toEqual({ campaignId: '21', linked: [{ assetId: '12', fieldType: 'CALLOUT', text: 'Made in Italy' }], unlinked: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free Returns' }] })
+    expect(d.warnings).toEqual([
+      'Unlinking 1 asset from "Search A": its ads show without it (the asset stays in the account).',
+      '1 link taken off is paused now (it shows nothing today); undo links it again paused.',
+    ])
+    expect(d.changes['callout "Free Returns" (asset 9)']).toEqual({ from: 'linked, paused (it shows nothing now)', to: 'unlinked (the ads show without it)' })
+    expect(d.before).toEqual({ campaignId: '21', links: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free Returns', status: 'PAUSED' }] })
+    expect(d.after).toEqual({ campaignId: '21', linked: [{ assetId: '12', fieldType: 'CALLOUT', text: 'Made in Italy', status: 'ENABLED' }], unlinked: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free Returns', status: 'PAUSED' }] })
+    // Undo's relink of a link that was paused: it goes back paused.
+    const back = assetsChangeDraft(C, { campaignId: '21', linkAssets: [{ assetId: '12', fieldType: 'CALLOUT', status: 'PAUSED' }] }, live)
+    if ('refusal' in back) throw new Error(back.refusal)
+    expect(back.operations).toEqual([{ campaignAssetOperation: { create: { campaign: `${C}/campaigns/21`, asset: `${C}/assets/12`, fieldType: 'CALLOUT', status: 'PAUSED' } } }])
+    expect(back.changes['callout "Made in Italy" (asset 12)']).toEqual({ from: 'not linked', to: 'linked, paused (it shows nothing)' })
     expect(d.summary).toBe('Google Ads assets of campaign "Search A": link 1 existing asset; unlink 1 asset.')
     expect(assetsChangeDraft(C, { campaignId: '21', linkAssets: [{ assetId: '12', fieldType: 'SITELINK' }] }, live)).toEqual({ refusal: 'Asset 12 is a CALLOUT, not a sitelink.' })
     expect(assetsChangeDraft(C, { campaignId: '21', linkAssets: [{ assetId: '9', fieldType: 'CALLOUT' }] }, { ...live, assets: [{ assetId: '9', type: 'CALLOUT', text: 'Free Returns', finalUrls: [] }] }))
-      .toEqual({ refusal: 'Nothing to change: The callout "Free Returns" (asset 9) is already linked to "Search A".' })
+      .toEqual({ refusal: 'Nothing to change: The callout "Free Returns" (asset 9) is already linked to "Search A" (its link is paused).' })
   })
 
   it('every length, description, URL, header and value problem is refused before anything is sent, all listed', () => {
@@ -272,7 +317,7 @@ describe('assetsChangeDraft', () => {
       campaignId: '21',
       sitelinks: [{ linkText: 'A sitelink text that is long', description1: 'Only one line', finalUrl: 'http://shop.example' }, { linkText: 'Ok', description1: 'x'.repeat(36), description2: 'fine', finalUrl: 'https://shop.example/ok' }],
       callouts: ['A callout that is too long!'],
-      structuredSnippets: [{ header: 'Colours', values: ['Red', 'Blue'] }, { header: 'Tipi', language: 'it', values: ['Rosso', 'red', 'A value that is far too long'] }],
+      structuredSnippets: [{ header: 'Colours', values: ['Red', 'Blue'] }, { header: 'Tipi', language: 'it', values: ['Rosso', 'Red', 'A value that is far too long'] }],
     }, ASSETS)
     if (!('refusal' in d)) throw new Error('expected a refusal')
     expect(d.refusal).toMatch(/^Not queued — the assets break Google's rules \(nothing was sent\): /)
@@ -285,7 +330,7 @@ describe('assetsChangeDraft', () => {
       'callout 1 "A callout that is too long!" is 27 characters long: Google allows 25',
       'structured snippet 1: header "Colours" is not one of Google\'s headers in English',
       'structured snippet 1: 2 values (Google needs 3 to 10)',
-      'structured snippet 2, value 2 "red" repeats structured snippet 1, value 1',
+      'structured snippet 2, value 2 "Red" repeats structured snippet 1, value 1 exactly',
       'structured snippet 2, value 3 "A value that is far too long" is 28 characters long: Google allows 25',
     ]) expect(d.refusal).toContain(part)
   })

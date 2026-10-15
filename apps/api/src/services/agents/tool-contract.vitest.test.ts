@@ -710,8 +710,8 @@ describe('C1 — every registered tool keeps the contract', () => {
         after: { campaignId: '21', adGroupId: '51', created: [{ adId: '701', status: 'ENABLED' }], paused: [], accountId: 'g-1', customerId: '1234567890' },
       },
       'set-google-assets': {
-        before: { campaignId: '21', links: [], accountId: 'g-1', customerId: '1234567890' },
-        after: { campaignId: '21', linked: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free returns' }], unlinked: [], accountId: 'g-1', customerId: '1234567890' },
+        before: { campaignId: '21', links: [{ assetId: '10', fieldType: 'CALLOUT', text: 'Gift wrap', status: 'PAUSED' }], accountId: 'g-1', customerId: '1234567890' },
+        after: { campaignId: '21', linked: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free returns', status: 'ENABLED' }], unlinked: [{ assetId: '10', fieldType: 'CALLOUT', text: 'Gift wrap', status: 'PAUSED' }], accountId: 'g-1', customerId: '1234567890' },
       },
       // L7 — products created (parent and a variation), and products binned.
       'create-product': { before: { products: [] }, after: { products: [{ id: 'p1', deleted: false }, { id: 'p2', deleted: false }] } },

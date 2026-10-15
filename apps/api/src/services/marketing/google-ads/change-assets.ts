@@ -14,8 +14,9 @@
  *                        1–25.
  *   AssetOperation       create (an asset is never removed through the API: unlink it from the campaign).
  *   CampaignAsset        campaign, asset, field_type (AssetFieldType SITELINK / CALLOUT / STRUCTURED_SNIPPET), all
- *                        immutable; resource name customers/{c}/campaignAssets/{campaign_id}~{asset_id}~{field_type};
- *                        CampaignAssetOperation remove takes that resource name.
+ *                        immutable; status (AssetLinkStatus ENABLED / PAUSED / REMOVED); resource name
+ *                        customers/{c}/campaignAssets/{campaign_id}~{asset_id}~{field_type}; CampaignAssetOperation
+ *                        remove takes that resource name. A link taken off and put back by undo keeps its status.
  *   AssetError DUPLICATE_ASSET "Assets are duplicated across operations": the same asset twice in a request is refused.
  *   MutateOperationResponse  asset_result, campaign_asset_result (JSON assetResult, campaignAssetResult).
  * Structured snippet headers (developers.google.com/google-ads/api/data/structured-snippet-headers, 2026-10-15): "The
@@ -25,7 +26,7 @@
  * same header or across different headers".
  */
 import { changeLines, plural, type GoogleChangeDraft } from './change-draft.js'
-import { httpsUrlProblem, textKey, widthProblem } from './change-ads.js'
+import { httpsUrlProblem, tagWarning, textKey, widthProblem } from './change-ads.js'
 import type { LiveAsset, LiveCampaign } from './live.js'
 import type { LiveAccountAsset } from './live-ads-assets.js'
 import type { GoogleMutateOperation, GoogleMutateResponse } from './write-client.js'
@@ -112,8 +113,9 @@ export function snippetHeaders(language: string): { language: string; headers: s
 export function snippetHeader(asked: string, language = 'en'): { header: string } | { problem: string } {
   const row = snippetHeaders(language)
   if (!row) return { problem: `language "${language}" is not one Google has snippet headers for (${SNIPPET_LANGUAGES.join(', ')})` }
-  const want = textKey(asked)
-  const own = row.headers.find((h) => h && textKey(h) === want)
+  const fold = (text: string) => textKey(text).toLowerCase()
+  const want = fold(asked)
+  const own = row.headers.find((h) => h && fold(h) === want)
   if (own) return { header: own }
   const english = want === 'service catalog' ? 'services' : want
   const column = SNIPPET_HEADER_NAMES.findIndex((n) => n.toLowerCase() === english)
@@ -125,7 +127,9 @@ export function snippetHeader(asked: string, language = 'en'): { header: string 
 
 export interface SitelinkRequest { linkText: string; description1?: string | null; description2?: string | null; finalUrl: string }
 export interface SnippetRequest { header: string; language?: string | null; values: string[] }
-export interface AssetRef { assetId: string; fieldType: AssetFieldType }
+export type AssetLinkStatus = 'ENABLED' | 'PAUSED'
+/** An asset of the account by id and what it is in the campaign; `status` only for a link (again): PAUSED keeps it paused. */
+export interface AssetRef { assetId: string; fieldType: AssetFieldType; status?: AssetLinkStatus }
 
 export interface AssetsChangeRequest {
   campaignId: string
@@ -147,8 +151,11 @@ export interface AssetsLiveState {
   assets: LiveAccountAsset[]
 }
 
-/** One link the change made or took away; `assetId` is `op:<index>` for a new asset until Google gave its id. */
-export interface AssetLink { assetId: string; fieldType: AssetFieldType; text: string }
+/**
+ * One link the change made or took away, with its status (a link taken off while paused is put back paused); `assetId`
+ * is `op:<index>` for a new asset until Google gave its id.
+ */
+export interface AssetLink { assetId: string; fieldType: AssetFieldType; text: string; status: AssetLinkStatus }
 export interface AssetsChangeRecord { campaignId: string; linked: AssetLink[]; unlinked: AssetLink[] }
 /** What it replaced: the links it took away. */
 export interface AssetsChangeBefore { campaignId: string; links: AssetLink[] }
@@ -168,6 +175,8 @@ function sameKey(fieldType: string | null, asset: { text?: string | null; header
   return `${fieldType}:${textKey(asset.text)}`
 }
 const linkKey = (assetId: string, fieldType: string | null) => `${assetId}~${fieldType}`
+const linkStatus = (status: string | null | undefined): AssetLinkStatus => (status === 'PAUSED' ? 'PAUSED' : 'ENABLED')
+const pausedNote = (status: string | null | undefined) => (status === 'PAUSED' ? ' (its link is paused)' : '')
 
 export function assetsChangeDraft(customer: string, request: AssetsChangeRequest, live: AssetsLiveState): GoogleChangeDraft | { refusal: string } {
   const sitelinks = request.sitelinks ?? []
@@ -181,9 +190,12 @@ export function assetsChangeDraft(customer: string, request: AssetsChangeRequest
 
   // 1. Google's text rules, every problem at once.
   const problems: string[] = []
+  const tagNotes: string[] = []
+  const tags = (where: string, text: string | null | undefined) => { const w = tagWarning(where, text); if (w) tagNotes.push(w) }
   const L = ASSET_LIMITS
   sitelinks.forEach((s, i) => {
     const where = `sitelink ${i + 1}`
+    tags(`${where}, link text`, s.linkText); tags(`${where}, description1`, s.description1); tags(`${where}, description2`, s.description2)
     const text = widthProblem(`${where}, link text`, s.linkText, L.linkText)
     if (text) problems.push(text)
     const d1 = s.description1?.trim() ?? ''
@@ -194,7 +206,7 @@ export function assetsChangeDraft(customer: string, request: AssetsChangeRequest
     const url = httpsUrlProblem(where, s.finalUrl)
     if (url) problems.push(url)
   })
-  callouts.forEach((c, i) => { const p = widthProblem(`callout ${i + 1}`, c, L.callout); if (p) problems.push(p) })
+  callouts.forEach((c, i) => { tags(`callout ${i + 1}`, c); const p = widthProblem(`callout ${i + 1}`, c, L.callout); if (p) problems.push(p) })
   const headers: string[] = []
   const valueSeen = new Map<string, string>()
   snippets.forEach((s, i) => {
@@ -206,11 +218,12 @@ export function assetsChangeDraft(customer: string, request: AssetsChangeRequest
       problems.push(`${where}: ${plural(s.values.length, 'value')} (Google needs ${L.minSnippetValues} to ${L.maxSnippetValues})`)
     }
     s.values.forEach((v, j) => {
+      tags(`${where}, value ${j + 1}`, v)
       const p = widthProblem(`${where}, value ${j + 1}`, v, L.snippetValue)
       if (p) { problems.push(p); return }
       const key = textKey(v)
       const first = valueSeen.get(key)
-      if (first) problems.push(`${where}, value ${j + 1} "${v.trim()}" repeats ${first} (Google's policy refuses a value repeated in a header or across headers)`)
+      if (first) problems.push(`${where}, value ${j + 1} "${v.trim()}" repeats ${first} exactly (Google's policy refuses a value repeated in a header or across headers)`)
       else valueSeen.set(key, `${where}, value ${j + 1}`)
     })
   })
@@ -224,14 +237,15 @@ export function assetsChangeDraft(customer: string, request: AssetsChangeRequest
   if (!campaign) return { refusal: `Campaign ${request.campaignId} is not in this account (or it is removed). google-ads-live view campaigns lists them.` }
   const campaignRes = `${customer}/campaigns/${campaign.campaignId}`
   const linkedNow = new Map(live.linked.filter((a) => isFieldType(a.fieldType)).map((a) => [linkKey(a.assetId, a.fieldType), a]))
-  const sameNow = new Set(live.linked.map((a) => sameKey(a.fieldType, a)))
+  const sameNow = new Map(live.linked.map((a) => [sameKey(a.fieldType, a), a]))
+  const sameAsked = new Set<string>()
   const assetById = new Map(live.assets.map((a) => [a.assetId, a]))
 
   const operations: GoogleMutateOperation[] = []
   const links: GoogleMutateOperation[] = []
   const lines: Array<[string, unknown, unknown]> = []
   const skipped: string[] = []
-  const warnings: string[] = []
+  const warnings: string[] = [...tagNotes]
   const record: AssetsChangeRecord = { campaignId: campaign.campaignId, linked: [], unlinked: [] }
   const made = { SITELINK: 0, CALLOUT: 0, STRUCTURED_SNIPPET: 0 }
   let tempId = -1
@@ -240,12 +254,20 @@ export function assetsChangeDraft(customer: string, request: AssetsChangeRequest
   const add = (fieldType: AssetFieldType, asset: Record<string, unknown>, label: { text?: string; header?: string; values?: string[] }, to: string) => {
     const key = sameKey(fieldType, label)
     const text = labelOf(label, fieldType)
-    if (sameNow.has(key)) { skipped.push(`A ${KIND[fieldType]} "${text}" is already linked to "${campaign.name}".`); return }
-    sameNow.add(key)
+    const Kind = KIND[fieldType][0].toUpperCase() + KIND[fieldType].slice(1)
+    if (sameAsked.has(key)) { skipped.push(`${Kind} "${text}" is named twice in this request.`); return }
+    sameAsked.add(key)
+    const there = sameNow.get(key)
+    if (there) {
+      skipped.push(fieldType === 'SITELINK'
+        ? `Sitelink "${text}": the same link text is already linked to "${campaign.name}" (URL ${there.finalUrls[0] ?? 'none'})${pausedNote(there.status)}.`
+        : `${Kind} "${text}" is already linked to "${campaign.name}"${pausedNote(there.status)}.`)
+      return
+    }
     const resourceName = `${customer}/assets/${tempId--}`
     operations.push({ assetOperation: { create: { resourceName, ...asset } } })
     links.push({ campaignAssetOperation: { create: { campaign: campaignRes, asset: resourceName, fieldType } } })
-    record.linked.push({ assetId: `${OP}${operations.length - 1}`, fieldType, text })
+    record.linked.push({ assetId: `${OP}${operations.length - 1}`, fieldType, text, status: 'ENABLED' })
     lines.push([`${KIND[fieldType]} "${text}"`, '(none)', to])
     made[fieldType] += 1
   }
@@ -270,10 +292,12 @@ export function assetsChangeDraft(customer: string, request: AssetsChangeRequest
     if (!asset) return { refusal: `Asset ${ref.assetId} is not in this account.` }
     if (asset.type !== ref.fieldType) return { refusal: `Asset ${ref.assetId} is a ${asset.type ?? 'asset of another kind'}, not a ${KIND[ref.fieldType]}.` }
     const text = labelOf(asset, ref.fieldType)
-    if (linkedNow.has(key)) { skipped.push(`The ${KIND[ref.fieldType]} "${text}" (asset ${ref.assetId}) is already linked to "${campaign.name}".`); continue }
-    operations.push({ campaignAssetOperation: { create: { campaign: campaignRes, asset: `${customer}/assets/${ref.assetId}`, fieldType: ref.fieldType } } })
-    record.linked.push({ assetId: ref.assetId, fieldType: ref.fieldType, text })
-    lines.push([`${KIND[ref.fieldType]} "${text}" (asset ${ref.assetId})`, 'not linked', 'linked'])
+    const now = linkedNow.get(key)
+    if (now) { skipped.push(`The ${KIND[ref.fieldType]} "${text}" (asset ${ref.assetId}) is already linked to "${campaign.name}"${pausedNote(now.status)}.`); continue }
+    const status = linkStatus(ref.status)
+    operations.push({ campaignAssetOperation: { create: { campaign: campaignRes, asset: `${customer}/assets/${ref.assetId}`, fieldType: ref.fieldType, ...(status === 'PAUSED' ? { status } : {}) } } })
+    record.linked.push({ assetId: ref.assetId, fieldType: ref.fieldType, text, status })
+    lines.push([`${KIND[ref.fieldType]} "${text}" (asset ${ref.assetId})`, 'not linked', status === 'PAUSED' ? 'linked, paused (it shows nothing)' : 'linked'])
   }
 
   // 5. Links taken off the campaign (the asset stays).
@@ -283,13 +307,16 @@ export function assetsChangeDraft(customer: string, request: AssetsChangeRequest
     const link = linkedNow.get(key)
     if (!link) { skipped.push(`Asset ${ref.assetId} is not linked to "${campaign.name}" as a ${KIND[ref.fieldType]}.`); continue }
     const text = labelOf(link, ref.fieldType)
+    const status = linkStatus(link.status)
     operations.push({ campaignAssetOperation: { remove: `${customer}/campaignAssets/${campaign.campaignId}~${ref.assetId}~${ref.fieldType}` } })
-    record.unlinked.push({ assetId: ref.assetId, fieldType: ref.fieldType, text })
-    lines.push([`${KIND[ref.fieldType]} "${text}" (asset ${ref.assetId})`, 'linked', 'unlinked (the ads show without it)'])
+    record.unlinked.push({ assetId: ref.assetId, fieldType: ref.fieldType, text, status })
+    lines.push([`${KIND[ref.fieldType]} "${text}" (asset ${ref.assetId})`, status === 'PAUSED' ? 'linked, paused (it shows nothing now)' : 'linked', 'unlinked (the ads show without it)'])
   }
   if (record.unlinked.length) {
     const n = record.unlinked.length
     warnings.push(`Unlinking ${plural(n, 'asset')} from "${campaign.name}": its ads show without ${n === 1 ? 'it' : 'them'} (the asset stays in the account).`)
+    const paused = record.unlinked.filter((l) => l.status === 'PAUSED').length
+    if (paused) warnings.push(`${plural(paused, 'link')} taken off ${paused === 1 ? 'is' : 'are'} paused now (${paused === 1 ? 'it shows' : 'they show'} nothing today); undo links ${paused === 1 ? 'it' : 'them'} again paused.`)
   }
 
   if (operations.length === 0) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
@@ -319,7 +346,7 @@ export function assetsChangeDraft(customer: string, request: AssetsChangeRequest
     operations,
     stands: {
       campaign: { campaignId: campaign.campaignId, status: campaign.status, type: campaign.type },
-      links: [...linkedNow.keys()].sort(),
+      links: [...linkedNow.entries()].map(([key, a]) => `${key}~${linkStatus(a.status)}`).sort(),
       texts: live.linked.map((a) => sameKey(a.fieldType, a)).sort(),
       assets: live.assets.filter((a) => asked.includes(a.assetId)).map((a) => ({ assetId: a.assetId, type: a.type })).sort((x, y) => x.assetId.localeCompare(y.assetId)),
     },

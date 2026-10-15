@@ -2,9 +2,10 @@
  * Google Ads changes (2026-10-15) — PR 5, responsive search ads: make up to 10 in ONE Search ad group, or pause ads of
  * that ad group (the undo of a make, and nothing else: only ads, only a pause). One atomic request.
  *
- * Status (Owner's rule): a new ad is made so it cannot spend by itself. In an ad group or campaign that is not enabled
- * it is made ENABLED (nothing serves until both are); in an enabled ad group of an enabled campaign it is made PAUSED,
- * unless the request says `enable: true` — then it is ENABLED and that is SPENDS MONEY (the person's decision).
+ * Status (Owner's rule): a new ad is made so it cannot spend by itself. In a campaign that is not enabled it is made
+ * ENABLED (nothing serves until the campaign is). In an ENABLED campaign it is made PAUSED — even when its ad group is
+ * paused, so enabling the ad group later never switches ads on unseen — unless the request says `enable: true`: then it
+ * is ENABLED and that is SPENDS MONEY (the person's decision; said when the ad group is paused and nothing serves yet).
  * `enable: false` makes it PAUSED anywhere.
  *
  * Every problem of the text is refused BEFORE Google is asked, all of them at once (which ad, which headline, how long).
@@ -42,23 +43,38 @@ const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
   [0xffe0, 0xffe6], [0x1f300, 0x1f64f], [0x1f900, 0x1f9ff], [0x20000, 0x2fffd], [0x30000, 0x3fffd],
 ]
 const isWide = (codePoint: number) => WIDE_RANGES.some(([from, to]) => codePoint >= from && codePoint <= to)
-/** Insertion tags show their default text when they cannot fill in: `{KeyWord:Moto jackets}` counts "Moto jackets". */
-const INSERTION_TAG = /\{(?:keyword|location\([^)]*\)|customizer\.[^:}]+):([^{}]*)\}/gi
+/** Insertion tags with a default text show it when they cannot fill in: `{KeyWord:Moto jackets}` counts "Moto jackets". */
+const DEFAULT_TAG = /\{(?:keyword|location\([^)]*\)|customizer\.[^:}]+):([^{}]*)\}/gi
+/** Any other tag (`{COUNTDOWN(…)}`, `{LOCATION(City)}` …): Google fills it in when the ad serves; Nexus does not count it. */
+const OTHER_TAG = /\{[^{}]*\}/g
+/** What Nexus counts of a text: NFC (a letter and its accent are one character), default texts for their tags, no other tag. */
+const countedText = (text: string) => text.normalize('NFC').replace(DEFAULT_TAG, '$1').replace(OTHER_TAG, '')
 
 /**
- * The length Google counts for ad and asset text. What Nexus implements: every character (a Unicode code point, so an
- * accented letter is 1) counts 1, and a character of the double-width blocks above counts 2 — Google's rule for
- * "double-width languages like Korean, Japanese, or Chinese". An insertion tag counts its default text. Google's check
- * (validate_only) is the last word: anything this count misses, it refuses before the change is queued.
+ * The length Google counts for ad and asset text. What Nexus implements: the text in NFC, every character (a Unicode
+ * code point, so an accented letter is 1) counts 1, and a character of the double-width blocks above counts 2 — Google's
+ * rule for "double-width languages like Korean, Japanese, or Chinese". A tag with a default text counts that text; a tag
+ * without one counts 0 (uncountedTags names it, and Google's check judges it). Google's check (validate_only) is the
+ * last word: anything this count misses, it refuses before the change is queued.
  */
 export function displayWidth(text: string): number {
   let width = 0
-  for (const ch of text.replace(INSERTION_TAG, '$1')) width += isWide(ch.codePointAt(0) ?? 0) ? 2 : 1
+  for (const ch of countedText(text)) width += isWide(ch.codePointAt(0) ?? 0) ? 2 : 1
   return width
 }
 
-/** Two texts are the same when they read the same: trimmed, spaces collapsed, case ignored. */
-export const textKey = (text: string | null | undefined): string => (text ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+/** The tags of a text Nexus did not count (no default text): Google's check judges their length. */
+export const uncountedTags = (text: string | null | undefined): string[] =>
+  (text ?? '').normalize('NFC').replace(DEFAULT_TAG, '$1').match(OTHER_TAG) ?? []
+
+/** The warning for a text with tags Nexus did not count, or null. */
+export function tagWarning(where: string, text: string | null | undefined): string | null {
+  const tags = uncountedTags(text)
+  return tags.length ? `${where}: Nexus did not count ${tags.join(', ')} (a tag without default text); Google's check judges its length.` : null
+}
+
+/** Two texts are the same when they are exactly the same once trimmed and their spaces collapsed (case counts). */
+export const textKey = (text: string | null | undefined): string => (text ?? '').normalize('NFC').trim().replace(/\s+/g, ' ')
 
 const clip = (text: string, max = 40) => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
 
@@ -68,7 +84,7 @@ export function widthProblem(where: string, text: string | null | undefined, max
   if (!t) return `${where} is empty`
   const width = displayWidth(t)
   if (width <= max) return null
-  const doubled = width !== [...t].length ? ' (a double-width character counts 2)' : ''
+  const doubled = [...countedText(t)].some((ch) => isWide(ch.codePointAt(0) ?? 0)) ? ' (a double-width character counts 2)' : ''
   return `${where} "${clip(t)}" is ${width} characters long${doubled}: Google allows ${max}`
 }
 
@@ -174,7 +190,7 @@ export function rsaProblems(ad: RsaAd, n: number): string[] {
       const key = textKey(t.text)
       if (!key) return
       const first = seen.get(key)
-      if (first !== undefined) problems.push(`${where}, ${word} ${i + 1} "${clip(t.text.trim())}" repeats ${word} ${first + 1} (Google refuses duplicates)`)
+      if (first !== undefined) problems.push(`${where}, ${word} ${i + 1} "${clip(t.text.trim())}" repeats ${word} ${first + 1} exactly (Google refuses duplicates)`)
       else seen.set(key, i)
     })
   }
@@ -262,8 +278,9 @@ export function adsChangeDraft(customer: string, request: AdsChangeRequest, live
   }
 
   // ── make responsive search ads ──
-  const canServe = campaign.status === 'ENABLED' && adGroup.status === 'ENABLED'
-  const status: AdStatus = canServe ? (request.enable === true ? 'ENABLED' : 'PAUSED') : (request.enable === false ? 'PAUSED' : 'ENABLED')
+  const campaignOn = campaign.status === 'ENABLED'
+  const groupOn = adGroup.status === 'ENABLED'
+  const status: AdStatus = campaignOn ? (request.enable === true ? 'ENABLED' : 'PAUSED') : (request.enable === false ? 'PAUSED' : 'ENABLED')
   const problems = ads.flatMap((ad, i) => rsaProblems(ad, i + 1))
   const enabledNow = groupAds.filter((a) => a.status === 'ENABLED' && a.type === 'RESPONSIVE_SEARCH_AD').length
   if (status === 'ENABLED' && enabledNow + ads.length > RSA_LIMITS.enabledPerAdGroup) {
@@ -296,14 +313,28 @@ export function adsChangeDraft(customer: string, request: AdsChangeRequest, live
     record.created.push({ adId: `${OP}${operations.length - 1}`, status })
   })
   const spendsMoney: string[] = []
-  if (status === 'ENABLED' && canServe) {
-    spendsMoney.push(`Makes ${plural(ads.length, 'responsive search ad')} ENABLED in the enabled ${where}: ${ads.length === 1 ? 'it shows (and spends)' : 'they show (and spend)'} as soon as Google approves ${ads.length === 1 ? 'it' : 'them'}.`)
+  const one = ads.length === 1
+  const showSpend = one ? 'it shows (and spends)' : 'they show (and spend)'
+  const lower = (value: string | null) => String(value ?? 'not enabled').toLowerCase()
+  if (status === 'ENABLED' && campaignOn) {
+    spendsMoney.push(groupOn
+      ? `Makes ${plural(ads.length, 'responsive search ad')} ENABLED in the enabled ${where}: ${showSpend} as soon as Google approves ${one ? 'it' : 'them'}.`
+      : `Makes ${plural(ads.length, 'responsive search ad')} ENABLED in ad group "${adGroup.name}" of the enabled campaign "${campaign.name}": the ad group is ${lower(adGroup.status)}, so nothing serves until it is enabled; then ${showSpend}.`)
   } else if (status === 'ENABLED') {
-    const off = campaign.status !== 'ENABLED' ? `campaign "${campaign.name}" is ${String(campaign.status ?? 'not enabled').toLowerCase()}` : `ad group "${adGroup.name}" is ${String(adGroup.status ?? 'not enabled').toLowerCase()}`
-    warnings.push(`The new ads are made ENABLED: ${off}, so they show nothing until it is enabled (enabling it is a change of its own, and spends money).`)
-  } else if (canServe) {
-    warnings.push(`The new ads are made PAUSED: campaign "${campaign.name}" and ad group "${adGroup.name}" are enabled, so enabled ads would show at once. Ask with enable: true to make them enabled (that spends money).`)
+    warnings.push(`The new ads are made ENABLED: campaign "${campaign.name}" is ${lower(campaign.status)}, so they show nothing until it is enabled (enabling it is a change of its own, and spends money).`)
+  } else if (campaignOn) {
+    warnings.push(groupOn
+      ? `The new ads are made PAUSED: campaign "${campaign.name}" and ad group "${adGroup.name}" are enabled, so enabled ads would show at once. Ask with enable: true to make them enabled (that spends money).`
+      : `The new ads are made PAUSED: campaign "${campaign.name}" is enabled, so enabled ads would show as soon as ad group "${adGroup.name}" is enabled. Ask with enable: true to make them enabled (that spends money).`)
   }
+  ads.forEach((ad, i) => {
+    const texts: Array<[string, string | null | undefined]> = [
+      ...ad.headlines.map((t, j): [string, string] => [`ad ${i + 1}, headline ${j + 1}`, t.text]),
+      ...ad.descriptions.map((t, j): [string, string] => [`ad ${i + 1}, description ${j + 1}`, t.text]),
+      [`ad ${i + 1}, path1`, ad.path1], [`ad ${i + 1}, path2`, ad.path2],
+    ]
+    for (const [label, text] of texts) { const w = tagWarning(label, text); if (w) warnings.push(w) }
+  })
   const { changes, more } = changeLines(lines)
   return {
     summary: `Google Ads: make ${plural(ads.length, 'responsive search ad')} in ${where}, ${status === 'ENABLED' ? 'enabled' : 'paused'}.`,

@@ -56,7 +56,8 @@ const rsaUndo: ToolUndo = {
       ...after,
       accountId: account.accountId,
       customerId: account.customerId,
-      created: (after.created ?? []).filter((c) => byId.has(c.adId)).map((c) => ({ adId: c.adId, status: byId.get(c.adId)!.status })),
+      // An id Google never answered for (op:N) is passed through as it is: request() then says why it cannot undo.
+      created: (after.created ?? []).flatMap((c) => (!isGoogleId(c.adId) ? [c] : byId.has(c.adId) ? [{ adId: c.adId, status: byId.get(c.adId)!.status }] : [])),
       paused: (after.paused ?? []).filter((id) => byId.get(id)?.status === 'PAUSED'),
     }
   },
@@ -102,7 +103,8 @@ const createGoogleRsa: AgentTool = {
   alwaysAsk: true,
   requiresApprovalDefault: true,
   openWorld: true,
-  reversibility: 'full',
+  // Undo pauses the ads it made (Google keeps them, paused); a pause made by this tool is not undone by it.
+  reversibility: 'partial',
   maxClaudeTrust: 'ask',
   requires: [F.adsCampaignsManage],
   input: z.object({
@@ -112,7 +114,7 @@ const createGoogleRsa: AgentTool = {
     ads: z.array(rsaArg).min(1).max(RSA_LIMITS.adsPerRequest).optional()
       .describe(`responsive search ads to make in the ad group (1 to ${RSA_LIMITS.adsPerRequest}); give ads or pauseAdIds`),
     enable: z.boolean().optional()
-      .describe('true: make them ENABLED even in an enabled ad group of an enabled campaign (SPENDS MONEY); false: make them PAUSED. Left out: ENABLED where nothing can serve yet, PAUSED where it could'),
+      .describe('true: make them ENABLED in an enabled campaign (SPENDS MONEY); false: make them PAUSED. Left out: ENABLED in a campaign that is not enabled (nothing serves yet), PAUSED in an enabled campaign'),
     pauseAdIds: z.array(googleIdArg('an ad of this ad group')).max(50).optional()
       .describe('the undo form: pause these ads of the ad group (only ads, only a pause; give ads or pauseAdIds)'),
     why: googleWhyArg,
@@ -124,12 +126,13 @@ const createGoogleRsa: AgentTool = {
     + `descriptions (at most ${RSA_LIMITS.descriptionWidth}), an optional pin per text (HEADLINE_1/2/3, DESCRIPTION_1/2), `
     + `path1/path2 (at most ${RSA_LIMITS.pathWidth} each; path2 only with path1) and one https final URL. Google counts a `
     + 'double-width character (Chinese, Japanese, Korean) as 2. Every length, duplicate, pin or path problem is refused '
-    + 'before the preview, all listed (which ad, which text, how long). Other campaign types are refused. A new ad cannot '
-    + 'spend by itself: where the campaign or ad group is not enabled it is made ENABLED (nothing serves yet); in an '
-    + 'enabled ad group of an enabled campaign it is made PAUSED unless enable: true (SPENDS MONEY). Google allows 3 '
-    + 'enabled responsive search ads per ad group. After the run the answer gives the new ad ids; Google\'s policy review '
-    + 'of them runs then — read it with google-ads-live view ads. Undo pauses the ads it made, through this tool\'s other '
-    + 'form (pauseAdIds: pause ads of the ad group, nothing else).' + GOOGLE_CHANGE_RULES,
+    + 'before the preview, all listed (which ad, which text, how long); Google\'s check judges the rest. Other campaign '
+    + 'types are refused. A new ad cannot spend by itself: in a campaign that is not enabled it is made ENABLED (nothing '
+    + 'serves yet); in an enabled campaign it is made PAUSED (also when its ad group is paused) unless enable: true '
+    + '(SPENDS MONEY). Google allows 3 enabled responsive search ads per ad group. After the run the answer gives the new '
+    + 'ad ids; Google\'s policy review of them runs then — read it with google-ads-live view ads. Undo pauses the ads it '
+    + 'made (Google keeps them, paused), through this tool\'s other form (pauseAdIds: pause ads of the ad group, nothing '
+    + 'else); a pause is not undone by this tool.' + GOOGLE_CHANGE_RULES,
   undo: rsaUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildRsa(args)),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildRsa(args), (draft, responses) => {
@@ -180,7 +183,8 @@ const assetsUndo: ToolUndo = {
       ...after,
       accountId: account.accountId,
       customerId: account.customerId,
-      linked: (after.linked ?? []).filter((l) => on.has(`${l.assetId}~${l.fieldType}`)),
+      // An id Google never answered for (op:N) is passed through as it is: request() then says why it cannot undo.
+      linked: (after.linked ?? []).filter((l) => !isGoogleId(l.assetId) || on.has(`${l.assetId}~${l.fieldType}`)),
       unlinked: (after.unlinked ?? []).filter((l) => !on.has(`${l.assetId}~${l.fieldType}`)),
     }
   },
@@ -198,7 +202,8 @@ const assetsUndo: ToolUndo = {
         ...accountArgOf(after),
         campaignId: after.campaignId,
         ...(linked.length ? { unlinkAssets: linked.map(ref) } : {}),
-        ...(unlinked.length ? { linkAssets: unlinked.map(ref) } : {}),
+        // A link taken off while paused goes back paused.
+        ...(unlinked.length ? { linkAssets: unlinked.map((l) => ({ ...ref(l), status: l.status === 'PAUSED' ? 'PAUSED' : 'ENABLED' })) } : {}),
         why: `undo of an earlier asset change${linked.length ? ' (the assets it made stay in the account, unlinked)' : ''}`,
       },
     }
@@ -208,6 +213,9 @@ const assetsUndo: ToolUndo = {
 const assetRefArg = z.object({
   assetId: googleIdArg('the asset'),
   fieldType: z.preprocess(upper, z.enum(ASSET_FIELD_TYPES)).describe('what it is in the campaign: SITELINK, CALLOUT or STRUCTURED_SNIPPET'),
+})
+const assetLinkArg = assetRefArg.extend({
+  status: z.preprocess(upper, z.enum(['ENABLED', 'PAUSED'])).optional().describe('the link\'s status: ENABLED (default) or PAUSED (it shows nothing)'),
 })
 
 const setGoogleAssets: AgentTool = {
@@ -239,7 +247,7 @@ const setGoogleAssets: AgentTool = {
       values: z.array(z.string().trim().min(1).max(100)).max(ASSET_LIMITS.maxSnippetValues)
         .describe(`${ASSET_LIMITS.minSnippetValues} to ${ASSET_LIMITS.maxSnippetValues} values, each at most ${ASSET_LIMITS.snippetValue} characters, none repeated`),
     })).max(10).optional().describe('new structured snippets to make and link to the campaign'),
-    linkAssets: z.array(assetRefArg).max(50).optional().describe('existing assets of the account to link to the campaign (again)'),
+    linkAssets: z.array(assetLinkArg).max(50).optional().describe('existing assets of the account to link to the campaign (again); undo puts a link that was paused back paused'),
     unlinkAssets: z.array(assetRefArg).max(50).optional().describe('assets to unlink from the campaign: the link goes, the asset stays in the account (google-ads-live view assets lists them)'),
     why: googleWhyArg,
   }),
@@ -253,7 +261,7 @@ const setGoogleAssets: AgentTool = {
     + 'stays in the account; the ads show without it — said in the warnings). An asset already linked with the same text '
     + 'is skipped. Every length or header problem is refused before the preview, all listed. Assets raise no bid or '
     + 'budget. Google reviews new assets after the run (google-ads-live view assets). Undo unlinks what it linked and '
-    + 'links again what it unlinked.' + GOOGLE_CHANGE_RULES,
+    + 'links again what it unlinked (a link that was paused goes back paused).' + GOOGLE_CHANGE_RULES,
   undo: assetsUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildAssets(args)),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildAssets(args), (draft, responses) => {
