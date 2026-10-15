@@ -4,12 +4,13 @@
  * the family leaves adopt only; each size listing the adopt-only link paused (`shopifyColourAdoptPaused`) is resumed — a
  * row the operator paused keeps its pause —; every linked size's stock is queued (`shopifyColourStockPending`), as a full
  * Confirm queues it; and the family's colour sync is due now. From then on the colour sync runs as it always has: it
- * sends stock, creates missing sizes (at zero stock, at the listing's price), orders the sizes, archives a colour Nexus
- * no longer has and writes the colour swatch fields (`custom.variation_value` / `variation_products`).
+ * sends stock, creates missing sizes (at zero stock, at the listing's price, under the size map's Shopify value), orders
+ * the sizes, archives a colour Nexus no longer has and writes the colour swatch fields (`custom.variation_value` /
+ * `variation_products`): one list per swatch group the store has (link.service.ts), each product named as in Nexus.
  *
  * Every gate of the writers stays: Shopify writes on for this server, the store switch on, a linked colour, the lock.
- * The body must say `{ "confirm": true }`: the swatch writer then replaces the store's colour names and colour groups with
- * this family's, so nothing starts it by accident.
+ * The body must say `{ "confirm": true }`: the swatch writer then owns the store's colour names and colour lists of this
+ * family, so nothing starts it by accident.
  */
 import { z } from 'zod'
 import type { Prisma } from '@prisma/client'

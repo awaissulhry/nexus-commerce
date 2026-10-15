@@ -23,6 +23,12 @@
  * to Shopify for it. In a product the operator chose, sizes paired by option values whose variants carry other SKUs
  * (another colour's, another prefix: Find's `skusToReplace`) are refused unless the operator asks to replace them
  * (`replaceSkus`): then the Nexus SKUs are written there with the missing ones, and read back.
+ *
+ * Feature 1 — the colour's name defaults to the one its product shows today (`custom.variation_value`); the operator may
+ * type another (`colourName`). The colour keeps the swatch group its product has on the store (stored on its row from
+ * this fresh read). A name may repeat across swatch groups, and inside one when the store already shows it so; the
+ * planner refuses only a repeat Nexus would create (keyed to that colour, so it stops that colour alone). A product whose
+ * name or colour list changed since Find is "changed since Find": the operator reviewed what Find read.
  */
 import { z } from 'zod'
 import type { Prisma } from '@prisma/client'
@@ -39,8 +45,8 @@ import { productReadCacheService } from '../../product-read-cache.service.js'
 import { logger } from '../../../utils/logger.js'
 import { readColourProductSettings } from './settings.js'
 import { loadColourPlan } from './family.js'
-import { claimedElsewhere, colourProductsView, gatherCandidates, linkedProducts, operatorChoices, rowsWhere, type Destination } from './find.service.js'
-import { colourAdoptOnly, commitColourSyncChange, guardedColourGraphql, setColourAdoptOnly, withColourSyncLock } from './sync-work.js'
+import { claimedElsewhere, colourProductsView, colourSwatches, gatherCandidates, linkedProducts, operatorChoices, rowsWhere, type Destination } from './find.service.js'
+import { colourAdoptOnly, colourSizeMap, commitColourSyncChange, guardedColourGraphql, setColourAdoptOnly, withColourSyncLock } from './sync-work.js'
 import { colourIsPublished, readOnlineStorePublication } from './variants.js'
 import { listingSkuRefusal, withListingSkus } from './listing-skus.js'
 import { ChannelSkuError, channelSkuProblem, confirmLiveChannelSku, setChannelSku } from '../../listings/channel-sku.js'
@@ -77,9 +83,11 @@ const READ_BACK = `query NexusColourReadBack($id:ID!,$location:ID!,$publication:
 type Row = Awaited<ReturnType<typeof prisma.shopifyColourProduct.findMany>>[number]
 type SkuToRecord = { productId: string; shopifyVariantId: string; sku: string }
 type SkuToReplace = { productId: string; shopifyVariantId: string; from: string; to: string }
-interface StoredProposal { shopifyProductId?: string | null; shopifyColourName?: string | null; variants?: ColourMatchVariant[]; skusToWrite?: Array<{ shopifyVariantId: string; sku: string }>; skusToRecord?: SkuToRecord[]; skusToReplace?: SkuToReplace[] }
+interface StoredProposal { shopifyProductId?: string | null; shopifyColourName?: string | null; swatchGroup?: string[] | null; variants?: ColourMatchVariant[]; skusToWrite?: Array<{ shopifyVariantId: string; sku: string }>; skusToRecord?: SkuToRecord[]; skusToReplace?: SkuToReplace[] }
 interface Adoption {
   row: Row; name: string; title: string; shopifyProductId: string; identity: string; identityWritten: boolean
+  /** The product's colour list as Shopify holds it now: the swatch group this colour keeps (Feature 1). */
+  swatchGroup: string[]
   colourName: string | null; locationId: string; variants: ColourMatchVariant[]; skusToWrite: Array<{ shopifyVariantId: string; sku: string }>
   /** Sizes whose Shopify SKU differs only in letter case: Shopify's SKU is recorded as the listing's own (Nexus only). */
   skusToRecord: SkuToRecord[]
@@ -115,7 +123,7 @@ async function confirmDestination(destination: Destination, input: z.infer<typeo
   const nameOf = (c: typeof input.colours[number]) => c.colourName ?? rowOf.get(c.valueKey)!.colourName ?? (rowOf.get(c.valueKey)!.proposal as StoredProposal).shopifyColourName ?? null
   const colourNames = { ...Object.fromEntries(rows.filter(r => r.colourName).map(r => [r.valueKey, r.colourName!])), ...Object.fromEntries(input.colours.flatMap(c => nameOf(c) ? [[c.valueKey, nameOf(c)!]] : [])) }
   // S5 — each size under the SKU Shopify knows it by (its listing's own SKU, else the product SKU), as Find matched it.
-  const { plan, problems: skuProblems } = await withListingSkus(destination, (await loadColourPlan(destination.familyId, { colourNames })).plan)
+  const { plan, problems: skuProblems } = await withListingSkus(destination, (await loadColourPlan(destination.familyId, { colourNames, swatches: colourSwatches(rows), sizeMap: await colourSizeMap(destination) })).plan)
   if (plan.mode !== 'colour-products' || !plan.splitAxis) throw new WorkspaceScopeError('This family has no colour to show as separate Shopify products. Nothing was changed.', 422)
   if (skuProblems.length) throw new WorkspaceScopeError(listingSkuRefusal(skuProblems), 409)
 
@@ -143,6 +151,7 @@ async function confirmDestination(destination: Destination, input: z.infer<typeo
     const product = plan.products.find(p => p.key === colour.valueKey)
     if (!product) { problems.push(`"${colour.valueKey}" is no longer a colour of this family. Run Find again.`); continue }
     const name = product.nexusValue, fresh = matches.find(m => m.key === colour.valueKey)!, shopify = remote.get(colour.shopifyProductId)
+    const candidate = candidates.find(c => c.id === colour.shopifyProductId)
     const before = problems.length
     for (const issue of plan.issues) if (issue.severity === 'error' && (!issue.key || issue.key === colour.valueKey)) problems.push(issue.message)
     if (row.state === 'LINKED' && row.shopifyProductId !== colour.shopifyProductId) problems.push(`"${name}" is already linked to another Shopify product.`)
@@ -150,7 +159,9 @@ async function confirmDestination(destination: Destination, input: z.infer<typeo
     else if (proposal.shopifyProductId !== colour.shopifyProductId || fresh.shopifyProductId !== colour.shopifyProductId || pairing(fresh.variants) !== pairing(proposal.variants)
       || fresh.skusToWrite.some(s => !proposal.skusToWrite?.some(p => p.shopifyVariantId === s.shopifyVariantId && p.sku === s.sku))
       || fresh.skusToRecord.some(s => !proposal.skusToRecord?.some(p => p.shopifyVariantId === s.shopifyVariantId && p.sku === s.sku))
-      || fresh.skusToReplace.some(s => !proposal.skusToReplace?.some(p => p.shopifyVariantId === s.shopifyVariantId && p.from === s.from && p.to === s.to))) {
+      || fresh.skusToReplace.some(s => !proposal.skusToReplace?.some(p => p.shopifyVariantId === s.shopifyVariantId && p.from === s.from && p.to === s.to))
+      // The name and the swatch group the operator reviewed are the ones the store shows now.
+      || (fresh.shopifyColourName ?? null) !== (proposal.shopifyColourName ?? null) || JSON.stringify(candidate?.group ?? null) !== JSON.stringify(proposal.swatchGroup ?? null)) {
       problems.push(`"${shopify.title}" changed since Find, or Find proposed another product for "${name}". Run Find again.`)
     }
     // The checks of the product and its sizes, only when it is the product the fresh match gives this colour.
@@ -178,7 +189,7 @@ async function confirmDestination(destination: Destination, input: z.infer<typeo
     const locationId = colour.locationId ?? (locations.length === 1 ? locations[0] : null)
     if (!locationId) problems.push(locations.length ? `The store has ${locations.length} active locations. Choose where the stock of "${name}" is counted.` : 'The Shopify store has no active location.')
     else if (!locations.includes(locationId)) problems.push(`The location chosen for "${name}" is not an active location of the store.`)
-    if (problems.length === before && same && locationId) adoptions.push({ row, name, title: shopify.title, shopifyProductId: colour.shopifyProductId, identity, identityWritten: shopify.identity !== identity,
+    if (problems.length === before && same && locationId) adoptions.push({ row, name, title: shopify.title, shopifyProductId: colour.shopifyProductId, identity, identityWritten: shopify.identity !== identity, swatchGroup: candidate?.group ?? [],
       colourName: nameOf(colour), locationId, variants: sizes, skusToWrite: fresh.skusToWrite, skusToRecord: record, skusToReplace: colour.replaceSkus ? replace : [] })
   }
   if (problems.length) throw new WorkspaceScopeError(`${[...new Set(problems)].join(' ')} Nothing was changed.`, 409)
@@ -276,7 +287,7 @@ async function adopt(graphql: ShopifyGraphql, destination: Destination, a: Adopt
         const held = shopifySkuOf(a, v)
         if (held !== listing.product?.sku || listing.liveChannelSku) await confirmLiveChannelSku(tx, listing.id, held)
       }
-      await tx.shopifyColourProduct.update({ where: { id: a.row.id }, data: { state: 'LINKED', shopifyProductId: a.shopifyProductId, colourName: a.colourName, remoteStatus: back.status, checkedAt: new Date() } })
+      await tx.shopifyColourProduct.update({ where: { id: a.row.id }, data: { state: 'LINKED', shopifyProductId: a.shopifyProductId, colourName: a.colourName, swatchGroup: a.swatchGroup, remoteStatus: back.status, checkedAt: new Date() } })
     })
   } catch (error) {
     if (error instanceof DraftListingError) throw new WorkspaceScopeError(error.message, error.statusCode)

@@ -23,7 +23,7 @@ vi.mock('../admin-client.js', async importOriginal => ({ ...await importOriginal
 vi.mock('../../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: () => state.mode, acquireShopifyPublishToken: async () => ({ ok: true }) }))
 vi.mock('./family.js', () => ({ loadColourPlan: async (_rootId: string, options: any = {}) => {
   const family: ColourPlanFamily = { ...state.family, variants: state.family.variants.filter((v: any) => state.colours.includes(v.values.color)), valueOrder: { ...state.family.valueOrder, color: state.colours } }
-  return { plan: planColourProducts(family, { splitAxis: 'color', colourNames: options.colourNames }), rootId: family.familyId, sku: 'LV-JACKET' }
+  return { plan: planColourProducts(family, { splitAxis: 'color', colourNames: options.colourNames, swatches: options.swatches, sizeMap: options.sizeMap }), rootId: family.familyId, sku: 'LV-JACKET' }
 } }))
 
 const VALUE = 'custom.variation_value', LIST = 'custom.variation_products'
@@ -330,7 +330,8 @@ describe('Link refuses, and names why', () => {
     expect(state.calls).toEqual([])
     expect(valueOf(gid(1), LIST)).toBe(list(C1, C2))
     await scoped(() => prisma.shopifyColourProduct.updateMany({ where: { valueKey: C2 }, data: { state: 'LINKED', shopifyProductId: gid(2), colourName: 'black' } }))
-    await expect(link()).rejects.toThrow('"Colore 1", "Colore 2" would all be called "Black" on Shopify. Give each colour its own name. Nothing was changed.')
+    // No swatch group or name of the store is known: both names are Nexus's, so each colour is refused by name.
+    await expect(link()).rejects.toThrow('"Colore 1" would be called "Black" on Shopify, like "Colore 2" in the same swatch group. Give it its own name. "Colore 2" would be called "black" on Shopify, like "Colore 1" in the same swatch group. Give it its own name. Nothing was changed.')
     expect(state.calls).toEqual([])
   })
 
@@ -530,5 +531,82 @@ describe('colourGrouping — who owns the grouping fields (the guard\'s database
     expect(await grouping([gid(2), gid(40)], other)).toMatchObject({ family: false, products: [gid(2)] })
     expect(await grouping([], { ...here(), aliasKey: 'outlet' })).toBeNull()
     expect(await grouping([gid(1)], { ...here(), accountId: ids.other })).toBeNull()
+  })
+})
+
+/**
+ * Feature 1 — the store's swatch groups, kept. REGAL: Nexus colours C1 "Nero | Uomo", C2 "Nero | Donna", C3 "Grigio |
+ * Uomo", C4 "Grigio | Donna" (in that colour order); the store groups men [C3, C1] (Grey, Black) and women [C4, C2]
+ * (Grey, Gray). AIREON: one group of four whose names repeat. Ids invented.
+ */
+describe('Link — one colour list per swatch group the store has', () => {
+  const C4 = COLOURS[3], C5 = COLOURS[4]
+  const groupOf = async (keys: string[], group: string[]) => scoped(() => prisma.shopifyColourProduct.updateMany({ where: { familyId: ids.fam, valueKey: { in: keys } }, data: { swatchGroup: group } }))
+  /** Find's read of each colour's product: the colour name the store showed (Confirm's default name). */
+  const storeShowed = async (names: Record<string, string>) => { for (const [key, name] of Object.entries(names))
+    await scoped(() => prisma.shopifyColourProduct.updateMany({ where: { familyId: ids.fam, valueKey: key }, data: { proposal: { method: 'linked', shopifyProductId: gid(N(key)), shopifyColourName: name } } })) }
+  async function regal() {
+    await family([C1, C2, C3, C4], ['Black', 'Gray', 'Grey', 'Grey'])
+    await groupOf([C1, C3], [gid(3), gid(1)])
+    await groupOf([C2, C4], [gid(4), gid(2)])
+    await storeShowed({ [C1]: 'Black', [C2]: 'Gray', [C3]: 'Grey', [C4]: 'Grey' })
+  }
+
+  it('REGAL: two lists, men\'s and women\'s apart; "Grey" in both groups is no duplicate; each product keeps its name', async () => {
+    await regal()
+    const view = await link()
+    expect(view.link).toMatchObject({ grouped: true, members: 4, groups: 2, written: 8, cleared: 0 })
+    expect([1, 3].map(n => valueOf(gid(n), LIST))).toEqual([list(C1, C3), list(C1, C3)])
+    expect([2, 4].map(n => valueOf(gid(n), LIST))).toEqual([list(C2, C4), list(C2, C4)])
+    expect([1, 2, 3, 4].map(n => valueOf(gid(n), VALUE))).toEqual(['Black', 'Gray', 'Grey', 'Grey'])
+    expect((await rowsOf()).every(r => r.linkVerifiedAt !== null)).toBe(true)
+    // Nothing changed: the next run only reads.
+    state.calls = []
+    await link()
+    expect(mutations()).toEqual([])
+  })
+
+  it('a name Nexus would repeat inside one group is refused before any write; the same name across groups is not', async () => {
+    await regal()
+    for (const [n, name] of [[1, 'Black'], [2, 'Gray'], [3, 'Grey'], [4, 'Grey']] as const) put(gid(n), VALUE, name)
+    await scoped(() => prisma.shopifyColourProduct.updateMany({ where: { valueKey: C2 }, data: { colourName: 'Grey' } }))
+    await expect(link()).rejects.toThrow('"Colore 2" would be called "Grey" on Shopify, like "Colore 4" in the same swatch group.')
+    expect(state.calls).toEqual([])
+    await scoped(() => prisma.shopifyColourProduct.updateMany({ where: { valueKey: C2 }, data: { colourName: 'Black' } }))
+    await link()
+    expect(valueOf(gid(2), VALUE)).toBe('Black')
+  })
+
+  it('AIREON: one group of four with the names the store repeats: nothing is written, the lists stay as they are', async () => {
+    await family([C1, C2, C3, C4], ['Crema e Vino', 'Nero Neo', 'Crema e Vino', 'Nero Neo'])
+    await groupOf([C1, C2, C3, C4], [gid(1), gid(2), gid(3), gid(4)])
+    await storeShowed({ [C1]: 'Crema e Vino', [C2]: 'Nero Neo', [C3]: 'Crema e Vino', [C4]: 'Nero Neo' })
+    for (const [n, name] of [[1, 'Crema e Vino'], [2, 'Nero Neo'], [3, 'Crema e Vino'], [4, 'Nero Neo']] as const) { put(gid(n), VALUE, name); put(gid(n), LIST, list(C1, C2, C3, C4)) }
+    const view = await link()
+    expect(mutations()).toEqual([])
+    expect(view.link).toMatchObject({ grouped: true, members: 4, groups: 1, written: 0, cleared: 0 })
+    expect([1, 2, 3, 4].map(n => valueOf(gid(n), LIST))).toEqual(Array(4).fill(list(C1, C2, C3, C4)))
+    expect((await rowsOf()).every(r => r.linkVerifiedAt !== null)).toBe(true)
+    // Renaming one jacket to the other jacket's name would be Nexus's own repeat: refused, nothing written.
+    put(gid(1), VALUE, 'Crema e Vino')
+    await scoped(() => prisma.shopifyColourProduct.updateMany({ where: { valueKey: C1 }, data: { colourName: 'Nero Neo' } }))
+    state.calls = []
+    await expect(link()).rejects.toThrow(/"Colore 1" would be called "Nero Neo" on Shopify/)
+    expect(mutations()).toEqual([])
+  })
+
+  it('a colour with no stored group joins the only group; with two groups it is refused by name, nothing written', async () => {
+    await family([C1, C2, C3])
+    await groupOf([C1, C2], [gid(1), gid(2)])
+    await link()
+    expect([1, 2, 3].map(n => valueOf(gid(n), LIST))).toEqual(Array(3).fill(list(C1, C2, C3)))
+    await scoped(() => prisma.shopifyColourProduct.deleteMany({}))
+    state.store = new Map(); state.calls = []
+    await regal()
+    await family([C5], ['Blue'])
+    await groupOf([C5], [])
+    state.colours = [C1, C2, C3, C4, C5]
+    await expect(link()).rejects.toThrow('"Colore 5" is in no swatch group on Shopify, and the colours of this family are in 2 groups. Nexus does not choose a group for it: add it to one group in Shopify (custom.variation_products), then run Find. Nothing was changed.')
+    expect(state.calls).toEqual([])
   })
 })

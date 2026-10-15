@@ -2,7 +2,7 @@
  * A family as colour products see it: the planner's input from the one family loader the Media page and its publishers
  * use (`loadFamily`: axes as dictionary codes, each variant's value keys, the family's value order), then the plan.
  */
-import { planColourProducts, type ColourPlan } from '@nexus/shared/shopify-colour-products'
+import { planColourProducts, type ColourPlan, type ColourPlanSettings } from '@nexus/shared/shopify-colour-products'
 import { loadFamily } from '../../images/media-plan.service.js'
 import { canonicalVariantAxis } from '../../pim/variant-attribute-keys.js'
 
@@ -14,9 +14,10 @@ export function colourAxisOf(axes: ReadonlyArray<{ code: string; label: string }
 /**
  * The family's Shopify colour products. `splitAxis`: the axis whose values become separate products — the operator's
  * choice when there is one, else the colour axis; a family without one stays one product. `colourNames`: the operator's
- * Shopify colour names, by value key.
+ * Shopify colour names, by value key. `swatches`: what the store shows for each colour (its swatch group and name).
+ * `sizeMap`: the destination's size map (Nexus value → Shopify option value).
  */
-export async function loadColourPlan(rootId: string, options: { splitAxis?: string | null; colourNames?: Record<string, string> } = {}): Promise<{ plan: ColourPlan; rootId: string; sku: string }> {
+export async function loadColourPlan(rootId: string, options: { splitAxis?: string | null } & Pick<ColourPlanSettings, 'colourNames' | 'swatches' | 'sizeMap'> = {}): Promise<{ plan: ColourPlan; rootId: string; sku: string }> {
   const { root, family, axes, unmapped } = await loadFamily(rootId)
   const splitAxis = options.splitAxis !== undefined ? options.splitAxis : colourAxisOf(axes)
   const plan = planColourProducts({
@@ -26,6 +27,6 @@ export async function loadColourPlan(rootId: string, options: { splitAxis?: stri
     valueOrder: family.valueOrder,
     valueLabels: family.valueLabels,
     unmapped,
-  }, { splitAxis, colourNames: options.colourNames })
+  }, { splitAxis, colourNames: options.colourNames, swatches: options.swatches, sizeMap: options.sizeMap })
   return { plan, rootId: root.id, sku: root.sku }
 }

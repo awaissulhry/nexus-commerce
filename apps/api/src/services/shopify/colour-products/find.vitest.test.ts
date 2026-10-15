@@ -24,7 +24,7 @@ const family: ColourPlanFamily = {
   valueLabels: { ...Object.fromEntries(COLOURS.map(c => [c.key, c.label])), ...Object.fromEntries(SIZES.map(s => [`size:${s.toLowerCase()}`, s])) }, unmapped: [],
 }
 const split = { value: 'color' as string | null }
-vi.mock('./family.js', () => ({ loadColourPlan: async (_rootId: string, options: any = {}) => ({ plan: planColourProducts(family, { splitAxis: split.value, colourNames: options.colourNames }), rootId: 'fam', sku: 'GALE-JACKET' }) }))
+vi.mock('./family.js', () => ({ loadColourPlan: async (_rootId: string, options: any = {}) => ({ plan: planColourProducts(family, { splitAxis: split.value, colourNames: options.colourNames, swatches: options.swatches, sizeMap: options.sizeMap }), rootId: 'fam', sku: 'GALE-JACKET' }) }))
 
 const BLACK = 'gid://shopify/Product/101', YELLOW = 'gid://shopify/Product/102', NOISE = 'gid://shopify/Product/103'
 const liveProduct = (id: string, colour: string, sku: (s: string) => string | null) => ({ id, title: 'GALE jacket', handle: id.split('/').pop(), status: 'ACTIVE', colour: { value: colour },
@@ -218,5 +218,39 @@ describe('S5 — Find uses the listing\'s own SKU on this store', () => {
       expect.objectContaining({ productId: 'p-BLACK-M', sku: 'GALE-JACKET-BLACK-MEN-M', by: 'sku' }),
     ]))
     expect(JSON.stringify(black)).not.toContain('ELSEWHERE')
+  })
+})
+
+/** Feature 1 — Find records the swatch group each colour's product has on the store (its colour list). */
+describe('Find records each colour\'s swatch group', () => {
+  const syncWhere = () => ({ familyId: ids.fam, channelConnectionId: ids.account, marketplace: 'GLOBAL', aliasKey: '' })
+  const setAdoptOnly = (adoptOnly: boolean) => scoped(() => prisma.shopifyColourSync.upsert({ where: { colour_sync: { ...syncWhere(), workspaceId: LEGACY_WORKSPACE_ID } }, create: { ...syncWhere(), adoptOnly }, update: { adoptOnly } }))
+  const regroup = (id: string, group: string[]) => { state.store.find(p => p.id === id).group = { value: JSON.stringify(group) } }
+
+  it('stores it with each proposal; refreshes a linked colour while adopt only; keeps it once the full sync runs (unless none is stored)', async () => {
+    try {
+      const view = await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, {}))
+      let r = await byKey()
+      expect([r['color:black'].swatchGroup, r['color:yellow'].swatchGroup]).toEqual([[BLACK, YELLOW], [BLACK, YELLOW]])
+      expect((r['color:black'].proposal as any).swatchGroup).toEqual([BLACK, YELLOW])
+      expect(view.plan).toMatchObject({ swatchGroups: 1, issues: [] })
+      expect(view.colourProducts.map(c => c.swatchGroup)).toEqual([[BLACK, YELLOW], [BLACK, YELLOW]])
+      // Black linked, adopt only: the store still owns the swatch fields, so Find reads its group again.
+      await scoped(() => prisma.shopifyColourProduct.updateMany({ where: { valueKey: 'color:black' }, data: { state: 'LINKED', shopifyProductId: BLACK } }))
+      await setAdoptOnly(true)
+      regroup(BLACK, [BLACK])
+      await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, {}))
+      expect((await byKey())['color:black'].swatchGroup).toEqual([BLACK])
+      // Full sync: the stored group is the link writer's now; a store change does not move it.
+      await setAdoptOnly(false)
+      regroup(BLACK, [BLACK, YELLOW, NOISE])
+      await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, {}))
+      r = await byKey()
+      expect(r['color:black'].swatchGroup).toEqual([BLACK])
+      // …unless it is stored as no group: then the store's group is read, so the link writer can place the colour.
+      await scoped(() => prisma.shopifyColourProduct.updateMany({ where: { valueKey: 'color:black' }, data: { swatchGroup: [] } }))
+      await scoped(() => findColourProducts('p-BLACK-M', { accountId: 'x' }, {}))
+      expect((await byKey())['color:black'].swatchGroup).toEqual([BLACK, YELLOW, NOISE])
+    } finally { await scoped(() => prisma.shopifyColourSync.deleteMany({})) }
   })
 })

@@ -1,13 +1,20 @@
 /**
  * Link (docs/studies/shopify-linked-variations-PLAN.md §3.5 LINK, PR 4): the ONLY writer of the two grouping fields of a
  * family's colour products — the colour name (`custom.variation_value`) and the colour list (`custom.variation_products`:
- * every colour product of the group, itself included, in colour order; the same list on each). Other paths refuse both
- * fields (`colourGroupingIssue`, linked-state-guard.ts).
+ * every colour product of its swatch group, itself included, in colour order; the same list on each member of a group).
+ * Other paths refuse both fields (`colourGroupingIssue`, linked-state-guard.ts).
  *
- * The group: every colour of the plan in the family's colour order, each with its confirmed product; then each confirmed
- * colour the family no longer has — it stays listed (D2 b: Shopify hides it once it is archived) and keeps its name.
- * Nothing is written until every colour of the plan is confirmed, so a live list never gets shorter by mistake. One colour:
- * no list; a list left from a larger group is deleted, the name stays.
+ * The members: every colour of the plan in the family's colour order, each with its confirmed product; then each
+ * confirmed colour the family no longer has — it stays listed (D2 b: Shopify hides it once it is archived) and keeps its
+ * name. Feature 1 — the members fall into the swatch groups the store has (`ShopifyColourProduct.swatchGroup`, read by
+ * Find and Confirm; `swatchGroupsOf`): men's and women's colours stay two groups, and each group gets ONE list of its own
+ * linked members. A colour with no stored group joins the family's group when the store shows exactly one (none at all:
+ * the whole family is one group, as before); with two or more groups Nexus does not choose one, and refuses with the
+ * colour's name until the store puts it in a group and Find reads it. Each name written is the colour's name in Nexus
+ * (by default the one the store showed at Confirm). A name may repeat across groups, and inside a group when the store
+ * already shows it that way; a repeat Nexus would write itself is refused.
+ * Nothing is written until every colour of the plan is confirmed, so a live list never gets shorter by mistake. A group
+ * of one colour: no list; a list left from a larger group is deleted, the name stays.
  *
  * One read of both fields on every member, then only what differs — names before lists, at most 25 fields per call, each
  * call all or nothing, compare-and-set on the values just read (`applyLinkedBatch`) — then one read-back of the whole
@@ -16,7 +23,7 @@
  */
 import prisma from '../../../db.js'
 import { requireWorkspace } from '../../../lib/workspace-context.js'
-import { IMPACT_LINKED_SHOWN_LIMIT, SHOPIFY_LINKED_LIST_LIMIT } from '@nexus/shared/shopify-colour-products'
+import { IMPACT_LINKED_SHOWN_LIMIT, SHOPIFY_LINKED_LIST_LIMIT, swatchGroupsOf } from '@nexus/shared/shopify-colour-products'
 import { definitionAddress, shopifyValuesEqual, validateShopifyField, type ShopifyFieldEdit, type ShopifyFieldDefinition, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import { shopifyAdmin, type ShopifyGraphql } from '../admin-client.js'
 import { contentDestination, object, type ContentScope } from '../content-workspace.service.js'
@@ -24,7 +31,7 @@ import { applyLinkedBatch, LINKED_KEY } from '../linked-products.service.js'
 import { getShopifyPublishMode } from '../../shopify-publish-gate.service.js'
 import { WorkspaceScopeError } from '../../pim/workspace-destination.js'
 import type { ColourProductSettings } from './settings.js'
-import { colourProductsView, planFor, rowsWhere, type Destination } from './find.service.js'
+import { colourProductsView, colourSwatches, planFor, rowsWhere, type Destination } from './find.service.js'
 import { colourAdoptOnly, commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
 
 /** Adopt only: the colour swatch fields stay as the store has them until an operator starts the full sync. */
@@ -74,24 +81,36 @@ async function linkDestination(destination: Destination) {
     ...rows.filter(r => !inPlan.has(r.valueKey)).filter(confirmed).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
       .map(row => ({ row, name: row.colourName ?? row.valueKey, colourName: null })),
   ]
-  if (members.length > SHOPIFY_LINKED_LIST_LIMIT) throw new WorkspaceScopeError(`Shopify can group at most ${SHOPIFY_LINKED_LIST_LIMIT} products; this family has ${members.length} colour products. Nothing was changed.`, 409)
-  const warnings = members.length > IMPACT_LINKED_SHOWN_LIMIT ? [`The theme shows at most ${IMPACT_LINKED_SHOWN_LIMIT} colours; this group has ${members.length}. The rest are grouped but not shown.`] : []
-  const grouped = members.length >= 2
+  // The store's swatch groups (Feature 1): one list per group, never one list of every colour of the family.
+  const swatch = swatchGroupsOf(members.map(m => m.row.valueKey), colourSwatches(rows))
+  if (swatch.unplaced.length) {
+    const named = members.filter(m => swatch.unplaced.includes(m.row.valueKey)).map(m => `"${m.name}"`), one = named.length === 1
+    throw new WorkspaceScopeError(`${named.join(', ')} ${one ? 'is' : 'are'} in no swatch group on Shopify, and the colours of this family are in ${swatch.groups.length} groups. Nexus does not choose a group for ${one ? 'it' : 'them'}: add ${one ? 'it' : 'them'} to one group in Shopify (${definitionAddress(settings.listField)}), then run Find. Nothing was changed.`, 409)
+  }
+  const groups = swatch.groups.map(keys => members.filter(m => keys.includes(m.row.valueKey)))
+  const largest = Math.max(0, ...groups.map(g => g.length))
+  if (largest > SHOPIFY_LINKED_LIST_LIMIT) throw new WorkspaceScopeError(`Shopify can group at most ${SHOPIFY_LINKED_LIST_LIMIT} products; ${groups.length > 1 ? 'one swatch group of this family has' : 'this family has'} ${largest} colour products. Nothing was changed.`, 409)
+  const warnings = groups.filter(g => g.length > IMPACT_LINKED_SHOWN_LIMIT).map(g => `The theme shows at most ${IMPACT_LINKED_SHOWN_LIMIT} colours; this group has ${g.length}. The rest are grouped but not shown.`)
+  const grouped = groups.some(g => g.length >= 2)
   const detached = rows.filter(r => r.state === 'NOT_FOUND' && r.shopifyProductId && !inPlan.has(r.valueKey))
-  if (!members.length && !detached.length) return { ...await colourProductsView(destination, plan, settings), link: { grouped, members: 0, written: 0, cleared: 0, warnings, verifiedAt: null } }
+  if (!members.length && !detached.length) return { ...await colourProductsView(destination, plan, settings), link: { grouped, members: 0, groups: 0, written: 0, cleared: 0, warnings, verifiedAt: null } }
 
   const graphql = guardedColourGraphql((await shopifyAdmin(destination.accountId)).graphql)
-  const list = JSON.stringify(members.map(m => m.row.shopifyProductId))
+  // Each member's list: its group's members (a group of one has none).
+  const listOf = new Map(groups.flatMap(g => g.map(m => [m, g.length >= 2 ? JSON.stringify(g.map(x => x.row.shopifyProductId)) : null] as const)))
   const wanted: Wanted[] = [
-    ...(grouped ? members.filter(m => m.colourName !== null).map(member => ({ member, slot: 'value' as const, next: member.colourName })) : []),
-    ...members.map(member => ({ member, slot: 'list' as const, next: grouped ? list : null })),
+    ...members.filter(m => m.colourName !== null && listOf.get(m) !== null).map(member => ({ member, slot: 'value' as const, next: member.colourName })),
+    ...members.map(member => ({ member, slot: 'list' as const, next: listOf.get(member) ?? null })),
   ]
   const { nodes, definitions, schema } = await readGroup(graphql, settings, members, 'Nothing was changed.')
-  if (grouped) {
-    // A colour the family no longer has keeps its Shopify name: no two swatches of the group may read the same.
-    const shown = members.map(m => ({ m, name: m.colourName ?? nodes.get(m.row.shopifyProductId)!.value?.value ?? '' })).filter(s => s.name.trim())
-    const same = shown.filter(s => shown.some(o => o !== s && fold(o.name) === fold(s.name)))
-    if (same.length) throw new WorkspaceScopeError(`${same.map(s => `"${s.m.name}"`).join(', ')} would all be called "${same[0].name}" on Shopify. Give each colour its own name. Nothing was changed.`, 409)
+  for (const group of groups.filter(g => g.length >= 2)) {
+    // A colour the family no longer has keeps its Shopify name. A name repeats inside a group only as the store already
+    // shows it; a repeat Nexus would write (a name that is not the one its product shows now) is refused.
+    const shown = group.map(m => { const current = nodes.get(m.row.shopifyProductId)!.value?.value ?? null; return { m, name: m.colourName ?? current ?? '', current } }).filter(s => s.name.trim())
+    for (const s of shown) {
+      const same = shown.filter(o => fold(o.name) === fold(s.name))
+      if (same.length > 1 && same.some(o => o.name !== o.current)) throw new WorkspaceScopeError(`${same.map(o => `"${o.m.name}"`).join(', ')} would all be called "${same[0].name}" on Shopify. Give each colour its own name. Nothing was changed.`, 409)
+    }
   }
   const edits: ShopifyFieldEdit[] = []
   // Explicitly detached colours keep their address until this writer clears their old list.
@@ -138,7 +157,7 @@ async function linkDestination(destination: Destination) {
       data: { shopifyColourLinks: 'Repaired', fields: edits.length }, metadata: { source: 'SYSTEM', writer: 'shopify-colour-link', channel: 'SHOPIFY', marketplace: destination.marketplace, accountId: destination.accountId, aliasKey: destination.aliasKey ?? '' } } })
   })
   return { ...await colourProductsView(destination, plan, settings),
-    link: { grouped, members: members.length, written: edits.filter(e => e.nextValue !== null).length, cleared: edits.filter(e => e.nextValue === null).length, warnings, verifiedAt: members.length ? verifiedAt.toISOString() : null } }
+    link: { grouped, members: members.length, groups: groups.length, written: edits.filter(e => e.nextValue !== null).length, cleared: edits.filter(e => e.nextValue === null).length, warnings, verifiedAt: members.length ? verifiedAt.toISOString() : null } }
 }
 
 /**

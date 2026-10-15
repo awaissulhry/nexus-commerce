@@ -8,18 +8,24 @@
  *
  * The operator may choose the Shopify product of a colour (`choices`): that choice outranks every guess (name, group,
  * SKUs) and is kept on the colour's proposal (`chosenProductId`), so the next Find and Confirm match the same way; a
- * choice of `null` lets Find guess again. The sizes are still matched inside it by SKU, then by option values.
+ * choice of `null` lets Find guess again. The sizes are still matched inside it by SKU, then by option values (through
+ * the destination's size map: `ShopifyColourSync.sizeMap`, size-map.service.ts).
+ *
+ * Feature 1 — each colour keeps the swatch group its product has on the store: Find stores the product's colour list
+ * (`ShopifyColourProduct.swatchGroup`) with its proposal, and Confirm stores it again from its fresh read. While the
+ * store still owns the swatch fields (nothing linked yet, or adopt only), every Find refreshes it; once the full sync
+ * runs, a linked colour keeps the group stored for it (the link writer owns the fields then), unless none is stored.
  */
 import { z } from 'zod'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
-import { matchColourProducts, type ColourCandidate, type ColourMatch, type ColourPlan } from '@nexus/shared/shopify-colour-products'
+import { matchColourProducts, type ColourCandidate, type ColourMatch, type ColourPlan, type ColourSwatch } from '@nexus/shared/shopify-colour-products'
 import { shopifyAdmin, type ShopifyGraphql } from '../admin-client.js'
 import { contentDestination, type ContentScope } from '../content-workspace.service.js'
 import { WorkspaceScopeError } from '../../pim/workspace-destination.js'
 import { readColourProductSettings, type ColourProductSettings } from './settings.js'
 import { loadColourPlan } from './family.js'
-import { colourAdoptOnly, commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
+import { colourAdoptOnly, colourSizeMap, commitColourSyncChange, guardedColourGraphql, withColourSyncLock } from './sync-work.js'
 import { listingSkuRefusal, withListingSkus } from './listing-skus.js'
 
 /** The most Shopify products one Find reads (a group plus the products holding the family's SKUs). */
@@ -73,9 +79,26 @@ export async function readColourCandidates(gql: ShopifyGraphql, settings: Pick<C
 export type Destination = Awaited<ReturnType<typeof contentDestination>>
 export const rowsWhere = (d: Destination) => ({ familyId: d.familyId, channelConnectionId: d.accountId, marketplace: d.marketplace, aliasKey: d.aliasKey ?? '' })
 
+/** A stored colour list: the Shopify product GIDs it names, in its order; null when none was read. */
+export const productGidList = (value: unknown): string[] | null => Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string' && productGid.test(id)) : null
+
+/**
+ * What the store shows for each colour, from its row (the planner's and the link writer's `swatches`): its product (the
+ * linked one, else Find's proposal), the swatch group stored for it, and the colour name Find read on that product.
+ */
+export function colourSwatches(rows: ReadonlyArray<{ valueKey: string; state: string; shopifyProductId: string | null; swatchGroup?: unknown; proposal: unknown }>): Record<string, ColourSwatch> {
+  return Object.fromEntries(rows.map(row => {
+    const proposal = row.proposal as { shopifyProductId?: string | null; shopifyColourName?: string | null } | null
+    const shopifyProductId = row.state === 'LINKED' ? row.shopifyProductId : proposal?.shopifyProductId ?? null
+    return [row.valueKey, { shopifyProductId, group: productGidList(row.swatchGroup),
+      name: shopifyProductId && proposal?.shopifyProductId === shopifyProductId ? proposal.shopifyColourName ?? null : null }]
+  }))
+}
+
 /** What the sheet and the review show: the plan, the store switch and the rows. No Shopify call. */
 export async function colourProductsView(destination: Destination, plan: ColourPlan, settings: Awaited<ReturnType<typeof readColourProductSettings>>) {
   const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(destination), orderBy: { createdAt: 'asc' } })
+  const sizeMap = await colourSizeMap(destination)
   const linked = rows.some(r => r.state === 'LINKED' && r.shopifyProductId)
   // The axes whose value order the family sets: a dictionary attribute's (its saved order, else its options' order). A
   // free-text axis has none but first use, A–Z by SKU (loadFamily); the panel shows such sizes in garment size order.
@@ -85,11 +108,15 @@ export async function colourProductsView(destination: Destination, plan: ColourP
     familyId: destination.familyId, accountId: destination.accountId, settings,
     // Adopt only: the colours are linked and Nexus writes nothing else to them until "Start full sync".
     sync: { linked, adoptOnly: linked && await colourAdoptOnly(destination) },
-    plan: { mode: plan.mode, splitAxis: plan.splitAxis, grouped: plan.grouped, issues: plan.issues, orderedAxes,
-      products: plan.products.map(p => ({ key: p.key, position: p.position, nexusValue: p.nexusValue, colourName: p.colourName, colourNameSource: p.colourNameSource, options: p.options, variants: p.variants.length,
-        sizes: p.variants.map(v => ({ productId: v.productId, sku: v.sku, options: v.options.map(o => o.value) })) })) },
+    // Sizes as Nexus names them; `shopify` beside a size the size map pairs with another Shopify value.
+    plan: { mode: plan.mode, splitAxis: plan.splitAxis, grouped: plan.grouped, issues: plan.issues, orderedAxes, swatchGroups: plan.swatchGroups.length,
+      products: plan.products.map(p => ({ key: p.key, position: p.position, nexusValue: p.nexusValue, colourName: p.colourName, colourNameSource: p.colourNameSource, swatchGroup: p.swatchGroup,
+        options: p.options.map(o => ({ axis: o.axis, name: o.name, values: o.nexusValues ?? o.values })), variants: p.variants.length,
+        sizes: p.variants.map(v => ({ productId: v.productId, sku: v.sku, options: v.options.map(o => o.nexusValue ?? o.value),
+          ...(v.options.some(o => o.nexusValue !== undefined) ? { shopify: v.options.map(o => o.value) } : {}) })) })) },
+    sizeMap: sizeMap ?? {},
     colourProducts: rows.map(r => ({ id: r.id, valueKey: r.valueKey, colourName: r.colourName, state: r.state, shopifyProductId: r.shopifyProductId, remoteStatus: r.remoteStatus,
-      checkedAt: r.checkedAt?.toISOString() ?? null, linkVerifiedAt: r.linkVerifiedAt?.toISOString() ?? null, proposal: r.proposal })),
+      checkedAt: r.checkedAt?.toISOString() ?? null, linkVerifiedAt: r.linkVerifiedAt?.toISOString() ?? null, swatchGroup: productGidList(r.swatchGroup), proposal: r.proposal })),
   }
 }
 
@@ -100,11 +127,12 @@ export async function colourProductsView(destination: Destination, plan: ColourP
  */
 export async function planFor(destination: Destination) {
   const rows = await prisma.shopifyColourProduct.findMany({ where: rowsWhere(destination),
-    select: { id: true, valueKey: true, colourName: true, state: true, shopifyProductId: true, createdAt: true, linkVerifiedAt: true, proposal: true } })
+    select: { id: true, valueKey: true, colourName: true, state: true, shopifyProductId: true, createdAt: true, linkVerifiedAt: true, proposal: true, swatchGroup: true } })
   const colourNames = Object.fromEntries(rows.filter(r => r.colourName).map(r => [r.valueKey, r.colourName!]))
-  const [settings, { plan: familyPlan }] = await Promise.all([readColourProductSettings(destination.accountId), loadColourPlan(destination.familyId, { colourNames })])
+  const [settings, sizeMap] = await Promise.all([readColourProductSettings(destination.accountId), colourSizeMap(destination)])
+  const { plan: familyPlan } = await loadColourPlan(destination.familyId, { colourNames, swatches: colourSwatches(rows), sizeMap })
   const { plan, problems: skuProblems } = await withListingSkus(destination, familyPlan)
-  return { rows, settings, plan, skuProblems }
+  return { rows, settings, plan, skuProblems, sizeMap }
 }
 
 export async function readColourProducts(productId: string, scope: ContentScope) {
@@ -135,8 +163,9 @@ async function findDestination(destination: Destination, input: z.infer<typeof f
   // The store's active locations, for the review: with more than one, the operator says where a colour's stock counts.
   const locations = ((await graphql(`query NexusColourLocations { locations(first:250) { nodes { id name isActive } } }`)).locations?.nodes ?? [])
     .filter((l: any) => l?.isActive !== false && /^gid:\/\/shopify\/Location\/\d+$/.test(l?.id ?? '')).map((l: any) => ({ id: l.id as string, name: String(l.name ?? '') }))
-  await saveProposals(destination, plan, matches, candidates, claimed, chosen)
-  return { ...await colourProductsView(destination, plan, settings), locations }
+  await saveProposals(destination, plan, matches, candidates, claimed, chosen, await colourAdoptOnly(destination))
+  // The plan again: the swatch groups and names Find just read are the planner's (Feature 1).
+  return { ...await colourProductsView(destination, (await planFor(destination)).plan, settings), locations }
 }
 
 /**
@@ -211,7 +240,7 @@ export function claimedElsewhere(destination: Destination, shopifyProductIds: re
 }
 
 async function saveProposals(destination: Destination, plan: ColourPlan, matches: ColourMatch[], candidates: ColourCandidate[], claimed: Array<{ shopifyProductId: string | null; family: { sku: string } }>,
-  chosen: Readonly<Record<string, string>>) {
+  chosen: Readonly<Record<string, string>>, adoptOnly: boolean) {
   const at = new Date()
   await commitColourSyncChange(async tx => {
     const rows = await tx.shopifyColourProduct.findMany({ where: rowsWhere(destination) })
@@ -220,11 +249,17 @@ async function saveProposals(destination: Destination, plan: ColourPlan, matches
       const elsewhere = claimed.find(c => c.shopifyProductId && c.shopifyProductId === match.shopifyProductId)
       const issues = [...match.issues, ...(elsewhere ? [{ code: 'linked-elsewhere', productIds: [], message: `"${candidate?.title}" is already the Shopify product of ${elsewhere.family.sku}.` }] : [])]
       const proposal = { at: at.toISOString(), method: match.method, shopifyProductId: match.shopifyProductId, title: candidate?.title ?? null, handle: candidate?.handle ?? null,
-        status: candidate?.status ?? null, shopifyColourName: match.shopifyColourName, variants: match.variants, missing: match.missing, extra: match.extra, skusToWrite: match.skusToWrite,
+        status: candidate?.status ?? null, shopifyColourName: match.shopifyColourName, swatchGroup: candidate?.group ?? null, variants: match.variants, missing: match.missing, extra: match.extra, skusToWrite: match.skusToWrite,
         skusToRecord: match.skusToRecord, skusToReplace: match.skusToReplace, chosenProductId: chosen[match.key] ?? null, issues }
       const row = rows.find(r => r.valueKey === match.key)
+      // The colour's swatch group as the store shows it (Feature 1). A linked colour takes it only from its own product,
+      // and keeps the group stored for it once the full sync runs (the link writer's then).
+      const linked = row?.state === 'LINKED'
+      const kept = linked && !adoptOnly && (productGidList(row.swatchGroup)?.length ?? 0) > 0
+      const source = linked ? candidates.find(c => c.id === row.shopifyProductId) : candidate
+      const swatchGroup = kept || (linked && !source) ? undefined : source ? source.group as Prisma.InputJsonValue : Prisma.DbNull
       const data = { splitAxis: plan.splitAxis!, proposal: proposal as unknown as Prisma.InputJsonValue, remoteStatus: candidate?.status ?? null, checkedAt: at,
-        state: row?.state === 'LINKED' ? 'LINKED' : match.shopifyProductId && !elsewhere ? 'PROPOSED' : 'NOT_FOUND' }
+        state: row?.state === 'LINKED' ? 'LINKED' : match.shopifyProductId && !elsewhere ? 'PROPOSED' : 'NOT_FOUND', ...(swatchGroup === undefined ? {} : { swatchGroup }) }
       if (row) await tx.shopifyColourProduct.update({ where: { id: row.id }, data })
       else await tx.shopifyColourProduct.create({ data: { ...rowsWhere(destination), valueKey: match.key, ...data } })
     }
