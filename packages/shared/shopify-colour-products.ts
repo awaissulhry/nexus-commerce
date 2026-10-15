@@ -115,7 +115,9 @@ function ordered(keys: Iterable<string>, order: readonly string[] | undefined): 
  * before); with exactly one, a loose colour joins it (the simplest safe rule: a colour Nexus adds to a family the store
  * shows as one group); with two or more, Nexus cannot tell which group a loose colour belongs to: it is `unplaced`, no
  * group takes it, and the link writer refuses until the store puts it in one. Groups come in the order of their first
- * colour; inside a group, colours keep the order given (the family's colour order).
+ * colour. Inside a group, colours keep the order the store's lists hold them in (the Owner: the store stays as it is):
+ * the first stored list of the group, then any other member's list; a colour no list names (new to the group) comes
+ * last. A family the store does not group yet keeps the order given (the family's colour order).
  */
 export function swatchGroupsOf(keys: readonly string[], swatches: Readonly<Record<string, ColourSwatch>> = {}): { groups: string[][]; unplaced: string[] } {
   const unique = [...new Set(keys)]
@@ -132,10 +134,17 @@ export function swatchGroupsOf(keys: readonly string[], swatches: Readonly<Recor
   const listed = new Set(unique.filter(lists).map(root))
   const components = new Map<string, string[]>()
   for (const key of unique) if (listed.has(root(key))) components.set(root(key), [...components.get(root(key)) ?? [], key])
-  const groups = [...components.values()], loose = unique.filter(key => !listed.has(root(key)))
+  const loose = unique.filter(key => !listed.has(root(key)))
+  // The store's order: every id the members' lists name, in list order (members in the order given), first seen first.
+  const inStoreOrder = (members: string[]) => {
+    const order = [...new Set(members.flatMap(key => lists(key) ? swatches[key]!.group! : []))]
+    const rank = (key: string) => { const i = order.indexOf(productOf(key) ?? ''); return i < 0 ? order.length : i }
+    return members.map((key, i) => ({ key, i })).sort((a, b) => rank(a.key) - rank(b.key) || a.i - b.i).map(e => e.key)
+  }
+  const groups = [...components.values()]
   if (!groups.length) return { groups: unique.length ? [unique] : [], unplaced: [] }
-  if (groups.length === 1) return { groups: [unique.filter(key => groups[0].includes(key) || loose.includes(key))], unplaced: [] }
-  return { groups, unplaced: loose }
+  if (groups.length === 1) return { groups: [inStoreOrder(unique.filter(key => groups[0].includes(key) || loose.includes(key)))], unplaced: [] }
+  return { groups: groups.map(inStoreOrder), unplaced: loose }
 }
 
 /** The Shopify products of one family on one store, with every problem that would stop them from being published. */

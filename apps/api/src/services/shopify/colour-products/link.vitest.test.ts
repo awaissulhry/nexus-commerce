@@ -552,18 +552,39 @@ describe('Link — one colour list per swatch group the store has', () => {
     await storeShowed({ [C1]: 'Black', [C2]: 'Gray', [C3]: 'Grey', [C4]: 'Grey' })
   }
 
-  it('REGAL: two lists, men\'s and women\'s apart; "Grey" in both groups is no duplicate; each product keeps its name', async () => {
+  it('REGAL: two lists, men\'s and women\'s apart, each in the store\'s order; "Grey" in both groups is no duplicate; each product keeps its name', async () => {
     await regal()
     const view = await link()
     expect(view.link).toMatchObject({ grouped: true, members: 4, groups: 2, written: 8, cleared: 0 })
-    expect([1, 3].map(n => valueOf(gid(n), LIST))).toEqual([list(C1, C3), list(C1, C3)])
-    expect([2, 4].map(n => valueOf(gid(n), LIST))).toEqual([list(C2, C4), list(C2, C4)])
+    // Men stay [Grey, Black] and women [Grey, Gray], as the store lists them (not the Nexus colour order).
+    expect([1, 3].map(n => valueOf(gid(n), LIST))).toEqual([list(C3, C1), list(C3, C1)])
+    expect([2, 4].map(n => valueOf(gid(n), LIST))).toEqual([list(C4, C2), list(C4, C2)])
     expect([1, 2, 3, 4].map(n => valueOf(gid(n), VALUE))).toEqual(['Black', 'Gray', 'Grey', 'Grey'])
     expect((await rowsOf()).every(r => r.linkVerifiedAt !== null)).toBe(true)
-    // Nothing changed: the next run only reads.
+    // Nothing changed: the next run only reads. Reordering the colours in Nexus does not move a stored group.
     state.calls = []
     await link()
+    state.colours = [C4, C3, C2, C1]
+    await link()
     expect(mutations()).toEqual([])
+  })
+
+  it('the live REGAL store as it is: lists and names already right, so nothing is written; a colour the store lists takes its place there', async () => {
+    await regal()
+    for (const [n, name] of [[1, 'Black'], [2, 'Gray'], [3, 'Grey'], [4, 'Grey']] as const) put(gid(n), VALUE, name)
+    for (const n of [1, 3]) put(gid(n), LIST, list(C3, C1))
+    for (const n of [2, 4]) put(gid(n), LIST, list(C4, C2))
+    await link()
+    expect(mutations()).toEqual([])
+    // A women's colour the women's lists on the store already name (third), with no list of its own read yet.
+    await family([C5], ['Blue'])
+    state.colours = [C1, C5, C2, C3, C4]
+    await groupOf([C5], [])
+    await groupOf([C2, C4], [gid(4), gid(2), gid(5)])
+    state.calls = []
+    await link()
+    expect([2, 4, 5].map(n => valueOf(gid(n), LIST))).toEqual(Array(3).fill(list(C4, C2, C5)))
+    expect(valueOf(gid(1), LIST)).toBe(list(C3, C1))
   })
 
   it('a name Nexus would repeat inside one group is refused before any write; the same name across groups is not', async () => {
@@ -595,11 +616,11 @@ describe('Link — one colour list per swatch group the store has', () => {
     expect(mutations()).toEqual([])
   })
 
-  it('a colour with no stored group joins the only group; with two groups it is refused by name, nothing written', async () => {
+  it('a colour with no stored group joins the only group, last, after the store\'s order; with two groups it is refused by name, nothing written', async () => {
     await family([C1, C2, C3])
-    await groupOf([C1, C2], [gid(1), gid(2)])
+    await groupOf([C1, C2], [gid(2), gid(1)])
     await link()
-    expect([1, 2, 3].map(n => valueOf(gid(n), LIST))).toEqual(Array(3).fill(list(C1, C2, C3)))
+    expect([1, 2, 3].map(n => valueOf(gid(n), LIST))).toEqual(Array(3).fill(list(C2, C1, C3)))
     await scoped(() => prisma.shopifyColourProduct.deleteMany({}))
     state.store = new Map(); state.calls = []
     await regal()

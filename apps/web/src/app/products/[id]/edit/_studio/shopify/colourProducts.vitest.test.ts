@@ -74,6 +74,7 @@ describe('the family\'s sync state and Start full sync', () => {
     expect(effects[0]).toContain('custom.variation_products')
     expect(effects[0]).toContain('keeps the swatch group it has on the store today (for example men\'s and women\'s colours stay apart)')
     expect(effects[0]).toContain('each group gets one list of its own linked colours')
+    expect(effects[0]).toContain('in the order the store lists them today (a colour new to the group goes last')
     expect(effects[0]).not.toMatch(/one swatch group with every colour|are replaced/)
     expect(effects.join(' ')).toMatch(/Stock and prices.*Sizes.*Archive.*paused yourself stays paused/)
   })

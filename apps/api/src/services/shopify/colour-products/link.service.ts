@@ -1,14 +1,16 @@
 /**
  * Link (docs/studies/shopify-linked-variations-PLAN.md §3.5 LINK, PR 4): the ONLY writer of the two grouping fields of a
  * family's colour products — the colour name (`custom.variation_value`) and the colour list (`custom.variation_products`:
- * every colour product of its swatch group, itself included, in colour order; the same list on each member of a group).
+ * every colour product of its swatch group, itself included; the same list on each member of a group).
  * Other paths refuse both fields (`colourGroupingIssue`, linked-state-guard.ts).
  *
  * The members: every colour of the plan in the family's colour order, each with its confirmed product; then each
  * confirmed colour the family no longer has — it stays listed (D2 b: Shopify hides it once it is archived) and keeps its
  * name. Feature 1 — the members fall into the swatch groups the store has (`ShopifyColourProduct.swatchGroup`, read by
  * Find and Confirm; `swatchGroupsOf`): men's and women's colours stay two groups, and each group gets ONE list of its own
- * linked members. A colour with no stored group joins the family's group when the store shows exactly one (none at all:
+ * linked members, in the order the store holds that list (the Owner: the store stays as it is; a colour new to the group
+ * goes last). Only a family the store does not group yet takes the Nexus colour order, and follows it when the family's
+ * colours are reordered. A colour with no stored group joins the family's group when the store shows exactly one (none at all:
  * the whole family is one group, as before); with two or more groups Nexus does not choose one, and refuses with the
  * colour's name until the store puts it in a group and Find reads it. Each name written is the colour's name in Nexus
  * (by default the one the store showed at Confirm). A name may repeat across groups, and inside a group when the store
@@ -87,7 +89,8 @@ async function linkDestination(destination: Destination) {
     const named = members.filter(m => swatch.unplaced.includes(m.row.valueKey)).map(m => `"${m.name}"`), one = named.length === 1
     throw new WorkspaceScopeError(`${named.join(', ')} ${one ? 'is' : 'are'} in no swatch group on Shopify, and the colours of this family are in ${swatch.groups.length} groups. Nexus does not choose a group for ${one ? 'it' : 'them'}: add ${one ? 'it' : 'them'} to one group in Shopify (${definitionAddress(settings.listField)}), then run Find. Nothing was changed.`, 409)
   }
-  const groups = swatch.groups.map(keys => members.filter(m => keys.includes(m.row.valueKey)))
+  // Each group's members in the group's order (the store's list order; `swatchGroupsOf`).
+  const groups = swatch.groups.map(keys => keys.map(key => members.find(m => m.row.valueKey === key)!))
   const largest = Math.max(0, ...groups.map(g => g.length))
   if (largest > SHOPIFY_LINKED_LIST_LIMIT) throw new WorkspaceScopeError(`Shopify can group at most ${SHOPIFY_LINKED_LIST_LIMIT} products; ${groups.length > 1 ? 'one swatch group of this family has' : 'this family has'} ${largest} colour products. Nothing was changed.`, 409)
   const warnings = groups.filter(g => g.length > IMPACT_LINKED_SHOWN_LIMIT).map(g => `The theme shows at most ${IMPACT_LINKED_SHOWN_LIMIT} colours; this group has ${g.length}. The rest are grouped but not shown.`)

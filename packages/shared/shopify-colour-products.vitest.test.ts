@@ -311,7 +311,8 @@ describe('swatch groups — each colour keeps the group and the name the store s
   it('REGAL: two groups as the store has them; the names default to the store\'s, so "Grey" in both groups passes', () => {
     const plan = planColourProducts(REGAL, { splitAxis: 'color', swatches: regalStore, colourNames: storeNames(regalStore) })
     expect(plan.issues).toEqual([])
-    expect(plan.swatchGroups).toEqual([['nero-uomo', 'grigio-uomo'], ['nero-donna', 'grigio-donna']])
+    // Each group in the order the store lists it (men [Grey, Black]), not the Nexus colour order.
+    expect(plan.swatchGroups).toEqual([['grigio-uomo', 'nero-uomo'], ['grigio-donna', 'nero-donna']])
     expect(plan.products.map(p => [p.key, p.colourName, p.swatchGroup])).toEqual([['nero-uomo', 'Black', 0], ['nero-donna', 'Gray', 1], ['grigio-uomo', 'Grey', 0], ['grigio-donna', 'Grey', 1]])
     expect(plan.grouped).toBe(true)
     // Without the store's groups the old rule holds: one group, and the two "Grey" are refused.
@@ -347,7 +348,10 @@ describe('swatch groups — each colour keeps the group and the name the store s
       .toEqual({ groups: [['a', 'b', 'c']], unplaced: [] })
     const two = { ...regalStore, extra: { shopifyProductId: gid(99), group: null } }
     expect(swatchGroupsOf(['nero-uomo', 'extra', 'grigio-uomo', 'grigio-donna', 'nero-donna'], two))
-      .toEqual({ groups: [['nero-uomo', 'grigio-uomo'], ['grigio-donna', 'nero-donna']], unplaced: ['extra'] })
+      .toEqual({ groups: [['grigio-uomo', 'nero-uomo'], ['grigio-donna', 'nero-donna']], unplaced: ['extra'] })
+    // The store's order inside a group; a colour new to the group (no list names it) comes last.
+    expect(swatchGroupsOf(['a', 'b', 'c'], { a: { shopifyProductId: gid(1), group: [gid(2), gid(1)] }, b: { shopifyProductId: gid(2), group: [gid(2), gid(1)] }, c: { shopifyProductId: gid(3), group: null } }))
+      .toEqual({ groups: [['b', 'a', 'c']], unplaced: [] })
     // A product with no list of its own that another list names is in that group; a list of foreign products is a group of one.
     expect(swatchGroupsOf(['a', 'b', 'c'], { a: { shopifyProductId: gid(1), group: [gid(1), gid(2)] }, b: { shopifyProductId: gid(2), group: null }, c: { shopifyProductId: gid(3), group: [gid(77)] } }))
       .toEqual({ groups: [['a', 'b'], ['c']], unplaced: [] })
