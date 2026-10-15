@@ -59,10 +59,11 @@ const REGISTRY: Record<string, Record<string, Loader>> = {
     'product/update': async () => (await import(SHOPIFY_WEBHOOKS)).handleProductUpdate,
     'product/delete': async () => (await import(SHOPIFY_WEBHOOKS)).handleProductDelete,
     'inventory/update': async () => (await import(SHOPIFY_WEBHOOKS)).handleInventoryUpdate,
-    'order/create': async () => (await import(SHOPIFY_WEBHOOKS)).handleOrderCreate,
-    'order/update': async () => (await import(SHOPIFY_WEBHOOKS)).handleOrderUpdate,
-    'fulfillment/create': async () => (await import(SHOPIFY_WEBHOOKS)).handleFulfillmentCreate,
-    'refunds/create': async () => (await import(SHOPIFY_WEBHOOKS)).handleRefundCreate,
+    // The order topics replay through Shopify order import's start date, exactly as the receiver runs them.
+    'order/create': async () => (await import(SHOPIFY_WEBHOOKS)).ingestShopifyOrderCreate,
+    'order/update': async () => (await import(SHOPIFY_WEBHOOKS)).ingestShopifyOrderUpdate,
+    'fulfillment/create': async () => (await import(SHOPIFY_WEBHOOKS)).ingestShopifyFulfillmentCreate,
+    'refunds/create': async () => (await import(SHOPIFY_WEBHOOKS)).ingestShopifyRefundCreate,
     // P2.4 — the app lifecycle and privacy topics. `app/uninstalled` is the one that
     // most needs to be replayable: its failure leaves Nexus writing to a shop that has
     // removed the app.

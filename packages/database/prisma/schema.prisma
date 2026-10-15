@@ -7292,6 +7292,8 @@ model ChannelConnection {
   // CX Etsy — receipt ingest state (activation time, poll cursor, lease) and durable refusals.
   etsyReceiptIngest        EtsyReceiptIngest[]
   etsyReceiptRefusals      EtsyReceiptRefusal[]
+  // Shopify order import — the start date (T0) recorded when a person switched it on for this account.
+  shopifyOrderIngest       ShopifyOrderIngest[]
   // Google step 1a — the Google Ads / Merchant Center / GA4 account each business picked through this login.
   googleAccountLinks       GoogleAccountLink[]
 
@@ -22229,6 +22231,24 @@ model EtsyReceiptIngest {
   updatedAt           DateTime          @updatedAt
 
   @@unique([workspaceId, connectionId], name: "workspace_connectionId", map: "EtsyReceiptIngest_connectionId_key")
+  @@index([workspaceId])
+}
+
+/// Shopify order import (2026-10-15) — one row per Shopify account a person switched order import on for
+/// (POST /api/shopify/order-import/:accountId/start). `activatedAt` is T0, the database clock's whole second at
+/// that moment, written once and never rewritten: a Shopify order created before it is never imported (no Nexus
+/// order, no hold, no stock movement), whatever webhook later names it. Processing never writes this row.
+model ShopifyOrderIngest {
+  // Business ownership comes from verified database context.
+  workspaceId  String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String            @id @default(cuid())
+  connectionId String
+  connection   ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  activatedAt  DateTime          @default(dbgenerated("date_trunc('second'::text, clock_timestamp())"))
+  /// The Nexus user who switched it on; null when no signed-in user is known.
+  activatedBy  String?
+
+  @@unique([workspaceId, connectionId], name: "workspace_connectionId", map: "ShopifyOrderIngest_connectionId_key")
   @@index([workspaceId])
 }
 

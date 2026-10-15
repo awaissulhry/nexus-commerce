@@ -222,6 +222,7 @@ import amazonOrders2026ProbeRoutes from "./routes/amazon-orders-2026-probe.route
 import connectionDependentsRoutes from "./routes/connection-dependents.routes.js";
 import amazonListingAsinRoutes from "./routes/amazon-listing-asin.routes.js";
 import shopifyShadowReportRoutes from "./routes/shopify-shadow-report.routes.js";
+import shopifyOrderImportRoutes from "./routes/shopify-order-import.routes.js";
 import pushHealthRoutes from "./routes/push-health.routes.js";
 import pushLatencyRoutes from "./routes/push-latency.routes.js";
 import outboundLatencyRoutes from "./routes/outbound-latency.routes.js";
@@ -803,6 +804,8 @@ app.register(connectionDependentsRoutes, { prefix: '/api' });
 app.register(amazonListingAsinRoutes, { prefix: '/api' });
 // Shopify orders shadow report — read-only counts before order ingest (NEXUS_ENABLE_SHOPIFY_SHADOW_REPORT=1).
 app.register(shopifyShadowReportRoutes, { prefix: '/api' });
+// Shopify order import per account — its start date (T0) and the order webhooks (NEXUS_ENABLE_SHOPIFY_ORDER_INGEST=1).
+app.register(shopifyOrderImportRoutes, { prefix: '/api' });
 // RT.1 — unified push-health endpoint feeds the PushHealthChip on
 // /orders + /insights/live.
 app.register(pushHealthRoutes, { prefix: '/api' });

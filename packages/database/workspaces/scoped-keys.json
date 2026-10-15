@@ -6844,6 +6844,24 @@
       }
     ]
   },
+  "ShopifyOrderIngest": {
+    "scalar": {
+      "connectionId": "workspace_connectionId"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "connection",
+        "model": "ChannelConnection",
+        "from": [
+          "connectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
   "CommandReceipt": {
     "scalar": {},
     "compound": {

@@ -58,25 +58,20 @@ describe('Shopify webhooks → SSE bus (P-RT.2)', () => {
     unsubscribe()
   })
 
-  it('product/update on a known product publishes product.updated', async () => {
-    productFindFirst.mockResolvedValueOnce({ id: 'prod_xavia_42', shopifyProductId: '9876543210' })
-    productUpdate.mockResolvedValueOnce({})
+  // 2026-10-15 — Shopify follows Nexus: a Shopify title never renames a Nexus product, so nothing changes and
+  // nothing is published, even for a product carrying the legacy shopifyProductId.
+  it('product/update on a product with the legacy shopifyProductId renames nothing and publishes nothing', async () => {
+    productFindFirst.mockResolvedValue({ id: 'prod_xavia_42', shopifyProductId: '9876543210' })
 
     await dispatchShopifyWebhook('product/update', {
       id: '9876543210',
       title: 'Xavia Glove — Updated by Shopify admin',
     })
 
-    expect(productFindFirst).toHaveBeenCalledTimes(1)
-    expect(productUpdate).toHaveBeenCalledTimes(1)
-    expect(productEventCreate).toHaveBeenCalledTimes(1)
-
-    expect(received).toHaveLength(1)
-    expect(received[0]).toMatchObject({
-      type: 'product.updated',
-      productId: 'prod_xavia_42',
-      reason: 'PRODUCT_UPDATED',
-    })
+    expect(productFindFirst).not.toHaveBeenCalled()
+    expect(productUpdate).not.toHaveBeenCalled()
+    expect(productEventCreate).not.toHaveBeenCalled()
+    expect(received).toHaveLength(0)
   })
 
   it('product/update for an unknown product publishes nothing', async () => {
@@ -98,19 +93,16 @@ describe('Shopify webhooks → SSE bus (P-RT.2)', () => {
     expect(listingUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ platformAttributes: expect.objectContaining({ _nexusContentPublish: expect.objectContaining({ status: 'REMOTE_CHANGED' }) }) }) }))
   })
 
-  it('product/delete on a known product publishes product.deleted', async () => {
-    productFindFirst.mockResolvedValueOnce({ id: 'prod_xavia_43', shopifyProductId: '111' })
-    productUpdate.mockResolvedValueOnce({})
+  // 2026-10-15 — a product deleted in Shopify never changes a Nexus product (it also sells on Amazon and eBay).
+  it('product/delete on a product with the legacy shopifyProductId changes nothing and publishes nothing', async () => {
+    productFindFirst.mockResolvedValue({ id: 'prod_xavia_43', shopifyProductId: '111' })
 
     await dispatchShopifyWebhook('product/delete', { id: '111' })
 
-    expect(productUpdate).toHaveBeenCalledTimes(1)
-    expect(productEventCreate).toHaveBeenCalledTimes(1)
-    expect(received).toHaveLength(1)
-    expect(received[0]).toMatchObject({
-      type: 'product.deleted',
-      productId: 'prod_xavia_43',
-    })
+    expect(productFindFirst).not.toHaveBeenCalled()
+    expect(productUpdate).not.toHaveBeenCalled()
+    expect(productEventCreate).not.toHaveBeenCalled()
+    expect(received).toHaveLength(0)
   })
 
   it('product/delete for an unknown product publishes nothing', async () => {

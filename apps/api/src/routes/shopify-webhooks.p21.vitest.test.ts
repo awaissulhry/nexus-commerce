@@ -31,6 +31,8 @@ vi.mock('../services/cx/ingress/ledger.js', () => ({
   }),
   completeInbound: vi.fn(async (id: any, ok: boolean, error?: string) => { completed.push({ id, ok, error }) }),
   inboundNotRecorded: (result: { conflict?: string }) => result.conflict === 'identity_mismatch' ? 'the delivery ID is already bound to another account, event type or trust verdict' : 'the inbound ledger is unavailable',
+  // The receiver tells a hold (Shopify order import switched off) from a failure by this class.
+  InboundDeferred: class InboundDeferred extends Error {},
 }))
 // Lease timing/CAS is covered by claims.vitest.test.ts. The receiver double keeps
 // the original arrival and one active owner so routing and duplicate behavior stay observable.
@@ -185,6 +187,7 @@ describe('a verified Shopify webhook reaches the ledger', () => {
     const app = await buildApp()
     const res = await app.inject({ method: 'POST', url: PATH, headers: headers(), payload: BODY })
     expect(res.statusCode).toBe(500)
+    expect(res.json()).toEqual({ success: false, error: 'handler exploded' })
     expect(completed[0].ok).toBe(false)
     expect(completed[0].error).toContain('handler exploded')
     await app.close()

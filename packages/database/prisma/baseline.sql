@@ -10649,6 +10649,17 @@ CREATE TABLE "EtsyReceiptIngest" (
 );
 
 -- CreateTable
+CREATE TABLE "ShopifyOrderIngest" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "activatedAt" TIMESTAMP(3) NOT NULL DEFAULT date_trunc('second'::text, clock_timestamp()),
+    "activatedBy" TEXT,
+
+    CONSTRAINT "ShopifyOrderIngest_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "EtsyReceiptRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -16775,6 +16786,12 @@ CREATE INDEX "EtsyReceiptIngest_workspaceId_idx" ON "EtsyReceiptIngest"("workspa
 CREATE UNIQUE INDEX "EtsyReceiptIngest_connectionId_key" ON "EtsyReceiptIngest"("workspaceId", "connectionId");
 
 -- CreateIndex
+CREATE INDEX "ShopifyOrderIngest_workspaceId_idx" ON "ShopifyOrderIngest"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ShopifyOrderIngest_connectionId_key" ON "ShopifyOrderIngest"("workspaceId", "connectionId");
+
+-- CreateIndex
 CREATE INDEX "EtsyReceiptRefusal_connectionId_createdAt_idx" ON "EtsyReceiptRefusal"("connectionId", "createdAt");
 
 -- CreateIndex
@@ -18096,6 +18113,9 @@ ALTER TABLE "StockPoolLink" ADD CONSTRAINT "StockPoolLink_productId_fkey" FOREIG
 
 -- AddForeignKey
 ALTER TABLE "EtsyReceiptIngest" ADD CONSTRAINT "EtsyReceiptIngest_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ShopifyOrderIngest" ADD CONSTRAINT "ShopifyOrderIngest_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "EtsyReceiptRefusal" ADD CONSTRAINT "EtsyReceiptRefusal_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;

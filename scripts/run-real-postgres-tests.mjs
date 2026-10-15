@@ -289,6 +289,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'one receive per arrival through the route (08 S10: five identical receives add the stock once; two different ones end at one; two receivers who saw the same total both count)', file: 'src/services/supply/receive-concurrency.vitest.test.ts', expect: 4 },
   { name: 'an order line is taken once (re-reads, oversold lines, surplus holds and splits, reconcile, races; Amazon FBM, Shopify, MCF)', file: 'src/services/order-stock-once-postgres.vitest.test.ts', expect: 21 },
   { name: 'one stock model across channels (crash heal, multi-line totals, cancellation after shipment, races)', file: 'src/services/stock-model-postgres.vitest.test.ts', expect: 51 },
+  { name: 'Shopify order import from its start date (no start date, orders before it, orders after it as before, one start, switch off; a stray product webhook changes no Nexus product or listing)', file: 'src/services/shopify/order-start-date-postgres.vitest.test.ts', expect: 6 },
   { name: 'assortment copy test (AE.3)', file: 'src/services/assortment/copy-run.vitest.test.ts', expect: 8 },
   { name: 'shared stock race test (pool doors)', file: 'src/services/stock-pool/stock-pool-concurrency.vitest.test.ts', expect: 6 },
   { name: 'shared stock end to end (switches, worker, cascade)', file: 'src/services/stock-pool/stock-pool-e2e.vitest.test.ts', expect: 9 },
