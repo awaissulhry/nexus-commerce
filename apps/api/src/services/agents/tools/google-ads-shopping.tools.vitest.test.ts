@@ -95,7 +95,7 @@ describe('G4 Shopping tools', () => {
 
   it('set-google-shopping-settings: local products on SPENDS MONEY; undo puts the old values back and parses as the tool\'s own arguments', async () => {
     const settings = tool('set-google-shopping-settings')
-    const ask = { campaignId: '21', localInventory: true, feedLabel: 'none' }
+    const ask = { campaignId: '21', localInventory: true, clearFeedLabel: true }
     h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
     const out = await settings.handler(ask, asker)
     expect(out.ok, String(out.error)).toBe(true)

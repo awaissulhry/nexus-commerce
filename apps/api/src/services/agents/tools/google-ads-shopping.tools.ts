@@ -18,8 +18,8 @@ import {
   googleAccountArg, googleChangePreview, googleIdArg, googleWhyArg, GOOGLE_CHANGE_RULES, recordAccount, runGoogleChange, type GoogleDraftBuilder,
 } from './google-ads-kit.js'
 import {
-  inventoryFilterDraft, inventoryFilterRecordAfterRun, inventoryFilterRecordNow, inventoryFilterUndoArgs, MAX_FILTER_CONDITIONS, shoppingSettingsDraft,
-  shoppingSettingsNow, type InventoryFilterRecord, type InventoryFilterRequest, type ShoppingSettingsRecord, type ShoppingSettingsRequest,
+  inventoryFilterDraft, inventoryFilterRecordAfterRun, inventoryFilterRecordNow, inventoryFilterUndoArgs, MAX_FILTER_CONDITIONS, shoppingSettingsArgs,
+  shoppingSettingsDraft, shoppingSettingsNow, type InventoryFilterRecord, type InventoryFilterRequest, type ShoppingSettingsRecord, type ShoppingSettingsRequest,
 } from '../../marketing/google-ads/change-shopping.js'
 import { liveShoppingState } from '../../marketing/google-ads/live-shopping.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
@@ -103,6 +103,7 @@ const setGoogleInventoryFilter: AgentTool = {
 const settingsRequest = (args: Record<string, unknown>): ShoppingSettingsRequest => ({
   campaignId: String(args.campaignId ?? ''),
   ...(typeof args.feedLabel === 'string' ? { feedLabel: args.feedLabel } : {}),
+  ...(args.clearFeedLabel === true ? { clearFeedLabel: true } : {}),
   ...(typeof args.localInventory === 'boolean' ? { localInventory: args.localInventory } : {}),
   ...(typeof args.ignoreBrandExclusions === 'boolean' ? { ignoreBrandExclusions: args.ignoreBrandExclusions } : {}),
 })
@@ -127,7 +128,7 @@ const settingsUndo: ToolUndo = {
   request(change: ToolChange) {
     const before = (change.before ?? null) as Stamped<ShoppingSettingsRecord> | null
     if (!before?.campaignId || !before.settings || !Object.keys(before.settings).length) return { refusal: 'This change does not record the Shopping settings it replaced.' }
-    return { tool: 'set-google-shopping-settings', args: { ...(before.accountId ? { accountId: before.accountId } : {}), campaignId: before.campaignId, ...before.settings, why: 'undo of an earlier Shopping settings change' } }
+    return { tool: 'set-google-shopping-settings', args: { ...(before.accountId ? { accountId: before.accountId } : {}), campaignId: before.campaignId, ...shoppingSettingsArgs(before.settings), why: 'undo of an earlier Shopping settings change' } }
   },
 }
 
@@ -139,17 +140,19 @@ const setGoogleShoppingSettings: AgentTool = {
     accountId: googleAccountArg,
     campaignId: googleIdArg('the Standard Shopping campaign'),
     feedLabel: z.string().trim().min(1).max(20).optional()
-      .describe('the feed label of the products it advertises (up to 20 of A–Z, 0–9, - and _), or none = every feed of the Merchant Center account (SPENDS MONEY)'),
+      .describe('the feed label of the products it advertises, exactly as in Merchant Center (up to 20 of A–Z, 0–9, - and _); another label than now = SPENDS MONEY'),
+    clearFeedLabel: z.boolean().optional().describe('true = no feed label: every feed of the Merchant Center account (SPENDS MONEY)'),
     localInventory: z.boolean().optional().describe('local products (sold in local stores) on or off; on = SPENDS MONEY'),
     ignoreBrandExclusions: z.boolean().optional().describe('true = Google ignores the brand exclusions for its Shopping ads (SPENDS MONEY); false = they apply'),
     why: googleWhyArg,
   }),
   description:
     'Change the Shopping settings Google lets change on ONE existing Standard Shopping campaign of the business\'s chosen '
-    + 'Google Ads account: the feed label (or none: every feed of the Merchant Center account), local products, and '
+    + 'Google Ads account: the feed label (or clearFeedLabel: every feed of the Merchant Center account), local products, and '
     + 'whether brand exclusions are ignored for its Shopping ads. Priority is set-google-campaign; the Merchant Center '
     + 'account cannot change on a Shopping campaign (Google: immutable). Only what is named changes; the preview shows each '
-    + 'from → to. Another or no feed label, local products on and brand exclusions ignored are marked SPENDS MONEY. Undo '
+    + 'from → to. Another label or none, local products on and brand exclusions ignored are marked SPENDS MONEY (a label where '
+    + 'there was none narrows: safe). Undo '
     + 'puts the old settings back.' + GOOGLE_CHANGE_RULES,
   undo: settingsUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildSettings(args)),

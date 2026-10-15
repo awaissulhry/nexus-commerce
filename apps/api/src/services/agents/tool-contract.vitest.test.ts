@@ -707,7 +707,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       },
       // G4: an inventory filter and Shopping settings go back as they were (a cleared filter is set again).
       'set-google-inventory-filter': { before: { campaignId: '21', filter: [{ dimension: 'BRAND', value: 'Brand A' }], criterionId: '61', accountId: 'g-1' }, after: { campaignId: '21', filter: [], criterionId: null, accountId: 'g-1' } },
-      'set-google-shopping-settings': { before: { campaignId: '21', settings: { feedLabel: 'IT', localInventory: false }, accountId: 'g-1' }, after: { campaignId: '21', settings: { feedLabel: 'none', localInventory: true }, accountId: 'g-1' } },
+      'set-google-shopping-settings': { before: { campaignId: '21', settings: { feedLabel: 'IT', localInventory: false }, accountId: 'g-1' }, after: { campaignId: '21', settings: { feedLabel: null, localInventory: true }, accountId: 'g-1' } },
       // PR 6: a build (or a copy) is undone by removing the campaigns it made (its budgets and lists stay, unused).
       'build-google-campaigns': { before: { campaigns: [], accountId: 'g-1' }, after: { campaigns: [{ name: 'Shop B', campaignId: '22', op: 1 }], sharedBudgets: [], negativeLists: [], accountId: 'g-1', customerId: '1234567890' } },
       'copy-google-campaign': { before: { campaigns: [], accountId: 'g-1' }, after: { campaigns: [{ name: 'Shop A copy', campaignId: '23', op: 0 }], sharedBudgets: [], negativeLists: [], accountId: 'g-1', customerId: '1234567890' } },

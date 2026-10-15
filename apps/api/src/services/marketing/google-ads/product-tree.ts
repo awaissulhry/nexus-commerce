@@ -28,11 +28,15 @@
  *     LISTING_GROUP_TREE_TOO_DEEP / LISTING_GROUP_TOO_LONG (Google's own limits: its check judges them).
  *   - AdGroupCriterion: listing_group and negative are Immutable; cpc_bid_micros is not (a bid change is an update).
  *
- * So a plan never removes a subdivision in a request that makes or changes anything: a request that must remove one
+ * So a plan never removes a subdivision in a request that makes or changes anything else: a request that must remove one
  * (a split that goes, a split that becomes a unit or changes dimension under a split) is either removals only, or it is
  * done in two steps the person asks for one after the other (step 1 removes, step 2 — the same request again — makes the
  * rest), each checked by Google before it is queued. Removing a UNIT is not a recursive removal: a unit becomes a split
- * (remove the unit, make the split with the same case under the same parent) in one request.
+ * (remove the unit, make the split with the same case under the same parent) in one request. One exception, by the
+ * error's own words ("subdivision is being created or modified"): the ROOT split replaced by "All products" alone makes
+ * no split and changes none (the new root has no parent), so the removal and the root unit go in one request. Google's
+ * guides do not say more (its sample removes a tree in one request and builds the new one, a split, in another); its
+ * check of the preview (validate_only) judges it before anything is queued.
  */
 import type { BuildProductNode } from './change-build.js'
 import { money, plural } from './change-draft.js'
@@ -182,6 +186,14 @@ export function walk(root: TNode | null): Array<{ node: TNode; parent: TNode | n
   return out
 }
 
+/** Google ids compared as numbers. */
+function byCriterionId(a: string, b: string): number {
+  const x = /^\d+$/.test(a) ? BigInt(a) : null
+  const y = /^\d+$/.test(b) ? BigInt(b) : null
+  if (x !== null && y !== null) return x < y ? -1 : x > y ? 1 : 0
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
 /** The tree Google holds, from the live listing groups; or why it does not read as one tree. */
 export function treeOfLive(nodes: ProductGroupNode[]): { root: TNode | null } | { refusal: string } {
   if (!nodes.length) return { root: null }
@@ -192,7 +204,8 @@ export function treeOfLive(nodes: ProductGroupNode[]): { root: TNode | null } | 
   let seen = 0
   const build = (n: ProductGroupNode, dim: Dimension | null, depth: number): TNode => {
     seen += 1
-    const kids = depth < 50 ? byParent.get(n.criterionId) ?? [] : []
+    // Children by Google id, whatever order Google answers in: the same tree always gives the same plan.
+    const kids = depth < 50 ? [...(byParent.get(n.criterionId) ?? [])].sort((a, b) => byCriterionId(a.criterionId, b.criterionId)) : []
     const kind = n.kind === 'SUBDIVISION' ? 'SUBDIVISION' : 'UNIT'
     // A subdivision's dimension: what its children say (Google may leave the Other's empty case value out).
     const named = kids.find((k) => k.dimension)
@@ -205,7 +218,8 @@ export function treeOfLive(nodes: ProductGroupNode[]): { root: TNode | null } | 
       kind,
       split,
       excluded: n.excluded,
-      bidCents: n.excluded ? null : n.bidCents,
+      // A split has no bid of its own (Google may still answer one).
+      bidCents: n.excluded || kind === 'SUBDIVISION' ? null : n.bidCents,
       caseValue: n.caseValue,
       children: kids.map((k) => build(k, split ?? dimensionOfLive(k.dimension), depth + 1)),
     }
@@ -351,7 +365,7 @@ export function snapshotOf(root: TNode | null): TreeSnapNode[] {
   const out: TreeSnapNode[] = []
   const go = (n: TNode, parent: number | null) => {
     const at = out.length
-    out.push({ id: n.id ?? null, parent, dim: parent === null ? null : n.dim, value: n.value, kind: n.kind, split: n.kind === 'SUBDIVISION' ? n.split : null, excluded: n.excluded, bidCents: n.excluded ? null : n.bidCents })
+    out.push({ id: n.id ?? null, parent, dim: parent === null ? null : n.dim, value: n.value, kind: n.kind, split: n.kind === 'SUBDIVISION' ? n.split : null, excluded: n.excluded, bidCents: n.excluded || n.kind === 'SUBDIVISION' ? null : n.bidCents })
     if (n.kind === 'SUBDIVISION') for (const c of ordered(n)) go(c, at)
   }
   if (root) go(root, null)
@@ -400,7 +414,7 @@ export function liveNodesOf(root: TNode | null): ProductGroupNode[] {
       dimension: node.dim ? liveDimensionOf(node.dim) : node.raw ?? null,
       value: node.value,
       excluded: node.excluded,
-      bidCents: node.excluded ? null : node.bidCents,
+      bidCents: node.excluded || node.kind === 'SUBDIVISION' ? null : node.bidCents,
     })
     for (const c of node.children) go(c, id)
   }
@@ -482,6 +496,8 @@ export interface TreePlan {
   bidChanges: Array<{ node: TNode; from: number | null }>
   /** Live units removed and made again (switched between advertised and excluded, or replaced by a split). */
   remade: Array<{ node: TNode; was: TNode }>
+  /** The live root split removed (with everything under it) in the request that makes "All products" alone. */
+  rootReplaced: TNode | null
 }
 
 const createOp = (resourceName: string, parent: string | null, caseValue: Json | null, n: TNode): GoogleMutateOperation => ({
@@ -502,7 +518,7 @@ const createOp = (resourceName: string, parent: string | null, caseValue: Json |
  * two steps, or a refusal). The desired nodes get `id`: the live id they keep, or `op:<n>` (the operation that makes them).
  */
 export function planTree(live: TNode | null, desired: TNode | null, crit: (id: string | number) => string): TreePlan {
-  const plan: TreePlan = { updates: [], removes: [], creates: [], splitsToRemove: [], waiting: [], dropped: [], created: new Map(), bidChanges: [], remade: [] }
+  const plan: TreePlan = { updates: [], removes: [], creates: [], splitsToRemove: [], waiting: [], dropped: [], created: new Map(), bidChanges: [], remade: [], rootReplaced: null }
   let temp = -1
   const removal = (n: TNode) => ({ adGroupCriterionOperation: { remove: crit(n.id!) } })
   const make = (d: TNode, parentRes: string | null, caseValue: Json | null) => {
@@ -543,7 +559,21 @@ export function planTree(live: TNode | null, desired: TNode | null, crit: (id: s
       make(d, parentRes, caseOfLive(l, d))
       return
     }
-    if (d.kind === 'UNIT') { plan.splitsToRemove.push({ node: l, parent: liveParent }); plan.waiting.push(d); return }
+    if (d.kind === 'UNIT') {
+      if (!liveParent) {
+        // The root split becomes "All products" alone. LISTING_GROUP_CANNOT_BE_REMOVED refuses a recursive removal only
+        // "because listing group subdivision is being created or modified in this request": a root UNIT is neither (it
+        // has no parent split), so the removal and the new root go in one request, the removal first.
+        plan.removes.push(removal(l))
+        plan.remade.push({ node: d, was: l })
+        plan.rootReplaced = l
+        make(d, null, null)
+        return
+      }
+      plan.splitsToRemove.push({ node: l, parent: liveParent })
+      plan.waiting.push(d)
+      return
+    }
     d.id = l.id
     const res = crit(l.id!)
     if (l.split && l.split === d.split) {
@@ -554,11 +584,11 @@ export function planTree(live: TNode | null, desired: TNode | null, crit: (id: s
         if (lc) { paired.add(lc); match(lc, dc, res, l) }
         else make(dc, res, caseValueOf(d.split!, dc.value))
       }
-      for (const lc of l.children) if (!paired.has(lc)) goAway(lc, l, d)
+      for (const lc of ordered(l)) if (!paired.has(lc)) goAway(lc, l, d)
       return
     }
     // The split keeps its id and changes dimension: every child goes, the new ones are made under it.
-    for (const lc of l.children) goAway(lc, l, null)
+    for (const lc of ordered(l)) goAway(lc, l, null)
     for (const dc of ordered(d)) make(dc, res, caseValueOf(d.split!, dc.value))
   }
   if (live && desired) match(live, desired, null, null)
@@ -570,21 +600,42 @@ export function planTree(live: TNode | null, desired: TNode | null, crit: (id: s
 }
 
 /**
- * What step 1 of a two-step change removes: each live split that must go, or — when it is the "everything else" of its
- * parent (a split cannot lose it) — the nearest split above it that can go alone; the root means the whole tree.
+ * What step 1 of a two-step change removes: each live split that must go — or, when that would leave a split without
+ * what every split needs, the nearest split above it that can go alone: a split cannot lose its "everything else", and
+ * a split left with only "everything else" is no tree Nexus (or its undo) can build again. The root means the whole tree.
+ * The tree that stays after step 1 is always a tree Google and Nexus take as it is.
  */
 export function stepOneRemovals(plan: TreePlan, live: TNode): TNode[] {
   const parentOf = new Map<TNode, TNode | null>(walk(live).map((w) => [w.node, w.parent]))
-  const picked = new Set<TNode>()
-  for (const { node } of plan.splitsToRemove) {
-    let n: TNode = node
+  const climb = (node: TNode) => {
+    let n = node
     let p = parentOf.get(n) ?? null
     while (p && isOther(n, p)) { n = p; p = parentOf.get(n) ?? null }
-    picked.add(n)
+    return n
   }
-  // Nothing under a split that goes already.
+  const picked = new Set<TNode>(plan.splitsToRemove.map((s) => climb(s.node)))
   const under = (n: TNode) => { let p = parentOf.get(n) ?? null; while (p) { if (picked.has(p)) return true; p = parentOf.get(p) ?? null } return false }
-  return [...picked].filter((n) => !under(n))
+  for (let moved = true; moved;) {
+    moved = false
+    for (const n of [...picked]) {
+      if (!picked.has(n) || under(n)) { picked.delete(n); continue }
+      const p = parentOf.get(n) ?? null
+      // Every named product group of its parent goes: the parent goes instead (it would keep only "everything else").
+      if (p && p.children.filter((c) => c.value !== null).every((c) => picked.has(c))) {
+        for (const c of p.children) picked.delete(c)
+        picked.add(climb(p))
+        moved = true
+      }
+    }
+  }
+  return walk(live).map((w) => w.node).filter((n) => picked.has(n) && !under(n))
+}
+
+/** A tree without the given subtrees (ids kept); null when the root is one of them. */
+export function withoutSubtrees(root: TNode | null, gone: TNode[]): TNode | null {
+  if (!root || gone.includes(root)) return null
+  const strip = (n: TNode): TNode => ({ ...n, children: n.children.filter((c) => !gone.includes(c)).map(strip) })
+  return strip(root)
 }
 
 // ── reading the old tree ────────────────────────────────────────────────────────────────────────────────────────

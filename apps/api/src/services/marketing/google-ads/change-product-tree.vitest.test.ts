@@ -198,7 +198,24 @@ describe('tree: the whole tree, any shape', () => {
     expect(d.spendsMoney).toEqual(['Advertises 1 product group in "Group A" whose products Nexus cannot match to the old tree (they may not have been advertised, or at a lower bid): brand "Brand A" › condition new at EUR 0.30.'])
   })
 
-  it('step 1 removes only the split that must go when it is not "everything else"; its products fall under an advertised "everything else": SPENDS MONEY', () => {
+  it('step 1 removes only the split that must go when another named product group stays beside it; its products fall under an advertised "everything else": SPENDS MONEY', () => {
+    const tree = [
+      node('901', null, 'SUBDIVISION', null),
+      node('902', '901', 'SUBDIVISION', { productBrand: { value: 'Brand A' } }),
+      node('903', '902', 'UNIT', { productItemId: { value: 'sku-1' } }, bid(30)),
+      node('904', '902', 'UNIT', { productItemId: {} }, NEG),
+      node('906', '901', 'UNIT', { productBrand: { value: 'Brand B' } }, bid(15)),
+      node('905', '901', 'UNIT', { productBrand: {} }, bid(20)),
+    ]
+    const want: TreeSpecNode[] = [{ split: 'BRAND' }, { parent: 0, value: 'Brand A', bidCents: 30 }, { parent: 0, value: 'Brand B', bidCents: 15 }, { parent: 0, everythingElse: true, bidCents: 20 }]
+    const one = draft(ask({ tree: want, inTwoSteps: true }), live(tree))
+    expect(one.operations).toEqual([{ adGroupCriterionOperation: { remove: `${AGC}902` } }])
+    expect(one.spendsMoney).toEqual(['Until step 2 runs, the products of brand "Brand A" fall under everything else (by brand) and are advertised at EUR 0.20 a click (some of them were excluded, or bid lower).'])
+    expect(one.warnings.at(-1)).toMatch(/^Step 2 still to ask: .*undo-change on the same change.*set-google-product-groups with the same arguments/)
+  })
+
+  it('probe: the only named product group of a split must become a unit — step 1 removes the whole tree (never a split left with only "everything else"); step 2 builds it; each step undoes exactly', () => {
+    // Live: by brand — Brand A split by item ID, "everything else" at EUR 0.20. Wanted: Brand A as one unit at EUR 0.30.
     const tree = [
       node('901', null, 'SUBDIVISION', null),
       node('902', '901', 'SUBDIVISION', { productBrand: { value: 'Brand A' } }),
@@ -208,8 +225,48 @@ describe('tree: the whole tree, any shape', () => {
     ]
     const want: TreeSpecNode[] = [{ split: 'BRAND' }, { parent: 0, value: 'Brand A', bidCents: 30 }, { parent: 0, everythingElse: true, bidCents: 20 }]
     const one = draft(ask({ tree: want, inTwoSteps: true }), live(tree))
-    expect(one.operations).toEqual([{ adGroupCriterionOperation: { remove: `${AGC}902` } }])
-    expect(one.spendsMoney).toEqual(['Until step 2 runs, the products of brand "Brand A" fall under everything else (by brand) and are advertised at EUR 0.20 a click (some of them were excluded, or bid lower).'])
+    expect(one.operations).toEqual([{ adGroupCriterionOperation: { remove: `${AGC}901` } }])
+    expect(one.spendsMoney).toEqual([])
+    expect(one.warnings).toContain('Until step 2 runs, "Group A" has no product groups: it shows no products.')
+    expect((one.after as ProductGroupChangeRecord).nodes).toEqual([])
+    // Step 2: the same request on the tree step 1 left — one request, creates only.
+    const two = draft(ask({ tree: want, inTwoSteps: true }), live([]))
+    expect(two.operations).toEqual([
+      create(-1, null, 'SUBDIVISION', null),
+      create(-2, `${AGC}-1`, 'UNIT', { productBrand: { value: 'Brand A' } }, { cpcBidMicros: '300000' }),
+      create(-3, `${AGC}-1`, 'UNIT', { productBrand: {} }, { cpcBidMicros: '200000' }),
+    ])
+    // Undo of step 2 (newest first): the tree goes (there was none before it).
+    expect(productGroupUndoArgs({ before: two.before, after: two.after })).toEqual({ args: { campaignId: '21', adGroupId: '51', removeTree: true } })
+    // Undo of step 1, once step 2 is undone (no tree, as step 1 left it): the old tree, made again in ONE request.
+    const back = productGroupUndoArgs({ before: one.before, after: one.after })
+    if ('refusal' in back) throw new Error(back.refusal)
+    const again = draft(ask(back.args as Partial<ProductGroupRequest>), live([]))
+    expect(again.operations).toHaveLength(5)
+    expect((again.after as ProductGroupChangeRecord).nodes!.map((n) => [n.value, n.kind, n.bidCents, n.excluded])).toEqual(
+      (one.before as ProductGroupChangeRecord).nodes!.map((n) => [n.value, n.kind, n.bidCents, n.excluded]),
+    )
+  })
+
+  it('"All products" alone where a split stands: the root split goes and the root unit is made in ONE request (removal first)', () => {
+    const d = draft(ask({ tree: [{ bidCents: 25 }] }), live(DEEP))
+    expect(d.operations).toEqual([
+      { adGroupCriterionOperation: { remove: `${AGC}801` } },
+      create(-1, null, 'UNIT', null, { cpcBidMicros: '250000' }),
+    ])
+    expect(d.warnings).toContain('Replaces the whole tree of "Group A" (6 product groups) with "All products" alone, in one request: Google removes the split with everything under it and makes the new root unit (it refuses this only when a split is made in the same request). Every product of the feed falls under "All products".')
+    expect(d.spendsMoney).toEqual(['Advertises 1 product group in "Group A" whose products Nexus cannot match to the old tree (they may not have been advertised, or at a lower bid): "All products" at EUR 0.25.'])
+  })
+
+  it('the same tree whatever order Google answers its rows in: the same operations (the plan hash)', () => {
+    const want: TreeSpecNode[] = [{ split: 'ITEM_ID' }, { parent: 0, value: 'sku-1', bidCents: 30 }, { parent: 0, everythingElse: true, excluded: true }]
+    const a = draft(ask({ tree: want }), live(BRANDS))
+    const b = draft(ask({ tree: want }), live([BRANDS[0], BRANDS[3], BRANDS[2], BRANDS[1]]))
+    expect(b.operations).toEqual(a.operations)
+    expect(b.before).toEqual(a.before)
+    // A split has no bid of its own, even when Google answers one.
+    const withBid = [node('701', null, 'SUBDIVISION', null, bid(99)), ...BRANDS.slice(1)]
+    expect((draft(ask({ tree: want }), live(withBid)).before as ProductGroupChangeRecord).nodes![0].bidCents).toBeNull()
   })
 
   it('the same tree: nothing to change; a tree that breaks Google\'s rules: refused before anything is sent', () => {
@@ -296,6 +353,15 @@ describe('the tree as it is: add, subdivide, remove, removeTree (with bids, excl
     expect(refusal(ask({ add: [{ parentId: '701', value: 'brand a', bidCents: 3 }] }), live(BRANDS))).toMatch(/already has "brand a"/)
     expect(refusal(ask({ add: [{ parentId: '702', value: 'x', bidCents: 3 }] }), live(BRANDS))).toMatch(/is not a split: split it with subdivide/)
     expect(refusal(ask({ add: [{ parentId: '701', value: 'x', bidCents: 3 }] }), live([]))).toMatch(/has no product groups: build a tree first/)
+    expect(refusal(ask({ remove: ['702', '703'] }), live(BRANDS))).toMatch(/"All products" would keep only "everything else": remove the whole tree with removeTree/)
+    // A split whose dimension Nexus cannot read (Google answered no value under it): edits are refused, never a crash.
+    const unread = [node('701', null, 'SUBDIVISION', null), node('702', '701', 'UNIT', null, bid(40)), node('703', '701', 'UNIT', null, NEG)]
+    expect(refusal(ask({ add: [{ parentId: '701', value: 'x', bidCents: 3 }] }), live(unread))).toMatch(/cannot tell which dimension "All products" \(701\) is split by/)
+    expect(refusal(ask({ exclude: ['702'], add: [{ parentId: '701', value: 'x', bidCents: 3 }] }), live(unread))).toMatch(/cannot edit this tree/)
+    // Nothing is changed under a split removed in the same request.
+    const deep = [...BRANDS.slice(0, 3), node('704', '701', 'UNIT', { productBrand: {} }, NEG), node('705', '701', 'SUBDIVISION', { productBrand: { value: 'Brand C' } }), node('706', '705', 'UNIT', { productItemId: { value: 'sku-1' } }, bid(10)), node('707', '705', 'UNIT', { productItemId: {} }, NEG)]
+    expect(refusal(ask({ remove: ['705'], bids: [{ criterionId: '706', bidCents: 12 }] }), live(deep))).toMatch(/\(706\) is under brand "Brand C" \(705\), which this request removes/)
+    expect(refusal(ask({ remove: ['705'], add: [{ parentId: '705', value: 'sku-2', bidCents: 5 }] }), live(deep))).toMatch(/add\[0\]: 705 is removed in this request/)
   })
 })
 
@@ -315,6 +381,29 @@ describe('records and undo of a change of any tree', () => {
     expect(undo.operations).toEqual([{ adGroupCriterionOperation: { remove: `${AGC}910` } }])
     const two = draft(ask({ tree: [{ split: 'BRAND' }, { parent: 0, value: 'Brand A', bidCents: 40 }, { parent: 0, value: 'Brand B', excluded: true }, { parent: 0, everythingElse: true, excluded: true }], inTwoSteps: true }), live([BRANDS[0], BRANDS[2], BRANDS[3]]))
     expect(two.operations).toEqual([create(-1, `${AGC}701`, 'UNIT', { productBrand: { value: 'Brand A' } }, { cpcBidMicros: '400000' })])
+  })
+
+  it('undo of a subdivide of the only named product group: two steps; between them the change still reads as standing (its undo half done), so the same undo is asked again for step 2', () => {
+    const one = [node('701', null, 'SUBDIVISION', null), node('702', '701', 'UNIT', { productBrand: { value: 'Brand A' } }, bid(40)), node('704', '701', 'UNIT', { productBrand: {} }, NEG)]
+    const d = draft(ask({ subdivide: [{ criterionId: '702', split: 'ITEM_ID', children: [{ value: 'sku-1', bidCents: 60 }], everythingElse: { bidCents: 40 } }] }), live(one))
+    const ran = productGroupRecordAfterRun(d.after as ProductGroupChangeRecord, [{}, { adGroupCriterionResult: { resourceName: `${AGC}910` } }, { adGroupCriterionResult: { resourceName: `${AGC}911` } }, { adGroupCriterionResult: { resourceName: `${AGC}912` } }])
+    const now = [one[0], node('910', '701', 'SUBDIVISION', { productBrand: { value: 'Brand A' } }), node('911', '910', 'UNIT', { productItemId: { value: 'sku-1' } }, bid(60)), node('912', '910', 'UNIT', { productItemId: {} }, bid(40)), one[2]]
+    const before = d.before as ProductGroupChangeRecord
+    expect(productGroupRecordNow(ran, now, before)).toEqual(ran)
+    const undo = productGroupUndoArgs({ before, after: ran })
+    if ('refusal' in undo) throw new Error(undo.refusal)
+    // Step 1: Brand A is the only named brand, so the whole tree goes (a split is never left with only "everything else").
+    const step1 = draft(ask(undo.args as Partial<ProductGroupRequest>), live(now))
+    expect(step1.operations).toEqual([{ adGroupCriterionOperation: { remove: `${AGC}701` } }])
+    expect(step1.totals).toMatchObject({ step: 1, steps: 2 })
+    // Google holds no tree now: exactly what the undo's step 1 leaves — the change still reads as it wrote it.
+    expect(productGroupRecordNow(ran, [], before)).toEqual(ran)
+    // Anything else (someone changed the tree): it reads as moved.
+    expect(productGroupRecordNow(ran, [one[0], one[2], node('920', '701', 'UNIT', { productBrand: { value: 'Brand Z' } }, bid(5))], before)).not.toEqual(ran)
+    // Step 2: the same undo again, on no tree: the old tree in one request.
+    const step2 = draft(ask(undo.args as Partial<ProductGroupRequest>), live([]))
+    expect(step2.totals).not.toHaveProperty('step')
+    expect((step2.after as ProductGroupChangeRecord).nodes!.map((n) => [n.value, n.bidCents, n.excluded])).toEqual(before.nodes!.map((n) => [n.value, n.bidCents, n.excluded]))
   })
 
   it('a tree made where there was none: undo removes it; a tree Nexus cannot rebuild: said', () => {

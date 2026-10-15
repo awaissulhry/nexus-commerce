@@ -144,16 +144,30 @@ export function inventoryFilterUndoArgs(before: InventoryFilterRecord | null): {
 // ── Shopping settings ───────────────────────────────────────────────────────────────────────────────────────────
 
 export interface ShoppingSettings {
-  /** A feed label, or 'none' (every feed of the Merchant Center account). */
-  feedLabel?: string
+  /** A feed label, or null: no feed label (every feed of the Merchant Center account). */
+  feedLabel?: string | null
   localInventory?: boolean
   ignoreBrandExclusions?: boolean
 }
-export interface ShoppingSettingsRequest extends ShoppingSettings { campaignId: string }
+export interface ShoppingSettingsRequest {
+  campaignId: string
+  /** A feed label exactly as Merchant Center has it ("NONE" is a label like any other). */
+  feedLabel?: string
+  /** true: no feed label — every feed of the Merchant Center account. */
+  clearFeedLabel?: boolean
+  localInventory?: boolean
+  ignoreBrandExclusions?: boolean
+}
 export interface ShoppingSettingsRecord { campaignId: string; settings: ShoppingSettings }
 
 export const shoppingSettingsNow = (c: ShoppingCampaignLive): Required<ShoppingSettings> =>
-  ({ feedLabel: c.feedLabel ?? 'none', localInventory: c.localInventory, ignoreBrandExclusions: c.ignoreBrandExclusions })
+  ({ feedLabel: c.feedLabel, localInventory: c.localInventory, ignoreBrandExclusions: c.ignoreBrandExclusions })
+
+/** The request that puts recorded settings back (no feed label = clearFeedLabel). */
+export function shoppingSettingsArgs(settings: ShoppingSettings): Record<string, unknown> {
+  const { feedLabel, ...rest } = settings
+  return { ...rest, ...(feedLabel === null ? { clearFeedLabel: true } : feedLabel !== undefined ? { feedLabel } : {}) }
+}
 
 const FEED_LABEL = /^[A-Z0-9_-]{1,20}$/
 
@@ -163,16 +177,17 @@ export function shoppingSettingsDraft(customer: string, request: ShoppingSetting
   const c = state.campaign!
   const now = shoppingSettingsNow(c)
   const ask: ShoppingSettings = {}
+  if (request.feedLabel !== undefined && request.clearFeedLabel) return { refusal: 'Give feedLabel or clearFeedLabel, not both.' }
+  if (request.clearFeedLabel) ask.feedLabel = null
   if (request.feedLabel !== undefined) {
     const label = request.feedLabel.trim()
-    if (label.toLowerCase() === 'none') ask.feedLabel = 'none'
-    else if (!FEED_LABEL.test(label)) return { refusal: `The feed label "${label.slice(0, 40)}" is not one Google takes (up to 20 of A–Z, 0–9, - and _), or give none (every feed).` }
-    else ask.feedLabel = label
+    if (!FEED_LABEL.test(label)) return { refusal: `The feed label "${label.slice(0, 40)}" is not one Google takes (up to 20 of A–Z, 0–9, - and _); clearFeedLabel: true uses every feed.` }
+    ask.feedLabel = label
   }
   if (request.localInventory !== undefined) ask.localInventory = request.localInventory
   if (request.ignoreBrandExclusions !== undefined) ask.ignoreBrandExclusions = request.ignoreBrandExclusions
   const keys = (Object.keys(ask) as Array<keyof ShoppingSettings>).filter((k) => ask[k] !== now[k])
-  if (!Object.keys(ask).length) return { refusal: 'Say what to change: feedLabel, localInventory or ignoreBrandExclusions.' }
+  if (!Object.keys(ask).length) return { refusal: 'Say what to change: feedLabel (or clearFeedLabel), localInventory or ignoreBrandExclusions.' }
   if (!keys.length) return { refusal: `Nothing to change: "${c.name}" already has these Shopping settings.` }
 
   const note = pausedNote(c)
@@ -189,14 +204,15 @@ export function shoppingSettingsDraft(customer: string, request: ShoppingSetting
     after[k] = ask[k] as never
   }
   if (keys.includes('feedLabel')) {
-    // A path in the mask with no value in the body is cleared (Google's update rule): 'none' clears the label.
-    if (ask.feedLabel !== 'none') setting.feedLabel = ask.feedLabel
+    // A path in the mask with no value in the body is cleared (Google's update rule): no feed label.
+    if (ask.feedLabel !== null) setting.feedLabel = ask.feedLabel
     mask.push('shopping_setting.feed_label')
-    const words = (l: string) => (l === 'none' ? 'none (every feed of the Merchant Center account)' : l)
+    const words = (l: string | null) => (l === null ? 'none (every feed of the Merchant Center account)' : l)
     lines.push(['feed label', words(now.feedLabel), words(ask.feedLabel!)])
-    spends.push(ask.feedLabel === 'none'
-      ? `Removes the feed label of "${c.name}": products of every feed of its Merchant Center account can be advertised${note}.`
-      : `Changes the feed label of "${c.name}" to ${ask.feedLabel}: the products of that feed can be advertised${now.feedLabel === 'none' ? '' : `, and those of ${now.feedLabel} stop`}${note}.`)
+    if (ask.feedLabel === null) spends.push(`Removes the feed label of "${c.name}": products of every feed of its Merchant Center account can be advertised${note}.`)
+    else if (now.feedLabel !== null) spends.push(`Changes the feed label of "${c.name}" to ${ask.feedLabel}: the products of that feed can be advertised, and those of ${now.feedLabel} stop${note}.`)
+    // From every feed to one: fewer products can be advertised (a safe step).
+    else warnings.push(`Only products of feed label ${ask.feedLabel} can be advertised in "${c.name}" after this change (now: every feed).`)
     warnings.push('A feed label does not target a country: the campaign\'s locations decide where ads show.')
   }
   if (keys.includes('localInventory')) {

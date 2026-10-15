@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  inventoryFilterDraft, inventoryFilterRecordAfterRun, inventoryFilterRecordNow, inventoryFilterUndoArgs, shoppingSettingsDraft,
+  inventoryFilterDraft, inventoryFilterRecordAfterRun, inventoryFilterRecordNow, inventoryFilterUndoArgs, shoppingSettingsArgs, shoppingSettingsDraft,
   type InventoryFilterRecord,
 } from './change-shopping.js'
 import { inventoryFilterOf, shoppingCampaignOf, type ShoppingLiveState } from './live-shopping.js'
@@ -91,14 +91,26 @@ describe('Shopping settings', () => {
     expect(d.after).toEqual({ campaignId: '21', settings: { feedLabel: 'DE', localInventory: true, ignoreBrandExclusions: true } })
   })
 
-  it('none clears the feed label (the path in the mask, no value: Google clears it); turning things off is safe', () => {
+  it('clearFeedLabel clears it (the path in the mask, no value: Google clears it) — SPENDS MONEY; turning things off is safe', () => {
     const live = state([], campaign({}, { enableLocal: true, ignoreBrandExclusionInShoppingAds: true }))
-    const d = ok(shoppingSettingsDraft(C, { campaignId: '21', feedLabel: 'none', localInventory: false, ignoreBrandExclusions: false }, live))
+    const d = ok(shoppingSettingsDraft(C, { campaignId: '21', clearFeedLabel: true, localInventory: false, ignoreBrandExclusions: false }, live))
     expect(d.operations).toEqual([{ campaignOperation: {
       update: { resourceName: `${C}/campaigns/21`, shoppingSetting: { enableLocal: false, ignoreBrandExclusionInShoppingAds: false } },
       updateMask: 'shopping_setting.feed_label,shopping_setting.enable_local,shopping_setting.ignore_brand_exclusion_in_shopping_ads',
     } }])
     expect(d.spendsMoney).toEqual(['Removes the feed label of "Shop A": products of every feed of its Merchant Center account can be advertised.'])
+    expect(d.before).toMatchObject({ settings: { feedLabel: 'IT' } })
+    expect(d.after).toMatchObject({ settings: { feedLabel: null } })
+    expect(shoppingSettingsArgs({ feedLabel: null, localInventory: true })).toEqual({ localInventory: true, clearFeedLabel: true })
+  })
+
+  it('a label where there was none narrows (safe); "NONE" is a label like any other', () => {
+    const live = state([], campaign({}, { feedLabel: undefined }))
+    const d = ok(shoppingSettingsDraft(C, { campaignId: '21', feedLabel: 'NONE' }, live))
+    expect(d.operations).toEqual([{ campaignOperation: { update: { resourceName: `${C}/campaigns/21`, shoppingSetting: { feedLabel: 'NONE' } }, updateMask: 'shopping_setting.feed_label' } }])
+    expect(d.spendsMoney).toEqual([])
+    expect(d.warnings).toContain('Only products of feed label NONE can be advertised in "Shop A" after this change (now: every feed).')
+    expect(no(shoppingSettingsDraft(C, { campaignId: '21', feedLabel: 'DE', clearFeedLabel: true }, live))).toMatch(/not both/)
   })
 
   it('refused: nothing to change, a feed label Google does not take, not a Shopping campaign', () => {

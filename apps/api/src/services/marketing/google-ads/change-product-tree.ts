@@ -13,18 +13,23 @@
  *     and makes the rest. Each step is its own preview, checked by Google, approved by a person. Between the two the
  *     preview says where the products of what was removed fall (and marks it SPENDS MONEY when that advertises them);
  *   - everything else (bids, units switched, units made, a unit split further, a split's dimension changed when only
- *     units hang under it) is ONE request, and what stays keeps its id and statistics.
+ *     units hang under it, and the root split replaced by "All products" alone — no split is made there) is ONE
+ *     request, and what stays keeps its id and statistics.
+ *   - step 1 never leaves a split without a named product group (it removes the parent, up to the whole tree), so what
+ *     stays between the steps is a tree Google and Nexus take, and each step undoes on its own.
  *
  * Undo: the change keeps the whole tree before and after (snapshots, with ids); undo asks for the old tree with `tree`
  * (and `inTwoSteps`, as putting a unit back where a split now stands needs two steps), or `removeTree` when there was
  * none. The old tree comes back as it was (dimensions, values, bids, exclusions); the product groups made again get new
- * ids, so their own statistics start from zero.
+ * ids, so their own statistics start from zero. A two-step undo's step 1 runs with `stepsLeft` (the change is not marked
+ * undone), and between the steps the change reads as still standing (undoStepOneOf), so undo-change asked again makes
+ * step 2 and only then marks it undone.
  */
 import { changeLines, money, plural, type GoogleChangeDraft } from './change-draft.js'
 import type { ProductGroupNode, ShoppingAdGroupLive } from './live-product-groups.js'
 import {
   cleanValue, DIMENSIONS, describeTNode, dimensionWords, MAX_TREE_NODES, pathLabel, planTree, reachAt, snapshotOf, specOfSnapshot, splitProblem, stateLabel,
-  stepOneRemovals, treeOfLive, treeOfSpec, unitStateOf, valueKey, walk,
+  stepOneRemovals, treeOfLive, treeOfSnapshot, treeOfSpec, unitStateOf, valueKey, walk, withoutSubtrees,
   type Dimension, type TNode, type TreePlan, type TreeSnapNode, type TreeSpecNode,
 } from './product-tree.js'
 import type { GoogleMutateOperation } from './write-client.js'
@@ -101,6 +106,22 @@ function editedTree(live: TNode | null, r: TreeChangeRequest, agName: string): {
   const label = (chain: TNode[]) => pathLabel(chain)
   const unitOnly = (at: ReturnType<typeof walk>[number], what: string) =>
     at.node.kind === 'UNIT' ? null : { refusal: `${label(at.chain)} (${at.node.id}) is a split: ${what}` }
+  // A split whose dimension Nexus cannot read: its product groups cannot be made again here.
+  const unread = walk(root).find((w) => w.node.kind === 'SUBDIVISION' && !w.node.split)
+  if (unread) {
+    return { refusal: `Nexus cannot tell which dimension ${label(unread.chain)} (${unread.node.id}) is split by (Google answered none of its product groups' values, or a dimension Nexus does not know), so it cannot edit this tree: give the whole tree with tree, or change it in Google Ads.` }
+  }
+  // Nothing is changed under a product group this request removes (it would go with it, unsaid).
+  const removing = new Set(r.remove ?? [])
+  const named0 = [
+    ...(r.bids ?? []).map((b) => b.criterionId), ...(r.exclude ?? []), ...(r.include ?? []).map((i) => i.criterionId),
+    ...(r.subdivide ?? []).map((x) => x.criterionId), ...(r.add ?? []).map((a) => a.parentId),
+  ]
+  for (const id of named0) {
+    const at = index.get(id)
+    const gone = at?.chain.slice(0, -1).find((n) => n.id && removing.has(n.id))
+    if (at && gone) return { refusal: `${label(at.chain)} (${id}) is under ${pathLabel(walk(root).find((w) => w.node === gone)!.chain)} (${gone.id}), which this request removes: change it, or remove its split, not both.` }
+  }
 
   for (const b of r.bids ?? []) {
     const at = take(b.criterionId, 'bids')
@@ -188,7 +209,11 @@ function editedTree(live: TNode | null, r: TreeChangeRequest, agName: string): {
   }
   for (const w of walk(root)) {
     if (w.node.kind === 'SUBDIVISION' && w.node.children.every((c) => c.value === null)) {
-      return { refusal: `${label(w.chain)} would keep only "everything else": remove the split itself instead (remove ${w.node.id ?? 'it'}), or keep a product group under it.` }
+      return {
+        refusal: w.parent
+          ? `${label(w.chain)} would keep only "everything else": remove the split itself instead (remove ${w.node.id ?? 'it'}), or keep a product group under it.`
+          : `"All products" would keep only "everything else": remove the whole tree with removeTree (then build a new one with tree or itemIds), or keep a product group under it.`,
+      }
     }
   }
   if (!changed) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
@@ -269,6 +294,25 @@ function fallOf(removed: TNode, other: TNode | undefined, ctx: TreeChangeCtx, la
 
 const liveWalkSize = (root: TNode | null) => walk(root).length
 
+/** What step 1 of a two-step change says, in its preview and when it ran. */
+export const STEP_TWO =
+  'Step 2 still to ask: once this step ran, ask again — undo-change on the same change when this is an undo (that change '
+  + 'is not undone until step 2 ran), or set-google-product-groups with the same arguments. Until then the ad group keeps the '
+  + 'tree step 1 leaves. Step 2 has its own preview, checked by Google and approved on its own.'
+
+/**
+ * The tree an undo's step 1 leaves: when putting `before` back over `after` needs two steps, what Google holds between
+ * them (ids kept); null when one request puts it back. Undo reads it as "the change still stands, its undo is half done".
+ */
+export function undoStepOneOf(before: TreeSnapNode[], after: TreeSnapNode[]): TreeSnapNode[] | null {
+  const live = treeOfSnapshot(after)
+  const want = treeOfSnapshot(before)
+  if (!live || !want) return null
+  const plan = planTree(live, want, (id) => String(id))
+  if (!plan.splitsToRemove.length || !(plan.updates.length || plan.creates.length || plan.waiting.length)) return null
+  return snapshotOf(withoutSubtrees(live, stepOneRemovals(plan, live)))
+}
+
 function record(ctx: TreeChangeCtx, root: TNode | null): TreeChangeRecord {
   return { campaignId: ctx.ag.campaign.campaignId, adGroupId: ctx.ag.adGroupId, nodes: snapshotOf(root) }
 }
@@ -281,11 +325,7 @@ function stepOne(
   const { ag, currency } = ctx
   const gone = stepOneRemovals(plan, live)
   const parentOf = new Map(walk(live).map((w) => [w.node, w.parent]))
-  const after = gone.includes(live) ? null : clone(live)
-  if (after) {
-    const ids = new Set(gone.map((g) => g.id))
-    for (const w of walk(after)) w.node.children = w.node.children.filter((c) => !ids.has(c.id))
-  }
+  const after = withoutSubtrees(live, gone)
   const lines: Array<[string, unknown, unknown]> = [[`product groups of "${ag.name}"`, describeTNode(live, currency), `after step 1: ${describeTNode(after, currency)}; after step 2: ${describeTNode(desired, currency)}`]]
   const spends: string[] = []
   const warnings: string[] = []
@@ -302,10 +342,10 @@ function stepOne(
     else warnings.push(fall.note)
   }
   const operations = gone.map(removal)
-  warnings.push('Step 2 is the same request asked again once this step ran: it makes the rest of the tree (its own preview, checked by Google and approved on its own).')
+  warnings.push(STEP_TWO)
   const { changes, more } = changeLines(lines)
   return {
-    summary: `Google Ads product groups of "${ag.name}", step 1 of 2: remove ${listed(gone.map(label), 4)} — Google refuses to remove a split in the request that makes the new product groups. Once it ran, ask set-google-product-groups again with the same arguments for step 2.`,
+    summary: `Google Ads product groups of "${ag.name}", step 1 of 2: remove ${listed(gone.map(label), 4)} — Google refuses to remove a split in the request that makes the new product groups. Step 2 still to ask once this ran.`,
     changes,
     totals: { operations: operations.length, step: 1, steps: 2, removedProductGroups: count, ...(more ? { linesNotShown: more } : {}) },
     warnings,
@@ -388,16 +428,21 @@ function fullChange(
       ? `"Everything else" in "${ag.name}" is NOT excluded: every product of the feed that the tree does not name can be advertised.`
       : `"Everything else" under ${pathLabel(desiredChain.get(w.parent) ?? [w.parent])} in "${ag.name}" is NOT excluded: every product there that the tree does not name can be advertised.`)
   }
-  if (plan.remade.length) {
-    warnings.push(`${plural(plan.remade.length, 'product group')} ${plan.remade.length === 1 ? 'is' : 'are'} removed and made again (Google cannot switch a product group between advertised and excluded, nor turn one into a split): ${plan.remade.length === 1 ? 'it gets a new id and its' : 'they get new ids and their'} own statistics in Google Ads start from zero. The product groups that stay keep their ids and statistics.`)
+  if (plan.rootReplaced) {
+    warnings.push(`Replaces the whole tree of "${ag.name}" (${plural(walk(plan.rootReplaced).length, 'product group')}) with "All products" alone, in one request: Google removes the split with everything under it and makes the new root unit (it refuses this only when a split is made in the same request). Every product of the feed falls under "All products".`)
   }
+  const remade = plan.remade.filter((m) => m.was !== plan.rootReplaced).length
+  if (remade) {
+    warnings.push(`${plural(remade, 'product group')} ${remade === 1 ? 'is' : 'are'} removed and made again (Google cannot switch a product group between advertised and excluded, nor turn one into a split): ${remade === 1 ? 'it gets a new id and its' : 'they get new ids and their'} own statistics in Google Ads start from zero. The product groups that stay keep their ids and statistics.`)
+  }
+
   const units = desiredWalk.filter((w) => w.node.kind === 'UNIT')
   if (units.length && units.every((w) => w.node.excluded)) warnings.push(`Nothing can be advertised in "${ag.name}" after this change: every product group of the tree is excluded.`)
 
   const { changes, more } = changeLines(lines)
   const parts: string[] = []
   if (plan.created.size) parts.push(`make ${plural(plan.created.size, 'product group')}`)
-  const gone = plan.removes.length - plan.remade.length + plan.splitsToRemove.length
+  const gone = plan.removes.length - plan.remade.length + plan.splitsToRemove.length + (plan.rootReplaced ? walk(plan.rootReplaced).length : 0)
   if (gone > 0) parts.push(`remove ${plural(gone, 'product group')}${plan.splitsToRemove.length ? ' (with what is under the splits)' : ''}`)
   if (plan.bidChanges.length) parts.push(`change ${plural(plan.bidChanges.length, 'bid')}`)
   return {

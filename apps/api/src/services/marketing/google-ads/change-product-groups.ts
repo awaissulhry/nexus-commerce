@@ -46,7 +46,7 @@ import { microsOfCents } from './live.js'
 import type { ProductGroupLiveState, ProductGroupNode, ShoppingAdGroupLive } from './live-product-groups.js'
 import { productItemKey } from './mappers.js'
 import type { GoogleMutateOperation } from './write-client.js'
-import { isTreeChange, treeChangeDraft, treeRecordAfterRun, treeRecordNow, treeUndoArgs, type TreeChangeRecord, type TreeChangeRequest } from './change-product-tree.js'
+import { isTreeChange, treeChangeDraft, treeRecordAfterRun, treeRecordNow, treeUndoArgs, undoStepOneOf, type TreeChangeRecord, type TreeChangeRequest } from './change-product-tree.js'
 import { liveNodesOf, treeOfSnapshot, type TreeSnapNode } from './product-tree.js'
 
 /** At most this many item ids in one request (the tool's limit; Google allows far more product groups per ad group). */
@@ -113,6 +113,7 @@ const REST_LABEL = '"everything else" (every other product of the feed)'
 
 // ── reading a tree ──────────────────────────────────────────────────────────────────────────────────────────────
 
+const byNumericId = (a: string, b: string) => (a.length - b.length) || (a < b ? -1 : a > b ? 1 : 0)
 const stateOf = (n: ProductGroupNode): TreeState => ({ bidCents: n.excluded ? null : n.bidCents, excluded: n.excluded })
 const byItem = (a: TreeItem, b: TreeItem) => {
   const x = productItemKey(a.itemId)
@@ -196,10 +197,16 @@ function spelledAs(tree: ProductGroupTree, like: ProductGroupTree | undefined): 
   return { ...tree, items: tree.items.map((i) => ({ ...i, itemId: spelling.get(productItemKey(i.itemId)) ?? i.itemId })).sort(byItem) }
 }
 
-/** The record of an ad group's product groups as they are now, in the shape of a change's `after` (undo compares them). */
-export function productGroupRecordNow(after: ProductGroupChangeRecord, nodes: ProductGroupNode[]): ProductGroupChangeRecord {
+/**
+ * The record of an ad group's product groups as they are now, in the shape of a change's `after` (undo compares them).
+ * With `before` (a change of any tree): when Google holds exactly what step 1 of this change's own undo leaves, the change
+ * reads as still standing — its undo is half done, and asking it again makes step 2 (nothing else moved the tree).
+ */
+export function productGroupRecordNow(after: ProductGroupChangeRecord, nodes: ProductGroupNode[], before?: ProductGroupChangeRecord | null): ProductGroupChangeRecord {
   if (after.nodes) {
     const now = treeRecordNow(after.nodes, nodes)
+    const mid = before?.nodes ? undoStepOneOf(before.nodes, after.nodes) : null
+    if (mid && JSON.stringify(now) === JSON.stringify(mid)) return { campaignId: after.campaignId, adGroupId: after.adGroupId, tree: after.tree, nodes: after.nodes }
     return { campaignId: after.campaignId, adGroupId: after.adGroupId, tree: spelledAs(treeOfSnap(now), after.tree), nodes: now }
   }
   const byId = new Map(nodes.map((n) => [n.criterionId, n]))
@@ -464,7 +471,8 @@ function rebuildDraft(ctx: Ctx, request: ProductGroupRequest): GoogleChangeDraft
       return { refusal: `The product groups of "${ag.name}" have more than one level (${plural(ctx.nodes.length, 'product group')}). Google cannot remove a split in the request that makes the new one, so Nexus does not rebuild this tree: remove it first in Google Ads, then build it here with itemIds.` }
     }
     const restNodes = children.filter(isRest)
-    const named = children.filter((c) => !isRest(c))
+    // By Google id, whatever order Google answers in: the same tree always gives the same operations (the plan hash).
+    const named = children.filter((c) => !isRest(c)).sort((a, b) => byNumericId(a.criterionId, b.criterionId))
     const foreign = named.find((c) => c.dimension !== ITEM)
     const splitBy = foreign?.dimension ?? named[0]?.dimension ?? restNodes[0]?.dimension ?? null
     if (foreign || splitBy !== ITEM) {
@@ -742,7 +750,8 @@ export function productGroupUndoArgs(change: { before: unknown; after: unknown }
   const tree = before.tree
   // A rebuild that made the first tree of the ad group: undo removes it (removals only).
   if (tree.kind === 'none') return { args: { ...base, removeTree: true } }
-  // "All products" alone again: a unit where a split now stands — two steps (remove the split, then make the unit).
+  // "All products" alone again: the root split goes and the root unit is made in ONE request (Google refuses a recursive
+  // removal only next to a split made or changed; product-tree.ts planTree). inTwoSteps is kept for a tree that moved.
   if (tree.kind === 'all') {
     if (!tree.excluded && badBid(tree.bidCents)) return { refusal: '"All products" had no bid of its own before this change (Google set its bids): put it back by hand in Google Ads.' }
     return { args: { ...base, tree: [tree.excluded ? { excluded: true } : { bidCents: tree.bidCents }], inTwoSteps: true } }

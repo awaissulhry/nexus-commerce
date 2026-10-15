@@ -124,9 +124,12 @@ export async function recordExecutedChange(input: RecordInput): Promise<string |
       select: { id: true },
     })
     // This approval may have been the undo of an earlier change: that one is undone now. A step of an undo plan undoes
-    // only its own target; the plan's other targets wait for their own steps.
+    // only its own target; the plan's other targets wait for their own steps. G4 — a run with steps left (step 1 of a
+    // two-step Google Shopping tree) undoes nothing yet: the earlier change stays not undone until its last step runs.
     const pick = { id: true, toolName: true, before: true, after: true } as const
-    const undone = input.planStepId
+    const undone = (raw.stepsLeft ?? 0) > 0
+      ? []
+      : input.planStepId
       ? input.undoesChangeId
         ? await tx.agentChange.findMany({ where: { id: input.undoesChangeId, undoneAt: null }, select: pick })
         : []

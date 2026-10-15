@@ -214,12 +214,30 @@ describe('set-google-product-groups', () => {
     const undo = tool.undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
     expect(undo.args).toMatchObject({ accountId: 'g-1', campaignId: '21', adGroupId: '51', inTwoSteps: true, tree: [{ split: 'ITEM_ID' }, { parent: 0, value: 'sku-1', bidCents: 30 }, { parent: 0, everythingElse: true, bidCents: 20 }] })
     expect(tool.input.safeParse(undo.args).success).toBe(true)
-    // The undo's own preview: step 1 of 2 removes the new split (sku-1 falls under "everything else" at the same bid meanwhile).
+    // The undo's step 1: sku-1 is the only named item, so the whole tree goes (a split never keeps only "everything else").
     h.mutate.mockReset()
     h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
     const back = await tool.handler(undo.args, asker)
-    expect(h.mutate.mock.calls[0][1]).toEqual([{ adGroupCriterionOperation: { remove: `${AGC}710` } }])
+    expect(h.mutate.mock.calls[0][1]).toEqual([{ adGroupCriterionOperation: { remove: `${AGC}601` } }])
     expect(back.preview).toMatchObject({ totals: { step: 1, steps: 2 } })
+    // It runs with a step left: the change it undoes is not undone by it (change-record.service.ts reads stepsLeft).
+    h.mutate.mockResolvedValue({ responses: [{}], ops: 1, requestId: 'r' })
+    const step1 = await tool.execute!(undo.args, approved(back.preview))
+    expect(step1).toMatchObject({ ok: true, stepsLeft: 1, data: { step: 1, steps: 2, next: expect.stringMatching(/^Step 2 still to ask/) } })
+    // Between the steps the original change still reads as it wrote it, so the same undo can be asked again for step 2.
+    h.state.rows = []
+    expect(await tool.undo!.current(run.change!)).toEqual(run.change!.after)
+    h.mutate.mockReset()
+    h.mutate.mockResolvedValue({ responses: [], ops: 3, requestId: null })
+    // The undo asked again gives the same request (pure, from the record): now it is step 2.
+    expect(tool.undo!.request(run.change!)).toEqual(undo)
+    const step2 = await tool.handler(undo.args, asker)
+    expect(step2.preview).not.toMatchObject({ totals: { step: 1 } })
+    expect((h.mutate.mock.calls[0][1] as unknown[]).length).toBe(3)
+    h.mutate.mockResolvedValue({ responses: [{ adGroupCriterionResult: { resourceName: `${AGC}801` } }, { adGroupCriterionResult: { resourceName: `${AGC}802` } }, { adGroupCriterionResult: { resourceName: `${AGC}803` } }], ops: 3, requestId: 'r' })
+    const done = await tool.execute!(undo.args, approved(step2.preview))
+    expect(done.ok).toBe(true)
+    expect(done).not.toHaveProperty('stepsLeft')
   })
 
   it('not sent when the tree moved since it was approved', async () => {

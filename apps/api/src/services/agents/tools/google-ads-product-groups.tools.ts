@@ -25,6 +25,7 @@ import {
 } from '../../marketing/google-ads/change-product-groups.js'
 import { liveProductGroupTree } from '../../marketing/google-ads/live-product-groups.js'
 import { DIMENSIONS, MAX_TREE_NODES } from '../../marketing/google-ads/product-tree.js'
+import { STEP_TWO } from '../../marketing/google-ads/change-product-tree.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
@@ -66,7 +67,8 @@ const productGroupUndo: ToolUndo = {
     const account = await recordAccount(after)
     if (!account) return null
     const live = await liveProductGroupTree(account.target, after.adGroupId)
-    return { ...productGroupRecordNow(after, live.nodes), accountId: account.accountId, customerId: account.customerId }
+    // `before`: when step 1 of this change's own undo ran, the change still reads as standing (its undo's step 2 is next).
+    return { ...productGroupRecordNow(after, live.nodes, change.before as ProductGroupChangeRecord | null), accountId: account.accountId, customerId: account.customerId }
   },
   request(change: ToolChange) {
     const undo = productGroupUndoArgs(change)
@@ -132,7 +134,7 @@ const setGoogleProductGroups: AgentTool = {
     tree: z.array(treeNodeArg).max(MAX_TREE_NODES).optional()
       .describe('the WHOLE tree as it should be, any shape: a flat list, the root ("All products") first, each other product group naming its parent by index. What already stands keeps its id and statistics; the rest is made, changed or removed. Alone (not with other arguments)'),
     inTwoSteps: z.boolean().optional()
-      .describe('tree only: when Google must remove a split before the new tree can be made (it refuses both in one request), do it in two changes — this one removes only what must go; ask the same request again after it ran for step 2'),
+      .describe('tree only: when Google must remove a split before the new tree can be made (it refuses both in one request), do it in two changes — this one removes only what must go (the nearest split that can go alone, or the whole tree); ask the same request again after it ran for step 2'),
     add: z.array(z.object({
       parentId: googleIdArg('the split (a subdivision) to add it under'),
       value: dimensionValueArg,
@@ -163,14 +165,22 @@ const setGoogleProductGroups: AgentTool = {
     + 'request again makes the rest; the preview says where the products fall in between). Bids are whole cents of the '
     + 'account\'s currency. The preview shows before → after and warns when an "everything else" is not excluded; product '
     + 'groups that can now be advertised, bid raises and products that fall under an advertised "everything else" are '
-    + 'marked SPENDS MONEY. Undo puts the old tree back as it was (bids, exclusions, splits; product groups made again get '
-    + 'new ids) — in two steps when a unit must come back where a split now stands — or the old bids and exclusions.' + GOOGLE_CHANGE_RULES,
+    + 'marked SPENDS MONEY. "All products" alone where a split stands is one request. Undo puts the old tree back as it '
+    + 'was (bids, exclusions, splits; product groups made again get new ids), or the old bids and exclusions; when a unit '
+    + 'must come back where a split stands below the root it takes two steps — the change reads as not undone until step 2 '
+    + 'ran (ask undo-change again for it).' + GOOGLE_CHANGE_RULES,
   undo: productGroupUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildProductGroups(args)),
-  execute: (args, ctx) => runGoogleChange(args, ctx, buildProductGroups(args), (draft, responses) => {
-    const after = productGroupRecordAfterRun(draft.after as ProductGroupChangeRecord, responses)
-    return { data: { campaignId: after.campaignId, adGroupId: after.adGroupId, tree: after.tree }, before: draft.before, after }
-  }),
+  async execute(args, ctx) {
+    let stepOne = false
+    const out = await runGoogleChange(args, ctx, buildProductGroups(args), (draft, responses) => {
+      const after = productGroupRecordAfterRun(draft.after as ProductGroupChangeRecord, responses)
+      stepOne = draft.totals.step === 1
+      return { data: { campaignId: after.campaignId, adGroupId: after.adGroupId, tree: after.tree, ...(stepOne ? { step: 1, steps: 2, next: STEP_TWO } : {}) }, before: draft.before, after }
+    })
+    // Step 1 of 2: the change it undoes (when it is an undo) is not undone yet (change-record.service.ts stepsLeft).
+    return out.ok && stepOne ? { ...out, stepsLeft: 1 } : out
+  },
 }
 
 export const GOOGLE_ADS_PRODUCT_GROUPS_TOOLS: AgentTool[] = [setGoogleProductGroups]
