@@ -126,6 +126,8 @@ const WORD: Record<string, string> = {
   MARKETING_IMAGE: 'marketing image', SQUARE_MARKETING_IMAGE: 'square marketing image', PORTRAIT_MARKETING_IMAGE: 'portrait marketing image',
 }
 const LEVEL_WORD: Record<LinkLevel, string> = { account: 'the account', campaign: 'a campaign', 'ad-group': 'an ad group' }
+/** "a callout", "an image", "an IMAGE asset". */
+const an = (word: string) => `${/^[aeiou]/i.test(word) ? 'an' : 'a'} ${word}`
 
 // ── images ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -155,11 +157,11 @@ export const RATIO_TOLERANCE = 0.02
 export function imageProblem(where: string, fieldType: ImageFieldType, image: Pick<PreparedImage, 'mimeType' | 'width' | 'height'>): string | null {
   const rule = IMAGE_RULES[fieldType]
   if (!rule.types.includes(image.mimeType)) {
-    return `${where} is ${image.mimeType.replace('image/', '').toUpperCase()}: a ${WORD[fieldType]} is ${rule.types.map((t) => t.replace('image/', '').toUpperCase()).join(' or ')}`
+    return `${where} is ${image.mimeType.replace('image/', '').toUpperCase()}: ${an(WORD[fieldType])} is ${rule.types.map((t) => t.replace('image/', '').toUpperCase()).join(' or ')}`
   }
   const ratio = image.width / image.height
   const shape = rule.shapes.find((s) => Math.abs(ratio - s.ratio) / s.ratio <= RATIO_TOLERANCE)
-  if (!shape) return `${where} is ${image.width}×${image.height} (ratio ${ratio.toFixed(2)}): a ${WORD[fieldType]} is ${rule.shapes.map((s) => s.name).join(' or ')}`
+  if (!shape) return `${where} is ${image.width}×${image.height} (ratio ${ratio.toFixed(2)}): ${an(WORD[fieldType])} is ${rule.shapes.map((s) => s.name).join(' or ')}`
   if (image.width < shape.minWidth || image.height < shape.minHeight) {
     return `${where} is ${image.width}×${image.height}: a ${shape.name} ${WORD[fieldType]} is at least ${shape.minWidth}×${shape.minHeight}`
   }
@@ -249,10 +251,17 @@ export interface NewAssetsLive {
   images: Array<PreparedImage | { problem: string }>
   /** Whether the account accepted Google's lead form terms; null when no lead form is asked (not read). */
   leadFormTerms: boolean | null
+  /**
+   * The account's own assets (source ADVERTISER) of the types of new assets that are linked nowhere (no linkTo); null
+   * when not read. One of the same content is not made again, so a request sent twice (an unknown outcome approved again)
+   * makes nothing twice. Images need none: Google keeps one asset per image content.
+   */
+  accountAssets?: LiveAssetDetail[] | null
 }
 
 export const MAX_NEW_ASSETS = 20
 export const MAX_PLACES = 20
+/** Links in one request: set-google-asset-links takes at most this many items, so the undo of a request can take all its links off. */
 export const MAX_LINK_ITEMS = 100
 /**
  * The image bytes one request may carry, all images together. The bytes travel base64 inside the one mutate request
@@ -314,9 +323,9 @@ export function resolvePlace(place: AssetPlace, live: { campaigns: LiveCampaign[
 /** Why a field type cannot be linked at a place, or null. */
 function placeProblem(fieldType: LinkFieldType, place: ResolvedPlace): string | null {
   const levels = FIELD_LEVELS[fieldType]
-  if (!levels.includes(place.level)) return `Google links a ${WORD[fieldType]} (${fieldType}) to ${levels.map((l) => LEVEL_WORD[l]).join(' or ')}, not to ${place.name}`
+  if (!levels.includes(place.level)) return `Google links ${an(WORD[fieldType])} (${fieldType}) to ${levels.map((l) => LEVEL_WORD[l]).join(' or ')}, not to ${place.name}`
   if ((fieldType === 'LOGO' || fieldType === 'LANDSCAPE_LOGO') && place.campaignType !== 'PERFORMANCE_MAX') {
-    return `a ${WORD[fieldType]} (${fieldType}) is linked to a Performance Max campaign (with brand guidelines), not to ${place.name} (a ${place.campaignType ?? 'campaign of another type'}): Search uses BUSINESS_LOGO`
+    return `${an(WORD[fieldType])} (${fieldType}) is linked to a Performance Max campaign (with brand guidelines), not to ${place.name} (a ${place.campaignType ?? 'campaign of another type'}): Search uses BUSINESS_LOGO`
   }
   return null
 }
@@ -342,6 +351,9 @@ const linkRemove = (customer: string, place: ResolvedPlace, assetId: string, fie
 
 const digits = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '')
 const lowerKey = (s: string | null | undefined) => textKey(s).toLowerCase()
+
+/** The field type an asset of the account is compared as (a business name is a TEXT asset; the rest carry their own name). */
+export const fieldTypeOfAsset = (type: string | null): string | null => (type === 'TEXT' ? 'BUSINESS_NAME' : type)
 
 /** The content key of a linked asset, by field type; null when Nexus does not compare it (images: Google itself does). */
 export function linkedContentKey(fieldType: string | null, a: LiveAssetDetail): string | null {
@@ -593,6 +605,24 @@ function newSpecs(customer: string, currency: string, request: NewAssetsRequest,
 
 const STATUS_WORD = (s: string | null | undefined) => (s === 'PAUSED' ? 'paused' : 'enabled')
 
+/**
+ * The links a change stands on (its `basis`). A link Google made itself (link source AUTOMATICALLY_CREATED: its dynamic
+ * assets; customer_asset / campaign_asset / ad_group_asset `.source`, AssetSource ADVERTISER / AUTOMATICALLY_CREATED in
+ * v25, checked 2026-10-15) comes and goes on its own: it is shown and compared for content, never part of the basis, so
+ * it cannot refuse an approved change as "the account changed".
+ */
+const standingLinks = (links: LivePlaceLink[]) =>
+  links.filter((l) => l.source !== 'AUTOMATICALLY_CREATED').map((l) => `${placeLinkKey(l)}~${l.status ?? ''}`).sort()
+
+const notServingWarning = (where: string[]) =>
+  `Linked ENABLED where nothing serves yet: ${where.join('; ')}. When that campaign (and ad group) is enabled, people can call or open the form from its ads — each such click is charged like a click.`
+
+/** What a call or lead form link lets people do from the ads (each charged like a click). */
+const PAID_WHAT: Record<string, string> = {
+  CALL: 'people may call from those ads (a call from the ad is charged like a click)',
+  LEAD_FORM: 'people may open the lead form from those ads (charged like a click)',
+}
+
 function spendSentence(fieldType: string, text: string, place: ResolvedPlace, how: 'link' | 'enable'): string {
   const what = fieldType === 'CALL'
     ? 'people can call from its ads at once (a call from the ad is charged like a click)'
@@ -648,6 +678,11 @@ export function newAssetsDraft(customer: string, currency: string, request: NewA
     if (key) contentAt.set(`${placeKeyOf(l)}|${key}`, l)
   }
   const askedKeys = new Set<string>()
+  const inAccount = new Map<string, LiveAssetDetail>()
+  for (const a of live.accountAssets ?? []) {
+    const key = linkedContentKey(fieldTypeOfAsset(a.type), a)
+    if (key && !inAccount.has(key)) inAccount.set(key, a)
+  }
   const pausedForSafety: string[] = []
   const notServing: string[] = []
   let tempId = -1
@@ -665,6 +700,9 @@ export function newAssetsDraft(customer: string, currency: string, request: NewA
       return !there
     })
     if (!s.uploadOnly && places.length && !targets.length) continue
+    // Linked nowhere: the same content the account has already is not made again.
+    const had = !places.length && s.key ? inAccount.get(s.key) : undefined
+    if (had) { skipped.push(`The ${label} is already in the account (asset ${had.assetId}): link it where it should show with set-google-asset-links.`); continue }
     const resourceName = `${customer}/assets/${tempId--}`
     operations.push({ assetOperation: { create: { resourceName, ...s.body } } })
     const assetId = `${OP}${operations.length - 1}`
@@ -686,11 +724,14 @@ export function newAssetsDraft(customer: string, currency: string, request: NewA
   }
   operations.push(...links)
   if (!operations.length) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
+  if (record.linked.length > MAX_LINK_ITEMS) {
+    return { refusal: `This would make ${record.linked.length} links, and one request makes at most ${MAX_LINK_ITEMS} (so that its undo can take them all off): ask in two requests (fewer assets or fewer places). Nothing was sent.` }
+  }
 
   if (pausedForSafety.length) {
     warnings.push(`Made PAUSED where it would serve (a call or a lead form brings new paid clicks): ${pausedForSafety.join('; ')}. Ask again with enable: true to make it serve at once (SPENDS MONEY), or enable the link later with set-google-asset-links.`)
   }
-  if (notServing.length) warnings.push(`Linked ENABLED where nothing serves yet: ${notServing.join('; ')}. When that campaign (and ad group) is enabled, people can call or open the form from its ads — each such click is charged like a click.`)
+  if (notServing.length) warnings.push(notServingWarning(notServing))
   if (record.linked.some((l) => !PAID_INTERACTION_FIELDS.includes(l.fieldType))) {
     warnings.push('The new assets make the ads bigger and raise no bid or budget; a click on one (a sitelink, a price, a promotion, the app link …) is charged like a click on the ad.')
   }
@@ -729,9 +770,14 @@ export function newAssetsDraft(customer: string, currency: string, request: NewA
     operations,
     stands: {
       places: places.map((p) => `${placeKeyOf(p)}~${p.status ?? ''}~${p.serves ? 'serves' : 'quiet'}`).sort(),
-      links: live.links.map((l) => `${placeLinkKey(l)}~${l.status ?? ''}`).sort(),
+      links: standingLinks(live.links),
       images: live.images.map((img) => ('problem' in img ? null : img.sha256)),
       leadFormTerms: live.leadFormTerms,
+      // Only the account's assets of the content asked (made by this request, they are there after it ran).
+      accountAssets: live.accountAssets ? live.accountAssets.flatMap((a) => {
+        const key = linkedContentKey(fieldTypeOfAsset(a.type), a)
+        return key && askedKeys.has(key) ? [`${a.assetId}~${key}`] : []
+      }).sort() : null,
     },
     before: { created: [], linked: [] } satisfies NewAssetsRecord,
     after: record,
@@ -765,6 +811,12 @@ export interface LinksLive {
   links: LivePlaceLink[]
   /** The assets `link` names, by id. */
   assets: LiveAssetDetail[]
+  /**
+   * Where the change pauses or unlinks a CALL or LEAD_FORM link of a campaign or an ad group: every link of that field
+   * type there and at the levels above (the ad group's campaign, the account) — for the warning that one of a level
+   * above then serves there. Read for that warning only; not part of what the change stands on.
+   */
+  paidAround?: LivePlaceLink[]
 }
 
 /** One link the change made, changed or took away: its status before (null: not linked) and after (null: unlinked). */
@@ -807,6 +859,7 @@ export function assetLinksDraft(customer: string, request: LinksRequest, live: L
   const changes: LinkChange[] = []
   const pausedForSafety: string[] = []
   const shownAgain: string[] = []
+  const notServing: string[] = []
 
   for (const { item, place } of resolved) {
     const key = placeLinkKey({ ...place, assetId: item.assetId, fieldType: item.fieldType })
@@ -816,7 +869,7 @@ export function assetLinksDraft(customer: string, request: LinksRequest, live: L
     if (item.action === 'link') {
       const asset = assetById.get(item.assetId)
       if (!asset) return { refusal: `Asset ${item.assetId} is not in this account (google-ads-live view asset-links lists the linked ones).` }
-      if (asset.type !== ASSET_TYPE_OF[item.fieldType]) return { refusal: `Asset ${item.assetId} is ${asset.type ? `a ${asset.type} asset` : 'an asset of another kind'}: a ${WORD[item.fieldType]} (${item.fieldType}) is a ${ASSET_TYPE_OF[item.fieldType]} asset.` }
+      if (asset.type !== ASSET_TYPE_OF[item.fieldType]) return { refusal: `Asset ${item.assetId} is ${asset.type ? an(`${asset.type} asset`) : 'an asset of another kind'}: ${an(WORD[item.fieldType])} (${item.fieldType}) is ${an(`${ASSET_TYPE_OF[item.fieldType]} asset`)}.` }
       if (asset.source === 'AUTOMATICALLY_CREATED') return { refusal: `Asset ${item.assetId} ("${asset.label}") was made by Google (text customization): Google does not let it be linked. Make an asset of your own with add-google-assets.` }
       const label = `${WORD[item.fieldType]} "${asset.label}" (asset ${item.assetId})`
       if (now) { skipped.push(`The ${label} is already linked to ${place.name} (${STATUS_WORD(now.status)}).`); continue }
@@ -827,9 +880,10 @@ export function assetLinksDraft(customer: string, request: LinksRequest, live: L
       if (paid && place.serves && status === 'ENABLED') spendsMoney.push(spendSentence(item.fieldType, asset.label, place, 'link'))
       if (paid && place.serves && status === 'PAUSED' && !item.status) pausedForSafety.push(`${label} at ${place.name}`)
       if (!paid && place.serves && status === 'ENABLED') shownAgain.push(`${label} at ${place.name}`)
+      if (paid && !place.serves && status === 'ENABLED') notServing.push(`${label} at ${place.name}`)
       continue
     }
-    if (!now) { skipped.push(`Asset ${item.assetId} is not linked to ${place.name} as a ${WORD[item.fieldType]} (${item.fieldType}).`); continue }
+    if (!now) { skipped.push(`Asset ${item.assetId} is not linked to ${place.name} as ${an(WORD[item.fieldType])} (${item.fieldType}).`); continue }
     const label = `${WORD[item.fieldType]} "${now.asset.label}" (asset ${item.assetId})`
     const from = asStatus(now.status)
     if (item.action === 'unlink') {
@@ -845,6 +899,7 @@ export function assetLinksDraft(customer: string, request: LinksRequest, live: L
     lines.push([`${label} at ${place.name}`, STATUS_WORD(from), STATUS_WORD(to)])
     if (to === 'ENABLED' && paid && place.serves) spendsMoney.push(spendSentence(item.fieldType, now.asset.label, place, 'enable'))
     if (to === 'ENABLED' && !paid && place.serves) shownAgain.push(`${label} at ${place.name}`)
+    if (to === 'ENABLED' && paid && !place.serves) notServing.push(`${label} at ${place.name}`)
   }
   if (!operations.length) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
 
@@ -852,6 +907,8 @@ export function assetLinksDraft(customer: string, request: LinksRequest, live: L
   if (unlinked.length) warnings.push(`Unlinking ${plural(unlinked.length, 'asset link')}: the ads there show without ${unlinked.length === 1 ? 'it' : 'them'} (the assets stay in the account).`)
   if (pausedForSafety.length) warnings.push(`Linked PAUSED where it would serve (a call or a lead form brings new paid clicks): ${pausedForSafety.join('; ')}. Ask with status ENABLED to make it serve at once (SPENDS MONEY).`)
   if (shownAgain.length) warnings.push(`Shows in ads that serve now: ${shownAgain.join('; ')}. It raises no bid or budget; a click on it is charged like a click on the ad.`)
+  if (notServing.length) warnings.push(notServingWarning(notServing))
+  warnings.push(...fallbackWarnings(resolved, changes, live))
   if (changes.some((c) => c.from !== null && c.to !== null && c.to === 'PAUSED')) warnings.push('A paused link keeps the asset where it is and shows nothing; enable it again with this tool.')
 
   const counts = { linked: changes.filter((c) => c.from === null).length, unlinked: unlinked.length, paused: changes.filter((c) => c.from && c.to === 'PAUSED').length, enabled: changes.filter((c) => c.from && c.to === 'ENABLED').length }
@@ -870,13 +927,58 @@ export function assetLinksDraft(customer: string, request: LinksRequest, live: L
     operations,
     stands: {
       places: [...new Map(resolved.map(({ place }) => [placeKeyOf(place), `${placeKeyOf(place)}~${place.status ?? ''}~${place.serves ? 'serves' : 'quiet'}`])).values()].sort(),
-      links: live.links.map((l) => `${placeLinkKey(l)}~${l.status ?? ''}`).sort(),
+      links: standingLinks(live.links),
       assets: live.assets.map((a) => `${a.assetId}~${a.type ?? ''}~${a.source ?? ''}`).sort(),
     },
     // Before: each link the change touches, as it was (status null: not linked there).
     before: { links: changes.map(({ from, to: _to, ...c }) => ({ ...c, status: from })) },
     after: { items: changes } satisfies LinksRecord,
   }
+}
+
+/**
+ * Google uses the call (or lead form) assets of the most specific level that has them: an ad group's own, else its
+ * campaign's, else the account's (Google Ads Help answer 2453991 "About call assets", Keep in mind: "If you create call
+ * assets at different levels (account, campaign, or ad group), the most specific will be used … campaign-level assets
+ * override account-level assets", checked 2026-10-15). So a pause or unlink that leaves a serving campaign or ad group no
+ * enabled link of its own lets an enabled one of a level above show there: a warning per place and field type.
+ */
+function fallbackWarnings(resolved: Array<{ item: LinkItemRequest; place: ResolvedPlace }>, changes: LinkChange[], live: LinksLive): string[] {
+  const known = new Map<string, LivePlaceLink>()
+  for (const l of [...live.links, ...(live.paidAround ?? [])]) if (l.fieldType && PAID_INTERACTION_FIELDS.includes(l.fieldType)) known.set(placeLinkKey(l), l)
+  const changed = new Map(changes.map((c) => [placeLinkKey(c), c]))
+  /** The labels of the links of a field type ENABLED at a place once the change ran. */
+  const enabledAfter = (level: LinkLevel, campaignId: string | null, adGroupId: string | null, fieldType: string): string[] => {
+    const at = (l: { level: LinkLevel; campaignId: string | null; adGroupId: string | null; fieldType: string | null }) =>
+      l.level === level && l.fieldType === fieldType && (level !== 'campaign' || l.campaignId === campaignId) && (level !== 'ad-group' || l.adGroupId === adGroupId)
+    const out: string[] = []
+    for (const l of known.values()) {
+      if (!at(l)) continue
+      const c = changed.get(placeLinkKey(l))
+      if ((c ? c.to : l.status) === 'ENABLED') out.push(l.asset.label)
+    }
+    for (const c of changes) if (!known.has(placeLinkKey(c)) && at(c) && c.to === 'ENABLED') out.push(c.text)
+    return out
+  }
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const { item, place } of resolved) {
+    const c = changed.get(placeLinkKey({ ...place, assetId: item.assetId, fieldType: item.fieldType }))
+    if (!c || place.level === 'account' || !place.serves || !PAID_INTERACTION_FIELDS.includes(c.fieldType) || c.from !== 'ENABLED' || c.to === 'ENABLED') continue
+    const at = `${placeKeyOf(place)}|${c.fieldType}`
+    if (seen.has(at)) continue
+    seen.add(at)
+    if (enabledAfter(place.level, place.campaignId, place.adGroupId, c.fieldType).length) continue
+    const above: Array<[LinkLevel, string]> = place.level === 'ad-group' ? [['campaign', 'its campaign\'s'], ['account', 'the account\'s']] : [['account', 'the account\'s']]
+    for (const [level, whose] of above) {
+      const labels = enabledAfter(level, place.campaignId, null, c.fieldType)
+      if (!labels.length) continue
+      const more = labels.length > 1 ? ` (and ${labels.length - 1} more)` : ''
+      out.push(`${place.name} keeps no enabled ${WORD[c.fieldType]} of its own: ${whose} ${WORD[c.fieldType]} "${labels[0]}"${more} can show in its ads instead (Google uses the most specific level that has one) — ${PAID_WHAT[c.fieldType]}.`)
+      break
+    }
+  }
+  return out
 }
 
 /** The request that puts a link change back: unlink what it linked, link again what it unlinked (old status), status back. */

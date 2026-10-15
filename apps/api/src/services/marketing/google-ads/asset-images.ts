@@ -76,7 +76,8 @@ export async function prepareImage(source: ImageSource): Promise<PreparedImage |
   }
   let fetched: Awaited<ReturnType<typeof fetchPhoto>>
   try {
-    fetched = await fetchPhoto(link)
+    // Google's cap is the fetch's own: a file over 5120 KB stops at 5120 KB, nothing more is read.
+    fetched = await fetchPhoto(link, GOOGLE_IMAGE_MAX_BYTES)
   } catch (err) {
     if (err instanceof PhotoUrlError) return { problem: `${libraryId ?? 'the link'}: ${err.message.replace(/\.$/, '')}` }
     throw err

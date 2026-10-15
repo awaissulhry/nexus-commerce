@@ -51,9 +51,9 @@ describe('imageProblem — Google\'s shape, size and file type per use', () => {
   it('a Search image is square (300×300 at least) or landscape 1.91:1 (600×314 at least), JPG or PNG', () => {
     expect(imageProblem('image 1', 'AD_IMAGE', image(1200, 1200))).toBeNull()
     expect(imageProblem('image 1', 'AD_IMAGE', image(1200, 628))).toBeNull()
-    expect(imageProblem('image 1', 'AD_IMAGE', image(1200, 900))).toBe('image 1 is 1200×900 (ratio 1.33): a image is square (1:1) or landscape (1.91:1)')
+    expect(imageProblem('image 1', 'AD_IMAGE', image(1200, 900))).toBe('image 1 is 1200×900 (ratio 1.33): an image is square (1:1) or landscape (1.91:1)')
     expect(imageProblem('image 1', 'AD_IMAGE', image(200, 200))).toBe('image 1 is 200×200: a square (1:1) image is at least 300×300')
-    expect(imageProblem('image 1', 'AD_IMAGE', image(1200, 1200, 'image/gif'))).toBe('image 1 is GIF: a image is JPEG or PNG')
+    expect(imageProblem('image 1', 'AD_IMAGE', image(1200, 1200, 'image/gif'))).toBe('image 1 is GIF: an image is JPEG or PNG')
   })
 
   it('logos: square 128×128; landscape logo 4:1 512×128; marketing images 1.91:1, 1:1, 4:5', () => {
@@ -238,6 +238,37 @@ describe('newAssetsDraft — make assets of every type and link them at every le
   })
 })
 
+describe('newAssetsDraft — review fixes (G6)', () => {
+  it('no more links than one undo can take off (100): refused before anything is sent', () => {
+    const many = Array.from({ length: 10 }, (_, i) => campaign(String(31 + i), `Search ${i}`, 'PAUSED'))
+    const places = many.map((c) => ({ level: 'campaign' as const, campaignId: c.campaignId }))
+    const callouts = Array.from({ length: 11 }, (_, i) => `Callout ${i}`)
+    expect(newAssetsDraft(C, 'EUR', { callouts, linkTo: places }, live({ campaigns: many })))
+      .toEqual({ refusal: 'This would make 110 links, and one request makes at most 100 (so that its undo can take them all off): ask in two requests (fewer assets or fewer places). Nothing was sent.' })
+    expect(ok(newAssetsDraft(C, 'EUR', { callouts: callouts.slice(0, 10), linkTo: places }, live({ campaigns: many }))).totals).toMatchObject({ links: 100 })
+  })
+
+  it('linked nowhere: the same content the account already has is not made again, and what the change stands on shows it', () => {
+    const had = detail('9', 'CALLOUT', { calloutText: 'Free returns' }, 'Free returns')
+    const d = ok(draft({ callouts: ['Free returns', 'Ships in 24h'] }, { accountAssets: [had, detail('8', 'CALLOUT', { calloutText: 'Gift wrap' })] }))
+    expect(d.skipped).toEqual(['The callout "Free returns" is already in the account (asset 9): link it where it should show with set-google-asset-links.'])
+    expect(d.operations).toEqual([{ assetOperation: { create: { resourceName: `${C}/assets/-1`, calloutAsset: { calloutText: 'Ships in 24h' } } } }])
+    // Only the content asked is in the basis: an unrelated callout does not move it; the one this change makes does.
+    expect(d.stands.accountAssets).toEqual(['9~CALLOUT:Free returns'])
+    const ran = draft({ callouts: ['Free returns', 'Ships in 24h'] }, { accountAssets: [had, detail('310', 'CALLOUT', { calloutText: 'Ships in 24h' })] })
+    expect(ran).toEqual({ refusal: expect.stringMatching(/^Nothing to change: .*"Ships in 24h" is already in the account \(asset 310\)/) })
+    // A business name is a TEXT asset of the account.
+    expect(draft({ businessNames: ['Shop A'] }, { accountAssets: [detail('7', 'TEXT', { text: 'Shop A' })] })).toEqual({ refusal: expect.stringContaining('is already in the account (asset 7)') })
+  })
+
+  it('a link Google made itself (AUTOMATICALLY_CREATED) is never part of what the change stands on', () => {
+    const own = link({ level: 'campaign', campaignId: '21', assetId: '9', fieldType: 'CALLOUT', asset: detail('9', 'CALLOUT', { calloutText: 'Free returns' }) })
+    const google = link({ level: 'campaign', campaignId: '21', assetId: '77', fieldType: 'CALLOUT', source: 'AUTOMATICALLY_CREATED', asset: detail('77', 'CALLOUT', { calloutText: 'Fast delivery' }, 'x', 'AUTOMATICALLY_CREATED') })
+    const ask = { callouts: ['Ships in 24h'], linkTo: [{ level: 'campaign' as const, campaignId: '21' }] }
+    expect(ok(draft(ask, { links: [own, google] })).stands).toEqual(ok(draft(ask, { links: [own] })).stands)
+  })
+})
+
 describe('assetLinksDraft — link, pause, enable and unlink at every level', () => {
   const CALL = detail('302', 'CALL', { countryCode: 'IT', phoneNumber: '000 111 2222' }, '000 111 2222 (IT)')
   const CALLOUT = detail('9', 'CALLOUT', { calloutText: 'Free returns' }, 'Free returns')
@@ -321,6 +352,39 @@ describe('assetLinksDraft — link, pause, enable and unlink at every level', ()
     expect(d.operations).toHaveLength(1)
     expect(assetLinksDraft(C, { items: [{ level: 'campaign', campaignId: '21', assetId: '302', fieldType: 'CALL', action: 'pause' }] }, state()))
       .toEqual({ refusal: 'Nothing to change: The call asset "000 111 2222 (IT)" (asset 302) at campaign "Search A" is already paused.' })
+  })
+})
+
+describe('assetLinksDraft — review fixes (G6)', () => {
+  const CALL_A = detail('302', 'CALL', { countryCode: 'IT', phoneNumber: '000 111 2222' }, '000 111 2222 (IT)')
+  const CALL_C = detail('303', 'CALL', { countryCode: 'IT', phoneNumber: '000 333 4444' }, '000 333 4444 (IT)')
+  const base = (over: Partial<LinksLive> = {}): LinksLive => ({ campaigns: [SEARCH_ON, SEARCH_OFF, PMAX], adGroups: [GROUP()], links: [], assets: [CALL_A, CALL_C], ...over })
+
+  it('a call linked or enabled ENABLED where nothing serves yet: the same warning as add-google-assets, no spend', () => {
+    const d = ok(assetLinksDraft(C, { items: [{ level: 'campaign', campaignId: '22', assetId: '302', fieldType: 'CALL', action: 'link' }] }, base()))
+    expect(d.operations).toEqual([{ campaignAssetOperation: { create: { campaign: `${C}/campaigns/22`, asset: `${C}/assets/302`, fieldType: 'CALL' } } }])
+    expect(d.spendsMoney).toEqual([])
+    expect(d.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/^Linked ENABLED where nothing serves yet: call asset "000 111 2222 \(IT\)" \(asset 302\) at campaign "Search B"\. When that campaign/)]))
+    const paused = link({ level: 'campaign', campaignId: '22', assetId: '302', fieldType: 'CALL', status: 'PAUSED', asset: CALL_A })
+    const e = ok(assetLinksDraft(C, { items: [{ level: 'campaign', campaignId: '22', assetId: '302', fieldType: 'CALL', action: 'enable' }] }, base({ links: [paused] })))
+    expect(e.warnings.join(' ')).toMatch(/Linked ENABLED where nothing serves yet/)
+  })
+
+  it('unlinking or pausing the last call of a serving campaign or ad group says when one of a level above then shows there', () => {
+    const atAccount = link({ level: 'account', assetId: '302', fieldType: 'CALL', asset: CALL_A })
+    const atCampaign = link({ level: 'campaign', campaignId: '21', campaignName: 'Search A', assetId: '303', fieldType: 'CALL', asset: CALL_C })
+    const unlink = { level: 'campaign' as const, campaignId: '21', assetId: '303', fieldType: 'CALL' as const, action: 'unlink' as const }
+    const d = ok(assetLinksDraft(C, { items: [unlink] }, base({ links: [atCampaign], paidAround: [atAccount, atCampaign] })))
+    expect(d.warnings).toContain('campaign "Search A" keeps no enabled call asset of its own: the account\'s call asset "000 111 2222 (IT)" can show in its ads instead (Google uses the most specific level that has one) — people may call from those ads (a call from the ad is charged like a click).')
+    // Another enabled call of its own stays: no warning.
+    const second = link({ level: 'campaign', campaignId: '21', assetId: '302', fieldType: 'CALL', asset: CALL_A })
+    expect(ok(assetLinksDraft(C, { items: [unlink] }, base({ links: [atCampaign], paidAround: [atAccount, atCampaign, second] }))).warnings.join(' ')).not.toMatch(/keeps no enabled/)
+    // An ad group: its campaign's call first.
+    const atGroup = link({ level: 'ad-group', campaignId: '21', adGroupId: '51', assetId: '302', fieldType: 'CALL', asset: CALL_A })
+    const g = ok(assetLinksDraft(C, { items: [{ level: 'ad-group', adGroupId: '51', assetId: '302', fieldType: 'CALL', action: 'pause' }] }, base({ links: [atGroup], paidAround: [atAccount, atCampaign, atGroup] })))
+    expect(g.warnings.join(' ')).toContain('ad group "Jackets" (campaign "Search A") keeps no enabled call asset of its own: its campaign\'s call asset "000 333 4444 (IT)" can show in its ads instead')
+    // Nothing above: no warning.
+    expect(ok(assetLinksDraft(C, { items: [unlink] }, base({ links: [atCampaign], paidAround: [atCampaign] }))).warnings.join(' ')).not.toMatch(/keeps no enabled/)
   })
 })
 

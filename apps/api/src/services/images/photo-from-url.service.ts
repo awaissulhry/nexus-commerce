@@ -35,18 +35,18 @@ export class PhotoUrlError extends Error {
 
 export interface FetchedPhoto { buffer: Buffer; mimeType: string; bytes: number; contentHash: string; host: string; url: string }
 
-/** Fetch a photo from a link, as the rules above say. Reads the web; writes nothing. */
-export async function fetchPhoto(link: string): Promise<FetchedPhoto> {
+/** Fetch a photo from a link, as the rules above say (at most `maxBytes`: a caller with a lower cap passes it). Reads the web; writes nothing. */
+export async function fetchPhoto(link: string, maxBytes = PHOTO_URL_MAX_BYTES): Promise<FetchedPhoto> {
   let url: URL
   try { url = new URL(link.trim()) } catch { throw new PhotoUrlError('That is not a web address.', 400) }
   if (url.protocol !== 'https:') throw new PhotoUrlError('Only an https:// link is fetched.', 400)
   let fetched: Awaited<ReturnType<typeof safeFetch>>
   try {
-    fetched = await safeFetch(url.toString(), { maxBytes: PHOTO_URL_MAX_BYTES, timeoutMs: 15_000, maxRedirects: 3, httpsOnly: true })
+    fetched = await safeFetch(url.toString(), { maxBytes, timeoutMs: 15_000, maxRedirects: 3, httpsOnly: true })
   } catch (error) {
     if (error instanceof SafeFetchError) {
       if (error.reason === 'refused') throw new PhotoUrlError(`${error.message}.`, 400)
-      if (error.reason === 'too_large') throw new PhotoUrlError(`The photo is larger than ${PHOTO_URL_MAX_BYTES / 1024 / 1024} MB.`, 413)
+      if (error.reason === 'too_large') throw new PhotoUrlError(`The photo is larger than ${maxBytes / 1024 / 1024} MB.`, 413)
       throw new PhotoUrlError(`The link answered HTTP ${error.status ?? '?'}.`, 502)
     }
     throw new PhotoUrlError(`The link could not be read: ${error instanceof Error ? error.message : String(error)}`, 502)

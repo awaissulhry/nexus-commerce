@@ -92,9 +92,10 @@ describe('prepareImage — an image Google Ads can take', () => {
   it('Google\'s file rules: WebP is refused; more than 5120 KB is refused', async () => {
     net.pages.set('https://cdn.example.test/a.webp', page(await picture(300, 300, 'webp'), 'image/webp'))
     expect(await prepareImage({ imageUrl: 'https://cdn.example.test/a.webp' })).toEqual({ problem: 'https://cdn.example.test/a.webp is image/webp: Google takes JPG, PNG or GIF images' })
-    const big = Buffer.concat([await picture(300, 300, 'png'), Buffer.alloc(GOOGLE_IMAGE_MAX_BYTES, 1)])
-    net.pages.set('https://cdn.example.test/big.png', page(big, 'image/png'))
-    expect(await prepareImage({ imageUrl: 'https://cdn.example.test/big.png' })).toEqual({ problem: expect.stringMatching(/KB: Google takes at most 5120 KB$/) })
+    // 6 MB declared: under the photo fetch's own 15 MB, over Google's 5120 KB.
+    net.pages.set('https://cdn.example.test/big.png', { status: 200, headers: { 'content-type': 'image/png', 'content-length': String(GOOGLE_IMAGE_MAX_BYTES + 1024 * 1024) }, body: await picture(300, 300, 'png') })
+    // The fetch itself stops at Google's 5120 KB (not the photo fetch's own 15 MB).
+    expect(await prepareImage({ imageUrl: 'https://cdn.example.test/big.png' })).toEqual({ problem: 'the link: The photo is larger than 5 MB' })
   })
 
   it('a library image: this business\'s row (da_ a library file, pi_ a product photo), fetched by the same rules', async () => {

@@ -22,14 +22,14 @@ import {
 import { isGoogleId } from '../../marketing/google-ads/change-ads.js'
 import { ASSET_LIMITS, SNIPPET_HEADER_NAMES } from '../../marketing/google-ads/change-assets.js'
 import {
-  APP_STORES, assetLinksDraft, IMAGE_FIELD_TYPES, LEAD_FORM_CTAS, LEAD_FORM_INTENTS, LEAD_FORM_POST_SUBMIT_CTAS, LINK_ACTIONS,
+  APP_STORES, ASSET_TYPE_OF, assetLinksDraft, IMAGE_FIELD_TYPES, PAID_INTERACTION_FIELDS, LEAD_FORM_CTAS, LEAD_FORM_INTENTS, LEAD_FORM_POST_SUBMIT_CTAS, LINK_ACTIONS,
   LINK_FIELD_TYPES, LINK_LEVELS, linksUndoItems, MAX_IMAGE_BYTES_TOTAL, MAX_LINK_ITEMS, MAX_NEW_ASSETS, MAX_PLACES, newAssetsDraft, newAssetsRecordAfterRun,
   PRICE_QUALIFIERS, PRICE_TYPES, PRICE_UNITS, PROMOTION_OCCASIONS, UPLOAD_ONLY_IMAGES,
-  type AssetPlace, type LinkItemRequest, type LinksRecord, type NewAssetsRecord, type NewAssetsRequest,
+  type AssetPlace, type LinkFieldType, type LinkItemRequest, type LinksRecord, type NewAssetsRecord, type NewAssetsRequest,
 } from '../../marketing/google-ads/change-assets-all.js'
 import { liveCampaigns } from '../../marketing/google-ads/live.js'
 import {
-  liveAdGroupsById, liveAssetDetails, liveLeadFormTerms, livePlaceLinks, placeLinkKey, type LinkFilter, type LinkLevel,
+  liveAccountAssets, liveAdGroupsById, liveAssetDetails, liveLeadFormTerms, livePlaceLinks, placeLinkKey, type LinkFilter, type LinkLevel,
 } from '../../marketing/google-ads/live-assets-all.js'
 import { prepareImage, type PreparedImage } from '../../marketing/google-ads/asset-images.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
@@ -132,7 +132,11 @@ const buildNew = (args: Record<string, unknown>): GoogleDraftBuilder => async (a
     images.push(got)
   }
   const leadFormTerms = request.leadForms?.length ? await liveLeadFormTerms(account.target) : null
-  return newAssetsDraft(customerResource(account.target), account.currency, request, { campaigns, adGroups, links, images, leadFormTerms })
+  // Linked nowhere: the account's own assets of those types, so the same content is not made twice (images: Google keeps
+  // one asset per image content itself).
+  const keyedTypes = unique(fieldTypes.filter((f) => !(IMAGE_FIELD_TYPES as readonly string[]).includes(f)).map((f) => ASSET_TYPE_OF[f as LinkFieldType]))
+  const accountAssets = !places.length && keyedTypes.length ? await liveAccountAssets(account.target, keyedTypes) : null
+  return newAssetsDraft(customerResource(account.target), account.currency, request, { campaigns, adGroups, links, images, leadFormTerms, accountAssets })
 }
 
 const placeOfLink = (l: { level: LinkLevel; campaignId: string | null; adGroupId: string | null }) =>
@@ -278,7 +282,8 @@ const addGoogleAssets: AgentTool = {
     + 'price (type, qualifier, 3–8 offerings), promotion (percent or money off, code or minimum order, occasion, dates), '
     + 'lead form (campaign level; the lead form terms must be accepted in Google Ads first), app link (App Store or Google '
     + 'Play), sitelinks, callouts and structured snippets. Places (linkTo): the account (every campaign), campaigns, ad '
-    + 'groups. An asset already linked at a place with the same content is skipped. Location assets are not made here: '
+    + 'groups. An asset already linked at a place with the same content is skipped; with no place, one the account already '
+    + 'has is skipped. At most 100 links in one request. Location assets are not made here: '
     + 'Google makes them from a Business Profile linked in Google Ads (that link needs a Business Profile sign-in Nexus '
     + 'does not have); google-ads-live view asset-links shows them. Money: assets raise no bid or budget; a call or a lead '
     + 'form link where it serves can bring new paid clicks — it is made PAUSED there unless enable: true (SPENDS MONEY). '
@@ -313,7 +318,17 @@ const buildLinks = (args: Record<string, unknown>): GoogleDraftBuilder => async 
     || (i.level === 'ad-group' && adGroups.some((g) => g.adGroupId === i.adGroupId)))
   const links = await linksAt(account.target, known, { assetIds: unique(items.map((i) => i.assetId)) })
   const assets = await liveAssetDetails(account.target, unique(items.filter((i) => i.action === 'link').map((i) => i.assetId)))
-  return assetLinksDraft(customerResource(account.target), { items }, { campaigns, adGroups, links, assets })
+  // A call or lead form paused or unlinked at a campaign or an ad group: that field type's links there and above (the ad
+  // group's campaign, the account), for the warning that one above then serves there.
+  const cuts = known.filter((i) => (i.action === 'pause' || i.action === 'unlink') && i.level !== 'account' && PAID_INTERACTION_FIELDS.includes(i.fieldType))
+  const paidAround = cuts.length
+    ? await livePlaceLinks(account.target, {
+      account: true,
+      campaignIds: unique(cuts.map((i) => (i.level === 'campaign' ? i.campaignId : adGroups.find((g) => g.adGroupId === i.adGroupId)?.campaignId))),
+      adGroupIds: unique(cuts.filter((i) => i.level === 'ad-group').map((i) => i.adGroupId)),
+    }, { fieldTypes: unique(cuts.map((i) => i.fieldType)) })
+    : []
+  return assetLinksDraft(customerResource(account.target), { items }, { campaigns, adGroups, links, assets, paidAround })
 }
 
 const linksUndo: ToolUndo = {
@@ -365,7 +380,8 @@ const setGoogleAssetLinks: AgentTool = {
     + 'or enable a link, unlink (the asset stays in the account; the ads there show without it). Each field type only '
     + 'where Google allows it (a lead form at a campaign; a business name or logo at the account or a campaign; an image '
     + 'at a campaign or an ad group). A link that is already so is skipped. Money: links raise no bid or budget; enabling '
-    + 'a call or lead form link where it serves is SPENDS MONEY (new paid clicks); pausing or unlinking is safe. New '
+    + 'a call or lead form link where it serves is SPENDS MONEY (new paid clicks); pausing or unlinking is safe (the preview '
+    + 'warns when a call asset of a level above then shows there instead: Google uses the most specific level). New '
     + 'assets: add-google-assets. Undo puts every link back as it was.' + GOOGLE_CHANGE_RULES,
   undo: linksUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildLinks(args)),

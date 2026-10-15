@@ -295,6 +295,20 @@ export async function liveAssetDetails(target: GoogleAdsTarget, assetIds: string
     .sort((a, b) => byGoogleId(a.assetId, b.assetId))
 }
 
+/**
+ * The account's own assets (source ADVERTISER; AssetSource v25: ADVERTISER / AUTOMATICALLY_CREATED; asset.type and
+ * asset.source filterable, checked 2026-10-15) of these asset types (AssetType names: TEXT, CALL, PRICE, …).
+ */
+export const liveAccountAssetsQuery = (types: string[]): string =>
+  `SELECT ${ASSET_FIELDS} FROM asset WHERE asset.type IN (${fieldTypeList(types)}) AND asset.source = 'ADVERTISER'`
+
+/** add-google-assets: an asset linked nowhere whose content the account already has is not made again. */
+export async function liveAccountAssets(target: GoogleAdsTarget, types: string[]): Promise<LiveAssetDetail[]> {
+  if (!types.length) return []
+  return (await liveRows<Json>(target, liveAccountAssetsQuery(types), 'ads.search.live.assets-by-type')).map((r) => liveAssetDetailOf(r.asset))
+    .sort((a, b) => byGoogleId(a.assetId, b.assetId))
+}
+
 export const LIVE_LEAD_FORM_TERMS_QUERY = 'SELECT customer.customer_agreement_setting.accepted_lead_form_terms FROM customer'
 
 /** Whether the account accepted Google's lead form terms (Google refuses a lead form until it has: LEAD_FORM_MISSING_AGREEMENT). */
