@@ -56,6 +56,7 @@ import { ADS_BRAIN_CONTROL_TOOLS } from './tools/ads-brain-control.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { GOOGLE_ADS_CHANGE_TOOLS } from './tools/google-ads-change.tools.js'
 import { GOOGLE_ADS_PRODUCT_GROUPS_TOOLS } from './tools/google-ads-product-groups.tools.js'
+import { GOOGLE_ADS_ADS_ASSETS_TOOLS } from './tools/google-ads-ads-assets.tools.js'
 import { GOOGLE_ADS_LIVE_TOOLS } from './tools/google-ads-live.tools.js'
 import { GOOGLE_ADS_CAMPAIGN_TOOLS } from './tools/google-ads-campaigns.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -209,6 +210,7 @@ const ALL: AgentTool[] = [
   ...GOOGLE_ADS_CHANGE_TOOLS,
   ...GOOGLE_ADS_CAMPAIGN_TOOLS,
   ...GOOGLE_ADS_PRODUCT_GROUPS_TOOLS,
+  ...GOOGLE_ADS_ADS_ASSETS_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

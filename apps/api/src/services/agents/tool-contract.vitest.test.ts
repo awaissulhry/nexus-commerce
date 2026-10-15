@@ -704,6 +704,14 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-product-groups': {
         before: { campaignId: '21', adGroupId: '51', tree: { kind: 'items', items: [{ itemId: 'sku-1', bidCents: 30, excluded: false }, { itemId: 'sku-2', bidCents: null, excluded: true }], everythingElse: { bidCents: null, excluded: true } } },
         after: { campaignId: '21', adGroupId: '51', tree: { kind: 'items', items: [{ itemId: 'sku-1', bidCents: 40, excluded: false }], everythingElse: { bidCents: null, excluded: true } } },
+      // PR 5: the responsive search ads it made are paused again; the assets it linked are unlinked (they stay in the account).
+      'create-google-rsa': {
+        before: { campaignId: '21', adGroupId: '51', ads: [], accountId: 'g-1', customerId: '1234567890' },
+        after: { campaignId: '21', adGroupId: '51', created: [{ adId: '701', status: 'ENABLED' }], paused: [], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-assets': {
+        before: { campaignId: '21', links: [], accountId: 'g-1', customerId: '1234567890' },
+        after: { campaignId: '21', linked: [{ assetId: '9', fieldType: 'CALLOUT', text: 'Free returns' }], unlinked: [], accountId: 'g-1', customerId: '1234567890' },
       },
       // L7 — products created (parent and a variation), and products binned.
       'create-product': { before: { products: [] }, after: { products: [{ id: 'p1', deleted: false }, { id: 'p2', deleted: false }] } },
@@ -779,7 +787,7 @@ describe('C1 — every registered tool keeps the contract', () => {
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
       'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list',
       'create-google-campaign', 'set-google-campaign', 'set-google-targeting', 'set-google-status',
-      'remove-google-ads-items', 'set-google-product-groups']) {
+      'remove-google-ads-items', 'set-google-product-groups', 'create-google-rsa', 'set-google-assets']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
