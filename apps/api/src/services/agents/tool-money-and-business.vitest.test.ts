@@ -156,6 +156,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'google-ads-query': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-live.tools test)',
   'set-google-negative-list': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-change.tools test)',
   'set-google-targeting': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-campaigns.tools test)',
+  'set-google-audiences': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-audiences.tools test)',
+  'set-google-demographics': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-audiences.tools test)',
   'set-google-status': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-campaigns.tools test)',
   'remove-google-ads-items': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-campaigns.tools test)',
   'create-google-rsa': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-ads-assets.tools test)',
@@ -422,6 +424,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'create-google-campaign': () => ({ type: 'SEARCH', name: 'Search A', dailyBudgetCents: 500 }),
   'set-google-campaign': () => ({ campaignId: '21', searchPartners: false }),
   'set-google-targeting': () => ({ campaignId: '21', addLocations: [{ id: '2380' }] }),
+  // Programme 2 G2 — audiences and demographics: no Google Ads account here either (google-ads-audiences.tools test).
+  'set-google-audiences': () => ({ campaignId: '21', add: [{ kind: 'USER_LIST', id: '301' }] }),
+  'set-google-demographics': () => ({ campaignId: '21', changes: [{ dimension: 'AGE_RANGE', value: 'AGE_RANGE_18_24', adGroupId: '51', exclude: true }] }),
   'set-google-status': () => ({ items: [{ kind: 'campaign', id: '21' }], status: 'PAUSED' }),
   'remove-google-ads-items': () => ({ items: [{ kind: 'campaign', id: '21' }], confirmRemove: true }),
   'set-google-product-groups': () => ({ campaignId: '21', adGroupId: '51', itemIds: ['sku-1'], bidCents: 30 }),

@@ -208,6 +208,8 @@ export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   'campaignBudgetOperation', 'campaignOperation', 'campaignCriterionOperation', 'adGroupOperation', 'adGroupCriterionOperation',
   'adGroupAdOperation', 'assetOperation', 'campaignAssetOperation', 'sharedSetOperation', 'sharedCriterionOperation',
   'campaignSharedSetOperation',
+  // An ad group's device bid adjustment (AdGroupBidModifier; set-google-targeting, programme 2 G2).
+  'adGroupBidModifierOperation',
   'labelOperation', 'campaignLabelOperation', 'adGroupLabelOperation', 'adGroupAdLabelOperation', 'adGroupCriterionLabelOperation',
   'biddingStrategyOperation', 'recommendationSubscriptionOperation',
 ])

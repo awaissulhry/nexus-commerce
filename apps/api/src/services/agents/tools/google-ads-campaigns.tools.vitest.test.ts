@@ -10,7 +10,7 @@ const h = vi.hoisted(() => ({
   mutate: vi.fn(),
   live: {
     campaigns: [] as unknown[], budgets: [] as unknown[], lists: [] as unknown[], settings: null as unknown,
-    criteria: [] as unknown[], productGroups: [] as unknown[], statuses: [] as unknown[],
+    criteria: [] as unknown[], productGroups: [] as unknown[], statuses: [] as unknown[], adGroups: [] as unknown[], adGroupDevices: [] as unknown[],
   },
 }))
 vi.mock('../../marketing/google-ads/change-account.js', () => ({
@@ -30,6 +30,12 @@ vi.mock('../../marketing/google-ads/live-campaigns.js', async (importActual) => 
   ...(await importActual<typeof import('../../marketing/google-ads/live-campaigns.js')>()),
   liveCampaignCriteria: vi.fn(async () => structuredClone(h.live.criteria)),
   liveStatuses: vi.fn(async () => structuredClone(h.live.statuses)),
+}))
+vi.mock('../../marketing/google-ads/live-targeting.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../marketing/google-ads/live-targeting.js')>()),
+  liveTargetingCriteria: vi.fn(async () => structuredClone(h.live.criteria)),
+  liveTargetingAdGroups: vi.fn(async () => structuredClone(h.live.adGroups)),
+  liveAdGroupDevices: vi.fn(async () => structuredClone(h.live.adGroupDevices)),
 }))
 vi.mock('../../marketing/google-ads/write-client.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/write-client.js')>()),
@@ -55,6 +61,8 @@ beforeEach(() => {
   h.live.criteria = []
   h.live.productGroups = []
   h.live.statuses = []
+  h.live.adGroups = []
+  h.live.adGroupDevices = []
 })
 
 describe('the campaign tools', () => {
@@ -99,6 +107,17 @@ describe('the campaign tools', () => {
       ],
     })
     expect((out.preview as { warnings: string[] }).warnings).toContain('"Shop A" targets no location: it can show in every country.')
+  })
+
+  it('set-google-status ENABLE: a campaign that targets only a radius targets a place (no "targets no location" warning)', async () => {
+    h.live.criteria = [{ criterionId: '8', type: 'PROXIMITY', negative: false, name: null, bidModifier: null }]
+    h.mutate.mockResolvedValue(ok)
+    const out = await tool('set-google-status').handler({ items: [{ kind: 'campaign', id: '21' }], status: 'ENABLED' }, asker)
+    expect(out.ok).toBe(true)
+    expect(JSON.stringify((out.preview as { warnings?: string[] }).warnings ?? [])).not.toContain('targets no location')
+    h.live.criteria = []
+    const none = await tool('set-google-status').handler({ items: [{ kind: 'campaign', id: '21' }], status: 'ENABLED' }, asker)
+    expect((none.preview as { warnings: string[] }).warnings).toContain('"Shop A" targets no location: it can show in every country.')
   })
 
   it('remove-google-ads-items: only with confirmRemove true (the person\'s ask)', () => {
