@@ -54,7 +54,8 @@ export function describeValueSource(cell: StudioCellValue | undefined, member: C
            server's note already says so ("Shopify keeps 2 kg. …"): it then stands alone, never after the same words. */
         case 'divergence': {
           const note = cell!.divergence!.note
-          if (!shopifyKeepsOwnValue(cell)) return marked('warning', `Publishes another value: ${note}`)
+          // An adopted colour product's cell shows Shopify's own value; its note says what Nexus holds instead.
+          if (!shopifyKeepsOwnValue(cell) && cell!.divergence!.nexusValue === undefined) return marked('warning', `Publishes another value: ${note}`)
           return marked('warning', /^Shopify keeps\b/.test(note.trim()) ? note : `Shopify keeps another value: ${note}`)
         }
         default: return marked('warning', provenanceTooltip('attention', null))
