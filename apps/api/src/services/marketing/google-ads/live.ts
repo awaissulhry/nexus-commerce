@@ -447,6 +447,8 @@ export interface LiveCampaignDetail {
   }
   criteria: { locations: LiveCriterion[]; languages: LiveCriterion[]; schedule: LiveCriterion[]; audiences: LiveCriterion[]; negativeKeywords: LiveCriterion[]; other: LiveCriterion[] }
   negativeLists: Array<{ listId: string; name: string | null }>
+  /** Shared sets of other types linked to the campaign (brand lists, …): read, so a copy can name what it leaves behind. */
+  otherSharedSets: Array<{ listId: string; name: string | null; type: string | null }>
   adGroups: Array<{ adGroupId: string; name: string; status: string | null; type: string | null; cpcBidCents: number | null }>
   keywords: Array<{ adGroupId: string; criterionId: string; text: string; matchType: string | null; negative: boolean; status: string | null; cpcBidCents: number | null; effectiveCpcBidCents: number | null; approval: string | null }>
   productGroups: LiveProductGroup[]
@@ -550,6 +552,7 @@ export async function liveCampaignDetail(target: GoogleAdsTarget, campaignId: st
       other: criteria.filter((k) => !known.has(k.type ?? '')),
     },
     negativeLists: lists.filter((l) => l.type === 'NEGATIVE_KEYWORDS' || l.type === null).map(({ listId, name }) => ({ listId, name })),
+    otherSharedSets: lists.filter((l) => l.type !== null && l.type !== 'NEGATIVE_KEYWORDS'),
     adGroups,
     keywords,
     productGroups,

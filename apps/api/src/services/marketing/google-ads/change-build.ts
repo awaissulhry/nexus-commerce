@@ -6,14 +6,20 @@
  * Google makes all of it or none of it. Steps of a change plan cannot do this: a later step cannot point at a campaign an
  * earlier step has not made yet when Google checks the plan.
  *
- * A campaign of the build can also be a COPY of a live campaign (`copyOf`): the tool reads it live (live.ts) and this file
- * receives it already expanded (`BuildCampaign` with every part), so the build is pure.
+ * The operations go grouped by kind, in an order where every id is made before it is used (budgets, lists, list
+ * keywords, campaigns, campaign criteria, list links, ad groups, ads, ad group criteria — each product group tree
+ * parent-first —, assets, asset links): Google's mutate best practices ask for few kind switches, as each one is a
+ * separate backend call and many of them can time a big request out.
+ *
+ * A campaign of the build can also be a COPY of a live campaign (`copyOf`): the tool reads it live (build-copy.ts) and
+ * this file receives it already expanded, so the build is pure.
  *
  * Money: every campaign is made PAUSED, so the build spends nothing; enabling is set-google-status (SPENDS MONEY). The
- * preview says what would spend once enabled: the daily budgets, and any "everything else" product group left open.
+ * preview shows each campaign as create-google-campaign does (budget, bidding, networks, Google's automation, targeting)
+ * and what would spend once enabled: the daily budgets, and any product group that leaves the rest of the feed open.
  */
 import { changeLines, keywordTextProblem, money, plural, type GoogleChangeDraft } from './change-draft.js'
-import { campaignCreateOperations, campaignCreateProblem, type CampaignCreateRequest } from './change-campaigns.js'
+import { campaignCreateNotes, campaignCreateOperations, campaignCreateProblem, type CampaignCreateRequest } from './change-campaigns.js'
 import { httpsUrlProblem, rsaProblems, widthProblem, type RsaAd } from './change-ads.js'
 import { ASSET_LIMITS, snippetHeader, type AssetFieldType, type SitelinkRequest, type SnippetRequest } from './change-assets.js'
 import { keywordKey, microsOfCents, type LiveBudget, type LiveCampaign, type LiveNegativeList, type MatchType } from './live.js'
@@ -21,8 +27,11 @@ import type { GoogleMutateOperation, GoogleMutateResponse } from './write-client
 
 export interface BuildKeyword { text: string; matchType: MatchType; bidCents?: number; status?: 'ENABLED' | 'PAUSED' }
 export interface BuildNegative { text: string; matchType: MatchType }
-/** A product group node to make again as it is (a copy): its parent by index in the list, its case value as Google reads it. */
-export interface BuildProductNode { parent: number | null; kind: 'SUBDIVISION' | 'UNIT'; caseValue: Record<string, unknown> | null; excluded: boolean; bidCents: number | null }
+/**
+ * A product group node to make again as it is (a copy): its parent by index in the list, its case value as Google reads
+ * it, and whether it is the rest of its parent's dimension ("everything else": the dimension with no value).
+ */
+export interface BuildProductNode { parent: number | null; kind: 'SUBDIVISION' | 'UNIT'; caseValue: Record<string, unknown> | null; excluded: boolean; bidCents: number | null; rest: boolean }
 export type BuildProductGroups =
   | { itemIds: string[]; bidCents: number; itemBids?: Array<{ itemId: string; bidCents: number }>; includeEverythingElse?: { bidCents: number } }
   | { nodes: BuildProductNode[] }
@@ -49,16 +58,18 @@ export interface BuildCampaign extends Omit<CampaignCreateRequest, 'budgetId' | 
     sitelinks?: SitelinkRequest[]
     callouts?: string[]
     structuredSnippets?: SnippetRequest[]
-    /** Existing assets of the account linked to the new campaign (a copy links the same assets). */
-    link?: Array<{ assetId: string; fieldType: AssetFieldType }>
+    /** Existing assets of the account linked to the new campaign (a copy links the same assets, with their link status). */
+    link?: Array<{ assetId: string; fieldType: AssetFieldType; status?: 'ENABLED' | 'PAUSED' }>
   }
+  /** BROAD keywords are allowed in this campaign (a copy keeps what the source holds). */
+  allowBroad?: boolean
 }
 
 export interface BuildSpec {
   sharedBudgets?: Array<{ ref: string; name: string; budgetCents: number }>
   negativeLists?: Array<{ ref: string; name: string; keywords: BuildNegative[] }>
   campaigns: BuildCampaign[]
-  /** BROAD keywords (not negatives) are refused unless asked. */
+  /** BROAD keywords (not negatives) are refused unless asked (or the campaign allows them). */
   allowBroad?: boolean
 }
 
@@ -66,20 +77,34 @@ export interface BuildLive { campaigns: LiveCampaign[]; budgets: LiveBudget[]; l
 
 /** What a build made, by the operation that made it: after the run, Google's ids. */
 export interface BuildRecord {
-  campaigns: Array<{ name: string; campaignId: string | null; op: number }>
+  campaigns: Array<{ name: string; campaignId: string | null; op: number; ownBudgetOp?: number; ownBudgetId?: string | null }>
   sharedBudgets: Array<{ name: string; budgetId: string | null; op: number }>
   negativeLists: Array<{ name: string; listId: string | null; op: number }>
 }
 
-const MAX_BUILD_OPERATIONS = 4000
+/**
+ * The most operations one build sends. A build is checked by Google (its preview) and then sent (its run): twice its
+ * size on the account's change allowance (ops-budget.ts WRITE_ACCOUNT_DAILY_OPS), with room for the live reads and a
+ * check-google-ads-build of the same plan (Google's acceptance is remembered for 30 minutes, so it is not paid twice).
+ */
+export const MAX_BUILD_OPERATIONS = 900
+
+/** The order of the kinds in the request: every resource is made before anything points at it. */
+const KIND_ORDER = [
+  'campaignBudgetOperation', 'sharedSetOperation', 'sharedCriterionOperation', 'campaignOperation', 'campaignCriterionOperation',
+  'campaignSharedSetOperation', 'adGroupOperation', 'adGroupAdOperation', 'adGroupCriterionOperation', 'assetOperation', 'campaignAssetOperation',
+] as const
+
+/** An operation with what the record needs to find it again after the operations are put in order. */
+interface Tagged { op: GoogleMutateOperation; tag?: string }
 
 export function buildDraft(customer: string, currency: string, spec: BuildSpec, live: BuildLive): GoogleChangeDraft | { refusal: string } {
   if (!spec.campaigns.length && !spec.sharedBudgets?.length && !spec.negativeLists?.length) return { refusal: 'The build holds nothing.' }
   const problems: string[] = []
   let next = -1
   const temp = () => next--
-  const ops: GoogleMutateOperation[] = []
-  const record: BuildRecord = { campaigns: [], sharedBudgets: [], negativeLists: [] }
+  const tagged: Tagged[] = []
+  const push = (op: GoogleMutateOperation, tag?: string) => tagged.push({ op, ...(tag ? { tag } : {}) })
   const lower = (s: string) => s.trim().toLowerCase()
   const lines: Array<[string, unknown, unknown]> = []
   const warnings: string[] = []
@@ -103,8 +128,7 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
   for (const b of spec.sharedBudgets ?? []) {
     if (budgetRefs.has(b.ref)) { problems.push(`Budget ref "${b.ref}" is used twice.`); continue }
     const res = `${customer}/campaignBudgets/${temp()}`
-    record.sharedBudgets.push({ name: b.name.trim(), budgetId: null, op: ops.length })
-    ops.push({ campaignBudgetOperation: { create: { resourceName: res, name: b.name.trim(), amountMicros: microsOfCents(b.budgetCents), explicitlyShared: true, deliveryMethod: 'STANDARD' } } })
+    push({ campaignBudgetOperation: { create: { resourceName: res, name: b.name.trim(), amountMicros: microsOfCents(b.budgetCents), explicitlyShared: true, deliveryMethod: 'STANDARD' } } }, `budget:${b.name.trim()}`)
     budgetRefs.set(b.ref, { res, cents: b.budgetCents, name: b.name.trim() })
     lines.push([`new shared budget "${b.name.trim()}"`, '(none)', `${money(b.budgetCents, currency)} a day`])
   }
@@ -114,8 +138,7 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
   for (const l of spec.negativeLists ?? []) {
     if (listRefs.has(l.ref)) { problems.push(`List ref "${l.ref}" is used twice.`); continue }
     const res = `${customer}/sharedSets/${temp()}`
-    record.negativeLists.push({ name: l.name.trim(), listId: null, op: ops.length })
-    ops.push({ sharedSetOperation: { create: { resourceName: res, name: l.name.trim(), type: 'NEGATIVE_KEYWORDS' } } })
+    push({ sharedSetOperation: { create: { resourceName: res, name: l.name.trim(), type: 'NEGATIVE_KEYWORDS' } } }, `list:${l.name.trim()}`)
     listRefs.set(l.ref, res)
     const seen = new Set<string>()
     for (const k of l.keywords) {
@@ -124,7 +147,7 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
       const key = keywordKey(k.text, k.matchType)
       if (seen.has(key)) continue
       seen.add(key)
-      ops.push({ sharedCriterionOperation: { create: { sharedSet: res, keyword: { text: k.text.trim(), matchType: k.matchType } } } })
+      push({ sharedCriterionOperation: { create: { sharedSet: res, keyword: { text: k.text.trim(), matchType: k.matchType } } } })
     }
     totals.negatives += seen.size
     lines.push([`new negative keyword list "${l.name.trim()}"`, '(none)', plural(seen.size, 'keyword')])
@@ -137,32 +160,35 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
     const where = `campaign ${ci + 1} "${c.name}"`
     let budgetRes: string
     let budgetCents: number | null
-    let budgetKey: string
-    const budgetOps: GoogleMutateOperation[] = []
+    let budgetText: string
+    let ownBudget = false
     if ('ref' in c.budget) {
       const b = budgetRefs.get(c.budget.ref)
       if (!b) { problems.push(`${where}: budget ref "${c.budget.ref}" is not a budget of the build.`); return }
-      budgetRes = b.res; budgetCents = b.cents; budgetKey = b.res
+      budgetRes = b.res; budgetCents = b.cents; budgetText = `new shared "${b.name}" ${money(b.cents, currency)} a day`
     } else if ('budgetId' in c.budget) {
       const b = live.budgets.find((x) => x.budgetId === (c.budget as { budgetId: string }).budgetId)
       if (!b) { problems.push(`${where}: budget ${c.budget.budgetId} is not in the account.`); return }
       if (!b.shared) { problems.push(`${where}: budget ${c.budget.budgetId} is another campaign's own budget.`); return }
-      budgetRes = `${customer}/campaignBudgets/${b.budgetId}`; budgetCents = b.amountCents; budgetKey = budgetRes
+      budgetRes = `${customer}/campaignBudgets/${b.budgetId}`; budgetCents = b.amountCents; budgetText = `shared "${b.name ?? b.budgetId}" ${money(b.amountCents, currency)} a day`
     } else {
-      budgetRes = `${customer}/campaignBudgets/${temp()}`; budgetCents = c.budget.dailyBudgetCents; budgetKey = budgetRes
-      budgetOps.push({ campaignBudgetOperation: { create: { resourceName: budgetRes, amountMicros: microsOfCents(c.budget.dailyBudgetCents), explicitlyShared: false, deliveryMethod: 'STANDARD' } } })
+      budgetRes = `${customer}/campaignBudgets/${temp()}`; budgetCents = c.budget.dailyBudgetCents; budgetText = `its own ${money(c.budget.dailyBudgetCents, currency)} a day`
+      ownBudget = true
     }
     const request: CampaignCreateRequest = { ...c, budgetId: undefined, dailyBudgetCents: undefined }
     const problem = campaignCreateProblem(request)
     if (problem) { problems.push(`${where}: ${problem}`); return }
     const campaignRes = `${customer}/campaigns/${temp()}`
-    ops.push(...budgetOps)
-    record.campaigns.push({ name: c.name.trim(), campaignId: null, op: ops.length })
+    if (ownBudget) push({ campaignBudgetOperation: { create: { resourceName: budgetRes, amountMicros: microsOfCents(budgetCents!), explicitlyShared: false, deliveryMethod: 'STANDARD' } } }, `own:${c.name.trim()}`)
     const created = campaignCreateOperations(customer, request, budgetRes, campaignRes)
     if ('refusal' in created) { problems.push(`${where}: ${created.refusal}`); return }
-    ops.push(...created.operations)
+    created.operations.forEach((op) => push(op, 'campaignOperation' in op ? `campaign:${c.name.trim()}` : undefined))
     totals.campaigns += 1
-    if (budgetCents !== null && !countedBudgets.has(budgetKey)) { dailyIfEnabled += budgetCents; countedBudgets.add(budgetKey) }
+    if (budgetCents !== null && !countedBudgets.has(budgetRes)) { dailyIfEnabled += budgetCents; countedBudgets.add(budgetRes) }
+    const notes = campaignCreateNotes(request, currency, budgetText)
+    // The campaign's own lines, named by it ("new campaign" first), so a copy shows every setting it carries over.
+    for (const [label, from, to] of notes.lines) lines.push([label === 'new campaign' ? `new campaign ${ci + 1}` : `campaign ${ci + 1} ${label}`, from, to])
+    warnings.push(...notes.warnings)
 
     // Campaign negatives and lists.
     const negSeen = new Set<string>()
@@ -172,7 +198,7 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
       const key = keywordKey(n.text, n.matchType)
       if (negSeen.has(key)) continue
       negSeen.add(key)
-      ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, negative: true, keyword: { text: n.text.trim(), matchType: n.matchType } } } })
+      push({ campaignCriterionOperation: { create: { campaign: campaignRes, negative: true, keyword: { text: n.text.trim(), matchType: n.matchType } } } })
     }
     totals.negatives += negSeen.size
     for (const l of c.negativeLists ?? []) {
@@ -180,7 +206,7 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
       if ('ref' in l) res = listRefs.get(l.ref)
       else if (live.lists.some((x) => x.listId === l.listId)) res = `${customer}/sharedSets/${l.listId}`
       if (!res) { problems.push(`${where}: negative keyword list ${'ref' in l ? `ref "${l.ref}"` : l.listId} is not in the build or the account.`); continue }
-      ops.push({ campaignSharedSetOperation: { create: { campaign: campaignRes, sharedSet: res } } })
+      push({ campaignSharedSetOperation: { create: { campaign: campaignRes, sharedSet: res } } })
     }
 
     // Ad groups.
@@ -194,18 +220,18 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
       if (isShopping && (g.keywords?.length || g.ads?.length)) problems.push(`${gWhere}: a Shopping ad group has no keywords or text ads (its products are its ads).`)
       if (!isShopping && g.productGroups) problems.push(`${gWhere}: product groups are for Shopping ad groups.`)
       const agRes = `${customer}/adGroups/${temp()}`
-      ops.push({ adGroupOperation: { create: { resourceName: agRes, campaign: campaignRes, name: g.name.trim(), status: g.status ?? 'ENABLED', type: isShopping ? 'SHOPPING_PRODUCT_ADS' : 'SEARCH_STANDARD', ...(g.defaultBidCents ? { cpcBidMicros: microsOfCents(g.defaultBidCents) } : {}) } } })
+      push({ adGroupOperation: { create: { resourceName: agRes, campaign: campaignRes, name: g.name.trim(), status: g.status ?? 'ENABLED', type: isShopping ? 'SHOPPING_PRODUCT_ADS' : 'SEARCH_STANDARD', ...(g.defaultBidCents ? { cpcBidMicros: microsOfCents(g.defaultBidCents) } : {}) } } })
       totals.adGroups += 1
-      if (isShopping) ops.push({ adGroupAdOperation: { create: { adGroup: agRes, status: 'ENABLED', ad: { shoppingProductAd: {} } } } })
+      if (isShopping) push({ adGroupAdOperation: { create: { adGroup: agRes, status: 'ENABLED', ad: { shoppingProductAd: {} } } } })
       const kwSeen = new Set<string>()
       for (const k of g.keywords ?? []) {
         const p = keywordTextProblem(k.text)
         if (p) { problems.push(`${gWhere}: keyword "${k.text}" ${p}.`); continue }
-        if (k.matchType === 'BROAD' && !spec.allowBroad) { problems.push(`${gWhere}: keyword "${k.text}" is BROAD (refused unless allowBroad).`); continue }
+        if (k.matchType === 'BROAD' && !spec.allowBroad && !c.allowBroad) { problems.push(`${gWhere}: keyword "${k.text}" is BROAD (refused unless allowBroad).`); continue }
         const key = keywordKey(k.text, k.matchType)
         if (kwSeen.has(key)) continue
         kwSeen.add(key)
-        ops.push({ adGroupCriterionOperation: { create: { adGroup: agRes, status: k.status ?? 'ENABLED', keyword: { text: k.text.trim(), matchType: k.matchType }, ...(k.bidCents ? { cpcBidMicros: microsOfCents(k.bidCents) } : {}) } } })
+        push({ adGroupCriterionOperation: { create: { adGroup: agRes, status: k.status ?? 'ENABLED', keyword: { text: k.text.trim(), matchType: k.matchType }, ...(k.bidCents ? { cpcBidMicros: microsOfCents(k.bidCents) } : {}) } } })
       }
       totals.keywords += kwSeen.size
       const agNeg = new Set<string>()
@@ -215,18 +241,18 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
         const key = keywordKey(n.text, n.matchType)
         if (agNeg.has(key)) continue
         agNeg.add(key)
-        ops.push({ adGroupCriterionOperation: { create: { adGroup: agRes, negative: true, keyword: { text: n.text.trim(), matchType: n.matchType } } } })
+        push({ adGroupCriterionOperation: { create: { adGroup: agRes, negative: true, keyword: { text: n.text.trim(), matchType: n.matchType } } } })
       }
       totals.negatives += agNeg.size
       if (g.productGroups) {
         const tree = productGroupOperations(customer, agRes, g.productGroups, temp)
         if ('refusal' in tree) problems.push(`${gWhere}: ${tree.refusal}`)
-        else { ops.push(...tree.operations); totals.productGroups += tree.operations.length; open += tree.openEverythingElse }
+        else { tree.operations.forEach((op) => push(op)); totals.productGroups += tree.operations.length; open += tree.openRest }
       }
       ;(g.ads ?? []).forEach((ad, ai) => {
         const adProblems = rsaProblems(ad, ai + 1).map((p) => `${gWhere}, ${p}`)
         if (adProblems.length) { problems.push(...adProblems); return }
-        ops.push({ adGroupAdOperation: { create: { adGroup: agRes, status: ad.status ?? 'ENABLED', ad: { finalUrls: [ad.finalUrl.trim()], responsiveSearchAd: {
+        push({ adGroupAdOperation: { create: { adGroup: agRes, status: ad.status ?? 'ENABLED', ad: { finalUrls: [ad.finalUrl.trim()], responsiveSearchAd: {
           headlines: ad.headlines.map((t) => ({ text: t.text.trim(), ...(t.pin ? { pinnedField: t.pin } : {}) })),
           descriptions: ad.descriptions.map((t) => ({ text: t.text.trim(), ...(t.pin ? { pinnedField: t.pin } : {}) })),
           ...(ad.path1?.trim() ? { path1: ad.path1.trim() } : {}),
@@ -235,27 +261,41 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
         totals.ads += 1
       })
     }
-    if (open) warnings.push(`${where}: ${plural(open, 'product group')} leave "everything else" OPEN: once enabled it can advertise every other product of the feed.`)
+    if (open) warnings.push(`${where}: ${plural(open, 'product group')} leave the rest of the feed OPEN (an advertised "everything else" or "All products"): once enabled it can advertise every other product of the feed.`)
 
     // Campaign assets.
-    const assetLines = assetOperations(customer, campaignRes, c.assets, temp)
-    if ('refusal' in assetLines) problems.push(`${where}: ${assetLines.refusal}`)
-    else { ops.push(...assetLines.operations); totals.assets += assetLines.count }
-    lines.push([`new campaign "${c.name.trim()}"`, '(none)', `${c.type === 'SHOPPING' ? 'Standard Shopping' : 'Search'} · PAUSED · ${plural((c.adGroups ?? []).length, 'ad group')}`])
+    const assets = assetOperations(customer, campaignRes, c.assets, temp)
+    if ('refusal' in assets) problems.push(`${where}: ${assets.refusal}`)
+    else { assets.operations.forEach((op) => push(op)); totals.assets += assets.count }
   })
 
   if (problems.length) return { refusal: `The build cannot be sent as it is (${plural(problems.length, 'problem')}): ${problems.slice(0, 25).join(' · ')}${problems.length > 25 ? ` · … ${problems.length - 25} more` : ''}` }
-  if (ops.length > MAX_BUILD_OPERATIONS) return { refusal: `The build holds ${ops.length} operations, more than the ${MAX_BUILD_OPERATIONS} Nexus sends at once. Split it.` }
+  if (tagged.length > MAX_BUILD_OPERATIONS) {
+    return { refusal: `The build holds ${tagged.length} operations, more than the ${MAX_BUILD_OPERATIONS} one build sends (its check and its run must fit the account's daily Google Ads allowance). Split it into builds of fewer campaigns.` }
+  }
+
+  // Grouped by kind (stable: the order inside a kind is the order made, so a tree stays parent-first).
+  const rank = (t: Tagged) => KIND_ORDER.indexOf(Object.keys(t.op)[0] as typeof KIND_ORDER[number])
+  const ordered = tagged.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map((x) => x.t)
+  const at = (tag: string) => ordered.findIndex((t) => t.tag === tag)
+  const record: BuildRecord = {
+    campaigns: spec.campaigns.filter((c) => at(`campaign:${c.name.trim()}`) >= 0).map((c) => ({
+      name: c.name.trim(), campaignId: null, op: at(`campaign:${c.name.trim()}`),
+      ...(at(`own:${c.name.trim()}`) >= 0 ? { ownBudgetOp: at(`own:${c.name.trim()}`), ownBudgetId: null } : {}),
+    })),
+    sharedBudgets: (spec.sharedBudgets ?? []).map((b) => ({ name: b.name.trim(), budgetId: null, op: at(`budget:${b.name.trim()}`) })),
+    negativeLists: (spec.negativeLists ?? []).map((l) => ({ name: l.name.trim(), listId: null, op: at(`list:${l.name.trim()}`) })),
+  }
   const { changes, more } = changeLines(lines)
   if (totals.campaigns) warnings.unshift(`Every campaign is made PAUSED: nothing spends until a person enables one (set-google-status, SPENDS MONEY). Once enabled, their daily budgets add up to ${money(dailyIfEnabled, currency)}.`)
   return {
     summary: `Google Ads build: ${[record.sharedBudgets.length && plural(record.sharedBudgets.length, 'shared budget'), record.negativeLists.length && plural(record.negativeLists.length, 'negative keyword list'), totals.campaigns && `${plural(totals.campaigns, 'campaign')} (PAUSED)`].filter(Boolean).join(', ')} — in one request.`,
     changes,
-    totals: { operations: ops.length, ...totals, ...(more ? { linesNotShown: more } : {}) },
+    totals: { operations: ordered.length, ...totals, ...(more ? { linesNotShown: more } : {}) },
     warnings,
     spendsMoney: [],
     skipped: [],
-    operations: ops,
+    operations: ordered.map((t) => t.op),
     stands: {
       // The names the build takes must still be free; nothing else of the account is changed.
       names: [...spec.campaigns.map((c) => `c:${lower(c.name)}`), ...(spec.sharedBudgets ?? []).map((b) => `b:${lower(b.name)}`), ...(spec.negativeLists ?? []).map((l) => `l:${lower(l.name)}`)].sort(),
@@ -274,7 +314,10 @@ export function buildRecordAfterRun(after: BuildRecord, responses: GoogleMutateR
     return name ? name.slice(name.lastIndexOf('/') + 1) : null
   }
   return {
-    campaigns: after.campaigns.map((c) => ({ ...c, campaignId: idAt(c.op, 'campaignResult') })),
+    campaigns: after.campaigns.map((c) => ({
+      ...c, campaignId: idAt(c.op, 'campaignResult'),
+      ...(c.ownBudgetOp !== undefined ? { ownBudgetId: idAt(c.ownBudgetOp, 'campaignBudgetResult') } : {}),
+    })),
     sharedBudgets: after.sharedBudgets.map((b) => ({ ...b, budgetId: idAt(b.op, 'campaignBudgetResult') })),
     negativeLists: after.negativeLists.map((l) => ({ ...l, listId: idAt(l.op, 'sharedSetResult') })),
   }
@@ -287,21 +330,20 @@ function productGroupOperations(
   adGroupRes: string,
   pg: BuildProductGroups,
   temp: () => number,
-): { operations: GoogleMutateOperation[]; openEverythingElse: number } | { refusal: string } {
+): { operations: GoogleMutateOperation[]; openRest: number } | { refusal: string } {
   const adGroupId = adGroupRes.slice(adGroupRes.lastIndexOf('/') + 1)
   const res = () => `${customer}/adGroupCriteria/${adGroupId}~${temp()}`
   const ops: GoogleMutateOperation[] = []
   if ('nodes' in pg) {
-    // A copy: every node again, in an order where a parent comes before its children.
+    // A copy: every node again, parent first. Open = an advertised unit that is the rest of its dimension, or "All
+    // products" itself as one advertised unit.
     const made: string[] = []
     let open = 0
     for (const [i, n] of pg.nodes.entries()) {
       if (n.parent !== null && (n.parent >= i || !made[n.parent])) return { refusal: 'the product group tree to copy lists a child before its parent.' }
       const name = res()
       made[i] = name
-      // "Everything else": a child whose dimension carries no value (`{ productItemId: {} }`, `{ productType: { level } }`).
-      const isRest = n.parent !== null && Object.values(n.caseValue ?? {}).every((v) => (v as { value?: unknown } | null)?.value == null)
-      if (n.kind === 'UNIT' && isRest && !n.excluded) open += 1
+      if (n.kind === 'UNIT' && !n.excluded && (n.rest || n.parent === null)) open += 1
       ops.push({ adGroupCriterionOperation: { create: {
         resourceName: name, status: 'ENABLED',
         ...(n.kind === 'UNIT' && n.excluded ? { negative: true } : {}),
@@ -309,7 +351,7 @@ function productGroupOperations(
         listingGroup: { type: n.kind, ...(n.parent !== null ? { parentAdGroupCriterion: made[n.parent] } : {}), ...(n.caseValue ? { caseValue: n.caseValue } : {}) },
       } } })
     }
-    return { operations: ops, openEverythingElse: open }
+    return { operations: ops, openRest: open }
   }
   // Item ids once, compared without case (Merchant Center may read ids differing only by case as one); the first spelling.
   const byKey = new Map<string, string>()
@@ -331,7 +373,7 @@ function productGroupOperations(
       listingGroup: { type: 'UNIT', parentAdGroupCriterion: root, caseValue: { productItemId: { value: id } } },
     } } })
   }
-  return { operations: ops, openEverythingElse: rest ? 1 : 0 }
+  return { operations: ops, openRest: rest ? 1 : 0 }
 }
 
 // ── campaign assets ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -373,7 +415,9 @@ function assetOperations(
     for (const v of values) { const p = widthProblem(`structured snippet ${i + 1} value "${v}"`, v, L.snippetValue); if (p) problems.push(p) }
     add('STRUCTURED_SNIPPET', { structuredSnippetAsset: { header: header.header, values } })
   }
-  for (const l of assets.link ?? []) links.push({ campaignAssetOperation: { create: { campaign: campaignRes, asset: `${customer}/assets/${l.assetId}`, fieldType: l.fieldType } } })
+  for (const l of assets.link ?? []) {
+    links.push({ campaignAssetOperation: { create: { campaign: campaignRes, asset: `${customer}/assets/${l.assetId}`, fieldType: l.fieldType, ...(l.status === 'PAUSED' ? { status: 'PAUSED' } : {}) } } })
+  }
   if (problems.length) return { refusal: problems.join(' · ') }
   return { operations: [...ops, ...links], count: links.length }
 }

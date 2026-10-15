@@ -33,33 +33,50 @@ const SPEC: BuildSpec = {
   ],
 }
 
-const ids = (ops: unknown[]) => JSON.stringify(ops).match(/\/(campaignBudgets|sharedSets|campaigns|adGroups|adGroupCriteria\/\d+~|adGroupCriteria\/-\d+~|assets)\/?-\d+/g) ?? []
 
 describe('buildDraft', () => {
   it('one request: budgets and lists first, campaigns PAUSED, refs resolved, temp ids unique and defined before use', () => {
     const d = buildDraft(C, 'EUR', SPEC, live)
     if ('refusal' in d) throw new Error(d.refusal)
     const ops = d.operations as Array<Record<string, any>>
-    expect(Object.keys(ops[0])).toEqual(['campaignBudgetOperation'])
-    expect(Object.keys(ops[1])).toEqual(['sharedSetOperation'])
+    // Budgets (the shared one, then the Search campaign's own) first, then the list.
+    expect(ops.slice(0, 3).map((o) => Object.keys(o)[0])).toEqual(['campaignBudgetOperation', 'campaignBudgetOperation', 'sharedSetOperation'])
     // The list's keyword once (duplicates by case are one keyword).
     expect(ops.filter((o) => o.sharedCriterionOperation)).toHaveLength(1)
     const creates = ops.map((o) => Object.values(o)[0].create).filter(Boolean)
     const campaigns = creates.filter((c) => c.advertisingChannelType)
     expect(campaigns.map((c) => c.status)).toEqual(['PAUSED', 'PAUSED'])
     expect(campaigns[0].campaignBudget).toBe(ops[0].campaignBudgetOperation.create.resourceName)
-    // Every temporary id is made once, before anything points at it.
+    // Every temporary NUMBER is used by one resource only, across every kind, and made before anything points at it.
+    const owner = new Map<number, string>()
     const made = new Set<string>()
-    for (const c of creates) {
-      for (const ref of Object.values(c).filter((v) => typeof v === 'string' && /\/-\d+$/.test(v)) as string[]) {
-        if (ref !== c.resourceName) expect(made.has(ref), `${ref} used before it is made`).toBe(true)
+    const tempsIn = (v: string) => [...v.matchAll(/(-\d+)/g)].map((m) => Number(m[1]))
+    for (const o of ops) {
+      const c = Object.values(o)[0].create
+      if (!c) continue
+      const refs = JSON.stringify(c).match(/customers\/1234567890\/[A-Za-z]+\/[-~\d]*-\d+[-~\d]*/g) ?? []
+      for (const ref of refs) {
+        if (ref === c.resourceName) continue
+        expect(made.has(ref), `${ref} used before it is made`).toBe(true)
       }
-      if (c.listingGroup?.parentAdGroupCriterion) expect(made.has(c.listingGroup.parentAdGroupCriterion)).toBe(true)
-      if (c.resourceName) { expect(made.has(c.resourceName)).toBe(false); made.add(c.resourceName) }
+      if (c.resourceName) {
+        const last = Number(c.resourceName.split(/[/~]/).pop())
+        if (last < 0) {
+          expect(owner.has(last), `temp id ${last} used twice`).toBe(false)
+          owner.set(last, c.resourceName)
+        }
+        made.add(c.resourceName)
+      }
     }
-    expect(ids(ops).length).toBeGreaterThan(0)
+    expect(owner.size).toBeGreaterThan(5)
+    // Grouped by kind: each kind once, in an order where every id is made before it is used.
+    const kinds = ops.map((o) => Object.keys(o)[0])
+    expect(kinds.filter((k, i) => k !== kinds[i - 1])).toEqual([...new Set(kinds)])
     expect(d.spendsMoney).toEqual([])
     expect(d.warnings[0]).toBe('Every campaign is made PAUSED: nothing spends until a person enables one (set-google-status, SPENDS MONEY). Once enabled, their daily budgets add up to EUR 18.00.')
+    // Each campaign's settings are shown, as create-google-campaign shows them.
+    expect(d.changes['campaign 2 budget']).toEqual({ from: '(none)', to: 'its own EUR 6.00 a day' })
+    expect(d.changes['campaign 1 Shopping']).toEqual({ from: '(none)', to: 'Merchant Center 5, feed label IT, priority HIGH' })
   })
 
   it('a Shopping ad group: its product ad, and a tree whose "everything else" is EXCLUDED (item ids once, without case)', () => {
@@ -104,7 +121,19 @@ describe('buildDraft', () => {
     expect(nodes.map((n) => n.parent)).toEqual([null, 0, 0])
     const d = buildDraft(C, 'EUR', { campaigns: [{ type: 'SHOPPING', name: 'Copy', budget: { dailyBudgetCents: 100 }, bidding: { strategy: 'MANUAL_CPC' }, shopping: { merchantId: '5' }, adGroups: [{ name: 'G', productGroups: { nodes } }] }] }, live)
     if ('refusal' in d) throw new Error(d.refusal)
-    expect(d.warnings).toContain('campaign 1 "Copy": 1 product group leave "everything else" OPEN: once enabled it can advertise every other product of the feed.')
+    expect(d.warnings).toContain('campaign 1 "Copy": 1 product group leave the rest of the feed OPEN (an advertised "everything else" or "All products"): once enabled it can advertise every other product of the feed.')
+    // A condition split ("NEW") is a value, not the rest; "All products" alone, advertised, is open.
+    const condition = treeNodes([
+      { criterionId: '1', parentId: null, kind: 'SUBDIVISION', caseValue: null, dimension: null, value: null, excluded: false, bidCents: null },
+      { criterionId: '2', parentId: '1', kind: 'UNIT', caseValue: { productCondition: { condition: 'NEW' } }, dimension: 'productCondition', value: 'NEW', excluded: false, bidCents: 10 },
+      { criterionId: '3', parentId: '1', kind: 'UNIT', caseValue: { productCondition: {} }, dimension: 'productCondition', value: null, excluded: true, bidCents: null },
+    ])
+    const c2 = buildDraft(C, 'EUR', { campaigns: [{ type: 'SHOPPING', name: 'C2', budget: { dailyBudgetCents: 100 }, bidding: { strategy: 'MANUAL_CPC' }, shopping: { merchantId: '5' }, adGroups: [{ name: 'G', productGroups: { nodes: condition } }] }] }, live)
+    if ('refusal' in c2) throw new Error(c2.refusal)
+    expect(c2.warnings.some((w) => /OPEN/.test(w))).toBe(false)
+    const all = buildDraft(C, 'EUR', { campaigns: [{ type: 'SHOPPING', name: 'C3', budget: { dailyBudgetCents: 100 }, bidding: { strategy: 'MANUAL_CPC' }, shopping: { merchantId: '5' }, adGroups: [{ name: 'G', productGroups: { nodes: [{ parent: null, kind: 'UNIT', caseValue: null, excluded: false, bidCents: 10, rest: false }] } }] }] }, live)
+    if ('refusal' in all) throw new Error(all.refusal)
+    expect(all.warnings.some((w) => /OPEN/.test(w))).toBe(true)
   })
 
   it('after the run: Google\'s ids by the operation that made each', () => {
@@ -113,8 +142,11 @@ describe('buildDraft', () => {
     const after = d.after as ReturnType<typeof buildRecordAfterRun>
     const responses = d.operations.map((_, i) => ({ campaignResult: { resourceName: `${C}/campaigns/${100 + i}` }, campaignBudgetResult: { resourceName: `${C}/campaignBudgets/${200 + i}` }, sharedSetResult: { resourceName: `${C}/sharedSets/${300 + i}` } }))
     const made = buildRecordAfterRun(after, responses)
-    expect(made.sharedBudgets[0].budgetId).toBe('200')
-    expect(made.negativeLists[0].listId).toBe('301')
+    expect(made.sharedBudgets[0].budgetId).toBe(String(200 + after.sharedBudgets[0].op))
+    expect(made.negativeLists[0].listId).toBe(String(300 + after.negativeLists[0].op))
+    expect(after.negativeLists[0].op).toBe(2)
     expect(made.campaigns.map((c) => c.campaignId)).toEqual(after.campaigns.map((c) => String(100 + c.op)))
+    // The Search campaign's own budget is recorded too (undo removes it).
+    expect(made.campaigns[1].ownBudgetId).toBe(String(200 + after.campaigns[1].ownBudgetOp!))
   })
 })

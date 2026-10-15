@@ -11,9 +11,9 @@
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
-import type { AgentTool, ToolChange, ToolContext, ToolUndo } from '../tool-types.js'
+import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
 import {
-  googleAccountArg, googleCentsArg, googleChangePreview, googleIdArg, googleWhyArg, GOOGLE_CHANGE_RULES, matchTypeArg, recordAccount, runGoogleChange,
+  googleAccountArg, googleCentsArg, googleChangePreview, googleCheck, googleIdArg, googleWhyArg, GOOGLE_CHANGE_RULES, matchTypeArg, recordAccount, runGoogleChange,
   type GoogleDraftBuilder,
 } from './google-ads-kit.js'
 import { buildDraft, buildRecordAfterRun, type BuildCampaign, type BuildRecord, type BuildSpec } from '../../marketing/google-ads/change-build.js'
@@ -33,7 +33,8 @@ const common = {
   requiresApprovalDefault: true,
   openWorld: true,
   maxClaudeTrust: 'ask' as const,
-  reversibility: 'full' as const,
+  // Undo removes what the build made; ids Google has not given back (a failed record) cannot be removed.
+  reversibility: 'partial' as const,
   requires: [F.adsCampaignsManage, F.adsBudgetsEdit, ADSPEND] as const,
   restrictedFields: BUILD_MONEY,
 }
@@ -216,16 +217,17 @@ const buildUndo: ToolUndo = {
   },
   request(change: ToolChange) {
     const after = (change.after ?? {}) as BuildRecord & { accountId?: string }
-    const made = (after.campaigns ?? []).filter((c) => c.campaignId)
-    if (!made.length) return { refusal: 'This build does not record the campaigns it made.' }
+    // Everything the build made, campaigns first (remove-google-ads-items sends budgets and lists last).
+    const items = [
+      ...(after.campaigns ?? []).filter((c) => c.campaignId).map((c) => ({ kind: 'campaign', id: c.campaignId })),
+      ...(after.campaigns ?? []).filter((c) => c.ownBudgetId).map((c) => ({ kind: 'budget', id: c.ownBudgetId })),
+      ...(after.sharedBudgets ?? []).filter((b) => b.budgetId).map((b) => ({ kind: 'budget', id: b.budgetId })),
+      ...(after.negativeLists ?? []).filter((l) => l.listId).map((l) => ({ kind: 'negative-list', id: l.listId })),
+    ]
+    if (!items.length) return { refusal: 'This build does not record the ids Google gave what it made.' }
     return {
       tool: 'remove-google-ads-items',
-      args: {
-        ...(after.accountId ? { accountId: after.accountId } : {}),
-        items: made.map((c) => ({ kind: 'campaign', id: c.campaignId })),
-        confirmRemove: true,
-        why: `undo of an earlier build (its shared budgets and lists stay, unused: they spend nothing)`,
-      },
+      args: { ...(after.accountId ? { accountId: after.accountId } : {}), items, confirmRemove: true, why: 'undo of an earlier build' },
     }
   },
 }
@@ -243,7 +245,7 @@ const buildGoogleCampaigns: AgentTool = {
     + 'bids (no BROAD unless allowBroad), ad-group negatives, Shopping product groups by item id ("everything else" '
     + 'excluded unless asked), responsive search ads, sitelinks, callouts and structured snippets. A campaign may be a '
     + 'copy of a live one (copyOf). Parts point at each other by ref. Use it, not a change plan, when new parts point at '
-    + 'new parts. Undo removes the campaigns it made.' + GOOGLE_CHANGE_RULES,
+    + 'new parts. At most 900 operations (its check and its run fit the daily allowance). Undo removes what it made.' + GOOGLE_CHANGE_RULES,
   undo: buildUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildBuilder(args)),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildBuilder(args), (draft, responses) => {
@@ -283,8 +285,9 @@ const copyGoogleCampaign: AgentTool = {
     + 'made PAUSED, in one request: settings, budget (the same shared one, or its own of the same amount), bidding, '
     + 'networks, Google\'s automation switches as they are, targeting, campaign negatives and lists, ad groups with bids '
     + 'and statuses, keywords with bids, ad-group negatives, the product group tree, responsive search ads and the '
-    + 'campaign\'s sitelinks, callouts and structured snippets. What it cannot copy is named in the preview. Undo removes '
-    + 'the copy.' + GOOGLE_CHANGE_RULES,
+    + 'campaign\'s sitelinks, callouts and structured snippets, tracking template and URL suffix. What it cannot copy is '
+    + 'named in the preview (keyword-level URLs, ad-group assets and conversion goals are never copied). Undo removes the '
+    + 'copy.' + GOOGLE_CHANGE_RULES,
   undo: buildUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildBuilder(copyArgs(args))),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildBuilder(copyArgs(args)), (draft, responses) => {
@@ -312,17 +315,18 @@ const checkGoogleAdsBuild: AgentTool = {
   description:
     'Read only: let Google check a build WITHOUT asking for it — the same arguments as build-google-campaigns (a campaign '
     + 'may be a copy, copyOf). Nothing is queued, nothing waits in Approvals, nothing changes. The answer is the build\'s '
-    + 'preview (accepted true: Google would accept every operation) or why Google or Nexus would refuse it (accepted '
-    + 'false). Use it to test a whole structure before asking for it. It costs the operations of Google\'s check from '
-    + 'the account\'s daily allowance.',
-  async handler(args, ctx) {
-    // A first request, never a re-check: the preview is built on Google's check.
-    const { approvalId: _a, approvedPreview: _p, ...asked } = ctx
-    const out = await googleChangePreview(args, asked as ToolContext, buildBuilder(args))
+    + 'preview (accepted true: Google would accept every operation), why Google or Nexus refuses it (checked true, '
+    + 'accepted false), or why it could not be checked (checked false: the allowance, a read). It costs the operations of '
+    + 'Google\'s check from the account\'s daily allowance; the same plan checked again within 30 minutes costs nothing, and '
+    + 'the build asked for right after reuses the check.',
+  async handler(args) {
+    // Always Google's check (never a re-check); its acceptance of the same plan is remembered for 30 minutes, so the
+    // build asked for right after it is not checked (and paid) a second time.
+    const out = await googleCheck(args, buildBuilder(args))
     const note = 'A check only: nothing was asked for, nothing waits in Approvals. To make it, call build-google-campaigns with the same arguments.'
-    return out.ok
-      ? { ok: true, data: { accepted: true, preview: out.preview, note } }
-      : { ok: true, data: { accepted: false, why: out.error, note } }
+    if (out.status === 'accepted') return { ok: true, data: { checked: true, accepted: true, preview: out.preview, note } }
+    if (out.status === 'refused') return { ok: true, data: { checked: true, accepted: false, why: out.why, note } }
+    return { ok: true, data: { checked: false, accepted: false, why: `Not checked: ${out.why}`, note } }
   },
 }
 

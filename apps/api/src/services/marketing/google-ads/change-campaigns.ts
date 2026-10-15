@@ -170,6 +170,13 @@ export interface CampaignCreateRequest {
   languages?: string[]
   schedule?: ScheduleSlot[]
   audiences?: string[]
+  /** Audiences the ads never show to (a copy keeps them). */
+  excludedAudiences?: string[]
+  /** true = the audiences TARGET (only they see the ads); default false = observation (a copy keeps the source's mode). */
+  audienceTargeting?: boolean
+  /** The campaign's tracking template and final URL suffix (a copy keeps them: sales tracking may rest on them). */
+  trackingTemplate?: string
+  finalUrlSuffix?: string
   euPoliticalAds?: boolean
 }
 
@@ -242,7 +249,9 @@ export function campaignCreateOperations(customer: string, r: CampaignCreateRequ
       { assetAutomationType: 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', assetAutomationStatus: s.finalUrlExpansion ? 'OPTED_IN' : 'OPTED_OUT' },
     ]
   }
-  if (r.audiences?.length) campaign.targetingSetting = { targetRestrictions: [{ targetingDimension: 'AUDIENCE', bidOnly: true }] }
+  if (r.audiences?.length) campaign.targetingSetting = { targetRestrictions: [{ targetingDimension: 'AUDIENCE', bidOnly: r.audienceTargeting !== true }] }
+  if (r.trackingTemplate) campaign.trackingUrlTemplate = r.trackingTemplate
+  if (r.finalUrlSuffix) campaign.finalUrlSuffix = r.finalUrlSuffix
   ops.push({ campaignOperation: { create: campaign } })
   for (const l of r.locations ?? []) {
     ops.push({ campaignCriterionOperation: { create: {
@@ -253,7 +262,42 @@ export function campaignCreateOperations(customer: string, r: CampaignCreateRequ
   for (const id of r.languages ?? []) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, language: { languageConstant: `languageConstants/${id}` } } } })
   for (const s of schedule) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, ...s } } })
   for (const id of r.audiences ?? []) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, userInterest: { userInterestCategory: `${customer}/userInterests/${id}` } } } })
+  for (const id of r.excludedAudiences ?? []) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, negative: true, userInterest: { userInterestCategory: `${customer}/userInterests/${id}` } } } })
   return { operations: ops }
+}
+
+/**
+ * What a person reads about a new campaign (its from → to lines) and what it does that they should know (warnings):
+ * shared by create-google-campaign and the build, so a copy shows every setting it carries over.
+ */
+export function campaignCreateNotes(r: CampaignCreateRequest, currency: string, budgetText: string): { lines: Array<[string, unknown, unknown]>; warnings: string[] } {
+  const optionInclude = r.locationOption ?? 'PRESENCE'
+  const schedule = r.schedule?.length ? scheduleCriteria(r.schedule) : []
+  const slots = 'refusal' in schedule ? 0 : schedule.length
+  const warnings: string[] = []
+  if (!(r.locations ?? []).some((l) => !l.exclude)) warnings.push(`"${r.name.trim()}" targets no location: when enabled it can show in every country.`)
+  if (r.searchPartners) warnings.push(`"${r.name.trim()}": search partners are on — ads can also show on Google's search partner sites.`)
+  if (r.type === 'SEARCH' && r.display) warnings.push(`"${r.name.trim()}": the Display Network is on — ads can also show on websites and apps.`)
+  if (r.type === 'SEARCH' && (r.search?.aiMax || r.search?.textCustomization || r.search?.finalUrlExpansion)) {
+    warnings.push(`"${r.name.trim()}": Google acts on its own — ${[r.search?.aiMax && 'AI Max', (r.search?.textCustomization || r.search?.finalUrlExpansion) && 'text customization', r.search?.finalUrlExpansion && 'final URL expansion'].filter(Boolean).join(', ')}.`)
+  }
+  if (optionInclude === 'PRESENCE_OR_INTEREST') warnings.push(`"${r.name.trim()}": location option "presence or interest" — people outside the locations who show interest in them can see the ads.`)
+  if (r.audienceTargeting) warnings.push(`"${r.name.trim()}": its audiences TARGET (only those people see the ads).`)
+  const lines: Array<[string, unknown, unknown]> = [
+    ['new campaign', '(none)', `"${r.name.trim()}" · ${r.type === 'SHOPPING' ? 'Standard Shopping' : 'Search'} · PAUSED`],
+    ['budget', '(none)', budgetText],
+    ['bidding', '(none)', biddingText(r.bidding, currency)],
+    ['networks', '(none)', ['Google Search', r.searchPartners && 'search partners', r.type === 'SEARCH' && r.display && 'Display'].filter(Boolean).join(', ')],
+  ]
+  if (r.type === 'SHOPPING') lines.push(['Shopping', '(none)', `Merchant Center ${r.shopping!.merchantId}${r.shopping!.feedLabel ? `, feed label ${r.shopping!.feedLabel}` : ''}, priority ${r.shopping!.priority ?? 'LOW'}${r.shopping!.localInventory ? ', local products' : ''}`])
+  else lines.push(['Google on its own', '(none)', `AI Max ${r.search?.aiMax ? 'on' : 'off'}, text customization ${r.search?.textCustomization || r.search?.finalUrlExpansion ? 'on' : 'off'}, final URL expansion ${r.search?.finalUrlExpansion ? 'on' : 'off'}`])
+  lines.push(['locations', '(none)', `${(r.locations ?? []).filter((l) => !l.exclude).length} targeted, ${(r.locations ?? []).filter((l) => l.exclude).length} excluded · ${optionInclude === 'PRESENCE' ? 'presence only' : 'presence or interest'}`])
+  if (r.type === 'SEARCH') lines.push(['languages', '(none)', (r.languages ?? []).length ? (r.languages ?? []).join(', ') : 'all'])
+  lines.push(['schedule', '(none)', slots ? `${slots} slot${slots === 1 ? '' : 's'}` : 'all day, every day'])
+  if (r.audiences?.length || r.excludedAudiences?.length) lines.push(['audiences', '(none)', `${(r.audiences ?? []).length} ${r.audienceTargeting ? 'targeting' : 'in observation'}, ${(r.excludedAudiences ?? []).length} excluded`])
+  lines.push(['dates', '(none)', `${r.startDate ?? 'starts when enabled'} → ${r.endDate ?? 'no end'}`])
+  if (r.trackingTemplate || r.finalUrlSuffix) lines.push(['tracking', '(none)', [r.trackingTemplate && 'tracking template', r.finalUrlSuffix && `final URL suffix ${r.finalUrlSuffix}`].filter(Boolean).join(', ')])
+  return { lines, warnings }
 }
 
 export function campaignCreateDraft(
@@ -288,29 +332,10 @@ export function campaignCreateDraft(
   const created = campaignCreateOperations(customer, r, budgetRes, `${customer}/campaigns/${CAMPAIGN_TEMP}`)
   if ('refusal' in created) return created
   ops.push(...created.operations)
-  const optionInclude = r.locationOption ?? 'PRESENCE'
 
-  const warnings: string[] = ['It is made PAUSED: nothing spends until a person enables it (set-google-status, marked SPENDS MONEY).']
-  if (!(r.locations ?? []).some((l) => !l.exclude)) warnings.push('No location is targeted: when enabled it can show in every country.')
-  if (r.searchPartners) warnings.push('Search partners are on: ads can also show on Google\'s search partner sites.')
-  if (r.type === 'SEARCH' && r.display) warnings.push('The Display Network is on: ads can also show on websites and apps.')
-  if (r.type === 'SEARCH' && (r.search?.aiMax || r.search?.textCustomization || r.search?.finalUrlExpansion)) {
-    warnings.push(`Google acts on its own in this campaign: ${[r.search?.aiMax && 'AI Max', (r.search?.textCustomization || r.search?.finalUrlExpansion) && 'text customization', r.search?.finalUrlExpansion && 'final URL expansion'].filter(Boolean).join(', ')}.`)
-  }
-  if (optionInclude === 'PRESENCE_OR_INTEREST') warnings.push('Location option "presence or interest": people outside the locations who show interest in them can see the ads.')
-  const lines: Array<[string, unknown, unknown]> = [
-    ['new campaign', '(none)', `"${name}" · ${r.type === 'SHOPPING' ? 'Standard Shopping' : 'Search'} · PAUSED`],
-    ['budget', '(none)', budgetText],
-    ['bidding', '(none)', biddingText(r.bidding, currency)],
-    ['networks', '(none)', ['Google Search', r.searchPartners && 'search partners', r.type === 'SEARCH' && r.display && 'Display'].filter(Boolean).join(', ')],
-  ]
-  if (r.type === 'SHOPPING') lines.push(['Shopping', '(none)', `Merchant Center ${r.shopping!.merchantId}${r.shopping!.feedLabel ? `, feed label ${r.shopping!.feedLabel}` : ''}, priority ${r.shopping!.priority ?? 'LOW'}${r.shopping!.localInventory ? ', local products' : ''}`])
-  else lines.push(['Google on its own', '(none)', `AI Max ${r.search?.aiMax ? 'on' : 'off'}, text customization ${r.search?.textCustomization || r.search?.finalUrlExpansion ? 'on' : 'off'}, final URL expansion ${r.search?.finalUrlExpansion ? 'on' : 'off'}`])
-  lines.push(['locations', '(none)', `${(r.locations ?? []).filter((l) => !l.exclude).length} targeted, ${(r.locations ?? []).filter((l) => l.exclude).length} excluded · ${optionInclude === 'PRESENCE' ? 'presence only' : 'presence or interest'}`])
-  if (r.type === 'SEARCH') lines.push(['languages', '(none)', (r.languages ?? []).length ? (r.languages ?? []).join(', ') : 'all'])
-  lines.push(['schedule', '(none)', schedule.length ? `${schedule.length} slot${schedule.length === 1 ? '' : 's'}` : 'all day, every day'])
-  if (r.audiences?.length) lines.push(['audiences', '(none)', `${r.audiences.length} in observation`])
-  lines.push(['dates', '(none)', `${r.startDate ?? 'starts when enabled'} → ${r.endDate ?? 'no end'}`])
+  const notes = campaignCreateNotes(r, currency, budgetText)
+  const warnings: string[] = ['It is made PAUSED: nothing spends until a person enables it (set-google-status, marked SPENDS MONEY).', ...notes.warnings]
+  const lines = notes.lines
   const { changes } = changeLines(lines)
   return {
     summary: `Google Ads: make the ${r.type === 'SHOPPING' ? 'Standard Shopping' : 'Search'} campaign "${name}", PAUSED, with its targeting.`,

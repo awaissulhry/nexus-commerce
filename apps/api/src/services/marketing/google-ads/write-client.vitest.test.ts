@@ -147,7 +147,7 @@ describe('mutateGoogleAds — one atomic request', () => {
     expect(h.calls).toHaveLength(1)
     // Nothing sent = nothing spent: only the check's 2 operations count.
     expect((await opsUsedLast24h(null))?.global).toBe(2)
-    await expect(mutateGoogleAds(TARGET, Array.from({ length: 1501 }, () => OPS[0]), { validateOnly: true })).rejects.toMatchObject({ outcome: 'not_sent' })
+    await expect(mutateGoogleAds(TARGET, Array.from({ length: 2001 }, () => OPS[0]), { validateOnly: true })).rejects.toMatchObject({ outcome: 'not_sent' })
   })
 })
 

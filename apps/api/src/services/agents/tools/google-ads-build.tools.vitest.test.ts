@@ -48,6 +48,7 @@ beforeEach(() => {
     },
     criteria: { locations: [{ criterionId: '1', type: 'LOCATION', negative: false, location: 'geoTargetConstants/2380' }], languages: [], schedule: [{ criterionId: '2', type: 'AD_SCHEDULE', negative: false, schedule: { day: 'MONDAY', from: '08:00', to: '24:00' } }], audiences: [], negativeKeywords: [{ criterionId: '3', type: 'KEYWORD', negative: true, keyword: { text: 'used', matchType: 'PHRASE' } }], other: [] },
     negativeLists: [{ listId: '31', name: 'List A' }],
+    otherSharedSets: [],
     adGroups: [{ adGroupId: '51', name: 'Group A', status: 'ENABLED', type: 'SHOPPING_PRODUCT_ADS', cpcBidCents: 25 }],
     keywords: [{ adGroupId: '51', criterionId: '9', text: 'kids', matchType: 'PHRASE', negative: true, status: 'ENABLED', cpcBidCents: null, effectiveCpcBidCents: null, approval: null }],
     productGroups: [], ads: [], assets: [], notRead: [],
@@ -88,17 +89,17 @@ describe('PR 6 tools', () => {
     expect(run.change?.after).toMatchObject({ campaigns: [{ name: 'Search Z', campaignId: '88' }], sharedBudgets: [{ name: 'Shared Z', budgetId: '77' }], accountId: 'g-1' })
     expect(run.change?.before).toEqual({ campaigns: [], accountId: 'g-1', customerId: '1234567890' })
     const undo = tool('build-google-campaigns').undo!.request(run.change!)
-    expect(undo).toMatchObject({ tool: 'remove-google-ads-items', args: { accountId: 'g-1', items: [{ kind: 'campaign', id: '88' }], confirmRemove: true } })
+    expect(undo).toMatchObject({ tool: 'remove-google-ads-items', args: { accountId: 'g-1', items: [{ kind: 'campaign', id: '88' }, { kind: 'budget', id: '77' }], confirmRemove: true } })
   })
 
   it('check-google-ads-build: the build\'s own preview on Google\'s check, nothing asked for; a refusal is an answer, not an error', async () => {
     h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
     const out = await tool('check-google-ads-build').handler({ campaigns: [{ copyOf: '21', name: 'Shop A copy' }] }, asker)
-    expect(out).toMatchObject({ ok: true, data: { accepted: true, preview: { googleCheck: { checked: true } } } })
+    expect(out).toMatchObject({ ok: true, data: { checked: true, accepted: true, preview: { googleCheck: { checked: true } } } })
     expect(h.mutate.mock.calls[0][2]).toEqual({ validateOnly: true })
     expect((out.data as { note: string }).note).toMatch(/nothing was asked for/)
     const taken = await tool('check-google-ads-build').handler({ campaigns: [{ copyOf: '21', name: 'Shop A' }] }, asker)
-    expect(taken).toMatchObject({ ok: true, data: { accepted: false, why: expect.stringContaining('already exists') } })
+    expect(taken).toMatchObject({ ok: true, data: { checked: true, accepted: false, why: expect.stringContaining('already exists') } })
     // Even inside a re-check context, the check asks Google (it is never a re-check itself).
     h.mutate.mockClear()
     await tool('check-google-ads-build').handler({ campaigns: [{ copyOf: '21', name: 'Shop A copy 2' }] }, { ...asker, approvalId: 'ap-x' })
