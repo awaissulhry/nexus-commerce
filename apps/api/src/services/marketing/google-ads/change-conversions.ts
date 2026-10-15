@@ -66,11 +66,19 @@ export interface BiddingContext {
   goals: Pick<LiveConversions, 'accountGoals' | 'campaigns'>
 }
 
-/** The ENABLED campaigns bidding with Smart Bidding (or, `valueOnly`, on value) whose biddable goals include `goal`. */
+/**
+ * The ENABLED campaigns bidding with Smart Bidding (or, `valueOnly`, on value) whose biddable goals include `goal`.
+ * A goal the account does not have yet is made by Google with the action that lands in it, for the account and its
+ * campaigns, BIDDABLE by default (checked 2026-10-15, …/docs/conversions/goals/customer-goals "New category and origin
+ * combinations": biddable true, false only for some GOOGLE_HOSTED combinations, which Nexus never makes): every enabled
+ * Smart Bidding campaign then bids for it at once, so all of them are named.
+ */
 export function chasersOf(ctx: BiddingContext, goal: string, valueOnly = false): SmartBiddingCampaign[] {
   const accountBiddable = new Set(ctx.goals.accountGoals.filter((g) => g.biddable).map((g) => g.goal))
+  const exists = ctx.goals.accountGoals.some((g) => g.goal === goal)
   return ctx.campaigns.filter((c) => {
     if (c.status !== 'ENABLED' || !c.bidding || !(valueOnly ? VALUE_BIDDING : CONVERSION_BIDDING).has(c.bidding)) return false
+    if (!exists) return true
     const own = ctx.goals.campaigns.find((g) => g.campaignId === c.campaignId)
     return own ? own.biddableGoals.includes(goal) : accountBiddable.has(goal)
   })
@@ -241,6 +249,7 @@ export function actionChangeDraft(
   const spends: string[] = []
   const warnings: string[] = []
   const skipped: string[] = []
+  const alreadySo: string[] = []
   const before: ActionRecord = { actions: [], created: [] }
   const after: ActionRecord = { actions: [], created: [] }
   const seenNames = new Set<string>()
@@ -272,7 +281,7 @@ export function actionChangeDraft(
     if (c.type === 'WEBPAGE') warnings.push(`"${c.name.trim()}" records nothing until its tag is on the shop: the answer after it runs gives the site tag and the event snippet to paste (Shopify: Settings › Customer events).`)
     if (c.type === 'UPLOAD_CLICKS') warnings.push(`"${c.name.trim()}" records only sales sent to it (upload-google-sales); Google takes them about 6 hours after the action is made.`)
     if (!live.bidding.goals.accountGoals.some((g) => g.category === category && g.origin === WEBSITE)) {
-      warnings.push(`The account has no ${category} website goal yet: Google adds it to the account and to every campaign when this action is made, biddable unless another goal of that category is not.`)
+      warnings.push(`The account has no ${category} website goal yet: Google adds it to the account and to every campaign when this action is made, biddable (Google's default): Smart Bidding campaigns bid for it once the action is primary.`)
     }
   }
 
@@ -296,7 +305,11 @@ export function actionChangeDraft(
       const to = ch[key]
       if (to === undefined) continue
       const from = liveSetting(a, key)
-      if (from === to || (key === 'name' && typeof to === 'string' && to.trim() === from)) { skipped.push(`${what}: ${LABEL[key]} is already ${show(key, to, actionCurrency)}.`); continue }
+      if (from === to || (key === 'name' && typeof to === 'string' && to.trim() === from)) {
+        skipped.push(`${what}: ${LABEL[key]} is already ${show(key, to, actionCurrency)}.`)
+        alreadySo.push(`${what}: ${LABEL[key]}`)
+        continue
+      }
       ;(wanted as Record<string, unknown>)[key] = to
       ;(was as Record<string, unknown>)[key] = from ?? null
       ;(now as Record<string, unknown>)[key] = to
@@ -331,7 +344,8 @@ export function actionChangeDraft(
     if (now.includeInConversions === false && a.includeInConversions) warnings.push(`${what} leaves "Conversions": automatic bidding stops counting it.`)
   }
 
-  if (!operations.length) return { refusal: `Nothing to change: ${skipped.join(' ') || 'every setting is already so.'}` }
+  // No values in the refusal: a default value is money, and `skipped` (which quotes it) is a restricted field of the tool.
+  if (!operations.length) return { refusal: `Nothing to change: every setting asked is already so${alreadySo.length ? ` (${alreadySo.join('; ')})` : ''}.` }
   const { changes: table, more } = changeLines(lines)
   const changed = after.actions.length
   const made = after.created.length

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { actionChangeDraft, actionRecordAfterRun, actionRemoveDraft, goalChangeDraft, type BiddingContext } from './change-conversions.js'
-import { valueRuleChangeDraft, valueRuleRecordAfterRun, type ValueRuleRecord } from './change-value-rules.js'
+import { upliftOf, valueDirection, valueRuleChangeDraft, valueRuleRecordAfterRun, type ValueRuleRecord } from './change-value-rules.js'
 import {
   adjustDraft, adjustRecordsAfterRun, clickIdOf, e164Phone, normalizedEmail, sha256Hex, uploadDraft, uploadWindowProblem,
   type AdjustRecord, type UploadLive, type UploadOrder,
@@ -92,6 +92,24 @@ describe('conversion actions', () => {
     expect(refusal(actionChangeDraft(CUSTOMER, 'EUR', { change: [{ conversionActionId: '71', clickWindowDays: 91 }] }, live))).toMatch(/1 to 90 days/)
   })
 
+  it('an action that lands in a goal the account does not have yet: Google makes it biddable, so Smart Bidding campaigns are named', () => {
+    // A new primary action in a new category: every enabled Smart Bidding campaign bids for it at once.
+    const made = draft(actionChangeDraft(CUSTOMER, 'EUR', { create: [{ name: 'Newsletter', type: 'WEBPAGE', category: 'SUBSCRIBE_PAID', primary: true }] }, { actions: [action()], bidding: bidding(), customerId: '1234567890' }))
+    expect(made.spendsMoney[0]).toMatch(/primary for the SUBSCRIBE_PAID goal: 1 enabled campaign bids with Smart Bidding for it \("Shop A"\)/)
+    // A primary action moved to a category with no goal yet: the same.
+    const moved = draft(actionChangeDraft(CUSTOMER, 'EUR', { change: [{ conversionActionId: '71', category: 'BOOK_APPOINTMENT' }] }, { actions: [action({ primary: true })], bidding: bidding(), customerId: '1234567890' }))
+    expect(moved.spendsMoney[0]).toMatch(/moves to the BOOK_APPOINTMENT goal.*"Shop A"/)
+    // A goal that exists and is not biddable: nothing chases.
+    const held = draft(actionChangeDraft(CUSTOMER, 'EUR', { change: [{ conversionActionId: '71', category: 'SIGNUP' }] }, { actions: [action({ primary: true })], bidding: bidding(), customerId: '1234567890' }))
+    expect(held.spendsMoney[0]).toMatch(/nothing spends more yet/)
+  })
+
+  it('nothing to change: the refusal names the settings, never a value (money is a restricted field)', () => {
+    const out = actionChangeDraft(CUSTOMER, 'EUR', { change: [{ conversionActionId: '71', defaultValueCents: 100 }] }, { actions: [action()], bidding: bidding(), customerId: '1234567890' })
+    expect(refusal(out)).toBe('Nothing to change: every setting asked is already so ("Purchase A" (71): default value).')
+    expect(refusal(out)).not.toMatch(/EUR|1\.00/)
+  })
+
   it('remove: one remove per action, said to be for good; a primary one warns', () => {
     const out = draft(actionRemoveDraft(CUSTOMER, ['71'], { actions: [action({ primary: true })], customerId: '1234567890' }))
     expect(out.operations).toEqual([{ conversionActionOperation: { remove: `${CUSTOMER}/conversionActions/71` } }])
@@ -164,6 +182,33 @@ describe('conversion value rules', () => {
     expect(refusal(valueRuleChangeDraft(CUSTOMER, 'EUR', { create: [{ multiply: 11, devices: ['MOBILE'] }] }, { rules: [], sets: [], campaigns }))).toMatch(/0.5 to 10/)
   })
 
+  it('values compared before and after: pausing a rule below 1 RAISES values (SPENDS MONEY); only a real fall "lowers"', () => {
+    const half = rule({ value: 0.5 })
+    const pause = draft(valueRuleChangeDraft(CUSTOMER, 'EUR', { change: [{ valueRuleId: '91', status: 'PAUSED' }] }, { rules: [half], sets: [set()], campaigns }))
+    expect(pause.spendsMoney[0]).toMatch(/raises conversion values \(× 0.5 → no change \(not applied\); value bidding\).*"Shop A"/)
+    expect(pause.warnings.join(' ')).not.toMatch(/lowers/)
+    const up = draft(valueRuleChangeDraft(CUSTOMER, 'EUR', { change: [{ valueRuleId: '91', multiply: 0.9 }] }, { rules: [half], sets: [set()], campaigns }))
+    expect(up.spendsMoney[0]).toMatch(/raises conversion values \(× 0.5 → × 0.9/)
+    expect(up.warnings.join(' ')).not.toMatch(/lowers/)
+    const enable = draft(valueRuleChangeDraft(CUSTOMER, 'EUR', { change: [{ valueRuleId: '91', status: 'ENABLED' }] }, { rules: [rule({ status: 'PAUSED', value: 0.5 })], sets: [set()], campaigns }))
+    expect(enable.spendsMoney).toEqual([])
+    expect(enable.warnings.join(' ')).toMatch(/lowers conversion values \(no change \(not applied\) → × 0.5\)/)
+    // A new enabled rule below 1 lowers values: a warning, nothing spends; from multiply to add is "may raise".
+    const lower = draft(valueRuleChangeDraft(CUSTOMER, 'EUR', { create: [{ multiply: 0.8, devices: ['MOBILE'], enable: true }] }, { rules: [], sets: [], campaigns }))
+    expect(lower.spendsMoney).toEqual([])
+    expect(lower.warnings.join(' ')).toMatch(/lowers conversion values/)
+    const swap = draft(valueRuleChangeDraft(CUSTOMER, 'EUR', { change: [{ valueRuleId: '91', add: 300 }] }, { rules: [rule()], sets: [set()], campaigns }))
+    expect(swap.spendsMoney[0]).toMatch(/may raise conversion values \(× 1.2 → add EUR 3.00/)
+  })
+
+  it('upliftOf and valueDirection: a paused rule is × 1 + 0; SET has no fixed direction', () => {
+    expect(upliftOf('PAUSED', 'MULTIPLY', 0.5)).toEqual({ mult: 1, add: 0 })
+    expect(valueDirection(upliftOf('ENABLED', 'MULTIPLY', 0.5), upliftOf('PAUSED', 'MULTIPLY', 0.5))).toBe('up')
+    expect(valueDirection(upliftOf('ENABLED', 'ADD', 5), upliftOf('ENABLED', 'ADD', 3))).toBe('down')
+    expect(valueDirection(upliftOf('ENABLED', 'SET', 5), upliftOf('PAUSED', 'SET', 5))).toBe('unknown')
+    expect(valueDirection(upliftOf('PAUSED', 'ADD', 5), upliftOf('PAUSED', 'MULTIPLY', 2))).toBe('same')
+  })
+
   it('reads rules and rule sets from Google\'s rows', () => {
     expect(valueRuleOf({ conversionValueRule: { id: '91', status: 'ENABLED', action: { operation: 'ADD', value: 5 }, geoLocationCondition: { geoTargetConstants: ['geoTargetConstants/2380'], geoMatchType: 'ANY' }, ownerCustomer: CUSTOMER } }))
       .toMatchObject({ valueRuleId: '91', operation: 'ADD', value: 5, dimensions: ['GEO_LOCATION'], locations: { include: ['2380'] }, ownerCustomerId: '1234567890' })
@@ -190,7 +235,9 @@ describe('the click id and the buyer\'s contact, as Google asks', () => {
     expect(e164Phone('+39 333 123 4567')).toBe('+393331234567')
     expect(e164Phone('0039 333 1234567')).toBe('+393331234567')
     expect(e164Phone('333 1234567')).toBeNull()
-    expect(sha256Hex('janedoe@gmail.com')).toMatch(/^[0-9a-f]{64}$/)
+    // Known values (computed apart with `shasum -a 256`): lowercase hex of the UTF-8 bytes, as Google asks.
+    expect(sha256Hex('janedoe@gmail.com')).toBe('d6117306485ed0e50afab3ac871e98f81699151f30281527d63ff5f233656c69')
+    expect(sha256Hex('+393331234567')).toBe('78f00e1ca317fb2af02c89b17b8b07382ff70336aba0997ad1f3ef3645b4e682')
   })
 })
 
@@ -268,12 +315,20 @@ describe('adjust-google-sales: retractions and restatements', () => {
     ])
     expect(out.changes['#5001']).toEqual({ from: 'EUR 49.90', to: 'EUR 29.90' })
     expect(out.warnings.join(' ')).toMatch(/Nexus did not send #5002/)
-    expect(out.spendsMoney).toHaveLength(1)
+    // 49.90 → 29.90 is lower than the value Nexus gave Google: nothing spends more.
+    expect(out.spendsMoney).toEqual([])
     // Google took the restatement, refused the retraction: only what it took is recorded.
     const run = adjustRecordsAfterRun({ before: out.before as AdjustRecord, after: out.after as AdjustRecord }, [{ ok: false, why: 'Conversion not found (CONVERSION_NOT_FOUND)' }, { ok: true }])
     expect(run.after).toEqual({ conversionActionId: '72', retracted: [], restated: [{ orderId: '5001', valueCents: 2990, currency: 'EUR' }] })
     expect(run.before).toEqual({ conversionActionId: '72', retracted: [], restated: [{ orderId: '5001', valueCents: 4990, currency: 'EUR' }] })
     expect(run.refused).toEqual([{ orderId: '5002', why: 'Conversion not found (CONVERSION_NOT_FOUND)' }])
+  })
+
+  it('a restatement above the value Nexus sent, or of a sale whose value Nexus does not know, is SPENDS MONEY', () => {
+    const higher = draft(adjustDraft(CUSTOMER, { conversionActionId: '72', restate: [{ orderId: '5001', valueCents: 5990 }] }, live()))
+    expect(higher.spendsMoney[0]).toMatch(/1 sale may get a higher value.*"Shop A"/)
+    const unknown = draft(adjustDraft(CUSTOMER, { conversionActionId: '72', restate: [{ orderId: '5002', valueCents: 100 }] }, live()))
+    expect(unknown.spendsMoney).toHaveLength(1)
   })
 
   it('never restates a retracted sale; skips one retracted before', () => {

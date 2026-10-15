@@ -269,8 +269,9 @@ function productAccountProblem(v: unknown, what: string): string | null {
  * An ingest body as the gateway judges it, or why it is refused: ONE destination (a Google Ads account and a conversion
  * action of it), 1–2000 events, each a sale (transactionId, eventTimestamp, eventSource WEB, value, currency) with exactly
  * one click id and/or user data that is HASHED only (emailAddress / phoneNumber as 64 hex characters: a plain email or
- * phone is never sent), consent ad user data only; encoding HEX; validateOnly a boolean (true = Google's check: it takes
- * nothing). Nothing else. The parsed body is what is sent; `customer` is the account it goes to.
+ * phone is never sent) and only with the buyer's consent to ad user data GRANTED on the event; consent ad user data and
+ * ad personalization only; encoding HEX; validateOnly a boolean (true = Google's check: it takes nothing). Nothing else.
+ * The parsed body is what is sent; `customer` is the account it goes to.
  */
 export function googleDataManagerBodyOf(body: unknown): { check: boolean; body: string; customer: string } | { refusal: string } {
   if (typeof body !== 'string') return { refusal: 'the body is not JSON text' }
@@ -324,9 +325,14 @@ export function googleDataManagerBodyOf(body: unknown): { check: boolean; body: 
     if (event.adIdentifiers === undefined && event.userData === undefined) return { refusal: 'an event carries neither a click id nor user data' }
     if (event.consent !== undefined) {
       const consent = event.consent
-      if (!isObject(consent) || onlyKeys(consent, ['adUserData']).length || !['CONSENT_GRANTED', 'CONSENT_DENIED'].includes(consent.adUserData as string)) {
-        return { refusal: 'an event\'s consent is not ad user data granted or denied' }
+      const status = (v: unknown) => v === undefined || v === 'CONSENT_GRANTED' || v === 'CONSENT_DENIED'
+      if (!isObject(consent) || onlyKeys(consent, ['adUserData', 'adPersonalization']).length || consent.adUserData === undefined || !status(consent.adUserData) || !status(consent.adPersonalization)) {
+        return { refusal: 'an event\'s consent is not ad user data (and ad personalization) granted or denied' }
       }
+    }
+    // Defence in depth: a buyer's (hashed) contact goes only with their consent to ad user data, said on the event.
+    if (event.userData !== undefined && (event.consent as Record<string, unknown> | undefined)?.adUserData !== 'CONSENT_GRANTED') {
+      return { refusal: 'an event carries user data without the buyer\'s consent to ad user data (CONSENT_GRANTED)' }
     }
   }
   return { check: parsed.validateOnly === true, body: JSON.stringify(parsed), customer: (destination.operatingAccount as Record<string, string>).accountId }
@@ -346,9 +352,12 @@ export function googleAdsAdjustmentCall(method: string, url: string): { customer
 }
 
 /**
- * An adjustment body as the gateway judges it, or why it is refused: 1–2000 adjustments of THIS customer's conversion
- * actions, each a RETRACTION or a RESTATEMENT (with its new value) named by order id, with its time; partialFailure true
- * (Google: always), validateOnly a boolean (true = Google's check). No enhancement, no user data, no gclid pair.
+ * An adjustment body as the gateway judges it, or why it is refused: 1–2000 adjustments, each a RETRACTION or a
+ * RESTATEMENT (with its new value) named by order id, with its time; partialFailure true (Google: always), validateOnly a
+ * boolean (true = Google's check). No enhancement, no user data, no gclid pair. Each action must be written under THIS
+ * customer, but that is tidiness, not the guard: Google ignores the customer id in `conversion_action` and uses only the
+ * action id (v25 ConversionAdjustment.conversion_action). The guard is the customer in the URL, which must be the account
+ * this business chose through this connection (gateway.ts, googleAdsCustomerLinked).
  */
 export function googleAdjustmentBodyOf(call: { customer: string }, body: unknown): { check: boolean; body: string } | { refusal: string } {
   if (typeof body !== 'string') return { refusal: 'the body is not JSON text' }

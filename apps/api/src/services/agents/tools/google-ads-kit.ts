@@ -113,7 +113,14 @@ async function draftFor(args: Record<string, unknown>, build: GoogleDraftBuilder
   }
 }
 
-function previewOf(account: GoogleChangeAccount, draft: GoogleChangeDraft, check: GooglePreview['googleCheck']): GooglePreview {
+/**
+ * The exact plan of a change: its operations, and (G8a) the destination a call names outside them (an upload's
+ * conversion action): two uploads of the same sales to different actions are different plans, checked and approved apart.
+ */
+const planOf = (draft: GoogleChangeDraft, destination?: string): string =>
+  factHash(destination ? { destination, operations: draft.operations } : draft.operations)
+
+function previewOf(account: GoogleChangeAccount, draft: GoogleChangeDraft, check: GooglePreview['googleCheck'], destination?: string): GooglePreview {
   const { reach, warning } = reachOf(account)
   const spends = draft.spendsMoney
   const warnings = [
@@ -134,7 +141,7 @@ function previewOf(account: GoogleChangeAccount, draft: GoogleChangeDraft, check
     googleCheck: check,
     operations: draft.operations.length,
     basis: factHash(draft.stands),
-    plan: factHash(draft.operations),
+    plan: planOf(draft, destination),
   }
 }
 
@@ -169,14 +176,14 @@ export type GoogleChecker = (target: GoogleAdsTarget, operations: GoogleMutateOp
 const mutateCheck: GoogleChecker = (target, operations) => mutateGoogleAds(target, operations, { validateOnly: true })
 
 /** Build from the live state and let Google check it (or reuse its acceptance of the same plan in the last 30 minutes). */
-export async function googleCheck(args: Record<string, unknown>, build: GoogleDraftBuilder, check: GoogleChecker = mutateCheck): Promise<GoogleCheckOutcome> {
+export async function googleCheck(args: Record<string, unknown>, build: GoogleDraftBuilder, check: GoogleChecker = mutateCheck, destination?: string): Promise<GoogleCheckOutcome> {
   const built = await draftFor(args, build)
   if ('refusal' in built) return { status: 'refused', why: built.refusal }
   const { account, draft } = built
-  const plan = factHash(draft.operations)
+  const plan = planOf(draft, destination)
   const at = await rememberedCheck(account.customerId, plan)
   if (at) {
-    return { status: 'accepted', preview: previewOf(account, draft, { checked: true, accepted: true, sentence: `Google checked this exact change at ${at.slice(11, 16)} UTC (validate_only) and would accept it: ${draft.operations.length} operation${draft.operations.length === 1 ? '' : 's'}.` }) }
+    return { status: 'accepted', preview: previewOf(account, draft, { checked: true, accepted: true, sentence: `Google checked this exact change at ${at.slice(11, 16)} UTC (validate_only) and would accept it: ${draft.operations.length} operation${draft.operations.length === 1 ? '' : 's'}.` }, destination) }
   }
   try {
     await check(account.target, draft.operations)
@@ -188,7 +195,7 @@ export async function googleCheck(args: Record<string, unknown>, build: GoogleDr
   await rememberCheck(account.customerId, plan)
   return {
     status: 'accepted',
-    preview: previewOf(account, draft, { checked: true, accepted: true, sentence: `Google checked this change (validate_only) and would accept it: ${draft.operations.length} operation${draft.operations.length === 1 ? '' : 's'}.` }),
+    preview: previewOf(account, draft, { checked: true, accepted: true, sentence: `Google checked this change (validate_only) and would accept it: ${draft.operations.length} operation${draft.operations.length === 1 ? '' : 's'}.` }, destination),
   }
 }
 
@@ -210,6 +217,8 @@ export interface GoogleSender {
    * `notChecked` is then unused.
    */
   check?: GoogleChecker
+  /** What the call sends the operations to when the request names it outside them (an upload's conversion action). */
+  destination?: string
 }
 
 /** The dry run of a Google Ads change tool: build from the live state, let Google check it (not on a re-check), preview. */
@@ -222,9 +231,9 @@ export async function googleChangePreview(args: Record<string, unknown>, ctx: To
   if (isRecheck(ctx)) {
     const built = await draftFor(args, build)
     if ('refusal' in built) return { ok: false, error: built.refusal }
-    return { ok: true, preview: previewOf(built.account, built.draft, { checked: false, sentence: 'Re-check before running: the live facts were read again; Google was not asked to check it twice.' }) }
+    return { ok: true, preview: previewOf(built.account, built.draft, { checked: false, sentence: 'Re-check before running: the live facts were read again; Google was not asked to check it twice.' }, sender?.destination) }
   }
-  const out = await googleCheck(args, build, sender?.check)
+  const out = await googleCheck(args, build, sender?.check, sender?.destination)
   if (out.status === 'accepted') return { ok: true, preview: out.preview }
   return { ok: false, error: out.status === 'refused' && !out.why.startsWith('Google Ads refused') ? out.why : `Not queued: ${out.why}` }
 }
@@ -259,7 +268,7 @@ export async function runGoogleChange(
   const built = await draftFor(args, build)
   if ('refusal' in built) return notRun(`Not run: ${built.refusal}`)
   const { account, draft } = built
-  const now = previewOf(account, draft, { checked: false, sentence: '' })
+  const now = previewOf(account, draft, { checked: false, sentence: '' }, sender?.destination)
   if (canonical(now.reach) !== canonical(approved.reach)) {
     return notRun(`Not run: it was approved for ${approved.reach.mode === 'live' ? 'Google' : 'nothing (writes off)'} on account ${approved.reach.customerId}, and it would now go ${now.reach.mode === 'live' ? 'to Google' : 'nowhere (writes off)'} on ${now.reach.customerId}.`)
   }

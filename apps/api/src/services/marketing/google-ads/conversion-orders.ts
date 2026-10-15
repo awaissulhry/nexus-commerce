@@ -9,6 +9,13 @@
  *   - Sent before: AgentChange rows of upload-google-sales (each `after.sent`: the sales Google took, by Shopify order id)
  *     and adjust-google-sales (`after.retracted`, `after.restated`) on the SAME Google Ads account (`after.customerId`).
  *     An upload is never undone in Google by an undo of the record (a retraction is), so every upload row counts.
+ *   - In flight (uploadInFlight): those records are written AFTER a run, so two uploads approved at once could both read
+ *     "not sent yet". A DB lock cannot cover it: the record is written by the approval gate after the tool returns, and a
+ *     transaction held open across Google's call (up to 2 minutes; pgbouncer transaction pooling) is no option. So the
+ *     run uses the approval's own claim: the gate commits `executing` (a plan step: its step row `executing`) BEFORE the
+ *     tool runs, and an upload runs only when no OTHER upload of this business is executing, or executed without its
+ *     record yet. Each run's claim is committed before its own check, so two at once can never both pass (both may
+ *     refuse; a person approves again). Business-wide, stricter than per account (a business has one Ads account).
  */
 import prisma from '../../../db.js'
 import type { UploadOrder } from './conversion-upload.js'
@@ -66,6 +73,32 @@ export async function shopifyOrdersById(shopifyOrderIds: string[]): Promise<Map<
   if (!ids.length) return new Map()
   const rows = await prisma.order.findMany({ where: { channel: 'SHOPIFY', deletedAt: null, channelOrderId: { in: ids } }, select: ORDER_SELECT }) as OrderRow[]
   return new Map(rows.map((o) => [o.channelOrderId, uploadOrderOf(o)]))
+}
+
+/** How long a run may hold its claim: Google's answer comes within 2 minutes; a claim older than this belongs to a run that stopped. */
+export const UPLOAD_CLAIM_MS = 30 * 60_000
+
+/**
+ * Another upload of sales in flight in this business, in words, or null: an upload approval (not `ownApprovalId`)
+ * executing now, or executed without its change record yet; or an upload step of another change plan executing now.
+ */
+export async function uploadInFlight(ownApprovalId: string, now: Date = new Date()): Promise<string | null> {
+  const since = new Date(now.getTime() - UPLOAD_CLAIM_MS)
+  const approval = await prisma.agentApproval.findFirst({
+    where: {
+      toolName: UPLOAD_TOOL,
+      id: { not: ownApprovalId },
+      decidedAt: { gte: since },
+      OR: [{ status: 'executing' }, { status: 'executed', changes: { none: {} } }],
+    },
+    select: { id: true, status: true },
+  })
+  if (approval) return approval.status === 'executing' ? `approval ${approval.id} is sending sales now` : `approval ${approval.id} has just sent sales and its record is being written`
+  const step = await prisma.agentPlanStep.findFirst({
+    where: { toolName: UPLOAD_TOOL, status: 'executing', approvalId: { not: ownApprovalId }, startedAt: { gte: since } },
+    select: { approvalId: true, position: true },
+  })
+  return step ? `step ${step.position} of change plan ${step.approvalId} is sending sales now` : null
 }
 
 /** What Nexus sent to one Google Ads account before, from its own change records. */

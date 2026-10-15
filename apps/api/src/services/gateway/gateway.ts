@@ -256,6 +256,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       const judged: { check: boolean; body: string; customer?: string } | { refusal: string } = adjustment ? googleAdjustmentBodyOf(adjustment, req.body) : googleDataManagerBodyOf(req.body)
       if ('refusal' in judged) return readOnly(`: ${judged.refusal}`)
       if (req.kind !== (judged.check ? 'read' : 'write')) return readOnly(': the kind declared is not the body\'s')
+      // The account the call acts on: an adjustment's is the customer in its URL (Google uses only the action id inside the
+      // body, never its customer part); a sale's is the destination's operating account.
       const account = adjustment ? adjustment.customer : judged.customer ?? ''
       if (!req.connectionId || !(await googleAdsCustomerLinked(req.connectionId, account))) return notChosen(account)
       googleBody = judged.body

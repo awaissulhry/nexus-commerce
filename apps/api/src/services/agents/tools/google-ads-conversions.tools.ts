@@ -11,7 +11,8 @@
  *   set-google-conversion-goals       which goals bid (the account's, a campaign's own), and a campaign back to the
  *                                     account's goals; undo puts them back
  *   set-google-value-rules            conversion value rules (add or multiply a value by device, location, audience) and
- *                                     their rule sets; new rules are made paused; undo puts the old actions back
+ *                                     their rule sets; new rules are made paused; undo puts the old actions back and
+ *                                     pauses the rules it made (they stay, as does a rule set it made)
  *   upload-google-sales               send the business's Shopify sales that carry a Google click id to an "import from
  *                                     clicks" action (Data Manager API); undo retracts them
  *   adjust-google-sales               retract sales sent before or restate their value (ConversionAdjustmentUploadService,
@@ -44,13 +45,14 @@ import {
   type AdjustRecord, type AdjustRequest, type UploadRecord, type UploadRequest,
 } from '../../marketing/google-ads/conversion-upload.js'
 import { ingestSales, uploadAdjustments } from '../../marketing/google-ads/conversion-upload-client.js'
-import { MAX_ORDERS_READ, nexusSales, shopifyOrdersById, shopifyOrdersForUpload } from '../../marketing/google-ads/conversion-orders.js'
+import { MAX_ORDERS_READ, nexusSales, shopifyOrdersById, shopifyOrdersForUpload, uploadInFlight } from '../../marketing/google-ads/conversion-orders.js'
 import { localFailure } from '../../marketing/google-ads/errors.js'
+import { notRun } from './ads-change-kit.js'
 import { customerResource, GoogleAdsWriteError } from '../../marketing/google-ads/write-client.js'
 
 const REVENUE = FIELDS.financialsRevenueView
-/** Money keys of set-google-conversion-actions: its table and records quote default values (what a conversion is worth). */
-const ACTION_MONEY = { changes: REVENUE, defaultValueCents: REVENUE } as const
+/** Money keys of set-google-conversion-actions: its table, the settings already so and the records quote default values (what a conversion is worth). */
+const ACTION_MONEY = { changes: REVENUE, skipped: REVENUE, defaultValueCents: REVENUE } as const
 
 const common = {
   category: 'advertising',
@@ -381,7 +383,7 @@ const setGoogleValueRules: AgentTool = {
   ...common,
   name: 'set-google-value-rules',
   title: 'Change Google Ads conversion value rules',
-  reversibility: 'full',
+  reversibility: 'partial',
   requires: [F.adsCampaignsManage, F.adsBidsEdit, REVENUE],
   input: z.object({
     accountId: googleAccountArg,
@@ -411,10 +413,11 @@ const setGoogleValueRules: AgentTool = {
     'Conversion value rules of the business\'s chosen Google Ads account: make rules that add an amount to, or multiply, '
     + 'the value of conversions by device, location or audience (in the account\'s rule set, or a campaign\'s), change a '
     + 'rule\'s action, enable or pause rules. New rules are made PAUSED unless the request says enable. A rule that '
-    + 'raises values (add, or multiply above 1) and is enabled or raised makes value bidding (target ROAS, maximize '
-    + 'conversion value) bid for higher values: SPENDS MONEY, naming those campaigns. Google\'s "set a value" rules and '
-    + 'travel conditions are not offered (allowlisted accounts only). Undo puts the old actions and statuses back and '
-    + 'pauses rules it made enabled.' + GOOGLE_CHANGE_RULES,
+    + 'raises values and is enabled or raised — and pausing a rule that multiplied below 1 — makes value bidding (target '
+    + 'ROAS, maximize conversion value) bid for higher values: SPENDS MONEY, naming those campaigns; only a real fall is '
+    + 'said to lower values. Google\'s "set a value" rules and travel conditions are not offered (allowlisted accounts '
+    + 'only). Undo puts the old actions and statuses back and pauses the rules it made enabled; what it made stays: those '
+    + 'rules (paused) and any rule set it made, with them in it.' + GOOGLE_CHANGE_RULES,
   undo: valueRulesUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildValueRules(args)),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildValueRules(args), (draft, responses) => {
@@ -469,6 +472,7 @@ function uploadSender(args: Record<string, unknown>, answer: { requestId: string
   const id = String(args.conversionActionId ?? '')
   return {
     notChecked: '',
+    destination: `conversionActions/${id}`,
     check: (target, events) => ingestSales(target, id, events, { validateOnly: true }),
     send: async (target, events) => {
       const out = await ingestSales(target, id, events, { validateOnly: false })
@@ -534,7 +538,10 @@ const uploadGoogleSales: AgentTool = {
     + GOOGLE_CHANGE_RULES,
   undo: uploadUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildUpload(args), uploadSender(args)),
-  execute: (args, ctx) => {
+  execute: async (args, ctx) => {
+    // Never two uploads at once: the sales already sent are read again below, after this run's claim (uploadInFlight).
+    const busy = ctx.approvalId ? await uploadInFlight(ctx.approvalId) : null
+    if (busy) return notRun(`Not run: another upload of sales to Google is running in this business (${busy}). Nothing was sent. Approve this again once it has finished: Nexus then leaves out the sales it sent.`)
     const answer = { requestId: null as string | null, warnings: [] as string[] }
     return runGoogleChange(args, ctx, buildUpload(args), (draft) => {
       const after: UploadRecord = { ...(draft.after as UploadRecord), requestId: answer.requestId }

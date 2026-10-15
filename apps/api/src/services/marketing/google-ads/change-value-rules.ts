@@ -18,9 +18,11 @@
  *     at creation (empty = every category; Nexus makes empty-category sets).
  * Temporary ids (negative) let a new set name new rules in the same request.
  *
- * Money: a rule that raises conversion values (ADD, or MULTIPLY above 1) makes value bidding (target ROAS, maximize
- * conversion value) bid for higher values: making one, enabling one or raising one is SPENDS MONEY, naming the enabled
- * campaigns that bid on value. New rules are made PAUSED unless the request says enable.
+ * Money: what a matching conversion is worth is compared before and after (upliftOf, valueDirection: a paused or absent
+ * rule is × 1 + 0). Whenever values go up — a new or enabled rule that adds or multiplies above 1, a higher action, and
+ * also PAUSING a rule that multiplied below 1 — value bidding (target ROAS, maximize conversion value) bids for higher
+ * values: SPENDS MONEY, naming the enabled campaigns that bid on value. Only a real fall is a "lowers" warning. New rules
+ * are made PAUSED unless the request says enable.
  */
 import { changeLines, money, plural, type GoogleChangeDraft } from './change-draft.js'
 import { VALUE_BIDDING, type LiveValueRule, type LiveValueRuleSet, type SmartBiddingCampaign, type ValueRuleDimension } from './live-conversions.js'
@@ -66,11 +68,37 @@ function actionProblem(a: RuleAction, what: string, required: boolean): string |
 }
 
 const actionJson = (a: RuleAction) => (a.add !== undefined ? { operation: 'ADD', value: a.add / 100 } : { operation: 'MULTIPLY', value: a.multiply })
-/** Whether an action makes values higher (ADD always; MULTIPLY above 1). */
-const raises = (operation: string | null | undefined, value: number | null | undefined) =>
-  operation === 'ADD' ? Number(value) > 0 : operation === 'MULTIPLY' ? Number(value) > 1 : operation === 'SET'
+
+/**
+ * What a rule does to a matching conversion's value: × mult, then + add. A rule that does not apply (paused, or no rule
+ * at all) is × 1 + 0; a SET rule has no fixed direction (null).
+ */
+export type Uplift = { mult: number; add: number } | null
+export function upliftOf(status: string | null | undefined, operation: string | null | undefined, value: number | null | undefined): Uplift {
+  if (status !== 'ENABLED') return { mult: 1, add: 0 }
+  if (operation === 'ADD') return { mult: 1, add: Number(value) || 0 }
+  if (operation === 'MULTIPLY') return { mult: Number(value), add: 0 }
+  return operation === 'SET' ? null : { mult: 1, add: 0 }
+}
+
+/**
+ * Whether matching conversions are worth more or less after a change than before: `up` when no part falls and one rises,
+ * `down` the other way, `same`, or `unknown` (a SET rule, or one part up and the other down: values may go up).
+ */
+export function valueDirection(before: Uplift, after: Uplift): 'up' | 'down' | 'same' | 'unknown' {
+  if (!before || !after) return before === after ? 'same' : 'unknown'
+  const dm = after.mult - before.mult
+  const da = after.add - before.add
+  if (dm === 0 && da === 0) return 'same'
+  if (dm >= 0 && da >= 0) return 'up'
+  if (dm <= 0 && da <= 0) return 'down'
+  return 'unknown'
+}
 const showAction = (operation: string | null | undefined, value: number | null | undefined, currency: string) =>
   operation === 'ADD' ? `add ${money(Math.round(Number(value) * 100), currency)}` : operation === 'MULTIPLY' ? `× ${value}` : operation === 'SET' ? `set ${money(Math.round(Number(value) * 100), currency)}` : '(none)'
+/** A rule's effect in words: its action when it applies, else that it changes nothing. */
+const showEffect = (status: string | null | undefined, operation: string | null | undefined, value: number | null | undefined, currency: string) =>
+  status === 'ENABLED' ? showAction(operation, value, currency) : 'no change (not applied)'
 
 export function valueRuleChangeDraft(
   customer: string,
@@ -140,9 +168,11 @@ export function valueRuleChangeDraft(
     after.created.push({ valueRuleId: id, status })
     const where = campaignId ? `campaign "${live.campaigns.find((x) => x.campaignId === campaignId)?.name}"` : 'the account'
     lines.push([`new value rule ${i + 1} (${where})`, null, `${showAction(actionJson(c).operation, actionJson(c).value as number, currency)} when ${dims.map((d) => d.toLowerCase().replace('_', ' ')).join(' + ')} matches, ${status}`])
-    if (status === 'ENABLED' && raises(actionJson(c).operation, actionJson(c).value as number)) {
+    const effect = valueDirection({ mult: 1, add: 0 }, upliftOf(status, actionJson(c).operation, actionJson(c).value as number))
+    if (effect === 'up' || effect === 'unknown') {
       spends.push(chaseSentence(`New value rule ${i + 1} raises conversion values in ${where} (value bidding)`, valueBidders(campaignId)))
     }
+    if (effect === 'down') warnings.push(`New value rule ${i + 1} lowers conversion values in ${where}: value bidding may bid lower.`)
     const key = campaignId ?? 'account'
     const group = byTarget.get(key) ?? { campaignId, temps: [], dims: [] }
     group.temps.push(ruleRes(temp))
@@ -234,18 +264,19 @@ export function valueRuleChangeDraft(
     after.rules.push(now)
     const set = live.sets.find((s) => s.ruleIds.includes(r.valueRuleId))
     if (!set) warnings.push(`${what} is in no rule set, so it applies nowhere (yet).`)
+    // Money: what a matching conversion is worth before and after (a paused rule is × 1); a pause of a rule below 1
+    // raises values as surely as a higher factor does.
     const statusAfter = now.status ?? r.status
     const opAfter = now.operation ?? r.operation
     const valueAfter = now.operation === 'ADD' ? (now.addCents ?? 0) / 100 : now.operation === 'MULTIPLY' ? now.multiply : r.value
-    const enabledNow = statusAfter === 'ENABLED'
-    const turnedOn = now.status === 'ENABLED' && r.status !== 'ENABLED'
-    const raisedValue = was.operation !== undefined && raises(opAfter, valueAfter) && (opAfter !== r.operation || Number(valueAfter) > Number(r.value))
+    const direction = valueDirection(upliftOf(r.status, r.operation, r.value), upliftOf(statusAfter, opAfter, valueAfter))
+    const fromTo = `${showEffect(r.status, r.operation, r.value, currency)} → ${showEffect(statusAfter, opAfter, valueAfter, currency)}`
     const campaignId = set?.attachment === 'CAMPAIGN' ? set.campaignId : null
-    if (set && enabledNow && raises(opAfter, valueAfter) && (turnedOn || raisedValue)) {
-      spends.push(chaseSentence(`${what} ${turnedOn ? 'applies again and ' : ''}raises conversion values (${showAction(opAfter, valueAfter, currency)}; value bidding)`, valueBidders(campaignId)))
+    if (set && (direction === 'up' || direction === 'unknown')) {
+      spends.push(chaseSentence(`${what} ${direction === 'up' ? 'raises' : 'may raise'} conversion values (${fromTo}; value bidding)`, valueBidders(campaignId)))
     }
-    if (was.operation !== undefined && !raisedValue && enabledNow) warnings.push(`${what} lowers conversion values: value bidding may bid lower.`)
-    if (now.status === 'PAUSED') warnings.push(`${what} is paused: it changes no value from now.`)
+    if (set && direction === 'down') warnings.push(`${what} lowers conversion values (${fromTo}): value bidding may bid lower.`)
+    if (now.status === 'PAUSED') warnings.push(`${what} is paused: from now it no longer changes conversion values (they count as the sale reports them).`)
   }
 
   if (!operations.length) return { refusal: `Nothing to change: ${skipped.join(' ') || 'every rule is already so.'}` }

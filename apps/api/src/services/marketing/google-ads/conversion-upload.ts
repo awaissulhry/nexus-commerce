@@ -414,10 +414,14 @@ export function adjustDraft(customer: string, request: AdjustRequest, live: Adju
   if (notByNexus.length) warnings.push(`Nexus did not send ${notByNexus.slice(0, 10).join(', ')} to ${label}: Google adjusts them only if it recorded them with this order id (transaction id), e.g. from the website tag.`)
   if (after.retracted.length) warnings.push(`A retracted sale counts 0 for good: Google cannot restate it, and its order id cannot be sent again.${action.primary ? ' Automatic bidding loses these conversions.' : ''}`)
   warnings.push('Google applies adjustments one by one: the answer says which it took and which it refused (and why).')
-  // A higher value restated on an action bidding uses can make value bidding bid higher: Nexus does not know the value
-  // Google recorded, so every restatement on such an action is the person's decision.
-  const spends = after.restated.length && live.countsForBidding
-    ? [chaseSentence(`${plural(after.restated.length, 'sale')} get${after.restated.length === 1 ? 's' : ''} a new value on ${label} (a higher one makes value bidding chase it more)`, live.chasers)]
+  // A higher value restated on an action bidding uses can make value bidding bid higher. A restatement BELOW the value
+  // Nexus gave Google (same currency) cannot; one whose earlier value Nexus does not know may be higher: the person's call.
+  const higher = after.restated.filter((r) => {
+    const was = before.restated.find((b) => b.orderId === r.orderId)
+    return !was || was.valueCents === null || was.currency !== r.currency || (r.valueCents ?? 0) > was.valueCents
+  })
+  const spends = higher.length && live.countsForBidding
+    ? [chaseSentence(`${plural(higher.length, 'sale')} may get a higher value on ${label} (value bidding chases it more)`, live.chasers)]
     : []
   const { changes, more } = changeLines(lines)
   return {

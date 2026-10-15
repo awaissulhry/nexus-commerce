@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   mutate: vi.fn(),
   ingest: vi.fn(),
   adjust: vi.fn(),
+  inFlight: vi.fn(async (): Promise<string | null> => null),
   enqueue: vi.fn(async () => ({ queued: true, reason: null })),
   live: {
     actions: [] as unknown[], accountGoals: [] as unknown[], campaignGoals: [] as unknown[], campaigns: [] as unknown[],
@@ -48,6 +49,7 @@ vi.mock('../../marketing/google-ads/conversion-orders.js', async (importActual) 
   shopifyOrdersForUpload: vi.fn(async () => ({ orders: structuredClone(h.live.orders), tooMany: false })),
   shopifyOrdersById: vi.fn(async (ids: string[]) => new Map((structuredClone(h.live.orders) as Array<{ shopifyOrderId: string }>).filter((o) => ids.includes(o.shopifyOrderId)).map((o) => [o.shopifyOrderId, o]))),
   nexusSales: vi.fn(async () => ({ sent: h.live.sent, retracted: new Set<string>(), value: new Map([['72:5001', { valueCents: 4990, currency: 'EUR' }]]) })),
+  uploadInFlight: h.inFlight,
 }))
 vi.mock('../../marketing/google-ads/enqueue.js', () => ({ enqueueGoogleAdsSync: h.enqueue }))
 
@@ -78,6 +80,7 @@ const ORDER = {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-15T12:00:00Z') })
   for (const f of [h.mutate, h.ingest, h.adjust]) f.mockReset()
+  h.inFlight.mockReset().mockResolvedValue(null)
   h.enqueue.mockClear()
   h.live.actions = [ACTION, UPLOAD_ACTION]
   h.live.accountGoals = [{ goal: 'PURCHASE/WEBSITE', category: 'PURCHASE', origin: 'WEBSITE', biddable: true }]
@@ -103,6 +106,9 @@ describe('every conversion tool', () => {
     expect(tool('remove-google-conversion-actions').reversibility).toBe('none')
     expect(tool('remove-google-conversion-actions').undo).toBeUndefined()
     expect(tool('remove-google-conversion-actions').input.safeParse({ conversionActionIds: ['71'] }).success).toBe(false)
+    // Default values are money: the table, the settings already so and the records are kept from people without revenue.
+    expect(tool('set-google-conversion-actions').restrictedFields).toEqual({ changes: 'financials.revenue.view', skipped: 'financials.revenue.view', defaultValueCents: 'financials.revenue.view' })
+    expect(tool('set-google-value-rules').reversibility).toBe('partial')
   })
 })
 
@@ -203,6 +209,27 @@ describe('upload-google-sales', () => {
     expect(parses(undo)).toBe(true)
   })
 
+  it('another upload in flight in this business: the run is refused before anything is read or sent', async () => {
+    h.ingest.mockResolvedValue({ requestId: null, warnings: [] })
+    const preview = (await tool('upload-google-sales').handler(ask, asker)).preview
+    h.ingest.mockClear()
+    h.inFlight.mockResolvedValue('approval ap-2 is sending sales now')
+    const run = await tool('upload-google-sales').execute!(ask, approved(preview))
+    expect(run.ok).toBe(false)
+    expect(run.error).toMatch(/another upload of sales to Google is running in this business \(approval ap-2 is sending sales now\)\. Nothing was sent/)
+    expect(h.inFlight).toHaveBeenCalledWith('ap-1')
+    expect(h.ingest).not.toHaveBeenCalled()
+  })
+
+  it('the conversion action the sales go to is part of the plan: the same sales to another action are another change', async () => {
+    h.ingest.mockResolvedValue({ requestId: null, warnings: [] })
+    h.live.actions = [ACTION, UPLOAD_ACTION, { ...UPLOAD_ACTION, conversionActionId: '73', name: 'Sales import B' }]
+    const to72 = (await tool('upload-google-sales').handler(ask, asker)).preview as { plan: string }
+    const to73 = (await tool('upload-google-sales').handler({ ...ask, conversionActionId: '73' }, asker)).preview as { plan: string }
+    expect(h.ingest.mock.calls[0][2]).toEqual(h.ingest.mock.calls[1][2])
+    expect(to72.plan).not.toBe(to73.plan)
+  })
+
   it('a sale Nexus sent before is never sent again: the approved change stands on it', async () => {
     h.ingest.mockResolvedValue({ requestId: null, warnings: [] })
     const preview = (await tool('upload-google-sales').handler(ask, asker)).preview
@@ -238,7 +265,8 @@ describe('adjust-google-sales', () => {
     const out = await tool('adjust-google-sales').handler(ask, asker)
     expect(out.ok).toBe(true)
     expect(h.adjust.mock.calls[0][2]).toEqual({ validateOnly: true })
-    expect(out.preview).toMatchObject({ changes: { '#5001': { from: 'EUR 49.90', to: 'EUR 29.90' } }, spendsMoney: true })
+    // Lower than the value Nexus gave Google: nothing spends more.
+    expect(out.preview).toMatchObject({ changes: { '#5001': { from: 'EUR 49.90', to: 'EUR 29.90' } }, spendsMoney: false })
     h.adjust.mockReset()
     h.adjust.mockResolvedValue({ results: [{ ok: true }] })
     const run = await tool('adjust-google-sales').execute!(ask, approved(out.preview))

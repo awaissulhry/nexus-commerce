@@ -439,7 +439,9 @@ describe('Google Ads G8a: conversion changes, sales sent to Google (Data Manager
     expect(gatewayLedger.map((r) => [r.operation, r.outcome])).toEqual([['datamanager.events.ingest.check', 'sent'], ['datamanager.events.ingest', 'sent']])
     // Hashed contact data (64 hex characters) may go; a plain email never.
     await googleCall({ connectionId: 'g-1', operation: 'datamanager.events.ingest.check', method: 'POST', url: INGEST, body: sales({ validateOnly: true }, { ...EVENT, userData: { userIdentifiers: [{ emailAddress: HASH }, { phoneNumber: HASH }] }, consent: { adUserData: 'CONSENT_GRANTED' } }) })
-    expect(h.calls).toHaveLength(3)
+    // A click-only sale may say consent was denied (nothing personal goes); ad personalization may be said too.
+    await googleCall({ connectionId: 'g-1', operation: 'datamanager.events.ingest.check', method: 'POST', url: INGEST, body: sales({ validateOnly: true }, { ...EVENT, consent: { adUserData: 'CONSENT_DENIED', adPersonalization: 'CONSENT_DENIED' } }) })
+    expect(h.calls).toHaveLength(4)
   })
 
   it('adjustments: partial failure always; a validate-only one is a check; the account\'s own conversion actions only', async () => {
@@ -464,8 +466,12 @@ describe('Google Ads G8a: conversion changes, sales sent to Google (Data Manager
   it('every other ingest or adjustment body, path or declared kind is refused before anything is sent', async () => {
     const send = (url: string, body: unknown) => googleCall({ connectionId: 'g-1', operation: 'x', method: 'POST', url, body })
     const tries = [
+      // hashed user data without the buyer's consent, with consent denied, with an unknown consent value
+      send(INGEST, sales({}, { ...EVENT, userData: { userIdentifiers: [{ emailAddress: HASH }] } })),
+      send(INGEST, sales({}, { ...EVENT, userData: { userIdentifiers: [{ emailAddress: HASH }] }, consent: { adUserData: 'CONSENT_DENIED' } })),
+      send(INGEST, sales({}, { ...EVENT, consent: { adUserData: 'CONSENT_GRANTED', adPersonalization: 'MAYBE' } })),
       // a plain email, an unknown identifier, an address (names), no identifier at all
-      send(INGEST, sales({}, { ...EVENT, userData: { userIdentifiers: [{ emailAddress: 'someone@example.com' }] } })),
+      send(INGEST, sales({}, { ...EVENT, userData: { userIdentifiers: [{ emailAddress: 'someone@example.com' }] }, consent: { adUserData: 'CONSENT_GRANTED' } })),
       send(INGEST, sales({}, { ...EVENT, userData: { userIdentifiers: [{ address: { givenName: HASH } }] } })),
       send(INGEST, sales({}, { ...EVENT, adIdentifiers: undefined })),
       // two click ids, a field Nexus never sends, another event source, no order id
