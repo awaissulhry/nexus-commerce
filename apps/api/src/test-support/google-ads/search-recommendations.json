@@ -28,7 +28,7 @@
       "recommendation": {
         "resourceName": "customers/1234567890/recommendations/test-rec-2",
         "type": "CAMPAIGN_BUDGET",
-        "campaign": "customers/1234567890/campaigns/33333333333",
+        "campaigns": ["customers/1234567890/campaigns/33333333333"],
         "dismissed": true,
         "impact": {
           "baseMetrics": {
@@ -42,5 +42,5 @@
       }
     }
   ],
-  "fieldMask": "recommendation.resourceName,recommendation.type,recommendation.campaign,recommendation.adGroup,recommendation.dismissed,recommendation.impact"
+  "fieldMask": "recommendation.resourceName,recommendation.type,recommendation.campaign,recommendation.campaigns,recommendation.adGroup,recommendation.dismissed,recommendation.impact"
 }

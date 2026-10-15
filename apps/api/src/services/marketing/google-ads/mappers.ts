@@ -743,6 +743,18 @@ function impactMetrics(metrics: GoogleAdsRecommendationMetricsJson | undefined):
 }
 
 /** One recommendation. `dismissed` is always set; the impact only when it was read and Google sent one. */
+/**
+ * The campaign a recommendation is about: `campaign` for most types; the budget types leave it empty and name their
+ * campaigns in `campaigns`. One campaign there → that one; a budget shared by several campaigns → none (one id would be
+ * a guess; google-ads-live lists them all).
+ */
+function recommendationCampaignId(recommendation: NonNullable<GoogleAdsRecommendationRow['recommendation']>): string | null {
+  const own = idFromResourceName(recommendation.campaign)
+  if (own) return own
+  const listed = [...new Set((Array.isArray(recommendation.campaigns) ? recommendation.campaigns : []).map(idFromResourceName).filter((id): id is string => !!id))]
+  return listed.length === 1 ? listed[0] : null
+}
+
 export function mapRecommendation(row: GoogleAdsRecommendationRow, context: { customerId: string; impactRead: boolean }): GoogleAdsRecommendationData | null {
   const recommendation = row.recommendation
   const resourceName = text(recommendation?.resourceName)
@@ -751,7 +763,7 @@ export function mapRecommendation(row: GoogleAdsRecommendationRow, context: { cu
     customerId: context.customerId,
     resourceName,
     type: enumText(recommendation.type) ?? 'UNKNOWN',
-    campaignId: idFromResourceName(recommendation.campaign),
+    campaignId: recommendationCampaignId(recommendation),
     adGroupId: idFromResourceName(recommendation.adGroup),
     dismissed: recommendation.dismissed === true,
   }

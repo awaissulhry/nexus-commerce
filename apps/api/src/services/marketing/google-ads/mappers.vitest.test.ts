@@ -394,7 +394,12 @@ describe('step 1b: negative keyword lists and recommendations', () => {
       impact: { base: { impressions: 1000, clicks: 40, costMicros: '28000000', conversions: 2, conversionsValue: 180 },
         potential: { impressions: 1300, clicks: 52, costMicros: '36000000', conversions: 2.6, conversionsValue: 234 } },
     })
-    expect(budget).toMatchObject({ type: 'CAMPAIGN_BUDGET', dismissed: true, adGroupId: null, impact: { base: { impressions: 500 }, potential: { impressions: 650, costMicros: '9000000' } } })
+    // A budget recommendation names its campaign in `campaigns`, not `campaign`.
+    expect(budget).toMatchObject({ type: 'CAMPAIGN_BUDGET', campaignId: '33333333333', dismissed: true, adGroupId: null, impact: { base: { impressions: 500 }, potential: { impressions: 650, costMicros: '9000000' } } })
+    // A budget shared by several campaigns: no single campaign is named (one id would be a guess).
+    const shared = m.mapRecommendation({ recommendation: { resourceName: 'customers/1234567890/recommendations/test-rec-4', type: 'CAMPAIGN_BUDGET',
+      campaigns: ['customers/1234567890/campaigns/21', 'customers/1234567890/campaigns/22'] } }, { ...CID, impactRead: false })
+    expect(shared?.campaignId).toBeNull()
     const notRead = m.mapRecommendation(rows<GoogleAdsRecommendationRow>('search-recommendations.json')[0], { ...CID, impactRead: false })
     expect(notRead).not.toHaveProperty('impact')
     expect(notRead?.dismissed).toBe(false)
