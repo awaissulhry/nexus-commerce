@@ -222,6 +222,9 @@ export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   // G8b: the account's own settings — an UPDATE of exactly the fields set-google-account-settings writes, never a create
   // or a remove (customerOperationProblem, google-account-calls.ts).
   'customerOperation',
+  // An asset linked at an ad group or at the account (AdGroupAsset / CustomerAsset; add-google-assets and
+  // set-google-asset-links, programme 2 G6; MutateOperation.ad_group_asset_operation / customer_asset_operation in v25).
+  'adGroupAssetOperation', 'customerAssetOperation',
 ])
 
 /**

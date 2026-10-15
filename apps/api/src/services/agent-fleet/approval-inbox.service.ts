@@ -856,6 +856,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-google-user-access': ['basis', 'plan', 'reach'],
   'set-google-account-links': ['basis', 'plan', 'reach'],
   'set-google-billing': ['basis', 'plan', 'reach'],
+  // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
+  'add-google-assets': ['basis', 'plan', 'reach'],
+  'set-google-asset-links': ['basis', 'plan', 'reach'],
   // Programme 2 G3 — edit in place, URLs and tracking, replace / move (google-ads-edit.tools.ts).
   'edit-google-rsa': ['basis', 'plan', 'reach'],
   'edit-google-assets': ['basis', 'plan', 'reach'],
