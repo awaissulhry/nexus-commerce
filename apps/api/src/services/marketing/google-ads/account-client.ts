@@ -132,9 +132,10 @@ export async function sendAccountCall(
       const textBody = await response.text()
       if (response.ok) {
         await settle()
-        let parsed: { resourceName?: unknown; result?: { resourceName?: unknown; multiPartyAuthReview?: unknown } } = {}
+        let parsed: { resourceName?: unknown; result?: { resourceName?: unknown; multiPartyAuthReview?: unknown }; results?: Array<{ resourceName?: unknown }> } = {}
         try { parsed = textBody ? JSON.parse(textBody) : {} } catch { /* a check answers with nothing to read */ }
-        const name = parsed.result?.resourceName ?? parsed.resourceName
+        // G10: the goal methods answer `results[]` (MutateGoalsResponse, MutateCampaignGoalConfigsResponse: one operation, one result).
+        const name = parsed.result?.resourceName ?? parsed.resourceName ?? (Array.isArray(parsed.results) ? parsed.results[0]?.resourceName : undefined)
         const review = parsed.result?.multiPartyAuthReview
         return { resourceName: typeof name === 'string' && name ? name : null, review: typeof review === 'string' && review ? review : null }
       }

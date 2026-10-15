@@ -449,6 +449,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // PR 6: build, copy and the check of a build.
   'build-google-campaigns': () => ({ campaigns: [{ type: 'SEARCH', name: 'Search Z', budget: { dailyBudgetCents: 500 } }] }),
   'copy-google-campaign': () => ({ campaignId: '21', name: 'Copy Z' }),
+  // Programme 2 G10: Performance Max build / copy / change and customer acquisition (google-ads-pmax.tools test).
+  'build-google-pmax': () => ({ campaigns: [{ name: 'PMax Z', dailyBudgetCents: 500, bidding: { strategy: 'MAXIMIZE_CONVERSIONS' } }] }),
+  'copy-google-pmax': () => ({ campaignId: '21', name: 'PMax copy' }),
+  'set-google-pmax': () => ({ campaignId: '21', automation: { finalUrlExpansion: false } }),
+  'set-google-customer-acquisition': () => ({ campaignId: '21', mode: 'ONLY_NEW' }),
   'check-google-ads-build': () => ({ campaigns: [{ type: 'SEARCH', name: 'Search Z', budget: { dailyBudgetCents: 500 } }] }),
   'create-google-campaign': () => ({ type: 'SEARCH', name: 'Search A', dailyBudgetCents: 500 }),
   'set-google-campaign': () => ({ campaignId: '21', searchPartners: false }),
