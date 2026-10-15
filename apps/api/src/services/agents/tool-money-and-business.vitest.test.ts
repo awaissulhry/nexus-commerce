@@ -190,6 +190,10 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-google-conversion-actions': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-conversions.tools test)',
   'remove-google-conversion-actions': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-conversions.tools test)',
   'set-google-conversion-goals': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-conversions.tools test)',
+  'google-merchant-live': 'it reads the business\'s chosen Merchant Center account live from Google, and no business here has one (google-ads-merchant.tools test)',
+  'set-google-merchant-products': 'it reads the business\'s chosen Merchant Center account live from Google, and no business here has one (google-ads-merchant.tools test)',
+  'set-google-merchant-data-sources': 'it reads the business\'s chosen Merchant Center account live from Google, and no business here has one (google-ads-merchant.tools test)',
+  'set-google-merchant-promotions': 'it reads the business\'s chosen Merchant Center account live from Google, and no business here has one (google-ads-merchant.tools test)',
   'set-harvest-rules': 'the seeded rule is not a harvest rule, so there is nothing to archive (tools/ads-harvest-postgres test)',
   'set-harvest-sources': 'the seeded ad group feeds no terms to harvest (a manual campaign with no ad product), so it is no source (tools/ads-harvest-postgres test)',
 }
@@ -482,6 +486,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-google-user-access': () => ({ action: 'change-role', userId: '61', role: 'READ_ONLY' }),
   'set-google-account-links': () => ({ action: 'link-merchant-center', merchantCenterId: '555' }),
   'set-google-billing': () => ({ action: 'change-account-budget', accountBudgetId: '91', spendingLimitCents: 50000 }),
+  // Programme 2 G12: Merchant Center (google-ads-merchant.tools.vitest.test.ts runs them on an account).
+  'google-merchant-live': () => ({ view: 'overview' }),
+  'set-google-merchant-products': () => ({ action: 'set', dataSourceId: '71', offerId: 'SKU-A', contentLanguage: 'it', feedLabel: 'IT', attributes: { customLabel0: 'top' } }),
+  'set-google-merchant-data-sources': () => ({ action: 'create-supplemental', displayName: 'Nexus A' }),
+  'set-google-merchant-promotions': () => ({ action: 'set', dataSourceId: '72', promotionId: 'PROMO-A', title: 'Ten off', type: 'PERCENT_OFF', percentOff: 10, products: 'all', startsAt: '2026-11-01T00:00:00Z', endsAt: '2026-11-08T00:00:00Z' }),
   'set-google-bid-strategy': () => ({ change: [{ strategyId: '81', targetCpaCents: 1200 }] }),
   'remove-google-bid-strategy': () => ({ strategyIds: ['81'], confirmRemove: true }),
   // G9 — experiments and campaign drafts: no Google Ads account here either (google-ads-experiments.tools test).

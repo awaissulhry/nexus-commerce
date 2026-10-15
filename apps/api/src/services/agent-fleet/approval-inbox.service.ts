@@ -847,6 +847,10 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // Google Ads changes (2026-10-15): the live facts it stands on, the exact operations it sends, where it lands (google-ads-kit.ts).
   'set-google-budget': ['basis', 'plan', 'reach'],
   'set-google-negative-list': ['basis', 'plan', 'reach'],
+  // Programme 2 G12 — Merchant Center: what it stands on (live + Nexus's records), the one call it sends, where it lands.
+  'set-google-merchant-products': ['basis', 'plan', 'reach'],
+  'set-google-merchant-data-sources': ['basis', 'plan', 'reach'],
+  'set-google-merchant-promotions': ['basis', 'plan', 'reach'],
   // G7: exclusions (account, campaign) and exclusion / brand lists (google-ads-exclusions.tools.ts).
   'set-google-account-exclusions': ['basis', 'plan', 'reach'],
   'set-google-campaign-exclusions': ['basis', 'plan', 'reach'],

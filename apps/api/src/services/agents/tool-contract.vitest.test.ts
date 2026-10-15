@@ -828,6 +828,20 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { conversionActionId: '72', retracted: ['5002'], restated: [{ orderId: '5001', valueCents: 4990, currency: 'EUR' }], accountId: 'g-1', customerId: '1234567890' },
         after: { conversionActionId: '72', retracted: ['5002'], restated: [{ orderId: '5001', valueCents: 2990, currency: 'EUR' }], accountId: 'g-1', customerId: '1234567890' },
       },
+      // G12: a product input goes back as it was (a new one is deleted); a data source made is deleted when empty; a
+      // promotion goes back as it was (a new one is ended).
+      'set-google-merchant-products': {
+        before: { action: 'set', merchantCenterId: '555', dataSourceId: '71', key: 'it~IT~SKU-A', offerId: 'SKU-A', contentLanguage: 'it', feedLabel: 'IT', state: { customLabel0: 'old' } },
+        after: { action: 'set', merchantCenterId: '555', dataSourceId: '71', key: 'it~IT~SKU-A', offerId: 'SKU-A', contentLanguage: 'it', feedLabel: 'IT', state: { customLabel0: 'new', pause: 'ADS' }, accountId: 'g-1' },
+      },
+      'set-google-merchant-data-sources': {
+        before: { action: 'create-supplemental', merchantCenterId: '555', type: 'supplemental', displayName: 'Nexus A', dataSourceId: null, created: false },
+        after: { action: 'create-supplemental', merchantCenterId: '555', type: 'supplemental', displayName: 'Nexus A', dataSourceId: '71', created: true, accountId: 'g-1' },
+      },
+      'set-google-merchant-promotions': {
+        before: { action: 'set', merchantCenterId: '555', dataSourceId: '72', key: 'IT~it~PROMO-A', promotionId: 'PROMO-A', state: null },
+        after: { action: 'set', merchantCenterId: '555', dataSourceId: '72', key: 'IT~it~PROMO-A', promotionId: 'PROMO-A', state: { title: 'Ten off', type: 'PERCENT_OFF', percentOff: 10, products: 'all', startsAt: '2026-11-01T00:00:00Z', endsAt: '2026-11-08T00:00:00Z' }, accountId: 'g-1' },
+      },
       // L7 — products created (parent and a variation), and products binned.
       'create-product': { before: { products: [] }, after: { products: [{ id: 'p1', deleted: false }, { id: 'p2', deleted: false }] } },
       'create-variations': { before: { products: [] }, after: { products: [{ id: 'p3', deleted: false }] } },
@@ -914,7 +928,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-google-experiment', 'set-google-experiment', 'schedule-google-experiment', 'end-google-experiment',
       'promote-google-experiment', 'graduate-google-experiment', 'set-google-campaign-draft', 'promote-google-campaign-draft',
       'set-google-conversion-actions', 'remove-google-conversion-actions', 'set-google-conversion-goals', 'set-google-value-rules',
-      'upload-google-sales', 'adjust-google-sales']) {
+      'upload-google-sales', 'adjust-google-sales',
+      'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
