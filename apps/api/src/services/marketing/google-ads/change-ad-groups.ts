@@ -13,6 +13,12 @@
  *   ad": a SHOPPING_PRODUCT_ADS ad group needs one). Resource name `customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}`.
  * - A new ad group and its ad go in one request: the ad points at the ad group by a temporary id (a negative number).
  *
+ * - Ad rotation (programme 2 group G3, checked 2026-10-15): AdGroup `ad_rotation_mode` (AdGroupAdRotationMode OPTIMIZE
+ *   "Optimize ad group ads based on clicks or conversions" / ROTATE_FOREVER "Rotate evenly forever"), not Immutable;
+ *   update mask `ad_rotation_mode`. Google Ads Help (answer 112876): ad rotation is for Shopping, Search and Display; "If
+ *   you're using Smart Bidding … Google Ads will automatically use the "Optimize" ad rotation setting"; "Do not optimize"
+ *   "isn't recommended for most advertisers".
+ *
  * Money (Owner's rules): a new ad group inside a campaign that is not ENABLED is made ENABLED (nothing serves); inside an
  * ENABLED campaign it is made PAUSED unless the request says `enable: true` — then it is named in `spendsMoney`. A raise
  * of a default max CPC is named in `spendsMoney`. Duplicate names in one campaign are refused here (Google refuses them).
@@ -75,8 +81,8 @@ export interface AdGroupChangeRequest {
   campaignId: string
   /** New ad groups: a name (unique in the campaign) and a default max CPC. */
   create?: Array<{ name: string; defaultBidCents: number }>
-  /** Existing ad groups of the campaign: a new name, a new default max CPC, or both. */
-  change?: Array<{ adGroupId: string; name?: string; defaultBidCents?: number }>
+  /** Existing ad groups of the campaign: a new name, a new default max CPC, a new ad rotation. */
+  change?: Array<{ adGroupId: string; name?: string; defaultBidCents?: number; adRotation?: AdRotation }>
   /** In an ENABLED campaign: make the new ad groups ENABLED (they can spend at once) instead of PAUSED. */
   enable?: boolean
 }
@@ -85,12 +91,20 @@ export interface AdGroupLiveState {
   campaigns: LiveCampaign[]
   /** The campaign's ad groups that are not removed. */
   adGroups: LiveAdGroup[]
+  /** Each ad group's ad rotation (read only when a change sets one: live-edit.ts liveAdGroupRotations). */
+  rotations?: Record<string, string | null>
 }
+
+export const AD_ROTATIONS = ['OPTIMIZE', 'ROTATE_FOREVER'] as const
+export type AdRotation = typeof AD_ROTATIONS[number]
+const ROTATION_WORD: Record<string, string> = { OPTIMIZE: 'Optimize (the ads Google expects to do best show more often)', ROTATE_FOREVER: 'Do not optimize (the ads take turns evenly, indefinitely)' }
+/** Bid strategies under which Google always optimizes ad rotation (Smart Bidding). */
+const SMART_BIDDING = new Set(['TARGET_CPA', 'TARGET_ROAS', 'MAXIMIZE_CONVERSIONS', 'MAXIMIZE_CONVERSION_VALUE'])
 
 /** What a change of ad groups replaced (before) and wrote (after): the fields it changed, and what it made. */
 export interface AdGroupChangeRecord {
   campaignId: string
-  adGroups: Array<{ adGroupId: string; name?: string; defaultBidCents?: number | null }>
+  adGroups: Array<{ adGroupId: string; name?: string; defaultBidCents?: number | null; adRotation?: string | null }>
   /** after only: the ad groups it made; their ids are Google's after the run (`new:<operation index>` before). */
   created?: Array<{ adGroupId: string; name: string; type: string; status: string; defaultBidCents: number; adId?: string }>
 }
@@ -127,7 +141,8 @@ export function adGroupChangeDraft(customer: string, currency: string, request: 
     if (seenChange.has(c.adGroupId)) return { refusal: `Ad group ${c.adGroupId} is named twice in change.` }
     seenChange.add(c.adGroupId)
     if (!groupById.has(c.adGroupId)) return { refusal: `Ad group ${c.adGroupId} is not in campaign "${campaign.name}" (or it is removed). google-ads-live view campaign lists its ad groups.` }
-    if (c.name === undefined && c.defaultBidCents === undefined) return { refusal: `Ad group ${c.adGroupId}: say what changes (name, defaultBidCents).` }
+    if (c.name === undefined && c.defaultBidCents === undefined && c.adRotation === undefined) return { refusal: `Ad group ${c.adGroupId}: say what changes (name, defaultBidCents, adRotation).` }
+    if (c.adRotation !== undefined && !live.rotations) return { refusal: 'The ad groups\' ad rotation was not read: Nexus cannot say what changes.' }
   }
   const finalName = new Map(live.adGroups.map((g) => [g.adGroupId, g.name]))
   const touched = new Set<string>()
@@ -171,6 +186,17 @@ export function adGroupChangeDraft(customer: string, currency: string, request: 
         if (g.cpcBidCents === null || c.defaultBidCents > g.cpcBidCents) {
           raises.push({ label: `"${g.name}"`, from: money(g.cpcBidCents, currency), to: money(c.defaultBidCents, currency), fromCents: g.cpcBidCents, toCents: c.defaultBidCents, servingNote: g.status === 'ENABLED' ? '' : 'paused' })
         }
+      }
+    }
+    if (c.adRotation !== undefined) {
+      const from = live.rotations?.[g.adGroupId] ?? null
+      if (from === c.adRotation) skipped.push(`Ad group "${g.name}" already rotates its ads that way.`)
+      else {
+        fields.push('ad_rotation_mode')
+        update.adRotationMode = c.adRotation
+        was.adRotation = from
+        now.adRotation = c.adRotation
+        lines.push([`ad group "${g.name}" ad rotation`, from ? ROTATION_WORD[from] ?? from : '(not set)', ROTATION_WORD[c.adRotation]])
       }
     }
     if (!fields.length) continue
@@ -219,19 +245,26 @@ export function adGroupChangeDraft(customer: string, currency: string, request: 
 
   const bidNote = made.length || after.adGroups.some((g) => g.defaultBidCents !== undefined) ? biddingNote(campaign, 'the ad groups\' default max CPCs') : null
   if (bidNote) warnings.push(bidNote)
+  if (after.adGroups.some((g) => g.adRotation === 'ROTATE_FOREVER')) {
+    warnings.push(SMART_BIDDING.has(campaign.bidding ?? '')
+      ? `Campaign "${campaign.name}" bids with ${campaign.bidding} (Smart Bidding): Google then always optimizes ad rotation, whatever the ad group says.`
+      : 'Google says "Do not optimize" is not recommended for most advertisers: the weaker ads show as often as the better ones.')
+  }
 
   if (operations.length === 0) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
   const { changes: table, more } = changeLines(lines)
   const renamed = after.adGroups.filter((g) => g.name !== undefined).length
   const rebid = after.adGroups.filter((g) => g.defaultBidCents !== undefined).length
+  const rotated = after.adGroups.filter((g) => g.adRotation !== undefined).length
   const parts: string[] = []
   if (made.length) parts.push(`make ${plural(made.length, 'ad group')} (${status})`)
   if (renamed) parts.push(`rename ${plural(renamed, 'ad group')}`)
   if (rebid) parts.push(`change the default max CPC of ${plural(rebid, 'ad group')}`)
+  if (rotated) parts.push(`change the ad rotation of ${plural(rotated, 'ad group')}`)
   return {
     summary: `Google Ads ad groups in "${campaign.name}": ${parts.join('; ')}.`,
     changes: table,
-    totals: { operations: operations.length, adGroupsCreated: made.length, adGroupsRenamed: renamed, bidsChanged: rebid, ...(more ? { linesNotShown: more } : {}) },
+    totals: { operations: operations.length, adGroupsCreated: made.length, adGroupsRenamed: renamed, bidsChanged: rebid, ...(rotated ? { rotationsChanged: rotated } : {}), ...(more ? { linesNotShown: more } : {}) },
     warnings,
     spendsMoney: spends,
     skipped,
@@ -241,7 +274,7 @@ export function adGroupChangeDraft(customer: string, currency: string, request: 
       // Every name (the duplicate check stands on them); the full fields only of the ad groups the change names.
       names: live.adGroups.map((g) => nameKey(g.name)).sort(),
       adGroups: live.adGroups.filter((g) => seenChange.has(g.adGroupId))
-        .map((g) => ({ adGroupId: g.adGroupId, name: g.name, status: g.status, type: g.type, cpcBidCents: g.cpcBidCents }))
+        .map((g) => ({ adGroupId: g.adGroupId, name: g.name, status: g.status, type: g.type, cpcBidCents: g.cpcBidCents, ...(live.rotations ? { adRotation: live.rotations[g.adGroupId] ?? null } : {}) }))
         .sort((x, y) => byGoogleId(x.adGroupId, y.adGroupId)),
     },
     before,

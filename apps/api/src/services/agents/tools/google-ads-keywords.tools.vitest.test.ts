@@ -12,7 +12,7 @@ const h = vi.hoisted(() => ({
   mutate: vi.fn(),
   enqueue: vi.fn(async () => ({ queued: true, reason: null })),
   findChange: vi.fn(),
-  live: { campaigns: [] as unknown[], adGroups: [] as unknown[], keywords: [] as unknown[], negatives: [] as unknown[], matchType: null as string | null },
+  live: { campaigns: [] as unknown[], adGroups: [] as unknown[], keywords: [] as unknown[], negatives: [] as unknown[], matchType: null as string | null, rotations: {} as Record<string, string | null> },
 }))
 vi.mock('../../../db.js', () => ({ default: { agentChange: { findFirst: h.findChange } } }))
 vi.mock('../../marketing/google-ads/change-account.js', () => ({
@@ -30,6 +30,10 @@ vi.mock('../../marketing/google-ads/live-keywords.js', async (importActual) => (
   liveKeywords: vi.fn(async () => structuredClone(h.live.keywords)),
   liveCampaignNegatives: vi.fn(async () => structuredClone(h.live.negatives)),
   liveCampaignKeywordMatchType: vi.fn(async () => h.live.matchType),
+}))
+vi.mock('../../marketing/google-ads/live-edit.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../marketing/google-ads/live-edit.js')>()),
+  liveAdGroupRotations: vi.fn(async () => structuredClone(h.live.rotations)),
 }))
 vi.mock('../../marketing/google-ads/write-client.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/write-client.js')>()),
@@ -64,6 +68,7 @@ beforeEach(() => {
   h.live.keywords = [KW_1]
   h.live.negatives = [{ criterionId: '901', text: 'cheap', matchType: 'PHRASE' }]
   h.live.matchType = null
+  h.live.rotations = { 51: 'OPTIMIZE' }
 })
 
 const pick = (p: unknown) => { const { basis, plan, reach } = p as Record<string, unknown>; return { basis, plan, reach } }
@@ -257,5 +262,45 @@ describe('set-google-negatives', () => {
     const undo = tool('set-google-negatives').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
     expect(undo).toEqual({ tool: 'set-google-negatives', args: { accountId: 'g-1', campaignId: '22', add: [{ text: 'free', matchType: 'EXACT', adGroupId: '51' }], remove: [{ text: 'used', matchType: 'PHRASE' }], why: 'undo of an earlier negative keyword change' } })
     expect(tool('set-google-negatives').input.safeParse(undo.args).success).toBe(true)
+  })
+})
+
+describe('set-google-ad-groups — ad rotation (programme 2 G3)', () => {
+  it('sets an ad group\'s ad rotation (mask ad_rotation_mode), says what Google recommends; undo sets it back', async () => {
+    const ask = tool('set-google-ad-groups').input.parse({ campaignId: '22', change: [{ adGroupId: '51', adRotation: 'rotate_forever' }] }) as Record<string, unknown>
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const preview = (await tool('set-google-ad-groups').handler(ask, asker)).preview as Record<string, unknown>
+    expect(preview).toMatchObject({ spendsMoney: false, operations: 1, totals: { rotationsChanged: 1 }, summary: 'Google Ads ad groups in "Search B": change the ad rotation of 1 ad group.' })
+    expect(preview.warnings).toContain('Google says "Do not optimize" is not recommended for most advertisers: the weaker ads show as often as the better ones.')
+    expect(h.mutate.mock.calls[0][1]).toEqual([{ adGroupOperation: { update: { resourceName: `${C}/adGroups/51`, adRotationMode: 'ROTATE_FOREVER' }, updateMask: 'ad_rotation_mode' } }])
+    h.mutate.mockResolvedValue({ responses: [{}], ops: 1, requestId: 'r' })
+    const run = await tool('set-google-ad-groups').execute!(ask, approved(preview))
+    expect(run.change).toEqual({
+      before: { campaignId: '22', adGroups: [{ adGroupId: '51', adRotation: 'OPTIMIZE' }], ...ACCOUNT },
+      after: { campaignId: '22', adGroups: [{ adGroupId: '51', adRotation: 'ROTATE_FOREVER' }], ...ACCOUNT },
+    })
+    h.live.rotations = { 51: 'ROTATE_FOREVER' }
+    expect(await tool('set-google-ad-groups').undo!.current(run.change!)).toEqual(run.change!.after)
+    const undo = tool('set-google-ad-groups').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
+    expect(undo).toMatchObject({ tool: 'set-google-ad-groups', args: { campaignId: '22', change: [{ adGroupId: '51', adRotation: 'OPTIMIZE' }] } })
+    expect(tool('set-google-ad-groups').input.safeParse(undo.args).success).toBe(true)
+  })
+
+  it('an old rotation Google left unset is said, never skipped in silence: alone it is refused, with a name it is in the why', () => {
+    const only = { before: { campaignId: '22', adGroups: [{ adGroupId: '51', adRotation: null }], ...ACCOUNT }, after: { campaignId: '22', adGroups: [{ adGroupId: '51', adRotation: 'ROTATE_FOREVER' }], ...ACCOUNT } }
+    expect(tool('set-google-ad-groups').undo!.request(only)).toEqual({ refusal: 'The ad group this change set had no ad rotation of its own before (Google\'s default): there is no value to put back. Set one with set-google-ad-groups (adRotation OPTIMIZE or ROTATE_FOREVER).' })
+    const both = { before: { campaignId: '22', adGroups: [{ adGroupId: '51', name: 'Group A', adRotation: 'UNSPECIFIED' }], ...ACCOUNT }, after: { campaignId: '22', adGroups: [{ adGroupId: '51', name: 'Group Z', adRotation: 'OPTIMIZE' }], ...ACCOUNT } }
+    const undo = tool('set-google-ad-groups').undo!.request(both) as { tool: string; args: Record<string, unknown> }
+    expect(undo.args.change).toEqual([{ adGroupId: '51', name: 'Group A' }])
+    expect(undo.args.why).toContain('1 had no ad rotation set before (Google\'s default) and keep the one it set')
+  })
+
+  it('under Smart Bidding the warning says Google always optimizes; the same rotation is skipped', async () => {
+    h.live.campaigns = [{ ...SEARCH, bidding: 'MAXIMIZE_CONVERSIONS' }, SHOP]
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const preview = (await tool('set-google-ad-groups').handler({ campaignId: '22', change: [{ adGroupId: '51', adRotation: 'ROTATE_FOREVER' }] }, asker)).preview as { warnings: string[] }
+    expect(preview.warnings).toContain('Campaign "Search B" bids with MAXIMIZE_CONVERSIONS (Smart Bidding): Google then always optimizes ad rotation, whatever the ad group says.')
+    const same = await tool('set-google-ad-groups').handler({ campaignId: '22', change: [{ adGroupId: '51', adRotation: 'OPTIMIZE' }] }, asker)
+    expect(same.error).toBe('Nothing to change: Ad group "Group A" already rotates its ads that way.')
   })
 })

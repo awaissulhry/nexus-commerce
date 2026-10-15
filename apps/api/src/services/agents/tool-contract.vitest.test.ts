@@ -703,6 +703,27 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-demographics': { before: { campaignId: '21', restore: [] }, after: { campaignId: '21', restore: [{ dimension: 'AGE_RANGE', value: 'AGE_RANGE_18_24', adGroupId: '51', criterion: 'NONE' }, { dimension: 'GENDER', value: 'MALE', criterion: 'EXCLUDED' }], set: [], accountId: 'g-1' } },
       'set-google-status': { before: { items: [{ kind: 'campaign', id: '21', status: 'PAUSED' }], accountId: 'g-1' }, after: { items: [{ kind: 'campaign', id: '21', status: 'ENABLED' }], accountId: 'g-1' } },
       'set-google-negative-list': { before: { listId: '31', keywords: [], campaigns: [] }, after: { listId: '31', added: [{ text: 'cheap', matchType: 'PHRASE' }], removed: [], attached: ['21'], detached: [] } },
+      // Programme 2 G3: texts, URLs and tracking go back in place; a replacement or a move goes back the same way.
+      'edit-google-rsa': {
+        before: { ads: [{ id: '51~701', campaignId: '21', headlines: [{ text: 'Old A', pin: 'HEADLINE_1' }, { text: 'Old B' }, { text: 'Old C' }], path1: null, finalUrl: 'https://shop.example/a' }], accountId: 'g-1', customerId: '1234567890' },
+        after: { ads: [{ id: '51~701', campaignId: '21', headlines: [{ text: 'New A' }, { text: 'New B' }, { text: 'New C' }], path1: 'jackets', finalUrl: 'https://shop.example/b' }], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'edit-google-assets': {
+        before: { mode: 'edit', assets: [{ assetId: '9', type: 'STRUCTURED_SNIPPET', header: 'Tipi', language: 'it', values: ['Uno', 'Due', 'Tre'] }], accountId: 'g-1', customerId: '1234567890' },
+        after: { mode: 'edit', assets: [{ assetId: '9', type: 'STRUCTURED_SNIPPET', header: 'Modelli', language: 'it', values: ['Uno', 'Due', 'Quattro'] }], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-urls': {
+        before: { items: [{ level: 'campaign', id: '21', trackingTemplate: null, customParameters: [{ key: 'src', value: 'a' }] }, { level: 'keyword', id: '51~601', finalUrl: 'https://shop.example/a' }], accountId: 'g-1', customerId: '1234567890' },
+        after: { items: [{ level: 'campaign', id: '21', trackingTemplate: '{lpurl}?x=1', customParameters: null }, { level: 'keyword', id: '51~601', finalUrl: null }], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'replace-google-keywords': {
+        before: { campaignId: '21', removed: [{ keywordId: '51~601', adGroupId: '51', text: 'test term', matchType: 'EXACT', status: 'PAUSED', bidCents: null }], accountId: 'g-1', customerId: '1234567890' },
+        after: { campaignId: '21', replaced: [{ from: { keywordId: '51~601', adGroupId: '51', text: 'test term', matchType: 'EXACT' }, to: { keywordId: '52~602', adGroupId: '52', text: 'test term', matchType: 'PHRASE' }, status: 'PAUSED', bidCents: null }], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'move-google-ads': {
+        before: { campaignId: '21', fromAdGroupId: '51', toAdGroupId: '52', ads: [{ adId: '701', status: 'PAUSED' }], accountId: 'g-1', customerId: '1234567890' },
+        after: { campaignId: '21', fromAdGroupId: '51', toAdGroupId: '52', moved: [{ fromAdId: '701', toAdId: '702', status: 'PAUSED' }], accountId: 'g-1', customerId: '1234567890' },
+      },
       // A Shopping ad group's product groups: the tree split by item ID it replaced is built again.
       'set-google-product-groups': {
         before: { campaignId: '21', adGroupId: '51', tree: { kind: 'items', items: [{ itemId: 'sku-1', bidCents: 30, excluded: false }, { itemId: 'sku-2', bidCents: null, excluded: true }], everythingElse: { bidCents: null, excluded: true } } },
@@ -821,7 +842,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-ad-groups', 'set-google-keywords', 'set-google-negatives', 'build-google-campaigns', 'copy-google-campaign',
       'set-google-inventory-filter', 'set-google-shopping-settings',
       'set-google-labels', 'remove-google-labels', 'apply-google-recommendations', 'dismiss-google-recommendations',
-      'set-google-auto-apply', 'set-google-bid-strategy', 'remove-google-bid-strategy']) {
+      'set-google-auto-apply', 'set-google-bid-strategy', 'remove-google-bid-strategy',
+      'edit-google-rsa', 'edit-google-assets', 'set-google-urls', 'replace-google-keywords', 'move-google-ads']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

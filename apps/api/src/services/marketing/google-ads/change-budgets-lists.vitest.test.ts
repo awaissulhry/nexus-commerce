@@ -77,7 +77,7 @@ describe('budgetChangeDraft', () => {
   })
 
   it('refused before anything is sent', () => {
-    expect(budgetChangeDraft(C, 'EUR', {}, BUDGETS)).toEqual({ refusal: 'Say what to change: create, amounts or campaigns.' })
+    expect(budgetChangeDraft(C, 'EUR', {}, BUDGETS)).toEqual({ refusal: 'Say what to change: create, amounts, renames or campaigns.' })
     expect(budgetChangeDraft(C, 'EUR', { create: { name: 'shared it', budgetCents: 100 } }, BUDGETS)).toMatchObject({ refusal: expect.stringContaining('already exists') })
     expect(budgetChangeDraft(C, 'EUR', { amounts: [{ budgetId: '99', budgetCents: 100 }] }, BUDGETS)).toMatchObject({ refusal: expect.stringContaining('not in this account') })
     expect(budgetChangeDraft(C, 'EUR', { campaigns: [{ campaignId: '21', budgetId: 'new' }] }, BUDGETS)).toMatchObject({ refusal: expect.stringContaining('needs create') })
