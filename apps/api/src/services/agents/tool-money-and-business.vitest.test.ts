@@ -161,6 +161,10 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'create-google-rsa': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-ads-assets.tools test)',
   'set-google-assets': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-ads-assets.tools test)',
   'set-google-negatives': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-keywords.tools test)',
+  'set-google-labels': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-labels.tools test)',
+  'remove-google-labels': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-labels.tools test)',
+  'dismiss-google-recommendations': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-recommendations.tools test)',
+  'set-google-auto-apply': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-recommendations.tools test)',
   'set-harvest-rules': 'the seeded rule is not a harvest rule, so there is nothing to archive (tools/ads-harvest-postgres test)',
   'set-harvest-sources': 'the seeded ad group feeds no terms to harvest (a manual campaign with no ad product), so it is no source (tools/ads-harvest-postgres test)',
 }
@@ -425,6 +429,14 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-google-ad-groups': () => ({ campaignId: '21', change: [{ adGroupId: '51', defaultBidCents: 40 }] }),
   'set-google-keywords': () => ({ campaignId: '21', bids: [{ keywordId: '51~601', bidCents: 40 }] }),
   'set-google-negatives': () => ({ campaignId: '21', add: [{ text: 'gratis', matchType: 'PHRASE' }] }),
+  // G5 — labels, Google's recommendations and portfolio bid strategies: no Google Ads account here either (their own tests).
+  'set-google-labels': () => ({ create: [{ name: 'Label Z' }] }),
+  'remove-google-labels': () => ({ labelIds: ['61'], confirmRemove: true }),
+  'apply-google-recommendations': () => ({ recommendations: [{ recommendationId: 'r-1', budgetCents: 1500 }] }),
+  'dismiss-google-recommendations': () => ({ recommendationIds: ['r-1'] }),
+  'set-google-auto-apply': () => ({ types: [{ type: 'KEYWORD', status: 'PAUSED' }] }),
+  'set-google-bid-strategy': () => ({ change: [{ strategyId: '81', targetCpaCents: 1200 }] }),
+  'remove-google-bid-strategy': () => ({ strategyIds: ['81'], confirmRemove: true }),
   // L2 — listing reads: where each listing lives, its stock and price per market, its photo plan.
   'listing-coordinates': (ids) => ({ productId: ids.productId }),
   'listing-matrix': (ids) => ({ productId: ids.productId }),
