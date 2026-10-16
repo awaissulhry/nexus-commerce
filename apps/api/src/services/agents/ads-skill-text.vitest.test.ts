@@ -29,8 +29,8 @@ const PLUGIN = new URL('../../../../../integrations/claude/nexus/.claude-plugin/
 const skill = (name: string) => readFileSync(new URL(`${name}/SKILL.md`, SKILLS), 'utf8')
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
-/** The skills that ask for or explain Amazon ad changes. */
-const ADS_SKILLS = ['ads-daily-manager', 'ads-weekly-review', 'ads-playbook', 'ads-strategy', 'automation-review'] as const
+/** The skills that ask for or explain ad changes (Amazon; G13 2026-10-16: and Google Ads, which names every Google tool). */
+const ADS_SKILLS = ['ads-daily-manager', 'ads-weekly-review', 'ads-playbook', 'ads-strategy', 'automation-review', 'google-ads'] as const
 const DAILY = skill('ads-daily-manager')
 const SECTION_10 = DAILY.slice(DAILY.indexOf('## 10. The ads brain'), DAILY.indexOf('## Setting up the routine'))
 
@@ -170,6 +170,15 @@ describe('2026-10-10 — Amazon\'s visibility numbers: what Nexus has, what it d
 
   it('the daily run keeps them as words in its report, which Nexus fills with figures', () => {
     expect(skill('ads-daily-manager')).toMatch(/In the run's report \(7\) they are words, never figures\./)
+  })
+})
+
+describe('G13 — the google-ads skill', () => {
+  it('names every Google Ads and Merchant Center tool, so a new one is not left out', () => {
+    const text = skill('google-ads')
+    const google = listTools().map((t) => t.name).filter((name) => name.includes('google'))
+    expect(google.length).toBeGreaterThan(50)
+    for (const name of google) expect(text, name).toContain(`\`${name}\``)
   })
 })
 
