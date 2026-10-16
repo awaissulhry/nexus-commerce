@@ -10,6 +10,9 @@ import { offeredOn } from '../agents/call-tool.js'
 import { mcpInputSchema, mcpInstructions, mcpServerInfo, requiredScope, toolAnnotations } from './mcp-server.js'
 import { inputJsonSchema } from '../agents/tool-loop.service.js'
 import { BRAIN_MAP_VIEWS } from '../advertising/brain/read-map.js'
+import { GOOGLE_UNCHECKED_CHANGE_RULES } from '../agents/tools/google-ads-kit.js'
+import { GOOGLE_PARTLY_CHECKED_RULES } from '../agents/tools/google-ads-account.tools.js'
+import { MERCHANT_CHANGE_RULES } from '../agents/tools/google-merchant-kit.js'
 
 /** Call OUR AI provider: offered in the app only. */
 const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-content', 'draft-seo', 'translate-content']
@@ -194,10 +197,15 @@ describe('C3 — the server and every change tool name the business', () => {
       'read platform-health-checks first in a daily or unattended run',
       // Google Ads step 1a — the two ad reads.
       'Google Ads: ads-overview and ad-campaigns with channel google read the Google Ads account a person chose',
-      // Google Ads changes (2026-10-15) — a person approves each, never a rule; Google checks it first; spend is marked.
-      'Google Ads changes go through the set-google-… tools: each is a request a person approves in Nexus, never run by a rule',
+      // Google Ads changes (2026-10-15) — a person approves each, never a rule; spend is marked. G13 — every family, and
+      // which changes Google cannot check first (the next test holds that list to the tools).
+      'Google changes: set-google-… and sibling tools (campaigns,',
+      'Merchant Center products, data sources, promotions): each is a request a person approves in Nexus, never run by a rule',
+      'Google checks it first (validate_only), except apply-google-recommendations',
       'what can make the account spend more is marked SPENDS MONEY in the preview',
-      'A new campaign is always made paused',
+      'A new campaign is always made paused', 'enabling anything is set-google-status (SPENDS MONEY)',
+      'remove-google-… tools delete only what the person asked to delete',
+      'New parts that point at new parts are ONE call (build-google-campaigns or copy-google-campaign',
       // Google Ads step 1b — the rest of the Google Ads page, one view at a time.
       'and google-ad-details (one view at a time) its ad groups, keywords, negatives, search terms and the']) {
       expect(mcpInstructions(business), rule).toContain(rule)
@@ -219,6 +227,33 @@ describe('C3 — the server and every change tool name the business', () => {
       expect(registered.has(name), name).toBe(true)
       expect(mcpInstructions(business), name).toMatch(new RegExp(`(^|[^a-z-])${name}([^a-z-]|$)`))
     }
+  })
+
+  it('G13 — the Google part names its reads, its builds and every change Google cannot check first, from the tools themselves', () => {
+    const text = mcpInstructions(business)
+    const tools = listTools()
+    const registered = new Set(tools.map((tool) => tool.name))
+    const named = (name: string) => expect(text, name).toMatch(new RegExp(`(^|[^a-z-])${name}([^a-z-]|$)`))
+    for (const name of ['google-ad-details', 'google-ads-live', 'google-ads-numbers', 'google-ads-query', 'google-ads-experiments',
+      'google-merchant-live', 'set-google-status', 'build-google-campaigns', 'copy-google-campaign', 'build-google-pmax', 'copy-google-pmax',
+      'check-google-ads-build']) {
+      expect(registered.has(name), name).toBe(true)
+      named(name)
+    }
+    // A Google Ads change whose description says Google cannot check it (or some of its actions) first is named.
+    const unchecked = tools.filter((tool) => !tool.readOnly
+      && (tool.description.endsWith(GOOGLE_UNCHECKED_CHANGE_RULES) || tool.description.endsWith(GOOGLE_PARTLY_CHECKED_RULES)))
+    expect(unchecked.map((tool) => tool.name).sort()).toEqual(['apply-google-recommendations', 'dismiss-google-recommendations',
+      'set-google-account-links', 'set-google-billing', 'set-google-user-access'])
+    for (const tool of unchecked) named(tool.name)
+    // No Merchant Center write can be checked first: they are all set-google-merchant-…, named as one family.
+    const merchant = tools.filter((tool) => tool.description.endsWith(MERCHANT_CHANGE_RULES))
+    expect(merchant.length).toBeGreaterThan(0)
+    for (const tool of merchant) expect(tool.name, tool.name).toMatch(/^set-google-merchant-/)
+    expect(text).toContain('set-google-merchant-…: their preview says so')
+    // Every create-google-…-campaign that builds its ad groups and ads in one call is one the instructions mean.
+    for (const name of ['create-google-demand-gen-campaign', 'create-google-display-campaign', 'create-google-app-campaign']) expect(registered.has(name), name).toBe(true)
+    expect(text).toContain('create-google-…-campaign for Demand Gen, Display, App')
   })
 
   it('HMCP — the instructions teach the one harvest engine: its reads, its one change set, its undo, its skip; approving stays a person\'s', () => {

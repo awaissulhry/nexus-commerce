@@ -1,8 +1,8 @@
 {
   "name": "nexus",
   "displayName": "Nexus Commerce",
-  "version": "0.8.3",
-  "description": "Connects Claude to Nexus Commerce (catalog, listings, content, ids, prices, stock, suppliers, orders, returns, ads (Amazon, eBay; Google Ads read only), automations) for one business per connection, and adds 22 skills, from a weekly channel health check to change plans and undo. Claude reads and asks for changes; each change waits for a person's approval in Nexus unless the business set that change to run by its rule or to be confirmed with an authenticator code.",
+  "version": "0.9.0",
+  "description": "Connects Claude to Nexus Commerce (catalog, listings, content, ids, prices, stock, suppliers, orders, returns, ads (Amazon, eBay, Google Ads and Merchant Center), automations) for one business per connection, and adds 23 skills, from a weekly channel health check to Google Ads, change plans and undo. Claude reads and asks for changes; each change waits for a person's approval in Nexus unless the business set that change to run by its rule or to be confirmed with an authenticator code. Google Ads and Merchant Center changes always wait for a person.",
   "author": {
     "name": "Nexus Commerce"
   },

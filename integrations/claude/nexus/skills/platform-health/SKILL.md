@@ -31,7 +31,7 @@ The Nexus server's instructions hold the rules for every change — say which bu
 - Channels whose calls fail or lag, the worst operations, and the oldest waiting change.
 - Alerts by severity, the recurring errors, and dead queue items per channel.
 - Failed jobs, with the first failing rows' reasons.
-- Google Ads alerts, worst first (danger, then warn, then info), and the checks that could not run; a person acts on them in Google Ads.
+- Google Ads alerts, worst first (danger, then warn, then info), and the checks that could not run; the fix is a Google Ads change a person approves in Nexus (the `google-ads` skill), or a change in Google Ads.
 - What could not be read (a tool not allowed for this person).
 
 ## 3. Offer (only when asked)

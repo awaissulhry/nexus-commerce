@@ -2453,7 +2453,8 @@ const googleAdDetailsTool: AgentTool = {
     + 'the ad-spend money permission gets the same answer without the amounts (bids, targets, impact and an alert\'s '
     + 'numbers too).' + PAGING + ' This tool reads what Nexus stored; changes go through the Google Ads change tools '
     + '(set-google-…, writes.mode approval), each a request a person approves in Nexus, and google-ads-live reads the '
-    + 'account live from Google. Nexus applies none of Google\'s recommendations.',
+    + 'account live from Google. Nexus applies none of Google\'s recommendations by itself: apply-google-recommendations and '
+    + 'dismiss-google-recommendations ask to apply or dismiss them, each a request a person approves.',
   handler: (args) => listTool('google-ad-details', async () => {
     const a = args as unknown as GoogleDetailArgs
     const refused = googleDetailRefusal(a)

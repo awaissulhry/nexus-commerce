@@ -2,7 +2,7 @@
 
 This folder connects Claude to Nexus. It holds two Claude plugins and the marketplace that lists them:
 
-- **`nexus`** — the commerce side (catalog, listings, content, ids, prices, stock, suppliers, orders, returns, ads, automations, platform). It holds the address of the Nexus MCP server, `https://nexusapi-production-b7bb.up.railway.app/mcp`, and 22 skills. Claude signs in with your own Nexus account.
+- **`nexus`** — the commerce side (catalog, listings, content, ids, prices, stock, suppliers, orders, returns, ads, automations, platform). It holds the address of the Nexus MCP server, `https://nexusapi-production-b7bb.up.railway.app/mcp`, and 23 skills. Claude signs in with your own Nexus account.
 - **`nexus-factory`** — the factory app. It starts the factory's own small server on the factory machine (no network) and adds one skill, `factory-desk`.
 
 No token, password or client secret is stored in these files.
@@ -13,8 +13,8 @@ No token, password or client secret is stored in these files.
 
 - **One business per connection.** A connection works in exactly one business. Claude sees and changes nothing else through it. See [Several businesses](#several-businesses).
 - **Your own permissions.** Claude can do only what your role in that business allows, and figures hidden from you (such as revenue or costs) are hidden from Claude too. Buyers are always masked (first name, city, country, masked e-mail).
-- **Reads:** products and families, listings and what the channel shows, text and translations, ids, prices and their reasons, stock and warehouses, suppliers and purchase orders, orders, shipments, returns, reviews, ads on Amazon and eBay, and Google Ads (read only: campaigns, numbers, search terms, products, what Google does on its own, its recommendations, alerts and disapprovals), every automation, catalog structure, reports, alerts, sync activity and what Claude itself did.
-- **Asks for changes:** create products and listings, publish, close and reopen listings, text, photos, ids, prices and promotions, stock counts and transfers, purchase orders, shipments and labels, returns and refunds, buyer messages, invoice numbers, ad bids, budgets and keywords, automation levels and rules, catalog structure, imports. Each change is first stored as a request with a preview. What happens next is the business's choice, per tool: see [Trust levels](#trust-levels-settings--ai--claude).
+- **Reads:** products and families, listings and what the channel shows, text and translations, ids, prices and their reasons, stock and warehouses, suppliers and purchase orders, orders, shipments, returns, reviews, ads on Amazon and eBay, Google Ads (stored and live: campaigns, numbers, search terms, products, settings, assets, conversions, what Google does on its own, its recommendations, alerts and disapprovals) and Merchant Center (products and their issues, data sources, promotions), every automation, catalog structure, reports, alerts, sync activity and what Claude itself did.
+- **Asks for changes:** create products and listings, publish, close and reopen listings, text, photos, ids, prices and promotions, stock counts and transfers, purchase orders, shipments and labels, returns and refunds, buyer messages, invoice numbers, ad bids, budgets and keywords, Google Ads and Merchant Center changes (always a person's approval, never by rule), automation levels and rules, catalog structure, imports. Each change is first stored as a request with a preview. What happens next is the business's choice, per tool: see [Trust levels](#trust-levels-settings--ai--claude).
 - **Never approves its own changes.** Claude cannot approve, raise its own levels or limits, or change who may do what. See [Never for Claude](#never-for-claude).
 
 ## Several businesses
@@ -94,6 +94,8 @@ No tool does these, and a test in the code fails if a change tool ever needs one
 - The old Amazon and eBay flat-file pages; FBA quantity.
 - In the factory: users, roles, permission mode, integrations, sending e-mails or quotes, converting quotes, labels, invoices, payments, backups.
 
+Two exceptions, by the Owner's decision: who may use the business's Google Ads account (`set-google-user-access`) and that account's links to Merchant Center and YouTube (`set-google-account-links`). Each is always a person's approval in Nexus, never a rule's.
+
 ## Server switches that start OFF
 
 Some new paths only act when the Owner turns them on in the server's environment (on Railway). Until then the preview says "dry run" or "off" and nothing reaches the channel.
@@ -128,6 +130,7 @@ Some new paths only act when the Owner turns them on in the server's environment
 | `ads-weekly-review` | How the ads are doing, and what to change (a stop is lower bids; a real pause only when you mean one) |
 | `ads-strategy` | Your ads strategy per market, category and product, kept in Nexus: read it, compare, and propose the changes as one plan |
 | `ads-playbook` | How a product's Amazon ads are built and run: include it, build or adopt its campaigns through Nexus's own builder, start them (you approve it) or stop them with low bids; phases, drift and winners as Nexus adds them |
+| `google-ads` | Your Google Ads and Merchant Center: read them, plan, and ask for changes or a whole build as one request you approve (what spends more is marked; new campaigns start paused); what Google's API cannot do |
 | `ads-daily-manager` | The daily Amazon ads run of a scheduled Claude routine: reads, asks for one plan inside your strategy (it waits for you in Nexus unless you set it to run by rule), reports to Nexus; for a product the ads brain runs it only supervises (never a lever the brain owns; the brain's report, clashes, tool gaps and your decisions in its report); the routine's setup steps are inside |
 | `automation-review` | What is automated, why a rule did or did not act, rules and levels |
 | `platform-health` | Channel accounts, alerts, failed syncs and jobs |

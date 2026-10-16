@@ -18,8 +18,9 @@ The Nexus server's instructions hold the rules for every change — say which bu
 - Read before you write: each step must rest on what Nexus holds now (the product, its current value, the listing's coordinate, the version of a purchase order). Use the read tools the other skills name.
 - A step is `{ tool, args }`: the change tool's name and its own arguments **without** `business` (the plan names the business once). Read each tool's description for its exact arguments.
 - Only change tools can be steps. Reads, `submit-change-plan`, `undo-change` and `confirm-change` cannot.
-- Prefer one bulk step over many single ones: `bulk-price-change` / `set-master-prices` (250 products), `bulk-listing-price-change` (250 listings: their own prices, or Amazon business prices with `businessPrices`), `bulk-attribute-change` (250), `bulk-content-change` (25), `set-brand` (250), `set-stock` (250 rows), `bulk-ad-bid-change` (250 targets), `close-listing` (250 listings). A bulk step counts as one step.
+- Prefer one bulk step over many single ones: `bulk-price-change` / `set-master-prices` (250 products), `bulk-listing-price-change` (250 listings: their own prices, or Amazon business prices with `businessPrices`), `bulk-attribute-change` (250), `bulk-content-change` (25), `set-brand` (250), `set-stock` (250 rows), `bulk-ad-bid-change` (250 targets), `set-google-keywords` (250 Google Ads keywords), `close-listing` (250 listings). A bulk step counts as one step.
 - **Steps cannot wait for each other.** Each one is checked against Nexus as it is now. A step that needs an earlier step's result cannot be in the same plan: a new product's id, a draft listing not created yet, text a publish should send, a purchase order to send that is still being drafted. Ask for the later step after the earlier one has run.
+- **Google Ads and Merchant Center.** Changes to things that exist are steps like any other (Google checks most of them now, as if asked alone; a preview says when it cannot). New Google parts that point at new parts — a campaign with its ad groups, keywords, product groups and ads — are ONE build call, never steps: `build-google-campaigns`, `copy-google-campaign`, `build-google-pmax`, `copy-google-pmax`, or a Demand Gen, Display or App create tool (see `google-ads`). A plan with a Google step always waits for a person.
 - Up to 200 steps. More: split into several plans and say so before you send the first.
 
 ## 2. Show the plan, then ask
@@ -27,7 +28,8 @@ The Nexus server's instructions hold the rules for every change — say which bu
 - A title a person understands on the Approvals page ("Raise helmet prices 5% and fix 12 titles").
 - A table, one row per step (or per group of alike steps): what it changes, from → to, how many items, where it lands (Nexus only, a marketplace, a buyer, a supplier).
 - Totals per kind ("120 price changes reach Amazon and eBay; 12 title changes stay in Nexus").
-- Which steps cannot be undone (a message sent, a refund, a cancelled order, a confirmed shipment, a numbered invoice, a sent purchase order, a new campaign) — say so plainly.
+- Which steps cannot be undone (a message sent, a refund, a cancelled order, a confirmed shipment, a numbered invoice, a sent purchase order, a new Amazon or eBay campaign, a Google Ads removal) — say so plainly.
+- Which steps can make an account spend more: each Google Ads step's preview marks them SPENDS MONEY — repeat those lines; they are the person's decision.
 - Then ask: "Shall I send this to Nexus as one plan for <business>?"
 
 ## 3. Submit it

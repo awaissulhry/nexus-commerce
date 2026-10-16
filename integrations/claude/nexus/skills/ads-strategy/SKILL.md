@@ -43,7 +43,7 @@ eBay, per market (the strategy covers Amazon only in this release):
 8. `list-automations` (`area: "ebay-ads"`): E1 rules and `caps.spendCeilings` (monthly cap, kill switch); `levelReason` names the eBay dial when it holds rules back.
 9. `ebay-ad-details` (`view`: `listings`, `ad-groups` or `keywords`; `market`, `campaignId`): each promoted listing's ad rate and break-even rate, a Priority campaign's ad groups, its keywords and bids.
 
-Google Ads has no strategy in Nexus: its changes are the Google Ads change tools (set-google-…), each a request a person approves in Nexus.
+Google Ads has no strategy in Nexus: its changes are the Google Ads change tools (set-google-… and the build tools; the `google-ads` skill), each a request a person approves in Nexus.
 
 Not readable by any tool — write "not readable", never guess: a campaign's max bid change % and CPC ceiling, which campaigns a rule reaches (A1 rows give only the count, `reach`); eBay campaign policy rate/bid caps and floors, eBay search terms. Budget baselines, monthly budget plans, budget schedules and pools are in `ad-budgets`; hourly bid plans in `ad-hourly-plans`; portfolios in `ad-portfolios`.
 
