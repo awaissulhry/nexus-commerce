@@ -45,6 +45,7 @@ Show one table: what changes, from → to, how many, the SPENDS MONEY lines, wha
 | Budgets, shared budgets | `set-google-budget` |
 | Locations, languages, ad schedule, devices, radius | `set-google-targeting` |
 | Audience segments; age, gender, parental status, income | `set-google-audiences`; `set-google-demographics` |
+| Audiences of the account's own: custom segments (keywords, sites, apps); your data lists (website visitors by rules, combinations, converters, lookalikes); reusable audiences for Demand Gen and Performance Max | `set-google-custom-audiences`, `set-google-user-lists`, `set-google-reusable-audiences` (making one spends nothing; a change that widens one a serving campaign uses is SPENDS MONEY) |
 | Ad groups (make, rename, default max CPC, rotation) | `set-google-ad-groups` |
 | Keywords and their bids; a keyword's text, match type or ad group | `set-google-keywords`; `replace-google-keywords` (the old one is removed: only on the person's ask) |
 | Negative keywords; shared negative lists | `set-google-negatives`; `set-google-negative-list` |
@@ -57,6 +58,7 @@ Show one table: what changes, from → to, how many, the SPENDS MONEY lines, wha
 | Tracking templates, URL suffixes, custom parameters, keyword URLs | `set-google-urls` |
 | Placement, content and IP exclusions; brand and placement lists; the account's negative list | `set-google-account-exclusions`, `set-google-campaign-exclusions`, `set-google-exclusion-list` |
 | Conversion actions, goals, value rules; sales sent to Google | `set-google-conversion-actions`, `remove-google-conversion-actions`, `set-google-conversion-goals`, `set-google-value-rules`; `upload-google-sales`, `adjust-google-sales` (5) |
+| Custom conversion goals (chosen actions); the custom goal a campaign uses | `set-google-custom-goals`; `set-google-conversion-goals` with `customGoals` (more actions for Smart Bidding: SPENDS MONEY) |
 | The account's settings, users, links, billing | `set-google-account-settings`, `set-google-user-access`, `set-google-account-links`, `set-google-billing` |
 | Experiments and campaign drafts | `create-google-experiment`, `set-google-experiment`, `schedule-google-experiment`, `end-google-experiment`, `promote-google-experiment`, `graduate-google-experiment`, `set-google-campaign-draft`, `promote-google-campaign-draft` |
 | Performance Max | `build-google-pmax`, `copy-google-pmax`, `set-google-pmax`, `set-google-customer-acquisition` |
@@ -71,6 +73,9 @@ Show one table: what changes, from → to, how many, the SPENDS MONEY lines, wha
 Say so plainly, and that the person does it in Google:
 - **A payment card**: no API can add one (Google Ads › Billing). At Google's Explorer access level Google also refuses user management and billing through the API; the answer says so.
 - **Google Analytics 4**: the Google Ads API has no GA4 link (`link-ga4` answers so). Link it in Google Analytics › Admin › Product links, or Google Ads › Tools › Data manager.
+- **Customer Match lists**: Nexus never uploads buyers' e-mails, phones or addresses to make an audience (Google closed its upload service to new projects; it is personal data). Make the list in Google Ads › Audience manager.
+- **Combined segments**: read only in the API (`google-ads-live` lookup `combined-audiences`); make them in Google Ads. `set-google-user-lists` combination lists do the same with lists.
+- **A reusable audience cannot be removed**: Google's API has no remove for it; a new one stays, reaching nobody until a campaign uses it.
 - **Video campaigns**: not made or changed through the API. Only a video responsive ad's own fields are edited in place (`edit-google-campaign-type-ads`).
 - **Location assets**: Google makes them from a Business Profile linked in Google Ads; that link needs the profile owner's sign-in, which Nexus does not have (`link-business-profile` answers so).
 - **A Merchant Center link request** is sent from Merchant Center; Nexus accepts it (`accept-merchant-request`) or links directly. A whole YouTube channel is linked in Google Ads; the API links single videos.

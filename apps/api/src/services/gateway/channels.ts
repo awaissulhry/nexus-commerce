@@ -237,19 +237,58 @@ export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   // asset_group_listing_group_filter_operation, asset_group_signal_operation, audience_operation). PMAX_OPERATION_ACTIONS
   // narrows them to what set-google-pmax and build-google-pmax send.
   'assetGroupOperation', 'assetGroupAssetOperation', 'assetGroupListingGroupFilterOperation', 'assetGroupSignalOperation', 'audienceOperation',
+  // G14a (2026-10-16): custom conversion goals (create, update, remove) and user lists — the lists set-google-user-lists
+  // makes and changes (userListOperationProblem: never a Customer Match list), v25 MutateOperation.custom_conversion_goal_
+  // operation and user_list_operation.
+  'customConversionGoalOperation', 'userListOperation',
 ])
 
 /**
  * G10: the actions Nexus sends for the Performance Max kinds — never an asset group removed (Google refuses to remove
- * the last one, and no tool asks), never an audience changed or removed (an audience is made for a signal, and only
- * made), never a listing group filter or signal updated (made and removed only).
+ * the last one, and no tool asks), never an audience removed (AudienceOperation v25 has create and update only; G14a's
+ * set-google-reusable-audiences changes one), never a listing group filter or signal updated (made and removed only).
  */
 export const PMAX_OPERATION_ACTIONS: Readonly<Record<string, readonly string[]>> = {
   assetGroupOperation: ['create', 'update'],
   assetGroupAssetOperation: ['create', 'remove'],
   assetGroupListingGroupFilterOperation: ['create', 'remove'],
   assetGroupSignalOperation: ['create', 'remove'],
-  audienceOperation: ['create'],
+  audienceOperation: ['create', 'update'],
+}
+
+/**
+ * G14a (2026-10-16): the user lists Nexus makes and changes (reference/rpc/v25/UserList, UserListOperation): a create holds
+ * exactly ONE list kind of rule_based_user_list (website visitors), logical_user_list (a combination), basic_user_list
+ * (people who converted) or lookalike_user_list — never crm_based_user_list (Customer Match: personal data, which
+ * Nexus never uploads), never similar_user_list (Output only). An update writes only the name, description, membership
+ * status and life span, eligible_for_search and the rules of those kinds; a remove names a list of this account.
+ */
+const USER_LIST_KINDS = ['ruleBasedUserList', 'logicalUserList', 'basicUserList', 'lookalikeUserList'] as const
+const USER_LIST_FIELDS = ['resourceName', 'name', 'description', 'membershipStatus', 'membershipLifeSpan', 'eligibleForSearch', ...USER_LIST_KINDS]
+export const USER_LIST_UPDATE_MASK: ReadonlySet<string> = new Set([
+  'name', 'description', 'membership_status', 'membership_life_span', 'eligible_for_search',
+  'rule_based_user_list.flexible_rule_user_list', 'logical_user_list.rules', 'basic_user_list.actions',
+])
+
+export function userListOperationProblem(op: unknown, customer?: string | null): string | null {
+  if (!isObject(op)) return 'the user list operation is not an object'
+  const own = (v: unknown) => typeof v === 'string' && new RegExp(`^customers/${customer ?? '\\d{1,20}'}/userLists/\\d{1,20}$`).test(v)
+  if ('remove' in op) return Object.keys(op).length === 1 && own(op.remove) ? null : 'a user list remove does not name a list of this account'
+  const create = isObject(op.create) ? op.create : null
+  const update = isObject(op.update) ? op.update : null
+  if (!create === !update) return 'a user list operation is not one create, update or remove'
+  const list = (create ?? update) as Record<string, unknown>
+  const extra = Object.keys(list).filter((k) => !USER_LIST_FIELDS.includes(k))
+  if (extra.length) return `a user list names ${extra.join(', ')} (Nexus never makes or fills a Customer Match list)`
+  const kinds = USER_LIST_KINDS.filter((k) => k in list)
+  if (create) {
+    if (Object.keys(op).length !== 1 || list.resourceName !== undefined || kinds.length !== 1) return 'a new user list is exactly one of a rule-based, combination, converters or lookalike list'
+    return null
+  }
+  if (Object.keys(op).some((k) => k !== 'update' && k !== 'updateMask') || !own(list.resourceName)) return 'a user list update does not name a list of this account'
+  if ('lookalikeUserList' in list) return 'a lookalike list cannot be changed (Immutable)'
+  const mask = typeof op.updateMask === 'string' ? op.updateMask.split(',') : []
+  return mask.length && mask.every((m) => USER_LIST_UPDATE_MASK.has(m)) ? null : 'a user list update masks a field Nexus does not change'
 }
 
 // ── G8a: sales sent to Google, and their adjustments ────────────────────────────────────────────────────────────
@@ -566,6 +605,10 @@ export function googleMutateBodyOf(body: unknown, customer?: string | null): Goo
     if (kinds.length !== 1 || !GOOGLE_ADS_MUTATE_KINDS.has(kinds[0])) return { refusal: `it holds an operation Nexus does not send (${kinds.join(', ') || 'none'})` }
     if (kinds[0] === 'customerOperation') {
       const problem = customerOperationProblem((operation as Record<string, unknown>).customerOperation, customer)
+      if (problem) return { refusal: problem }
+    }
+    if (kinds[0] === 'userListOperation') {
+      const problem = userListOperationProblem((operation as Record<string, unknown>).userListOperation, customer)
       if (problem) return { refusal: problem }
     }
     const allowed = PMAX_OPERATION_ACTIONS[kinds[0]]

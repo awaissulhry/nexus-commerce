@@ -43,6 +43,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Google Ads G8a (2026-10-15) — conversion actions, goals and value rules change the Google Ads account; Shopify sales and their adjustments are sent to Google.
 // Google Ads G11 (2026-10-15) — Demand Gen, Display and App campaigns, their ad groups and ads, and video responsive ads change the Google Ads account.
 // Google Ads G10 (2026-10-16) — Performance Max campaigns are built, copied and changed, and customer acquisition is set, in the Google Ads account.
+// Google Ads G14a (2026-10-16) — custom conversion goals, custom segments, user lists and reusable audiences change the Google Ads account.
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -76,13 +77,13 @@ const OPEN_WORLD = [
   'set-google-audiences', 'set-google-auto-apply', 'set-google-bid-strategy', 'set-google-billing',
   'set-google-budget', 'set-google-campaign', 'set-google-campaign-draft', 'set-google-campaign-exclusions',
   'set-google-campaign-type', 'set-google-conversion-actions', 'set-google-conversion-goals',
-  'set-google-customer-acquisition', 'set-google-demographics',
+  'set-google-custom-audiences', 'set-google-custom-goals', 'set-google-customer-acquisition', 'set-google-demographics',
   'set-google-exclusion-list', 'set-google-experiment', 'set-google-inventory-filter', 'set-google-keywords',
   'set-google-labels', 'set-google-merchant-data-sources', 'set-google-merchant-products',
   'set-google-merchant-promotions', 'set-google-negative-list', 'set-google-negatives', 'set-google-pmax',
-  'set-google-product-groups',
+  'set-google-product-groups', 'set-google-reusable-audiences',
   'set-google-shopping-settings', 'set-google-status', 'set-google-targeting', 'set-google-urls',
-  'set-google-user-access', 'set-google-value-rules', 'set-hourly-bid-plan', 'set-listing-price',
+  'set-google-user-access', 'set-google-user-lists', 'set-google-value-rules', 'set-hourly-bid-plan', 'set-listing-price',
   'set-listing-stock',
   'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
   'set-promotion', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
