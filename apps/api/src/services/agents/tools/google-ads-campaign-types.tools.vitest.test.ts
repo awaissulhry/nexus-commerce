@@ -364,3 +364,15 @@ describe('G14b: Display uploads, frequency caps, demographics with bid adjustmen
     ])
   })
 })
+
+describe('G14b review fixes', () => {
+  it('an undo gives back any cap a live campaign holds (Google\'s int32 bounds), and its request parses', () => {
+    const cap = { events: 50_000, timeUnit: 'MONTH', timeLength: 90, level: 'CAMPAIGN', eventType: 'IMPRESSION' }
+    const undo = tool('set-google-campaign-type').undo!.request({
+      before: { campaignId: '21', campaign: { frequencyCaps: [cap] }, adGroups: [], accountId: 'g-1' },
+      after: { campaignId: '21', campaign: { frequencyCaps: [] }, adGroups: [], accountId: 'g-1' },
+    } as ToolChange) as { tool: string; args: Record<string, unknown> }
+    expect(undo.args).toMatchObject({ frequencyCaps: [cap] })
+    expect(tool('set-google-campaign-type').input.safeParse(undo.args).success).toBe(true)
+  })
+})

@@ -769,6 +769,9 @@ const pageFeedUndo: ToolUndo = {
     const removeUrls = (after.added ?? []).map((e) => e.url)
     const addUrls = (after.removed ?? []).map((e) => ({ url: e.url, ...(e.labels.length ? { labels: e.labels } : {}) }))
     if (!removeUrls.length && !addUrls.length) return { refusal: 'This change added and took away no page.' }
+    // A page it took away goes back with its labels: only when they fit what Nexus sends (else say so, do not ask).
+    const unfit = (after.removed ?? []).filter((e) => e.labels.length > PAGE_FEED_LABEL_LIMITS.perUrl || e.labels.some((l) => l.length > PAGE_FEED_LABEL_LIMITS.length))
+    if (unfit.length) return { refusal: `The page ${unfit[0].url} had ${unfit[0].labels.length} labels or one longer than ${PAGE_FEED_LABEL_LIMITS.length} characters: Nexus cannot add it back as it was. Add it back in Google Ads (Tools › Business data › Page feeds).` }
     return {
       tool: 'set-google-page-feed',
       args: {
@@ -794,7 +797,7 @@ const setGooglePageFeed: AgentTool = {
     addUrls: z.array(z.object({
       url: z.string().trim().min(1).max(2048).describe('a page of the site (http:// or https://)'),
       labels: z.array(z.string().trim().min(1).max(PAGE_FEED_LABEL_LIMITS.length).describe('a custom label')).max(PAGE_FEED_LABEL_LIMITS.perUrl).optional()
-        .describe('custom labels that group the pages (asset groups and Dynamic Search Ads can target a label)'),
+        .describe('custom labels that group the pages (up to 20 per URL; Search ad groups and Dynamic Search Ads can target a label)'),
     })).max(MAX_PAGE_FEED_URLS).optional().describe('pages to add (a page already there is skipped)'),
     removeUrls: z.array(z.string().trim().min(1).max(2048).describe('a page URL in the feed')).max(MAX_PAGE_FEED_URLS).optional().describe('pages to take out of the feed'),
     why: googleWhyArg,

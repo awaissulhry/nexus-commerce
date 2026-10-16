@@ -115,7 +115,7 @@ describe('Google: reads, and Google Ads mutates only', () => {
     expect([...GOOGLE_ACCOUNT_CHECKABLE].sort()).toEqual(['CampaignGoalConfigs:mutate', 'Goals:mutate', 'accountBudgetProposals:mutate', 'customAudiences:mutate', 'productLinks:remove'])
   })
 
-  it('G6: an asset linked at an ad group or at the account (adGroupAssetOperation, customerAssetOperation) goes, check and change; asset set links stay refused', async () => {
+  it('G6: an asset linked at an ad group or at the account (adGroupAssetOperation, customerAssetOperation) goes, check and change; an asset set of another type than PAGE_FEED, and a malformed campaign link, stay refused', async () => {
     const LINKS = [
       { adGroupAssetOperation: { create: { adGroup: 'customers/1234567890/adGroups/51', asset: 'customers/1234567890/assets/301', fieldType: 'CALLOUT' } } },
       { customerAssetOperation: { update: { resourceName: 'customers/1234567890/customerAssets/302~CALL', status: 'PAUSED' }, updateMask: 'status' } },
@@ -125,8 +125,9 @@ describe('Google: reads, and Google Ads mutates only', () => {
     const run = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: LINKS } })
     expect(run.status).toBe(200)
     expect(h.calls).toHaveLength(2)
-    // Nexus sends no location asset set, and a campaign link names its campaign and asset set (G14b: only page feeds are
-    // made and linked — google-pmax.vitest.test.ts): refused before anything is sent.
+    // The gateway judges the SHAPE (G14b): an asset set made is a PAGE_FEED one; a campaign link names exactly a campaign
+    // and an asset set. That the set a link names IS a page feed, the gateway cannot see: the tools check it against the
+    // account's page feeds (google-ads-pmax.tools and google-ads-campaigns.tools tests). Refused before anything is sent:
     for (const op of [{ assetSetOperation: { create: {} } }, { assetSetOperation: { create: { name: 'L', type: 'LOCATION_SYNC' } } }, { campaignAssetSetOperation: { create: {} } }]) {
       const err = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: [op], validateOnly: true } }).catch((e) => e)
       expect(err).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY' })

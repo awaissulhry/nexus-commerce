@@ -2112,7 +2112,12 @@ export function typedSettingsDraft(customer: string, currency: string, r: TypedS
       const lists = has.filter((x) => x.kind === 'user-list').length - removes.filter((x) => x.item.kind === 'user-list').length + adds.filter((t) => t.kind === 'user-list').length
       if (lists < 1) problems.push(`${where}: an App engagement ad group needs a user list (Google's rule)`)
     }
-    for (const t of adds) { operations.push(criterionCreate(customer, `${customer}/adGroups/${g.adGroupId}`, t)); lines.push([`${where} targeting`, '(none)', targetWords(t, live.names)]) }
+    for (const t of adds) {
+      operations.push(criterionCreate(customer, `${customer}/adGroups/${g.adGroupId}`, t))
+      lines.push([`${where} targeting`, '(none)', targetWords(t, live.names)])
+      // A new item with a raise bids more for those it matches — also the first of its dimension, and one in observation.
+      if ((bidOf(t.bidModifier) ?? 1) > 1) (serves ? spends : warnings).push(`${where}: bids more for ${targetWords({ ...t, bidModifier: null }, live.names)} (${adjustmentWords(null)} → ${adjustmentWords(t.bidModifier)})${gNote}.`)
+    }
     for (const x of removes) { operations.push({ adGroupCriterionOperation: { remove: `${customer}/adGroupCriteria/${g.adGroupId}~${x.criterionId}` } }); lines.push([`${where} targeting`, targetWords(x.item, live.names), 'removed']) }
     for (const r of rebids) {
       operations.push({ adGroupCriterionOperation: { update: { resourceName: `${customer}/adGroupCriteria/${g.adGroupId}~${r.criterionId}`, bidModifier: r.to ?? 1 }, updateMask: 'bid_modifier' } })

@@ -242,6 +242,28 @@ describe('Display: demographics targeted with bid adjustments', () => {
   })
 })
 
+describe('review fix: a new targeted item with a raise bids more', () => {
+  const display = (o: { observation?: string[]; criteria?: LiveTypedCriterion[] } = {}) => ({
+    campaign: { ...liveCampaign(), type: 'DISPLAY', bidding: 'MANUAL_CPC' }, adGroups: [group({ type: 'DISPLAY_STANDARD', observation: o.observation ?? [] })],
+    campaignNames: [], names: { 'user-list|501': { name: 'Visitors', status: 'OPEN' } }, criteria: o.criteria ?? [],
+  })
+  it('the first of its dimension (narrower, and bids more: SPENDS MONEY where it serves; said in a paused ad group)', () => {
+    const d = draft(typedSettingsDraft(C, 'EUR', { campaignId: '21', adGroups: [{ adGroupId: '51', addTargeting: [{ kind: 'age-range', value: 'AGE_RANGE_25_34', bidModifier: 1.3 }] }] }, display()))
+    expect(d.spendsMoney).toEqual(['ad group "Group A": bids more for age range AGE_RANGE_25_34 (none → +30 %).'])
+    expect(d.warnings.join(' ')).toMatch(/targets age ranges from now — only those see the ads \(narrower\)/)
+    const paused = draft(typedSettingsDraft(C, 'EUR', { campaignId: '21', adGroups: [{ adGroupId: '51', addTargeting: [{ kind: 'age-range', value: 'AGE_RANGE_25_34', bidModifier: 1.3 }] }] }, { ...display(), adGroups: [group({ type: 'DISPLAY_STANDARD', status: 'PAUSED' })] }))
+    expect(paused.spendsMoney).toEqual([])
+    expect(paused.warnings.join(' ')).toMatch(/bids more for age range AGE_RANGE_25_34 \(none → \+30 %\) \(it does not serve now\)/)
+    // A lower one bids less: no SPENDS MONEY line.
+    expect(draft(typedSettingsDraft(C, 'EUR', { campaignId: '21', adGroups: [{ adGroupId: '51', addTargeting: [{ kind: 'age-range', value: 'AGE_RANGE_25_34', bidModifier: 0.7 }] }] }, display())).spendsMoney).toEqual([])
+  })
+  it('an audience in observation (it widens nothing, but its raise bids more)', () => {
+    const d = draft(typedSettingsDraft(C, 'EUR', { campaignId: '21', adGroups: [{ adGroupId: '51', addTargeting: [{ kind: 'user-list', value: '501', bidModifier: 1.5 }] }] }, display({ observation: ['AUDIENCE'], criteria: [crit('3', 'user-list', '502')] })))
+    expect(d.spendsMoney).toEqual(['ad group "Group A": bids more for user list 501 (Visitors) (none → +50 %).'])
+    expect(d.warnings.join(' ')).toMatch(/audiences are in observation \(bids only\)/)
+  })
+})
+
 // ── fixtures ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 function liveCampaign(): LiveTypedCampaign {

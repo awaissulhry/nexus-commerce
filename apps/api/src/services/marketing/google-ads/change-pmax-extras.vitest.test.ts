@@ -193,7 +193,7 @@ describe('set-google-page-feed builder', () => {
     expect(refused(pageFeedDraft(C, { pageFeedId: '79', addUrls: [{ url: 'https://shop.example/a' }] }, feedLive()))).toMatch(/Page feed 79 is not a page feed of this account/)
     expect(refused(pageFeedDraft(C, { addUrls: [{ url: 'https://shop.example/a' }] }, feedLive()))).toMatch(/needs a name/)
     expect(refused(pageFeedDraft(C, { name: 'pages a', addUrls: [{ url: 'https://shop.example/a' }] }, feedLive()))).toMatch(/a page feed named "pages a" exists \(pageFeedId 77\)/)
-    expect(refused(pageFeedDraft(C, { pageFeedId: '77', addUrls: [{ url: 'ftp://shop.example/a' }, { url: 'https://shop.example/"x' }, { url: 'https://shop.example/b', labels: Array.from({ length: 11 }, (_, i) => `l${i}`) }] }, feedLive()))).toMatch(/is not a web page.*no quote.*11 labels/)
+    expect(refused(pageFeedDraft(C, { pageFeedId: '77', addUrls: [{ url: 'ftp://shop.example/a' }, { url: 'https://shop.example/"x' }, { url: 'https://shop.example/b', labels: Array.from({ length: 21 }, (_, i) => `l${i}`) }] }, feedLive()))).toMatch(/is not a web page.*no quote.*21 labels \(Google takes at most 20 per URL\)/)
     expect(pageUrlProblem('http://shop.example/a')).toBeNull()
   })
 })

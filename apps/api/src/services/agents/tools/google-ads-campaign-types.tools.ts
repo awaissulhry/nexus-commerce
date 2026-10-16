@@ -270,10 +270,13 @@ const createCommon = {
 }
 const contentArg = z.array(z.string().trim().min(1).max(60)).max(25).optional()
   .describe('content labels the ads never show next to (Google\'s ContentLabelType: SEXUALLY_SUGGESTIVE, TRAGEDY, PROFANITY, BELOW_THE_FOLD, …)')
+const INT32_MAX = 2_147_483_647
 const frequencyCapsArg = z.array(z.object({
-  events: z.coerce.number().int().min(1).max(10_000).describe('at most this many impressions (or video views) for one person'),
+  // Google's own bounds: FrequencyCapEntry.cap and FrequencyCapKey.time_length are int32 (a cap of at least 1:
+  // MAX_IMPRESSIONS_NOT_IN_RANGE); anything a live campaign holds can be given back by an undo.
+  events: z.coerce.number().int().min(1).max(INT32_MAX).describe('at most this many impressions (or video views) for one person'),
   timeUnit: z.preprocess(upper, z.enum(FREQUENCY_UNITS)).describe('per DAY, WEEK or MONTH'),
-  timeLength: z.coerce.number().int().min(1).max(30).optional().describe('how many of that unit (default 1)'),
+  timeLength: z.coerce.number().int().min(1).max(INT32_MAX).optional().describe('how many of that unit (default 1)'),
   level: z.preprocess(upper, z.enum(FREQUENCY_LEVELS)).optional().describe('counted per CAMPAIGN (default), AD_GROUP or AD_GROUP_AD (each ad)'),
   eventType: z.preprocess(upper, z.enum(FREQUENCY_EVENTS)).optional().describe('IMPRESSION (default; a Display campaign caps impressions only) or VIDEO_VIEW'),
 })).max(10).describe('frequency caps: how often one person may see the ads (Display and Demand Gen; one cap per level, unit and event)')

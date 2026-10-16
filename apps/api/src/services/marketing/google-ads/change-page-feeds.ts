@@ -19,8 +19,8 @@
  *                     MutateOperationResponse asset_set_result, asset_result.
  *   ListingGroupFilterDimension.WebpageCondition custom_label: "A custom label can be added to a campaign by creating an
  *                     AssetSet of type PAGE_FEED and linking it to the campaign using CampaignAssetSet."
- * Google does not document a limit on labels per URL or their length in the reference: Nexus bounds a request (10 labels of
- * at most 100 characters) and Google's check (validate_only) judges the rest.
+ * Labels per URL: at most 20 (Google Ads Help 7166527); their length is not documented (PAGE_FEED_LABEL_LIMITS); Google's
+ * check (validate_only) judges the rest.
  *
  * Money. A page URL added to a feed linked to a campaign that serves (ENABLED) lets Google send people to that page and
  * write ads from it: SPENDS MONEY. A URL taken away narrows (a warning). A new feed is linked to nothing: it cannot spend.
@@ -32,7 +32,12 @@ import type { PageFeedRef, PageFeedUrl } from './live-pmax.js'
 import type { GoogleMutateOperation, GoogleMutateResponse } from './write-client.js'
 
 export const MAX_PAGE_FEED_URLS = 250
-export const PAGE_FEED_LABEL_LIMITS = { perUrl: 10, length: 100 } as const
+/**
+ * Google Ads Help 7166527 (Use a feed to target Dynamic Search Ads and Performance Max, read 2026-10-16): "You can add as
+ * many as 20 custom labels for each URL"; "a limit of 100 page feeds per account". No label length is documented: Nexus
+ * bounds one at 1024 characters (an undo whose labels do not fit says so instead of asking).
+ */
+export const PAGE_FEED_LABEL_LIMITS = { perUrl: 20, length: 1024 } as const
 
 export interface PageFeedUrlAsk { url: string; labels?: string[] | null }
 export interface PageFeedRequest {
@@ -121,7 +126,7 @@ export function pageFeedDraft(customer: string, r: PageFeedRequest, live: PageFe
     seen.add(url)
     if (removes.includes(url)) { problems.push(`"${url}" is both added and taken away`); continue }
     const labels = [...new Set((a.labels ?? []).map((l) => l.trim()).filter(Boolean))]
-    if (labels.length > PAGE_FEED_LABEL_LIMITS.perUrl) problems.push(`"${url}": ${labels.length} labels (Nexus sends at most ${PAGE_FEED_LABEL_LIMITS.perUrl} per URL)`)
+    if (labels.length > PAGE_FEED_LABEL_LIMITS.perUrl) problems.push(`"${url}": ${labels.length} labels (Google takes at most ${PAGE_FEED_LABEL_LIMITS.perUrl} per URL)`)
     const long = labels.find((l) => l.length > PAGE_FEED_LABEL_LIMITS.length)
     if (long) problems.push(`"${url}": the label "${long.slice(0, 30)}…" is longer than ${PAGE_FEED_LABEL_LIMITS.length} characters`)
     const there = has.get(url)

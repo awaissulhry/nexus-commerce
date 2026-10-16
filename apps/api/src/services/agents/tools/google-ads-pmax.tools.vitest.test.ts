@@ -389,3 +389,24 @@ describe('G14b: text guidelines, page feeds and asset group tracking', () => {
     expect(tool('set-google-page-feed').input.safeParse(undo.args).success).toBe(true)
   })
 })
+
+describe('G14b review fixes', () => {
+  it('linking an asset set that is not a page feed of the account (a location set, an unknown id) is refused before Google is asked', async () => {
+    // livePageFeeds reads asset sets of type PAGE_FEED only: a location set's id is not among them.
+    const out = await tool('set-google-pmax').handler(parsed('set-google-pmax', { campaignId: '21', pageFeeds: { link: ['99'] } }), asker)
+    expect(out).toMatchObject({ ok: false, error: expect.stringMatching(/page feed 99 is not a page feed of this account/) })
+    expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('a page feed undo whose pages carry more labels than Google takes says so in words instead of asking', () => {
+    const many = Array.from({ length: 21 }, (_, i) => `l${i}`)
+    const change = {
+      before: { pageFeedId: '77', name: 'Pages A', created: false, added: [], removed: [], ops: { feed: null, assets: [] } },
+      after: { pageFeedId: '77', name: 'Pages A', created: false, added: [], removed: [{ url: 'https://shop.example/b', labels: many, assetId: '401' }], ops: { feed: null, assets: [] }, accountId: 'g-1' },
+    }
+    expect(tool('set-google-page-feed').undo!.request(change)).toEqual({ refusal: expect.stringMatching(/had 21 labels .*Add it back in Google Ads/) })
+    const fits = { ...change, after: { ...change.after, removed: [{ url: 'https://shop.example/b', labels: many.slice(0, 20), assetId: '401' }] } }
+    const undo = tool('set-google-page-feed').undo!.request(fits) as { tool: string; args: Record<string, unknown> }
+    expect(tool('set-google-page-feed').input.safeParse(undo.args).success).toBe(true)
+  })
+})

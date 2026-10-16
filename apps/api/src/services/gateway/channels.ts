@@ -243,8 +243,9 @@ export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   'customConversionGoalOperation', 'userListOperation',
   // G14b (2026-10-16): page feeds (URL inclusions) — a PAGE_FEED asset set made, its URLs added and taken away, and its link
   // to a campaign (v25 MutateOperation.asset_set_operation, asset_set_asset_operation, campaign_asset_set_operation).
-  // PMAX_OPERATION_ACTIONS narrows them to what set-google-page-feed, set-google-pmax and build-google-pmax send, and an
-  // asset set made is a PAGE_FEED one only (assetSetCreateProblem).
+  // PMAX_OPERATION_ACTIONS narrows them to what set-google-page-feed, set-google-pmax and build-google-pmax send; an
+  // asset set made is a PAGE_FEED one only (assetSetCreateProblem); a campaign link names exactly a campaign and an asset
+  // set (campaignAssetSetCreateProblem) — whether that set IS a page feed is the tools' check (the gateway reads nothing).
   'assetSetOperation', 'assetSetAssetOperation', 'campaignAssetSetOperation',
 ])
 
