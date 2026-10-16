@@ -259,7 +259,7 @@ const setGoogleCampaign: AgentTool = {
       contains: z.string().trim().min(1).max(2048).optional().describe('never use a page whose address contains this'),
       equals: z.string().trim().min(1).max(2048).optional().describe('never use this exact page'),
     }).refine((u) => (u.contains === undefined) !== (u.equals === undefined), { message: 'give contains or equals, one of them' }).describe('a landing page never used'))
-      .max(250).optional().describe('SEARCH (AI Max): the WHOLE list of URL exclusions — pages final URL expansion never sends people to ([] clears it)'),
+      .max(250).optional().describe('SEARCH (AI Max): the WHOLE list of URL exclusions — pages Google never sends people to (final URL expansion, Dynamic Search Ads; [] clears it)'),
     urlInclusions: z.array(z.object({
       adGroupId: googleIdArg('a standard Search ad group of this campaign'),
       rules: z.array(z.object({

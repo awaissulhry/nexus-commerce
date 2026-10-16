@@ -191,7 +191,7 @@ const campaignArg = z.object({
     contains: z.string().trim().min(1).max(2048).optional().describe('never use a page whose address contains this'),
     equals: z.string().trim().min(1).max(2048).optional().describe('never use this exact page'),
   }).refine((u) => (u.contains === undefined) !== (u.equals === undefined), { message: 'give contains or equals, one of them' }).describe('a landing page never used')).max(250).optional()
-    .describe('SEARCH (AI Max): URL exclusions — pages final URL expansion never sends people to'),
+    .describe('SEARCH (AI Max): URL exclusions — pages Google never sends people to (final URL expansion, Dynamic Search Ads)'),
   conversionGoals: z.array(z.object({
     category: z.enum(ACTION_CATEGORIES).describe('the goal\'s category (PURCHASE, ADD_TO_CART, …)'),
     origin: z.enum(GOAL_ORIGINS).describe('the goal\'s origin (WEBSITE, …)'),

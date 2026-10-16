@@ -65,7 +65,7 @@ describe('a Search campaign\'s AI Max controls (set-google-campaign)', () => {
     expect(refused(campaignSettingsDraft(C, 'EUR', '21', { pageFeeds: ['77', '79'] }, live()))).toMatch(/page feed 79 is not a page feed of this account/)
   })
 
-  it('URL exclusions: a new one is a negative WEBPAGE criterion; one taken off SPENDS MONEY with final URL expansion on, else it is said', () => {
+  it('URL exclusions: a new one is a negative WEBPAGE criterion; one taken off SPENDS MONEY in an enabled campaign, final URL expansion on or off (they also keep pages from Dynamic Search Ads)', () => {
     const d = draft(campaignSettingsDraft(C, 'EUR', '21', { urlExclusions: [{ equals: 'https://shop.example/thanks' }] }, live()))
     expect(d.operations).toEqual([
       { campaignCriterionOperation: { create: { campaign: `${C}/campaigns/21`, negative: true, webpage: { criterionName: 'Exclude equals:https://shop.example/thanks', conditions: [{ operand: 'URL', operator: 'EQUALS', argument: 'https://shop.example/thanks' }] } } } },
@@ -73,8 +73,32 @@ describe('a Search campaign\'s AI Max controls (set-google-campaign)', () => {
     ])
     expect(d.spendsMoney.join(' ')).toMatch(/Takes the URL exclusion contains:\/outlet off/)
     const off = draft(campaignSettingsDraft(C, 'EUR', '21', { urlExclusions: [] }, live({ assetAutomation: [{ type: 'TEXT_ASSET_AUTOMATION', status: 'OPTED_IN' }] })))
-    expect(off.spendsMoney).toEqual([])
-    expect(off.warnings.join(' ')).toMatch(/final URL expansion is off/)
+    expect(off.spendsMoney).toEqual(['Takes the URL exclusion contains:/outlet off: Google may send people to those pages again (final URL expansion, Dynamic Search Ads).'])
+  })
+
+  it('URL inclusions in mixed case: the record, the before and what is read back keep ONE order (undo\'s compare and the undo\'s own undo)', () => {
+    const base = live()
+    base.ai.adGroups![1].rules = [{ criterionId: '30', name: null, rule: { urlContains: ['Zip'] } }, { criterionId: '31', name: null, rule: { urlContains: ['alpha'] } }]
+    const d = draft(campaignSettingsDraft(C, 'EUR', '21', { urlInclusions: [{ adGroupId: '52', rules: [{ urlContains: ['boots'] }, { urlContains: ['Sale'] }] }] }, base))
+    const after = (d.after as CampaignSettingsRecord).settings.urlInclusions
+    const before = (d.before as CampaignSettingsRecord).settings.urlInclusions
+    // Read back in Google's order (any order): the same as the record.
+    const ran: SearchAiLive = { ...structuredClone(AI), adGroups: [AI.adGroups![0], { ...AI.adGroups![1], rules: [
+      { criterionId: '41', name: null, rule: { urlContains: ['boots'] } }, { criterionId: '40', name: null, rule: { urlContains: ['Sale'] } },
+    ] }] }
+    expect(campaignSettingsNow(settings(), OWN, ran, ['52']).urlInclusions).toEqual(after)
+    expect(campaignSettingsNow(settings(), OWN, base.ai, ['52']).urlInclusions).toEqual(before)
+    expect(after).toEqual([{ adGroupId: '52', rules: [{ urlContains: ['Sale'] }, { urlContains: ['boots'] }] }])
+  })
+
+  it('an ad group named for URL inclusions is in what the change stands on: enabled since the preview, the run is refused as moved', () => {
+    const paused = live()
+    paused.ai.adGroups![1].status = 'PAUSED'
+    const ask = { urlInclusions: [{ adGroupId: '52', rules: [{ labels: ['sale'] }] }] }
+    const d = draft(campaignSettingsDraft(C, 'EUR', '21', ask, paused))
+    expect(d.stands).toMatchObject({ adGroups: ['52:PAUSED:SEARCH_STANDARD'] })
+    expect(draft(campaignSettingsDraft(C, 'EUR', '21', ask, live())).stands).toMatchObject({ adGroups: ['52:ENABLED:SEARCH_STANDARD'] })
+    expect(draft(campaignSettingsDraft(C, 'EUR', '21', { termExclusions: [] }, live())).stands).toMatchObject({ adGroups: undefined })
   })
 
   it('URL inclusions: a rule added where the ad group keeps to a list SPENDS MONEY, the last taken away too, a first one narrows; a rule changed is removed and made again', () => {

@@ -196,6 +196,29 @@ describe('G14b: set-google-campaign — a Search campaign\'s AI Max controls', (
     expect(tool('set-google-campaign').input.safeParse(undo.args).success).toBe(true)
   })
 
+  it('URL inclusions in mixed case: the record and what is read back keep ONE order, so undo is not refused; an ad group enabled since the preview stops the run', async () => {
+    h.mutate.mockResolvedValue(ok)
+    const paused = { ...structuredClone(AI), adGroups: [{ ...AI.adGroups[0], status: 'PAUSED' }] }
+    h.live.ai = structuredClone(paused)
+    const args = tool('set-google-campaign').input.parse({ campaignId: '21', urlInclusions: [{ adGroupId: '51', rules: [{ urlContains: ['boots'] }, { urlContains: ['Sale'] }] }] }) as Record<string, unknown>
+    const out = await tool('set-google-campaign').handler(args, asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    // Enabled after the preview: what the change stands on moved, nothing is sent.
+    h.live.ai = { ...structuredClone(AI), adGroups: [{ ...AI.adGroups[0], status: 'ENABLED' }] }
+    h.mutate.mockClear()
+    const moved = await tool('set-google-campaign').execute!(args, approved(out.preview))
+    expect(moved).toMatchObject({ ok: false, error: expect.stringMatching(/changed since this was approved/) })
+    expect(h.mutate.mock.calls.filter((c) => !c[2]?.validateOnly)).toEqual([])
+    // As previewed: it runs, and the account read back (Google's order) is the record exactly.
+    h.live.ai = structuredClone(paused)
+    const run = await tool('set-google-campaign').execute!(args, approved(out.preview))
+    expect(run.ok, String(run.error)).toBe(true)
+    h.live.ai = { ...structuredClone(paused), adGroups: [{ ...paused.adGroups[0], rules: [
+      { criterionId: '19', name: null, rule: { urlContains: ['boots'] } }, { criterionId: '18', name: null, rule: { urlContains: ['Sale'] } },
+    ] }] }
+    expect(await tool('set-google-campaign').undo!.current(run.change!)).toEqual(run.change!.after)
+  })
+
   it('an asset set that is not a page feed of the account (a location set, an unknown id) is refused before Google is asked', async () => {
     const out = await tool('set-google-campaign').handler(tool('set-google-campaign').input.parse({ campaignId: '21', pageFeeds: ['99'] }) as Record<string, unknown>, asker)
     expect(out).toMatchObject({ ok: false, error: expect.stringMatching(/page feed 99 is not a page feed of this account/) })

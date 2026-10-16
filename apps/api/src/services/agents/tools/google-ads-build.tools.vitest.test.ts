@@ -399,6 +399,28 @@ describe('G14b: AI Max\'s controls in a Search build and copy', () => {
     expect(((out.preview as { skipped?: string[] }).skipped ?? []).filter((x) => /WEBPAGE/.test(x))).toEqual([])
   })
 
+  it('copy-google-campaign: with AI Max off, URL inclusions the source still holds are named as not copied, and the rest is copied', async () => {
+    const d = h.detail as Record<string, any>
+    Object.assign(d.campaign, { type: 'SEARCH', shopping: null, aiMax: false, assetAutomation: [] })
+    d.adGroups = [{ adGroupId: '51', name: 'Group A', status: 'ENABLED', type: 'SEARCH_STANDARD', cpcBidCents: 25, targetCpaCents: null, targetRoas: null, rotation: null, urls: { trackingTemplate: null, finalUrlSuffix: null, customParameters: [] }, audienceMode: [] }]
+    d.keywords = []; d.ads = []; d.assets = []; d.criteriaRows = []
+    h.others = [{ adGroupId: '51', criterionId: '17', type: 'WEBPAGE', negative: false, name: 'Include', listId: null }]
+    h.searchAi = {
+      textGuidelines: { termExclusions: [], messagingRestrictions: [] }, pageFeeds: [], webpageCriteria: [],
+      adGroups: [{ adGroupId: '51', name: 'Group A', status: 'ENABLED', type: 'SEARCH_STANDARD', rules: [{ criterionId: '17', name: 'Include', rule: { urlContains: ['/jackets'] } }], otherWebpage: 0 }],
+    }
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const out = await tool('copy-google-campaign').handler({ campaignId: '21', name: 'Search A copy' }, asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    const ops = h.mutate.mock.calls[0][1] as Array<Record<string, any>>
+    expect(ops.filter((o) => o.adGroupCriterionOperation?.create?.webpage)).toEqual([])
+    expect(ops.filter((o) => o.adGroupOperation?.create)).toHaveLength(1)
+    const skipped = (out.preview as { skipped?: string[] }).skipped ?? []
+    expect(skipped.filter((x) => /URL inclusion/.test(x))).toEqual([expect.stringMatching(/1 URL inclusion of "Group A" \(URL contains "\/jackets"\): URL inclusions need AI Max on/)])
+    // Named once: not again as a criterion no Nexus tool sets.
+    expect(skipped.filter((x) => /WEBPAGE/.test(x))).toEqual([])
+  })
+
   it('build-google-campaigns: URL inclusions need AI Max and text customization; a page feed must be one of the account\'s', async () => {
     h.feeds = [{ assetSetId: '77', name: 'Pages A' }]
     const base = { type: 'SEARCH', name: 'Search Z', budget: { dailyBudgetCents: 500 }, adGroups: [{ name: 'G', urlInclusions: [{ urlContains: ['/jackets'] }] }] }

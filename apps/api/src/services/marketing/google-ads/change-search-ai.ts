@@ -24,8 +24,8 @@
  *   WebpageInfo       criterion_name and conditions "required for CREATE operations and … prohibited on UPDATE operations": a
  *                     rule changed is removed and made again.
  *
- * Money (Owner's rules). In an ENABLED campaign: a text guideline taken away, a page feed linked, a URL exclusion taken away
- * while final URL expansion is on — SPENDS MONEY; in a serving ad group: a URL inclusion added to an ad group that already
+ * Money (Owner's rules). In an ENABLED campaign: a text guideline taken away, a page feed linked, any URL exclusion taken
+ * away (it also keeps pages from Dynamic Search Ads ad groups) — SPENDS MONEY; in a serving ad group: a URL inclusion added to an ad group that already
  * keeps to a list, or the last one taken away (it then may use every page) — SPENDS MONEY. Narrowing is said as a warning.
  */
 import { plural } from './change-draft.js'
@@ -60,6 +60,9 @@ export function normalizeUrlRule(r: UrlRule): UrlRule {
   }
 }
 export const urlRuleKey = (r: UrlRule) => JSON.stringify(normalizeUrlRule(r))
+/** ONE order for an ad group's rules, wherever they are listed (the preview's after, what is read back, undo's compare). */
+export const byUrlRule = (a: UrlRule, b: UrlRule): number => { const x = urlRuleKey(a); const y = urlRuleKey(b); return x < y ? -1 : x > y ? 1 : 0 }
+export const sortedUrlRules = (rules: UrlRule[]): UrlRule[] => rules.map(normalizeUrlRule).sort(byUrlRule)
 export const urlRuleWords = (r: UrlRule) => {
   const n = normalizeUrlRule(r)
   return n.urlEquals ? `the page ${n.urlEquals}` : [...(n.urlContains ?? []).map((u) => `URL contains "${u}"`), ...(n.labels ?? []).map((l) => `label "${l}"`)].join(' and ')
@@ -105,7 +108,7 @@ export function searchAiNow(live: SearchAiLive, groupIds?: string[]): SearchAiAs
   if (live.adGroups && groupIds) {
     out.urlInclusions = groupIds.map((id) => {
       const g = live.adGroups!.find((x) => x.adGroupId === id)
-      const rules = (g?.rules ?? []).filter((r) => r.rule).map((r) => normalizeUrlRule(r.rule!)).sort((a, b) => urlRuleKey(a).localeCompare(urlRuleKey(b)))
+      const rules = sortedUrlRules((g?.rules ?? []).filter((r) => r.rule).map((r) => r.rule!))
       return { adGroupId: id, rules }
     })
   }
@@ -205,7 +208,9 @@ export function searchAiPart(
       if (want.includes(key)) continue
       out.post.push({ campaignCriterionOperation: { remove: `${customer}/campaignCriteria/${c.campaignId}~${id}` } })
       out.lines.push([`URL exclusion ${key}`, 'excluded', '(none)'])
-      ;(after.finalUrlExpansion ? out.spends : out.warnings).push(`Takes the URL exclusion ${key} off: Google may send people to those pages again${after.finalUrlExpansion ? note : ' (final URL expansion is off: Google sends people only to the final URLs)'}.`)
+      // Always SPENDS MONEY: a campaign's URL exclusions also keep pages from its Dynamic Search Ads ad groups, not only
+      // from final URL expansion (urlExclusions: [] takes every one off).
+      out.spends.push(`Takes the URL exclusion ${key} off: Google may send people to those pages again (final URL expansion, Dynamic Search Ads)${note}.`)
     }
     const before = sorted(has.keys())
     if (JSON.stringify(before) !== JSON.stringify(want)) { out.before.urlExclusions = before.map(urlExclusionOfKey); out.after.urlExclusions = want.map(urlExclusionOfKey) }
@@ -254,8 +259,8 @@ export function searchAiPart(
       if ([...want.values()].some((r) => r.labels?.length) && !(out.after.pageFeeds ?? now.pageFeeds ?? []).length) {
         out.warnings.push(`${where}: a custom label names pages of a page feed, and no page feed is linked to "${c.name}" (pageFeeds).`)
       }
-      before.push({ adGroupId: g.adGroupId, rules: [...has.keys()].sort().map((k) => has.get(k)!.rule!).map(normalizeUrlRule) })
-      afterList.push({ adGroupId: g.adGroupId, rules: [...want.keys()].sort().map((k) => want.get(k)!) })
+      before.push({ adGroupId: g.adGroupId, rules: sortedUrlRules([...has.values()].map((r) => r.rule!)) })
+      afterList.push({ adGroupId: g.adGroupId, rules: sortedUrlRules([...want.values()]) })
     }
     if (afterList.length) { out.before.urlInclusions = before; out.after.urlInclusions = afterList }
   }

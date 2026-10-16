@@ -58,6 +58,17 @@ describe('brand guidelines turned on for an existing Performance Max campaign', 
   it('refuses in words: no business name or no square logo, already on, two business names unnamed, six logos, one color, a font Google does not take, another type', () => {
     expect(refused(brandGuidelinesDraft(C, { campaignId: '21' }, campaign({ assetGroups: [group('41', [link('202', 'LOGO')])] }), []))).toMatch(/has no business name in its asset groups: brand guidelines need a business name and at least one square logo/)
     expect(refused(brandGuidelinesDraft(C, { campaignId: '21' }, campaign({ assetGroups: [group('41', [link('201', 'BUSINESS_NAME', 'Shop A'), link('203', 'LANDSCAPE_LOGO')])] }), []))).toMatch(/no square logo/)
+    // Named assets of the account stand in for what the asset groups lack; Google's own pick needs them in the campaign.
+    const bare = campaign({ assetGroups: [group('41', [])] })
+    const named: PmaxAsset[] = [
+      { assetId: '301', type: 'TEXT', name: null, text: 'Shop B', width: null, height: null, mimeType: null, youtubeId: null, callToAction: null },
+      { assetId: '302', type: 'IMAGE', name: null, text: null, width: 1200, height: 1200, mimeType: 'image/png', youtubeId: null, callToAction: null },
+    ]
+    const own = draft(brandGuidelinesDraft(C, { campaignId: '21', businessNameAssetId: '301', logoAssetIds: ['302'] }, bare, named))
+    expect((own.operations[0] as any).accountCall.body.operations[0].brandAssets).toEqual({ businessNameAsset: `${C}/assets/301`, logoAsset: [`${C}/assets/302`] })
+    expect(refused(brandGuidelinesDraft(C, { campaignId: '21', businessNameAssetId: '301' }, bare, named))).toMatch(/has no square logo in its asset groups.*Name assets of this account \(businessNameAssetId, logoAssetIds\)/)
+    expect(refused(brandGuidelinesDraft(C, { campaignId: '21', autoPopulate: true }, bare, []))).toMatch(/no business name and no square logo/)
+    expect(refused(brandGuidelinesDraft(C, { campaignId: '21', businessNameAssetId: '309', logoAssetIds: ['302'] }, bare, named))).toMatch(/asset 309 is not in this account/)
     expect(refused(brandGuidelinesDraft(C, { campaignId: '21' }, campaign({ brandGuidelines: true }), []))).toMatch(/has brand guidelines on already/)
     const two = campaign({ assetGroups: [group('41', [link('201', 'BUSINESS_NAME', 'Shop A'), link('202', 'LOGO')]), group('42', [link('205', 'BUSINESS_NAME', 'Shop B')])] })
     expect(refused(brandGuidelinesDraft(C, { campaignId: '21' }, two, []))).toMatch(/hold 2 business names \(assets 201, 205\): name one/)

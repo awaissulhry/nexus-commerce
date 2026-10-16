@@ -73,8 +73,12 @@ export function brandGuidelinesDraft(customer: string, r: BrandGuidelinesRequest
   const names = inGroups('BUSINESS_NAME')
   const logos = inGroups('LOGO')
   const wide = inGroups('LANDSCAPE_LOGO')
-  if (!names.length || !logos.length) {
-    return { refusal: `"${camp.name}" has ${!names.length ? 'no business name' : ''}${!names.length && !logos.length ? ' and ' : ''}${!logos.length ? 'no square logo' : ''} in its asset groups: brand guidelines need a business name and at least one square logo. Add them with set-google-pmax (assetGroups[].addAssets: adBusinessName, a LOGO image), then ask again.` }
+  // What the asset groups lack, the person may name from the account's assets (checked below); Google's own pick
+  // (autoPopulate) needs them in the campaign.
+  const noName = !names.length && (r.autoPopulate || !r.businessNameAssetId?.trim())
+  const noLogo = !logos.length && (r.autoPopulate || !r.logoAssetIds?.some((x) => x.trim()))
+  if (noName || noLogo) {
+    return { refusal: `"${camp.name}" has ${noName ? 'no business name' : ''}${noName && noLogo ? ' and ' : ''}${noLogo ? 'no square logo' : ''} in its asset groups: brand guidelines need a business name and at least one square logo. Name assets of this account (businessNameAssetId, logoAssetIds), or add them with set-google-pmax (assetGroups[].addAssets: adBusinessName, a LOGO image), then ask again.` }
   }
   const asset = (id: string) => named.find((a) => a.assetId === id)
   const op: Record<string, unknown> = { campaign: `${customer}/campaigns/${camp.campaignId}`, autoPopulateBrandAssets: r.autoPopulate === true }

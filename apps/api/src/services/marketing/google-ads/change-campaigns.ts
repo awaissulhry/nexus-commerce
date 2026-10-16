@@ -626,7 +626,11 @@ export function campaignSettingsDraft(
     spendsMoney: spends,
     skipped: [],
     operations: ops,
-    stands: { campaignId: c.campaignId, now, status: c.status, budgetId: live.budget?.budgetId ?? null, names: ask.name ? live.campaigns.map((x) => x.name.trim().toLowerCase()).sort() : undefined },
+    stands: {
+      campaignId: c.campaignId, now, status: c.status, budgetId: live.budget?.budgetId ?? null, names: ask.name ? live.campaigns.map((x) => x.name.trim().toLowerCase()).sort() : undefined,
+      // Each ad group named for URL inclusions as it was read: one enabled (or changed in type) since the preview has moved.
+      adGroups: ask.urlInclusions ? (live.ai?.adGroups ?? []).filter((g) => ask.urlInclusions!.some((x) => x.adGroupId === g.adGroupId)).map((g) => `${g.adGroupId}:${g.status}:${g.type}`).sort() : undefined,
+    },
     before: { campaignId: c.campaignId, settings: before } satisfies CampaignSettingsRecord,
     after: { campaignId: c.campaignId, settings: after } satisfies CampaignSettingsRecord,
   }
