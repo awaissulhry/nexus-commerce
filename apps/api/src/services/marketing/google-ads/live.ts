@@ -6,7 +6,16 @@
  * Every field below was checked on 2026-10-15 against Google's v25 field reference (developers.google.com/google-ads/api/fields/v25):
  * selectable, and filterable where it is in a WHERE. An update mask is snake_case, as Google's REST example writes it.
  * Amounts are minor units (cents) of the account's currency: Google's micros / 10,000. Ids are Google's (digits).
+ *
+ * G13 (2026-10-16): the reads a change tool stands on ask for Google's drafts too (`PARAMETERS include_drafts=true`, the
+ * GAQL PARAMETERS clause, last in a query: developers.google.com/google-ads/api/docs/query/structure "PARAMETERS …
+ * include_drafts: Set include_drafts to true to return draft entities. Defaults to false"; the guide experiments/
+ * system-managed: "Draft and in-design campaigns are only returned when you include PARAMETERS include_drafts = true"),
+ * so the treatment campaign of an experiment (in design or running) and a campaign draft can be found and changed like
+ * any campaign. Each campaign says what it is: campaign.experiment_type (fields/v25/campaign: selectable, filterable;
+ * CampaignExperimentType BASE | DRAFT | EXPERIMENT), and `campaignKindWords` names a draft or a trial in words.
  */
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { liveRows } from './write-client.js'
 import type { GoogleAdsTarget } from './types.js'
 
@@ -36,6 +45,94 @@ export function gaqlId(value: unknown, what: string): string {
   return s
 }
 const DAY = /^\d{4}-\d{2}-\d{2}$/
+/** Google's drafts too (in-design experiment campaigns, campaign drafts): the GAQL PARAMETERS clause, always last. */
+export const INCLUDE_DRAFTS = ' PARAMETERS include_drafts=true'
+
+export interface CustomParameterValue { key: string; value: string }
+/** Custom parameters as Google sends them, sorted by key (two reads of the same parameters compare equal). */
+export const customParamsOf = (value: unknown): CustomParameterValue[] =>
+  (Array.isArray(value) ? value : [])
+    .map((p: Json) => ({ key: str(p?.key) ?? '', value: typeof p?.value === 'string' ? p.value : '' }))
+    .filter((p) => p.key !== '')
+    .sort((a, b) => a.key.localeCompare(b.key))
+
+/** The URL and tracking fields of a campaign, ad group, keyword or ad (none = null / []). */
+export interface LiveUrlSet { trackingTemplate: string | null; finalUrlSuffix: string | null; customParameters: CustomParameterValue[] }
+const urlSetOf = (x: Json | undefined): LiveUrlSet => ({
+  trackingTemplate: str(x?.trackingUrlTemplate), finalUrlSuffix: str(x?.finalUrlSuffix), customParameters: customParamsOf(x?.urlCustomParameters),
+})
+
+/** A campaign's kind in one word: 'draft' (a Google draft, it does not serve), 'trial' (an experiment's trial), null (its own). */
+export const campaignKind = (experimentType: string | null | undefined): 'draft' | 'trial' | null =>
+  experimentType === 'DRAFT' ? 'draft' : experimentType === 'EXPERIMENT' ? 'trial' : null
+
+/**
+ * What a campaign is beyond a campaign of its own (campaign.experiment_type): a Google draft (a campaign draft, or the
+ * treatment of an experiment still in design) or the trial campaign of a running experiment. Null for a campaign of its own.
+ */
+export function campaignKindWords(c: { name: string; experimentType?: string | null }): string | null {
+  if (c.experimentType === 'DRAFT') return `"${c.name}" is a Google draft (a campaign draft, or the trial of an experiment still in design): it does not serve; promote-google-campaign-draft or schedule-google-experiment puts it to use.`
+  if (c.experimentType === 'EXPERIMENT') return `"${c.name}" is the trial campaign of a running experiment: it takes a share of its base campaign's traffic and budget; the change applies to the trial only (promote-google-experiment carries it to the base campaign).`
+  return null
+}
+
+/**
+ * The Google drafts and experiment trials a change's live reads met (G13), with the ad groups and ads of theirs those
+ * reads returned: a campaign read on its own, the account's campaign list, and every read of ad groups, keywords and ads
+ * that selects campaign.experiment_type (noteCampaignRow). google-ads-kit says it in the preview (campaignKindNotes) only
+ * when the change's operations name that campaign, one of its ad groups or one of its ads — never for a campaign a change
+ * only READ (a build copying a trial). Nothing else reads it.
+ */
+export interface CampaignsSeen {
+  campaigns: Map<string, { name: string; experimentType: string | null }>
+  /** Ad group id → its campaign id; ad id → its campaign id (drafts and trials only). */
+  adGroups: Map<string, string>
+  ads: Map<string, string>
+}
+const seenScope = new AsyncLocalStorage<CampaignsSeen>()
+
+/** Runs `fn` (a change's build) and answers what it returned and the drafts and trials its live reads met. */
+export async function withCampaignsSeen<T>(fn: () => Promise<T>): Promise<{ value: T; seen: CampaignsSeen }> {
+  const seen: CampaignsSeen = { campaigns: new Map(), adGroups: new Map(), ads: new Map() }
+  const value = await seenScope.run(seen, fn)
+  return { value, seen }
+}
+
+function noteSeen(c: { campaignId: string; name: string; experimentType: string | null }, adGroupId?: string | null, adId?: string | null): void {
+  const store = seenScope.getStore()
+  if (!store || !campaignKind(c.experimentType) || !c.campaignId) return
+  store.campaigns.set(c.campaignId, { name: c.name || `campaign ${c.campaignId}`, experimentType: c.experimentType })
+  if (adGroupId) store.adGroups.set(adGroupId, c.campaignId)
+  if (adId) store.ads.set(adId, c.campaignId)
+}
+
+/**
+ * A row of any read that selects campaign.experiment_type (with campaign.id, and ad_group.id / ad_group_ad.ad.id when it
+ * has them): a draft's or trial's campaign, ad group and ad are remembered for the preview's note. A no-op outside a
+ * change's build.
+ */
+export function noteCampaignRow(row: Json): void {
+  const c = row?.campaign
+  if (!c || !seenScope.getStore()) return
+  noteSeen({ campaignId: str(c.id) ?? '', name: str(c.name) ?? '', experimentType: str(c.experimentType) }, str(row.adGroup?.id), str(row.adGroupAd?.ad?.id))
+}
+
+/**
+ * The preview's words for the drafts and trials a change is about: those whose campaign (`…/campaigns/22`,
+ * `…/campaignCriteria/22~5`, `…/conversionGoalCampaignConfigs/22`), ad group (`…/adGroups/51`, `…/adGroupCriteria/51~9`,
+ * `…/adGroupAds/51~7` …) or ad (`…/ads/7`) a resource name of the operations holds.
+ */
+export function campaignKindNotes(seen: CampaignsSeen, operations: unknown[]): string[] {
+  if (!seen.campaigns.size) return []
+  const text = JSON.stringify(operations)
+  const named = new Set<string>()
+  for (const id of seen.campaigns.keys()) {
+    if (new RegExp(`/(?:campaigns|conversionGoalCampaignConfigs)/${id}(?![0-9])|/campaign[A-Za-z]+/${id}~`).test(text)) named.add(id)
+  }
+  for (const [adGroupId, campaignId] of seen.adGroups) if (!named.has(campaignId) && new RegExp(`/adGroup[A-Za-z]*/${adGroupId}(?![0-9])`).test(text)) named.add(campaignId)
+  for (const [adId, campaignId] of seen.ads) if (!named.has(campaignId) && new RegExp(`/ads/${adId}(?![0-9])|/adGroupAds/[0-9]+~${adId}(?![0-9])`).test(text)) named.add(campaignId)
+  return [...named].map((id) => campaignKindWords(seen.campaigns.get(id)!)).filter((w): w is string => !!w)
+}
 
 // ── campaigns ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -44,11 +141,11 @@ const CAMPAIGN_FIELDS = [
   'campaign.advertising_channel_type', 'campaign.advertising_channel_sub_type', 'campaign.bidding_strategy_type',
   'campaign.start_date_time', 'campaign.end_date_time', 'campaign.shopping_setting.merchant_id',
   'campaign.shopping_setting.feed_label', 'campaign.shopping_setting.campaign_priority', 'campaign_budget.id',
-  'campaign_budget.name', 'campaign_budget.amount_micros', 'campaign_budget.explicitly_shared',
+  'campaign_budget.name', 'campaign_budget.amount_micros', 'campaign_budget.explicitly_shared', 'campaign.experiment_type',
 ]
 
-/** Every campaign that is not removed, with its budget. */
-export const LIVE_CAMPAIGNS_QUERY = `SELECT ${CAMPAIGN_FIELDS.join(', ')} FROM campaign WHERE campaign.status != 'REMOVED' ORDER BY campaign.name`
+/** Every campaign that is not removed, with its budget — Google's drafts and experiment trials too, each marked (experimentType). */
+export const LIVE_CAMPAIGNS_QUERY = `SELECT ${CAMPAIGN_FIELDS.join(', ')} FROM campaign WHERE campaign.status != 'REMOVED' ORDER BY campaign.name${INCLUDE_DRAFTS}`
 
 export interface LiveCampaign {
   campaignId: string
@@ -63,6 +160,8 @@ export interface LiveCampaign {
   end: string | null
   shopping: { merchantId: string | null; feedLabel: string | null; priority: 'LOW' | 'MEDIUM' | 'HIGH' | null } | null
   budget: { budgetId: string | null; name: string | null; amountCents: number | null; shared: boolean } | null
+  /** BASE (a campaign of its own), DRAFT (a Google draft: does not serve) or EXPERIMENT (an experiment's trial); null when not read. */
+  experimentType: string | null
 }
 
 const PRIORITY: Record<number, 'LOW' | 'MEDIUM' | 'HIGH'> = { 0: 'LOW', 1: 'MEDIUM', 2: 'HIGH' }
@@ -89,11 +188,14 @@ export function liveCampaignOf(row: Json): LiveCampaign {
       ? { merchantId: str(shopping.merchantId), feedLabel: str(shopping.feedLabel), priority: priorityName(shopping.campaignPriority ?? 0) }
       : null,
     budget: b ? { budgetId: str(b.id), name: str(b.name), amountCents: centsOfMicros(b.amountMicros), shared: bool(b.explicitlyShared) } : null,
+    experimentType: str(c.experimentType),
   }
 }
 
 export async function liveCampaigns(target: GoogleAdsTarget): Promise<LiveCampaign[]> {
-  return (await liveRows<Json>(target, LIVE_CAMPAIGNS_QUERY, 'ads.search.live.campaigns')).map(liveCampaignOf)
+  const campaigns = (await liveRows<Json>(target, LIVE_CAMPAIGNS_QUERY, 'ads.search.live.campaigns')).map(liveCampaignOf)
+  for (const c of campaigns) noteSeen(c)
+  return campaigns
 }
 
 // ── budgets ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -112,7 +214,8 @@ export interface LiveBudget {
   period: string | null
   /** How many campaigns (not removed) use it, as Google counts them. */
   usedBy: number
-  campaigns: Array<{ campaignId: string; name: string; status: string | null }>
+  /** `kind`: a Google draft or an experiment's trial using it (G13: the campaign list holds them too, marked). */
+  campaigns: Array<{ campaignId: string; name: string; status: string | null; kind?: 'draft' | 'trial' }>
 }
 
 /** The account's budgets (shared and own), each with the campaigns that use it. Two queries. */
@@ -131,7 +234,7 @@ export async function liveBudgets(target: GoogleAdsTarget, campaigns?: LiveCampa
       deliveryMethod: str(b.deliveryMethod),
       period: str(b.period),
       usedBy: Number(b.referenceCount ?? users.length) || 0,
-      campaigns: users.map((c) => ({ campaignId: c.campaignId, name: c.name, status: c.status })),
+      campaigns: users.map((c) => ({ campaignId: c.campaignId, name: c.name, status: c.status, ...(campaignKind(c.experimentType) ? { kind: campaignKind(c.experimentType)! } : {}) })),
     }
   })
 }
@@ -206,34 +309,74 @@ const SETTINGS_FIELDS = [
   'campaign.ai_max_setting.enable_ai_max', 'campaign.keyword_match_type', 'campaign.asset_automation_settings',
   'campaign.shopping_setting.enable_local', 'campaign.tracking_url_template', 'campaign.final_url_suffix',
   'campaign.primary_status_reasons', 'campaign_budget.delivery_method',
+  // G13 (fields/v25/campaign, 2026-10-16): selectable; url_custom_parameters is not filterable (never in a WHERE).
+  'campaign.url_custom_parameters', 'campaign.shopping_setting.ignore_brand_exclusion_in_shopping_ads',
+  // G13 review: the standard strategies a copy carries (fields/v25/campaign, 2026-10-16: selectable): Target impression
+  // share, and standard Target CPA / Target ROAS (Portfolio-only in v25 docs/campaigns/bidding/strategy-types; a copy
+  // makes them Maximize conversions / conversion value with the target).
+  'campaign.target_impression_share.location', 'campaign.target_impression_share.location_fraction_micros',
+  'campaign.target_impression_share.cpc_bid_ceiling_micros', 'campaign.target_cpa.target_cpa_micros', 'campaign.target_roas.target_roas',
 ]
 
 export const liveCampaignSettingsQuery = (campaignId: string): string =>
-  `SELECT ${SETTINGS_FIELDS.join(', ')} FROM campaign WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')}`
+  `SELECT ${SETTINGS_FIELDS.join(', ')} FROM campaign WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')}${INCLUDE_DRAFTS}`
+
+/**
+ * Every part of a campaign's criteria in ONE query (G13: the copy maps these rows with G2's targetingCriterionOf, G7's
+ * liveCampaignExclusionsOf and G4's inventoryFilterOf instead of three more reads). The fields are the ones those groups
+ * checked on campaign_criterion (fields/v25/campaign_criterion: device.type, proximity.*, the audience and demographic
+ * infos, placement / youtube / mobile app / app category / content label / ip block infos, brand_list.shared_set,
+ * listing_scope.dimensions — selectable; listing_scope.dimensions is not filterable and is never in a WHERE).
+ */
+const CRITERIA_FIELDS = [
+  'campaign.id', 'campaign.name', 'campaign.status', 'campaign.experiment_type',
+  'campaign_criterion.criterion_id', 'campaign_criterion.type', 'campaign_criterion.negative', 'campaign_criterion.status',
+  'campaign_criterion.bid_modifier', 'campaign_criterion.display_name', 'campaign_criterion.location.geo_target_constant',
+  'campaign_criterion.language.language_constant', 'campaign_criterion.ad_schedule.day_of_week',
+  'campaign_criterion.ad_schedule.start_hour', 'campaign_criterion.ad_schedule.start_minute',
+  'campaign_criterion.ad_schedule.end_hour', 'campaign_criterion.ad_schedule.end_minute', 'campaign_criterion.keyword.text',
+  'campaign_criterion.keyword.match_type', 'campaign_criterion.user_interest.user_interest_category',
+  'campaign_criterion.user_list.user_list', 'campaign_criterion.custom_audience.custom_audience',
+  'campaign_criterion.combined_audience.combined_audience', 'campaign_criterion.life_event.life_event_id',
+  'campaign_criterion.age_range.type', 'campaign_criterion.gender.type', 'campaign_criterion.parental_status.type',
+  'campaign_criterion.income_range.type', 'campaign_criterion.device.type',
+  'campaign_criterion.proximity.geo_point.latitude_in_micro_degrees', 'campaign_criterion.proximity.geo_point.longitude_in_micro_degrees',
+  'campaign_criterion.proximity.radius', 'campaign_criterion.proximity.radius_units',
+  'campaign_criterion.proximity.address.street_address', 'campaign_criterion.proximity.address.city_name',
+  'campaign_criterion.proximity.address.postal_code', 'campaign_criterion.proximity.address.country_code',
+  'campaign_criterion.placement.url', 'campaign_criterion.youtube_channel.channel_id', 'campaign_criterion.youtube_video.video_id',
+  'campaign_criterion.mobile_application.app_id', 'campaign_criterion.mobile_application.name',
+  'campaign_criterion.mobile_app_category.mobile_app_category_constant', 'campaign_criterion.content_label.type',
+  'campaign_criterion.ip_block.ip_address', 'campaign_criterion.brand_list.shared_set', 'campaign_criterion.listing_scope.dimensions',
+]
 
 export const liveCampaignCriteriaQuery = (campaignId: string): string =>
-  'SELECT campaign_criterion.criterion_id, campaign_criterion.type, campaign_criterion.negative, campaign_criterion.status, ' +
-  'campaign_criterion.bid_modifier, campaign_criterion.display_name, campaign_criterion.location.geo_target_constant, ' +
-  'campaign_criterion.language.language_constant, campaign_criterion.ad_schedule.day_of_week, ' +
-  'campaign_criterion.ad_schedule.start_hour, campaign_criterion.ad_schedule.start_minute, ' +
-  'campaign_criterion.ad_schedule.end_hour, campaign_criterion.ad_schedule.end_minute, campaign_criterion.keyword.text, ' +
-  'campaign_criterion.keyword.match_type, campaign_criterion.user_interest.user_interest_category, ' +
-  `campaign_criterion.user_list.user_list FROM campaign_criterion WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} ` +
-  "AND campaign_criterion.status != 'REMOVED'"
+  `SELECT ${CRITERIA_FIELDS.join(', ')} FROM campaign_criterion WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} ` +
+  `AND campaign_criterion.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
+/**
+ * G13 (fields/v25/ad_group, 2026-10-16): ad_rotation_mode, tracking_url_template, final_url_suffix, target_cpa_micros and
+ * target_roas selectable; url_custom_parameters and targeting_setting.target_restrictions selectable, not filterable.
+ */
 export const liveAdGroupsQuery = (campaignId: string): string =>
-  'SELECT ad_group.id, ad_group.name, ad_group.status, ad_group.type, ad_group.cpc_bid_micros FROM ad_group ' +
-  `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group.status != 'REMOVED'`
+  'SELECT campaign.id, campaign.name, campaign.experiment_type, ad_group.id, ad_group.name, ad_group.status, ad_group.type, ad_group.cpc_bid_micros, ad_group.target_cpa_micros, ' +
+  'ad_group.target_roas, ad_group.ad_rotation_mode, ad_group.tracking_url_template, ad_group.final_url_suffix, ' +
+  'ad_group.url_custom_parameters, ad_group.targeting_setting.target_restrictions FROM ad_group ' +
+  `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export const liveKeywordsQuery = (campaignId: string): string =>
-  'SELECT ad_group.id, ad_group_criterion.criterion_id, ad_group_criterion.negative, ad_group_criterion.status, ' +
+  'SELECT campaign.id, campaign.name, campaign.experiment_type, ad_group.id, ad_group_criterion.criterion_id, ad_group_criterion.negative, ad_group_criterion.status, ' +
   'ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.cpc_bid_micros, ' +
-  'ad_group_criterion.effective_cpc_bid_micros, ad_group_criterion.approval_status, ad_group_criterion.primary_status ' +
+  'ad_group_criterion.effective_cpc_bid_micros, ad_group_criterion.approval_status, ad_group_criterion.primary_status, ' +
+  // G13 (fields/v25/ad_group_criterion): final_urls, final_mobile_urls, tracking_url_template, final_url_suffix selectable;
+  // url_custom_parameters selectable, not filterable.
+  'ad_group_criterion.final_urls, ad_group_criterion.final_mobile_urls, ad_group_criterion.tracking_url_template, ' +
+  'ad_group_criterion.final_url_suffix, ad_group_criterion.url_custom_parameters ' +
   `FROM ad_group_criterion WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group_criterion.type = 'KEYWORD' ` +
-  "AND ad_group_criterion.status != 'REMOVED' AND ad_group.status != 'REMOVED'"
+  `AND ad_group_criterion.status != 'REMOVED' AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export const liveProductGroupsQuery = (campaignId: string): string =>
-  'SELECT ad_group.id, ad_group_criterion.criterion_id, ad_group_criterion.status, ad_group_criterion.negative, ' +
+  'SELECT campaign.id, campaign.name, campaign.experiment_type, ad_group.id, ad_group_criterion.criterion_id, ad_group_criterion.status, ad_group_criterion.negative, ' +
   'ad_group_criterion.cpc_bid_micros, ad_group_criterion.listing_group.type, ' +
   'ad_group_criterion.listing_group.parent_ad_group_criterion, ad_group_criterion.listing_group.case_value.product_item_id.value, ' +
   'ad_group_criterion.listing_group.case_value.product_brand.value, ad_group_criterion.listing_group.case_value.product_type.value, ' +
@@ -241,29 +384,35 @@ export const liveProductGroupsQuery = (campaignId: string): string =>
   'ad_group_criterion.listing_group.case_value.product_custom_attribute.value, ' +
   'ad_group_criterion.listing_group.case_value.product_custom_attribute.index ' +
   `FROM ad_group_criterion WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group_criterion.type = 'LISTING_GROUP' ` +
-  "AND ad_group_criterion.status != 'REMOVED' AND ad_group.status != 'REMOVED'"
+  `AND ad_group_criterion.status != 'REMOVED' AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export const liveAdsQuery = (campaignId: string): string =>
-  'SELECT ad_group.id, ad_group_ad.ad.id, ad_group_ad.status, ad_group_ad.ad.type, ad_group_ad.ad.final_urls, ' +
+  'SELECT campaign.id, campaign.name, campaign.experiment_type, ad_group.id, ad_group_ad.ad.id, ad_group_ad.status, ad_group_ad.ad.type, ad_group_ad.ad.final_urls, ' +
   'ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions, ' +
   'ad_group_ad.ad.responsive_search_ad.path1, ad_group_ad.ad.responsive_search_ad.path2, ad_group_ad.ad_strength, ' +
   'ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.review_status, ' +
-  'ad_group_ad.policy_summary.policy_topic_entries FROM ad_group_ad ' +
-  `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group_ad.status != 'REMOVED' AND ad_group.status != 'REMOVED'`
+  'ad_group_ad.policy_summary.policy_topic_entries, ' +
+  // G13 (fields/v25/ad_group_ad): ad.final_mobile_urls, ad.tracking_url_template, ad.final_url_suffix selectable;
+  // ad.url_custom_parameters selectable, not filterable.
+  'ad_group_ad.ad.final_mobile_urls, ad_group_ad.ad.tracking_url_template, ad_group_ad.ad.final_url_suffix, ' +
+  'ad_group_ad.ad.url_custom_parameters FROM ad_group_ad ' +
+  `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group_ad.status != 'REMOVED' AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export const liveCampaignListsQuery = (campaignId: string): string =>
   'SELECT shared_set.id, shared_set.name, shared_set.type, campaign_shared_set.status FROM campaign_shared_set ' +
-  `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND campaign_shared_set.status = 'ENABLED'`
+  `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND campaign_shared_set.status = 'ENABLED'${INCLUDE_DRAFTS}`
 
 export const liveAssetsQuery = (campaignId?: string): string =>
   // Google refuses a filter on campaign.status here unless campaign.status is selected too (read 2026-10-15).
+  // campaign_asset.source (G13, fields/v25/campaign_asset: selectable): ADVERTISER, or AUTOMATICALLY_CREATED (Google linked it).
   'SELECT campaign.id, campaign.status, campaign_asset.field_type, campaign_asset.status, campaign_asset.primary_status, ' +
-  'campaign_asset.primary_status_reasons, asset.id, asset.type, asset.name, asset.final_urls, ' +
+  'campaign_asset.primary_status_reasons, campaign_asset.source, asset.id, asset.type, asset.name, asset.final_urls, ' +
   'asset.sitelink_asset.link_text, asset.sitelink_asset.description1, asset.sitelink_asset.description2, ' +
   'asset.callout_asset.callout_text, asset.structured_snippet_asset.header, asset.structured_snippet_asset.values, ' +
   'asset.policy_summary.approval_status, asset.policy_summary.review_status, asset.policy_summary.policy_topic_entries ' +
   "FROM campaign_asset WHERE campaign_asset.status != 'REMOVED' AND campaign.status != 'REMOVED'" +
-  (campaignId ? ` AND campaign.id = ${gaqlId(campaignId, 'The campaign')}` : '')
+  // One campaign (a change stands on it): Google's drafts too. Every campaign (a listing): campaigns of their own only.
+  (campaignId ? ` AND campaign.id = ${gaqlId(campaignId, 'The campaign')}${INCLUDE_DRAFTS}` : '')
 
 export interface LiveCriterion {
   criterionId: string
@@ -360,6 +509,8 @@ export interface LiveAd {
   approval: string | null
   review: string | null
   policy: Array<{ topic: string | null; type: string | null }>
+  finalMobileUrls: string[]
+  urls: LiveUrlSet
 }
 
 const adText = (assets: unknown) => (Array.isArray(assets) ? assets : []).map((a: Json) => ({ text: str(a.text) ?? '', pinned: str(a.pinnedField) }))
@@ -383,6 +534,8 @@ export function liveAdOf(row: Json): LiveAd {
     approval: str(g.policySummary?.approvalStatus),
     review: str(g.policySummary?.reviewStatus),
     policy: topics(g.policySummary?.policyTopicEntries),
+    finalMobileUrls: Array.isArray(ad.finalMobileUrls) ? ad.finalMobileUrls.map(String) : [],
+    urls: urlSetOf(ad),
   }
 }
 
@@ -392,6 +545,8 @@ export interface LiveAsset {
   fieldType: string | null
   type: string | null
   status: string | null
+  /** ADVERTISER, or AUTOMATICALLY_CREATED (Google linked it itself); null when not read. */
+  source: string | null
   primaryStatus: string | null
   primaryStatusReasons: string[]
   text: string | null
@@ -414,6 +569,7 @@ export function liveAssetOf(row: Json): LiveAsset {
     fieldType: str(link.fieldType),
     type: str(a.type),
     status: str(link.status),
+    source: str(link.source),
     primaryStatus: str(link.primaryStatus),
     primaryStatusReasons: Array.isArray(link.primaryStatusReasons) ? link.primaryStatusReasons.map(String) : [],
     text: str(a.sitelinkAsset?.linkText) ?? str(a.calloutAsset?.calloutText) ?? str(a.name),
@@ -444,19 +600,36 @@ export interface LiveCampaignDetail {
     localInventory: boolean
     trackingTemplate: string | null
     finalUrlSuffix: string | null
+    customParameters: CustomParameterValue[]
+    ignoreBrandExclusions: boolean
+    /** Target impression share (a standard strategy): where, how often (micros: 1 % = 10,000), the max CPC ceiling. */
+    targetImpressionShare: { location: string | null; fractionMicros: number | null; ceilingCents: number | null } | null
+    /** Standard Target CPA / Target ROAS (campaign.target_cpa / target_roas), when the campaign has them. */
+    standardTargetCpaCents: number | null
+    standardTargetRoas: number | null
     primaryStatusReasons: string[]
   }
   criteria: { locations: LiveCriterion[]; languages: LiveCriterion[]; schedule: LiveCriterion[]; audiences: LiveCriterion[]; negativeKeywords: LiveCriterion[]; other: LiveCriterion[] }
   negativeLists: Array<{ listId: string; name: string | null }>
   /** Shared sets of other types linked to the campaign (brand lists, …): read, so a copy can name what it leaves behind. */
   otherSharedSets: Array<{ listId: string; name: string | null; type: string | null }>
-  adGroups: Array<{ adGroupId: string; name: string; status: string | null; type: string | null; cpcBidCents: number | null }>
-  keywords: Array<{ adGroupId: string; criterionId: string; text: string; matchType: string | null; negative: boolean; status: string | null; cpcBidCents: number | null; effectiveCpcBidCents: number | null; approval: string | null }>
+  adGroups: Array<{
+    adGroupId: string; name: string; status: string | null; type: string | null; cpcBidCents: number | null
+    targetCpaCents: number | null; targetRoas: number | null; rotation: string | null; urls: LiveUrlSet
+    /** Its own targeting setting (empty: the campaign's, or Google's default, applies). */
+    audienceMode: Array<{ dimension: string | null; observationOnly: boolean }>
+  }>
+  keywords: Array<{
+    adGroupId: string; criterionId: string; text: string; matchType: string | null; negative: boolean; status: string | null; cpcBidCents: number | null; effectiveCpcBidCents: number | null; approval: string | null
+    finalUrls: string[]; finalMobileUrls: string[]; urls: LiveUrlSet
+  }>
   productGroups: LiveProductGroup[]
   ads: LiveAd[]
   assets: LiveAsset[]
   /** What Google answered for each part, and the parts it refused (a field it no longer knows, …). */
   notRead: Array<{ part: string; why: string }>
+  /** G13: the criteria rows as Google sent them (every part: devices, radius, audiences, exclusions, brand lists, filter) — a copy maps them. */
+  criteriaRows: Json[]
 }
 
 /** One campaign's settings, as the settings query reads them (liveCampaignSettingsQuery). */
@@ -487,6 +660,13 @@ export function liveCampaignSettingsOf(row: Json): LiveCampaignDetail['campaign'
     localInventory: bool(c.shoppingSetting?.enableLocal),
     trackingTemplate: str(c.trackingUrlTemplate),
     finalUrlSuffix: str(c.finalUrlSuffix),
+    customParameters: customParamsOf(c.urlCustomParameters),
+    ignoreBrandExclusions: bool(c.shoppingSetting?.ignoreBrandExclusionInShoppingAds),
+    targetImpressionShare: c.targetImpressionShare
+      ? { location: str(c.targetImpressionShare.location), fractionMicros: Number(c.targetImpressionShare.locationFractionMicros ?? NaN) || null, ceilingCents: centsOfMicros(c.targetImpressionShare.cpcBidCeilingMicros) }
+      : null,
+    standardTargetCpaCents: centsOfMicros(c.targetCpa?.targetCpaMicros),
+    standardTargetRoas: typeof c.targetRoas?.targetRoas === 'number' ? c.targetRoas.targetRoas : null,
     primaryStatusReasons: Array.isArray(c.primaryStatusReasons) ? c.primaryStatusReasons.map(String) : [],
   }
 }
@@ -495,7 +675,10 @@ export function liveCampaignSettingsOf(row: Json): LiveCampaignDetail['campaign'
 export async function liveCampaignSettings(target: GoogleAdsTarget, campaignId: string): Promise<LiveCampaignDetail['campaign'] | null> {
   const rows = await liveRows<Json>(target, liveCampaignSettingsQuery(gaqlId(campaignId, 'The campaign')), 'ads.search.live.campaign')
   const row = rows[0]
-  return row && str(row.campaign?.status) !== 'REMOVED' ? liveCampaignSettingsOf(row) : null
+  if (!row || str(row.campaign?.status) === 'REMOVED') return null
+  const campaign = liveCampaignSettingsOf(row)
+  noteSeen(campaign)
+  return campaign
 }
 
 /**
@@ -519,14 +702,21 @@ export async function liveCampaignDetail(target: GoogleAdsTarget, campaignId: st
     }
   }
   const base = liveCampaignOf(row)
-  const criteria = await part('criteria', liveCampaignCriteriaQuery(id), liveCriterionOf)
+  const criteriaRows = await part('criteria', liveCampaignCriteriaQuery(id), (r) => r)
+  const criteria = criteriaRows.map(liveCriterionOf)
   const lists = await part('negative-lists', liveCampaignListsQuery(id), (r) => ({ listId: str(r.sharedSet?.id) ?? '', name: str(r.sharedSet?.name), type: str(r.sharedSet?.type) }))
-  const adGroups = await part('ad-groups', liveAdGroupsQuery(id), (r) => ({
+  const adGroups = await part('ad-groups', liveAdGroupsQuery(id), (r) => (noteCampaignRow(r), {
     adGroupId: str(r.adGroup?.id) ?? '', name: str(r.adGroup?.name) ?? '', status: str(r.adGroup?.status), type: str(r.adGroup?.type), cpcBidCents: centsOfMicros(r.adGroup?.cpcBidMicros),
+    targetCpaCents: centsOfMicros(r.adGroup?.targetCpaMicros) || null,
+    targetRoas: typeof r.adGroup?.targetRoas === 'number' && r.adGroup.targetRoas > 0 ? r.adGroup.targetRoas : null,
+    rotation: str(r.adGroup?.adRotationMode),
+    urls: urlSetOf(r.adGroup),
+    audienceMode: (Array.isArray(r.adGroup?.targetingSetting?.targetRestrictions) ? r.adGroup.targetingSetting.targetRestrictions : [])
+      .map((t: Json) => ({ dimension: str(t.targetingDimension), observationOnly: bool(t.bidOnly) })),
   }))
   const isShopping = base.type === 'SHOPPING'
   // Keywords and ad-group negative keywords (a Shopping campaign has only the negatives).
-  const keywords = await part('keywords', liveKeywordsQuery(id), (r) => ({
+  const keywords = await part('keywords', liveKeywordsQuery(id), (r) => (noteCampaignRow(r), {
     adGroupId: str(r.adGroup?.id) ?? '',
     criterionId: str(r.adGroupCriterion?.criterionId) ?? '',
     text: str(r.adGroupCriterion?.keyword?.text) ?? '',
@@ -536,14 +726,20 @@ export async function liveCampaignDetail(target: GoogleAdsTarget, campaignId: st
     cpcBidCents: centsOfMicros(r.adGroupCriterion?.cpcBidMicros),
     effectiveCpcBidCents: centsOfMicros(r.adGroupCriterion?.effectiveCpcBidMicros),
     approval: str(r.adGroupCriterion?.approvalStatus),
+    finalUrls: Array.isArray(r.adGroupCriterion?.finalUrls) ? r.adGroupCriterion.finalUrls.map(String) : [],
+    finalMobileUrls: Array.isArray(r.adGroupCriterion?.finalMobileUrls) ? r.adGroupCriterion.finalMobileUrls.map(String) : [],
+    urls: urlSetOf(r.adGroupCriterion),
   }))
   const productGroups = isShopping ? await part('product-groups', liveProductGroupsQuery(id), liveProductGroupOf) : []
-  const ads = isShopping ? [] : await part('ads', liveAdsQuery(id), liveAdOf)
+  // G13: a Shopping campaign's product ads too (their status and labels go with a copy).
+  const ads = await part('ads', liveAdsQuery(id), (r) => (noteCampaignRow(r), liveAdOf(r)))
   const assets = await part('assets', liveAssetsQuery(id), liveAssetOf)
   const by = (type: string) => criteria.filter((k) => k.type === type)
   const known = new Set(['LOCATION', 'LANGUAGE', 'AD_SCHEDULE', 'USER_INTEREST', 'USER_LIST', 'KEYWORD'])
+  const campaign = liveCampaignSettingsOf(row)
+  noteSeen(campaign)
   return {
-    campaign: liveCampaignSettingsOf(row),
+    campaign,
     criteria: {
       locations: by('LOCATION'),
       languages: by('LANGUAGE'),
@@ -560,17 +756,18 @@ export async function liveCampaignDetail(target: GoogleAdsTarget, campaignId: st
     ads,
     assets,
     notRead,
+    criteriaRows,
   }
 }
 
 // ── one ad group's parts (product groups, keywords, ads), for the change tools ─────────────────────────────────
 
 export async function liveProductGroups(target: GoogleAdsTarget, campaignId: string): Promise<LiveProductGroup[]> {
-  return (await liveRows<Json>(target, liveProductGroupsQuery(campaignId), 'ads.search.live.product-groups')).map(liveProductGroupOf)
+  return (await liveRows<Json>(target, liveProductGroupsQuery(campaignId), 'ads.search.live.product-groups')).map((r) => (noteCampaignRow(r), liveProductGroupOf(r)))
 }
 
 export async function liveAds(target: GoogleAdsTarget, campaignId: string): Promise<LiveAd[]> {
-  return (await liveRows<Json>(target, liveAdsQuery(campaignId), 'ads.search.live.ads')).map(liveAdOf)
+  return (await liveRows<Json>(target, liveAdsQuery(campaignId), 'ads.search.live.ads')).map((r) => (noteCampaignRow(r), liveAdOf(r)))
 }
 
 export async function liveAssets(target: GoogleAdsTarget, campaignId?: string): Promise<LiveAsset[]> {

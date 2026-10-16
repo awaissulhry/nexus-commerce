@@ -9,7 +9,7 @@
  * campaign_criterion.status are filterable. The inventory filter of the Google Ads UI is the campaign's LISTING_SCOPE
  * criterion; "Only one listing scope is allowed per campaign" (developers.google.com/google-ads/api/samples/add-listing-scope).
  */
-import { gaqlId } from './live.js'
+import { gaqlId, INCLUDE_DRAFTS, noteCampaignRow } from './live.js'
 import { dimensionOfCase, type Dimension } from './product-tree.js'
 import type { GoogleAdsTarget } from './types.js'
 import { liveRows } from './write-client.js'
@@ -44,13 +44,13 @@ export interface ShoppingLiveState {
 export const liveShoppingCampaignQuery = (campaignId: string): string =>
   'SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.shopping_setting.merchant_id, ' +
   'campaign.shopping_setting.feed_label, campaign.shopping_setting.campaign_priority, campaign.shopping_setting.enable_local, ' +
-  'campaign.shopping_setting.ignore_brand_exclusion_in_shopping_ads FROM campaign ' +
-  `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')}`
+  'campaign.shopping_setting.ignore_brand_exclusion_in_shopping_ads, campaign.experiment_type FROM campaign ' +
+  `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')}${INCLUDE_DRAFTS}`
 
 export const liveInventoryFilterQuery = (campaignId: string): string =>
   'SELECT campaign.id, campaign_criterion.criterion_id, campaign_criterion.listing_scope.dimensions FROM campaign_criterion ' +
   `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND campaign_criterion.type = 'LISTING_SCOPE' ` +
-  "AND campaign_criterion.status != 'REMOVED'"
+  `AND campaign_criterion.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export function shoppingCampaignOf(row: Json): ShoppingCampaignLive {
   const c = row.campaign ?? {}
@@ -79,6 +79,7 @@ export function inventoryFilterOf(row: Json): InventoryFilterLive {
 /** The campaign's Shopping settings and inventory filter: two queries on the account's change allowance. */
 export async function liveShoppingState(target: GoogleAdsTarget, campaignId: string): Promise<ShoppingLiveState> {
   const rows = await liveRows<Json>(target, liveShoppingCampaignQuery(campaignId), 'ads.search.live.campaign')
+  if (rows[0]) noteCampaignRow(rows[0])
   const campaign = rows[0] ? shoppingCampaignOf(rows[0]) : null
   if (!campaign || campaign.status === 'REMOVED') return { campaign: null, filters: [] }
   const scopes = await liveRows<Json>(target, liveInventoryFilterQuery(campaignId), 'ads.search.live.inventory-filter')

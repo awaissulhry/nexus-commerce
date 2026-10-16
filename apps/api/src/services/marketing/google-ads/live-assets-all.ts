@@ -31,7 +31,7 @@
  * campaign_asset query, ad_group.status in an ad_group_asset query) must also be in the SELECT — every such field is.
  */
 import { liveRows } from './write-client.js'
-import { centsOfMicros, gaqlId, idOf } from './live.js'
+import { centsOfMicros, gaqlId, idOf, INCLUDE_DRAFTS, noteCampaignRow } from './live.js'
 import { byGoogleId } from './live-keywords.js'
 import type { GoogleAdsTarget } from './types.js'
 
@@ -211,6 +211,8 @@ export const liveCampaignLinksQuery = (campaignIds: string[] | null, filter: Lin
   'SELECT campaign.id, campaign.name, campaign.status, campaign_asset.field_type, campaign_asset.status, campaign_asset.source, ' +
   `campaign_asset.primary_status, ${ASSET_FIELDS} FROM campaign_asset WHERE campaign_asset.status != 'REMOVED' AND campaign.status != 'REMOVED'` +
   (campaignIds ? ` AND campaign.id IN (${inList(campaignIds, 'The campaign')})` : '') + filters(filter, 'campaign_asset')
+  // Named campaigns (a change stands on them): Google's drafts too (G13). Every campaign (a listing): its own only.
+  + (campaignIds ? INCLUDE_DRAFTS : '')
 
 /** Ad group links of the given ad groups, or of one campaign's ad groups, or (neither) of every ad group. */
 export const liveAdGroupLinksQuery = (scope: { adGroupIds?: string[]; campaignId?: string }, filter: LinkFilter = {}): string =>
@@ -219,6 +221,7 @@ export const liveAdGroupLinksQuery = (scope: { adGroupIds?: string[]; campaignId
   "WHERE ad_group_asset.status != 'REMOVED' AND ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'" +
   (scope.adGroupIds?.length ? ` AND ad_group.id IN (${inList(scope.adGroupIds, 'The ad group')})` : '') +
   (scope.campaignId ? ` AND campaign.id = ${gaqlId(scope.campaignId, 'The campaign')}` : '') + filters(filter, 'ad_group_asset')
+  + (scope.adGroupIds?.length || scope.campaignId ? INCLUDE_DRAFTS : '')
 
 export function livePlaceLinkOf(level: LinkLevel, row: Json): LivePlaceLink {
   const link = (level === 'account' ? row.customerAsset : level === 'campaign' ? row.campaignAsset : row.adGroupAsset) ?? {}
@@ -274,12 +277,12 @@ export interface LiveAdGroupRef {
 }
 
 export const liveAdGroupsByIdQuery = (adGroupIds: string[]): string =>
-  'SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, ad_group.id, ad_group.name, ad_group.status ' +
-  `FROM ad_group WHERE ad_group.id IN (${inList(adGroupIds, 'The ad group')}) AND ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'`
+  'SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.experiment_type, ad_group.id, ad_group.name, ad_group.status ' +
+  `FROM ad_group WHERE ad_group.id IN (${inList(adGroupIds, 'The ad group')}) AND ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export async function liveAdGroupsById(target: GoogleAdsTarget, adGroupIds: string[]): Promise<LiveAdGroupRef[]> {
   if (!adGroupIds.length) return []
-  return (await liveRows<Json>(target, liveAdGroupsByIdQuery(adGroupIds), 'ads.search.live.ad-groups')).map((r) => ({
+  return (await liveRows<Json>(target, liveAdGroupsByIdQuery(adGroupIds), 'ads.search.live.ad-groups')).map((r) => (noteCampaignRow(r), {
     adGroupId: str(r.adGroup?.id) ?? '', name: str(r.adGroup?.name) ?? '', status: str(r.adGroup?.status),
     campaignId: str(r.campaign?.id) ?? '', campaignName: str(r.campaign?.name) ?? '', campaignStatus: str(r.campaign?.status),
     campaignType: str(r.campaign?.advertisingChannelType),

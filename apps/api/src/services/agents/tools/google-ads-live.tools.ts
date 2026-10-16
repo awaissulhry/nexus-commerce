@@ -24,7 +24,7 @@ import { GoogleAdsReadError } from '../../marketing/google-ads/errors.js'
 import { customerIdDigits } from '../../marketing/google-ads/mappers.js'
 import { asLiveRead, liveRows } from '../../marketing/google-ads/write-client.js'
 import {
-  liveAds, liveAssets, liveBudgets, liveCampaignDetail, liveCampaigns, liveChangeHistory, liveDrafts, liveNegativeLists,
+  campaignKind, campaignKindWords, liveAds, liveAssets, liveBudgets, liveCampaignDetail, liveCampaigns, liveChangeHistory, liveDrafts, liveNegativeLists,
 } from '../../marketing/google-ads/live.js'
 import { liveAutoApply, liveBidStrategies, liveCampaignProductGroups } from '../../marketing/google-ads/live-views.js'
 import { liveLookup, type LookupKind } from '../../marketing/google-ads/live-campaigns.js'
@@ -107,13 +107,22 @@ async function liveView(args: Record<string, unknown>, ctx: ToolContext): Promis
   try {
     switch (view) {
       case 'campaigns': {
-        const items = await liveCampaigns(account.target)
-        return { ok: true, data: { ...base, items, total: items.length } }
+        // G13: Google's drafts and experiment trials are listed too, each marked (kind), never mixed in silently.
+        const items = (await liveCampaigns(account.target)).map((c) => (campaignKind(c.experimentType) ? { ...c, kind: campaignKind(c.experimentType)! } : c))
+        const drafts = items.filter((c) => 'kind' in c && c.kind === 'draft').length
+        const trials = items.filter((c) => 'kind' in c && c.kind === 'trial').length
+        const note = drafts || trials
+          ? `${[drafts && `${drafts} Google draft${drafts === 1 ? '' : 's'} (kind draft: a campaign draft or an experiment's trial still in design; it does not serve)`, trials && `${trials} experiment trial${trials === 1 ? '' : 's'} (kind trial: it takes a share of its base campaign's traffic)`].filter(Boolean).join(' and ')} are in this list. The set-google-… tools change them like any campaign; google-ads-experiments shows the experiment each belongs to.`
+          : undefined
+        return { ok: true, data: { ...base, items, total: items.length, ...(note ? { note } : {}) } }
       }
       case 'campaign': {
         const detail = await liveCampaignDetail(account.target, campaignId!)
         if (!detail) return { ok: false, error: `Campaign ${campaignId} is not in this account (or it is removed).` }
-        return { ok: true, data: { ...base, ...detail } }
+        const kind = campaignKind(detail.campaign.experimentType)
+        // The raw criteria rows are for a copy; the view shows them mapped (criteria).
+        const { criteriaRows: _rows, ...shown } = detail
+        return { ok: true, data: { ...base, ...shown, ...(kind ? { kind, note: campaignKindWords(detail.campaign) } : {}) } }
       }
       case 'budgets': {
         const items = await liveBudgets(account.target)

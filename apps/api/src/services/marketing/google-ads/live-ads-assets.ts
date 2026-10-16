@@ -10,7 +10,7 @@
  * description2, asset.callout_asset.callout_text, asset.structured_snippet_asset.header / values are selectable.
  */
 import { liveRows } from './write-client.js'
-import { gaqlId, liveAssetOf, type LiveAsset } from './live.js'
+import { gaqlId, liveAssetOf, type LiveAsset, INCLUDE_DRAFTS, noteCampaignRow } from './live.js'
 import type { GoogleAdsTarget } from './types.js'
 
 type Json = Record<string, any>
@@ -19,9 +19,9 @@ const str = (value: unknown): string | null => (typeof value === 'string' && val
 // ── one ad group with its campaign ───────────────────────────────────────────────────────────────────────────────
 
 export const liveAdGroupPlaceQuery = (campaignId: string, adGroupId: string): string =>
-  'SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, ad_group.id, ad_group.name, ' +
+  'SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.experiment_type, ad_group.id, ad_group.name, ' +
   `ad_group.status, ad_group.type FROM ad_group WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} ` +
-  `AND ad_group.id = ${gaqlId(adGroupId, 'The ad group')} AND ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'`
+  `AND ad_group.id = ${gaqlId(adGroupId, 'The ad group')} AND ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export interface LiveAdGroupPlace {
   campaign: { campaignId: string; name: string; status: string | null; type: string | null }
@@ -40,6 +40,7 @@ export function liveAdGroupPlaceOf(row: Json): LiveAdGroupPlace {
 /** The ad group with its campaign, or null when it is not in that campaign (or either is removed). */
 export async function liveAdGroupPlace(target: GoogleAdsTarget, campaignId: string, adGroupId: string): Promise<LiveAdGroupPlace | null> {
   const rows = await liveRows<Json>(target, liveAdGroupPlaceQuery(campaignId, adGroupId), 'ads.search.live.ad-group')
+  if (rows[0]) noteCampaignRow(rows[0])
   return rows[0] ? liveAdGroupPlaceOf(rows[0]) : null
 }
 

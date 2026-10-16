@@ -24,7 +24,7 @@
  * IncomeRangeType, ProximityRadiusUnits, TargetingDimension.
  */
 import { liveRows } from './write-client.js'
-import { gaqlId, idOf, liveCriterionOf, type LiveCriterion } from './live.js'
+import { gaqlId, idOf, liveCriterionOf, type LiveCriterion, INCLUDE_DRAFTS, noteCampaignRow } from './live.js'
 import type { GoogleAdsTarget } from './types.js'
 
 type Json = Record<string, any>
@@ -137,7 +137,7 @@ export const CAMPAIGN_TARGETING_TYPES = [
 
 /** A campaign's targeting criteria that are not removed (no keywords: negatives are set-google-negatives). */
 export const liveTargetingCriteriaQuery = (campaignId: string): string =>
-  'SELECT campaign.id, campaign_criterion.criterion_id, campaign_criterion.type, campaign_criterion.negative, ' +
+  'SELECT campaign.id, campaign.name, campaign.experiment_type, campaign_criterion.criterion_id, campaign_criterion.type, campaign_criterion.negative, ' +
   'campaign_criterion.status, campaign_criterion.bid_modifier, campaign_criterion.display_name, ' +
   'campaign_criterion.location.geo_target_constant, campaign_criterion.language.language_constant, ' +
   'campaign_criterion.ad_schedule.day_of_week, campaign_criterion.ad_schedule.start_hour, ' +
@@ -149,7 +149,7 @@ export const liveTargetingCriteriaQuery = (campaignId: string): string =>
   'campaign_criterion.proximity.address.postal_code, campaign_criterion.proximity.address.country_code, ' +
   `${AUDIENCE_PARTS('campaign_criterion').join(', ')} FROM campaign_criterion ` +
   `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND campaign_criterion.status != 'REMOVED' ` +
-  `AND campaign_criterion.type IN (${inTypes(CAMPAIGN_TARGETING_TYPES)})`
+  `AND campaign_criterion.type IN (${inTypes(CAMPAIGN_TARGETING_TYPES)})${INCLUDE_DRAFTS}`
 
 export function targetingCriterionOf(row: Json): TargetingCriterion {
   const base = liveCriterionOf(row)
@@ -157,7 +157,7 @@ export function targetingCriterionOf(row: Json): TargetingCriterion {
 }
 
 export async function liveTargetingCriteria(target: GoogleAdsTarget, campaignId: string): Promise<TargetingCriterion[]> {
-  return (await liveRows<Json>(target, liveTargetingCriteriaQuery(campaignId), 'ads.search.live.targeting')).map(targetingCriterionOf)
+  return (await liveRows<Json>(target, liveTargetingCriteriaQuery(campaignId), 'ads.search.live.targeting')).map((r) => (noteCampaignRow(r), targetingCriterionOf(r)))
 }
 
 // ── a campaign's ad groups, their criteria and device adjustments ──────────────────────────────────────────────
@@ -173,8 +173,8 @@ export interface TargetingAdGroup {
 }
 
 export const liveTargetingAdGroupsQuery = (campaignId: string): string =>
-  'SELECT campaign.id, ad_group.id, ad_group.name, ad_group.status, ad_group.targeting_setting.target_restrictions ' +
-  `FROM ad_group WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group.status != 'REMOVED'`
+  'SELECT campaign.id, campaign.name, campaign.experiment_type, ad_group.id, ad_group.name, ad_group.status, ad_group.targeting_setting.target_restrictions ' +
+  `FROM ad_group WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export const restrictionsOf = (setting: Json | undefined): AudienceRestriction[] =>
   (Array.isArray(setting?.targetRestrictions) ? setting!.targetRestrictions : [])
@@ -182,6 +182,7 @@ export const restrictionsOf = (setting: Json | undefined): AudienceRestriction[]
 
 export async function liveTargetingAdGroups(target: GoogleAdsTarget, campaignId: string): Promise<TargetingAdGroup[]> {
   return (await liveRows<Json>(target, liveTargetingAdGroupsQuery(campaignId), 'ads.search.live.targeting-ad-groups')).map((r) => ({
+    ...(noteCampaignRow(r), {}),
     adGroupId: str(r.adGroup?.id) ?? '', name: str(r.adGroup?.name) ?? '', status: str(r.adGroup?.status), audienceMode: restrictionsOf(r.adGroup?.targetingSetting),
   }))
 }
@@ -199,11 +200,11 @@ export const AD_GROUP_TARGETING_TYPES = [...AUDIENCE_KINDS, ...DEMOGRAPHIC_DIMEN
 
 /** The audience and demographic criteria of a campaign's ad groups (not removed). */
 export const liveAdGroupTargetingQuery = (campaignId: string): string =>
-  'SELECT campaign.id, ad_group.id, ad_group.status, ad_group_criterion.criterion_id, ad_group_criterion.type, ' +
+  'SELECT campaign.id, campaign.name, campaign.experiment_type, ad_group.id, ad_group.status, ad_group_criterion.criterion_id, ad_group_criterion.type, ' +
   'ad_group_criterion.negative, ad_group_criterion.status, ad_group_criterion.bid_modifier, ad_group_criterion.display_name, ' +
   `${AUDIENCE_PARTS('ad_group_criterion').join(', ')} FROM ad_group_criterion ` +
   `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group.status != 'REMOVED' ` +
-  `AND ad_group_criterion.status != 'REMOVED' AND ad_group_criterion.type IN (${inTypes(AD_GROUP_TARGETING_TYPES)})`
+  `AND ad_group_criterion.status != 'REMOVED' AND ad_group_criterion.type IN (${inTypes(AD_GROUP_TARGETING_TYPES)})${INCLUDE_DRAFTS}`
 
 export function adGroupTargetingCriterionOf(row: Json): AdGroupTargetingCriterion {
   const c = row.adGroupCriterion ?? {}
@@ -219,20 +220,20 @@ export function adGroupTargetingCriterionOf(row: Json): AdGroupTargetingCriterio
 }
 
 export async function liveAdGroupTargeting(target: GoogleAdsTarget, campaignId: string): Promise<AdGroupTargetingCriterion[]> {
-  return (await liveRows<Json>(target, liveAdGroupTargetingQuery(campaignId), 'ads.search.live.targeting-ad-group-criteria')).map(adGroupTargetingCriterionOf)
+  return (await liveRows<Json>(target, liveAdGroupTargetingQuery(campaignId), 'ads.search.live.targeting-ad-group-criteria')).map((r) => (noteCampaignRow(r), adGroupTargetingCriterionOf(r)))
 }
 
 export interface AdGroupDeviceModifier { adGroupId: string; criterionId: string; device: string | null; bidModifier: number | null }
 
 /** The device bid adjustments of a campaign's ad groups (AdGroupBidModifier; other kinds are hotel-only). */
 export const liveAdGroupDevicesQuery = (campaignId: string): string =>
-  'SELECT campaign.id, ad_group.id, ad_group.status, ad_group_bid_modifier.criterion_id, ad_group_bid_modifier.bid_modifier, ' +
+  'SELECT campaign.id, campaign.name, campaign.experiment_type, ad_group.id, ad_group.status, ad_group_bid_modifier.criterion_id, ad_group_bid_modifier.bid_modifier, ' +
   `ad_group_bid_modifier.device.type FROM ad_group_bid_modifier WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} ` +
-  "AND ad_group.status != 'REMOVED'"
+  `AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export async function liveAdGroupDevices(target: GoogleAdsTarget, campaignId: string): Promise<AdGroupDeviceModifier[]> {
   return (await liveRows<Json>(target, liveAdGroupDevicesQuery(campaignId), 'ads.search.live.targeting-ad-group-devices'))
-    .map((r) => ({
+    .map((r) => (noteCampaignRow(r), {
       adGroupId: str(r.adGroup?.id) ?? '',
       criterionId: str(r.adGroupBidModifier?.criterionId) ?? '',
       device: str(r.adGroupBidModifier?.device?.type),

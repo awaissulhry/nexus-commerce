@@ -22,8 +22,20 @@ import type { GoogleMutateOperation } from './write-client.js'
 
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH'
 export type LocationOption = 'PRESENCE' | 'PRESENCE_OR_INTEREST'
-export type Strategy = 'MANUAL_CPC' | 'MAXIMIZE_CLICKS' | 'MAXIMIZE_CONVERSIONS' | 'MAXIMIZE_CONVERSION_VALUE' | 'PORTFOLIO'
-export interface Bidding { strategy: Strategy; maxCpcCents?: number; targetCpaCents?: number; targetRoas?: number; portfolioId?: string }
+export type Strategy = 'MANUAL_CPC' | 'MAXIMIZE_CLICKS' | 'MAXIMIZE_CONVERSIONS' | 'MAXIMIZE_CONVERSION_VALUE' | 'PORTFOLIO' | 'TARGET_IMPRESSION_SHARE'
+export type ImpressionShareLocation = 'ANYWHERE_ON_PAGE' | 'TOP_OF_PAGE' | 'ABSOLUTE_TOP_OF_PAGE'
+/**
+ * A campaign's bidding. G13 (build/copy only; create-google-campaign and set-google-campaign do not offer them):
+ * TARGET_IMPRESSION_SHARE — a Standard strategy in v25 (docs/campaigns/bidding/strategy-types; TargetImpressionShare:
+ * location (TargetImpressionShareLocation ANYWHERE_ON_PAGE / TOP_OF_PAGE / ABSOLUTE_TOP_OF_PAGE), location_fraction_micros
+ * (1 % = 10,000), cpc_bid_ceiling_micros "a required field"): `location`, `impressionSharePercent`, `maxCpcCents` (the
+ * ceiling); `enhancedCpc` on MANUAL_CPC — the strategy table: "Deprecated for Search and Display campaigns. Setting
+ * ManualCpc.enhanced_cpc_enabled to true has no effect", so Nexus sets it on Standard Shopping only.
+ */
+export interface Bidding {
+  strategy: Strategy; maxCpcCents?: number; targetCpaCents?: number; targetRoas?: number; portfolioId?: string
+  location?: ImpressionShareLocation; impressionSharePercent?: number; enhancedCpc?: boolean
+}
 /** A schedule slot; `bidModifier` is the slot's bid adjustment (1.2 = +20 %, 0.1 = −90 %), none = no adjustment. */
 export interface ScheduleSlot { days: string[]; from: string; to: string; bidModifier?: number }
 /** One schedule criterion: Google's AdScheduleInfo and the criterion's bid adjustment (a CampaignCriterion field). */
@@ -39,8 +51,11 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/
 /** Google's bidding message for a strategy (create, or the switch to it). */
 export function biddingFields(customer: string, b: Bidding): Record<string, unknown> {
   switch (b.strategy) {
-    case 'MANUAL_CPC': return { manualCpc: { enhancedCpcEnabled: false } }
+    case 'MANUAL_CPC': return { manualCpc: { enhancedCpcEnabled: b.enhancedCpc === true } }
     case 'MAXIMIZE_CLICKS': return { targetSpend: b.maxCpcCents ? { cpcBidCeilingMicros: microsOfCents(b.maxCpcCents) } : {} }
+    case 'TARGET_IMPRESSION_SHARE': return { targetImpressionShare: {
+      location: b.location, locationFractionMicros: String(Math.round((b.impressionSharePercent ?? 0) * 10_000)), cpcBidCeilingMicros: microsOfCents(b.maxCpcCents ?? 0),
+    } }
     case 'MAXIMIZE_CONVERSIONS': return { maximizeConversions: b.targetCpaCents ? { targetCpaMicros: microsOfCents(b.targetCpaCents) } : {} }
     case 'MAXIMIZE_CONVERSION_VALUE': return { maximizeConversionValue: b.targetRoas ? { targetRoas: b.targetRoas } : {} }
     case 'PORTFOLIO': return { biddingStrategy: `${customer}/biddingStrategies/${b.portfolioId}` }
@@ -57,14 +72,16 @@ export function biddingMask(b: Bidding): string[] {
     case 'MAXIMIZE_CONVERSIONS': return ['maximize_conversions.target_cpa_micros']
     case 'MAXIMIZE_CONVERSION_VALUE': return ['maximize_conversion_value.target_roas']
     case 'PORTFOLIO': return ['bidding_strategy']
+    case 'TARGET_IMPRESSION_SHARE': return ['target_impression_share.location', 'target_impression_share.location_fraction_micros', 'target_impression_share.cpc_bid_ceiling_micros']
   }
 }
 
 /** A person's words for a bidding setting. */
 export function biddingText(b: Bidding, currency: string): string {
   switch (b.strategy) {
-    case 'MANUAL_CPC': return 'Manual CPC'
+    case 'MANUAL_CPC': return `Manual CPC${b.enhancedCpc ? ', enhanced CPC' : ''}`
     case 'MAXIMIZE_CLICKS': return `Maximize clicks${b.maxCpcCents ? `, max CPC ${money(b.maxCpcCents, currency)}` : ''}`
+    case 'TARGET_IMPRESSION_SHARE': return `Target impression share ${b.impressionSharePercent ?? '?'} % ${(b.location ?? '').toLowerCase().replace(/_/g, ' ')}, max CPC ${money(b.maxCpcCents ?? null, currency)}`
     case 'MAXIMIZE_CONVERSIONS': return `Maximize conversions${b.targetCpaCents ? `, target CPA ${money(b.targetCpaCents, currency)}` : ''}`
     case 'MAXIMIZE_CONVERSION_VALUE': return `Maximize conversion value${b.targetRoas ? `, target ROAS ${Math.round(b.targetRoas * 100)} %` : ''}`
     case 'PORTFOLIO': return `portfolio strategy ${b.portfolioId}`
@@ -93,6 +110,7 @@ export function biddingClean(b: Bidding): Bidding {
     case 'MAXIMIZE_CONVERSIONS': return { strategy: b.strategy, ...(b.targetCpaCents ? { targetCpaCents: b.targetCpaCents } : {}) }
     case 'MAXIMIZE_CONVERSION_VALUE': return { strategy: b.strategy, ...(b.targetRoas ? { targetRoas: b.targetRoas } : {}) }
     case 'PORTFOLIO': return { strategy: b.strategy, portfolioId: b.portfolioId }
+    case 'TARGET_IMPRESSION_SHARE': return { strategy: b.strategy, location: b.location, impressionSharePercent: b.impressionSharePercent, maxCpcCents: b.maxCpcCents }
   }
 }
 
@@ -144,6 +162,9 @@ export function biddingSpends(from: Bidding | null, to: Bidding, currency: strin
     return `Lowers the target ROAS ${Math.round(from.targetRoas * 100)} % → ${to.targetRoas ? `${Math.round(to.targetRoas * 100)} %` : 'none'}`
   }
   if (to.strategy === 'PORTFOLIO' && from.portfolioId !== to.portfolioId) return `Moves to portfolio strategy ${to.portfolioId}: its targets decide the bids`
+  if (to.strategy === 'TARGET_IMPRESSION_SHARE' && ((to.maxCpcCents ?? 0) > (from.maxCpcCents ?? 0) || (to.impressionSharePercent ?? 0) > (from.impressionSharePercent ?? 0) || to.location !== from.location)) {
+    return `Changes the impression share target (${biddingText(from, currency)} → ${biddingText(to, currency)}): cost per click can rise`
+  }
   return null
 }
 
@@ -162,11 +183,18 @@ export interface CampaignCreateRequest {
   endDate?: string
   searchPartners?: boolean
   display?: boolean
-  shopping?: { merchantId: string; feedLabel?: string; priority?: Priority; localInventory?: boolean }
+  /** `ignoreBrandExclusions` (G13): Campaign.ShoppingSetting.ignore_brand_exclusion_in_shopping_ads — a copy keeps it. */
+  shopping?: { merchantId: string; feedLabel?: string; priority?: Priority; localInventory?: boolean; ignoreBrandExclusions?: boolean }
   search?: { aiMax?: boolean; textCustomization?: boolean; finalUrlExpansion?: boolean }
   /** `bidModifier`: a targeted location's bid adjustment (a copy keeps it). */
   locations?: Array<{ id: string; exclude?: boolean; bidModifier?: number }>
-  locationOption?: LocationOption
+  /**
+   * PRESENCE (default), PRESENCE_OR_INTEREST, or SEARCH_INTEREST (G13: PositiveGeoTargetType v25 "can only be used with
+   * Search and standard Shopping campaigns" — a copy keeps it).
+   */
+  locationOption?: LocationOption | 'SEARCH_INTEREST'
+  /** Who an excluded location keeps out (NegativeGeoTargetType v25: PRESENCE, default, or PRESENCE_OR_INTEREST; a copy keeps it). */
+  negativeLocationOption?: 'PRESENCE' | 'PRESENCE_OR_INTEREST'
   languages?: string[]
   schedule?: ScheduleSlot[]
   audiences?: string[]
@@ -174,9 +202,17 @@ export interface CampaignCreateRequest {
   excludedAudiences?: string[]
   /** true = the audiences TARGET (only they see the ads); default false = observation (a copy keeps the source's mode). */
   audienceTargeting?: boolean
+  /**
+   * G13: the campaign's audience setting said outright (TargetingSetting AUDIENCE bid_only: OBSERVATION true, TARGETING
+   * false), whatever audiences it gets; `targetRestrictions` instead writes Google's list as it is (a copy).
+   */
+  audienceMode?: 'OBSERVATION' | 'TARGETING'
+  targetRestrictions?: Array<{ dimension: string | null; observationOnly: boolean }>
   /** The campaign's tracking template and final URL suffix (a copy keeps them: sales tracking may rest on them). */
   trackingTemplate?: string
   finalUrlSuffix?: string
+  /** G13: the campaign's custom parameters (Campaign.url_custom_parameters: key, value). */
+  customParameters?: Array<{ key: string; value: string }>
   euPoliticalAds?: boolean
 }
 
@@ -194,6 +230,13 @@ export function campaignCreateProblem(r: CampaignCreateRequest): string | null {
   if (r.type === 'SEARCH' && r.shopping) return 'shopping settings are for a Shopping campaign only.'
   if (r.type === 'SHOPPING' && (r.search || r.languages?.length || r.display)) return 'A Standard Shopping campaign takes no search settings, languages or Display Network (its products come from the feed).'
   if (r.bidding.strategy === 'PORTFOLIO' && !r.bidding.portfolioId) return 'A portfolio strategy needs bidding.portfolioId.'
+  if (r.bidding.strategy === 'TARGET_IMPRESSION_SHARE') {
+    const b = r.bidding
+    if (!b.location || !['ANYWHERE_ON_PAGE', 'TOP_OF_PAGE', 'ABSOLUTE_TOP_OF_PAGE'].includes(b.location)) return 'Target impression share needs bidding.location (ANYWHERE_ON_PAGE, TOP_OF_PAGE or ABSOLUTE_TOP_OF_PAGE).'
+    if (!(b.impressionSharePercent !== undefined && b.impressionSharePercent > 0 && b.impressionSharePercent <= 100)) return 'Target impression share needs bidding.impressionSharePercent (above 0, at most 100).'
+    if (!b.maxCpcCents) return 'Target impression share needs bidding.maxCpcCents (Google requires its max CPC ceiling).'
+  }
+  if (r.bidding.enhancedCpc && (r.bidding.strategy !== 'MANUAL_CPC' || r.type !== 'SHOPPING')) return 'Enhanced CPC goes with Manual CPC in a Standard Shopping campaign only (Google ignores it on Search: deprecated, it has no effect).'
   if (r.search?.finalUrlExpansion && r.search.textCustomization === false) return 'Google turns text customization on with final URL expansion: ask for both, or neither.'
   for (const d of [r.startDate, r.endDate]) if (d !== undefined && !DAY.test(d)) return `"${d}" is not a day (YYYY-MM-DD).`
   if (r.startDate && r.endDate && r.endDate < r.startDate) return 'The end date is before the start date.'
@@ -229,7 +272,7 @@ export function campaignCreateOperations(customer: string, r: CampaignCreateRequ
       targetContentNetwork: r.type === 'SEARCH' && r.display === true,
       targetPartnerSearchNetwork: false,
     },
-    geoTargetTypeSetting: { positiveGeoTargetType: optionInclude, negativeGeoTargetType: 'PRESENCE' },
+    geoTargetTypeSetting: { positiveGeoTargetType: optionInclude, negativeGeoTargetType: r.negativeLocationOption ?? 'PRESENCE' },
     containsEuPoliticalAdvertising: r.euPoliticalAds ? 'CONTAINS_EU_POLITICAL_ADVERTISING' : 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
     ...(r.startDate ? { startDateTime: `${r.startDate} 00:00:00` } : {}),
     ...(r.endDate ? { endDateTime: `${r.endDate} 23:59:59` } : {}),
@@ -240,6 +283,7 @@ export function campaignCreateOperations(customer: string, r: CampaignCreateRequ
       ...(r.shopping!.feedLabel ? { feedLabel: r.shopping!.feedLabel } : {}),
       campaignPriority: PRIORITY_NUMBER[r.shopping!.priority ?? 'LOW'],
       enableLocal: r.shopping!.localInventory === true,
+      ...(r.shopping!.ignoreBrandExclusions ? { ignoreBrandExclusionInShoppingAds: true } : {}),
     }
   } else {
     const s = r.search ?? {}
@@ -249,9 +293,11 @@ export function campaignCreateOperations(customer: string, r: CampaignCreateRequ
       { assetAutomationType: 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION', assetAutomationStatus: s.finalUrlExpansion ? 'OPTED_IN' : 'OPTED_OUT' },
     ]
   }
-  if (r.audiences?.length) campaign.targetingSetting = { targetRestrictions: [{ targetingDimension: 'AUDIENCE', bidOnly: r.audienceTargeting !== true }] }
+  const restrictions = audienceRestrictions(r)
+  if (restrictions.length) campaign.targetingSetting = { targetRestrictions: restrictions.map((t) => ({ targetingDimension: t.dimension, bidOnly: t.observationOnly })) }
   if (r.trackingTemplate) campaign.trackingUrlTemplate = r.trackingTemplate
   if (r.finalUrlSuffix) campaign.finalUrlSuffix = r.finalUrlSuffix
+  if (r.customParameters?.length) campaign.urlCustomParameters = r.customParameters.map((p) => ({ key: p.key.trim(), value: p.value.trim() }))
   ops.push({ campaignOperation: { create: campaign } })
   for (const l of r.locations ?? []) {
     ops.push({ campaignCriterionOperation: { create: {
@@ -264,6 +310,13 @@ export function campaignCreateOperations(customer: string, r: CampaignCreateRequ
   for (const id of r.audiences ?? []) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, userInterest: { userInterestCategory: `${customer}/userInterests/${id}` } } } })
   for (const id of r.excludedAudiences ?? []) ops.push({ campaignCriterionOperation: { create: { campaign: campaignRes, negative: true, userInterest: { userInterestCategory: `${customer}/userInterests/${id}` } } } })
   return { operations: ops }
+}
+
+/** The campaign's targeting setting as it is written: Google's list as given, an audience mode said, or (audiences) observation unless audienceTargeting. */
+function audienceRestrictions(r: CampaignCreateRequest): Array<{ dimension: string; observationOnly: boolean }> {
+  if (r.targetRestrictions) return r.targetRestrictions.filter((t): t is { dimension: string; observationOnly: boolean } => !!t.dimension)
+  if (r.audienceMode) return [{ dimension: 'AUDIENCE', observationOnly: r.audienceMode === 'OBSERVATION' }]
+  return r.audiences?.length ? [{ dimension: 'AUDIENCE', observationOnly: r.audienceTargeting !== true }] : []
 }
 
 /**
@@ -282,21 +335,23 @@ export function campaignCreateNotes(r: CampaignCreateRequest, currency: string, 
     warnings.push(`"${r.name.trim()}": Google acts on its own — ${[r.search?.aiMax && 'AI Max', (r.search?.textCustomization || r.search?.finalUrlExpansion) && 'text customization', r.search?.finalUrlExpansion && 'final URL expansion'].filter(Boolean).join(', ')}.`)
   }
   if (optionInclude === 'PRESENCE_OR_INTEREST') warnings.push(`"${r.name.trim()}": location option "presence or interest" — people outside the locations who show interest in them can see the ads.`)
-  if (r.audienceTargeting) warnings.push(`"${r.name.trim()}": its audiences TARGET (only those people see the ads).`)
+  if (optionInclude === 'SEARCH_INTEREST') warnings.push(`"${r.name.trim()}": location option "search interest" — people anywhere who search for the locations can see the ads.`)
+  const audienceTargets = audienceRestrictions(r).some((t) => t.dimension === 'AUDIENCE' && !t.observationOnly)
+  if (audienceTargets) warnings.push(`"${r.name.trim()}": its audiences TARGET (only those people see the ads).`)
   const lines: Array<[string, unknown, unknown]> = [
     ['new campaign', '(none)', `"${r.name.trim()}" · ${r.type === 'SHOPPING' ? 'Standard Shopping' : 'Search'} · PAUSED`],
     ['budget', '(none)', budgetText],
     ['bidding', '(none)', biddingText(r.bidding, currency)],
     ['networks', '(none)', ['Google Search', r.searchPartners && 'search partners', r.type === 'SEARCH' && r.display && 'Display'].filter(Boolean).join(', ')],
   ]
-  if (r.type === 'SHOPPING') lines.push(['Shopping', '(none)', `Merchant Center ${r.shopping!.merchantId}${r.shopping!.feedLabel ? `, feed label ${r.shopping!.feedLabel}` : ''}, priority ${r.shopping!.priority ?? 'LOW'}${r.shopping!.localInventory ? ', local products' : ''}`])
+  if (r.type === 'SHOPPING') lines.push(['Shopping', '(none)', `Merchant Center ${r.shopping!.merchantId}${r.shopping!.feedLabel ? `, feed label ${r.shopping!.feedLabel}` : ''}, priority ${r.shopping!.priority ?? 'LOW'}${r.shopping!.localInventory ? ', local products' : ''}${r.shopping!.ignoreBrandExclusions ? ', brand exclusions ignored' : ''}`])
   else lines.push(['Google on its own', '(none)', `AI Max ${r.search?.aiMax ? 'on' : 'off'}, text customization ${r.search?.textCustomization || r.search?.finalUrlExpansion ? 'on' : 'off'}, final URL expansion ${r.search?.finalUrlExpansion ? 'on' : 'off'}`])
-  lines.push(['locations', '(none)', `${(r.locations ?? []).filter((l) => !l.exclude).length} targeted, ${(r.locations ?? []).filter((l) => l.exclude).length} excluded · ${optionInclude === 'PRESENCE' ? 'presence only' : 'presence or interest'}`])
+  lines.push(['locations', '(none)', `${(r.locations ?? []).filter((l) => !l.exclude).length} targeted, ${(r.locations ?? []).filter((l) => l.exclude).length} excluded · ${optionInclude === 'PRESENCE' ? 'presence only' : optionInclude === 'SEARCH_INTEREST' ? 'search interest' : 'presence or interest'}${r.negativeLocationOption === 'PRESENCE_OR_INTEREST' ? ' (exclusions: presence or interest)' : ''}`])
   if (r.type === 'SEARCH') lines.push(['languages', '(none)', (r.languages ?? []).length ? (r.languages ?? []).join(', ') : 'all'])
   lines.push(['schedule', '(none)', slots ? `${slots} slot${slots === 1 ? '' : 's'}` : 'all day, every day'])
-  if (r.audiences?.length || r.excludedAudiences?.length) lines.push(['audiences', '(none)', `${(r.audiences ?? []).length} ${r.audienceTargeting ? 'targeting' : 'in observation'}, ${(r.excludedAudiences ?? []).length} excluded`])
+  if (r.audiences?.length || r.excludedAudiences?.length) lines.push(['audiences', '(none)', `${(r.audiences ?? []).length} ${audienceTargets ? 'targeting' : 'in observation'}, ${(r.excludedAudiences ?? []).length} excluded`])
   lines.push(['dates', '(none)', `${r.startDate ?? 'starts when enabled'} → ${r.endDate ?? 'no end'}`])
-  if (r.trackingTemplate || r.finalUrlSuffix) lines.push(['tracking', '(none)', [r.trackingTemplate && 'tracking template', r.finalUrlSuffix && `final URL suffix ${r.finalUrlSuffix}`].filter(Boolean).join(', ')])
+  if (r.trackingTemplate || r.finalUrlSuffix || r.customParameters?.length) lines.push(['tracking', '(none)', [r.trackingTemplate && 'tracking template', r.finalUrlSuffix && `final URL suffix ${r.finalUrlSuffix}`, r.customParameters?.length && `${r.customParameters.length} custom parameter${r.customParameters.length === 1 ? '' : 's'}`].filter(Boolean).join(', ')])
   return { lines, warnings }
 }
 

@@ -23,6 +23,7 @@ import type { GoogleChangeDraft } from '../../marketing/google-ads/change-draft.
 import { GoogleAdsWriteError, mutateGoogleAds, writeErrorSentence, type GoogleMutateOperation, type GoogleMutateResponse } from '../../marketing/google-ads/write-client.js'
 import type { GoogleAdsTarget } from '../../marketing/google-ads/types.js'
 import { GoogleAdsReadError } from '../../marketing/google-ads/errors.js'
+import { campaignKindNotes, withCampaignsSeen } from '../../marketing/google-ads/live.js'
 import { googleAdsWritesMode } from '../../gateway/channels.js'
 import { googleAdsRedis, timed } from '../../marketing/google-ads/ops-budget.js'
 
@@ -104,8 +105,11 @@ async function draftFor(args: Record<string, unknown>, build: GoogleDraftBuilder
   try {
     const account = await googleChangeAccount(typeof args.accountId === 'string' ? args.accountId : null)
     if ('refusal' in account) return account
-    const draft = await build(account)
+    // G13: a change about a Google draft or an experiment's trial says so (the live reads ask for drafts too).
+    const { value: draft, seen } = await withCampaignsSeen(() => build(account))
     if ('refusal' in draft) return draft
+    const kinds = campaignKindNotes(seen, draft.operations)
+    if (kinds.length) draft.warnings = [...kinds, ...draft.warnings]
     return { account, draft }
   } catch (err) {
     if (err instanceof GoogleAdsReadError) return { refusal: `Nexus could not read the Google Ads account: ${err.message}` }

@@ -15,9 +15,9 @@
  *   google-ads-experiments          read: experiments, arms, their campaigns (in-design ones included), drafts, and the
  *                                   state of Google's long-running work with its errors
  *
- * Changes to a treatment or draft campaign itself go through the set-google-… tools on that campaign's id — once it is a
- * campaign they can read: an in-design campaign (before scheduling) and a draft campaign are Google drafts, which those
- * tools' live reads do not ask for (PARAMETERS include_drafts), so until they do those are changed in Google Ads.
+ * Changes to a treatment or draft campaign itself go through the set-google-… tools on that campaign's id: an in-design
+ * campaign (before scheduling) and a draft campaign are Google drafts, and since G13 (2026-10-16) the campaign reads of
+ * live.ts ask for them (PARAMETERS include_drafts=true); the preview of such a change says the campaign is a draft or a trial.
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -154,9 +154,9 @@ const createGoogleExperiment: AgentTool = {
     'Make a Google Ads experiment on one campaign of the business\'s chosen Google Ads account: the experiment and its two '
     + 'arms (control = the campaign, treatment = its share of the traffic) in one request. SEARCH_CUSTOM / DISPLAY_CUSTOM: '
     + 'made in SETUP, nothing serves; Google makes the treatment\'s in-design campaign (a copy that never serves) which '
-    + 'must be changed before schedule-google-experiment (Google refuses a treatment with no change). Nexus\'s '
-    + 'set-google-… tools do not read Google\'s drafts yet, so change the in-design campaign in Google Ads for now; once '
-    + 'scheduled, the experiment campaign is changed with the set-google-… tools on its id. The campaign must be on a '
+    + 'must be changed before schedule-google-experiment (Google refuses a treatment with no change): the set-google-… '
+    + 'tools change it on its id (google-ads-experiments shows it; their preview says it is a draft), and once scheduled '
+    + 'the experiment campaign likewise (their preview says it is a trial). The campaign must be on a '
     + 'budget of its own (Google cannot schedule one on a shared budget). ADOPT_BROAD_MATCH_KEYWORDS: runs from its '
     + 'start (or now), 50/50, broad match on the treatment half — SPENDS MONEY when the campaign is enabled. Other types '
     + '(AI Max, Performance Max ones, video, hotel, campaign mixes) are not made here. Undo removes an experiment never '

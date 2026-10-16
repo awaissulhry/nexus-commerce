@@ -35,7 +35,7 @@ import { googleCall } from '../../gateway/google.js'
 import type { GatewayNoAnswer, GatewayRefusal } from '../../gateway/gateway.js'
 import { GOOGLE_ADS_API_BASE } from '../../google/api-version.js'
 import { failureFromGatewayRefusal, failureFromNoAnswer, GoogleAdsReadError, localFailure, parseGoogleAdsFailure } from './errors.js'
-import { gaqlId, idOf, type LiveListKeyword, type MatchType } from './live.js'
+import { gaqlId, idOf, type LiveListKeyword, type MatchType, INCLUDE_DRAFTS } from './live.js'
 import { byGoogleId } from './live-keywords.js'
 import { customerIdDigits } from './mappers.js'
 import { markQuotaExhausted, releaseOps, reserveOps } from './ops-budget.js'
@@ -234,7 +234,7 @@ export const liveCampaignExclusionsQuery = (campaignId: string): string =>
   `campaign_criterion.status, ${INFO_FIELDS('campaign_criterion').join(', ')}, campaign_criterion.brand_list.shared_set ` +
   `FROM campaign_criterion WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} ` +
   `AND campaign_criterion.type IN (${CAMPAIGN_EXCLUSION_TYPES.map((t) => `'${t}'`).join(', ')}) ` +
-  "AND campaign_criterion.status != 'REMOVED' AND campaign.status != 'REMOVED'"
+  `AND campaign_criterion.status != 'REMOVED' AND campaign.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export interface LiveCampaignExclusions {
   /** Its exclusions (negative criteria of the kinds above). */

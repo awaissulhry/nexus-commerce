@@ -76,7 +76,7 @@ const placeArg = z.object({
 })
 
 /** A library image needs the image library permission (as image-library itself does). */
-function libraryRefusal(args: Record<string, unknown>, ctx: ToolContext): ToolResult | null {
+export function libraryRefusal(args: Record<string, unknown>, ctx: ToolContext): ToolResult | null {
   const usesLibrary = ((args.images as Array<{ libraryImageId?: string }> | undefined) ?? []).some((i) => !!i.libraryImageId)
   return usesLibrary && !ctx.can(F.assetsManage) ? { ok: false, error: `An image from the Nexus image library needs the ${F.assetsManage} permission (as image-library does). Give imageUrl instead, or ask a person who has it.` } : null
 }
@@ -178,6 +178,94 @@ const textArg = (what: string, max = 200) => z.string().trim().min(1).max(max).d
 const dayArg = (what: string) => z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe(`${what} (YYYY-MM-DD)`)
 const httpsArg = (what: string) => z.string().trim().min(1).max(2048).describe(`${what} (https)`)
 
+/**
+ * The new assets of every type add-google-assets makes, as its arguments: build-google-campaigns (G13) takes the same
+ * shapes for the assets of its new campaigns and ad groups.
+ */
+export const NEW_ASSET_ARGS = {
+  images: z.array(z.object({
+    fieldType: z.preprocess(upper, z.enum(IMAGE_FIELD_TYPES)).describe('what the image is for: AD_IMAGE (an image on Search ads: square 1:1 at least 300×300, or landscape 1.91:1 at least 600×314; JPG or PNG; campaign or ad group), BUSINESS_LOGO (Search: square, at least 128×128; account or campaign), LOGO (square, 128×128) or LANDSCAPE_LOGO (4:1, 512×128) for a Performance Max campaign with brand guidelines (campaign), MARKETING_IMAGE (1.91:1), SQUARE_MARKETING_IMAGE (1:1) or PORTRAIT_MARKETING_IMAGE (4:5): made only, for Performance Max asset groups and display ads'),
+    imageUrl: z.string().trim().min(1).max(2048).optional().describe('the image\'s https link (a public address; JPG, PNG or GIF, at most 5120 KB); give imageUrl or libraryImageId'),
+    libraryImageId: z.string().trim().min(3).max(80).optional().describe('an image of the Nexus image library (its id from image-library: da_… or pi_…); needs the image library permission'),
+    name: z.string().trim().min(1).max(120).optional().describe('the asset\'s name in Google Ads (default: the library label or file name and a short fingerprint)'),
+  })).max(10).optional().describe('new image assets (Google checks each image\'s shape where it is linked)'),
+  businessNames: z.array(textArg('the business name (at most 25 characters; it must match the verified legal name or the domain)', 100)).max(3).optional()
+    .describe('new BUSINESS_NAME text assets (account or campaign)'),
+  calls: z.array(z.object({
+    countryCode: z.string().trim().min(2).max(2).describe('the phone number\'s country, two letters (IT, DE, …)'),
+    phoneNumber: z.string().trim().min(3).max(40).describe('the phone number as people dial it'),
+    callConversion: z.preprocess(upper, z.enum(['ACCOUNT', 'OFF'])).optional().describe('call conversions: ACCOUNT (the account\'s call conversion setting) or OFF; left out = Google\'s default'),
+    conversionActionId: googleIdArg('a call conversion action of the account to count calls as (instead of callConversion)').optional(),
+  })).max(5).optional().describe('new CALL assets: a phone number shown with the ads (a call from the ad is charged like a click)'),
+  prices: z.array(z.object({
+    priceType: z.preprocess(upper, z.enum(PRICE_TYPES)).describe(`the price asset's type: ${PRICE_TYPES.join(', ')}`),
+    qualifier: z.preprocess(upper, z.enum(PRICE_QUALIFIERS)).optional().describe('FROM, UP_TO or AVERAGE (left out: none)'),
+    languageCode: z.string().trim().min(2).max(20).describe('the language of the texts (en, it, de, …)'),
+    currency: z.string().trim().length(3).optional().describe('the prices\' currency (ISO 4217); default the account\'s'),
+    offerings: z.array(z.object({
+      header: textArg('the offering\'s header (at most 25 characters)', 100),
+      description: textArg('its description (at most 25 characters; not the same as the header)', 100),
+      priceCents: z.coerce.number().int().min(0).max(1_000_000_000).describe('its price in minor units (cents)'),
+      unit: z.preprocess(upper, z.enum(PRICE_UNITS)).optional().describe('PER_HOUR, PER_DAY, PER_WEEK, PER_MONTH, PER_YEAR or PER_NIGHT (left out: none)'),
+      finalUrl: httpsArg('the page it leads to'),
+      finalMobileUrl: z.string().trim().max(2048).optional().describe('a page for mobile (https)'),
+    })).max(8).describe('3 to 8 offerings'),
+  })).max(3).optional().describe('new PRICE assets'),
+  promotions: z.array(z.object({
+    target: textArg('what is on promotion (e.g. "Winter jackets")', 100),
+    percentOff: z.coerce.number().positive().max(99.9).optional().describe('percent off (e.g. 15 or 12.5); give percentOff or amountOffCents'),
+    amountOffCents: z.coerce.number().int().min(1).max(1_000_000_000).optional().describe('money off, in minor units (cents)'),
+    upTo: z.boolean().optional().describe('true: "up to" the discount'),
+    currency: z.string().trim().length(3).optional().describe('the currency of the amounts (ISO 4217); default the account\'s'),
+    promotionCode: z.string().trim().min(1).max(50).optional().describe('a code to use (give promotionCode or ordersOverCents, not both)'),
+    ordersOverCents: z.coerce.number().int().min(1).max(1_000_000_000).optional().describe('for orders over this amount, in minor units (cents)'),
+    occasion: z.preprocess(upper, z.enum(PROMOTION_OCCASIONS)).optional().describe('an occasion (BLACK_FRIDAY, CHRISTMAS, SUMMER_SALE, …): its dates must fall in its window'),
+    languageCode: z.string().trim().min(2).max(20).optional().describe('the language of the promotion (en, it, …)'),
+    startDate: dayArg('the first day it shows'),
+    endDate: dayArg('the last day it shows'),
+    redemptionStartDate: dayArg('the first day it can be redeemed'),
+    redemptionEndDate: dayArg('the last day it can be redeemed'),
+    finalUrl: httpsArg('the page it leads to'),
+  })).max(5).optional().describe('new PROMOTION assets'),
+  leadForms: z.array(z.object({
+    nameOnForm: textArg('the business name shown on the form (at most 25 characters)', 100),
+    headline: textArg('the form\'s headline'),
+    description: textArg('what the form is for', 500),
+    callToActionType: z.preprocess(upper, z.enum(LEAD_FORM_CTAS)).describe(`the button that opens the form: ${LEAD_FORM_CTAS.join(', ')}`),
+    callToActionDescription: textArg('the line next to the button'),
+    privacyPolicyUrl: httpsArg('the business\'s privacy policy page'),
+    finalUrl: httpsArg('the business\'s page the form belongs to'),
+    fields: z.array(z.object({
+      inputType: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,60}$/).describe('what is asked, as Google names it: FULL_NAME, EMAIL, PHONE_NUMBER, POSTAL_CODE, CITY, COUNTRY, COMPANY_NAME, … (Google\'s LeadFormFieldUserInputType)'),
+      choices: z.array(z.string().trim().min(1).max(100)).max(12).optional().describe('for one of Google\'s fixed questions: 2 to 12 answers to choose from'),
+    })).max(15).describe('the fields the form asks, in order'),
+    postSubmitHeadline: z.string().trim().min(1).max(200).optional().describe('the headline after sending'),
+    postSubmitDescription: z.string().trim().min(1).max(500).optional().describe('what happens next, shown after sending'),
+    postSubmitCallToActionType: z.preprocess(upper, z.enum(LEAD_FORM_POST_SUBMIT_CTAS)).optional().describe('the button after sending: VISIT_SITE, DOWNLOAD, LEARN_MORE or SHOP_NOW'),
+    desiredIntent: z.preprocess(upper, z.enum(LEAD_FORM_INTENTS)).optional().describe('LOW_INTENT (more leads) or HIGH_INTENT (more qualified leads)'),
+  })).max(2).optional().describe('new LEAD_FORM assets (campaign level only; the account must have accepted Google\'s lead form terms in Google Ads)'),
+  mobileApps: z.array(z.object({
+    appStore: z.preprocess(upper, z.enum(APP_STORES)).describe('APPLE_APP_STORE or GOOGLE_APP_STORE'),
+    appId: z.string().trim().min(1).max(200).describe('the app\'s id: digits for the App Store (e.g. 12345689), the package name for Google Play (com.example.app)'),
+    linkText: textArg('the link\'s text (at most 25 characters)', 100),
+    startDate: dayArg('the first day it shows'),
+    endDate: dayArg('the last day it shows'),
+  })).max(3).optional().describe('new MOBILE_APP assets (a link to the app in the store)'),
+  sitelinks: z.array(z.object({
+    linkText: z.string().trim().min(1).max(100).describe(`the link text (at most ${ASSET_LIMITS.linkText} characters)`),
+    description1: z.string().trim().max(100).optional().describe(`first description line (at most ${ASSET_LIMITS.sitelinkDescription}; both lines or neither)`),
+    description2: z.string().trim().max(100).optional().describe(`second description line (at most ${ASSET_LIMITS.sitelinkDescription})`),
+    finalUrl: httpsArg('the page the sitelink leads to'),
+  })).max(20).optional().describe('new sitelinks (at any level; set-google-assets does campaign sitelinks too)'),
+  callouts: z.array(z.string().trim().min(1).max(100)).max(20).optional().describe(`new callouts (each at most ${ASSET_LIMITS.callout} characters)`),
+  structuredSnippets: z.array(z.object({
+    header: z.string().trim().min(1).max(60).describe(`a header from Google's list in the snippet's language (${SNIPPET_HEADER_NAMES.join(', ')} in English; the English name is translated)`),
+    language: z.string().trim().min(2).max(10).optional().describe('the language of the header and values (en, it, de, …); default en'),
+    values: z.array(z.string().trim().min(1).max(100)).max(ASSET_LIMITS.maxSnippetValues)
+      .describe(`${ASSET_LIMITS.minSnippetValues} to ${ASSET_LIMITS.maxSnippetValues} values, each at most ${ASSET_LIMITS.snippetValue} characters, none repeated`),
+  })).max(10).optional().describe('new structured snippets'),
+}
+
 const addGoogleAssets: AgentTool = {
   ...common,
   name: 'add-google-assets',
@@ -187,87 +275,7 @@ const addGoogleAssets: AgentTool = {
   requires: [F.adsCampaignsManage],
   input: z.object({
     accountId: googleAccountArg,
-    images: z.array(z.object({
-      fieldType: z.preprocess(upper, z.enum(IMAGE_FIELD_TYPES)).describe('what the image is for: AD_IMAGE (an image on Search ads: square 1:1 at least 300×300, or landscape 1.91:1 at least 600×314; JPG or PNG; campaign or ad group), BUSINESS_LOGO (Search: square, at least 128×128; account or campaign), LOGO (square, 128×128) or LANDSCAPE_LOGO (4:1, 512×128) for a Performance Max campaign with brand guidelines (campaign), MARKETING_IMAGE (1.91:1), SQUARE_MARKETING_IMAGE (1:1) or PORTRAIT_MARKETING_IMAGE (4:5): made only, for Performance Max asset groups and display ads'),
-      imageUrl: z.string().trim().min(1).max(2048).optional().describe('the image\'s https link (a public address; JPG, PNG or GIF, at most 5120 KB); give imageUrl or libraryImageId'),
-      libraryImageId: z.string().trim().min(3).max(80).optional().describe('an image of the Nexus image library (its id from image-library: da_… or pi_…); needs the image library permission'),
-      name: z.string().trim().min(1).max(120).optional().describe('the asset\'s name in Google Ads (default: the library label or file name and a short fingerprint)'),
-    })).max(10).optional().describe('new image assets (Google checks each image\'s shape where it is linked)'),
-    businessNames: z.array(textArg('the business name (at most 25 characters; it must match the verified legal name or the domain)', 100)).max(3).optional()
-      .describe('new BUSINESS_NAME text assets (account or campaign)'),
-    calls: z.array(z.object({
-      countryCode: z.string().trim().min(2).max(2).describe('the phone number\'s country, two letters (IT, DE, …)'),
-      phoneNumber: z.string().trim().min(3).max(40).describe('the phone number as people dial it'),
-      callConversion: z.preprocess(upper, z.enum(['ACCOUNT', 'OFF'])).optional().describe('call conversions: ACCOUNT (the account\'s call conversion setting) or OFF; left out = Google\'s default'),
-      conversionActionId: googleIdArg('a call conversion action of the account to count calls as (instead of callConversion)').optional(),
-    })).max(5).optional().describe('new CALL assets: a phone number shown with the ads (a call from the ad is charged like a click)'),
-    prices: z.array(z.object({
-      priceType: z.preprocess(upper, z.enum(PRICE_TYPES)).describe(`the price asset's type: ${PRICE_TYPES.join(', ')}`),
-      qualifier: z.preprocess(upper, z.enum(PRICE_QUALIFIERS)).optional().describe('FROM, UP_TO or AVERAGE (left out: none)'),
-      languageCode: z.string().trim().min(2).max(20).describe('the language of the texts (en, it, de, …)'),
-      currency: z.string().trim().length(3).optional().describe('the prices\' currency (ISO 4217); default the account\'s'),
-      offerings: z.array(z.object({
-        header: textArg('the offering\'s header (at most 25 characters)', 100),
-        description: textArg('its description (at most 25 characters; not the same as the header)', 100),
-        priceCents: z.coerce.number().int().min(0).max(1_000_000_000).describe('its price in minor units (cents)'),
-        unit: z.preprocess(upper, z.enum(PRICE_UNITS)).optional().describe('PER_HOUR, PER_DAY, PER_WEEK, PER_MONTH, PER_YEAR or PER_NIGHT (left out: none)'),
-        finalUrl: httpsArg('the page it leads to'),
-        finalMobileUrl: z.string().trim().max(2048).optional().describe('a page for mobile (https)'),
-      })).max(8).describe('3 to 8 offerings'),
-    })).max(3).optional().describe('new PRICE assets'),
-    promotions: z.array(z.object({
-      target: textArg('what is on promotion (e.g. "Winter jackets")', 100),
-      percentOff: z.coerce.number().positive().max(99.9).optional().describe('percent off (e.g. 15 or 12.5); give percentOff or amountOffCents'),
-      amountOffCents: z.coerce.number().int().min(1).max(1_000_000_000).optional().describe('money off, in minor units (cents)'),
-      upTo: z.boolean().optional().describe('true: "up to" the discount'),
-      currency: z.string().trim().length(3).optional().describe('the currency of the amounts (ISO 4217); default the account\'s'),
-      promotionCode: z.string().trim().min(1).max(50).optional().describe('a code to use (give promotionCode or ordersOverCents, not both)'),
-      ordersOverCents: z.coerce.number().int().min(1).max(1_000_000_000).optional().describe('for orders over this amount, in minor units (cents)'),
-      occasion: z.preprocess(upper, z.enum(PROMOTION_OCCASIONS)).optional().describe('an occasion (BLACK_FRIDAY, CHRISTMAS, SUMMER_SALE, …): its dates must fall in its window'),
-      languageCode: z.string().trim().min(2).max(20).optional().describe('the language of the promotion (en, it, …)'),
-      startDate: dayArg('the first day it shows'),
-      endDate: dayArg('the last day it shows'),
-      redemptionStartDate: dayArg('the first day it can be redeemed'),
-      redemptionEndDate: dayArg('the last day it can be redeemed'),
-      finalUrl: httpsArg('the page it leads to'),
-    })).max(5).optional().describe('new PROMOTION assets'),
-    leadForms: z.array(z.object({
-      nameOnForm: textArg('the business name shown on the form (at most 25 characters)', 100),
-      headline: textArg('the form\'s headline'),
-      description: textArg('what the form is for', 500),
-      callToActionType: z.preprocess(upper, z.enum(LEAD_FORM_CTAS)).describe(`the button that opens the form: ${LEAD_FORM_CTAS.join(', ')}`),
-      callToActionDescription: textArg('the line next to the button'),
-      privacyPolicyUrl: httpsArg('the business\'s privacy policy page'),
-      finalUrl: httpsArg('the business\'s page the form belongs to'),
-      fields: z.array(z.object({
-        inputType: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,60}$/).describe('what is asked, as Google names it: FULL_NAME, EMAIL, PHONE_NUMBER, POSTAL_CODE, CITY, COUNTRY, COMPANY_NAME, … (Google\'s LeadFormFieldUserInputType)'),
-        choices: z.array(z.string().trim().min(1).max(100)).max(12).optional().describe('for one of Google\'s fixed questions: 2 to 12 answers to choose from'),
-      })).max(15).describe('the fields the form asks, in order'),
-      postSubmitHeadline: z.string().trim().min(1).max(200).optional().describe('the headline after sending'),
-      postSubmitDescription: z.string().trim().min(1).max(500).optional().describe('what happens next, shown after sending'),
-      postSubmitCallToActionType: z.preprocess(upper, z.enum(LEAD_FORM_POST_SUBMIT_CTAS)).optional().describe('the button after sending: VISIT_SITE, DOWNLOAD, LEARN_MORE or SHOP_NOW'),
-      desiredIntent: z.preprocess(upper, z.enum(LEAD_FORM_INTENTS)).optional().describe('LOW_INTENT (more leads) or HIGH_INTENT (more qualified leads)'),
-    })).max(2).optional().describe('new LEAD_FORM assets (campaign level only; the account must have accepted Google\'s lead form terms in Google Ads)'),
-    mobileApps: z.array(z.object({
-      appStore: z.preprocess(upper, z.enum(APP_STORES)).describe('APPLE_APP_STORE or GOOGLE_APP_STORE'),
-      appId: z.string().trim().min(1).max(200).describe('the app\'s id: digits for the App Store (e.g. 12345689), the package name for Google Play (com.example.app)'),
-      linkText: textArg('the link\'s text (at most 25 characters)', 100),
-      startDate: dayArg('the first day it shows'),
-      endDate: dayArg('the last day it shows'),
-    })).max(3).optional().describe('new MOBILE_APP assets (a link to the app in the store)'),
-    sitelinks: z.array(z.object({
-      linkText: z.string().trim().min(1).max(100).describe(`the link text (at most ${ASSET_LIMITS.linkText} characters)`),
-      description1: z.string().trim().max(100).optional().describe(`first description line (at most ${ASSET_LIMITS.sitelinkDescription}; both lines or neither)`),
-      description2: z.string().trim().max(100).optional().describe(`second description line (at most ${ASSET_LIMITS.sitelinkDescription})`),
-      finalUrl: httpsArg('the page the sitelink leads to'),
-    })).max(20).optional().describe('new sitelinks (at any level; set-google-assets does campaign sitelinks too)'),
-    callouts: z.array(z.string().trim().min(1).max(100)).max(20).optional().describe(`new callouts (each at most ${ASSET_LIMITS.callout} characters)`),
-    structuredSnippets: z.array(z.object({
-      header: z.string().trim().min(1).max(60).describe(`a header from Google's list in the snippet's language (${SNIPPET_HEADER_NAMES.join(', ')} in English; the English name is translated)`),
-      language: z.string().trim().min(2).max(10).optional().describe('the language of the header and values (en, it, de, …); default en'),
-      values: z.array(z.string().trim().min(1).max(100)).max(ASSET_LIMITS.maxSnippetValues)
-        .describe(`${ASSET_LIMITS.minSnippetValues} to ${ASSET_LIMITS.maxSnippetValues} values, each at most ${ASSET_LIMITS.snippetValue} characters, none repeated`),
-    })).max(10).optional().describe('new structured snippets'),
+    ...NEW_ASSET_ARGS,
     linkTo: z.array(placeArg).max(MAX_PLACES).optional()
       .describe('where every new asset is linked: the account, campaigns, ad groups (each type only where Google allows it); left out = made and linked nowhere'),
     enable: z.boolean().optional()

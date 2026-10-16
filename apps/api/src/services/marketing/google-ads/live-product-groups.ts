@@ -14,7 +14,7 @@
  * parent_ad_group_criterion, type), as are ad_group_criterion.negative and cpc_bid_micros. Shopping dimensions per
  * developers.google.com/google-ads/api/docs/shopping-ads/create-listing-groups ("Available dimensions").
  */
-import { centsOfMicros, gaqlId, idOf } from './live.js'
+import { centsOfMicros, gaqlId, idOf, INCLUDE_DRAFTS, noteCampaignRow } from './live.js'
 import type { GoogleAdsTarget } from './types.js'
 import { liveRows } from './write-client.js'
 
@@ -55,19 +55,22 @@ export interface ProductGroupLiveState {
 
 export const liveShoppingAdGroupQuery = (adGroupId: string): string =>
   'SELECT ad_group.id, ad_group.name, ad_group.status, ad_group.type, campaign.id, campaign.name, campaign.status, ' +
-  'campaign.advertising_channel_type, campaign.bidding_strategy_type FROM ad_group ' +
-  `WHERE ad_group.id = ${gaqlId(adGroupId, 'The ad group')} AND ad_group.status != 'REMOVED'`
+  'campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign.experiment_type FROM ad_group ' +
+  `WHERE ad_group.id = ${gaqlId(adGroupId, 'The ad group')} AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 const CASE = 'ad_group_criterion.listing_group.case_value'
-export const liveAdGroupProductGroupsQuery = (adGroupId: string): string =>
-  'SELECT ad_group.id, ad_group_criterion.criterion_id, ad_group_criterion.negative, ad_group_criterion.cpc_bid_micros, ' +
+/** A tree node's fields, every Shopping dimension (also read campaign-wide by a copy: live-copy.ts). */
+export const PRODUCT_GROUP_NODE_FIELDS =
+  'ad_group.id, ad_group_criterion.criterion_id, ad_group_criterion.negative, ad_group_criterion.cpc_bid_micros, ' +
   'ad_group_criterion.listing_group.type, ad_group_criterion.listing_group.parent_ad_group_criterion, ' +
   `${CASE}.product_item_id.value, ${CASE}.product_brand.value, ${CASE}.product_type.value, ${CASE}.product_type.level, ` +
   `${CASE}.product_custom_attribute.value, ${CASE}.product_custom_attribute.index, ${CASE}.product_condition.condition, ` +
   `${CASE}.product_category.category_id, ${CASE}.product_category.level, ${CASE}.product_channel.channel, ` +
-  `${CASE}.product_channel_exclusivity.channel_exclusivity FROM ad_group_criterion ` +
+  `${CASE}.product_channel_exclusivity.channel_exclusivity`
+export const liveAdGroupProductGroupsQuery = (adGroupId: string): string =>
+  `SELECT ${PRODUCT_GROUP_NODE_FIELDS} FROM ad_group_criterion ` +
   `WHERE ad_group.id = ${gaqlId(adGroupId, 'The ad group')} AND ad_group_criterion.type = 'LISTING_GROUP' ` +
-  "AND ad_group_criterion.status != 'REMOVED'"
+  `AND ad_group_criterion.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export function shoppingAdGroupOf(row: Json): ShoppingAdGroupLive {
   const g = row.adGroup ?? {}
@@ -119,5 +122,6 @@ export async function liveProductGroupTree(target: GoogleAdsTarget, adGroupId: s
   const groups = await liveRows<Json>(target, liveShoppingAdGroupQuery(adGroupId), 'ads.search.live.ad-group')
   if (!groups[0]) return { adGroup: null, nodes: [] }
   const rows = await liveRows<Json>(target, liveAdGroupProductGroupsQuery(adGroupId), 'ads.search.live.product-groups')
+  noteCampaignRow(groups[0])
   return { adGroup: shoppingAdGroupOf(groups[0]), nodes: rows.map(productGroupNodeOf) }
 }

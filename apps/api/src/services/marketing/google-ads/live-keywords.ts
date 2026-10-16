@@ -10,7 +10,7 @@
  * A keyword without a max CPC of its own uses its ad group's default: Google leaves `cpc_bid_micros` out of the row (an
  * absent or zero bid reads as "none of its own" here) and `effective_cpc_bid_micros` holds the bid it uses.
  */
-import { centsOfMicros, gaqlId, liveAdGroupsQuery, liveCampaignCriteriaQuery, liveCriterionOf, liveKeywordsQuery, type MatchType } from './live.js'
+import { centsOfMicros, gaqlId, liveAdGroupsQuery, liveCampaignCriteriaQuery, liveCriterionOf, liveKeywordsQuery, type MatchType, INCLUDE_DRAFTS, noteCampaignRow } from './live.js'
 import { liveRows } from './write-client.js'
 import type { GoogleAdsTarget } from './types.js'
 
@@ -88,12 +88,12 @@ export function liveKeywordOf(row: Json): LiveKeyword {
 
 /** The campaign's ad groups that are not removed. One query. */
 export async function liveAdGroups(target: GoogleAdsTarget, campaignId: string): Promise<LiveAdGroup[]> {
-  return (await liveRows<Json>(target, liveAdGroupsQuery(campaignId), 'ads.search.live.ad-groups')).map(liveAdGroupOf).sort((a, b) => byGoogleId(a.adGroupId, b.adGroupId))
+  return (await liveRows<Json>(target, liveAdGroupsQuery(campaignId), 'ads.search.live.ad-groups')).map((r) => (noteCampaignRow(r), liveAdGroupOf(r))).sort((a, b) => byGoogleId(a.adGroupId, b.adGroupId))
 }
 
 /** The campaign's keywords and ad group negative keywords (not removed, in ad groups not removed). One query. */
 export async function liveKeywords(target: GoogleAdsTarget, campaignId: string): Promise<LiveKeyword[]> {
-  return (await liveRows<Json>(target, liveKeywordsQuery(campaignId), 'ads.search.live.keywords')).map(liveKeywordOf).sort((a, b) => byGoogleId(a.keywordId, b.keywordId))
+  return (await liveRows<Json>(target, liveKeywordsQuery(campaignId), 'ads.search.live.keywords')).map((r) => (noteCampaignRow(r), liveKeywordOf(r))).sort((a, b) => byGoogleId(a.keywordId, b.keywordId))
 }
 
 /** The campaign's own negative keywords (campaign criteria; not its shared lists). One query. */
@@ -112,7 +112,7 @@ export async function liveCampaignNegatives(target: GoogleAdsTarget, campaignId:
  * (CampaignError.CANNOT_SET_CAMPAIGN_KEYWORD_MATCH_TYPE), but an older campaign may hold BROAD. One query.
  */
 export const liveKeywordMatchTypeQuery = (campaignId: string): string =>
-  `SELECT campaign.id, campaign.keyword_match_type FROM campaign WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')}`
+  `SELECT campaign.id, campaign.keyword_match_type FROM campaign WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')}${INCLUDE_DRAFTS}`
 
 export async function liveCampaignKeywordMatchType(target: GoogleAdsTarget, campaignId: string): Promise<string | null> {
   const rows = await liveRows<Json>(target, liveKeywordMatchTypeQuery(campaignId), 'ads.search.live.match-type')
