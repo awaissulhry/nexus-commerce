@@ -59,10 +59,11 @@ describe('Performance Max operations in a mutate', () => {
     expect(gatewayLedger.map((r) => r.outcome)).toEqual(['sent', 'sent'])
   })
 
-  it('only the actions the tools send: no asset group removed, no audience changed, no filter or signal updated', async () => {
+  it('only the actions the tools send: no asset group removed, no audience removed, no filter or signal updated', async () => {
     const bad = [
       { assetGroupOperation: { remove: `${C}/assetGroups/41` } },
-      { audienceOperation: { update: { resourceName: `${C}/audiences/5`, name: 'X' }, updateMask: 'name' } },
+      // G14a: an audience is changed now (set-google-reusable-audiences); Google has no remove for one, and Nexus sends none.
+      { audienceOperation: { remove: `${C}/audiences/5` } },
       { assetGroupListingGroupFilterOperation: { update: { resourceName: `${C}/assetGroupListingGroupFilters/41~601`, caseValue: {} }, updateMask: 'case_value' } },
       { assetGroupSignalOperation: { create: { assetGroup: `${C}/assetGroups/41`, searchTheme: { text: 'x' } }, exemptPolicyViolationKeys: [] } },
       { assetGroupAssetOperation: {} },

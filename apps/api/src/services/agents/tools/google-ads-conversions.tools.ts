@@ -8,8 +8,8 @@
  *                                     primary / secondary, "include in conversions", value, counting, windows,
  *                                     attribution, name and status; undo puts the old settings back (actions it made stay)
  *   remove-google-conversion-actions  remove conversion actions for good — only when the person asked; never undone
- *   set-google-conversion-goals       which goals bid (the account's, a campaign's own), and a campaign back to the
- *                                     account's goals; undo puts them back
+ *   set-google-conversion-goals       which goals bid (the account's, a campaign's own), a campaign back to the
+ *                                     account's goals, and (G14a) the custom goal a campaign uses; undo puts them back
  *   set-google-value-rules            conversion value rules (add or multiply a value by device, location, audience) and
  *                                     their rule sets; new rules are made paused; undo puts the old actions back and
  *                                     pauses the rules it made (they stay, as does a rule set it made)
@@ -40,6 +40,7 @@ import {
 } from '../../marketing/google-ads/change-value-rules.js'
 import { liveAccountSettings, liveConversions, type LiveConversionAction, type LiveConversions } from '../../marketing/google-ads/live-account.js'
 import { liveBiddingCampaigns, liveConversionActions, liveTagSnippets, liveValueRules } from '../../marketing/google-ads/live-conversions.js'
+import { liveCustomGoals } from '../../marketing/google-ads/live-goals-audiences.js'
 import {
   adjustDraft, adjustRecordsAfterRun, MAX_UPLOAD_ORDERS, uploadDraft, uploadWindowProblem,
   type AdjustRecord, type AdjustRequest, type UploadRecord, type UploadRequest,
@@ -242,12 +243,15 @@ const goalRequest = (args: Record<string, unknown>): GoalRequest => ({
   accountGoals: args.accountGoals as GoalRequest['accountGoals'],
   campaignGoals: args.campaignGoals as GoalRequest['campaignGoals'],
   useAccountGoals: args.useAccountGoals as GoalRequest['useAccountGoals'],
+  customGoals: args.customGoals as GoalRequest['customGoals'],
 })
 
 const buildGoals = (args: Record<string, unknown>): GoogleDraftBuilder => async (account) => {
   const live = await conversionsOf(account)
   if ('refusal' in live) return live
-  return goalChangeDraft(customerResource(account.target), goalRequest(args), { bidding: live.bidding })
+  // G14a: a campaign's custom goal stands on the account's custom goals (read only when one is asked).
+  const custom = Array.isArray(args.customGoals) && args.customGoals.length ? { customGoals: await liveCustomGoals(account.target), actions: live.conv.actions } : {}
+  return goalChangeDraft(customerResource(account.target), goalRequest(args), { bidding: live.bidding, ...custom })
 }
 
 const goalsUndo: ToolUndo = {
@@ -265,7 +269,11 @@ const goalsUndo: ToolUndo = {
       customerId: account.customerId,
       account: (after.account ?? []).map((g) => ({ ...g, biddable: accountBiddable(g) })),
       campaigns: (after.campaigns ?? []).map((g) => ({ ...g, biddable: own(g.campaignId) ? own(g.campaignId)!.biddableGoals.includes(goal(g)) : accountBiddable(g) })),
-      levels: (after.levels ?? []).map((l) => ({ campaignId: l.campaignId, goalsFrom: own(l.campaignId)?.goalsFrom ?? 'CUSTOMER' })),
+      levels: (after.levels ?? []).map((l) => {
+        const goalsFrom = own(l.campaignId)?.goalsFrom ?? 'CUSTOMER'
+        // G14a: a campaign that follows the account's goals uses no custom goal, whatever its config still names.
+        return { campaignId: l.campaignId, goalsFrom, ...('customGoalId' in l ? { customGoalId: goalsFrom === 'CAMPAIGN' ? own(l.campaignId)?.customGoalId ?? null : null } : {}) }
+      }),
     }
   },
   request(change: ToolChange) {
@@ -275,7 +283,12 @@ const goalsUndo: ToolUndo = {
     const following = levels.filter((l) => l.goalsFrom !== 'CAMPAIGN').map((l) => l.campaignId)
     const campaignGoals = (before.campaigns ?? []).filter((g) => !following.includes(g.campaignId))
     const accountGoals = before.account ?? []
-    if (!accountGoals.length && !campaignGoals.length && !following.length) return { refusal: 'This change records no goal setting it replaced.' }
+    // G14a: a campaign on its own goals gets back the custom goal it used (or none), when the change moved it.
+    const afterLevel = (id: string) => (after.levels ?? []).find((l) => l.campaignId === id)
+    const customGoals = levels
+      .filter((l) => l.goalsFrom === 'CAMPAIGN' && 'customGoalId' in l && (afterLevel(l.campaignId)?.customGoalId ?? null) !== (l.customGoalId ?? null))
+      .map((l) => ({ campaignId: l.campaignId, customGoalId: l.customGoalId ?? null }))
+    if (!accountGoals.length && !campaignGoals.length && !following.length && !customGoals.length) return { refusal: 'This change records no goal setting it replaced.' }
     const accountId = after.accountId ?? before.accountId
     return {
       tool: 'set-google-conversion-goals',
@@ -284,6 +297,7 @@ const goalsUndo: ToolUndo = {
         ...(accountGoals.length ? { accountGoals } : {}),
         ...(campaignGoals.length ? { campaignGoals } : {}),
         ...(following.length ? { useAccountGoals: following } : {}),
+        ...(customGoals.length ? { customGoals } : {}),
         why: 'undo of an earlier conversion goal change',
       },
     }
@@ -302,16 +316,22 @@ const setGoogleConversionGoals: AgentTool = {
     campaignGoals: z.array(z.object({ campaignId: googleIdArg('the campaign'), ...goalPart })).max(250).optional()
       .describe('a campaign\'s own goals (the campaign then stops following the account\'s goals)'),
     useAccountGoals: z.array(googleIdArg('a campaign')).max(100).optional().describe('campaigns that go back to following the account\'s goals'),
+    customGoals: z.array(z.object({
+      campaignId: googleIdArg('the campaign'),
+      customGoalId: googleIdArg('the custom goal (set-google-custom-goals makes one)').nullable()
+        .describe('the custom goal the campaign bids for, besides its biddable goals; null: it stops using one'),
+    })).max(100).optional().describe('the custom goal each campaign uses (a campaign with one has goals of its own)'),
     why: googleWhyArg,
   }),
   description:
     'Conversion goals of the business\'s chosen Google Ads account (a goal = a category from an origin, e.g. PURCHASE from '
     + 'WEBSITE): make an account goal biddable or not (accountGoals: every campaign that follows the account\'s goals), '
-    + 'give a campaign goals of its own (campaignGoals), or put campaigns back on the account\'s goals (useAccountGoals). '
-    + 'A goal made biddable for campaigns that bid with Smart Bidding is marked SPENDS MONEY, naming them; one made not '
-    + 'biddable is a warning (bidding stops counting it). Google makes goals from conversion actions: '
-    + 'google-ads-live view conversions lists them. Undo puts the old goals back (a custom goal a campaign used is not '
-    + 'given back).' + GOOGLE_CHANGE_RULES,
+    + 'give a campaign goals of its own (campaignGoals), put campaigns back on the account\'s goals (useAccountGoals), or '
+    + 'set or clear the custom goal a campaign uses (customGoals: a goal of chosen conversion actions, primary or not; '
+    + 'set-google-custom-goals makes one). A goal made biddable, or a custom goal that adds conversion actions, for '
+    + 'campaigns that bid with Smart Bidding is marked SPENDS MONEY, naming them; one made not biddable or cleared is a '
+    + 'warning (bidding stops counting it). Google makes goals from conversion actions: google-ads-live view conversions '
+    + 'lists them. Undo puts the old goals back, a campaign\'s custom goal included.' + GOOGLE_CHANGE_RULES,
   undo: goalsUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildGoals(args)),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildGoals(args), (draft) => ({ data: { totals: draft.totals }, before: draft.before, after: draft.after })),

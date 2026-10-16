@@ -66,6 +66,22 @@ describe('sendAccountCall', () => {
     expect(gatewayLedger.map((r) => [r.operation, r.outcome])).toEqual([['ads.account.customerUserAccessInvitations.mutate', 'sent'], ['ads.account.customerUserAccessInvitations.mutate', 'sent']])
   })
 
+  it('G14a: custom segments — several operations in ONE call cost one each, and every result comes back in order', async () => {
+    const redis = new MemoryRedis()
+    setOpsBudgetRedisForTests(redis)
+    const body = { operations: [{ create: { name: 'Segment Z', type: 'AUTO', members: [{ memberType: 'KEYWORD', keyword: 'moto jacket' }] } }, { remove: `${C}/customAudiences/42` }] }
+    h.answers.push(() => new Response('{}', { status: 200 }))
+    await checkAccountOperations(TARGET, [{ accountCall: { path: 'customAudiences:mutate', body } }])
+    expect(JSON.parse(String(h.calls[0].init.body))).toEqual({ ...body, validateOnly: true })
+    const counted = () => Math.max(0, ...[...redis.values.values()].map(Number).filter(Number.isFinite))
+    expect(counted()).toBe(2)
+    h.answers.push(() => new Response(JSON.stringify({ results: [{ resourceName: `${C}/customAudiences/43` }, { resourceName: `${C}/customAudiences/42` }] }), { status: 200 }))
+    const out = await sendAccountOperations(TARGET, [{ accountCall: { path: 'customAudiences:mutate', body } }])
+    expect(h.calls[1].url).toBe(`${GOOGLE_ADS_API_BASE}/${C}/customAudiences:mutate`)
+    expect(out.responses).toEqual([{ [ACCOUNT_RESULT]: { resourceName: `${C}/customAudiences/43` } }, { [ACCOUNT_RESULT]: { resourceName: `${C}/customAudiences/42` } }])
+    expect(counted()).toBe(4)
+  })
+
   it('a check only where the method has validate_only; it goes even with writes switched off', async () => {
     vi.stubEnv('NEXUS_GOOGLE_ADS_WRITES', 'off')
     h.answers.push(() => new Response('{}', { status: 200 }))

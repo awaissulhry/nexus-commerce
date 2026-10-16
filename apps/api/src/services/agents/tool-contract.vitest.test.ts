@@ -851,6 +851,24 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { account: [{ category: 'PURCHASE', origin: 'WEBSITE', biddable: false }], campaigns: [{ campaignId: '21', category: 'SIGNUP', origin: 'WEBSITE', biddable: true }], levels: [{ campaignId: '21', goalsFrom: 'CUSTOMER' }], accountId: 'g-1', customerId: '1234567890' },
         after: { account: [{ category: 'PURCHASE', origin: 'WEBSITE', biddable: true }], campaigns: [{ campaignId: '21', category: 'SIGNUP', origin: 'WEBSITE', biddable: false }], levels: [{ campaignId: '21', goalsFrom: 'CAMPAIGN' }], accountId: 'g-1', customerId: '1234567890' },
       },
+      // Programme 2 G14a: custom goals, custom segments and user lists go back (and the ones it made are removed); a
+      // reusable audience goes back (the ones it made stay: Google cannot remove one).
+      'set-google-custom-goals': {
+        before: { goals: [{ customGoalId: '31', name: 'Goal A', conversionActionIds: ['71'] }], created: [], removed: [], accountId: 'g-1' },
+        after: { goals: [{ customGoalId: '31', name: 'Goal B', conversionActionIds: ['71', '72'] }], created: [{ customGoalId: '32', name: 'Goal C', conversionActionIds: ['72'] }], removed: [], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-custom-audiences': {
+        before: { audiences: [{ customAudienceId: '41', members: [{ type: 'KEYWORD', value: 'moto jacket' }] }], created: [], removed: [], accountId: 'g-1' },
+        after: { audiences: [{ customAudienceId: '41', members: [{ type: 'KEYWORD', value: 'moto jacket' }, { type: 'URL', value: 'https://example.com/jackets' }] }], created: [{ customAudienceId: '42', name: 'Segment B' }], removed: [], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-user-lists': {
+        before: { lists: [{ userListId: '51', membershipStatus: 'CLOSED', visitors: { operator: 'AND', include: [{ anyOf: [{ allOf: [{ parameter: 'url__', operator: 'CONTAINS', text: '/jackets' }] }], lookbackDays: 30 }], exclude: [] } }], created: [], removed: [], accountId: 'g-1' },
+        after: { lists: [{ userListId: '51', membershipStatus: 'OPEN', visitors: { operator: 'AND', include: [{ anyOf: [{ allOf: [{ parameter: 'url__', operator: 'CONTAINS', text: '/helmets' }] }], lookbackDays: 30 }], exclude: [] } }], created: [{ userListId: '52', name: 'List B', kind: 'combination' }], removed: [], accountId: 'g-1', customerId: '1234567890' },
+      },
+      'set-google-reusable-audiences': {
+        before: { audiences: [{ audienceId: '61', name: 'Audience A', definition: { segments: [{ kind: 'USER_LIST', id: '51' }], ages: null, genders: { values: ['MALE'], includeUndetermined: false }, incomes: null, parental: null, excludeUserLists: [], other: [] } }], created: [], accountId: 'g-1' },
+        after: { audiences: [{ audienceId: '61', name: 'Audience B', definition: { segments: [{ kind: 'USER_LIST', id: '51' }], ages: null, genders: null, incomes: null, parental: null, excludeUserLists: [], other: [] } }], created: [{ audienceId: '62', name: 'Audience C' }], accountId: 'g-1', customerId: '1234567890' },
+      },
       'set-google-value-rules': {
         before: { rules: [{ valueRuleId: '91', operation: 'MULTIPLY', multiply: 1.2, status: 'ENABLED' }], created: [], accountId: 'g-1', customerId: '1234567890' },
         after: { rules: [{ valueRuleId: '91', operation: 'ADD', addCents: 500, status: 'PAUSED' }], created: [{ valueRuleId: '92', status: 'ENABLED' }], accountId: 'g-1', customerId: '1234567890' },
@@ -966,6 +984,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-google-experiment', 'set-google-experiment', 'schedule-google-experiment', 'end-google-experiment',
       'promote-google-experiment', 'graduate-google-experiment', 'set-google-campaign-draft', 'promote-google-campaign-draft',
       'set-google-conversion-actions', 'remove-google-conversion-actions', 'set-google-conversion-goals', 'set-google-value-rules',
+      'set-google-custom-goals', 'set-google-custom-audiences', 'set-google-user-lists', 'set-google-reusable-audiences',
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)

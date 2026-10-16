@@ -6,8 +6,8 @@
  *
  *   POST {GOOGLE_ADS_API_BASE}/customers/{customerId}/{path}     body: the request message without customer_id
  *
- * One call is ONE operation (each of these methods takes one), reserved on the account's change allowance first, like a
- * mutate (write-client.ts). A "slow down" is sent again once (Google changed nothing); no answer, or a failure on Google's
+ * One call is ONE operation (each of these methods takes one; G14a: CustomAudienceService.MutateCustomAudiences takes
+ * several, and each counts), reserved on the account's change allowance first, like a mutate (write-client.ts). A "slow down" is sent again once (Google changed nothing); no answer, or a failure on Google's
  * side, is an UNKNOWN outcome Nexus never sends again by itself. Two methods have validate_only (RemoveProductLink,
  * MutateAccountBudgetProposal): their check goes as a read and changes nothing.
  *
@@ -90,7 +90,7 @@ export async function sendAccountCall(
   target: GoogleAdsTarget,
   call: AccountCall,
   options: { validateOnly?: boolean; sleep?: (ms: number) => Promise<void>; random?: () => number } = {},
-): Promise<{ resourceName: string | null; review: string | null }> {
+): Promise<{ resourceName: string | null; review: string | null; resourceNames: string[] }> {
   const check = options.validateOnly === true
   const operation = `ads.account.${call.path.replace(':', '.')}${check ? '.check' : ''}`
   const notSent = (sentence: string, code: string) => new GoogleAdsWriteError(localFailure(sentence, code), operation, 'not_sent')
@@ -101,7 +101,9 @@ export async function sendAccountCall(
   const customerId = customer.slice('customers/'.length)
   // A check costs an operation like the change itself (write-client.ts): both on the change allowance.
   const lane = 'write' as const
-  const reservation = await reserveOps(customerId, 1, new Date(), lane)
+  // G14a: a method that takes several operations (customAudiences:mutate) costs one per operation.
+  const ops = Array.isArray(call.body.operations) && call.body.operations.length > 1 ? call.body.operations.length : 1
+  const reservation = await reserveOps(customerId, ops, new Date(), lane)
   if (!reservation.ok) throw notSent(reservation.sentence, reservation.reason ?? 'OPS_REFUSED')
   const sleep = options.sleep ?? defaultSleep
   const random = options.random ?? Math.random
@@ -109,8 +111,8 @@ export async function sendAccountCall(
   let reached = 0
   let slowDowns = 0
   const settle = async () => {
-    if (reached === 0) await releaseOps(customerId, 1, reservation.reservedAt, lane)
-    else if (reached > 1) await addSpentOps(customerId, reached - 1, reservation.reservedAt, lane)
+    if (reached === 0) await releaseOps(customerId, ops, reservation.reservedAt, lane)
+    else if (reached > 1) await addSpentOps(customerId, (reached - 1) * ops, reservation.reservedAt, lane)
   }
   for (;;) {
     let failure: GoogleAdsFailure
@@ -137,7 +139,9 @@ export async function sendAccountCall(
         // G10: the goal methods answer `results[]` (MutateGoalsResponse, MutateCampaignGoalConfigsResponse: one operation, one result).
         const name = parsed.result?.resourceName ?? parsed.resourceName ?? (Array.isArray(parsed.results) ? parsed.results[0]?.resourceName : undefined)
         const review = parsed.result?.multiPartyAuthReview
-        return { resourceName: typeof name === 'string' && name ? name : null, review: typeof review === 'string' && review ? review : null }
+        // G14a: every result of a method that takes several operations (in operation order).
+        const names = Array.isArray(parsed.results) ? parsed.results.map((r) => (typeof r?.resourceName === 'string' ? r.resourceName : '')) : []
+        return { resourceName: typeof name === 'string' && name ? name : null, review: typeof review === 'string' && review ? review : null, resourceNames: names }
       }
       failure = accessRefusal(call.path, parseGoogleAdsFailure(response.status, textBody, response.headers))
     } catch (err) {
@@ -173,6 +177,8 @@ export async function sendAccountCall(
 /** The run's answer for a change of ONE account call, in the shape runGoogleChange hands `finish`. */
 export async function sendAccountOperations(target: GoogleAdsTarget, operations: GoogleMutateOperation[]): Promise<{ responses: GoogleMutateResponse[] }> {
   const result = await sendAccountCall(target, accountCallOf(operations))
+  // G14a: one response per result when the method answered several (customAudiences:mutate), in operation order.
+  if (result.resourceNames.length > 1) return { responses: result.resourceNames.map((name) => ({ [ACCOUNT_RESULT]: { resourceName: name || undefined } })) }
   return {
     responses: [{
       [ACCOUNT_RESULT]: { resourceName: result.resourceName ?? undefined },

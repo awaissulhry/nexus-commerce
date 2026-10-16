@@ -20,6 +20,9 @@
  *   /v25/customers/{customer_id}/CampaignGoalConfigs:mutate           MutateCampaignGoalConfigs (validate_only) — G10
  *   (the two goal paths are written with a capital letter in the v25 protos' HTTP bindings and in the v25 discovery
  *   document, googleads.googleapis.com/$discovery/rest?version=v25, read 2026-10-16)
+ *   /v25/customers/{customer_id}/customAudiences:mutate               MutateCustomAudiences (validate_only) — G14a
+ *   (2026-10-16): GoogleAdsService.Mutate has no custom audience operation (MutateOperation v25), so custom audiences go
+ *   to their own service (services/custom_audience_service.proto: `post: "/v25/customers/{customer_id=*}/customAudiences:mutate"`).
  * Not here, on purpose: CustomerService.CreateCustomerClient (`customers/{id}:createCustomerClient`, a new account) and
  * ProductLinkInvitationService.CreateProductLinkInvitation (Google Ads cannot invite a Merchant Center account: on
  * ProductLinkInvitation v25 `merchant_center` is OUTPUT_ONLY; the request comes from Merchant Center).
@@ -51,6 +54,12 @@
  *                                          TARGET_ALL | TARGET_SPECIFIC, valueSettingsOverride? } } | update { resourceName
  *                                          "customers/{c}/campaignGoalConfigs/{campaign}~{goal}", campaignNewCustomerAcquisitionSettings }
  *                                          + updateMask (target_option and the override's two value paths) | remove (that name)
+ *   MutateCustomAudiencesRequest (G14a)    operations[] (1 to GOOGLE_CUSTOM_AUDIENCE_MAX_OPERATIONS), validateOnly; each ONE of
+ *                                          create { name, description?, type AUTO | SEARCH, members[] } | update { resourceName
+ *                                          "customers/{c}/customAudiences/{id}", name?, description?, type?, members? } + updateMask
+ *                                          (name, description, type, members) | remove (that name). A member is { memberType
+ *                                          KEYWORD | URL | APP | PLACE_CATEGORY, and its one value keyword | url | app |
+ *                                          placeCategory } (CustomAudienceMember v25: "can only be created or removed").
  */
 
 const HOST = 'googleads.googleapis.com'
@@ -62,11 +71,13 @@ export const GOOGLE_ACCOUNT_CALL_PATHS = [
   'billingSetups:mutate', 'accountBudgetProposals:mutate',
   // G10 (2026-10-16): the account's new-customer acquisition goal and a campaign's use of it (set-google-customer-acquisition).
   'Goals:mutate', 'CampaignGoalConfigs:mutate',
+  // G14a (2026-10-16): custom audiences (set-google-custom-audiences).
+  'customAudiences:mutate',
 ] as const
 export type GoogleAccountCallPath = typeof GOOGLE_ACCOUNT_CALL_PATHS[number]
 
 /** The ones Google can check first (their request has validate_only). */
-export const GOOGLE_ACCOUNT_CHECKABLE: ReadonlySet<GoogleAccountCallPath> = new Set(['productLinks:remove', 'accountBudgetProposals:mutate', 'Goals:mutate', 'CampaignGoalConfigs:mutate'])
+export const GOOGLE_ACCOUNT_CHECKABLE: ReadonlySet<GoogleAccountCallPath> = new Set(['productLinks:remove', 'accountBudgetProposals:mutate', 'Goals:mutate', 'CampaignGoalConfigs:mutate', 'customAudiences:mutate'])
 
 export interface GoogleAccountCall { customer: string; path: GoogleAccountCallPath }
 
@@ -197,6 +208,8 @@ function problemOf(call: GoogleAccountCall, body: Json): string | null {
     case 'Goals:mutate':
     case 'CampaignGoalConfigs:mutate':
       return goalProblem(c, call.path, body)
+    case 'customAudiences:mutate':
+      return customAudienceProblem(c, body)
     case 'accountBudgetProposals:mutate': {
       if (onlyKeys(body, ['operation', 'validateOnly']).length) return 'it names more than one operation and validateOnly'
       if (body.validateOnly !== undefined && typeof body.validateOnly !== 'boolean') return 'validateOnly is not true or false'
@@ -257,6 +270,50 @@ function goalProblem(c: string, path: 'Goals:mutate' | 'CampaignGoalConfigs:muta
   if (!isObject(s) || onlyKeys(s, ['targetOption', 'valueSettingsOverride']).length) return 'the new-customer settings are not a target option and a value override'
   if (s.targetOption !== 'TARGET_ALL' && s.targetOption !== 'TARGET_SPECIFIC') return 'the target option is not TARGET_ALL or TARGET_SPECIFIC'
   return s.valueSettingsOverride === undefined ? null : valueSettingsProblem(s.valueSettingsOverride)
+}
+
+/** G14a: the most operations one custom audience call carries (set-google-custom-audiences sends at most 20 + 50 + 50). */
+export const GOOGLE_CUSTOM_AUDIENCE_MAX_OPERATIONS = 120
+const CUSTOM_AUDIENCE_MASK: ReadonlySet<string> = new Set(['name', 'description', 'type', 'members'])
+const MEMBER_VALUE: Record<string, string> = { KEYWORD: 'keyword', URL: 'url', APP: 'app', PLACE_CATEGORY: 'placeCategory' }
+
+/** G14a: custom audiences — exactly what set-google-custom-audiences sends (never a status, never another account's). */
+function customAudienceProblem(c: string, body: Json): string | null {
+  if (onlyKeys(body, ['operations', 'validateOnly']).length) return 'it names more than its operations and validateOnly'
+  if (body.validateOnly !== undefined && typeof body.validateOnly !== 'boolean') return 'validateOnly is not true or false'
+  if (!Array.isArray(body.operations) || !body.operations.length || body.operations.length > GOOGLE_CUSTOM_AUDIENCE_MAX_OPERATIONS) {
+    return `it holds no operation, or more than ${GOOGLE_CUSTOM_AUDIENCE_MAX_OPERATIONS}`
+  }
+  const own = ownName(c, 'customAudiences', ID)
+  for (const op of body.operations) {
+    if (!isObject(op)) return 'an operation is not an object'
+    if ('remove' in op) {
+      if (Object.keys(op).length !== 1 || !own(op.remove)) return 'a remove does not name a custom audience of this account'
+      continue
+    }
+    const create = isObject(op.create) ? op.create : null
+    const update = isObject(op.update) ? op.update : null
+    if (!create === !update || onlyKeys(op, create ? ['create'] : ['update', 'updateMask']).length) return 'an operation is not one create, update or remove of a custom audience'
+    const a = (create ?? update) as Json
+    if (onlyKeys(a, ['resourceName', 'name', 'description', 'type', 'members']).length) return 'a custom audience names more than its name, description, type and members'
+    if (create) {
+      if (a.resourceName !== undefined || !text(a.name, 1000) || !Array.isArray(a.members) || !a.members.length) return 'a new custom audience has a name and members, and no resource name'
+    } else {
+      const mask = typeof op.updateMask === 'string' ? op.updateMask.split(',') : []
+      if (!own(a.resourceName) || !mask.length || mask.some((m) => !CUSTOM_AUDIENCE_MASK.has(m))) return 'an update does not name a custom audience of this account, or masks more than its name, description, type and members'
+      if (a.name !== undefined && !text(a.name, 1000)) return 'a custom audience name is not one line of text'
+    }
+    if (a.description !== undefined && (typeof a.description !== 'string' || a.description.length > 2000)) return 'a description is not text'
+    if (a.type !== undefined && a.type !== 'AUTO' && a.type !== 'SEARCH') return 'the type is not AUTO or SEARCH (Google takes no other for a new one)'
+    if (a.members !== undefined) {
+      if (!Array.isArray(a.members) || a.members.length > 1000) return 'the members are not a list'
+      for (const m of a.members) {
+        const field = isObject(m) && typeof m.memberType === 'string' ? MEMBER_VALUE[m.memberType] : undefined
+        if (!field || Object.keys(m).length !== 2 || typeof (m as Json)[field] !== 'string' || !String((m as Json)[field]).trim()) return 'a member is not one keyword, web address, app or place category'
+      }
+    }
+  }
+  return null
 }
 
 function proposalProblem(c: string, p: Json, mask: unknown): string | null {

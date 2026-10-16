@@ -25,6 +25,12 @@
  *     campaign to its own goals (goal_config_level CAMPAIGN): account goal changes no longer reach it until its
  *     ConversionGoalCampaignConfig (customers/{id}/conversionGoalCampaignConfigs/{campaign_id}, update only) is set back to
  *     goal_config_level CUSTOMER.
+ *   - G14a (2026-10-16): a campaign's custom goal is ConversionGoalCampaignConfig.custom_conversion_goal (update mask
+ *     custom_conversion_goal; docs/conversions/goals/campaign-goals "Custom goals": "the backend automatically updates
+ *     goal_config_level to CAMPAIGN"; the campaign then bids for the custom goal's actions AND its biddable campaign
+ *     goals, primary or not). A custom goal is cleared by the same mask with no value (the field is a plain proto3 string).
+ *     Setting goal_config_level CUSTOMER leaves custom goals behind: a campaign that follows the account's goals uses
+ *     none ("using a custom goal automatically changes … goal_config_level=CAMPAIGN").
  *
  * Money: Smart Bidding (target CPA / ROAS, maximize conversions / value) bids for the conversions of the goals it
  * optimises. Making an action count for bidding (primary, include in conversions, enabled again, a goal made biddable)
@@ -35,6 +41,7 @@
 import { changeLines, money, plural, type GoogleChangeDraft } from './change-draft.js'
 import type { LiveConversionAction, LiveConversions } from './live-account.js'
 import { CONVERSION_BIDDING, VALUE_BIDDING, type SmartBiddingCampaign } from './live-conversions.js'
+import type { LiveCustomGoal } from './live-goals-audiences.js'
 import type { GoogleMutateOperation } from './write-client.js'
 
 // ── vocabulary ───────────────────────────────────────────────────────────────────────────────────────────────────
@@ -425,23 +432,49 @@ export interface GoalRequest {
   campaignGoals?: Array<GoalAsk & { campaignId: string }>
   /** Campaigns that go back to the account's goals (goal_config_level CUSTOMER). */
   useAccountGoals?: string[]
+  /** G14a: the custom goal a campaign uses (null: none). */
+  customGoals?: Array<{ campaignId: string; customGoalId: string | null }>
 }
 export interface GoalRecord {
   account: GoalAsk[]
   campaigns: Array<GoalAsk & { campaignId: string }>
-  /** Each campaign's goal level (CUSTOMER: follows the account's goals; CAMPAIGN: its own). */
-  levels: Array<{ campaignId: string; goalsFrom: string | null }>
+  /**
+   * Each campaign's goal level (CUSTOMER: follows the account's goals; CAMPAIGN: its own), and (G14a, when the change
+   * touches it) the custom goal it uses (null: none).
+   */
+  levels: Array<{ campaignId: string; goalsFrom: string | null; customGoalId?: string | null }>
+}
+
+/**
+ * The conversion actions a campaign bids for now (what a custom goal adds to): the enabled primary actions of its
+ * biddable goals (its own goals, or the account's when it has none of its own) and the actions of the custom goal it uses.
+ */
+export function campaignChasedActions(
+  campaignId: string,
+  live: { goals: Pick<LiveConversions, 'accountGoals' | 'campaigns'>; actions: LiveConversionAction[]; customGoals: LiveCustomGoal[] },
+  options: { withCustomGoal?: boolean } = {},
+): Set<string> {
+  const own = live.goals.campaigns.find((c) => c.campaignId === campaignId)
+  const biddable = new Set(own ? own.biddableGoals : live.goals.accountGoals.filter((g) => g.biddable).map((g) => g.goal))
+  const out = new Set(live.actions
+    .filter((a) => a.status === 'ENABLED' && a.primary && biddable.has(goalOf(a.category, a.origin)))
+    .map((a) => a.conversionActionId ?? ''))
+  const custom = options.withCustomGoal !== false && own?.goalsFrom === 'CAMPAIGN' && own.customGoalId ? live.customGoals.find((g) => g.customGoalId === own.customGoalId) : null
+  for (const id of custom?.conversionActionIds ?? []) out.add(id)
+  out.delete('')
+  return out
 }
 
 export function goalChangeDraft(
   customer: string,
   request: GoalRequest,
-  live: { bidding: BiddingContext },
+  live: { bidding: BiddingContext; customGoals?: LiveCustomGoal[]; actions?: LiveConversionAction[] },
 ): GoalRecordDraft {
   const asks = request.accountGoals ?? []
   const campaignAsks = request.campaignGoals ?? []
   const back = [...new Set(request.useAccountGoals ?? [])]
-  if (!asks.length && !campaignAsks.length && !back.length) return { refusal: 'Say what to change: accountGoals, campaignGoals or useAccountGoals.' }
+  const customAsks = request.customGoals ?? []
+  if (!asks.length && !campaignAsks.length && !back.length && !customAsks.length) return { refusal: 'Say what to change: accountGoals, campaignGoals, useAccountGoals or customGoals.' }
   const goals = live.bidding.goals
   const accountGoal = (g: { category: string; origin: string }) => goals.accountGoals.find((a) => a.category === g.category && a.origin === g.origin)
   const campaignOf = (id: string) => goals.campaigns.find((c) => c.campaignId === id)
@@ -514,8 +547,9 @@ export function goalChangeDraft(
     if (!own || own.goalsFrom !== 'CAMPAIGN') { skipped.push(`Campaign "${campaign.name}" already follows the account's goals.`); continue }
     operations.push({ conversionGoalCampaignConfigOperation: { update: { resourceName: `${customer}/conversionGoalCampaignConfigs/${id}`, goalConfigLevel: 'CUSTOMER' }, updateMask: 'goal_config_level' } })
     lines.push([`${campaign.name}: goals`, 'its own', 'the account\'s'])
-    before.levels.push({ campaignId: id, goalsFrom: own.goalsFrom })
-    after.levels.push({ campaignId: id, goalsFrom: 'CUSTOMER' })
+    // G14a: the custom goal it used is recorded, so undo can give it back (customGoals).
+    before.levels.push({ campaignId: id, goalsFrom: own.goalsFrom, ...(own.customGoalId ? { customGoalId: own.customGoalId } : {}) })
+    after.levels.push({ campaignId: id, goalsFrom: 'CUSTOMER', ...(own.customGoalId ? { customGoalId: null } : {}) })
     // Its own biddable goals, so undo can give them back.
     for (const ag of goals.accountGoals) {
       const key = goalOf(ag.category, ag.origin)
@@ -526,7 +560,57 @@ export function goalChangeDraft(
     const lost = own.biddableGoals.filter((g) => !goals.accountGoals.some((ag) => ag.biddable && ag.goal === g))
     if (gained.length) spends.push(chaseSentence(`Campaign "${campaign.name}" starts bidding for ${gained.join(', ')} (the account's goals)`, smart(campaign)))
     if (lost.length) warnings.push(`Campaign "${campaign.name}" stops bidding for ${lost.join(', ')}.`)
-    if (own.customGoalId) warnings.push(`Campaign "${campaign.name}" stops using its custom goal (${own.customGoalId}); undo cannot give a custom goal back.`)
+    if (own.customGoalId) warnings.push(`Campaign "${campaign.name}" stops using its custom goal (${own.customGoalId}); undo gives it back.`)
+  }
+
+  // G14a: the custom goal a campaign uses (ConversionGoalCampaignConfig.custom_conversion_goal).
+  const customSeen = new Set<string>()
+  for (const ask of customAsks) {
+    const id = ask.campaignId
+    if (customSeen.has(id)) return { refusal: `Campaign ${id} is named twice in customGoals.` }
+    customSeen.add(id)
+    if (back.includes(id)) return { refusal: `Campaign ${id} is in customGoals and in useAccountGoals: a campaign that follows the account's goals uses no custom goal. One or the other.` }
+    const campaign = live.bidding.campaigns.find((c) => c.campaignId === id)
+    if (!campaign) return { refusal: `Campaign ${id} is not in the account (or is removed).` }
+    const own = campaignOf(id)
+    const level = own?.goalsFrom ?? 'CUSTOMER'
+    const nowId = level === 'CAMPAIGN' ? own?.customGoalId ?? null : null
+    const customGoals = live.customGoals ?? []
+    const named = (gid: string | null) => (gid ? customGoals.find((g) => g.customGoalId === gid) : undefined)
+    const target = ask.customGoalId ? named(ask.customGoalId) : null
+    if (ask.customGoalId && !target) return { refusal: `Custom goal ${ask.customGoalId} is not in the account (or is removed). set-google-custom-goals makes one; google-ads-query "SELECT custom_conversion_goal.id, custom_conversion_goal.name FROM custom_conversion_goal" lists them.` }
+    if ((ask.customGoalId ?? null) === nowId) { skipped.push(`Campaign "${campaign.name}" ${nowId ? `already uses custom goal ${nowId}` : 'uses no custom goal'}.`); continue }
+    const label = (gid: string | null) => (gid ? `custom goal "${named(gid)?.name ?? gid}"` : 'no custom goal')
+    operations.push({
+      conversionGoalCampaignConfigOperation: {
+        update: { resourceName: `${customer}/conversionGoalCampaignConfigs/${id}`, ...(ask.customGoalId ? { customConversionGoal: `${customer}/customConversionGoals/${ask.customGoalId}` } : {}) },
+        updateMask: 'custom_conversion_goal',
+      },
+    })
+    lines.push([`${campaign.name}: custom goal`, label(nowId), label(ask.customGoalId)])
+    const levelBefore = before.levels.find((l) => l.campaignId === id)
+    const levelAfter = after.levels.find((l) => l.campaignId === id)
+    if (levelBefore && levelAfter) {
+      levelBefore.customGoalId = nowId
+      levelAfter.customGoalId = ask.customGoalId
+    } else {
+      before.levels.push({ campaignId: id, goalsFrom: level, customGoalId: nowId })
+      after.levels.push({ campaignId: id, goalsFrom: ask.customGoalId ? 'CAMPAIGN' : level, customGoalId: ask.customGoalId })
+    }
+    const ctx = { goals, actions: live.actions ?? [], customGoals }
+    const actionName = (aid: string) => `"${(live.actions ?? []).find((a) => a.conversionActionId === aid)?.name ?? aid}"`
+    const list = (ids: string[]) => ids.slice(0, 5).map(actionName).join(', ') + (ids.length > 5 ? ` and ${ids.length - 5} more` : '')
+    if (target) {
+      const chased = campaignChasedActions(id, ctx)
+      const more = target.conversionActionIds.filter((aid) => !chased.has(aid))
+      if (more.length) spends.push(chaseSentence(`Campaign "${campaign.name}" bids for ${plural(more.length, 'more conversion action')} with custom goal "${target.name ?? target.customGoalId}" (${list(more)}; a custom goal counts its actions primary or not)`, smart(campaign)))
+      if (level !== 'CAMPAIGN') warnings.push(`Campaign "${campaign.name}" gets goals of its own (Google moves it to campaign-level goals with a custom goal): changes to the account's goals no longer reach it (useAccountGoals puts it back).`)
+    }
+    if (nowId) {
+      const kept = target ? new Set([...campaignChasedActions(id, ctx, { withCustomGoal: false }), ...target.conversionActionIds]) : campaignChasedActions(id, ctx, { withCustomGoal: false })
+      const lost = (named(nowId)?.conversionActionIds ?? []).filter((aid) => !kept.has(aid))
+      if (lost.length) warnings.push(`Campaign "${campaign.name}" stops bidding for ${list(lost)} (they were in its custom goal).`)
+    }
   }
 
   if (!operations.length) return { refusal: `Nothing to change: ${skipped.join(' ') || 'every goal is already so.'}` }
@@ -534,15 +618,23 @@ export function goalChangeDraft(
   return {
     summary: `Change ${plural(operations.length, 'conversion goal setting')}.`,
     changes,
-    totals: { accountGoals: after.account.length, campaignGoals: after.campaigns.length, campaignsBackToAccountGoals: back.length, ...(more ? { moreLines: more } : {}) },
+    totals: {
+      accountGoals: after.account.length, campaignGoals: after.campaigns.length, campaignsBackToAccountGoals: back.length,
+      ...(customAsks.length ? { campaignCustomGoals: customSeen.size } : {}), ...(more ? { moreLines: more } : {}),
+    },
     warnings,
     spendsMoney: spends,
     skipped,
     operations,
     stands: {
       account: goals.accountGoals.map((g) => `${g.goal}:${g.biddable}`).sort(),
-      campaigns: goals.campaigns.filter((c) => campaignAsks.some((a) => a.campaignId === c.campaignId) || back.includes(c.campaignId ?? ''))
+      campaigns: goals.campaigns.filter((c) => campaignAsks.some((a) => a.campaignId === c.campaignId) || back.includes(c.campaignId ?? '') || customSeen.has(c.campaignId ?? ''))
         .map((c) => `${c.campaignId}:${c.goalsFrom}:${c.biddableGoals.join(',')}:${c.customGoalId ?? ''}`).sort(),
+      // G14a: what a campaign's custom goal stands on — the goals it names and the actions they count.
+      ...(customAsks.length ? {
+        customGoals: (live.customGoals ?? []).map((g) => `${g.customGoalId}:${g.conversionActionIds.join(',')}`).sort(),
+        actions: (live.actions ?? []).map((a) => `${a.conversionActionId}:${a.status}:${a.primary}:${a.category}/${a.origin}`).sort(),
+      } : {}),
     },
     before,
     after,
