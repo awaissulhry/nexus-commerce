@@ -294,7 +294,8 @@ const createAdCampaign: AgentTool = {
     + 'when the market has no spend ceiling or the budget is above it, the name is taken, a SKU is not found, or '
     + 'Amazon\'s write gate would refuse it. The preview shows the whole plan, where it lands (live at Amazon or sandbox) '
     + 'and each limit with where it comes from. Undo archives the campaign (archive-ads): permanent at Amazon, an archived '
-    + 'campaign never comes back.',
+    + 'campaign never comes back. Sponsored Brands and Sponsored Display campaigns are created on the Nexus screens, not '
+    + 'here (the ad tools change the ones that exist).',
   async handler(args, ctx) {
     return createPreview(args, ctx)
   },

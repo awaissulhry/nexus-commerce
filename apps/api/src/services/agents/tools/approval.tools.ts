@@ -511,6 +511,7 @@ const approvalStatus: AgentTool = {
   readOnly: true,
   description:
     'Check a change that was queued for approval: whether a person approved or rejected it, when, and when it expires. '
+    + 'An approved change runs as the person who approved it, after its facts are checked again. '
     + 'A rejected one says so, with the person\'s words in rejectedReason when they gave a reason; one replaced by an '
     + 'edit names the new request in replacedBy; one approved but handed back without running says why in handedBack; '
     + 'one that failed when it ran says why in failed (both wait for a person again). '

@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { listTools } from '../agents/tool-registry.js'
 import { offeredOn } from '../agents/call-tool.js'
-import { mcpInputSchema, mcpInstructions, mcpServerInfo, requiredScope, toolAnnotations } from './mcp-server.js'
+import { INSTRUCTIONS_LIMIT, mcpInputSchema, mcpInstructions, mcpServerInfo, requiredScope, toolAnnotations } from './mcp-server.js'
 import { inputJsonSchema } from '../agents/tool-loop.service.js'
 import { BRAIN_MAP_VIEWS } from '../advertising/brain/read-map.js'
 import { GOOGLE_UNCHECKED_CHANGE_RULES } from '../agents/tools/google-ads-kit.js'
@@ -91,6 +91,88 @@ const OPEN_WORLD = [
   'upload-google-sales', 'void-shipping-label',
 ]
 
+/**
+ * The hard rules: every one must reach Claude inside the first 4,096 characters (the 4,096 block below). One key phrase
+ * per rule; the comments say where each came from.
+ */
+const HARD_RULES = [
+  // C3 — one business per connection; ids never cross; the business named on every change.
+  'never reuse an id, a SKU or an approvalId', 'any other name is refused', 'submit-change-plan, undo-change and confirm-change',
+  'before naming a market or an account',
+  // N3 — the rules every skill used to repeat, once, here.
+  'Before any change: tell the person which business it is for, read what is there now, show the plan',
+  'go on only after a clear yes', 'ONE submit-change-plan', 'never a loop of single requests',
+  'A change tool changes nothing from here', 'approveAt; it expires at expiresAt', 'status runs_by_rule',
+  'You cannot approve changes, and you cannot change what may run by rule', 'confirm-change (approvalId, planHash, code)',
+  'never guess, store or reuse a code', 'Never say a change ran until approval-status says so',
+  'undo-change asks to put a change back', 'Never change an Amazon FBA quantity', 'old Amazon or eBay flat-file pages',
+  'pass the reason on in plain words and carry on',
+  // Platform health watchdog (2026-10-07) — the daily checks are read first in an unattended run.
+  'In a daily or unattended run read platform-health-checks first',
+  'make no change that rests on a feed it calls late or failing',
+  // W1-8 — the ads strategy only narrows.
+  'The Amazon ads strategy (ads-strategy) only narrows what this business lets', 'never widens it',
+  // AA-W2-12 (Owner 2026-10-06) — a temporary stop is low bids; a real pause only when meant; an archive is for good.
+  'To stop an ad for a while, lower its bids', 'Pause an ad (pause-ads) only when the person means a real pause',
+  'Archive an ad (archive-ads) only when it is meant for good',
+  // PB — campaigns only through Nexus's own builders.
+  "Amazon campaigns are built only with Nexus's own builders",
+  // Never by rule: Google (2026-10-15), a strategy raise (W1-8), a harvest (HMCP, AB-11), the brains (BB-6, AB-13, AB-15,
+  // AB-20, one brain), a copy into another market and a person's pause (W4-14).
+  "Never by rule, always a person's decision: every Google Ads and Merchant Center change (approved in Nexus)",
+  'a raise of the ads strategy, a harvest, any change to the ads or bid brain or an hourly plan the brain painted',
+  'a copy of campaigns into another market', 'switching on an ad no Claude request paused (enable-ads includePeoplesPauses)',
+  // Google Ads changes (2026-10-15, G13) — checked first except …, spend marked, new campaigns paused, removes only asked,
+  // a build is one call.
+  'Google checks a Google change first (validate_only), except apply-google-recommendations',
+  'make the account spend more is marked SPENDS MONEY in the preview', 'A new campaign is always made paused',
+  'enabling anything is set-google-status (SPENDS MONEY)', 'remove-google-… tools delete only what the person asked to delete',
+  'New parts that point at new parts are ONE call (build-google-campaigns', 'never steps of a change plan',
+]
+
+/**
+ * Tool-by-tool guidance that left the instructions (2026-10-16, 4,096): each sentence is said in the named tool's own
+ * description, which Claude always gets in full.
+ */
+const MOVED_TO_DESCRIPTIONS: ReadonlyArray<readonly [string, string]> = [
+  ['business-overview', 'Read it before naming a market or an account'],
+  ['ads-strategy', 'the strategy only narrows it, never widens it'], ['ads-strategy', 'trust.strategy'],
+  ['set-ads-strategy', 'a RAISE never does'],
+  ['approval-status', 'An approved change runs as the person who approved it, after its facts are checked again'],
+  ['ads-overview', 'Google (channel google): the Google Ads account a person chose for this business'],
+  ['ad-campaigns', 'Google (channel google)'], ['google-ad-details', 'brand-split'], ['google-ad-details', 'alerts:'],
+  ['google-ads-live', 'change-history'], ['google-ads-numbers', 'up to and including TODAY'],
+  ['google-ads-query', 'the catch-all for any read'], ['google-ads-experiments', 'read LIVE from Google'],
+  ['google-merchant-live', 'Merchant Center, read LIVE from Google'], ['check-google-ads-build', 'nothing waits in Approvals'],
+  ['build-google-campaigns', 'Use it, not a change plan, when new parts point at new parts'],
+  ['bid-brain', 'in SHADOW'], ['bid-brain', 'for a campaign set-bid-brain-enrollment put LIVE'], ['bid-brain', 'view what-if'],
+  ['bid-brain', 'view diff'], ['set-bid-brain-enrollment', 'never by rule'],
+  ['apply-brain-harvest', 'it never runs by rule'], ['apply-brain-harvest', 'Claude cannot approve it'],
+  ['apply-harvest', 'as ONE change set'], ['apply-harvest', 'it never runs by rule, and Claude cannot approve it'],
+  ['apply-harvest', 'then its keyword paused'], ['harvest-search-term', 'same change set'], ['graduate-keyword', 'same change set'],
+  ['harvest-candidates', 'one row per search term × product × market'], ['harvest-destinations', 'destination picker'],
+  ['harvest-history', 'too early'], ['skip-harvest-terms', 'for 7 days, 30 days or for'], ['harvest-rules', 'Rules view'],
+  ['set-harvest-rules', 'Rules view'], ['harvest-sources', 'Sources view'], ['set-harvest-sources', 'detach'],
+  ['apply-brain-hourly-plan', 'never by rule'],
+  ['apply-brain-hourly-plan', 'the hourly bid engine applies it at Amazon from its next run'],
+  ['set-ads-brain', "always win over the brain's defaults and over the brain"], ['set-ads-brain', 'portfolioCapLimitCents) included'],
+  ['set-brain-kill-switch', "a person's normal approval (as a kill itself is)"],
+  ['retire-ads-writers', 'never deleted'], ['retire-ads-writers', 'ads-brain view retire shows what would retire'],
+  ['apply-ads-playbook', "Starting to spend is a person's approval"], ['apply-ads-playbook', 'allowlist'],
+  ['replicate-ad-structure', 'a copy into another market never runs by rule'],
+  ['replicate-ad-structure', 'off the live-write allowlist'], ['build-sp-wizard-campaigns', 'allowlist'],
+  ['create-ai-goal-campaigns', 'off the live-write allowlist'], ['create-ad-campaign', 'off the live-write allowlist'],
+  ['undo-worse-ad-change', 'born OBSERVE'], ['undo-worse-ad-change', '3 settled days'],
+  ['automation-detail', 'auto-undo (A19) lists its judgements'],
+  ['create-ad-campaign', 'Sponsored Brands and Sponsored Display campaigns are created on the Nexus screens'],
+  ['set-campaign-budget', 'Sponsored Brands'], ['set-target-bid', 'Sponsored Brands'], ['bulk-ad-bid-change', 'Sponsored Brands'],
+  ['pause-ads', 'Sponsored Brands'], ['enable-ads', 'Sponsored Brands'], ['add-negative-targets', 'Sponsored Brands'],
+  ['retire-negatives', 'which Amazon never lets be added to that campaign again'],
+  ['set-hourly-bid-plan', 'A plan a person made or last changed changes by rule only where the business allowed it'],
+  ['enable-ads', 'it never runs by rule'],
+  ['platform-health-checks', 'Read it first in a daily run'], ['platform-health-checks', 'the watchdog itself did not run'],
+]
+
 describe('MCP.7 — every tool, as Claude sees it', () => {
   it('has a short title', () => {
     const bad = listTools().filter((tool) => !tool.title?.trim() || tool.title.length > 40).map((tool) => tool.name)
@@ -157,86 +239,50 @@ describe('C3 — the server and every change tool name the business', () => {
     expect(mcpServerInfo(business)).toMatchObject({ name: 'nexus', title: 'Nexus — Xavia Racing' })
     expect(mcpInstructions(business)).toContain('This connection works in the business "Xavia Racing" only')
     expect(mcpInstructions(business)).toContain('business: "Xavia Racing"')
-    // N3 — the rules every skill used to repeat, once, here.
-    for (const rule of ['submit-change-plan, undo-change and confirm-change', 'read it before naming a market or an account',
-      'go on only after a clear yes', 'ONE submit-change-plan', 'approveAt; it expires at expiresAt', 'the approvalId, the planHash and the',
-      'Never say a change ran until approval-status says so', 'Never change an Amazon FBA quantity', 'old Amazon or eBay flat-file pages',
-      // AA-W2-12 (Owner 2026-10-06) — a temporary stop is low bids; a real pause only when meant; an archive is for good.
-      'To stop an ad for a while, lower its bids', 'Pause an ad (pause-ads) only when the person means a real pause',
-      'Archive an ad (archive-ads) only when it is meant for good',
-      // W1-8 — where the ads strategy lives, and that it only narrows.
-      'read it with ads-strategy, change', 'It only narrows what this business lets',
-      // BB-4 — the bid brain's read tool; BB-6 — it writes only for a campaign put LIVE, a person's approval (no code
-      // since 2026-10-12, Owner "B").
-      'bid-brain (read only; the bid', 'writes only for a campaign set-bid-brain-enrollment put LIVE',
-      "is a person's approval; its diff view",
-      // AB-3 — the brain's map, read only; every view it has (AB-7 money, AB-9 terms, AB-12 state, AB-13 hours, AB-10 negatives, AB-11 harvest, AB-14 report).
-      'ads-brain (read only; views map, clashes, setup, money, terms, state, hours, negatives, harvest, report, structure, bidding, retire, proof)',
-      // AB-11 — the brain's harvest request, a person's decision.
-      'person for is apply-brain-harvest (the keyword and its source negatives in one change set',
-      // AB-13 (batch 2 review fix) — the brain's painted hourly plan, named, and that it reaches Amazon through the engine.
-      'An hourly plan the brain painted is applied with apply-brain-hourly-plan',
-      'bid engine applies at Amazon from its next run; a person approves it in Nexus, never by rule',
-      // One brain — the Owner's control tool; a lever to AUTO and a raised portfolio cap limit: a normal approval (B).
-      'The Owner controls a product\'s brain with set-ads-brain',
-      'to AUTO and a raise of the product\'s portfolio cap limit (portfolioCapLimitCents) included, is a person\'s normal approval',
-      // AB-15 — the kill switch per lever, a person's decision.
-      'One lever of the brain is stopped at once, for one product or every product, with set-brain-kill-switch',
-      // Batch 2 review fix (lead decision) — a kill ended: a normal approval since 2026-10-12 (B).
-      'ending one lets the brain write that lever again, also a normal approval',
-      // AB-20 — the duplicate writers retired and given back (a person's decision), and the views that show them and the proof.
-      'retire-ads-writers (op retire, or op give-back; never deleted; a person approves it): ads-brain view retire lists what',
-      // PB-11 — where the playbook lives, and that a start is a person's approval.
-      'read it with ads-playbook, change it with', 'start, stop or sync its campaigns, switch its phase',
-      "a start is a person's approval",
-      // W4-14 — a copy into another market, a person's hourly plan and a person's pause keep their own doors.
-      'a copy into another market never runs by rule',
-      'An hourly bid plan a person made changes by rule only where the business allowed it',
-      "only with enable-ads includePeoplesPauses and a person's approval, never by rule",
-      // Platform health watchdog (2026-10-07) — the daily checks are read first in an unattended run.
-      'read platform-health-checks first in a daily or unattended run',
-      // Google Ads step 1a — the two ad reads.
-      'Google Ads: ads-overview and ad-campaigns with channel google read the Google Ads account a person chose',
-      // Google Ads changes (2026-10-15) — a person approves each, never a rule; spend is marked. G13 — every family, and
-      // which changes Google cannot check first (the next test holds that list to the tools).
-      'Google changes: set-google-… and sibling tools (campaigns,',
-      'Merchant Center products, data sources, promotions): each is a request a person approves in Nexus, never run by a rule',
-      'Google checks it first (validate_only), except apply-google-recommendations',
-      'what can make the account spend more is marked SPENDS MONEY in the preview',
-      'A new campaign is always made paused', 'enabling anything is set-google-status (SPENDS MONEY)',
-      'remove-google-… tools delete only what the person asked to delete',
-      'New parts that point at new parts are ONE call (build-google-campaigns or copy-google-campaign',
-      // Google Ads step 1b — the rest of the Google Ads page, one view at a time.
-      'and google-ad-details (one view at a time) its ad groups, keywords, negatives, search terms and the']) {
-      expect(mcpInstructions(business), rule).toContain(rule)
-    }
+    for (const rule of HARD_RULES) expect(mcpInstructions(business), rule).toContain(rule)
   })
 
-  it('the instructions name every view of ads-brain, in the tool\'s own order (a new view cannot be left out)', () => {
-    expect(mcpInstructions(business)).toContain(`ads-brain (read only; views ${BRAIN_MAP_VIEWS.join(', ')}).`)
-    expect([...BRAIN_MAP_VIEWS]).toEqual(['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report', 'structure', 'bidding', 'retire', 'proof'])
-  })
-
-  it('W4-14 — the instructions name every Wave 4 Amazon ads tool, and each is a registered tool', () => {
-    const registered = new Set(listTools().map((tool) => tool.name))
+  it('every Amazon ads, harvest and Google tool the instructions once listed is registered and offered to Claude: its own description, which Claude always gets in full, says what it does', () => {
+    const tools = new Map(listTools().map((tool) => [tool.name, tool]))
+    // W4-14 (Wave 4 Amazon ads), HMCP (the harvest engine), the ads brain, G13 (Google reads and builds).
     for (const name of ['ad-hourly-plans', 'set-hourly-bid-plan', 'enable-ads', 'ad-portfolios', 'set-portfolio', 'set-campaign-settings',
       'add-ad-targets', 'add-negative-targets', 'retire-negatives', 'harvest-search-term', 'set-harvest-destination', 'ad-groups',
       'create-ad-group', 'add-product-ads', 'set-ad-group', 'ad-budgets', 'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool',
       'restore-budget-baselines', 'assign-ad-rules', 'set-coverage-set', 'run-ad-engine-now', 'ad-recommendations', 'apply-ad-recommendations',
-      'mute-ad-recommendations', 'replicate-ad-structure']) {
-      expect(registered.has(name), name).toBe(true)
-      expect(mcpInstructions(business), name).toMatch(new RegExp(`(^|[^a-z-])${name}([^a-z-]|$)`))
+      'mute-ad-recommendations', 'replicate-ad-structure',
+      'harvest-candidates', 'harvest-destinations', 'apply-harvest', 'harvest-history', 'skip-harvest-terms', 'graduate-keyword',
+      'harvest-rules', 'set-harvest-rules', 'harvest-sources', 'set-harvest-sources',
+      'bid-brain', 'set-bid-brain-enrollment', 'ads-brain', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'set-ads-brain',
+      'set-brain-kill-switch', 'retire-ads-writers', 'ads-playbook', 'set-ads-playbook', 'undo-worse-ad-change',
+      'google-ad-details', 'google-ads-live', 'google-ads-numbers', 'google-ads-query', 'google-ads-experiments', 'google-merchant-live',
+      'check-google-ads-build', 'create-google-demand-gen-campaign', 'create-google-display-campaign', 'create-google-app-campaign']) {
+      const tool = tools.get(name)
+      expect(tool, name).toBeDefined()
+      expect({ name, offered: offeredOn(tool!, 'mcp') }).toEqual({ name, offered: true })
     }
   })
 
-  it('G13 — the Google part names its reads, its builds and every change Google cannot check first, from the tools themselves', () => {
+  it('what left the instructions is said in the named tool\'s own description, so nothing is lost', () => {
+    const description = (name: string) => listTools().find((tool) => tool.name === name)?.description ?? ''
+    for (const [name, said] of MOVED_TO_DESCRIPTIONS) expect(description(name), `${name}: ${said}`).toContain(said)
+    // The ads brain's map names every view, in the tool's own order (a new view cannot be left out).
+    const brain = description('ads-brain')
+    const at = BRAIN_MAP_VIEWS.map((view) => brain.indexOf(`view ${view}`))
+    expect(at.every((index) => index >= 0), `${BRAIN_MAP_VIEWS.join(', ')}`).toBe(true)
+    expect(at).toEqual([...at].sort((a, b) => a - b))
+    expect([...BRAIN_MAP_VIEWS]).toEqual(['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report', 'structure', 'bidding', 'retire', 'proof'])
+    // "Never by rule": every Google Ads and Merchant Center change tool says so itself.
+    const google = listTools().filter((tool) => !tool.readOnly && /google/.test(tool.name))
+    expect(google.length).toBeGreaterThan(0)
+    for (const tool of google) expect(tool.description, tool.name).toMatch(/never (?:run )?by (?:a )?rule/)
+  })
+
+  it('G13 — the Google part names every change Google cannot check first, and the builds that are one call, from the tools themselves', () => {
     const text = mcpInstructions(business)
     const tools = listTools()
     const registered = new Set(tools.map((tool) => tool.name))
     const named = (name: string) => expect(text, name).toMatch(new RegExp(`(^|[^a-z-])${name}([^a-z-]|$)`))
-    for (const name of ['google-ad-details', 'google-ads-live', 'google-ads-numbers', 'google-ads-query', 'google-ads-experiments',
-      'google-merchant-live', 'set-google-status', 'build-google-campaigns', 'copy-google-campaign', 'build-google-pmax', 'copy-google-pmax',
-      'check-google-ads-build']) {
+    for (const name of ['set-google-status', 'build-google-campaigns', 'copy-google-campaign', 'build-google-pmax', 'copy-google-pmax']) {
       expect(registered.has(name), name).toBe(true)
       named(name)
     }
@@ -251,18 +297,12 @@ describe('C3 — the server and every change tool name the business', () => {
     expect(merchant.length).toBeGreaterThan(0)
     for (const tool of merchant) expect(tool.name, tool.name).toMatch(/^set-google-merchant-/)
     expect(text).toContain('set-google-merchant-…: their preview says so')
-    // Every create-google-…-campaign that builds its ad groups and ads in one call is one the instructions mean.
-    for (const name of ['create-google-demand-gen-campaign', 'create-google-display-campaign', 'create-google-app-campaign']) expect(registered.has(name), name).toBe(true)
-    expect(text).toContain('create-google-…-campaign for Demand Gen, Display, App')
-  })
-
-  it('HMCP — the instructions teach the one harvest engine: its reads, its one change set, its undo, its skip; approving stays a person\'s', () => {
-    const registered = new Set(listTools().map((tool) => tool.name))
-    for (const name of ['harvest-candidates', 'harvest-destinations', 'apply-harvest', 'harvest-history', 'skip-harvest-terms', 'harvest-search-term', 'graduate-keyword', 'harvest-rules', 'set-harvest-rules', 'harvest-sources', 'set-harvest-sources']) {
+    // Every create-google-…-campaign builds its ad groups and ads in ONE request, as the instructions say.
+    for (const name of ['create-google-demand-gen-campaign', 'create-google-display-campaign', 'create-google-app-campaign']) {
       expect(registered.has(name), name).toBe(true)
-      expect(mcpInstructions(business), name).toMatch(new RegExp(`(^|[^a-z-])${name}([^a-z-]|$)`))
+      expect(tools.find((tool) => tool.name === name)!.description, name).toContain('ONE request')
     }
-    expect(mcpInstructions(business)).toContain('you cannot approve a waiting harvest')
+    expect(text).toContain('create-google-…-campaign), never steps of a change plan')
   })
 
   it('every change tool takes a required business name; a read takes none', () => {
@@ -282,6 +322,30 @@ describe('C3 — the server and every change tool name the business', () => {
       for (const key of own.required ?? []) expect(schema.required).toContain(key)
       // The tool's own schema is untouched (the in-app assistant gets it as it is).
       expect(own.properties ?? {}).not.toHaveProperty('business')
+    }
+  })
+})
+
+describe('4,096 — Claude Code and the claude.ai connector keep only the first 4,096 characters of the instructions', () => {
+  // The longest business name the instructions must carry whole, twice: 80 characters (a made-up name, no real business).
+  const longest = { id: 'ws-long', name: 'B'.repeat(80) }
+
+  it('the whole text fits, with an 80-character business name: nothing is cut, and it ends on a whole sentence', () => {
+    const text = mcpInstructions(longest)
+    expect(text.length).toBeLessThanOrEqual(INSTRUCTIONS_LIMIT)
+    const kept = text.slice(0, INSTRUCTIONS_LIMIT)
+    expect(kept).toBe(text)
+    expect(kept).toMatch(/\.$/)
+  })
+
+  it('every hard rule ends before character 4,096', () => {
+    const text = mcpInstructions(longest)
+    expect(text).toContain(`This connection works in the business "${longest.name}" only`)
+    expect(text).toContain(`business: "${longest.name}"`)
+    for (const rule of HARD_RULES) {
+      const at = text.indexOf(rule)
+      expect(at, rule).toBeGreaterThanOrEqual(0)
+      expect(at + rule.length, rule).toBeLessThanOrEqual(INSTRUCTIONS_LIMIT)
     }
   })
 })
