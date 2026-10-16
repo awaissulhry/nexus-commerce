@@ -177,6 +177,7 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-google-shopping-settings': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-shopping.tools test)',
   'set-google-labels': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-labels.tools test)',
   'set-google-page-feed': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-pmax.tools test)',
+  'enable-google-pmax-brand-guidelines': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-pmax.tools test)',
   'remove-google-labels': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-labels.tools test)',
   'dismiss-google-recommendations': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-recommendations.tools test)',
   'set-google-auto-apply': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-recommendations.tools test)',
@@ -461,6 +462,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-google-customer-acquisition': () => ({ campaignId: '21', mode: 'ONLY_NEW' }),
   // Programme 2 G14b: a page feed (URL inclusions) of the account.
   'set-google-page-feed': () => ({ pageFeedId: '77', addUrls: [{ url: 'https://shop.example/a' }] }),
+  'enable-google-pmax-brand-guidelines': () => ({ campaignId: '21', confirmIrreversible: true }),
   'check-google-ads-build': () => ({ campaigns: [{ type: 'SEARCH', name: 'Search Z', budget: { dailyBudgetCents: 500 } }] }),
   'create-google-campaign': () => ({ type: 'SEARCH', name: 'Search A', dailyBudgetCents: 500 }),
   'set-google-campaign': () => ({ campaignId: '21', searchPartners: false }),

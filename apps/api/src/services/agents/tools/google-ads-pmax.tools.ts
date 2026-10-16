@@ -14,6 +14,8 @@
  *                                    CampaignGoalConfigs — not a GoogleAdsService.Mutate: one call each)
  *   set-google-page-feed             a page feed (URL inclusions) of the account: make one, add page URLs with labels,
  *                                    take URLs away (G14b; set-google-pmax links it to a campaign)
+ *   enable-google-pmax-brand-guidelines  brand guidelines turned ON for an existing campaign (CampaignService.
+ *                                    EnablePMaxBrandGuidelines: no validate_only, cannot be undone — change-brand-guidelines.ts)
  *
  * G14b (2026-10-16) also added: text guidelines (term exclusions, messaging restrictions) and page feeds on build, copy and
  * set-google-pmax, and an asset group's own tracking (template, final URL suffix, custom parameters) on set-google-pmax.
@@ -31,7 +33,7 @@ import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 import {
-  googleAccountArg, googleCentsArg, googleChangePreview, googleIdArg, googleWhyArg, GOOGLE_CHANGE_RULES, matchTypeArg, recordAccount, runGoogleChange,
+  googleAccountArg, googleCentsArg, googleChangePreview, googleIdArg, googleWhyArg, GOOGLE_CHANGE_RULES, GOOGLE_UNCHECKED_CHANGE_RULES, matchTypeArg, recordAccount, runGoogleChange,
   type GoogleDraftBuilder, type GoogleSender,
 } from './google-ads-kit.js'
 import { dimensionValueArg } from './google-ads-product-groups.tools.js'
@@ -45,6 +47,7 @@ import {
 } from '../../marketing/google-ads/change-pmax.js'
 import { buildImageScope, pmaxBuildDraft, pmaxCampaignAsBuild, type PmaxBuildCampaign } from '../../marketing/google-ads/build-pmax.js'
 import { acquisitionDraft, type AcquisitionRecord, type AcquisitionRequest } from '../../marketing/google-ads/change-acquisition.js'
+import { brandGuidelinesDraft, type BrandGuidelinesRequest } from '../../marketing/google-ads/change-brand-guidelines.js'
 import { MAX_PAGE_FEED_URLS, pageFeedDraft, pageFeedNow, pageFeedRecordAfterRun, pageUrlProblem, PAGE_FEED_LABEL_LIMITS, type PageFeedRecord, type PageFeedRequest } from '../../marketing/google-ads/change-page-feeds.js'
 import { checkAccountOperations, sendAccountOperations } from '../../marketing/google-ads/account-client.js'
 import { liveCampaigns } from '../../marketing/google-ads/live.js'
@@ -817,5 +820,72 @@ const setGooglePageFeed: AgentTool = {
   }),
 }
 
-export const GOOGLE_ADS_PMAX_TOOLS: AgentTool[] = [buildGooglePmax, copyGooglePmax, setGooglePmax, setGoogleCustomerAcquisition, setGooglePageFeed]
+// ── enable-google-pmax-brand-guidelines ─────────────────────────────────────────────────────────────────────────
+
+const brandRequest = (args: Record<string, unknown>): BrandGuidelinesRequest => ({
+  campaignId: String(args.campaignId),
+  ...(args.autoPopulate !== undefined ? { autoPopulate: args.autoPopulate as boolean } : {}),
+  ...(args.businessNameAssetId ? { businessNameAssetId: args.businessNameAssetId as string } : {}),
+  ...(args.logoAssetIds ? { logoAssetIds: args.logoAssetIds as string[] } : {}),
+  ...(args.landscapeLogoAssetIds ? { landscapeLogoAssetIds: args.landscapeLogoAssetIds as string[] } : {}),
+  ...(args.mainColor ? { mainColor: args.mainColor as string } : {}),
+  ...(args.accentColor ? { accentColor: args.accentColor as string } : {}),
+  ...(args.font ? { font: args.font as string } : {}),
+  ...(args.finalUriDomain ? { finalUriDomain: args.finalUriDomain as string } : {}),
+})
+
+const buildBrandGuidelines = (args: Record<string, unknown>): GoogleDraftBuilder => async (account) => {
+  const r = brandRequest(args)
+  const campaign = await livePmaxCampaign(account.target, r.campaignId)
+  const ids = [r.businessNameAssetId, ...(r.logoAssetIds ?? []), ...(r.landscapeLogoAssetIds ?? [])].filter((x): x is string => !!x && /^\d{1,20}$/.test(x))
+  return brandGuidelinesDraft(customerResource(account.target), r, campaign, ids.length ? await livePmaxAssets(account.target, ids) : [])
+}
+
+/**
+ * EnablePMaxBrandGuidelines is not a GoogleAdsService.Mutate and has no validate_only: the preview stands on the live
+ * campaign alone; the run sends the one call (account-client.ts reads Google's per-campaign refusal).
+ */
+const BRAND_SENDER: GoogleSender = {
+  notChecked: 'Google cannot check this change first: CampaignService.EnablePMaxBrandGuidelines has no validate_only '
+    + '(reference/rpc/v25/EnablePMaxBrandGuidelinesRequest). Nexus checked what it knows (the campaign, its business name and '
+    + 'logos, colors, font); Google judges the rest when the approved change runs.',
+  send: sendAccountOperations,
+}
+
+const enableBrandGuidelines: AgentTool = {
+  ...common,
+  name: 'enable-google-pmax-brand-guidelines',
+  title: 'Turn on Performance Max brand guidelines',
+  // Google has no way back: Campaign.brand_guidelines_enabled "It is not possible to disable Brand Guidelines for an
+  // existing campaign" (reference/rpc/v25/Campaign).
+  reversibility: 'none',
+  requires: [F.adsCampaignsManage],
+  input: z.object({
+    accountId: googleAccountArg,
+    campaignId: googleIdArg('the Performance Max campaign (brand guidelines off)'),
+    confirmIrreversible: z.literal(true).describe('true: the person knows brand guidelines can never be turned off again for this campaign'),
+    autoPopulate: z.boolean().optional().describe('true: Google picks the campaign\'s top-performing business name and logos; left out: Nexus names them (below, or the ones its asset groups hold)'),
+    businessNameAssetId: googleIdArg('the business name (a text asset; default: the one its asset groups hold)').optional(),
+    logoAssetIds: z.array(googleIdArg('a square logo (an image asset)')).min(1).max(5).optional().describe('the square logos (default: those its asset groups hold, up to 5)'),
+    landscapeLogoAssetIds: z.array(googleIdArg('a landscape logo (an image asset)')).max(4).optional().describe('landscape logos (with the square ones at most 5)'),
+    mainColor: z.string().trim().regex(/^#[0-9A-Fa-f]{6}$/).optional().describe('main brand color #rrggbb (with accentColor)'),
+    accentColor: z.string().trim().regex(/^#[0-9A-Fa-f]{6}$/).optional().describe('accent brand color #rrggbb (with mainColor)'),
+    font: z.enum(BRAND_FONTS).optional().describe('the font of what Google makes on its own'),
+    finalUriDomain: z.string().trim().min(3).max(253).optional().describe('the domain of the final URLs (like shop.example)'),
+    why: googleWhyArg,
+  }),
+  description:
+    'Turn brand guidelines ON for an existing Performance Max campaign of the business\'s chosen account (Google\'s '
+    + 'EnablePMaxBrandGuidelines): the business name and one to five logos become the campaign\'s (named, the ones its asset '
+    + 'groups hold, or Google\'s pick), with optional brand colors, font and final URL domain. It CANNOT be undone — Google '
+    + 'has no way to turn brand guidelines off again — so the request says confirmIrreversible: true. It moves no money. A '
+    + 'campaign without a business name or a square logo in its asset groups is refused (add them with set-google-pmax '
+    + 'first). New campaigns: build-google-pmax (brandGuidelines).' + GOOGLE_UNCHECKED_CHANGE_RULES,
+  handler: (args, ctx) => googleChangePreview(args, ctx, buildBrandGuidelines(args), BRAND_SENDER),
+  execute: (args, ctx) => runGoogleChange(args, ctx, buildBrandGuidelines(args), (draft) => ({
+    data: { campaignId: args.campaignId, brandGuidelines: true }, before: draft.before, after: draft.after,
+  }), BRAND_SENDER),
+}
+
+export const GOOGLE_ADS_PMAX_TOOLS: AgentTool[] = [buildGooglePmax, copyGooglePmax, setGooglePmax, setGoogleCustomerAcquisition, setGooglePageFeed, enableBrandGuidelines]
 

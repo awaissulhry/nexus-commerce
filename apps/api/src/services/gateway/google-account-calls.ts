@@ -23,6 +23,8 @@
  *   /v25/customers/{customer_id}/customAudiences:mutate               MutateCustomAudiences (validate_only) — G14a
  *   (2026-10-16): GoogleAdsService.Mutate has no custom audience operation (MutateOperation v25), so custom audiences go
  *   to their own service (services/custom_audience_service.proto: `post: "/v25/customers/{customer_id=*}/customAudiences:mutate"`).
+ *   /v25/customers/{customer_id}/campaigns:enablePMaxBrandGuidelines  EnablePMaxBrandGuidelines (no validate_only) — G14b
+ *   (2026-10-16; the v25 discovery document: POST v25/customers/{+customerId}/campaigns:enablePMaxBrandGuidelines)
  * Not here, on purpose: CustomerService.CreateCustomerClient (`customers/{id}:createCustomerClient`, a new account) and
  * ProductLinkInvitationService.CreateProductLinkInvitation (Google Ads cannot invite a Merchant Center account: on
  * ProductLinkInvitation v25 `merchant_center` is OUTPUT_ONLY; the request comes from Merchant Center).
@@ -50,6 +52,11 @@
  *                                          set on create by Google's lifecycle-goals sample), newCustomerAcquisitionGoalSettings { valueSettings { additionalValue,
  *                                          additionalHighLifetimeValue? } } } | update { resourceName "customers/{c}/goals/{id}",
  *                                          newCustomerAcquisitionGoalSettings } + updateMask (those two value paths); no remove
+ *   EnablePMaxBrandGuidelinesRequest (G14b) operations [ONE EnableOperation { campaign "customers/{c}/campaigns/{id}",
+ *                                          autoPopulateBrandAssets (bool, required), brandAssets? { businessNameAsset,
+ *                                          logoAsset [1–5], landscapeLogoAsset? } (assets of this account; required when
+ *                                          autoPopulateBrandAssets is false, absent when true), mainColor + accentColor
+ *                                          (#rrggbb, together), fontFamily (Google's eight), finalUriDomain }]
  *   CampaignGoalConfigOperation (G10)      ONE of create { campaign, goal, campaignNewCustomerAcquisitionSettings { targetOption
  *                                          TARGET_ALL | TARGET_SPECIFIC, valueSettingsOverride? } } | update { resourceName
  *                                          "customers/{c}/campaignGoalConfigs/{campaign}~{goal}", campaignNewCustomerAcquisitionSettings }
@@ -73,6 +80,8 @@ export const GOOGLE_ACCOUNT_CALL_PATHS = [
   'Goals:mutate', 'CampaignGoalConfigs:mutate',
   // G14a (2026-10-16): custom audiences (set-google-custom-audiences).
   'customAudiences:mutate',
+  // G14b (2026-10-16): brand guidelines turned on for an existing Performance Max campaign (enable-google-pmax-brand-guidelines).
+  'campaigns:enablePMaxBrandGuidelines',
 ] as const
 export type GoogleAccountCallPath = typeof GOOGLE_ACCOUNT_CALL_PATHS[number]
 
@@ -210,6 +219,8 @@ function problemOf(call: GoogleAccountCall, body: Json): string | null {
       return goalProblem(c, call.path, body)
     case 'customAudiences:mutate':
       return customAudienceProblem(c, body)
+    case 'campaigns:enablePMaxBrandGuidelines':
+      return brandGuidelinesProblem(c, body)
     case 'accountBudgetProposals:mutate': {
       if (onlyKeys(body, ['operation', 'validateOnly']).length) return 'it names more than one operation and validateOnly'
       if (body.validateOnly !== undefined && typeof body.validateOnly !== 'boolean') return 'validateOnly is not true or false'
@@ -313,6 +324,35 @@ function customAudienceProblem(c: string, body: Json): string | null {
       }
     }
   }
+  return null
+}
+
+const BRAND_FONTS: readonly string[] = ['Open Sans', 'Roboto', 'Roboto Slab', 'Montserrat', 'Poppins', 'Lato', 'Oswald', 'Playfair Display']
+const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/
+
+/** G14b: ONE campaign's brand guidelines turned on — exactly what enable-google-pmax-brand-guidelines sends. */
+function brandGuidelinesProblem(c: string, body: Json): string | null {
+  if (onlyKeys(body, ['operations']).length) return 'it names more than one operation (this method has no check)'
+  if (!Array.isArray(body.operations) || body.operations.length !== 1 || !isObject(body.operations[0])) return 'it is not ONE operation'
+  const op = body.operations[0]
+  if (onlyKeys(op, ['campaign', 'autoPopulateBrandAssets', 'brandAssets', 'mainColor', 'accentColor', 'fontFamily', 'finalUriDomain']).length) return 'the operation names more than a campaign, its brand assets and its style'
+  if (!ownName(c, 'campaigns', ID)(op.campaign)) return 'it does not name a campaign of this account'
+  if (typeof op.autoPopulateBrandAssets !== 'boolean') return 'autoPopulateBrandAssets is not true or false'
+  const asset = ownName(c, 'assets', ID)
+  if (op.autoPopulateBrandAssets) {
+    if (op.brandAssets !== undefined) return 'Google picks the brand assets: it names none'
+  } else {
+    const b = op.brandAssets
+    if (!isObject(b) || onlyKeys(b, ['businessNameAsset', 'logoAsset', 'landscapeLogoAsset']).length) return 'the brand assets are not a business name and logos'
+    if (!asset(b.businessNameAsset)) return 'the business name is not an asset of this account'
+    const logos = Array.isArray(b.logoAsset) ? b.logoAsset : []
+    const wide = b.landscapeLogoAsset === undefined ? [] : Array.isArray(b.landscapeLogoAsset) ? b.landscapeLogoAsset : null
+    if (!logos.length || !wide || logos.length + wide.length > 5 || ![...logos, ...wide].every(asset)) return 'the logos are not one to five assets of this account'
+  }
+  if ((op.mainColor === undefined) !== (op.accentColor === undefined)) return 'the main and accent colors go together'
+  if (op.mainColor !== undefined && !(HEX_COLOR.test(String(op.mainColor)) && HEX_COLOR.test(String(op.accentColor)))) return 'a color is not #rrggbb'
+  if (op.fontFamily !== undefined && !BRAND_FONTS.includes(String(op.fontFamily))) return 'the font is not one Google takes'
+  if (op.finalUriDomain !== undefined && !text(op.finalUriDomain, 253)) return 'the final URL domain is not one'
   return null
 }
 

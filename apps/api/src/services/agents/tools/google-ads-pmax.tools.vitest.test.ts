@@ -49,7 +49,7 @@ vi.mock('../../marketing/google-ads/asset-images.js', async (importActual) => ({
 vi.mock('../../marketing/google-ads/enqueue.js', () => ({ enqueueGoogleAdsSync: vi.fn(async () => ({ queued: true, reason: null })) }))
 
 import { GOOGLE_ADS_PMAX_TOOLS } from './google-ads-pmax.tools.js'
-import { GOOGLE_CHANGE_RULES } from './google-ads-kit.js'
+import { GOOGLE_CHANGE_RULES, GOOGLE_UNCHECKED_CHANGE_RULES } from './google-ads-kit.js'
 import type { ToolContext } from '../tool-types.js'
 
 const C = 'customers/1234567890'
@@ -105,9 +105,16 @@ beforeEach(() => {
 
 describe('G10 tools', () => {
   it('are person-approved Google changes, never by rule', () => {
-    expect(GOOGLE_ADS_PMAX_TOOLS.map((t) => t.name)).toEqual(['build-google-pmax', 'copy-google-pmax', 'set-google-pmax', 'set-google-customer-acquisition', 'set-google-page-feed'])
+    expect(GOOGLE_ADS_PMAX_TOOLS.map((t) => t.name)).toEqual(['build-google-pmax', 'copy-google-pmax', 'set-google-pmax', 'set-google-customer-acquisition', 'set-google-page-feed', 'enable-google-pmax-brand-guidelines'])
     for (const t of GOOGLE_ADS_PMAX_TOOLS) {
       expect(t, t.name).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'ask', riskTier: 'high', requiresApprovalDefault: true, openWorld: true, readOnly: false })
+      // G14b: brand guidelines turned on cannot be checked by Google first, nor undone: it says so.
+      if (t.name === 'enable-google-pmax-brand-guidelines') {
+        expect(t.description.endsWith(GOOGLE_UNCHECKED_CHANGE_RULES)).toBe(true)
+        expect(t).toMatchObject({ reversibility: 'none' })
+        expect(t.undo).toBeUndefined()
+        continue
+      }
       expect(t.description.endsWith(GOOGLE_CHANGE_RULES), t.name).toBe(true)
       expect(t.undo, t.name).toBeDefined()
     }
@@ -408,5 +415,44 @@ describe('G14b review fixes', () => {
     const fits = { ...change, after: { ...change.after, removed: [{ url: 'https://shop.example/b', labels: many.slice(0, 20), assetId: '401' }] } }
     const undo = tool('set-google-page-feed').undo!.request(fits) as { tool: string; args: Record<string, unknown> }
     expect(tool('set-google-page-feed').input.safeParse(undo.args).success).toBe(true)
+  })
+})
+
+describe('G14b: enable-google-pmax-brand-guidelines', () => {
+  it('Google cannot check it first (said in the preview, nothing sent); the run sends ONE call as the approver; it has no undo', async () => {
+    const live = campaign()
+    live.brandGuidelines = false
+    live.campaignAssets = []
+    live.assetGroups[0].assets = [...live.assetGroups[0].assets, link('210', 'BUSINESS_NAME', 'Shop A'), link('211', 'LOGO')]
+    h.campaign = live
+    const args = parsed('enable-google-pmax-brand-guidelines', { campaignId: '21', confirmIrreversible: true })
+    const out = await tool('enable-google-pmax-brand-guidelines').handler(args, asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    expect(out.preview).toMatchObject({ googleCheck: { checked: false } })
+    expect(h.check).not.toHaveBeenCalled()
+    expect(h.send).not.toHaveBeenCalled()
+    expect(h.mutate).not.toHaveBeenCalled()
+    h.send.mockResolvedValue({ responses: [{ accountResult: { resourceName: `${C}/campaigns/21` } }] })
+    const run = await tool('enable-google-pmax-brand-guidelines').execute!(args, approved(out.preview))
+    expect(run.ok, String(run.error)).toBe(true)
+    expect(h.send).toHaveBeenCalledTimes(1)
+    expect(h.send.mock.calls[0][1]).toEqual([{ accountCall: { path: 'campaigns:enablePMaxBrandGuidelines', body: { operations: [{
+      campaign: `${C}/campaigns/21`, autoPopulateBrandAssets: false, brandAssets: { businessNameAsset: `${C}/assets/210`, logoAsset: [`${C}/assets/211`] },
+    }] } } }])
+    expect(tool('enable-google-pmax-brand-guidelines').undo).toBeUndefined()
+    // Without the person's confirmation that it cannot be undone, the request does not parse.
+    expect(tool('enable-google-pmax-brand-guidelines').input.safeParse({ campaignId: '21' }).success).toBe(false)
+  })
+
+  it('a campaign with brand guidelines on already, or without a business name in its asset groups, is refused before anything is sent', async () => {
+    h.campaign = campaign()
+    expect(await tool('enable-google-pmax-brand-guidelines').handler(parsed('enable-google-pmax-brand-guidelines', { campaignId: '21', confirmIrreversible: true }), asker))
+      .toMatchObject({ ok: false, error: expect.stringMatching(/has brand guidelines on already/) })
+    const live = campaign()
+    live.brandGuidelines = false
+    h.campaign = live
+    expect(await tool('enable-google-pmax-brand-guidelines').handler(parsed('enable-google-pmax-brand-guidelines', { campaignId: '21', confirmIrreversible: true }), asker))
+      .toMatchObject({ ok: false, error: expect.stringMatching(/no business name and no square logo in its asset groups/) })
+    expect(h.send).not.toHaveBeenCalled()
   })
 })

@@ -106,7 +106,8 @@ describe('Google: reads, and Google Ads mutates only', () => {
     // Bodies, customers and refusals: google-account-calls.vitest.test.ts. A new method is a new line here, on purpose.
     expect([...GOOGLE_ACCOUNT_CALL_PATHS].sort()).toEqual([
       'CampaignGoalConfigs:mutate', 'Goals:mutate',
-      'accountBudgetProposals:mutate', 'billingSetups:mutate', 'customAudiences:mutate', 'customerUserAccessInvitations:mutate', 'customerUserAccesses:mutate',
+      'accountBudgetProposals:mutate', 'billingSetups:mutate', 'campaigns:enablePMaxBrandGuidelines', 'customAudiences:mutate',
+      'customerUserAccessInvitations:mutate', 'customerUserAccesses:mutate',
       'dataLinks:create', 'dataLinks:remove', 'dataLinks:update', 'productLinkInvitations:remove', 'productLinkInvitations:update',
       'productLinks:create', 'productLinks:remove',
     ])

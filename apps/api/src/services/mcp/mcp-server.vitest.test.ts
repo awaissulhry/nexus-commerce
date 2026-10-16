@@ -59,7 +59,7 @@ const OPEN_WORLD = [
   'decide-automation-suggestions',
   'delete-listing', 'dismiss-google-recommendations', 'dispose-return-items', 'ebay-categories',
   'ebay-keywords-change', 'edit-google-assets', 'edit-google-campaign-type-ads', 'edit-google-rsa', 'email-supplier',
-  'enable-ads', 'end-google-experiment', 'end-listing', 'google-ads-experiments', 'google-ads-live',
+  'enable-ads', 'enable-google-pmax-brand-guidelines', 'end-google-experiment', 'end-listing', 'google-ads-experiments', 'google-ads-live',
   'google-ads-numbers', 'google-ads-query', 'google-merchant-live', 'graduate-google-experiment', 'graduate-keyword',
   'harvest-search-term',
   'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
@@ -291,7 +291,7 @@ describe('C3 — the server and every change tool name the business', () => {
     const unchecked = tools.filter((tool) => !tool.readOnly
       && (tool.description.endsWith(GOOGLE_UNCHECKED_CHANGE_RULES) || tool.description.endsWith(GOOGLE_PARTLY_CHECKED_RULES)))
     expect(unchecked.map((tool) => tool.name).sort()).toEqual(['apply-google-recommendations', 'dismiss-google-recommendations',
-      'set-google-account-links', 'set-google-billing', 'set-google-user-access'])
+      'enable-google-pmax-brand-guidelines', 'set-google-account-links', 'set-google-billing', 'set-google-user-access'])
     for (const tool of unchecked) named(tool.name)
     // No Merchant Center write can be checked first: they are all set-google-merchant-…, named as one family.
     const merchant = tools.filter((tool) => tool.description.endsWith(MERCHANT_CHANGE_RULES))

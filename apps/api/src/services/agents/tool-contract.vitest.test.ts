@@ -973,7 +973,7 @@ describe('C1 — every registered tool keeps the contract', () => {
     const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
       'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list',
-      'build-google-pmax', 'copy-google-pmax', 'set-google-pmax', 'set-google-customer-acquisition', 'set-google-page-feed',
+      'build-google-pmax', 'copy-google-pmax', 'set-google-pmax', 'set-google-customer-acquisition', 'set-google-page-feed', 'enable-google-pmax-brand-guidelines',
       'create-google-campaign', 'set-google-campaign', 'set-google-targeting', 'set-google-status', 'set-google-audiences', 'set-google-demographics',
       'remove-google-ads-items', 'set-google-product-groups', 'create-google-rsa', 'set-google-assets',
       'set-google-ad-groups', 'set-google-keywords', 'set-google-negatives', 'build-google-campaigns', 'copy-google-campaign',
