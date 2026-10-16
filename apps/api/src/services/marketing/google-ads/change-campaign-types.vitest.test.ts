@@ -542,7 +542,7 @@ describe('the parts', () => {
     expect(shapeProblem('x', 'tallPortrait', 600, 1067)).toBeNull()
     expect(shapeProblem('x', 'logo', 100, 100)).toMatch(/at least 128×128/)
     expect(mediaNeeds([multiAsset, { ...multiAsset, videos: [{ youtubeVideoId: 'https://youtu.be/abcdefghijk' }, { assetId: '401' }] }])).toEqual({
-      imageSources: [{ imageUrl: 'https://cdn.example/land.png' }, { imageUrl: 'https://cdn.example/logo.png' }], assetIds: ['401'], youtubeIds: ['abcdefghijk'],
+      imageSources: [{ imageUrl: 'https://cdn.example/land.png' }, { imageUrl: 'https://cdn.example/logo.png' }], assetIds: ['401'], youtubeIds: ['abcdefghijk'], bundleUrls: [],
     })
     expect(normalizeTarget({ kind: 'topic', value: 'topicConstants/66' })).toEqual({ kind: 'topic', value: '66', exclude: false })
     expect(normalizeTarget({ kind: 'youtube-channel', value: 'https://www.youtube.com/channel/UCabc' })).toEqual({ kind: 'youtube-channel', value: 'UCabc', exclude: false })

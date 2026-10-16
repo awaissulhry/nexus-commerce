@@ -2,7 +2,8 @@
  * Google Ads programme 2, G10 — Performance Max on the gateway: the asset group, asset group asset, listing group filter,
  * signal and audience operations a Performance Max change sends (each only with the actions the tools send), and the
  * customer acquisition calls (Goals / CampaignGoalConfigs: exact paths, exactly the bodies set-google-customer-acquisition
- * sends, validate_only a check). Everything else stays refused.
+ * sends, validate_only a check). G14b: page feed asset sets, their pages and their campaign links. Everything else stays
+ * refused.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -70,6 +71,45 @@ describe('Performance Max operations in a mutate', () => {
     ]
     for (const op of bad) {
       expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [op] })), JSON.stringify(op)).toMatchObject({ refusal: expect.stringContaining('Nexus sends') })
+      const err = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: [op], validateOnly: true } }).catch((e) => e)
+      expect(err, JSON.stringify(op)).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY' })
+    }
+    expect(h.calls).toHaveLength(0)
+  })
+})
+
+/** G14b: what a page feed change and its campaign link send (change-page-feeds.ts, change-pmax.ts, build-pmax.ts). */
+const PAGE_FEED_OPS = [
+  { assetSetOperation: { create: { resourceName: `${C}/assetSets/-1`, name: 'Pages Z', type: 'PAGE_FEED' } } },
+  { assetOperation: { create: { resourceName: `${C}/assets/-2`, pageFeedAsset: { pageUrl: 'https://shop.example/a', labels: ['sale'] } } } },
+  { assetSetAssetOperation: { remove: `${C}/assetSetAssets/77~401` } },
+  { assetSetAssetOperation: { create: { assetSet: `${C}/assetSets/-1`, asset: `${C}/assets/-2` } } },
+  { campaignAssetSetOperation: { remove: `${C}/campaignAssetSets/21~77` } },
+  { campaignAssetSetOperation: { create: { campaign: `${C}/campaigns/21`, assetSet: `${C}/assetSets/78` } } },
+]
+
+describe('G14b: page feeds in a mutate', () => {
+  it('a PAGE_FEED asset set made, its pages linked and unlinked, a feed linked to a campaign and unlinked: check and change', async () => {
+    await googleCall({ connectionId: 'g-1', operation: 'ads.mutate.check', method: 'POST', url: MUTATE, body: { mutateOperations: PAGE_FEED_OPS, validateOnly: true } })
+    await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: PAGE_FEED_OPS } })
+    expect(h.calls).toHaveLength(2)
+    expect(JSON.parse(String(h.calls[1].init.body))).toEqual({ mutateOperations: PAGE_FEED_OPS })
+  })
+
+  it('nothing else: another asset set type, an asset set changed or removed, more than a name, a link without its campaign or set, a link updated', async () => {
+    const bad = [
+      { assetSetOperation: { create: { resourceName: `${C}/assetSets/-1`, name: 'L', type: 'LOCATION_SYNC' } } },
+      { assetSetOperation: { create: { name: 'P', type: 'PAGE_FEED', merchantCenterFeed: { merchantId: '1' } } } },
+      { assetSetOperation: { update: { resourceName: `${C}/assetSets/77`, name: 'X' }, updateMask: 'name' } },
+      { assetSetOperation: { remove: `${C}/assetSets/77` } },
+      { assetSetAssetOperation: { update: { resourceName: `${C}/assetSetAssets/77~401` } } },
+      { campaignAssetSetOperation: { create: { campaign: `${C}/campaigns/21` } } },
+      { campaignAssetSetOperation: { create: { campaign: `${C}/campaigns/21`, assetSet: `${C}/assetSets/78`, status: 'ENABLED' } } },
+      { campaignAssetSetOperation: { create: { campaign: 'campaigns/21', assetSet: `${C}/assetSets/78` } } },
+      { campaignAssetSetOperation: { update: { resourceName: `${C}/campaignAssetSets/21~77` }, updateMask: 'status' } },
+    ]
+    for (const op of bad) {
+      expect(googleMutateBodyOf(JSON.stringify({ mutateOperations: [op] })), JSON.stringify(op)).toHaveProperty('refusal')
       const err = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: [op], validateOnly: true } }).catch((e) => e)
       expect(err, JSON.stringify(op)).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY' })
     }

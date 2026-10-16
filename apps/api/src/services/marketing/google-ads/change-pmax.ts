@@ -70,19 +70,47 @@
  *                       invalid state in which the minimum asset requirements are no longer met".
  *   AssetGroupError     AD_CUSTOMIZER_NOT_SUPPORTED ("Ad customizers are not supported in asset group's text field").
  *
+ * Added 2026-10-16 (programme 2 group G14b), checked with curl in the same reference and guides:
+ *   Campaign.text_guidelines  Campaign.TextGuidelines {term_exclusions[] "At most 25 exclusions … a maximum of 30
+ *                       characters", messaging_restrictions[] Campaign.MessagingRestriction {restriction_text "a maximum of
+ *                       300 characters", restriction_type MessagingRestrictionType — "Only RESTRICTION_BASED_EXCLUSION is
+ *                       currently supported"} "At most 40 restrictions"}: "Only available in Performance Max and Search
+ *                       campaigns (Brand Guidelines does not need to be enabled)" (performance-max/assets "Text guidelines").
+ *                       Update masks text_guidelines.term_exclusions / text_guidelines.messaging_restrictions (each list
+ *                       written whole).
+ *   page feeds          performance-max/assets "Text customization": URL inclusions (page feeds: an AssetSet of type
+ *                       PAGE_FEED holding PageFeedAsset assets) are linked to a Performance Max campaign with a
+ *                       CampaignAssetSet ("the same process as used for Dynamic Search Ads", docs/dynamic-search-ads/
+ *                       dsa-page-feeds); "Both the CampaignAssetSet for AssetSet of type PAGE_FEED and TEXT_ASSET_AUTOMATION
+ *                       set to OPTED_IN … must be present together … If you want to set TEXT_ASSET_AUTOMATION to OPTED_OUT,
+ *                       you must first remove the CampaignAssetSet … you must opt-in to TEXT_ASSET_AUTOMATION before creating
+ *                       a CampaignAssetSet … OPERATION_NOT_PERMITTED_FOR_CONTEXT". CampaignAssetSetOperation create | remove
+ *                       (customers/{c}/campaignAssetSets/{campaign_id}~{asset_set_id}); MutateOperation
+ *                       campaign_asset_set_operation. So a link goes after the campaign's automation update, an unlink
+ *                       before it (one request, in that order).
+ *   AssetGroup          tracking_url_template, final_url_suffix, url_custom_parameters[] (CustomParameter) — not Immutable;
+ *                       the rules Nexus checks first are G3's (change-urls.ts urlItemProblems).
+ *
  * Money. Enabling an asset group (or a new one in an enabled campaign: made PAUSED unless asked), a bidding raise, final
- * URL expansion turned on, a URL or brand exclusion taken off, audience signals or search themes added, and a product tree
- * that advertises products it did not — in an ENABLED campaign (and an enabled asset group) — are SPENDS MONEY; in a
- * paused campaign they are said as warnings (nothing spends until it is enabled).
+ * URL expansion turned on, a URL or brand exclusion taken off, audience signals or search themes added, a product tree
+ * that advertises products it did not, a page feed linked, a text guideline taken away — in an ENABLED campaign (and an
+ * enabled asset group) — are SPENDS MONEY; in a paused campaign they are said as warnings (nothing spends until it is
+ * enabled). Tracking (templates, suffixes, custom parameters) moves no money.
  */
 import { changeLines, keywordTextProblem, plural, type GoogleChangeDraft } from './change-draft.js'
 import { httpsUrlProblem, tagWarning, textKey, widthProblem } from './change-ads.js'
 import { imageProblem, MAX_IMAGE_BYTES_TOTAL, type ImageFieldType } from './change-assets-all.js'
 import { biddingFields, biddingMask, biddingSpends, biddingText, type Bidding } from './change-campaigns.js'
 import { DIMENSIONS, caseValueOf, dimensionWords, snapshotOf, treeOfLive, treeOfSpec, valueKey, walk, type Dimension, type TNode, type TreeSpecNode } from './product-tree.js'
+import { urlItemProblems } from './change-urls.js'
+import {
+  textGuidelinesBody, textGuidelinesOfAsk, urlExclusionKey, urlExclusionOfKey, urlExclusionsOf, type TextGuidelinesAsk, type UrlExclusion,
+} from './change-ai-controls.js'
+export { TEXT_GUIDELINES_LIMITS, textGuidelinesBody, textGuidelinesOfAsk, urlExclusionKey, urlExclusionOfKey, urlExclusionsOf } from './change-ai-controls.js'
+export type { TextGuidelinesAsk, UrlExclusion } from './change-ai-controls.js'
 import type { PreparedImage } from './asset-images.js'
 import type { ProductGroupNode } from './live-product-groups.js'
-import type { PmaxAsset, PmaxAssetGroup, PmaxAudience, PmaxCampaignLive, PmaxFilterNode, PmaxLink } from './live-pmax.js'
+import type { CustomParameter, PageFeedRef, PmaxAsset, PmaxAssetGroup, PmaxAudience, PmaxCampaignLive, PmaxFilterNode, PmaxLink, TextGuidelines } from './live-pmax.js'
 import type { GoogleMutateOperation, GoogleMutateResponse } from './write-client.js'
 
 // ── field types and Google's minimums ────────────────────────────────────────────────────────────────────────────
@@ -127,6 +155,8 @@ export const AUTOMATION_KEYS = Object.keys(AUTOMATION_TYPES) as AutomationKey[]
 const AUTOMATION_WORD: Record<AutomationKey, string> = {
   finalUrlExpansion: 'final URL expansion', textCustomization: 'text customization', imageEnhancement: 'image enhancement', videoEnhancement: 'video enhancement',
 }
+const listText = (l: string[] | undefined) => (l?.length ? l.map((t) => `"${t.length > 50 ? `${t.slice(0, 49)}…` : t}"`).join(', ') : '(none)')
+
 /** Brand guideline fonts Google takes (performance-max/create-campaign, case-sensitive). */
 export const BRAND_FONTS = ['Open Sans', 'Roboto', 'Montserrat', 'Poppins', 'Lato', 'Oswald', 'Playfair Display', 'Roboto Slab'] as const
 /** Audience segment kinds an Audience is made of (AudienceSegment v25) and their resource collections. */
@@ -172,7 +202,6 @@ export interface PmaxSignalsAsk {
 }
 /** One node of a product tree (G4's tree shape): a unit is included unless `excluded`; a split has none of them. */
 export interface PmaxTreeNode { parent?: number; value?: string; everythingElse?: boolean; split?: Dimension; excluded?: boolean }
-export interface UrlExclusion { contains?: string; equals?: string }
 
 /** Every image of a request, fetched first by the tool, by its slot (`imageSlot`). */
 export type PreparedImages = Record<string, PreparedImage | { problem: string }>
@@ -198,8 +227,6 @@ export const tmp = (temp: number) => `tmp:${temp}`
 const tempOf = (res: string) => res.slice(res.lastIndexOf('/') + 1)
 /** An asset id for a record: its id, or `tmp:<temporary id>` until Google gives one. */
 const idForRecord = (res: string) => { const t = tempOf(res); return t.startsWith('-') ? tmp(Number(t)) : t }
-export const urlExclusionKey = (u: UrlExclusion) => (u.contains !== undefined ? `contains:${u.contains.trim()}` : `equals:${(u.equals ?? '').trim()}`)
-export const urlExclusionOfKey = (key: string): UrlExclusion => (key.startsWith('contains:') ? { contains: key.slice(9) } : { equals: key.slice(7) })
 const sorted = (xs: Iterable<string>) => [...new Set(xs)].sort()
 /** Advertiser links only: what Google made itself comes and goes on its own and is never counted, compared or copied. */
 export const ownLinks = (links: PmaxLink[]) => links.filter((l) => l.source !== 'AUTOMATICALLY_CREATED')
@@ -608,6 +635,10 @@ export const signalKeysOf = (g: PmaxAssetGroup) => sorted(g.signals.map((s) => (
 export interface PmaxGroupChange {
   /** An existing asset group; left out = a new one (name and finalUrls needed). */
   assetGroupId?: string
+  /** The asset group's own tracking ('' / [] / null takes it away: the campaign's then applies). */
+  trackingTemplate?: string | null
+  finalUrlSuffix?: string | null
+  customParameters?: CustomParameter[] | null
   name?: string
   status?: 'ENABLED' | 'PAUSED'
   finalUrls?: string[]
@@ -635,6 +666,10 @@ export interface PmaxChangeRequest {
   urlExclusions?: { add?: UrlExclusion[]; remove?: UrlExclusion[] }
   brandExclusions?: { add?: string[]; remove?: string[] }
   brandAssets?: { add?: PmaxAssetsAsk; remove?: AssetLinkRef[] }
+  /** What Google's generated text never says: each list WHOLE (a list left out stays). */
+  textGuidelines?: TextGuidelinesAsk
+  /** Page feeds (URL inclusions) of the account to link to the campaign or unlink from it, by id. */
+  pageFeeds?: { link?: string[]; unlink?: string[] }
   assetGroups?: PmaxGroupChange[]
 }
 
@@ -646,6 +681,8 @@ export interface PmaxChangeLive {
   audiences: PmaxAudience[]
   brandLists: Array<{ listId: string; name: string | null }>
   images: PreparedImages
+  /** The account's page feeds (read when the change links one). */
+  pageFeeds?: PageFeedRef[]
 }
 
 /** The facts of a campaign a change touches (and what undo puts back): only the keys it touched. */
@@ -658,6 +695,10 @@ export interface PmaxCampaignFacts {
   urlExclusions?: string[]
   brandExclusions?: string[]
   brandLinks?: string[]
+  /** Only the lists the change wrote. */
+  textGuidelines?: TextGuidelinesAsk
+  /** The page feeds linked (ids, sorted). */
+  pageFeeds?: string[]
 }
 export interface PmaxGroupFacts {
   assetGroupId: string
@@ -671,6 +712,9 @@ export interface PmaxGroupFacts {
   links?: string[]
   tree?: PmaxTreeSnap[] | null
   signals?: string[]
+  trackingTemplate?: string | null
+  finalUrlSuffix?: string | null
+  customParameters?: CustomParameter[]
 }
 export interface PmaxChangeRecord { campaignId: string; campaign: PmaxCampaignFacts; groups: PmaxGroupFacts[] }
 
@@ -691,17 +735,6 @@ const cleanBidding = (b: Bidding): Bidding => (b.strategy === 'MAXIMIZE_CONVERSI
 export const automationNow = (c: Pick<PmaxCampaignLive, 'automation'>, key: AutomationKey): 'OPTED_IN' | 'OPTED_OUT' =>
   (c.automation[AUTOMATION_TYPES[key]] === 'OPTED_OUT' ? 'OPTED_OUT' : 'OPTED_IN')
 
-/** The URL exclusions a campaign holds (negative WEBPAGE criteria of one URL condition), by key. */
-export function urlExclusionsOf(c: PmaxCampaignLive): Array<{ key: string; criterionId: string }> {
-  const out: Array<{ key: string; criterionId: string }> = []
-  for (const k of c.criteria) {
-    if (k.type !== 'WEBPAGE' || !k.negative || !k.webpage || k.webpage.conditions.length !== 1) continue
-    const w = k.webpage.conditions[0]
-    if (w.operand !== 'URL' || !w.argument) continue
-    out.push({ key: urlExclusionKey(w.operator === 'EQUALS' ? { equals: w.argument } : { contains: w.argument }), criterionId: k.criterionId })
-  }
-  return out
-}
 export const brandExclusionsOf = (c: PmaxCampaignLive) => c.criteria.filter((k) => k.type === 'BRAND_LIST' && k.negative && k.brandListId).map((k) => ({ listId: k.brandListId!, criterionId: k.criterionId }))
 export const brandLinksOf = (c: PmaxCampaignLive) => ownLinks(c.campaignAssets).filter((l) => BRAND_FIELDS.includes(l.fieldType))
 
@@ -716,6 +749,14 @@ export function campaignFactsOf(c: PmaxCampaignLive, keys: PmaxCampaignFacts): P
   if ('urlExclusions' in keys) out.urlExclusions = sorted(urlExclusionsOf(c).map((u) => u.key))
   if ('brandExclusions' in keys) out.brandExclusions = sorted(brandExclusionsOf(c).map((b) => b.listId))
   if ('brandLinks' in keys) out.brandLinks = sorted(brandLinksOf(c).map((l) => linkKey(l.assetId, l.fieldType)))
+  if (keys.textGuidelines) {
+    const now: TextGuidelines = c.textGuidelines ?? { termExclusions: [], messagingRestrictions: [] }
+    out.textGuidelines = {
+      ...('termExclusions' in keys.textGuidelines ? { termExclusions: now.termExclusions } : {}),
+      ...('messagingRestrictions' in keys.textGuidelines ? { messagingRestrictions: now.messagingRestrictions } : {}),
+    }
+  }
+  if ('pageFeeds' in keys) out.pageFeeds = sorted((c.pageFeeds ?? []).map((f) => f.assetSetId))
   return out
 }
 
@@ -731,14 +772,18 @@ export function groupFactsOf(g: PmaxAssetGroup, keys: PmaxGroupFacts): PmaxGroup
   if ('links' in keys) out.links = sorted(ownLinks(g.assets).map((l) => linkKey(l.assetId, l.fieldType)))
   if ('tree' in keys) { const t = pmaxTreeOfLive(g.tree); out.tree = 'refusal' in t ? null : pmaxSnapshot(t.root) }
   if ('signals' in keys) out.signals = signalKeysOf(g)
+  if ('trackingTemplate' in keys) out.trackingTemplate = g.trackingTemplate ?? null
+  if ('finalUrlSuffix' in keys) out.finalUrlSuffix = g.finalUrlSuffix ?? null
+  if ('customParameters' in keys) out.customParameters = sortedParams(g.customParameters ?? [])
   return out
 }
+const sortedParams = (list: CustomParameter[]) => [...list].map((p) => ({ key: p.key.trim(), value: p.value.trim() })).sort((a, b) => a.key.localeCompare(b.key))
 
 /** The kinds in the order Google needs them: what is pointed at before what points at it; asset links together. */
 export const PMAX_KIND_ORDER = [
-  'campaignBudgetOperation', 'campaignOperation', 'campaignCriterionOperation', 'assetOperation', 'audienceOperation',
-  'campaignAssetOperation', 'assetGroupOperation', 'assetGroupAssetOperation', 'assetGroupListingGroupFilterOperation',
-  'assetGroupSignalOperation',
+  'campaignBudgetOperation', 'campaignOperation', 'campaignCriterionOperation', 'assetOperation', 'assetSetOperation', 'assetSetAssetOperation',
+  'audienceOperation', 'campaignAssetOperation', 'campaignAssetSetOperation', 'assetGroupOperation', 'assetGroupAssetOperation',
+  'assetGroupListingGroupFilterOperation', 'assetGroupSignalOperation',
 ] as const
 /** Operations grouped by kind (stable: the order inside a kind is the order made). */
 export function inKindOrder(ops: GoogleMutateOperation[]): GoogleMutateOperation[] {
@@ -748,7 +793,7 @@ export function inKindOrder(ops: GoogleMutateOperation[]): GoogleMutateOperation
 
 const RESULT_OF: Record<string, string> = {
   assetOperation: 'assetResult', assetGroupOperation: 'assetGroupResult', audienceOperation: 'audienceResult',
-  campaignOperation: 'campaignResult', campaignBudgetOperation: 'campaignBudgetResult',
+  campaignOperation: 'campaignResult', campaignBudgetOperation: 'campaignBudgetResult', assetSetOperation: 'assetSetResult',
 }
 /** Temporary id → the id Google gave, from the operations sent and Google's results (in order). */
 export function idsFromRun(operations: GoogleMutateOperation[], responses: GoogleMutateResponse[]): Map<string, string> {
@@ -873,6 +918,57 @@ function buildPmaxChange(customer: string, currency: string, request: PmaxChange
     if (changedAuto.includes('finalUrlExpansion') && final.finalUrlExpansion === 'OPTED_IN') spendOrWarn('Turns on final URL expansion: Google may send people to other pages of the site and match more searches')
     if (changedAuto.includes('textCustomization') && final.textCustomization === 'OPTED_IN') warnings.push('Text customization on: Google writes headlines and descriptions from the site and the assets on its own.')
   }
+  // ── text guidelines (what Google's generated text never says) ──
+  if (request.textGuidelines) {
+    const asked = textGuidelinesOfAsk(request.textGuidelines, 'text guidelines', problems)
+    const now: TextGuidelines = camp.textGuidelines ?? { termExclusions: [], messagingRestrictions: [] }
+    const write: TextGuidelinesAsk = {}
+    for (const [key, path, word] of [['termExclusions', 'text_guidelines.term_exclusions', 'term exclusions'], ['messagingRestrictions', 'text_guidelines.messaging_restrictions', 'messaging restrictions']] as const) {
+      const want = asked[key]
+      // The order of a list means nothing to Google: the same items in another order are no change.
+      if (!want || JSON.stringify([...want].sort()) === JSON.stringify([...now[key]].sort())) continue
+      write[key] = want
+      mask.push(path)
+      lines.push([`text guidelines: ${word}`, listText(now[key]), listText(want)])
+      const gone = now[key].filter((t) => !want.some((w) => w.toLowerCase() === t.toLowerCase()))
+      if (gone.length) spendOrWarn(`Takes away the ${word.replace(/s$/, '')}${gone.length > 1 ? 's' : ''} ${listText(gone)}: Google's generated text may say what it did not`)
+    }
+    if (Object.keys(write).length) {
+      fields.textGuidelines = textGuidelinesBody(write)
+      before.campaign.textGuidelines = Object.fromEntries(Object.keys(write).map((k) => [k, now[k as keyof TextGuidelines]]))
+      after.campaign.textGuidelines = write
+      const auto = (k: AutomationKey) => (autoAsk[k] === undefined ? automationNow(camp, k) : autoAsk[k] ? 'OPTED_IN' : 'OPTED_OUT')
+      if (auto('textCustomization') === 'OPTED_OUT' && auto('finalUrlExpansion') === 'OPTED_OUT') warnings.push('Text guidelines guide the text Google writes: with text customization and final URL expansion off, Google writes none here.')
+    } else skipped.push('text guidelines: already so')
+  }
+  // ── page feeds (URL inclusions) ──
+  const textAfter = autoAsk.textCustomization === undefined ? automationNow(camp, 'textCustomization') : autoAsk.textCustomization ? 'OPTED_IN' : 'OPTED_OUT'
+  const unlinkOps: GoogleMutateOperation[] = []
+  if (request.pageFeeds) {
+    const has = sorted((camp.pageFeeds ?? []).map((f) => f.assetSetId))
+    const final = new Set(has)
+    const nameOf = (id: string) => (live.pageFeeds ?? camp.pageFeeds ?? []).find((f) => f.assetSetId === id)?.name ?? id
+    for (const id of sorted(request.pageFeeds.unlink ?? [])) {
+      if (!final.has(id)) { skipped.push(`page feed ${id} is not linked`); continue }
+      unlinkOps.push({ campaignAssetSetOperation: { remove: `${customer}/campaignAssetSets/${camp.campaignId}~${id}` } })
+      final.delete(id)
+      lines.push([`page feed "${nameOf(id)}"`, 'linked', '(none)'])
+    }
+    for (const id of sorted(request.pageFeeds.link ?? [])) {
+      if (final.has(id)) { skipped.push(`page feed "${nameOf(id)}" is already linked`); continue }
+      if (!(live.pageFeeds ?? []).some((f) => f.assetSetId === id)) { problems.push(`page feed ${id} is not a page feed of this account (set-google-page-feed makes one)`); continue }
+      ops.push({ campaignAssetSetOperation: { create: { campaign: campaignRes, assetSet: `${customer}/assetSets/${id}` } } })
+      final.add(id)
+      lines.push([`page feed "${nameOf(id)}"`, '(none)', 'linked'])
+      spendOrWarn(`Links the page feed "${nameOf(id)}": Google may send people to its pages and write ads from them`)
+    }
+    if (final.size !== has.length || has.some((k) => !final.has(k))) { before.campaign.pageFeeds = has; after.campaign.pageFeeds = sorted(final) }
+  }
+  const feedsAfter = request.pageFeeds ? (after.campaign.pageFeeds ?? sorted((camp.pageFeeds ?? []).map((f) => f.assetSetId))) : (camp.pageFeeds ?? []).map((f) => f.assetSetId)
+  if (feedsAfter.length && textAfter === 'OPTED_OUT') {
+    problems.push(`Google keeps text customization on while a page feed is linked (performance-max/assets: OPERATION_NOT_PERMITTED_FOR_CONTEXT): ${request.pageFeeds?.link?.length ? 'turn text customization on (automation.textCustomization: true) to link one' : 'unlink its page feeds (pageFeeds.unlink) to turn text customization off'}`)
+  }
+
   if (mask.length) ops.push({ campaignOperation: { update: { resourceName: campaignRes, ...fields }, updateMask: mask.join(',') } })
 
   // ── URL exclusions (negative WEBPAGE criteria) ──
@@ -1015,6 +1111,24 @@ function buildPmaxChange(customer: string, currency: string, request: PmaxChange
     if ((path2 === undefined ? liveGroup?.path2 : path2) && !(path1 === undefined ? liveGroup?.path1 : path1)) problems.push(`${where}: path 2 needs path 1 (Google's rule)`)
     if (path1 !== undefined) set('path1', 'path1', liveGroup?.path1 ?? null, path1, 'path 1', (v) => v ?? '(none)')
     if (path2 !== undefined) set('path2', 'path2', liveGroup?.path2 ?? null, path2, 'path 2', (v) => v ?? '(none)')
+    // Its own tracking (G3's rules): '' / [] / null takes it away (the campaign's then applies).
+    if (g.trackingTemplate !== undefined || g.finalUrlSuffix !== undefined || g.customParameters !== undefined) {
+      problems.push(...urlItemProblems({ level: 'ad-group', id: groupId, trackingTemplate: g.trackingTemplate, finalUrlSuffix: g.finalUrlSuffix, customParameters: g.customParameters }, where))
+      const track = [
+        ['trackingTemplate', 'tracking_url_template', 'trackingUrlTemplate', 'tracking template', g.trackingTemplate === undefined ? undefined : (g.trackingTemplate ?? '').trim() || null, liveGroup?.trackingTemplate ?? null],
+        ['finalUrlSuffix', 'final_url_suffix', 'finalUrlSuffix', 'final URL suffix', g.finalUrlSuffix === undefined ? undefined : (g.finalUrlSuffix ?? '').trim() || null, liveGroup?.finalUrlSuffix ?? null],
+        ['customParameters', 'url_custom_parameters', 'urlCustomParameters', 'custom parameters', g.customParameters === undefined ? undefined : sortedParams(g.customParameters ?? []), sortedParams(liveGroup?.customParameters ?? [])],
+      ] as const
+      for (const [key, path, body, label, to, from] of track) {
+        if (to === undefined || (!isNew && JSON.stringify(to) === JSON.stringify(from))) continue
+        if (to !== null && !(Array.isArray(to) && !to.length)) own[body] = to
+        if (!isNew || own[body] !== undefined) ownMask.push(path)
+        ;(gb as unknown as Record<string, unknown>)[key] = from
+        ;(ga as unknown as Record<string, unknown>)[key] = to
+        const shown = (v: unknown) => (Array.isArray(v) ? (v.length ? v.map((p: CustomParameter) => `{_${p.key}}=${p.value}`).join(', ') : '(none)') : (v as string | null) ?? '(none: the campaign\'s applies)')
+        if (!isNew) lines.push([`${where} ${label}`, shown(from), shown(to)])
+      }
+    }
     let status: 'ENABLED' | 'PAUSED' = (liveGroup?.status as 'ENABLED' | 'PAUSED' | null) ?? 'ENABLED'
     if (isNew) {
       status = g.status ?? (enabled && !g.enable ? 'PAUSED' : 'ENABLED')
@@ -1132,7 +1246,8 @@ function buildPmaxChange(customer: string, currency: string, request: PmaxChange
   if (maker.bytes > MAX_IMAGE_BYTES_TOTAL) problems.push(`the images are ${(maker.bytes / 1024 / 1024).toFixed(1)} MB together: one request carries at most ${MAX_IMAGE_BYTES_TOTAL / 1024 / 1024} MB of images (ask in two)`)
 
   if (problems.length) refuse(`Not sent (${plural(problems.length, 'problem')}): ${problems.slice(0, 20).join(' · ')}${problems.length > 20 ? ` · … ${problems.length - 20} more` : ''}`)
-  const all = inKindOrder([...maker.ops, ...ops])
+  // A page feed unlinked goes first: Google refuses text customization turned off while one is linked.
+  const all = [...unlinkOps, ...inKindOrder([...maker.ops, ...ops])]
   if (!all.length) refuse(`Nothing to change in "${camp.name}"${skipped.length ? `: ${skipped.slice(0, 8).join('; ')}` : ''}.`)
   const { changes, more } = changeLines(lines)
   return {
@@ -1145,8 +1260,17 @@ function buildPmaxChange(customer: string, currency: string, request: PmaxChange
     operations: all,
     stands: {
       // The change rests on the campaign's state, every touched part of it.
-      campaign: { status: camp.status, campaign: campaignFactsOf(camp, { name: '', bidding: null, startDate: null, endDate: '', automation: Object.fromEntries(AUTOMATION_KEYS.map((k) => [k, 'OPTED_IN'])), urlExclusions: [], brandExclusions: [], brandLinks: [] }), brandGuidelines: camp.brandGuidelines, retail },
-      groups: camp.assetGroups.filter((g) => touched.has(g.assetGroupId)).map((g) => groupFactsOf(g, { assetGroupId: '', name: '', status: '', finalUrls: [], finalMobileUrls: [], path1: null, path2: null, links: [], tree: null, signals: [] })),
+      campaign: {
+        status: camp.status, brandGuidelines: camp.brandGuidelines, retail,
+        campaign: campaignFactsOf(camp, {
+          name: '', bidding: null, startDate: null, endDate: '', automation: Object.fromEntries(AUTOMATION_KEYS.map((k) => [k, 'OPTED_IN'])), urlExclusions: [], brandExclusions: [], brandLinks: [],
+          textGuidelines: { termExclusions: [], messagingRestrictions: [] }, pageFeeds: [],
+        }),
+      },
+      groups: camp.assetGroups.filter((g) => touched.has(g.assetGroupId)).map((g) => groupFactsOf(g, {
+        assetGroupId: '', name: '', status: '', finalUrls: [], finalMobileUrls: [], path1: null, path2: null, links: [], tree: null, signals: [], trackingTemplate: null, finalUrlSuffix: null, customParameters: [],
+      })),
+      ...(request.pageFeeds?.link?.length ? { pageFeedsKnown: (live.pageFeeds ?? []).map((f) => f.assetSetId).sort() } : {}),
       groupNames: [...camp.assetGroups.map((g) => g.name.trim().toLowerCase())].sort(),
       assets: live.assets.map((a) => `${a.assetId}:${a.type}`).sort(),
     },

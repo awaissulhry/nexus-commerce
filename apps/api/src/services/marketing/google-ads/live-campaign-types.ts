@@ -51,6 +51,14 @@
  *                       videos, logo_images, breadcrumb1, breadcrumb2}; ad_group and campaign are attributed resources.
  *   asset               id, type, name, source, image_asset.full_size.width_pixels / height_pixels, image_asset.mime_type,
  *                       youtube_video_asset.youtube_video_id / youtube_video_title — selectable and filterable.
+ * Added 2026-10-16 (programme 2 G14b, checked with curl in fields/v25):
+ *   campaign.frequency_caps            selectable, not filterable, repeated FrequencyCapEntry {key {level, event_type,
+ *                       time_unit, time_length}, cap} (rpc/v25 FrequencyCapEntry, FrequencyCapKey, FrequencyCapLevel
+ *                       CAMPAIGN / AD_GROUP / AD_GROUP_AD, FrequencyCapEventType IMPRESSION / VIDEO_VIEW,
+ *                       FrequencyCapTimeUnit DAY / WEEK / MONTH).
+ *   ad_group_criterion.bid_modifier    selectable, filterable ("The modifier must be in the range: 0.1 - 10.0. Most
+ *                       targetable criteria types support modifiers.").
+ *   asset.image_asset.file_size        selectable, filterable (an uploaded image ad is at most 150 KB).
  *   audience            id, name, status (AudienceStatus ENABLED / REMOVED) — selectable and filterable.
  * Every field a WHERE names is selected too, also a field of another resource (2026-10-15: Google refused a filter on a
  * segmenting resource's field that was not selected).
@@ -106,6 +114,38 @@ export interface LiveTypedCampaign {
   conversionActionIds: string[]
   optimizationGoals: string[]
   budget: { budgetId: string | null; amountCents: number | null; totalCents: number | null; period: string | null; shared: boolean } | null
+  /** How often one person may see the campaign's ads (Campaign.frequency_caps), in a stable order (absent: none). */
+  frequencyCaps?: FrequencyCap[]
+}
+
+// ── frequency caps ──────────────────────────────────────────────────────────────────────────────────────────────
+
+export const FREQUENCY_LEVELS = ['CAMPAIGN', 'AD_GROUP', 'AD_GROUP_AD'] as const
+export const FREQUENCY_EVENTS = ['IMPRESSION', 'VIDEO_VIEW'] as const
+export const FREQUENCY_UNITS = ['DAY', 'WEEK', 'MONTH'] as const
+/** One frequency cap: at most `events` per `timeLength` × `timeUnit`, counted per campaign, ad group or ad. */
+export interface FrequencyCap {
+  events: number
+  timeUnit: typeof FREQUENCY_UNITS[number]
+  timeLength: number
+  level: typeof FREQUENCY_LEVELS[number]
+  eventType: typeof FREQUENCY_EVENTS[number]
+}
+/** A cap's key (Google: "There can be no more than one frequency cap with the same key"). */
+export const frequencyKey = (c: Pick<FrequencyCap, 'eventType' | 'level' | 'timeUnit' | 'timeLength'>) => `${c.eventType}|${c.level}|${c.timeUnit}|${c.timeLength}`
+
+/** Google's frequency_caps JSON as caps, sorted by key (a value Google left out is its default: time length 1). */
+export function frequencyCapsOf(value: unknown): FrequencyCap[] {
+  return (Array.isArray(value) ? value : []).flatMap((e: Json) => {
+    const k = e?.key ?? {}
+    const level = str(k.level)
+    const eventType = str(k.eventType)
+    const timeUnit = str(k.timeUnit)
+    const events = num(e?.cap)
+    if (!(FREQUENCY_LEVELS as readonly string[]).includes(level ?? '') || !(FREQUENCY_EVENTS as readonly string[]).includes(eventType ?? '')
+      || !(FREQUENCY_UNITS as readonly string[]).includes(timeUnit ?? '') || !events) return []
+    return [{ events, timeUnit, timeLength: num(k.timeLength) ?? 1, level, eventType } as FrequencyCap]
+  }).sort((a, b) => frequencyKey(a).localeCompare(frequencyKey(b)))
 }
 
 const TYPED_CAMPAIGN_FIELDS = [
@@ -117,7 +157,7 @@ const TYPED_CAMPAIGN_FIELDS = [
   'campaign.shopping_setting.merchant_id', 'campaign.shopping_setting.feed_label', 'campaign.demand_gen_campaign_settings.upgraded_targeting',
   'campaign.selective_optimization.conversion_actions', 'campaign.optimization_goal_setting.optimization_goal_types',
   'campaign_budget.id', 'campaign_budget.amount_micros', 'campaign_budget.total_amount_micros', 'campaign_budget.period',
-  'campaign_budget.explicitly_shared',
+  'campaign_budget.explicitly_shared', 'campaign.frequency_caps',
 ]
 
 export const liveTypedCampaignQuery = (campaignId: string): string =>
@@ -154,6 +194,7 @@ export function liveTypedCampaignOf(row: Json): LiveTypedCampaign {
       // Google leaves a field at its default out of the answer: a budget with no period is DAILY.
       period: str(b.period) ?? 'DAILY', shared: b.explicitlyShared === true,
     } : null,
+    frequencyCaps: frequencyCapsOf(c.frequencyCaps),
   }
 }
 
@@ -264,11 +305,13 @@ export interface LiveTypedCriterion {
   exclude: boolean
   status: string | null
   name: string | null
+  /** Its bid adjustment (0.1–10; null or absent = none). */
+  bidModifier?: number | null
 }
 
 export const liveTypedCriteriaQuery = (campaignId: string): string =>
   'SELECT ad_group.id, campaign.id, ad_group_criterion.criterion_id, ad_group_criterion.type, ad_group_criterion.status, ' +
-  'ad_group_criterion.negative, ad_group_criterion.display_name, ad_group_criterion.placement.url, ad_group_criterion.topic.topic_constant, ' +
+  'ad_group_criterion.negative, ad_group_criterion.bid_modifier, ad_group_criterion.display_name, ad_group_criterion.placement.url, ad_group_criterion.topic.topic_constant, ' +
   'ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.youtube_video.video_id, ' +
   'ad_group_criterion.youtube_channel.channel_id, ad_group_criterion.mobile_application.app_id, ' +
   'ad_group_criterion.mobile_app_category.mobile_app_category_constant, ad_group_criterion.user_list.user_list, ' +
@@ -317,6 +360,8 @@ export function liveTypedCriterionOf(row: Json): LiveTypedCriterion | null {
     exclude: c.negative === true,
     status: str(c.status),
     name: str(c.displayName),
+    // Google leaves a field at its default out of its answer: no bid modifier is none (×1).
+    bidModifier: typeof c.bidModifier === 'number' && c.bidModifier !== 1 ? c.bidModifier : null,
   }
 }
 
@@ -419,10 +464,12 @@ export interface LiveMediaAsset {
   mimeType: string | null
   youtubeVideoId: string | null
   youtubeTitle: string | null
+  /** An image's file size in bytes (null when Google does not say). */
+  fileSize?: number | null
 }
 
 const MEDIA_FIELDS = 'asset.id, asset.type, asset.name, asset.source, asset.image_asset.full_size.width_pixels, ' +
-  'asset.image_asset.full_size.height_pixels, asset.image_asset.mime_type, asset.youtube_video_asset.youtube_video_id, ' +
+  'asset.image_asset.full_size.height_pixels, asset.image_asset.mime_type, asset.image_asset.file_size, asset.youtube_video_asset.youtube_video_id, ' +
   'asset.youtube_video_asset.youtube_video_title'
 
 export const liveMediaAssetsQuery = (assetIds: string[]): string =>
@@ -450,6 +497,7 @@ export function liveMediaAssetOf(row: Json): LiveMediaAsset {
     mimeType: str(a.imageAsset?.mimeType),
     youtubeVideoId: str(a.youtubeVideoAsset?.youtubeVideoId),
     youtubeTitle: str(a.youtubeVideoAsset?.youtubeVideoTitle),
+    fileSize: num(a.imageAsset?.fileSize),
   }
 }
 

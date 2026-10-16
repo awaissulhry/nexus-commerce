@@ -182,3 +182,28 @@ describe('the account calls: users, links and billing', () => {
     expect(googleAccountCallBodyOf({ customer: '1234567890', path: 'productLinks:remove' }, JSON.stringify({ resource_name: `${C}/productLinks/41` }))).toEqual({ refusal: 'the body names a field in snake_case' })
   })
 })
+
+describe('G14b: brand guidelines turned on for an existing Performance Max campaign (EnablePMaxBrandGuidelines)', () => {
+  const C = 'customers/1234567890'
+  const URL = `${GOOGLE_ADS_API_BASE}/customers/1234567890/campaigns:enablePMaxBrandGuidelines`
+  const call = { customer: '1234567890', path: 'campaigns:enablePMaxBrandGuidelines' as const }
+  const op = (o: Record<string, unknown> = {}) => ({ campaign: `${C}/campaigns/21`, autoPopulateBrandAssets: false, brandAssets: { businessNameAsset: `${C}/assets/201`, logoAsset: [`${C}/assets/202`] }, ...o })
+  it('the exact path; exactly the body the tool sends; never a check (the method has no validate_only)', () => {
+    expect(googleAdsAccountCall('POST', URL)).toEqual(call)
+    expect(googleAccountCallBodyOf(call, JSON.stringify({ operations: [op({ mainColor: '#112233', accentColor: '#445566', fontFamily: 'Lato', finalUriDomain: 'shop.example' })] }))).toMatchObject({ check: false })
+    expect(googleAccountCallBodyOf(call, JSON.stringify({ operations: [{ campaign: `${C}/campaigns/21`, autoPopulateBrandAssets: true }] }))).toMatchObject({ check: false })
+    const refused = (body: unknown) => googleAccountCallBodyOf(call, JSON.stringify(body))
+    for (const body of [
+      { operations: [op()], validateOnly: true },
+      { operations: [op(), op()] },
+      { operations: [op({ campaign: 'customers/999/campaigns/21' })] },
+      { operations: [op({ autoPopulateBrandAssets: true })] },
+      { operations: [op({ brandAssets: { businessNameAsset: `${C}/assets/201`, logoAsset: [] } })] },
+      { operations: [op({ brandAssets: { businessNameAsset: `${C}/assets/201`, logoAsset: ['1', '2', '3', '4', '5', '6'].map((i) => `${C}/assets/${i}`) } })] },
+      { operations: [op({ brandAssets: { businessNameAsset: 'customers/999/assets/201', logoAsset: [`${C}/assets/202`] } })] },
+      { operations: [op({ mainColor: '#112233' })] },
+      { operations: [op({ fontFamily: 'Comic Sans' })] },
+      { operations: [op({ status: 'ENABLED' })] },
+    ]) expect(refused(body), JSON.stringify(body)).toHaveProperty('refusal')
+  })
+})

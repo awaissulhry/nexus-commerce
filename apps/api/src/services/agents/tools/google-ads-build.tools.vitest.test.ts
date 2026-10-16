@@ -12,6 +12,16 @@ const h = vi.hoisted(() => ({
   // demographics, exclusions, brand lists and the inventory filter).
   groupCriteria: [] as unknown[], groupDevices: [] as unknown[], others: [] as unknown[], groupLinks: [] as unknown[], labels: [] as unknown[],
   labelLinks: [] as unknown[], goals: { level: 'CUSTOMER', customGoalId: null, goals: [] } as unknown,
+  // G14b: a Search campaign's AI Max controls as liveSearchAi reads them; the account's page feeds.
+  searchAi: {} as unknown, feeds: [] as unknown[],
+}))
+vi.mock('../../marketing/google-ads/live-search-ai.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../marketing/google-ads/live-search-ai.js')>()),
+  liveSearchAi: vi.fn(async () => structuredClone(h.searchAi)),
+}))
+vi.mock('../../marketing/google-ads/live-pmax.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../marketing/google-ads/live-pmax.js')>()),
+  livePageFeeds: vi.fn(async () => structuredClone(h.feeds)),
 }))
 vi.mock('../../marketing/google-ads/change-account.js', () => ({
   googleChangeAccount: vi.fn(async () => ({
@@ -62,7 +72,7 @@ const approved = (preview: unknown): ToolContext => ({ can: () => true, via: 'cl
 
 beforeEach(() => {
   h.mutate.mockReset()
-  Object.assign(h, { groupCriteria: [], groupDevices: [], others: [], groupLinks: [], labels: [], labelLinks: [], goals: { level: 'CUSTOMER', customGoalId: null, goals: [] } })
+  Object.assign(h, { groupCriteria: [], groupDevices: [], others: [], groupLinks: [], labels: [], labelLinks: [], goals: { level: 'CUSTOMER', customGoalId: null, goals: [] }, searchAi: {}, feeds: [] })
   h.detail = {
     campaign: {
       campaignId: '21', name: 'Shop A', status: 'ENABLED', type: 'SHOPPING', bidding: 'MANUAL_CPC', biddingStrategyId: null,
@@ -357,5 +367,67 @@ describe('PR 6 tools', () => {
     expect(refused.error).toMatch(/conversionGoals\) need the .* permission/)
     expect(h.mutate).not.toHaveBeenCalled()
     expect((await tool('build-google-campaigns').handler(ask, asker)).ok).toBe(true)
+  })
+})
+
+describe('G14b: AI Max\'s controls in a Search build and copy', () => {
+  it('copy-google-campaign carries a Search campaign\'s text guidelines, page feeds, URL exclusions and an ad group\'s URL inclusions (none named as not copied)', async () => {
+    const d = h.detail as Record<string, any>
+    Object.assign(d.campaign, { type: 'SEARCH', shopping: null, aiMax: true, assetAutomation: [{ type: 'TEXT_ASSET_AUTOMATION', status: 'OPTED_IN' }] })
+    d.criteria.other = [{ criterionId: '16', type: 'WEBPAGE', negative: true, name: 'x' }]
+    d.adGroups = [{ adGroupId: '51', name: 'Group A', status: 'ENABLED', type: 'SEARCH_STANDARD', cpcBidCents: 25, targetCpaCents: null, targetRoas: null, rotation: null, urls: { trackingTemplate: null, finalUrlSuffix: null, customParameters: [] }, audienceMode: [] }]
+    d.keywords = []; d.ads = []; d.assets = []; d.criteriaRows = []
+    h.others = [{ adGroupId: '51', criterionId: '17', type: 'WEBPAGE', negative: false, name: 'Include', listId: null }]
+    h.feeds = [{ assetSetId: '77', name: 'Pages A' }]
+    h.searchAi = {
+      textGuidelines: { termExclusions: ['cheap'], messagingRestrictions: ['Never mention prices'] },
+      pageFeeds: [{ assetSetId: '77', name: 'Pages A' }],
+      webpageCriteria: [{ criterionId: '16', type: 'WEBPAGE', negative: true, bidModifier: null, webpage: { name: 'x', conditions: [{ operand: 'URL', operator: 'CONTAINS', argument: '/outlet' }] } }],
+      adGroups: [{ adGroupId: '51', name: 'Group A', status: 'ENABLED', type: 'SEARCH_STANDARD', rules: [{ criterionId: '17', name: 'Include', rule: { urlContains: ['/jackets'], labels: ['sale'] } }], otherWebpage: 0 }],
+    }
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const out = await tool('copy-google-campaign').handler({ campaignId: '21', name: 'Search A copy' }, asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    const ops = h.mutate.mock.calls[0][1] as Array<Record<string, any>>
+    const made = (kind: string) => ops.filter((o) => o[kind]?.create).map((o) => o[kind].create)
+    const campaign = made('campaignOperation')[0]
+    expect(campaign.textGuidelines).toEqual({ termExclusions: ['cheap'], messagingRestrictions: [{ restrictionText: 'Never mention prices', restrictionType: 'RESTRICTION_BASED_EXCLUSION' }] })
+    expect(made('campaignAssetSetOperation')).toEqual([{ campaign: campaign.resourceName, assetSet: 'customers/1234567890/assetSets/77' }])
+    expect(made('campaignCriterionOperation')).toContainEqual({ campaign: campaign.resourceName, negative: true, webpage: { criterionName: 'Exclude contains:/outlet', conditions: [{ operand: 'URL', operator: 'CONTAINS', argument: '/outlet' }] } })
+    const group = made('adGroupOperation')[0]
+    expect(made('adGroupCriterionOperation')).toContainEqual({ adGroup: group.resourceName, webpage: { criterionName: 'Include URL contains "/jackets" and label "sale"', conditions: [{ operand: 'URL', operator: 'CONTAINS', argument: '/jackets' }, { operand: 'CUSTOM_LABEL', operator: 'EQUALS', argument: 'sale' }] } })
+    expect(((out.preview as { skipped?: string[] }).skipped ?? []).filter((x) => /WEBPAGE/.test(x))).toEqual([])
+  })
+
+  it('copy-google-campaign: with AI Max off, URL inclusions the source still holds are named as not copied, and the rest is copied', async () => {
+    const d = h.detail as Record<string, any>
+    Object.assign(d.campaign, { type: 'SEARCH', shopping: null, aiMax: false, assetAutomation: [] })
+    d.adGroups = [{ adGroupId: '51', name: 'Group A', status: 'ENABLED', type: 'SEARCH_STANDARD', cpcBidCents: 25, targetCpaCents: null, targetRoas: null, rotation: null, urls: { trackingTemplate: null, finalUrlSuffix: null, customParameters: [] }, audienceMode: [] }]
+    d.keywords = []; d.ads = []; d.assets = []; d.criteriaRows = []
+    h.others = [{ adGroupId: '51', criterionId: '17', type: 'WEBPAGE', negative: false, name: 'Include', listId: null }]
+    h.searchAi = {
+      textGuidelines: { termExclusions: [], messagingRestrictions: [] }, pageFeeds: [], webpageCriteria: [],
+      adGroups: [{ adGroupId: '51', name: 'Group A', status: 'ENABLED', type: 'SEARCH_STANDARD', rules: [{ criterionId: '17', name: 'Include', rule: { urlContains: ['/jackets'] } }], otherWebpage: 0 }],
+    }
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const out = await tool('copy-google-campaign').handler({ campaignId: '21', name: 'Search A copy' }, asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    const ops = h.mutate.mock.calls[0][1] as Array<Record<string, any>>
+    expect(ops.filter((o) => o.adGroupCriterionOperation?.create?.webpage)).toEqual([])
+    expect(ops.filter((o) => o.adGroupOperation?.create)).toHaveLength(1)
+    const skipped = (out.preview as { skipped?: string[] }).skipped ?? []
+    expect(skipped.filter((x) => /URL inclusion/.test(x))).toEqual([expect.stringMatching(/1 URL inclusion of "Group A" \(URL contains "\/jackets"\): URL inclusions need AI Max on/)])
+    // Named once: not again as a criterion no Nexus tool sets.
+    expect(skipped.filter((x) => /WEBPAGE/.test(x))).toEqual([])
+  })
+
+  it('build-google-campaigns: URL inclusions need AI Max and text customization; a page feed must be one of the account\'s', async () => {
+    h.feeds = [{ assetSetId: '77', name: 'Pages A' }]
+    const base = { type: 'SEARCH', name: 'Search Z', budget: { dailyBudgetCents: 500 }, adGroups: [{ name: 'G', urlInclusions: [{ urlContains: ['/jackets'] }] }] }
+    const off = await tool('build-google-campaigns').handler(tool('build-google-campaigns').input.parse({ campaigns: [base] }) as Record<string, unknown>, asker)
+    expect(off).toMatchObject({ ok: false, error: expect.stringMatching(/URL inclusions only with AI Max and text customization on/) })
+    const feed = await tool('build-google-campaigns').handler(tool('build-google-campaigns').input.parse({ campaigns: [{ ...base, adGroups: [], pageFeeds: ['79'] }] }) as Record<string, unknown>, asker)
+    expect(feed).toMatchObject({ ok: false, error: expect.stringMatching(/page feed 79 is not a page feed of this account/) })
+    expect(h.mutate).not.toHaveBeenCalled()
   })
 })

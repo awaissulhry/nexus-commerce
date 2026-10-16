@@ -51,6 +51,27 @@ describe('the mappers', () => {
     expect(liveTypedCampaignOf({ campaign: { id: '23', advertisingChannelType: 'DEMAND_GEN' } }).upgradedTargeting).toBe(false)
   })
 
+  it('G14b: a campaign\'s frequency caps (sorted by key; a time length Google left out is 1; one Nexus cannot name is left out); the query selects them', () => {
+    const c = liveTypedCampaignOf({
+      campaign: {
+        id: '24', advertisingChannelType: 'DISPLAY', frequencyCaps: [
+          { key: { level: 'AD_GROUP', eventType: 'IMPRESSION', timeUnit: 'WEEK', timeLength: 2 }, cap: 9 },
+          { key: { level: 'CAMPAIGN', eventType: 'IMPRESSION', timeUnit: 'DAY' }, cap: 3 },
+          { key: { level: 'CAMPAIGN', eventType: 'UNKNOWN', timeUnit: 'DAY' }, cap: 1 },
+        ],
+      },
+    })
+    expect(c.frequencyCaps).toEqual([
+      { events: 9, timeUnit: 'WEEK', timeLength: 2, level: 'AD_GROUP', eventType: 'IMPRESSION' },
+      { events: 3, timeUnit: 'DAY', timeLength: 1, level: 'CAMPAIGN', eventType: 'IMPRESSION' },
+    ])
+    expect(liveTypedCampaignOf({ campaign: { id: '25' } }).frequencyCaps).toEqual([])
+    expect(liveTypedCampaignQuery('21')).toContain('campaign.frequency_caps')
+    expect(liveTypedCriteriaQuery('21')).toContain('ad_group_criterion.bid_modifier')
+    expect(liveMediaAssetsQuery(['301'])).toContain('asset.image_asset.file_size')
+    expect(liveMediaAssetOf({ asset: { id: '301', type: 'IMAGE', imageAsset: { fileSize: '40960', fullSize: { widthPixels: 300, heightPixels: 250 } } } })).toMatchObject({ width: 300, height: 250, fileSize: 40960 })
+  })
+
   it('an ad group: Demand Gen channels (none sent = all channels), its strategy or its picked channels; other kinds have none', () => {
     const base = { id: '51', name: 'G', status: 'ENABLED', cpcBidMicros: '400000', optimizedTargetingEnabled: true, audienceSetting: { useAudienceGrouped: true } }
     expect(liveTypedAdGroupOf({ adGroup: base }, 'DEMAND_GEN')).toMatchObject({ channels: { strategy: 'ALL_CHANNELS' }, cpcBidCents: 40, optimizedTargeting: true, audienceGrouped: true })
@@ -67,7 +88,11 @@ describe('the mappers', () => {
     expect(targetOf({ mobileAppCategory: { mobileAppCategoryConstant: 'mobileAppCategoryConstants/60009' } })).toEqual({ kind: 'app-category', value: '60009' })
     expect(targetOf({ deviceType: {} })).toBeNull()
     expect(liveTypedCriterionOf({ adGroup: { id: '51' }, adGroupCriterion: { criterionId: '9', negative: true, status: 'ENABLED', placement: { url: 'example.com' } } }))
-      .toEqual({ adGroupId: '51', criterionId: '9', kind: 'placement', value: 'example.com', exclude: true, status: 'ENABLED', name: null })
+      .toEqual({ adGroupId: '51', criterionId: '9', kind: 'placement', value: 'example.com', exclude: true, status: 'ENABLED', name: null, bidModifier: null })
+    // A bid adjustment Google holds is read; ×1 (Google's default) is none.
+    expect(liveTypedCriterionOf({ adGroup: { id: '51' }, adGroupCriterion: { criterionId: '10', bidModifier: 1.2, ageRange: { type: 'AGE_RANGE_25_34' } } }))
+      .toMatchObject({ kind: 'age-range', value: 'AGE_RANGE_25_34', exclude: false, bidModifier: 1.2 })
+    expect(liveTypedCriterionOf({ adGroup: { id: '51' }, adGroupCriterion: { criterionId: '11', bidModifier: 1, gender: { type: 'MALE' } } })?.bidModifier).toBeNull()
     const ad = liveTypedAdOf({
       adGroup: { id: '51', status: 'ENABLED' }, campaign: { id: '21', status: 'PAUSED', advertisingChannelType: 'DISPLAY' },
       adGroupAd: { status: 'ENABLED', policySummary: { approvalStatus: 'APPROVED_LIMITED' }, ad: { id: '701', type: 'RESPONSIVE_DISPLAY_AD', finalUrls: ['https://shop.example/a'], responsiveDisplayAd: { businessName: 'Shop A' } } },

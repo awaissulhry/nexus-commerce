@@ -38,6 +38,10 @@ import { liveAdGroupDevices, liveAdGroupTargeting, targetingCriterionOf, type De
 import { liveCampaignExclusionsOf } from './live-exclusions.js'
 import { inventoryFilterOf } from './live-shopping.js'
 import { liveLabels } from './live-labels.js'
+import { liveSearchAi } from './live-search-ai.js'
+import { urlExclusionOfKey, urlExclusionsOf } from './change-ai-controls.js'
+import { normalizeUrlRule, urlRuleWords } from './change-search-ai.js'
+import { plural } from './change-draft.js'
 import {
   liveAdGroupOtherCriteria, liveCampaignAdGroupLinks, liveCampaignGoals, liveCampaignLabels, liveCampaignProductGroupNodes,
 } from './live-copy.js'
@@ -202,6 +206,13 @@ export async function campaignAsBuild(
   // Labels: four reads only when the account has a label at all.
   const labels = (await liveLabels(target)).length ? await liveCampaignLabels(target, campaignId) : []
   const goals = await liveCampaignGoals(target, campaignId)
+  // G14b — AI Max's controls of a Search campaign: text guidelines, page feeds linked, URL exclusions, URL inclusions.
+  const ai = c.type === 'SEARCH' ? await liveSearchAi(target, campaignId, { textGuidelines: true, pageFeeds: true, urlExclusions: true, urlInclusions: true }) : null
+  const urlExclusions = ai ? urlExclusionsOf({ criteria: ai.webpageCriteria ?? [] }) : []
+  // Google takes an ad group's URL inclusions only with AI Max and text customization on (the copy keeps the source's
+  // switches): with them off, rules the source still holds are named in notCopied, not sent (Google would refuse the copy).
+  const optedIn = (type: string) => c.assetAutomation.some((x) => x.type === type && x.status === 'OPTED_IN')
+  const aiReady = !!(c.aiMax && (optedIn('TEXT_ASSET_AUTOMATION') || optedIn('FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION')))
   const labelsUsed = new Set<string>()
   const labelsOf = (kind: string, id: string) => labels.filter((l) => l.kind === kind && l.id === id).map((l) => { labelsUsed.add(`${kind}|${id}|${l.labelId}`); return l.labelId })
   const withLabels = (kind: string, id: string) => { const l = labelsOf(kind, id); return l.length ? { labels: l } : {} }
@@ -244,6 +255,7 @@ export async function campaignAsBuild(
     .filter((k) => k.keyword).map((k) => { used.add(k.criterionId); return { text: k.keyword!.text, matchType: (k.keyword!.matchType ?? 'BROAD') as MatchType } })
   for (const e of exclusions.items) used.add(e.criterionId)
   for (const b of exclusions.brandLists) used.add(b.criterionId)
+  for (const u of urlExclusions) used.add(u.criterionId)
   const inventoryFilter: FilterCondition[] = []
   for (const s of scopes) {
     used.add(s.criterionId)
@@ -280,7 +292,10 @@ export async function campaignAsBuild(
     if (g.type && g.type !== AD_GROUP_TYPE[c.type!]) { notCopied.push(`ad group "${g.name}" (${g.type}: Nexus makes ${AD_GROUP_TYPE[c.type!]} ad groups)`); continue }
     const own = d.keywords.filter((k) => k.adGroupId === g.adGroupId).sort((x, y) => byId(x.criterionId, y.criterionId))
     const criteria = groupCriteria.filter((k) => k.adGroupId === g.adGroupId).sort((x, y) => byId(x.criterionId, y.criterionId))
-    const others = groupOthers.filter((x) => x.adGroupId === g.adGroupId)
+    // URL inclusions Nexus can name go with the ad group; one it cannot name (a page title, content or category) is said.
+    const inclusions = (ai?.adGroups ?? []).find((x) => x.adGroupId === g.adGroupId)?.rules ?? []
+    const carried = new Set(inclusions.filter((r) => r.rule).map((r) => r.criterionId))
+    const others = groupOthers.filter((x) => x.adGroupId === g.adGroupId && !(x.type === 'WEBPAGE' && carried.has(x.criterionId)))
     const crit = (criterionId: string) => withLabels('keyword', `${g.adGroupId}~${criterionId}`)
     const group: BuildAdGroup = {
       name: g.name,
@@ -304,7 +319,12 @@ export async function campaignAsBuild(
       audiences: criteria.filter((k) => k.segment).map((k) => ({ kind: k.segment!.kind, id: k.segment!.id, ...(k.negative ? { exclude: true } : {}), ...(!k.negative && factor(k.bidModifier) !== undefined ? { bidModifier: k.bidModifier! } : {}), ...crit(k.criterionId) })),
       demographics: criteria.filter((k) => k.demographic?.value).map((k) => ({ dimension: k.demographic!.dimension, value: k.demographic!.value!, ...(k.negative ? { exclude: true } : {}), ...(!k.negative && factor(k.bidModifier) !== undefined ? { bidModifier: k.bidModifier! } : {}), ...crit(k.criterionId) })),
       brandLists: others.filter((b) => b.type === 'BRAND_LIST' && b.listId && !b.negative).map((b) => b.listId!),
+      ...(carried.size && aiReady ? { urlInclusions: inclusions.filter((r) => r.rule).sort((x, y) => byId(x.criterionId, y.criterionId)).map((r) => normalizeUrlRule(r.rule!)) } : {}),
       ...withLabels('ad-group', g.adGroupId),
+    }
+    if (carried.size && !aiReady) {
+      const words = inclusions.filter((r) => r.rule).sort((x, y) => byId(x.criterionId, y.criterionId)).map((r) => urlRuleWords(r.rule!))
+      notCopied.push(`${plural(words.length, 'URL inclusion')} of "${g.name}" (${words.join('; ')}): URL inclusions need AI Max on (and text customization), which "${c.name}" has off — the copy keeps them off`)
     }
     for (const k of criteria.filter((x) => !x.segment && !x.demographic?.value)) notCopied.push(`criterion ${k.name ?? k.criterionId} (${k.type ?? 'criterion'}) of "${g.name}" (Nexus cannot read its value)`)
     for (const k of others.filter((x) => !(x.type === 'BRAND_LIST' && x.listId && !x.negative))) notCopied.push(`criterion ${k.name ?? k.criterionId} (${k.type ?? 'criterion'}${k.negative ? ', excluded' : ''}) of "${g.name}" (no Nexus tool sets this kind)`)
@@ -407,6 +427,9 @@ export async function campaignAsBuild(
     ...(inventoryFilter.length ? { inventoryFilter } : {}),
     ...campaignLabels,
     ...(goals.level === 'CAMPAIGN' && goals.goals.length ? { conversionGoals: goals.goals } : {}),
+    ...(ai?.textGuidelines && (ai.textGuidelines.termExclusions.length || ai.textGuidelines.messagingRestrictions.length) ? { textGuidelines: { ...ai.textGuidelines } } : {}),
+    ...(ai?.pageFeeds?.length ? { pageFeeds: ai.pageFeeds.map((f) => f.assetSetId) } : {}),
+    ...(urlExclusions.length ? { urlExclusions: urlExclusions.map((u) => u.key).sort().map(urlExclusionOfKey) } : {}),
     adGroups,
     assets: { link },
   }

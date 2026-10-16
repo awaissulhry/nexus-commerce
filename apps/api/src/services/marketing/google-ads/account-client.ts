@@ -134,10 +134,22 @@ export async function sendAccountCall(
       const textBody = await response.text()
       if (response.ok) {
         await settle()
-        let parsed: { resourceName?: unknown; result?: { resourceName?: unknown; multiPartyAuthReview?: unknown }; results?: Array<{ resourceName?: unknown }> } = {}
+        let parsed: {
+          resourceName?: unknown; result?: { resourceName?: unknown; multiPartyAuthReview?: unknown }
+          results?: Array<{ resourceName?: unknown; campaign?: unknown; enablementError?: { code?: unknown; message?: unknown } }>
+        } = {}
         try { parsed = textBody ? JSON.parse(textBody) : {} } catch { /* a check answers with nothing to read */ }
-        // G10: the goal methods answer `results[]` (MutateGoalsResponse, MutateCampaignGoalConfigsResponse: one operation, one result).
-        const name = parsed.result?.resourceName ?? parsed.resourceName ?? (Array.isArray(parsed.results) ? parsed.results[0]?.resourceName : undefined)
+        // G14b: EnablePMaxBrandGuidelinesResponse answers HTTP 200 with a refusal per campaign (results[].enablement_error):
+        // Google changed nothing for that campaign — a refusal, never a success.
+        const refusedHere = Array.isArray(parsed.results) ? parsed.results.find((r) => r?.enablementError) : undefined
+        if (refusedHere) {
+          const e = refusedHere.enablementError!
+          throw new GoogleAdsWriteError(localFailure(`Google refused it${typeof e.message === 'string' && e.message ? `: ${e.message}` : ''}. Nothing was changed.`, 'ENABLEMENT_ERROR'), operation, 'refused', reached)
+        }
+        // G10: the goal methods answer `results[]` (MutateGoalsResponse, MutateCampaignGoalConfigsResponse: one operation, one result);
+        // G14b: EnablePMaxBrandGuidelines names the campaign it turned brand guidelines on for.
+        const first = Array.isArray(parsed.results) ? parsed.results[0] : undefined
+        const name = parsed.result?.resourceName ?? parsed.resourceName ?? first?.resourceName ?? first?.campaign
         const review = parsed.result?.multiPartyAuthReview
         // G14a: every result of a method that takes several operations (in operation order).
         const names = Array.isArray(parsed.results) ? parsed.results.map((r) => (typeof r?.resourceName === 'string' ? r.resourceName : '')) : []

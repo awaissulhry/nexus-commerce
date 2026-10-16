@@ -141,3 +141,23 @@ describe('livePaymentsAccounts (review fixes: a billing setup only for a payment
     expect(err.message).toBe(`${PAYMENTS_NOT_LISTED} (Google: SERVICE_ACCESS_DENIED.)`)
   })
 })
+
+describe('G14b: EnablePMaxBrandGuidelines (no validate_only; a refusal may come with HTTP 200)', () => {
+  const ENABLE = { path: 'campaigns:enablePMaxBrandGuidelines' as const, body: { operations: [{ campaign: `${C}/campaigns/21`, autoPopulateBrandAssets: true }] } }
+  it('ONE call; the campaign Google turned it on for; Google cannot check it first', async () => {
+    h.answers.push(() => new Response(JSON.stringify({ results: [{ campaign: `${C}/campaigns/21` }] }), { status: 200 }))
+    expect(await sendAccountOperations(TARGET, [{ accountCall: ENABLE }])).toEqual({ responses: [{ [ACCOUNT_RESULT]: { resourceName: `${C}/campaigns/21` } }] })
+    expect(h.calls.map((c) => c.url)).toEqual([`${GOOGLE_ADS_API_BASE}/${C}/campaigns:enablePMaxBrandGuidelines`])
+    const check = await checkAccountOperations(TARGET, [{ accountCall: ENABLE }]).catch((e) => e)
+    expect(check).toBeInstanceOf(GoogleAdsWriteError)
+    expect(check).toMatchObject({ outcome: 'not_sent' })
+    expect(h.calls).toHaveLength(1)
+  })
+  it('a result carrying Google\'s enablement error is a refusal, never a success', async () => {
+    h.answers.push(() => new Response(JSON.stringify({ results: [{ campaign: `${C}/campaigns/21`, enablementError: { code: 3, message: 'Brand assets are missing.' } }] }), { status: 200 }))
+    const err = await sendAccountOperations(TARGET, [{ accountCall: ENABLE }]).catch((e) => e)
+    expect(err).toBeInstanceOf(GoogleAdsWriteError)
+    expect(err).toMatchObject({ outcome: 'refused' })
+    expect(writeErrorSentence(err)).toMatch(/Brand assets are missing/)
+  })
+})
