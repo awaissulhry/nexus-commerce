@@ -49,6 +49,7 @@ async function picker(query) {
 async function page(query) {
   return `<!doctype html><html lang="${query.get('locale') || 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fit finder stand-in</title>
+<link rel="stylesheet" href="/store-theme.css">
 <style>
   :root { --text-primary: 26 26 26; --background-primary: 255 255 255; --dialog-background: 255 255 255; --button-background-primary: 255 122 0; --button-text-primary: 255 255 255;
     --success-text: 22 128 61; --success-background: 232 245 237; --warning-text: 176 92 0; --error-text: 196 32 32; --error-background: 253 236 236; --rounded-input: 8px; --rounded-button: 999px; --rounded-block: 12px;
@@ -125,6 +126,7 @@ createServer(async (req, res) => {
     const source = url.pathname.match(/^\/src\/(xavia-fit-[a-z]+\.js)$/)
     if (source) return res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' }).end(readFileSync(new URL(source[1], new URL('../../fit-finder/', import.meta.url))))
     if (url.pathname === '/viewer.html') return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(VIEWER_PAGE)
+    if (url.pathname === '/store-theme.css') return res.writeHead(200, { 'content-type': 'text/css; charset=utf-8' }).end(readFileSync(new URL('store-theme.css', import.meta.url)))
     if (url.pathname === '/logo.svg') return res.writeHead(200, { 'content-type': 'image/svg+xml' }).end(LOGO_SVG)
     if (url.pathname === '/product.svg') return res.writeHead(200, { 'content-type': 'image/svg+xml' }).end(PRODUCT_SVG)
     res.writeHead(404).end('not found')

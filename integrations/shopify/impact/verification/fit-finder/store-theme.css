@@ -1,0 +1,15 @@
+/* What the store's theme (Impact 7.2) does to bare elements, so the stand-in page shows the size guide the way the
+   store does. Found on the store's preview theme on 2026-10-16 by comparing every element of the dialog with and
+   without the theme's style sheets. The stand-in loads this before the size guide's own CSS, as the store does. */
+*, ::before, ::after { border: 0 solid; }
+button, input, select, textarea { line-height: inherit; text-transform: inherit; padding: 0; }
+button, [type="button"] { appearance: button; text-align: inherit; }
+a { text-decoration: none; }
+label { cursor: pointer; }
+img { vertical-align: middle; }
+th { text-align: start; }
+th, td { padding: 0; vertical-align: top; }
+table:not(.table--bordered) :is(th, td):first-child { padding-inline-start: 0; }
+table:not(.table--bordered) :is(th, td):last-child { padding-inline-end: 0; }
+tbody tr + tr > *, thead + tbody tr > * { border-top-width: 1px; }
+@media screen and (min-width: 700px) { th, td { padding-block: 16px; } }
