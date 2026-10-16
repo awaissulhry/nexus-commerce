@@ -10,7 +10,7 @@
  * A keyword without a max CPC of its own uses its ad group's default: Google leaves `cpc_bid_micros` out of the row (an
  * absent or zero bid reads as "none of its own" here) and `effective_cpc_bid_micros` holds the bid it uses.
  */
-import { centsOfMicros, gaqlId, liveAdGroupsQuery, liveCampaignCriteriaQuery, liveCriterionOf, liveKeywordsQuery, type MatchType } from './live.js'
+import { centsOfMicros, gaqlId, liveAdGroupsQuery, liveCampaignCriteriaQuery, liveCriterionOf, liveKeywordsQuery, type MatchType, INCLUDE_DRAFTS } from './live.js'
 import { liveRows } from './write-client.js'
 import type { GoogleAdsTarget } from './types.js'
 
@@ -112,7 +112,7 @@ export async function liveCampaignNegatives(target: GoogleAdsTarget, campaignId:
  * (CampaignError.CANNOT_SET_CAMPAIGN_KEYWORD_MATCH_TYPE), but an older campaign may hold BROAD. One query.
  */
 export const liveKeywordMatchTypeQuery = (campaignId: string): string =>
-  `SELECT campaign.id, campaign.keyword_match_type FROM campaign WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')}`
+  `SELECT campaign.id, campaign.keyword_match_type FROM campaign WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')}${INCLUDE_DRAFTS}`
 
 export async function liveCampaignKeywordMatchType(target: GoogleAdsTarget, campaignId: string): Promise<string | null> {
   const rows = await liveRows<Json>(target, liveKeywordMatchTypeQuery(campaignId), 'ads.search.live.match-type')

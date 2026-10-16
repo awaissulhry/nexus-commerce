@@ -29,7 +29,7 @@
  * segmenting resource's field that was not selected; live.ts liveAssetsQuery).
  */
 import { liveRows } from './write-client.js'
-import { centsOfMicros, gaqlId, type MatchType } from './live.js'
+import { centsOfMicros, gaqlId, type MatchType, INCLUDE_DRAFTS } from './live.js'
 import { byGoogleId } from './live-keywords.js'
 import { pairOf } from './live-campaigns.js'
 import type { GoogleAdsTarget } from './types.js'
@@ -119,12 +119,12 @@ export function liveEditAdsQuery(ids: string[]): string {
     return p
   })
   return `SELECT ${AD_FIELDS.join(', ')} FROM ad_group_ad WHERE ad_group.id IN (${inList(pairs.map((p) => p[0]), 'The ad group')}) ` +
-    `AND ad_group_ad.ad.id IN (${inList(pairs.map((p) => p[1]), 'The ad')}) AND ad_group_ad.status != 'REMOVED'`
+    `AND ad_group_ad.ad.id IN (${inList(pairs.map((p) => p[1]), 'The ad')}) AND ad_group_ad.status != 'REMOVED'${INCLUDE_DRAFTS}`
 }
 
 /** The ads of ONE ad group (not removed): where moved ads land, and how many enabled ones it holds. */
 export const liveAdGroupAdsQuery = (adGroupId: string): string =>
-  `SELECT ${AD_FIELDS.join(', ')} FROM ad_group_ad WHERE ad_group.id = ${gaqlId(adGroupId, 'The ad group')} AND ad_group_ad.status != 'REMOVED'`
+  `SELECT ${AD_FIELDS.join(', ')} FROM ad_group_ad WHERE ad_group.id = ${gaqlId(adGroupId, 'The ad group')} AND ad_group_ad.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 const adTexts = (value: unknown): LiveAdText[] => (Array.isArray(value) ? value : []).map((a: Json) => ({ text: str(a?.text) ?? '', pin: str(a?.pinnedField) }))
 
@@ -197,12 +197,12 @@ export interface LiveKeywordUrls {
 export const liveCampaignUrlsQuery = (campaignIds: string[]): string =>
   'SELECT campaign.id, campaign.name, campaign.status, campaign.tracking_url_template, campaign.final_url_suffix, ' +
   `campaign.url_custom_parameters FROM campaign WHERE campaign.id IN (${inList(bounded(campaignIds, 'campaigns'), 'The campaign')}) ` +
-  "AND campaign.status != 'REMOVED'"
+  `AND campaign.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export const liveAdGroupUrlsQuery = (adGroupIds: string[]): string =>
   'SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ad_group.status, ad_group.tracking_url_template, ' +
   `ad_group.final_url_suffix, ad_group.url_custom_parameters FROM ad_group WHERE ad_group.id IN (${inList(bounded(adGroupIds, 'ad groups'), 'The ad group')}) ` +
-  "AND ad_group.status != 'REMOVED'"
+  `AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 const KEYWORD_FIELDS = [
   'campaign.id', 'campaign.name', 'campaign.status', 'ad_group.id', 'ad_group.name', 'ad_group.status',
@@ -221,13 +221,13 @@ export function liveKeywordUrlsQuery(ids: string[]): string {
   })
   return `SELECT ${KEYWORD_FIELDS.join(', ')} FROM ad_group_criterion WHERE ad_group.id IN (${inList(pairs.map((p) => p[0]), 'The ad group')}) ` +
     `AND ad_group_criterion.criterion_id IN (${inList(pairs.map((p) => p[1]), 'The keyword')}) AND ad_group_criterion.type = 'KEYWORD' ` +
-    "AND ad_group_criterion.status != 'REMOVED'"
+    `AND ad_group_criterion.status != 'REMOVED'${INCLUDE_DRAFTS}`
 }
 
 /** One campaign's keywords and ad group negatives (not removed, in ad groups not removed), with their URLs. */
 export const liveCampaignKeywordUrlsQuery = (campaignId: string): string =>
   `SELECT ${KEYWORD_FIELDS.join(', ')} FROM ad_group_criterion WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} ` +
-  "AND ad_group_criterion.type = 'KEYWORD' AND ad_group_criterion.status != 'REMOVED' AND ad_group.status != 'REMOVED'"
+  `AND ad_group_criterion.type = 'KEYWORD' AND ad_group_criterion.status != 'REMOVED' AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export function liveKeywordUrlsOf(row: Json): LiveKeywordUrls {
   const c = row.campaign ?? {}
@@ -376,7 +376,7 @@ export async function liveEditAssets(target: GoogleAdsTarget, assetIds: string[]
 
 export const liveAdGroupRotationsQuery = (campaignId: string): string =>
   'SELECT campaign.id, ad_group.id, ad_group.status, ad_group.ad_rotation_mode FROM ad_group ' +
-  `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group.status != 'REMOVED'`
+  `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 /** Each ad group's ad rotation (OPTIMIZE / ROTATE_FOREVER; null when Google leaves it out). */
 export async function liveAdGroupRotations(target: GoogleAdsTarget, campaignId: string): Promise<Record<string, string | null>> {

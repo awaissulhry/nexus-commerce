@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  centsOfMicros, liveAdOf, liveAssetOf, liveAssetsQuery, liveCampaignOf, liveChangeHistoryQuery, liveCriterionOf, liveListKeywordsQuery, liveProductGroupOf,
+  campaignKind, campaignKindNotes, campaignKindWords, centsOfMicros, liveAdGroupsQuery, liveAdOf, liveAdsQuery, liveAssetOf, liveAssetsQuery, liveCampaignOf,
+  liveCampaignSettingsQuery, liveChangeHistoryQuery, liveCriterionOf, liveKeywordsQuery, liveListKeywordsQuery, LIVE_CAMPAIGNS_QUERY, liveProductGroupOf,
   liveProductGroupsQuery, microsOfCents, priorityName,
 } from './live.js'
 
@@ -67,5 +68,35 @@ describe('live rows', () => {
     expect(ad).toMatchObject({ adId: '7', headlines: [{ text: 'H1', pinned: 'HEADLINE_1' }], descriptions: [{ text: 'D1', pinned: null }], path1: 'jackets', approval: 'APPROVED' })
     const asset = liveAssetOf({ campaign: { id: '21' }, campaignAsset: { fieldType: 'SITELINK', status: 'ENABLED' }, asset: { id: '9', type: 'SITELINK', sitelinkAsset: { linkText: 'Size guide', description1: 'a' }, finalUrls: ['https://x.example/t'], policySummary: { reviewStatus: 'UNDER_REVIEW' } } })
     expect(asset).toMatchObject({ assetId: '9', fieldType: 'SITELINK', text: 'Size guide', description1: 'a', review: 'UNDER_REVIEW' })
+  })
+})
+
+describe('G13: Google\'s drafts and experiment trials', () => {
+  it('the reads a change stands on ask for drafts too: PARAMETERS include_drafts=true, last and once', () => {
+    for (const q of [LIVE_CAMPAIGNS_QUERY, liveCampaignSettingsQuery('21'), liveAdGroupsQuery('21'), liveKeywordsQuery('21'), liveProductGroupsQuery('21'), liveAdsQuery('21'), liveAssetsQuery('21')]) {
+      expect(q).toMatch(/ PARAMETERS include_drafts=true$/)
+      expect(q.match(/PARAMETERS/g)).toHaveLength(1)
+    }
+    expect(LIVE_CAMPAIGNS_QUERY).toContain('campaign.experiment_type')
+    // A listing of every campaign's assets stays the campaigns' own.
+    expect(liveAssetsQuery()).not.toContain('PARAMETERS')
+  })
+
+  it('a campaign says what it is: its own, a Google draft or an experiment\'s trial', () => {
+    expect(liveCampaignOf({ campaign: { id: '31', name: 'Trial A', experimentType: 'EXPERIMENT' } }).experimentType).toBe('EXPERIMENT')
+    expect([campaignKind('BASE'), campaignKind('DRAFT'), campaignKind('EXPERIMENT'), campaignKind(null)]).toEqual([null, 'draft', 'trial', null])
+    expect(campaignKindWords({ name: 'Shop A', experimentType: 'BASE' })).toBeNull()
+    expect(campaignKindWords({ name: 'Draft A', experimentType: 'DRAFT' })).toMatch(/^"Draft A" is a Google draft/)
+  })
+
+  it('the preview\'s note: a campaign read on its own, or a listed one the operations name', () => {
+    const seen = {
+      one: new Map([['31', { name: 'Draft A', experimentType: 'DRAFT' }]]),
+      listed: new Map([['32', { name: 'Trial B', experimentType: 'EXPERIMENT' }], ['33', { name: 'Trial C', experimentType: 'EXPERIMENT' }]]),
+    }
+    const notes = campaignKindNotes(seen, [{ campaignCriterionOperation: { create: { campaign: 'customers/1/campaigns/32' } } }, { campaignCriterionOperation: { remove: 'customers/1/campaignCriteria/330~5' } }])
+    expect(notes).toHaveLength(2)
+    expect(notes[0]).toMatch(/"Draft A" is a Google draft/)
+    expect(notes[1]).toMatch(/"Trial B" is the trial campaign of a running experiment/)
   })
 })

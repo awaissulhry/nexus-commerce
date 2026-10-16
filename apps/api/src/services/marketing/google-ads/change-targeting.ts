@@ -130,7 +130,7 @@ const DEVICE_WORDS: Record<string, string> = { MOBILE: 'mobile phones', DESKTOP:
 const deviceWords = (d: string) => DEVICE_WORDS[d] ?? d
 
 /** A radius as Google's ProximityInfo JSON: a geo point in micro degrees, or an address Google geocodes. */
-function proximityOf(r: RadiusSpec): { proximity: Record<string, unknown> } | { refusal: string } {
+export function proximityOf(r: RadiusSpec): { proximity: Record<string, unknown> } | { refusal: string } {
   const point = r.latitude !== undefined || r.longitude !== undefined
   if (point === !!r.address) return { refusal: 'A radius takes a point (latitude and longitude) or an address, one of them.' }
   if (point && (r.latitude === undefined || r.longitude === undefined)) return { refusal: 'A radius point needs both latitude and longitude.' }

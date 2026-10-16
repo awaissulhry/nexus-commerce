@@ -14,7 +14,7 @@
  * parent_ad_group_criterion, type), as are ad_group_criterion.negative and cpc_bid_micros. Shopping dimensions per
  * developers.google.com/google-ads/api/docs/shopping-ads/create-listing-groups ("Available dimensions").
  */
-import { centsOfMicros, gaqlId, idOf } from './live.js'
+import { centsOfMicros, gaqlId, idOf, INCLUDE_DRAFTS } from './live.js'
 import type { GoogleAdsTarget } from './types.js'
 import { liveRows } from './write-client.js'
 
@@ -56,7 +56,7 @@ export interface ProductGroupLiveState {
 export const liveShoppingAdGroupQuery = (adGroupId: string): string =>
   'SELECT ad_group.id, ad_group.name, ad_group.status, ad_group.type, campaign.id, campaign.name, campaign.status, ' +
   'campaign.advertising_channel_type, campaign.bidding_strategy_type FROM ad_group ' +
-  `WHERE ad_group.id = ${gaqlId(adGroupId, 'The ad group')} AND ad_group.status != 'REMOVED'`
+  `WHERE ad_group.id = ${gaqlId(adGroupId, 'The ad group')} AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 const CASE = 'ad_group_criterion.listing_group.case_value'
 export const liveAdGroupProductGroupsQuery = (adGroupId: string): string =>
@@ -67,7 +67,7 @@ export const liveAdGroupProductGroupsQuery = (adGroupId: string): string =>
   `${CASE}.product_category.category_id, ${CASE}.product_category.level, ${CASE}.product_channel.channel, ` +
   `${CASE}.product_channel_exclusivity.channel_exclusivity FROM ad_group_criterion ` +
   `WHERE ad_group.id = ${gaqlId(adGroupId, 'The ad group')} AND ad_group_criterion.type = 'LISTING_GROUP' ` +
-  "AND ad_group_criterion.status != 'REMOVED'"
+  `AND ad_group_criterion.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export function shoppingAdGroupOf(row: Json): ShoppingAdGroupLive {
   const g = row.adGroup ?? {}

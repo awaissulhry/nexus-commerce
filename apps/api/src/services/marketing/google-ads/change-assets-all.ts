@@ -601,6 +601,27 @@ function newSpecs(customer: string, currency: string, request: NewAssetsRequest,
   return specs
 }
 
+/**
+ * G13 (2026-10-16): every new asset of a request as Google takes it, its rules checked (all problems at once) — for
+ * build-google-campaigns, which makes them in its new campaigns and ad groups (temporary ids) in its one request. The
+ * same checks as add-google-assets; `images` are the request's images as the tool read them (asset-images.ts), in order.
+ */
+export function newAssetSpecs(
+  customer: string,
+  currency: string,
+  request: NewAssetsRequest,
+  images: NewAssetsLive['images'],
+): { specs: Array<{ fieldType: string; type: string; body: Record<string, unknown>; text: string; uploadOnly: boolean }>; problems: string[]; notes: string[] } {
+  const problems: string[] = []
+  const notes: string[] = []
+  const live: NewAssetsLive = { campaigns: [], adGroups: [], links: [], images, leadFormTerms: null }
+  const specs = newSpecs(customer, currency, request, live, problems, notes).map((s) => ({ fieldType: s.fieldType, type: s.type, body: s.body, text: s.text, uploadOnly: s.uploadOnly }))
+  return { specs, problems, notes }
+}
+
+/** An asset's field type in words ("call asset", "price asset"). */
+export const assetWord = (fieldType: string): string => WORD[fieldType] ?? fieldType.toLowerCase().replace(/_/g, ' ')
+
 // ── newAssetsDraft ───────────────────────────────────────────────────────────────────────────────────────────────
 
 const STATUS_WORD = (s: string | null | undefined) => (s === 'PAUSED' ? 'paused' : 'enabled')

@@ -10,7 +10,7 @@
  * description2, asset.callout_asset.callout_text, asset.structured_snippet_asset.header / values are selectable.
  */
 import { liveRows } from './write-client.js'
-import { gaqlId, liveAssetOf, type LiveAsset } from './live.js'
+import { gaqlId, liveAssetOf, type LiveAsset, INCLUDE_DRAFTS } from './live.js'
 import type { GoogleAdsTarget } from './types.js'
 
 type Json = Record<string, any>
@@ -21,7 +21,7 @@ const str = (value: unknown): string | null => (typeof value === 'string' && val
 export const liveAdGroupPlaceQuery = (campaignId: string, adGroupId: string): string =>
   'SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, ad_group.id, ad_group.name, ' +
   `ad_group.status, ad_group.type FROM ad_group WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} ` +
-  `AND ad_group.id = ${gaqlId(adGroupId, 'The ad group')} AND ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'`
+  `AND ad_group.id = ${gaqlId(adGroupId, 'The ad group')} AND ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export interface LiveAdGroupPlace {
   campaign: { campaignId: string; name: string; status: string | null; type: string | null }

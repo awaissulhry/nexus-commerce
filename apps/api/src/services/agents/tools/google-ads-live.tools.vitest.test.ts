@@ -121,6 +121,19 @@ describe('google-ads-live, new views', () => {
     expect(await tool('google-ads-live').handler({ view: 'exclusions', listId: '49' }, everyone)).toMatchObject({ ok: false, error: expect.stringMatching(/^Exclusion list 49 is not in this account/) })
   })
 
+  it('campaigns (G13): Google\'s drafts and experiment trials are listed, each marked, with a note — never mixed in silently', async () => {
+    h.rows.mockResolvedValue([
+      { campaign: { id: '21', name: 'Shop A', status: 'ENABLED', experimentType: 'BASE' } },
+      { campaign: { id: '31', name: 'Shop A [draft]', status: 'ENABLED', experimentType: 'DRAFT' } },
+      { campaign: { id: '32', name: 'Shop A [trial]', status: 'ENABLED', experimentType: 'EXPERIMENT' } },
+    ])
+    const out = await tool('google-ads-live').handler({ view: 'campaigns' }, everyone)
+    const data = out.data as { items: Array<{ campaignId: string; kind?: string }>; note: string }
+    expect(data.items.map((c) => [c.campaignId, c.kind ?? null])).toEqual([['21', null], ['31', 'draft'], ['32', 'trial']])
+    expect(data.note).toMatch(/1 Google draft .* and 1 experiment trial/)
+    expect(sent()[0]).toMatch(/PARAMETERS include_drafts=true$/)
+  })
+
   it('account: the settings, read live', async () => {
     h.rows.mockResolvedValue([{ customer: { id: '1234567890', autoTaggingEnabled: true, timeZone: 'Europe/Rome', currencyCode: 'EUR' } }])
     const out = await tool('google-ads-live').handler({ view: 'account' }, everyone)

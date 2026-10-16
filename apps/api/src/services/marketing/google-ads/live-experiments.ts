@@ -201,9 +201,12 @@ export async function liveCampaignNames(target: GoogleAdsTarget): Promise<Array<
   return (await liveRows<Json>(target, CAMPAIGN_NAMES_QUERY, 'ads.search.live.campaign-names')).map((r) => ({ campaignId: str(r.campaign?.id) ?? '', name: str(r.campaign?.name) ?? '' }))
 }
 
-/** One campaign's settings (live.ts's settings query), drafts and in-design campaigns included; null when Google has none. */
+/**
+ * One campaign's settings (live.ts's settings query), drafts and in-design campaigns included; null when Google has none.
+ * G13: live.ts's settings query asks for Google's drafts itself (PARAMETERS include_drafts=true), so it is not added twice.
+ */
 export async function liveSettingsWithDrafts(target: GoogleAdsTarget, campaignId: string): Promise<LiveCampaignDetail['campaign'] | null> {
-  const rows = await liveRows<Json>(target, `${liveCampaignSettingsQuery(campaignId)}${WITH_DRAFTS}`, 'ads.search.live.campaign')
+  const rows = await liveRows<Json>(target, liveCampaignSettingsQuery(campaignId), 'ads.search.live.campaign')
   return rows[0] ? liveCampaignSettingsOf(rows[0]) : null
 }
 

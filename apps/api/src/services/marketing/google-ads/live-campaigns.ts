@@ -6,7 +6,7 @@
  * user_interest.{user_interest_id, name, taxonomy_type, launched_to_all} — all selectable and filterable.
  */
 import { liveRows } from './write-client.js'
-import { gaqlId, liveCampaignCriteriaQuery, liveCriterionOf, type LiveCriterion } from './live.js'
+import { gaqlId, liveCampaignCriteriaQuery, liveCriterionOf, type LiveCriterion, INCLUDE_DRAFTS } from './live.js'
 import type { GoogleAdsTarget } from './types.js'
 
 type Json = Record<string, any>
@@ -37,18 +37,18 @@ const inList = (ids: string[], what: string) => ids.map((id) => gaqlId(id, what)
 
 export const liveAdGroupStatusQuery = (adGroupIds: string[]): string =>
   'SELECT ad_group.id, ad_group.name, ad_group.status, campaign.id, campaign.name, campaign.status FROM ad_group ' +
-  `WHERE ad_group.id IN (${inList(adGroupIds, 'The ad group')})`
+  `WHERE ad_group.id IN (${inList(adGroupIds, 'The ad group')})${INCLUDE_DRAFTS}`
 
 export const liveKeywordStatusQuery = (adGroupIds: string[], criterionIds: string[]): string =>
   'SELECT ad_group.id, ad_group.status, ad_group_criterion.criterion_id, ad_group_criterion.status, ' +
   'ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.negative, campaign.id, ' +
   `campaign.name, campaign.status FROM ad_group_criterion WHERE ad_group.id IN (${inList(adGroupIds, 'The ad group')}) ` +
-  `AND ad_group_criterion.criterion_id IN (${inList(criterionIds, 'The keyword')})`
+  `AND ad_group_criterion.criterion_id IN (${inList(criterionIds, 'The keyword')})${INCLUDE_DRAFTS}`
 
 export const liveAdStatusQuery = (adGroupIds: string[], adIds: string[]): string =>
   'SELECT ad_group.id, ad_group.status, ad_group_ad.ad.id, ad_group_ad.status, ad_group_ad.ad.type, campaign.id, ' +
   `campaign.name, campaign.status FROM ad_group_ad WHERE ad_group.id IN (${inList(adGroupIds, 'The ad group')}) ` +
-  `AND ad_group_ad.ad.id IN (${inList(adIds, 'The ad')})`
+  `AND ad_group_ad.ad.id IN (${inList(adIds, 'The ad')})${INCLUDE_DRAFTS}`
 
 /** `adGroupId~childId` → its two parts, or null. */
 export function pairOf(id: string): [string, string] | null {
