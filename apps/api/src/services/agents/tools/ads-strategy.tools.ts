@@ -88,7 +88,8 @@ const adsStrategy: AgentTool = {
     + 'several products in one ad group take the safer number per field and name the product it came from; a category or '
     + 'product row always belongs to one market. It also lists the older settings that still bind (campaign bid limits, '
     + 'bid and harvest policies, the budget plan), the campaigns whose own target ACoS wins over the strategy, and the '
-    + "business's own Claude level per ad tool and the level that applies here (effective: the strategy only narrows it). "
+    + "business's own Claude level per ad tool and the level that applies here (effective: the strategy only narrows it, "
+    + 'never widens it; a change request it narrowed answers with that strategy row, trust.strategy). '
     + 'view rows lists every strategy row of a market; view history the changes. Each field\'s readBy names what acts on it '
     + "(the bid engines steer by its target ACoS after a campaign's own target and keep its lowest and highest bid and "
     + 'largest bid change — engines and rules are held to them, and a request a person approves that goes past the bid band '

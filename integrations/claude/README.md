@@ -249,6 +249,7 @@ A Claude Code marketplace is a `.claude-plugin/marketplace.json` file. The short
 
 - Edit the files under `nexus/` or `nexus-factory/` and raise `version` in that plugin's `.claude-plugin/plugin.json`. Installed copies stay on their version until it changes.
 - A skill may name only tools that exist in Nexus (`apps/api/src/services/agents/tools/`) or in the factory server (`apps/factory/mcp/tools/`), and only tools offered to Claude.
+- Claude clients keep only the first 4,096 characters of a server's instructions; Nexus keeps its hard rules inside them (`apps/api/src/services/mcp/mcp-server.ts`, held by a test), and what one tool does goes in that tool's own description.
 - Check before you commit: `claude plugin validate integrations/claude/nexus`, `claude plugin validate integrations/claude/nexus-factory` and `claude plugin validate integrations/claude`.
 - After the change is on `main`, people update with `/plugin marketplace update nexus-commerce`, then **Update now** on the plugin in `/plugin` (in a terminal: `claude plugin update nexus@nexus-commerce`).
 - Keep this folder free of tokens, secrets, real business or seller ids, and real email addresses: the repository is public.

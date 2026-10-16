@@ -60,7 +60,10 @@ const undoWorseAdChange: AgentTool = {
   title: 'Undo a worse automatic ad change',
   category: 'advertising',
   description:
-    'Put back ONE automatic Amazon ad change that auto-undo (A19) judged clearly worse: an engine\'s, a rule\'s at AUTO, '
+    'Auto-undo (automation A19) judges every automatic Amazon ad change once 3 settled days are in, against comparable '
+    + 'entities, and puts back what made things clearly worse: it is born OBSERVE (it records what it would undo) and a '
+    + 'person turns it up (PROPOSE asks a person, AUTO undoes inside its caps). '
+    + 'Put back ONE automatic Amazon ad change that auto-undo (A19) judged clearly worse: an engine\'s, a rule\'s at AUTO, '
     + 'or a Claude change that ran by rule — never a person\'s own change or one a person approved. Name its judgementId '
     + '(automation-detail A19 lists the judgements, automation-activity A19 counts them). The bid, daily budget or placement '
     + 'goes back to its value before that change, through the Undo\'s own path, sent to Amazon at once when a person approves it. '
