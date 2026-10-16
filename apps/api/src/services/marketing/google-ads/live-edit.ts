@@ -29,7 +29,7 @@
  * segmenting resource's field that was not selected; live.ts liveAssetsQuery).
  */
 import { liveRows } from './write-client.js'
-import { centsOfMicros, gaqlId, type MatchType, INCLUDE_DRAFTS } from './live.js'
+import { centsOfMicros, gaqlId, type MatchType, INCLUDE_DRAFTS, noteCampaignRow } from './live.js'
 import { byGoogleId } from './live-keywords.js'
 import { pairOf } from './live-campaigns.js'
 import type { GoogleAdsTarget } from './types.js'
@@ -103,7 +103,7 @@ export interface LiveEditAd {
 }
 
 const AD_FIELDS = [
-  'campaign.id', 'campaign.name', 'campaign.status', 'campaign.advertising_channel_type', 'ad_group.id', 'ad_group.name',
+  'campaign.id', 'campaign.name', 'campaign.status', 'campaign.advertising_channel_type', 'campaign.experiment_type', 'ad_group.id', 'ad_group.name',
   'ad_group.status', 'ad_group_ad.status', 'ad_group_ad.ad.id', 'ad_group_ad.ad.type', 'ad_group_ad.ad.final_urls',
   'ad_group_ad.ad.final_mobile_urls', 'ad_group_ad.ad.tracking_url_template', 'ad_group_ad.ad.final_url_suffix',
   'ad_group_ad.ad.url_custom_parameters', 'ad_group_ad.ad.responsive_search_ad.headlines',
@@ -161,12 +161,12 @@ export function liveEditAdOf(row: Json): LiveEditAd {
 
 export async function liveEditAds(target: GoogleAdsTarget, ids: string[]): Promise<LiveEditAd[]> {
   const wanted = new Set(ids)
-  return (await liveRows<Json>(target, liveEditAdsQuery(ids), 'ads.search.live.edit-ads')).map(liveEditAdOf)
+  return (await liveRows<Json>(target, liveEditAdsQuery(ids), 'ads.search.live.edit-ads')).map((r) => (noteCampaignRow(r), liveEditAdOf(r)))
     .filter((a) => wanted.has(a.id)).sort((a, b) => byGoogleId(a.id, b.id))
 }
 
 export async function liveAdGroupAds(target: GoogleAdsTarget, adGroupId: string): Promise<LiveEditAd[]> {
-  return (await liveRows<Json>(target, liveAdGroupAdsQuery(adGroupId), 'ads.search.live.edit-ads')).map(liveEditAdOf).sort((a, b) => byGoogleId(a.id, b.id))
+  return (await liveRows<Json>(target, liveAdGroupAdsQuery(adGroupId), 'ads.search.live.edit-ads')).map((r) => (noteCampaignRow(r), liveEditAdOf(r))).sort((a, b) => byGoogleId(a.id, b.id))
 }
 
 // ── campaigns, ad groups, keywords by id: their URL and tracking fields ─────────────────────────────────────────────
@@ -195,17 +195,17 @@ export interface LiveKeywordUrls {
 }
 
 export const liveCampaignUrlsQuery = (campaignIds: string[]): string =>
-  'SELECT campaign.id, campaign.name, campaign.status, campaign.tracking_url_template, campaign.final_url_suffix, ' +
+  'SELECT campaign.id, campaign.name, campaign.status, campaign.experiment_type, campaign.tracking_url_template, campaign.final_url_suffix, ' +
   `campaign.url_custom_parameters FROM campaign WHERE campaign.id IN (${inList(bounded(campaignIds, 'campaigns'), 'The campaign')}) ` +
   `AND campaign.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export const liveAdGroupUrlsQuery = (adGroupIds: string[]): string =>
-  'SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ad_group.status, ad_group.tracking_url_template, ' +
+  'SELECT campaign.id, campaign.name, campaign.experiment_type, ad_group.id, ad_group.name, ad_group.status, ad_group.tracking_url_template, ' +
   `ad_group.final_url_suffix, ad_group.url_custom_parameters FROM ad_group WHERE ad_group.id IN (${inList(bounded(adGroupIds, 'ad groups'), 'The ad group')}) ` +
   `AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 const KEYWORD_FIELDS = [
-  'campaign.id', 'campaign.name', 'campaign.status', 'ad_group.id', 'ad_group.name', 'ad_group.status',
+  'campaign.id', 'campaign.name', 'campaign.status', 'campaign.experiment_type', 'ad_group.id', 'ad_group.name', 'ad_group.status',
   'ad_group_criterion.criterion_id', 'ad_group_criterion.type', 'ad_group_criterion.negative', 'ad_group_criterion.status',
   'ad_group_criterion.keyword.text', 'ad_group_criterion.keyword.match_type', 'ad_group_criterion.cpc_bid_micros',
   'ad_group_criterion.effective_cpc_bid_micros', 'ad_group_criterion.final_urls', 'ad_group_criterion.final_mobile_urls',
@@ -258,6 +258,7 @@ export function liveKeywordUrlsOf(row: Json): LiveKeywordUrls {
 
 export async function liveCampaignUrls(target: GoogleAdsTarget, campaignIds: string[]): Promise<LiveCampaignUrls[]> {
   return (await liveRows<Json>(target, liveCampaignUrlsQuery(campaignIds), 'ads.search.live.urls')).map((r) => ({
+    ...(noteCampaignRow(r), {}),
     campaignId: str(r.campaign?.id) ?? '', name: str(r.campaign?.name) ?? '', status: str(r.campaign?.status), urls: urlFieldsOf(r.campaign),
   })).sort((a, b) => byGoogleId(a.campaignId, b.campaignId))
 }
@@ -265,18 +266,19 @@ export async function liveCampaignUrls(target: GoogleAdsTarget, campaignIds: str
 export async function liveAdGroupUrls(target: GoogleAdsTarget, adGroupIds: string[]): Promise<LiveAdGroupUrls[]> {
   return (await liveRows<Json>(target, liveAdGroupUrlsQuery(adGroupIds), 'ads.search.live.urls')).map((r) => ({
     adGroupId: str(r.adGroup?.id) ?? '', name: str(r.adGroup?.name) ?? '', status: str(r.adGroup?.status),
+    ...(noteCampaignRow(r), {}),
     campaignId: str(r.campaign?.id) ?? '', campaignName: str(r.campaign?.name) ?? '', urls: urlFieldsOf(r.adGroup),
   })).sort((a, b) => byGoogleId(a.adGroupId, b.adGroupId))
 }
 
 export async function liveKeywordUrls(target: GoogleAdsTarget, ids: string[]): Promise<LiveKeywordUrls[]> {
   const wanted = new Set(ids)
-  return (await liveRows<Json>(target, liveKeywordUrlsQuery(ids), 'ads.search.live.urls')).map(liveKeywordUrlsOf)
+  return (await liveRows<Json>(target, liveKeywordUrlsQuery(ids), 'ads.search.live.urls')).map((r) => (noteCampaignRow(r), liveKeywordUrlsOf(r)))
     .filter((k) => wanted.has(k.id)).sort((a, b) => byGoogleId(a.id, b.id))
 }
 
 export async function liveCampaignKeywordUrls(target: GoogleAdsTarget, campaignId: string): Promise<LiveKeywordUrls[]> {
-  return (await liveRows<Json>(target, liveCampaignKeywordUrlsQuery(campaignId), 'ads.search.live.keywords')).map(liveKeywordUrlsOf)
+  return (await liveRows<Json>(target, liveCampaignKeywordUrlsQuery(campaignId), 'ads.search.live.keywords')).map((r) => (noteCampaignRow(r), liveKeywordUrlsOf(r)))
     .sort((a, b) => byGoogleId(a.id, b.id))
 }
 
@@ -375,13 +377,14 @@ export async function liveEditAssets(target: GoogleAdsTarget, assetIds: string[]
 // ── ad rotation of one campaign's ad groups ───────────────────────────────────────────────────────────────────────
 
 export const liveAdGroupRotationsQuery = (campaignId: string): string =>
-  'SELECT campaign.id, ad_group.id, ad_group.status, ad_group.ad_rotation_mode FROM ad_group ' +
+  'SELECT campaign.id, campaign.name, campaign.experiment_type, ad_group.id, ad_group.status, ad_group.ad_rotation_mode FROM ad_group ' +
   `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND ad_group.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 /** Each ad group's ad rotation (OPTIMIZE / ROTATE_FOREVER; null when Google leaves it out). */
 export async function liveAdGroupRotations(target: GoogleAdsTarget, campaignId: string): Promise<Record<string, string | null>> {
   const out: Record<string, string | null> = {}
   for (const r of await liveRows<Json>(target, liveAdGroupRotationsQuery(campaignId), 'ads.search.live.rotation')) {
+    noteCampaignRow(r)
     const id = str(r.adGroup?.id)
     if (id) out[id] = str(r.adGroup?.adRotationMode)
   }

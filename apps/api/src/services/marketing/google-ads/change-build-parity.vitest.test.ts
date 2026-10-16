@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { buildDraft, type BuildSpec } from './change-build.js'
+import { copyBidding } from './build-copy.js'
 import type { LiveBudget, LiveCampaign } from './live.js'
 
 const C = 'customers/1234567890'
@@ -34,7 +35,6 @@ const SPEC: BuildSpec = {
       brandLists: [{ listId: '71', mode: 'exclude' }],
       placementLists: ['72'],
       conversionGoals: [{ category: 'PURCHASE', origin: 'WEBSITE', biddable: true }, { category: 'PAGE_VIEW', origin: 'WEBSITE', biddable: false }],
-      customConversionGoalId: '73',
       assets: { link: [{ assetId: '81', fieldType: 'CALL', status: 'PAUSED' }, { assetId: '82', fieldType: 'PROMOTION' }] },
       adGroups: [{
         name: 'Jackets', defaultBidCents: 30, targetCpaCents: 900, adRotation: 'ROTATE_FOREVER', finalUrlSuffix: 'g=1',
@@ -81,7 +81,9 @@ describe('build parity (G13)', () => {
     }
     const kinds = kindsOf(ops)
     expect(kinds.filter((k, i) => k !== kinds[i - 1])).toEqual([...new Set(kinds)])
-    expect(kinds.slice(-2)).toEqual(['campaignConversionGoalOperation', 'conversionGoalCampaignConfigOperation'])
+    // The new campaign's goals last, as Google's sample sends them; never a custom goal on a temporary id.
+    expect(kinds.slice(-1)).toEqual(['campaignConversionGoalOperation'])
+    expect(kinds).not.toContain('conversionGoalCampaignConfigOperation')
     expect(creates(ops, 'campaignOperation').map((c) => c.status)).toEqual(['PAUSED', 'PAUSED'])
     expect(d.spendsMoney).toEqual([])
 
@@ -116,9 +118,6 @@ describe('build parity (G13)', () => {
       { update: { resourceName: `${C}/campaignConversionGoals/${campaignTemp}~PURCHASE~WEBSITE`, biddable: true }, updateMask: 'biddable' },
       { update: { resourceName: `${C}/campaignConversionGoals/${campaignTemp}~PAGE_VIEW~WEBSITE`, biddable: false }, updateMask: 'biddable' },
     ])
-    expect(ops.find((o) => o.conversionGoalCampaignConfigOperation)!.conversionGoalCampaignConfigOperation).toEqual({
-      update: { resourceName: `${C}/conversionGoalCampaignConfigs/${campaignTemp}`, customConversionGoal: `${C}/customConversionGoals/73` }, updateMask: 'custom_conversion_goal',
-    })
 
     const [jackets, all] = creates(ops, 'adGroupOperation')
     expect(jackets).toMatchObject({ cpcBidMicros: '300000', targetCpaMicros: '9000000', adRotationMode: 'ROTATE_FOREVER', finalUrlSuffix: 'g=1' })
@@ -190,5 +189,69 @@ describe('build parity (G13)', () => {
     expect(why).toMatch(/final URL suffix cannot begin with "\?" or "&"/)
     expect(why).toMatch(/opts out of tablets: Google does not use an ad group's adjustment/)
     expect(why).toMatch(/Google links a lead form at campaign level, not to an ad group/)
+  })
+
+  it('labels go on an ad group\'s audience and demographic criteria and on product group nodes (AdGroupCriterionLabel on their temporary ids)', () => {
+    const d = buildDraft(C, 'EUR', { campaigns: [
+      { type: 'SEARCH', name: 'L1', budget: { dailyBudgetCents: 100 }, bidding: { strategy: 'MANUAL_CPC' },
+        adGroups: [{ name: 'G', audiences: [{ kind: 'USER_LIST', id: '41', labels: ['61'] }], demographics: [{ dimension: 'GENDER', value: 'MALE', exclude: true, labels: ['62'] }] }] },
+      { type: 'SHOPPING', name: 'L2', budget: { dailyBudgetCents: 100 }, bidding: { strategy: 'MANUAL_CPC' }, shopping: { merchantId: '5' },
+        adGroups: [{ name: 'S', productGroups: { nodes: [
+          { parent: null, kind: 'SUBDIVISION', caseValue: null, excluded: false, bidCents: null, rest: false },
+          { parent: 0, kind: 'UNIT', caseValue: { productItemId: {} }, excluded: true, bidCents: null, rest: true },
+          { parent: 0, kind: 'UNIT', caseValue: { productItemId: { value: 'sku-1' } }, excluded: false, bidCents: 20, rest: false, labels: ['63'] },
+        ] } }] },
+    ] }, live)
+    if ('refusal' in d) throw new Error(d.refusal)
+    const ops = d.operations as Op[]
+    const criteria = creates(ops, 'adGroupCriterionOperation')
+    const links = creates(ops, 'adGroupCriterionLabelOperation')
+    const res = (pick: (c: Op) => boolean) => criteria.find(pick)!.resourceName
+    expect(links).toEqual([
+      { adGroupCriterion: res((c) => !!c.userList), label: `${C}/labels/61` },
+      { adGroupCriterion: res((c) => !!c.gender), label: `${C}/labels/62` },
+      { adGroupCriterion: res((c) => c.listingGroup?.caseValue?.productItemId?.value === 'sku-1'), label: `${C}/labels/63` },
+    ])
+    expect(links.every((l) => /adGroupCriteria\/-\d+~-\d+$/.test(l.adGroupCriterion))).toBe(true)
+  })
+
+  it('bidding: Target impression share and enhanced CPC (Standard Shopping only) are made; a link of a field type Nexus does not link is refused', () => {
+    const d = buildDraft(C, 'EUR', { campaigns: [
+      { type: 'SEARCH', name: 'T1', budget: { dailyBudgetCents: 100 }, bidding: { strategy: 'TARGET_IMPRESSION_SHARE', location: 'TOP_OF_PAGE', impressionSharePercent: 65, maxCpcCents: 150 } },
+      { type: 'SHOPPING', name: 'T2', budget: { dailyBudgetCents: 100 }, bidding: { strategy: 'MANUAL_CPC', enhancedCpc: true }, shopping: { merchantId: '5' } },
+    ] }, live)
+    if ('refusal' in d) throw new Error(d.refusal)
+    const [tis, ecpc] = creates(d.operations as Op[], 'campaignOperation')
+    expect(tis.targetImpressionShare).toEqual({ location: 'TOP_OF_PAGE', locationFractionMicros: '650000', cpcBidCeilingMicros: '1500000' })
+    expect(ecpc.manualCpc).toEqual({ enhancedCpcEnabled: true })
+    const search = buildDraft(C, 'EUR', { campaigns: [{ type: 'SEARCH', name: 'T3', budget: { dailyBudgetCents: 100 }, bidding: { strategy: 'MANUAL_CPC', enhancedCpc: true } }] }, live)
+    expect('refusal' in search && search.refusal).toMatch(/Enhanced CPC goes with Manual CPC in a Standard Shopping campaign only/)
+    const noCeiling = buildDraft(C, 'EUR', { campaigns: [{ type: 'SEARCH', name: 'T4', budget: { dailyBudgetCents: 100 }, bidding: { strategy: 'TARGET_IMPRESSION_SHARE', location: 'TOP_OF_PAGE', impressionSharePercent: 65 } }] }, live)
+    expect('refusal' in noCeiling && noCeiling.refusal).toMatch(/needs bidding.maxCpcCents/)
+    const odd = buildDraft(C, 'EUR', { campaigns: [{ type: 'SEARCH', name: 'T5', budget: { dailyBudgetCents: 100 }, bidding: { strategy: 'MANUAL_CPC' }, assets: { link: [{ assetId: '84', fieldType: 'HOTEL_CALLOUT' }] } }] }, live)
+    expect('refusal' in odd && odd.refusal).toMatch(/HOTEL_CALLOUT is not a field type Nexus links/)
+  })
+})
+
+describe('copy bidding (G13 review)', () => {
+  const base = {
+    campaignId: '21', name: 'Shop A', type: 'SEARCH', bidding: 'MANUAL_CPC', biddingStrategyId: null, manualCpcEnhanced: false, maxCpcCeilingCents: null,
+    targetCpaCents: null, targetRoas: null, targetImpressionShare: null, standardTargetCpaCents: null, standardTargetRoas: null,
+  } as unknown as Parameters<typeof copyBidding>[0]
+  const of = (over: Record<string, unknown>) => copyBidding({ ...base, ...over } as Parameters<typeof copyBidding>[0])
+
+  it('Target impression share as it is; standard Target CPA / ROAS as Maximize conversions / value with the target, said; anything else refused', () => {
+    expect(of({ bidding: 'TARGET_IMPRESSION_SHARE', targetImpressionShare: { location: 'ABSOLUTE_TOP_OF_PAGE', fractionMicros: 655_000, ceilingCents: 120 } }))
+      .toEqual({ bidding: { strategy: 'TARGET_IMPRESSION_SHARE', location: 'ABSOLUTE_TOP_OF_PAGE', impressionSharePercent: 65.5, maxCpcCents: 120 } })
+    const cpa = of({ bidding: 'TARGET_CPA', standardTargetCpaCents: 900 })!
+    expect(cpa.bidding).toEqual({ strategy: 'MAXIMIZE_CONVERSIONS', targetCpaCents: 900 })
+    expect(cpa.note).toMatch(/standard Target CPA, which v25 takes as a portfolio strategy only: the copy bids Maximize conversions with the same target CPA/)
+    expect(of({ bidding: 'TARGET_ROAS', standardTargetRoas: 4 })!.bidding).toEqual({ strategy: 'MAXIMIZE_CONVERSION_VALUE', targetRoas: 4 })
+    expect(of({ bidding: 'MANUAL_CPM' })).toBeNull()
+  })
+
+  it('enhanced CPC: kept on Standard Shopping; on Search it is named (Google ignores it there)', () => {
+    expect(of({ type: 'SHOPPING', manualCpcEnhanced: true })).toEqual({ bidding: { strategy: 'MANUAL_CPC', enhancedCpc: true } })
+    expect(of({ manualCpcEnhanced: true })).toEqual({ bidding: { strategy: 'MANUAL_CPC' }, notCopied: expect.stringMatching(/Google deprecated it for Search: enhanced_cpc_enabled has no effect/) })
   })
 })

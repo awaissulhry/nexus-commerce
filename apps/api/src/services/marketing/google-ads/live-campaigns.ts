@@ -6,7 +6,7 @@
  * user_interest.{user_interest_id, name, taxonomy_type, launched_to_all} — all selectable and filterable.
  */
 import { liveRows } from './write-client.js'
-import { gaqlId, liveCampaignCriteriaQuery, liveCriterionOf, type LiveCriterion, INCLUDE_DRAFTS } from './live.js'
+import { gaqlId, liveCampaignCriteriaQuery, liveCriterionOf, type LiveCriterion, INCLUDE_DRAFTS, noteCampaignRow } from './live.js'
 import type { GoogleAdsTarget } from './types.js'
 
 type Json = Record<string, any>
@@ -36,18 +36,18 @@ export interface LiveStatusItem {
 const inList = (ids: string[], what: string) => ids.map((id) => gaqlId(id, what)).join(', ')
 
 export const liveAdGroupStatusQuery = (adGroupIds: string[]): string =>
-  'SELECT ad_group.id, ad_group.name, ad_group.status, campaign.id, campaign.name, campaign.status FROM ad_group ' +
+  'SELECT ad_group.id, ad_group.name, ad_group.status, campaign.id, campaign.name, campaign.status, campaign.experiment_type FROM ad_group ' +
   `WHERE ad_group.id IN (${inList(adGroupIds, 'The ad group')})${INCLUDE_DRAFTS}`
 
 export const liveKeywordStatusQuery = (adGroupIds: string[], criterionIds: string[]): string =>
   'SELECT ad_group.id, ad_group.status, ad_group_criterion.criterion_id, ad_group_criterion.status, ' +
   'ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.negative, campaign.id, ' +
-  `campaign.name, campaign.status FROM ad_group_criterion WHERE ad_group.id IN (${inList(adGroupIds, 'The ad group')}) ` +
+  `campaign.name, campaign.status, campaign.experiment_type FROM ad_group_criterion WHERE ad_group.id IN (${inList(adGroupIds, 'The ad group')}) ` +
   `AND ad_group_criterion.criterion_id IN (${inList(criterionIds, 'The keyword')})${INCLUDE_DRAFTS}`
 
 export const liveAdStatusQuery = (adGroupIds: string[], adIds: string[]): string =>
   'SELECT ad_group.id, ad_group.status, ad_group_ad.ad.id, ad_group_ad.status, ad_group_ad.ad.type, campaign.id, ' +
-  `campaign.name, campaign.status FROM ad_group_ad WHERE ad_group.id IN (${inList(adGroupIds, 'The ad group')}) ` +
+  `campaign.name, campaign.status, campaign.experiment_type FROM ad_group_ad WHERE ad_group.id IN (${inList(adGroupIds, 'The ad group')}) ` +
   `AND ad_group_ad.ad.id IN (${inList(adIds, 'The ad')})${INCLUDE_DRAFTS}`
 
 /** `adGroupId~childId` → its two parts, or null. */
@@ -64,6 +64,7 @@ export async function liveStatuses(target: GoogleAdsTarget, ask: { adGroups: str
   const out: LiveStatusItem[] = []
   if (ask.adGroups.length) {
     for (const r of await liveRows<Json>(target, liveAdGroupStatusQuery(ask.adGroups), 'ads.search.live.status')) {
+      noteCampaignRow(r)
       out.push({
         kind: 'ad-group', id: str(r.adGroup?.id) ?? '', name: str(r.adGroup?.name) ?? '', status: str(r.adGroup?.status),
         campaignId: str(r.campaign?.id) ?? '', campaignName: str(r.campaign?.name) ?? '', campaignStatus: str(r.campaign?.status), adGroupStatus: str(r.adGroup?.status),
@@ -78,6 +79,7 @@ export async function liveStatuses(target: GoogleAdsTarget, ask: { adGroups: str
     for (const r of rows) {
       const id = `${str(r.adGroup?.id)}~${str(r.adGroupCriterion?.criterionId)}`
       if (!wanted.has(id)) continue
+      noteCampaignRow(r)
       const k = r.adGroupCriterion?.keyword ?? {}
       out.push({
         kind: 'keyword', id, name: `${str(k.text) ?? ''} (${str(k.matchType) ?? '?'}${r.adGroupCriterion?.negative ? ', negative' : ''})`, status: str(r.adGroupCriterion?.status), negative: r.adGroupCriterion?.negative === true,
@@ -92,6 +94,7 @@ export async function liveStatuses(target: GoogleAdsTarget, ask: { adGroups: str
     for (const r of rows) {
       const id = `${str(r.adGroup?.id)}~${str(r.adGroupAd?.ad?.id)}`
       if (!wanted.has(id)) continue
+      noteCampaignRow(r)
       out.push({
         kind: 'ad', id, name: `ad ${str(r.adGroupAd?.ad?.id)} (${str(r.adGroupAd?.ad?.type) ?? 'ad'})`, status: str(r.adGroupAd?.status),
         campaignId: str(r.campaign?.id) ?? '', campaignName: str(r.campaign?.name) ?? '', campaignStatus: str(r.campaign?.status), adGroupStatus: str(r.adGroup?.status),

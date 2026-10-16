@@ -34,8 +34,9 @@ describe('live-targeting reads', () => {
   it('every field of another resource in a WHERE is selected too; types listed; ids checked', () => {
     expect(liveTargetingCriteriaQuery('21')).toMatch(/^SELECT campaign\.id, /)
     expect(liveTargetingCriteriaQuery('21')).toContain("campaign_criterion.type IN ('LOCATION', 'PROXIMITY', 'LANGUAGE', 'AD_SCHEDULE', 'DEVICE', 'USER_LIST', 'USER_INTEREST', 'CUSTOM_AUDIENCE', 'COMBINED_AUDIENCE', 'LIFE_EVENT', 'AGE_RANGE', 'GENDER', 'PARENTAL_STATUS', 'INCOME_RANGE')")
-    for (const q of [liveAdGroupTargetingQuery('21'), liveAdGroupDevicesQuery('21')]) expect(q).toMatch(/^SELECT campaign\.id, ad_group\.id, ad_group\.status, /)
-    expect(liveTargetingAdGroupsQuery('21')).toMatch(/^SELECT campaign\.id, ad_group\.id, ad_group\.name, ad_group\.status, ad_group\.targeting_setting\.target_restrictions FROM ad_group/)
+    // G13: the campaign's name and kind too (a draft's or trial's ad group says so in the preview).
+    for (const q of [liveAdGroupTargetingQuery('21'), liveAdGroupDevicesQuery('21')]) expect(q).toMatch(/^SELECT campaign\.id, campaign\.name, campaign\.experiment_type, ad_group\.id, ad_group\.status, /)
+    expect(liveTargetingAdGroupsQuery('21')).toMatch(/^SELECT campaign\.id, campaign\.name, campaign\.experiment_type, ad_group\.id, ad_group\.name, ad_group\.status, ad_group\.targeting_setting\.target_restrictions FROM ad_group/)
     expect(() => liveTargetingCriteriaQuery('21 OR 1=1')).toThrow(/Nothing was sent/)
   })
 

@@ -31,8 +31,9 @@
  *   CampaignConversionGoal / CampaignConversionGoalOperation  update only, resource name
  *                     customers/{c}/campaignConversionGoals/{campaign_id}~{category}~{origin}; Google's own sample
  *                     (google-ads-python examples/shopping_ads/add_performance_max_retail_campaign.py) updates them on the
- *                     campaign's TEMPORARY id in the same request as the campaign. ConversionGoalCampaignConfig
- *                     custom_conversion_goal (update only; customers/{c}/conversionGoalCampaignConfigs/{campaign_id}).
+ *                     campaign's TEMPORARY id in the same request as the campaign. A custom goal
+ *                     (ConversionGoalCampaignConfig, update only) is NOT sent on a temporary id: no Google sample does it,
+ *                     and a refusal would fail the whole build — a copy names it in notCopied instead.
  *   AdGroup           ad_rotation_mode (AdGroupAdRotationMode OPTIMIZE / ROTATE_FOREVER), target_cpa_micros, target_roas,
  *                     tracking_url_template, final_url_suffix, url_custom_parameters, targeting_setting — settable on create.
  *   AdGroupAdLabel    customers/{c}/adGroupAdLabels/{ad_group_id}~{ad_id}~{label_id}; ad_group_ad Immutable.
@@ -66,9 +67,9 @@ import type { GoogleMutateOperation, GoogleMutateResponse } from './write-client
 /** A level's URL and tracking fields (G3's set-google-urls): none given = none. */
 export interface BuildUrlFields { trackingTemplate?: string; finalUrlSuffix?: string; customParameters?: CustomParameterValue[] }
 /** An audience segment of any kind (G2), targeted / observed, or excluded; a bid adjustment only on a positive one. */
-export interface BuildAudience { kind: AudienceKind; id: string; exclude?: boolean; bidModifier?: number }
+export interface BuildAudience { kind: AudienceKind; id: string; exclude?: boolean; bidModifier?: number; labels?: string[] }
 /** One demographic criterion exactly as it is made (G2): excluded, or shown (a shown group narrows its dimension to the shown ones). */
-export interface BuildDemographic { dimension: DemographicDimension; value: string; exclude?: boolean; bidModifier?: number }
+export interface BuildDemographic { dimension: DemographicDimension; value: string; exclude?: boolean; bidModifier?: number; labels?: string[] }
 /** A device's bid adjustment: 0 = never on that device (−100 %), else 0.1–10. */
 export interface BuildDevice { device: Device; bidModifier: number }
 export type BuildLinkStatus = 'ENABLED' | 'PAUSED'
@@ -87,7 +88,11 @@ export interface BuildNegative { text: string; matchType: MatchType }
  * checks it against Google's rules first): its parent by index in the list, its case value as Google takes it, and
  * whether it is the rest of its parent's dimension ("everything else": the dimension with no value).
  */
-export interface BuildProductNode { parent: number | null; kind: 'SUBDIVISION' | 'UNIT'; caseValue: Record<string, unknown> | null; excluded: boolean; bidCents: number | null; rest: boolean }
+export interface BuildProductNode {
+  parent: number | null; kind: 'SUBDIVISION' | 'UNIT'; caseValue: Record<string, unknown> | null; excluded: boolean; bidCents: number | null; rest: boolean
+  /** A copy: the labels on the node (AdGroupCriterionLabel, as on a keyword). */
+  labels?: string[]
+}
 export type BuildProductGroups =
   | { itemIds: string[]; bidCents: number; itemBids?: Array<{ itemId: string; bidCents: number }>; includeEverythingElse?: { bidCents: number } }
   | { nodes: BuildProductNode[] }
@@ -105,7 +110,7 @@ export interface BuildAssets extends Omit<NewAssetsRequest, 'linkTo' | 'enable' 
   sitelinks?: SitelinkRequest[]
   callouts?: string[]
   structuredSnippets?: SnippetRequest[]
-  /** Existing assets of the account linked here (a copy links the same assets, with their link status). */
+  /** Existing assets of the account linked here (a copy links the same assets, with their link status); LINK_FIELD_TYPES only. */
   link?: Array<{ assetId: string; fieldType: string; status?: BuildLinkStatus }>
   /** The images of `images`, as the tool read them (asset-images.ts prepareImage), in order. */
   prepared?: Array<PreparedImage | { problem: string }>
@@ -169,8 +174,6 @@ export interface BuildCampaign extends Omit<CampaignCreateRequest, 'budgetId' | 
   placementLists?: string[]
   /** The campaign's own conversion goals: which category / origin it bids for (it then stops following the account's goals). */
   conversionGoals?: Array<{ category: string; origin: string; biddable: boolean }>
-  /** A copy: the custom conversion goal the campaign optimises for (ConversionGoalCampaignConfig). */
-  customConversionGoalId?: string
 }
 
 export interface BuildSpec {
@@ -203,8 +206,8 @@ const KIND_ORDER = [
   'campaignSharedSetOperation', 'campaignLabelOperation', 'adGroupOperation', 'adGroupBidModifierOperation', 'adGroupLabelOperation',
   'adGroupAdOperation', 'adGroupAdLabelOperation', 'adGroupCriterionOperation', 'adGroupCriterionLabelOperation', 'assetOperation',
   'campaignAssetOperation', 'adGroupAssetOperation',
-  // Last, as Google's own sample sends them: the new campaign's goals (an update on its temporary id), then its goal setting.
-  'campaignConversionGoalOperation', 'conversionGoalCampaignConfigOperation',
+  // Last, as Google's own sample sends them: the new campaign's goals (an update on its temporary id).
+  'campaignConversionGoalOperation',
 ] as const
 
 /** An operation with what the record needs to find it again after the operations are put in order. */
@@ -363,7 +366,7 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
         ...(groupRestrictions.some((t) => t.dimension) ? { targetingSetting: { targetRestrictions: groupRestrictions.filter((t) => t.dimension).map((t) => ({ targetingDimension: t.dimension, bidOnly: t.observationOnly })) } } : {}),
       } } })
       totals.adGroups += 1
-      const groupExtras = adGroupExtras(customer, agRes, g, gWhere, campaignDevice)
+      const groupExtras = adGroupExtras(customer, agRes, g, gWhere, campaignDevice, temp)
       problems.push(...groupExtras.problems)
       groupExtras.ops.forEach((op) => push(op))
       totals.criteria += groupExtras.criteria
@@ -407,7 +410,7 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
       if (g.productGroups) {
         const tree = productGroupOperations(customer, agRes, g.productGroups, temp)
         if ('refusal' in tree) problems.push(`${gWhere}: ${tree.refusal}`)
-        else { tree.operations.forEach((op) => push(op)); totals.productGroups += tree.operations.length; open += tree.openRest }
+        else { tree.operations.forEach((op) => push(op)); totals.productGroups += tree.operations.length; open += tree.openRest; for (const l of tree.labels ?? []) { push(l); totals.labels += 1 } }
       }
       ;(g.ads ?? []).forEach((ad, ai) => {
         const adProblems = rsaProblems(ad, ai + 1).map((p) => `${gWhere}, ${p}`)
@@ -508,7 +511,7 @@ function productGroupOperations(
   adGroupRes: string,
   pg: BuildProductGroups,
   temp: () => number,
-): { operations: GoogleMutateOperation[]; openRest: number } | { refusal: string } {
+): { operations: GoogleMutateOperation[]; openRest: number; labels?: GoogleMutateOperation[] } | { refusal: string } {
   const adGroupId = adGroupRes.slice(adGroupRes.lastIndexOf('/') + 1)
   const res = () => `${customer}/adGroupCriteria/${adGroupId}~${temp()}`
   const ops: GoogleMutateOperation[] = []
@@ -516,6 +519,8 @@ function productGroupOperations(
     // A copy: every node again, parent first. Open = an advertised unit that is the rest of its dimension, or "All
     // products" itself as one advertised unit.
     const made: string[] = []
+    const labels: GoogleMutateOperation[] = []
+    const labelProblems: string[] = []
     let open = 0
     for (const [i, n] of pg.nodes.entries()) {
       if (n.parent !== null && (n.parent >= i || !made[n.parent])) return { refusal: 'the product group tree to copy lists a child before its parent.' }
@@ -528,8 +533,11 @@ function productGroupOperations(
         ...(n.kind === 'UNIT' && !n.excluded && n.bidCents ? { cpcBidMicros: microsOfCents(n.bidCents) } : {}),
         listingGroup: { type: n.kind, ...(n.parent !== null ? { parentAdGroupCriterion: made[n.parent] } : {}), ...(n.caseValue ? { caseValue: n.caseValue } : {}) },
       } } })
+      // A copied node's labels (AdGroupCriterionLabel on its temporary id, as on a keyword).
+      if (n.labels?.length) labels.push(...labelLinks(customer, 'keyword', name.slice(name.lastIndexOf('/') + 1), n.labels, 'a product group', labelProblems))
     }
-    return { operations: ops, openRest: open }
+    if (labelProblems.length) return { refusal: labelProblems.join(' · ') }
+    return { operations: ops, openRest: open, labels }
   }
   // Item ids once, compared without case (Merchant Center may read ids differing only by case as one); the first spelling.
   const byKey = new Map<string, string>()
@@ -607,8 +615,8 @@ function deviceProblems(devices: BuildDevice[], where: string): string[] {
 }
 
 /** An audience segment's criterion body (live-targeting.ts audienceCriterion) with Google's rules checked (change-audiences.ts). */
-function audienceBodies(customer: string, list: BuildAudience[], where: string, problems: string[]): Array<Record<string, unknown>> {
-  const out: Array<Record<string, unknown>> = []
+function audienceBodies(customer: string, list: BuildAudience[], where: string, problems: string[]): Array<{ body: Record<string, unknown>; labels: string[] }> {
+  const out: Array<{ body: Record<string, unknown>; labels: string[] }> = []
   const seen = new Set<string>()
   for (const a of list) {
     const w = `${where}: audience ${a.kind} ${a.id}`
@@ -619,14 +627,14 @@ function audienceBodies(customer: string, list: BuildAudience[], where: string, 
     if (a.exclude && POSITIVE_ONLY_AUDIENCES.has(a.kind)) { problems.push(`${w}: Google cannot exclude a custom or combined segment`); continue }
     if (a.exclude && a.bidModifier !== undefined) { problems.push(`${w}: an excluded audience has no bid adjustment`); continue }
     if (a.bidModifier !== undefined && !(a.bidModifier >= 0.1 && a.bidModifier <= 10)) { problems.push(`${w}: a bid adjustment is between 0.1 and 10`); continue }
-    out.push({ ...(a.exclude ? { negative: true } : {}), ...(a.bidModifier !== undefined && a.bidModifier !== 1 ? { bidModifier: a.bidModifier } : {}), ...audienceCriterion(customer, a.kind, a.id) })
+    out.push({ body: { ...(a.exclude ? { negative: true } : {}), ...(a.bidModifier !== undefined && a.bidModifier !== 1 ? { bidModifier: a.bidModifier } : {}), ...audienceCriterion(customer, a.kind, a.id) }, labels: a.labels ?? [] })
   }
   return out
 }
 
 /** Demographic criteria exactly as given (change-demographics.ts: AgeRangeInfo / GenderInfo / ParentalStatusInfo / IncomeRangeInfo `type`). */
-function demographicBodies(list: BuildDemographic[], where: string, problems: string[]): Array<Record<string, unknown>> {
-  const out: Array<Record<string, unknown>> = []
+function demographicBodies(list: BuildDemographic[], where: string, problems: string[]): Array<{ body: Record<string, unknown>; labels: string[] }> {
+  const out: Array<{ body: Record<string, unknown>; labels: string[] }> = []
   const seen = new Set<string>()
   for (const d of list) {
     const w = `${where}: ${d.dimension} ${d.value}`
@@ -637,7 +645,7 @@ function demographicBodies(list: BuildDemographic[], where: string, problems: st
     seen.add(`${d.dimension}|${d.value}`)
     if (d.exclude && d.bidModifier !== undefined) { problems.push(`${w}: an excluded group has no bid adjustment`); continue }
     if (d.bidModifier !== undefined && !(d.bidModifier >= 0.1 && d.bidModifier <= 10)) { problems.push(`${w}: a bid adjustment is between 0.1 and 10`); continue }
-    out.push({ ...(d.exclude ? { negative: true } : {}), ...(d.bidModifier !== undefined && d.bidModifier !== 1 ? { bidModifier: d.bidModifier } : {}), [DEMOGRAPHIC_FIELD[d.dimension]]: { type: d.value } })
+    out.push({ body: { ...(d.exclude ? { negative: true } : {}), ...(d.bidModifier !== undefined && d.bidModifier !== 1 ? { bidModifier: d.bidModifier } : {}), [DEMOGRAPHIC_FIELD[d.dimension]]: { type: d.value } }, labels: d.labels ?? [] })
   }
   // CriterionError.CANNOT_EXCLUDE_ALL_TARGETS (change-demographics.ts): every group of a dimension excluded.
   for (const [dimension, values] of Object.entries(DEMOGRAPHIC_VALUES)) {
@@ -675,15 +683,16 @@ function campaignExtras(customer: string, campaignRes: string, c: BuildCampaign,
     criteria += 1
   }
   if (c.radius?.length) lines.push(['radius targets', '(none)', plural(c.radius.length, 'radius', 'radii')])
+  // A campaign criterion takes no label (Google has no campaign criterion label).
   const audiences = audienceBodies(customer, c.audienceSegments ?? [], where, problems)
-  for (const body of audiences) criterion(body)
+  for (const a of audiences) criterion(a.body)
   criteria += audiences.length
   if (c.audienceSegments?.length) {
     const excluded = c.audienceSegments.filter((a) => a.exclude).length
     lines.push(['audience segments', '(none)', `${c.audienceSegments.length - excluded} on, ${excluded} excluded`])
   }
   const demographics = demographicBodies(c.demographics ?? [], where, problems)
-  for (const body of demographics) criterion(body)
+  for (const d of demographics) criterion(d.body)
   criteria += demographics.length
   if (c.demographics?.length) lines.push(['demographics', '(none)', `${c.demographics.filter((d) => d.exclude).length} excluded, ${c.demographics.filter((d) => !d.exclude).length} shown`])
 
@@ -743,23 +752,23 @@ function campaignExtras(customer: string, campaignRes: string, c: BuildCampaign,
     lines.push(['conversion goals', 'the account\'s', (c.conversionGoals ?? []).map((g) => `${g.category}/${g.origin} ${g.biddable ? 'biddable' : 'not biddable'}`).join(', ')])
     warnings.push(`${where}: it gets conversion goals of its own — changes to the account's goals do not reach it (set-google-conversion-goals useAccountGoals puts it back).`)
   }
-  if (c.customConversionGoalId) {
-    if (!/^\d{1,20}$/.test(c.customConversionGoalId)) problems.push(`${where}: custom conversion goal "${c.customConversionGoalId}" is not an id`)
-    else {
-      ops.push({ conversionGoalCampaignConfigOperation: { update: { resourceName: `${customer}/conversionGoalCampaignConfigs/${campaignId}`, customConversionGoal: `${customer}/customConversionGoals/${c.customConversionGoalId}` }, updateMask: 'custom_conversion_goal' } })
-      lines.push(['custom conversion goal', '(none)', c.customConversionGoalId])
-    }
-  }
   return { ops, problems, lines, warnings, criteria, labels: labels.length }
 }
 
 /** An ad group's parts beyond its own fields: device adjustments, audiences, demographics, brand lists, labels. */
-function adGroupExtras(customer: string, agRes: string, g: BuildAdGroup, where: string, campaignDevice: Map<string, number>): {
+function adGroupExtras(customer: string, agRes: string, g: BuildAdGroup, where: string, campaignDevice: Map<string, number>, temp: () => number): {
   ops: GoogleMutateOperation[]; problems: string[]; criteria: number; labels: number
 } {
   const ops: GoogleMutateOperation[] = []
   const problems: string[] = []
-  const criterion = (body: Record<string, unknown>) => ops.push({ adGroupCriterionOperation: { create: { adGroup: agRes, ...body } } })
+  const agId = agRes.slice(agRes.lastIndexOf('/') + 1)
+  let labelCount = 0
+  // A criterion gets a temporary id only when a label is put on it (AdGroupCriterionLabel, as on a keyword).
+  const criterion = (body: Record<string, unknown>, labels: string[] = []) => {
+    const res = labels.length ? `${customer}/adGroupCriteria/${agId}~${temp()}` : null
+    ops.push({ adGroupCriterionOperation: { create: { ...(res ? { resourceName: res } : {}), adGroup: agRes, ...body } } })
+    if (res) { const links = labelLinks(customer, 'keyword', res.slice(res.lastIndexOf('/') + 1), labels, where, problems); ops.push(...links); labelCount += links.length }
+  }
   let criteria = 0
   if (g.devices?.length) {
     problems.push(...deviceProblems(g.devices, where))
@@ -771,18 +780,18 @@ function adGroupExtras(customer: string, agRes: string, g: BuildAdGroup, where: 
     criteria += g.devices.length
   }
   const audiences = audienceBodies(customer, g.audiences ?? [], where, problems)
-  for (const body of audiences) criterion(body)
+  for (const a of audiences) criterion(a.body, a.labels)
   const demographics = demographicBodies(g.demographics ?? [], where, problems)
-  for (const body of demographics) criterion(body)
+  for (const d of demographics) criterion(d.body, d.labels)
   criteria += audiences.length + demographics.length
   for (const id of [...new Set(g.brandLists ?? [])]) {
     if (!/^\d{1,20}$/.test(id)) { problems.push(`${where}: brand list "${id}" is not a list id`); continue }
     criterion({ brandList: { sharedSet: `${customer}/sharedSets/${id}` } })
     criteria += 1
   }
-  const labels = labelLinks(customer, 'ad-group', agRes.slice(agRes.lastIndexOf('/') + 1), g.labels ?? [], where, problems)
+  const labels = labelLinks(customer, 'ad-group', agId, g.labels ?? [], where, problems)
   ops.push(...labels)
-  return { ops, problems, criteria, labels: labels.length }
+  return { ops, problems, criteria, labels: labels.length + labelCount }
 }
 
 // ── assets of a campaign or an ad group ─────────────────────────────────────────────────────────────────────────
@@ -790,8 +799,8 @@ function adGroupExtras(customer: string, agRes: string, g: BuildAdGroup, where: 
 /**
  * New assets (each linked where it is made) and the account's own assets linked again, at a new campaign or ad group.
  * Sitelinks, callouts and snippets as PR 6 checks them; every other type through G6's newAssetSpecs (the same checks as
- * add-google-assets); where each field type may be linked is G6's FIELD_LEVELS (docs/assets/overview). A link of a
- * field type Nexus does not make (a copy) is linked as it is: Google's check judges it.
+ * add-google-assets); where each field type may be linked is G6's FIELD_LEVELS (docs/assets/overview). Only the
+ * field types Nexus links (LINK_FIELD_TYPES): a copy names any other in notCopied and never sends it.
  */
 function assetOperations(
   customer: string,
@@ -858,7 +867,9 @@ function assetOperations(
     if (!/^\d{1,20}$/.test(l.assetId)) { problems.push(`asset "${l.assetId}" is not an asset id`); continue }
     if (linked.has(`${l.assetId}~${l.fieldType}`)) continue
     linked.add(`${l.assetId}~${l.fieldType}`)
-    const p = (LINK_FIELD_TYPES as readonly string[]).includes(l.fieldType) ? levelProblem(l.fieldType, `asset ${l.assetId}`) : null
+    // Only field types Nexus links (a copy names any other in notCopied and does not send it).
+    if (!(LINK_FIELD_TYPES as readonly string[]).includes(l.fieldType)) { problems.push(`asset ${l.assetId}: ${l.fieldType} is not a field type Nexus links (${LINK_FIELD_TYPES.join(', ')})`); continue }
+    const p = levelProblem(l.fieldType, `asset ${l.assetId}`)
     if (p) { problems.push(p); continue }
     links.push(linkOp(`${customer}/assets/${l.assetId}`, l.fieldType, l.status))
   }

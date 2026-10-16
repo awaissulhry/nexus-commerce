@@ -136,8 +136,11 @@ const campaignArg = z.object({
   name: textArg(255, 'the new campaign\'s name (unique in the account)'),
   budget: budgetChoice.optional(),
   bidding: z.object({
-    strategy: z.enum(['MANUAL_CPC', 'MAXIMIZE_CLICKS', 'MAXIMIZE_CONVERSIONS', 'MAXIMIZE_CONVERSION_VALUE', 'PORTFOLIO']).describe('the bid strategy'),
-    maxCpcCents: googleCentsArg('MAXIMIZE_CLICKS: the max CPC ceiling').optional(),
+    strategy: z.enum(['MANUAL_CPC', 'MAXIMIZE_CLICKS', 'MAXIMIZE_CONVERSIONS', 'MAXIMIZE_CONVERSION_VALUE', 'PORTFOLIO', 'TARGET_IMPRESSION_SHARE']).describe('the bid strategy'),
+    maxCpcCents: googleCentsArg('MAXIMIZE_CLICKS or TARGET_IMPRESSION_SHARE (required there): the max CPC ceiling').optional(),
+    location: z.enum(['ANYWHERE_ON_PAGE', 'TOP_OF_PAGE', 'ABSOLUTE_TOP_OF_PAGE']).optional().describe('TARGET_IMPRESSION_SHARE: where on the page'),
+    impressionSharePercent: z.coerce.number().min(0.01).max(100).optional().describe('TARGET_IMPRESSION_SHARE: how often, in % of the searches (e.g. 65)'),
+    enhancedCpc: z.boolean().optional().describe('MANUAL_CPC in a SHOPPING campaign: enhanced CPC (Google ignores it on Search: deprecated)'),
     targetCpaCents: googleCentsArg('MAXIMIZE_CONVERSIONS: target CPA').optional(),
     targetRoas: z.coerce.number().min(0.01).max(1000).optional().describe('MAXIMIZE_CONVERSION_VALUE: target ROAS ratio'),
     portfolioId: googleIdArg('PORTFOLIO: the portfolio strategy').optional(),
@@ -312,9 +315,19 @@ function buildLibraryRefusal(args: Record<string, unknown>, ctx: ToolContext): T
   return libraryRefusal({ images }, ctx)
 }
 
+/**
+ * A campaign's own conversion goals decide what Smart Bidding bids for: set-google-conversion-goals needs the bids
+ * permission, and so does a build that says them (a copy carries the source's goals as they are).
+ */
+function goalsRefusal(args: Record<string, unknown>, ctx: ToolContext): ToolResult | null {
+  const asked = ((args.campaigns as Array<{ conversionGoals?: unknown[] }> | undefined) ?? []).some((c) => !!c.conversionGoals?.length)
+  return asked && !ctx.can(F.adsBidsEdit) ? { ok: false, error: `A campaign's own conversion goals (conversionGoals) need the ${F.adsBidsEdit} permission, as set-google-conversion-goals does. Leave them out (the campaign follows the account's goals), or ask a person who has it.` } : null
+}
+
 /** The build as asked, with every copyOf read live and expanded. */
-async function specOf(account: Parameters<GoogleDraftBuilder>[0], args: Record<string, unknown>): Promise<{ spec: BuildSpec; notCopied: string[] } | { refusal: string }> {
+async function specOf(account: Parameters<GoogleDraftBuilder>[0], args: Record<string, unknown>): Promise<{ spec: BuildSpec; notCopied: string[]; notes: string[] } | { refusal: string }> {
   const notCopied: string[] = []
+  const notes: string[] = []
   const lists: BuildSpec['negativeLists'] = []
   for (const l of (args.negativeLists as Array<{ ref: string; name: string; keywords?: BuildSpec['campaigns'][number]['negatives']; copyOf?: string }>) ?? []) {
     const keywords = l.copyOf ? await listAsBuild(account.target, l.copyOf) : l.keywords ?? []
@@ -333,6 +346,7 @@ async function specOf(account: Parameters<GoogleDraftBuilder>[0], args: Record<s
       })
       if ('refusal' in copied) return copied
       notCopied.push(...copied.notCopied.map((n) => `"${raw.name}": ${n}`))
+      notes.push(...copied.notes.map((n) => `Copy "${raw.name}": ${n}`))
       const { copyOf: _c, name: _n, budget: _b, startDate: _s, endDate: _e, negativeLists: _l, type: _t, ...rest } = raw
       const { adGroups: given, ...others } = rest
       const adGroups = given ? adGroupsOf(raw.name, given) : copied.campaign.adGroups ?? []
@@ -358,6 +372,7 @@ async function specOf(account: Parameters<GoogleDraftBuilder>[0], args: Record<s
   return {
     spec: { sharedBudgets: (args.sharedBudgets as BuildSpec['sharedBudgets']) ?? [], negativeLists: lists, campaigns: await withImages(campaigns), allowBroad: args.allowBroad === true },
     notCopied,
+    notes,
   }
 }
 
@@ -369,6 +384,8 @@ const buildBuilder = (args: Record<string, unknown>): GoogleDraftBuilder => asyn
   const lists = await liveNegativeLists(account.target)
   const draft = buildDraft(customerResource(account.target), account.currency, expanded.spec, { campaigns, budgets, lists })
   if ('refusal' in draft) return draft
+  // How a copy carries a part differently (a standard Target CPA as Maximize conversions with a target CPA, …).
+  draft.warnings.push(...expanded.notes)
   // What a copy does not carry: a warning, and every item with its reason in skipped (none hidden).
   if (expanded.notCopied.length) {
     draft.warnings.push(`Not copied (${expanded.notCopied.length}, each with its reason in skipped): ${expanded.notCopied.slice(0, 10).join('; ')}${expanded.notCopied.length > 10 ? ' …' : ''}.`)
@@ -427,8 +444,8 @@ const buildGoogleCampaigns: AgentTool = {
     + 'change plan, when new parts point at new parts. At most 900 operations (its check and its run fit the daily '
     + 'allowance). Undo removes what it made (Google keeps new assets, linked nowhere).' + GOOGLE_CHANGE_RULES,
   undo: buildUndo,
-  handler: async (args, ctx) => buildLibraryRefusal(args, ctx) ?? googleChangePreview(args, ctx, buildBuilder(args)),
-  execute: async (args, ctx) => buildLibraryRefusal(args, ctx) ?? runGoogleChange(args, ctx, buildBuilder(args), (draft, responses) => {
+  handler: async (args, ctx) => buildLibraryRefusal(args, ctx) ?? goalsRefusal(args, ctx) ?? googleChangePreview(args, ctx, buildBuilder(args)),
+  execute: async (args, ctx) => buildLibraryRefusal(args, ctx) ?? goalsRefusal(args, ctx) ?? runGoogleChange(args, ctx, buildBuilder(args), (draft, responses) => {
     const after = buildRecordAfterRun(draft.after as BuildRecord, responses)
     return { data: { made: after }, before: { campaigns: [] }, after }
   }),
@@ -463,17 +480,20 @@ const copyGoogleCampaign: AgentTool = {
   description:
     'Copy a live Google Ads campaign (Search or Standard Shopping) of the business\'s chosen account into a NEW campaign, '
     + 'made PAUSED, in one request, with everything Nexus can set: settings, budget (the same shared one, or its own of '
-    + 'the same amount), bidding, networks, Google\'s automation switches as they are, locations and their bid '
+    + 'the same amount), bidding (also Target impression share, and enhanced CPC on Standard Shopping; a standard Target '
+    + 'CPA / ROAS becomes Maximize conversions / conversion value with the same target, as Google now takes them — the '
+    + 'preview says so), networks, Google\'s automation switches as they are, locations and their bid '
     + 'adjustments, radius targets, location options, languages, schedule, device bid adjustments, audiences of every kind '
     + 'and the audience setting, demographics, campaign negatives and lists, exclusions, brand and placement lists, the '
     + 'campaign\'s conversion goals, the inventory filter and Shopping settings, ad groups with bids, statuses, target CPA '
     + '/ ROAS, ad rotation and their own targeting, keywords with bids and URLs, ad-group negatives, the product group '
     + 'tree, responsive search ads, labels on everything, tracking and custom parameters at every level, and every asset '
     + 'linked to the campaign and its ad groups (the same assets linked again). The preview names what it does not copy, '
-    + 'each with the reason (what Google\'s API cannot set, links Google made itself, kinds of criteria and ads no Nexus '
-    + 'tool sets). A Performance Max campaign is copied with copy-google-pmax; Demand Gen, Display and App campaigns are '
-    + 'refused (make them with their create tools); a Google draft is refused (copy its base campaign). It reads the '
-    + 'campaign in about 20 queries of the account\'s allowance (a Shopping campaign: two more per ad group). Undo removes the copy.' + GOOGLE_CHANGE_RULES,
+    + 'each with the reason (what Google\'s API cannot set, links Google made itself, a custom conversion goal — set it '
+    + 'in Google Ads after the copy —, kinds of criteria, ads and asset field types no Nexus tool sets). A Performance Max '
+    + 'campaign is copied with copy-google-pmax; Demand Gen, Display and App campaigns are refused (make them with their '
+    + 'create tools); a Google draft is refused (copy its base campaign). It reads the campaign in about 15 queries of '
+    + 'the account\'s allowance (four more when the account has labels). Undo removes the copy.' + GOOGLE_CHANGE_RULES,
   undo: buildUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildBuilder(copyArgs(args))),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildBuilder(copyArgs(args)), (draft, responses) => {
@@ -506,8 +526,8 @@ const checkGoogleAdsBuild: AgentTool = {
     + 'Google\'s check from the account\'s daily allowance; the same plan checked again within 30 minutes costs nothing, and '
     + 'the build asked for right after reuses the check.',
   async handler(args, ctx) {
-    const library = buildLibraryRefusal(args, ctx)
-    if (library) return library
+    const refused = buildLibraryRefusal(args, ctx) ?? goalsRefusal(args, ctx)
+    if (refused) return refused
     // Always Google's check (never a re-check); its acceptance of the same plan is remembered for 30 minutes, so the
     // build asked for right after it is not checked (and paid) a second time.
     const out = await googleCheck(args, buildBuilder(args))

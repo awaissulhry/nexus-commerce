@@ -8,10 +8,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
   mutate: vi.fn(), detail: null as unknown, tree: [] as unknown[],
-  // G13: the parts a copy reads beyond the campaign detail.
-  targeting: [] as unknown[], groupCriteria: [] as unknown[], groupDevices: [] as unknown[], exclusions: { items: [], brandLists: [], targeted: 0 } as unknown,
-  brandLists: [] as unknown[], others: [] as unknown[], groupLinks: [] as unknown[], labels: [] as unknown[], labelLinks: [] as unknown[],
-  goals: { level: 'CUSTOMER', customGoalId: null, goals: [] } as unknown, filters: [] as unknown[],
+  // G13: the parts a copy reads beyond the campaign detail (whose criteria rows hold devices, radius, audiences,
+  // demographics, exclusions, brand lists and the inventory filter).
+  groupCriteria: [] as unknown[], groupDevices: [] as unknown[], others: [] as unknown[], groupLinks: [] as unknown[], labels: [] as unknown[],
+  labelLinks: [] as unknown[], goals: { level: 'CUSTOMER', customGoalId: null, goals: [] } as unknown,
 }))
 vi.mock('../../marketing/google-ads/change-account.js', () => ({
   googleChangeAccount: vi.fn(async () => ({
@@ -25,19 +25,10 @@ vi.mock('../../marketing/google-ads/live.js', async (importActual) => ({
   liveNegativeLists: vi.fn(async () => [{ listId: '31', name: 'List A', keywordCount: 1, campaigns: [] }]),
   liveCampaignDetail: vi.fn(async () => structuredClone(h.detail)),
 }))
-vi.mock('../../marketing/google-ads/live-product-groups.js', async (importActual) => ({
-  ...(await importActual<typeof import('../../marketing/google-ads/live-product-groups.js')>()),
-  liveProductGroupTree: vi.fn(async () => ({ adGroup: null, nodes: structuredClone(h.tree) })),
-}))
 vi.mock('../../marketing/google-ads/live-targeting.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/live-targeting.js')>()),
-  liveTargetingCriteria: vi.fn(async () => structuredClone(h.targeting)),
   liveAdGroupTargeting: vi.fn(async () => structuredClone(h.groupCriteria)),
   liveAdGroupDevices: vi.fn(async () => structuredClone(h.groupDevices)),
-}))
-vi.mock('../../marketing/google-ads/live-exclusions.js', async (importActual) => ({
-  ...(await importActual<typeof import('../../marketing/google-ads/live-exclusions.js')>()),
-  liveCampaignExclusions: vi.fn(async () => structuredClone(h.exclusions)),
 }))
 vi.mock('../../marketing/google-ads/live-labels.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/live-labels.js')>()),
@@ -45,12 +36,12 @@ vi.mock('../../marketing/google-ads/live-labels.js', async (importActual) => ({
 }))
 vi.mock('../../marketing/google-ads/live-copy.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/live-copy.js')>()),
-  liveAdGroupBrandLists: vi.fn(async () => structuredClone(h.brandLists)),
   liveAdGroupOtherCriteria: vi.fn(async () => structuredClone(h.others)),
   liveCampaignAdGroupLinks: vi.fn(async () => structuredClone(h.groupLinks)),
   liveCampaignLabels: vi.fn(async () => structuredClone(h.labelLinks)),
   liveCampaignGoals: vi.fn(async () => structuredClone(h.goals)),
-  liveInventoryFilters: vi.fn(async () => structuredClone(h.filters)),
+  // Every tree of the campaign in one read (ad group 51's).
+  liveCampaignProductGroupNodes: vi.fn(async () => new Map([['51', structuredClone(h.tree)]])),
 }))
 vi.mock('../../marketing/google-ads/write-client.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/write-client.js')>()),
@@ -71,10 +62,7 @@ const approved = (preview: unknown): ToolContext => ({ can: () => true, via: 'cl
 
 beforeEach(() => {
   h.mutate.mockReset()
-  Object.assign(h, {
-    targeting: [], groupCriteria: [], groupDevices: [], exclusions: { items: [], brandLists: [], targeted: 0 }, brandLists: [], others: [], groupLinks: [],
-    labels: [], labelLinks: [], goals: { level: 'CUSTOMER', customGoalId: null, goals: [] }, filters: [],
-  })
+  Object.assign(h, { groupCriteria: [], groupDevices: [], others: [], groupLinks: [], labels: [], labelLinks: [], goals: { level: 'CUSTOMER', customGoalId: null, goals: [] } })
   h.detail = {
     campaign: {
       campaignId: '21', name: 'Shop A', status: 'ENABLED', type: 'SHOPPING', bidding: 'MANUAL_CPC', biddingStrategyId: null,
@@ -89,7 +77,7 @@ beforeEach(() => {
     otherSharedSets: [],
     adGroups: [{ adGroupId: '51', name: 'Group A', status: 'ENABLED', type: 'SHOPPING_PRODUCT_ADS', cpcBidCents: 25, targetCpaCents: null, targetRoas: null, rotation: null, urls: { trackingTemplate: null, finalUrlSuffix: null, customParameters: [] }, audienceMode: [] }],
     keywords: [{ adGroupId: '51', criterionId: '9', text: 'kids', matchType: 'PHRASE', negative: true, status: 'ENABLED', cpcBidCents: null, effectiveCpcBidCents: null, approval: null, finalUrls: [], finalMobileUrls: [], urls: { trackingTemplate: null, finalUrlSuffix: null, customParameters: [] } }],
-    productGroups: [], ads: [], assets: [], notRead: [],
+    productGroups: [], ads: [], assets: [], notRead: [], criteriaRows: [],
   }
   h.tree = [
     { criterionId: '601', parentId: null, kind: 'SUBDIVISION', caseValue: null, dimension: null, value: null, excluded: false, bidCents: null },
@@ -204,25 +192,33 @@ describe('PR 6 tools', () => {
     d.assets = [
       { campaignId: '21', assetId: '81', fieldType: 'CALL', status: 'PAUSED', source: 'ADVERTISER' },
       { campaignId: '21', assetId: '82', fieldType: 'SITELINK', status: 'ENABLED', source: 'AUTOMATICALLY_CREATED' },
+      // A field type Nexus does not link: named, never sent (one odd link must not block the whole copy).
+      { campaignId: '21', assetId: '84', fieldType: 'HOTEL_CALLOUT', status: 'ENABLED', source: 'ADVERTISER' },
     ]
-    h.targeting = [
-      { criterionId: '4', type: 'DEVICE', negative: false, bidModifier: 1.3, device: 'MOBILE' },
-      { criterionId: '5', type: 'PROXIMITY', negative: false, bidModifier: null, proximity: { latitudeMicro: 45_500_000, longitudeMicro: 9_200_000, radius: 20, units: 'KILOMETERS', address: null } },
-      { criterionId: '6', type: 'AGE_RANGE', negative: true, bidModifier: null, demographic: { dimension: 'AGE_RANGE', value: 'AGE_RANGE_18_24' } },
-      { criterionId: '11', type: 'USER_LIST', negative: false, bidModifier: 1.5, segment: { kind: 'USER_LIST', id: '41' } },
+    // The detail's ONE criteria read, as Google sends the rows.
+    d.criteriaRows = [
+      { campaignCriterion: { criterionId: '4', type: 'DEVICE', bidModifier: 1.3, device: { type: 'MOBILE' } } },
+      { campaignCriterion: { criterionId: '5', type: 'PROXIMITY', proximity: { geoPoint: { latitudeInMicroDegrees: 45_500_000, longitudeInMicroDegrees: 9_200_000 }, radius: 20, radiusUnits: 'KILOMETERS' } } },
+      { campaignCriterion: { criterionId: '6', type: 'AGE_RANGE', negative: true, ageRange: { type: 'AGE_RANGE_18_24' } } },
+      { campaignCriterion: { criterionId: '11', type: 'USER_LIST', bidModifier: 1.5, userList: { userList: 'customers/1234567890/userLists/41' } } },
+      { campaignCriterion: { criterionId: '7', type: 'PLACEMENT', negative: true, placement: { url: 'example.com' } } },
+      { campaignCriterion: { criterionId: '8', type: 'BRAND_LIST', negative: true, brandList: { sharedSet: 'customers/1234567890/sharedSets/71' } } },
     ]
     h.groupCriteria = [{ adGroupId: '51', criterionId: '12', type: 'GENDER', negative: true, bidModifier: null, demographic: { dimension: 'GENDER', value: 'FEMALE' } }]
     h.groupDevices = [{ adGroupId: '51', criterionId: '13', device: 'DESKTOP', bidModifier: 1.2 }]
-    h.exclusions = { items: [{ kind: 'placement', value: 'example.com', criterionId: '7', name: null }], brandLists: [{ criterionId: '8', listId: '71', mode: 'exclude' }], targeted: 0 }
-    h.brandLists = [{ adGroupId: '51', criterionId: '14', type: 'BRAND_LIST', negative: false, name: null, listId: '74' }]
-    h.others = [{ adGroupId: '51', criterionId: '15', type: 'WEBPAGE', negative: false, name: 'all pages', listId: null }]
+    h.others = [
+      { adGroupId: '51', criterionId: '14', type: 'BRAND_LIST', negative: false, name: null, listId: '74' },
+      { adGroupId: '51', criterionId: '15', type: 'WEBPAGE', negative: false, name: 'all pages', listId: null },
+    ]
     h.groupLinks = [{ level: 'ad-group', adGroupId: '51', assetId: '83', fieldType: 'PRICE', status: 'ENABLED', source: 'ADVERTISER' }]
     h.labels = [{ labelId: '61', name: 'L', color: null, description: null }]
     h.labelLinks = [
       { kind: 'campaign', id: '21', labelId: '61' }, { kind: 'ad-group', id: '51', labelId: '61' },
-      { kind: 'keyword', id: '51~9', labelId: '61' }, { kind: 'ad', id: '51~91', labelId: '61' },
+      { kind: 'keyword', id: '51~9', labelId: '61', criterionType: 'KEYWORD' }, { kind: 'ad', id: '51~91', labelId: '61' },
+      // A label on an audience criterion goes with it; one on a brand list (not labelled by the copy) is named.
+      { kind: 'keyword', id: '51~12', labelId: '61', criterionType: 'GENDER' }, { kind: 'keyword', id: '51~14', labelId: '61', criterionType: 'BRAND_LIST' },
     ]
-    h.goals = { level: 'CAMPAIGN', customGoalId: null, goals: [{ category: 'PURCHASE', origin: 'WEBSITE', biddable: true }] }
+    h.goals = { level: 'CAMPAIGN', customGoalId: '73', goals: [{ category: 'PURCHASE', origin: 'WEBSITE', biddable: true }] }
     h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
     const out = await tool('copy-google-campaign').handler({ campaignId: '21', name: 'Search A copy' }, asker)
     expect(out.ok, String(out.error)).toBe(true)
@@ -243,12 +239,17 @@ describe('PR 6 tools', () => {
     expect(made('campaignSharedSetOperation')).toContainEqual({ campaign: campaign.resourceName, sharedSet: 'customers/1234567890/sharedSets/72' })
     expect(made('campaignLabelOperation')).toHaveLength(1)
     expect(made('adGroupLabelOperation')).toHaveLength(1)
-    expect(made('adGroupCriterionLabelOperation')).toHaveLength(1)
+    expect(made('adGroupCriterionLabelOperation')).toHaveLength(2)
+    const gender = made('adGroupCriterionOperation').find((c) => c.gender)
+    expect(gender).toMatchObject({ resourceName: expect.stringMatching(/adGroupCriteria\/-\d+~-\d+$/), negative: true })
+    expect(made('adGroupCriterionLabelOperation').map((l) => l.adGroupCriterion)).toContain(gender.resourceName)
+    // The custom goal is never sent on the new campaign's temporary id.
+    expect(ops.some((o) => o.conversionGoalCampaignConfigOperation)).toBe(false)
     expect(made('adGroupAdLabelOperation')).toHaveLength(1)
     const group = made('adGroupOperation')[0]
     expect(group).toMatchObject({ targetCpaMicros: '9000000', adRotationMode: 'ROTATE_FOREVER', trackingUrlTemplate: '{lpurl}?g=1' })
     expect(made('adGroupBidModifierOperation')).toEqual([{ adGroup: group.resourceName, device: { type: 'DESKTOP' }, bidModifier: 1.2 }])
-    expect(made('adGroupCriterionOperation')).toContainEqual({ adGroup: group.resourceName, negative: true, gender: { type: 'FEMALE' } })
+    expect(made('adGroupCriterionOperation')).toContainEqual(expect.objectContaining({ adGroup: group.resourceName, negative: true, gender: { type: 'FEMALE' } }))
     expect(made('adGroupCriterionOperation')).toContainEqual({ adGroup: group.resourceName, brandList: { sharedSet: 'customers/1234567890/sharedSets/74' } })
     expect(made('adGroupCriterionOperation').find((c) => c.keyword)).toMatchObject({ finalUrls: ['https://shop.example/rain'], cpcBidMicros: '400000' })
     expect(made('adGroupAdOperation')).toEqual([expect.objectContaining({ status: 'PAUSED', ad: expect.objectContaining({ finalMobileUrls: ['https://m.shop.example/p'], trackingUrlTemplate: '{lpurl}?a=1' }) })])
@@ -260,11 +261,14 @@ describe('PR 6 tools', () => {
     const preview = out.preview as { skipped: string[]; spendsMoney: boolean }
     expect(preview.spendsMoney).toBe(false)
     expect(preview.skipped).toEqual([
+      'Not copied — "Search A copy": the custom conversion goal 73 (no Nexus tool sets a custom goal, and Google shows no way to set one on a campaign made in the same request: set it in Google Ads after the copy).',
       'Not copied — "Search A copy": campaign-level broad match (Google Ads API v25 no longer lets it be set: CANNOT_SET_CAMPAIGN_KEYWORD_MATCH_TYPE).',
       'Not copied — "Search A copy": campaign criterion a page (WEBPAGE: no Nexus tool sets this kind).',
       'Not copied — "Search A copy": criterion all pages (WEBPAGE) of "Group A" (no Nexus tool sets this kind).',
       'Not copied — "Search A copy": ad 92 (EXPANDED_TEXT_AD) in "Group A" (Google no longer lets an expanded text ad be made).',
       'Not copied — "Search A copy": asset 82 (SITELINK) (Google linked it itself; it makes its own for the copy).',
+      'Not copied — "Search A copy": asset 84 (HOTEL_CALLOUT) (no Nexus tool links this field type).',
+      'Not copied — "Search A copy": label 61 on criterion 51~14 (BRAND_LIST) (it is on a part the copy does not carry).',
     ])
   })
 
@@ -272,7 +276,11 @@ describe('PR 6 tools', () => {
     const d = h.detail as Record<string, any>
     d.campaign.ignoreBrandExclusions = true
     d.ads = [{ adGroupId: '51', adId: '95', status: 'PAUSED', type: 'SHOPPING_PRODUCT_AD', finalUrls: [], finalMobileUrls: [], urls: { trackingTemplate: null, finalUrlSuffix: null, customParameters: [] }, headlines: [], descriptions: [], path1: null, path2: null }]
-    h.filters = [{ criterionId: '20', conditions: [{ dimension: 'CUSTOM_LABEL_0', raw: 'productCustomAttribute:INDEX0', value: 'top' }] }]
+    d.criteriaRows = [{ campaignCriterion: { criterionId: '20', type: 'LISTING_SCOPE', listingScope: { dimensions: [{ productCustomAttribute: { index: 'INDEX0', value: 'top' } }] } } }]
+    d.criteria.other = [{ criterionId: '20', type: 'LISTING_SCOPE', negative: false }]
+    // A label on a product group node goes with the node.
+    h.labels = [{ labelId: '62', name: 'L', color: null, description: null }]
+    h.labelLinks = [{ kind: 'keyword', id: '51~603', labelId: '62', criterionType: 'LISTING_GROUP' }]
     h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
     const out = await tool('copy-google-campaign').handler({ campaignId: '21', name: 'Shop A copy' }, asker)
     expect(out.ok, String(out.error)).toBe(true)
@@ -281,6 +289,8 @@ describe('PR 6 tools', () => {
     expect(campaign.shoppingSetting).toMatchObject({ ignoreBrandExclusionInShoppingAds: true })
     expect(ops.map((o) => o.campaignCriterionOperation?.create).filter((c) => c?.listingScope)).toEqual([{ campaign: campaign.resourceName, listingScope: { dimensions: [{ productCustomAttribute: { index: 'INDEX0', value: 'top' } }] } }])
     expect(ops.find((o) => o.adGroupAdOperation)!.adGroupAdOperation.create).toMatchObject({ status: 'PAUSED', ad: { shoppingProductAd: {} } })
+    const sku = ops.map((o) => o.adGroupCriterionOperation?.create).find((c) => c?.listingGroup?.caseValue?.productItemId?.value === 'sku-1')
+    expect(ops.filter((o) => o.adGroupCriterionLabelOperation).map((o) => o.adGroupCriterionLabelOperation.create)).toEqual([{ adGroupCriterion: sku.resourceName, label: 'customers/1234567890/labels/62' }])
     expect((out.preview as { skipped?: string[] }).skipped ?? []).toEqual([])
   })
 
@@ -324,5 +334,28 @@ describe('PR 6 tools', () => {
     expect(refused.ok).toBe(false)
     expect(refused.error).toMatch(/image library/)
     expect(h.mutate).not.toHaveBeenCalled()
+  })
+
+  it('copy (G13 review): a standard Target CPA campaign is copied as Maximize conversions with the target, and the preview says so', async () => {
+    const d = h.detail as Record<string, any>
+    Object.assign(d.campaign, { type: 'SEARCH', shopping: null, bidding: 'TARGET_CPA', standardTargetCpaCents: 900 })
+    d.adGroups = []
+    d.keywords = []
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const out = await tool('copy-google-campaign').handler({ campaignId: '21', name: 'Search A copy' }, asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    const campaign = (h.mutate.mock.calls[0][1] as Array<Record<string, any>>).find((o) => o.campaignOperation)!.campaignOperation.create
+    expect(campaign.maximizeConversions).toEqual({ targetCpaMicros: '9000000' })
+    expect((out.preview as { warnings: string[] }).warnings).toContain('Copy "Search A copy": "Shop A" bids with standard Target CPA, which v25 takes as a portfolio strategy only: the copy bids Maximize conversions with the same target CPA, Google\'s standard form of it.')
+  })
+
+  it('build (G13 review): a campaign\'s own conversion goals need the bids permission, as set-google-conversion-goals does', async () => {
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const ask = { campaigns: [{ type: 'SEARCH', name: 'Search G', budget: { dailyBudgetCents: 500 }, conversionGoals: [{ category: 'PURCHASE', origin: 'WEBSITE', biddable: true }] }] }
+    const refused = await tool('build-google-campaigns').handler(ask, { ...asker, can: (p: string) => p !== 'ads.bids.edit' && !p.includes('bids') })
+    expect(refused.ok).toBe(false)
+    expect(refused.error).toMatch(/conversionGoals\) need the .* permission/)
+    expect(h.mutate).not.toHaveBeenCalled()
+    expect((await tool('build-google-campaigns').handler(ask, asker)).ok).toBe(true)
   })
 })

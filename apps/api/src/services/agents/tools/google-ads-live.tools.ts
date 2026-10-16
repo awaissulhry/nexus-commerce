@@ -120,7 +120,9 @@ async function liveView(args: Record<string, unknown>, ctx: ToolContext): Promis
         const detail = await liveCampaignDetail(account.target, campaignId!)
         if (!detail) return { ok: false, error: `Campaign ${campaignId} is not in this account (or it is removed).` }
         const kind = campaignKind(detail.campaign.experimentType)
-        return { ok: true, data: { ...base, ...detail, ...(kind ? { kind, note: campaignKindWords(detail.campaign) } : {}) } }
+        // The raw criteria rows are for a copy; the view shows them mapped (criteria).
+        const { criteriaRows: _rows, ...shown } = detail
+        return { ok: true, data: { ...base, ...shown, ...(kind ? { kind, note: campaignKindWords(detail.campaign) } : {}) } }
       }
       case 'budgets': {
         const items = await liveBudgets(account.target)

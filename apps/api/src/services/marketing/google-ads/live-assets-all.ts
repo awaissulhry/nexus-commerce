@@ -31,7 +31,7 @@
  * campaign_asset query, ad_group.status in an ad_group_asset query) must also be in the SELECT — every such field is.
  */
 import { liveRows } from './write-client.js'
-import { centsOfMicros, gaqlId, idOf, INCLUDE_DRAFTS } from './live.js'
+import { centsOfMicros, gaqlId, idOf, INCLUDE_DRAFTS, noteCampaignRow } from './live.js'
 import { byGoogleId } from './live-keywords.js'
 import type { GoogleAdsTarget } from './types.js'
 
@@ -277,12 +277,12 @@ export interface LiveAdGroupRef {
 }
 
 export const liveAdGroupsByIdQuery = (adGroupIds: string[]): string =>
-  'SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, ad_group.id, ad_group.name, ad_group.status ' +
+  'SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.experiment_type, ad_group.id, ad_group.name, ad_group.status ' +
   `FROM ad_group WHERE ad_group.id IN (${inList(adGroupIds, 'The ad group')}) AND ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED'${INCLUDE_DRAFTS}`
 
 export async function liveAdGroupsById(target: GoogleAdsTarget, adGroupIds: string[]): Promise<LiveAdGroupRef[]> {
   if (!adGroupIds.length) return []
-  return (await liveRows<Json>(target, liveAdGroupsByIdQuery(adGroupIds), 'ads.search.live.ad-groups')).map((r) => ({
+  return (await liveRows<Json>(target, liveAdGroupsByIdQuery(adGroupIds), 'ads.search.live.ad-groups')).map((r) => (noteCampaignRow(r), {
     adGroupId: str(r.adGroup?.id) ?? '', name: str(r.adGroup?.name) ?? '', status: str(r.adGroup?.status),
     campaignId: str(r.campaign?.id) ?? '', campaignName: str(r.campaign?.name) ?? '', campaignStatus: str(r.campaign?.status),
     campaignType: str(r.campaign?.advertisingChannelType),

@@ -89,14 +89,23 @@ describe('G13: Google\'s drafts and experiment trials', () => {
     expect(campaignKindWords({ name: 'Draft A', experimentType: 'DRAFT' })).toMatch(/^"Draft A" is a Google draft/)
   })
 
-  it('the preview\'s note: a campaign read on its own, or a listed one the operations name', () => {
+  it('the preview\'s note: only a draft or trial whose campaign, ad group or ad the operations name (never one a change only read)', () => {
     const seen = {
-      one: new Map([['31', { name: 'Draft A', experimentType: 'DRAFT' }]]),
-      listed: new Map([['32', { name: 'Trial B', experimentType: 'EXPERIMENT' }], ['33', { name: 'Trial C', experimentType: 'EXPERIMENT' }]]),
+      campaigns: new Map([['31', { name: 'Draft A', experimentType: 'DRAFT' }], ['32', { name: 'Trial B', experimentType: 'EXPERIMENT' }], ['33', { name: 'Trial C', experimentType: 'EXPERIMENT' }], ['34', { name: 'Trial D', experimentType: 'EXPERIMENT' }]]),
+      adGroups: new Map([['51', '32']]),
+      ads: new Map([['71', '34']]),
     }
-    const notes = campaignKindNotes(seen, [{ campaignCriterionOperation: { create: { campaign: 'customers/1/campaigns/32' } } }, { campaignCriterionOperation: { remove: 'customers/1/campaignCriteria/330~5' } }])
-    expect(notes).toHaveLength(2)
+    const notes = campaignKindNotes(seen, [
+      { campaignOperation: { update: { resourceName: 'customers/1/campaigns/31', name: 'x' } } },
+      { adGroupCriterionOperation: { create: { adGroup: 'customers/1/adGroups/51' } } },
+      { adOperation: { update: { resourceName: 'customers/1/ads/71' } } },
+      // 330 is not 33, and 510 is not 51: ids are matched whole.
+      { campaignCriterionOperation: { remove: 'customers/1/campaignCriteria/330~5' } },
+    ])
+    expect(notes).toHaveLength(3)
     expect(notes[0]).toMatch(/"Draft A" is a Google draft/)
     expect(notes[1]).toMatch(/"Trial B" is the trial campaign of a running experiment/)
+    expect(notes[2]).toMatch(/"Trial D" is the trial campaign/)
+    expect(campaignKindNotes(seen, [{ campaignOperation: { create: { resourceName: 'customers/1/campaigns/-1' } } }])).toEqual([])
   })
 })

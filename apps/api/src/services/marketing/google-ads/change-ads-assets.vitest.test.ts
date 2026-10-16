@@ -346,7 +346,7 @@ describe('assetsChangeDraft', () => {
 describe('live reads of PR 5', () => {
   it('queries: ids are digits or nothing is sent; one ad group with its campaign; assets by id', () => {
     expect(liveAdGroupPlaceQuery('21', '51')).toBe(
-      'SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, ad_group.id, ad_group.name, ad_group.status, ' +
+      'SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign.experiment_type, ad_group.id, ad_group.name, ad_group.status, ' +
       // G13: Google's drafts too (an experiment's in-design campaign is changed like any campaign).
       "ad_group.type FROM ad_group WHERE campaign.id = 21 AND ad_group.id = 51 AND ad_group.status != 'REMOVED' AND campaign.status != 'REMOVED' PARAMETERS include_drafts=true",
     )
