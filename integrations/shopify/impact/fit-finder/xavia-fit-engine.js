@@ -4,6 +4,12 @@
 // tools.openlab.psu.edu/publicData). Each measure in cm = c0 + c1·height cm + c2·weight kg + c3·age + c4·BMI.
 // sd is the residual standard deviation: how far a real person usually is from the guess.
 // The charts are BODY measurements (the Xavia charts say "misure corpo"), so the body is compared to them directly.
+// A product may also carry its GARMENT measurements (the finished jacket, per size). They are never shown; they only
+// check the room between the garment and the body (see ROOM).
+// ANSUR columns: chest/waist/buttock circumference (chest, waist, hips), hand circumference and length, crotch height
+// (inseam), sleeve outseam (sleeve: shoulder point to wrist), neck circumference at the base (neck), thigh and calf
+// circumference. Head circumference and foot length are left out on purpose: height and weight explain too little of
+// them (R² 0.17–0.55), so a guess would often miss a helmet or boot size. The shopper measures those.
 
 export const BODY_MODEL = {
   male: {
@@ -13,6 +19,10 @@ export const BODY_MODEL = {
     hand: { c: [4.132, 0.0794, -0.0102, 0.0093, 0.1352], sd: 0.79 },
     handLength: { c: [1.6433, 0.0953, 0.0026, 0.0089, 0.0168], sd: 0.72 },
     inseam: { c: [-17.2862, 0.5997, -0.0181, -0.0064, -0.0613], sd: 2.34 },
+    sleeve: { c: [-0.4841, 0.3414, 0.0205, 0.0008, -0.0695], sd: 1.84 },
+    neck: { c: [17.3458, 0.0749, 0.0296, 0.0192, 0.3556], sd: 1.62 },
+    thigh: { c: [17.9354, 0.0588, 0.1608, -0.0901, 0.8384], sd: 2.11 },
+    calf: { c: [11.9528, 0.065, 0.0506, -0.0296, 0.4487], sd: 1.58 },
   },
   female: {
     chest: { c: [8.6628, 0.2139, 0.076, 0.1236, 1.6657], sd: 4.11 },
@@ -21,6 +31,10 @@ export const BODY_MODEL = {
     hand: { c: [8.4575, 0.0485, 0.0164, 0.0015, 0.045], sd: 0.71 },
     handLength: { c: [8.416, 0.0517, 0.0576, 0.0043, -0.1084], sd: 0.75 },
     inseam: { c: [-9.8357, 0.5563, 0.0439, -0.0226, -0.1902], sd: 2.33 },
+    sleeve: { c: [-4.2942, 0.3526, 0.012, -0.0079, 0.0251], sd: 1.78 },
+    neck: { c: [11.6904, 0.102, 0.0164, 0.0067, 0.2944], sd: 1.34 },
+    thigh: { c: [3.5146, 0.1437, 0.1091, -0.0229, 1.0971], sd: 2.25 },
+    calf: { c: [9.8245, 0.0791, 0.0665, -0.0414, 0.4435], sd: 1.66 },
   },
 };
 
@@ -92,11 +106,48 @@ export function combineBody(estimate, measured) {
   return { mode: 'mixed', values: { ...estimate.values, ...measured.values }, sd: { ...estimate.sd, ...measured.sd }, warnings: estimate.warnings };
 }
 
-const MEASURES = ['chest', 'waist', 'hips', 'inseam', 'hand', 'handLength', 'height'];
+/**
+ * Every measure a chart may list, with the values a person can have (cm), for checking what the shopper types.
+ * A measure with a BODY_MODEL entry can be guessed from height and weight; the others must be measured.
+ */
+export const MEASURES = {
+  chest: [60, 170], waist: [45, 170], hips: [60, 180], sleeve: [40, 80], neck: [28, 56], inseam: [55, 100],
+  thigh: [35, 95], calf: [25, 60], head: [48, 66], foot: [20, 33], hand: [14, 30], handLength: [14, 24], height: [120, 230],
+};
+/** True when the body model can guess this measure from height and weight. */
+export const canEstimate = (sex, measure) => measure === 'height' || Boolean(BODY_MODEL[sex === 'female' ? 'female' : 'male'][measure]);
+/** A typed measure is believable. */
+export const validMeasure = (measure, cm) => Number.isFinite(cm) && cm >= MEASURES[measure][0] && cm <= MEASURES[measure][1];
 const isRange = r => Array.isArray(r) && r.length === 2 && r.every(Number.isFinite) && r[0] < r[1];
+
+/** Measures that are lengths: over the range means the garment is too short, not too tight. */
+export const LENGTHS = ['sleeve', 'inseam'];
+/**
+ * Room for a good fit, in cm: garment measure minus body measure (plus layers), [least, most]. Less than "least" is
+ * too tight (too short for a length); more than "most" is too loose (too long). Starting values for motorcycle
+ * clothing with armour; a product's garment measurements may set their own (garment.room).
+ * Circumferences are the full way round (a measure taken flat counts twice); sleeve = shoulder seam to cuff,
+ * compared with the arm from the shoulder point to the wrist; inseam = crotch seam to hem.
+ */
+export const ROOM = {
+  chest: [4, 20], waist: [2, 24], hips: [2, 24], neck: [0, 10], thigh: [2, 16], calf: [1, 14], sleeve: [1, 9], inseam: [-4, 6],
+};
+/**
+ * The product's garment measurements (the xavia.fit_garment metafield), checked: { measures, sizes: [{ name, chest… }],
+ * room? }. Measures without a ROOM entry and broken values are dropped; null when nothing usable is left.
+ */
+export function validGarment(garment) {
+  if (!garment || !Array.isArray(garment.measures) || !Array.isArray(garment.sizes)) return null;
+  const own = garment.room ?? {};
+  const roomOf = m => (Array.isArray(own[m]) && own[m].length === 2 && own[m].every(Number.isFinite) && own[m][0] < own[m][1] ? own[m] : ROOM[m]);
+  const measures = garment.measures.filter(m => m in ROOM && garment.sizes.some(s => Number.isFinite(s?.[m]) && s[m] > 0));
+  const sizes = garment.sizes.filter(s => s?.name).map(s => ({ name: s.name, ...Object.fromEntries(measures.filter(m => Number.isFinite(s[m]) && s[m] > 0).map(m => [m, s[m]])) }));
+  if (!measures.length || !sizes.length) return null;
+  return { measures, sizes, room: Object.fromEntries(measures.map(m => [m, roomOf(m)])) };
+}
 /** A chart is usable only when every size has a [from, to] range for every measure it lists. */
 export function validChart(chart) {
-  return Boolean(chart && Array.isArray(chart.measures) && chart.measures.length && chart.measures.every(m => MEASURES.includes(m)) &&
+  return Boolean(chart && Array.isArray(chart.measures) && chart.measures.length && chart.measures.every(m => m in MEASURES) &&
     Array.isArray(chart.sizes) && chart.sizes.length && chart.sizes.every(s => s?.name && chart.measures.every(m => isRange(s[m]))));
 }
 
@@ -125,9 +176,9 @@ export function pickChart(charts, sex) {
   return own ?? charts.unisex ?? charts.men ?? charts.women ?? null;
 }
 
-const effective = (chart, body, layers) => {
+const effective = (measures, body, layers) => {
   const extra = LAYERS[layers] ?? {};
-  return Object.fromEntries(chart.measures.map(m => [m, body[m] == null ? null : body[m] + (extra[m] ?? 0)]));
+  return Object.fromEntries(measures.map(m => [m, body[m] == null ? null : body[m] + (extra[m] ?? 0)]));
 };
 
 /** How one measure sits in one size: tooTight, snug, right, loose or tooLoose, plus cm over or under the range. */
@@ -139,6 +190,23 @@ export function regionFit([lo, hi], value) {
   if (value >= lo - TOO_LOOSE_CM) return { fit: 'loose', cm: round1(Math.max(0, lo - value)) };
   return { fit: 'tooLoose', cm: round1(lo - value) };
 }
+
+/** How the room in the garment feels, in the same words: room = garment − body, room band = [least, most]. */
+export function roomFit([least, most], room) {
+  const quarter = (most - least) / 4;
+  if (room < least) return { fit: 'tooTight' };
+  if (room < least + quarter) return { fit: 'snug' };
+  if (room <= most - quarter) return { fit: 'right' };
+  if (room <= most) return { fit: 'loose' };
+  return { fit: 'tooLoose' };
+}
+const garmentSize = (garment, name) => garment?.sizes.find(s => normalizeSize(s.name) === normalizeSize(name)) ?? null;
+// Less room than the least is "too tight" (or "too short"), as wrong as a body 3 cm over a size's top on the chart.
+const TIGHT_COST = 8;
+// More room than the most, on a garment-only measure (a sleeve the body chart does not list), costs a little.
+const GARMENT_WEIGHT = 0.3;
+// cm outside the room band that cost as much as half a size step on the chart.
+const ROOM_STEP = 3;
 
 // Too tight anywhere is wrong (it cannot close, armour presses). Too loose is wrong only on the main measure
 // (chest for a jacket): armour that moves. A roomy waist is fine; jackets have waist adjusters.
@@ -154,9 +222,18 @@ const weightsFor = chart => {
 // Lower is better. Inside the range: distance from the wished position. Outside: a steep extra cost,
 // steeper when too tight (armour that cannot close) than when too loose (armour that moves).
 // Room on a secondary measure (a jacket's waist) costs only a little: it has adjusters.
-function sizeCost(chart, size, eff, target) {
+function sizeCost(chart, size, eff, target, garment) {
   const weights = weightsFor(chart), primary = primaryOf(chart);
   let cost = 0, used = 0;
+  // The garment: a chart measure costs only when the garment leaves less than the least room (the product runs
+  // small); a garment-only measure costs outside its room band. Inside the band the garment costs nothing.
+  const gsize = garmentSize(garment, size.name);
+  for (const m of garment?.measures ?? []) {
+    if (eff[m] == null || gsize?.[m] == null) continue;
+    const [least, most] = garment.room[m], room = gsize[m] - eff[m];
+    if (room < least) cost += TIGHT_COST + 4 * ((least - room) / ROOM_STEP) ** 2;
+    else if (room > most && !chart.measures.includes(m)) cost += GARMENT_WEIGHT * ((room - most) / ROOM_STEP) ** 2;
+  }
   for (const m of chart.measures) {
     if (eff[m] == null || !size[m]) continue;
     const [lo, hi] = size[m], half = Math.max(0.5, (hi - lo) / 2), t = (eff[m] - (lo + hi) / 2) / half;
@@ -169,9 +246,9 @@ function sizeCost(chart, size, eff, target) {
   return used ? cost / used : Infinity;
 }
 
-const bestIndex = (chart, eff, target) => {
+const bestIndex = (chart, eff, target, garment) => {
   let best = -1, low = Infinity;
-  chart.sizes.forEach((size, i) => { const c = sizeCost(chart, size, eff, target); if (c < low) { low = c; best = i; } });
+  chart.sizes.forEach((size, i) => { const c = sizeCost(chart, size, eff, target, garment); if (c < low) { low = c; best = i; } });
   return best;
 };
 
@@ -186,17 +263,28 @@ const seedOf = values => Object.entries(values).sort().reduce((h, [k, v]) => Mat
 /**
  * Ranks every size of the chart for this body.
  * options.fit: snug | regular | relaxed; options.layers: none | hoodie | protector;
- * options.material: leather | textile | …; options.available: { [size]: boolean } (missing = unknown).
- * Returns null when the body lacks a measure the chart needs.
+ * options.material: leather | textile | …; options.available: { [size]: boolean } (missing = unknown);
+ * options.garment: the product's garment measurements, checked by validGarment (optional).
+ * Returns { missing } when the body lacks a measure the chart needs. A garment measure the body lacks is skipped.
+ * A region from the garment has garment: true and no cm and range, so the garment numbers never reach the screen.
  */
 export function recommend(chart, body, options = {}) {
   const missing = chart.measures.filter(m => body.values[m] == null);
   if (missing.length) return { missing };
   const target = clamp((FIT_TARGET[options.fit] ?? 0) + (MATERIAL_TARGET[options.material] ?? 0), [-0.6, 0.6]);
-  const eff = effective(chart, body.values, options.layers);
-  const best = bestIndex(chart, eff, target);
+  const garment = options.garment ?? null;
+  const extra = (garment?.measures ?? []).filter(m => !chart.measures.includes(m) && body.values[m] != null);
+  const measures = [...chart.measures, ...extra];
+  const eff = effective(measures, body.values, options.layers);
+  const best = bestIndex(chart, eff, target, garment);
   const sizes = chart.sizes.map((size, i) => {
-    const regions = chart.measures.map(m => ({ measure: m, value: round1(eff[m]), range: size[m], ...regionFit(size[m], eff[m]) }));
+    const gsize = garmentSize(garment, size.name);
+    const room = m => (gsize?.[m] == null ? null : gsize[m] - eff[m]);
+    const regions = chart.measures.map(m => {
+      const region = { measure: m, value: round1(eff[m]), range: size[m], ...regionFit(size[m], eff[m]) };
+      // The body chart says how it fits; the garment can only add "too tight" when it leaves too little room.
+      return garment?.room[m] && room(m) != null && room(m) < garment.room[m][0] ? { ...region, fit: 'tooTight', cm: null, garment: true } : region;
+    }).concat(extra.filter(m => room(m) != null).map(m => ({ measure: m, value: round1(eff[m]), range: null, cm: null, garment: true, ...roomFit(garment.room[m], room(m)) })));
     const fits = !regions.some(r => wrong(chart, r));
     const available = options.available?.[normalizeSize(size.name)];
     return { name: size.name, index: i, regions, verdict: i === best ? 'best' : fits ? 'fits' : 'no', available: available ?? null };
@@ -206,8 +294,8 @@ export function recommend(chart, body, options = {}) {
   const next = rng(seedOf({ ...body.values, t: target * 100 }));
   const wins = new Array(chart.sizes.length).fill(0);
   for (let n = 0; n < 400; n++) {
-    const drawn = Object.fromEntries(chart.measures.map(m => [m, eff[m] + gaussian(next) * (body.sd[m] ?? TAPE_SD)]));
-    wins[bestIndex(chart, drawn, target)]++;
+    const drawn = Object.fromEntries(measures.map(m => [m, eff[m] + gaussian(next) * (body.sd[m] ?? TAPE_SD)]));
+    wins[bestIndex(chart, drawn, target, garment)]++;
   }
   const runnerUp = wins.map((w, i) => [w, i]).filter(([, i]) => i !== best).sort((a, b) => b[0] - a[0])[0];
   const bestSize = sizes[best];
