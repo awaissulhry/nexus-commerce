@@ -868,6 +868,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'copy-google-pmax': ['basis', 'plan', 'reach'],
   'set-google-pmax': ['basis', 'plan', 'reach'],
   'set-google-customer-acquisition': ['basis', 'plan', 'reach'],
+  // Programme 2 G14b — a page feed (URL inclusions) of the account (google-ads-pmax.tools.ts).
+  'set-google-page-feed': ['basis', 'plan', 'reach'],
   // G7: exclusions (account, campaign) and exclusion / brand lists (google-ads-exclusions.tools.ts).
   'set-google-account-exclusions': ['basis', 'plan', 'reach'],
   'set-google-campaign-exclusions': ['basis', 'plan', 'reach'],

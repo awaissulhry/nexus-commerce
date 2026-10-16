@@ -752,6 +752,11 @@ describe('C1 — every registered tool keeps the contract', () => {
         after: { campaignId: '21', campaign: { automation: { finalUrlExpansion: 'OPTED_IN' }, brandExclusions: ['61'] }, groups: [{ assetGroupId: '41', status: 'ENABLED', links: ['301~HEADLINE', '302~HEADLINE'], signals: ['a:71', 't:moto jacket'] }, { assetGroupId: '42', created: true, status: 'ENABLED', name: 'Group Z' }], accountId: 'g-1', customerId: '1234567890' },
       },
       'set-google-customer-acquisition': { before: { kind: 'campaign', campaignId: '21', mode: 'OFF', valueCents: null, highValueCents: null, accountId: 'g-1' }, after: { kind: 'campaign', campaignId: '21', mode: 'BID_HIGHER', valueCents: 500, highValueCents: null, accountId: 'g-1', customerId: '1234567890' } },
+      // Programme 2 G14b: a page feed's pages added are taken away again, pages taken away are added back (a feed it made stays).
+      'set-google-page-feed': {
+        before: { pageFeedId: '77', name: 'Pages A', created: false, added: [], removed: [], ops: { feed: null, assets: [] }, accountId: 'g-1' },
+        after: { pageFeedId: '77', name: 'Pages A', created: false, added: [{ url: 'https://shop.example/a', labels: [], assetId: '501' }], removed: [{ url: 'https://shop.example/b', labels: ['sale'], assetId: '401' }], ops: { feed: null, assets: [0] }, accountId: 'g-1', customerId: '1234567890' },
+      },
       // PR 5: the responsive search ads it made are paused again; the assets it linked are unlinked (they stay in the account).
       'create-google-rsa': {
         before: { campaignId: '21', adGroupId: '51', ads: [], accountId: 'g-1', customerId: '1234567890' },
@@ -968,7 +973,7 @@ describe('C1 — every registered tool keeps the contract', () => {
     const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
       'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list',
-      'build-google-pmax', 'copy-google-pmax', 'set-google-pmax', 'set-google-customer-acquisition',
+      'build-google-pmax', 'copy-google-pmax', 'set-google-pmax', 'set-google-customer-acquisition', 'set-google-page-feed',
       'create-google-campaign', 'set-google-campaign', 'set-google-targeting', 'set-google-status', 'set-google-audiences', 'set-google-demographics',
       'remove-google-ads-items', 'set-google-product-groups', 'create-google-rsa', 'set-google-assets',
       'set-google-ad-groups', 'set-google-keywords', 'set-google-negatives', 'build-google-campaigns', 'copy-google-campaign',

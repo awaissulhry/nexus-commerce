@@ -6,7 +6,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PmaxAssetGroup, PmaxCampaignLive, PmaxLink } from '../../marketing/google-ads/live-pmax.js'
 
-const h = vi.hoisted(() => ({ mutate: vi.fn(), send: vi.fn(), check: vi.fn(), campaign: null as unknown, acquisition: { goal: null as unknown, config: null as unknown } }))
+const h = vi.hoisted(() => ({
+  mutate: vi.fn(), send: vi.fn(), check: vi.fn(), campaign: null as unknown, acquisition: { goal: null as unknown, config: null as unknown },
+  feeds: [] as unknown[], feedUrls: [] as Array<{ url: string }>, feedCampaigns: [] as unknown[],
+}))
 vi.mock('../../marketing/google-ads/change-account.js', () => ({
   googleChangeAccount: vi.fn(async () => ({
     target: { connectionId: 'g-1', customerId: '1234567890', loginCustomerId: null }, accountId: 'g-1', customerId: '1234567890', name: 'Shop', currency: 'EUR', timeZone: 'Europe/Rome',
@@ -23,6 +26,9 @@ vi.mock('../../marketing/google-ads/live-pmax.js', async (importActual) => ({
   livePmaxAudiences: vi.fn(async () => [{ audienceId: '71', name: 'Buyers', scope: 'CUSTOMER', assetGroupId: null }, { audienceId: '72', name: 'Group only', scope: 'ASSET_GROUP', assetGroupId: '41' }]),
   liveBrandLists: vi.fn(async () => [{ listId: '61', name: 'Brands Z' }]),
   liveAcquisition: vi.fn(async () => structuredClone(h.acquisition)),
+  livePageFeeds: vi.fn(async () => structuredClone(h.feeds)),
+  livePageFeedUrls: vi.fn(async (_t: unknown, _id: string, urls: string[]) => structuredClone(h.feedUrls.filter((u) => urls.includes(u.url)))),
+  livePageFeedCampaigns: vi.fn(async () => structuredClone(h.feedCampaigns)),
 }))
 vi.mock('../../marketing/google-ads/write-client.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/write-client.js')>()),
@@ -92,11 +98,14 @@ beforeEach(() => {
   h.mutate.mockReset(); h.send.mockReset(); h.check.mockReset()
   h.campaign = campaign()
   h.acquisition = { goal: null, config: null }
+  h.feeds = [{ assetSetId: '77', name: 'Pages A' }, { assetSetId: '78', name: 'Pages B' }]
+  h.feedUrls = [{ assetId: '401', url: 'https://shop.example/jackets', labels: ['sale'] } as never]
+  h.feedCampaigns = [{ campaignId: '21', name: 'PMax A', status: 'ENABLED', type: 'PERFORMANCE_MAX' }]
 })
 
 describe('G10 tools', () => {
   it('are person-approved Google changes, never by rule', () => {
-    expect(GOOGLE_ADS_PMAX_TOOLS.map((t) => t.name)).toEqual(['build-google-pmax', 'copy-google-pmax', 'set-google-pmax', 'set-google-customer-acquisition'])
+    expect(GOOGLE_ADS_PMAX_TOOLS.map((t) => t.name)).toEqual(['build-google-pmax', 'copy-google-pmax', 'set-google-pmax', 'set-google-customer-acquisition', 'set-google-page-feed'])
     for (const t of GOOGLE_ADS_PMAX_TOOLS) {
       expect(t, t.name).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'ask', riskTier: 'high', requiresApprovalDefault: true, openWorld: true, readOnly: false })
       expect(t.description.endsWith(GOOGLE_CHANGE_RULES), t.name).toBe(true)
@@ -286,5 +295,97 @@ describe('set-google-customer-acquisition', () => {
     expect(back.args).toMatchObject({ campaignId: '21', mode: 'BID_HIGHER', clearValueOverride: true })
     expect(back.args.valueOverride).toBeUndefined()
     expect(tool('set-google-customer-acquisition').input.safeParse(back.args).success).toBe(true)
+  })
+})
+
+// ── G14b ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe('G14b: text guidelines, page feeds and asset group tracking', () => {
+  it('set-google-pmax: text guidelines, a page feed linked and an asset group\'s tracking in one change; undo puts each back and parses as the tool\'s arguments', async () => {
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const live = campaign() as PmaxCampaignLive & { textGuidelines: unknown; pageFeeds: unknown }
+    live.textGuidelines = { termExclusions: ['cheap'], messagingRestrictions: [] }
+    live.pageFeeds = [{ assetSetId: '77', name: 'Pages A' }]
+    h.campaign = live
+    const args = parsed('set-google-pmax', {
+      campaignId: '21', textGuidelines: { termExclusions: [], messagingRestrictions: ['Never mention prices'] }, pageFeeds: { link: ['78'] },
+      assetGroups: [{ assetGroupId: '41', trackingTemplate: '', customParameters: [{ key: 'grp', value: 'b' }] }],
+    })
+    const out = await tool('set-google-pmax').handler(args, asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    const ops = h.mutate.mock.calls[0][1] as Array<Record<string, any>>
+    expect(ops.map((o) => Object.keys(o)[0])).toEqual(['campaignOperation', 'campaignAssetSetOperation', 'assetGroupOperation'])
+    expect(ops[0].campaignOperation.updateMask).toBe('text_guidelines.term_exclusions,text_guidelines.messaging_restrictions')
+    expect((out.preview as { spendsMoney: boolean }).spendsMoney).toBe(true)
+    const run = await tool('set-google-pmax').execute!(args, approved(out.preview))
+    expect(run.ok, String(run.error)).toBe(true)
+    const undo = tool('set-google-pmax').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
+    expect(undo.args).toMatchObject({
+      campaignId: '21', textGuidelines: { termExclusions: ['cheap'], messagingRestrictions: [] }, pageFeeds: { unlink: ['78'] },
+      assetGroups: [{ assetGroupId: '41', trackingTemplate: '{lpurl}?g=1', customParameters: [{ key: 'grp', value: 'a' }] }],
+    })
+    expect(tool('set-google-pmax').input.safeParse(undo.args).success).toBe(true)
+    // Nothing moved: current is the record.
+    const now = structuredClone(live)
+    now.textGuidelines = { termExclusions: [], messagingRestrictions: ['Never mention prices'] }
+    now.pageFeeds = [{ assetSetId: '77', name: 'Pages A' }, { assetSetId: '78', name: 'Pages B' }]
+    now.assetGroups[0].trackingTemplate = null
+    now.assetGroups[0].customParameters = [{ key: 'grp', value: 'b' }]
+    h.campaign = now
+    expect(await tool('set-google-pmax').undo!.current(run.change!)).toEqual(run.change!.after)
+  })
+
+  it('copy-google-pmax carries the source\'s text guidelines and its page feeds', async () => {
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const live = campaign() as PmaxCampaignLive & { textGuidelines: unknown; pageFeeds: unknown }
+    live.textGuidelines = { termExclusions: ['cheap'], messagingRestrictions: ['Never mention prices'] }
+    live.pageFeeds = [{ assetSetId: '77', name: 'Pages A' }]
+    h.campaign = live
+    const out = await tool('copy-google-pmax').handler(parsed('copy-google-pmax', { campaignId: '21', name: 'PMax A copy' }), asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    const ops = h.mutate.mock.calls[0][1] as Array<Record<string, any>>
+    const created = ops.find((o) => o.campaignOperation).campaignOperation.create
+    expect(created.textGuidelines).toEqual({ termExclusions: ['cheap'], messagingRestrictions: [{ restrictionText: 'Never mention prices', restrictionType: 'RESTRICTION_BASED_EXCLUSION' }] })
+    expect(ops.filter((o) => o.campaignAssetSetOperation).map((o) => o.campaignAssetSetOperation.create)).toEqual([{ campaign: created.resourceName, assetSet: `${C}/assetSets/77` }])
+  })
+
+  it('set-google-page-feed: a new feed with its pages, one Google check, the ids Google gave in the record; undo takes the pages away again', async () => {
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const args = parsed('set-google-page-feed', { name: 'Pages Z', addUrls: [{ url: 'https://shop.example/a', labels: ['sale'] }] })
+    const out = await tool('set-google-page-feed').handler(args, asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    expect(h.mutate.mock.calls[0][2]).toEqual({ validateOnly: true })
+    const ops = h.mutate.mock.calls[0][1] as Array<Record<string, any>>
+    expect(ops.map((o) => Object.keys(o)[0])).toEqual(['assetSetOperation', 'assetOperation', 'assetSetAssetOperation'])
+    expect((out.preview as { spendsMoney: boolean }).spendsMoney).toBe(false)
+    h.mutate.mockReset()
+    h.mutate.mockResolvedValue({ responses: [{ assetSetResult: { resourceName: `${C}/assetSets/88` } }, { assetResult: { resourceName: `${C}/assets/501` } }, {}], ops: 3, requestId: null })
+    const run = await tool('set-google-page-feed').execute!(args, approved(out.preview))
+    expect(run.ok, String(run.error)).toBe(true)
+    expect(run.change?.after).toMatchObject({ pageFeedId: '88', created: true, added: [{ url: 'https://shop.example/a', labels: ['sale'], assetId: '501' }], accountId: 'g-1' })
+    h.feedUrls = [{ assetId: '501', url: 'https://shop.example/a', labels: ['sale'] } as never]
+    expect(await tool('set-google-page-feed').undo!.current(run.change!)).toEqual(run.change!.after)
+    const undo = tool('set-google-page-feed').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
+    expect(undo).toMatchObject({ tool: 'set-google-page-feed', args: { accountId: 'g-1', pageFeedId: '88', removeUrls: ['https://shop.example/a'], why: expect.stringMatching(/stays in the account, empty/) } })
+    expect(tool('set-google-page-feed').input.safeParse(undo.args).success).toBe(true)
+  })
+
+  it('set-google-page-feed: pages added to a feed an enabled campaign uses are SPENDS MONEY; taken away, undo adds them back with their labels', async () => {
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const add = await tool('set-google-page-feed').handler(parsed('set-google-page-feed', { pageFeedId: '77', addUrls: [{ url: 'https://shop.example/gloves' }] }), asker)
+    expect(add.ok, String(add.error)).toBe(true)
+    expect((add.preview as { spendsMoney: boolean }).spendsMoney).toBe(true)
+    const args = parsed('set-google-page-feed', { pageFeedId: '77', removeUrls: ['https://shop.example/jackets'] })
+    h.mutate.mockReset()
+    h.mutate.mockResolvedValue({ responses: [], ops: 1, requestId: null })
+    const out = await tool('set-google-page-feed').handler(args, asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    const run = await tool('set-google-page-feed').execute!(args, approved(out.preview))
+    expect(run.ok, String(run.error)).toBe(true)
+    h.feedUrls = []
+    expect(await tool('set-google-page-feed').undo!.current(run.change!)).toEqual(run.change!.after)
+    const undo = tool('set-google-page-feed').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
+    expect(undo.args).toMatchObject({ pageFeedId: '77', addUrls: [{ url: 'https://shop.example/jackets', labels: ['sale'] }] })
+    expect(tool('set-google-page-feed').input.safeParse(undo.args).success).toBe(true)
   })
 })

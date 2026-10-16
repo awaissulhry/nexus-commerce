@@ -12,6 +12,11 @@
  *                                    Google's automation, URL exclusions, brand exclusions and brand assets
  *   set-google-customer-acquisition  the account's new-customer goal, or one campaign's use of it (Goals /
  *                                    CampaignGoalConfigs — not a GoogleAdsService.Mutate: one call each)
+ *   set-google-page-feed             a page feed (URL inclusions) of the account: make one, add page URLs with labels,
+ *                                    take URLs away (G14b; set-google-pmax links it to a campaign)
+ *
+ * G14b (2026-10-16) also added: text guidelines (term exclusions, messaging restrictions) and page feeds on build, copy and
+ * set-google-pmax, and an asset group's own tracking (template, final URL suffix, custom parameters) on set-google-pmax.
  *
  * Why its own build tool and not build-google-campaigns (G10 brief: "only if that is the clean way"): a Performance Max
  * campaign shares nothing with that build's parts (no ad groups, keywords, ads or product groups; a budget of its own,
@@ -40,9 +45,12 @@ import {
 } from '../../marketing/google-ads/change-pmax.js'
 import { buildImageScope, pmaxBuildDraft, pmaxCampaignAsBuild, type PmaxBuildCampaign } from '../../marketing/google-ads/build-pmax.js'
 import { acquisitionDraft, type AcquisitionRecord, type AcquisitionRequest } from '../../marketing/google-ads/change-acquisition.js'
+import { MAX_PAGE_FEED_URLS, pageFeedDraft, pageFeedNow, pageFeedRecordAfterRun, pageUrlProblem, PAGE_FEED_LABEL_LIMITS, type PageFeedRecord, type PageFeedRequest } from '../../marketing/google-ads/change-page-feeds.js'
 import { checkAccountOperations, sendAccountOperations } from '../../marketing/google-ads/account-client.js'
 import { liveCampaigns } from '../../marketing/google-ads/live.js'
-import { liveAcquisition, liveBrandLists, livePmaxAssets, livePmaxAudiences, livePmaxCampaign, type PmaxAsset } from '../../marketing/google-ads/live-pmax.js'
+import {
+  liveAcquisition, liveBrandLists, livePageFeedCampaigns, livePageFeeds, livePageFeedUrls, livePmaxAssets, livePmaxAudiences, livePmaxCampaign, type PmaxAsset,
+} from '../../marketing/google-ads/live-pmax.js'
 import { prepareImage, type ImageSource } from '../../marketing/google-ads/asset-images.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
 import type { GoogleAdsTarget } from '../../marketing/google-ads/types.js'
@@ -144,6 +152,14 @@ const customParametersArg = z.array(z.object({
   value: z.string().trim().min(1).max(250).describe('its value'),
 })).max(8).describe('custom parameters (up to 8)')
 
+const textGuidelinesArg = z.object({
+  termExclusions: z.array(z.string().trim().min(1).max(30).describe('an exact word or phrase (at most 30 characters)')).max(25).optional()
+    .describe('the WHOLE list of words and phrases Google\'s generated text never uses (up to 25; [] clears it)'),
+  messagingRestrictions: z.array(z.string().trim().min(1).max(300).describe('a plain instruction (at most 300 characters), e.g. "never mention prices"')).max(40).optional()
+    .describe('the WHOLE list of instructions Google\'s generated text follows (up to 40; [] clears it)'),
+}).describe('text guidelines: what the text Google writes for this campaign never says (a list left out stays as it is)')
+const pageFeedIdArg = googleIdArg('a page feed of the account (set-google-page-feed makes one)')
+
 const groupBuildArg = z.object({
   name: textArg(128, 'the asset group\'s name (unique in the campaign)'),
   finalUrls: z.array(urlArg('a final URL')).min(1).max(10).describe('final URLs (retail: the Merchant Center site)'),
@@ -198,6 +214,8 @@ const campaignBuildArg = z.object({
   ignoreBrandExclusionsForShopping: z.boolean().optional().describe('its brand exclusions do not hold for Shopping ads (default off)'),
   excludedParentAssetFieldTypes: z.array(z.preprocess(upper, z.string().regex(/^[A-Z_]{3,40}$/))).max(30).optional().describe('asset field types the campaign does not inherit from the account (SITELINK, CALLOUT, …)'),
   excludedParentAssetSetTypes: z.array(z.preprocess(upper, z.string().regex(/^[A-Z_]{3,60}$/))).max(30).optional().describe('asset set types the campaign does not inherit from the account'),
+  textGuidelines: textGuidelinesArg.optional(),
+  pageFeeds: z.array(pageFeedIdArg).max(10).optional().describe('page feeds (URL inclusions) linked to the campaign — Google needs automation.textCustomization: true with one'),
   assetGroups: z.array(groupBuildArg).max(20).optional().describe('asset groups'),
 })
 
@@ -267,10 +285,11 @@ const buildPmaxBuilder = (args: Record<string, unknown>): GoogleDraftBuilder => 
   const linkIds = asked.flatMap((c) => [...linkIdsOf(c.brandAssets as PmaxAssetsAsk | undefined), ...(c.assetGroups ?? []).flatMap((g: GroupArgs) => linkIdsOf(g.assets as PmaxAssetsAsk | undefined))])
   for (const a of await livePmaxAssets(target, linkIds.filter((id) => !assets.has(id)))) assets.set(a.assetId, a)
   const brandLists = campaigns.some((c) => c.brandExclusions?.length) ? await liveBrandLists(target) : []
+  const pageFeeds = campaigns.some((c) => c.pageFeeds?.length) ? await livePageFeeds(target) : []
   // A copy links the source's assets again: it fetches no image (its arguments hold none).
   const images = await fetchImages(buildImages(asked))
   const campaignNames = (await liveCampaigns(target)).map((x) => x.name)
-  return pmaxBuildDraft(customerResource(target), account.currency, campaigns, { campaignNames, assets: [...assets.values()], audiences, brandLists, images, trusted: [...trusted] }, notCopied)
+  return pmaxBuildDraft(customerResource(target), account.currency, campaigns, { campaignNames, assets: [...assets.values()], audiences, brandLists, images, trusted: [...trusted], pageFeeds }, notCopied)
 }
 
 const buildUndo: ToolUndo = {
@@ -322,7 +341,8 @@ const buildGooglePmax: AgentTool = {
     + 'feed, feed label, local products), locations, languages, schedule, brand guidelines (on by default: the business name '
     + 'and one to five logos are the campaign\'s brandAssets) with colors and font, other campaign assets by id, Google\'s '
     + 'automation (final URL expansion and text customization OFF unless asked), URL exclusions, brand exclusions (brand '
-    + 'lists), negative keywords, tracking; and asset groups with final URLs, paths, their assets (headlines, long headlines, '
+    + 'lists), negative keywords, tracking, text guidelines (term exclusions, messaging restrictions), page feeds (URL '
+    + 'inclusions; with text customization on); and asset groups with final URLs, paths, their assets (headlines, long headlines, '
     + 'descriptions, images from a link or the Nexus image library, YouTube videos, call to action, existing assets by id — '
     + 'Google\'s minimums are checked first and refused in words), a retail product tree of any shape (default "All '
     + 'products"), and signals (existing audiences, new audiences made of segments, search themes). A campaign may be a copy '
@@ -367,7 +387,7 @@ const copyGooglePmax: AgentTool = {
     'Copy a live Performance Max campaign of the business\'s chosen account into a NEW campaign, made PAUSED, in one '
     + 'request: its own budget of the same amount, bidding, Merchant Center feed, locations, languages, schedule, brand '
     + 'guidelines with the same brand assets, every campaign asset, Google\'s automation switches as they are, URL and '
-    + 'brand exclusions, negative keywords, tracking (templates, URL suffixes and custom parameters, of the campaign and of each '
+    + 'brand exclusions, negative keywords, text guidelines, page feeds, tracking (templates, URL suffixes and custom parameters, of the campaign and of each '
     + 'asset group), the brand targeting override for Shopping ads, the asset types it does not inherit, and every asset group '
     + 'with its final URLs, paths, status, assets (the '
     + 'same assets linked again — Google\'s own automatically created ones are not), product tree and signals. What it '
@@ -390,6 +410,8 @@ const changeRequest = (args: Record<string, unknown>): PmaxChangeRequest => ({
   urlExclusions: args.urlExclusions as PmaxChangeRequest['urlExclusions'],
   brandExclusions: args.brandExclusions as PmaxChangeRequest['brandExclusions'],
   brandAssets: args.brandAssets as PmaxChangeRequest['brandAssets'],
+  textGuidelines: args.textGuidelines as PmaxChangeRequest['textGuidelines'],
+  pageFeeds: args.pageFeeds as PmaxChangeRequest['pageFeeds'],
   assetGroups: args.assetGroups as PmaxChangeRequest['assetGroups'],
 })
 
@@ -409,7 +431,8 @@ const buildChange = (args: Record<string, unknown>): GoogleDraftBuilder => async
   const audiences = groups.some((g) => g.addSignals?.audiences?.length || g.addSignals?.newAudiences?.length) ? await livePmaxAudiences(target) : []
   const brandLists = request.brandExclusions?.add?.length || request.brandExclusions?.remove?.length ? await liveBrandLists(target) : []
   const images = await fetchImages(changeImages(request))
-  return pmaxChangeDraft(customerResource(target), account.currency, request, { campaign, campaignNames, assets, audiences, brandLists, images })
+  const pageFeeds = request.pageFeeds?.link?.length ? await livePageFeeds(target) : undefined
+  return pmaxChangeDraft(customerResource(target), account.currency, request, { campaign, campaignNames, assets, audiences, brandLists, images, ...(pageFeeds ? { pageFeeds } : {}) })
 }
 
 const linksOfKeys = (keys: string[]) => keys.map((k) => ({ assetId: k.slice(0, k.indexOf('~')), fieldType: k.slice(k.indexOf('~') + 1) }))
@@ -466,6 +489,13 @@ const pmaxUndo: ToolUndo = {
       const remove = linksOfKeys(minus(ac.brandLinks, bc.brandLinks))
       args.brandAssets = { ...(link.length ? { add: { link } } : {}), ...(remove.length ? { remove } : {}) }
     }
+    // Each list it wrote, whole, as it was.
+    if (ac.textGuidelines) args.textGuidelines = bc.textGuidelines ?? {}
+    if ('pageFeeds' in ac) {
+      const link = minus(bc.pageFeeds, ac.pageFeeds)
+      const unlink = minus(ac.pageFeeds, bc.pageFeeds)
+      args.pageFeeds = { ...(link.length ? { link } : {}), ...(unlink.length ? { unlink } : {}) }
+    }
     const groups: Array<Record<string, unknown>> = []
     for (const g of after.groups ?? []) {
       if (g.created) {
@@ -481,6 +511,9 @@ const pmaxUndo: ToolUndo = {
       if ('finalMobileUrls' in g) entry.finalMobileUrls = b.finalMobileUrls ?? []
       if ('path1' in g) entry.path1 = b.path1 ?? ''
       if ('path2' in g) entry.path2 = b.path2 ?? ''
+      if ('trackingTemplate' in g) entry.trackingTemplate = b.trackingTemplate ?? ''
+      if ('finalUrlSuffix' in g) entry.finalUrlSuffix = b.finalUrlSuffix ?? ''
+      if ('customParameters' in g) entry.customParameters = b.customParameters ?? []
       if ('links' in g) {
         const link = linksOfKeys(minus(b.links, g.links))
         const remove = linksOfKeys(minus(g.links, b.links))
@@ -520,6 +553,9 @@ const groupChangeArg = z.object({
   finalMobileUrls: z.array(urlArg('a mobile final URL')).max(10).optional().describe('its mobile final URLs (all of them; [] clears them)'),
   path1: z.string().trim().max(30).optional().describe('display path 1 (15 characters; "" clears it and path 2)'),
   path2: z.string().trim().max(30).optional().describe('display path 2 (15 characters; "" clears it)'),
+  trackingTemplate: z.string().trim().max(2048).optional().describe('its own tracking template (http(s):// or {lpurl}…; "" takes it away: the campaign\'s applies)'),
+  finalUrlSuffix: z.string().trim().max(2048).optional().describe('its own final URL suffix (key=value&key2=value2; "" takes it away)'),
+  customParameters: customParametersArg.optional().describe('its own custom parameters, the WHOLE list (up to 8; [] takes them away)'),
   addAssets: assetsArg.optional().describe('assets to add (Google\'s minimums and maximums are checked on what it holds after)'),
   removeAssets: z.array(assetRefArg).max(100).optional().describe('assets to unlink (they stay in the account)'),
   productGroups: z.array(pmaxTreeNodeArg).min(1).max(250).optional().describe('retail: the WHOLE product group tree as it should be, the root first (what stays keeps its id)'),
@@ -561,20 +597,28 @@ const setGooglePmax: AgentTool = {
       add: assetsArg.optional().describe('a business name and logos to link to the campaign'),
       remove: z.array(assetRefArg).max(10).optional().describe('brand assets to unlink (exactly one business name and one to five logos stay)'),
     }).optional().describe('with brand guidelines on: the campaign\'s business name and logos'),
+    textGuidelines: textGuidelinesArg.optional(),
+    pageFeeds: z.object({
+      link: z.array(pageFeedIdArg).max(10).optional().describe('page feeds to link (SPENDS MONEY in an enabled campaign; Google needs text customization on)'),
+      unlink: z.array(pageFeedIdArg).max(10).optional().describe('page feeds to unlink (sent first, so text customization may be turned off in the same change)'),
+    }).optional().describe('page feeds (URL inclusions) of the account, linked to this campaign'),
     assetGroups: z.array(groupChangeArg).max(20).optional().describe('asset groups to change, or to make (no assetGroupId)'),
     why: googleWhyArg,
   }),
   description:
     'Change a live Performance Max campaign of the business\'s chosen account, in ONE request: its asset groups (make one, '
-    + 'rename, pause or enable, final URLs and mobile final URLs, display paths), their assets (add headlines, long '
+    + 'rename, pause or enable, final URLs and mobile final URLs, display paths, their own tracking template, final URL '
+    + 'suffix and custom parameters), their assets (add headlines, long '
     + 'headlines, descriptions, images from a link or the Nexus image library, YouTube videos, call to action, existing '
     + 'assets by id; unlink assets — Google\'s minimums and maximums are checked on what each asset group holds after), a '
     + 'retail asset group\'s product tree of any shape (the whole tree as it should be; what stays keeps its id), signals '
     + '(add / remove audiences, new audiences made of segments, search themes); and the campaign\'s name, bidding (Maximize '
     + 'conversions / conversion value and their targets), dates, Google\'s automation (final URL expansion, text '
-    + 'customization, image and video enhancement), URL exclusions, brand exclusions (brand lists) and, with brand '
-    + 'guidelines, its business name and logos. In an enabled campaign, enabling, a bidding raise, final URL expansion on, '
-    + 'an exclusion taken off, new signals and a product tree that advertises more are marked SPENDS MONEY; a new asset '
+    + 'customization, image and video enhancement), URL exclusions, brand exclusions (brand lists), text guidelines (term '
+    + 'exclusions and messaging restrictions for the text Google writes), page feeds (URL inclusions) linked or unlinked, '
+    + 'and, with brand guidelines, its business name and logos. In an enabled campaign, enabling, a bidding raise, final URL '
+    + 'expansion on, an exclusion or a text guideline taken off, a page feed linked, new signals and a product tree that '
+    + 'advertises more are marked SPENDS MONEY; a new asset '
     + 'group is made PAUSED there unless enable is true. Budget: set-google-budget; status of the campaign: set-google-status. '
     + 'Undo puts back what it changed (an asset group it made is paused; assets it made stay in the account).' + GOOGLE_CHANGE_RULES,
   undo: pmaxUndo,
@@ -683,5 +727,92 @@ const setGoogleCustomerAcquisition: AgentTool = {
   }, ACQUISITION_SENDER),
 }
 
-export const GOOGLE_ADS_PMAX_TOOLS: AgentTool[] = [buildGooglePmax, copyGooglePmax, setGooglePmax, setGoogleCustomerAcquisition]
+// ── set-google-page-feed ────────────────────────────────────────────────────────────────────────────────────────
+
+const pageFeedRequest = (args: Record<string, unknown>): PageFeedRequest => ({
+  pageFeedId: (args.pageFeedId as string | undefined) ?? null,
+  name: (args.name as string | undefined) ?? null,
+  addUrls: (args.addUrls as PageFeedRequest['addUrls']) ?? [],
+  removeUrls: (args.removeUrls as string[] | undefined) ?? [],
+})
+
+async function pageFeedLive(target: GoogleAdsTarget, feedId: string | null, urls: string[]) {
+  const feeds = await livePageFeeds(target)
+  const known = !!feedId && feeds.some((f) => f.assetSetId === feedId)
+  // Only URLs Google can be asked about are looked up (the builder says why the others are refused).
+  const lookup = [...new Set(urls.map((u) => u.trim()).filter((u) => !pageUrlProblem(u)))]
+  return {
+    feeds,
+    urls: known && lookup.length ? await livePageFeedUrls(target, feedId!, lookup) : [],
+    campaigns: known ? await livePageFeedCampaigns(target, feedId!) : [],
+  }
+}
+
+const buildPageFeed = (args: Record<string, unknown>): GoogleDraftBuilder => async (account) => {
+  const r = pageFeedRequest(args)
+  const live = await pageFeedLive(account.target, r.pageFeedId ?? null, [...(r.addUrls ?? []).map((a) => a.url), ...(r.removeUrls ?? [])])
+  return pageFeedDraft(customerResource(account.target), r, live)
+}
+
+const pageFeedUndo: ToolUndo = {
+  async current(change: ToolChange) {
+    const after = (change.after ?? {}) as PageFeedRecord & Stamped
+    const account = await recordAccount(after)
+    if (!account || !after.pageFeedId) return null
+    const urls = [...(after.added ?? []), ...(after.removed ?? [])].map((e) => e.url)
+    const now = pageFeedNow(after, urls.length ? await livePageFeedUrls(account.target, after.pageFeedId, urls) : [])
+    return { ...now, accountId: account.accountId, customerId: account.customerId }
+  },
+  request(change: ToolChange) {
+    const after = (change.after ?? {}) as PageFeedRecord & Stamped
+    if (!after.pageFeedId) return { refusal: 'This change does not record the page feed Google made.' }
+    const removeUrls = (after.added ?? []).map((e) => e.url)
+    const addUrls = (after.removed ?? []).map((e) => ({ url: e.url, ...(e.labels.length ? { labels: e.labels } : {}) }))
+    if (!removeUrls.length && !addUrls.length) return { refusal: 'This change added and took away no page.' }
+    return {
+      tool: 'set-google-page-feed',
+      args: {
+        ...accountArgOf(after), pageFeedId: after.pageFeedId,
+        ...(removeUrls.length ? { removeUrls } : {}), ...(addUrls.length ? { addUrls } : {}),
+        why: `undo of an earlier page feed change${after.created ? ' (the feed it made stays in the account, empty)' : ''}`,
+      },
+    }
+  },
+}
+
+const setGooglePageFeed: AgentTool = {
+  ...common,
+  name: 'set-google-page-feed',
+  title: 'Change a Google Ads page feed',
+  // Undo takes the pages it added away and adds back those it took away; a feed it made stays (Nexus removes no asset set).
+  reversibility: 'partial',
+  requires: [F.adsCampaignsManage],
+  input: z.object({
+    accountId: googleAccountArg,
+    pageFeedId: pageFeedIdArg.optional().describe('an existing page feed of the account (left out: a new one — give name)'),
+    name: z.string().trim().min(1).max(128).optional().describe('a NEW page feed\'s name (1 to 128 characters, not taken)'),
+    addUrls: z.array(z.object({
+      url: z.string().trim().min(1).max(2048).describe('a page of the site (http:// or https://)'),
+      labels: z.array(z.string().trim().min(1).max(PAGE_FEED_LABEL_LIMITS.length).describe('a custom label')).max(PAGE_FEED_LABEL_LIMITS.perUrl).optional()
+        .describe('custom labels that group the pages (asset groups and Dynamic Search Ads can target a label)'),
+    })).max(MAX_PAGE_FEED_URLS).optional().describe('pages to add (a page already there is skipped)'),
+    removeUrls: z.array(z.string().trim().min(1).max(2048).describe('a page URL in the feed')).max(MAX_PAGE_FEED_URLS).optional().describe('pages to take out of the feed'),
+    why: googleWhyArg,
+  }),
+  description:
+    'Make a page feed (URL inclusions) in the business\'s chosen Google Ads account, or change one, in ONE request: page '
+    + 'URLs added (with custom labels) or taken away. A page feed tells Performance Max (and Dynamic Search Ads) which pages '
+    + 'of the site to send people to and write ads from; set-google-pmax pageFeeds links it to a Performance Max campaign '
+    + '(with text customization on), build-google-pmax links it to a new one. Pages added to a feed an enabled campaign uses '
+    + 'are SPENDS MONEY; a new feed is linked to nothing. Google crawls and reviews new pages before ads serve for them. '
+    + 'Undo takes the added pages away and adds back the ones taken away (a feed it made stays, empty).' + GOOGLE_CHANGE_RULES,
+  undo: pageFeedUndo,
+  handler: (args, ctx) => googleChangePreview(args, ctx, buildPageFeed(args)),
+  execute: (args, ctx) => runGoogleChange(args, ctx, buildPageFeed(args), (draft, responses) => {
+    const after = pageFeedRecordAfterRun(draft.after as PageFeedRecord, responses)
+    return { data: { pageFeedId: after.pageFeedId, pagesAdded: after.added.length, pagesRemoved: after.removed.length }, before: draft.before, after }
+  }),
+}
+
+export const GOOGLE_ADS_PMAX_TOOLS: AgentTool[] = [buildGooglePmax, copyGooglePmax, setGooglePmax, setGoogleCustomerAcquisition, setGooglePageFeed]
 

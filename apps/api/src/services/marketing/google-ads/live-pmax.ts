@@ -36,6 +36,13 @@
  *                         additional_high_lifetime_value. campaign_goal_config: campaign, goal, goal_type,
  *                         campaign_new_customer_acquisition_settings.target_option and value_settings_override.* — all
  *                         selectable and filterable (attributed: campaign, customer, goal).
+ * Added 2026-10-16 (programme 2 G14b, curl of fields/v25 and rpc/v25):
+ *   campaign.text_guidelines.term_exclusions (selectable, filterable, repeated string) and .messaging_restrictions
+ *                         (selectable, repeated Campaign.MessagingRestriction {restriction_text, restriction_type}).
+ *   asset_set             id, name, type (AssetSetType … PAGE_FEED …), status (ENABLED / REMOVED) — selectable, filterable.
+ *   asset_set_asset       status, asset, asset_set — selectable, filterable; attributed resources asset, asset_set, customer.
+ *   campaign_asset_set    status, asset_set — selectable, filterable; attributed resources asset_set, campaign, customer.
+ *   asset                 page_feed_asset.page_url (filterable) and page_feed_asset.labels (repeated) — selectable.
  * Google's trap (found 2026-10-15): a field in a WHERE is also in the SELECT, every time.
  */
 import { centsOfMicros, gaqlId, idOf } from './live.js'
@@ -137,6 +144,8 @@ export interface PmaxSignal {
 }
 
 export interface CustomParameter { key: string; value: string }
+export interface TextGuidelines { termExclusions: string[]; messagingRestrictions: string[] }
+export interface PageFeedRef { assetSetId: string; name: string | null }
 
 export interface PmaxAssetGroup {
   assetGroupId: string
@@ -194,11 +203,15 @@ export interface PmaxCampaignLive {
   /** Asset field types / asset set types the campaign does not inherit from the account. */
   excludedParentAssetFieldTypes: string[]
   excludedParentAssetSetTypes: string[]
+  /** What Google's generated text never says (Campaign.text_guidelines): exact terms, and freeform restrictions. */
+  textGuidelines: TextGuidelines
   /** Google's automation switches as Google answered them (a type left out is at Google's default). */
   automation: Record<string, string>
   campaignAssets: PmaxLink[]
   criteria: PmaxCriterion[]
   assetGroups: PmaxAssetGroup[]
+  /** The page feeds (URL inclusions: asset sets of type PAGE_FEED) linked to the campaign (CampaignAssetSet). */
+  pageFeeds?: PageFeedRef[]
   /** Parts Google refused to read: a copy or a change would miss them. */
   notRead: Array<{ part: string; why: string }>
 }
@@ -213,6 +226,7 @@ const SETTINGS = [
   'campaign.tracking_url_template', 'campaign.final_url_suffix', 'campaign.asset_automation_settings',
   'campaign.url_custom_parameters', 'campaign.pmax_campaign_settings.brand_targeting_overrides.ignore_exclusions_for_shopping_ads',
   'campaign.excluded_parent_asset_field_types', 'campaign.excluded_parent_asset_set_types', 'campaign_budget.id', 'campaign_budget.amount_micros', 'campaign_budget.explicitly_shared',
+  'campaign.text_guidelines.term_exclusions', 'campaign.text_guidelines.messaging_restrictions',
 ]
 
 export const pmaxSettingsQuery = (campaignId: string): string =>
@@ -250,6 +264,10 @@ export const pmaxFiltersQuery = (campaignId: string): string =>
   `${CASE}.product_condition.condition, ${CASE}.product_custom_attribute.index, ${CASE}.product_custom_attribute.value, ` +
   `${CASE}.product_item_id.value, ${CASE}.product_type.level, ${CASE}.product_type.value FROM asset_group_listing_group_filter ` +
   `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND asset_group.status != 'REMOVED'`
+
+export const pmaxPageFeedLinksQuery = (campaignId: string): string =>
+  'SELECT campaign.id, asset_set.id, asset_set.name, asset_set.type, campaign_asset_set.status FROM campaign_asset_set ' +
+  `WHERE campaign.id = ${gaqlId(campaignId, 'The campaign')} AND campaign_asset_set.status != 'REMOVED' AND asset_set.type = 'PAGE_FEED'`
 
 export const pmaxSignalsQuery = (campaignId: string): string =>
   'SELECT campaign.id, asset_group.id, asset_group.status, asset_group_signal.resource_name, asset_group_signal.audience.audience, ' +
@@ -347,7 +365,17 @@ export function pmaxSettingsOf(row: Json): Omit<PmaxCampaignLive, 'campaignAsset
     ignoreBrandExclusionsForShopping: c.pmaxCampaignSettings?.brandTargetingOverrides?.ignoreExclusionsForShoppingAds === true,
     excludedParentAssetFieldTypes: strings(c.excludedParentAssetFieldTypes),
     excludedParentAssetSetTypes: strings(c.excludedParentAssetSetTypes),
+    textGuidelines: textGuidelinesOf(c.textGuidelines),
     automation,
+  }
+}
+
+/** Google's text_guidelines JSON: the terms and the restrictions' texts, as Google holds them (in its order). */
+export function textGuidelinesOf(value: unknown): TextGuidelines {
+  const g = (value && typeof value === 'object' ? value : {}) as Json
+  return {
+    termExclusions: strings(g.termExclusions).filter((t) => t !== ''),
+    messagingRestrictions: (Array.isArray(g.messagingRestrictions) ? g.messagingRestrictions : []).map((m: Json) => str(m?.restrictionText)).filter((t): t is string => !!t),
   }
 }
 
@@ -362,7 +390,7 @@ export async function livePmaxCampaign(target: GoogleAdsTarget, campaignId: stri
   if (!row || str(row.campaign?.status) === 'REMOVED') return null
   const base = pmaxSettingsOf(row)
   const notRead: PmaxCampaignLive['notRead'] = []
-  if (base.type !== 'PERFORMANCE_MAX') return { ...base, campaignAssets: [], criteria: [], assetGroups: [], notRead }
+  if (base.type !== 'PERFORMANCE_MAX') return { ...base, campaignAssets: [], criteria: [], assetGroups: [], pageFeeds: [], notRead }
   const part = async <T>(name: string, query: string, map: (r: Json) => T): Promise<T[]> => {
     try {
       return (await liveRows<Json>(target, query, `ads.search.live.pmax-${name}`)).map(map)
@@ -376,6 +404,7 @@ export async function livePmaxCampaign(target: GoogleAdsTarget, campaignId: stri
   const groups = await part('asset-groups', pmaxAssetGroupsQuery(id), (r) => r.assetGroup ?? {})
   const groupAssets = await part('asset-group-assets', pmaxGroupAssetsQuery(id), (r) => ({ assetGroupId: str(r.assetGroup?.id) ?? '', link: linkOf(r.assetGroupAsset, r.asset) }))
   const filters = await part('listing-groups', pmaxFiltersQuery(id), (r) => ({ assetGroupId: str(r.assetGroup?.id) ?? '', node: pmaxFilterNodeOf(r) }))
+  const pageFeeds = await part('page-feeds', pmaxPageFeedLinksQuery(id), (r) => ({ assetSetId: str(r.assetSet?.id) ?? '', name: str(r.assetSet?.name) } satisfies PageFeedRef))
   const signals = await part('signals', pmaxSignalsQuery(id), (r) => ({
     assetGroupId: str(r.assetGroup?.id) ?? '',
     signal: {
@@ -405,7 +434,7 @@ export async function livePmaxCampaign(target: GoogleAdsTarget, campaignId: stri
       signals: signals.filter((s) => s.assetGroupId === groupId).map((s) => s.signal),
     }
   })
-  return { ...base, campaignAssets, criteria, assetGroups, notRead }
+  return { ...base, campaignAssets, criteria, assetGroups, pageFeeds: pageFeeds.sort((a, b) => a.assetSetId.localeCompare(b.assetSetId)), notRead }
 }
 
 // ── the account's parts a request names ─────────────────────────────────────────────────────────────────────────
@@ -438,6 +467,47 @@ export async function livePmaxAudiences(target: GoogleAdsTarget): Promise<PmaxAu
 export async function liveBrandLists(target: GoogleAdsTarget): Promise<Array<{ listId: string; name: string | null }>> {
   return (await liveRows<Json>(target, liveExclusionSetsQuery(['BRANDS']), 'ads.search.live.brand-lists'))
     .map((r) => ({ listId: str(r.sharedSet?.id) ?? '', name: str(r.sharedSet?.name) }))
+}
+
+// ── page feeds (URL inclusions) ─────────────────────────────────────────────────────────────────────────────────
+
+export const LIVE_PAGE_FEEDS_QUERY = "SELECT asset_set.id, asset_set.name, asset_set.type, asset_set.status FROM asset_set WHERE asset_set.type = 'PAGE_FEED' AND asset_set.status != 'REMOVED'"
+
+/** The account's page feeds (asset sets of type PAGE_FEED). */
+export async function livePageFeeds(target: GoogleAdsTarget): Promise<PageFeedRef[]> {
+  return (await liveRows<Json>(target, LIVE_PAGE_FEEDS_QUERY, 'ads.search.live.page-feeds')).map((r) => ({ assetSetId: str(r.assetSet?.id) ?? '', name: str(r.assetSet?.name) }))
+}
+
+/** A page URL as a GAQL string (double quotes; a URL holding a quote, a backslash or a line break is refused). */
+export function gaqlUrl(url: string): string {
+  if (/["\\\r\n]/.test(url) || !url.length || url.length > 2048) throw new Error(`"${url.slice(0, 80)}" cannot be looked up (a quote, a backslash or a line break, or no text). Nothing was sent.`)
+  return `"${url}"`
+}
+
+export interface PageFeedUrl { assetId: string; url: string; labels: string[] }
+
+export const pageFeedUrlsQuery = (assetSetId: string, urls: string[]): string =>
+  'SELECT asset_set.id, asset_set_asset.status, asset.id, asset.type, asset.page_feed_asset.page_url, asset.page_feed_asset.labels FROM asset_set_asset ' +
+  `WHERE asset_set.id = ${gaqlId(assetSetId, 'The page feed')} AND asset_set_asset.status != 'REMOVED' AND asset.type = 'PAGE_FEED' ` +
+  `AND asset.page_feed_asset.page_url IN (${[...new Set(urls)].map(gaqlUrl).join(', ')})`
+
+/** The URLs of one page feed among those named (a feed may hold thousands: only these are read). */
+export async function livePageFeedUrls(target: GoogleAdsTarget, assetSetId: string, urls: string[]): Promise<PageFeedUrl[]> {
+  if (!urls.length) return []
+  return (await liveRows<Json>(target, pageFeedUrlsQuery(assetSetId, urls), 'ads.search.live.page-feed-urls')).map((r) => ({
+    assetId: str(r.asset?.id) ?? '', url: str(r.asset?.pageFeedAsset?.pageUrl) ?? '', labels: strings(r.asset?.pageFeedAsset?.labels),
+  }))
+}
+
+export const pageFeedCampaignsQuery = (assetSetId: string): string =>
+  'SELECT asset_set.id, campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, campaign_asset_set.status FROM campaign_asset_set ' +
+  `WHERE asset_set.id = ${gaqlId(assetSetId, 'The page feed')} AND campaign_asset_set.status != 'REMOVED'`
+
+/** The campaigns a page feed is linked to (a URL added there can bring new searches and pages to those that serve). */
+export async function livePageFeedCampaigns(target: GoogleAdsTarget, assetSetId: string): Promise<Array<{ campaignId: string; name: string; status: string | null; type: string | null }>> {
+  return (await liveRows<Json>(target, pageFeedCampaignsQuery(assetSetId), 'ads.search.live.page-feed-campaigns')).map((r) => ({
+    campaignId: str(r.campaign?.id) ?? '', name: str(r.campaign?.name) ?? '', status: str(r.campaign?.status), type: str(r.campaign?.advertisingChannelType),
+  }))
 }
 
 // ── customer acquisition (Goal, CampaignGoalConfig) ─────────────────────────────────────────────────────────────

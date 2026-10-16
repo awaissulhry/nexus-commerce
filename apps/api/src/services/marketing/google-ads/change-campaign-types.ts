@@ -85,20 +85,49 @@
  *   Campaign          contains_eu_political_advertising required on create (PLAN.md "v25 facts"); advertising_channel_type
  *                     and sub type Immutable; bidding oneof manual_cpc, manual_cpm, target_spend, target_cpc,
  *                     maximize_conversions, target_cpa, maximize_conversion_value, target_roas, bidding_strategy.
+ *
+ * Added 2026-10-16 (programme 2 group G14b), checked with curl in the same reference and guides:
+ *   docs/ads/ad-types  ImageAd and DisplayUploadAd are ad types an API makes (no deprecation note; VideoAd: "permits only
+ *                     reporting"); Ad.image_ad "Immutable" (made, never edited); Ad.name "only supported for
+ *                     DisplayUploadAd, ImageAd, …, VideoResponsiveAd and DemandGen ads".
+ *   ImageAdInfo       image oneof image_asset (AdImageAsset.asset) | data (bytes) | ad_id_to_copy_image_from: an existing
+ *                     image asset is pointed at, a new image goes as its bytes. DisplayUploadAdInfo, MediaBundleAsset, the
+ *                     HTML5 and image ad specifications: media-bundles.ts.
+ *   Campaign.frequency_caps  repeated FrequencyCapEntry {key {level CAMPAIGN | AD_GROUP | AD_GROUP_AD, event_type IMPRESSION |
+ *                     VIDEO_VIEW, time_unit DAY | WEEK | MONTH, time_length}, cap} — "There can be no more than one frequency
+ *                     cap with the same key"; CampaignError MAX_IMPRESSIONS_NOT_IN_RANGE ("an integer greater than 0"). Not
+ *                     Immutable: the update mask frequency_caps writes the whole list. The reference does not tie it to a
+ *                     channel; Google Ads Help 117579 describes caps of Display campaigns (impressions, per day / week /
+ *                     month, at the campaign, ad group or ad) and of Video campaigns (which Google's API cannot change):
+ *                     Nexus sets them on Display (impressions) and Demand Gen campaigns, and Google's check judges each.
+ *   docs/targeting/criteria  Age range, Gender, Income range, Parental status: positive AND negative, campaign and ad group;
+ *                     CriterionError CANNOT_TARGET_ONLY_UNDETERMINED, CANNOT_EXCLUDE_ALL_TARGETS. AdGroupCriterion.bid_modifier
+ *                     "must be in the range: 0.1 - 10.0. Most targetable criteria types support modifiers." Google Ads Help
+ *                     7365594 (as change-demographics.ts read it): every group of a dimension is targeted until a positive
+ *                     criterion narrows the dimension to the groups named.
+ *   AdGroupAd.ad_group_ad_asset_automation_settings  AdGroupAdAssetAutomationSetting {asset_automation_type,
+ *                     asset_automation_status}. AssetAutomationType (v25): GENERATE_ANIMATED_IMAGES_FROM_OTHER_ASSETS,
+ *                     GENERATE_DESIGN_VERSIONS_FOR_IMAGES and GENERATE_VIDEOS_FROM_OTHER_ASSETS "By default, advertisers
+ *                     are opted in for DemandGenMultiAssetAd"; GENERATE_LANDING_PAGE_TEXT, GENERATE_SHORTER_YOUTUBE_VIDEOS
+ *                     and GENERATE_VERTICAL_YOUTUBE_VIDEOS opted in by default for DemandGenVideoResponsiveAdInfo — so a new
+ *                     Demand Gen image or video ad says OPTED_OUT for each unless the person asks (Owner's rule: Google
+ *                     acting on its own is off unless asked).
  */
 import { changeLines, keywordTextProblem, money, plural, type GoogleChangeDraft } from './change-draft.js'
 import { httpsUrlProblem, textKey, widthProblem } from './change-ads.js'
 import { microsOfCents } from './live.js'
-import { audienceCriterion, DEMOGRAPHIC_FIELD, DEMOGRAPHIC_VALUES, type AudienceKind, type DemographicDimension } from './live-targeting.js'
+import { adjustmentWords, audienceCriterion, DEMOGRAPHIC_FIELD, DEMOGRAPHIC_VALUES, smartBiddingWords, type AudienceKind, type DemographicDimension } from './live-targeting.js'
 import { exclusionInfo, exclusionKey, normalizeExclusion, type ExclusionKind } from './live-exclusions.js'
 import {
-  DG_CHANNEL_FIELD, DG_CHANNELS, YOUTUBE_ID, type ChannelControls, type DgChannel, type LiveMediaAsset, type LiveTypedAd,
-  type LiveTypedAdGroup, type LiveTypedCampaign, type LiveTypedCriterion, type TargetKind,
+  DG_CHANNEL_FIELD, DG_CHANNELS, FREQUENCY_EVENTS, FREQUENCY_LEVELS, FREQUENCY_UNITS, frequencyKey, YOUTUBE_ID, type ChannelControls,
+  type DgChannel, type FrequencyCap, type LiveMediaAsset, type LiveTypedAd, type LiveTypedAdGroup, type LiveTypedCampaign,
+  type LiveTypedCriterion, type TargetKind,
 } from './live-campaign-types.js'
+import { displaySizeProblem, IMAGE_AD_MAX_BYTES, type PreparedBundle } from './media-bundles.js'
 import type { PreparedImage } from './asset-images.js'
 import type { GoogleMutateOperation, GoogleMutateResponse } from './write-client.js'
 
-export type { ChannelControls, DgChannel, TargetKind } from './live-campaign-types.js'
+export type { ChannelControls, DgChannel, FrequencyCap, TargetKind } from './live-campaign-types.js'
 
 // ── what Nexus makes ────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -121,6 +150,8 @@ const GOOGLE_ID = /^\d{1,20}$/
 export interface ImageRef { assetId?: string | null; imageUrl?: string | null; libraryImageId?: string | null }
 /** A YouTube video an ad uses: a YOUTUBE_VIDEO asset the account has, or a video (its id or link): its asset is made. */
 export interface VideoRef { assetId?: string | null; youtubeVideoId?: string | null }
+/** An HTML5 ad's ZIP: a MEDIA_BUNDLE asset the account has, or a ZIP from an https link (its asset is made). */
+export interface Html5Ref { assetId?: string | null; zipUrl?: string | null }
 
 export type ImageSlot = 'marketing' | 'square' | 'portrait' | 'tallPortrait' | 'logo' | 'landscapeLogo' | 'any'
 interface Shape { name: string; ratio: number; minWidth: number; minHeight: number }
@@ -160,18 +191,28 @@ export function youtubeIdOf(value: string | null | undefined): string | null {
   return 'problem' in got ? null : got.value
 }
 
-/** What the media of a request asks the tool to read: new images, existing assets, YouTube videos. */
-export interface MediaNeeds { imageSources: ImageRef[]; assetIds: string[]; youtubeIds: string[] }
+/** What the media of a request asks the tool to read: new images, existing assets, YouTube videos, HTML5 ZIPs. */
+export interface MediaNeeds { imageSources: ImageRef[]; assetIds: string[]; youtubeIds: string[]; bundleUrls: string[] }
 
 export const IMAGE_FIELDS = ['marketingImages', 'squareMarketingImages', 'portraitMarketingImages', 'tallPortraitMarketingImages', 'logoImages', 'squareLogoImages', 'images'] as const
 type ImageField = typeof IMAGE_FIELDS[number]
 
 /** Every image and video the ads (to make or to edit) name, once each. */
-export function mediaNeeds(ads: Array<Partial<AdFields> & { cards?: CarouselCardRequest[] | null }>): MediaNeeds {
+export function mediaNeeds(ads: Array<Partial<AdFields> & { cards?: CarouselCardRequest[] | null; image?: ImageRef | null; html5?: Html5Ref | null }>): MediaNeeds {
   const sources = new Map<string, ImageRef>()
   const assetIds = new Set<string>()
   const youtube = new Set<string>()
+  const bundles = new Set<string>()
   for (const ad of ads) {
+    if (ad.image) {
+      const key = imageSourceKey(ad.image)
+      if (key && !sources.has(key)) sources.set(key, ad.image)
+      if (ad.image.assetId && GOOGLE_ID.test(ad.image.assetId.trim())) assetIds.add(ad.image.assetId.trim())
+    }
+    if (ad.html5) {
+      if (ad.html5.zipUrl?.trim()) bundles.add(ad.html5.zipUrl.trim())
+      if (ad.html5.assetId && GOOGLE_ID.test(ad.html5.assetId.trim())) assetIds.add(ad.html5.assetId.trim())
+    }
     for (const field of IMAGE_FIELDS) {
       for (const ref of ad[field] ?? []) {
         const key = imageSourceKey(ref)
@@ -188,7 +229,7 @@ export function mediaNeeds(ads: Array<Partial<AdFields> & { cards?: CarouselCard
       for (const id of [card.marketingImageAssetId, card.squareMarketingImageAssetId, card.portraitMarketingImageAssetId]) if (id && GOOGLE_ID.test(id.trim())) assetIds.add(id.trim())
     }
   }
-  return { imageSources: [...sources.values()], assetIds: [...assetIds], youtubeIds: [...youtube] }
+  return { imageSources: [...sources.values()], assetIds: [...assetIds], youtubeIds: [...youtube], bundleUrls: [...bundles] }
 }
 
 export interface MediaLive {
@@ -198,10 +239,12 @@ export interface MediaLive {
   assets: LiveMediaAsset[]
   /** The account's YOUTUBE_VIDEO assets of the videos the request names: used again, not made twice. */
   youtube: LiveMediaAsset[]
+  /** Each HTML5 ZIP read, by its link: the ZIP, or why it cannot be one (media-bundles.ts). */
+  bundles?: Record<string, PreparedBundle | { problem: string }>
 }
 
-/** A new asset the change makes (its id `op:<n>` until Google gave one); an image records its fingerprint, not its bytes. */
-export interface NewAssetEntry { type: 'IMAGE' | 'YOUTUBE_VIDEO' | 'DEMAND_GEN_CAROUSEL_CARD'; assetId: string; text: string; sha256?: string }
+/** A new asset the change makes (its id `op:<n>` until Google gave one); an image or ZIP records its fingerprint, not its bytes. */
+export interface NewAssetEntry { type: 'IMAGE' | 'YOUTUBE_VIDEO' | 'DEMAND_GEN_CAROUSEL_CARD' | 'MEDIA_BUNDLE'; assetId: string; text: string; sha256?: string }
 
 // ── the operations of one request ───────────────────────────────────────────────────────────────────────────────
 
@@ -239,13 +282,62 @@ class Media {
     for (const a of live.youtube) if (a.youtubeVideoId && a.assetId && !this.byVideo.has(a.youtubeVideoId)) this.byVideo.set(a.youtubeVideoId, `${ops.customer}/assets/${a.assetId}`)
   }
 
-  private existing(assetId: string, type: string, where: string): LiveMediaAsset | null {
+  private existing(assetId: string, type: 'IMAGE' | 'YOUTUBE_VIDEO' | 'MEDIA_BUNDLE', where: string): LiveMediaAsset | null {
     const id = assetId.trim()
     if (!GOOGLE_ID.test(id)) { this.problems.push(`${where}: asset "${id}" is not a Google id`); return null }
     const a = this.live.assets.find((x) => x.assetId === id)
     if (!a) { this.problems.push(`${where}: asset ${id} is not in this account`); return null }
-    if (a.type !== type) { this.problems.push(`${where}: asset ${id} is ${a.type ?? 'of another type'}, not ${type === 'IMAGE' ? 'an image' : 'a YouTube video'}`); return null }
+    const word = { IMAGE: 'an image', YOUTUBE_VIDEO: 'a YouTube video', MEDIA_BUNDLE: 'an HTML5 ZIP (MEDIA_BUNDLE)' }[type]
+    if (a.type !== type) { this.problems.push(`${where}: asset ${id} is ${a.type ?? 'of another type'}, not ${word}`); return null }
     return a
+  }
+
+  /**
+   * An image ad's image (ImageAdInfo's image oneof): an existing image asset (image_asset), or a new image's bytes (data)
+   * — of an uploaded display ad size, at most 150 KB (media-bundles.ts).
+   */
+  imageAd(ref: ImageRef, where: string): Record<string, unknown> | null {
+    const given = [ref.assetId?.trim(), ref.imageUrl?.trim(), ref.libraryImageId?.trim()].filter(Boolean)
+    if (given.length !== 1) { this.problems.push(`${where}: give assetId, imageUrl or libraryImageId (one of them)`); return null }
+    const tooHeavy = (what: string, bytes: number | null | undefined) =>
+      (bytes && bytes > IMAGE_AD_MAX_BYTES ? `${what} is ${Math.ceil(bytes / 1024)} KB: Google takes an image ad of at most 150 KB` : null)
+    if (ref.assetId?.trim()) {
+      const a = this.existing(ref.assetId, 'IMAGE', where)
+      if (!a) return null
+      const p = displaySizeProblem(`${where} (asset ${a.assetId})`, a.width, a.height) ?? tooHeavy(`${where} (asset ${a.assetId})`, a.fileSize)
+      if (p) { this.problems.push(p); return null }
+      return { imageAsset: { asset: `${this.ops.customer}/assets/${a.assetId}` } }
+    }
+    const got = this.live.images[imageSourceKey(ref)!]
+    if (!got) { this.problems.push(`${where}: Nexus did not read the image`); return null }
+    if ('problem' in got) { this.problems.push(`${where}: ${got.problem}`); return null }
+    const p = displaySizeProblem(where, got.width, got.height) ?? tooHeavy(where, got.bytes)
+    if (p) { this.problems.push(p); return null }
+    return { data: got.data }
+  }
+
+  /** An HTML5 ad's ZIP: an existing MEDIA_BUNDLE asset, or a new one made from the ZIP read (once per content). */
+  bundle(ref: Html5Ref, where: string): string | null {
+    const asset = ref.assetId?.trim()
+    const url = ref.zipUrl?.trim()
+    if (!!asset === !!url) { this.problems.push(`${where}: give zipUrl or assetId (one of them)`); return null }
+    if (asset) {
+      const a = this.existing(asset, 'MEDIA_BUNDLE', where)
+      return a ? `${this.ops.customer}/assets/${a.assetId}` : null
+    }
+    const got = this.live.bundles?.[url!]
+    if (!got) { this.problems.push(`${where}: Nexus did not read the ZIP`); return null }
+    if ('problem' in got) { this.problems.push(`${where}: ${got.problem}`); return null }
+    const had = this.bySha.get(got.sha256)
+    if (had) return had
+    const res = `${this.ops.customer}/assets/${this.ops.temp()}`
+    const tag = `asset:${this.created.length}`
+    const name = `${got.label ?? 'HTML5 ad'} ${got.sha256.slice(0, 8)}`.slice(0, 120)
+    this.ops.push({ assetOperation: { create: { resourceName: res, name, type: 'MEDIA_BUNDLE', mediaBundleAsset: { data: got.data } } } }, tag)
+    this.created.push({ type: 'MEDIA_BUNDLE', assetId: tag, text: `HTML5 ZIP ${name} (${got.width}×${got.height}, ${plural(got.files, 'file')}, ${Math.ceil(got.bytes / 1024)} KB)`, sha256: got.sha256, tag })
+    this.bySha.set(got.sha256, res)
+    this.tagOf.set(res, tag)
+    return res
   }
 
   /** The resource name of an image (an existing one, or a new asset made for it), or null with the problem said. */
@@ -365,7 +457,7 @@ export interface CarouselCardRequest {
 }
 
 /** The ad kinds a person names (each is one Google ad type; an App ad's type follows its campaign's sub type). */
-export const AD_KINDS = ['multi-asset', 'carousel', 'video', 'product', 'responsive-display', 'app'] as const
+export const AD_KINDS = ['multi-asset', 'carousel', 'video', 'product', 'responsive-display', 'image', 'html5-upload', 'app'] as const
 export type AdKind = typeof AD_KINDS[number]
 
 export interface TypedAdRequest extends AdFields {
@@ -378,10 +470,17 @@ export interface TypedAdRequest extends AdFields {
   accentColor?: string | null
   allowFlexibleColor?: boolean | null
   formatSetting?: 'ALL_FORMATS' | 'NATIVE' | 'NON_NATIVE' | null
-  /** Responsive display ads: Google may enhance the images (off unless asked). */
+  /**
+   * Google may enhance the media (off unless asked): a responsive display ad's images; a Demand Gen image ad's animated
+   * images and design versions; a Demand Gen video ad's shorter and vertical videos and landing page text.
+   */
   assetEnhancements?: boolean | null
-  /** Responsive display ads: Google may make videos from the assets (off unless asked). */
+  /** Google may make videos from the assets (off unless asked): responsive display and Demand Gen image ads. */
   autogenVideo?: boolean | null
+  /** An image ad (Display): the ad itself, ONE image of an uploaded display ad size. */
+  image?: ImageRef | null
+  /** An HTML5 ad (Display): its ZIP. */
+  html5?: Html5Ref | null
 }
 
 type FieldShape = 'texts' | 'text' | 'string' | 'textAsset' | 'textInList' | 'images' | 'image' | 'videos'
@@ -497,6 +596,9 @@ export const AD_TYPES: Record<string, AdTypeSpec> = {
       videos: { key: 'youtubeVideos', path: 'youtube_videos', shape: 'videos', max: 20 },
     },
   },
+  // Uploaded display ads (Display): the ad is its one image, or its HTML5 ZIP — no texts (newAdBody builds their info).
+  IMAGE_AD: { info: 'imageAd', path: 'image_ad', word: 'image ad', finalUrl: 'required', fields: {} },
+  HTML5_UPLOAD_AD: { info: 'displayUploadAd', path: 'display_upload_ad', word: 'HTML5 ad', finalUrl: 'required', fields: {} },
   VIDEO_RESPONSIVE_AD: {
     info: 'videoResponsiveAd', path: 'video_responsive_ad', word: 'video responsive ad', finalUrl: 'required',
     fields: {
@@ -525,7 +627,7 @@ const FIELD_WORD: Record<AdField, string> = {
 export function adTypeOf(kind: TypedKind, subType: string | null, asked: AdKind | null | undefined): string | { problem: string } {
   const want = asked ?? (kind === 'DISPLAY' ? 'responsive-display' : kind === 'APP' ? 'app' : null)
   if (!want) return { problem: 'a Demand Gen ad names its type: multi-asset, carousel, video or product' }
-  const allowed: Record<TypedKind, AdKind[]> = { DEMAND_GEN: ['multi-asset', 'carousel', 'video', 'product'], DISPLAY: ['responsive-display'], APP: ['app'] }
+  const allowed: Record<TypedKind, AdKind[]> = { DEMAND_GEN: ['multi-asset', 'carousel', 'video', 'product'], DISPLAY: ['responsive-display', 'image', 'html5-upload'], APP: ['app'] }
   if (!allowed[kind].includes(want)) return { problem: `a ${KIND_WORD[kind]} campaign takes ${allowed[kind].join(', ')} ads, not ${want}` }
   switch (want) {
     case 'multi-asset': return 'DEMAND_GEN_MULTI_ASSET_AD'
@@ -533,6 +635,8 @@ export function adTypeOf(kind: TypedKind, subType: string | null, asked: AdKind 
     case 'video': return 'DEMAND_GEN_VIDEO_RESPONSIVE_AD'
     case 'product': return 'DEMAND_GEN_PRODUCT_AD'
     case 'responsive-display': return 'RESPONSIVE_DISPLAY_AD'
+    case 'image': return 'IMAGE_AD'
+    case 'html5-upload': return 'HTML5_UPLOAD_AD'
     case 'app': return subType === 'APP_CAMPAIGN_FOR_ENGAGEMENT' ? 'APP_ENGAGEMENT_AD' : subType === 'APP_CAMPAIGN_FOR_PRE_REGISTRATION' ? 'APP_PRE_REGISTRATION_AD' : 'APP_AD'
   }
 }
@@ -589,8 +693,35 @@ function fieldValue(spec: FieldSpec, field: AdField, value: unknown, media: Medi
   }
 }
 
-/** The ad's words for the preview: its first headline (or business name) and type. */
-const adLabel = (spec: AdTypeSpec, ad: AdFields) => `${spec.word} "${(ad.headlines?.[0] ?? ad.brandName ?? '').trim().slice(0, 40)}"`
+/** The ad's words for the preview: its first headline (or business name, or name) and type. */
+const adLabel = (spec: AdTypeSpec, ad: TypedAdRequest) => `${spec.word} "${(ad.headlines?.[0] ?? ad.brandName ?? ad.name ?? ad.finalUrl ?? '').trim().slice(0, 40)}"`
+
+/** Ad types whose Ad.name Google keeps ("only supported for DisplayUploadAd, ImageAd, … and DemandGen ads"). */
+const NAMED_ADS: readonly string[] = ['image_ad', 'display_upload_ad']
+
+/** Google acting on its own per Demand Gen ad type (AssetAutomationType, v25: each opted in by default for that type). */
+const DG_AUTOMATION: Record<string, Array<[string, 'assetEnhancements' | 'autogenVideo']>> = {
+  DEMAND_GEN_MULTI_ASSET_AD: [
+    ['GENERATE_ANIMATED_IMAGES_FROM_OTHER_ASSETS', 'assetEnhancements'], ['GENERATE_DESIGN_VERSIONS_FOR_IMAGES', 'assetEnhancements'],
+    ['GENERATE_VIDEOS_FROM_OTHER_ASSETS', 'autogenVideo'],
+  ],
+  DEMAND_GEN_VIDEO_RESPONSIVE_AD: [
+    ['GENERATE_SHORTER_YOUTUBE_VIDEOS', 'assetEnhancements'], ['GENERATE_VERTICAL_YOUTUBE_VIDEOS', 'assetEnhancements'], ['GENERATE_LANDING_PAGE_TEXT', 'assetEnhancements'],
+  ],
+}
+
+/**
+ * The AdGroupAd's own part of a new ad: a Demand Gen image or video ad says OPTED_OUT for each of Google's automations
+ * Google opts it into by default, unless the person asked (assetEnhancements / autogenVideo). Other ads: nothing.
+ */
+export function adGroupAdAutomation(adType: string, ad: TypedAdRequest): Record<string, unknown> {
+  const types = DG_AUTOMATION[adType]
+  if (!types) return {}
+  return { adGroupAdAssetAutomationSettings: types.map(([type, flag]) => ({ assetAutomationType: type, assetAutomationStatus: ad[flag] === true ? 'OPTED_IN' : 'OPTED_OUT' })) }
+}
+
+/** HTML5 ads need Google's permission for the account (said once per request). */
+const HTML5_NOTE = 'HTML5 ads: Google takes them only from accounts it allowed (support.google.com/google-ads/answer/1722096 — account age, spend and policy history, then "Apply for HTML5 access"); Google\'s check in this preview says whether this account may.'
 
 const HEX = /^#[0-9a-fA-F]{6}$/
 
@@ -629,31 +760,61 @@ function newAdBody(spec: AdTypeSpec, ad: TypedAdRequest, media: Media, where: st
     // Google acting on its own is OFF unless the person asks (Owner's rule for every new campaign Nexus makes).
     info.controlSpec = { enableAssetEnhancements: ad.assetEnhancements === true, enableAutogenVideo: ad.autogenVideo === true }
     if (ad.assetEnhancements || ad.autogenVideo) notes.push(`${where}: Google acts on its own — ${[ad.assetEnhancements && 'asset enhancements', ad.autogenVideo && 'videos made from the assets'].filter(Boolean).join(', ')}.`)
-  } else if (ad.mainColor || ad.accentColor || (ad.allowFlexibleColor !== undefined && ad.allowFlexibleColor !== null) || ad.formatSetting || ad.assetEnhancements || ad.autogenVideo) {
-    problems.push(`${where}: colours, format and Google's enhancements are for a responsive display ad`)
+  } else if (ad.mainColor || ad.accentColor || (ad.allowFlexibleColor !== undefined && ad.allowFlexibleColor !== null) || ad.formatSetting) {
+    problems.push(`${where}: colours and format are for a responsive display ad`)
   }
+  if (spec.info !== 'responsiveDisplayAd') {
+    const dg = DG_AUTOMATION[spec.info === 'demandGenMultiAssetAd' ? 'DEMAND_GEN_MULTI_ASSET_AD' : spec.info === 'demandGenVideoResponsiveAd' ? 'DEMAND_GEN_VIDEO_RESPONSIVE_AD' : '']
+    if (ad.assetEnhancements && !dg) problems.push(`${where}: Google's enhancements are for responsive display ads and Demand Gen image and video ads`)
+    if (ad.autogenVideo && !dg?.some(([, flag]) => flag === 'autogenVideo')) problems.push(`${where}: videos made by Google are for responsive display ads and Demand Gen image ads`)
+    if (dg && (ad.assetEnhancements || ad.autogenVideo)) {
+      notes.push(`${where}: Google acts on its own — ${dg.filter(([, flag]) => ad[flag]).map(([t]) => t.toLowerCase().replace(/^generate_/, '').replace(/_/g, ' ')).join(', ')}.`)
+    }
+  }
+  if (spec.info === 'imageAd') {
+    if (!ad.image) problems.push(`${where}: an image ad needs image (the ad itself: ONE image of an uploaded display ad size)`)
+    else { const v = media.imageAd(ad.image, `${where}, image`); if (v) Object.assign(info, v) }
+  } else if (ad.image) problems.push(`${where}: image is for an image ad (type image)`)
+  if (spec.info === 'displayUploadAd') {
+    if (!ad.html5) problems.push(`${where}: an HTML5 ad needs html5 (its ZIP: zipUrl or assetId)`)
+    else {
+      const res = media.bundle(ad.html5, `${where}, ZIP`)
+      if (res) { info.displayUploadProductType = 'HTML5_UPLOAD_AD'; info.mediaBundle = { asset: res } }
+    }
+    if (!notes.includes(HTML5_NOTE)) notes.push(HTML5_NOTE)
+  } else if (ad.html5) problems.push(`${where}: html5 is for an HTML5 ad (type html5-upload)`)
   const url = ad.finalUrl?.trim()
   if (spec.finalUrl === 'none' && url) problems.push(`${where}: an ${spec.word} has no final URL (it leads to the app's store page)`)
   if (spec.finalUrl === 'required' && !url) problems.push(`${where}: a ${spec.word} needs finalUrl`)
   if (url && spec.finalUrl !== 'none') { const p = httpsUrlProblem(where, url); if (p) problems.push(p) }
   const name = ad.name?.trim()
-  if (name && !spec.path.startsWith('demand_gen')) problems.push(`${where}: an ad name is for a Demand Gen ad`)
+  if (name && !spec.path.startsWith('demand_gen') && !NAMED_ADS.includes(spec.path)) problems.push(`${where}: an ad name is for Demand Gen, image and HTML5 ads`)
   if (problems.length > before) return null
   return { ...(url && spec.finalUrl !== 'none' ? { finalUrls: [url] } : {}), ...(name ? { name: name.slice(0, 255) } : {}), [spec.info]: info }
 }
 
 // ── targeting ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-export interface TargetItem { kind: TargetKind; value: string; exclude?: boolean | null }
+export interface TargetItem {
+  kind: TargetKind
+  value: string
+  exclude?: boolean | null
+  /**
+   * A targeted (not excluded) item's bid adjustment in a Display ad group (AdGroupCriterion.bid_modifier, 0.1–10; 1 or
+   * null = none). Kept on the item; it is not part of what the item is (targetKey).
+   */
+  bidModifier?: number | null
+}
 
 /** What each campaign kind takes in an ad group (Google's guides above); App: by sub type. */
 export function targetKindsOf(kind: TypedKind, subType: string | null): { include: readonly TargetKind[]; exclude: readonly TargetKind[] } {
   const SEGMENTS: TargetKind[] = ['user-list', 'user-interest', 'custom-audience', 'combined-audience', 'life-event']
-  // Demographics: everyone is shown by default, so they are only ever excluded here (a narrowing).
+  // Demographics: everyone is shown by default. Display ad groups may also target them (a first group of a dimension
+  // narrows it to the groups named, docs/targeting/criteria) with bid adjustments; Demand Gen only excludes them.
   const DEMOGRAPHICS: TargetKind[] = ['age-range', 'gender', 'parental-status', 'income-range']
   if (kind === 'DISPLAY') {
     const content: TargetKind[] = ['placement', 'topic', 'keyword', 'youtube-channel', 'youtube-video', 'mobile-app', 'app-category']
-    return { include: [...content, ...SEGMENTS], exclude: [...content, 'user-list', 'user-interest', 'custom-audience', 'combined-audience', ...DEMOGRAPHICS] }
+    return { include: [...content, ...SEGMENTS, ...DEMOGRAPHICS], exclude: [...content, 'user-list', 'user-interest', 'custom-audience', 'combined-audience', ...DEMOGRAPHICS] }
   }
   if (kind === 'DEMAND_GEN') return { include: ['audience', ...SEGMENTS, 'location', 'language'], exclude: ['location', ...DEMOGRAPHICS] }
   if (subType === 'APP_CAMPAIGN_FOR_ENGAGEMENT') return { include: ['user-list'], exclude: [] }
@@ -680,8 +841,23 @@ export const segmentKindOf = (kind: TargetKind): AudienceKind | null => SEGMENT_
 const PLACEMENT_LIKE: readonly string[] = ['placement', 'youtube-channel', 'youtube-video', 'mobile-app', 'app-category']
 const ID_KINDS: readonly string[] = ['topic', 'user-list', 'user-interest', 'custom-audience', 'combined-audience', 'life-event', 'audience', 'location', 'language']
 
-/** The item as Google takes it (YouTube links become ids, resource names their ids), or why not. */
+/** A bid adjustment as Nexus keeps it: null for none (×1), else the factor. */
+const bidOf = (m: number | null | undefined): number | null => (m === undefined || m === null || m === 1 ? null : m)
+
+/**
+ * The item as Google takes it (YouTube links become ids, resource names their ids), with its bid adjustment checked
+ * (0.1–10, only on a targeted item), or why not.
+ */
 export function normalizeTarget(item: TargetItem): TargetItem | { problem: string } {
+  const base = normalizeTargetValue(item)
+  if ('problem' in base || item.bidModifier === undefined) return base
+  const m = item.bidModifier
+  if (m !== null && !(typeof m === 'number' && m >= 0.1 && m <= 10)) return { problem: `${targetWords(base)}: a bid adjustment is between 0.1 and 10 (1 = none)` }
+  if (base.exclude && bidOf(m) !== null) return { problem: `${targetWords(base)}: an excluded item has no bid adjustment` }
+  return { ...base, bidModifier: bidOf(m) }
+}
+
+function normalizeTargetValue(item: TargetItem): TargetItem | { problem: string } {
   const v = String(item.value ?? '').trim()
   const word = TARGET_WORD[item.kind] ?? item.kind
   if (PLACEMENT_LIKE.includes(item.kind)) {
@@ -731,6 +907,9 @@ export function targetInfo(customer: string, item: TargetItem): Record<string, u
   }
 }
 
+/** Each demographic kind is a dimension of its own (an age narrows ages, not genders). */
+const DEMOGRAPHIC_DIMENSION_WORD: Record<DemographicDimension, string> = { AGE_RANGE: 'age ranges', GENDER: 'genders', PARENTAL_STATUS: 'parental statuses', INCOME_RANGE: 'household incomes' }
+
 /** Which "dimension" an item narrows: within one, values add up (OR); between them, they narrow together. */
 export function dimensionOf(kind: TargetKind): string {
   if (PLACEMENT_LIKE.includes(kind)) return 'placements'
@@ -738,20 +917,50 @@ export function dimensionOf(kind: TargetKind): string {
   if (kind === 'keyword') return 'keywords'
   if (kind === 'location') return 'locations'
   if (kind === 'language') return 'languages'
-  if (DEMOGRAPHIC_OF[kind]) return 'demographics'
+  const demographic = DEMOGRAPHIC_OF[kind]
+  if (demographic) return DEMOGRAPHIC_DIMENSION_WORD[demographic]
   return 'audiences'
+}
+/** One of a dimension, in words. */
+const DIMENSION_ONE: Record<string, string> = {
+  placements: 'placement', topics: 'topic', keywords: 'keyword', locations: 'location', languages: 'language', audiences: 'audience',
+  'age ranges': 'age range', genders: 'gender', 'parental statuses': 'parental status', 'household incomes': 'household income',
 }
 
 /** The dimension (dimensionOf) a TargetRestriction's targeting dimension narrows, or null. */
 const dimensionOfRestriction = (d: string): string | null =>
-  ({ AUDIENCE: 'audiences', TOPIC: 'topics', PLACEMENT: 'placements', KEYWORD: 'keywords', AGE_RANGE: 'demographics', GENDER: 'demographics', PARENTAL_STATUS: 'demographics', INCOME_RANGE: 'demographics' } as Record<string, string>)[d] ?? null
+  ({ AUDIENCE: 'audiences', TOPIC: 'topics', PLACEMENT: 'placements', KEYWORD: 'keywords', ...DEMOGRAPHIC_DIMENSION_WORD } as Record<string, string>)[d] ?? null
+
+/**
+ * Google's demographic rules on what an ad group holds after a change (docs/targeting/criteria, CriterionError): a group
+ * both targeted and excluded is a contradiction; every group of a dimension excluded is CANNOT_EXCLUDE_ALL_TARGETS; only
+ * the "unknown" group left to see the ads is CANNOT_TARGET_ONLY_UNDETERMINED. Only the dimensions `touched` are judged
+ * (an ad group Google already holds that way stays as it is).
+ */
+export function demographicProblems(where: string, after: TargetItem[], touched: Set<string>): string[] {
+  const out: string[] = []
+  for (const [kind, dim] of Object.entries(DEMOGRAPHIC_OF) as Array<[TargetKind, DemographicDimension]>) {
+    if (!touched.has(kind)) continue
+    const items = after.filter((t) => t.kind === kind)
+    const values: readonly string[] = DEMOGRAPHIC_VALUES[dim]
+    const excluded = new Set(items.filter((t) => t.exclude).map((t) => t.value))
+    const targeted = new Set(items.filter((t) => !t.exclude).map((t) => t.value))
+    const both = [...targeted].filter((v) => excluded.has(v))
+    if (both.length) out.push(`${where}: ${TARGET_WORD[kind]} ${both.join(', ')} is both targeted and excluded`)
+    const shown = (targeted.size ? [...targeted] : [...values]).filter((v) => !excluded.has(v))
+    if (!shown.length) out.push(`${where}: that leaves every ${TARGET_WORD[kind]} group out — Google refuses it (CANNOT_EXCLUDE_ALL_TARGETS: the ads could show to nobody)`)
+    else if (shown.length === 1 && shown[0].endsWith('UNDETERMINED')) out.push(`${where}: that leaves only the unknown ${TARGET_WORD[kind]} group — Google refuses it (CANNOT_TARGET_ONLY_UNDETERMINED)`)
+  }
+  return out
+}
 
 /** The names Google gave the segments and Audience resources named, by `kind|id` (a missing key: Google does not know it). */
 export type TargetNames = Record<string, { name: string | null; status: string | null }>
 const nameKey = (item: TargetItem) => `${item.kind}|${item.value}`
 export const targetWords = (item: TargetItem, names: TargetNames = {}) => {
   const n = names[nameKey(item)]?.name
-  return `${item.exclude ? 'exclude ' : ''}${TARGET_WORD[item.kind]} ${item.kind === 'keyword' ? `"${item.value}"` : item.value}${n ? ` (${n})` : ''}`
+  const bid = bidOf(item.bidModifier)
+  return `${item.exclude ? 'exclude ' : ''}${TARGET_WORD[item.kind]} ${item.kind === 'keyword' ? `"${item.value}"` : item.value}${n ? ` (${n})` : ''}${bid !== null ? ` (bid ${adjustmentWords(bid)})` : ''}`
 }
 
 /**
@@ -770,6 +979,10 @@ function checkTargets(items: TargetItem[], kind: TypedKind, subType: string | nu
       problems.push(`${where}: a ${KIND_WORD[kind]}${kind === 'APP' && subType ? ` (${subType})` : ''} ad group cannot ${item.exclude ? 'exclude' : 'target'} a ${TARGET_WORD[item.kind]}${list.length ? ` (it ${item.exclude ? 'excludes' : 'targets'} ${list.map((k) => TARGET_WORD[k]).join(', ')})` : ''}`)
       continue
     }
+    if (bidOf(item.bidModifier) !== null && (kind !== 'DISPLAY' || item.kind === 'keyword')) {
+      problems.push(`${where}: a bid adjustment on targeting is for a Display ad group's audiences, demographics, placements and topics (not ${kind !== 'DISPLAY' ? `a ${KIND_WORD[kind]} ad group` : 'a keyword: its bid is the ad group\'s'})`)
+      continue
+    }
     if (NAMED_TARGET_KINDS.includes(item.kind)) {
       const known = names[nameKey(item)]
       if (!known) { problems.push(`${where}: ${TARGET_WORD[item.kind]} ${item.value} is not in this account (google-ads-query can list them)`); continue }
@@ -784,7 +997,9 @@ function checkTargets(items: TargetItem[], kind: TypedKind, subType: string | nu
 }
 
 const criterionCreate = (customer: string, adGroup: string, item: TargetItem): GoogleMutateOperation =>
-  ({ adGroupCriterionOperation: { create: { adGroup, ...(item.exclude ? { negative: true } : {}), ...targetInfo(customer, item) } } })
+  ({ adGroupCriterionOperation: { create: { adGroup, ...(item.exclude ? { negative: true } : {}), ...(bidOf(item.bidModifier) !== null ? { bidModifier: item.bidModifier } : {}), ...targetInfo(customer, item) } } })
+/** The record form of an item: kind, value, exclude, and its bid adjustment when it has one. */
+const recordItem = (t: TargetItem): TargetItem => ({ kind: t.kind, value: t.value, exclude: t.exclude === true, ...(bidOf(t.bidModifier) !== null ? { bidModifier: t.bidModifier } : {}) })
 
 // ── bidding ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -968,6 +1183,8 @@ function channelsProblem(c: ChannelControls | null | undefined): string | null {
 
 interface GroupContext {
   kind: TypedKind
+  /** The campaign's name (said in a Smart Bidding note). */
+  campaignName: string
   subType: string | null
   currency: string
   bidding: TypedBidding | null
@@ -1015,6 +1232,11 @@ function newAdGroup(
     body.targetCpaMicros = microsOfCents(g.targetCpaCents)
   }
   const targets = checkTargets([...ctx.dgDefaults, ...(g.targeting ?? [])], ctx.kind, ctx.subType, ctx.names, where, problems)
+  problems.push(...demographicProblems(where, targets, new Set(targets.map((t) => t.kind))))
+  if (targets.some((t) => bidOf(t.bidModifier) !== null)) {
+    const smart = smartBiddingWords({ name: ctx.campaignName, bidding: ctx.bidding?.strategy ?? null }, 'other')
+    if (smart && !notes.includes(smart)) notes.push(smart)
+  }
   if (targets.some((t) => t.kind === 'audience')) {
     if (targets.some((t) => SEGMENT_KIND[t.kind] && !t.exclude)) problems.push(`${where}: an ad group targets an Audience or audience segments, not both`)
     // AudienceInfo needs the ad group made audience-grouped (immutable after it is made): Demand Gen targeting and App
@@ -1032,21 +1254,21 @@ function newAdGroup(
   const ads = g.ads ?? []
   if (!ads.length) notes.push(`${where}: no ads — it shows nothing until it has one.`)
   if (ads.length > MAX_ADS) problems.push(`${where}: at most ${MAX_ADS} ads in one ad group of a request`)
-  const adBodies: Array<{ body: Record<string, unknown>; label: string }> = []
+  const adBodies: Array<{ body: Record<string, unknown>; extra: Record<string, unknown>; label: string }> = []
   ads.forEach((ad, i) => {
     const type = adTypeOf(ctx.kind, ctx.subType, ad.type)
     if (typeof type !== 'string') { problems.push(`${where}, ad ${i + 1}: ${type.problem}`); return }
     const spec = AD_TYPES[type]
     if (type === 'DEMAND_GEN_PRODUCT_AD' && !ctx.feed) { problems.push(`${where}, ad ${i + 1}: a product ad needs the campaign's product feed (merchantId)`); return }
     const body2 = newAdBody(spec, ad, media, `${where}, ad ${i + 1}`, problems, notes)
-    if (body2) adBodies.push({ body: body2, label: adLabel(spec, ad) })
+    if (body2) adBodies.push({ body: body2, extra: adGroupAdAutomation(type, ad), label: adLabel(spec, ad) })
   })
   if (problems.length > before) return null
   ops.push({ adGroupOperation: { create: body } }, `group:${res}`)
   if (ctx.feed) ops.push({ adGroupCriterionOperation: { create: { adGroup: res, listingGroup: { type: 'UNIT' } } } })
   for (const t of targets) ops.push(criterionCreate(ops.customer, res, t))
   // Ads of a new ad group are ENABLED: the ad group's own status says whether they serve.
-  for (const a of adBodies) ops.push({ adGroupAdOperation: { create: { adGroup: res, status: 'ENABLED', ad: a.body } } })
+  for (const a of adBodies) ops.push({ adGroupAdOperation: { create: { adGroup: res, status: 'ENABLED', ad: a.body, ...a.extra } } })
   const settings = [
     ctx.kind === 'DEMAND_GEN' ? `channels: ${channelsText(g.channels ?? null)}` : null,
     ctx.kind !== 'APP' ? `optimized targeting ${g.optimizedTargeting ? 'ON' : 'off'}` : null,
@@ -1059,6 +1281,58 @@ function newAdGroup(
   for (const a of adBodies) lines.push([`"${name}" new ${a.label}`, '(none)', 'ENABLED'])
   if (g.optimizedTargeting) notes.push(`${where}: optimized targeting is ON — Google shows the ads beyond the targeting set here.`)
   return { name, tag: `group:${res}`, status, ads: adBodies.length }
+}
+
+// ── frequency caps ──────────────────────────────────────────────────────────────────────────────────────────────
+
+/** A frequency cap as a person names it (defaults: per campaign, impressions, a time length of 1). */
+export interface FrequencyCapRequest {
+  events: number
+  timeUnit: string
+  timeLength?: number | null
+  level?: string | null
+  eventType?: string | null
+}
+const LEVEL_WORD: Record<string, string> = { CAMPAIGN: 'per campaign', AD_GROUP: 'per ad group', AD_GROUP_AD: 'per ad' }
+const capText = (c: FrequencyCap) =>
+  `${plural(c.events, c.eventType === 'VIDEO_VIEW' ? 'video view' : 'impression')} a ${c.timeLength > 1 ? `${c.timeLength} ` : ''}${c.timeUnit.toLowerCase()}${c.timeLength > 1 ? 's' : ''} ${LEVEL_WORD[c.level]}`
+export const capsText = (caps: FrequencyCap[] | undefined) => (caps?.length ? caps.map(capText).join('; ') : 'none (no cap)')
+const capBody = (c: FrequencyCap) => ({ key: { level: c.level, eventType: c.eventType, timeUnit: c.timeUnit, timeLength: c.timeLength }, cap: c.events })
+
+/**
+ * The caps a request names, as Google takes them (sorted by key), or the problems: Display and Demand Gen only, a Display
+ * campaign caps impressions (Google Ads Help 117579), a cap of at least 1 (MAX_IMPRESSIONS_NOT_IN_RANGE), one cap per key.
+ */
+export function frequencyCapsOfRequest(kind: TypedKind, asked: FrequencyCapRequest[], problems: string[]): FrequencyCap[] {
+  if (asked.length && kind === 'APP') { problems.push('frequency caps are for Display and Demand Gen campaigns (Google picks how often App ads show)'); return [] }
+  const out: FrequencyCap[] = []
+  for (const [i, a] of asked.entries()) {
+    const where = `frequency cap ${i + 1}`
+    const cap = {
+      events: a.events, timeUnit: String(a.timeUnit ?? '').toUpperCase(), timeLength: a.timeLength ?? 1,
+      level: String(a.level ?? 'CAMPAIGN').toUpperCase(), eventType: String(a.eventType ?? 'IMPRESSION').toUpperCase(),
+    } as FrequencyCap
+    if (!Number.isInteger(cap.events) || cap.events < 1) problems.push(`${where}: the cap is a whole number of at least 1 (Google's rule)`)
+    if (!Number.isInteger(cap.timeLength) || cap.timeLength < 1) problems.push(`${where}: the time length is a whole number of at least 1`)
+    if (!(FREQUENCY_UNITS as readonly string[]).includes(cap.timeUnit)) problems.push(`${where}: the time unit is ${FREQUENCY_UNITS.join(', ')}`)
+    if (!(FREQUENCY_LEVELS as readonly string[]).includes(cap.level)) problems.push(`${where}: the level is ${FREQUENCY_LEVELS.join(', ')}`)
+    if (!(FREQUENCY_EVENTS as readonly string[]).includes(cap.eventType)) problems.push(`${where}: the event is ${FREQUENCY_EVENTS.join(', ')}`)
+    if (kind === 'DISPLAY' && cap.eventType !== 'IMPRESSION') problems.push(`${where}: a Display campaign caps impressions (Google Ads Help 117579)`)
+    if (out.some((x) => frequencyKey(x) === frequencyKey(cap))) problems.push(`${where}: two caps of one key (${capText(cap)}): Google takes one`)
+    out.push(cap)
+  }
+  return out.sort((a, b) => frequencyKey(a).localeCompare(frequencyKey(b)))
+}
+
+/** Why new caps let the same people see the ads more often: a cap taken away, or one raised (each a sentence). */
+export function frequencyCapsSpend(from: FrequencyCap[], to: FrequencyCap[]): string[] {
+  const out: string[] = []
+  for (const f of from) {
+    const t = to.find((x) => frequencyKey(x) === frequencyKey(f))
+    if (!t) out.push(`Takes the frequency cap "${capText(f)}" away — the same people can see the ads more often`)
+    else if (t.events > f.events) out.push(`Raises the frequency cap ${capText(f)} → ${t.events}`)
+  }
+  return out
 }
 
 // ── create ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1084,6 +1358,8 @@ export interface TypedCampaignCreateRequest {
   /** Demand Gen: a Merchant Center feed for product ads. */
   merchant?: { merchantId: string; feedLabel?: string | null } | null
   app?: AppSettingsRequest | null
+  /** Display and Demand Gen: how often one person may see the ads. */
+  frequencyCaps?: FrequencyCapRequest[] | null
   adGroups: TypedAdGroupRequest[]
 }
 
@@ -1179,6 +1455,7 @@ export function typedCreateDraft(customer: string, currency: string, r: TypedCam
   if (r.merchant && !GOOGLE_ID.test(r.merchant.merchantId.trim())) problems.push('merchantId is not a Merchant Center id (digits)')
   if (r.merchant?.feedLabel && !/^[A-Z0-9_-]{1,20}$/.test(r.merchant.feedLabel)) problems.push(`the feed label "${r.merchant.feedLabel}" is not one Google takes (up to 20 of A–Z, 0–9, - and _)`)
   if (r.excludedContent?.length && r.kind === 'APP') problems.push('content exclusions are for Demand Gen and Display campaigns')
+  const caps = frequencyCapsOfRequest(r.kind, r.frequencyCaps ?? [], problems)
   if (!r.adGroups.length) problems.push('a campaign needs at least one ad group (with its ads)')
   if (r.adGroups.length > MAX_AD_GROUPS) problems.push(`at most ${MAX_AD_GROUPS} ad groups in one request`)
 
@@ -1206,6 +1483,7 @@ export function typedCreateDraft(customer: string, currency: string, r: TypedCam
     containsEuPoliticalAdvertising: r.euPoliticalAds ? 'CONTAINS_EU_POLITICAL_ADVERTISING' : 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
     ...(r.startDate ? { startDateTime: `${r.startDate} 00:00:00` } : {}),
     ...(r.endDate ? { endDateTime: `${r.endDate} 23:59:59` } : {}),
+    ...(caps.length ? { frequencyCaps: caps.map(capBody) } : {}),
   } } }, 'campaign')
 
   // Locations and languages: the campaign's (Display, App), or every ad group's (Demand Gen: upgraded targeting).
@@ -1229,7 +1507,7 @@ export function typedCreateDraft(customer: string, currency: string, r: TypedCam
   }
 
   const subType = r.kind === 'APP' && r.app ? appSubType(r.app) : null
-  const ctx: GroupContext = { kind: r.kind, subType, currency, bidding, names: live.names, feed: !!r.merchant, dgDefaults: r.kind === 'DEMAND_GEN' ? placeItems : [] }
+  const ctx: GroupContext = { kind: r.kind, campaignName: name, subType, currency, bidding, names: live.names, feed: !!r.merchant, dgDefaults: r.kind === 'DEMAND_GEN' ? placeItems : [] }
   const groups: MadeGroup[] = []
   const groupLines: Array<[string, unknown, unknown]> = []
   const groupNames = new Set<string>()
@@ -1258,6 +1536,7 @@ export function typedCreateDraft(customer: string, currency: string, r: TypedCam
   lines.push(['locations', '(none)', `${placeItems.filter((p) => p.kind === 'location' && !p.exclude).length} targeted, ${placeItems.filter((p) => p.kind === 'location' && p.exclude).length} excluded${r.kind === 'DEMAND_GEN' ? ' (set on every ad group)' : ''}`])
   lines.push(['languages', '(none)', placeItems.filter((p) => p.kind === 'language').map((p) => p.value).join(', ') || 'all'])
   if (r.excludedContent?.length) lines.push(['content exclusions', '(none)', r.excludedContent.map((c) => c.toUpperCase()).join(', ')])
+  if (caps.length) lines.push(['frequency caps', '(none)', capsText(caps)])
   lines.push(['dates', '(none)', `${r.startDate ?? 'starts when enabled'} → ${r.endDate ?? 'no end'}`])
   lines.push(...groupLines)
   for (const a of media.created.slice(0, 5)) lines.push(['new asset', '(none)', a.text])
@@ -1389,7 +1668,7 @@ export function typedAddDraft(customer: string, currency: string, r: TypedAddReq
   const groupStatus: 'ENABLED' | 'PAUSED' = serving && !r.enable ? 'PAUSED' : 'ENABLED'
   const dgGroupPlaces = kind === 'DEMAND_GEN' && c.upgradedTargeting
   const ctx: GroupContext = {
-    kind, subType: c.subType, currency, bidding: typedBiddingNow(c), names: live.names, feed: kind === 'DEMAND_GEN' && !!c.merchantId, dgDefaults: [],
+    kind, campaignName: c.name, subType: c.subType, currency, bidding: typedBiddingNow(c), names: live.names, feed: kind === 'DEMAND_GEN' && !!c.merchantId, dgDefaults: [],
     campaignPlaces: kind === 'DEMAND_GEN' && !c.upgradedTargeting,
   }
   const ownLocation = (g: TypedAdGroupRequest) => (g.targeting ?? []).some((t) => t.kind === 'location' && !t.exclude)
@@ -1435,7 +1714,7 @@ export function typedAddDraft(customer: string, currency: string, r: TypedAddReq
       const body = newAdBody(spec, ad, media, `${where}, ad ${j + 1}`, problems, notes)
       if (!body) return
       const tag = `ad:${g.adGroupId}:${i}:${j}`
-      ops.push({ adGroupAdOperation: { create: { adGroup: `${customer}/adGroups/${g.adGroupId}`, status, ad: body } } }, tag)
+      ops.push({ adGroupAdOperation: { create: { adGroup: `${customer}/adGroups/${g.adGroupId}`, status, ad: body, ...adGroupAdAutomation(type, ad) } } }, tag)
       newAds.push({ adGroupId: g.adGroupId, tag })
       lines.push([`ad group "${g.name}" new ${adLabel(spec, ad)}`, '(none)', status])
       if (groupServes && status === 'ENABLED') spends.push(`Adds an ENABLED ${spec.word} to "${g.name}", which serves now: it can serve at once.`)
@@ -1505,6 +1784,8 @@ export interface TypedCampaignSettings {
   bidding?: TypedBidding
   /** The campaign's OWN budget: its daily amount, or (a campaign total budget) the total. */
   budgetCents?: number
+  /** Display and Demand Gen: the WHOLE list of frequency caps ([] = none). */
+  frequencyCaps?: FrequencyCap[]
 }
 export interface TypedAdGroupSettings {
   name?: string
@@ -1515,8 +1796,10 @@ export interface TypedAdGroupSettings {
   /** The ad group's own target CPA; 0 takes it off (the campaign's then applies). */
   targetCpaCents?: number
 }
-export interface TypedSettingsRequest extends TypedCampaignSettings {
+export interface TypedSettingsRequest extends Omit<TypedCampaignSettings, 'frequencyCaps'> {
   campaignId: string
+  /** Display and Demand Gen: the WHOLE list of frequency caps as it should be ([] takes every cap away). */
+  frequencyCaps?: FrequencyCapRequest[]
   /** Display and App: the campaign's own locations and languages (Demand Gen holds them at its ad groups). */
   addCampaignTargeting?: TargetItem[] | null
   removeCampaignTargeting?: TargetItem[] | null
@@ -1533,12 +1816,14 @@ export interface TypedSettingsLive {
   campaignNames: string[]
   names: TargetNames
 }
+/** A bid adjustment changed in place on targeting an ad group keeps (null = none). */
+export interface TargetRebid { item: TargetItem; from: number | null; to: number | null }
 export interface TypedSettingsRecord {
   campaignId: string
   campaign: TypedCampaignSettings
   campaignAdded?: TargetItem[]
   campaignRemoved?: TargetItem[]
-  adGroups: Array<{ adGroupId: string; settings: TypedAdGroupSettings; added: TargetItem[]; removed: TargetItem[] }>
+  adGroups: Array<{ adGroupId: string; settings: TypedAdGroupSettings; added: TargetItem[]; removed: TargetItem[]; rebid?: TargetRebid[] }>
 }
 
 /**
@@ -1560,7 +1845,7 @@ function widening(
     const plus = adds.filter((t) => !t.exclude && dimensionOf(t.kind) === dim).length
     const minus = removes.filter((t) => !t.exclude && dimensionOf(t.kind) === dim).length
     const left = was + plus - minus
-    if (was > 0 && plus > 0) (serves ? spends : warnings).push(`${where}: adds ${plural(plus, dim.replace(/s$/, ''), dim)} to the ${was} it targets — more people or places can see the ads${note}.`)
+    if (was > 0 && plus > 0) (serves ? spends : warnings).push(`${where}: adds ${plural(plus, DIMENSION_ONE[dim] ?? dim, dim)} to the ${was} it targets — more people or places can see the ads${note}.`)
     else if (was > 0 && left === 0) (serves ? spends : warnings).push(`${where}: takes away the last of its ${dim} — it then reaches everyone on ${dim}${note}.`)
     else if (was === 0 && plus > 0) warnings.push(`${where}: targets ${dim} from now — only those see the ads (narrower).`)
   }
@@ -1580,6 +1865,7 @@ export function typedCampaignNow(c: LiveTypedCampaign): TypedCampaignSettings {
     endDate: dayOf(c.end) && !dayOf(c.end)!.startsWith('2037-12-30') ? dayOf(c.end)! : 'none',
     ...(bidding ? { bidding } : {}),
     ...(own !== null && own !== undefined ? { budgetCents: own } : {}),
+    frequencyCaps: [...(c.frequencyCaps ?? [])].sort((a, b) => frequencyKey(a).localeCompare(frequencyKey(b))),
   }
 }
 
@@ -1653,6 +1939,17 @@ export function typedSettingsDraft(customer: string, currency: string, r: TypedS
         const why = typedBiddingSpends(now.bidding, asked, currency)
         if (why) spends.push(`${why}${note}.`)
       }
+    }
+  }
+  if (r.frequencyCaps !== undefined) {
+    const want = frequencyCapsOfRequest(kind, r.frequencyCaps, problems)
+    if (kind !== 'APP' && !same(want, now.frequencyCaps ?? [])) {
+      record('frequencyCaps', want)
+      fields.frequencyCaps = want.map(capBody); mask.push('frequency_caps')
+      lines.push(['frequency caps', capsText(now.frequencyCaps), capsText(want)])
+      for (const why of frequencyCapsSpend(now.frequencyCaps ?? [], want)) spends.push(`${why}${note}.`)
+      const tighter = want.filter((x) => !(now.frequencyCaps ?? []).some((f) => frequencyKey(f) === frequencyKey(x)) || (now.frequencyCaps ?? []).some((f) => frequencyKey(f) === frequencyKey(x) && x.events < f.events))
+      if (tighter.length) warnings.push(`Frequency: ${tighter.map(capText).join('; ')} — fewer showings to the same person (narrower).`)
     }
   }
   if (mask.length) operations.push({ campaignOperation: { update: { resourceName: `${customer}/campaigns/${c.campaignId}`, ...fields }, updateMask: mask.join(',') } })
@@ -1786,9 +2083,15 @@ export function typedSettingsDraft(customer: string, currency: string, r: TypedS
     // Targeting: what is added and what is taken away, and whether that widens who sees the ads.
     const has = live.criteria.filter((x) => x.adGroupId === g.adGroupId && x.kind !== 'listing-group') as Array<LiveTypedCriterion & { kind: TargetKind }>
     const hasKey = new Map(has.map((x) => [targetKey({ kind: x.kind, value: x.value, exclude: x.exclude }), x]))
+    // Targeting it holds, named again with another bid adjustment: the adjustment changes in place (Display).
+    const rebids: Array<TargetRebid & { criterionId: string }> = []
     const adds = checkTargets(a.addTargeting ?? [], kind, c.subType, live.names, where, problems).filter((t) => {
-      if (hasKey.has(targetKey(t))) { warnings.push(`${where}: ${targetWords(t, live.names)} is already there.`); return false }
-      return true
+      const found = hasKey.get(targetKey(t))
+      if (!found) return true
+      const from = bidOf(found.bidModifier)
+      if (t.bidModifier !== undefined && bidOf(t.bidModifier) !== from) rebids.push({ item: { kind: t.kind, value: found.value, exclude: false }, criterionId: found.criterionId, from, to: bidOf(t.bidModifier) })
+      else warnings.push(`${where}: ${targetWords(t, live.names)} is already there.`)
+      return false
     })
     if (kind === 'DEMAND_GEN' && !c.upgradedTargeting && adds.some((t) => t.kind === 'location' || t.kind === 'language')) {
       problems.push(`${where}: this Demand Gen campaign holds its locations and languages at the campaign, not its ad groups (addCampaignTargeting)`)
@@ -1800,21 +2103,36 @@ export function typedSettingsDraft(customer: string, currency: string, r: TypedS
       if ('problem' in n) { problems.push(`${where}: ${n.problem}`); continue }
       const found = hasKey.get(targetKey(n))
       if (!found) { warnings.push(`${where}: ${targetWords(n, live.names)} is not there.`); continue }
-      if (!removes.some((x) => x.criterionId === found.criterionId)) removes.push({ item: { kind: n.kind, value: found.value, exclude: n.exclude === true }, criterionId: found.criterionId })
+      if (!removes.some((x) => x.criterionId === found.criterionId)) removes.push({ item: recordItem({ kind: n.kind, value: found.value, exclude: n.exclude === true, bidModifier: found.bidModifier }), criterionId: found.criterionId })
     }
+    // Google's demographic rules on what the ad group holds after (only the dimensions this change touches).
+    const removedIds = new Set(removes.map((x) => x.criterionId))
+    problems.push(...demographicProblems(where, [...has.filter((x) => !removedIds.has(x.criterionId)), ...adds], new Set([...adds, ...removes.map((x) => x.item)].map((t) => t.kind))))
     if (kind === 'APP' && c.subType === 'APP_CAMPAIGN_FOR_ENGAGEMENT') {
       const lists = has.filter((x) => x.kind === 'user-list').length - removes.filter((x) => x.item.kind === 'user-list').length + adds.filter((t) => t.kind === 'user-list').length
       if (lists < 1) problems.push(`${where}: an App engagement ad group needs a user list (Google's rule)`)
     }
     for (const t of adds) { operations.push(criterionCreate(customer, `${customer}/adGroups/${g.adGroupId}`, t)); lines.push([`${where} targeting`, '(none)', targetWords(t, live.names)]) }
     for (const x of removes) { operations.push({ adGroupCriterionOperation: { remove: `${customer}/adGroupCriteria/${g.adGroupId}~${x.criterionId}` } }); lines.push([`${where} targeting`, targetWords(x.item, live.names), 'removed']) }
+    for (const r of rebids) {
+      operations.push({ adGroupCriterionOperation: { update: { resourceName: `${customer}/adGroupCriteria/${g.adGroupId}~${r.criterionId}`, bidModifier: r.to ?? 1 }, updateMask: 'bid_modifier' } })
+      lines.push([`${where} bid adjustment, ${targetWords(r.item, live.names)}`, adjustmentWords(r.from), adjustmentWords(r.to)])
+      if ((r.to ?? 1) > (r.from ?? 1)) (serves ? spends : warnings).push(`${where}: bids more for ${targetWords(r.item, live.names)} (${adjustmentWords(r.from)} → ${adjustmentWords(r.to)})${gNote}.`)
+    }
+    if (rebids.length || adds.some((t) => bidOf(t.bidModifier) !== null)) {
+      const smart = smartBiddingWords(c, 'other')
+      if (smart && !warnings.includes(smart)) warnings.push(smart)
+    }
     widening(where, has, adds, removes.map((x) => x.item), serves, gNote, live.names, spends, warnings, {
       observation: g.observation.map(dimensionOfRestriction).filter((d): d is string => !!d),
       signals: kind === 'APP' && c.subType === 'APP_CAMPAIGN',
     })
-    if (Object.keys(gAfter).length || adds.length || removes.length) {
+    if (Object.keys(gAfter).length || adds.length || removes.length || rebids.length) {
       before.adGroups.push({ adGroupId: g.adGroupId, settings: gBefore, added: [], removed: [] })
-      after.adGroups.push({ adGroupId: g.adGroupId, settings: gAfter, added: adds.map((t) => ({ kind: t.kind, value: t.value, exclude: t.exclude === true })), removed: removes.map((x) => x.item) })
+      after.adGroups.push({
+        adGroupId: g.adGroupId, settings: gAfter, added: adds.map(recordItem), removed: removes.map((x) => x.item),
+        ...(rebids.length ? { rebid: rebids.map(({ item, from, to }) => ({ item, from, to })) } : {}),
+      })
     }
   }
   if (problems.length) return { refusal: `Not queued (${plural(problems.length, 'problem')}): ${problems.slice(0, 25).join(' · ')}. Nothing was sent.` }
@@ -1831,7 +2149,7 @@ export function typedSettingsDraft(customer: string, currency: string, r: TypedS
     stands: {
       campaign: { id: c.campaignId, status: c.status, now, budget: c.budget },
       adGroups: live.adGroups.filter((g) => seenGroups.has(g.adGroupId)).map((g) => ({ ...typedAdGroupNow(g, c), id: g.adGroupId, status: g.status, grouped: g.audienceGrouped, observation: g.observation })),
-      criteria: live.criteria.filter((x) => seenGroups.has(x.adGroupId)).map((x) => `${x.adGroupId}~${x.criterionId}:${x.kind}:${x.value}:${x.exclude}`).sort(),
+      criteria: live.criteria.filter((x) => seenGroups.has(x.adGroupId)).map((x) => `${x.adGroupId}~${x.criterionId}:${x.kind}:${x.value}:${x.exclude}:${bidOf(x.bidModifier) ?? 1}`).sort(),
       places: cAsk.length ? (live.campaignCriteria ?? []).map((x) => `${x.criterionId}:${x.kind}:${x.value}:${x.exclude}`).sort() : null,
       names: r.name ? live.campaignNames.map((n) => n.trim().toLowerCase()).filter((n) => n === r.name!.trim().toLowerCase()) : null,
     },
@@ -1849,12 +2167,16 @@ export function typedSettingsNow(record: TypedSettingsRecord, live: TypedSetting
   const adGroups = record.adGroups.map((a) => {
     const g = live.adGroups.find((x) => x.adGroupId === a.adGroupId)
     const gNow = g ? typedAdGroupNow(g, c) : {}
-    const has = new Set(live.criteria.filter((x) => x.adGroupId === a.adGroupId && x.kind !== 'listing-group').map((x) => targetKey({ kind: x.kind as TargetKind, value: x.value, exclude: x.exclude })))
+    const mine = live.criteria.filter((x) => x.adGroupId === a.adGroupId && x.kind !== 'listing-group')
+    const has = new Set(mine.map((x) => targetKey({ kind: x.kind as TargetKind, value: x.value, exclude: x.exclude })))
+    const bidNow = (t: TargetItem) => bidOf(mine.find((x) => targetKey({ kind: x.kind as TargetKind, value: x.value, exclude: x.exclude }) === targetKey(t))?.bidModifier)
     return {
       adGroupId: a.adGroupId,
       settings: Object.fromEntries(Object.keys(a.settings).map((k) => [k, (gNow as TypedAdGroupSettings)[k as keyof TypedAdGroupSettings]])) as TypedAdGroupSettings,
-      added: a.added.filter((t) => has.has(targetKey(t))),
+      // An added item holds while it is there with the adjustment it was given; a rebid one while it has the new one.
+      added: a.added.filter((t) => has.has(targetKey(t)) && bidNow(t) === bidOf(t.bidModifier)),
       removed: a.removed.filter((t) => !has.has(targetKey(t))),
+      ...(a.rebid ? { rebid: a.rebid.filter((r) => has.has(targetKey(r.item))).map((r) => ({ ...r, to: bidNow(r.item) })) } : {}),
     }
   })
   const places = new Set((live.campaignCriteria ?? []).map((x) => targetKey(x)))

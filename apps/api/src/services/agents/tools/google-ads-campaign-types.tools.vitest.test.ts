@@ -12,6 +12,7 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 const h = vi.hoisted(() => ({
   mutate: vi.fn(),
   prepare: vi.fn(),
+  bundle: vi.fn(),
   live: {
     campaigns: [] as unknown[], budgets: [] as unknown[], typed: null as unknown, adGroups: [] as unknown[], criteria: [] as unknown[], ads: [] as unknown[],
     assets: [] as Array<{ assetId: string }>, youtube: [] as unknown[], audiences: [] as unknown[], segments: {} as Record<string, unknown>,
@@ -44,6 +45,10 @@ vi.mock('../../marketing/google-ads/live-targeting.js', async (importActual) => 
 vi.mock('../../marketing/google-ads/asset-images.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/asset-images.js')>()),
   prepareImage: h.prepare,
+}))
+vi.mock('../../marketing/google-ads/media-bundles.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../marketing/google-ads/media-bundles.js')>()),
+  prepareMediaBundle: h.bundle,
 }))
 vi.mock('../../marketing/google-ads/write-client.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/google-ads/write-client.js')>()),
@@ -81,6 +86,8 @@ const multiAsset = {
 beforeEach(() => {
   h.mutate.mockReset()
   h.prepare.mockReset()
+  h.bundle.mockReset()
+  h.bundle.mockImplementation(async (url: string) => ({ source: url, label: 'banner', bytes: 4096, sha256: 'cd'.repeat(32), files: 3, html: 'index.html', width: 300, height: 250, data: 'UEsDBA==' }))
   h.prepare.mockImplementation(async () => structuredClone(IMAGE))
   h.live.campaigns = [{ campaignId: '9', name: 'Search A', status: 'ENABLED' }]
   h.live.budgets = []
@@ -299,5 +306,61 @@ describe('the G11 tools', () => {
     expect(moved.ok).toBe(false)
     expect(moved.error ?? JSON.stringify(moved)).toMatch(/changed since this was approved/)
     expect(h.mutate).not.toHaveBeenCalled()
+  })
+})
+
+// ── G14b ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe('G14b: Display uploads, frequency caps, demographics with bid adjustments', () => {
+  it('create-google-display-campaign: an HTML5 ad (its ZIP read once through the public-address fetch) and an image ad, frequency caps, a targeted age range with its adjustment — Google checked it', async () => {
+    h.prepare.mockImplementation(async () => ({ ...IMAGE, width: 300, height: 250, bytes: 40_000 }))
+    const args = parsed('create-google-display-campaign', {
+      name: 'Display B', dailyBudgetCents: 1500, frequencyCaps: [{ events: 3, timeUnit: 'day' }],
+      adGroups: [{
+        name: 'G', defaultBidCents: 40, targeting: [{ kind: 'age-range', value: 'AGE_RANGE_25_34', bidModifier: '1.2' }],
+        ads: [
+          { type: 'html5-upload', name: 'HTML5 A', finalUrl: 'https://shop.example/a', html5: { zipUrl: 'https://cdn.example/banner.zip' } },
+          { type: 'image', finalUrl: 'https://shop.example/b', image: { imageUrl: 'https://cdn.example/rect.png' } },
+        ],
+      }],
+    })
+    const { preview, sent } = await previewAndRun('create-google-display-campaign', args, [])
+    expect(h.bundle).toHaveBeenCalledTimes(2)
+    expect(h.bundle).toHaveBeenCalledWith('https://cdn.example/banner.zip')
+    expect(preview.spendsMoney).toBe(false)
+    expect(sent.find((op) => op.campaignOperation)!.campaignOperation.create.frequencyCaps).toEqual([{ key: { level: 'CAMPAIGN', eventType: 'IMPRESSION', timeUnit: 'DAY', timeLength: 1 }, cap: 3 }])
+    expect(sent.find((op) => op.assetOperation)!.assetOperation.create).toMatchObject({ type: 'MEDIA_BUNDLE', mediaBundleAsset: { data: 'UEsDBA==' } })
+    const ads = sent.filter((op) => op.adGroupAdOperation).map((op) => op.adGroupAdOperation.create.ad)
+    expect(ads.map((a) => Object.keys(a).filter((k) => k !== 'finalUrls' && k !== 'name')[0])).toEqual(['displayUploadAd', 'imageAd'])
+    expect(sent.find((op) => op.adGroupCriterionOperation)!.adGroupCriterionOperation.create).toMatchObject({ bidModifier: 1.2, ageRange: { type: 'AGE_RANGE_25_34' } })
+    expect((preview.warnings as string[]).join(' ')).toMatch(/Apply for HTML5 access/)
+  })
+
+  it('set-google-campaign-type: a frequency cap raised and an age range\'s adjustment raised are SPENDS MONEY; undo puts both back (its request passes its own draft)', async () => {
+    h.live.typed = typedCampaign({ type: 'DISPLAY', bidding: 'MANUAL_CPC', frequencyCaps: [{ events: 3, timeUnit: 'DAY', timeLength: 1, level: 'CAMPAIGN', eventType: 'IMPRESSION' }] })
+    h.live.adGroups = [adGroup({ type: 'DISPLAY_STANDARD', channels: null, cpcBidCents: 40 })]
+    h.live.criteria = [{ adGroupId: '51', criterionId: '2', kind: 'age-range', value: 'AGE_RANGE_25_34', exclude: false, status: 'ENABLED', name: null, bidModifier: 1.1 }]
+    const args = parsed('set-google-campaign-type', {
+      campaignId: '21', frequencyCaps: [{ events: 5, timeUnit: 'DAY' }],
+      adGroups: [{ adGroupId: '51', addTargeting: [{ kind: 'age-range', value: 'AGE_RANGE_25_34', bidModifier: 1.5 }] }],
+    })
+    const { preview, sent, run } = await previewAndRun('set-google-campaign-type', args, [])
+    expect(preview.spendsMoney).toBe(true)
+    expect(sent.map((op) => Object.keys(op)[0])).toEqual(['campaignOperation', 'adGroupCriterionOperation'])
+    expect(sent[1].adGroupCriterionOperation).toEqual({ update: { resourceName: `${C}/adGroupCriteria/51~2`, bidModifier: 1.5 }, updateMask: 'bid_modifier' })
+    h.live.typed = typedCampaign({ type: 'DISPLAY', bidding: 'MANUAL_CPC', frequencyCaps: [{ events: 5, timeUnit: 'DAY', timeLength: 1, level: 'CAMPAIGN', eventType: 'IMPRESSION' }] })
+    h.live.criteria = [{ adGroupId: '51', criterionId: '2', kind: 'age-range', value: 'AGE_RANGE_25_34', exclude: false, status: 'ENABLED', name: null, bidModifier: 1.5 }]
+    const change = { before: run.change!.before, after: run.change!.after } as ToolChange
+    expect(await tool('set-google-campaign-type').undo!.current(change)).toEqual(change.after)
+    const undo = tool('set-google-campaign-type').undo!.request(change) as { tool: string; args: Record<string, unknown> }
+    expect(undo.args).toMatchObject({
+      campaignId: '21', frequencyCaps: [{ events: 3, timeUnit: 'DAY', timeLength: 1, level: 'CAMPAIGN', eventType: 'IMPRESSION' }],
+      adGroups: [{ adGroupId: '51', addTargeting: [{ kind: 'age-range', value: 'AGE_RANGE_25_34', exclude: false, bidModifier: 1.1 }] }],
+    })
+    const back = await undoDraft(undo)
+    expect(back.sent).toEqual([
+      { campaignOperation: { update: { resourceName: `${C}/campaigns/21`, frequencyCaps: [{ key: { level: 'CAMPAIGN', eventType: 'IMPRESSION', timeUnit: 'DAY', timeLength: 1 }, cap: 3 }] }, updateMask: 'frequency_caps' } },
+      { adGroupCriterionOperation: { update: { resourceName: `${C}/adGroupCriteria/51~2`, bidModifier: 1.1 }, updateMask: 'bid_modifier' } },
+    ])
   })
 })

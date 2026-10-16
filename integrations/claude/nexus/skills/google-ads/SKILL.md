@@ -61,8 +61,8 @@ Show one table: what changes, from → to, how many, the SPENDS MONEY lines, wha
 | Custom conversion goals (chosen actions); the custom goal a campaign uses | `set-google-custom-goals`; `set-google-conversion-goals` with `customGoals` (more actions for Smart Bidding: SPENDS MONEY) |
 | The account's settings, users, links, billing | `set-google-account-settings`, `set-google-user-access`, `set-google-account-links`, `set-google-billing` |
 | Experiments and campaign drafts | `create-google-experiment`, `set-google-experiment`, `schedule-google-experiment`, `end-google-experiment`, `promote-google-experiment`, `graduate-google-experiment`, `set-google-campaign-draft`, `promote-google-campaign-draft` |
-| Performance Max | `build-google-pmax`, `copy-google-pmax`, `set-google-pmax`, `set-google-customer-acquisition` |
-| Demand Gen, Display, App | the three create tools above, `add-google-campaign-type-ads`, `set-google-campaign-type`, `edit-google-campaign-type-ads` |
+| Performance Max (with text guidelines, page feeds linked, an asset group's tracking); page feeds (URL inclusions) themselves | `build-google-pmax`, `copy-google-pmax`, `set-google-pmax`, `set-google-customer-acquisition`; `set-google-page-feed` |
+| Demand Gen, Display, App (Display image and HTML5 ads, frequency caps, demographics with bid adjustments) | the three create tools above, `add-google-campaign-type-ads`, `set-google-campaign-type`, `edit-google-campaign-type-ads` |
 | Delete | `remove-google-ads-items` (campaigns, ad groups, keywords, ads, budgets, lists) — only what the person asked to delete |
 | Merchant Center | `set-google-merchant-products`, `set-google-merchant-data-sources`, `set-google-merchant-promotions` |
 
@@ -78,6 +78,7 @@ Say so plainly, and that the person does it in Google:
 - **A reusable audience cannot be removed**: Google's API has no remove for it; a new one stays, reaching nobody until a campaign uses it.
 - **Video campaigns**: not made or changed through the API. Only a video responsive ad's own fields are edited in place (`edit-google-campaign-type-ads`).
 - **Location assets**: Google makes them from a Business Profile linked in Google Ads; that link needs the profile owner's sign-in, which Nexus does not have (`link-business-profile` answers so).
+- **HTML5 display ads** are taken only from accounts Google allowed (account age, spend, policy history, then "Apply for HTML5 access" in Google Ads); Google's check in the preview says whether this account may. Dynamic HTML5 ads (feed-based) are not made.
 - **A Merchant Center link request** is sent from Merchant Center; Nexus accepts it (`accept-merchant-request`) or links directly. A whole YouTube channel is linked in Google Ads; the API links single videos.
 - **The Merchant Center primary feed** (Shopify's Google channel) is never touched. Nexus writes only into data sources it made (supplemental and promotion). A supplemental source reaches products only once a person links it to the primary in Merchant Center (Data sources › the primary › Rules). Price, sale price, availability and link are changed in Nexus, from where they reach Shopify and its feed.
 

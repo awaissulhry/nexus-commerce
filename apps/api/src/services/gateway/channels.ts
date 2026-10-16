@@ -241,6 +241,11 @@ export const GOOGLE_ADS_MUTATE_KINDS: ReadonlySet<string> = new Set([
   // makes and changes (userListOperationProblem: never a Customer Match list), v25 MutateOperation.custom_conversion_goal_
   // operation and user_list_operation.
   'customConversionGoalOperation', 'userListOperation',
+  // G14b (2026-10-16): page feeds (URL inclusions) — a PAGE_FEED asset set made, its URLs added and taken away, and its link
+  // to a campaign (v25 MutateOperation.asset_set_operation, asset_set_asset_operation, campaign_asset_set_operation).
+  // PMAX_OPERATION_ACTIONS narrows them to what set-google-page-feed, set-google-pmax and build-google-pmax send, and an
+  // asset set made is a PAGE_FEED one only (assetSetCreateProblem).
+  'assetSetOperation', 'assetSetAssetOperation', 'campaignAssetSetOperation',
 ])
 
 /**
@@ -254,6 +259,31 @@ export const PMAX_OPERATION_ACTIONS: Readonly<Record<string, readonly string[]>>
   assetGroupListingGroupFilterOperation: ['create', 'remove'],
   assetGroupSignalOperation: ['create', 'remove'],
   audienceOperation: ['create', 'update'],
+  // G14b: a page feed is made (never changed or removed here), its URLs linked and unlinked, the feed linked to a campaign
+  // and unlinked (AssetSetAssetOperation / CampaignAssetSetOperation have create and remove only).
+  assetSetOperation: ['create'],
+  assetSetAssetOperation: ['create', 'remove'],
+  campaignAssetSetOperation: ['create', 'remove'],
+}
+
+/** G14b: an asset set Nexus makes is a page feed (type PAGE_FEED), with a name and a temporary resource name only. */
+function assetSetCreateProblem(op: unknown): string | null {
+  const create = (op as { create?: unknown } | null)?.create
+  if (!isObject(create)) return null
+  if (create.type !== 'PAGE_FEED') return `it makes an asset set of type ${String(create.type ?? 'none')} (Nexus makes PAGE_FEED asset sets only)`
+  if (onlyKeys(create, ['resourceName', 'name', 'type']).length) return 'it makes an asset set with more than a name and its type'
+  return null
+}
+
+/** G14b: a campaign asset set link Nexus makes names exactly its campaign and its asset set (resource names), nothing else. */
+function campaignAssetSetCreateProblem(op: unknown): string | null {
+  const create = (op as { create?: unknown } | null)?.create
+  if (create === undefined) return null
+  if (!isObject(create) || onlyKeys(create, ['campaign', 'assetSet']).length || typeof create.campaign !== 'string' || typeof create.assetSet !== 'string'
+    || !/^customers\/\d{1,20}\/campaigns\/-?\d{1,20}$/.test(create.campaign) || !/^customers\/\d{1,20}\/assetSets\/-?\d{1,20}$/.test(create.assetSet)) {
+    return 'it links an asset set to a campaign without exactly the campaign and the asset set'
+  }
+  return null
 }
 
 /**
@@ -616,6 +646,11 @@ export function googleMutateBodyOf(body: unknown, customer?: string | null): Goo
       const inner = (operation as Record<string, unknown>)[kinds[0]]
       const actions = inner && typeof inner === 'object' ? Object.keys(inner).filter((k) => k !== 'updateMask') : []
       if (actions.length !== 1 || !allowed.includes(actions[0])) return { refusal: `it holds a ${kinds[0]} ${actions.join('/') || 'without an action'} (Nexus sends ${allowed.join(' or ')} only)` }
+    }
+    if (kinds[0] === 'assetSetOperation' || kinds[0] === 'campaignAssetSetOperation') {
+      const inner = (operation as Record<string, unknown>)[kinds[0]]
+      const problem = kinds[0] === 'assetSetOperation' ? assetSetCreateProblem(inner) : campaignAssetSetCreateProblem(inner)
+      if (problem) return { refusal: problem }
     }
   }
   return { check: parsed.validateOnly === true, body: JSON.stringify(parsed) }

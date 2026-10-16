@@ -21,6 +21,11 @@
  * builders, with every field and rule checked in Google's v25 reference, are marketing/google-ads/change-campaign-types.ts;
  * the live reads live-campaign-types.ts; images come through asset-images.ts (G6). build-google-campaigns and
  * copy-google-campaign do not hold these types yet (programme 2 G13).
+ *
+ * G14b (2026-10-16) added: Display image ads and HTML5 ads (a ZIP from an https link through the one public-address
+ * fetch, media-bundles.ts), frequency caps (Display and Demand Gen), demographics targeted on Display ad groups with bid
+ * adjustments (and bid adjustments on a Display ad group's audiences, placements and topics, changed in place), and
+ * Google's own automation of new Demand Gen image and video ads OFF unless asked.
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -37,14 +42,15 @@ import {
   type TypedEditRequest, type TypedKind, type TypedSettingsRecord, type TypedSettingsRequest,
 } from '../../marketing/google-ads/change-campaign-types.js'
 import {
-  DG_CHANNELS, DG_STRATEGIES, liveAudiences, liveMediaAssets, liveTypedAdGroups, liveTypedAds, liveTypedCampaign, liveTypedCriteria,
-  liveYoutubeAssets, TARGET_KINDS,
+  DG_CHANNELS, DG_STRATEGIES, FREQUENCY_EVENTS, FREQUENCY_LEVELS, FREQUENCY_UNITS, liveAudiences, liveMediaAssets, liveTypedAdGroups, liveTypedAds,
+  liveTypedCampaign, liveTypedCriteria, liveYoutubeAssets, TARGET_KINDS,
 } from '../../marketing/google-ads/live-campaign-types.js'
 import { MAX_IMAGE_BYTES_TOTAL } from '../../marketing/google-ads/change-assets-all.js'
 import { idOf, liveBudgets, liveCampaigns } from '../../marketing/google-ads/live.js'
 import { liveCampaignCriteria } from '../../marketing/google-ads/live-campaigns.js'
 import { liveSegmentNames, type AudienceKind } from '../../marketing/google-ads/live-targeting.js'
 import { prepareImage, type PreparedImage } from '../../marketing/google-ads/asset-images.js'
+import { prepareMediaBundle, type PreparedBundle } from '../../marketing/google-ads/media-bundles.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
 import type { GoogleAdsTarget } from '../../marketing/google-ads/types.js'
 
@@ -78,6 +84,8 @@ const why300 = (text: string) => (text.length > 300 ? `${text.slice(0, 299)}…`
 
 /** At most this many new images in one request (each is fetched and sent inside the one request). */
 export const MAX_NEW_IMAGES = 20
+/** At most this many new HTML5 ZIPs in one request (each up to 600 KB, fetched and sent inside the one request). */
+export const MAX_NEW_BUNDLES = 5
 
 /** The images to make (fetched one at a time, bounded), the assets named by id, the YouTube videos named. */
 async function mediaFor(target: GoogleAdsTarget, needs: MediaNeeds): Promise<MediaLive> {
@@ -91,10 +99,16 @@ async function mediaFor(target: GoogleAdsTarget, needs: MediaNeeds): Promise<Med
     if (!('problem' in got)) bytes += got.bytes
     images[key] = got
   }
+  const bundles: Record<string, PreparedBundle | { problem: string }> = {}
+  for (const [i, url] of needs.bundleUrls.entries()) {
+    if (i >= MAX_NEW_BUNDLES) { bundles[url] = { problem: `not read: at most ${MAX_NEW_BUNDLES} new HTML5 ZIPs in one request` }; continue }
+    bundles[url] = await prepareMediaBundle(url)
+  }
   return {
     images,
     assets: needs.assetIds.length ? await liveMediaAssets(target, needs.assetIds) : [],
     youtube: needs.youtubeIds.length ? await liveYoutubeAssets(target, needs.youtubeIds) : [],
+    ...(needs.bundleUrls.length ? { bundles } : {}),
   }
 }
 
@@ -182,23 +196,30 @@ const cardArg = z.object({
 
 const newAdArg = z.object({
   type: z.preprocess(lower, z.enum(AD_KINDS)).optional()
-    .describe('the ad: Demand Gen multi-asset (image ad), carousel, video or product (a feed campaign); Display responsive-display (default); App app (default)'),
-  name: z.string().trim().min(1).max(255).optional().describe('Demand Gen: the ad\'s name in reports (it cannot be changed later)'),
+    .describe('the ad: Demand Gen multi-asset (image ad), carousel, video or product (a feed campaign); Display responsive-display (default), image (an uploaded image ad) or html5-upload (an HTML5 ad); App app (default)'),
+  name: z.string().trim().min(1).max(255).optional().describe('Demand Gen, image and HTML5 ads: the ad\'s name in reports (it cannot be changed later)'),
   ...adFields,
   cards: z.array(cardArg).max(10).optional().describe('carousel ads: 2 to 10 cards, each with an EXISTING image asset (make images first with add-google-assets: MARKETING_IMAGE / SQUARE_MARKETING_IMAGE)'),
   mainColor: z.string().trim().max(7).optional().describe('responsive display ads: the main colour (#rrggbb; with accentColor)'),
   accentColor: z.string().trim().max(7).optional().describe('responsive display ads: the accent colour (#rrggbb; with mainColor)'),
   allowFlexibleColor: z.boolean().optional().describe('responsive display ads: Google may use other colours (default true; must be true without colours)'),
   formatSetting: z.preprocess(upper, z.enum(['ALL_FORMATS', 'NATIVE', 'NON_NATIVE'])).optional().describe('responsive display ads: ALL_FORMATS (default), NATIVE or NON_NATIVE'),
-  assetEnhancements: z.boolean().optional().describe('responsive display ads: Google may enhance the images (default off)'),
-  autogenVideo: z.boolean().optional().describe('responsive display ads: Google may make videos from the assets (default off)'),
+  assetEnhancements: z.boolean().optional().describe('Google may enhance the media (default off): responsive display ads\' images; Demand Gen image ads\' animated images and design versions; Demand Gen video ads\' shorter and vertical videos and landing page text'),
+  autogenVideo: z.boolean().optional().describe('responsive display and Demand Gen image ads: Google may make videos from the assets (default off)'),
+  image: imageRefArg.optional().describe('image ads (type image, Display): the ad itself — ONE image of an uploaded display ad size (300×250, 336×280, 728×90, 160×600, 300×600, 320×50 …), JPG, PNG or GIF, at most 150 KB'),
+  html5: z.object({
+    zipUrl: z.string().trim().min(1).max(2048).optional().describe('the ZIP\'s https link (a public address): ONE HTML document with <meta name="ad.size" content="width=…,height=…"> of a display ad size, and its CSS, JS, GIF, PNG, JPG, SVG files — at most 40 files, 600 KB'),
+    assetId: googleIdArg('an HTML5 ZIP (MEDIA_BUNDLE) asset the account has').optional(),
+  }).optional().describe('HTML5 ads (type html5-upload, Display): the ZIP, zipUrl or assetId (Google takes HTML5 ads only from accounts it allowed)'),
 })
 
 const targetArg = z.object({
   kind: z.preprocess(lower, z.enum(TARGET_KINDS)).describe(`what it is: ${TARGET_KINDS.join(', ')}`),
   value: z.string().trim().min(1).max(300)
-    .describe('a website\'s URL; a keyword\'s text; a YouTube channel or video id (or link); an app ("1-<App Store id>" or "2-<package>"); a demographic\'s value (AGE_RANGE_18_24 …, FEMALE / MALE / UNDETERMINED, PARENT …, INCOME_RANGE_0_50 …: excluded only); else the id (topic, app category, user list, interest, custom / combined segment, life event, Audience, location, language)'),
+    .describe('a website\'s URL; a keyword\'s text; a YouTube channel or video id (or link); an app ("1-<App Store id>" or "2-<package>"); a demographic\'s value (AGE_RANGE_18_24 …, FEMALE / MALE / UNDETERMINED, PARENT / NOT_A_PARENT / UNDETERMINED, INCOME_RANGE_0_50 …: Display ad groups target or exclude them, Demand Gen only excludes); else the id (topic, app category, user list, interest, custom / combined segment, life event, Audience, location, language)'),
   exclude: z.boolean().optional().describe('true = never show there / to them'),
+  bidModifier: z.coerce.number().min(0.1).max(10).nullable().optional()
+    .describe('Display ad groups, a targeted item (audience, demographic, placement, topic): its bid adjustment, 0.1–10 (1.2 = +20 %, 0.5 = −50 %; 1 or null = none). Naming an item the ad group already targets with another value changes it in place'),
 })
 const targetsArg = (what: string) => z.array(targetArg).max(250).optional().describe(what)
 
@@ -249,6 +270,13 @@ const createCommon = {
 }
 const contentArg = z.array(z.string().trim().min(1).max(60)).max(25).optional()
   .describe('content labels the ads never show next to (Google\'s ContentLabelType: SEXUALLY_SUGGESTIVE, TRAGEDY, PROFANITY, BELOW_THE_FOLD, …)')
+const frequencyCapsArg = z.array(z.object({
+  events: z.coerce.number().int().min(1).max(10_000).describe('at most this many impressions (or video views) for one person'),
+  timeUnit: z.preprocess(upper, z.enum(FREQUENCY_UNITS)).describe('per DAY, WEEK or MONTH'),
+  timeLength: z.coerce.number().int().min(1).max(30).optional().describe('how many of that unit (default 1)'),
+  level: z.preprocess(upper, z.enum(FREQUENCY_LEVELS)).optional().describe('counted per CAMPAIGN (default), AD_GROUP or AD_GROUP_AD (each ad)'),
+  eventType: z.preprocess(upper, z.enum(FREQUENCY_EVENTS)).optional().describe('IMPRESSION (default; a Display campaign caps impressions only) or VIDEO_VIEW'),
+})).max(10).describe('frequency caps: how often one person may see the ads (Display and Demand Gen; one cap per level, unit and event)')
 
 const createRequest = (kind: TypedKind, a: Record<string, unknown>): TypedCampaignCreateRequest => ({
   kind,
@@ -265,6 +293,7 @@ const createRequest = (kind: TypedKind, a: Record<string, unknown>): TypedCampai
   euPoliticalAds: a.euPoliticalAds === true,
   merchant: (a.merchant as TypedCampaignCreateRequest['merchant']) ?? null,
   app: (a.app as TypedCampaignCreateRequest['app']) ?? null,
+  frequencyCaps: (a.frequencyCaps as TypedCampaignCreateRequest['frequencyCaps']) ?? null,
   adGroups: ((a.adGroups as Array<Record<string, unknown>> | undefined) ?? []).map(toAdGroup),
 })
 
@@ -342,6 +371,7 @@ const createDemandGen: AgentTool = {
     bidding: biddingArg(['MAXIMIZE_CLICKS', 'TARGET_CPC', 'MAXIMIZE_CONVERSIONS', 'TARGET_CPA', 'MAXIMIZE_CONVERSION_VALUE', 'TARGET_ROAS'])
       .describe('how bids are set: MAXIMIZE_CLICKS, TARGET_CPC, MAXIMIZE_CONVERSIONS, TARGET_CPA, MAXIMIZE_CONVERSION_VALUE or TARGET_ROAS'),
     excludedContent: contentArg,
+    frequencyCaps: frequencyCapsArg.optional(),
     merchant: z.object({
       merchantId: googleIdArg('the Merchant Center account (linked to the Google Ads account)'),
       feedLabel: z.string().trim().min(1).max(20).optional().describe('the feed label of the products'),
@@ -352,10 +382,11 @@ const createDemandGen: AgentTool = {
     'Make a Google Ads Demand Gen campaign (YouTube, Discover, Gmail, Maps, Display Network) in the business\'s chosen '
     + 'account, in ONE request: its own budget (daily, or a total for the campaign with start and end), bidding (Maximize '
     + 'clicks, Target CPC, Maximize conversions, Target CPA, Maximize conversion value, Target ROAS), dates, locations and '
-    + 'languages (set on every ad group, as Demand Gen holds them), content exclusions, an optional Merchant Center feed, and '
+    + 'languages (set on every ad group, as Demand Gen holds them), content exclusions, frequency caps, an optional Merchant Center feed, and '
     + 'ad groups with channel controls (all channels, Google\'s own, or picked one by one), audiences (an Audience, or '
     + 'audience segments: user lists, interests, custom, combined, life events), extra locations and languages, and ads: '
-    + 'image (multi-asset), carousel (2–10 cards on existing image assets), video (YouTube) and product ads.' + CREATE_TAIL + GOOGLE_CHANGE_RULES,
+    + 'image (multi-asset), carousel (2–10 cards on existing image assets), video (YouTube) and product ads (Google\'s animated '
+    + 'images, design versions, generated, shorter and vertical videos and landing page text OFF unless asked).' + CREATE_TAIL + GOOGLE_CHANGE_RULES,
   undo: createUndo,
   handler: previewCreate('DEMAND_GEN'),
   execute: runCreate('DEMAND_GEN'),
@@ -377,18 +408,21 @@ const createDisplay: AgentTool = {
     bidding: biddingArg(['MANUAL_CPC', 'MANUAL_CPM', 'MAXIMIZE_CLICKS', 'MAXIMIZE_CONVERSIONS', 'TARGET_CPA', 'MAXIMIZE_CONVERSION_VALUE', 'TARGET_ROAS', 'PORTFOLIO']).optional()
       .describe('how bids are set (default MANUAL_CPC): MANUAL_CPC, MANUAL_CPM, MAXIMIZE_CLICKS, MAXIMIZE_CONVERSIONS, TARGET_CPA, MAXIMIZE_CONVERSION_VALUE, TARGET_ROAS or PORTFOLIO'),
     excludedContent: contentArg,
-    adGroups: z.array(adGroupArg).min(1).max(20).describe('the ad groups with their bids, targeting and responsive display ads'),
+    frequencyCaps: frequencyCapsArg.optional(),
+    adGroups: z.array(adGroupArg).min(1).max(20).describe('the ad groups with their bids, targeting and ads (responsive display, image, HTML5)'),
   }),
   description:
     'Make a Google Ads Display campaign (the Google Display Network) in the business\'s chosen account, in ONE request: '
     + 'its budget (its own daily one, or a shared budgetId), bidding (Manual CPC by default; Manual CPM, Maximize clicks, '
     + 'Maximize conversions, Target CPA, Maximize conversion value, Target ROAS, or a portfolio strategy), dates, locations '
-    + '(presence only) and languages, content exclusions, and ad groups with their bid (Manual CPC / CPM), targeting — '
+    + '(presence only) and languages, content exclusions, frequency caps (impressions per day, week or month, per campaign, '
+    + 'ad group or ad), and ad groups with their bid (Manual CPC / CPM), targeting — '
     + 'websites, topics, keywords, YouTube channels and videos, apps, app categories, audience segments (user lists, '
-    + 'interests, custom, combined, life events), each kind narrowing who sees the ads, exclusions of the same kinds and '
-    + 'demographic exclusions (age, gender, parental status, income) — '
-    + 'and responsive display ads (landscape and square images, logos, 1–5 headlines, a long headline, 1–5 descriptions, '
-    + 'business name, optional videos, colours and format).' + CREATE_TAIL + GOOGLE_CHANGE_RULES,
+    + 'interests, custom, combined, life events) and demographics (age, gender, parental status, household income), each '
+    + 'kind narrowing who sees the ads, with optional bid adjustments, and exclusions of the same kinds — '
+    + 'and ads: responsive display ads (landscape and square images, logos, 1–5 headlines, a long headline, 1–5 descriptions, '
+    + 'business name, optional videos, colours and format), image ads (one image of a display ad size, at most 150 KB) and '
+    + 'HTML5 ads (a ZIP from an https link, at most 600 KB; Google takes them only from accounts it allowed).' + CREATE_TAIL + GOOGLE_CHANGE_RULES,
   undo: createUndo,
   handler: previewCreate('DISPLAY'),
   execute: runCreate('DISPLAY'),
@@ -510,8 +544,8 @@ const addCampaignTypeAds: AgentTool = {
   description:
     'Add new ad groups (with channel controls, bids, targeting and ads) and new ads in existing ad groups to ONE Demand Gen, '
     + 'Display or App campaign of the business\'s chosen account, in one request — the same ad groups and ads the create '
-    + 'tools make (Demand Gen image, carousel, video and product ads; responsive display ads; app ads), with their new '
-    + 'images and YouTube videos. A new Demand Gen ad group that names no location takes the locations and languages the '
+    + 'tools make (Demand Gen image, carousel, video and product ads; responsive display, image and HTML5 ads; app ads), with '
+    + 'their new images, ZIPs and YouTube videos. A new Demand Gen ad group that names no location takes the locations and languages the '
     + 'campaign\'s ad groups share (refused when they differ: name its locations). An App install ad group\'s Audience is a '
     + 'signal for Google. In an ENABLED campaign, new ad groups and new ads in enabled ad groups are made PAUSED '
     + 'unless enable: true (SPENDS MONEY). A Video campaign cannot be added to through Google\'s API. Undo removes what it '
@@ -537,6 +571,7 @@ const settingsRequest = (a: Record<string, unknown>): TypedSettingsRequest => ({
   ...(a.endDate !== undefined ? { endDate: a.endDate as string } : {}),
   ...(a.bidding !== undefined ? { bidding: a.bidding as TypedSettingsRequest['bidding'] } : {}),
   ...(a.budgetCents !== undefined ? { budgetCents: a.budgetCents as number } : {}),
+  ...(a.frequencyCaps !== undefined ? { frequencyCaps: a.frequencyCaps as TypedSettingsRequest['frequencyCaps'] } : {}),
   addCampaignTargeting: (a.addCampaignTargeting as TargetItem[] | undefined) ?? [],
   removeCampaignTargeting: (a.removeCampaignTargeting as TargetItem[] | undefined) ?? [],
   adGroups: ((a.adGroups as Array<Record<string, unknown>> | undefined) ?? []).map((g) => ({
@@ -599,7 +634,8 @@ const settingsUndo: ToolUndo = {
       return {
         adGroupId: a.adGroupId,
         ...(b?.settings ?? {}),
-        ...(a.removed.length ? { addTargeting: a.removed } : {}),
+        // Taken away: added back (with the bid adjustment it had); an adjustment changed in place: set back.
+        ...(a.removed.length || a.rebid?.length ? { addTargeting: [...a.removed, ...(a.rebid ?? []).map((r) => ({ ...r.item, bidModifier: r.from ?? 1 }))] } : {}),
         ...(a.added.length ? { removeTargeting: a.added } : {}),
       }
     })
@@ -643,6 +679,7 @@ const setCampaignType: AgentTool = {
     bidding: biddingArg([...TYPED_STRATEGIES]).optional()
       .describe('the bidding: Demand Gen and Display may switch strategy (their own lists) or change targets; an App campaign only its target CPA or ROAS'),
     budgetCents: googleCentsArg('a new amount of the campaign\'s OWN budget: its daily amount, or the total of a campaign total budget (a shared budget: set-google-budget)').optional(),
+    frequencyCaps: frequencyCapsArg.optional().describe('Display and Demand Gen: the WHOLE list of frequency caps as it should be ([] takes every cap away)'),
     addCampaignTargeting: targetsArg('Display and App: locations (targeted or excluded) and languages to add to the campaign (Demand Gen holds them at its ad groups)'),
     removeCampaignTargeting: targetsArg('Display and App: the campaign\'s locations and languages to take away'),
     adGroups: z.array(z.object({
@@ -660,14 +697,15 @@ const setCampaignType: AgentTool = {
   description:
     'Change ONE Demand Gen, Display or App campaign of the business\'s chosen account and its ad groups, in one request: '
     + 'the campaign\'s name, start and end, bidding (strategy and targets; an App campaign only its target CPA or ROAS) and '
-    + 'the amount of its own budget (daily, or the total of a Demand Gen campaign total budget), a Display or App campaign\'s '
-    + 'locations and languages; each ad group\'s name, '
+    + 'the amount of its own budget (daily, or the total of a Demand Gen campaign total budget), a Display or Demand Gen '
+    + 'campaign\'s frequency caps, a Display or App campaign\'s locations and languages; each ad group\'s name, '
     + 'Demand Gen channel controls, optimized targeting, Manual CPC / CPM bid and own target CPA, and targeting added or '
     + 'taken away (websites, topics, keywords, YouTube, apps, audience segments, Audiences, locations, languages, '
-    + 'exclusions, demographic exclusions). Only what is named changes; the preview shows each from → to. In a serving ad group, anything that '
+    + 'demographics — targeted on Display, with bid adjustments changed in place — and exclusions). Only what is named '
+    + 'changes; the preview shows each from → to. In a serving ad group, anything that '
     + 'widens who sees the ads (another value of a kind it narrows by, the last one of a kind taken away, an exclusion taken '
-    + 'away, optimized targeting on, a channel added) and any higher bid, target or budget, or a longer run, is SPENDS '
-    + 'MONEY. Status: set-google-status. Search and Shopping campaigns: set-google-campaign. A Video campaign cannot be '
+    + 'away, optimized targeting on, a channel added), a higher bid adjustment, and any higher bid, target or budget, a '
+    + 'frequency cap raised or taken away, or a longer run, is SPENDS MONEY. Status: set-google-status. Search and Shopping campaigns: set-google-campaign. A Video campaign cannot be '
     + 'changed through Google\'s API. Undo puts the old settings and targeting back.' + GOOGLE_CHANGE_RULES,
   undo: settingsUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildSettings(args)),

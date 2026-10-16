@@ -27,6 +27,10 @@
  * product trees and signals, tracking (templates, URL suffixes, custom parameters, at the campaign and each asset group),
  * the brand targeting override for Shopping ads and the asset types it does not inherit. What it cannot copy is named
  * (`notCopied`).
+ *
+ * G14b (2026-10-16): a build may set text guidelines (Campaign.text_guidelines) and link the account's page feeds (a
+ * CampaignAssetSet per PAGE_FEED asset set — only with text customization asked on: Google refuses a page feed without it,
+ * change-pmax.ts); a copy carries both as the source holds them.
  */
 import { changeLines, keywordTextProblem, money, plural, type GoogleChangeDraft } from './change-draft.js'
 import { httpsUrlProblem, widthProblem } from './change-ads.js'
@@ -36,11 +40,11 @@ import { MAX_BUILD_OPERATIONS, type BuildRecord } from './change-build.js'
 import {
   AUTOMATION_KEYS, AUTOMATION_TYPES, AssetMaker, automationNow, BRAND_FIELDS, BRAND_FONTS, brandCountProblems, countsOf, describePmaxTree, groupCountProblems,
   inKindOrder, MAX_ASSET_GROUPS, ownLinks, planAssets, planSignals, pmaxBiddingNow, pmaxSnapshot, pmaxSpecOfSnapshot, pmaxTreeOfLive,
-  pmaxTreeOfSpec, pmaxTreeOps, sameSignal, signalKeyOfTheme, SHORT_DESCRIPTION, urlExclusionKey, urlExclusionOfKey, urlExclusionsOf,
-  type AssetContext, type AutomationKey, type PmaxAssetsAsk, type PmaxGroupField, type PmaxSignalsAsk, type PmaxTreeNode, type PreparedImages, type UrlExclusion,
+  pmaxTreeOfSpec, pmaxTreeOps, sameSignal, signalKeyOfTheme, SHORT_DESCRIPTION, textGuidelinesBody, textGuidelinesOfAsk, urlExclusionKey, urlExclusionOfKey, urlExclusionsOf,
+  type AssetContext, type AutomationKey, type PmaxAssetsAsk, type PmaxGroupField, type PmaxSignalsAsk, type PmaxTreeNode, type PreparedImages, type TextGuidelinesAsk, type UrlExclusion,
 } from './change-pmax.js'
 import { keywordKey, microsOfCents, type MatchType } from './live.js'
-import { livePmaxCampaign, type CustomParameter, type PmaxAsset, type PmaxAudience } from './live-pmax.js'
+import { livePmaxCampaign, type CustomParameter, type PageFeedRef, type PmaxAsset, type PmaxAudience } from './live-pmax.js'
 import type { TNode } from './product-tree.js'
 import type { GoogleMutateOperation } from './write-client.js'
 import type { GoogleAdsTarget } from './types.js'
@@ -92,6 +96,10 @@ export interface PmaxBuildCampaign {
   /** Asset field types / asset set types the campaign does not inherit from the account (a copy keeps the source's). */
   excludedParentAssetFieldTypes?: string[]
   excludedParentAssetSetTypes?: string[]
+  /** What Google's generated text never says. */
+  textGuidelines?: TextGuidelinesAsk
+  /** The account's page feeds (URL inclusions) linked to the campaign, by id (needs text customization on). */
+  pageFeeds?: string[]
   assetGroups: PmaxBuildGroup[]
 }
 
@@ -103,6 +111,8 @@ export interface PmaxBuildLive {
   images: PreparedImages
   /** Assets a copy links again as the source holds them (not judged again: Google took them there). */
   trusted?: string[]
+  /** The account's page feeds (read when a campaign links one). */
+  pageFeeds?: PageFeedRef[]
 }
 
 const HEX = /^#[0-9A-Fa-f]{6}$/
@@ -152,6 +162,11 @@ export function pmaxBuildDraft(customer: string, currency: string, campaigns: Pm
     if (c.brandAssets && !brandGuidelines) problems.push(`${where}: with brand guidelines off the business name and logos go in each asset group (assetGroups[].assets), not on the campaign`)
     const auto: Record<AutomationKey, boolean | undefined> = { finalUrlExpansion: false, textCustomization: false, imageEnhancement: undefined, videoEnhancement: undefined, ...c.automation }
     if (auto.finalUrlExpansion && auto.textCustomization === false) problems.push(`${where}: Google turns text customization on with final URL expansion: ask for both, or neither`)
+    const feeds = [...new Set(c.pageFeeds ?? [])]
+    if (feeds.length && !auto.textCustomization) problems.push(`${where}: a page feed needs text customization on (Google refuses one without it: OPERATION_NOT_PERMITTED_FOR_CONTEXT) — ask automation.textCustomization: true`)
+    for (const id of feeds) if (!(live.pageFeeds ?? []).some((f) => f.assetSetId === id)) problems.push(`${where}: page feed ${id} is not a page feed of this account (set-google-page-feed makes one)`)
+    const guidelines = c.textGuidelines ? textGuidelinesOfAsk(c.textGuidelines, `${where} text guidelines`, problems) : {}
+    const hasGuidelines = !!(guidelines.termExclusions?.length || guidelines.messagingRestrictions?.length)
 
     // Budget and campaign.
     const budgetRes = `${customer}/campaignBudgets/${temp()}`
@@ -182,6 +197,7 @@ export function pmaxBuildDraft(customer: string, currency: string, campaigns: Pm
       ...(c.ignoreBrandExclusionsForShopping ? { pmaxCampaignSettings: { brandTargetingOverrides: { ignoreExclusionsForShoppingAds: true } } } : {}),
       ...(c.excludedParentAssetFieldTypes?.length ? { excludedParentAssetFieldTypes: c.excludedParentAssetFieldTypes } : {}),
       ...(c.excludedParentAssetSetTypes?.length ? { excludedParentAssetSetTypes: c.excludedParentAssetSetTypes } : {}),
+      ...(hasGuidelines ? { textGuidelines: textGuidelinesBody(guidelines) } : {}),
     }
     if (c.ignoreBrandExclusionsForShopping) warnings.push(`${where}: its brand exclusions do not hold for Shopping ads (ignore exclusions for Shopping ads).`)
     for (const p of [...(c.customParameters ?? []), ...c.assetGroups.flatMap((g) => g.customParameters ?? [])]) {
@@ -196,6 +212,12 @@ export function pmaxBuildDraft(customer: string, currency: string, campaigns: Pm
     if (c.retail) lines.push([`campaign ${ci + 1} feed`, '(none)', `Merchant Center ${c.retail.merchantId}${c.retail.feedLabel ? `, feed label ${c.retail.feedLabel}` : ''}${c.retail.localInventory ? ', local products' : ''}`])
     lines.push([`campaign ${ci + 1} Google on its own`, '(none)', AUTOMATION_KEYS.filter((k) => auto[k] !== undefined).map((k) => `${k} ${auto[k] ? 'on' : 'off'}`).join(', ') || "Google's defaults"])
     if (auto.finalUrlExpansion) warnings.push(`${where}: final URL expansion is on — once enabled, Google may send people to other pages of the site.`)
+    if (hasGuidelines) lines.push([`campaign ${ci + 1} text guidelines`, '(none)', `${(guidelines.termExclusions ?? []).length} term exclusions, ${(guidelines.messagingRestrictions ?? []).length} messaging restrictions`])
+    for (const id of feeds) ops.push({ campaignAssetSetOperation: { create: { campaign: campaignRes, assetSet: `${customer}/assetSets/${id}` } } })
+    if (feeds.length) {
+      lines.push([`campaign ${ci + 1} page feeds`, '(none)', feeds.map((id) => `"${live.pageFeeds?.find((f) => f.assetSetId === id)?.name ?? id}"`).join(', ')])
+      warnings.push(`${where}: page feeds linked — once enabled, Google may send people to their pages and write ads from them.`)
+    }
     if (auto.textCustomization) warnings.push(`${where}: text customization is on — Google writes text from the site and the assets on its own.`)
 
     // Criteria.
@@ -332,6 +354,7 @@ export function pmaxBuildDraft(customer: string, currency: string, campaigns: Pm
       assets: live.assets.map((a) => `${a.assetId}:${a.type}`).sort(),
       audiences: live.audiences.map((a) => `${a.audienceId}:${a.scope}`).sort(),
       brandLists: live.brandLists.map((l) => l.listId).sort(),
+      ...(campaigns.some((c) => c.pageFeeds?.length) ? { pageFeeds: (live.pageFeeds ?? []).map((f) => f.assetSetId).sort() } : {}),
     },
     before: null,
     after: record,
@@ -484,6 +507,8 @@ export async function pmaxCampaignAsBuild(
     ...(c.ignoreBrandExclusionsForShopping ? { ignoreBrandExclusionsForShopping: true } : {}),
     ...(c.excludedParentAssetFieldTypes.length ? { excludedParentAssetFieldTypes: c.excludedParentAssetFieldTypes } : {}),
     ...(c.excludedParentAssetSetTypes.length ? { excludedParentAssetSetTypes: c.excludedParentAssetSetTypes } : {}),
+    ...(c.textGuidelines && (c.textGuidelines.termExclusions.length || c.textGuidelines.messagingRestrictions.length) ? { textGuidelines: { termExclusions: c.textGuidelines.termExclusions, messagingRestrictions: c.textGuidelines.messagingRestrictions } } : {}),
+    ...(c.pageFeeds?.length ? { pageFeeds: c.pageFeeds.map((f) => f.assetSetId) } : {}),
     assetGroups,
   }
   return { campaign, assets: [...assets.values()], notCopied }

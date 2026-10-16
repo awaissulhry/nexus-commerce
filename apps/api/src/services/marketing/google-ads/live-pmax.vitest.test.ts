@@ -16,8 +16,9 @@ vi.mock('./write-client.js', async (importActual) => ({
 }))
 
 import {
-  LIVE_ACQUISITION_GOAL_QUERY, liveAcquisition, liveAcquisitionConfigQuery, livePmaxCampaign, pmaxAssetGroupsQuery, pmaxCampaignAssetsQuery, pmaxCriteriaQuery,
-  pmaxFiltersQuery, pmaxGroupAssetsQuery, pmaxSettingsQuery, pmaxSignalsQuery,
+  gaqlUrl, LIVE_ACQUISITION_GOAL_QUERY, LIVE_PAGE_FEEDS_QUERY, liveAcquisition, liveAcquisitionConfigQuery, livePageFeedCampaigns, livePageFeeds, livePageFeedUrls,
+  livePmaxCampaign, pageFeedCampaignsQuery, pageFeedUrlsQuery, pmaxAssetGroupsQuery, pmaxCampaignAssetsQuery, pmaxCriteriaQuery, pmaxFiltersQuery, pmaxGroupAssetsQuery,
+  pmaxPageFeedLinksQuery, pmaxSettingsQuery, pmaxSignalsQuery,
 } from './live-pmax.js'
 
 const T = { connectionId: 'g-1', customerId: '1234567890', loginCustomerId: null }
@@ -35,6 +36,7 @@ beforeEach(() => {
         startDateTime: '2026-01-01 00:00:00', containsEuPoliticalAdvertising: 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
         urlCustomParameters: [{ key: 'camp', value: 'z' }], pmaxCampaignSettings: { brandTargetingOverrides: { ignoreExclusionsForShoppingAds: true } },
         excludedParentAssetFieldTypes: ['CALLOUT'],
+        textGuidelines: { termExclusions: ['cheap'], messagingRestrictions: [{ restrictionText: 'Never mention prices', restrictionType: 'RESTRICTION_BASED_EXCLUSION' }] },
       },
       campaignBudget: { id: '11', amountMicros: '25000000' },
     }],
@@ -43,6 +45,7 @@ beforeEach(() => {
       { campaignCriterion: { criterionId: '92', type: 'WEBPAGE', negative: true, webpage: { criterionName: 'x', conditions: [{ operand: 'URL', operator: 'CONTAINS', argument: '/outlet' }] } } },
       { campaignCriterion: { criterionId: '93', type: 'LOCATION', location: { geoTargetConstant: 'geoTargetConstants/2380' } } },
     ],
+    'ads.search.live.pmax-page-feeds': [{ campaign: { id: '21' }, assetSet: { id: '77', name: 'Pages A', type: 'PAGE_FEED' }, campaignAssetSet: { status: 'ENABLED' } }],
     'ads.search.live.pmax-campaign-assets': [
       { campaignAsset: { fieldType: 'BUSINESS_NAME', status: 'ENABLED', source: 'ADVERTISER' }, asset: { id: '201', type: 'TEXT', textAsset: { text: 'Shop A' } } },
     ],
@@ -92,7 +95,21 @@ describe('livePmaxCampaign', () => {
     ])
     expect(a).toMatchObject({ trackingTemplate: '{lpurl}?g=1', finalUrlSuffix: 'src=g', customParameters: [{ key: 'grp', value: 'a' }] })
     expect(b).toMatchObject({ assetGroupId: '42', status: 'PAUSED', assets: [], tree: [], signals: [], finalUrls: [], trackingTemplate: null, customParameters: [] })
-    expect(h.queries).toHaveLength(7)
+    // G14b: its text guidelines and the page feeds linked to it (one more query).
+    expect(c).toMatchObject({ textGuidelines: { termExclusions: ['cheap'], messagingRestrictions: ['Never mention prices'] }, pageFeeds: [{ assetSetId: '77', name: 'Pages A' }] })
+    expect(h.queries).toHaveLength(8)
+  })
+
+  it('G14b: page feeds — the account\'s, the URLs of one among those named (GAQL strings refused when they hold a quote), the campaigns using one', async () => {
+    h.rows['ads.search.live.page-feeds'] = [{ assetSet: { id: '77', name: 'Pages A', type: 'PAGE_FEED', status: 'ENABLED' } }]
+    expect(await livePageFeeds(T)).toEqual([{ assetSetId: '77', name: 'Pages A' }])
+    h.rows['ads.search.live.page-feed-urls'] = [{ assetSet: { id: '77' }, asset: { id: '401', type: 'PAGE_FEED', pageFeedAsset: { pageUrl: 'https://shop.example/a', labels: ['sale'] } } }]
+    expect(await livePageFeedUrls(T, '77', ['https://shop.example/a', 'https://shop.example/b'])).toEqual([{ assetId: '401', url: 'https://shop.example/a', labels: ['sale'] }])
+    expect(h.queries.at(-1)).toContain('asset.page_feed_asset.page_url IN ("https://shop.example/a", "https://shop.example/b")')
+    expect(() => gaqlUrl('https://shop.example/a" OR "1')).toThrow(/cannot be looked up/)
+    h.rows['ads.search.live.page-feed-campaigns'] = [{ assetSet: { id: '77' }, campaign: { id: '21', name: 'PMax A', status: 'ENABLED', advertisingChannelType: 'PERFORMANCE_MAX' } }]
+    expect(await livePageFeedCampaigns(T, '77')).toEqual([{ campaignId: '21', name: 'PMax A', status: 'ENABLED', type: 'PERFORMANCE_MAX' }])
+    expect(await livePageFeedUrls(T, '77', [])).toEqual([])
   })
 
   it('a part Google refuses is named, not hidden; a campaign of another type reads its settings only; a removed one is null', async () => {
@@ -107,7 +124,10 @@ describe('livePmaxCampaign', () => {
   })
 
   it('every field a query filters on is also selected (Google refuses otherwise), and ids are digits only', () => {
-    for (const q of [pmaxSettingsQuery('21'), pmaxCriteriaQuery('21'), pmaxCampaignAssetsQuery('21'), pmaxAssetGroupsQuery('21'), pmaxGroupAssetsQuery('21'), pmaxFiltersQuery('21'), pmaxSignalsQuery('21'), LIVE_ACQUISITION_GOAL_QUERY, liveAcquisitionConfigQuery('21')]) {
+    for (const q of [
+      pmaxSettingsQuery('21'), pmaxCriteriaQuery('21'), pmaxCampaignAssetsQuery('21'), pmaxAssetGroupsQuery('21'), pmaxGroupAssetsQuery('21'), pmaxFiltersQuery('21'), pmaxSignalsQuery('21'),
+      LIVE_ACQUISITION_GOAL_QUERY, liveAcquisitionConfigQuery('21'), pmaxPageFeedLinksQuery('21'), LIVE_PAGE_FEEDS_QUERY, pageFeedUrlsQuery('77', ['https://shop.example/a']), pageFeedCampaignsQuery('77'),
+    ]) {
       const [select, where] = q.split(' WHERE ')
       const fields = new Set(select.replace(/^SELECT /, '').split(' FROM ')[0].split(', '))
       for (const f of where.match(/[a-z_]+\.[a-z_.]+(?= (=|!=|IN))/g) ?? []) expect(fields.has(f), `${f} in ${q.slice(0, 60)}`).toBe(true)

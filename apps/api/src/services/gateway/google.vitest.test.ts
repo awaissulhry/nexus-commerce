@@ -84,7 +84,8 @@ describe('Google: reads, and Google Ads mutates only', () => {
       'adGroupAdLabelOperation', 'adGroupAdOperation', 'adGroupAssetOperation', 'adGroupBidModifierOperation',
       'adGroupCriterionLabelOperation', 'adGroupCriterionOperation', 'adGroupLabelOperation', 'adGroupOperation',
       'adOperation', 'assetGroupAssetOperation', 'assetGroupListingGroupFilterOperation', 'assetGroupOperation', 'assetGroupSignalOperation',
-      'assetOperation', 'audienceOperation', 'biddingStrategyOperation', 'campaignAssetOperation', 'campaignBudgetOperation',
+      'assetOperation', 'assetSetAssetOperation', 'assetSetOperation', 'audienceOperation', 'biddingStrategyOperation', 'campaignAssetOperation',
+      'campaignAssetSetOperation', 'campaignBudgetOperation',
       'campaignConversionGoalOperation', 'campaignCriterionOperation', 'campaignDraftOperation',
       'campaignLabelOperation', 'campaignOperation', 'campaignSharedSetOperation', 'conversionActionOperation',
       'conversionGoalCampaignConfigOperation', 'conversionValueRuleOperation', 'conversionValueRuleSetOperation',
@@ -124,8 +125,9 @@ describe('Google: reads, and Google Ads mutates only', () => {
     const run = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: LINKS } })
     expect(run.status).toBe(200)
     expect(h.calls).toHaveLength(2)
-    // Nexus sends no asset set (location) operation: refused before anything is sent.
-    for (const op of [{ assetSetOperation: { create: {} } }, { campaignAssetSetOperation: { create: {} } }]) {
+    // Nexus sends no location asset set, and a campaign link names its campaign and asset set (G14b: only page feeds are
+    // made and linked — google-pmax.vitest.test.ts): refused before anything is sent.
+    for (const op of [{ assetSetOperation: { create: {} } }, { assetSetOperation: { create: { name: 'L', type: 'LOCATION_SYNC' } } }, { campaignAssetSetOperation: { create: {} } }]) {
       const err = await googleCall({ connectionId: 'g-1', operation: 'ads.mutate', method: 'POST', url: MUTATE, body: { mutateOperations: [op], validateOnly: true } }).catch((e) => e)
       expect(err).toMatchObject({ outcome: 'refused', code: 'GOOGLE_READ_ONLY' })
     }
