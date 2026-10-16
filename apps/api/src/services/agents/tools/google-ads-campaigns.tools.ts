@@ -28,6 +28,8 @@ import { liveBudgets, liveCampaigns, liveCampaignSettings, liveNegativeLists, li
 import { liveCampaignCriteria, liveStatuses } from '../../marketing/google-ads/live-campaigns.js'
 import { DEVICES, liveAdGroupDevices, liveAdGroupTargetingState, liveSegmentNames, liveTargetingAdGroups, liveTargetingCriteria, type TargetingCriterion } from '../../marketing/google-ads/live-targeting.js'
 import { customerResource } from '../../marketing/google-ads/write-client.js'
+import { liveSearchAi } from '../../marketing/google-ads/live-search-ai.js'
+import { livePageFeeds } from '../../marketing/google-ads/live-pmax.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
 /** Money keys of the campaign tools' previews and answers (their sentences and tables quote budgets and bids). */
@@ -175,20 +177,35 @@ const createGoogleCampaign: AgentTool = {
 
 // ── set-google-campaign ─────────────────────────────────────────────────────────────────────────────────────────
 
-const SETTINGS_KEYS = ['name', 'priority', 'bidding', 'startDate', 'endDate', 'searchPartners', 'display', 'aiMax', 'textCustomization', 'finalUrlExpansion', 'locationOption', 'dailyBudgetCents'] as const
+const SETTINGS_KEYS = [
+  'name', 'priority', 'bidding', 'startDate', 'endDate', 'searchPartners', 'display', 'aiMax', 'textCustomization', 'finalUrlExpansion', 'locationOption', 'dailyBudgetCents',
+  // G14b: a Search campaign's AI Max controls (change-search-ai.ts).
+  'termExclusions', 'messagingRestrictions', 'pageFeeds', 'urlExclusions', 'urlInclusions',
+] as const
 const settingsRequest = (a: Record<string, unknown>): CampaignSettingsRequest =>
   Object.fromEntries(SETTINGS_KEYS.filter((k) => a[k] !== undefined).map((k) => [k, a[k]])) as CampaignSettingsRequest
 
-async function campaignLive(account: Parameters<GoogleDraftBuilder>[0], campaignId: string) {
+/** The campaign, the account's campaigns, its budget, and (a Search campaign's AI Max controls named) those read live. */
+async function campaignLive(account: Parameters<GoogleDraftBuilder>[0], campaignId: string, asked: CampaignSettingsRequest = {}) {
   const campaign = await liveCampaignSettings(account.target, campaignId)
   const campaigns = await liveCampaigns(account.target)
   const budget = campaign?.budget?.budgetId ? (await liveBudgets(account.target, campaigns)).find((b) => b.budgetId === campaign.budget!.budgetId) ?? null : null
-  return { campaign, campaigns, budget }
+  const parts = {
+    textGuidelines: asked.termExclusions !== undefined || asked.messagingRestrictions !== undefined,
+    pageFeeds: asked.pageFeeds !== undefined || asked.urlInclusions !== undefined,
+    urlExclusions: asked.urlExclusions !== undefined,
+    urlInclusions: asked.urlInclusions !== undefined,
+  }
+  if (campaign?.type !== 'SEARCH' || !Object.values(parts).some(Boolean)) return { campaign, campaigns, budget }
+  const ai = await liveSearchAi(account.target, campaignId, parts)
+  const accountFeeds = asked.pageFeeds?.length ? await livePageFeeds(account.target) : undefined
+  return { campaign, campaigns, budget, ai: { ...ai, ...(accountFeeds ? { accountFeeds } : {}) } }
 }
 
 const buildSettings = (args: Record<string, unknown>): GoogleDraftBuilder => async (account) => {
-  const live = await campaignLive(account, String(args.campaignId))
-  return campaignSettingsDraft(customerResource(account.target), account.currency, String(args.campaignId), settingsRequest(args), live)
+  const request = settingsRequest(args)
+  const live = await campaignLive(account, String(args.campaignId), request)
+  return campaignSettingsDraft(customerResource(account.target), account.currency, String(args.campaignId), request, live)
 }
 
 const settingsUndo: ToolUndo = {
@@ -196,9 +213,9 @@ const settingsUndo: ToolUndo = {
     const after = (change.after ?? {}) as CampaignSettingsRecord & { accountId?: string; customerId?: string }
     const account = await recordAccount(after)
     if (!account) return null
-    const live = await campaignLive(account, after.campaignId)
+    const live = await campaignLive(account, after.campaignId, after.settings ?? {})
     if (!live.campaign) return null
-    const now = campaignSettingsNow(live.campaign, live.budget)
+    const now = campaignSettingsNow(live.campaign, live.budget, live.ai, after.settings?.urlInclusions?.map((g) => g.adGroupId))
     const settings = Object.fromEntries(Object.keys(after.settings ?? {}).map((k) => [k, now[k as keyof CampaignSettingsRequest]]))
     return { ...after, settings }
   },
@@ -231,15 +248,37 @@ const setGoogleCampaign: AgentTool = {
     finalUrlExpansion: z.boolean().optional().describe('SEARCH: final URL expansion on or off'),
     locationOption: z.enum(['PRESENCE', 'PRESENCE_OR_INTEREST']).optional().describe('the location option'),
     dailyBudgetCents: googleCentsArg('a new amount of the campaign\'s OWN budget (a shared budget: set-google-budget)').optional(),
+    termExclusions: z.array(z.string().trim().min(1).max(30).describe('an exact word or phrase (at most 30 characters)')).max(25).optional()
+      .describe('SEARCH (AI Max): the WHOLE list of words and phrases the text Google writes never uses (up to 25; [] clears it)'),
+    messagingRestrictions: z.array(z.string().trim().min(1).max(300).describe('a plain instruction (at most 300 characters)')).max(40).optional()
+      .describe('SEARCH (AI Max): the WHOLE list of instructions the text Google writes follows (up to 40; [] clears it)'),
+    // At most 100 page feeds per account (Google Ads Help 7166527): an undo can give back any list a campaign holds.
+    pageFeeds: z.array(googleIdArg('a page feed of the account (set-google-page-feed makes one)')).max(100).optional()
+      .describe('SEARCH (AI Max, Dynamic Search Ads): the WHOLE list of page feeds (URL inclusions) linked to the campaign ([] unlinks all)'),
+    urlExclusions: z.array(z.object({
+      contains: z.string().trim().min(1).max(2048).optional().describe('never use a page whose address contains this'),
+      equals: z.string().trim().min(1).max(2048).optional().describe('never use this exact page'),
+    }).refine((u) => (u.contains === undefined) !== (u.equals === undefined), { message: 'give contains or equals, one of them' }).describe('a landing page never used'))
+      .max(250).optional().describe('SEARCH (AI Max): the WHOLE list of URL exclusions — pages final URL expansion never sends people to ([] clears it)'),
+    urlInclusions: z.array(z.object({
+      adGroupId: googleIdArg('a standard Search ad group of this campaign'),
+      rules: z.array(z.object({
+        urlEquals: z.string().trim().min(1).max(2048).optional().describe('exactly this page (a full https:// URL; alone in its rule)'),
+        urlContains: z.array(z.string().trim().min(1).max(2048).describe('a part of the page address')).max(3).optional().describe('pages whose address contains each of these'),
+        labels: z.array(z.string().trim().min(1).max(1024).describe('a custom label of a page feed linked to the campaign')).max(3).optional().describe('pages of the linked page feeds with each of these labels'),
+      }).describe('one rule: at most three conditions, all must match')).max(250).describe('the WHOLE list of the ad group\'s rules ([] = none: it may use any page)'),
+    })).max(20).optional().describe('SEARCH (AI Max): URL inclusions — the pages an ad group may send people to (needs AI Max and text customization on)'),
     why: googleWhyArg,
   }),
   description:
     'Change one Google Ads campaign\'s settings (Search or Standard Shopping): name, Shopping priority, bidding (strategy, '
     + 'max CPC ceiling, target CPA or ROAS, a portfolio), start and end, search partners, Display Network, the location '
-    + 'option, what Google does on its own (AI Max, text customization, final URL expansion), and '
-    + 'the amount of its own budget. Only what is named changes; the preview shows each from → to. Turning on anything '
-    + 'that reaches more people, Google taking over bids, a higher ceiling or budget, and running longer are marked '
-    + 'SPENDS MONEY. Status: set-google-status. Undo puts the old settings back.' + GOOGLE_CHANGE_RULES,
+    + 'option, what Google does on its own (AI Max, text customization, final URL expansion), the amount of its own budget, '
+    + 'and AI Max\'s controls of a Search campaign: text guidelines (term exclusions, messaging restrictions), page feeds '
+    + 'linked, URL exclusions and an ad group\'s URL inclusions (each list given whole). Only what is named changes; the '
+    + 'preview shows each from → to. Turning on anything that reaches more people, Google taking over bids, a higher ceiling '
+    + 'or budget, running longer, a text guideline or URL exclusion taken away, a page feed linked and an ad group let use '
+    + 'more pages are marked SPENDS MONEY. Status: set-google-status. Undo puts the old settings back.' + GOOGLE_CHANGE_RULES,
   undo: settingsUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildSettings(args)),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildSettings(args), (draft) => ({ data: { campaignId: args.campaignId }, before: draft.before, after: draft.after })),

@@ -61,6 +61,9 @@ import {
   AUDIENCE_KINDS, audienceCriterion, DEMOGRAPHIC_FIELD, DEMOGRAPHIC_VALUES, DEVICES, type AudienceKind, type DemographicDimension, type Device,
 } from './live-targeting.js'
 import { caseValueOf } from './product-tree.js'
+import { textGuidelinesBody, textGuidelinesOfAsk, urlExclusionKey, urlExclusionOfKey, type TextGuidelinesAsk, type UrlExclusion } from './change-ai-controls.js'
+import { normalizeUrlRule, urlExclusionBody, urlRuleBody, urlRuleKey, urlRuleProblem, type UrlRule } from './change-search-ai.js'
+import type { PageFeedRef } from './live-pmax.js'
 import type { PreparedImage } from './asset-images.js'
 import type { GoogleMutateOperation, GoogleMutateResponse } from './write-client.js'
 
@@ -141,6 +144,8 @@ export interface BuildAdGroup extends BuildUrlFields {
   demographics?: BuildDemographic[]
   /** Brand lists the ad group keeps to (an ad group takes an inclusion only). */
   brandLists?: string[]
+  /** G14b — SEARCH with AI Max and text customization: the pages it may send people to (positive WEBPAGE criteria). */
+  urlInclusions?: UrlRule[]
   labels?: string[]
   assets?: BuildAssets
 }
@@ -174,6 +179,10 @@ export interface BuildCampaign extends Omit<CampaignCreateRequest, 'budgetId' | 
   placementLists?: string[]
   /** The campaign's own conversion goals: which category / origin it bids for (it then stops following the account's goals). */
   conversionGoals?: Array<{ category: string; origin: string; biddable: boolean }>
+  /** G14b — SEARCH (AI Max): text guidelines, page feeds linked (by id), URL exclusions (change-search-ai.ts). */
+  textGuidelines?: TextGuidelinesAsk
+  pageFeeds?: string[]
+  urlExclusions?: UrlExclusion[]
 }
 
 export interface BuildSpec {
@@ -184,7 +193,13 @@ export interface BuildSpec {
   allowBroad?: boolean
 }
 
-export interface BuildLive { campaigns: LiveCampaign[]; budgets: LiveBudget[]; lists: LiveNegativeList[] }
+export interface BuildLive {
+  campaigns: LiveCampaign[]
+  budgets: LiveBudget[]
+  lists: LiveNegativeList[]
+  /** The account's page feeds (read when a campaign links one). */
+  pageFeeds?: PageFeedRef[]
+}
 
 /** What a build made, by the operation that made it: after the run, Google's ids. */
 export interface BuildRecord {
@@ -203,7 +218,7 @@ export const MAX_BUILD_OPERATIONS = 900
 /** The order of the kinds in the request: every resource is made before anything points at it. */
 const KIND_ORDER = [
   'campaignBudgetOperation', 'sharedSetOperation', 'sharedCriterionOperation', 'campaignOperation', 'campaignCriterionOperation',
-  'campaignSharedSetOperation', 'campaignLabelOperation', 'adGroupOperation', 'adGroupBidModifierOperation', 'adGroupLabelOperation',
+  'campaignSharedSetOperation', 'campaignAssetSetOperation', 'campaignLabelOperation', 'adGroupOperation', 'adGroupBidModifierOperation', 'adGroupLabelOperation',
   'adGroupAdOperation', 'adGroupAdLabelOperation', 'adGroupCriterionOperation', 'adGroupCriterionLabelOperation', 'assetOperation',
   'campaignAssetOperation', 'adGroupAssetOperation',
   // Last, as Google's own sample sends them: the new campaign's goals (an update on its temporary id).
@@ -300,7 +315,15 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
     if (ownBudget) push({ campaignBudgetOperation: { create: { resourceName: budgetRes, amountMicros: microsOfCents(budgetCents!), explicitlyShared: false, deliveryMethod: 'STANDARD' } } }, `own:${c.name.trim()}`)
     const created = campaignCreateOperations(customer, request, budgetRes, campaignRes)
     if ('refusal' in created) { problems.push(`${where}: ${created.refusal}`); return }
-    created.operations.forEach((op) => push(op, 'campaignOperation' in op ? `campaign:${c.name.trim()}` : undefined))
+    // G14b: a Search campaign's text guidelines go in its create (Campaign.text_guidelines).
+    const guidelines = c.textGuidelines ? textGuidelinesOfAsk(c.textGuidelines, `${where} text guidelines`, problems) : {}
+    const hasGuidelines = !!(guidelines.termExclusions?.length || guidelines.messagingRestrictions?.length)
+    if (hasGuidelines && c.type !== 'SEARCH') problems.push(`${where}: text guidelines are for a Search campaign here (Performance Max: build-google-pmax)`)
+    created.operations.forEach((op) => {
+      if ('campaignOperation' in op && hasGuidelines) ((op.campaignOperation as { create: Record<string, unknown> }).create).textGuidelines = textGuidelinesBody(guidelines)
+      push(op, 'campaignOperation' in op ? `campaign:${c.name.trim()}` : undefined)
+    })
+    if (hasGuidelines) lines.push([`campaign ${ci + 1} text guidelines`, '(none)', `${(guidelines.termExclusions ?? []).length} term exclusions, ${(guidelines.messagingRestrictions ?? []).length} messaging restrictions`])
     totals.campaigns += 1
     if (budgetCents !== null && !countedBudgets.has(budgetRes)) { dailyIfEnabled += budgetCents; countedBudgets.add(budgetRes) }
     const notes = campaignCreateNotes(request, currency, budgetText)
@@ -328,7 +351,7 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
     }
 
     // G13: what the newer change tools set on a campaign.
-    const extras = campaignExtras(customer, campaignRes, c, where)
+    const extras = campaignExtras(customer, campaignRes, c, where, live.pageFeeds ?? [])
     problems.push(...extras.problems)
     extras.ops.forEach((op) => push(op))
     totals.criteria += extras.criteria
@@ -366,7 +389,7 @@ export function buildDraft(customer: string, currency: string, spec: BuildSpec, 
         ...(groupRestrictions.some((t) => t.dimension) ? { targetingSetting: { targetRestrictions: groupRestrictions.filter((t) => t.dimension).map((t) => ({ targetingDimension: t.dimension, bidOnly: t.observationOnly })) } } : {}),
       } } })
       totals.adGroups += 1
-      const groupExtras = adGroupExtras(customer, agRes, g, gWhere, campaignDevice, temp)
+      const groupExtras = adGroupExtras(customer, agRes, g, gWhere, campaignDevice, temp, { search: c.type === 'SEARCH', aiReady: !!(c.search?.aiMax && (c.search.textCustomization || c.search.finalUrlExpansion)) })
       problems.push(...groupExtras.problems)
       groupExtras.ops.forEach((op) => push(op))
       totals.criteria += groupExtras.criteria
@@ -655,7 +678,7 @@ function demographicBodies(list: BuildDemographic[], where: string, problems: st
 }
 
 /** A campaign's parts beyond create-google-campaign's: criteria, labels, lists, goals, and how they read. */
-function campaignExtras(customer: string, campaignRes: string, c: BuildCampaign, where: string): {
+function campaignExtras(customer: string, campaignRes: string, c: BuildCampaign, where: string, accountFeeds: PageFeedRef[]): {
   ops: GoogleMutateOperation[]; problems: string[]; lines: Array<[string, unknown, unknown]>; warnings: string[]; criteria: number; labels: number
 } {
   const ops: GoogleMutateOperation[] = []
@@ -667,6 +690,26 @@ function campaignExtras(customer: string, campaignRes: string, c: BuildCampaign,
   const campaignId = campaignRes.slice(campaignRes.lastIndexOf('/') + 1)
 
   problems.push(...urlProblemsOf('campaign', c, where))
+  // G14b — AI Max's campaign controls (Search): page feeds linked, URL exclusions (negative WEBPAGE criteria).
+  const textOn = !!(c.search?.textCustomization || c.search?.finalUrlExpansion)
+  if ((c.pageFeeds?.length || c.urlExclusions?.length) && c.type !== 'SEARCH') problems.push(`${where}: page feeds and URL exclusions are for a Search campaign here (Performance Max: build-google-pmax)`)
+  for (const id of [...new Set(c.pageFeeds ?? [])]) {
+    const feed = accountFeeds.find((f) => f.assetSetId === id)
+    if (!feed) { problems.push(`${where}: page feed ${id} is not a page feed of this account (set-google-page-feed makes one)`); continue }
+    ops.push({ campaignAssetSetOperation: { create: { campaign: campaignRes, assetSet: `${customer}/assetSets/${id}` } } })
+  }
+  if (c.pageFeeds?.length) {
+    lines.push(['page feeds', '(none)', [...new Set(c.pageFeeds)].map((id) => `"${accountFeeds.find((f) => f.assetSetId === id)?.name ?? id}"`).join(', ')])
+    if (!textOn) warnings.push(`${where}: a page feed reaches a Search campaign's ads through AI Max (text customization, final URL expansion, URL inclusions) or Dynamic Search Ads: with them off it changes nothing yet.`)
+  }
+  const exclusionKeys = [...new Set((c.urlExclusions ?? []).map(urlExclusionKey))].sort()
+  for (const key of exclusionKeys) {
+    const u = urlExclusionOfKey(key)
+    if (!(u.contains ?? u.equals ?? '').trim()) { problems.push(`${where}: a URL exclusion is empty`); continue }
+    criterion({ negative: true, webpage: urlExclusionBody(u) })
+  }
+  criteria += exclusionKeys.length
+  if (exclusionKeys.length) lines.push(['URL exclusions', '(none)', plural(exclusionKeys.length, 'page rule')])
   if (c.devices?.length) {
     problems.push(...deviceProblems(c.devices, where))
     if (['DESKTOP', 'MOBILE', 'TABLET'].every((d) => c.devices!.some((x) => x.device === d && x.bidModifier === 0))) problems.push(`${where}: opted out of computers, mobile phones and tablets — its ads could show nowhere`)
@@ -756,7 +799,10 @@ function campaignExtras(customer: string, campaignRes: string, c: BuildCampaign,
 }
 
 /** An ad group's parts beyond its own fields: device adjustments, audiences, demographics, brand lists, labels. */
-function adGroupExtras(customer: string, agRes: string, g: BuildAdGroup, where: string, campaignDevice: Map<string, number>, temp: () => number): {
+function adGroupExtras(
+  customer: string, agRes: string, g: BuildAdGroup, where: string, campaignDevice: Map<string, number>, temp: () => number,
+  campaign: { search: boolean; aiReady: boolean } = { search: false, aiReady: false },
+): {
   ops: GoogleMutateOperation[]; problems: string[]; criteria: number; labels: number
 } {
   const ops: GoogleMutateOperation[] = []
@@ -788,6 +834,20 @@ function adGroupExtras(customer: string, agRes: string, g: BuildAdGroup, where: 
     if (!/^\d{1,20}$/.test(id)) { problems.push(`${where}: brand list "${id}" is not a list id`); continue }
     criterion({ brandList: { sharedSet: `${customer}/sharedSets/${id}` } })
     criteria += 1
+  }
+  // G14b — AI Max's URL inclusions: a standard Search ad group of a campaign with AI Max and text customization on.
+  if (g.urlInclusions?.length) {
+    if (!campaign.search) problems.push(`${where}: URL inclusions are for a Search ad group`)
+    else if (!campaign.aiReady) problems.push(`${where}: Google takes URL inclusions only with AI Max and text customization on (search.aiMax, search.textCustomization)`)
+    const seen = new Set<string>()
+    for (const r of g.urlInclusions) {
+      const p = urlRuleProblem(r)
+      if (p) { problems.push(`${where}: ${p}`); continue }
+      if (seen.has(urlRuleKey(r))) continue
+      seen.add(urlRuleKey(r))
+      criterion({ webpage: urlRuleBody(normalizeUrlRule(r)) })
+      criteria += 1
+    }
   }
   const labels = labelLinks(customer, 'ad-group', agId, g.labels ?? [], where, problems)
   ops.push(...labels)

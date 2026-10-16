@@ -15,9 +15,14 @@
  * asset_automation_settings with TEXT_ASSET_AUTOMATION (text customization) and
  * FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION ("Enabling final URL expansion also enables text asset automation"),
  * OPTED_IN | OPTED_OUT. An update mask lists snake_case paths; a path in the mask with no value in the body is cleared.
+ * G14b (2026-10-16): a Search campaign's AI Max controls — text guidelines, page feeds linked, URL exclusions, ad group URL
+ * inclusions — are change-search-ai.ts's (what Google allows, and their money, are in its header).
  */
-import { changeLines, money, type GoogleChangeDraft } from './change-draft.js'
+import { changeLines, money, plural, type GoogleChangeDraft } from './change-draft.js'
 import { microsOfCents, type LiveBudget, type LiveCampaign, type LiveCampaignDetail } from './live.js'
+import { searchAiNow, searchAiPart, SEARCH_AI_KEYS, type SearchAiAsk, type SearchAiPart } from './change-search-ai.js'
+import type { SearchAiLive } from './live-search-ai.js'
+import type { PageFeedRef } from './live-pmax.js'
 import type { GoogleMutateOperation } from './write-client.js'
 
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH'
@@ -416,7 +421,7 @@ export function campaignCreateRecordAfterRun(after: CampaignCreateRecord, respon
 
 // ── settings ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export interface CampaignSettingsRequest {
+export interface CampaignSettingsRequest extends SearchAiAsk {
   name?: string
   priority?: Priority
   bidding?: Bidding
@@ -442,8 +447,11 @@ export interface CampaignSettingsRecord {
 const automationOn = (c: LiveCampaignDetail['campaign'], type: string) => c.assetAutomation.some((a) => a.type === type && a.status === 'OPTED_IN')
 const dayOf = (dateTime: string | null) => (dateTime ? dateTime.slice(0, 10) : null)
 
-/** What the campaign has now, in the request's own terms (the "from" side, and what undo puts back). */
-export function campaignSettingsNow(c: LiveCampaignDetail['campaign'], budget: LiveBudget | null): CampaignSettingsRequest {
+/**
+ * What the campaign has now, in the request's own terms (the "from" side, and what undo puts back). `ai`: a Search
+ * campaign's AI Max controls as read (only the parts read; URL inclusions of the ad groups `groups` names).
+ */
+export function campaignSettingsNow(c: LiveCampaignDetail['campaign'], budget: LiveBudget | null, ai?: SearchAiLive, groups?: string[]): CampaignSettingsRequest {
   const now: CampaignSettingsRequest = {
     name: c.name,
     ...(c.shopping ? { priority: c.shopping.priority ?? 'LOW' } : {}),
@@ -461,6 +469,7 @@ export function campaignSettingsNow(c: LiveCampaignDetail['campaign'], budget: L
     now.finalUrlExpansion = automationOn(c, 'FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION')
   }
   if (budget && !budget.shared && budget.amountCents !== null) now.dailyBudgetCents = budget.amountCents
+  if (c.type === 'SEARCH' && ai) Object.assign(now, searchAiNow(ai, groups))
   return now
 }
 
@@ -469,16 +478,18 @@ export function campaignSettingsDraft(
   currency: string,
   campaignId: string,
   asked: CampaignSettingsRequest,
-  live: { campaign: LiveCampaignDetail['campaign'] | null; budget: LiveBudget | null; campaigns: LiveCampaign[] },
+  live: { campaign: LiveCampaignDetail['campaign'] | null; budget: LiveBudget | null; campaigns: LiveCampaign[]; ai?: SearchAiLive & { accountFeeds?: PageFeedRef[] } },
 ): GoogleChangeDraft | { refusal: string } {
   const c = live.campaign
   if (!c) return { refusal: `Campaign ${campaignId} is not in this account (or it is removed).` }
-  const now = campaignSettingsNow(c, live.budget)
+  const now = campaignSettingsNow(c, live.budget, live.ai, asked.urlInclusions?.map((g) => g.adGroupId))
+  const aiKeys = SEARCH_AI_KEYS.filter((k) => asked[k] !== undefined)
   let ask: CampaignSettingsRequest = { ...asked }
   const isSearch = c.type === 'SEARCH'
   const isShopping = c.type === 'SHOPPING'
   if (!isSearch && !isShopping) return { refusal: `"${c.name}" is a ${c.type ?? 'campaign'} campaign: Nexus changes the settings of Search and Standard Shopping campaigns.` }
   if (ask.priority && !isShopping) return { refusal: 'priority is for a Shopping campaign.' }
+  if (aiKeys.length && !isSearch) return { refusal: `${aiKeys.join(', ')}: text guidelines, page feeds and URL exclusions / inclusions are Search campaign settings here (Performance Max: set-google-pmax).` }
   if (!isSearch && (ask.display !== undefined || ask.textCustomization !== undefined || ask.finalUrlExpansion !== undefined)) {
     return { refusal: 'display, textCustomization and finalUrlExpansion are Search campaign settings.' }
   }
@@ -586,7 +597,17 @@ export function campaignSettingsDraft(
     lines.push(['location option', now.locationOption === 'PRESENCE' ? 'presence only' : 'presence or interest', ask.locationOption === 'PRESENCE' ? 'presence only' : 'presence or interest'])
     if (ask.locationOption === 'PRESENCE_OR_INTEREST') spends.push(`Reaches people outside the locations who show interest in them${note}.`)
   }
-  const ops: GoogleMutateOperation[] = []
+  // AI Max's controls (text guidelines, page feeds, URL exclusions and inclusions): what is taken away goes before the
+  // campaign's update (it may turn text customization off), what is added after it (it may need AI Max turned on).
+  let part: SearchAiPart | null = null
+  if (aiKeys.length) {
+    const aiAsk = Object.fromEntries(aiKeys.map((k) => [k, ask[k]])) as SearchAiAsk
+    part = searchAiPart(customer, { campaignId: c.campaignId, name: c.name, status: c.status }, aiAsk, live.ai ?? {}, { aiMax: !!(ask.aiMax ?? now.aiMax), textCustomization: !!(textOn || urlOn), finalUrlExpansion: !!urlOn }, note)
+    if (part.problems.length) return { refusal: `Not queued (${plural(part.problems.length, 'problem')}): ${part.problems.slice(0, 20).join(' · ')}. Nothing was sent.` }
+    Object.assign(fields, part.fields); mask.push(...part.mask); lines.push(...part.lines); spends.push(...part.spends); warnings.push(...part.warnings)
+    Object.assign(before, part.before); Object.assign(after, part.after)
+  }
+  const ops: GoogleMutateOperation[] = [...(part?.pre ?? [])]
   if (mask.length) ops.push({ campaignOperation: { update: { resourceName: `${customer}/campaigns/${c.campaignId}`, ...fields }, updateMask: mask.join(',') } })
   if (changed('dailyBudgetCents')) {
     record('dailyBudgetCents')
@@ -594,6 +615,7 @@ export function campaignSettingsDraft(
     lines.push(['daily budget (its own)', money(now.dailyBudgetCents ?? null, currency), money(ask.dailyBudgetCents!, currency)])
     if (now.dailyBudgetCents === undefined || ask.dailyBudgetCents! > now.dailyBudgetCents) spends.push(`Raises the daily budget ${money(now.dailyBudgetCents ?? null, currency)} → ${money(ask.dailyBudgetCents!, currency)}${note}.`)
   }
+  ops.push(...(part?.post ?? []))
   if (!ops.length) return { refusal: `Nothing to change: "${c.name}" already has these settings.` }
   const { changes } = changeLines(lines)
   return {

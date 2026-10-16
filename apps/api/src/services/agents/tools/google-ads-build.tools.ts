@@ -28,6 +28,7 @@ import { DAYS } from '../../marketing/google-ads/change-campaigns.js'
 import { LINK_FIELD_TYPES, MAX_IMAGE_BYTES_TOTAL } from '../../marketing/google-ads/change-assets-all.js'
 import { ACTION_CATEGORIES, GOAL_ORIGINS } from '../../marketing/google-ads/change-conversions.js'
 import { liveBudgets, liveCampaigns, liveNegativeLists } from '../../marketing/google-ads/live.js'
+import { livePageFeeds } from '../../marketing/google-ads/live-pmax.js'
 import { CONTENT_LABELS, EXCLUSION_KINDS } from '../../marketing/google-ads/live-exclusions.js'
 import { AUDIENCE_KINDS, DEMOGRAPHIC_DIMENSIONS, DEMOGRAPHIC_VALUES, DEVICES } from '../../marketing/google-ads/live-targeting.js'
 import { prepareImage, type PreparedImage } from '../../marketing/google-ads/asset-images.js'
@@ -180,6 +181,17 @@ const campaignArg = z.object({
   exclusions: z.array(exclusionArg).max(250).optional().describe('websites, YouTube channels / videos, apps, app categories, content labels, IP addresses excluded'),
   brandLists: z.array(z.object({ listId: googleIdArg('a brand list (google-ads-live view exclusions)'), mode: z.enum(['exclude', 'include']).describe('exclude, or include (keep to)') })).max(20).optional().describe('brand lists'),
   placementLists: z.array(googleIdArg('a placement exclusion list (google-ads-live view exclusions)')).max(20).optional().describe('placement exclusion lists to attach'),
+  // G14b — AI Max's controls of a Search campaign (as set-google-campaign sets them).
+  textGuidelines: z.object({
+    termExclusions: z.array(z.string().trim().min(1).max(30).describe('an exact word or phrase (at most 30 characters)')).max(25).optional().describe('words the text Google writes never uses'),
+    messagingRestrictions: z.array(z.string().trim().min(1).max(300).describe('a plain instruction (at most 300 characters)')).max(40).optional().describe('instructions the text Google writes follows'),
+  }).optional().describe('SEARCH (AI Max): text guidelines'),
+  pageFeeds: z.array(googleIdArg('a page feed of the account (set-google-page-feed makes one)')).max(100).optional().describe('SEARCH: page feeds (URL inclusions) linked to the campaign'),
+  urlExclusions: z.array(z.object({
+    contains: z.string().trim().min(1).max(2048).optional().describe('never use a page whose address contains this'),
+    equals: z.string().trim().min(1).max(2048).optional().describe('never use this exact page'),
+  }).refine((u) => (u.contains === undefined) !== (u.equals === undefined), { message: 'give contains or equals, one of them' }).describe('a landing page never used')).max(250).optional()
+    .describe('SEARCH (AI Max): URL exclusions — pages final URL expansion never sends people to'),
   conversionGoals: z.array(z.object({
     category: z.enum(ACTION_CATEGORIES).describe('the goal\'s category (PURCHASE, ADD_TO_CART, …)'),
     origin: z.enum(GOAL_ORIGINS).describe('the goal\'s origin (WEBSITE, …)'),
@@ -209,6 +221,12 @@ const campaignArg = z.object({
     audienceMode: audienceModeArg,
     demographics: demographicsArg('at the ad group'),
     brandLists: z.array(googleIdArg('a brand list the ad group keeps to')).max(20).optional().describe('brand lists (an ad group takes an inclusion only)'),
+    urlInclusions: z.array(z.object({
+      urlEquals: z.string().trim().min(1).max(2048).optional().describe('exactly this page (a full https:// URL; alone in its rule)'),
+      urlContains: z.array(z.string().trim().min(1).max(2048).describe('a part of the page address')).max(3).optional().describe('pages whose address contains each of these'),
+      labels: z.array(z.string().trim().min(1).max(1024).describe('a custom label of a page feed linked to the campaign')).max(3).optional().describe('pages of the linked page feeds with each of these labels'),
+    }).describe('one rule: at most three conditions, all must match')).max(250).optional()
+      .describe('SEARCH (AI Max and text customization on): URL inclusions — the pages the ad group may send people to'),
     labels: labelsArg,
     productAdLabels: labelsArg.describe('SHOPPING: labels on its product ad'),
     assets: assetsArg('the ad group\'s'),
@@ -382,7 +400,8 @@ const buildBuilder = (args: Record<string, unknown>): GoogleDraftBuilder => asyn
   const campaigns = await liveCampaigns(account.target)
   const budgets = await liveBudgets(account.target, campaigns)
   const lists = await liveNegativeLists(account.target)
-  const draft = buildDraft(customerResource(account.target), account.currency, expanded.spec, { campaigns, budgets, lists })
+  const pageFeeds = expanded.spec.campaigns.some((c) => c.pageFeeds?.length) ? await livePageFeeds(account.target) : []
+  const draft = buildDraft(customerResource(account.target), account.currency, expanded.spec, { campaigns, budgets, lists, pageFeeds })
   if ('refusal' in draft) return draft
   // How a copy carries a part differently (a standard Target CPA as Maximize conversions with a target CPA, …).
   draft.warnings.push(...expanded.notes)
@@ -435,7 +454,8 @@ const buildGoogleCampaigns: AgentTool = {
     + 'and demographics at the campaign and its ad groups, labels (campaign, ad group, keyword, ad), tracking template, '
     + 'final URL suffix and custom parameters at every level, keyword final URLs, campaign negatives and lists, exclusions '
     + '(websites, YouTube, apps, content labels, IP addresses), brand lists, placement exclusion lists, the campaign\'s own '
-    + 'conversion goals, the Shopping inventory filter and settings, ad groups with bids, target CPA / ROAS and ad '
+    + 'conversion goals, AI Max\'s text guidelines, page feeds, URL exclusions and ad group URL inclusions (Search), the '
+    + 'Shopping inventory filter and settings, ad groups with bids, target CPA / ROAS and ad '
     + 'rotation, keywords with bids (no BROAD unless allowBroad), ad-group negatives, Shopping product groups by item id '
     + '("everything else" excluded unless asked) or as a tree of any shape (nodes), responsive search ads, and assets of '
     + 'every type at the campaign and its ad groups (new: images, business name, call, price, promotion, lead form, app '
@@ -485,7 +505,8 @@ const copyGoogleCampaign: AgentTool = {
     + 'preview says so), networks, Google\'s automation switches as they are, locations and their bid '
     + 'adjustments, radius targets, location options, languages, schedule, device bid adjustments, audiences of every kind '
     + 'and the audience setting, demographics, campaign negatives and lists, exclusions, brand and placement lists, the '
-    + 'campaign\'s conversion goals, the inventory filter and Shopping settings, ad groups with bids, statuses, target CPA '
+    + 'campaign\'s conversion goals, AI Max\'s text guidelines, page feeds, URL exclusions and URL inclusions, the '
+    + 'inventory filter and Shopping settings, ad groups with bids, statuses, target CPA '
     + '/ ROAS, ad rotation and their own targeting, keywords with bids and URLs, ad-group negatives, the product group '
     + 'tree, responsive search ads, labels on everything, tracking and custom parameters at every level, and every asset '
     + 'linked to the campaign and its ad groups (the same assets linked again). The preview names what it does not copy, '

@@ -40,7 +40,7 @@ Show one table: what changes, from → to, how many, the SPENDS MONEY lines, wha
 
 | To change | Tool |
 |---|---|
-| Campaign settings, bidding, networks, location option, what Google does on its own (Search, Shopping) | `set-google-campaign`; a new campaign alone: `create-google-campaign` |
+| Campaign settings, bidding, networks, location option, what Google does on its own (Search, Shopping); AI Max's text guidelines, page feeds, URL exclusions and ad group URL inclusions (Search) | `set-google-campaign`; a new campaign alone: `create-google-campaign` |
 | Pause or enable campaigns, ad groups, keywords, ads | `set-google-status` (enabling: SPENDS MONEY) |
 | Budgets, shared budgets | `set-google-budget` |
 | Locations, languages, ad schedule, devices, radius | `set-google-targeting` |

@@ -103,6 +103,11 @@ import { imageProblem, MAX_IMAGE_BYTES_TOTAL, type ImageFieldType } from './chan
 import { biddingFields, biddingMask, biddingSpends, biddingText, type Bidding } from './change-campaigns.js'
 import { DIMENSIONS, caseValueOf, dimensionWords, snapshotOf, treeOfLive, treeOfSpec, valueKey, walk, type Dimension, type TNode, type TreeSpecNode } from './product-tree.js'
 import { urlItemProblems } from './change-urls.js'
+import {
+  textGuidelinesBody, textGuidelinesOfAsk, urlExclusionKey, urlExclusionOfKey, urlExclusionsOf, type TextGuidelinesAsk, type UrlExclusion,
+} from './change-ai-controls.js'
+export { TEXT_GUIDELINES_LIMITS, textGuidelinesBody, textGuidelinesOfAsk, urlExclusionKey, urlExclusionOfKey, urlExclusionsOf } from './change-ai-controls.js'
+export type { TextGuidelinesAsk, UrlExclusion } from './change-ai-controls.js'
 import type { PreparedImage } from './asset-images.js'
 import type { ProductGroupNode } from './live-product-groups.js'
 import type { CustomParameter, PageFeedRef, PmaxAsset, PmaxAssetGroup, PmaxAudience, PmaxCampaignLive, PmaxFilterNode, PmaxLink, TextGuidelines } from './live-pmax.js'
@@ -150,37 +155,6 @@ export const AUTOMATION_KEYS = Object.keys(AUTOMATION_TYPES) as AutomationKey[]
 const AUTOMATION_WORD: Record<AutomationKey, string> = {
   finalUrlExpansion: 'final URL expansion', textCustomization: 'text customization', imageEnhancement: 'image enhancement', videoEnhancement: 'video enhancement',
 }
-/** Text guidelines' limits (Campaign.TextGuidelines, v25). */
-export const TEXT_GUIDELINES_LIMITS = { terms: 25, termLength: 30, restrictions: 40, restrictionLength: 300 } as const
-/** Text guidelines as a person names them: each list WHOLE (what it should be); a list left out stays as it is. */
-export interface TextGuidelinesAsk { termExclusions?: string[]; messagingRestrictions?: string[] }
-
-/** The lists as Google takes them (trimmed, each once without case), or the problems (Google's limits). */
-export function textGuidelinesOfAsk(ask: TextGuidelinesAsk, where: string, problems: string[]): TextGuidelinesAsk {
-  const out: TextGuidelinesAsk = {}
-  const clean = (list: string[], max: number, length: number, word: string) => {
-    const seen = new Set<string>()
-    const kept: string[] = []
-    for (const raw of list) {
-      const t = raw.trim().replace(/\s+/g, ' ')
-      if (!t) { problems.push(`${where}: a ${word} is empty`); continue }
-      if (t.length > length) problems.push(`${where}: the ${word} "${t.slice(0, 40)}…" has ${t.length} characters (Google allows ${length})`)
-      if (seen.has(t.toLowerCase())) continue
-      seen.add(t.toLowerCase())
-      kept.push(t)
-    }
-    if (kept.length > max) problems.push(`${where}: ${plural(kept.length, word)} (Google takes at most ${max})`)
-    return kept
-  }
-  if (ask.termExclusions) out.termExclusions = clean(ask.termExclusions, TEXT_GUIDELINES_LIMITS.terms, TEXT_GUIDELINES_LIMITS.termLength, 'term exclusion')
-  if (ask.messagingRestrictions) out.messagingRestrictions = clean(ask.messagingRestrictions, TEXT_GUIDELINES_LIMITS.restrictions, TEXT_GUIDELINES_LIMITS.restrictionLength, 'messaging restriction')
-  return out
-}
-/** Google's JSON for text guidelines (only the lists given). */
-export const textGuidelinesBody = (g: TextGuidelinesAsk): Record<string, unknown> => ({
-  ...(g.termExclusions ? { termExclusions: g.termExclusions } : {}),
-  ...(g.messagingRestrictions ? { messagingRestrictions: g.messagingRestrictions.map((t) => ({ restrictionText: t, restrictionType: 'RESTRICTION_BASED_EXCLUSION' })) } : {}),
-})
 const listText = (l: string[] | undefined) => (l?.length ? l.map((t) => `"${t.length > 50 ? `${t.slice(0, 49)}…` : t}"`).join(', ') : '(none)')
 
 /** Brand guideline fonts Google takes (performance-max/create-campaign, case-sensitive). */
@@ -228,7 +202,6 @@ export interface PmaxSignalsAsk {
 }
 /** One node of a product tree (G4's tree shape): a unit is included unless `excluded`; a split has none of them. */
 export interface PmaxTreeNode { parent?: number; value?: string; everythingElse?: boolean; split?: Dimension; excluded?: boolean }
-export interface UrlExclusion { contains?: string; equals?: string }
 
 /** Every image of a request, fetched first by the tool, by its slot (`imageSlot`). */
 export type PreparedImages = Record<string, PreparedImage | { problem: string }>
@@ -254,8 +227,6 @@ export const tmp = (temp: number) => `tmp:${temp}`
 const tempOf = (res: string) => res.slice(res.lastIndexOf('/') + 1)
 /** An asset id for a record: its id, or `tmp:<temporary id>` until Google gives one. */
 const idForRecord = (res: string) => { const t = tempOf(res); return t.startsWith('-') ? tmp(Number(t)) : t }
-export const urlExclusionKey = (u: UrlExclusion) => (u.contains !== undefined ? `contains:${u.contains.trim()}` : `equals:${(u.equals ?? '').trim()}`)
-export const urlExclusionOfKey = (key: string): UrlExclusion => (key.startsWith('contains:') ? { contains: key.slice(9) } : { equals: key.slice(7) })
 const sorted = (xs: Iterable<string>) => [...new Set(xs)].sort()
 /** Advertiser links only: what Google made itself comes and goes on its own and is never counted, compared or copied. */
 export const ownLinks = (links: PmaxLink[]) => links.filter((l) => l.source !== 'AUTOMATICALLY_CREATED')
@@ -764,17 +735,6 @@ const cleanBidding = (b: Bidding): Bidding => (b.strategy === 'MAXIMIZE_CONVERSI
 export const automationNow = (c: Pick<PmaxCampaignLive, 'automation'>, key: AutomationKey): 'OPTED_IN' | 'OPTED_OUT' =>
   (c.automation[AUTOMATION_TYPES[key]] === 'OPTED_OUT' ? 'OPTED_OUT' : 'OPTED_IN')
 
-/** The URL exclusions a campaign holds (negative WEBPAGE criteria of one URL condition), by key. */
-export function urlExclusionsOf(c: PmaxCampaignLive): Array<{ key: string; criterionId: string }> {
-  const out: Array<{ key: string; criterionId: string }> = []
-  for (const k of c.criteria) {
-    if (k.type !== 'WEBPAGE' || !k.negative || !k.webpage || k.webpage.conditions.length !== 1) continue
-    const w = k.webpage.conditions[0]
-    if (w.operand !== 'URL' || !w.argument) continue
-    out.push({ key: urlExclusionKey(w.operator === 'EQUALS' ? { equals: w.argument } : { contains: w.argument }), criterionId: k.criterionId })
-  }
-  return out
-}
 export const brandExclusionsOf = (c: PmaxCampaignLive) => c.criteria.filter((k) => k.type === 'BRAND_LIST' && k.negative && k.brandListId).map((k) => ({ listId: k.brandListId!, criterionId: k.criterionId }))
 export const brandLinksOf = (c: PmaxCampaignLive) => ownLinks(c.campaignAssets).filter((l) => BRAND_FIELDS.includes(l.fieldType))
 

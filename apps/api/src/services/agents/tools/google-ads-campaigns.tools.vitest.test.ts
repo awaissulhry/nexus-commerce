@@ -11,7 +11,17 @@ const h = vi.hoisted(() => ({
   live: {
     campaigns: [] as unknown[], budgets: [] as unknown[], lists: [] as unknown[], settings: null as unknown,
     criteria: [] as unknown[], productGroups: [] as unknown[], statuses: [] as unknown[], adGroups: [] as unknown[], adGroupDevices: [] as unknown[],
+    // G14b: a Search campaign's AI Max controls, and the account's page feeds.
+    ai: {} as unknown, feeds: [] as unknown[],
   },
+}))
+vi.mock('../../marketing/google-ads/live-search-ai.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../marketing/google-ads/live-search-ai.js')>()),
+  liveSearchAi: vi.fn(async () => structuredClone(h.live.ai)),
+}))
+vi.mock('../../marketing/google-ads/live-pmax.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../marketing/google-ads/live-pmax.js')>()),
+  livePageFeeds: vi.fn(async () => structuredClone(h.live.feeds)),
 }))
 vi.mock('../../marketing/google-ads/change-account.js', () => ({
   googleChangeAccount: vi.fn(async () => ({
@@ -140,5 +150,55 @@ describe('the campaign tools', () => {
       expect(parsed.success, `${name}: ${JSON.stringify(parsed.error?.issues)}`).toBe(true)
       expect((request as { args: { accountId?: string } }).args.accountId).toBe('g-1')
     }
+  })
+})
+
+describe('G14b: set-google-campaign — a Search campaign\'s AI Max controls', () => {
+  const SEARCH = {
+    ...SHOP, name: 'Search A', status: 'ENABLED', type: 'SEARCH', shopping: null, budget: { budgetId: '12', name: null, amountCents: 700, shared: false },
+    networks: { googleSearch: true, searchPartners: false, display: false, partnerSearch: false }, locationOption: { include: 'PRESENCE', exclude: 'PRESENCE' },
+    audienceMode: [], euPoliticalAds: 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING', aiMax: true, keywordMatchType: null,
+    assetAutomation: [{ type: 'TEXT_ASSET_AUTOMATION', status: 'OPTED_IN' }], manualCpcEnhanced: false, maxCpcCeilingCents: null, targetCpaCents: null, targetRoas: null,
+    biddingStrategyId: null, localInventory: false, trackingTemplate: null, finalUrlSuffix: null, primaryStatusReasons: [],
+  }
+  const AI = {
+    textGuidelines: { termExclusions: ['cheap'], messagingRestrictions: [] }, pageFeeds: [{ assetSetId: '77', name: 'Pages A' }], webpageCriteria: [],
+    adGroups: [{ adGroupId: '51', name: 'Group A', status: 'ENABLED', type: 'SEARCH_STANDARD', rules: [], otherWebpage: 0 }],
+  }
+  beforeEach(() => {
+    h.live.settings = structuredClone(SEARCH)
+    h.live.campaigns = [{ ...SEARCH }]
+    h.live.budgets = [{ budgetId: '12', name: null, amountCents: 700, shared: false, deliveryMethod: 'STANDARD', period: 'DAILY', usedBy: 1, campaigns: [] }]
+    h.live.ai = structuredClone(AI)
+    h.live.feeds = [{ assetSetId: '77', name: 'Pages A' }, { assetSetId: '78', name: 'Pages B' }]
+  })
+
+  it('previews on Google\'s check, runs as the approver; undo reads the record back and asks for the old lists (they parse as the tool\'s arguments)', async () => {
+    h.mutate.mockResolvedValue(ok)
+    const args = tool('set-google-campaign').input.parse({
+      campaignId: '21', termExclusions: [], pageFeeds: ['77', '78'], urlExclusions: [{ contains: '/blog' }], urlInclusions: [{ adGroupId: '51', rules: [{ urlContains: ['/jackets'] }] }],
+    }) as Record<string, unknown>
+    const out = await tool('set-google-campaign').handler(args, asker)
+    expect(out.ok, String(out.error)).toBe(true)
+    expect((out.preview as { spendsMoney: boolean }).spendsMoney).toBe(true)
+    const sent = h.mutate.mock.calls[0][1] as Array<Record<string, any>>
+    expect(sent.map((o) => Object.keys(o)[0])).toEqual(['campaignOperation', 'campaignAssetSetOperation', 'campaignCriterionOperation', 'adGroupCriterionOperation'])
+    const run = await tool('set-google-campaign').execute!(args, approved(out.preview))
+    expect(run.ok, String(run.error)).toBe(true)
+    h.live.ai = {
+      textGuidelines: { termExclusions: [], messagingRestrictions: [] }, pageFeeds: [{ assetSetId: '77', name: 'Pages A' }, { assetSetId: '78', name: 'Pages B' }],
+      webpageCriteria: [{ criterionId: '16', type: 'WEBPAGE', negative: true, bidModifier: null, webpage: { name: 'x', conditions: [{ operand: 'URL', operator: 'CONTAINS', argument: '/blog' }] } }],
+      adGroups: [{ adGroupId: '51', name: 'Group A', status: 'ENABLED', type: 'SEARCH_STANDARD', rules: [{ criterionId: '17', name: null, rule: { urlContains: ['/jackets'] } }], otherWebpage: 0 }],
+    }
+    expect(await tool('set-google-campaign').undo!.current(run.change!)).toEqual(run.change!.after)
+    const undo = tool('set-google-campaign').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
+    expect(undo.args).toMatchObject({ termExclusions: ['cheap'], pageFeeds: ['77'], urlExclusions: [], urlInclusions: [{ adGroupId: '51', rules: [] }] })
+    expect(tool('set-google-campaign').input.safeParse(undo.args).success).toBe(true)
+  })
+
+  it('an asset set that is not a page feed of the account (a location set, an unknown id) is refused before Google is asked', async () => {
+    const out = await tool('set-google-campaign').handler(tool('set-google-campaign').input.parse({ campaignId: '21', pageFeeds: ['99'] }) as Record<string, unknown>, asker)
+    expect(out).toMatchObject({ ok: false, error: expect.stringMatching(/page feed 99 is not a page feed of this account/) })
+    expect(h.mutate).not.toHaveBeenCalled()
   })
 })
