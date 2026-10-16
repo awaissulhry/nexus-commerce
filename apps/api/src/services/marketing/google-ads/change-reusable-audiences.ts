@@ -27,7 +27,7 @@
  * exclusion taken off) is SPENDS MONEY when one of them serves (change-audience-uses.ts).
  */
 import { changeLines, plural, type GoogleChangeDraft } from './change-draft.js'
-import { narrowLine, placesOf, widenLines, type UseContext } from './change-audience-uses.js'
+import { narrowLine, placeKeys, placesOf, widenLines, type UseContext } from './change-audience-uses.js'
 import {
   definitionJson, GENDERS, INCOMES, PARENTAL, segmentKey,
   type AgeRange, type AudienceDefinition, type DemographicPart, type LiveReusableAudience, type SegmentRef,
@@ -272,7 +272,7 @@ export function reusableAudienceDraft(customer: string, request: ReusableAudienc
     stands: {
       audiences: live.audiences.filter((a) => seen.has(a.audienceId)).map((a) => `${a.audienceId}:${a.name}:${a.description ?? ''}:${a.scope}:${definitionKey(a.definition)}`).sort(),
       names: creates.length || changes.some((c) => c.name !== undefined) ? live.audiences.map((a) => (a.name ?? '').toLowerCase()).sort() : [],
-      uses: [...seen].sort().map((id) => `${id}:${placesOf(live, 'AUDIENCE', id).positive.map((u) => `${u.campaignId}/${u.campaignStatus}/${u.levelStatus}/${u.status}`).sort().join(',')}`),
+      uses: [...seen].sort().map((id) => `${id}:${placeKeys(placesOf(live, 'AUDIENCE', id)).join(',')}`),
     },
     before,
     after,

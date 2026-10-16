@@ -163,9 +163,16 @@ describe('set-google-conversion-goals customGoals', () => {
     expect(run.ok).toBe(true)
     h.live.campaignGoals = [{ campaignId: '21', name: 'Shop A', status: 'ENABLED', goalsFrom: 'CAMPAIGN', customGoalId: '31', biddableGoals: ['PURCHASE/WEBSITE'], differsFromAccount: true }]
     expect(await tool('set-google-conversion-goals').undo!.current(run.change!)).toEqual(run.change!.after)
-    const undo = tool('set-google-conversion-goals').undo!.request(run.change!)
+    const undo = tool('set-google-conversion-goals').undo!.request(run.change!) as { tool: string; args: Record<string, unknown> }
     expect(undo).toEqual({ tool: 'set-google-conversion-goals', args: { accountId: 'g-1', useAccountGoals: ['21'], why: 'undo of an earlier conversion goal change' } })
     expect(parses(undo)).toBe(true)
+    // The undo takes the custom goal off in the same operation: it cannot come back when the campaign gets goals of its own.
+    h.mutate.mockClear()
+    const back = await tool('set-google-conversion-goals').handler(undo.args, asker)
+    expect(back.ok).toBe(true)
+    expect(h.mutate.mock.calls[0][1]).toEqual([{ conversionGoalCampaignConfigOperation: { update: { resourceName: `${C}/conversionGoalCampaignConfigs/21`, goalConfigLevel: 'CUSTOMER' }, updateMask: 'goal_config_level,custom_conversion_goal' } }])
+    h.live.campaignGoals = [{ campaignId: '21', name: 'Shop A', status: 'ENABLED', goalsFrom: 'CUSTOMER', customGoalId: null, biddableGoals: ['PURCHASE/WEBSITE'], differsFromAccount: false }]
+    expect(await tool('set-google-conversion-goals').undo!.current(run.change!)).not.toEqual(run.change!.after)
   })
 
   it('a campaign on its own goals that loses its custom goal gets it back on undo', () => {
@@ -202,6 +209,36 @@ describe('set-google-custom-audiences', () => {
     const undo = tool('set-google-custom-audiences').undo!.request(run.change!)
     expect(undo).toEqual({ tool: 'set-google-custom-audiences', args: { accountId: 'g-1', change: [{ customAudienceId: '41', members: [{ type: 'KEYWORD', value: 'moto jacket' }] }], remove: ['43'], confirmRemove: true, why: 'undo of an earlier custom segment change' } })
     expect(parses(undo)).toBe(true)
+  })
+})
+
+describe('undo: Google writes text back in its own case; what Nexus cannot send back is said', () => {
+  it('a keyword Google lowercases still counts as the change that stands', async () => {
+    h.check.mockResolvedValue({ resourceName: null, review: null, resourceNames: [] })
+    const ask = { change: [{ customAudienceId: '41', addMembers: [{ type: 'KEYWORD', value: 'Moto Gloves' }] }] }
+    const out = await tool('set-google-custom-audiences').handler(ask, asker)
+    h.send.mockResolvedValue({ responses: [{ accountResult: { resourceName: `${C}/customAudiences/41` } }] })
+    const run = await tool('set-google-custom-audiences').execute!(ask, approved(out.preview))
+    expect(run.ok).toBe(true)
+    h.live.customAudiences = [{ customAudienceId: '41', name: 'Riders', description: null, type: 'AUTO', members: [{ type: 'KEYWORD', value: 'moto gloves' }, { type: 'KEYWORD', value: 'moto jacket' }] }]
+    expect(await tool('set-google-custom-audiences').undo!.current(run.change!)).toEqual(run.change!.after)
+  })
+
+  it('more than 250 members, or rules beyond what one change sends: the undo says so instead of a request the tool refuses', () => {
+    const members = Array.from({ length: 251 }, (_, i) => ({ type: 'KEYWORD', value: `term ${i}` }))
+    const many = tool('set-google-custom-audiences').undo!.request({ before: { audiences: [{ customAudienceId: '41', members }], created: [], removed: [] }, after: { audiences: [{ customAudienceId: '41', members: [] }], created: [], removed: [], accountId: 'g-1' } })
+    expect(many).toMatchObject({ refusal: expect.stringMatching(/251 members.*at most 250/) })
+    const groups = Array.from({ length: 11 }, (_, i) => ({ allOf: [{ parameter: 'url__', operator: 'CONTAINS', text: `/p${i}` }] }))
+    const rules = tool('set-google-user-lists').undo!.request({
+      before: { lists: [{ userListId: '51', visitors: { operator: 'AND', include: [{ anyOf: groups, lookbackDays: null }], exclude: [] } }], created: [], removed: [] },
+      after: { lists: [{ userListId: '51', visitors: VISITORS }], created: [], removed: [], accountId: 'g-1' },
+    })
+    expect(rules).toMatchObject({ refusal: expect.stringMatching(/Undo cannot send the old lists and rules back.*anyOf/) })
+    const nameless = tool('set-google-user-lists').undo!.request({
+      before: { lists: [{ userListId: '51', visitors: { operator: 'AND', include: [{ anyOf: [{ allOf: [{ parameter: '', operator: 'CONTAINS', text: '/a' }] }], lookbackDays: null }], exclude: [] } }], created: [], removed: [] },
+      after: { lists: [{ userListId: '51', visitors: VISITORS }], created: [], removed: [], accountId: 'g-1' },
+    })
+    expect(nameless).toHaveProperty('refusal')
   })
 })
 

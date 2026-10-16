@@ -40,7 +40,7 @@
  * a list a serving campaign EXCLUDES, the opposite (closed, shorter, other rules, removed) lets more people in.
  */
 import { changeLines, plural, type GoogleChangeDraft } from './change-draft.js'
-import { narrowLine, placesOf, widenLines, type UseContext } from './change-audience-uses.js'
+import { narrowLine, placeKeys, placesOf, widenLines, type UseContext } from './change-audience-uses.js'
 import {
   DATE_OPERATORS, NUMBER_OPERATORS, STRING_OPERATORS, visitorRulesJson,
   type LiveUserList, type RuleItem, type RuleOperand, type VisitorRules,
@@ -153,8 +153,11 @@ export function visitorsFrom(v: VisitorsAsk, what: string): VisitorRules | { pro
   return { operator: v.operator ?? 'AND', include, exclude }
 }
 
-/** One canonical text of visitor rules (to compare two). */
-export const visitorsKey = (v: VisitorRules | null): string => JSON.stringify(v ? visitorRulesJson(v) : null)
+/**
+ * One canonical text of visitor rules (to compare two), case aside: Google may write a rule's text or parameter back in
+ * another case, and an address rule is no other rule for it.
+ */
+export const visitorsKey = (v: VisitorRules | null): string => JSON.stringify(v ? visitorRulesJson(v) : null).toLowerCase()
 const combinationKey = (c: CombinationRule[] | null) => JSON.stringify((c ?? []).map((r) => ({ o: r.operator, u: [...r.userListIds].sort() })))
 const itemWords = (i: RuleItem) => `${i.parameter === 'url__' ? 'page' : i.parameter === 'ref_url__' ? 'referrer' : i.parameter} ${i.operator.toLowerCase().replace(/_/g, ' ')} ${i.text ?? i.number ?? i.date ?? `${i.offsetDays} days`}`
 const operandWords = (o: RuleOperand) => o.anyOf.map((g) => g.allOf.map(itemWords).join(' and ')).join(' or ') + (o.lookbackDays ? ` (last ${o.lookbackDays} days)` : '')
@@ -412,10 +415,8 @@ export function userListDraft(customer: string, request: UserListRequest, live: 
       operands: [...new Set([...creates, ...changes].flatMap((c) => [...(c.combination ?? []).flatMap((r) => r.userListIds), ...('lookalike' in c && c.lookalike ? c.lookalike.seedUserListIds : [])]))].sort()
         .map((id) => `${id}:${byId.get(id)?.type ?? '-'}`),
       names: creates.length || changes.some((c) => c.name !== undefined) ? live.lists.filter((l) => l.accessReason === 'OWNED').map((l) => (l.name ?? '').toLowerCase()).sort() : [],
-      uses: [...seen, ...removes].sort().map((id) => {
-        const p = placesOf(live, 'USER_LIST', id)
-        return `${id}:${[...p.positive.map((u) => `+${u.campaignId}/${u.campaignStatus}/${u.levelStatus}/${u.status}/${u.channel}`), ...p.negative.map((u) => `-${u.campaignId}/${u.campaignStatus}/${u.levelStatus}/${u.status}`)].sort().join(',')}`
-      }),
+      // Direct uses and those through reusable audiences, combinations and lookalikes (each with its path).
+      uses: [...seen, ...removes].sort().map((id) => `${id}:${placeKeys(placesOf(live, 'USER_LIST', id)).join(',')}`),
     },
     before,
     after,

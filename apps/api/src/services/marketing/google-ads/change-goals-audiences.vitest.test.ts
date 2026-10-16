@@ -54,13 +54,16 @@ describe('custom conversion goals', () => {
     expect(d.before).toEqual({ goals: [{ customGoalId: '31', conversionActionIds: ['71'] }], created: [], removed: [] })
   })
 
-  it('refuses another account\'s conversions, an unknown action, and warns on a removal used by a campaign', () => {
-    expect(customGoalDraft(C, { create: [{ name: 'G', conversionActionIds: ['71'] }] }, live({ conversionCustomerId: '999' }))).toMatchObject({ refusal: expect.stringMatching(/cross-account/) })
+  it('refuses in words what Google refuses: another account\'s conversions, an unknown or disabled action, a name or list twice, removing a linked goal', () => {
+    expect(customGoalDraft(C, { create: [{ name: 'G', conversionActionIds: ['72'] }] }, live({ conversionCustomerId: '999' }))).toMatchObject({ refusal: expect.stringMatching(/cross-account/) })
     expect(customGoalDraft(C, { create: [{ name: 'G', conversionActionIds: ['79'] }] }, live())).toMatchObject({ refusal: expect.stringMatching(/79/) })
-    const d = customGoalDraft(C, { remove: ['31'] }, live())
+    expect(customGoalDraft(C, { create: [{ name: 'G', conversionActionIds: ['72'] }] }, live({ actions: [ACTION('71'), ACTION('72', { status: 'HIDDEN' })] }))).toMatchObject({ refusal: expect.stringMatching(/CONVERSION_ACTION_NOT_ENABLED/) })
+    expect(customGoalDraft(C, { create: [{ name: 'goal a', conversionActionIds: ['72'] }] }, live())).toMatchObject({ refusal: expect.stringMatching(/CUSTOM_GOAL_DUPLICATE_NAME/) })
+    expect(customGoalDraft(C, { create: [{ name: 'Goal B', conversionActionIds: ['71'] }] }, live())).toMatchObject({ refusal: expect.stringMatching(/DUPLICATE_CONVERSION_ACTION_LIST/) })
+    expect(customGoalDraft(C, { remove: ['31'] }, live())).toMatchObject({ refusal: expect.stringMatching(/CANNOT_REMOVE_LINKED_CUSTOM_CONVERSION_GOAL/) })
+    const d = customGoalDraft(C, { remove: ['31'] }, live({ campaignGoals: [] }))
     if ('refusal' in d) throw new Error(d.refusal)
     expect(d.operations).toEqual([{ customConversionGoalOperation: { remove: `${C}/customConversionGoals/31` } }])
-    expect(d.warnings.join(' ')).toMatch(/"Shop A"/)
   })
 })
 
@@ -94,10 +97,15 @@ describe('a campaign\'s custom goal (set-google-conversion-goals customGoals)', 
     expect(d.spendsMoney).toEqual([])
     expect(d.warnings.join(' ')).toMatch(/stops bidding for "Action 72"/)
     expect(goalChangeDraft(C, { customGoals: [{ campaignId: '21', customGoalId: null }], useAccountGoals: ['21'] }, { bidding: own, customGoals, actions })).toMatchObject({ refusal: expect.stringMatching(/one or the other/i) })
-    // Back to the account's goals: the custom goal it used is recorded for undo.
+    // Back to the account's goals: the custom goal is cleared in the same operation (it cannot come back later), and
+    // what it used is recorded for undo.
     const back = goalChangeDraft(C, { useAccountGoals: ['21'] }, { bidding: own })
     if ('refusal' in back) throw new Error(back.refusal)
+    expect(back.operations).toEqual([{ conversionGoalCampaignConfigOperation: { update: { resourceName: `${C}/conversionGoalCampaignConfigs/21`, goalConfigLevel: 'CUSTOMER' }, updateMask: 'goal_config_level,custom_conversion_goal' } }])
     expect(back.before).toMatchObject({ levels: [{ campaignId: '21', goalsFrom: 'CAMPAIGN', customGoalId: '31' }] })
+    // Clearing a custom goal that leaves the campaign no biddable goal: Google's check decides (EMPTY_CONVERSION_GOALS).
+    const bare = { ...bidding, goals: { ...bidding.goals, campaigns: [{ ...own.goals.campaigns[0], biddableGoals: [] }] } }
+    expect(goalChangeDraft(C, { customGoals: [{ campaignId: '21', customGoalId: null }] }, { bidding: bare, customGoals, actions })).toMatchObject({ warnings: expect.arrayContaining([expect.stringMatching(/EMPTY_CONVERSION_GOALS/)]) })
   })
 })
 
@@ -122,6 +130,11 @@ describe('custom segments', () => {
     expect(paused).toMatchObject({ spendsMoney: [], warnings: expect.arrayContaining([expect.stringMatching(/paused/)]) })
     expect(customAudienceDraft(C, { remove: ['41'] }, { customAudiences: [AUD], uses: [USE({ kind: 'CUSTOM_AUDIENCE', id: '41' })], audiences: [] })).toMatchObject({ refusal: expect.stringMatching(/CANNOT_REMOVE_WHILE_IN_USE/) })
     expect(customAudienceDraft(C, { create: [{ name: 'X', members: [{ type: 'URL', value: 'example.com' }] }] }, { customAudiences: [] })).toMatchObject({ refusal: expect.stringMatching(/https/) })
+    // Where a serving campaign EXCLUDES it, members dropped (or another type) leave out fewer people: SPENDS MONEY.
+    const two = { ...AUD, members: [{ type: 'KEYWORD' as const, value: 'moto jacket' }, { type: 'KEYWORD' as const, value: 'moto gloves' }] }
+    const excluded = customAudienceDraft(C, { change: [{ customAudienceId: '41', removeMembers: [{ type: 'KEYWORD', value: 'moto gloves' }], type: 'SEARCH' }] }, { customAudiences: [two], uses: [USE({ kind: 'CUSTOM_AUDIENCE', id: '41', negative: true })], audiences: [] })
+    if ('refusal' in excluded) throw new Error(excluded.refusal)
+    expect(excluded.spendsMoney).toEqual([expect.stringMatching(/\(an exclusion\) loses 1 member/), expect.stringMatching(/\(an exclusion\) is matched another way/)])
     expect(customAudienceDraft(C, { create: [{ name: 'riders', members: [{ type: 'KEYWORD', value: 'x' }] }] }, { customAudiences: [AUD] })).toMatchObject({ refusal: expect.stringMatching(/ignoring case/) })
   })
 })
@@ -220,6 +233,26 @@ describe('user lists', () => {
     })
     const d = userListDraft(C, { change: [{ userListId: '51', membershipStatus: 'OPEN' }] }, viaAudience)
     expect(d).toMatchObject({ spendsMoney: [expect.stringMatching(/"Shop A"/)] })
+  })
+
+  it('through combinations and lookalikes: ALL / ANY pass a combination\'s uses through, NONE swaps them, a lookalike passes them through', () => {
+    const combo = (operator: 'ALL' | 'ANY' | 'NONE') => OWN({ userListId: '52', name: 'Combo', type: 'LOGICAL', visitors: null, combination: [{ operator, userListIds: ['51', '54'] }] })
+    const targeted = [USE({ id: '52', campaignName: 'Shop C' })]
+    // Widen L (open again) inside ANY of a targeted combination: SPENDS MONEY, and the path is in the facts.
+    const any = userListDraft(C, { change: [{ userListId: '51', membershipStatus: 'OPEN' }] }, live({ lists: [OWN({ membershipStatus: 'CLOSED' }), combo('ANY')], uses: targeted }))
+    if ('refusal' in any) throw new Error(any.refusal)
+    expect(any.spendsMoney).toEqual([expect.stringMatching(/open again.*"Shop C"/)])
+    expect((any.stands as { uses: string[] }).uses[0]).toMatch(/combination 52/)
+    const all = userListDraft(C, { change: [{ userListId: '51', membershipStatus: 'OPEN' }] }, live({ lists: [OWN({ membershipStatus: 'CLOSED' }), combo('ALL')], uses: targeted }))
+    expect(all).toMatchObject({ spendsMoney: [expect.stringMatching(/"Shop C"/)] })
+    // Narrow L (closed) inside NONE of a targeted combination: the combination holds MORE people: SPENDS MONEY.
+    const none = userListDraft(C, { change: [{ userListId: '51', membershipStatus: 'CLOSED' }] }, live({ lists: [OWN({}), combo('NONE')], uses: targeted }))
+    if ('refusal' in none) throw new Error(none.refusal)
+    expect(none.spendsMoney).toEqual([expect.stringMatching(/an exclusion.*closed.*"Shop C"/)])
+    // L seeds a lookalike a serving campaign targets: widening L is SPENDS MONEY.
+    const look = OWN({ userListId: '55', name: 'Look', type: 'LOOKALIKE', visitors: null, lookalike: { seedUserListIds: ['51'], expansion: 'NARROW', countries: ['IT'] } })
+    const seeded = userListDraft(C, { change: [{ userListId: '51', membershipStatus: 'OPEN' }] }, live({ lists: [OWN({ membershipStatus: 'CLOSED' }), look], uses: [USE({ id: '55', campaignName: 'Demand D', channel: 'DEMAND_GEN', level: 'ad-group', levelStatus: 'ENABLED' })] }))
+    expect(seeded).toMatchObject({ spendsMoney: [expect.stringMatching(/"Demand D"/)] })
   })
 })
 

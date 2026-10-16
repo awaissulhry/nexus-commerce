@@ -19,6 +19,9 @@
  *   - A campaign uses a custom goal through ConversionGoalCampaignConfig.custom_conversion_goal (update mask
  *     custom_conversion_goal; "the backend automatically updates goal_config_level to CAMPAIGN"); it then bids for the
  *     custom goal's actions AND its biddable campaign goals.
+ *   - CustomConversionGoalError (reference/rpc/v25/CustomConversionGoalErrorEnum, checked 2026-10-16): CUSTOM_GOAL_
+ *     DUPLICATE_NAME, DUPLICATE_CONVERSION_ACTION_LIST, CONVERSION_ACTION_NOT_ENABLED, CANNOT_REMOVE_LINKED_CUSTOM_
+ *     CONVERSION_GOAL ("linked to a campaign") — each refused here in words before Google is asked.
  *   The reference gives no length limit for a name and no cap on the actions: Google's check (validate_only) judges.
  *
  * Money: a custom goal that counts more conversion actions makes the Smart Bidding campaigns that use it chase more:
@@ -76,7 +79,18 @@ function actionsProblem(ids: string[], live: CustomGoalLive, what: string): stri
   if (!ids.length) return `${what}: name at least one conversion action (google-ads-live view conversions lists them).`
   const known = new Set(live.actions.map((a) => a.conversionActionId))
   const missing = ids.filter((id) => !known.has(id))
-  return missing.length ? `${what}: conversion action ${missing.join(', ')} is not in the account (or is removed).` : null
+  if (missing.length) return `${what}: conversion action ${missing.join(', ')} is not in the account (or is removed).`
+  const off = live.actions.filter((a) => ids.includes(a.conversionActionId ?? '') && a.status !== 'ENABLED')
+  return off.length ? `${what}: conversion action "${off[0].name}" (${off[0].conversionActionId}) is not enabled, and Google takes only enabled ones (CONVERSION_ACTION_NOT_ENABLED).` : null
+}
+
+/** Google keeps custom goal names and action lists unique (CUSTOM_GOAL_DUPLICATE_NAME, DUPLICATE_CONVERSION_ACTION_LIST). */
+function duplicateProblem(live: CustomGoalLive, what: string, except: string | null, name: string | null, ids: string[] | null): string | null {
+  const others = live.goals.filter((g) => g.customGoalId !== except)
+  const sameName = name ? others.find((g) => (g.name ?? '').trim().toLowerCase() === name.toLowerCase()) : undefined
+  if (sameName) return `${what}: custom goal ${sameName.customGoalId} is already called "${sameName.name}" (Google: CUSTOM_GOAL_DUPLICATE_NAME).`
+  const sameList = ids ? others.find((g) => g.conversionActionIds.join(',') === ids.join(',')) : undefined
+  return sameList ? `${what}: custom goal "${sameList.name}" (${sameList.customGoalId}) already counts exactly these actions (Google: DUPLICATE_CONVERSION_ACTION_LIST); use it.` : null
 }
 
 export function customGoalDraft(customer: string, request: CustomGoalRequest, live: CustomGoalLive): GoogleChangeDraft | { refusal: string } {
@@ -98,6 +112,7 @@ export function customGoalDraft(customer: string, request: CustomGoalRequest, li
   const before: CustomGoalRecord = { goals: [], created: [], removed: [] }
   const after: CustomGoalRecord = { goals: [], created: [], removed: [] }
   const names = new Set<string>()
+  const lists = new Set<string>()
 
   for (const [i, c] of creates.entries()) {
     const name = c.name.trim()
@@ -108,7 +123,10 @@ export function customGoalDraft(customer: string, request: CustomGoalRequest, li
     const ids = uniq(c.conversionActionIds)
     const problem = actionsProblem(ids, live, what)
     if (problem) return { refusal: problem }
-    if (live.goals.some((g) => (g.name ?? '').trim().toLowerCase() === name.toLowerCase())) warnings.push(`A custom goal called "${name}" exists already: the new one is another goal with the same name.`)
+    const duplicate = duplicateProblem(live, what, null, name, ids)
+    if (duplicate) return { refusal: duplicate }
+    if (lists.has(ids.join(','))) return { refusal: `${what}: another new goal counts exactly these actions (Google: DUPLICATE_CONVERSION_ACTION_LIST).` }
+    lists.add(ids.join(','))
     createOps.push({ customConversionGoalOperation: { create: { name, conversionActions: ids.map((id) => `${customer}/conversionActions/${id}`), status: 'ENABLED' } } })
     after.created.push({ customGoalId: NEW_GOAL(i + 1), name, conversionActionIds: ids })
     lines.push([`new custom goal: ${name}`, null, `${plural(ids.length, 'conversion action')}: ${actionNames(ids, live.actions)}`])
@@ -129,6 +147,8 @@ export function customGoalDraft(customer: string, request: CustomGoalRequest, li
     if (ch.name !== undefined) {
       const name = ch.name.trim()
       if (!name) return { refusal: `${what}: a name cannot be empty.` }
+      const duplicate = duplicateProblem(live, what, g.customGoalId, name, null)
+      if (duplicate) return { refusal: duplicate }
       if (name === g.name) skipped.push(`${what}: the name is already "${name}".`)
       else {
         was.name = g.name
@@ -140,7 +160,7 @@ export function customGoalDraft(customer: string, request: CustomGoalRequest, li
     }
     if (ch.conversionActionIds !== undefined) {
       const ids = uniq(ch.conversionActionIds)
-      const problem = actionsProblem(ids, live, what)
+      const problem = actionsProblem(ids, live, what) ?? (ids.join(',') === g.conversionActionIds.join(',') ? null : duplicateProblem(live, what, g.customGoalId, null, ids))
       if (problem) return { refusal: problem }
       if (ids.join(',') === g.conversionActionIds.join(',')) skipped.push(`${what}: it already counts exactly these conversion actions.`)
       else {
@@ -165,13 +185,13 @@ export function customGoalDraft(customer: string, request: CustomGoalRequest, li
   for (const id of removes) {
     const g = byId.get(id)
     if (!g) return { refusal: `Custom goal ${id} is not in the account (or is already removed).` }
+    const linked = live.campaignGoals.filter((c) => c.customGoalId === id)
+    if (linked.length) return { refusal: `Custom goal "${g.name ?? id}" is used by ${plural(linked.length, 'campaign')} (${linked.slice(0, 5).map((c) => `"${c.name ?? c.campaignId}"`).join(', ')}): Google does not remove a goal linked to a campaign (CANNOT_REMOVE_LINKED_CUSTOM_CONVERSION_GOAL). Take it off them first (set-google-conversion-goals, customGoals null).` }
     removeOps.push({ customConversionGoalOperation: { remove: `${customer}/customConversionGoals/${id}` } })
     lines.push([`custom goal ${g.name ?? id}`, `${plural(g.conversionActionIds.length, 'conversion action')}`, 'REMOVED'])
     const removed = { customGoalId: id, name: g.name, conversionActionIds: g.conversionActionIds }
     before.removed.push(removed)
     after.removed.push(removed)
-    const { users } = goalUsers(live, id)
-    if (users.length) warnings.push(`Custom goal "${g.name ?? id}" is used by ${plural(users.length, 'campaign')} (${users.slice(0, 5).map((c) => `"${c.name}"`).join(', ')}): they stop bidding for its conversion actions (Google may refuse while a campaign uses it).`)
   }
   if (removes.length) warnings.push('A removed custom goal cannot be restored (a new goal with the same actions is another goal); undo does not make it again.')
 
@@ -195,7 +215,8 @@ export function customGoalDraft(customer: string, request: CustomGoalRequest, li
       goals: live.goals.filter((g) => seen.has(g.customGoalId) || removes.includes(g.customGoalId)).map((g) => `${g.customGoalId}:${g.name}:${g.conversionActionIds.join(',')}`).sort(),
       actions: [...new Set([...creates.flatMap((c) => c.conversionActionIds), ...changes.flatMap((c) => c.conversionActionIds ?? [])])].sort()
         .map((id) => `${id}:${live.actions.some((a) => a.conversionActionId === id)}`),
-      users: [...seen, ...removes].sort().map((id) => `${id}:${goalUsers(live, id).users.map((c) => `${c.campaignId}/${c.status}/${c.bidding}`).join(',')}`),
+      users: [...seen, ...removes].sort().map((id) => `${id}:${goalUsers(live, id).users.map((c) => `${c.campaignId}/${c.status}/${c.bidding}`).join(',')}`
+        + `:${live.campaignGoals.filter((c) => c.customGoalId === id).map((c) => `${c.campaignId}/${c.goalsFrom}`).sort().join(',')}`),
     },
     before,
     after,

@@ -545,7 +545,14 @@ export function goalChangeDraft(
     if (!campaign) return { refusal: `Campaign ${id} is not in the account (or is removed).` }
     const own = campaignOf(id)
     if (!own || own.goalsFrom !== 'CAMPAIGN') { skipped.push(`Campaign "${campaign.name}" already follows the account's goals.`); continue }
-    operations.push({ conversionGoalCampaignConfigOperation: { update: { resourceName: `${customer}/conversionGoalCampaignConfigs/${id}`, goalConfigLevel: 'CUSTOMER' }, updateMask: 'goal_config_level' } })
+    // G14a review: a custom goal it names is cleared in the same operation (no value under its mask), so it cannot come
+    // back when the campaign gets goals of its own again; Google's check judges it.
+    operations.push({
+      conversionGoalCampaignConfigOperation: {
+        update: { resourceName: `${customer}/conversionGoalCampaignConfigs/${id}`, goalConfigLevel: 'CUSTOMER' },
+        updateMask: own.customGoalId ? 'goal_config_level,custom_conversion_goal' : 'goal_config_level',
+      },
+    })
     lines.push([`${campaign.name}: goals`, 'its own', 'the account\'s'])
     // G14a: the custom goal it used is recorded, so undo can give it back (customGoals).
     before.levels.push({ campaignId: id, goalsFrom: own.goalsFrom, ...(own.customGoalId ? { customGoalId: own.customGoalId } : {}) })
@@ -610,6 +617,8 @@ export function goalChangeDraft(
       const kept = target ? new Set([...campaignChasedActions(id, ctx, { withCustomGoal: false }), ...target.conversionActionIds]) : campaignChasedActions(id, ctx, { withCustomGoal: false })
       const lost = (named(nowId)?.conversionActionIds ?? []).filter((aid) => !kept.has(aid))
       if (lost.length) warnings.push(`Campaign "${campaign.name}" stops bidding for ${list(lost)} (they were in its custom goal).`)
+      // ConversionGoalCampaignConfigError EMPTY_CONVERSION_GOALS: "using campaign override goals but has no goals configured".
+      if (!target && !(own?.biddableGoals ?? []).length) warnings.push(`Campaign "${campaign.name}" would bid for no goal of its own without its custom goal: Google's check decides, and may refuse it (EMPTY_CONVERSION_GOALS). Make a goal biddable for it first (campaignGoals), or put it back on the account's goals (useAccountGoals).`)
     }
   }
 

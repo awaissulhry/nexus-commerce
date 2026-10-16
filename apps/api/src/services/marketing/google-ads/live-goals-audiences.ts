@@ -389,6 +389,8 @@ export interface AudienceUse {
   /** The criterion's own status (ENABLED | PAUSED; null for a signal). */
   status: string | null
   negative: boolean
+  /** G14a review: what the audience is used through (a reusable audience, a combination, a lookalike); none = directly. */
+  via?: string
 }
 
 export const USES_CAMPAIGN_QUERY =

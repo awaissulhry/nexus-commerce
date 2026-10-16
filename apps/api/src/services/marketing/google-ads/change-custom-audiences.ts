@@ -24,7 +24,7 @@
  * (members added, another type) is SPENDS MONEY when a campaign that serves uses it (change-audience-uses.ts).
  */
 import { changeLines, keywordTextProblem, plural, type GoogleChangeDraft } from './change-draft.js'
-import { narrowLine, placesOf, placesWords, widenLines, type UseContext } from './change-audience-uses.js'
+import { narrowLine, placeKeys, placesOf, placesWords, widenLines, type UseContext } from './change-audience-uses.js'
 import { ACCOUNT_CALL } from './account-client.js'
 import { memberJson, memberKey, type AudienceMember, type LiveCustomAudience } from './live-goals-audiences.js'
 
@@ -75,7 +75,11 @@ export function membersOf(list: AudienceMember[]): AudienceMember[] {
   }
   return [...seen.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, m]) => m)
 }
-const sameMembers = (a: AudienceMember[], b: AudienceMember[]) => membersOf(a).map(memberKey).join('\n') === membersOf(b).map(memberKey).join('\n')
+/** The same members, as Google may write them back (case and spacing aside): what undo compares. */
+export const sameMembers = (a: AudienceMember[], b: AudienceMember[]): boolean => {
+  const loose = (list: AudienceMember[]) => [...new Set(list.map((m) => `${m.type}:${m.value.trim().toLowerCase().replace(/\s+/g, ' ')}`))].sort().join('\n')
+  return loose(a) === loose(b)
+}
 const memberWords = (list: AudienceMember[]) => {
   const count = (t: string, w: string, many?: string) => { const n = list.filter((m) => m.type === t).length; return n ? plural(n, w, many) : '' }
   return [count('KEYWORD', 'keyword'), count('URL', 'web address', 'web addresses'), count('APP', 'app'), count('PLACE_CATEGORY', 'place category', 'place categories')].filter(Boolean).join(', ') || 'no member'
@@ -166,6 +170,8 @@ export function customAudienceDraft(customer: string, request: CustomAudienceReq
       members = membersOf([...a.members.filter((m) => !gone.has(memberKey(m))), ...(ch.addMembers ?? [])])
     }
     const membersAsked = !!ch.members || !!ch.addMembers?.length || !!ch.removeMembers?.length
+    const places = placesOf(ctx, 'CUSTOM_AUDIENCE', a.customAudienceId)
+    const take = (o: { spends: string[]; warnings: string[] }) => { spends.push(...o.spends); warnings.push(...o.warnings) }
     if (membersAsked && sameMembers(members, a.members)) skipped.push(`${what}: it already has exactly these members.`)
     else if (membersAsked) {
       if (!members.length) return { refusal: `${what}: a custom segment keeps at least one member (remove it instead).` }
@@ -176,17 +182,16 @@ export function customAudienceDraft(customer: string, request: CustomAudienceReq
       const added = members.filter((m) => !a.members.some((x) => memberKey(x) === memberKey(m)))
       const dropped = a.members.filter((m) => !members.some((x) => memberKey(x) === memberKey(m)))
       lines.push([`${a.name}: members`, memberWords(a.members), `${memberWords(members)}${added.length ? ` (+${added.length})` : ''}${dropped.length ? ` (−${dropped.length})` : ''}`])
-      const places = placesOf(ctx, 'CUSTOM_AUDIENCE', a.customAudienceId)
-      if (added.length) {
-        const out = widenLines(what, `gets ${plural(added.length, 'new member')} (${added.slice(0, 3).map((m) => `"${m.value}"`).join(', ')}${added.length > 3 ? ' …' : ''})`, places.positive)
-        spends.push(...out.spends)
-        warnings.push(...out.warnings)
-      } else warnings.push(...narrowLine(what, `loses ${plural(dropped.length, 'member')}`, places.positive))
+      if (added.length) take(widenLines(what, `gets ${plural(added.length, 'new member')} (${added.slice(0, 3).map((m) => `"${m.value}"`).join(', ')}${added.length > 3 ? ' …' : ''})`, places.positive))
+      if (dropped.length) {
+        // Where a campaign EXCLUDES it, fewer members leave out fewer people (as user lists do).
+        take(widenLines(`${what} (an exclusion)`, `loses ${plural(dropped.length, 'member')}`, places.negative))
+        if (!added.length) warnings.push(...narrowLine(what, `loses ${plural(dropped.length, 'member')}`, places.positive))
+      }
     }
     if (now.type !== undefined) {
-      const out = widenLines(what, `is matched another way (${a.type} → ${now.type})`, placesOf(ctx, 'CUSTOM_AUDIENCE', a.customAudienceId).positive)
-      spends.push(...out.spends)
-      warnings.push(...out.warnings)
+      take(widenLines(what, `is matched another way (${a.type} → ${now.type})`, places.positive))
+      take(widenLines(`${what} (an exclusion)`, `is matched another way (${a.type} → ${now.type})`, places.negative))
     }
     if (!mask.length) continue
     updateOps.push({ update: body, updateMask: mask.join(',') })
@@ -231,10 +236,7 @@ export function customAudienceDraft(customer: string, request: CustomAudienceReq
       audiences: live.customAudiences.filter((a) => seen.has(a.customAudienceId) || removes.includes(a.customAudienceId))
         .map((a) => `${a.customAudienceId}:${a.name}:${a.description ?? ''}:${a.type}:${membersOf(a.members).map(memberKey).join('|')}`).sort(),
       names: creates.length || changes.some((c) => c.name !== undefined) ? live.customAudiences.map((a) => (a.name ?? '').toLowerCase()).sort() : [],
-      uses: [...seen, ...removes].sort().map((id) => {
-        const p = placesOf(ctx, 'CUSTOM_AUDIENCE', id)
-        return `${id}:${[...p.positive, ...p.negative].map((u) => `${u.campaignId}/${u.campaignStatus}/${u.levelStatus}/${u.status}`).sort().join(',')}`
-      }),
+      uses: [...seen, ...removes].sort().map((id) => `${id}:${placeKeys(placesOf(ctx, 'CUSTOM_AUDIENCE', id)).join(',')}`),
     },
     before,
     after,

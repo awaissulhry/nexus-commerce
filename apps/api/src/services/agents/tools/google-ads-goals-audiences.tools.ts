@@ -30,7 +30,7 @@ import {
 import type { GoogleChangeAccount } from '../../marketing/google-ads/change-account.js'
 import { customGoalDraft, customGoalRecordAfterRun, type CustomGoalRecord, type CustomGoalRequest } from '../../marketing/google-ads/change-custom-goals.js'
 import {
-  CUSTOM_AUDIENCE_TYPES, customAudienceDraft, customAudienceRecordAfterRun, membersOf,
+  CUSTOM_AUDIENCE_TYPES, customAudienceDraft, customAudienceRecordAfterRun, membersOf, sameMembers,
   type CustomAudienceRecord, type CustomAudienceRequest,
 } from '../../marketing/google-ads/change-custom-audiences.js'
 import {
@@ -79,6 +79,17 @@ function removalUnasked(args: Record<string, unknown>): { refusal: string } | nu
 
 /** The ids a record made that undo removes; null when one has no Google id (the run did not record it). */
 const madeIds = (ids: string[]): string[] | null => (ids.every((id) => /^\d{1,20}$/.test(id)) ? ids : null)
+
+/**
+ * An undo request the target tool takes, or a sentence why undo cannot send it (what Google held before is beyond what
+ * Nexus sends in one change: more than 250 members, more than 10 rules or conditions, a condition with no name …).
+ */
+function undoRequest(target: () => AgentTool, args: Record<string, unknown>, what: string): { tool: string; args: Record<string, unknown> } | { refusal: string } {
+  const parsed = target().input.safeParse(args)
+  if (parsed.success) return { tool: target().name, args }
+  const issue = parsed.error.issues[0]
+  return { refusal: `Undo cannot send ${what} back through ${target().name}: what Google held before is beyond what Nexus sends in one change (${issue.path.join('.')}: ${issue.message}). Put it back in Google Ads.` }
+}
 
 // ── set-google-custom-goals ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -137,15 +148,12 @@ const customGoalsUndo: ToolUndo = {
     if (!remove) return { refusal: 'This change does not record the id of a custom goal it made.' }
     if (!back.length && !remove.length) return { refusal: 'A removed custom goal cannot be put back (a new goal with the same actions is another goal, and no campaign uses it).' }
     const accountId = after.accountId ?? before.accountId
-    return {
-      tool: 'set-google-custom-goals',
-      args: {
-        ...(accountId ? { accountId } : {}),
-        ...(back.length ? { change: back } : {}),
-        ...(remove.length ? { remove, confirmRemove: true } : {}),
-        why: `undo of an earlier custom goal change${(after.removed ?? []).length ? ' (the goals it removed cannot be made again)' : ''}`,
-      },
-    }
+    return undoRequest(() => setGoogleCustomGoals, {
+      ...(accountId ? { accountId } : {}),
+      ...(back.length ? { change: back } : {}),
+      ...(remove.length ? { remove, confirmRemove: true } : {}),
+      why: `undo of an earlier custom goal change${(after.removed ?? []).length ? ' (the goals it removed cannot be made again)' : ''}`,
+    }, 'the old custom goals')
   },
 }
 
@@ -176,8 +184,10 @@ const setGoogleCustomGoals: AgentTool = {
     + 'category, primary or secondary) a campaign bids for besides its biddable goals. Make them (create), rename them or '
     + 'give them a new list of actions (change), or REMOVE them (remove, with confirmRemove true, only when the person '
     + 'asked; a removal cannot be undone). A campaign uses one through set-google-conversion-goals (customGoals). More '
-    + 'actions in a goal that Smart Bidding campaigns use is marked SPENDS MONEY, naming them; fewer is a warning. Google '
-    + 'makes custom goals only in the account that tracks the conversions (cross-account tracking is refused, named). '
+    + 'actions in a goal that Smart Bidding campaigns use is marked SPENDS MONEY, naming them; fewer is a warning. With '
+    + 'cross-account conversion tracking, custom goals live in the conversion account and cannot be made or named here '
+    + '(refused, naming that account). Google refuses a duplicate name or action list, an action that is not enabled, and '
+    + 'removing a goal a campaign uses. '
     + 'google-ads-query "SELECT custom_conversion_goal.id, custom_conversion_goal.name, custom_conversion_goal.conversion_actions '
     + 'FROM custom_conversion_goal" lists them. Undo puts names and actions back and removes the goals it made.'
     + GOOGLE_CHANGE_RULES,
@@ -195,7 +205,9 @@ const memberArg = z.object({
   type: z.enum(MEMBER_TYPES).describe('KEYWORD (what people search or are into), URL (a site they visit, with https://), APP (an Android package name) or PLACE_CATEGORY (Google\'s id)'),
   value: z.string().trim().min(1).max(2048).describe('the keyword (at most 10 words, 80 characters), the web address, the package name or the id'),
 })
-const membersArg = z.array(memberArg).max(250)
+/** The most members one change carries (the brief's array limit; Google's own is higher — the gateway lets 1,000 through). */
+const MEMBERS_MAX = 250
+const membersArg = z.array(memberArg).max(MEMBERS_MAX)
 
 const customAudienceRequest = (args: Record<string, unknown>): CustomAudienceRequest => ({
   create: args.create as CustomAudienceRequest['create'],
@@ -238,7 +250,8 @@ const customAudiencesUndo: ToolUndo = {
           ...('name' in a ? { name: now?.name ?? null } : {}),
           ...('description' in a ? { description: now?.description ?? '' } : {}),
           ...('type' in a ? { type: now?.type ?? null } : {}),
-          ...('members' in a ? { members: membersOf(now?.members ?? []) } : {}),
+          // Google may write a member back in another case: the recorded members stand when Google holds the same.
+          ...('members' in a ? { members: now && sameMembers(now.members, a.members ?? []) ? a.members : membersOf(now?.members ?? []) } : {}),
         }
       }),
       created: (after.created ?? []).filter((c) => byId.has(c.customAudienceId)),
@@ -264,15 +277,14 @@ const customAudiencesUndo: ToolUndo = {
     if (!back.length && !remove.length) return { refusal: 'A removed custom segment cannot be put back.' }
     const accountId = after.accountId ?? before.accountId
     const notes = [...lost, ...((after.removed ?? []).length ? ['the segments it removed cannot be made again'] : [])]
-    return {
-      tool: 'set-google-custom-audiences',
-      args: {
-        ...(accountId ? { accountId } : {}),
-        ...(back.length ? { change: back } : {}),
-        ...(remove.length ? { remove, confirmRemove: true } : {}),
-        why: `undo of an earlier custom segment change${notes.length ? ` (${notes.join('; ')})` : ''}`,
-      },
-    }
+    const many = back.find((a) => (a.members?.length ?? 0) > MEMBERS_MAX)
+    if (many) return { refusal: `Undo cannot send back the ${many.members!.length} members custom segment ${many.customAudienceId} had: one change carries at most ${MEMBERS_MAX} (Nexus's limit). Put them back in Google Ads.` }
+    return undoRequest(() => setGoogleCustomAudiences, {
+      ...(accountId ? { accountId } : {}),
+      ...(back.length ? { change: back } : {}),
+      ...(remove.length ? { remove, confirmRemove: true } : {}),
+      why: `undo of an earlier custom segment change${notes.length ? ` (${notes.join('; ')})` : ''}`,
+    }, 'the old custom segments')
   },
 }
 
@@ -416,15 +428,12 @@ const userListsUndo: ToolUndo = {
     if (!remove) return { refusal: 'This change does not record the id of a user list it made.' }
     if (!back.length && !remove.length) return { refusal: 'A removed user list and the people in it cannot be put back.' }
     const accountId = after.accountId ?? before.accountId
-    return {
-      tool: 'set-google-user-lists',
-      args: {
-        ...(accountId ? { accountId } : {}),
-        ...(back.length ? { change: back } : {}),
-        ...(remove.length ? { remove, confirmRemove: true } : {}),
-        why: `undo of an earlier user list change${(after.removed ?? []).length ? ' (the lists it removed cannot be made again)' : ''}`,
-      },
-    }
+    return undoRequest(() => setGoogleUserLists, {
+      ...(accountId ? { accountId } : {}),
+      ...(back.length ? { change: back } : {}),
+      ...(remove.length ? { remove, confirmRemove: true } : {}),
+      why: `undo of an earlier user list change${(after.removed ?? []).length ? ' (the lists it removed cannot be made again)' : ''}`,
+    }, 'the old lists and rules')
   },
 }
 
@@ -579,14 +588,11 @@ const reusableUndo: ToolUndo = {
         : 'This change records no setting it replaced.' }
     }
     const accountId = after.accountId ?? before.accountId
-    return {
-      tool: 'set-google-reusable-audiences',
-      args: {
-        ...(accountId ? { accountId } : {}),
-        change: back,
-        why: `undo of an earlier audience change${(after.created ?? []).length ? ' (the audiences it made stay: Google cannot remove an audience)' : ''}`,
-      },
-    }
+    return undoRequest(() => setGoogleReusableAudiences, {
+      ...(accountId ? { accountId } : {}),
+      change: back,
+      why: `undo of an earlier audience change${(after.created ?? []).length ? ' (the audiences it made stay: Google cannot remove an audience)' : ''}`,
+    }, 'the old audiences')
   },
 }
 

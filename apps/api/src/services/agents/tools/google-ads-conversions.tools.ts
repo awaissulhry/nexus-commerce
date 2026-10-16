@@ -319,7 +319,7 @@ const setGoogleConversionGoals: AgentTool = {
     customGoals: z.array(z.object({
       campaignId: googleIdArg('the campaign'),
       customGoalId: googleIdArg('the custom goal (set-google-custom-goals makes one)').nullable()
-        .describe('the custom goal the campaign bids for, besides its biddable goals; null: it stops using one'),
+        .describe('the custom goal the campaign bids for, besides its biddable goals; null: it stops using one (Google\'s check decides: a campaign left with no goal is refused, EMPTY_CONVERSION_GOALS)'),
     })).max(100).optional().describe('the custom goal each campaign uses (a campaign with one has goals of its own)'),
     why: googleWhyArg,
   }),
@@ -330,8 +330,11 @@ const setGoogleConversionGoals: AgentTool = {
     + 'set or clear the custom goal a campaign uses (customGoals: a goal of chosen conversion actions, primary or not; '
     + 'set-google-custom-goals makes one). A goal made biddable, or a custom goal that adds conversion actions, for '
     + 'campaigns that bid with Smart Bidding is marked SPENDS MONEY, naming them; one made not biddable or cleared is a '
-    + 'warning (bidding stops counting it). Google makes goals from conversion actions: google-ads-live view conversions '
-    + 'lists them. Undo puts the old goals back, a campaign\'s custom goal included.' + GOOGLE_CHANGE_RULES,
+    + 'warning (bidding stops counting it); clearing a custom goal is judged by Google\'s check, which refuses a campaign '
+    + 'left with no goal of its own (EMPTY_CONVERSION_GOALS). With cross-account conversion tracking, custom goals live in '
+    + 'the conversion account and cannot be named here. A campaign put back on the account\'s goals also drops its custom '
+    + 'goal. Google makes goals from conversion actions: google-ads-live view conversions lists them. Undo puts the old '
+    + 'goals back, a campaign\'s custom goal included.' + GOOGLE_CHANGE_RULES,
   undo: goalsUndo,
   handler: (args, ctx) => googleChangePreview(args, ctx, buildGoals(args)),
   execute: (args, ctx) => runGoogleChange(args, ctx, buildGoals(args), (draft) => ({ data: { totals: draft.totals }, before: draft.before, after: draft.after })),
