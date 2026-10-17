@@ -1,0 +1,34 @@
+/* Nexus colour pictures on product cards: one look on every screen. With a mouse the strip appears on hover (the
+   merchant's effect, kept); on touch screens it is always shown. Three places fit on any card (34–48 px each). The photo sits on a
+   small white mat inside its frame; the selected frame is thicker by what the mat gives up, so the photo keeps one size,
+   nothing covers it, and nothing is scaled or cut by the strip's edge. */
+.product-card .product-card__info nexus-card-swatches.linked-products-swatches { --nexus-swatch-gap: 6px; padding: 0 !important; gap: var(--nexus-swatch-gap) !important; }
+.product-card .product-card__info .linked-variant-thumb,
+.product-card .product-card__info .linked-products-more {
+  width: clamp(34px, calc((100% - 2 * var(--nexus-swatch-gap)) / 3), 48px) !important;
+  min-width: 0 !important; height: auto !important; aspect-ratio: 1 / 1; margin: 0 !important; padding: 0 !important;
+  border: 1px solid rgb(var(--text-color) / .12) !important; border-radius: min(4px, var(--rounded-input)) !important;
+  transform: none !important; transition: border-color .2s ease, background-color .2s ease !important;
+}
+.product-card .product-card__info .linked-variant-thumb { padding: 3px !important; }
+.product-card .product-card__info .linked-variant-thumb img { border-radius: 1px !important; object-fit: contain !important; }
+.product-card .product-card__info .linked-variant-thumb.is-selected { border: 2px solid rgb(var(--text-color)) !important; padding: 2px !important; }
+.product-card .product-card__info .linked-products-more { font-size: 12px !important; }
+.product-card .product-card__info .linked-variant-thumb:focus-visible { outline-offset: -1px; }
+@media (hover: hover) and (pointer: fine) {
+  .product-card:is(:hover, :focus-within, [data-nexus-hover]) .product-card__info nexus-card-swatches.linked-products-swatches { margin-top: var(--spacing-2) !important; }
+  .product-card .product-card__info .linked-variant-thumb:hover { border-color: rgb(var(--text-color) / .45) !important; }
+  .product-card .product-card__info .linked-variant-thumb.is-selected:hover { border-color: rgb(var(--text-color)) !important; }
+  .product-card .product-card__info .linked-products-more:hover { border-color: rgb(var(--text-color) / .45) !important; background: rgb(var(--text-color) / .1) !important; }
+}
+@media (hover: none), (pointer: coarse) {
+  .product-card .product-card__info nexus-card-swatches.linked-products-swatches { opacity: 1 !important; visibility: visible !important; transform: none !important; max-height: none !important; margin-top: var(--spacing-2) !important; transition: none !important; }
+  .product-card .product-card__info .linked-variant-thumb,
+  .product-card .product-card__info .linked-products-more { transition: none !important; }
+  .product-card .product-card__info .linked-variant-thumb img { transform: none !important; }
+}
+/* The tapped picture's small photo stands in for the card's photo until the sharp one is decoded (nexus-card-swatches.js). */
+.product-card .nexus-card-stand-in { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(2px); pointer-events: none; opacity: 0; }
+.product-card .nexus-card-stand-in.is-shown { opacity: 1; }
+.product-card .nexus-card-stand-in.is-shown.is-done { opacity: 0; transition: opacity .25s ease; }
+@media (prefers-reduced-motion: reduce) { .product-card .nexus-card-stand-in.is-shown.is-done { transition: none; } }

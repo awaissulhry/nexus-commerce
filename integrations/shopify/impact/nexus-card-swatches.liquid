@@ -32,7 +32,7 @@
         {%- if nexus_choice != blank -%}
           {%- capture nexus_label -%}{%- for nexus_index in nexus_group.optionIndexes -%}{% unless forloop.first %} / {% endunless %}{{ nexus_choice.options[nexus_index] }}{%- endfor -%}{%- endcapture -%}
           <a class="linked-variant-thumb {% if nexus_chosen %}is-selected{% endif %}" href="{{ nexus_choice.url }}" data-nexus-swatch data-variant-id="{{ nexus_choice.id }}" data-nexus-group="{{ nexus_group.id | escape }}" aria-label="{{ nexus_label | escape }}" {% if nexus_chosen %}aria-current="true"{% endif %}>
-            {%- if nexus_choice.featured_media -%}{{- nexus_choice.featured_media | image_url: width: 96 | image_tag: alt: nexus_label, loading: 'lazy', width: 48, height: 48 -}}{%- else -%}<span>{{ nexus_label | escape }}</span>{%- endif -%}
+            {%- if nexus_choice.featured_media -%}{{- nexus_choice.featured_media | image_url: width: 192 | image_tag: alt: nexus_label, loading: 'lazy', width: 48, height: 48, widths: '96, 144, 192', sizes: '48px' -}}{%- else -%}<span>{{ nexus_label | escape }}</span>{%- endif -%}
           </a>
         {%- endif -%}
       {%- endfor -%}
@@ -41,7 +41,7 @@
     {%- for nexus_linked in product.metafields.custom.variation_products.value -%}
       {%- assign nexus_label = nexus_linked.metafields.custom.variation_value | default: nexus_linked.title -%}
       <a class="linked-variant-thumb {% if nexus_linked.id == product.id %}is-selected{% endif %}" href="{{ nexus_linked.selected_or_first_available_variant.url }}" data-nexus-swatch data-variant-id="{{ nexus_linked.selected_or_first_available_variant.id }}" data-nexus-group="{{ nexus_linked.id }}:family" aria-label="{{ nexus_label | escape }}" {% if nexus_linked.id == product.id %}aria-current="true"{% endif %}>
-        {{- nexus_linked.featured_image | image_url: width: 96 | image_tag: alt: nexus_label, loading: 'lazy', width: 48, height: 48 -}}
+        {{- nexus_linked.featured_image | image_url: width: 192 | image_tag: alt: nexus_label, loading: 'lazy', width: 48, height: 48, widths: '96, 144, 192', sizes: '48px' -}}
       </a>
     {%- endfor -%}
   {%- endif -%}

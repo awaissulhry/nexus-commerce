@@ -394,9 +394,14 @@ html.nexus-menu-open :is(shopify-chat, .loloyal-launcher-wrapper, #loloyal-core-
 .product .product-gallery__thumbnail img { object-fit: contain; }
 .linked-variant-thumb[hidden], .linked-products-more[hidden] { display: none !important; }
 .product-card:focus-within .linked-products-swatches { opacity: 1; visibility: visible; transform: translateY(0); max-height: 100px; margin-top: var(--spacing-1); }
+/* A swapped card is not :hover until the pointer moves; nexus-card-swatches.js pins the state it replaced. */
+@media (hover: hover) and (pointer: fine) {
+  .product-card[data-nexus-hover] .linked-products-swatches { opacity: 1; visibility: visible; transform: translateY(0); max-height: 100px; margin-top: var(--spacing-1); }
+  .product-card[data-nexus-hover] .product-card__quick-buy { opacity: 1; visibility: visible; transform: translateY(0); }
+}
 .linked-variant-thumb:focus-visible { outline: 2px solid rgb(var(--text-color)); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .linked-products-swatches, .linked-variant-thumb, .linked-variant-thumb img { transition: none !important; } .product-gallery__thumbnail-list { scroll-behavior: auto; } }
-""" + (HERE / 'nexus-features.css').read_text())
+""" + (HERE / 'nexus-features.css').read_text() + (HERE / 'nexus-card-swatches.css').read_text())
 collection = source('sections/main-collection.liquid')
 collection = collection.replace('<style>', '<style>\n  nexus-collection { display: block; }\n  nexus-collection product-list[hidden] { display: none !important; }', 1)
 old = "{%- render 'product-card', product: product, stacked: true, position: forloop.index, show_badges: true -%}"
@@ -489,6 +494,7 @@ write('assets/nexus-impact.js', (HERE / 'nexus-impact.js').read_text())
 write('assets/nexus-collection.js', (HERE / 'nexus-collection.js').read_text())
 write('assets/nexus-card-swatches.js', (HERE / 'nexus-card-swatches.js').read_text())
 write('assets/nexus-menu-widgets.js', (HERE / 'nexus-menu-widgets.js').read_text())
+write('assets/nexus-product-speed.js', (HERE / 'nexus-product-speed.js').read_text())
 layout = source('layout/theme.liquid').replace('"photoswipe":', '"nexus-impact": "{{ \'nexus-impact.js\' | asset_url }}",\n          "photoswipe":')
 layout = layout.replace('"photoswipe":', '"nexus-collection": "{{ \'nexus-collection.js\' | asset_url }}",\n          "photoswipe":')
 layout = layout.replace('<html lang=', '<html data-nexus-variant-error="{{ \'nexus.variant_error\' | t | escape }}" lang=')
@@ -500,6 +506,14 @@ write('assets/theme.css', source('assets/theme.css') + '\n/* Nexus customization
 # their original position and the cascade remains theme first, overrides last.
 layout = replace_once(layout, "    {{- 'theme.css' | asset_url | stylesheet_tag: preload: true -}}", '')
 layout = replace_once(layout, "    {%- render 'social-meta-tags' -%}", "    {{- 'theme.css' | asset_url | stylesheet_tag: preload: true -}}\n\n    {%- render 'social-meta-tags' -%}")
+# Product pages only: colour changes and photos ahead of the shopper (nexus-product-speed.js).
+layout = replace_once(layout, """    <script type="module" src="{{ 'theme.js' | asset_url }}"></script>
+""", """    <script type="module" src="{{ 'theme.js' | asset_url }}"></script>
+
+    {%- if request.page_type == 'product' -%}
+      <script type="module" src="{{ 'nexus-product-speed.js' | asset_url }}"></script>
+    {%- endif -%}
+""")
 # Preserve pinch zoom; the export disabled it at the viewport level.
 layout = layout.replace(', minimum-scale=1.0, maximum-scale=1.0', '')
 write('layout/theme.liquid', layout)
