@@ -2,7 +2,8 @@
 // - every lazy photo starts loading 1.5 screens before it scrolls into view (Safari otherwise waits until a photo is
 //   almost on screen) — but only once the page has loaded, so the first screen keeps the network to itself;
 // - a photo still loading when it is half a screen away gets a small soft version of itself underneath (48 px wide,
-//   1–2 KB), so a section that fades in shows that instead of an empty box until the sharp photo is decoded.
+//   1–2 KB); once that can paint, the theme's fade-ins start with it instead of an empty box, and the sharp photo
+//   replaces it when decoded.
 const PREVIEW_WIDTH = 48;
 // The photo the browser shows or will show: a <picture> source that matches this screen comes first.
 function photoUrl(img) {
@@ -36,6 +37,10 @@ function showPreview(img) {
   img.style.backgroundSize = fit === 'contain' ? 'contain' : fit === 'cover' ? 'cover' : '100% 100%';
   img.style.backgroundPosition = 'center';
   img.style.backgroundRepeat = 'no-repeat';
+  // Once the soft version can paint, the theme's fades stop waiting for the sharp photo (imageLoaded in theme.js).
+  const probe = new Image(), announce = () => { if (ready(img)) return; img.setAttribute('data-nexus-preview-ready', ''); img.dispatchEvent(new Event('nexus:preview-ready')); };
+  probe.onload = () => probe.decode().then(announce, announce);
+  probe.src = url;
   // Taken away once the sharp photo can paint, so it never shows through a photo with a transparent background.
   const clear = () => requestAnimationFrame(() => { for (const name of ['background-image', 'background-size', 'background-position', 'background-repeat']) img.style.removeProperty(name); });
   img.addEventListener('load', () => img.decode().then(clear, clear), { once: true });

@@ -1,0 +1,27 @@
+    {%- if request.page_type == 'product' -%}
+      {%- assign nexus_main_media = product.selected_or_first_available_variant.featured_media | default: product.featured_media -%}
+      {%- if nexus_main_media.media_type == 'image' -%}
+        {%- comment -%}
+          Nexus: a soft 48 px version of the main product photo is fetched first and shown as the photo's background
+          until the photo is decoded. Then it goes (the photos have transparent backgrounds).
+        {%- endcomment -%}
+        <link rel="preload" as="image" fetchpriority="high" href="{{ nexus_main_media.preview_image | image_url: width: 48 }}">
+        <style>html:not(.nexus-main-photo) [data-media-id="{{ nexus_main_media.id }}"] img { background: url({{ nexus_main_media.preview_image | image_url: width: 48 }}) center / contain no-repeat; }</style>
+        <script>
+          (function () {
+            var html = document.documentElement, done = function () { html.classList.add('nexus-main-photo'); };
+            var find = function () { return document.querySelector('[data-media-id="{{ nexus_main_media.id }}"] img'); };
+            function watch(img) {
+              var decoded = function () { img.decode().then(done, done); };
+              if (img.complete && img.naturalWidth) decoded();
+              else { img.addEventListener('load', decoded, { once: true }); img.addEventListener('error', done, { once: true }); }
+            }
+            var img = find();
+            if (img) return watch(img);
+            var watcher = new MutationObserver(function () { var found = find(); if (found) { watcher.disconnect(); watch(found); } });
+            watcher.observe(html, { childList: true, subtree: true });
+            document.addEventListener('DOMContentLoaded', function () { watcher.disconnect(); var found = find(); if (found) watch(found); else done(); }, { once: true });
+          })();
+        </script>
+      {%- endif -%}
+    {%- endif -%}
