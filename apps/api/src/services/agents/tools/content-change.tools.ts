@@ -723,6 +723,11 @@ interface ListingFieldPlan {
   store?: ChannelStoreRef
   /** An attribute the listing stops keeping its own value for. */
   drop?: boolean
+  /**
+   * A list the sheet keeps as numbered slot columns (Amazon's Bullet 1 … Bullet 5): the write field of each slot, in
+   * order. A pin is written as the product sheet saves it, one slot write per position (`bulletPoints[3]`).
+   */
+  slotFields?: string[]
   englishMeaning?: string
 }
 type ChannelStoreRef = ReturnType<typeof storeOf>
@@ -845,9 +850,22 @@ async function planListingContent(args: Record<string, unknown>, nothing: string
     pinAddress = address
     const own = ownPin(product, listing, coordinate, languages, field, language)
     const isFollow = follow.includes(field)
-    const to = isFollow ? null : pin[field]
+    // A list kept as slot columns (Amazon's bullets): one cell per position, so at most as many items as slots, and the
+    // list as the slot writes store it — each item trimmed, the blank positions after the last item no item at all.
+    const slots = columns[0].slot ? columns : null
+    let to = isFollow ? null : pin[field]
+    if (slots && !isFollow) {
+      const items = (Array.isArray(to) ? to : []).map((item) => (item == null ? '' : String(item).trim()))
+      while (items.length && items[items.length - 1] === '') items.pop()
+      if (items.length > slots.length) {
+        refusals.push(`${field}: ${where} listings keep at most ${slots.length} ${field === 'bulletPoints' ? 'bullet points' : 'values'} (${items.length} were given)`)
+        continue
+      }
+      to = items
+    }
     if (isFollow ? own === null : own !== null && same(own.value, to)) { unchanged.push(field); continue }
-    fields.push({ field, kind: isFollow ? 'follow' : 'pin', writerField: writerField(field), column: columns[0], to, from: shownValue(columns), own })
+    fields.push({ field, kind: isFollow ? 'follow' : 'pin', writerField: writerField(field), column: columns[0], to, from: shownValue(columns), own,
+      ...(slots ? { slotFields: slots.map((column) => cellOf(column)?.writeField ?? column.writeField) } : {}) })
   }
   for (const code of codes) {
     const column = sheet.columns.find((col) => !isLocalizableContent(col.slot?.of ?? col.key, col.storage)
@@ -898,13 +916,14 @@ async function planListingContent(args: Record<string, unknown>, nothing: string
 }
 
 function listingWrites(plan: ListingPlan): ProductBulkInput {
-  const changes: Change[] = plan.fields.map((f) => f.kind === 'attribute'
-    ? { id: plan.product.id, field: f.writerField, value: f.to, target: 'channel' as const, ...(f.drop ? { intent: 'reset' as const } : {}) }
-    : {
-        id: plan.product.id, field: f.writerField, value: f.kind === 'follow' ? null : f.to, contentAddress: plan.pinAddress!,
-        contentAcknowledged: true, contentState: 'reviewed' as const, contentVersion: plan.pinVersion,
-        ...(f.kind === 'follow' ? { intent: 'reset' as const } : {}),
-      })
+  const changes: Change[] = plan.fields.flatMap((f): Change[] => {
+    if (f.kind === 'attribute') return [{ id: plan.product.id, field: f.writerField, value: f.to, target: 'channel' as const, ...(f.drop ? { intent: 'reset' as const } : {}) }]
+    const content = { id: plan.product.id, contentAddress: plan.pinAddress!, contentAcknowledged: true, contentState: 'reviewed' as const, contentVersion: plan.pinVersion }
+    // A slotted list, as the product sheet saves it: one write per slot, and every slot after the last item cleared, so
+    // 5 bullets → 4 removes the fifth. The writer folds the slot writes of one listing and language into one list.
+    if (f.kind === 'pin' && f.slotFields) return f.slotFields.map((field, i) => ({ ...content, field, value: (f.to as string[])[i] ?? null }))
+    return [{ ...content, field: f.writerField, value: f.kind === 'follow' ? null : f.to, ...(f.kind === 'follow' ? { intent: 'reset' as const } : {}) }]
+  })
   return {
     changes,
     marketplaceContexts: [{

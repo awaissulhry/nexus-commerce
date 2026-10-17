@@ -167,3 +167,26 @@ it('R-58: a product listed nowhere keeps no cap', async () => {
   expect(result.warnings ?? []).toEqual([])
   expect(await masterBullets(other.none)).toEqual([long])
 })
+
+/*
+ * The sheet's Reset to Shared on a channel's bullets (`reset-list`: the whole list's field, `bulletPoints`, intent reset) and
+ * Claude's set-listing-content follow send the same change. It is the LIST's reset, so it takes the list's own contract
+ * column, never Bullet 1: every slot shows the shared bullets again. One slot still cannot reset alone.
+ */
+it('channel: a whole-list reset returns every slot to the shared bullets; one slot alone is still refused', async () => {
+  const reset = (field: string) => scoped(async () => {
+    const listing = await prisma.channelListing.findFirstOrThrow({ where: { productId: id }, include: { translations: true } })
+    return applyProductBulkEdits({ changes: [{ id, field, value: null, intent: 'reset', target: 'channel', contentAddress: pin(), contentAcknowledged: true,
+      contentVersion: listing.translations.find(t => t.language === 'it')?.version ?? 0 }],
+      marketplaceContexts: [{ channel: 'AMAZON', marketplace: 'IT', accountId: account, locale: 'it' }], expectedVersion: listing.version } as never, context) as Promise<any>
+  })
+  expect((await channelSave('bulletPoints[1]', 'Own first')).errors ?? []).toEqual([])
+  expect((await channelBullets()).translated).toContain('Own first')
+  const one = await reset('bulletPoints[1]')
+  expect(one.updated).toBe(0)
+  expect(one.errors).toEqual([expect.objectContaining({ field: 'bulletPoints[1]', error: expect.stringContaining('whole list') })])
+  const whole = await reset('bulletPoints')
+  expect(whole.errors ?? []).toEqual([])
+  const listing = await scoped(() => prisma.channelListing.findFirstOrThrow({ where: { productId: id }, include: { translations: true } }))
+  expect(listing.translations.find(t => t.language === 'it')).toMatchObject({ bulletPoints: [], follows: expect.arrayContaining(['bulletPoints']) })
+})
