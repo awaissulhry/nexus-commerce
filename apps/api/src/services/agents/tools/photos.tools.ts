@@ -13,7 +13,9 @@
  *   add-photo-from-url   (decision d6) fetch a photo from an https link through the one public-address fetch and store it
  *                        (Cloudinary), where an upload goes: the family's library on the media plan, else the product's
  *                        own gallery. Its dry run fetches and checks the link, storing nothing; its run stores exactly the
- *                        bytes the person approved (by content hash).
+ *                        bytes the person approved (by content hash). A photo already there is refused; with
+ *                        allowNearDuplicate one that only looks like one (an edited version) is added as a separate photo,
+ *                        its preview naming the photo it looks like — the same bytes never.
  *   remove-unused-photo  its way back: remove a photo nothing uses (no plan places it, not the main photo, no copy or
  *                        listing photo points at it). The stored file stays, so its own undo adds it back from there.
  */
@@ -22,6 +24,7 @@ import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { MEDIA_LAYERS, mediaOpSchema, type MediaOp } from '@nexus/shared/media-plan'
 import prisma from '../../../db.js'
+import type { DuplicatePhoto } from '../../images/photo-from-url.service.js'
 import type { AgentTool, ToolResult, ToolUndo } from '../tool-types.js'
 import { liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 
@@ -144,7 +147,16 @@ const linkInput = z.object({
   productId: z.string().trim().min(1).max(64).describe('Nexus product id: the family (parent) or one of its variations'),
   url: z.string().trim().url().max(2000).describe('https:// link to one JPEG, PNG, WebP or GIF photo, at most 15 MB, on a public web address'),
   label: z.string().trim().min(1).max(200).optional().describe('the photo\'s name in Nexus (its alt text)'),
+  allowNearDuplicate: z.boolean().optional()
+    .describe('true: add it even though it looks like a photo already there (a near duplicate, e.g. an edited version), as a separate photo; the preview names that photo. The same file is never added twice'),
 })
+
+/** The refusal of a photo already there; a near duplicate also says how to add it on purpose. */
+function alreadyThere(sku: string, same: DuplicatePhoto, nothing: string, allowNear: boolean): string {
+  if (same.kind === 'exact') return `${sku}: this photo is already there (photo ${same.id}${allowNear ? ', the same file: it is never added twice' : ''}). ${nothing}`
+  return `${sku}: this photo is already there (photo ${same.id}, a near duplicate). ${nothing} If it is a different picture (e.g. an edited version), `
+    + 'ask again with allowNearDuplicate: true to add it as a separate photo.'
+}
 
 /** The photo's home, or the sentence that refuses it. */
 async function homeOf(productId: string) {
@@ -191,25 +203,34 @@ const addPhotoFromUrl: AgentTool = {
     'Add one photo to a product in Nexus from a web link: https only, a public address, a JPEG, PNG, WebP or GIF photo of '
     + 'at most 15 MB. Nexus fetches and stores it (Cloudinary) where an upload goes: a family on the media plan gets it '
     + 'in its library (place it with arrange-photos), any other product in its own gallery. A photo already there is '
-    + 'not added again. Nothing reaches a channel until a publish sends the photos. Waits for a person to approve it in '
-    + 'Nexus; the photo stored is exactly the one previewed.',
+    + 'not added again; one that only looks like one (a near duplicate, e.g. an edited version) is added as a separate '
+    + 'photo with allowNearDuplicate. Nothing reaches a channel until a publish sends the photos. Waits for a person to '
+    + 'approve it in Nexus; the photo stored is exactly the one previewed.',
   async handler(args): Promise<ToolResult> {
     const home = await homeOf(String(args.productId))
     if ('error' in home) return { ok: false, error: home.error }
     const { fetchPhoto, duplicateOf, PhotoUrlError } = await linkPhotos()
     const { isCloudinaryConfigured } = await import('../../cloudinary.service.js')
     if (!isCloudinaryConfigured()) return { ok: false, error: `${home.sku}: photo storage (Cloudinary) is not configured on this Nexus. Nothing was queued.` }
+    const allowNear = args.allowNearDuplicate === true
     try {
       const photo = await fetchPhoto(String(args.url))
       const same = await duplicateOf(home, photo)
-      if (same) return { ok: false, error: `${home.sku}: this photo is already there (photo ${same.id}${same.kind === 'near' ? ', a near duplicate' : ''}). Nothing was queued.` }
+      if (same && (same.kind === 'exact' || !allowNear)) return { ok: false, error: alreadyThere(home.sku, same, 'Nothing was queued.', allowNear) }
+      const where = home.onPlan ? 'Adds it to the family\'s photo library in Nexus; arrange-photos places it, a publish sends it.'
+        : 'Adds it to the end of the product\'s gallery in Nexus; a publish sends it.'
+      // Asked on purpose: the person approves it knowing which photo it looks like (material: a similarity that appears,
+      // goes or changes before the approval hands it back).
+      const similar = same ? { photoId: same.id, url: same.url, label: same.label } : null
       return {
         ok: true,
         preview: {
           action: 'add-photo-from-url', family: { productId: home.ownerId, sku: home.sku }, place: home.onPlan ? 'library' : 'gallery',
           url: photo.url, host: photo.host, mimeType: photo.mimeType, bytes: photo.bytes, contentHash: photo.contentHash, label: args.label ?? null,
-          note: home.onPlan ? 'Adds it to the family\'s photo library in Nexus; arrange-photos places it, a publish sends it.'
-            : 'Adds it to the end of the product\'s gallery in Nexus; a publish sends it.',
+          ...(allowNear ? { similar } : {}),
+          note: similar
+            ? `Looks like photo ${similar.photoId} already there (${similar.label ? `"${similar.label}", ` : ''}${similar.url}); it is added as a separate photo, the other stays. ${where}`
+            : where,
         },
       }
     } catch (error) {
@@ -220,15 +241,20 @@ const addPhotoFromUrl: AgentTool = {
   async execute(args, ctx): Promise<ToolResult> {
     const home = await homeOf(String(args.productId))
     if ('error' in home) return { ok: false, error: home.error }
-    const approved = ctx.approvedPreview as { contentHash?: unknown; family?: { productId?: unknown } } | undefined
+    const approved = ctx.approvedPreview as { contentHash?: unknown; family?: { productId?: unknown }; similar?: { photoId?: unknown } | null } | undefined
     if (typeof approved?.contentHash !== 'string') return { ok: false, error: 'A photo is added only after a person approved its preview. Nothing changed.' }
     if (approved.family?.productId !== home.ownerId) return { ok: false, error: `${home.sku}: where this photo goes changed since it was approved. Nothing changed; ask Claude again.` }
+    const allowNear = args.allowNearDuplicate === true
     const { fetchPhoto, duplicateOf, addPhoto, PhotoUrlError } = await linkPhotos()
     try {
       const photo = await fetchPhoto(String(args.url))
       if (photo.contentHash !== approved.contentHash) return { ok: false, error: `${home.sku}: the photo at this link changed since it was approved. Nothing changed; ask Claude again.` }
       const same = await duplicateOf(home, photo)
-      if (same) return { ok: false, error: `${home.sku}: this photo is already there (photo ${same.id}). Nothing changed.` }
+      if (same && (same.kind === 'exact' || !allowNear)) return { ok: false, error: `${home.sku}: this photo is already there (photo ${same.id}). Nothing changed.` }
+      // A near duplicate is added only when the approved preview said which photo it looks like.
+      if (same && typeof approved.similar?.photoId !== 'string') {
+        return { ok: false, error: `${home.sku}: this photo now looks like photo ${same.id}, which the approved request did not say. Nothing changed; ask Claude again.` }
+      }
       const label = typeof args.label === 'string' ? args.label : null
       const image = await addPhoto(home, photo, label)
       return {
