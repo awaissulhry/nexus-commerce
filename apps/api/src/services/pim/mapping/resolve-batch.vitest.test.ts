@@ -613,6 +613,45 @@ describe('eBay gets a colour or size as the market word', () => {
   })
 })
 
+// 2026-10-17 (MOSS on Amazon DE) — the colour is stored in Italian (`Nero`), and Amazon DE was sent `Nero` (live: `Schwarz`).
+// Amazon now gets the colour in the market's word on a market in another language; Amazon IT is unchanged. A value-map
+// row still wins; a value the dictionary does not know goes out as it is.
+describe('Amazon gets the colour in the market word outside Italy', () => {
+  const colour = { id: 'attr-color', code: 'color', label: 'Color', semanticKey: 'color', archivedAt: null, options: [
+    { id: 'o-black', code: 'black', label: 'Nero', metadata: { labels: { en: 'Black', it: 'Nero', de: 'Schwarz', fr: 'Noir', es: 'Negro' } }, synonyms: ['Black', 'Schwarz'], sortOrder: 0, archivedAt: null },
+  ] }
+  const setup = (stored = 'Nero') => {
+    db.dictionary.mockResolvedValue([colour])
+    db.products.mockResolvedValue([{ id: 'p', sku: 'TEST-SKU', name: 'T', translations: [], categoryAttributes: { color: stored }, variantAttributes: {}, parentId: null }])
+    db.listings.mockResolvedValue([])
+    // The generated "Shared Master source" rule: the stored colour as it is, no value-map step.
+    db.mapping.mockResolvedValue({ fields: { color: { source: 'color' } } })
+    db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('color', { label: 'Color', rule: { source: 'color' } })] })
+  }
+  const cell = async (marketplace: string) => (await resolveBatch({ channel: 'AMAZON', marketplace, productIds: ['p'] })).products[0].cells.color
+
+  it('Amazon DE gets Schwarz, FR Noir and ES Negro for a stored Nero', async () => {
+    setup()
+    expect(await cell('DE')).toMatchObject({ value: 'Schwarz', errors: [] })
+    expect(await cell('FR')).toMatchObject({ value: 'Noir' })
+    expect(await cell('ES')).toMatchObject({ value: 'Negro' })
+  })
+  it('Amazon IT is unchanged and reads no dictionary', async () => {
+    setup()
+    expect(await cell('IT')).toMatchObject({ value: 'Nero' })
+    expect(db.dictionary).not.toHaveBeenCalled()
+  })
+  it('a value-map row wins over the market word', async () => {
+    setup()
+    db.valueMap.mockImplementation((attribute: string, from: string) => attribute === 'color' && from === 'Nero' ? 'Tiefschwarz' : null)
+    expect(await cell('DE')).toMatchObject({ value: 'Tiefschwarz' })
+  })
+  it('a value the dictionary does not know goes out as it is', async () => {
+    setup('Fucsia acceso')
+    expect(await cell('DE')).toMatchObject({ value: 'Fucsia acceso' })
+  })
+})
+
 // Wave 2 (Owner decisions 1 and 6, 2026-10-05) — every Trading publish sends GTC, and no handling time (eBay takes it from
 // the shipping policy). The cells show exactly that: never a stored or mapped value. Stored values are left as they are.
 describe('eBay duration and handling time show what publish sends', () => {

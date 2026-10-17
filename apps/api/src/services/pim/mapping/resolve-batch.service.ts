@@ -14,6 +14,7 @@ import { finding, type ValueFinding } from '../value-verdict.js'
 import { ebayAspectValues } from '../../ebay-aspect-values.js'
 import { conceptListMatcher, masterDefaultRule } from './master-default-rule.js'
 import { ebayMarketWords } from '../ebay-market-label.js'
+import { conceptByKey } from '@nexus/shared/attribute-concepts'
 import { variationDictionary } from '../variation-dictionary.js'
 import { exprDependenciesDeep } from './expr.js'
 import { evaluateSchemaRequirements } from './schema-requirements.js'
@@ -56,6 +57,9 @@ import { categoryFieldValue, categoryForListing, channelCategoryField, resolveCa
 export const AMAZON_FAMILY_FACT_KEYS: ReadonlySet<string> = new Set([
   'parentage_level', 'child_parent_sku_relationship__child_relationship_type', 'child_parent_sku_relationship__parent_sku',
 ])
+
+/** The Amazon fields that carry the colour (the `color` concept's binding): sent in the market's word. */
+const AMAZON_COLOUR_FIELDS: ReadonlySet<string> = new Set(conceptByKey('color')?.bindings.AMAZON ?? [])
 
 export interface ResolvedCell {
   content?: import('../content-resolver.js').ResolvedContent
@@ -317,7 +321,13 @@ export async function resolveBatch(input: {
   const ebayWordAttribute = (field: CatalogueField, rules: Record<string, FieldMappingRule>): string | null =>
     channel === 'EBAY' && field.ruleOrigin === 'master' && !rules[field.fieldKey]
       ? (field.rule?.transforms?.find(t => t.type === 'valueMap') as { attribute?: string } | undefined)?.attribute ?? null : null
-  const marketWord = channel === 'EBAY' && [...catalogueByCategory].some(([cat, { fields }]) => { const rules = getRulesFor(mapping, cat); return fields.some(f => ebayWordAttribute(f, rules)) })
+  // 2026-10-17 (MOSS on Amazon DE) — Amazon gets the colour in the market's word too (`Nero` → `Schwarz` on DE, `Noir` on
+  // FR): the colour is stored in the primary language, and Amazon DE was sent `Nero`. Only on a market in another
+  // language (Amazon IT is unchanged); a value-map row still wins, and a listing's own value is never reached.
+  const amazonWordAttribute = (field: CatalogueField): string | null =>
+    channel === 'AMAZON' && normalizeLanguage(languages[0] ?? PRIMARY_CONTENT_LOCALE) !== PRIMARY_CONTENT_LOCALE && AMAZON_COLOUR_FIELDS.has(field.fieldKey) ? 'color' : null
+  const marketWord = (channel === 'EBAY' && [...catalogueByCategory].some(([cat, { fields }]) => { const rules = getRulesFor(mapping, cat); return fields.some(f => ebayWordAttribute(f, rules)) }))
+    || [...catalogueByCategory.values()].some(({ fields }) => fields.some(f => amazonWordAttribute(f)))
     ? ebayMarketWords(await variationDictionary(), languages[0]) : null
   // Item 1 (2026-10-05) — each list field's synonym matcher, built once per catalogue field (not per product).
   const listMatchers = new Map<CatalogueField, ReturnType<typeof conceptListMatcher>>()
@@ -475,8 +485,12 @@ export async function resolveBatch(input: {
       const listMatcher = listMatcherFor(field)
       const synonymMatches: Array<{ from: string; to: string }> = []
       // E1b — after the synonym matcher (a strict list keeps its ONE option), the market word; null = no change.
-      const wordAttribute = marketWord && rule === field.rule ? ebayWordAttribute(field, rules) : null
+      const amazonWord = marketWord && rule ? amazonWordAttribute(field) : null
+      const wordAttribute = amazonWord ?? (marketWord && rule === field.rule ? ebayWordAttribute(field, rules) : null)
       const marketWordFor = wordAttribute ? (from: string) => { const word = marketWord!(wordAttribute, from); return word !== from ? word : null } : null
+      // The Amazon colour rule reads the stored colour as it is: the market word runs as its value-map step (a row wins).
+      const ruleToRun = amazonWord && !rule!.transforms?.some(t => t.type === 'valueMap')
+        ? { ...rule!, transforms: [...(rule!.transforms ?? []), { type: 'valueMap' as const, attribute: amazonWord }] } : rule
       const r: import('../resolve-channel-field.js').ResolvedChannelField = contentHit && (contentHit.tier === 'pin' || !rule)
         ? { content: contentHit.content, fieldKey: field.fieldKey, value: contentHit.value, raw: contentHit.value, source: contentHit.tier === 'pin' && !contentHit.follows ? 'override' : 'catalogRule',
             legacySource: 'source', required: rule?.required === true, language: contentHit.language, requested: locale,
@@ -484,7 +498,7 @@ export async function resolveBatch(input: {
             follows: contentHit.follows, drift: contentHit.drift, needsTranslation: translationMissing(contentHit, locale), warnings: [], appliedTransforms: [] }
         : hasStored ? { fieldKey: field.fieldKey, required: rule?.required === true, value: directValue, raw: directValue, source: stored === undefined ? 'default' : 'override', legacySource: 'source', needsTranslation: false, warnings: [], appliedTransforms: [] } : resolveChannelField({
         fieldKey: field.fieldKey,
-        rule: rule!,
+        rule: ruleToRun!,
         resolvedAttrs,
         attrsView,
         product: productForFields() as any,
