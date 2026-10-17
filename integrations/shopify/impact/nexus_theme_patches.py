@@ -40,8 +40,20 @@ def patch_slideshow(text, image, mobile, block_id, type_guard=''):
 
 
 def patch_layout(layout):
-    """Product pages place the colour row before the first frame (head); every page loads nexus-photos.js."""
+    """Product pages place the colour row before the first frame and preload a soft main photo (head); every page
+    loads nexus-photos.js."""
     viewport = '    <meta name="viewport" content="width=device-width, initial-scale=1.0, height=device-height">\n'
-    layout = replace_once(layout, viewport, viewport + '\n' + (HERE / 'nexus-colour-place.liquid').read_text())
+    layout = replace_once(layout, viewport, viewport + '\n' + (HERE / 'nexus-colour-place.liquid').read_text()
+                          + '\n' + (HERE / 'nexus-main-photo.liquid').read_text())
     speed = "    {%- if request.page_type == 'product' -%}\n      <script type=\"module\" src=\"{{ 'nexus-product-speed.js' | asset_url }}\"></script>\n    {%- endif -%}\n"
     return replace_once(layout, speed, "    <script type=\"module\" src=\"{{ 'nexus-photos.js' | asset_url }}\"></script>\n\n" + speed)
+
+
+def patch_image_loaded(js):
+    """The theme's fade-ins (image with text, banners, multiple images, slideshow) wait for imageLoaded(); a photo
+    whose soft preview can paint (nexus-photos.js) counts as loaded, so the fade starts with the preview."""
+    js = replace_once(js, '        if (image.tagName === "IMG" && image.complete || !image.offsetParent) {\n',
+                      '        if (image.tagName === "IMG" && image.complete || !image.offsetParent || image.hasAttribute("data-nexus-preview-ready")) {\n')
+    onload = '          image.onload = () => resolve();\n'
+    return replace_once(js, onload, onload + '          // Nexus: a ready soft preview counts as loaded, so the fade starts with it (nexus-photos.js).\n'
+                        '          image.addEventListener("nexus:preview-ready", () => resolve(), { once: true });\n')

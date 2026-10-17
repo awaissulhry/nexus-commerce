@@ -2,7 +2,7 @@
 """Apply the reviewed Nexus integration to the supplied Impact export; preserve other files byte for byte."""
 import argparse, difflib, hashlib, json, re, shutil, zipfile
 from pathlib import Path
-from nexus_theme_patches import patch_layout, patch_slideshow
+from nexus_theme_patches import patch_image_loaded, patch_layout, patch_slideshow
 
 HERE = Path(__file__).resolve().parent
 parser = argparse.ArgumentParser()
@@ -494,6 +494,8 @@ js = replace_once(js, ', onIntersection_fn, renderForCombination_fn,', ', render
 bulk_prefetch_start = js.index('/**\n * When the variant picker is intersecting the viewport')
 bulk_prefetch_end = js.index('renderForCombination_fn = async function', bulk_prefetch_start)
 js = js[:bulk_prefetch_start] + js[bulk_prefetch_end:]
+# Fade-ins start with the soft photo preview instead of waiting for the sharp photo (nexus-photos.js).
+js = patch_image_loaded(js)
 write('assets/theme.js', js)
 write('assets/nexus-impact.js', (HERE / 'nexus-impact.js').read_text())
 write('assets/nexus-collection.js', (HERE / 'nexus-collection.js').read_text())
@@ -522,7 +524,8 @@ layout = replace_once(layout, """    <script type="module" src="{{ 'theme.js' | 
 """)
 # Preserve pinch zoom; the export disabled it at the viewport level.
 layout = layout.replace(', minimum-scale=1.0, maximum-scale=1.0', '')
-# Every page: photos ahead and soft previews (nexus-photos.js); product pages: the colour row placed in <head>.
+# Every page: photos ahead and soft previews (nexus-photos.js); product pages: the colour row placed and a soft main
+# photo preloaded in <head>.
 layout = patch_layout(layout)
 write('layout/theme.liquid', layout)
 header_body, header_schema = source('sections/header.liquid').split('{% schema %}', 1)
