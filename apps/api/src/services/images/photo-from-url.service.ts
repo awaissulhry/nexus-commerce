@@ -4,7 +4,8 @@
  * The link is fetched by the ONE public-address fetch (`net/safe-fetch.ts`): https only (every redirect hop too), public
  * addresses only, bounded time and bytes. Only a photo is accepted: the declared type AND the file's own first bytes must
  * be JPEG, PNG, WebP or GIF, at most 15 MB. A photo already there (the same bytes, or a near duplicate by the upload
- * gate's own two hashes) is not added again. Cloudinary stores it.
+ * gate's own two hashes) is not added again — a near duplicate only when the caller says it is a different picture on
+ * purpose (the Media page's "upload anyway"); the same bytes never. Cloudinary stores it.
  *
  * Where it goes is where an upload goes (`uploadDedupScope`): a family on the media plan has ONE library, the family
  * root's row (placed nowhere until the photo plan places it); any other product has its own gallery. Nothing reaches a
@@ -84,16 +85,27 @@ const hashes = async (buffer: Buffer) => {
   try { return { a: await aHashBuffer(buffer), d: await dHash256Buffer(buffer) } } catch { return { a: null, d: null } }
 }
 
-/** The photo this one already is (the same bytes, or a near duplicate by the upload gate's two hashes), if any. */
-export async function duplicateOf(home: PhotoHome, photo: FetchedPhoto): Promise<{ id: string; kind: 'exact' | 'near' } | null> {
-  const exact = await prisma.productImage.findFirst({ where: { productId: { in: home.scope }, contentHash: photo.contentHash }, select: { id: true } })
-  if (exact) return { id: exact.id, kind: 'exact' }
+/** A photo already there that a new one is (`exact`: the same bytes) or looks like (`near`), with its stored file and name. */
+export interface DuplicatePhoto { id: string; kind: 'exact' | 'near'; url: string; label: string | null }
+
+/**
+ * The photo this one already is (the same bytes), or else looks like (a near duplicate by the upload gate's two hashes:
+ * the closest, as the Media page's "looks similar" choice shows it), if any.
+ */
+export async function duplicateOf(home: PhotoHome, photo: FetchedPhoto): Promise<DuplicatePhoto | null> {
+  const exact = await prisma.productImage.findFirst({ where: { productId: { in: home.scope }, contentHash: photo.contentHash }, select: { id: true, url: true, alt: true } })
+  if (exact) return { id: exact.id, kind: 'exact', url: exact.url, label: exact.alt }
   const { a, d } = await hashes(photo.buffer)
   if (!a || !d) return null
   const candidates = await prisma.productImage.findMany({ where: { productId: { in: home.scope }, perceptualHash: { not: null }, dhash256: { not: null } },
-    select: { id: true, perceptualHash: true, dhash256: true } })
-  const near = candidates.find((c) => hammingHex(c.perceptualHash!, a) <= NEAR_DUP_HAMMING_THRESHOLD && hammingHex(c.dhash256!, d) <= DHASH256_NEAR_DUP_THRESHOLD)
-  return near ? { id: near.id, kind: 'near' } : null
+    select: { id: true, url: true, alt: true, perceptualHash: true, dhash256: true } })
+  let near: { id: string; url: string; alt: string | null; distance: number } | null = null
+  for (const c of candidates) {
+    if (hammingHex(c.perceptualHash!, a) > NEAR_DUP_HAMMING_THRESHOLD) continue
+    const distance = hammingHex(c.dhash256!, d)
+    if (distance <= DHASH256_NEAR_DUP_THRESHOLD && (!near || distance < near.distance)) near = { id: c.id, url: c.url, alt: c.alt, distance }
+  }
+  return near ? { id: near.id, kind: 'near', url: near.url, label: near.alt } : null
 }
 
 function changed(home: PhotoHome, imageId: string, source: string) {
