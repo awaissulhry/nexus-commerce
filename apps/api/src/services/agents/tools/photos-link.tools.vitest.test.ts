@@ -65,6 +65,7 @@ vi.mock('node:https', async (importOriginal) => {
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
 import { callTool, executeTool, type UserPrincipal } from '../call-tool.js'
 import { getTool } from '../tool-registry.js'
+import { movedFieldNames } from '../../agent-fleet/approval-inbox.service.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -82,10 +83,16 @@ const dryRun = async (tool: string, args: Json) => (await inside(() => callTool(
 const run = async (tool: string, args: Json, preview: Json) => (await inside(() => executeTool(approver, tool, args, { approvedPreview: JSON.parse(JSON.stringify(preview)), via: 'claude' }))).raw as Json
 const photos = (productId: string) => inside(() => db().productImage.findMany({ where: { productId }, orderBy: { sortOrder: 'asc' } }))
 
-/** A 64×64 PNG split in two halves (left/right or top/bottom), so the two pictures differ by their perceptual hashes too. */
-async function halves(split: 'vertical' | 'horizontal') {
+/**
+ * A 64×64 PNG split in two halves (left/right or top/bottom), so the two pictures differ by their perceptual hashes too.
+ * `edited`: a small corner patch lighter — other bytes, the same picture by both perceptual hashes (a near duplicate).
+ */
+async function halves(split: 'vertical' | 'horizontal', edited = false) {
   const raw = Buffer.alloc(64 * 64 * 3)
-  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) raw.fill((split === 'vertical' ? x < 32 : y < 32) ? 20 : 235, (y * 64 + x) * 3, (y * 64 + x) * 3 + 3)
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+    const value = edited && x < 4 && y < 4 ? 60 : (split === 'vertical' ? x < 32 : y < 32) ? 20 : 235
+    raw.fill(value, (y * 64 + x) * 3, (y * 64 + x) * 3 + 3)
+  }
   return sharp(raw, { raw: { width: 64, height: 64, channels: 3 } }).png().toBuffer()
 }
 const plant = (path: string, body: Buffer, type = 'image/png') => state.pages.set(`https://photos.example.test${path}`, { status: 200, headers: { 'content-type': type }, body })
@@ -96,6 +103,7 @@ const png: Record<string, Buffer> = {}
 beforeAll(async () => {
   png.a = await halves('vertical')
   png.b = await halves('horizontal')
+  png.edited = await halves('vertical', true)
   await inside(async () => {
     ids.root = (await db().product.create({ data: { sku: 'TEST-SKU-L11', name: 'L11 jacket', basePrice: 10, isParent: true } })).id
     ids.child = (await db().product.create({ data: { sku: 'TEST-SKU-L11-S', name: 'L11 jacket S', basePrice: 10, parentId: ids.root } })).id
@@ -174,6 +182,65 @@ describe('add-photo-from-url', () => {
     const ran = await run('add-photo-from-url', args, preview.preview)
     expect(ran.ok, ran.error).toBe(true)
     expect((await photos(ids.off)).map((p: Json) => p.id)).toEqual([ran.data.photoId])
+  })
+})
+
+describe('add-photo-from-url — a near duplicate (an edited version) on purpose: allowNearDuplicate', () => {
+  const near = (name: string, extra: Json = {}) => ({ productId: ids.near, url: `https://photos.example.test/near/${name}.png`, ...extra })
+  const original: Json = {}
+  /** Previews asked before the original was there: nothing looked like them yet. */
+  const asked: Json = {}
+  beforeAll(async () => {
+    ids.near = (await inside(() => db().product.create({ data: { sku: 'TEST-SKU-L11-NEAR', name: 'L11 near', basePrice: 10 } }))).id
+  })
+  beforeEach(() => { plant('/near/original.png', png.a); plant('/near/edited.png', png.edited); plant('/near/copy.png', png.a) })
+
+  it('without it a near duplicate is refused, naming the photo it looks like and how to add it on purpose', async () => {
+    asked.edited = (await dryRun('add-photo-from-url', near('edited', { allowNearDuplicate: true }))).preview
+    asked.copy = (await dryRun('add-photo-from-url', near('copy', { allowNearDuplicate: true }))).preview
+    expect(asked.edited).toMatchObject({ similar: null })
+    expect(asked.edited.note).not.toContain('Looks like')
+    const args = near('original', { label: 'Jacket, with hood' })
+    const preview = (await dryRun('add-photo-from-url', args)).preview
+    expect(preview).not.toHaveProperty('similar')
+    const added = await run('add-photo-from-url', args, preview)
+    expect(added.ok, added.error).toBe(true)
+    Object.assign(original, added.data)
+
+    const refused = await dryRun('add-photo-from-url', near('edited'))
+    expect(refused).toMatchObject({ ok: false, error: expect.stringContaining(`already there (photo ${original.photoId}, a near duplicate). Nothing was queued.`) })
+    expect(refused.error).toContain('allowNearDuplicate: true')
+    expect(await run('add-photo-from-url', near('edited'), asked.edited)).toMatchObject({ ok: false, error: expect.stringContaining(`photo ${original.photoId}`) })
+    expect(state.uploads).toHaveLength(1)
+    expect(await photos(ids.near)).toHaveLength(1)
+  })
+
+  it('with it the preview names the photo it looks like, and the run adds it as a separate photo', async () => {
+    const args = near('edited', { allowNearDuplicate: true })
+    const preview = (await dryRun('add-photo-from-url', args)).preview
+    expect(preview).toMatchObject({ similar: { photoId: original.photoId, url: original.url, label: 'Jacket, with hood' }, contentHash: asked.edited.contentHash })
+    expect(preview.note).toContain(`Looks like photo ${original.photoId} already there ("Jacket, with hood", ${original.url}); it is added as a separate photo`)
+
+    // A request approved before the original was there did not say what it looks like: the approval gate hands it back
+    // (the similarity is material), and the run refuses it too.
+    expect(movedFieldNames('add-photo-from-url', asked.edited, preview)).toEqual(['similar'])
+    expect(await run('add-photo-from-url', args, asked.edited)).toMatchObject({ ok: false,
+      error: expect.stringContaining(`now looks like photo ${original.photoId}, which the approved request did not say`) })
+    expect(state.uploads).toEqual([])
+
+    const ran = await run('add-photo-from-url', args, preview)
+    expect(ran.ok, ran.error).toBe(true)
+    expect(ran.data.photoId).not.toBe(original.photoId)
+    expect(state.uploads).toHaveLength(1)
+    expect((await photos(ids.near)).map((p: Json) => [p.id, p.contentHash])).toEqual([[original.photoId, asked.copy.contentHash], [ran.data.photoId, preview.contentHash]])
+  })
+
+  it('the same file is still refused with it, in the preview and in the run', async () => {
+    const args = near('copy', { allowNearDuplicate: true })
+    expect(await dryRun('add-photo-from-url', args)).toMatchObject({ ok: false, error: expect.stringContaining(`already there (photo ${original.photoId}, the same file: it is never added twice)`) })
+    expect(await run('add-photo-from-url', args, asked.copy)).toMatchObject({ ok: false, error: expect.stringContaining(`already there (photo ${original.photoId})`) })
+    expect(state.uploads).toEqual([])
+    expect(await photos(ids.near)).toHaveLength(2)
   })
 })
 

@@ -1207,7 +1207,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'delete-listing': ['listings', 'changes', 'how'],
   // L10 — the photo layer, the revision it was read at and the plan the edit leaves it with.
   'arrange-photos': ['layer', 'revision', 'after'],
-  'add-photo-from-url': ['family', 'place', 'host', 'contentHash', 'bytes'],
+  // `similar` (asked with allowNearDuplicate): the photo it looks like — one that appears, goes or changes is a different decision.
+  'add-photo-from-url': ['family', 'place', 'host', 'contentHash', 'bytes', 'similar'],
   'remove-unused-photo': ['family', 'photo'],
   // MCP full control P9 — imports and their undo (tools/data-transfer.tools.ts). `counts` what changes, `basis` the
   // file, the mapping and a fingerprint of every write (or the job and what its undo writes): any of them moved since
