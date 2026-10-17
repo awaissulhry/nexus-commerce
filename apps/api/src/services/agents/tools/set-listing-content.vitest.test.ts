@@ -44,12 +44,26 @@ vi.mock('../../product-read-cache.service.js', () => ({
 vi.mock('../../pim/readiness-index.service.js', async () => (await import('../../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
 // The product sheet's Shopify scope reads the store live (a sealed channel login): its enrichment is stood in for by the
 // common sheet itself, whose Title and Description cells are the content writer's (the projection keeps them so).
-vi.mock('../../shopify/channel-sheet.service.js', () => ({ enrichShopifyChannelSheet: async (page: unknown) => page }))
+// `colourOwner`: the row that owns an adopted colour product's Shopify product, whose Title and Description cells the
+// live projection (`channel-sheet-projection.ts`) serves as editable content-writer cells.
+const shopifyProjection = vi.hoisted(() => ({ colourOwner: null as string | null }))
+vi.mock('../../shopify/channel-sheet.service.js', () => ({
+  enrichShopifyChannelSheet: async (page: any) => {
+    const owner = shopifyProjection.colourOwner
+    if (!owner) return page
+    const keys: string[] = page.columns.filter((c: any) => ['title', 'descriptionHtml'].includes(c.shopifyField?.id)).map((c: any) => c.key)
+    return { ...page, rows: page.rows.map((row: any) => row.id !== owner ? row : { ...row, values: { ...row.values,
+      ...Object.fromEntries(keys.map((key) => [key, { ...row.values[key], shopifyWrite: undefined, editable: true, writable: true, writeBlockedReason: null }])) } }) }
+  },
+}))
 
 import { callTool, ToolAccessError, type UserPrincipal } from '../call-tool.js'
 import { runOrQueueTool } from '../approval-gate.service.js'
 import { checkStaleness, commitScheduledApproval, MATERIAL_PREVIEW_FIELDS, scheduleApproval } from '../../agent-fleet/approval-inbox.service.js'
 import { runPlan } from '../change-plan.service.js'
+import { getInformationSheet } from '../../pim/information-sheet.js'
+import { applyProductBulkEdits } from '../../products/bulk-edit.service.js'
+import { contentWriterContext } from './content-change.tools.js'
 
 const A = LEGACY_WORKSPACE_ID
 const business = { workspaceId: A, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -283,6 +297,43 @@ describe('T7 — set-listing-content', { timeout: 30_000 }, () => {
     expect(await translationOf(amazonDe.id)).toMatchObject({ name: 'Eigener Titel', description: 'Eigene Beschreibung.' })
   })
 
+  it('Amazon bullets: each item lands in its own slot (Bullet 1 …), 5 → 4 clears the fifth, follow returns every slot, undo puts the list back', async () => {
+    const { parent, amazonDe } = await seed('TEST-SKU-T7-BULLETS')
+    const five = ['Eins', 'Zwei', 'Drei', 'Vier', 'Fünf']
+    const pinBullets = (bulletPoints: string[]) => ({ product: parent.sku, coordinate: AMAZON_DE, language: 'de', pin: { bulletPoints },
+      englishMeaning: { bulletPoints: 'One, two, three, four, five.' } })
+    // The sheet keeps Amazon's bullets as five slot columns (the fixture's bullet_point maxItems): a list with no fifth slot is refused.
+    expect(await preview(pinBullets([...five, 'Sechs']))).toMatchObject({ ok: false, error: expect.stringMatching(/bulletPoints: Amazon · DE listings keep at most 5 bullet points \(6 were given\)/) })
+
+    const first = await queued(pinBullets(five))
+    // No German bullets of its own yet: it shows the Italian source until the pin.
+    expect(first.preview.changes.bulletPoints).toEqual({ kind: 'pin', from: ['Pelle'], to: five, englishMeaning: 'One, two, three, four, five.' })
+    expect(await approveAndRun(first.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await translationOf(amazonDe.id)).toMatchObject({ name: 'Amazon-Titel', bulletPoints: five })
+
+    // 5 → 4: the fifth slot is cleared, not left behind; trailing blanks are no bullet.
+    const four = await queued(pinBullets(['Eins', 'Zwei', 'Drei', 'Vier neu', ' ']))
+    expect(four.preview.changes.bulletPoints).toMatchObject({ kind: 'pin', from: five, to: ['Eins', 'Zwei', 'Drei', 'Vier neu'] })
+    expect(await approveAndRun(four.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await translationOf(amazonDe.id))!.bulletPoints).toEqual(['Eins', 'Zwei', 'Drei', 'Vier neu'])
+    expect((await productOf(parent.id)).bulletPoints).toEqual(['Pelle'])
+    expect(await queueRows([parent.id])).toBe(0)
+    // The same four again: nothing to change.
+    expect(await preview(pinBullets(['Eins', 'Zwei', 'Drei', 'Vier neu']))).toMatchObject({ ok: false, error: expect.stringMatching(/^Nothing to change/) })
+
+    // Undo of 5 → 4 puts the five back.
+    const undo = await ask('undo-change', { approvalId: four.approvalId })
+    expect(undo, undo.error).toMatchObject({ ok: true, mode: 'queued' })
+    expect(await approveAndRun(undo.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await translationOf(amazonDe.id))!.bulletPoints).toEqual(five)
+
+    // Follow: every slot shows the shared text again.
+    const back = await queued({ product: parent.id, coordinate: AMAZON_DE, language: 'de', follow: ['bulletPoints'] })
+    expect(back.preview.changes.bulletPoints).toEqual({ kind: 'follow', from: five, to: ['Pelle'] })
+    expect(await approveAndRun(back.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await translationOf(amazonDe.id)).toMatchObject({ name: 'Amazon-Titel', bulletPoints: [], follows: ['bulletPoints'] })
+  })
+
   it('undo restores an attribute with its original JSON type: a number stays a number, a list stays a list', async () => {
     const { parent, amazonDe } = await seed('TEST-SKU-T7-TYPES')
     await inside(() => db().channelListing.update({ where: { id: amazonDe.id }, data: { overrideData: { number_of_pockets: 4, special_feature: ['Impermeabile', 'Ventilata'] } } }))
@@ -405,5 +456,53 @@ describe('T7 — set-listing-content', { timeout: 30_000 }, () => {
     const back = await queued({ product: parent.id, coordinate: SHOP, language: 'en', follow: ['title', 'description'] })
     expect(await approveAndRun(back.approvalId)).toMatchObject({ ok: true, status: 'executed' })
     expect(await sent()).toEqual({ title: 'TEST-SKU-T7-SHOP giacca', description: 'Giacca da moto in pelle.' })
+  })
+
+  /*
+   * NOT FIXED — the Owner's decision (2026-10-17). An adopted colour product's Shopify product is owned by its first size
+   * row (`product-owner-row.ts`), a row WITH a parent. The live sheet serves that row's Description as an editable
+   * content-writer cell (`channel-sheet-projection.ts`), but the product writer's row contract (`bulk-edit.service.ts`,
+   * `shopifyApplies`) keeps a product-level Shopify field to a row WITHOUT a parent: the save is refused, for a person in
+   * the sheet and for Claude alike, with the same sentence. (Nothing would send it either: an adopted colour product is
+   * adopt-only, and Shopify's publisher sends the family root listing's text.)
+   */
+  it('Shopify: an adopted colour product\'s description — the writer refuses it for a person and for Claude alike', async () => {
+    const family = await inside(async () => {
+      const parent = await db().product.create({ data: { sku: 'TEST-SKU-T7-COLOUR', name: 'Colour family', basePrice: '100.00', isParent: true, status: 'ACTIVE', description: 'Giacca.' } })
+      const size = await db().product.create({ data: { sku: 'TEST-SKU-T7-COLOUR-BLACK-3XL', name: 'Colour family black 3XL', basePrice: '100.00', parentId: parent.id, status: 'ACTIVE' } })
+      const listing = (productId: string, extra: Record<string, unknown>) => db().channelListing.create({ data: {
+        productId, channel: 'SHOPIFY', marketplace: 'GLOBAL', region: 'GLOBAL', channelMarket: 'SHOPIFY_GLOBAL', channelConnectionId: accounts.shopify, aliasKey: '',
+        listingStatus: 'ACTIVE', isPublished: true, syncPaused: true, ...extra,
+      } as never })
+      await listing(parent.id, { externalListingId: null })
+      const own = await listing(size.id, { externalListingId: '9000000004',
+        platformAttributes: { shopifyColourProductId: 'fake-colour-black', shopifyProductId: '9000000004', variantId: '9000000005', nexusFamilyId: parent.id } })
+      return { size, own }
+    })
+    const html = '<p>Black jacket.</p>'
+    const args = { product: family.size.sku, coordinate: { channel: 'SHOPIFY', market: 'GLOBAL' }, language: 'en', pin: { description: html } }
+    // The common sheet alone: a product-level Shopify field belongs to a row without a parent.
+    expect(await preview(args)).toMatchObject({ ok: false, error: expect.stringMatching(/description: This Shopify field belongs to the product row/) })
+    shopifyProjection.colourOwner = family.size.id
+    try {
+      // The live sheet: the size row owns its colour's Shopify product, so its Description cell is editable …
+      const sheet = await inside(() => getInformationSheet({ productId: family.size.id, scope: 'channel', channel: 'SHOPIFY', market: 'GLOBAL', locale: 'en', accountId: accounts.shopify }))
+      const column = sheet.columns.find((c) => c.shopifyField?.id === 'descriptionHtml')!
+      const cell = sheet.rows.find((r) => r.id === family.size.id)!.values[column.key]
+      expect(cell).toMatchObject({ editable: true })
+      // … and Claude's preview is refused by the product writer …
+      expect(await preview(args)).toEqual({ ok: false, error: 'The product writer refused it: description: Description is read-only. Nothing was queued.' })
+      // … exactly as a person's save of that cell (the change the sheet sends) is.
+      const listing = await listingOf(family.own.id)
+      const saved = await inside(() => applyProductBulkEdits({
+        changes: [{ id: family.size.id, field: cell.writeField ?? column.writeField, value: html, target: 'channel', contentAddress: cell.contentAcknowledgement?.pin.address ?? cell.contentAddress,
+          contentAcknowledged: true, contentVersion: cell.contentVersion }],
+        marketplaceContexts: [{ channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: accounts.shopify, locale: 'en', aliasKey: '' }], expectedVersion: listing.version,
+      } as never, contentWriterContext(approverId, 'test'))).catch((error) => ({ errors: error.details?.errors }))
+      expect((saved as { errors?: Array<{ error: string }> }).errors).toEqual([expect.objectContaining({ error: 'Description is read-only.' })])
+      expect(await inside(() => db().channelListingTranslation.count({ where: { channelListingId: family.own.id } }))).toBe(0)
+    } finally {
+      shopifyProjection.colourOwner = null
+    }
   })
 })

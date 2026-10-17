@@ -942,6 +942,11 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // was judged and named as "Bullet 1". Anything else keeps the order below.
     const slotAddress = parseSlotField(change.field)
     const col = (slotAddress ? columns.find(col => col.slot?.index === slotAddress.index && contentField(col.slot.of) === key) : undefined)
+      // A whole-list RESET of a slotted list (the sheet's Reset to Shared on Amazon's bullets, `reset-list`; Claude's
+      // set-listing-content follow) is the list's: its own contract column (the `slot.of` entry), never Bullet 1, whose
+      // slot the content writer may edit but not reset alone. A whole-list SET still takes Bullet 1 and is refused as a shape.
+      ?? (!slotAddress && change.intent === 'reset'
+        ? columns.find(col => !col.slot && contentField(col.key) === key && columns.some(other => other.slot?.of === col.key)) : undefined)
       ?? columns.find(col => col.writeField === change.field || col.key === base || contentField(col.slot?.of ?? col.key) === key)
     // LX.F F-LX-1 — the ContentAddress gate belongs to LOCALIZABLE changes only.
     // It used to run for EVERY change, before this predicate, so a price, a
