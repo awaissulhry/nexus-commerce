@@ -18,6 +18,8 @@ export interface TranslationWrite {
   /** MCP full control — the writer's provenance stamp (`sourceModel`, else `values.sourceModel`) and the audit `reason`. */
   sourceModel?: string
   reason?: string
+  /** The listings a person chose this write for, which follow it explicitly (master-content `follow`). */
+  follow?: readonly string[]
 }
 const conflict = (label: string) => productWriteRefusal(409, `${label} changed. Reload before saving it.`)
 
@@ -91,7 +93,7 @@ export async function writeTranslation(input: TranslationWrite) {
     }
     if (!Object.keys(changed).length && prior) for (const [key,column] of Object.entries(CONTENT_COLUMNS)) changed[key] = prior[column]
     const { masterContentService } = await import('../master-content.service.js')
-    await masterContentService.update(product.id, changed, { locale: language, address, actor: input.userId, reason: input.reason ?? 'language-content-write', reviewed: input.state === 'reviewed', masterAlreadyWritten: true, queueOutbound: input.queueOutbound, tx: prisma as any })
+    await masterContentService.update(product.id, changed, { locale: language, address, actor: input.userId, reason: input.reason ?? 'language-content-write', reviewed: input.state === 'reviewed', masterAlreadyWritten: true, queueOutbound: input.queueOutbound, ...(input.follow?.length ? { follow: input.follow } : {}), tx: prisma as any })
     await prisma.auditLog.create({ data: { entityType: 'Product', entityId: product.id, action: 'update', userId: input.userId ?? null, ip: input.ip,
       before: prior as any ?? {}, after: input.remove ? { removed: true } : changed as any,
       metadata: { source: input.state === 'draft' ? 'ai' : 'manual', layer: 'language', language, intent: input.remove ? 'remove' : 'set', ...(input.reason ? { reason: input.reason } : {}) } } })

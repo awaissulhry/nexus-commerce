@@ -3055,7 +3055,7 @@
     "successRows": 0,
     "failedRows": 0,
     "skippedRows": 0,
-    "id": "fixture-25",
+    "id": "fixture-24",
     "createdAt": "2026-09-15T10:00:00.000Z",
     "updatedAt": "2026-09-15T10:00:00.001Z",
     "jobName": "golden-source.csv",
@@ -3108,7 +3108,7 @@
   "status": 200,
   "type": "application/json",
   "body": {
-   "jobId": "fixture-25",
+   "jobId": "fixture-24",
    "state": "QUEUED",
    "processed": 0,
    "total": 1,
@@ -3142,7 +3142,7 @@
    "source": {
     "autoApply": false
    },
-   "reviewToken": "43534aba52bc0e81b46a4bbdc079eaa6c77a7b01b1b1474c2726922bfa9f6101",
+   "reviewToken": "e32e74752a12f464ff5f243e9158739f918e126d02563449c9bec05f563dbb3f",
    "expiresAt": "2026-09-16T10:00:00.000Z",
    "filename": "golden-source.csv",
    "links": [],
@@ -3202,7 +3202,7 @@
      "channel": "AMAZON",
      "marketplace": "IT",
      "account": "account-a",
-     "version": 10,
+     "version": 9,
      "title": "Sync snapshot",
      "overrideData": {
       "material": "Protected cotton"
@@ -3210,7 +3210,7 @@
      "platformAttributes": {
       "productType": "COAT"
      },
-     "updatedAt": "2026-09-15T10:00:00.001Z"
+     "updatedAt": "2026-09-15T10:00:00.000Z"
     },
     {
      "id": "p0-account-b",
@@ -3295,23 +3295,23 @@
    ],
    "listingTranslations": [
     {
-     "id": "fixture-13",
+     "id": "fixture-21",
      "createdAt": "2026-09-15T10:00:00.000Z",
      "updatedAt": "2026-09-15T10:00:00.000Z",
-     "channelListingId": "p0-account-a",
-     "language": "it",
-     "follows": [],
-     "version": 2,
      "name": "Golden title",
      "attributes": {},
+     "follows": [],
      "source": "manual",
-     "reviewedAt": "2026-09-15T10:00:00.000Z"
+     "reviewedAt": "2026-09-15T10:00:00.000Z",
+     "channelListingId": "p0-account-a",
+     "language": "it",
+     "version": 1
     }
    ],
    "productTranslations": [],
    "audit": [
     {
-     "id": "fixture-15",
+     "id": "fixture-13",
      "createdAt": "2026-09-15T10:00:00.000Z",
      "updatedAt": "2026-09-15T10:00:00.000Z",
      "entityType": "Product",
@@ -3332,16 +3332,12 @@
       "contentTier": "source",
       "layer": "master",
       "reason": null,
-      "cascadedListingIds": [
-       "p0-account-a"
-      ],
-      "queuedSyncIds": [
-       "fixture-14"
-      ]
+      "cascadedListingIds": [],
+      "queuedSyncIds": []
      }
     },
     {
-     "id": "fixture-16",
+     "id": "fixture-14",
      "createdAt": "2026-09-15T10:00:00.000Z",
      "updatedAt": "2026-09-15T10:00:00.000Z",
      "userId": "owner",
@@ -3374,24 +3370,14 @@
      }
     },
     {
-     "id": "fixture-23",
+     "id": "fixture-22",
      "createdAt": "2026-09-15T10:00:00.000Z",
      "updatedAt": "2026-09-15T10:00:00.000Z",
      "entityType": "ChannelListing",
      "entityId": "p0-account-a",
      "action": "update",
      "userId": "owner",
-     "before": {
-      "id": "fixture-13",
-      "createdAt": "2026-09-15T10:00:00.000Z",
-      "updatedAt": "2026-09-15T10:00:00.000Z",
-      "channelListingId": "p0-account-a",
-      "language": "it",
-      "follows": [
-       "title"
-      ],
-      "version": 1
-     },
+     "before": {},
      "after": {
       "values": {
        "title": "Golden title"
@@ -3409,7 +3395,7 @@
      }
     },
     {
-     "id": "fixture-24",
+     "id": "fixture-23",
      "createdAt": "2026-09-15T10:00:00.000Z",
      "updatedAt": "2026-09-15T10:00:00.000Z",
      "userId": "owner",
@@ -3533,7 +3519,7 @@
      "completedAt": "2026-09-15T10:00:00.000Z"
     },
     {
-     "id": "fixture-25",
+     "id": "fixture-24",
      "createdAt": "2026-09-15T10:00:00.000Z",
      "updatedAt": "2026-09-15T10:00:00.000Z",
      "userId": "owner",
@@ -3604,7 +3590,7 @@
        "AMAZON IT / COAT: requirements from 2026-01-01; publish readiness is checked separately."
       ],
       "unmappedColumns": [],
-      "reviewToken": "43534aba52bc0e81b46a4bbdc079eaa6c77a7b01b1b1474c2726922bfa9f6101"
+      "reviewToken": "e32e74752a12f464ff5f243e9158739f918e126d02563449c9bec05f563dbb3f"
      },
      "processed": 0,
      "total": 1,
@@ -3714,7 +3700,7 @@
      "successRows": 0,
      "failedRows": 0,
      "skippedRows": 0,
-     "id": "fixture-25",
+     "id": "fixture-24",
      "createdAt": "2026-09-15T10:00:00.000Z",
      "updatedAt": "2026-09-15T10:00:00.002Z",
      "jobName": "golden-source.csv",
@@ -3759,7 +3745,7 @@
      "totalRows": 1,
      "createdBy": "owner",
      "parentJobId": "fixture-3",
-     "planToken": "43534aba52bc0e81b46a4bbdc079eaa6c77a7b01b1b1474c2726922bfa9f6101",
+     "planToken": "e32e74752a12f464ff5f243e9158739f918e126d02563449c9bec05f563dbb3f",
      "planComputedAt": "2026-09-15T10:00:00.000Z",
      "planSummary": {
       "productsCreated": 0,
@@ -4742,10 +4728,10 @@
     {
      "status": "REVIEWED",
      "errorMessage": null,
-     "id": "fixture-26",
+     "id": "fixture-25",
      "createdAt": "2026-09-15T10:00:00.000Z",
      "updatedAt": "2026-09-15T10:00:00.000Z",
-     "jobId": "fixture-25",
+     "jobId": "fixture-24",
      "rowIndex": 1,
      "targetId": "[\"Listings\",\"000001\",\"AMAZON\",\"account-a\",\"IT\",\"\"]",
      "parsedValues": {
@@ -4944,33 +4930,7 @@
      }
     }
    ],
-   "outbound": [
-    {
-     "id": "fixture-14",
-     "createdAt": "2026-09-15T10:00:00.000Z",
-     "updatedAt": "2026-09-15T10:00:00.000Z",
-     "productId": "p0",
-     "channelListingId": "p0-account-a",
-     "channelConnectionId": "account-a",
-     "targetChannel": "AMAZON",
-     "syncStatus": "PENDING",
-     "syncType": "CONTENT_UPDATE",
-     "holdUntil": "2026-09-15T10:00:30.000Z",
-     "payload": {
-      "source": "MASTER_CONTENT_CHANGE",
-      "productId": "p0",
-      "productSku": "000000",
-      "channel": "AMAZON",
-      "marketplace": "IT",
-      "channelConnectionId": "account-a",
-      "aliasKey": "",
-      "locale": "it",
-      "language": "it",
-      "title": "Golden shared"
-     },
-     "traceId": null
-    }
-   ]
+   "outbound": []
   }
  }
 ]

@@ -145,7 +145,7 @@ export function legacyPin(listing: ContentListing, field: string): unknown {
   return spec[1] ? listing[spec[1]] : undefined
 }
 
-/** Following intent used by the write cascade and the acknowledgement's reach. */
+/** Following intent (a following legacy snapshot counts as following): what a formula's restore captures. */
 export function listingFollowsContent(listing: Record<string, any>, fieldInput: string, requested: string, languages: readonly string[]): boolean {
   const field = contentField(fieldInput), language = normalizeLanguage(requested)
   const row = (listing.translations ?? []).find((row: ContentTranslation) => normalizeLanguage(row.language) === language) as ContentTranslation | undefined
@@ -153,6 +153,21 @@ export function listingFollowsContent(listing: Record<string, any>, fieldInput: 
   if (present(translationValue(row, field)) || Object.prototype.hasOwnProperty.call(row?.attributes ?? {}, field)) return false
   const flag = LEGACY_CONTENT_FIELDS[field as keyof typeof LEGACY_CONTENT_FIELDS]?.[2]
   return language !== normalizeLanguage(languages[0]) || !flag || listing[flag] !== false || !present(legacyPin(listing as ContentListing, field))
+}
+
+/**
+ * Whether the listing shows the shared text for this field, so a change of the shared text reaches it: it follows it
+ * explicitly (its row's `follows`), or it keeps no text of its own in this language. Text a listing keeps — its pin, or
+ * a legacy snapshot (the channel's own text, even under a follow flag: the resolver shows it as the listing's) — stays
+ * until an explicit follow drops it, never because the shared text changed. The write cascade and every reach use this.
+ * 2026-10-17: a shared Italian title change turned the eBay IT titles of 31 listings into the 150-character shared one.
+ */
+export function listingShowsSharedContent(listing: Record<string, any>, fieldInput: string, requested: string, languages: readonly string[]): boolean {
+  const field = contentField(fieldInput), language = normalizeLanguage(requested)
+  const row = (listing.translations ?? []).find((row: ContentTranslation) => normalizeLanguage(row.language) === language) as ContentTranslation | undefined
+  if (row?.follows?.includes(field)) return true
+  if (present(translationValue(row, field)) || Object.prototype.hasOwnProperty.call(row?.attributes ?? {}, field)) return false
+  return language !== normalizeLanguage(languages[0]) || !present(legacyPin(listing as ContentListing, field))
 }
 
 function resolver(input: Omit<ResolveContentInput, 'field' | 'address' | 'computed'>) {

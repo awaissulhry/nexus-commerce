@@ -100,14 +100,20 @@ describe('LX.8 addressed writes, real disposable PostgreSQL, no provider', () =>
   await writeContent({ productId:'lx-child', address:pin, values:{}, reset:['title'], label:'Product title' }); expect((await read()).resolved).toMatchObject({ value:'Gemeinsam geändert', tier:'language' })
   expect((await read()).listing.title).toBe('Legacy DE')
  })
- it('primary writes stay on Product and mask following Italian snapshots', async () => {
+ // 2026-10-17 — a change of the shared text never drops a listing's own text: the channel's own title kept as a legacy
+ // snapshot (under the follow flag) stays until an explicit follow drops it (2026-10-17: the eBay IT titles of a 31-listing family).
+ it('primary writes stay on Product and keep a listing\'s own Italian snapshot until an explicit follow', async () => {
   await writeContent({ productId:'lx-child', address:{ tier:'source' }, values:{ title:'Titolo nuovo' }, label:'Product title' })
+  const kept = await read('it','IT')
+  expect(kept.product.name).toBe('Titolo nuovo'); expect(kept.resolved).toMatchObject({ value:'Legacy IT', tier:'pin' }); expect(kept.listing.translations).toEqual([])
+  await writeContent({ productId:'lx-child', address:{ tier:'pin', language:'it', coordinate:{ ...coord, market:'IT' } }, values:{}, reset:['title'], label:'Product title' })
   expect((await read('it','IT')).resolved).toMatchObject({ value:'Titolo nuovo', tier:'source', language:'it' })
  })
  it('Belgium cascades both ordered languages independently and keeps audit languages', async () => {
   for (const language of ['nl','fr']) {
    await writeTranslation({ productId:'lx-child', locale:language, address:{tier:'language',language}, values:{name:`Shared ${language}`}, state:'reviewed' })
-   expect((await read(language,'BE')).resolved).toMatchObject({ value:`Shared ${language}`, language })
+   // Dutch, the market's first language, is where the listing keeps the channel's own title (a legacy snapshot): it stays.
+   expect((await read(language,'BE')).resolved).toMatchObject(language === 'nl' ? { value:'Legacy BE', tier:'pin' } : { value:`Shared ${language}`, language })
   }
   const audit = await prisma.auditLog.findMany({ where:{ entityId:'lx-child' } }); expect(audit.length).toBeGreaterThan(4); expect(audit.every(row => typeof (row.metadata as any).language === 'string')).toBe(true)
  })

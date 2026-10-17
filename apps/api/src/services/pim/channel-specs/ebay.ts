@@ -134,6 +134,9 @@ export const EBAY_HELD_REASONS = {
   sharedSkuListing: 'Publish here does not use this. It only steered the old eBay flat-file page. To sell the same SKUs on another eBay listing, add a listing alias.',
 } as const
 
+/** eBay's title limit, in characters: the sheet's Title column and the shared-text guard of the content tools. */
+export const EBAY_TITLE_MAX_LENGTH = 80
+
 export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
   const marketplace = String(input.marketplace).toUpperCase()
   const fields: ChannelFieldSpec[] = []
@@ -152,7 +155,7 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
       channelStore: { kind: 'listingColumn', column: 'price', followFlag: 'followMasterPrice' },
     }),
     listing('quantity', 'Quantità disponibile', sheetName('quantity', 'EBAY')!, { kind: 'number', requirement: 'required', channelStore: { kind: 'listingColumn', column: 'quantity', followFlag: 'followMasterQuantity' } }),
-    listing('title', 'Titolo', 'Title', { kind: 'text', maxLength: 80, requirement: 'required', masterKey: 'name', channelStore: { kind: 'listingColumn', column: 'title', followFlag: 'followMasterTitle' } }),
+    listing('title', 'Titolo', 'Title', { kind: 'text', maxLength: EBAY_TITLE_MAX_LENGTH, requirement: 'required', masterKey: 'name', channelStore: { kind: 'listingColumn', column: 'title', followFlag: 'followMasterTitle' } }),
     listing('subtitle', 'Sottotitolo', 'Subtitle', { kind: 'text', maxLength: 55, channelStore: pa('subtitle'), helpText: 'Blank: Publish sends none. A live listing keeps eBay\'s subtitle, unless a Full update removes it.' }),
     listing('description', 'Descrizione', 'Description', { kind: 'longtext', requirement: 'required', masterKey: 'description', channelStore: { kind: 'listingColumn', column: 'description', followFlag: 'followMasterDescription' } }),
     listing('conditionId', 'Condizione', 'Condition', {

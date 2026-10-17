@@ -22,13 +22,15 @@ export interface ContentWrite {
    */
   sourceModel?: string
   reason?: string
+  /** A shared write: the listings a person chose it for, which follow it explicitly (master-content `follow`). */
+  follow?: readonly string[]
 }
 const refuse = (label: string) => productWriteRefusal(409, `${label} changed. Reload before saving it.`)
 
 /** Persist a validated, explicitly addressed edit; all shared writes cascade in this transaction. */
 export async function writeContent(input: ContentWrite) {
   const address = contentAddress(input.address, input.label)
-  if (address.tier === 'language') return writeTranslation({ ...input, address, locale: address.language, state: input.state ?? 'reviewed', expectedTranslationVersion: input.expectedContentVersion, queueOutbound: input.queueOutbound, sourceModel: input.sourceModel, reason: input.reason })
+  if (address.tier === 'language') return writeTranslation({ ...input, address, locale: address.language, state: input.state ?? 'reviewed', expectedTranslationVersion: input.expectedContentVersion, queueOutbound: input.queueOutbound, sourceModel: input.sourceModel, reason: input.reason, follow: input.follow })
   return inDatabaseTransaction(prisma, async () => {
     const product = await prisma.product.findUniqueOrThrow({ where: { id: input.productId } })
     const values = Object.fromEntries(Object.entries(input.values).map(([key,value]) => [contentField(key), contentStorageValue(contentField(key), value)]))
@@ -54,7 +56,7 @@ export async function writeContent(input: ContentWrite) {
       const updated = await prisma.product.updateMany({ where: { id: product.id, version: product.version }, data: { ...data, categoryAttributes: attributes as any, version: { increment: 1 } } })
       if (updated.count !== 1) throw refuse(input.label)
       const { masterContentService } = await import('../master-content.service.js')
-      await masterContentService.update(product.id, values, { address, locale: PRIMARY_CONTENT_LOCALE, actor: input.userId, reviewed: input.state !== 'draft', masterAlreadyWritten: true, previousValues, queueOutbound: input.queueOutbound, ...(input.reason ? { reason: input.reason } : {}), tx: prisma as any })
+      await masterContentService.update(product.id, values, { address, locale: PRIMARY_CONTENT_LOCALE, actor: input.userId, reviewed: input.state !== 'draft', masterAlreadyWritten: true, previousValues, queueOutbound: input.queueOutbound, ...(input.reason ? { reason: input.reason } : {}), ...(input.follow?.length ? { follow: input.follow } : {}), tx: prisma as any })
       return prisma.product.findUniqueOrThrow({ where: { id: product.id } })
     }
     const c = address.coordinate
