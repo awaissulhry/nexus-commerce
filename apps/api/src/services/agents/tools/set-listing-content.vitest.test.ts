@@ -210,6 +210,22 @@ describe('T7 — set-listing-content', { timeout: 30_000 }, () => {
       .toMatchObject({ ok: false, error: expect.stringMatching(/^Nothing to change/) })
   })
 
+  it("follow: the channel's own title, kept under the follow flag (a legacy snapshot), goes back to the shared text only when asked", async () => {
+    const { parent } = await seed('TEST-SKU-T7-SNAPSHOT')
+    const ebayIt = await inside(() => db().channelListing.create({ data: {
+      productId: parent.id, channel: 'EBAY', marketplace: 'IT', region: 'EU', channelMarket: 'EBAY_IT', channelConnectionId: accounts.ebay, aliasKey: '',
+      listingStatus: 'ACTIVE', isPublished: true, externalListingId: `FIXTURE-EBAY-IT-${parent.id}`, syncPaused: false,
+      title: 'Giacca eBay', followMasterTitle: true,
+    } as never }))
+    const EBAY_IT = { channel: 'EBAY', market: 'IT' }
+    const { approvalId, preview: p } = await queued({ product: parent.id, coordinate: EBAY_IT, language: 'it', follow: ['title'] })
+    expect(p.changes.title).toEqual({ kind: 'follow', from: 'Giacca eBay', to: 'TEST-SKU-T7-SNAPSHOT giacca' })
+    expect(await approveAndRun(approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await inside(() => db().channelListingTranslation.findFirst({ where: { channelListingId: ebayIt.id, language: 'it' } }))).toMatchObject({ follows: ['title'] })
+    expect(await preview({ product: parent.id, coordinate: EBAY_IT, language: 'it', follow: ['title'] }))
+      .toMatchObject({ ok: false, error: expect.stringMatching(/^Nothing to change/) })
+  })
+
   it("the listing's own channel attribute; read-only, a listing setting and unknown keys are refused with their reason", async () => {
     const { parent, ebayDe } = await seed('TEST-SKU-T7-ATTR')
     const { approvalId, preview: p } = await queued({ product: parent.id, coordinate: EBAY_DE, language: 'de', attributes: { subtitle: 'Neu: Leder' }, englishMeaning: { subtitle: 'New: leather' } })

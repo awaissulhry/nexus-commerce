@@ -9,7 +9,7 @@ import type { AmazonOfferCellExtras } from './amazon-offer-cells.js'
 import type { StudioRowBusiness, StudioRowStock } from './studio-stock.js'
 import { marketLanguages } from './market-languages.js'
 import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
-import { isLocalizableContent, contentField, listingFollowsContent, translationMissing } from './content-resolver.js'
+import { isLocalizableContent, contentField, listingFollowsContent, listingShowsSharedContent, translationMissing } from './content-resolver.js'
 import { contentWireValue } from './content-read.js'
 import { AMAZON_FULFILMENT_KEY } from './channel-specs/amazon.js'
 import { effectiveFulfilment, reportedFulfilment } from './matrix-cells.js'
@@ -1230,7 +1230,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
     }),
   ])
   const [reachListings, reachMarkets] = coordinate ? await Promise.all([
-    prisma.channelListing.findMany({ where: { productId: { in: familyIds } }, select: { productId: true, channel: true, marketplace: true, title: true, description: true, titleOverride: true, descriptionOverride: true, bulletPointsOverride: true, followMasterTitle: true, followMasterDescription: true, followMasterBulletPoints: true, translations: true } }),
+    prisma.channelListing.findMany({ where: { productId: { in: familyIds } }, select: { id: true, productId: true, channel: true, marketplace: true, title: true, description: true, titleOverride: true, descriptionOverride: true, bulletPointsOverride: true, followMasterTitle: true, followMasterDescription: true, followMasterBulletPoints: true, translations: true } }),
     prisma.marketplace.findMany({ select: { channel: true, code: true, languages: true, language: true } }),
   ]) : [[], []]
   mark('related')
@@ -1418,7 +1418,9 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
           // the resolver is handed at :1206, so the acknowledgement can never offer
           // a pin the write path refuses.
           languages: coordinate?.languages,
-          reach: [...new Set(reachListings.filter(listing => listing.productId === product.id && marketLanguages(listing.channel, listing.marketplace, reachMarkets).includes(locale) && listingFollowsContent(listing, col.slot?.of ?? col.key, locale, marketLanguages(listing.channel, listing.marketplace, reachMarkets))).map(listing => `${channelLabel(listing.channel)} · ${listing.marketplace} (${locale})`))] })
+          // The listings a shared write reaches: those that show the shared text, and this cell's own listing (choosing
+          // the shared text here follows it). Another listing's own text — a legacy snapshot too — stays as it is.
+          reach: [...new Set(reachListings.filter(listing => listing.productId === product.id && marketLanguages(listing.channel, listing.marketplace, reachMarkets).includes(locale) && (listing.id === listingRow?.id ? listingFollowsContent : listingShowsSharedContent)(listing, col.slot?.of ?? col.key, locale, marketLanguages(listing.channel, listing.marketplace, reachMarkets))).map(listing => `${channelLabel(listing.channel)} · ${listing.marketplace} (${locale})`))] })
         if (contentHit) {
           base = { value: sheetValueForColumn(col, product as unknown as Record<string, unknown>, resolved),
             source: contentHit.source, inheritedFrom: contentHit.inheritedFrom,

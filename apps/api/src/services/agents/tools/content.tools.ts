@@ -212,8 +212,10 @@ export function cellOf(field: Field, row: StudioRow, requested: string, channelS
     if (head.language && head.language !== requested) out.language = head.language
     const review = reviewState({ value, tier: head.tier ?? 'computed', language: head.language ?? requested, translation: head.translation }, requested)
     if (review) out.review = review
-    // On a listing, a content cell that is not the listing's own pin uses the shared text (studio-sheet's routing).
-    if (channelScope) out.followsShared = head.affectsAllChannels
+    // On a listing, a content cell that is not the listing's own pin uses the shared text (studio-sheet's routing). Text
+    // the listing keeps — also the channel's own text under a follow flag (layer pin) — does not follow it: a change of
+    // the shared text leaves it as it is (listingShowsSharedContent).
+    if (channelScope) out.followsShared = head.affectsAllChannels && head.tier !== 'pin'
     if (head.provenance?.from) out.from = head.provenance.from
   } else {
     out.layer = ATTRIBUTE_LAYER[head.layer] ?? head.layer

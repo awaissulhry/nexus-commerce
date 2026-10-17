@@ -28,7 +28,11 @@ vi.mock('../../../lib/queue.js', () => ({
   searchIndexQueue: null, readCacheQueue: null, readinessQueue: null,
   addJobSafely: vi.fn(async () => ({ enqueued: false })),
 }))
-vi.mock('../../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(), refreshMany: vi.fn(), refreshInTransaction: vi.fn() } }))
+// The product sheet (product-content reads it) takes the face-image select from here too.
+vi.mock('../../product-read-cache.service.js', () => ({
+  productReadCacheService: { refresh: vi.fn(), refreshMany: vi.fn(), refreshInTransaction: vi.fn() },
+  FACE_IMAGE_ORDER_BY: [], FACE_IMAGE_SELECT: { url: true }, pickFaceImage: () => null,
+}))
 vi.mock('../../pim/readiness-index.service.js', async () => (await import('../../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
 
 import { callTool, ToolAccessError, type UserPrincipal } from '../call-tool.js'
@@ -94,7 +98,7 @@ beforeAll(async () => {
   const membership = await db().workspaceMembership.create({ data: { workspaceId: A, userId: user.id, status: 'active' } })
   await db().workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
   await inside(async () => {
-    for (const [channel, code, language] of [['AMAZON', 'IT', 'it'], ['EBAY', 'DE', 'de']] as const) {
+    for (const [channel, code, language] of [['AMAZON', 'IT', 'it'], ['EBAY', 'DE', 'de'], ['EBAY', 'IT', 'it']] as const) {
       await db().marketplace.create({ data: { channel, code, name: `${channel} ${code}`, currency: 'EUR', region: 'EU', language, languages: [language], marketplaceId: `TEST_${channel}_${code}` } as never })
     }
     accounts.ebay = (await db().channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 't8-ebay', isActive: true, isPrimary: true, externalAccountId: 'EBAY-TEST-T8' } as never })).id
@@ -127,6 +131,64 @@ describe('T8 — bulk-content-change', { timeout: 60_000 }, () => {
     expect(await german(one.id)).toMatchObject({ name: 'Jacke eins', source: 'manual', sourceModel: 'claude-mcp' })
     expect(await german(two.id)).toMatchObject({ name: 'Jacke zwei', description: 'Zwei.', source: 'manual', sourceModel: 'claude-mcp' })
     expect(await queueRows([one.id, two.id])).toBe(0)
+  })
+
+  /*
+   * 2026-10-17 (a jacket family, 31 eBay IT listings): a change of the shared Italian title turned every eBay IT title the
+   * listings kept as their own into the new 150-character shared title. A listing linked from eBay keeps the channel's
+   * title as a legacy snapshot under the default follow flag; the shared write's cascade wrote "follows title" on it.
+   */
+  it("a change of the shared title never drops an eBay listing's own title; only the following listing shows the new one", async () => {
+    const [snapshot, pinned, plain] = await products('TEST-SKU-T8-KEEP', 3)
+    const ebayIt = (productId: string, extra: Data = {}) => inside(() => db().channelListing.create({ data: {
+      productId, channel: 'EBAY', marketplace: 'IT', region: 'EU', channelMarket: 'EBAY_IT', channelConnectionId: accounts.ebay, aliasKey: '',
+      listingStatus: 'ACTIVE', isPublished: true, externalListingId: `FIXTURE-T8-KEEP-${productId}`, syncPaused: false, ...extra,
+    } as never }))
+    // The eBay title as a listing linked from eBay keeps it (followMasterTitle stays at its default), and an operator's pin.
+    const linked = await ebayIt(snapshot.id, { title: 'Giacca Moto Uomo Impermeabile Protezioni CE Livello 2', followMasterTitle: true })
+    const own = await ebayIt(pinned.id)
+    await inside(() => db().channelListingTranslation.create({ data: { channelListingId: own.id, language: 'it', name: 'Giacca Moto Uomo CE Livello 2 con Cappuccio', source: 'manual', reviewedAt: new Date(), version: 1 } }))
+    const following = await ebayIt(plain.id)
+    const shows = async (sku: string) => {
+      const read = (await inside(() => callTool(ALL(), 'product-content', { product: sku, coordinate: { channel: 'EBAY', market: 'IT' }, language: 'it', fields: ['title'] }))).visible as { ok: boolean; error?: string; data?: Data }
+      expect(read.ok, read.error).toBe(true)
+      return read.data!.rows[0].cells.title as { value: unknown; layer: string; followsShared?: boolean }
+    }
+    expect(await shows(snapshot.sku)).toMatchObject({ value: 'Giacca Moto Uomo Impermeabile Protezioni CE Livello 2', layer: 'pin', followsShared: false })
+
+    const { approvalId, preview: p } = await queued({ language: 'it', items: [item(snapshot.sku, 'Nuovo titolo uno'), item(pinned.sku, 'Nuovo titolo due'), item(plain.sku, 'Nuovo titolo tre')] })
+    expect(p.reach).toEqual({ listingsFollowing: 1, listingsWithOwnText: 2 })
+    expect(await approveAndRun(approvalId)).toMatchObject({ ok: true, status: 'executed' })
+
+    expect(await shows(snapshot.sku)).toMatchObject({ value: 'Giacca Moto Uomo Impermeabile Protezioni CE Livello 2', layer: 'pin' })
+    expect(await shows(pinned.sku)).toMatchObject({ value: 'Giacca Moto Uomo CE Livello 2 con Cappuccio', layer: 'pin' })
+    expect(await shows(plain.sku)).toMatchObject({ value: 'Nuovo titolo tre', followsShared: true })
+    // Nothing written on the listings that keep their own text: no follow marker, the same versions.
+    const rows = await inside(() => db().channelListingTranslation.findMany({ where: { channelListingId: { in: [linked.id, own.id, following.id] } } }))
+    expect(rows.find((row) => row.channelListingId === linked.id)).toBeUndefined()
+    expect(rows.find((row) => row.channelListingId === own.id)).toMatchObject({ name: 'Giacca Moto Uomo CE Livello 2 con Cappuccio', follows: [], version: 1 })
+    expect(rows.find((row) => row.channelListingId === following.id)).toMatchObject({ follows: ['title'] })
+    expect((await inside(() => db().channelListing.findUniqueOrThrow({ where: { id: linked.id } }))).version).toBe(linked.version)
+  })
+
+  it("refused: a new title over eBay's 80 characters that an eBay listing following the shared title would show", async () => {
+    const [follows, keeps] = await products('TEST-SKU-T8-EBAY80', 2)
+    for (const [product, extra] of [[follows, {}], [keeps, { title: 'Titolo eBay proprio', followMasterTitle: false }]] as const) {
+      await inside(() => db().channelListing.create({ data: {
+        productId: product.id, channel: 'EBAY', marketplace: 'IT', region: 'EU', channelMarket: 'EBAY_IT', channelConnectionId: accounts.ebay, aliasKey: '',
+        listingStatus: 'ACTIVE', isPublished: true, externalListingId: `FIXTURE-T8-EBAY80-${product.id}`, syncPaused: false, ...extra,
+      } as never }))
+    }
+    const long = `Giacca Moto – Giubbotto Moto Traspirante e Idrorepellente con Protezioni CE Livello 2 | Tutte le Stagioni`
+    expect(long.length).toBeGreaterThan(80)
+    expect(await preview({ language: 'it', items: [item(follows.sku, long), item(keeps.sku, long)] })).toMatchObject({
+      ok: false, error: expect.stringMatching(new RegExp(`^${follows.sku}: the new title is ${long.length} characters; eBay allows 80, and 1 eBay listing follows the shared title and would show it \\(eBay · IT · ${follows.sku}\\)`)),
+    })
+    expect((await inside(() => callTool(ALL(), 'set-content', { product: follows.sku, language: 'it', title: long, englishMeaning: { title: 'Long' } }))).visible)
+      .toMatchObject({ ok: false, error: expect.stringMatching(/the new title is \d+ characters; eBay allows 80/) })
+    // The listing that keeps its own eBay title does not show the shared one: nothing to refuse.
+    const kept = await preview({ language: 'it', items: [item(keeps.sku, long)] })
+    expect(kept, kept.error).toMatchObject({ ok: true, preview: { reach: { listingsFollowing: 0, listingsWithOwnText: 1 } } })
   })
 
   it('one product that cannot change refuses them all — in the preview, and when it runs', async () => {

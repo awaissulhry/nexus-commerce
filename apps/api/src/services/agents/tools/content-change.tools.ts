@@ -31,7 +31,8 @@ import { PRODUCT_NOT_FOUND } from './live-product.js'
 import { NEXUS_ONLY } from './bulk.tools.js'
 import { COORDINATE_CHANNELS, languageArg, languageOf, liveProductByRef, NOT_CONTENT_GROUPS, primaryLanguage } from './content.tools.js'
 import { CONTENT_COLUMNS } from '../../pim/content-locale.js'
-import { contentField, isLocalizableContent, listingFollowsContent, resolveContent, type ContentProduct } from '../../pim/content-resolver.js'
+import { contentField, isLocalizableContent, listingShowsSharedContent, resolveContent, type ContentProduct } from '../../pim/content-resolver.js'
+import { EBAY_TITLE_MAX_LENGTH } from '../../pim/channel-specs/ebay.js'
 import { contentListing } from '../../pim/content-read.js'
 import { storedChannelState } from '../../pim/channel-value-mutation.js'
 import type { SheetColumn } from '../../pim/sheet-columns.service.js'
@@ -171,12 +172,15 @@ function withoutOwn(product: ContentRow, field: string, language: string): Conte
 // ── reach: the listings a shared change shows on ───────────────────────────────────────────────────────
 
 export interface Reach { follow: string[]; ownPin: string[]; moreFollow?: number; moreOwnPin?: number }
+/** `reach` as the preview shows it, and per field every eBay listing that will show the new text (the title guard). */
+interface ReachFacts { reach: Record<string, Reach>; ebayFollow: Record<string, string[]> }
 
 /**
  * Per field, the listings carrying this language that show this product's shared text: those that follow it (the
- * product's own listings, and its variations' when they inherit the field from it) and those that keep their own pin.
+ * product's own listings, and its variations' when they inherit the field from it) and those that keep their own text
+ * (a pin, or the channel's own text kept as a legacy snapshot): the write's cascade reaches exactly the first.
  */
-async function reachOf(product: ContentRow, fields: string[], language: string): Promise<Record<string, Reach>> {
+async function reachOf(product: ContentRow, fields: string[], language: string): Promise<ReachFacts> {
   const children = await prisma.product.findMany({
     where: { parentId: product.id, deletedAt: null },
     select: { ...PRODUCT_CONTENT_SELECT },
@@ -199,6 +203,7 @@ async function reachOf(product: ContentRow, fields: string[], language: string):
     }
   }
   const out: Record<string, Reach> = {}
+  const ebayFollow: Record<string, string[]> = {}
   const tier = language === primaryLanguage() ? 'source' : 'language'
   for (const field of fields) {
     // A variation shows this product's text for the field unless it holds its own at this tier (the resolver reads a
@@ -209,22 +214,41 @@ async function reachOf(product: ContentRow, fields: string[], language: string):
     }).map((child) => child.id)])
     const follow: string[] = []
     const ownPin: string[] = []
+    const ebay: string[] = []
     for (const listing of listings) {
       if (!inherits.has(listing.productId)) continue
       const languages = languagesOf(listing.channel, listing.marketplace)
       if (!languages.includes(language)) continue
       const label = `${channelLabel(listing.channel)} · ${listing.marketplace} · ${listing.product.sku}${listing.aliasKey ? ` (${listing.aliasKey})` : ''}`
-      ;(listingFollowsContent(listing, field, language, languages) ? follow : ownPin).push(label)
+      const shows = listingShowsSharedContent(listing, field, language, languages)
+      ;(shows ? follow : ownPin).push(label)
+      if (shows && listing.channel === 'EBAY') ebay.push(label)
     }
     follow.sort()
     ownPin.sort()
+    ebayFollow[field] = ebay.sort()
     out[field] = {
       follow: follow.slice(0, REACH_NAMES), ownPin: ownPin.slice(0, REACH_NAMES),
       ...(follow.length > REACH_NAMES ? { moreFollow: follow.length - REACH_NAMES } : {}),
       ...(ownPin.length > REACH_NAMES ? { moreOwnPin: ownPin.length - REACH_NAMES } : {}),
     }
   }
-  return out
+  return { reach: out, ebayFollow }
+}
+
+/**
+ * A new shared title that an eBay listing following it would show over eBay's limit is refused: Publish would send it
+ * and eBay refuse it. A listing that keeps its own title is not reached, so it does not count (2026-10-17).
+ */
+function ebayTitleRefusal(plan: SharedPlan, ebayFollow: Record<string, string[]>): string | null {
+  const title = plan.fields.find((f) => f.field === 'title')
+  const text = title ? (title.reset ? title.thenShows : title.to) : null
+  const listings = ebayFollow.title ?? []
+  if (!listings.length || typeof text !== 'string' || text.length <= EBAY_TITLE_MAX_LENGTH) return null
+  const one = listings.length === 1
+  return `${plan.product.sku}: the new title is ${text.length} characters; eBay allows ${EBAY_TITLE_MAX_LENGTH}, and ${listings.length} eBay `
+    + `${one ? 'listing follows' : 'listings follow'} the shared title and would show it (${listed(listings, 5)}). Shorten the title, or first give `
+    + `${one ? 'that listing its' : 'those listings their'} own eBay title (set-listing-content pin)`
 }
 
 // ── The plan: one product, one language, the shared layer ──────────────────────────────────────────────
@@ -505,6 +529,8 @@ const setContentInput = z.object({
 
 const NOTHING = 'Nothing was queued.'
 const NOTHING_WRITTEN = 'Nothing was changed.'
+/** What a shared change never does to a listing (2026-10-17): the previews say so. */
+const OWN_TEXT_NOTE = ' A listing that keeps its own text (listed under ownPin / counted as listingsWithOwnText) keeps it; set-listing-content follow makes it show the shared text.'
 
 function sharedRequest(args: Record<string, unknown>): SharedRequest {
   return {
@@ -581,17 +607,20 @@ const setContent: AgentTool = {
     + 'source text; any other language is the shared text every listing in that language follows unless it keeps its own '
     + 'pin. Give englishMeaning for every field you set unless the language is en: the person who approves reads it. The '
     + 'preview shows from → to, the writer\'s warnings, the glossary\'s avoid words found, and reach (listings that follow '
-    + 'this text, and those with their own pin). A person approves it in Nexus, and the approval is its review. Saved in '
+    + 'this text, and those with their own pin). Refused when an eBay listing that follows the title would show more than '
+    + `${EBAY_TITLE_MAX_LENGTH} characters. A person approves it in Nexus, and the approval is its review. Saved in `
     + 'Nexus only: the channels change when the listings are published from Nexus. Read content-guidelines first.',
   async handler(args): Promise<ToolResult> {
     const plan = await planSharedContent(sharedRequest(args), NOTHING)
     if ('error' in plan) return { ok: false, error: plan.error }
     const checked = await runContentWriter({ changes: sharedWrites(plan), dryRun: true }, contentWriterContext(null, 'set-content'), (row) => row.field.replace(/^attr_/, ''))
     if ('refusal' in checked) return { ok: false, error: `${checked.refusal.replace(/[.\s]+$/, '')}. ${NOTHING}` }
-    const [reach, hits] = await Promise.all([
+    const [{ reach, ebayFollow }, hits] = await Promise.all([
       reachOf(plan.product, plan.fields.map((f) => f.field), plan.language),
       glossaryHitsFor(plan),
     ])
+    const tooLong = ebayTitleRefusal(plan, ebayFollow)
+    if (tooLong) return { ok: false, error: `${tooLong}. ${NOTHING}` }
     const planFacts = sharedPlanFacts(plan)
     return {
       ok: true,
@@ -608,13 +637,15 @@ const setContent: AgentTool = {
         ...(plan.unchanged.length ? { unchanged: plan.unchanged } : {}),
         ...(checked.warnings.length ? { warnings: checked.warnings } : {}),
         ...(hits.length ? { glossaryHits: hits } : {}),
-        note: `${NEXUS_ONLY} Saved as reviewed text: approving it is its review. The English meaning is Claude's own reading of the new text.`,
+        note: `${NEXUS_ONLY} Saved as reviewed text: approving it is its review. The English meaning is Claude's own reading of the new text.${OWN_TEXT_NOTE}`,
       },
     }
   },
   async execute(args, ctx): Promise<ToolResult> {
     const plan = await planSharedContent(sharedRequest(args), NOTHING_WRITTEN)
     if ('error' in plan) return { ok: false, error: plan.error }
+    const tooLong = ebayTitleRefusal(plan, (await reachOf(plan.product, plan.fields.map((f) => f.field), plan.language)).ebayFollow)
+    if (tooLong) return { ok: false, error: `${tooLong}. ${NOTHING_WRITTEN}` }
     const fields = plan.fields.map((f) => f.field)
     try {
       // One transaction: the write, and the removal of a language row it leaves with nothing (dropEmptyLanguageRow).
@@ -743,13 +774,16 @@ interface ListingPlan {
   unchanged: string[]
 }
 
-/** What a listing keeps as its own text for a field: the resolver's pin (its own row, or a legacy pin), else null. */
+/**
+ * What a listing keeps as its own text for a field: the resolver's pin (its own row, or a legacy pin — also the channel's
+ * own text kept under a follow flag, which a shared change no longer drops), else null. So `follow` drops it explicitly.
+ */
 function ownPin(product: ContentRow, listing: Exclude<ListingRow, 'many'>, coordinate: ListingPlan['coordinate'], languages: string[], field: string, language: string): Own {
   const hydrated = contentListing(product, listing, { channel: coordinate.channel, market: coordinate.market,
     ...(coordinate.accountId ? { accountId: coordinate.accountId } : {}), ...(coordinate.aliasKey ? { aliasId: coordinate.aliasKey } : {}) }, languages)
   const resolved = resolveContent({ product: product as unknown as ContentProduct, parent: (product.parent ?? null) as unknown as ContentProduct | null,
     listing: hydrated, field, address: { requested: language, coordinate: hydrated!.coordinate } })
-  return resolved.tier === 'pin' && resolved.follows === false ? { value: resolved.value } : null
+  return resolved.tier === 'pin' ? { value: resolved.value } : null
 }
 
 function storeOf(column: SheetColumn, label: string, productType: string | null) {
@@ -1161,6 +1195,13 @@ async function planBulkContent(args: Record<string, unknown>): Promise<BulkPlan 
   return { language: plans[0].language, tier: plans[0].tier, plans }
 }
 
+/** The eBay title guard over every product of a bulk change (ebayTitleRefusal), in item order. */
+function bulkTitleRefusal(plan: BulkPlan, facts: ReachFacts[]): string | null {
+  const refusals = plan.plans.map((p, i) => ebayTitleRefusal(p, facts[i].ebayFollow)).filter((r): r is string => !!r)
+  if (!refusals.length) return null
+  return refusals.slice(0, 5).join('; ') + (refusals.length > 5 ? `; and ${refusals.length - 5} more products` : '')
+}
+
 /** Per product and field, what the person reads; all of them, in item order. */
 function bulkChanges(plan: BulkPlan) {
   return plan.plans.flatMap((p) => Object.entries(sharedChanges(p)).map(([field, change]) => ({ sku: p.product.sku, field, ...change })))
@@ -1184,7 +1225,8 @@ const bulkContentChange: AgentTool = {
     + `Give englishMeaning for every field set unless the language is en. At most ${BULK_CONTENT_MAX_BYTES / 1024} KB of `
     + 'arguments. If any one product cannot change, none does, and the answer says why. The preview shows the first '
     + `${BULK_PREVIEW_CHANGES} changes, the totals, how many listings show the new texts, the glossary's avoid words and `
-    + 'the writer\'s warnings. A person approves it in Nexus, and the approval is the texts\' review. Saved in Nexus only: '
+    + 'the writer\'s warnings. Refused when an eBay listing that follows a new title would show more than '
+    + `${EBAY_TITLE_MAX_LENGTH} characters. A person approves it in Nexus, and the approval is the texts' review. Saved in Nexus only: `
     + 'the channels change when the listings are published from Nexus.',
   async handler(args): Promise<ToolResult> {
     const plan = await planBulkContent(args)
@@ -1195,7 +1237,10 @@ const bulkContentChange: AgentTool = {
       (row) => `${skuOf.get(row.id) ?? row.id} ${row.field.replace(/^attr_/, '')}`,
     )
     if ('refusal' in checked) return { ok: false, error: `${checked.refusal.replace(/[.\s]+$/, '')}. ${NOTHING}` }
-    const reaches = await Promise.all(plan.plans.map((p) => reachOf(p.product, p.fields.map((f) => f.field), p.language)))
+    const facts = await Promise.all(plan.plans.map((p) => reachOf(p.product, p.fields.map((f) => f.field), p.language)))
+    const tooLong = bulkTitleRefusal(plan, facts)
+    if (tooLong) return { ok: false, error: `${tooLong}. ${NOTHING}` }
+    const reaches = facts.map((f) => f.reach)
     const following = new Set<string>()
     const ownText = new Set<string>()
     for (const reach of reaches) for (const r of Object.values(reach)) { r.follow.forEach((l) => following.add(l)); r.ownPin.forEach((l) => ownText.add(l)) }
@@ -1216,7 +1261,7 @@ const bulkContentChange: AgentTool = {
         basis: basisOf({ plans: plan.plans.map((p) => [p.product.id, sharedBasis(p)]), changes, reaches }),
         ...(checked.warnings.length ? { warnings: checked.warnings.slice(0, BULK_PREVIEW_CHANGES), ...(checked.warnings.length > BULK_PREVIEW_CHANGES ? { moreWarnings: checked.warnings.length - BULK_PREVIEW_CHANGES } : {}) } : {}),
         ...(hits.length ? { glossaryHits: hits.slice(0, BULK_PREVIEW_CHANGES) } : {}),
-        note: `${NEXUS_ONLY} Saved as reviewed text: approving it is the texts' review. The English meanings are Claude's own reading of the new texts.`,
+        note: `${NEXUS_ONLY} Saved as reviewed text: approving it is the texts' review. The English meanings are Claude's own reading of the new texts.${OWN_TEXT_NOTE}`,
       },
     }
   },
@@ -1226,6 +1271,8 @@ const bulkContentChange: AgentTool = {
       return await inDatabaseTransaction(prisma, async () => {
         const plan = await planBulkContent(args)
         if ('error' in plan) throw new ContentRefused(plan.error)
+        const tooLong = bulkTitleRefusal(plan, await Promise.all(plan.plans.map((p) => reachOf(p.product, p.fields.map((f) => f.field), p.language))))
+        if (tooLong) throw new ContentRefused(tooLong)
         for (const p of plan.plans) {
           const written = await runContentWriter({ changes: sharedWrites(p), expectedVersion: p.product.version },
             contentWriterContext(ctx.userId, 'bulk-content-change'), (row) => `${p.product.sku} ${row.field.replace(/^attr_/, '')}`)

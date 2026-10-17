@@ -36,7 +36,8 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
   const withWarnings = (rest: { warnings?: typeof warnings }) => { const all = [...warnings, ...(rest.warnings ?? [])]; return all.length ? { warnings: all } : {} }
   // `draft`: a PIN on a coordinate where the product has no listing yet — its draft is started when the write runs.
   // `contentVersion`: the content row's version as read here (0 = no row), the before pair's half for a receipt.
-  const plans: Array<{ edit: ContentEdit; address: ContentAddress; value: unknown; field: string; slot?: number; baseValue: unknown; listingId?: string; ownerVersion: number; contentVersion: number; draft?: true }> = []
+  // `follow`: a shared write chosen on a listing's cell — that listing follows it explicitly (master-content `follow`).
+  const plans: Array<{ edit: ContentEdit; address: ContentAddress; value: unknown; field: string; slot?: number; baseValue: unknown; listingId?: string; ownerVersion: number; contentVersion: number; draft?: true; follow?: string }> = []
   const contexts = input.marketplaceContexts ?? (input.marketplaceContext ? [input.marketplaceContext] : [])
   const { ProductBulkError } = await import('../products/bulk-edit.service.js')
   for (const edit of edits) {
@@ -96,7 +97,11 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       for (const found of checked.findings) warnings.push({ id: change.id, field: change.field, warning: found.message })
       const contentVersion = address.tier === 'pin' ? listingTranslations.find(row => row.language === address.language)?.version ?? 0
         : address.tier === 'language' ? product.translations.find(row => row.language === address.language)?.version ?? 0 : 0
-      plans.push({ edit, address, value, field, slot, baseValue: resolved.value, listingId: listing?.id, ownerVersion: address.tier === 'pin' ? listingVersion! : product.version, contentVersion, ...(draft ? { draft: true as const } : {}) })
+      // The shared text chosen on this listing's cell: the listing shows it afterwards, also when it showed the channel's
+      // own text as a legacy snapshot. A change of the shared text leaves every other listing's own text as it is.
+      const origin = coordinate && address.tier !== 'pin' ? await prisma.channelListing.findFirst({ where: { productId: product.id, channel: coordinate.channel as any, marketplace: coordinate.market,
+        ...(coordinate.accountId ? { channelConnectionId: coordinate.accountId } : {}), aliasKey: coordinate.aliasId ?? '' }, select: { id: true } }) : null
+      plans.push({ edit, address, value, field, slot, baseValue: resolved.value, listingId: listing?.id, ownerVersion: address.tier === 'pin' ? listingVersion! : product.version, contentVersion, ...(draft ? { draft: true as const } : {}), ...(origin ? { follow: origin.id } : {}) })
     } catch (error) {
       if (error instanceof ProductBulkError) throw error
       errors.push({ id: change.id, field: change.field, error: error instanceof Error ? error.message : String(error) })
@@ -163,7 +168,8 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
         if (own === 'conflict') throw productWriteRefusal(409, `${first.edit.column.label} changed. Reload before saving it.`)
         if (own !== undefined) guardVersion = own
       }
-      const written = await writeContent({ productId: change.id, address: first.address, values, reset, label: first.edit.column.label, state: change.contentState,
+      const follow = [...new Set(group.flatMap(plan => plan.follow ? [plan.follow] : []))]
+      const written = await writeContent({ productId: change.id, address: first.address, values, reset, label: first.edit.column.label, state: change.contentState, ...(follow.length ? { follow } : {}),
         expectedVersion: guardVersion, expectedContentVersion: change.contentVersion, userId: context.userId, ip: context.ip ?? undefined,
         ...(context.queueOutbound === false ? { queueOutbound: false } : {}),
         ...(context.contentProvenance?.sourceModel ? { sourceModel: context.contentProvenance.sourceModel } : {}),

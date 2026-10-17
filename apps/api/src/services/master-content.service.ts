@@ -1,5 +1,5 @@
-/** Shared content writes cascade only to following listings carrying that language.
- * Language-specific follow markers mask legacy snapshots without rewriting them.
+/** Shared content writes cascade only to listings carrying that language that show the shared text: a listing that
+ * keeps text of its own (a pin, or a legacy snapshot under a follow flag) keeps it — only an explicit follow drops it.
  * The caller's transaction owns values, versions, audit and outbound queue rows.
  */
 
@@ -12,7 +12,7 @@ import prisma from '../db.js'
 import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
 import { CONTENT_COLUMNS, PRIMARY_CONTENT_LOCALE } from './pim/content-locale.js'
 import { normalizeLanguage } from './pim/content-language.js'
-import { contentField, listingFollowsContent, resolveContent } from './pim/content-resolver.js'
+import { contentField, listingFollowsContent, listingShowsSharedContent, resolveContent } from './pim/content-resolver.js'
 import { marketLanguages } from './pim/market-languages.js'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 
@@ -50,6 +50,12 @@ export interface MasterContentUpdateContext {
   masterAlreadyWritten?: boolean
   /** Source values captured by the authoring boundary before its mutation. */
   previousValues?: Record<string, unknown>
+  /**
+   * Listings a person chose this shared write for (the sheet's "Edit the shared" on that listing's cell): they show the
+   * shared text afterwards even when they showed the channel's own text as a legacy snapshot — an explicit follow. A
+   * listing's own pin row still keeps its text. Every other listing keeps text of its own.
+   */
+  follow?: readonly string[]
 }
 
 export interface MasterContentUpdateResult {
@@ -136,11 +142,15 @@ export class MasterContentService {
             const inherited = resolveContent({ product: listing.product as any, parent: product as any, field, localizableKeys: fields, address: { requested: language } })
             if (inherited.ownerId !== productId) return false
           }
-          return listingFollowsContent(listing, field, language, marketLanguages(listing.channel, market, markets))
+          // A listing keeping its own text (a pin, or the channel's own text as a legacy snapshot) keeps it: the follow
+          // marker below would drop it, and only an explicit follow may (2026-10-17: the eBay IT titles of a 31-listing family).
+          const languages = marketLanguages(listing.channel, market, markets)
+          return listingShowsSharedContent(listing, field, language, languages)
+            || (!!ctx.follow?.includes(listing.id) && listingFollowsContent(listing, field, language, languages))
         })
         if (!following.length) { snapshottedListingIds.push(listing.id); continue }
-        // Language-specific following intent masks stale legacy snapshots. Never
-        // write an untagged title/description or turn an operator pin into shared text.
+        // The language-specific follow marker of a listing that already shows the shared text. Never write an untagged
+        // title/description, and never turn text a listing keeps (a pin or a legacy snapshot) into shared text.
         const follows = [...new Set([...(pin?.follows ?? []), ...following])]
         if (pin) await tx.channelListingTranslation.update({ where: { id: pin.id }, data: { follows, version: { increment: 1 } } })
         else await tx.channelListingTranslation.create({ data: { channelListingId: listing.id, language, follows, version: 1 } })
