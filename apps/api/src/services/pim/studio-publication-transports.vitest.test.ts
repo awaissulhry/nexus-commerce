@@ -540,6 +540,15 @@ it('checks Amazon variation collisions against saved channel sizes instead of st
   expect(openChild.feed.messages[0].attributes?.child_parent_sku_relationship).toEqual([{ parent_sku: 'SELLER-p', child_relationship_type: 'variation', marketplace_id: 'MARKET' }])
   const allClosed = await prepareAmazonPublication({ ...facts, products: [] })
   expect(allClosed.products).toEqual([]); expect(allClosed.feed.messages).toEqual([])
+  expect(prepared).not.toHaveProperty('issues')
+  // Owner 2026-10-17 — a deprecated theme on a market whose parent is not on Amazon is a problem of the theme field (it
+  // blocks every selection but a text-only one, `blockingIssues`), not a refusal of the whole review.
+  original.schema.amazon.facts.deprecated = [theme]
+  original.listing = { ...original.listing, externalListingId: null, listingStatus: 'DRAFT' }
+  expect((await prepareAmazonPublication(facts)).issues).toEqual([{ severity: 'error', field: 'variation_theme',
+    message: 'Amazon has deprecated the variation theme SIZE/COLOR on AMAZON IT. Choose a current theme before publishing.' }])
+  original.listing = { ...original.listing, externalListingId: 'ASIN', listingStatus: 'ACTIVE' }
+  expect((await prepareAmazonPublication(facts)).issues).toBeUndefined()
   facts.resolved[0].products[2].cells.apparel_size__size.value = 'x_s'
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('2 variants cannot be told apart')
 })

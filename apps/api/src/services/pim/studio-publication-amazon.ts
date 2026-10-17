@@ -1,5 +1,5 @@
 import type { PublicationFacts } from './studio-publication-plan.js'
-import type { StudioChannelIssue, StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
+import type { StudioChannelIssue, StudioPublishFieldWrite, StudioPublishIssue } from '@nexus/shared/studio-publication'
 import { object } from './studio-publication-plan.js'
 import { buildRow, COCKPIT_EXPANDED_FIELDS } from '../amazon/cockpit-publish-row.js'
 import { AmazonFlatFileService, normalizeVariationTheme } from '../amazon/flat-file.service.js'
@@ -63,6 +63,8 @@ export interface AmazonPublication {
    * update. Never part of the feed: a compiled selection carries no `full`.
    */
   full?: Record<string, { managedRoots: string[] }>
+  /** Problems of one field that block every selection but a text-only one (`blockingIssues`): a deprecated theme. */
+  issues?: StudioPublishIssue[]
   /**
    * S10 (per-channel SKU, Owner D2 = A) — the live rows this publication MOVES to a new seller SKU: NEW (the listing's own
    * SKU) is created whole as a new offer on the same ASIN; OLD (the SKU Amazon holds now) is deleted in this market only
@@ -201,6 +203,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
   const sellerSkus = amazonSellerSkus(facts)
   const moves = amazonSkuMoves(facts, sellerSkus)
   const moveOf = (productId: string) => moves.find(move => move.productId === productId)
+  const issues: StudioPublishIssue[] = []
   let projection: ReturnType<typeof resolveVariationProjection> | undefined
   let variationInput: Awaited<ReturnType<typeof loadStoredVariationProjection>>['input'] | undefined
   if (products.length > 1 || products.some(product => product.id !== parent.id)) {
@@ -218,7 +221,11 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     })
     projection = resolveVariationProjection(variationInput)
     const errors = variationReadinessItems(projection, `AMAZON ${scope.marketplace}`).filter(i => i.severity === 'error')
-    if (!projection.theme || errors.length) throw new Error(errors.map(i => i.message).join('; ') || 'Set the Amazon variation theme in Information before publishing.')
+    // Owner 2026-10-17 — a deprecated theme blocks only what can carry it: a market whose parent is not on Amazon (the
+    // closed DE offers) still takes a text-only update of its live variants, which sends no relationship.
+    const deprecated = errors.filter(i => i.kind === 'theme-deprecated')
+    if (!projection.theme || errors.length > deprecated.length) throw new Error(errors.map(i => i.message).join('; ') || 'Set the Amazon variation theme in Information before publishing.')
+    for (const item of deprecated) issues.push({ severity: 'error', field: 'variation_theme', message: item.message })
   }
   const feed: AmazonPublication['feed'] = { header: {}, messages: [] }
   const full: NonNullable<AmazonPublication['full']> = {}
@@ -386,7 +393,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     feed.messages.push({ ...message, messageId: feed.messages.length + 1 })
   }
   return { kind: 'amazon', sellerId, marketplaceId, feed, products: products.map(product => ({ productId: product.id, sku: sellerSkus.get(product.id)! })),
-    ...(Object.keys(full).length ? { full } : {}), ...(moves.length ? { moves } : {}) }
+    ...(Object.keys(full).length ? { full } : {}), ...(moves.length ? { moves } : {}), ...(issues.length ? { issues } : {}) }
 }
 
 type PublicationListing = PublicationFacts['listings'][number]
