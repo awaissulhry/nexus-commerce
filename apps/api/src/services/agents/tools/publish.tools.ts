@@ -465,7 +465,9 @@ export function planPublish(review: StudioPublishReview, channel: string, fields
     plan.refusal = `Only photos may be sent from this review: ${review.issues.filter((i) => i.severity === 'error').map((i) => i.message).join(' ')}`
     return plan
   }
-  const blockers = blockingIssues(review.issues, ids)
+  // An empty selection sends nothing: only a problem that names no field (it blocks everything) is said, never every
+  // field's own problems (2026-10-17: a re-approved publish with nothing left to send listed 547 of them).
+  const blockers = ids.length ? blockingIssues(review.issues, ids) : review.issues.filter((i) => i.severity === 'error' && !i.field)
   if (blockers.length) plan.refusal = blockers.map((i) => i.message).join(' ')
   else if (!plan.selected.length && channel === 'ETSY' && [...wanted].every((g) => g === 'photos' || g === 'bullets')) {
     // Etsy has no bullet points, and Nexus sends it no photos yet: naming only those sends nothing, said truly.
