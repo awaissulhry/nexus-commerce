@@ -57,9 +57,13 @@
       assign xff_label = 'Size guide'
   endcase
 
+  # The dialog's top bar is white: the shop's brand logo, else the black logo in Shopify Files (the header logo is white).
   assign xff_logo = ''
+  assign xff_logo_file = images['XAVIA_LOGO_06c286e9-0256-470d-bb70-b8df768bd1d0.png']
   if shop.brand.logo != blank
     assign xff_logo = shop.brand.logo | image_url: width: 300
+  elsif xff_logo_file != blank
+    assign xff_logo = xff_logo_file | image_url: width: 300
   endif
 
   assign xff_image = ''

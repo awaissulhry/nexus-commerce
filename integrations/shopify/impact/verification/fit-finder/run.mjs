@@ -491,6 +491,23 @@ await scenario('desktop: hidden garment measurements check the sleeve and never 
   await page.screenshot({ path: `${shots}/desktop-12-garment.png` })
 })
 
+// The store's theme styles bare table cells, buttons and links (store-theme.css copies it). A 13" laptop window.
+for (const viewport of [{ width: 1224, height: 715 }, { width: 1440, height: 900 }]) {
+  await scenario(`desktop ${viewport.width}×${viewport.height}: the theme does not move cells or buttons; the table's buttons sit where Next sits`, viewport, async page => {
+    await openGuide(page)
+    await page.waitForTimeout(400)
+    const cells = await page.evaluate(() => [...document.querySelectorAll('.xff-table :is(th, td)')].map(c => { const s = getComputedStyle(c); return [s.verticalAlign, s.paddingLeft, s.paddingRight, s.borderTopWidth].join(' ') }))
+    assert.deepEqual([...new Set(cells)], ['middle 8px 8px 0px'], 'every cell: text in the middle, 8 px each side, no theme line on top')
+    const aligns = await page.evaluate(() => [...document.querySelectorAll('dialog.xff-dialog button')].filter(b => b.offsetWidth).map(b => getComputedStyle(b).textAlign))
+    assert.ok(!aligns.includes('start'), 'no button text pushed to the start by the theme')
+    const gap = sel => page.evaluate(sel => document.querySelector('.xff-modal').getBoundingClientRect().bottom - document.querySelector(sel).getBoundingClientRect().bottom, sel)
+    const findGap = await gap('#xff-find')
+    assert.ok(findGap >= 20, `room under "Find your size" (${findGap} px)`)
+    await page.locator('#xff-find').click()
+    assert.equal(Math.round(await gap('#xff-next')), Math.round(findGap), '"Find your size" and "Next" at the same height')
+  })
+}
+
 await browser.close()
 await flatBrowser.close()
 for (const r of results) console.log(r.join(' · '))

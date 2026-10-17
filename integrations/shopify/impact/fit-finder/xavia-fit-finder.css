@@ -36,6 +36,14 @@
 .xff-dialog *, .xff-dialog *::before, .xff-dialog *::after { box-sizing: border-box; }
 .xff-dialog :focus-visible { outline: 2px solid var(--xff-ink); outline-offset: 2px; }
 .xff-dialog button, .xff-dialog select, .xff-dialog input { font-family: inherit; }
+/* The store's theme styles bare elements (Impact: cell text at the top, no cell or button padding, buttons aligned to
+   the start, links not underlined). Inside the dialog these go back to the browser's values, so only the rules below
+   decide the look. One class: our own rules further down still win. verification/fit-finder/store-theme.css copies them. */
+.xff-dialog :where(button, input, select, textarea) { padding: revert; line-height: revert; text-align: revert; text-transform: revert; letter-spacing: revert; appearance: revert; }
+.xff-dialog :where(th, td) { padding: revert; vertical-align: revert; text-align: revert; border-block-start-width: 0; }
+.xff-dialog :where(a) { text-decoration-line: revert; }
+.xff-dialog :where(label) { cursor: revert; }
+.xff-dialog :where(img) { vertical-align: revert; }
 .xff-sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .xff-icon { flex: none; }
 
@@ -182,6 +190,9 @@
 /* Headers may take two short lines (a long name, many columns) inside the same row height. */
 .xff-table thead th { font-size: 12px; font-weight: 600; line-height: 1.15; letter-spacing: .05em; color: var(--xff-muted); white-space: normal; hyphens: auto; overflow-wrap: anywhere; border-block-end: 1.5px solid var(--xff-ink); }
 .xff-table--wide :is(th, td) { padding: 0 4px; font-size: 13px; }
+/* Impact zeroes the side padding of a table's first and last cell with a stronger selector than ours. */
+.xff-dialog .xff-table :is(th, td):is(:first-child, :last-child) { padding-inline: 8px; }
+.xff-dialog .xff-table--wide :is(th, td):is(:first-child, :last-child) { padding-inline: 4px; }
 .xff-table--wide thead th { font-size: 11px; letter-spacing: .02em; }
 .xff-table--wide .xff-table__size { inline-size: 13%; }
 .xff-table tbody th { font-weight: 700; color: var(--xff-ink); }
@@ -200,7 +211,7 @@
   .xff-panel-close:hover { background: var(--xff-soft); }
 }
 .xff-table tr.is-best > * { background: #e8f3e9; color: var(--xff-ink); }
-.xff-chart__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block-start: 16px; }
+.xff-chart__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 16px 28px; }   /* bottom = .xff-footer's: the button sits where Next sits */
 
 /* ---------------------------------------------------------------- body shape */
 .xff-sliders { display: flex; flex-direction: column; gap: 16px; inline-size: 100%; max-inline-size: 440px; margin-block-start: 24px; }
@@ -303,7 +314,7 @@
 /* A lower desktop window: the same layout, a little tighter, so no step needs to scroll. */
 @media (max-height: 759px) {
   .xff-content { padding-block-start: 18px; }
-  .xff-footer, .xff-actions { padding-block-end: 22px; }
+  .xff-footer, .xff-actions, .xff-chart__foot { padding-block-end: 22px; }
   .xff-progress-wrap { margin-block-end: 18px; }
   .xff-h1, .xff-chart__title { font-size: 22px; }
   .xff-h1 + .xff-pills--gender { margin-block-start: 14px; }
