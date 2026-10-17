@@ -23,6 +23,29 @@ describe('photos-only publishing (Images rebuild P4c)', () => {
   })
 })
 
+// Owner 2026-10-17 — missing German package sizes blocked the new MOSS title on the DE listings already on Amazon.
+describe('Amazon text-only publishing', () => {
+  const de = (root: string) => id(`${root}:["A1PA6795UKMFR9","de_DE"]`)
+  const height: StudioPublishIssue = { productId: 'parent', sku: 'SKU-M', field: 'item_package_dimensions__height', severity: 'error', message: 'Item package height: required.' }
+  const bullets: StudioPublishIssue = { productId: 'parent', sku: 'SKU-M', field: 'bullet_point', severity: 'error', message: 'Bullet point: too long.' }
+  it('an error on another attribute does not block a title, description, bullets or keywords selection', () => {
+    expect(blockingIssues([height], [de('item_name'), de('product_description'), de('bullet_point'), de('generic_keyword')])).toEqual([])
+  })
+  it('an error on a selected text field still blocks it, in either field form', () => {
+    expect(blockingIssues([height, bullets], [de('item_name'), de('bullet_point')])).toEqual([bullets])
+    expect(blockingIssues([{ ...bullets, field: 'bullet_point:["A1PA6795UKMFR9","de_DE"]' }], [de('bullet_point')])).toHaveLength(1)
+  })
+  it('text plus any other field, a first publish or a Full update stays blocked by every error', () => {
+    expect(blockingIssues([height], [de('item_name'), id('item_package_dimensions')])).toEqual([height])
+    expect(blockingIssues([height], [id('$create')])).toEqual([height])
+    expect(blockingIssues([height], [de('item_name'), id('$create')])).toEqual([height])
+  })
+  it('eBay title and description keep the old rule, and a fieldless error blocks text too', () => {
+    expect(blockingIssues([season], [id('title'), id('description')])).toEqual([season])
+    expect(blockingIssues([height, account], [de('item_name')])).toEqual([height, account])
+  })
+})
+
 // Build shape v2 P4 — a Full update row's field is ticked and locked, DIFFERS and unchanged fields included, and its
 // reason says what Full sends.
 describe('fullUpdateChange', () => {
