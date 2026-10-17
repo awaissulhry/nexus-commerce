@@ -11,8 +11,10 @@ const index = (chart, name) => chart.sizes.findIndex(s => s.name === name)
 test('the shipped charts match the Xavia chart images, size by size', () => {
   assert.deepEqual(men.sizes.map(s => s.name), ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'])
   assert.deepEqual(men.sizes.find(s => s.name === 'L'), { name: 'L', chest: [98, 104], waist: [86, 92] })
-  assert.deepEqual(women.sizes.map(s => s.name), ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'])
+  assert.deepEqual(women.sizes.map(s => s.name), ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'])
   assert.deepEqual(women.sizes.find(s => s.name === 'M'), { name: 'M', chest: [88, 94], waist: [72, 78] })
+  // Not on the image: the Owner's 5XL is one more 3XL → 4XL step
+  assert.deepEqual(women.sizes.find(s => s.name === '5XL'), { name: '5XL', chest: [124, 130], waist: [108, 114] })
   for (const chart of [men, women]) for (let i = 1; i < chart.sizes.length; i++) {
     assert.equal(chart.sizes[i].chest[0], chart.sizes[i - 1].chest[1], `${chart.sizes[i].name} chest starts where the size below ends`)
     assert.equal(chart.sizes[i].waist[0], chart.sizes[i - 1].waist[1], `${chart.sizes[i].name} waist starts where the size below ends`)
