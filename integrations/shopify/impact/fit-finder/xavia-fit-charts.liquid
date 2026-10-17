@@ -2,6 +2,7 @@
   Xavia fit finder: the default size charts, as plain JSON. BODY measurements in cm (not garment measurements),
   copied from the store's chart images IT_MENS_JACKET.jpg and IT_WOMEN.jpg (chest = petto, waist = vita).
   A size range is [from, to]; each size starts where the size below ends.
+  Women's 5XL is not on IT_WOMEN.jpg: the Owner set it on 2026-10-17 as one more 3XL → 4XL step (+6 cm).
   Which products use which chart: see xavia-fit-finder.liquid. One product can override with the JSON
   metafield xavia.fit_chart (a whole chart, or { "men": "<key or chart>", "women": "<key or chart>" }).
   Measures a chart may list (MEASURES in xavia-fit-engine.js): chest, waist, hips, sleeve, neck, inseam, thigh, calf,
@@ -36,7 +37,8 @@
       { "name": "XL", "chest": [100, 106], "waist": [84, 90] },
       { "name": "XXL", "chest": [106, 112], "waist": [90, 96] },
       { "name": "3XL", "chest": [112, 118], "waist": [96, 102] },
-      { "name": "4XL", "chest": [118, 124], "waist": [102, 108] }
+      { "name": "4XL", "chest": [118, 124], "waist": [102, 108] },
+      { "name": "5XL", "chest": [124, 130], "waist": [108, 114] }
     ]
   }
 }
