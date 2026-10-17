@@ -66,6 +66,11 @@ export interface StudioPublishReview {
    */
   photosOnly?: boolean
   /**
+   * Like `photosOnly`, for a publish of Amazon text only (title, description, bullets, keywords; MCP publish-listing):
+   * other fields have problems (every error names its field), so only text fields may be sent from this review.
+   */
+  textOnly?: boolean
+  /**
    * Build shape v2 — "Will be removed": what the channel holds that Nexus does not, on the rows reviewed as Full update.
    * Sending the review removes each of these from the channel. Absent when no row is a Full update.
    */
@@ -185,6 +190,9 @@ function amazonTextRoot(id: string): string | null {
     return AMAZON_TEXT_ROOTS.has(root) ? root : null
   } catch { return null }
 }
+
+/** Whether a change id (`["<productId>","<field>"]`) is an Amazon text field. */
+export const isAmazonTextChangeId = (id: string): boolean => amazonTextRoot(id) !== null
 
 /**
  * The problems that block a publication. When every error names a field, a selection of photo fields only is not

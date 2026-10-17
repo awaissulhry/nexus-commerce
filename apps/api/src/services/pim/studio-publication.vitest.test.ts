@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { deletedPublishSkip } from '@nexus/shared/listing-actions'
 
-const m = vi.hoisted(() => ({ ebayNotices: [] as string[], published: [] as any[], facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn(), snapshots: vi.fn(), findListings: vi.fn(), fill: vi.fn(), events: [] as string[], photoFields: { on: false }, moves: null as any[] | null, claim: vi.fn(), amazonSkus: null as Record<string, string> | null }))
+const m = vi.hoisted(() => ({ ebayNotices: [] as string[], published: [] as any[], facts: vi.fn(), drift: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), ensure: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn(), snapshots: vi.fn(), findListings: vi.fn(), fill: vi.fn(), events: [] as string[], photoFields: { on: false }, amazonFields: null as string[] | null, moves: null as any[] | null, claim: vi.fn(), amazonSkus: null as Record<string, string> | null }))
 vi.mock('./studio-publication-plan.js', async original => {
   const { createHash } = await import('node:crypto')
   return { readPublicationFacts: m.facts, publicationDigest: (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex'), object: (v: any) => v && typeof v === 'object' ? v : {} }
@@ -25,11 +25,15 @@ vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: async (
 vi.mock('./studio-publication-baseline.js', () => ({ readPublicationBaseline: async () => ({ values: new Map(), revision: 'baseline-1' }) }))
 vi.mock('./studio-publication-amazon-changes.js', () => ({
   prepareAmazonChanges: async (_facts: any, publication: any) => ({ kind: 'amazon-changes', publication, remoteRevision: 'remote-1', products: [], schemas: [],
-    changes: publication.products.map((p: any) => ({ id: p.productId, ...p, field: 'title', label: 'Title', current: { state: 'value', value: 'Saved title' },
+    // Amazon text-only (2026-10-17): with amazonFields set, the owner row offers those fields, keyed the real way (["<id>","<field>"]).
+    changes: m.amazonFields ? m.amazonFields.map(field => ({ id: JSON.stringify(['parent', field]), productId: 'parent', sku: 'SKU', field, label: field,
+      current: { state: 'value', value: field }, lastAccepted: { state: 'unknown', reason: 'No record' }, channel: { state: 'value', value: 'old' }, status: 'DIFFERS',
+      selectable: true, selectedByDefault: false, localChanged: null, channelChanged: null, reason: 'Differs', operation: 'replace' }))
+    : publication.products.map((p: any) => ({ id: p.productId, ...p, field: 'title', label: 'Title', current: { state: 'value', value: 'Saved title' },
       lastAccepted: { state: 'unknown', reason: 'No record' }, channel: { state: 'unknown', reason: 'New listing' }, status: 'SEND', selectable: true, selectedByDefault: true, localChanged: null, channelChanged: null, reason: 'Create', operation: 'replace' })) }),
-  compileAmazonChanges: (plan: any, ids: string[]) => ({ ...plan.publication, products: plan.publication.products.filter((p: any) => ids.includes(p.productId)),
+  compileAmazonChanges: (plan: any, ids: string[]) => ({ ...plan.publication, products: plan.publication.products.filter((p: any) => ids.some(id => id === p.productId || id.startsWith(`["${p.productId}"`))),
     ...(plan.publication.moves ? { moves: plan.publication.moves.filter((move: any) => ids.includes(move.productId)) } : {}),
-    feed: { ...plan.publication.feed, messages: plan.publication.feed.messages.filter((message: any) => plan.publication.products.some((p: any) => p.sku === message.sku && ids.includes(p.productId))) },
+    feed: { ...plan.publication.feed, messages: plan.publication.feed.messages.filter((message: any) => plan.publication.products.some((p: any) => p.sku === message.sku && ids.some(id => id === p.productId || id.startsWith(`["${p.productId}"`)))) },
     fieldWrites: Object.fromEntries(plan.changes.filter((c: any) => ids.includes(c.id)).map((c: any) => [c.productId, [{ field: c.field, value: c.current }]])) }),
 }))
 vi.mock('./studio-publication-ebay-changes.js', () => ({
@@ -84,7 +88,7 @@ const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'seller-b', lis
 const facts = () => ({ scope, destination: { familyId: 'parent', aliasKey: 'alias-b' }, account: { displayName: 'Store B' }, parent: { id: 'parent' },
   products: [{ id: 'parent', sku: 'SKU', name: 'Saved title' }, { id: 'child', sku: 'CHILD', name: 'Child' }], listings: [], resolved: [], issues: [], excluded: 1, aliasLabel: 'Second listing', revision: 'v1' })
 
-beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.ebayNotices = []; m.moves = null; m.amazonSkus = null; m.drift.mockResolvedValue([]); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.ensure.mockResolvedValue([]); m.updateListings.mockResolvedValue({ count: 2 })
+beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.ebayNotices = []; m.amazonFields = null; m.moves = null; m.amazonSkus = null; m.drift.mockResolvedValue([]); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.ensure.mockResolvedValue([]); m.updateListings.mockResolvedValue({ count: 2 })
   m.snapshots.mockResolvedValue([]); m.findListings.mockResolvedValue([]); m.events.length = 0; m.published.length = 0
   m.fill.mockImplementation(async () => { m.events.push('fill'); return { dryRun: false, rows: [], counts: {} } }) })
 
@@ -361,6 +365,39 @@ it('an error that names no field still blocks the whole review, photos included'
   expect(await previewRaw('parent', ebayScope, 'user')).toMatchObject({ id: null })
   expect(m.rows.size).toBe(0)
   m.photoFields.on = false
+})
+
+// 2026-10-17 (MOSS on Amazon DE) — Claude's Amazon text-only publish: other fields' problems block those fields, not the text.
+const amazonTitle = JSON.stringify(['parent', 'item_name:["market","de_DE"]']), amazonWeight = JSON.stringify(['parent', 'item_package_weight'])
+const weightError = { productId: 'parent', sku: 'SKU', field: 'item_package_weight', severity: 'error', message: 'Item package weight: required.' }
+it('keeps an Amazon text-only review when every error names a field, sends a text selection, and refuses any other field', async () => {
+  m.amazonFields = ['item_name:["market","de_DE"]', 'item_package_weight']
+  m.facts.mockImplementation(async () => ({ ...existingFacts(), issues: [weightError] }))
+  expect(await previewRaw('parent', scope, 'user')).toMatchObject({ id: null })
+  const review = await previewRaw('parent', scope, 'user', { textOnly: true })
+  expect(review).toMatchObject({ textOnly: true })
+  expect(review.photosOnly).toBeUndefined()
+  expect(review.id).toBeTruthy()
+  await expect(previewStudioPublicationSelection('parent', review.id!, { selectedIds: [amazonTitle, amazonWeight] }, 'user')).rejects.toMatchObject({ statusCode: 422 })
+  await previewStudioPublicationSelection('parent', review.id!, { selectedIds: [amazonTitle] }, 'user')
+  const result = await submitStudioPublication('parent', review.id!, {}, 'user')
+  expect(m.amazon).toHaveBeenCalledOnce()
+  expect(result.status).not.toBe('FAILED')
+})
+it('an Amazon text-only review still refuses an error on the text itself, and is not kept for an error that names no field or on eBay', async () => {
+  m.amazonFields = ['item_name:["market","de_DE"]']
+  m.facts.mockImplementation(async () => ({ ...existingFacts(), issues: [{ ...weightError, field: 'item_name', message: 'Title: too long.' }] }))
+  const review = await previewRaw('parent', scope, 'user', { textOnly: true })
+  await previewStudioPublicationSelection('parent', review.id!, { selectedIds: [amazonTitle] }, 'user')
+  await expect(submitStudioPublication('parent', review.id!, {}, 'user')).rejects.toMatchObject({ statusCode: 422 })
+  expect(m.amazon).not.toHaveBeenCalled()
+  m.rows.clear()
+  m.facts.mockImplementation(async () => ({ ...existingFacts(), issues: [weightError, { severity: 'error', message: 'Reconnect this account before publishing.' }] }))
+  expect(await previewRaw('parent', scope, 'user', { textOnly: true })).toMatchObject({ id: null })
+  const ebayScope = { ...scope, channel: 'EBAY' }
+  m.facts.mockImplementation(async () => ({ ...existingFacts(), scope: ebayScope, issues: [weightError] }))
+  expect(await previewRaw('parent', ebayScope, 'user', { textOnly: true })).toMatchObject({ id: null })
+  expect(m.rows.size).toBe(0)
 })
 
 // Sheet publish parity, step 1 — the history's columns and counts.

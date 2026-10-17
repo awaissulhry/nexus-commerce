@@ -356,6 +356,8 @@ export function publishStory(d: { product: { sku: string }; channel: string; mar
  * a first publish creates the listing with them (inside its create message). */
 export const FIELD_GROUPS = ['title', 'description', 'bullets', 'keywords', 'photos', 'attributes'] as const
 type FieldGroup = (typeof FIELD_GROUPS)[number]
+/** The groups that are text (an Amazon text-only publish: `PreviewOptions.textOnly`). */
+const TEXT_GROUPS: ReadonlySet<FieldGroup> = new Set(['title', 'description', 'bullets', 'keywords'])
 /** `variations`: Etsy's whole inventory (one replace), sent only with fields "all" — never a group a caller names (Q7 = A). */
 type SendGroup = FieldGroup | 'variations'
 type Group = SendGroup | 'create' | 'never'
@@ -800,7 +802,9 @@ const publishListing: AgentTool = {
       // own check of a new eBay listing (VerifyAddFixedPriceItem, creates nothing) exactly as the studio's Review does; an
       // error there blocks the plan below, so the run refuses with eBay's words and nothing is sent. The read tools and
       // this tool's preview never make that live call.
-      const review = await (await studio()).previewStudioPublication(d.product.id, d.scope, userId)
+      // Amazon text only: the studio keeps the review although other fields have problems, and lets only text be sent.
+      const textOnly = d.channel === 'AMAZON' && Array.isArray(fields) && fields.every((f) => TEXT_GROUPS.has(f))
+      const review = await (await studio()).previewStudioPublication(d.product.id, d.scope, userId, textOnly ? { textOnly } : {})
       const built = await publishPlanFor(d, review, fields, args.location as string | undefined)
       if (built.refusal) return { ok: false, error: `${where}: ${built.refusal} Nothing was sent.` }
       if (!review.id) return { ok: false, error: `${where}: the studio would not keep this review. Nothing was sent.` }
