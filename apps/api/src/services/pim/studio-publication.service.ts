@@ -208,7 +208,10 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
   let baselineRevision: string | null = null
   let locations: StudioPublishReview['locations'], visibility: string | undefined
   try {
-    if (scope.channel === 'AMAZON') prepared = await prepareAmazonPublication(facts, { ...(modes.full.size ? { fullProductIds: modes.full } : {}), ...inactiveOption })
+    if (scope.channel === 'AMAZON') {
+      prepared = await prepareAmazonPublication(facts, { ...(modes.full.size ? { fullProductIds: modes.full } : {}), ...inactiveOption })
+      issues.push(...prepared.issues ?? [])
+    }
     else if (scope.channel === 'EBAY') {
       prepared = usesEbayInventory(facts) ? await prepareEbayInventoryPublication(facts) : await prepareEbayPublication(facts, { ...(modes.full.size ? { full: true } : {}), ...inactiveOption })
       if (prepared.kind === 'ebay') for (const message of prepared.notices ?? []) issues.push({ severity: 'warning', message })
