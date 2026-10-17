@@ -170,15 +170,39 @@ export function isPhotoChangeId(id: string): boolean {
   } catch { return false }
 }
 
+/** The Amazon text roots of the change review (title, description, bullets, keywords; one line per market and language). */
+export const AMAZON_TEXT_ROOTS: ReadonlySet<string> = new Set(['item_name', 'product_description', 'bullet_point', 'generic_keyword'])
+
+/** The attribute root of a review field or issue field: `bullet_point:["APJ6JRA9NG5V4","it_IT"]` and `bullet_point` → `bullet_point`. */
+const fieldRoot = (field: string) => field.split(':')[0].split('__')[0]
+
+/** The Amazon text root a change id (`["<productId>","<field>"]`) carries, or null. */
+function amazonTextRoot(id: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(id)
+    if (!Array.isArray(parsed) || typeof parsed[1] !== 'string') return null
+    const root = fieldRoot(parsed[1])
+    return AMAZON_TEXT_ROOTS.has(root) ? root : null
+  } catch { return null }
+}
+
 /**
  * The problems that block a publication. When every error names a field, a selection of photo fields only is not
  * blocked by them — it sends no other field (Owner, 2026-09-28: an off-list Season value blocked a photos-only send).
+ * Likewise an Amazon selection of text fields only is blocked only by errors on those text fields: it is a partial
+ * update of listings already on Amazon, so Amazon keeps every other attribute as it holds it (Owner, 2026-10-17: missing
+ * German package sizes blocked the new MOSS title on the closed DE offers). A first publish or a Full update always
+ * selects other fields too, so it stays blocked by every error.
  * An error that names no field (the account, a paused listing, the photo plan's own checks) always blocks.
  */
 export function blockingIssues(issues: readonly StudioPublishIssue[], selectedIds?: readonly string[]): StudioPublishIssue[] {
   const errors = issues.filter(i => i.severity === 'error')
   if (!errors.length || errors.some(i => !i.field)) return errors
-  return selectedIds?.length && selectedIds.every(isPhotoChangeId) ? [] : errors
+  if (!selectedIds?.length) return errors
+  if (selectedIds.every(isPhotoChangeId)) return []
+  const textRoots = selectedIds.map(amazonTextRoot)
+  if (textRoots.every(root => root !== null)) return errors.filter(i => textRoots.includes(fieldRoot(i.field!)))
+  return errors
 }
 
 export interface StudioPublishOverwrite {
