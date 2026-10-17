@@ -63,7 +63,7 @@ vi.mock('../images/media-plan.service.js', async () => {
   } }
 })
 
-import { prepareEbayPublication } from './studio-publication-ebay.js'
+import { descriptionSources, prepareEbayPublication } from './studio-publication-ebay.js'
 
 const updatedAt = new Date('2026-09-01T00:00:00Z')
 const product = (id: string, sku: string, extra: Record<string, unknown> = {}) => ({ id, sku, name: `Nome ${sku}`, ean: null, parentId: null, isParent: false,
@@ -182,5 +182,18 @@ describe('the item location of a new eBay listing', () => {
   })
   it('no country: refused', async () => {
     await expect(prepareEbayPublication(located({ itemPostalCode: '47822' }))).rejects.toThrow('eBay needs the item location country')
+  })
+})
+
+// Owner 2026-10-17 (MOSS) — the description shows what the publish sends.
+describe('descriptionSources', () => {
+  const shared = { pictureUrls: ['main.jpg', 'chart.jpg'], itemSpecifics: { Stagione: 'Tutte le stagione', Caratteristiche: ['Ventilato', ' ', 'Leggero'], Vuoto: '' },
+    variationPictures: { byValue: { Verde: ['verde.jpg'], Nero: ['nero.jpg', 'nero-2.jpg'], Grigio: [] }, order: ['Nero', 'Grigio', 'Verde'] } }
+  it('on the media plan: the gallery and the colour sets in the plan\'s order, an empty set left out', () => {
+    expect(descriptionSources(shared, true).galleries).toEqual({ shared: ['main.jpg', 'chart.jpg'],
+      byGroup: [{ value: 'Nero', urls: ['nero.jpg', 'nero-2.jpg'] }, { value: 'Verde', urls: ['verde.jpg'] }] })
+  })
+  it('off the plan: no galleries (the description keeps its own photo rows); item specifics always, lists joined, blanks dropped', () => {
+    expect(descriptionSources(shared, false)).toEqual({ aspects: [{ name: 'Stagione', value: 'Tutte le stagione' }, { name: 'Caratteristiche', value: 'Ventilato, Leggero' }] })
   })
 })
