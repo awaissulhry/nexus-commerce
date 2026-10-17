@@ -6,6 +6,8 @@
 // - The gallery thumbnails load with the page, the next gallery photos once the page is idle, and every lazy photo
 //   starts 1.5 screens ahead (Safari otherwise waits until a photo is almost on screen).
 const COLOUR_LINKS = '.variant-picker__option a.thumbnail-swatch[href]';
+// Where the colour pictures were on screen at the tap; variant-picker.liquid puts them back there on the colour's page.
+const PLACE_KEY = 'nexus-colour-place';
 const warming = new Set();
 const main = () => document.querySelector('[id^="shopify-section-"][id$="__main"]') || document;
 const colourLinks = () => [...main().querySelectorAll(COLOUR_LINKS)].filter(link => !link.closest('quick-buy-drawer'));
@@ -29,6 +31,12 @@ function warm(link, urgent) {
   if (urgent) image.fetchPriority = 'high';
   image.onerror = () => warming.delete(sources.srcset);
   image.sizes = sources.sizes; image.srcset = sources.srcset;
+}
+// The colour row is its own block (product picker), above the size picker: count option rows across the whole section.
+function rememberPlace(link) {
+  const option = link.closest('.variant-picker__option'), index = [...main().querySelectorAll('.variant-picker__option')].indexOf(option);
+  if (index < 0) return;
+  try { sessionStorage.setItem(PLACE_KEY, JSON.stringify({ path: new URL(link.href).pathname, option: index, top: option.getBoundingClientRect().top, at: Date.now() })); } catch (error) {}
 }
 // Put back what the tap changed when the browser restores this page from its back/forward cache.
 let undo = [];
@@ -65,8 +73,11 @@ if (links.length) {
   for (const link of links) {
     link.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') warm(link, false); });
     for (const type of ['pointerdown', 'focus']) link.addEventListener(type, () => warm(link, true));
+    // At the press too: Chrome may start rendering the page ahead before the click, with a copy of this storage.
+    link.addEventListener('pointerdown', () => rememberPlace(link));
     link.addEventListener('click', event => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.classList.contains('is-selected')) return;
+      rememberPlace(link);
       showColour(link);   // the link still opens the colour's page as before
     });
   }

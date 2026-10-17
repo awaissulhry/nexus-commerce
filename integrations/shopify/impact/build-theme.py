@@ -531,6 +531,8 @@ picker = replace_once(picker, '''              <div class="prose">
                 </div>
               </template>''')
 picker = replace_once(picker, "        if variant_image_options contains option_downcase", "        assign nexus_axis_index = option.position | minus: 1\n        if product.metafields.nexus.resolved.value.managed and product.metafields.nexus.resolved.value.thumbnailAxisIndexes contains nexus_axis_index\n          assign resolved_option_selector_style = 'variant_image'\n        endif\n        if variant_image_options contains option_downcase")
+# A colour picture opens the colour's own page: put the colour row back where the shopper saw it (nexus-product-speed.js).
+picker = replace_once(picker, "  </variant-picker>\n{%- endunless -%}", "  </variant-picker>\n\n" + (HERE / 'nexus-colour-place.liquid').read_text() + "{%- endunless -%}")
 write('snippets/variant-picker.liquid', picker)
 storefront_translations = {
     'locales/fr.json': {
