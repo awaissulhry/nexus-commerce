@@ -277,6 +277,16 @@ describe('what a publish sends', () => {
     expect(plan.notSent).toEqual([expect.objectContaining({ field: 'purchasable_offer', reason: expect.stringContaining('Sent inside the new listing') })])
   })
 
+  it('nothing left to send says so, not every field\'s own problems; a problem that names no field is still said (2026-10-17)', () => {
+    const changes = planPublicationChanges([change('p', 'TEST-SKU', 'item_name:["A1","de_DE"]', [{ value: 'Same' }], [{ value: 'Same' }], [{ value: 'Same' }])])
+    const fieldError = { severity: 'error', field: 'item_package_weight', message: 'Item package weight: required.' }
+    const plan = planPublish({ action: 'update', issues: [fieldError], rows: [], mode: 'live', changes } as any, 'AMAZON', ['title'])
+    expect(plan.refusal).toBe('Nothing to send: every field named already matches the channel.')
+    const account = { severity: 'error', message: 'Reconnect this account before publishing.' }
+    expect(planPublish({ action: 'update', issues: [fieldError, account], rows: [], mode: 'live', changes } as any, 'AMAZON', ['title']).refusal)
+      .toBe('Reconnect this account before publishing.')
+  })
+
   it('eBay re-publish: the preview is the studio review of the groups named', async () => {
     const base = { productId: ids.ebayProduct, channel: 'EBAY', marketplace: 'IT' }
     const title = await dryRun({ ...base, fields: ['title'] })
