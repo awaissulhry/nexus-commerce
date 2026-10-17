@@ -318,6 +318,38 @@ describe('what a publish sends', () => {
   })
 })
 
+describe('Amazon text only (2026-10-17, MOSS on Amazon DE)', () => {
+  const titleField = 'item_name:["market-test","it_IT"]'
+  beforeEach(() => {
+    const base = fixture.facts.getMockImplementation()!
+    // Another field of the listing has a problem: it names its field (missing package weight).
+    fixture.facts.mockImplementation(async (productId: string, scope: Json) => ({ ...(await base(productId, scope)),
+      issues: [{ productId: ids.euProduct, sku: 'TEST-SKU-L5-EU', field: 'item_package_weight', severity: 'error', message: 'Item package weight: required.' }] }))
+    fixture.amazonChanges.mockImplementation(async (facts: any, publication: any) => {
+      const plan = amazonPlan(facts, publication)
+      const products = plan.products.map((p: any) => ({ ...p, patches: { ...p.patches, [titleField]: { op: 'replace', path: '/attributes/item_name', value: [{ value: 'New title', language_tag: 'it_IT' }] } } }))
+      const p = products[0]
+      return { ...plan, products, changes: planPublicationChanges([
+        change(p.productId, p.sku, titleField, [{ value: 'New title' }], [{ value: 'Old title' }], [{ value: 'Old title' }]),
+        change(p.productId, p.sku, 'brand', [{ value: 'Test brand' }], [{ value: 'Old brand' }], [{ value: 'Old brand' }])]) }
+    })
+  })
+
+  it('the approved run keeps the review and sends only the title; naming another field too is refused and sends nothing', async () => {
+    const { ran } = await approveAndRun({ productId: ids.euProduct, channel: 'AMAZON', marketplace: 'IT', fields: ['title'] })
+    expect(ran.ok, ran.error).toBe(true)
+    expect(fixture.sendAmazon).toHaveBeenCalledOnce()
+    const sent = fixture.sendAmazon.mock.calls[0][0]
+    expect(sent.feed.messages).toEqual([expect.objectContaining({ sku: 'TEST-SKU-L5-EU', operationType: 'PATCH', patches: [expect.objectContaining({ path: '/attributes/item_name' })] })])
+    const operation = await inside(() => db().bulkOperation.findUniqueOrThrow({ where: { id: (ran.data as Json).publicationId } }))
+    expect((operation.changes as Json).review).toMatchObject({ textOnly: true })
+    fixture.sendAmazon.mockClear()
+    const both = await dryRun({ productId: ids.euProduct, channel: 'AMAZON', marketplace: 'IT', fields: ['title', 'attributes'] })
+    expect(both).toMatchObject({ ok: false, error: expect.stringContaining('Item package weight') })
+    expect(fixture.sendAmazon).not.toHaveBeenCalled()
+  })
+})
+
 describe('first publish of a draft', () => {
   it('Amazon (outside the EU): the complete listing, as the approver; its drafts go live once Amazon accepts', async () => {
     expect((await dryRun({ productId: ids.amazonChild, channel: 'AMAZON', marketplace: 'UK', fields: 'photos' })).error).toContain('A first publish sends the complete listing')

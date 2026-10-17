@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
-import { blockingIssues, isPhotoChangeId, type StudioPublishReview, type StudioPublishResult, type StudioPublishScope, type StudioPublishSelection,
+import { blockingIssues, isAmazonTextChangeId, isPhotoChangeId, type StudioPublishReview, type StudioPublishResult, type StudioPublishScope, type StudioPublishSelection,
   type StudioPublishStoredReview } from '@nexus/shared/studio-publication'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
@@ -457,6 +457,11 @@ export interface PreviewOptions {
    * creates (a row set Not listed stays out). Kept with the review, so its submit rebuilds the same plan.
    */
   startAs?: StartAsTarget | null
+  /**
+   * MCP publish-listing of Amazon text only — keep a review whose every error names a field, marked `textOnly`: only its
+   * text fields may then be selected, and the submit checks them against `blockingIssues` (2026-10-17, MOSS on Amazon DE).
+   */
+  textOnly?: boolean
 }
 
 /** A stored "New listings start as", or null. */
@@ -521,8 +526,10 @@ export async function previewStudioPublication(productId: string, scope: StudioP
   }
   // D3 — a publication a person marked checked is closed (`OPEN_PUBLICATION`) and no longer blocks its destination.
   if (unresolved) return blocked({ ...plan.review, ...(unresolved.userId === userId ? { previousPublicationId: unresolved.id } : {}), issues: [...plan.review.issues, { severity: 'error', message: `A previous publication still needs a result (${unresolved.id}). ${unresolved.userId === userId ? 'Check its status before publishing again.' : 'Ask the colleague who submitted it to check its status.'}` }] })
-  if (!plan.prepared || (errors.length && !photosOnly)) return blocked(plan.review)
-  const review = { ...plan.review, id, ...(photosOnly ? { photosOnly: true } : {}) }
+  const textOnly = !!options.textOnly && scope.channel === 'AMAZON' && errors.length > 0 && errors.every(i => i.field) && !!plan.changePlan
+    && !!plan.review.changes?.some(c => c.selectable && isAmazonTextChangeId(c.id))
+  if (!plan.prepared || (errors.length && !photosOnly && !textOnly)) return blocked(plan.review)
+  const review = { ...plan.review, id, ...(textOnly ? { textOnly: true } : photosOnly ? { photosOnly: true } : {}) }
   await prisma.bulkOperation.create({ data: { id, userId, status: 'PREVIEW', productCount: plan.review.rows.length, changeCount: 0,
     ...columns,
     expiresAt: new Date(plan.review.expiresAt), changes: json({ kind: KIND, publicationKey: key, productId, scope, revision: plan.revision,
@@ -559,6 +566,8 @@ export async function previewStudioPublicationSelection(productId: string, id: s
     throw new WorkspaceScopeError('Choose valid fields from this review.', 400)
   if (object(data.review).photosOnly === true && !ids.every(value => isPhotoChangeId(value as string)))
     throw new WorkspaceScopeError('Other fields of this listing have problems (listed in the review). Choose only photos, or fix them first.', 422)
+  if (object(data.review).textOnly === true && !ids.every(value => isAmazonTextChangeId(value as string)))
+    throw new WorkspaceScopeError('Other fields of this listing have problems (listed in the review). Choose only its text, or fix them first.', 422)
   let compiled: ReturnType<typeof compileSelection>
   try { compiled = compileSelection(data.changePlan, ids, id) }
   catch (error) { throw new WorkspaceScopeError(error instanceof Error ? error.message : String(error), 400) }
