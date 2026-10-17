@@ -219,6 +219,22 @@ describe('renderListingDescriptionSafe — raw mode renders body tokens', () => 
     expect(prisma.listingImage.findMany).not.toHaveBeenCalled()
   })
 
+  // Owner 2026-10-17 (MOSS) — the hood photos stayed in the description: it read the frozen eBay photo rows and the old
+  // flat-file snapshot, not what the publish sent.
+  it('the photos and item specifics the push hands over are what the description shows; the old sources are not read', async () => {
+    const prisma = mockPrisma({})
+    const res = await renderListingDescriptionSafe(asPrisma(prisma), {
+      productId: 'prod-1', marketplace: 'IT', mode: 'group', sku: 'SKU-1', themeIdOverride: 'none',
+      body: '{{specs_table}}{{gallery_groups}}',
+      galleries: { shared: ['https://img/main.jpg'], byGroup: [{ value: 'Nero', urls: ['https://img/nero-new.jpg'] }] },
+      aspects: [{ name: 'Stagione', value: 'Tutte le stagione' }],
+    })
+    expect(res.html).toContain('https://img/nero-new.jpg')
+    expect(res.html).toContain('Nero')
+    expect(res.html).toContain('Tutte le stagione')
+    expect(prisma.listingImage.findMany).not.toHaveBeenCalled()
+  })
+
   it('raw mode enforces the forbidden-token guard — {{body}} never recurses', async () => {
     const prisma = mockPrisma({})
     const res = await renderListingDescriptionSafe(asPrisma(prisma), {

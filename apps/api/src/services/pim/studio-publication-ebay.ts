@@ -591,6 +591,21 @@ export async function buildEbayListingInput(facts: PublicationFacts, options: { 
   return { shared: shared!, itemId, parentListing, settings, galleries, ownPhotos, variants, identities, moves, media: onPlan ? { channelValues } : null }
 }
 
+/**
+ * Owner 2026-10-17 (MOSS) — the description shows what this publish sends: a family on the media plan shows the plan's
+ * gallery and colour sets (the older eBay photo rows are frozen once a family is on the plan), and its spec table shows
+ * the item specifics sent (the older flat-file snapshot is never written by the studio).
+ */
+export function descriptionSources(shared: { pictureUrls?: string[]; variationPictures?: { byValue: Record<string, string[]>; order?: string[] }; itemSpecifics?: Record<string, string | string[]> }, onPlan: boolean) {
+  const sets = shared.variationPictures
+  const galleries = onPlan ? { shared: shared.pictureUrls ?? [],
+    byGroup: (sets?.order ?? Object.keys(sets?.byValue ?? {})).map(value => ({ value, urls: sets?.byValue[value] ?? [] })).filter(group => group.urls.length) } : undefined
+  const aspects = Object.entries(shared.itemSpecifics ?? {})
+    .map(([name, value]) => ({ name, value: (Array.isArray(value) ? value : [value]).map(v => String(v ?? '').trim()).filter(Boolean).join(', ') }))
+    .filter(aspect => aspect.value)
+  return { ...(galleries ? { galleries } : {}), aspects }
+}
+
 /** Images rebuild P2c — the plan's eBay layout, checked, as the Trading/Inventory input's pictures (screen order = payload order). */
 async function ebayPicturesFromPlan(facts: PublicationFacts, shared: Awaited<ReturnType<typeof buildEbayListingInput>>['shared'], channelValues: MediaChannelValues | undefined, problems: EbayProblems) {
   const { scope, parent, products } = facts
@@ -842,7 +857,8 @@ async function finishEbayListingInput(facts: PublicationFacts, built: Awaited<Re
     } else problems.note('The stock is 0. When sending is on, Nexus checks that this eBay account keeps a listing at 0 (its out-of-stock option).')
   }
   const rendered = await renderListingDescriptionSafe(prisma, { productId: parent.id, marketplace: scope.marketplace, channelConnectionId: scope.accountId,
-    aliasKey: facts.destination.aliasKey ?? '', mode: products.length > 1 ? 'group' : 'single', body: shared.description, title: shared.title })
+    aliasKey: facts.destination.aliasKey ?? '', mode: products.length > 1 ? 'group' : 'single', body: shared.description, title: shared.title,
+    ...descriptionSources(shared, !!built.media) })
   for (const warning of rendered.warnings) problems.add(warning, { field: 'description' })
   if (!rendered.warnings.length) shared.description = rendered.html
   return shared

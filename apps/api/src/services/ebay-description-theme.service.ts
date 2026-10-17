@@ -44,6 +44,11 @@ export interface RenderListingDescriptionArgs {
   sku?: string
   /** Business-policy display names when the push site has them resolved. */
   policies?: { shipping?: string; returns?: string; payment?: string }
+  /** The photos the push sends (a family on the media plan): read instead of the older eBay photo rows, so the
+   *  description's gallery and colour sets show what the listing shows (Owner 2026-10-17, MOSS). */
+  galleries?: { shared: string[]; byGroup: DescriptionGalleryGroup[] }
+  /** The item specifics the push sends: read instead of the older flat-file snapshot. */
+  aspects?: Array<{ name: string; value: string }>
   /** Preview-only: try a specific theme instead of the listing's assignment. */
   themeIdOverride?: string
   /** Preview-only (ED.4 theme editor): render THIS html as the theme without
@@ -378,21 +383,23 @@ export async function renderListingDescriptionSafe(
     const assigned = typeof themeCell?.value === 'string' ? themeCell.value : undefined
 
     const buildData = async (): Promise<DescriptionRenderData> => {
-      const galleries = await loadGalleries(prisma, args.productId, args.sku, args.marketplace, { channelConnectionId: connectionId, aliasKey: args.aliasKey ?? '', marketplace: args.marketplace.toUpperCase() })
+      const galleries = args.galleries ? { ...args.galleries, rowImages: args.galleries.shared }
+        : await loadGalleries(prisma, args.productId, args.sku, args.marketplace, { channelConnectionId: connectionId, aliasKey: args.aliasKey ?? '', marketplace: args.marketplace.toUpperCase() })
+      const aspects = args.aspects ?? aspectsFromSnapshot(listing?.flatFileSnapshot)
       return {
         market: args.marketplace.toUpperCase(),
         title: args.title ?? listing?.title ?? '',
         subtitle: args.subtitle ?? (typeof attrs.subtitle === 'string' ? attrs.subtitle : undefined),
         body: args.body ?? listing?.description ?? '',
         sku: args.sku,
-        brand: aspectsFromSnapshot(listing?.flatFileSnapshot).find((a) =>
+        brand: aspects.find((a) =>
           ['marca', 'marke', 'marque', 'brand'].includes(a.name.toLowerCase()),
         )?.value,
         mode: args.mode,
         sharedImages: galleries.shared,
         imagesByGroup: galleries.byGroup,
         rowImages: galleries.rowImages,
-        aspects: aspectsFromSnapshot(listing?.flatFileSnapshot),
+        aspects,
         policies: args.policies,
       }
     }
