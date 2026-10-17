@@ -1,39 +1,42 @@
-  {%- if update_url -%}
-    {%- comment -%}
-      Nexus: a colour picture opens that colour's own page. Put the colour row back where the shopper saw it
-      (nexus-product-speed.js remembers the spot at the tap). The colour row is a block above this picker, so it is
-      parsed when this runs, before the page is shown; a page rendered ahead in Chrome does it when it is shown.
-    {%- endcomment -%}
-    <script>
-      (function () {
-        var section = document.currentScript.closest('[id^="shopify-section-"]') || document, key = 'nexus-colour-place', expected = null;
-        var html = document.documentElement, minHeight = html.style.minHeight;
-        function place(first) {
-          var saved;
+    {%- if request.page_type == 'product' -%}
+      {%- comment -%}
+        Nexus: a colour picture opens that colour's own page. Put the colour row where the shopper saw it
+        (nexus-product-speed.js saves the spot). The row is placed the moment the parser inserts it, before the
+        browser can draw the top of the page; a page Chrome rendered ahead places it when it is shown.
+      {%- endcomment -%}
+      <script>
+        (function () {
+          var key = 'nexus-colour-place', saved;
           try { saved = JSON.parse(sessionStorage.getItem(key) || 'null'); } catch (error) { return; }
           if (!saved || saved.path !== location.pathname || Date.now() - saved.at > 20000) return;
-          var option = section.querySelectorAll('.variant-picker__option')[saved.option];
-          if (!option) return;
-          if (!first && window.scrollY !== expected) { try { sessionStorage.removeItem(key); } catch (error) {} return; }   // the shopper moved: leave them
-          var shift = option.getBoundingClientRect().top - saved.top;
-          if (Math.abs(shift) > 1) {
-            var target = window.scrollY + shift, behaviour = html.style.scrollBehavior;
-            // The page below the picker is not parsed yet, so it may be too short to scroll that far: give it room
-            // until the whole page is there.
-            if (first && document.readyState === 'loading') html.style.minHeight = Math.ceil(target + window.innerHeight + 1) + 'px';
-            html.style.scrollBehavior = 'auto'; window.scrollTo(0, target); html.style.scrollBehavior = behaviour;
+          var html = document.documentElement, minHeight = html.style.minHeight, expected = null, placed = false;
+          var row = function () { return document.querySelectorAll('[id^="shopify-section-"][id$="__main"] .variant-picker__option')[saved.option]; };
+          function place(first) {
+            var option = row();
+            if (!option) return false;
+            if (!first && window.scrollY !== expected) return true;   // the shopper moved: leave them
+            var shift = option.getBoundingClientRect().top - saved.top;
+            if (Math.abs(shift) > 1) {
+              var target = window.scrollY + shift, behaviour = html.style.scrollBehavior;
+              // The page below the row is not parsed yet, so it may be too short to scroll that far: give it room.
+              if (document.readyState === 'loading') html.style.minHeight = Math.ceil(target + window.innerHeight + 1) + 'px';
+              html.style.scrollBehavior = 'auto'; window.scrollTo(0, target); html.style.scrollBehavior = behaviour;
+            }
+            expected = window.scrollY;
+            return true;
           }
-          expected = window.scrollY;
-        }
-        function start() {
-          place(true);
-          // Fonts and late layout can move the picker a little; correct once more unless the shopper has scrolled.
-          var again = function () { place(false); };
-          document.addEventListener('DOMContentLoaded', function () { html.style.minHeight = minHeight; again(); }, { once: true });
-          if (document.fonts && document.fonts.ready) document.fonts.ready.then(again);
-          window.addEventListener('load', function () { html.style.minHeight = minHeight; again(); try { sessionStorage.removeItem(key); } catch (error) {} }, { once: true });
-        }
-        if (document.prerendering) document.addEventListener('prerenderingchange', start, { once: true }); else start();
-      })();
-    </script>
-  {%- endif -%}
+          var forget = function () { try { sessionStorage.removeItem(key); } catch (error) {} };
+          if (document.prerendering) {
+            document.addEventListener('prerenderingchange', function () { place(true); forget(); }, { once: true });
+            return;
+          }
+          // Mutation callbacks run before the next frame, so the row never shows at its unplaced spot.
+          var watch = new MutationObserver(function () { if (place(true)) { placed = true; watch.disconnect(); } });
+          watch.observe(html, { childList: true, subtree: true });
+          // Fonts and late layout can move the row a little: correct again unless the shopper has scrolled.
+          document.addEventListener('DOMContentLoaded', function () { watch.disconnect(); html.style.minHeight = minHeight; if (placed) place(false); }, { once: true });
+          if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (placed) place(false); });
+          window.addEventListener('load', function () { html.style.minHeight = minHeight; if (placed) place(false); forget(); }, { once: true });
+        })();
+      </script>
+    {%- endif -%}

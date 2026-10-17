@@ -1,0 +1,19 @@
+
+{%- comment -%}
+  Nexus: the first slide's photo downloads alone; the others start once it is shown, or as soon as the shopper reaches
+  for the slideshow (their srcset/src wait in data-nexus-* attributes until then).
+{%- endcomment -%}
+<script>
+  (function () {
+    var slideshow = document.currentScript.previousElementSibling, first = slideshow && slideshow.querySelector('.slideshow__slide img'), started = false;
+    function start() {
+      if (started || !slideshow) return;
+      started = true;
+      slideshow.querySelectorAll('[data-nexus-srcset]').forEach(function (el) { el.setAttribute('srcset', el.getAttribute('data-nexus-srcset')); el.removeAttribute('data-nexus-srcset'); });
+      slideshow.querySelectorAll('[data-nexus-src]').forEach(function (el) { el.setAttribute('src', el.getAttribute('data-nexus-src')); el.removeAttribute('data-nexus-src'); });
+    }
+    if (!first || (first.complete && first.naturalWidth)) start();
+    else { first.addEventListener('load', start, { once: true }); first.addEventListener('error', start, { once: true }); setTimeout(start, 4000); }
+    ['pointerdown', 'focusin', 'keydown'].forEach(function (type) { if (slideshow) slideshow.addEventListener(type, start, { once: true, passive: true }); });
+  })();
+</script>

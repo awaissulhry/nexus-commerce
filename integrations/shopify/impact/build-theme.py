@@ -2,6 +2,7 @@
 """Apply the reviewed Nexus integration to the supplied Impact export; preserve other files byte for byte."""
 import argparse, difflib, hashlib, json, re, shutil, zipfile
 from pathlib import Path
+from nexus_theme_patches import patch_layout, patch_slideshow
 
 HERE = Path(__file__).resolve().parent
 parser = argparse.ArgumentParser()
@@ -146,6 +147,10 @@ for sid, configured in template['sections'].items():
     if override_params:
         clone = clone.replace("render 'section-properties'", f"render 'section-properties', {override_params}")
     clone = declarations + '{%- if nexus_entry != blank -%}\n' + clone + '\n{%- endif -%}\n'
+    if section_type == 'slideshow':
+        # The first slide loads alone, with a soft preview; later slides wait for it (nexus_theme_patches.py).
+        clone = patch_slideshow(clone, 'nexus_block_image', 'nexus_block_mobile_image', '{{ block.system.id }}')
+        body = patch_slideshow(body, 'block.settings.image', 'block.settings.mobile_image', '{{ block.id }}', "block.type == 'image' and ")
     write(f'snippets/nexus-impact-{section_type}.liquid', clone)
     wrapper = f'''{{%- if product.metafields.nexus.resolved.value.managed and section.settings.nexus_variant_content -%}}
 <div data-nexus-section="{{{{ section.id }}}}" data-nexus-product="{{{{ product.id }}}}">
@@ -495,6 +500,7 @@ write('assets/nexus-collection.js', (HERE / 'nexus-collection.js').read_text())
 write('assets/nexus-card-swatches.js', (HERE / 'nexus-card-swatches.js').read_text())
 write('assets/nexus-menu-widgets.js', (HERE / 'nexus-menu-widgets.js').read_text())
 write('assets/nexus-product-speed.js', (HERE / 'nexus-product-speed.js').read_text())
+write('assets/nexus-photos.js', (HERE / 'nexus-photos.js').read_text())
 layout = source('layout/theme.liquid').replace('"photoswipe":', '"nexus-impact": "{{ \'nexus-impact.js\' | asset_url }}",\n          "photoswipe":')
 layout = layout.replace('"photoswipe":', '"nexus-collection": "{{ \'nexus-collection.js\' | asset_url }}",\n          "photoswipe":')
 layout = layout.replace('<html lang=', '<html data-nexus-variant-error="{{ \'nexus.variant_error\' | t | escape }}" lang=')
@@ -516,6 +522,8 @@ layout = replace_once(layout, """    <script type="module" src="{{ 'theme.js' | 
 """)
 # Preserve pinch zoom; the export disabled it at the viewport level.
 layout = layout.replace(', minimum-scale=1.0, maximum-scale=1.0', '')
+# Every page: photos ahead and soft previews (nexus-photos.js); product pages: the colour row placed in <head>.
+layout = patch_layout(layout)
 write('layout/theme.liquid', layout)
 header_body, header_schema = source('sections/header.liquid').split('{% schema %}', 1)
 header_body = replace_once(header_body, '      show_country_selector: section.settings.show_country_selector,', '      show_country_selector: section.settings.show_mobile_country_selector,')
@@ -531,8 +539,6 @@ picker = replace_once(picker, '''              <div class="prose">
                 </div>
               </template>''')
 picker = replace_once(picker, "        if variant_image_options contains option_downcase", "        assign nexus_axis_index = option.position | minus: 1\n        if product.metafields.nexus.resolved.value.managed and product.metafields.nexus.resolved.value.thumbnailAxisIndexes contains nexus_axis_index\n          assign resolved_option_selector_style = 'variant_image'\n        endif\n        if variant_image_options contains option_downcase")
-# A colour picture opens the colour's own page: put the colour row back where the shopper saw it (nexus-product-speed.js).
-picker = replace_once(picker, "  </variant-picker>\n{%- endunless -%}", "  </variant-picker>\n\n" + (HERE / 'nexus-colour-place.liquid').read_text() + "{%- endunless -%}")
 write('snippets/variant-picker.liquid', picker)
 storefront_translations = {
     'locales/fr.json': {

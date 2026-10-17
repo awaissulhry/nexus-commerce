@@ -3,8 +3,8 @@
 //   mouse presses it (speculation rules). Safari has no speculation rules; there the photo answers first (below).
 // - At the tap the chosen colour is marked and its photo replaces the main photo at once: the colour picture's own small
 //   photo, soft, until the sharp one (started at the first touch, at the size the gallery asks for) is decoded.
-// - The gallery thumbnails load with the page, the next gallery photos once the page is idle, and every lazy photo
-//   starts 1.5 screens ahead (Safari otherwise waits until a photo is almost on screen).
+// - The gallery thumbnails load with the page and the next gallery photos once the page is idle (nexus-photos.js starts
+//   every other lazy photo 1.5 screens ahead, on every page).
 const COLOUR_LINKS = '.variant-picker__option a.thumbnail-swatch[href]';
 // Where the colour pictures were on screen at the tap; variant-picker.liquid puts them back there on the colour's page.
 const PLACE_KEY = 'nexus-colour-place';
@@ -93,14 +93,4 @@ if (gallery) {
   const whenLoaded = task => (document.readyState === 'complete' ? task() : window.addEventListener('load', task, { once: true }));
   whenLoaded(() => idle(() => loadSlides(2)));
   for (const type of ['pointerdown', 'pointerenter', 'focusin']) gallery.addEventListener(type, () => loadSlides(slides.length), { once: true, passive: true });
-}
-// Every other lazy photo starts 1.5 screens before it scrolls into view.
-if ('IntersectionObserver' in window) {
-  const ahead = new IntersectionObserver(entries => entries.forEach(entry => {
-    if (entry.isIntersecting) { ahead.unobserve(entry.target); entry.target.loading = 'eager'; }
-  }), { rootMargin: '150% 0px' });
-  const watch = root => { if (root.matches?.('img[loading="lazy"]')) ahead.observe(root); root.querySelectorAll?.('img[loading="lazy"]').forEach(img => ahead.observe(img)); };
-  watch(document);
-  // Sections that arrive later (related products, reviews) are watched as they are added.
-  new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(node => { if (node.nodeType === 1) watch(node); }))).observe(document.body, { childList: true, subtree: true });
 }
