@@ -712,7 +712,7 @@ const setListingContentInput = z.object({
     title: z.string().max(1000).nullable().optional().describe("this listing's own title (null: its own empty title)"),
     description: z.string().max(20_000).nullable().optional().describe("this listing's own description (null: its own empty description)"),
     bulletPoints: z.array(z.string().max(2000)).max(MAX_BULLETS).optional().describe(`this listing's own bullet points, at most ${MAX_BULLETS}`),
-    keywords: z.array(z.string().max(500)).max(MAX_KEYWORDS).optional().describe(`this listing's own search keywords, at most ${MAX_KEYWORDS}`),
+    keywords: z.array(z.string().max(500)).max(MAX_KEYWORDS).optional().describe(`this listing's own search keywords, at most ${MAX_KEYWORDS}; where the listing keeps them as one text (Amazon) the items are joined with spaces`),
   }).optional().describe("text this listing keeps as its own, instead of the shared text"),
   follow: z.array(z.enum(TEXT_FIELDS)).min(1).max(TEXT_FIELDS.length).optional()
     .describe("fields this listing stops keeping as its own: they show the shared text again"),
@@ -896,6 +896,11 @@ async function planListingContent(args: Record<string, unknown>, nothing: string
         continue
       }
       to = items
+    }
+    // A list field this listing keeps as ONE text (Amazon's search keywords: terms separated by spaces), as its one
+    // sheet cell stores it: the items joined, each trimmed, blanks dropped. A real list (Etsy's tags) stays a list.
+    if (!slots && !isFollow && Array.isArray(to) && columns[0].shape !== 'list') {
+      to = to.map((item) => (item == null ? '' : String(item).trim())).filter(Boolean).join(' ')
     }
     if (isFollow ? own === null : own !== null && same(own.value, to)) { unchanged.push(field); continue }
     fields.push({ field, kind: isFollow ? 'follow' : 'pin', writerField: writerField(field), column: columns[0], to, from: shownValue(columns), own,
