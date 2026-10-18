@@ -151,6 +151,7 @@ beforeAll(async () => {
         item_name: attribute({ value: { type: 'string', maxLength: 150 } }),
         product_description: attribute({ value: { type: 'string', maxLength: 2000 } }),
         bullet_point: attribute({ value: { type: 'string', maxLength: 500 } }, { maxItems: 5 }),
+        generic_keyword: attribute({ value: { type: 'string', maxLength: 500 } }),
         fit_type: attribute({ value: { type: 'string', editable: false } }),
         color: attribute({ value: { type: 'string' } }),
         number_of_pockets: attribute({ value: { type: 'integer' } }),
@@ -196,6 +197,17 @@ describe('T7 — set-listing-content', { timeout: 30_000 }, () => {
     expect(await queueRows([parent.id, child.id])).toBe(0)
     const audit = await inside(() => db().auditLog.findFirst({ where: { entityType: 'ChannelListing', entityId: amazonDe.id }, orderBy: { createdAt: 'desc' } }))
     expect(audit).toMatchObject({ userId: approverId, metadata: expect.objectContaining({ layer: 'pin', reason: 'mcp:set-listing-content' }) })
+  })
+
+  it('Amazon search keywords: a list is saved as the ONE text the listing keeps, its terms joined with spaces', async () => {
+    const { parent, amazonDe } = await seed('TEST-SKU-T7-KEYWORDS')
+    const { approvalId, preview: p } = await queued({
+      product: parent.sku, coordinate: AMAZON_DE, language: 'de', pin: { keywords: [' motorradjacke sommer ', '', 'mesh belüftet'] },
+      englishMeaning: { keywords: 'Search terms: motorcycle jacket, summer, mesh, ventilated.' },
+    })
+    expect(p.changes.keywords).toMatchObject({ kind: 'pin', to: 'motorradjacke sommer mesh belüftet' })
+    expect(await approveAndRun(approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await translationOf(amazonDe.id))?.keywords).toEqual(['motorradjacke sommer mesh belüftet'])
   })
 
   it('follow: the pinned title goes back to the shared text', async () => {
