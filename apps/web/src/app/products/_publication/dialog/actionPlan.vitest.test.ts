@@ -199,21 +199,21 @@ describe('what one click sends', () => {
     const t = tally({ partial: 18, fields: 41, full: 2, fullFields: 19, delete: 1, active: 1, inactive: 3, ended: 1, changes: 64 })
     const markets = { one: 'market', many: 'markets' }
     expect(planButtonText(t, ['it'], markets)).toBe('Publish 64 changes · end 1 listing · delete 1 listing')
-    expect(planButtonText(t, ['it', 'de'], markets, ['fr'])).toBe('Publish 64 changes to 2 markets · end 1 listing · delete 1 listing · skip 1 with problems')
+    expect(planButtonText(t, ['it', 'de'], markets, ['fr'])).toBe('Publish 64 changes to 2 markets · end 1 listing · delete 1 listing · skip 1 market with problems')
     expect(planButtonText(tally({ ended: 1, delete: 1 }), ['it'], markets)).toBe('End 1 listing · delete 1 listing')
     expect(planButtonText(tally({ delete: 2 }), ['it'], markets)).toBe('Delete 2 listings')
-    expect(planButtonText(tally({ changes: 21 }), ['it', 'de'], markets, ['fr'])).toBe('Publish 21 changes to 2 markets · skip 1 with problems')
+    expect(planButtonText(tally({ changes: 21 }), ['it', 'de'], markets, ['fr'])).toBe('Publish 21 changes to 2 markets · skip 1 market with problems')
     expect(planButtonText(tally({ changes: 6 }), ['a', 'e', 's'], { one: 'destination', many: 'destinations' }, [], 1)).toBe('Publish 6 changes and 1 new product to 3 destinations')
     expect(planButtonText(tally({ changes: 4 }), ['a', 'b'], { one: 'listing', many: 'listings' })).toBe('Publish 4 changes to 2 listings')
   })
-  it('"skip N with problems" counts only the markets that send nothing at all, for every caller (as the Publish window\'s line)', () => {
+  it('"skip N markets with problems" counts only the markets that send nothing at all, for every caller (as the Publish window\'s line)', () => {
     const counts = tally({ inactive: 2, changes: 2 })
     const markets = { one: 'market', many: 'markets' }
     // DE: content blocked, but its status change goes — published, not skipped. FR: skipped, sends nothing.
     expect(marketsSendingNothing(['de', 'fr'], ['it', 'de'])).toEqual(['fr'])
-    expect(planButtonText(counts, ['it', 'de'], markets, ['de', 'fr'])).toBe('Publish 2 changes to 2 markets · skip 1 with problems')
+    expect(planButtonText(counts, ['it', 'de'], markets, ['de', 'fr'])).toBe('Publish 2 changes to 2 markets · skip 1 market with problems')
     expect(planButtonText(counts, ['it', 'de'], markets, ['de'])).toBe('Publish 2 changes to 2 markets')
-    expect(planButtonText(EMPTY_TALLY, [], markets, ['fr'])).toBe('Nothing to publish · 1 with problems')
+    expect(planButtonText(EMPTY_TALLY, [], markets, ['fr'])).toBe('Nothing to publish · 1 market with problems')
     // The line above the tabs: the blocked market whose status changes go says "content blocked", not "with problems".
     expect(planFamilySummary(3, { skipped: ['de', 'fr'], nothing: [], pending: [] }, counts, 0, ['it', 'de']))
       .toBe('3 markets · 2 inactive · 1 with problems · 1 with content blocked')

@@ -596,16 +596,16 @@ export function planStateLabel(state: DestinationState, entry: Pick<DestinationE
 /**
  * The ONE counted button, in one unit (Owner audit 2026-10-19: it switched from changes to listings once a status
  * change was ticked): "Publish 63 changes to 3 markets · end 1 listing · delete 1 listing · removes 4 values · skip 1
- * with problems". Changes = `SendTally.changes` (every ticked field and every Active or Inactive status change); End and
+ * market with problems". Changes = `SendTally.changes` (every ticked field and every Active or Inactive status change); End and
  * Delete (a move deletes its old SKU) are named after them with their unit; then the values a Full update removes. With
  * only End or Delete: "End 1 listing · delete 1 listing", "Delete 2 listings". `sending` = the markets that send
- * something; "skip N with problems" counts the skipped markets that send nothing at all (`marketsSendingNothing`).
+ * something; "skip N markets with problems" counts the skipped markets that send nothing at all (`marketsSendingNothing`).
  */
 export function planButtonText(tally: Pick<SendTally, 'changes' | 'ended' | 'delete' | 'moved' | 'removedValues'>, sending: readonly string[], word: { one: string; many: string },
   skippedMarkets: readonly string[] = [], wholeProducts = 0): string {
   const places = sending.length
   const skipped = marketsSendingNothing(skippedMarkets, sending).length
-  const skip = skipped ? ` · skip ${skipped.toLocaleString('en')} with problems` : ''
+  const skip = skipped ? ` · skip ${plural(skipped, word.one, word.many)} with problems` : ''
   const deletes = tally.delete + (tally.moved ?? 0)
   const danger = [tally.ended ? `end ${plural(tally.ended, 'listing', 'listings')}` : null, deletes ? `delete ${plural(deletes, 'listing', 'listings')}` : null]
     .filter((part): part is string => !!part)
@@ -621,7 +621,7 @@ export function planButtonText(tally: Pick<SendTally, 'changes' | 'ended' | 'del
     const [first, ...rest] = danger
     return `${first[0].toUpperCase()}${first.slice(1)}${where}${rest.map(part => ` · ${part}`).join('')}${skip}`
   }
-  return skipped ? `Nothing to publish · ${skipped.toLocaleString('en')} with problems` : 'Nothing to publish'
+  return skipped ? `Nothing to publish · ${plural(skipped, word.one, word.many)} with problems` : 'Nothing to publish'
 }
 
 /** The send request of one Publish: each sending market with its content (when it goes) and the ticked rows. */

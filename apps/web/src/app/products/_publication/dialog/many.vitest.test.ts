@@ -50,9 +50,9 @@ describe('many-product rows', () => {
     const plan = manyPlan(rows, NOW)
     expect(plan).toEqual({ listings: 2, changes: 8, problems: 1, expired: 1, nothing: 1, problemCount: 1, markets: 1, notListed: 0 })
     // One-click O5 — the studio's words: changes to markets.
-    expect(manyPublishButtonText(plan)).toBe('Publish 8 changes to 1 market · skip 1 with problems · 1 expired')
+    expect(manyPublishButtonText(plan)).toBe('Publish 8 changes to 1 market · skip 1 listing with problems · 1 listing expired')
     expect(manyPublishButtonText(manyPlan([child()], NOW))).toBe('Publish 3 changes to 1 market')
-    expect(manyPublishButtonText(manyPlan([child({ status: 'BLOCKED' })], NOW))).toBe('Nothing to publish · skip 1 with problems')
+    expect(manyPublishButtonText(manyPlan([child({ status: 'BLOCKED' })], NOW))).toBe('Nothing to publish · skip 1 listing with problems')
     expect(manyPublishButtonText(manyPlan([], NOW))).toBe('Nothing to publish')
   })
 
@@ -285,7 +285,7 @@ describe('the studio window\'s rules in the products list (One-click O5)', () =>
     expect(manyRowLabel(manyRowState(notListed(), NOW))).toMatchObject({ label: 'Not listed', tone: 'neutral' })
     const plan = manyPlan([child(), notListed(), child({ publicationId: 'p3', status: 'BLOCKED' })], NOW)
     expect(plan).toMatchObject({ listings: 1, notListed: 1, problems: 1, markets: 1 })
-    expect(manyPublishButtonText(plan)).toBe('Publish 3 changes to 1 market · skip 1 with problems')
+    expect(manyPublishButtonText(plan)).toBe('Publish 3 changes to 1 market · skip 1 listing with problems')
     expect(manyPlanSummary(plan)).toBe('1 product ready in 1 market · 3 changes · 1 with problems · 1 not listed there')
     expect(manyNotListedSummary([notListed(), notListed({ publicationId: 'nl2' }), child()], 'Amazon · DE', NOW))
       .toBe('2 products are not listed on Amazon · DE, so they are skipped. Choose “New listings start as” to create them.')
