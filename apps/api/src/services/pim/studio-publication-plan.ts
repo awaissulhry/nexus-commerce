@@ -150,8 +150,9 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   const familyRows = included.map(p => ({ productId: p.id, sku: p.sku, isParent: p.id === parent.id }))
   const resolved = []
   for (const locale of languages) {
+    // `catalogues`: an Amazon family can mix product types, and each row is judged against its own (studio-publication-amazon.ts).
     const result = await resolveBatch({ channel: scope.channel, marketplace: scope.marketplace, channelConnectionId: scope.accountId,
-      aliasKey: destination.aliasKey ?? '', productIds: included.map(p => p.id), locale, includeCatalogue: true })
+      aliasKey: destination.aliasKey ?? '', productIds: included.map(p => p.id), locale, includeCatalogue: true, includeCatalogues: true })
     const levels = ebayAxes ? ebayListingLevelValues({ rows: familyRows, axes: ebayAxes, fields: ebayFields(result.catalogue?.fields),
       valueOf: (row, field) => result.products.find(p => p.productId === row.productId)?.cells[field.key]?.value }) : []
     const listingLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayListingLevel(field, ebayAxes)).map(field => field.key) : [])

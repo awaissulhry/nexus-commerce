@@ -19,7 +19,7 @@ import { shapeAmazonStudioAttributes, type AmazonFamilyRow } from './studio-publ
 import { loadStoredVariationProjection } from './stored-variation-projection.js'
 import { resolveVariationProjection, variationReadinessItems } from './variation-rules.service.js'
 import { publicationImages } from './studio-publication-media.js'
-import type { ResolvedCell } from './mapping/resolve-batch.service.js'
+import type { ResolveBatchResult, ResolvedCell, ResolvedProduct } from './mapping/resolve-batch.service.js'
 import { amazonImageSlots } from '@nexus/shared/amazon-media'
 import { readAmazonMedia, desiredAmazonImages } from '../images/amazon-media-workspace.service.js'
 import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
@@ -166,6 +166,13 @@ export async function amazonMovesWithoutPublication(facts: MoveFacts & Pick<Publ
   return { marketplaceId: marketplaceId ?? null, moves, refusal }
 }
 
+/**
+ * The catalogue a row was resolved against: its own category's (`resolveBatch` `catalogues`, keyed by the channel category,
+ * `''` = none), as one family can mix product types; else the batch's one `catalogue`.
+ */
+const rowCatalogue = (result: Pick<ResolveBatchResult, 'catalogue' | 'catalogues'> | undefined, row: Pick<ResolvedProduct, 'category'> | undefined) =>
+  result?.catalogues?.[row?.category.channelCategoryId ?? ''] ?? result?.catalogue ?? null
+
 /** Sources whose values the Amazon builder does not take from the sheet cells (price, stock, photos, channel reads). */
 const NOT_FROM_CELLS = ['Pricing', 'Inventory', 'Media', 'Product media', 'Channel-reported data']
 
@@ -231,10 +238,13 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     const stored = await loadStoredVariationProjection({ productId: parent.id, channel: scope.channel, market: scope.marketplace, accountId: scope.accountId, aliasKey: facts.destination.aliasKey ?? '' })
     variationInput = stored.input
     variationInput.family.variants = variationInput.family.variants?.map(v => {
-      const cells = resolved[0]?.products.find(p => p.productId === v.id)?.cells ?? {}
+      const row = resolved[0]?.products.find(p => p.productId === v.id)
+      const cells = row?.cells ?? {}
+      // A family can mix product types: each variant's axis field is its own type's.
+      const catalogue = rowCatalogue(resolved[0], row)
       const axisValues = { ...v.axisValues }
       for (const axis of stored.cell.axes.filter(a => a.included)) {
-        const field = resolved[0]?.catalogue?.fields.find(f => f.sheetKey === axis.axisKey || f.fieldKey === axis.target)
+        const field = catalogue?.fields.find(f => f.sheetKey === axis.axisKey || f.fieldKey === axis.target)
         const value = field ? cells[field.fieldKey]?.value : undefined
         if (value !== undefined) axisValues[axis.familyKey] = value == null ? '' : String(value)
       }
@@ -265,6 +275,9 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     const listing = listings.find(l => l.productId === product.id)
     const data = resolved[0]?.products.find(p => p.productId === product.id)
     if (!data) throw new Error(`${product.sku} could not be resolved.`)
+    // A family can mix product types: the row is judged against the catalogue of its own category, the one resolveBatch
+    // resolved it against — never the first row's.
+    const own = rowCatalogue(resolved[0], data)
     const ledger = ledgers.get(product.id)
     const live = !!listing?.externalListingId && !moveOf(product.id)
     const problem = (field: string, error: unknown) => issues.push({ productId: product.id, sku: product.sku, field, severity: 'error',
@@ -373,7 +386,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     }
     // Preserve the owning pricing/inventory/media builder; serialize the other
     // saved listing settings with their schema paths, including policies.
-    const ownedKeys = new Set(resolved[0].catalogue?.fields.filter(f => f.sourceOwner && !['Pricing', 'Inventory', 'Media', 'Product media', 'Channel-reported data'].includes(f.sourceOwner.label)).map(f => f.fieldKey))
+    const ownedKeys = new Set(own?.fields.filter(f => f.sourceOwner && !['Pricing', 'Inventory', 'Media', 'Product media', 'Channel-reported data'].includes(f.sourceOwner.label)).map(f => f.fieldKey))
     // RRP is a saved pricing fact; serialize it without changing selling prices.
     for (const field of spec.fields.filter(f => f.attribute === 'list_price')) ownedKeys.add(field.key)
     const owned = attributesFromCells(spec, Object.fromEntries(Object.entries(values).filter(([key]) => ownedKeys.has(key))))
@@ -387,7 +400,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
       ...(product.id === parent.id ? { role: 'parent' as const } : { role: 'child' as const, parentSku: sellerSkus.get(parent.id)! }) } : null
     base.messages[0].attributes = shapeAmazonStudioAttributes(spec, base.messages[0].attributes, family, { familyMember: !!(product.isParent || product.parentId) })
     const mappedCells = Object.fromEntries(Object.entries(cells).map(([key, cell]) => [key, { ...cell, value: values[key] }]))
-    const catalogue = resolved[0].catalogue && excludedRoots.size ? { ...resolved[0].catalogue, fields: resolved[0].catalogue.fields.filter(f => !excludedRoots.has(amazonRootOf(f.fieldKey))) } : resolved[0].catalogue
+    const catalogue = own && excludedRoots.size ? { ...own, fields: own.fields.filter(f => !excludedRoots.has(amazonRootOf(f.fieldKey))) } : own
     const mapped = applyResolvedMappingToAmazonFeed(JSON.stringify(base), { ...resolved[0], catalogue, products: [{ ...data, cells: mappedCells }] }, spec)
     const envelope = JSON.parse(mapped)
     const message = envelope.messages[0]
@@ -436,7 +449,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
       if (message.patches) message.patches = message.patches.filter((p: any) => p.path !== `/attributes/${root}`)
     }
     if (options.fullProductIds?.has(product.id) && listing?.externalListingId && !move) {
-      const fields = (resolved[0].catalogue?.fields ?? []) as Array<{ fieldKey: string; sourceOwner?: { label: string } | null }>
+      const fields = (own?.fields ?? []) as Array<{ fieldKey: string; sourceOwner?: { label: string } | null }>
       const mapped = new Set(fields.filter(f => !f.sourceOwner || !NOT_FROM_CELLS.includes(f.sourceOwner.label))
         .filter(f => cells[f.fieldKey]?.status === 'mapped').map(f => amazonRootOf(f.fieldKey)))
       const schemaRoots = new Set(Object.keys(object(spec.validationSchema?.properties)))
