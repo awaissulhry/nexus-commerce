@@ -656,6 +656,16 @@ html:has(> body > .nds-backdrop) { overscroll-behavior: none; }
   background: var(--nds-surface-hover);
   color: var(--nds-text);
 }
+/* A HELD close (Modal `closeHeld`): the X stays focusable so it can say why it does not close; it looks quieter, as a
+   held button does. */
+.nds-modal-x[aria-disabled="true"] {
+  opacity: 0.62;
+  cursor: default;
+}
+.nds-modal-x[aria-disabled="true"]:hover {
+  background: none;
+  color: var(--nds-text-3);
+}
 .nds-modal-b {
   min-height: 0;
   flex: 1;

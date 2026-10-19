@@ -4354,3 +4354,7 @@ The approved accessibility follow-up is complete: held ScopeBar wrapper/ring is 
 - CLOSED: `Tag` had no way to stay inside a narrow card (always `nowrap`, no `title`): `truncate` + `title` (Settings › Channels Google card chips).
 - CLOSED: `PerformanceGraph` drew two unlabeled Y axes, so two money series on different scales looked the same size: `ChartSeries.axisLabel` (Ads › Google chart and campaign window).
 - OPEN: `SummaryTable` is `table-layout: fixed` with `overflow-wrap: anywhere`, so a header wider than its equal share breaks inside a word; the Google campaign window works around it locally (`google.css` `.gads-table`). A DS option (content-width columns, headers on one line) would serve every caller.
+
+## 2026-10-19 — Publish window frame
+- CLOSED: a `Modal` could not hold its close: the Publish window's X looked live and did nothing while a publish started — `Modal closeHeld` (held X with its reason; Esc and backdrop do nothing). Both apps.
+- CLOSED: `Button size="sm" wrap` kept the `sm` tier's fixed height, so a second line ran out of the box; the Publish window restyled `.nds-btn.sm` locally (`oneClick.module.css`) — `.nds-btn.sm.wrap` now grows from the tier's height. Both apps.

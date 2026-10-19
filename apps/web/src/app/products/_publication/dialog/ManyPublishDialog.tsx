@@ -307,7 +307,9 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
     return null
   })()
 
-  return <Modal open onClose={() => { if (busy !== 'check' && busy !== 'submit') onClose() }} size="xxl" title="Publish products"
+  // While a check or a send starts, the window cannot close: the X says why instead of doing nothing.
+  const closeHeld = busy === 'check' ? 'This window can close once the check has started.' : busy === 'submit' ? 'This window can close once the publish has started.' : null
+  return <Modal open onClose={() => { if (!closeHeld) onClose() }} closeHeld={closeHeld} size="xxl" title="Publish products"
     subtitle={`${plural(familyCount, 'product', 'products')} selected${productIds.length !== familyCount ? ` (${plural(productIds.length, 'row', 'rows')}: a selected variation publishes its whole product)` : ''}`}
     footer={<>
       <Button size="sm" disabled={busy === 'check' || busy === 'submit'} onClick={onClose}>{batch ? (batch.done ? 'Done' : 'Close') : 'Cancel'}</Button>

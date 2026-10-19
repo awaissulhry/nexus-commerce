@@ -1,3 +1,14 @@
+## A Modal can hold its close; a small wrapping button grows — 2026-10-19
+
+Mirrored from `apps/web`. `components/Modal.tsx`, `styles/primitives.css` (both apps, identical) and `styles/components.css` (the same rule in each).
+- **`Modal closeHeld`**: why the dialog cannot close now. The X stays focusable, looks held (`.nds-modal-x[aria-disabled]`),
+  says why on hover and focus (portal `Tooltip`) and to a screen reader (`aria-description`), and does nothing; Esc and a
+  backdrop click do nothing either. The Publish windows hold it while a publish is starting (the X used to look live and
+  do nothing). Absent = the X closes, as before.
+- **`.nds-btn.sm.wrap`**: a wrapping label on the `sm` tier grows the button (the tier's height becomes its minimum)
+  instead of running out of the box. One line is unchanged. Replaces the Publish window's local `.nds-btn.sm` override
+  (`oneClick.module.css`, removed).
+
 ## A press on a scrolling tab strip activates the tab it started on — 2026-10-13
 
 Mirrored from `apps/web` (identical file).
