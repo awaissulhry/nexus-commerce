@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AMAZON_RELIST_NO_MATCH, amazonIssuesInText, amazonRelistAnswer, contentGoesOut, countWaiting, explainAmazonRelist, fbaNewAsinWarning,
-  fillResultSentence, isRelistChoice, isStaleWaiting, needsTypedConfirm, parseSendMode, parseStatusTarget, publishPlanSummary,
+  fillResultSentence, isRelistChoice, isStaleWaiting, parseSendMode, parseStatusTarget, publishPlanSummary,
   relistSentence, SEND_ORDER, sendModeOf, sendModeOptions, statusTargetOf, storedSendMode, storedStatusTarget,
   waitingMark, NEW_LISTING_SENT_WHOLE, SEND_MODE_LABEL, SEND_MODES, newRowId, parseNewRowId, isNewRowId, startedSentence, leftOutSentence,
   SHARED_NO_LISTING, SHOPIFY_EXISTING_NOT_YET, FULL_ETSY_VARIATION, FULL_ETSY_WARNING, FULL_WARNING, ETSY_PHOTOS_NOT_SENT,
@@ -110,12 +110,6 @@ describe('waiting values', () => {
     expect(isStaleWaiting({ setAt: '2026-10-04T11:00:00Z', setById: 'me' }, 'me', now)).toBe(false)
     expect(isStaleWaiting({ setAt: '2026-10-04T11:00:00Z', setById: 'maria' }, 'me', now)).toBe(true)
     expect(isStaleWaiting({ setAt: '2026-10-03T11:00:00Z', setById: 'me' }, 'me', now)).toBe(true)
-  })
-  it('Ended and Delete need a typed confirmation', () => {
-    expect(needsTypedConfirm({ kind: 'send', value: 'delete' })).toBe(true)
-    expect(needsTypedConfirm({ kind: 'status', value: 'ended' })).toBe(true)
-    expect(needsTypedConfirm({ kind: 'status', value: 'inactive' })).toBe(false)
-    expect(needsTypedConfirm({ kind: 'send', value: 'full' })).toBe(false)
   })
   it('the toolbar mark counts every waiting value; danger when an End or a Delete waits', () => {
     const counts = countWaiting([{ kind: 'status', value: 'inactive' }, { kind: 'status', value: 'inactive' }, { kind: 'status', value: 'ended' }, { kind: 'send', value: 'full' }])
@@ -239,11 +233,12 @@ describe('New listings', () => {
 
 describe('S10 — the sentences of a SKU move', () => {
   const NOW = Date.parse('2026-10-05T12:00:00Z')
-  it('Amazon: creates NEW, then deletes OLD there; the confirmation says a refused NEW deletes nothing', () => {
+  it('Amazon: creates NEW, then deletes OLD there; the window says a refused NEW deletes nothing; nothing is typed', () => {
     expect(amazonMoveSentence('GALE-M-IT', 'GALE-M', 'Amazon · IT')).toBe('Creates GALE-M-IT on Amazon · IT as a new offer, then deletes GALE-M there.')
     expect(amazonMoveConfirmSentence([{ from: 'GALE-M' }], 'Amazon · IT')).toBe('This Publish deletes GALE-M on Amazon · IT once Amazon accepts its new SKU. If Amazon refuses a new SKU, its old one stays and nothing is deleted. It cannot be undone.')
     expect(amazonMoveConfirmSentence([{ from: 'A' }, { from: 'B' }, { from: 'C' }, { from: 'D' }], 'Amazon · DE')).toMatch(/^This Publish deletes A, B, C and 1 more on Amazon · DE once Amazon accepts their new SKUs\./)
-    expect(AMAZON_MOVE_NEEDS_CONFIRM).toMatch(/type the SKU, then confirm/)
+    expect(AMAZON_MOVE_NEEDS_CONFIRM).toMatch(/sent only from the product's Publish window/)
+    expect(AMAZON_MOVE_NEEDS_CONFIRM).not.toMatch(/type/i)
   })
   it('FBA: NEW starts with no FBA units; Amazon\'s stay under OLD (with Nexus\'s count, or without one)', () => {
     expect(fbaMoveWarning({ sellable: 12, inbound: 2, reserved: 0, other: 0, readAt: '2026-10-05T10:00:00Z' }, 'N', 'O', NOW))

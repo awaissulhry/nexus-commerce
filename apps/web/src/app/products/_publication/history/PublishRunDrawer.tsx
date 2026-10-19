@@ -102,7 +102,6 @@ export function PublishRunDrawer({ runId, mode, onClose, onRunChanged, onOpenPar
   const { state, detail, reload, checkNow, markChecked, retrySelection, deleteOldAgain, loadRequest } = usePublishRunDetail(runId)
   const host = useContext(PublishHistoryHostContext)
   const canPublish = usePermission('products.publish')
-  const canDelete = usePermission('products.delete')
   const { toast } = useToast()
   const [filter, setFilter] = useState<ProductFilter>('all')
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
@@ -144,7 +143,7 @@ export function PublishRunDrawer({ runId, mode, onClose, onRunChanged, onOpenPar
     if (before.state === 'in_progress' && run.state !== 'in_progress') setAnnouncement(`${runDestination(run)} publish finished. ${runHeadline(run)}`)
   }, [run, onRunChanged])
 
-  const visibility = run ? runActionVisibility(run, { canPublish, canOpenReview: !!host.publishAgain, canDelete }, products, detail?.skuMoves ?? []) : null
+  const visibility = run ? runActionVisibility(run, { canPublish, canOpenReview: !!host.publishAgain }, products, detail?.skuMoves ?? []) : null
 
   const act = useCallback(async (kind: 'check' | 'mark' | 'again' | 'undo' | 'old-sku', work: () => Promise<void>) => {
     setBusy(kind); setActionError(null)

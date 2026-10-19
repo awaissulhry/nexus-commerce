@@ -22,7 +22,7 @@ import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { CONTENT_HELD_FOR_DELETE, CONTENT_HELD_FOR_END } from '@nexus/shared/publish-actions'
 import { deletedPublishSkip, deletedShort, deletedStatusReason, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD } from '@nexus/shared/listing-actions'
-import { ROLE_CANNOT_END_OR_DELETE, publishPlanCounts, type PublishPlan } from '@nexus/shared/publish-plan'
+import { publishPlanCounts, type PublishPlan } from '@nexus/shared/publish-plan'
 import type { StudioPublishChange, StudioPublishReview, StudioPublishScope } from '@nexus/shared/studio-publication'
 import { readPublishActions, writePublishActions, type PublishActionActor } from '../listings/publish-action.service.js'
 import { afterContentSettled, heldContent, notListedHeld, parsePlanRowId, planRowId, reviewPublishPlan, settleLifecycleValues } from './publish-plan.js'
@@ -119,7 +119,10 @@ describe('the review of one Publish', () => {
   it('mixes Full, Partial, Delete and Status rows: Delete holds that row\'s content, stale values start unticked, outgrown values are listed', () => scoped(async () => {
     const { f, l } = await amazonMix('PP-MIX')
     const plan = await reviewPublishPlan(f.children.S, { destinations: [amazonIT()] }, owner(), { preview: fakePreview })
-    expect(plan).toMatchObject({ familyId: f.root, familySku: 'PP-MIX', canDelete: true, confirm: { expected: 'PP-MIX', rows: 1 } })
+    expect(plan).toMatchObject({ familyId: f.root, familySku: 'PP-MIX' })
+    // Owner 2026-10-19 — nothing is typed to send Ended or Delete, and no separate delete permission is reported.
+    expect(plan).not.toHaveProperty('confirm')
+    expect(plan).not.toHaveProperty('canDelete')
     const d = plan.destinations[0]
     expect(d).toMatchObject({ label: 'Amazon · IT', destination: { channel: 'AMAZON', marketplace: 'IT', accountId: ids.amazon, aliasKey: '' }, error: null,
       fullProductIds: [f.children.S], contentHeld: [{ productId: f.children.M, sku: 'PP-MIX-M', reason: CONTENT_HELD_FOR_DELETE }] })
@@ -135,9 +138,10 @@ describe('the review of one Publish', () => {
     // One lifecycle row per waiting value, in the send order (pause before delete).
     expect(d.lifecycle.map(r => [r.sku, r.action, r.step])).toEqual([['PP-MIX-L', 'pause', 'pause'], ['PP-MIX-X', 'pause', 'pause'], ['PP-MIX-M', 'delete', 'delete']])
     expect(lifecycleOf(plan, 'PP-MIX-L')).toMatchObject({ listingId: l.L, column: 'status', value: 'inactive', state: 'active', stale: false, tickedByDefault: true,
-      needsTypedConfirm: false, refused: null, sentence: 'Stops selling here.', consequence: expect.stringMatching(/^Amazon · IT stops selling 2 SKUs/), setByName: 'Anna' })
+      refused: null, sentence: 'Stops selling here.', consequence: expect.stringMatching(/^Amazon · IT stops selling 2 SKUs/), setByName: 'Anna' })
     expect(lifecycleOf(plan, 'PP-MIX-X')).toMatchObject({ stale: true, tickedByDefault: false, setByName: 'Bruno', refused: null })
-    expect(lifecycleOf(plan, 'PP-MIX-M')).toMatchObject({ column: 'send', value: 'delete', needsTypedConfirm: true, tickedByDefault: true, consequence: expect.stringMatching(/cannot be undone/) })
+    expect(lifecycleOf(plan, 'PP-MIX-M')).toMatchObject({ column: 'send', value: 'delete', tickedByDefault: true, refused: null, consequence: expect.stringMatching(/cannot be undone/) })
+    expect(lifecycleOf(plan, 'PP-MIX-M')).not.toHaveProperty('needsTypedConfirm')
     expect(parsePlanRowId(lifecycleOf(plan, 'PP-MIX-L').id)).toMatchObject({ column: 'status', listingId: l.L, action: 'pause' })
     expect(d.outgrown).toEqual([expect.objectContaining({ listingId: l.O, sku: 'PP-MIX-O', column: 'status', value: 'inactive', reason: 'Already inactive.' })])
     // The summary with the default ticks: M's content is held, X is unticked.
@@ -155,8 +159,6 @@ describe('the review of one Publish', () => {
     await writePublishActions(f.root, { listingIds: [lL, lM], change: { column: 'send', mode: 'delete' } }, owner())
     const plan = await reviewPublishPlan(f.root, { destinations: [amazonIT()] }, owner(), { preview: fakePreview })
     expect(plan.destinations[0].lifecycle.map(r => [r.listingId, r.sku, r.action])).toEqual([[lL, 'PP-OWN-L', 'delete'], [lM, 'PP-OWN-M-IT', 'delete']])
-    // The typed confirmation stays the family SKU (one phrase for the whole Publish).
-    expect(plan.confirm).toEqual({ expected: 'PP-OWN', rows: 2 })
   }))
 
   it('eBay End holds every row\'s content: no review is made (no channel read), the End row says what eBay does', () => scoped(async () => {
@@ -170,29 +172,37 @@ describe('the review of one Publish', () => {
     expect(fixture.previews).toEqual([])
     expect(d.review).toBeNull()
     expect(d.contentHeld.map(r => [r.sku, r.reason])).toEqual([['PP-END', CONTENT_HELD_FOR_END], ['PP-END-M', CONTENT_HELD_FOR_END], ['PP-END-S', CONTENT_HELD_FOR_END]])
-    expect(d.lifecycle).toEqual([expect.objectContaining({ listingId: root, isParent: true, action: 'end', step: 'end', needsTypedConfirm: true, tickedByDefault: true,
+    expect(d.lifecycle).toEqual([expect.objectContaining({ listingId: root, isParent: true, action: 'end', step: 'end', tickedByDefault: true, refused: null,
       sentence: expect.stringMatching(/eBay ends PP-END and all 2 variations on eBay · IT/) })])
     expect(plan.summary).toBe('1 ended')
   }))
 
-  it('a role without products.delete: Delete is refused and keeps waiting, so it holds no content; nothing to confirm', () => scoped(async () => {
+  // Owner 2026-10-19 — "remove the typed SKU for deletes and for delete permission": Delete and End need products.publish only.
+  it('a role with products.publish but not products.delete: Delete and End are offered and ticked, and hold their content', () => scoped(async () => {
     const f = await family('PP-ROLE', ['L', 'M'])
     await listing(f.root, 'AMAZON', 'IT', ids.amazon)
     const lL = await listing(f.children.L, 'AMAZON', 'IT', ids.amazon)
     const lM = await listing(f.children.M, 'AMAZON', 'IT', ids.amazon)
-    await writePublishActions(f.root, { listingIds: [lM], change: { column: 'send', mode: 'delete' } }, owner())
+    await writePublishActions(f.root, { listingIds: [lM], change: { column: 'send', mode: 'delete' } }, publisher())
     await writePublishActions(f.root, { listingIds: [lL], change: { column: 'status', target: 'inactive' } }, publisher())
     const plan = await reviewPublishPlan(f.root, { destinations: [amazonIT()] }, publisher(), { preview: fakePreview })
-    expect(plan).toMatchObject({ canDelete: false, confirm: null })
-    expect(plan.destinations[0].contentHeld).toEqual([])
-    expect(lifecycleOf(plan, 'PP-ROLE-M')).toMatchObject({ refused: ROLE_CANNOT_END_OR_DELETE, tickedByDefault: false })
+    expect(plan.destinations[0].contentHeld).toEqual([{ productId: f.children.M, sku: 'PP-ROLE-M', reason: CONTENT_HELD_FOR_DELETE }])
+    expect(lifecycleOf(plan, 'PP-ROLE-M')).toMatchObject({ refused: null, tickedByDefault: true })
     expect(lifecycleOf(plan, 'PP-ROLE-L')).toMatchObject({ refused: null, tickedByDefault: true })
-    expect(plan.counts).toMatchObject({ delete: 0, inactive: 1 })
+    expect(plan.counts).toMatchObject({ delete: 1, inactive: 1 })
+    // eBay End, by the same role: offered and ticked too.
+    const g = await family('PP-ROLE-E', ['S'])
+    const root = await listing(g.root, 'EBAY', 'IT', ids.ebay, { externalListingId: '5678' })
+    await listing(g.children.S, 'EBAY', 'IT', ids.ebay, { externalListingId: '5678' })
+    await writePublishActions(g.root, { listingIds: [root], change: { column: 'status', target: 'ended' } }, publisher())
+    const ended = await reviewPublishPlan(g.root, { destinations: [ebayIT()] }, publisher(), { preview: fakePreview })
+    expect(ended.destinations[0].lifecycle).toEqual([expect.objectContaining({ listingId: root, action: 'end', refused: null, tickedByDefault: true })])
+    expect(ended.counts).toMatchObject({ ended: 1 })
   }))
 
   // Owner 2026-10-19 — "if I'm deleting a product on the market, it doesn't let me publish because a field is empty": the
   // content review is told which rows this Publish holds, so it does not judge them (they send nothing there).
-  it('an Amazon variation being deleted reaches the content review as held; a Delete refused for lack of products.delete passes none', () => scoped(async () => {
+  it('an Amazon variation being deleted reaches the content review as held, for a role without products.delete too', () => scoped(async () => {
     const f = await family('PP-UNSENT', ['L', 'M'])
     await listing(f.root, 'AMAZON', 'IT', ids.amazon)
     await listing(f.children.L, 'AMAZON', 'IT', ids.amazon)
@@ -201,12 +211,12 @@ describe('the review of one Publish', () => {
     const plan = await reviewPublishPlan(f.root, { destinations: [amazonIT()] }, owner(), { preview: fakePreview })
     expect(plan.destinations[0].contentHeld).toEqual([{ productId: f.children.M, sku: 'PP-UNSENT-M', reason: CONTENT_HELD_FOR_DELETE }])
     expect(fixture.previews).toEqual([{ productId: f.root, scope: amazonIT(), options: { heldProductIds: [f.children.M] } }])
-    // Control: without products.delete the Delete is refused and holds nothing, so the content review judges every row.
+    // Owner 2026-10-19 — the Delete needs products.publish only: a publisher's review holds the same row the same way.
     fixture.previews.length = 0
-    const refused = await reviewPublishPlan(f.root, { destinations: [amazonIT()] }, publisher(), { preview: fakePreview })
-    expect(refused.destinations[0].contentHeld).toEqual([])
-    expect(lifecycleOf(refused, 'PP-UNSENT-M')).toMatchObject({ refused: ROLE_CANNOT_END_OR_DELETE })
-    expect(fixture.previews).toEqual([{ productId: f.root, scope: amazonIT(), options: {} }])
+    const byPublisher = await reviewPublishPlan(f.root, { destinations: [amazonIT()] }, publisher(), { preview: fakePreview })
+    expect(byPublisher.destinations[0].contentHeld).toEqual([{ productId: f.children.M, sku: 'PP-UNSENT-M', reason: CONTENT_HELD_FOR_DELETE }])
+    expect(lifecycleOf(byPublisher, 'PP-UNSENT-M')).toMatchObject({ refused: null })
+    expect(fixture.previews).toEqual([{ productId: f.root, scope: amazonIT(), options: { heldProductIds: [f.children.M] } }])
   }))
 
   it('refuses a malformed request, and names a destination it cannot resolve without failing the others', () => scoped(async () => {
@@ -221,10 +231,9 @@ describe('the review of one Publish', () => {
 
 describe('heldContent (pure)', () => {
   const products = [{ productId: 'root', sku: 'F' }, { productId: 's', sku: 'F-S' }, { productId: 'm', sku: 'F-M' }]
-  it('Amazon holds only the rows being deleted, every row when it is the main row; a refused value holds nothing', () => {
+  it('Amazon holds only the rows being deleted, every row when it is the main row', () => {
     expect(heldContent('AMAZON', 'root', [{ productId: 's', action: 'delete' }, { productId: 'm', action: 'pause' }], products)).toEqual([{ productId: 's', sku: 'F-S', reason: CONTENT_HELD_FOR_DELETE }])
     expect(heldContent('AMAZON', 'root', [{ productId: 'root', action: 'delete' }], products)).toHaveLength(3)
-    expect(heldContent('AMAZON', 'root', [{ productId: 's', action: 'delete', refused: 'no' }], products)).toEqual([])
   })
   it('eBay and Shopify hold the whole listing for End, Delete or Relist, never for Pause or Resume', () => {
     expect(heldContent('EBAY', 'root', [{ productId: 'root', action: 'relist' }], products).map(r => r.productId)).toEqual(['root', 's', 'm'])
@@ -256,7 +265,7 @@ describe('the send: one batch header with content and lifecycle children', () =>
     const token = await tick(d.review!.id!, d.review!.changes!.filter(c => c.selectable).map(c => c.id))
     const lifecycle = [lifecycleOf(plan, 'PP-SEND-L').id, lifecycleOf(plan, 'PP-SEND-M').id]
     const { batchId } = await createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: amazonIT(), reviewId: d.review!.id, selectionToken: token }],
-      lifecycle, outgrown: d.outgrown.map(o => o.id), confirmText: ' PP-SEND ' } }, ids.anna, owner())
+      lifecycle, outgrown: d.outgrown.map(o => o.id) } }, ids.anna)
     expect(fixture.queued).toEqual([batchId])
     const children = await prisma.bulkOperation.findMany({ where: { batchId }, orderBy: { createdAt: 'asc' } })
     const pause = children.find(c => c.kind === LIFECYCLE_KIND && (c.changes as any).action === 'pause')!
@@ -281,38 +290,48 @@ describe('the send: one batch header with content and lifecycle children', () =>
     expect(view.counts).toMatchObject({ total: 3, waiting: 3, unknown: 0 })
   }))
 
-  it('refuses a ticked row whose value changed since the review, and Ended or Delete without the typed SKU', () => scoped(async () => {
+  it('refuses a ticked row whose value changed since the review (409), and a row not in a chosen destination', () => scoped(async () => {
     const { f, l } = await amazonMix('PP-REFUSE')
     const plan = await reviewPublishPlan(f.root, { destinations: [amazonIT()] }, owner(), { preview: fakePreview })
-    const body = (lifecycle: string[], confirmText?: string) => ({ plan: { productId: f.root, destinations: [{ scope: amazonIT() }], lifecycle, confirmText } })
-    await expect(createPublicationBatch(body([lifecycleOf(plan, 'PP-REFUSE-M').id]), ids.anna, owner())).rejects.toMatchObject({ statusCode: 400, code: 'confirm_required', message: 'Type PP-REFUSE to end or delete listings.' })
-    await expect(createPublicationBatch(body([lifecycleOf(plan, 'PP-REFUSE-M').id], 'PP-OTHER'), ids.anna, owner())).rejects.toMatchObject({ code: 'confirm_required' })
+    const body = (lifecycle: string[]) => ({ plan: { productId: f.root, destinations: [{ scope: amazonIT() }], lifecycle } })
     await new Promise(resolve => setTimeout(resolve, 5))
     await writePublishActions(f.root, { listingIds: [l.L], change: { column: 'status', target: 'inactive' } }, publisher(ids.bruno))
-    await expect(createPublicationBatch(body([lifecycleOf(plan, 'PP-REFUSE-L').id]), ids.anna, owner())).rejects.toMatchObject({ statusCode: 409, code: 'changed', message: expect.stringMatching(/PP-REFUSE-L: its waiting value changed since the review \(Bruno\)/) })
-    await expect(createPublicationBatch(body([]), ids.anna, owner())).rejects.toMatchObject({ statusCode: 400 })
-    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayIT() }], lifecycle: [lifecycleOf(plan, 'PP-REFUSE-X').id] } }, ids.anna, owner()))
+    await expect(createPublicationBatch(body([lifecycleOf(plan, 'PP-REFUSE-L').id]), ids.anna)).rejects.toMatchObject({ statusCode: 409, code: 'changed', message: expect.stringMatching(/PP-REFUSE-L: its waiting value changed since the review \(Bruno\)/) })
+    await expect(createPublicationBatch(body([]), ids.anna)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayIT() }], lifecycle: [lifecycleOf(plan, 'PP-REFUSE-X').id] } }, ids.anna))
       .rejects.toMatchObject({ statusCode: 400, message: expect.stringMatching(/not in this Publish/) })
     expect(await prisma.bulkOperation.count({ where: { kind: 'publication-batch', productId: f.root } })).toBe(0)
   }))
 
-  it('without products.delete, the Delete child is recorded NOT_SENT and keeps its value; the rest still goes', () => scoped(async () => {
-    const { f, l } = await amazonMix('PP-NODEL')
-    const plan = await reviewPublishPlan(f.root, { destinations: [amazonIT()] }, owner(), { preview: fakePreview })
+  // Owner 2026-10-19 — "remove the typed SKU for deletes and for delete permission".
+  it('a Delete and an End with no typed confirmation are queued; an older window\'s confirmText is ignored', () => scoped(async () => {
+    const { f, l } = await amazonMix('PP-NOTYPE')
+    const plan = await reviewPublishPlan(f.root, { destinations: [amazonIT()] }, publisher(), { preview: fakePreview })
     const { batchId } = await createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: amazonIT() }],
-      lifecycle: [lifecycleOf(plan, 'PP-NODEL-L').id, lifecycleOf(plan, 'PP-NODEL-M').id] } }, ids.anna, publisher())
+      lifecycle: [lifecycleOf(plan, 'PP-NOTYPE-L').id, lifecycleOf(plan, 'PP-NOTYPE-M').id] } }, ids.anna)
     const children = await prisma.bulkOperation.findMany({ where: { batchId } })
-    expect(children.map(c => [(c.changes as any).action, c.status]).sort()).toEqual([['delete', 'NOT_SENT'], ['pause', 'PREVIEW']])
-    expect(children.find(c => (c.changes as any).action === 'delete')!.summary).toMatchObject({ message: ROLE_CANNOT_END_OR_DELETE })
+    expect(children.map(c => [(c.changes as any).action, c.status]).sort()).toEqual([['delete', 'PREVIEW'], ['pause', 'PREVIEW']])
     expect(await stored(l.M)).toMatchObject({ publishAction: 'DELETE' })
-    expect((await readPublicationBatch(batchId, ids.anna)).counts).toMatchObject({ waiting: 1, notSent: 1 })
+    expect((await readPublicationBatch(batchId, ids.anna)).counts).toMatchObject({ waiting: 2, notSent: 0 })
+    // eBay End, no confirmText; then one with a wrong confirmText (an older window): both queued.
+    for (const [prefix, confirmText] of [['PP-NOTYPE-E', undefined], ['PP-NOTYPE-W', 'NOT-THE-SKU']] as const) {
+      const g = await family(prefix, ['S'])
+      const root = await listing(g.root, 'EBAY', 'IT', ids.ebay, { externalListingId: prefix.endsWith('E') ? '9101' : '9102' })
+      await listing(g.children.S, 'EBAY', 'IT', ids.ebay, { externalListingId: prefix.endsWith('E') ? '9101' : '9102' })
+      await writePublishActions(g.root, { listingIds: [root], change: { column: 'status', target: 'ended' } }, publisher())
+      const ended = await reviewPublishPlan(g.root, { destinations: [ebayIT()] }, publisher(), { preview: fakePreview })
+      const sent = await createPublicationBatch({ plan: { productId: g.root, destinations: [{ scope: ebayIT() }], lifecycle: [lifecycleOf(ended, prefix).id],
+        ...(confirmText ? { confirmText } : {}) } }, ids.anna)
+      const end = await prisma.bulkOperation.findMany({ where: { batchId: sent.batchId } })
+      expect(end.map(c => [(c.changes as any).action, c.status])).toEqual([['end', 'PREVIEW']])
+    }
   }))
 
   it('refuses a content review that ticks a row being deleted (a review made outside the plan)', () => scoped(async () => {
     const { f } = await amazonMix('PP-HELD')
     const review = await fakePreview(f.root, amazonIT(), ids.anna, {})
     const token = await tick(review.id!, review.changes!.map(c => c.id))
-    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: amazonIT(), reviewId: review.id, selectionToken: token }], lifecycle: [] } }, ids.anna, owner()))
+    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: amazonIT(), reviewId: review.id, selectionToken: token }], lifecycle: [] } }, ids.anna))
       .rejects.toMatchObject({ statusCode: 409, message: expect.stringMatching(/PP-HELD-M: This listing is being deleted/) })
     expect(await prisma.bulkOperation.findUnique({ where: { id: review.id! } })).toMatchObject({ batchId: null, status: 'PREVIEW' })
   }))
@@ -619,7 +638,7 @@ describe('aliases: a second listing on a market is its own destination', () => {
     await expect(reviewPublishPlan(f.root, { destinations: [ebayAlias(alias), ebayAlias(aliasRoot)] }, owner(), { preview: fakePreview })).rejects.toMatchObject(twice)
     await expect(reviewPublishPlan(f.root, { destinations: [ebayIT(), ebayAlias(main)] }, owner(), { preview: fakePreview })).rejects.toMatchObject(twice)
     expect(fixture.previews).toEqual([])
-    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayAlias(alias) }, { scope: ebayAlias(aliasRoot) }], lifecycle: [] } }, ids.anna, owner()))
+    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayAlias(alias) }, { scope: ebayAlias(aliasRoot) }], lifecycle: [] } }, ids.anna))
       .rejects.toMatchObject(twice)
   }))
 
@@ -627,13 +646,13 @@ describe('aliases: a second listing on a market is its own destination', () => {
     const { f, alias } = await aliasFamily('PP-SEND-ALIAS')
     const mainReview = await fakePreview(f.root, ebayIT(), ids.anna, {})
     const mainToken = await tick(mainReview.id!, mainReview.changes!.map(c => c.id))
-    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayAlias(alias), reviewId: mainReview.id, selectionToken: mainToken }], lifecycle: [] } }, ids.anna, owner()))
+    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayAlias(alias), reviewId: mainReview.id, selectionToken: mainToken }], lifecycle: [] } }, ids.anna))
       .rejects.toMatchObject({ statusCode: 409, message: 'eBay · IT · ALT1: this review is for the main listing on this market, not the listing chosen. Review again.' })
     const aliasReview = await fakePreview(f.root, ebayAlias(alias), ids.anna, {})
     const aliasToken = await tick(aliasReview.id!, aliasReview.changes!.map(c => c.id))
-    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayIT(), reviewId: aliasReview.id, selectionToken: aliasToken }], lifecycle: [] } }, ids.anna, owner()))
+    await expect(createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayIT(), reviewId: aliasReview.id, selectionToken: aliasToken }], lifecycle: [] } }, ids.anna))
       .rejects.toMatchObject({ statusCode: 409, message: 'eBay · IT: this review is for another listing (an alias) on this market, not the listing chosen. Review again.' })
-    const { batchId } = await createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayAlias(alias), reviewId: aliasReview.id, selectionToken: aliasToken }], lifecycle: [] } }, ids.anna, owner())
+    const { batchId } = await createPublicationBatch({ plan: { productId: f.root, destinations: [{ scope: ebayAlias(alias), reviewId: aliasReview.id, selectionToken: aliasToken }], lifecycle: [] } }, ids.anna)
     expect(await prisma.bulkOperation.findUnique({ where: { id: aliasReview.id! } })).toMatchObject({ batchId, aliasKey: alias })
     expect(await prisma.bulkOperation.findUnique({ where: { id: mainReview.id! } })).toMatchObject({ batchId: null, status: 'PREVIEW' })
   }))

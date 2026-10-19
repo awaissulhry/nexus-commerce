@@ -229,8 +229,6 @@ export interface RunActionContext {
   canPublish: boolean
   /** The surface can open a new review with the failed products ticked (the studio passes a handler). */
   canOpenReview: boolean
-  /** The viewer holds `products.delete` (S10: "Delete the old SKU again" deletes a listing on Amazon, as Delete). */
-  canDelete?: boolean
 }
 
 export interface RunActionVisibility {
@@ -248,7 +246,7 @@ export interface RunActionVisibility {
   copyFailed: boolean
   /**
    * S10 — "Delete the old SKU again": the publish moved a live Amazon listing to a new SKU and Amazon did not confirm the
-   * delete of the old one. Product sheet runs only; needs `products.delete`.
+   * delete of the old one. Product sheet runs only; needs `products.publish`, as the publish that made the move.
    */
   deleteOldAgain: boolean
 }
@@ -273,7 +271,7 @@ export function runActionVisibility(run: HistoryRun, ctx: RunActionContext, prod
     publishAgainUnavailable: againPossible && !ctx.canOpenReview,
     download: products.length > 0,
     copyFailed: products.some(p => p.result === 'FAILED' || p.result === 'NOT_SENT'),
-    deleteOldAgain: studio && settled && skuMoves.some(move => move.canDeleteAgain) && !!ctx.canDelete,
+    deleteOldAgain: studio && settled && skuMoves.some(move => move.canDeleteAgain) && ctx.canPublish,
   }
 }
 

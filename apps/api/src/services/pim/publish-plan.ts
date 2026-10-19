@@ -10,8 +10,8 @@
  *                            own plan gives each its sentence), and the values the listing outgrew. It sends nothing;
  *                            its only write is the content review it saves (as the studio's preview does).
  *   preparePlanSubmit      → the send request checked against the values NOW: each ticked row still holds the value
- *                            the review saw (otherwise 409, review again); Ended and Delete need the typed family SKU
- *                            and products.delete (without products.delete they are not sent and keep waiting).
+ *                            the review saw (otherwise 409, review again). Ended and Delete need what every other change
+ *                            needs (products.publish, the route's); nothing is typed to send them.
  *                            publication-batch.service.ts makes the batch from it.
  *   settleLifecycleValues  → after a lifecycle child ran: clears the values it did, and those the listing outgrew;
  *                            a failure, NOT_SENT or UNKNOWN keeps the value.
@@ -35,11 +35,9 @@
 import type { StudioPublishReview, StudioPublishResult, StudioPublishScope } from '@nexus/shared/studio-publication'
 import { deletedPublishSkip, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD, statusChangeAction, STATUS_TARGET_LABEL, type ListingAction, type ListingActionDestination, type ListingActionPlanRow,
   type ListingActionPreview, type ListingActionRunResult, type StatusTarget } from '@nexus/shared/listing-actions'
-import { AMAZON_MOVE_ROLE_CANNOT_DELETE, CONTENT_HELD_FOR_DELETE, CONTENT_HELD_FOR_END, isStaleWaiting, needsTypedConfirm, publishPlanSummary, SEND_ORDER,
-  type PublishActionCell } from '@nexus/shared/publish-actions'
-import { CONTENT_HELD_FOR_RELIST, confirmMatches, lifecycleStep, MAX_PLAN_DESTINATIONS, publishPlanCounts, ROLE_CANNOT_END_OR_DELETE,
-  STATUS_TARGET_ACTIONS, TYPE_TO_CONFIRM, type ListedStatusTarget, type PublishPlan, type PublishPlanColumn, type PublishPlanDestination, type PublishPlanHeldRow,
-  type PublishPlanLifecycleRow, type PublishPlanOutgrownRow } from '@nexus/shared/publish-plan'
+import { CONTENT_HELD_FOR_DELETE, CONTENT_HELD_FOR_END, isStaleWaiting, publishPlanSummary, SEND_ORDER, type PublishActionCell } from '@nexus/shared/publish-actions'
+import { CONTENT_HELD_FOR_RELIST, lifecycleStep, MAX_PLAN_DESTINATIONS, publishPlanCounts, STATUS_TARGET_ACTIONS, type ListedStatusTarget, type PublishPlan,
+  type PublishPlanColumn, type PublishPlanDestination, type PublishPlanHeldRow, type PublishPlanLifecycleRow, type PublishPlanOutgrownRow } from '@nexus/shared/publish-plan'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { clearWaitingValues, readPublishActions } from '../listings/publish-action.service.js'
@@ -53,10 +51,9 @@ export class PublishPlanError extends Error {
   constructor(message: string, readonly statusCode = 409, readonly code = 'PUBLISH_PLAN_REFUSED') { super(message) }
 }
 
-/** Who reviews or sends, and what this request may do (the RBAC gate's resolved permissions: `permissionCheckerFor`). */
+/** Who reviews: a value they set themselves less than a day ago starts ticked (`isStaleWaiting`). */
 export interface PublishPlanActor {
   userId: string | null
-  can: (permission: string) => boolean
 }
 
 const CHANNEL_LABEL: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify', ETSY: 'Etsy', WOOCOMMERCE: 'WooCommerce' }
@@ -166,22 +163,21 @@ export function waitingValuesOf(cells: readonly PublishActionCell[]): { fullProd
  * PURE. Whose content this Publish holds back on a destination, and why (`contentGoesOut`). eBay and Shopify end, delete
  * and relist a WHOLE listing (an eBay relist also makes a new item number), so any of these holds every row's content
  * there. Elsewhere (Amazon) the rows being deleted are held — every row when it is the family's main row, because the
- * engine then deletes every variation too. A value that cannot be sent (`refused`) holds nothing.
+ * engine then deletes every variation too.
  */
-export function heldContent(channel: string, familyId: string, values: ReadonlyArray<{ productId: string; action: ListingAction; refused?: string | null }>,
+export function heldContent(channel: string, familyId: string, values: ReadonlyArray<{ productId: string; action: ListingAction }>,
   products: ReadonlyArray<{ productId: string; sku: string }>): PublishPlanHeldRow[] {
-  const applying = values.filter(value => !value.refused)
   const reasonOf = (action: ListingAction) => action === 'delete' ? CONTENT_HELD_FOR_DELETE : action === 'end' ? CONTENT_HELD_FOR_END : CONTENT_HELD_FOR_RELIST
   const all = (action: ListingAction) => products.map(p => ({ productId: p.productId, sku: p.sku, reason: reasonOf(action) }))
-  const whole = (actions: readonly ListingAction[], from: typeof applying) => actions.find(action => from.some(value => value.action === action))
+  const whole = (actions: readonly ListingAction[], from: typeof values) => actions.find(action => from.some(value => value.action === action))
   if (channel === 'EBAY' || channel === 'SHOPIFY') {
-    const action = whole(['delete', 'end', 'relist'], applying)
+    const action = whole(['delete', 'end', 'relist'], values)
     return action ? all(action) : []
   }
-  const main = whole(['delete', 'end'], applying.filter(value => value.productId === familyId))
+  const main = whole(['delete', 'end'], values.filter(value => value.productId === familyId))
   if (main) return all(main)
   const held = new Map<string, ListingAction>()
-  for (const value of applying) if (value.action === 'delete' || value.action === 'end') held.set(value.productId, held.get(value.productId) === 'delete' ? 'delete' : value.action)
+  for (const value of values) if (value.action === 'delete' || value.action === 'end') held.set(value.productId, held.get(value.productId) === 'delete' ? 'delete' : value.action)
   return products.filter(p => held.has(p.productId)).map(p => ({ productId: p.productId, sku: p.sku, reason: reasonOf(held.get(p.productId)!) }))
 }
 
@@ -191,12 +187,11 @@ const listedProducts = (cells: readonly PublishActionCell[]) =>
 
 /**
  * The content held on one destination, from EVERY value waiting there (ticked or not, stale or not: the review and the
- * send decide it the same way). Only Ended and Delete without products.delete are refused here, so they hold nothing.
- * Rows not on the channel that Publish leaves out are held too (`notListedHeld`; a deleted row with the delete's words).
+ * send decide it the same way). Rows not on the channel that Publish leaves out are held too (`notListedHeld`; a deleted
+ * row with the delete's words).
  */
-export function heldOnDestination(channel: string, familyId: string, cells: readonly PublishActionCell[], canDelete: boolean): PublishPlanHeldRow[] {
-  const values = waitingValuesOf(cells).values.map(value => ({ productId: value.cell.productId, action: value.action,
-    refused: (value.action === 'end' || value.action === 'delete') && !canDelete ? ROLE_CANNOT_END_OR_DELETE : null }))
+export function heldOnDestination(channel: string, familyId: string, cells: readonly PublishActionCell[]): PublishPlanHeldRow[] {
+  const values = waitingValuesOf(cells).values.map(value => ({ productId: value.cell.productId, action: value.action }))
   const products = listedProducts(cells)
   const held = heldContent(channel, familyId, values, products)
   return [...held, ...notListedHeld(channel, familyId, cells, products).filter(row => !held.some(other => other.productId === row.productId))]
@@ -294,7 +289,6 @@ async function lifecycleRowsOf(family: { familyId: string; hasVariations: boolea
   const { familyId } = family
   const byAction = new Map<ListingAction, WaitingLifecycleValue[]>()
   for (const value of values) byAction.set(value.action, [...(byAction.get(value.action) ?? []), value])
-  const canDelete = actor.can('products.delete')
   const rows: PublishPlanLifecycleRow[] = []
   for (const [action, group] of byAction) {
     let read: Awaited<ReturnType<ActionPlan>> | null = null
@@ -305,11 +299,9 @@ async function lifecycleRowsOf(family: { familyId: string; hasVariations: boolea
     for (const value of group) {
       const own = ownRow.get(value.cell.productId)
       const consequence = read?.consequence ?? failure ?? 'Not available here.'
-      let refused: string | null = failure
+      const refused: string | null = failure
         ?? (own?.plan === 'refused' ? own.sentence : null)
         ?? (read && read.sendCount === 0 ? own?.sentence ?? 'Nothing would be sent here.' : null)
-      const confirm = needsTypedConfirm({ kind: value.column, value: value.value })
-      if (!refused && confirm && !canDelete) refused = ROLE_CANNOT_END_OR_DELETE
       const option = value.column === 'status' ? value.cell.statusOptions.find(o => o.target === value.value) : null
       const stale = isStaleWaiting({ setAt: value.setAt, setById: value.setById }, actor.userId, now)
       rows.push({
@@ -321,7 +313,7 @@ async function lifecycleRowsOf(family: { familyId: string; hasVariations: boolea
         sentence: own?.plan === 'send' ? own.sentence : read && read.sendCount > 0 ? consequence : own?.sentence ?? consequence,
         consequence, warning: own?.warning ?? option?.warning ?? null, checkedAtSend: read?.checkedAtSend ?? option?.checkedAtSend ?? null,
         setAt: value.setAt, setById: value.setById, setByName: value.setByName,
-        stale, tickedByDefault: !stale && !refused, needsTypedConfirm: confirm, refused,
+        stale, tickedByDefault: !stale && !refused, refused,
       })
     }
   }
@@ -352,7 +344,7 @@ async function holdReviewRows(review: StudioPublishReview, held: PublishPlanHeld
 
 /**
  * The review of one Publish: per destination the content review, the lifecycle rows, the held rows and the values the
- * listing outgrew; the counts and the summary line with the default ticks; whether a typed confirmation is needed.
+ * listing outgrew; the counts and the summary line with the default ticks.
  */
 export async function reviewPublishPlan(productId: string, body: unknown, actor: PublishPlanActor, deps: PublishPlanDeps = {}): Promise<PublishPlan> {
   const scopes = parseDestinations(object(body).destinations)
@@ -361,7 +353,6 @@ export async function reviewPublishPlan(productId: string, body: unknown, actor:
   const now = (deps.now ?? (() => new Date()))()
   const family = await familyOf(productId)
   const { familyId, familySku } = family
-  const canDelete = actor.can('products.delete')
   const cells = await readPublishActions(productId)
   // Aliases (Owner 2026-10-05): every destination is resolved first, and one listing is one destination — an alias named
   // by its alias id and by one of its listing ids is the same destination, refused as a repeat like any other.
@@ -398,7 +389,7 @@ export async function reviewPublishPlan(productId: string, body: unknown, actor:
     const waiting = waitingValuesOf(here)
     const lifecycle = await lifecycleRowsOf(family, destination, waiting.values, actor, plan, now.getTime())
     const products = listedProducts(here)
-    const contentHeld = heldOnDestination(destination.channel, familyId, here, canDelete)
+    const contentHeld = heldOnDestination(destination.channel, familyId, here)
     const heldIds = new Set(contentHeld.map(row => row.productId))
     const fullProductIds = waiting.fullProductIds.filter(id => !heldIds.has(id))
     const base = { scope, destination, label: planDestinationLabel(destination, alias.aliasLabel), ...alias, fullProductIds, contentHeld, lifecycle, outgrown: waiting.outgrown }
@@ -420,9 +411,7 @@ export async function reviewPublishPlan(productId: string, body: unknown, actor:
   await inOrder([...groups.values()], 2, async indexes => { for (const at of indexes) destinations[at] = await reviewOne(scopes[at], resolved[at]) })
 
   const counts = publishPlanCounts({ destinations })
-  const confirmRows = destinations.flatMap(d => d.lifecycle).filter(row => row.needsTypedConfirm && !row.refused).length
-  return { productId, familyId, familySku, destinations, counts, summary: publishPlanSummary(counts),
-    confirm: confirmRows ? { expected: familySku, rows: confirmRows } : null, canDelete, readAt: now.toISOString() }
+  return { productId, familyId, familySku, destinations, counts, summary: publishPlanSummary(counts), readAt: now.toISOString() }
 }
 
 // ── The send request, checked against the values now ─────────────────────────────────────────────
@@ -430,7 +419,7 @@ export async function reviewPublishPlan(productId: string, body: unknown, actor:
 /**
  * The submit body of one content review, as the batch stamps it (`{ selectionToken?, confirmOverwrite?, locationId?,
  * confirm? }`). `confirm: 'DELETE'` (S10): the review moves a live Amazon listing to a new SKU, which deletes the old SKU;
- * the plan checked the typed family SKU and the delete permission before stamping it.
+ * the window sends it with a ticked move (`confirmDelete`, nothing typed), and the claim refuses a move without it.
  */
 export interface PlanContentChild { reviewId: string; selectionToken?: string; confirmOverwrite?: boolean; locationId?: string; confirm?: 'DELETE' }
 
@@ -444,13 +433,10 @@ export interface PlanLifecycleGroup {
   action: ListingAction
   productIds: string[]
   values: PlanValueRef[]
-  /** Set: the child is recorded NOT_SENT with this reason (the values keep waiting). */
-  refused: string | null
 }
 
 export interface PreparedPlanSubmit {
   familyId: string
-  familySku: string
   destinations: Array<{ scope: StudioPublishScope; destination: ListingActionDestination; label: string; content: PlanContentChild | null
     /** Rows whose content is held here (`heldOnDestination`); a content review that ticks one of them is refused. */
     held: PublishPlanHeldRow[]
@@ -475,11 +461,10 @@ function idList(value: unknown, what: string): string[] {
 
 /**
  * Check one Publish against the values as they are now. Refused as a whole (nothing queued) when a ticked row's value
- * changed since the review or no longer applies, when a row is not in a chosen destination, or when Ended or Delete is
- * ticked without the typed family SKU by someone who may end and delete. Someone who may not: those rows are recorded
- * NOT_SENT and keep waiting; the rest still sends.
+ * changed since the review or no longer applies, or when a row is not in a chosen destination. A `confirmText` an older
+ * window still sends is ignored: nothing is typed to send Ended or Delete.
  */
-export async function preparePlanSubmit(body: unknown, actor: PublishPlanActor): Promise<PreparedPlanSubmit> {
+export async function preparePlanSubmit(body: unknown): Promise<PreparedPlanSubmit> {
   const input = object(body)
   const productId = optionalText(input.productId, 200, 'The product')
   if (!productId) throw new PublishPlanError('Choose the product to publish.', 400, 'invalid_request')
@@ -488,9 +473,8 @@ export async function preparePlanSubmit(body: unknown, actor: PublishPlanActor):
   if (rawDestinations.length > MAX_PLAN_DESTINATIONS) throw new PublishPlanError(`Publish to at most ${MAX_PLAN_DESTINATIONS} destinations at once.`, 400, 'invalid_request')
   const ticked = idList(input.lifecycle, 'lifecycle')
   const outgrownIds = idList(input.outgrown, 'outgrown')
-  const confirmText = input.confirmText === undefined || input.confirmText === null ? null : optionalText(input.confirmText, 300, 'The typed confirmation') ?? null
 
-  const { familyId, familySku } = await familyOf(productId)
+  const { familyId } = await familyOf(productId)
   const cells = await readPublishActions(productId)
   const cellOf = new Map(cells.map(cell => [cell.listingId, cell]))
   const destinations: PreparedPlanSubmit['destinations'] = []
@@ -506,7 +490,7 @@ export async function preparePlanSubmit(body: unknown, actor: PublishPlanActor):
     if (entry.confirmOverwrite !== undefined && typeof entry.confirmOverwrite !== 'boolean') throw new PublishPlanError('The overwrite confirmation is not valid.', 400, 'invalid_request')
     const selectionToken = optionalText(entry.selectionToken, 200, 'A selection token')
     const locationId = optionalText(entry.locationId, 200, 'The inventory location')
-    // S10 — the review deletes an old Amazon SKU (a move): the typed family SKU and the delete permission, checked below.
+    // S10 — the review deletes an old Amazon SKU (a move): the window says so and sends `confirmDelete` with it.
     if (entry.confirmDelete !== undefined && typeof entry.confirmDelete !== 'boolean') throw new PublishPlanError('The delete confirmation is not valid.', 400, 'invalid_request')
     const confirmDelete = entry.confirmDelete === true && !!reviewId
     destinations.push({ scope, destination, label: planDestinationLabel(destination), held: [], listed: 0,
@@ -519,7 +503,6 @@ export async function preparePlanSubmit(body: unknown, actor: PublishPlanActor):
   const destinationIndex = (cell: PublishActionCell) => destinations.findIndex(d => sameDestination(cell, d.destination))
 
   // Every ticked row must still hold the value the review saw, and still lead to the same action.
-  const canDelete = actor.can('products.delete')
   const groups = new Map<string, PlanLifecycleGroup>()
   for (const id of ticked) {
     const ref = parsePlanRowId(id)
@@ -534,27 +517,16 @@ export async function preparePlanSubmit(body: unknown, actor: PublishPlanActor):
     const action = ref.column === 'send' ? (cell.send.mode === 'delete' ? 'delete' : null) : cell.status.target ? statusChangeAction(cell.state, cell.status.target) : null
     if (action !== ref.action) throw new PublishPlanError(`${cell.sku}: this listing changed since the review. Review again.`, 409, 'changed')
     const key = `${at}\u0000${action}`
-    const group = groups.get(key) ?? { destinationIndex: at, destination: destinations[at].destination, action, productIds: [], values: [], refused: null }
+    const group = groups.get(key) ?? { destinationIndex: at, destination: destinations[at].destination, action, productIds: [], values: [] }
     if (!group.productIds.includes(cell.productId)) group.productIds.push(cell.productId)
     group.values.push({ listingId: cell.listingId, productId: cell.productId, column: ref.column, setAt: own.setAt })
     groups.set(key, group)
-  }
-  const confirming = [...groups.values()].filter(group => group.action === 'end' || group.action === 'delete')
-  if (confirming.length) {
-    if (!canDelete) for (const group of confirming) group.refused = ROLE_CANNOT_END_OR_DELETE
-    else if (!confirmMatches(familySku, confirmText)) throw new PublishPlanError(TYPE_TO_CONFIRM(familySku), 400, 'confirm_required')
-  }
-  // S10 — a content review that moves a live Amazon listing to a new SKU deletes the old SKU: the same typed family SKU
-  // and the same permission as Delete. The review itself refuses a send without it (`claimPublication`).
-  if (destinations.some(entry => entry.content?.confirm === 'DELETE')) {
-    if (!canDelete) throw new PublishPlanError(AMAZON_MOVE_ROLE_CANNOT_DELETE, 403, 'forbidden')
-    if (!confirmMatches(familySku, confirmText)) throw new PublishPlanError(TYPE_TO_CONFIRM(familySku), 400, 'confirm_required')
   }
 
   // The content held on each destination, decided as the review decided it.
   for (const entry of destinations) {
     const here = cells.filter(cell => sameDestination(cell, entry.destination))
-    entry.held = heldOnDestination(entry.destination.channel, familyId, here, canDelete)
+    entry.held = heldOnDestination(entry.destination.channel, familyId, here)
     entry.listed = listedProducts(here).length
   }
 
@@ -566,7 +538,7 @@ export async function preparePlanSubmit(body: unknown, actor: PublishPlanActor):
     outgrown.push({ listingId: cell.listingId, productId: cell.productId, column: ref.column, setAt: ref.setAt.toISOString() })
   }
   const order = (group: PlanLifecycleGroup) => group.destinationIndex * SEND_ORDER.length + SEND_ORDER.indexOf(lifecycleStep(group.action))
-  return { familyId, familySku, destinations, groups: [...groups.values()].sort((a, b) => order(a) - order(b)), outgrown }
+  return { familyId, destinations, groups: [...groups.values()].sort((a, b) => order(a) - order(b)), outgrown }
 }
 
 /**

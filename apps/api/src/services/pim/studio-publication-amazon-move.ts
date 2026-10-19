@@ -6,7 +6,7 @@
  *
  *   - Review (`amazonMoveReview`): each moved row says "Creates NEW on Amazon · IT as a new offer, then deletes OLD
  *     there."; an FBA row adds that NEW starts with no FBA units and Amazon's stay under OLD (with Nexus's last count);
- *     the review asks for the typed confirmation Delete asks for (the family SKU, `confirm: 'DELETE'`).
+ *     the review says what the move deletes (`confirm.sentence`); the Publish window sends it with `confirm: 'DELETE'`.
  *   - Claim (`claimMoveCoordinates`): on a SHARED account the coordinate NEW is claimed for this business before anything
  *     is sent (another business holding it refuses the Publish by name).
  *   - Settle (`finishAmazonMovesAfterResult`, after `storeResult` committed; `recoverAmazonMoves` from the result sweep):
@@ -84,8 +84,8 @@ export async function fbaUnitsUnderSku(marketplaceId: string, sku: string): Prom
   }
 }
 
-/** The review's words for each moved row, and the typed confirmation the review needs (null when nothing moves). */
-export async function amazonMoveReview(facts: Pick<PublicationFacts, 'scope' | 'parent'>, prepared: { marketplaceId: string | null; moves?: AmazonPublication['moves'] } | null) {
+/** The review's words for each moved row, and what the moves delete (null when nothing moves). */
+export async function amazonMoveReview(facts: Pick<PublicationFacts, 'scope'>, prepared: { marketplaceId: string | null; moves?: AmazonPublication['moves'] } | null) {
   const rows = new Map<string, StudioPublishSkuMove>()
   const moves = prepared?.moves ?? []
   if (!moves.length) return { rows, confirm: null as StudioPublishConfirm | null }
@@ -96,7 +96,7 @@ export async function amazonMoveReview(facts: Pick<PublicationFacts, 'scope' | '
     const warning = move.fba ? fbaMoveWarning(units, move.to, move.from) : null
     rows.set(move.productId, { from: move.from, to: move.to, kind: 'create-delete', sentence: amazonMoveSentence(move.to, move.from, here), warning })
   }
-  const confirm: StudioPublishConfirm = { kind: 'type', expected: facts.parent.sku, token: 'DELETE', sentence: amazonMoveConfirmSentence(moves, here) }
+  const confirm: StudioPublishConfirm = { token: 'DELETE', sentence: amazonMoveConfirmSentence(moves, here) }
   return { rows, confirm }
 }
 

@@ -15,8 +15,8 @@
  * every listing of the products in the chosen markets (Set Active · Set Inactive · Set Ended; no Delete here). A Status
  * is checked by the listing-action engine: one row per product × market with its listings, a summary per market tab
  * ("Inactive on Amazon · DE: 36 listings · 4 cannot"), and one counted button ("Set 36 listings inactive on 2 markets").
- * Set Ended needs permission to delete products and the typed count of listings it ends. It sends in the background;
- * the results appear in Publish history.
+ * Set Ended needs nothing typed and no permission beyond products.publish (Owner 2026-10-19). It sends in the
+ * background; the results appear in Publish history.
  *
  * New listings (ND4 B, Owner 2026-10-04) — with Send changes, "New listings start as: As each row says · Active ·
  * Inactive" (a SegmentedControl, its hint under it): how every listing the changes CREATE starts (`options.startAs`). A
@@ -31,11 +31,11 @@
  */
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import {
-  MANY_PUBLISH_ACTION_LABEL, START_AS_LABEL, TYPE_COUNT_TO_END, createsSentence, isStartAsTarget,
+  MANY_PUBLISH_ACTION_LABEL, START_AS_LABEL, createsSentence, isStartAsTarget,
   type ListedStatusTarget, type ManyPublishAction, type PublishPlanBatchChild, type PublishPlanBatchView, type StartAsTarget,
 } from '@nexus/shared/publish-plan'
 import { Button, Pill, SegmentedControl, Toggle } from '@/design-system/primitives'
-import { Banner, ConfirmPhraseField, JobProgress, Listbox, Modal, phraseMatches, Tabs, tabPanelProps } from '@/design-system/components'
+import { Banner, JobProgress, Listbox, Modal, Tabs, tabPanelProps } from '@/design-system/components'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { PublishStatusPill } from '@/design-system/grid'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
@@ -86,7 +86,6 @@ function statusGroupMeta(children: readonly PublishPlanBatchChild[]) {
 
 export function ManyPublishDialog({ productIds, familyCount, destinations, loadingDestinations = false, discoveryFailed = null, onClose }: ManyPublishDialogProps) {
   const canPublish = usePermission('products.publish')
-  const canEnd = usePermission('products.delete')
   // P11 — what the window does: Send changes, or one Status for every listing there.
   const [action, setAction] = useState<ManyPublishAction>('content')
   const status: ListedStatusTarget | null = action === 'content' ? null : action
@@ -118,7 +117,6 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
     const lost = options.length > 0 && !options.some(o => o.scope.channel === choice.channel && o.scope.accountId === choice.accountId)
     if ((!touched && listedSet) || lost) setChoice(initialChoice(options, [], listedSet))
   }, [choice.channel, choice.accountId, options, listedSet, touched, batch])
-  const [typed, setTyped] = useState('')
   const ticked = useMemo(() => new Set(choice.keys), [choice.keys])
   const [active, setActive] = useState<string | null>(null)
   const tabBase = useId()
@@ -143,8 +141,8 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
     catch (e) { setError(message(e)) }
   }, [])
   const check = async () => {
-    if (busy || !tickedOptions.length || cap || !canPublish || (status === 'ended' && !canEnd)) return
-    setBusy('check'); setError(null); setEu(null); setTyped('')
+    if (busy || !tickedOptions.length || cap || !canPublish) return
+    setBusy('check'); setError(null); setEu(null)
     try {
       const created = await request<{ batchId: string }>('/api/publication-batches', 'POST', manyRequest(productIds, tickedOptions.map(o => o.scope), keepChannelValues, action, startAs))
       setStartedAt(Date.now())
@@ -156,7 +154,7 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
     if (!batch || busy) return
     setBusy('submit'); setError(null); setEu(null)
     try {
-      setBatch(await request<PublishPlanBatchView>(`/api/publication-batches/${encodeURIComponent(batch.batchId)}/submit`, 'POST', status === 'ended' ? { confirmText: typed } : {}))
+      setBatch(await request<PublishPlanBatchView>(`/api/publication-batches/${encodeURIComponent(batch.batchId)}/submit`, 'POST', {}))
       setStartedAt(Date.now())
     } catch (e) {
       const refusal = euRefusal(e)
@@ -179,11 +177,11 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
     try { await request<PublishPlanBatchView>(`/api/publication-batches/${encodeURIComponent(batch.batchId)}/cancel`, 'POST', {}) }
     catch { /* already closed: start again regardless */ }
     finally { setBusy(null) }
-    setBatch(null); setExpanded(new Set()); setEu(null); setTyped('')
+    setBatch(null); setExpanded(new Set()); setEu(null)
   }
   const pickAction = (next: string) => {
     if (batch) return
-    setAction(next as ManyPublishAction); setError(null); setTyped('')
+    setAction(next as ManyPublishAction); setError(null)
   }
 
   // While the server is reviewing or sending, read the batch every few seconds; REVIEWED waits for the person.
@@ -209,11 +207,7 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
   const plan = useMemo(() => manyPlan(batch?.children ?? [], now), [batch, now])
   // P11 — a Status batch: one row per product × market, and what the one button sends.
   const statusRows = useMemo(() => (status ? manyStatusRows(batch?.children ?? [], now) : []), [status, batch, now])
-  const statusPlan = useMemo(() => manyStatusPlan(statusRows, now), [statusRows, now])
-  const ending = status === 'ended' ? statusPlan.ending : 0
-  // The typed count confirms one number: when it changes (a check expired, a row was re-read), type it again.
-  useEffect(() => { setTyped('') }, [ending])
-  const endConfirmed = !ending || phraseMatches(typed, String(ending))
+  const statusPlan = useMemo(() => manyStatusPlan(statusRows), [statusRows])
   const estimate = estimateText(batch)
   const progress = reviewProgress(batch)
   const sendProgress = sending && batch ? batchProgress(batch) : null
@@ -297,7 +291,7 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
     // One button (One-click O5): while the server checks (and builds every request), it says how far it is.
     if (reviewing) return <Button size="sm" variant="primary" disabled>{manyCheckingText(batch.children, marketKeys, families)}</Button>
     if (reviewed && status) {
-      return <Button size="sm" variant={status === 'ended' ? 'danger' : 'primary'} disabled={!!busy || !statusPlan.listings || !canPublish || !endConfirmed || (status === 'ended' && !canEnd)}
+      return <Button size="sm" variant={status === 'ended' ? 'danger' : 'primary'} disabled={!!busy || !statusPlan.listings || !canPublish}
         onClick={() => void submit()}>{busy === 'submit' ? 'Sending…' : manyStatusButtonText(statusPlan, status)}</Button>
     }
     if (reviewed) {
@@ -324,7 +318,7 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
           {batch ? <p className={styles.destinationLine}>Action: <strong>{MANY_PUBLISH_ACTION_LABEL[action]}</strong>
             {!status && manyStartAsLine(chosenOptions.startAs) && <> · {manyStartAsLine(chosenOptions.startAs)}</>}
             {!status && <> · {KEEP_CHANNEL_VALUES_LABEL}: {chosenOptions.keepChannelValues ? 'on' : 'off'}</>}</p>
-            : <Listbox size="sm" width="auto" ariaLabel="Action" value={action} options={manyActionOptions(canEnd)} onChange={pickAction} />}
+            : <Listbox size="sm" width="auto" ariaLabel="Action" value={action} options={manyActionOptions()} onChange={pickAction} />}
         </div>
         {options.length > 0 && <DestinationPicker options={options} choice={choice} onChange={pick} locked={!!batch} />}
         {!batch && options.length > 0 && (listedState === 'loading'
@@ -384,11 +378,6 @@ export function ManyPublishDialog({ productIds, familyCount, destinations, loadi
         <p className={styles.summary}>{manyStatusSummary(statusPlan, status)}</p>
         {estimate && statusPlan.listings > 0 && <p className={styles.muted}>Sending takes {estimate}. You can close this window once it has started.</p>}
         {!statusPlan.listings && <Banner tone="neutral" title="Nothing to change">No listing here needs this change. Open a row to see why.</Banner>}
-        {ending > 0 && <div className={styles.confirm}>
-          {!canEnd && <Banner tone="warning" title="Ending listings needs permission">Your role cannot end listings: it needs permission to delete products.</Banner>}
-          <ConfirmPhraseField phrase={String(ending)} value={typed} onChange={setTyped} disabled={!!busy || !canEnd}
-            label={TYPE_COUNT_TO_END(ending)} />
-        </div>}
       </>}
 
       {sending && batch && sendProgress && <>

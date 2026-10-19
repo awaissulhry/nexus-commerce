@@ -625,28 +625,25 @@ const MOVE = { productId: 'child', listingId: 'listing-child', from: 'CHILD', to
 const movingFacts = () => ({ ...existingFacts(), parent: { id: 'parent', sku: 'SKU' },
   listings: [...existingFacts().listings, { id: 'listing-child', productId: 'child', externalListingId: 'B0TESTMOVE' }] })
 
-it('S10: the review says the move and asks for the typed confirmation Delete asks for', async () => {
+it('S10: the review says the move and what it deletes; nothing is typed', async () => {
   m.moves = [MOVE]; m.facts.mockResolvedValue(movingFacts())
   const review = await previewStudioPublication('parent', scope, 'user')
   expect(review.rows.find(row => row.productId === 'child')?.skuMove).toEqual({ from: 'CHILD', to: 'SELLER-CHILD', kind: 'create-delete',
     sentence: 'Creates SELLER-CHILD on Amazon · IT as a new offer, then deletes CHILD there.', warning: null })
   expect(review.rows.find(row => row.productId === 'child')?.sendsSku).toBe('SELLER-CHILD')
-  expect(review.confirm).toEqual({ kind: 'type', expected: 'SKU', token: 'DELETE', sentence: expect.stringContaining('This Publish deletes CHILD on Amazon · IT once Amazon accepts its new SKU. If Amazon refuses a new SKU, its old one stays and nothing is deleted.') })
+  expect(review.confirm).toEqual({ token: 'DELETE', sentence: expect.stringContaining('This Publish deletes CHILD on Amazon · IT once Amazon accepts its new SKU. If Amazon refuses a new SKU, its old one stays and nothing is deleted.') })
 })
 
-it('S10: a move is refused without the typed confirmation, and by a role that cannot delete — nothing is sent, nothing is claimed', async () => {
+it('S10: a move is refused without `confirm: \'DELETE\'` (a caller that never shows the delete) — nothing is sent, nothing is claimed', async () => {
   m.moves = [MOVE]; m.facts.mockResolvedValue(movingFacts())
   const review = await previewStudioPublication('parent', scope, 'user')
   await expect(submitStudioPublication('parent', review.id!, { confirmOverwrite: true }, 'user'))
-    .rejects.toThrow('Moving a listing to a new SKU deletes its old SKU on Amazon: type the SKU, then confirm. It cannot be undone.')
-  const token = m.rows.get(review.id!)?.changes.selection?.token
-  await expect(submitRaw('parent', review.id!, { confirmOverwrite: true, confirm: 'DELETE', selectionToken: token }, 'user', { canDelete: false }))
-    .rejects.toThrow(/Your role cannot delete listings/)
+    .rejects.toThrow('Moving a listing to a new SKU deletes its old SKU on Amazon, so it is sent only from the product\'s Publish window, which shows that delete. Nothing was sent.')
   expect(m.amazon).not.toHaveBeenCalled(); expect(m.claim).not.toHaveBeenCalled()
   expect(m.rows.get(review.id!).status).toBe('PREVIEW')
 })
 
-it('S10: confirmed, the NEW coordinate is claimed before the send and the move is kept with the publication', async () => {
+it('S10: sent from the window (`confirm: \'DELETE\'`, nothing typed, no delete permission asked), the NEW coordinate is claimed before the send and the move is kept', async () => {
   m.moves = [MOVE]; m.facts.mockResolvedValue(movingFacts())
   const review = await previewStudioPublication('parent', scope, 'user')
   await submitStudioPublication('parent', review.id!, { confirmOverwrite: true, confirm: 'DELETE' }, 'user')

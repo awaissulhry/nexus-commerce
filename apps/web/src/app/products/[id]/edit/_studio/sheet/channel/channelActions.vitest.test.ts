@@ -8,7 +8,7 @@ import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import { tidyServerMessage } from './rows'
 
 import {
-  ACTION_NOT_ON_CHANNEL, ACTION_ROLE_CANNOT_DELETE, CHANNEL_VERB_PERMISSION, LISTING_NOT_RECORDED, PUBLISH_THIS_LISTING, SHOW_ALL_LISTINGS, SHOW_ONLY_LISTING,
+  ACTION_NOT_ON_CHANNEL, ACTION_ROLE_CANNOT_PUBLISH, CHANNEL_VERB_PERMISSION, LISTING_NOT_RECORDED, PUBLISH_THIS_LISTING, SHOW_ALL_LISTINGS, SHOW_ONLY_LISTING,
   actionMenuEntries, broadcastToListings, channelActions, listingBandActions, openRecordAction, permissionRefusal, type ChannelActionDeps, type ListingBandDeps,
 } from './channelActions'
 import { actionsFor, ROW } from '@/design-system/grid/actions/registry'
@@ -161,7 +161,7 @@ describe('build shape v2 — "Mark paused / active" is gone; Action ▾ counts w
       { sku: 'GALE-Y', cell: cell({ inactive: false }) },
       { sku: 'GALE-NEW', cell: null },
     ]
-    const entries = actionMenuEntries(rows, { publish: true, delete: true })
+    const entries = actionMenuEntries(rows, { publish: true })
     expect(entries.map(e => e.label)).toEqual([
       'Active — 20 of 21', 'Inactive — 18 of 21', 'Ended — 0 of 21',
       'Partial update — 20 of 21', 'Full update — 20 of 21', 'Delete — 20 of 21',
@@ -177,14 +177,15 @@ describe('build shape v2 — "Mark paused / active" is gone; Action ▾ counts w
     expect(entries.find(e => e.id === 'send:partial')!.note).toBe(`1 not allowed: ${ACTION_NOT_ON_CHANNEL}`)
   })
 
-  it('Ended and Delete need products.delete — the rest only products.publish', () => {
+  // Owner 2026-10-19 — every item, Ended and Delete included, needs products.publish; no separate delete permission.
+  it('Ended and Delete need products.publish, as every item; without it every item is held', () => {
     const rows = [{ sku: 'A', cell: cell({ end: null }) }, { sku: 'B', cell: cell({ end: null, fba: true }) }]
-    const entries = actionMenuEntries(rows, { publish: true, delete: false })
-    expect(entries.find(e => e.id === 'status:ended')).toMatchObject({ allowed: 2, disabled: true, note: ACTION_ROLE_CANNOT_DELETE })
-    expect(entries.find(e => e.id === 'send:delete')).toMatchObject({ allowed: 1, disabled: true, note: ACTION_ROLE_CANNOT_DELETE })
+    const entries = actionMenuEntries(rows, { publish: true })
+    expect(entries.find(e => e.id === 'status:ended')).toMatchObject({ allowed: 2, disabled: false, note: null, danger: true })
+    expect(entries.find(e => e.id === 'send:delete')).toMatchObject({ label: 'Delete — 1 of 2', disabled: false, note: '1 not allowed: Amazon holds FBA units for this offer.', danger: true })
     expect(entries.find(e => e.id === 'send:full')).toMatchObject({ allowed: 2, disabled: false, note: null })
-    const withRole = actionMenuEntries(rows, { publish: true, delete: true })
-    expect(withRole.find(e => e.id === 'send:delete')).toMatchObject({ label: 'Delete — 1 of 2', disabled: false, note: '1 not allowed: Amazon holds FBA units for this offer.' })
+    const noPublish = actionMenuEntries(rows, { publish: false })
+    expect(noPublish.every(e => e.disabled && e.note === ACTION_ROLE_CANNOT_PUBLISH)).toBe(true)
   })
 
   it('delete and relist (simplify): a deleted row is a row not on the channel — its Status lists it again, its Full update changes nothing', () => {
@@ -194,20 +195,20 @@ describe('build shape v2 — "Mark paused / active" is gone; Action ▾ counts w
       sendOptions: [{ mode: 'partial', offered: false, reason: 'A new listing is always sent whole.', warning: null }, { mode: 'full', offered: true, reason: null, warning: 'A new listing is always sent whole.' },
         { mode: 'delete', offered: false, reason: already, warning: null }],
       statusOptions: (['active', 'inactive', 'not_listed'] as const).map(target => ({ target, offered: true, action: null, reason: null, warning: null, checkedAtSend: null })) })
-    const mixed = actionMenuEntries([{ sku: 'A', cell: cell() }, { sku: 'B', cell: deleted }], { publish: true, delete: true })
+    const mixed = actionMenuEntries([{ sku: 'A', cell: cell() }, { sku: 'B', cell: deleted }], { publish: true })
     expect(mixed.find(e => e.id === 'status:active')).toMatchObject({ label: 'Active — 2 of 2', note: '1 deleted row is listed again on the next Publish.' })
     expect(mixed.find(e => e.id === 'status:not_listed')!.note).toMatch(/1 deleted row stays off\.$/)
     expect(mixed.find(e => e.id === 'send:full')).toMatchObject({ label: 'Full update — 2 of 2', note: '1 not on the channel is always sent whole.' })
     expect(mixed.find(e => e.id === 'send:delete')).toMatchObject({ label: 'Delete — 1 of 2', note: `1 not allowed: ${already}`, danger: true })
     // No "Keep deleted" any more: Delete on a deleted row alone is held with the reason.
-    const only = actionMenuEntries([{ sku: 'B', cell: deleted }], { publish: true, delete: true })
+    const only = actionMenuEntries([{ sku: 'B', cell: deleted }], { publish: true })
     expect(only.find(e => e.id === 'send:delete')).toMatchObject({ label: 'Delete — 0 of 1', disabled: true, note: already })
     expect(only.some(e => e.label.startsWith('Keep deleted'))).toBe(false)
   })
 
   it('Ended appears only when a ticked row\'s channel can end a listing (never on Amazon)', () => {
     const amazon = cell({ statusOptions: (['active', 'inactive'] as const).map(target => ({ target, offered: true, action: target === 'inactive' ? 'pause' as const : null, reason: null, warning: null, checkedAtSend: null })) })
-    expect(actionMenuEntries([{ sku: 'A', cell: amazon }], { publish: true, delete: true }).some(e => e.id === 'status:ended')).toBe(false)
+    expect(actionMenuEntries([{ sku: 'A', cell: amazon }], { publish: true }).some(e => e.id === 'status:ended')).toBe(false)
   })
 })
 

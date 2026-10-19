@@ -727,7 +727,7 @@ app.register(listingActionRoutes, { prefix: '/api' });
 app.register(sheetDeleteRowsRoutes, { prefix: '/api' });
 // Item ID control (step I1) — the sheet's eBay Item ID cell: /api/listings/:id/channel-id/{check,link,unlink} (listings.recover).
 app.register(channelIdRoutes, { prefix: '/api' });
-// Build shape v2 — the waiting Action and Status values: /api/products/:id/studio/publish-actions (read: products.view; send/delete and status/ended: products.delete; the rest: products.publish).
+// Build shape v2 — the waiting Action and Status values: /api/products/:id/studio/publish-actions (read: products.view; every value, Delete and Ended included: products.publish).
 app.register(publishActionRoutes, { prefix: '/api' });
 // PE — GET /api/products/:id/live-read: what the channel holds right now (read only; products:view by the prefix rule).
 app.register(liveReadRoutes, { prefix: '/api' });

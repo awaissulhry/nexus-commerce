@@ -63,7 +63,7 @@ function ctx(over: Partial<BulkContext> = {}, table: Record<string, MatrixCells>
     coordinates: [EU, IT, EBAY],
     cellsOf: (rowId, key) => all[`${rowId}|${key}`] ?? null,
     statusCellOf: (rowId, c) => (c.key === 'AMAZON:IT' ? statusCell({ listingId: `L-${rowId}`, sku: rowId.toUpperCase() }) : null),
-    canEdit: true, canPrice: true, statusHeld: null, canDelete: false, focusedKey: null, locations: LOCATIONS,
+    canEdit: true, canPrice: true, statusHeld: null, focusedKey: null, locations: LOCATIONS,
     handoffHeld: { casePack: null, stockPool: null },
     ...over,
   }
@@ -372,6 +372,14 @@ describe('lines the page works out', () => {
     expect(statusLines(ctx(), 'inactive', ['AMAZON:IT']).map((l) => [l.sku, l.now, l.next, l.note])).toEqual([['A', 'Active', 'Inactive', 'Waits for Publish'], ['B', 'Active', 'Inactive', 'Waits for Publish']])
     expect(statusLines(ctx(), 'ended', ['AMAZON:IT']).map((l) => l.skipped)).toEqual(['Amazon has no Ended', 'Amazon has no Ended'])
     expect(statusLines(ctx(), 'active', ['AMAZON:IT']).map((l) => l.skipped)).toEqual(['Already Active', 'Already Active'])
+  })
+  // Owner 2026-10-19 — Ended needs products.publish only (the Status is held without it, `statusHeld`), no delete permission.
+  it('Status Ended where the channel ends listings waits for Publish; no separate delete permission is asked', () => {
+    const ends = ctx({ statusCellOf: (rowId, c) => (c.key === 'AMAZON:IT' ? statusCell({ listingId: `L-${rowId}`, sku: rowId.toUpperCase(), statusOptions: [
+      { target: 'active', offered: true, action: null, reason: null, warning: null, checkedAtSend: null },
+      { target: 'ended', offered: true, action: 'end', reason: null, warning: null, checkedAtSend: null },
+    ] }) : null) })
+    expect(statusLines(ends, 'ended', ['AMAZON:IT']).map((l) => [l.sku, l.next, l.skipped])).toEqual([['A', 'Ended', null], ['B', 'Ended', null]])
   })
   it('Status never creates a listing: a row not on the market yet is skipped, and a market with only such rows is held', () => {
     const fresh = ctx({ statusCellOf: (rowId, c) => (c.key === 'AMAZON:IT' ? statusCell({ listingId: `new:${rowId}`, create: { target: 'not_listed', source: 'default', sentence: null } as never }) : null) })

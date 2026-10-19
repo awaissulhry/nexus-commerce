@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { AMAZON_PAN_EU_DELETE_WARNING, deleteDoneSentence, fbaDeleteWarning } from '@nexus/shared/listing-actions'
 import { relistSentence } from '@nexus/shared/publish-actions'
 import { moveModeLabel, type StudioPublishReview, type StudioPublishScope } from '@nexus/shared/studio-publication'
-import { ROLE_CANNOT_END_OR_DELETE, confirmMatches, type PublishPlanBatchChild, type PublishPlanDestination, type PublishPlanLifecycleRow } from '@nexus/shared/publish-plan'
+import { type PublishPlanBatchChild, type PublishPlanDestination, type PublishPlanLifecycleRow } from '@nexus/shared/publish-plan'
 import { EMPTY_ENTRY, destinationState, initialTicks, type DestinationEntry } from './destinations'
 import { matchesPublishPlan } from './model'
 import { NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD } from '@nexus/shared/listing-actions'
 import {
-  CHECK_ON_CHANNEL, CREATE_UNTICKED, EVERYTHING_SENT, NOTHING_HERE, NOT_SENT_PROBLEMS, RELIST_UNTICKED, actionPlanRows, actionPlanSend, agoText, confirmReason, confirmSentence, confirmWhat,
+  CHECK_ON_CHANNEL, CREATE_UNTICKED, EVERYTHING_SENT, NOTHING_HERE, NOT_SENT_PROBLEMS, RELIST_UNTICKED, actionPlanRows, actionPlanSend, agoText,
   createdCounts, createdWords, createsLine, planFamilySummary, reviewRowListingWord, shopifyVisibilityWords,
-  lifecycleChildMeta, planButtonText, planResultRows, planResultWord, planSubmit, planSummaryLine, planTabWords, planUndo, roleLockSentence,
+  lifecycleChildMeta, planButtonText, planResultRows, planResultWord, planSubmit, planSummaryLine, planTabWords, planUndo,
   setByText, toggleRowTicks, undoButtonText, undoSentence, withProductTicks, marketsSendingNothing, replacesCountWords,
 } from './actionPlan'
 
@@ -45,7 +45,7 @@ const lifecycle = (id: string, action: PublishPlanLifecycleRow['action'], over: 
   id, listingId: `l-${id}`, productId: `p-${id}`, sku: `GALE-${id.toUpperCase()}`, isParent: false,
   column: action === 'delete' ? 'send' : 'status', value: action === 'delete' ? 'delete' : action === 'pause' ? 'inactive' : action === 'end' ? 'ended' : 'active',
   action, step: action, state: action === 'resume' ? 'paused' : 'active', sentence: `${action} sentence`, consequence: `${action} consequence`, warning: null, checkedAtSend: null,
-  setAt: MINUTES_AGO(5), setById: 'me', setByName: 'Awais', stale: false, tickedByDefault: true, needsTypedConfirm: action === 'end' || action === 'delete', refused: null,
+  setAt: MINUTES_AGO(5), setById: 'me', setByName: 'Awais', stale: false, tickedByDefault: true, refused: null,
   ...over,
 })
 
@@ -55,7 +55,7 @@ const destination = (scope: StudioPublishScope, over: Partial<PublishPlanDestina
 })
 
 const entryOf = (plan: PublishPlanDestination, over: Partial<DestinationEntry> = {}): DestinationEntry => ({
-  ...EMPTY_ENTRY, plan, review: plan.review, familySku: 'GALE-JACKET', canDelete: true,
+  ...EMPTY_ENTRY, plan, review: plan.review,
   selectedIds: plan.review ? initialTicks(plan.review) : [], lifecycleIds: plan.lifecycle.filter(r => r.tickedByDefault && !r.refused).map(r => r.id), ...over,
 })
 
@@ -172,35 +172,28 @@ describe('what one click sends', () => {
     expect(planFamilySummary(2, { skipped: ['de'], nothing: [], pending: [] }, counts, 0, ['it', 'de'])).toBe('2 markets · 2 inactive · 1 with content blocked')
     expect(planFamilySummary(2, { skipped: ['de'], nothing: [], pending: [] }, counts, 0, ['it'])).toBe('2 markets · 2 inactive · 1 with problems')
   })
-  it('asks for the typed family SKU only while an End or Delete row is ticked', () => {
+  // Owner 2026-10-19 — "remove the typed SKU for deletes and for delete permission".
+  it('a ticked End or Delete is sent with nothing typed, as a removal (the danger tone); unticked, the send removes nothing', () => {
     const plan = destination(IT, { lifecycle: [lifecycle('e1', 'end'), lifecycle('d1', 'delete'), lifecycle('p1', 'pause')] })
     const send = sendOf({ it: entryOf(plan) })
-    expect(send.confirm).toEqual({ expected: 'GALE-JACKET', ended: 1, deleted: 1, places: ['eBay · IT'], skus: { ended: ['GALE-E1'], deleted: ['GALE-D1'] } })
-    // S11 follow-up — the confirmation names the SKU each End and Delete acts on (the one the channel holds).
-    expect(confirmSentence(send.confirm!)).toBe('Type GALE-JACKET to end GALE-E1 and delete GALE-D1 on eBay · IT')
-    expect(confirmReason(send.confirm!)).toBe('Type GALE-JACKET below to end GALE-E1 and delete GALE-D1.')
-    expect(confirmMatches(send.confirm!.expected, 'GALE-JACKE')).toBe(false)
-    expect(confirmMatches(send.confirm!.expected, 'GALE-JACKET')).toBe(true)
+    expect(send).toMatchObject({ removes: true, moving: [], lifecycle: ['e1', 'd1', 'p1'], batch: true })
+    expect(send).not.toHaveProperty('confirm')
+    expect(send).not.toHaveProperty('roleLocked')
+    const rows = actionPlanRows(entryOf(plan), destinationState(entryOf(plan), true, NOW), NOW)
+    expect(rows.filter(r => r.danger).map(r => [r.key, r.tickable, r.tick])).toEqual([['d1', true, 'on'], ['e1', true, 'on']])
     const withoutDanger = sendOf({ it: entryOf(plan, { lifecycleIds: ['p1'] }) })
-    expect(withoutDanger.confirm).toBeNull()
+    expect(withoutDanger).toMatchObject({ removes: false, lifecycle: ['p1'] })
   })
-  it('without products.delete, End and Delete stay waiting and lock; the rest still sends', () => {
-    const plan = destination(IT, { lifecycle: [
-      lifecycle('e1', 'end', { refused: ROLE_CANNOT_END_OR_DELETE, tickedByDefault: false }),
-      lifecycle('d1', 'delete', { refused: ROLE_CANNOT_END_OR_DELETE, tickedByDefault: false }),
-      lifecycle('p1', 'pause'),
-    ] })
-    const entry = entryOf(plan, { canDelete: false })
+  it('a row the channel refuses stays waiting and locked; the rest still sends', () => {
+    const refused = 'Not possible here: Amazon holds FBA units for this offer.'
+    const plan = destination(IT, { lifecycle: [lifecycle('d1', 'delete', { refused, tickedByDefault: false }), lifecycle('p1', 'pause')] })
+    const entry = entryOf(plan)
     const send = sendOf({ it: entry })
-    expect(send.roleLocked).toEqual({ ended: 1, deleted: 1 })
-    expect(roleLockSentence(send.roleLocked)).toBe('1 end and 1 delete stay waiting: your role cannot end or delete listings.')
-    expect(roleLockSentence({ ended: 1, deleted: 0 })).toBe('1 end stays waiting: your role cannot end or delete listings.')
-    expect(send.confirm).toBeNull()
-    expect(send.lifecycle).toEqual(['p1'])
-    const locked = actionPlanRows(entry, destinationState(entry, true, NOW), NOW).filter(r => r.notSent === ROLE_CANNOT_END_OR_DELETE)
-    expect(locked.map(r => [r.key, r.tickable, r.tick])).toEqual([['d1', false, 'none'], ['e1', false, 'none']])
+    expect(send).toMatchObject({ lifecycle: ['p1'], removes: false })
+    const locked = actionPlanRows(entry, destinationState(entry, true, NOW), NOW).filter(r => r.notSent === refused)
+    expect(locked.map(r => [r.key, r.tickable, r.tick])).toEqual([['d1', false, 'none']])
     // A refused row the person somehow ticked is never sent.
-    expect(sendOf({ it: { ...entry, lifecycleIds: ['e1', 'p1'] } }).lifecycle).toEqual(['p1'])
+    expect(sendOf({ it: { ...entry, lifecycleIds: ['d1', 'p1'] } }).lifecycle).toEqual(['p1'])
   })
   it('batch or today\'s direct submit', () => {
     const contentOnly = destination(IT)
@@ -218,8 +211,8 @@ describe('what one click sends', () => {
     const send = sendOf(entries)
     expect(send.send).toEqual(['it'])
     expect(send.content).toEqual([])
-    const body = planSubmit('gale', send, key => entries[key as 'it'], () => IT, 'GALE-JACKET')
-    expect(body).toEqual({ productId: 'gale', destinations: [{ scope: IT }], lifecycle: ['d1'], confirmText: 'GALE-JACKET' })
+    const body = planSubmit('gale', send, key => entries[key as 'it'], () => IT)
+    expect(body).toEqual({ productId: 'gale', destinations: [{ scope: IT }], lifecycle: ['d1'] })
   })
   it('the request carries each ready market\'s review, token and the outgrown ids', () => {
     const plan = destination(IT, { lifecycle: [lifecycle('p1', 'pause')], outgrown: [{ id: 'o1', listingId: 'l', productId: 'p', sku: 'S', column: 'status', value: 'inactive', reason: 'x' }] })
@@ -227,11 +220,11 @@ describe('what one click sends', () => {
     const ticks = initialTicks(r)
     const entries = { it: entryOf(plan, { selection: { reviewId: r.id!, token: 'tok', selectedIds: ticks, fieldCount: ticks.length, products: [], payload: { format: 'json', content: '{}' } } as never }) }
     const send = sendOf(entries)
-    const body = planSubmit('gale', send, key => entries[key as 'it'], () => IT, null)
+    const body = planSubmit('gale', send, key => entries[key as 'it'], () => IT)
     expect(body.destinations).toEqual([{ scope: IT, reviewId: 'r-IT', selectionToken: 'tok' }])
     expect(body.lifecycle).toEqual(['p1'])
     expect(body.outgrown).toEqual(['o1'])
-    expect(body.confirmText).toBeUndefined()
+    expect(body).not.toHaveProperty('confirmText')
   })
   it('the tab words name the status changes', () => {
     const held = destination(IT, { review: null, lifecycle: [lifecycle('p1', 'pause'), lifecycle('d1', 'delete')] })
@@ -245,7 +238,7 @@ describe('what one click sends', () => {
     const entries: Record<string, DestinationEntry> = { main: entryOf(destination(IT, { review: null, lifecycle: [lifecycle('m1', 'pause')] })), alt1: entryOf(aliasPlan) }
     const send = sendOf(entries)
     expect(send.send).toEqual(['main', 'alt1'])
-    const body = planSubmit('gale', send, key => entries[key], key => (key === 'alt1' ? ALT1 : IT), null)
+    const body = planSubmit('gale', send, key => entries[key], key => (key === 'alt1' ? ALT1 : IT))
     expect(body.destinations.map(d => d.scope)).toEqual([IT, ALT1])
     expect(body.destinations[1]).toMatchObject({ scope: { listingId: 'alias-1' }, reviewId: 'r-ALT1' })
     expect(body.lifecycle).toEqual(['m1', 'a1'])
@@ -254,8 +247,6 @@ describe('what one click sends', () => {
     // The rows are counted as listings already: the places are destinations in the button, never "listings to listings".
     expect(planButtonText({ ...send.counts, partial: 0, full: 0, active: 0, inactive: 2 }, send.send, { one: 'listing', many: 'listings' }))
       .toBe('Publish 2 listings to 2 destinations')
-    expect(confirmWhat({ ended: 2, deleted: 0, places: ['eBay · IT', 'eBay · IT · ALT1', 'eBay · IT · ALT2'], aliases: true })).toBe('to end 2 listings on 3 destinations')
-    expect(confirmWhat({ ended: 2, deleted: 0, places: ['eBay · IT', 'eBay · DE', 'eBay · FR'] })).toBe('to end 2 listings on 3 markets')
   })
 })
 
@@ -268,7 +259,7 @@ describe('after the click: results, words and Undo', () => {
     expect(lifecycleChildMeta({ status: 'UNKNOWN', message: null }).label).toBe(CHECK_ON_CHANNEL)
     expect(lifecycleChildMeta({ status: 'DONE', message: null }).label).toBe('Accepted')
     expect(lifecycleChildMeta({ status: 'PREVIEW', message: null }).label).toBe('Waiting its turn')
-    expect(lifecycleChildMeta({ status: 'NOT_SENT', message: ROLE_CANNOT_END_OR_DELETE }).hint).toBe(ROLE_CANNOT_END_OR_DELETE)
+    expect(lifecycleChildMeta({ status: 'NOT_SENT', message: 'Refused before sending.' }).hint).toBe('Refused before sending.')
   })
   it('lists each listing of a finished status change; a done delete cannot be undone', () => {
     const rows = planResultRows([
@@ -315,7 +306,7 @@ describe('after the click: results, words and Undo', () => {
 
 describe('the plan answer guard', () => {
   const plan = { productId: 'gale', familyId: 'gale', familySku: 'GALE-JACKET', destinations: [destination(IT, { review: { ...review(IT), productId: 'gale' } })],
-    counts: {}, summary: '', confirm: null, canDelete: true, readAt: '' }
+    counts: {}, summary: '', readAt: '' }
   it('accepts a plan for this product and exactly this destination', () => {
     expect(matchesPublishPlan(plan, 'gale', IT)).toBe(true)
     expect(matchesPublishPlan({ ...plan, destinations: [destination(IT, { review: null })] }, 'gale', IT)).toBe(true)
@@ -474,7 +465,7 @@ describe('S10 — a SKU move in the Publish window', () => {
     rows: [{ productId: 'gale-s', sku: 'GALE-S', title: 'Jacket S', existing: true, mode: 'move', sendsSku: 'GALE-S-IT', skuMove: move },
       { productId: 'gale-m', sku: 'GALE-M', title: 'Jacket M', existing: true, mode: 'partial' }],
     changes: [change('gale-s', '$create'), change('gale-m', 'title')], removals: undefined,
-    confirm: { kind: 'type', expected: 'GALE-JACKET', token: 'DELETE', sentence: 'This Publish deletes GALE-S on Amazon · IT once Amazon accepts its new SKU.' }, ...over }) })
+    confirm: { token: 'DELETE', sentence: 'This Publish deletes GALE-S on Amazon · IT once Amazon accepts its new SKU.' }, ...over }) })
 
   it('the row reads its own mode, "Move to NEW" — never Partial or Full update — as a danger row first, with its FBA note', () => {
     const plan = moving()
@@ -489,14 +480,10 @@ describe('S10 — a SKU move in the Publish window', () => {
     expect(rows.find(r => r.key === 'content:gale-m')!.what).toMatchObject({ column: 'send', mode: 'partial' })
   })
 
-  it('S11 follow-up — the typed confirmation names each listing by the SKU it holds; more than three, or one SKU twice, are counted', () => {
-    // The plan names an End or Delete row by the SKU the channel holds for that listing (its own, not the product SKU).
+  it('S11 follow-up — a Delete row is named by the SKU the channel holds for that listing (its own, not the product SKU)', () => {
     const held = destination(IT, { lifecycle: [lifecycle('d1', 'delete', { sku: 'GALE-M-OLD' }), lifecycle('d2', 'delete', { sku: 'GALE-L' })] })
-    expect(confirmSentence(sendOf({ it: entryOf(held) }).confirm!)).toBe('Type GALE-JACKET to delete GALE-M-OLD and GALE-L on eBay · IT')
-    const many = destination(IT, { lifecycle: ['a', 'b', 'c', 'd'].map(id => lifecycle(id, 'delete')) })
-    expect(confirmSentence(sendOf({ it: entryOf(many) }).confirm!)).toBe('Type GALE-JACKET to delete 4 listings on eBay · IT')
-    expect(confirmWhat({ ended: 0, deleted: 2, places: [], skus: { ended: [], deleted: ['GALE-M'] } })).toBe('to delete 2 listings')
-    expect(confirmWhat({ ended: 1, deleted: 0, places: ['eBay · IT'] })).toBe('to end 1 listing on eBay · IT')
+    const rows = actionPlanRows(entryOf(held), destinationState(entryOf(held), true, NOW), NOW)
+    expect(rows.filter(r => r.danger).map(r => r.sku)).toEqual(['GALE-L', 'GALE-M-OLD'])
   })
 
   it('the summary and the button count a move as a move, not a partial update', () => {
@@ -507,21 +494,19 @@ describe('S10 — a SKU move in the Publish window', () => {
     expect(planButtonText({ ...send.counts, delete: 1 }, ['it'], { one: 'market', many: 'markets' })).toBe('Publish 2 listings · delete 1')
   })
 
-  it('a ticked move asks for the typed family SKU like Delete, and goes through the batch with confirmDelete', () => {
+  it('a ticked move is a removal (the danger tone) with nothing typed, and goes through the batch with confirmDelete', () => {
     const entries = { it: entryOf(moving()) }
     const send = sendOf(entries)
-    expect(send.confirm).toEqual({ expected: 'GALE-JACKET', ended: 0, deleted: 0, places: ['Amazon · IT'], moved: 1 })
-    expect(send.batch).toBe(true)
-    expect(confirmSentence(send.confirm!)).toBe('Type GALE-JACKET to move 1 listing to its new SKU (its old SKU is deleted) on Amazon · IT')
-    const body = planSubmit('gale', send, key => entries[key as 'it'], () => AMAZON_IT, 'GALE-JACKET')
+    expect(send).toMatchObject({ removes: true, moving: ['it'], batch: true })
+    const body = planSubmit('gale', send, key => entries[key as 'it'], () => AMAZON_IT)
     expect(body.destinations[0]).toMatchObject({ reviewId: 'r-IT', confirmDelete: true })
-    expect(body.confirmText).toBe('GALE-JACKET')
+    expect(body).not.toHaveProperty('confirmText')
   })
 
-  it('an unticked move asks for nothing, sends no confirmDelete, and says the old SKU stays', () => {
+  it('an unticked move removes nothing, sends no confirmDelete, and says the old SKU stays', () => {
     const plan = moving()
     const entry = entryOf(plan, { selectedIds: [] })
-    expect(sendOf({ it: entry }).confirm).toBeNull()
+    expect(sendOf({ it: entry })).toMatchObject({ removes: false, moving: [] })
     const row = actionPlanRows(entry, destinationState(entry, true, NOW), NOW).find(r => r.key === 'content:gale-s')!
     expect(row.sent).toBe(`${move.sentence} Unticked: nothing is created, and the old SKU stays.`)
     expect(row.what).toEqual({ column: 'move', from: 'GALE-S', to: 'GALE-S-IT' })

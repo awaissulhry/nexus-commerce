@@ -147,7 +147,7 @@ export function amazonSkuMoves(facts: MoveFacts, sellerSkus: ReadonlyMap<string,
  * Browser check 2026-10-05 (F5) — the moves of a review whose Amazon publication could not be prepared (a problem the
  * review lists already: a variation axis that binds to nothing, a schema Nexus cannot read, …). Nothing can be sent until
  * those are fixed, but the review still says what Publish WILL do to each row (create NEW, then delete OLD) and still
- * asks for the typed confirmation: hiding the move behind an unrelated problem read as a Partial update. The move's own
+ * says what the move deletes: hiding the move behind an unrelated problem read as a Partial update. The move's own
  * refusal (a family's main row, no ASIN, two SKUs), when there is one, is returned as a sentence; it never throws.
  */
 export async function amazonMovesWithoutPublication(facts: MoveFacts & Pick<PublicationFacts, 'scope'> & { unsent?: ReadonlySet<string> }): Promise<{ marketplaceId: string | null; moves: AmazonSkuMove[]; refusal: string | null }> {
