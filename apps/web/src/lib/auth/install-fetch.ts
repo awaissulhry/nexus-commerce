@@ -9,6 +9,7 @@
  *   • set credentials: 'include' (send the session + CSRF cookies), and
  *   • add the x-nexus-csrf header on mutating methods (double-submit).
  * Non-API requests pass through untouched. Idempotent + client-only.
+ * EventSource and XMLHttpRequest get the same rule below (streams; uploads).
  *
  * Under Option A (custom same-site domain) the credentials part becomes
  * unnecessary, but keeping it is harmless.
@@ -20,6 +21,18 @@ import { browserWorkspaceId, WORKSPACES_ENABLED } from '../workspaces/paths'
 
 let installed = false
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+/** The headers an API call carries: the business, and on a mutating method the CSRF token. One rule for fetch and XHR. */
+function apiHeaders(method: string): Array<[string, string]> {
+  const out: Array<[string, string]> = []
+  const workspaceId = browserWorkspaceId()
+  if (WORKSPACES_ENABLED && workspaceId) out.push(['x-nexus-workspace-id', workspaceId])
+  if (MUTATING.has(method.toUpperCase())) {
+    const token = getCsrfToken()
+    if (token) out.push(['x-nexus-csrf', token])
+  }
+  return out
+}
 
 export function installAuthFetch(): void {
   if (installed || typeof window === 'undefined') return
@@ -42,17 +55,9 @@ export function installAuthFetch(): void {
         const opts: RequestInit = { ...(init ?? {}) }
         opts.credentials = 'include'
         const headers = new Headers(opts.headers ?? (input instanceof Request ? input.headers : undefined))
-        const workspaceId = browserWorkspaceId()
-        if (WORKSPACES_ENABLED && workspaceId && !headers.has('x-nexus-workspace-id')) headers.set('x-nexus-workspace-id', workspaceId)
+        const method = opts.method ?? (input instanceof Request ? input.method : 'GET')
+        for (const [name, value] of apiHeaders(method)) if (!headers.has(name)) headers.set(name, value)
         opts.headers = headers
-        const method = (opts.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
-        if (MUTATING.has(method)) {
-          const token = getCsrfToken()
-          if (token) {
-            if (!headers.has('x-nexus-csrf')) headers.set('x-nexus-csrf', token)
-            opts.headers = headers
-          }
-        }
         return original(input, opts)
       }
     } catch {
@@ -87,5 +92,40 @@ export function installAuthFetch(): void {
     P.OPEN = OrigES.OPEN
     P.CLOSED = OrigES.CLOSED
     window.EventSource = PatchedES
+  }
+
+  // XMLHttpRequest isn't window.fetch either. The uploads use it for byte progress (media library files and ZIPs,
+  // purchase-order attachments), so they left without the CSRF token and the business, and the API refused every
+  // one: 403 "Refresh this page and try again". Same rule as fetch, patched once on the prototype.
+  const XHR = window.XMLHttpRequest
+  if (XHR) {
+    const apiMethod = new WeakMap<XMLHttpRequest, string>()   // the method of an open API-origin request
+    const ownHeaders = new WeakMap<XMLHttpRequest, Set<string>>()
+    const { open, send, setRequestHeader } = XHR.prototype
+    XHR.prototype.open = function (this: XMLHttpRequest, method: string, url: string | URL, ...rest: unknown[]) {
+      apiMethod.delete(this)
+      ownHeaders.delete(this)
+      try {
+        if (new URL(url, window.location.href).origin === apiOrigin) apiMethod.set(this, method)
+      } catch {
+        /* not a URL we can read: leave the request untouched */
+      }
+      return (open as (...args: unknown[]) => void).call(this, method, url, ...rest)
+    } as XMLHttpRequest['open']
+    XHR.prototype.setRequestHeader = function (this: XMLHttpRequest, name: string, value: string) {
+      const own = ownHeaders.get(this) ?? new Set<string>()
+      own.add(name.toLowerCase())
+      ownHeaders.set(this, own)
+      return setRequestHeader.call(this, name, value)
+    }
+    XHR.prototype.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) {
+      const method = apiMethod.get(this)
+      if (method !== undefined) {
+        this.withCredentials = true
+        const own = ownHeaders.get(this)
+        for (const [name, value] of apiHeaders(method)) if (!own?.has(name)) setRequestHeader.call(this, name, value)
+      }
+      return send.call(this, body)
+    }
   }
 }
