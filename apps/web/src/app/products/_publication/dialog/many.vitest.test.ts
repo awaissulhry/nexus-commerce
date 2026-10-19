@@ -13,7 +13,7 @@ import {
   manyMarketTabWords, manyNotListedSummary, manyPlanSummary, manyRowSkipReason,
 } from './many'
 import { initialChoice, refillChoice } from './pickers'
-import { batchChildMeta, limitOneAccountPerChannel } from './destinations'
+import { batchChildMeta } from './destinations'
 import { publicationDestinations, publicationScopeKey } from './model'
 import { joinMarketsAndConnections } from './useBusinessDestinations'
 
@@ -50,9 +50,9 @@ describe('many-product rows', () => {
     const plan = manyPlan(rows, NOW)
     expect(plan).toEqual({ listings: 2, changes: 8, problems: 1, expired: 1, nothing: 1, problemCount: 1, markets: 1, notListed: 0 })
     // One-click O5 — the studio's words: changes to markets.
-    expect(manyPublishButtonText(plan)).toBe('Publish 8 changes to 1 market · skip 1 with problems · 1 expired')
+    expect(manyPublishButtonText(plan)).toBe('Publish 8 changes to 1 market · skip 1 listing with problems · 1 listing expired')
     expect(manyPublishButtonText(manyPlan([child()], NOW))).toBe('Publish 3 changes to 1 market')
-    expect(manyPublishButtonText(manyPlan([child({ status: 'BLOCKED' })], NOW))).toBe('Nothing to publish · skip 1 with problems')
+    expect(manyPublishButtonText(manyPlan([child({ status: 'BLOCKED' })], NOW))).toBe('Nothing to publish · skip 1 listing with problems')
     expect(manyPublishButtonText(manyPlan([], NOW))).toBe('Nothing to publish')
   })
 
@@ -92,29 +92,6 @@ describe('batch words come from the design system', () => {
     expect(batchChildMeta({ status: 'PREVIEW', checked: false })).toEqual(publicationStatusMeta('QUEUED'))
     expect(batchChildMeta({ status: 'CANCELLED', checked: false })).toEqual(publicationStatusMeta('CANCELLED'))
     expect(batchChildMeta({ status: 'BLOCKED', checked: false })).toEqual(publicationStatusMeta('NOT_SENT'))
-  })
-})
-
-describe('ticking many markets at once keeps one account per channel', () => {
-  const options = publicationDestinations([
-    { channel: 'AMAZON', code: 'IT', name: 'Amazon IT', accounts: [{ id: 'a1', label: 'One' }, { id: 'a2', label: 'Two' }] },
-    { channel: 'AMAZON', code: 'DE', name: 'Amazon DE', accounts: [{ id: 'a1', label: 'One' }, { id: 'a2', label: 'Two' }] },
-    { channel: 'EBAY', code: 'IT', name: 'eBay IT', accounts: [{ id: 'e1', label: 'Shop' }] },
-  ])
-  const all = new Set(options.map(o => o.key))
-  it('keeps the first account per channel when nothing was ticked', () => {
-    const kept = limitOneAccountPerChannel(all, new Set(), options)
-    expect(options.filter(o => kept.has(o.key)).map(o => `${o.scope.marketplace}:${o.scope.accountId}`)).toEqual(['IT:a1', 'DE:a1', 'IT:e1'])
-  })
-  it('keeps the account already ticked on that channel', () => {
-    const it2 = options.find(o => o.scope.marketplace === 'IT' && o.scope.accountId === 'a2')!.key
-    const kept = limitOneAccountPerChannel(all, new Set([it2]), options)
-    expect(options.filter(o => kept.has(o.key) && o.scope.channel === 'AMAZON').map(o => o.scope.accountId)).toEqual(['a2', 'a2'])
-  })
-  it('never changes a single click', () => {
-    const one = options.find(o => o.scope.accountId === 'a2')!.key
-    const first = options.find(o => o.scope.accountId === 'a1')!.key
-    expect([...limitOneAccountPerChannel(new Set([first, one]), new Set([first]), options)]).toEqual([first, one])
   })
 })
 
@@ -308,7 +285,7 @@ describe('the studio window\'s rules in the products list (One-click O5)', () =>
     expect(manyRowLabel(manyRowState(notListed(), NOW))).toMatchObject({ label: 'Not listed', tone: 'neutral' })
     const plan = manyPlan([child(), notListed(), child({ publicationId: 'p3', status: 'BLOCKED' })], NOW)
     expect(plan).toMatchObject({ listings: 1, notListed: 1, problems: 1, markets: 1 })
-    expect(manyPublishButtonText(plan)).toBe('Publish 3 changes to 1 market · skip 1 with problems')
+    expect(manyPublishButtonText(plan)).toBe('Publish 3 changes to 1 market · skip 1 listing with problems')
     expect(manyPlanSummary(plan)).toBe('1 product ready in 1 market · 3 changes · 1 with problems · 1 not listed there')
     expect(manyNotListedSummary([notListed(), notListed({ publicationId: 'nl2' }), child()], 'Amazon · DE', NOW))
       .toBe('2 products are not listed on Amazon · DE, so they are skipped. Choose “New listings start as” to create them.')

@@ -16,7 +16,7 @@
  */
 import type { PublicationBatchChild } from '@nexus/shared/studio-publication'
 import { channelLabel } from '@nexus/shared/channel-label'
-import { LISTINGS_WORD, MARKETS_WORD, MAX_BATCH_DESTINATIONS, type DestinationState, type PlacesWord, type PublishPlan } from './destinations'
+import { LISTINGS_WORD, MARKETS_WORD, MAX_BATCH_DESTINATIONS, type DestinationState, type PlacesWord } from './destinations'
 import { manyRowState, type ManyPlan } from './many'
 import { optionListingLabel, publicationScopeKey, type PublicationDestinationOption } from './model'
 
@@ -238,18 +238,6 @@ export function manyTabWords(children: readonly PublicationBatchChild[], stage: 
   if (ready) return plural(changes, 'change', 'changes')
   if (problems) return `${problems.toLocaleString('en')} with problems`
   return children.length ? 'nothing to send' : 'no products'
-}
-
-/** One quiet line when two or more markets are chosen — it replaces the big counters: "3 markets · 21 changes · 1 with problems". */
-export function familySummary(markets: number, plan: Pick<PublishPlan, 'changes' | 'wholeProducts' | 'skipped' | 'nothing' | 'pending'>, word: PlacesWord = MARKETS_WORD): string {
-  return [
-    plural(markets, word.one, word.many),
-    plan.changes ? plural(plan.changes, 'change', 'changes') : null,
-    plan.wholeProducts ? plural(plan.wholeProducts, 'new product', 'new products') : null,
-    plan.skipped.length ? `${plan.skipped.length.toLocaleString('en')} with problems` : null,
-    plan.nothing.length ? `${plan.nothing.length.toLocaleString('en')} with nothing to send` : null,
-    plan.pending.length ? `${plan.pending.length.toLocaleString('en')} not ready yet` : null,
-  ].filter(Boolean).join(' · ')
 }
 
 /** The same line for the many-product window once checked: "12 listings ready · 214 changes · 3 with problems". */

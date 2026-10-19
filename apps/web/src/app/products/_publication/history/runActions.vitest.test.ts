@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { HistoryProduct, HistoryRun } from '@nexus/shared/publication-history'
 import {
   SHEET_LANDING_TTL_MS, failedSkus, filterProducts, historyDeepLinkPatch, listWords, orderProducts, parseHistoryDeepLink, productFilterCounts, requestSheetLanding,
-  resultsCsv, productsAsShown, resultsFileName, runActionVisibility, runChangeLabel, runDestination, runHeadline, runListingLabel, runStatusMeta, runUndos,
-  sentFieldsText, sheetFieldHints, sheetRowIdOf, takeSheetLanding,
+  resultsCsv, productsAsShown, resultsFileName, reviewFieldHints, reviewSheetLanding, runActionVisibility, runChangeLabel, runDestination, runHeadline, runListingLabel,
+  runStatusMeta, runUndos, sentFieldsText, sheetFieldHints, sheetLandingVersion, sheetRowIdOf, subscribeSheetLanding, takeSheetLanding,
 } from './runActions'
 
 const ZERO = { accepted: 0, verified: 0, failed: 0, waiting: 0, notSent: 0, skipped: 0, unknown: 0 }
@@ -290,5 +290,27 @@ describe('"Show in sheet" lands on the field the channel named', () => {
     requestSheetLanding({ rowId: 'primary:p-B', fieldNames: [], channel: 'EBAY', marketplace: 'IT' }, now)
     expect(takeSheetLanding({ channel: 'EBAY', marketplace: 'IT' }, now + SHEET_LANDING_TTL_MS + 1)).toBeNull()
     expect(takeSheetLanding({ channel: 'EBAY', marketplace: 'IT' }, now)).toBeNull()
+  })
+  // Owner audit 2026-10-19 — "Show in sheet" from a problem in the Publish window, which closes over a sheet already on screen.
+  it('a review problem lands on its product\'s row of the sheet\'s own listing, on the names its field goes by', () => {
+    expect(reviewSheetLanding({ channel: 'AMAZON', marketplace: 'IT' }, 'p-A', 'title'))
+      .toEqual({ rowId: 'primary:p-A', fieldNames: ['title', 'item_name'], channel: 'AMAZON', marketplace: 'IT' })
+    expect(reviewSheetLanding({ channel: 'EBAY', marketplace: 'IT', listingId: 'alias-1' }, 'p-B', 'aspect:Colour'))
+      .toEqual({ rowId: 'alias-1:p-B', fieldNames: ['aspect:Colour', 'Colour', 'aspects'], channel: 'EBAY', marketplace: 'IT' })
+    // No field named: the sheet lands on the row (its SKU).
+    expect(reviewSheetLanding({ channel: 'EBAY', marketplace: 'DE' }, 'p-C', null).fieldNames).toEqual([])
+    expect(reviewFieldHints('AMAZON', 'bullet_point:["A1","it_IT"]')).toEqual(['bullet_point:["A1","it_IT"]', 'bullet_point'])
+  })
+  it('a sheet on screen hears of a new request at once, and stops hearing when it goes', () => {
+    let heard = 0
+    const stop = subscribeSheetLanding(() => { heard += 1 })
+    const before = sheetLandingVersion()
+    requestSheetLanding({ rowId: 'primary:p-D', fieldNames: [], channel: 'EBAY', marketplace: 'IT' })
+    expect(heard).toBe(1)
+    expect(sheetLandingVersion()).toBe(before + 1)
+    stop()
+    requestSheetLanding({ rowId: 'primary:p-E', fieldNames: [], channel: 'EBAY', marketplace: 'IT' })
+    expect(heard).toBe(1)
+    expect(takeSheetLanding({ channel: 'EBAY', marketplace: 'IT' })).toMatchObject({ rowId: 'primary:p-E' })
   })
 })

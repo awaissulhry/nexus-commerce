@@ -67,6 +67,19 @@ describe('the review body of a market tab', () => {
     expect(renderToStaticMarkup(createElement(ReviewBody, { ...props, review: review(), selection: null, nexusWins: true }))).toContain('differ from Nexus')
     expect(renderToStaticMarkup(createElement(ReviewBody, { ...props, review: review(), selection: null }))).not.toContain('differ from Nexus')
   })
+  // Owner audit 2026-10-19 — a warning (the same product live in another business) must be seen: the notes start open.
+  it('opens the notes by itself, and counts a problem on several SKUs once, on N SKUs', () => {
+    const html = renderToStaticMarkup(createElement(ReviewBody, { ...props, review: review({ issues: [
+      { severity: 'error', productId: 'p', sku: 'SKU', field: 'colour', message: 'SKU: Colour is empty.' },
+      { severity: 'error', productId: 'q', sku: 'SKU-2', field: 'colour', message: 'SKU-2: Colour is empty.' },
+      { severity: 'warning', sku: 'SKU', message: 'SKU: The same product is live in another business.' },
+    ] }), selection: null }))
+    expect(html).toContain('<details class="nds-disclosure" open="">')
+    expect(html).toContain('SKU: The same product is live in another business.')
+    expect(html).toMatch(/Problems<\/div><div class="nds-metric-body"><div class="val">1<\/div><div class="hint">on 2 SKUs/)
+    // The Full update field of that SKU is left out (its problem); the others go.
+    expect(html).toContain('1 change is left out by 1 problem')
+  })
   it('keeps the exact request in a closed fold, and says when it is still being prepared', () => {
     const built = renderToStaticMarkup(createElement(ReviewBody, { ...props, review: review(), selection }))
     expect(built).toContain('<details'); expect(built).not.toContain('<details open')

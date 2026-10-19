@@ -7,7 +7,7 @@
  * status ("DONE", "FATAL"), so they are labelled by the plain `state` the server derived — never by the raw word.
  */
 import type { HistoryKind, HistoryProduct, HistoryProductResult, HistoryRun, HistoryRunDetail, HistorySkuMove, HistoryState } from '@nexus/shared/publication-history'
-import type { StudioPublishChange } from '@nexus/shared/studio-publication'
+import { sendUnit, type StudioPublishChange, type StudioPublishScope } from '@nexus/shared/studio-publication'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { publicationStatusMeta, publishResultMeta, publishFullTime, toCsv, type CsvColumn, type PublishStatusMeta } from '@/design-system/grid'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -194,7 +194,7 @@ export function sheetFieldHints(product: Pick<HistoryProduct, 'columnKey' | 'col
  */
 export interface SheetLandingRequest {
   rowId: string
-  /** Field names as the channel named them (`sheetFieldHints`); [] = land on the row. */
+  /** Field names as the channel named them (`sheetFieldHints`, `reviewFieldHints`); [] = land on the row (its SKU). */
   fieldNames: string[]
   /** Destination the row belongs to: a sheet showing another one leaves the request alone. */
   channel: string
@@ -204,9 +204,42 @@ export interface SheetLandingRequest {
 
 export const SHEET_LANDING_TTL_MS = 30_000
 let pendingLanding: SheetLandingRequest | null = null
+let landingVersion = 0
+const landingListeners = new Set<() => void>()
 
 export function requestSheetLanding(request: Omit<SheetLandingRequest, 'at'>, now: number = Date.now()): void {
   pendingLanding = { ...request, at: now }
+  landingVersion += 1
+  for (const listener of [...landingListeners]) listener()
+}
+
+/**
+ * A sheet already on screen hears of a new request (the Publish window closes over it, so nothing mounts): it takes the
+ * request then. For `useSyncExternalStore`: subscribe, and the request count as the snapshot.
+ */
+export function subscribeSheetLanding(listener: () => void): () => void {
+  landingListeners.add(listener)
+  return () => { landingListeners.delete(listener) }
+}
+export const sheetLandingVersion = (): number => landingVersion
+
+/**
+ * The names a review problem's field goes by, in the order the sheet tries them: its own, without an eBay "aspect:"
+ * prefix (the item specific's name), and the send unit it travels in (`sendUnit`: Amazon's content check names `title`,
+ * the sheet's column the attribute `item_name`).
+ */
+export function reviewFieldHints(channel: string, field: string): string[] {
+  const names = [field, field.replace(/^(aspect:|itemSpecifics\.)/, ''), sendUnit(channel, field)]
+  return [...new Set(names.map(name => name.trim()).filter(Boolean))]
+}
+
+/**
+ * "Show in sheet" from the Publish review (Owner audit 2026-10-19): the problem's product on the sheet's own destination
+ * (its main listing, or the listing alias it shows), on the problem's field when the sheet has its column, else on the
+ * row's SKU.
+ */
+export function reviewSheetLanding(scope: Pick<StudioPublishScope, 'channel' | 'marketplace' | 'listingId'>, productId: string, field: string | null): Omit<SheetLandingRequest, 'at'> {
+  return { rowId: studioRowId(scope.listingId || null, productId), fieldNames: field ? reviewFieldHints(scope.channel, field) : [], channel: scope.channel, marketplace: scope.marketplace }
 }
 
 /**

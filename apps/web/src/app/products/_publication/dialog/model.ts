@@ -1,4 +1,4 @@
-import type { StudioPublishIssue, StudioPublishResult, StudioPublishReview, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
+import { blockedChanges, type StudioPublishIssue, type StudioPublishResult, type StudioPublishReview, type StudioPublishScope, type StudioPublishSelection } from '@nexus/shared/studio-publication'
 import type { PublishPlan } from '@nexus/shared/publish-plan'
 import { aliasMarkGlyph } from '@/design-system/primitives'
 
@@ -171,14 +171,79 @@ export function matchesPublishPlan(value: unknown, productId: string, scope: Stu
 /** One row of the review's problem table: the SKU (or the whole listing) and what to fix, with the channel's own words. */
 export interface PublicationProblemRow { id: string; sku: string; message: string; detail?: string }
 
+/** An issue's words without its SKU in front: a message that already starts with its SKU does not repeat it. */
+const issueText = (issue: StudioPublishIssue) => issue.sku && issue.message.startsWith(`${issue.sku}: `) ? issue.message.slice(issue.sku.length + 2) : issue.message
+
 /**
  * Audit D4 (2026-10-01) — the review's issues as ONE table of problems (SKU · what to fix) and a list of notes. A problem
  * that names no SKU is about the whole listing. A message that already starts with its SKU does not repeat it.
  */
 export function publicationProblems(issues: readonly StudioPublishIssue[]): { problems: PublicationProblemRow[]; notes: string[] } {
-  const text = (issue: StudioPublishIssue) => issue.sku && issue.message.startsWith(`${issue.sku}: `) ? issue.message.slice(issue.sku.length + 2) : issue.message
   const problems = issues.filter(issue => issue.severity === 'error')
-    .map((issue, index) => ({ id: `${index}`, sku: issue.sku ?? 'Whole listing', message: text(issue), ...(issue.detail ? { detail: issue.detail } : {}) }))
-  const notes = [...new Set(issues.filter(issue => issue.severity === 'warning').map(issue => issue.sku ? `${issue.sku}: ${text(issue)}` : issue.message))]
+    .map((issue, index) => ({ id: `${index}`, sku: issue.sku ?? 'Whole listing', message: issueText(issue), ...(issue.detail ? { detail: issue.detail } : {}) }))
+  const notes = [...new Set(issues.filter(issue => issue.severity === 'warning').map(issue => issue.sku ? `${issue.sku}: ${issueText(issue)}` : issue.message))]
   return { problems, notes }
+}
+
+/**
+ * One problem to fix, however many SKUs it is on: the same words (and the channel's same detail) on 20 SKUs are ONE
+ * problem — one row of the review, counted once everywhere (`problemCount`).
+ */
+export interface ProblemGroup {
+  id: string
+  /** The SKUs it is on, in order; none when it is about the whole listing. */
+  skus: string[]
+  message: string
+  detail: string | null
+  /** The first product it names and that issue's field: where the sheet can land ("Show in sheet"). Null when it names none. */
+  productId: string | null
+  field: string | null
+  /** The review's errors behind it, one per SKU: what a left-out change points back to (`blockedChanges`). */
+  issues: StudioPublishIssue[]
+}
+
+/**
+ * A review's problems, one per distinct message. Measured on a large family (local copy, four Amazon markets): 1,501
+ * problems were 1,501 rows — the window froze for 45 s drawing them — and read as one list of the same few sentences.
+ */
+export function problemGroups(issues: readonly StudioPublishIssue[]): ProblemGroup[] {
+  const groups = new Map<string, ProblemGroup>()
+  issues.forEach((issue, index) => {
+    if (issue.severity !== 'error') return
+    const message = issueText(issue), detail = issue.detail ?? null
+    const key = `${message}\u0000${detail ?? ''}`
+    const group = groups.get(key) ?? { id: `${index}`, skus: [], message, detail, productId: null, field: null, issues: [] }
+    groups.set(key, group)
+    group.issues.push(issue)
+    if (issue.sku && !group.skus.includes(issue.sku)) group.skus.push(issue.sku)
+    if (!group.productId && issue.productId) { group.productId = issue.productId; group.field = issue.field ?? null }
+  })
+  return [...groups.values()]
+}
+
+/** How many problems, counted ONE way everywhere (tab, status, tiles, filter, banner): distinct problems, and the SKUs they are on. */
+export interface ProblemCount { problems: number; skus: number }
+
+export function problemCount(issues: readonly StudioPublishIssue[]): ProblemCount {
+  const groups = problemGroups(issues)
+  return { problems: groups.length, skus: new Set(groups.flatMap(group => group.skus)).size }
+}
+
+const countWords = (n: number, one: string, many: string) => `${n.toLocaleString('en')} ${n === 1 ? one : many}`
+
+/** "2 problems on 14 SKUs", "1 problem on 1 SKU", "1 problem" (about the whole listing). */
+export function problemCountWords(count: ProblemCount): string {
+  return `${countWords(count.problems, 'problem', 'problems')}${count.skus ? ` on ${countWords(count.skus, 'SKU', 'SKUs')}` : ''}`
+}
+
+/**
+ * Option A (Owner 2026-10-19), counted the table's way: the changes a problem leaves out that the table lists as "Left
+ * out: …" (a field that changes; a value the channel already holds is never a row), and the distinct problems behind
+ * them. The publish gate itself stays `blockedChanges`.
+ */
+export function leftOutCount(review: Parameters<typeof blockedChanges>[0]): { changes: number; problems: number } {
+  const blocked = blockedChanges(review)
+  const shown = (review?.changes ?? []).filter(change => blocked.has(change.id) && change.status !== 'SAME')
+  const issues = [...new Set(shown.map(change => blocked.get(change.id)!))]
+  return { changes: shown.length, problems: problemCount(issues).problems }
 }

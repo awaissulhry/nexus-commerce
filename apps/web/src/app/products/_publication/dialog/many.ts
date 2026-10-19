@@ -199,9 +199,9 @@ export function manyPlan(children: readonly RowChild[], now: number = Date.now()
   return plan
 }
 
-/** "Publish 120 changes to 3 markets · skip 2 with problems" — the one counted button (as the studio's). */
+/** "Publish 120 changes to 3 markets · skip 2 listings with problems" — the one counted button (as the studio's). */
 export function manyPublishButtonText(plan: ManyPlan): string {
-  const skips = [plan.problems ? `skip ${plan.problems} with problems` : null, plan.expired ? `${plan.expired} expired` : null].filter(Boolean)
+  const skips = [plan.problems ? `skip ${plural(plan.problems, 'listing', 'listings')} with problems` : null, plan.expired ? `${plural(plan.expired, 'listing', 'listings')} expired` : null].filter(Boolean)
   const tail = skips.length ? ` · ${skips.join(' · ')}` : ''
   if (!plan.listings) return `Nothing to publish${tail}`
   return `Publish ${plural(plan.changes, 'change', 'changes')} to ${plural(plan.markets, 'market', 'markets')}${tail}`

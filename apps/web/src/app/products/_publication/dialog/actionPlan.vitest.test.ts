@@ -8,10 +8,10 @@ import { matchesPublishPlan } from './model'
 import { destinationStateLabel } from './destinations'
 import { NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD } from '@nexus/shared/listing-actions'
 import {
-  CHECK_ON_CHANNEL, CREATE_UNTICKED, EVERYTHING_SENT, NOTHING_HERE, NOT_SENT_PROBLEMS, RELIST_UNTICKED, actionPlanRows, actionPlanSend, agoText,
-  createdCounts, createdWords, createsLine, planFamilySummary, reviewRowListingWord, shopifyVisibilityWords,
-  lifecycleChildMeta, planButtonText, planResultRows, planResultWord, planSubmit, planSummaryLine, planTabWords, planUndo,
-  setByText, toggleRowTicks, undoButtonText, undoSentence, withProductTicks, marketsSendingNothing, replacesCountWords,
+  CHECK_ON_CHANNEL, CREATE_UNTICKED, EMPTY_TALLY, NOTHING_HERE, NOT_SENT_PROBLEMS, RELIST_UNTICKED, actionPlanRows, actionPlanSend, addTallies, agoText,
+  createdCounts, createdWords, createsLine, everythingSentWords, planFamilySummary, reviewRowListingWord, shopifyVisibilityWords,
+  lifecycleChildMeta, planButtonText, planResultRows, planResultWord, planRowResults, planSubmit, planSummaryLine, planTabWords, planUndo, sendTally,
+  setByText, toggleRowTicks, undoButtonText, undoSentence, withProductTicks, marketsSendingNothing, replacesCountWords, type SendTally,
 } from './actionPlan'
 
 const NOW = Date.parse('2026-10-04T10:00:00Z')
@@ -63,6 +63,11 @@ const entryOf = (plan: PublishPlanDestination, over: Partial<DestinationEntry> =
 const sendOf = (entries: Record<string, DestinationEntry>) =>
   actionPlanSend(Object.keys(entries), key => destinationState(entries[key], true, NOW), key => entries[key] ?? EMPTY_ENTRY)
 
+/** The window's one count over these markets, as PublishDialog makes it from each market's table. */
+const tallyOf = (entries: Record<string, DestinationEntry>) => addTallies(Object.values(entries).map(e =>
+  sendTally({ rows: actionPlanRows(e, destinationState(e, true, NOW), NOW), review: e.review, selectedIds: e.selectedIds })))
+const tally = (over: Partial<SendTally>): SendTally => ({ ...EMPTY_TALLY, ...over })
+
 describe('the one table of a market', () => {
   const plan = destination(IT, {
     lifecycle: [lifecycle('pause1', 'pause'), lifecycle('del1', 'delete'), lifecycle('end1', 'end'), lifecycle('res1', 'resume')],
@@ -100,10 +105,15 @@ describe('the one table of a market', () => {
     expect(replacesCountWords(1200, 'AMAZON')).toBe('1,200 replace Amazon values')
   })
   // What a Full row removes is a row of the review table of its own, whole (reviewRows.vitest.test.ts).
-  it('a Full row says everything is sent', () => {
+  it('a Full row says everything is sent, and how many fields — those that already match included', () => {
     const full = rows.find(r => r.key === 'content:gale-m')!
-    expect(full.sent).toBe(EVERYTHING_SENT)
+    expect(full.sent).toBe('Everything is sent: 2 fields.')
     expect(full.tick).toBe('on')
+    expect(everythingSentWords(5, 3)).toBe('Everything is sent: 5 fields, 3 of them already as on the channel.')
+  })
+  it('a Delete row keeps the listing\'s state now (its "Channel now")', () => {
+    expect(rows.find(r => r.key === 'del1')).toMatchObject({ listingState: 'active', what: { column: 'send', mode: 'delete' } })
+    expect(rows.find(r => r.key === 'content:gale-m')!.listingState).toBeNull()
   })
   it('lifecycle rows carry the server sentence and who set them; outgrown rows say "No longer applies" and cannot be ticked', () => {
     const pause = rows.find(r => r.key === 'pause1')!
@@ -129,7 +139,7 @@ describe('the one table of a market', () => {
     const amazon = destination(AMAZON_IT, { review: review(AMAZON_IT, { issues: [title] }) })
     const e = entryOf(amazon)
     const state = destinationState(e, true, NOW)
-    expect(state).toMatchObject({ kind: 'ready', leftOut: 1 })
+    expect(state).toMatchObject({ kind: 'ready', leftOut: { changes: 1, problems: 1 } })
     expect(destinationStateLabel(state).label).toBe('Ready · 1 left out')
     const out = actionPlanRows(e, state, NOW)
     // GALE-S keeps its brand (not ticked by default); GALE-M (another SKU, a Full update) goes whole.
@@ -161,29 +171,49 @@ describe('default ticks: stale and refused values start unticked', () => {
 })
 
 describe('what one click sends', () => {
-  it('counts the summary line from the ticks', () => {
+  // Owner audit 2026-10-19 — "the numbers do not add up": one count for the summary line, the tiles and the button.
+  it('counts the summary line from the ticks, and it adds up to the button', () => {
     const plan = destination(IT, { lifecycle: [lifecycle('p1', 'pause'), lifecycle('p2', 'pause'), lifecycle('d1', 'delete'), lifecycle('e1', 'end')] })
-    const send = sendOf({ it: entryOf(plan) })
-    expect(send.counts).toMatchObject({ partial: 1, fields: 1, full: 1, inactive: 2, ended: 1, delete: 1 })
-    expect(planSummaryLine(send.counts)).toBe('1 partial update (1 field) · 1 full update · 2 inactive · 1 ended · 1 delete')
-    expect(planSummaryLine({ partial: 0, fields: 0, full: 0, delete: 0, active: 0, inactive: 0, ended: 0 })).toBe(NOTHING_HERE)
+    const t = tallyOf({ it: entryOf(plan) })
+    expect(t).toMatchObject({ partial: 1, fields: 1, full: 1, fullFields: 2, inactive: 2, ended: 1, delete: 1, removedValues: 1, listings: 6 })
+    // 1 partial field + 2 Full update fields + 2 status changes; End and Delete are named after, with their unit.
+    expect(t.changes).toBe(5)
+    expect(planSummaryLine(t)).toBe('1 partial update (1 field) · 1 full update (2 fields) · 2 inactive · 1 ended · 1 delete · removes 1 value')
+    expect(planButtonText(t, ['it'], { one: 'market', many: 'markets' })).toBe('Publish 5 changes · end 1 listing · delete 1 listing · removes 1 value')
+    expect(planSummaryLine(EMPTY_TALLY)).toBe(NOTHING_HERE)
   })
-  it('the counted button names End and Delete after the listings', () => {
-    const counts = { partial: 18, fields: 41, full: 2, delete: 1, active: 1, inactive: 3, ended: 1 }
+  it('a Full update names what it removes, on the summary and the button; unticked, it removes nothing', () => {
+    const plan = destination(IT)
+    const on = tallyOf({ it: entryOf(plan) })
+    expect(on.removedValues).toBe(1)
+    expect(planButtonText(on, ['it'], { one: 'market', many: 'markets' })).toBe('Publish 3 changes · removes 1 value')
+    const off = tallyOf({ it: entryOf(plan, { selectedIds: entryOf(plan).selectedIds.filter(id => !id.includes('gale-m')) }) })
+    expect(off).toMatchObject({ full: 0, removedValues: 0, changes: 1 })
+    expect(planButtonText(off, ['it'], { one: 'market', many: 'markets' })).toBe('Publish 1 change')
+  })
+  it('content a problem holds back is not counted; its status changes still are', () => {
+    const blocked = destination(IT, { review: review(IT, { issues: [{ severity: 'error', message: 'Reconnect this account.' }] }), lifecycle: [lifecycle('p1', 'pause')] })
+    expect(tallyOf({ it: entryOf(blocked) })).toMatchObject({ partial: 0, full: 0, changes: 1, inactive: 1, removedValues: 0 })
+  })
+  it('the counted button names its unit, always changes — never switching to listings when a status change is ticked', () => {
+    const t = tally({ partial: 18, fields: 41, full: 2, fullFields: 19, delete: 1, active: 1, inactive: 3, ended: 1, changes: 64 })
     const markets = { one: 'market', many: 'markets' }
-    expect(planButtonText(counts, ['it'], markets)).toBe('Publish 24 listings · end 1 · delete 1')
-    expect(planButtonText(counts, ['it', 'de'], markets, ['fr'])).toBe('Publish 24 listings to 2 markets · end 1 · delete 1 · skip 1 with problems')
-    expect(planButtonText({ ...counts, partial: 0, full: 0, active: 0, inactive: 0 }, ['it'], markets)).toBe('End 1 listing · delete 1')
-    expect(planButtonText({ partial: 0, fields: 0, full: 0, delete: 2, active: 0, inactive: 0, ended: 0 }, ['it'], markets)).toBe('Delete 2 listings')
+    expect(planButtonText(t, ['it'], markets)).toBe('Publish 64 changes · end 1 listing · delete 1 listing')
+    expect(planButtonText(t, ['it', 'de'], markets, ['fr'])).toBe('Publish 64 changes to 2 markets · end 1 listing · delete 1 listing · skip 1 market with problems')
+    expect(planButtonText(tally({ ended: 1, delete: 1 }), ['it'], markets)).toBe('End 1 listing · delete 1 listing')
+    expect(planButtonText(tally({ delete: 2 }), ['it'], markets)).toBe('Delete 2 listings')
+    expect(planButtonText(tally({ changes: 21 }), ['it', 'de'], markets, ['fr'])).toBe('Publish 21 changes to 2 markets · skip 1 market with problems')
+    expect(planButtonText(tally({ changes: 6 }), ['a', 'e', 's'], { one: 'destination', many: 'destinations' }, [], 1)).toBe('Publish 6 changes and 1 new product to 3 destinations')
+    expect(planButtonText(tally({ changes: 4 }), ['a', 'b'], { one: 'listing', many: 'listings' })).toBe('Publish 4 changes to 2 listings')
   })
-  it('"skip N with problems" counts only the markets that send nothing at all, for every caller (as the Publish window\'s line)', () => {
-    const counts = { partial: 0, fields: 0, full: 0, delete: 0, active: 0, inactive: 2, ended: 0 }
+  it('"skip N markets with problems" counts only the markets that send nothing at all, for every caller (as the Publish window\'s line)', () => {
+    const counts = tally({ inactive: 2, changes: 2 })
     const markets = { one: 'market', many: 'markets' }
     // DE: content blocked, but its status change goes — published, not skipped. FR: skipped, sends nothing.
     expect(marketsSendingNothing(['de', 'fr'], ['it', 'de'])).toEqual(['fr'])
-    expect(planButtonText(counts, ['it', 'de'], markets, ['de', 'fr'])).toBe('Publish 2 listings to 2 markets · skip 1 with problems')
-    expect(planButtonText(counts, ['it', 'de'], markets, ['de'])).toBe('Publish 2 listings to 2 markets')
-    expect(planButtonText({ ...counts, inactive: 0 }, [], markets, ['fr'])).toBe('Nothing to publish · 1 with problems')
+    expect(planButtonText(counts, ['it', 'de'], markets, ['de', 'fr'])).toBe('Publish 2 changes to 2 markets · skip 1 market with problems')
+    expect(planButtonText(counts, ['it', 'de'], markets, ['de'])).toBe('Publish 2 changes to 2 markets')
+    expect(planButtonText(EMPTY_TALLY, [], markets, ['fr'])).toBe('Nothing to publish · 1 market with problems')
     // The line above the tabs: the blocked market whose status changes go says "content blocked", not "with problems".
     expect(planFamilySummary(3, { skipped: ['de', 'fr'], nothing: [], pending: [] }, counts, 0, ['it', 'de']))
       .toBe('3 markets · 2 inactive · 1 with problems · 1 with content blocked')
@@ -260,11 +290,10 @@ describe('what one click sends', () => {
     expect(body.destinations.map(d => d.scope)).toEqual([IT, ALT1])
     expect(body.destinations[1]).toMatchObject({ scope: { listingId: 'alias-1' }, reviewId: 'r-ALT1' })
     expect(body.lifecycle).toEqual(['m1', 'a1'])
-    expect(planFamilySummary(2, { skipped: [], nothing: [], pending: [] }, send.counts, 0, send.send, null, { one: 'listing', many: 'listings' }))
+    expect(planFamilySummary(2, { skipped: [], nothing: [], pending: [] }, tallyOf(entries), 0, send.send, null, { one: 'listing', many: 'listings' }))
       .toMatch(/^2 listings · /)
-    // The rows are counted as listings already: the places are destinations in the button, never "listings to listings".
-    expect(planButtonText({ ...send.counts, partial: 0, full: 0, active: 0, inactive: 2 }, send.send, { one: 'listing', many: 'listings' }))
-      .toBe('Publish 2 listings to 2 destinations')
+    // Only End or Delete: the places are destinations, never "on 2 listings".
+    expect(planButtonText(tally({ ended: 2 }), send.send, { one: 'listing', many: 'listings' })).toBe('End 2 listings on 2 destinations')
   })
 })
 
@@ -272,6 +301,24 @@ describe('after the click: results, words and Undo', () => {
   const child = (over: Partial<PublishPlanBatchChild>): PublishPlanBatchChild => ({
     publicationId: 'c', productId: 'gale', channel: 'EBAY', marketplace: 'IT', accountId: 'ebay', aliasKey: '', status: 'DONE', terminal: true, checked: false,
     message: null, summary: null, kind: 'lifecycle', action: 'pause', step: 'pause', rows: null, ...over,
+  })
+  // Owner audit 2026-10-19 — a row read "Sent" before anything was sent, and kept it after the channel refused it.
+  it('each row that went gets its real result: the single publish\'s per SKU, a batch step\'s, a listing\'s own', () => {
+    const plan = destination(IT, { lifecycle: [lifecycle('p1', 'pause'), lifecycle('d1', 'delete')] })
+    const rows = actionPlanRows(entryOf(plan), destinationState(entryOf(plan), true, NOW), NOW)
+    const single = planRowResults(rows, { result: { status: 'PARTIAL', results: [{ sku: 'GALE-S', status: 'FAILED', message: 'Refused.' }] } })
+    expect(single.get('content:gale-s')?.label).toBe('Failed')
+    expect(single.get('content:gale-m')?.label).toBe('Partly failed')
+    expect(single.has('p1')).toBe(false)
+    const batch = planRowResults(rows, { children: [
+      child({ publicationId: 'c', kind: 'content', action: null, status: 'ACCEPTED' }),
+      child({ publicationId: 'l', action: 'delete', rows: [{ productId: 'p-d1', listingId: 'l-d1', sku: 'GALE-D1', outcome: 'FAILED', message: 'No.' }] }),
+    ] })
+    expect(batch.get('content:gale-m')?.label).toBe('Accepted')
+    expect(batch.get('d1')?.label).toBe('Failed')
+    // No step for the pause in this batch: no result — the table says "Not sent".
+    expect(batch.has('p1')).toBe(false)
+    expect(planRowResults(rows, { unknown: true }).get('content:gale-s')?.label).toBe('Result unknown')
   })
   it('UNKNOWN reads "Check on the channel"; DONE reads Accepted (only a read-back is Verified)', () => {
     expect(lifecycleChildMeta({ status: 'UNKNOWN', message: null }).label).toBe(CHECK_ON_CHANNEL)
@@ -439,7 +486,8 @@ describe('new listings in the Publish window', () => {
     expect(createdWords({ total: 1, inactive: 1 })).toBe('1 new listing (inactive)')
     expect(createdWords({ total: 2, inactive: 2 })).toBe('2 new listings (all inactive)')
     expect(createdWords({ total: 0, inactive: 0 })).toBeNull()
-    const counts = { partial: 3, fields: 3, full: 0, delete: 0, active: 0, inactive: 0, ended: 0 }
+    const counts = tally({ partial: 3, fields: 3, changes: 3 })
+    expect(tallyOf({ it: entry })).toMatchObject({ partial: 3, fields: 3, changes: 3 })
     expect(planSummaryLine(counts, 0, createdCounts(rows))).toBe('3 partial updates (3 fields) · 3 new listings (1 inactive)')
     expect(planFamilySummary(2, { skipped: [], nothing: [], pending: [] }, counts, 0, [], { total: 3, inactive: 1 })).toBe('2 markets · 3 partial updates (3 fields) · 3 new listings (1 inactive)')
   })
@@ -448,7 +496,7 @@ describe('new listings in the Publish window', () => {
     expect(row('held:gale-l')).toMatchObject({ kind: 'held', tick: 'none', tickable: false, notListed: true, notSent: NOT_LISTED_LEFT_OUT,
       what: { column: 'status', target: 'not_listed' }, creates: null })
     expect(rows.at(-1)!.key).toBe('held:gale-l')
-    expect(sendOf({ it: entry }).counts.partial).toBe(3)
+    expect(tallyOf({ it: entry }).partial).toBe(3)
   })
 
   it('a main row set Not listed holds its family: each row it lists is held with the reason, nothing is created', () => {
@@ -508,11 +556,11 @@ describe('S10 — a SKU move in the Publish window', () => {
   })
 
   it('the summary and the button count a move as a move, not a partial update', () => {
-    const entries = { it: entryOf(moving()) }
-    const send = sendOf(entries)
-    expect(send.counts).toMatchObject({ partial: 1, fields: 1, full: 0, moved: 1 })
-    expect(planSummaryLine(send.counts)).toBe('1 partial update (1 field) · 1 move to a new SKU')
-    expect(planButtonText({ ...send.counts, delete: 1 }, ['it'], { one: 'market', many: 'markets' })).toBe('Publish 2 listings · delete 1')
+    const t = tallyOf({ it: entryOf(moving()) })
+    expect(t).toMatchObject({ partial: 1, fields: 1, full: 0, moved: 1, movedFields: 1, changes: 2 })
+    expect(planSummaryLine(t)).toBe('1 partial update (1 field) · 1 move to a new SKU (1 field)')
+    // The move deletes its old SKU: the button names that delete.
+    expect(planButtonText(t, ['it'], { one: 'market', many: 'markets' })).toBe('Publish 2 changes · delete 1 listing')
   })
 
   it('a ticked move is a removal (the danger tone) with nothing typed, and goes through the batch with confirmDelete', () => {

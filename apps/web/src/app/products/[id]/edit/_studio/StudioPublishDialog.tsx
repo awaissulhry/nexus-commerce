@@ -6,6 +6,7 @@ import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import { PublishDialog, type PublicationInitialSelection, type PublicationSaveBridge } from '@/app/products/_publication/dialog/PublishDialog'
 import { canonicalScope, isOfferedScope, listedAliases, listedDestinationKeys, sheetDestinationScope, type ListedDestinations } from '@/app/products/_publication/dialog/destinations'
 import { publicationDestinations } from '@/app/products/_publication/dialog/model'
+import { requestSheetLanding, reviewSheetLanding } from '@/app/products/_publication/history/runActions'
 import { usePublicationSave, useStudioDiscoveryFailure, useStudioProduct, useStudioScope } from './contracts'
 import { readPublishActionsShared } from './sheet/publishActionsApi'
 import { MASTER_SCOPE } from './types'
@@ -67,6 +68,13 @@ export function StudioPublishDialog({ onClose, initialDestination, initialSelect
     blocker: () => publicationBlocker(canChangeEditor),
   }), [state, preparePublication, publicationBlocker, canChangeEditor])
   const productIds = useMemo(() => [product.id], [product.id])
+  // "Show in sheet" (Owner audit 2026-10-19): the window closes, the studio shows its sheet, and the sheet lands on the
+  // problem's product and field — only on the destination the sheet shows (none on the Shared tab).
+  const setTab = studio.setTab
+  const sheet = useMemo(() => (current ? {
+    scope: current,
+    showField: (productId: string, field: string | null) => { requestSheetLanding(reviewSheetLanding(current, productId, field)); setTab('sheet') },
+  } : null), [current, setTab])
   const wanted = !initialDestination && !initialSelection
   const listed = useMemo<ListedDestinations | null>(() => {
     // The retry's own destination is still being read: the window says it is finding it.
@@ -79,7 +87,7 @@ export function StudioPublishDialog({ onClose, initialDestination, initialSelect
     return { keys: listedDestinationKeys(read.cells, familyId, chosen), loading: false, aliases }
   }, [holding, wanted, read.loading, read.cells, familyId, aliases, listingChosen, chosen, studio.destination.status])
   return <PublishDialog productIds={productIds} productLabel={product.sku} destinations={destinations} initialDestinations={initialDestinations}
-    initialSelection={initialSelection} save={save} discoveryFailed={discoveryFailed} listed={listed} onClose={onClose} />
+    initialSelection={initialSelection} save={save} discoveryFailed={discoveryFailed} listed={listed} sheet={sheet} onClose={onClose} />
 }
 
 /**

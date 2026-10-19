@@ -31,11 +31,11 @@ import { channelLabel } from '@nexus/shared/channel-label'
 import { deleteDoneSentence, LISTING_ACTION_LABEL, type ListingAction, type SellingState, type StatusTarget } from '@nexus/shared/listing-actions'
 import { publishPlanSummary, type SendMode } from '@nexus/shared/publish-actions'
 import {
-  LIFECYCLE_UNKNOWN, START_AS_WORD, publishPlanCounts, publishPlanUsesBatch,
+  LIFECYCLE_UNKNOWN, START_AS_WORD, publishPlanUsesBatch,
   type PublishPlanBatchChild, type PublishPlanBatchView, type PublishPlanCounts, type PublishPlanDestination, type PublishPlanLifecycleRow,
   type PublishPlanSubmit, type StartAsTarget,
 } from '@nexus/shared/publish-plan'
-import { blockedChanges, leftOutReason, type StudioPublishReview, type StudioPublishScope } from '@nexus/shared/studio-publication'
+import { blockedChanges, leftOutReason, type StudioPublishResult, type StudioPublishReview, type StudioPublishScope } from '@nexus/shared/studio-publication'
 import { publicationStatusMeta, publishResultMeta, type PublishStatusMeta } from '@/design-system/grid/renderers/publishStatus'
 import type { Tone } from '@/design-system/primitives/tone'
 import { batchChildMeta, isSparse, publishPlan, tickedChanges, type DestinationEntry, type DestinationState, type PublishPlan as ContentPlan } from './destinations'
@@ -46,6 +46,15 @@ const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en
 // ── Words ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const EVERYTHING_SENT = 'Everything is sent.'
+/**
+ * A Full update row's line: every field goes, named with how many (the counts above the table count them all) and how
+ * many of them already match the channel (they are sent again, and are not rows of their own).
+ */
+export function everythingSentWords(fields: number, same: number): string {
+  if (!fields) return EVERYTHING_SENT
+  const again = same ? `, ${same.toLocaleString('en')} of them already as on the channel` : ''
+  return `Everything is sent: ${plural(fields, 'field', 'fields')}${again}.`
+}
 export const FULL_UNTICKED = 'Unticked: nothing of it is sent.'
 export const NOT_SENT_PROBLEMS = 'Not sent until the problems above are fixed.'
 export const NOT_SENT_EARLIER = 'Not sent: an earlier publish here has no answer yet.'
@@ -172,6 +181,8 @@ export interface ActionPlanRow {
   what: PlanRowWhat
   /** A lifecycle row's action (Pause, Resume, End, Relist, Delete); null for the others. */
   action: ListingAction | null
+  /** A lifecycle row's listing as the channel has it now (its "Channel now"); null for the others. */
+  listingState: SellingState | null
   /** What is sent, in plain English (for a row that sends nothing: why). */
   sent: string
   /** Offered, but the person should read this first (an FBA pause), or null. */
@@ -240,7 +251,7 @@ function lifecycleRow(row: PublishPlanLifecycleRow, ticked: ReadonlySet<string>,
     ? { column: 'send', mode: 'delete', setAt: row.setAt, setByName: row.setByName }
     : { column: 'status', target: row.value, state: row.state, setAt: row.setAt, setByName: row.setByName }
   return {
-    key: row.id, kind: 'lifecycle', productId: row.productId, sku: row.sku, what, action: row.action, sent: row.refused ?? row.sentence,
+    key: row.id, kind: 'lifecycle', productId: row.productId, sku: row.sku, what, action: row.action, listingState: row.state, sent: row.refused ?? row.sentence,
     warning: row.refused ? null : row.warning, checkedAtSend: row.refused ? null : row.checkedAtSend, notSent: row.refused,
     setBy: setByText(row, now), stale: row.stale, tick: row.refused ? 'none' : ticked.has(row.id) ? 'on' : 'off', tickable: !row.refused,
     danger: isDanger(row.action), changeIds: [], defaultFieldIds: [], fields: { ticked: 0, total: 0 },
@@ -298,7 +309,7 @@ export function actionPlanRows(entry: Pick<DestinationEntry, 'plan' | 'review' |
     else if (!sparse) { sent = row.existing ? WHOLE_AGAIN : WHOLE_NEW; tick = 'whole' }
     else if (!review?.changes) { sent = FIELDS_NOT_LISTED; tick = 'none' }
     else if (!usable.length) { sent = rowProblem ? leftOutReason(rowProblem) : changes.some(c => c.status !== 'SAME') ? NOTHING_SENDABLE : NOTHING_TO_SEND; tick = 'none' }
-    else if (mode === 'full') { sent = on ? EVERYTHING_SENT : FULL_UNTICKED; tick = on ? 'on' : 'off' }
+    else if (mode === 'full') { sent = on ? everythingSentWords(on, usable.filter(c => ticked.has(c.id) && c.status === 'SAME').length) : FULL_UNTICKED; tick = on ? 'on' : 'off' }
     else {
       sent = [`${on.toLocaleString('en')} of ${plural(usable.length, 'field', 'fields')}`, replacing ? replacesCountWords(replacing, channel) : null].filter(Boolean).join(' · ')
       tick = on === 0 ? 'off' : on === usable.length ? 'on' : 'some'
@@ -329,7 +340,7 @@ export function actionPlanRows(entry: Pick<DestinationEntry, 'plan' | 'review' |
       : { column: 'send', mode: newRow ? 'full' : mode, setAt: null, setByName: null, ...(newRow ? { newRow } : {}) }
     rows.push({
       key: `content:${row.productId}`, kind: 'content', productId: row.productId, sku: row.sku,
-      what, action: null, sent, warning: relist?.warning ?? (move && !notSent ? move.warning : null) ?? null,
+      what, action: null, listingState: null, sent, warning: relist?.warning ?? (move && !notSent ? move.warning : null) ?? null,
       checkedAtSend: null, notSent, setBy: null, stale: false,
       // S10 — a move deletes the old SKU: a danger row, like Delete.
       tick, tickable: tick !== 'none' && tick !== 'whole' && !!review?.id, danger: moving && !notSent,
@@ -345,7 +356,7 @@ export function actionPlanRows(entry: Pick<DestinationEntry, 'plan' | 'review' |
     rows.push({
       key: `held:${row.productId}`, kind: 'held', productId: row.productId, sku: row.sku,
       what: row.notListed || row.deleted ? NOT_LISTED_WHAT : { column: 'send', mode: 'partial', setAt: null, setByName: null },
-      action: null, sent: row.reason, warning: null, checkedAtSend: null, notSent: row.reason, setBy: null, stale: false, tick: 'none', tickable: false, danger: false,
+      action: null, listingState: null, sent: row.reason, warning: null, checkedAtSend: null, notSent: row.reason, setBy: null, stale: false, tick: 'none', tickable: false, danger: false,
       changeIds: [], defaultFieldIds: [], fields: { ticked: 0, total: 0 },
       creates: null, notListed: !!row.notListed || !!row.deleted,
     })
@@ -357,7 +368,7 @@ export function actionPlanRows(entry: Pick<DestinationEntry, 'plan' | 'review' |
       : { column: 'status', target: row.value as StatusTarget, state: 'unknown', setAt: null, setByName: null }
     const reason = /[.!?]$/.test(row.reason.trim()) ? row.reason.trim() : `${row.reason.trim()}.`
     rows.push({
-      key: `outgrown:${row.id}`, kind: 'outgrown', productId: row.productId, sku: row.sku, what, action: null, sent: `${reason} ${CLEARED_ON_SEND}`,
+      key: `outgrown:${row.id}`, kind: 'outgrown', productId: row.productId, sku: row.sku, what, action: null, listingState: null, sent: `${reason} ${CLEARED_ON_SEND}`,
       warning: null, checkedAtSend: null, notSent: NO_LONGER_APPLIES, setBy: null, stale: false, tick: 'none', tickable: false, danger: false,
       changeIds: [], defaultFieldIds: [], fields: { ticked: 0, total: 0 },
       creates: null, notListed: false,
@@ -396,7 +407,6 @@ export interface ActionPlanSend {
   lifecycle: string[]
   /** The "No longer applies" ids over the chosen markets: cleared when the batch is queued. */
   outgrown: string[]
-  counts: PublishPlanCounts
   /** Markets that send a whole new product (Shopify). */
   wholeProducts: number
   /** A ticked End, Delete or Amazon SKU move: the button reads in the danger tone (nothing is typed). */
@@ -439,27 +449,90 @@ export function actionPlanSend(keys: readonly string[], stateOf: (key: string) =
   const lifecycleRows = send.flatMap(key => tickedLifecycleRows(entryOf(key)))
   const lifecycle = lifecycleRows.map(row => row.id)
   const plans = keys.map(key => entryOf(key).plan).filter((plan): plan is PublishPlanDestination => !!plan)
-  const fields: Record<string, string[]> = {}
-  for (const key of keys) {
-    const entry = entryOf(key)
-    if (entry.review?.id) fields[entry.review.id] = contentCounts(stateOf(key)) ? tickedChanges(entry) : []
-  }
-  const counts = publishPlanCounts({ destinations: plans }, { fields, lifecycle })
   const outgrown = plans.flatMap(plan => plan.outgrown.map(row => row.id))
   // S10 — content that moves a live Amazon listing to a new SKU deletes the old SKU: sent through the batch, which says
   // so (`confirmDelete`). Nothing is typed (Owner 2026-10-19).
   const moving = content.filter(key => contentCounts(stateOf(key)) && movedRowsTicked(entryOf(key)) > 0)
   const removes = moving.length > 0 || lifecycleRows.some(row => isDanger(row.action))
   const batch = send.length > 0 && (moving.length > 0 || publishPlanUsesBatch({ destinations: plans }, { destinations: send.length, lifecycle }))
-  return { send, content, lifecycle, outgrown, counts, wholeProducts: base.wholeProducts, removes, moving, batch }
+  return { send, content, lifecycle, outgrown, wholeProducts: base.wholeProducts, removes, moving, batch }
 }
 
+// ── The one count (Owner audit 2026-10-19: "the numbers do not add up") ─────────────────────────────────────────────
+
 /**
- * The one summary line: "18 partial updates (41 fields) · 2 full updates · 3 inactive · 1 ended · 1 delete", and the
- * listings it creates ("2 new listings (1 inactive)", counted inside the partial updates).
+ * What a market's ticks send, counted ONE way for every number the window shows: the summary line above the table, the
+ * table's tiles, the button and the line beside it. The summary's counts (`PublishPlanCounts`, the review row's own mode
+ * as the server counts it) plus the fields a Full update or a move sends, the values a Full update removes, and two
+ * totals. Only a row that sends is counted: content a problem or an earlier publish holds back is not.
  */
-export function planSummaryLine(counts: PublishPlanCounts, wholeProducts = 0, created?: CreatedCounts | null): string {
-  return [publishPlanSummary(counts) || null, wholeProducts ? plural(wholeProducts, 'new product', 'new products') : null, createdWords(created)].filter(Boolean).join(' · ') || NOTHING_HERE
+export interface SendTally extends PublishPlanCounts {
+  /** Rows that send something: a product's content, a status change or a Delete. */
+  listings: number
+  /** The fields a Full update sends, those that already match the channel included (it sends them again). */
+  fullFields: number
+  /** The fields a move to a new SKU creates. */
+  movedFields: number
+  /** Every ticked field that goes (Partial, Full, move) and every Active or Inactive status change: the button's "changes". */
+  changes: number
+  /** The values a sent Full update removes from the channel (its "Will be removed" rows). */
+  removedValues: number
+}
+
+export const EMPTY_TALLY: SendTally = Object.freeze({ partial: 0, fields: 0, full: 0, delete: 0, active: 0, inactive: 0, ended: 0, moved: 0,
+  listings: 0, fullFields: 0, movedFields: 0, changes: 0, removedValues: 0 })
+
+/** A row that sends something now: ticked (in part or whole) and not held back. */
+export const rowSends = (row: Pick<ActionPlanRow, 'notSent' | 'tick'>) => !row.notSent && (row.tick === 'on' || row.tick === 'some' || row.tick === 'whole')
+
+/** One market's tally, from its rows, its content review and its ticks. */
+export function sendTally(market: { rows: readonly ActionPlanRow[]; selectedIds: readonly string[]
+  review: (NonNullable<Parameters<typeof tickedChanges>[0]['review']> & Pick<StudioPublishReview, 'rows'> & Partial<Pick<StudioPublishReview, 'removals'>>) | null }): SendTally {
+  const t: SendTally = { ...EMPTY_TALLY }
+  const review = market.review
+  const ticked = new Set(tickedChanges({ review, selectedIds: market.selectedIds }))
+  const modeOf = new Map((review?.rows ?? []).map(row => [row.productId, row.mode ?? 'partial']))
+  for (const row of market.rows) {
+    if (!rowSends(row)) continue
+    t.listings += 1
+    if (row.kind === 'lifecycle') {
+      if (row.action === 'delete') t.delete += 1
+      else if (row.action === 'end') t.ended += 1
+      else if (row.action === 'pause') { t.inactive += 1; t.changes += 1 }
+      else { t.active += 1; t.changes += 1 }
+      continue
+    }
+    if (row.kind !== 'content') continue
+    const fields = (review?.changes ?? []).filter(change => change.productId === row.productId && ticked.has(change.id)).length
+    if (!fields) continue
+    t.changes += fields
+    const mode = modeOf.get(row.productId)
+    if (mode === 'full') {
+      t.full += 1; t.fullFields += fields
+      t.removedValues += (review?.removals ?? []).filter(removal => removal.productId === row.productId).length
+    } else if (mode === 'move') { t.moved = (t.moved ?? 0) + 1; t.movedFields += fields }
+    else { t.partial += 1; t.fields += fields }
+  }
+  return t
+}
+
+/** Several markets' tallies, added. */
+export function addTallies(tallies: readonly SendTally[]): SendTally {
+  const sum: SendTally = { ...EMPTY_TALLY }
+  for (const t of tallies) for (const key of Object.keys(sum) as Array<keyof SendTally>) sum[key] = (sum[key] ?? 0) + (t[key] ?? 0)
+  return sum
+}
+
+/** "removes 3 values" — what a Full update takes off the channel, for the summary, the button and the line beside it. */
+export const removesWords = (values: number) => (values ? `removes ${plural(values, 'value', 'values')}` : null)
+
+/**
+ * The one summary line: "18 partial updates (41 fields) · 2 full updates (19 fields) · 3 inactive · 1 ended · 1 delete ·
+ * removes 4 values", and the listings it creates ("2 new listings (1 inactive)", counted inside the updates).
+ */
+export function planSummaryLine(tally: SendTally, wholeProducts = 0, created?: CreatedCounts | null): string {
+  return [publishPlanSummary(tally) || null, wholeProducts ? plural(wholeProducts, 'new product', 'new products') : null, createdWords(created),
+    removesWords(tally.removedValues)].filter(Boolean).join(' · ') || NOTHING_HERE
 }
 
 /**
@@ -475,16 +548,17 @@ export const marketsSendingNothing = (skipped: readonly string[], sending: reado
  * 1 with problems". A market whose content is blocked but whose status changes still go reads "1 with content blocked".
  * With a listing alias chosen it counts listings (`word`): "3 listings · …".
  */
-export function planFamilySummary(markets: number, base: Pick<ContentPlan, 'skipped' | 'nothing' | 'pending'>, counts: PublishPlanCounts, wholeProducts = 0, sending: readonly string[] = [],
+export function planFamilySummary(markets: number, base: Pick<ContentPlan, 'skipped' | 'nothing' | 'pending'>, tally: SendTally, wholeProducts = 0, sending: readonly string[] = [],
   created?: CreatedCounts | null, word: { one: string; many: string } = { one: 'market', many: 'markets' }): string {
   const nothing = base.nothing.filter(key => !sending.includes(key)).length
   const problems = marketsSendingNothing(base.skipped, sending).length
   const contentBlocked = base.skipped.length - problems
   return [
     plural(markets, word.one, word.many),
-    publishPlanSummary(counts) || null,
+    publishPlanSummary(tally) || null,
     wholeProducts ? plural(wholeProducts, 'new product', 'new products') : null,
     createdWords(created),
+    removesWords(tally.removedValues),
     problems ? `${problems.toLocaleString('en')} with problems` : null,
     contentBlocked ? `${contentBlocked.toLocaleString('en')} with content blocked` : null,
     nothing ? `${nothing.toLocaleString('en')} with nothing to send` : null,
@@ -520,28 +594,34 @@ export function planStateLabel(state: DestinationState, entry: Pick<DestinationE
 }
 
 /**
- * The counted button when status changes go out: "Publish 24 listings · end 1 · delete 1". Listings = Partial and Full
- * updates, new products, Active and Inactive; End and Delete are named after them. With only End or Delete: "End 1
- * listing · delete 1", "Delete 1 listing". `sending` = the markets that send something (`ActionPlanSend.send`);
- * "skip N with problems" counts the skipped markets that send nothing at all (`marketsSendingNothing`).
- * The rows are already counted as "listings": when the window counts its places as listings (an alias is chosen), they
- * are called destinations here ("Publish 24 listings to 3 destinations"), never "24 listings to 3 listings".
+ * The ONE counted button, in one unit (Owner audit 2026-10-19: it switched from changes to listings once a status
+ * change was ticked): "Publish 63 changes to 3 markets · end 1 listing · delete 1 listing · removes 4 values · skip 1
+ * market with problems". Changes = `SendTally.changes` (every ticked field and every Active or Inactive status change); End and
+ * Delete (a move deletes its old SKU) are named after them with their unit; then the values a Full update removes. With
+ * only End or Delete: "End 1 listing · delete 1 listing", "Delete 2 listings". `sending` = the markets that send
+ * something; "skip N markets with problems" counts the skipped markets that send nothing at all (`marketsSendingNothing`).
  */
-export function planButtonText(counts: PublishPlanCounts, sending: readonly string[], word: { one: string; many: string }, skippedMarkets: readonly string[] = [],
-  wholeProducts = 0): string {
-  const listings = counts.partial + counts.full + (counts.moved ?? 0) + counts.active + counts.inactive + wholeProducts
+export function planButtonText(tally: Pick<SendTally, 'changes' | 'ended' | 'delete' | 'moved' | 'removedValues'>, sending: readonly string[], word: { one: string; many: string },
+  skippedMarkets: readonly string[] = [], wholeProducts = 0): string {
   const places = sending.length
   const skipped = marketsSendingNothing(skippedMarkets, sending).length
-  const placeWord = word.one === 'listing' ? { one: 'destination', many: 'destinations' } : word
-  const where = places > 1 ? plural(places, placeWord.one, placeWord.many) : ''
-  const skip = skipped ? ` · skip ${skipped.toLocaleString('en')} with problems` : ''
-  if (listings) {
-    const tail = [counts.ended ? `end ${counts.ended.toLocaleString('en')}` : null, counts.delete ? `delete ${counts.delete.toLocaleString('en')}` : null].filter(Boolean)
-    return `Publish ${plural(listings, 'listing', 'listings')}${where ? ` to ${where}` : ''}${tail.map(t => ` · ${t}`).join('')}${skip}`
+  const skip = skipped ? ` · skip ${plural(skipped, word.one, word.many)} with problems` : ''
+  const deletes = tally.delete + (tally.moved ?? 0)
+  const danger = [tally.ended ? `end ${plural(tally.ended, 'listing', 'listings')}` : null, deletes ? `delete ${plural(deletes, 'listing', 'listings')}` : null]
+    .filter((part): part is string => !!part)
+  const what = [tally.changes ? plural(tally.changes, 'change', 'changes') : null, wholeProducts ? plural(wholeProducts, 'new product', 'new products') : null].filter(Boolean).join(' and ')
+  if (what) {
+    const where = places > 1 ? ` to ${plural(places, word.one, word.many)}` : ''
+    return `Publish ${what}${where}${[...danger, removesWords(tally.removedValues)].filter(Boolean).map(part => ` · ${part}`).join('')}${skip}`
   }
-  if (counts.ended) return `End ${plural(counts.ended, 'listing', 'listings')}${where ? ` on ${where}` : ''}${counts.delete ? ` · delete ${counts.delete.toLocaleString('en')}` : ''}${skip}`
-  if (counts.delete) return `Delete ${plural(counts.delete, 'listing', 'listings')}${where ? ` on ${where}` : ''}${skip}`
-  return skipped ? `Nothing to publish · ${skipped.toLocaleString('en')} with problems` : 'Nothing to publish'
+  if (danger.length) {
+    // "End 2 listings on 3 destinations", never "on 3 listings" (an alias is chosen: the places are listings too).
+    const placeWord = word.one === 'listing' ? { one: 'destination', many: 'destinations' } : word
+    const where = places > 1 ? ` on ${plural(places, placeWord.one, placeWord.many)}` : ''
+    const [first, ...rest] = danger
+    return `${first[0].toUpperCase()}${first.slice(1)}${where}${rest.map(part => ` · ${part}`).join('')}${skip}`
+  }
+  return skipped ? `Nothing to publish · ${plural(skipped, word.one, word.many)} with problems` : 'Nothing to publish'
 }
 
 /** The send request of one Publish: each sending market with its content (when it goes) and the ticked rows. */
@@ -635,6 +715,37 @@ export function planResultRows(children: readonly PublishPlanBatchChild[], conte
     if (mine.length) return mine.map(row => ({ key: `${child.publicationId}:${row.id}`, sku: row.sku, what, meta, message: child.message }))
     return [{ key: child.publicationId, sku: '—', what, meta, message: child.message }]
   })
+}
+
+/**
+ * After the send (Owner audit 2026-10-19: a row read a green "Sent" before anything was sent, and kept it after the
+ * channel refused it): each row that went, with its real result — the product's own result in a single publish (else the
+ * publication's), the content step's in a batch, a status change's own listing (else its step); "Result unknown" when a
+ * single send's answer never came. A row this send carried no step for has no entry: the table says "Not sent".
+ */
+export function planRowResults(rows: readonly ActionPlanRow[],
+  sent: { result: Pick<StudioPublishResult, 'status' | 'results'> } | { children: readonly PublishPlanBatchChild[] } | { unknown: true }): Map<string, PublishStatusMeta> {
+  const out = new Map<string, PublishStatusMeta>()
+  for (const row of rows) {
+    if (!rowSends(row)) continue
+    // A single send whose answer never came: it may have reached the channel.
+    if ('unknown' in sent) { if (row.kind === 'content') out.set(row.key, publishResultMeta('UNKNOWN')); continue }
+    if ('result' in sent) {
+      if (row.kind !== 'content') continue
+      const own = sent.result.results.find(result => result.sku === row.sku)
+      out.set(row.key, own ? publishResultMeta(own.status) : publicationStatusMeta(sent.result.status))
+      continue
+    }
+    if (row.kind === 'lifecycle') {
+      const child = sent.children.find(c => c.kind === 'lifecycle' && c.action === row.action)
+      const own = child?.rows?.find(result => result.sku === row.sku)
+      if (child) out.set(row.key, own ? lifecycleRowMeta(own.outcome) : lifecycleChildMeta(child))
+    } else if (row.kind === 'content') {
+      const child = sent.children.find(c => c.kind !== 'lifecycle')
+      if (child) out.set(row.key, batchChildMeta(child))
+    }
+  }
+  return out
 }
 
 /** "Amazon · IT", "eBay · DE", "Shopify" — as the listing-action engine names a destination. */

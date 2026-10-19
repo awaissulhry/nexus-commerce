@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { PublicationBatchView, StudioPublishReview, StudioPublishScope } from '@nexus/shared/studio-publication'
 import {
   EMPTY_ENTRY, LISTINGS_WORD, MAX_BATCH_DESTINATIONS, REQUEST_PAUSE_MS, ReviewQueue, accountGroup, batchCancellable, batchChildMeta, batchLimitText, batchPlaces, batchProgress,
-  batchRequest, batchSentence, canonicalScope, cellDestinationKey, channelOptions, checkingButtonText, checkingProgress, destinationName, destinationPlace, destinationState,
+  batchSentence, canonicalScope, cellDestinationKey, checkingButtonText, checkingProgress, destinationName, destinationPlace, destinationState,
   destinationStateLabel, euRefusal, initialTicked, initialTicks, isOfferedScope, listedAliases, listedDestinationKeys, listingEventConcerns, marketKey, offeredAliasIds, offeredCells,
-  placesWord, publishButtonText, publishPath, publishPlan, requestOutstanding, requestSkipReason, requestsDue, reviewOrder, selectAllText, sheetDestinationScope, withInitialOptions,
+  placesWord, publishPlan, requestOutstanding, requestSkipReason, requestsDue, reviewOrder, sheetDestinationScope, stateLine, withInitialOptions,
   type DestinationEntry, type DestinationState,
 } from './destinations'
 import type { PublishActionCell } from '@nexus/shared/publish-actions'
@@ -17,7 +17,6 @@ const markets = ['IT', 'DE', 'FR', 'ES'].map(code => ({ id: code, channel: 'AMAZ
   .concat([{ id: 'ebay-it', channel: 'EBAY', code: 'IT', name: 'eBay Italy', accounts: [{ id: 'ebay', label: 'Xavia eBay' }] }])
 const options = publicationDestinations(markets)
 const key = (channel: string, marketplace: string, accountId = channel === 'EBAY' ? 'ebay' : 'acc') => publicationScopeKey({ channel, marketplace, accountId })
-const scopeOf = (k: string) => options.find(o => o.key === k)?.scope
 
 const change = (id: string, over: Partial<NonNullable<StudioPublishReview['changes']>[number]> = {}) => ({
   id, productId: 'p', sku: 'SKU', field: id, label: id, status: 'SEND', selectable: true, selectedByDefault: true, reason: '',
@@ -50,13 +49,6 @@ describe('which destinations start ticked', () => {
     expect(optionListingLabel(extended.find(o => o.key === publicationScopeKey(retry))!)).toBe('Selected listing')
     expect(withInitialOptions(options, [{ channel: 'ETSY', marketplace: 'GLOBAL', accountId: 'x' }])).toHaveLength(options.length)
   })
-  it('"Select all" covers every market of the channel on the account in use, once', () => {
-    const twoAccounts = publicationDestinations(markets.map(m => m.channel === 'AMAZON' ? { ...m, accounts: [...m.accounts, { id: 'synthetic', label: 'Synthetic' }] } : m))
-    expect(channelOptions(twoAccounts, 'AMAZON')).toHaveLength(8)
-    const amazon = channelOptions(twoAccounts, 'AMAZON', 'acc')
-    expect(amazon).toHaveLength(4)
-    expect(selectAllText('AMAZON', amazon.length)).toBe('Select all Amazon markets (4)')
-  })
 })
 
 describe('a destination’s state after its review', () => {
@@ -72,8 +64,29 @@ describe('a destination’s state after its review', () => {
   })
   it('is blocked by an error issue, named with the number of problems', () => {
     const state = destinationState(entry(review(it_, { issues: [{ message: 'Brand is required', severity: 'error' }, { message: 'x', severity: 'error' }] })), true, NOW)
-    expect(state).toEqual({ kind: 'blocked', problems: 2, reason: null })
+    expect(state).toEqual({ kind: 'blocked', problems: 2, skus: 0, reason: null })
     expect(destinationStateLabel(state).label).toBe('Fix 2 problems first')
+  })
+  // Owner audit 2026-10-19 — one rule everywhere: the same words on several SKUs are ONE problem, "on N SKUs".
+  it('counts the same problem on several SKUs once, and says how many SKUs it is on', () => {
+    const height = (sku: string) => ({ sku, message: `${sku}: Item package height is required.`, severity: 'error' as const })
+    const state = destinationState(entry(review(it_, { id: null, issues: [height('GALE-S'), height('GALE-M'), height('GALE-L'), { sku: 'GALE-L', message: 'GALE-L: Brand is required', severity: 'error' }] })), true, NOW)
+    expect(state).toEqual({ kind: 'blocked', problems: 2, skus: 3, reason: null })
+    expect(destinationStateLabel(state)).toEqual({ label: 'Fix 2 problems first', tone: 'warning', hint: '2 problems on 3 SKUs hold back the content of this destination until they are fixed.' })
+  })
+  it('never sends the person to "open the review" from inside it, and never says "Tick this destination"', () => {
+    const states: DestinationState[] = [{ kind: 'not_checked' }, { kind: 'blocked', problems: 1, skus: 1, reason: null }, { kind: 'blocked', problems: 0, reason: null },
+      { kind: 'nothing', reason: 'unticked' }, { kind: 'input', needs: 'location' }, { kind: 'input', needs: 'overwrite' }]
+    for (const state of states) {
+      const said = destinationStateLabel(state)
+      expect(said.hint).not.toMatch(/open the review/i)
+      expect(said.hint).not.toMatch(/tick this destination/i)
+    }
+  })
+  it('one line from a label and its hint, without a double stop', () => {
+    expect(stateLine(destinationStateLabel({ kind: 'checking' }))).toBe('Checking… Reading the saved values and the channel.')
+    expect(stateLine(destinationStateLabel({ kind: 'expired' }))).toBe('Review expired. Reviews last 15 minutes. Check again to compare the current values.')
+    expect(stateLine({ label: 'Skipped', hint: 'Skipped: the exact request could not be built.' })).toBe('Skipped: the exact request could not be built.')
   })
   // Owner 2026-10-19 — "With a partial update I'm unable to click the publish button because it says that these listings
   // have problems." Option A: a problem leaves out only the changes that would send its field; the rest is Ready.
@@ -82,14 +95,14 @@ describe('a destination’s state after its review', () => {
     const kept = review(it_, { issues: [brand] })
     expect(initialTicks(kept)).toEqual(['title'])
     const state = destinationState(entry(kept, { selectedIds: ['title', 'brand'] }), true, NOW)
-    expect(state).toEqual({ kind: 'ready', changes: 1, whole: false, requestReady: false, leftOut: 1 })
-    expect(destinationStateLabel(state)).toMatchObject({ label: 'Ready · 1 left out', hint: expect.stringContaining('1 change has problems and is left out; the rest is sent.') })
+    expect(state).toEqual({ kind: 'ready', changes: 1, whole: false, requestReady: false, leftOut: { changes: 1, problems: 1 } })
+    expect(destinationStateLabel(state)).toMatchObject({ label: 'Ready · 1 left out', hint: expect.stringContaining('1 change is left out by 1 problem; the rest is sent.') })
     // A problem on a field it does not send leaves nothing out.
     expect(destinationState(entry(review(it_, { issues: [{ ...brand, field: 'item_package_weight' }] })), true, NOW)).toEqual({ kind: 'ready', changes: 1, whole: false, requestReady: false })
     // Unticked, it has nothing to send — still not "blocked".
     expect(destinationState(entry(kept, { selectedIds: [] }), true, NOW)).toEqual({ kind: 'nothing', reason: 'unticked' })
     // A problem that names nothing blocks the destination, kept or not.
-    expect(destinationState(entry(review(it_, { issues: [{ message: 'Reconnect this account.', severity: 'error' }] })), true, NOW)).toEqual({ kind: 'blocked', problems: 1, reason: null })
+    expect(destinationState(entry(review(it_, { issues: [{ message: 'Reconnect this account.', severity: 'error' }] })), true, NOW)).toEqual({ kind: 'blocked', problems: 1, skus: 0, reason: null })
   })
   it('is blocked when the review has no id (the publish gate refused it) even without a named problem', () => {
     expect(destinationState(entry(review(it_, { id: null })), true, NOW).kind).toBe('blocked')
@@ -124,7 +137,7 @@ describe('"Publish failed products again…" pre-ticks only the given fields', (
   })
 })
 
-describe('the counted button and the send path', () => {
+describe('what one click does with the chosen markets', () => {
   const states: Record<string, DestinationState> = {
     [key('AMAZON', 'IT')]: { kind: 'ready', changes: 12, whole: false, requestReady: true },
     [key('AMAZON', 'DE')]: { kind: 'ready', changes: 9, whole: false, requestReady: true },
@@ -132,25 +145,16 @@ describe('the counted button and the send path', () => {
     [key('AMAZON', 'ES')]: { kind: 'nothing', reason: 'none' },
   }
   const stateOf = (k: string) => states[k] ?? { kind: 'not_checked' as const }
-  it('counts changes over the markets that send, and names the skipped ones', () => {
+  // The counted button is `planButtonText` (actionPlan.vitest.test.ts): one unit, the window's one count.
+  it('sends the ready markets and names the skipped ones', () => {
     const plan = publishPlan(Object.keys(states), stateOf)
-    expect(plan).toMatchObject({ changes: 21, problems: 2, send: [key('AMAZON', 'IT'), key('AMAZON', 'DE')], skipped: [key('AMAZON', 'FR')], nothing: [key('AMAZON', 'ES')] })
-    expect(publishButtonText(plan, scopeOf)).toBe('Publish 21 changes to 2 markets · skip 1 with problems')
-    expect(publishPath(plan)).toBe('batch')
+    expect(plan).toMatchObject({ send: [key('AMAZON', 'IT'), key('AMAZON', 'DE')], skipped: [key('AMAZON', 'FR')], nothing: [key('AMAZON', 'ES')] })
   })
-  it('one ready destination takes the single path; none takes no path', () => {
-    const one = publishPlan([key('AMAZON', 'IT'), key('AMAZON', 'FR')], stateOf)
-    expect(publishPath(one)).toBe('single')
-    expect(publishButtonText(one, scopeOf)).toBe('Publish 12 changes to 1 market · skip 1 with problems')
-    expect(publishPath(publishPlan([key('AMAZON', 'FR')], stateOf))).toBe('none')
-    expect(publishButtonText(publishPlan([key('AMAZON', 'FR')], stateOf), scopeOf)).toBe('Nothing to publish · 1 with problems')
-  })
-  it('says "destinations" when channels mix, and counts a new Shopify product', () => {
+  it('counts a new Shopify product', () => {
     const shopKey = publicationScopeKey({ channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'shop' })
-    const mixed = publishPlan([key('AMAZON', 'IT'), key('EBAY', 'IT'), shopKey], k => k === shopKey ? { kind: 'ready', changes: 1, whole: true, requestReady: true }
+    const mixed = publishPlan([key('AMAZON', 'IT'), shopKey], k => k === shopKey ? { kind: 'ready', changes: 1, whole: true, requestReady: true }
       : { kind: 'ready', changes: 3, whole: false, requestReady: true })
-    expect(publishButtonText(mixed, k => k === shopKey ? { channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'shop' } : scopeOf(k)))
-      .toBe('Publish 6 changes and 1 new product to 3 destinations')
+    expect(mixed.wholeProducts).toBe(1)
   })
   it('lists the sparse destinations whose request is not prepared, and waits while one is still checking', () => {
     const plan = publishPlan([key('AMAZON', 'IT'), key('AMAZON', 'DE')], k => k === key('AMAZON', 'IT') ? { kind: 'ready', changes: 2, whole: false, requestReady: false } : { kind: 'checking' })
@@ -159,19 +163,7 @@ describe('the counted button and the send path', () => {
   })
 })
 
-describe('the batch request and its destinations’ words', () => {
-  it('sends each ready destination with its own token, confirmation and location', () => {
-    const a = review({ channel: 'AMAZON', marketplace: 'IT', accountId: 'acc' })
-    const s = review({ channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'shop' }, { id: 'r-shop', locations: [{ id: 'l1', name: 'Main' }] })
-    const entries: Record<string, DestinationEntry> = {
-      a: entry(a, { selection: { reviewId: a.id!, token: 'tok-a', selectedIds: ['title'], products: [], fieldCount: 1, payload: { format: 'json', content: '{}' } } }),
-      s: entry(s, { locationId: 'l1', confirmedReviewId: 'r-shop' }),
-    }
-    expect(batchRequest(['a', 's'], k => entries[k])).toEqual({ reviews: [
-      { reviewId: 'r-IT', selectionToken: 'tok-a' },
-      { reviewId: 'r-shop', confirmOverwrite: true, locationId: 'l1' },
-    ] })
-  })
+describe('the batch destinations’ words', () => {
   it('uses the design-system words, and plain words for the two batch states the table lacks', () => {
     expect(batchChildMeta({ status: 'VERIFIED', checked: false }).label).toBe('Verified')
     expect(batchChildMeta({ status: 'NOT_SENT', checked: false }).label).toBe('Not sent')
@@ -320,8 +312,7 @@ describe('OD4 A — a market whose request cannot be built is skipped with its r
       hint: 'Skipped: the exact request could not be built. The review expired.' })
     const states: Record<string, DestinationState> = { IT: failed, DE: { kind: 'ready', changes: 4, whole: false, requestReady: true }, FR: { kind: 'ready', changes: 2, whole: false, requestReady: true } }
     const plan = publishPlan(['IT', 'DE', 'FR'], k => states[k])
-    expect(plan).toMatchObject({ send: ['DE', 'FR'], skipped: ['IT'], problems: 0 })
-    expect(publishButtonText(plan, () => it_)).toBe('Publish 6 changes to 2 markets · skip 1 with problems')
+    expect(plan).toMatchObject({ send: ['DE', 'FR'], skipped: ['IT'] })
   })
   it('clears when the ticks change: the request is built again', () => {
     const r = review(it_)
@@ -407,10 +398,10 @@ describe('aliases — every listing of a market is a destination of its own', ()
       [aliasKey('alias-2')]: { kind: 'blocked', problems: 1, reason: null },
     }
     const plan = publishPlan(Object.keys(states), k => states[k])
-    expect(publishButtonText(plan, scopeIn)).toBe('Publish 6 changes to 2 listings · skip 1 with problems')
-    // Only the main listing goes, but an alias is chosen: still listings.
-    const mainOnly = publishPlan([ebayKey, aliasKey('alias-2')], k => states[k])
-    expect(publishButtonText(mainOnly, scopeIn)).toBe('Publish 4 changes to 1 listing · skip 1 with problems')
+    expect(plan).toMatchObject({ send: [ebayKey, aliasKey('alias-1')], skipped: [aliasKey('alias-2')] })
+    // The window's word (the button's places): listings once an alias is chosen, even when only the main listing goes.
+    expect(placesWord(Object.keys(states), scopeIn)).toBe(LISTINGS_WORD)
+    expect(placesWord([ebayKey, aliasKey('alias-2')], scopeIn)).toBe(LISTINGS_WORD)
     expect(placesWord([ebayKey], scopeIn)).toEqual({ one: 'market', many: 'markets' })
     expect(placesWord([ebayKey, aliasKey('alias-1')], scopeIn)).toBe(LISTINGS_WORD)
     expect(checkingButtonText({ done: 1, total: 3 }, LISTINGS_WORD)).toBe('Checking 2 of 3 listings…')
