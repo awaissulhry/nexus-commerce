@@ -129,6 +129,9 @@ export interface ResolveBatchResult {
    *  anyway, so returning it saves a second round trip. Omitted when `includeCatalogue` is
    *  false (the sheet already has its columns). */
   catalogue: FieldCatalogue | null
+  /** Every catalogue the rows were resolved against, keyed by its channel category (`''` = none): a batch can span
+   *  several (one Amazon family can mix product types). Only with `includeCatalogues`. */
+  catalogues?: Record<string, FieldCatalogue>
   products: ResolvedProduct[]
   /** Products asked for but not found. Named rather than silently dropped. */
   missingProductIds: string[]
@@ -207,6 +210,8 @@ export async function resolveBatch(input: {
   /** Internal review filter: match actual account/alias category before loading field schemas. */
   categoryFilter?: string | null
   includeCatalogue?: boolean
+  /** Also return every category's catalogue (`catalogues`), for a caller that judges each row against its own. */
+  includeCatalogues?: boolean
   /** Read-only draft simulation. Never persisted or used as a separate resolver. */
   mappingSnapshot?: MarketplaceSchemaMapping
   categoryMappingSnapshot?: MappingRow[]
@@ -671,6 +676,7 @@ export async function resolveBatch(input: {
     marketplace,
     locale,
     catalogue: includeCatalogue ? (catalogueByCategory.get(pinned ?? distinctCategories[0]) ?? null) : null,
+    ...(input.includeCatalogues ? { catalogues: Object.fromEntries([...catalogueByCategory].map(([cat, catalogue]) => [cat ?? '', catalogue])) } : {}),
     products: out,
     missingProductIds,
   }
