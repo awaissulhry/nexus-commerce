@@ -370,10 +370,42 @@ describe('rules across fields', () => {
     const spots = (points: Array<[string, string]>) => ({ desktopImage: NEW, hotSpots: points.map(([x, y], i) => ({ imageHotSpot: { title: T(`Spot ${i}`), xCoordinate: T(x), yCoordinate: T(y), mobileImage: NEW } })) })
     expect(problemsOf(ebc(mod('PREMIUM_HOTSPOT_IMAGE', spots([['100', '100'], ['160', '150']])))))
       .toEqual(['Module 1 (PREMIUM_HOTSPOT_IMAGE) hotSpots[1]: the marker is 78 px from hotSpots[0]; markers sit at least 95 px apart.'])
-    expect(problemsOf(ebc(mod('PREMIUM_HOTSPOT_IMAGE', spots([['10', '100'], ['400', '25.5']]))))).toEqual([
-      'Module 1 (PREMIUM_HOTSPOT_IMAGE) hotSpots[0].imageHotSpot.xCoordinate: value must be a whole number of pixels as text, 23–1441 (it is "10").',
-      'Module 1 (PREMIUM_HOTSPOT_IMAGE) hotSpots[1].imageHotSpot.yCoordinate: value must be a whole number of pixels as text, 23–577 (it is "25.5").',
+    expect(problemsOf(ebc(mod('PREMIUM_HOTSPOT_IMAGE', spots([['10', '100'], ['400', '25px']]))))).toEqual([
+      'Module 1 (PREMIUM_HOTSPOT_IMAGE) hotSpots[0].imageHotSpot.xCoordinate: value must be a number of pixels as text, 23–1441 (it is "10").',
+      'Module 1 (PREMIUM_HOTSPOT_IMAGE) hotSpots[1].imageHotSpot.yCoordinate: value must be a number of pixels as text, 23–577 (it is "25px").',
     ])
+    // Seller Central writes decimals; Amazon's model takes any text.
+    expect(problemsOf(ebc(mod('PREMIUM_HOTSPOT_IMAGE', spots([['498.49199999999996', '279.66'], ['250.1976', '130.44']]))))).toEqual([])
+  })
+
+  it('takes a hotspot module back as Amazon reads it out of Seller Central: twins, nulls, decimals and its own long alt texts', () => {
+    // The shape of a live read (2026-10-19), text made neutral: every other module key null, x / y written twice
+    // (xcoordinate beside xCoordinate), and an alt text Amazon generated that is over its own 100-character limit.
+    const generated = 'The text reads "EN 1621-2", black label "2". A bright yellow protective pad with air holes and raised details on a grey background.'
+    const atAmazon = (altText = 'aplus content image') => ({ ...AT_AMAZON(1464, 600), altText, imageCropSpecification: crop(2928, 1200) })
+    const spot = (x: string, y: string, altText?: string) => ({
+      imageHotSpot: {
+        xcoordinate: { value: x, decoratorSet: [] }, ycoordinate: { value: y, decoratorSet: [] },
+        mobileImage: { ...atAmazon(altText), imageCropSpecification: crop(1200, 900) },
+        title: { value: 'Back protector', decoratorSet: [] }, description: { value: 'Tested to EN 1621-2.', decoratorSet: [] },
+        xCoordinate: { value: x, decoratorSet: [] }, yCoordinate: { value: y, decoratorSet: [] },
+      },
+    })
+    const read = { contentModuleType: 'PREMIUM_HOTSPOT_IMAGE', standardCompanyLogo: null, premiumText: null, premiumHotspotImage: { desktopImage: atAmazon(), hotSpots: [spot('498.49199999999996', '279.66', generated), spot('250.1976', '130.44')] }, premiumFaq: null }
+    const result = ebc(read)
+    expect(problemsOf(result)).toEqual([])
+    if (result.ok !== true) return
+    const hotSpots = (result.doc.modules[0].premiumHotspotImage as { hotSpots: Array<{ imageHotSpot: Record<string, any> }> }).hotSpots
+    expect(Object.keys(hotSpots[0].imageHotSpot).sort()).toEqual(['description', 'mobileImage', 'title', 'xCoordinate', 'yCoordinate'])
+    expect(hotSpots[0].imageHotSpot.xCoordinate).toEqual({ value: '498.49199999999996' })
+    const alt = hotSpots[0].imageHotSpot.mobileImage.altText as string
+    expect(alt.length).toBeLessThanOrEqual(100)
+    expect(alt).toBe(`${generated.slice(0, 99).slice(0, generated.slice(0, 99).lastIndexOf(' '))}…`)
+    expect(hotSpots[1].imageHotSpot.mobileImage.altText).toBe('aplus content image')
+    expect(result.doc.notes).toEqual(['One alt text Amazon wrote for an image (module 1) is longer than the 100 characters Amazon\'s API takes: Nexus shortens it to 100.'])
+    // A new photo's alt text is the asker's own: checked, never shortened.
+    expect(problemsOf(ebc(mod('PREMIUM_IMAGE_TEXT', { positionType: 'LEFT', headline: T('H'), image: { ...NEW, altText: generated } }))))
+      .toEqual([`Module 1 (PREMIUM_IMAGE_TEXT) image.altText: at most 100 characters (it has ${generated.length}).`])
   })
 
   it('a comparison row has one field per product, at the products\' positions; a checkbox says true or false', () => {
@@ -422,6 +454,14 @@ describe('normalising, hashing and summarising', () => {
   it('drops nulls at every depth and empty decoratorSets, nothing else', () => {
     const doc = document([{ contentModuleType: 'STANDARD_TEXT', standardText: { headline: null, body: { textList: [{ value: 'A', decoratorSet: [] }, { value: 'B', decoratorSet: [{ type: 'STYLE_BOLD', offset: 0, length: 1 }] }] } }, standardCompanyLogo: null }])
     expect(normalizeAmazonDocument(doc)).toEqual(document([{ contentModuleType: 'STANDARD_TEXT', standardText: { body: { textList: [{ value: 'A' }, { value: 'B', decoratorSet: [{ type: 'STYLE_BOLD', offset: 0, length: 1 }] }] } } }]))
+  })
+
+  it('drops the lowercase twin Amazon writes beside a camelCase field only when it is an exact copy', () => {
+    const twin = (lower: unknown) => document([mod('PREMIUM_HOTSPOT_IMAGE', { hotSpots: [{ imageHotSpot: { xcoordinate: lower, xCoordinate: { value: '30.5', decoratorSet: [] } } }] })])
+    const spotOf = (doc: AplusDocument) => (doc.contentModuleList[0].premiumHotspotImage as { hotSpots: Array<{ imageHotSpot: unknown }> }).hotSpots[0].imageHotSpot
+    expect(spotOf(normalizeAmazonDocument(twin({ value: '30.5' })))).toEqual({ xCoordinate: { value: '30.5' } })
+    expect(spotOf(normalizeAmazonDocument(twin({ value: '99' })))).toEqual({ xcoordinate: { value: '99' }, xCoordinate: { value: '30.5' } })
+    expect(documentHash(twin({ value: '30.5', decoratorSet: [] }))).toBe(documentHash(document([mod('PREMIUM_HOTSPOT_IMAGE', { hotSpots: [{ imageHotSpot: { xCoordinate: { value: '30.5' } } }] })])))
   })
 
   it('documentHash is stable across key order, nulls and decoratorSet [] versus absent; it changes with the text', () => {
