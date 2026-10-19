@@ -426,6 +426,23 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { productId: 'p1', accountId: 'store', aliasKey: null, language: 'en', fields: { vendor: { value: 'Old', nexusDraft: true }, tags: { value: '["a"]', nexusDraft: false } } },
         after: { productId: 'p1', accountId: 'store', aliasKey: null, language: 'en', fields: { vendor: { value: 'New', nexusDraft: true }, tags: { value: '["b"]', nexusDraft: true } } },
       },
+      // Amazon A+ (2026-10-19) — an update puts the document back through the same tool; a new set of ASINs the set it had;
+      // a submit is undone by a suspend (and a suspend by a submit).
+      'set-aplus-content': {
+        before: {
+          op: 'update', market: 'IT', marketplaceId: 'APJ6JRA9NG5V4', accountId: 'a1', contentReferenceKey: 'k1', name: 'Old', documentHash: 'h0',
+          document: { name: 'Old', contentType: 'EBC', locale: 'it-IT', contentModuleList: [{ contentModuleType: 'STANDARD_TEXT', standardText: { body: { textList: [{ value: 'Vecchio' }] } } }] },
+        },
+        after: { op: 'update', market: 'IT', marketplaceId: 'APJ6JRA9NG5V4', accountId: 'a1', contentReferenceKey: 'k1', name: 'New', documentHash: 'h1' },
+      },
+      'set-aplus-asins': {
+        before: { market: 'IT', marketplaceId: 'APJ6JRA9NG5V4', accountId: 'a1', contentReferenceKey: 'k1', asins: ['B000000001'] },
+        after: { market: 'IT', marketplaceId: 'APJ6JRA9NG5V4', accountId: 'a1', contentReferenceKey: 'k1', asins: ['B000000001', 'B000000002'] },
+      },
+      'submit-aplus-content': {
+        before: { op: 'submit', market: 'IT', marketplaceId: 'APJ6JRA9NG5V4', accountId: 'a1', contentReferenceKey: 'k1', phase: 'draft' },
+        after: { op: 'submit', market: 'IT', marketplaceId: 'APJ6JRA9NG5V4', accountId: 'a1', contentReferenceKey: 'k1', phase: 'submitted' },
+      },
       'bulk-content-change': {
         before: { language: 'de', tier: 'language', products: { p1: { sku: 'S1', fields: { title: { value: 'Alt' } } }, p2: { sku: 'S2', fields: { description: null } } } },
         after: { language: 'de', tier: 'language', products: { p1: { sku: 'S1', fields: { title: { value: 'Neu' } } }, p2: { sku: 'S2', fields: { description: { value: 'x' } } } } },

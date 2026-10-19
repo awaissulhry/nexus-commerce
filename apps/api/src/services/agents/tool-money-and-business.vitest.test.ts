@@ -203,6 +203,10 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-google-merchant-promotions': 'it reads the business\'s chosen Merchant Center account live from Google, and no business here has one (google-ads-merchant.tools test)',
   'set-harvest-rules': 'the seeded rule is not a harvest rule, so there is nothing to archive (tools/ads-harvest-postgres test)',
   'set-harvest-sources': 'the seeded ad group feeds no terms to harvest (a manual campaign with no ad product), so it is no source (tools/ads-harvest-postgres test)',
+  'aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
+  'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
+  'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
+  'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
 }
 
 /**
@@ -298,6 +302,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'shopify-content': (ids) => ({ product: ids.productId }),
   'set-shopify-content': (ids) => ({ product: ids.productId, fields: { vendor: 'A vendor' } }),
   'listing-live-content': (ids) => ({ product: ids.productId, channel: 'EBAY', market: 'IT' }),
+  // Amazon A+ (2026-10-19) — read and changed live at Amazon (aplus tools tests).
+  'aplus-content': () => ({ market: 'IT' }),
+  'set-aplus-content': () => ({ op: 'create', market: 'IT', name: 'Money test A+', modules: [{ contentModuleType: 'STANDARD_TEXT', standardText: { body: { textList: [{ value: 'A short text.' }] } } }], summary: 'A short text.' }),
+  'set-aplus-asins': () => ({ market: 'IT', contentReferenceKey: 'money-key', add: ['B000000001'] }),
+  'submit-aplus-content': () => ({ op: 'submit', market: 'IT', contentReferenceKey: 'money-key' }),
   // Phase 3 T3 — a category the business loaded on eBay IT (seeded per business): read from Nexus, no eBay call.
   'ebay-categories': () => ({ market: 'IT', categoryId: '177104' }),
   'set-listing-content': (ids) => ({ product: ids.productId, coordinate: { channel: 'EBAY', market: 'IT' }, language: 'it', pin: { title: 'A better title' }, englishMeaning: { title: 'A better title' } }),

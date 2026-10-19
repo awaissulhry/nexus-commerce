@@ -129,6 +129,8 @@ import { LISTING_LIFECYCLE_TOOLS } from './tools/listing-lifecycle.tools.js'
 import { PHOTO_TOOLS } from './tools/photos.tools.js'
 import { DATA_TRANSFER_TOOLS } from './tools/data-transfer.tools.js'
 import { EBAY_CATEGORY_TOOLS } from './tools/ebay-category.tools.js'
+import { APLUS_READ_TOOLS } from './tools/aplus-read.tools.js'
+import { APLUS_CHANGE_TOOLS } from './tools/aplus-change.tools.js'
 
 export type {
   RiskTier,
@@ -342,6 +344,9 @@ const ALL: AgentTool[] = [
   ...DATA_TRANSFER_TOOLS,
   // MCP phase 3 T3 — find an eBay category and read its item specifics and conditions (cached, else live, never stored).
   ...EBAY_CATEGORY_TOOLS,
+  // Amazon A+ content (2026-10-19) — read live from Amazon; drafts, ASINs and submissions changed there after a person's approval.
+  ...APLUS_READ_TOOLS,
+  ...APLUS_CHANGE_TOOLS,
 ]
 const REGISTRY = new Map<string, AgentTool>(ALL.map((t) => [t.name, t]))
 

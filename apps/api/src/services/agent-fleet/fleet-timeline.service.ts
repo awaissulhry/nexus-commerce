@@ -258,6 +258,10 @@ export const TOOL_PHRASE: Record<string, string> = {
   'schedule-pickup': 'book a carrier pickup',
   'sync-orders-now': 'sync orders now',
   'set-shopify-content': "change a Shopify listing's store fields in its Nexus draft",
+  // Amazon A+ (2026-10-19) — drafts, their ASINs and their submission, at Amazon.
+  'set-aplus-content': 'make or change an Amazon A+ draft',
+  'set-aplus-asins': 'change which ASINs show an A+ document',
+  'submit-aplus-content': 'submit or suspend Amazon A+ content',
 }
 
 /** Why a run happened. */
