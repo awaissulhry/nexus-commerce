@@ -34,6 +34,10 @@ describe('many-product rows', () => {
     expect(manyRowState(child({ selectedCount: 0 }), NOW).kind).toBe('nothing')
     expect(manyRowState(child({ status: 'NOT_SENT', nothingToSend: true }), NOW).kind).toBe('nothing')
     expect(manyRowState(child({ status: 'BLOCKED', problems: { errors: 2, warnings: 1, messages: ['a', 'b'] } }), NOW)).toMatchObject({ kind: 'problems', problems: 2 })
+    // Option A (Owner 2026-10-19) — a family kept with problems sends its ticked fields: Ready, and it says the rest is left out.
+    const kept = manyRowState(child({ problems: { errors: 1, warnings: 0, messages: ['Brand is required'] } }), NOW)
+    expect(kept).toEqual({ kind: 'ready', changes: 3, problems: 1 })
+    expect(manyRowLabel(kept)).toMatchObject({ label: 'Ready', hint: expect.stringContaining('1 problem leaves out the fields it names; the ticked fields are sent.') })
     expect(manyRowState(child({ expiresAt: EARLIER }), NOW).kind).toBe('expired')
     expect(manyRowState(child({ status: 'NOT_SENT', message: 'No Amazon listing.' }), NOW)).toEqual({ kind: 'not_sent', reason: 'No Amazon listing.' })
     expect(manyRowLabel({ kind: 'problems', problems: 2, reason: null }).label).toBe('Fix 2 problems first')

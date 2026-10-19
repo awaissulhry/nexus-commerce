@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
-import { blockingIssues, isAmazonTextChangeId, isPhotoChangeId, type StudioPublishReview, type StudioPublishResult, type StudioPublishScope, type StudioPublishSelection,
-  type StudioPublishStoredReview } from '@nexus/shared/studio-publication'
+import { blockedChanges, blockingIssues, isPhotoChangeId, publishGateContext, type StudioPublishReview, type StudioPublishResult, type StudioPublishScope,
+  type StudioPublishSelection, type StudioPublishStoredReview } from '@nexus/shared/studio-publication'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { workspaceIdForQuery } from '@nexus/database/workspace-context'
@@ -63,10 +63,13 @@ export const publicationColumns = (familyId: string, scope: StudioPublishScope, 
  * problem it found (`issues`) and the notes it made on the way (`notes`); "sending is off" (`gateOnly`) is already the
  * review's one gate message, so it adds nothing but its notes. Any other refusal is one message, as before.
  */
-function refusalIssues(error: unknown): StudioPublishReview['issues'] {
+export function refusalIssues(error: unknown): StudioPublishReview['issues'] {
   const found = error as { issues?: unknown; notes?: unknown; gateOnly?: unknown } | null
   const notes = Array.isArray(found?.notes) ? (found!.notes as string[]).map(message => ({ severity: 'warning' as const, message })) : []
-  if (Array.isArray(found?.issues)) return [...(found!.issues as StudioPublishReview['issues']), ...notes]
+  // A refusal's own issues in the review's shape: the content gate (`ContentReviewRequired`) names its severity 'ERROR',
+  // which no gate counted as an error — its problems showed as notes and blocked nothing.
+  if (Array.isArray(found?.issues)) return [...(found!.issues as Array<StudioPublishReview['issues'][number] & { severity: string }>)
+    .map(issue => ({ ...issue, severity: String(issue.severity).toLowerCase() === 'error' ? 'error' as const : 'warning' as const })), ...notes]
   if (found?.gateOnly === true) return notes
   return [{ severity: 'error', message: error instanceof Error ? error.message : String(error) }, ...notes]
 }
@@ -202,7 +205,11 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
     }
     else if (scope.channel === 'EBAY') {
       prepared = usesEbayInventory(facts) ? await prepareEbayInventoryPublication(facts) : await prepareEbayPublication(facts, { ...(modes.full.size ? { full: true } : {}), ...inactiveOption })
-      if (prepared.kind === 'ebay') for (const message of prepared.notices ?? []) issues.push({ severity: 'warning', message })
+      if (prepared.kind === 'ebay') {
+        // A listing already on eBay: its problems, each blocking only what sends its field (option A).
+        issues.push(...prepared.issues ?? [])
+        for (const message of prepared.notices ?? []) issues.push({ severity: 'warning', message })
+      }
     }
     else if (scope.channel === 'SHOPIFY') {
       if (facts.excluded) throw new Error('This Shopify family has excluded variants. Review the family selection before publishing.')
@@ -234,6 +241,8 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
         readLive: async input => (await import('../live-read/etsy.js')).readEtsyLive(input),
         // E3 — a create reads the shop (its languages and currency) when sending is live.
         readShop: async accountId => (await import('../live-read/etsy.js')).readEtsyShop(accountId) })
+      // A listing already on Etsy: its problems, each blocking only what sends its field (option A).
+      issues.push(...prepared.issues ?? [])
       for (const message of prepared.notices ?? []) issues.push({ severity: 'warning', message })
     } else issues.push({ severity: 'error', message: `Direct publishing to ${scope.channel === 'WOOCOMMERCE' ? 'WooCommerce' : scope.channel} is not available yet. Your product changes are saved in the studio.` })
     if (prepared && prepared.kind !== 'shopify') {
@@ -310,7 +319,10 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
     issues: [...new Map(issues.map(i => [JSON.stringify(i), i])).values()], expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), locations, visibility, overwrite,
     ...(removals?.length ? { removals } : {}),
     ...(moves.confirm ? { confirm: moves.confirm } : {}),
+    // eBay Inventory — the whole group is PUT again: any problem blocks every change (`blockedChanges`).
+    ...(prepared?.kind === 'ebay-inventory' ? { sendsWhole: true as const } : {}),
   }
+  if (scope.channel === 'AMAZON') review.issues.push(...orphanCreateIssues(review, facts.parent, existingProducts, unsent))
   return { facts, review, prepared, changePlan, relist: relist.kept, creates: createsRecord(creates, prepared),
     // New listings — only a review that holds, creates Inactive or starts rows a certain way adds them (others keep their digest).
     // Etsy: its plan without the live offering numbers and the sold-out flip (`etsyRevisionView`) — a sale or a stock push
@@ -323,6 +335,27 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
           ...(creates.etsyCreateState ? [creates.etsyCreateState] : [])] : []),
       // The mixed-plan Publish's held rows (not judged): only a review made with them adds them (others keep their digest).
       ...(heldIds.length ? [{ heldProductIds: heldIds }] : [])]) }
+}
+
+/**
+ * Owner 2026-10-19 (option A) — an Amazon child is created under its main row: when the main row is not on Amazon and a
+ * problem leaves its create out (or left it unbuilt), each child create still ticked would name a parent Amazon does not
+ * hold. Each is left out too, by its own problem. Nothing when the main row is on Amazon, held, or creates cleanly.
+ */
+export function orphanCreateIssues(review: Pick<StudioPublishReview, 'scope' | 'rows' | 'changes' | 'issues' | 'sendsWhole'>, parent: { id: string; sku: string },
+  existing: ReadonlySet<string>, unsent: ReadonlySet<string>): StudioPublishReview['issues'] {
+  if (existing.has(parent.id) || unsent.has(parent.id) || !review.rows.some(row => row.productId !== parent.id)) return []
+  const createOf = (productId: string) => review.changes?.find(change => change.productId === productId && change.field === '$create')
+  const blocked = blockedChanges(review)
+  const own = createOf(parent.id)
+  const parentOut = own ? blocked.has(own.id) : review.issues.some(issue => issue.severity === 'error' && issue.productId === parent.id)
+  if (!parentOut) return []
+  return review.rows.flatMap(row => {
+    const create = row.productId === parent.id || existing.has(row.productId) ? undefined : createOf(row.productId)
+    if (!create?.selectable || blocked.has(create.id)) return []
+    return [{ productId: row.productId, sku: row.sku, severity: 'error' as const,
+      message: `${row.sku}: its main row ${parent.sku} cannot be created on Amazon here yet (its problem is listed), so this row cannot be created either.` }]
+  })
 }
 
 /**
@@ -456,11 +489,6 @@ export interface PreviewOptions {
    * creates (a row set Not listed stays out). Kept with the review, so its submit rebuilds the same plan.
    */
   startAs?: StartAsTarget | null
-  /**
-   * MCP publish-listing of Amazon text only — keep a review whose every error names a field, marked `textOnly`: only its
-   * text fields may then be selected, and the submit checks them against `blockingIssues` (2026-10-17, MOSS on Amazon DE).
-   */
-  textOnly?: boolean
 }
 
 /** A stored "New listings start as", or null. */
@@ -483,20 +511,30 @@ const storedProductIds = (ids: unknown): string[] | undefined => {
 
 /**
  * The review of one destination and what decides whether it may be stored: the publication key, a publication at this
- * destination still waiting for its result (D3: one a person marked checked no longer blocks), and whether only photos
- * may be sent. Reads only (the channel too, through the studio transports); it writes nothing.
+ * destination still waiting for its result (D3: one a person marked checked no longer blocks), and whether it can send
+ * anything. Reads only (the channel too, through the studio transports); it writes nothing.
  */
 async function reviewPlan(productId: string, scope: StudioPublishScope, options: { verify?: boolean; fullProductIds?: readonly string[]; startAs?: StartAsTarget | null
   heldProductIds?: readonly string[] } = {}) {
   const plan = await buildReview(productId, scope, options)
   const key = publicationDigest([workspaceIdForQuery(), plan.facts.destination.familyId, scope.channel, scope.accountId, scope.marketplace, plan.facts.destination.aliasKey])
   const unresolved = await prisma.bulkOperation.findFirst({ where: { ...OPEN_PUBLICATION, changes: { path: ['publicationKey'], equals: key } }, select: { id: true, userId: true } })
-  // P4c — errors that each name a field (an off-list Season value) block that field, not the listing: on a change-only
-  // review the photos can still be sent. Any error that names no field blocks the review as before.
+  // Owner 2026-10-19 (option A) — a problem blocks only the changes that would send its field, on its SKU
+  // (`blockedChanges`): a change-only review is kept while one change can still go; the others are left out. A problem
+  // that names nothing, or a review without a change plan (Shopify), blocks it whole, as before.
   const errors = plan.review.issues.filter(i => i.severity === 'error')
-  const photosOnly = errors.length > 0 && errors.every(i => i.field) && !!plan.changePlan && !!plan.review.changes?.some(c => c.selectable && isPhotoChangeId(c.id))
-  return { plan, key, unresolved, errors, photosOnly }
+  const blocked = blockedChanges(plan.review)
+  const clean = (plan.review.changes ?? []).filter(change => change.selectable && !blocked.has(change.id))
+  const sendable = !errors.length || (!!plan.changePlan && clean.length > 0)
+  // The publication history's "Photos" kind (`photosOnly`): problems left changes out, and only photos can still go.
+  const photosOnly = blocked.size > 0 && clean.length > 0 && clean.every(change => isPhotoChangeId(change.id))
+  return { plan, key, unresolved, errors, sendable, photosOnly }
 }
+
+/** Why a selection is refused: its ticked changes that a problem leaves out, and those problems (one per line). */
+const leftOutRefusal = (blockers: StudioPublishReview['issues']) => !blockers.length ? ''
+  : blockers.some(issue => !issue.field && !issue.productId) ? blockers.map(issue => issue.message).join('\n')
+    : ['Some ticked changes have problems and are left out. Untick them, or fix the problems first:', ...blockers.map(issue => issue.message)].join('\n')
 
 /** A durable review also owns retries, across API processes and browser reconnects. */
 export async function previewStudioPublication(productId: string, scope: StudioPublishScope, userId: string | null, options: PreviewOptions = {}): Promise<StudioPublishReview> {
@@ -511,7 +549,7 @@ export async function previewStudioPublication(productId: string, scope: StudioP
   const fullProductIds = storedProductIds(options.fullProductIds)
   const heldProductIds = storedProductIds(options.heldProductIds)
   const startAs = storedStartAs(options.startAs)
-  const { plan, key, unresolved, errors, photosOnly } = await reviewPlan(productId, scope, { verify: true, fullProductIds, startAs, heldProductIds })
+  const { plan, key, unresolved, sendable, photosOnly } = await reviewPlan(productId, scope, { verify: true, fullProductIds, startAs, heldProductIds })
   if (options.expiresInMs) plan.review.expiresAt = new Date(Date.now() + options.expiresInMs).toISOString()
   const id = randomUUID()
   const columns = { ...publicationColumns(plan.facts.destination.familyId, scope, plan.facts.destination.aliasKey ?? ''), ...(options.batchId ? { batchId: options.batchId } : {}) }
@@ -527,10 +565,8 @@ export async function previewStudioPublication(productId: string, scope: StudioP
   }
   // D3 — a publication a person marked checked is closed (`OPEN_PUBLICATION`) and no longer blocks its destination.
   if (unresolved) return blocked({ ...plan.review, ...(unresolved.userId === userId ? { previousPublicationId: unresolved.id } : {}), issues: [...plan.review.issues, { severity: 'error', message: `A previous publication still needs a result (${unresolved.id}). ${unresolved.userId === userId ? 'Check its status before publishing again.' : 'Ask the colleague who submitted it to check its status.'}` }] })
-  const textOnly = !!options.textOnly && scope.channel === 'AMAZON' && errors.length > 0 && errors.every(i => i.field) && !!plan.changePlan
-    && !!plan.review.changes?.some(c => c.selectable && isAmazonTextChangeId(c.id))
-  if (!plan.prepared || (errors.length && !photosOnly && !textOnly)) return blocked(plan.review)
-  const review = { ...plan.review, id, ...(textOnly ? { textOnly: true } : photosOnly ? { photosOnly: true } : {}) }
+  if (!plan.prepared || !sendable) return blocked(plan.review)
+  const review = { ...plan.review, id, ...(photosOnly ? { photosOnly: true } : {}) }
   await prisma.bulkOperation.create({ data: { id, userId, status: 'PREVIEW', productCount: plan.review.rows.length, changeCount: 0,
     ...columns,
     expiresAt: new Date(plan.review.expiresAt), changes: json({ kind: KIND, publicationKey: key, productId, scope, revision: plan.revision,
@@ -565,10 +601,12 @@ export async function previewStudioPublicationSelection(productId: string, id: s
   const ids = object(body).selectedIds
   if (!Array.isArray(ids) || ids.length > 50_000 || ids.some(id => typeof id !== 'string' || id.length > 2_000))
     throw new WorkspaceScopeError('Choose valid fields from this review.', 400)
-  if (object(data.review).photosOnly === true && !ids.every(value => isPhotoChangeId(value as string)))
-    throw new WorkspaceScopeError('Other fields of this listing have problems (listed in the review). Choose only photos, or fix them first.', 422)
-  if (object(data.review).textOnly === true && !ids.every(value => isAmazonTextChangeId(value as string)))
-    throw new WorkspaceScopeError('Other fields of this listing have problems (listed in the review). Choose only its text, or fix them first.', 422)
+  // Option A — a ticked change a problem leaves out is refused by name; untick it, or fix the problem first.
+  const reviewed = object(data.review) as StudioPublishReview
+  if (reviewed.scope && Array.isArray(reviewed.issues)) {
+    const blockers = blockingIssues(reviewed.issues, ids as string[], publishGateContext(reviewed))
+    if (blockers.length) throw new WorkspaceScopeError(leftOutRefusal(blockers), 422)
+  }
   let compiled: ReturnType<typeof compileSelection>
   try { compiled = compileSelection(data.changePlan, ids, id) }
   catch (error) { throw new WorkspaceScopeError(error instanceof Error ? error.message : String(error), 400) }
@@ -680,9 +718,10 @@ export async function claimPublication(productId: string, id: string, body: unkn
   const plan = await buildReview(productId, data.scope as StudioPublishScope, { fullProductIds: storedProductIds(data.fullProductIds), startAs: storedStartAs(data.startAs),
     heldProductIds: storedProductIds(data.heldProductIds) })
   if (plan.revision !== data.revision) throw new WorkspaceScopeError('Saved information, the destination, channel settings or content-read evidence changed. Review the current values before publishing.')
-  // A photos-only selection is not blocked by other fields' problems (P4c); everything else is, as before.
-  const blockers = sparse ? blockingIssues(plan.review.issues, data.selection?.selectedIds) : plan.review.issues.filter(i => i.severity === 'error')
-  if (blockers.length || !plan.prepared) throw new WorkspaceScopeError(blockers.map(i => i.message).join('\n') || 'Publication is unavailable.', 422)
+  // Option A — only the problems of the ticked changes (and those that name nothing) block a change-only send; a whole
+  // product (Shopify) is blocked by every error, as before.
+  const blockers = sparse ? blockingIssues(plan.review.issues, data.selection?.selectedIds, publishGateContext(plan.review)) : plan.review.issues.filter(i => i.severity === 'error')
+  if (blockers.length || !plan.prepared) throw new WorkspaceScopeError((sparse ? leftOutRefusal(blockers) : blockers.map(i => i.message).join('\n')) || 'Publication is unavailable.', 422)
   if (sparse) {
     if (!plan.changePlan) throw new WorkspaceScopeError('The change-only review is unavailable. Refresh the review.')
     const compiled = compileSelection(plan.changePlan, data.selection.selectedIds, id)

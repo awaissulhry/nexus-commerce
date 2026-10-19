@@ -20,7 +20,7 @@ import { isOnMediaPlan } from '../images/media-plan-switch.js'
 import { mediaLayoutFor, type MediaChannelValues } from '../images/media-plan.service.js'
 import type { EbayMediaLayout } from '@nexus/shared/media-plan-channels'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
-import { FULL_EBAY_SHAPE_DIFFERS, type StudioPublishFieldWrite } from '@nexus/shared/studio-publication'
+import { FULL_EBAY_SHAPE_DIFFERS, type StudioPublishFieldWrite, type StudioPublishIssue } from '@nexus/shared/studio-publication'
 import { EBAY_NEW_INACTIVE_OOS_OFF, EBAY_NEW_INACTIVE_OOS_UNKNOWN } from '@nexus/shared/listing-actions'
 import { ebayInventoryMoveRefusal } from '../listings/channel-sku-live-move.js'
 import { parseEbayItemDocument, parseEbayPublicationItem, ebayXmlList, ebayXmlObject, ebayXmlText } from '../channel-drift/ebay-content-compare.js'
@@ -49,6 +49,12 @@ export interface EbayPublication {
   fieldWrites?: Record<string, StudioPublishFieldWrite[]>
   /** Review notes that block nothing (a new listing at stock 0). */
   notices?: string[]
+  /**
+   * Owner 2026-10-19 (option A) — the problems of a listing already on eBay, each on its row and field: the review lists
+   * them, and each blocks only the changes that would send its field (`blockingIssues`). A new listing has none here: any
+   * problem refuses it whole (`EbayPublicationProblems`).
+   */
+  issues?: StudioPublishIssue[]
   /** Build shape v2 — the listing is reviewed as Full update: the whole Revise it sends (prepared from the live read). */
   full?: EbayFullRevision
   /**
@@ -881,9 +887,14 @@ export async function prepareEbayPublication(facts: PublicationFacts, options: {
   if (inactiveSkus.size && built.shared) for (const variation of built.shared.variations) if (inactiveSkus.has(variation.sku)) variation.quantity = 0
   const shared = await finishEbayListingInput(facts, built, problems, live, { inactive: inactiveSkus.size > 0 })
   ebayOfferChecks({ settings, shared: shared as AddFixedPriceItemInput, single: products.length === 1, itemId, main: { productId: facts.parent.id, sku: facts.parent.sku }, problems })
-  problems.throwIfAny()
+  // Owner 2026-10-19 (option A) — a listing already on eBay is reviewed change by change: its problems go with the review
+  // (`issues`), each blocking only what sends its field. A new listing is created whole: any problem refuses it. With
+  // sending off nothing is read: every problem is said, as before.
+  if (!itemId || !live) problems.throwIfAny()
   // Audit P9 — every check above ran in every mode; eBay is read (the live item) only when this server really sends to eBay.
   if (!live) throw sendingOff(problems.notes)
+  const xml = problems.attempt(() => ebayPublicationXml(shared as AddFixedPriceItemInput, itemId, products.length === 1, settings))
+  if (xml === undefined) problems.throwIfAny()
   let liveRevision: string | null = null, liveContent: Record<string, unknown> | null = null, liveReadError: string | undefined
   let full: EbayFullRevision | undefined
   if (itemId) {
@@ -900,7 +911,7 @@ export async function prepareEbayPublication(facts: PublicationFacts, options: {
   // S10 — only a live item has rows to rename (a new item is created under the SKUs it is sent).
   const moves = itemId ? built.moves : []
   return { kind: 'ebay', marketplace: scope.marketplace, itemId, liveRevision, liveContent, ...(liveReadError ? { liveReadError } : {}), ...(notices.length ? { notices } : {}), products: identities,
-    xml: ebayPublicationXml(shared as AddFixedPriceItemInput, itemId, products.length === 1, settings), ...(full ? { full } : {}), ...(moves.length ? { moves } : {}) }
+    xml: xml!, ...(full ? { full } : {}), ...(moves.length ? { moves } : {}), ...(problems.issues.length ? { issues: [...problems.issues] } : {}) }
 }
 
 /** The live variation values this Revise renames; none when its XML cannot be read (eBay's own text then stands). */

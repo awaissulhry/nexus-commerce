@@ -92,7 +92,10 @@ describe('an Amazon alias never sends photos different from the Main listing\'s 
 
   it('a refusal on an alias row names the Main listing, where its photos are changed', async () => {
     const ids = await scoped(() => family('alias-empty', {}, { photos: 'none' }))
-    await expect(publish(ids.productId, ids.alias)).rejects.toThrow('alias-empty: add a product image on the Main listing before publishing.')
+    // Option A (Owner 2026-10-19): the SKU is left out by its own problem, never built; the review lists it.
+    const built = await publish(ids.productId, ids.alias)
+    expect(built.issues).toContainEqual(expect.objectContaining({ productId: ids.productId, severity: 'error', message: 'alias-empty: add a product image on the Main listing before publishing.' }))
+    expect(built.feed.messages).toEqual([])
   })
 
   it('a NEW alias row of a family with an Images draft on the main listing: the main listing\'s draft, not the alias\'s own', async () => {

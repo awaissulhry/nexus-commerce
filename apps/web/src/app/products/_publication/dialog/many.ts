@@ -121,7 +121,8 @@ export function manyBatchOptions(view: Pick<PublishPlanBatchView, 'request'> | n
 
 /** One reviewed family × destination, before anything is sent. */
 export type ManyRowState =
-  | { kind: 'ready'; changes: number }
+  /** `problems` (option A, Owner 2026-10-19): the review's errors; the fields they name are left out, the ticked ones go. */
+  | { kind: 'ready'; changes: number; problems?: number }
   | { kind: 'nothing'; reason: string }
   | { kind: 'not_listed'; reason: string }
   | { kind: 'problems'; problems: number; reason: string | null }
@@ -144,13 +145,16 @@ export function manyRowState(child: Pick<RowChild, 'status' | 'message' | 'probl
   const expires = child.expiresAt ? Date.parse(child.expiresAt) : NaN
   if (Number.isFinite(expires) && expires <= now) return { kind: 'expired' }
   const changes = child.selectedCount ?? 0
-  return changes > 0 ? { kind: 'ready', changes } : { kind: 'nothing', reason: 'No fields are ticked for this market.' }
+  const problems = child.problems?.errors ?? 0
+  return changes > 0 ? { kind: 'ready', changes, ...(problems ? { problems } : {}) } : { kind: 'nothing', reason: 'No fields are ticked for this market.' }
 }
 
 /** The words in a reviewed row's Review column. */
 export function manyRowLabel(state: ManyRowState): { label: string; tone: Tone; hint: string } {
   switch (state.kind) {
-    case 'ready': return { label: 'Ready', tone: 'info', hint: 'Open the row to see or change the ticked fields.' }
+    case 'ready': return state.problems
+      ? { label: 'Ready', tone: 'info', hint: `${plural(state.problems, 'problem leaves', 'problems leave')} out the fields ${state.problems === 1 ? 'it names' : 'they name'}; the ticked fields are sent. Open the row to see them.` }
+      : { label: 'Ready', tone: 'info', hint: 'Open the row to see or change the ticked fields.' }
     case 'nothing': return { label: 'Nothing to send', tone: 'neutral', hint: state.reason }
     case 'not_listed': return { label: 'Not listed', tone: 'neutral', hint: state.reason }
     case 'problems': return state.problems

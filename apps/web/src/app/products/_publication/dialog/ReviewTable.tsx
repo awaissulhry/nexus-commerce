@@ -13,14 +13,14 @@
  * column and an always-empty "Set by" (D3), its cut values (D6) and its header menus and resize handles (D11).
  */
 import { useEffect, useMemo, useState } from 'react'
-import { moveModeLabel } from '@nexus/shared/studio-publication'
+import { blockedChanges, moveModeLabel } from '@nexus/shared/studio-publication'
 import { Button, Checkbox, Pill, SegmentedControl, Tag } from '@/design-system/primitives'
 import { Disclosure, MetricStrip, Pagination } from '@/design-system/components'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { PublishActionView, SellingStatusView, SEND_MODE_WORD, STATUS_TARGET_WORD } from '@/design-system/grid'
 import { NOT_LISTED_ASIDE, NO_LONGER_APPLIES, STARTS_UNTICKED, toggleRowTicks, withProductTicks, type ActionPlanRow } from './actionPlan'
 import { replacesWords } from './PublicationChanges'
-import { fieldStatus, fieldTick, fieldValues, reviewCounts, reviewPages, reviewTableRows, type ReviewFilter, type ReviewTableMarket, type ReviewTableRow } from './reviewRows'
+import { fieldNote, fieldStatus, fieldTick, fieldValues, reviewCounts, reviewPages, reviewTableRows, type ReviewFilter, type ReviewTableMarket, type ReviewTableRow } from './reviewRows'
 import styles from './reviewTable.module.css'
 
 export interface ReviewTableMarketProps extends ReviewTableMarket {
@@ -92,6 +92,8 @@ export function ReviewTable({ markets, locked, now, ariaLabel, allMarkets = fals
   const firstRow = pages.slice(0, shownPage - 1).reduce((n, p) => n + p.length, 0)
   const counts = useMemo(() => reviewCounts(markets), [markets])
   const marketOf = useMemo(() => new Map(markets.map(m => [m.key, m])), [markets])
+  // Option A (Owner 2026-10-19) — per market, the changes a problem leaves out, each with that problem.
+  const leftOutOf = useMemo(() => new Map(markets.map(m => [m.key, m.review?.id ? blockedChanges(m.review) : new Map()])), [markets])
 
   const planTick = (r: Extract<ReviewTableRow, { type: 'plan' }>) => {
     const m = marketOf.get(r.market.key)!
@@ -105,7 +107,7 @@ export function ReviewTable({ markets, locked, now, ariaLabel, allMarkets = fals
   }
   const fieldCheckbox = (r: Extract<ReviewTableRow, { type: 'field' }>) => {
     const m = marketOf.get(r.market.key)!
-    const tick = fieldTick(r.row, r.change, { selectedIds: m.selectedIds, locked, reviewId: m.review?.id, photosOnly: m.review?.photosOnly })
+    const tick = fieldTick(r.row, r.change, { selectedIds: m.selectedIds, locked, reviewId: m.review?.id, leftOut: leftOutOf.get(m.key) })
     return <Checkbox checked={tick.on} disabled={!tick.enabled} aria-label={`Send ${r.change.label} of ${r.row.sku}`}
       onChange={event => {
         const mine = r.row.changeIds
@@ -162,8 +164,9 @@ export function ReviewTable({ markets, locked, now, ariaLabel, allMarkets = fals
       if (r.type === 'field') {
         const status = fieldStatus(r.change)
         const m = marketOf.get(r.market.key)!
-        const words = r.change.selectable ? replacesWords(r.change, m.selectedIds.includes(r.change.id), m.channel) : null
-        const reason = [r.change.reason, r.change.display?.note].filter(Boolean).join(' ')
+        const leftOut = leftOutOf.get(m.key)
+        const words = r.change.selectable && !leftOut?.has(r.change.id) ? replacesWords(r.change, m.selectedIds.includes(r.change.id), m.channel) : null
+        const reason = fieldNote(r.change, leftOut)
         return <span className={styles.lines}><Tag tone={status.tone}>{status.label}</Tag>
           {reason && <span className={styles.quiet}>{reason}</span>}
           {words && <span className={words.warning ? undefined : styles.quiet}>{words.warning && <strong>Warning: </strong>}{words.text}</span>}</span>

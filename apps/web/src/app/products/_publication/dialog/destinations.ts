@@ -16,7 +16,8 @@
  * after their market's main listing (`listedAliases`), keyed by the ALIAS id (`scope.listingId`), and ticked by the same
  * "listed" rule as the main listing. The counts then say "listings" instead of "markets" (`placesWord`).
  */
-import { blockingIssues, isPhotoChangeId, type PublicationBatchChild, type PublicationBatchView, type StudioPublishReview, type StudioPublishScope, type StudioPublishSelection } from '@nexus/shared/studio-publication'
+import { blockedChangeIds, blockingIssues, publishGateContext, sendableChanges, type PublicationBatchChild, type PublicationBatchView, type StudioPublishReview, type StudioPublishScope,
+  type StudioPublishSelection } from '@nexus/shared/studio-publication'
 import { isNewRowId, type PublishActionCell } from '@nexus/shared/publish-actions'
 import type { PublishPlanDestination } from '@nexus/shared/publish-plan'
 import { channelLabel, channelPlace } from '@nexus/shared/channel-label'
@@ -86,18 +87,20 @@ export type DestinationState =
   | { kind: 'expired' }
   | { kind: 'nothing'; reason: 'none' | 'unticked' }
   | { kind: 'input'; needs: 'location' | 'overwrite' }
-  | { kind: 'ready'; changes: number; whole: boolean; requestReady: boolean }
+  /** `leftOut` (option A, Owner 2026-10-19): changes problems leave out of this send; the ticked ones go. */
+  | { kind: 'ready'; changes: number; whole: boolean; requestReady: boolean; leftOut?: number }
 
-/** The ticked fields that still count: selectable in this review (and photos only, on a photos-only review). */
+/** The ticked fields that still count: selectable in this review, and not left out by a problem (`blockedChangeIds`). */
 export function tickedChanges(entry: Pick<DestinationEntry, 'review' | 'selectedIds'>): string[] {
   const review = entry.review
   if (!review?.changes) return []
-  return review.changes.filter(c => c.selectable && entry.selectedIds.includes(c.id) && (!review.photosOnly || isPhotoChangeId(c.id))).map(c => c.id)
+  const left = blockedChangeIds(review)
+  return review.changes.filter(c => c.selectable && entry.selectedIds.includes(c.id) && !left.has(c.id)).map(c => c.id)
 }
 
 /** The fields a fresh review starts with: its own defaults, or — for "Publish failed products again…" — only the given ids. */
 export function initialTicks(review: StudioPublishReview, given?: { fieldIds: readonly string[] } | null): string[] {
-  const usable = (review.changes ?? []).filter(c => c.selectable && (!review.photosOnly || isPhotoChangeId(c.id)))
+  const usable = sendableChanges(review)
   if (given) return usable.filter(c => given.fieldIds.includes(c.id)).map(c => c.id)
   return usable.filter(c => c.selectedByDefault).map(c => c.id)
 }
@@ -111,17 +114,22 @@ export function destinationState(entry: DestinationEntry, ticked: boolean, now: 
   if (!review && entry.plan) return entry.plan.error ? { kind: 'error', message: entry.plan.error } : { kind: 'nothing', reason: 'none' }
   if (!review) return ticked ? { kind: 'checking' } : { kind: 'not_checked' }
   if (review.previousPublicationId) return { kind: 'earlier', publicationId: review.previousPublicationId }
-  const blockers = blockingIssues(review.issues, review.photosOnly ? entry.selectedIds : undefined)
+  // Option A (Owner 2026-10-19) — a kept change-only review (it has an id) is blocked only by a problem of a ticked change
+  // or one that names nothing; the changes a problem leaves out are not ticked and say so. Any other review: every error.
+  const sparse = isSparse(review) && !!review.id
+  const ticks = sparse ? tickedChanges(entry) : []
+  const blockers = !sparse ? blockingIssues(review.issues)
+    : ticks.length ? blockingIssues(review.issues, ticks, publishGateContext(review)) : review.issues.filter(i => i.severity === 'error' && !i.field && !i.productId)
   if (blockers.length) return { kind: 'blocked', problems: blockers.length, reason: null }
   if (!review.id) return { kind: 'blocked', problems: 0, reason: 'This review cannot be sent. Its notes say why.' }
   if (Number.isFinite(Date.parse(review.expiresAt)) && Date.parse(review.expiresAt) <= now) return { kind: 'expired' }
   if (isSparse(review)) {
     if (!review.changes) return { kind: 'blocked', problems: 0, reason: 'The review did not list the fields to send. Check again.' }
-    const ticks = tickedChanges(entry)
-    if (!ticks.length) return { kind: 'nothing', reason: review.changes.some(c => c.selectable) ? 'unticked' : 'none' }
+    if (!ticks.length) return { kind: 'nothing', reason: sendableChanges(review).length ? 'unticked' : 'none' }
     const requestReady = matchesPublicationSelection(entry.selection, review, ticks)
     if (!requestReady && entry.selectionError) return { kind: 'blocked', problems: 0, reason: requestSkipReason(entry.selectionError), request: true }
-    return { kind: 'ready', changes: ticks.length, whole: false, requestReady }
+    const leftOut = blockedChangeIds(review).size
+    return { kind: 'ready', changes: ticks.length, whole: false, requestReady, ...(leftOut ? { leftOut } : {}) }
   }
   if (review.locations && !review.locations.some(l => l.id === entry.locationId)) return { kind: 'input', needs: 'location' }
   if (!publicationOverwriteAcknowledged(review, entry.confirmedReviewId)) return { kind: 'input', needs: 'overwrite' }
@@ -155,9 +163,13 @@ export function destinationStateLabel(state: DestinationState): { label: string;
     case 'input': return state.needs === 'location'
       ? { label: 'Choose a location', tone: 'warning', hint: 'Open the review and choose the inventory location.' }
       : { label: 'Confirm the overwrite', tone: 'warning', hint: 'Open the review and confirm that this publish can overwrite channel values.' }
-    case 'ready': return state.whole
-      ? { label: 'Ready', tone: 'info', hint: 'The whole product will be sent.' }
-      : { label: 'Ready', tone: 'info', hint: state.requestReady ? 'The exact request is prepared.' : 'Preparing the exact request…' }
+    case 'ready': {
+      if (state.whole) return { label: 'Ready', tone: 'info', hint: 'The whole product will be sent.' }
+      // Option A — never "blocked" while changes can go: how many problems leave out, said beside Ready.
+      const left = state.leftOut ? `${plural(state.leftOut, 'change has', 'changes have')} problems and ${state.leftOut === 1 ? 'is' : 'are'} left out; the rest is sent. ` : ''
+      return { label: state.leftOut ? `Ready · ${state.leftOut.toLocaleString('en')} left out` : 'Ready', tone: 'info',
+        hint: `${left}${state.requestReady ? 'The exact request is prepared.' : 'Preparing the exact request…'}` }
+    }
   }
 }
 

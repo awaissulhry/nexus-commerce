@@ -52,10 +52,10 @@ it('unticked ("Keep Amazon\'s values"), the line says what the channel keeps —
   expect(replacesWords({ replaces: { ...price.replaces!, channel: null } }, false, 'EBAY')!.text).toBe('Unticked: nothing is set on eBay.')
   expect(replacesWords(price, false)!.text).toBe('Unticked: the channel keeps 129.00.')
 })
-it('a line without replaces, and a line a photos-only review cannot send, get no replaces words', () => {
+it('a line without replaces, and a line a problem leaves out, get no replaces words; the left-out line names its problem', () => {
   expect(replacesWords(change, true)).toBeNull()
-  const html = renderLines([price], ['price'], { photosOnly: true })
-  expect(html).toContain('Fix the problems listed above'); expect(html).not.toContain('Warning:')
+  const html = renderLines([price], ['price'], { leftOut: new Map([['price', { productId: 'child', field: 'price', severity: 'error', message: 'Price: set a price above 0.' }]]) })
+  expect(html).toContain('Left out: Price: set a price above 0.'); expect(html).not.toContain('Warning:')
 })
 it('a photo line judged on Nexus\'s side (the channel re-hosts its photos) shows its reason, unticked', () => {
   const COPY = 'Amazon shows its own copy of the photos, so Nexus cannot compare them. Tick it to send Nexus\'s photos.'

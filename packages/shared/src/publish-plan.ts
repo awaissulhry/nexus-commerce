@@ -37,7 +37,7 @@
  */
 import type { ListingAction, ListingActionDestination, ListingActionPlanRow, ListingActionRowResult, SellingState, StatusTarget } from './listing-actions.js'
 import type { SendMode, SendStep } from './publish-actions.js'
-import { isPhotoChangeId, type PublicationBatchChild, type PublicationBatchCounts, type PublicationBatchView, type StudioPublishReview,
+import { sendableChanges, type PublicationBatchChild, type PublicationBatchCounts, type PublicationBatchView, type StudioPublishReview,
   type StudioPublishScope } from './studio-publication.js'
 
 /** One Publish reviews and sends at most this many destinations (the batch route's limit). */
@@ -298,9 +298,9 @@ export const lifecycleStep = (action: ListingAction): SendStep => action
 export const confirmMatches = (expected: string, typed: string | null | undefined) =>
   typeof typed === 'string' && typed.trim() === expected.trim() && expected.trim().length > 0
 
-/** The changes a fresh review ticks: selectable and selected by default (photos only on a photos-only review). */
-export function defaultReviewTicks(review: Pick<StudioPublishReview, 'changes' | 'photosOnly'> | null | undefined): string[] {
-  return (review?.changes ?? []).filter(c => c.selectable && c.selectedByDefault && (!review?.photosOnly || isPhotoChangeId(c.id))).map(c => c.id)
+/** The changes a fresh review ticks: selected by default, and not left out by a problem (`sendableChanges`). */
+export function defaultReviewTicks(review: Pick<StudioPublishReview, 'scope' | 'changes'> & Partial<Pick<StudioPublishReview, 'issues' | 'sendsWhole'>> | null | undefined): string[] {
+  return sendableChanges(review).filter(c => c.selectedByDefault).map(c => c.id)
 }
 
 /** The lifecycle rows ticked when the window opens. */

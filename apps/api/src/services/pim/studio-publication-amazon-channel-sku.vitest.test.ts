@@ -94,7 +94,10 @@ describe('the EU shared-quantity check of a new listing is per seller SKU', () =
 
   it('control (as before): a DE row under the product SKU is held by the disagreeing IT and FR rows → refused', async () => {
     const id = await scoped(async () => { const pid = await draftRow('pub-eu-same', 'DE'); await livePair(pid); return pid })
-    await expect(publish(id, 'DE')).rejects.toThrow(/EU shared-quantity conflict for pub-eu-same/)
+    // Option A (Owner 2026-10-19): this SKU's create is left out by its own problem, never built.
+    const built = await publish(id, 'DE')
+    expect(built.issues).toContainEqual(expect.objectContaining({ productId: id, severity: 'error', message: expect.stringMatching(/EU shared-quantity conflict for pub-eu-same/) }))
+    expect(built.feed.messages).toEqual([])
   })
 
   it('a DE row under its own seller SKU is another quantity: created with its stock', async () => {

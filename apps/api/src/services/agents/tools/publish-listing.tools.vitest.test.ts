@@ -328,7 +328,7 @@ describe('what a publish sends', () => {
   })
 })
 
-describe('Amazon text only (2026-10-17, MOSS on Amazon DE)', () => {
+describe('a problem leaves out only what sends its field (2026-10-17 MOSS on Amazon DE; option A 2026-10-19)', () => {
   const titleField = 'item_name:["market-test","it_IT"]'
   beforeEach(() => {
     const base = fixture.facts.getMockImplementation()!
@@ -345,18 +345,31 @@ describe('Amazon text only (2026-10-17, MOSS on Amazon DE)', () => {
     })
   })
 
-  it('the approved run keeps the review and sends only the title; naming another field too is refused and sends nothing', async () => {
+  it('a change the problem names is left out, with that problem; the others go', async () => {
+    const base = fixture.facts.getMockImplementation()!
+    fixture.facts.mockImplementation(async (productId: string, scope: Json) => ({ ...(await base(productId, scope)),
+      issues: [{ productId: ids.euProduct, sku: 'TEST-SKU-L5-EU', field: 'brand', severity: 'error', message: 'Brand: required.' }] }))
+    const both = await dryRun({ productId: ids.euProduct, channel: 'AMAZON', marketplace: 'IT', fields: ['title', 'attributes'] })
+    expect(both.ok, both.error).toBe(true)
+    expect(both.preview.send.map((s: Json) => s.field)).toEqual(['item_name:["market-test","it_IT"]'])
+    expect(both.preview.notSent).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'brand', reason: 'Left out: Brand: required.' })]))
+    const brand = await dryRun({ productId: ids.euProduct, channel: 'AMAZON', marketplace: 'IT', fields: ['attributes'] })
+    expect(brand).toMatchObject({ ok: false, error: expect.stringContaining('Left out: Brand: required.') })
+  })
+
+  it('the brand goes too; the approved run keeps the review and sends only the title; the weight\'s problem blocks nothing it sends', async () => {
+    // The brand is another attribute: it goes too (a dry run: nothing is sent).
+    const both = await dryRun({ productId: ids.euProduct, channel: 'AMAZON', marketplace: 'IT', fields: ['title', 'attributes'] })
+    expect(both.ok, both.error).toBe(true)
+    expect(both.preview.send.map((s: Json) => s.field)).toEqual(expect.arrayContaining(['item_name:["market-test","it_IT"]', 'brand']))
+    expect(fixture.sendAmazon).not.toHaveBeenCalled()
     const { ran } = await approveAndRun({ productId: ids.euProduct, channel: 'AMAZON', marketplace: 'IT', fields: ['title'] })
     expect(ran.ok, ran.error).toBe(true)
     expect(fixture.sendAmazon).toHaveBeenCalledOnce()
     const sent = fixture.sendAmazon.mock.calls[0][0]
     expect(sent.feed.messages).toEqual([expect.objectContaining({ sku: 'TEST-SKU-L5-EU', operationType: 'PATCH', patches: [expect.objectContaining({ path: '/attributes/item_name' })] })])
     const operation = await inside(() => db().bulkOperation.findUniqueOrThrow({ where: { id: (ran.data as Json).publicationId } }))
-    expect((operation.changes as Json).review).toMatchObject({ textOnly: true })
-    fixture.sendAmazon.mockClear()
-    const both = await dryRun({ productId: ids.euProduct, channel: 'AMAZON', marketplace: 'IT', fields: ['title', 'attributes'] })
-    expect(both).toMatchObject({ ok: false, error: expect.stringContaining('Item package weight') })
-    expect(fixture.sendAmazon).not.toHaveBeenCalled()
+    expect((operation.changes as Json).review).not.toHaveProperty('textOnly')
   })
 })
 
