@@ -86,10 +86,14 @@ describe('🔴 the Amazon publication sends the listing\'s send price', () => {
     expect(await publishedPrice(id, 'UK')).toEqual({ price: 9, currency: 'GBP' })
   })
 
-  it('🔴 a follower on Amazon UK that holds no price is refused by name, as the price door refuses it — nothing is built', async () => {
+  it('🔴 a follower on Amazon UK that holds no price is refused by name, as the price door refuses it — no price is built', async () => {
     const id = await scoped(() => seed('send-gbp-none', 'UK', { followMasterPrice: true, pricingRule: 'FIXED', price: null }))
-    await expect(publishedPrice(id, 'UK')).rejects.toThrow(
-      'send-gbp-none: Amazon UK sells in GBP, and this listing follows the master price in EUR. Nexus does not convert it. Set this listing\'s own GBP price.')
+    // Option A (Owner 2026-10-19): a live row's missing price is its offer's problem (it leaves the price lines out); the
+    // EUR master number is never sent as pounds.
+    const prepared = await scoped(async () => prepareAmazonPublication(await readPublicationFacts(id, { channel: 'AMAZON', marketplace: 'UK', accountId: account })))
+    expect(prepared.issues).toContainEqual({ productId: id, sku: 'send-gbp-none', field: 'purchasable_offer', severity: 'error',
+      message: 'send-gbp-none: Amazon UK sells in GBP, and this listing follows the master price in EUR. Nexus does not convert it. Set this listing\'s own GBP price.' })
+    expect(await publishedPrice(id, 'UK')).toEqual({ price: undefined, currency: undefined })
   })
 })
 
@@ -141,7 +145,8 @@ describe('🔴 a row this publication sends nothing for is not built', () => {
       await prisma.channelListing.updateMany({ where: { productId: made.held }, data: { overrideData: { size: 'L' } } as never })
       return made
     })
-    await expect(scoped(async () => prepareAmazonPublication(await readPublicationFacts(ids.parent, { ...UK, accountId: account }))))
-      .rejects.toThrow('sent-fam-L: Amazon UK sells in GBP, and this listing follows the master price in EUR. Nexus does not convert it. Set this listing\'s own GBP price.')
+    const prepared = await scoped(async () => prepareAmazonPublication(await readPublicationFacts(ids.parent, { ...UK, accountId: account })))
+    expect(prepared.issues).toContainEqual(expect.objectContaining({ productId: ids.held, severity: 'error',
+      message: 'sent-fam-L: Amazon UK sells in GBP, and this listing follows the master price in EUR. Nexus does not convert it. Set this listing\'s own GBP price.' }))
   })
 })

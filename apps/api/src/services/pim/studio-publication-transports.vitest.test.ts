@@ -341,7 +341,11 @@ it('updates an existing Amazon alias by seller SKU without a destructive full re
   await prepareAmazonPublication(facts)
   expect(m.row.mock.calls.at(-1)![0].main_product_image_locator).toBe('https://example.test/4')
   facts.listings[0].platformAttributes = { _productMediaLocales: writeMediaCollection({}, 'it', { version: 1, items: [] }) }
-  await expect(prepareAmazonPublication(facts)).rejects.toThrow('add a product image')
+  // Option A (Owner 2026-10-19): a live row's photo problem is named on its photos; the rest of its message is built.
+  const noPhotos = await prepareAmazonPublication(facts)
+  expect(noPhotos.issues).toEqual([{ productId: 'p', sku: 'MASTER-SKU', field: 'photos', severity: 'error', message: 'MASTER-SKU: add a product image before publishing.' }])
+  expect(JSON.stringify(noPhotos.feed.messages)).not.toContain('image_locator')
+  expect(noPhotos.feed.messages[0]).toMatchObject({ sku: 'ALIAS-SKU', attributes: { item_name: [{ value: 'Saved localized title', language_tag: 'it_IT' }] } })
   // Owner 2026-10-05 — on the live Main listing's ASIN the alias sends no photo of its own (Amazon keeps one set per product).
   m.mainRows = [{ id: 'main', productId: 'p', version: 1, externalListingId: 'ASIN', isPublished: true, platformAttributes: {} }]
   facts.listings[0].platformAttributes = { _productMediaLocales: writeMediaCollection({}, 'it', { version: 1, items: [{ assetId: '4' }] }) }
@@ -484,7 +488,10 @@ it('CHMAP M4: Amazon takes an attribute whole — one ignored part keeps the who
   facts.resolved[0].products[0].cells.sleeve__type = { value: 'Raglan', errors: ['Not an Amazon value'] }
   await expect(send()).resolves.toEqual(without)
   m.sets.mockResolvedValue([]); m.mapFields.mockResolvedValue([])
-  await expect(send()).rejects.toThrow('Mapping validation failed')
+  // A SKU whose message cannot be built is left out by its own problem (option A): nothing of it is built.
+  const failed = await prepareAmazonPublication(facts)
+  expect(failed.issues).toEqual([expect.objectContaining({ productId: 'p', severity: 'error', message: expect.stringContaining('Mapping validation failed') })])
+  expect(failed.feed.messages).toEqual([])
 })
 
 it('CHMAP M7 (B2): a market outside the row builder\'s five gets its own marketplace id and language tag, not Italy\'s', async () => {
@@ -541,8 +548,8 @@ it('checks Amazon variation collisions against saved channel sizes instead of st
   const allClosed = await prepareAmazonPublication({ ...facts, products: [] })
   expect(allClosed.products).toEqual([]); expect(allClosed.feed.messages).toEqual([])
   expect(prepared).not.toHaveProperty('issues')
-  // Owner 2026-10-17 — a deprecated theme on a market whose parent is not on Amazon is a problem of the theme field (it
-  // blocks every selection but a text-only one, `blockingIssues`), not a refusal of the whole review.
+  // Owner 2026-10-17/19 — a deprecated theme on a market whose parent is not on Amazon is a problem of the theme field (it
+  // blocks what carries the family's shape, `blockingIssues`), not a refusal of the whole review.
   original.schema.amazon.facts.deprecated = [theme]
   original.listing = { ...original.listing, externalListingId: null, listingStatus: 'DRAFT' }
   expect((await prepareAmazonPublication(facts)).issues).toEqual([{ severity: 'error', field: 'variation_theme',
@@ -550,7 +557,10 @@ it('checks Amazon variation collisions against saved channel sizes instead of st
   original.listing = { ...original.listing, externalListingId: 'ASIN', listingStatus: 'ACTIVE' }
   expect((await prepareAmazonPublication(facts)).issues).toBeUndefined()
   facts.resolved[0].products[2].cells.apparel_size__size.value = 'x_s'
-  await expect(prepareAmazonPublication(facts)).rejects.toThrow('2 variants cannot be told apart')
+  // So is a collision (option A, 2026-10-19): every create and the family's shape wait for it; the live rows' other changes go.
+  const collided = await prepareAmazonPublication(facts)
+  expect(collided.issues).toContainEqual(expect.objectContaining({ severity: 'error', field: 'variation_theme', message: expect.stringContaining('2 variants cannot be told apart') }))
+  expect(collided.products).toHaveLength(3)
 })
 
 it('keeps each Amazon issue apart with its code, severity and attributes, and the feed completion time (sheet publish parity, step 2)', async () => {

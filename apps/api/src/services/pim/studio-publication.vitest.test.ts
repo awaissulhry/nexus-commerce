@@ -76,7 +76,8 @@ vi.mock('../../db.js', () => {
 })
 import { newListingChoices } from '../listings/new-listing-choices.js'
 import { readListingDeletions } from '../listings/listing-deletions.js'
-import { previewStudioPublication as previewRaw, submitStudioPublication as submitRaw, previewStudioPublicationSelection, studioPublicationResult, publicationSummary, publicationColumns, reviewStudioPublication, publicationResultFor } from './studio-publication.service.js'
+import { previewStudioPublication as previewRaw, submitStudioPublication as submitRaw, previewStudioPublicationSelection, studioPublicationResult, publicationSummary, publicationColumns, reviewStudioPublication, publicationResultFor,
+  orphanCreateIssues, refusalIssues } from './studio-publication.service.js'
 
 // Existing recovery tests explicitly review a selection before their send/result scenario.
 async function previewStudioPublication(...args: Parameters<typeof previewRaw>) {
@@ -344,21 +345,38 @@ it('reads nothing when an Amazon acceptance promoted no row', async () => {
   expect(m.fill).not.toHaveBeenCalled()
 })
 
-// P4c — an off-list value on one field (eBay's Season list) blocks that field, not the listing's photos.
-it('saves a photos-only review when every error names a field, sends a photos-only selection, and refuses any other field', async () => {
+// P4c, then option A (Owner 2026-10-19) — an off-list value on one item specific (eBay's Season list) blocks the item
+// specifics, never the listing's title or photos: the review is kept and they go.
+it('keeps an eBay review whose problem names another field: the title and the photos go', async () => {
   const ebayScope = { ...scope, channel: 'EBAY' }
   m.photoFields.on = true
-  const fieldError = { productId: 'parent', sku: 'SKU', field: 'season', severity: 'error', message: 'Season: Season contains an unaccepted value.' }
+  const fieldError = { productId: 'parent', sku: 'SKU', field: 'aspect:season', severity: 'error', message: 'Season: Season contains an unaccepted value.' }
   m.facts.mockImplementation(async () => ({ ...existingFacts(), scope: ebayScope, issues: [fieldError] }))
   const review = await previewRaw('parent', ebayScope, 'user')
-  expect(review).toMatchObject({ photosOnly: true, issues: [expect.objectContaining({ field: 'season' })] })
+  expect(review).toMatchObject({ issues: [expect.objectContaining({ field: 'aspect:season' })] })
   expect(review.id).toBeTruthy()
+  expect(review.photosOnly).toBeUndefined()
   const title = JSON.stringify(['parent', 'title']), pictures = JSON.stringify(['parent', 'pictures'])
-  await expect(previewStudioPublicationSelection('parent', review.id!, { selectedIds: [title, pictures] }, 'user')).rejects.toMatchObject({ statusCode: 422 })
-  await previewStudioPublicationSelection('parent', review.id!, { selectedIds: [pictures] }, 'user')
+  await previewStudioPublicationSelection('parent', review.id!, { selectedIds: [title, pictures] }, 'user')
   const result = await submitStudioPublication('parent', review.id!, {}, 'user')
   expect(m.ebay).toHaveBeenCalledOnce()
   expect(result.status).not.toBe('FAILED')
+  m.photoFields.on = false
+})
+// The publication history's "Photos" kind: problems left the title out, so only the photos can go.
+it('a problem on the title leaves it out (422 when ticked); the photos go, and the review is marked photos-only for the history', async () => {
+  const ebayScope = { ...scope, channel: 'EBAY' }
+  m.photoFields.on = true
+  const fieldError = { productId: 'parent', sku: 'SKU', field: 'title', severity: 'error', message: 'Title: too long.' }
+  m.facts.mockImplementation(async () => ({ ...existingFacts(), scope: ebayScope, issues: [fieldError] }))
+  const review = await previewRaw('parent', ebayScope, 'user')
+  expect(review).toMatchObject({ photosOnly: true })
+  const title = JSON.stringify(['parent', 'title']), pictures = JSON.stringify(['parent', 'pictures'])
+  await expect(previewStudioPublicationSelection('parent', review.id!, { selectedIds: [title, pictures] }, 'user')).rejects.toMatchObject({ statusCode: 422,
+    message: expect.stringContaining('Title: too long.') })
+  await previewStudioPublicationSelection('parent', review.id!, { selectedIds: [pictures] }, 'user')
+  expect(await submitStudioPublication('parent', review.id!, {}, 'user')).toMatchObject({ status: expect.not.stringMatching(/FAILED/) })
+  expect(m.ebay).toHaveBeenCalledOnce()
   m.photoFields.on = false
 })
 it('an error that names no field still blocks the whole review, photos included', async () => {
@@ -370,37 +388,72 @@ it('an error that names no field still blocks the whole review, photos included'
   m.photoFields.on = false
 })
 
-// 2026-10-17 (MOSS on Amazon DE) — Claude's Amazon text-only publish: other fields' problems block those fields, not the text.
+// 2026-10-17 (MOSS on Amazon DE), then option A (Owner 2026-10-19): other attributes' problems block those attributes, not
+// the text — for every Publish, the studio's own too ("I'm unable to click the publish button because it says that these
+// listings have problems").
 const amazonTitle = JSON.stringify(['parent', 'item_name:["market","de_DE"]']), amazonWeight = JSON.stringify(['parent', 'item_package_weight'])
 const weightError = { productId: 'parent', sku: 'SKU', field: 'item_package_weight', severity: 'error', message: 'Item package weight: required.' }
-it('keeps an Amazon text-only review when every error names a field, sends a text selection, and refuses any other field', async () => {
+it('keeps an Amazon review with a field error elsewhere: the text goes; a ticked change the problem names is refused (422)', async () => {
   m.amazonFields = ['item_name:["market","de_DE"]', 'item_package_weight']
   m.facts.mockImplementation(async () => ({ ...existingFacts(), issues: [weightError] }))
-  expect(await previewRaw('parent', scope, 'user')).toMatchObject({ id: null })
-  const review = await previewRaw('parent', scope, 'user', { textOnly: true })
-  expect(review).toMatchObject({ textOnly: true })
-  expect(review.photosOnly).toBeUndefined()
+  const review = await previewRaw('parent', scope, 'user')
   expect(review.id).toBeTruthy()
-  await expect(previewStudioPublicationSelection('parent', review.id!, { selectedIds: [amazonTitle, amazonWeight] }, 'user')).rejects.toMatchObject({ statusCode: 422 })
+  expect(review.photosOnly).toBeUndefined()
+  await expect(previewStudioPublicationSelection('parent', review.id!, { selectedIds: [amazonTitle, amazonWeight] }, 'user')).rejects.toMatchObject({ statusCode: 422,
+    message: expect.stringContaining('Item package weight: required.') })
   await previewStudioPublicationSelection('parent', review.id!, { selectedIds: [amazonTitle] }, 'user')
   const result = await submitStudioPublication('parent', review.id!, {}, 'user')
   expect(m.amazon).toHaveBeenCalledOnce()
   expect(result.status).not.toBe('FAILED')
 })
-it('an Amazon text-only review still refuses an error on the text itself, and is not kept for an error that names no field or on eBay', async () => {
-  m.amazonFields = ['item_name:["market","de_DE"]']
-  m.facts.mockImplementation(async () => ({ ...existingFacts(), issues: [{ ...weightError, field: 'item_name', message: 'Title: too long.' }] }))
-  const review = await previewRaw('parent', scope, 'user', { textOnly: true })
+it('the submit refuses (422) a ticked change a problem now names; an error on the only change, or one that names nothing, keeps no review', async () => {
+  m.amazonFields = ['item_name:["market","de_DE"]', 'item_package_weight']
+  m.facts.mockImplementation(async () => ({ ...existingFacts(), issues: [weightError] }))
+  const review = await previewRaw('parent', scope, 'user')
   await previewStudioPublicationSelection('parent', review.id!, { selectedIds: [amazonTitle] }, 'user')
-  await expect(submitStudioPublication('parent', review.id!, {}, 'user')).rejects.toMatchObject({ statusCode: 422 })
+  // The same saved values, and now a problem with the text itself (the content checks call it `title`).
+  m.facts.mockImplementation(async () => ({ ...existingFacts(), issues: [weightError, { ...weightError, field: 'title', message: 'Review the German (de) title before publishing.' }] }))
+  await expect(submitStudioPublication('parent', review.id!, {}, 'user')).rejects.toMatchObject({ statusCode: 422, message: expect.stringContaining('Review the German (de) title') })
   expect(m.amazon).not.toHaveBeenCalled()
   m.rows.clear()
-  m.facts.mockImplementation(async () => ({ ...existingFacts(), issues: [weightError, { severity: 'error', message: 'Reconnect this account before publishing.' }] }))
-  expect(await previewRaw('parent', scope, 'user', { textOnly: true })).toMatchObject({ id: null })
-  const ebayScope = { ...scope, channel: 'EBAY' }
-  m.facts.mockImplementation(async () => ({ ...existingFacts(), scope: ebayScope, issues: [weightError] }))
-  expect(await previewRaw('parent', ebayScope, 'user', { textOnly: true })).toMatchObject({ id: null })
+  m.amazonFields = ['item_name:["market","de_DE"]']
+  m.facts.mockImplementation(async () => ({ ...existingFacts(), issues: [{ ...weightError, field: 'item_name', message: 'Title: too long.' }] }))
+  expect(await previewRaw('parent', scope, 'user')).toMatchObject({ id: null })
+  m.facts.mockImplementation(async () => ({ ...existingFacts(), issues: [{ severity: 'error', message: 'Reconnect this account before publishing.' }] }))
+  expect(await previewRaw('parent', scope, 'user')).toMatchObject({ id: null })
   expect(m.rows.size).toBe(0)
+})
+it('a create stays whole: any error on its SKU blocks it (Amazon), and the review is not kept', async () => {
+  m.amazonFields = ['$create']
+  m.facts.mockImplementation(async () => ({ ...facts(), products: [facts().products[0]], issues: [weightError] }))
+  expect(await previewRaw('parent', scope, 'user')).toMatchObject({ id: null, action: 'create' })
+  // The same create with the problem on another SKU goes.
+  m.facts.mockImplementation(async () => ({ ...facts(), products: [facts().products[0]], issues: [{ ...weightError, productId: 'child', sku: 'CHILD' }] }))
+  expect((await previewRaw('parent', scope, 'user')).id).toEqual(expect.any(String))
+})
+
+it('an Amazon child create waits for its main row when a problem leaves the main row\'s create out (not on Amazon yet)', () => {
+  const create = (productId: string, sku: string) => ({ id: JSON.stringify([productId, '$create']), productId, sku, field: '$create', label: 'Create complete listing',
+    current: { state: 'value' as const, value: {} }, lastAccepted: { state: 'unknown' as const, reason: 'none' }, channel: { state: 'absent' as const }, status: 'SEND' as const,
+    localChanged: null, channelChanged: null, selectable: true, selectedByDefault: true, reason: 'Create', operation: 'replace' as const })
+  const parent = { id: 'parent', sku: 'SKU' }
+  const review = { scope, rows: [{ productId: 'parent', sku: 'SKU', title: 'P', existing: false }, { productId: 'child', sku: 'CHILD', title: 'C', existing: false }],
+    changes: [create('parent', 'SKU'), create('child', 'CHILD')], issues: [weightError] as any[] }
+  expect(orphanCreateIssues(review, parent, new Set(), new Set())).toEqual([{ productId: 'child', sku: 'CHILD', severity: 'error',
+    message: 'CHILD: its main row SKU cannot be created on Amazon here yet (its problem is listed), so this row cannot be created either.' }])
+  // The main row is on Amazon, held, or clean: the child goes.
+  expect(orphanCreateIssues(review, parent, new Set(['parent']), new Set())).toEqual([])
+  expect(orphanCreateIssues(review, parent, new Set(), new Set(['parent']))).toEqual([])
+  expect(orphanCreateIssues({ ...review, issues: [] }, parent, new Set(), new Set())).toEqual([])
+  // The main row was not built at all (its own problem names it): its children wait too.
+  expect(orphanCreateIssues({ ...review, changes: [create('child', 'CHILD')], issues: [{ productId: 'parent', sku: 'SKU', severity: 'error', message: 'SKU: choose a fulfillment method before publishing.' }] },
+    parent, new Set(), new Set())).toHaveLength(1)
+})
+
+it('a refusal\'s own issues are read in the review\'s words: the content gate\'s ERROR is an error (it showed as a note)', () => {
+  expect(refusalIssues(Object.assign(new Error('x'), { issues: [{ language: 'de', field: 'title', severity: 'ERROR', message: 'Review the German (de) title before publishing.' }] })))
+    .toEqual([{ language: 'de', field: 'title', severity: 'error', message: 'Review the German (de) title before publishing.' }])
+  expect(refusalIssues({ issues: [{ severity: 'WARNING', message: 'Note.' }] })).toEqual([{ severity: 'warning', message: 'Note.' }])
 })
 
 // Sheet publish parity, step 1 — the history's columns and counts.
@@ -595,20 +648,24 @@ it('🔴 a deleted child left Not listed with an empty required field: the revie
   expect(m.amazon).toHaveBeenCalledOnce()
 })
 
-it('🔴 control: the same empty required field on the parent (a row that IS sent) still blocks the review', async () => {
+it('🔴 control: the same empty required field on the parent (a row that IS sent) is still judged, and blocks what sends it', async () => {
   deletedChild()
   await judgedBy(m.facts.getMockImplementation()!, [requiredBrand('parent', 'SKU')])
+  expect((await previewStudioPublication('parent', scope, 'user-a')).issues).toContainEqual(requiredBrand('parent', 'SKU'))
+  m.rows.clear()
+  deletedChild()
+  await judgedBy(m.facts.getMockImplementation()!, [{ ...requiredBrand('parent', 'SKU'), field: 'title' }])
   const review = await previewStudioPublication('parent', scope, 'user-a')
   expect(review.id).toBeNull()
-  expect(review.issues).toContainEqual(requiredBrand('parent', 'SKU'))
   expect(m.amazon).not.toHaveBeenCalled()
 })
 
 it('🔴 a child the mixed-plan Publish holds (being deleted): its problem is left out, the held rows are stored with the review and read again at the send', async () => {
   const live = { ...existingFacts(), listings: [...existingFacts().listings, { id: 'listing-child', productId: 'child', externalListingId: 'existing-child' }] }
   await judgedBy(async () => structuredClone(live), [requiredBrand('child', 'CHILD')])
-  // Without the held rows (the studio's own Publish) the child is sent, so its problem blocks, as before.
-  expect(await previewRaw('parent', scope, 'user')).toMatchObject({ id: null, issues: expect.arrayContaining([requiredBrand('child', 'CHILD')]) })
+  // Without the held rows (the studio's own Publish) the child is sent, so its problem is judged, as before.
+  expect(await previewRaw('parent', scope, 'user')).toMatchObject({ issues: expect.arrayContaining([requiredBrand('child', 'CHILD')]) })
+  m.rows.clear()
   const review = await previewStudioPublication('parent', scope, 'user', { heldProductIds: ['child'] })
   expect(review.id).toEqual(expect.any(String))
   expect(review.issues.filter(issue => issue.productId === 'child')).toEqual([])
@@ -625,28 +682,25 @@ const MOVE = { productId: 'child', listingId: 'listing-child', from: 'CHILD', to
 const movingFacts = () => ({ ...existingFacts(), parent: { id: 'parent', sku: 'SKU' },
   listings: [...existingFacts().listings, { id: 'listing-child', productId: 'child', externalListingId: 'B0TESTMOVE' }] })
 
-it('S10: the review says the move and asks for the typed confirmation Delete asks for', async () => {
+it('S10: the review says the move and what it deletes; nothing is typed', async () => {
   m.moves = [MOVE]; m.facts.mockResolvedValue(movingFacts())
   const review = await previewStudioPublication('parent', scope, 'user')
   expect(review.rows.find(row => row.productId === 'child')?.skuMove).toEqual({ from: 'CHILD', to: 'SELLER-CHILD', kind: 'create-delete',
     sentence: 'Creates SELLER-CHILD on Amazon · IT as a new offer, then deletes CHILD there.', warning: null })
   expect(review.rows.find(row => row.productId === 'child')?.sendsSku).toBe('SELLER-CHILD')
-  expect(review.confirm).toEqual({ kind: 'type', expected: 'SKU', token: 'DELETE', sentence: expect.stringContaining('This Publish deletes CHILD on Amazon · IT once Amazon accepts its new SKU. If Amazon refuses a new SKU, its old one stays and nothing is deleted.') })
+  expect(review.confirm).toEqual({ token: 'DELETE', sentence: expect.stringContaining('This Publish deletes CHILD on Amazon · IT once Amazon accepts its new SKU. If Amazon refuses a new SKU, its old one stays and nothing is deleted.') })
 })
 
-it('S10: a move is refused without the typed confirmation, and by a role that cannot delete — nothing is sent, nothing is claimed', async () => {
+it('S10: a move is refused without `confirm: \'DELETE\'` (a caller that never shows the delete) — nothing is sent, nothing is claimed', async () => {
   m.moves = [MOVE]; m.facts.mockResolvedValue(movingFacts())
   const review = await previewStudioPublication('parent', scope, 'user')
   await expect(submitStudioPublication('parent', review.id!, { confirmOverwrite: true }, 'user'))
-    .rejects.toThrow('Moving a listing to a new SKU deletes its old SKU on Amazon: type the SKU, then confirm. It cannot be undone.')
-  const token = m.rows.get(review.id!)?.changes.selection?.token
-  await expect(submitRaw('parent', review.id!, { confirmOverwrite: true, confirm: 'DELETE', selectionToken: token }, 'user', { canDelete: false }))
-    .rejects.toThrow(/Your role cannot delete listings/)
+    .rejects.toThrow('Moving a listing to a new SKU deletes its old SKU on Amazon, so it is sent only from the product\'s Publish window, which shows that delete. Nothing was sent.')
   expect(m.amazon).not.toHaveBeenCalled(); expect(m.claim).not.toHaveBeenCalled()
   expect(m.rows.get(review.id!).status).toBe('PREVIEW')
 })
 
-it('S10: confirmed, the NEW coordinate is claimed before the send and the move is kept with the publication', async () => {
+it('S10: sent from the window (`confirm: \'DELETE\'`, nothing typed, no delete permission asked), the NEW coordinate is claimed before the send and the move is kept', async () => {
   m.moves = [MOVE]; m.facts.mockResolvedValue(movingFacts())
   const review = await previewStudioPublication('parent', scope, 'user')
   await submitStudioPublication('parent', review.id!, { confirmOverwrite: true, confirm: 'DELETE' }, 'user')

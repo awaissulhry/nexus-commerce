@@ -29,6 +29,8 @@ const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGAC
 const ids: Record<string, string> = {}
 const publisher = (userId = ids.anna): PublishActionActor => ({ userId, can: permission => permission === 'products.publish' })
 const owner = (userId = ids.anna): PublishActionActor => ({ userId, can: () => true })
+/** Reads the sheet and may delete Nexus rows (products.view, products.delete), but may not publish. */
+const viewer = (userId = ids.anna): PublishActionActor => ({ userId, can: permission => permission === 'products.view' || permission === 'products.delete' })
 
 async function family(prefix: string, sizes: string[]) {
   const root = await prisma.product.create({ data: { sku: prefix, name: prefix, basePrice: 10, isParent: true, fulfillmentMethod: 'FBM' } as never })
@@ -175,17 +177,23 @@ describe('the write: one column on many rows', () => {
     expect(await stored(s)).toMatchObject({ publishAction: null, publishActionAt: null })
   }))
 
-  it('Ended and Delete need products.delete; the rows of another family are refused', () => scoped(async () => {
+  // Owner 2026-10-19 — "remove the typed SKU for deletes and for delete permission": Ended and Delete need products.publish only.
+  it('Ended and Delete need products.publish (not products.delete); without it they are refused; the rows of another family are refused', () => scoped(async () => {
     const f = await family('PA-PERM', ['S'])
     const other = await family('PA-OTHER', ['S'])
     const root = await listing(f.root, 'EBAY', 'IT', ids.ebay, { externalListingId: '5678' })
     await listing(f.children.S, 'EBAY', 'IT', ids.ebay, { externalListingId: '5678' })
+    const amazonChild = await listing(f.children.S, 'AMAZON', 'IT', ids.amazon)
     const foreign = await listing(other.children.S, 'EBAY', 'IT', ids.ebay)
-    await expect(writePublishActions(f.root, { listingIds: [root], change: { column: 'status', target: 'ended' } }, publisher())).rejects.toMatchObject({ statusCode: 403 })
-    await expect(writePublishActions(f.root, { listingIds: [root], change: { column: 'send', mode: 'delete' } }, publisher())).rejects.toMatchObject({ statusCode: 403 })
+    // Without products.publish (even holding products.delete): refused, nothing stored.
+    await expect(writePublishActions(f.root, { listingIds: [root], change: { column: 'status', target: 'ended' } }, viewer())).rejects.toMatchObject({ statusCode: 403, code: 'forbidden', message: expect.stringMatching(/cannot publish listings/) })
+    await expect(writePublishActions(f.root, { listingIds: [root], change: { column: 'send', mode: 'delete' } }, viewer())).rejects.toMatchObject({ statusCode: 403 })
     expect(await stored(root)).toMatchObject({ sellingTarget: null, publishAction: null })
-    expect((await writePublishActions(f.root, { listingIds: [root], change: { column: 'status', target: 'ended' } }, owner())).applied).toEqual([root])
+    // With products.publish and without products.delete: both are set.
+    expect((await writePublishActions(f.root, { listingIds: [root], change: { column: 'status', target: 'ended' } }, publisher())).applied).toEqual([root])
     expect(await stored(root)).toMatchObject({ sellingTarget: 'ENDED' })
+    expect((await writePublishActions(f.root, { listingIds: [amazonChild], change: { column: 'send', mode: 'delete' } }, publisher())).applied).toEqual([amazonChild])
+    expect(await stored(amazonChild)).toMatchObject({ publishAction: 'DELETE' })
     await expect(writePublishActions(f.root, { listingIds: [foreign], change: { column: 'send', mode: 'full' } }, owner())).rejects.toMatchObject({ statusCode: 400 })
     await expect(writePublishActions(f.root, { change: { column: 'send', mode: 'full' } }, owner())).rejects.toMatchObject({ statusCode: 400 })
     await expect(writePublishActions(f.root, { listingIds: [root], change: { column: 'status', target: 'paused' as never } }, owner())).rejects.toMatchObject({ statusCode: 400 })
@@ -335,7 +343,7 @@ describe('the request body', () => {
 })
 
 describe('the routes: each value is its own path, so the permission manifest decides', () => {
-  it('registers literal paths that resolve to products.view, products.publish or products.delete', async () => {
+  it('registers literal paths that resolve to products.view or products.publish (Delete and Ended included)', async () => {
     const { default: Fastify } = await import('fastify')
     const { permissionForRoute } = await import('../../lib/auth/permissions-manifest.js')
     const { default: routes } = await import('../../routes/publish-actions.routes.js')
@@ -349,11 +357,11 @@ describe('the routes: each value is its own path, so the permission manifest dec
       [`GET ${base}`]: 'products.view',
       [`PUT ${base}/send/partial`]: 'products.publish',
       [`PUT ${base}/send/full`]: 'products.publish',
-      [`PUT ${base}/send/delete`]: 'products.delete',
+      [`PUT ${base}/send/delete`]: 'products.publish',
       [`PUT ${base}/status/active`]: 'products.publish',
       [`PUT ${base}/status/inactive`]: 'products.publish',
       [`PUT ${base}/status/not_listed`]: 'products.publish',
-      [`PUT ${base}/status/ended`]: 'products.delete',
+      [`PUT ${base}/status/ended`]: 'products.publish',
       [`PUT ${base}/status/none`]: 'products.publish',
     })
     await app.close()

@@ -160,7 +160,7 @@ export function matchesPublicationReview(value: unknown, productId: string, scop
  */
 export function matchesPublishPlan(value: unknown, productId: string, scope: StudioPublishScope): value is PublishPlan {
   const plan = value as PublishPlan | null
-  if (!plan || plan.productId !== productId || typeof plan.familySku !== 'string' || typeof plan.canDelete !== 'boolean'
+  if (!plan || plan.productId !== productId || typeof plan.familySku !== 'string'
     || !Array.isArray(plan.destinations) || plan.destinations.length !== 1) return false
   const destination = plan.destinations[0]
   return !!destination?.scope && publicationScopeKey(destination.scope) === publicationScopeKey(scope)

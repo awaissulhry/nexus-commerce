@@ -73,16 +73,21 @@ describe('permission manifest ordering', () => {
     ['POST', '/api/products/:id/listing-actions/delete/preview', 'products.delete'],
     ['POST', '/api/products/:id/listing-actions/delete/run', 'products.delete'],
     // Build shape v2 — the waiting Action and Status values: reading them is a view; setting one needs what sending it
-    // needs (Delete and Ended are deletes, every other value is publishing).
+    // needs: publishing, Delete and Ended included (Owner 2026-10-19: no separate delete permission in the publish flows).
     ['GET', '/api/products/:id/studio/publish-actions', 'products.view'],
     ['PUT', '/api/products/:id/studio/publish-actions/send/partial', 'products.publish'],
     ['PUT', '/api/products/:id/studio/publish-actions/send/full', 'products.publish'],
-    ['PUT', '/api/products/:id/studio/publish-actions/send/delete', 'products.delete'],
+    ['PUT', '/api/products/:id/studio/publish-actions/send/delete', 'products.publish'],
     ['PUT', '/api/products/:id/studio/publish-actions/status/active', 'products.publish'],
     ['PUT', '/api/products/:id/studio/publish-actions/status/inactive', 'products.publish'],
     ['PUT', '/api/products/:id/studio/publish-actions/status/not_listed', 'products.publish'],
     ['PUT', '/api/products/:id/studio/publish-actions/status/none', 'products.publish'],
-    ['PUT', '/api/products/:id/studio/publish-actions/status/ended', 'products.delete'],
+    ['PUT', '/api/products/:id/studio/publish-actions/status/ended', 'products.publish'],
+    // The publish windows' plan, batch and submit, the S10 move's "Delete the old SKU again": publishing, deletes included.
+    ['POST', '/api/products/:id/studio-publication/plan', 'products.publish'],
+    ['POST', '/api/products/:id/studio-publication/:reviewId/submit', 'products.publish'],
+    ['POST', '/api/products/:id/studio-publication/:reviewId/delete-old-sku', 'products.publish'],
+    ['POST', '/api/publication-batches/:id/submit', 'products.publish'],
     ['POST', '/etsy/sync/listings', 'products.edit'],
     ['POST', '/etsy/sync/inventory/from-etsy', 'inventory.adjust'],
     ['POST', '/etsy/sync/orders', 'orders.edit'],

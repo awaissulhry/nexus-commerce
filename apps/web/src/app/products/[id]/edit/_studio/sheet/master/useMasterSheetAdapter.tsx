@@ -436,12 +436,10 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     }), [publishActions.status, publishLock]);
     const publishReadRef = useRef(publishRead);
     publishReadRef.current = publishRead;
-    const canDeleteRef = useRef(false);
-    canDeleteRef.current = has('products.delete');
     const [publishTracker] = useState(() => new CellSaveTracker());
     const toastRef = useRef(toast);
     toastRef.current = toast;
-    /** A shared Delete is SET only after a typed confirmation that lists every listing it would remove. */
+    /** A shared Delete is SET only after a confirmation that lists every listing it would remove (one click, nothing typed). */
     const deleteConfirm = useActionConfirm();
     const askDeleteRef = useRef(deleteConfirm.ask);
     askDeleteRef.current = deleteConfirm.ask;
@@ -469,7 +467,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         for (const write of writes) {
             if (write.change.column === 'send' && write.change.mode === 'delete') {
                 const targets = write.listingIds.flatMap((id) => { const cell = byListing.get(id); return cell ? [{ sku: rowsRef.current.find((row) => row.id === cell.productId)?.sku ?? cell.sku, cell }] : []; });
-                const impact = sharedDeleteImpact(targets, canDeleteRef.current);
+                const impact = sharedDeleteImpact(targets);
                 if (impact && !(await askDeleteRef.current(impact)))
                     continue;
             }
@@ -604,7 +602,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     const hasSheet = !!sheet;
     const statusActionColumns = useMemo<ColDef<StudioRow>[]>(() => {
         if (!hasSheet) return [];
-        const input = { cells: publishCellsOf, read: () => publishReadRef.current, canDelete: () => canDeleteRef.current, tracker: publishTracker, rowIdOf: (row: StudioRow) => row.id };
+        const input = { cells: publishCellsOf, read: () => publishReadRef.current, tracker: publishTracker, rowIdOf: (row: StudioRow) => row.id };
         return [
             sharedStatusColumn<StudioRow>({ ...input, onInput: (row, value) => stagePublishCell('status', row, value) }),
             sharedActionColumn<StudioRow>({ ...input, onInput: (row, value) => stagePublishCell('send', row, value) }),
@@ -907,7 +905,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     latestValueChanged.current = onCellValueChanged;
     /* Action ▾ counts what each item would do to the ticked products, on every market. */
     const actionEntries = useMemo(() => sharedActionMenuEntries(selectedRows.map((row) => ({ sku: row.sku, cells: publishCellsOf(row) })),
-        { publish: !publishLock && authStatus !== 'loading', delete: has('products.delete') }), [selectedRows, publishCellsOf, publishActions.version, publishLock, authStatus, has]);
+        { publish: !publishLock && authStatus !== 'loading' }), [selectedRows, publishCellsOf, publishActions.version, publishLock, authStatus]);
     /* The grid's operation events open and close the Status and Action fence too (after the sheet's own fence). */
     const publishFenceProps = useMemo(() => {
         const g = undo.gridProps;

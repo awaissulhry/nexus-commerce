@@ -8,7 +8,8 @@ import { AmazonService } from '../marketplaces/amazon.service.js'
 import prisma from '../../db.js'
 import { applyResolvedMappingToAmazonFeed } from '../amazon/mapping-payload.js'
 import { loadAmazonSpec } from './channel-specs/index.js'
-import { buildAmazonContentAttributes } from './amazon-content-payload.js'
+import { buildAmazonContentAttributes, buildAmazonContentEntries, resolvePublishContent } from './amazon-content-payload.js'
+import { ContentReviewRequired } from './publish-review-gate.js'
 import { configuredAmazonMarketplaceId } from '../categories/marketplace-ids.js'
 import { getAmazonSellerId, getAmazonSpClient } from '../../lib/amazon-sp-client.js'
 import { AmazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
@@ -63,7 +64,12 @@ export interface AmazonPublication {
    * update. Never part of the feed: a compiled selection carries no `full`.
    */
   full?: Record<string, { managedRoots: string[] }>
-  /** Problems of one field that block every selection but a text-only one (`blockingIssues`): a deprecated theme. */
+  /**
+   * Problems this builder found without stopping (`blockingIssues` decides what each one blocks, Owner 2026-10-19):
+   * the family's variation checks (a deprecated theme, a missing axis value — field `variation_theme`), a live row's
+   * missing price (`purchasable_offer`) or photos (`photos`), unreviewed machine text, and a SKU it could not build at
+   * all (no field: that SKU is left out, the others are built).
+   */
   issues?: StudioPublishIssue[]
   /**
    * S10 (per-channel SKU, Owner D2 = A) — the live rows this publication MOVES to a new seller SKU: NEW (the listing's own
@@ -147,7 +153,7 @@ export function amazonSkuMoves(facts: MoveFacts, sellerSkus: ReadonlyMap<string,
  * Browser check 2026-10-05 (F5) — the moves of a review whose Amazon publication could not be prepared (a problem the
  * review lists already: a variation axis that binds to nothing, a schema Nexus cannot read, …). Nothing can be sent until
  * those are fixed, but the review still says what Publish WILL do to each row (create NEW, then delete OLD) and still
- * asks for the typed confirmation: hiding the move behind an unrelated problem read as a Partial update. The move's own
+ * says what the move deletes: hiding the move behind an unrelated problem read as a Partial update. The move's own
  * refusal (a family's main row, no ASIN, two SKUs), when there is one, is returned as a sentence; it never throws.
  */
 export async function amazonMovesWithoutPublication(facts: MoveFacts & Pick<PublicationFacts, 'scope'> & { unsent?: ReadonlySet<string> }): Promise<{ marketplaceId: string | null; moves: AmazonSkuMove[]; refusal: string | null }> {
@@ -237,11 +243,11 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     })
     projection = resolveVariationProjection(variationInput)
     const errors = variationReadinessItems(projection, `AMAZON ${scope.marketplace}`).filter(i => i.severity === 'error')
-    // Owner 2026-10-17 — a deprecated theme blocks only what can carry it: a market whose parent is not on Amazon (the
-    // closed DE offers) still takes a text-only update of its live variants, which sends no relationship.
-    const deprecated = errors.filter(i => i.kind === 'theme-deprecated')
-    if (!projection.theme || errors.length > deprecated.length) throw new Error(errors.map(i => i.message).join('; ') || 'Set the Amazon variation theme in Information before publishing.')
-    for (const item of deprecated) issues.push({ severity: 'error', field: 'variation_theme', message: item.message })
+    // Owner 2026-10-17/19 — the family's variation checks block only what carries the family's shape (every create, a
+    // Full update, a change of the theme or relationship: field `variation_theme`); a Partial update of its live rows'
+    // other attributes still goes.
+    for (const item of errors) issues.push({ severity: 'error', field: 'variation_theme', message: item.message })
+    if (!projection.theme && !errors.length) issues.push({ severity: 'error', field: 'variation_theme', message: 'Set the Amazon variation theme in Information before publishing.' })
   }
   const feed: AmazonPublication['feed'] = { header: {}, messages: [] }
   const full: NonNullable<AmazonPublication['full']> = {}
@@ -251,16 +257,27 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
   const exclusionsFor = pushExclusionsCache()
   // CHMAP M7 (B2) — the row builder's own maps know five markets and fall back to Italy; give it this market's own.
   const market = { marketplaceId, languageTag: facts.languages[0] ? languageTag(facts.languages[0], scope.marketplace) : '' }
-  for (const product of products) {
+  // Owner 2026-10-19 (option A) — a SKU this builder cannot build is left out by its own problem (no field: every change of
+  // it), and the others are built; a live SKU's problem with one part (its price, its photos, its text) is named on that
+  // part and the rest of its message is built.
+  const unbuilt = new Set<string>()
+  for (const product of products) try {
     const listing = listings.find(l => l.productId === product.id)
     const data = resolved[0]?.products.find(p => p.productId === product.id)
     if (!data) throw new Error(`${product.sku} could not be resolved.`)
     const ledger = ledgers.get(product.id)
+    const live = !!listing?.externalListingId && !moveOf(product.id)
+    const problem = (field: string, error: unknown) => issues.push({ productId: product.id, sku: product.sku, field, severity: 'error',
+      message: withSku(product.sku, error instanceof Error ? error.message : String(error)) })
     // Round 6 — THE send price (`listingSendPrice`): a pin's own price, a follower's rule price from the current master in
     // the master currency, else the price the listing holds. It sent a follower the master price: "master +10%" went live
-    // at the master, and Amazon UK was sent the EUR number as pounds. Nothing to send is refused for that SKU, by name.
+    // at the master, and Amazon UK was sent the EUR number as pounds. Nothing to send is refused for that SKU, by name: a
+    // new SKU is not built; a live one is built without it (only its offer lines need it).
     const send = listingSendPrice(listing ?? NO_LISTING_PRICE_FACTS, { masterPrice: product.basePrice, marketCurrency: marketCur, where: `Amazon ${scope.marketplace}` })
-    if (send.price == null && !product.isParent) throw new Error(`${product.sku}: ${send.reason}`)
+    if (send.price == null && !product.isParent) {
+      if (!live) throw new Error(`${product.sku}: ${send.reason}`)
+      problem('purchasable_offer', send.reason)
+    }
     // Amazon sheet gaps — the quantity is the offer builder's (a new listing, below) or the stock job's: never the row's.
     const current = { ...listing, priceOverride: send.price, quantityOverride: null, quantity: null }
     // `data.category` is resolveBatch's answer for this listing (the #82 rule); the row builder takes it, no second read.
@@ -286,52 +303,60 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     if (move) move.fba = fulfillment === 'FBA'
     // A live listing's fulfilment root is the offer lane's (never a code from here, never AMAZON_<region>): see below.
     delete row.fulfillment_availability__fulfillment_channel_code
-    if (planMedia && planLayout) {
-      for (const slot of amazonImageSlots) delete row[slot.attribute]
-      if (row._isNew) {
-        const errors = planLayout.checks.filter(c => c.severity === 'error').map(c => c.message)
-        if (errors.length) throw new Error(`${product.sku}: ${errors.join('; ')}`)
-        const slots = amazonSlotsFor(planLayout, product.id)
-        if (!slots?.MAIN) throw new Error(`${product.sku}: choose a main photo on the Media page before publishing.`)
-        for (const slot of amazonImageSlots) { const id = slots[slot.code as keyof typeof slots]; if (id) row[slot.attribute] = planMedia.url(id) }
-      }
-    } else if (followsMain(product.id) && !row._isNew && mainLive(product.id)) {
-      // An alias offer Amazon holds, on the live Main listing's product page: no image attribute (above).
-      for (const slot of amazonImageSlots) delete row[slot.attribute]
-    } else if (followsMain(product.id)) {
-      // The Main listing's photos (above): its Images draft for its row of this product, else its Product media.
-      for (const slot of amazonImageSlots) delete row[slot.attribute]
-      const main = mainOf(product.id)
-      if (mainGallery) {
-        const { desired, problems } = desiredAmazonImages(mainGallery, main?.id ?? '')
-        if (problems.length) throw new Error(`${product.sku}: ${problems.join('; ')} (on the Main listing)`)
-        if (!desired.MAIN) throw new Error(`${product.sku}: choose a main image in Images on the Main listing before publishing.`)
-        for (const slot of amazonImageSlots) if (desired[slot.code]) row[slot.attribute] = desired[slot.code]
-      } else {
-        const images = publicationImages(facts, product, main ?? null)
-        if (!images.length) throw new Error(`${product.sku}: add a product image on the Main listing before publishing.`)
-        if (images.length > 9) throw new Error(`${product.sku}: choose at most nine images for the Amazon product gallery on the Main listing.`)
+    const rowPhotos = () => {
+      if (planMedia && planLayout) {
+        for (const slot of amazonImageSlots) delete row[slot.attribute]
+        if (row._isNew) {
+          const errors = planLayout.checks.filter(c => c.severity === 'error').map(c => c.message)
+          if (errors.length) throw new Error(`${product.sku}: ${errors.join('; ')}`)
+          const slots = amazonSlotsFor(planLayout, product.id)
+          if (!slots?.MAIN) throw new Error(`${product.sku}: choose a main photo on the Media page before publishing.`)
+          for (const slot of amazonImageSlots) { const id = slots[slot.code as keyof typeof slots]; if (id) row[slot.attribute] = planMedia.url(id) }
+        }
+      } else if (followsMain(product.id) && !row._isNew && mainLive(product.id)) {
+        // An alias offer Amazon holds, on the live Main listing's product page: no image attribute (above).
+        for (const slot of amazonImageSlots) delete row[slot.attribute]
+      } else if (followsMain(product.id)) {
+        // The Main listing's photos (above): its Images draft for its row of this product, else its Product media.
+        for (const slot of amazonImageSlots) delete row[slot.attribute]
+        const main = mainOf(product.id)
+        if (mainGallery) {
+          const { desired, problems } = desiredAmazonImages(mainGallery, main?.id ?? '')
+          if (problems.length) throw new Error(`${product.sku}: ${problems.join('; ')} (on the Main listing)`)
+          if (!desired.MAIN) throw new Error(`${product.sku}: choose a main image in Images on the Main listing before publishing.`)
+          for (const slot of amazonImageSlots) if (desired[slot.code]) row[slot.attribute] = desired[slot.code]
+        } else {
+          const images = publicationImages(facts, product, main ?? null)
+          if (!images.length) throw new Error(`${product.sku}: add a product image on the Main listing before publishing.`)
+          if (images.length > 9) throw new Error(`${product.sku}: choose at most nine images for the Amazon product gallery on the Main listing.`)
+          row.main_product_image_locator = images[0]
+          for (let i = 1; i < images.length; i++) row[`other_product_image_locator_${i}`] = images[i]
+        }
+      } else if (gallery && listing) {
+        const { desired, problems } = desiredAmazonImages(gallery, listing.id)
+        if (problems.length) throw new Error(`${product.sku}: ${problems.join('; ')}`)
+        if (!desired.MAIN) throw new Error(`${product.sku}: choose a main image in Images before publishing.`)
+        for (const slot of amazonImageSlots) {
+          delete row[slot.attribute]
+          if (desired[slot.code]) row[slot.attribute] = desired[slot.code]
+        }
+      } else if (row._isNew || object(listing?.platformAttributes)._productMediaLocales) {
+        const images = publicationImages(facts, product)
+        if (!images.length) throw new Error(`${product.sku}: add a product image before publishing.`)
+        if (images.length > 9) throw new Error(`${product.sku}: choose at most nine images for the Amazon product gallery.`)
         row.main_product_image_locator = images[0]
         for (let i = 1; i < images.length; i++) row[`other_product_image_locator_${i}`] = images[i]
+      } else {
+        // A partial content update has no gallery edit to publish. The shared
+        // asset library can include several colours and is not a selected gallery.
+        for (const slot of amazonImageSlots) delete row[slot.attribute]
       }
-    } else if (gallery && listing) {
-      const { desired, problems } = desiredAmazonImages(gallery, listing.id)
-      if (problems.length) throw new Error(`${product.sku}: ${problems.join('; ')}`)
-      if (!desired.MAIN) throw new Error(`${product.sku}: choose a main image in Images before publishing.`)
-      for (const slot of amazonImageSlots) {
-        delete row[slot.attribute]
-        if (desired[slot.code]) row[slot.attribute] = desired[slot.code]
-      }
-    } else if (row._isNew || object(listing?.platformAttributes)._productMediaLocales) {
-      const images = publicationImages(facts, product)
-      if (!images.length) throw new Error(`${product.sku}: add a product image before publishing.`)
-      if (images.length > 9) throw new Error(`${product.sku}: choose at most nine images for the Amazon product gallery.`)
-      row.main_product_image_locator = images[0]
-      for (let i = 1; i < images.length; i++) row[`other_product_image_locator_${i}`] = images[i]
-    } else {
-      // A partial content update has no gallery edit to publish. The shared
-      // asset library can include several colours and is not a selected gallery.
+    }
+    // A live row whose photos cannot be built sends none from here (its photo lines are left out by the problem).
+    try { rowPhotos() } catch (error) {
+      if (row._isNew) throw error
       for (const slot of amazonImageSlots) delete row[slot.attribute]
+      problem('photos', error)
     }
     const hints = await service.getFeedSchemaHints(scope.marketplace, String(row.product_type))
     const legacy = service.buildJsonFeedBody([row as any], scope.marketplace, sellerId, COCKPIT_EXPANDED_FIELDS, market.languageTag ? { ...hints, market } : hints)
@@ -366,6 +391,12 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     const mapped = applyResolvedMappingToAmazonFeed(JSON.stringify(base), { ...resolved[0], catalogue, products: [{ ...data, cells: mappedCells }] }, spec)
     const envelope = JSON.parse(mapped)
     const message = envelope.messages[0]
+    // A live row without a send price (its problem is named above) carries no offer from here: never the row builder's
+    // fallback (the master number, in another currency).
+    if (send.price == null && !product.isParent) {
+      if (message.attributes) delete message.attributes.purchasable_offer
+      if (message.patches) message.patches = message.patches.filter((p: any) => p.path !== '/attributes/purchasable_offer')
+    }
     // S10 — NEW goes on the live listing's ASIN, whatever the product ID cell says (a barcode would let Amazon pick).
     if (move && message.attributes) {
       delete message.attributes.externally_assigned_product_identifier
@@ -382,9 +413,16 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
         else delete message.attributes[root]
       }
     }
-    // The content resolver owns every supported language, including reviewed pins.
-    const content = await buildAmazonContentAttributes({ product: product as any, parent: product.id === parent.id ? null : parent as any,
-      listing, marketplace: scope.marketplace, marketplaceId })
+    // The content resolver owns every supported language, including reviewed pins. Unreviewed machine text is named on its
+    // own field (a create of this SKU, or that text line, is left out by it); the message is built as it reads.
+    const contentInput = { product: product as any, parent: product.id === parent.id ? null : parent as any, listing, marketplace: scope.marketplace, marketplaceId }
+    let content: Record<string, any[]>
+    try { content = await buildAmazonContentAttributes(contentInput) } catch (error) {
+      if (!(error instanceof ContentReviewRequired)) throw error
+      // The same shape (and key order) as the review's own content problem, so the review lists it once.
+      for (const issue of error.issues) issues.push({ productId: product.id, sku: product.sku, field: issue.field, message: issue.message, severity: 'error' })
+      content = buildAmazonContentEntries(await resolvePublishContent(contentInput), contentInput)
+    }
     if (message.attributes) {
       for (const key of CONTENT_ROOTS) delete message.attributes[key]
       Object.assign(message.attributes, content)
@@ -407,10 +445,19 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
     }
     feed.header = envelope.header
     feed.messages.push({ ...message, messageId: feed.messages.length + 1 })
+  } catch (error) {
+    unbuilt.add(product.id)
+    delete full[product.id]
+    issues.push({ productId: product.id, sku: product.sku, severity: 'error', message: withSku(product.sku, error instanceof Error ? error.message : String(error)) })
   }
-  return { kind: 'amazon', sellerId, marketplaceId, feed, products: products.map(product => ({ productId: product.id, sku: sellerSkus.get(product.id)! })),
-    ...(Object.keys(full).length ? { full } : {}), ...(moves.length ? { moves } : {}), ...(issues.length ? { issues } : {}) }
+  const built = products.filter(product => !unbuilt.has(product.id))
+  const kept = moves.filter(move => !unbuilt.has(move.productId))
+  return { kind: 'amazon', sellerId, marketplaceId, feed, products: built.map(product => ({ productId: product.id, sku: sellerSkus.get(product.id)! })),
+    ...(Object.keys(full).length ? { full } : {}), ...(kept.length ? { moves: kept } : {}), ...(issues.length ? { issues } : {}) }
 }
+
+/** A builder's sentence with its SKU in front, once ("GALE-M: choose a fulfillment method…"). */
+const withSku = (sku: string, message: string) => message.startsWith(`${sku}:`) || message.startsWith(`${sku} `) ? message : `${sku}: ${message}`
 
 type PublicationListing = PublicationFacts['listings'][number]
 type PublicationProduct = PublicationFacts['products'][number]

@@ -282,17 +282,18 @@ describe('eBay listing-level item specifics in the publish review', () => {
       parent: { season: cell('Tutte le stagioni', [offList]) },
       child: { colore_specifico: cell('Giallo'), season: cell('x'.repeat(70), [{ rule: 'length', message: 'Season exceeds 65 characters (70).' }]) },
     })
-    // the child's over-length season is not sent (the parent's is): no block for it; the parent's off-list one warns once
-    expect(issues.filter(i => i.field === 'season')).toEqual([
+    // the child's over-length season is not sent (the parent's is): no block for it; the parent's off-list one warns once.
+    // Option A (2026-10-19): an item specific's problem is named by the change it blocks (`aspect:<eBay name>`).
+    expect(issues.filter(i => i.field === 'aspect:stagione')).toEqual([
       expect.objectContaining({ productId: 'parent', severity: 'warning', message: 'x: Season contains an unaccepted value. Allowed values: Estate.' }),
     ])
     expect(issues.filter(i => /not sent|one value for the whole listing/.test(i.message))).toEqual([])
     // no parent value: the first variation supplies it, and it is judged there
-    expect(issues.filter(i => i.field === 'colore_specifico')).toEqual([])
+    expect(issues.filter(i => i.field === 'aspect:colore specifico' || i.field === 'colore_specifico')).toEqual([])
   })
   it('a problem on the value eBay receives still blocks, on the row it comes from', async () => {
     const issues = await run({ parent: {}, child: { season: cell('x'.repeat(70), [{ rule: 'length', message: 'Season exceeds 65 characters (70).' }]) } })
-    expect(issues.filter(i => i.field === 'season')).toEqual([expect.objectContaining({ productId: 'child', severity: 'error' })])
+    expect(issues.filter(i => i.field === 'aspect:stagione')).toEqual([expect.objectContaining({ productId: 'child', severity: 'error' })])
   })
   it('a stored item specific with no column (Genere): a variation\'s own different value is not named; a value over 65 blocks', async () => {
     const { ebayStoredSpecificIssues } = await import('./studio-publication-plan.js')

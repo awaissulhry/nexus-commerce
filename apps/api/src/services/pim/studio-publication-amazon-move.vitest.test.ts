@@ -126,18 +126,18 @@ describe('the builder: which live rows move, and NEW\'s create', () => {
   })
 })
 
-describe('the review: the move, its FBA note, and the typed confirmation', () => {
-  it('says what happens, names Amazon\'s FBA units under OLD, and asks for the family SKU like Delete', async () => {
+describe('the review: the move, its FBA note, and what it deletes', () => {
+  it('says what happens, names Amazon\'s FBA units under OLD, and what the move deletes (nothing is typed)', async () => {
     await scoped(async () => {
       for (const [condition, quantity] of [['SELLABLE', 12], ['INBOUND', 2]] as const) await prisma.fbaInventoryDetail.create({ data: {
         sku: 'rv-old', marketplaceId: 'TEST_MARKET_IT', fulfillmentCenterId: 'MXP6', condition, quantity, lastSyncedAt: new Date(Date.now() - 2 * 3_600_000) } })
     })
-    const review = await scoped(() => amazonMoveReview({ scope: { channel: 'AMAZON', marketplace: 'IT', accountId: account }, parent: { sku: 'rv-fam' } } as never,
+    const review = await scoped(() => amazonMoveReview({ scope: { channel: 'AMAZON', marketplace: 'IT', accountId: account } } as never,
       { marketplaceId: 'TEST_MARKET_IT', moves: [{ productId: 'p1', listingId: 'l1', from: 'rv-old', to: 'rv-new', asin: 'B0RV', fba: true }] }))
     expect(review.rows.get('p1')).toEqual({ from: 'rv-old', to: 'rv-new', kind: 'create-delete',
       sentence: 'Creates rv-new on Amazon · IT as a new offer, then deletes rv-old there.',
       warning: 'rv-new starts with no FBA units; Amazon\'s 14 FBA units stay under rv-old (12 sellable, 2 on the way), read 2 hours ago. Once rv-old is deleted they cannot sell until you list rv-old here again, and Amazon still charges storage.' })
-    expect(review.confirm).toEqual({ kind: 'type', expected: 'rv-fam', token: 'DELETE',
+    expect(review.confirm).toEqual({ token: 'DELETE',
       sentence: 'This Publish deletes rv-old on Amazon · IT once Amazon accepts its new SKU. If Amazon refuses a new SKU, its old one stays and nothing is deleted. It cannot be undone.' })
   })
 
@@ -145,14 +145,14 @@ describe('the review: the move, its FBA note, and the typed confirmation', () =>
     await scoped(() => prisma.fbaInventoryDetail.create({ data: {
       sku: 'rv-inb-old', marketplaceId: 'TEST_MARKET_IT', fulfillmentCenterId: 'ALL', condition: 'INBOUND', quantity: 5, rawData: { working: 3, shipped: 2, receiving: 0 } } }))
     expect(await scoped(() => fbaUnitsUnderSku('TEST_MARKET_IT', 'rv-inb-old'))).toBeNull()
-    const review = await scoped(() => amazonMoveReview({ scope: { channel: 'AMAZON', marketplace: 'IT', accountId: account }, parent: { sku: 'rv-inb' } } as never,
+    const review = await scoped(() => amazonMoveReview({ scope: { channel: 'AMAZON', marketplace: 'IT', accountId: account } } as never,
       { marketplaceId: 'TEST_MARKET_IT', moves: [{ productId: 'p2', listingId: 'l2', from: 'rv-inb-old', to: 'rv-inb-new', asin: 'B0RVI', fba: true }] }))
     expect(review.rows.get('p2')!.warning).toBe('rv-inb-new starts with no FBA units; any FBA units Amazon holds stay under rv-inb-old. Once rv-inb-old is deleted they cannot sell until you list rv-inb-old here again, and Amazon still charges storage.')
   })
 })
 
 describe('F5 — a review that cannot be prepared still says the move (browser check 2026-10-05)', () => {
-  it('a family whose publication fails for another reason: the moved row still reads "Move to NEW", with the typed confirmation', async () => {
+  it('a family whose publication fails for another reason: the moved row still reads "Move to NEW", with what it deletes', async () => {
     const id = await scoped(async () => {
       const parent = await product('gt-fam', { isParent: true })
       const moved = await product('gt-fam-L', { parentId: parent })
@@ -160,17 +160,21 @@ describe('F5 — a review that cannot be prepared still says the move (browser c
       const unready = await product('gt-fam-M', { parentId: parent, fulfillmentMethod: null })
       await liveRow(parent, 'IT'); await liveRow(moved, 'IT', { channelSku: 'gt-fam-L-IT' })
       await liveRow(unready, 'IT', { externalListingId: null, listingStatus: 'DRAFT', isPublished: false, fulfillmentMethod: null })
-      return { parent, moved }
+      return { parent, moved, unready }
     })
     const facts = await scoped(() => readPublicationFacts(id.parent, { channel: 'AMAZON', marketplace: 'IT', accountId: account }))
-    await expect(scoped(() => prepareAmazonPublication(facts))).rejects.toThrow()
+    // Option A (Owner 2026-10-19): the unready create is left out by its own problem; the others are built, the move too.
+    const prepared = await scoped(() => prepareAmazonPublication(facts))
+    expect(prepared.issues).toContainEqual(expect.objectContaining({ productId: id.unready, severity: 'error', message: expect.stringContaining('gt-fam-M') }))
+    expect(prepared.products.map(product => product.productId)).not.toContain(id.unready)
+    expect(prepared.moves).toEqual([expect.objectContaining({ productId: id.moved, from: 'gt-fam-L', to: 'gt-fam-L-IT' })])
     const found = await scoped(() => amazonMovesWithoutPublication(facts))
     expect(found).toMatchObject({ marketplaceId: 'TEST_MARKET_IT', refusal: null, moves: [expect.objectContaining({ productId: id.moved, from: 'gt-fam-L', to: 'gt-fam-L-IT', fba: false })] })
     // What the review builds from it when the publication is missing (`prepared` null).
     const review = await scoped(() => skuMoveRows(facts, null, null))
     expect(review.rows.get(id.moved)).toEqual({ from: 'gt-fam-L', to: 'gt-fam-L-IT', kind: 'create-delete',
       sentence: 'Creates gt-fam-L-IT on Amazon · IT as a new offer, then deletes gt-fam-L there.', warning: null })
-    expect(review.confirm).toMatchObject({ kind: 'type', expected: 'gt-fam', token: 'DELETE' })
+    expect(review.confirm).toEqual({ token: 'DELETE', sentence: expect.stringMatching(/^This Publish deletes gt-fam-L on Amazon · IT/) })
     expect(review.issues).toEqual([])
   })
 

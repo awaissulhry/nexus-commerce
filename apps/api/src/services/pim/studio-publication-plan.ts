@@ -19,6 +19,7 @@ import { newListingChoices, newListingHolds, type NewRowFacts } from '../listing
 import { readListingDeletions } from '../listings/listing-deletions.js'
 import { nativeListingValue } from '../shopify/native-listing-value.js'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
+import { ebayAspectKey } from '../channel-drift/ebay-content-compare.js'
 import { EBAY_ASPECT_VALUE_MAX, ebayAspectValues } from '../ebay-aspect-values.js'
 import { withFieldName } from '@nexus/shared/off-list-message'
 
@@ -155,6 +156,10 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
       valueOf: (row, field) => result.products.find(p => p.productId === row.productId)?.cells[field.key]?.value }) : []
     const listingLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayListingLevel(field, ebayAxes)).map(field => field.key) : [])
     const reporterOf = (field: string) => levels.find(level => level.field.key === field)?.supplier.productId ?? parent.id
+    // Owner 2026-10-19 (option A) — an eBay item specific's problem names the change it blocks (`aspect:<key>`, the change
+    // review's field): every live item specific is sent again with a changed one, so it blocks them all (`sendUnit`). A
+    // variation axis stays its own column: a narrow revise never sends a variation's values.
+    const issueField = scope.channel === 'EBAY' ? ebayAspectIssueFields(ebayFields(result.catalogue?.fields), ebayAxes) : new Map<string, string>()
     // Follow-up 2026-10-01 — Condition, policies, location, package… go to eBay once, from the main row: only it is judged.
     const itemLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayItemLevel(field.store)).map(field => field.key) : [])
     for (const row of result.products) for (const [field, cell] of Object.entries(row.cells)) {
@@ -171,7 +176,7 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
         continue
       }
       // P1 — block only what the channel itself would reject (`value-verdict.ts`); every other problem warns.
-      for (const found of cellFindings(cell)) issues.push({ productId: row.productId, sku: row.sku, field,
+      for (const found of cellFindings(cell)) issues.push({ productId: row.productId, sku: row.sku, field: issueField.get(field) ?? field,
         severity: publishVerdict(scope.channel, found) === 'block' ? 'error' : 'warning', message: withFieldName(cell.label ?? field, found.message) })
     }
     if (result.missingProductIds.length) error('Some products could not be read. Refresh the product before publishing.')
@@ -218,6 +223,22 @@ export function existingRowRule(listing: (PushLockListing & { externalListingId?
   if (listing.endedAt || String(listing.listingStatus ?? '').trim().toUpperCase() === 'ENDED' || listing.presenceIntent === 'ENDED') return ENDED_FIRST
   if (listing.presenceIntent === 'DISCONTINUED' || listing.presenceIntent === 'RELEASED') return assertPushAllowed({ presenceIntent: listing.presenceIntent })?.sentence ?? null
   return null
+}
+
+/**
+ * PURE. Owner 2026-10-19 — the issue field of each eBay item-specific column that is not a variation axis: the change
+ * review's own field (`aspect:<key>`, `ebayAspectKey` of its eBay name), so its problem blocks the item specifics it is
+ * sent with. Without axes (a single listing) every item specific is one.
+ */
+export function ebayAspectIssueFields(fields: readonly ListingLevelField[], axes: Set<string> | null): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const field of fields) {
+    const store = field.store as { kind?: string; path?: string[] } | null | undefined
+    if (store?.kind !== 'platformAttributes' || store.path?.[0] !== 'itemSpecifics' || !store.path[1]) continue
+    if (axes && !isEbayListingLevel(field, axes)) continue
+    out.set(field.key, `aspect:${ebayAspectKey(store.path[1])}`)
+  }
+  return out
 }
 
 /** The eBay catalogue fields as listing-level candidates (key, label, store, the names they go by). */

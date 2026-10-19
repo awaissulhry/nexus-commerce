@@ -25,7 +25,7 @@
  */
 import type { Prisma } from '@prisma/client'
 import type { StudioPublishReview, StudioPublishScope, StudioPublishSelection, StudioPublishResult } from '@nexus/shared/studio-publication'
-import { isPhotoChangeId } from '@nexus/shared/studio-publication'
+import { blockedChangeIds } from '@nexus/shared/studio-publication'
 import type { ListingAction, ListingActionDestination, ListingActionRunResult } from '@nexus/shared/listing-actions'
 import { SEND_ORDER, type SendStep } from '@nexus/shared/publish-actions'
 import { CONTENT_HELD_FOR_RELIST, isStartAsTarget, LIFECYCLE_UNKNOWN, lifecycleStep, START_AS_LABEL, type ListedStatusTarget, type ManyBatchOptions,
@@ -234,17 +234,18 @@ async function defaultSelect(productId: string, id: string, body: unknown, userI
  * PURE. The fields a batch ticks for one review by default — Nexus wins (One-click O5, OD3 A): what the review ticks
  * itself (SEND) and every selectable field the channel holds differently (DIFFERS: changed on the channel, on both
  * sides, or never published from Nexus). "Keep channel values" (`keepChannelValues`) leaves the DIFFERS fields out —
- * except a Full update row's locked fields, which always go whole. A photos-only review (other fields have problems)
- * ticks only its photos. Never ticked: SAME, CANNOT_COMPARE and every line the review refuses (not selectable).
+ * except a Full update row's locked fields, which always go whole. Never ticked: SAME, CANNOT_COMPARE, every line the
+ * review refuses (not selectable) and every line a problem leaves out (`blockedChangeIds`, Owner 2026-10-19 option A:
+ * the family's other changes still go).
  */
-export function defaultBatchSelection(review: Pick<StudioPublishReview, 'changes' | 'photosOnly'>, keepChannelValues: boolean): string[] {
-  const ids = (review.changes ?? []).filter(change => {
-    if (!change.selectable) return false
+export function defaultBatchSelection(review: Pick<StudioPublishReview, 'scope' | 'changes'> & Partial<Pick<StudioPublishReview, 'issues' | 'sendsWhole'>>, keepChannelValues: boolean): string[] {
+  const left = blockedChangeIds(review)
+  return (review.changes ?? []).filter(change => {
+    if (!change.selectable || left.has(change.id)) return false
     const differs = change.status === 'DIFFERS' && !change.locked
     if (keepChannelValues) return change.selectedByDefault && !differs
     return change.selectedByDefault || change.status === 'DIFFERS'
   }).map(change => change.id)
-  return review.photosOnly ? ids.filter(id => isPhotoChangeId(id)) : ids
 }
 
 /**

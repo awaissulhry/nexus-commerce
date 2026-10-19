@@ -90,6 +90,12 @@ export interface EtsyPublication {
   /** The Etsy inventory products: a family's children, or the single product. */
   inventoryProducts: ProductIdentity[]
   ownerProductId: string
+  /**
+   * Owner 2026-10-19 (option A) — the problems of a listing already on Etsy, each on its row and field: the review lists
+   * them, and each blocks only the changes that would send its field (`blockingIssues`; the inventory is one unit). A
+   * new listing has none here: any problem refuses it whole (`EtsyPublicationProblems`).
+   */
+  issues?: StudioPublishIssue[]
   values: EtsyListingValues
   /** The full createDraftListing body (new listing); built for an existing one too (the change values come from `values`). */
   form: EtsyListingForm

@@ -24,7 +24,8 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import { channelLabel } from '@nexus/shared/channel-label'
-import { blockingIssues, isPhotoChangeId, PUBLICATION_PHOTO_FIELDS, type StudioPublishChange, type StudioPublishResult, type StudioPublishReview, type StudioPublishValue } from '@nexus/shared/studio-publication'
+import { blockedChanges, blockingIssues, leftOutReason, publishFieldGroup, publishGateContext, type StudioPublishChange, type StudioPublishResult, type StudioPublishReview,
+  type StudioPublishValue } from '@nexus/shared/studio-publication'
 import prisma from '../../../db.js'
 import { connectionLabel } from '../../connection-label.js'
 import { etsyShopLabel } from '../../etsy/shop-label.js'
@@ -124,6 +125,8 @@ async function accountFor(channel: string, accountId: string | undefined, listin
 
 function trimmedReview(review: StudioPublishReview) {
   const errors = review.issues.filter((i) => i.severity === 'error')
+  // Option A (Owner 2026-10-19) — the changes a problem leaves out, each with that problem; the others can go.
+  const left = blockedChanges(review)
   const changes = (review.changes ?? []) as StudioPublishChange[]
   const byStatus: Record<string, number> = {}
   for (const change of changes) byStatus[change.status] = (byStatus[change.status] ?? 0) + 1
@@ -136,9 +139,9 @@ function trimmedReview(review: StudioPublishReview) {
     action: review.action,
     accountLabel: review.accountLabel,
     aliasLabel: review.aliasLabel,
-    // Ready: nothing blocks it. Only photos may be sent when every problem names a field other than the photos.
+    // Ready: no problem at all. With problems, the changes they leave out say so (`leftOut`); the others can still go.
     ready: errors.length === 0,
-    ...(review.photosOnly ? { photosOnly: true } : {}),
+    ...(left.size ? { leftOutChanges: left.size } : {}),
     ...(review.previousPublicationId ? { previousPublicationId: review.previousPublicationId } : {}),
     issueCounts: { errors: errors.length, warnings: review.issues.length - errors.length },
     issues: issues.map((i) => ({ severity: i.severity, ...(i.sku ? { sku: i.sku } : {}), ...(i.field ? { field: i.field } : {}), message: clip(i.message) })),
@@ -152,6 +155,7 @@ function trimmedReview(review: StudioPublishReview) {
       changes: shownChanges.map((c) => ({
         id: c.id, sku: c.sku, field: c.field, label: c.label, status: c.status,
         nexus: valueText(c.current), channel: valueText(c.channel), selectable: c.selectable, selectedByDefault: c.selectedByDefault, reason: clip(c.reason),
+        ...(left.has(c.id) ? { leftOut: clip(leftOutReason(left.get(c.id)!)) } : {}),
       })),
       ...(changes.length > shownChanges.length ? { moreChanges: changes.length - shownChanges.length } : {}),
     } : {}),
@@ -356,8 +360,6 @@ export function publishStory(d: { product: { sku: string }; channel: string; mar
  * a first publish creates the listing with them (inside its create message). */
 export const FIELD_GROUPS = ['title', 'description', 'bullets', 'keywords', 'photos', 'attributes'] as const
 type FieldGroup = (typeof FIELD_GROUPS)[number]
-/** The groups that are text (an Amazon text-only publish: `PreviewOptions.textOnly`). */
-const TEXT_GROUPS: ReadonlySet<FieldGroup> = new Set(['title', 'description', 'bullets', 'keywords'])
 /** `variations`: Etsy's whole inventory (one replace), sent only with fields "all" — never a group a caller names (Q7 = A). */
 type SendGroup = FieldGroup | 'variations'
 type Group = SendGroup | 'create' | 'never'
@@ -380,18 +382,8 @@ const etsyVariationView = (v: EtsyAddedVariation) => ({ sku: v.sku, price: v.pri
 const SENT_IN_CREATE = 'Sent inside the new listing: a first publish creates it with its price, quantity and (Amazon) fulfilment. '
   + 'After that, set-listing-stock and set-listing-price change them.'
 
-/** The group of one reviewed field (Amazon roots and content coordinates, eBay Trading and Inventory fields, Etsy listing fields). */
-export function groupOf(field: string): Group {
-  if (field === '$create' || field === '__create__') return 'create'
-  if (/quantity|fulfil|purchasable_offer|price/i.test(field)) return 'never'
-  if (PUBLICATION_PHOTO_FIELDS.has(field) || /image_locator/i.test(field)) return 'photos'
-  const root = field.split(':')[0]
-  if (root === 'item_name' || field === 'title') return 'title'
-  if (root === 'product_description' || field === 'description') return 'description'
-  if (root === 'bullet_point') return 'bullets'
-  if (root === 'generic_keyword' || field === 'tags') return 'keywords'
-  return 'attributes'
-}
+/** The group of one reviewed field: the shared rule (`publishFieldGroup`), the one the publish gate's `sendUnit` builds on. */
+export const groupOf = (field: string): Group => publishFieldGroup(field)
 
 /**
  * The groups one reviewed field belongs to. Etsy (E5b): a translation line carries its title, description and tags
@@ -436,6 +428,8 @@ export function planPublish(review: StudioPublishReview, channel: string, fields
       refusal: blockers.length ? blockers.map((i) => i.message).join(' ') : 'The studio could not review the fields of this listing.' }
   }
   const wanted = wantedGroups(fields)
+  // Option A (Owner 2026-10-19) — a change a problem leaves out is not sent: it is said, with that problem.
+  const left = blockedChanges({ scope: { ...review.scope, channel }, changes, issues: review.issues, sendsWhole: review.sendsWhole })
   const creates = changes.filter((c) => groupOf(c.field) === 'create')
   const plan: PublishPlan = { publish: creates.length ? 'first publish' : 're-publish', selected: [], notSent: [], unchanged: 0, refusal: null }
   if (creates.length && fields !== 'all') {
@@ -447,7 +441,7 @@ export function planPublish(review: StudioPublishReview, channel: string, fields
     const group = groups[0]
     const skip = (reason: string) => plan.notSent.push({ sku: change.sku, field: change.field, label: change.label, reason })
     if (group === 'never') { if (change.status !== 'SAME') skip(plan.publish === 'first publish' ? SENT_IN_CREATE : NEVER_SENT); continue }
-    if (group === 'create') { if (change.selectable) plan.selected.push(change); else skip(change.reason); continue }
+    if (group === 'create') { if (change.selectable && !left.has(change.id)) plan.selected.push(change); else skip(left.has(change.id) ? leftOutReason(left.get(change.id)!) : change.reason); continue }
     if (!groups.some((g) => wanted.has(g as SendGroup))) {
       // Etsy's variations differ but the fields named leave them out: said, never silently dropped — "all" when "all"
       // would send them, else the studio's own reason (review MINOR-2).
@@ -457,17 +451,15 @@ export function planPublish(review: StudioPublishReview, channel: string, fields
       continue
     }
     if (change.status === 'SAME') { plan.unchanged += 1; continue }
-    if (change.selectable && (change.status === 'SEND' || change.status === 'DIFFERS')) plan.selected.push(change)
+    if (change.selectable && (change.status === 'SEND' || change.status === 'DIFFERS') && left.has(change.id)) skip(leftOutReason(left.get(change.id)!))
+    else if (change.selectable && (change.status === 'SEND' || change.status === 'DIFFERS')) plan.selected.push(change)
     else skip(change.reason)
   }
   const ids = plan.selected.map((c) => c.id)
-  if (review.photosOnly && ids.some((id) => !isPhotoChangeId(id))) {
-    plan.refusal = `Only photos may be sent from this review: ${review.issues.filter((i) => i.severity === 'error').map((i) => i.message).join(' ')}`
-    return plan
-  }
   // An empty selection sends nothing: only a problem that names no field (it blocks everything) is said, never every
   // field's own problems (2026-10-17: a re-approved publish with nothing left to send listed 547 of them).
-  const blockers = ids.length ? blockingIssues(review.issues, ids) : review.issues.filter((i) => i.severity === 'error' && !i.field)
+  const blockers = ids.length ? blockingIssues(review.issues, ids, publishGateContext({ scope: { ...review.scope, channel }, changes, sendsWhole: review.sendsWhole }))
+    : review.issues.filter((i) => i.severity === 'error' && !i.field)
   if (blockers.length) plan.refusal = blockers.map((i) => i.message).join(' ')
   else if (!plan.selected.length && channel === 'ETSY' && [...wanted].every((g) => g === 'photos' || g === 'bullets')) {
     // Etsy has no bullet points, and Nexus sends it no photos yet: naming only those sends nothing, said truly.
@@ -804,9 +796,8 @@ const publishListing: AgentTool = {
       // own check of a new eBay listing (VerifyAddFixedPriceItem, creates nothing) exactly as the studio's Review does; an
       // error there blocks the plan below, so the run refuses with eBay's words and nothing is sent. The read tools and
       // this tool's preview never make that live call.
-      // Amazon text only: the studio keeps the review although other fields have problems, and lets only text be sent.
-      const textOnly = d.channel === 'AMAZON' && Array.isArray(fields) && fields.every((f) => TEXT_GROUPS.has(f))
-      const review = await (await studio()).previewStudioPublication(d.product.id, d.scope, userId, textOnly ? { textOnly } : {})
+      // The studio keeps a review while one change can still go (option A): the changes a problem leaves out stay out.
+      const review = await (await studio()).previewStudioPublication(d.product.id, d.scope, userId)
       const built = await publishPlanFor(d, review, fields, args.location as string | undefined)
       if (built.refusal) return { ok: false, error: `${where}: ${built.refusal} Nothing was sent.` }
       if (!review.id) return { ok: false, error: `${where}: the studio would not keep this review. Nothing was sent.` }

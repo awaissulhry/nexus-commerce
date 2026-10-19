@@ -114,7 +114,7 @@ export function publicationReplaces(change: Pick<StudioPublishChange, 'field' | 
  * words — so the window can warn per line and per market. Never ticked: SAME, CANNOT_COMPARE (an unknown channel value
  * is never overwritten by default), every refused line (its reason kept), and a photo line whose channel shows only its own
  * re-hosted copy (`channelCopy`: judged on Nexus's side alone, so it never resends unchanged photos). Held / blocked rows are unticked after this
- * (`blockRowChanges`); a photos-only review ticks photo fields only (`defaultReviewTicks`).
+ * (`blockRowChanges`); a change a problem leaves out is never ticked (`blockedChanges`, `defaultReviewTicks`).
  */
 export function planPublicationChanges(inputs: PublicationChangeInput[], options: PublicationChangeOptions = {}): StudioPublishChange[] {
   const ids = inputs.map(input => publicationChangeId(input.productId, input.field))

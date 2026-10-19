@@ -8,8 +8,7 @@
  *        rows (one per waiting value), the values the listing outgrew, and the rows whose content is held back.
  *   POST /api/publication-batches                     `{ plan: PublishPlanSubmit }` → 202 `{ batchId }`  products.publish
  *        One batch header with mixed children: the content reviews and one listing-action change per destination ×
- *        action. Ended and Delete need the typed family SKU AND products.delete (without products.delete they are not
- *        sent and keep waiting; the rest still sends).
+ *        action. Ended and Delete need what every other change needs (products.publish); nothing is typed to send them.
  *   GET  /api/publication-batches/:id                 → `PublishPlanBatchView` (a `PublicationBatchView` whose children
  *        carry `kind` and `action`).
  *
@@ -26,8 +25,7 @@
  * changes, it can set every listing of the chosen products in the chosen markets to one Status (Active / Inactive /
  * Ended; no Delete there). The batch reviews each product × market in the background with the engine's own plan (one
  * lifecycle child per product × market × action, refusals with the reason), waits, and sends on
- * `POST /api/publication-batches/:id/submit` (`ManySubmitRequest`). Ended needs products.delete and the typed COUNT of
- * listings it ends ("Type 36 to end 36 listings."), not a SKU. The single-family plan above is unchanged.
+ * `POST /api/publication-batches/:id/submit` (`ManySubmitRequest`). The single-family plan above is unchanged.
  *
  * New listings (ND4 B, Owner 2026-10-04): the window may also say how the listings its changes CREATE start
  * (`options.startAs`: Active or Inactive, per the channel's rules); each content review then marks the rows it creates
@@ -37,7 +35,7 @@
  */
 import type { ListingAction, ListingActionDestination, ListingActionPlanRow, ListingActionRowResult, SellingState, StatusTarget } from './listing-actions.js'
 import type { SendMode, SendStep } from './publish-actions.js'
-import { isPhotoChangeId, type PublicationBatchChild, type PublicationBatchCounts, type PublicationBatchView, type StudioPublishReview,
+import { sendableChanges, type PublicationBatchChild, type PublicationBatchCounts, type PublicationBatchView, type StudioPublishReview,
   type StudioPublishScope } from './studio-publication.js'
 
 /** One Publish reviews and sends at most this many destinations (the batch route's limit). */
@@ -85,8 +83,6 @@ export interface PublishPlanLifecycleRow {
   stale: boolean
   /** Ticked when the window opens: not stale and not refused. */
   tickedByDefault: boolean
-  /** Ended and Delete: sending it needs the typed confirmation (`PublishPlan.confirm`) and products.delete. */
-  needsTypedConfirm: boolean
   /** Why it cannot be sent now (it keeps waiting), or null when it can. A refused row cannot be ticked. */
   refused: string | null
 }
@@ -163,14 +159,6 @@ export interface PublishPlanCounts {
   moved?: number
 }
 
-/** The typed confirmation Ended and Delete rows need. */
-export interface PublishPlanConfirm {
-  /** What the person types: the family SKU. */
-  expected: string
-  /** Ended and Delete rows that can be sent (across every destination). */
-  rows: number
-}
-
 export interface PublishPlan {
   /** The product the studio opened (any member of the family). */
   productId: string
@@ -181,10 +169,6 @@ export interface PublishPlan {
   counts: PublishPlanCounts
   /** The one summary line with the default ticks: "18 partial updates (41 fields) · 2 full updates · 3 inactive · 1 ended". */
   summary: string
-  /** Null when no Ended or Delete row can be sent. */
-  confirm: PublishPlanConfirm | null
-  /** The viewer may end and delete listings (products.delete). Without it, Ended and Delete rows are refused and keep waiting. */
-  canDelete: boolean
   readAt: string
 }
 
@@ -202,7 +186,7 @@ export interface PublishPlanSubmitDestination {
   locationId?: string
   /**
    * S10 — this content review moves a live Amazon listing to a new SKU, which deletes the old SKU there once Amazon
-   * accepts the new one (`StudioPublishReview.confirm`): the person typed the family SKU (`confirmText`).
+   * accepts the new one (`StudioPublishReview.confirm`): the window sends it with a ticked move (nothing is typed).
    */
   confirmDelete?: boolean
 }
@@ -216,8 +200,6 @@ export interface PublishPlanSubmit {
   lifecycle: string[]
   /** The plan's "No longer applies" ids: cleared when the batch is queued (only if nobody changed them since the review). */
   outgrown?: string[]
-  /** The typed confirmation for Ended and Delete rows, and for a content review that deletes an old SKU: the family SKU. */
-  confirmText?: string | null
 }
 
 export interface PublishPlanBatchRequest { plan: PublishPlanSubmit }
@@ -229,7 +211,7 @@ export type PublishPlanChildKind = 'content' | 'lifecycle'
 
 /**
  * One child of a batch. A lifecycle child's `status` is the listing-action run's: PREVIEW (waiting its turn), RUNNING,
- * DONE, PARTIAL, FAILED, NOT_SENT (refused before sending — `message` says why, e.g. `ROLE_CANNOT_END_OR_DELETE`),
+ * DONE, PARTIAL, FAILED, NOT_SENT (refused before sending — `message` says why),
  * UNKNOWN (it stopped before Nexus heard back: `LIFECYCLE_UNKNOWN`) or CANCELLED.
  */
 export interface PublishPlanBatchChild extends PublicationBatchChild {
@@ -284,23 +266,21 @@ export interface PublishPlanBatchView extends PublicationBatchView {
 
 // ── Words ────────────────────────────────────────────────────────────────────────────────────────
 
-export const ROLE_CANNOT_END_OR_DELETE = 'Your role cannot end or delete listings, so this stays waiting.'
 export const LIFECYCLE_UNKNOWN = 'This change stopped before Nexus heard back from the channel. Check the listing on the channel before sending it again.'
 export const CONTENT_HELD_FOR_RELIST = 'This listing is being relisted (eBay gives it a new item number), so its changes wait for the next Publish.'
-export const TYPE_TO_CONFIRM = (expected: string) => `Type ${expected} to end or delete listings.`
 
 // ── Pure helpers ─────────────────────────────────────────────────────────────────────────────────
 
 /** The step one lifecycle action takes in the send order. */
 export const lifecycleStep = (action: ListingAction): SendStep => action
 
-/** Does the typed text confirm Ended and Delete? Exact SKU, ignoring surrounding spaces. */
+/** Claude's End and Delete tools: does the family SKU the person typed match? Exact SKU, ignoring surrounding spaces. */
 export const confirmMatches = (expected: string, typed: string | null | undefined) =>
   typeof typed === 'string' && typed.trim() === expected.trim() && expected.trim().length > 0
 
-/** The changes a fresh review ticks: selectable and selected by default (photos only on a photos-only review). */
-export function defaultReviewTicks(review: Pick<StudioPublishReview, 'changes' | 'photosOnly'> | null | undefined): string[] {
-  return (review?.changes ?? []).filter(c => c.selectable && c.selectedByDefault && (!review?.photosOnly || isPhotoChangeId(c.id))).map(c => c.id)
+/** The changes a fresh review ticks: selected by default, and not left out by a problem (`sendableChanges`). */
+export function defaultReviewTicks(review: Pick<StudioPublishReview, 'scope' | 'changes'> & Partial<Pick<StudioPublishReview, 'issues' | 'sendsWhole'>> | null | undefined): string[] {
+  return sendableChanges(review).filter(c => c.selectedByDefault).map(c => c.id)
 }
 
 /** The lifecycle rows ticked when the window opens. */
@@ -341,12 +321,6 @@ export function publishPlanCounts(plan: Pick<PublishPlan, 'destinations'>, ticks
     }
   }
   return counts
-}
-
-/** The ticked lifecycle rows that need the typed confirmation (Ended and Delete). */
-export const confirmRowsTicked = (plan: Pick<PublishPlan, 'destinations'>, lifecycle: readonly string[]) => {
-  const ticked = new Set(lifecycle)
-  return plan.destinations.flatMap(d => d.lifecycle).filter(row => !row.refused && row.needsTypedConfirm && ticked.has(row.id)).length
 }
 
 /**
@@ -394,7 +368,7 @@ export interface ManyPublishRequest {
      * When both are sent, this one decides.
      */
     keepChannelValues?: boolean
-    /** Set every listing there to this Status, where allowed. Ended needs products.delete. */
+    /** Set every listing there to this Status, where allowed. */
     status?: ListedStatusTarget | null
     /**
      * New listings (ND4 B, Owner 2026-10-04) — "New listings start as": the Status the changes create every listing not on
@@ -414,8 +388,6 @@ export interface ManySubmitRequest {
   confirmOverwrite?: string[]
   /** Shopify: account id → inventory location. */
   shopifyLocations?: Record<string, string>
-  /** Ended: the typed count of listings it ends (`manyEndCount`), e.g. "36". */
-  confirmText?: string | null
 }
 
 /** ND4 B — "New listings start as": Active or Inactive (`ManyPublishRequest.options.startAs`). */
@@ -442,18 +414,3 @@ export function createsSentence(rows: readonly Pick<PublishCreateRow, 'sku' | 's
 }
 
 export const MANY_ENDED_WITH_CONTENT = 'A listing being ended gets no changes. Choose Send changes or Set Ended, not both.'
-export const MANY_ROLE_CANNOT_END = 'Your role cannot end listings (it needs permission to delete products). Nothing was sent.'
-/** "Type 36 to end 36 listings." */
-export const TYPE_COUNT_TO_END = (count: number) => `Type ${count} to end ${count} ${count === 1 ? 'listing' : 'listings'}.`
-
-/** Does the typed text confirm ending `count` listings? The exact number, ignoring surrounding spaces. */
-export const confirmCountMatches = (count: number, typed: string | null | undefined) =>
-  count > 0 && typeof typed === 'string' && typed.trim() === String(count)
-
-/**
- * The listings a reviewed many-product batch would end: the rows to send of every End child still waiting. The typed
- * confirmation is this number, on the web and on the server alike.
- */
-export function manyEndCount(children: ReadonlyArray<Pick<PublishPlanBatchChild, 'kind' | 'status' | 'action' | 'sendCount'>>): number {
-  return children.filter(c => c.kind === 'lifecycle' && c.status === 'PREVIEW' && c.action === 'end').reduce((n, c) => n + Math.max(0, c.sendCount ?? 0), 0)
-}

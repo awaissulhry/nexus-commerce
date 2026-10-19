@@ -306,7 +306,11 @@ describe('🔴 a new listing\'s offer roots (the one builder, after the mapping)
 
   it('FBA evidence (stock at Amazon) on a listing typed FBM is refused by name — never re-coded, never sent a merchant quantity', async () => {
     const id = await scoped(() => seedNew('lane-new-fba', { fbaStock: 12 }))
-    await expect(prepare(id)).rejects.toThrow('lane-new-fba: Amazon fulfils this product (FBA), but this listing is set to FBM. Nexus never sends it a merchant quantity: choose FBA for it, or move its stock out of FBA, before publishing.')
+    // Option A (Owner 2026-10-19): the create is left out by its own problem — nothing of it is built.
+    const prepared = await prepare(id)
+    expect(prepared.issues).toContainEqual(expect.objectContaining({ productId: id, severity: 'error',
+      message: 'lane-new-fba: Amazon fulfils this product (FBA), but this listing is set to FBM. Nexus never sends it a merchant quantity: choose FBA for it, or move its stock out of FBA, before publishing.' }))
+    expect(prepared.feed.messages).toEqual([])
   })
 
   it('control: an FBM listing is created with the stock job\'s quantity (pin 10, buffer 3, routed 50 → 10) and its sale with both dates', async () => {

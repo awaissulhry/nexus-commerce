@@ -9,8 +9,8 @@
  * listing of the chosen products in the chosen markets (Set Active · Set Inactive · Set Ended; no Delete here). A Status
  * is reviewed by the listing-action engine (one lifecycle child per product × market × action, each listing with what
  * happens or why it cannot); the window shows one row per product × market, a summary per market tab ("Inactive on
- * Amazon · DE: 36 listings · 4 cannot"), and one counted button ("Set 36 listings inactive on 2 markets"). Ended asks
- * for the typed count of listings it ends (`TYPE_COUNT_TO_END`, checked again by the server).
+ * Amazon · DE: 36 listings · 4 cannot"), and one counted button ("Set 36 listings inactive on 2 markets"). Ended needs
+ * nothing typed and no permission beyond products.publish (Owner 2026-10-19).
  *
  * New listings (ND4 B, Owner 2026-10-04) — with Send changes, "New listings start as: As each row says · Active ·
  * Inactive" (`manyStartAsOptions`): the Status every listing the changes CREATE starts with (`options.startAs`; absent =
@@ -31,7 +31,7 @@ import { differsSentence, type PublicationBatchChild, type PublicationBatchView,
 import { channelLabel } from '@nexus/shared/channel-label'
 import { STATUS_TARGET_LABEL, type ListingAction, type ListingActionRowOutcome, type ListingActionRowPlan } from '@nexus/shared/listing-actions'
 import {
-  MANY_PUBLISH_ACTION_LABEL, MANY_PUBLISH_ACTIONS, START_AS_HINT, START_AS_LABEL, START_AS_TARGETS, START_AS_WORD, manyEndCount,
+  MANY_PUBLISH_ACTION_LABEL, MANY_PUBLISH_ACTIONS, START_AS_HINT, START_AS_LABEL, START_AS_TARGETS, START_AS_WORD,
   type ListedStatusTarget, type ManyBatchOptions, type ManyPublishAction, type ManyPublishRequest, type PublishPlanBatchChild, type PublishPlanBatchView,
   type StartAsTarget,
 } from '@nexus/shared/publish-plan'
@@ -121,7 +121,8 @@ export function manyBatchOptions(view: Pick<PublishPlanBatchView, 'request'> | n
 
 /** One reviewed family × destination, before anything is sent. */
 export type ManyRowState =
-  | { kind: 'ready'; changes: number }
+  /** `problems` (option A, Owner 2026-10-19): the review's errors; the fields they name are left out, the ticked ones go. */
+  | { kind: 'ready'; changes: number; problems?: number }
   | { kind: 'nothing'; reason: string }
   | { kind: 'not_listed'; reason: string }
   | { kind: 'problems'; problems: number; reason: string | null }
@@ -144,13 +145,16 @@ export function manyRowState(child: Pick<RowChild, 'status' | 'message' | 'probl
   const expires = child.expiresAt ? Date.parse(child.expiresAt) : NaN
   if (Number.isFinite(expires) && expires <= now) return { kind: 'expired' }
   const changes = child.selectedCount ?? 0
-  return changes > 0 ? { kind: 'ready', changes } : { kind: 'nothing', reason: 'No fields are ticked for this market.' }
+  const problems = child.problems?.errors ?? 0
+  return changes > 0 ? { kind: 'ready', changes, ...(problems ? { problems } : {}) } : { kind: 'nothing', reason: 'No fields are ticked for this market.' }
 }
 
 /** The words in a reviewed row's Review column. */
 export function manyRowLabel(state: ManyRowState): { label: string; tone: Tone; hint: string } {
   switch (state.kind) {
-    case 'ready': return { label: 'Ready', tone: 'info', hint: 'Open the row to see or change the ticked fields.' }
+    case 'ready': return state.problems
+      ? { label: 'Ready', tone: 'info', hint: `${plural(state.problems, 'problem leaves', 'problems leave')} out the fields ${state.problems === 1 ? 'it names' : 'they name'}; the ticked fields are sent. Open the row to see them.` }
+      : { label: 'Ready', tone: 'info', hint: 'Open the row to see or change the ticked fields.' }
     case 'nothing': return { label: 'Nothing to send', tone: 'neutral', hint: state.reason }
     case 'not_listed': return { label: 'Not listed', tone: 'neutral', hint: state.reason }
     case 'problems': return state.problems
@@ -372,18 +376,16 @@ export const tickKey = (ids: readonly string[] | null | undefined) => [...(ids ?
 
 // ── P11: one Status for many products × markets ────────────────────────────────────────────────────────────────────
 
-/** The Action picker: Send changes, Set Active, Set Inactive, Set Ended (never Delete). Ended needs products.delete. */
-export const MANY_ROLE_CANNOT_END_SHORT = 'Your role cannot end listings: it needs permission to delete products.'
-export function manyActionOptions(canEnd: boolean): Array<{ value: ManyPublishAction; label: string; disabled?: boolean; title?: string }> {
-  return MANY_PUBLISH_ACTIONS.map(action => ({ value: action, label: MANY_PUBLISH_ACTION_LABEL[action],
-    ...(action === 'ended' && !canEnd ? { disabled: true, title: MANY_ROLE_CANNOT_END_SHORT } : {}) }))
+/** The Action picker: Send changes, Set Active, Set Inactive, Set Ended (never Delete). */
+export function manyActionOptions(): Array<{ value: ManyPublishAction; label: string }> {
+  return MANY_PUBLISH_ACTIONS.map(action => ({ value: action, label: MANY_PUBLISH_ACTION_LABEL[action] }))
 }
 
 /** What a Status does, said before the check. */
 export const MANY_STATUS_HINT: Readonly<Record<ListedStatusTarget, string>> = {
   active: 'Every listing of these products in the chosen markets sells again. An inactive listing resumes with the current stock; an ended one is relisted (eBay gives it a new item number). Listings already active are left as they are.',
   inactive: 'Every listing of these products in the chosen markets stops selling. The listings stay on the channel, and Set Active sells them again.',
-  ended: 'Every listing of these products in the chosen markets is ended. Amazon and Etsy have no End: set Inactive there. You type the number of listings to confirm.',
+  ended: 'Every listing of these products in the chosen markets is ended. Amazon and Etsy have no End: set Inactive there.',
 }
 
 /** The Status word inside a sentence: "inactive", "ended". */
@@ -499,12 +501,10 @@ export interface ManyStatusPlan {
   expired: number
   /** Products × markets that could not be checked. */
   notChecked: number
-  /** Listings it ends: the typed count Ended asks for. */
-  ending: number
 }
 
-export function manyStatusPlan(rows: readonly ManyStatusRow[], now: number = Date.now()): ManyStatusPlan {
-  const plan: ManyStatusPlan = { listings: 0, markets: 0, refused: 0, nothing: 0, expired: 0, notChecked: 0, ending: 0 }
+export function manyStatusPlan(rows: readonly ManyStatusRow[]): ManyStatusPlan {
+  const plan: ManyStatusPlan = { listings: 0, markets: 0, refused: 0, nothing: 0, expired: 0, notChecked: 0 }
   const markets = new Set<string>()
   for (const row of rows) {
     plan.refused += row.refused
@@ -515,13 +515,8 @@ export function manyStatusPlan(rows: readonly ManyStatusRow[], now: number = Dat
     else plan.notChecked++
   }
   plan.markets = markets.size
-  plan.ending = manyEndingCount(rows.flatMap(row => row.children), now)
   return plan
 }
-
-/** The listings the send would end — as the server counts them (`manyEndCount`): waiting End children not expired. */
-export const manyEndingCount = (children: readonly PublishPlanBatchChild[], now: number = Date.now()) =>
-  manyEndCount(children.filter(child => !isExpired(child.expiresAt, now)))
 
 /** "Set 36 listings inactive on 2 markets", "End 36 listings on 2 markets" — the one counted button. */
 export function manyStatusButtonText(plan: Pick<ManyStatusPlan, 'listings' | 'markets'>, target: ListedStatusTarget): string {

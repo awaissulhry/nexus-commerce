@@ -65,6 +65,7 @@ import { EBAY_EU_SAFETY_NOTE, prepareEbayPublication } from './studio-publicatio
 import { EbayPublicationProblems, EbaySendingOff, ebayCheckIssue, tradingErrors } from './studio-publication-ebay-problems.js'
 import { previewStudioPublication } from './studio-publication.service.js'
 import { TradingApiFailure } from '../ebay-trading-api.service.js'
+import { blockedChanges } from '@nexus/shared/studio-publication'
 
 const updatedAt = new Date('2026-09-01T00:00:00Z')
 const SKUS: Record<string, string> = { p: 'FAM', c1: 'FAM-NERO-M', c2: 'FAM-NERO-L', solo: 'SOLO' }
@@ -447,5 +448,47 @@ describe('eBay\'s own check in the review (P1)', () => {
     const [policy, condition] = tradingErrors(`${block('Error', '21916582', 'Invalid shipping policy.', 'The shipping policy for &lt;Item.SellerProfiles.SellerShippingProfile.ShippingProfileID&gt; is not valid.')}${block('Error', '37', 'Input data is invalid.', 'Input data for tag &lt;Item.ConditionID&gt; is invalid.')}`).map(ebayCheckIssue)
     expect(policy).toMatchObject({ field: 'fulfillmentPolicyId', message: 'Shipping policy: eBay says: Invalid shipping policy.' })
     expect(condition).toMatchObject({ field: 'conditionId', message: 'Condition: eBay says this is missing or not valid.' })
+  })
+})
+
+// Owner 2026-10-19 (option A) — "With a partial update I'm unable to click the publish button because it says that these
+// listings have problems." A listing already on eBay is reviewed change by change: a problem blocks only the changes that
+// would send its field. Every live item specific is sent again with a changed one, so they are one unit.
+describe('a live listing is reviewed change by change (option A)', () => {
+  const GET_ITEM = '<GetItemResponse xmlns="urn:ebay:apis:eBLBaseComponents"><Ack>Success</Ack><Item><ItemID>456</ItemID><SKU>SOLO</SKU><Title>Old title</Title>'
+    + '<Description>Old description</Description><SellingStatus><ListingStatus>Active</ListingStatus></SellingStatus>'
+    + '<ItemSpecifics><NameValueList><Name>Marca</Name><Value>Old brand</Value></NameValueList><NameValueList><Name>Materiale</Name><Value>Cotone</Value></NameValueList></ItemSpecifics>'
+    + '</Item></GetItemResponse>'
+  const scope = { channel: 'EBAY', marketplace: 'IT', accountId: 'acc' }
+  const id = (field: string) => JSON.stringify(['solo', field])
+  beforeEach(() => {
+    m.products = ['solo']
+    m.listing = { solo: { externalListingId: '456' } }
+    m.pa = { solo: { itemSpecifics: { Marca: 'Xavia', Materiale: 'Pelle' } } }
+    m.trading.mockImplementation(async (call: string) => call === 'GetItem' ? { ack: 'Success', errors: [], raw: GET_ITEM } : { ack: 'Success', errors: [], raw: '' })
+  })
+
+  it('an item specific\'s problem leaves out every item-specific change, never the title; the review is kept', async () => {
+    m.factsIssues = [{ productId: 'solo', sku: 'SOLO', field: 'aspect:marca', severity: 'error', message: 'Marca: eBay takes at most 65 characters per value.' }]
+    const review = await previewStudioPublication('solo', scope, 'user')
+    const selectable = review.changes!.filter(c => c.selectable).map(c => c.field)
+    expect(selectable).toEqual(expect.arrayContaining(['title', 'aspect:marca', 'aspect:materiale']))
+    const left = blockedChanges(review)
+    expect([...left.keys()].sort()).toEqual([id('aspect:marca'), id('aspect:materiale')])
+    expect(left.get(id('aspect:materiale'))).toMatchObject({ message: 'Marca: eBay takes at most 65 characters per value.' })
+    expect(review.id).toEqual(expect.any(String))
+  })
+
+  it('a problem on a field a narrow revise does not send (a variation price, the category) blocks nothing; a builder problem on a live listing is listed, not thrown', async () => {
+    m.listing = { solo: { externalListingId: '456', followMasterPrice: false } }
+    const plan = await prepareEbayPublication(facts())
+    expect(plan.issues).toEqual([expect.objectContaining({ sku: 'SOLO', field: 'price', severity: 'error' })])
+    const review = await previewStudioPublication('solo', scope, 'user')
+    expect(review.issues).toContainEqual(expect.objectContaining({ sku: 'SOLO', field: 'price', severity: 'error' }))
+    expect(blockedChanges(review).size).toBe(0)
+    expect(review.id).toEqual(expect.any(String))
+    // A new listing is created whole: the same problem refuses it.
+    m.listing = { solo: { followMasterPrice: false } }
+    await expect(prepareEbayPublication(facts())).rejects.toBeInstanceOf(EbayPublicationProblems)
   })
 })

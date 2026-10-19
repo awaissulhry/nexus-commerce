@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { StudioPublishChange } from '@nexus/shared/studio-publication'
+import { blockedChanges, type StudioPublishChange } from '@nexus/shared/studio-publication'
 
 import type { ActionPlanRow } from './actionPlan'
-import { fieldStatus, fieldTick, fieldValues, marketStateRow, problemGroups, reviewCounts, reviewPages, reviewTableRows, valueText, type ReviewTableMarket, type ReviewTableRow } from './reviewRows'
+import { fieldNote, fieldStatus, fieldTick, fieldValues, marketStateRow, problemGroups, reviewCounts, reviewPages, reviewTableRows, valueText, type ReviewTableMarket, type ReviewTableRow } from './reviewRows'
 
 const planRow = (over: Partial<ActionPlanRow> & Pick<ActionPlanRow, 'key' | 'productId' | 'sku'>): ActionPlanRow => ({
   kind: 'content', what: { column: 'send', mode: 'partial', setAt: null, setByName: null }, action: null, sent: '', warning: null,
@@ -25,7 +25,7 @@ const it_: ReviewTableMarket = {
   key: 'amazon-it', label: 'Amazon · IT',
   rows: [del, full, partial, held],
   review: {
-    id: 'r1', photosOnly: false,
+    id: 'r1', scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'acc' },
     issues: [{ severity: 'error', sku: 'GALE-XS', message: 'GALE-XS: Bullet 1 is too long' }, { severity: 'warning', message: 'A note' }],
     changes: [
       change({ id: 'p1:title', productId: 'p1' }),
@@ -84,9 +84,16 @@ describe('a field\'s tick and words', () => {
     expect(fieldTick(full, it_.review!.changes![3], { selectedIds: [], locked: false, reviewId: 'r1' })).toEqual({ on: true, enabled: false })
   })
 
-  it('only photos can be ticked while other fields have problems', () => {
+  it('a change a problem leaves out is never on and cannot be ticked; it says "Left out: <problem>" (option A, Owner 2026-10-19)', () => {
     const [title] = it_.review!.changes!
-    expect(fieldTick(partial, title, { selectedIds: [], locked: false, reviewId: 'r1', photosOnly: true }).enabled).toBe(false)
+    const problem = { productId: 'p1', field: 'title', severity: 'error' as const, message: 'Title: too long.' }
+    const leftOut = blockedChanges({ ...it_.review!, issues: [problem] })
+    expect([...leftOut.keys()]).toEqual(['p1:title'])
+    expect(fieldTick(partial, title, { selectedIds: ['p1:title'], locked: false, reviewId: 'r1', leftOut })).toEqual({ on: false, enabled: false })
+    expect(fieldNote(title, leftOut)).toBe('Left out: Title: too long.')
+    // The row's other change still ticks.
+    expect(fieldTick(partial, it_.review!.changes![1], { selectedIds: [], locked: false, reviewId: 'r1', leftOut }).enabled).toBe(true)
+    expect(fieldNote(change({ id: 'z', productId: 'p1', reason: 'Nexus changed it.' }), leftOut)).toBe('Nexus changed it.')
   })
 
   it('reads Channel now → Nexus sends, and an offer draft in its own words', () => {

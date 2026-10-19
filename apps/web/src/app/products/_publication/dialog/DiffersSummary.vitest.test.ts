@@ -26,7 +26,8 @@ const review = (over: Partial<StudioPublishReview> = {}): StudioPublishReview =>
 describe('the "Keep Amazon’s values" switch', () => {
   it('governs the lines that replace a channel value, never a Full update row’s field or a line that cannot be ticked', () => {
     expect(keepChannelIds(changes)).toEqual(['price', 'brand'])
-    expect(keepChannelIds(changes, true)).toEqual([])
+    // Option A (Owner 2026-10-19) — a line a problem leaves out is not governed: it is never ticked.
+    expect(keepChannelIds(changes, new Set(['price']))).toEqual(['brand'])
     expect(keepChannelWords('AMAZON')).toBe('Keep Amazon’s values')
   })
   it('on unticks every ticked line that replaces a channel value; off ticks them back; other ticks stay', () => {

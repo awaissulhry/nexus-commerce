@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StudioPublishChange } from '@nexus/shared/studio-publication'
+import { blockedChangeIds, type StudioPublishChange } from '@nexus/shared/studio-publication'
 
 const m = vi.hoisted(() => ({ facts: vi.fn(), baseline: vi.fn(), prepare: vi.fn(), compile: vi.fn(), send: vi.fn(), records: vi.fn(),
   beforeUpdate: vi.fn(), rows: new Map<string, any>(), remoteRevision: 'remote-1', compilerVersion: 'compiler-1', mode: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), inventory: vi.fn(() => false), ebayPrepare: vi.fn() }))
@@ -268,12 +268,17 @@ describe('Full update rows', () => {
     expect(review.rows.find(row => row.productId === 'child')?.mode).toBe('partial')
   })
 
-  it('a Full row Amazon refuses (another product type) blocks the review by name', async () => {
+  it('a Full row Amazon refuses (another product type) is left out by name; the other rows still go (option A)', async () => {
     m.prepare.mockImplementation(async (_facts, prepared) => ({ kind: 'amazon-changes', changes: changes(), remoteRevision: 'remote-1', publication: prepared, products: [],
       fullIssues: [{ productId: 'child', sku: 'SELLER-CHILD', severity: 'error', message: 'SELLER-CHILD: Product type differs on Amazon — use Delete, then Publish.' }] }))
     const review = await publication.previewStudioPublication('parent', scope, 'owner', { fullProductIds: ['child'] })
-    expect(review.id).toBeNull()
     expect(review.issues).toContainEqual(expect.objectContaining({ severity: 'error', message: 'SELLER-CHILD: Product type differs on Amazon — use Delete, then Publish.' }))
+    expect([...blockedChangeIds(review)]).toEqual(['field-child-title'])
+    expect(review.id).toEqual(expect.any(String))
+    // Only that row: with the parent's change gone too, nothing can go and no review is kept.
+    m.prepare.mockImplementation(async (_facts, prepared) => ({ kind: 'amazon-changes', changes: [change('child', 'title')], remoteRevision: 'remote-1', publication: prepared, products: [],
+      fullIssues: [{ productId: 'child', sku: 'SELLER-CHILD', severity: 'error', message: 'SELLER-CHILD: Product type differs on Amazon — use Delete, then Publish.' }] }))
+    expect((await publication.previewStudioPublication('parent', scope, 'owner', { fullProductIds: ['child'] })).id).toBeNull()
   })
 
   it.each([

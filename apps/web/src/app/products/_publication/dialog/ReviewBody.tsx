@@ -1,6 +1,6 @@
 'use client'
 
-import { blockingIssues, type StudioPublishReview, type StudioPublishSelection } from '@nexus/shared/studio-publication'
+import { blockedChanges, blockingIssues, type StudioPublishReview, type StudioPublishSelection } from '@nexus/shared/studio-publication'
 import { Select } from '@/design-system/primitives'
 import { Banner, Disclosure, Field, MetricStrip } from '@/design-system/components'
 // The DS grid's DataGrid (AG Grid), as the Import dialog lists its rows (audit D4: one way to list rows in both dialogs).
@@ -129,7 +129,11 @@ function PlanPart({ plan, review, selectedIds, locked }: { plan: ReviewBodyPlan;
 
 function ContentReviewBody({ review, selectedIds, selection, selecting = false, locationId, confirmed, locked, onSelectionChange, onLocationChange, onConfirmChange, plan, nexusWins = false, listing = null }: ReviewBodyProps & { review: StudioPublishReview }) {
   const sparse = isSparse(review)
-  const blockers = blockingIssues(review.issues, review.photosOnly ? selectedIds : undefined)
+  // Every error: the reason a review lists no fields, or no overwrite check, when it names one.
+  const blockers = blockingIssues(review.issues)
+  // Option A (Owner 2026-10-19) — on a kept change-only review, the changes problems leave out; the others can go.
+  const leftOut = sparse && review.id ? blockedChanges(review) : new Map()
+  const keptWithProblems = sparse && !!review.id
   const line = publicationDestinationParts(review, true, listing)
   const { problems, notes } = publicationProblems(review.issues)
   const visibility = shopifyVisibilityWords(review)
@@ -146,8 +150,11 @@ function ContentReviewBody({ review, selectedIds, selection, selecting = false, 
     {review.locations && <Field label="Inventory location"><Select size="sm" disabled={locked} value={locationId} onChange={e => onLocationChange(e.target.value)}><option value="">Choose a location</option>{review.locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</Select></Field>}
     {/* Audit D4 — one short banner says what the table is; the table names each problem (SKU · what to fix). The count is
         the Problems tile's: the banner does not say it again. */}
-    {problems.length > 0 && <Banner tone="warning" title={review.photosOnly ? 'Other fields have problems — only photos can be sent now' : 'Fix these before publishing'}>
-      {review.photosOnly ? 'Choose only photos to send now, or fix the problems first.' : plan ? 'They are the first rows of the table below. Fix them, then check again.' : 'Each row says what to fix. Fix them, then check again.'}
+    {problems.length > 0 && <Banner tone="warning" title={!keptWithProblems ? 'Fix these before publishing'
+      : leftOut.size ? `${leftOut.size.toLocaleString('en')} ${leftOut.size === 1 ? 'change is' : 'changes are'} left out by these problems` : 'These problems block nothing this publish sends'}>
+      {keptWithProblems ? (leftOut.size ? 'The other changes can be sent now. Fix the problems, then check again to send the rest.'
+        : 'They are on fields this update does not send. Fix them before a Full update or a new listing.')
+        : plan ? 'They are the first rows of the table below. Fix them, then check again.' : 'Each row says what to fix. Fix them, then check again.'}
     </Banner>}
     {/* With the plan, the problems are rows of the one table; without it (the products list's rows) they keep their own. */}
     {problems.length > 0 && !plan && <DataGrid ariaLabel="Problems to fix before publishing" size="md" headerMenus={false} columns={PROBLEM_COLUMNS} rows={problems} rowKey={row => row.id} />}
@@ -156,7 +163,7 @@ function ContentReviewBody({ review, selectedIds, selection, selecting = false, 
       <ul className={styles.issues}>{notes.map(note => <li key={note}>{note}</li>)}</ul>
     </Disclosure>}
     {plan && <PlanPart plan={plan} review={review} selectedIds={selectedIds} locked={locked} />}
-    {!plan && sparse && review.changes && <PublicationChanges changes={review.changes} selectedIds={selectedIds} onSelectionChange={onSelectionChange} disabled={!review.id || locked} photosOnly={review.photosOnly}
+    {!plan && sparse && review.changes && <PublicationChanges changes={review.changes} selectedIds={selectedIds} onSelectionChange={onSelectionChange} disabled={!review.id || locked} leftOut={leftOut}
       channel={review.scope.channel} />}
     {/* An error above already says why no fields are listed: this banner is only for a review that names no error. */}
     {sparse && !review.changes && !blockers.length && <Banner tone="warning" title="Field review unavailable">The review did not list the fields to send. Check again.</Banner>}

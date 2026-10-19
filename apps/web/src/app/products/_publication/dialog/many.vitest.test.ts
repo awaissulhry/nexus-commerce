@@ -34,6 +34,10 @@ describe('many-product rows', () => {
     expect(manyRowState(child({ selectedCount: 0 }), NOW).kind).toBe('nothing')
     expect(manyRowState(child({ status: 'NOT_SENT', nothingToSend: true }), NOW).kind).toBe('nothing')
     expect(manyRowState(child({ status: 'BLOCKED', problems: { errors: 2, warnings: 1, messages: ['a', 'b'] } }), NOW)).toMatchObject({ kind: 'problems', problems: 2 })
+    // Option A (Owner 2026-10-19) — a family kept with problems sends its ticked fields: Ready, and it says the rest is left out.
+    const kept = manyRowState(child({ problems: { errors: 1, warnings: 0, messages: ['Brand is required'] } }), NOW)
+    expect(kept).toEqual({ kind: 'ready', changes: 3, problems: 1 })
+    expect(manyRowLabel(kept)).toMatchObject({ label: 'Ready', hint: expect.stringContaining('1 problem leaves out the fields it names; the ticked fields are sent.') })
     expect(manyRowState(child({ expiresAt: EARLIER }), NOW).kind).toBe('expired')
     expect(manyRowState(child({ status: 'NOT_SENT', message: 'No Amazon listing.' }), NOW)).toEqual({ kind: 'not_sent', reason: 'No Amazon listing.' })
     expect(manyRowLabel({ kind: 'problems', problems: 2, reason: null }).label).toBe('Fix 2 problems first')
@@ -176,9 +180,10 @@ describe('a Status for many products', () => {
     ], marketplace: 'DE', ...over,
   } as Child)
 
-  it('offers Send changes and the three Status targets; Ended only with permission to delete', () => {
-    expect(manyActionOptions(true).map(o => o.label)).toEqual(['Send changes', 'Set Active', 'Set Inactive', 'Set Ended'])
-    expect(manyActionOptions(false).find(o => o.value === 'ended')).toMatchObject({ disabled: true })
+  // Owner 2026-10-19 — Set Ended needs products.publish only (the window itself needs it), and nothing typed.
+  it('offers Send changes and the three Status targets, Set Ended held for no role', () => {
+    expect(manyActionOptions()).toEqual([{ value: 'content', label: 'Send changes' }, { value: 'active', label: 'Set Active' },
+      { value: 'inactive', label: 'Set Inactive' }, { value: 'ended', label: 'Set Ended' }])
   })
 
   it('reaches every channel for a Status, and asks for the Status alone', () => {
@@ -201,8 +206,8 @@ describe('a Status for many products', () => {
     expect(rows.map(r => r.state)).toEqual(['ready', 'nothing', 'ready', 'not_checked'])
     expect(rows[0]).toMatchObject({ send: 2, refused: 1 })
     expect(rows[3].reason).toBe('The channel could not be read.')
-    const plan = manyStatusPlan(rows, NOW)
-    expect(plan).toMatchObject({ listings: 5, markets: 2, refused: 1, nothing: 1, notChecked: 1, ending: 0 })
+    const plan = manyStatusPlan(rows)
+    expect(plan).toEqual({ listings: 5, markets: 2, refused: 1, nothing: 1, expired: 0, notChecked: 1 })
     expect(manyStatusButtonText(plan, 'inactive')).toBe('Set 5 listings inactive on 2 markets')
     expect(manyStatusSummary(plan, 'inactive')).toBe('5 listings to set inactive in 2 markets · 1 cannot · 1 with nothing to change · 1 not checked')
     const de = rows.filter(r => r.marketplace === 'DE')
@@ -218,14 +223,17 @@ describe('a Status for many products', () => {
     const refusedOnly = manyStatusRows([life({ sendCount: 0, nothingToSend: true, message: 'Not possible here: Amazon has no End.',
       planRows: [{ productId: 'v1', listingId: 'l1', sku: 'GALE-S', plan: 'refused', sentence: 'Amazon has no End.' }] })], NOW)
     expect(refusedOnly[0]).toMatchObject({ state: 'refused', reason: 'Not possible here: Amazon has no End.' })
-    expect(manyStatusPlan(refusedOnly, NOW)).toMatchObject({ refused: 1, nothing: 0 })
+    expect(manyStatusPlan(refusedOnly)).toMatchObject({ refused: 1, nothing: 0 })
   })
 
-  it('Ended asks for the count the server checks: waiting End children not expired', () => {
+  it('Ended counts the listings it ends (waiting End children not expired); nothing is typed', () => {
     const rows = manyStatusRows([life({ action: 'end', step: 'end', sendCount: 30 }), life({ publicationId: 'p2', productId: 'fam2', action: 'end', step: 'end', sendCount: 6 }),
       life({ publicationId: 'p3', productId: 'fam3', action: 'end', step: 'end', sendCount: 4, expiresAt: EARLIER })], NOW)
     expect(rows.map(r => r.state)).toEqual(['ready', 'ready', 'expired'])
-    expect(manyStatusPlan(rows, NOW).ending).toBe(36)
+    const plan = manyStatusPlan(rows)
+    expect(plan).toMatchObject({ listings: 36, expired: 1 })
+    expect(plan).not.toHaveProperty('ending')
+    expect(manyStatusButtonText(plan, 'ended')).toBe('End 36 listings on 1 market')
     expect(manyMarketName({ channel: 'AMAZON', marketplace: 'DE' })).toBe('Amazon · DE')
     expect(manyMarketName({ channel: 'SHOPIFY', marketplace: 'GLOBAL' })).toBe('Shopify')
   })

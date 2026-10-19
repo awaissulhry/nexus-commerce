@@ -54,7 +54,7 @@ function fixture(): Omit<ReviewTableMarketProps, 'onTicksChange'>[] {
           sent: 'Its Status is Not listed, so Publish leaves it out.', notSent: 'Its Status is Not listed, so Publish leaves it out.', tick: 'none', tickable: false, notListed: true }),
       ],
       review: {
-        id: 'review-it', photosOnly: false, changes: IT_CHANGES,
+        id: 'review-it', scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'lab' }, changes: IT_CHANGES,
         removals: [{ productId: 'l', sku: 'GALE-BLACK-L', field: 'bullets', label: 'Bullet 5', value: 'Garanzia 2 anni. Spedizione gratuita in 24 ore con Amazon Prime. Reso gratuito entro 30 giorni dalla consegna, senza domande e con rimborso completo.' }],
         issues: [{ severity: 'error', sku: 'GALE-BLACK-XS', message: 'GALE-BLACK-XS: Bullet 1 is longer than 500 characters (612).', detail: 'Amazon: The value for bullet_point exceeds the maximum length of 500 characters for this product type (JACKET).' }],
       },

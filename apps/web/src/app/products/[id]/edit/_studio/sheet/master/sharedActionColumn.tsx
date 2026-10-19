@@ -3,15 +3,15 @@
 /**
  * Sheet publish parity, build shape v2 (Owner 2026-10-04), phase P9 — the SHARED scope's **Action** column (how Publish
  * sends each market of a product: Partial update, the quiet default · Full update · Delete), the selection bar's
- * **Action ▾** for the ticked products (next to "Delete child…"), the typed confirmation of a shared Delete, and the one
+ * **Action ▾** for the ticked products (next to "Delete child…"), the confirmation of a shared Delete, and the one
  * toast of a shared operation.
  *
  *  - The cell summarises the product's markets: quiet "Partial update" when nothing waits; "[clock Full update]" when
  *    every market waits for it; "[clock Delete on 2 of 7]" or "[clock 3 waiting]" otherwise. The tooltip lists each market.
  *  - A change is written to every market of the product where it is allowed (the Owner's option B); the toast names the
  *    markets that refused and why ("Full update set on 5 listings. 2 not allowed: GALE-S · eBay · IT (…)").
- *  - Delete is set only after a confirmation that LISTS every listing it would remove and asks for the SKU typed (for
- *    several products: the number of listings). Setting it sends nothing: Publish removes the listings, and asks again.
+ *  - Delete is set only after a confirmation that LISTS every listing it would remove (one click; nothing is typed, Owner
+ *    2026-10-19). Setting it sends nothing: Publish removes the listings, after its own review.
  *  - Action ▾ (`sharedActionMenuEntries`) offers the channel menu's groups — Status: Active, Inactive (Not listed, Ended
  *    where they apply) · Send as: Partial update, Full update, Delete — counted across every market of the ticked
  *    products. It only fills the cells.
@@ -33,7 +33,7 @@ import {
 import type { ActionImpact } from '@/design-system/grid/actions/registry'
 import { isClearKey } from '../sheetReset'
 import { SKIP_CELL, operationToast, type PublishActionWriteOutcome, type PublishCellInput } from '../usePublishActions'
-import { ACTION_COLUMN, DELETE_NEEDS_DELETE, actionEditorChoices, actionPartialNote, parseSendInput } from '../channel/actionColumn'
+import { ACTION_COLUMN, actionEditorChoices, actionPartialNote, parseSendInput } from '../channel/actionColumn'
 import { actionMenuEntries, type ActionMenuEntry, type ActionMenuRow } from '../channel/channelActions'
 import { samePublishCellValue, type PublishCellReadState } from '../channel/statusColumn'
 import { marketLabel, sendWaitingOf } from '../../SellingSummary'
@@ -175,10 +175,10 @@ export function sharedActionValue(cells: readonly PublishActionCell[], read: Pub
  * The editor's options for a product with several markets, counted; one market: exactly the channel cell's options. A
  * market Nexus deleted is counted as not allowed, with the reason (its own sheet lists it again).
  */
-export function sharedActionEditorOptions(input: readonly PublishActionCell[], canDelete: boolean): SelectPanelOption[] {
-  if (input.length === 1 && !input[0].deleted) return actionEditorChoices(input[0], canDelete)
+export function sharedActionEditorOptions(input: readonly PublishActionCell[]): SelectPanelOption[] {
+  if (input.length === 1 && !input[0].deleted) return actionEditorChoices(input[0])
   // A product new on every market: Full update (sent whole), the rest held with the reasons (as one new row's editor).
-  if (input.length && input.every(cell => cell.create && !cell.deleted)) return actionEditorChoices(input[0], canDelete)
+  if (input.length && input.every(cell => cell.create && !cell.deleted)) return actionEditorChoices(input[0])
   const cells = input.map(sharedSendCell)
   const total = cells.length
   const waiting = sendWaitingOf(cells.filter(cell => !cell.create))
@@ -197,9 +197,8 @@ export function sharedActionEditorOptions(input: readonly PublishActionCell[], c
     const reasons = new Map<string, number>()
     for (const cell of cells) {
       const option = cell.sendOptions.find(o => o.mode === mode)
-      const roleRefused = mode === 'delete' && !!option?.offered && !canDelete
-      if (option?.offered && !roleRefused) allowed += 1
-      else { const why = roleRefused ? DELETE_NEEDS_DELETE : option?.reason?.trim() || SEND_MODE_REFUSED_FALLBACK; reasons.set(why, (reasons.get(why) ?? 0) + 1) }
+      if (option?.offered) allowed += 1
+      else { const why = option?.reason?.trim() || SEND_MODE_REFUSED_FALLBACK; reasons.set(why, (reasons.get(why) ?? 0) + 1) }
       if (cell.send.mode === mode && !cell.send.noLongerApplies && !cell.create) waitingHere += 1
     }
     const top = [...reasons.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? SEND_MODE_REFUSED_FALLBACK
@@ -250,7 +249,7 @@ export function sharedActionColumn<Row>(input: SharedColumnInput<Row>): ColDef<R
     cellEditorPopupPosition: 'under',
     cellEditorParams: (p: { data?: Row }) => {
       const cells = p.data ? input.cells(p.data) : []
-      return { value: commonSendMode(cells), options: sharedActionEditorOptions(cells, input.canDelete()) }
+      return { value: commonSendMode(cells), options: sharedActionEditorOptions(cells) }
     },
     cellRenderer: SharedSummaryCell,
     tooltipValueGetter: p => composeCellTooltip(
@@ -270,43 +269,39 @@ export interface SharedMenuRow { sku: string; cells: readonly PublishActionCell[
  * The items of the shared Action ▾: the channel menu's items (`actionMenuEntries`), counted across every market of the
  * ticked products — "Inactive — 18 of 21 listings" — with the most common reason for the rest.
  */
-export function sharedActionMenuEntries(rows: readonly SharedMenuRow[], can: { publish: boolean; delete: boolean }): ActionMenuEntry[] {
+export function sharedActionMenuEntries(rows: readonly SharedMenuRow[], can: { publish: boolean }): ActionMenuEntry[] {
   // A market Nexus deleted takes no Status or Action from here (its own sheet lists it again): not allowed, with why.
   const flat = rows.flatMap((row): ActionMenuRow[] => (row.cells.length ? row.cells.map(cell => ({ sku: row.sku, cell: sharedCell(cell) })) : [{ sku: row.sku, cell: null }]))
   return actionMenuEntries(flat, can).map(entry => ({ ...entry, label: `${entry.label} ${entry.total === 1 ? 'listing' : 'listings'}` }))
 }
 
-// ── The typed confirmation of a shared Delete ────────────────────────────────────────────────────
+// ── The confirmation of a shared Delete ─────────────────────────────────────────────────────────
 
 export interface DeleteTarget { sku: string; cell: PublishActionCell }
 
 /**
  * The confirmation a shared Delete asks before the value is SET (nothing is sent: Publish removes the listings, after
- * its own review and typed confirmation). Lists every listing it would remove, names the ones that refuse, and asks for
- * the SKU typed — for several products, the number of listings. Null when no listing allows Delete (the write's toast
- * says why) or the viewer may not delete (the editor holds the value already).
+ * its own review). Lists every listing it would remove and names the ones that refuse; one click confirms it — nothing
+ * is typed (Owner 2026-10-19). Null when no listing allows Delete (the write's toast says why).
  */
-export function sharedDeleteImpact(input: readonly DeleteTarget[], canDelete: boolean): ActionImpact | null {
-  if (!canDelete) return null
+export function sharedDeleteImpact(input: readonly DeleteTarget[]): ActionImpact | null {
   const targets = input.map(t => ({ ...t, cell: sharedSendCell(t.cell) }))
   const removes = targets.filter(t => t.cell.sendOptions.find(o => o.mode === 'delete')?.offered)
   if (!removes.length) return null
   const refused = targets.filter(t => !removes.includes(t))
   const skus = [...new Set(removes.map(t => t.sku))]
   const one = skus.length === 1
-  const phrase = one ? skus[0] : String(removes.length)
   const what = plural(removes.length, 'listing', 'listings')
   return {
-    level: 'type-to-confirm',
+    level: 'confirm',
     title: one ? `Set Delete on ${what} of ${skus[0]}?` : `Set Delete on ${what} of ${n(skus.length)} products?`,
     consequences: removes.map(t => `${t.sku} · ${marketLabel(t.cell)} — removed from the channel when you press Publish; Nexus forgets its channel number.`),
     sideEffects: [
-      'Nothing is sent now. Publish lists these deletes in its review and asks you to confirm them again.',
+      'Nothing is sent now. Publish lists these deletes in its review, and removes them only when you press Publish there.',
       'Until you press Publish, setting the Action back to Partial update takes this back.',
       'After Publish it cannot be undone: each listing then reads Not listed in its market\'s sheet. To list it again, set its Status there to Active and Publish.',
     ],
     findings: refused.map(t => ({ label: `${t.sku} · ${marketLabel(t.cell)} stays: ${sentence(t.cell.sendOptions.find(o => o.mode === 'delete')?.reason ?? SEND_MODE_REFUSED_FALLBACK)}`, severity: 'warn' as const })),
-    confirmPhrase: phrase,
   }
 }
 

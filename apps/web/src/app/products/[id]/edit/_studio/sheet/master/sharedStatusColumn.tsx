@@ -11,7 +11,7 @@
  *    The tooltip lists each market, its state and what waits.
  *  - The editor (DS `SelectPanelEditor`): Active · Inactive (· Ended when a market's channel can end: eBay, Shopify),
  *    each with how many markets allow it ("5 of 7 markets. 2 not allowed: …"); a value no market allows stays in the
- *    list, held, with the reason. Ended needs `products.delete`.
+ *    list, held, with the reason. Ended needs products.publish, as every value.
  *  - Choosing a value STAGES one change per listing of the product in the sheet's operation fence; the sheet sends one
  *    write per value and ONE toast that names the markets that refused and why (`sharedOperationToast`). Delete /
  *    Backspace clears what waits on every market. Nothing is sent to a channel here: Publish does.
@@ -42,7 +42,7 @@ import { Pill, Skeleton } from '@/design-system/primitives'
 import type { Tone } from '@/design-system/primitives/tone'
 import { isClearKey } from '../sheetReset'
 import type { PublishCellInput } from '../usePublishActions'
-import { ENDED_NEEDS_DELETE, STATUS_COLUMN, currentStatusTarget, parseStatusInput, samePublishCellValue, statusEditorChoices, type PublishCellReadState } from '../channel/statusColumn'
+import { STATUS_COLUMN, currentStatusTarget, parseStatusInput, samePublishCellValue, statusEditorChoices, type PublishCellReadState } from '../channel/statusColumn'
 import { freshWords, marketLabel, marketLine, sellingSummaryOf, statusWaitingOf } from '../../SellingSummary'
 
 export { STATUS_COLUMN as SHARED_STATUS_COLUMN }
@@ -220,10 +220,10 @@ const topReason = (reasons: Map<string, number>) => [...reasons.entries()].sort(
  * The editor's options for a product with several markets: every Status, with how many of its markets allow it; a value
  * no market allows is HELD with the most common reason. One market: exactly the channel cell's options.
  */
-export function sharedStatusEditorOptions(input: readonly PublishActionCell[], canDelete: boolean): SelectPanelOption[] {
+export function sharedStatusEditorOptions(input: readonly PublishActionCell[]): SelectPanelOption[] {
   // A market Nexus deleted takes no Status from here (its own sheet lists it again): held, with the server's words.
   const cells = input.map(sharedCell)
-  if (cells.length === 1) return statusEditorChoices(cells[0], canDelete)
+  if (cells.length === 1) return statusEditorChoices(cells[0])
   const total = cells.length
   // New listings: Not listed is offered when a market is not on the channel; Ended only where a channel can end.
   const targets: StatusTarget[] = ['active', 'inactive', ...(cells.some(cell => cell.create) ? ['not_listed' as const] : []),
@@ -236,14 +236,13 @@ export function sharedStatusEditorOptions(input: readonly PublishActionCell[], c
     const reasons = new Map<string, number>()
     for (const cell of cells) {
       const option = cell.statusOptions.find(o => o.target === target)
-      const roleRefused = target === 'ended' && !!option?.offered && !!option.action && !canDelete
-      if (option?.offered && !roleRefused) {
+      if (option?.offered) {
         allowed += 1
         // A new market holds its choice already; a listed one is already there when the target needs no action.
         if (cell.create ? cell.create.target === (target as NewListingTarget) : !option.action) already += 1
       } else {
         const missing = !option ? (cell.create ? SHARED_NEW_ROW_STATUS : target === 'not_listed' ? SHARED_NOT_LISTED_ON_CHANNEL : null) : null
-        const why = roleRefused ? ENDED_NEEDS_DELETE : option?.reason?.trim() || missing || STATUS_REFUSED_FALLBACK
+        const why = option?.reason?.trim() || missing || STATUS_REFUSED_FALLBACK
         reasons.set(why, (reasons.get(why) ?? 0) + 1)
       }
       if (cell.status.target === target && !cell.status.noLongerApplies) waitingHere += 1
@@ -278,7 +277,6 @@ export interface SharedColumnInput<Row> {
   cells: (row: Row) => readonly PublishActionCell[]
   read: () => PublishCellReadState
   onInput: (row: Row, input: PublishCellInput) => void
-  canDelete: () => boolean
   tracker: CellSaveTracker
   rowIdOf: (row: Row) => string
 }
@@ -305,7 +303,7 @@ export function sharedStatusColumn<Row>(input: SharedColumnInput<Row>): ColDef<R
     cellEditorPopupPosition: 'under',
     cellEditorParams: (p: { data?: Row }) => {
       const cells = p.data ? input.cells(p.data) : []
-      return { value: commonStatusTarget(cells), options: sharedStatusEditorOptions(cells, input.canDelete()) }
+      return { value: commonStatusTarget(cells), options: sharedStatusEditorOptions(cells) }
     },
     cellRenderer: SharedSummaryCell,
     tooltipValueGetter: p => composeCellTooltip(

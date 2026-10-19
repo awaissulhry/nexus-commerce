@@ -10,7 +10,7 @@
  * one per field that changes (Channel now → Nexus sends, ticked one by one), and on a Full update, one per value the
  * channel loses ("Will be removed", whole). The review's problems are rows of the same table, first.
  */
-import { isPhotoChangeId, type StudioPublishChange, type StudioPublishIssue, type StudioPublishRemoval, type StudioPublishReview, type StudioPublishValue } from '@nexus/shared/studio-publication'
+import { leftOutReason, type StudioPublishChange, type StudioPublishIssue, type StudioPublishRemoval, type StudioPublishReview, type StudioPublishValue } from '@nexus/shared/studio-publication'
 import type { Tone } from '@/design-system/primitives/tone'
 import { plainValue } from '@/design-system/lib/format'
 import type { ActionPlanRow } from './actionPlan'
@@ -34,7 +34,7 @@ export interface ReviewMarketState {
 
 export interface ReviewTableMarket extends ReviewMarketRef {
   rows: ActionPlanRow[]
-  review: Pick<StudioPublishReview, 'id' | 'changes' | 'removals' | 'photosOnly' | 'issues'> | null
+  review: (Pick<StudioPublishReview, 'id' | 'scope' | 'changes' | 'removals' | 'issues'> & Partial<Pick<StudioPublishReview, 'sendsWhole'>>) | null
   selectedIds: readonly string[]
   lifecycleIds: readonly string[]
   /** Set when the market has nothing the table can list yet, or needs something only its tab offers. */
@@ -166,11 +166,21 @@ export function reviewCounts(markets: readonly ReviewTableMarket[]): ReviewCount
   return counts
 }
 
-/** A field's tick: on, and whether the person can change it (a Full update's fields follow their row's tick). */
-export function fieldTick(row: ActionPlanRow, change: StudioPublishChange, opts: { selectedIds: readonly string[]; locked: boolean; reviewId: string | null | undefined; photosOnly?: boolean }): { on: boolean; enabled: boolean } {
+/**
+ * A field's tick: on, and whether the person can change it (a Full update's fields follow their row's tick). A change a
+ * problem leaves out (`leftOut`, `blockedChanges` — option A, Owner 2026-10-19) is never on and cannot be ticked.
+ */
+export function fieldTick(row: ActionPlanRow, change: StudioPublishChange, opts: { selectedIds: readonly string[]; locked: boolean; reviewId: string | null | undefined
+  leftOut?: ReadonlyMap<string, unknown> }): { on: boolean; enabled: boolean } {
+  if (opts.leftOut?.has(change.id)) return { on: false, enabled: false }
   if (change.locked || isFull(row)) return { on: row.tick === 'on' || row.tick === 'whole', enabled: false }
-  const blocked = !!opts.photosOnly && !isPhotoChangeId(change.id)
-  return { on: opts.selectedIds.includes(change.id), enabled: change.selectable && !blocked && !opts.locked && !!opts.reviewId && !row.notSent }
+  return { on: opts.selectedIds.includes(change.id), enabled: change.selectable && !opts.locked && !!opts.reviewId && !row.notSent }
+}
+
+/** A field's note: "Left out: <problem>" when a problem leaves it out, else its own reason (and an offer line's note). */
+export function fieldNote(change: StudioPublishChange, leftOut?: ReadonlyMap<string, StudioPublishIssue>): string {
+  const issue = leftOut?.get(change.id)
+  return issue ? leftOutReason(issue) : [change.reason, change.display?.note].filter(Boolean).join(' ')
 }
 
 /** One field's two values, as the table shows them: what the channel has now, and what Publish sends. */
