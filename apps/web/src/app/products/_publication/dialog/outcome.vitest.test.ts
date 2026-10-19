@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StudioPublicationStatus } from '@nexus/shared/studio-publication'
-import { SHOW_ALL_ACTION, SHOW_REJECTED_ACTION, combinedPublicationMark, destinationLabel, eventListing, isSettled, listingPlace, publicationEventMatches, publicationEventOf, publicationMark, publicationOutcome, rejectedFilterMenuLabel, resultCounts, summaryCounts, watchedListings, withRejectedFilter } from './outcome'
+import { RESULT_NEEDS_CHECKING, SENDS_CONTENT, SHOW_ALL_ACTION, SHOW_REJECTED_ACTION, combinedPublicationMark, destinationLabel, eventListing, isRefusedResult, isSettled, listingPlace, publicationEventMatches, publicationEventOf, publicationMark, publicationOutcome, publishErrorTitle, publishSendsWords, rejectedFilterMenuLabel, resultCounts, summaryCounts, watchedListings, withRejectedFilter } from './outcome'
 
 const destination = { productIds: ['child', 'family'], channel: 'AMAZON', marketplace: 'IT', accountId: 'acc', aliasKey: '' }
 const meta = { publicationId: 'pub', productId: 'family', channel: 'AMAZON', marketplace: 'IT', accountId: 'acc', aliasKey: '', status: 'PARTIAL', terminal: true, source: 'sse' }
@@ -217,5 +217,41 @@ describe('aliases (2026-10-05) — the mark and the toast cover every listing of
     const chosen = { ...destination, aliasKey: 'alias-2' }
     expect(eventListing(event('alias-1'), chosen, watchedListings('alias-2', aliases))).toBeNull()
     expect(eventListing(event('alias-2'), chosen, watchedListings('alias-2', aliases))).toEqual({ aliasKey: 'alias-2', known: true })
+  })
+})
+
+describe('the Publish window frame (2026-10-19)', () => {
+  const none = { partial: 0, full: 0, delete: 0, active: 0, inactive: 0, ended: 0 }
+
+  it('titles each error by what was being done, not "Review could not complete" for all', () => {
+    expect(publishErrorTitle('send', false)).toBe('Publish not sent')
+    expect(publishErrorTitle('start', false)).toBe('Publish could not start')
+    expect(publishErrorTitle('progress', false)).toBe('Progress could not be read')
+    expect(publishErrorTitle('cancel', false)).toBe('Could not stop the rest')
+    expect(publishErrorTitle('undo', false)).toBe('Undo did not complete')
+    expect(publishErrorTitle('status', false)).toBe('Status could not be read')
+    // No clear answer to a send or a status read: it may have reached the channel.
+    expect(publishErrorTitle('send', true)).toBe(RESULT_NEEDS_CHECKING)
+    expect(publishErrorTitle('status', true)).toBe(RESULT_NEEDS_CHECKING)
+    expect(publishErrorTitle('undo', true)).toBe('Undo did not complete')
+    for (const kind of ['send', 'status', 'start', 'progress', 'cancel', 'undo'] as const) expect(publishErrorTitle(kind, false)).not.toMatch(/review/i)
+  })
+
+  it('says in the subtitle what is sent: product information, status changes, or both', () => {
+    expect(publishSendsWords(none)).toBe(SENDS_CONTENT)
+    expect(publishSendsWords({ ...none, partial: 3 })).toBe(SENDS_CONTENT)
+    expect(publishSendsWords(none, 1)).toBe(SENDS_CONTENT)
+    // A Delete-only publish sends no product information.
+    expect(publishSendsWords({ ...none, delete: 1 })).toBe('Status changes only: delete 1 listing')
+    expect(publishSendsWords({ ...none, ended: 2, delete: 1 })).toBe('Status changes only: end 2 listings, delete 1 listing')
+    expect(publishSendsWords({ ...none, active: 1, inactive: 2 })).toBe('Status changes only: set 1 listing Active, set 2 listings Inactive')
+    expect(publishSendsWords({ ...none, full: 1, delete: 1 })).toBe(`${SENDS_CONTENT} · Status changes: delete 1 listing`)
+    expect(publishSendsWords({ ...none, moved: 1, ended: 1 })).toBe(`${SENDS_CONTENT} · Status changes: end 1 listing`)
+  })
+
+  it('offers a new review after a publish the channel refused in part or whole', () => {
+    expect(isRefusedResult('FAILED')).toBe(true)
+    expect(isRefusedResult('PARTIAL')).toBe(true)
+    for (const status of ['ACCEPTED', 'VERIFIED', 'SUBMITTED', 'PUBLISHING', 'UNVERIFIED', null, undefined]) expect(isRefusedResult(status)).toBe(false)
   })
 })

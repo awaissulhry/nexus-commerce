@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useId, useRef, useState, type CSSProperties
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import type { Size } from '../primitives/size'
+import { Tooltip } from '../primitives/Tooltip'
 import { createLayerStack, ownsKeys, returnFocusOrder, type ReturnFocusTarget } from './modalStack'
 import { createBackdropPress, watchGridEscape } from './overlayDismiss'
 import { opensDark } from '../lib/opens-dark'
@@ -96,6 +97,13 @@ export interface ModalProps {
   initialFocus?: 'first' | 'dialog'
   /** The body is being read (`aria-busy`). */
   busy?: boolean
+  /**
+   * HELD close: why the dialog cannot close now ("This window can close once the publish has started"). Null /
+   * undefined = it closes. The X keeps its place and its focus, looks held, says why on hover and focus (a portal
+   * `Tooltip`) and to a screen reader (`aria-description`), and does nothing when pressed; Esc and a backdrop click do
+   * nothing either. The Button's `heldReason` rule: a control that refuses says why (`scripts/check-silent-disabled.mjs`).
+   */
+  closeHeld?: string | null
 }
 
 /**
@@ -107,7 +115,7 @@ export interface ModalProps {
  */
 export function Modal({
   open, onClose, title, subtitle, footer, size = 'sm', children, readable = false, className, anchor, 'aria-label': ariaLabel,
-  returnFocusTo, headerActions, subheader, initialFocus = 'first', busy = false,
+  returnFocusTo, headerActions, subheader, initialFocus = 'first', busy = false, closeHeld = null,
 }: ModalProps) {
   const hydrated = useHydrated()
   const titleId = useId()
@@ -131,6 +139,8 @@ export function Modal({
   }, [open, hydrated, anchor])
   const closeRef = useRef(onClose)
   closeRef.current = onClose
+  const closeHeldRef = useRef(closeHeld)
+  closeHeldRef.current = closeHeld
   const returnFocusRef = useRef(returnFocusTo)
   returnFocusRef.current = returnFocusTo
   const initialFocusRef = useRef(initialFocus)
@@ -158,7 +168,7 @@ export function Modal({
     const gridEscape = watchGridEscape(document)
     const onKey = (event: KeyboardEvent) => {
       if (!dialog || !backdrop || !ownsKeys(modalStack, backdrop, { coveredByOther: coveredByOther(dialog), handled: event.defaultPrevented })) return
-      if (event.key === 'Escape' && !gridEscape.owns(event)) { event.preventDefault(); closeRef.current() }
+      if (event.key === 'Escape' && !gridEscape.owns(event)) { event.preventDefault(); if (!closeHeldRef.current) closeRef.current() }
       if (event.key !== 'Tab') return
       const elements = focusable()
       const first = elements[0] ?? dialog
@@ -187,7 +197,7 @@ export function Modal({
       // Capture phase: a control inside that stops its own pointer events still counts as a press inside.
       onPointerDownCapture={(e) => backdropPress.down(e.target === e.currentTarget)}
       onPointerUpCapture={(e) => backdropPress.up(e.target === e.currentTarget)}
-      onClick={(e) => { if (backdropPress.clickCloses(e.target === e.currentTarget)) onClose() }}
+      onClick={(e) => { if (backdropPress.clickCloses(e.target === e.currentTarget) && !closeHeld) onClose() }}
     >
       <div
         ref={modalRef}
@@ -209,9 +219,13 @@ export function Modal({
             {subtitle != null && <div className="sub" id={subtitleId}>{subtitle}</div>}
           </div>
           {headerActions != null && <div className="nds-modal-h-actions">{headerActions}</div>}
-          <button type="button" className="nds-modal-x" onClick={onClose} aria-label="Close">
-            <X size={18} />
-          </button>
+          {closeHeld
+            ? <Tooltip label={closeHeld} portal>
+                <button type="button" className="nds-modal-x" aria-label="Close" aria-disabled aria-description={closeHeld}><X size={18} /></button>
+              </Tooltip>
+            : <button type="button" className="nds-modal-x" onClick={onClose} aria-label="Close">
+                <X size={18} />
+              </button>}
         </div>
         {subheader != null && <div className="nds-modal-sh">{subheader}</div>}
         <div className="nds-modal-b" aria-busy={busy || undefined}>{children}</div>

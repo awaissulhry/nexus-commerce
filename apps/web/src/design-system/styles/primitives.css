@@ -960,6 +960,14 @@
   overflow-wrap: anywhere;
   text-align: start;
 }
+/* The `sm` tier pins a height (one line); a wrapping label needs it as a minimum, or its second line runs out of the
+   box. One line stays the tier's height. Measured on the Publish window's one counted button at 390 px (2026-10-19),
+   which restyled `.nds-btn.sm` locally until this rule existed. `inline` keeps its own box (it unsets the tier). */
+.nds-btn.sm.wrap:not(.inline) {
+  height: auto;
+  min-height: var(--nds-control-h-sm);
+  padding-block: var(--nds-space-4);
+}
 
 /* Inline — for a button inside running text. MUST stay last: it unsets the box that every
    variant above sets, and at equal specificity source order is what decides. */

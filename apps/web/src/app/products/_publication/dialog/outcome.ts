@@ -8,6 +8,7 @@
  * from the design system's one vocabulary (`publicationStatusMeta`).
  */
 import type { StudioPublicationStatus, StudioPublishResult } from '@nexus/shared/studio-publication'
+import type { PublishPlanCounts } from '@nexus/shared/publish-plan'
 import { publicationStatusMeta, publishFullTime } from '@/design-system/grid/renderers/publishStatus'
 import type { SheetStatus } from '@/design-system/grid/toolbars/SheetStatus'
 import type { Tone } from '@/design-system/primitives/tone'
@@ -164,6 +165,45 @@ export function publicationMark(read: StudioPublicationStatus | null, channel: s
 /** A dialog result is final when the vocabulary says so; UNVERIFIED stays open until someone checks. */
 export function isSettled(status: string | null | undefined): boolean {
   return !!status && publicationStatusMeta(status).terminal
+}
+
+/** A single publish that ended with products the channel refused: the window offers a new review. */
+export const isRefusedResult = (status: string | null | undefined) => status === 'FAILED' || status === 'PARTIAL'
+
+/** What the Publish window was doing when something went wrong: each has its own title. */
+export type PublishErrorKind = 'send' | 'status' | 'start' | 'progress' | 'cancel' | 'undo'
+const PUBLISH_ERROR_TITLE: Record<PublishErrorKind, string> = {
+  send: 'Publish not sent',
+  status: 'Status could not be read',
+  start: 'Publish could not start',
+  progress: 'Progress could not be read',
+  cancel: 'Could not stop the rest',
+  undo: 'Undo did not complete',
+}
+export const RESULT_NEEDS_CHECKING = 'Publication result needs checking'
+
+/** The error banner's title. A send or status read with no clear answer may still have reached the channel: it needs checking. */
+export function publishErrorTitle(kind: PublishErrorKind, uncertain: boolean): string {
+  return uncertain && (kind === 'send' || kind === 'status') ? RESULT_NEEDS_CHECKING : PUBLISH_ERROR_TITLE[kind]
+}
+
+export const SENDS_CONTENT = 'Saved product information and included variants'
+const listings = (n: number) => `${n.toLocaleString('en')} ${n === 1 ? 'listing' : 'listings'}`
+
+/**
+ * The Publish window's subtitle after the product: what this Publish sends. Product information, status changes, or
+ * both — a Delete-only publish says "Status changes only: delete 1 listing", not "Saved product information".
+ */
+export function publishSendsWords(counts: Pick<PublishPlanCounts, 'partial' | 'full' | 'delete' | 'active' | 'inactive' | 'ended' | 'moved'>, wholeProducts = 0): string {
+  const content = counts.partial + counts.full + (counts.moved ?? 0) + wholeProducts
+  const statuses = [
+    counts.active ? `set ${listings(counts.active)} Active` : null,
+    counts.inactive ? `set ${listings(counts.inactive)} Inactive` : null,
+    counts.ended ? `end ${listings(counts.ended)}` : null,
+    counts.delete ? `delete ${listings(counts.delete)}` : null,
+  ].filter(Boolean).join(', ')
+  if (!statuses) return SENDS_CONTENT
+  return content ? `${SENDS_CONTENT} · Status changes: ${statuses}` : `Status changes only: ${statuses}`
 }
 
 /**
