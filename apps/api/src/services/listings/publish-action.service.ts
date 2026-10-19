@@ -411,10 +411,6 @@ export function parsePublishActionChange(column: unknown, value: unknown): Publi
   throw new PublishActionError('Choose the Action or the Status column.', 400, 'invalid_request')
 }
 
-/** Delete (Action) and Ended (Status) are deletes (house rule A-10); every other value is publishing. */
-export const permissionForChange = (change: PublishActionChange): 'products.publish' | 'products.delete' =>
-  (change.column === 'send' && change.mode === 'delete') || (change.column === 'status' && change.target === 'ended') ? 'products.delete' : 'products.publish'
-
 const changeLabel = (change: PublishActionChange) =>
   change.column === 'send' ? SEND_MODE_LABEL[change.mode] : change.target ? STATUS_TARGET_LABEL[change.target] : 'No status change'
 const changeValue = (change: PublishActionChange): SendMode | StatusTarget | null => change.column === 'send' ? change.mode : change.target
@@ -507,12 +503,8 @@ export function parsePublishActionBody(body: unknown): Omit<PublishActionWriteRe
  */
 export async function writePublishActions(productId: string, write: PublishActionWriteRequest, actor: PublishActionActor): Promise<PublishActionWriteResult> {
   const change = parsePublishActionChange(write.change?.column, write.change ? changeValue(write.change) : undefined)
-  const permission = permissionForChange(change)
-  if (!actor.can(permission)) {
-    throw new PublishActionError(permission === 'products.delete'
-      ? 'Your role cannot end or delete listings, so it cannot set this either.'
-      : 'Your role cannot publish listings, so it cannot set what Publish sends.', 403, 'forbidden')
-  }
+  // Every value — Delete and Ended included (Owner 2026-10-19) — needs what sending it needs: products.publish.
+  if (!actor.can('products.publish')) throw new PublishActionError('Your role cannot publish listings, so it cannot set what Publish sends.', 403, 'forbidden')
   const family = await readFamilyRows(productId)
   const rowsById = new Map(family.rows.map(r => [r.row.id, r]))
   let targets: Array<{ id: string; r: RowRead }>

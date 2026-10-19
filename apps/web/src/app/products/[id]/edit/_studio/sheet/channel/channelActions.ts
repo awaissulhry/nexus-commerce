@@ -364,7 +364,6 @@ export const ACTION_NOT_LISTED_ON_CHANNEL = 'On the channel already: Not listed 
 export const ACTION_MENU_SEND: readonly SendMode[] = ['partial', 'full', 'delete']
 export const ACTION_NOT_ON_CHANNEL = 'Not on the channel yet. Publish creates it.'
 export const ACTION_ROLE_CANNOT_PUBLISH = 'Your role cannot publish listings, so it cannot set what Publish sends.'
-export const ACTION_ROLE_CANNOT_DELETE = 'Your role cannot end or delete listings.'
 
 const optionOf = (cell: PublishActionCell, change: PublishActionChange): { offered: boolean; reason: string | null } => {
   if (change.column === 'send') {
@@ -384,9 +383,9 @@ const optionOf = (cell: PublishActionCell, change: PublishActionChange): { offer
  * "Includes 3 new listings.", "2 deleted rows are listed again on the next Publish."); Send as holds their Partial update
  * and Delete with the server's reason, and their Full update changes nothing (they are always sent whole). Each counts
  * the rows whose own options allow it — the same options the cells' editors offer — and names the most common reason
- * for the rest. Ended and Delete need `products.delete`; the rest `products.publish`.
+ * for the rest. Every item, Ended and Delete included, needs `products.publish` (Owner 2026-10-19).
  */
-export function actionMenuEntries(rows: readonly ActionMenuRow[], can: { publish: boolean; delete: boolean }): ActionMenuEntry[] {
+export function actionMenuEntries(rows: readonly ActionMenuRow[], can: { publish: boolean }): ActionMenuEntry[] {
   const anyNew = rows.some(row => !!row.cell?.create)
   // Ended only where a ticked row's channel ends listings (never Amazon or Etsy).
   const canEnd = rows.some(row => !!row.cell?.statusOptions.some(o => o.target === 'ended'))
@@ -406,8 +405,7 @@ export function actionMenuEntries(rows: readonly ActionMenuRow[], can: { publish
       if (option.offered) { allowed += 1; if (row.cell?.create) { if (row.cell.deleted) deletedAllowed += 1; else newAllowed += 1 } }
       else { const why = option.reason ?? 'Not possible for this listing.'; reasons.set(why, (reasons.get(why) ?? 0) + 1) }
     }
-    // Ended and Delete need products.delete.
-    const permitted = danger ? can.delete : can.publish
+    const permitted = can.publish
     const top = [...reasons.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
     const refused = total - allowed
     const n = (count: number) => count.toLocaleString('en')
@@ -421,7 +419,7 @@ export function actionMenuEntries(rows: readonly ActionMenuRow[], can: { publish
         : `${n(deletedAllowed)} deleted ${deletedAllowed === 1 ? 'row is' : 'rows are'} listed again on the next Publish.`
     const wholeNote = change.column === 'send' && change.mode === 'full' && rowsNotOn
       ? `${n(rowsNotOn)} not on the channel ${rowsNotOn === 1 ? 'is' : 'are'} always sent whole.` : null
-    const note = !permitted ? (danger ? ACTION_ROLE_CANNOT_DELETE : ACTION_ROLE_CANNOT_PUBLISH)
+    const note = !permitted ? ACTION_ROLE_CANNOT_PUBLISH
       : [refused > 0 && top ? (allowed === 0 ? top : `${n(refused)} not allowed: ${top}`) : null, newNote, deletedNote, wholeNote].filter(Boolean).join(' ') || null
     return {
       id: `${change.column}:${change.column === 'send' ? change.mode : change.target}`,

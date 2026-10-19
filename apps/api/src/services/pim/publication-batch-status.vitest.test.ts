@@ -4,13 +4,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
  * Build shape v2, P11 — the products list's Publish… window sets one Status on many products × markets, on the real
  * schema and tenant policies.
  *
- * The request: a Status target (active, inactive, ended; never Delete), with or without the content; Ended is refused
- * to a role without products.delete and never goes with content. The review stage: one listing-action preview per
+ * The request: a Status target (active, inactive, ended; never Delete), with or without the content; Ended never goes
+ * with content. The review stage: one listing-action preview per
  * family × market × action, stamped as the batch's lifecycle child (send order, 2-hour life); a pair whose listings
  * need nothing keeps one child marked "nothing to send" with the reason; a pair the engine cannot read is recorded as
  * not reviewed; Active keeps only the action that sends (Resume or Relist); a relist holds that pair's content; a
  * resumed run reviews only what is missing. The submit: the "nothing to send" children are removed, the rest are
- * queued; Ended needs products.delete and the typed COUNT of listings it ends. The send: in the send order, through
+ * queued; Ended needs nothing typed and no permission beyond products.publish (Owner 2026-10-19). The send: in the send order, through
  * the engine's seam; a channel switched off ends "Not sent".
  */
 const fixture = vi.hoisted(() => ({ database: null as any, published: [] as any[], queued: [] as unknown[] }))
@@ -31,13 +31,11 @@ import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { BATCH_KIND, LIFECYCLE_KIND, manyOptionsOf, runPublicationBatch, statusPairKey, type BatchRunDeps } from './publication-batch.processor.js'
 import { createPublicationBatch, readPublicationBatch, submitReviewedBatch } from './publication-batch.service.js'
-import { keptStatusPreviews, reviewStatusPair, statusNothingMessage, type PublishPlanActor } from './publish-plan.js'
+import { keptStatusPreviews, reviewStatusPair, statusNothingMessage } from './publish-plan.js'
 import { WorkspaceScopeError } from './workspace-destination.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const USER = 'status-user'
-const PUBLISHER: PublishPlanActor = { userId: USER, can: permission => permission === 'products.publish' }
-const OWNER: PublishPlanActor = { userId: USER, can: () => true }
 const ids: Record<string, string> = {}
 const AMAZON_IT: StudioPublishScope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'amazon-a' }
 const AMAZON_DE: StudioPublishScope = { channel: 'AMAZON', marketplace: 'DE', accountId: 'amazon-a' }
@@ -81,8 +79,8 @@ const statusDeps = (plan: PlanOf, extra: BatchRunDeps = {}) => {
   return { deps, calls: fake.calls }
 }
 
-async function statusBatch(target: StatusTarget, destinations: StudioPublishScope[], families = [ids.coat, ids.glove], actor = OWNER, content?: boolean) {
-  const { batchId } = await createPublicationBatch({ productIds: families, destinations, options: { status: target, ...(content !== undefined ? { content } : {}) } }, USER, actor)
+async function statusBatch(target: StatusTarget, destinations: StudioPublishScope[], families = [ids.coat, ids.glove], content?: boolean) {
+  const { batchId } = await createPublicationBatch({ productIds: families, destinations, options: { status: target, ...(content !== undefined ? { content } : {}) } }, USER)
   return batchId
 }
 
@@ -102,8 +100,8 @@ describe('many products × markets with one Status (P11)', () => {
   afterAll(async () => { delete process.env.ENABLE_QUEUE_WORKERS; await fixture.database?.close?.() })
   beforeEach(() => { fixture.published.length = 0; fixture.queued.length = 0 })
 
-  it('the request: a Status without content by default; Ended needs products.delete and never goes with content; no Delete', () => scoped(async () => {
-    const batchId = await statusBatch('inactive', [AMAZON_IT, AMAZON_DE], [ids['SCOAT-S'], ids.glove], PUBLISHER)
+  it('the request: a Status without content by default; Ended never goes with content; no Delete', () => scoped(async () => {
+    const batchId = await statusBatch('inactive', [AMAZON_IT, AMAZON_DE], [ids['SCOAT-S'], ids.glove])
     const header = await prisma.bulkOperation.findUnique({ where: { id: batchId } })
     expect(header).toMatchObject({ kind: BATCH_KIND, status: 'QUEUED', productCount: 2 })
     expect((header!.changes as any).request).toMatchObject({ families: [ids.coat, ids.glove], options: { status: 'inactive', content: false, keepChannelValues: false } })
@@ -115,10 +113,12 @@ describe('many products × markets with one Status (P11)', () => {
     expect(manyOptionsOf({ startAs: 'inactive' })).toMatchObject({ content: true, startAs: 'inactive' })
     expect(manyOptionsOf({ startAs: 'ended' }).startAs).toBeNull()
     expect(manyOptionsOf({ status: 'active', content: true })).toMatchObject({ status: 'active', content: true })
-    await expect(statusBatch('ended', [AMAZON_IT], [ids.glove], PUBLISHER)).rejects.toMatchObject({ statusCode: 403, message: expect.stringContaining('cannot end listings') })
-    await expect(statusBatch('ended', [AMAZON_IT], [ids.glove], OWNER, true)).rejects.toMatchObject({ statusCode: 400, message: expect.stringContaining('gets no changes') })
-    await expect(createPublicationBatch({ productIds: [ids.glove], destinations: [AMAZON_IT], options: { status: 'delete' } }, USER, OWNER)).rejects.toMatchObject({ statusCode: 400 })
-    await expect(createPublicationBatch({ productIds: [ids.glove], destinations: [AMAZON_IT], options: { content: false } }, USER, OWNER)).rejects.toMatchObject({ statusCode: 400 })
+    // Owner 2026-10-19 — Ended is made like any other Status (the route needs products.publish; nothing else is asked).
+    const ended = await statusBatch('ended', [AMAZON_IT], [ids.glove])
+    expect((await prisma.bulkOperation.findUnique({ where: { id: ended } }))!.changes).toMatchObject({ request: { options: { status: 'ended', content: false } } })
+    await expect(statusBatch('ended', [AMAZON_IT], [ids.glove], true)).rejects.toMatchObject({ statusCode: 400, message: expect.stringContaining('gets no changes') })
+    await expect(createPublicationBatch({ productIds: [ids.glove], destinations: [AMAZON_IT], options: { status: 'delete' } }, USER)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(createPublicationBatch({ productIds: [ids.glove], destinations: [AMAZON_IT], options: { content: false } }, USER)).rejects.toMatchObject({ statusCode: 400 })
   }))
 
   it('reviews every family × market with the engine\'s plan: one child per action, refusals kept, nothing-to-send marked, unreadable recorded', () => scoped(async () => {
@@ -151,7 +151,7 @@ describe('many products × markets with one Status (P11)', () => {
   }))
 
   it('Active keeps only the action that sends (Relist or Resume); a relist holds that pair\'s content; content still reviews elsewhere', () => scoped(async () => {
-    const batchId = await statusBatch('active', [EBAY_IT, AMAZON_IT], [ids.coat, ids.glove], OWNER, true)
+    const batchId = await statusBatch('active', [EBAY_IT, AMAZON_IT], [ids.coat, ids.glove], true)
     const { deps, calls } = statusDeps((family, action, scope) => {
       if (scope.channel === 'EBAY' && family === ids.coat) return action === 'relist' ? [send('SCOAT-S', 'Listed here again.'), send('SCOAT-M', 'Listed here again.')] : [skip('SCOAT-S', 'Ended — use Relist.')]
       return action === 'resume' ? [send(family === ids.glove ? 'SGLOVE' : 'SCOAT-S', 'Sells here again.')] : [skip('X', 'Not ended.')]
@@ -203,7 +203,7 @@ describe('many products × markets with one Status (P11)', () => {
     await runPublicationBatch(batchId, deps)
     const before = await prisma.bulkOperation.findMany({ where: { batchId, kind: LIFECYCLE_KIND } })
     const nothing = before.find(c => c.changeCount === 0)!
-    const view = await submitReviewedBatch(batchId, {}, USER, PUBLISHER)
+    const view = await submitReviewedBatch(batchId, {}, USER)
     expect(view.phase).toBe('QUEUED')
     expect(await prisma.bulkOperation.findUnique({ where: { id: nothing.id } })).toBeNull()
     const header = await prisma.bulkOperation.findUnique({ where: { id: batchId } })
@@ -223,22 +223,24 @@ describe('many products × markets with one Status (P11)', () => {
     expect(after.children.filter(c => c.status === 'NOT_SENT').every(c => c.message?.includes('switched off'))).toBe(true)
   }))
 
-  it('Ended: refused without products.delete; asks for the typed COUNT of listings it ends; then queues', () => scoped(async () => {
+  it('Ended: sent with nothing typed; an older window\'s confirmText (right or wrong) is ignored', () => scoped(async () => {
     const batchId = await statusBatch('ended', [EBAY_IT, AMAZON_IT], [ids.coat, ids.glove])
     const { deps } = statusDeps((family, _action, scope) => scope.channel === 'AMAZON' ? [refuse(family === ids.coat ? 'SCOAT-S' : 'SGLOVE', 'Amazon has no End. Set Inactive to pause this market, or Delete to remove the listing here.')]
       : family === ids.coat ? [send('SCOAT-S', 'Ends here.'), send('SCOAT-M', 'Ends here.'), send('SCOAT', 'Ends here.')] : [send('SGLOVE', 'Ends here.')])
     await runPublicationBatch(batchId, deps)
     const view = await readPublicationBatch(batchId, USER)
     expect(view.children.filter(c => c.channel === 'AMAZON').every(c => c.nothingToSend && c.message?.startsWith('Not possible here: Amazon has no End'))).toBe(true)
-    await expect(submitReviewedBatch(batchId, { confirmText: '4' }, USER, PUBLISHER)).rejects.toMatchObject({ statusCode: 403 })
-    await expect(submitReviewedBatch(batchId, {}, USER, OWNER)).rejects.toMatchObject({ statusCode: 400, code: 'confirm_required', message: 'Type 4 to end 4 listings.' })
-    await expect(submitReviewedBatch(batchId, { confirmText: 'SCOAT' }, USER, OWNER)).rejects.toMatchObject({ code: 'confirm_required' })
-    await expect(submitReviewedBatch(batchId, { confirmText: 3 }, USER, OWNER)).rejects.toMatchObject({ statusCode: 400 })
-    // Nothing was marked or removed by a refused submit.
     expect(await prisma.bulkOperation.count({ where: { batchId, kind: LIFECYCLE_KIND, status: 'PREVIEW' } })).toBe(4)
-    const sent = await submitReviewedBatch(batchId, { confirmText: ' 4 ' }, USER, OWNER)
+    const sent = await submitReviewedBatch(batchId, {}, USER)
     expect(sent.phase).toBe('QUEUED')
     expect(sent.children.map(c => `${c.channel}:${c.action}:${c.sendCount}`).sort()).toEqual(['EBAY:end:1', 'EBAY:end:3'])
+    // A window opened before this change still sends confirmText (even a wrong one, or not a string): ignored.
+    const older = await statusBatch('ended', [EBAY_IT], [ids.glove])
+    const { deps: olderDeps } = statusDeps(() => [send('SGLOVE', 'Ends here.')])
+    await runPublicationBatch(older, olderDeps)
+    const olderSent = await submitReviewedBatch(older, { confirmText: 3 }, USER)
+    expect(olderSent.phase).toBe('QUEUED')
+    expect(olderSent.children.map(c => `${c.channel}:${c.action}:${c.sendCount}`)).toEqual(['EBAY:end:1'])
   }))
 })
 

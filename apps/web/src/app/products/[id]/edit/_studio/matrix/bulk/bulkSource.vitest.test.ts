@@ -30,7 +30,7 @@ function doorsFor(table: Record<string, MatrixCells>, over: Partial<BulkDoors> =
     coordinates: [IT, EBAY],
     cellsOf: (rowId, key) => table[`${rowId}|${key}`] ?? null,
     statusCellOf: () => null,
-    canEdit: true, canPrice: true, statusHeld: null, canDelete: false, focusedKey: null, locations: [],
+    canEdit: true, canPrice: true, statusHeld: null, focusedKey: null, locations: [],
     handoffHeld: { casePack: null, stockPool: null },
     ...ctxOver,
   })

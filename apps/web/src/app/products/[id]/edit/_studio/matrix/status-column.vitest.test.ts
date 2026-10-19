@@ -90,7 +90,7 @@ describe('the Matrix\'s Status column IS the Information page\'s Status column',
   type Def = Record<string, unknown>
   const call = <T,>(fn: unknown, params: unknown): T => (fn as (p: unknown) => T)(params)
   const build = (colId: string | undefined, onInput = vi.fn()) => ({
-    def: statusColumn<{ id: string }>({ colId, cell: () => waiting, read: () => read, onInput, canDelete: () => false, tracker: new CellSaveTracker(), rowIdOf: (r) => r.id }) as Def,
+    def: statusColumn<{ id: string }>({ colId, cell: () => waiting, read: () => read, onInput, tracker: new CellSaveTracker(), rowIdOf: (r) => r.id }) as Def,
     onInput,
   })
 
@@ -122,8 +122,8 @@ describe('the Matrix\'s Status column IS the Information page\'s Status column',
 
   it('its save marks are kept under its own id: one market\'s refusal never shows on another market', () => {
     const tracker = new CellSaveTracker()
-    const it = statusColumn<{ id: string }>({ colId: 'AMAZON:IT.status', cell: () => waiting, read: () => read, onInput: vi.fn(), canDelete: () => false, tracker, rowIdOf: (r) => r.id }) as Def
-    const de = statusColumn<{ id: string }>({ colId: 'AMAZON:DE.status', cell: () => waiting, read: () => read, onInput: vi.fn(), canDelete: () => false, tracker, rowIdOf: (r) => r.id }) as Def
+    const it = statusColumn<{ id: string }>({ colId: 'AMAZON:IT.status', cell: () => waiting, read: () => read, onInput: vi.fn(), tracker, rowIdOf: (r) => r.id }) as Def
+    const de = statusColumn<{ id: string }>({ colId: 'AMAZON:DE.status', cell: () => waiting, read: () => read, onInput: vi.fn(), tracker, rowIdOf: (r) => r.id }) as Def
     tracker.set('p1', 'AMAZON:IT.status', 'refused', 'Amazon refused it.')
     const value = call(it.valueGetter, { data: { id: 'p1' } })
     expect(call(it.tooltipValueGetter, { data: { id: 'p1' }, value })).toContain('Amazon refused it.')

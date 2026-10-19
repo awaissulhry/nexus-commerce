@@ -392,8 +392,9 @@ describe('S10 — a publish that moved a live Amazon listing to a new SKU', () =
     ])
     // A run without moves says nothing about them.
     expect(await scoped(() => publicationRunDetail('p-partial', { now: NOW }))).not.toHaveProperty('skuMoves')
-    // "Delete the old SKU again" deletes a listing on Amazon: products.delete, as Delete.
-    expect(permissionForRoute('POST', `/api/products/${ids.root}/studio-publication/p-move/delete-old-sku`)).toBe('products.delete')
+    // "Delete the old SKU again" finishes the publish that made the move: products.publish (Owner 2026-10-19: no separate
+    // delete permission in the publish flows).
+    expect(permissionForRoute('POST', `/api/products/${ids.root}/studio-publication/p-move/delete-old-sku`)).toBe('products.publish')
     expect(permissionForRoute('POST', `/api/products/${ids.root}/studio-publication/p-move/mark-checked`)).toBe('products.publish')
   })
 })

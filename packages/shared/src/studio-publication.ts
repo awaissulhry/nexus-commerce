@@ -76,21 +76,18 @@ export interface StudioPublishReview {
    */
   removals?: StudioPublishRemoval[]
   /**
-   * S10 (per-channel SKU, Owner D2 = A) — the typed confirmation this review needs before it is sent: it moves a live Amazon
-   * listing to a new SKU, which DELETES the old SKU there once Amazon accepts the new one. Typed like Delete (the family
-   * SKU, body `confirm: 'DELETE'`). Absent when nothing is deleted.
+   * S10 (per-channel SKU, Owner D2 = A) — this review moves a live Amazon listing to a new SKU, which DELETES the old SKU
+   * there once Amazon accepts the new one. The Publish window says so (`sentence`) and sends the move with `confirm:
+   * 'DELETE'` (nothing is typed). Absent when nothing is deleted.
    */
   confirm?: StudioPublishConfirm
 }
 
-/** S10 — a typed confirmation, as Delete's (`ListingActionConfirm` with token 'DELETE'). */
+/** S10 — what a move deletes, and the body field its submit carries. */
 export interface StudioPublishConfirm {
-  kind: 'type'
-  /** What the person types: the family SKU. */
-  expected: string
   /** The body field the submit needs: `confirm: 'DELETE'`. */
   token: 'DELETE'
-  /** "Moving 1 listing to a new SKU deletes its old SKU on Amazon · IT once Amazon accepts the new one. …" */
+  /** "This Publish deletes GALE-M on Amazon · IT once Amazon accepts its new SKU. … It cannot be undone." */
   sentence: string
 }
 

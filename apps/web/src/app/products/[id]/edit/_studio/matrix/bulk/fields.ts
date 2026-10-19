@@ -220,8 +220,6 @@ export interface BulkContext {
   canPrice: boolean
   /** Why the markets' Status cannot be set here now (not read, read failed, the role cannot publish), or null. */
   statusHeld: string | null
-  /** May the viewer end listings (`products.delete`)? */
-  canDelete: boolean
   /** The market group the operator was in (the focused cell), or null. */
   focusedKey: CoordinateKey | null
   /** The business's warehouses (`MatrixRead.locations`) — Sells from; absent = an older server. */
@@ -707,7 +705,6 @@ export function statusLines(ctx: BulkContext, target: StatusTarget, keys: readon
     if (cell.create) { skip(BULK_STATUS_NEW_ROW); continue }
     if (now.target === target) { skip(BULK_SAME(STATUS_TARGET_WORD[target])); continue }
     if (!option || !option.offered) { skip(option?.reason ?? `${STATUS_TARGET_WORD[target]} is not offered here`); continue }
-    if (target === 'ended' && !ctx.canDelete) { skip('Your role cannot end or delete listings'); continue }
     out.push({ ...line, next: STATUS_TARGET_WORD[target], note: option.warning ?? 'Waits for Publish', skipped: null })
   }
   return out

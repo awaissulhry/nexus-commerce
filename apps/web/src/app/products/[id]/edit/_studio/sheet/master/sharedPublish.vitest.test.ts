@@ -15,7 +15,6 @@ import {
   sharedActionValue, sharedDeleteImpact, sharedDeletedRefusal, sharedOperationToast, sharedPartialHint,
 } from './sharedActionColumn'
 import { SHOPIFY_EXISTING_NOT_YET } from '@nexus/shared/publish-actions'
-import { ENDED_NEEDS_DELETE } from '../channel/statusColumn'
 import {
   cellsByProduct, headerSellingOf, marketLabel, marketLine, publishButtonWords, publishWaitingCount, sellingSummaryOf, statusWaitingOf,
 } from '../../SellingSummary'
@@ -136,18 +135,19 @@ describe('the shared Status cell', () => {
   })
 
   it('the editor counts the markets that allow each Status and holds the one none allows', () => {
-    const options = sharedStatusEditorOptions([cell(), cell({ marketplace: 'DE' }), ebay()], true)
+    const options = sharedStatusEditorOptions([cell(), cell({ marketplace: 'DE' }), ebay()])
     const ended = options.find(o => o.value === 'ended')!
     expect(ended.heldReason).toBeUndefined()
     expect(ended.note).toBe('1 of 3 markets. 2 not allowed: Amazon has no End.')
     expect(options.find(o => o.value === 'inactive')!.note).toBe('Every market (3).')
-    const amazonOnly = sharedStatusEditorOptions([cell(), cell({ marketplace: 'DE' })], true)
+    const amazonOnly = sharedStatusEditorOptions([cell(), cell({ marketplace: 'DE' })])
     expect(amazonOnly.find(o => o.value === 'ended')!.heldReason).toBe('Amazon has no End.')
   })
 
-  it('Ended needs products.delete', () => {
-    const options = sharedStatusEditorOptions([ebay(), ebay({ marketplace: 'DE' })], false)
-    expect(options.find(o => o.value === 'ended')!.heldReason).toBe(ENDED_NEEDS_DELETE)
+  // Owner 2026-10-19 — no separate delete permission: Ended is offered where the channel ends listings.
+  it('Ended is offered on every market that can end, never held for the role', () => {
+    const options = sharedStatusEditorOptions([ebay(), ebay({ marketplace: 'DE' })])
+    expect(options.find(o => o.value === 'ended')!.heldReason).toBeUndefined()
   })
 
   it('a fill copies the common value; "Mixed" cannot be copied; an Action is refused', () => {
@@ -212,15 +212,15 @@ describe('the shared Action cell', () => {
     expect(sharedPartialHint([cell(), etsy])).toBeNull()
     expect(sharedActionValue([cell(), cell({ marketplace: 'DE' })], read)!.ariaLabel).toBe('Action: Partial update on every market (2). Publish sends only the fields you changed.')
     // The editor's Partial update says the same.
-    expect(sharedActionEditorOptions([shopify, etsy], true).find(o => o.value === 'partial')!.note)
+    expect(sharedActionEditorOptions([shopify, etsy]).find(o => o.value === 'partial')!.note)
       .toBe(`The default. Shopify · GLOBAL: ${SHOPIFY_EXISTING_NOT_YET} Other markets: Publish sends only the fields you changed.`)
-    expect(sharedActionEditorOptions([cell(), cell()], true).find(o => o.value === 'partial')!.note).toBe('The default. Only the fields you changed.')
+    expect(sharedActionEditorOptions([cell(), cell()]).find(o => o.value === 'partial')!.note).toBe('The default. Only the fields you changed.')
   })
 
   it('the editor counts Delete across markets and says it is confirmed first', () => {
-    const options = sharedActionEditorOptions([cell(), cell({ deleteOffered: false })], true)
+    const options = sharedActionEditorOptions([cell(), cell({ deleteOffered: false })])
     expect(options.find(o => o.value === 'delete')!.note).toBe('1 of 2 markets. 1 not allowed: Amazon holds FBA units for this offer. You confirm the listings first.')
-    expect(sharedActionEditorOptions([cell(), cell()], false).find(o => o.value === 'delete')!.heldReason).toMatch(/cannot end or delete/)
+    expect(sharedActionEditorOptions([cell(), cell()]).find(o => o.value === 'delete')!.heldReason).toBeUndefined()
   })
 })
 
@@ -231,7 +231,7 @@ describe('Action ▾ on the ticked products', () => {
       { sku: 'GALE-M', cells: [cell(), ebay()] },
       { sku: 'GALE-L', cells: [] },
     ]
-    const entries = sharedActionMenuEntries(rows, { publish: true, delete: true })
+    const entries = sharedActionMenuEntries(rows, { publish: true })
     const inactive = entries.find(e => e.id === 'status:inactive')!
     expect(inactive.label).toBe('Inactive — 5 of 6 listings')
     expect(inactive.note).toMatch(/^1 not allowed: Not on the channel yet/)
@@ -239,38 +239,39 @@ describe('Action ▾ on the ticked products', () => {
     expect(entries.map(e => e.group)).toEqual(['Status', 'Status', 'Status', 'Send as', 'Send as', 'Send as'])
   })
 
-  it('Ended and Delete are disabled without products.delete', () => {
-    const entries = sharedActionMenuEntries([{ sku: 'GALE-S', cells: [ebay()] }], { publish: true, delete: false })
-    expect(entries.find(e => e.id === 'status:ended')!.disabled).toBe(true)
-    expect(entries.find(e => e.id === 'send:delete')!.disabled).toBe(true)
-    expect(entries.find(e => e.id === 'status:inactive')!.disabled).toBe(false)
+  it('Ended and Delete need products.publish, as every item (no separate delete permission)', () => {
+    const entries = sharedActionMenuEntries([{ sku: 'GALE-S', cells: [ebay()] }], { publish: true })
+    expect(entries.find(e => e.id === 'status:ended')!.disabled).toBe(false)
+    expect(entries.find(e => e.id === 'send:delete')!.disabled).toBe(false)
+    expect(sharedActionMenuEntries([{ sku: 'GALE-S', cells: [ebay()] }], { publish: false }).every(e => e.disabled)).toBe(true)
   })
 })
 
 describe('a shared Delete is confirmed by listing what it removes', () => {
-  it('lists every listing, names the ones that stay, and asks for the SKU typed', () => {
+  it('lists every listing and names the ones that stay; one click confirms it, nothing is typed', () => {
     const impact = sharedDeleteImpact([
       { sku: 'GALE-S', cell: cell() },
       { sku: 'GALE-S', cell: ebay() },
       { sku: 'GALE-S', cell: cell({ marketplace: 'DE', deleteOffered: false }) },
-    ], true)!
-    expect(impact.level).toBe('type-to-confirm')
+    ])!
+    expect(impact.level).toBe('confirm')
     expect(impact.title).toBe('Set Delete on 2 listings of GALE-S?')
     expect(impact.consequences).toHaveLength(2)
     expect(impact.consequences![0]).toMatch(/^GALE-S · Amazon · IT — removed from the channel when you press Publish/)
     expect(impact.findings![0].label).toBe('GALE-S · Amazon · DE stays: Amazon holds FBA units for this offer.')
-    expect(impact.confirmPhrase).toBe('GALE-S')
+    expect(impact.confirmPhrase).toBeUndefined()
+    expect(impact.sideEffects).toContain('After Publish it cannot be undone: each listing then reads Not listed in its market\'s sheet. To list it again, set its Status there to Active and Publish.')
   })
 
-  it('several products: the number of listings is the phrase', () => {
-    const impact = sharedDeleteImpact([{ sku: 'GALE-S', cell: cell() }, { sku: 'GALE-M', cell: cell() }, { sku: 'GALE-M', cell: ebay() }], true)!
+  it('several products: counted in the title; still nothing typed', () => {
+    const impact = sharedDeleteImpact([{ sku: 'GALE-S', cell: cell() }, { sku: 'GALE-M', cell: cell() }, { sku: 'GALE-M', cell: ebay() }])!
     expect(impact.title).toBe('Set Delete on 3 listings of 2 products?')
-    expect(impact.confirmPhrase).toBe('3')
+    expect(impact).toMatchObject({ level: 'confirm' })
+    expect(impact.confirmPhrase).toBeUndefined()
   })
 
-  it('asks nothing when no listing allows it, or the viewer may not delete', () => {
-    expect(sharedDeleteImpact([{ sku: 'GALE-S', cell: cell({ deleteOffered: false }) }], true)).toBeNull()
-    expect(sharedDeleteImpact([{ sku: 'GALE-S', cell: cell() }], false)).toBeNull()
+  it('asks nothing when no listing allows it', () => {
+    expect(sharedDeleteImpact([{ sku: 'GALE-S', cell: cell({ deleteOffered: false }) }])).toBeNull()
   })
 })
 
@@ -357,8 +358,8 @@ describe('delete and relist (simplify) — a market Nexus deleted, in the shared
     expect(value).toMatchObject({ lockedReason: null, aside: '1 deleted' })
     expect(value.tooltip).toContain(`Amazon · IT: Not listed. ${words}`)
     // Listing it again is chosen in its own sheet: here every Status is refused on it, with the server's words.
-    expect(sharedStatusEditorOptions(cells, true).find(o => o.value === 'inactive')!.note).toBe(`1 of 2 markets. 1 not allowed: ${refusal}`)
-    expect(sharedStatusEditorOptions([deleted()], true).every(o => o.heldReason === refusal)).toBe(true)
+    expect(sharedStatusEditorOptions(cells).find(o => o.value === 'inactive')!.note).toBe(`1 of 2 markets. 1 not allowed: ${refusal}`)
+    expect(sharedStatusEditorOptions([deleted()]).every(o => o.heldReason === refusal)).toBe(true)
     expect(sharedStatusValue([deleted()], read, NOW)!.lockedReason).toBe(refusal)
     expect(sharedStatusValue([deleted(), deleted({ marketplace: 'DE' })], read, NOW)!.lockedReason).toBe(SHARED_ALL_DELETED)
     // Its own Status choice (made in its own sheet) waits; one set before the delete does not.
@@ -376,15 +377,15 @@ describe('delete and relist (simplify) — a market Nexus deleted, in the shared
   })
 
   it('every Status and Action on a deleted market is refused with the reason: editor, Action ▾ and the Delete confirmation', () => {
-    const options = sharedActionEditorOptions([cell({ marketplace: 'DE' }), deleted()], true)
+    const options = sharedActionEditorOptions([cell({ marketplace: 'DE' }), deleted()])
     expect(options.find(o => o.value === 'full')!.note).toBe(`1 of 2 markets. 1 not allowed: ${refusal}`)
     expect(options.find(o => o.value === 'partial')!.note).toMatch(/1 deleted market stays as it is: set its Status in its own sheet\.$/)
     // One market, deleted: no channel options here (its own sheet lists it again).
-    expect(sharedActionEditorOptions([deleted()], true).every(o => o.heldReason === refusal)).toBe(true)
-    const entries = sharedActionMenuEntries([{ sku: 'GALE-M', cells: [cell({ marketplace: 'DE' }), deleted()] }], { publish: true, delete: true })
+    expect(sharedActionEditorOptions([deleted()]).every(o => o.heldReason === refusal)).toBe(true)
+    const entries = sharedActionMenuEntries([{ sku: 'GALE-M', cells: [cell({ marketplace: 'DE' }), deleted()] }], { publish: true })
     expect(entries.find(e => e.id === 'send:full')).toMatchObject({ label: 'Full update — 1 of 2 listings', note: `1 not allowed: ${refusal}` })
     expect(entries.find(e => e.id === 'status:active')).toMatchObject({ label: 'Active — 1 of 2 listings', note: `1 not allowed: ${refusal}` })
-    const impact = sharedDeleteImpact([{ sku: 'GALE-M', cell: cell({ marketplace: 'DE' }) }, { sku: 'GALE-M', cell: deleted() }], true)!
+    const impact = sharedDeleteImpact([{ sku: 'GALE-M', cell: cell({ marketplace: 'DE' }) }, { sku: 'GALE-M', cell: deleted() }])!
     expect(impact.consequences).toHaveLength(1)
     expect(impact.findings).toEqual([{ label: `GALE-M · Amazon · IT stays: ${refusal}`, severity: 'warn' }])
     expect(impact.sideEffects).toContain('After Publish it cannot be undone: each listing then reads Not listed in its market\'s sheet. To list it again, set its Status there to Active and Publish.')
@@ -430,7 +431,7 @@ describe('new listings in the shared scope', () => {
     const value = sharedStatusValue(cells, read, NOW)!
     expect(value.pill).toEqual({ label: 'Inactive', tone: 'warning', glyph: 'clock' })
     expect(value).toMatchObject({ aside: '2 new', lockedReason: null, common: 'inactive' })
-    const options = sharedStatusEditorOptions(cells, true)
+    const options = sharedStatusEditorOptions(cells)
     // Ended only where a market's channel can end a listing (none here).
     expect(options.map(o => o.value)).toEqual(['active', 'inactive', 'not_listed'])
     expect(options[1].note).toBe('Every market (2). Waiting for Publish on every market.')
@@ -443,7 +444,7 @@ describe('new listings in the shared scope', () => {
     const allNew = sharedActionValue([fresh(), fresh({ marketplace: 'PL' })], read, NOW)!
     expect(allNew).toMatchObject({ pill: { label: 'Full update', tone: 'info', glyph: 'none' }, common: null, notOnChannel: true })
     expect(parseSharedSendInput(allNew)).toEqual({ skip: true })
-    expect(sharedActionEditorOptions([fresh(), fresh({ marketplace: 'PL' })], true).map(o => [o.value, Boolean(o.heldReason)]))
+    expect(sharedActionEditorOptions([fresh(), fresh({ marketplace: 'PL' })]).map(o => [o.value, Boolean(o.heldReason)]))
       .toEqual([['partial', true], ['full', false], ['delete', true]])
   })
 })

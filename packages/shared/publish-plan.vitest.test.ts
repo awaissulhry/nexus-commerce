@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { moveModeLabel, type StudioPublishChange, type StudioPublishReview } from './studio-publication.js'
 import {
-  confirmCountMatches, confirmMatches, confirmRowsTicked, defaultLifecycleTicks, defaultReviewTicks, MANY_PUBLISH_ACTION_LABEL, MANY_PUBLISH_ACTIONS, manyEndCount,
-  publishPlanCounts, publishPlanUsesBatch, STATUS_TARGET_ACTIONS, TYPE_COUNT_TO_END, type PublishPlanDestination, type PublishPlanLifecycleRow,
+  confirmMatches, defaultLifecycleTicks, defaultReviewTicks, MANY_PUBLISH_ACTION_LABEL, MANY_PUBLISH_ACTIONS,
+  publishPlanCounts, publishPlanUsesBatch, STATUS_TARGET_ACTIONS, type PublishPlanDestination, type PublishPlanLifecycleRow,
 } from './publish-plan.js'
 
 /** Build shape v2, P6 — the pure helpers of one mixed Publish: default ticks, the counts for the summary line, the path. */
@@ -17,7 +17,7 @@ const review = (changes: StudioPublishChange[], full: string[] = []): StudioPubl
 const row = (id: string, action: PublishPlanLifecycleRow['action'], extra: Partial<PublishPlanLifecycleRow> = {}): PublishPlanLifecycleRow => ({ id, listingId: id, productId: id, sku: id,
   isParent: false, column: action === 'delete' ? 'send' : 'status', value: action === 'delete' ? 'delete' : action === 'pause' ? 'inactive' : action === 'end' ? 'ended' : 'active',
   action, step: action, state: 'active', sentence: '', consequence: '', warning: null, checkedAtSend: null, setAt: '', setById: null, setByName: null,
-  stale: false, tickedByDefault: true, needsTypedConfirm: action === 'end' || action === 'delete', refused: null, ...extra })
+  stale: false, tickedByDefault: true, refused: null, ...extra })
 
 const destination = (r: StudioPublishReview | null, lifecycle: PublishPlanLifecycleRow[], outgrown = 0): PublishPlanDestination => ({
   scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'a' }, destination: { channel: 'AMAZON', marketplace: 'IT', accountId: 'a', aliasKey: '' }, label: 'Amazon · IT',
@@ -28,7 +28,7 @@ describe('publish plan counts', () => {
   const plan = { destinations: [destination(review([change('s1', 'S', { locked: true }), change('s2', 'S', { locked: true }), change('m1', 'M'), change('l1', 'L'),
     change('l2', 'L', { selectedByDefault: false }), change('x1', 'X', { selectable: false })], ['S']), [
     row('p1', 'pause'), row('p2', 'pause', { stale: true, tickedByDefault: false }), row('r1', 'relist'), row('e1', 'end'),
-    row('d1', 'delete', { refused: 'Your role cannot end or delete listings, so this stays waiting.', tickedByDefault: false })])] }
+    row('d1', 'delete', { refused: 'Not possible here: Amazon holds FBA units for this offer.', tickedByDefault: false })])] }
 
   it('counts the default ticks: partial rows and fields, full rows, and each lifecycle step; never a refused row', () => {
     expect(defaultReviewTicks(plan.destinations[0].review)).toEqual(['s1', 's2', 'm1', 'l1'])
@@ -39,7 +39,6 @@ describe('publish plan counts', () => {
   it('recounts with the person\'s ticks', () => {
     expect(publishPlanCounts(plan, { fields: { r1: ['l1', 'l2'] }, lifecycle: ['p1', 'p2', 'd1'] }))
       .toEqual({ partial: 1, fields: 2, full: 0, delete: 0, active: 0, inactive: 2, ended: 0 })
-    expect(confirmRowsTicked(plan, ['e1', 'd1', 'p1'])).toBe(1)
   })
 
   it('S10: a moved row (mode "move") is counted as a move, never as a partial or full update', () => {
@@ -50,7 +49,7 @@ describe('publish plan counts', () => {
   })
 })
 
-describe('the typed confirmation and the path', () => {
+describe('the family SKU Claude\'s End and Delete tools take, and the path', () => {
   it('confirms with the exact SKU, ignoring surrounding spaces', () => {
     expect(confirmMatches('GALE', ' GALE ')).toBe(true)
     expect(confirmMatches('GALE', 'gale')).toBe(false)
@@ -67,27 +66,13 @@ describe('the typed confirmation and the path', () => {
   })
 })
 
-/** P11 — the products list's Publish… window: a Status for many products, Ended confirmed by the typed count. */
+/** P11 — the products list's Publish… window: a Status for many products (Ended needs nothing typed). */
 describe('many products × markets with a Status', () => {
   it('offers Send changes and the three Status targets, never Delete', () => {
     expect(MANY_PUBLISH_ACTIONS).toEqual(['content', 'active', 'inactive', 'ended'])
     expect(MANY_PUBLISH_ACTIONS.map(a => MANY_PUBLISH_ACTION_LABEL[a])).toEqual(['Send changes', 'Set Active', 'Set Inactive', 'Set Ended'])
     expect(Object.values(STATUS_TARGET_ACTIONS).flat()).not.toContain('delete')
     expect(STATUS_TARGET_ACTIONS.active).toEqual(['resume', 'relist'])
-  })
-
-  it('Ended asks for the count of listings it ends, typed exactly (spaces around it do not count)', () => {
-    const end = (sendCount: number, status = 'PREVIEW') => ({ kind: 'lifecycle' as const, status, action: 'end' as const, sendCount })
-    const children = [end(30), end(6), end(0), end(4, 'NOT_SENT'), { kind: 'lifecycle' as const, status: 'PREVIEW', action: 'pause' as const, sendCount: 9 },
-      { kind: 'content' as const, status: 'PREVIEW', action: null, sendCount: null }]
-    expect(manyEndCount(children)).toBe(36)
-    expect(TYPE_COUNT_TO_END(36)).toBe('Type 36 to end 36 listings.')
-    expect(TYPE_COUNT_TO_END(1)).toBe('Type 1 to end 1 listing.')
-    expect(confirmCountMatches(36, ' 36 ')).toBe(true)
-    expect(confirmCountMatches(36, '35')).toBe(false)
-    expect(confirmCountMatches(36, 'GALE')).toBe(false)
-    expect(confirmCountMatches(0, '0')).toBe(false)
-    expect(confirmCountMatches(36, null)).toBe(false)
   })
 })
 
