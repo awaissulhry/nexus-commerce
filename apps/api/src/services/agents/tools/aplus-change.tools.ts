@@ -214,6 +214,7 @@ async function planContent(a: ContentArgs, amazonChecks: boolean, nothing: strin
     return refuse(`The document does not keep Amazon's A+ rules: ${checkedOut.problems.slice(0, 6).join(' ')}${more}`)
   }
   const checked = checkedOut.doc
+  warnings.push(...(checked.notes ?? []))
   const newUses = checked.images.filter((use) => use.source.kind !== 'amazon')
   if (newUses.length > APLUS_MAX_NEW_IMAGES) {
     return refuse(`At most ${APLUS_MAX_NEW_IMAGES} new images go in one request (this has ${newUses.length}): send the rest in a later update.`)

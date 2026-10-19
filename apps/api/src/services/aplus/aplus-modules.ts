@@ -79,6 +79,8 @@ export interface CheckedAplusDocument {
   videos: number
   /** ASINs named inside modules (comparison products, carousel buttons, Brand Story cards), sorted, once each. */
   asins: string[]
+  /** What Nexus changed so Amazon takes the document back (alt texts Amazon wrote that are over its own limit), as sentences. */
+  notes?: string[]
 }
 
 // ── The table's vocabulary ─────────────────────────────────────────────────────────────────────────
@@ -92,7 +94,7 @@ interface FieldBase { required: boolean; note?: string }
  *   video       VideoComponent, only as already at Amazon
  *   enum        a plain string, one of `values` (positionType, colorType)
  *   choice      TextComponent whose value is one of `values` (comparisonType)
- *   coordinate  TextComponent whose value is a whole number of pixels as text (hotspot x / y)
+ *   coordinate  TextComponent whose value is a number of pixels as text (hotspot x / y)
  *   number      a whole number from `min` to `max`
  *   boolean     true or false
  *   asin        an ASIN, as a plain string or as a TextComponent (`form`)
@@ -668,9 +670,10 @@ function baseSchemaOf(field: Field): z.ZodType {
     case 'video': return VIDEO
     case 'enum': return z.enum(field.values as [string, ...string[]])
     case 'choice': return textComponent((value) => (field.values.includes(value) ? null : `value must be ${field.values.map((v) => `"${v}"`).join(' or ')} (it is "${value}")`))
+    // A number of pixels as text; Seller Central writes decimals ("498.49199999999996"), which Amazon's model allows.
     case 'coordinate': return textComponent((value) => {
-      const n = /^\d+$/.test(value) ? Number(value) : NaN
-      return n >= field.min && n <= field.max ? null : `value must be a whole number of pixels as text, ${field.min}–${field.max} (it is "${value}")`
+      const n = /^\d+(\.\d+)?$/.test(value) ? Number(value) : NaN
+      return n >= field.min && n <= field.max ? null : `value must be a number of pixels as text, ${field.min}–${field.max} (it is "${value}")`
     })
     case 'number': return wholeSchema(field.min, field.max)
     case 'boolean': return z.boolean()
@@ -804,7 +807,11 @@ function cropOf(spec: unknown): CropSpec | null {
 
 // ── Normalising and hashing ──────────────────────────────────────────────────────────────────────────
 
-/** Drop null / undefined object values at every depth and every empty decoratorSet (Amazon treats both as absent). */
+/**
+ * Drop null / undefined object values at every depth and every empty decoratorSet (Amazon treats both as absent), and the
+ * all-lowercase twin Amazon writes beside a camelCase field when it reads a document back (`xcoordinate` beside
+ * `xCoordinate`, same value, seen 2026-10-19 on a hotspot made in Seller Central): its model names only the camelCase one.
+ */
 function dropEmpty(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(dropEmpty)
   if (!isRecord(value)) return value
@@ -814,7 +821,41 @@ function dropEmpty(value: unknown): unknown {
     if (key === 'decoratorSet' && Array.isArray(inner) && inner.length === 0) continue
     out[key] = dropEmpty(inner)
   }
+  for (const key of Object.keys(out)) {
+    if (key !== key.toLowerCase()) continue
+    const twin = Object.keys(out).find((other) => other !== key && other.toLowerCase() === key)
+    // Only an exact copy goes; a lowercase key with another value stays, and the strict check names it.
+    if (twin && factHash(out[twin]) === factHash(out[key])) delete out[key]
+  }
   return out
+}
+
+/** The most characters of an image's alt text Amazon's API takes (ImageComponent.altText). */
+const ALT_TEXT_MAX = 100
+
+/** `text` cut to at most `max` characters, at a word end when one is near, with an ellipsis. */
+function shortened(text: string, max: number): string {
+  const cut = text.slice(0, max - 1)
+  const space = cut.lastIndexOf(' ')
+  return `${(space >= max * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`
+}
+
+/**
+ * Amazon writes alt texts of its own for images placed in Seller Central ("Alt text will be automatically generated"),
+ * some longer than the 100 characters its API takes. Each such alt text of an image already at Amazon is shortened in
+ * place (`module` is a fresh copy), so the document can be sent back; returns how many. A new photo's alt text is the
+ * asker's and is checked, never shortened.
+ */
+function shortenAmazonAltTexts(value: unknown): number {
+  if (Array.isArray(value)) return value.reduce((n: number, inner) => n + shortenAmazonAltTexts(inner), 0)
+  if (!isRecord(value)) return 0
+  let count = 0
+  if (typeof value.uploadDestinationId === 'string' && typeof value.altText === 'string' && value.altText.length > ALT_TEXT_MAX) {
+    value.altText = shortened(value.altText, ALT_TEXT_MAX)
+    count++
+  }
+  for (const inner of Object.values(value)) count += shortenAmazonAltTexts(inner)
+  return count
 }
 
 /** The document without null / undefined values and empty decoratorSets, so the same content always compares and hashes the same. */
@@ -857,10 +898,13 @@ export function checkAplusDocument(input: { name: string; contentType: 'EBC' | '
   if (raw.length === 0) problems.push('The document needs at least one module.')
   const modules: AplusModule[] = []
   const types: Array<{ n: number; type: AplusModuleType }> = []
+  const shortenedIn: Array<{ n: number; count: number }> = []
   raw.forEach((entry, i) => {
     const n = i + 1
     const module = dropEmpty(entry)
     if (!isRecord(module)) { problems.push(`Module ${n}: must be an object { contentModuleType, <its content> }.`); return }
+    const altTexts = shortenAmazonAltTexts(module)
+    if (altTexts) shortenedIn.push({ n, count: altTexts })
     const type = module.contentModuleType
     if (!isAplusModuleType(type)) {
       problems.push(`Module ${n}: contentModuleType ${JSON.stringify(type ?? null)} is not an A+ module type (aplus-content view modules lists them).`)
@@ -921,9 +965,13 @@ export function checkAplusDocument(input: { name: string; contentType: 'EBC' | '
       images.push({ key: `${index}:${path}`, module: index, path, slot: field.slot, source, altText: position.altText, crop: cropOf(position.imageCropSpecification) })
     })
   })
+  const altTexts = shortenedIn.reduce((sum, { count }) => sum + count, 0)
+  const notes = altTexts
+    ? [`${altTexts === 1 ? 'One alt text Amazon wrote for an image' : `${altTexts} alt texts Amazon wrote for images`} (${listOf(shortenedIn.map(({ n }) => n))}) ${altTexts === 1 ? 'is' : 'are'} longer than the ${ALT_TEXT_MAX} characters Amazon's API takes: Nexus shortens ${altTexts === 1 ? 'it' : 'them'} to ${ALT_TEXT_MAX}.`]
+    : []
   return {
     ok: true,
-    doc: { name, contentType: contentType as 'EBC' | 'BrandStory', tier, locale, modules, images, videos, asins: [...asins].sort() },
+    doc: { name, contentType: contentType as 'EBC' | 'BrandStory', tier, locale, modules, images, videos, asins: [...asins].sort(), ...(notes.length ? { notes } : {}) },
   }
 }
 
@@ -979,7 +1027,7 @@ function ruleOf(field: Field): string {
       case 'video': return 'a video already at Amazon: { videoMediaId, imageMediaId, imageCropSpecification }'
       case 'enum': return field.values.join(' or ')
       case 'choice': return `{ value: ${field.values.map((v) => `"${v}"`).join(' or ')} }`
-      case 'coordinate': return `{ value: a whole number of pixels as text, ${field.min}–${field.max} }`
+      case 'coordinate': return `{ value: a number of pixels as text, ${field.min}–${field.max} }`
       case 'number': return `a whole number ${range(field.min, field.max)}`
       case 'boolean': return 'true or false'
       case 'asin': return field.form === 'string' ? 'an ASIN: 10 capital letters and digits' : '{ value: an ASIN, 10 capital letters and digits }'

@@ -7,7 +7,7 @@
  *   view list      the market's documents, one Amazon page at a time, each with its status, kind, badges and the first
  *                  ASINs it is applied to. nextCursor carries Amazon's pageToken, bound to the business, the market and
  *                  the account: a cursor from another list is refused, never a page of something else.
- *   view document  one document in full: every module exactly as Amazon keeps it (the shape set-aplus-content takes
+ *   view document  one document in full: every module as Amazon keeps it, empty fields left out (the shape set-aplus-content takes
  *                  back), its ASINs with their badges, and its documentHash
  *   view asin      which A+ and which Brand Story is published on each ASIN now (Amazon's publish records), each named
  *                  with a METADATA read of its document
@@ -45,7 +45,7 @@ import {
   type AplusStatus,
   type AplusTarget,
 } from '../../aplus/aplus-client.js'
-import { APLUS_DOCUMENT_RULES, APLUS_MODULE_TYPES, aplusModuleGuide, documentHash, summarizeModules } from '../../aplus/aplus-modules.js'
+import { APLUS_DOCUMENT_RULES, APLUS_MODULE_TYPES, aplusModuleGuide, documentHash, normalizeAmazonDocument, summarizeModules } from '../../aplus/aplus-modules.js'
 
 const TOOL = 'aplus-content'
 const VIEWS = ['list', 'document', 'asin', 'modules'] as const
@@ -247,7 +247,8 @@ async function documentView(market: AplusMarket, contentReferenceKey: string): P
   if (!document) return { ok: false, error: `Amazon answered ${contentReferenceKey} without its contents. Ask again in a minute.` }
   const metadata = record.contentMetadata
   const badges = metadata?.badgeSet ?? []
-  const modules = document.contentModuleList ?? []
+  // Amazon answers every module with the other 38 module keys as null (and a few fields twice): left out, as it treats them.
+  const modules = normalizeAmazonDocument({ ...document, contentModuleList: document.contentModuleList ?? [] }).contentModuleList
   const notRead: Array<{ part: string; why: string }> = []
   let relations: { asins: AplusAsin[]; complete: boolean; warnings: AplusMessage[] } | null = null
   try {
@@ -399,7 +400,7 @@ const aplusContent: AgentTool = {
     'Amazon A+ content of one market, read live from Amazon (nothing is stored in Nexus). view list (default): the '
     + "market's A+ and Brand Story documents, one Amazon page at a time (nextCursor) — key (contentReferenceKey), name, "
     + 'status (DRAFT, SUBMITTED, APPROVED, REJECTED), kind (premium, standard or brand-story), badges, last update and the '
-    + 'ASINs it is applied to. view document: one document in full — every module exactly as Amazon keeps it, the shape '
+    + 'ASINs it is applied to. view document: one document in full — every module as Amazon keeps it (empty fields left out), the shape '
     + 'set-aplus-content takes back (keep each image\'s uploadDestinationId and imageCropSpecification), its ASINs with '
     + 'their badges (CONTENT_PUBLISHED: live there) and documentHash. view asin: which A+ and which Brand Story is '
     + 'published on each ASIN now. view modules: every module type Nexus can send, with its fields, text limits and '

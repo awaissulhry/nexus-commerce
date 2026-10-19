@@ -468,6 +468,18 @@ describe('set-aplus-content', () => {
       expect(p.warnings).toContain('The text stays in the source\'s language (it-IT) in a de-DE document: to translate it, read it with aplus-content and make the translated document with op create.')
     })
 
+    it('a copy of a document made in Seller Central shortens the alt texts Amazon wrote over its own limit, and says so', async () => {
+      seed()
+      const long = 'Close-up of a black jacket sleeve with a mesh vent, a zip pull and reflective piping, on a plain grey background.'
+      h.docs.get(at(IT, KEY))!.document.contentModuleList[0] = imageText('Rete traspirante', atAmazon('aplus-media/sc/one.jpg', long))
+      const p = await preview('set-aplus-content', { op: 'copy', market: 'DE', fromMarket: 'IT', contentReferenceKey: KEY })
+      expect(p.warnings).toContain('One alt text Amazon wrote for an image (module 1) is longer than the 100 characters Amazon\'s API takes: Nexus shortens it to 100.')
+      const sent = h.validate.mock.calls[0][1] as Doc
+      const alt = (sent.contentModuleList[0].premiumImageText as { image: { altText: string } }).image.altText
+      expect(alt.length).toBeLessThanOrEqual(100)
+      expect(alt.endsWith('…')).toBe(true)
+    })
+
     it('a copy whose images Amazon cannot reach in the other market says how to send them', async () => {
       seed()
       h.validate.mockResolvedValueOnce({ errors: [{ code: 'CONTENT_FAILED_VALIDATION', message: 'We can\'t read one of the images that you uploaded', details: '' }], warnings: [] })
