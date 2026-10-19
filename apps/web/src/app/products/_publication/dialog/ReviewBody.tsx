@@ -1,6 +1,7 @@
 'use client'
 
 import { blockedChanges, blockingIssues, type StudioPublishReview, type StudioPublishSelection } from '@nexus/shared/studio-publication'
+import type { PublishStatusMeta } from '@/design-system/grid/renderers/publishStatus'
 import { Select } from '@/design-system/primitives'
 import { Banner, Disclosure, Field, MetricStrip } from '@/design-system/components'
 // The DS grid's DataGrid (AG Grid), as the Import dialog lists its rows (audit D4: one way to list rows in both dialogs).
@@ -12,7 +13,8 @@ import { ReviewTable } from './ReviewTable'
 import { DiffersSummary } from './DiffersSummary'
 import { reviewRowListingWord, shopifyVisibilityWords, type ActionPlanRow } from './actionPlan'
 import { isSparse } from './destinations'
-import { listingDisplayLabel, publicationProblems, type PublicationProblemRow } from './model'
+import { leftOutCount, listingDisplayLabel, problemCount, publicationProblems, type PublicationProblemRow } from './model'
+import { problemBanner } from './reviewRows'
 import styles from './publication.module.css'
 
 /**
@@ -65,6 +67,8 @@ export interface ReviewBodyPlan {
   /** The content review could not be made (plain English); the status changes can still be sent. */
   contentError: string | null
   now: number
+  /** After the send: each row that went, with its real result (`planRowResults`); absent before. */
+  results?: ReadonlyMap<string, PublishStatusMeta> | null
   onTicksChange(next: { selectedIds: string[]; lifecycleIds: string[] }): void
 }
 
@@ -95,6 +99,11 @@ export interface ReviewBodyProps {
    * edition", "★ Main listing"); null when the market has one listing (the review's own words then).
    */
   listing?: string | null
+  /**
+   * The sheet behind the window shows this market: a problem that names a product offers "Show in sheet" (the window
+   * closes, the sheet lands on its row and field). Absent where the sheet cannot land.
+   */
+  onShowField?(destinationKey: string, productId: string, field: string | null): void
 }
 
 /** The closed fold's words: "Exact request to the channel · 12 changes affecting 3 products", or that it is being prepared. */
@@ -112,22 +121,25 @@ export function ReviewBody(props: ReviewBodyProps) {
     return <div className={styles.body}>
       <p><strong>{plan.label}</strong></p>
       {plan.contentError && <Banner tone="warning" title="The content review could not be made">{plan.contentError} The status changes below can still be sent.</Banner>}
-      <PlanPart plan={plan} review={null} selectedIds={props.selectedIds} locked={props.locked} />
+      <PlanPart plan={plan} review={null} selectedIds={props.selectedIds} locked={props.locked} onShowField={props.onShowField} />
     </div>
   }
   return <ContentReviewBody {...props} review={review} />
 }
 
 /** The summary line and the one table of a market: one row per change, its problems first (grid audit wave 3). */
-function PlanPart({ plan, review, selectedIds, locked }: { plan: ReviewBodyPlan; review: StudioPublishReview | null; selectedIds: string[]; locked: boolean }) {
+function PlanPart({ plan, review, selectedIds, locked, onShowField }: { plan: ReviewBodyPlan; review: StudioPublishReview | null; selectedIds: string[]; locked: boolean
+  onShowField?: ReviewBodyProps['onShowField'] }) {
   return <>
     <p className={styles.planSummary} role="status">{plan.summary}</p>
-    <ReviewTable locked={locked} now={plan.now} ariaLabel={`Changes in this publish to ${plan.label}`}
-      markets={[{ key: plan.key, label: plan.label, channel: plan.channel, rows: plan.rows, review, selectedIds, lifecycleIds: plan.lifecycleIds, onTicksChange: plan.onTicksChange }]} />
+    <ReviewTable locked={locked} now={plan.now} ariaLabel={`Changes in this publish to ${plan.label}`} onShowField={onShowField}
+      markets={[{ key: plan.key, label: plan.label, channel: plan.channel, rows: plan.rows, review, selectedIds, lifecycleIds: plan.lifecycleIds, onTicksChange: plan.onTicksChange,
+        results: plan.results ?? null, inSheet: !!onShowField }]} />
   </>
 }
 
-function ContentReviewBody({ review, selectedIds, selection, selecting = false, locationId, confirmed, locked, onSelectionChange, onLocationChange, onConfirmChange, plan, nexusWins = false, listing = null }: ReviewBodyProps & { review: StudioPublishReview }) {
+function ContentReviewBody({ review, selectedIds, selection, selecting = false, locationId, confirmed, locked, onSelectionChange, onLocationChange, onConfirmChange, plan, nexusWins = false, listing = null,
+  onShowField }: ReviewBodyProps & { review: StudioPublishReview }) {
   const sparse = isSparse(review)
   // Every error: the reason a review lists no fields, or no overwrite check, when it names one.
   const blockers = blockingIssues(review.issues)
@@ -136,33 +148,36 @@ function ContentReviewBody({ review, selectedIds, selection, selecting = false, 
   const keptWithProblems = sparse && !!review.id
   const line = publicationDestinationParts(review, true, listing)
   const { problems, notes } = publicationProblems(review.issues)
+  // The window's one count: distinct problems (the same words on 20 SKUs are one), and the SKUs they are on.
+  const problemTotal = problemCount(review.issues)
+  // A row Publish leaves out (Not listed, deleted, a mode the channel cannot send) is not one it sends.
+  const held = review.rows.filter(row => row.blocked || row.notListed || row.deleted).length
+  const banner = problemBanner({ kept: keptWithProblems, namesNothing: review.issues.some(i => i.severity === 'error' && !i.field && !i.productId),
+    leftOut: keptWithProblems ? leftOutCount(review) : { changes: 0, problems: 0 }, inTable: !!plan,
+    statusChangesGo: !!plan?.rows.some(row => row.kind === 'lifecycle' && row.tick === 'on') })
   const visibility = shopifyVisibilityWords(review)
   return <div className={styles.body}>
     <p><strong>{line.lead}</strong>{line.rest && ` · ${line.rest}`}</p>
     {nexusWins && sparse && <DiffersSummary review={review} selectedIds={selectedIds} locked={locked} onSelectionChange={onSelectionChange} />}
     <MetricStrip metrics={[
-      { label: 'Products', value: review.rows.length.toLocaleString('en'), hint: review.excluded || review.skipped?.length
-        ? [review.excluded ? `${review.excluded} excluded` : '', review.skipped?.length ? `${review.skipped.length} skipped` : ''].filter(Boolean).join(' · ') : undefined },
-      { label: 'Problems', value: problems.length.toLocaleString('en') },
+      { label: 'Products', value: (review.rows.length - held).toLocaleString('en'), hint: held || review.excluded || review.skipped?.length
+        ? [held ? `${held} not sent` : '', review.excluded ? `${review.excluded} excluded` : '', review.skipped?.length ? `${review.skipped.length} skipped` : ''].filter(Boolean).join(' · ') : undefined },
+      { label: 'Problems', value: problemTotal.problems.toLocaleString('en'), hint: problemTotal.skus ? `on ${problemTotal.skus.toLocaleString('en')} ${problemTotal.skus === 1 ? 'SKU' : 'SKUs'}` : undefined },
       { label: 'Notes', value: notes.length.toLocaleString('en') },
     ]} />
     {visibility && <Banner tone="info" title={visibility.title}>{visibility.body}</Banner>}
     {review.locations && <Field label="Inventory location"><Select size="sm" disabled={locked} value={locationId} onChange={e => onLocationChange(e.target.value)}><option value="">Choose a location</option>{review.locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</Select></Field>}
-    {/* Audit D4 — one short banner says what the table is; the table names each problem (SKU · what to fix). The count is
-        the Problems tile's: the banner does not say it again. */}
-    {problems.length > 0 && <Banner tone="warning" title={!keptWithProblems ? 'Fix these before publishing'
-      : leftOut.size ? `${leftOut.size.toLocaleString('en')} ${leftOut.size === 1 ? 'change is' : 'changes are'} left out by these problems` : 'These problems block nothing this publish sends'}>
-      {keptWithProblems ? (leftOut.size ? 'The other changes can be sent now. Fix the problems, then check again to send the rest.'
-        : 'They are on fields this update does not send. Fix them before a Full update or a new listing.')
-        : plan ? 'They are the first rows of the table below. Fix them, then check again.' : 'Each row says what to fix. Fix them, then check again.'}
-    </Banner>}
+    {/* Audit D4 — one short banner says what the problems hold back and what still goes (`problemBanner`); the table names
+        each problem. The count is the Problems tile's: the banner does not say it again. */}
+    {problems.length > 0 && <Banner tone="warning" title={banner.title}>{banner.body}</Banner>}
     {/* With the plan, the problems are rows of the one table; without it (the products list's rows) they keep their own. */}
     {problems.length > 0 && !plan && <DataGrid ariaLabel="Problems to fix before publishing" size="md" headerMenus={false} columns={PROBLEM_COLUMNS} rows={problems} rowKey={row => row.id} />}
-    {/* Notes inform and block nothing: one closed section, as in the Import dialog. */}
-    {notes.length > 0 && <Disclosure summary={`${notes.length} ${notes.length === 1 ? 'note' : 'notes'}`}>
+    {/* Notes block nothing, but one may say the same product is live in another business: the section opens by itself
+        (Owner audit 2026-10-19), and closes on a click. */}
+    {notes.length > 0 && <Disclosure open summary={`${notes.length} ${notes.length === 1 ? 'note' : 'notes'}`}>
       <ul className={styles.issues}>{notes.map(note => <li key={note}>{note}</li>)}</ul>
     </Disclosure>}
-    {plan && <PlanPart plan={plan} review={review} selectedIds={selectedIds} locked={locked} />}
+    {plan && <PlanPart plan={plan} review={review} selectedIds={selectedIds} locked={locked} onShowField={onShowField} />}
     {!plan && sparse && review.changes && <PublicationChanges changes={review.changes} selectedIds={selectedIds} onSelectionChange={onSelectionChange} disabled={!review.id || locked} leftOut={leftOut}
       channel={review.scope.channel} />}
     {/* An error above already says why no fields are listed: this banner is only for a review that names no error. */}

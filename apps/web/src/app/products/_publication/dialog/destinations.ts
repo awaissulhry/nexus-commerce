@@ -20,11 +20,11 @@ import { blockedChangeIds, blockingIssues, publishGateContext, sendableChanges, 
   type StudioPublishSelection } from '@nexus/shared/studio-publication'
 import { isNewRowId, type PublishActionCell } from '@nexus/shared/publish-actions'
 import type { PublishPlanDestination } from '@nexus/shared/publish-plan'
-import { channelLabel, channelPlace } from '@nexus/shared/channel-label'
+import { channelPlace } from '@nexus/shared/channel-label'
 import { publicationStatusMeta, type PublishStatusMeta } from '@/design-system/grid/renderers/publishStatus'
 import type { Tone } from '@/design-system/primitives/tone'
 import {
-  SELECTED_LISTING_LABEL, matchesPublicationSelection, optionListingLabel, publicationOverwriteAcknowledged, publicationScopeKey,
+  SELECTED_LISTING_LABEL, leftOutCount, matchesPublicationSelection, optionListingLabel, problemCount, problemCountWords, publicationOverwriteAcknowledged, publicationScopeKey,
   type PublicationAlias, type PublicationDestinationOption,
 } from './model'
 
@@ -78,16 +78,22 @@ export type DestinationState =
   | { kind: 'error'; message: string }
   /** An earlier publish to this destination has no answer yet; the server refuses a new one until it has. */
   | { kind: 'earlier'; publicationId: string }
-  /** `request`: the exact request could not be built (OD4 A) — the market is skipped, the reason says why. */
-  | { kind: 'blocked'; problems: number; reason: string | null; request?: true }
+  /**
+   * `problems`: the DISTINCT problems that hold it back (the same words on 20 SKUs are one, `problemCount`), and `skus`
+   * the SKUs they are on. `request`: the exact request could not be built (OD4 A) — the market is skipped, the reason says why.
+   */
+  | { kind: 'blocked'; problems: number; skus?: number; reason: string | null; request?: true }
   | { kind: 'expired' }
   | { kind: 'nothing'; reason: 'none' | 'unticked' }
   | { kind: 'input'; needs: 'location' | 'overwrite' }
-  /** `leftOut` (option A, Owner 2026-10-19): changes problems leave out of this send; the ticked ones go. */
-  | { kind: 'ready'; changes: number; whole: boolean; requestReady: boolean; leftOut?: number }
+  /**
+   * `leftOut` (option A, Owner 2026-10-19): the changes problems leave out of this send, as the table lists them, and the
+   * distinct problems behind them (`leftOutCount`); the ticked ones go.
+   */
+  | { kind: 'ready'; changes: number; whole: boolean; requestReady: boolean; leftOut?: { changes: number; problems: number } }
 
 /** The ticked fields that still count: selectable in this review, and not left out by a problem (`blockedChangeIds`). */
-export function tickedChanges(entry: Pick<DestinationEntry, 'review' | 'selectedIds'>): string[] {
+export function tickedChanges(entry: { review: (Parameters<typeof blockedChangeIds>[0] & Pick<StudioPublishReview, 'changes'>) | null; selectedIds: readonly string[] }): string[] {
   const review = entry.review
   if (!review?.changes) return []
   const left = blockedChangeIds(review)
@@ -116,7 +122,7 @@ export function destinationState(entry: DestinationEntry, ticked: boolean, now: 
   const ticks = sparse ? tickedChanges(entry) : []
   const blockers = !sparse ? blockingIssues(review.issues)
     : ticks.length ? blockingIssues(review.issues, ticks, publishGateContext(review)) : review.issues.filter(i => i.severity === 'error' && !i.field && !i.productId)
-  if (blockers.length) return { kind: 'blocked', problems: blockers.length, reason: null }
+  if (blockers.length) { const count = problemCount(blockers); return { kind: 'blocked', problems: count.problems, skus: count.skus, reason: null } }
   if (!review.id) return { kind: 'blocked', problems: 0, reason: 'This review cannot be sent. Its notes say why.' }
   if (Number.isFinite(Date.parse(review.expiresAt)) && Date.parse(review.expiresAt) <= now) return { kind: 'expired' }
   if (isSparse(review)) {
@@ -124,8 +130,8 @@ export function destinationState(entry: DestinationEntry, ticked: boolean, now: 
     if (!ticks.length) return { kind: 'nothing', reason: sendableChanges(review).length ? 'unticked' : 'none' }
     const requestReady = matchesPublicationSelection(entry.selection, review, ticks)
     if (!requestReady && entry.selectionError) return { kind: 'blocked', problems: 0, reason: requestSkipReason(entry.selectionError), request: true }
-    const leftOut = blockedChangeIds(review).size
-    return { kind: 'ready', changes: ticks.length, whole: false, requestReady, ...(leftOut ? { leftOut } : {}) }
+    const leftOut = leftOutCount(review)
+    return { kind: 'ready', changes: ticks.length, whole: false, requestReady, ...(leftOut.changes ? { leftOut } : {}) }
   }
   if (review.locations && !review.locations.some(l => l.id === entry.locationId)) return { kind: 'input', needs: 'location' }
   if (!publicationOverwriteAcknowledged(review, entry.confirmedReviewId)) return { kind: 'input', needs: 'overwrite' }
@@ -140,33 +146,47 @@ export function requestSkipReason(message: string): string {
   return `Skipped: the exact request could not be built.${said ? ` ${/[.!?]$/.test(said) ? said : `${said}.`}` : ''}`
 }
 
-/** The words in the destination list's Review column. */
+/**
+ * A market's state in words: its label and one hint. The hint is read where the market's review already shows (its tab,
+ * the footer beside the button, its row in "All markets"), so it never says "open the review" (Owner audit 2026-10-19).
+ */
 export function destinationStateLabel(state: DestinationState): { label: string; tone: Tone; hint: string } {
   switch (state.kind) {
-    case 'not_checked': return { label: 'Not checked yet', tone: 'neutral', hint: 'Tick this destination to review what would be sent.' }
+    case 'not_checked': return { label: 'Not checked yet', tone: 'neutral', hint: 'Choose this market in Markets to review what would be sent.' }
     case 'checking': return { label: 'Checking…', tone: 'info', hint: 'Reading the saved values and the channel.' }
     case 'error': return { label: 'Could not check', tone: 'danger', hint: state.message }
     case 'earlier': return { label: 'Earlier publish waiting', tone: 'warning', hint: 'An earlier publish to this destination has no answer yet. It is not sent again until that publish has a result.' }
     case 'blocked': return state.request
       ? { label: 'Skipped', tone: 'warning', hint: state.reason ?? requestSkipReason('') }
       : state.problems
-      ? { label: `Fix ${plural(state.problems, 'problem', 'problems')} first`, tone: 'warning', hint: 'Open the review to see the problems. This destination is skipped until they are fixed.' }
-      : { label: 'Cannot be sent', tone: 'warning', hint: state.reason ?? 'Open the review to see why.' }
+      ? { label: `Fix ${plural(state.problems, 'problem', 'problems')} first`, tone: 'warning',
+        hint: `${problemCountWords({ problems: state.problems, skus: state.skus ?? 0 })} ${state.problems === 1 ? 'holds' : 'hold'} back the content of this destination until ${state.problems === 1 ? 'it is' : 'they are'} fixed.` }
+      : { label: 'Cannot be sent', tone: 'warning', hint: state.reason ?? 'The review\'s notes say why.' }
     case 'expired': return { label: 'Review expired', tone: 'warning', hint: 'Reviews last 15 minutes. Check again to compare the current values.' }
     case 'nothing': return state.reason === 'unticked'
-      ? { label: 'No fields ticked', tone: 'neutral', hint: 'Open the review and tick the fields to send.' }
+      ? { label: 'No fields ticked', tone: 'neutral', hint: 'Tick the fields to send.' }
       : { label: 'Nothing to send', tone: 'neutral', hint: 'The channel already has these values.' }
     case 'input': return state.needs === 'location'
-      ? { label: 'Choose a location', tone: 'warning', hint: 'Open the review and choose the inventory location.' }
-      : { label: 'Confirm the overwrite', tone: 'warning', hint: 'Open the review and confirm that this publish can overwrite channel values.' }
+      ? { label: 'Choose a location', tone: 'warning', hint: 'Choose the inventory location in this market\'s review.' }
+      : { label: 'Confirm the overwrite', tone: 'warning', hint: 'Confirm in this market\'s review that this publish can overwrite channel values.' }
     case 'ready': {
       if (state.whole) return { label: 'Ready', tone: 'info', hint: 'The whole product will be sent.' }
-      // Option A — never "blocked" while changes can go: how many problems leave out, said beside Ready.
-      const left = state.leftOut ? `${plural(state.leftOut, 'change has', 'changes have')} problems and ${state.leftOut === 1 ? 'is' : 'are'} left out; the rest is sent. ` : ''
-      return { label: state.leftOut ? `Ready · ${state.leftOut.toLocaleString('en')} left out` : 'Ready', tone: 'info',
+      // Option A — never "blocked" while changes can go: how many changes problems leave out, said beside Ready.
+      const out = state.leftOut
+      const left = out ? `${plural(out.changes, 'change is', 'changes are')} left out by ${plural(out.problems, 'problem', 'problems')}; the rest is sent. ` : ''
+      return { label: out ? `Ready · ${out.changes.toLocaleString('en')} left out` : 'Ready', tone: 'info',
         hint: `${left}${state.requestReady ? 'The exact request is prepared.' : 'Preparing the exact request…'}` }
     }
   }
+}
+
+/**
+ * A state's label and hint as one line: "Checking… Reading the saved values and the channel." — never "Checking….", and
+ * never the label twice when the hint already starts with it.
+ */
+export function stateLine(said: { label: string; hint: string }): string {
+  if (said.hint.startsWith(said.label)) return said.hint
+  return /[.…!?]$/.test(said.label) ? `${said.label} ${said.hint}` : `${said.label}. ${said.hint}`
 }
 
 /** What one click would do with the ticked destinations. */
@@ -181,34 +201,25 @@ export interface PublishPlan {
   pending: string[]
   /** Sparse destinations whose exact request is not prepared yet. */
   needsRequest: string[]
-  /** Fields to send, over the sparse destinations in `send`. */
-  changes: number
   /** Destinations that send a whole new product (Shopify). */
   wholeProducts: number
-  /** Blocking problems over every ticked destination. */
-  problems: number
 }
 
 export function publishPlan(ticked: readonly string[], stateOf: (key: string) => DestinationState): PublishPlan {
-  const plan: PublishPlan = { send: [], skipped: [], nothing: [], pending: [], needsRequest: [], changes: 0, wholeProducts: 0, problems: 0 }
+  const plan: PublishPlan = { send: [], skipped: [], nothing: [], pending: [], needsRequest: [], wholeProducts: 0 }
   for (const key of ticked) {
     const state = stateOf(key)
     if (state.kind === 'ready') {
       plan.send.push(key)
       if (state.whole) plan.wholeProducts++
-      else { plan.changes += state.changes; if (!state.requestReady) plan.needsRequest.push(key) }
+      else if (!state.requestReady) plan.needsRequest.push(key)
     } else if (state.kind === 'blocked' || state.kind === 'earlier' || state.kind === 'error') {
       plan.skipped.push(key)
-      if (state.kind === 'blocked') plan.problems += state.problems
     } else if (state.kind === 'nothing') plan.nothing.push(key)
     else plan.pending.push(key)
   }
   return plan
 }
-
-/** One destination sends through today's path; two or more go to the background batch. */
-export type PublishPath = 'none' | 'single' | 'batch'
-export const publishPath = (plan: Pick<PublishPlan, 'send'>): PublishPath => plan.send.length === 0 ? 'none' : plan.send.length === 1 ? 'single' : 'batch'
 
 export type PlacesWord = { one: string; many: string }
 export const MARKETS_WORD: PlacesWord = Object.freeze({ one: 'market', many: 'markets' })
@@ -225,23 +236,6 @@ export function placesWord(keys: readonly string[], scopeOf: (key: string) => St
   const scopes = keys.map(scopeOf).filter((s): s is StudioPublishScope => !!s)
   const sameChannel = new Set(scopes.map(s => s.channel)).size <= 1 && new Set(scopes.map(s => s.accountId)).size <= 1
   return sameChannel ? MARKETS_WORD : DESTINATIONS_WORD
-}
-
-/** Every destination a plan counts (ticked), in its order. */
-const planKeys = (plan: Pick<PublishPlan, 'send' | 'skipped' | 'nothing' | 'pending'>) => [...plan.send, ...plan.skipped, ...plan.nothing, ...plan.pending]
-
-/**
- * The counted primary button: "Publish 21 changes to 2 markets", "… · skip 1 with problems" — "to 3 listings" when an
- * alias is ticked. A Shopify destination sends a whole NEW product (the dialog refuses existing Shopify products), so it
- * is counted as one.
- */
-export function publishButtonText(plan: PublishPlan, scopeOf: (key: string) => StudioPublishScope | undefined): string {
-  const word = placesWord(plan.send, scopeOf, planKeys(plan))
-  const what = [plan.changes ? plural(plan.changes, 'change', 'changes') : null, plan.wholeProducts ? plural(plan.wholeProducts, 'new product', 'new products') : null]
-    .filter(Boolean).join(' and ')
-  const skip = plan.skipped.length ? ` · skip ${plan.skipped.length} with problems` : ''
-  if (!plan.send.length) return plan.skipped.length ? `Nothing to publish · ${plan.skipped.length} with problems` : 'Nothing to publish'
-  return `Publish ${what || 'the review'} to ${plural(plan.send.length, word.one, word.many)}${skip}`
 }
 
 // ── One-click publish (Owner 2026-10-04) ─────────────────────────────────────────────────────────────────────────────
@@ -534,15 +528,6 @@ export function destinationName(option: Pick<PublicationDestinationOption, 'scop
   return listing ? `${option.marketName} · ${listing}` : option.marketName
 }
 
-/**
- * Every market of one channel on one account, for "Select all Amazon markets (11)". A business with two accounts on a
- * channel would otherwise tick each market twice.
- */
-export function channelOptions(options: readonly PublicationDestinationOption[], channel: string, accountId?: string): PublicationDestinationOption[] {
-  return options.filter(o => o.scope.channel === channel && (!accountId || o.scope.accountId === accountId) && !o.scope.listingId)
-}
-export const selectAllText = (channel: string, n: number) => `Select all ${channelLabel(channel)} markets (${n})`
-
 /** The destinations ticked when the dialog opens: the ones asked for that exist, else the only one there is. */
 export function initialTicked(options: readonly PublicationDestinationOption[], initial: readonly StudioPublishScope[]): string[] {
   const keys = initial.map(publicationScopeKey).filter(key => options.some(o => o.key === key))
@@ -586,26 +571,6 @@ export function batchChildMeta(child: Pick<PublicationBatchChild, 'status' | 'ch
   if (status === 'BLOCKED') return publicationStatusMeta('NOT_SENT')
   const meta = publicationStatusMeta(status)
   return child.checked ? { ...meta, hint: `${meta.hint} A person marked it as checked.` } : meta
-}
-
-/**
- * Ticking many destinations at once (the grid's header box, or a pasted set) keeps ONE account per channel, the same
- * rule as "Select all Amazon markets": a business with two accounts on a channel would otherwise tick every market
- * twice. The account kept is the one already ticked on that channel, else the first one listed. A single click on one
- * row is never changed.
- */
-export function limitOneAccountPerChannel(next: ReadonlySet<string>, previous: ReadonlySet<string>, options: readonly PublicationDestinationOption[]): Set<string> {
-  const added = [...next].filter(key => !previous.has(key))
-  if (added.length <= 1) return new Set(next)
-  const byKey = new Map(options.map(o => [o.key, o]))
-  const keep = new Map<string, string>()
-  for (const key of previous) { const o = byKey.get(key); if (o && next.has(key) && !keep.has(o.scope.channel)) keep.set(o.scope.channel, o.scope.accountId) }
-  for (const o of options) if (next.has(o.key) && !keep.has(o.scope.channel)) keep.set(o.scope.channel, o.scope.accountId)
-  return new Set([...next].filter(key => {
-    if (previous.has(key)) return true
-    const o = byKey.get(key)
-    return !o || keep.get(o.scope.channel) === o.scope.accountId
-  }))
 }
 
 /**
@@ -660,20 +625,4 @@ export function euRefusal(error: unknown): { title: string; lines: string[] } | 
   const e = error as { status?: number; message?: string } | null
   if (!e || e.status !== 422 || typeof e.message !== 'string') return null
   return { title: 'Different Amazon EU quantities', lines: e.message.split('\n').map(line => line.trim()).filter(Boolean) }
-}
-
-/** The batch request for the ready destinations, each with its own token, confirmation and location. */
-export function batchRequest(keys: readonly string[], entryOf: (key: string) => DestinationEntry) {
-  return {
-    reviews: keys.flatMap(key => {
-      const entry = entryOf(key), review = entry.review
-      if (!review?.id) return []
-      return [{
-        reviewId: review.id,
-        ...(isSparse(review) && entry.selection?.token ? { selectionToken: entry.selection.token } : {}),
-        ...(!isSparse(review) && entry.confirmedReviewId === review.id ? { confirmOverwrite: true } : {}),
-        ...(review.locations ? { locationId: entry.locationId } : {}),
-      }]
-    }),
-  }
 }

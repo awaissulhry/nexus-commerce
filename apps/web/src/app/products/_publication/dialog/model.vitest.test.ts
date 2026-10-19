@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { MAIN_LISTING_LABEL, listingDisplayLabel, publicationDestinations, matchesPublicationReview, retainPublicationReceipt, publicationOverwriteAcknowledged, matchesPublicationSelection, publicationProblems, optionListingLabel, publicationScopeKey } from './model'
+import { MAIN_LISTING_LABEL, leftOutCount, listingDisplayLabel, problemCount, problemCountWords, problemGroups, publicationDestinations, matchesPublicationReview, retainPublicationReceipt, publicationOverwriteAcknowledged, matchesPublicationSelection, publicationProblems, optionListingLabel, publicationScopeKey } from './model'
 import type { StudioPublishResult, StudioPublishReview } from '@nexus/shared/studio-publication'
 
 const market = { id: 'a', channel: 'AMAZON', code: 'IT', name: 'Amazon Italy', language: 'it', accounts: [{ id: 'one', label: 'One', primary: true }, { id: 'two', label: 'Two', primary: false }] }
@@ -94,6 +94,35 @@ it('lists the review\'s problems as table rows and its warnings as notes', () =>
     { id: '2', sku: 'Whole listing', message: 'Item location postal code: eBay says this is missing or not valid.', detail: 'Input data for tag <Item.PostalCode> is invalid. (eBay code 37)' },
   ])
   expect(notes).toEqual(['Condition is empty, so Nexus sends New.', 'FAM: Title: the Italian text is shown on DE.'])
+})
+
+// Owner audit 2026-10-19 — one rule for every number: a problem is counted once however many SKUs it is on, "on N SKUs".
+it('counts distinct problems and the SKUs they are on, the same way everywhere', () => {
+  const issues = [
+    { severity: 'error' as const, productId: 'p-m', sku: 'FAM-M', field: 'item_package_dimensions', message: 'FAM-M: Item package height is required.' },
+    { severity: 'error' as const, productId: 'p-l', sku: 'FAM-L', field: 'item_package_dimensions', message: 'FAM-L: Item package height is required.' },
+    { severity: 'error' as const, sku: 'FAM-L', message: 'FAM-L: Size is empty.' },
+    { severity: 'error' as const, message: 'Reconnect this account.' },
+    { severity: 'warning' as const, sku: 'FAM-S', message: 'FAM-S: A note.' },
+  ]
+  expect(problemCount(issues)).toEqual({ problems: 3, skus: 2 })
+  expect(problemCountWords(problemCount(issues))).toBe('3 problems on 2 SKUs')
+  expect(problemCountWords({ problems: 1, skus: 1 })).toBe('1 problem on 1 SKU')
+  expect(problemCountWords({ problems: 1, skus: 0 })).toBe('1 problem')
+  // The first product a problem names, and its field: where "Show in sheet" lands.
+  expect(problemGroups(issues)[0]).toMatchObject({ skus: ['FAM-M', 'FAM-L'], productId: 'p-m', field: 'item_package_dimensions' })
+  expect(problemGroups(issues)[2]).toMatchObject({ skus: [], productId: null, field: null })
+})
+
+it('counts the changes a problem leaves out as the table lists them (a field that changes), and the problems behind them', () => {
+  const change = (id: string, field: string, status: 'SEND' | 'SAME' = 'SEND') => ({ id, productId: 'p', sku: 'S', field, label: field, status, selectable: true, selectedByDefault: true,
+    reason: '', current: { state: 'value' as const, value: 1 }, lastAccepted: { state: 'absent' as const }, channel: { state: 'value' as const, value: 0 },
+    localChanged: true, channelChanged: false, operation: 'replace' as const })
+  const review = { scope: { channel: 'EBAY', marketplace: 'IT', accountId: 'e' },
+    changes: [change('t', 'title'), change('d', 'description'), change('same', 'title', 'SAME')],
+    issues: [{ severity: 'error' as const, productId: 'p', sku: 'S', field: 'title', message: 'S: Title is too long.' }] }
+  expect(leftOutCount(review)).toEqual({ changes: 1, problems: 1 })
+  expect(leftOutCount({ ...review, issues: [] })).toEqual({ changes: 0, problems: 0 })
 })
 
 // m3 (review 2026-10-05): one word for the main listing on screen; display only, other names untouched.

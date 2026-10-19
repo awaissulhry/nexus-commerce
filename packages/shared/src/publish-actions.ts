@@ -209,13 +209,17 @@ export const CONTENT_HELD_FOR_DELETE = 'This listing is being deleted, so its ch
 
 /**
  * The review's one summary line: "18 partial updates (41 fields) · 2 full updates · 1 move to a new SKU · 3 inactive ·
- * 1 ended · 1 delete".
+ * 1 ended · 1 delete". `fullFields` / `movedFields` (the Publish window, which counts every field a send carries): the
+ * fields a Full update sends (again) and a move creates, named like a partial update's — "2 full updates (19 fields)" —
+ * so the line adds up to the button's changes.
  */
-export function publishPlanSummary(plan: { partial: number; fields: number; full: number; delete: number; active: number; inactive: number; ended: number; moved?: number }): string {
+export function publishPlanSummary(plan: { partial: number; fields: number; full: number; delete: number; active: number; inactive: number; ended: number; moved?: number
+  fullFields?: number; movedFields?: number }): string {
+  const fields = (n: number | undefined) => (n ? ` (${plural(n, 'field', 'fields')})` : '')
   return [
-    plan.partial ? `${plural(plan.partial, 'partial update', 'partial updates')}${plan.fields ? ` (${plural(plan.fields, 'field', 'fields')})` : ''}` : null,
-    plan.full ? plural(plan.full, 'full update', 'full updates') : null,
-    plan.moved ? plural(plan.moved, 'move to a new SKU', 'moves to a new SKU') : null,
+    plan.partial ? `${plural(plan.partial, 'partial update', 'partial updates')}${fields(plan.fields)}` : null,
+    plan.full ? `${plural(plan.full, 'full update', 'full updates')}${fields(plan.fullFields)}` : null,
+    plan.moved ? `${plural(plan.moved, 'move to a new SKU', 'moves to a new SKU')}${fields(plan.movedFields)}` : null,
     plan.active ? `${plan.active.toLocaleString('en')} active` : null,
     plan.inactive ? `${plan.inactive.toLocaleString('en')} inactive` : null,
     plan.ended ? `${plan.ended.toLocaleString('en')} ended` : null,

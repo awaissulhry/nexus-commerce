@@ -37,7 +37,7 @@ import { rulesStatus } from './rulesStatus';
 import { channelLabel, languageLabel } from '../../scopes';
 import { buildCompareTargets } from '../compareTargets';
 import { sheetEmptyState } from '../sheetGridStates';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { mediaGridTransfer } from '../../media/mediaGridTransfer';
 import { mediaListingName, useProductMediaEditor, withProductMediaColumn } from '../../media/productMediaColumn';
 import { withSheetGroups } from '../sheetGroups';
@@ -57,7 +57,7 @@ import { PUBLISH_COLUMN, isRejectedRow, publishColumn, publishColumnLookup, publ
 import { StudioPublishDialog } from '../../StudioPublishDialog';
 import { aliasName, listingPublishScope, pageListingSelection } from '../../listingScope';
 import type { StudioPublishScope } from '@nexus/shared/studio-publication';
-import { takeSheetLanding } from '@/app/products/_publication/history/runActions';
+import { sheetLandingVersion, subscribeSheetLanding, takeSheetLanding } from '@/app/products/_publication/history/runActions';
 import { discardOfferDrafts, offerDraftControls } from './offerDrafts';
 import { useLiveStockCells } from './useLiveStockCells';
 import { BUSINESS_SHEET_COPY, businessGesture, clearsSelectionOn, fillTargetColumns, isBusinessColumnKey, openMatrixTab, reachesBusiness, withBusinessPaste } from './businessColumns';
@@ -1176,7 +1176,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         },
     })] : [], [scopePage, getGridApi, revealCell, openPublishHistory]);
     useEffect(() => { getGridApi()?.refreshCells({ columns: [PUBLISH_COLUMN] }); }, [publication.read, listingPublications, publishLookup, getGridApi]);
-    // "Show in sheet" from Publish history lands on the FIELD the channel named (the request names the row and fields).
+    // "Show in sheet" from Publish history, or from a problem in the Publish window (which closes over this sheet: the
+    // request arrives while it is on screen, `landingAsked`), lands on the FIELD named — else on the row's SKU.
+    const landingAsked = useSyncExternalStore(subscribeSheetLanding, sheetLandingVersion, () => 0);
     useEffect(() => {
         if (!gridReady || !rows.length)
             return;
@@ -1185,9 +1187,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         if (!request || !api || !rows.some(row => rowIdOf(row) === request.rowId))
             return;
         const column = request.fieldNames.map(name => publishLookup(name)).find(ref => !!ref);
-        if (column)
-            landOnCell(api, { rowId: request.rowId, colId: column.key, reveal: (colId) => revealCell(colId, 'reveal'), root: document.querySelector('.nds-grid-sheet') ?? undefined });
-    }, [gridReady, rows, channel, marketplace, getGridApi, publishLookup, revealCell]);
+        landOnCell(api, { rowId: request.rowId, colId: column?.key ?? IDENTITY_SKU_COLUMN, reveal: (colId) => revealCell(colId, 'reveal'), root: document.querySelector('.nds-grid-sheet') ?? undefined });
+    }, [gridReady, rows, channel, marketplace, getGridApi, publishLookup, revealCell, landingAsked]);
     /** Build shape v2, P8 — Status and Action, right after "Last publish". Their values are read through refs. */
     const statusActionColumns = useMemo<ColDef<ChannelSheetRow>[]>(() => {
         if (!scopePage) return [];

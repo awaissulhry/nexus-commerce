@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { PublicationBatchChild } from '@nexus/shared/studio-publication'
 import { publicationScopeKey, type PublicationDestinationOption } from './model'
-import { LISTINGS_WORD, MARKETS_WORD, publishButtonText, publishPlan, MAX_BATCH_DESTINATIONS, type DestinationState } from './destinations'
+import { LISTINGS_WORD, MARKETS_WORD, MAX_BATCH_DESTINATIONS, type DestinationState } from './destinations'
 import {
-  activeTab, changeAccount, changeChannel, changeMarkets, childMarketKey, choiceWord, familySummary, initialChoice, listedMarkets, manySummary, manyTabWords, marketOptionLabel,
+  activeTab, changeAccount, changeChannel, changeMarkets, childMarketKey, choiceWord, initialChoice, listedMarkets, manySummary, manyTabWords, marketOptionLabel,
   marketShortLabel, marketsPickerText, marketTabLabel, marketTabParts, pickerAccounts, pickerChannels, pickerMarkets, refillChoice, removeMarket, reviewTabWords,
 } from './pickers'
 
@@ -106,19 +106,6 @@ describe('pickers', () => {
     for (const [state, label] of cases) expect(marketTabLabel(amazonIT, state)).toBe(label)
     expect(marketTabLabel(amazonIT, { kind: 'checking' }, 'Waiting for channel')).toBe('IT · Waiting for channel')
     expect(reviewTabWords({ kind: 'input', needs: 'overwrite' })).toBe('confirm the overwrite')
-  })
-
-  it('leaves the counted Publish button exactly as it was', () => {
-    const states: Record<string, DestinationState> = {
-      [amazonIT.key]: { kind: 'ready', changes: 12, whole: false, requestReady: true },
-      [amazonDE.key]: { kind: 'ready', changes: 9, whole: false, requestReady: true },
-      [amazonFR.key]: { kind: 'blocked', problems: 2, reason: null },
-    }
-    const plan = publishPlan([amazonIT.key, amazonDE.key, amazonFR.key], key => states[key])
-    const scopeOf = (key: string) => options.find(o => o.key === key)?.scope
-    expect(publishButtonText(plan, scopeOf)).toBe('Publish 21 changes to 2 markets · skip 1 with problems')
-    expect(familySummary(3, plan)).toBe('3 markets · 21 changes · 1 with problems')
-    expect(familySummary(3, plan, LISTINGS_WORD)).toBe('3 listings · 21 changes · 1 with problems')
   })
 
   it('labels a many-product market tab from its rows', () => {

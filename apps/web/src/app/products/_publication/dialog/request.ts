@@ -12,13 +12,24 @@ export function requestFailure(error: unknown): { status: number | null; code: s
   return { status: typeof e?.status === 'number' ? e.status : null, code: typeof e?.code === 'string' ? e.code : null }
 }
 
+/**
+ * What a request is, for the words when it takes too long: a `send` (a submit, a batch start) may have reached the
+ * channel, so its outcome is uncertain; a `review` (the plan, the exact request — no channel write) sent nothing.
+ */
+export type PublicationRequestKind = 'send' | 'review'
+
+/** A review that took too long: nothing was sent (Owner audit 2026-10-19: it said "Check publication status"). */
+export const REVIEW_TIMED_OUT = 'This took longer than expected and was stopped. Nothing was sent. Check again.'
+/** A send that took too long: it may have reached the channel. */
+export const SEND_TIMED_OUT = 'Confirmation is taking longer than expected. Check publication status before trying again.'
+
 /** A missing response is uncertain; abort waiting without retrying a channel submission. */
-export async function publicationRequest<T>(path: string, method: 'GET' | 'POST' | 'PUT', body?: unknown, signal?: AbortSignal): Promise<T> {
+export async function publicationRequest<T>(path: string, method: 'GET' | 'POST' | 'PUT', body?: unknown, signal?: AbortSignal, kind: PublicationRequestKind = 'send'): Promise<T> {
   const controller = new AbortController()
   const cancel = () => controller.abort(signal?.reason)
   if (signal?.aborted) cancel()
   else signal?.addEventListener('abort', cancel, { once: true })
-  const timer = setTimeout(() => controller.abort(new Error('Confirmation is taking longer than expected. Check publication status before trying again.')), method === 'GET' ? 30_000 : 120_000)
+  const timer = setTimeout(() => controller.abort(new Error(kind === 'review' ? REVIEW_TIMED_OUT : SEND_TIMED_OUT)), method === 'GET' ? 30_000 : 120_000)
   try {
     const response = await fetch(`${getBackendUrl()}${path}`, { method, credentials: 'include', cache: 'no-store', signal: controller.signal,
       ...(method !== 'GET' ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) } : {}) })

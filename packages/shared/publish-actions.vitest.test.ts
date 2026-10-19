@@ -137,6 +137,10 @@ describe('one Publish', () => {
     expect(publishPlanSummary({ partial: 18, fields: 41, full: 2, delete: 1, active: 0, inactive: 3, ended: 1 }))
       .toBe('18 partial updates (41 fields) · 2 full updates · 3 inactive · 1 ended · 1 delete')
   })
+  it('names the fields a Full update and a move send when the window counts them, so the line adds up to its button', () => {
+    expect(publishPlanSummary({ partial: 1, fields: 2, full: 2, fullFields: 19, delete: 0, active: 0, inactive: 0, ended: 0, moved: 1, movedFields: 4 }))
+      .toBe('1 partial update (2 fields) · 2 full updates (19 fields) · 1 move to a new SKU (4 fields)')
+  })
 })
 
 /** Delete and relist (Owner 2026-10-04) — the Action column on a deleted row, the relist rule, and Amazon's answers. */

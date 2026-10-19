@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { publicationRequest, requestFailure } from './request'
+import { REVIEW_TIMED_OUT, publicationRequest, requestFailure } from './request'
 
 vi.mock('@/lib/backend-url', () => ({ getBackendUrl: () => 'http://publication.test' }))
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
@@ -16,6 +16,21 @@ it('ends a stalled submit with an uncertain outcome and never sends it twice', a
   await rejected
   expect(fetch).toHaveBeenCalledOnce()
   expect(fetch.mock.calls[0][1].signal.aborted).toBe(true)
+})
+
+it('ends a slow review saying nothing was sent, and offers Check again — never "Check publication status"', async () => {
+  vi.useFakeTimers()
+  const fetch = vi.fn((_url, input) => new Promise((_resolve, reject) => {
+    input.signal.addEventListener('abort', () => reject(input.signal.reason), { once: true })
+  }))
+  vi.stubGlobal('fetch', fetch)
+  const request = publicationRequest('/api/products/p/studio-publication/plan', 'POST', {}, undefined, 'review')
+  const rejected = expect(request).rejects.toThrow(REVIEW_TIMED_OUT)
+  await vi.advanceTimersByTimeAsync(120_000)
+  await rejected
+  expect(REVIEW_TIMED_OUT).toContain('Nothing was sent.')
+  expect(REVIEW_TIMED_OUT).toMatch(/Check again\.$/)
+  expect(REVIEW_TIMED_OUT).not.toContain('publication status')
 })
 
 it('cancels an obsolete preview and keeps HTTP refusals distinguishable from missing confirmation', async () => {
