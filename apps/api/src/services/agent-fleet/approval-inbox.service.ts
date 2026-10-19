@@ -1181,6 +1181,12 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'plan-fba-shipment': ['marketplace', 'from', 'readyToShipOn', 'lines', 'totals'],
   // `basis` fingerprints the Shopify sheet's own cell tokens and baselines: a draft edit or a store change in between.
   'set-shopify-content': ['changes', 'reach', 'basis'],
+  // Amazon A+ (2026-10-19, aplus-change.tools.ts) — the op, where it lands (market, account, document, locale, kind),
+  // what it stands on at Amazon (the document's content, status and last update; its ASINs), the exact document and new
+  // images it sends (each photo's bytes by hash), and the ASINs a new draft is applied to.
+  'set-aplus-content': ['op', 'target', 'basis', 'plan', 'images', 'asins'],
+  'set-aplus-asins': ['target', 'basis', 'plan'],
+  'submit-aplus-content': ['op', 'target', 'basis'],
   // I9 — the id read at preview time (and for unlink, the quantity it was advertising); for link, the channel's proof.
   'unlink-channel-id': ['changes', 'liveQuantity'],
   'link-channel-id': ['changes', 'verdict'],
