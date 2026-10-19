@@ -249,9 +249,12 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
       // An Inventory listing is reviewed and sent by its owner alone (`prepareEbayInventoryChanges` addresses every change
       // to it), so its baseline is the owner's. Judged against all included products, a family failed every review.
       const owner = prepared.kind === 'ebay-inventory' ? prepared.owner.productId : null
-      // Amazon builds no message for a row it sends nothing for (`prepareAmazonPublication`): its baseline leaves it out too.
+      // Amazon builds no message for a row it sends nothing for, nor for a row it cannot build (its own problem names it,
+      // `prepareAmazonPublication`): its baseline is the built rows'. Judged against every row, one unbuilt SKU failed the
+      // identity rule and blocked the whole family.
+      const builtIds = prepared.kind === 'amazon' ? new Set(prepared.products.map(product => product.productId)) : null
       const baselineFacts = owner ? { ...facts, products: facts.products.filter(product => product.id === owner) }
-        : prepared.kind === 'amazon' && unsent.size ? { ...facts, products: facts.products.filter(product => !unsent.has(product.id)) } : facts
+        : builtIds ? { ...facts, products: facts.products.filter(product => builtIds.has(product.id)) } : facts
       const baseline = await readPublicationBaseline(baselineFacts, prepared.products)
       baselineRevision = baseline.revision
       changePlan = prepared.kind === 'amazon' ? await prepareAmazonChanges(facts, prepared, baseline.values, { ...(modes.full.size ? { fullProductIds: modes.full } : {}),
