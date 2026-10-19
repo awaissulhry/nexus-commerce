@@ -36,8 +36,8 @@ import { blockRowChanges, compileSelection, type EbayInventorySend, type Publica
 import { explainAmazonRelist, type PublicationRelistRecord, FULL_EBAY_INVENTORY_LATER, FULL_EBAY_VARIATION, fbaNewAsinWarning, relistSentence,
   SHOPIFY_EXISTING_NOT_YET, AMAZON_MOVE_NEEDS_CONFIRM, AMAZON_MOVE_ROLE_CANNOT_DELETE, channelSkuLengthProblem, ebayRenameSentence, etsySkuMoveSentence, oldSkuStaysDeleted,
   FULL_ETSY_VARIATION } from '@nexus/shared/publish-actions'
-import { deletedOn, deletedPublishSkip, etsyCreateState, ETSY_NEW_ACTIVE_NEEDS_PHOTO, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD, shopifyCreateStatus,
-  type ListingDeletion } from '@nexus/shared/listing-actions'
+import { deletedOn, etsyCreateState, ETSY_NEW_ACTIVE_NEEDS_PHOTO, shopifyCreateStatus, type ListingDeletion } from '@nexus/shared/listing-actions'
+import { newListingHolds, newRowTargets } from '../listings/new-listing-choices.js'
 import type { StudioPublishSkuMove } from '@nexus/shared/studio-publication'
 import { isStillDraftListing } from '@nexus/shared/push-lock'
 import { liveChannelSku, wantedChannelSku } from '../listings/channel-sku.pure.js'
@@ -129,30 +129,12 @@ function newRowsOf(facts: PublicationFacts, startAs: StartAsTarget | null) {
   // Facts read before New listings (a caller's stand-in) carry no choices: nothing is held or created Inactive.
   const choices: PublicationFacts['createChoices'] = facts.createChoices ?? new Map()
   const deletions: ReadonlyMap<string, ListingDeletion> = facts.deletions ?? new Map()
-  // Not on the channel by the selling state's own rule (`newListingChoices` holds exactly those, deleted rows included).
-  const isNew = (productId: string) => choices.has(productId)
-  const targetOf = (productId: string) => {
-    const choice = choices.get(productId)
-    if (!choice) return null
-    return startAs && choice.target !== 'not_listed' ? startAs : choice.target
-  }
-  // Shopify, and Etsy while its listing is not on Etsy yet, create (or list again) the whole listing: its main row's choice
-  // decides for every variant. A new variation of a listing already on Etsy has its own choice.
-  const etsyListed = scope.channel === 'ETSY' && facts.listings.some(listing => listing.externalListingId)
-  const effective = (productId: string) => scope.channel === 'SHOPIFY' || (scope.channel === 'ETSY' && !etsyListed) ? targetOf(parent.id) : targetOf(productId)
-  // A deleted row says why in the delete's own words ("Deleted on Amazon · IT on 4 Oct. To list it again, set Status to Active.").
-  const heldWords = (productId: string, reason: string) => deletions.has(productId) ? deletedPublishSkip(deletions.get(productId)!) : reason
+  const rows = { channel: scope.channel, familyId: parent.id, products, listings: facts.listings, choices, deletions }
+  const { isNew, targetOf, effective, etsyListed } = newRowTargets(rows, startAs)
   const family = products.length > 1 || products.some(product => product.id !== parent.id)
-  const held = new Map<string, string>()
-  if (isNew(parent.id) && products.some(product => product.id === parent.id) && targetOf(parent.id) === 'not_listed') {
-    const reason = family ? NOT_LISTED_MAIN_HELD : NOT_LISTED_LEFT_OUT
-    for (const product of products) if (scope.channel === 'EBAY' || scope.channel === 'SHOPIFY' || scope.channel === 'ETSY' || product.id === parent.id || isNew(product.id)) held.set(product.id, heldWords(product.id, reason))
-  }
-  // A deleted row left Not listed sends nothing (every Publish skips it until its Status lists it again).
-  for (const product of products) if (!held.has(product.id) && deletions.has(product.id) && effective(product.id) === 'not_listed') held.set(product.id, heldWords(product.id, NOT_LISTED_LEFT_OUT))
-  // S10 / I1 — an UNLINKED row (Nexus forgot its channel id; the item may still be live there) is never listed as new,
-  // whatever its Status says: that would make a second item beside the live one. Its own words say how to link it again.
-  for (const product of products) if (deletions.get(product.id)?.unlinked) held.set(product.id, deletedPublishSkip(deletions.get(product.id)!))
+  // The rows held here (a Not listed main row's family, a deleted row left Not listed, an unlinked row): the one rule
+  // `readPublicationFacts` reads too, so a held row is never judged for content (`unsentRows`).
+  const held = newListingHolds(rows)
   const relist = new Map<string, ListingDeletion>()
   for (const product of products) {
     const deletion = deletions.get(product.id)
@@ -186,9 +168,15 @@ type PublicationRelist = Required<PublicationRelistRecord>
  * `verify` (the preview only): a NEW eBay listing whose own checks pass is checked by eBay too (VerifyAddFixedPriceItem,
  * which creates nothing), so its problems are in this review, not at the send. The send runs eBay's check again.
  * `fullProductIds` (build shape v2): the rows to review as Full update (`sendModes`).
+ * `heldProductIds` (the mixed-plan Publish): the rows whose content it holds here; with the rows New listings holds, this
+ * review sends nothing for them, so they are not judged (`facts.unsent`, `unsentRows`).
  */
-async function buildReview(productId: string, scope: StudioPublishScope, options: { verify?: boolean; fullProductIds?: readonly string[]; startAs?: StartAsTarget | null } = {}) {
-  const facts = await readPublicationFacts(productId, scope)
+async function buildReview(productId: string, scope: StudioPublishScope, options: { verify?: boolean; fullProductIds?: readonly string[]; startAs?: StartAsTarget | null
+  heldProductIds?: readonly string[] } = {}) {
+  const heldIds = [...new Set(options.heldProductIds ?? [])].sort()
+  const facts = heldIds.length ? await readPublicationFacts(productId, scope, { heldProductIds: heldIds }) : await readPublicationFacts(productId, scope)
+  // Facts read before this rule (a caller's stand-in) name no unsent row: every row is judged, as before.
+  const unsent: ReadonlySet<string> = facts.unsent ?? new Set()
   const mode = publishMode(scope.channel)
   const issues = [...facts.issues]
   // Sharing studio step 5 — the same shared product already live on this channel in the other business (a warning).
@@ -252,7 +240,9 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
       // An Inventory listing is reviewed and sent by its owner alone (`prepareEbayInventoryChanges` addresses every change
       // to it), so its baseline is the owner's. Judged against all included products, a family failed every review.
       const owner = prepared.kind === 'ebay-inventory' ? prepared.owner.productId : null
-      const baselineFacts = owner ? { ...facts, products: facts.products.filter(product => product.id === owner) } : facts
+      // Amazon builds no message for a row it sends nothing for (`prepareAmazonPublication`): its baseline leaves it out too.
+      const baselineFacts = owner ? { ...facts, products: facts.products.filter(product => product.id === owner) }
+        : prepared.kind === 'amazon' && unsent.size ? { ...facts, products: facts.products.filter(product => !unsent.has(product.id)) } : facts
       const baseline = await readPublicationBaseline(baselineFacts, prepared.products)
       baselineRevision = baseline.revision
       changePlan = prepared.kind === 'amazon' ? await prepareAmazonChanges(facts, prepared, baseline.values, { ...(modes.full.size ? { fullProductIds: modes.full } : {}),
@@ -292,7 +282,7 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
   const moves = await skuMoveRows(facts, prepared, changePlan)
   issues.push(...moves.issues)
   if (prepared) for (const product of facts.products) {
-    if (creates.held.has(product.id) || modes.blocked.has(product.id)) continue
+    if (creates.held.has(product.id) || modes.blocked.has(product.id) || unsent.has(product.id)) continue
     const problem = channelSkuLengthProblem(scope.channel, sentSkuOf(product.id))
     if (problem) issues.push({ productId: product.id, sku: product.sku, severity: 'error', message: problem })
   }
@@ -330,7 +320,9 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
       ...(creates.held.size || creates.inactive.size || creates.startsAs.length || creates.createStatus || creates.etsyCreateState || options.startAs
         ? [[...creates.held.keys()].sort(), [...creates.inactive].sort(), creates.startsAs, creates.createStatus, options.startAs ?? null,
           // Etsy only: how its new listing starts (the other channels keep their digest).
-          ...(creates.etsyCreateState ? [creates.etsyCreateState] : [])] : [])]) }
+          ...(creates.etsyCreateState ? [creates.etsyCreateState] : [])] : []),
+      // The mixed-plan Publish's held rows (not judged): only a review made with them adds them (others keep their digest).
+      ...(heldIds.length ? [{ heldProductIds: heldIds }] : [])]) }
 }
 
 /**
@@ -453,6 +445,13 @@ export interface PreviewOptions {
    */
   fullProductIds?: string[]
   /**
+   * The mixed-plan Publish (`reviewPublishPlan`) — the rows whose content it holds on this destination (`heldOnDestination`:
+   * a row being deleted or ended, a deleted row left Not listed). This review sends nothing for them, so they are not
+   * judged (`unsentRows`): an empty field of a row being deleted no longer blocks its family. Kept with the review, so
+   * its submit rebuilds the same plan.
+   */
+  heldProductIds?: string[]
+  /**
    * New listings (ND4 B) — the products list's "New listings start as": Active or Inactive for every row this review
    * creates (a row set Not listed stays out). Kept with the review, so its submit rebuilds the same plan.
    */
@@ -476,8 +475,8 @@ const createsColumns = (record: ReturnType<typeof createsRecord>, startAs: Start
   ...(startAs ? { startAs } : {}),
 })
 
-/** The Full update rows a review was asked for, as stored with it: unique, sorted, none = absent. */
-const storedFullIds = (ids: unknown): string[] | undefined => {
+/** The rows a review was asked to treat apart (Full update, held), as stored with it: unique, sorted, none = absent. */
+const storedProductIds = (ids: unknown): string[] | undefined => {
   const list = Array.isArray(ids) ? [...new Set(ids.filter((id): id is string => typeof id === 'string' && !!id && id.length <= 200))].sort() : []
   return list.length ? list : undefined
 }
@@ -487,7 +486,8 @@ const storedFullIds = (ids: unknown): string[] | undefined => {
  * destination still waiting for its result (D3: one a person marked checked no longer blocks), and whether only photos
  * may be sent. Reads only (the channel too, through the studio transports); it writes nothing.
  */
-async function reviewPlan(productId: string, scope: StudioPublishScope, options: { verify?: boolean; fullProductIds?: readonly string[]; startAs?: StartAsTarget | null } = {}) {
+async function reviewPlan(productId: string, scope: StudioPublishScope, options: { verify?: boolean; fullProductIds?: readonly string[]; startAs?: StartAsTarget | null
+  heldProductIds?: readonly string[] } = {}) {
   const plan = await buildReview(productId, scope, options)
   const key = publicationDigest([workspaceIdForQuery(), plan.facts.destination.familyId, scope.channel, scope.accountId, scope.marketplace, plan.facts.destination.aliasKey])
   const unresolved = await prisma.bulkOperation.findFirst({ where: { ...OPEN_PUBLICATION, changes: { path: ['publicationKey'], equals: key } }, select: { id: true, userId: true } })
@@ -508,9 +508,10 @@ export async function previewStudioPublication(productId: string, scope: StudioP
     const workspace = await getContentWorkspace(productId, contentScope)
     if (!workspace.initialized) await saveContentWorkspace(productId, contentScope, { draft: workspace.draft, expectedRevision: workspace.revision })
   }
-  const fullProductIds = storedFullIds(options.fullProductIds)
+  const fullProductIds = storedProductIds(options.fullProductIds)
+  const heldProductIds = storedProductIds(options.heldProductIds)
   const startAs = storedStartAs(options.startAs)
-  const { plan, key, unresolved, errors, photosOnly } = await reviewPlan(productId, scope, { verify: true, fullProductIds, startAs })
+  const { plan, key, unresolved, errors, photosOnly } = await reviewPlan(productId, scope, { verify: true, fullProductIds, startAs, heldProductIds })
   if (options.expiresInMs) plan.review.expiresAt = new Date(Date.now() + options.expiresInMs).toISOString()
   const id = randomUUID()
   const columns = { ...publicationColumns(plan.facts.destination.familyId, scope, plan.facts.destination.aliasKey ?? ''), ...(options.batchId ? { batchId: options.batchId } : {}) }
@@ -521,7 +522,7 @@ export async function previewStudioPublication(productId: string, scope: StudioP
     await prisma.bulkOperation.create({ data: { id, userId, status: 'BLOCKED', productCount: review.rows.length, changeCount: 0, ...columns,
       completedAt: new Date(), summary: json({ message: blockingIssues(review.issues).map(i => i.message).join('\n') || 'This review cannot be sent.', blocked: true }),
       changes: json({ kind: KIND, publicationKey: key, productId, scope, revision: plan.revision, review: kept, ...(fullProductIds ? { fullProductIds } : {}),
-        ...createsColumns(plan.creates, startAs) }) } })
+        ...(heldProductIds ? { heldProductIds } : {}), ...createsColumns(plan.creates, startAs) }) } })
     return kept
   }
   // D3 — a publication a person marked checked is closed (`OPEN_PUBLICATION`) and no longer blocks its destination.
@@ -533,7 +534,7 @@ export async function previewStudioPublication(productId: string, scope: StudioP
   await prisma.bulkOperation.create({ data: { id, userId, status: 'PREVIEW', productCount: plan.review.rows.length, changeCount: 0,
     ...columns,
     expiresAt: new Date(plan.review.expiresAt), changes: json({ kind: KIND, publicationKey: key, productId, scope, revision: plan.revision,
-      changeVersion: plan.changePlan ? 1 : null, changePlan: plan.changePlan, review, ...(fullProductIds ? { fullProductIds } : {}),
+      changeVersion: plan.changePlan ? 1 : null, changePlan: plan.changePlan, review, ...(fullProductIds ? { fullProductIds } : {}), ...(heldProductIds ? { heldProductIds } : {}),
       ...(plan.relist.length ? { relistProductIds: plan.relist.map(row => row.productId), relist: plan.relist } : {}),
       ...createsColumns(plan.creates, startAs) }) } })
   return review
@@ -675,8 +676,9 @@ export async function claimPublication(productId: string, id: string, body: unkn
   if (sparse && (typeof input.selectionToken !== 'string' || input.selectionToken !== data.selection?.token))
     throw new WorkspaceScopeError('Review the exact selected changes before publishing. This selection token is missing or stale.', 400)
   // Build shape v2 — the same rows as Full update as the review (its stored list), so the same plan is rebuilt; New
-  // listings — and the same "New listings start as".
-  const plan = await buildReview(productId, data.scope as StudioPublishScope, { fullProductIds: storedFullIds(data.fullProductIds), startAs: storedStartAs(data.startAs) })
+  // listings — and the same "New listings start as"; the mixed-plan Publish — and the same held rows (not judged).
+  const plan = await buildReview(productId, data.scope as StudioPublishScope, { fullProductIds: storedProductIds(data.fullProductIds), startAs: storedStartAs(data.startAs),
+    heldProductIds: storedProductIds(data.heldProductIds) })
   if (plan.revision !== data.revision) throw new WorkspaceScopeError('Saved information, the destination, channel settings or content-read evidence changed. Review the current values before publishing.')
   // A photos-only selection is not blocked by other fields' problems (P4c); everything else is, as before.
   const blockers = sparse ? blockingIssues(plan.review.issues, data.selection?.selectedIds) : plan.review.issues.filter(i => i.severity === 'error')

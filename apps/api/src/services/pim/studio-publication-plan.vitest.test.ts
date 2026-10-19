@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn(), languages: vi.fn(), closed: vi.fn(), connection: vi.fn() }))
+const m = vi.hoisted(() => ({ destination: vi.fn(), listingRead: vi.fn(), products: vi.fn(), resolve: vi.fn(), excluded: vi.fn(), languages: vi.fn(), closed: vi.fn(), connection: vi.fn(),
+  snapshots: vi.fn(), content: vi.fn() }))
 vi.mock('../amazon-market-offer.service.js', () => ({ closedMarketSet: m.closed }))
 vi.mock('../../db.js', () => ({ default: { product: { findMany: m.products }, channelListing: { findMany: m.listingRead }, productListingAlias: { findUnique: async () => ({ label: 'Summer' }) },
-  // Delete and relist: no row here was deleted by Nexus (the facts read the delete records of draft-shaped rows).
-  channelListingSnapshot: { findMany: async () => [] } } }))
+  // Delete and relist: no row here was deleted by Nexus unless a test says so (the facts read the delete records of draft-shaped rows).
+  channelListingSnapshot: { findMany: (...args: unknown[]) => m.snapshots(...args) } } }))
 vi.mock('./workspace-destination.js', () => ({ resolveWorkspaceDestination: m.destination, WorkspaceScopeError: class extends Error { constructor(message: string, public statusCode = 409) { super(message) } } }))
 vi.mock('../connection-resolver.service.js', () => ({ resolveConnection: m.connection }))
 vi.mock('./variation-excluded.js', () => ({ readExcludedListingIds: m.excluded }))
@@ -11,13 +12,14 @@ vi.mock('./mapping/resolve-batch.service.js', () => ({ resolveBatch: m.resolve }
 vi.mock('./market-languages.js', () => ({ marketLanguages: m.languages }))
 // A-32 — the primary content language is pinned here, whatever a local .env says.
 vi.mock('./content-locale.js', async (importOriginal) => ({ ...(await importOriginal<object>()), PRIMARY_CONTENT_LOCALE: 'it' }))
-vi.mock('./publish-review-gate.js', () => ({ resolvePublishContent: async () => [], publishContentIssues: () => [], requireReviewedContent: () => false }))
+vi.mock('./publish-review-gate.js', () => ({ resolvePublishContent: async () => [], publishContentIssues: (...args: unknown[]) => m.content(...args), requireReviewedContent: () => false }))
 import { readPublicationFacts, publicationScope, publicationDigest } from './studio-publication-plan.js'
 import { permissionForRoute } from '../../lib/auth/permissions-manifest.js'
 const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b', listingId: 'alias-parent' }
 beforeEach(() => {
   vi.clearAllMocks(); m.destination.mockResolvedValue({ familyId: 'parent', accountId: 'account-b', aliasKey: 'summer' })
   m.closed.mockResolvedValue(new Set())
+  m.snapshots.mockResolvedValue([]); m.content.mockReturnValue([])
   m.connection.mockResolvedValue({ displayName: 'Selected account', authStatus: 'connected' })
   m.languages.mockResolvedValue(['it', 'en'])
   m.products.mockResolvedValue([{ id: 'child', sku: 'CHILD', parentId: 'parent' }, { id: 'excluded', sku: 'EXCLUDED', parentId: 'parent' }, { id: 'parent', sku: 'PARENT', isParent: true }])
@@ -398,5 +400,60 @@ describe('eBay item-level fields are judged on the main row only', () => {
     const facts = await readPublicationFacts('parent', ebay)
     expect(facts.issues.filter(i => i.field === 'conditionId')).toEqual([{ productId: 'parent', sku: 'PARENT', field: 'conditionId', severity: 'warning',
       message: 'Condition is empty in Nexus; eBay keeps the listing\'s current condition.' }])
+  })
+})
+
+// Owner 2026-10-19 — "if I'm deleting a product on the market, it doesn't let me publish because a field is empty". A row
+// this Publish sends nothing for here stays in the review (it says why) but none of its fields is judged (`unsentRows`).
+describe('a row this Publish sends nothing for is not judged', () => {
+  const brand = { value: null, label: 'Brand', errors: ["Field 'Brand' is required."], findings: [{ rule: 'required', message: "Field 'Brand' is required." }] }
+  const live = (externalListingId: string) => ({ externalListingId, listingStatus: 'ACTIVE', isPublished: true })
+  beforeEach(() => {
+    m.languages.mockResolvedValue(['it'])
+    m.excluded.mockResolvedValue(new Set())
+    m.resolve.mockImplementation(async ({ productIds }: any) => ({ products: productIds.map((productId: string) => ({ productId, sku: productId.toUpperCase(), cells: { brand } })),
+      missingProductIds: [], catalogue: {} }))
+    m.content.mockReturnValue([{ field: 'description', severity: 'WARNING', message: 'Description: review this text.' }])
+  })
+  /** The products the review names a problem for. */
+  const judged = (facts: { issues: Array<{ productId?: string }> }) => [...new Set(facts.issues.flatMap(i => i.productId ? [i.productId] : []))].sort()
+
+  it('Amazon: a row being deleted (held by the plan) stays in the review, but neither its cells nor its text are judged; the row sent still is', async () => {
+    m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', ...live('LIVE-PARENT') }, { id: 'listing-child', productId: 'child', ...live('LIVE-CHILD') }])
+    const plain = await readPublicationFacts('parent', scope)
+    expect(judged(plain)).toEqual(['child', 'parent'])
+    expect(plain.unsent).toEqual(new Set())
+    const facts = await readPublicationFacts('parent', scope, { heldProductIds: ['child', 'not-in-this-family'] })
+    expect(facts.products.map(p => p.id)).toEqual(['parent', 'child'])
+    expect(facts.unsent).toEqual(new Set(['child']))
+    expect(judged(facts)).toEqual(['parent'])
+    expect(facts.issues).toContainEqual(expect.objectContaining({ productId: 'parent', field: 'brand', severity: 'error' }))
+    // The delivery re-reads the facts without the held rows: the revision does not depend on them.
+    expect(facts.revision).toBe(plain.revision)
+  })
+
+  it('Amazon: a deleted row left Not listed is not judged, with no held rows passed at all', async () => {
+    m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', ...live('LIVE-PARENT') },
+      { id: 'listing-child', productId: 'child', externalListingId: null, listingStatus: 'DRAFT', isPublished: false }])
+    m.snapshots.mockImplementation(async ({ where }: any) => where.reason?.in
+      ? [{ channelListingId: 'listing-child', acceptedAt: new Date('2026-10-18T10:00:00Z'), payload: {}, reason: 'delete' }] : [])
+    const facts = await readPublicationFacts('parent', scope)
+    expect(facts.deletions.has('child')).toBe(true)
+    expect(facts.products.map(p => p.id)).toEqual(['parent', 'child'])
+    expect(facts.unsent).toEqual(new Set(['child']))
+    expect(judged(facts)).toEqual(['parent'])
+  })
+
+  it('eBay sends a whole listing: a variation held alone still goes out with it and is judged; a listing held whole is not, and a problem of no row still blocks', async () => {
+    const ebay = { ...scope, channel: 'EBAY' }
+    m.listingRead.mockResolvedValue([{ id: 'alias-parent', productId: 'parent', ...live('111') }, { id: 'listing-child', productId: 'child', ...live('111') }])
+    const one = await readPublicationFacts('parent', ebay, { heldProductIds: ['child'] })
+    expect(one.unsent).toEqual(new Set())
+    expect(judged(one)).toEqual(['child', 'parent'])
+    m.connection.mockResolvedValue({ displayName: 'Store B', authStatus: 'needs_reauth' })
+    const whole = await readPublicationFacts('parent', ebay, { heldProductIds: ['parent', 'child'] })
+    expect(whole.unsent).toEqual(new Set(['parent', 'child']))
+    expect(judged(whole)).toEqual([])
+    expect(whole.issues).toContainEqual({ severity: 'error', message: 'Reconnect Store B in Settings → Channels before publishing.' })
   })
 })

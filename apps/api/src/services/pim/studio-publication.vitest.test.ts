@@ -12,11 +12,14 @@ vi.mock('../amazon-publish-gate.service.js', () => ({ getAmazonPublishMode: m.mo
 vi.mock('../listing-events.service.js', () => ({ publishListingEvent: (event: any) => m.published.push(event) }))
 vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: m.mode }))
 vi.mock('../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: m.mode }))
-vi.mock('./studio-publication-amazon.js', () => ({ prepareAmazonPublication: async () => {
+// Like the real builder, a row the facts name unsent (`facts.unsent`) gets no message.
+vi.mock('./studio-publication-amazon.js', () => ({ prepareAmazonPublication: async (facts: any) => {
   const sku = (productId: string, fallback: string) => m.amazonSkus?.[productId] ?? fallback
+  const sent = (['parent', 'child'] as const).filter(productId => !facts?.unsent?.has(productId))
+  const skuOf = (productId: string) => sku(productId, productId === 'parent' ? 'SELLER-SKU' : 'SELLER-CHILD')
   return { kind: 'amazon', sellerId: 'seller', marketplaceId: 'market',
-  products: [{ productId: 'parent', sku: sku('parent', 'SELLER-SKU') }, { productId: 'child', sku: sku('child', 'SELLER-CHILD') }],
-  feed: { header: { version: '2.0' }, messages: [{ sku: sku('parent', 'SELLER-SKU') }, { sku: sku('child', 'SELLER-CHILD') }] }, ...(m.moves ? { moves: m.moves } : {}) } }, sendAmazonPublication: m.amazon, readAmazonPublication: m.amazonStatus }))
+  products: sent.map(productId => ({ productId, sku: skuOf(productId) })),
+  feed: { header: { version: '2.0' }, messages: sent.map(productId => ({ sku: skuOf(productId) })) }, ...(m.moves ? { moves: m.moves } : {}) } }, sendAmazonPublication: m.amazon, readAmazonPublication: m.amazonStatus }))
 // S10 — the coordinate claim of a moved SKU (shared accounts) is recorded, never written.
 vi.mock('../listing-claim.service.js', () => ({ assertClaimed: m.claim, releaseCoordinate: vi.fn() }))
 vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: async (facts: any) => ({ kind: 'ebay', marketplace: 'IT', itemId: '123', xml: '<Item/>', ...(m.ebayNotices.length ? { notices: m.ebayNotices } : {}),
@@ -510,7 +513,8 @@ const draftListing = (productId: string, extra: Record<string, unknown> = {}) =>
   externalListingId: null, listingStatus: 'DRAFT', isPublished: false, publishAction: null, publishActionAt: null, ...extra })
 function deletedChild(childExtra: Record<string, unknown> = {}) {
   const listings = [draftListing('parent', { externalListingId: 'B0PARENT01', listingStatus: 'ACTIVE', isPublished: true }), draftListing('child', childExtra)]
-  m.snapshots.mockImplementation(async ({ where }: any) => where.reason === 'delete'
+  // The reader asks for every removal reason at once (`REMOVAL_REASONS`: delete and unlink).
+  m.snapshots.mockImplementation(async ({ where }: any) => where.reason === 'delete' || where.reason?.in?.includes('delete')
     ? [{ channelListingId: 'listing-child', acceptedAt: deletedAt, payload: { kind: 'listing-action', evidence: { oldExternalListingId: 'B0OLDCHILD' } } }] : [])
   // The facts as `readPublicationFacts` reads them: the delete records, and the choices of every row not on the channel.
   m.facts.mockImplementation(async () => {
@@ -559,6 +563,61 @@ it('delete and relist: an OLDER relist choice (Full update after the delete) rea
   m.amazon.mockRejectedValue(Object.assign(new Error('SELLER-CHILD: 13013: The SKU was recently deleted.'), { notSent: true }))
   const result = await submitStudioPublication('parent', review.id!, {}, 'user-a')
   expect(result).toMatchObject({ status: 'FAILED', message: expect.stringMatching(/^Nothing was submitted\. Amazon is still removing this SKU \(deleted 2 hours ago\)\. Try again later; Amazon can take up to 24 hours\. Amazon said: SELLER-CHILD: 13013: The SKU was recently deleted\.$/) })
+})
+
+// ── A row this Publish sends nothing for is not judged (Owner 2026-10-19) ─────────────────────────────────────────────
+// "If I'm deleting a product on the market, it doesn't let me publish because a field is empty." The facts leave the
+// problems of an unsent row out, by the real rule (`unsentRows`); the review is then stored and its send is not refused.
+// The same problem on a row that IS sent still blocks.
+const requiredBrand = (productId: string, sku: string) => ({ productId, sku, field: 'brand', severity: 'error' as const, message: 'Brand: Field \'Brand\' is required.' })
+/** The facts `read` gives, judged as `readPublicationFacts` judges them: `problems`, less those of the rows it sends nothing for. */
+async function judgedBy(read: (...args: any[]) => Promise<any>, problems: ReturnType<typeof requiredBrand>[]) {
+  const { unsentRows } = await vi.importActual<typeof import('./studio-publication-plan.js')>('./studio-publication-plan.js')
+  m.facts.mockImplementation(async (...args: any[]) => {
+    const facts = await read(...args)
+    const unsent = unsentRows({ channel: facts.scope.channel, familyId: facts.parent.id, products: facts.products, listings: facts.listings,
+      choices: facts.createChoices, deletions: facts.deletions }, args[2]?.heldProductIds)
+    return { ...facts, unsent, issues: problems.filter(issue => !unsent.has(issue.productId)) }
+  })
+}
+
+it('🔴 a deleted child left Not listed with an empty required field: the review is stored without its problem, and its send is not refused', async () => {
+  deletedChild()
+  await judgedBy(m.facts.getMockImplementation()!, [requiredBrand('child', 'CHILD')])
+  const review = await previewStudioPublication('parent', scope, 'user-a')
+  expect(review.id).toEqual(expect.any(String))
+  expect(review.issues.filter(issue => issue.productId === 'child')).toEqual([])
+  expect(review.rows.find(r => r.productId === 'child')).toMatchObject({ deleted: true, blocked: deletedPublishSkip({ where: 'Amazon · IT', at: deletedAt.toISOString() }) })
+  // Nothing of the deleted row is built (the real builder leaves it out too), so nothing of it can be ticked.
+  expect(review.changes!.map(c => c.productId)).toEqual(['parent'])
+  expect(await submitStudioPublication('parent', review.id!, {}, 'user-a')).toMatchObject({ status: 'SUBMITTED' })
+  expect(m.rows.get(review.id!).changes.delivery.productIds).toEqual(['parent'])
+  expect(m.amazon).toHaveBeenCalledOnce()
+})
+
+it('🔴 control: the same empty required field on the parent (a row that IS sent) still blocks the review', async () => {
+  deletedChild()
+  await judgedBy(m.facts.getMockImplementation()!, [requiredBrand('parent', 'SKU')])
+  const review = await previewStudioPublication('parent', scope, 'user-a')
+  expect(review.id).toBeNull()
+  expect(review.issues).toContainEqual(requiredBrand('parent', 'SKU'))
+  expect(m.amazon).not.toHaveBeenCalled()
+})
+
+it('🔴 a child the mixed-plan Publish holds (being deleted): its problem is left out, the held rows are stored with the review and read again at the send', async () => {
+  const live = { ...existingFacts(), listings: [...existingFacts().listings, { id: 'listing-child', productId: 'child', externalListingId: 'existing-child' }] }
+  await judgedBy(async () => structuredClone(live), [requiredBrand('child', 'CHILD')])
+  // Without the held rows (the studio's own Publish) the child is sent, so its problem blocks, as before.
+  expect(await previewRaw('parent', scope, 'user')).toMatchObject({ id: null, issues: expect.arrayContaining([requiredBrand('child', 'CHILD')]) })
+  const review = await previewStudioPublication('parent', scope, 'user', { heldProductIds: ['child'] })
+  expect(review.id).toEqual(expect.any(String))
+  expect(review.issues.filter(issue => issue.productId === 'child')).toEqual([])
+  expect(review.changes!.map(c => c.productId)).toEqual(['parent'])
+  expect(m.rows.get(review.id!).changes.heldProductIds).toEqual(['child'])
+  expect(await submitStudioPublication('parent', review.id!, { confirmOverwrite: true }, 'user')).toMatchObject({ status: 'SUBMITTED' })
+  // The preview and the claim both read the facts with the held row (the delivery's revision check reads them plain).
+  expect(m.facts.mock.calls.filter(call => call[2]?.heldProductIds).map(call => call[2])).toEqual([{ heldProductIds: ['child'] }, { heldProductIds: ['child'] }])
+  expect(m.rows.get(review.id!).changes.delivery.productIds).toEqual(['parent'])
 })
 
 // ── S10 (per-channel SKU, Owner D2 = A) — a live Amazon listing moved to its own SKU ─────────────────────────────────────

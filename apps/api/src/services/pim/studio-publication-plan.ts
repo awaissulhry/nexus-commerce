@@ -15,7 +15,7 @@ import { closedMarketSet } from '../amazon-market-offer.service.js'
 import { cellFindings, publishVerdict } from './value-verdict.js'
 import { familyPublicationOrder } from './family-publication-order.js'
 import { ebayListingLevelValues, isEbayItemLevel, isEbayListingLevel, loadEbayListingAxes, type ListingLevelField } from './ebay-listing-level.js'
-import { newListingChoices } from '../listings/new-listing-choices.js'
+import { newListingChoices, newListingHolds, type NewRowFacts } from '../listings/new-listing-choices.js'
 import { readListingDeletions } from '../listings/listing-deletions.js'
 import { nativeListingValue } from '../shopify/native-listing-value.js'
 import { aspectCanonicalName } from '../ebay-theme-axes.js'
@@ -40,8 +40,30 @@ export function publicationScope(body: unknown): StudioPublishScope {
   return { channel: input.channel.toUpperCase(), marketplace: input.marketplace.toUpperCase(), accountId: input.accountId, ...(input.listingId ? { listingId: input.listingId } : {}) }
 }
 
-/** Load the same resolver and account/alias stores as Information. No writes or provider sends. */
-export async function readPublicationFacts(productId: string, scope: StudioPublishScope) {
+/** eBay, Shopify and Etsy change a whole listing in one send; Amazon sends each row (seller SKU) on its own. */
+const WHOLE_LISTING_CHANNELS = ['EBAY', 'SHOPIFY', 'ETSY']
+
+/**
+ * PURE. The rows this Publish sends NOTHING for on this destination — they are not judged for content (Owner 2026-10-19:
+ * "if I'm deleting a product on the market, it doesn't let me publish because a field is empty"): the rows New listings
+ * holds (`newListingHolds`: a family left out by its Not listed main row, a deleted row left Not listed, an unlinked
+ * row) and the rows the mixed-plan Publish holds (`heldProductIds`: a row being deleted or ended, `heldOnDestination`).
+ * Amazon sends each row on its own, so each held row is left out. eBay, Shopify and Etsy send a whole listing: a held row
+ * of it still goes out with the rest (a variation removed by a Full update is part of that send), so there only a listing
+ * held whole sends nothing. Only included products count.
+ */
+export function unsentRows(facts: NewRowFacts, heldProductIds: Iterable<string> = []): Set<string> {
+  const included = new Set(facts.products.map(product => product.id))
+  const held = new Set([...newListingHolds(facts).keys(), ...heldProductIds].filter(id => included.has(id)))
+  return WHOLE_LISTING_CHANNELS.includes(facts.channel) && held.size < included.size ? new Set() : held
+}
+
+/**
+ * Load the same resolver and account/alias stores as Information. No writes or provider sends. `heldProductIds`: the rows
+ * the mixed-plan Publish holds here (`PreviewOptions.heldProductIds`); with the rows New listings holds they are `unsent`,
+ * and not judged.
+ */
+export async function readPublicationFacts(productId: string, scope: StudioPublishScope, options: { heldProductIds?: readonly string[] } = {}) {
   const destination = await resolveWorkspaceDestination({ productId, ...scope })
   const account = await resolveConnection({ accountId: destination.accountId })
   const products = await prisma.product.findMany({ where: { deletedAt: null, OR: [{ id: destination.familyId }, { parentId: destination.familyId }] },
@@ -94,6 +116,9 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   const skipped = selected.filter(p => wholeListing || rowSkips.has(p.id))
     .map(p => ({ productId: p.id, sku: p.sku, reason: rowSkips.get(p.id) ?? wholeListing! }))
   const included = selected.filter(p => !skipped.some(skip => skip.productId === p.id))
+  // Owner 2026-10-19 — a row this Publish sends nothing for here stays in the review (it says why) but is never judged
+  // for content: a deleted row left Not listed, or one being deleted, no longer blocks its family on an empty field.
+  const unsent = unsentRows({ channel: scope.channel, familyId: parent.id, products: included, listings, choices: createChoices, deletions }, options.heldProductIds)
   const issues: StudioPublishIssue[] = []
   const error = (message: string) => issues.push({ message, severity: 'error' })
   if (!selected.length) error('Every product is excluded from this destination. Include a product in Information first.')
@@ -133,6 +158,7 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     // Follow-up 2026-10-01 — Condition, policies, location, package… go to eBay once, from the main row: only it is judged.
     const itemLevelKeys = new Set(ebayAxes ? ebayFields(result.catalogue?.fields).filter(field => isEbayItemLevel(field.store)).map(field => field.key) : [])
     for (const row of result.products) for (const [field, cell] of Object.entries(row.cells)) {
+      if (unsent.has(row.productId)) continue
       const existing = listings.some(listing => listing.productId === row.productId && listing.externalListingId)
       if (existing && ['AMAZON', 'EBAY', 'ETSY'].includes(scope.channel) && ['Pricing', 'Inventory'].includes(cell.sourceOwner?.label ?? '')) continue
       // A variation's own value of a listing-level field is not sent: only the row eBay's value comes from is judged.
@@ -152,8 +178,10 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
     resolved.push(result)
   }
   if (!languages.length) error('Configure a content language for this destination before publishing.')
-  if (ebayAxes && resolved[0]) issues.push(...ebayStoredSpecificIssues({ parentId: parent.id, rows: familyRows, listings, fields: ebayFields(resolved[0].catalogue?.fields), axes: ebayAxes }))
+  if (ebayAxes && resolved[0]) issues.push(...ebayStoredSpecificIssues({ parentId: parent.id, rows: familyRows, listings, fields: ebayFields(resolved[0].catalogue?.fields), axes: ebayAxes })
+    .filter(issue => !unsent.has(issue.productId ?? '')))
   for (const product of included) {
+    if (unsent.has(product.id)) continue
     const listing = listings.find(l => l.productId === product.id)
     const content = await resolvePublishContent({ product: product as any, parent: product.id === parent.id ? null : parent as any,
       listing, channel: scope.channel, marketplace: scope.marketplace })
@@ -175,7 +203,7 @@ export async function readPublicationFacts(productId: string, scope: StudioPubli
   const revision = publicationDigest({ scope, products, listings, excluded: [...excludedIds].sort(), skipped,
     resolved: resolved.map(r => ({ products: r.products, catalogue: r.catalogue })) })
   return { scope, destination, account, parent, products: included, listings, resolved, languages, issues, revision, skipped,
-    excluded: products.length - selected.length, aliasLabel: alias?.label ?? 'Primary listing', createChoices, deletions }
+    excluded: products.length - selected.length, aliasLabel: alias?.label ?? 'Primary listing', createChoices, deletions, unsent }
 }
 export type PublicationFacts = Awaited<ReturnType<typeof readPublicationFacts>>
 

@@ -123,8 +123,9 @@ describe('the review of one Publish', () => {
     const d = plan.destinations[0]
     expect(d).toMatchObject({ label: 'Amazon · IT', destination: { channel: 'AMAZON', marketplace: 'IT', accountId: ids.amazon, aliasKey: '' }, error: null,
       fullProductIds: [f.children.S], contentHeld: [{ productId: f.children.M, sku: 'PP-MIX-M', reason: CONTENT_HELD_FOR_DELETE }] })
-    // The content review was made with the Full update rows; the held row cannot be ticked, there and in the saved review.
-    expect(fixture.previews).toEqual([{ productId: f.children.S, scope: amazonIT(), options: { fullProductIds: [f.children.S] } }])
+    // The content review was made with the Full update rows and the held row (not judged: it sends nothing here); the
+    // held row cannot be ticked, there and in the saved review.
+    expect(fixture.previews).toEqual([{ productId: f.children.S, scope: amazonIT(), options: { fullProductIds: [f.children.S], heldProductIds: [f.children.M] } }])
     const heldChange = d.review!.changes!.find(c => c.productId === f.children.M)!
     expect(heldChange).toMatchObject({ selectable: false, selectedByDefault: false, reason: CONTENT_HELD_FOR_DELETE })
     expect(d.review!.rows.find(r => r.productId === f.children.M)).toMatchObject({ blocked: CONTENT_HELD_FOR_DELETE })
@@ -187,6 +188,25 @@ describe('the review of one Publish', () => {
     expect(lifecycleOf(plan, 'PP-ROLE-M')).toMatchObject({ refused: ROLE_CANNOT_END_OR_DELETE, tickedByDefault: false })
     expect(lifecycleOf(plan, 'PP-ROLE-L')).toMatchObject({ refused: null, tickedByDefault: true })
     expect(plan.counts).toMatchObject({ delete: 0, inactive: 1 })
+  }))
+
+  // Owner 2026-10-19 — "if I'm deleting a product on the market, it doesn't let me publish because a field is empty": the
+  // content review is told which rows this Publish holds, so it does not judge them (they send nothing there).
+  it('an Amazon variation being deleted reaches the content review as held; a Delete refused for lack of products.delete passes none', () => scoped(async () => {
+    const f = await family('PP-UNSENT', ['L', 'M'])
+    await listing(f.root, 'AMAZON', 'IT', ids.amazon)
+    await listing(f.children.L, 'AMAZON', 'IT', ids.amazon)
+    const lM = await listing(f.children.M, 'AMAZON', 'IT', ids.amazon)
+    await writePublishActions(f.root, { listingIds: [lM], change: { column: 'send', mode: 'delete' } }, owner())
+    const plan = await reviewPublishPlan(f.root, { destinations: [amazonIT()] }, owner(), { preview: fakePreview })
+    expect(plan.destinations[0].contentHeld).toEqual([{ productId: f.children.M, sku: 'PP-UNSENT-M', reason: CONTENT_HELD_FOR_DELETE }])
+    expect(fixture.previews).toEqual([{ productId: f.root, scope: amazonIT(), options: { heldProductIds: [f.children.M] } }])
+    // Control: without products.delete the Delete is refused and holds nothing, so the content review judges every row.
+    fixture.previews.length = 0
+    const refused = await reviewPublishPlan(f.root, { destinations: [amazonIT()] }, publisher(), { preview: fakePreview })
+    expect(refused.destinations[0].contentHeld).toEqual([])
+    expect(lifecycleOf(refused, 'PP-UNSENT-M')).toMatchObject({ refused: ROLE_CANNOT_END_OR_DELETE })
+    expect(fixture.previews).toEqual([{ productId: f.root, scope: amazonIT(), options: {} }])
   }))
 
   it('refuses a malformed request, and names a destination it cannot resolve without failing the others', () => scoped(async () => {
@@ -402,7 +422,8 @@ describe('delete and relist', () => {
     expect(d.review!.changes!.find(c => c.productId === f.children.S)).toMatchObject({ selectable: false, selectedByDefault: false, reason: deletedPublishSkip(where) })
     expect(d.lifecycle).toEqual([])
     expect(d.outgrown.map(o => [o.column, o.value])).toEqual([['send', 'full'], ['status', 'inactive']])
-    expect(fixture.previews[0].options).toEqual({})
+    // The deleted row is held, so the content review does not judge it (Owner 2026-10-19).
+    expect(fixture.previews[0].options).toEqual({ heldProductIds: [f.children.S] })
     // Status Active after the delete: stored as the row's choice; the next Publish lists it again, ticked.
     await prisma.channelListing.update({ where: { id: lS }, data: { publishAction: null, publishActionAt: null, publishActionById: null, sellingTarget: null, sellingTargetAt: null, publishActionBasis: Prisma.DbNull } })
     expect(await writePublishActions(f.root, { listingIds: [lS], change: { column: 'status', target: 'active' } }, publisher())).toMatchObject({ applied: [lS] })
