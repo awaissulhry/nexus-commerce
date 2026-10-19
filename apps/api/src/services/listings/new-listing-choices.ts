@@ -22,7 +22,8 @@
  * `studio-publication.service.ts`) read the choices from the same facts with this one function, so the Status a cell
  * shows is what Publish does.
  */
-import { isNewListingTarget, newListingChoice, newListingDefault, type ListingDeletion, type NewListingSource, type NewListingTarget } from '@nexus/shared/listing-actions'
+import { deletedPublishSkip, isNewListingTarget, newListingChoice, newListingDefault, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD, type ListingDeletion, type NewListingSource,
+  type NewListingTarget } from '@nexus/shared/listing-actions'
 import { statusTargetOf } from '@nexus/shared/publish-actions'
 
 export interface ChoiceProduct { id: string; parentId: string | null }
@@ -125,4 +126,64 @@ export function newListingChoices(input: NewListingChoicesInput): Map<string, Ne
     })
   }
   return out
+}
+
+/** The facts Publish reads its new rows from on ONE destination (`readPublicationFacts`). */
+export interface NewRowFacts {
+  channel: string
+  familyId: string
+  /** The products this Publish reviews here (its included products). */
+  products: ReadonlyArray<{ id: string }>
+  /** The family's rows on this destination. */
+  listings: ReadonlyArray<{ productId: string; externalListingId?: string | null }>
+  /** `newListingChoices`, by product id. Absent: facts read before New listings (a caller's stand-in) — no choices. */
+  choices?: ReadonlyMap<string, Pick<NewListingRowChoice, 'target'>>
+  /** The rows Nexus deleted or unlinked, by PRODUCT id (`readListingDeletions`). */
+  deletions?: ReadonlyMap<string, ListingDeletion>
+}
+
+/**
+ * What Publish does with each row not on the channel here: its choice's target, with "New listings start as" (`startAs`,
+ * ND4 B) in place of Active or Inactive, never of Not listed. Shopify, and Etsy while its listing is not on Etsy yet,
+ * create (or list again) the whole listing: the main row's choice decides for every variant. A new variation of a
+ * listing already on Etsy has its own choice.
+ */
+export function newRowTargets(facts: NewRowFacts, startAs: Exclude<NewListingTarget, 'not_listed'> | null = null) {
+  const choices = facts.choices ?? new Map<string, Pick<NewListingRowChoice, 'target'>>()
+  const targetOf = (productId: string): NewListingTarget | null => {
+    const choice = choices.get(productId)
+    if (!choice) return null
+    return startAs && choice.target !== 'not_listed' ? startAs : choice.target
+  }
+  const etsyListed = facts.channel === 'ETSY' && facts.listings.some(listing => listing.externalListingId)
+  const effective = (productId: string) => facts.channel === 'SHOPIFY' || (facts.channel === 'ETSY' && !etsyListed) ? targetOf(facts.familyId) : targetOf(productId)
+  // Not on the channel by the selling state's own rule (`newListingChoices` holds exactly those, deleted rows included).
+  return { isNew: (productId: string) => choices.has(productId), targetOf, effective, etsyListed }
+}
+
+/**
+ * New listings — the rows not on the channel that Publish HOLDS here (it sends nothing for them), with why. The one rule
+ * Publish's review (`newRowsOf`, studio-publication.service.ts) and its judging (`unsentRows`, studio-publication-plan.ts:
+ * a row sent nothing is not judged) read:
+ *  - a main row whose Status is Not listed holds its family (eBay, Shopify and Etsy: the whole listing; Amazon: the main
+ *    row and every row not on the channel — they need their main product); a standalone product set Not listed itself;
+ *  - a deleted row left Not listed (every Publish skips it until its Status lists it again);
+ *  - an UNLINKED row (S10 / I1: Nexus forgot its channel id; the item may still be live there), whatever its Status says:
+ *    listing it as new would make a second item beside the live one.
+ * A deleted row says why in the delete's own words ("Deleted on Amazon · IT on 4 Oct. To list it again, set Status to Active.").
+ */
+export function newListingHolds(facts: NewRowFacts): Map<string, string> {
+  const { channel, familyId, products } = facts
+  const deletions = facts.deletions ?? new Map<string, ListingDeletion>()
+  const { isNew, targetOf, effective } = newRowTargets(facts)
+  const heldWords = (productId: string, reason: string) => deletions.has(productId) ? deletedPublishSkip(deletions.get(productId)!) : reason
+  const family = products.length > 1 || products.some(product => product.id !== familyId)
+  const held = new Map<string, string>()
+  if (isNew(familyId) && products.some(product => product.id === familyId) && targetOf(familyId) === 'not_listed') {
+    const reason = family ? NOT_LISTED_MAIN_HELD : NOT_LISTED_LEFT_OUT
+    for (const product of products) if (channel === 'EBAY' || channel === 'SHOPIFY' || channel === 'ETSY' || product.id === familyId || isNew(product.id)) held.set(product.id, heldWords(product.id, reason))
+  }
+  for (const product of products) if (!held.has(product.id) && deletions.has(product.id) && effective(product.id) === 'not_listed') held.set(product.id, heldWords(product.id, NOT_LISTED_LEFT_OUT))
+  for (const product of products) if (deletions.get(product.id)?.unlinked) held.set(product.id, deletedPublishSkip(deletions.get(product.id)!))
+  return held
 }

@@ -88,6 +88,14 @@ export interface AmazonSkuMove {
 type MoveFacts = Pick<PublicationFacts, 'parent' | 'products' | 'listings' | 'destination'>
 
 /**
+ * The products this publication SENDS: every included one but the rows it sends nothing for (`facts.unsent`: held by
+ * Not listed, deleted, unlinked, or being deleted — `unsentRows`). Such a row gets no message, no move and no check.
+ */
+function sentProducts<T extends { id: string }>(facts: { products: T[]; unsent?: ReadonlySet<string> }): T[] {
+  return facts.unsent?.size ? facts.products.filter(product => !facts.unsent!.has(product.id)) : facts.products
+}
+
+/**
  * S3 (per-channel SKU) — THE seller-SKU rule (`wantedChannelSku`, channel-sku.pure.ts): the listing's own SKU when set;
  * else the one active offer or stored identity; else the product SKU. Its refusals are word for word the ones this rule
  * had (more than one active offer, two identities, an alias with none of its own). The alias is the destination's.
@@ -142,10 +150,11 @@ export function amazonSkuMoves(facts: MoveFacts, sellerSkus: ReadonlyMap<string,
  * asks for the typed confirmation: hiding the move behind an unrelated problem read as a Partial update. The move's own
  * refusal (a family's main row, no ASIN, two SKUs), when there is one, is returned as a sentence; it never throws.
  */
-export async function amazonMovesWithoutPublication(facts: MoveFacts & Pick<PublicationFacts, 'scope'>): Promise<{ marketplaceId: string | null; moves: AmazonSkuMove[]; refusal: string | null }> {
+export async function amazonMovesWithoutPublication(facts: MoveFacts & Pick<PublicationFacts, 'scope'> & { unsent?: ReadonlySet<string> }): Promise<{ marketplaceId: string | null; moves: AmazonSkuMove[]; refusal: string | null }> {
   let moves: AmazonSkuMove[] = []
   let refusal: string | null = null
-  try { moves = amazonSkuMoves(facts, amazonSellerSkus(facts)) }
+  // A row this publication sends nothing for never moves (`sentProducts`).
+  try { moves = amazonSkuMoves({ ...facts, products: sentProducts(facts) }, amazonSellerSkus(facts)) }
   catch (error) { refusal = error instanceof Error ? error.message : String(error) }
   const marketplaceId = moves.length ? await configuredAmazonMarketplaceId(facts.scope.marketplace).catch(() => null) : null
   return { marketplaceId: marketplaceId ?? null, moves, refusal }
@@ -159,9 +168,15 @@ const NOT_FROM_CELLS = ['Pricing', 'Inventory', 'Media', 'Product media', 'Chann
  * market's offer (no `purchasable_offer`, no merchant quantity; an FBA row keeps only its fulfilment channel code, never
  * a quantity). Their price is still checked, so Resume can put the offer back. The settle step marks them as a paused
  * Amazon row once Amazon accepts them (studio-publication-settle.ts).
+ *
+ * A row this publication sends nothing for (`facts.unsent`, Owner 2026-10-19: a row being deleted, a deleted row left Not
+ * listed, …) is not built: no message, so no price, fulfilment or photo refusal of its own, and it is not an included
+ * variant of the family's projection. The family keeps its theme and relationships: the projection is still made for the
+ * whole family, and every sent row names its parent's seller SKU.
  */
 export async function prepareAmazonPublication(facts: PublicationFacts, options: { fullProductIds?: ReadonlySet<string>; inactiveProductIds?: ReadonlySet<string> } = {}): Promise<AmazonPublication> {
-  const { scope, parent, products, listings, resolved } = facts
+  const { scope, parent, products: included, listings, resolved } = facts
+  const products = sentProducts(facts)
   const marketplaceId = await configuredAmazonMarketplaceId(scope.marketplace)
   if (!marketplaceId) throw new Error('The Amazon marketplace identifier is unavailable.')
   const sellerId = await getAmazonSellerId(scope.accountId)
@@ -201,12 +216,12 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
   const ledgers = await loadSyncLedgers(prisma, products.map(p => p.id))
   const saleWindows = await readSaleWindows(prisma as never, listings.filter(l => !l.externalListingId).map(l => l.id))
   const sellerSkus = amazonSellerSkus(facts)
-  const moves = amazonSkuMoves(facts, sellerSkus)
+  const moves = amazonSkuMoves({ ...facts, products }, sellerSkus)
   const moveOf = (productId: string) => moves.find(move => move.productId === productId)
   const issues: StudioPublishIssue[] = []
   let projection: ReturnType<typeof resolveVariationProjection> | undefined
   let variationInput: Awaited<ReturnType<typeof loadStoredVariationProjection>>['input'] | undefined
-  if (products.length > 1 || products.some(product => product.id !== parent.id)) {
+  if (included.length > 1 || included.some(product => product.id !== parent.id)) {
     const stored = await loadStoredVariationProjection({ productId: parent.id, channel: scope.channel, market: scope.marketplace, accountId: scope.accountId, aliasKey: facts.destination.aliasKey ?? '' })
     variationInput = stored.input
     variationInput.family.variants = variationInput.family.variants?.map(v => {
@@ -217,6 +232,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts, options:
         const value = field ? cells[field.fieldKey]?.value : undefined
         if (value !== undefined) axisValues[axis.familyKey] = value == null ? '' : String(value)
       }
+      // Only a variant this publication sends is included: a held one's empty axis value blocks nothing.
       return { ...v, axisValues, included: products.some(p => p.id === v.id) }
     })
     projection = resolveVariationProjection(variationInput)

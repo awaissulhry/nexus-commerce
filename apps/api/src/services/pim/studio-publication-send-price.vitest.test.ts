@@ -39,6 +39,9 @@ beforeAll(() => scoped(async () => {
     await prisma.categorySchema.create({ data: { channel: 'AMAZON', marketplace: code, productType: 'COAT', schemaVersion: 'v1', expiresAt: new Date(Date.now() + 86_400_000),
       schemaDefinition: { properties: {} } } })
   }
+  // A product type with a size theme, for the family below.
+  await prisma.categorySchema.create({ data: { channel: 'AMAZON', marketplace: 'UK', productType: 'SHIRT', schemaVersion: 'v1', expiresAt: new Date(Date.now() + 86_400_000),
+    schemaDefinition: { properties: { size: { title: 'Size' }, variation_theme: { items: { properties: { name: { enum: ['SIZE'] } } } } } } } })
   account = (await prisma.channelConnection.create({ data: { channelType: 'AMAZON', accountLabel: 'send-price', isActive: true, externalAccountId: 'TEST-SELLER',
     authStatus: 'connected', managedBy: 'oauth', region: 'EU' } as never })).id
 }), 60_000)
@@ -87,5 +90,58 @@ describe('🔴 the Amazon publication sends the listing\'s send price', () => {
     const id = await scoped(() => seed('send-gbp-none', 'UK', { followMasterPrice: true, pricingRule: 'FIXED', price: null }))
     await expect(publishedPrice(id, 'UK')).rejects.toThrow(
       'send-gbp-none: Amazon UK sells in GBP, and this listing follows the master price in EUR. Nexus does not convert it. Set this listing\'s own GBP price.')
+  })
+})
+
+// Owner 2026-10-19 — "if I'm deleting a product on the market, it doesn't let me publish because a field is empty". A row this
+// publication sends nothing for (`facts.unsent`: here a variation being deleted, held by the plan) is not built, so its own
+// gaps refuse nothing; the same row, sent, is still refused by name. The family keeps its theme and relationships.
+describe('🔴 a row this publication sends nothing for is not built', () => {
+  const UK = { channel: 'AMAZON', marketplace: 'UK', accountId: '' }
+  async function family(prefix: string) {
+    const parent = await prisma.product.create({ data: { sku: prefix, name: prefix, basePrice: 10, productType: 'SHIRT', isParent: true, variationAxes: ['Size'], fulfillmentMethod: 'FBM' } as never })
+    const child = async (size: string, price: number | null, value: string | null) => {
+      const row = await prisma.product.create({ data: { sku: `${prefix}-${size}`, name: `${prefix} ${size}`, basePrice: 10, productType: 'SHIRT', parentId: parent.id, fulfillmentMethod: 'FBM' } as never })
+      await prisma.channelListing.create({ data: { productId: row.id, channel: 'AMAZON', marketplace: 'UK', channelMarket: 'AMAZON_UK', region: 'EU', channelConnectionId: account,
+        externalListingId: `TEST-ASIN-${prefix}-${size}`, listingStatus: 'ACTIVE', isPublished: true, followMasterPrice: true, pricingRule: 'FIXED', price,
+        overrideData: value === null ? {} : { size: value } } as never })
+      return row.id
+    }
+    await prisma.channelListing.create({ data: { productId: parent.id, channel: 'AMAZON', marketplace: 'UK', channelMarket: 'AMAZON_UK', region: 'EU', channelConnectionId: account,
+      externalListingId: `TEST-ASIN-${prefix}`, listingStatus: 'ACTIVE', isPublished: true, variationTheme: 'SIZE' } as never })
+    // M is sent (its own GBP price); L is being deleted: no GBP price and no size value.
+    return { parent: parent.id, sent: await child('M', 9, 'M'), held: await child('L', null, null) }
+  }
+
+  it('a variation being deleted with no price and no size: it gets no message and refuses nothing; the parent and the sent child are built exactly as when it is sent', async () => {
+    const ids = await scoped(() => family('unsent-fam'))
+    const scope = { ...UK, accountId: account }
+    const held = await scoped(async () => prepareAmazonPublication(await readPublicationFacts(ids.parent, scope, { heldProductIds: [ids.held] })))
+    expect(held.products).toEqual([{ productId: ids.parent, sku: 'unsent-fam' }, { productId: ids.sent, sku: 'unsent-fam-M' }])
+    const bySku = (publication: Awaited<ReturnType<typeof prepareAmazonPublication>>) =>
+      Object.fromEntries(publication.feed.messages.map(({ messageId: _messageId, ...message }) => [message.sku, message]))
+    const attributes = (message: { attributes?: Record<string, unknown>; patches?: any[] }) =>
+      (message.attributes ?? Object.fromEntries((message.patches ?? []).map((p: any) => [p.path.replace('/attributes/', ''), p.value]))) as Record<string, any>
+    // The family's lines stay: the parent keeps its theme and role, the sent child names its parent.
+    expect(attributes(bySku(held)['unsent-fam']).variation_theme).toEqual([expect.objectContaining({ name: 'SIZE' })])
+    expect(attributes(bySku(held)['unsent-fam']).parentage_level).toEqual([expect.objectContaining({ value: 'parent' })])
+    expect(attributes(bySku(held)['unsent-fam-M']).child_parent_sku_relationship).toEqual([expect.objectContaining({ parent_sku: 'unsent-fam' })])
+    // Control: once the row has its price and size and is sent, the parent and M are built exactly the same.
+    await scoped(() => prisma.channelListing.updateMany({ where: { productId: ids.held }, data: { price: 9, overrideData: { size: 'L' } } as never }))
+    const sent = await scoped(async () => prepareAmazonPublication(await readPublicationFacts(ids.parent, scope)))
+    expect(Object.keys(bySku(sent)).sort()).toEqual(['unsent-fam', 'unsent-fam-L', 'unsent-fam-M'])
+    expect(bySku(sent)['unsent-fam']).toEqual(bySku(held)['unsent-fam'])
+    expect(bySku(sent)['unsent-fam-M']).toEqual(bySku(held)['unsent-fam-M'])
+  })
+
+  it('control: the same variation SENT is still refused by name', async () => {
+    const ids = await scoped(async () => {
+      const made = await family('sent-fam')
+      // Its size is set, so only its missing price is left to refuse.
+      await prisma.channelListing.updateMany({ where: { productId: made.held }, data: { overrideData: { size: 'L' } } as never })
+      return made
+    })
+    await expect(scoped(async () => prepareAmazonPublication(await readPublicationFacts(ids.parent, { ...UK, accountId: account }))))
+      .rejects.toThrow('sent-fam-L: Amazon UK sells in GBP, and this listing follows the master price in EUR. Nexus does not convert it. Set this listing\'s own GBP price.')
   })
 })

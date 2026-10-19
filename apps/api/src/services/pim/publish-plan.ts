@@ -5,8 +5,8 @@
  * shapes are shared: `@nexus/shared/publish-plan`.
  *
  *   reviewPublishPlan      → per destination: the content review (the studio's own review, made with the rows whose
- *                            stored Action is Full update; rows being ended, deleted or relisted are held back and say
- *                            why), one lifecycle row per waiting Status change or Delete (the listing-action engine's
+ *                            stored Action is Full update; rows being ended, deleted or relisted are held back, say
+ *                            why and are not judged for content), one lifecycle row per waiting Status change or Delete (the listing-action engine's
  *                            own plan gives each its sentence), and the values the listing outgrew. It sends nothing;
  *                            its only write is the content review it saves (as the studio's preview does).
  *   preparePlanSubmit      → the send request checked against the values NOW: each ticked row still holds the value
@@ -228,7 +228,7 @@ export function notListedHeld(channel: string, familyId: string, cells: readonly
 
 // ── The review ───────────────────────────────────────────────────────────────────────────────────
 
-type ContentPreview = (productId: string, scope: StudioPublishScope, userId: string | null, options: { fullProductIds?: string[] }) => Promise<StudioPublishReview>
+type ContentPreview = (productId: string, scope: StudioPublishScope, userId: string | null, options: { fullProductIds?: string[]; heldProductIds?: string[] }) => Promise<StudioPublishReview>
 type ActionPlan = (productId: string, action: ListingAction, body: unknown) => Promise<{ rows: Array<{ productId: string; plan: string; sentence: string; warning?: string | null; heldSku?: string }>;
   consequence: string; checkedAtSend: string | null; sendCount: number; reach: string }>
 
@@ -240,7 +240,7 @@ export interface PublishPlanDeps {
   now?: () => Date
 }
 
-async function defaultPreview(productId: string, scope: StudioPublishScope, userId: string | null, options: { fullProductIds?: string[] }) {
+async function defaultPreview(productId: string, scope: StudioPublishScope, userId: string | null, options: { fullProductIds?: string[]; heldProductIds?: string[] }) {
   const { previewStudioPublication } = await import('./studio-publication.service.js')
   return previewStudioPublication(productId, scope, userId, options)
 }
@@ -404,8 +404,11 @@ export async function reviewPublishPlan(productId: string, body: unknown, actor:
     const base = { scope, destination, label: planDestinationLabel(destination, alias.aliasLabel), ...alias, fullProductIds, contentHeld, lifecycle, outgrown: waiting.outgrown }
     // Every row this destination lists is held: no content goes out here, so no review is made (no channel read).
     if (products.length && contentHeld.length === products.length) return { ...base, review: null, error: null }
+    // Owner 2026-10-19 — the held rows send nothing here, so the content review does not judge them (`unsentRows`): an
+    // empty field of a variation being deleted no longer blocks its siblings' updates. Kept with the review, for its send.
+    const heldProductIds = [...heldIds].sort()
     try {
-      const made = await preview(productId, scope, actor.userId, fullProductIds.length ? { fullProductIds } : {})
+      const made = await preview(productId, scope, actor.userId, { ...(fullProductIds.length ? { fullProductIds } : {}), ...(heldProductIds.length ? { heldProductIds } : {}) })
       return { ...base, review: contentHeld.length ? await holdReviewRows(made, contentHeld) : made, error: null }
     } catch (error) {
       return { ...base, review: null, error: errorText(error) }
