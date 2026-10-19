@@ -75,6 +75,22 @@ describe('a destination’s state after its review', () => {
     expect(state).toEqual({ kind: 'blocked', problems: 2, reason: null })
     expect(destinationStateLabel(state).label).toBe('Fix 2 problems first')
   })
+  // Owner 2026-10-19 — "With a partial update I'm unable to click the publish button because it says that these listings
+  // have problems." Option A: a problem leaves out only the changes that would send its field; the rest is Ready.
+  it('a kept review with a problem elsewhere is Ready (never "Fix problems first") and says how many changes are left out', () => {
+    const brand = { productId: 'p', sku: 'SKU', field: 'brand', message: 'Brand is required', severity: 'error' as const }
+    const kept = review(it_, { issues: [brand] })
+    expect(initialTicks(kept)).toEqual(['title'])
+    const state = destinationState(entry(kept, { selectedIds: ['title', 'brand'] }), true, NOW)
+    expect(state).toEqual({ kind: 'ready', changes: 1, whole: false, requestReady: false, leftOut: 1 })
+    expect(destinationStateLabel(state)).toMatchObject({ label: 'Ready · 1 left out', hint: expect.stringContaining('1 change has problems and is left out; the rest is sent.') })
+    // A problem on a field it does not send leaves nothing out.
+    expect(destinationState(entry(review(it_, { issues: [{ ...brand, field: 'item_package_weight' }] })), true, NOW)).toEqual({ kind: 'ready', changes: 1, whole: false, requestReady: false })
+    // Unticked, it has nothing to send — still not "blocked".
+    expect(destinationState(entry(kept, { selectedIds: [] }), true, NOW)).toEqual({ kind: 'nothing', reason: 'unticked' })
+    // A problem that names nothing blocks the destination, kept or not.
+    expect(destinationState(entry(review(it_, { issues: [{ message: 'Reconnect this account.', severity: 'error' }] })), true, NOW)).toEqual({ kind: 'blocked', problems: 1, reason: null })
+  })
   it('is blocked when the review has no id (the publish gate refused it) even without a named problem', () => {
     expect(destinationState(entry(review(it_, { id: null })), true, NOW).kind).toBe('blocked')
   })

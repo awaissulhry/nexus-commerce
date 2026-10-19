@@ -1,6 +1,6 @@
 'use client'
 
-import { isPhotoChangeId, type StudioPublishChange, type StudioPublishValue } from '@nexus/shared/studio-publication'
+import { leftOutReason, type StudioPublishChange, type StudioPublishIssue, type StudioPublishValue } from '@nexus/shared/studio-publication'
 import { channelLabel } from '@nexus/shared/channel-label'
 import { ChangeReview, Disclosure } from '@/design-system/components'
 import styles from './publication.module.css'
@@ -29,10 +29,12 @@ export function replacesWords(change: Pick<StudioPublishChange, 'replaces'>, tic
   return { warning: false, text: replaces.channel === null ? `Unticked: nothing is set on ${name}.` : `Unticked: ${name} keeps ${replaces.channel}.` }
 }
 
-export function PublicationChanges({ changes, selectedIds, disabled, onSelectionChange, photosOnly = false, compact = false, channel = null }: {
+const NONE_LEFT_OUT: ReadonlyMap<string, StudioPublishIssue> = new Map()
+
+export function PublicationChanges({ changes, selectedIds, disabled, onSelectionChange, leftOut = NONE_LEFT_OUT, compact = false, channel = null }: {
   changes: StudioPublishChange[]; selectedIds: string[]; disabled: boolean; onSelectionChange(ids: string[]): void
-  /** Other fields have problems (P4c): only photo rows can be ticked; the others say why. */
-  photosOnly?: boolean
+  /** Option A (Owner 2026-10-19): the changes a problem leaves out (`blockedChanges`) cannot be ticked and say which problem. */
+  leftOut?: ReadonlyMap<string, StudioPublishIssue>
   /**
    * Inside one row of the Publish window's plan table (build shape v2, P10): the row already counts its ticked fields,
    * so the two lines above the list are left out. `onSelectionChange` still receives only these changes' ids.
@@ -41,7 +43,7 @@ export function PublicationChanges({ changes, selectedIds, disabled, onSelection
   /** The review's channel ("AMAZON"), for the words of an unticked line that would replace its value. */
   channel?: string | null
 }) {
-  const blocked = (change: StudioPublishChange) => photosOnly && !isPhotoChangeId(change.id)
+  const blocked = (change: StudioPublishChange) => leftOut.has(change.id)
   const ticked = new Set(selectedIds)
   // Amazon sheet gaps — an offer draft line names its three values in words: the saved value, live in Nexus, Amazon's.
   const values = (change: StudioPublishChange) => change.display
@@ -51,7 +53,7 @@ export function PublicationChanges({ changes, selectedIds, disabled, onSelection
   // The reason (a line judged on Nexus's side — photos the channel re-hosts — says so here), then, on a line that
   // replaces a channel value, the warning under it (or, unticked, what the channel keeps).
   const note = (change: StudioPublishChange) => {
-    if (blocked(change)) return 'Fix the problems listed above to send this field. Photos can be sent now.'
+    if (blocked(change)) return leftOutReason(leftOut.get(change.id)!)
     const reason = [change.reason, change.display?.note].filter(Boolean).join(' ')
     const words = change.selectable ? replacesWords(change, ticked.has(change.id), channel) : null
     if (!words) return reason

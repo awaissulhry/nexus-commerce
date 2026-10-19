@@ -53,6 +53,8 @@ import { prepareEtsyPublication, ETSY_CATEGORY_CHANGE, ETSY_CREATE_DRAFT_NOTE, E
 import { ETSY_AUTO_RENEW_NOTE, ETSY_NEEDS_READINESS } from './studio-publication-etsy-build.js'
 import { EtsyPublicationProblems } from './studio-publication-etsy-problems.js'
 import type { EtsyLiveListing, EtsyShopRead } from './studio-publication-etsy-types.js'
+import { prepareEtsyChanges } from './studio-publication-etsy-changes.js'
+import { blockedChangeIds } from '@nexus/shared/studio-publication'
 
 const SKUS: Record<string, string> = { p: 'FAKE-SKU-1', c1: 'FAKE-SKU-2', c2: 'FAKE-SKU-3' }
 const MAIN = { title: 'Leather knee slider', description: 'A hand-stitched knee slider.', taxonomy_id: 1234, who_made: 'i_did', when_made: '2020_2026', is_supply: false,
@@ -98,10 +100,19 @@ function liveListing(extra: Partial<EtsyLiveListing> = {}): EtsyLiveListing {
 const readLive = vi.fn(async (): Promise<EtsyLiveListing> => liveListing())
 /** E3 — the shop read a create makes in live mode. */
 const readShop = vi.fn(async (_accountId: string): Promise<EtsyShopRead> => ({ languages: ['en'], currencyCode: 'EUR' }))
-async function problemsOf(promise: Promise<unknown>) {
-  const error = await promise.then(() => null, (e: unknown) => e)
-  expect(error).toBeInstanceOf(EtsyPublicationProblems)
-  return error as EtsyPublicationProblems
+/**
+ * The problems prepare names. A new listing is refused with all of them at once (`EtsyPublicationProblems`); a listing on
+ * Etsy is reviewed change by change (Owner 2026-10-19, option A): it is built, and its problems come back with it.
+ */
+async function problemsOf(promise: Promise<Awaited<ReturnType<typeof prepareEtsyPublication>>>): Promise<Pick<EtsyPublicationProblems, 'issues' | 'notes'>> {
+  const outcome = await promise.then(publication => ({ publication, error: null }), (error: unknown) => ({ publication: null, error }))
+  if (!outcome.publication) {
+    expect(outcome.error).toBeInstanceOf(EtsyPublicationProblems)
+    return outcome.error as EtsyPublicationProblems
+  }
+  expect(outcome.publication.listingId).toBeTruthy()
+  expect(outcome.publication.issues?.length).toBeGreaterThan(0)
+  return { issues: outcome.publication.issues!, notes: outcome.publication.notices ?? [] }
 }
 
 beforeEach(() => {
@@ -340,6 +351,25 @@ describe('rows and their numbers', () => {
     m.listing.c1 = { followMasterPrice: false, priceOverride: null }
     const error = await problemsOf(prepareEtsyPublication(facts(), { readLive }))
     expect(error.issues).toEqual([{ productId: 'c2', sku: 'FAKE-SKU-3', field: 'price', severity: 'error', message: 'This listing has no price of its own for Etsy. Set its price first.' }])
+  })
+
+  it('option A (Owner 2026-10-19): that problem leaves out the inventory line only (one PUT of every variation) — the listing fields still go', async () => {
+    m.mode = 'live'; m.listingId = '9000000001'
+    m.listing = { c2: { externalListingId: null, listingStatus: 'DRAFT', isPublished: false, followMasterPrice: false, priceOverride: null } }
+    // Etsy holds an older title, and not the new variation yet: both lines differ.
+    const held = liveListing()
+    readLive.mockImplementation(async () => liveListing({ values: { ...held.values, title: 'Old title' }, inventory: { ...held.inventory, products: [held.inventory.products[0]] },
+      offerings: { 'FAKE-SKU-2': held.offerings['FAKE-SKU-2'] } }))
+    const publication = await prepareEtsyPublication(facts(), { readLive })
+    expect(publication.issues).toEqual([expect.objectContaining({ productId: 'c2', field: 'price', severity: 'error' })])
+    const plan = prepareEtsyChanges(facts(), publication, new Map())
+    const review = { scope: { channel: 'ETSY', marketplace: 'GLOBAL', accountId: 'acc' }, changes: plan.changes, issues: publication.issues }
+    const left = blockedChangeIds(review)
+    expect([...left].map(id => JSON.parse(id)[1])).toEqual(['inventory'])
+    expect(plan.changes.filter(c => c.selectable && !left.has(c.id)).map(c => c.field)).toEqual(expect.arrayContaining(['title']))
+    // A create sends the whole listing: the same problem leaves out its one line.
+    m.listingId = null; m.listing = { c2: { followMasterPrice: false, priceOverride: null } }
+    await expect(prepareEtsyPublication(facts(), { readLive })).rejects.toBeInstanceOf(EtsyPublicationProblems)
   })
 
   it('a listing\'s own channel SKU is the SKU Etsy is sent', async () => {

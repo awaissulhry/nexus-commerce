@@ -178,7 +178,16 @@ describe('🔴 the eBay studio builder sends each variation its send price, neve
   it('🔴 on eBay UK (GBP) a follower that holds no price is refused by name — the EUR master number is never sent as pounds', async () => {
     const facts = fixture()
     facts.scope.marketplace = 'UK'; facts.destination.currency = 'GBP'
-    await expect(builder.prepareEbayPublication(facts)).rejects.toThrow(
+    // Option A (Owner 2026-10-19): on this listing eBay holds, the problem is named on that SKU's price; a narrow revise never
+    // sends a price, and a create or a Full update (whole) is blocked by it (`blockingIssues`).
+    const plan = await builder.prepareEbayPublication(facts)
+    expect(plan.issues).toContainEqual(expect.objectContaining({ sku: 'FAM-NERO-M', field: 'price', severity: 'error',
+      message: 'eBay UK sells in GBP, and this listing follows the master price in EUR. Nexus does not convert it. Set this listing\'s own GBP price.' }))
+    // A new listing is created whole: the same problem refuses it, by name.
+    const fresh = fixture()
+    fresh.scope.marketplace = 'UK'; fresh.destination.currency = 'GBP'
+    for (const row of fresh.listings) row.externalListingId = null
+    await expect(builder.prepareEbayPublication(fresh)).rejects.toThrow(
       'FAM-NERO-M: eBay UK sells in GBP, and this listing follows the master price in EUR. Nexus does not convert it. Set this listing\'s own GBP price.')
   })
 })

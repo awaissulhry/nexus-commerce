@@ -1,4 +1,4 @@
-import { isPhotoChangeId, type StudioPublishChange, type StudioPublishResult, type StudioPublishReview } from '@nexus/shared/studio-publication'
+import { blockedChanges, isPhotoChangeId, leftOutReason, type StudioPublishChange, type StudioPublishResult, type StudioPublishReview } from '@nexus/shared/studio-publication'
 
 import type { MediaDestinationRow } from './model'
 
@@ -43,9 +43,12 @@ export function ebayCheck(review: StudioPublishReview): PhotoCheck {
   if (!photos.length) return { kind: 'blocked', reason: 'This eBay listing has no photos to compare. Refresh the review.' }
   const differ = photos.filter(c => c.status !== 'SAME')
   if (!differ.length) return { kind: 'same', summary: 'eBay already shows these photos.' }
-  const send = differ.filter(c => c.selectable)
-  if (!send.length) return { kind: 'blocked', reason: differ.map(c => c.reason).filter(Boolean).join(' ') || 'The photo change cannot be sent.' }
-  const summary = photos.map(c => `${fieldOf(c)}: ${c.status === 'SAME' ? 'same on eBay' : c.selectable ? 'will be replaced' : `not sent — ${c.reason}`}`).join(' · ')
+  // Option A (Owner 2026-10-19) — a photo change a problem leaves out is not sent; it says which problem.
+  const left = blockedChanges(review)
+  const why = (c: StudioPublishChange) => left.has(c.id) ? leftOutReason(left.get(c.id)!) : c.reason
+  const send = differ.filter(c => c.selectable && !left.has(c.id))
+  if (!send.length) return { kind: 'blocked', reason: differ.map(why).filter(Boolean).join(' ') || 'The photo change cannot be sent.' }
+  const summary = photos.map(c => `${fieldOf(c)}: ${c.status === 'SAME' ? 'same on eBay' : c.selectable && !left.has(c.id) ? 'will be replaced' : `not sent — ${why(c)}`}`).join(' · ')
   return { kind: 'ready', summary, send: { channel: 'EBAY', reviewId: review.id, selectedIds: send.map(c => c.id) },
     ...(review.photosOnly ? { note: 'Other fields of this listing have problems; only photos are sent.' } : {}) }
 }

@@ -160,10 +160,14 @@ describe('F5 — a review that cannot be prepared still says the move (browser c
       const unready = await product('gt-fam-M', { parentId: parent, fulfillmentMethod: null })
       await liveRow(parent, 'IT'); await liveRow(moved, 'IT', { channelSku: 'gt-fam-L-IT' })
       await liveRow(unready, 'IT', { externalListingId: null, listingStatus: 'DRAFT', isPublished: false, fulfillmentMethod: null })
-      return { parent, moved }
+      return { parent, moved, unready }
     })
     const facts = await scoped(() => readPublicationFacts(id.parent, { channel: 'AMAZON', marketplace: 'IT', accountId: account }))
-    await expect(scoped(() => prepareAmazonPublication(facts))).rejects.toThrow()
+    // Option A (Owner 2026-10-19): the unready create is left out by its own problem; the others are built, the move too.
+    const prepared = await scoped(() => prepareAmazonPublication(facts))
+    expect(prepared.issues).toContainEqual(expect.objectContaining({ productId: id.unready, severity: 'error', message: expect.stringContaining('gt-fam-M') }))
+    expect(prepared.products.map(product => product.productId)).not.toContain(id.unready)
+    expect(prepared.moves).toEqual([expect.objectContaining({ productId: id.moved, from: 'gt-fam-L', to: 'gt-fam-L-IT' })])
     const found = await scoped(() => amazonMovesWithoutPublication(facts))
     expect(found).toMatchObject({ marketplaceId: 'TEST_MARKET_IT', refusal: null, moves: [expect.objectContaining({ productId: id.moved, from: 'gt-fam-L', to: 'gt-fam-L-IT', fba: false })] })
     // What the review builds from it when the publication is missing (`prepared` null).

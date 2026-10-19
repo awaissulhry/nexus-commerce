@@ -202,9 +202,11 @@ export async function prepareEtsyPublication(facts: PublicationFacts, options: P
   // must be the one Nexus holds Etsy prices in. The live read's shop currency stands in when the account has none.
   const currencyCheck = (shopCurrency: string | null) => {
     const shop = currencyCode(record(record(facts.account.identity).extra).currencyCode) ?? currencyCode(shopCurrency)
-    if (!shop) problems.add('Nexus does not know this Etsy shop\'s currency. Reconnect the Etsy account, then review again.')
-    else if (!marketCurrency) problems.add(`This Etsy shop sells in ${shop}, and the Etsy market has no currency in Nexus. Set the Etsy market's currency to ${shop}.`)
-    else if (shop !== marketCurrency) problems.add(`This Etsy shop sells in ${shop} and Nexus holds Etsy prices in ${marketCurrency}. A price is never converted: set the Etsy market's currency to ${shop}.`)
+    // The prices Publish sends (a create's, a new variation's): on a listing Etsy holds, they travel in the inventory only.
+    const price = { field: 'price' }
+    if (!shop) problems.add('Nexus does not know this Etsy shop\'s currency. Reconnect the Etsy account, then review again.', price)
+    else if (!marketCurrency) problems.add(`This Etsy shop sells in ${shop}, and the Etsy market has no currency in Nexus. Set the Etsy market's currency to ${shop}.`, price)
+    else if (shop !== marketCurrency) problems.add(`This Etsy shop sells in ${shop} and Nexus holds Etsy prices in ${marketCurrency}. A price is never converted: set the Etsy market's currency to ${shop}.`, price)
   }
   // E3 — a create reads the shop in live mode (a listing that exists reads it with the listing, below): its currency stands
   // in when the account has none (the identity still wins), and its languages are checked as a live read's are.
@@ -228,7 +230,9 @@ export async function prepareEtsyPublication(facts: PublicationFacts, options: P
   }
   if (shop) shopLanguageChecks(shop.languages)
   problems.note(ETSY_PHOTOS_LATER)
-  problems.throwIfAny()
+  // Owner 2026-10-19 (option A) — a listing Etsy holds is reviewed change by change: its problems go with the review
+  // (`issues`), each blocking only what sends its field (the inventory is one unit). A new listing is created whole.
+  if (!listingId) problems.throwIfAny()
 
   // 7–8 — the live listing, read only when sending to Etsy is live (A1: the review is built in every mode; without the
   // read every change of an existing listing is refused, and a new listing needs no read).
@@ -294,7 +298,6 @@ export async function prepareEtsyPublication(facts: PublicationFacts, options: P
       const held = live.offerings[product.sku]?.readiness_state_id ?? live.inventory.products.find(entry => entry.sku === product.sku)?.readiness_state_id ?? null
       if (held !== null) product.readiness_state_id = held
     }
-    problems.throwIfAny()
   } else if (listingId) {
     // Without the read nothing of the inventory is sent (every line is refused); a new variation without a processing
     // profile is said now, so it can be set before the review that sends.
@@ -318,6 +321,7 @@ export async function prepareEtsyPublication(facts: PublicationFacts, options: P
   return {
     kind: 'etsy', marketplace: scope.marketplace, listingId, products: identities,
     inventoryProducts: rows.map(row => ({ productId: row.productId, sku: row.sku })), ownerProductId: parent.id,
+    ...(problems.issues.length ? { issues: [...problems.issues] } : {}),
     values: built.values, form: built.form, inventory: built.inventory, structure, properties: built.properties, translations,
     create: listingId ? null : built.create, live, liveRevision: live?.revision ?? null, currency: marketCurrency,
     ...(liveReadError ? { liveReadError } : {}), ...(liveSkipped ? { liveSkipped } : {}), ...(notices.length ? { notices } : {}),

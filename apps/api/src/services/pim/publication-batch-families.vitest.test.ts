@@ -154,13 +154,18 @@ describe('many families in one batch', () => {
   it('Nexus wins: ticks the fields that differ on the channel too, unless Keep channel values (a Full update row stays whole)', () => scoped(async () => {
     const changes = [change('a', 'SEND', true), change('b', 'DIFFERS', false), change('c', 'SAME', false), change('d', 'CANNOT_COMPARE', false),
       { ...change('e', 'DIFFERS', false), selectable: false }]
-    expect(defaultBatchSelection({ changes }, false)).toEqual(['a', 'b'])
+    const at = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'a' } }
+    expect(defaultBatchSelection({ ...at, changes }, false)).toEqual(['a', 'b'])
     // O1's server default also ticks DIFFERS: Keep channel values still leaves them out.
-    expect(defaultBatchSelection({ changes: [change('a', 'SEND', true), change('b', 'DIFFERS', true)] }, true)).toEqual(['a'])
-    expect(defaultBatchSelection({ changes }, true)).toEqual(['a'])
+    expect(defaultBatchSelection({ ...at, changes: [change('a', 'SEND', true), change('b', 'DIFFERS', true)] }, true)).toEqual(['a'])
+    expect(defaultBatchSelection({ ...at, changes }, true)).toEqual(['a'])
     // A Full update row's locked fields go whole, Keep channel values or not.
-    expect(defaultBatchSelection({ changes: [{ ...change('f', 'DIFFERS', true), locked: true }, { ...change('g', 'SEND', true), locked: true }] }, true)).toEqual(['f', 'g'])
-    expect(defaultBatchSelection({ changes: [change('["p","photos"]', 'SEND', true), change('["p","title"]', 'SEND', true)], photosOnly: true }, false)).toEqual([])
+    expect(defaultBatchSelection({ ...at, changes: [{ ...change('f', 'DIFFERS', true), locked: true }, { ...change('g', 'SEND', true), locked: true }] }, true)).toEqual(['f', 'g'])
+    // Option A (Owner 2026-10-19) — a change a problem leaves out is never ticked; the family's other changes are.
+    const sized = [{ ...change('["p","item_name"]', 'SEND', true), productId: 'p', field: 'item_name' }, { ...change('["p","item_package_weight"]', 'SEND', true), productId: 'p', field: 'item_package_weight' }]
+    const weight = { productId: 'p', field: 'item_package_weight', severity: 'error' as const, message: 'Item package weight: required.' }
+    expect(defaultBatchSelection({ ...at, changes: sized, issues: [weight] }, false)).toEqual(['["p","item_name"]'])
+    expect(defaultBatchSelection({ ...at, changes: sized, issues: [{ severity: 'error', message: 'Reconnect this account before publishing.' }] }, false)).toEqual([])
   }))
 
   it('Keep channel values: the request carries it, the review leaves the differing fields out, the view echoes it', () => scoped(async () => {

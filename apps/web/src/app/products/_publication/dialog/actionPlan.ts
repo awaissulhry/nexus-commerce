@@ -35,7 +35,7 @@ import {
   type PublishPlanBatchChild, type PublishPlanBatchView, type PublishPlanCounts, type PublishPlanDestination, type PublishPlanLifecycleRow,
   type PublishPlanSubmit, type StartAsTarget,
 } from '@nexus/shared/publish-plan'
-import { isPhotoChangeId, type StudioPublishReview, type StudioPublishScope } from '@nexus/shared/studio-publication'
+import { blockedChanges, leftOutReason, type StudioPublishReview, type StudioPublishScope } from '@nexus/shared/studio-publication'
 import { publicationStatusMeta, publishResultMeta, type PublishStatusMeta } from '@/design-system/grid/renderers/publishStatus'
 import type { Tone } from '@/design-system/primitives/tone'
 import { batchChildMeta, isSparse, publishPlan, tickedChanges, type DestinationEntry, type DestinationState, type PublishPlan as ContentPlan } from './destinations'
@@ -275,6 +275,8 @@ export function actionPlanRows(entry: Pick<DestinationEntry, 'plan' | 'review' |
   const ticked = new Set(tickedChanges(entry))
   const lifecycleTicked = new Set(entry.lifecycleIds)
   const blockedBy = contentHeldBy(state)
+  // Option A (Owner 2026-10-19) — the changes a problem leaves out (never ticked); the row's others still go.
+  const leftOut = review?.id ? blockedChanges(review) : new Map()
   const rows: ActionPlanRow[] = []
   const listed = new Set<string>()
 
@@ -282,7 +284,10 @@ export function actionPlanRows(entry: Pick<DestinationEntry, 'plan' | 'review' |
     listed.add(row.productId)
     const mode: SendMode = row.mode === 'full' ? 'full' : 'partial'
     const changes = (review?.changes ?? []).filter(c => c.productId === row.productId)
-    const usable = changes.filter(c => c.selectable && (!review?.photosOnly || isPhotoChangeId(c.id)))
+    const usable = changes.filter(c => c.selectable && !leftOut.has(c.id))
+    // Nothing of the row can go because of its own problem: a change it leaves out, or a SKU no change was built for.
+    const rowProblem = changes.map(c => leftOut.get(c.id)).find(Boolean)
+      ?? (changes.length ? undefined : review?.issues.find(i => i.severity === 'error' && i.productId === row.productId && !i.field))
     const on = usable.filter(c => ticked.has(c.id)).length
     // One-click "Nexus wins": the ticked fields that replace a value on the channel.
     const replacing = usable.filter(c => ticked.has(c.id) && !!c.replaces).length
@@ -292,7 +297,7 @@ export function actionPlanRows(entry: Pick<DestinationEntry, 'plan' | 'review' |
     if (notSent) { sent = notSent; tick = 'none' }
     else if (!sparse) { sent = row.existing ? WHOLE_AGAIN : WHOLE_NEW; tick = 'whole' }
     else if (!review?.changes) { sent = FIELDS_NOT_LISTED; tick = 'none' }
-    else if (!usable.length) { sent = changes.some(c => c.status !== 'SAME') ? NOTHING_SENDABLE : NOTHING_TO_SEND; tick = 'none' }
+    else if (!usable.length) { sent = rowProblem ? leftOutReason(rowProblem) : changes.some(c => c.status !== 'SAME') ? NOTHING_SENDABLE : NOTHING_TO_SEND; tick = 'none' }
     else if (mode === 'full') { sent = on ? EVERYTHING_SENT : FULL_UNTICKED; tick = on ? 'on' : 'off' }
     else {
       sent = [`${on.toLocaleString('en')} of ${plural(usable.length, 'field', 'fields')}`, replacing ? replacesCountWords(replacing, channel) : null].filter(Boolean).join(' · ')

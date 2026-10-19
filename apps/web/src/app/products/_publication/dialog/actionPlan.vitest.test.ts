@@ -5,6 +5,7 @@ import { moveModeLabel, type StudioPublishReview, type StudioPublishScope } from
 import { type PublishPlanBatchChild, type PublishPlanDestination, type PublishPlanLifecycleRow } from '@nexus/shared/publish-plan'
 import { EMPTY_ENTRY, destinationState, initialTicks, type DestinationEntry } from './destinations'
 import { matchesPublishPlan } from './model'
+import { destinationStateLabel } from './destinations'
 import { NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD } from '@nexus/shared/listing-actions'
 import {
   CHECK_ON_CHANNEL, CREATE_UNTICKED, EVERYTHING_SENT, NOTHING_HERE, NOT_SENT_PROBLEMS, RELIST_UNTICKED, actionPlanRows, actionPlanSend, agoText,
@@ -114,13 +115,30 @@ describe('the one table of a market', () => {
     const ids = withProductTicks(['a', 'b', 'c'], ['b', 'x'], ['x'])
     expect(ids.sort()).toEqual(['a', 'c', 'x'])
   })
-  it('content behind problems is not sent; held rows the review does not list still show with their reason', () => {
-    const blocked = destination(IT, { review: review(IT, { issues: [{ severity: 'error', message: 'Brand missing', productId: 'gale-s', sku: 'GALE-S', field: 'brand' } as never] }),
+  it('content behind a problem that names nothing is not sent; held rows the review does not list still show with their reason', () => {
+    const blocked = destination(IT, { review: review(IT, { issues: [{ severity: 'error', message: 'Reconnect this account before publishing.' }] }),
       contentHeld: [{ productId: 'gale-l', sku: 'GALE-L', reason: 'This listing is being deleted, so its changes are not sent.' }] })
     const e = entryOf(blocked)
     const out = actionPlanRows(e, destinationState(e, true, NOW), NOW)
     expect(out.find(r => r.key === 'content:gale-s')).toMatchObject({ notSent: NOT_SENT_PROBLEMS, tick: 'none', tickable: false })
     expect(out.find(r => r.key === 'held:gale-l')).toMatchObject({ kind: 'held', tick: 'none' })
+  })
+  const AMAZON_IT: StudioPublishScope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'amz' }
+  it('option A (Owner 2026-10-19): a field\'s problem leaves out only that change; a row\'s own problem leaves the row out, by name; the market stays Ready', () => {
+    const title = { severity: 'error' as const, message: 'Title: too long.', productId: 'gale-s', sku: 'GALE-S', field: 'title' }
+    const amazon = destination(AMAZON_IT, { review: review(AMAZON_IT, { issues: [title] }) })
+    const e = entryOf(amazon)
+    const state = destinationState(e, true, NOW)
+    expect(state).toMatchObject({ kind: 'ready', leftOut: 1 })
+    expect(destinationStateLabel(state).label).toBe('Ready · 1 left out')
+    const out = actionPlanRows(e, state, NOW)
+    // GALE-S keeps its brand (not ticked by default); GALE-M (another SKU, a Full update) goes whole.
+    expect(out.find(r => r.key === 'content:gale-s')).toMatchObject({ notSent: null, fields: { ticked: 0, total: 1 } })
+    expect(out.find(r => r.key === 'content:gale-m')).toMatchObject({ notSent: null, tick: 'on' })
+    const row = { severity: 'error' as const, message: 'GALE-S: the seller SKU is too long.', productId: 'gale-s', sku: 'GALE-S' }
+    const rowOut = entryOf(destination(AMAZON_IT, { review: review(AMAZON_IT, { issues: [row] }) }))
+    expect(actionPlanRows(rowOut, destinationState(rowOut, true, NOW), NOW).find(r => r.key === 'content:gale-s'))
+      .toMatchObject({ sent: 'Left out: GALE-S: the seller SKU is too long.', tick: 'none', tickable: false })
   })
 })
 
@@ -358,9 +376,12 @@ describe('delete and relist in the Publish window', () => {
     expect(off.find(r => r.key === 'content:gale-l')!.sent).toBe(`Lists GALE-L on ASIN B0NEW12345 (was B0OLD12345). ${RELIST_UNTICKED}`)
     expect(relistSentence('GALE-L', 'B0OLD12345', 'B0OLD12345', 'AMAZON')).toBe('Lists GALE-L again on ASIN B0OLD12345.')
     // Held back by the review's problems, it still names the relist, then why it waits.
-    const blocked = { ...entry, review: { ...amazonReview, issues: [{ severity: 'error' as const, productId: 'gale-s', sku: 'GALE-S', message: 'GALE-S: Brand is required.' }] } }
+    const blocked = { ...entry, review: { ...amazonReview, issues: [{ severity: 'error' as const, message: 'Reconnect this account before publishing.' }] } }
     const held = actionPlanRows(blocked, destinationState(blocked, true, NOW), NOW).find(r => r.key === 'content:gale-l')!
     expect(held).toMatchObject({ tick: 'none', notSent: NOT_SENT_PROBLEMS, sent: `Lists GALE-L on ASIN B0NEW12345 (was B0OLD12345). ${NOT_SENT_PROBLEMS}`, what: { newRow: true } })
+    // Option A — another SKU's problem does not hold it back (Amazon sends each SKU on its own).
+    const other = { ...entry, review: { ...amazonReview, issues: [{ severity: 'error' as const, productId: 'gale-s', sku: 'GALE-S', message: 'GALE-S: Brand is required.' }] } }
+    expect(actionPlanRows(other, destinationState(other, true, NOW), NOW).find(r => r.key === 'content:gale-l')).toMatchObject({ tick: 'on', notSent: null })
   })
 
   it('a Delete row carries Amazon\'s FBA unit count and the Pan-European FBA warning', () => {

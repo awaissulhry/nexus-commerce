@@ -61,15 +61,16 @@ export interface StudioPublishReview {
   /** Historical content observations, not a live read or a list of changes to be sent. */
   overwrite?: StudioPublishOverwrite
   /**
-   * Images rebuild P4c — some fields have problems (every error names its field), so only photo fields may be sent from
-   * this review. The problems are in `issues`; a selection with any other field is refused.
+   * Images rebuild P4c — kept for the publication history (its "Photos" kind reads it): some changes are left out by
+   * problems (`blockedChanges`) and every change that can still go is a photo. The publish gate itself is
+   * `blockedChanges` / `blockingIssues`, never this flag.
    */
   photosOnly?: boolean
   /**
-   * Like `photosOnly`, for a publish of Amazon text only (title, description, bullets, keywords; MCP publish-listing):
-   * other fields have problems (every error names its field), so only text fields may be sent from this review.
+   * eBay Inventory: the change review's fields go out in ONE whole-group PUT, so any error blocks every change of the
+   * review (`blockedChanges`). Absent on every other review.
    */
-  textOnly?: boolean
+  sendsWhole?: true
   /**
    * Build shape v2 — "Will be removed": what the channel holds that Nexus does not, on the rows reviewed as Full update.
    * Sending the review removes each of these from the channel. Absent when no row is a Full update.
@@ -172,42 +173,189 @@ export function isPhotoChangeId(id: string): boolean {
   } catch { return false }
 }
 
-/** The Amazon text roots of the change review (title, description, bullets, keywords; one line per market and language). */
-export const AMAZON_TEXT_ROOTS: ReadonlySet<string> = new Set(['item_name', 'product_description', 'bullet_point', 'generic_keyword'])
-
 /** The attribute root of a review field or issue field: `bullet_point:["APJ6JRA9NG5V4","it_IT"]` and `bullet_point` → `bullet_point`. */
 const fieldRoot = (field: string) => field.split(':')[0].split('__')[0]
 
-/** The Amazon text root a change id (`["<productId>","<field>"]`) carries, or null. */
-function amazonTextRoot(id: string): string | null {
+/** A change id's product and field (`["<productId>","<field>"]`), or null when it is not one. */
+export function parseChangeId(id: string): { productId: string; field: string } | null {
   try {
     const parsed: unknown = JSON.parse(id)
-    if (!Array.isArray(parsed) || typeof parsed[1] !== 'string') return null
-    const root = fieldRoot(parsed[1])
-    return AMAZON_TEXT_ROOTS.has(root) ? root : null
+    return Array.isArray(parsed) && parsed.length === 2 && typeof parsed[0] === 'string' && typeof parsed[1] === 'string' ? { productId: parsed[0], field: parsed[1] } : null
   } catch { return null }
 }
 
-/** Whether a change id (`["<productId>","<field>"]`) is an Amazon text field. */
-export const isAmazonTextChangeId = (id: string): boolean => amazonTextRoot(id) !== null
+/** The field groups Claude's publish-listing tool names, plus the two it never names: a create, and stock, price or fulfilment. */
+export type PublishFieldGroup = 'title' | 'description' | 'bullets' | 'keywords' | 'photos' | 'attributes' | 'create' | 'never'
+
+/** The two fields that create a listing whole (Amazon's `$create`, eBay's and Etsy's `__create__`). */
+const CREATE_FIELDS: ReadonlySet<string> = new Set(['$create', '__create__'])
+
+/** The group of one reviewed field (Amazon roots and content coordinates, eBay Trading and Inventory fields, Etsy listing fields). */
+export function publishFieldGroup(field: string): PublishFieldGroup {
+  if (CREATE_FIELDS.has(field)) return 'create'
+  if (/quantity|fulfil|purchasable_offer|price/i.test(field)) return 'never'
+  if (PUBLICATION_PHOTO_FIELDS.has(field) || /image_locator/i.test(field)) return 'photos'
+  const root = field.split(':')[0]
+  if (root === 'item_name' || field === 'title') return 'title'
+  if (root === 'product_description' || field === 'description') return 'description'
+  if (root === 'bullet_point') return 'bullets'
+  if (root === 'generic_keyword' || field === 'tags') return 'keywords'
+  return 'attributes'
+}
+
+// ── The publish gate (Owner 2026-10-19, option A) ─────────────────────────────────────────────────────────────────
+//
+// On a PARTIAL update of a listing already on the channel, an error blocks only the changes that would send the field
+// it names, on the SKU it names; the other changes go. A change an error blocks stays unticked and cannot be ticked
+// ("Left out: <problem>", `leftOutReason`). An error that names no field and no product (the account, sending off, an
+// earlier publish waiting…) blocks the whole destination; one that names a product but no field blocks every change of
+// that product. A create, a Full update, an eBay Inventory group and a Shopify product are sent whole: every error of the
+// listing blocks them (Amazon: every error of that SKU). Errors on fields the update does not send stay problems of
+// their row, and block nothing.
 
 /**
- * The problems that block a publication. When every error names a field, a selection of photo fields only is not
- * blocked by them — it sends no other field (Owner, 2026-09-28: an off-list Season value blocked a photos-only send).
- * Likewise an Amazon selection of text fields only is blocked only by errors on those text fields: it is a partial
- * update of listings already on Amazon, so Amazon keeps every other attribute as it holds it (Owner, 2026-10-17: missing
- * German package sizes blocked the new MOSS title on the closed DE offers). A first publish or a Full update always
- * selects other fields too, so it stays blocked by every error.
- * An error that names no field (the account, a paused listing, the photo plan's own checks) always blocks.
+ * Amazon — the names the content checks give the text roots (`publishContentIssues`, the machine-text review), and the
+ * family's structure: its three roots (theme, parentage, relationship) are one unit, so a problem with the variation
+ * theme leaves out every change of the family's shape.
  */
-export function blockingIssues(issues: readonly StudioPublishIssue[], selectedIds?: readonly string[]): StudioPublishIssue[] {
+const AMAZON_UNITS: Readonly<Record<string, string>> = { title: 'item_name', description: 'product_description', bulletPoints: 'bullet_point', keywords: 'generic_keyword',
+  variation_theme: 'family', parentage_level: 'family', child_parent_sku_relationship: 'family' }
+/** Photo fields by any of their names: the change review's, the sheet's (`imageUrls`) and the builders' (`photos`). */
+const PHOTO_NAMES: ReadonlySet<string> = new Set([...PUBLICATION_PHOTO_FIELDS, 'imageUrls', 'photos', 'images'])
+/**
+ * eBay Trading — what a narrow ReviseFixedPriceItem sends: Title, Description, PictureDetails, ItemSpecifics (every live
+ * item specific is sent again, so they are one unit) and Variations (renames, colour photo sets). The builders' and the
+ * sheet's names for them. An item-specific column's problem reaches here as `aspect:<key>` (the review names it so).
+ */
+const EBAY_UNITS: Readonly<Record<string, string>> = {
+  // The category decides which item specifics eBay takes: its problem leaves them out too.
+  title: 'title', description: 'description', descriptionThemeId: 'description', itemSpecifics: 'aspects', categoryId: 'aspects',
+  SKU: 'sku', sellerSku: 'sku', variationSku: 'sku', variationTheme: 'variations',
+}
+/** Etsy — the listing fields an update sends one by one (`ETSY_LISTING_FIELDS`), and the sheet's names that feed them. */
+const ETSY_UNITS: Readonly<Record<string, string>> = {
+  ...Object.fromEntries(['title', 'description', 'tags', 'materials', 'taxonomy_id', 'classification', 'type', 'shop_section_id', 'shipping_profile_id',
+    'return_policy_id', 'item_weight', 'item_dimensions', 'is_taxable', 'should_auto_renew', 'production_partner_ids', 'styles'].map(field => [field, field])),
+  keywords: 'tags', who_made: 'classification', when_made: 'classification', is_supply: 'classification', item_weight_unit: 'item_weight',
+  item_length: 'item_dimensions', item_width: 'item_dimensions', item_height: 'item_dimensions', item_dimensions_unit: 'item_dimensions',
+  // Etsy has no bullet points: Publish never sends them.
+  bulletPoints: 'bulletPoints',
+}
+
+/**
+ * The part of a channel's send a field travels in — for a change's field and for a problem's field alike: a problem
+ * blocks the changes whose unit it is (`carries`). Amazon: the attribute root (one PATCH per root; the content checks'
+ * `title` is `item_name`…; the family's three structure roots are `family`); photos are one unit everywhere. eBay: `title`, `description`, `photos`, `aspects` (the item
+ * specifics, one unit), `sku`, `variations`; any other field is not sent by a narrow revise. Etsy: each listing field,
+ * `property:<id>`, `translation:<lang>`, and `inventory` — the one PUT of every variation's SKU, price, stock and values,
+ * where every field that is not a listing field travels. Exported for its tests: a name it does not translate would stop
+ * blocking silently.
+ */
+export function sendUnit(channel: string, field: string): string {
+  if (CREATE_FIELDS.has(field)) return 'create'
+  if (PHOTO_NAMES.has(field) || /image_locator/i.test(field)) return 'photos'
+  switch (channel.toUpperCase()) {
+    case 'AMAZON': { const root = fieldRoot(field); return AMAZON_UNITS[root] ?? root }
+    case 'EBAY':
+      if (field.startsWith('aspect:') || field.startsWith('itemSpecifics.')) return 'aspects'
+      return EBAY_UNITS[field] ?? field
+    case 'ETSY': {
+      if (field.startsWith('translation:') || field.startsWith('property:')) return field
+      const property = /^property_(\d+)(__scale_id)?$/.exec(field)
+      if (property) return property[2] ? `scale:${property[1]}` : `property:${property[1]}`
+      return ETSY_UNITS[field] ?? 'inventory'
+    }
+    default: return field
+  }
+}
+
+/**
+ * Whether a change's field sends a unit: its own, and what travels with it — an Etsy translation line carries that
+ * language's title, description and tags; Etsy's inventory and a listing property carry their property scales; eBay's
+ * colour photo sets and a variation's rename go inside `<Variations>`.
+ */
+function carries(channel: string, changeField: string, unit: string): boolean {
+  if (sendUnit(channel, changeField) === unit) return true
+  if (channel === 'ETSY') {
+    if (changeField.startsWith('translation:')) return unit === 'title' || unit === 'description' || unit === 'tags'
+    if (changeField === 'inventory') return unit.startsWith('scale:')
+    if (changeField.startsWith('property:')) return unit === `scale:${changeField.slice('property:'.length)}`
+  }
+  if (channel === 'EBAY') return (changeField === 'Pictures' || changeField === 'variationSku') && unit === 'variations'
+  return false
+}
+
+/** A unit the listing sends once for all its rows: a problem on any row of it blocks it (eBay's title, Etsy's inventory…). */
+const listingWide = (channel: string, unit: string) => channel === 'ETSY' || (channel === 'EBAY' && unit !== 'sku' && unit !== 'variations')
+
+/** What the gate reads of a review. */
+export interface PublishGateContext {
+  /** The review's channel ("AMAZON"). */
+  channel: string
+  /** The review's changes: a Full update's are `locked` (sent whole). A selected id the list lacks is read from the id. */
+  changes?: ReadonlyArray<Pick<StudioPublishChange, 'id' | 'productId' | 'field' | 'locked'>> | null
+  /** eBay Inventory: the whole group is one send (`StudioPublishReview.sendsWhole`). */
+  sendsWhole?: boolean
+}
+
+type GateChange = Pick<StudioPublishChange, 'productId' | 'field' | 'locked'>
+
+/** The rule (above) for one error and one change. */
+function blocks(error: StudioPublishIssue, change: GateChange, context: PublishGateContext): boolean {
+  if (!error.field && !error.productId) return true
+  const channel = context.channel.toUpperCase()
+  const sameRow = !error.productId || error.productId === change.productId
+  if (context.sendsWhole || channel === 'SHOPIFY' || change.locked || CREATE_FIELDS.has(change.field)) return channel === 'AMAZON' ? sameRow : true
+  if (!error.field) return error.productId === change.productId
+  const unit = sendUnit(channel, error.field)
+  return carries(channel, change.field, unit) && (sameRow || listingWide(channel, unit))
+}
+
+/** What the gate reads of a review: its channel, its changes, and whether it is sent whole. */
+export const publishGateContext = (review: Pick<StudioPublishReview, 'scope' | 'changes'> & Partial<Pick<StudioPublishReview, 'sendsWhole'>>): PublishGateContext =>
+  ({ channel: review.scope.channel, changes: review.changes ?? null, sendsWhole: !!review.sendsWhole })
+
+/**
+ * The problems that block a selection: every error that blocks one of the selected changes (the rule above), and every
+ * error that names no field and no product. Without a selection or a context (a summary of why a review cannot be sent,
+ * Shopify's whole product), every error. Warnings never block.
+ */
+export function blockingIssues(issues: readonly StudioPublishIssue[], selectedIds?: readonly string[] | null, context?: PublishGateContext | null): StudioPublishIssue[] {
   const errors = issues.filter(i => i.severity === 'error')
-  if (!errors.length || errors.some(i => !i.field)) return errors
-  if (!selectedIds?.length) return errors
-  if (selectedIds.every(isPhotoChangeId)) return []
-  const textRoots = selectedIds.map(amazonTextRoot)
-  if (textRoots.every(root => root !== null)) return errors.filter(i => textRoots.includes(fieldRoot(i.field!)))
-  return errors
+  if (!errors.length || !selectedIds?.length || !context) return errors
+  const known = new Map((context.changes ?? []).map(change => [change.id, change]))
+  const selected = selectedIds.map(id => known.get(id) ?? parseChangeId(id)).filter((change): change is GateChange => !!change)
+  return errors.filter(error => (!error.field && !error.productId) || selected.some(change => blocks(error, change, context)))
+}
+
+/**
+ * Every change of a review that a problem leaves out, with the first error that blocks it (its "Left out: …" words).
+ * Only selectable changes: one the channel cannot take already says why. Empty for a review without errors.
+ */
+export function blockedChanges(review: (Pick<StudioPublishReview, 'scope' | 'changes'> & Partial<Pick<StudioPublishReview, 'issues' | 'sendsWhole'>>) | null | undefined): Map<string, StudioPublishIssue> {
+  const out = new Map<string, StudioPublishIssue>()
+  const errors = (review?.issues ?? []).filter(i => i.severity === 'error')
+  if (!review?.changes || !errors.length) return out
+  const context = publishGateContext(review)
+  for (const change of review.changes) {
+    if (!change.selectable) continue
+    const found = errors.find(error => blocks(error, change, context))
+    if (found) out.set(change.id, found)
+  }
+  return out
+}
+
+/** The ids of the changes a problem leaves out (`blockedChanges`). */
+export const blockedChangeIds = (review: Parameters<typeof blockedChanges>[0]): Set<string> => new Set(blockedChanges(review).keys())
+
+/** A left-out change's words: "Left out: Item package height is required." */
+export const leftOutReason = (issue: Pick<StudioPublishIssue, 'message'>) => `Left out: ${issue.message}`
+
+/** The changes that can go: selectable and not left out by a problem. */
+export function sendableChanges(review: Parameters<typeof blockedChanges>[0]): StudioPublishChange[] {
+  if (!review?.changes) return []
+  const blocked = blockedChangeIds(review)
+  return review.changes.filter(change => change.selectable && !blocked.has(change.id))
 }
 
 export interface StudioPublishOverwrite {
