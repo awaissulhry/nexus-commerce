@@ -47,7 +47,6 @@ export const STATUS_COLUMN_LABEL = 'Status'
 export const STATUS_COLUMN_WIDTH = 200
 export const STATUS_COLUMN_TIP = 'Is it on this channel and market: Active, Inactive, or Ended (eBay, Shopify). Change it here (Enter on a cell, or Action ▾ for the ticked rows); Publish sends the change. A row not on the channel ("new", or deleted) chooses what Publish does: Active or Inactive creates it, Not listed leaves it out. A choice a channel cannot take is held, with the reason.'
 
-export const ENDED_NEEDS_DELETE = 'Your role cannot end or delete listings.'
 export const STATUS_READ_FAILED = 'The selling state could not be read. Reload the sheet to try again.'
 export const STATUS_NOT_LISTED = 'Not on this channel and market yet. Publish creates it.'
 
@@ -114,14 +113,12 @@ export function currentStatusTarget(cell: PublishActionCell | null | undefined):
   return cell.state === 'active' ? 'active' : cell.state === 'paused' ? 'inactive' : cell.state === 'ended' ? 'ended' : null
 }
 
-/** The editor's options: the server's choices; Ended held without `products.delete` (the server refuses it too). */
-export function statusEditorChoices(cell: PublishActionCell, canDelete: boolean): SelectPanelOption[] {
+/** The editor's options: the server's choices (Ended needs products.publish, as every value: the column is locked without it). */
+export function statusEditorChoices(cell: PublishActionCell): SelectPanelOption[] {
   // A new row: Active · Inactive · Not listed, each with what Publish does; the current choice says where it comes from.
   if (cell.create) return newListingEditorOptions(cell.statusOptions, { ...cell.create, deleted: removedFacts(cell.deleted) },
     cell.create.source === 'own' ? cell.status : null)
-  const choices = cell.statusOptions.map(option => option.target === 'ended' && option.offered && option.action && !canDelete
-    ? { ...option, offered: false, reason: ENDED_NEEDS_DELETE } : option)
-  return statusEditorOptions(choices, cell.state, cell.status.target ? { target: cell.status.target, setAt: cell.status.setAt, setByName: cell.status.setByName } : null)
+  return statusEditorOptions(cell.statusOptions, cell.state, cell.status.target ? { target: cell.status.target, setAt: cell.status.setAt, setByName: cell.status.setByName } : null)
 }
 
 const capital = (text: string) => { const t = text.trim(); return t ? `${t[0].toUpperCase()}${t.slice(1)}` : t }
@@ -171,8 +168,6 @@ export interface PublishColumnInput<Row> {
   read: () => PublishCellReadState
   /** The cell received a value (editor, fill, paste): stage it in the sheet's operation fence. */
   onInput: (row: Row, input: PublishCellInput) => void
-  /** May the viewer end or delete listings (`products.delete`)? */
-  canDelete: () => boolean
   /** The column's own save marks (saving, refused with the reason). */
   tracker: CellSaveTracker
   rowIdOf: (row: Row) => string
@@ -202,7 +197,7 @@ export function statusColumn<Row>(input: PublishColumnInput<Row>): ColDef<Row> {
     // The cell's value is an object: the editor opens on the target it stands for.
     cellEditorParams: (p: { data?: Row }) => {
       const cell = p.data ? input.cell(p.data) : null
-      return { value: currentStatusTarget(cell), options: cell ? statusEditorChoices(cell, input.canDelete()) : [] }
+      return { value: currentStatusTarget(cell), options: cell ? statusEditorChoices(cell) : [] }
     },
     cellRenderer: SellingStatusCell,
     tooltipValueGetter: p => composeCellTooltip(

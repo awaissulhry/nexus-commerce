@@ -39,7 +39,6 @@ export const ACTION_COLUMN_LABEL = 'Action'
 export const ACTION_COLUMN_WIDTH = 170
 export const ACTION_COLUMN_TIP = 'What Publish sends for each row: Partial update (the default: only the fields you changed), Full update (every field Nexus manages again) or Delete (removes the listing from the channel). A row not on the channel reads Full update: a new listing is always sent whole, and its Status says whether Publish creates it. A choice a channel cannot take is held, with the reason. Nothing is sent until you press Publish.'
 
-export const DELETE_NEEDS_DELETE = 'Your role cannot end or delete listings.'
 export const ACTION_NOT_LISTED = 'Not on this channel and market yet: Publish creates it with every field.'
 
 export function actionSheetColumn<T>(): T {
@@ -70,12 +69,11 @@ export function actionCellValue(cell: PublishActionCell | null | undefined, read
 /** The value the Action editor opens on: the stored mode (a row not on the channel: Full update). */
 export const actionEditorValue = (cell: PublishActionCell | null | undefined) => cell?.send.mode ?? 'partial'
 
-export function actionEditorChoices(cell: PublishActionCell, canDelete: boolean): SelectPanelOption[] {
-  const choices = cell.sendOptions.map(option => option.mode === 'delete' && option.offered && !canDelete ? { ...option, offered: false, reason: DELETE_NEEDS_DELETE } : option)
+export function actionEditorChoices(cell: PublishActionCell): SelectPanelOption[] {
   // A row not on the channel: Full update (sent whole), the rest held with the server's reasons. Nothing waits.
-  if (cell.create) return sendModeEditorOptions(choices, null, Date.now(), true)
+  if (cell.create) return sendModeEditorOptions(cell.sendOptions, null, Date.now(), true)
   const by = { mode: cell.send.mode, setAt: cell.send.setAt, setByName: cell.send.setByName }
-  return sendModeEditorOptions(choices, cell.send.mode !== 'partial' ? by : null)
+  return sendModeEditorOptions(cell.sendOptions, cell.send.mode !== 'partial' ? by : null)
 }
 
 const capital = (text: string) => { const t = text.trim(); return t ? `${t[0].toUpperCase()}${t.slice(1)}` : t }
@@ -135,7 +133,7 @@ export function actionColumn<Row>(input: PublishColumnInput<Row>): ColDef<Row> {
     cellEditorPopupPosition: 'under',
     cellEditorParams: (p: { data?: Row }) => {
       const cell = p.data ? input.cell(p.data) : null
-      return { value: actionEditorValue(cell), options: cell ? actionEditorChoices(cell, input.canDelete()) : [] }
+      return { value: actionEditorValue(cell), options: cell ? actionEditorChoices(cell) : [] }
     },
     cellRenderer: PublishActionCellRenderer,
     tooltipValueGetter: p => {

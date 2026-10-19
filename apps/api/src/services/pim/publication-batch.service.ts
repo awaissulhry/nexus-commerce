@@ -19,8 +19,8 @@
  *
  * P11 — the products list's request may carry a Status target (`options.status`: active, inactive or ended; no Delete):
  * the review stage then makes one lifecycle child per family × destination × action (the listing-action engine's plan,
- * refusals with the reason), and `submitReviewedBatch` sends them in the send order with any content. Ended needs
- * products.delete (checked when the batch is made and when it is sent) and the typed count of listings it ends.
+ * refusals with the reason), and `submitReviewedBatch` sends them in the send order with any content. Ended needs what
+ * every other change needs (products.publish, the route's); nothing is typed to send it.
  *
  * One-click O5 (Owner 2026-10-04, OD3 A + OD4 A) — the products list's window follows the studio's rules:
  *   listedMarkets            POST /api/publication-batches/listed-markets   the markets where the chosen families are
@@ -37,8 +37,7 @@ import type { Prisma } from '@prisma/client'
 import type { PublicationBatchEstimate, PublicationBatchPhase, StudioPublishScope } from '@nexus/shared/studio-publication'
 import type { ListingAction, ListingActionPlanRow, ListingActionRowResult } from '@nexus/shared/listing-actions'
 import type { SendStep } from '@nexus/shared/publish-actions'
-import { confirmCountMatches, isStartAsTarget, MANY_ENDED_WITH_CONTENT, MANY_ROLE_CANNOT_END, manyEndCount, START_AS_NEEDS_CONTENT, TYPE_COUNT_TO_END,
-  type ListedStatusTarget, type PublishCreateRow, type PublishPlanBatchChild, type PublishPlanBatchCounts, type PublishPlanBatchView, type StartAsTarget } from '@nexus/shared/publish-plan'
+import { isStartAsTarget, MANY_ENDED_WITH_CONTENT, START_AS_NEEDS_CONTENT, type ListedStatusTarget, type PublishCreateRow, type PublishPlanBatchChild, type PublishPlanBatchCounts, type PublishPlanBatchView, type StartAsTarget } from '@nexus/shared/publish-plan'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { object } from './studio-publication-plan.js'
@@ -47,7 +46,6 @@ import { IN_FLIGHT, OPEN_PUBLICATION, PUBLICATION_KIND, announcePublication, che
 import { amazonSendOf, batchEuQuantityConflicts, createdQuantity, euConflictMessage, type BatchAmazonSend, type BatchEuConflict } from './publication-batch-eu-quantity.js'
 import { BATCH_HEARTBEAT_MS, BATCH_KIND, BATCH_REVIEW_TTL_MS, LIFECYCLE_KIND, MAX_BATCH_FAMILIES, MAX_BATCH_REVIEWS, batchStageOf, cancelWaitingChildren,
   lifecycleStepOf, manyOptionsOf, readFamilyPresence, reviewPairKey, reviewPairs, runPublicationBatch, statusPairKey } from './publication-batch.processor.js'
-import type { PublishPlanActor } from './publish-plan.js'
 import { AMAZON_FEED_MESSAGE_CAP } from './studio-publication-amazon-batch.js'
 
 /** One family has at most a few dozen destinations (markets × accounts × listings). */
@@ -193,11 +191,9 @@ export async function listedMarkets(body: unknown): Promise<{ families: number; 
 /**
  * Step 6 — queue the REVIEW of many families × destinations. Nothing is reviewed or sent here: the batch reviews in the
  * background (phase REVIEWING) and then waits for `submitReviewedBatch`.
- * P11 — Ended is refused at once to a role without products.delete (it could never be sent).
  */
-async function createFamiliesBatch(body: unknown, userId: string | null, actor: PublishPlanActor): Promise<{ batchId: string }> {
+async function createFamiliesBatch(body: unknown, userId: string | null): Promise<{ batchId: string }> {
   const request = parseFamiliesRequest(body)
-  if (request.status === 'ended' && !actor.can('products.delete')) throw new WorkspaceScopeError(MANY_ROLE_CANNOT_END, 403)
   // A selected variation means its family; a product of another business is simply not found (row security).
   const families = await familiesOf(request.productIds)
   if (families.length > MAX_BATCH_FAMILIES) throw new WorkspaceScopeError(`Publish at most ${MAX_BATCH_FAMILIES} product families at once.`, 400)
@@ -283,18 +279,17 @@ async function stampReviews(tx: Prisma.TransactionClient, children: CheckedRevie
 /**
  * Check every review, stamp it with the batch, create the header and queue it. Nothing is sent here.
  * Step 6 — a body with `productIds` and `destinations` (the products list) queues a review of many families instead.
- * Build shape v2, P6 — a body with `plan` (`PublishPlanSubmit`) is one mixed Publish (`createPlanBatch`); `actor`
- * decides whether its Ended and Delete rows may be sent (products.delete). Without an actor they never are.
+ * Build shape v2, P6 — a body with `plan` (`PublishPlanSubmit`) is one mixed Publish (`createPlanBatch`).
  */
-export async function createPublicationBatch(body: unknown, userId: string | null, actor?: PublishPlanActor): Promise<{ batchId: string }> {
+export async function createPublicationBatch(body: unknown, userId: string | null): Promise<{ batchId: string }> {
   const input = object(body)
   if (input.plan !== undefined) {
     if (input.reviews !== undefined || input.productIds !== undefined) throw new WorkspaceScopeError('Send either a plan, reviews, or products with destinations.', 400)
-    return createPlanBatch(input.plan, userId, actor ?? { userId, can: () => false })
+    return createPlanBatch(input.plan, userId)
   }
   if (input.productIds !== undefined || input.destinations !== undefined) {
     if (input.reviews !== undefined) throw new WorkspaceScopeError('Send either reviews or products with destinations, not both.', 400)
-    return createFamiliesBatch(body, userId, actor ?? { userId, can: () => false })
+    return createFamiliesBatch(body, userId)
   }
   const reviews = parseRequest(body)
   const batchId = randomUUID()
@@ -317,13 +312,12 @@ export async function createPublicationBatch(body: unknown, userId: string | nul
  * now (`preparePlanSubmit`); then one listing-action preview is made per destination × action (outside the transaction:
  * one the transaction does not stamp is never sent and expires in 15 minutes); then, in one transaction, the content
  * reviews are checked and stamped, the header is created, and every lifecycle preview is stamped with the batch, the
- * values it carries (cleared after it succeeds) and its place in the send order. Ended and Delete the person may not
- * send are stamped NOT_SENT with the reason (their values keep waiting). The values the listing outgrew are cleared once
- * the batch exists; then the batch is queued.
+ * values it carries (cleared after it succeeds) and its place in the send order. The values the listing outgrew are
+ * cleared once the batch exists; then the batch is queued.
  */
-async function createPlanBatch(planBody: unknown, userId: string | null, actor: PublishPlanActor): Promise<{ batchId: string }> {
+async function createPlanBatch(planBody: unknown, userId: string | null): Promise<{ batchId: string }> {
   const { preparePlanSubmit, heldTickRefusal, clearOutgrown } = await import('./publish-plan.js')
-  const prepared = await preparePlanSubmit(planBody, { ...actor, userId })
+  const prepared = await preparePlanSubmit(planBody)
   const contents = prepared.destinations.flatMap((entry, at) => entry.content ? [{ at, entry, review: entry.content as BatchReviewInput }] : [])
   if (!contents.length && !prepared.groups.length) throw new WorkspaceScopeError('Nothing is ticked to send. Tick a change or a waiting value.', 400)
   const batchId = randomUUID()
@@ -363,8 +357,7 @@ async function createPlanBatch(planBody: unknown, userId: string | null, actor: 
         if (!row) throw new WorkspaceScopeError('A waiting value changed while the batch was being made. Review again.', 409)
         const batch = { batchId, step: lifecycleStepOf(group.action), familyId: prepared.familyId, destination: group.destination, values: group.values }
         const stamped = await tx.bulkOperation.updateMany({ where: { id: previewId, status: 'PREVIEW', batchId: null, changes: { equals: json(row.changes) } },
-          data: { batchId, expiresAt: new Date(now.getTime() + BATCH_REVIEW_TTL_MS), changes: json({ ...object(row.changes), batch }),
-            ...(group.refused ? { status: 'NOT_SENT', completedAt: now, summary: json({ message: group.refused, notSent: true, refused: true }) } : {}) } })
+          data: { batchId, expiresAt: new Date(now.getTime() + BATCH_REVIEW_TTL_MS), changes: json({ ...object(row.changes), batch }) } })
         if (stamped.count !== 1) throw new WorkspaceScopeError('A waiting value changed while the batch was being made. Review again.', 409)
       }
     })
@@ -596,16 +589,15 @@ export async function cancelPublicationBatch(batchId: string, userId: string | n
   return readPublicationBatch(batchId, userId)
 }
 
-function parseSubmit(body: unknown): { confirmOverwrite: Set<string>; locations: Record<string, string>; confirmText: string | null } {
+/** The submit body. A `confirmText` an older window still sends is ignored: nothing is typed to end listings. */
+function parseSubmit(body: unknown): { confirmOverwrite: Set<string>; locations: Record<string, string> } {
   const input = object(body)
   const confirm = input.confirmOverwrite ?? []
   if (!Array.isArray(confirm) || confirm.length > MAX_BATCH_REVIEWS || confirm.some(id => !text(id, 200))) throw new WorkspaceScopeError('The overwrite confirmations are not valid.', 400)
   const locations = object(input.shopifyLocations)
   if (input.shopifyLocations !== undefined && (typeof input.shopifyLocations !== 'object' || Array.isArray(input.shopifyLocations)
     || Object.entries(locations).some(([key, value]) => !text(key, 200) || !text(value, 200)))) throw new WorkspaceScopeError('The Shopify inventory locations are not valid.', 400)
-  if (input.confirmText !== undefined && input.confirmText !== null && (typeof input.confirmText !== 'string' || input.confirmText.length > 40))
-    throw new WorkspaceScopeError('The typed confirmation is not valid.', 400)
-  return { confirmOverwrite: new Set(confirm.map(String)), locations: locations as Record<string, string>, confirmText: typeof input.confirmText === 'string' ? input.confirmText : null }
+  return { confirmOverwrite: new Set(confirm.map(String)), locations: locations as Record<string, string> }
 }
 
 /**
@@ -623,23 +615,18 @@ export function euSkipped(sends: readonly BatchAmazonSend[], conflicts: readonly
   return new Map([...found].map(([reviewId, list]) => [reviewId, euConflictMessage(list)]))
 }
 
-/** A refusal the web branches on by its code (`confirm_required`), as the plan route sends it. */
-const refusal = (message: string, statusCode: number, code: string) => Object.assign(new Error(message), { statusCode, code })
-
 /**
  * Step 6 — send what the batch reviewed. A review that expired, or that has nothing ticked, is marked NOT_SENT with
  * the reason; the others are stamped with their submit body (their CURRENT ticks: the person may have changed one
  * review's ticks through the normal selection route) and the batch is queued to send. Refused as a whole when two EU
  * markets would create one SKU with two quantities, as a step-5 batch is.
  * P11 — the lifecycle children (a Status target) go too, in the send order: one that sends nothing is removed (nothing
- * to send; the window showed why); one that expired is NOT_SENT. Ending listings is refused as a whole, before anything
- * is marked or queued, to a role without products.delete, and without the typed count of listings it ends
- * (`manyEndCount`: "Type 36 to end 36 listings.").
+ * to send; the window showed why); one that expired is NOT_SENT. Ending listings needs nothing typed.
  * One-click O5 (OD4 A) — two EU markets that would create one SKU with two quantities no longer hold the whole batch:
  * the reviews that create such a SKU are NOT_SENT with the reason (`euSkipped`), and the rest are sent.
  */
-export async function submitReviewedBatch(batchId: string, body: unknown, userId: string | null, actor?: PublishPlanActor): Promise<PublishPlanBatchView> {
-  const { confirmOverwrite, locations, confirmText } = parseSubmit(body)
+export async function submitReviewedBatch(batchId: string, body: unknown, userId: string | null): Promise<PublishPlanBatchView> {
+  const { confirmOverwrite, locations } = parseSubmit(body)
   const header = await readHeader(batchId, userId)
   if (header.status !== 'REVIEWED') throw new WorkspaceScopeError(batchPhase(header.status, header.changes) === 'REVIEWING'
     ? 'This batch is still reviewing. Send it when every destination is reviewed.' : 'This batch is not waiting to be sent.', 409)
@@ -655,12 +642,6 @@ export async function submitReviewedBatch(batchId: string, body: unknown, userId
   const empty = lifecycle.filter(row => (row.changeCount ?? 0) <= 0)
   const lateLifecycle = lifecycle.filter(row => !empty.includes(row) && expired(row))
   const sendLifecycle = lifecycle.filter(row => !empty.includes(row) && !lateLifecycle.includes(row))
-  const actionOf = (row: { changes: Prisma.JsonValue }) => object(row.changes).action
-  const ending = manyEndCount(sendLifecycle.map(row => ({ kind: 'lifecycle' as const, status: 'PREVIEW', action: actionOf(row) as ListingAction, sendCount: row.changeCount })))
-  if (sendLifecycle.some(row => actionOf(row) === 'end' || actionOf(row) === 'delete')) {
-    if (!actor?.can('products.delete')) throw new WorkspaceScopeError(MANY_ROLE_CANNOT_END, 403)
-    if (!confirmCountMatches(ending, confirmText)) throw refusal(TYPE_COUNT_TO_END(ending), 400, 'confirm_required')
-  }
 
   const sendable: typeof rows = []
   for (const row of rows) {

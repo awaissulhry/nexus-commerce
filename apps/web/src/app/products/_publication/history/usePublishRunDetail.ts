@@ -85,7 +85,7 @@ export function usePublishRunDetail(runId: string | null) {
 
   /**
    * S10 — "Delete the old SKU again": the publish moved a live Amazon listing to a new SKU and Amazon did not confirm the
-   * delete of the old one. Nexus tries that delete again now (products.delete), then the run is read again.
+   * delete of the old one. Nexus tries that delete again now (products.publish), then the run is read again.
    */
   const deleteOldAgain = useCallback(async () => {
     if (!detail?.run.productId) throw new Error('This publish is not tied to a product.')

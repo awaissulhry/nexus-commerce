@@ -7,10 +7,10 @@ import { describe, expect, it } from 'vitest'
 import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import { parseHistoryDeepLink } from '@/app/products/_publication/history/runActions'
 import {
-  ENDED_NEEDS_DELETE, STATUS_COLUMN, STATUS_NOT_LISTED, currentStatusTarget, parseStatusInput, statusCellText, statusCellValue, statusColumn,
+  STATUS_COLUMN, STATUS_NOT_LISTED, currentStatusTarget, parseStatusInput, statusCellText, statusCellValue, statusColumn,
   statusEditorChoices, statusSheetColumn,
 } from './statusColumn'
-import { ACTION_COLUMN, ACTION_NOT_LISTED, DELETE_NEEDS_DELETE, actionCellText, actionCellValue, actionColumn, actionEditorChoices, actionEditorValue,
+import { ACTION_COLUMN, ACTION_NOT_LISTED, actionCellText, actionCellValue, actionColumn, actionEditorChoices, actionEditorValue,
   parseSendInput } from './actionColumn'
 import { publishHistorySearch } from './publishColumn'
 import { CellSaveTracker, publishActionModel, sellingStatusModel } from '@/design-system/grid'
@@ -98,7 +98,7 @@ describe('what the cells show', () => {
     const value = actionCellValue(shopify, read)
     expect(value).toEqual({ mode: 'partial', setAt: null, setByName: null, lockedReason: null, partialNote: existing })
     expect(publishActionModel(value).tooltip).toBe(`Partial update: ${existing}`)
-    expect(actionEditorChoices(shopify, true)[0]).toMatchObject({ value: 'partial', note: `The default. ${existing}` })
+    expect(actionEditorChoices(shopify)[0]).toMatchObject({ value: 'partial', note: `The default. ${existing}` })
     // Amazon and eBay: no note, the usual hint.
     expect(actionCellValue(cell(), read)).not.toHaveProperty('partialNote')
     expect(publishActionModel(actionCellValue(cell(), read)).tooltip).toBe('Partial update: Publish sends only the fields you changed.')
@@ -121,19 +121,21 @@ describe('what the cells show', () => {
     expect(currentStatusTarget(cell({ state: 'mixed' }))).toBeNull()
   })
 
-  it('Ended and Delete are held without products.delete; the FBA warning stays the option\'s note', () => {
-    const status = statusEditorChoices(cell(), false)
-    expect(status.find(o => o.value === 'ended')).toMatchObject({ heldReason: ENDED_NEEDS_DELETE })
+  // Owner 2026-10-19 — no separate delete permission: the columns are locked only without products.publish (`lockedReason`).
+  it('Ended and Delete are offered as the server offers them, never held for the role; the FBA warning stays the option\'s note', () => {
+    const status = statusEditorChoices(cell())
+    expect(status.find(o => o.value === 'ended')!.heldReason).toBeUndefined()
     expect(status.find(o => o.value === 'inactive')).toMatchObject({ note: 'Amazon runs this offer (FBA).' })
-    expect(statusEditorChoices(cell(), true).find(o => o.value === 'ended')!.heldReason).toBeUndefined()
-    expect(actionEditorChoices(cell(), false).find(o => o.value === 'delete')).toMatchObject({ heldReason: DELETE_NEEDS_DELETE, group: 'Remove' })
+    const del = actionEditorChoices(cell()).find(o => o.value === 'delete')!
+    expect(del).toMatchObject({ group: 'Remove' })
+    expect(del.heldReason).toBeUndefined()
   })
 })
 
 describe('the two columns', () => {
   const tracker = new CellSaveTracker()
   const inputs: unknown[] = []
-  const shared = { cell: () => cell(), read: () => read, canDelete: () => true, tracker, rowIdOf: (row: { id: string }) => row.id }
+  const shared = { cell: () => cell(), read: () => read, tracker, rowIdOf: (row: { id: string }) => row.id }
   const status = statusColumn<{ id: string }>({ ...shared, onInput: (row, input) => inputs.push(['status', row.id, input]) })
   const action = actionColumn<{ id: string }>({ ...shared, onInput: (row, input) => inputs.push(['send', row.id, input]) })
 
@@ -208,7 +210,7 @@ describe('delete and relist (simplify) — a row Nexus deleted is a row not on t
   })
 
   it('its Status editor offers the new-row choices; Active lists it again ("lists again", with who and when)', () => {
-    expect(statusEditorChoices(gone(), true).map(o => [o.value, Boolean(o.heldReason)])).toEqual([['active', false], ['inactive', false], ['not_listed', false]])
+    expect(statusEditorChoices(gone()).map(o => [o.value, Boolean(o.heldReason)])).toEqual([['active', false], ['inactive', false], ['not_listed', false]])
     expect(parseStatusInput('Active')).toEqual({ change: { column: 'status', target: 'active' } })
     const model = sellingStatusModel(statusCellValue(again(), read))
     expect(model).toMatchObject({ aside: 'lists again', pill: { label: 'Active', glyph: 'clock' } })
@@ -223,7 +225,7 @@ describe('delete and relist (simplify) — a row Nexus deleted is a row not on t
     expect(publishActionModel(actionCellValue(again(), read))).toMatchObject({ kind: 'new', pill: { label: 'Full update', glyph: 'none' } })
     expect(actionCellText(value)).toBe('Full update')
     expect(actionEditorValue(gone())).toBe('full')
-    expect(actionEditorChoices(gone(), true).map(o => [o.value, o.heldReason ?? null])).toEqual([['partial', 'A new listing is always sent whole.'], ['full', null], ['delete', already]])
+    expect(actionEditorChoices(gone()).map(o => [o.value, o.heldReason ?? null])).toEqual([['partial', 'A new listing is always sent whole.'], ['full', null], ['delete', already]])
     // Empty, "full update" or a filled Full update change nothing on it; Delete and Partial update go to the server (refused there).
     expect(parseSendInput('', gone())).toEqual({ skip: true })
     expect(parseSendInput('full update', gone())).toEqual({ skip: true })
@@ -259,7 +261,7 @@ describe('an UNLINKED row (Item ID control) — never "set Status to Active and 
     const model = sellingStatusModel(value)
     expect(model).toMatchObject({ kind: 'new', aside: 'unlinked 5 Oct', tooltip: words })
     expect(model.tooltip).not.toMatch(/set Status to Active/)
-    expect(statusEditorChoices(unlinked(), true).map(o => [o.value, o.heldReason ?? null])).toEqual([['active', words], ['inactive', words], ['not_listed', null]])
+    expect(statusEditorChoices(unlinked()).map(o => [o.value, o.heldReason ?? null])).toEqual([['active', words], ['inactive', words], ['not_listed', null]])
   })
 
   it('it never counts as a row the next Publish lists again, even holding an older Active', () => {
@@ -309,7 +311,7 @@ describe('new listings — a row not on the channel yet', () => {
     expect(model).toMatchObject({ kind: 'new', editable: true, locked: false, aside: 'new' })
     expect(statusCellText(value)).toBe('Active')
     expect(currentStatusTarget(row)).toBe('active')
-    const options = statusEditorChoices(row, true)
+    const options = statusEditorChoices(row)
     expect(options.map(o => o.value)).toEqual(['active', 'inactive', 'not_listed'])
     expect(options[1].note).toBe(`Publish creates it, but buyers cannot buy it yet. ${CHECK}`)
     expect(options[2].note).toContain('Publish leaves the whole family out here.')
@@ -328,7 +330,7 @@ describe('new listings — a row not on the channel yet', () => {
     expect(publishActionModel(value)).toMatchObject({ kind: 'new', label: 'Full update', pill: { glyph: 'none' }, editable: true })
     expect(actionCellText(value)).toBe('Full update')
     expect(actionEditorValue(row)).toBe('full')
-    expect(actionEditorChoices(row, true).map(o => [o.value, Boolean(o.heldReason)])).toEqual([['partial', true], ['full', false], ['delete', true]])
+    expect(actionEditorChoices(row).map(o => [o.value, Boolean(o.heldReason)])).toEqual([['partial', true], ['full', false], ['delete', true]])
     const out = newCell({ create: { target: 'not_listed', source: 'own', defaultTarget: 'active', noRecord: false, sentence: 'Publish leaves it out.' } })
     expect(publishActionModel(actionCellValue(out, read)).pill).toBeNull()
   })
@@ -347,7 +349,7 @@ describe('new listings — a row not on the channel yet', () => {
 
   it('Action ▾: Not listed appears for ticked new rows; Active counts them as listings Publish creates; Ended is refused on them with a reason', () => {
     const rows = [{ sku: 'GALE', cell: newCell() }, { sku: 'GALE-M', cell: newCell({ listingId: 'new:p2:EBAY:IT:acc:' }) }, { sku: 'GALE-S', cell: cell() }]
-    const entries = actionMenuEntries(rows, { publish: true, delete: true })
+    const entries = actionMenuEntries(rows, { publish: true })
     expect(entries.filter(e => e.group === 'Status').map(e => e.id)).toEqual(['status:active', 'status:inactive', 'status:not_listed', 'status:ended'])
     const active = entries.find(e => e.id === 'status:active')!
     expect(active.label).toBe('Active — 3 of 3')
@@ -357,6 +359,6 @@ describe('new listings — a row not on the channel yet', () => {
     expect(notListed.note).toMatch(/^1 not allowed: On the channel already/)
     expect(entries.find(e => e.id === 'status:ended')!.note).toMatch(/2 not allowed: Not on the channel yet: choose Active, Inactive or Not listed\./)
     // No new row ticked: no Not listed item.
-    expect(actionMenuEntries([{ sku: 'GALE-S', cell: cell() }], { publish: true, delete: true }).some(e => e.id === 'status:not_listed')).toBe(false)
+    expect(actionMenuEntries([{ sku: 'GALE-S', cell: cell() }], { publish: true }).some(e => e.id === 'status:not_listed')).toBe(false)
   })
 })

@@ -50,10 +50,6 @@ export interface DestinationEntry {
    * Null until the plan is read.
    */
   plan: PublishPlanDestination | null
-  /** The family SKU the typed confirmation asks for (the plan's `familySku`). */
-  familySku: string | null
-  /** The viewer may end and delete listings (the plan's `canDelete`). */
-  canDelete: boolean
   /** The ticked lifecycle row ids of this destination (the plan's own ids, sent back as given). */
   lifecycleIds: string[]
   /**
@@ -67,7 +63,7 @@ export interface DestinationEntry {
 
 export const EMPTY_ENTRY: DestinationEntry = Object.freeze({
   review: null, loading: false, error: null, selectedIds: [], selection: null, selecting: false, locationId: '', confirmedReviewId: null,
-  plan: null, familySku: null, canDelete: true, lifecycleIds: [], selectionError: null, ticksAt: 0,
+  plan: null, lifecycleIds: [], selectionError: null, ticksAt: 0,
 }) as DestinationEntry
 
 /**

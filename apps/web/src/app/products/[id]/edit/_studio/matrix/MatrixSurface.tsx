@@ -538,8 +538,6 @@ export function MatrixSurface({ productId }: { productId: string }) {
   }), [publishActions.status, authStatus, has])
   const publishReadRef = useRef(publishRead)
   publishReadRef.current = publishRead
-  const canDeleteRef = useRef(false)
-  canDeleteRef.current = has('products.delete')
   const statusCoordinates = useMemo(() => visibleCoordinates.filter(hasMatrixStatus), [visibleCoordinates])
   const statusCoordinatesRef = useRef(statusCoordinates)
   statusCoordinatesRef.current = statusCoordinates
@@ -601,7 +599,6 @@ export function MatrixSurface({ productId }: { productId: string }) {
       if (clearsNothing(input, place.cell)) return
       stageStatus(place, input)
     },
-    canDelete: () => canDeleteRef.current,
     tracker: statusTracker,
     rowIdOf: (row) => row.id,
   }), [statusCellOf, statusPlaceOf, stageStatus, statusTracker])
@@ -737,7 +734,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   /* ── the bulk Edit's doors ──────────────────────────────────────────────────────────────────
      Read at every preview and Apply through refs: a write moves cells and versions while the dialog is open. */
 
-  const bulkLive = useRef({ visibleCoordinates, focusedKey, publishRead, canEdit: false, canPrice: false, canDelete: false, canStock: false })
+  const bulkLive = useRef({ visibleCoordinates, focusedKey, publishRead, canEdit: false, canPrice: false, canStock: false })
   bulkLive.current = {
     visibleCoordinates, focusedKey, publishRead,
     // "Sells from" and Case size need `inventory.adjust` (the server's preview refuses it per row too).
@@ -746,7 +743,6 @@ export function MatrixSurface({ productId }: { productId: string }) {
     canEdit: has('products.edit'),
     // The server refuses every price write without both (`products.edit` on the route, `products.price.edit` in the service).
     canPrice: has('products.edit') && has('products.price.edit'),
-    canDelete: has('products.delete'),
   }
   const statusEditingRef = useRef(statusEditing)
   statusEditingRef.current = statusEditing
@@ -785,7 +781,6 @@ export function MatrixSurface({ productId }: { productId: string }) {
         canPrice: live.canPrice,
         statusHeld: !live.publishRead.loaded ? 'The markets\' Status is still being read. Try again in a moment.'
           : live.publishRead.failed ? STATUS_READ_FAILED : live.publishRead.lockedReason,
-        canDelete: live.canDelete,
         focusedKey: live.focusedKey,
         locations: readRef.current?.locations,
         canStock: live.canStock,

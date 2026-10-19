@@ -11,7 +11,7 @@
  *   PUT /api/products/:id/studio/publish-actions/status/:target  active | inactive | ended | not_listed | none (clears)
  *       (a `new:` listing id starts the family's drafts on that destination first: `started` in the answer)
  *       body { listingIds?, expected?, allCoordinates? } → { applied, refused, conflicts }
- *       delete and ended: products.delete; every other value: products.publish
+ *       every value, Delete and Ended included: products.publish (Owner 2026-10-19: no separate delete permission)
  *
  * Each value is its own registered path, so the permission manifest (which sees the route pattern, never the URL)
  * decides by path; the service checks again. Setting a value sends nothing: Publish does, after the review.

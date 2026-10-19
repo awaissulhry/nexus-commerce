@@ -245,8 +245,8 @@ export const ENTRIES: Entry[] = [
   // The Products page's "New product" dialog creates one DRAFT product: `products.create`, not the `/api/products`
   // prefix rule's products.edit below (GET /api/products, the list, stays products.view there).
   P(F.productsCreate, (m, p) => m === 'POST' && p === '/api/products'),
-  // S10 — "Delete the old SKU again" deletes a listing on Amazon: products.delete, as Delete (before the publish rule).
-  P(F.productsDelete, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/studio-publication\/[^/]+\/delete-old-sku$/.test(p)),
+  // Every studio publication route is publishing, S10's "Delete the old SKU again" included (Owner 2026-10-19: deletes in
+  // the publish flows need products.publish, no separate delete permission).
   P(F.productsPublish, (_m, p) => /^\/api\/products\/[^/]+\/studio-publication(?:\/|$)/.test(p)),
   // Sheet publish parity, step 4 — the publish history. Reading runs is a view for anyone in the business; the exact request a
   // listing received shows raw seller and item identifiers, so it needs products.publish. /api/products/:id/publications is a
@@ -266,11 +266,10 @@ export const ENTRIES: Entry[] = [
   P(F.productsDelete, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/sheet-rows\/(delete\/run|restore)$/.test(p)),
   P(F.productsPublish, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/listing-actions\/[^/]+\/(preview|run)$/.test(p)),
   // Sheet publish parity, build shape v2 — the waiting Action and Status values of listing rows (publish-actions.routes.ts).
-  // Setting a value sends nothing, but it is what Publish will send, so it needs what sending it needs: Delete (Action) and
-  // Ended (Status) are deletes (house rule A-10), every other value is publishing. Each value has its own path, so this
-  // manifest decides; the service checks again. The read is a GET under the /api/products prefix rule (products.view).
-  P(F.productsDelete, (m, p) => m === 'PUT' && /^\/api\/products\/[^/]+\/studio\/publish-actions\/(send\/delete|status\/ended)$/.test(p)),
-  P(F.productsPublish, (m, p) => m === 'PUT' && /^\/api\/products\/[^/]+\/studio\/publish-actions\/(send\/(partial|full)|status\/(active|inactive|not_listed|none))$/.test(p)),
+  // Setting a value sends nothing, but it is what Publish will send, so it needs what sending it needs: publishing, Delete
+  // (Action) and Ended (Status) included (Owner 2026-10-19: no separate delete permission in the publish flows). Each value
+  // has its own path; the service checks again. The read is a GET under the /api/products prefix rule (products.view).
+  P(F.productsPublish, (m, p) => m === 'PUT' && /^\/api\/products\/[^/]+\/studio\/publish-actions\/(send\/(partial|full|delete)|status\/(active|inactive|ended|not_listed|none))$/.test(p)),
   // Sheet pop-up P3 A3 — "New attribute" from the variation pop-up creates a dictionary attribute and places it in a family:
   // what `/api/attributes` and `/api/families` require, never the `/api/products` rule's products.edit below.
   P(F.pimManage, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/studio\/own-axis-attribute$/.test(p)),

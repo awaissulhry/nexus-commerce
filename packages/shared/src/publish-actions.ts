@@ -160,10 +160,6 @@ export function isStaleWaiting(value: Pick<WaitingValue, 'setAt' | 'setById'>, v
   return !Number.isFinite(at) || now - at > STALE_AFTER_MS || (value.setById ?? null) !== (viewerId ?? null)
 }
 
-/** Ended and Delete need the publisher's own typed confirmation and `products.delete`. */
-export const needsTypedConfirm = (value: Pick<WaitingValue, 'kind' | 'value'>) =>
-  (value.kind === 'send' && value.value === 'delete') || (value.kind === 'status' && value.value === 'ended')
-
 export interface WaitingCounts { full: number; delete: number; active: number; inactive: number; ended: number }
 export const EMPTY_WAITING: WaitingCounts = Object.freeze({ full: 0, delete: 0, active: 0, inactive: 0, ended: 0 }) as WaitingCounts
 
@@ -502,18 +498,18 @@ export function explainAmazonRelist(publication: unknown, sku: string | null, is
  */
 export const amazonMoveSentence = (to: string, from: string, where: string) => `Creates ${to} on ${where} as a new offer, then deletes ${from} there.`
 
-/** The review's typed confirmation for one or more Amazon moves (`StudioPublishReview.confirm.sentence`). */
+/** What one or more Amazon moves delete, said above the Publish button (`StudioPublishReview.confirm.sentence`). */
 export function amazonMoveConfirmSentence(moves: ReadonlyArray<{ from: string }>, where: string): string {
   const olds = moves.map(move => move.from)
   const named = olds.length <= 3 ? olds.join(', ') : `${olds.slice(0, 3).join(', ')} and ${olds.length - 3} more`
   return `This Publish deletes ${named} on ${where} once Amazon accepts ${olds.length === 1 ? 'its new SKU' : 'their new SKUs'}. If Amazon refuses a new SKU, its old one stays and nothing is deleted. It cannot be undone.`
 }
 
-/** The submit's refusal when the person may not delete listings (a move deletes the old SKU, as Delete does). */
-export const AMAZON_MOVE_ROLE_CANNOT_DELETE = 'Your role cannot delete listings (it needs permission to delete products), and moving an Amazon listing to a new SKU deletes its old SKU there. Nothing was sent.'
-
-/** The submit's refusal when a review that deletes an old Amazon SKU arrives without the typed confirmation. */
-export const AMAZON_MOVE_NEEDS_CONFIRM = 'Moving a listing to a new SKU deletes its old SKU on Amazon: type the SKU, then confirm. It cannot be undone.'
+/**
+ * The submit's refusal when a review that deletes an old Amazon SKU arrives without `confirm: 'DELETE'`. The product's
+ * Publish window sends it with a ticked move (nothing is typed); a caller that never shows the delete is refused.
+ */
+export const AMAZON_MOVE_NEEDS_CONFIRM = 'Moving a listing to a new SKU deletes its old SKU on Amazon, so it is sent only from the product\'s Publish window, which shows that delete. Nothing was sent.'
 
 /**
  * An FBA move (the FBA delete warning's counts): NEW starts with no FBA units, and Amazon's units stay under OLD. Null

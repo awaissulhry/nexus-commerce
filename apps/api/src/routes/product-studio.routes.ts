@@ -140,22 +140,19 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
   })
   // Sheet publish parity, build shape v2 (P6) — the review of ONE mixed Publish: per destination the content review (with
   // the Full update rows), the waiting Status changes and Deletes, held rows and outgrown values (`publish-plan.ts`).
-  // products.publish (the `/studio-publication` rule); Ended and Delete rows say whether this caller may send them.
+  // products.publish (the `/studio-publication` rule), Ended and Delete included.
   fastify.post<{ Params: { id: string } }>('/products/:id/studio-publication/plan', async (request, reply) => {
     try {
       const { reviewPublishPlan } = await import('../services/pim/publish-plan.js')
-      const { permissionCheckerFor } = await import('./studio-matrix.routes.js')
       reply.header('Cache-Control', 'no-store')
-      return await reviewPublishPlan(request.params.id, request.body, { userId: request.authUser?.id ?? null, can: permissionCheckerFor(request) })
+      return await reviewPublishPlan(request.params.id, request.body, { userId: request.authUser?.id ?? null })
     } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
   })
   fastify.post<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId/submit', async (request, reply) => {
     try {
       const { submitStudioPublication } = await import('../services/pim/studio-publication.service.js')
-      // S10 — a review that moves a live Amazon listing to a new SKU deletes the old one: products.delete, as Delete.
-      const { permissionCheckerFor } = await import('./studio-matrix.routes.js')
-      return await submitStudioPublication(request.params.id, request.params.reviewId, request.body, request.authUser?.id ?? null,
-        { canDelete: permissionCheckerFor(request)('products.delete') })
+      // S10 — a review that moves a live Amazon listing to a new SKU deletes the old one: products.publish, as every publish.
+      return await submitStudioPublication(request.params.id, request.params.reviewId, request.body, request.authUser?.id ?? null)
     } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
   })
   fastify.post<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId/selection', async (request, reply) => {
@@ -192,7 +189,7 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
   })
   // S10 — "Delete the old SKU again": a publish that moved a live Amazon listing to a new SKU, whose old SKU Amazon did
   // not confirm deleting, tries that delete again now (the move finisher, through the Delete path's channel half).
-  // products.delete (permissions manifest), as Delete.
+  // products.publish (the `/studio-publication` rule), as the publish that made the move.
   fastify.post<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId/delete-old-sku', async (request, reply) => {
     try {
       const { deleteOldSkuAgain } = await import('../services/pim/studio-publication-amazon-move.js')

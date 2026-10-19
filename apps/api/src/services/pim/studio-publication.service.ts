@@ -34,7 +34,7 @@ import { prepareAmazonChanges } from './studio-publication-amazon-changes.js'
 import { prepareEbayChanges } from './studio-publication-ebay-changes.js'
 import { blockRowChanges, compileSelection, type EbayInventorySend, type PublicationChangePlan } from './studio-publication-selection.js'
 import { explainAmazonRelist, type PublicationRelistRecord, FULL_EBAY_INVENTORY_LATER, FULL_EBAY_VARIATION, fbaNewAsinWarning, relistSentence,
-  SHOPIFY_EXISTING_NOT_YET, AMAZON_MOVE_NEEDS_CONFIRM, AMAZON_MOVE_ROLE_CANNOT_DELETE, channelSkuLengthProblem, ebayRenameSentence, etsySkuMoveSentence, oldSkuStaysDeleted,
+  SHOPIFY_EXISTING_NOT_YET, AMAZON_MOVE_NEEDS_CONFIRM, channelSkuLengthProblem, ebayRenameSentence, etsySkuMoveSentence, oldSkuStaysDeleted,
   FULL_ETSY_VARIATION } from '@nexus/shared/publish-actions'
 import { deletedOn, etsyCreateState, ETSY_NEW_ACTIVE_NEEDS_PHOTO, shopifyCreateStatus, type ListingDeletion } from '@nexus/shared/listing-actions'
 import { newListingHolds, newRowTargets } from '../listings/new-listing-choices.js'
@@ -285,7 +285,7 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
   // listed included), nothing of it is sent.
   if (scope.channel === 'SHOPIFY' && creates.held.size) issues.push({ severity: 'error', message: [...creates.held.values()][0] })
   // S10 (per-channel SKU) — the SKU each row sends, and what this review does about a row the channel holds under another
-  // SKU (Amazon: create NEW, then delete OLD, typed like Delete; eBay Trading: rename in place; Etsy: cannot yet). A SKU
+  // SKU (Amazon: create NEW, then delete OLD, said above the Publish button; eBay Trading: rename in place; Etsy: cannot yet). A SKU
   // longer than the channel takes is refused here by name (only where the repo shows the channel's limit).
   const sentSkuOf = (productId: string) => sentSku(prepared, productId) ?? facts.products.find(p => p.id === productId)?.sku ?? ''
   const moves = await skuMoveRows(facts, prepared, changePlan)
@@ -386,11 +386,11 @@ function sentSku(prepared: Prepared | null, productId: string): string | null {
 /**
  * S10 (per-channel SKU) — the rows the channel holds under another SKU than the one this review sends (only rows with
  * their own SKU, `channelSku`: a row without one publishes as before), and what the review does about each: Amazon creates
- * NEW and deletes OLD after Amazon accepts it (typed confirmation); eBay Trading renames in place; Etsy cannot yet (said,
+ * NEW and deletes OLD after Amazon accepts it (the window says so); eBay Trading renames in place; Etsy cannot yet (said,
  * never sent: studio Publish keeps the SKU Etsy holds). eBay Inventory refuses in its builder; Shopify renames in place
  * through its own synchronisation (content-sync), which studio Publish leaves to it for a product Shopify holds.
  * F5 (browser check 2026-10-05): an Amazon publication that could not be prepared still names its moves and asks for the
- * typed confirmation (`amazonMovesWithoutPublication`); its problems say why nothing is sent yet. Exported for its test.
+ * move's sentence (`amazonMovesWithoutPublication`); its problems say why nothing is sent yet. Exported for its test.
  */
 export async function skuMoveRows(facts: PublicationFacts, prepared: Prepared | null, changePlan: PublicationChangePlan | null) {
   const rows = new Map<string, StudioPublishSkuMove>()
@@ -402,7 +402,7 @@ export async function skuMoveRows(facts: PublicationFacts, prepared: Prepared | 
     confirm = review.confirm
   } else if (!prepared && facts.scope.channel === 'AMAZON') {
     // F5 (browser check 2026-10-05) — the publication could not be prepared (its problem is listed already, so nothing is
-    // sent). The rows it would move still read "Move to NEW", and the review still asks for the typed confirmation.
+    // sent). The rows it would move still read "Move to NEW", and the review still says what the move deletes.
     const found = await amazonMovesWithoutPublication(facts)
     const review = await amazonMoveReview(facts, found)
     for (const [productId, move] of review.rows) rows.set(productId, move)
@@ -694,14 +694,8 @@ export interface ClaimedPublication {
 }
 export interface DeliveredPublication { result: StudioPublishResult; receipt?: StudioPublishResult }
 
-/**
- * What the caller may do besides publishing (the route's permission check). `canDelete` false: a selection that deletes
- * an old SKU (an Amazon move) is refused. Absent: not checked here (a batch checked it when the plan was submitted).
- */
-export interface ClaimOptions { canDelete?: boolean }
-
 /** Check the review and claim its send. Returns the stored result instead when it was already started or claimed. */
-export async function claimPublication(productId: string, id: string, body: unknown, userId: string | null, options: ClaimOptions = {}): Promise<{ result: StudioPublishResult } | { claim: ClaimedPublication }> {
+export async function claimPublication(productId: string, id: string, body: unknown, userId: string | null): Promise<{ result: StudioPublishResult } | { claim: ClaimedPublication }> {
   const operation = await prisma.bulkOperation.findFirst({ where: { id, userId } })
   const data = object(operation?.changes)
   if (!operation || data.kind !== KIND || data.productId !== productId) throw new WorkspaceScopeError('Publication review not found.', 404)
@@ -732,12 +726,12 @@ export async function claimPublication(productId: string, id: string, body: unkn
   }
   if (!sparse && plan.review.overwrite?.requiresConfirmation && input.confirmOverwrite !== true) throw new WorkspaceScopeError('Confirm the overwrite warning for this review before publishing.', 400)
   // S10 (Owner D2 = A) — a selection that moves a live Amazon listing to a new SKU deletes the old SKU once Amazon accepts
-  // the new one: typed like Delete (`confirm: 'DELETE'`), by someone who may delete. On a shared account the new SKU's
+  // the new one: the Publish window, which says so, sends it with `confirm: 'DELETE'` (nothing typed; the permission is
+  // products.publish, as every publish); a caller that never shows the delete is refused. On a shared account the new SKU's
   // coordinate is claimed for this business first; another business holding it refuses the send. Nothing is sent otherwise.
   const moves = plan.prepared.kind === 'amazon' ? plan.prepared.moves ?? [] : []
   if (moves.length) {
     if (input.confirm !== 'DELETE') throw new WorkspaceScopeError(AMAZON_MOVE_NEEDS_CONFIRM, 400)
-    if (options.canDelete === false) throw new WorkspaceScopeError(AMAZON_MOVE_ROLE_CANNOT_DELETE, 403)
     try { await claimMoveCoordinates(data.scope, moves) }
     catch (error) { throw new WorkspaceScopeError(`${error instanceof Error ? error.message : String(error)} Nothing was sent.`, 409) }
     data.skuMoves = moves.map(move => ({ ...move, marketplaceId: (plan.prepared as { marketplaceId: string }).marketplaceId }))
@@ -946,8 +940,8 @@ export async function finishPublication(claim: ClaimedPublication, delivered: De
   }
 }
 
-export async function submitStudioPublication(productId: string, id: string, body: unknown, userId: string | null, options: ClaimOptions = {}): Promise<StudioPublishResult> {
-  const claimed = await claimPublication(productId, id, body, userId, options)
+export async function submitStudioPublication(productId: string, id: string, body: unknown, userId: string | null): Promise<StudioPublishResult> {
+  const claimed = await claimPublication(productId, id, body, userId)
   if ('result' in claimed) return claimed.result
   return finishPublication(claimed.claim, await deliverPublication(claimed.claim))
 }

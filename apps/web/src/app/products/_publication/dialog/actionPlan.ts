@@ -5,9 +5,9 @@
  * destination per request) instead of a bare content review:
  *  - the ONE table of a market tab (`actionPlanRows`): tick · SKU · what · what is sent · set by — danger rows first;
  *  - what a row's tick does (`toggleRowTicks`, `withProductTicks`);
- *  - what one click sends over every chosen market (`actionPlanSend`): the counts behind the one summary line, the
- *    typed confirmation Ended and Delete need, the rows a role without products.delete leaves waiting, and whether the
- *    send takes the batch (`POST /api/publication-batches { plan }`) or today's direct submit;
+ *  - what one click sends over every chosen market (`actionPlanSend`): the counts behind the one summary line, whether
+ *    it removes listings (End, Delete, an Amazon SKU move: the button reads in the danger tone; nothing is typed, Owner
+ *    2026-10-19), and whether the send takes the batch (`POST /api/publication-batches { plan }`) or today's direct submit;
  *  - the counted button, the batch's words for each lifecycle child and row, and Undo after Done.
  *
  * The contract is `@nexus/shared/publish-plan` (P6); the Action and Status words are the design system's (P5).
@@ -31,7 +31,7 @@ import { channelLabel } from '@nexus/shared/channel-label'
 import { deleteDoneSentence, LISTING_ACTION_LABEL, type ListingAction, type SellingState, type StatusTarget } from '@nexus/shared/listing-actions'
 import { publishPlanSummary, type SendMode } from '@nexus/shared/publish-actions'
 import {
-  LIFECYCLE_UNKNOWN, ROLE_CANNOT_END_OR_DELETE, START_AS_WORD, confirmRowsTicked, publishPlanCounts, publishPlanUsesBatch,
+  LIFECYCLE_UNKNOWN, START_AS_WORD, publishPlanCounts, publishPlanUsesBatch,
   type PublishPlanBatchChild, type PublishPlanBatchView, type PublishPlanCounts, type PublishPlanDestination, type PublishPlanLifecycleRow,
   type PublishPlanSubmit, type StartAsTarget,
 } from '@nexus/shared/publish-plan'
@@ -187,7 +187,7 @@ export interface ActionPlanRow {
   tick: PlanTick
   /** The person can change the tick (before the window is locked). */
   tickable: boolean
-  /** Ended or Delete: the typed confirmation. */
+  /** Ended, Delete or an Amazon SKU move: it removes a listing (the danger tone). */
   danger: boolean
   /** Content rows: every change id of this product (the field ticks inside the row). */
   changeIds: string[]
@@ -387,24 +387,6 @@ export function withProductTicks(selectedIds: readonly string[], productChangeId
 
 // ── What one click sends, over every chosen market ────────────────────────────────────────────────────────────────
 
-export interface PlanConfirm {
-  /** What the person types: the family SKU. */
-  expected: string
-  ended: number
-  deleted: number
-  /** S10 — live Amazon listings this Publish moves to a new SKU (their old SKU is deleted once Amazon accepts the new one). */
-  moved?: number
-  /** The destinations with a ticked Ended or Delete row ("eBay · IT"). */
-  places: string[]
-  /** One of `places` is a listing alias (Owner 2026-10-05): three or more are counted as destinations, not markets. */
-  aliases?: boolean
-  /**
-   * S11 follow-up — the SKUs the ticked End and Delete rows act on: the ones the channel holds for those listings (the
-   * plan's lifecycle rows name them), so the confirmation says what is ended or deleted, not the product SKU in its place.
-   */
-  skus?: { ended: string[]; deleted: string[] }
-}
-
 export interface ActionPlanSend {
   /** The chosen markets that send something: content that is ready and/or ticked lifecycle rows. */
   send: string[]
@@ -417,17 +399,20 @@ export interface ActionPlanSend {
   counts: PublishPlanCounts
   /** Markets that send a whole new product (Shopify). */
   wholeProducts: number
-  /** Ticked Ended and Delete rows need the typed family SKU; null when none is ticked. */
-  confirm: PlanConfirm | null
-  /** Ended and Delete rows this role cannot send: they stay waiting. */
-  roleLocked: { ended: number; deleted: number }
+  /** A ticked End, Delete or Amazon SKU move: the button reads in the danger tone (nothing is typed). */
+  removes: boolean
+  /**
+   * S10 — the markets whose ticked content moves a live Amazon listing to a new SKU (its old SKU is deleted once Amazon
+   * accepts the new one): the window says what each deletes, and the batch sends it (`confirmDelete`).
+   */
+  moving: string[]
   /** The batch (`{ plan }`), else today's direct submit. */
   batch: boolean
 }
 
 /**
  * S10 — the rows of a destination's content review that move a live Amazon listing to a new SKU (create NEW, then delete
- * OLD) and whose create is ticked. Each one needs the typed confirmation.
+ * OLD) and whose create is ticked.
  */
 export function movedRowsTicked(entry: Pick<DestinationEntry, 'review' | 'selectedIds'>): number {
   const review = entry.review
@@ -461,27 +446,12 @@ export function actionPlanSend(keys: readonly string[], stateOf: (key: string) =
   }
   const counts = publishPlanCounts({ destinations: plans }, { fields, lifecycle })
   const outgrown = plans.flatMap(plan => plan.outgrown.map(row => row.id))
-
-  let confirm: PlanConfirm | null = null
-  // S10 — content that moves a live Amazon listing to a new SKU deletes the old SKU: typed like Delete, and sent through
-  // the batch, which carries the typed confirmation (`confirmDelete`).
+  // S10 — content that moves a live Amazon listing to a new SKU deletes the old SKU: sent through the batch, which says
+  // so (`confirmDelete`). Nothing is typed (Owner 2026-10-19).
   const moving = content.filter(key => contentCounts(stateOf(key)) && movedRowsTicked(entryOf(key)) > 0)
-  if (confirmRowsTicked({ destinations: plans }, lifecycle) > 0 || moving.length) {
-    const rows = lifecycleRows.filter(row => row.needsTypedConfirm)
-    const placeKeys = [...new Set([...send.filter(key => tickedLifecycleRows(entryOf(key)).some(row => row.needsTypedConfirm)), ...moving])]
-    const places = placeKeys.map(key => entryOf(key).plan?.label ?? key)
-    const aliases = placeKeys.some(key => !!entryOf(key).plan?.scope.listingId)
-    const expected = keys.map(key => entryOf(key).familySku).find((sku): sku is string => !!sku)
-      ?? moving.map(key => entryOf(key).review?.confirm?.expected).find((sku): sku is string => !!sku) ?? ''
-    const moved = moving.reduce((n, key) => n + movedRowsTicked(entryOf(key)), 0)
-    const skusOf = (action: 'end' | 'delete') => [...new Set(rows.filter(row => row.action === action).map(row => row.sku))]
-    confirm = { expected, ended: rows.filter(row => row.action === 'end').length, deleted: rows.filter(row => row.action === 'delete').length, places, ...(aliases ? { aliases } : {}), ...(moved ? { moved } : {}),
-      ...(rows.length ? { skus: { ended: skusOf('end'), deleted: skusOf('delete') } } : {}) }
-  }
-  const locked = plans.flatMap(plan => plan.lifecycle).filter(row => row.refused === ROLE_CANNOT_END_OR_DELETE)
-  const roleLocked = { ended: locked.filter(row => row.action === 'end').length, deleted: locked.filter(row => row.action === 'delete').length }
+  const removes = moving.length > 0 || lifecycleRows.some(row => isDanger(row.action))
   const batch = send.length > 0 && (moving.length > 0 || publishPlanUsesBatch({ destinations: plans }, { destinations: send.length, lifecycle }))
-  return { send, content, lifecycle, outgrown, counts, wholeProducts: base.wholeProducts, confirm, roleLocked, batch }
+  return { send, content, lifecycle, outgrown, counts, wholeProducts: base.wholeProducts, removes, moving, batch }
 }
 
 /**
@@ -549,44 +519,6 @@ export function planStateLabel(state: DestinationState, entry: Pick<DestinationE
   return label
 }
 
-const listed = (names: readonly string[]) => names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
-
-/**
- * "to end GALE-M-IT and delete GALE-L on eBay · IT" — the words after "Type GALE-JACKET". Up to three listings are named by
- * the SKU each End or Delete acts on (`skus`, one per listing); more, or one SKU on several markets, are counted ("to end 1
- * listing and delete 4 on 3 markets").
- */
-export function confirmWhat(confirm: Pick<PlanConfirm, 'ended' | 'deleted' | 'places' | 'moved' | 'skus' | 'aliases'>): string {
-  const skus = confirm.skus
-  const named = !!skus && skus.ended.length === confirm.ended && skus.deleted.length === confirm.deleted && confirm.ended + confirm.deleted <= 3
-  const parts = [
-    confirm.ended ? named ? `end ${listed(skus!.ended)}` : `end ${plural(confirm.ended, 'listing', 'listings')}` : null,
-    confirm.deleted ? named ? `delete ${listed(skus!.deleted)}`
-      : (confirm.ended ? `delete ${confirm.deleted.toLocaleString('en')}` : `delete ${plural(confirm.deleted, 'listing', 'listings')}`) : null,
-    // S10 — "move 1 listing to its new SKU (its old SKU is deleted)".
-    confirm.moved ? `move ${plural(confirm.moved, 'listing', 'listings')} to ${confirm.moved === 1 ? 'its new SKU (its old SKU is deleted)' : 'their new SKUs (their old SKUs are deleted)'}` : null,
-  ].filter(Boolean).join(' and ')
-  const places = confirm.places.length === 0 ? '' : confirm.places.length <= 2 ? ` on ${confirm.places.join(' and ')}`
-    : ` on ${confirm.places.length} ${confirm.aliases ? 'destinations' : 'markets'}`
-  return `to ${parts}${places}`
-}
-
-/** "Type GALE-JACKET to end 1 listing and delete 1 on eBay · IT". */
-export const confirmSentence = (confirm: PlanConfirm) => `Type ${confirm.expected} ${confirmWhat(confirm)}`
-
-/** The disabled button's visible reason: "Type GALE-JACKET below to end 1 listing and delete 1." */
-export function confirmReason(confirm: PlanConfirm): string {
-  return `Type ${confirm.expected} below ${confirmWhat({ ...confirm, places: [] })}.`
-}
-
-/** "1 end stays waiting: your role cannot end or delete listings." — null when the role can. */
-export function roleLockSentence(locked: { ended: number; deleted: number }): string | null {
-  const total = locked.ended + locked.deleted
-  if (!total) return null
-  const what = [locked.ended ? plural(locked.ended, 'end', 'ends') : null, locked.deleted ? plural(locked.deleted, 'delete', 'deletes') : null].filter(Boolean).join(' and ')
-  return `${what} ${total === 1 ? 'stays' : 'stay'} waiting: your role cannot end or delete listings.`
-}
-
 /**
  * The counted button when status changes go out: "Publish 24 listings · end 1 · delete 1". Listings = Partial and Full
  * updates, new products, Active and Inactive; End and Delete are named after them. With only End or Delete: "End 1
@@ -612,9 +544,8 @@ export function planButtonText(counts: PublishPlanCounts, sending: readonly stri
   return skipped ? `Nothing to publish · ${skipped.toLocaleString('en')} with problems` : 'Nothing to publish'
 }
 
-/** The send request of one Publish: each sending market with its content (when it goes), the ticked rows, the confirmation. */
-export function planSubmit(productId: string, send: ActionPlanSend, entryOf: (key: string) => DestinationEntry, scopeOf: (key: string) => StudioPublishScope | undefined,
-  confirmText: string | null): PublishPlanSubmit {
+/** The send request of one Publish: each sending market with its content (when it goes) and the ticked rows. */
+export function planSubmit(productId: string, send: ActionPlanSend, entryOf: (key: string) => DestinationEntry, scopeOf: (key: string) => StudioPublishScope | undefined): PublishPlanSubmit {
   return {
     productId,
     destinations: send.send.flatMap(key => {
@@ -627,13 +558,12 @@ export function planSubmit(productId: string, send: ActionPlanSend, entryOf: (ke
         ...(isSparse(review) && entry.selection?.token ? { selectionToken: entry.selection.token } : {}),
         ...(!isSparse(review) && entry.confirmedReviewId === review.id ? { confirmOverwrite: true } : {}),
         ...(review.locations ? { locationId: entry.locationId } : {}),
-        // S10 — this content deletes an old Amazon SKU (a move): the typed family SKU below confirms it.
-        ...(movedRowsTicked(entry) > 0 && send.confirm && confirmText ? { confirmDelete: true } : {}),
+        // S10 — this content deletes an old Amazon SKU (a move): the window says so above the button (nothing is typed).
+        ...(movedRowsTicked(entry) > 0 ? { confirmDelete: true } : {}),
       }]
     }),
     lifecycle: [...send.lifecycle],
     ...(send.outgrown.length ? { outgrown: [...send.outgrown] } : {}),
-    ...(send.confirm && confirmText ? { confirmText } : {}),
   }
 }
 

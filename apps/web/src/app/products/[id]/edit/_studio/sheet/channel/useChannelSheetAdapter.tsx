@@ -833,8 +833,6 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     }), [publishActions.status, publishLock]);
     const publishReadRef = useRef(publishRead);
     publishReadRef.current = publishRead;
-    const canDeleteRef = useRef(false);
-    canDeleteRef.current = auth.has('products.delete');
     const repaintPublishCells = useCallback((rowIds?: Iterable<string>) => {
         const api = getGridApi();
         if (!api || api.isDestroyed())
@@ -963,7 +961,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     ], [publishCounts, publishFilter, togglePublishFilter, destinationWords, waitingTotal, publishLock, clearWaitingValues]);
     /* Action ▾ counts what each item would do to the ticked rows. */
     const actionEntries = useMemo(() => actionMenuEntries(selected.map((row) => ({ sku: row.sku, cell: publishCellOf(row) })),
-        { publish: !publishLock && auth.status !== 'loading', delete: auth.has('products.delete') }), [selected, publishCellOf, publishActions.version, publishLock, auth]);
+        { publish: !publishLock && auth.status !== 'loading' }), [selected, publishCellOf, publishActions.version, publishLock, auth.status]);
     /* Amazon Business (step 5 Part 4) — B2B price and Quantity discounts are set on the Matrix (`businessColumns.ts`): a
        paste, a fill or Delete that reaches them changes nothing there and says so; Enter, F2 or a double-click on one of
        their cells opens the Matrix where the Matrix would let this person set it. */
@@ -1193,7 +1191,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     /** Build shape v2, P8 — Status and Action, right after "Last publish". Their values are read through refs. */
     const statusActionColumns = useMemo<ColDef<ChannelSheetRow>[]>(() => {
         if (!scopePage) return [];
-        const shared = { cell: publishCellOf, read: () => publishReadRef.current, canDelete: () => canDeleteRef.current, tracker: publishTracker, rowIdOf };
+        const shared = { cell: publishCellOf, read: () => publishReadRef.current, tracker: publishTracker, rowIdOf };
         return [
             statusColumn<ChannelSheetRow>({ ...shared, onInput: (row, input) => stagePublishCell('status', row, input) }),
             actionColumn<ChannelSheetRow>({ ...shared, onInput: (row, input) => stagePublishCell('send', row, input) }),

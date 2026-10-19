@@ -11,7 +11,8 @@
  * content review (Partial and Full update rows) AND the waiting Status changes and Deletes, the rows whose content is
  * held back and the values that no longer apply. Each market tab shows the review's metric strip and problems, then
  * one summary line and one table (`ReviewTable`: one row per change; with more than one market, "All markets" lists every
- * market's in one table first — grid audit wave 3). Ended and Delete need the typed family SKU. One market with
+ * market's in one table first — grid audit wave 3). Ended and Delete read as removals (the danger tone); nothing is typed
+ * to send them, and they need products.publish like every other change (Owner 2026-10-19). One market with
  * content only sends through the single-publish path exactly as before; several markets, a ticked status change or a
  * value to clear go to the background batch (`POST /api/publication-batches { plan }`), which keeps sending when the
  * dialog closes. Done offers Undo for Inactive and Ended (Status Active again, reviewed anew); a Delete cannot be undone.
@@ -36,10 +37,10 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { StudioPublishResult, StudioPublishScope, StudioPublishSelection } from '@nexus/shared/studio-publication'
 import { fillResultSentence, type PublishActionWriteResult } from '@nexus/shared/publish-actions'
-import { confirmMatches, defaultLifecycleTicks, type PublishPlan, type PublishPlanBatchView } from '@nexus/shared/publish-plan'
+import { defaultLifecycleTicks, type PublishPlan, type PublishPlanBatchView } from '@nexus/shared/publish-plan'
 import { Button, Pill } from '@/design-system/primitives'
 import type { Tone } from '@/design-system/primitives/tone'
-import { Banner, ConfirmPhraseField, Disclosure, JobProgress, Modal, Tabs, tabPanelProps } from '@/design-system/components'
+import { Banner, Disclosure, JobProgress, Modal, Tabs, tabPanelProps } from '@/design-system/components'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { saveFirstNotice } from '@/app/products/[id]/edit/_studio/saveFirst'
 import { PublishStatusPill, publicationStatusMeta } from '@/design-system/grid'
@@ -56,8 +57,8 @@ import {
   type DestinationEntry, type DestinationState, type ListedDestinations,
 } from './destinations'
 import {
-  PLAN_CHANGED, PLAN_OUT_OF_DATE, actionPlanRows, actionPlanSend, confirmReason, confirmWhat, createdCounts, destinationChildren, planBatchSentence, planButtonText, planFamilySummary,
-  planResultRows, planResultWord, planStateLabel, planSubmit, planSummaryLine, planTabWords, planUndo, roleLockSentence, tickedLifecycleRows,
+  PLAN_CHANGED, PLAN_OUT_OF_DATE, actionPlanRows, actionPlanSend, createdCounts, destinationChildren, planBatchSentence, planButtonText, planFamilySummary,
+  planResultRows, planResultWord, planStateLabel, planSubmit, planSummaryLine, planTabWords, planUndo, tickedLifecycleRows,
   undoButtonText, undoSentence, type PlanResultRow,
 } from './actionPlan'
 import { activeTab, initialChoice, marketOptionLabel, marketTabLabel, marketTabParts, refillChoice, type PickerChoice } from './pickers'
@@ -225,8 +226,6 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
   const [batchStartedAt, setBatchStartedAt] = useState<number | null>(null)
   const [eu, setEu] = useState<{ title: string; lines: string[] } | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
-  // The typed confirmation Ended and Delete need (the family SKU). Cleared whenever the rows it confirms change.
-  const [confirmText, setConfirmText] = useState('')
 
   const blockedSave = save.state.kind === 'saving' || save.state.kind === 'error'
   const saveNotice = saveFirstNotice(save.state as Parameters<typeof saveFirstNotice>[0], 'The review loads')
@@ -267,7 +266,7 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
         const given = key === initialKey && initialSelection && !retryApplied.current ? initialSelection : null
         if (given) retryApplied.current = true
         // "Publish failed products again…" ticks only the failed fields: waiting status changes start unticked there.
-        update(key, { plan: planned, familySku: data.familySku, canDelete: data.canDelete, review, loading: false, error: null,
+        update(key, { plan: planned, review, loading: false, error: null,
           selectedIds: review ? initialTicks(review, given) : [], lifecycleIds: given ? [] : defaultLifecycleTicks({ destinations: [planned] }),
           selection: null, selecting: false, selectionError: null, ticksAt: 0,
           locationId: review?.locations?.length === 1 ? review.locations[0].id : '', confirmedReviewId: null })
@@ -291,7 +290,7 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
   const reloadPlans = useCallback((next: Notice | null) => {
     for (const c of controllers.current.values()) c.abort()
     controllers.current.clear()
-    setEntries({}); setError(null); setConfirmText(''); setNotice(next)
+    setEntries({}); setError(null); setNotice(next)
   }, [])
 
   // A save after the reviews makes them out of date: review the ticked destinations again (as the single dialog did).
@@ -316,9 +315,6 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     .reduce((sum, c) => ({ total: sum.total + c.total, inactive: sum.inactive + c.inactive }), { total: 0, inactive: 0 }), [action.content, entryOf, stateOf, now])
   const singleKey = tickedKeys.length === 1 ? tickedKeys[0] : null
   const scopeOf = useCallback((key: string) => optionOf(key)?.scope, [optionOf])
-  const dangerKey = useMemo(() => tickedKeys.flatMap(key => tickedLifecycleRows(entryOf(key)).filter(row => row.needsTypedConfirm).map(row => row.id)).sort().join(','),
-    [tickedKeys, entryOf])
-  useEffect(() => { setConfirmText('') }, [dangerKey])
 
   const checkAgain = (key: string) => {
     controllers.current.get(key)?.abort()
@@ -440,14 +436,13 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     try { setBatch(await request<PublishPlanBatchView>(`/api/publication-batches/${encodeURIComponent(id)}`, 'GET')) }
     catch (e) { setError({ kind: 'progress', message: message(e) }) }
   }, [])
-  const confirmed = !action.confirm || confirmMatches(action.confirm.expected, confirmText)
   const sendPlan = async () => {
-    if (!action.batch || busy || locked || plan.needsRequest.length || plan.pending.length || !action.send.length || !canPublish || blockedSave || !confirmed) return
+    if (!action.batch || busy || locked || plan.needsRequest.length || plan.pending.length || !action.send.length || !canPublish || blockedSave) return
     const saveBlocker = save.blocker()
     if (saveBlocker) { setError({ kind: 'start', message: saveBlocker }); return }
     setBusy('batch'); setError(null); setEu(null); setNotice(null)
     try {
-      const body = planSubmit(productId, action, entryOf, scopeOf, action.confirm ? confirmText : null)
+      const body = planSubmit(productId, action, entryOf, scopeOf)
       const created = await request<{ batchId: string }>('/api/publication-batches', 'POST', { plan: body })
       setBatchStartedAt(Date.now())
       await readBatch(created.batchId)
@@ -585,13 +580,12 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     ? `${plan.pending.length} ${plan.pending.length === 1 ? 'destination is' : 'destinations are'} not ready yet: ${plan.pending.map(key => { const o = optionOf(key); return `${o ? destinationName(o) : ''} (${destinationStateLabel(stateOf(key)).label.toLowerCase()})` }).join(', ')}.`
     : null
   const checkNowFirst = uncertain || (earlierWaiting && !action.lifecycle.length)
-  // Why the one button is grey, in the footer beside it and read with it (aria-describedby): the typed confirmation, what
-  // holds the one market, or which markets are not ready. A wait the button names itself ("Checking…", "Publishing…") and
+  // Why the one button is grey, in the footer beside it and read with it (aria-describedby): what holds the one market,
+  // or which markets are not ready. A wait the button names itself ("Checking…", "Publishing…") and
   // a reason a banner above gives (permission, saving) are not repeated here.
   const footReason = (() => {
     if (batch || result || checkNowFirst || locked || busy || sendWaiting || checkingNow || blockedSave || !canPublish || discoveryFailed) return null
     if (listed?.loading && !choice.keys.length) return null
-    if (action.batch && action.confirm && !confirmed) return confirmReason(action.confirm)
     if (tickedKeys.length > 1 || action.batch) return waitingHint
     if (!singleKey || !singleState) return options.length ? 'Choose a market above.' : null
     if (singleState.kind === 'ready') return null
@@ -623,13 +617,12 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
     const text = action.lifecycle.length
       ? planButtonText(action.counts, action.send, word, plan.skipped, action.wholeProducts)
       : publishButtonText(plan, scopeOf)
-    return <Button {...one} variant={action.confirm ? 'danger' : 'primary'} disabled={!multiReady || !confirmed}
+    return <Button {...one} variant={action.removes ? 'danger' : 'primary'} disabled={!multiReady}
       onClick={publish}>{busy === 'batch' ? 'Publishing…' : text}</Button>
   })()
   // Markets with nothing to send stay as quiet tabs: they are not counted in the line above the tabs.
   const quiet = plan.nothing.filter(key => !action.send.includes(key))
   const counted = choice.keys.length - quiet.length
-  const roleLock = !locked ? roleLockSentence(action.roleLocked) : null
 
   // ── one tab per chosen market ───────────────────────────────────────────────────────────────────────────────
   const childrenOf = useCallback((key: string) => {
@@ -793,17 +786,13 @@ function FamilyPublishDialog({ productIds, productLabel, destinations, initialDe
       {choice.keys.length > 1 && !batch && !result && <p className={styles.summary}>{counted > 0 || checkingNow
         ? planFamilySummary(counted, { ...plan, nothing: [] }, action.counts, action.wholeProducts, action.send, created, word)
         : `Nothing to send: these ${word.many} already have the saved values.`}</p>}
-      {roleLock && <Banner tone="warning" title={roleLock}>The other changes can still be sent.</Banner>}
       {shownTab === ALL_MARKETS ? renderAll() : shownTab && renderPanel(shownTab)}
       {ticked.size >= MAX_BATCH_DESTINATIONS && !locked && <p className={styles.muted}>{batchLimitText(word)}</p>}
 
-      {/* Ended and Delete (and an Amazon SKU move, S10): the publisher's own typed confirmation (the family SKU), last, right above the button. */}
-      {action.confirm && !locked && <div className={styles.confirm}>
-        {/* S10 — what a move deletes, and that a refused new SKU deletes nothing (the server's own words). */}
-        {action.confirm.moved ? [...new Set(action.content.map(key => entryOf(key).review?.confirm?.sentence).filter((line): line is string => !!line))]
-          .map(line => <p key={line}>{line}</p>) : null}
-        <ConfirmPhraseField phrase={action.confirm.expected} value={confirmText} onChange={setConfirmText} disabled={!!busy}
-          label={<>Type <strong className="nds-confirm-h">{action.confirm.expected}</strong> {confirmWhat(action.confirm)}</>} />
+      {/* S10 — what an Amazon SKU move deletes, and that a refused new SKU deletes nothing (the server's own words), last,
+          right above the button. Nothing is typed (Owner 2026-10-19). */}
+      {action.moving.length > 0 && !locked && <div className={styles.moveNote}>
+        {[...new Set(action.moving.map(key => entryOf(key).review?.confirm?.sentence).filter((line): line is string => !!line))].map(line => <p key={line}>{line}</p>)}
       </div>}
 
     </div>
