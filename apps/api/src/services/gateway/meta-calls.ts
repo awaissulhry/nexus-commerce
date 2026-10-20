@@ -90,7 +90,7 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *   - step 2, the ad account's lists act_<id>/campaigns | adsets | ads, and a campaign's or ad set's own
  *     <id>/adsets | ads (meta-ads-live, review B5: Meta documents these, not `filtering` on act_<id>/adsets | ads):
  *     effective_status;
- *   - step 2, a portfolio's <id>/owned_ad_accounts: search_query (AA-002, documented; client and pending have none);
+ *   - step 2, a portfolio's <id>/owned_ad_accounts and <id>/client_ad_accounts: search_query (AA-002; pending has none);
  *   - step 2, insights (act_<id>/insights, <object>/insights): level, time_range, time_increment, filtering — never
  *     use_unified_attribution_setting or action_report_time (Meta ignores both since 2025-06-10, facts F2 T1);
  *   - step 2, act_<id>/async_requests: status, type (master ACC-028, SDK only: a refusal from Meta answers plainly;
@@ -102,7 +102,7 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string> }> = [
   { route: /^\d+\/authorized_adaccounts$/, keys: new Set(['business']) },
   { route: /^act_\d+\/(campaigns|adsets|ads)$/, keys: new Set(['effective_status']) },
   { route: /^\d+\/(adsets|ads)$/, keys: new Set(['effective_status']) },
-  { route: /^\d+\/owned_ad_accounts$/, keys: new Set(['search_query']) },
+  { route: /^\d+\/(owned|client)_ad_accounts$/, keys: new Set(['search_query']) },
   { route: /^(act_)?\d+\/insights$/, keys: new Set(['level', 'time_range', 'time_increment', 'filtering']) },
   { route: /^act_\d+\/async_requests$/, keys: new Set(['status', 'type']) },
 ]
@@ -130,6 +130,9 @@ const FIELD_DENIED = new Set([
   'users', 'assigned_users', 'system_users', 'business_users', 'agencies', 'leadgen_forms', 'leads', 'conversations', 'messages', 'comments',
 ])
 
+/** Review 2 — never inside an expansion (`{…}` or `.fields(…)`): another object's Instagram account, owner, ratings, feed. */
+const NESTED_DENIED = new Set(['instagram_business_account', 'owner_business', 'ratings', 'feed', 'blocked'])
+
 /** A real field name: a letter first. */
 const FIELD_NAME = /^[A-Za-z][A-Za-z0-9_]*$/
 
@@ -138,13 +141,29 @@ const FIELD_NAME = /^[A-Za-z][A-Za-z0-9_]*$/
  * Modifier arguments (`.limit(5)`) and modifier names (the word after a `.`) are not fields.
  */
 function bracesProblem(value: string): string | null {
+  // Each open list: how many field names it holds so far. A "(" is either a `.fields(` list (review 2: exactly like
+  // `{…}`) or a modifier's argument (skipped, but balanced).
   const lists: number[] = []
-  let paren = 0
+  const parens: Array<'list' | 'argument'> = []
   for (let i = 0; i < value.length; i++) {
     const c = value[i]
-    if (c === '(') { paren++; continue }
-    if (c === ')') { paren = Math.max(0, paren - 1); continue }
-    if (paren > 0) continue
+    const inArgument = parens.length > 0 && parens[parens.length - 1] === 'argument'
+    if (c === '(') {
+      const isFields = !inArgument && /\.\s*fields\s*$/.test(value.slice(0, i))
+      parens.push(isFields ? 'list' : 'argument')
+      if (isFields) lists.push(0)
+      continue
+    }
+    if (c === ')') {
+      const kind = parens.pop()
+      if (kind === undefined) return 'fields has a ) with no ('
+      if (kind === 'list') {
+        const named = lists.pop()
+        if (!named) return 'every .fields(…) in fields names a field'
+      }
+      continue
+    }
+    if (inArgument) continue
     if (c === '{') { lists.push(0); continue }
     if (c === '}') {
       const named = lists.pop()
@@ -153,8 +172,16 @@ function bracesProblem(value: string): string | null {
       continue
     }
     const startsName = /[A-Za-z]/.test(c) && (i === 0 || !/[A-Za-z0-9_]/.test(value[i - 1]))
-    if (startsName && lists.length > 0 && value[i - 1] !== '.') lists[lists.length - 1]++
+    if (!startsName || /\.\s*$/.test(value.slice(0, i))) continue
+    const name = /^[A-Za-z][A-Za-z0-9_]*/.exec(value.slice(i))![0]
+    if (lists.length > 0) {
+      lists[lists.length - 1]++
+      // Review 2 — inside any expansion, never another object's Instagram account, owner, ratings, feed or blocked list.
+      if (NESTED_DENIED.has(name.toLowerCase())) return `a read never expands "${name}" inside another field`
+    }
+    i += name.length - 1
   }
+  if (parens.length > 0) return 'fields has a ( with no )'
   return lists.length > 0 ? 'fields has a { with no }' : null
 }
 

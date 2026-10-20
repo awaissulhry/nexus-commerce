@@ -62,6 +62,8 @@ export interface MetaAdsSyncResult {
   removed: number
   metricRows: number
   window: DayWindow | null
+  /** What the read could only do in part, in words (e.g. live objects only at one level); kept as a PARTIAL read. */
+  notes: string[]
 }
 
 function stopsTheRun(failure: MetaFailure): boolean {
@@ -78,8 +80,10 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
   const { adAccountId } = target
   const result: MetaAdsSyncResult = {
     adAccountId, kind: options.kind, mode: null, status: 'FAILED', error: null, calls: 0,
-    campaigns: 0, adSets: 0, ads: 0, removed: 0, metricRows: 0, window: null,
+    campaigns: 0, adSets: 0, ads: 0, removed: 0, metricRows: 0, window: null, notes: [],
   }
+  /** The entities the structure read listed this run (review 2: an empty insights answer for them means zero days). */
+  const listed: Partial<Record<MetaAdsEntityType, Set<string>>> = { ACCOUNT: new Set([adAccountId]) }
   const account = await ensureMetaAdAccount({ connectionId: target.connectionId, adAccountId, name: null, currencyCode: null, timeZone: null })
   const triggeredBy = options.kind === 'MANUAL' ? 'manual' as const : 'cron' as const
   const failures: StepFailure[] = []
@@ -166,6 +170,7 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
       })
       result.calls += read.calls
       result.campaigns = await upsertCampaigns(rows, now)
+      if (!read.truncated) listed.CAMPAIGN = new Set(rows.map((r) => r.campaignId))
       if (!read.truncated) result.removed += (await markUnseenRemoved('campaign', adAccountId, now, rows.length)).removed
       stored = true
       rows = []
@@ -178,6 +183,7 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
       })
       result.calls += read.calls
       result.adSets = await upsertAdSets(rows, now)
+      if (!read.truncated) listed.ADSET = new Set(rows.map((r) => r.adSetId))
       if (!read.truncated) result.removed += (await markUnseenRemoved('adSet', adAccountId, now, rows.length)).removed
       stored = true
       return result.adSets
@@ -189,6 +195,7 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
       })
       result.calls += read.calls
       result.ads = await upsertAds(rows, now)
+      if (!read.truncated) listed.AD = new Set(rows.map((r) => r.adId))
       if (!read.truncated) result.removed += (await markUnseenRemoved('ad', adAccountId, now, rows.length)).removed
       stored = true
       return result.ads
@@ -209,9 +216,14 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
       : metaReadWindow(context.timeZone, now, readThroughOf(grain)))
     result.window = windowOf('CAMPAIGN')
     const level = { ACCOUNT: 'account', CAMPAIGN: 'campaign', ADSET: 'adset', AD: 'ad' } as const
+    const LEVEL_WORDS = { ACCOUNT: 'account', CAMPAIGN: 'campaign', ADSET: 'ad set', AD: 'ad' } as const
+    /** Levels where Meta refused the status filter this run: read without it (live objects only), said in words. */
+    const liveOnly = new Set<MetaAdsEntityType>()
     /** One piece of days at one grain; Meta's "too much at once" halves it, down to one day (review B4). */
     const readPiece = async (grain: MetaAdsEntityType, piece: DayWindow): Promise<number> => {
       const rows: MetaDailyMetricData[] = []
+      // Review B1 — archived and deleted objects too: without the filter Meta returns live objects only.
+      const filtered = grain !== 'ACCOUNT' && !liveOnly.has(grain)
       let read: Awaited<ReturnType<typeof metaReadAll>>
       try {
         read = await metaReadAll(target, {
@@ -219,8 +231,7 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
           path: `${act(adAccountId)}/insights`,
           query: {
             level: level[grain], time_increment: 1, time_range: { since: piece.from, until: piece.to }, fields: insightFields(grain),
-            // Review B1 — archived and deleted objects too: without the filter Meta returns live objects only.
-            ...(grain === 'ACCOUNT' ? {} : { filtering: insightStatusFilter(grain) }),
+            ...(filtered ? { filtering: insightStatusFilter(grain as Exclude<MetaAdsEntityType, 'ACCOUNT'>) } : {}),
             limit: INSIGHTS_PAGE,
           },
           maxPages: 400,
@@ -239,11 +250,22 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
           const second = { from: addDays(piece.from, half), to: piece.to }
           return (await readPiece(grain, first)) + (await readPiece(grain, second))
         }
+        // Review 2 (B1) — the campaign and ad set forms of the status filter are not documented: a #100 refusal that is
+        // not "too much at once" reads the piece once more without the filter (live objects only), and says so.
+        if (err instanceof MetaReadError && filtered && !err.failure.shrink && !err.failure.permissionDenied && /^100(\/|$)/.test(err.failure.code ?? '')) {
+          result.calls += err.callsSpent
+          liveOnly.add(grain)
+          result.notes.push(`Meta refused the filter that also reads archived and deleted ${LEVEL_WORDS[grain]}s (${err.failure.code}); the ${LEVEL_WORDS[grain]} numbers of this read are of live ${LEVEL_WORDS[grain]}s only.`)
+          return readPiece(grain, piece)
+        }
         throw err
       }
       result.calls += read.calls
       if (read.truncated) throw new MetaReadError(localFailure('Meta sent more pages of numbers than Nexus reads at once; Nexus kept none of that piece.', 'TOO_MANY_PAGES'), 'insights', 0)
-      const saved = await replaceDailyMetrics(adAccountId, grain, piece, rows, new Date())
+      // Review 2 (A3/B5) — an entity the structure read listed and Meta sent no row for has zero days in this piece (Meta
+      // leaves out days with no delivery); not when reading live objects only (an archived one would look like zero).
+      const zeroFor = filtered ? listed[grain] : undefined
+      const saved = await replaceDailyMetrics(adAccountId, grain, piece, rows, new Date(), { zeroFor })
       metricsStored = true
       stored = true
       return saved.rows
@@ -263,11 +285,11 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
     if (backfill && campaignDaysOk && accountDaysOk) outcome.backfillCompletedAt = new Date()
   }
 
-  if (failures.length === 0) result.status = 'SUCCESS'
+  if (failures.length === 0) result.status = result.notes.length ? 'PARTIAL' : 'SUCCESS'
   else if (failures.some((f) => f.failure.authLost)) result.status = 'AUTH_LOST'
   else if (failures.some((f) => f.failure.throttled)) result.status = 'THROTTLED'
   else result.status = stored ? 'PARTIAL' : 'FAILED'
-  result.error = failures[0]?.failure.sentence ?? null
+  result.error = failures[0]?.failure.sentence ?? result.notes[0] ?? null
   await recordSyncOutcome(adAccountId, { status: result.status, error: result.error, calls: result.calls, at: new Date(), ...outcome })
   if (metricsStored) publishMarketingEvent({ type: 'campaign.metrics.refreshed', channel: 'META', marketplace: null, rows: result.metricRows, ts: Date.now() })
   logger.info('[meta-ads-sync] read finished', {
@@ -284,7 +306,7 @@ export async function syncMetaAdAccountById(adAccountId: string, kind: MetaAdsSy
   if (!target) {
     return {
       adAccountId, kind, mode: null, status: 'NOT_LINKED', error: 'This business no longer reads this Meta ad account.', calls: 0,
-      campaigns: 0, adSets: 0, ads: 0, removed: 0, metricRows: 0, window: null,
+      campaigns: 0, adSets: 0, ads: 0, removed: 0, metricRows: 0, window: null, notes: [],
     }
   }
   return syncMetaAdAccount(target, { kind, now })

@@ -118,16 +118,15 @@ export async function enqueueMetaAdsSync({ adAccountId, kind }: { adAccountId?: 
 
 /**
  * Review A2 — a good token for this connection (its credentials were replaced and checked, or "Check now" found it
- * valid): a read that ended AUTH_LOST no longer stands. Its status is cleared and a read is queued at once (TOKEN: not
- * held to the hourly limit of "Read now"). Never throws: a person's save is never failed by it.
+ * valid) when the last read lost the token: a read is queued at once (TOKEN: not held to the hourly limit of "Read
+ * now"). The AUTH_LOST status stays until that read SUCCEEDS (review 2: a token check alone never hides a failed read).
+ * Never throws: a person's save is never failed by it.
  */
 export async function metaReadAfterGoodToken(connectionId: string): Promise<void> {
   try {
     const { default: prisma } = await import('../../../db.js')
-    const { workspaceKey } = await import('../../../lib/workspace-context.js')
     const lost = await prisma.metaAdAccount.findMany({ where: { connectionId, lastSyncStatus: 'AUTH_LOST' }, select: { adAccountId: true } })
     for (const { adAccountId } of lost) {
-      await prisma.metaAdAccount.update({ where: { meta_ad_account: workspaceKey({ adAccountId }) }, data: { lastSyncStatus: null, lastSyncError: null } })
       const queued = await enqueueMetaAdsSync({ adAccountId, kind: 'TOKEN' })
       if (!queued.queued) logger.info('[meta-ads-sync] read after a good token not queued', { reason: queued.reason })
     }

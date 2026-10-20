@@ -13,7 +13,7 @@ const h = vi.hoisted(() => ({
   calls: [] as Array<{ operation: string; path: string; query?: Record<string, unknown> }>,
   one: null as null | ((req: { operation: string; path: string }) => unknown),
   rows: [] as Record<string, unknown>[],
-  known: new Set<string>(),
+  known: new Map<string, string>(),
   taken: [] as Array<{ id: string }>,
   refuseAll: null as null | ((req: { operation: string; path: string; query?: Record<string, unknown> }) => Error | null),
 }))
@@ -32,12 +32,14 @@ vi.mock('../../marketing/meta-ads/read-client.js', async () => ({
   }),
 }))
 vi.mock('../../../db.js', () => {
-  const found = (key: string) => vi.fn(async ({ where }: { where: Record<string, string> }) => (h.known.has(where[key]) ? { id: 'x' } : null))
+  // Nexus's own rows, by kind: an id is a campaign, an ad set, an ad or a creative of the chosen account.
+  const found = (pairs: Array<[string, string]>) => vi.fn(async ({ where }: { where: Record<string, string> }) =>
+    (pairs.some(([key, kind]) => where[key] && h.known.get(where[key]) === kind) ? { id: 'x' } : null))
   return {
     default: {
-      metaAdsCampaign: { findFirst: found('campaignId') },
-      metaAdsAdSet: { findFirst: found('adSetId') },
-      metaAdsAd: { findFirst: found('adId') },
+      metaAdsCampaign: { findFirst: found([['campaignId', 'campaign']]) },
+      metaAdsAdSet: { findFirst: found([['adSetId', 'adset']]) },
+      metaAdsAd: { findFirst: found([['adId', 'ad'], ['creativeId', 'creative']]) },
       $queryRaw: vi.fn(async () => h.taken),
     },
   }
@@ -67,7 +69,7 @@ const CHOSEN = {
   page: { pageId: '120000000000010' }, instagram: null, read: {},
 }
 
-beforeEach(() => { h.connections = [CHOSEN]; h.calls.length = 0; h.one = null; h.rows = []; h.known = new Set(); h.taken = []; h.refuseAll = null })
+beforeEach(() => { h.connections = [CHOSEN]; h.calls.length = 0; h.one = null; h.rows = []; h.known = new Map(); h.taken = []; h.refuseAll = null })
 
 describe('the four tools are reads', () => {
   it('none changes anything; the live ones reach Meta (open world); graph-read needs the ad-spend money permission', () => {
@@ -104,43 +106,81 @@ describe('meta-ads-graph-read — the chosen ad account and its own objects only
     }
     expect(h.calls).toHaveLength(0)
   })
-  it('review A1 — no other portfolio, ad account, person or lead form through field expansion, at any depth', async () => {
-    for (const [path, fields] of [
-      ['act_1234567890', 'business{owned_ad_accounts{id,name,amount_spent}}'],
-      ['act_1234567890', 'business{client_ad_accounts{name,insights{spend}}}'],
-      ['act_1234567890', 'users{id,name,tasks}'],
-      ['120000000000010', 'leadgen_forms{leads{field_data}}'],
-      ['act_1234567890', 'id,name,campaigns{adsets{name}}'],
-      ['act_1234567890', 'insights{spend,owner}'],
-      ['act_1234567890', 'owned_pages'],
-    ] as const) {
-      const res = await run('meta-ads-graph-read', { path, fields })
-      expect({ path, fields, ok: res.ok }).toEqual({ path, fields, ok: false })
-    }
-    expect((await run('meta-ads-graph-read', { path: '120000000000010/leadgen_forms' })).error).toMatch(/not read by meta-ads-graph-read/)
+  // Review 2 (lead decision) — allow-list only. The reviewers' probes (scratchpad probe2.mts, probe-verdict.mts): every one
+  // is refused by name before any call.
+  it.each([
+    ['act_1234567890', 'business{owned_ad_accounts{id,name,amount_spent}}'],
+    ['act_1234567890', 'business{client_ad_accounts{name,insights{spend}}}'],
+    ['act_1234567890', 'users{id,name,tasks}'],
+    ['120000000000010', 'leadgen_forms{leads{field_data}}'],
+    ['act_1234567890', 'owned_ad_accounts.as(x){name}'],
+    ['act_1234567890', 'promote_pages.fields(name,business.fields(name,owned_product_catalogs))'],
+    ['act_1234567890', 'promote_pages.fields(id,name,instagram_business_account.fields(username,followers_count))'],
+    ['act_1234567890', 'instagram_accounts.fields(username,followers_count)'],
+    ['act_1234567890', 'promote_pages{name}'],
+    ['act_1234567890', 'instagram_accounts{username}'],
+    ['act_1234567890', 'ads.fields(leads.fields(field_data))'],
+    ['act_1234567890', 'insights{campaign_name,owned_ad_accounts}'],
+    ['act_1234567890', 'ad_accounts{name}'],
+    ['act_1234567890', 'owner_business{name}'],
+    ['act_1234567890', 'customaudiences.fields(name,approximate_count_lower_bound)'],
+    ['act_1234567890', 'adspixels.fields(name,owner_business.fields(name))'],
+    ['act_1234567890', 'promote_pages.fields(ratings.fields(reviewer,review_text))'],
+    ['act_1234567890', 'promote_pages.fields(feed.fields(message,from))'],
+    ['act_1234567890', 'adcreatives{object_story_spec,actor_id}'],
+    ['act_1234567890', 'creative{effective_object_story_id}'],
+    ['120000000000010', 'instagram_business_account{followers_count,username}'],
+    ['120000000000010', 'instagram_business_account.fields(followers_count,username,business_discovery.username(rival){followers_count})'],
+    ['act_1234567890', 'targeting{custom_audiences}'],
+    ['act_1234567890', 'funding_source_details'],
+    ['act_1234567890', 'insights.fields(funding_source_details)'],
+    ['act_1234567890', 'adspaymentcycle.fields(threshold_amount)'],
+    ['act_1234567890', 'Business{name}'],
+    ['act_1234567890', 'businesS.fields(name)'],
+    ['act_1234567890', 'agency_client_declaration'],
+    ['act_1234567890', 'adaccounts.fields(name)'],
+    ['act_1234567890', 'id,name,campaigns{adsets{name}}'],
+    ['act_1234567890', 'insights.as(x){spend}'],
+    ['act_1234567890', 'insights.summary(true){spend}'],
+  ])('refuses %s ?fields=%s', async (path, fields) => {
+    const res = await run('meta-ads-graph-read', { path, fields })
+    expect(res).toMatchObject({ ok: false, error: expect.any(String) })
     expect(h.calls).toHaveLength(0)
-    // What the views need still reads: the account's numbers, an ad's creative.
-    expect((await run('meta-ads-graph-read', { path: 'act_1234567890', fields: 'id,name,insights.date_preset(last_7d){spend,impressions}' })).ok).toBe(true)
-    h.known.add('120000000000301')
+  })
+  it.each([
+    'act_1234567890/promote_pages', 'act_1234567890/instagram_accounts', 'act_1234567890/customaudiences', 'act_1234567890/adspixels',
+    'act_1234567890/users', 'act_1234567890/agencies', 'act_1234567890/audience_funnel', '120000000000010', '120000000000010/leadgen_forms',
+  ])('refuses the path %s (allow-list of paths)', async (path) => {
+    expect((await run('meta-ads-graph-read', { path })).ok).toBe(false)
+    // Also with the users permission: no people edge is read here at all.
+    expect((await run('meta-ads-graph-read', { path }, can(['ads.view', 'financials.adspend.view', 'users.manage']))).ok).toBe(false)
+    expect(h.calls).toHaveLength(0)
+  })
+  it('the probe\'s insights read names only the account\'s own numbers: refused by name when a field is not one of them', async () => {
+    expect((await run('meta-ads-graph-read', { path: 'act_1234567890/insights', fields: 'account_name,account_id' })).error).toMatch(/"account_name" is not a field meta-ads-graph-read reads on insights/)
+  })
+  it('what the views need still reads: the account\'s own numbers (both nesting forms), an ad\'s creative, a campaign\'s edges', async () => {
+    for (const fields of ['id,name,insights.date_preset(last_7d){spend,impressions}', 'insights.fields(spend).date_preset(last_7d)', 'insights.time_range({"since":"2026-10-01","until":"2026-10-19"}).time_increment(1){spend}']) {
+      expect((await run('meta-ads-graph-read', { path: 'act_1234567890', fields })).ok, fields).toBe(true)
+    }
+    h.known = new Map([['120000000000301', 'ad'], ['120000000000101', 'campaign'], ['120000000000401', 'creative']])
     expect((await run('meta-ads-graph-read', { path: '120000000000301', fields: 'id,creative{title,body}' })).ok).toBe(true)
-  })
-  it('an edge that lists people needs the users permission', async () => {
-    expect((await run('meta-ads-graph-read', { path: 'act_1234567890/users' })).error).toMatch(/users permission/)
-    expect((await run('meta-ads-graph-read', { path: 'act_1234567890/users' }, can(['ads.view', 'financials.adspend.view', 'users.manage']))).ok).toBe(true)
-  })
-  it('an object id: Nexus\'s own rows first; else its account_id on Meta must be the chosen account', async () => {
-    h.known.add('120000000000101')
-    expect((await run('meta-ads-graph-read', { path: '120000000000101/insights' })).ok).toBe(true)
+    expect((await run('meta-ads-graph-read', { path: '120000000000101/adsets', fields: 'id,name,targeting{geo_locations,age_min}' })).ok).toBe(true)
+    expect((await run('meta-ads-graph-read', { path: '120000000000401', fields: 'id,title,thumbnail_url' })).ok).toBe(true)
+    // Each of these the real gateway lets through too.
+    const refused = h.calls.map((c) => [c.path, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' })]).filter(([, problem]) => problem)
+    expect(refused).toEqual([])
+    // No fields: a few of that object's own (Meta's default answer is never taken).
     h.calls.length = 0
-    h.one = (req) => (req.operation === 'graph.ownerCheck' ? { account_id: '5550001112' } : {})
-    const res = await run('meta-ads-graph-read', { path: '120000000000999' })
-    expect(res).toMatchObject({ ok: false, error: expect.stringMatching(/does not belong to the ad account/) })
-    expect(h.calls.map((c) => c.operation)).toEqual(['graph.ownerCheck'])
-    h.one = (req) => (req.operation === 'graph.ownerCheck' ? { account_id: '1234567890' } : { id: '120000000000999' })
-    expect((await run('meta-ads-graph-read', { path: '120000000000999' })).ok).toBe(true)
-    // One object with no fields names id,name (the gateway refuses an object read without fields: a Page can carry its token).
-    expect(h.calls.at(-1)).toMatchObject({ operation: 'graph.read', path: '120000000000999', query: { fields: 'id,name' } })
-    expect((await run('meta-ads-graph-read', { path: '120000000000010' })).ok).toBe(true)
+    await run('meta-ads-graph-read', { path: '120000000000101' })
+    expect(h.calls.at(-1)).toMatchObject({ operation: 'graph.read', path: '120000000000101', query: { fields: 'id,name,status' } })
+  })
+  it('an object id is read only when Nexus has read it for the chosen account — no live look-up, no Page; only its own edges', async () => {
+    h.known = new Map([['120000000000201', 'adset']])
+    h.one = () => ({ account_id: '1234567890' })
+    expect((await run('meta-ads-graph-read', { path: '120000000000999' })).error).toMatch(/reads only a campaign, ad set, ad or creative Nexus has read/)
+    expect((await run('meta-ads-graph-read', { path: '120000000000201/adcreatives' })).error).toMatch(/does not read "adcreatives" of a adset; it reads ads, insights/)
+    expect(h.calls).toHaveLength(0)
   })
   it('a business without Meta, or without a chosen account, is told who sets it up', async () => {
     h.connections = []
@@ -184,10 +224,11 @@ describe('meta-ad-accounts', () => {
     await run('meta-ad-accounts', { list: 'client' })
     expect(h.calls[0].query).toMatchObject({ fields: 'account_id,name,currency,timezone_name,account_status,business{id,name}' })
   })
-  it('AA-002 — the owned list takes Meta\'s search_query; the client and pending lists have none (said so)', async () => {
+  it('AA-002 — the owned and client lists take Meta\'s search_query; the pending lists have none (said so)', async () => {
     await run('meta-ad-accounts', { list: 'owned', search: 'shop' })
-    expect(h.calls[0]).toMatchObject({ path: '9876543210/owned_ad_accounts', query: { search_query: 'shop' } })
-    expect((await run('meta-ad-accounts', { list: 'client', search: 'shop' })).error).toMatch(/search only for the portfolio's own/)
+    await run('meta-ad-accounts', { list: 'client', search: 'shop' })
+    expect(h.calls.map((c) => [c.path, c.query?.search_query])).toEqual([['9876543210/owned_ad_accounts', 'shop'], ['9876543210/client_ad_accounts', 'shop']])
+    expect((await run('meta-ad-accounts', { list: 'pending', search: 'shop' })).error).toMatch(/no search for the pending lists/)
   })
 })
 
@@ -201,7 +242,7 @@ describe('meta-ads-live and meta-ads-overview', () => {
     expect(h.calls[0]).toMatchObject({ path: 'act_1234567890/insights', query: { level: 'adset', time_increment: 1, time_range: { since: '2026-10-19', until: '2026-10-20' } } })
   })
   it('every live view asks only what the real gateway lets through (its query-key allow-list and fields rules)', async () => {
-    h.known = new Set(['120000000000101', '120000000000201'])
+    h.known = new Map([['120000000000101', 'campaign'], ['120000000000201', 'adset']])
     for (const args of [
       { view: 'account' }, { view: 'campaigns', numbers: 'last_7d' }, { view: 'adsets', campaignId: '120000000000101', numbers: 'today' },
       { view: 'ads', adSetId: '120000000000201' }, { view: 'insights', level: 'ad', from: '2026-10-01', to: '2026-10-19', campaignId: '120000000000101' },
@@ -214,7 +255,7 @@ describe('meta-ads-live and meta-ads-overview', () => {
     expect(refused).toEqual([])
   })
   it('review B5 — one campaign\'s ad sets and one ad set\'s ads through Meta\'s own edges, each checked to be the account\'s', async () => {
-    h.known = new Set(['120000000000101', '120000000000201'])
+    h.known = new Map([['120000000000101', 'campaign'], ['120000000000201', 'adset']])
     await run('meta-ads-live', { view: 'adsets', campaignId: '120000000000101' })
     await run('meta-ads-live', { view: 'ads', adSetId: '120000000000201' })
     await run('meta-ads-live', { view: 'ads', campaignId: '120000000000101' })

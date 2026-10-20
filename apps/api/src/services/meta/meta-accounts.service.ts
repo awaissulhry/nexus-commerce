@@ -161,11 +161,16 @@ export function metaConnectionState(input: { isActive: boolean; authStatus: stri
   const name = input.accountName ? `“${input.accountName}”` : 'the chosen ad account'
   const status = input.account?.lastSyncStatus ?? null
   const error = input.account?.lastSyncError ?? null
-  // Review A2 — a read that lost the token counts only while no good token check came after it (a replaced token, or
-  // "Check now" valid, ends it: the read is cleared and queued again — enqueue.ts metaReadAfterGoodToken).
+  // Review A2 (round 2) — a read that lost the token stays visible until a read SUCCEEDS. Before any good token check
+  // came after it, a person needs a new token; once one did (a replaced token, or "Check now" valid), the token is fine
+  // but the numbers are still the old ones: read_failed, in words, while the read queued at once (enqueue.ts
+  // metaReadAfterGoodToken) runs.
   const goodCheckAfter = input.token.isValid && !!input.token.checkedAt && !!input.account?.lastSyncAt
     && Date.parse(input.token.checkedAt) > input.account.lastSyncAt.getTime()
   if (status === 'AUTH_LOST' && !goodCheckAfter) return { state: 'sign_in_needed', stateText: error ?? 'Meta no longer accepts the token. Enter a new system-user token in Settings › Channels › Meta.' }
+  if (status === 'AUTH_LOST') {
+    return { state: 'read_failed', stateText: `The last read of ${name} stopped because Meta refused the token then; the token has been checked valid since, and Nexus reads again now. Until that read finishes, the numbers shown are from before.` }
+  }
   if (!input.account?.metricsReadThrough) {
     if (status === 'FAILED' || status === 'PARTIAL') return { state: 'read_failed', stateText: `Nexus could not read ${name}. ${error ?? 'Meta did not say why.'}` }
     if (input.readingOn === false) return { state: 'first_read_pending', stateText: `Nexus has not read ${name} yet: reading Meta ads is switched off on the server for now.` }

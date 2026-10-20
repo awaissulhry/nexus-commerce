@@ -202,9 +202,10 @@ describe('later reads', () => {
   })
   it('review B1 — a re-read never erases a stored day of an object Meta now leaves out; a returned one is replaced', async () => {
     const DAY = new Date('2026-10-13T06:50:00Z')
-    // Meta now returns no ad set or ad rows at all (they were deleted beyond what Meta still reports) and the campaign
-    // only on 2026-10-12.
+    // Meta now leaves the ad set and the ad out everywhere (deleted beyond what Meta still reports): not in the structure
+    // read, no insights rows. The campaign has a row on 2026-10-12 only.
     h.override = (req) => {
+      if (req.operation === 'adsets.list' || req.operation === 'ads.list') return { ok: true, status: 200, body: { data: [] } }
       if (req.operation === 'insights.adsetDays' || req.operation === 'insights.adDays') return { ok: true, status: 200, body: { data: [] } }
       if (req.operation === 'insights.campaignDays') {
         return { ok: true, status: 200, body: { data: [{ date_start: '2026-10-12', date_stop: '2026-10-12', campaign_id: '120000000000101', campaign_name: 'Shop A campaign 1', impressions: '500', clicks: '5', spend: '5.00' }] } }
@@ -219,6 +220,31 @@ describe('later reads', () => {
       const campaign = await db().metaAdsDailyMetric.findMany({ where: { adAccountId: AD_ACCOUNT, entityType: 'CAMPAIGN', entityId: '120000000000101' }, select: { date: true, spendMicros: true } })
       expect(campaign.map((c) => [c.date.toISOString().slice(0, 10), c.spendMicros])).toEqual([['2026-10-12', 5_000_000n]])
     })
+  })
+  it('review 2 (A3/B5) — an object Meta still lists but sends no row for has zero days in that piece (Meta leaves zero days out)', async () => {
+    const DAY = new Date('2026-10-13T06:50:00Z')
+    await inA(() => syncMetaAdAccount({ connectionId: conn[A], adAccountId: AD_ACCOUNT }, { kind: 'DAILY', now: DAY }))
+    const stored = () => inA(() => db().metaAdsDailyMetric.count({ where: { adAccountId: AD_ACCOUNT, entityType: 'ADSET', entityId: '120000000000201' } }))
+    expect(await stored()).toBeGreaterThan(0)
+    // The ad set is still listed (structure read) but Meta now restates its days to nothing: no insights row at all.
+    h.override = (req) => (req.operation === 'insights.adsetDays' ? { ok: true, status: 200, body: { data: [] } } : null)
+    await inA(() => syncMetaAdAccount({ connectionId: conn[A], adAccountId: AD_ACCOUNT }, { kind: 'DAILY', now: DAY }))
+    expect(await stored()).toBe(0)
+    // Inside the days read, the ad set's days now read as zero (read: true, no row).
+  })
+  it('review 2 (B1) — Meta refusing the status filter (#100) reads that level again without it, live objects only, said in words', async () => {
+    const DAY = new Date('2026-10-13T06:50:00Z')
+    h.override = (req) => (req.operation === 'insights.campaignDays' && req.query.filtering
+      ? { ok: false, status: 400, body: {}, verdict: { errorClass: 'validation', channelCode: '100', channelMessage: 'Filtering field campaign.effective_status is invalid' } }
+      : null)
+    h.calls.length = 0
+    const result = await inA(() => syncMetaAdAccount({ connectionId: conn[A], adAccountId: AD_ACCOUNT }, { kind: 'DAILY', now: DAY }))
+    expect(result).toMatchObject({ status: 'PARTIAL', notes: [expect.stringMatching(/live campaigns only/)], error: expect.stringMatching(/archived and deleted campaigns/) })
+    const campaignCalls = h.calls.filter((c) => c.operation === 'insights.campaignDays')
+    expect(campaignCalls.map((c) => !!c.query.filtering)).toEqual([true, false])
+    // The other levels still ask with their filter.
+    expect(h.calls.find((c) => c.operation === 'insights.adsetDays')!.query.filtering).toBeDefined()
+    expect(await inA(() => db().metaAdsDailyMetric.count({ where: { adAccountId: AD_ACCOUNT, entityType: 'CAMPAIGN', entityId: '120000000000101' } }))).toBeGreaterThan(0)
   })
   it('review B4 — Meta\'s "too much at once" halves the piece, down to one day; 100/3191001 is a permission refusal', async () => {
     const asked: string[] = []

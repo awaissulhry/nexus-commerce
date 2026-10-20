@@ -113,9 +113,14 @@ describe('the token as a person reads it', () => {
     expect(at({ lastSyncStatus: 'FAILED', lastSyncError: 'Meta was down.' })).toMatchObject({ state: 'read_failed', stateText: expect.stringMatching(/could not read “Shop A”\. Meta was down\./) })
     // The read that lost the token came after the last good check: a new token is needed.
     expect(at({ lastSyncStatus: 'AUTH_LOST', lastSyncAt: new Date(Date.now() + 60_000) }).state).toBe('sign_in_needed')
-    // Review A2 — a good token check after the read that lost the token ends it (a replaced or re-checked token).
+    // Review A2 (round 2) — a good token check after the read that lost the token: no new token needed, but the failed
+    // read stays visible (read_failed, in words) until a read succeeds; a token check alone never hides it.
     const goodLater = metaTokenView(health({ checkedAt: new Date().toISOString() }) as never, {})
-    expect(metaConnectionState({ isActive: true, authStatus: 'connected', token: goodLater, adAccountLinked: true, accountName: 'Shop A', account: { lastSyncAt: new Date(Date.now() - 60_000), lastSuccessAt: null, lastSyncStatus: 'AUTH_LOST', lastSyncError: 'Meta no longer accepts it.', metricsReadThrough: null } as never, readingOn: true }).state).toBe('first_read_pending')
+    const lostThenChecked = (metricsReadThrough: Date | null) => metaConnectionState({ isActive: true, authStatus: 'connected', token: goodLater, adAccountLinked: true, accountName: 'Shop A', account: { lastSyncAt: new Date(Date.now() - 60_000), lastSuccessAt: null, lastSyncStatus: 'AUTH_LOST', lastSyncError: 'Meta no longer accepts it.', metricsReadThrough } as never, readingOn: true })
+    expect(lostThenChecked(null)).toMatchObject({ state: 'read_failed', stateText: expect.stringMatching(/checked valid since.*reads again now/) })
+    expect(lostThenChecked(new Date()).state).toBe('read_failed')
+    // A read that succeeds afterwards is what ends it.
+    expect(metaConnectionState({ isActive: true, authStatus: 'connected', token: goodLater, adAccountLinked: true, accountName: 'Shop A', account: { lastSyncAt: new Date(), lastSuccessAt: new Date(), lastSyncStatus: 'SUCCESS', lastSyncError: null, metricsReadThrough: new Date() } as never, readingOn: true }).state).toBe('ok')
     expect(at({ lastSyncStatus: 'FAILED', metricsReadThrough: new Date() })).toMatchObject({ state: 'read_failed', stateText: expect.stringMatching(/from an earlier read/) })
   })
   it('C1 shows the system user, the app id (never the secret) and the picks', async () => {

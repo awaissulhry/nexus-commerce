@@ -2,8 +2,8 @@
  * Meta step 2, review A2 and B4 — what a failed read means.
  *   - Only a token that is gone is "auth lost": a held call because Nexus could not read the stored token, the app secret
  *     or its KMS key is Nexus's own problem, never "a new token is needed".
- *   - A good token (credentials replaced, or "Check now" valid) ends a read that lost the token: its status is cleared and
- *     a read is queued at once (TOKEN), outside the hourly limit of "Read now".
+ *   - A good token (credentials replaced, or "Check now" valid) after a read that lost the token queues a read at once
+ *     (TOKEN), outside the hourly limit of "Read now"; the failed read stays visible until a read succeeds.
  *   - Meta's "too much at once" codes ask for fewer days; 100/3191001 is a permission refusal.
  * The database, the targets and the read are stubbed; made-up ids only.
  */
@@ -56,14 +56,14 @@ describe('review B4 — Meta\'s codes the read acts on', () => {
 })
 
 describe('review A2 — a good token ends a read that lost the token', () => {
-  it('clears AUTH_LOST and reads at once (TOKEN), only for that connection\'s account', async () => {
+  it('reads at once (TOKEN), only for that connection\'s account; AUTH_LOST stays until that read succeeds', async () => {
     h.accounts = [
       { adAccountId: '1234567890', connectionId: 'conn-1', lastSyncStatus: 'AUTH_LOST' },
       { adAccountId: '1234567891', connectionId: 'conn-2', lastSyncStatus: 'AUTH_LOST' },
     ]
     await metaReadAfterGoodToken('conn-1')
     await new Promise((resolve) => setImmediate(resolve))
-    expect(h.updates).toEqual([{ lastSyncStatus: null, lastSyncError: null }])
+    expect(h.updates).toEqual([])
     expect(h.reads).toEqual([{ adAccountId: '1234567890', kind: 'TOKEN' }])
   })
   it('nothing to do when the last read did not lose the token; never throws', async () => {

@@ -165,15 +165,34 @@ describe('read only by construction', () => {
     // What Nexus's own reads ask still goes: the account's portfolio by id and name.
     expect(ok(`${BASE}/act_1234567890?fields=account_id,name,business{id,name}`)).toBeNull()
   })
+  it('step 2 review 2 — .fields(…) is a list exactly like {…}; inside any expansion no Instagram account, owner, ratings, feed or blocked list', () => {
+    const f = (fields: string) => ok(`${BASE}/act_1234567890?fields=${encodeURIComponent(fields)}`)
+    expect(f('insights.fields()')).toMatch(/every \.fields\(…\) in fields names a field/)
+    expect(f('insights.fields(,)')).toMatch(/every \.fields\(…\) in fields names a field/)
+    expect(f('insights.fields(spend')).toMatch(/\( with no \)/)
+    expect(f('promote_pages.fields(owned_pages.fields(id))')).toMatch(/never expands "owned_pages"/)
+    for (const nested of ['instagram_business_account', 'owner_business', 'ratings', 'feed', 'blocked']) {
+      expect(f(`promote_pages.fields(id,${nested}.fields(id))`), nested).toMatch(new RegExp(`never expands "${nested}" inside another field`))
+      expect(f(`promote_pages{id,${nested}{id}}`), nested).toMatch(new RegExp(`never expands "${nested}" inside another field`))
+    }
+    // The reviewer's probe2 at the gateway: the nested Instagram account of a promoted Page.
+    expect(f('promote_pages.fields(id,name,instagram_business_account.fields(username,followers_count))')).toMatch(/never expands "instagram_business_account"/)
+    // Nexus's own reads still go: a Page list's own Instagram account at the top level (discovery), the account's
+    // insights with a preset and a nested list in either form.
+    expect(ok(`${BASE}/me/accounts?fields=id,name,instagram_business_account{id,username}`)).toBeNull()
+    expect(f('insights.date_preset(last_7d){spend}')).toBeNull()
+    expect(f('insights.fields(spend).date_preset(last_7d)')).toBeNull()
+  })
   it('step 2 — the daily read and the live views add only their own keys, each where it is used', () => {
     expect(ok(`${BASE}/act_1234567890/campaigns?fields=id&effective_status=["ACTIVE"]&limit=200`)).toBeNull()
     // Review B5 — a campaign's or ad set's own edge, not `filtering` on act_<id>/adsets | ads (undocumented on v26).
     expect(ok(`${BASE}/120000000000101/adsets?fields=id&effective_status=["ACTIVE"]`)).toBeNull()
     expect(ok(`${BASE}/120000000000201/ads?fields=id&effective_status=["ACTIVE"]`)).toBeNull()
     expect(ok(`${BASE}/act_1234567890/ads?fields=id&filtering=[]`)).toMatch(/"filtering" is not one/)
-    // AA-002 — the portfolio's own ad accounts take search_query (documented); the client list does not.
+    // AA-002 — the portfolio's own and client ad accounts take search_query; the pending lists do not.
     expect(ok(`${BASE}/9876543210/owned_ad_accounts?fields=account_id&search_query=shop`)).toBeNull()
-    expect(ok(`${BASE}/9876543210/client_ad_accounts?fields=account_id&search_query=shop`)).toMatch(/"search_query" is not one/)
+    expect(ok(`${BASE}/9876543210/client_ad_accounts?fields=account_id&search_query=shop`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/pending_client_ad_accounts?fields=id&search_query=shop`)).toMatch(/"search_query" is not one/)
     expect(ok(`${BASE}/act_1234567890/insights?level=adset&time_increment=1&time_range={"since":"2026-10-01","until":"2026-10-19"}&fields=spend&limit=500`)).toBeNull()
     expect(ok(`${BASE}/120000000000101/insights?time_range={"since":"2026-10-01","until":"2026-10-19"}&fields=spend`)).toBeNull()
     // Review B6 — Meta's enums: status ERROR | EXECUTING | FINISHED | INITIALIZED, type ASYNC_ADGROUP_CREATION | BATCH_API | DRAFTS.

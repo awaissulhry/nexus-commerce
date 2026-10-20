@@ -244,8 +244,12 @@ const DELETE_CHUNK = 1000
  * Review B1 — only the entities Meta sent are replaced: inside the window, an entity Meta sent has exactly the days Meta
  * sent (a day with no row is a zero day). An entity Meta left out this time (deleted or archived beyond what Meta still
  * reports) keeps every day already stored: a re-read never erases a day it did not get back.
+ *
+ * Review 2 (A3/B5) — `zeroFor`: entities Meta LISTS this run (the structure read) whose numbers it may restate to
+ * nothing. Meta leaves out a row for a day with no delivery, so for those an empty answer means zero days: their stored
+ * days in the window are replaced too (by nothing). Every other entity Meta did not send is kept as it is.
  */
-export async function replaceDailyMetrics(adAccountId: string, entityType: MetaAdsEntityType, window: DayWindow, rows: MetaDailyMetricData[], pulledAt: Date): Promise<{ rows: number; range: ReadRange }> {
+export async function replaceDailyMetrics(adAccountId: string, entityType: MetaAdsEntityType, window: DayWindow, rows: MetaDailyMetricData[], pulledAt: Date, options: { zeroFor?: Iterable<string> } = {}): Promise<{ rows: number; range: ReadRange }> {
   const from = dayToDate(window.from)
   const to = dayToDate(window.to)
   const byKey = new Map<string, MetaDailyMetricData>()
@@ -254,7 +258,7 @@ export async function replaceDailyMetrics(adAccountId: string, entityType: MetaA
     byKey.set(`${row.entityId}|${dateToDay(row.date)}`, row)
   }
   const data = [...byKey.values()].map((row) => ({ ...row, extra: (row.extra ?? undefined) as Prisma.InputJsonValue | undefined, pulledAt }))
-  const entities = [...new Set(data.map((row) => row.entityId))]
+  const entities = [...new Set([...data.map((row) => row.entityId), ...(options.zeroFor ?? [])])]
   return prisma.$transaction(async (tx) => {
     for (let i = 0; i < entities.length; i += DELETE_CHUNK) {
       await tx.metaAdsDailyMetric.deleteMany({ where: { adAccountId, entityType, entityId: { in: entities.slice(i, i + DELETE_CHUNK) }, date: { gte: from, lte: to } } })

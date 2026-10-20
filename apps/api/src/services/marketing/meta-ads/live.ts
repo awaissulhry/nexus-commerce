@@ -27,6 +27,7 @@ import { decimalToMicros, metaUnitsToMicros, minorOf } from './money.js'
 import type { MetaQueryValue } from '../../gateway/meta.js'
 import { metaQueryKeyAllowed } from '../../gateway/meta-calls.js'
 import { maskTakenRows, takenIds } from './taken.js'
+import { ACCOUNT_EDGES, GRAPH_DEFAULT_FIELDS, graphFieldsProblem, OBJECT_EDGES, OBJECT_NODE, type GraphNode, type GraphObjectKind } from './graph-allow.js'
 
 /** A refusal in words (no Meta call was made, or Meta's answer was not usable). */
 export class MetaLiveRefusal extends Error {
@@ -150,9 +151,10 @@ export async function liveAdAccounts(input: { connectionId?: string | null; list
   const edges: Record<AdAccountList, string[]> = {
     owned: ['owned_ad_accounts'], client: ['client_ad_accounts'], pending: ['pending_owned_ad_accounts', 'pending_client_ad_accounts'],
   }
-  // AA-002 — owned_ad_accounts documents one read parameter, search_query; client and pending ones document none.
+  // AA-002 — owned_ad_accounts and client_ad_accounts take search_query (what it matches is not documented); the
+  // pending lists document no parameter.
   const search = input.search?.trim() || null
-  if (search && input.list !== 'owned') throw new MetaLiveRefusal('Meta documents a search only for the portfolio\'s own ad accounts (list owned); the client and pending lists have no search parameter.')
+  if (search && input.list === 'pending') throw new MetaLiveRefusal('Meta documents no search for the pending lists; search the owned or client list.')
   const items: Array<NonNullable<ReturnType<typeof adAccountRow>> & { edge: string; requestId?: string | null }> = []
   let more = false
   for (const edge of edges[input.list]) {
@@ -213,10 +215,12 @@ async function listWithNumbers(connectionId: string, operation: string, path: st
 }
 
 /** A campaign or ad set id from a caller, read only when it is the chosen account's own (else refused in words). */
-async function ownObject(account: MetaChosenAccount, id: string, what: string): Promise<string> {
+async function ownObject(account: MetaChosenAccount, id: string, what: 'campaign' | 'ad set'): Promise<string> {
   const objectId = metaObjectId(id)
   if (!objectId) throw new MetaLiveRefusal(`"${id}" is not a Meta ${what} id (digits).`)
-  if (!(await objectInAccount(account, objectId))) throw new MetaLiveRefusal(`That ${what} does not belong to the ad account this business chose, so it is not read.`)
+  const kind = await objectKindOf(account, objectId)
+  if (kind && kind !== (what === 'campaign' ? 'campaign' : 'adset')) throw new MetaLiveRefusal(`That id is a ${kind} of this ad account, not a ${what}.`)
+  if (!kind && !(await objectInAccount(account, objectId))) throw new MetaLiveRefusal(`That ${what} does not belong to the ad account this business chose, so it is not read.`)
   return objectId
 }
 
@@ -336,55 +340,9 @@ function withNumbers(row: Record<string, unknown>, raw: Record<string, unknown>,
 
 // ── meta-ads-graph-read ──────────────────────────────────────────────────────────────────────────────────────────
 
-/** Edges that list people: they need the users permission. */
-/** Edges that list people with access: as the path's edge they need the users permission. */
-export const PEOPLE_EDGES = new Set(['users', 'assigned_users', 'agencies'])
-/**
- * Review A1 — never read by meta-ads-graph-read, as the path's edge or as a name ANYWHERE in `fields` (any depth): other
- * businesses' portfolios and ad accounts, people, buyers' messages and lead-form answers, the payment method. A people
- * edge inside `fields` is refused too (the path edge, with the users permission, is the one way to read it).
- */
-export const GRAPH_DENIED_NAMES = new Set([
-  'business', 'businesses', 'owner', 'owner_business', 'owned_ad_accounts', 'client_ad_accounts', 'pending_owned_ad_accounts', 'pending_client_ad_accounts',
-  'adaccounts', 'accounts', 'owned_pages', 'client_pages', 'owned_businesses', 'client_businesses', 'owned_instagram_accounts', 'business_users', 'system_users',
-  'leadgen_forms', 'leads', 'comments', 'conversations', 'messages', 'funding_source_details',
-  ...PEOPLE_EDGES,
-])
-/** Review A1 — the only names a `{…}` list may follow in graph-read's `fields`: the chosen account's own numbers and ads' parts. */
-export const GRAPH_NESTABLE = new Set(['insights', 'creative', 'adcreatives', 'targeting'])
+// Review 2 (lead decision): graph-read is an ALLOW-LIST — graph-allow.ts names every path, field and modifier it reads.
+export { graphFieldsProblem } from './graph-allow.js'
 
-/**
- * Why graph-read's `fields` is refused, or null: every field name at any depth is checked against GRAPH_DENIED_NAMES, and
- * a `{…}` list may only follow a GRAPH_NESTABLE name. Modifier names (after a `.`) and their arguments are not fields.
- */
-export function graphFieldsProblem(fields: string): string | null {
-  const parents: string[] = []
-  let paren = 0
-  let lastName: string | null = null
-  for (let i = 0; i < fields.length; i++) {
-    const c = fields[i]
-    if (c === '(') { paren++; continue }
-    if (c === ')') { paren = Math.max(0, paren - 1); continue }
-    if (paren > 0) continue
-    if (c === '{') {
-      if (!lastName || !GRAPH_NESTABLE.has(lastName.toLowerCase())) return `"${lastName ?? '{'}" cannot be expanded with {…} here; only ${[...GRAPH_NESTABLE].join(', ')} can.`
-      parents.push(lastName)
-      lastName = null
-      continue
-    }
-    if (c === '}') { parents.pop(); lastName = null; continue }
-    if (/[A-Za-z_]/.test(c) && (i === 0 || !/[A-Za-z0-9_]/.test(fields[i - 1]))) {
-      const name = /^[A-Za-z_][A-Za-z0-9_]*/.exec(fields.slice(i))![0]
-      i += name.length - 1
-      if (fields[i - name.length] === '.') continue // a modifier (.limit, .date_preset), not a field
-      if (GRAPH_DENIED_NAMES.has(name.toLowerCase())) return `"${name}" is not read by meta-ads-graph-read${parents.length ? ` (inside ${parents.join(' › ')})` : ''}.`
-      lastName = name
-    }
-  }
-  return null
-}
-/** Fields a graph read never asks for: the payment method's details live in Meta's billing screen (meta-billing reads them). */
-const REFUSED_FIELDS = /(^|[,{])\s*funding_source_details\b/
 const GATEWAY_KEYS = /^(access_token|appsecret_proof|appsecret_time|_?method|batch|fields|limit|after)$/i
 export const MAX_GRAPH_ROWS = 500
 const MAX_ANSWER_BYTES = 200_000
@@ -405,16 +363,24 @@ export function graphSafe(value: unknown, depth = 0): unknown {
   return value
 }
 
-/** Does this Meta object belong to the chosen ad account? Nexus's own rows first, else one live read of its account_id. */
-async function objectInAccount(account: MetaChosenAccount, objectId: string): Promise<boolean> {
-  if (objectId === account.pageId || objectId === account.instagramId) return true
+/** Which of the chosen account's objects this id is, from Nexus's own read (null: Nexus has not read it for this account). */
+export async function objectKindOf(account: MetaChosenAccount, objectId: string): Promise<GraphObjectKind | null> {
   const where = { adAccountId: account.adAccountId }
-  const known = await Promise.all([
+  const [campaign, adSet, ad, creative] = await Promise.all([
     prisma.metaAdsCampaign.findFirst({ where: { ...where, campaignId: objectId }, select: { id: true } }),
     prisma.metaAdsAdSet.findFirst({ where: { ...where, adSetId: objectId }, select: { id: true } }),
     prisma.metaAdsAd.findFirst({ where: { ...where, adId: objectId }, select: { id: true } }),
+    prisma.metaAdsAd.findFirst({ where: { ...where, creativeId: objectId }, select: { id: true } }),
   ])
-  if (known.some(Boolean)) return true
+  return campaign ? 'campaign' : adSet ? 'adset' : ad ? 'ad' : creative ? 'creative' : null
+}
+
+/**
+ * Does this campaign or ad set belong to the chosen ad account? Nexus's own rows first, else one live read of its
+ * account_id (a campaign made since the last daily read). Never a Page or another account's object.
+ */
+async function objectInAccount(account: MetaChosenAccount, objectId: string): Promise<boolean> {
+  if (await objectKindOf(account, objectId)) return true
   try {
     const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'graph.ownerCheck', path: objectId, query: { fields: 'account_id' } })
     return metaAdAccountId((read.body as { account_id?: unknown }).account_id) === account.adAccountId
@@ -431,7 +397,6 @@ export interface GraphReadInput {
   params?: Record<string, string | number | boolean>
   limit?: number
   after?: string | null
-  canSeePeople: boolean
 }
 
 /**
@@ -446,21 +411,29 @@ export async function graphRead(input: GraphReadInput) {
   if (segments.length < 1 || segments.length > 2 || segments.some((s) => !s)) throw new MetaLiveRefusal('The path is an object and at most one edge: act_<the chosen account>[/edge] or <object id>[/edge].')
   const [node, edge] = segments
   if (edge !== undefined && !/^[a-z][a-z0-9_]{0,60}$/.test(edge)) throw new MetaLiveRefusal(`"${edge}" is not an edge name (lower case letters, digits and _).`)
-  if (edge && PEOPLE_EDGES.has(edge) && !input.canSeePeople) throw new MetaLiveRefusal(`The edge "${edge}" lists people; it needs the users permission.`)
-  if (edge && !PEOPLE_EDGES.has(edge) && GRAPH_DENIED_NAMES.has(edge)) throw new MetaLiveRefusal(`The edge "${edge}" is not read by meta-ads-graph-read.`)
+  // Review 2 — allow-list only: the chosen account and its own read edges, or one of its objects Nexus has read and that
+  // object's own edges. A Page, an Instagram account, a Business, people, pixels, audiences, lead forms: never here.
+  let type: GraphNode
   if (/^act_/.test(node)) {
     if (metaAdAccountId(node) !== account.adAccountId) throw new MetaLiveRefusal('Only the ad account this business chose may be read (another account is refused, never read).')
+    if (edge !== undefined && !ACCOUNT_EDGES[edge]) {
+      throw new MetaLiveRefusal(`meta-ads-graph-read does not read "${edge}" of the ad account; it reads ${Object.keys(ACCOUNT_EDGES).join(', ')} (Pages and Instagram accounts: meta-ads-live).`)
+    }
+    type = edge === undefined ? 'AdAccount' : ACCOUNT_EDGES[edge]
   } else {
     const id = metaObjectId(node)
     if (!id) throw new MetaLiveRefusal(`"${node}" is not a Meta object id (digits) or act_<the chosen account>.`)
-    if (!(await objectInAccount(account, id))) throw new MetaLiveRefusal('That object does not belong to the ad account this business chose, so it is not read.')
+    const kind = await objectKindOf(account, id)
+    if (!kind) throw new MetaLiveRefusal('meta-ads-graph-read reads only a campaign, ad set, ad or creative Nexus has read for the ad account this business chose; this id is none of them (a new one appears after the next daily read).')
+    if (edge !== undefined && !OBJECT_EDGES[kind][edge]) {
+      const edges = Object.keys(OBJECT_EDGES[kind])
+      throw new MetaLiveRefusal(`meta-ads-graph-read does not read "${edge}" of a ${kind}${edges.length ? `; it reads ${edges.join(', ')}` : ''}.`)
+    }
+    type = edge === undefined ? OBJECT_NODE[kind] : OBJECT_EDGES[kind][edge]
   }
-  // One object with no fields names id,name: Meta's default answer of a Page node can carry its token, so the gateway
-  // refuses an object read without fields.
-  const fields = input.fields?.trim() || (!edge && !/^act_/.test(node) ? 'id,name' : '')
-  if (fields && !/^[a-z0-9_.,{}()\s]{1,800}$/i.test(fields)) throw new MetaLiveRefusal('fields holds characters a Graph field list never has.')
-  if (REFUSED_FIELDS.test(fields)) throw new MetaLiveRefusal('funding_source_details (the payment method) is not read here; it is shown on Meta\'s billing screen.')
-  const fieldProblem = graphFieldsProblem(fields)
+  const fields = input.fields?.trim() || GRAPH_DEFAULT_FIELDS[type]
+  if (!/^[a-z0-9_.,{}()'":\s-]{1,800}$/i.test(fields)) throw new MetaLiveRefusal('fields holds characters a Graph field list never has.')
+  const fieldProblem = graphFieldsProblem(fields, type)
   if (fieldProblem) throw new MetaLiveRefusal(fieldProblem)
   const params: Record<string, MetaQueryValue> = {}
   for (const [key, value] of Object.entries(input.params ?? {})) {

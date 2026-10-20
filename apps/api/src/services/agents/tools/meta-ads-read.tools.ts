@@ -17,7 +17,7 @@
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
-import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
+import type { AgentTool, ToolResult } from '../tool-types.js'
 import { listMetaConnections } from '../../meta/meta-accounts.service.js'
 import { metaAdsAds, metaAdsAdSets, metaAdsCampaigns, metaAdsOverview, metaCampaignDays, MetaAdsReadError, type MetaAdsDay } from '../../marketing/meta-ads/read.service.js'
 import { AD_ACCOUNT_LISTS, graphRead, INLINE_PRESETS, INSIGHT_LEVELS, LIVE_VIEWS, liveAdAccounts, liveView, MAX_GRAPH_ROWS, MetaLiveRefusal, type AdAccountList, type LiveView } from '../../marketing/meta-ads/live.js'
@@ -64,7 +64,7 @@ const metaAdAccounts: AgentTool = {
     list: z.preprocess(lower, z.enum(['chosen', ...AD_ACCOUNT_LISTS])).default('chosen')
       .describe('chosen (what this business reads; no Meta call) | owned | client | pending (the business portfolio\'s, live)'),
     portfolioId: metaIdArg('owned / client / pending: the Meta business portfolio (an ad account\'s businessId in meta-connection view choices); default: the chosen account\'s'),
-    search: z.string().trim().min(1).max(100).optional().describe('owned only: Meta\'s search_query (a word of the name or the id); the client and pending lists have no search'),
+    search: z.string().trim().min(1).max(100).optional().describe('owned or client: Meta\'s search (search_query; what it matches is not documented); the pending lists have none'),
     maxRows: z.number().int().min(1).max(500).optional().describe('at most this many accounts (default 200)'),
     connectionId: connectionArg,
   }),
@@ -261,8 +261,8 @@ const metaAdsGraphRead: AgentTool = {
   // Any field may be money (budgets, spend): the answer is judged with the ad-spend money permission.
   requires: [F.adsView, ADSPEND],
   input: z.object({
-    path: z.string().trim().min(1).max(120).describe('act_<the chosen ad account> or a Meta object id of it (campaign, ad set, ad, creative …), and at most one edge: e.g. act_1234567890/async_requests, act_1234567890/audience_funnel, 120000000000001/insights'),
-    fields: z.string().trim().min(1).max(800).optional().describe('Meta\'s field list, as the Graph API takes it (e.g. id,name,status or spend,impressions)'),
+    path: z.string().trim().min(1).max(120).describe('act_<the chosen ad account>[/edge] or <a campaign, ad set, ad or creative id of it>[/edge]: e.g. act_1234567890/async_requests, act_1234567890/adimages, 120000000000001/insights'),
+    fields: z.string().trim().min(1).max(800).optional().describe('Meta\'s field list, from that object\'s own list (e.g. id,name,status; spend,impressions; insights.date_preset(last_7d){spend}); default: a few of them'),
     params: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,40}$/), z.union([z.string().max(500), z.number(), z.boolean()])).optional()
       .describe('other query parameters, only those Nexus sends on that path: insights → level, time_range, time_increment, filtering; act_<id>/campaigns | adsets | ads and <campaign or ad set id>/adsets | ads → effective_status; act_<id>/async_requests → status, type; never a token'),
     limit: z.number().int().min(1).max(MAX_GRAPH_ROWS).optional().describe(`an edge: at most this many rows (default 100, at most ${MAX_GRAPH_ROWS})`),
@@ -270,17 +270,19 @@ const metaAdsGraphRead: AgentTool = {
     connectionId: connectionArg,
   }),
   description:
-    'The catch-all Meta read, so no read is ever missing: ONE GET on the business\'s chosen ad account or one of its own '
-    + 'objects (a campaign, ad set, ad, creative …, or the chosen Page or Instagram account) and at most one edge, with '
-    + 'the fields and parameters Meta\'s Marketing API reference names (e.g. act_<id>/async_requests, act_<id>/'
-    + 'audience_funnel, <ad id>/insights). Another account, an object of another account, a batch or anything but a read '
-    + 'is refused before a call. Edges that list people need the users permission; other portfolios, ad accounts, Pages, '
-    + 'people, messages, comments, lead forms and the payment method are never read here — as the edge or as a name '
-    + 'anywhere in fields — and a {…} expansion is allowed only after insights, creative, adcreatives or targeting. '
-    + 'Meta\'s raw answer, paging links removed (use nextAfter): money in Meta\'s own units (budgets in the currency\'s '
-    + 'smallest unit for most currencies, insights spend a decimal of the currency); needs the ad-spend money permission. '
+    'One GET on the business\'s chosen ad account or one of its own objects, for a read the other Meta tools do not wrap. '
+    + 'ALLOW-LIST ONLY: the path is act_<the chosen account> or its edges campaigns, adsets, ads, adcreatives, insights, '
+    + 'ads_volume, minimum_budgets, async_requests, adimages, advideos; or a campaign, ad set, ad or creative Nexus has read '
+    + 'for that account, with its own edges (a campaign: adsets, ads, insights; an ad set: ads, insights; an ad: insights, '
+    + 'adcreatives). fields come from each object\'s own list (the ones Nexus reads, and Meta\'s read-only numbers); a '
+    + 'nested list ({…} or .fields(…)) only under insights, creative, adcreatives or targeting; modifiers .limit, '
+    + '.date_preset, .time_increment, .time_range only; anything else is refused by name before a call. No Page, '
+    + 'Instagram account, Business, person, pixel, audience, lead form or payment method is read here (Pages and Instagram '
+    + 'accounts: meta-ads-live). Meta\'s raw answer, paging links removed (use nextAfter): money in Meta\'s own units '
+    + '(budgets in the currency\'s smallest unit for most currencies, insights spend a decimal of the currency); needs the '
+    + 'ad-spend money permission. '
     + 'Prefer meta-ads-live and meta-ads-overview where they answer.',
-  async handler(args, ctx: ToolContext): Promise<ToolResult> {
+  async handler(args): Promise<ToolResult> {
     return guarded(() => graphRead({
       connectionId: (args.connectionId as string | undefined) ?? null,
       path: String(args.path),
@@ -288,7 +290,6 @@ const metaAdsGraphRead: AgentTool = {
       params: (args.params as Record<string, string | number | boolean> | undefined) ?? {},
       limit: typeof args.limit === 'number' ? args.limit : undefined,
       after: (args.after as string | undefined) ?? null,
-      canSeePeople: ctx.can(F.usersManage),
     }))
   },
 }
