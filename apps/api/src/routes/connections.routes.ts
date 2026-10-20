@@ -25,7 +25,7 @@ import { connectionLabel } from "../services/connection-label.js";
 import { channelFootprint } from "../services/channel-footprint.service.js";
 import { isOwnConnection } from "../services/connection-resolver.service.js";
 
-type Channel = "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY" | "GOOGLE";
+type Channel = "AMAZON" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY" | "GOOGLE" | "META";
 type IsManagedBy = "oauth" | "env" | "pending";
 
 interface ConnectionRow {
@@ -67,11 +67,13 @@ const CHANNEL_ORDER: Record<Channel, number> = {
   WOOCOMMERCE: 3,
   ETSY: 4,
   GOOGLE: 5,
+  META: 6,
 };
 const ALL_CHANNELS: Channel[] = ["AMAZON", "EBAY", "SHOPIFY", "WOOCOMMERCE", "ETSY"];
 // Google Ads step 1a — Google has a detail page (/settings/channels/google) but no card in the padded GET /connections
 // grid: its card comes from the catalogue and C1 (/api/google-ads/connections), so it is allowed for the detail only.
-const DETAIL_CHANNELS: Channel[] = [...ALL_CHANNELS, "GOOGLE"];
+// Meta step 2 — the same for Meta (/settings/channels/meta; C1 is /api/meta-ads/connections).
+const DETAIL_CHANNELS: Channel[] = [...ALL_CHANNELS, "GOOGLE", "META"];
 
 /**
  * Convert a raw DB row to the API contract. Generic columns win;
@@ -413,6 +415,7 @@ const ALLOWED_MARKETPLACES: Record<Channel, string[]> = {
   WOOCOMMERCE: [],
   ETSY: [],
   GOOGLE: [],
+  META: [],
 };
 
 export default connectionsRoutes;

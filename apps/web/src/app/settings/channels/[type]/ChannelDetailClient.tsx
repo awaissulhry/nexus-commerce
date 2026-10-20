@@ -42,6 +42,7 @@ import '../channels.css'
 import { InboundGrid } from '../ChannelEventsGrid'
 import { ShopifyShadowReportCard } from './ShopifyShadowReportCard'
 import { GoogleAccountsCard } from './GoogleAccountsCard'
+import { MetaConnectionCards } from './MetaConnectionCards'
 import {
   type ActionNote,
   type ChannelConnection,
@@ -55,6 +56,7 @@ import {
   SYNC_TONE,
   channelLabel,
   disconnectAccount,
+  disconnectDescription,
   disconnectNote,
   disconnectHold,
   fetchDetail,
@@ -71,6 +73,8 @@ import {
   showLastError,
   showsGoogleAccounts,
   showsMarketplacesAndEvents,
+  showsMetaConnection,
+  showsReconnect,
   startReconnect,
   statusPill,
   testHold,
@@ -245,10 +249,7 @@ export default function ChannelDetailClient({ channelType, initial, initialError
     }
     const ok = await confirm({
       title: `Disconnect ${label}?`,
-      description: channelType.toUpperCase() === 'GOOGLE'
-        // One Google login may be connected in many businesses: Nexus never revokes it at Google (it would stop them all).
-        ? 'Removes this business\'s Google sign-in from Nexus and frees the Google Ads, Merchant Center and Analytics accounts it chose. Your other businesses keep their own Google connection. Nothing is removed at Google.'
-        : 'Removes the stored grant from Nexus and revokes it at the channel when supported. Syncs and listings for this account stop until it is reconnected.',
+      description: disconnectDescription(channelType),
       confirmLabel: 'Disconnect',
       tone: 'danger',
     })
@@ -313,15 +314,17 @@ export default function ChannelDetailClient({ channelType, initial, initialError
             >
               {busy === 'test' ? 'Testing…' : 'Test'}
             </Button>
-            <Button
-              size="sm"
-              variant={drift.length > 0 ? 'primary' : 'secondary'}
-              onClick={onReconnect}
-              aria-disabled={reconnectH.held || busy === 'reconnect'}
-              aria-busy={busy === 'reconnect'}
-            >
-              {busy === 'reconnect' ? 'Checking…' : connection.connectMode === 'self_authorization' ? connection.isManagedBy === 'env' ? 'Import authorization' : 'Verify access' : reconnectLabel(drift.length, detail.scopes.length)}
-            </Button>
+            {showsReconnect(channelType) && (
+              <Button
+                size="sm"
+                variant={drift.length > 0 ? 'primary' : 'secondary'}
+                onClick={onReconnect}
+                aria-disabled={reconnectH.held || busy === 'reconnect'}
+                aria-busy={busy === 'reconnect'}
+              >
+                {busy === 'reconnect' ? 'Checking…' : connection.connectMode === 'self_authorization' ? connection.isManagedBy === 'env' ? 'Import authorization' : 'Verify access' : reconnectLabel(drift.length, detail.scopes.length)}
+              </Button>
+            )}
             <Button
               size="sm"
               variant="danger-outline"
@@ -364,6 +367,10 @@ export default function ChannelDetailClient({ channelType, initial, initialError
           accounts this business reads instead. */}
       {showsGoogleAccounts(channelType) && connection.isManagedBy !== 'pending' && (
         <GoogleAccountsCard connectionId={connection.id} reloadSignal={detail} onReconnect={() => { void onReconnect() }} />
+      )}
+      {/* Meta ads step 1 — the token and the assets this business reads; "Connect Meta" when nothing is connected. */}
+      {showsMetaConnection(channelType) && (
+        <MetaConnectionCards connectionId={connection.isManagedBy === 'pending' ? null : connection.id} reloadSignal={detail} onChanged={() => { void refetch(); router.refresh() }} />
       )}
       {showsMarketplacesAndEvents(channelType) && (
         <>

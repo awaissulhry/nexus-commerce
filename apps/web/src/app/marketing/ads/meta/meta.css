@@ -1,0 +1,114 @@
+/* Meta ads step 2 — /marketing/ads/meta. Layout and domain content only: every colour, size and space is a semantic
+   --nds-* token, and every control is a design-system component (nothing here restyles one). Mirrors google.css. */
+
+.mads-root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.mads-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* One wrapping line of facts above the numbers. */
+.mads-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-muted);
+}
+
+.mads-note {
+  margin: var(--nds-space-8) 0 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text-2);
+}
+
+.mads-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text);
+}
+
+.mads-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.mads-dim {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+.mads-tabs {
+  min-width: 0;
+}
+
+.mads-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.mads-view:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+
+/* The campaign window. */
+.mads-modal {
+  display: grid;
+  gap: var(--nds-space-20);
+  min-width: 0;
+}
+
+.mads-section {
+  display: grid;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.mads-section h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+/* A day table is wider than a phone: it scrolls sideways on its own, and takes the focus so a keyboard can scroll it. */
+.mads-table {
+  min-width: 0;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.mads-table .nds-summary-table {
+  table-layout: auto;
+}
+
+.mads-table .nds-summary-table th,
+.mads-table .nds-summary-table td {
+  white-space: nowrap;
+}
+
+.mads-table:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}

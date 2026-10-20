@@ -154,6 +154,19 @@ describe('read only by construction', () => {
   ])('refuses %s', (path, why) => {
     expect(ok(`${BASE}/${path}`)).toMatch(why)
   })
+  it('step 2 — the daily read and the live views add only their own keys, each where it is used', () => {
+    expect(ok(`${BASE}/act_1234567890/campaigns?fields=id&effective_status=["ACTIVE"]&limit=200`)).toBeNull()
+    expect(ok(`${BASE}/act_1234567890/ads?fields=id&filtering=[]`)).toBeNull()
+    expect(ok(`${BASE}/act_1234567890/insights?level=adset&time_increment=1&time_range={"since":"2026-10-01","until":"2026-10-19"}&fields=spend&limit=500`)).toBeNull()
+    expect(ok(`${BASE}/120000000000101/insights?time_range={"since":"2026-10-01","until":"2026-10-19"}&fields=spend`)).toBeNull()
+    expect(ok(`${BASE}/act_1234567890/async_requests?status=COMPLETED&type=ASYNC_ADGROUP`)).toBeNull()
+    // Meta ignores both since 2025-06-10 (facts F2 T1): never sent, so never allowed.
+    expect(ok(`${BASE}/act_1234567890/insights?fields=spend&use_unified_attribution_setting=true`)).toMatch(/"use_unified_attribution_setting" is not one/)
+    expect(ok(`${BASE}/act_1234567890/insights?fields=spend&action_report_time=mixed`)).toMatch(/"action_report_time" is not one/)
+    // Each key only where it is used.
+    expect(ok(`${BASE}/me/adaccounts?fields=id&effective_status=["ACTIVE"]`)).toMatch(/"effective_status" is not one/)
+    expect(ok(`${BASE}/act_1234567890/campaigns?fields=id&level=ad`)).toMatch(/"level" is not one/)
+  })
   it('review 3 — query keys are an allow-list: the keys step 1 reads, each only where it is used', () => {
     expect(ok(`${BASE}/me/adaccounts?fields=account_id,name,business{id,name}&limit=100&summary=total_count&after=c1`)).toBeNull()
     expect(ok(`${BASE}/me/adaccounts?fields=id&before=c0`)).toBeNull()
@@ -278,6 +291,11 @@ describe('signing and the token', () => {
     expect(JSON.parse(escaped.text)).toEqual(JSON.parse('{"id":"1","__proto__":{}}'))
     // Not JSON at all: one string.
     expect(scrubMetaAnswer(`access_token=${USER}&token_type=bearer`)).toEqual({ text: 'token_type=bearer', scrubbed: 1 })
+    // Step 1 final review: a token used as a KEY is masked; two such keys stay apart; a URL-encoded app token is masked.
+    const keyed = scrubMetaAnswer(JSON.stringify({ [USER]: { id: '1' }, [APPTOKEN]: { id: '2' }, note: `token 1234567%7C${'aB3_cD4-eF5gH6iJ7kL8'}` }))
+    expect(keyed.text).not.toMatch(/EAAB|aB3_cD4/)
+    expect(JSON.parse(keyed.text)).toEqual({ '[removed]': { id: '1' }, '[removed]-2': { id: '2' }, note: 'token [removed]' })
+    expect(keyed.scrubbed).toBe(3)
   })
   it('review 2 — the renewal\'s own answer keeps its access_token: it IS the new token', async () => {
     h.answers.push(() => new Response(JSON.stringify({ access_token: 'NEW-TOKEN', token_type: 'bearer', expires_in: 5183944 }), { status: 200 }))

@@ -17,10 +17,14 @@ import { Tabs, Banner } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
 import { useProfileScope } from '@/app/_shared/ProfileScope'
 import { WORKSPACES_ENABLED } from '@/lib/workspaces/paths'
-import { useAccounts, useAdsConnections, useCatalogue, useGoogleAccounts, type CatalogueChannel } from './channels-data'
+import { useAccounts, useAdsConnections, useCatalogue, useGoogleAccounts, useMetaConnections, type CatalogueChannel } from './channels-data'
 import type { GoogleAccount } from '@/lib/google-ads/contract'
+import type { MetaConnection } from '@/lib/meta-ads/contract'
 import { GoogleAccountsDialog } from './GoogleAccountsDialog'
 import { GOOGLE_KEY, savedNotice } from './google-selection'
+import { MetaAccountsDialog } from './MetaAccountsDialog'
+import { MetaCredentialsDialog } from './MetaCredentialsDialog'
+import { metaConnectedNotice, metaSavedNotice } from './meta-selection'
 import { useConnectPopup, type StartOptions } from './useConnectPopup'
 import { ConnectAccountDialog } from './ConnectAccountDialog'
 import { AccountsTab } from './AccountsTab'
@@ -58,11 +62,16 @@ export function ChannelsClient() {
   const [notice, setNotice] = useState<{ tone: 'success' | 'info' | 'danger'; title: string; text?: string; workspaceId?: string } | null>(null)
   // Google Ads step 1a — "Choose Google accounts" for one Google sign-in (after it connects, or from its card).
   const [googleChoice, setGoogleChoice] = useState<{ connectionId: string; current: GoogleAccount | null } | null>(null)
+  // Meta ads step 1 — Meta has no sign-in popup: "Connect Meta" / "Replace credentials" take the business's app id, app
+  // secret and system-user token (connectionId null = a new connection), then "Choose Meta assets".
+  const [metaCredentials, setMetaCredentials] = useState<{ connectionId: string | null; appId: string | null } | null>(null)
+  const [metaChoice, setMetaChoice] = useState<{ connectionId: string; current: MetaConnection | null } | null>(null)
 
   const accounts = useAccounts(reload, true, activeProfile?.id)
   const catalogue = useCatalogue()
   const ads = useAdsConnections(reload, activeProfile?.id)
   const google = useGoogleAccounts(reload, activeProfile?.id)
+  const meta = useMetaConnections(reload, activeProfile?.id)
 
   const popup = useConnectPopup(
     (m) => {
@@ -106,6 +115,11 @@ export function ChannelsClient() {
     popup.clearError()
     const channel = catalogue.data?.find(item => item.key === key && item.available)
     if (!channel) return
+    if (channel.connectMode === 'token_entry') {
+      const target = options.intent === 'reconnect' ? options.targetConnectionId ?? null : null
+      setMetaCredentials({ connectionId: target, appId: meta.data?.items.find((item) => item.connectionId === target)?.appId ?? null })
+      return
+    }
     // Shopify, Etsy and Google check server setup before sign-in, including single-profile mode.
     // Shopify also collects the permanent domain used to choose its provider host.
     if (!WORKSPACES_ENABLED && channel.key !== 'SHOPIFY' && channel.key !== 'ETSY' && channel.key !== GOOGLE_KEY) { void popup.start(key, options); return }
@@ -156,6 +170,8 @@ export function ChannelsClient() {
             onStart={requestConnection}
             google={google.data}
             onChooseGoogle={(account) => setGoogleChoice({ connectionId: account.connectionId, current: account })}
+            meta={meta.data}
+            onChooseMeta={(connection) => setMetaChoice({ connectionId: connection.connectionId, current: connection })}
           />
         )}
         {tab === 'health' && <HealthTab />}
@@ -169,6 +185,17 @@ export function ChannelsClient() {
         onClose={() => setGoogleChoice(null)}
         onSaved={(account) => { setGoogleChoice(null); setNotice({ tone: 'success', ...savedNotice(account) }); bump() }}
         onReconnect={() => { const target = googleChoice.connectionId; setGoogleChoice(null); requestConnection(GOOGLE_KEY, { intent: 'reconnect', targetConnectionId: target }) }} />}
+      {metaCredentials && <MetaCredentialsDialog connectionId={metaCredentials.connectionId} appId={metaCredentials.appId}
+        onClose={() => setMetaCredentials(null)}
+        onSaved={(answer) => {
+          setMetaCredentials(null)
+          setNotice({ tone: 'success', ...metaConnectedNotice(answer) })
+          if (answer.placement !== 'reconsent' && answer.adAccountsSeen > 0) setMetaChoice({ connectionId: answer.connectionId, current: null })
+          bump()
+        }} />}
+      {metaChoice && <MetaAccountsDialog connectionId={metaChoice.connectionId} current={metaChoice.current}
+        onClose={() => setMetaChoice(null)}
+        onSaved={(connection) => { setMetaChoice(null); setNotice({ tone: 'success', ...metaSavedNotice(connection) }); bump() }} />}
       {pending && <ConnectAccountDialog channel={pending.channel} options={pending.options} accountLabel={pending.accountLabel}
         busy={!!popup.connecting} error={popup.error} onStart={(options, profile) => { setConnectionProfile(profile ?? null); return popup.start(pending.channel.key, options) }} onClose={() => setPending(null)} />}
     </div>

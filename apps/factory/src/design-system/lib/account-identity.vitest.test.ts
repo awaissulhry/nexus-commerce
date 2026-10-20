@@ -17,6 +17,11 @@ describe('account identity display', () => {
     expect(channelDisplayName('AMAZON_ADS')).toBe('Amazon Ads')
     expect(channelDisplayName('EBAY')).toBe('eBay')
     expect(channelDisplayName('GOOGLE')).toBe('Google')
+    expect(channelDisplayName('META')).toBe('Meta')
+  })
+  it('never shows a Meta id as a name', () => {
+    expect(accountDisplayName({ channel: 'META', label: '120000000000001' })).toBe('Meta account')
+    expect(accountDisplayName({ channel: 'META', label: 'Shop A system user' })).toBe('Shop A system user')
   })
   it('never shows a Google Ads customer id as a name', () => {
     expect(accountDisplayName({ channel: 'GOOGLE', label: '123-456-7890' })).toBe('Google account')

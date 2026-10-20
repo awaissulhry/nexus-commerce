@@ -26,7 +26,7 @@ export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 export interface ChannelConnection {
   connectMode?: 'website_oauth' | 'self_authorization'
   id: string
-  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY' | 'GOOGLE'
+  channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY' | 'GOOGLE' | 'META'
   isActive: boolean
   isManagedBy: 'oauth' | 'env' | 'pending'
   sellerName: string | null
@@ -101,6 +101,7 @@ export const CHANNEL_LABEL: Record<string, string> = {
   woocommerce: 'WooCommerce',
   etsy: 'Etsy',
   google: 'Google',
+  meta: 'Meta',
 }
 
 export function channelLabel(channelType: string): string {
@@ -335,14 +336,37 @@ export function disconnectHold(channelType: string, connection: ChannelConnectio
 /**
  * Google Ads step 1a — Google has no marketplaces to scope and sends Nexus no inbound events, so its page shows the
  * accounts chosen for it instead of those two cards (an empty "Inbound events" card would read as "nothing arrived").
+ * Meta (ads step 1) likewise.
  */
 export function showsMarketplacesAndEvents(channelType: string): boolean {
-  return channelType.toLowerCase() !== 'google'
+  return channelType.toLowerCase() !== 'google' && channelType.toLowerCase() !== 'meta'
 }
 
 /** Google Ads step 1a — the channel whose page carries the "Google accounts" card. */
 export function showsGoogleAccounts(channelType: string): boolean {
   return channelType.toLowerCase() === 'google'
+}
+
+/**
+ * Meta ads step 1 — Meta has no sign-in to renew: its page carries the token and assets cards, whose "Connect Meta" /
+ * "Replace credentials" take the app id, app secret and system-user token. So it shows no OAuth Reconnect.
+ */
+export function showsMetaConnection(channelType: string): boolean {
+  return channelType.toLowerCase() === 'meta'
+}
+
+export function showsReconnect(channelType: string): boolean {
+  return !showsMetaConnection(channelType)
+}
+
+/** What Disconnect does, said before it is pressed. */
+export function disconnectDescription(channelType: string): string {
+  const type = channelType.toLowerCase()
+  // One Google login may be connected in many businesses: Nexus never revokes it at Google (it would stop them all).
+  if (type === 'google') return 'Removes this business\'s Google sign-in from Nexus and frees the Google Ads, Merchant Center and Analytics accounts it chose. Your other businesses keep their own Google connection. Nothing is removed at Google.'
+  // The same system user may serve other businesses: Nexus forgets the token, it never ends it at Meta.
+  if (type === 'meta') return 'Removes this business\'s Meta app secret and system-user token from Nexus and frees the ad account, Page and Instagram account it chose. Nothing is removed at Meta: the token keeps working there until you revoke it in Meta Business settings.'
+  return 'Removes the stored grant from Nexus and revokes it at the channel when supported. Syncs and listings for this account stop until it is reconnected.'
 }
 
 // ─── Marketplaces ────────────────────────────────────────────────────────

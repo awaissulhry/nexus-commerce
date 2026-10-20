@@ -86,14 +86,27 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  * reads need, with a test (meta.vitest.test.ts).
  *   - any read: fields, limit, after, before, summary;
  *   - debug_token: input_token (the token inspected);
- *   - <app>/authorized_adaccounts: business (the business portfolio asked about; meta-connection view app).
+ *   - <app>/authorized_adaccounts: business (the business portfolio asked about; meta-connection view app);
+ *   - step 2, the ad account's lists act_<id>/campaigns | adsets | ads: effective_status, filtering (the daily read and
+ *     meta-ads-live);
+ *   - step 2, insights (act_<id>/insights, <object>/insights): level, time_range, time_increment, filtering — never
+ *     use_unified_attribution_setting or action_report_time (Meta ignores both since 2025-06-10, facts F2 T1);
+ *   - step 2, act_<id>/async_requests: status, type (master ACC-028, SDK only: a refusal from Meta answers plainly;
+ *     LIVE-PROBES.md).
  */
 const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
 const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string> }> = [
   { route: /^debug_token$/, keys: new Set(['input_token']) },
   { route: /^\d+\/authorized_adaccounts$/, keys: new Set(['business']) },
+  { route: /^act_\d+\/(campaigns|adsets|ads)$/, keys: new Set(['effective_status', 'filtering']) },
+  { route: /^(act_)?\d+\/insights$/, keys: new Set(['level', 'time_range', 'time_increment', 'filtering']) },
+  { route: /^act_\d+\/async_requests$/, keys: new Set(['status', 'type']) },
 ]
-const keyAllowed = (route: string, key: string) => READ_KEYS.has(key) || ROUTE_KEYS.some((r) => r.route.test(route) && r.keys.has(key))
+/** May a read of this route (the canonical one: lower case, no version) carry this query key? (meta-ads-graph-read asks.) */
+export function metaQueryKeyAllowed(route: string, key: string): boolean {
+  return READ_KEYS.has(key) || ROUTE_KEYS.some((r) => r.route.test(route) && r.keys.has(key))
+}
+const keyAllowed = metaQueryKeyAllowed
 /** At most this long, a `fields` value (the longest Nexus asks is far shorter). */
 const MAX_FIELDS_LENGTH = 4000
 /** A field name that is (or holds) a token: `access_token`, `page_access_token`, … — never asked for. */
@@ -223,8 +236,11 @@ const SECRET_IN_QUERY = new RegExp(`([?&])(?:${SECRET_NAMES})=[^&#\\s"'<>]*`, 'g
 const SECRET_BARE = new RegExp(`\\b(?:${SECRET_NAMES})=[^&#\\s"'<>]*&?`, 'gi')
 /** Marks where a `?` stood before a dropped parameter, so the next parameter takes its place. */
 const QUERY_START = '\u0000q'
-/** Token shapes, anywhere in a string: a user or system-user token (EAA…), an app token (`<app id>|<app secret>`). */
-const TOKEN_SHAPES = /EAA[A-Za-z0-9]{20,}|\b\d{6,}\|[A-Za-z0-9_-]{16,}/g
+/**
+ * Token shapes, anywhere in a string (a value or a key): a user or system-user token (EAA…), an app token
+ * (`<app id>|<app secret>`), also URL-encoded (`<app id>%7C<app secret>`).
+ */
+const TOKEN_SHAPES = /EAA[A-Za-z0-9]{20,}|\b\d{6,}(?:\||%7[Cc])[A-Za-z0-9_-]{16,}/g
 
 /** A string with every secret parameter dropped and every token shape masked, and how many were removed. */
 function scrubString(value: string): { text: string; removed: number } {
@@ -264,8 +280,13 @@ export function scrubMetaAnswer(text: string): { text: string; scrubbed: number 
     if (Array.isArray(value)) return value.map((item) => walk(item, depth + 1))
     if (value && typeof value === 'object') {
       const out: Record<string, unknown> = {}
-      for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-        if (key.toLowerCase() === 'access_token') { scrubbed++; continue }
+      for (const [rawKey, child] of Object.entries(value as Record<string, unknown>)) {
+        if (rawKey.toLowerCase() === 'access_token') { scrubbed++; continue }
+        // A key can carry a token too (an answer keyed by token): it is masked like a value, and kept apart if two clash.
+        const masked = scrubString(rawKey)
+        scrubbed += masked.removed
+        let key = masked.text
+        for (let n = 2; masked.removed && Object.prototype.hasOwnProperty.call(out, key); n++) key = `${masked.text}-${n}`
         // defineProperty: a key named "__proto__" stays an own key (an assignment would set the prototype and lose it).
         Object.defineProperty(out, key, { value: walk(child, depth + 1), enumerable: true, writable: true, configurable: true })
       }

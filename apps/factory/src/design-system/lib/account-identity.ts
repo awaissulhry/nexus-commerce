@@ -2,7 +2,7 @@
 export function channelDisplayName(channel: string): string {
   const names: Record<string, string> = {
     AMAZON: 'Amazon', AMAZON_ADS: 'Amazon Ads', EBAY: 'eBay',
-    SHOPIFY: 'Shopify', WOOCOMMERCE: 'WooCommerce', ETSY: 'Etsy', GOOGLE: 'Google',
+    SHOPIFY: 'Shopify', WOOCOMMERCE: 'WooCommerce', ETSY: 'Etsy', GOOGLE: 'Google', META: 'Meta',
   }
   return names[channel] ?? 'Channel'
 }

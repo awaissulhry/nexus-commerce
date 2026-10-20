@@ -30,7 +30,7 @@ import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool, ToolChange, ToolResult, ToolUndo } from '../tool-types.js'
 import {
-  getMetaChoices, listMetaConnections, metaChoicesAnswer, MetaConnectionNotFound, MetaSelectionError, parseMetaSelection, saveMetaSelection,
+  getMetaChoices, INSTAGRAM_PAGE_TAKEN, listMetaConnections, metaChoicesAnswer, MetaConnectionNotFound, MetaSelectionError, parseMetaSelection, saveMetaSelection,
   type MetaConnection,
 } from '../../meta/meta-accounts.service.js'
 import { liveApp, liveConnectionCheck, livePermissions, MetaLiveError } from '../../meta/meta-connection-live.js'
@@ -190,6 +190,8 @@ async function setPlanOf(args: Record<string, unknown>): Promise<SetPlan | { err
   const instagram = selection.instagramId ? answer.instagram.items.find((i) => i.instagramId === selection.instagramId) : null
   if (selection.instagramId && !instagram) return { error: cannotSee('Instagram account', answer.instagram.error) }
   if (instagram?.takenByAnotherBusiness === true) return { error: TAKEN_HERE.instagram }
+  // An Instagram account goes with its linked Page: one whose Page another business uses is refused too.
+  if (instagram && 'pageTakenByAnotherBusiness' in instagram && instagram.pageTakenByAnotherBusiness === true) return { error: INSTAGRAM_PAGE_TAKEN }
 
   const plan: MetaPicks = { connectionId: connection.connectionId, adAccountId: account.adAccountId, pageId: page?.pageId ?? null, instagramId: instagram?.instagramId ?? null }
   const changes: SetPlan['changes'] = {}
@@ -251,7 +253,8 @@ const setMetaConnection: AgentTool = {
   description:
     'Choose, for this business, the Meta ad account Nexus reads and, optionally, its Facebook Page and Instagram account — '
     + 'only from what the business\'s Meta system user can see (meta-connection view choices lists them). A Meta id belongs '
-    + 'to one business only: one another business in Nexus already uses is refused, without naming it. A field left out '
+    + 'to one business only: one another business in Nexus already uses is refused, without naming it — so is an '
+    + 'Instagram account whose linked Page another business uses. A field left out '
     + 'keeps the current choice; pageId or instagramId null takes that choice away. The preview shows each choice from → '
     + 'to with its name and id. A person approves it in Nexus (Approvals) — or, when this business\'s "Claude\'s changes '
     + 'need no approval" switch is on, it runs 20 s after the request unless stopped. It runs as that person, never by a '

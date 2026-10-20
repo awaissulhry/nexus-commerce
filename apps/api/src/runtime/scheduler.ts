@@ -78,6 +78,7 @@ import { startEtsyContentRefreshCron } from "../jobs/etsy-content-refresh.job.js
 import { startEtsyReceiptsPollCron } from "../jobs/etsy-receipts-poll.job.js";
 import { startEbayAdsSyncCrons } from "../jobs/ebay-ads-sync.job.js";
 import { startGoogleAdsSyncCron } from "../jobs/ads-google-sync.job.js";
+import { startMetaAdsSyncCron } from "../jobs/ads-meta-sync.job.js";
 import { startReconcileCron } from "../jobs/reconcile-cron.job.js";
 import { startLateShipmentFlagCron } from "../jobs/late-shipment-flag.job.js";
 import { startTrackingPushbackCron } from "../jobs/tracking-pushback.job.js";
@@ -600,6 +601,10 @@ export async function startScheduler(): Promise<void> {
   // NEXUS_GOOGLE_ADS_SYNC=off schedules nothing).
   markCronStep('google-ads-sync')
   startGoogleAdsSyncCron();
+  // Meta ads step 2 — the daily read of each business's chosen Meta ad account, 06:50 UTC (read-only; ship live;
+  // NEXUS_META_ADS_SYNC=off schedules nothing).
+  markCronStep('meta-ads-sync')
+  startMetaAdsSyncCron();
   // P5.3 — daily reconcile cron: Amazon drift + cumulative bleed + stale-conflict escalation
   startReconcileCron();
 

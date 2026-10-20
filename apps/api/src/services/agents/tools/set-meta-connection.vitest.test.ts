@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   takenRows: [] as Array<{ product: string; id: string }>,
   failUpsert: null as null | ((product: string) => unknown),
   discoveries: 0,
+  enqueued: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock('../../../db.js', () => {
@@ -68,6 +69,9 @@ vi.mock('../../cx/connectors/meta/discovery.js', async (importOriginal) => ({
     }
   }),
 }))
+// Step 2: the daily read's account rows and its queue (a choice of a never-read account queues its first read).
+vi.mock('../../marketing/meta-ads/store.js', () => ({ ensureMetaAdAccount: vi.fn(async () => undefined), metaAdAccountsById: vi.fn(async () => new Map()) }))
+vi.mock('../../marketing/meta-ads/enqueue.js', () => ({ enqueueMetaAdsSync: vi.fn(async (job: Record<string, unknown>) => { h.enqueued.push(job); return { queued: true, reason: null } }) }))
 vi.mock('../../meta/meta-connection-live.js', () => ({ MetaLiveError: class MetaLiveError extends Error {}, liveConnectionCheck: vi.fn(), livePermissions: vi.fn(), liveApp: vi.fn() }))
 
 import { META_ADS_CONNECTION_TOOLS } from './meta-ads-connection.tools.js'
@@ -93,7 +97,7 @@ const link = (product: string, externalId: string, metadata: Record<string, unkn
 beforeEach(() => {
   h.connections = [connection()]
   h.links = [link('AD_ACCOUNT', '1234567890', { name: 'Shop A ads', businessId: '9876543210' })]
-  h.upserts = []; h.takenRows = []; h.failUpsert = null; h.discoveries = 0
+  h.upserts = []; h.takenRows = []; h.failUpsert = null; h.discoveries = 0; h.enqueued = []
   __clearMetaChoicesCache()
 })
 
@@ -141,6 +145,11 @@ describe('the preview', () => {
     expect(await preview({ adAccountId: '5550001112' })).toMatchObject({ ok: false, error: expect.stringMatching(/does not show this ad account to the business's system user/) })
     expect(await preview({ pageId: '120000000000099' })).toMatchObject({ ok: false, error: expect.stringMatching(/does not show this Facebook Page/) })
   })
+  it('an Instagram account whose linked Page another business uses is refused in the preview', async () => {
+    h.takenRows = [{ product: 'PAGE', id: '120000000000010' }]
+    expect(await preview({ instagramId: '170000000000001' })).toMatchObject({ ok: false, error: expect.stringMatching(/linked to a Facebook Page another business/) })
+    expect(h.upserts).toEqual([])
+  })
   it('a business without Meta, or whose token is dead, is told a person fixes it in Settings', async () => {
     h.connections = []
     expect((await preview({ adAccountId: '1234567891' })).error).toMatch(/Settings › Channels › Meta/)
@@ -164,6 +173,8 @@ describe('the run and its undo', () => {
       after: { connectionId: 'conn-1', adAccountId: '1234567891', pageId: '120000000000010', instagramId: null },
     } })
     expect(h.upserts.map((u) => [u.product, u.externalId, u.selectedByUserId])).toEqual([['AD_ACCOUNT', '1234567891', 'u-approver'], ['PAGE', '120000000000010', 'u-approver']])
+    // Step 2: like a choice in Settings, it queues the first read of an ad account Nexus never read.
+    expect(h.enqueued).toEqual([{ adAccountId: '1234567891', kind: 'BACKFILL' }])
 
     // Undo: only while what is stored is what the change wrote; it asks this tool for the previous choice.
     const change = ran.change!

@@ -6,6 +6,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  channelLabel,
+  disconnectDescription,
   disconnectHold,
   eventTone,
   identityLine,
@@ -23,6 +25,8 @@ import {
   showLastError,
   showsGoogleAccounts,
   showsMarketplacesAndEvents,
+  showsMetaConnection,
+  showsReconnect,
   startReconnect,
   statusPill,
   testHold,
@@ -376,5 +380,28 @@ describe('Google (Google Ads step 1a)', () => {
   it('has no markets to scope, and never shows a customer id as its name', () => {
     expect(marketplaceOptions('google')).toEqual([])
     expect(identityLine(google({ sellerName: '123-456-7890' }))).toBe('Google account')
+  })
+})
+
+describe('Meta (Meta ads step 1)', () => {
+  it('shows the Meta token and assets cards, and no OAuth Reconnect, Marketplaces or Inbound events', () => {
+    expect(channelLabel('meta')).toBe('Meta')
+    expect(showsMetaConnection('meta')).toBe(true)
+    expect(showsReconnect('meta')).toBe(false)
+    expect(showsMarketplacesAndEvents('meta')).toBe(false)
+    for (const other of ['amazon', 'ebay', 'shopify', 'woocommerce', 'etsy', 'google']) {
+      expect(showsMetaConnection(other)).toBe(false)
+      expect(showsReconnect(other)).toBe(true)
+    }
+  })
+
+  it('Disconnect says Nexus forgets the token and never ends it at Meta', () => {
+    expect(disconnectDescription('meta')).toMatch(/Nothing is removed at Meta: the token keeps working there until you revoke it/)
+    expect(disconnectDescription('google')).toMatch(/Nothing is removed at Google\.$/)
+    expect(disconnectDescription('ebay')).toMatch(/revokes it at the channel when supported/)
+  })
+
+  it('never shows a system-user id as its name', () => {
+    expect(identityLine(connection({ channel: 'META', sellerName: '120000000000001', region: null }))).toBe('Meta account')
   })
 })

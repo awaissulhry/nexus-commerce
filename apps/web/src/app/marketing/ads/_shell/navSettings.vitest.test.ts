@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { ADS_NAV, EBAY_ADS_NAV, GOOGLE_ADS_NAV, adChannelOf, navFor, switchTarget } from './nav'
+import { ADS_NAV, EBAY_ADS_NAV, GOOGLE_ADS_NAV, META_ADS_NAV, adChannelOf, navFor, switchTarget } from './nav'
 
 describe('the rail’s Settings row', () => {
   it('goes to /settings/advertising', () => {
@@ -61,6 +61,39 @@ describe('the Google channel (Google Ads step 1a)', () => {
     expect(marks).toMatch(/export function GoogleBadge[\s\S]*<svg/)
     const sidebar = readFileSync(fileURLToPath(new URL('./AdsSidebar.tsx', import.meta.url)), 'utf8')
     expect(sidebar).toContain("{ id: 'google', label: 'Google', Badge: GoogleBadge }")
+    expect(sidebar + marks).not.toMatch(/\p{Extended_Pictographic}/u)
+  })
+})
+
+describe('the Meta channel (Meta ads step 2)', () => {
+  it('has a read-only rail: its Ad Manager and the place its connection and ad account are set', () => {
+    expect(META_ADS_NAV.map((n) => [n.label, n.route, n.href ?? null])).toEqual([
+      ['Ad Manager', 'meta', null],
+      ['Settings', 'meta-settings', '/settings/channels/meta'],
+    ])
+    expect(navFor('meta')).toBe(META_ADS_NAV)
+  })
+
+  it('knows its console, and "metadata"-like paths are not Meta', () => {
+    expect(adChannelOf('/marketing/ads/meta')).toBe('meta')
+    expect(adChannelOf('/marketing/ads/metadata')).toBe('amazon')
+    expect(adChannelOf('/marketing/ads/google')).toBe('google')
+  })
+
+  it('switching: every page goes to Meta\'s one page; from Meta to the other channel\'s Ad Manager', () => {
+    expect(switchTarget('/marketing/ads/campaigns', 'meta')).toBe('meta')
+    expect(switchTarget('/marketing/ads/google', 'meta')).toBe('meta')
+    expect(switchTarget('/marketing/ads/meta', 'amazon')).toBe('campaigns')
+    expect(switchTarget('/marketing/ads/meta', 'ebay')).toBe('ebay/campaigns')
+    expect(switchTarget('/marketing/ads/meta', 'google')).toBe('google')
+    expect(switchTarget('/marketing/ads/meta', 'meta')).toBeNull()
+  })
+
+  it('the switch draws Meta as an SVG tile, never an emoji', () => {
+    const marks = readFileSync(fileURLToPath(new URL('./BrandMarks.tsx', import.meta.url)), 'utf8')
+    expect(marks).toMatch(/export function MetaBadge[\s\S]*<svg/)
+    const sidebar = readFileSync(fileURLToPath(new URL('./AdsSidebar.tsx', import.meta.url)), 'utf8')
+    expect(sidebar).toContain("{ id: 'meta', label: 'Meta', Badge: MetaBadge }")
     expect(sidebar + marks).not.toMatch(/\p{Extended_Pictographic}/u)
   })
 })
