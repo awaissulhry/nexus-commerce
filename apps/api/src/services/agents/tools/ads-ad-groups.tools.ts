@@ -73,6 +73,7 @@ import {
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
+import { sdExpressionInWords, sdTacticInWords } from '../../advertising/sd/sd-expression-words.js'
 import type { AgentTool, FieldPermission, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 const TOOL = { read: 'ad-groups', create: 'create-ad-group', ads: 'add-product-ads', set: 'set-ad-group' } as const
@@ -403,6 +404,8 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
   const campaign = await loadCampaign(campaignId!)
   if (!campaign) return { ok: false, error: 'Campaign not found' }
   const currency = campaignCurrency(campaign)
+  // SD-AUD — a Sponsored Display campaign shows its own settings, ad group and ad fields, and its negatives in words.
+  const isSd = adProductOf({ adProduct: campaign.adProduct, type: campaign.type == null ? null : String(campaign.type) }) === SPONSORED_DISPLAY
   // Every ad group of the campaign: the campaign's metrics are allocated over all of them (ads-detail-metrics.service.ts).
   const { all, wanted } = await campaignAdGroupsForRead(campaign.id, { status: a.status, adGroupId: a.adGroupId ?? null })
   const groups = all.filter((g) => wanted.has(g.id))
@@ -410,22 +413,26 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
   // SD reports below the campaign (2026-10-20) — a Sponsored Display campaign's ad groups and product ads are measured
   // each on its own (Amazon's SD ad group and advertised product reports) over the window's complete days, never shared
   // out from the campaign's total.
-  const sdRange = adProductOf({ adProduct: campaign.adProduct, type: campaign.type == null ? null : String(campaign.type) }) === SPONSORED_DISPLAY
-    ? resolveRange({ windowDays: a.days })
-    : null
+  const sdRange = isSd ? resolveRange({ windowDays: a.days }) : null
   const { computeCampaignDetailMetrics } = await import('../../advertising/ads-detail-metrics.service.js')
-  const [metrics, targets, sdGroups, sdAds] = await Promise.all([
+  const [metrics, targets, sdGroups, sdAds, sdCampaign] = await Promise.all([
     sdRange ? null : computeCampaignDetailMetrics({ campaignId: campaign.id, externalCampaignId: campaign.externalCampaignId, adGroups: all.map((g) => ({ id: g.id, productAdIds: g.productAds.map((ad) => ad.id) })), windowDays: a.days }),
     shown.length
-      ? prisma.adTarget.findMany({ where: { adGroupId: { in: shown.map((g) => g.id) }, status: { not: 'ARCHIVED' } }, select: { adGroupId: true, kind: true, isNegative: true, suppressedFromBidCents: true } })
+      ? prisma.adTarget.findMany({
+          where: { adGroupId: { in: shown.map((g) => g.id) }, status: { not: 'ARCHIVED' } },
+          select: { id: true, adGroupId: true, kind: true, isNegative: true, suppressedFromBidCents: true, status: true, expressionValue: true, expressionJson: true, servingStatus: true },
+          orderBy: { id: 'asc' },
+        })
       : [],
     sdRange ? sdMetricsByLocalId('AD_GROUP', shown.map((g) => g.id), sdRange.since, sdRange.until) : null,
     sdRange ? sdMetricsByLocalId('PRODUCT_AD', shown.flatMap((g) => g.productAds.slice(0, LINES_SHOWN).map((ad) => ad.id)), sdRange.since, sdRange.until) : null,
+    isSd ? prisma.campaign.findFirst({ where: { id: campaign.id }, select: { tactic: true, costType: true, servingStatus: true, startDate: true, endDate: true, portfolioId: true } }) : null,
   ])
   const items = shown.map((g) => {
     const mine = targets.filter((t) => t.adGroupId === g.id)
     const count = (kind: string) => mine.filter((t) => !t.isNegative && t.kind === kind).length
     const m = metrics?.byAdGroup.get(g.id)
+    const negatives = mine.filter((t) => t.isNegative)
     return {
       adGroupId: g.id,
       externalAdGroupId: g.externalAdGroupId,
@@ -440,6 +447,7 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
       productAds: g.productAds.slice(0, LINES_SHOWN).map((ad) => ({
         productAdId: ad.id, sku: ad.sku, asin: ad.asin, productId: ad.productId, status: String(ad.status), atAmazon: !!ad.externalAdId,
         ...(sdAds ? { metrics: sdAds.byId.get(ad.id) ?? sdMetricsOf(null) } : {}),
+        ...(isSd ? { sd: { servingStatus: ad.servingStatus, landingPage: ad.landingPageType ? { type: ad.landingPageType, url: ad.landingPageUrl } : null, adName: ad.adName } } : {}),
       })),
       ...(g.productAds.length > LINES_SHOWN ? { moreProductAds: g.productAds.length - LINES_SHOWN } : {}),
       targets: {
@@ -451,6 +459,16 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
       metrics: sdGroups
         ? sdGroups.byId.get(g.id) ?? sdMetricsOf(null)
         : m ? { impressions: m.impressions, clicks: m.clicks, orders: m.orders, spendCents: m.spendCents, salesCents: m.salesCents, acos: m.acos, roas: m.roas } : null,
+      ...(isSd
+        ? {
+            sd: {
+              bidOptimization: g.bidOptimization, creativeType: g.creativeType, servingStatus: g.servingStatus, audienceTargets: count('AUDIENCE'),
+              // Its negative targets (ASINs, brands) in words; until the SD sync has read one, Nexus's stored value.
+              negativeTargets: negatives.slice(0, LINES_SHOWN).map((t) => ({ targetId: t.id, status: String(t.status), inWords: sdExpressionInWords(t.expressionJson) ?? t.expressionValue, servingStatus: t.servingStatus })),
+              ...(negatives.length > LINES_SHOWN ? { moreNegativeTargets: negatives.length - LINES_SHOWN } : {}),
+            },
+          }
+        : {}),
     }
   })
   return {
@@ -460,6 +478,14 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
         campaignId: campaign.id, externalCampaignId: campaign.externalCampaignId, name: campaign.name, market: campaign.marketplace, status: String(campaign.status),
         targetingType: campaign.targetingType, currency, liveWrites: campaign.liveBidWritesEnabled,
         floor: campaign.bidsSuppressedAt ? { by: campaign.bidsSuppressedBy, since: campaign.bidsSuppressedAt.toISOString(), givenBackBy: isPerson(campaign.bidsSuppressedBy) ? 'restore-campaign' : 'the engine that set it' } : null,
+        ...(sdCampaign
+          ? {
+              sd: {
+                tactic: sdCampaign.tactic, tacticWords: sdTacticInWords(sdCampaign.tactic), costType: sdCampaign.costType, servingStatus: sdCampaign.servingStatus,
+                startDate: sdCampaign.startDate.toISOString().slice(0, 10), endDate: sdCampaign.endDate ? sdCampaign.endDate.toISOString().slice(0, 10) : null, portfolioId: sdCampaign.portfolioId,
+              },
+            }
+          : {}),
       },
       window: sdRange
         ? { days: a.days, from: sdRange.sinceStr, to: sdRange.untilStr, dataAsOf: [sdGroups?.dataAsOf, sdAds?.dataAsOf].filter(Boolean).sort().at(-1) ?? null, note: `Metrics: each ad group's and product ad's own, from Amazon's SD ad group and advertised product reports. ${SD_ATTRIBUTION_NOTE}` }
@@ -486,7 +512,7 @@ const adGroupsRead: AgentTool = {
     days: z.coerce.number().int().min(1).max(90).default(30).describe('the metrics window: the last N days (default 30, max 90)'),
   }),
   description:
-    'The ad groups of one Amazon Sponsored Products campaign (or one ad group). Per ad group: adGroupId (the id '
+    'The ad groups of one Amazon campaign (or one ad group). Per ad group: adGroupId (the id '
     + 'set-ad-group, add-product-ads, pause-ads and archive-ads take) and Amazon\'s id, name, status, whether Amazon holds '
     + 'it, its default bid, the floor that holds its bids (who set it, since when, the default bid it keeps to give back, '
     + 'and which tool gives it back), its product ads (SKU, ASIN, status, at Amazon or not), how many keywords, product, '
@@ -495,7 +521,10 @@ const adGroupsRead: AgentTool = {
     + 'ad groups and product ads each carry their own metrics from Amazon\'s SD reports (14 days, a click or a view of the '
     + 'ad counts): also viewable impressions, units, CPC, detail page views, new-to-brand, and each attributed figure after '
     + 'a click (afterClick) and after a view (afterView). The campaign: market, status, '
-    + 'targeting type, currency, live-write allowlist and its own floor. Amounts are minor units (cents) of the '
+    + 'targeting type, currency, live-write allowlist and its own floor. A Sponsored Display campaign also gives sd: '
+    + 'its tactic (in words), cost type, Amazon\'s serving status, start and end date and portfolio; per ad group its bid '
+    + 'optimization, creative type, serving status, audience target count and negative targets in words; per product ad '
+    + 'its serving status, landing page and ad name (null fields: not read from Amazon yet). Amounts are minor units (cents) of the '
     + 'campaign\'s own currency, never converted; a person without the ad-spend money permission gets the same answer '
     + 'without the amounts.',
   handler: (args) => readAdGroups(args),

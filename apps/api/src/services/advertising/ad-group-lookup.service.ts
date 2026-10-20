@@ -49,7 +49,12 @@ export async function campaignAdGroupsForRead(campaignId: string, opts: { status
       select: {
         id: true, name: true, status: true, defaultBidCents: true, externalAdGroupId: true, suppressedFromBidCents: true,
         bidsSuppressedAt: true, bidsSuppressedBy: true, bidsSuppressedFloorCents: true, orphanedAt: true,
-        productAds: { select: { id: true, sku: true, asin: true, productId: true, status: true, externalAdId: true }, orderBy: { id: 'asc' } },
+        // SD-AUD — a Sponsored Display ad group's own settings and its ads' landing pages (null on Sponsored Products).
+        bidOptimization: true, creativeType: true, servingStatus: true,
+        productAds: {
+          select: { id: true, sku: true, asin: true, productId: true, status: true, externalAdId: true, landingPageType: true, landingPageUrl: true, adName: true, servingStatus: true },
+          orderBy: { id: 'asc' },
+        },
       },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     }),

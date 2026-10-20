@@ -326,10 +326,11 @@ export class AmazonAdsQuotaError extends Error {
  * stays fail-closed with the writes.
  *
  * KAPI-S (2026-10-10) — Amazon's suggested bids (`POST /sp/targets/bid/recommendations`) only answer, so they are a
- * read here too: the read budget, and open on a quota-store outage. The same list as the gateway's ADS_READ_POSTS
+ * read here too: the read budget, and open on a quota-store outage; so are SD's targeting and bid recommendations
+ * (SD-AUD, sd/sd-recommendations.client.ts). The same list as the gateway's ADS_READ_POSTS
  * (gateway/ads.ts, imported lazily by fetchWithRetry, so it is not imported here); a test holds the two equal.
  */
-export const ADS_READ_ONLY_POSTS: ReadonlySet<string> = new Set(['/sp/targets/bid/recommendations'])
+export const ADS_READ_ONLY_POSTS: ReadonlySet<string> = new Set(['/sp/targets/bid/recommendations', '/sd/targets/recommendations', '/sd/targets/bid/recommendations'])
 
 export function isMutatingCall(method: string, path: string): boolean {
   if (method === 'GET') return false
