@@ -265,6 +265,8 @@ const AT_AMAZON = ['ACTIVE', 'INACTIVE']
  * The products by SKU, each listed at Amazon in this market (an active or inactive offer — out of stock reads inactive —
  * with an ASIN; a draft, ended or failed listing is not at Amazon), a variation rather than its parent, with the seller SKU
  * Amazon holds there (resolveSellerSku). Two SKUs of one ASIN are the same product: refused. Their stock is read alongside.
+ * The ASIN is that listing's (the product Amazon holds in this market); the old `Product.amazonAsin` column only when the
+ * listing has none — it can hold a sibling size's ASIN (2026-10-21: two sizes refused as "the same product twice").
  */
 async function sdProductsOf(skus: readonly string[], market: string): Promise<{ products: SdProduct[]; stock: SdStock[] } | { refusal: string }> {
   const rows = await prisma.product.findMany({ where: { sku: { in: [...skus] }, deletedAt: null }, select: { id: true, sku: true, amazonAsin: true, isParent: true } })
@@ -279,10 +281,9 @@ async function sdProductsOf(skus: readonly string[], market: string): Promise<{ 
     orderBy: { id: 'asc' },
   })
   const asinOf = (p: (typeof rows)[number]): string | null => {
-    if (p.amazonAsin) return p.amazonAsin
     const own = listings.filter((l) => l.productId === p.id)
-    const listed = (own.find((l) => !l.aliasKey) ?? own[0])?.externalListingId ?? null
-    return listed && /^[A-Z0-9]{10}$/i.test(listed) ? listed.toUpperCase() : null
+    const listed = (own.find((l) => !l.aliasKey) ?? own[0])?.externalListingId?.trim() ?? null
+    return listed && /^[A-Z0-9]{10}$/i.test(listed) ? listed.toUpperCase() : p.amazonAsin || null
   }
   const listed = new Set(listings.map((l) => l.productId))
   const notThere = skus.filter((sku) => !listed.has(bySku.get(sku)!.id))

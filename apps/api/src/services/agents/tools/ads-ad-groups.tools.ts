@@ -278,7 +278,9 @@ interface AdProduct { sku: string; productId: string; asin: string; adSku: strin
  * The products by SKU, each sold on Amazon in this market: an ACTIVE listing there (as identity-fix.tools.ts reads a live
  * Amazon listing: a draft, inactive, ended, removed or failed one sells nothing) with an ASIN, a variation rather than its
  * parent, and the seller SKU Amazon holds there (resolveSellerSku, the create's own resolver: a SKU it cannot name without
- * a guess is refused now, not at the write). Two SKUs of one ASIN are the same product: refused.
+ * a guess is refused now, not at the write). Two SKUs of one ASIN are the same product: refused. The ASIN is that
+ * listing's (the product Amazon sells in this market); the old `Product.amazonAsin` column only when the listing has none —
+ * it can hold a sibling size's ASIN (2026-10-21: two sizes refused as "the same product twice").
  */
 async function productsSoldIn(skus: readonly string[], market: string): Promise<{ products: AdProduct[] } | { refusal: string }> {
   const rows = await prisma.product.findMany({ where: { sku: { in: [...skus] }, deletedAt: null }, select: { id: true, sku: true, amazonAsin: true, isParent: true } })
@@ -293,10 +295,9 @@ async function productsSoldIn(skus: readonly string[], market: string): Promise<
     orderBy: { id: 'asc' },
   })
   const asinOf = (p: (typeof rows)[number]): string | null => {
-    if (p.amazonAsin) return p.amazonAsin
     const own = listings.filter((l) => l.productId === p.id)
-    const listed = (own.find((l) => !l.aliasKey) ?? own[0])?.externalListingId ?? null
-    return listed && /^[A-Z0-9]{10}$/i.test(listed) ? listed.toUpperCase() : null
+    const listed = (own.find((l) => !l.aliasKey) ?? own[0])?.externalListingId?.trim() ?? null
+    return listed && /^[A-Z0-9]{10}$/i.test(listed) ? listed.toUpperCase() : p.amazonAsin || null
   }
   const listed = new Set(listings.map((l) => l.productId))
   const notSold = skus.filter((sku) => !listed.has(bySku.get(sku)!.id))
