@@ -207,6 +207,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
+  'ad-creatives': 'the seeded campaign is Sponsored Products, and creatives are Sponsored Display\'s (tools/ads-sd-creatives test)',
+  'set-ad-creative': 'the seeded campaign is Sponsored Products, and creatives are Sponsored Display\'s (tools/ads-sd-creatives test)',
+  'upload-ad-asset': 'no photo here is named: an upload reads a photo before it asks (tools/ads-sd-creatives test)',
 }
 
 /**
@@ -307,6 +310,12 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-aplus-content': () => ({ op: 'create', market: 'IT', name: 'Money test A+', modules: [{ contentModuleType: 'STANDARD_TEXT', standardText: { body: { textList: [{ value: 'A short text.' }] } } }], summary: 'A short text.' }),
   'set-aplus-asins': () => ({ market: 'IT', contentReferenceKey: 'money-key', add: ['B000000001'] }),
   'submit-aplus-content': () => ({ op: 'submit', market: 'IT', contentReferenceKey: 'money-key' }),
+  // SD creatives (2026-10-20) — read and changed live at Amazon (tools/ads-sd-creatives test); the seeded campaign is
+  // Sponsored Products, so the creative tools refuse it by name, and the library reads nothing in sandbox.
+  'ad-creatives': (ids) => ({ campaignId: ids.campaignId }),
+  'ad-assets': () => ({ market: 'IT' }),
+  'set-ad-creative': (ids) => ({ op: 'create', adGroupId: ids.adGroupId, headline: 'Money test headline' }),
+  'upload-ad-asset': () => ({ market: 'IT', use: 'brandLogo', photoId: 'da_money-none' }),
   // Phase 3 T3 — a category the business loaded on eBay IT (seeded per business): read from Nexus, no eBay call.
   'ebay-categories': () => ({ market: 'IT', categoryId: '177104' }),
   'set-listing-content': (ids) => ({ product: ids.productId, coordinate: { channel: 'EBAY', market: 'IT' }, language: 'it', pin: { title: 'A better title' }, englishMeaning: { title: 'A better title' } }),

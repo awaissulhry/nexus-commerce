@@ -286,6 +286,8 @@ const AMAZON_AD_TOOLS = new Set([
   'add-ad-targets', 'add-negative-targets', 'retire-negatives', 'harvest-search-term', 'set-harvest-destination',
   // W4-6 — ad groups and product ads.
   'create-ad-group', 'add-product-ads', 'set-ad-group',
+  // SD creatives — a Display ad group's creative, and an asset for one.
+  'set-ad-creative', 'upload-ad-asset',
   // ADS AUTONOMY W4-8 — engine settings: a rule's campaigns, a coverage set, an engine's Run now.
   'assign-ad-rules', 'set-coverage-set', 'run-ad-engine-now',
 ])

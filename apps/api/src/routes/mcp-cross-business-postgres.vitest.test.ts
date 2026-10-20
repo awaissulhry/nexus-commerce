@@ -1100,6 +1100,10 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   get 'set-aplus-content'() { return { op: 'update', market: seeded.b.market, contentReferenceKey: 'MCP8-PROBE', name: 'MCP8 probe', summary: 'MCP8 probe', accountId: undefined, fromMarket: undefined, kind: undefined, language: undefined, modules: undefined, asins: undefined } },
   get 'set-aplus-asins'() { return { market: seeded.b.market, contentReferenceKey: 'MCP8-PROBE', add: ['B000000001'], accountId: undefined, asins: undefined, remove: undefined } },
   get 'submit-aplus-content'() { return { op: 'submit', market: seeded.b.market, contentReferenceKey: 'MCP8-PROBE', accountId: undefined } },
+  // SD creatives (2026-10-20) — a headline for B's ad group (inside B its campaign is refused by name: it is not Sponsored
+  // Display; from A the ad group is not found), and an upload of B's library photo (from A it is not found, before any fetch).
+  get 'set-ad-creative'() { return { op: 'update', adGroupId: seeded.b.adGroupId, headline: 'MCP8 probe', brandLogo: undefined, customImage: undefined, video: undefined, properties: undefined, consentToTranslate: undefined } },
+  get 'upload-ad-asset'() { return { market: seeded.b.market, use: 'brandLogo', photoId: `da_${seeded.b.assetId}`, url: undefined, subType: undefined, name: undefined } },
   // Google Ads step 1a — the two ad reads that take channel google are aimed at B's Google sign-in (accountId), read per
   // account and never per market (the eBay forms of these reads are held in 1b).
   get 'ads-overview'() { return { channel: 'google', market: undefined, accountId: seeded.b.googleConnectionId } },
@@ -1329,7 +1333,10 @@ const BUSINESS_WIDE = new Set(['set-business-settings'])
 /** T11 — the tools that read a marketplace live: probed from A only (see the control). */
 const LIVE_READS = new Set(['shopify-content', 'set-shopify-content', 'listing-live-content',
   // Amazon A+ (2026-10-19) — read and changed live at Amazon: from A, B's market is not found before any Amazon call.
-  'aplus-content', 'set-aplus-content', 'set-aplus-asins', 'submit-aplus-content'])
+  'aplus-content', 'set-aplus-content', 'set-aplus-asins', 'submit-aplus-content',
+  // SD creatives (2026-10-20) — the asset library is read live at Amazon (sandbox here: nothing to read inside B), and an
+  // upload fetches its photo: from A, B's photo is not found before any fetch or Amazon call.
+  'ad-assets', 'upload-ad-asset'])
 /**
  * L7 — tools that create from nothing: they name no row of either business, so there is nothing of B to reach (no
  * control inside B), and from A the creation is legitimate (it queues A's own approval). They are held to "no trace of

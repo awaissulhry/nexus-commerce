@@ -12,10 +12,11 @@ import { accountOfToken } from './token-accounts.js'
 
 /**
  * The Ads POSTs that only answer and change nothing, beside …/list: Amazon's suggested bids (theme-based bid
- * recommendations, ads-api-client.ts fetchThemeBidRecommendations). A read: the ledger says read, and a transient
- * failure may be repeated as a read's is (the Ads client's own loop does the repeating).
+ * recommendations, ads-api-client.ts fetchThemeBidRecommendations), a Sponsored Display creative's preview HTML and a
+ * search of the account's creative assets (advertising/sd/). A read: the ledger says read, and a transient failure may
+ * be repeated as a read's is (the Ads client's own loop does the repeating).
  */
-export const ADS_READ_POSTS: ReadonlySet<string> = new Set(['/sp/targets/bid/recommendations'])
+export const ADS_READ_POSTS: ReadonlySet<string> = new Set(['/sp/targets/bid/recommendations', '/sd/creatives/preview', '/assets/search'])
 
 export function adsKind(method: string, url: string): GatewayRequest['kind'] {
   const m = method.toUpperCase()

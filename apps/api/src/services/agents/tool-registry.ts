@@ -47,6 +47,7 @@ import { ADS_HOURLY_PLAN_TOOLS } from './tools/ads-hourly-plan.tools.js'
 import { ADS_TARGET_TOOLS } from './tools/ads-targets.tools.js'
 import { ADS_NEGATIVE_TOOLS } from './tools/ads-negatives.tools.js'
 import { ADS_AD_GROUP_TOOLS } from './tools/ads-ad-groups.tools.js'
+import { ADS_SD_CREATIVE_TOOLS } from './tools/ads-sd-creatives.tools.js'
 import { ADS_QUEUED_WRITE_TOOLS } from './tools/ads-queued-write.tools.js'
 import { ADS_AUTO_UNDO_TOOLS } from './tools/ads-auto-undo.tools.js'
 // One brain AB-13 — the brain's painted hourly plan, applied only after a person's approval.
@@ -215,6 +216,9 @@ const ALL: AgentTool[] = [
   ...ADS_NEGATIVE_TOOLS,
   // Ads autonomy W4-6 — ad groups and product ads: read them, create one (born at the floor), add product ads, change one.
   ...ADS_AD_GROUP_TOOLS,
+  // SD creatives (2026-10-20) — a Sponsored Display ad group's creative and the asset library, read live from Amazon;
+  // a creative made or changed, or an asset uploaded, after a person's approval.
+  ...ADS_SD_CREATIVE_TOOLS,
   // Ads autonomy W3-2 — cancel an ad write Nexus queued and has not sent yet (a brake: nothing reaches Amazon).
   ...ADS_QUEUED_WRITE_TOOLS,
   // ADS AUTONOMY — auto-undo (A19): one undo of an automatic change it judged clearly worse, a person decides it.

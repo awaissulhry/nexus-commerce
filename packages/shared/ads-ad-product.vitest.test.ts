@@ -118,6 +118,13 @@ describe('adWriteRefusal (W4-11)', () => {
     no(SB, { entity: 'AD_TARGET', kind: 'KEYWORD', isNegative: true, fields: ['status'], toStatus: 'PAUSED' }, /not a change to a negative other than retiring it/)
   })
 
+  it('SD creatives: a Display ad group\'s creative (and an asset for one) is sent; a Sponsored Brands creative is refused by name', () => {
+    ok(SD, { entity: 'CREATIVE', fields: ['headline', 'brandLogo'] })
+    ok(SD, { entity: 'CREATIVE' })
+    no(SB, { entity: 'CREATIVE', fields: ['headline'] }, /— not a creative —/)
+    expect(adWriteRefusal({ adProduct: 'DSP', name: 'DSP test' }, { entity: 'CREATIVE' })).toBe(adProductRefusal({ adProduct: 'DSP', name: 'DSP test' }))
+  })
+
   it('an SB campaign with a lifetime budget: its budget is refused, its on/off is not', () => {
     const life = { ...SB, budgetJson: { budgetType: 'LIFETIME' } }
     no(life, { entity: 'CAMPAIGN', fields: ['dailyBudget'] }, /^Brand test is a Sponsored Brands campaign with a lifetime budget at Amazon\. Nexus sets a daily budget only/)

@@ -435,6 +435,11 @@ describe('C1 — every registered tool keeps the contract', () => {
         },
         after: { op: 'update', market: 'IT', marketplaceId: 'APJ6JRA9NG5V4', accountId: 'a1', contentReferenceKey: 'k1', name: 'New', documentHash: 'h1' },
       },
+      // SD creatives (2026-10-20) — a changed creative is put back with its old properties through the same tool.
+      'set-ad-creative': {
+        before: { market: 'IT', adGroupId: 'g1', externalAdGroupId: '1001', creativeId: '2001', creativeType: 'IMAGE', properties: { headline: 'Old headline' }, mode: 'live' },
+        after: { market: 'IT', adGroupId: 'g1', externalAdGroupId: '1001', creativeId: '2001', creativeType: 'IMAGE', properties: { headline: 'New headline' }, mode: 'live' },
+      },
       'set-aplus-asins': {
         before: { market: 'IT', marketplaceId: 'APJ6JRA9NG5V4', accountId: 'a1', contentReferenceKey: 'k1', asins: ['B000000001'] },
         after: { market: 'IT', marketplaceId: 'APJ6JRA9NG5V4', accountId: 'a1', contentReferenceKey: 'k1', asins: ['B000000001', 'B000000002'] },

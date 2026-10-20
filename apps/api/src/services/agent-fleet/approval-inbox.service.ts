@@ -847,6 +847,11 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'create-ad-group': ['basis', 'reach'],
   'add-product-ads': ['basis', 'reach'],
   'set-ad-group': ['op', 'basis', 'byRuleBidCents', 'reach'],
+  // SD creatives (2026-10-20, ads-sd-creatives.tools.ts) — the op, what it stands on at Amazon (the creative, its moderation,
+  // the ad group's creative type, each new asset's version, size and status), the exact creative it sends, where it lands;
+  // an upload: the photo's bytes (by hash), what it is filed as, where it lands.
+  'set-ad-creative': ['op', 'basis', 'send', 'reach'],
+  'upload-ad-asset': ['basis', 'send', 'reach'],
   // A14/A15 — eBay: each rate, listing, budget or keyword it starts from and sets, and where it lands (live or sandbox).
   'set-ebay-ad-rates': ['changes', 'reach'],
   'promote-ebay-listings': ['adds', 'adGroup', 'reach'],
