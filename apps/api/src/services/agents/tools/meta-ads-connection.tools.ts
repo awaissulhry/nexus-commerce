@@ -77,7 +77,7 @@ const metaConnection: AgentTool = {
     + 'the system user can see (read live, kept 5 minutes); one another business in Nexus already uses is shown by its id '
     + 'only, marked takenByAnotherBusiness (a Meta id belongs to one business; never which) — set-meta-connection asks to '
     + 'choose among the others. Connecting Meta and replacing its credentials are a person\'s in '
-    + 'Settings › Channels › Meta; Claude never takes an app secret or a token. Nexus only reads Meta for now.',
+    + 'Settings › Channels › Meta; Claude never takes an app secret or a token. Changes on Meta are the set-meta-… tools (a person approves each).',
   async handler(args, ctx): Promise<ToolResult> {
     const view = (args.view ?? 'summary') as View
     // Review 2 — the same permission as Settings › Channels › Meta's own list of choices (GET …/choices).

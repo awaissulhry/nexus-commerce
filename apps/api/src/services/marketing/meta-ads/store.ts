@@ -285,3 +285,29 @@ export async function replaceDailyMetrics(adAccountId: string, entityType: MetaA
     return { rows: data.length, range }
   }, LONG_TX)
 }
+
+// ── a change's own read-back (step 17) ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Step 17 — after a Nexus change of Meta objects, their stored rows take the status Meta read back (so Nexus's pages show
+ * it at once, without a whole new read of the account). Only rows of this business (row-level security) and this account;
+ * their children's effective status ("CAMPAIGN_PAUSED") follows at the next daily read. Never throws: a change that ran
+ * is never failed by its bookkeeping.
+ */
+export async function recordStatusReadBack(adAccountId: string, items: ReadonlyArray<{ kind: 'campaign' | 'adset' | 'ad'; id: string; status: string; effectiveStatus: string | null }>): Promise<number> {
+  let rows = 0
+  for (const item of items) {
+    const data = { status: item.status, ...(item.effectiveStatus ? { effectiveStatus: item.effectiveStatus } : {}) }
+    try {
+      const done = item.kind === 'campaign'
+        ? await prisma.metaAdsCampaign.updateMany({ where: { adAccountId, campaignId: item.id }, data })
+        : item.kind === 'adset'
+          ? await prisma.metaAdsAdSet.updateMany({ where: { adAccountId, adSetId: item.id }, data })
+          : await prisma.metaAdsAd.updateMany({ where: { adAccountId, adId: item.id }, data })
+      rows += done.count
+    } catch (error) {
+      logger.warn('[meta-ads] could not store a change\'s read-back', { kind: item.kind, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  return rows
+}

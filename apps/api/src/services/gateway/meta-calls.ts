@@ -1,9 +1,10 @@
 /**
  * Meta on the gateway (Meta ads M1, 2026-10-20) — what a Meta call may be, judged before the token or the network.
  *
- * M1 is READ ONLY by construction: the only Meta call the gateway lets through is a GET, with no body, to
- * `https://graph.facebook.com/<the pinned version>/…` (services/meta/api-version.ts). Everything else is refused with
- * its ledger row (`META_READ_ONLY`), whatever kind the caller declared. On top of the method, the URL itself:
+ * A READ (M1) is a GET, with no body, to `https://graph.facebook.com/<the pinned version>/…`
+ * (services/meta/api-version.ts); a GET that is not one is refused with its ledger row (`META_READ_ONLY`), whatever kind
+ * the caller declared, and anything but a GET goes to the write allow-list (metaWriteVerdict, below). On top of the
+ * method, the URL itself:
  *   - `method` / `_method` in the query (Graph's method override: a GET that acts as a POST or DELETE) — refused;
  *   - `batch` (a batch request carries its own methods) and the root path (the batch endpoint) — refused;
  *   - `oauth/revoke` (a GET that ends a token) — refused;
@@ -30,7 +31,10 @@
  *     stored token (a caller that names one is refused); the verdict hands its client_id back and gateway.ts sends it
  *     only when that is the connection's own app;
  *   - a caller's own headers are refused (no method override or other header travels on a Meta call).
- * Writes come in M3, by an allow-list of exact paths and methods.
+ * Writes (step 17, 2026-10-21) are judged apart, by metaWriteVerdict below: an ALLOW-list of exact (method, path shape,
+ * body keys and values) that Nexus's own change tools send — today a status change of one campaign, ad set or ad, and
+ * Meta's check of it (validate_only, a campaign's only). Every other non-GET is refused; so is every batch (no Nexus
+ * change sends one yet: metaBatchProblem).
  *
  * Every call with a token carries `appsecret_proof` = HMAC-SHA256(key = the app secret, message = `<token>|<time>`) and
  * `appsecret_time` = that time in seconds, as Meta's Login Security page asks today (checked 2026-10-20:
@@ -216,8 +220,8 @@ export interface MetaCallVerdict { problem: string | null; renewalClientId: stri
 export function metaCallVerdict(input: { method: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string, string> }): MetaCallVerdict {
   const refuse = (problem: string): MetaCallVerdict => ({ problem, renewalClientId: null })
   const method = input.method.toUpperCase()
-  if (method !== 'GET') return refuse(`Nexus only reads Meta for now, and this call would change something (${method})`)
-  if (input.kind !== 'read') return refuse('Nexus only reads Meta for now, and this call is not declared a read')
+  if (method !== 'GET') return refuse(`this call is not a read (${method}): a Meta change goes only through the write allow-list`)
+  if (input.kind !== 'read') return refuse('a GET of Meta is a read, and this call is not declared a read')
   if (input.body !== undefined && input.body !== null && input.body !== '') return refuse('a read of Meta carries no body')
   if (input.headers && Object.keys(input.headers).length > 0) return refuse('a Meta call carries no header of the caller\'s own')
   const graph = graphRouteOf(input.url)
@@ -363,4 +367,246 @@ export function metaSendUrl(url: string, token: string, proof: { appsecret_proof
   parsed.searchParams.set('appsecret_proof', proof.appsecret_proof)
   parsed.searchParams.set('appsecret_time', proof.appsecret_time)
   return parsed.toString()
+}
+
+// ── writes (step 17, 2026-10-21) ────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The statuses a Nexus change writes on a campaign, ad set or ad (set-meta-status). Checked 2026-10-21 on
+ * developers.facebook.com/documentation/ads-commerce/marketing-api/reference/ad-campaign-group.md ("Updating", `status`
+ * enum ACTIVE, PAUSED, DELETED, ARCHIVED) and best-practices/manage-your-ad-object-status.md (ARCHIVED can only go to
+ * DELETED; DELETED cannot change). DELETED is not one: deleting is its own tool (not built yet), so no Nexus change sends
+ * it today.
+ */
+export const META_WRITE_STATUSES = ['ACTIVE', 'PAUSED', 'ARCHIVED'] as const
+export type MetaWriteStatus = typeof META_WRITE_STATUSES[number]
+
+/**
+ * What a change may read back in the same POST (read-after-write, master ACC-030: the campaign update "supports
+ * read-after-write and will read the node to which you POSTed"; Meta's Python SDK sends `fields` on every api_update).
+ */
+export const META_READ_BACK_FIELDS: ReadonlySet<string> = new Set(['id', 'status', 'configured_status', 'effective_status', 'updated_time'])
+
+/** The ONE value of `execution_options` Nexus sends: Meta's check (validate_only), which changes nothing. */
+export const META_VALIDATE_ONLY = '["validate_only"]'
+
+/**
+ * Review fix A2 (2026-10-21) — Meta documents validate_only on a campaign UPDATE (reference/ad-campaign-group.md
+ * "Updating"), but Nexus has not seen it honoured live yet. Until LIVE-PROBE ST17-01 shows Meta checks an update and
+ * changes nothing, Nexus asks Meta's check ONLY of a change to PAUSED: had Meta wrongly applied it, a pause is harmless
+ * and undoable. A change to ACTIVE or ARCHIVED is then previewed without Meta's check ("Meta's check is not used for this
+ * change yet"). THE LEADER FLIPS THIS TO true after ST17-01 (meta-writes.vitest.test.ts tests both states).
+ */
+export const META_UPDATE_CHECK_PROVEN = false
+
+/** May Nexus ask Meta's check (validate_only) of a status change to `status`? (Both states: see META_UPDATE_CHECK_PROVEN.) */
+export function metaCheckAllowed(status: string, proven: boolean = META_UPDATE_CHECK_PROVEN): boolean {
+  return proven ? (META_WRITE_STATUSES as readonly string[]).includes(status) : status === 'PAUSED'
+}
+
+/**
+ * One kind of Meta change Nexus sends: the method, the path's shape, the body keys it must and may carry and a judge of
+ * their values. `budget`: it moves an ad set's daily or lifetime budget (Meta's 4-an-hour limit, meta-object-limits.ts).
+ * Each later step adds only the rules its own tools send, with tests (meta.vitest.test.ts).
+ */
+interface MetaWriteRule {
+  name: string
+  method: 'POST'
+  /** The route, lower case, without the version (`120000000000001`). */
+  path: RegExp
+  required: readonly string[]
+  optional: readonly string[]
+  /** Why a value is refused, or null. */
+  values: (params: ReadonlyMap<string, string>) => string | null
+  budget: boolean
+}
+
+const fieldsValueProblem = (value: string): string | null => {
+  const names = value.split(',')
+  if (!names.length || names.length > META_READ_BACK_FIELDS.size) return 'fields names the fields a change reads back, each once'
+  if (names.some((name) => !META_READ_BACK_FIELDS.has(name))) return `a change reads back only ${[...META_READ_BACK_FIELDS].join(', ')}`
+  if (new Set(names).size !== names.length) return 'fields names each field once'
+  return null
+}
+
+// Review fix A5 — exactly the string judged is the string sent: no other spelling of the same list.
+const executionProblem = (value: string): string | null =>
+  value === META_VALIDATE_ONLY ? null : `the only execution_options Nexus sends is exactly ${META_VALIDATE_ONLY} (Meta's check, which changes nothing)`
+
+/** Step 17 — the write allow-list. */
+const META_WRITE_RULES: readonly MetaWriteRule[] = [
+  {
+    // set-meta-status: POST /{campaign_id | ad_set_id | ad_id} status=ACTIVE|PAUSED|ARCHIVED, optionally Meta's check
+    // (execution_options) or the read-back (fields).
+    name: 'object.status',
+    method: 'POST',
+    path: /^\d{1,20}$/,
+    required: ['status'],
+    optional: ['execution_options', 'fields'],
+    values: (params) => {
+      const status = params.get('status') ?? ''
+      if (status === 'DELETED') return 'Nexus deletes nothing on Meta yet: deleting is its own tool, not built yet'
+      if (!(META_WRITE_STATUSES as readonly string[]).includes(status)) return `status is ${META_WRITE_STATUSES.join(', ')}`
+      if (params.has('execution_options')) {
+        const problem = executionProblem(params.get('execution_options')!)
+        if (problem) return problem
+        if (params.has('fields')) return 'Meta\'s check (validate_only) changes nothing, so it reads nothing back (no fields)'
+        if (!metaCheckAllowed(status)) return `Nexus does not use Meta's check for a change to ${status} yet (only for a pause, until a live probe shows Meta honours validate_only on updates)`
+      }
+      if (params.has('fields')) return fieldsValueProblem(params.get('fields')!)
+      return null
+    },
+    budget: false,
+  },
+]
+
+/** The longest body a Nexus change sends (a status change is a few dozen characters). */
+const MAX_WRITE_BODY = 2000
+
+/** A Meta change the gateway may send, as it judged it. */
+export interface MetaJudgedWrite {
+  /** The allow-list entry it matched. */
+  rule: string
+  /** The object the change is for (the path's id): the gateway checks it is of the business's chosen ad account. */
+  objectId: string
+  /** Meta's check (validate_only): Meta changes nothing, so it goes as a read; else a write under the publish mode. */
+  check: boolean
+  /** The body as it is sent: the judged keys, written again in one order (what was judged is what goes). */
+  body: string
+  /** It moves an ad set's budget (Meta's 4-an-hour limit). */
+  budget: boolean
+}
+
+/** The gateway's verdict on a Meta call that is not a GET: why it is refused (and whether as a batch), or the judged write. */
+export type MetaWriteVerdict = { problem: string; batch?: true } | { write: MetaJudgedWrite }
+
+/**
+ * Step 17 — the verdict on one Meta call that is not a GET, judged on the same canonical parse as a read (graphRouteOf):
+ * the exact allow-list above, the declared kind equal to the body's (a check = read, a change = write), the account's own
+ * token, no caller headers, no query string (a change carries its parameters in its body only, so the body judged is the
+ * one sent), each key named once. Whether the object is of the business's chosen ad account is the gateway's next step
+ * (it needs the database or one live read), and so are Meta's per-object limits.
+ */
+export function metaWriteVerdict(input: { method: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string, string> }): MetaWriteVerdict {
+  const refuse = (problem: string): MetaWriteVerdict => ({ problem })
+  const method = input.method.toUpperCase()
+  if (input.headers && Object.keys(input.headers).length > 0) return refuse('a Meta call carries no header of the caller\'s own')
+  if (input.auth !== undefined && input.auth !== 'account') return refuse('a Meta change goes only with the account\'s own system-user token')
+  // The Graph root with its version (`…/v26.0/`, Meta's batch endpoint) is judged as the root, so a batch is named as one.
+  const graph = graphRouteOf(input.url.replace(/^(https:\/\/graph\.facebook\.com\/v\d+\.\d+)\/(?=$|[?#])/i, '$1'))
+  if (!graph) return refuse('Nexus calls Meta only at https://graph.facebook.com')
+  if ('problem' in graph) return refuse(graph.problem)
+  const pinned = metaGraphApiVersion()
+  if (graph.version !== pinned) return refuse(`Nexus calls Meta only on API version ${pinned} (this call: ${graph.version ?? 'no version'})`)
+  if ([...graph.search.keys()].length > 0) return refuse('a Meta change carries its parameters in its body, never in the URL')
+  const batch = metaBatchProblem(method, graph.route, input.body)
+  if (batch) return { problem: batch, batch: true }
+  if (method === 'DELETE') return refuse('Nexus deletes nothing on Meta yet (deleting is its own tool, not built yet), and cancels no async batch')
+  if (method !== 'POST') return refuse(`Nexus sends Meta no ${method}`)
+  const parsed = writeParams(input.body)
+  if ('problem' in parsed) return refuse(parsed.problem)
+  const keys = [...parsed.params.keys()]
+  const rule = META_WRITE_RULES.find((r) => r.method === method && r.path.test(graph.route)
+    && r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k)))
+  if (!rule) {
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status); this one is POST /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+  }
+  const problem = rule.values(parsed.params)
+  if (problem) return refuse(problem)
+  const check = parsed.params.has('execution_options')
+  if (input.kind !== (check ? 'read' : 'write')) {
+    return refuse(check ? 'Meta\'s check (validate_only) changes nothing and goes as a read; this one is declared otherwise' : 'a Meta change goes as a write; this one is declared otherwise')
+  }
+  const order = [...rule.required, ...rule.optional].filter((k) => parsed.params.has(k))
+  const body = new URLSearchParams(order.map((k): [string, string] => [k, parsed.params.get(k)!])).toString()
+  return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget: rule.budget } }
+}
+
+/** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
+function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {
+  if (typeof body !== 'string' || !body) return { problem: 'a Meta change carries its parameters as a form body' }
+  if (body.length > MAX_WRITE_BODY) return { problem: `a Meta change body is at most ${MAX_WRITE_BODY} characters` }
+  const params = new Map<string, string>()
+  for (const [key, value] of new URLSearchParams(body)) {
+    if (!/^[a-z_][a-z0-9_]*$/.test(key)) return { problem: `the body key "${key.slice(0, 40)}" is not one Meta reads (lower-case letters, digits and _)` }
+    if (params.has(key)) return { problem: `the body names "${key}" more than once` }
+    if (GATEWAY_OWNED_KEYS.has(key) || NOT_A_READ_KEYS.test(key) || /token|secret|proof/.test(key)) return { problem: `the body names "${key}", which no Nexus change sends` }
+    if (!/^[\x20-\x7e]*$/.test(value)) return { problem: `the value of "${key}" is plain ASCII` }
+    params.set(key, value)
+  }
+  return { params }
+}
+
+// ── batches (master ACC-022 / 023 / 025–027): the plumbing, nothing allowed through it yet ──────────────────────────
+
+/**
+ * Meta's two batch forms (checked 2026-10-21: developers.facebook.com/docs/graph-api/batch-requests and
+ * documentation/ads-commerce/marketing-api/asyncrequests.md, reference/ad-account/async_batch_requests):
+ *   graph-batch  POST https://graph.facebook.com/<version>/ with `batch` = JSON list of {method, relative_url, body,
+ *                name} — at most 50, at most 10 ad creations; independent parts run in parallel; NOT all or nothing: each
+ *                part answers on its own, and on a timeout the unfinished parts come back null
+ *   async-batch  POST /act_<id>/async_batch_requests with `name` + `adbatch` = JSON list of {name, relative_url, body} —
+ *                at most 1,000; read back per request (GET /<request set id>, /<request set id>/requests); rename
+ *                (POST /<request set id> name, notification_*) and cancel (DELETE /<request id | set id>) before they run
+ * Every part of a batch would be judged exactly like a call of its own (metaWriteVerdict, then the chosen-account check
+ * per object), and a batch is never treated as atomic. NO kind is allowed yet: no Nexus change needs one (set-meta-status
+ * sends one request per object, in order, and reports step by step). A step that needs one adds its kind here with tests.
+ * The reads of an async request set are GETs (the read gate); its rename and cancel are refused by the write allow-list.
+ */
+export type MetaBatchKind = 'graph-batch' | 'async-batch'
+export const META_BATCH_KINDS_ALLOWED: ReadonlySet<MetaBatchKind> = new Set<MetaBatchKind>()
+const MAX_BATCH_PARTS: Record<MetaBatchKind, number> = { 'graph-batch': 50, 'async-batch': 1000 }
+
+/** Which batch form a call is, or null. */
+export function metaBatchKindOf(method: string, route: string): MetaBatchKind | null {
+  if (method.toUpperCase() !== 'POST') return null
+  if (route === '') return 'graph-batch'
+  if (/^act_\d+\/async_batch_requests$/.test(route)) return 'async-batch'
+  return null
+}
+
+/**
+ * Why a batch-shaped call is refused (null: it is not a batch). Each part is judged as a change of its own, so the
+ * sentence names the first part Nexus would not send even one by one.
+ */
+export function metaBatchProblem(method: string, route: string, body: unknown): string | null {
+  const kind = metaBatchKindOf(method, route)
+  if (!kind) return null
+  const parts = batchParts(kind, body)
+  const detail = 'problem' in parts ? parts.problem : parts.problems[0] ?? null
+  if (!META_BATCH_KINDS_ALLOWED.has(kind) || detail) {
+    const why = kind === 'graph-batch'
+      ? 'Nexus sends no Meta batch request yet: no Nexus change needs one, and Meta runs a batch\'s parts one by one (some can succeed while others fail; on a timeout the unfinished ones come back empty), so each change goes as its own request'
+      : 'Nexus sends no Meta async batch yet: no Nexus change needs one, and Meta runs each of its requests on its own (not all or nothing), so each change goes as its own request'
+    return detail ? `${why} (${detail})` : why
+  }
+  return null
+}
+
+/** The parts of a batch body, each judged as its own change (a write), or why the body is not one. */
+function batchParts(kind: MetaBatchKind, body: unknown): { problems: string[] } | { problem: string } {
+  if (typeof body !== 'string') return { problem: 'the batch has no form body' }
+  const form = new URLSearchParams(body)
+  const listKey = kind === 'graph-batch' ? 'batch' : 'adbatch'
+  const raw = form.get(listKey)
+  if (raw === null) return { problem: `it names no ${listKey}` }
+  let list: unknown
+  try { list = JSON.parse(raw) } catch { return { problem: `${listKey} is not JSON` } }
+  if (!Array.isArray(list) || list.length === 0) return { problem: `${listKey} is not a list of requests` }
+  if (list.length > MAX_BATCH_PARTS[kind]) return { problem: `Meta takes at most ${MAX_BATCH_PARTS[kind]} requests in one ${kind}` }
+  const problems: string[] = []
+  list.forEach((part, i) => {
+    const p = (part && typeof part === 'object' ? part : {}) as Record<string, unknown>
+    const where = `part ${i + 1}`
+    const relative = typeof p.relative_url === 'string' ? p.relative_url : ''
+    const partBody = typeof p.body === 'string' ? p.body : ''
+    if (/\{result=/.test(relative) || /\{result=/.test(partBody)) { problems.push(`${where} depends on another part's result`); return }
+    if (p.attached_files !== undefined) { problems.push(`${where} attaches a file`); return }
+    const path = relative.replace(/^\/+/, '').replace(/^v\d+\.\d+\//, '')
+    if (metaBatchKindOf('POST', path.split('?')[0].toLowerCase()) !== null) { problems.push(`${where} is a batch inside a batch`); return }
+    const method = kind === 'async-batch' ? 'POST' : typeof p.method === 'string' ? p.method : 'GET'
+    const verdict = metaWriteVerdict({ method, url: `https://${META_GRAPH_HOST}/${metaGraphApiVersion()}/${path}`, kind: 'write', body: partBody })
+    if ('problem' in verdict) problems.push(`${where}: ${verdict.problem}`)
+  })
+  return { problems }
 }

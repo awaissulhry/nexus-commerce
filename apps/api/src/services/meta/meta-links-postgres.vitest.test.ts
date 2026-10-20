@@ -15,6 +15,9 @@
  *      never move.
  *   4. A7: a Meta token's expiry warning is recorded once per level and expiry date (the ledger's JSON path filter), and
  *      a renewed token (another expiry date) warns afresh.
+ *   5. Step 17 (write base): the gateway's chosen-account check under row security — BRAVO's stored campaign is invisible
+ *      to ALPHA, a connection's chosen ad account is read only in its own business, and a change of BRAVO's campaign asked
+ *      in ALPHA (a forged id) is refused after ONE live read of its account_id: nothing is sent to change it.
  * Meta's discovery and the token service are stubbed (no Meta call); made-up ids only.
  */
 import { randomBytes, randomUUID } from 'node:crypto'
@@ -34,7 +37,14 @@ const ID = {
 }
 const h = vi.hoisted(() => ({ alerts: 0 }))
 
-vi.mock('../cx/token.service.js', () => ({ metaAppIdOf: vi.fn(async () => '1234567') }))
+vi.mock('../cx/token.service.js', () => ({
+  metaAppIdOf: vi.fn(async () => '1234567'),
+  // Step 17: the gateway's live read of an object's account_id (fetch is a stand-in; no Meta call).
+  getAccessToken: vi.fn(async () => 'meta-system-user-token'),
+  metaRequestProof: vi.fn(async () => ({ appsecret_proof: 'proof', appsecret_time: '1760000000' })),
+}))
+vi.mock('../gateway/ledger.js', () => ({ writeLedgerRow: vi.fn(async () => undefined) }))
+vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 // Step 2: a choice queues the first read; here it is only recorded (no queue, no read, no Meta).
 vi.mock('../marketing/meta-ads/enqueue.js', () => ({ enqueueMetaAdsSync: vi.fn(async () => ({ queued: true, reason: null })) }))
 vi.mock('../monitoring/alert.service.js', () => ({ AlertType: { CONNECTION_HEALTH: 'CONNECTION_HEALTH' }, alertService: { createAlert: vi.fn(async () => { h.alerts++ }) } }))
@@ -54,6 +64,8 @@ vi.mock('../cx/connectors/meta/discovery.js', async (importOriginal) => ({
 import { __clearMetaChoicesCache, getMetaChoices, metaChoicesAnswer, saveMetaSelection } from './meta-accounts.service.js'
 import { META_ADS_CONNECTION_TOOLS } from '../agents/tools/meta-ads-connection.tools.js'
 import { metaExpiryAlerts } from '../../jobs/cx-heartbeat.job.js'
+import { metaChosenAdAccountOf, metaStoredObject } from '../gateway/account.js'
+import { metaWriteCall } from '../gateway/meta.js'
 
 const ALPHA = `meta_alpha_${RUN}`
 const BRAVO = `meta_bravo_${RUN}`
@@ -170,6 +182,31 @@ describe.skipIf(!concurrentDatabaseUrl())('Meta: one Meta id in one business (re
     expect(await links(BRAVO)).toEqual([{ product: 'AD_ACCOUNT', externalId: ID.x, selectedByUserId: 'u-bravo' }, { product: 'PAGE', externalId: ID.pageBravo, selectedByUserId: 'u-bravo' }])
     // Now ALPHA uses Y: BRAVO's view of it says so, by id only.
     expect(await taken(BRAVO, 'AD_ACCOUNT', [ID.y, ID.z])).toEqual([{ id: ID.y }])
+  })
+
+  it('step 17: the chosen-account check under row security — BRAVO\'s campaign, forged in ALPHA, is refused after ONE live read; nothing sent to change it', async () => {
+    const campaignOfBravo = digits('81', 15)
+    await as(BRAVO, () => database.client.metaAdsCampaign.create({ data: { adAccountId: ID.x, campaignId: campaignOfBravo, name: 'Bravo campaign', status: 'PAUSED', currencyCode: 'EUR', lastSeenAt: new Date() } }))
+    // Control: BRAVO sees its own row and its own pick; ALPHA sees neither.
+    expect(await as(BRAVO, () => metaStoredObject(campaignOfBravo))).toEqual({ adAccountId: ID.x, kind: 'campaign' })
+    expect(await as(BRAVO, () => metaChosenAdAccountOf(conn.bravo))).toBe(ID.x)
+    expect(await as(ALPHA, () => metaStoredObject(campaignOfBravo))).toBeNull()
+    expect(await as(ALPHA, () => metaChosenAdAccountOf(conn.bravo))).toBeNull()
+    expect(await as(ALPHA, () => metaChosenAdAccountOf(conn.alpha))).toBe(ID.y)
+    // The shared system user can see BRAVO's campaign, so Meta answers its account: X, not ALPHA's Y.
+    const calls: Array<{ url: string; method: string }> = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url: String(url), method: String(init.method) })
+      return new Response(JSON.stringify({ id: campaignOfBravo, account_id: ID.x }), { status: 200 })
+    }))
+    try {
+      const err = await as(ALPHA, () => metaWriteCall({ connectionId: conn.alpha, operation: 'campaign.status', objectId: campaignOfBravo, objectKind: 'campaign', params: { status: 'ACTIVE' }, check: false })).catch((e) => e)
+      expect(err).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', outcome: 'refused' })
+      expect(String(err.message)).not.toContain(ID.x)
+      expect(calls.map((c) => [c.method, new URL(c.url).pathname, new URL(c.url).searchParams.get('fields')])).toEqual([['GET', `/v26.0/${campaignOfBravo}`, 'account_id,objective,effective_status']])
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('A7: an expiry warning once per level and expiry date; a renewed token warns afresh', async () => {
