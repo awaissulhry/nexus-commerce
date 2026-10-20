@@ -169,7 +169,7 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   marketplaces: { part: '09', feature: 49, also: 'the product-channel routes are the listings part, 02 (#2); marketplaces/seed is admin' },
   matrix: { part: '02', feature: 2 },
   mcp: { part: '05', feature: 46, also: 'Claude’s own door and access: never offered to Claude as tools' },
-  'meta-connection': { excluded: 'connecting Meta (the app secret and the system-user token are entered by a person in the browser, never through a tool) and choosing which Meta ad account, Page and Instagram account it reads: a person in the browser (09 §2); Claude reads the connection, its token health and its picks with meta-connection', feature: 51 },
+  'meta-connection': { part: '01', feature: 51, also: 'connecting Meta, its app secret and its system-user token are a person\'s in the browser, never a tool (09 §2); Claude reads the connection, its token health and what the system user can see with meta-connection, and asks to choose the business\'s ad account, Page and Instagram account with set-meta-connection (Owner 2026-10-20 "yes 1"; a person approves it in Nexus)' },
   mfa: { excluded: 'sign-in, passwords, 2FA, sessions, invitations, personal profile: never for Claude (09 §2)', feature: 55 },
   monitoring: { excluded: 'platform operations (job monitor, queues, telemetry, circuit breakers) are platform-wide, not one business (09 §2)', feature: 80 },
   notifications: { part: '09', feature: 76 },

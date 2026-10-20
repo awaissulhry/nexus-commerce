@@ -6,7 +6,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({ connections: [] as Array<Record<string, unknown>>, live: [] as string[] }))
-vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => h.connections) }))
+vi.mock('../../meta/meta-accounts.service.js', () => ({
+  listMetaConnections: vi.fn(async () => h.connections),
+  getMetaChoices: vi.fn(async () => { h.live.push('choices'); return {} }),
+  metaChoicesAnswer: vi.fn(async () => ({ systemUser: null, adAccounts: { items: [], total: 0, error: null }, pages: { items: [], total: 0, error: null }, instagram: { items: [], total: 0, error: null } })),
+  MetaConnectionNotFound: class MetaConnectionNotFound extends Error {},
+  MetaSelectionError: class MetaSelectionError extends Error {},
+  parseMetaSelection: vi.fn(),
+  saveMetaSelection: vi.fn(),
+}))
 vi.mock('../../meta/meta-connection-live.js', () => ({
   MetaLiveError: class MetaLiveError extends Error {},
   liveConnectionCheck: vi.fn(async (connectionId: string, adAccountId: string | null) => { h.live.push(`check:${connectionId}:${adAccountId}`); return { token: { isValid: true }, tokenError: null, usage: { tier: 'development_access' }, usageReadOn: 'the chosen ad account', usageError: null, apiVersion: 'v26.0' } }),
@@ -17,6 +25,7 @@ vi.mock('../../meta/meta-connection-live.js', () => ({
 import { META_ADS_CONNECTION_TOOLS } from './meta-ads-connection.tools.js'
 
 const tool = META_ADS_CONNECTION_TOOLS.find((t) => t.name === 'meta-connection')!
+// set-meta-connection: set-meta-connection.vitest.test.ts
 const ctx = { can: () => true, via: 'claude' as const }
 const run = (args: Record<string, unknown>) => tool.handler(tool.input.parse(args), ctx)
 const META = {
@@ -46,11 +55,12 @@ describe('meta-connection', () => {
     expect(h.live).toEqual([])
     expect((await run({ connectionId: 'nope' })).ok).toBe(false)
   })
-  it('the live views read Meta for the chosen ad account and its business portfolio', async () => {
+  it('the live views read Meta for the chosen ad account, its business portfolio and what the system user can see', async () => {
     await run({ view: 'check' })
     const perms = await run({ view: 'permissions' })
     await run({ view: 'app' })
-    expect(h.live).toEqual(['check:conn-1:1234567890', 'permissions', 'app:9876543210'])
+    await run({ view: 'choices' })
+    expect(h.live).toEqual(['check:conn-1:1234567890', 'permissions', 'app:9876543210', 'choices'])
     // ACC-900 (assigned_applications) needs manage_app_solution, which a system user cannot hold: no such view.
     expect(() => tool.input.parse({ view: 'assigned-apps' })).toThrow()
     expect(perms).toMatchObject({ ok: true, data: { granted: ['ads_read'], declined: [{ permission: 'pages_show_list', status: 'declined' }] } })
