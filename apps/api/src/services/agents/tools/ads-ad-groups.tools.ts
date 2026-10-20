@@ -5,7 +5,9 @@
  *
  *   ad-groups        read: per campaign its ad groups — state, default bid, the floor that holds them (and the bids it
  *                    keeps to give back), product ads (SKU, ASIN, at Amazon or not), target counts and the window's
- *                    metrics (the campaign page's own allocation, ads-detail-metrics.service.ts).
+ *                    metrics (the campaign page's own allocation, ads-detail-metrics.service.ts). A Sponsored Display
+ *                    campaign's ad groups and product ads are measured each on its own, from Amazon's SD reports
+ *                    (sd/sd-report-reads.service.ts, 2026-10-20).
  *   create-ad-group  ONE step (a plan's later step cannot see an earlier step's new ad group, report 2 B2): a manual ad
  *                    group in an existing campaign with its product ads, keywords OR product targets, and negatives,
  *                    through the screen's own creates (createAdGroupLocal, createProductAdLocal, createKeywordLocal,
@@ -47,6 +49,7 @@
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
+import { adProductOf, SPONSORED_DISPLAY } from '@nexus/shared/ads-ad-product'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
@@ -60,6 +63,8 @@ import { bidLimitsFor } from '../../advertising/ads-strategy/bids.js'
 import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { playbookHolds, startOnlyRefusal } from '../../advertising/ads-playbook/held.js'
+import { SD_ATTRIBUTION_NOTE, sdMetricsByLocalId, sdMetricsOf } from '../../advertising/sd/sd-report-reads.service.js'
+import { resolveRange } from '../../ads-core/date-range.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
 import {
   alsoChangedBy, approvedRun, BY_RULE_WORDS, canonical, notRun, queuedNote, reachNote, reachRefusal, recheck, requesterOf, ruleFactsFor, ruleRefusal,
@@ -90,6 +95,8 @@ const OWN_MONEY: Readonly<Record<string, FieldPermission>> = {
   plannedCents: ADSPEND, startCents: ADSPEND, floorCents: ADSPEND, plannedDefaultBidCents: ADSPEND, highestPlannedBidCents: ADSPEND,
   currentBidCents: ADSPEND, effectiveBidCents: ADSPEND, proposedBidCents: ADSPEND, fromCents: ADSPEND, toCents: ADSPEND,
   rememberedCents: ADSPEND, highestRestoredBidCents: ADSPEND, stopBidCents: ADSPEND, dailyBudgetCents: ADSPEND,
+  // A Sponsored Display ad group's or product ad's cost per click (sd/sd-report-reads.service.ts).
+  cpcCents: ADSPEND,
 }
 const CHANGE_MONEY = { ...LIMIT_FACTS_MONEY, ...OWN_MONEY } as Readonly<Record<string, FieldPermission>>
 
@@ -400,17 +407,25 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
   const { all, wanted } = await campaignAdGroupsForRead(campaign.id, { status: a.status, adGroupId: a.adGroupId ?? null })
   const groups = all.filter((g) => wanted.has(g.id))
   const shown = groups.slice(0, READ_MAX_GROUPS)
+  // SD reports below the campaign (2026-10-20) — a Sponsored Display campaign's ad groups and product ads are measured
+  // each on its own (Amazon's SD ad group and advertised product reports) over the window's complete days, never shared
+  // out from the campaign's total.
+  const sdRange = adProductOf({ adProduct: campaign.adProduct, type: campaign.type == null ? null : String(campaign.type) }) === SPONSORED_DISPLAY
+    ? resolveRange({ windowDays: a.days })
+    : null
   const { computeCampaignDetailMetrics } = await import('../../advertising/ads-detail-metrics.service.js')
-  const [metrics, targets] = await Promise.all([
-    computeCampaignDetailMetrics({ campaignId: campaign.id, externalCampaignId: campaign.externalCampaignId, adGroups: all.map((g) => ({ id: g.id, productAdIds: g.productAds.map((ad) => ad.id) })), windowDays: a.days }),
+  const [metrics, targets, sdGroups, sdAds] = await Promise.all([
+    sdRange ? null : computeCampaignDetailMetrics({ campaignId: campaign.id, externalCampaignId: campaign.externalCampaignId, adGroups: all.map((g) => ({ id: g.id, productAdIds: g.productAds.map((ad) => ad.id) })), windowDays: a.days }),
     shown.length
       ? prisma.adTarget.findMany({ where: { adGroupId: { in: shown.map((g) => g.id) }, status: { not: 'ARCHIVED' } }, select: { adGroupId: true, kind: true, isNegative: true, suppressedFromBidCents: true } })
       : [],
+    sdRange ? sdMetricsByLocalId('AD_GROUP', shown.map((g) => g.id), sdRange.since, sdRange.until) : null,
+    sdRange ? sdMetricsByLocalId('PRODUCT_AD', shown.flatMap((g) => g.productAds.slice(0, LINES_SHOWN).map((ad) => ad.id)), sdRange.since, sdRange.until) : null,
   ])
   const items = shown.map((g) => {
     const mine = targets.filter((t) => t.adGroupId === g.id)
     const count = (kind: string) => mine.filter((t) => !t.isNegative && t.kind === kind).length
-    const m = metrics.byAdGroup.get(g.id)
+    const m = metrics?.byAdGroup.get(g.id)
     return {
       adGroupId: g.id,
       externalAdGroupId: g.externalAdGroupId,
@@ -422,7 +437,10 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
       floor: g.bidsSuppressedAt
         ? { by: g.bidsSuppressedBy, since: g.bidsSuppressedAt.toISOString(), floorCents: g.bidsSuppressedFloorCents, ...(g.suppressedFromBidCents != null ? { plannedDefaultBidCents: g.suppressedFromBidCents } : {}), givenBackBy: isPerson(g.bidsSuppressedBy) ? 'set-ad-group op start' : 'the engine that set it' }
         : null,
-      productAds: g.productAds.slice(0, LINES_SHOWN).map((ad) => ({ productAdId: ad.id, sku: ad.sku, asin: ad.asin, productId: ad.productId, status: String(ad.status), atAmazon: !!ad.externalAdId })),
+      productAds: g.productAds.slice(0, LINES_SHOWN).map((ad) => ({
+        productAdId: ad.id, sku: ad.sku, asin: ad.asin, productId: ad.productId, status: String(ad.status), atAmazon: !!ad.externalAdId,
+        ...(sdAds ? { metrics: sdAds.byId.get(ad.id) ?? sdMetricsOf(null) } : {}),
+      })),
       ...(g.productAds.length > LINES_SHOWN ? { moreProductAds: g.productAds.length - LINES_SHOWN } : {}),
       targets: {
         keywords: count('KEYWORD'), productTargets: count('PRODUCT'), categoryTargets: count('CATEGORY'), autoTargets: count('AUTO'),
@@ -430,7 +448,9 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
         // Bids at a floor that remember the bid to give back (a born-at-the-floor ad group, a stop).
         heldAtFloor: mine.filter((t) => !t.isNegative && t.suppressedFromBidCents != null).length,
       },
-      metrics: m ? { impressions: m.impressions, clicks: m.clicks, orders: m.orders, spendCents: m.spendCents, salesCents: m.salesCents, acos: m.acos, roas: m.roas } : null,
+      metrics: sdGroups
+        ? sdGroups.byId.get(g.id) ?? sdMetricsOf(null)
+        : m ? { impressions: m.impressions, clicks: m.clicks, orders: m.orders, spendCents: m.spendCents, salesCents: m.salesCents, acos: m.acos, roas: m.roas } : null,
     }
   })
   return {
@@ -441,7 +461,9 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
         targetingType: campaign.targetingType, currency, liveWrites: campaign.liveBidWritesEnabled,
         floor: campaign.bidsSuppressedAt ? { by: campaign.bidsSuppressedBy, since: campaign.bidsSuppressedAt.toISOString(), givenBackBy: isPerson(campaign.bidsSuppressedBy) ? 'restore-campaign' : 'the engine that set it' } : null,
       },
-      window: { days: a.days, note: 'Metrics: the campaign\'s own total over the window (today\'s hourly figures included), shared out over its ad groups by their product ads, as the campaign page shows them.' },
+      window: sdRange
+        ? { days: a.days, from: sdRange.sinceStr, to: sdRange.untilStr, dataAsOf: [sdGroups?.dataAsOf, sdAds?.dataAsOf].filter(Boolean).sort().at(-1) ?? null, note: `Metrics: each ad group's and product ad's own, from Amazon's SD ad group and advertised product reports. ${SD_ATTRIBUTION_NOTE}` }
+        : { days: a.days, note: 'Metrics: the campaign\'s own total over the window (today\'s hourly figures included), shared out over its ad groups by their product ads, as the campaign page shows them.' },
       items,
       total: groups.length,
       ...(groups.length > READ_MAX_GROUPS ? { more: `${groups.length} ad groups match; the first ${READ_MAX_GROUPS} are listed. Narrow with status or adGroupId.` } : {}),
@@ -469,7 +491,10 @@ const adGroupsRead: AgentTool = {
     + 'it, its default bid, the floor that holds its bids (who set it, since when, the default bid it keeps to give back, '
     + 'and which tool gives it back), its product ads (SKU, ASIN, status, at Amazon or not), how many keywords, product, '
     + 'category and auto targets and negatives it holds (and how many bids wait at a floor), and impressions, clicks, '
-    + 'orders, spend, sales, ACoS and ROAS over the window as the campaign page shows them. The campaign: market, status, '
+    + 'orders, spend, sales, ACoS and ROAS over the window as the campaign page shows them. A Sponsored Display campaign\'s '
+    + 'ad groups and product ads each carry their own metrics from Amazon\'s SD reports (14 days, a click or a view of the '
+    + 'ad counts): also viewable impressions, units, CPC, detail page views, new-to-brand, and each attributed figure after '
+    + 'a click (afterClick) and after a view (afterView). The campaign: market, status, '
     + 'targeting type, currency, live-write allowlist and its own floor. Amounts are minor units (cents) of the '
     + 'campaign\'s own currency, never converted; a person without the ad-spend money permission gets the same answer '
     + 'without the amounts.',

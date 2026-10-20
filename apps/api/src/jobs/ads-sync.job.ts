@@ -48,6 +48,7 @@ import {
   runPlacementReportCycle,
   runAdvertisedProductReportCycle,
   runTargetingReportCycle,
+  runSdReportCycle,
   pollPendingJobs,
   ingestCompletedJob,
   cleanupOldSearchTerms,
@@ -308,11 +309,13 @@ export function startFbaFeesIngestCron(): void {
 // one job; targeting and advertised product (one day per job) ask yesterday and
 // the day that completes tonight (ads-report-settle.service.ts).
 
-// 01:15 UTC daily — campaign-level performance reports
+// 01:15 UTC daily — campaign-level performance reports, and (2026-10-20) Sponsored Display below the campaign: its ad
+// group, targeting, advertised product and purchased product reports over the same 15-day settling span as sdCampaigns.
 export async function runReportCreateCron(): Promise<void> {
   await recordCronRun('ads-report-create', async () => {
     const result = await settlingCycle((a) => runReportCreationCycle(a), ['SPONSORED_PRODUCTS', 'SPONSORED_DISPLAY', 'SPONSORED_BRANDS'])
-    return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length}`
+    const sd = await settlingCycle((a) => runSdReportCycle(a), ['SPONSORED_DISPLAY'])
+    return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length} sdBelowCampaign: created=${sd.jobsCreated} skipped=${sd.jobsSkipped} errors=${sd.errors.length}`
   }).catch((err) => logger.error('ads-report-create cron: failure', { error: String(err) }))
 }
 

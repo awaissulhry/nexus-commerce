@@ -104,6 +104,8 @@
     "KeywordCoverageTerm",
     "AmazonAdsPortfolio",
     "AmazonAdsDailyPerformance",
+    "AmazonAdsSdDailyPerformance",
+    "AmazonAdsSdPurchasedProduct",
     "AmazonAdsHourlyPerformance",
     "AdBudgetUsageSample",
     "AmazonAdsSearchTerm",

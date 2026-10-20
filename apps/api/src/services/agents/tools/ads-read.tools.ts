@@ -6,6 +6,7 @@
  *                       dial and the data pipeline's health
  *   ad-campaigns        the campaigns with their settings, guards and window metrics
  *   ad-targets          the targets (keywords, product and auto targets) with their bids and window metrics
+ *   ad-purchased-products  Sponsored Display: what shoppers bought after an ad (another product than the advertised one)
  *   ad-search-terms     the search terms that spent with no order, and the ones that convert (a first look: a converting
  *                       term is harvested through harvest-candidates and apply-harvest, the Keyword Harvest page's engine)
  *   ad-changes          what changed on the account, who changed it, whether it reached Amazon, and its undo handle
@@ -45,7 +46,7 @@
  * read-search-terms, read-acts and alerts services), never a query of its own. Still read only.
  */
 
-import { adProductOf, isLifetimeBudget } from '@nexus/shared/ads-ad-product'
+import { adProductOf, isLifetimeBudget, SPONSORED_DISPLAY } from '@nexus/shared/ads-ad-product'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -73,6 +74,7 @@ import { getEngineLevers } from '../../advertising/ads-control-room.service.js'
 import { pipelineHealth } from '../../advertising/ads-pipeline-health.service.js'
 import { dataVintageByMarket, type MarketVintage } from '../../advertising/ads-report-settle.service.js'
 import { primeSettledWindow } from '../../advertising/ads-settled-facts.js'
+import { SD_ATTRIBUTION_NOTE, sdMetricsByLocalId, sdMetricsOf, sdPurchasedProducts, type SdPurchasedLine } from '../../advertising/sd/sd-report-reads.service.js'
 import { adsProfileFor } from '../../advertising/ads-profile-resolver.js'
 import { getBidGrid, type BidTargetRow } from '../../advertising/bid-grid.service.js'
 import { previewHarvest, type HarvestCandidate } from '../../advertising/ads-harvest.service.js'
@@ -1132,7 +1134,10 @@ const adTargets: AgentTool = {
     + 'text, kind, match type, status, live now (target and campaign enabled), bid, the bid it held before a no-pause '
     + 'suppression (suppressedFromBidCents; a suppressed bid is not raised), the campaign\'s bid bounds, effective max '
     + 'CPC, who owns its bids (brain, schedule, goal, manual or none), and impressions, clicks, orders, spend, sales, CPC and '
-    + 'ACoS over the window. The bid is Nexus\'s copy: when it has not reached Amazon yet (a write queued or being sent, '
+    + 'ACoS over the window. A Sponsored Display target\'s metrics are its own SD targeting report\'s (14 days, a click or '
+    + 'a view of the ad counts) and add viewable impressions, units, ROAS, detail page views, new-to-brand, and each '
+    + 'attributed figure after a click (afterClick) and after a view (afterView). The bid is Nexus\'s copy: when it has not '
+    + 'reached Amazon yet (a write queued or being sent, '
     + 'or one that failed), bidNotAtAmazon says so, with the bid Amazon still has (amazonBidCents) and, for a failed '
     + 'one, why; null when Amazon has the bid shown. Filter by campaignId, adGroupId, market, status or text.' + MONEY_WORDS + PAGING,
   handler: (args) => listTool('ad-targets', async () => {
@@ -1146,7 +1151,7 @@ const adTargets: AgentTool = {
       if (!groupCampaign || (campaignId && groupCampaign !== campaignId)) return { ok: false, error: 'Ad group not found' }
       campaignId = groupCampaign
     }
-    const { window } = windowOf(a.days)
+    const { range, window } = windowOf(a.days)
     const grid = await getBidGrid({
       market: a.market ?? 'all',
       line: null,
@@ -1172,6 +1177,13 @@ const adTargets: AgentTool = {
     const [index, externalGroup, notAtAmazon] = await Promise.all([
       campaignIndex(campaignIds, []), adGroupExternalIds(groupIds), bidsNotAtAmazon(page.items.map((r) => ({ id: r.id, bidCents: r.bidCents }))),
     ])
+    const adProductOfRow = (r: BidTargetRow) => {
+      const c = index.byId.get(r.campaignId)
+      return c ? adProductOf({ adProduct: c.adProduct, type: c.type == null ? null : String(c.type) }) : null
+    }
+    // SD reports below the campaign (2026-10-20) — a Sponsored Display target's figures are its own SD targeting report's.
+    const sdIds = new Set(page.items.filter((r) => adProductOfRow(r) === SPONSORED_DISPLAY).map((r) => r.id))
+    const sd = await sdMetricsByLocalId('AD_TARGET', [...sdIds], range.since, range.until)
     const items = page.items.map((r) => {
       const c = index.byId.get(r.campaignId)
       const unsent = notAtAmazon.get(r.id)
@@ -1191,7 +1203,7 @@ const adTargets: AgentTool = {
         campaignName: r.campaignName,
         // W4-11 — set-target-bid and bulk-ad-bid-change also change Sponsored Brands keyword and product-target bids and
         // Sponsored Display target bids.
-        adProduct: c ? adProductOf({ adProduct: c.adProduct, type: c.type == null ? null : String(c.type) }) : null,
+        adProduct: adProductOfRow(r),
         campaignStatus: r.campaignStatus,
         market: r.market,
         currency: c ? campaignCurrency(c) : null,
@@ -1208,16 +1220,18 @@ const adTargets: AgentTool = {
         bidOwner: r.bidder,
         bidOwnerName: r.bidderName,
         bidChangedOutsideNexus: r.unrecorded,
-        metrics: {
-          measured: r.measured,
-          impressions: r.impressions,
-          clicks: r.clicks,
-          orders: r.orders,
-          spendCents: r.spendCents,
-          salesCents: r.salesCents,
-          cpcCents: r.cpcCents == null ? null : Math.round(r.cpcCents),
-          acos: r.acos,
-        },
+        metrics: sdIds.has(r.id)
+          ? sd.byId.get(r.id) ?? sdMetricsOf(null)
+          : {
+              measured: r.measured,
+              impressions: r.impressions,
+              clicks: r.clicks,
+              orders: r.orders,
+              spendCents: r.spendCents,
+              salesCents: r.salesCents,
+              cpcCents: r.cpcCents == null ? null : Math.round(r.cpcCents),
+              acos: r.acos,
+            },
       }
     })
     return {
@@ -1225,11 +1239,108 @@ const adTargets: AgentTool = {
       data: {
         dataAsOf: day(grid.freshness.newestPerfDate ? new Date(grid.freshness.newestPerfDate) : null),
         window,
+        ...(sdIds.size ? { display: { dataAsOf: sd.dataAsOf, attribution: SD_ATTRIBUTION_NOTE } } : {}),
         items,
         nextCursor: page.nextCursor,
         total: rows.length,
         ...(grid.truncated ? { truncated: 'More than 5,000 targets matched: only the first 5,000 (by bid) were read. Narrow with campaignId, market or search.' } : {}),
         ...(page.nextCursor ? { more: moreHint(items.length, rows.length, page.cut, 'campaignId, adGroupId, market or search') } : {}),
+      },
+    }
+  }),
+}
+
+// ── ad-purchased-products ──────────────────────────────────────────────────────────────────────────
+
+/** A purchased-product line's own id: its Amazon campaign and ad group, the advertised product and the one bought. */
+const purchasedLineId = (l: SdPurchasedLine) => shortId([l.campaignId, l.adGroupId, l.promotedAsin, l.promotedSku ?? '', l.purchasedAsin, l.currencyCode].join('|'))
+
+const adPurchasedProducts: AgentTool = {
+  name: 'ad-purchased-products',
+  title: 'What shoppers bought after a Display ad',
+  category: 'insights',
+  riskTier: 'low',
+  readOnly: true,
+  requires: [F.adsView],
+  restrictedFields: AD_MONEY,
+  input: z.object({
+    campaignId: campaignArg,
+    adGroupId: z.string().trim().min(1).max(64).optional().describe('only this ad group: its Nexus id (adGroupId in ad-groups or ad-targets)'),
+    market: z.string().trim().toUpperCase().min(2).max(20).optional().describe('only this Amazon marketplace: IT, DE, FR, ES, UK'),
+    asin: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{10}$/, 'an ASIN is 10 letters and digits').optional()
+      .describe('only lines where this ASIN is the advertised product or the one bought'),
+    days: daysArg(30, 'the window'),
+    limit: limitArg,
+    cursor: cursorArg,
+  }),
+  description:
+    'Amazon Sponsored Display: what shoppers bought after an ad. Per campaign, ad group and advertised product (ASIN and '
+    + 'SKU), each OTHER product (boughtAsin, a different ASIN) bought within 14 days of the ad (Amazon\'s SD purchased '
+    + 'product report): orders, units and sales after a click or a view (clickOrView: Amazon sends it for vcpm campaigns, '
+    + 'null when it sent none), after a click (afterClick) and after a view (afterView, the difference), with the campaign '
+    + 'and ad group (Nexus and Amazon ids, names), market and currency. Most orders first. Filter by campaignId, adGroupId '
+    + '(the campaign read is named), market or asin.' + MONEY_WORDS + PAGING,
+  handler: (args) => listTool('ad-purchased-products', async () => {
+    const a = args as { campaignId?: string; adGroupId?: string; market?: string; asin?: string; days: number; limit?: number; cursor?: string }
+    const size = pageSize(a.limit)
+    const scope = scopeOf('ad-purchased-products', args)
+    let campaign = a.campaignId ? await campaignById(a.campaignId) : null
+    if (a.campaignId && !campaign) return { ok: false, error: 'Campaign not found' }
+    let externalAdGroupId: string | null = null
+    if (a.adGroupId) {
+      const groupCampaign = await adGroupCampaignId(a.adGroupId)
+      if (!groupCampaign || (campaign && groupCampaign !== campaign.id)) return { ok: false, error: 'Ad group not found' }
+      campaign = campaign ?? await campaignById(groupCampaign)
+      externalAdGroupId = (await adGroupExternalIds([a.adGroupId])).get(a.adGroupId) ?? null
+    }
+    // Amazon reports by its own ids: a campaign or ad group Amazon does not hold has nothing reported.
+    const campaignIds = campaign
+      ? (campaign.externalCampaignId ? [campaign.externalCampaignId] : [])
+      : a.market
+        ? (await prisma.campaign.findMany({ where: { marketplace: a.market, externalCampaignId: { not: null } }, select: { externalCampaignId: true } }))
+            .map((c) => c.externalCampaignId as string)
+        : undefined
+    const { range } = windowOf(a.days)
+    const read = a.adGroupId && !externalAdGroupId
+      ? { lines: [] as SdPurchasedLine[], dataAsOf: null }
+      : await sdPurchasedProducts({ since: range.since, until: range.until, campaignIds, adGroupId: externalAdGroupId ?? undefined, asin: a.asin })
+    const ordersOf = (l: SdPurchasedLine) => l.clickOrView.orders ?? l.afterClick.orders ?? 0
+    const unitsOf = (l: SdPurchasedLine) => l.clickOrView.units ?? l.afterClick.units ?? 0
+    const positionOf = (l: SdPurchasedLine): CursorPosition => ({ values: [ordersOf(l), unitsOf(l)], id: purchasedLineId(l) })
+    const page = keysetPage(read.lines, positionOf, size, scope, a.cursor, [true, true])
+    const [index, groups] = await Promise.all([
+      campaignIndex([], page.items.map((l) => l.campaignId)), adGroupsByExternalId(page.items.map((l) => l.adGroupId)),
+    ])
+    const items = page.items.map((l) => {
+      const group = groups.get(l.adGroupId)
+      return {
+        lineId: purchasedLineId(l),
+        ...campaignOut(index.byExternal.get(l.campaignId)),
+        externalCampaignId: l.campaignId,
+        adGroupId: group?.id ?? null,
+        externalAdGroupId: l.adGroupId,
+        adGroupName: group?.name ?? null,
+        currency: l.currencyCode,
+        advertised: { asin: l.promotedAsin, sku: l.promotedSku },
+        boughtAsin: l.purchasedAsin,
+        clickOrView: l.clickOrView,
+        afterClick: l.afterClick,
+        afterView: l.afterView,
+      }
+    })
+    return {
+      ok: true,
+      data: {
+        dataAsOf: read.dataAsOf,
+        window: { from: range.sinceStr, to: range.untilStr, days: range.days },
+        // The campaign a campaignId or adGroupId narrowed the read to.
+        ...(campaign ? { campaign: campaignOut(campaign) } : {}),
+        attribution: SD_ATTRIBUTION_NOTE,
+        meaning: 'Each line: shoppers who saw or clicked the ad for the advertised product, then bought boughtAsin (not the advertised product) within 14 days. For a cpc campaign Amazon counts after a click; for a vcpm campaign after a click or a view.',
+        items,
+        nextCursor: page.nextCursor,
+        total: read.lines.length,
+        ...(page.nextCursor ? { more: moreHint(items.length, read.lines.length, page.cut, 'campaignId, adGroupId, market or asin') } : {}),
       },
     }
   }),
@@ -2463,4 +2574,4 @@ const googleAdDetailsTool: AgentTool = {
   }),
 }
 
-export const ADS_READ_TOOLS: AgentTool[] = [adsOverview, adCampaigns, adTargets, adSearchTerms, adChanges, adRecommendations, ebayAdDetailsTool, googleAdDetailsTool]
+export const ADS_READ_TOOLS: AgentTool[] = [adsOverview, adCampaigns, adTargets, adPurchasedProducts, adSearchTerms, adChanges, adRecommendations, ebayAdDetailsTool, googleAdDetailsTool]

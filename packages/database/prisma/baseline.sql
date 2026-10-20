@@ -1692,6 +1692,74 @@ CREATE TABLE "AmazonAdsDailyPerformance" (
 );
 
 -- CreateTable
+CREATE TABLE "AmazonAdsSdDailyPerformance" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "date" DATE NOT NULL,
+    "entityType" TEXT NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "localEntityId" TEXT,
+    "campaignId" TEXT NOT NULL,
+    "adGroupId" TEXT,
+    "entityName" TEXT,
+    "targetingExpression" TEXT,
+    "entityStatus" TEXT,
+    "promotedAsin" TEXT,
+    "promotedSku" TEXT,
+    "currencyCode" TEXT NOT NULL,
+    "impressions" INTEGER NOT NULL DEFAULT 0,
+    "viewableImpressions" INTEGER,
+    "clicks" INTEGER NOT NULL DEFAULT 0,
+    "costMicros" BIGINT NOT NULL DEFAULT 0,
+    "sales14dCents" INTEGER,
+    "salesClicks14dCents" INTEGER,
+    "orders14d" INTEGER,
+    "ordersClicks14d" INTEGER,
+    "units14d" INTEGER,
+    "unitsClicks14d" INTEGER,
+    "detailPageViews14d" INTEGER,
+    "detailPageViewsClicks14d" INTEGER,
+    "ntbOrders14d" INTEGER,
+    "ntbOrdersClicks14d" INTEGER,
+    "ntbSalesCents14d" INTEGER,
+    "ntbSalesClicksCents14d" INTEGER,
+    "ntbUnits14d" INTEGER,
+    "ntbUnitsClicks14d" INTEGER,
+    "reportRunId" TEXT,
+    "reportedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AmazonAdsSdDailyPerformance_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AmazonAdsSdPurchasedProduct" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "date" DATE NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "adGroupId" TEXT NOT NULL,
+    "promotedAsin" TEXT NOT NULL,
+    "promotedSku" TEXT,
+    "purchasedAsin" TEXT NOT NULL,
+    "currencyCode" TEXT NOT NULL,
+    "sales14dCents" INTEGER,
+    "salesClicks14dCents" INTEGER,
+    "orders14d" INTEGER,
+    "ordersClicks14d" INTEGER,
+    "units14d" INTEGER,
+    "unitsClicks14d" INTEGER,
+    "reportRunId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AmazonAdsSdPurchasedProduct_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdsDailyVintage" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -12169,6 +12237,30 @@ CREATE INDEX "AmazonAdsDailyPerformance_workspaceId_idx" ON "AmazonAdsDailyPerfo
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AmazonAdsDailyPerformance_profileId_adProduct_entityT_4f88ac473" ON "AmazonAdsDailyPerformance"("workspaceId", "profileId", "adProduct", "entityType", "entityId", "date");
+
+-- CreateIndex
+CREATE INDEX "AmazonAdsSdDailyPerformance_localEntityId_date_idx" ON "AmazonAdsSdDailyPerformance"("localEntityId", "date");
+
+-- CreateIndex
+CREATE INDEX "AmazonAdsSdDailyPerformance_campaignId_date_idx" ON "AmazonAdsSdDailyPerformance"("campaignId", "date");
+
+-- CreateIndex
+CREATE INDEX "AmazonAdsSdDailyPerformance_marketplace_date_idx" ON "AmazonAdsSdDailyPerformance"("marketplace", "date");
+
+-- CreateIndex
+CREATE INDEX "AmazonAdsSdDailyPerformance_workspaceId_idx" ON "AmazonAdsSdDailyPerformance"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AmazonAdsSdDailyPerformance_entity_day_key" ON "AmazonAdsSdDailyPerformance"("workspaceId", "profileId", "entityType", "entityId", "date");
+
+-- CreateIndex
+CREATE INDEX "AmazonAdsSdPurchasedProduct_profileId_date_idx" ON "AmazonAdsSdPurchasedProduct"("profileId", "date");
+
+-- CreateIndex
+CREATE INDEX "AmazonAdsSdPurchasedProduct_campaignId_date_idx" ON "AmazonAdsSdPurchasedProduct"("campaignId", "date");
+
+-- CreateIndex
+CREATE INDEX "AmazonAdsSdPurchasedProduct_workspaceId_idx" ON "AmazonAdsSdPurchasedProduct"("workspaceId");
 
 -- CreateIndex
 CREATE INDEX "AdsDailyVintage_marketplace_date_idx" ON "AdsDailyVintage"("marketplace", "date");

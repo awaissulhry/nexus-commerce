@@ -1291,6 +1291,23 @@
     },
     "relations": []
   },
+  "AmazonAdsSdDailyPerformance": {
+    "scalar": {},
+    "compound": {
+      "sd_daily_entity": [
+        "profileId",
+        "entityType",
+        "entityId",
+        "date"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsSdPurchasedProduct": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
   "AmazonAdsHourlyPerformance": {
     "scalar": {},
     "compound": {
