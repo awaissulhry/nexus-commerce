@@ -218,7 +218,7 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
   })
 
   it('A2 — the ad reads (T4: and the eBay ad details; Google Ads 1b: the Google ad details) are offered to Claude as reads: nexus.read, closed world, ads.view', () => {
-    const reads = ['ads-overview', 'ad-campaigns', 'ad-targets', 'ad-search-terms', 'ad-changes', 'ad-recommendations', 'ebay-ad-details', 'google-ad-details']
+    const reads = ['ads-overview', 'ad-campaigns', 'ad-targets', 'ad-purchased-products', 'ad-search-terms', 'ad-changes', 'ad-recommendations', 'ebay-ad-details', 'google-ad-details']
     for (const name of reads) {
       const tool = listTools().find((t) => t.name === name)
       expect(tool, name).toBeDefined()

@@ -6,7 +6,8 @@
  *              day still fills — Sponsored Products the last 8 days, Brands and Display the last 15 — as one ranged job per
  *              account and report; the two reports Amazon answers one day at a time (targeting, advertised product) ask
  *              yesterday and the day that completes tonight. Same number of ranged jobs as before; 2 instead of 1 for
- *              the per-day reports.
+ *              the per-day reports. The four Sponsored Display reports below the campaign (2026-10-20, sd/sd-reports.ts)
+ *              ride the campaign cron: ranged, the same 15 days.
  *   catch-up   `runSettleCatchUp`: the days of the last 60 (inside Amazon's retention) that hold no settled copy yet are
  *              asked again, at most `maxJobs` report jobs a run, ranged reports first. After deploy it re-reads the 60
  *              days once — the campaign ingest keeps each day's first copy as a vintage before the re-read replaces it,
@@ -42,11 +43,13 @@ import {
   runAdvertisedProductReportCycle,
   runPlacementReportCycle,
   runReportCreationCycle,
+  runSdReportCycle,
   runSearchTermReportCycle,
   runTargetingReportCycle,
   type AdProduct,
   type CreationCycleResult,
 } from './ads-reports.service.js'
+import { SD_REPORTS, type SdReportSpec } from './sd/sd-reports.js'
 
 const DAY = 86_400_000
 
@@ -115,6 +118,11 @@ const searchTermKind = (adProduct: AdProduct): ReportKind => ({
   label: `search-term ${adProduct}`, reportTypeId: SEARCH_TERM_REPORT_TYPE_ID[adProduct]!, adProduct, ranged: true,
   cycle: (a) => runSearchTermReportCycle({ ...a, adProducts: [adProduct] }),
 })
+/** 2026-10-20 — one Sponsored Display report below the campaign: its first catch-up is the 60-day backfill. */
+const sdKind = (spec: SdReportSpec): ReportKind => ({
+  label: `SD ${spec.label}`, reportTypeId: spec.reportTypeId, adProduct: 'SPONSORED_DISPLAY', ranged: true,
+  cycle: (a) => runSdReportCycle({ ...a, reports: [spec.reportTypeId] }),
+})
 
 /** Ranged reports first (they settle 30 days a job), the per-day reports after. */
 export const SETTLE_KINDS: readonly ReportKind[] = [
@@ -124,6 +132,7 @@ export const SETTLE_KINDS: readonly ReportKind[] = [
   searchTermKind('SPONSORED_PRODUCTS'),
   searchTermKind('SPONSORED_BRANDS'),
   { label: 'placement', reportTypeId: PLACEMENT_REPORT_TYPE_ID, adProduct: 'SPONSORED_PRODUCTS', ranged: true, cycle: (a) => runPlacementReportCycle(a) },
+  ...SD_REPORTS.map(sdKind),
   { label: 'targeting', reportTypeId: TARGETING_REPORT_TYPE_ID, adProduct: 'SPONSORED_PRODUCTS', ranged: false, cycle: (a) => runTargetingReportCycle(a) },
   { label: 'advertised product', reportTypeId: ADVERTISED_PRODUCT_REPORT_TYPE_ID, adProduct: 'SPONSORED_PRODUCTS', ranged: false, cycle: (a) => runAdvertisedProductReportCycle(a) },
 ]

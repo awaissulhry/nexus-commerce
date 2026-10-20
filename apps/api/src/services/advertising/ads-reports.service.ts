@@ -34,6 +34,8 @@ import {
 } from './ads-api-client.js'
 import { reportCurrencyOrSkip } from './ads-profile-facts.service.js'
 import { ageDays, pullSettles } from './ads-report-settle.js'
+import { SD_ENTITY_OF, SD_PURCHASED_PRODUCT_REPORT_TYPE_ID, SD_REPORTS } from './sd/sd-reports.js'
+import { ingestSdEntityRows, ingestSdPurchasedProductRows } from './sd/sd-report-ingest.js'
 
 export type AdProduct =
   | 'SPONSORED_PRODUCTS'
@@ -737,6 +739,11 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
     upserted = await ingestTargetRows(job, rows, marketplace, currencyCode)
   } else if (job.reportTypeId === ADVERTISED_PRODUCT_REPORT_TYPE_ID) {
     upserted = await ingestProductAdRows(job, rows, marketplace, currencyCode)
+  } else if (SD_ENTITY_OF[job.reportTypeId]) {
+    // SD below the campaign: ad group, target, advertised product (sd/sd-report-ingest.ts).
+    upserted = await ingestSdEntityRows(job, rows, marketplace, currencyCode)
+  } else if (job.reportTypeId === SD_PURCHASED_PRODUCT_REPORT_TYPE_ID) {
+    upserted = await ingestSdPurchasedProductRows(job, rows, marketplace, currencyCode)
   } else {
     logger.warn('[ads-reports] unknown reportTypeId', { jobId, reportTypeId: job.reportTypeId })
   }
@@ -1756,6 +1763,59 @@ export async function runTargetingReportCycle(
         result.errors.push(`${profile.profileId} ${day} targeting: ${msg.slice(0, 400)}`)
       }
     }
+  }
+  return result
+}
+
+/**
+ * SD reports below the campaign (2026-10-20) — the Sponsored Display ad group, targeting, advertised product and
+ * purchased product reports (sd/sd-reports.ts), one ranged job per account and report: Amazon answers up to 31 days of
+ * DAILY rows in one SD report, as it does sdCampaigns. Only accounts whose market delivers Display are asked (the same
+ * dormancy gate as the campaign cycle). `reports` narrows to some of the four (the settle catch-up asks per report).
+ */
+export async function runSdReportCycle(
+  args: { startDate: string; endDate: string; reports?: readonly string[]; profileIds?: readonly string[] },
+): Promise<CreationCycleResult> {
+  const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
+  const specs = SD_REPORTS.filter((s) => !args.reports || args.reports.includes(s.reportTypeId))
+  const profiles = onlyProfiles(await activeProfilesWithCampaigns(), args.profileIds)
+  const delivering = await deliveringAdProducts(profiles.map((p) => p.marketplace))
+  const dormant: string[] = []
+  for (const profile of profiles) {
+    if (!delivering.get(profile.marketplace)?.has('SPONSORED_DISPLAY')) {
+      dormant.push(profile.marketplace)
+      continue
+    }
+    const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
+      ? (profile.region as AdsRegion) : 'EU'
+    // Ads wave 4b — the account's real currency; unknown → this account is skipped and said so, never assumed EUR.
+    const currencyCode = await reportCurrencyOrSkip(profile, 'Sponsored Display report')
+    if (!currencyCode) continue
+    for (const spec of specs) {
+      try {
+        const out = await createReportJob({
+          profileId: profile.profileId,
+          region,
+          marketplace: profile.marketplace,
+          currencyCode,
+          adProduct: 'SPONSORED_DISPLAY',
+          reportTypeId: spec.reportTypeId,
+          startDate: args.startDate,
+          endDate: args.endDate,
+          groupBy: spec.groupBy,
+          columns: spec.columns,
+          timeUnit: 'DAILY',
+        })
+        if (out.alreadyExisted) result.jobsSkipped += 1
+        else result.jobsCreated += 1
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        result.errors.push(`${profile.profileId} SD ${spec.label}: ${msg.slice(0, 800)}`)
+      }
+    }
+  }
+  if (dormant.length > 0) {
+    logger.info('[ads-reports] skipping Sponsored Display reports where Display is dormant', { skipped: dormant, lookbackDays: DELIVERY_LOOKBACK_DAYS })
   }
   return result
 }

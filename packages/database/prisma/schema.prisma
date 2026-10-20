@@ -4043,6 +4043,103 @@ model AmazonAdsDailyPerformance {
   @@index([workspaceId])
 }
 
+/// SD reports below the campaign (2026-10-20) — one Sponsored Display ad group, target or product ad on one day, from
+/// Amazon's sdAdGroup, sdTargeting and sdAdvertisedProduct reports (ads-reports.service.ts → sd/sd-report-ingest.ts).
+/// Its own table, not AmazonAdsDailyPerformance: that table's AD_GROUP / AD_TARGET / PRODUCT_AD rows feed Sponsored
+/// Products rules, engines and the strategy's product caps with no ad-product filter, so SD rows there would put SD under
+/// them unasked; and Display counts a purchase after a VIEW as well as after a click, which no column there can hold.
+///   entityType  AD_GROUP | AD_TARGET | PRODUCT_AD; entityId = Amazon's ad group id / targeting id / ad id
+///   attribution 14 days. Each `…14d` figure counts purchases after a click OR a view (Amazon's `sales`, `purchases`, …);
+///               each `…Clicks14d` figure counts those after a click only. After a view = the first minus the second.
+/// Null = Amazon sent no value for it; 0 = Amazon said zero. A re-pull of a day replaces it (unique key).
+model AmazonAdsSdDailyPerformance {
+  // Business ownership comes from verified database context.
+  workspaceId              String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                       String   @id @default(cuid())
+  profileId                String
+  marketplace              String
+  date                     DateTime @db.Date
+  entityType               String
+  entityId                 String
+  /// AdGroup.id / AdTarget.id / AdProductAd.id; null when Nexus does not hold the entity.
+  localEntityId            String?
+  /// Amazon's campaign and ad group ids.
+  campaignId               String
+  adGroupId                String?
+  /// Ad group name (AD_GROUP) or targeting text (AD_TARGET), as Amazon sent it.
+  entityName               String?
+  /// AD_TARGET: Amazon's targeting expression and the target's state that day.
+  targetingExpression      String?
+  entityStatus             String?
+  /// PRODUCT_AD: the advertised ASIN and SKU.
+  promotedAsin             String?
+  promotedSku              String?
+  currencyCode             String
+  impressions              Int      @default(0)
+  /// Impressions that met the MRC viewability standard (Amazon's `impressionsViews`).
+  viewableImpressions      Int?
+  clicks                   Int      @default(0)
+  costMicros               BigInt   @default(0)
+  sales14dCents            Int?
+  salesClicks14dCents      Int?
+  orders14d                Int?
+  ordersClicks14d          Int?
+  units14d                 Int?
+  unitsClicks14d           Int?
+  detailPageViews14d       Int?
+  detailPageViewsClicks14d Int?
+  ntbOrders14d             Int?
+  ntbOrdersClicks14d       Int?
+  ntbSalesCents14d         Int?
+  ntbSalesClicksCents14d   Int?
+  ntbUnits14d              Int?
+  ntbUnitsClicks14d        Int?
+  /// AmazonAdsReportJob.id of the pull that wrote the row.
+  reportRunId              String?
+  reportedAt               DateTime
+  createdAt                DateTime @default(now())
+
+  @@unique([workspaceId, profileId, entityType, entityId, date], name: "sd_daily_entity", map: "AmazonAdsSdDailyPerformance_entity_day_key")
+  @@index([localEntityId, date])
+  @@index([campaignId, date])
+  @@index([marketplace, date])
+  @@index([workspaceId])
+}
+
+/// SD reports below the campaign (2026-10-20) — what shoppers bought after a Sponsored Display ad: per day, campaign, ad
+/// group and advertised product, each OTHER product (a different ASIN / SKU) bought within 14 days (Amazon's
+/// sdPurchasedProduct report, "brand halo"). For a vcpm campaign the totals count a click or a view; for a cpc
+/// campaign Amazon counts after a click. No natural unique key: a re-pull of a day deletes that day's older rows and
+/// inserts its own in one transaction (as AmazonAdsSearchTerm), so a day never counts twice.
+model AmazonAdsSdPurchasedProduct {
+  // Business ownership comes from verified database context.
+  workspaceId         String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String   @id @default(cuid())
+  profileId           String
+  marketplace         String
+  date                DateTime @db.Date
+  /// Amazon's campaign and ad group ids.
+  campaignId          String
+  adGroupId           String
+  promotedAsin        String
+  promotedSku         String?
+  /// The product bought instead (Amazon's `asinBrandHalo`).
+  purchasedAsin       String
+  currencyCode        String
+  sales14dCents       Int?
+  salesClicks14dCents Int?
+  orders14d           Int?
+  ordersClicks14d     Int?
+  units14d            Int?
+  unitsClicks14d      Int?
+  reportRunId         String?
+  createdAt           DateTime @default(now())
+
+  @@index([profileId, date])
+  @@index([campaignId, date])
+  @@index([workspaceId])
+}
+
 /// BID BRAIN BB-13 (2026-10-08, design BRAIN-UPGRADES-DESIGN.md U1a) — the copies of one campaign day as Amazon
 /// filled it in. Amazon keeps adding attributed sales to a day for 7 days (Sponsored Products) or 14 (Brands,
 /// Display); the daily reports now re-read the last 8 / 15 days every night, and AmazonAdsDailyPerformance keeps only

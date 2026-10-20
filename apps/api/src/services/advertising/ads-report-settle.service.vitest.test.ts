@@ -17,7 +17,7 @@ vi.mock('../../db.js', () => ({
 }))
 vi.mock('../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
 
-type Asked = { kind: string; startDate: string; endDate: string; adProducts?: string[]; profileIds?: readonly string[] }
+type Asked = { kind: string; startDate: string; endDate: string; adProducts?: string[]; profileIds?: readonly string[]; reports?: readonly string[] }
 const asked: Asked[] = []
 let failFor: string | null = null
 const cycle = (kind: string) => vi.fn(async (a: Omit<Asked, 'kind'>) => {
@@ -38,6 +38,7 @@ vi.mock('./ads-reports.service.js', () => ({
   runPlacementReportCycle: cycle('placement'),
   runTargetingReportCycle: cycle('targeting'),
   runAdvertisedProductReportCycle: cycle('advertised'),
+  runSdReportCycle: cycle('sd'),
 }))
 
 const { settlingCycle, perDaySettlingCycle, runSettleCatchUp, measureGap, dataVintageByMarket, catchUpBounds } = await import('./ads-report-settle.service.js')
@@ -101,6 +102,20 @@ describe('catch-up', () => {
     expect(targeting).toHaveLength(53)
     expect(targeting[0]).toMatchObject({ startDate: '2026-09-30', endDate: '2026-09-30' })
     expect(r.capped).toBe(false)
+  })
+
+  it('SD reports below the campaign: where Display delivers, the first run asks each of the four for the days of the last 60 before the nightly 15-day span, 30 days a job', async () => {
+    delivering.mockResolvedValue(new Map([['IT', new Set(['SPONSORED_PRODUCTS', 'SPONSORED_DISPLAY'])]]))
+    await runSettleCatchUp({ now: NOW, maxJobs: 1000 })
+    expect(asked.filter((a) => a.kind === 'sd').map((a) => `${a.reports?.join()} ${a.startDate}..${a.endDate} ${a.profileIds?.join()}`)).toEqual(
+      ['sdAdGroup', 'sdTargeting', 'sdAdvertisedProduct', 'sdPurchasedProduct'].flatMap((report) => [
+        `${report} 2026-08-25..2026-09-23 p-it`,
+        `${report} 2026-08-09..2026-08-24 p-it`,
+      ]),
+    )
+    // Display's campaign report is backfilled too (it always was); the ranged SD reports come before the per-day ones.
+    expect(asked.some((a) => a.kind === 'campaign' && a.adProducts?.join() === 'SPONSORED_DISPLAY')).toBe(true)
+    expect(asked.findIndex((a) => a.kind === 'sd')).toBeLessThan(asked.findIndex((a) => a.kind === 'targeting'))
   })
 
   it('stops at maxJobs and says what is still waiting', async () => {
