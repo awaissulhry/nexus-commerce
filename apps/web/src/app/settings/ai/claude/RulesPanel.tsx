@@ -2,7 +2,9 @@
 /**
  * MCP full control C9 — Settings › AI › Claude › Rules: how far Claude may go in this business without a person.
  *
- *   Brakes   Pause (a switch: on and off at once), and the most changes that may run by rule in 24 hours.
+ *   Brakes   Pause (a switch: on and off at once), "Claude’s changes need no approval" (a switch: on, every change
+ *            Claude is asked for runs after the stop window without the Approvals page; a kind at Off stays off; the
+ *            tools' levels wait, still editable, until it is off), and the most changes that may run by rule in 24 hours.
  *   Tools    one row per tool Claude is offered: what it does, its level (a Select of the levels the tool allows —
  *            never above its ceiling), and its limits for Auto (edited in a dialog). Every change is sent at once; a
  *            raise (a higher level, looser limits, a higher cap, Resume) needs settings.security.manage, and the
@@ -21,6 +23,11 @@ import {
   levelLabel,
   limitFields,
   limitsSummary,
+  NO_APPROVAL_LABEL,
+  NO_APPROVAL_NOTICE,
+  noApprovalOf,
+  noApprovalSentence,
+  noApprovalSince,
   parseLimits,
   pauseSentence,
   raises,
@@ -159,6 +166,8 @@ export function RulesPanel({ rules, onChanged }: { rules: ClaudeRules; onChanged
   const [limitsFor, setLimitsFor] = useState<ClaudeRule | null>(null)
   const [cap, setCap] = useState(String(rules.autonomy.dailyAutoCap))
   const pauseLabel = useId()
+  const noApprovalLabel = useId()
+  const noApprovalNote = useId()
   const capId = useId()
   useEffect(() => setCap(String(rules.autonomy.dailyAutoCap)), [rules.autonomy.dailyAutoCap])
 
@@ -202,6 +211,8 @@ export function RulesPanel({ rules, onChanged }: { rules: ClaudeRules; onChanged
   }
 
   const { autonomy } = rules
+  const noApproval = noApprovalOf(autonomy)
+  const noApprovalOn = noApprovalSince(noApproval)
   return (
     <div className="claude-panel">
       {error && <Banner tone="danger" onDismiss={() => setError(null)}>{error}</Banner>}
@@ -223,6 +234,21 @@ export function RulesPanel({ rules, onChanged }: { rules: ClaudeRules; onChanged
             <span id={pauseLabel}>Pause every change that runs by rule</span>
           </div>
           {!autonomy.paused && <p className="claude-note">{pauseSentence(autonomy)}</p>}
+          <div className="claude-row">
+            <Toggle
+              checked={noApproval.on}
+              aria-labelledby={noApprovalLabel}
+              aria-describedby={noApprovalNote}
+              disabled={busy}
+              onChange={(next) => {
+                if (next) void run(() => claudeApi.setNoApproval(true), raised({ kind: 'no-approval' }))
+                else void run(() => claudeApi.setNoApproval(false), 'Claude’s changes need approval again: each kind follows its own level.')
+              }}
+            />
+            <span id={noApprovalLabel}>{NO_APPROVAL_LABEL}</span>
+          </div>
+          {noApprovalOn && <p className="claude-note">{noApprovalOn}</p>}
+          <p className="claude-note" id={noApprovalNote}>{noApprovalSentence(noApproval)}</p>
           <Field label="Most changes that may run by rule in 24 hours" hint="Takes effect at once. Raising it needs the security permission." htmlFor={capId}>
             <div className="claude-row">
               <Input id={capId} size="sm" inputMode="numeric" value={cap} onChange={(event) => setCap(event.target.value.replace(/\D/g, ''))} disabled={busy} />
@@ -236,7 +262,10 @@ export function RulesPanel({ rules, onChanged }: { rules: ClaudeRules; onChanged
         header="What Claude may do here"
         description="Every tool starts at Ask: a person approves each change in Nexus. A new level takes effect at once; letting Claude do more needs the security permission."
       >
-        <ToolRows tools={rules.tools} actions={actions} />
+        <div className="claude-card-body">
+          {noApproval.on && <Banner tone="info">{NO_APPROVAL_NOTICE}</Banner>}
+          <ToolRows tools={rules.tools} actions={actions} />
+        </div>
       </Card>
 
       {limitsFor && (

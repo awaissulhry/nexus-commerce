@@ -7,7 +7,7 @@
  */
 import { getBackendUrl } from '@/lib/backend-url'
 import { commandConflictMessage, commandKeyFor, sendCommand } from '@/lib/command-key'
-import type { ActivityRow, Autonomy, ClaudeRule, ClaudeRules, ClaudeTrust, Outcome } from './claudeWords'
+import type { ActivityRow, Autonomy, ClaudeRule, ClaudeRules, ClaudeTrust, NoApproval, Outcome } from './claudeWords'
 
 export class ClaudeApiError extends Error {
   constructor(message: string, readonly status: number, readonly code?: string) {
@@ -47,6 +47,9 @@ export const claudeApi = {
     call<{ ok: true; rule: Pick<ClaudeRule, 'level' | 'stored' | 'limits'> }>(`trust/${encodeURIComponent(tool)}`, { method: 'PUT', body: patch }),
   setDailyCap: (dailyAutoCap: number) =>
     call<{ ok: true; dailyAutoCap: number }>('autonomy', { method: 'PUT', body: { dailyAutoCap } }),
+  /** "Claude’s changes need no approval": turning it on needs settings.security.manage, off only ai.run (the API checks). */
+  setNoApproval: (on: boolean) =>
+    call<{ ok: true; noApproval?: NoApproval }>('autonomy', { method: 'PUT', body: { noApproval: on } }),
   pause: (reason?: string) =>
     command<{ ok: true; handedBack: number }>('claude-pause', `${getBackendUrl()}/api/claude/pause`, { reason }, 'pause request'),
   resume: () =>

@@ -30,7 +30,9 @@
  * rule-run goes back to a person if the business paused Claude's rule-runs or lowered the tool's level meanwhile; a
  * rule-run that is stale or fails counts towards the automatic pause (claude-trust.service.ts). ADS AUTONOMY AA-W2-3:
  * a strategy-bound one is also judged again on the fresh dry run the staleness check makes (the ads strategy and the
- * day's counts as they are when it runs), and goes back to a person as `rule_refused` when that is outside.
+ * day's counts as they are when it runs), and goes back to a person as `rule_refused` when that is outside. NA: a change
+ * the business's switch "Claude's changes need no approval" scheduled (decisionVia `no-approval`, as the person who
+ * asked) runs only while the switch is still on and Claude is not paused; otherwise it goes back to a person the same way.
  *
  * MCP full control C6: a change plan (toolName submit-change-plan) is approved once by a person who holds the
  * permissions of every step; after the window the commit hands it to the plan worker (change-plan.service.ts), which
@@ -66,10 +68,10 @@ import { logger } from '../../utils/logger.js'
 import { resolvePermissions, type ResolvedPermissions } from '../../lib/auth/rbac.js'
 import { WorkspaceError, type WorkspaceContext } from '../../lib/workspace-context.js'
 import { createWorkspaceService } from '../workspace.service.js'
-import { autoCommitRefusal, autoFreshRefusal, autoPlanCommitRefusal, freshCode, mayRaise, noteAutoFailure, type RaiseWords } from '../agents/claude-trust.service.js'
+import { autoCommitRefusal, autoFreshRefusal, autoPlanCommitRefusal, freshCode, mayRaise, noApprovalCommitRefusal, noteAutoFailure, type RaiseWords } from '../agents/claude-trust.service.js'
 import { drainPlans, enqueuePlan } from '../agents/change-plan.service.js'
 import { approvalStepUp, stepUpOf, type StepUp } from '../agents/step-up-approval.js'
-import { approvedOnVersion, PLAN_TOOL } from '../agents/tool-types.js'
+import { approvedOnVersion, NO_APPROVAL_VIA, PLAN_TOOL } from '../agents/tool-types.js'
 import type { QueueBulkResult } from '@nexus/shared/approval-queue'
 import { BULK_MAX_IDS, bulkApproveRefusal } from './bulk-approve-policy.js'
 
@@ -388,9 +390,10 @@ export async function scheduleApproval(input: {
   /**
    * C5 — who decides: a person in Nexus (the default), the business's rule (auto) as the person who asked, or (C7) the
    * person who asked, confirming in Claude with their authenticator code. W1-3 — `nexus-step-up`: a person in Nexus who
-   * typed their authenticator code (decideFleetApproval checked it), the only way a raise is approved in Nexus.
+   * typed their authenticator code (decideFleetApproval checked it), the only way a raise is approved in Nexus. NA —
+   * `no-approval`: the person who asked, under the business's switch "Claude's changes need no approval".
    */
-  via?: 'nexus' | 'nexus-step-up' | 'auto' | 'claude-confirm'
+  via?: 'nexus' | 'nexus-step-up' | 'auto' | 'claude-confirm' | typeof NO_APPROVAL_VIA
 }): Promise<{
   ok: boolean
   status?: string
@@ -646,6 +649,12 @@ export async function commitScheduledApproval(
   if (ap.decisionVia === 'auto') {
     const ruleNow = ap.toolName === PLAN_TOOL ? await autoPlanCommitRefusal(id) : await autoCommitRefusal(ap.toolName, ap.preview, ap.args)
     if (ruleNow) return handBack(id, ap.decidedBy, ruleNow, 'rule_refused', ap.decisionVia)
+  }
+  // NA — a change the no-approval switch scheduled runs only while the switch is on, Claude is not paused and its kind
+  // (or the ads strategy where it lands) is not off for Claude (a plan: every step).
+  if (ap.decisionVia === NO_APPROVAL_VIA) {
+    const switchNow = await noApprovalCommitRefusal({ approvalId: id, toolName: ap.toolName, preview: ap.preview, args: ap.args })
+    if (switchNow) return handBack(id, ap.decidedBy, switchNow, 'rule_refused', ap.decisionVia)
   }
 
   // The person who approved must still be allowed to do this NOW, in this business: the window, or the sweep that

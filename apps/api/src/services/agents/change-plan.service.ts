@@ -38,11 +38,11 @@ import { deciderPrincipal, freshDryRun, movedFieldNames, movedFields, previewSta
 import { decideByRule, EXPIRY_HOURS, requestDoor, type GateOutcome, type GateRule } from './approval-gate.service.js'
 import { callTool, executeTool, ToolAccessError, type ToolPrincipal, type UserPrincipal } from './call-tool.js'
 import { recordExecutedChangeSafely } from './change-record.service.js'
-import { autoFreshRefusal, autoPlanStepRefusal, noteAutoFailure } from './claude-trust.service.js'
+import { autoFreshRefusal, autoPlanStepRefusal, noApprovalCommitRefusal, noteAutoFailure } from './claude-trust.service.js'
 import { mergedStepUp } from './step-up-approval.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
 import { getTool } from './tool-registry.js'
-import { PLAN_MAX_STEPS, PLAN_TOOL, decidedViaOf, factHash, type AgentTool, type PlanEntities, type PlanFacts, type PlanRequest, type PlanWrite, type ToolRequest } from './tool-types.js'
+import { NO_APPROVAL_VIA, PLAN_MAX_STEPS, PLAN_TOOL, decidedViaOf, factHash, type AgentTool, type PlanEntities, type PlanFacts, type PlanRequest, type PlanWrite, type ToolRequest } from './tool-types.js'
 
 /** How many steps a preview lists in full; the rest are counted. */
 const PREVIEW_STEPS = 20
@@ -461,6 +461,16 @@ async function runStep(ap: PlanApproval, step: StepRow, rebased: Rebased, notReb
         return
       }
     }
+    // NA — a plan the no-approval switch scheduled stops running so the moment the switch is turned off, Claude is paused
+    // or this step's kind (or the ads strategy where it lands) is set to off for Claude.
+    if (ap.decisionVia === NO_APPROVAL_VIA) {
+      const switchNow = await noApprovalCommitRefusal({ approvalId: ap.id, toolName: step.toolName, preview: approved, args: step.args })
+      if (switchNow) {
+        await end('skipped', { reason: `not run — ${switchNow}` })
+        await stepAudit(ap, step, 'rule_refused', switchNow)
+        return
+      }
+    }
     // The approver, as they are NOW in this business, with this step's tool's permissions.
     const decider = await deciderPrincipal({ ...ap, toolName: step.toolName })
     if ('refusal' in decider) {
@@ -495,7 +505,7 @@ async function runStep(ap: PlanApproval, step: StepRow, rebased: Rebased, notReb
       approvalId: ap.id,
       approvedPreview: approved ?? undefined,
       via: requestDoor(ap.agentRun),
-      approvedByPerson: !auto, // 4A — a plan a person approved; a plan run by his standing rule is not his click
+      approvedByPerson: !auto, // 4A — a plan a person approved (NA: or the switch, as the asker); a plan run by his standing rule is not his click
       decidedVia: decidedViaOf(ap.decisionVia), // AA-W2-1 — who decided the plan, for every step
     })
     if (!raw.ok) {

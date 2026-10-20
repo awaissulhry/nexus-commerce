@@ -19,6 +19,11 @@
  *   watch       AA-W2-4 — the full check auto would make runs and its verdict is recorded on the request; it is never
  *               scheduled: a person decides it (as at confirm); the cap counts the watched changes that would have run;
  *               offered only below an auto ceiling and never for a brake; raising to it takes settings.security.manage
+ *   no approval NA — with "Claude's changes need no approval" on, every change (a plan too) is scheduled as the person who
+ *               asked (decisionVia no-approval), whatever its kind's level or ceiling, and runs as approved by a person;
+ *               off, Pause, no nexus.run, a raise that asks for a code and a kind set to off keep today's answer; off,
+ *               Pause or the kind set to off inside the window hands it back (a plan: at commit and before each step);
+ *               turning it on takes settings.security.manage, off does not
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -40,7 +45,7 @@ vi.mock('../../db.js', async () => {
 })
 vi.mock('../../lib/queue.js', () => ({
   outboundSyncQueue: null, channelSyncQueue: null, bulkJobQueue: null, redis: null,
-  searchIndexQueue: null, readCacheQueue: null, readinessQueue: null,
+  searchIndexQueue: null, readCacheQueue: null, readinessQueue: null, agentPlanQueue: null,
   addJobSafely: vi.fn(async () => ({ enqueued: false })),
 }))
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(), refreshMany: vi.fn(), refreshInTransaction: vi.fn() } }))
@@ -52,7 +57,8 @@ import type { McpPrincipal } from '../mcp/mcp-auth.js'
 import { runToolForClaude } from '../mcp/mcp-tool-call.js'
 import { getTool } from './tool-registry.js'
 import { z } from 'zod'
-import type { AgentTool } from './tool-types.js'
+import type { AgentTool, ToolContext } from './tool-types.js'
+import { runPlan } from './change-plan.service.js'
 import { dailyRefusal, LIMIT_FACTS_VERSION, limitFactsOf } from './tools/ads-autonomy-kit.js'
 import {
   AUTO_PAUSE_FAILURES,
@@ -66,6 +72,7 @@ import {
   resumeAutoRuns,
   setClaudeRule,
   setDailyAutoCap,
+  setNoApproval,
   watchedRunsInLastDay,
 } from './claude-trust.service.js'
 
@@ -646,5 +653,198 @@ describe('AA-W2-4 — the ads strategy\'s daily limits: watch counts the watched
       const two = await call('submit-change-plan', { title: 'Two bid steps', steps: [await step(), await step()] })
       expect(two.answer.status).toBe('runs_by_rule')
     })
+  })
+})
+
+describe('NA — "Claude\'s changes need no approval": every change Claude asks for, approved in the name of the person who asked', { timeout: TIMEOUT }, () => {
+  const switchTo = (noApproval: unknown, who = actor()) => inside(() => setNoApproval(who, { noApproval }))
+  const skuOf = async (id: string) => (await inside(() => db().product.findUniqueOrThrow({ where: { id } }))).sku
+  /** A product of its own for each rename (a kind that always waits for a person: alwaysAsk, ceiling ask). */
+  const freshProduct = () => inside(() => db().product.create({ data: { sku: `TEST-NA-${randomUUID().slice(0, 8)}`, name: 'No-approval jacket', basePrice: '100.00' } }))
+  /** What `execute` is told about who approved the request it carries out. */
+  async function seenByExecute<T>(toolName: string, work: (seen: Array<Pick<ToolContext, 'approvedByPerson' | 'decidedVia'>>) => Promise<T>): Promise<T> {
+    const tool = getTool(toolName)!
+    const original = tool.execute!
+    const seen: Array<Pick<ToolContext, 'approvedByPerson' | 'decidedVia'>> = []
+    tool.execute = async (args, ctx) => {
+      seen.push({ approvedByPerson: ctx.approvedByPerson, decidedVia: ctx.decidedVia })
+      return original(args, ctx)
+    }
+    try {
+      return await work(seen)
+    } finally {
+      tool.execute = original
+    }
+  }
+  const latestPolicyAudit = () => inside(() => db().agentControlAudit.findFirstOrThrow({ where: { charterKey: 'claude', action: 'policy' }, orderBy: { createdAt: 'desc' } }))
+
+  it('off (no row): exactly as before — a kind that always waits for a person waits for one', async () => {
+    const product = await freshProduct()
+    const { answer } = await call('set-product-sku', { productId: product.id, sku: `${product.sku}-X` })
+    expect(answer).toMatchObject({ status: 'waiting_for_approval' })
+    expect(answer).not.toHaveProperty('trust')
+    expect(await approvalOf(answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null })
+    expect((await inside(() => listClaudeRules())).autonomy.noApproval).toEqual({ on: false, since: null, by: null })
+  })
+
+  it('on: a kind whose ceiling is ask is scheduled as the person who asked and runs after the window, approved by a person in Claude', async () => {
+    expect(getTool('set-product-sku')).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'ask' })
+    expect(await switchTo(true)).toMatchObject({ ok: true, noApproval: { on: true, since: expect.any(String), by: 'Tara Trust' } })
+    const capBefore = (await inside(() => listClaudeRules())).autonomy.autoRunsLastDay
+    const product = await freshProduct()
+    const { answer } = await call('set-product-sku', { productId: product.id, sku: `${product.sku}-NA` })
+    expect(answer).toMatchObject({
+      status: 'runs_by_rule',
+      approvalId: expect.any(String),
+      trust: { level: 'auto', noApproval: true },
+      next: expect.stringMatching(new RegExp(`^${names.A} turned on "Claude's changes need no approval": nobody needs to approve it\\. It runs at runsAt`)),
+    })
+    const parked = await approvalOf(answer.approvalId)
+    expect(parked).toMatchObject({ status: 'scheduled', decisionVia: 'no-approval', decidedByUserId: ids.person, decidedBy: 'Tara Trust' })
+    expect(parked.executeAfter!.getTime() - parked.decidedAt!.getTime()).toBeCloseTo(UNDO_WINDOW_MS, -3)
+    expect(new Date(answer.runsAt).getTime()).toBe(parked.executeAfter!.getTime())
+    expect(await skuOf(product.id)).toBe(product.sku) // nothing inside the window
+    await seenByExecute('set-product-sku', async (seen) => {
+      expect(await windowCloses(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+      expect(seen).toEqual([{ approvedByPerson: true, decidedVia: 'claude' }])
+    })
+    expect(await skuOf(product.id)).toBe(`${product.sku}-NA`)
+    expect(await approvalOf(answer.approvalId)).toMatchObject({ status: 'executed', decisionVia: 'no-approval' })
+    // Not a rule-run: the daily cap does not count it.
+    expect((await inside(() => listClaudeRules())).autonomy.autoRunsLastDay).toBe(capBefore)
+  })
+
+  it('on: a plan is one request, scheduled as the asker, outside every level and limit; each step runs as approved by a person', async () => {
+    await switchTo(true)
+    const before = await priceOf(ids.productA)
+    const far = Math.round(before * 1.5) // outside set-price's 10 % limit, and set-price is at ask (no row)
+    const plan = await call('submit-change-plan', { title: 'No approval plan', steps: [{ tool: 'set-price', args: { productId: ids.productA, price: far } }] })
+    expect(plan.answer).toMatchObject({ status: 'runs_by_rule', trust: { level: 'auto', noApproval: true }, plan: { steps: 1 } })
+    expect(await approvalOf(plan.answer.approvalId)).toMatchObject({ status: 'scheduled', decisionVia: 'no-approval', decidedByUserId: ids.person })
+    expect(await windowCloses(plan.answer.approvalId)).toMatchObject({ ok: true, status: 'executing' })
+    await seenByExecute('set-price', async (seen) => {
+      expect(await inside(() => runPlan(plan.answer.approvalId))).toMatchObject({ finished: true })
+      expect(seen).toEqual([{ approvedByPerson: true, decidedVia: 'claude' }])
+    })
+    expect(await priceOf(ids.productA)).toBe(far)
+  })
+
+  it('on, but paused: as without the switch; on, but without nexus.run: as without the switch (a watch verdict still recorded)', async () => {
+    await switchTo(true)
+    await inside(() => pauseAutoRuns(actor(), 'checking'))
+    const paused = await call('set-product-sku', { productId: (await freshProduct()).id, sku: `TEST-NA-PAUSED-${randomUUID().slice(0, 6)}` })
+    expect(paused.answer).toMatchObject({ status: 'waiting_for_approval' })
+    expect(paused.answer).not.toHaveProperty('trust')
+    await setLevel('set-price', 'auto')
+    const pausedAuto = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
+    expect(pausedAuto.answer).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'auto', why: expect.stringContaining('(checking)') } })
+    for (const id of [paused.answer.approvalId, pausedAuto.answer.approvalId]) expect(await approvalOf(id)).toMatchObject({ status: 'pending', decisionVia: null })
+
+    expect(await inside(() => resumeAutoRuns(actor()))).toMatchObject({ ok: true })
+    const noRun = claude(A, ['nexus.read', 'nexus.write'])
+    const noScope = await call('set-product-sku', { productId: (await freshProduct()).id, sku: `TEST-NA-SCOPE-${randomUUID().slice(0, 6)}` }, noRun)
+    expect(noScope.answer).toMatchObject({ status: 'waiting_for_approval' })
+    expect(noScope.answer).not.toHaveProperty('trust')
+    // A watched kind keeps its watch: the verdict is recorded, the words say who decides.
+    await setLevel('set-price', 'watch')
+    const watched = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 }, noRun)
+    expect(watched.answer).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'watch', watch: { wouldRun: true, scope: 'no-run-by-rule' } } })
+    expect((await approvalOf(watched.answer.approvalId)).ruleVerdict).toMatchObject({ level: 'watch', wouldRun: true, scope: 'no-run-by-rule' })
+    for (const id of [noScope.answer.approvalId, watched.answer.approvalId]) expect(await approvalOf(id)).toMatchObject({ status: 'pending', decisionVia: null })
+  })
+
+  it('on: a raise that asks for the approver’s code (stepUp) is not the switch’s — it goes as without the switch', async () => {
+    await switchTo(true)
+    const tool = getTool('set-price')!
+    const handler = tool.handler
+    tool.handler = async (args, ctx) => {
+      const out = await handler(args, ctx)
+      return out.ok ? { ...out, preview: { ...(out.preview as object), stepUp: { what: 'raises a limit', raises: ['Price'] } } } : out
+    }
+    try {
+      const { answer } = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
+      expect(answer).toMatchObject({ status: 'waiting_for_approval' })
+      expect(answer).not.toHaveProperty('trust')
+      expect(await approvalOf(answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null })
+    } finally {
+      tool.handler = handler
+    }
+  })
+
+  it('on: a kind set to off is still refused before anything runs', async () => {
+    await switchTo(true)
+    expect(await inside(() => setClaudeRule(brake(), 'set-product-sku', { level: 'off' }))).toMatchObject({ ok: true })
+    const product = await freshProduct()
+    const { isError, answer } = await call('set-product-sku', { productId: product.id, sku: `${product.sku}-OFF` })
+    expect(isError).toBe(true)
+    expect(answer.error).toBe(`set-product-sku is turned off for Claude in ${names.A}. Nothing was queued.`)
+  })
+
+  it('turned off or paused inside the window: back to a person, nothing ran — a plan’s steps too', async () => {
+    const before = await priceOf(ids.productA)
+    const ask = (price: number) => call('set-price', { productId: ids.productA, price })
+    // Off: what it scheduled goes back at once.
+    await switchTo(true)
+    const first = await ask(before + 1)
+    expect(first.answer.status).toBe('runs_by_rule')
+    expect(await switchTo(false, brake())).toMatchObject({ ok: true, noApproval: { on: false, since: null, by: null }, handedBack: 1 })
+    expect(await approvalOf(first.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, executeAfter: null, reason: expect.stringContaining('was turned off') })
+    // And at the commit itself, whatever turned it off: handed back, not run.
+    await switchTo(true)
+    const second = await ask(before + 2)
+    await inside(() => db().agentAutonomy.updateMany({ data: { claudeNoApprovalAt: null } }))
+    expect(await windowCloses(second.answer.approvalId)).toMatchObject({ ok: false, error: 'not run — "Claude\'s changes need no approval" was turned off in this business before it ran' })
+    expect(await approvalOf(second.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null })
+    // Pause hands it back, as it does a rule-run.
+    await switchTo(true)
+    const third = await ask(before + 3)
+    expect(await inside(() => pauseAutoRuns(brake(), 'stop'))).toMatchObject({ handedBack: 1 })
+    expect(await approvalOf(third.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, reason: expect.stringContaining('paused') })
+    expect(await inside(() => resumeAutoRuns(actor()))).toMatchObject({ ok: true })
+    // A plan already handed to its worker: each step checks the switch again before it runs.
+    const plan = await call('submit-change-plan', { title: 'Stopped plan', steps: [{ tool: 'set-price', args: { productId: ids.productA, price: before + 4 } }] })
+    expect(plan.answer.status).toBe('runs_by_rule')
+    expect(await windowCloses(plan.answer.approvalId)).toMatchObject({ ok: true, status: 'executing' })
+    await switchTo(false, brake())
+    await inside(() => runPlan(plan.answer.approvalId))
+    const [step] = await inside(() => db().agentPlanStep.findMany({ where: { approvalId: plan.answer.approvalId } }))
+    expect(step).toMatchObject({ status: 'skipped', reason: expect.stringContaining('was turned off in this business before it ran') })
+    expect(await priceOf(ids.productA)).toBe(before)
+  })
+
+  it('the kind set to off inside the window: back to a person at the commit; a plan at its commit and before each step', async () => {
+    const before = await priceOf(ids.productA)
+    await switchTo(true)
+    const single = await call('set-price', { productId: ids.productA, price: before + 1 })
+    const plan = await call('submit-change-plan', { title: 'Off plan', steps: [{ tool: 'set-price', args: { productId: ids.productA, price: before + 2 } }] })
+    const running = await call('submit-change-plan', { title: 'Running plan', steps: [{ tool: 'set-price', args: { productId: ids.productA, price: before + 3 } }] })
+    for (const out of [single, plan, running]) expect(out.answer).toMatchObject({ status: 'runs_by_rule', trust: { noApproval: true } })
+    expect(await windowCloses(running.answer.approvalId)).toMatchObject({ ok: true, status: 'executing' })
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'off' }))).toMatchObject({ ok: true }) // lowering: a brake
+    expect(await windowCloses(single.answer.approvalId)).toMatchObject({ ok: false, error: 'not run — set-price was turned off for Claude in this business before it ran' })
+    expect(await windowCloses(plan.answer.approvalId)).toMatchObject({ ok: false, error: 'not run — step 1: set-price was turned off for Claude in this business before it ran' })
+    for (const out of [single, plan]) expect(await approvalOf(out.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null })
+    await inside(() => runPlan(running.answer.approvalId))
+    const [step] = await inside(() => db().agentPlanStep.findMany({ where: { approvalId: running.answer.approvalId } }))
+    expect(step).toMatchObject({ status: 'skipped', reason: 'not run — set-price was turned off for Claude in this business before it ran' })
+    expect(await priceOf(ids.productA)).toBe(before)
+  })
+
+  it('turning it on takes settings.security.manage; off is a brake anyone who may use Claude pulls; audited; the rules list shows it', async () => {
+    const forbidden = { ok: false, status: 403, code: 'forbidden', error: expect.stringContaining('settings.security.manage') }
+    expect(await switchTo(true, brake())).toMatchObject(forbidden)
+    expect((await inside(() => listClaudeRules())).autonomy.noApproval.on).toBe(false)
+    expect(await switchTo(true)).toMatchObject({ ok: true, noApproval: { on: true, by: 'Tara Trust' }, dailyAutoCap: 200, handedBack: 0 })
+    expect(await latestPolicyAudit()).toMatchObject({ actor: 'Tara Trust', fromValue: { noApproval: false }, toValue: { noApproval: true } })
+    expect((await inside(() => listClaudeRules())).autonomy).toMatchObject({ paused: false, noApproval: { on: true, since: expect.any(String), by: 'Tara Trust' } })
+    expect(await switchTo(false, brake())).toMatchObject({ ok: true, noApproval: { on: false } })
+    expect(await latestPolicyAudit()).toMatchObject({ fromValue: { noApproval: true }, toValue: { noApproval: false, handedBack: 0 } })
+    // With the cap in the same call, both are checked before either is saved.
+    expect(await inside(() => setNoApproval(brake(), { noApproval: true, dailyAutoCap: 50 }))).toMatchObject(forbidden)
+    expect(await inside(() => setNoApproval(brake(), { noApproval: false, dailyAutoCap: 500 }))).toMatchObject(forbidden)
+    expect(await inside(() => setNoApproval(actor(), { noApproval: true, dailyAutoCap: -1 }))).toMatchObject({ ok: false, status: 400 })
+    expect(await switchTo('yes')).toMatchObject({ ok: false, status: 400, error: 'noApproval must be true or false.' })
+    expect((await inside(() => listClaudeRules())).autonomy).toMatchObject({ dailyAutoCap: 200, noApproval: { on: false } })
+    expect(await inside(() => setNoApproval(actor(), { noApproval: true, dailyAutoCap: 50 }))).toMatchObject({ ok: true, noApproval: { on: true }, dailyAutoCap: 50 })
   })
 })

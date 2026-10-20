@@ -6394,6 +6394,8 @@ CREATE TABLE "AgentAutonomy" (
     "autoPausedBy" TEXT,
     "pauseReason" TEXT,
     "dailyAutoCap" INTEGER NOT NULL DEFAULT 200,
+    "claudeNoApprovalAt" TIMESTAMP(3),
+    "claudeNoApprovalBy" TEXT,
     "updatedBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,

@@ -16,6 +16,7 @@ const m = vi.hoisted(() => ({
   list: vi.fn(),
   setRule: vi.fn(),
   setCap: vi.fn(),
+  setNoApproval: vi.fn(),
   pause: vi.fn(),
   resume: vi.fn(),
   activity: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock('../services/agents/claude-trust.service.js', () => ({
   listClaudeRules: m.list,
   setClaudeRule: m.setRule,
   setDailyAutoCap: m.setCap,
+  setNoApproval: m.setNoApproval,
   pauseAutoRuns: m.pause,
   resumeAutoRuns: m.resume,
 }))
@@ -111,6 +113,7 @@ beforeEach(() => {
   m.list.mockResolvedValue({ autonomy: { paused: false, dailyAutoCap: 200 }, tools: [] })
   m.setRule.mockResolvedValue({ ok: true, rule: { tool: 'set-price', level: 'auto' } })
   m.setCap.mockResolvedValue({ ok: true, dailyAutoCap: 50 })
+  m.setNoApproval.mockResolvedValue({ ok: true, noApproval: { on: true, since: '2026-10-20T12:00:00.000Z', by: 'Name u-admin' }, dailyAutoCap: 200, handedBack: 0 })
   m.pause.mockResolvedValue({ ok: true, handedBack: 2 })
   m.resume.mockResolvedValue({ ok: true })
   m.activity.mockResolvedValue({ rows: [], nextCursor: null })
@@ -202,6 +205,35 @@ describe('C5 — what the routes hand the service, and what they answer', () => 
     expect(m.pause).toHaveBeenCalledWith(ADMIN, 'checking')
     expect((await call('POST', '/api/claude/resume', 'token-admin', {})).json()).toEqual({ ok: true })
     expect(m.resume).toHaveBeenCalledWith(ADMIN)
+  })
+})
+
+describe('NA — "Claude\'s changes need no approval": PUT /api/claude/autonomy { noApproval }', () => {
+  const ADMIN = { userId: 'u-admin', label: 'Name u-admin', canManage: true }
+  const VIEWER = { userId: 'u-viewer', label: 'Name u-viewer', canManage: false }
+
+  it('on: the switch (and a cap sent along) go to the one service call that checks both, as the signed-in person', async () => {
+    const on = await call('PUT', '/api/claude/autonomy', 'token-admin', { noApproval: true })
+    expect(on.statusCode).toBe(200)
+    expect(on.json()).toEqual({ ok: true, noApproval: { on: true, since: '2026-10-20T12:00:00.000Z', by: 'Name u-admin' }, dailyAutoCap: 200, handedBack: 0 })
+    expect(m.setNoApproval).toHaveBeenCalledWith(ADMIN, { noApproval: true, dailyAutoCap: undefined })
+    await call('PUT', '/api/claude/autonomy', 'token-admin', { noApproval: false, dailyAutoCap: 50 })
+    expect(m.setNoApproval).toHaveBeenLastCalledWith(ADMIN, { noApproval: false, dailyAutoCap: 50 })
+    expect(m.setCap).not.toHaveBeenCalled()
+  })
+
+  it('needs ai.run to reach; without settings.security.manage the service hears it and its 403 is kept; off is allowed', async () => {
+    expect((await call('PUT', '/api/claude/autonomy', 'token-none', { noApproval: false })).statusCode).toBe(403)
+    expect(m.setNoApproval).not.toHaveBeenCalled()
+    m.setNoApproval.mockResolvedValueOnce({ ok: false, status: 403, code: 'forbidden', error: 'Letting Claude do more without a person needs the settings.security.manage permission in this business.' })
+    const refused = await call('PUT', '/api/claude/autonomy', 'token-viewer', { noApproval: true })
+    expect(refused.statusCode).toBe(403)
+    expect(refused.json()).toEqual({ ok: false, code: 'forbidden', error: 'Letting Claude do more without a person needs the settings.security.manage permission in this business.' })
+    expect(m.setNoApproval).toHaveBeenCalledWith(VIEWER, { noApproval: true, dailyAutoCap: undefined })
+    m.setNoApproval.mockResolvedValueOnce({ ok: true, noApproval: { on: false, since: null, by: null }, dailyAutoCap: 200, handedBack: 1 })
+    const off = await call('PUT', '/api/claude/autonomy', 'token-viewer', { noApproval: false })
+    expect(off.statusCode).toBe(200)
+    expect(off.json()).toMatchObject({ ok: true, noApproval: { on: false }, handedBack: 1 })
   })
 })
 

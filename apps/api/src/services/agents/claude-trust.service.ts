@@ -41,6 +41,13 @@
  * person decides it, as at confirm (watch allows all confirm allows, so lowering watch → confirm never lets Claude do
  * more). Raising to watch is a raise; lowering auto → watch is a free brake. Offered only for a tool whose
  * ceiling is auto, never for a brake (`levelsFor`).
+ *
+ * NA (Owner, 2026-10-20) — one switch per business, "Claude's changes need no approval" (AgentAutonomy.claudeNoApprovalAt):
+ * on, every change Claude asks for over a connection with nexus.run is approved in the name of the person who asked
+ * (decisionVia `no-approval`, a person's approval: tool-types.ts NO_APPROVAL_VIA) and runs after the normal undo window,
+ * whatever its kind's level, ceiling, limits, the ads strategy or the daily cap. A kind set to off is still refused, and
+ * Pause still holds every change (what waits goes back to a person). Turning it on is a raise (settings.security.manage);
+ * off is a brake: what it scheduled and has not run goes back to a person, and the commit checks it again (`noApprovalCommitRefusal`).
  */
 
 import { z } from 'zod'
@@ -59,7 +66,7 @@ import { EXPIRY_HOURS } from './approval-gate.service.js'
 import { offeredOn } from './call-tool.js'
 import { bustPolicyCache } from './tool-policy.service.js'
 import { getTool, listTools } from './tool-registry.js'
-import { CLAUDE_TRUST_LEVELS, PLAN_TOOL, type AgentTool, type ClaudeTrust, type Reversibility } from './tool-types.js'
+import { CLAUDE_TRUST_LEVELS, NO_APPROVAL_VIA, PLAN_TOOL, type AgentTool, type ClaudeTrust, type Reversibility } from './tool-types.js'
 import { asWatched, dailyRefusal, ledgerOf, limitFactsOf, ruleRunLedger, type LimitFacts, type MarketFacts, type RuleRunLedger } from './tools/ads-autonomy-kit.js'
 
 /** The charter Claude's approvals are audited under (AgentRun.agentKey of every MCP call). */
@@ -293,15 +300,23 @@ export async function claudeOffTools(): Promise<Set<string>> {
   return new Set(rows.map((row) => row.name))
 }
 
+/** NA — "Claude's changes need no approval": on or off, since when (ISO) and who turned it on. */
+export interface NoApproval {
+  on: boolean
+  since: string | null
+  by: string | null
+}
+
 export interface Autonomy {
   paused: boolean
   pausedAt: Date | null
   pausedBy: string | null
   reason: string | null
   dailyAutoCap: number
+  noApproval: NoApproval
 }
 
-/** The business's brakes now; no row = not paused, the default cap. */
+/** The business's brakes now; no row = not paused, the default cap, approvals on (the switch off). */
 export async function autonomyOf(): Promise<Autonomy> {
   const row = await prisma.agentAutonomy.findFirst()
   return {
@@ -310,6 +325,11 @@ export async function autonomyOf(): Promise<Autonomy> {
     pausedBy: row?.autoPausedBy ?? null,
     reason: row?.pauseReason ?? null,
     dailyAutoCap: row?.dailyAutoCap ?? DEFAULT_DAILY_AUTO_CAP,
+    noApproval: {
+      on: !!row?.claudeNoApprovalAt,
+      since: row?.claudeNoApprovalAt?.toISOString() ?? null,
+      by: row?.claudeNoApprovalAt ? (row.claudeNoApprovalBy ?? null) : null,
+    },
   }
 }
 
@@ -748,10 +768,15 @@ export async function overDailyCap(): Promise<string | null> {
     : null
 }
 
-/** Back to a person: a change a rule scheduled that must not run by rule after all. */
-async function handToPerson(where: Prisma.AgentApprovalWhereInput, why: string, db: Pick<typeof prisma, 'agentApproval'> = prisma): Promise<number> {
+/** Back to a person: a change a rule (NA — or the no-approval switch: `vias`) scheduled that must not run so after all. */
+async function handToPerson(
+  where: Prisma.AgentApprovalWhereInput,
+  why: string,
+  db: Pick<typeof prisma, 'agentApproval'> = prisma,
+  vias: string[] = ['auto'],
+): Promise<number> {
   const handed = await db.agentApproval.updateMany({
-    where: { ...where, status: 'scheduled', decisionVia: 'auto' },
+    where: { ...where, status: 'scheduled', decisionVia: { in: vias } },
     data: {
       status: 'pending',
       decidedBy: null,
@@ -785,6 +810,32 @@ export async function autoCommitRefusal(toolName: string, preview: unknown, args
   if (!tool || !rule || rule.level !== 'auto') return `the business no longer lets Claude run ${toolName} by rule`
   const outside = limitsRefusal(tool, preview, rule)
   return outside ? `it is no longer inside the business's limits: ${outside}` : null
+}
+
+/** NA — what the switch is called, wherever a person or Claude reads about it. */
+export const NO_APPROVAL_NAME = '"Claude\'s changes need no approval"'
+const NO_APPROVAL_OFF = `${NO_APPROVAL_NAME} was turned off in this business`
+
+/**
+ * NA — at commit (and before each step of a plan), for a change the switch scheduled: why it must go back to a person
+ * instead of running — inside the window the switch was turned off, Claude's changes were paused, or its kind (W1-8: or
+ * the ads strategy where it lands) was set to off for Claude — or null. A plan at commit: every step's kind.
+ */
+export async function noApprovalCommitRefusal(change: { approvalId: string; toolName: string; preview?: unknown; args?: unknown }): Promise<string | null> {
+  const autonomy = await autonomyOf()
+  if (autonomy.paused) return 'changes that run by rule were paused in this business before it ran'
+  if (!autonomy.noApproval.on) return `${NO_APPROVAL_OFF} before it ran`
+  const steps: Array<{ position: number | null; toolName: string; preview?: unknown; args?: unknown }> = change.toolName === PLAN_TOOL
+    ? await prisma.agentPlanStep.findMany({ where: { approvalId: change.approvalId }, orderBy: { position: 'asc' }, select: { position: true, toolName: true, preview: true, args: true } })
+    : [{ position: null, toolName: change.toolName, preview: change.preview, args: change.args }]
+  const rules = await claudeRulesForSteps(steps.map((step) => ({ toolName: step.toolName, args: step.args ?? {}, preview: step.preview })))
+  for (const [index, rule] of rules.entries()) {
+    if (rule?.level !== 'off') continue
+    const { position, toolName } = steps[index]
+    const why = rule.narrowedBy ? narrowedWhy(rule.narrowedBy) : rule.narrowedFor ?? `${toolName} was turned off for Claude in this business before it ran`
+    return position == null ? why : `step ${position}: ${why}`
+  }
+  return null
 }
 
 /**
@@ -861,7 +912,8 @@ export async function pauseAutoRuns(
           update: { autoPausedAt: new Date(), autoPausedBy: actor.label, pauseReason: why, updatedBy: actor.label },
           select: { id: true },
         })
-    const count = await handToPerson({}, 'changes that run by rule were paused in this business', tx)
+    // NA — what "Claude's changes need no approval" scheduled waits for a person too.
+    const count = await handToPerson({}, 'changes that run by rule were paused in this business', tx, ['auto', NO_APPROVAL_VIA])
     if (row) {
       await publishEvent(tx, 'agent.autorun.paused', {
         autonomyId: row.id,
@@ -1087,6 +1139,54 @@ export async function setDailyAutoCap(actor: TrustActor, patch: { dailyAutoCap?:
   })
   await recordControlChange({ charterKey: CLAUDE_CHARTER, action: 'policy', from: { dailyAutoCap: now.dailyAutoCap }, to: { dailyAutoCap: cap }, actor: actor.label })
   return { ok: true, dailyAutoCap: cap }
+}
+
+/**
+ * NA — turn "Claude's changes need no approval" on or off, with the daily cap in the same call when it is given (both
+ * checked before either is saved). On is a raise: settings.security.manage, as for raising a level; off is a brake
+ * anyone who may use Claude here may pull, and what the switch scheduled and has not run goes back to a person at once.
+ * Audited: who, from → to.
+ */
+export async function setNoApproval(
+  actor: TrustActor,
+  patch: { noApproval?: unknown; dailyAutoCap?: unknown },
+): Promise<{ ok: true; noApproval: NoApproval; dailyAutoCap: number; handedBack: number } | TrustRefusal> {
+  if (typeof patch.noApproval !== 'boolean') return { ok: false, status: 400, error: 'noApproval must be true or false.' }
+  const on = patch.noApproval
+  const now = await autonomyOf()
+  const cap = patch.dailyAutoCap === undefined ? now.dailyAutoCap : Number(patch.dailyAutoCap)
+  if (!Number.isInteger(cap) || cap < 0 || cap > MAX_DAILY_AUTO_CAP) {
+    return { ok: false, status: 400, error: `dailyAutoCap must be a whole number from 0 to ${MAX_DAILY_AUTO_CAP}.` }
+  }
+  const switched = on !== now.noApproval.on
+  if (!switched && cap === now.dailyAutoCap) return { ok: true, noApproval: now.noApproval, dailyAutoCap: cap, handedBack: 0 }
+  if ((switched && on) || cap > now.dailyAutoCap) {
+    const refused = await mayRaise(actor)
+    if (refused) return refused
+  }
+  const data = {
+    dailyAutoCap: cap,
+    ...(switched ? { claudeNoApprovalAt: on ? new Date() : null, claudeNoApprovalBy: on ? actor.label : null } : {}),
+    updatedBy: actor.label,
+  }
+  const handedBack = await prisma.$transaction(async (tx) => {
+    await tx.agentAutonomy.upsert({ where: { workspaceId: workspaceIdForQuery() }, create: data, update: data })
+    // Off: what the switch scheduled and has not run goes back to a person now, not only at its commit.
+    return switched && !on ? handToPerson({}, NO_APPROVAL_OFF, tx, [NO_APPROVAL_VIA]) : 0
+  })
+  if (switched) {
+    await recordControlChange({
+      charterKey: CLAUDE_CHARTER,
+      action: 'policy',
+      from: { noApproval: now.noApproval.on },
+      to: { noApproval: on, ...(on ? {} : { handedBack }) },
+      actor: actor.label,
+    })
+  }
+  if (cap !== now.dailyAutoCap) {
+    await recordControlChange({ charterKey: CLAUDE_CHARTER, action: 'policy', from: { dailyAutoCap: now.dailyAutoCap }, to: { dailyAutoCap: cap }, actor: actor.label })
+  }
+  return { ok: true, noApproval: (await autonomyOf()).noApproval, dailyAutoCap: cap, handedBack }
 }
 
 export interface ClaudeRuleRow {

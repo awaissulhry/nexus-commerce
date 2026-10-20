@@ -217,8 +217,10 @@ describe('C1 — execute knows the approval it carries out', () => {
   })
 
   it('AA-W2-1 — and who decided it: a person in Nexus, the person who asked with their code in Claude, or the rule', async () => {
+    // NA — under "Claude's changes need no approval": the person who asked, in Claude — a person's approval.
     const cases: Array<[string | null, string, boolean]> = [
       [null, 'nexus', true], ['nexus', 'nexus', true], ['nexus-step-up', 'nexus', true], ['claude-confirm', 'claude', true], ['auto', 'auto', false],
+      ['no-approval', 'claude', true],
     ]
     for (const [decisionVia, decidedVia, byPerson] of cases) {
       execute.mockClear()

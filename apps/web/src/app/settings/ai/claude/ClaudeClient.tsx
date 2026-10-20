@@ -43,7 +43,8 @@ export default function ClaudeClient() {
         <h2>Claude</h2>
         <p className="claude-note">
           What Claude may do in this business without a person, how to stop it at once, and everything it did. Changes
-          from Claude wait for a person in Approvals unless you set a tool to Auto here.
+          from Claude wait for a person in Approvals unless you set a tool to Auto here, or turn on “Claude’s changes need
+          no approval”.
         </p>
       </header>
       {denied ? (

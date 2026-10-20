@@ -37,7 +37,7 @@ import { actorLabel } from './call-tool.js'
 import { CLAUDE_CHARTER, ruleFrom } from './claude-trust.service.js'
 import { getTool } from './tool-registry.js'
 import { channelQueueOf, type ChannelQueue } from './tools/approval.tools.js'
-import { PLAN_TOOL } from './tool-types.js'
+import { NO_APPROVAL_VIA, PLAN_TOOL } from './tool-types.js'
 
 export const ACTIVITY_OUTCOMES = [
   'read', 'refused', 'preview', 'queued', 'handed-back', 'failed', 'auto', 'approved', 'confirmed', 'rejected',
@@ -60,8 +60,8 @@ export const ACTIVITY_FILTERS = z.object({
   tool: z.string().trim().min(1).max(64).optional().describe('only calls of this tool, or that changed with it (e.g. set-price: an undo asks for one too)'),
   outcome: z.enum(ACTIVITY_OUTCOMES).optional().describe(
     'only rows with this outcome: read, refused, preview, queued (waits for a person), handed-back (approved, then handed back '
-    + 'without running), failed, auto (run by the business\'s rule), approved (by a person), confirmed, rejected, expired, '
-    + 'superseded, undone',
+    + 'without running), failed, auto (run by the business\'s rule, or with "Claude\'s changes need no approval" on: its '
+    + 'decisionVia says no-approval), approved (by a person), confirmed, rejected, expired, superseded, undone',
   ),
   connectionId: z.string().trim().min(1).max(64).optional().describe('only calls over this Claude connection (its id, as each row names it)'),
   cursor: z.string().trim().min(1).max(200).optional().describe('the nextCursor of the previous page, to read further back'),
@@ -97,7 +97,7 @@ export interface ActivityRow {
     requestedAt: string
     decidedBy: string | null
     decidedAt: string | null
-    /** nexus (a person) | auto (the business's rule) | claude-confirm; null while nobody decided. */
+    /** nexus (a person) | auto (the business's rule) | claude-confirm | no-approval (NA: the switch, as the asker); null while nobody decided. */
     decisionVia: string | null
     runsAt: string | null
     expiresAt: string | null
@@ -188,7 +188,10 @@ function outcomeOf(run: RunRow, approval: ApprovalRow | undefined, change: Chang
   }
   if (change?.undoneAt) return 'undone'
   const reason = approval.reason ?? ''
-  const decided = approval.decisionVia === 'auto' ? 'auto' : approval.decisionVia === 'claude-confirm' ? 'confirmed' : 'approved'
+  // NA — run under "Claude's changes need no approval": nobody approved it, so it reads as run without a person (auto); its
+  // decisionVia says which door.
+  const decided = approval.decisionVia === 'auto' || approval.decisionVia === NO_APPROVAL_VIA ? 'auto'
+    : approval.decisionVia === 'claude-confirm' ? 'confirmed' : 'approved'
   switch (approval.status) {
     case 'pending':
       if (reason.startsWith('not run')) return 'handed-back'

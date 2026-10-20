@@ -51,7 +51,7 @@ import { AUTOMATION_HREF } from '../advertising/ads-automation-notify.service.js
 import { CLAUDE_ACTION_TOOLS } from '../advertising/ads-strategy/fields.js'
 import { campaignMarkets, loadIndex } from '../advertising/ads-strategy/load.js'
 import { strategyVersionOf } from '../advertising/ads-strategy/autonomy.js'
-import type { ClaudeTrust } from './tool-types.js'
+import { NO_APPROVAL_VIA, type ClaudeTrust } from './tool-types.js'
 import { ADS_MANAGER_AGENT_KEY, ADS_RUN_DAY_ZONE, ADS_RUN_NOTICE_TYPE, DANGER_NOTICES_PER_DAY, OPEN_RUN_MS, RUNS_PER_DAY } from './ads-manager-constants.js'
 
 // Claude's trust rules and the tool registry are imported where used: they load every tool, this module's own among
@@ -220,7 +220,8 @@ export async function namedApprovals(lists: Record<ListedAs, readonly string[]>)
       continue
     }
     const fate = fateOf(row)
-    const byRule = row.decisionVia === 'auto' && (fate === 'ran' || fate === 'approved')
+    // NA — a change "Claude's changes need no approval" scheduled answered runs_by_rule too: the report lists it so.
+    const byRule = (row.decisionVia === 'auto' || row.decisionVia === NO_APPROVAL_VIA) && (fate === 'ran' || fate === 'approved')
     const watch = ruleVerdictOf(row.ruleVerdict)
     items.push({
       approvalId,

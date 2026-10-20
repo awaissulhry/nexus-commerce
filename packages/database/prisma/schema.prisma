@@ -14073,6 +14073,10 @@ model AgentAutonomy {
   autoPausedBy String?
   pauseReason  String?
   dailyAutoCap Int       @default(200)
+  /// NA — "Claude's changes need no approval": when a person turned it on; null = off (every change follows its kind's level).
+  claudeNoApprovalAt DateTime?
+  /// NA — the name of the person who turned it on.
+  claudeNoApprovalBy String?
   updatedBy    String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

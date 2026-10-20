@@ -437,3 +437,28 @@ describe('AA-W2-4 — a request asked at watch: its recorded verdict, and why it
     }
   })
 })
+
+describe('NA — a change "Claude\'s changes need no approval" ran: who decided says so, never "your rule"', { timeout: 30_000 }, () => {
+  it('the person who asked, with the switch named; it is not counted as ran by rule', async () => {
+    await inside(async () => {
+      const db = database.client
+      const run = await db.agentRun.findFirstOrThrow({ where: { agentKey: 'claude', via: 'claude' } })
+      const row = await db.agentApproval.create({
+        data: {
+          agentRunId: run.id, riskTier: 'high', toolName: 'set-price', status: 'executed', args: { productId: ids.p1, price: 54 },
+          preview: { action: 'set-price', sku: 'AQ-GLOVE-M', scope: 'master', changes: { 'base price': { from: 50, to: 54 } }, deltaPct: 8 },
+          decidedBy: 'Ana Plan', decidedByUserId: people.all.id, decidedAt: new Date(), decisionVia: 'no-approval',
+          expiresAt: new Date(Date.now() + 24 * 3600_000),
+        } as never,
+      })
+      ids.noApproval = row.id
+    })
+    try {
+      const done = await rowOf('all', 'noApproval', 'done')
+      expect(done.decider).toEqual({ kind: 'person', label: 'Ana Plan (no approval needed: switch on)' })
+      expect(done.note).toBe('Ran · approved by Ana Plan (no approval needed: switch on)')
+    } finally {
+      await inside(() => database.client.agentApproval.delete({ where: { id: ids.noApproval } }))
+    }
+  })
+})

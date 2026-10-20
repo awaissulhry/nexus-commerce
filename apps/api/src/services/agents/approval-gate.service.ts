@@ -76,9 +76,11 @@ export interface GateOutcome {
  * C5 — who decides a stored request. `rule`: the business's rule scheduled it (auto) as the person who asked; it runs
  * at `executeAfter` unless someone stops it. `person`: it waits for a person in Nexus; `why` says why the tool's level
  * (above ask) did not decide it. AA-W2-4 — at `watch` it always waits for a person, with the rule's recorded verdict.
+ * NA — `noApproval`: scheduled by the business's switch "Claude's changes need no approval" (decisionVia no-approval),
+ * whatever the kind's level; it runs as any rule-run does.
  */
 export type RuleVerdict =
-  | { by: 'rule'; level: 'auto'; executeAfter: string }
+  | { by: 'rule'; level: 'auto'; executeAfter: string; noApproval?: true }
   | {
       by: 'person'
       level: ClaudeTrust
@@ -425,7 +427,8 @@ export async function decideApproval(
       decider,
       ap.toolName,
       ap.args as Record<string, unknown>,
-      // 4A — approved by a person (in Nexus or with his code in Claude), not by a standing rule. AA-W2-1 — and which.
+      // 4A — approved by a person (in Nexus, with his code in Claude, or NA — asked by him with "Claude's changes need no
+      // approval" on), not by a standing rule. AA-W2-1 — and which.
       {
         approvalId: id,
         approvedPreview: ap.preview ?? undefined,
