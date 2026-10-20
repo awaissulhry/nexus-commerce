@@ -140,6 +140,17 @@ beforeAll(async () => {
     await product('TEST-SD-3', 'B0FXSD0003', 3, 'ACTIVE')
     await product('TEST-SD-4', 'B0FXSD0004', 2, 'ACTIVE')
     await product('TEST-SD-DRAFT', 'B0FXSD0009', 5, 'DRAFT')
+    // A family (2026-10-21): size L's old column holds size M's ASIN (copied from the sibling) while its Amazon IT listing
+    // holds its own; and two sizes whose LISTINGS share one ASIN (a real duplicate) while their old columns differ.
+    const family = await db.product.create({ data: { sku: 'TEST-SD-FAM', name: 'Test family', basePrice: '49.00', isParent: true } })
+    const size = async (sku: string, oldAsin: string, listingAsin: string) => {
+      const p = await db.product.create({ data: { sku, name: `Test ${sku}`, basePrice: '49.00', amazonAsin: oldAsin, totalStock: 4, parentId: family.id } })
+      await db.channelListing.create({ data: { productId: p.id, channel: 'AMAZON', marketplace: 'IT', region: 'IT', channelMarket: 'AMAZON_IT', listingStatus: 'ACTIVE', externalListingId: listingAsin } })
+    }
+    await size('TEST-SD-M', 'B0FXSDM001', 'B0FXSDM001')
+    await size('TEST-SD-L', 'B0FXSDM001', 'B0FXSDL001')
+    await size('TEST-SD-DUP-A', 'B0FXSDDA01', 'B0FXSDDUP1')
+    await size('TEST-SD-DUP-B', 'B0FXSDDB01', 'B0FXSDDUP1')
   })
 }, 180_000)
 afterAll(async () => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); await database?.close() }, 30_000)
@@ -382,5 +393,30 @@ describe('add-negative-targets — an SD negative brand beside the negative ASIN
     const live = await ask('add-negative-targets', { adGroupIds: ['g-sd-aud'], brands: ['98765'], why: 'test' })
     expect(await approve(live.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { added: 1, reachedAmazon: 1 } })
     expect(posted('/sd/negativeTargets')).toEqual([{ adGroupId: 300000000102, expressionType: 'manual', expression: [{ type: 'asinBrandSameAs', value: '98765' }], state: 'enabled' }])
+  })
+})
+
+describe('the ASIN of each product is its Amazon listing\'s in the campaign\'s market (2026-10-21)', () => {
+  it('a size whose old column holds its sibling\'s ASIN is not "the same product twice": the preview, the plan and the stored ad carry its listing\'s ASIN', async () => {
+    const args = contextual({ name: 'Test SD sizes', skus: ['TEST-SD-M', 'TEST-SD-L'], sdTargets: [{ type: 'similarProducts' }] })
+    const r = await preview('create-ad-campaign', args)
+    expect(r.ok, r.error).toBe(true)
+    expect(r.preview).toMatchObject({
+      plan: { products: [{ sku: 'TEST-SD-M', asin: 'B0FXSDM001' }, { sku: 'TEST-SD-L', asin: 'B0FXSDL001' }] },
+      products: [{ sku: 'TEST-SD-M', line: 'TEST-SD-M → B0FXSDM001: in stock (4)' }, { sku: 'TEST-SD-L', asin: 'B0FXSDL001', line: 'TEST-SD-L → B0FXSDL001: in stock (4)' }],
+    })
+    const lines = (await preview('add-product-ads', { adGroupId: 'g-sd-aud', skus: ['TEST-SD-L'] })).preview as Row
+    expect(lines).toMatchObject({ products: [{ sku: 'TEST-SD-L', asin: 'B0FXSDL001' }], productLines: [{ sku: 'TEST-SD-L', asin: 'B0FXSDL001' }] })
+    const asked = await ask('create-ad-campaign', { ...args, why: 'test' })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { created: { productAds: 2 } } })
+    expect(await sql(`SELECT a.sku, a.asin FROM "AdProductAd" a JOIN "AdGroup" g ON g.id = a."adGroupId" JOIN "Campaign" c ON c.id = g."campaignId" WHERE c.name = 'Test SD sizes' ORDER BY a.sku`))
+      .toEqual([{ sku: 'TEST-SD-L', asin: 'B0FXSDL001' }, { sku: 'TEST-SD-M', asin: 'B0FXSDM001' }])
+  })
+
+  it('two SKUs whose listings share one ASIN are still the same product: refused, whatever their old columns say', async () => {
+    const twice = 'The same product twice: TEST-SD-DUP-A and TEST-SD-DUP-B are both ASIN B0FXSDDUP1. An ad group advertises a product once: name one of them.'
+    expect((await preview('create-ad-campaign', contextual({ skus: ['TEST-SD-DUP-A', 'TEST-SD-DUP-B'] }))).error).toBe(twice)
+    expect((await preview('create-ad-group', { campaignId: 'c-sd-paused', name: 'Test SD dup', defaultBidCents: 35, skus: ['TEST-SD-DUP-A', 'TEST-SD-DUP-B'] })).error).toBe(twice)
+    expect((await preview('add-product-ads', { adGroupId: 'g-sd-aud', skus: ['TEST-SD-DUP-A', 'TEST-SD-DUP-B'] })).error).toBe(twice)
   })
 })

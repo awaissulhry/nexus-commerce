@@ -198,6 +198,16 @@ beforeAll(async () => {
     for (const status of LISTING_STATUSES_NOT_SOLD) await product(`TEST-ST-${status}`, `B0TST${status.slice(0, 5).padEnd(5, 'X')}`, status)
     await product('TEST-TWIN-A', 'B0TESTTWN1')
     await product('TEST-TWIN-B', 'B0TESTTWN1')
+    // 2026-10-21 — size L's old column holds size M's ASIN while its Amazon IT listing holds its own; two SKUs whose
+    // LISTINGS share one ASIN while their old columns differ.
+    const sized = async (sku: string, oldAsin: string, listingAsin: string) => {
+      const p = await product(sku, oldAsin, null)
+      await db().channelListing.create({ data: { productId: p.id, channel: 'AMAZON', marketplace: 'IT', region: 'IT', channelMarket: 'AMAZON_IT', listingStatus: 'ACTIVE', externalListingId: listingAsin } })
+    }
+    await sized('TEST-SIZE-M', 'B0FXAGM001', 'B0FXAGM001')
+    await sized('TEST-SIZE-L', 'B0FXAGM001', 'B0FXAGL001')
+    await sized('TEST-LDUP-A', 'B0FXAGDA01', 'B0FXAGDUP1')
+    await sized('TEST-LDUP-B', 'B0FXAGDB01', 'B0FXAGDUP1')
     // An ad group a stock lowering floored (its request on record), and one a person floored with no such request.
     const floored = { bidsSuppressedAt: new Date(Date.now() - 60_000), bidsSuppressedFloorCents: 2, suppressedFromBidCents: 30, defaultBidCents: 2 }
     await campaign('c-stock-floor')
@@ -319,6 +329,14 @@ describe('create-ad-group — the preview and what refuses it', () => {
     // Two SKUs of one ASIN are the same product.
     expect((await preview('create-ad-group', group({ skus: ['TEST-TWIN-A', 'TEST-TWIN-B'] }))).error).toBe('The same product twice: TEST-TWIN-A and TEST-TWIN-B are both ASIN B0TESTTWN1. An ad group advertises a product once: name one of them.')
     expect((await preview('add-product-ads', { adGroupId: 'g-c-it', skus: ['TEST-TWIN-A', 'TEST-TWIN-B'] })).error).toMatch(/^The same product twice/)
+    // The ASIN is the listing's in the market, not the old column's: size L (its old column holds size M's ASIN) is its own.
+    const sizes = await preview('create-ad-group', group({ skus: ['TEST-SIZE-M', 'TEST-SIZE-L'] }))
+    expect(sizes.ok, sizes.error).toBe(true)
+    expect(sizes.preview).toMatchObject({ plan: { products: [{ sku: 'TEST-SIZE-M', asin: 'B0FXAGM001' }, { sku: 'TEST-SIZE-L', asin: 'B0FXAGL001' }] } })
+    expect((await preview('add-product-ads', { adGroupId: 'g-c-it', skus: ['TEST-SIZE-L'] })).preview).toMatchObject({ products: [{ sku: 'TEST-SIZE-L', asin: 'B0FXAGL001' }] })
+    // Two SKUs whose listings share one ASIN are the same product, whatever their old columns say.
+    expect((await preview('create-ad-group', group({ skus: ['TEST-LDUP-A', 'TEST-LDUP-B'] }))).error).toBe('The same product twice: TEST-LDUP-A and TEST-LDUP-B are both ASIN B0FXAGDUP1. An ad group advertises a product once: name one of them.')
+    expect((await preview('add-product-ads', { adGroupId: 'g-c-it', skus: ['TEST-LDUP-A', 'TEST-LDUP-B'] })).error).toMatch(/^The same product twice: TEST-LDUP-A and TEST-LDUP-B are both ASIN B0FXAGDUP1/)
   })
 
   it('the Owner\'s rule 3: the same product twice in a campaign refused; elsewhere warned and then never by rule by default', async () => {
