@@ -8,6 +8,9 @@
  * those changes are refused before Nexus or Amazon changes, with the sentence below — everywhere the same words.
  *
  * Creating SB/SD campaigns, ad groups, keywords and ads is NOT refused here: those calls go to their own endpoints.
+ * SD CREATE P2a (2026-10-20) — Claude creates Sponsored Display campaigns, ad groups, product ads and targets through
+ * create-ad-campaign (adProduct SD), create-ad-group, add-product-ads and add-ad-targets: the creates' own SD endpoints,
+ * never a change judged here. An SD negative may now also be a brand (`BRAND`, asinBrandSameAs) in an ad group.
  *
  * W4-11 (2026-10-07; reverses S8 for these writes) — Nexus now sends some changes to an EXISTING Sponsored Brands or
  * Display campaign through their own endpoints (ads-api-client.ts), for the callers that ask (Claude's tools): its daily
@@ -102,7 +105,7 @@ export interface AdWrite {
   fields?: ReadonlyArray<string | null | undefined> | null
   /** The state a `status` change sets: ENABLED | PAUSED | ARCHIVED (any case). */
   toStatus?: string | null
-  /** A target's or a new negative's kind (`AdTarget.kind`: KEYWORD | PRODUCT | CATEGORY | AUDIENCE | AUTO). */
+  /** A target's or a new negative's kind (`AdTarget.kind`: KEYWORD | PRODUCT | CATEGORY | AUDIENCE | AUTO; an SD negative: BRAND too). */
   kind?: string | null
   /** The target is a negative. */
   isNegative?: boolean | null
@@ -118,10 +121,13 @@ const ENTITY_WORDS: Record<AdWrite['entity'], string> = {
   PORTFOLIO: 'a portfolio', PLACEMENT: 'the placement adjustments', NEGATIVE_CREATE: 'a new negative',
 }
 
-/** The negatives Nexus adds and retires: SB a negative keyword in an ad group, SD a negative product target (an ASIN). */
+/**
+ * The negatives Nexus adds and retires: SB a negative keyword in an ad group, SD a negative product target (an ASIN) or,
+ * P2a, a negative brand (SD 3.0 `NegativeTargetingExpression`: asinSameAs | asinBrandSameAs) in an ad group.
+ */
 function negativeSupported(product: string, kind: string, level: string): boolean {
   if (level === 'CAMPAIGN') return false
-  return product === SPONSORED_BRANDS ? kind === 'KEYWORD' : product === SPONSORED_DISPLAY ? kind === 'PRODUCT' : false
+  return product === SPONSORED_BRANDS ? kind === 'KEYWORD' : product === SPONSORED_DISPLAY ? kind === 'PRODUCT' || kind === 'BRAND' : false
 }
 
 /** What of this write Nexus cannot send for an SB or SD campaign, in a few words; null when it can send all of it. */
@@ -130,7 +136,7 @@ function sbSdProblem(product: string, w: AdWrite): string | null {
   const status = (w.toStatus ?? '').trim().toUpperCase()
   const kind = (w.kind ?? '').trim().toUpperCase()
   const level = (w.negativeLevel ?? '').trim().toUpperCase()
-  const negativeWords = product === SPONSORED_BRANDS ? 'a negative other than a keyword in an ad group' : 'a negative other than a product target (an ASIN) in an ad group'
+  const negativeWords = product === SPONSORED_BRANDS ? 'a negative other than a keyword in an ad group' : 'a negative other than a product target (an ASIN) or a brand in an ad group'
   switch (w.entity) {
     case 'CAMPAIGN': {
       const other = fields.filter((f) => !SBSD_CAMPAIGN_FIELDS.has(f))
@@ -162,7 +168,7 @@ function sbSdProblem(product: string, w: AdWrite): string | null {
 function sbSdCan(product: string): string {
   return product === SPONSORED_BRANDS
     ? 'its daily budget and on/off state, the bids and on/off state of its keywords and product targets, and its negative keywords in an ad group (add and retire)'
-    : 'its daily budget and on/off state, the bids and on/off state of its targets, and its negative product targets in an ad group (add and retire)'
+    : 'its daily budget and on/off state, the bids and on/off state of its targets, and its negative product targets and brands in an ad group (add and retire)'
 }
 
 /**

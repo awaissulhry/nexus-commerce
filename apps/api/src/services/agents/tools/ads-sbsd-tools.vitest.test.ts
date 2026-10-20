@@ -236,7 +236,7 @@ describe('add-negative-targets and retire-negatives', () => {
     expect(sb.preview.stepUp).toBeUndefined()
     expect((await preview('add-negative-targets', { adGroupIds: ['g-c-sd'], asins: ['B0TESTOTH1'] })).ok).toBe(true)
     expect((await preview('add-negative-targets', { adGroupIds: ['g-c-sb'], asins: ['B0TESTOTH1'] })).error).toMatch(/not a negative other than a keyword in an ad group/)
-    expect((await preview('add-negative-targets', { adGroupIds: ['g-c-sd'], keywords: [{ text: 'free brand' }] })).error).toMatch(/not a negative other than a product target \(an ASIN\) in an ad group/)
+    expect((await preview('add-negative-targets', { adGroupIds: ['g-c-sd'], keywords: [{ text: 'free brand' }] })).error).toMatch(/not a negative other than a product target \(an ASIN\) or a brand in an ad group/)
     expect((await preview('add-negative-targets', { scope: 'CAMPAIGN', campaignIds: ['c-sb'], keywords: [{ text: 'free brand' }] })).error).toMatch(/not a negative other than a keyword in an ad group/)
   })
 

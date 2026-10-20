@@ -40,6 +40,11 @@
  * in the campaign's market is advertised: a product needs an ACTIVE Amazon listing there with an ASIN, and the seller SKU
  * Amazon holds there (resolveSellerSku).
  *
+ * SD CREATE P2a (2026-10-20) — create-ad-group and add-product-ads also create in a Sponsored Display campaign
+ * (ads-sd-create-kit.ts): an SD ad group (default bid, bid optimisation per cost type, creative type) with its product ads
+ * and targets (sdTargets), and SKUs into an SD ad group — out-of-stock products included unless asked otherwise. The
+ * campaign's ad product decides which path a request takes; a Sponsored Products request reads exactly as before.
+ *
  * Every change tool follows ads-change-kit.ts — previewed first, refused and not queued when Amazon's write gate would
  * refuse it, run only as an approved request (as the approver, changeSetId = the approval on every write and every
  * created row), re-checked in `execute` — and is strategy-bound (ads-autonomy-kit.ts): one may run by the business's rule
@@ -74,6 +79,10 @@ import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type Kit
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import type { AgentTool, FieldPermission, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import {
+  bidOptimizationArg, creativeTypeArg, includeOutOfStockArg, isSdCampaign, sdAdsPreview, sdAdsRun, sdArgsGiven, sdByRuleRefusal, sdGroupPreview,
+  sdGroupRun, sdTargetsArg,
+} from './ads-sd-create-kit.js'
 
 const TOOL = { read: 'ad-groups', create: 'create-ad-group', ads: 'add-product-ads', set: 'set-ad-group' } as const
 /** The most products a new ad group advertises (one product ad each). */
@@ -518,7 +527,7 @@ const negativeArg = z.object({
 })
 
 const CREATE_INPUT = z.object({
-  campaignId: z.string().trim().min(1).max(64).describe('the campaign it goes in: its Nexus id (campaignId in ad-campaigns) — a manual Sponsored Products campaign at Amazon'),
+  campaignId: z.string().trim().min(1).max(64).describe('the campaign it goes in: its Nexus id (campaignId in ad-campaigns) — a manual Sponsored Products campaign at Amazon, or a Sponsored Display campaign at Amazon'),
   name: z.string().trim().min(1).max(128).describe("the ad group's name; new among the campaign's ad groups"),
   defaultBidCents: z.coerce.number().int().min(2).max(BID_MAX_CENTS)
     .describe("the ad group's planned default bid in minor units of the campaign's currency (never converted); also the planned bid of every keyword and product target without its own"),
@@ -532,6 +541,19 @@ const CREATE_INPUT = z.object({
   why: whyArg,
 })
 type CreateArgs = z.infer<typeof CREATE_INPUT>
+
+/**
+ * P2a — what create-ad-group takes: the Sponsored Products arguments (skus optional here: a Sponsored Display ad group may
+ * start without products; CREATE_INPUT still requires them for Sponsored Products) and Sponsored Display's own.
+ */
+const CREATE_TOOL_INPUT = CREATE_INPUT.extend({
+  skus: z.array(SKU).max(MAX_PRODUCTS).optional()
+    .describe(`the Nexus SKUs it advertises, one product ad each (at most ${MAX_PRODUCTS}) — Sponsored Products: required, each sold on Amazon in the campaign's market; Sponsored Display: optional, each listed there (out of stock is fine)`),
+  bidOptimization: bidOptimizationArg,
+  creativeType: creativeTypeArg,
+  sdTargets: sdTargetsArg(' (a contextual T00020 campaign takes product, category and similarProducts only)').optional(),
+  includeOutOfStock: includeOutOfStockArg,
+})
 
 /**
  * How a new ad group's bids start: as planned, or at a floor of its own held by the person who asked — inside a campaign
@@ -559,7 +581,18 @@ const START_HOW = 'A person with settings.security.manage approves it in Nexus w
 
 const CREATE_UNDO_WORDS = 'Undo archives the ad group (archive-ads), and that is permanent at Amazon: an archived ad group never comes back; what it spent stays spent.'
 
+/** P2a — the campaign a create-ad-group request names is Sponsored Display: its own path (ads-sd-create-kit.ts). */
+async function sdCampaignNamed(raw: Record<string, unknown>): Promise<boolean> {
+  const id = typeof raw.campaignId === 'string' ? raw.campaignId.trim() : ''
+  const c = id ? await prisma.campaign.findFirst({ where: { id }, select: { adProduct: true, type: true } }) : null
+  return !!c && isSdCampaign(c)
+}
+const sdGroupOpts = () => ({ tool: TOOL.create, limits: CREATE_LIMITS, undoNote: CREATE_UNDO_WORDS })
+
 async function createPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'> = {}): Promise<ToolResult> {
+  // P2a — a Sponsored Display argument is never dropped silently from a Sponsored Products request.
+  const sdOnly = sdArgsGiven(raw)
+  if (sdOnly.length) return { ok: false, error: `Not queued: ${sdOnly.join(', ')} ${sdOnly.length === 1 ? 'is' : 'are'} for an ad group of a Sponsored Display campaign; this campaign is not one.` }
   const parsed = CREATE_INPUT.safeParse(raw)
   if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; ') }
   const a: CreateArgs = parsed.data
@@ -881,7 +914,7 @@ const CREATE_MATERIAL = ['basis', 'reach'] as const
 const createAdGroup: AgentTool = {
   name: TOOL.create,
   title: 'Create an Amazon ad group',
-  input: CREATE_INPUT,
+  input: CREATE_TOOL_INPUT,
   requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
   restrictedFields: CHANGE_MONEY,
   category: 'advertising',
@@ -895,7 +928,8 @@ const createAdGroup: AgentTool = {
   reversibility: 'partial',
   maxClaudeTrust: 'auto',
   limits: CREATE_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? createRefusal(preview, limits),
+  // P2a — a Sponsored Display ad group never runs by rule (sdByRuleRefusal).
+  withinLimits: (preview, limits) => sdByRuleRefusal(preview) ?? ruleRefusal(preview, limits) ?? createRefusal(preview, limits),
   undo: CREATE_UNDO,
   description:
     'Create a manual ad group in an existing Amazon Sponsored Products campaign, as ONE request: its products (by SKU, '
@@ -911,12 +945,17 @@ const createAdGroup: AgentTool = {
     + 'shows every row and bid, where it lands (live at Amazon or sandbox), the live-write allowlist and each limit with '
     + 'where it comes from. Refused, and not queued, for an Auto, archived or not-at-Amazon campaign, a taken name, a SKU '
     + 'not found or not sold there, a protected negative, or when Amazon\'s write gate would refuse it. Undo archives the '
-    + 'ad group (archive-ads): permanent at Amazon.',
+    + 'ad group (archive-ads): permanent at Amazon. In a Sponsored Display campaign it creates an SD ad group instead: '
+    + 'name, defaultBidCents (per click for cpc, per thousand viewable impressions for vcpm), bidOptimization (clicks or '
+    + 'conversions for cpc, reach for vcpm: a mismatch is refused), creativeType (IMAGE or VIDEO), and optionally its '
+    + 'product ads (skus, by seller SKU; out-of-stock products included unless includeOutOfStock is false) and targets '
+    + '(sdTargets, in plain words); its bids serve as planned once its campaign is on (SPENDS MONEY: said in the '
+    + 'preview), and it never runs by the business\'s rule.',
   async handler(args, ctx) {
-    return createPreview(args, ctx)
+    return (await sdCampaignNamed(args)) ? sdGroupPreview(args, ctx, sdGroupOpts()) : createPreview(args, ctx)
   },
   async execute(args, ctx) {
-    return runCreate(args, ctx)
+    return (await sdCampaignNamed(args)) ? sdGroupRun(args, ctx, sdGroupOpts()) : runCreate(args, ctx)
   },
 }
 
@@ -924,14 +963,25 @@ const createAdGroup: AgentTool = {
 
 const ADS_INPUT = z.object({
   adGroupId: z.string().trim().min(1).max(64).describe('the ad group: its Nexus id (adGroupId in ad-groups or ad-targets)'),
-  skus: z.array(SKU).min(1).max(MAX_ADS).describe(`the Nexus SKUs it advertises, one product ad each (at most ${MAX_ADS}); each must be sold on Amazon in the campaign's market`),
+  skus: z.array(SKU).min(1).max(MAX_ADS).describe(`the Nexus SKUs it advertises, one product ad each (at most ${MAX_ADS}); each must be sold on Amazon in the campaign's market (Sponsored Display: listed there, out of stock is fine)`),
   why: whyArg,
 })
+/** P2a — what add-product-ads takes: the arguments above, and Sponsored Display's own. */
+const ADS_TOOL_INPUT = ADS_INPUT.extend({ includeOutOfStock: includeOutOfStockArg })
+
+/** P2a — the ad group a request names, when its campaign is Sponsored Display (its own path); null otherwise. */
+async function sdGroupNamed(raw: Record<string, unknown>) {
+  const id = typeof raw.adGroupId === 'string' ? raw.adGroupId.trim() : ''
+  const g = id ? await loadGroup(id) : null
+  return g && isSdCampaign(g.campaign) ? g : null
+}
+const sdAdsOpts = () => ({ tool: TOOL.ads, limits: ADS_LIMITS })
 
 const ADS_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in '
   + 'Claude with theirs when the business set the tool to confirm in Claude. By rule only inside this tool\'s limits.'
 
 async function adsPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'> = {}): Promise<ToolResult> {
+  if (raw.includeOutOfStock !== undefined) return { ok: false, error: 'Not queued: includeOutOfStock is for an ad group of a Sponsored Display campaign; this ad group is not one.' }
   const parsed = ADS_INPUT.safeParse(raw)
   if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; ') }
   const a = parsed.data
@@ -1068,7 +1118,7 @@ const ADS_MATERIAL = ['basis', 'reach'] as const
 const addProductAds: AgentTool = {
   name: TOOL.ads,
   title: 'Add Amazon product ads',
-  input: ADS_INPUT,
+  input: ADS_TOOL_INPUT,
   requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
   restrictedFields: CHANGE_MONEY,
   category: 'advertising',
@@ -1082,7 +1132,8 @@ const addProductAds: AgentTool = {
   reversibility: 'partial',
   maxClaudeTrust: 'auto',
   limits: ADS_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? adsRefusal(preview, limits),
+  // P2a — Sponsored Display product ads never run by rule (sdByRuleRefusal).
+  withinLimits: (preview, limits) => sdByRuleRefusal(preview) ?? ruleRefusal(preview, limits) ?? adsRefusal(preview, limits),
   undo: ADS_UNDO,
   description:
     'Add product ads (by SKU, up to 100) to an existing ad group of an Amazon Sponsored Products campaign, through the '
@@ -1095,12 +1146,17 @@ const addProductAds: AgentTool = {
     + 'enabled campaign of the market is warned. The preview names each product and the seller SKU Amazon holds, the '
     + 'bids they serve at, where it lands (live at Amazon or sandbox) and each limit with where it comes from. Refused, '
     + 'and not queued, for an archived or not-at-Amazon ad group, a SKU not found or not sold there, or when Amazon\'s '
-    + 'write gate would refuse it. Undo pauses them (pause-ads).',
+    + 'write gate would refuse it. Undo pauses them (pause-ads). In a Sponsored Display ad group it adds SD product ads '
+    + 'by seller SKU (a product listed on Amazon there; out-of-stock products included unless includeOutOfStock is '
+    + 'false, each said in the preview: SKU → ASIN, in stock or not); they spend once its campaign is on, and a person '
+    + 'approves it, never a rule.',
   async handler(args, ctx) {
-    return adsPreview(args, ctx)
+    const sd = await sdGroupNamed(args)
+    return sd ? sdAdsPreview(args, sd, ctx, sdAdsOpts()) : adsPreview(args, ctx)
   },
   async execute(args, ctx) {
-    return runAds(args, ctx)
+    const sd = await sdGroupNamed(args)
+    return sd ? sdAdsRun(args, sd, ctx, sdAdsOpts()) : runAds(args, ctx)
   },
 }
 

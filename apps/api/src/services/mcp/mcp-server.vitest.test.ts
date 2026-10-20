@@ -166,7 +166,10 @@ const MOVED_TO_DESCRIPTIONS: ReadonlyArray<readonly [string, string]> = [
   ['create-ai-goal-campaigns', 'off the live-write allowlist'], ['create-ad-campaign', 'off the live-write allowlist'],
   ['undo-worse-ad-change', 'born OBSERVE'], ['undo-worse-ad-change', '3 settled days'],
   ['automation-detail', 'auto-undo (A19) lists its judgements'],
-  ['create-ad-campaign', 'Sponsored Brands and Sponsored Display campaigns are created on the Nexus screens'],
+  // P2a — Sponsored Display is created here too (born paused); Sponsored Brands stays on the Nexus screens.
+  ['create-ad-campaign', 'A Sponsored Display campaign is born PAUSED'], ['create-ad-campaign', 'Sponsored Brands campaigns are created on the Nexus screens'],
+  ['create-ad-group', 'In a Sponsored Display campaign it creates an SD ad group'], ['add-product-ads', 'In a Sponsored Display ad group'],
+  ['add-ad-targets', 'For an ad group of a Sponsored Display campaign it takes sdTargets'],
   ['set-campaign-budget', 'Sponsored Brands'], ['set-target-bid', 'Sponsored Brands'], ['bulk-ad-bid-change', 'Sponsored Brands'],
   ['pause-ads', 'Sponsored Brands'], ['enable-ads', 'Sponsored Brands'], ['add-negative-targets', 'Sponsored Brands'],
   ['retire-negatives', 'which Amazon never lets be added to that campaign again'],

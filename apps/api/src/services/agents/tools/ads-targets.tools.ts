@@ -27,6 +27,11 @@
  *                            apply-harvest, harvest-search-term, graduate-keyword, the rules, the brain). Undo: the
  *                            destination it replaced, set again (or removed).
  *
+ * SD CREATE P2a (2026-10-20) — add-ad-targets also adds targets to an ad group of a Sponsored Display campaign
+ * (ads-sd-create-kit.ts): `sdTargets` in plain words (product, category with its refinements, similar products, views or
+ * purchases remarketing with a lookback, an Amazon audience), each built into Amazon's SD expression by
+ * sd-target-expression.ts and judged by its campaign's tactic and cost type. Always a person's approval; undo pauses them.
+ *
  * add-ad-targets and set-harvest-destination follow ads-change-kit.ts — previewed first; refused, and not queued, when the
  * write gate would refuse it (set-harvest-destination is Nexus only: no gate is asked, its basis is compared again in
  * `execute`); run only as an approved request, as the approver, with changeSetId = the approval on every write and every
@@ -54,6 +59,7 @@ import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
 import { fingerprint, named, placeWords, plural, reachOver, spendGate } from './ads-targeting-kit.js'
 import { aliasExecute, aliasPreview, aliasUndo, aliasUndoExecute, aliasUndoPreview, candidateInAdGroup, namedCandidate, type EngineItem } from './ads-harvest-alias.js'
 import type { AgentTool, FieldPermission, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import { isSdCampaign, sdArgsGiven, sdByRuleRefusal, sdTargetsArg, sdTargetsPreview, sdTargetsRun } from './ads-sd-create-kit.js'
 
 const TOOL = { add: 'add-ad-targets', harvest: 'harvest-search-term', destination: 'set-harvest-destination' } as const
 /** The most targets one request adds (the tool contract's bound for a list), as ONE step. */
@@ -107,7 +113,7 @@ const storedMatch = (expressionType: string) => expressionType.replace(/^_+/, ''
 // ── add-ad-targets ────────────────────────────────────────────────────────────────────────────────
 
 const ADD_INPUT = z.object({
-  adGroupId: ID.describe('the ad group the targets go into (Nexus adGroupId in ad-targets): an ad group of a manual Sponsored Products campaign at Amazon'),
+  adGroupId: ID.describe('the ad group the targets go into (Nexus adGroupId in ad-targets): an ad group of a manual Sponsored Products campaign at Amazon, or of a Sponsored Display campaign (sdTargets)'),
   keywords: z.array(z.object({
     text: TEXT.describe("the keyword's words (at most 10)"),
     matchType: MATCH.describe('EXACT, PHRASE or BROAD'),
@@ -129,6 +135,16 @@ const ADD_INPUT = z.object({
   why: whyArg,
 })
 type AddArgs = z.infer<typeof ADD_INPUT>
+/** P2a — what add-ad-targets takes: the Sponsored Products arguments above, and Sponsored Display's targets. */
+const ADD_TOOL_INPUT = ADD_INPUT.extend({
+  sdTargets: sdTargetsArg(' — for an ad group of a Sponsored Display campaign (instead of keywords, productTargets and categoryTargets); a contextual T00020 campaign takes product, category and similarProducts only').optional(),
+})
+
+/** P2a — the ad group a request names, when its campaign is Sponsored Display (its own path); null otherwise. */
+async function sdGroupNamed(raw: Record<string, unknown>) {
+  const g = typeof raw.adGroupId === 'string' && raw.adGroupId.trim() ? await groupById(raw.adGroupId.trim()) : null
+  return g && isSdCampaign(g.campaign) ? { id: g.id, name: g.name, status: g.status, defaultBidCents: g.defaultBidCents, externalAdGroupId: g.externalAdGroupId, orphanedAt: g.orphanedAt, campaignId: g.campaign.id } : null
+}
 
 /** One target a request adds, at the bid it is written at, and the bid planned for it. */
 interface NewTarget { key: string; kind: 'KEYWORD' | 'PRODUCT' | 'CATEGORY'; value: string; match: Match | null; plannedCents: number; writtenCents: number }
@@ -161,6 +177,9 @@ const ADD_HOW = 'A person with settings.security.manage approves it in Nexus wit
 
 async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'>, opts: { rule: boolean }): Promise<{ result: ToolResult; group?: GroupRow; targets: NewTarget[] }> {
   const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult, targets: [] as NewTarget[] })
+  // P2a — a Sponsored Display argument is never dropped silently from a Sponsored Products request.
+  const sdOnly = sdArgsGiven(raw)
+  if (sdOnly.length) return refuse(`Not queued: ${sdOnly.join(', ')} ${sdOnly.length === 1 ? 'is' : 'are'} for an ad group of a Sponsored Display campaign; this ad group is not one.`)
   const parsed = ADD_INPUT.safeParse(raw)
   if (!parsed.success) return refuse(parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; '))
   const a: AddArgs = parsed.data
@@ -359,6 +378,11 @@ export const ADD_TARGETS_UNDO: ToolUndo = {
   current: targetBidsNow,
   request(change) {
     const targets = ((change.after as { targets?: Array<{ targetId?: unknown; bidCents?: unknown }> } | null)?.targets ?? [])
+    // P2a — Sponsored Display targets are paused (a vCPM bid has no stop bid Nexus may set): they stay at Amazon, paused.
+    if ((change.before as { adProduct?: unknown } | null)?.adProduct === 'SD') {
+      if (!targets.length) return { refusal: 'This change does not record the targets it added.' }
+      return { tool: 'pause-ads', args: { targetIds: targets.map((t) => String(t.targetId)), why: 'undo of add-ad-targets: each Sponsored Display target it added paused (it stays at Amazon)' } }
+    }
     const above = targets.filter((t) => typeof t.bidCents === 'number' && t.bidCents > FLOOR_CENTS)
     if (!targets.length) return { refusal: 'This change does not record the targets it added.' }
     if (!above.length) return { refusal: `Every target it added sits at the ${FLOOR_CENTS}-cent floor already: there is nothing to lower. archive-ads removes them for good.` }
@@ -369,7 +393,7 @@ export const ADD_TARGETS_UNDO: ToolUndo = {
 const addAdTargets: AgentTool = {
   name: TOOL.add,
   title: 'Add keywords and targets',
-  input: ADD_INPUT,
+  input: ADD_TOOL_INPUT,
   requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
   restrictedFields: LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>,
   category: 'advertising',
@@ -384,7 +408,8 @@ const addAdTargets: AgentTool = {
   reversibility: 'partial',
   maxClaudeTrust: 'auto',
   limits: ADD_LIMITS,
-  withinLimits: (preview, limits) => addRefusal(preview, limits) ?? ruleRefusal(preview, limits) ?? addBidRefusal(preview, limits),
+  // P2a — Sponsored Display targets never run by rule (sdByRuleRefusal).
+  withinLimits: (preview, limits) => sdByRuleRefusal(preview) ?? addRefusal(preview, limits) ?? ruleRefusal(preview, limits) ?? addBidRefusal(preview, limits),
   undo: ADD_TARGETS_UNDO,
   description:
     `Add keywords (EXACT, PHRASE, BROAD), product targets (ASINs) and category targets to ONE ad group of a manual Amazon `
@@ -398,11 +423,21 @@ const addAdTargets: AgentTool = {
     + 'and not queued, for an auto campaign, a target already in the ad group, a floored campaign without startAtFloor, or '
     + `when Amazon's write gate would refuse it. ${BY_RULE_WORDS} (by default it does not: maxItems 0, no market). `
     + 'graduate-keyword stays the one-term form for a converting search term. Undo (undo-change) lowers what it added to the '
-    + 'stop bid; archive-ads removes it for good.',
+    + 'stop bid; archive-ads removes it for good. For an ad group of a Sponsored Display campaign it takes sdTargets '
+    + 'instead, in plain words — product (asin), category (categoryId, with brand, price, rating and Prime refinements), '
+    + 'similarProducts, views or purchases remarketing (scope exactProduct, similarProduct for views, relatedProduct for '
+    + 'purchases, or a category; lookbackDays), audience (audienceId) — each at its bid (per click for cpc, per thousand '
+    + 'viewable impressions for vcpm); a contextual (T00020) campaign takes product, category and similarProducts only. '
+    + 'They spend once the campaign is on (SPENDS MONEY: said in the preview); a person approves it, never a rule; undo '
+    + 'pauses them (pause-ads).',
   async handler(args, ctx) {
+    const sd = await sdGroupNamed(args)
+    if (sd) return sdTargetsPreview(args, sd, ctx, { tool: TOOL.add, limits: ADD_LIMITS })
     return (await decideAdd(args, ctx, { rule: true })).result
   },
   async execute(args, ctx) {
+    const sd = await sdGroupNamed(args)
+    if (sd) return sdTargetsRun(args, sd, ctx, { tool: TOOL.add, limits: ADD_LIMITS })
     const { result: fresh, group: g, targets } = await decideAdd(args, ctx, { rule: false })
     const refusal = recheck(ctx, fresh, ADD_MATERIAL)
     if (refusal) return notRun(refusal)

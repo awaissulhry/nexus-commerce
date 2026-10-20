@@ -64,6 +64,51 @@ describe('sdTargetExpression — what Amazon would refuse is refused first, with
   })
 })
 
+describe('SD CREATE P2a — the shapes added, each checked against the SD 3.0 document', () => {
+  it('similar products is a flat clause with no value (`similarProduct`), stored as its name', () => {
+    const e = sdTargetExpression({ kind: 'PRODUCT', value: 'similarProduct' })
+    expect(e).toEqual([{ type: 'similarProduct' }])
+    expect(sdExpressionValue(e)).toBe('similarProduct')
+  })
+
+  it('a refined category: the category first, then brand, price, rating and Prime — and the stored text round-trips', () => {
+    const e = sdTargetExpression({ kind: 'CATEGORY', value: '12345 brand=45678 price=50-100 rating>4 prime=true' })
+    expect(e).toEqual([
+      { type: 'asinCategorySameAs', value: '12345' }, { type: 'asinBrandSameAs', value: '45678' },
+      { type: 'asinPriceBetween', value: '50-100' }, { type: 'asinReviewRatingGreaterThan', value: '4' },
+      { type: 'asinIsPrimeShippingEligible', value: 'true' },
+    ])
+    expect(sdExpressionValue(e)).toBe('12345 brand=45678 price=50-100 rating>4 prime=true')
+    expect(sdTargetExpression({ kind: 'CATEGORY', value: '12345 price<20.5' })).toEqual([{ type: 'asinCategorySameAs', value: '12345' }, { type: 'asinPriceLessThan', value: '20.5' }])
+  })
+
+  it('a category-grain views audience takes refinements before its lookback, as the document\'s example', () => {
+    // views(asinCategorySameAs=12345 asinBrandSameAs=45678 asinPriceBetween=50-100 lookback=60)
+    const e = sdTargetExpression({ kind: 'AUDIENCE', audienceType: 'VIEWS_REMARKETING', value: '12345 brand=45678 price=50-100', lookbackDays: 60 })
+    expect(e).toEqual([{ type: 'views', value: [
+      { type: 'asinCategorySameAs', value: '12345' }, { type: 'asinBrandSameAs', value: '45678' }, { type: 'asinPriceBetween', value: '50-100' }, { type: 'lookback', value: '60' },
+    ] }])
+    expect(sdExpressionValue(e)).toBe('12345 brand=45678 price=50-100 lookback=60')
+    expect(sdTargetExpression({ kind: 'AUDIENCE', audienceType: 'VIEWS_REMARKETING', value: '12345 brand=45678 price=50-100 lookback=60' })).toEqual(e)
+  })
+
+  it('similarProduct is a views scope only, relatedProduct a purchases scope only (the reference tables)', () => {
+    expect(sdTargetExpression({ kind: 'AUDIENCE', audienceType: 'VIEWS_REMARKETING', value: 'similarProduct', lookbackDays: 14 }))
+      .toEqual([{ type: 'views', value: [{ type: 'similarProduct' }, { type: 'lookback', value: '14' }] }])
+    expect(() => sdTargetExpression({ kind: 'AUDIENCE', audienceType: 'VIEWS_REMARKETING', value: 'relatedProduct' })).toThrow(/"relatedProduct" is not a views audience Amazon knows\. Use exactProduct, similarProduct or a category id/)
+    expect(() => sdTargetExpression({ kind: 'AUDIENCE', audienceType: 'PURCHASES_REMARKETING', value: 'similarProduct' })).toThrow(/"similarProduct" is not a purchases audience Amazon knows\. Use exactProduct, relatedProduct or a category id/)
+  })
+
+  it('refuses what Amazon would refuse: two brands, a backwards range, a rating above 5, a refined product scope, a word for Prime', () => {
+    expect(() => sdTargetExpression({ kind: 'CATEGORY', value: '12345 brand=1 brand=2' })).toThrow(/one brand refinement, not two/)
+    expect(() => sdTargetExpression({ kind: 'CATEGORY', value: '12345 price=100-50' })).toThrow(/price range is "low-high"/)
+    expect(() => sdTargetExpression({ kind: 'CATEGORY', value: '12345 rating=3-6' })).toThrow(/review rating range is "low-high" with the low one smaller, 0 to 5/)
+    expect(() => sdTargetExpression({ kind: 'CATEGORY', value: '12345 brand=Acme' })).toThrow(/not a brand id/)
+    expect(() => sdTargetExpression({ kind: 'CATEGORY', value: '12345 prime=false' })).toThrow(/prime=true/)
+    expect(() => sdTargetExpression({ kind: 'AUDIENCE', audienceType: 'VIEWS_REMARKETING', value: 'exactProduct brand=1' })).toThrow(/takes no refinement/)
+  })
+})
+
 describe('the /sd/targets create body and answer', () => {
   it('a bare array: numeric adGroupId, expressionType manual, lowercase state — no campaignId, no SP casing', () => {
     const body = sdTargetCreateBody({ externalCampaignId: '111', externalAdGroupId: '123456789012345', expression: [{ type: 'asinSameAs', value: 'B0TEST0001' }], bid: 0.45 })

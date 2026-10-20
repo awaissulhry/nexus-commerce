@@ -2391,6 +2391,8 @@ export interface CreateSdCampaignInput {
   tactic?: SdTactic
   costType?: 'cpc' | 'vcpm'
   startDate?: Date
+  /** SD CREATE P2a — the last day it serves (none: it runs until stopped), sent as the calendar day in `timeZone`. */
+  endDate?: Date | null
   /** CC-26 — the account's IANA time zone: `startDate` (default now) is sent as the calendar day there. */
   timeZone?: string | null
   portfolioId?: string
@@ -2403,6 +2405,7 @@ export async function createSdCampaign(ctx: ClientContext, input: CreateSdCampai
     budget: input.dailyBudget,
     costType: input.costType ?? 'cpc',
     startDate: sdDate(input.startDate ?? new Date(), input.timeZone),
+    ...(input.endDate ? { endDate: sdDate(input.endDate, input.timeZone) } : {}),
     state: input.state ?? 'paused',
     tactic: input.tactic ?? 'T00020',
     ...(input.portfolioId ? { portfolioId: Number(input.portfolioId) } : {}),
@@ -2948,12 +2951,13 @@ export function sbNegativeKeywordCreateBody(input: CreateNegativeKeywordInput): 
  * SD 3.0 `createNegativeTargetingClauses` — POST /sd/negativeTargets, `application/json`, `[{ adGroupId (int64),
  * expressionType: manual, expression: [{ type: asinSameAs, value }], state: enabled }]`; answered 207 with
  * `{ code, description, targetId }` items. Source: https://advertising.amazon.com/API/docs/en-us/sponsored-display/3-0/openapi#/Negative%20Targeting
+ * SD CREATE P2a — or a brand (`NegativeTargetingExpression` type `asinBrandSameAs`, Amazon's brand id), with `brandId`.
  */
-export function sdNegativeTargetCreateBody(input: CreateNegativeTargetInput): Array<Record<string, unknown>> {
+export function sdNegativeTargetCreateBody(input: CreateNegativeTargetInput & { brandId?: string | null }): Array<Record<string, unknown>> {
   return [{
     adGroupId: amazonIntId(input.externalAdGroupId),
     expressionType: 'manual',
-    expression: [{ type: 'asinSameAs', value: input.asin }],
+    expression: [input.brandId ? { type: 'asinBrandSameAs', value: input.brandId } : { type: 'asinSameAs', value: input.asin }],
     state: input.state ?? 'enabled',
   }]
 }
@@ -2977,8 +2981,8 @@ export async function createSbNegativeKeyword(ctx: ClientContext, input: CreateN
   return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
-/** W4-11 — add an SD negative product target (an ASIN) in an ad group (sdNegativeTargetCreateBody). The wire check binds it. */
-export async function createSdNegativeTarget(ctx: ClientContext, input: CreateNegativeTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown; error: string | null }> {
+/** W4-11 — add an SD negative product target (an ASIN) — or, P2a, a brand (`brandId`) — in an ad group (sdNegativeTargetCreateBody). The wire check binds it. */
+export async function createSdNegativeTarget(ctx: ClientContext, input: CreateNegativeTargetInput & { brandId?: string | null }): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown; error: string | null }> {
   const body = sdNegativeTargetCreateBody(input)
   if (adsMode() === 'sandbox') {
     await assertNegativeWriteAllowed({ method: 'POST', path: '/sd/negativeTargets', body, personConfirmed: input.personConfirmed === true })

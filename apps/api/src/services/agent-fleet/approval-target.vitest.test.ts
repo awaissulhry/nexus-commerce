@@ -354,6 +354,26 @@ const CASES: Case[] = [
     market: 'IT',
     first: { label: 'Daily budget', from: '€3.00', to: '€5.00' },
   },
+  // P2a — a Sponsored Display campaign Claude asks for: what it is, born paused, then its budget and what it advertises.
+  {
+    tool: 'create-ad-campaign',
+    args: { adProduct: 'SD', market: 'IT', name: 'Test display', tactic: 'T00030', costType: 'vcpm', dailyBudgetCents: 2000 },
+    preview: { action: 'create-ad-campaign', adProduct: 'SD', plan: { adProduct: 'SD', market: 'IT', name: 'Test display', tactic: 'T00030', costType: 'vcpm', currency: 'EUR', dailyBudgetCents: 2000, products: [{ sku: 'XR-JKT-S', productId: 'prod-jkt' }], adGroup: { name: 'g', targets: [{}, {}] } } },
+    target: { kind: 'campaign' },
+    channel: 'AMAZON',
+    market: 'IT',
+    first: { label: 'New campaign', from: null, to: 'Sponsored Display “Test display” · T00030 · vCPM · born paused' },
+    changeCount: 3,
+  },
+  {
+    tool: 'create-ad-group',
+    args: { campaignId: 'camp-sd', name: 'Test group', defaultBidCents: 40 },
+    preview: { action: 'create-ad-group', adProduct: 'SD', campaign: { id: 'camp-sd', name: 'Test display', marketplace: 'IT' }, currency: 'EUR', highestPlannedBidCents: 55, plan: { name: 'Test group', products: [{ sku: 'XR-JKT-S', productId: 'prod-jkt' }], targets: [{}, {}, {}] } },
+    target: { kind: 'product', id: 'prod-jkt' },
+    channel: 'AMAZON',
+    market: 'IT',
+    first: { label: 'New ad group', from: null, to: '“Test group” · Sponsored Display · 1 product ad · 3 targets' },
+  },
 ]
 
 describe('resolveRequest — table of tools', () => {
