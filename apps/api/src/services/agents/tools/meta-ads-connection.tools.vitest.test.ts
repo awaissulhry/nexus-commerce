@@ -12,7 +12,6 @@ vi.mock('../../meta/meta-connection-live.js', () => ({
   liveConnectionCheck: vi.fn(async (connectionId: string, adAccountId: string | null) => { h.live.push(`check:${connectionId}:${adAccountId}`); return { token: { isValid: true }, tokenError: null, usage: { tier: 'development_access' }, usageReadOn: 'the chosen ad account', usageError: null, apiVersion: 'v26.0' } }),
   livePermissions: vi.fn(async () => { h.live.push('permissions'); return [{ permission: 'ads_read', status: 'granted' }, { permission: 'pages_show_list', status: 'declined' }] }),
   liveApp: vi.fn(async (_c: string, businessId: string | null) => { h.live.push(`app:${businessId}`); return { appId: '1234567', roles: { items: [], error: null }, authorizedAdAccounts: { items: [], error: null }, clientBusinesses: { items: [], error: null } } }),
-  liveAssignedApps: vi.fn(async (_c: string, userId: string) => { h.live.push(`assigned:${userId}`); return [{ appId: '1234567', name: 'Nexus app', tasks: null }] }),
 }))
 
 import { META_ADS_CONNECTION_TOOLS } from './meta-ads-connection.tools.js'
@@ -51,8 +50,9 @@ describe('meta-connection', () => {
     await run({ view: 'check' })
     const perms = await run({ view: 'permissions' })
     await run({ view: 'app' })
-    await run({ view: 'assigned-apps' })
-    expect(h.live).toEqual(['check:conn-1:1234567890', 'permissions', 'app:9876543210', 'assigned:120000000000001'])
+    expect(h.live).toEqual(['check:conn-1:1234567890', 'permissions', 'app:9876543210'])
+    // ACC-900 (assigned_applications) needs manage_app_solution, which a system user cannot hold: no such view.
+    expect(() => tool.input.parse({ view: 'assigned-apps' })).toThrow()
     expect(perms).toMatchObject({ ok: true, data: { granted: ['ads_read'], declined: [{ permission: 'pages_show_list', status: 'declined' }] } })
   })
 })

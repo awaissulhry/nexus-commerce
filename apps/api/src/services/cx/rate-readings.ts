@@ -86,6 +86,8 @@ export function metaRateReading(headers: Headers, status: number): RateLimitRead
   const percents: number[] = []
   let regainMinutes = 0
   let resetSeconds = 0
+  let tier: string | undefined
+  const tierOf = (value: unknown) => { if (typeof value === 'string' && value && !tier) tier = value }
   const buc = json('x-business-use-case-usage') ?? json('x-business-use-case')
   if (buc && typeof buc === 'object') {
     for (const entries of Object.values(buc as Record<string, unknown>)) {
@@ -93,6 +95,7 @@ export function metaRateReading(headers: Headers, status: number): RateLimitRead
         const e = entry as Record<string, unknown>
         for (const key of ['call_count', 'total_cputime', 'total_time']) { const v = num(e?.[key]); if (v !== null) percents.push(v) }
         regainMinutes = Math.max(regainMinutes, num(e?.estimated_time_to_regain_access) ?? 0)
+        tierOf(e?.ads_api_access_tier)
       }
     }
   }
@@ -100,6 +103,7 @@ export function metaRateReading(headers: Headers, status: number): RateLimitRead
   if (account && typeof account === 'object') {
     const v = num(account.acc_id_util_pct); if (v !== null) percents.push(v)
     resetSeconds = Math.max(resetSeconds, num(account.reset_time_duration) ?? 0)
+    tierOf(account.ads_api_access_tier)
   }
   const insights = json('x-fb-ads-insights-throttle') as Record<string, unknown> | null
   if (insights && typeof insights === 'object') {
@@ -119,6 +123,7 @@ export function metaRateReading(headers: Headers, status: number): RateLimitRead
     model: 'points',
     ...(used !== null ? { remaining: Math.max(0, Math.round(100 - used)), limit: 100 } : {}),
     ...(retryAfterSec ? { retryAfterSec } : {}),
+    ...(tier ? { tier } : {}),
   }
 }
 

@@ -8,8 +8,9 @@
  * /documentation/ads-commerce/marketing-api/get-started/authorization (ads_read reads ads and insights; ads_management
  * changes them; business_management reads the business's assets).
  *
- * M1 reads only: `ads_read` is required. The others are optional: a token without one is complete, and what needs it
- * says so in words (`metaPermissionGaps`).
+ * M1 reads only: `ads_read` is required — `ads_management` covers it too (it grants reading the ads it manages). The
+ * others are optional: a token without one is complete, and what needs it says so in words (`metaPermissionGaps`).
+ * Instagram accounts need instagram_basic AND pages_show_list (they are read through the Pages).
  */
 export const META_SCOPE = {
   ads_read: 'ads_read',
@@ -39,7 +40,7 @@ const NEEDED_FOR: Readonly<Record<string, string>> = {
   business_management: "read the business portfolio's assets",
   pages_show_list: 'list the Facebook Pages',
   pages_read_engagement: "read the Pages' Instagram accounts",
-  instagram_basic: 'read the Instagram accounts',
+  instagram_basic: 'read the Instagram accounts (with pages_show_list)',
   catalog_management: 'read the catalogs (later Nexus versions)',
 }
 
@@ -48,6 +49,7 @@ export interface MetaPermissionGap { scope: string; required: boolean; neededFor
 /** The permissions the token does not carry, required first, each with what it is needed for. */
 export function metaPermissionGaps(grantedScopes: readonly string[]): MetaPermissionGap[] {
   const granted = new Set(grantedScopes)
+  if (granted.has(META_SCOPE.ads_management)) granted.add(META_SCOPE.ads_read)
   return [...META_REQUIRED_SCOPES, ...META_OPTIONAL_SCOPES]
     .filter((scope) => !granted.has(scope))
     .map((scope) => ({ scope, required: META_REQUIRED_SCOPES.includes(scope), neededFor: NEEDED_FOR[scope] ?? 'a later Nexus feature' }))

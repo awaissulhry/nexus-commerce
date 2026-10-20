@@ -341,43 +341,73 @@ function google(status: number, text: string): ChannelVerdict {
  *   4, 17, 32, 613, 80000–80014 and 341 — a rate limit (app, user, ad account, Business Use Case) → rate_limited
  *   10, 200–299 — a permission not given → forbidden;  3 — a capability the app does not have → forbidden;
  *   368 — temporarily blocked for a policy → forbidden
- *   100 — an invalid parameter → validation; with subcode 33 (the object does not exist or is not visible) → not_found
+ *   100 — an invalid parameter → validation; with subcode 33 (the object does not exist or is not visible) → not_found,
+ *       worded "not found or no access (is the system user assigned to it?)"
+ *   a negative code → routed on its error_subcode; `is_transient: true` → transient (Meta: a retry later can succeed)
+ * Meta's words for a person (error_user_title, error_user_msg) come first, then its message; fbtrace_id is kept with
+ * them (Meta support asks for it); blame_field_specs names the field (`attribute`).
  *   2635 — an API version Meta no longer serves → configuration (a Nexus fix, never the person's sign-in)
  *   1, 2 — Meta is unwell → transient
  * `channelCode` = "code" or "code/subcode" (e.g. "613/1487632"), so the ledger says exactly which limit.
  */
 export const META_RATE_LIMIT_CODES: ReadonlySet<number> = new Set([4, 17, 32, 341, 613, 80000, 80001, 80002, 80003, 80004, 80005, 80006, 80008, 80009, 80014])
 
-export function metaErrorOf(text: string): { code: number | null; subcode: number | null; message: string | null; userMessage: string | null; type: string | null } {
+export interface MetaGraphError {
+  code: number | null
+  subcode: number | null
+  message: string | null
+  /** error_user_title / error_user_msg: Meta's words for a person, when it gives them. */
+  userTitle: string | null
+  userMessage: string | null
+  type: string | null
+  /** fbtrace_id: what Meta support asks for. */
+  fbtraceId: string | null
+  /** is_transient: Meta says a retry later can succeed. */
+  isTransient: boolean
+  /** blame_field_specs: the fields Meta blames, as paths (e.g. ["targeting", "geo_locations"]). */
+  blameFields: string[]
+}
+
+export function metaErrorOf(text: string): MetaGraphError {
   const body = parseJson(text)
   const error = body?.error && typeof body.error === 'object' ? body.error : null
   const num = (value: unknown): number | null => {
-    const n = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN
+    const n = typeof value === 'number' ? value : typeof value === 'string' && /^-?\d+$/.test(value) ? Number(value) : NaN
     return Number.isFinite(n) ? n : null
   }
   const str = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value.trim() : null)
+  const blame = Array.isArray(error?.error_data?.blame_field_specs) ? error.error_data.blame_field_specs : Array.isArray(error?.blame_field_specs) ? error.blame_field_specs : []
   return {
     code: num(error?.code),
     subcode: num(error?.error_subcode),
     message: str(error?.message),
+    userTitle: str(error?.error_user_title),
     userMessage: str(error?.error_user_msg),
     type: str(error?.type),
+    fbtraceId: str(error?.fbtrace_id),
+    isTransient: error?.is_transient === true,
+    blameFields: blame.map((spec: unknown) => (Array.isArray(spec) ? spec.map(String).join('.') : String(spec))).filter(Boolean),
   }
 }
 
 function meta(status: number, text: string): ChannelVerdict {
-  const { code, subcode, message, userMessage, type } = metaErrorOf(text)
-  const channelCode = code === null ? (status ? status : null) : subcode === null ? code : `${code}/${subcode}`
-  const words = userMessage ?? message ?? (text || null)
-  if (code === 190 || code === 102 || (code === null && type === 'OAuthException' && status === 401)) {
-    return verdict(subcode === 463 ? 'auth_expired' : 'auth_revoked', channelCode, words)
+  const e = metaErrorOf(text)
+  // A negative code (-1, -2, …) is Meta's "something unexpected": the subcode, when it is a known code, says more.
+  const code = e.code !== null && e.code < 0 ? (e.subcode !== null && e.subcode > 0 ? e.subcode : null) : e.code
+  const channelCode = e.code === null ? (status ? status : null) : e.subcode === null ? e.code : `${e.code}/${e.subcode}`
+  const said = e.userTitle && e.userMessage ? `${e.userTitle}: ${e.userMessage}` : e.userMessage ?? e.userTitle ?? e.message ?? (text || null)
+  const words = said && e.fbtraceId ? `${said} (Meta trace ${e.fbtraceId})` : said
+  const extra = e.blameFields.length ? { attribute: e.blameFields[0] } : {}
+  if (code === 190 || code === 102 || (code === null && e.type === 'OAuthException' && status === 401)) {
+    return verdict(e.subcode === 463 ? 'auth_expired' : 'auth_revoked', channelCode, words, extra)
   }
-  if (code !== null && META_RATE_LIMIT_CODES.has(code)) return verdict('rate_limited', channelCode, words)
-  if (code === 10 || code === 3 || code === 368 || (code !== null && code >= 200 && code <= 299)) return verdict('forbidden', channelCode, words)
-  if (code === 100) return verdict(subcode === 33 ? 'not_found' : 'validation', channelCode, words)
-  if (code === 2635) return verdict('configuration', channelCode, words)
-  if (code === 1 || code === 2) return verdict('transient', channelCode, words)
-  return verdict(byStatus(status), channelCode, words)
+  if (code !== null && META_RATE_LIMIT_CODES.has(code)) return verdict('rate_limited', channelCode, words, extra)
+  if (code === 10 || code === 3 || code === 368 || (code !== null && code >= 200 && code <= 299)) return verdict('forbidden', channelCode, words, extra)
+  if (code === 100 && e.subcode === 33) return verdict('not_found', channelCode, `Not found or no access (is the system user assigned to it?): ${words ?? 'Meta gave no detail.'}`, extra)
+  if (code === 2635) return verdict('configuration', channelCode, words, extra)
+  if (e.isTransient || code === 1 || code === 2 || (e.code !== null && e.code < 0 && code === null)) return verdict('transient', channelCode, words, extra)
+  if (code === 100) return verdict('validation', channelCode, words, extra)
+  return verdict(byStatus(status), channelCode, words, extra)
 }
 
 /** Classify a channel's answer. `status` 0 = no answer (network); `timedOut` wins over everything. */

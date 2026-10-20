@@ -8,21 +8,23 @@
 import { createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response>, proofs: [] as string[] }))
+const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response>, proofs: [] as string[], forgotten: [] as string[] }))
 vi.mock('./account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
 vi.mock('./ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 vi.mock('../cx/token.service.js', () => ({
   getAccessToken: vi.fn(async () => 'meta-system-user-token'),
   metaAppAccessToken: vi.fn(async () => '1234567|app-secret-for-tests'),
+  metaAppIdOf: vi.fn(async () => '1234567'),
   metaRequestProof: vi.fn(async (_connectionId: string, token: string) => {
     h.proofs.push(token)
     return { appsecret_proof: `proof-of-${token.length}`, appsecret_time: '1760000000' }
   }),
 }))
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
+vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async (id: string) => { h.forgotten.push(id) }) }))
 
 import { gatewayLedger } from '../../test-support/gateway-stubs.js'
-import { __rateTest, bucketKey, defaultsFor, META_BUCKETS } from './rate.js'
+import { __rateTest, bucketKey, defaultsFor, META_BUCKETS, META_FULL_BUCKETS, observeRate, takeToken } from './rate.js'
 import { gatewayCall, GatewayRefusal } from './gateway.js'
 import { metaCall, metaUrl } from './meta.js'
 import { metaAppSecretProof, metaCallGroup, metaReadOnlyProblem, metaSendUrl } from './meta-calls.js'
@@ -37,7 +39,7 @@ const sentUrl = (i = 0) => new URL(h.calls[i].url)
 
 beforeEach(() => {
   __rateTest.useMemory()
-  h.calls = []; h.answers = []; h.proofs = []; gatewayLedger.length = 0
+  h.calls = []; h.answers = []; h.proofs = []; h.forgotten = []; gatewayLedger.length = 0
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     h.calls.push({ url: String(url), init })
     return h.answers.shift()?.() ?? new Response(JSON.stringify({ data: [] }), { status: 200 })
@@ -85,11 +87,28 @@ describe('read only by construction', () => {
     expect(ok(`${BASE}/me?access_token=x`)).toMatch(/only the gateway sets/)
     expect(ok(`${BASE}/me?appsecret_proof=x`)).toMatch(/only the gateway sets/)
   })
-  it('the only sign-in call is the system-user token renewal, sent with no account token', () => {
+  it('the only sign-in call is the system-user token renewal, exactly Meta\'s five keys once each, with no account token', () => {
     const renew = `${BASE}/oauth/access_token?grant_type=fb_exchange_token&client_id=1&client_secret=s&set_token_expires_in_60_days=true&fb_exchange_token=t`
     expect(ok(renew, { auth: 'none' })).toBeNull()
     expect(ok(renew, { auth: 'account' })).toMatch(/token renewal/)
     expect(ok(`${BASE}/oauth/access_token?grant_type=client_credentials`, { auth: 'none' })).toMatch(/token renewal/)
+    expect(ok(`${renew}&client_id=2`, { auth: 'none' })).toMatch(/token renewal/)
+    expect(ok(`${renew}&redirect_uri=x`, { auth: 'none' })).toMatch(/token renewal/)
+    expect(ok(renew.replace('&set_token_expires_in_60_days=true', ''), { auth: 'none' })).toMatch(/token renewal/)
+    expect(ok(renew.replace('grant_type=fb_exchange_token', 'grant_type=client_credentials'), { auth: 'none' })).toMatch(/token renewal/)
+  })
+  it('a read never brings a token back: access_token in fields (also nested), Pages without fields, a bare node without fields', () => {
+    expect(ok(`${BASE}/me/accounts?fields=id,access_token`)).toMatch(/never asks Meta for an access_token/)
+    expect(ok(`${BASE}/me?fields=accounts{id,access_token}`)).toMatch(/never asks Meta for an access_token/)
+    expect(ok(`${BASE}/me?fields=accounts{id, access_token }`)).toMatch(/never asks Meta for an access_token/)
+    expect(ok(`${BASE}/me/accounts`)).toMatch(/Pages \(accounts\) names its fields/)
+    expect(ok(`${BASE}/120000000000010`)).toMatch(/names its fields/)
+    expect(ok(`${BASE}/120000000000010?fields=id,name`)).toBeNull()
+    expect(ok(`${BASE}/me/accounts?fields=id,name`)).toBeNull()
+    expect(ok(`${BASE}/me?fields=id,access_token_expires`)).toBeNull()
+  })
+  it('a caller\'s own headers never travel on a Meta call', () => {
+    expect(ok(`${BASE}/me?fields=id`, { headers: { 'X-HTTP-Method-Override': 'POST' } })).toMatch(/no header/)
   })
   it('the publish mode is gated: there is no switch that lets a Meta write out', () => {
     expect(publishModeOf('META')).toBe('gated')
@@ -132,10 +151,14 @@ describe('signing and the token', () => {
     expect(err).toMatchObject({ outcome: 'held', code: 'META_APP_SECRET_UNAVAILABLE' })
     expect(h.calls).toHaveLength(0)
   })
-  it('the token renewal goes with no account token at all (its URL carries the app id and secret)', async () => {
-    await gatewayCall({ channel: 'META', operation: 'token.renew', kind: 'read', connectionId: 'm-1', url: metaUrl('oauth/access_token', { grant_type: 'fb_exchange_token', client_id: '1', client_secret: 's', fb_exchange_token: 't' }), method: 'GET', auth: 'none' })
+  it('the token renewal goes with no account token at all, and only for the connection\'s own app', async () => {
+    const renewal = (clientId: string) => metaUrl('oauth/access_token', { grant_type: 'fb_exchange_token', client_id: clientId, client_secret: 's', set_token_expires_in_60_days: 'true', fb_exchange_token: 't' })
+    await gatewayCall({ channel: 'META', operation: 'token.renew', kind: 'read', connectionId: 'm-1', url: renewal('1234567'), method: 'GET', auth: 'none' })
     expect(sentUrl().searchParams.get('access_token')).toBeNull()
     expect(sentUrl().searchParams.get('appsecret_proof')).toBeNull()
+    const err = await gatewayCall({ channel: 'META', operation: 'token.renew', kind: 'read', connectionId: 'm-1', url: renewal('7654321'), method: 'GET', auth: 'none' }).catch((e) => e)
+    expect(err).toMatchObject({ code: 'META_READ_ONLY', message: expect.stringMatching(/connection's own Meta app/) })
+    expect(h.calls).toHaveLength(1)
   })
   it('metaSendUrl only adds the three parameters', () => {
     expect(metaSendUrl(`${BASE}/me?fields=id`, 't', { appsecret_proof: 'p', appsecret_time: '1' })).toBe(`${BASE}/me?fields=id&access_token=t&appsecret_proof=p&appsecret_time=1`)
@@ -173,7 +196,7 @@ describe('rate limits', () => {
       'x-business-use-case-usage': JSON.stringify({ '9876543210': [{ type: 'ads_management', call_count: 20, total_cputime: 12, total_time: 30, estimated_time_to_regain_access: 0, ads_api_access_tier: 'development_access' }] }),
       'x-ad-account-usage': JSON.stringify({ acc_id_util_pct: 80, reset_time_duration: 120, ads_api_access_tier: 'development_access' }),
     })
-    expect(metaRateReading(headers, 200)).toEqual({ model: 'points', remaining: 20, limit: 100, retryAfterSec: 120 })
+    expect(metaRateReading(headers, 200)).toEqual({ model: 'points', remaining: 20, limit: 100, retryAfterSec: 120, tier: 'development_access' })
     expect(metaRateReading(new Headers({ 'x-app-usage': '{"call_count":5,"total_cputime":1,"total_time":2}' }), 200)).toEqual({ model: 'points', remaining: 95, limit: 100 })
     expect(metaRateReading(new Headers(), 200)).toBeNull()
   })
@@ -187,6 +210,30 @@ describe('rate limits', () => {
     const err = await gatewayCall({ channel: 'META', operation: 'campaigns.list', kind: 'read', connectionId: 'm-1', url: metaUrl('act_1234567890/campaigns'), method: 'GET', maxRateWaitMs: 10 }).catch((e) => e)
     expect(err).toMatchObject({ code: 'RATE_LIMITED_LOCAL' })
     expect(h.calls).toHaveLength(1)
+  })
+  it('a throttle answer with no usage header still holds the bucket: 300 s, an hour for ad-set budget changes', async () => {
+    h.answers.push(() => new Response(JSON.stringify({ error: { code: 17, error_subcode: 2446079, message: 'User request limit reached' } }), { status: 400 }))
+    await metaCall({ connectionId: 'm-2', operation: 'campaigns.list', path: 'act_1234567890/campaigns', query: { fields: 'id' } })
+    const held = await takeToken('META', bucketKey('META', 'm-2', 'ads'), 0)
+    expect(held.ok).toBe(false)
+    expect(held.waitMs).toBeGreaterThan(290_000)
+    expect(held.waitMs).toBeLessThanOrEqual(300_000)
+    h.answers.push(() => new Response(JSON.stringify({ error: { code: 613, error_subcode: 1487632 } }), { status: 400 }))
+    await metaCall({ connectionId: 'm-3', operation: 'adsets.list', path: 'act_1234567890/adsets', query: { fields: 'id' } })
+    expect((await takeToken('META', bucketKey('META', 'm-3', 'ads'), 0)).waitMs).toBeGreaterThan(3_500_000)
+  })
+  it('the Full tier, as the headers name it, sizes the bucket up; Limited sizes it back', async () => {
+    const key = bucketKey('META', 'm-4', 'ads')
+    await observeRate('META', key, { tier: 'standard_access' })
+    const full = await takeToken('META', key, 0)
+    expect(full.tokensLeft).toBe(META_FULL_BUCKETS.ads.capacity - 1)
+    expect(META_BUCKETS.ads).toEqual({ capacity: 45, refillPerSec: 0.08 })
+  })
+  it('a dead token answer makes the next heartbeat check the token again at once', async () => {
+    h.answers.push(() => new Response(JSON.stringify({ error: { code: 190, error_subcode: 460, message: 'Password changed' } }), { status: 400 }))
+    await metaCall({ connectionId: 'm-5', operation: 'campaigns.list', path: 'act_1234567890/campaigns', query: { fields: 'id' } })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(h.forgotten).toEqual(['m-5'])
   })
   it('spells out the usage for a person (meta-connection view check)', () => {
     const usage = metaUsageOf(new Headers({
@@ -217,9 +264,15 @@ describe('Graph error codes (developers.facebook.com/docs/graph-api/guides/error
     expect(classifyChannelAnswer('META', 500, body(2)).errorClass).toBe('transient')
     expect(classifyChannelAnswer('META', 503, 'not json').errorClass).toBe('transient')
   })
-  it('a person reads Meta\'s user message when it gives one', () => {
-    const text = JSON.stringify({ error: { message: 'Invalid parameter', code: 100, error_user_msg: 'The budget is too low.' } })
-    expect(classifyChannelAnswer('META', 400, text).channelMessage).toBe('The budget is too low.')
+  it('a person reads Meta\'s own title and message first, with the trace id Meta support asks for and the field it blames', () => {
+    const text = JSON.stringify({ error: { message: 'Invalid parameter', code: 100, error_user_title: 'Budget too low', error_user_msg: 'The budget is too low.', fbtrace_id: 'Abc123', error_data: { blame_field_specs: [['daily_budget']] } } })
+    expect(classifyChannelAnswer('META', 400, text)).toMatchObject({ errorClass: 'validation', channelMessage: 'Budget too low: The budget is too low. (Meta trace Abc123)', attribute: 'daily_budget' })
+  })
+  it('100/33 says "not found or no access"; a negative code routes on its subcode; is_transient is transient', () => {
+    expect(classifyChannelAnswer('META', 400, body(100, 33, 'Unsupported get request')).channelMessage).toMatch(/^Not found or no access \(is the system user assigned to it\?\)/)
+    expect(classifyChannelAnswer('META', 400, body(-1, 613))).toMatchObject({ errorClass: 'rate_limited', channelCode: '-1/613' })
+    expect(classifyChannelAnswer('META', 500, body(-2)).errorClass).toBe('transient')
+    expect(classifyChannelAnswer('META', 400, JSON.stringify({ error: { code: 100, is_transient: true } })).errorClass).toBe('transient')
   })
 })
 

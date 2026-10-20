@@ -56,6 +56,9 @@ vi.mock('../../db.js', () => ({ default: prismaMock }))
 vi.mock('../monitoring/alert.service.js', () => ({ alertService: { createAlert: vi.fn(async () => ({})) }, AlertType: { CONNECTION_HEALTH: 'CONNECTION_HEALTH' } }))
 vi.mock('./legacy-channel-credentials.js', () => ({ clearLegacyChannelCredentials: vi.fn(async () => null) }))
 vi.mock('../../utils/logger.js', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../utils/logger.js')>()), logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
+vi.mock('./connectors/meta/token-check.js', () => ({
+  checkMetaToken: vi.fn(async ({ token }: { token: string }) => ({ isValid: token !== 'invalid-token', neverExpires: false, expiresAt: new Date(Date.now() + 40 * 86_400_000).toISOString() })),
+}))
 vi.mock('../gateway/gateway.js', () => {
   class GatewayRefusal extends Error {
     constructor(readonly outcome: string, readonly code: string, message: string) { super(message) }
@@ -145,6 +148,19 @@ describe('Meta: no refresh token is not a dead sign-in', () => {
     expect(eventsOf('refresh_failed')).toEqual([expect.objectContaining({ detail: expect.objectContaining({ keptCurrentToken: true, errorClass: 'transient' }) })])
     await expect(getAccessToken(id)).resolves.toBe('current-token')
     expect(h.calls).toHaveLength(1)
+  })
+  it('a renewal answer without expires_in: the new token\'s expiry is read with debug_token, not thrown away', async () => {
+    const id = await seed(10)
+    h.answers.push(() => ({ status: 200, ok: true, body: { access_token: 'renewed-token', token_type: 'bearer' } }))
+    await expect(getAccessToken(id)).resolves.toBe('renewed-token')
+    const creds = await credsOf(id)
+    expect(Math.round((Date.parse(creds.accessTokenExpiresAt!) - Date.now()) / DAY)).toBe(40)
+  })
+  it('a renewed token debug_token calls invalid is not stored; the current one keeps serving', async () => {
+    const id = await seed(10)
+    h.answers.push(() => ({ status: 200, ok: true, body: { access_token: 'invalid-token' } }))
+    await expect(getAccessToken(id)).resolves.toBe('current-token')
+    expect((await credsOf(id)).accessToken).toBe('current-token')
   })
   it('Meta saying the token is dead (190) needs a new token: needs_reauth', async () => {
     const id = await seed(10)

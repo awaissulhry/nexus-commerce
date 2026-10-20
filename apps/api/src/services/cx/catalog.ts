@@ -51,6 +51,8 @@ export interface RateLimitReading {
   /** Seconds until the window resets / until a retry is allowed. */
   retryAfterSec?: number
   model: 'token_bucket' | 'daily_quota' | 'leaky_bucket' | 'points'
+  /** Meta: the app's Marketing API access tier the answer named (`ads_api_access_tier`), which sizes its buckets. */
+  tier?: string
 }
 
 export interface HeartbeatOk {
@@ -239,6 +241,7 @@ export function scopeDriftOf(spec: ChannelSpec, granted: string[]): string[] {
     if (g.endsWith('.readonly')) continue
     implied.add(`${g}.readonly`)
     if (g.startsWith('write_')) implied.add(g.replace(/^write_/, 'read_')) // Shopify: write_x ⇒ read_x
+    if (g === 'ads_management') implied.add('ads_read') // Meta: managing ads includes reading them
   }
   return spec.auth.requiredScopes.filter((s) => !have.has(s) && !implied.has(s))
 }

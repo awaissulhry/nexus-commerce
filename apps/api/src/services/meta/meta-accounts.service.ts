@@ -26,7 +26,7 @@ import { metaAppIdOf } from '../cx/token.service.js'
 import { storedTokenHealth, META_RENEW_WITHIN_SEC } from '../cx/connectors/meta/spec.js'
 import { discoverMetaChoices, metaAdAccountId, metaObjectId, MetaConnectionNotFound, type MetaChoices } from '../cx/connectors/meta/discovery.js'
 import { metaPermissionGaps, type MetaPermissionGap } from '../cx/connectors/meta/scopes.js'
-import type { MetaTokenHealth } from '../cx/connectors/meta/token-check.js'
+import { tokenTypeText, type MetaTokenHealth } from '../cx/connectors/meta/token-check.js'
 
 export { MetaConnectionNotFound } from '../cx/connectors/meta/discovery.js'
 
@@ -41,11 +41,13 @@ export interface MetaTokenView {
   /** ISO day-time; null with neverExpires = a token that does not expire by date. */
   expiresAt: string | null
   neverExpires: boolean
+  /** When Meta stops letting the token read data (debug_token data_access_expires_at); null = not given. */
+  dataAccessExpiresAt: string | null
   /** When Nexus renews a 60-day token (30 days before it expires); null for a never-expiring one. */
   renewsFrom: string | null
   /** When Nexus last renewed or stored it. */
   lastRenewedAt: string | null
-  /** SYSTEM_USER, … — or null when Meta did not report a type ("token type not reported"). */
+  /** SYSTEM_USER, … as Meta said it — or null when Meta did not report a type ("token type not reported"). */
   type: string | null
   typeText: string
   scopes: string[]
@@ -116,10 +118,11 @@ export function metaTokenView(health: MetaTokenHealth | null, row: { accessToken
     isValid: health ? health.isValid : null,
     expiresAt,
     neverExpires,
+    dataAccessExpiresAt: health?.dataAccessExpiresAt ?? null,
     renewsFrom: expiresAt ? new Date(Date.parse(expiresAt) - META_RENEW_WITHIN_SEC * 1000).toISOString() : null,
     lastRenewedAt: iso(row.lastRefreshAt ?? null),
     type,
-    typeText: type === 'SYSTEM_USER' ? 'System-user token' : type ? `${type.toLowerCase().replace(/_/g, ' ')} token` : 'Token type not reported by Meta',
+    typeText: tokenTypeText(type),
     scopes,
     missing: metaPermissionGaps(scopes),
     problem: health?.problem ?? null,
@@ -259,9 +262,9 @@ export async function metaChoicesAnswer(choices: MetaChoices) {
   const isTaken = (product: MetaProduct, id: string) => taken.get(product)?.has(id) ?? false
   return {
     systemUser: choices.systemUser,
-    adAccounts: { items: choices.adAccounts.items.map((a) => ({ ...a, takenByAnotherBusiness: isTaken(META_PRODUCT.adAccount, a.adAccountId) })), error: choices.adAccounts.error },
-    pages: { items: choices.pages.items.map((p) => ({ ...p, takenByAnotherBusiness: isTaken(META_PRODUCT.page, p.pageId) })), error: choices.pages.error },
-    instagram: { items: choices.instagram.items.map((i) => ({ ...i, takenByAnotherBusiness: isTaken(META_PRODUCT.instagram, i.instagramId) })), error: choices.instagram.error },
+    adAccounts: { items: choices.adAccounts.items.map((a) => ({ ...a, takenByAnotherBusiness: isTaken(META_PRODUCT.adAccount, a.adAccountId) })), total: choices.adAccounts.total, error: choices.adAccounts.error },
+    pages: { items: choices.pages.items.map((p) => ({ ...p, takenByAnotherBusiness: isTaken(META_PRODUCT.page, p.pageId) })), total: choices.pages.total, error: choices.pages.error },
+    instagram: { items: choices.instagram.items.map((i) => ({ ...i, takenByAnotherBusiness: isTaken(META_PRODUCT.instagram, i.instagramId) })), total: choices.instagram.total, error: choices.instagram.error },
   }
 }
 

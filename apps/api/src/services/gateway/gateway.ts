@@ -33,7 +33,7 @@ import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock
 import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade } from './account.js'
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
-import { metaAppSecretProof, metaReadOnlyProblem, metaSendUrl } from './meta-calls.js'
+import { metaAppSecretProof, metaReadOnlyProblem, metaRenewalOf, metaSendUrl } from './meta-calls.js'
 import { writeLedgerRow } from './ledger.js'
 import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
@@ -326,8 +326,14 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // method override, a batch, a token revoke or any sign-in call but the system-user token renewal (meta-calls.ts).
   // Refused before the account, the token or the network, by the kind declared AND by the method and URL themselves.
   if (req.channel === 'META') {
-    const problem = metaReadOnlyProblem({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth })
+    const problem = metaReadOnlyProblem({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
     if (problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${problem} (${req.method} ${safePath(req.url)}).`, 403)
+    // The renewal names the app it is for: it must be THIS connection's own app, never another.
+    const renewal = metaRenewalOf(req.url)
+    if (renewal) {
+      const appId = req.connectionId ? await (await import('../cx/token.service.js')).metaAppIdOf(req.connectionId) : null
+      if (!appId || renewal.clientId !== appId) return refuse('refused', 'META_READ_ONLY', 'Nothing was sent to Meta: a token renewal is sent only for the connection\'s own Meta app.', 403)
+    }
   }
 
   // 2. status
@@ -497,6 +503,18 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // 8. classify
   const ok = status >= 200 && status < 300 && !graphqlErrors && (req.answerOk ? req.answerOk(text) : true)
   const verdict = ok ? null : classifyChannelAnswer(req.channel, status, text, { timedOut })
+  if (req.channel === 'META' && verdict) {
+    // Meta answers a throttle with an error code (often with no usage header): hold the bucket all the same — 300 s, the
+    // block Meta's rate-limit page names for an ad account's score; an hour for ad-set budget changes (613/1487632).
+    if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec) {
+      await observeRate(req.channel, key, { retryAfterSec: verdict.channelCode === '613/1487632' ? 3600 : 300 })
+    }
+    // Meta says the token is dead: the next heartbeat checks it again at once, rather than trusting a check kept for hours.
+    if ((verdict.errorClass === 'auth_revoked' || verdict.errorClass === 'auth_expired') && req.connectionId) {
+      const connectionId = req.connectionId
+      void import('../cx/connectors/meta/token-check.js').then((m) => m.forgetMetaTokenCheck(connectionId)).catch(() => undefined)
+    }
+  }
 
   // 9. ledger
   await writeLedgerRow({

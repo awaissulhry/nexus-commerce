@@ -12,7 +12,13 @@
  *     expiry (checked 2026-10-20: developers.facebook.com/docs/marketing-api/businessmanager/systemuser/
  *     install-apps-and-generate-tokens, "Refresh Access Token" and "Access Token Rotation");
  *   - `access_token`, `appsecret_proof` and `appsecret_time` are the gateway's own: a caller that names one is refused,
- *     so no call can carry a token the gateway did not choose.
+ *     so no call can carry a token the gateway did not choose;
+ *   - a read never brings a token back: `access_token` named anywhere in `fields` (also nested, `accounts{access_token}`)
+ *     is refused, and so is a read of an `accounts` edge (a person's or system user's Pages: Meta answers each Page's
+ *     access_token by default) or of a bare object node that names no `fields` (a Page node can carry its token);
+ *   - the renewal must be exactly Meta's documented call: grant_type, client_id, client_secret, fb_exchange_token and
+ *     set_token_expires_in_60_days, each once, nothing else (gateway.ts also checks client_id is the connection's app);
+ *   - a caller's own headers are refused (no method override or other header travels on a Meta call).
  * Writes come in M3, by an allow-list of exact paths and methods.
  *
  * Every call with a token carries `appsecret_proof` = HMAC-SHA256(key = the app secret, message = `<token>|<time>`) and
@@ -44,11 +50,24 @@ function graphPathOf(url: string): { path: string; version: string | null; searc
  * Why the gateway refuses this Meta call, in words, or null when it may go. `auth` is how the caller asked the call to
  * be authorised (gateway.ts `GatewayRequest.auth`): only the token renewal goes without one.
  */
-export function metaReadOnlyProblem(input: { method: string; url: string; kind: string; body?: unknown; auth?: unknown }): string | null {
+/** The exact query keys of the system-user token renewal (Meta's "Refresh Access Token", system-user guide). */
+export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'fb_exchange_token', 'grant_type', 'set_token_expires_in_60_days'] as const
+/** `access_token` as a field, at any depth of a field list (`id,access_token`, `accounts{id,access_token}`). */
+const TOKEN_FIELD = /(^|[,{(\s])access_token\s*($|[,}{.(\s])/i
+
+/** Is this the token renewal (the only sign-in call), and with which client_id? Null when it is not one. */
+export function metaRenewalOf(url: string): { clientId: string } | null {
+  const graph = graphPathOf(url)
+  if (!graph || graph.path.replace(/^\/+|\/+$/g, '').toLowerCase() !== 'oauth/access_token') return null
+  return { clientId: graph.search.get('client_id') ?? '' }
+}
+
+export function metaReadOnlyProblem(input: { method: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string, string> }): string | null {
   const method = input.method.toUpperCase()
   if (method !== 'GET') return `Nexus only reads Meta for now, and this call would change something (${method})`
   if (input.kind !== 'read') return 'Nexus only reads Meta for now, and this call is not declared a read'
   if (input.body !== undefined && input.body !== null && input.body !== '') return 'a read of Meta carries no body'
+  if (input.headers && Object.keys(input.headers).length > 0) return 'a Meta call carries no header of the caller\'s own'
   const graph = graphPathOf(input.url)
   if (!graph) return 'Nexus calls Meta only at https://graph.facebook.com'
   const pinned = metaGraphApiVersion()
@@ -62,10 +81,18 @@ export function metaReadOnlyProblem(input: { method: string; url: string; kind: 
   const route = segments.join('/').toLowerCase()
   if (route === 'oauth/revoke') return 'oauth/revoke ends a token: Nexus never sends it'
   if (route.startsWith('oauth/')) {
-    if (route !== 'oauth/access_token' || graph.search.get('grant_type') !== 'fb_exchange_token' || input.auth !== 'none') {
-      return 'the only Meta sign-in call Nexus sends is the system-user token renewal (grant_type=fb_exchange_token)'
+    const keys = [...graph.search.keys()]
+    const exact = keys.length === META_RENEWAL_KEYS.length && [...keys].sort().every((k, i) => k === META_RENEWAL_KEYS[i])
+    if (route !== 'oauth/access_token' || !exact || graph.search.get('grant_type') !== 'fb_exchange_token' || input.auth !== 'none') {
+      return 'the only Meta sign-in call Nexus sends is the system-user token renewal, exactly as Meta documents it (grant_type=fb_exchange_token, client_id, client_secret, fb_exchange_token, set_token_expires_in_60_days)'
     }
+    return null
   }
+  const fields = graph.search.getAll('fields').join(',')
+  if (TOKEN_FIELD.test(fields)) return 'a read never asks Meta for an access_token'
+  const last = segments[segments.length - 1].toLowerCase()
+  if (last === 'accounts' && !fields) return 'a read of Pages (accounts) names its fields: Meta answers each Page\'s token by default'
+  if (segments.length === 1 && /^\d+$/.test(segments[0]) && !fields) return 'a read of one object names its fields (a Page node can carry its token)'
   return null
 }
 

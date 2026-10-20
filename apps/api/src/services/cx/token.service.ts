@@ -760,18 +760,34 @@ async function renewMetaToken(row: ConnRow, creds: Credentials): Promise<string>
   }
   const json = answer.json<{ access_token?: unknown; expires_in?: unknown }>()
   const token = typeof json?.access_token === 'string' ? json.access_token.trim() : ''
-  const expiresIn = typeof json?.expires_in === 'number' ? json.expires_in : Number(json?.expires_in)
-  if (!token || !Number.isFinite(expiresIn) || expiresIn <= 0) return keepOrFail('unknown', 'Meta answered the token renewal without a usable token.')
+  if (!token) return keepOrFail('unknown', 'Meta answered the token renewal without a token.')
+  const expiresIn = json?.expires_in === undefined || json?.expires_in === null ? NaN : Number(json.expires_in)
+  let accessTokenExpiresAt: string | null
+  if (Number.isFinite(expiresIn) && expiresIn > 0) {
+    accessTokenExpiresAt = new Date(Date.now() + expiresIn * 1000).toISOString()
+  } else {
+    // No expires_in in the answer: ask debug_token about the NEW token rather than throw it away. If that cannot be
+    // asked either, count on Meta's documented "valid for 60 days from generated or refreshed date", a day short.
+    accessTokenExpiresAt = new Date(Date.now() + 59 * 86_400_000).toISOString()
+    try {
+      const { checkMetaToken } = await import('./connectors/meta/token-check.js')
+      const health = await checkMetaToken({ token, connectionId, expectedAppId: app.appId })
+      if (!health.isValid) return keepOrFail('unknown', 'Meta answered the token renewal with a token its own check calls not valid.')
+      accessTokenExpiresAt = health.neverExpires ? null : health.expiresAt ?? accessTokenExpiresAt
+    } catch (err) {
+      logger.warn('[cx-token] the renewed Meta token could not be checked; its expiry is taken as 59 days', { connectionId, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
   const next: Credentials = {
     accessToken: token,
     refreshToken: null,
-    accessTokenExpiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+    accessTokenExpiresAt,
     refreshTokenExpiresAt: null,
     extra: creds.extra,
   }
   await writeCredentials(connectionId, next, { lastRefreshAt: new Date(), consecutiveFailures: 0, lastError: null, lastErrorAt: null, authStatus: 'connected' }, row)
   if (row.authStatus !== 'connected') await announceTransition(row, 'connected', 'Meta token renewed', SYSTEM_ACTOR)
-  await recordConnectionEvent({ connectionId, channelKey: 'META', type: 'refresh', detail: { latencyMs: Date.now() - started, rotated: true, expiresInSec: expiresIn, meta: 'system-user token renewed for 60 days' } })
+  await recordConnectionEvent({ connectionId, channelKey: 'META', type: 'refresh', detail: { latencyMs: Date.now() - started, rotated: true, expiresAt: accessTokenExpiresAt, meta: 'system-user token renewed' } })
   lastFailureAt.delete(connectionId)
   return token
 }

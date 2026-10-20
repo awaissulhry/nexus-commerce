@@ -9,7 +9,7 @@
  *   - GET /{app_id}/authorized_adaccounts?business= (SDK application.py get_authorized_ad_accounts; not on a doc page
  *     today: VERIFIED-SDK only)
  *   - GET /{app_id}/connected_client_businesses (SDK application.py get_connected_client_businesses)
- *   - GET /{user_id}/assigned_applications (SDK user.py get_assigned_applications)
+ *   (GET /{user_id}/assigned_applications needs manage_app_solution, which a system user cannot hold: not read here.)
  *   - the usage headers of an ordinary answer (cx/rate-readings.ts metaUsageOf)
  */
 import { metaCall, type MetaQueryValue } from '../gateway/meta.js'
@@ -95,10 +95,4 @@ export async function liveApp(connectionId: string, businessId: string | null) {
   const clientBusinesses = await part(async () => list((await read(connectionId, 'app.connectedClientBusinesses', `${appId}/connected_client_businesses`, { fields: 'id,name', limit: 100 }, 'app')).body)
     .map((b) => ({ businessId: String(b.id ?? ''), name: typeof b.name === 'string' ? b.name : null })))
   return { appId, roles, authorizedAdAccounts, clientBusinesses }
-}
-
-/** The apps the system user is assigned to, with its tasks (/{user_id}/assigned_applications). */
-export async function liveAssignedApps(connectionId: string, systemUserId: string) {
-  const { body } = await read(connectionId, 'connection.assignedApps', `${systemUserId}/assigned_applications`, { fields: 'id,name', limit: 100 })
-  return list(body).map((a) => ({ appId: String(a.id ?? ''), name: typeof a.name === 'string' ? a.name : null, tasks: Array.isArray(a.tasks) ? a.tasks : null }))
 }

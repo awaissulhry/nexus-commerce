@@ -30,17 +30,26 @@ export const DEFAULT_BUCKETS: Record<GatewayChannel, BucketParams> = {
 /**
  * Meta, per kind of call (the key's operation group, channels.bucketGroupOf → meta-calls.ts metaCallGroup), per
  * connection. Sized for Meta's Limited (default) Marketing API tier (checked 2026-10-20:
- * developers.facebook.com/documentation/ads-commerce/marketing-api/overview/rate-limiting): an ad account's score is
- * at most 60, a read costs 1 point and the score decays over 300 s — so a burst of 40 refilled one read per 5 s keeps a
- * daily read inside it. Insights (ads_insights, 600 an hour per account at Limited) refill one per 6 s. The sign-in
- * calls (debug_token, the token renewal) are rare. Meta's own usage headers then hold a bucket (rate-readings.ts
- * metaRateReading): the gateway backs off at 75 % and while Meta says access is blocked.
+ * developers.facebook.com/documentation/ads-commerce/marketing-api/overview/rate-limiting): an ad account's score is at
+ * most 60 (a read 1 point, a write 3), it decays over 300 s, and a full score blocks the account for 300 s; the
+ * ads_management Business Use Case allows 300 calls an hour (plus 40 per active ad). So a burst of 45 refilled about one
+ * read per 12 s (0.08/s ≈ 290 an hour) stays under both. Insights (ads_insights, 600 an hour per account at Limited)
+ * refill one per 6 s. The sign-in calls (debug_token, the renewal) are rare. At the Full tier (score 9,000, 60 s block,
+ * 100,000 / 190,000 calls an hour) the headers' `ads_api_access_tier` = standard_access moves the bucket to
+ * META_FULL_BUCKETS. Meta's own usage headers hold a bucket too: from 75 %, and while Meta says access is blocked.
  */
 export const META_BUCKETS: Record<'ads' | 'insights' | 'auth', BucketParams> = {
-  ads: { capacity: 40, refillPerSec: 0.2 },
+  ads: { capacity: 45, refillPerSec: 0.08 },
   insights: { capacity: 30, refillPerSec: 1 / 6 },
   auth: { capacity: 5, refillPerSec: 1 },
 }
+export const META_FULL_BUCKETS: Record<'ads' | 'insights' | 'auth', BucketParams> = {
+  ads: { capacity: 300, refillPerSec: 10 },
+  insights: { capacity: 200, refillPerSec: 5 },
+  auth: { capacity: 5, refillPerSec: 1 },
+}
+/** The tier value Meta's headers give the Full Marketing API tier (the Limited one is development_access). */
+export const META_FULL_TIER = 'standard_access'
 
 /** The longest a channel's own wait holds a bucket: Meta names its block in minutes (up to an hour), others in seconds. */
 const MAX_HOLD_SEC: Partial<Record<GatewayChannel, number>> = { META: 3600 }
@@ -205,7 +214,7 @@ export async function takeToken(channel: GatewayChannel, key: string, maxWaitMs:
   }
 }
 
-export interface RateObservation { remaining?: number; limit?: number; retryAfterSec?: number }
+export interface RateObservation { remaining?: number; limit?: number; retryAfterSec?: number; tier?: string }
 
 /**
  * Feed the channel's own reading back into the bucket. Amazon's limit header is a rate per second:
@@ -219,6 +228,13 @@ export async function observeRate(channel: GatewayChannel, key: string, reading:
     if (reading.retryAfterSec && reading.retryAfterSec > 0) await s.holdUntil(key, Date.now() + Math.min(reading.retryAfterSec, MAX_HOLD_SEC[channel] ?? 60) * 1000)
     // Amazon reports the operation's sustained rate (requests per second), not its burst: the
     // refill follows the header, the burst stays at the default (10 — Amazon's bursts are 10–30).
+    // Meta: the tier the answer named sizes this connection's bucket for that kind of call (Limited → Full and back).
+    if (channel === 'META' && reading.tier) {
+      const group = key.slice(key.lastIndexOf(':') + 1) as keyof typeof META_BUCKETS
+      const wanted = (reading.tier === META_FULL_TIER ? META_FULL_BUCKETS : META_BUCKETS)[group] ?? DEFAULT_BUCKETS.META
+      const current = await s.getParams(key)
+      if (!current || current.capacity !== wanted.capacity || Math.abs(current.refillPerSec - wanted.refillPerSec) > 1e-9) await s.setParams(key, wanted)
+    }
     if (channel === 'AMAZON_SP' && reading.limit && reading.limit > 0) {
       const current = (await s.getParams(key)) ?? DEFAULT_BUCKETS.AMAZON_SP
       if (Math.abs(current.refillPerSec - reading.limit) > 1e-9) await s.setParams(key, { refillPerSec: reading.limit, capacity: DEFAULT_BUCKETS.AMAZON_SP.capacity })

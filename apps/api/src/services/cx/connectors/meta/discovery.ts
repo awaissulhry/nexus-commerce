@@ -10,13 +10,21 @@
  *   - /docs/graph-api/reference/user/accounts: "Pages the User has a role on" — `/{user-id}/accounts`
  *   - a Page's `instagram_business_account` { id, username } is its linked Instagram professional account
  *     (UNVERIFIED for every system-user set-up: when Meta lists none, the picker says so in words)
- * Paging follows `paging.cursors.after` (never `paging.next`, which carries the token), at most MAX_PAGES pages.
+ * Paging follows `paging.cursors.after` (never `paging.next`, which carries the token) through every page, up to a hard
+ * cap of MAX_PAGES (×100 rows); a list cut there says so in words. Each list asks `summary=total_count`, so its count is
+ * Meta's own (developers.facebook.com/docs/graph-api/results: "summary=total_count").
+ * Nested fields need their own permission (business{…}: business_management; instagram_business_account{…}:
+ * instagram_basic): a nested field is asked for only when the token carries it, and a list Meta refuses for a missing
+ * permission (codes 10, 200–299) is read again without its nested fields, so the list itself is never lost — the answer
+ * says plainly what could not be read.
  */
 import { metaCall } from '../../../gateway/meta.js'
 import { GatewayNoAnswer, GatewayRefusal, type GatewayResponse } from '../../../gateway/gateway.js'
+import prisma from '../../../../db.js'
 import type { ScopeInput } from '../../catalog.js'
+import { META_SCOPE } from './scopes.js'
 
-export const MAX_PAGES = 5
+export const MAX_PAGES = 50
 export const PAGE_SIZE = 100
 
 /** Meta's ad account id, digits only: `act_1234567890` or `1234567890` → `1234567890`; anything else → null. */
@@ -51,11 +59,14 @@ export interface MetaAdAccountChoice {
 export interface MetaPageChoice { pageId: string; name: string | null; instagram: { id: string; username: string | null } | null }
 export interface MetaInstagramChoice { instagramId: string; username: string | null; pageId: string }
 
+/** One list as read: its items, Meta's own count when given, and what could not be read, in words (null = nothing). */
+export interface MetaChoiceList<T> { items: T[]; total: number | null; error: string | null }
+
 export interface MetaChoices {
   systemUser: { id: string; name: string | null } | null
-  adAccounts: { items: MetaAdAccountChoice[]; error: string | null }
-  pages: { items: MetaPageChoice[]; error: string | null }
-  instagram: { items: MetaInstagramChoice[]; error: string | null }
+  adAccounts: MetaChoiceList<MetaAdAccountChoice>
+  pages: MetaChoiceList<MetaPageChoice>
+  instagram: MetaChoiceList<MetaInstagramChoice>
 }
 
 export class MetaConnectionNotFound extends Error {
@@ -67,27 +78,49 @@ export class MetaConnectionNotFound extends Error {
 
 const text = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value.trim() : null)
 
-/** One list read page by page; the words of the first failure, or null. */
-async function readList(connectionId: string, operation: string, path: string, fields: string): Promise<{ rows: Record<string, unknown>[]; error: string | null }> {
+interface ListRead { rows: Record<string, unknown>[]; total: number | null; error: string | null; permissionDenied: boolean }
+
+/** One list read page by page (all pages, up to the cap); the words of the first failure, or of the cut. */
+async function readList(connectionId: string, operation: string, path: string, fields: string): Promise<ListRead> {
   const rows: Record<string, unknown>[] = []
   let after: string | null = null
+  let total: number | null = null
   for (let page = 0; page < MAX_PAGES; page++) {
     let answer: GatewayResponse
     try {
-      answer = await metaCall({ connectionId, operation, path, query: { fields, limit: PAGE_SIZE, ...(after ? { after } : {}) }, timeoutMs: 30_000 })
+      answer = await metaCall({ connectionId, operation, path, query: { fields, limit: PAGE_SIZE, summary: 'total_count', ...(after ? { after } : {}) }, timeoutMs: 30_000 })
     } catch (err) {
-      if (err instanceof GatewayRefusal || err instanceof GatewayNoAnswer) return { rows, error: err.message }
+      if (err instanceof GatewayRefusal || err instanceof GatewayNoAnswer) return { rows, total, error: err.message, permissionDenied: false }
       throw err
     }
-    if (answer.status === 0) return { rows, error: 'Meta did not answer.' }
-    if (!answer.ok) return { rows, error: answer.verdict?.channelMessage ? `Meta refused: ${answer.verdict.channelMessage}` : `Meta answered ${answer.status}.` }
-    const body = answer.json<{ data?: unknown[]; paging?: { cursors?: { after?: unknown }; next?: unknown } }>()
+    if (answer.status === 0) return { rows, total, error: 'Meta did not answer.', permissionDenied: false }
+    if (!answer.ok) {
+      return { rows, total, error: answer.verdict?.channelMessage ? `Meta refused: ${answer.verdict.channelMessage}` : `Meta answered ${answer.status}.`, permissionDenied: answer.verdict?.errorClass === 'forbidden' }
+    }
+    const body = answer.json<{ data?: unknown[]; paging?: { cursors?: { after?: unknown }; next?: unknown }; summary?: { total_count?: unknown } }>()
     for (const row of Array.isArray(body?.data) ? body!.data : []) if (row && typeof row === 'object') rows.push(row as Record<string, unknown>)
+    const count = Number(body?.summary?.total_count)
+    if (Number.isFinite(count)) total = count
     const next = text(body?.paging?.cursors?.after)
-    if (!next || !body?.paging?.next) break
+    if (!next || !body?.paging?.next) return { rows, total, error: null, permissionDenied: false }
     after = next
   }
-  return { rows, error: null }
+  return { rows, total, error: `Nexus read the first ${rows.length.toLocaleString('en-US')}${total !== null ? ` of ${total.toLocaleString('en-US')}` : ''}; the rest were not read.`, permissionDenied: false }
+}
+
+/**
+ * A list with a nested field that needs its own permission: asked with it only when the token carries that permission;
+ * refused for a permission (Meta codes 10, 200–299) → asked again without it, and the answer says what is missing.
+ */
+async function readWithNested(connectionId: string, operation: string, path: string, base: string, nested: string, granted: boolean, missing: string): Promise<ListRead> {
+  if (!granted) {
+    const plain = await readList(connectionId, operation, path, base)
+    return { ...plain, error: [plain.error, missing].filter(Boolean).join(' ') }
+  }
+  const full = await readList(connectionId, operation, path, `${base},${nested}`)
+  if (!full.permissionDenied) return full
+  const plain = await readList(connectionId, operation, path, base)
+  return { ...plain, error: [plain.error, missing].filter(Boolean).join(' ') }
 }
 
 /** Everything the system user of this connection can see, list by list. Throws MetaConnectionNotFound for a foreign id. */
@@ -101,8 +134,12 @@ export async function discoverMetaChoices(connectionId: string): Promise<MetaCho
     if (err instanceof GatewayRefusal && err.code === 'ACCOUNT_NOT_FOUND') throw new MetaConnectionNotFound()
     if (!(err instanceof GatewayRefusal) && !(err instanceof GatewayNoAnswer)) throw err
   }
-  const accounts = await readList(connectionId, 'discovery.adAccounts', 'me/adaccounts', 'account_id,name,currency,timezone_name,account_status,business{id,name}')
-  const pages = await readList(connectionId, 'discovery.pages', 'me/accounts', 'id,name,instagram_business_account{id,username}')
+  const granted = await prisma.channelConnection.findUnique({ where: { id: connectionId }, select: { grantedScopes: true } })
+  const scopes = new Set(granted?.grantedScopes ?? [])
+  const accounts = await readWithNested(connectionId, 'discovery.adAccounts', 'me/adaccounts', 'account_id,name,currency,timezone_name,account_status', 'business{id,name}',
+    scopes.has(META_SCOPE.business_management), 'The business portfolio of each ad account was not read: the token does not carry business_management.')
+  const pages = await readWithNested(connectionId, 'discovery.pages', 'me/accounts', 'id,name', 'instagram_business_account{id,username}',
+    scopes.has(META_SCOPE.instagram_basic), 'Instagram accounts were not read: the token does not carry instagram_basic (with pages_show_list).')
   const adAccounts: MetaAdAccountChoice[] = []
   for (const row of accounts.rows) {
     const adAccountId = metaAdAccountId(row.account_id ?? row.id)
@@ -132,9 +169,9 @@ export async function discoverMetaChoices(connectionId: string): Promise<MetaCho
   }
   return {
     systemUser: me,
-    adAccounts: { items: adAccounts, error: accounts.error },
-    pages: { items: pageItems, error: pages.error },
-    instagram: { items: instagram, error: pages.error },
+    adAccounts: { items: adAccounts, total: accounts.total, error: accounts.error },
+    pages: { items: pageItems, total: pages.total, error: pages.error },
+    instagram: { items: instagram, total: null, error: pages.error },
   }
 }
 

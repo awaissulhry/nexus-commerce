@@ -87,7 +87,9 @@ describe('the token as a person reads it', () => {
     expect(metaConnectionState({ isActive: true, authStatus: 'needs_reauth', token, adAccountLinked: true, accountName: null }).state).toBe('sign_in_needed')
     expect(metaConnectionState({ isActive: true, authStatus: 'connected', token: metaTokenView(health({ isValid: false, problem: 'Meta says the token is not valid.' }) as never, {}), adAccountLinked: true, accountName: null }).state).toBe('token_problem')
     expect(metaConnectionState({ isActive: true, authStatus: 'connected', token: metaTokenView(health({ neverExpires: false }) as never, { accessTokenExpiresAt: new Date(Date.now() - DAY) }), adAccountLinked: true, accountName: null })).toMatchObject({ state: 'token_problem', stateText: expect.stringMatching(/expired on/) })
-    expect(metaConnectionState({ isActive: true, authStatus: 'connected', token: metaTokenView(health({ scopes: ['ads_management'] }) as never, {}), adAccountLinked: true, accountName: null })).toMatchObject({ state: 'permission_missing', stateText: expect.stringMatching(/ads_read/) })
+    expect(metaConnectionState({ isActive: true, authStatus: 'connected', token: metaTokenView(health({ scopes: ['pages_show_list'] }) as never, {}), adAccountLinked: true, accountName: null })).toMatchObject({ state: 'permission_missing', stateText: expect.stringMatching(/ads_read/) })
+    // ads_management covers reading.
+    expect(metaConnectionState({ isActive: true, authStatus: 'connected', token: metaTokenView(health({ scopes: ['ads_management'] }) as never, {}), adAccountLinked: true, accountName: null }).state).toBe('ok')
     expect(metaConnectionState({ isActive: true, authStatus: 'connected', token, adAccountLinked: false, accountName: null }).state).toBe('choose_account')
     expect(metaConnectionState({ isActive: true, authStatus: 'connected', token, adAccountLinked: true, accountName: 'Shop A' })).toMatchObject({ state: 'ok', stateText: expect.stringMatching(/“Shop A”.*does not expire by date/) })
   })

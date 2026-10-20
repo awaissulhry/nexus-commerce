@@ -11,7 +11,7 @@
  *   view permissions        LIVE: the permissions the token holds, granted or declined (ACC-011)
  *   view app                LIVE: the app's roles, the ad accounts it is authorised for in the business, its connected
  *                           client businesses (ACC-037, ACC-038, ACC-903; app token)
- *   view assigned-apps      LIVE: the apps the system user is assigned to (ACC-900)
+ * (ACC-900, the apps a user is assigned to, needs manage_app_solution — not a system-user permission: not offered.)
  *
  * Connecting Meta, replacing its credentials and choosing its assets are a person's, in Settings › Channels › Meta: an
  * app secret or a token never travels through a tool (Owner rule). Making, renewing and revoking a token in Meta are
@@ -21,10 +21,10 @@ import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool, ToolResult } from '../tool-types.js'
 import { listMetaConnections, type MetaConnection } from '../../meta/meta-accounts.service.js'
-import { liveApp, liveAssignedApps, liveConnectionCheck, livePermissions, MetaLiveError } from '../../meta/meta-connection-live.js'
+import { liveApp, liveConnectionCheck, livePermissions, MetaLiveError } from '../../meta/meta-connection-live.js'
 import { metaGraphApiVersion } from '../../meta/api-version.js'
 
-export const META_CONNECTION_VIEWS = ['summary', 'check', 'permissions', 'app', 'assigned-apps'] as const
+export const META_CONNECTION_VIEWS = ['summary', 'check', 'permissions', 'app'] as const
 type View = typeof META_CONNECTION_VIEWS[number]
 
 const lower = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v)
@@ -43,12 +43,12 @@ const metaConnection: AgentTool = {
   category: 'settings',
   riskTier: 'low',
   readOnly: true,
-  // Views check, permissions, app and assigned-apps read Meta live.
+  // Views check, permissions and app read Meta live.
   openWorld: true,
   requires: [F.adsView],
   input: z.object({
     view: z.preprocess(lower, z.enum(META_CONNECTION_VIEWS)).default('summary')
-      .describe('what to read: summary (what Nexus keeps, no Meta call) | check (token and usage, live) | permissions (live) | app (live) | assigned-apps (live)'),
+      .describe('what to read: summary (what Nexus keeps, no Meta call) | check (token and usage, live) | permissions (live) | app (live)'),
     connectionId: z.string().trim().min(1).max(64).optional().describe('the Meta connection (from a previous answer); default: this business\'s one'),
   }),
   description:
@@ -59,7 +59,7 @@ const metaConnection: AgentTool = {
     + 'API version. check: debug_token now and the usage Meta reports on one cheap read (Business Use Case, ad account '
     + 'and app usage in percent, the access tier, a version warning). permissions: granted and declined permissions. app: '
     + 'the app\'s roles, the ad accounts it is authorised for in the business portfolio, its connected client businesses. '
-    + 'assigned-apps: the apps the system user is assigned to. Connecting Meta, replacing its credentials and choosing '
+    + 'Connecting Meta, replacing its credentials and choosing '
     + 'its assets are a person\'s in Settings › Channels › Meta; Claude never takes an app secret or a token. Nexus only '
     + 'reads Meta for now.',
   async handler(args): Promise<ToolResult> {
@@ -84,8 +84,7 @@ const metaConnection: AgentTool = {
       if (view === 'app') {
         return { ok: true, data: { source: 'Read live from Meta now, with the app\'s own token.', connectionId: connection.connectionId, ...(await liveApp(connection.connectionId, connection.adAccount?.businessId ?? null)) } }
       }
-      if (!connection.systemUser) return { ok: false, error: 'Nexus does not know this connection\'s system user yet. A person enters the token again in Settings › Channels › Meta.' }
-      return { ok: true, data: { source: 'Read live from Meta now.', connectionId: connection.connectionId, systemUserId: connection.systemUser.id, apps: await liveAssignedApps(connection.connectionId, connection.systemUser.id) } }
+      return { ok: false, error: 'Unknown view.' }
     } catch (err) {
       if (err instanceof MetaLiveError) return { ok: false, error: err.message }
       throw err

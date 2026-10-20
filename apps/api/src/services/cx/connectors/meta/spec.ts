@@ -75,7 +75,7 @@ async function heartbeat(handle: ConnectionHandle): Promise<HeartbeatResult> {
   }
   const row = await prisma.channelConnection.findUnique({ where: { id: handle.id }, select: { connectionMetadata: true } })
   const kept = storedTokenHealth(row?.connectionMetadata)
-  if (kept?.isValid && Date.now() - Date.parse(kept.checkedAt) < CHECK_EVERY_MS && (!kept.expiresAt || Date.parse(kept.expiresAt) > Date.now())) {
+  if (kept?.isValid && kept.checkedAt && Date.now() - Date.parse(kept.checkedAt) < CHECK_EVERY_MS && (!kept.expiresAt || Date.parse(kept.expiresAt) > Date.now())) {
     return { ok: true, latencyMs: Date.now() - started, scopes: kept.scopes, ...(kept.userId ? { identity: { userId: kept.userId } } : {}) }
   }
   let health: MetaTokenHealth
@@ -110,7 +110,10 @@ export const metaSpec: ChannelSpec = {
   key: 'META',
   channelType: 'META',
   displayName: 'Meta',
-  available: true,
+  // Step 1: the connection, the gateway and the token code are in; the Settings card a person enters the app id, app
+  // secret and token on is not (step 2). Until then Settings › Channels says so honestly instead of offering a
+  // Connect / Reconnect button that would fail ("Meta does not use a browser consent flow").
+  available: false,
   auth: {
     // No consent screen: the business's system-user token is entered by a person (connect.ts).
     mode: 'api_key',
@@ -142,7 +145,7 @@ export const metaSpec: ChannelSpec = {
   apiVersion: metaGraphApiVersion(),
   sandbox: { available: false },
   connectException: {
-    reason: 'Meta is connected with a system-user token of your business portfolio and your own Meta app (app id and secret), entered in Nexus; there is no Facebook sign-in page.',
+    reason: 'Meta is connected with a system-user token of your business portfolio and your own Meta app (app id and secret), entered in Nexus; there is no Facebook sign-in page. The card to enter them arrives with the Ads › Meta page.',
     deepLink: 'https://business.facebook.com/settings/system-users',
   },
   tokenExpirationBufferSec: META_RENEW_WITHIN_SEC,

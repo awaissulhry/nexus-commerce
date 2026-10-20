@@ -5,9 +5,12 @@
  * In order, before anything is stored (every Meta call through the gateway, GET only):
  *   1. the three values have Meta's shape (app id digits; app secret hex; a token with no spaces);
  *   2. `debug_token`, asked with the app's own app token: the token is valid, belongs to THIS app, and carries
- *      `ads_read` (the one permission M1 needs); a `type` Meta names must be SYSTEM_USER (a person's token expires
- *      with their session and ties the business to one person);
- *   3. `GET /me` with the token: the system user it acts as, which must be the user debug_token named;
+ *      `ads_read` or `ads_management` (reading needs one of them); a type Meta names that is plainly not a system
+ *      user's (PAGE, APP) is refused — `type` is not on Meta's v26 reference, so any other value, or none, is kept
+ *      as Meta said it and shown;
+ *   3. `GET /me` with the token: the system user it acts as (its id is the connection's identity). That debug_token's
+ *      user_id and /me's id are the same for a system user is not on a Meta page: both are kept, and a difference is
+ *      a warning, never a refusal. Replacing credentials keeps the same system user (identity.service, by /me's id);
  *   4. the grant is placed like an OAuth grant (identity.service placeGrant: this business's own row for this system
  *      user, or a new row; one system user may be connected in many businesses, each with its own row and token) and
  *      stored by the token service — the token, the app id and the app secret sealed together in
@@ -27,7 +30,7 @@ import { GatewayNoAnswer, GatewayRefusal, type GatewayResponse } from '../../../
 import { recordConnectionEvent, type Actor } from '../../events.service.js'
 import { IdentityRefusal, placeGrant } from '../../identity.service.js'
 import { handleOf, metaAppIdOf, storeGrant, type GrantResult } from '../../token.service.js'
-import { checkMetaToken, MetaTokenCheckError, type MetaTokenHealth } from './token-check.js'
+import { checkMetaToken, MetaTokenCheckError, REFUSED_TOKEN_TYPES, tokenTypeText, type MetaTokenHealth } from './token-check.js'
 import { saveTokenHealth } from './spec.js'
 import { discoverMetaChoices, metaScopeRows } from './discovery.js'
 import { META_SCOPE } from './scopes.js'
@@ -35,7 +38,7 @@ import { META_SCOPE } from './scopes.js'
 export class MetaConnectError extends Error {
   constructor(
     readonly code: 'invalid_app_id' | 'invalid_app_secret' | 'invalid_token' | 'token_refused' | 'wrong_app' | 'not_system_user'
-      | 'missing_permission' | 'identity_mismatch' | 'meta_unreachable' | 'already_connected' | 'not_found',
+      | 'missing_permission' | 'meta_unreachable' | 'already_connected' | 'not_found',
     message: string,
     readonly statusCode = 400,
   ) {
@@ -50,6 +53,8 @@ export interface MetaConnectResult {
   systemUser: { id: string; name: string | null }
   token: MetaTokenHealth
   adAccountsSeen: number
+  /** Things a person should know that did not stop the connect (a token type that is not SYSTEM_USER, two user ids). */
+  warnings: string[]
 }
 
 const APP_ID = /^\d{5,25}$/
@@ -106,17 +111,19 @@ export async function connectMeta(input: { body: unknown; targetConnectionId?: s
   }
   if (!health.appMatches) throw new MetaConnectError('wrong_app', 'This token was made for another Meta app than the App ID entered. Make the token for this app, or enter that app\'s id and secret.', 409)
   if (!health.isValid) throw new MetaConnectError('token_refused', `${health.problem ?? 'Meta says the token is not valid.'} Make a new system-user token and paste it again.`, 409)
-  if (health.type && health.type !== 'SYSTEM_USER') {
+  if (health.type && REFUSED_TOKEN_TYPES.has(health.type)) {
     throw new MetaConnectError('not_system_user', `This is a ${health.type.toLowerCase().replace(/_/g, ' ')} token. Nexus takes a system-user token: Meta Business settings → Users → System users → choose the system user → Generate token.`, 409)
   }
-  if (!health.scopes.includes(META_SCOPE.ads_read)) {
-    throw new MetaConnectError('missing_permission', 'The token does not carry the ads_read permission, which Nexus needs to read your ads. Generate the token again and tick ads_read.', 409)
+  if (!health.scopes.includes(META_SCOPE.ads_read) && !health.scopes.includes(META_SCOPE.ads_management)) {
+    throw new MetaConnectError('missing_permission', 'The token carries neither ads_read nor ads_management, so Nexus cannot read your ads. Generate the token again and tick ads_read.', 409)
   }
+  const warnings: string[] = []
+  if (health.type !== 'SYSTEM_USER') warnings.push(`${tokenTypeText(health.type)}.`)
 
   // 3 — the system user the token acts as.
   const systemUser = await systemUserOf(token, appSecret)
   if (health.userId && health.userId !== systemUser.id) {
-    throw new MetaConnectError('identity_mismatch', 'Meta named two different users for this token. Nothing was saved; make a new token and try again.', 409)
+    warnings.push('Meta named one user in the token check and another for the token itself; Nexus keeps the token\'s own (/me).')
   }
 
   // 4 — place and store the grant (the token service seals token + app id + app secret together).
@@ -128,7 +135,7 @@ export async function connectMeta(input: { body: unknown; targetConnectionId?: s
     grantedScopes: health.scopes,
     identity: { userId: systemUser.id, ...(systemUser.name ? { username: systemUser.name } : {}) },
     region: null,
-    tokenResponseMetadata: { metaApp: { appId, appSecret }, tokenType: health.type ?? 'SYSTEM_USER', authorizationMode: 'system_user_token' },
+    tokenResponseMetadata: { metaApp: { appId, appSecret }, tokenType: health.type, debugUserId: health.userId, authorizationMode: 'system_user_token' },
   }
   let placed: { connectionId: string; placement: 'new' | 'reconsent' | 'adopt' }
   try {
@@ -180,7 +187,7 @@ export async function connectMeta(input: { body: unknown; targetConnectionId?: s
   } catch (err) {
     logger.warn('[meta-connect] discovery failed (grant stored)', { connectionId, error: err instanceof Error ? err.message : String(err) })
   }
-  return { connectionId, placement, systemUser, token: health, adAccountsSeen }
+  return { connectionId, placement, systemUser, token: health, adAccountsSeen, warnings }
 }
 
 /**

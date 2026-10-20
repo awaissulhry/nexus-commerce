@@ -133,7 +133,7 @@ export async function runHeartbeatFor(row: Row, actor: Actor = CRON_ACTOR): Prom
 /**
  * Meta (M1): a system-user token has no refresh token; a 60-day one expires by its own date. Nexus renews it once 30
  * days are left (token.service.ts renewMetaToken), so reaching 14 days means the renewal kept failing: warn at 14, 7 and
- * 1 days, once per level per day, with the date and what to do. A never-expiring token has no date and no alert.
+ * 1 days, once per level for each token (its expiry), with the date and what to do. A never-expiring token has no date and no alert.
  */
 const META_EXPIRY_WARN_DAYS = [14, 7, 1]
 
@@ -147,9 +147,12 @@ export function metaTokenExpiryLevel(expiresAt: Date | null, now: number = Date.
 async function metaExpiryAlerts(row: Row): Promise<void> {
   const d = metaTokenExpiryLevel(row.accessTokenExpiresAt)
   if (!row.accessTokenExpiresAt || d === null) return
-  // Once per day per level: skip if an identical event exists in the last 20 h.
+  // Once per level per token: a renewed or replaced token has another expiry, and warns afresh.
   const recent = await prisma.connectionEvent.findFirst({
-    where: { connectionId: row.id, type: 'status_change', createdAt: { gt: new Date(Date.now() - 20 * 3_600_000) }, detail: { path: ['metaTokenExpiryWarnDays'], equals: d } },
+    where: {
+      connectionId: row.id, type: 'status_change',
+      AND: [{ detail: { path: ['metaTokenExpiryWarnDays'], equals: d } }, { detail: { path: ['accessTokenExpiresAt'], equals: row.accessTokenExpiresAt.toISOString() } }],
+    },
     select: { id: true },
   })
   if (recent) return

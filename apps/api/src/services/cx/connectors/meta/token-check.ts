@@ -6,19 +6,25 @@
  * answer's `data` holds app_id, application, expires_at (unixtime; 0 = never), data_access_expires_at, is_valid,
  * issued_at, scopes, granular_scopes, user_id and, when the token is broken, error { code, message, subcode }. Meta's
  * login-security page asks servers to check tokens with it and never assume a token belongs to their app.
- * A `type` field (USER / SYSTEM_USER / PAGE / APP) appears in Meta's answers but is not on the reference page: it is
- * read when present and never required.
+ * A `type` field (USER / SYSTEM_USER / PAGE / APP) appears in Meta's answers but is NOT on the v26 reference page: it is
+ * read when present and never required. Only a clearly wrong one (PAGE, APP) is refused at connect; any other value or
+ * none is accepted, kept as Meta said it, and shown ("token type not reported" / "token type X — Nexus expects a
+ * system-user token"). `expires_at` 0 = never expires; `data_access_expires_at` in the past means Meta no longer lets
+ * the token read data: not valid.
  *
  * Nothing here stores anything: the connect service and the heartbeat decide what to keep (connectionMetadata.metaToken,
  * never the token).
  */
+import type { Prisma } from '@prisma/client'
+import prisma from '../../../../db.js'
 import { metaCall } from '../../../gateway/meta.js'
 import { GatewayNoAnswer, GatewayRefusal, type GatewayResponse } from '../../../gateway/gateway.js'
 import { metaPermissionGaps, type MetaPermissionGap } from './scopes.js'
 
 /** What Nexus keeps of a token check (connectionMetadata.metaToken) and shows. Never the token. */
 export interface MetaTokenHealth {
-  checkedAt: string
+  /** Null after Meta said the token is dead (forgetMetaTokenCheck): the next heartbeat checks again at once. */
+  checkedAt: string | null
   isValid: boolean
   /** The Meta app the token belongs to, as Meta says. */
   appId: string | null
@@ -60,11 +66,14 @@ export function tokenHealthOf(data: Record<string, unknown> | null | undefined, 
   const expiresAt = neverExpires ? null : unix(d.expires_at)
   const error = d.error && typeof d.error === 'object' ? d.error as Record<string, unknown> : null
   const appMatches = !expectedAppId || appId === expectedAppId
-  const isValid = d.is_valid === true && appMatches && (!expiresAt || Date.parse(expiresAt) > now.getTime())
+  const dataAccessExpiresAt = unix(d.data_access_expires_at)
+  const dataAccessEnded = !!dataAccessExpiresAt && Date.parse(dataAccessExpiresAt) <= now.getTime()
+  const isValid = d.is_valid === true && appMatches && (!expiresAt || Date.parse(expiresAt) > now.getTime()) && !dataAccessEnded
   let problem: string | null = null
   if (d.is_valid !== true) problem = typeof error?.message === 'string' && error.message ? `Meta says the token is not valid: ${error.message}` : 'Meta says the token is not valid.'
   else if (!appMatches) problem = 'This token belongs to another Meta app than the app id entered for this business.'
   else if (expiresAt && Date.parse(expiresAt) <= now.getTime()) problem = `The token expired on ${expiresAt.slice(0, 10)}.`
+  else if (dataAccessEnded) problem = `Meta stopped this token's access to data on ${dataAccessExpiresAt!.slice(0, 10)}.`
   return {
     checkedAt: now.toISOString(),
     isValid,
@@ -74,11 +83,35 @@ export function tokenHealthOf(data: Record<string, unknown> | null | undefined, 
     userId: d.user_id == null ? null : String(d.user_id),
     expiresAt,
     neverExpires,
-    dataAccessExpiresAt: unix(d.data_access_expires_at),
+    dataAccessExpiresAt,
     scopes,
     missing: metaPermissionGaps(scopes),
     problem,
   }
+}
+
+/** Token types a connect refuses: plainly not a system user's (Meta's own words for a Page's or the app's own token). */
+export const REFUSED_TOKEN_TYPES = new Set(['PAGE', 'APP'])
+
+/** The token type as a person reads it. */
+export function tokenTypeText(type: string | null): string {
+  if (!type) return 'Token type not reported by Meta'
+  if (type === 'SYSTEM_USER') return 'System-user token'
+  return `Token type ${type.toLowerCase().replace(/_/g, ' ')} — Nexus expects a system-user token`
+}
+
+/**
+ * Meta said this connection's token is dead (an auth answer to any call): forget when it was last checked, so the next
+ * heartbeat asks debug_token at once instead of trusting a check kept for hours. Never throws.
+ */
+export async function forgetMetaTokenCheck(connectionId: string): Promise<void> {
+  try {
+    const row = await prisma.channelConnection.findUnique({ where: { id: connectionId }, select: { connectionMetadata: true } })
+    const metadata = row?.connectionMetadata && typeof row.connectionMetadata === 'object' && !Array.isArray(row.connectionMetadata) ? row.connectionMetadata as Record<string, unknown> : null
+    const kept = metadata?.metaToken
+    if (!metadata || !kept || typeof kept !== 'object') return
+    await prisma.channelConnection.update({ where: { id: connectionId }, data: { connectionMetadata: { ...metadata, metaToken: { ...kept as object, checkedAt: null } } as unknown as Prisma.InputJsonValue } })
+  } catch { /* advisory: the heartbeat checks again in 12 h at the latest */ }
 }
 
 /**
