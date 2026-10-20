@@ -39,9 +39,9 @@ export function publishModeOf(channel: GatewayChannel): PublishMode {
     // Google Ads writes (Owner 2026-10-15, pick A): live — each one is a change a person approved in Nexus.
     // The gateway still refuses every other Google change (googleCallKind); NEXUS_GOOGLE_ADS_WRITES=off is the brake.
     case 'GOOGLE': return googleAdsWritesMode()
-    // Meta (M1, 2026-10-20): Nexus only reads Meta. Writes have no switch to turn on — the gateway refuses every Meta
-    // call that is not a GET (META_READ_ONLY, meta-calls.ts), whatever this says. M3 brings the write allow-list.
-    case 'META': return 'gated'
+    // Meta (step 17, 2026-10-21): only the changes on the write allow-list ever reach this (meta-calls.ts
+    // metaWriteVerdict); a person's approval in Nexus is their gate, NEXUS_META_ADS_WRITES=off the brake.
+    case 'META': return metaAdsWritesMode()
   }
 }
 
@@ -185,6 +185,17 @@ export function googleHostGroup(url: string): 'ads' | 'merchant' | 'analytics' |
  */
 export function googleAdsWritesMode(): PublishMode {
   return process.env.NEXUS_GOOGLE_ADS_WRITES?.trim().toLowerCase() === 'off' ? 'gated' : 'live'
+}
+
+/**
+ * Meta ads writes (step 17, 2026-10-21, mirroring Google's pick A): `live` — every Meta change Nexus sends is on the
+ * gateway's write allow-list and is one a person approved in Nexus (or the business's "Claude's changes need no approval"
+ * switch ran in that person's name), and that approval is the gate. `NEXUS_META_ADS_WRITES=off` is the brake: real
+ * changes are then refused before anything is sent (`gated`); Meta's check of a change (validate_only) still runs, as it
+ * changes nothing.
+ */
+export function metaAdsWritesMode(): PublishMode {
+  return process.env.NEXUS_META_ADS_WRITES?.trim().toLowerCase() === 'off' ? 'gated' : 'live'
 }
 
 /**

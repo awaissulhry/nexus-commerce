@@ -18,6 +18,10 @@ export const gatewayMerchantUnlinked = new Set<string>()
 /** Merchant Center data sources Nexus did NOT make (`${merchantId}:${dataSourceId}`); every other is Nexus's. */
 export const gatewayMerchantForeignSources = new Set<string>()
 export const gatewayLedger: GatewayLedgerRow[] = []
+/** Meta step 17: the ad account each Meta connection chose (`connectionId` → digits); a connection not here chose `1234567890`. */
+export const gatewayMetaChosen: Record<string, string | null> = {}
+/** Meta step 17: Meta objects in this business's stored rows (`objectId` → account and kind); every other is not stored. */
+export const gatewayMetaStored: Record<string, { adAccountId: string; kind: 'campaign' | 'adset' | 'ad' }> = {}
 
 export const accountModule = {
   accountStatusOf: async (id: string): Promise<GatewayAccountState | null> =>
@@ -25,6 +29,8 @@ export const accountModule = {
   googleAdsCustomerLinked: async (connectionId: string, customerId: string): Promise<boolean> => !gatewayGoogleUnlinked.has(`${connectionId}:${customerId}`),
   googleMerchantAccountLinked: async (connectionId: string, merchantId: string): Promise<boolean> => !gatewayMerchantUnlinked.has(`${connectionId}:${merchantId}`),
   googleMerchantDataSourceNexusMade: async (merchantId: string, dataSourceId: string): Promise<boolean> => !gatewayMerchantForeignSources.has(`${merchantId}:${dataSourceId}`),
+  metaChosenAdAccountOf: async (connectionId: string): Promise<string | null> => (connectionId in gatewayMetaChosen ? gatewayMetaChosen[connectionId] : '1234567890'),
+  metaStoredObject: async (objectId: string): Promise<{ adAccountId: string; kind: 'campaign' | 'adset' | 'ad' } | null> => gatewayMetaStored[objectId] ?? null,
 }
 export const ledgerModule = {
   writeLedgerRow: async (row: GatewayLedgerRow): Promise<void> => { gatewayLedger.push(row) },

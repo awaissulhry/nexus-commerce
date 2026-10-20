@@ -185,6 +185,7 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-google-user-access': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-account.tools test)',
   'set-google-account-links': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-account.tools test)',
   'set-meta-connection': 'it reads what the business\'s Meta system user can see live from Meta, and no business here has Meta connected (meta-ads-connection.tools test)',
+  'set-meta-status': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-status.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -501,6 +502,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-ads-overview': () => ({ view: 'overview' }),
   'meta-ads-live': () => ({ view: 'campaigns' }),
   'meta-ads-graph-read': () => ({ path: 'act_1234567890/campaigns' }),
+  // Meta ads step 17: the write base's status change refuses in words here (no business has Meta; its own test runs it).
+  'set-meta-status': () => ({ items: [{ kind: 'campaign', id: '120000000000001' }], status: 'PAUSED' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

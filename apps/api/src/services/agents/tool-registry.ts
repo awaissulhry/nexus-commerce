@@ -82,6 +82,7 @@ import { GOOGLE_ADS_BUILD_TOOLS } from './tools/google-ads-build.tools.js'
 import { META_ADS_CONNECTION_TOOLS } from './tools/meta-ads-connection.tools.js'
 // Meta ads step 2 (2026-10-20): the ad accounts, the stored daily read, the live reads and the catch-all GET.
 import { META_ADS_READ_TOOLS } from './tools/meta-ads-read.tools.js'
+import { META_ADS_STATUS_TOOLS } from './tools/meta-ads-status.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -280,6 +281,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_CONNECTION_TOOLS,
   // Meta ads step 2 (2026-10-20): meta-ad-accounts, meta-ads-overview, meta-ads-live, meta-ads-graph-read (read only).
   ...META_ADS_READ_TOOLS,
+  // Meta ads step 17 (2026-10-21): the write base's first change — set-meta-status (pause, switch on, archive).
+  ...META_ADS_STATUS_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

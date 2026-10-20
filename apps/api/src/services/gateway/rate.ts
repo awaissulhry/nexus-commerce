@@ -178,6 +178,15 @@ export function registerRateRedis(get: () => RedisLike | null): void {
   sharedRedis = get
 }
 
+/**
+ * The app's Redis while it is connected, else null — for the gateway's other small shared state (Meta's per-object holds,
+ * meta-object-limits.ts). Never opens a connection itself.
+ */
+export function rateRedis(): RedisLike | null {
+  const client = sharedRedis?.() ?? null
+  return client && client.status === 'ready' ? client : null
+}
+
 /** Redis while it is connected; else this process's memory. Never blocks on Redis. */
 async function store(): Promise<BucketStore> {
   if (override) return override
@@ -200,13 +209,17 @@ export function bucketKey(channel: GatewayChannel, connectionId: string | null, 
   return `${channel}:${connectionId ?? 'app'}:${group}`
 }
 
-/** Wait for a token, up to `maxWaitMs`. `ok: false` = still none after waiting (answer rate_limited). */
-export async function takeToken(channel: GatewayChannel, key: string, maxWaitMs: number, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))): Promise<TakeResult & { waitedMs: number }> {
+/**
+ * Wait for a token, up to `maxWaitMs`. `ok: false` = still none after waiting (answer rate_limited). `cost`: how many
+ * tokens the call takes (default 1; a Meta write takes 3 — Meta scores a write 3 points and a read 1, rate-limiting page).
+ */
+export async function takeToken(channel: GatewayChannel, key: string, maxWaitMs: number, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)), cost = 1): Promise<TakeResult & { waitedMs: number }> {
   const s = await store()
   const params = (await s.getParams(key).catch(() => null)) ?? defaultsFor(channel, key)
+  const need = Math.min(Math.max(1, cost), params.capacity)
   let waitedMs = 0
   for (;;) {
-    const result = await s.take(key, params, 1, Date.now()).catch(() => ({ ok: true, waitMs: 0, tokensLeft: 0 } as TakeResult))
+    const result = await s.take(key, params, need, Date.now()).catch(() => ({ ok: true, waitMs: 0, tokensLeft: 0 } as TakeResult))
     if (result.ok) return { ...result, waitedMs }
     if (waitedMs + result.waitMs > maxWaitMs) return { ...result, waitedMs }
     await sleep(result.waitMs)

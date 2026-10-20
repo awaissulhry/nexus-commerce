@@ -1,0 +1,284 @@
+/**
+ * Meta on the gateway, step 17 (write base): a change reaches Meta ONLY when it is on the write ALLOW-list — today a status
+ * change of one campaign, ad set or ad (POST /<id> status=ACTIVE|PAUSED|ARCHIVED), or Meta's check of one (validate_only,
+ * a campaign's only, sent as a read) — and its object is of the ad account THIS business chose through THIS connection
+ * (its own stored rows, else ONE live read of account_id): a forged id of another business's account is refused before
+ * anything is sent. Every batch is refused (none allowed yet; each part judged as its own change). Meta's per-object
+ * limits hold only that object. The body sent is the body judged. Made-up ids only.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response> }))
+vi.mock('./account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('./ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
+vi.mock('../cx/token.service.js', () => ({
+  getAccessToken: vi.fn(async () => 'meta-system-user-token'),
+  metaAppAccessToken: vi.fn(async () => '1234567|app-secret-for-tests'),
+  metaAppIdOf: vi.fn(async () => '1234567'),
+  metaRenewalToken: vi.fn(async () => 'stored-meta-token'),
+  metaRequestProof: vi.fn(async () => ({ appsecret_proof: 'proof', appsecret_time: '1760000000' })),
+}))
+vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
+vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
+
+import { gatewayLedger, gatewayMetaChosen, gatewayMetaStored } from '../../test-support/gateway-stubs.js'
+import { __rateTest, bucketKey, takeToken } from './rate.js'
+import { gatewayCall, GatewayRefusal } from './gateway.js'
+import { metaCall, metaWriteCall } from './meta.js'
+import { META_BATCH_KINDS_ALLOWED, metaBatchProblem, metaWriteVerdict } from './meta-calls.js'
+import { __metaObjectLimitsTest, metaObjectState, metaObjectWait } from './meta-object-limits.js'
+import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
+
+const BASE = `https://graph.facebook.com/${META_DEFAULT_GRAPH_API_VERSION}`
+const CAMPAIGN = '120000000000001'
+const AD_SET = '120000000000002'
+const OTHER_BUSINESS_CAMPAIGN = '120000000000099'
+
+const verdict = (input: Partial<Parameters<typeof metaWriteVerdict>[0]> & { body?: unknown }) =>
+  metaWriteVerdict({ method: 'POST', url: `${BASE}/${CAMPAIGN}`, kind: 'write', ...input })
+const problem = (input: Partial<Parameters<typeof metaWriteVerdict>[0]> & { body?: unknown }) => {
+  const v = verdict(input)
+  return 'problem' in v ? v.problem : null
+}
+const json = (body: unknown, status = 200) => () => new Response(JSON.stringify(body), { status })
+const sent = (i: number) => ({ method: h.calls[i].init.method, url: new URL(h.calls[i].url), body: h.calls[i].init.body, headers: h.calls[i].init.headers as Record<string, string> })
+
+beforeEach(() => {
+  __rateTest.useMemory()
+  __metaObjectLimitsTest.useMemory()
+  h.calls = []; h.answers = []; gatewayLedger.length = 0
+  for (const key of Object.keys(gatewayMetaChosen)) delete gatewayMetaChosen[key]
+  for (const key of Object.keys(gatewayMetaStored)) delete gatewayMetaStored[key]
+  gatewayMetaStored[CAMPAIGN] = { adAccountId: '1234567890', kind: 'campaign' }
+  gatewayMetaStored[AD_SET] = { adAccountId: '1234567890', kind: 'adset' }
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+    h.calls.push({ url: String(url), init })
+    return h.answers.shift()?.() ?? new Response(JSON.stringify({ id: CAMPAIGN, status: 'PAUSED', effective_status: 'PAUSED' }), { status: 200 })
+  }))
+})
+afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); __rateTest.reset(); __metaObjectLimitsTest.reset() })
+
+describe('the write allow-list (metaWriteVerdict)', () => {
+  it('lets a status change of one object through as a write, the body written again in one order', () => {
+    expect(verdict({ body: 'status=PAUSED' })).toEqual({ write: { rule: 'object.status', objectId: CAMPAIGN, check: false, body: 'status=PAUSED', budget: false } })
+    expect(verdict({ body: 'fields=id%2Cstatus%2Ceffective_status&status=ACTIVE' })).toMatchObject({ write: { body: 'status=ACTIVE&fields=id%2Cstatus%2Ceffective_status' } })
+    expect(verdict({ body: 'status=ARCHIVED' })).toMatchObject({ write: { check: false } })
+  })
+  it('Meta\'s check (validate_only) is a read: exactly ["validate_only"], never with a read-back', () => {
+    expect(verdict({ kind: 'read', body: 'status=ACTIVE&execution_options=%5B%22validate_only%22%5D' })).toMatchObject({ write: { check: true } })
+    expect(problem({ kind: 'write', body: 'status=ACTIVE&execution_options=["validate_only"]' })).toMatch(/goes as a read/)
+    expect(problem({ kind: 'read', body: 'status=ACTIVE' })).toMatch(/goes as a write/)
+    expect(problem({ kind: 'read', body: 'status=ACTIVE&execution_options=["include_recommendations"]' })).toMatch(/only execution_options/)
+    expect(problem({ kind: 'read', body: 'status=ACTIVE&execution_options=["validate_only","include_recommendations"]' })).toMatch(/only execution_options/)
+    expect(problem({ kind: 'read', body: 'status=ACTIVE&execution_options=validate_only' })).toMatch(/JSON list/)
+    expect(problem({ kind: 'read', body: 'status=ACTIVE&execution_options=["validate_only"]&fields=id' })).toMatch(/reads nothing back/)
+    expect(problem({ kind: 'action', body: 'status=PAUSED' })).toMatch(/goes as a write/)
+  })
+  it('refuses DELETED (its own tool), any other status, any other key, and a read-back outside its fields', () => {
+    expect(problem({ body: 'status=DELETED' })).toMatch(/deletes nothing/)
+    expect(problem({ body: 'status=paused' })).toMatch(/status is ACTIVE, PAUSED, ARCHIVED/)
+    expect(problem({ body: 'status=PAUSED&name=Shop%20A' })).toMatch(/only Meta change Nexus sends is a status change/)
+    expect(problem({ body: 'status=PAUSED&daily_budget=1000' })).toMatch(/only Meta change/)
+    expect(problem({ body: 'name=Shop%20A' })).toMatch(/only Meta change/)
+    expect(problem({ body: 'status=PAUSED&fields=id,name' })).toMatch(/reads back only/)
+    expect(problem({ body: 'status=PAUSED&fields=adset{id}' })).toMatch(/reads back only/)
+    expect(problem({ body: 'status=PAUSED&fields=id,id' })).toMatch(/each field once/)
+  })
+  it('refuses every other path: a create edge, an object\'s edge, the ad account, a root call', () => {
+    expect(problem({ url: `${BASE}/act_1234567890/campaigns`, body: 'status=PAUSED' })).toMatch(/only Meta change/)
+    expect(problem({ url: `${BASE}/${CAMPAIGN}/copies`, body: 'status=PAUSED' })).toMatch(/only Meta change/)
+    expect(problem({ url: `${BASE}/act_1234567890`, body: 'status=PAUSED' })).toMatch(/only Meta change/)
+    expect(problem({ url: `${BASE}/me`, body: 'status=PAUSED' })).toMatch(/only Meta change/)
+  })
+  it('refuses parameters on the URL, a JSON or empty body, a key twice, a gateway key, a method override, odd values', () => {
+    expect(problem({ url: `${BASE}/${CAMPAIGN}?status=ACTIVE`, body: 'status=PAUSED' })).toMatch(/never in the URL/)
+    expect(problem({ url: `${BASE}/${CAMPAIGN}?fields=id`, body: 'status=PAUSED' })).toMatch(/never in the URL/)
+    expect(problem({ body: '{"status":"PAUSED"}' })).toMatch(/is not one Meta reads/)
+    expect(problem({ body: '' })).toMatch(/form body/)
+    expect(problem({ body: undefined })).toMatch(/form body/)
+    expect(problem({ body: 'status=PAUSED&status=ACTIVE' })).toMatch(/more than once/)
+    expect(problem({ body: 'status=PAUSED&access_token=EAAforged' })).toMatch(/no Nexus change sends/)
+    expect(problem({ body: 'status=PAUSED&appsecret_proof=x' })).toMatch(/no Nexus change sends/)
+    expect(problem({ body: 'status=PAUSED&method=delete' })).toMatch(/no Nexus change sends/)
+    expect(problem({ body: 'status=PAUSED&_method=delete' })).toMatch(/no Nexus change sends/)
+    expect(problem({ body: 'Status=PAUSED' })).toMatch(/is not one Meta reads/)
+    expect(problem({ body: 'status=PAUS%C3%89D' })).toMatch(/plain ASCII/)
+    expect(problem({ body: `status=PAUSED&fields=${'id,'.repeat(800)}id` })).toMatch(/at most 2000/)
+  })
+  it('refuses DELETE, PUT, a caller\'s header, any token but the account\'s, another host, version or an odd path', () => {
+    expect(problem({ method: 'DELETE', body: undefined })).toMatch(/deletes nothing on Meta yet/)
+    expect(problem({ method: 'PUT', body: 'status=PAUSED' })).toMatch(/no PUT/)
+    expect(problem({ body: 'status=PAUSED', headers: { 'X-HTTP-Method-Override': 'DELETE' } })).toMatch(/no header/)
+    expect(problem({ body: 'status=PAUSED', auth: 'app' })).toMatch(/system-user token/)
+    expect(problem({ body: 'status=PAUSED', auth: 'none' })).toMatch(/system-user token/)
+    expect(problem({ body: 'status=PAUSED', auth: { token: 'EAAx', appSecret: 's' } })).toMatch(/system-user token/)
+    expect(problem({ url: `https://graph-video.facebook.com/v26.0/${CAMPAIGN}`, body: 'status=PAUSED' })).toMatch(/graph\.facebook\.com/)
+    expect(problem({ url: `https://graph.facebook.com/v25.0/${CAMPAIGN}`, body: 'status=PAUSED' })).toMatch(/v26\.0/)
+    expect(problem({ url: `${BASE}/%31${CAMPAIGN.slice(1)}`, body: 'status=PAUSED' })).toMatch(/percent-encoded/)
+    expect(problem({ url: `${BASE}//${CAMPAIGN}`, body: 'status=PAUSED' })).toMatch(/empty segment/)
+  })
+})
+
+describe('batches (ACC-022/023/025–027): the plumbing judges each part, and nothing is allowed through it yet', () => {
+  const batch = (parts: unknown[]) => `batch=${encodeURIComponent(JSON.stringify(parts))}`
+  it('no batch kind is allowed', () => {
+    expect([...META_BATCH_KINDS_ALLOWED]).toEqual([])
+  })
+  it('a Graph batch is refused as a batch, naming the first part Nexus would not send even on its own', () => {
+    const ok = verdict({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: `v26.0/${CAMPAIGN}`, body: 'status=PAUSED' }]) })
+    expect(ok).toMatchObject({ batch: true, problem: expect.stringMatching(/sends no Meta batch request yet.*not all|one by one/) })
+    expect(problem({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: CAMPAIGN, body: 'status=PAUSED' }, { method: 'DELETE', relative_url: AD_SET }]) })).toMatch(/part 2: Nexus deletes nothing/)
+    expect(problem({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: CAMPAIGN, body: 'status={result=one:$.id}' }]) })).toMatch(/depends on another part/)
+    expect(problem({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: 'v26.0/', body: 'batch=[]' }]) })).toMatch(/batch inside a batch/)
+    expect(problem({ url: `${BASE}/`, body: batch(Array.from({ length: 51 }, () => ({ method: 'POST', relative_url: CAMPAIGN, body: 'status=PAUSED' }))) })).toMatch(/at most 50/)
+    expect(problem({ url: `${BASE}/`, body: 'batch=not-json' })).toMatch(/batch is not JSON/)
+  })
+  it('an async batch is refused too; renaming or cancelling an async request set is not on the allow-list', () => {
+    const body = `name=Set%20A&adbatch=${encodeURIComponent(JSON.stringify([{ name: 'one', relative_url: `v26.0/${CAMPAIGN}`, body: 'status=PAUSED' }]))}`
+    expect(verdict({ url: `${BASE}/act_1234567890/async_batch_requests`, body })).toMatchObject({ batch: true, problem: expect.stringMatching(/no Meta async batch yet/) })
+    expect(metaBatchProblem('POST', 'act_1234567890/async_batch_requests', 'name=x')).toMatch(/names no adbatch/)
+    expect(problem({ body: 'name=Set%20B&notification_mode=OFF' })).toMatch(/only Meta change/)
+    expect(problem({ method: 'DELETE', body: undefined })).toMatch(/cancels no async batch/)
+  })
+  it('the gateway refuses a batch META_BATCH_NOT_ALLOWED with its ledger row, sending nothing', async () => {
+    const err = await gatewayCall({ channel: 'META', operation: 'batch', kind: 'write', connectionId: 'm-1', url: `${BASE}/`, method: 'POST', body: batch([{ method: 'POST', relative_url: CAMPAIGN, body: 'status=PAUSED' }]) }).catch((e) => e)
+    expect(err).toMatchObject({ code: 'META_BATCH_NOT_ALLOWED', outcome: 'refused' })
+    expect(h.calls).toHaveLength(0)
+    expect(gatewayLedger).toEqual([expect.objectContaining({ errorCode: 'META_BATCH_NOT_ALLOWED' })])
+  })
+})
+
+describe('a change through the gateway', () => {
+  it('a status change of a stored campaign of the chosen account goes once: POST, the judged form body, the token on the URL only', async () => {
+    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status', objectId: CAMPAIGN, params: { status: 'PAUSED', fields: 'id,status,effective_status' }, check: false })
+    expect(res.ok).toBe(true)
+    expect(h.calls).toHaveLength(1)
+    const call = sent(0)
+    expect(call.method).toBe('POST')
+    expect(call.url.pathname).toBe(`/v26.0/${CAMPAIGN}`)
+    expect(call.url.searchParams.get('access_token')).toBe('meta-system-user-token')
+    expect([...call.url.searchParams.keys()].sort()).toEqual(['access_token', 'appsecret_proof', 'appsecret_time'])
+    expect(call.body).toBe('status=PAUSED&fields=id%2Cstatus%2Ceffective_status')
+    expect(call.headers['Content-Type']).toBe('application/x-www-form-urlencoded')
+    expect(gatewayLedger).toEqual([expect.objectContaining({ channel: 'META', method: 'POST', outcome: 'sent', success: true, endpoint: `graph.facebook.com/v26.0/${CAMPAIGN}` })])
+    expect(JSON.stringify(gatewayLedger)).not.toContain('meta-system-user-token')
+  })
+  it('writes switched off (NEXUS_META_ADS_WRITES=off): a change is gated, whatever the caller says; Meta\'s check still runs', async () => {
+    vi.stubEnv('NEXUS_META_ADS_WRITES', 'off')
+    const err = await gatewayCall({ channel: 'META', operation: 'campaign.status', kind: 'write', connectionId: 'm-1', url: `${BASE}/${CAMPAIGN}`, method: 'POST', body: 'status=ACTIVE', modeAppliedByCaller: true }).catch((e) => e)
+    expect(err).toMatchObject({ outcome: 'gated', code: 'PUBLISH_GATED' })
+    h.answers.push(json({ success: true }))
+    const check = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status.check', objectId: CAMPAIGN, params: { status: 'ACTIVE' }, check: true })
+    expect(check.ok).toBe(true)
+    expect(h.calls).toHaveLength(1)
+    expect(sent(0).body).toBe('status=ACTIVE&execution_options=%5B%22validate_only%22%5D')
+  })
+  it('Meta has a check only for campaigns: an ad set\'s check is refused, nothing sent', async () => {
+    const err = await metaWriteCall({ connectionId: 'm-1', operation: 'adset.status.check', objectId: AD_SET, params: { status: 'ACTIVE' }, check: true }).catch((e) => e)
+    expect(err).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/only for campaign changes/) })
+    expect(h.calls).toHaveLength(0)
+  })
+  it('an object stored for another account of this business, or no ad account chosen: refused, nothing sent', async () => {
+    gatewayMetaStored[CAMPAIGN] = { adAccountId: '1234567891', kind: 'campaign' }
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    gatewayMetaChosen['m-2'] = null
+    expect(await metaWriteCall({ connectionId: 'm-2', operation: 'x', objectId: AD_SET, params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/no Meta ad account chosen/) })
+    expect(h.calls).toHaveLength(0)
+  })
+  it('a FORGED id of another business\'s ad account: ONE live read of its account_id, then refused — no change sent, the other account never named', async () => {
+    // Not in this business's rows (row-level security hides the other business's); the shared system user can still see it.
+    h.answers.push(json({ account_id: '5555555555', id: OTHER_BUSINESS_CAMPAIGN }))
+    const err = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status', objectId: OTHER_BUSINESS_CAMPAIGN, params: { status: 'ACTIVE' }, check: false }).catch((e) => e)
+    expect(err).toBeInstanceOf(GatewayRefusal)
+    expect(err).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', outcome: 'refused' })
+    expect(err.message).not.toContain('5555555555')
+    expect(h.calls).toHaveLength(1)
+    expect(sent(0).method).toBe('GET')
+    expect(sent(0).url.pathname).toBe(`/v26.0/${OTHER_BUSINESS_CAMPAIGN}`)
+    expect(sent(0).url.searchParams.get('fields')).toBe('account_id')
+    expect(gatewayLedger.map((r) => [r.operation, r.outcome, r.errorCode ?? null])).toEqual([['write.ownerCheck', 'sent', null], ['campaign.status', 'refused', 'META_ACCOUNT_NOT_CHOSEN']])
+  })
+  it('a campaign made since the last daily read: the live read places it in the chosen account, then the change goes', async () => {
+    h.answers.push(json({ account_id: '1234567890', id: '120000000000005' }), json({ id: '120000000000005', status: 'PAUSED' }))
+    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status', objectId: '120000000000005', params: { status: 'PAUSED' }, check: false })
+    expect(res.ok).toBe(true)
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'POST'])
+  })
+  it('a check of an object Nexus has not read asks account_id and objective: an ad set (no objective) is refused', async () => {
+    h.answers.push(json({ error: { code: 100, message: 'Tried accessing nonexisting field (objective) on node type (AdSet)' } }, 400))
+    const err = await metaWriteCall({ connectionId: 'm-1', operation: 'x.check', objectId: '120000000000006', params: { status: 'ACTIVE' }, check: true }).catch((e) => e)
+    expect(err).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
+    expect(sent(0).url.searchParams.get('fields')).toBe('account_id,objective')
+    expect(h.calls).toHaveLength(1)
+  })
+  it('Meta does not place the object (an error, or no account_id): refused META_ACCOUNT_UNCONFIRMED', async () => {
+    h.answers.push(json({ error: { code: 100, error_subcode: 33, message: 'Object does not exist' } }, 400))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000007', params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED' })
+    h.answers.push(json({ id: '120000000000008' }))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000008', params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED' })
+    expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
+  })
+  it('a change names its connection', async () => {
+    const err = await gatewayCall({ channel: 'META', operation: 'x', kind: 'write', connectionId: null, appLevel: true, url: `${BASE}/${CAMPAIGN}`, method: 'POST', body: 'status=PAUSED' }).catch((e) => e)
+    expect(err).toMatchObject({ code: 'ACCOUNT_REQUIRED' })
+  })
+  it('a change is never retried (5xx: one call), not even when a caller calls it idempotent; Meta\'s check is, once', async () => {
+    h.answers.push(json({ error: { code: 1, message: 'Unknown error' } }, 500))
+    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, params: { status: 'PAUSED' }, check: false })
+    expect(res.ok).toBe(false)
+    expect(h.calls).toHaveLength(1)
+    h.calls = []
+    __metaObjectLimitsTest.useMemory()
+    h.answers.push(json({ error: { code: 1, message: 'Unknown error' } }, 500), json({ id: CAMPAIGN, status: 'PAUSED' }))
+    const forced = await gatewayCall({ channel: 'META', operation: 'x', kind: 'write', connectionId: 'm-1', url: `${BASE}/${CAMPAIGN}`, method: 'POST', body: 'status=PAUSED', idempotent: true, maxTransientRetries: 3, retryBackoffMs: 1 })
+    expect(forced.ok).toBe(false)
+    expect(h.calls).toHaveLength(1)
+    h.calls = []; h.answers = []
+    __metaObjectLimitsTest.useMemory()
+    h.answers.push(json({ error: { code: 1, message: 'Unknown error' } }, 500), json({ success: true }))
+    const check = await gatewayCall({ channel: 'META', operation: 'x.check', kind: 'read', connectionId: 'm-1', url: `${BASE}/${CAMPAIGN}`, method: 'POST', body: 'status=PAUSED&execution_options=["validate_only"]', retryBackoffMs: 1 })
+    expect(check.ok).toBe(true)
+    expect(h.calls).toHaveLength(2)
+  })
+  it('a change takes 3 tokens of the account\'s bucket (Meta scores a write 3 points, a read 1)', async () => {
+    await metaCall({ connectionId: 'm-5', operation: 'r', path: 'act_1234567890/campaigns', query: { fields: 'id' } })
+    const afterRead = await takeToken('META', bucketKey('META', 'm-5', 'ads'), 0)
+    gatewayMetaChosen['m-6'] = '1234567890'
+    await metaWriteCall({ connectionId: 'm-6', operation: 'w', objectId: CAMPAIGN, params: { status: 'PAUSED' }, check: false })
+    const afterWrite = await takeToken('META', bucketKey('META', 'm-6', 'ads'), 0)
+    expect(afterRead.tokensLeft - afterWrite.tokensLeft).toBeCloseTo(2, 0)
+  })
+})
+
+describe('Meta\'s per-object limits hold only that object', () => {
+  it('a second change of the same object within 30 s is refused RATE_LIMITED_LOCAL (nothing sent); another object goes; a check is not held', async () => {
+    await metaWriteCall({ connectionId: 'm-1', operation: 'w', objectId: CAMPAIGN, params: { status: 'PAUSED' }, check: false })
+    const err = await metaWriteCall({ connectionId: 'm-1', operation: 'w', objectId: CAMPAIGN, params: { status: 'ACTIVE' }, check: false }).catch((e) => e)
+    expect(err).toMatchObject({ code: 'RATE_LIMITED_LOCAL', message: expect.stringMatching(/one change of the same object every 30 s/) })
+    expect(err.retryAfterMs).toBeGreaterThan(25_000)
+    expect(err.retryAfterMs).toBeLessThanOrEqual(30_000)
+    await metaWriteCall({ connectionId: 'm-1', operation: 'w', objectId: AD_SET, params: { status: 'PAUSED' }, check: false })
+    h.answers.push(json({ success: true }))
+    await metaWriteCall({ connectionId: 'm-1', operation: 'c', objectId: CAMPAIGN, params: { status: 'ACTIVE' }, check: true })
+    expect(h.calls).toHaveLength(3)
+  })
+  it('613/4841018 holds that object 30 s, never the account\'s bucket', async () => {
+    h.answers.push(json({ error: { code: 613, error_subcode: 4841018, message: 'Calls to this api have exceeded the rate limit.' } }, 400))
+    const res = await metaWriteCall({ connectionId: 'm-7', operation: 'w', objectId: CAMPAIGN, params: { status: 'PAUSED' }, check: false })
+    expect(res.ok).toBe(false)
+    const state = await metaObjectState('m-7', CAMPAIGN)
+    expect(state.heldUntil! - Date.now()).toBeGreaterThan(25_000)
+    expect(metaObjectWait(state, false)?.why).toMatch(/4841018/)
+    await metaCall({ connectionId: 'm-7', operation: 'r', path: 'act_1234567890/campaigns', query: { fields: 'id' } })
+    expect(h.calls).toHaveLength(2)
+  })
+  it('613/1487632 holds only that ad set\'s BUDGET changes for an hour (Meta: "the budget change for that ad set is blocked"), never the bucket', async () => {
+    h.answers.push(json({ error: { code: 613, error_subcode: 1487632, message: 'You can only change your ad set budget 4 times per hour.' } }, 400))
+    await metaWriteCall({ connectionId: 'm-8', operation: 'w', objectId: AD_SET, params: { status: 'PAUSED' }, check: false })
+    const state = await metaObjectState('m-8', AD_SET)
+    expect(state.budgetHeldUntil! - Date.now()).toBeGreaterThan(3_500_000)
+    expect(metaObjectWait(state, true)?.why).toMatch(/1487632/)
+    expect(metaObjectWait({ ...state, touchedAt: null }, false)).toBeNull()
+    expect(await takeToken('META', bucketKey('META', 'm-8', 'ads'), 0)).toMatchObject({ ok: true })
+  })
+})

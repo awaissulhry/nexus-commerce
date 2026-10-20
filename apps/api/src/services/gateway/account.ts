@@ -50,3 +50,33 @@ export async function googleMerchantDataSourceNexusMade(merchantId: string, data
   })
   return row !== null
 }
+
+/**
+ * Meta step 17 (write base): the ad account this business chose through this Meta connection (its AD_ACCOUNT
+ * MetaAccountLink, digits only), or null. Read in the business the call runs in (row-level security): an account another
+ * business chose is never this one (a Meta id belongs to one business: MetaAccountLink is unique on product + id).
+ */
+export async function metaChosenAdAccountOf(connectionId: string): Promise<string | null> {
+  const link = await prisma.metaAccountLink.findFirst({ where: { connectionId, product: 'AD_ACCOUNT' }, select: { externalId: true } })
+  return link?.externalId ?? null
+}
+
+/** The kinds of Meta object Nexus's daily read stores (and a change by object id may name). */
+export type MetaStoredKind = 'campaign' | 'adset' | 'ad'
+
+/**
+ * Meta step 17: which ad account a Meta object belongs to, from this business's own rows of its daily read (row-level
+ * security: another business's rows are never read), with its kind. Null when Nexus has not read it for this business —
+ * the gateway then asks Meta once (`GET /<id>?fields=account_id`).
+ */
+export async function metaStoredObject(objectId: string): Promise<{ adAccountId: string; kind: MetaStoredKind } | null> {
+  const [campaign, adSet, ad] = await Promise.all([
+    prisma.metaAdsCampaign.findFirst({ where: { campaignId: objectId }, select: { adAccountId: true } }),
+    prisma.metaAdsAdSet.findFirst({ where: { adSetId: objectId }, select: { adAccountId: true } }),
+    prisma.metaAdsAd.findFirst({ where: { adId: objectId }, select: { adAccountId: true } }),
+  ])
+  if (campaign) return { adAccountId: campaign.adAccountId, kind: 'campaign' }
+  if (adSet) return { adAccountId: adSet.adAccountId, kind: 'adset' }
+  if (ad) return { adAccountId: ad.adAccountId, kind: 'ad' }
+  return null
+}

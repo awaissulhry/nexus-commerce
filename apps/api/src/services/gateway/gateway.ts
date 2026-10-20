@@ -30,10 +30,12 @@
 import { createHash } from 'node:crypto'
 import { withSpan } from '../../utils/otel-setup.js'
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
-import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade } from './account.js'
+import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade, metaChosenAdAccountOf, metaStoredObject } from './account.js'
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
-import { metaAppSecretProof, metaCallVerdict, metaSendUrl, scrubMetaAnswer } from './meta-calls.js'
+import { metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite } from './meta-calls.js'
+import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
+import { metaGraphBase } from '../meta/api-version.js'
 import { writeLedgerRow } from './ledger.js'
 import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
@@ -322,11 +324,22 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     }
   }
 
-  // 1d. Meta (M1, 2026-10-20) — Nexus only READS Meta: a GET with no body, to the pinned Graph version, that is not a
-  // method override, a batch, a token revoke or any sign-in call but the system-user token renewal (meta-calls.ts).
-  // Refused before the account, the token or the network, by the kind declared AND by the method and URL themselves.
+  // 1d. Meta (M1, 2026-10-20) — a READ is a GET with no body, to the pinned Graph version, that is not a method override,
+  // a batch, a token revoke or any sign-in call but the system-user token renewal (meta-calls.ts metaCallVerdict).
+  // Step 17 (2026-10-21) — anything else is judged by the write ALLOW-list (metaWriteVerdict): today a status change of
+  // one campaign, ad set or ad, or Meta's check of one (validate_only: a read). Every batch is refused (none allowed yet).
+  // Refused before the account, the token or the network, by the kind declared AND by the method, URL and body
+  // themselves; what is sent is the body as it was judged. The object's ad account is checked after the status (3b).
   let metaRenewal = false
-  if (req.channel === 'META') {
+  let metaWrite: MetaJudgedWrite | null = null
+  if (req.channel === 'META' && req.method !== 'GET') {
+    const judged = metaWriteVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
+    if ('problem' in judged) {
+      return refuse('refused', judged.batch ? 'META_BATCH_NOT_ALLOWED' : 'META_WRITE_NOT_ALLOWED', `Nothing was sent to Meta: ${judged.problem} (${req.method} ${safePath(req.url)}).`, 403)
+    }
+    if (!req.connectionId) return refuse('refused', 'ACCOUNT_REQUIRED', 'Nothing was sent to Meta: a change names the Meta connection it is for.', 400)
+    metaWrite = judged.write
+  } else if (req.channel === 'META') {
     // One verdict on one canonical parse (meta-calls.ts): the refusal, and for the renewal the client_id it names.
     const judged = metaCallVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
     if (judged.problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${judged.problem} (${req.method} ${safePath(req.url)}).`, 403)
@@ -349,7 +362,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
 
   // 3. publish mode (writes)
   let url = req.url
-  if (req.kind === 'write' && !req.modeAppliedByCaller) {
+  // A Meta change never skips it (step 17): Meta's writes brake (NEXUS_META_ADS_WRITES=off) holds whatever the caller says.
+  if (req.kind === 'write' && (!req.modeAppliedByCaller || req.channel === 'META')) {
     const mode = publishModeOf(req.channel)
     if (mode === 'gated') return refuse('gated', 'PUBLISH_GATED', `Nothing was sent to ${name}: ${name} publishing is switched off.`, 503)
     if (mode === 'dry-run') return refuse('would_send', 'DRY_RUN', `Dry run: this ${req.operation} would be sent to ${name}. Nothing was sent.`, 200)
@@ -357,6 +371,20 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       const sandbox = sandboxUrlOf(req.channel, req.url)
       if (!sandbox) return refuse('gated', 'NO_SANDBOX_HOST', `Nothing was sent to ${name}: publishing is in sandbox mode and this call has no sandbox host.`, 503)
       url = sandbox
+    }
+  }
+
+  // 3b. Meta step 17 — a change (or Meta's check of one) names an object by id (POST /<id>), never its ad account: the
+  // object must be of the ad account THIS business chose through THIS connection (its own stored rows, else ONE live
+  // read of its account_id), and Meta's check only for a campaign (Meta documents validate_only on campaign updates
+  // only). Then Meta's per-object limits: a change waits 30 s after the last one of the same object, and an ad set's
+  // budget changes wait out Meta's hour (meta-object-limits.ts).
+  if (metaWrite && req.connectionId) {
+    const owner = await metaOwnerProblem(req.connectionId, metaWrite)
+    if (owner) return refuse('refused', owner.code, owner.sentence, 403)
+    if (!metaWrite.check) {
+      const wait = metaObjectWait(await metaObjectState(req.connectionId, metaWrite.objectId), metaWrite.budget)
+      if (wait) return refuse('refused', 'RATE_LIMITED_LOCAL', `Not sent yet: ${wait.why}. Retry in ${Math.ceil(wait.waitMs / 1000)} s; nothing was changed.`, 429, wait.waitMs)
     }
   }
 
@@ -418,6 +446,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     ...callerHeaders,
     ...marketHeaders,
     ...(token ? authHeadersOf(req.channel, token) : {}),
+    // A Meta change is a form (Meta's `-F` fields), as the gateway judged it.
+    ...(metaWrite ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
   }
   // Meta: the token and its appsecret_proof go on the URL that is sent (never on `url`, which the ledger, the trace and
   // the answer carry). The proof is made from the app secret the token service holds for this connection, or from the
@@ -460,7 +490,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   const key = bucketKey(req.channel, req.connectionId, bucketGroupOf(req.channel, req.method, url))
   const max429 = req.max429Retries ?? 2
   const maxTransient = req.maxTransientRetries ?? 1
-  const repeatable = req.kind === 'read' || req.idempotent === true || req.method === 'PUT' || req.method === 'DELETE'
+  // A Meta change is never repeatable, whatever the caller says (step 17): a 5xx or no answer may have applied it.
+  const repeatable = (req.kind === 'read' || req.idempotent === true || req.method === 'PUT' || req.method === 'DELETE') && !(metaWrite && !metaWrite.check)
   let throttleRetries = 0
   let transientRetries = 0
   let attempts = 0
@@ -472,7 +503,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   let graphqlErrors = false
   let metaScrubbed = 0
   for (;;) {
-    const slot = await takeToken(req.channel, key, req.maxRateWaitMs ?? 30_000)
+    // Meta scores a write 3 points and a read 1 (rate-limiting page); its check of a change is counted as a write.
+    const slot = await takeToken(req.channel, key, req.maxRateWaitMs ?? 30_000, undefined, metaWrite ? 3 : 1)
     if (!slot.ok) {
       return refuse('refused', 'RATE_LIMITED_LOCAL', `Not sent yet: the ${name} rate limit for this account needs ${Math.ceil(slot.waitMs / 1000)} s more. Retry later.`, 429, slot.waitMs)
     }
@@ -481,7 +513,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     try {
       // Never follow a redirect: a channel call carries its token in a header, and a custom token header
       // (x-amz-access-token, X-Shopify-Access-Token) would travel to the redirect's host.
-      const res = await fetch(sendUrl, { method: req.method, headers, body: (googleBody ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
+      const res = await fetch(sendUrl, { method: req.method, headers, body: (googleBody ?? metaWrite?.body ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
       status = res.status
       responseHeaders = res.headers
       text = await res.text()
@@ -525,12 +557,19 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // 8. classify
   const ok = status >= 200 && status < 300 && !graphqlErrors && (req.answerOk ? req.answerOk(text) : true)
   const verdict = ok ? null : classifyChannelAnswer(req.channel, status, text, { timedOut })
+  // Step 17 — what Meta's per-object limits learn from a change or a check of one: it reached Meta (or may have), or Meta
+  // held that one object (613/4841018: 30 s for its changes; 613/1487632: an hour for that ad set's budget changes).
+  const objectLimit = verdict?.channelCode === '613/4841018' ? 'edits' : verdict?.channelCode === '613/1487632' ? 'budget' : null
+  if (req.channel === 'META' && metaWrite && req.connectionId) {
+    if (objectLimit) await holdMetaObject(req.connectionId, metaWrite.objectId, objectLimit)
+    else if (ok || status === 0 || status >= 500) await noteMetaObjectTouched(req.connectionId, metaWrite.objectId, { budget: ok && metaWrite.budget && !metaWrite.check })
+  }
   if (req.channel === 'META' && verdict) {
     // Meta answers a throttle with an error code (often with no usage header): hold the bucket all the same — 300 s, the
-    // block Meta's rate-limit page names for an ad account's score. 613/1487632 is the per-ad-set budget-change limit: it
-    // cannot occur while Nexus only reads; step 17 (writes) will hold only that ad set's writes, not the whole bucket.
-    if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec) {
-      await observeRate(req.channel, key, { retryAfterSec: verdict.channelCode === '613/1487632' ? 3600 : 300 })
+    // block Meta's rate-limit page names for an ad account's score. The two per-object limits (4841018, 1487632) hold only
+    // that object (above), never the account's whole bucket.
+    if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec && !objectLimit) {
+      await observeRate(req.channel, key, { retryAfterSec: 300 })
     }
     // Meta says the token is dead: the next heartbeat checks it again at once, rather than trusting a check kept for hours.
     if ((verdict.errorClass === 'auth_revoked' || verdict.errorClass === 'auth_expired') && req.connectionId) {
@@ -575,6 +614,43 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
 }
 
 const sleepMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * Step 17 — why a Meta change (or Meta's check of one) of this object is refused for this connection, or null: the object
+ * must be of the ad account the business chose through it. From the business's own stored rows (row-level security), else
+ * ONE live read through this gateway (`GET /<id>?fields=account_id`, plus `objective` for a check: only a campaign has
+ * it). An object Nexus cannot place, or of any other account (another business's too), gets nothing sent; the sentence
+ * never names the other account.
+ */
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite): Promise<{ code: string; sentence: string } | null> {
+  const id = write.objectId
+  const chosen = await metaChosenAdAccountOf(connectionId)
+  if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus changes nothing on Meta.' }
+  const notChosen = { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: object ${id} is not of the Meta ad account this business chose through this connection.` }
+  const notCampaign = (detail = '') => ({ code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has a check (validate_only) only for campaign changes, and ${id} is not a campaign Nexus can confirm${detail}.` })
+  const stored = await metaStoredObject(id)
+  if (stored) {
+    if (stored.adAccountId !== chosen) return notChosen
+    return write.check && stored.kind !== 'campaign' ? notCampaign() : null
+  }
+  const url = new URL(`${metaGraphBase()}/${id}`)
+  url.searchParams.set('fields', write.check ? 'account_id,objective' : 'account_id')
+  let answer: GatewayResponse
+  try {
+    answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+  } catch (err) {
+    return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: Nexus could not confirm which ad account ${id} belongs to (${err instanceof Error ? err.message : String(err)}).` }
+  }
+  const body = answer.ok ? answer.json<{ account_id?: unknown; objective?: unknown }>() : null
+  const account = body && (typeof body.account_id === 'string' || typeof body.account_id === 'number') ? String(body.account_id).replace(/^act_/, '') : null
+  if (!account || !/^\d{1,25}$/.test(account)) {
+    if (write.check) return notCampaign(answer.verdict?.channelMessage ? ` (Meta: ${answer.verdict.channelMessage})` : '')
+    return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: Nexus could not confirm which ad account ${id} belongs to${answer.verdict?.channelMessage ? ` (Meta: ${answer.verdict.channelMessage})` : ''}.` }
+  }
+  if (account !== chosen) return notChosen
+  if (write.check && !(typeof body?.objective === 'string' && body.objective)) return notCampaign()
+  return null
+}
 
 /** No answer at all (network error or timeout) — thrown by `gatewayFetch`, as `fetch` itself throws. */
 export class GatewayNoAnswer extends Error {

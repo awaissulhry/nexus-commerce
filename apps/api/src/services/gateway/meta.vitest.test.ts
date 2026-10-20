@@ -223,7 +223,9 @@ describe('read only by construction', () => {
   it('a caller\'s own headers never travel on a Meta call', () => {
     expect(ok(`${BASE}/me?fields=id`, { headers: { 'X-HTTP-Method-Override': 'POST' } })).toMatch(/no header/)
   })
-  it('the publish mode is gated: there is no switch that lets a Meta write out', () => {
+  it('step 17 — the publish mode is live (only the write allow-list reaches it); NEXUS_META_ADS_WRITES=off is the brake', () => {
+    expect(publishModeOf('META')).toBe('live')
+    vi.stubEnv('NEXUS_META_ADS_WRITES', 'off')
     expect(publishModeOf('META')).toBe('gated')
   })
 })
@@ -346,13 +348,13 @@ describe('signing and the token', () => {
 })
 
 describe('refusals send nothing and have their ledger row', () => {
-  it('a POST through the gateway is refused META_READ_ONLY, before the token or the network', async () => {
+  it('a POST that is not on the write allow-list (step 17) is refused META_WRITE_NOT_ALLOWED, before the token or the network', async () => {
     const err = await gatewayCall({ channel: 'META', operation: 'campaigns.create', kind: 'write', connectionId: 'm-1', url: `${BASE}/act_1234567890/campaigns`, method: 'POST', body: '{"name":"Shop A"}' }).catch((e) => e)
     expect(err).toBeInstanceOf(GatewayRefusal)
-    expect(err).toMatchObject({ outcome: 'refused', code: 'META_READ_ONLY', statusCode: 403 })
+    expect(err).toMatchObject({ outcome: 'refused', code: 'META_WRITE_NOT_ALLOWED', statusCode: 403 })
     expect(h.calls).toHaveLength(0)
     expect(h.proofs).toHaveLength(0)
-    expect(gatewayLedger).toEqual([expect.objectContaining({ channel: 'META', outcome: 'refused', errorCode: 'META_READ_ONLY' })])
+    expect(gatewayLedger).toEqual([expect.objectContaining({ channel: 'META', outcome: 'refused', errorCode: 'META_WRITE_NOT_ALLOWED' })])
   })
   it('a GET declared a write is refused too (the declared kind and the call itself must both read)', async () => {
     const err = await gatewayCall({ channel: 'META', operation: 'x', kind: 'write', connectionId: 'm-1', url: `${BASE}/me`, method: 'GET' }).catch((e) => e)
@@ -391,7 +393,7 @@ describe('rate limits', () => {
     expect(err).toMatchObject({ code: 'RATE_LIMITED_LOCAL' })
     expect(h.calls).toHaveLength(1)
   })
-  it('a throttle answer with no usage header still holds the bucket: 300 s; an hour for the per-ad-set budget-change limit (613/1487632, a write-only code)', async () => {
+  it('a throttle answer with no usage header still holds the bucket: 300 s; never for the two per-object limits (613/4841018, 613/1487632: step 17 holds only that object)', async () => {
     h.answers.push(() => new Response(JSON.stringify({ error: { code: 17, error_subcode: 2446079, message: 'User request limit reached' } }), { status: 400 }))
     await metaCall({ connectionId: 'm-2', operation: 'campaigns.list', path: 'act_1234567890/campaigns', query: { fields: 'id' } })
     const held = await takeToken('META', bucketKey('META', 'm-2', 'ads'), 0)
@@ -400,7 +402,7 @@ describe('rate limits', () => {
     expect(held.waitMs).toBeLessThanOrEqual(300_000)
     h.answers.push(() => new Response(JSON.stringify({ error: { code: 613, error_subcode: 1487632 } }), { status: 400 }))
     await metaCall({ connectionId: 'm-3', operation: 'adsets.list', path: 'act_1234567890/adsets', query: { fields: 'id' } })
-    expect((await takeToken('META', bucketKey('META', 'm-3', 'ads'), 0)).waitMs).toBeGreaterThan(3_500_000)
+    expect(await takeToken('META', bucketKey('META', 'm-3', 'ads'), 0)).toMatchObject({ ok: true, waitMs: 0 })
   })
   it('the Full tier, as the headers name it, sizes the bucket up; Limited sizes it back', async () => {
     const key = bucketKey('META', 'm-4', 'ads')

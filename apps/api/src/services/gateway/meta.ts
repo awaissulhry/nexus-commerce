@@ -1,6 +1,8 @@
 /**
  * Meta on the gateway (Meta ads M1, 2026-10-20): the ONE way Nexus calls Meta (Graph and Marketing API at
- * graph.facebook.com). Read only in M1: every call is a GET, and the gateway refuses anything else (meta-calls.ts).
+ * graph.facebook.com). Reads are GETs (metaCall); a change (step 17) is a POST of a form body (metaWriteCall) that the
+ * gateway lets through only when it is on its write allow-list and its object is of the business's chosen ad account
+ * (meta-calls.ts metaWriteVerdict, gateway.ts 3b).
  *
  * - `path` is below the pinned version (services/meta/api-version.ts): `me`, `act_123/campaigns`, `debug_token`.
  * - `query` values are sent as Meta reads them: text as is, a list or an object as JSON (`fields` may be a list).
@@ -57,6 +59,47 @@ export async function metaCall(req: MetaCallRequest): Promise<GatewayResponse> {
     maxTransientRetries: req.maxTransientRetries,
     // Meta's throttle is a 400 with a code; a real 429 is not waited out either: Meta asks to stop, not to retry.
     max429Retries: 0,
+    timeoutMs: req.timeoutMs ?? 60_000,
+    ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
+  })
+}
+
+export interface MetaWriteRequest {
+  /** The META connection the change is for (required: a change always names its account). */
+  connectionId: string
+  /** Stable operation name for the ledger, e.g. 'status.change', 'status.check'. */
+  operation: string
+  /** The object changed: its id, digits only (`POST /<id>`). */
+  objectId: string
+  /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
+  params: Record<string, string>
+  /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
+  check: boolean
+  timeoutMs?: number
+  /** How long the call may wait for a slot of the account's rate bucket (a change waits longer than a read). */
+  maxRateWaitMs?: number
+  triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
+}
+
+/**
+ * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):
+ * when Meta does not answer, or fails on its side, nobody knows whether it applied — the caller says so and never sends it
+ * again by itself. A check changes nothing and may be retried once after a network error, like a read. A refusal throws
+ * GatewayRefusal; an answer (ok or not) comes back with its verdict.
+ */
+export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
+  const body = new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
+  return gatewayCall({
+    channel: 'META',
+    operation: req.operation,
+    kind: req.check ? 'read' : 'write',
+    connectionId: req.connectionId,
+    url: metaUrl(req.objectId),
+    method: 'POST',
+    body,
+    maxTransientRetries: req.check ? 1 : 0,
+    max429Retries: 0,
+    maxRateWaitMs: req.maxRateWaitMs,
     timeoutMs: req.timeoutMs ?? 60_000,
     ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
   })

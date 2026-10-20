@@ -37,7 +37,8 @@ export const isRetryableClass = (cls: GatewayErrorClass): boolean => RETRYABLE.h
  * GOOGLE (2026-10-13) — one channel for every Google API Nexus calls (Google Ads, Merchant Center,
  * Analytics, the sign-in's userinfo); the rate bucket is per host (channels.bucketGroupOf).
  * META (2026-10-20, Meta ads M1) — Meta's Graph and Marketing API (graph.facebook.com): Facebook, Instagram and
- * Meta ads, read only in M1 (gateway.ts refuses anything but a GET); the rate bucket is per kind of call.
+ * Meta ads: reads, and since step 17 only the changes on the gateway's write allow-list (meta-calls.ts); the rate
+ * bucket is per kind of call.
  */
 export type GatewayChannel = 'EBAY' | 'AMAZON_SP' | 'SHOPIFY' | 'AMAZON_ADS' | 'ETSY' | 'GOOGLE' | 'META'
 
