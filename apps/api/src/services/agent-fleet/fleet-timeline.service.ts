@@ -262,6 +262,10 @@ export const TOOL_PHRASE: Record<string, string> = {
   'set-aplus-content': 'make or change an Amazon A+ draft',
   'set-aplus-asins': 'change which ASINs show an A+ document',
   'submit-aplus-content': 'submit or suspend Amazon A+ content',
+  // Sponsored Display extras (P3c, 2026-10-20) — Amazon's own rules and the deny list, at Amazon.
+  'set-sd-optimization-rule': 'change a Sponsored Display cost control',
+  'set-sd-budget-rule': 'change a Sponsored Display budget rule',
+  'set-sd-brand-safety': 'change the Sponsored Display deny list',
 }
 
 /** Why a run happened. */
