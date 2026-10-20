@@ -132,6 +132,10 @@ import { DATA_TRANSFER_TOOLS } from './tools/data-transfer.tools.js'
 import { EBAY_CATEGORY_TOOLS } from './tools/ebay-category.tools.js'
 import { APLUS_READ_TOOLS } from './tools/aplus-read.tools.js'
 import { APLUS_CHANGE_TOOLS } from './tools/aplus-change.tools.js'
+import { ADS_SD_OPTIMIZATION_RULE_TOOLS } from './tools/ads-sd-optimization-rules.tools.js'
+import { ADS_SD_BUDGET_RULE_TOOLS } from './tools/ads-sd-budget-rules.tools.js'
+import { ADS_SD_FORECAST_TOOLS } from './tools/ads-sd-forecast.tools.js'
+import { ADS_SD_BRAND_SAFETY_TOOLS } from './tools/ads-sd-brand-safety.tools.js'
 
 export type {
   RiskTier,
@@ -350,6 +354,12 @@ const ALL: AgentTool[] = [
   // Amazon A+ content (2026-10-19) — read live from Amazon; drafts, ASINs and submissions changed there after a person's approval.
   ...APLUS_READ_TOOLS,
   ...APLUS_CHANGE_TOOLS,
+  // Sponsored Display extras (P3c, 2026-10-20) — optimization rules (cost control), budget rules, budget insights, forecasts
+  // and the brand-safety deny list, read live from Amazon; each change there after a person's approval.
+  ...ADS_SD_OPTIMIZATION_RULE_TOOLS,
+  ...ADS_SD_BUDGET_RULE_TOOLS,
+  ...ADS_SD_FORECAST_TOOLS,
+  ...ADS_SD_BRAND_SAFETY_TOOLS,
 ]
 const REGISTRY = new Map<string, AgentTool>(ALL.map((t) => [t.name, t]))
 

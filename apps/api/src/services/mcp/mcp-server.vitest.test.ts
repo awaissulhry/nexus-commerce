@@ -45,6 +45,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Google Ads G10 (2026-10-16) — Performance Max campaigns are built, copied and changed, and customer acquisition is set, in the Google Ads account.
 // Google Ads G14a (2026-10-16) — custom conversion goals, custom segments, user lists and reusable audiences change the Google Ads account.
 // Amazon A+ (2026-10-19) — aplus-content reads A+ content live from Amazon; set-aplus-content, set-aplus-asins and submit-aplus-content change it there.
+// Sponsored Display extras (P3c, 2026-10-20) — the sd-… reads ask Amazon live; set-sd-optimization-rule, set-sd-budget-rule and set-sd-brand-safety change it there.
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -71,8 +72,9 @@ const OPEN_WORLD = [
   'resend-prices', 'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign',
   'resume-automation', 'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
   'save-channel-mapping', 'save-price-rule', 'schedule-google-experiment', 'schedule-pickup', 'schedule-price-change',
-  // SD-AUD — the Sponsored Display lookups read Amazon live.
-  'sd-audiences', 'sd-bid-recommendations', 'sd-categories', 'sd-targeting-recommendations', 'send-customer-message',
+  // SD-AUD and P3c — the Sponsored Display lookups and extras read Amazon live.
+  'sd-audiences', 'sd-bid-recommendations', 'sd-brand-safety', 'sd-budget-insights', 'sd-budget-rules', 'sd-categories',
+  'sd-forecast', 'sd-optimization-rules', 'sd-targeting-recommendations', 'send-customer-message',
   'set-ad-group', 'set-ads-brain', 'set-aplus-asins', 'set-aplus-content', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule',
   'set-campaign-budget', 'set-campaign-settings', 'set-ebay-ad-rates', 'set-ebay-campaign-budget',
   'set-ebay-price-promotion', 'set-google-account-exclusions', 'set-google-account-links',
@@ -89,7 +91,7 @@ const OPEN_WORLD = [
   'set-google-user-access', 'set-google-user-lists', 'set-google-value-rules', 'set-hourly-bid-plan', 'set-listing-price',
   'set-listing-stock',
   'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
-  'set-promotion', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
+  'set-promotion', 'set-sd-brand-safety', 'set-sd-budget-rule', 'set-sd-optimization-rule', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
   'shipping-rates', 'shopify-content', 'submit-aplus-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock',
   'tune-ad-engine', 'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change',
   'upload-google-sales', 'void-shipping-label',

@@ -211,6 +211,14 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
+  'sd-optimization-rules': 'it reads and changes Sponsored Display rules or the deny list live at Amazon, and Amazon Ads runs in sandbox mode here (ads-sd tools tests)',
+  'set-sd-optimization-rule': 'it reads and changes Sponsored Display rules or the deny list live at Amazon, and Amazon Ads runs in sandbox mode here (ads-sd tools tests)',
+  'sd-budget-rules': 'it reads and changes Sponsored Display rules or the deny list live at Amazon, and Amazon Ads runs in sandbox mode here (ads-sd tools tests)',
+  'sd-budget-insights': 'it reads and changes Sponsored Display rules or the deny list live at Amazon, and Amazon Ads runs in sandbox mode here (ads-sd tools tests)',
+  'set-sd-budget-rule': 'it reads and changes Sponsored Display rules or the deny list live at Amazon, and Amazon Ads runs in sandbox mode here (ads-sd tools tests)',
+  'sd-forecast': 'it reads and changes Sponsored Display rules or the deny list live at Amazon, and Amazon Ads runs in sandbox mode here (ads-sd tools tests)',
+  'sd-brand-safety': 'it reads and changes Sponsored Display rules or the deny list live at Amazon, and Amazon Ads runs in sandbox mode here (ads-sd tools tests)',
+  'set-sd-brand-safety': 'it reads and changes Sponsored Display rules or the deny list live at Amazon, and Amazon Ads runs in sandbox mode here (ads-sd tools tests)',
 }
 
 /**
@@ -315,6 +323,15 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-aplus-content': () => ({ op: 'create', market: 'IT', name: 'Money test A+', modules: [{ contentModuleType: 'STANDARD_TEXT', standardText: { body: { textList: [{ value: 'A short text.' }] } } }], summary: 'A short text.' }),
   'set-aplus-asins': () => ({ market: 'IT', contentReferenceKey: 'money-key', add: ['B000000001'] }),
   'submit-aplus-content': () => ({ op: 'submit', market: 'IT', contentReferenceKey: 'money-key' }),
+  // Sponsored Display extras (P3c) — read and changed live at Amazon (ads-sd tools tests).
+  'sd-optimization-rules': () => ({ market: 'IT' }),
+  'set-sd-optimization-rule': (ids) => ({ op: 'attach', adGroupId: ids.adGroupId, ruleId: 'money-rule' }),
+  'sd-budget-rules': () => ({ market: 'IT' }),
+  'sd-budget-insights': () => ({ market: 'IT' }),
+  'set-sd-budget-rule': (ids) => ({ op: 'attach', campaignId: ids.campaignId, ruleId: 'money-rule' }),
+  'sd-forecast': () => ({ market: 'IT', startDate: '2099-01-01', bidOptimization: 'clicks', skus: ['MONEY-SKU'], targets: [{ kind: 'category', value: '12345', bidCents: 50 }] }),
+  'sd-brand-safety': () => ({ market: 'IT' }),
+  'set-sd-brand-safety': () => ({ op: 'add', market: 'IT', domains: [{ name: 'example.com', type: 'website' }] }),
   // Phase 3 T3 — a category the business loaded on eBay IT (seeded per business): read from Nexus, no eBay call.
   'ebay-categories': () => ({ market: 'IT', categoryId: '177104' }),
   'set-listing-content': (ids) => ({ product: ids.productId, coordinate: { channel: 'EBAY', market: 'IT' }, language: 'it', pin: { title: 'A better title' }, englishMeaning: { title: 'A better title' } }),

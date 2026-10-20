@@ -330,7 +330,16 @@ export class AmazonAdsQuotaError extends Error {
  * (SD-AUD, sd/sd-recommendations.client.ts). The same list as the gateway's ADS_READ_POSTS
  * (gateway/ads.ts, imported lazily by fetchWithRetry, so it is not imported here); a test holds the two equal.
  */
-export const ADS_READ_ONLY_POSTS: ReadonlySet<string> = new Set(['/sp/targets/bid/recommendations', '/sd/targets/recommendations', '/sd/targets/bid/recommendations'])
+export const ADS_READ_ONLY_POSTS: ReadonlySet<string> = new Set([
+  '/sp/targets/bid/recommendations',
+  // SD-AUD — Sponsored Display's targeting and bid recommendations (advertising/sd/sd-recommendations.client.ts).
+  '/sd/targets/recommendations',
+  '/sd/targets/bid/recommendations',
+  // P3c — Sponsored Display's forecast, budget recommendations and budget usage only answer (advertising/sd/).
+  '/sd/forecasts',
+  '/sd/campaigns/budgetRecommendations',
+  '/sd/campaigns/budget/usage',
+])
 
 export function isMutatingCall(method: string, path: string): boolean {
   if (method === 'GET') return false
