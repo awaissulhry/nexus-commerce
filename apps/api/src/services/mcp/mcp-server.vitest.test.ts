@@ -52,6 +52,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 2 (2026-10-20) — meta-ad-accounts, meta-ads-live and meta-ads-graph-read read Meta live (meta-ads-overview reads Nexus's stored read).
 // Meta ads step 17 (2026-10-21) — set-meta-status reads Meta live and changes it (pause, switch on, archive).
 // Meta ads step 9 (2026-10-21) — meta-targeting-search and meta-targeting-check read Meta live.
+// Meta ads step 6 (2026-10-21) — meta-campaigns, meta-ad-sets, meta-ad-details, meta-labels and meta-value-rules read Meta live.
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -71,8 +72,8 @@ const OPEN_WORLD = [
   'google-ads-numbers', 'google-ads-query', 'google-merchant-live', 'graduate-google-experiment', 'graduate-keyword',
   'harvest-search-term',
   'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
-  'meta-ad-accounts', 'meta-ads-graph-read', 'meta-ads-live', 'meta-connection',
-  'meta-targeting-check', 'meta-targeting-search',
+  'meta-ad-accounts', 'meta-ad-details', 'meta-ad-sets', 'meta-ads-graph-read', 'meta-ads-live', 'meta-campaigns', 'meta-connection', 'meta-labels',
+  'meta-targeting-check', 'meta-targeting-search', 'meta-value-rules',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
   'remove-google-conversion-actions', 'remove-google-labels', 'reopen-listing', 'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',

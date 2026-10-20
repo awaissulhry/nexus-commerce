@@ -378,7 +378,7 @@ export async function objectKindOf(account: MetaChosenAccount, objectId: string)
  * Does this campaign or ad set belong to the chosen ad account? Nexus's own rows first, else one live read of its
  * account_id (a campaign made since the last daily read). Never a Page or another account's object.
  */
-async function objectInAccount(account: MetaChosenAccount, objectId: string): Promise<boolean> {
+export async function objectInAccount(account: MetaChosenAccount, objectId: string): Promise<boolean> {
   if (await objectKindOf(account, objectId)) return true
   try {
     const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'graph.ownerCheck', path: objectId, query: { fields: 'account_id' } })
