@@ -34,14 +34,14 @@ export const META_MONEY = {
   amountSpentCents: ADSPEND, balanceCents: ADSPEND, minDailyBudgetCents: ADSPEND,
 } as const
 
-const lower = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v)
-const dayArg = (what: string) => z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe(`${what} (YYYY-MM-DD, the ad account's time zone)`)
-const metaIdArg = (what: string) => z.string().trim().regex(/^\d{1,25}$/).optional().describe(what)
-const connectionArg = z.string().trim().min(1).max(64).optional().describe('the Meta connection (from meta-connection); default: this business\'s one')
+export const lower = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v)
+export const dayArg = (what: string) => z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe(`${what} (YYYY-MM-DD, the ad account's time zone)`)
+export const metaIdArg = (what: string) => z.string().trim().regex(/^\d{1,25}$/).optional().describe(what)
+export const connectionArg = z.string().trim().min(1).max(64).optional().describe('the Meta connection (from meta-connection); default: this business\'s one')
 
 const BENCHMARKS = 'Meta has no public API for industry benchmarks or auction ranking benchmarks (they exist in Meta\'s own ads MCP and in Ads Manager only); Nexus does not copy them. Use Meta\'s own MCP or Ads Manager for them.'
 
-async function guarded(work: () => Promise<unknown>): Promise<ToolResult> {
+export async function guarded(work: () => Promise<unknown>): Promise<ToolResult> {
   try {
     return { ok: true, data: await work() }
   } catch (err) {

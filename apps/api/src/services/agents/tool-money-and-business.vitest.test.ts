@@ -221,6 +221,11 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-ad-details': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-objects.tools test)',
   'meta-labels': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-objects.tools test)',
   'meta-value-rules': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-objects.tools test)',
+  'meta-media-library': 'it reads the business\'s chosen Meta ad account, Page or Instagram account live from Meta, and no business here has one (meta-ads-media.tools test)',
+  'meta-page-posts': 'it reads the business\'s chosen Meta ad account, Page or Instagram account live from Meta, and no business here has one (meta-ads-media.tools test)',
+  'meta-instagram-media': 'it reads the business\'s chosen Meta ad account, Page or Instagram account live from Meta, and no business here has one (meta-ads-media.tools test)',
+  'meta-ad-preview': 'it reads the business\'s chosen Meta ad account, Page or Instagram account live from Meta, and no business here has one (meta-ads-media.tools test)',
+  'meta-instant-experiences': 'it reads the business\'s chosen Meta ad account, Page or Instagram account live from Meta, and no business here has one (meta-ads-media.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -523,6 +528,13 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-ad-details': () => ({ view: 'ads' }),
   'meta-labels': () => ({ view: 'labels' }),
   'meta-value-rules': () => ({ view: 'sets' }),
+  // Meta ads step 10: the media, post, Instagram, preview and Instant Experience reads refuse in words because no business
+  // here has Meta (meta-ads-media.tools.vitest.test.ts runs them on an account).
+  'meta-media-library': () => ({ view: 'images' }),
+  'meta-page-posts': () => ({ view: 'feed' }),
+  'meta-instagram-media': () => ({ view: 'media' }),
+  'meta-ad-preview': () => ({ view: 'ad', adId: '120000000000001' }),
+  'meta-instant-experiences': () => ({ view: 'list' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

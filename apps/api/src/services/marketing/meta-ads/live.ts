@@ -82,7 +82,7 @@ const act = (id: string) => `act_${id}`
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
 const num = (v: unknown): number | null => { const n = typeof v === 'number' ? v : Number(v); return v === null || v === undefined || v === '' || !Number.isFinite(n) ? null : n }
 
-async function list(connectionId: string, operation: string, path: string, query: Record<string, MetaQueryValue>, maxRows: number) {
+export async function list(connectionId: string, operation: string, path: string, query: Record<string, MetaQueryValue>, maxRows: number) {
   const rows: Record<string, unknown>[] = []
   const read = await metaReadAll({ connectionId }, { operation, path, query: { limit: Math.min(100, maxRows), ...query }, maxPages: Math.ceil(maxRows / Math.min(100, maxRows)) }, (page) => { rows.push(...page) })
   return { rows: rows.slice(0, maxRows), more: read.truncated || rows.length > maxRows }

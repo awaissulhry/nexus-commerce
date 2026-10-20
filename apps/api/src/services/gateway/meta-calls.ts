@@ -109,6 +109,16 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *     filtering on act_<id>/recommendations (one campaign's: the ad-recommendations page); the suggested_ads and
  *     smart_suggested_ads parameters (never a pixel, product set, app or CMS id: not this step's to check); adlocale is
  *     one of step 9's META_SEARCH_TYPES; categorization_criteria on <catalog>/categories.
+ *   - step 10 (media, posts, Instagram media, previews, Instant Experiences — marketing/meta-ads/live-media.ts), each
+ *     only on its own edge: act_<id>/adimages hashes, name, minwidth, minheight; act_<id>/advideos title, minlength,
+ *     maxlength; act_<id>/video_ads since, until; a portfolio's <id>/images | videos | creatives creative_folder_id;
+ *     act_<id>/website_creative_assets | website_creative_info link_url; <campaign>/video_groups date_range;
+ *     <page>/live_videos broadcast_status; <page>/feed | published_posts | visitor_posts include_hidden, show_expired;
+ *     <page>/ads_posts include_inline_create, exclude_dynamic_ads, since, until; <Instagram account>/media since, until;
+ *     <page | Instagram account | Instagram media>/insights metric, period, since, until, breakdown, metric_type,
+ *     timeframe and <page>_<post>/insights metric, period, since, until, breakdown (organic insights);
+ *     act_<id>/generatepreviews ad_format, creative, creative_feature, dynamic_asset_label, dynamic_customization,
+ *     product_item_ids and <ad | creative>/previews the same without creative; <page>/canvases is_hidden, is_published.
  */
 const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
 /**
@@ -183,6 +193,22 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/categories$/, keys: new Set(['categorization_criteria']) },
   // Review fix A6 — the Page ad limits per Page (problems view).
   { route: /^act_\d+\/ads_volume$/, keys: new Set(['show_breakdown_by_actor']) },
+  // Step 10 — media, posts, Instagram media, previews, Instant Experiences (marketing/meta-ads/live-media.ts).
+  { route: /^act_\d+\/adimages$/, keys: new Set(['hashes', 'name', 'minwidth', 'minheight']) },
+  { route: /^act_\d+\/advideos$/, keys: new Set(['title', 'minlength', 'maxlength']) },
+  { route: /^act_\d+\/video_ads$/, keys: new Set(['since', 'until']) },
+  { route: /^\d+\/(images|videos|creatives)$/, keys: new Set(['creative_folder_id']) },
+  { route: /^act_\d+\/(website_creative_assets|website_creative_info)$/, keys: new Set(['link_url']) },
+  { route: /^\d+\/video_groups$/, keys: new Set(['date_range']) },
+  { route: /^\d+\/live_videos$/, keys: new Set(['broadcast_status']) },
+  { route: /^\d+\/(feed|published_posts|visitor_posts)$/, keys: new Set(['include_hidden', 'show_expired']) },
+  { route: /^\d+\/ads_posts$/, keys: new Set(['include_inline_create', 'exclude_dynamic_ads', 'since', 'until']) },
+  { route: /^\d+\/media$/, keys: new Set(['since', 'until']) },
+  { route: /^\d+\/insights$/, keys: new Set(['metric', 'period', 'since', 'until', 'breakdown', 'metric_type', 'timeframe']) },
+  { route: /^\d+_\d+\/insights$/, keys: new Set(['metric', 'period', 'since', 'until', 'breakdown']) },
+  { route: /^act_\d+\/generatepreviews$/, keys: new Set(['ad_format', 'creative', 'creative_feature', 'dynamic_asset_label', 'dynamic_customization', 'product_item_ids']) },
+  { route: /^\d+\/previews$/, keys: new Set(['ad_format', 'creative_feature', 'dynamic_asset_label', 'dynamic_customization', 'product_item_ids']) },
+  { route: /^\d+\/canvases$/, keys: new Set(['is_hidden', 'is_published']) },
 ]
 /**
  * Step 9 — the `type` values a /search read may carry: targeting options only (targeting-search reference), never

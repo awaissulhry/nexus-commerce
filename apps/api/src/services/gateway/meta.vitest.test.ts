@@ -308,6 +308,47 @@ describe('read only by construction', () => {
     vi.stubEnv('NEXUS_META_ADS_WRITES', 'on')
     expect(publishModeOf('META')).toBe('live')
   })
+  it('step 10 — media, posts, Instagram media, previews and Instant Experiences: each key only on its own edge', () => {
+    const q = (path: string) => ok(`${BASE}/${path}`)
+    // Allowed where the read uses it.
+    for (const path of [
+      'act_1234567890/adimages?fields=id,hash&hashes=["0123456789abcdef0123456789abcdef"]&name=hero&minwidth=600&minheight=600',
+      'act_1234567890/advideos?fields=id&title=promo&minlength=3&maxlength=60',
+      'act_1234567890/video_ads?fields=id&since=2026-10-01&until=2026-10-20',
+      '9876543210/images?fields=id&creative_folder_id=300000000000001', '9876543210/videos?fields=id&creative_folder_id=300000000000001',
+      '9876543210/creatives?fields=id&creative_folder_id=300000000000001',
+      `act_1234567890/website_creative_assets?fields=id&link_url=${encodeURIComponent('https://shop.example.com/')}`,
+      `act_1234567890/website_creative_info?fields=id&link_url=${encodeURIComponent('https://shop.example.com/')}`,
+      '120000000000101/video_groups?fields=id&date_range={"start":"2026-10-01","end":"2026-10-20"}',
+      '120000000000010/live_videos?fields=id&broadcast_status=["VOD"]',
+      '120000000000010/feed?fields=id&include_hidden=true&show_expired=true', '120000000000010/visitor_posts?fields=id&include_hidden=true',
+      '120000000000010/published_posts?fields=id&show_expired=true',
+      '120000000000010/ads_posts?fields=id&include_inline_create=true&exclude_dynamic_ads=true&since=2026-10-01&until=2026-10-20',
+      '170000000000001/media?fields=id&since=2026-10-01&until=2026-10-20',
+      '120000000000010/insights?metric=page_media_view&period=day&since=2026-10-01&until=2026-10-20&breakdown=is_from_ads',
+      '170000000000001/insights?metric=reach&period=day&metric_type=total_value&timeframe=last_30_days',
+      '120000000000010_500000000000001/insights?metric=post_clicks&period=lifetime&since=2026-10-01&until=2026-10-20',
+      'act_1234567890/generatepreviews?ad_format=INSTAGRAM_STANDARD&creative={"object_story_id":"1_2"}&creative_feature=image_uncrop&dynamic_asset_label=french',
+      '120000000000301/previews?ad_format=MOBILE_FEED_STANDARD&product_item_ids=["400000000000001"]&dynamic_customization={"language":"fr_XX","country":"FR"}',
+      '120000000000010/canvases?fields=id&is_hidden=false&is_published=true',
+      '120000000000010_500000000000001?fields=id,message,attachments{media_type,url,subattachments}',
+    ]) expect(q(path), path).toBeNull()
+    // Refused anywhere else.
+    for (const [path, key] of [
+      ['act_1234567890/campaigns?fields=id&hashes=["a"]', 'hashes'], ['act_1234567890/adimages?fields=id&title=x', 'title'],
+      ['act_1234567890/adimages?fields=id&creative_folder_id=1', 'creative_folder_id'], ['act_1234567890/adimages?fields=id&link_url=x', 'link_url'],
+      ['120000000000010/feed?fields=id&since=2026-10-01', 'since'], ['120000000000010/feed?fields=id&with=LOCATION', 'with'],
+      ['act_1234567890/insights?fields=spend&metric=page_media_view', 'metric'], ['120000000000010_500000000000001/insights?level=ad', 'level'],
+      ['120000000000301/previews?ad_format=MOBILE_FEED_STANDARD&creative={}', 'creative'], ['120000000000301/previews?place_page_id=1', 'place_page_id'],
+      ['act_1234567890/generatepreviews?ad_format=X&post={}', 'post'], ['120000000000010/canvases?fields=id&is_published=true&user_ids=[1]', 'user_ids'],
+      ['120000000000010/live_videos?fields=id&source=target', 'source'], ['120000000000010/ads_posts?fields=id&include_hidden=true', 'include_hidden'],
+    ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
+    // FIELD_DENIED stays: comments (step 14), leads and messages are never asked inside fields, on posts and Instagram too.
+    expect(q('120000000000010_500000000000001?fields=id,comments{message}')).toMatch(/never expands "comments"/)
+    expect(q('120000000000010/feed?fields=id,comments.limit(5){message}')).toMatch(/never expands "comments"/)
+    expect(q('170000000000001/media?fields=id,comments{text}')).toMatch(/never expands "comments"/)
+    expect(q('120000000000010?fields=id,conversations{messages}')).toMatch(/never expands/)
+  })
 })
 
 describe('signing and the token', () => {
