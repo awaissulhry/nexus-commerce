@@ -1,6 +1,6 @@
 /**
- * Meta ads — which Meta assets a business reads through its Meta connection (step 1, 2026-10-20), mirroring Google's
- * accounts service (C1–C3). Read-only towards Meta: the only Meta calls are the discovery reads
+ * Meta ads — which Meta assets a business reads through its Meta connection (steps 1–2, 2026-10-20), mirroring Google's
+ * accounts service (C1–C3); step 2 adds the state of the daily read and queues the first read on a choice. Read-only towards Meta: the only Meta calls are the discovery reads
  * (cx/connectors/meta/discovery.ts) and the token check, both GET through the gateway.
  *
  *   listMetaConnections()  C1 — this business's Meta connections: the system user, the app, the token's health (valid,
@@ -27,12 +27,16 @@ import { storedTokenHealth, META_RENEW_WITHIN_SEC } from '../cx/connectors/meta/
 import { discoverMetaChoices, metaAdAccountId, metaObjectId, MetaConnectionNotFound, type MetaChoices } from '../cx/connectors/meta/discovery.js'
 import { metaPermissionGaps, type MetaPermissionGap } from '../cx/connectors/meta/scopes.js'
 import { tokenTypeText, type MetaTokenHealth } from '../cx/connectors/meta/token-check.js'
+import { enqueueMetaAdsSync } from '../marketing/meta-ads/enqueue.js'
+import { ensureMetaAdAccount, metaAdAccountsById } from '../marketing/meta-ads/store.js'
+import { metaAdsSyncSwitchedOff, nextMetaAdsReadAt } from '../marketing/meta-ads/sync-switch.js'
+import { logger } from '../../utils/logger.js'
 
 export { MetaConnectionNotFound } from '../cx/connectors/meta/discovery.js'
 
 // ── the contract (apps/web/src/lib/meta-ads/contract.ts is the web's copy) ────────────────────────────────────────
 
-export type MetaConnectionState = 'sign_in_needed' | 'token_problem' | 'permission_missing' | 'choose_account' | 'ok'
+export type MetaConnectionState = 'sign_in_needed' | 'token_problem' | 'permission_missing' | 'choose_account' | 'first_read_pending' | 'read_failed' | 'ok'
 
 export interface MetaTokenView {
   /** When Nexus last asked Meta about the token (debug_token); null = never. */
@@ -72,7 +76,12 @@ export interface MetaConnection {
   instagram: { instagramId: string; username: string | null } | null
   /** The last error the connection recorded (a renewal that failed, a refused check), in words. */
   lastError: string | null
+  /** The daily read of the chosen ad account. */
+  read: { lastReadAt: string | null; lastDataDay: string | null; nextReadAt: string | null; lastStatus: string | null; lastError: string | null }
 }
+
+/** What the daily read keeps on MetaAdAccount that the state needs. */
+interface AccountRead { lastSyncAt: Date | null; lastSuccessAt: Date | null; lastSyncStatus: string | null; lastSyncError: string | null; metricsReadThrough: Date | null }
 
 export interface MetaSelectionInput {
   adAccountId: string
@@ -130,7 +139,7 @@ export function metaTokenView(health: MetaTokenHealth | null, row: { accessToken
 }
 
 /** The state and its sentence, from the connection, its token and the choice. Pure. */
-export function metaConnectionState(input: { isActive: boolean; authStatus: string; token: MetaTokenView; adAccountLinked: boolean; accountName: string | null; now?: Date }): { state: MetaConnectionState; stateText: string } {
+export function metaConnectionState(input: { isActive: boolean; authStatus: string; token: MetaTokenView; adAccountLinked: boolean; accountName: string | null; account?: AccountRead | null; readingOn?: boolean; now?: Date }): { state: MetaConnectionState; stateText: string } {
   const now = input.now ?? new Date()
   if (!input.isActive || input.authStatus === 'disconnected') {
     return { state: 'sign_in_needed', stateText: 'Meta is not connected for this business. Enter the Meta app id, app secret and a system-user token in Settings › Channels › Meta.' }
@@ -150,6 +159,24 @@ export function metaConnectionState(input: { isActive: boolean; authStatus: stri
   }
   if (!input.adAccountLinked) return { state: 'choose_account', stateText: 'Choose the Meta ad account Nexus reads for this business.' }
   const name = input.accountName ? `“${input.accountName}”` : 'the chosen ad account'
+  const status = input.account?.lastSyncStatus ?? null
+  const error = input.account?.lastSyncError ?? null
+  // Review A2 (round 2) — a read that lost the token stays visible until a read SUCCEEDS. Before any good token check
+  // came after it, a person needs a new token; once one did (a replaced token, or "Check now" valid), the token is fine
+  // but the numbers are still the old ones: read_failed, in words, while the read queued at once (enqueue.ts
+  // metaReadAfterGoodToken) runs.
+  const goodCheckAfter = input.token.isValid && !!input.token.checkedAt && !!input.account?.lastSyncAt
+    && Date.parse(input.token.checkedAt) > input.account.lastSyncAt.getTime()
+  if (status === 'AUTH_LOST' && !goodCheckAfter) return { state: 'sign_in_needed', stateText: error ?? 'Meta no longer accepts the token. Enter a new system-user token in Settings › Channels › Meta.' }
+  if (status === 'AUTH_LOST') {
+    return { state: 'read_failed', stateText: `The last read of ${name} stopped because Meta refused the token then; the token has been checked valid since, and Nexus reads again now. Until that read finishes, the numbers shown are from before.` }
+  }
+  if (!input.account?.metricsReadThrough) {
+    if (status === 'FAILED' || status === 'PARTIAL') return { state: 'read_failed', stateText: `Nexus could not read ${name}. ${error ?? 'Meta did not say why.'}` }
+    if (input.readingOn === false) return { state: 'first_read_pending', stateText: `Nexus has not read ${name} yet: reading Meta ads is switched off on the server for now.` }
+    return { state: 'first_read_pending', stateText: `Nexus has not finished reading ${name} yet. Campaigns appear when it does.${status === 'THROTTLED' && error ? ` ${error}` : ''}` }
+  }
+  if (status === 'FAILED') return { state: 'read_failed', stateText: `The last read of ${name} failed. ${error ?? 'Meta did not say why.'} The numbers shown are from an earlier read.` }
   const expiry = input.token.neverExpires
     ? 'The token does not expire by date.'
     : input.token.expiresAt
@@ -158,10 +185,12 @@ export function metaConnectionState(input: { isActive: boolean; authStatus: stri
   const soon = input.token.expiresAt && Date.parse(input.token.expiresAt) - now.getTime() < 14 * DAY_MS
     ? ' Nexus could not renew it yet: if that goes on, make a new token before it expires.'
     : ''
-  return { state: 'ok', stateText: `Nexus reads ${name} through this connection (read only). ${expiry}${soon}` }
+  const partial = status === 'PARTIAL' || status === 'THROTTLED' ? ` The last read was not complete. ${error ?? ''}`.trimEnd() : ''
+  const reading = input.readingOn === false ? `Nexus has read ${name}; reading is switched off on the server for now.` : `Nexus reads ${name} once a day (read only).`
+  return { state: 'ok', stateText: `${reading} ${expiry}${soon}${partial}` }
 }
 
-function connectionOf(row: ConnectionRow, links: MetaAccountLink[], appId: string | null, now: Date): MetaConnection {
+function connectionOf(row: ConnectionRow, links: MetaAccountLink[], appId: string | null, accounts: Map<string, AccountRead>, now: Date): MetaConnection {
   const health = storedTokenHealth(row.connectionMetadata)
   const token = metaTokenView(health, row)
   const link = (product: MetaProduct) => links.find((l) => l.product === product) ?? null
@@ -173,7 +202,10 @@ function connectionOf(row: ConnectionRow, links: MetaAccountLink[], appId: strin
   const adAccount = adLink
     ? { adAccountId: adLink.externalId, name: text(adMeta.name) ?? null, currency: text(adMeta.currency), timeZone: text(adMeta.timeZone), statusText: text(adMeta.statusText), businessId: text(adMeta.businessId) }
     : null
-  const { state, stateText } = metaConnectionState({ isActive: row.isActive, authStatus: row.authStatus, token, adAccountLinked: !!adLink, accountName: adAccount?.name ?? null, now })
+  const account = adLink ? accounts.get(adLink.externalId) ?? null : null
+  const readingOn = !metaAdsSyncSwitchedOff()
+  const { state, stateText } = metaConnectionState({ isActive: row.isActive, authStatus: row.authStatus, token, adAccountLinked: !!adLink, accountName: adAccount?.name ?? null, account, readingOn, now })
+  const reads = !!adLink && (state === 'ok' || state === 'first_read_pending' || state === 'read_failed')
   return {
     connectionId: row.id,
     label: connectionLabel(row).label,
@@ -187,6 +219,13 @@ function connectionOf(row: ConnectionRow, links: MetaAccountLink[], appId: strin
     page: pageLink ? { pageId: pageLink.externalId, name: text(record(pageLink.metadata).name) } : null,
     instagram: igLink ? { instagramId: igLink.externalId, username: text(record(igLink.metadata).username) } : null,
     lastError: row.lastError ?? null,
+    read: {
+      lastReadAt: iso(account?.lastSyncAt ?? null),
+      lastDataDay: account?.metricsReadThrough ? account.metricsReadThrough.toISOString().slice(0, 10) : null,
+      nextReadAt: reads ? iso(nextMetaAdsReadAt(now)) : null,
+      lastStatus: account?.lastSyncStatus ?? null,
+      lastError: account && account.lastSyncStatus && account.lastSyncStatus !== 'SUCCESS' ? account.lastSyncError ?? null : null,
+    },
   }
 }
 
@@ -195,8 +234,9 @@ export async function listMetaConnections(now: Date = new Date()): Promise<MetaC
   const rows = (await listManagedConnections(false)).filter((row) => row.channelType === 'META' && isOwnConnection(row))
   if (rows.length === 0) return []
   const links = await prisma.metaAccountLink.findMany({ where: { connectionId: { in: rows.map((row) => row.id) } } })
+  const accounts = await metaAdAccountsById(links.filter((l) => l.product === META_PRODUCT.adAccount).map((l) => l.externalId))
   const out: MetaConnection[] = []
-  for (const row of rows) out.push(connectionOf(row, links.filter((l) => l.connectionId === row.id), await metaAppIdOf(row.id), now))
+  for (const row of rows) out.push(connectionOf(row, links.filter((l) => l.connectionId === row.id), await metaAppIdOf(row.id), accounts, now))
   return out.sort((a, b) => Number(!!b.adAccount) - Number(!!a.adAccount))
 }
 
@@ -303,6 +343,9 @@ export function parseMetaSelection(body: unknown): MetaSelectionInput {
   return { adAccountId, pageId: optional(input.pageId, 'Facebook Page'), instagramId: optional(input.instagramId, 'Instagram account') }
 }
 
+/** An Instagram account whose linked Facebook Page another business uses (never which business). */
+export const INSTAGRAM_PAGE_TAKEN = 'This Instagram account is linked to a Facebook Page another business in Nexus uses, so it belongs with that Page. Choose another Instagram account, or link it to this business\'s Page in Meta first.'
+
 const TAKEN: Record<MetaProduct, string> = {
   AD_ACCOUNT: 'Another business in Nexus already reads this Meta ad account. An ad account can belong to one business only. Choose another, or disconnect Meta in the other business first.',
   PAGE: 'Another business in Nexus already uses this Facebook Page. A Page can belong to one business only. Choose another, or disconnect Meta in the other business first.',
@@ -340,6 +383,11 @@ export async function saveMetaSelection(connectionId: string, body: unknown, act
   if (selection.pageId && !page) throw new MetaSelectionError(409, 'not_offered', 'Meta does not offer this Facebook Page to this business\'s system user. Reload the list and choose again.')
   const instagram = selection.instagramId ? choices.instagram.items.find((i) => i.instagramId === selection.instagramId) : null
   if (selection.instagramId && !instagram) throw new MetaSelectionError(409, 'not_offered', 'Meta does not offer this Instagram account to this business\'s system user. Reload the list and choose again.')
+  // Step 1 final review: an Instagram account is linked to a Facebook Page; one whose Page another business uses belongs
+  // with that Page, so it is refused like a taken one (nexus_meta_links_taken: yes or no, never which business).
+  if (instagram && (await prisma.$queryRaw<Array<{ id: string }>>`SELECT t.id FROM nexus_meta_links_taken(${META_PRODUCT.page}, ${[instagram.pageId]}::text[]) AS t(id)`).length > 0) {
+    throw new MetaSelectionError(409, 'taken_by_other_business', INSTAGRAM_PAGE_TAKEN, META_PRODUCT.instagram)
+  }
 
   // One ad account per business: another, still connected, Meta connection of this business that holds the choice keeps it.
   const existing = await prisma.metaAccountLink.findMany({ include: { connection: { select: { isActive: true } } } })
@@ -363,6 +411,7 @@ export async function saveMetaSelection(connectionId: string, body: unknown, act
       else await tx.metaAccountLink.deleteMany({ where: { product: META_PRODUCT.page } })
       if (instagram) await linkRow(tx, META_PRODUCT.instagram, { connectionId, externalId: instagram.instagramId, label: instagram.username ? `@${instagram.username}` : 'Instagram account', metadata: { username: instagram.username, pageId: instagram.pageId }, selectedByUserId: userId })
       else await tx.metaAccountLink.deleteMany({ where: { product: META_PRODUCT.instagram } })
+      await ensureMetaAdAccount({ connectionId, adAccountId: account.adAccountId, name: account.name, currencyCode: account.currency, timeZone: account.timeZone }, tx)
       await recordConnectionEventInTx(tx, {
         connectionId, channelKey: 'META', type: 'accounts_linked', actor: { kind: 'operator', userId: actor.userId ?? workspaceContext()?.actorUserId ?? null },
         detail: {
@@ -373,6 +422,12 @@ export async function saveMetaSelection(connectionId: string, body: unknown, act
         },
       })
     })
+  }
+  // The first read of an ad account Nexus has never read is queued now (a second save in the same hour adds nothing).
+  const read = (await metaAdAccountsById([account.adAccountId])).get(account.adAccountId)
+  if (!read?.backfillCompletedAt) {
+    const queued = await enqueueMetaAdsSync({ adAccountId: account.adAccountId, kind: 'BACKFILL' })
+    if (!queued.queued) logger.info('[meta-accounts] first read not queued', { connectionId, reason: queued.reason })
   }
   const connection = (await listMetaConnections()).find((c) => c.connectionId === connectionId)
   if (!connection) throw new MetaSelectionError(404, 'not_found', 'This Meta connection is not connected to this business.')
@@ -388,11 +443,13 @@ export async function metaConnectionHealth(): Promise<Map<string, { health: 'ok'
     switch (c.state) {
       case 'choose_account': out.set(c.connectionId, { health: 'warn', healthReason: 'Choose a Meta ad account' }); break
       case 'permission_missing': out.set(c.connectionId, { health: 'warn', healthReason: c.stateText }); break
+      case 'first_read_pending': out.set(c.connectionId, { health: 'unknown', healthReason: c.stateText }); break
+      case 'read_failed':
       case 'token_problem':
       case 'sign_in_needed': out.set(c.connectionId, { health: 'error', healthReason: c.stateText }); break
       case 'ok': {
         const soon = c.token.expiresAt && Date.parse(c.token.expiresAt) - Date.now() < 14 * DAY_MS
-        out.set(c.connectionId, soon ? { health: 'warn', healthReason: c.stateText } : { health: 'ok', healthReason: null })
+        out.set(c.connectionId, soon || c.read.lastError ? { health: 'warn', healthReason: c.stateText } : { health: 'ok', healthReason: null })
         break
       }
     }

@@ -58,7 +58,16 @@ export const GOOGLE_ADS_NAV: NavItem[] = [
   { label: 'Settings', route: 'google-settings', href: '/settings/channels/google', Icon: Settings },
 ]
 
-export type AdChannel = 'amazon' | 'ebay' | 'google'
+/**
+ * Meta ads step 2 — the fourth channel on the same switch, read only like Google's start: one Ad Manager page and the
+ * place its connection and ad account are set (Settings › Channels › Meta, which leaves this console).
+ */
+export const META_ADS_NAV: NavItem[] = [
+  { label: 'Ad Manager', route: 'meta', Icon: Table },
+  { label: 'Settings', route: 'meta-settings', href: '/settings/channels/meta', Icon: Settings },
+]
+
+export type AdChannel = 'amazon' | 'ebay' | 'google' | 'meta'
 
 const under = (pathname: string, route: string) => pathname === `${ADS_BASE}/${route}` || pathname.startsWith(`${ADS_BASE}/${route}/`)
 
@@ -66,12 +75,13 @@ const under = (pathname: string, route: string) => pathname === `${ADS_BASE}/${r
 export function adChannelOf(pathname: string): AdChannel {
   if (under(pathname, 'ebay')) return 'ebay'
   if (under(pathname, 'google')) return 'google'
+  if (under(pathname, 'meta')) return 'meta'
   return 'amazon'
 }
 
 /** The rail for a channel. */
 export function navFor(channel: AdChannel): NavItem[] {
-  return channel === 'ebay' ? EBAY_ADS_NAV : channel === 'google' ? GOOGLE_ADS_NAV : ADS_NAV
+  return channel === 'ebay' ? EBAY_ADS_NAV : channel === 'google' ? GOOGLE_ADS_NAV : channel === 'meta' ? META_ADS_NAV : ADS_NAV
 }
 
 // E4.1 — channel counterparts: switching keeps you on the equivalent page.
@@ -88,14 +98,15 @@ const TO_AMAZON: Record<string, string> = {
 }
 
 /**
- * Where the channel switch goes (a route under ADS_BASE), or null when you are already there. Google has one page, so
- * every page switches to it; from Google you land on the other channel's Ad Manager, its counterpart.
+ * Where the channel switch goes (a route under ADS_BASE), or null when you are already there. Google and Meta have one
+ * page each, so every page switches to it; from either you land on the other channel's Ad Manager, its counterpart.
  */
 export function switchTarget(pathname: string, to: AdChannel): string | null {
   const from = adChannelOf(pathname)
   if (from === to) return null
   if (to === 'google') return 'google'
-  if (from === 'google') return to === 'ebay' ? 'ebay/campaigns' : 'campaigns'
+  if (to === 'meta') return 'meta'
+  if (from === 'google' || from === 'meta') return to === 'ebay' ? 'ebay/campaigns' : 'campaigns'
   const current = pathname.slice(ADS_BASE.length + 1) // strip "/marketing/ads/"
   const map = to === 'ebay' ? TO_EBAY : TO_AMAZON
   const hit = Object.entries(map).find(([route]) => current === route || current.startsWith(`${route}/`))

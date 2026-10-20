@@ -49,6 +49,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Sponsored Display extras (P3c, 2026-10-20) — the sd-… reads ask Amazon live; set-sd-optimization-rule, set-sd-budget-rule and set-sd-brand-safety change it there.
 // Meta ads step 1 (2026-10-20) — meta-connection reads the Meta connection live from Meta (views check, permissions, app,
 // choices); set-meta-connection's preview reads what the system user can see from Meta (its change stays in Nexus).
+// Meta ads step 2 (2026-10-20) — meta-ad-accounts, meta-ads-live and meta-ads-graph-read read Meta live (meta-ads-overview reads Nexus's stored read).
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -68,7 +69,7 @@ const OPEN_WORLD = [
   'google-ads-numbers', 'google-ads-query', 'google-merchant-live', 'graduate-google-experiment', 'graduate-keyword',
   'harvest-search-term',
   'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
-  'meta-connection', 'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
+  'meta-ad-accounts', 'meta-ads-graph-read', 'meta-ads-live', 'meta-connection', 'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
   'remove-google-conversion-actions', 'remove-google-labels', 'reopen-listing', 'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
   'request-review',
@@ -137,6 +138,8 @@ const HARD_RULES = [
   'make the account spend more is marked SPENDS MONEY in the preview', 'A new campaign is always made paused',
   'enabling anything is set-google-status (SPENDS MONEY)', 'remove-google-… tools delete only what the person asked to delete',
   'New parts that point at new parts are ONE call (build-google-campaigns', 'never steps of a change plan',
+  // Meta ads step 2 (2026-10-20) — read only for now; a Meta app secret or token is a person's to enter in Settings, never Claude's.
+  'Meta is read only for now (meta-… tools); never take a Meta app secret or token in chat',
 ]
 
 /**

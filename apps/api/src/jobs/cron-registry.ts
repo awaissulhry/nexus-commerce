@@ -431,6 +431,9 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // Google Ads step 1a — a read of this business's chosen Google Ads account, now (read-only; at most once an hour per
   // account, as Ads › Google's "Read now"). The trigger route's recordCronRun is the single run record.
   'google-ads-sync': () => import('./ads-google-sync.job.js').then((m) => m.runGoogleAdsSyncOnce(new Date(), 'MANUAL')),
+  // Meta ads step 2 — a read of this business's chosen Meta ad account, now (read-only; at most once an hour per account,
+  // as Ads › Meta's "Read now"). The trigger route's recordCronRun is the single run record.
+  'meta-ads-sync': () => import('./ads-meta-sync.job.js').then((m) => m.runMetaAdsSyncOnce(new Date(), 'MANUAL')),
   // Platform health watchdog (2026-10-07) — the daily checks of crons, feeds, ad writes, approvals, automation and queues
   // (services/platform-health/), measured, stored and alerted on now. Reads only, plus its own rows and alerts.
   'platform-health-watchdog': () => import('./platform-health-watchdog.job.js').then((m) => m.runPlatformHealthWatchdogOnce('manual')),

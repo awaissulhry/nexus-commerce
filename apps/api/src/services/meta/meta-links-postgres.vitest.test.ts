@@ -29,12 +29,14 @@ const RUN = randomBytes(5).toString('hex')
 const digits = (seed: string, length: number) => `${seed}${RUN.replace(/\D/g, '7')}`.padEnd(length, '7').slice(0, length)
 const ID = {
   x: digits('51', 12), y: digits('52', 12), z: digits('53', 12),
-  pageBravo: digits('61', 15), pageAlpha: digits('62', 15),
+  pageBravo: digits('61', 15), pageAlpha: digits('62', 15), igOfBravoPage: digits('71', 15),
   systemUser: digits('12', 15),
 }
 const h = vi.hoisted(() => ({ alerts: 0 }))
 
 vi.mock('../cx/token.service.js', () => ({ metaAppIdOf: vi.fn(async () => '1234567') }))
+// Step 2: a choice queues the first read; here it is only recorded (no queue, no read, no Meta).
+vi.mock('../marketing/meta-ads/enqueue.js', () => ({ enqueueMetaAdsSync: vi.fn(async () => ({ queued: true, reason: null })) }))
 vi.mock('../monitoring/alert.service.js', () => ({ AlertType: { CONNECTION_HEALTH: 'CONNECTION_HEALTH' }, alertService: { createAlert: vi.fn(async () => { h.alerts++ }) } }))
 vi.mock('../cx/connectors/meta/discovery.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../cx/connectors/meta/discovery.js')>()),
@@ -45,7 +47,7 @@ vi.mock('../cx/connectors/meta/discovery.js', async (importOriginal) => ({
       total: 3, error: null,
     },
     pages: { items: [{ pageId: ID.pageBravo, name: 'Bravo Page', instagram: null }, { pageId: ID.pageAlpha, name: 'Alpha Page', instagram: null }], total: 2, error: null },
-    instagram: { items: [], total: 0, error: null },
+    instagram: { items: [{ instagramId: ID.igOfBravoPage, username: 'bravo_ig', pageId: ID.pageBravo }], total: 1, error: null },
   })),
 }))
 
@@ -131,6 +133,14 @@ describe.skipIf(!concurrentDatabaseUrl())('Meta: one Meta id in one business (re
     expect(answer.adAccounts.items[1]).toMatchObject({ adAccountId: ID.y, name: 'Account 2', takenByAnotherBusiness: false })
     expect(answer.pages.items[0]).toEqual({ pageId: ID.pageBravo, takenByAnotherBusiness: true })
     expect(JSON.stringify(answer.pages.items)).not.toMatch(/Bravo Page/)
+    // The Instagram account linked to BRAVO's Page says so (the Page is id only).
+    expect(answer.instagram.items[0]).toMatchObject({ instagramId: ID.igOfBravoPage, pageId: ID.pageBravo, pageTakenByAnotherBusiness: true, takenByAnotherBusiness: false })
+  })
+  it('an Instagram account linked to BRAVO\'s Page is refused in the preview and on save', async () => {
+    expect(await as(ALPHA, () => tool.handler(tool.input.parse({ adAccountId: ID.y, instagramId: ID.igOfBravoPage }), ctx as never))).toMatchObject({ ok: false, error: expect.stringMatching(/linked to a Facebook Page another business/) })
+    const err = await as(ALPHA, () => saveMetaSelection(conn.alpha, { adAccountId: ID.y, instagramId: ID.igOfBravoPage })).catch((e) => e)
+    expect(err).toMatchObject({ statusCode: 409, code: 'taken_by_other_business', product: 'INSTAGRAM' })
+    expect(await links(ALPHA)).toEqual([])
   })
 
   it('set-meta-connection: BRAVO\'s ad account is refused in the preview, and by the unique index when the preview is skipped', async () => {

@@ -283,6 +283,19 @@ export const googleAdsSyncQueue: Queue = new Queue('google-ads-sync', {
   },
 })
 
+// Meta ads step 2 — one read of one Meta ad account per job (services/marketing/meta-ads/sync.service.ts), run by
+// workers/meta-ads-sync.worker.ts. Deterministic job ids per account and day (daily) or hour (manual, first read). A read
+// records its own outcome and never throws for a Meta answer; a retry is for a fault of Nexus's own.
+export const metaAdsSyncQueue: Queue = new Queue('meta-ads-sync', {
+  connection: redis.connection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 60_000 },
+    removeOnComplete: { age: 86400 },
+    removeOnFail: { age: 86400 },
+  },
+})
+
 export const queueEvents: QueueEvents = new QueueEvents('outbound-sync', {
   connection: redis.connection,
 })
@@ -459,6 +472,7 @@ export async function closeQueue() {
     await fbaInboundQueue.close()
     await adsSyncQueue.close()
     await googleAdsSyncQueue.close()
+    await metaAdsSyncQueue.close()
     await ebayOrderNoticeQueue.close()
     await queueEvents.close()
     await channelSyncQueueEvents.close()

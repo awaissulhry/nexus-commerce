@@ -1,3 +1,9 @@
+## Meta has its channel name — 2026-10-20
+
+`lib/account-identity.ts` (both apps, identical).
+- **`channelDisplayName('META')`** is `Meta` (it was the fallback `Channel`), so a Meta connection whose label is an id
+  reads "Meta account" and Settings › Channels names the Meta card and page in words.
+
 ## A Modal can hold its close; a small wrapping button grows — 2026-10-19
 
 `components/Modal.tsx`, `styles/primitives.css` (both apps, identical) and `styles/components.css` (the same rule in each).

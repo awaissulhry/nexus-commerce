@@ -212,6 +212,9 @@ export const ENTRIES: Entry[] = [
   P(F.channelsConnect, (m, p) => (m.toUpperCase() === 'POST' && p === '/api/meta-ads/connect') || (m.toUpperCase() === 'PUT' && /^\/api\/meta-ads\/connections\/[^/]+\/credentials$/.test(p))),
   P(F.settingsIntegrationsManage, (m, p) => (isRead(m) && (p === '/api/meta-ads/connections' || /^\/api\/meta-ads\/connections\/[^/]+\/choices$/.test(p))) || (m.toUpperCase() === 'POST' && /^\/api\/meta-ads\/connections\/[^/]+\/token-check$/.test(p))),
   P(F.adsConnect, (m, p) => m.toUpperCase() === 'PUT' && /^\/api\/meta-ads\/connections\/[^/]+\/selection$/.test(p)),
+  // Meta ads step 2 — the read-only Ads › Meta tab and its "Read now" (the ads sync permission), as Google's.
+  P(F.adsView, (m, p) => isRead(m) && /^\/api\/meta-ads\/(overview|campaigns(\/[^/]+\/days)?|adsets|ads)$/.test(p)),
+  P(F.adsCampaignsManage, (m, p) => m.toUpperCase() === 'POST' && p === '/api/meta-ads/sync'),
   P(F.settingsIntegrationsManage, pfx('/api/cx/channels')),
   // P3.6 — the channel health dashboard and the per-change trace. Read-only, and the
   // same people who manage connections: both answer questions ABOUT the channels this

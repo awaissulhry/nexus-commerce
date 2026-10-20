@@ -86,14 +86,31 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  * reads need, with a test (meta.vitest.test.ts).
  *   - any read: fields, limit, after, before, summary;
  *   - debug_token: input_token (the token inspected);
- *   - <app>/authorized_adaccounts: business (the business portfolio asked about; meta-connection view app).
+ *   - <app>/authorized_adaccounts: business (the business portfolio asked about; meta-connection view app);
+ *   - step 2, the ad account's lists act_<id>/campaigns | adsets | ads, and a campaign's or ad set's own
+ *     <id>/adsets | ads (meta-ads-live, review B5: Meta documents these, not `filtering` on act_<id>/adsets | ads):
+ *     effective_status;
+ *   - step 2, a portfolio's <id>/owned_ad_accounts and <id>/client_ad_accounts: search_query (AA-002; pending has none);
+ *   - step 2, insights (act_<id>/insights, <object>/insights): level, time_range, time_increment, filtering — never
+ *     use_unified_attribution_setting or action_report_time (Meta ignores both since 2025-06-10, facts F2 T1);
+ *   - step 2, act_<id>/async_requests: status, type (master ACC-028, SDK only: a refusal from Meta answers plainly;
+ *     LIVE-PROBES.md).
  */
 const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
 const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string> }> = [
   { route: /^debug_token$/, keys: new Set(['input_token']) },
   { route: /^\d+\/authorized_adaccounts$/, keys: new Set(['business']) },
+  { route: /^act_\d+\/(campaigns|adsets|ads)$/, keys: new Set(['effective_status']) },
+  { route: /^\d+\/(adsets|ads)$/, keys: new Set(['effective_status']) },
+  { route: /^\d+\/(owned|client)_ad_accounts$/, keys: new Set(['search_query']) },
+  { route: /^(act_)?\d+\/insights$/, keys: new Set(['level', 'time_range', 'time_increment', 'filtering']) },
+  { route: /^act_\d+\/async_requests$/, keys: new Set(['status', 'type']) },
 ]
-const keyAllowed = (route: string, key: string) => READ_KEYS.has(key) || ROUTE_KEYS.some((r) => r.route.test(route) && r.keys.has(key))
+/** May a read of this route (the canonical one: lower case, no version) carry this query key? (meta-ads-graph-read asks.) */
+export function metaQueryKeyAllowed(route: string, key: string): boolean {
+  return READ_KEYS.has(key) || ROUTE_KEYS.some((r) => r.route.test(route) && r.keys.has(key))
+}
+const keyAllowed = metaQueryKeyAllowed
 /** At most this long, a `fields` value (the longest Nexus asks is far shorter). */
 const MAX_FIELDS_LENGTH = 4000
 /** A field name that is (or holds) a token: `access_token`, `page_access_token`, … — never asked for. */
@@ -103,6 +120,19 @@ const ACCOUNTS_FIELD = /(?<![A-Za-z0-9_])accounts(?![A-Za-z0-9_])/gi
 /** Field modifiers that may sit between a field and its own `{…}` list: `.limit(100)`, `.summary(true)`. */
 const MODIFIERS = /^(?:\s*\.\s*[A-Za-z_]+\s*\([^(){}]*\))*\s*/
 
+/**
+ * Step 2 review A1 (defence in depth under meta-ads-graph-read's own guard): names no Nexus read asks inside `fields` —
+ * other businesses' ad accounts and Pages, people, buyers' messages and lead-form answers. Nexus reads its own lists
+ * through their edge (the path), never by expanding them into another object.
+ */
+const FIELD_DENIED = new Set([
+  'owned_ad_accounts', 'client_ad_accounts', 'pending_owned_ad_accounts', 'pending_client_ad_accounts', 'owned_pages', 'client_pages',
+  'users', 'assigned_users', 'system_users', 'business_users', 'agencies', 'leadgen_forms', 'leads', 'conversations', 'messages', 'comments',
+])
+
+/** Review 2 — never inside an expansion (`{…}` or `.fields(…)`): another object's Instagram account, owner, ratings, feed. */
+const NESTED_DENIED = new Set(['instagram_business_account', 'owner_business', 'ratings', 'feed', 'blocked'])
+
 /** A real field name: a letter first. */
 const FIELD_NAME = /^[A-Za-z][A-Za-z0-9_]*$/
 
@@ -111,13 +141,29 @@ const FIELD_NAME = /^[A-Za-z][A-Za-z0-9_]*$/
  * Modifier arguments (`.limit(5)`) and modifier names (the word after a `.`) are not fields.
  */
 function bracesProblem(value: string): string | null {
+  // Each open list: how many field names it holds so far. A "(" is either a `.fields(` list (review 2: exactly like
+  // `{…}`) or a modifier's argument (skipped, but balanced).
   const lists: number[] = []
-  let paren = 0
+  const parens: Array<'list' | 'argument'> = []
   for (let i = 0; i < value.length; i++) {
     const c = value[i]
-    if (c === '(') { paren++; continue }
-    if (c === ')') { paren = Math.max(0, paren - 1); continue }
-    if (paren > 0) continue
+    const inArgument = parens.length > 0 && parens[parens.length - 1] === 'argument'
+    if (c === '(') {
+      const isFields = !inArgument && /\.\s*fields\s*$/.test(value.slice(0, i))
+      parens.push(isFields ? 'list' : 'argument')
+      if (isFields) lists.push(0)
+      continue
+    }
+    if (c === ')') {
+      const kind = parens.pop()
+      if (kind === undefined) return 'fields has a ) with no ('
+      if (kind === 'list') {
+        const named = lists.pop()
+        if (!named) return 'every .fields(…) in fields names a field'
+      }
+      continue
+    }
+    if (inArgument) continue
     if (c === '{') { lists.push(0); continue }
     if (c === '}') {
       const named = lists.pop()
@@ -126,8 +172,16 @@ function bracesProblem(value: string): string | null {
       continue
     }
     const startsName = /[A-Za-z]/.test(c) && (i === 0 || !/[A-Za-z0-9_]/.test(value[i - 1]))
-    if (startsName && lists.length > 0 && value[i - 1] !== '.') lists[lists.length - 1]++
+    if (!startsName || /\.\s*$/.test(value.slice(0, i))) continue
+    const name = /^[A-Za-z][A-Za-z0-9_]*/.exec(value.slice(i))![0]
+    if (lists.length > 0) {
+      lists[lists.length - 1]++
+      // Review 2 — inside any expansion, never another object's Instagram account, owner, ratings, feed or blocked list.
+      if (NESTED_DENIED.has(name.toLowerCase())) return `a read never expands "${name}" inside another field`
+    }
+    i += name.length - 1
   }
+  if (parens.length > 0) return 'fields has a ( with no )'
   return lists.length > 0 ? 'fields has a { with no }' : null
 }
 
@@ -139,6 +193,8 @@ function fieldsProblem(value: string): string | null {
   if (!/^[\x20-\x7e]*$/.test(value)) return 'fields is plain ASCII letters, digits and punctuation'
   const names = value.split(/[^A-Za-z0-9_]+/).filter(Boolean)
   if (names.some((name) => TOKEN_NAME.test(name))) return 'a read never asks Meta for a token'
+  const denied = names.find((name) => FIELD_DENIED.has(name.toLowerCase()))
+  if (denied) return `a read never expands "${denied}" inside fields (another business's assets, people or messages)`
   if (!names.some((name) => FIELD_NAME.test(name))) return 'fields names no field'
   const braces = bracesProblem(value)
   if (braces) return braces
@@ -223,8 +279,11 @@ const SECRET_IN_QUERY = new RegExp(`([?&])(?:${SECRET_NAMES})=[^&#\\s"'<>]*`, 'g
 const SECRET_BARE = new RegExp(`\\b(?:${SECRET_NAMES})=[^&#\\s"'<>]*&?`, 'gi')
 /** Marks where a `?` stood before a dropped parameter, so the next parameter takes its place. */
 const QUERY_START = '\u0000q'
-/** Token shapes, anywhere in a string: a user or system-user token (EAA…), an app token (`<app id>|<app secret>`). */
-const TOKEN_SHAPES = /EAA[A-Za-z0-9]{20,}|\b\d{6,}\|[A-Za-z0-9_-]{16,}/g
+/**
+ * Token shapes, anywhere in a string (a value or a key): a user or system-user token (EAA…), an app token
+ * (`<app id>|<app secret>`), also URL-encoded (`<app id>%7C<app secret>`).
+ */
+const TOKEN_SHAPES = /EAA[A-Za-z0-9]{20,}|\b\d{6,}(?:\||%7[Cc])[A-Za-z0-9_-]{16,}/g
 
 /** A string with every secret parameter dropped and every token shape masked, and how many were removed. */
 function scrubString(value: string): { text: string; removed: number } {
@@ -264,8 +323,13 @@ export function scrubMetaAnswer(text: string): { text: string; scrubbed: number 
     if (Array.isArray(value)) return value.map((item) => walk(item, depth + 1))
     if (value && typeof value === 'object') {
       const out: Record<string, unknown> = {}
-      for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-        if (key.toLowerCase() === 'access_token') { scrubbed++; continue }
+      for (const [rawKey, child] of Object.entries(value as Record<string, unknown>)) {
+        if (rawKey.toLowerCase() === 'access_token') { scrubbed++; continue }
+        // A key can carry a token too (an answer keyed by token): it is masked like a value, and kept apart if two clash.
+        const masked = scrubString(rawKey)
+        scrubbed += masked.removed
+        let key = masked.text
+        for (let n = 2; masked.removed && Object.prototype.hasOwnProperty.call(out, key); n++) key = `${masked.text}-${n}`
         // defineProperty: a key named "__proto__" stays an own key (an assignment would set the prototype and lose it).
         Object.defineProperty(out, key, { value: walk(child, depth + 1), enumerable: true, writable: true, configurable: true })
       }

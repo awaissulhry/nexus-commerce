@@ -71,6 +71,7 @@ export function AccountsTab({ catalogue, reloadSignal, onStart, onChanged }: Acc
         const entry = catalogue?.find((c) => c.channelType === a.channel && c.available)
         if (!entry) return null
         if (entry.connectMode === 'self_authorization') return a.managedBy === 'env' ? 'Import authorization' : 'Verify access'
+        if (entry.connectMode === 'token_entry') return 'Replace credentials'
         return a.managedBy === 'env' ? 'Replace environment credentials' : reconnectLabel(a.scopeDrift, a.grantedScopes)
       }}
       onReconnect={(a) => {

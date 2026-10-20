@@ -209,6 +209,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'sd-categories': 'it reads Amazon Ads live for the market\'s profile, and no business here has one (ads-sd.tools test)',
   'sd-targeting-recommendations': 'it reads Amazon Ads live for an SD ad group or market, and no business here has one (ads-sd.tools test)',
   'sd-bid-recommendations': 'it reads Amazon Ads live for an SD ad group or market, and no business here has one (ads-sd.tools test)',
+  'meta-ads-live': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-read.tools test)',
+  'meta-ads-graph-read': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-read.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -493,6 +495,12 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // Meta ads step 1: the connection as Nexus keeps it (no Meta call; this seed has no Meta connection, so it says so).
   'meta-connection': () => ({ view: 'summary' }),
   'set-meta-connection': () => ({ adAccountId: '1234567890' }),
+  // Meta ads step 2: the stored read answers (empty: no Meta account here); the chosen list needs no call; the live reads
+  // refuse in words because no business here has Meta (meta-ads-read.tools.vitest.test.ts runs them on an account).
+  'meta-ad-accounts': () => ({ list: 'chosen' }),
+  'meta-ads-overview': () => ({ view: 'overview' }),
+  'meta-ads-live': () => ({ view: 'campaigns' }),
+  'meta-ads-graph-read': () => ({ path: 'act_1234567890/campaigns' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

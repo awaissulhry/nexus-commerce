@@ -54,8 +54,8 @@ beforeEach(() => { h.metadata = null; h.saved = []; h.checks = 0; h.check = null
 
 describe('the catalogue entry', () => {
   it('has no consent screen, needs no refresh token, renews 30 days before expiry, and never revokes at Meta', () => {
-    // Step 1: no Settings card yet, so no Connect button that would fail; the card (step 2) switches it on.
-    expect(metaSpec.available).toBe(false)
+    // Step 2: the Settings card a person enters the app id, app secret and token on switches it on.
+    expect(metaSpec.available).toBe(true)
     expect(metaSpec.connectException?.reason).toMatch(/system-user token/)
     expect(metaSpec.auth.authorizeUrl).toBeUndefined()
     expect(metaSpec.auth).toMatchObject({ mode: 'api_key', refreshTokenRequired: false, accessTokenLifetimeSec: null, requiredScopes: ['ads_read'] })

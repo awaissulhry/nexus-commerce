@@ -13,6 +13,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import type { AccountRow } from '@/design-system/components/AccountSwitcher'
 import { accountDisplayName, channelDisplayName } from '@/design-system/lib'
 import type { GoogleAccount } from '@/lib/google-ads/contract'
+import type { MetaConnection } from '@/lib/meta-ads/contract'
 
 export type { AccountRow }
 
@@ -22,7 +23,8 @@ export interface CatalogueChannel {
   displayName: string
   available: boolean
   authMode: string
-  connectMode: 'website_oauth' | 'self_authorization'
+  /** token_entry: Meta — the business's app id, app secret and system-user token are typed in Nexus (no popup). */
+  connectMode: 'website_oauth' | 'self_authorization' | 'token_entry'
   permissionModel: 'oauth_scopes' | 'application_roles'
   requiredScopes: string[]
   reviewGatedScopes: string[]
@@ -116,6 +118,14 @@ const pickGoogle = (raw: unknown) => {
   return { items: r.items }
 }
 
+const pickMeta = (raw: unknown) => {
+  const r = raw as { items?: MetaConnection[] }
+  if (!r || !Array.isArray(r.items) || !r.items.every((item) => item && typeof item.connectionId === 'string')) {
+    throw new Error('The Meta connections could not be verified.')
+  }
+  return { items: r.items }
+}
+
 export function useAccounts(reloadSignal: unknown, includeDisconnected = false, workspaceId: string | null = null) {
   return useJson(`/api/accounts${includeDisconnected ? '?includeDisconnected=1' : ''}`, reloadSignal, pickAccounts, workspaceId)
 }
@@ -131,6 +141,11 @@ export function useAdsConnections(reloadSignal: unknown, workspaceId: string | n
 /** Google Ads step 1a — this business's Google sign-ins and the accounts chosen for each (C1). */
 export function useGoogleAccounts(reloadSignal: unknown, workspaceId: string | null = null) {
   return useJson('/api/google-ads/connections', reloadSignal, pickGoogle, workspaceId)
+}
+
+/** Meta ads step 1 — this business's Meta connections, their token health and the assets chosen for each. */
+export function useMetaConnections(reloadSignal: unknown, workspaceId: string | null = null) {
+  return useJson('/api/meta-ads/connections', reloadSignal, pickMeta, workspaceId)
 }
 
 /** The one place channel display names live on this page (the catalogue carries them for its own keys). */

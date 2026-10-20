@@ -187,6 +187,8 @@ export async function connectMeta(input: { body: unknown; targetConnectionId?: s
   } catch (err) {
     logger.warn('[meta-connect] discovery failed (grant stored)', { connectionId, error: err instanceof Error ? err.message : String(err) })
   }
+  // Review A2 — a read that lost the old token no longer stands: cleared, and read again at once.
+  if (health.isValid) await (await import('../../../marketing/meta-ads/enqueue.js')).metaReadAfterGoodToken(connectionId)
   return { connectionId, placement, systemUser, token: health, adAccountsSeen, warnings }
 }
 
@@ -213,5 +215,7 @@ export async function recheckMetaToken(connectionId: string): Promise<MetaTokenH
     throw err
   }
   await saveTokenHealth(connectionId, health)
+  // Review A2 — a valid token now: a read that lost the token no longer stands (cleared, read again at once).
+  if (health.isValid) await (await import('../../../marketing/meta-ads/enqueue.js')).metaReadAfterGoodToken(connectionId)
   return health
 }

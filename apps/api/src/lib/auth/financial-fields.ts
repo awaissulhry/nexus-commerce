@@ -81,6 +81,10 @@ add(FIELDS.financialsAdspendView, [
   // conversion value, average cost per click, cost per conversion (spendCents and roas are above; a campaign's
   // dailyBudgetCents is stripped by those routes' own hook and by the ad tools' AD_MONEY).
   'conversionValueCents', 'avgCpcCents', 'costPerConversionCents',
+  // Meta ads step 2 — Ads › Meta's reads (routes/meta-ads-read.routes.ts) and Claude's Meta reads: purchase value, cost
+  // per 1,000 impressions and per purchase, and the ad account's amount spent, spending limit and balance (cpcCents and
+  // the budgets, which other answers name too, are stripped by those routes' own hook and by the tools' money lists).
+  'purchaseValueCents', 'cpmCents', 'costPerPurchaseCents', 'amountSpentCents', 'spendCapCents', 'balanceCents',
 ])
 
 // ── Suppliers / B2B pricing ────────────────────────────────────────

@@ -1,6 +1,6 @@
 /**
  * CH1 — the square channel marks, shared by the rail's channel switch and the
- * SP super-wizard product rows. (Google's tile joined them in Google Ads step 1a.)
+ * SP super-wizard product rows. (Google's tile joined them in Google Ads step 1a, Meta's in Meta ads step 2.)
  *
  * Both render as a 20x20 tile so they can be dropped in at any size and stay
  * optically matched: Amazon is its navy app tile (white "a" + orange smile),
@@ -59,6 +59,21 @@ export function GoogleBadge({ size = 15 }: { size?: number }) {
           <path d="M13.89 13.89A5.5 5.5 0 0 1 6.11 13.89" stroke="#34A853" />
           <path d="M15.5 10A5.5 5.5 0 0 1 13.89 13.89M10 10H15.5" stroke="#4285F4" />
         </g>
+      </svg>
+    </span>
+  )
+}
+
+/**
+ * Meta ads step 2 — Meta's tile for the fourth switch position: the white tile (same hairline as eBay's and Google's)
+ * carrying a plain blue loop drawn as one path, a neutral mark of our own (no logo file). An SVG, never an emoji.
+ */
+export function MetaBadge({ size = 15 }: { size?: number }) {
+  return (
+    <span className="h10-bmk" style={{ width: size, height: size }} aria-hidden>
+      <svg viewBox="0 0 20 20" width={size} height={size}>
+        <rect x="0.5" y="0.5" width="19" height="19" rx="2.5" fill="#fff" stroke="rgba(0,0,0,0.14)" strokeWidth="1" />
+        <path d="M4 12.6c0-3.4 1.5-5.6 3.3-5.6 2.4 0 3.4 6.2 5.6 6.2 1.4 0 2.6-1.4 2.6-3.6 0-2.1-1.1-3.6-2.5-3.6-2.2 0-3.4 6.8-6.3 6.8C5 12.8 4 12.7 4 12.6Z" fill="none" stroke="#0866FF" strokeWidth="1.7" strokeLinejoin="round" />
       </svg>
     </span>
   )

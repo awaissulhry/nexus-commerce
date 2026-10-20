@@ -147,10 +147,11 @@ function DefaultAdsHeader({
   // pages pass 'ebay' so the header stops showing the amazon wordmark.
   // Google Ads step 1a — 'google': read only, no market picker and no change log of Nexus's own (Nexus makes no
   // change in Google Ads), so neither the amazon wordmark nor the Amazon change log may appear there.
-  channel?: 'amazon' | 'ebay' | 'google'
+  // Meta ads step 2 — 'meta': read only like Google (no market picker, no change log of Nexus's own).
+  channel?: 'amazon' | 'ebay' | 'google' | 'meta'
 }) {
   const pathname = usePathname()
-  const changeLogHref = channel === 'ebay' ? '/marketing/ads/ebay/change-log' : channel === 'google' ? null : '/marketing/ads/changelog'
+  const changeLogHref = channel === 'ebay' ? '/marketing/ads/ebay/change-log' : channel === 'google' || channel === 'meta' ? null : '/marketing/ads/changelog'
   const [open, setOpen] = useState<'' | 'action'>('')
   const close = () => setOpen('')
   // AM-16 — the default window is the 7 complete days ending yesterday (DateRangePicker's rule).
@@ -231,7 +232,7 @@ function DefaultAdsHeader({
             onValuesChange={onMarketValuesChange}
             allowAll={allowAllMarkets}
             notYet={marketNotYet}
-            brand={channel === 'ebay' ? <EbayMark /> : channel === 'google' ? <span>Google</span> : <span className="amz">amazon</span>}
+            brand={channel === 'ebay' ? <EbayMark /> : channel === 'google' ? <span>Google</span> : channel === 'meta' ? <span>Meta</span> : <span className="amz">amazon</span>}
           />
         )}
 

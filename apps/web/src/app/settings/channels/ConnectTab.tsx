@@ -15,9 +15,11 @@ import { type AccountRow, type AdsConnection, type CatalogueChannel } from './ch
 import { getBackendUrl } from '@/lib/backend-url'
 import { accountDisplayName } from '@/design-system/lib'
 import type { GoogleAccount } from '@/lib/google-ads/contract'
+import type { MetaConnection } from '@/lib/meta-ads/contract'
 import { GOOGLE_KEY, googleChips, needsChoice } from './google-selection'
+import { META_KEY, metaChips, needsMetaChoice } from './meta-selection'
 
-const ORDER = ['AMAZON_SP', 'AMAZON_ADS', 'EBAY', 'SHOPIFY', 'ETSY', GOOGLE_KEY]
+const ORDER = ['AMAZON_SP', 'AMAZON_ADS', 'EBAY', 'SHOPIFY', 'ETSY', GOOGLE_KEY, META_KEY]
 
 /**
  * P4.5g — the catalogue's `refreshTokenLifetimeSec` is what the channel spec DECLARES,
@@ -37,6 +39,7 @@ function lifetimeLine(c: CatalogueChannel, connections: AdsConnection[] = []): s
     )
   }
   if (c.connectMode === 'self_authorization') return 'Amazon does not report an expiry for this private authorization.'
+  if (c.connectMode === 'token_entry') return 'Nexus renews a 60-day token before it expires; a token that does not expire needs nothing.'
   if (c.rotatesRefreshToken) return 'Sign-in renews itself on every refresh.'
   if (c.refreshTokenLifetimeSec) {
     const months = Math.round(c.refreshTokenLifetimeSec / (30 * 86_400))
@@ -56,9 +59,13 @@ export interface ConnectTabProps {
   google?: { items: GoogleAccount[] } | null
   /** Opens "Choose Google accounts" for one Google sign-in. */
   onChooseGoogle?: (account: GoogleAccount) => void
+  /** Meta ads step 1 — this business's Meta connections (token health, chosen assets); null while loading or unavailable. */
+  meta?: { items: MetaConnection[] } | null
+  /** Opens "Choose Meta assets" for one Meta connection. */
+  onChooseMeta?: (connection: MetaConnection) => void
 }
 
-export function ConnectTab({ catalogue, catalogueError, accounts, ads, connecting, onStart, google, onChooseGoogle }: ConnectTabProps) {
+export function ConnectTab({ catalogue, catalogueError, accounts, ads, connecting, onStart, google, onChooseGoogle, meta, onChooseMeta }: ConnectTabProps) {
   const [region, setRegion] = useState<Record<string, string>>({})
   const [reasonShown, setReasonShown] = useState<string | null>(null)
 
@@ -93,6 +100,11 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
           const isAds = c.key === 'AMAZON_ADS'
           const googleItems = c.key === GOOGLE_KEY ? (google?.items ?? []) : []
           const googleToChoose = googleItems.find(needsChoice)
+          // Meta: no popup — the button opens "Connect Meta" (or "Replace credentials" for the connection it has).
+          const byToken = c.connectMode === 'token_entry'
+          const metaItems = c.key === META_KEY ? (meta?.items ?? []) : []
+          const metaToChoose = metaItems.find(needsMetaChoice)
+          const metaTarget = byToken ? metaItems[0] : undefined
           const isSelfAuthorizedAmazon = c.key === 'AMAZON_SP' && c.connectMode === 'self_authorization'
           const adsItems = isAds ? (ads?.items ?? []) : []
           const have = connectedFor(c.channelType)
@@ -140,13 +152,15 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
               <dl className="nds-connect-facts">
                 <div>
                   <dt>Signs in with</dt>
-                  <dd>{isSelfAuthorizedAmazon ? 'Private app authorization' : c.authMode.replace(/_/g, ' ')}</dd>
+                  <dd>{isSelfAuthorizedAmazon ? 'Private app authorization' : byToken ? 'Your own Meta app and a system-user token' : c.authMode.replace(/_/g, ' ')}</dd>
                 </div>
                 <div>
                   <dt>Permissions</dt>
                   <dd>
                     {c.permissionModel === 'application_roles' ? (
                       'Every role approved for this app by Amazon'
+                    ) : byToken ? (
+                      `${c.requiredScopes.join(', ')} required, ticked in Meta when the token is generated`
                     ) : c.requiredScopes.length > 0 ? (
                       <>
                         {c.requiredScopes.length} requested
@@ -191,6 +205,14 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                 </div>
               )}
 
+              {metaItems.length > 0 && (
+                <div className="nds-connect-chips">
+                  {metaItems.flatMap((item) => metaChips(item).map((chip) => (
+                    <Tag key={`${item.connectionId}:${chip.text}`} tone={chip.tone} title={chip.text} truncate>{chip.text}</Tag>
+                  )))}
+                </div>
+              )}
+
               {c.regions.length > 1 && (
                 <div className="nds-connect-region">
                   <span id={`region-${c.key}`}>Region</span>
@@ -218,8 +240,8 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                       return
                     }
                     onStart(c.key, {
-                      intent: envAccount ? 'reconnect' : 'connect',
-                      targetConnectionId: envAccount?.id,
+                      intent: envAccount || metaTarget ? 'reconnect' : 'connect',
+                      targetConnectionId: envAccount?.id ?? metaTarget?.connectionId,
                       region: chosenRegion,
                       // Amazon Ads signs in through its own live route until the Ads
                       // console's allowed return URL is re-pointed at the shared
@@ -230,6 +252,8 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                 >
                   {busy
                     ? 'Opening sign-in…'
+                    : metaTarget
+                      ? 'Replace credentials'
                     : envAccount
                       ? isSelfAuthorizedAmazon
                         ? 'Import Seller Central authorization'
@@ -240,6 +264,9 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
                 </Button>
                 {googleToChoose && onChooseGoogle && (
                   <Button variant="secondary" size="sm" onClick={() => onChooseGoogle(googleToChoose)}>Choose accounts</Button>
+                )}
+                {metaToChoose && onChooseMeta && (
+                  <Button variant="secondary" size="sm" onClick={() => onChooseMeta(metaToChoose)}>Choose assets</Button>
                 )}
                 {have.length > 0 && (
                   <Button asChild variant="secondary" size="sm">
@@ -263,6 +290,7 @@ export function ConnectTab({ catalogue, catalogueError, accounts, ads, connectin
       <Card header="About channel connections">
         <ul className="nds-connect-about">
           <li>Public channel connections open the channel’s own sign-in in a popup; Nexus never sees your password. Amazon private apps import the company authorization created in the Solution Provider Portal.</li>
+          <li>Meta connects with your business’s own Meta app and a system-user token, typed in here once. Meta checks the token before Nexus saves it, encrypted; the secret and the token are never shown again.</li>
           <li>OAuth permissions are recorded at consent. Amazon Seller access follows the roles Amazon approved on the Nexus SP-API application, so Seller Central grants every eligible app role in one sign-in.</li>
           <li>Every connected account is checked with a real call every 15 minutes (heartbeat). Access tokens are refreshed before they expire; you are told 30, 7 and 1 days before a sign-in itself runs out.</li>
           <li>Disconnect removes the stored credentials, revokes at the channel when its API supports that, and keeps the account’s history in the ledger.</li>

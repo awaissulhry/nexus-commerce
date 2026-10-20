@@ -5,14 +5,16 @@ import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { useEffect, useState, type ReactElement } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 import { ADS_BASE, adChannelOf, navFor, switchTarget, type AdChannel } from './nav'
-import { AmazonBadge, EbayBadge, GoogleBadge } from './BrandMarks'
+import { AmazonBadge, EbayBadge, GoogleBadge, MetaBadge } from './BrandMarks'
 import { getBackendUrl } from '@/lib/backend-url'
 
-// E4.1 — one switch, one console per channel; Google joined as the third (Google Ads step 1a, read only).
+// E4.1 — one switch, one console per channel; Google joined as the third (Google Ads step 1a, read only), Meta as the
+// fourth (Meta ads step 2, read only).
 const CHANNELS: Array<{ id: AdChannel; label: string; Badge: (p: { size?: number }) => ReactElement }> = [
   { id: 'amazon', label: 'Amazon', Badge: AmazonBadge },
   { id: 'ebay', label: 'eBay', Badge: EbayBadge },
   { id: 'google', label: 'Google', Badge: GoogleBadge },
+  { id: 'meta', label: 'Meta', Badge: MetaBadge },
 ]
 
 export function AdsSidebar() {

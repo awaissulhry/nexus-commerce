@@ -129,10 +129,8 @@ export const metaSpec: ChannelSpec = {
   key: 'META',
   channelType: 'META',
   displayName: 'Meta',
-  // Step 1: the connection, the gateway and the token code are in; the Settings card a person enters the app id, app
-  // secret and token on is not (step 2). Until then Settings › Channels says so honestly instead of offering a
-  // Connect / Reconnect button that would fail ("Meta does not use a browser consent flow").
-  available: false,
+  // Step 2: Settings › Channels has the card a person enters the app id, app secret and token on (no consent screen).
+  available: true,
   auth: {
     // No consent screen: the business's system-user token is entered by a person (connect.ts).
     mode: 'api_key',
