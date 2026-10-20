@@ -72,6 +72,7 @@ import marketingRoutes from "./routes/marketing.routes.js";
 import marketingOsRoutes from "./routes/marketing-os.routes.js";
 import ebayAdsRoutes from "./routes/ebay-ads.routes.js";
 import googleAccountsRoutes from "./routes/google-accounts.routes.js";
+import metaConnectionRoutes from "./routes/meta-connection.routes.js";
 import googleAdsReadRoutes from "./routes/google-ads-read.routes.js";
 import advertisingRoutes from "./routes/advertising.routes.js";
 import advertisingIntelRoutes from "./routes/advertising-intel.routes.js";
@@ -647,6 +648,7 @@ app.register(marketingRoutes, { prefix: '/api' });
 app.register(marketingOsRoutes, { prefix: '/api' });
 app.register(ebayAdsRoutes, { prefix: '/api' }); // E3 eBay ads console (reads)
 app.register(googleAccountsRoutes, { prefix: '/api' }); // Google Ads step 1a: the connection's account choice (C1–C3)
+app.register(metaConnectionRoutes, { prefix: '/api' }); // Meta ads step 1: the Meta connection (system-user token) and its asset choice (C1–C3)
 app.register(googleAdsReadRoutes, { prefix: '/api' }); // Google Ads step 1a: R1–R4 + read now (read only)
 app.register(advertisingRoutes, { prefix: '/api' });
 // R16 — a person's per-business engine switch, from the Control Room lever drawer.

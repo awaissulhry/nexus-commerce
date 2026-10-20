@@ -533,6 +533,13 @@
     "GoogleAdsNegativeList",
     "GoogleAdsPolicyIssue",
     "GoogleAdsRecommendation",
-    "GoogleAdsAutoApply"
+    "GoogleAdsAutoApply",
+    "MetaAccountLink",
+    "MetaAdAccount",
+    "MetaAdsCampaign",
+    "MetaAdsAdSet",
+    "MetaAdsAd",
+    "MetaAdsDailyMetric",
+    "MetaAdsReadState"
   ]
 }

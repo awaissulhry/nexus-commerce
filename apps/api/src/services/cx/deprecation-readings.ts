@@ -51,7 +51,7 @@ export interface DeprecationNotice {
   /** The channel's own explanation, when it gave one (Shopify does). */
   reason: string | null
   /** Which header carried it — for the record, and so a surprise is visible. */
-  via: 'sunset' | 'deprecation' | 'shopify' | 'sunset+deprecation'
+  via: 'sunset' | 'deprecation' | 'shopify' | 'sunset+deprecation' | 'meta'
 }
 
 /**
@@ -91,7 +91,15 @@ export function deprecationOf(headers: Headers): DeprecationNotice | null {
   const rawDeprecation = headers.get('deprecation')
   const rawSunset = headers.get('sunset')
   const shopifyReason = headers.get('x-shopify-api-deprecated-reason')
-  if (!rawDeprecation && !rawSunset && !shopifyReason) return null
+  // Meta (2026-10-20): a call to an expired Marketing API version is upgraded by Meta where the endpoint did not change,
+  // and the answer says so in `X-Ad-Api-Version-Warning` (checked 2026-10-20: developers.facebook.com/documentation/
+  // ads-commerce/marketing-api/overview/versioning). Nexus pins one version (services/meta/api-version.ts), so this
+  // means the pin has expired: the version moves in that one place.
+  const metaWarning = headers.get('x-ad-api-version-warning')
+  if (!rawDeprecation && !rawSunset && !shopifyReason && !metaWarning) return null
+  if (metaWarning && !rawDeprecation && !rawSunset && !shopifyReason) {
+    return { deprecated: true, sunsetAt: null, reason: `Meta upgraded this call from an expired API version: ${metaWarning.trim().slice(0, 300)}`, via: 'meta' }
+  }
 
   const deprecation = rawDeprecation ? parseDeprecationValue(rawDeprecation) : { deprecated: false, at: null }
 

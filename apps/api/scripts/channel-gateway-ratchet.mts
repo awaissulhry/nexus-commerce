@@ -24,7 +24,7 @@ import * as path from 'node:path'
 import * as url from 'node:url'
 import ts from 'typescript'
 
-type Channel = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY' | 'GOOGLE'
+type Channel = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY' | 'GOOGLE' | 'META'
 
 /**
  * Sends outside the gateway allowed per channel. Lower a number in the same change that moves a path;
@@ -45,6 +45,10 @@ type Channel = 'EBAY' | 'AMAZON_SP' | 'AMAZON_ADS' | 'SHOPIFY' | 'ETSY' | 'GOOGL
  * 2026-10-13: Google joins at 0 (services/gateway/google.ts from its first call). Its hosts are every
  * `*.googleapis.com` and `accounts.google.com`, so a new Google API is counted the day it is first called —
  * except Gemini (`generativelanguage`, services/ai) and Google Fonts, which are not a sales channel (HOSTS below).
+ * 2026-10-20: Meta joins at 0 (services/gateway/meta.ts from its first call). Its hosts are the Graph API
+ * (`graph.facebook.com`, `graph-video.facebook.com`), the resumable upload host (`rupload.facebook.com`), the Instagram
+ * Graph API (`graph.instagram.com`) and the Facebook sign-in dialog, so a Meta call outside the gateway is counted the
+ * day it is written.
  */
 const BASELINE: Record<Channel, number> = {
   EBAY: 0,
@@ -53,6 +57,7 @@ const BASELINE: Record<Channel, number> = {
   SHOPIFY: 0,
   ETSY: 0,
   GOOGLE: 0,
+  META: 0,
 }
 
 const HOSTS: Array<[Channel, RegExp]> = [
@@ -64,6 +69,8 @@ const HOSTS: Array<[Channel, RegExp]> = [
   // Any Google API host (Ads, Merchant, Analytics, sign-in, and whatever Google API comes next) except two that are
   // not the Google channel: Gemini (`generativelanguage`, services/ai) and Google Fonts (stylesheets in eBay descriptions).
   ['GOOGLE', /(?<![\w.-])(?!(?:fonts|generativelanguage)\.googleapis\.com)(?:[\w-]+\.)*googleapis\.com|accounts\.google\.com/],
+  // Meta: the Graph and Marketing API, video and resumable uploads, the Instagram Graph API and the sign-in dialog.
+  ['META', /(graph|graph-video|rupload)\.facebook\.com|graph\.instagram\.com|www\.facebook\.com\/v?[\d.]*\/?dialog\/oauth/],
 ]
 /** The API path written in the call itself — decides before the file's hosts (a file can mix channels). */
 const API_PATHS: Array<[Channel, RegExp]> = [
@@ -75,6 +82,8 @@ const API_PATHS: Array<[Channel, RegExp]> = [
 const PATH_CHANNEL: Array<[Channel, RegExp]> = [
   // Before Amazon Ads: `marketing/google-ads/` is Google, not Amazon's `ads/`.
   ['GOOGLE', /connectors\/google\/|(^|\/)google(-ads)?\//i],
+  // Before Amazon Ads too: `marketing/meta-ads/` is Meta. A whole path segment only, never `metadata` or `readinessMeta`.
+  ['META', /connectors\/meta\/|(^|\/)meta(-ads)?\//i],
   ['AMAZON_ADS', /amazon-ads|advertising|(^|\/)ads[-/]/i],
   ['EBAY', /ebay/i],
   ['SHOPIFY', /shopify/i],
@@ -182,7 +191,7 @@ export function scanQueueRowCreation(root = SRC): Array<{ file: string; line: nu
 }
 
 export function counts(sites: Site[]): Record<Channel, number> {
-  const out: Record<Channel, number> = { EBAY: 0, AMAZON_SP: 0, AMAZON_ADS: 0, SHOPIFY: 0, ETSY: 0, GOOGLE: 0 }
+  const out: Record<Channel, number> = { EBAY: 0, AMAZON_SP: 0, AMAZON_ADS: 0, SHOPIFY: 0, ETSY: 0, GOOGLE: 0, META: 0 }
   for (const site of sites) if (!site.exempt) out[site.channel]++
   return out
 }

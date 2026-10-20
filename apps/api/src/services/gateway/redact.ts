@@ -14,8 +14,9 @@ const PERSONAL_KEY = /^(buyer.*|recipient.*|shipTo|shippingAddress|billingAddres
  * OAuth's form-encoded bodies (`grant_type=refresh_token&refresh_token=…&client_secret=…`) and the
  * answers some token endpoints give in the same shape: the value after each credential name is masked.
  * `code` is the one-time authorisation code; the boundary keeps `postal_code=` and `country_code=` intact.
+ * Meta (M1): `appsecret_proof`, the token being renewed (`fb_exchange_token`) and the one inspected (`input_token`).
  */
-const FORM_SECRET = /(^|[?&\s])(access_token|refresh_token|id_token|client_secret|code|code_verifier|token|assertion|client_assertion)=([^&\s]*)/gi
+const FORM_SECRET = /(^|[?&\s])(access_token|refresh_token|id_token|client_secret|code|code_verifier|token|assertion|client_assertion|appsecret_proof|fb_exchange_token|input_token)=([^&\s]*)/gi
 const MAX_DEPTH = 8
 export const LEDGER_BODY_MAX = 32 * 1024
 

@@ -7358,6 +7358,8 @@ model ChannelConnection {
   // tell apart cannot both be active. NULL until MAP.4 adds eBay's identity scope.
   // GOOGLE (the login's `sub`) is the one exception: the same login may be active
   // once per business (`ChannelConnection_google_active_login_key`, 20261013b).
+  // META (the system user's id) likewise: once per business
+  // (`ChannelConnection_meta_active_login_key`, 20261020e).
   externalAccountId String?
 
   connectionMetadata Json?
@@ -7422,6 +7424,8 @@ model ChannelConnection {
   shopifyOrderIngest       ShopifyOrderIngest[]
   // Google step 1a — the Google Ads / Merchant Center / GA4 account each business picked through this login.
   googleAccountLinks       GoogleAccountLink[]
+  // Meta M1 — the Meta ad account, Facebook Page and Instagram account each business picked through this system user.
+  metaAccountLinks         MetaAccountLink[]
 
   @@index([workspaceId, channelType])
   // The partial unique index `ChannelConnection_channelType_marketplace_active_key`
@@ -23431,5 +23435,255 @@ model GoogleAdsAutoApply {
   updatedAt        DateTime  @updatedAt
 
   @@unique([workspaceId, customerId, type], name: "google_ads_auto_apply")
+  @@index([workspaceId])
+}
+
+// ── Meta (Facebook + Instagram) ads, M1 (2026-10-20): connect a Meta system user per business and READ its ad account. ──
+// Nothing here is ever sent to Meta in M1 (the gateway lets only GET through). Ids are Meta's (digits; an ad account is
+// stored without its `act_` prefix). No foreign keys below the link: what was read outlives a disconnect, as for Google.
+// Money is stored in micros of the account currency (Meta's budgets come in the currency's own "offset" units and its
+// insights `spend` as a decimal string; each is turned into micros once, on read).
+
+/// The Meta assets a business picked through its Meta system user: one ad account, at most one Facebook Page and one
+/// Instagram account per business. One system user may be connected in many businesses (20261020e), but each Meta ad
+/// account, Page and Instagram id is chosen by ONE business only: (product, externalId) is unique across businesses. A
+/// disconnect deletes the business's rows, so another business may then choose them.
+model MetaAccountLink {
+  workspaceId      String            @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id               String            @id @default(cuid())
+  connectionId     String
+  connection       ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  /// AD_ACCOUNT | PAGE | INSTAGRAM
+  product          String
+  /// AD_ACCOUNT: the ad account id, digits only (no `act_`); PAGE: the Facebook Page id; INSTAGRAM: the Instagram account id.
+  externalId       String
+  /// The name a person reads (Meta's name, or a fallback sentence); never shown as an id.
+  label            String
+  metadata         Json?
+  selectedByUserId String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([workspaceId, product], name: "meta_link_product")
+  @@unique([product, externalId])
+  @@index([workspaceId])
+  @@index([connectionId])
+}
+
+/// One Meta ad account a business reads, its settings as last read, and the state of its daily read.
+model MetaAdAccount {
+  workspaceId            String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                     String    @id @default(cuid())
+  /// The META ChannelConnection the read goes through (no foreign key: the read history outlives a disconnect).
+  connectionId           String
+  /// Meta's account_id: digits only (the Graph node is `act_<id>`).
+  adAccountId            String
+  name                   String?
+  /// ISO 4217; every money column of this account's rows is in it (never converted).
+  currencyCode           String
+  /// IANA zone (timezone_name); Meta's insight days are days in this zone.
+  timeZone               String
+  timezoneOffsetHoursUtc Decimal?  @db.Decimal(5, 2)
+  /// account_status: 1 ACTIVE, 2 DISABLED, 3 UNSETTLED, 7 PENDING_RISK_REVIEW, 8 PENDING_SETTLEMENT, 9 IN_GRACE_PERIOD,
+  /// 100 PENDING_CLOSURE, 101 CLOSED. Null = not read yet.
+  accountStatus          Int?
+  /// disable_reason (0 NONE, 1 ADS_INTEGRITY_POLICY, 3 RISK_PAYMENT, …); null = not read yet.
+  disableReason          Int?
+  businessId             String?
+  businessName           String?
+  /// amount_spent, spend_cap (0 = no cap), balance and min_daily_budget, in micros of the account currency.
+  amountSpentMicros      BigInt?
+  spendCapMicros         BigInt?
+  balanceMicros          BigInt?
+  minDailyBudgetMicros   BigInt?
+  isPrepayAccount        Boolean?
+  /// The other settings as Meta sent them (capabilities, terms, failed delivery checks, brand-safety filter levels,
+  /// opportunity score, minimum budgets, ads volume, promoted Pages, Instagram accounts). Never a token.
+  settings               Json?
+  /// When the settings above were last read; null = never ("not read yet", never "off").
+  settingsReadAt         DateTime?
+  backfillCompletedAt    DateTime?
+  structureSyncedAt      DateTime?
+  /// The contiguous range of account days whose CAMPAIGN numbers were read: a day inside it with no row is a zero day; a
+  /// day outside it was never read (shown as "not read", never as zero). The other grains keep theirs in MetaAdsReadState.
+  metricsReadFrom        DateTime? @db.Date
+  metricsReadThrough     DateTime? @db.Date
+  /// When the last read that called Meta ended (any outcome), and when one last succeeded.
+  lastSyncAt             DateTime?
+  lastSuccessAt          DateTime?
+  /// SUCCESS | PARTIAL | FAILED | AUTH_LOST | THROTTLED
+  lastSyncStatus         String?
+  /// A plain sentence for a person; never a token, a request body or a person's name.
+  lastSyncError          String?
+  callsLastRun           Int?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@unique([workspaceId, adAccountId], name: "meta_ad_account")
+  @@index([workspaceId])
+  @@index([connectionId])
+}
+
+/// One Meta campaign, as the last read saw it.
+model MetaAdsCampaign {
+  workspaceId           String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                    String    @id @default(cuid())
+  adAccountId           String
+  campaignId            String
+  name                  String
+  /// status: ACTIVE | PAUSED | DELETED | ARCHIVED
+  status                String
+  /// effective_status: ACTIVE | PAUSED | DELETED | ARCHIVED | IN_PROCESS | WITH_ISSUES
+  effectiveStatus       String?
+  /// OUTCOME_SALES | OUTCOME_TRAFFIC | OUTCOME_AWARENESS | OUTCOME_ENGAGEMENT | OUTCOME_LEADS | OUTCOME_APP_PROMOTION | …
+  objective             String?
+  buyingType            String?
+  bidStrategy           String?
+  /// Campaign budget (Advantage+ campaign budget); null = the budget is on the ad sets.
+  dailyBudgetMicros     BigInt?
+  lifetimeBudgetMicros  BigInt?
+  budgetRemainingMicros BigInt?
+  spendCapMicros        BigInt?
+  startTime             DateTime?
+  stopTime              DateTime?
+  createdTimeMeta       DateTime?
+  updatedTimeMeta       DateTime?
+  currencyCode          String
+  firstSeenAt           DateTime  @default(now())
+  lastSeenAt            DateTime
+  /// Set when a full read no longer returns the campaign (deleted at Meta, or no longer visible).
+  removedAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([workspaceId, adAccountId, campaignId], name: "meta_ads_campaign")
+  @@index([workspaceId])
+  @@index([adAccountId, status])
+}
+
+/// One Meta ad set, as the last read saw it.
+model MetaAdsAdSet {
+  workspaceId           String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                    String    @id @default(cuid())
+  adAccountId           String
+  campaignId            String
+  adSetId               String
+  name                  String
+  status                String
+  /// effective_status: ACTIVE | PAUSED | DELETED | CAMPAIGN_PAUSED | ARCHIVED | IN_PROCESS | WITH_ISSUES
+  effectiveStatus       String?
+  optimizationGoal      String?
+  billingEvent          String?
+  bidStrategy           String?
+  bidAmountMicros       BigInt?
+  dailyBudgetMicros     BigInt?
+  lifetimeBudgetMicros  BigInt?
+  budgetRemainingMicros BigInt?
+  destinationType       String?
+  startTime             DateTime?
+  endTime               DateTime?
+  /// The targeting as Meta sent it (countries, ages, placements, Advantage+ audience …), for reading only.
+  targeting             Json?
+  currencyCode          String
+  firstSeenAt           DateTime  @default(now())
+  lastSeenAt            DateTime
+  removedAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([workspaceId, adAccountId, adSetId], name: "meta_ads_ad_set")
+  @@index([workspaceId])
+  @@index([adAccountId, campaignId])
+}
+
+/// One Meta ad, as the last read saw it (with a summary of its creative).
+model MetaAdsAd {
+  workspaceId     String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id              String    @id @default(cuid())
+  adAccountId     String
+  campaignId      String
+  adSetId         String
+  adId            String
+  name            String
+  status          String
+  /// effective_status: ACTIVE | PAUSED | DELETED | PENDING_REVIEW | DISAPPROVED | PREAPPROVED | PENDING_BILLING_INFO |
+  /// CAMPAIGN_PAUSED | ARCHIVED | ADSET_PAUSED | IN_PROCESS | WITH_ISSUES
+  effectiveStatus String?
+  creativeId      String?
+  /// The creative's name, title, body and object type as Meta sent them (never an image's bytes).
+  creative        Json?
+  /// issues_info and failed delivery checks as Meta sent them.
+  issues          Json?
+  createdTimeMeta DateTime?
+  updatedTimeMeta DateTime?
+  firstSeenAt     DateTime  @default(now())
+  lastSeenAt      DateTime
+  removedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([workspaceId, adAccountId, adId], name: "meta_ads_ad")
+  @@index([workspaceId])
+  @@index([adAccountId, adSetId])
+}
+
+/// One day of Meta numbers for one entity (CAMPAIGN, ADSET or AD), from Meta's insights with the ad set's own
+/// attribution (use_unified_attribution_setting). A day is replaced whole on every read of it (Meta restates recent days).
+model MetaAdsDailyMetric {
+  workspaceId         String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String   @id @default(cuid())
+  adAccountId         String
+  /// The account's own day (date_start of a one-day row).
+  date                DateTime @db.Date
+  /// CAMPAIGN | ADSET | AD
+  entityType          String
+  /// The entity's Meta id at that grain.
+  entityId            String
+  campaignId          String
+  adSetId             String?
+  label               String?
+  impressions         Int      @default(0)
+  reach               Int?
+  clicks              Int      @default(0)
+  linkClicks          Int?
+  /// insights `spend` (a decimal in currency units), in micros of the account currency.
+  spendMicros         BigInt   @default(0)
+  /// Purchases Meta attributes (actions of the purchase type named in `extra.purchaseActionType`).
+  purchases           Decimal  @default(0) @db.Decimal(14, 4)
+  purchaseValueMicros BigInt   @default(0)
+  currencyCode        String
+  /// Other numbers as Meta sent them (the purchase action type used, frequency …).
+  extra               Json?
+  pulledAt            DateTime
+  createdAt           DateTime @default(now())
+
+  @@unique([workspaceId, adAccountId, entityType, entityId, date], name: "meta_ads_daily_metric")
+  @@index([workspaceId])
+  @@index([adAccountId, entityType, date])
+  @@index([campaignId, date])
+}
+
+/// The state of one step of the daily read of one Meta ad account (the campaign days stay on MetaAdAccount). No row, or
+/// readAt null = never read: "Not read yet", never zero.
+model MetaAdsReadState {
+  workspaceId   String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id            String    @id @default(cuid())
+  adAccountId   String
+  /// ACCOUNT | CAMPAIGNS | ADSETS | ADS | ADSET_DAYS | AD_DAYS
+  resource      String
+  /// *_DAYS only: the contiguous range of account days read.
+  readFrom      DateTime? @db.Date
+  readThrough   DateTime? @db.Date
+  readAt        DateTime?
+  lastAttemptAt DateTime?
+  /// SUCCESS | FAILED
+  lastStatus    String?
+  /// A plain sentence for a person; never a token or a request body.
+  lastError     String?
+  rows          Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([workspaceId, adAccountId, resource], name: "meta_ads_read_state")
   @@index([workspaceId])
 }

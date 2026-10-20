@@ -101,7 +101,7 @@ function envValue(name: string): string | null {
 }
 
 type AccountEnvironment = 'production' | 'sandbox'
-const CHANNEL_LABEL: Record<GatewayChannel, string> = { EBAY: 'eBay', AMAZON_SP: 'Amazon', AMAZON_ADS: 'Amazon Ads', SHOPIFY: 'Shopify', ETSY: 'Etsy', GOOGLE: 'Google' }
+const CHANNEL_LABEL: Record<GatewayChannel, string> = { EBAY: 'eBay', AMAZON_SP: 'Amazon', AMAZON_ADS: 'Amazon Ads', SHOPIFY: 'Shopify', ETSY: 'Etsy', GOOGLE: 'Google', META: 'Meta' }
 
 /** The named account's environment, read the way the token service reads it; null = no such account. */
 async function accountEnvironmentOf(connectionId: string): Promise<AccountEnvironment | null> {

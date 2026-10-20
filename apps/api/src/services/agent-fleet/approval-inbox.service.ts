@@ -895,6 +895,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-google-user-access': ['basis', 'plan', 'reach'],
   'set-google-account-links': ['basis', 'plan', 'reach'],
   'set-google-billing': ['basis', 'plan', 'reach'],
+  // Meta step 1 (Owner 2026-10-20 "yes 1") — the business's Meta ad account, Page and Instagram account, by id: the choice
+  // it starts from (basis), the one it saves (plan) and where it lands (Nexus only, on which connection).
+  'set-meta-connection': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

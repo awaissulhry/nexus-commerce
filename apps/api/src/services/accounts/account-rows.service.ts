@@ -15,7 +15,7 @@ import { scopeDriftOf, tryGetChannelSpec, channelKeyOf } from "../cx/catalog.js"
 import { connectionLabel } from "../connection-label.js";
 import { logger } from "../../utils/logger.js";
 
-export type Channel = "AMAZON" | "AMAZON_ADS" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY" | "GOOGLE";
+export type Channel = "AMAZON" | "AMAZON_ADS" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY" | "GOOGLE" | "META";
 
 /**
  * One market / profile the grant reaches. `state` is set on an Amazon Ads profile only: what Nexus does with it, from
@@ -41,6 +41,7 @@ const CHANNEL_ORDER: Record<string, number> = {
   WOOCOMMERCE: 3,
   ETSY: 4,
   GOOGLE: 5,
+  META: 6,
 };
 
 type Health = "ok" | "warn" | "error" | "unknown";
@@ -218,6 +219,26 @@ async function attachGoogleHealth(accounts: AccountRow[]): Promise<void> {
   }
 }
 
+/**
+ * Meta ads M1 — a Meta connection is healthy only when its token is valid and it reads something: the token's state
+ * (valid, expiry, permissions), then "Choose a Meta ad account", then the state of its read
+ * (services/meta/meta-accounts.service.ts). Never fails the list: a Meta problem leaves the rows as they were.
+ */
+async function attachMetaHealth(accounts: AccountRow[]): Promise<void> {
+  const meta = accounts.filter((a) => a.channel === "META" && a.isActive && a.health !== "error");
+  if (meta.length === 0) return;
+  try {
+    const { metaConnectionHealth } = await import("../meta/meta-accounts.service.js");
+    const health = await metaConnectionHealth();
+    for (const account of meta) {
+      const state = health.get(account.id);
+      if (state) Object.assign(account, state);
+    }
+  } catch (err) {
+    logger.warn("[accounts] Meta health not read", { error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 function hasAnyChannelWithTwo(accounts: AccountRow[]): boolean {
   const counts = new Map<string, number>();
   for (const a of accounts) counts.set(a.channel, (counts.get(a.channel) ?? 0) + 1);
@@ -275,6 +296,7 @@ export async function listAccountRows({ includeDisconnected }: { includeDisconne
     );
 
   await attachGoogleHealth(accounts);
+  await attachMetaHealth(accounts);
 
   const connectedChannels = new Set(accounts.map((a) => a.channel));
   const notConnected = ACTIVE_CHANNELS.filter((c) => !connectedChannels.has(c));

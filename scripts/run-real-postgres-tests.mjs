@@ -52,6 +52,10 @@
  *   · `fiscal-numbering-postgres.vitest.test.ts` (MCP full control #14, 2026-10-01) — invoice and credit-note numbers:
  *     the counter's ON CONFLICT target must be its real key, and a forced race numbers 1…N with no duplicate or gap;
  *     two businesses numbering the same year at the same moment each get their own series (plan O2).
+ *   · `services/meta/meta-links-postgres.vitest.test.ts` (Meta step 1, 2026-10-20) — one Meta ad account, Page or Instagram
+ *     account in ONE business: the SECURITY DEFINER function that tells a business which of the ids it asks about another
+ *     business uses (never which), set-meta-connection across two businesses under the real unique index, and the Meta
+ *     token's expiry warning once per level and expiry date.
  *   · `services/identity/identity-foreign-postgres.vitest.test.ts` (MCP full control I5, 2026-10-01) — the SECURITY DEFINER
  *     function that tells a business which of its own channel ids another business holds: as the runtime login, with
  *     members and non-members, it must name nothing it may not and answer no id the caller does not hold.
@@ -336,6 +340,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'Shopify sheet root-creation proof (one action across 1,000-cell requests; business, account, family, alias and actor bounds; recreated roots; current cell state; expiry; refusal, rollback and a forced first-create race; lost answer)', file: 'src/services/shopify/channel-sheet-root-proof-postgres.vitest.test.ts', expect: 18 },
   { name: 'Claude for one business never reaches another (MCP.8: every tool with the other business\'s ids, header and query, membership, role, revocation, approvals, tool policy, one URL per business and the same SKU in both, trust levels, Pause and activity, shared accounts, canary scan)', file: 'src/routes/mcp-cross-business-postgres.vitest.test.ts', expect: 26 },
   { name: 'identity: own channel ids another business holds, named only to its members (MCP full control I5: no probe, deleted and ASIN ignored, runtime-only EXECUTE, audit check #2)', file: 'src/services/identity/identity-foreign-postgres.vitest.test.ts', expect: 8 },
+  { name: 'Meta: one Meta id in one business (nexus_meta_links_taken answers only ids asked, never which business, runtime-only EXECUTE; a taken asset by id only; set-meta-connection refused, saved and undone across two businesses; one expiry warning per level and expiry)', file: 'src/services/meta/meta-links-postgres.vitest.test.ts', expect: 8 },
   { name: 'identity: a merge against a concurrent stock write or order (MCP full control I11: the merge waits and refuses, two merges of one duplicate — one wins)', file: 'src/services/identity/identity-merge-postgres.vitest.test.ts', expect: 5 },
   { name: 'a 200-step change plan (MCP full control C6: one approval, a stopped worker resumed, two workers at once, each step exactly once, a stale step skipped)', file: 'src/services/agents/change-plan-postgres.vitest.test.ts', expect: 2 },
   { name: 'identity: one channel item, two businesses, the same moment (MCP full control I12: report mode both succeed with one claim; enforce mode one wins)', file: 'src/services/identity/channel-item-claim-postgres.vitest.test.ts', expect: 2 },

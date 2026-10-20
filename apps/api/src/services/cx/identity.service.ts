@@ -42,9 +42,10 @@ export async function placeGrant(input: {
   region?: string | null
 }): Promise<GrantPlacement> {
   const { channelType, channelLabel, identity, targetConnectionId } = input
-  // GOOGLE: one login may be connected in many businesses, each on its own row (20261013b). Match and fold only into
-  // this business's own rows, never into a row another business shares with it (its write would be refused).
-  const ownWorkspaceId = channelType === 'GOOGLE' ? workspaceIdForQuery() : undefined
+  // GOOGLE: one login may be connected in many businesses, each on its own row (20261013b); META: one system user
+  // likewise (20261020e). Match and fold only into this business's own rows, never into a row another business shares
+  // with it (its write would be refused).
+  const ownWorkspaceId = channelType === 'GOOGLE' || channelType === 'META' ? workspaceIdForQuery() : undefined
   const findAccount = (externalAccountId: string) => findAccountByExternalId(channelType, externalAccountId, undefined, ownWorkspaceId)
   const notOwn = (target: { workspaceId: string } | null) => Boolean(ownWorkspaceId && target && target.workspaceId !== ownWorkspaceId)
 

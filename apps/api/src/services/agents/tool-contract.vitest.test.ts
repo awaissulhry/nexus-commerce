@@ -857,6 +857,11 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { action: 'link-merchant-center', merchantCenterId: '555', state: 'none', accountId: 'g-1' },
         after: { action: 'link-merchant-center', merchantCenterId: '555', state: 'linked', accountId: 'g-1', customerId: '1234567890' },
       },
+      // Meta step 1: the previous ad account, Page and Instagram account go back (a first choice cannot be taken away).
+      'set-meta-connection': {
+        before: { connectionId: 'conn-1', adAccountId: '1234567890', pageId: null, instagramId: null },
+        after: { connectionId: 'conn-1', adAccountId: '1234567891', pageId: '120000000000010', instagramId: null },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1002,7 +1007,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       .filter((t) => !AD_STRATEGY_AUTO.includes(t.name) && !(t.name in ALWAYS_ASK_ABOVE_ASK))
       .map((t) => t.name)
     expect(outside).toEqual([])
-    // Refunds, fiscal numbers, messages, publishing, eBay and Google ads and Amazon spend: a person approves each in Nexus.
+    // Refunds, fiscal numbers, messages, publishing, eBay and Google ads, Amazon spend and the business's Meta assets: a
+    // person approves each in Nexus.
     const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
       'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-google-budget', 'set-google-negative-list',
@@ -1024,7 +1030,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-conversion-actions', 'remove-google-conversion-actions', 'set-google-conversion-goals', 'set-google-value-rules',
       'set-google-custom-goals', 'set-google-custom-audiences', 'set-google-user-lists', 'set-google-reusable-audiences',
       'upload-google-sales', 'adjust-google-sales',
-      'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions']) {
+      'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
+      'set-meta-connection']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

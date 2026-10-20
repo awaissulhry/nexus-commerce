@@ -206,6 +206,12 @@ export const ENTRIES: Entry[] = [
   // Google Ads step 1a — the read-only Google Ads tab (R1–R4) and its "Read now" (the ads sync permission).
   P(F.adsView, (m, p) => isRead(m) && /^\/api\/google-ads\/(overview|campaigns(\/[^/]+\/(days|changes))?|ad-groups|keywords|negatives|search-terms|brand-split|asset-groups|products|acts-on-its-own|recommendations|alerts|disapprovals)$/.test(p)),
   P(F.adsCampaignsManage, (m, p) => m.toUpperCase() === 'POST' && p === '/api/google-ads/sync'),
+  // Meta ads step 1 — the Meta connection: connecting and replacing its credentials (app id, app secret, system-user
+  // token) is connecting a channel; its health, token check and asset list are integration management; the asset choice
+  // is connecting ads (as Google's).
+  P(F.channelsConnect, (m, p) => (m.toUpperCase() === 'POST' && p === '/api/meta-ads/connect') || (m.toUpperCase() === 'PUT' && /^\/api\/meta-ads\/connections\/[^/]+\/credentials$/.test(p))),
+  P(F.settingsIntegrationsManage, (m, p) => (isRead(m) && (p === '/api/meta-ads/connections' || /^\/api\/meta-ads\/connections\/[^/]+\/choices$/.test(p))) || (m.toUpperCase() === 'POST' && /^\/api\/meta-ads\/connections\/[^/]+\/token-check$/.test(p))),
+  P(F.adsConnect, (m, p) => m.toUpperCase() === 'PUT' && /^\/api\/meta-ads\/connections\/[^/]+\/selection$/.test(p)),
   P(F.settingsIntegrationsManage, pfx('/api/cx/channels')),
   // P3.6 — the channel health dashboard and the per-change trace. Read-only, and the
   // same people who manage connections: both answer questions ABOUT the channels this

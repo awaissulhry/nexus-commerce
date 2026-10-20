@@ -252,6 +252,34 @@ describe.runIf(canRun)('bootstrap-fresh-database.mjs — isolation, not just sch
     })
   })
 
+  it('META like GOOGLE: one system user active once in each business, never twice in one; no single owner; each Meta id picked by ONE business', async () => {
+    await asRuntime(async c => {
+      const insert = (id: string, workspaceId: string, external: string) => c.query(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","isActive","updatedAt")
+        VALUES ($1,$2,'META',$3,true,now())`, [id, workspaceId, external])
+      const link = (id: string, workspaceId: string, connectionId: string, externalId: string) => c.query(`INSERT INTO "MetaAccountLink" (id,"workspaceId","connectionId",product,"externalId",label,"selectedByUserId","updatedAt")
+        VALUES ($1,$2,$3,'AD_ACCOUNT',$4,'Shop A','u-1',now())`, [id, workspaceId, connectionId, externalId])
+      const inBusiness = (workspaceId: string) => c.query("SELECT set_config('nexus.workspace_id', $1, true)", [workspaceId])
+      const refused = async (work: () => Promise<unknown>, constraint: string) => {
+        await c.query('SAVEPOINT refusal')
+        await expect(work()).rejects.toMatchObject({ code: '23505', constraint })
+        await c.query('ROLLBACK TO SAVEPOINT refusal')
+      }
+      await insert('meta-user-here', 'nexus_legacy_workspace', '120000000000001')
+      await refused(() => insert('meta-user-twice', 'nexus_legacy_workspace', '120000000000001'), 'ChannelConnection_meta_active_login_key')
+      await link('meta-link-here', 'nexus_legacy_workspace', 'meta-user-here', '1234567890')
+      const taken = await c.query(`SELECT * FROM nexus_meta_links_taken('AD_ACCOUNT', ARRAY['1234567890'])`)
+      expect(taken.rows).toEqual([])
+      await inBusiness('bootstrap-other-profile')
+      await insert('meta-user-other', 'bootstrap-other-profile', '120000000000001')
+      const takenElsewhere = await c.query(`SELECT * FROM nexus_meta_links_taken('AD_ACCOUNT', ARRAY['1234567890','1234567891']) AS t(id)`)
+      expect(takenElsewhere.rows.map((r: { id: string }) => r.id)).toEqual(['1234567890'])
+      await refused(() => link('meta-link-other', 'bootstrap-other-profile', 'meta-user-other', '1234567890'), 'MetaAccountLink_product_externalId_key')
+      await inBusiness('nexus_legacy_workspace')
+      const owned = await c.query(`SELECT count(*)::int AS n FROM "ChannelAccountOwnership" WHERE "channelType" = 'META'`)
+      expect(owned.rows[0].n).toBe(0)
+    })
+  })
+
   it('permits a primary in each profile but refuses a second primary in one profile/channel', async () => {
     await asRuntime(async c => {
       const insert = (id: string, workspaceId: string) => c.query(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","isPrimary","updatedAt")

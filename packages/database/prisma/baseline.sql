@@ -11420,6 +11420,189 @@ CREATE TABLE "GoogleAdsAutoApply" (
     CONSTRAINT "GoogleAdsAutoApply_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "MetaAccountLink" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "product" TEXT NOT NULL,
+    "externalId" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "metadata" JSONB,
+    "selectedByUserId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "MetaAccountLink_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MetaAdAccount" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "connectionId" TEXT NOT NULL,
+    "adAccountId" TEXT NOT NULL,
+    "name" TEXT,
+    "currencyCode" TEXT NOT NULL,
+    "timeZone" TEXT NOT NULL,
+    "timezoneOffsetHoursUtc" DECIMAL(5,2),
+    "accountStatus" INTEGER,
+    "disableReason" INTEGER,
+    "businessId" TEXT,
+    "businessName" TEXT,
+    "amountSpentMicros" BIGINT,
+    "spendCapMicros" BIGINT,
+    "balanceMicros" BIGINT,
+    "minDailyBudgetMicros" BIGINT,
+    "isPrepayAccount" BOOLEAN,
+    "settings" JSONB,
+    "settingsReadAt" TIMESTAMP(3),
+    "backfillCompletedAt" TIMESTAMP(3),
+    "structureSyncedAt" TIMESTAMP(3),
+    "metricsReadFrom" DATE,
+    "metricsReadThrough" DATE,
+    "lastSyncAt" TIMESTAMP(3),
+    "lastSuccessAt" TIMESTAMP(3),
+    "lastSyncStatus" TEXT,
+    "lastSyncError" TEXT,
+    "callsLastRun" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "MetaAdAccount_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MetaAdsCampaign" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "adAccountId" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "effectiveStatus" TEXT,
+    "objective" TEXT,
+    "buyingType" TEXT,
+    "bidStrategy" TEXT,
+    "dailyBudgetMicros" BIGINT,
+    "lifetimeBudgetMicros" BIGINT,
+    "budgetRemainingMicros" BIGINT,
+    "spendCapMicros" BIGINT,
+    "startTime" TIMESTAMP(3),
+    "stopTime" TIMESTAMP(3),
+    "createdTimeMeta" TIMESTAMP(3),
+    "updatedTimeMeta" TIMESTAMP(3),
+    "currencyCode" TEXT NOT NULL,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL,
+    "removedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "MetaAdsCampaign_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MetaAdsAdSet" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "adAccountId" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "adSetId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "effectiveStatus" TEXT,
+    "optimizationGoal" TEXT,
+    "billingEvent" TEXT,
+    "bidStrategy" TEXT,
+    "bidAmountMicros" BIGINT,
+    "dailyBudgetMicros" BIGINT,
+    "lifetimeBudgetMicros" BIGINT,
+    "budgetRemainingMicros" BIGINT,
+    "destinationType" TEXT,
+    "startTime" TIMESTAMP(3),
+    "endTime" TIMESTAMP(3),
+    "targeting" JSONB,
+    "currencyCode" TEXT NOT NULL,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL,
+    "removedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "MetaAdsAdSet_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MetaAdsAd" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "adAccountId" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "adSetId" TEXT NOT NULL,
+    "adId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "effectiveStatus" TEXT,
+    "creativeId" TEXT,
+    "creative" JSONB,
+    "issues" JSONB,
+    "createdTimeMeta" TIMESTAMP(3),
+    "updatedTimeMeta" TIMESTAMP(3),
+    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL,
+    "removedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "MetaAdsAd_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MetaAdsDailyMetric" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "adAccountId" TEXT NOT NULL,
+    "date" DATE NOT NULL,
+    "entityType" TEXT NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "adSetId" TEXT,
+    "label" TEXT,
+    "impressions" INTEGER NOT NULL DEFAULT 0,
+    "reach" INTEGER,
+    "clicks" INTEGER NOT NULL DEFAULT 0,
+    "linkClicks" INTEGER,
+    "spendMicros" BIGINT NOT NULL DEFAULT 0,
+    "purchases" DECIMAL(14,4) NOT NULL DEFAULT 0,
+    "purchaseValueMicros" BIGINT NOT NULL DEFAULT 0,
+    "currencyCode" TEXT NOT NULL,
+    "extra" JSONB,
+    "pulledAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "MetaAdsDailyMetric_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MetaAdsReadState" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "adAccountId" TEXT NOT NULL,
+    "resource" TEXT NOT NULL,
+    "readFrom" DATE,
+    "readThrough" DATE,
+    "readAt" TIMESTAMP(3),
+    "lastAttemptAt" TIMESTAMP(3),
+    "lastStatus" TEXT,
+    "lastError" TEXT,
+    "rows" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "MetaAdsReadState_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE INDEX "Product_gtin_idx" ON "Product"("gtin");
 
@@ -17186,6 +17369,72 @@ CREATE INDEX "GoogleAdsAutoApply_workspaceId_idx" ON "GoogleAdsAutoApply"("works
 -- CreateIndex
 CREATE UNIQUE INDEX "GoogleAdsAutoApply_workspaceId_customerId_type_key" ON "GoogleAdsAutoApply"("workspaceId", "customerId", "type");
 
+-- CreateIndex
+CREATE INDEX "MetaAccountLink_workspaceId_idx" ON "MetaAccountLink"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "MetaAccountLink_connectionId_idx" ON "MetaAccountLink"("connectionId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MetaAccountLink_workspaceId_product_key" ON "MetaAccountLink"("workspaceId", "product");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MetaAccountLink_product_externalId_key" ON "MetaAccountLink"("product", "externalId");
+
+-- CreateIndex
+CREATE INDEX "MetaAdAccount_workspaceId_idx" ON "MetaAdAccount"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "MetaAdAccount_connectionId_idx" ON "MetaAdAccount"("connectionId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MetaAdAccount_workspaceId_adAccountId_key" ON "MetaAdAccount"("workspaceId", "adAccountId");
+
+-- CreateIndex
+CREATE INDEX "MetaAdsCampaign_workspaceId_idx" ON "MetaAdsCampaign"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "MetaAdsCampaign_adAccountId_status_idx" ON "MetaAdsCampaign"("adAccountId", "status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MetaAdsCampaign_workspaceId_adAccountId_campaignId_key" ON "MetaAdsCampaign"("workspaceId", "adAccountId", "campaignId");
+
+-- CreateIndex
+CREATE INDEX "MetaAdsAdSet_workspaceId_idx" ON "MetaAdsAdSet"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "MetaAdsAdSet_adAccountId_campaignId_idx" ON "MetaAdsAdSet"("adAccountId", "campaignId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MetaAdsAdSet_workspaceId_adAccountId_adSetId_key" ON "MetaAdsAdSet"("workspaceId", "adAccountId", "adSetId");
+
+-- CreateIndex
+CREATE INDEX "MetaAdsAd_workspaceId_idx" ON "MetaAdsAd"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "MetaAdsAd_adAccountId_adSetId_idx" ON "MetaAdsAd"("adAccountId", "adSetId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MetaAdsAd_workspaceId_adAccountId_adId_key" ON "MetaAdsAd"("workspaceId", "adAccountId", "adId");
+
+-- CreateIndex
+CREATE INDEX "MetaAdsDailyMetric_workspaceId_idx" ON "MetaAdsDailyMetric"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "MetaAdsDailyMetric_adAccountId_entityType_date_idx" ON "MetaAdsDailyMetric"("adAccountId", "entityType", "date");
+
+-- CreateIndex
+CREATE INDEX "MetaAdsDailyMetric_campaignId_date_idx" ON "MetaAdsDailyMetric"("campaignId", "date");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MetaAdsDailyMetric_workspaceId_adAccountId_entityType_entit_key" ON "MetaAdsDailyMetric"("workspaceId", "adAccountId", "entityType", "entityId", "date");
+
+-- CreateIndex
+CREATE INDEX "MetaAdsReadState_workspaceId_idx" ON "MetaAdsReadState"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MetaAdsReadState_workspaceId_adAccountId_resource_key" ON "MetaAdsReadState"("workspaceId", "adAccountId", "resource");
+
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "ProductFamily"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
@@ -18286,4 +18535,7 @@ ALTER TABLE "ChannelItemClaim" ADD CONSTRAINT "ChannelItemClaim_workspaceId_fkey
 
 -- AddForeignKey
 ALTER TABLE "GoogleAccountLink" ADD CONSTRAINT "GoogleAccountLink_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MetaAccountLink" ADD CONSTRAINT "MetaAccountLink_connectionId_fkey" FOREIGN KEY ("connectionId") REFERENCES "ChannelConnection"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

@@ -33,6 +33,7 @@ import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock
 import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade } from './account.js'
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
+import { metaAppSecretProof, metaCallVerdict, metaSendUrl, scrubMetaAnswer } from './meta-calls.js'
 import { writeLedgerRow } from './ledger.js'
 import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
@@ -76,8 +77,12 @@ export interface GatewayRequest {
   headers?: Record<string, string>
   /** Text, or a file upload (FormData / bytes). The ledger keeps text bodies (made safe) and only the size of a file. */
   body?: GatewayBody
-  /** How the call is authorised: the account's token (default), a token the caller holds, or none. */
-  auth?: 'account' | 'none' | { token: string }
+  /**
+   * How the call is authorised: the account's token (default), a token the caller holds, or none. Meta only: 'app' =
+   * the connection's own Meta app token (`app-id|app-secret`, for debug_token), and a caller-held token may come with
+   * its app secret (the connect-time check, before the connection holds them) so the gateway can sign it.
+   */
+  auth?: 'account' | 'none' | 'app' | { token: string; appSecret?: string }
   marketplace?: string | null
   /** eBay: one of the market's content languages (Marketplace.languages); default = the market's first. */
   contentLanguage?: string | null
@@ -148,8 +153,8 @@ export class GatewayRefusal extends Error {
   }
 }
 
-const CHANNEL_NAME: Record<GatewayChannel, string> = { EBAY: 'eBay', AMAZON_SP: 'Amazon', SHOPIFY: 'Shopify', AMAZON_ADS: 'Amazon Ads', ETSY: 'Etsy', GOOGLE: 'Google' }
-const LEDGER_CHANNEL: Record<GatewayChannel, 'EBAY' | 'AMAZON' | 'SHOPIFY' | 'AMAZON_ADS' | 'ETSY' | 'GOOGLE'> = { EBAY: 'EBAY', AMAZON_SP: 'AMAZON', SHOPIFY: 'SHOPIFY', AMAZON_ADS: 'AMAZON_ADS', ETSY: 'ETSY', GOOGLE: 'GOOGLE' }
+const CHANNEL_NAME: Record<GatewayChannel, string> = { EBAY: 'eBay', AMAZON_SP: 'Amazon', SHOPIFY: 'Shopify', AMAZON_ADS: 'Amazon Ads', ETSY: 'Etsy', GOOGLE: 'Google', META: 'Meta' }
+const LEDGER_CHANNEL: Record<GatewayChannel, 'EBAY' | 'AMAZON' | 'SHOPIFY' | 'AMAZON_ADS' | 'ETSY' | 'GOOGLE' | 'META'> = { EBAY: 'EBAY', AMAZON_SP: 'AMAZON', SHOPIFY: 'SHOPIFY', AMAZON_ADS: 'AMAZON_ADS', ETSY: 'ETSY', GOOGLE: 'GOOGLE', META: 'META' }
 
 /** A stable idempotency key for a write: the same parts always give the same key. */
 export function idempotencyKeyFor(...parts: unknown[]): string {
@@ -160,6 +165,10 @@ async function tokenFor(req: GatewayRequest): Promise<string | null> {
   if (req.auth === 'none') return null
   if (req.auth && typeof req.auth === 'object') return req.auth.token
   if (!req.connectionId) return null
+  if (req.auth === 'app') {
+    if (req.channel !== 'META') throw new Error('an app token is a Meta call\'s only')
+    return (await import('../cx/token.service.js')).metaAppAccessToken(req.connectionId)
+  }
   if (req.channel === 'AMAZON_SP') return (await import('../../lib/amazon-sp-client.js')).getAmazonAccessToken(req.connectionId)
   return (await import('../cx/token.service.js')).getAccessToken(req.connectionId)
 }
@@ -313,6 +322,22 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     }
   }
 
+  // 1d. Meta (M1, 2026-10-20) — Nexus only READS Meta: a GET with no body, to the pinned Graph version, that is not a
+  // method override, a batch, a token revoke or any sign-in call but the system-user token renewal (meta-calls.ts).
+  // Refused before the account, the token or the network, by the kind declared AND by the method and URL themselves.
+  let metaRenewal = false
+  if (req.channel === 'META') {
+    // One verdict on one canonical parse (meta-calls.ts): the refusal, and for the renewal the client_id it names.
+    const judged = metaCallVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
+    if (judged.problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${judged.problem} (${req.method} ${safePath(req.url)}).`, 403)
+    // The renewal names the app it is for: it must be THIS connection's own app, never another.
+    if (judged.renewalClientId !== null) {
+      const appId = req.connectionId ? await (await import('../cx/token.service.js')).metaAppIdOf(req.connectionId) : null
+      if (!appId || judged.renewalClientId !== appId) return refuse('refused', 'META_READ_ONLY', 'Nothing was sent to Meta: a token renewal is sent only for the connection\'s own Meta app.', 403)
+      metaRenewal = true
+    }
+  }
+
   // 2. status
   if (req.connectionId) {
     const account = await accountStatusOf(req.connectionId)
@@ -394,6 +419,35 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     ...marketHeaders,
     ...(token ? authHeadersOf(req.channel, token) : {}),
   }
+  // Meta: the token and its appsecret_proof go on the URL that is sent (never on `url`, which the ledger, the trace and
+  // the answer carry). The proof is made from the app secret the token service holds for this connection, or from the
+  // one a connect-time caller passes; with neither, nothing is sent.
+  let sendUrl = url
+  if (req.channel === 'META' && token) {
+    let proof: { appsecret_proof: string; appsecret_time: string } | null = null
+    try {
+      proof = req.auth && typeof req.auth === 'object'
+        ? (req.auth.appSecret ? metaAppSecretProof(token, req.auth.appSecret) : null)
+        : req.connectionId ? await (await import('../cx/token.service.js')).metaRequestProof(req.connectionId, token) : null
+    } catch (err) {
+      return refuse('held', 'META_APP_SECRET_UNAVAILABLE', `Held, nothing sent: the Meta app secret of this account could not be read (${err instanceof Error ? err.message : String(err)}).`, 409)
+    }
+    if (!proof) return refuse('held', 'META_APP_SECRET_UNAVAILABLE', 'Held, nothing sent: no Meta app secret is stored for this account, so the call cannot carry its appsecret_proof. Enter the app id and secret again in Settings → Channels → Meta.', 409)
+    sendUrl = metaSendUrl(url, token, proof)
+  }
+  // Review 3 — the token a renewal exchanges is the connection's own stored token, filled here (a caller cannot name one:
+  // meta-calls.ts refuses it). Like the token above, it goes only on the URL that is sent.
+  if (req.channel === 'META' && metaRenewal) {
+    let current: string
+    try {
+      current = await (await import('../cx/token.service.js')).metaRenewalToken(req.connectionId!)
+    } catch (err) {
+      return refuse('held', 'META_TOKEN_UNAVAILABLE', `Held, nothing sent: the stored Meta token of this account could not be read (${err instanceof Error ? err.message : String(err)}).`, 409)
+    }
+    const renewal = new URL(url)
+    renewal.searchParams.set('fb_exchange_token', current)
+    sendUrl = renewal.toString()
+  }
   if (req.channel === 'EBAY' && (req.sign || ebaySignatureAppliesTo(url, req.method))) {
     if (req.body != null && typeof req.body !== 'string') {
       return refuse('refused', 'SIGNING_BINARY_BODY', 'Nothing was sent to eBay: a signed call with a file body is not supported by the gateway.', 400)
@@ -416,6 +470,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   let timedOut = false
   let reading: { remaining?: number; limit?: number; retryAfterSec?: number } | null = null
   let graphqlErrors = false
+  let metaScrubbed = 0
   for (;;) {
     const slot = await takeToken(req.channel, key, req.maxRateWaitMs ?? 30_000)
     if (!slot.ok) {
@@ -426,10 +481,16 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     try {
       // Never follow a redirect: a channel call carries its token in a header, and a custom token header
       // (x-amz-access-token, X-Shopify-Access-Token) would travel to the redirect's host.
-      const res = await fetch(url, { method: req.method, headers, body: (googleBody ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
+      const res = await fetch(sendUrl, { method: req.method, headers, body: (googleBody ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
       status = res.status
       responseHeaders = res.headers
       text = await res.text()
+      // Review 2 — no token leaves the gateway in a Meta answer (the renewal's own answer IS the new token).
+      if (req.channel === 'META' && !metaRenewal) {
+        const clean = scrubMetaAnswer(text)
+        text = clean.text
+        metaScrubbed += clean.scrubbed
+      }
     } catch (err) {
       status = 0
       timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
@@ -464,6 +525,19 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // 8. classify
   const ok = status >= 200 && status < 300 && !graphqlErrors && (req.answerOk ? req.answerOk(text) : true)
   const verdict = ok ? null : classifyChannelAnswer(req.channel, status, text, { timedOut })
+  if (req.channel === 'META' && verdict) {
+    // Meta answers a throttle with an error code (often with no usage header): hold the bucket all the same — 300 s, the
+    // block Meta's rate-limit page names for an ad account's score. 613/1487632 is the per-ad-set budget-change limit: it
+    // cannot occur while Nexus only reads; step 17 (writes) will hold only that ad set's writes, not the whole bucket.
+    if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec) {
+      await observeRate(req.channel, key, { retryAfterSec: verdict.channelCode === '613/1487632' ? 3600 : 300 })
+    }
+    // Meta says the token is dead: the next heartbeat checks it again at once, rather than trusting a check kept for hours.
+    if ((verdict.errorClass === 'auth_revoked' || verdict.errorClass === 'auth_expired') && req.connectionId) {
+      const connectionId = req.connectionId
+      void import('../cx/connectors/meta/token-check.js').then((m) => m.forgetMetaTokenCheck(connectionId)).catch(() => undefined)
+    }
+  }
 
   // 9. ledger
   await writeLedgerRow({
@@ -480,7 +554,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     rateLimitLimit: reading?.limit ?? null,
     attempts,
     requestPayload: ok ? undefined : typeof req.body === 'string' || req.body == null ? ledgerSafeBody(req.body ?? null) : { __binary: true, bytes: req.body instanceof Uint8Array ? req.body.byteLength : null },
-    responsePayload: ok ? undefined : ledgerSafeBody(text),
+    // Review 2 — how many access_token keys were dropped from a Meta answer (it never reaches the ledger either).
+    responsePayload: metaScrubbed ? { scrubbed: metaScrubbed, ...(ok ? {} : { body: ledgerSafeBody(text) }) } : ok ? undefined : ledgerSafeBody(text),
   })
 
   return {

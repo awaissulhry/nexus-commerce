@@ -35,13 +35,17 @@ export const NEVER_FOR_CHANGES = [
 ] as const
 
 /**
- * The Owner's narrow exception (2026-10-15, "Allow them for Google Ads"): these Google Ads change tools may need exactly
- * these "never" permissions — who may use the business's Google Ads account, and its links to Merchant Center and
- * YouTube. Each must always wait for a person's approval in Nexus (alwaysAsk, ask at most, never by rule). Nothing else.
+ * The Owner's narrow exceptions (2026-10-15, "Allow them for Google Ads"; 2026-10-20, "yes 1" for Meta): these change
+ * tools may need exactly these "never" permissions — who may use the business's Google Ads account, its links to
+ * Merchant Center and YouTube, and which Meta ad account, Page and Instagram account the business uses. Each must always
+ * wait for a person's approval in Nexus (alwaysAsk, ask at most, never by rule). Nothing else.
  */
 export const NEVER_EXCEPTIONS: Readonly<Record<string, readonly string[]>> = {
   'set-google-user-access': [F.usersManage, F.adsConnect],
   'set-google-account-links': [F.adsConnect],
+  // Owner 2026-10-20 "yes 1", like #653: Claude asks to choose the business's Meta ad account, Page and Instagram account
+  // (never a secret or a token, never a renewal or a revoke). ads.connect only — NOT settings.integrations.manage.
+  'set-meta-connection': [F.adsConnect],
 }
 
 /** 09 §2: no tool at all, read or change, requires one of these. */
@@ -77,8 +81,8 @@ describe('P1 — never for Claude', () => {
     expect(listTools().flatMap(neverProblems)).toEqual([])
   })
 
-  it('the Owner\'s Google Ads exception is exactly two tools, each a change a person always approves', () => {
-    expect(Object.keys(NEVER_EXCEPTIONS).sort()).toEqual(['set-google-account-links', 'set-google-user-access'])
+  it('the Owner\'s Google Ads and Meta exceptions are exactly three tools, each a change a person always approves', () => {
+    expect(Object.keys(NEVER_EXCEPTIONS).sort()).toEqual(['set-google-account-links', 'set-google-user-access', 'set-meta-connection'])
     for (const name of Object.keys(NEVER_EXCEPTIONS)) {
       const tool = listTools().find((t) => t.name === name)
       expect(tool, name).toBeDefined()

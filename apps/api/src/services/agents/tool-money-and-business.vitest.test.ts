@@ -184,6 +184,7 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-google-account-settings': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-account.tools test)',
   'set-google-user-access': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-account.tools test)',
   'set-google-account-links': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-account.tools test)',
+  'set-meta-connection': 'it reads what the business\'s Meta system user can see live from Meta, and no business here has Meta connected (meta-ads-connection.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -489,6 +490,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // each answers why there is nothing to read or change, before any Google call (google-ads-change.tools.vitest.test.ts
   // runs them on an account).
   'google-ads-live': () => ({ view: 'campaigns' }),
+  // Meta ads step 1: the connection as Nexus keeps it (no Meta call; this seed has no Meta connection, so it says so).
+  'meta-connection': () => ({ view: 'summary' }),
+  'set-meta-connection': () => ({ adAccountId: '1234567890' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),
