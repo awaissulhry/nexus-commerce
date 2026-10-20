@@ -204,12 +204,34 @@ describe('a change through the gateway', () => {
     h.answers.push(json({ error: { code: 100, message: 'Tried accessing nonexisting field (adset_id) on node type (AdCreative)' } }, 400))
     const creative = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000077', objectKind: 'ad', params: { status: 'PAUSED' }, check: false }).catch((e) => e)
     expect(creative).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/not a ad Nexus can confirm.*nonexisting field/) })
-    expect(sent(0).url.searchParams.get('fields')).toBe('account_id,adset_id')
+    expect(sent(0).url.searchParams.get('fields')).toBe('account_id,adset_id,creative')
     // Meta answers the account but not the kind's own field: not confirmed as that kind either.
     h.answers.push(json({ id: '120000000000078', account_id: '1234567890' }))
     expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000078', objectKind: ADSET_KIND, params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
-    expect(sent(1).url.searchParams.get('fields')).toBe('account_id,optimization_goal')
+    expect(sent(1).url.searchParams.get('fields')).toBe('account_id,optimization_goal,billing_event')
     expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
+  })
+  it('re-review — a ReachFrequencyPrediction (account_id, objective, optimization_goal) is no campaign and no ad set: two kind fields, both required', async () => {
+    // Meta answers the second field's absence on that node with an error…
+    h.answers.push(json({ error: { code: 100, message: 'Tried accessing nonexisting field (effective_status) on node type (ReachFrequencyPrediction)' } }, 400))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000081', objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: false }).catch((e) => e))
+      .toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/not a campaign Nexus can confirm/) })
+    // …and an RFP-shaped answer with only one of a kind's two fields is refused too.
+    const rfp = { id: '120000000000082', account_id: '1234567890', objective: 'REACH', optimization_goal: 'REACH', buying_type: 'RESERVED', campaign_id: '120000000000001' }
+    h.answers.push(json(rfp))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: rfp.id, objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
+    h.answers.push(json(rfp))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: rfp.id, objectKind: ADSET_KIND, params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
+    expect(h.calls.map((c) => [c.init.method, new URL(c.url).searchParams.get('fields')])).toEqual([
+      ['GET', 'account_id,objective,effective_status'], ['GET', 'account_id,objective,effective_status'], ['GET', 'account_id,optimization_goal,billing_event'],
+    ])
+    // The real kinds pass with both fields: an ad set, then an ad (no POST is sent before the kind is confirmed).
+    h.calls = []
+    h.answers.push(json({ id: '120000000000083', account_id: '1234567890', optimization_goal: 'OFFSITE_CONVERSIONS', billing_event: 'IMPRESSIONS' }), json({ id: '120000000000083', status: 'PAUSED' }))
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000083', objectKind: ADSET_KIND, params: { status: 'PAUSED' }, check: false })).ok).toBe(true)
+    h.answers.push(json({ id: '120000000000084', account_id: '1234567890', adset_id: '120000000000083', creative: { id: '120000000000085' } }), json({ id: '120000000000084', status: 'PAUSED' }))
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000084', objectKind: 'ad', params: { status: 'PAUSED' }, check: false })).ok).toBe(true)
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'POST', 'GET', 'POST'])
   })
   it('an object stored for another account of this business, or no ad account chosen: refused, nothing sent', async () => {
     gatewayMetaStored[CAMPAIGN] = { adAccountId: '1234567891', kind: 'campaign' }
@@ -228,11 +250,11 @@ describe('a change through the gateway', () => {
     expect(h.calls).toHaveLength(1)
     expect(sent(0).method).toBe('GET')
     expect(sent(0).url.pathname).toBe(`/v26.0/${OTHER_BUSINESS_CAMPAIGN}`)
-    expect(sent(0).url.searchParams.get('fields')).toBe('account_id,objective')
+    expect(sent(0).url.searchParams.get('fields')).toBe('account_id,objective,effective_status')
     expect(gatewayLedger.map((r) => [r.operation, r.outcome, r.errorCode ?? null])).toEqual([['write.ownerCheck', 'sent', null], ['campaign.status', 'refused', 'META_ACCOUNT_NOT_CHOSEN']])
   })
   it('a campaign made since the last daily read: the live read places it in the chosen account, then the change goes', async () => {
-    h.answers.push(json({ account_id: '1234567890', id: '120000000000005', objective: 'OUTCOME_SALES' }), json({ id: '120000000000005', status: 'PAUSED' }))
+    h.answers.push(json({ account_id: '1234567890', id: '120000000000005', objective: 'OUTCOME_SALES', effective_status: 'ACTIVE' }), json({ id: '120000000000005', status: 'PAUSED' }))
     const res = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status', objectId: '120000000000005', objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: false })
     expect(res.ok).toBe(true)
     expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'POST'])
@@ -241,7 +263,7 @@ describe('a change through the gateway', () => {
     h.answers.push(json({ error: { code: 100, message: 'Tried accessing nonexisting field (objective) on node type (AdSet)' } }, 400))
     const err = await metaWriteCall({ connectionId: 'm-1', operation: 'x.check', objectId: '120000000000006', objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: true }).catch((e) => e)
     expect(err).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
-    expect(sent(0).url.searchParams.get('fields')).toBe('account_id,objective')
+    expect(sent(0).url.searchParams.get('fields')).toBe('account_id,objective,effective_status')
     expect(h.calls).toHaveLength(1)
   })
   it('Meta does not place the object (an error, or no account_id): refused META_ACCOUNT_UNCONFIRMED', async () => {

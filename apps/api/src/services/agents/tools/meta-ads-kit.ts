@@ -278,9 +278,7 @@ function doneSentence(request: MetaChangeRequest, result: MetaChangeResult): str
   const read = result.afterError
     ? `Meta's answer was not a success (${result.afterError.replace(/\.$/, '')}), but Nexus read it back as ${status ?? wanted}: Meta made it.`
     : result.readBack === 'none'
-    ? 'Meta confirmed it; Nexus could not read it back (meta-ads-live shows it).'
-    : wanted && status && status !== wanted
-      ? `Meta answered success, but reads it back as ${status}${effective ? ` (${effective})` : ''}.`
+      ? 'Meta confirmed it; Nexus could not read it back (meta-ads-live shows it).'
       : `Meta made it; it now reads ${status ?? wanted}${effective && effective !== status ? ` (${effective})` : ''}.`
   return `${request.label}: ${read}${result.waitedMs ? ` Nexus waited ${Math.round(result.waitedMs / 1000)} s first (Meta's limit of one change of an object every 30 s).` : ''}`
 }
@@ -335,6 +333,14 @@ export async function runMetaChange(
       const result = await metaSendChange(account.target, {
         objectId: request.objectId, kind: request.kind, params: request.params, operation: `${request.kind}.status`, budget: request.budget, readBackInPost: request.readBackInPost,
       })
+      // Meta said success, but the object reads back with another status than the one asked: not done (no record, no
+      // undo), and a missed step for what follows (no later switch-on).
+      const readStatus = typeof result.node?.status === 'string' ? result.node.status : null
+      if (readStatus && request.params.status && readStatus !== request.params.status) {
+        missedAt ??= request.step
+        steps.push({ step: request.step, label: request.label, outcome: 'not_confirmed', sentence: `${request.label}: Meta answered success but it reads back ${readStatus}${typeof result.node?.effective_status === 'string' ? ` (${result.node.effective_status})` : ''}, not ${request.params.status}. Nexus records no change for it and never sends it again by itself; meta-ads-live shows it now.` })
+        continue
+      }
       done.push({ request, result })
       steps.push({
         step: request.step, label: request.label, outcome: 'done', sentence: doneSentence(request, result),

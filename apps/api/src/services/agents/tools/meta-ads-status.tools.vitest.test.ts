@@ -185,6 +185,14 @@ describe('the run', () => {
     expect(ran).toEqual({ ok: false, error: expect.stringMatching(/^Not run: Meta changed nothing\. 1\. Pause campaign .*refused.* 2\. Switch on ad set .*not sent — step 1 did not happen/) })
     expect(h.send).toHaveBeenCalledTimes(1)
   })
+  it('re-review — Meta answers success but it reads back another status: not done (no record, no undo), and no later switch-on is sent', async () => {
+    const p = (await preview(args)).preview
+    h.send.mockImplementationOnce(async () => ({ node: { id: CAMPAIGN.id, status: 'ACTIVE', effective_status: 'ACTIVE' }, readBack: 'same-request', waitedMs: 0 }))
+    const ran = await tool.execute!(ask(args), approved(p))
+    expect(ran).toEqual({ ok: false, error: expect.stringMatching(/^Not confirmed: 1\. Pause campaign .*Meta answered success but it reads back ACTIVE \(ACTIVE\), not PAUSED.* 2\. Switch on ad set .*not sent — step 1 did not happen/) })
+    expect(ran.change).toBeUndefined()
+    expect(h.send).toHaveBeenCalledTimes(1)
+  })
   it('NOT atomic: Meta refusing step 1 does not stop a later pause or archive; the record holds only what Meta made', async () => {
     const twoStops = { items: [{ kind: 'campaign', id: CAMPAIGN.id, status: 'PAUSED' }, { kind: 'adset', id: AD_SET.id, status: 'ARCHIVED' }] }
     const p = (await preview(twoStops)).preview

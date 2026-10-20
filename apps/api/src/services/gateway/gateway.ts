@@ -626,19 +626,29 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
 const sleepMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * A field only that kind of object has (checked 2026-10-21 on the field tables of reference/ad-campaign-group.md,
- * ad-campaign.md and adgroup.md): `objective` only a campaign, `optimization_goal` only an ad set, `adset_id` only an ad. A
- * live read asking it of another kind (a creative, a Page, an ad account) is answered with an error, never the field.
+ * TWO fields only that kind of object has together, both always set on it (re-review 2026-10-21: one is not enough — a
+ * ReachFrequencyPrediction has account_id, objective, optimization_goal, buying_type and campaign_id). Checked 2026-10-21
+ * on the field tables of reference/ad-campaign-group.md, ad-campaign.md and adgroup.md and on Meta's Python Business SDK
+ * (facebook_business/adobjects campaign.py, adset.py, ad.py, adcreative.py, reachfrequencyprediction.py):
+ *   campaign  objective + effective_status       (an ad set or ad has no objective; a reach-and-frequency prediction no
+ *                                                 effective_status)
+ *   ad set    optimization_goal + billing_event  (a campaign or ad has neither; a prediction no billing_event)
+ *   ad        adset_id + creative                (a campaign, ad set, creative or prediction has neither)
+ * A live read asking them of another kind is answered with an error ("nonexisting field") or without one of them: refused.
  */
-const META_KIND_FIELD: Readonly<Record<'campaign' | 'adset' | 'ad', string>> = { campaign: 'objective', adset: 'optimization_goal', ad: 'adset_id' }
+const META_KIND_FIELD: Readonly<Record<'campaign' | 'adset' | 'ad', readonly [string, string]>> = {
+  campaign: ['objective', 'effective_status'],
+  adset: ['optimization_goal', 'billing_event'],
+  ad: ['adset_id', 'creative'],
+}
 const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad', string>> = { campaign: 'campaign', adset: 'ad set', ad: 'ad' }
 
 /**
  * Step 17 — why a Meta change (or Meta's check of one) of this object is refused for this connection, or null: the object
  * must be of the ad account the business chose through it, AND of the kind the change names (review fix B4: the
  * allow-list is a campaign, an ad set or an ad — nothing else Meta numbers the same way). From the business's own stored
- * rows (row-level security), else ONE live read through this gateway (`GET /<id>?fields=account_id,<a field only that
- * kind has>`). Meta's check only for a campaign (Meta documents validate_only on campaign updates only). An object Nexus
+ * rows (row-level security), else ONE live read through this gateway (`GET /<id>?fields=account_id,<two fields only
+ * that kind has>`). Meta's check only for a campaign (Meta documents validate_only on campaign updates only). An object Nexus
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
@@ -656,7 +666,7 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
     return stored.kind !== kind ? notKind(` (Nexus has it as a ${META_KIND_WORD[stored.kind]})`) : null
   }
   const url = new URL(`${metaGraphBase()}/${id}`)
-  url.searchParams.set('fields', `account_id,${META_KIND_FIELD[kind]}`)
+  url.searchParams.set('fields', ['account_id', ...META_KIND_FIELD[kind]].join(','))
   let answer: GatewayResponse
   try {
     answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
@@ -671,8 +681,8 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
     return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: Nexus could not confirm which ad account ${id} belongs to${answer.verdict?.channelMessage ? ` (Meta: ${answer.verdict.channelMessage})` : ''}.` }
   }
   if (account !== chosen) return notChosen
-  const field = body?.[META_KIND_FIELD[kind]]
-  if (field === undefined || field === null || field === '') return notKind()
+  // Both of the kind's own fields, each present with a value.
+  if (META_KIND_FIELD[kind].some((name) => { const value = body?.[name]; return value === undefined || value === null || value === '' })) return notKind()
   return null
 }
 

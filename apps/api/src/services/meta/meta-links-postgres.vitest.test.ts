@@ -203,7 +203,7 @@ describe.skipIf(!concurrentDatabaseUrl())('Meta: one Meta id in one business (re
       const err = await as(ALPHA, () => metaWriteCall({ connectionId: conn.alpha, operation: 'campaign.status', objectId: campaignOfBravo, objectKind: 'campaign', params: { status: 'ACTIVE' }, check: false })).catch((e) => e)
       expect(err).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', outcome: 'refused' })
       expect(String(err.message)).not.toContain(ID.x)
-      expect(calls.map((c) => [c.method, new URL(c.url).pathname, new URL(c.url).searchParams.get('fields')])).toEqual([['GET', `/v26.0/${campaignOfBravo}`, 'account_id,objective']])
+      expect(calls.map((c) => [c.method, new URL(c.url).pathname, new URL(c.url).searchParams.get('fields')])).toEqual([['GET', `/v26.0/${campaignOfBravo}`, 'account_id,objective,effective_status']])
     } finally {
       vi.unstubAllGlobals()
     }
