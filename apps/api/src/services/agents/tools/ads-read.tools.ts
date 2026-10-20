@@ -134,6 +134,7 @@ import { googleAdsActsOnItsOwn, googleAdsRecommendations } from '../../marketing
 // The alerts service is imported where it is used: it also raises the bell's notifications, whose module graph the tool
 // registry must not load in every process that lists tools.
 import type { googleAdsAlerts } from '../../marketing/google-ads/alerts.service.js'
+import { sdExpressionInWords, sdTacticInWords } from '../../advertising/sd/sd-expression-words.js'
 import type { AgentTool, ToolResult } from '../tool-types.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
@@ -800,6 +801,7 @@ async function amazonCampaigns(a: CampaignListArgs, scope: string) {
             id: true, dailyBudgetCurrency: true, liveBidWritesEnabled: true, bidsSuppressedAt: true, bidsSuppressedBy: true,
             pinBids: true, pinBudget: true, pinPlacement: true, targetingType: true, dynamicBidding: true, budgetBaselineCents: true,
             costType: true, budgetJson: true, // W4-11
+            tactic: true, servingStatus: true, startDate: true, endDate: true, // SD-AUD
           },
         })
       : Promise.resolve([]),
@@ -827,6 +829,10 @@ async function amazonCampaigns(a: CampaignListArgs, scope: string) {
       // whose cost type Nexus does not hold is refused), and a Sponsored Brands lifetime budget (not set from Nexus).
       costType: x?.costType ?? null,
       ...(x && isLifetimeBudget(x.budgetJson) ? { budgetPeriod: 'LIFETIME' } : {}),
+      // SD-AUD — a Sponsored Display campaign's own settings, as the SD sync read them from Amazon (null: not read yet).
+      ...(x && adProductOf({ adProduct: c.adProduct ?? null, type: c.type == null ? null : String(c.type) }) === 'SPONSORED_DISPLAY'
+        ? { sd: { tactic: x.tactic, tacticWords: sdTacticInWords(x.tactic), servingStatus: x.servingStatus, startDate: day(x.startDate), endDate: day(x.endDate) } }
+        : {}),
       targetingType: x?.targetingType ?? null,
       status: String(c.status),
       deliveryStatus: c.deliveryStatus ?? null,
@@ -896,7 +902,8 @@ const adCampaigns: AgentTool = {
   description:
     'The Amazon campaigns, by market and name. Per campaign: campaignId (the Nexus id the other ad tools take) and '
     + 'externalCampaignId (Amazon\'s), name, market, ad product (for Sponsored Brands / Display also costType, cpc or vcpm, '
-    + 'and budgetPeriod LIFETIME for an SB lifetime budget), status and delivery, currency, daily budget, bidding '
+    + 'and budgetPeriod LIFETIME for an SB lifetime budget; for Sponsored Display also sd: tactic in words, Amazon\'s '
+    + 'serving status, start and end date), status and delivery, currency, daily budget, bidding '
     + 'strategy, target ACoS, placement adjustments, bid and budget bounds and the budget baseline, its portfolio (Amazon\'s id and name), the '
     + 'guards that move a bid asked for (maxBidChangePct: the most one bid change may move, in %; cpcCeiling: no bid above '
     + 'that multiple of a target\'s average cost per click), whether live writes are allowed for it '
@@ -1134,7 +1141,10 @@ const adTargets: AgentTool = {
     + 'CPC, who owns its bids (brain, schedule, goal, manual or none), and impressions, clicks, orders, spend, sales, CPC and '
     + 'ACoS over the window. The bid is Nexus\'s copy: when it has not reached Amazon yet (a write queued or being sent, '
     + 'or one that failed), bidNotAtAmazon says so, with the bid Amazon still has (amazonBidCents) and, for a failed '
-    + 'one, why; null when Amazon has the bid shown. Filter by campaignId, adGroupId, market, status or text.' + MONEY_WORDS + PAGING,
+    + 'one, why; null when Amazon has the bid shown. A Sponsored Display target also gives sd: its expression in plain words '
+    + '(inWords, e.g. "people who viewed the advertised products in the last 30 days" or "products in category \"Helmets\" '
+    + '(123), brand \"Acme\" (9), rating above 4 stars"), Amazon\'s expression and resolved expression, and its serving '
+    + 'status (null: not read from Amazon yet). Filter by campaignId, adGroupId, market, status or text.' + MONEY_WORDS + PAGING,
   handler: (args) => listTool('ad-targets', async () => {
     const a = args as { campaignId?: string; adGroupId?: string; market?: string; status: (typeof TARGET_STATUSES)[number]; search?: string; days: number; limit?: number; cursor?: string }
     const size = pageSize(a.limit)
@@ -1172,9 +1182,20 @@ const adTargets: AgentTool = {
     const [index, externalGroup, notAtAmazon] = await Promise.all([
       campaignIndex(campaignIds, []), adGroupExternalIds(groupIds), bidsNotAtAmazon(page.items.map((r) => ({ id: r.id, bidCents: r.bidCents }))),
     ])
+    const adProductOfRow = (r: BidTargetRow) => {
+      const c = index.byId.get(r.campaignId)
+      return c ? adProductOf({ adProduct: c.adProduct, type: c.type == null ? null : String(c.type) }) : null
+    }
+    // SD-AUD — a Sponsored Display target as Amazon holds it (the SD sync's read): its expression, in words, and serving status.
+    const sdIds = page.items.filter((r) => adProductOfRow(r) === 'SPONSORED_DISPLAY').map((r) => r.id)
+    const sdRows = sdIds.length
+      ? await prisma.adTarget.findMany({ where: { id: { in: sdIds } }, select: { id: true, expressionJson: true, resolvedExpressionJson: true, servingStatus: true } })
+      : []
+    const sdById = new Map(sdRows.map((t) => [t.id, t]))
     const items = page.items.map((r) => {
       const c = index.byId.get(r.campaignId)
       const unsent = notAtAmazon.get(r.id)
+      const sd = sdById.get(r.id)
       return {
         targetId: r.id,
         text: r.label,
@@ -1191,7 +1212,17 @@ const adTargets: AgentTool = {
         campaignName: r.campaignName,
         // W4-11 — set-target-bid and bulk-ad-bid-change also change Sponsored Brands keyword and product-target bids and
         // Sponsored Display target bids.
-        adProduct: c ? adProductOf({ adProduct: c.adProduct, type: c.type == null ? null : String(c.type) }) : null,
+        adProduct: adProductOfRow(r),
+        ...(sd
+          ? {
+              sd: {
+                inWords: sdExpressionInWords(sd.expressionJson, sd.resolvedExpressionJson),
+                expression: sd.expressionJson ?? null,
+                resolvedExpression: sd.resolvedExpressionJson ?? null,
+                servingStatus: sd.servingStatus,
+              },
+            }
+          : {}),
         campaignStatus: r.campaignStatus,
         market: r.market,
         currency: c ? campaignCurrency(c) : null,

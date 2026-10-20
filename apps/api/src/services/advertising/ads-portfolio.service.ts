@@ -102,7 +102,7 @@ async function linkCampaignMembership(profileId: string, region: AdsRegion): Pro
  * Central. Keyed (entityType, entityId, field) like all drift, so a campaign wrong for three
  * days is one row with a high occurrence count, not one row per sync.
  */
-async function recordMembershipLoss(externalCampaignIds: string[]): Promise<void> {
+export async function recordMembershipLoss(externalCampaignIds: string[]): Promise<void> {
   const losing = await prisma.campaign.findMany({
     where: { externalCampaignId: { in: externalCampaignIds }, portfolioId: { not: null } },
     select: { id: true, name: true, marketplace: true, portfolioId: true, externalCampaignId: true, lastSyncedAt: true, lastSyncStatus: true },
