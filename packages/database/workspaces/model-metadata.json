@@ -1745,6 +1745,14 @@
       "fields": []
     },
     {
+      "name": "AmazonAdsSdDailyPerformance",
+      "fields": []
+    },
+    {
+      "name": "AmazonAdsSdPurchasedProduct",
+      "fields": []
+    },
+    {
       "name": "AdsDailyVintage",
       "fields": []
     },

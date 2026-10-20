@@ -439,6 +439,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'ads-overview': () => ({}),
   'ad-campaigns': () => ({}),
   'ad-targets': (ids) => ({ campaignId: ids.campaignId, status: 'all' }),
+  // SD reports below the campaign (2026-10-20) — what shoppers bought after a Display ad: sales are money.
+  'ad-purchased-products': (ids) => ({ campaignId: ids.campaignId }),
   'ad-search-terms': (ids) => ({ campaignId: ids.campaignId }),
   // Negative Targeting (#546): every view of the page's read, in the seeded campaign; money stripped, one business.
   'ad-waste': (ids) => ({ view: 'rows', show: 'all', campaignId: ids.campaignId }),
