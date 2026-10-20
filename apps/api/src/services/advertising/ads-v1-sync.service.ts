@@ -496,7 +496,6 @@ export async function ingestCampaigns(profileId: string, records: V1Campaign[]):
       brandEntityId: r.brandEntityId ?? null,
       budgetJson: r.budgetCaps ? (r.budgetCaps as object) : undefined,
       bidStrategyJson: r.optimization ? (r.optimization as object) : undefined,
-      costType: r.costType ?? null,
       deliveryStatus: r.deliveryStatus ?? null,
       deliveryReasons: r.deliveryReasons ?? [],
       lastSyncedAt: new Date(),
@@ -509,6 +508,8 @@ export async function ingestCampaigns(profileId: string, records: V1Campaign[]):
     if (budgetAmount != null) settings.dailyBudget = budgetAmount
     if (stratMapped) settings.biddingStrategy = stratMapped
     if (statusMapped) settings.status = statusMapped
+    // SD-AUD — a record without costType no longer blanks the one the SD sync read from Amazon (sd-entity-sync.service.ts).
+    if (r.costType) settings.costType = r.costType
     try {
       // AF.1d — find by externalCampaignId ALONE. It is globally unique per
       // Amazon account; matching on marketplace too created a 2nd row whenever
@@ -522,7 +523,7 @@ export async function ingestCampaigns(profileId: string, records: V1Campaign[]):
         const w = await prisma.campaign.updateMany({ where: { id: existing.id, updatedAt: existing.updatedAt }, data: await hb.without(existing.id, existing.updatedAt, { ...base, ...settings }) })
         if (!w.count) { hb.raced++; continue }
       } else {
-        await prisma.campaign.create({ data: { ...base, dailyBudget: budgetAmount ?? 0, biddingStrategy: stratMapped ?? 'LEGACY_FOR_SALES', status: statusMapped ?? 'ENABLED' } })
+        await prisma.campaign.create({ data: { ...base, dailyBudget: budgetAmount ?? 0, biddingStrategy: stratMapped ?? 'LEGACY_FOR_SALES', status: statusMapped ?? 'ENABLED', costType: r.costType ?? null } })
       }
       upserted += 1
     } catch (err) {

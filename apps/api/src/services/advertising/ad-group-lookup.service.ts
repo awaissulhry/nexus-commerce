@@ -10,6 +10,7 @@ import prisma from '../../db.js'
 export const AD_GROUP_CAMPAIGN_SELECT = {
   id: true, name: true, type: true, adProduct: true, marketplace: true, status: true, externalCampaignId: true, dailyBudget: true,
   dailyBudgetCurrency: true, targetingType: true, liveBidWritesEnabled: true, bidsSuppressedAt: true, bidsSuppressedBy: true, dynamicBidding: true,
+  costType: true, // P2b — a Sponsored Display default bid is changed only in a campaign that pays per click
 } as const
 
 /** One ad group with what a change of it needs: its bids, its floor, whether Amazon holds it, and its campaign. */
@@ -49,7 +50,12 @@ export async function campaignAdGroupsForRead(campaignId: string, opts: { status
       select: {
         id: true, name: true, status: true, defaultBidCents: true, externalAdGroupId: true, suppressedFromBidCents: true,
         bidsSuppressedAt: true, bidsSuppressedBy: true, bidsSuppressedFloorCents: true, orphanedAt: true,
-        productAds: { select: { id: true, sku: true, asin: true, productId: true, status: true, externalAdId: true }, orderBy: { id: 'asc' } },
+        // SD-AUD — a Sponsored Display ad group's own settings and its ads' landing pages (null on Sponsored Products).
+        bidOptimization: true, creativeType: true, servingStatus: true,
+        productAds: {
+          select: { id: true, sku: true, asin: true, productId: true, status: true, externalAdId: true, landingPageType: true, landingPageUrl: true, adName: true, servingStatus: true },
+          orderBy: { id: 'asc' },
+        },
       },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     }),

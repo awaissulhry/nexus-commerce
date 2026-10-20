@@ -68,7 +68,8 @@ import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy
 import { playbookHoldOf, playbookHolds, startOnlyRefusal } from '../../advertising/ads-playbook/held.js'
 import { amountLabel, campaignCurrency, checkLiveReach, liftSuppressionRefusal, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
 import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, BY_RULE_WORDS, handBackEvidence, handBackRefusal, notRun, queuedNote, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, bidWriteOf, stopBidOf, STOP_MIN_CENTS, storedReach, strategyFactsMoney, withStepPast, type BidAfterwards, type BidStep, type RuleWrite, type StoredReach } from './ads-change-kit.js'
-import type { AdWrite } from '@nexus/shared/ads-ad-product'
+import { SPONSORED_DISPLAY, adProductOf, type AdWrite } from '@nexus/shared/ads-ad-product'
+import { bidCostType, marketLimitsOf } from '@nexus/shared/ads-market-limits'
 import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
@@ -135,7 +136,7 @@ async function campaignsOf(rows: Array<{ entityType: string; entityId: string }>
 /** The fields a recorded write changed (its before and after differ), in the mutation layer's names. */
 const RESTORED_FIELDS: Record<string, string> = {
   dailyBudget: 'dailyBudget', dailyBudgetCurrency: 'dailyBudgetCurrency', status: 'status', biddingStrategy: 'biddingStrategy', endDate: 'endDate',
-  name: 'name', portfolioId: 'portfolioId', bidCents: 'bid', defaultBidCents: 'defaultBid',
+  name: 'name', portfolioId: 'portfolioId', bidCents: 'bid', defaultBidCents: 'defaultBid', startDate: 'startDate',
 }
 function restoredFieldsOf(r: UndoRow): string[] {
   const before = (r.restores ?? {}) as Record<string, unknown>
@@ -165,6 +166,8 @@ async function sbSdRestoreWrites(rows: UndoRow[], negatives: UndoNegative[]): Pr
     const status = (r.restores as { status?: unknown } | null)?.status
     const toStatus = typeof status === 'string' ? status : null
     if (r.entityType === 'CAMPAIGN') out.set(r.actionLogId, { entity: 'CAMPAIGN', fields: restoredFieldsOf(r), toStatus })
+    // P2b — a Sponsored Display ad group's default bid and state go back on its own route too.
+    if (r.entityType === 'AD_GROUP') out.set(r.actionLogId, { entity: 'AD_GROUP', fields: restoredFieldsOf(r), toStatus })
     const t = r.entityType === 'AD_TARGET' ? target.get(r.entityId) : undefined
     if (t) out.set(r.actionLogId, { entity: 'AD_TARGET', fields: restoredFieldsOf(r), toStatus, kind: t.kind == null ? null : String(t.kind), isNegative: t.isNegative, negativeLevel: t.negativeLevel })
   }
@@ -582,6 +585,7 @@ const CAMPAIGN_FOR_CHANGE = {
   dynamicBidding: true, minBudgetCents: true, maxBudgetCents: true, pinPlacement: true, pinBids: true, pinBudget: true, pinNote: true,
   liveBidWritesEnabled: true, bidsSuppressedAt: true, bidsSuppressedBy: true,
   budgetJson: true, // W4-11 — a Sponsored Brands budget is set only when Nexus has read it is daily
+  costType: true, // P2b — a Sponsored Display campaign is stopped with low bids only when it pays per click
 } as const
 
 async function campaignForChange(campaignId: string) {
@@ -594,7 +598,8 @@ type ChangeCampaign = NonNullable<Awaited<ReturnType<typeof campaignForChange>>>
  * no longer refuses it: a change tool writes only once a person approves it, and his approval counts as his own click,
  * which a pin (like the allowlist) does not stop.
  * W4-11 — a daily budget (`budget`) is sent for a Sponsored Brands or Display campaign too (BUDGET_WRITE); placements
- * and the campaign-wide bid tools (suppress-campaign, restore-campaign) stay Sponsored Products only.
+ * stay Sponsored Products only; the campaign-wide bid tools (suppress-campaign, restore-campaign) take a Sponsored Display
+ * campaign that pays per click too (P2b, stopRefusal).
  */
 function campaignRefusal(campaign: ChangeCampaign | null, campaignId: string, dimension: 'bids' | 'budget' | 'placement'): string | null {
   if (!campaign) return `campaign ${campaignId} not found`
@@ -603,6 +608,32 @@ function campaignRefusal(campaign: ChangeCampaign | null, campaignId: string, di
 
 /** W4-11 — a daily budget write, as the gate and the mutation layer judge it for an SB/SD campaign (adWriteRefusal). */
 const BUDGET_WRITE: AdWrite = { entity: 'CAMPAIGN', fields: ['dailyBudget'] }
+
+/** P2b — a stop's (and its give-back's) writes, as the gate and the mutation layer judge them for an SD campaign. */
+const STOP_WRITE: AdWrite = { entity: 'AD_GROUP', fields: ['defaultBid'] }
+
+const isSdCampaign = (c: ChangeCampaign) => adProductOf({ type: c.type == null ? null : String(c.type), adProduct: c.adProduct }) === SPONSORED_DISPLAY
+
+/**
+ * P2b — suppress-campaign and restore-campaign: Sponsored Products, and a Sponsored Display campaign that pays per click,
+ * whose floor is a click bid as on Sponsored Products (Amazon's lowest SD CPC bid: €0.02 in the euro markets). A vCPM
+ * campaign is refused in words: its lowest bid (€1.00 per thousand viewable impressions there) still buys impressions,
+ * and the stop bids and the bid limits are per click. Null: it may go on.
+ */
+function stopRefusal(campaign: ChangeCampaign): string | null {
+  if (!isSdCampaign(campaign)) return spOnlyRefusal(campaign)
+  if (bidCostType(campaign.costType) === 'VCPM') {
+    const min = marketLimitsOf(campaign.marketplace)?.adProducts[SPONSORED_DISPLAY]?.vcpmBid?.min
+    const lowest = min != null ? `${amountLabel(min, campaignCurrency(campaign))} per thousand viewable impressions` : 'a bid per thousand viewable impressions'
+    return `${campaign.name} is a Sponsored Display campaign that pays per thousand viewable impressions (vCPM). Its lowest bid at Amazon is ${lowest}, which still buys impressions: a low-bid stop does not stop it the way a 2-cent click bid does, and Nexus's stop bids and bid limits are per click. Nothing was queued; for a real stop pause it (pause-ads), and enable-ads switches it back on.`
+  }
+  return adWriteRefusalOf(campaign, STOP_WRITE)
+}
+
+/** P2b — what the floor means on a Sponsored Display campaign, in the stop's preview (null: Sponsored Products). */
+const sdFloorWords = (campaign: ChangeCampaign, floor: number) => (isSdCampaign(campaign)
+  ? `${campaign.name} is a Sponsored Display campaign that pays per click: its floor is a bid of ${amountLabel(floor, campaignCurrency(campaign))} a click (Amazon's lowest Sponsored Display click bid is ${amountLabel(marketLimitsOf(campaign.marketplace)?.adProducts[SPONSORED_DISPLAY]?.bid.min ?? SUPPRESSION_FLOOR_CENTS, campaignCurrency(campaign))}), so it stops winning auctions as a Sponsored Products campaign does; its ad group default bids and target bids go to Sponsored Display's own endpoints.`
+  : null)
 
 const whyArg = z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit')
 const campaignIdArg = z.string().trim().min(1).max(64).describe('Nexus campaign id (campaignId in ad-campaigns)')
@@ -1536,7 +1567,7 @@ async function suppressPreview(args: Record<string, unknown>, ctx?: Pick<ToolCon
   if (wrongSource) return { ok: false, error: `Not queued: ${wrongSource}.` }
   const campaign = await campaignForChange(campaignId)
   if (!campaign) return { ok: false, error: `campaign ${campaignId} not found` }
-  const notSp = spOnlyRefusal(campaign)
+  const notSp = stopRefusal(campaign)
   if (notSp) return { ok: false, error: notSp }
   if (campaign.bidsSuppressedAt) {
     return { ok: false, error: `${campaign.name}'s bids are already suppressed (by ${campaign.bidsSuppressedBy ?? 'an unrecorded actor'} since ${campaign.bidsSuppressedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC).` }
@@ -1551,7 +1582,7 @@ async function suppressPreview(args: Record<string, unknown>, ctx?: Pick<ToolCon
     adGroupSuppressionCounts(campaignId, floor),
   ])
   if (!targets && !groups.aboveFloor) return { ok: false, error: `Every bid of ${campaign.name} is already at the floor: there is nothing to lower.` }
-  const intent = { campaignId, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: floor }], isSuppression: true }
+  const intent = { campaignId, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: floor }], isSuppression: true, ...(isSdCampaign(campaign) ? { write: STOP_WRITE } : {}) }
   const reach = await checkLiveReach(intent)
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
   const stored = storedReach(reach)
@@ -1579,6 +1610,7 @@ async function suppressPreview(args: Record<string, unknown>, ctx?: Pick<ToolCon
       moves: { targets, adGroups: groups.aboveFloor },
       stopBidCents: floor,
       stopBidFrom: stop.source ? strategySourceWords(stop.source) : 'the 2-cent floor (the ads strategy sets no stop bid here)',
+      ...(sdFloorWords(campaign, floor) ? { floorMeans: sdFloorWords(campaign, floor) } : {}),
       reach: stored,
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
@@ -1621,14 +1653,16 @@ const suppressCampaign: AgentTool = {
     undone: unsettleChange,
   },
   description:
-    'Stop an Amazon Sponsored Products campaign the Nexus way: never paused — every keyword and target bid and every ad '
+    'Stop an Amazon Sponsored Products campaign, or a Sponsored Display campaign that pays per click, the Nexus way: never paused — every keyword and target bid and every ad '
     + "group default bid goes to the stop bid the ads strategy sets for it (the 2-cent floor when it sets none; bids already "
     + 'lower stay), and each bid is remembered; restore-campaign brings it back in about a minute. Nothing changes until '
     + 'it is approved: in Nexus, or the person who asked confirms it in Claude with their authenticator code when the '
     + `business set it so. ${BY_RULE_WORDS} — never the campaign of a product the strategy protects. The preview counts `
     + 'what moves, where it lands (live at Amazon or sandbox) and the ads strategy\'s limits that apply. Refused, and not '
     + 'queued, when it is already suppressed or Amazon\'s write gate would refuse it (the live-write allowlist; a halt '
-    + 'does not block lowering). restore-campaign (or undo-change) puts the bids back.',
+    + 'does not block lowering), and for a Sponsored Display campaign that pays per thousand viewable impressions (vCPM: '
+    + 'Amazon\'s lowest bid there, €1.00 per thousand in the euro markets, still buys impressions — pause it instead). '
+    + 'restore-campaign (or undo-change) puts the bids back.',
   async handler(args, ctx) {
     return suppressPreview(args, ctx)
   },
@@ -1641,7 +1675,8 @@ const suppressCampaign: AgentTool = {
     const run = approvedRun(ctx, String(args.why ?? '') || 'no-pause stop: bids floored instead of pausing')
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const changeSource = sourceOf(args.source)
-    const moved = await suppressCampaignBids(p.campaign.id, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, floorCents: p.stopBidCents, ...(changeSource ? { evidence: withSource(null, changeSource) } : {}) })
+    // P2b — allowSbSd: a Sponsored Display campaign's bids go to its own endpoints (stopRefusal let only a per-click one through).
+    const moved = await suppressCampaignBids(p.campaign.id, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, floorCents: p.stopBidCents, allowSbSd: true, ...(changeSource ? { evidence: withSource(null, changeSource) } : {}) })
     const now = await suppressionState(p.campaign.id)
     if (!now.suppressed) return notRun('Not run: the campaign was not suppressed (it changed meanwhile). Nothing changed.')
     await settleSources([changeSource], run.changeSetId)
@@ -1689,7 +1724,7 @@ async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolCont
   const campaignId = String(args.campaignId ?? '')
   const campaign = await campaignForChange(campaignId)
   if (!campaign) return { ok: false, error: `campaign ${campaignId} not found` }
-  const notSp = spOnlyRefusal(campaign)
+  const notSp = stopRefusal(campaign)
   if (notSp) return { ok: false, error: notSp }
   // #513 review — a stop declared as a STOP hold (a campaign the bid brain owns) is a suppression too.
   const stopHolds = (await openStopHolds([campaign.id])).get(campaign.id) ?? []
@@ -1718,7 +1753,7 @@ async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolCont
   const ownFloors = groups.ownFloors ? await ownFloorsOf({ campaignId }) : []
   const origins = await floorOriginsOf(ownFloors)
   const stays = ownFloors.map((g) => ({ adGroupId: g.id, name: g.name, until: floorUntilWords(origins.get(g.id)) }))
-  const intent = { campaignId, adGroupId: top?.adGroupId ?? null, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: highest || null }], isSuppression: true }
+  const intent = { campaignId, adGroupId: top?.adGroupId ?? null, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: highest || null }], isSuppression: true, ...(isSdCampaign(campaign) ? { write: STOP_WRITE } : {}) }
   const reach = await checkLiveReach(intent)
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
   const stored = storedReach(reach)
@@ -1810,7 +1845,7 @@ const restoreCampaign: AgentTool = {
     },
   },
   description:
-    'Put back the bids an Amazon Sponsored Products campaign had before it was suppressed (the no-pause stop), so it '
+    'Put back the bids an Amazon Sponsored Products or Sponsored Display campaign had before it was suppressed (the no-pause stop), so it '
     + 'serves again. Only a suppression a person set is lifted here — never one an engine set (dayparting, the retail '
     + 'guard, budget enforcement own theirs). Nothing changes until it is approved; spend resumes. A campaign born at the '
     + 'floor (made by create-ad-campaign or a builder, never restored since) starts spending with it: a big door, so a '
@@ -1832,7 +1867,7 @@ const restoreCampaign: AgentTool = {
     const p = fresh.preview as { campaign: { id: string }; suppressedBy: string | null; reach: StoredReach; effect: string }
     const run = approvedRun(ctx, String(args.why ?? '') || 'restore after a no-pause stop')
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-    const restored = await restoreCampaignBids(p.campaign.id, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual })
+    const restored = await restoreCampaignBids(p.campaign.id, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual, allowSbSd: true })
     const now = await suppressionState(p.campaign.id)
     const change = { before: { campaignId: p.campaign.id, suppressed: true, by: p.suppressedBy, changeSetId: run.changeSetId }, after: now }
     if (now.suppressed) {

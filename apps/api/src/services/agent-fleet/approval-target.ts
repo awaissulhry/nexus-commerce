@@ -898,12 +898,16 @@ const READERS: Record<string, Reader> = {
   'create-ad-campaign': (p) => {
     const plan = rec(p.plan) ?? {}
     const products = recs(plan.products)
+    // P2a — a Sponsored Display campaign: its kind and how it pays, born paused, and what its ad group holds.
+    const group = rec(plan.adGroup)
+    const sd = plan.adProduct === 'SD'
     return {
       channel: 'AMAZON',
       market: marketOf(plan.market),
       changes: [
+        ...(sd ? [{ label: 'New campaign', from: null, to: `Sponsored Display “${text(plan.name) ?? '?'}” · ${text(plan.tactic) ?? '?'} · ${plan.costType === 'vcpm' ? 'vCPM' : 'CPC'} · born paused` }] : []),
         { label: 'Daily budget', from: null, to: adMoney(plan.dailyBudgetCents, plan.currency) },
-        { label: 'Advertises', from: null, to: plural(products.length, 'product') },
+        { label: 'Advertises', from: null, to: `${plural(products.length, 'product')}${sd && group ? ` · ${plural(recs(group.targets).length, 'target')}` : ''}` },
       ],
     }
   },
@@ -978,6 +982,17 @@ const READERS: Record<string, Reader> = {
   'create-ad-group': (p, _a, ctx, tool) => {
     const plan = rec(p.plan) ?? {}
     const products = recs(plan.products)
+    // P2a — a Sponsored Display ad group: its product ads and targets, its bids as planned (its campaign is the switch).
+    if (p.adProduct === 'SD') {
+      return {
+        ...adCampaign(p, tool),
+        target: productTarget({ id: text(products[0]?.productId), sku: text(products[0]?.sku) }, products.length || 1, ctx),
+        changes: [
+          { label: 'New ad group', from: null, to: `“${text(plan.name) ?? '?'}” · Sponsored Display · ${plural(products.length, 'product ad')} · ${plural(recs(plan.targets).length, 'target')}` },
+          { label: 'Bids', from: null, to: `as planned, up to ${adMoney(p.highestPlannedBidCents, p.currency) ?? '?'}` },
+        ],
+      }
+    }
     const keywords = recs(plan.keywords).length
     const targets = recs(plan.productTargets).length
     const negatives = recs(plan.negativeKeywords).length + strings(plan.negativeAsins).length

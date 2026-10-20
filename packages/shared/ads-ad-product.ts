@@ -8,6 +8,9 @@
  * those changes are refused before Nexus or Amazon changes, with the sentence below — everywhere the same words.
  *
  * Creating SB/SD campaigns, ad groups, keywords and ads is NOT refused here: those calls go to their own endpoints.
+ * SD CREATE P2a (2026-10-20) — Claude creates Sponsored Display campaigns, ad groups, product ads and targets through
+ * create-ad-campaign (adProduct SD), create-ad-group, add-product-ads and add-ad-targets: the creates' own SD endpoints,
+ * never a change judged here. An SD negative may now also be a brand (`BRAND`, asinBrandSameAs) in an ad group.
  *
  * W4-11 (2026-10-07; reverses S8 for these writes) — Nexus now sends some changes to an EXISTING Sponsored Brands or
  * Display campaign through their own endpoints (ads-api-client.ts), for the callers that ask (Claude's tools): its daily
@@ -17,6 +20,11 @@
  * sentence for every path that is still Sponsored Products only (placements, the bulk sheet, the engines), and for a
  * write that does not say what it is.
  *
+ * P2b (2026-10-20, Owner: "control and manage it all") — a Sponsored Display campaign is managed whole, as Amazon's SD 3.0
+ * updates allow (PUT /sd/campaigns: "the mutable fields are name, state, budget, startDate, and endDate", and its
+ * portfolioId; PUT /sd/adGroups: "name, defaultBid, and state"; PUT /sd/productAds: "the only mutable field, state"; PUT
+ * /sd/targets: "bid and state"), and archived (each one's DELETE). What Amazon fixes when it is made — a campaign's cost
+ * type and tactic, an ad group's bid optimization and creative type — stays refused, by the tools in Amazon's words.
  * SD creatives (2026-10-20) — and a Sponsored Display ad group's creative (its headline, brand logo, custom image or
  * video, /sd/creatives), with the asset it is made from: `CREATIVE`.
  */
@@ -108,7 +116,7 @@ export interface AdWrite {
   fields?: ReadonlyArray<string | null | undefined> | null
   /** The state a `status` change sets: ENABLED | PAUSED | ARCHIVED (any case). */
   toStatus?: string | null
-  /** A target's or a new negative's kind (`AdTarget.kind`: KEYWORD | PRODUCT | CATEGORY | AUDIENCE | AUTO). */
+  /** A target's or a new negative's kind (`AdTarget.kind`: KEYWORD | PRODUCT | CATEGORY | AUDIENCE | AUTO; an SD negative: BRAND too). */
   kind?: string | null
   /** The target is a negative. */
   isNegative?: boolean | null
@@ -119,15 +127,24 @@ export interface AdWrite {
 const SBSD_CAMPAIGN_FIELDS = new Set(['dailyBudget', 'dailyBudgetCurrency', 'status'])
 const SBSD_TARGET_FIELDS = new Set(['bid', 'status'])
 const ON_OFF = new Set(['ENABLED', 'PAUSED'])
+/** P2b — besides those, what Amazon's PUT /sd/campaigns changes of a Sponsored Display campaign. */
+const SD_CAMPAIGN_FIELDS = new Set([...SBSD_CAMPAIGN_FIELDS, 'name', 'startDate', 'endDate', 'portfolioId'])
+/** P2b — what PUT /sd/adGroups changes of a Sponsored Display ad group ("name, defaultBid, and state"). */
+const SD_AD_GROUP_FIELDS = new Set(['name', 'defaultBid', 'status'])
+/** P2b — a Sponsored Display campaign, ad group, product ad or target is also archived (its DELETE: for good). */
+const SD_STATES = new Set([...ON_OFF, 'ARCHIVED'])
 const ENTITY_WORDS: Record<AdWrite['entity'], string> = {
   CAMPAIGN: 'the campaign', AD_GROUP: 'an ad group', AD_TARGET: 'a target', PRODUCT_AD: 'an ad',
   PORTFOLIO: 'a portfolio', PLACEMENT: 'the placement adjustments', NEGATIVE_CREATE: 'a new negative', CREATIVE: 'a creative',
 }
 
-/** The negatives Nexus adds and retires: SB a negative keyword in an ad group, SD a negative product target (an ASIN). */
+/**
+ * The negatives Nexus adds and retires: SB a negative keyword in an ad group, SD a negative product target (an ASIN) or,
+ * P2a, a negative brand (SD 3.0 `NegativeTargetingExpression`: asinSameAs | asinBrandSameAs) in an ad group.
+ */
 function negativeSupported(product: string, kind: string, level: string): boolean {
   if (level === 'CAMPAIGN') return false
-  return product === SPONSORED_BRANDS ? kind === 'KEYWORD' : product === SPONSORED_DISPLAY ? kind === 'PRODUCT' : false
+  return product === SPONSORED_BRANDS ? kind === 'KEYWORD' : product === SPONSORED_DISPLAY ? kind === 'PRODUCT' || kind === 'BRAND' : false
 }
 
 /** What of this write Nexus cannot send for an SB or SD campaign, in a few words; null when it can send all of it. */
@@ -136,12 +153,28 @@ function sbSdProblem(product: string, w: AdWrite): string | null {
   const status = (w.toStatus ?? '').trim().toUpperCase()
   const kind = (w.kind ?? '').trim().toUpperCase()
   const level = (w.negativeLevel ?? '').trim().toUpperCase()
-  const negativeWords = product === SPONSORED_BRANDS ? 'a negative other than a keyword in an ad group' : 'a negative other than a product target (an ASIN) in an ad group'
+  const negativeWords = product === SPONSORED_BRANDS ? 'a negative other than a keyword in an ad group' : 'a negative other than a product target (an ASIN) or a brand in an ad group'
+  const sd = product === SPONSORED_DISPLAY
+  const states = sd ? SD_STATES : ON_OFF
   switch (w.entity) {
     case 'CAMPAIGN': {
-      const other = fields.filter((f) => !SBSD_CAMPAIGN_FIELDS.has(f))
+      const other = fields.filter((f) => !(sd ? SD_CAMPAIGN_FIELDS : SBSD_CAMPAIGN_FIELDS).has(f))
       if (other.length) return `the campaign's ${other.join(', ')}`
-      if (fields.includes('status') && !ON_OFF.has(status)) return status === 'ARCHIVED' ? 'archiving the campaign' : 'that campaign state'
+      if (fields.includes('status') && !states.has(status)) return status === 'ARCHIVED' ? 'archiving the campaign' : 'that campaign state'
+      return null
+    }
+    // P2b — a Sponsored Display ad group's name, default bid and state, and a product ad's state.
+    case 'AD_GROUP': {
+      if (!sd) return `a change to ${ENTITY_WORDS.AD_GROUP}`
+      const other = fields.filter((f) => !SD_AD_GROUP_FIELDS.has(f))
+      if (other.length) return `an ad group's ${other.join(', ')}`
+      if (fields.includes('status') && !states.has(status)) return 'that ad group state'
+      return null
+    }
+    case 'PRODUCT_AD': {
+      if (!sd) return `a change to ${ENTITY_WORDS.PRODUCT_AD}`
+      if (fields.some((f) => f !== 'status')) return `an ad's ${fields.filter((f) => f !== 'status').join(', ')}`
+      if (fields.includes('status') && !states.has(status)) return 'that ad state'
       return null
     }
     case 'AD_TARGET': {
@@ -154,7 +187,7 @@ function sbSdProblem(product: string, w: AdWrite): string | null {
       if (product === SPONSORED_DISPLAY && (kind === 'KEYWORD' || !kind)) return 'that kind of target'
       const other = fields.filter((f) => !SBSD_TARGET_FIELDS.has(f))
       if (other.length) return `a target's ${other.join(', ')}`
-      if (fields.includes('status') && !ON_OFF.has(status)) return status === 'ARCHIVED' ? 'archiving a target' : 'that target state'
+      if (fields.includes('status') && !states.has(status)) return status === 'ARCHIVED' ? 'archiving a target' : 'that target state'
       return null
     }
     case 'NEGATIVE_CREATE':
@@ -171,7 +204,7 @@ function sbSdProblem(product: string, w: AdWrite): string | null {
 function sbSdCan(product: string): string {
   return product === SPONSORED_BRANDS
     ? 'its daily budget and on/off state, the bids and on/off state of its keywords and product targets, and its negative keywords in an ad group (add and retire)'
-    : 'its daily budget and on/off state, the bids and on/off state of its targets, and its negative product targets in an ad group (add and retire)'
+    : 'its daily budget, name, start and end date, portfolio and state (on, off or archived), the name, default bid and state of its ad groups, the state of its product ads, the bids and state of its targets, and its negative product targets and brands in an ad group (add and retire)'
 }
 
 /**
@@ -207,7 +240,9 @@ export function adWriteRefusal(
     }
     // A bid: only in a campaign that pays per click. The ads strategy's bid limits and Nexus's floors are per click, so
     // they cannot judge a bid per thousand viewable impressions (vCPM); a cost type Nexus has not read is not guessed.
-    if (write.entity === 'AD_TARGET' && (write.fields ?? []).includes('bid')) {
+    // P2b — an SD ad group's default bid is such a bid too.
+    const bid = (write.entity === 'AD_TARGET' && (write.fields ?? []).includes('bid')) || (write.entity === 'AD_GROUP' && (write.fields ?? []).includes('defaultBid'))
+    if (bid) {
       const pays = (campaign?.costType ?? '').trim().toUpperCase()
       if (pays === 'VCPM') {
         return `${who} is a ${label} campaign that pays per thousand viewable impressions (vCPM). The ads strategy's bid limits and Nexus's bid floors are per click, so Nexus does not change its bids and nothing was sent to Amazon; change them in Amazon's advertising console.`

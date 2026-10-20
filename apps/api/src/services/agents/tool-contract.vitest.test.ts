@@ -973,6 +973,17 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { setId: 's1', name: 'Set', terms: [{ termId: 't1', term: 'test term', leadAsin: null, status: 'ACTIVE', maxCpcCents: 80, targetSharePct: null, isControl: false }] },
         after: { setId: 's1', name: 'Set', terms: [{ termId: 't1', term: 'test term', leadAsin: null, status: 'ACTIVE', maxCpcCents: 80, targetSharePct: 20, isControl: false }] },
       },
+      // Sponsored Display extras (P3c) — a cost control's old limit put back; a budget rule's old raise put back; an add to an
+      // empty deny list cleared again.
+      'set-sd-optimization-rule': {
+        before: { op: 'update', market: 'IT', ruleId: 'r1', rule: { name: 'Cost cap', metric: 'cost-per-order', thresholdCents: 1000 }, adGroupId: null, attached: null },
+        after: { op: 'update', market: 'IT', ruleId: 'r1', rule: { name: 'Cost cap', metric: 'cost-per-order', thresholdCents: 1500 }, adGroupId: null, attached: null },
+      },
+      'set-sd-budget-rule': {
+        before: { op: 'update', market: 'IT', ruleId: 'b1', campaignId: null, attached: null, rule: { name: 'Weekend', type: 'schedule', state: 'active', increasePct: 20, startDate: '2099-01-01', endDate: null, event: null, recurrence: 'weekly', daysOfWeek: ['saturday'], hours: null, condition: null } },
+        after: { op: 'update', market: 'IT', ruleId: 'b1', campaignId: null, attached: null, rule: { name: 'Weekend', type: 'schedule', state: 'active', increasePct: 30, startDate: '2099-01-01', endDate: null, event: null, recurrence: 'weekly', daysOfWeek: ['saturday'], hours: null, condition: null } },
+      },
+      'set-sd-brand-safety': { before: { op: 'add', market: 'IT', count: 0, added: [] }, after: { op: 'add', market: 'IT', count: null, added: ['example.com'] } },
     }
     const withUndo = listTools().filter((t) => t.undo)
     expect(withUndo.map((t) => t.name).sort()).toEqual(Object.keys(sample).sort())

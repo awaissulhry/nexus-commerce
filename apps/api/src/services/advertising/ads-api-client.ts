@@ -326,13 +326,26 @@ export class AmazonAdsQuotaError extends Error {
  * stays fail-closed with the writes.
  *
  * KAPI-S (2026-10-10) — Amazon's suggested bids (`POST /sp/targets/bid/recommendations`) only answer, so they are a
- * read here too: the read budget, and open on a quota-store outage. The same list as the gateway's ADS_READ_POSTS
+ * read here too: the read budget, and open on a quota-store outage; so are SD's targeting and bid recommendations
+ * (SD-AUD, sd/sd-recommendations.client.ts). The same list as the gateway's ADS_READ_POSTS
  * (gateway/ads.ts, imported lazily by fetchWithRetry, so it is not imported here); a test holds the two equal.
  *
  * SD creatives (2026-10-20) — a creative's preview (`POST /sd/creatives/preview`, HTML only) and a search of the account's
  * creative assets (`POST /assets/search`) only answer too (sd/sd-creatives.client.ts, sd/ads-assets.client.ts).
  */
-export const ADS_READ_ONLY_POSTS: ReadonlySet<string> = new Set(['/sp/targets/bid/recommendations', '/sd/creatives/preview', '/assets/search'])
+export const ADS_READ_ONLY_POSTS: ReadonlySet<string> = new Set([
+  '/sp/targets/bid/recommendations',
+  // SD-AUD — Sponsored Display's targeting and bid recommendations (advertising/sd/sd-recommendations.client.ts).
+  '/sd/targets/recommendations',
+  '/sd/targets/bid/recommendations',
+  // P3c — Sponsored Display's forecast, budget recommendations and budget usage only answer (advertising/sd/).
+  '/sd/forecasts',
+  '/sd/campaigns/budgetRecommendations',
+  '/sd/campaigns/budget/usage',
+  // SD creatives — a creative's preview HTML and a search of the account's creative assets (advertising/sd/).
+  '/sd/creatives/preview',
+  '/assets/search',
+])
 
 export function isMutatingCall(method: string, path: string): boolean {
   if (method === 'GET') return false
@@ -2160,14 +2173,38 @@ export function sbCampaignUpdateRequest(externalCampaignId: string, patch: SbSdP
 }
 
 /**
- * SD 3.0 `updateCampaigns` — PUT /sd/campaigns, `application/json`, `[{ campaignId (int64), state?: enabled|paused,
- * budget? }]`; answered 207 `[{ code, description, campaignId }]`. Only a daily budget exists on SD (`budgetType: daily`).
+ * P2b — a Sponsored Display campaign's update also carries what PUT /sd/campaigns changes besides the budget and state:
+ * "the mutable fields are name, state, budget, startDate, and endDate", and `portfolioId` ("if null then the campaign
+ * will be disassociated from existing portfolio"). Dates as YYYY-MM-DD here; endDate null = none.
  */
-export function sdCampaignUpdateRequest(externalCampaignId: string, patch: SbSdPatch): SbSdRequest {
+export interface SdCampaignPatch extends SbSdPatch {
+  name?: string
+  startDate?: string
+  endDate?: string | null
+  portfolioId?: string | null
+}
+
+/**
+ * SD 3.0 `updateCampaigns` — PUT /sd/campaigns, `application/json`, `[{ campaignId (int64), state?: enabled|paused|
+ * archived, budget?, name?, startDate? (YYYYMMDD), endDate? (YYYYMMDD | null), portfolioId? (int64 | null) }]`; answered
+ * 207 `[{ code, description, campaignId }]`. Only a daily budget exists on SD (`budgetType: daily`). Archived is for good.
+ */
+export function sdCampaignUpdateRequest(externalCampaignId: string, patch: SdCampaignPatch): SbSdRequest {
   const campaign: Record<string, unknown> = { campaignId: amazonIntId(externalCampaignId) }
   if (patch.state) campaign.state = patch.state
   if (patch.dailyBudget != null) campaign.budget = patch.dailyBudget
+  if (patch.name != null) campaign.name = patch.name
+  if (patch.startDate != null) campaign.startDate = sdDay(patch.startDate)
+  if (patch.endDate !== undefined) campaign.endDate = patch.endDate == null ? null : sdDay(patch.endDate)
+  if (patch.portfolioId !== undefined) campaign.portfolioId = patch.portfolioId == null ? null : amazonIntId(patch.portfolioId)
   return { method: 'PUT', path: '/sd/campaigns', body: [campaign], contentType: 'application/json', acceptHeader: 'application/json', answer: 'items' }
+}
+
+/** P2b — a YYYY-MM-DD day as SD 3.0 takes it (YYYYMMDD). Anything else is refused (thrown: nothing is sent). */
+export function sdDay(day: string): string {
+  const d = String(day).trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new Error(`"${day}" is not a YYYY-MM-DD date, so nothing was sent to Amazon`)
+  return d.replace(/-/g, '')
 }
 
 /** The Amazon ids an SB 3.0 keyword or target update needs besides its own (the API requires them on a keyword). */
@@ -2394,6 +2431,8 @@ export interface CreateSdCampaignInput {
   tactic?: SdTactic
   costType?: 'cpc' | 'vcpm'
   startDate?: Date
+  /** SD CREATE P2a — the last day it serves (none: it runs until stopped), sent as the calendar day in `timeZone`. */
+  endDate?: Date | null
   /** CC-26 — the account's IANA time zone: `startDate` (default now) is sent as the calendar day there. */
   timeZone?: string | null
   portfolioId?: string
@@ -2406,6 +2445,7 @@ export async function createSdCampaign(ctx: ClientContext, input: CreateSdCampai
     budget: input.dailyBudget,
     costType: input.costType ?? 'cpc',
     startDate: sdDate(input.startDate ?? new Date(), input.timeZone),
+    ...(input.endDate ? { endDate: sdDate(input.endDate, input.timeZone) } : {}),
     state: input.state ?? 'paused',
     tactic: input.tactic ?? 'T00020',
     ...(input.portfolioId ? { portfolioId: Number(input.portfolioId) } : {}),
@@ -2951,12 +2991,13 @@ export function sbNegativeKeywordCreateBody(input: CreateNegativeKeywordInput): 
  * SD 3.0 `createNegativeTargetingClauses` — POST /sd/negativeTargets, `application/json`, `[{ adGroupId (int64),
  * expressionType: manual, expression: [{ type: asinSameAs, value }], state: enabled }]`; answered 207 with
  * `{ code, description, targetId }` items. Source: https://advertising.amazon.com/API/docs/en-us/sponsored-display/3-0/openapi#/Negative%20Targeting
+ * SD CREATE P2a — or a brand (`NegativeTargetingExpression` type `asinBrandSameAs`, Amazon's brand id), with `brandId`.
  */
-export function sdNegativeTargetCreateBody(input: CreateNegativeTargetInput): Array<Record<string, unknown>> {
+export function sdNegativeTargetCreateBody(input: CreateNegativeTargetInput & { brandId?: string | null }): Array<Record<string, unknown>> {
   return [{
     adGroupId: amazonIntId(input.externalAdGroupId),
     expressionType: 'manual',
-    expression: [{ type: 'asinSameAs', value: input.asin }],
+    expression: [input.brandId ? { type: 'asinBrandSameAs', value: input.brandId } : { type: 'asinSameAs', value: input.asin }],
     state: input.state ?? 'enabled',
   }]
 }
@@ -2980,8 +3021,8 @@ export async function createSbNegativeKeyword(ctx: ClientContext, input: CreateN
   return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
-/** W4-11 — add an SD negative product target (an ASIN) in an ad group (sdNegativeTargetCreateBody). The wire check binds it. */
-export async function createSdNegativeTarget(ctx: ClientContext, input: CreateNegativeTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown; error: string | null }> {
+/** W4-11 — add an SD negative product target (an ASIN) — or, P2a, a brand (`brandId`) — in an ad group (sdNegativeTargetCreateBody). The wire check binds it. */
+export async function createSdNegativeTarget(ctx: ClientContext, input: CreateNegativeTargetInput & { brandId?: string | null }): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown; error: string | null }> {
   const body = sdNegativeTargetCreateBody(input)
   if (adsMode() === 'sandbox') {
     await assertNegativeWriteAllowed({ method: 'POST', path: '/sd/negativeTargets', body, personConfirmed: input.personConfirmed === true })

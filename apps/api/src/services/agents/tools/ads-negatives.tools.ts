@@ -20,6 +20,12 @@
  *                         that (allowRetire). Undo adds the
  *                         same negatives again (new ones: Amazon never switches an archived one on again).
  *
+ * SD CREATE P2a (2026-10-20) — add-negative-targets also adds a negative BRAND (Amazon's brand id, asinBrandSameAs) to an
+ * ad group of a Sponsored Display campaign, beside its negative product targets (ASINs): `brands`, or `brandId` in
+ * `negatives`. Sponsored Display only (SD 3.0 negative targeting takes asinSameAs and asinBrandSameAs); a brand blocks no
+ * search term, so neither the converting rule nor the own-keyword lock judges it. retire-negatives lifts one like an
+ * ASIN, and its undo adds the brand again.
+ *
  * Negative Targeting (2026-10-11, lane NWRITE) — every negative names its author (ads-negative-kw.service.ts
  * negativeOriginsOf: Harvest, the brain's funnel, the brain, the playbook, a rule, Claude, a person). retire-negatives
  * REFUSES a Harvest negative (it sends a harvested search to its new keyword) or a Brain-funnel negative (the Owner's
@@ -48,6 +54,7 @@ import { DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import { alsoChangedBy, approvedRun, BY_RULE_WORDS, gateRefusal, notRun, reachNote, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { isSbSdCampaign } from '../../advertising/ads-mutation.service.js'
 import { SPONSORED_BRANDS, adProductOf, type AdWrite } from '@nexus/shared/ads-ad-product'
+import { isSdCampaign } from './ads-sd-create-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
 import { amountLabel, campaignCurrency, type BoundAutomation } from './ads-tool-guards.js'
 import {
@@ -66,15 +73,22 @@ const LINES_SHOWN = 20
 
 const ID = z.string().trim().min(1).max(64)
 const ASIN = z.string().trim().toUpperCase().regex(/^B0[A-Z0-9]{8}$/, 'an ASIN is B0 and 8 letters or digits')
+/** P2a — Amazon's brand id (a Sponsored Display negative brand). */
+const BRAND = z.string().trim().regex(/^\d{1,30}$/, "a brand is Amazon's numeric brand id")
 const TEXT = z.string().trim().min(1).max(80)
 const NEG_MATCH = z.enum(['NEGATIVE_EXACT', 'NEGATIVE_PHRASE'])
 type NegMatch = z.infer<typeof NEG_MATCH>
 type Level = 'AD_GROUP' | 'CAMPAIGN'
 const whyArg = z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit')
 
+/** The kinds of negative these tools add and lift: a keyword, a product target (an ASIN), P2a an SD brand. */
+type NegKind = 'KEYWORD' | 'PRODUCT' | 'BRAND'
+/** A stored negative's kind (anything else reads as a keyword, as before). */
+const negKindOf = (kind: unknown): NegKind => (String(kind) === 'PRODUCT' ? 'PRODUCT' : String(kind) === 'BRAND' ? 'BRAND' : 'KEYWORD')
+
 /** How a negative reads on a card. */
-const negativeWords = (n: { kind: 'KEYWORD' | 'PRODUCT'; text: string; match: NegMatch | null }) =>
-  n.kind === 'PRODUCT' ? `negative product target ${n.text}` : `negative ${n.match === 'NEGATIVE_PHRASE' ? 'phrase' : 'exact'} "${n.text}"`
+const negativeWords = (n: { kind: NegKind; text: string; match: NegMatch | null }) =>
+  n.kind === 'PRODUCT' ? `negative product target ${n.text}` : n.kind === 'BRAND' ? `negative brand ${n.text}` : `negative ${n.match === 'NEGATIVE_PHRASE' ? 'phrase' : 'exact'} "${n.text}"`
 
 interface Campaign { id: string; name: string; marketplace: string | null; currency: string; externalCampaignId: string }
 
@@ -85,7 +99,7 @@ interface NegItem {
   /** The ad group (AD_GROUP) or the campaign (CAMPAIGN) it goes into. */
   placeId: string
   place: string
-  kind: 'KEYWORD' | 'PRODUCT'
+  kind: NegKind
   text: string
   match: NegMatch | null
   campaign: Campaign
@@ -106,12 +120,14 @@ const ADD_INPUT = z.object({
     matchType: NEG_MATCH.default('NEGATIVE_EXACT').describe('NEGATIVE_EXACT (default: that search only) or NEGATIVE_PHRASE (every search holding the words, in order)'),
   })).max(MAX_NEGATIVES).optional().describe('negative keywords, each into every place named above'),
   asins: z.array(ASIN).max(MAX_NEGATIVES).optional().describe('negative product targets: ASINs whose product pages stop showing these ads (AD_GROUP scope), each into every ad group named above'),
+  brands: z.array(BRAND).max(MAX_NEGATIVES).optional().describe('Sponsored Display only — negative brands: Amazon brand ids whose products\' pages stop showing these ads (AD_GROUP scope), each into every ad group named above'),
   negatives: z.array(z.object({
     adGroupId: ID.optional().describe('the ad group it goes into (Nexus id)'),
     campaignId: ID.optional().describe('or the campaign: a campaign negative (keywords only)'),
     text: TEXT.optional().describe('a negative keyword: the search words'),
     matchType: NEG_MATCH.optional().describe('its match: NEGATIVE_EXACT (default) or NEGATIVE_PHRASE'),
     asin: ASIN.optional().describe('or a negative product target: the ASIN (an ad group only)'),
+    brandId: BRAND.optional().describe('or, Sponsored Display only, a negative brand: Amazon\'s brand id (an ad group only)'),
   })).max(MAX_NEGATIVES).optional().describe('or each negative with its own place (how a retire is put back)'),
   product: z.string().trim().min(1).max(64).optional()
     .describe('the product whose own campaigns these negatives keep apart: its SKU or Nexus id (default: the one product every place advertises)'),
@@ -156,30 +172,35 @@ const campaignOf = (c: PlaceRow['campaign']): Campaign => ({ id: c.id, name: c.n
 
 /** The request as a list of negatives, each in its place — or why it cannot be one. */
 async function itemsOf(a: AddArgs): Promise<{ items: NegItem[] } | { refusal: string }> {
-  type Asked = { level: Level; placeId: string; kind: 'KEYWORD' | 'PRODUCT'; text: string; match: NegMatch | null }
+  type Asked = { level: Level; placeId: string; kind: NegKind; text: string; match: NegMatch | null }
   const asked: Asked[] = []
   const problems: string[] = []
   const places = a.scope === 'CAMPAIGN' ? (a.campaignIds ?? []) : (a.adGroupIds ?? [])
   if (a.scope === 'CAMPAIGN' && a.adGroupIds?.length) problems.push('adGroupIds is for AD_GROUP scope: with CAMPAIGN scope, name campaignIds')
   if (a.scope === 'AD_GROUP' && a.campaignIds?.length) problems.push('campaignIds is for CAMPAIGN scope (a campaign negative): ask with scope CAMPAIGN')
   if (a.scope === 'CAMPAIGN' && a.asins?.length) problems.push('a negative product target goes into an ad group, not a whole campaign: name adGroupIds with scope AD_GROUP')
-  if ((a.keywords?.length || a.asins?.length) && !places.length) problems.push(`name the places the keywords and ASINs go into (${a.scope === 'CAMPAIGN' ? 'campaignIds' : 'adGroupIds'})`)
-  if (places.length && !a.keywords?.length && !a.asins?.length) problems.push('name the keywords or ASINs that go into those places')
+  if (a.scope === 'CAMPAIGN' && a.brands?.length) problems.push('a negative brand goes into an ad group, not a whole campaign: name adGroupIds with scope AD_GROUP')
+  if ((a.keywords?.length || a.asins?.length || a.brands?.length) && !places.length) problems.push(`name the places the keywords, ASINs and brands go into (${a.scope === 'CAMPAIGN' ? 'campaignIds' : 'adGroupIds'})`)
+  if (places.length && !a.keywords?.length && !a.asins?.length && !a.brands?.length) problems.push('name the keywords, ASINs or brands that go into those places')
   for (const placeId of places) {
     for (const k of a.keywords ?? []) asked.push({ level: a.scope, placeId, kind: 'KEYWORD', text: k.text, match: k.matchType })
     for (const asin of a.asins ?? []) asked.push({ level: 'AD_GROUP', placeId, kind: 'PRODUCT', text: asin, match: null })
+    for (const brand of a.brands ?? []) asked.push({ level: 'AD_GROUP', placeId, kind: 'BRAND', text: brand, match: null })
   }
   for (const [i, n] of (a.negatives ?? []).entries()) {
     const where = n.adGroupId && n.campaignId ? 'both' : n.adGroupId ? 'AD_GROUP' : n.campaignId ? 'CAMPAIGN' : null
     if (where === 'both' || !where) { problems.push(`negatives[${i}] names ${where ? 'an ad group and a campaign' : 'no place'}: name one (adGroupId or campaignId)`); continue }
-    if (!!n.text === !!n.asin) { problems.push(`negatives[${i}] names ${n.text ? 'a keyword and an ASIN' : 'no keyword and no ASIN'}: name one (text or asin)`); continue }
-    if (n.asin && where === 'CAMPAIGN') { problems.push(`negatives[${i}]: a negative product target goes into an ad group, not a whole campaign`); continue }
+    const given = [n.text, n.asin, n.brandId].filter(Boolean).length
+    if (given !== 1) { problems.push(`negatives[${i}] names ${given ? 'more than one of a keyword, an ASIN and a brand' : 'no keyword, no ASIN and no brand'}: name one (text, asin or brandId)`); continue }
+    if ((n.asin || n.brandId) && where === 'CAMPAIGN') { problems.push(`negatives[${i}]: a negative ${n.asin ? 'product target' : 'brand'} goes into an ad group, not a whole campaign`); continue }
     asked.push(n.asin
       ? { level: 'AD_GROUP', placeId: n.adGroupId!, kind: 'PRODUCT', text: n.asin, match: null }
-      : { level: where, placeId: (n.adGroupId ?? n.campaignId)!, kind: 'KEYWORD', text: n.text!, match: n.matchType ?? 'NEGATIVE_EXACT' })
+      : n.brandId
+        ? { level: 'AD_GROUP', placeId: n.adGroupId!, kind: 'BRAND', text: n.brandId, match: null }
+        : { level: where, placeId: (n.adGroupId ?? n.campaignId)!, kind: 'KEYWORD', text: n.text!, match: n.matchType ?? 'NEGATIVE_EXACT' })
   }
   if (problems.length) return { refusal: `Not queued: ${problems.join('; ')}.` }
-  if (!asked.length) return { refusal: 'Name the negatives: keywords or asins with adGroupIds (or campaignIds with scope CAMPAIGN), or negatives each with its own place.' }
+  if (!asked.length) return { refusal: 'Name the negatives: keywords, asins or brands with adGroupIds (or campaignIds with scope CAMPAIGN), or negatives each with its own place.' }
   if (asked.length > MAX_NEGATIVES) return { refusal: `${asked.length} negatives asked for: at most ${MAX_NEGATIVES} in one request. Split them.` }
 
   // Where each lands, as Nexus holds it now.
@@ -212,14 +233,17 @@ async function itemsOf(a: AddArgs): Promise<{ items: NegItem[] } | { refusal: st
   const seen = new Set<string>()
   const twice: string[] = []
   for (const x of asked) {
-    const norm = x.kind === 'PRODUCT' ? x.text.toUpperCase() : normaliseNegTerm(x.text)
-    const key = `${x.level}:${x.placeId}:${x.kind === 'PRODUCT' ? 'PRODUCT' : x.match}:${norm}`
+    const norm = x.kind === 'KEYWORD' ? normaliseNegTerm(x.text) : x.text.toUpperCase()
+    const key = `${x.level}:${x.placeId}:${x.kind === 'KEYWORD' ? x.match : x.kind}:${norm}`
     if (seen.has(key)) { twice.push(negativeWords(x)); continue }
     seen.add(key)
     // W4-11 — what kind of negative this campaign's ad product takes from Nexus (SB: a keyword, SD: a product target, both
     // in an ad group); a Sponsored Products campaign takes every kind.
     const placed = x.level === 'AD_GROUP' ? groupById.get(x.placeId)!.campaign : campaignById.get(x.placeId)!
-    const notThisKind = adWriteRefusalOf(placed, negativeWriteOf(x))
+    // P2a — a negative brand is Sponsored Display's only (a Sponsored Products write is never refused by adWriteRefusalOf).
+    const notThisKind = x.kind === 'BRAND' && !isSdCampaign(placed)
+      ? 'a negative brand goes into an ad group of a Sponsored Display campaign only'
+      : adWriteRefusalOf(placed, negativeWriteOf(x))
     if (notThisKind) cannot.push(`${negativeWords(x)}: ${notThisKind}`)
     if (x.level === 'AD_GROUP') {
       const g = groupById.get(x.placeId)!
@@ -235,7 +259,7 @@ async function itemsOf(a: AddArgs): Promise<{ items: NegItem[] } | { refusal: st
 }
 
 /** W4-11 — a new negative as the gate and adWriteRefusalOf judge it for a Sponsored Brands / Display campaign. */
-function negativeWriteOf(x: { kind: 'KEYWORD' | 'PRODUCT'; level: Level }): AdWrite {
+function negativeWriteOf(x: { kind: NegKind; level: Level }): AdWrite {
   return { entity: 'NEGATIVE_CREATE', kind: x.kind, negativeLevel: x.level }
 }
 
@@ -251,8 +275,9 @@ async function checksOf(items: NegItem[]): Promise<{ refusal: string } | { warni
   }
   if (problems.length) return { refusal: `Not queued: ${named(problems)}.` }
   // Protected terms refuse everyone; a protected product's ASIN is the person's own limit (warned, his approval sends it).
+  // P2a — a brand is neither a term nor an ASIN: nothing protects it, and it blocks no keyword of its place (L1 below).
   const asked = new Map<string, ReturnType<typeof protectedNegativeRefusal>>()
-  for (const i of items) {
+  for (const i of items.filter((x) => x.kind !== 'BRAND')) {
     const k = `${i.campaign.id}|${i.match ?? 'PRODUCT'}|${i.text.toLowerCase()}`
     if (!asked.has(k)) asked.set(k, protectedNegativeRefusal({ text: i.text, matchType: i.match, marketplace: i.campaign.marketplace, campaignId: i.campaign.id }))
     const hit = await asked.get(k)!
@@ -265,7 +290,7 @@ async function checksOf(items: NegItem[]): Promise<{ refusal: string } | { warni
   const positives = await positivesIn(allGroups)
   const places = await adGroupPlaces(allGroups)
   const groupNames = new Map([...places.values()].map((g) => [g.id, g.name]))
-  for (const i of items) {
+  for (const i of items.filter((x) => x.kind !== 'BRAND')) {
     const own = blockedPositive({ text: i.text, match: i.kind === 'PRODUCT' ? 'PRODUCT' : i.match === 'NEGATIVE_PHRASE' ? 'PHRASE' : 'EXACT' }, i.adGroupIds.flatMap((id) => positives.get(id) ?? []))
     if (own) problems.push(`${negativeWords(i)}: ${blockedWords(own, groupNames.get(own.adGroupId)).replace(/\.$/, '')}`)
   }
@@ -282,8 +307,9 @@ async function checksOf(items: NegItem[]): Promise<{ refusal: string } | { warni
   })
   const there = new Set(standing.map((s) => {
     const level: Level = s.negativeLevel === 'CAMPAIGN' ? 'CAMPAIGN' : 'AD_GROUP'
-    const match = s.kind === 'PRODUCT' ? 'PRODUCT' : /PHRASE/.test(s.expressionType) ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT'
-    return `${level}:${level === 'CAMPAIGN' ? s.adGroup.campaignId : s.adGroupId}:${match}:${s.kind === 'PRODUCT' ? s.expressionValue.trim().toUpperCase() : normaliseNegTerm(s.expressionValue)}`
+    const kind = negKindOf(s.kind)
+    const match = kind !== 'KEYWORD' ? kind : /PHRASE/.test(s.expressionType) ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT'
+    return `${level}:${level === 'CAMPAIGN' ? s.adGroup.campaignId : s.adGroupId}:${match}:${kind !== 'KEYWORD' ? s.expressionValue.trim().toUpperCase() : normaliseNegTerm(s.expressionValue)}`
   }))
   for (const i of items) if (there.has(i.key)) problems.push(`${negativeWords(i)} is already negated in ${i.place}`)
   // W4-11 — a Sponsored Brands negative keyword archived in a campaign is never created there again (Amazon's
@@ -376,8 +402,8 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
   const checked = await checksOf(items)
   if ('refusal' in checked) return refuse(checked.refusal)
 
-  // The Owner's rules 2 and 3, on the search-term report of the ad groups the negatives land in.
-  const rules = await termRulesFor(items.map(placementOf), { product })
+  // The Owner's rules 2 and 3, on the search-term report of the ad groups the negatives land in (P2a: a brand blocks no search term).
+  const rules = await termRulesFor(items.filter((i) => i.kind !== 'BRAND').map(placementOf), { product })
   if (rules.converting.length) {
     return refuse(`Not queued: a negative there would block a search term that converts — ${convertingWords(rules.converting)} over the last ${rules.windowDays} days. `
       + 'Winners stay where they win (the Owner\'s rule 2): leave it out, and lower its bid or placement there instead; once its own exact keyword elsewhere wins, its old place can be closed.')
@@ -408,10 +434,11 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
       blocked: { searchTerms: r?.terms ?? 0, clicks: r?.clicks ?? 0, orders: r?.orders ?? 0, spendCents: r?.spendCents ?? 0, currency: currencyOf.get(i.key) },
     }
   })
-  const counts = { keywords: items.filter((i) => i.kind === 'KEYWORD').length, asins: items.filter((i) => i.kind === 'PRODUCT').length }
+  const brands = items.filter((i) => i.kind === 'BRAND').length
+  const counts = { keywords: items.filter((i) => i.kind === 'KEYWORD').length, asins: items.filter((i) => i.kind === 'PRODUCT').length, ...(brands ? { brands } : {}) }
   const places = new Set(items.map((i) => `${i.level}:${i.placeId}`)).size
   const markets = [...new Set(items.map((i) => i.campaign.marketplace).filter((m): m is string => !!m))].sort()
-  const what = [counts.keywords ? plural(counts.keywords, 'negative keyword') : '', counts.asins ? plural(counts.asins, 'negative product target') : ''].filter(Boolean).join(' and ')
+  const what = [counts.keywords ? plural(counts.keywords, 'negative keyword') : '', counts.asins ? plural(counts.asins, 'negative product target') : '', brands ? plural(brands, 'negative brand') : ''].filter(Boolean).join(' and ')
   const effect = `Adds ${what} at Amazon in ${plural(places, 'place')}: ${named(lines.map((l) => l.label))}. A negative only lowers spend: the searches it blocks stop showing these ads there.`
     + (rules.handovers.length ? ` ${plural(rules.handovers.length, 'converting term')} ${rules.handovers.length === 1 ? 'is' : 'are'} closed in an old place because its own exact keyword wins elsewhere (the proven handover): ${named(rules.handovers.map((h) => `"${h.term}" in ${h.place} (it wins in ${h.home})`))}.` : '')
     + (rules.otherProducts.length ? ` As asked (allowOtherProducts), ${plural(rules.otherProducts.length, 'place')} of another product ${rules.otherProducts.length === 1 ? 'is' : 'are'} blocked too: ${otherProductWords(rules.otherProducts)}.` : '')
@@ -566,7 +593,7 @@ const addNegativeTargets: AgentTool = {
   withinLimits: (preview, limits) => addRefusal(preview, limits) ?? ruleRefusal(preview, limits) ?? negateGroupRefusal(preview, limits),
   undo: ADD_NEGATIVES_UNDO,
   description:
-    `Add negatives to Amazon Sponsored Products campaigns in one request, and a negative keyword to a Sponsored Brands ad group or a negative product target to a Sponsored Display ad group (up to ${MAX_NEGATIVES}, one step): negative keywords `
+    `Add negatives to Amazon Sponsored Products campaigns in one request, and a negative keyword to a Sponsored Brands ad group or a negative product target or negative brand (brands: Amazon brand ids) to a Sponsored Display ad group (up to ${MAX_NEGATIVES}, one step): negative keywords `
     + '(NEGATIVE_EXACT or NEGATIVE_PHRASE) and negative product targets (ASINs), into ad groups — one set of terms into many '
     + 'ad groups, the n-gram way — or as campaign negatives (every ad group of a campaign; keywords only), or each with its '
     + 'own place. create-negative-keyword stays the one-term form. Never a search term that converts where it lands (an '
@@ -610,8 +637,9 @@ const addNegativeTargets: AgentTool = {
       // is his own click, 4A), checks protection and the own-keyword lock, pushes, and records the row with its audit row
       // on this change set — only for a negative that stands.
       // W4-11 — allowSbSd: an SB negative keyword or SD negative product target goes to its own endpoint.
-      const out = i.kind === 'PRODUCT'
-        ? await writeNegativeProductTarget({ adGroupId: i.placeId, asin: i.text, userId: run.actor, evidence, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits, changeSetId: run.changeSetId, allowSbSd: true })
+      const out = i.kind !== 'KEYWORD'
+        // P2a — an SD negative brand goes through the same door (`brandId`), to SD's own endpoint.
+        ? await writeNegativeProductTarget({ adGroupId: i.placeId, asin: i.kind === 'PRODUCT' ? i.text : '', ...(i.kind === 'BRAND' ? { brandId: i.text } : {}), userId: run.actor, evidence, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits, changeSetId: run.changeSetId, allowSbSd: true })
         : await writeNegativeKeyword({
           scope: i.level, ...(i.level === 'AD_GROUP' ? { adGroupId: i.placeId } : { campaignId: i.placeId }), keywordText: i.text, matchType: i.match!,
           userId: run.actor, evidence, manual: run.manual, changeSetId: run.changeSetId, allowSbSd: true,
@@ -696,7 +724,7 @@ type NegRow = { id: string; kind: unknown; isNegative: boolean; status: unknown;
 /** One standing negative a retire lifts, as a card and its record read it. */
 interface Retiring {
   id: string
-  kind: 'KEYWORD' | 'PRODUCT'
+  kind: NegKind
   text: string
   match: NegMatch | null
   level: Level
@@ -716,11 +744,11 @@ interface Retiring {
 }
 
 const retiringOf = (r: NegRow, madeBy: string, owner: NegativeOrigin | null = null): Retiring => {
-  const kind = String(r.kind) === 'PRODUCT' ? 'PRODUCT' : 'KEYWORD'
+  const kind = negKindOf(r.kind)
   const level: Level = r.negativeLevel === 'CAMPAIGN' ? 'CAMPAIGN' : 'AD_GROUP'
   const sbKeyword = kind === 'KEYWORD' && adProductOf({ adProduct: r.adGroup.campaign.adProduct, type: r.adGroup.campaign.type == null ? null : String(r.adGroup.campaign.type) }) === SPONSORED_BRANDS
   return {
-    id: r.id, kind, text: r.expressionValue, match: kind === 'PRODUCT' ? null : /PHRASE/.test(r.expressionType) ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT',
+    id: r.id, kind, text: r.expressionValue, match: kind !== 'KEYWORD' ? null : /PHRASE/.test(r.expressionType) ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT',
     level, adGroupId: r.adGroupId, campaign: campaignOf(r.adGroup.campaign),
     place: level === 'CAMPAIGN' ? `campaign "${r.adGroup.campaign.name}" (every ad group)` : placeWords(r.adGroup),
     atAmazon: !!r.externalTargetId, madeBy, owner, final: sbKeyword && !!r.externalTargetId,
@@ -793,7 +821,7 @@ async function retiringFor(a: RetireArgs): Promise<{ list: Retiring[] } | { refu
   const unique = [...new Map(rows.map((r) => [r.id, r])).values()]
   const cannot: string[] = []
   for (const r of unique) {
-    const label = `${negativeWords({ kind: String(r.kind) === 'PRODUCT' ? 'PRODUCT' : 'KEYWORD', text: r.expressionValue, match: /PHRASE/.test(r.expressionType) ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT' })} in ${placeWords(r.adGroup)}`
+    const label = `${negativeWords({ kind: negKindOf(r.kind), text: r.expressionValue, match: /PHRASE/.test(r.expressionType) ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT' })} in ${placeWords(r.adGroup)}`
     if (String(r.status) === 'ARCHIVED') cannot.push(`${label}: it is retired already (archived)`)
     else {
       // W4-11 — an SB negative keyword or SD negative product target in an ad group is retired at its own endpoint.
@@ -968,7 +996,9 @@ export const RETIRE_NEGATIVES_UNDO: ToolUndo = {
       args: {
         negatives: back.map((n) => (n.kind === 'PRODUCT'
           ? { adGroupId: String(n.adGroupId), asin: String(n.text) }
-          : { ...(n.level === 'CAMPAIGN' ? { campaignId: String(n.campaignId) } : { adGroupId: String(n.adGroupId) }), text: String(n.text), matchType: n.match === 'NEGATIVE_PHRASE' ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT' })),
+          : n.kind === 'BRAND'
+            ? { adGroupId: String(n.adGroupId), brandId: String(n.text) }
+            : { ...(n.level === 'CAMPAIGN' ? { campaignId: String(n.campaignId) } : { adGroupId: String(n.adGroupId) }), text: String(n.text), matchType: n.match === 'NEGATIVE_PHRASE' ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT' })),
         allowOtherProducts: true,
         why: 'undo of retire-negatives: the same negatives added again where they stood'
           + (final.length ? ` (not the ${final.length === 1 ? 'Sponsored Brands negative keyword' : `${final.length} Sponsored Brands negative keywords`}: Amazon does not let one archived in a campaign be added there again)` : ''),

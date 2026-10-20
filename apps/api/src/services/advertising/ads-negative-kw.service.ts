@@ -13,6 +13,8 @@
  * W4-11 — no longer only: for a caller that may change SB/SD (`allowSbSd`, Claude's add-negative-targets), a negative
  * keyword in a Sponsored Brands ad group goes to SB 3.0's own POST /sb/negativeKeywords and a negative product target in
  * a Sponsored Display ad group to SD 3.0's POST /sd/negativeTargets (ads-api-client.ts), through the same order below.
+ * SD CREATE P2a — and a negative BRAND in a Sponsored Display ad group (`writeNegativeProductTarget` with `brandId`:
+ * asinBrandSameAs, kind BRAND), SD only: no other ad product's brand negative is sent from Nexus.
  *
  * 5b — THE ONE NEGATIVE WRITE SERVICE (review 7.1, 7.5, 7.6, 7.12). Every Nexus path that adds a negative — the
  * launches, bulk negatives, the bulk sheet, blueprints, AI goals, the launch repair, harvest, the rules, n-grams, the
@@ -280,6 +282,11 @@ export interface WriteNegativeProductTargetArgs {
    * to SD's own endpoint (POST /sd/negativeTargets). Absent: Sponsored Products only, as before.
    */
   allowSbSd?: boolean
+  /**
+   * SD CREATE P2a — a negative BRAND instead of an ASIN (Amazon's brand id; `asin` is then not read): a Sponsored Display
+   * ad group only, and only with `allowSbSd`. Stored as kind BRAND, expression type BRAND.
+   */
+  brandId?: string | null
   /** Negative Targeting — the author, said outright (negativeOriginOf decides it from the rest when absent). */
   origin?: NegativeOrigin | null
 }
@@ -497,7 +504,7 @@ interface KeywordJob {
  * W4-11 — the new negative as the gate judges an SB/SD one (adWriteRefusal), for a caller that may send it; null for
  * every other caller and every Sponsored Products campaign, so the gate keeps refusing SB/SD for them (6a).
  */
-function sbSdNegative(allow: boolean | undefined, campaign: CampaignRow, kind: 'KEYWORD' | 'PRODUCT', level: NegativeScope): AdWrite | null {
+function sbSdNegative(allow: boolean | undefined, campaign: CampaignRow, kind: 'KEYWORD' | 'PRODUCT' | 'BRAND', level: NegativeScope): AdWrite | null {
   const product = adProductOf(campaign)
   if (allow !== true || (product !== SPONSORED_BRANDS && product !== SPONSORED_DISPLAY)) return null
   return { entity: 'NEGATIVE_CREATE', kind, negativeLevel: level }
@@ -595,21 +602,31 @@ async function sendKeyword(job: KeywordJob): Promise<Sent> {
   }
 }
 
-interface ProductJob { placement: Placement; asin: string; creationFlow?: boolean; pushing?: boolean; /** 1e — see KeywordJob.manual. */ manual?: boolean; /** W1-7 — see WriteNegativeProductTargetArgs. */ confirmOwnLimits?: boolean; /** W4-11 — see WriteNegativeProductTargetArgs.allowSbSd. */ allowSbSd?: boolean; /** AB-5 — see KeywordJob.actor. */ actor?: string | null }
+interface ProductJob {
+  placement: Placement; asin: string; creationFlow?: boolean; pushing?: boolean; /** 1e — see KeywordJob.manual. */ manual?: boolean; /** W1-7 — see WriteNegativeProductTargetArgs. */ confirmOwnLimits?: boolean; /** W4-11 — see WriteNegativeProductTargetArgs.allowSbSd. */ allowSbSd?: boolean; /** AB-5 — see KeywordJob.actor. */ actor?: string | null
+  /** P2a — see WriteNegativeProductTargetArgs.brandId: an SD negative brand (`asin` is then the brand id). */
+  brand?: boolean
+}
 
 async function sendProductTarget(job: ProductJob): Promise<Sent> {
   const { placement: { campaign, adGroup }, asin } = job
-  if (!adGroup) return { kind: 'refused', refusal: { deniedAt: 'ad_group_unknown', reason: 'A negative product target needs an ad group.' } }
-  if (!isAsin(asin)) return { kind: 'refused', refusal: { deniedAt: 'not_an_asin', reason: `"${asin}" is not an ASIN (B0 and 8 letters or digits): a negative product target names one product.` } }
+  const kind = job.brand ? 'BRAND' : 'PRODUCT'
+  if (!adGroup) return { kind: 'refused', refusal: { deniedAt: 'ad_group_unknown', reason: `A negative ${job.brand ? 'brand' : 'product target'} needs an ad group.` } }
+  if (job.brand) {
+    // P2a — a brand negative is Sponsored Display's (asinBrandSameAs), sent for a caller that may change SD; a brand
+    // protects no ASIN and blocks no keyword of its ad group, so neither of those checks is asked.
+    if (job.allowSbSd !== true || adProductOf(campaign) !== SPONSORED_DISPLAY) return { kind: 'refused', refusal: { deniedAt: 'ad_product_unsupported', reason: 'A negative brand goes into a Sponsored Display ad group only: Nexus sends no brand negative for any other ad product.' } }
+    if (!/^\d{1,30}$/.test(asin)) return { kind: 'refused', refusal: { deniedAt: 'not_a_brand', reason: `"${asin}" is not a brand id: a negative brand names Amazon's numeric brand id.` } }
+  } else if (!isAsin(asin)) return { kind: 'refused', refusal: { deniedAt: 'not_an_asin', reason: `"${asin}" is not an ASIN (B0 and 8 letters or digits): a negative product target names one product.` } }
   const confirmed = job.manual === true && job.confirmOwnLimits === true
-  const invalid = await protectedRefusal(asin, null, campaign, { manual: job.manual, confirmOwnLimits: job.confirmOwnLimits })
+  const invalid = job.brand ? null : await protectedRefusal(asin, null, campaign, { manual: job.manual, confirmOwnLimits: job.confirmOwnLimits })
     ?? await ownKeywordRefusal({ scope: 'AD_GROUP', adGroupId: adGroup.id, campaignId: campaign.id }, asin, 'PRODUCT')
   if (invalid) return { kind: 'refused', refusal: invalid }
   let heal: string | null = null
   if (!job.pushing) {
-    // H.5 — a negative product target is identified by ad group + ASIN.
+    // H.5 — a negative product target is identified by ad group + ASIN (P2a: a negative brand by ad group + brand id).
     const standing = await prisma.adTarget.findFirst({
-      where: { adGroupId: adGroup.id, kind: 'PRODUCT', isNegative: true, status: { not: 'ARCHIVED' }, expressionValue: { equals: asin, mode: 'insensitive' } },
+      where: { adGroupId: adGroup.id, kind, isNegative: true, status: { not: 'ARCHIVED' }, expressionValue: { equals: asin, mode: 'insensitive' } },
       orderBy: { externalTargetId: { sort: 'asc', nulls: 'last' } },
       select: { id: true, externalTargetId: true },
     })
@@ -620,7 +637,7 @@ async function sendProductTarget(job: ProductJob): Promise<Sent> {
   }
   if (!campaign.externalCampaignId || !adGroup.externalAdGroupId) return { kind: 'draft' }
   // W4-11 — for a caller that may send one, the SD negative product target it is (sbSdNegative): SD's own endpoint below.
-  const sbSd = sbSdNegative(job.allowSbSd, campaign, 'PRODUCT', 'AD_GROUP')
+  const sbSd = sbSdNegative(job.allowSbSd, campaign, kind, 'AD_GROUP')
   const gate = await checkAdsWriteGate({
     marketplace: campaign.marketplace, payloadValueCents: 0, isNegation: true, keywordText: asin, adProduct: adProductOf(campaign),
     ...(job.creationFlow ? {} : { campaignId: campaign.id }),
@@ -635,7 +652,7 @@ async function sendProductTarget(job: ProductJob): Promise<Sent> {
   const ctx = await clientContext(campaign.marketplace, gate.mode === 'live' ? gate.profileId : null)
   try {
     if (sbSd && adProductOf(campaign) === SPONSORED_DISPLAY) {
-      const r = await sendSdNegativeTarget(ctx, { externalCampaignId: campaign.externalCampaignId, externalAdGroupId: adGroup.externalAdGroupId, asin, state: 'enabled', ...(confirmed ? { personConfirmed: true } : {}) })
+      const r = await sendSdNegativeTarget(ctx, { externalCampaignId: campaign.externalCampaignId, externalAdGroupId: adGroup.externalAdGroupId, ...(job.brand ? { asin: '', brandId: asin } : { asin }), state: 'enabled', ...(confirmed ? { personConfirmed: true } : {}) })
       if (r.mode === 'sandbox') return { kind: 'sent', mode: 'sandbox', externalId: null, rawResponse: r.rawResponse, errors: [] }
       return { kind: 'sent', mode: 'live', externalId: await healNegativeRow(heal, r.externalId), rawResponse: r.rawResponse, errors: r.externalId ? [] : r.error ? [r.error] : [] }
     }
@@ -660,7 +677,7 @@ export async function mirrorNegativeRow(m: {
   adGroupId: string
   /** Needed for CAMPAIGN level: the campaign whose negatives are searched. */
   campaignId?: string | null
-  kind: 'KEYWORD' | 'PRODUCT'
+  kind: 'KEYWORD' | 'PRODUCT' | 'BRAND'
   level: NegativeScope
   expressionType: string
   expressionValue: string
@@ -670,7 +687,7 @@ export async function mirrorNegativeRow(m: {
 }): Promise<{ id: string; created: boolean }> {
   const where: Prisma.AdTargetWhereInput = m.kind === 'KEYWORD'
     ? standingNegativeWhere({ scope: m.level, adGroupId: m.adGroupId, campaignId: m.campaignId ?? '', keywordText: m.expressionValue, matchType: toNegativeMatch(m.expressionType) })
-    : { adGroupId: m.adGroupId, kind: 'PRODUCT', isNegative: true, status: { not: 'ARCHIVED' }, expressionValue: { equals: m.expressionValue, mode: 'insensitive' } }
+    : { adGroupId: m.adGroupId, kind: m.kind, isNegative: true, status: { not: 'ARCHIVED' }, expressionValue: { equals: m.expressionValue, mode: 'insensitive' } }
   // CM-25 — the row Amazon holds first, so a second id-less row is never given the same Amazon id.
   const existing = await prisma.adTarget.findFirst({ where, orderBy: { externalTargetId: { sort: 'asc', nulls: 'last' } }, select: { id: true, externalTargetId: true } })
   if (existing) {
@@ -787,24 +804,26 @@ export async function writeNegativeKeyword(args: WriteNegativeKeywordArgs): Prom
   }
 }
 
-/** 5b — add one ad-group negative product target (an ASIN), through the same order as a keyword. */
+/** 5b — add one ad-group negative product target (an ASIN) — P2a: or an SD negative brand (`brandId`) — through the same order as a keyword. */
 export async function writeNegativeProductTarget(args: WriteNegativeProductTargetArgs): Promise<NegativeWriteResult> {
   const mode = adsMode()
+  const brand = !!args.brandId
+  const what = brand ? 'negative brand' : 'negative product target'
   const placement = await resolvePlacement({ scope: 'AD_GROUP', adGroupId: args.adGroupId })
-  if (isRefusal(placement)) return done('negative product target', refusedResult(placement, mode))
-  const asin = (args.asin ?? '').trim()
-  const sent = await sendProductTarget({ placement, asin, creationFlow: args.creationFlow, manual: isPersonCreate(args.manual, args.userId), confirmOwnLimits: args.confirmOwnLimits, allowSbSd: args.allowSbSd, actor: args.userId ?? null })
+  if (isRefusal(placement)) return done(what, refusedResult(placement, mode))
+  const asin = ((brand ? args.brandId : args.asin) ?? '').trim()
+  const sent = await sendProductTarget({ placement, asin, brand, creationFlow: args.creationFlow, manual: isPersonCreate(args.manual, args.userId), confirmOwnLimits: args.confirmOwnLimits, allowSbSd: args.allowSbSd, actor: args.userId ?? null })
   const early = settled(sent, sent.kind === 'draft' ? 'local' : mode)
-  if (early) return done('negative product target', early)
+  if (early) return done(what, early)
 
   const recordMode = sent.kind === 'sent' ? sent.mode : 'local'
   const externalTargetId = sent.kind === 'sent' ? sent.externalId : null
   const row = await mirrorNegativeRow({
-    adGroupId: args.adGroupId, kind: 'PRODUCT', level: 'AD_GROUP', expressionType: 'ASIN', expressionValue: asin, externalTargetId,
+    adGroupId: args.adGroupId, kind: brand ? 'BRAND' : 'PRODUCT', level: 'AD_GROUP', expressionType: brand ? 'BRAND' : 'ASIN', expressionValue: asin, externalTargetId,
     origin: await originFor({ origin: args.origin, userId: args.userId, evidence: args.evidence, creationFlow: args.creationFlow, changeSetId: args.changeSetId }),
   })
   if (row.created) {
-    await auditCreate('create_negative_product_target', row.id, { asin, externalId: externalTargetId, reachedAmazon: externalTargetId != null, mode: recordMode }, args.userId, args.evidence, args.changeSetId)
+    await auditCreate(brand ? 'create_negative_brand_target' : 'create_negative_product_target', row.id, { ...(brand ? { brandId: asin } : { asin }), externalId: externalTargetId, reachedAmazon: externalTargetId != null, mode: recordMode }, args.userId, args.evidence, args.changeSetId)
   }
   return {
     outcome: sent.kind === 'draft' ? 'local' : 'created', mode: recordMode, externalTargetId, reachedAmazon: externalTargetId != null,
@@ -834,8 +853,9 @@ export async function pushLocalNegative(adTargetId: string, opts: { creationFlow
   const scope: NegativeScope = row.negativeLevel === 'CAMPAIGN' ? 'CAMPAIGN' : 'AD_GROUP'
   const placement = await resolvePlacement({ scope: 'AD_GROUP', adGroupId: row.adGroupId })
   if (isRefusal(placement)) return done('negative push', refusedResult(placement, mode))
-  const sent = row.kind === 'PRODUCT'
-    ? await sendProductTarget({ placement, asin: row.expressionValue.trim(), creationFlow: opts.creationFlow, pushing: true })
+  const sent = row.kind === 'PRODUCT' || row.kind === 'BRAND'
+    // P2a — an SD negative brand is pushed as one (SD only: sendProductTarget refuses it anywhere else).
+    ? await sendProductTarget({ placement, asin: row.expressionValue.trim(), creationFlow: opts.creationFlow, pushing: true, ...(row.kind === 'BRAND' ? { brand: true, allowSbSd: true } : {}) })
     : await sendKeyword({ placement, scope, text: row.expressionValue.trim(), matchType: toNegativeMatch(row.expressionType), creationFlow: opts.creationFlow, pushing: true })
   if (sent.kind === 'draft') return done('negative push', failedResult('The campaign or ad group has no Amazon ids yet, so the negative cannot be pushed.', 'local'))
   const early = settled(sent, mode)

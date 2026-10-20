@@ -1361,6 +1361,7 @@ CREATE TABLE "Campaign" (
     "linkedMarketplaces" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "deliveryStatus" TEXT,
     "deliveryReasons" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "servingStatus" TEXT,
     "liveBidWritesEnabled" BOOLEAN NOT NULL DEFAULT false,
     "liveBidWritesToday" INTEGER NOT NULL DEFAULT 0,
     "liveBidWritesDay" TEXT,
@@ -1408,6 +1409,8 @@ CREATE TABLE "AdGroup" (
     "creativeType" TEXT,
     "deliveryStatus" TEXT,
     "deliveryReasons" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "bidOptimization" TEXT,
+    "servingStatus" TEXT,
     "orphanedAt" TIMESTAMP(3),
     "orphanReason" TEXT,
 
@@ -1441,6 +1444,9 @@ CREATE TABLE "AdTarget" (
     "negativeLevel" TEXT,
     "deliveryStatus" TEXT,
     "deliveryReasons" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "expressionJson" JSONB,
+    "resolvedExpressionJson" JSONB,
+    "servingStatus" TEXT,
     "orphanedAt" TIMESTAMP(3),
     "orphanReason" TEXT,
     "retiredAt" TIMESTAMP(3),
@@ -1475,6 +1481,10 @@ CREATE TABLE "AdProductAd" (
     "adType" TEXT,
     "deliveryStatus" TEXT,
     "deliveryReasons" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "landingPageType" TEXT,
+    "landingPageUrl" TEXT,
+    "adName" TEXT,
+    "servingStatus" TEXT,
 
     CONSTRAINT "AdProductAd_pkey" PRIMARY KEY ("id")
 );

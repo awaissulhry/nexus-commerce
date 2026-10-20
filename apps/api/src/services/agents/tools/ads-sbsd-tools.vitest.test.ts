@@ -210,11 +210,11 @@ describe('set-target-bid and bulk-ad-bid-change', () => {
 })
 
 describe('pause-ads and enable-ads', () => {
-  it('an SB campaign and an SD target pause and come back on; archive and an SB ad group are refused by name', async () => {
+  it('an SB campaign and an SD target pause and come back on; an SB archive and an SB ad group are refused by name', async () => {
     const r = await preview('pause-ads', { campaignIds: ['c-sb'], targetIds: ['t-sd-pt'] })
     expect(r.ok, r.error).toBe(true)
-    expect((await preview('archive-ads', { targetIds: ['t-sd-pt'] })).error).toMatch(/— not archiving a target —/)
-    expect((await preview('pause-ads', { adGroupIds: ['g-c-sd'] })).error).toMatch(/ad group "group g-c-sd" .*it is Sponsored Display/)
+    expect((await preview('archive-ads', { targetIds: ['t-sb-pt'] })).error).toMatch(/— not archiving a target —/)
+    expect((await preview('pause-ads', { adGroupIds: ['g-c-sb'] })).error).toMatch(/ad group "[^"]+" \(campaign "Italy brands"\): Italy brands is a Sponsored Brands campaign\. .* — not a change to an ad group —/)
     const asked = await ask('pause-ads', { campaignIds: ['c-sb'], targetIds: ['t-sd-pt'], why: 'test' })
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { paused: 2 } })
     expect(await queuedBy(asked.approvalId!)).toEqual([
@@ -236,7 +236,7 @@ describe('add-negative-targets and retire-negatives', () => {
     expect(sb.preview.stepUp).toBeUndefined()
     expect((await preview('add-negative-targets', { adGroupIds: ['g-c-sd'], asins: ['B0TESTOTH1'] })).ok).toBe(true)
     expect((await preview('add-negative-targets', { adGroupIds: ['g-c-sb'], asins: ['B0TESTOTH1'] })).error).toMatch(/not a negative other than a keyword in an ad group/)
-    expect((await preview('add-negative-targets', { adGroupIds: ['g-c-sd'], keywords: [{ text: 'free brand' }] })).error).toMatch(/not a negative other than a product target \(an ASIN\) in an ad group/)
+    expect((await preview('add-negative-targets', { adGroupIds: ['g-c-sd'], keywords: [{ text: 'free brand' }] })).error).toMatch(/not a negative other than a product target \(an ASIN\) or a brand in an ad group/)
     expect((await preview('add-negative-targets', { scope: 'CAMPAIGN', campaignIds: ['c-sb'], keywords: [{ text: 'free brand' }] })).error).toMatch(/not a negative other than a keyword in an ad group/)
   })
 

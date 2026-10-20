@@ -1104,6 +1104,16 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   // Display; from A the ad group is not found), and an upload of B's library photo (from A it is not found, before any fetch).
   get 'set-ad-creative'() { return { op: 'update', adGroupId: seeded.b.adGroupId, headline: 'MCP8 probe', brandLogo: undefined, customImage: undefined, video: undefined, properties: undefined, consentToTranslate: undefined } },
   get 'upload-ad-asset'() { return { market: seeded.b.market, use: 'brandLogo', photoId: `da_${seeded.b.assetId}`, url: undefined, subType: undefined, name: undefined } },
+  // Sponsored Display extras (P3c, 2026-10-20) — aimed at B's market, campaign or ad group, with every key given (no Amazon id
+  // of B exists): from A the market, campaign or ad group is not found, before any Amazon call.
+  get 'sd-optimization-rules'() { return { market: seeded.b.market, ruleId: undefined, adGroupId: undefined, withAdGroups: false, startIndex: 0 } },
+  get 'set-sd-optimization-rule'() { return { op: 'attach', adGroupId: seeded.b.adGroupId, ruleId: 'MCP8-PROBE', market: undefined, name: undefined, metric: undefined, thresholdCents: undefined } },
+  get 'sd-budget-rules'() { return { market: seeded.b.market, ruleId: undefined, campaignId: undefined, nextToken: undefined } },
+  get 'sd-budget-insights'() { return { market: seeded.b.market, campaignIds: undefined } },
+  get 'set-sd-budget-rule'() { return { op: 'attach', campaignId: seeded.b.campaignId, ruleId: 'MCP8-PROBE', market: undefined, name: undefined, type: undefined, increasePct: undefined, startDate: undefined, endDate: undefined, recurrence: undefined, daysOfWeek: undefined, hours: undefined, condition: undefined, state: undefined } },
+  get 'sd-forecast'() { return { market: seeded.b.market, startDate: '2099-01-01', bidOptimization: 'clicks', skus: [seeded.b.sku], targets: [{ kind: 'category', value: '12345', bidCents: 50 }], endDate: undefined, dailyBudgetCents: undefined, creativeType: undefined, defaultBidCents: undefined, negatives: undefined, costControl: undefined } },
+  get 'sd-brand-safety'() { return { market: seeded.b.market, view: 'list', requestId: undefined, startIndex: 0 } },
+  get 'set-sd-brand-safety'() { return { op: 'add', market: seeded.b.market, domains: [{ name: 'mcp8-probe.example', type: 'website' }] } },
   // Google Ads step 1a — the two ad reads that take channel google are aimed at B's Google sign-in (accountId), read per
   // account and never per market (the eBay forms of these reads are held in 1b).
   get 'ads-overview'() { return { channel: 'google', market: undefined, accountId: seeded.b.googleConnectionId } },
@@ -1336,7 +1346,10 @@ const LIVE_READS = new Set(['shopify-content', 'set-shopify-content', 'listing-l
   'aplus-content', 'set-aplus-content', 'set-aplus-asins', 'submit-aplus-content',
   // SD creatives (2026-10-20) — the asset library is read live at Amazon (sandbox here: nothing to read inside B), and an
   // upload fetches its photo: from A, B's photo is not found before any fetch or Amazon call.
-  'ad-assets', 'upload-ad-asset'])
+  'ad-assets', 'upload-ad-asset',
+  // Sponsored Display extras (P3c) — read and changed live at Amazon: from A, B's market, campaign or ad group is not found first.
+  'sd-optimization-rules', 'set-sd-optimization-rule', 'sd-budget-rules', 'sd-budget-insights', 'set-sd-budget-rule', 'sd-forecast',
+  'sd-brand-safety', 'set-sd-brand-safety'])
 /**
  * L7 — tools that create from nothing: they name no row of either business, so there is nothing of B to reach (no
  * control inside B), and from A the creation is legitimate (it queues A's own approval). They are held to "no trace of

@@ -32,7 +32,7 @@ import {
 import { CAMPAIGN_NOT_ON_AMAZON } from './launch-outcome.js'
 import { AUTO_CLAUSE_LABEL, autoClauseFromSpelling, autoClauseOf, type AutoClause } from '../ads-core/ads-blueprint.js'
 import { mergeOntoAmazonPlacements } from './ads-placement-math.js'
-import { sdExpressionValue, sdTargetExpression } from './sd-target-expression.js'
+import { SD_SIMILAR_PRODUCT, sdExpressionValue, sdTargetExpression } from './sd-target-expression.js'
 import { patchDynamicBidding } from './dynamic-bidding-write.js'
 import { checkAdsWriteGate, sentPastSentence, type GateContext, type GateDecision, type OwnLimit } from './ads-write-gate.js'
 import { createIdentity, withCreateClaim } from './ads-create-claim.js'
@@ -178,6 +178,13 @@ export interface NewCampaign {
   biddingStrategy?: 'legacyForSales' | 'autoForSales' | 'manual'; portfolioId?: string; userId?: string
   /** SD only. T00020 = contextual product/category, T00030 = audiences. */
   sdTactic?: 'T00020' | 'T00030'
+  /**
+   * SD CREATE P2a — SD only: how it pays (cpc, Amazon's default, or vcpm; fixed once created), its first and last day
+   * (default: today, and no end). Stored on the campaign row too, so its bids are judged on the right range.
+   */
+  sdCostType?: 'cpc' | 'vcpm'
+  sdStartDate?: Date
+  sdEndDate?: Date | null
   /** SB only. Brand Registry binding; resolved from an existing SB campaign when omitted. */
   brandEntityId?: string
   /**
@@ -292,7 +299,7 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
       // CC-26 — SB and SD send a start date: the day in the account's own time zone, not the UTC day.
       const timeZone = input.type === 'SP' ? null : await startDateTimeZone(ctx.profileId, input.marketplace)
       const r = input.type === 'SD'
-        ? await createSdCampaign(ctx, { ...common, tactic: input.sdTactic ?? 'T00020', timeZone })
+        ? await createSdCampaign(ctx, { ...common, tactic: input.sdTactic ?? 'T00020', costType: input.sdCostType, startDate: input.sdStartDate, endDate: input.sdEndDate, timeZone })
         : input.type === 'SB'
           ? await createSbCampaign(ctx, { ...common, brandEntityId: brandEntityId!, timeZone })
           // AX-VT.1 — portfolioId travels with the create. It used to be collected by
@@ -323,14 +330,15 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
       externalCampaignId: externalId, dailyBudget: input.dailyBudgetEur, biddingStrategy: (input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES'),
       portfolioId: input.portfolioId || null,
       ...(brandEntityId ? { brandEntityId } : {}),
-      // CC-12 — an SD campaign keeps the tactic it was created with, as Amazon holds it.
-      ...(input.type === 'SD' ? { tactic: input.sdTactic ?? 'T00020' } : {}),
+      // CC-12 — an SD campaign keeps the tactic it was created with, as Amazon holds it. P2a — and how it pays (createAdGroupLocal
+      // reads it for the ad group's bid optimisation) and its last day, as sent.
+      ...(input.type === 'SD' ? { tactic: input.sdTactic ?? 'T00020', costType: input.sdCostType ?? 'cpc', ...(input.sdEndDate ? { endDate: input.sdEndDate } : {}) } : {}),
       // CC-27 — the Sponsored Products targeting type this create asked Amazon for (the same value `createCampaign`
       // sends). The list, the export and the receipt showed it blank until the settings sync read it back.
       ...(input.type === 'SP' ? { targetingType: input.targetingType ?? 'MANUAL' } : {}),
       // W2-A (CC-3) — a campaign Amazon does not hold is marked FAILED with the reason (the delivery column shows it), not
       // PENDING as if a push were on its way: no path pushes a campaign that has no Amazon id.
-      startDate: new Date(),
+      startDate: (input.type === 'SD' ? input.sdStartDate : null) ?? new Date(),
       ...(externalId
         ? { lastSyncStatus: 'SUCCESS' as const }
         : { lastSyncStatus: 'FAILED' as const, lastSyncedAt: new Date(), lastSyncError: notSent ?? CAMPAIGN_NOT_ON_AMAZON }),
@@ -360,6 +368,9 @@ export interface NewAdGroup {
   confirmOwnLimits?: boolean
   /** PB-5 — the approval this create runs for: its AdvertisingActionLog row carries it (executionId). Absent: no change set. */
   changeSetId?: string | null
+  /** SD CREATE P2a — SD only: what Amazon optimises its bids for (clicks | conversions per click, reach per vCPM) and its creative. */
+  sdBidOptimization?: 'clicks' | 'conversions' | 'reach'
+  sdCreativeType?: 'IMAGE' | 'VIDEO'
 }
 export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: string | null; externalAdGroupId: string | null; /** W2-A — why it did not reach Amazon (every caller; a launch lists it). */ notSent?: NotSent | null } & PersonAddResult> {
   const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true, costType: true } })
@@ -392,7 +403,8 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
         try {
           const r = isSd
             // SD-P1 — no tactic on an SD ad group (it is the campaign's); how the campaign pays picks its bidOptimization.
-            ? await createSdAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name, defaultBid: input.defaultBidEur, state, costType: campaign.costType === 'vcpm' ? 'vcpm' : 'cpc' })
+            // P2a — unless the caller names one (and its creative type).
+            ? await createSdAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name, defaultBid: input.defaultBidEur, state, costType: campaign.costType === 'vcpm' ? 'vcpm' : 'cpc', bidOptimization: input.sdBidOptimization, creativeType: input.sdCreativeType })
             // SB ad groups take no bid at all — see CreateSbAdGroupInput.
             : isSb
               ? await createSbAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name, state })
@@ -411,7 +423,7 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
     logger.warn('[CM-8] ad group not created — nothing written', { campaignId: input.campaignId, outcome: notSent.outcome, reason: notSent.reason })
     return { id: null, externalAdGroupId: null, ...personAdd(notSent.outcome, notSent.reason, notSent.limits) }
   }
-  const ag = await prisma.adGroup.create({ data: { campaignId: input.campaignId, name, defaultBidCents: Math.round(input.defaultBidEur * 100), status: 'ENABLED', externalAdGroupId: externalId } })
+  const ag = await prisma.adGroup.create({ data: { campaignId: input.campaignId, name, defaultBidCents: Math.round(input.defaultBidEur * 100), status: 'ENABLED', externalAdGroupId: externalId, ...(isSd && input.sdCreativeType ? { creativeType: input.sdCreativeType } : {}) } })
   await audit('create_ad_group', 'AD_GROUP', ag.id, { name, externalId }, input.userId, {}, 'SUCCESS', pastNote, input.changeSetId)
   return {
     id: ag.id, externalAdGroupId: externalId, notSent,
@@ -1306,9 +1318,10 @@ const AUTO_EXPRESSION: Record<string, string> = {
 export interface NewTarget {
   adGroupId: string
   kind: 'PRODUCT' | 'CATEGORY' | 'AUTO' | 'AUDIENCE'
-  // PRODUCT → an ASIN; CATEGORY → a browse-node id; AUTO → one of AUTO_EXPRESSION keys;
-  // AUDIENCE → with audienceType set: VIEWS/PURCHASES_REMARKETING → the scope (`exactProduct` = the advertised products,
-  // `similarProduct`, `relatedProduct`, or a category id); AUDIENCE → an Amazon audience id. See sdTargetExpression.
+  // PRODUCT → an ASIN (SD: or `similarProduct`); CATEGORY → a browse-node id (SD: with its refinements); AUTO → one of
+  // AUTO_EXPRESSION keys; AUDIENCE → with audienceType set: VIEWS/PURCHASES_REMARKETING → the scope (`exactProduct` = the
+  // advertised products, `similarProduct` for views, `relatedProduct` for purchases, or a category id with its
+  // refinements); AUDIENCE → an Amazon audience id. See sdTargetExpression for the text each value is.
   value: string
   audienceType?: 'VIEWS_REMARKETING' | 'PURCHASES_REMARKETING' | 'AUDIENCE'
   /** CC-12 — an SD remarketing audience's window in days (Amazon requires one); 30 when omitted. */
@@ -1382,7 +1395,8 @@ async function createTargetOnce(input: NewTarget): Promise<TargetCreateResult> {
     : input.kind === 'CATEGORY'
       ? [{ type: 'ASIN_CATEGORY_SAME_AS', value: input.value }]
       : [{ type: AUTO_EXPRESSION[input.value] ?? input.value }]
-  const expressionType = input.kind === 'PRODUCT' ? 'ASIN' : input.kind === 'CATEGORY' ? 'CATEGORY' : isAudience ? audType : 'AUTO'
+  // P2a — SD's "products similar to the advertised ones" names no ASIN: its own expression type, so no reader takes it for one.
+  const expressionType = input.kind === 'PRODUCT' ? (sdExpression && value === SD_SIMILAR_PRODUCT ? 'SIMILAR_PRODUCT' : 'ASIN') : input.kind === 'CATEGORY' ? 'CATEGORY' : isAudience ? audType : 'AUTO'
   let externalId: string | null = null, mode = 'local'
   // CM-8 — why nothing reached Amazon, for a person's add (W2-A: and for a launch).
   let notSent: NotSent | null = null
