@@ -254,7 +254,8 @@ export function SbSdBuilder() {
 
     let adGroupId: string | undefined
     try {
-      const ag = await post('adgroups/create', { campaignId: campaign.id, name: `${name.trim()} — ad group`, defaultBidEur: bidNum })
+      // A plain hyphen: Amazon refused "<campaign> — ad group" (em dash) as "Adgroup name invalid characters".
+      const ag = await post('adgroups/create', { campaignId: campaign.id, name: `${name.trim()} - ad group`, defaultBidEur: bidNum })
       adGroupId = ag?.id
       reached('Ad group', 'ok', ag?.externalAdGroupId ? `Amazon ${ag.externalAdGroupId}` : 'local only')
       if (ag?.externalAdGroupId) live.push({ what: 'Ad group', amazonId: ag.externalAdGroupId })

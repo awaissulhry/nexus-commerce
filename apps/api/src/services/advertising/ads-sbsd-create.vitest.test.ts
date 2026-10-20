@@ -55,43 +55,43 @@ describe('SD campaign create — legacy JSON, lowercase, YYYYMMDD', () => {
   })
 })
 
-describe('SD ad group create', () => {
-  it('carries tactic and creativeType, and a NUMERIC campaignId', async () => {
-    const w = sent(await createSdAdGroup(CTX, { externalCampaignId: '292043476568515', name: 'CONTEXTUAL ONLY', defaultBid: 0.5, dryRun: true }))
+describe('SD ad group create — SD 3.0 CreateAdGroup', () => {
+  it('carries bidOptimization and creativeType, a NUMERIC campaignId, and NO tactic (that is the campaign\'s)', async () => {
+    const w = sent(await createSdAdGroup(CTX, { externalCampaignId: '100000000000001', name: 'CONTEXTUAL ONLY', defaultBid: 0.5, dryRun: true }))
     expect(w.path).toBe('/sd/adGroups')
     expect((w.body as Array<Record<string, unknown>>)[0]).toEqual({
-      campaignId: 292043476568515, // number, not the string we store locally
+      campaignId: 100000000000001, // number, not the string we store locally
       name: 'CONTEXTUAL ONLY',
       defaultBid: 0.5,
       state: 'paused',
-      tactic: 'T00020',
       bidOptimization: 'conversions',
       creativeType: 'IMAGE',
     })
   })
+
+  it('bidOptimization follows how the campaign pays: conversions for cpc, reach for vcpm; a caller\'s choice is kept', async () => {
+    const row = async (input: Partial<Parameters<typeof createSdAdGroup>[1]>) =>
+      (sent(await createSdAdGroup(CTX, { externalCampaignId: '1', name: 'x', defaultBid: 1, dryRun: true, ...input })).body as Array<Record<string, unknown>>)[0]
+    expect((await row({ costType: 'cpc' })).bidOptimization).toBe('conversions')
+    expect((await row({ costType: 'vcpm' })).bidOptimization).toBe('reach')
+    expect((await row({ costType: 'cpc', bidOptimization: 'clicks' })).bidOptimization).toBe('clicks')
+    expect((await row({ creativeType: 'VIDEO' })).creativeType).toBe('VIDEO')
+    expect('tactic' in (await row({ costType: 'vcpm' }))).toBe(false)
+  })
 })
 
-describe('SD product ad create', () => {
-  it('carries numeric campaign/adGroup ids and both identifiers', async () => {
+describe('SD product ad create — a seller sends the SKU only', () => {
+  it('carries numeric campaign/adGroup ids and the seller SKU, never the ASIN beside it (SD 3.0: asin is for vendors)', async () => {
     const w = sent(await createSdProductAd(CTX, {
-      externalCampaignId: '543917214584094', externalAdGroupId: '307064886584043',
-      sku: 'MISANO-JACKET-3XL-BLACK', asin: 'B0FXA3DEFF', dryRun: true,
+      externalCampaignId: '100000000000002', externalAdGroupId: '100000000000003', sku: 'TEST-JACKET-3XL-BLACK', dryRun: true,
     }))
     expect(w.path).toBe('/sd/productAds')
     expect((w.body as Array<Record<string, unknown>>)[0]).toEqual({
-      campaignId: 543917214584094,
-      adGroupId: 307064886584043,
-      sku: 'MISANO-JACKET-3XL-BLACK',
-      asin: 'B0FXA3DEFF',
+      campaignId: 100000000000002,
+      adGroupId: 100000000000003,
+      sku: 'TEST-JACKET-3XL-BLACK',
       state: 'paused',
     })
-  })
-
-  it('accepts an ASIN alone — SD does not require a seller SKU the way SP does', async () => {
-    const w = sent(await createSdProductAd(CTX, { externalCampaignId: '1', externalAdGroupId: '2', asin: 'B0FXA3DEFF', dryRun: true }))
-    const row = (w.body as Array<Record<string, unknown>>)[0]
-    expect(row.asin).toBe('B0FXA3DEFF')
-    expect('sku' in row).toBe(false)
   })
 })
 

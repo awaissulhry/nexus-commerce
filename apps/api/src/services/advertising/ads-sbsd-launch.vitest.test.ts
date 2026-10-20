@@ -7,7 +7,10 @@
  *   what would be sent) before the builder creates the campaign; a creative Amazon would refuse is refused with the
  *   reason and leaves no row and no Amazon call.
  * - CC-12: an SD target is sent in SD's dialect (nested audience with a lookback, asinSameAs) and stored by the text
- *   it names; an SD audience campaign keeps its tactic, so its ad group goes out with the same one.
+ *   it names; an SD audience campaign keeps its tactic.
+ * - SD-P1: an SD ad group goes out without a tactic (Amazon's ad group has none), with its campaign's costType; a name
+ *   with an em dash, en dash or middle dot goes out (and is kept) with a hyphen; Amazon's refusal reaches the person in
+ *   its words; an SD product ad names the seller SKU only, is refused without one, and a repair sends it to /sd.
  *
  * PGlite with the production schema and the real advertising routes. The gate answers "allowed" unless a test says
  * otherwise; Amazon is a recorder; nothing leaves the process.
@@ -59,11 +62,15 @@ vi.mock('./ads-write-gate.js', async (importOriginal) => ({
   recordSuccessfulWrite: async () => undefined,
   recordCampaignLiveWrite: async () => undefined,
 }))
-const amazon = vi.hoisted(() => ({ calls: [] as Array<{ what: string; input: Record<string, unknown> }>, seq: 0 }))
+/** `refuse`: the next create is refused with these words (what the client reads from Amazon's 207 item). */
+const amazon = vi.hoisted(() => ({ calls: [] as Array<{ what: string; input: Record<string, unknown> }>, seq: 0, refuse: null as string | null }))
 vi.mock('./ads-api-client.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('./ads-api-client.js')>()
   const create = (what: string) => async (_ctx: unknown, input: Record<string, unknown>) => {
     amazon.calls.push({ what, input })
+    const refuse = amazon.refuse
+    amazon.refuse = null
+    if (refuse) return { ok: false, mode: 'live', externalId: null, rawResponse: [], error: refuse }
     return { ok: true, mode: 'live', externalId: `${7000 + ++amazon.seq}`, rawResponse: {}, error: null }
   }
   return {
@@ -98,7 +105,7 @@ beforeAll(async () => {
   await app.ready()
 }, 180_000)
 afterAll(async () => { await app?.close(); await database?.close() }, 30_000)
-beforeEach(() => { amazon.calls = []; gate.seen = []; gate.refuse = null })
+beforeEach(() => { amazon.calls = []; amazon.refuse = null; gate.seen = []; gate.refuse = null })
 
 describe('CC-10 — the Guided launch refuses Sponsored Brands / Display before anything is created', () => {
   it('an SB or SD campaign in the launch is a 400 with the reason; no campaign row and no Amazon call', async () => {
@@ -182,7 +189,9 @@ describe('CC-12 — Sponsored Display targets and ad groups in SD\'s own dialect
     expect(row?.tactic).toBe('T00030')
     amazon.calls = []
     const ag = await inside(() => svc.createAdGroupLocal({ campaignId: camp.id, name: 'SD audiences test - ad group', defaultBidEur: 0.5 }))
-    expect(calls('sd ad group')[0].input).toMatchObject({ tactic: 'T00030' })
+    // SD-P1 — the tactic stays on the campaign: Amazon's SD ad group has no such field. The campaign pays per click.
+    expect(calls('sd ad group')[0].input).toMatchObject({ costType: 'cpc' })
+    expect('tactic' in calls('sd ad group')[0].input).toBe(false)
     adGroupId = String(ag.id)
   })
 
@@ -221,8 +230,58 @@ describe('CC-12 — Sponsored Display targets and ad groups in SD\'s own dialect
     const sd = await inside(() => svc.pushCampaignStructure(sdCampaignId))
     const sb = await inside(() => svc.pushCampaignStructure('c-sb'))
     expect([sd.adGroups, sb.adGroups]).toEqual([1, 1])
-    expect(calls('sd ad group')[0].input).toMatchObject({ name: 'SD missing group', tactic: 'T00030' })
+    expect(calls('sd ad group')[0].input).toMatchObject({ name: 'SD missing group', costType: 'cpc' })
+    expect('tactic' in calls('sd ad group')[0].input).toBe(false)
     expect(calls('sb ad group')[0].input).toMatchObject({ name: 'SB missing group' })
     expect(calls('sp ad group')).toEqual([])
+  })
+
+  it('SD-P1 — the builder\'s "<campaign> — ad group" goes out and is kept as "<campaign> - ad group"', async () => {
+    const r = await post('/advertising/adgroups/create', { campaignId: sdCampaignId, name: 'SD audiences test — ad group · IT – 2', defaultBidEur: 0.5 })
+    expect(r.status).toBe(200)
+    expect(calls('sd ad group')[0].input.name).toBe('SD audiences test - ad group - IT - 2')
+    const row = await inside(() => database.client.adGroup.findUnique({ where: { id: String(r.body.id) } }))
+    expect(row?.name).toBe('SD audiences test - ad group - IT - 2')
+  })
+
+  it('SD-P1 — a campaign that pays per viewable impression sends its ad group as vcpm', async () => {
+    await inside(() => database.client.campaign.update({ where: { id: sdCampaignId }, data: { costType: 'vcpm' } }))
+    try {
+      await inside(() => svc.createAdGroupLocal({ campaignId: sdCampaignId, name: 'SD vcpm group', defaultBidEur: 1 }))
+      expect(calls('sd ad group')[0].input).toMatchObject({ name: 'SD vcpm group', costType: 'vcpm' })
+    } finally {
+      await inside(() => database.client.campaign.update({ where: { id: sdCampaignId }, data: { costType: null } }))
+    }
+  })
+
+  it('SD-P1 — Amazon\'s refusal reaches the person in its words, and nothing is kept', async () => {
+    const before = await inside(() => database.client.adGroup.count({ where: { campaignId: sdCampaignId } }))
+    amazon.refuse = 'Amazon refused it: INVALID_ARGUMENT — Adgroup name invalid characters'
+    const r = await post('/advertising/adgroups/create', { campaignId: sdCampaignId, name: 'SD refused group', defaultBidEur: 0.5 })
+    expect(r.status).toBe(502)
+    expect(r.body.error).toBe('Amazon refused it: INVALID_ARGUMENT — Adgroup name invalid characters')
+    expect(r.body.error).not.toMatch(/without an id/)
+    expect(await inside(() => database.client.adGroup.count({ where: { campaignId: sdCampaignId } }))).toBe(before)
+  })
+
+  it('SD-P1 — an SD product ad names the seller SKU only; with no SKU it is refused before Amazon is asked', async () => {
+    await inside(() => svc.createProductAdLocal({ adGroupId, sku: 'TEST-SD-SKU-1', asin: 'B0FXSDTST1' }))
+    expect(calls('sd product ad')).toHaveLength(1)
+    expect(calls('sd product ad')[0].input).toMatchObject({ sku: 'TEST-SD-SKU-1' })
+    expect('asin' in calls('sd product ad')[0].input).toBe(false)
+
+    const refused = await inside(() => svc.createProductAdLocal({ adGroupId, asin: 'B0FXNOSKU1', requireAmazon: true }))
+    expect(refused).toMatchObject({ ok: false, outcome: 'refused', id: null, externalAdId: null })
+    expect(refused.reason).toMatch(/no seller SKU for "B0FXNOSKU1" — a Sponsored Display ad from a seller account names its SKU/)
+    expect(calls('sd product ad')).toHaveLength(1)
+    expect(calls('sp product ad')).toEqual([])
+  })
+
+  it('SD-P1 — the repair push sends a missing SD product ad to /sd/productAds, never /sp/productAds', async () => {
+    await inside(() => database.client.adProductAd.create({ data: { adGroupId: 'g-sd-missing', sku: 'TEST-SD-SKU-2', status: 'ENABLED' } }))
+    const out = await inside(() => svc.pushCampaignStructure(sdCampaignId))
+    expect(out.productAds).toBe(1)
+    expect(calls('sd product ad').map((c) => c.input.sku)).toEqual(['TEST-SD-SKU-2'])
+    expect(calls('sp product ad')).toEqual([])
   })
 })
