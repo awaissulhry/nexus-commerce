@@ -31,6 +31,11 @@
  *                    day-to-day give-back — no code, the raise listed, by rule only inside this tool's limits
  *                    (maxRestoredBidCents, 0 by default). A pause, an enable and an archive of an ad group stay pause-ads,
  *                    enable-ads and archive-ads (W2).
+ *                    P2b (2026-10-20) — and one ad group of a Sponsored Display campaign, op edit: its name and its
+ *                    default bid (a campaign that pays per click: the bid limits are per click), sent to SD's own
+ *                    endpoint (PUT /sd/adGroups: "the mutable fields are 'name', 'defaultBid', and 'state'"). Its bid
+ *                    optimization and creative type are fixed by Amazon when it is made, refused in those words. A
+ *                    Sponsored Display stop is suppress-campaign (op stop and op start stay Sponsored Products).
  *
  * The Owner's rule 3 (isolation is per product): a product is advertised once per campaign — the same product twice in
  * one campaign (any of its ad groups) is refused, as its own ads would bid against each other there. Another product
@@ -49,12 +54,13 @@
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { adProductOf, SPONSORED_DISPLAY } from '@nexus/shared/ads-ad-product'
+import { adProductOf, SPONSORED_DISPLAY, type AdWrite } from '@nexus/shared/ads-ad-product'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { updateAdGroupWithSync } from '../../advertising/ads-mutation.service.js'
 import { AdSkuConflictError, resolveSellerSku } from '../../advertising/ads-create.service.js'
+import { campaignNameProblem } from '@nexus/shared/ads-campaign-name'
 import { lowerAdGroupBids, markAdGroupBornAtFloor, rememberPlannedBid, restoreAdGroupBids, restoreBidsFor, SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
 import { AD_GROUP_CAMPAIGN_SELECT, adGroupForChange, adGroupNamedInCampaign, adGroupState, campaignAdGroupsForRead, ownFloorsOf } from '../../advertising/ad-group-lookup.service.js'
 import { groupSelfCompetition, type SelfCompetitionConflict } from '../../advertising/campaign-settings.service.js'
@@ -67,12 +73,13 @@ import { SD_ATTRIBUTION_NOTE, sdMetricsByLocalId, sdMetricsOf } from '../../adve
 import { resolveRange } from '../../ads-core/date-range.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
 import {
-  alsoChangedBy, approvedRun, BY_RULE_WORDS, canonical, notRun, queuedNote, reachNote, reachRefusal, recheck, requesterOf, ruleFactsFor, ruleRefusal,
+  adWriteRefusalOf, alsoChangedBy, approvedRun, BY_RULE_WORDS, canonical, notRun, queuedNote, reachNote, reachRefusal, recheck, requesterOf, ruleFactsFor, ruleRefusal,
   spOnlyRefusal, stepClampWords, bidStepOf, withStepPast, type RuleWrite, type StoredReach,
 } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
+import { sdExpressionInWords, sdTacticInWords } from '../../advertising/sd/sd-expression-words.js'
 import type { AgentTool, FieldPermission, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 const TOOL = { read: 'ad-groups', create: 'create-ad-group', ads: 'add-product-ads', set: 'set-ad-group' } as const
@@ -120,7 +127,7 @@ function twice(values: readonly string[]): string[] {
 interface CampaignRow {
   id: string; name: string; type: unknown; adProduct: string | null; marketplace: string | null; status: unknown; externalCampaignId: string | null
   dailyBudget: unknown; dailyBudgetCurrency: string | null; targetingType: string | null; liveBidWritesEnabled: boolean
-  bidsSuppressedAt: Date | null; bidsSuppressedBy: string | null; dynamicBidding: unknown
+  bidsSuppressedAt: Date | null; bidsSuppressedBy: string | null; dynamicBidding: unknown; costType: string | null
 }
 
 interface GroupRow {
@@ -133,9 +140,12 @@ const loadCampaign = (id: string) => prisma.campaign.findFirst({ where: { id }, 
 /** AdGroup is advertising's own table: read through its lookup service (scripts/check-context-boundary.mjs). */
 const loadGroup = (id: string) => adGroupForChange(id) as Promise<GroupRow | null>
 
-/** Why nothing is added to or changed in this campaign (`what` ends the sentence), or null. */
-function campaignRefusal(c: CampaignRow, what: string): string | null {
-  const notSp = spOnlyRefusal({ type: c.type == null ? null : String(c.type), adProduct: c.adProduct, name: c.name })
+/**
+ * Why nothing is added to or changed in this campaign (`what` ends the sentence), or null. P2b — `write`: an ad group
+ * change Nexus also sends for a Sponsored Display campaign (adWriteRefusalOf); without it, Sponsored Products only.
+ */
+function campaignRefusal(c: CampaignRow, what: string, write: AdWrite | null = null): string | null {
+  const notSp = write ? adWriteRefusalOf(c, write) : spOnlyRefusal({ type: c.type == null ? null : String(c.type), adProduct: c.adProduct, name: c.name })
   if (notSp) return notSp
   if (String(c.status) === 'ARCHIVED') return `campaign "${c.name}" is archived: Amazon serves nothing of it again, so ${what}`
   if (!c.externalCampaignId) return `campaign "${c.name}" is not at Amazon (a draft, or a launch Amazon refused), so ${what} could not reach Amazon either`
@@ -143,9 +153,9 @@ function campaignRefusal(c: CampaignRow, what: string): string | null {
   return null
 }
 
-/** Why this ad group cannot be changed at all, or null. */
-function groupRefusal(g: GroupRow): string | null {
-  const c = campaignRefusal(g.campaign, 'its ad groups are not changed here')
+/** Why this ad group cannot be changed at all, or null. P2b — `write` as campaignRefusal's. */
+function groupRefusal(g: GroupRow, write: AdWrite | null = null): string | null {
+  const c = campaignRefusal(g.campaign, 'its ad groups are not changed here', write)
   if (c) return c
   if (String(g.status) === 'ARCHIVED') return `ad group "${g.name}" is archived: Amazon serves it no more and nothing of it changes again`
   if (!g.externalAdGroupId) return `ad group "${g.name}" is not at Amazon, so nothing of it could reach Amazon`
@@ -403,6 +413,8 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
   const campaign = await loadCampaign(campaignId!)
   if (!campaign) return { ok: false, error: 'Campaign not found' }
   const currency = campaignCurrency(campaign)
+  // SD-AUD — a Sponsored Display campaign shows its own settings, ad group and ad fields, and its negatives in words.
+  const isSd = adProductOf({ adProduct: campaign.adProduct, type: campaign.type == null ? null : String(campaign.type) }) === SPONSORED_DISPLAY
   // Every ad group of the campaign: the campaign's metrics are allocated over all of them (ads-detail-metrics.service.ts).
   const { all, wanted } = await campaignAdGroupsForRead(campaign.id, { status: a.status, adGroupId: a.adGroupId ?? null })
   const groups = all.filter((g) => wanted.has(g.id))
@@ -410,22 +422,26 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
   // SD reports below the campaign (2026-10-20) — a Sponsored Display campaign's ad groups and product ads are measured
   // each on its own (Amazon's SD ad group and advertised product reports) over the window's complete days, never shared
   // out from the campaign's total.
-  const sdRange = adProductOf({ adProduct: campaign.adProduct, type: campaign.type == null ? null : String(campaign.type) }) === SPONSORED_DISPLAY
-    ? resolveRange({ windowDays: a.days })
-    : null
+  const sdRange = isSd ? resolveRange({ windowDays: a.days }) : null
   const { computeCampaignDetailMetrics } = await import('../../advertising/ads-detail-metrics.service.js')
-  const [metrics, targets, sdGroups, sdAds] = await Promise.all([
+  const [metrics, targets, sdGroups, sdAds, sdCampaign] = await Promise.all([
     sdRange ? null : computeCampaignDetailMetrics({ campaignId: campaign.id, externalCampaignId: campaign.externalCampaignId, adGroups: all.map((g) => ({ id: g.id, productAdIds: g.productAds.map((ad) => ad.id) })), windowDays: a.days }),
     shown.length
-      ? prisma.adTarget.findMany({ where: { adGroupId: { in: shown.map((g) => g.id) }, status: { not: 'ARCHIVED' } }, select: { adGroupId: true, kind: true, isNegative: true, suppressedFromBidCents: true } })
+      ? prisma.adTarget.findMany({
+          where: { adGroupId: { in: shown.map((g) => g.id) }, status: { not: 'ARCHIVED' } },
+          select: { id: true, adGroupId: true, kind: true, isNegative: true, suppressedFromBidCents: true, status: true, expressionValue: true, expressionJson: true, servingStatus: true },
+          orderBy: { id: 'asc' },
+        })
       : [],
     sdRange ? sdMetricsByLocalId('AD_GROUP', shown.map((g) => g.id), sdRange.since, sdRange.until) : null,
     sdRange ? sdMetricsByLocalId('PRODUCT_AD', shown.flatMap((g) => g.productAds.slice(0, LINES_SHOWN).map((ad) => ad.id)), sdRange.since, sdRange.until) : null,
+    isSd ? prisma.campaign.findFirst({ where: { id: campaign.id }, select: { tactic: true, costType: true, servingStatus: true, startDate: true, endDate: true, portfolioId: true } }) : null,
   ])
   const items = shown.map((g) => {
     const mine = targets.filter((t) => t.adGroupId === g.id)
     const count = (kind: string) => mine.filter((t) => !t.isNegative && t.kind === kind).length
     const m = metrics?.byAdGroup.get(g.id)
+    const negatives = mine.filter((t) => t.isNegative)
     return {
       adGroupId: g.id,
       externalAdGroupId: g.externalAdGroupId,
@@ -440,6 +456,7 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
       productAds: g.productAds.slice(0, LINES_SHOWN).map((ad) => ({
         productAdId: ad.id, sku: ad.sku, asin: ad.asin, productId: ad.productId, status: String(ad.status), atAmazon: !!ad.externalAdId,
         ...(sdAds ? { metrics: sdAds.byId.get(ad.id) ?? sdMetricsOf(null) } : {}),
+        ...(isSd ? { sd: { servingStatus: ad.servingStatus, landingPage: ad.landingPageType ? { type: ad.landingPageType, url: ad.landingPageUrl } : null, adName: ad.adName } } : {}),
       })),
       ...(g.productAds.length > LINES_SHOWN ? { moreProductAds: g.productAds.length - LINES_SHOWN } : {}),
       targets: {
@@ -451,6 +468,16 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
       metrics: sdGroups
         ? sdGroups.byId.get(g.id) ?? sdMetricsOf(null)
         : m ? { impressions: m.impressions, clicks: m.clicks, orders: m.orders, spendCents: m.spendCents, salesCents: m.salesCents, acos: m.acos, roas: m.roas } : null,
+      ...(isSd
+        ? {
+            sd: {
+              bidOptimization: g.bidOptimization, creativeType: g.creativeType, servingStatus: g.servingStatus, audienceTargets: count('AUDIENCE'),
+              // Its negative targets (ASINs, brands) in words; until the SD sync has read one, Nexus's stored value.
+              negativeTargets: negatives.slice(0, LINES_SHOWN).map((t) => ({ targetId: t.id, status: String(t.status), inWords: sdExpressionInWords(t.expressionJson) ?? t.expressionValue, servingStatus: t.servingStatus })),
+              ...(negatives.length > LINES_SHOWN ? { moreNegativeTargets: negatives.length - LINES_SHOWN } : {}),
+            },
+          }
+        : {}),
     }
   })
   return {
@@ -460,6 +487,14 @@ async function readAdGroups(args: Record<string, unknown>): Promise<ToolResult> 
         campaignId: campaign.id, externalCampaignId: campaign.externalCampaignId, name: campaign.name, market: campaign.marketplace, status: String(campaign.status),
         targetingType: campaign.targetingType, currency, liveWrites: campaign.liveBidWritesEnabled,
         floor: campaign.bidsSuppressedAt ? { by: campaign.bidsSuppressedBy, since: campaign.bidsSuppressedAt.toISOString(), givenBackBy: isPerson(campaign.bidsSuppressedBy) ? 'restore-campaign' : 'the engine that set it' } : null,
+        ...(sdCampaign
+          ? {
+              sd: {
+                tactic: sdCampaign.tactic, tacticWords: sdTacticInWords(sdCampaign.tactic), costType: sdCampaign.costType, servingStatus: sdCampaign.servingStatus,
+                startDate: sdCampaign.startDate.toISOString().slice(0, 10), endDate: sdCampaign.endDate ? sdCampaign.endDate.toISOString().slice(0, 10) : null, portfolioId: sdCampaign.portfolioId,
+              },
+            }
+          : {}),
       },
       window: sdRange
         ? { days: a.days, from: sdRange.sinceStr, to: sdRange.untilStr, dataAsOf: [sdGroups?.dataAsOf, sdAds?.dataAsOf].filter(Boolean).sort().at(-1) ?? null, note: `Metrics: each ad group's and product ad's own, from Amazon's SD ad group and advertised product reports. ${SD_ATTRIBUTION_NOTE}` }
@@ -486,7 +521,7 @@ const adGroupsRead: AgentTool = {
     days: z.coerce.number().int().min(1).max(90).default(30).describe('the metrics window: the last N days (default 30, max 90)'),
   }),
   description:
-    'The ad groups of one Amazon Sponsored Products campaign (or one ad group). Per ad group: adGroupId (the id '
+    'The ad groups of one Amazon campaign (or one ad group). Per ad group: adGroupId (the id '
     + 'set-ad-group, add-product-ads, pause-ads and archive-ads take) and Amazon\'s id, name, status, whether Amazon holds '
     + 'it, its default bid, the floor that holds its bids (who set it, since when, the default bid it keeps to give back, '
     + 'and which tool gives it back), its product ads (SKU, ASIN, status, at Amazon or not), how many keywords, product, '
@@ -495,7 +530,10 @@ const adGroupsRead: AgentTool = {
     + 'ad groups and product ads each carry their own metrics from Amazon\'s SD reports (14 days, a click or a view of the '
     + 'ad counts): also viewable impressions, units, CPC, detail page views, new-to-brand, and each attributed figure after '
     + 'a click (afterClick) and after a view (afterView). The campaign: market, status, '
-    + 'targeting type, currency, live-write allowlist and its own floor. Amounts are minor units (cents) of the '
+    + 'targeting type, currency, live-write allowlist and its own floor. A Sponsored Display campaign also gives sd: '
+    + 'its tactic (in words), cost type, Amazon\'s serving status, start and end date and portfolio; per ad group its bid '
+    + 'optimization, creative type, serving status, audience target count and negative targets in words; per product ad '
+    + 'its serving status, landing page and ad name (null fields: not read from Amazon yet). Amounts are minor units (cents) of the '
     + 'campaign\'s own currency, never converted; a person without the ad-spend money permission gets the same answer '
     + 'without the amounts.',
   handler: (args) => readAdGroups(args),
@@ -1115,9 +1153,22 @@ const SET_INPUT = z.object({
     .describe('edit (default): its default bid and/or name; stop: its bids to the stop bid, each remembered (a temporary stop is low bids, never a pause); start: the bids a floor of its own remembered given back — after create-ad-group born at the floor (a big door: the approver\'s code, never by rule), or after an op stop (day-to-day)'),
   defaultBidCents: z.coerce.number().int().min(2).max(BID_MAX_CENTS).optional().describe("op edit: the new default bid in minor units of the campaign's currency"),
   name: z.string().trim().min(1).max(128).optional().describe("op edit: the new name; new among the campaign's ad groups"),
+  bidOptimization: z.enum(['clicks', 'conversions', 'reach']).optional()
+    .describe('Sponsored Display: what its bids optimize for. Amazon fixes it when the ad group is made, so asking for it is refused (make a new ad group)'),
+  creativeType: z.enum(['IMAGE', 'VIDEO']).optional()
+    .describe('Sponsored Display: image or video ads. Amazon fixes it when the ad group is made, so asking for it is refused (make a new ad group)'),
   why: whyArg,
 })
 type SetArgs = z.infer<typeof SET_INPUT>
+
+/** P2b — Amazon's rule for what a Sponsored Display ad group keeps from its creation (PUT /sd/adGroups' mutable fields). */
+const SD_GROUP_FIXED = "Amazon fixes a Sponsored Display ad group's bid optimization and creative type (image or video) when it is made: its update changes only the name, the default bid and the state. For another one, make a new ad group (create-ad-group)"
+
+/** P2b — an ad group of a Sponsored Display campaign. */
+const isSdGroup = (g: GroupRow) => adProductOf({ type: g.campaign.type == null ? null : String(g.campaign.type), adProduct: g.campaign.adProduct }) === SPONSORED_DISPLAY
+
+/** P2b — what op edit writes, as the gate and the mutation layer judge it for a Sponsored Display ad group (adWriteRefusal). */
+const editWriteOf = (a: Pick<SetArgs, 'defaultBidCents' | 'name'>): AdWrite => ({ entity: 'AD_GROUP', fields: [a.defaultBidCents != null ? 'defaultBid' : null, a.name ? 'name' : null] })
 
 /** One bid a stop lowers or a start gives back. */
 interface BidMove { kind: 'adGroup' | 'target'; id: string; text: string; fromCents: number; toCents: number; rememberedCents?: number | null; heldBy?: string | null }
@@ -1126,9 +1177,15 @@ async function setPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext, '
   const parsed = SET_INPUT.safeParse(raw)
   if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; ') }
   const a: SetArgs = parsed.data
+  if (a.bidOptimization || a.creativeType) return { ok: false, error: `Not queued: ${SD_GROUP_FIXED}.` }
   const group = await loadGroup(a.adGroupId)
   if (!group) return { ok: false, error: `Ad group ${a.adGroupId} not found in this business.` }
-  const refused = groupRefusal(group)
+  // P2b — a Sponsored Display ad group: its name and default bid (op edit), on SD's own endpoint.
+  const sd = isSdGroup(group)
+  if (sd && a.op !== 'edit') {
+    return { ok: false, error: `Not queued: ad group "${group.name}" is in a Sponsored Display campaign: op ${a.op} lowers or gives back the bids of a Sponsored Products ad group only. Stop a Sponsored Display campaign with low bids with suppress-campaign (restore-campaign gives them back).` }
+  }
+  const refused = groupRefusal(group, sd ? editWriteOf(a) : null)
   if (refused) return { ok: false, error: `Not queued: ${refused}.` }
   if (a.op !== 'edit' && (a.defaultBidCents != null || a.name)) return { ok: false, error: `op ${a.op} changes the ad group's bids as a whole: name no defaultBidCents or name (op edit sets those).` }
   if (a.op === 'edit') return editPreview(a, group, ctx)
@@ -1166,6 +1223,10 @@ async function editPreview(a: SetArgs, group: GroupRow, ctx: Pick<ToolContext, '
     if (bid.effectiveBidCents !== current) changes.push({ field: 'defaultBid', from: amountLabel(current, currency), to: amountLabel(bid.effectiveBidCents, currency) })
   }
   if (a.name && a.name !== group.name) {
+    // P2b — the one name rule (ads-campaign-name.ts): Amazon refuses an em dash in an SD ad group's name ("Adgroup name
+    // invalid characters", 2026-10-20), and a middle dot in any ad group's.
+    const problem = campaignNameProblem(a.name)
+    if (problem) return { ok: false, error: `Not queued: ${problem}` }
     const taken = await adGroupNamedInCampaign(campaign.id, a.name, group.id)
     if (taken) return { ok: false, error: `Campaign "${campaign.name}" already has an ad group named "${taken.name}" (${taken.id}): choose another name.` }
     changes.push({ field: 'name', from: `"${group.name}"`, to: `"${a.name}"` })
@@ -1177,6 +1238,8 @@ async function editPreview(a: SetArgs, group: GroupRow, ctx: Pick<ToolContext, '
   const intentOf = (valueCents: number | null): AdWriteIntent => ({
     campaignId: campaign.id, adGroupId: group.id, marketplace: campaign.marketplace,
     changes: [...(valueCents != null ? [{ field: 'defaultBid', valueCents }] : []), ...(renames ? [{ field: 'name', valueCents: null }] : [])],
+    // P2b — a Sponsored Display ad group's write, described: the gate lets it through to SD's own endpoint.
+    ...(isSdGroup(group) ? { write: editWriteOf({ defaultBidCents: valueCents ?? undefined, name: renames ? a.name : undefined }) } : {}),
   })
   const newBid = bidChanges ? bid!.effectiveBidCents : null
   const reach = await reachOf([intentOf(newBid)])
@@ -1436,6 +1499,7 @@ async function runSet(args: Record<string, unknown>, ctx: ToolContext): Promise<
       patch: { ...(bidChanges ? { defaultBidCents: newBid } : {}), ...(p.name ? { name: p.name.to } : {}) },
       ...write,
       confirmOwnLimits: run.confirmOwnLimits,
+      allowSbSd: true, // P2b — a Sponsored Display ad group's name and default bid go to its own endpoint
     })
     if (!out.ok) return notRun(`Not run: the write was refused (${out.error ?? 'unknown'}). Nothing changed.`)
     const after = await setStateNow(p.adGroup.id, 'edit')
@@ -1493,7 +1557,9 @@ const setAdGroup: AgentTool = {
   withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? setRefusal(preview, limits),
   undo: SET_UNDO,
   description:
-    'Change one ad group of an Amazon Sponsored Products campaign. op edit: its default bid (the bid of its auto targets '
+    'Change one ad group of an Amazon Sponsored Products campaign, or the name and default bid (op edit) of one of a Sponsored Display '
+    + 'campaign that pays per click (its bid optimization and creative type are fixed by Amazon when it is made, and refused; '
+    + 'a Sponsored Display stop is suppress-campaign). op edit: its default bid (the bid of its auto targets '
     + 'and of every keyword or target without its own), moved like a keyword bid in set-target-bid — past the largest '
     + 'change per action (the campaign\'s max-change guardrail or the ads strategy\'s, the lower one) it is warned on the '
     + 'approval card and a person\'s approval sends it as asked, while run by rule it moves only as far as that change '

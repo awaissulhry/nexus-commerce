@@ -247,7 +247,7 @@ describe('each setting', () => {
     expect((await preview({ campaignIds: ['nope'], biddingStrategy: 'manual' })).error).toBe('Not queued: campaign nope was not found in this business.')
     expect((await preview({ campaignIds: ['c-sb'], biddingStrategy: 'manual' })).error).toMatch(/campaign "Italy brands": .*Sponsored Products/)
     expect((await preview({ campaignIds: ['c-arch'], biddingStrategy: 'manual' })).error).toMatch(/it is archived: Amazon does not change an archived campaign/)
-    expect((await preview({ campaignIds: ['c-m1'] })).error).toMatch(/^Nothing to change for campaign "Test c-m1": give portfolioId, name, endDate or biddingStrategy/)
+    expect((await preview({ campaignIds: ['c-m1'] })).error).toMatch(/^Nothing to change for campaign "Test c-m1": give portfolioId, name, endDate, biddingStrategy or \(Sponsored Display\) startDate/)
     expect((await preview({ campaignIds: ['c-m1'], campaigns: [{ campaignId: 'c-m2', biddingStrategy: 'manual' }] })).error).toMatch(/Name the campaigns one way/)
   })
 })

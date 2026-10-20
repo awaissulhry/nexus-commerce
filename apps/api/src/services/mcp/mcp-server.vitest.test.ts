@@ -72,7 +72,9 @@ const OPEN_WORLD = [
   'resend-prices', 'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign',
   'resume-automation', 'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
   'save-channel-mapping', 'save-price-rule', 'schedule-google-experiment', 'schedule-pickup', 'schedule-price-change',
-  'sd-brand-safety', 'sd-budget-insights', 'sd-budget-rules', 'sd-forecast', 'sd-optimization-rules', 'send-customer-message',
+  // SD-AUD and P3c — the Sponsored Display lookups and extras read Amazon live.
+  'sd-audiences', 'sd-bid-recommendations', 'sd-brand-safety', 'sd-budget-insights', 'sd-budget-rules', 'sd-categories',
+  'sd-forecast', 'sd-optimization-rules', 'sd-targeting-recommendations', 'send-customer-message',
   'set-ad-group', 'set-ads-brain', 'set-aplus-asins', 'set-aplus-content', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule',
   'set-campaign-budget', 'set-campaign-settings', 'set-ebay-ad-rates', 'set-ebay-campaign-budget',
   'set-ebay-price-promotion', 'set-google-account-exclusions', 'set-google-account-links',

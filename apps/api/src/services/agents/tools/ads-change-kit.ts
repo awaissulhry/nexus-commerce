@@ -222,8 +222,9 @@ export function recheck(ctx: ToolContext, fresh: ToolResult, material: readonly 
 /**
  * Phase 1 changes Sponsored Products campaigns only (SB negatives are blocked upstream; SD has none). 6a — the shared
  * ad product and sentence the mutation layer and the write gate refuse with; an unknown ad product is refused here.
- * W4-11 — still the check of every tool whose logic is Sponsored Products only (placements, suppress/restore, archive,
- * ad groups, product ads, the playbook, the builders, hourly plans, budget plans/schedules/pools, stock bids, harvest).
+ * W4-11 — still the check of every tool whose logic is Sponsored Products only (placements, the playbook, the builders,
+ * hourly plans, budget plans/schedules/pools, stock bids, harvest; P2b — and of a Sponsored Brands campaign's
+ * suppress/restore, archive, ad groups and product ads, which Nexus now sends for a Sponsored Display one).
  * The tools that send Sponsored Brands / Display changes use `adWriteRefusalOf`.
  */
 export function spOnlyRefusal(campaign: { type?: string | null; adProduct?: string | null; name?: string | null }): string | null {

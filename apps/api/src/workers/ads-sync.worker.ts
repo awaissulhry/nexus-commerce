@@ -45,9 +45,11 @@ import {
   type ClientContext,
   type SbSdPatch,
   type SbSdRequest,
+  type SdCampaignPatch,
   type SpArchiveEntity,
   type AdsRegion,
 } from '../services/advertising/ads-api-client.js'
+import { sdAdGroupUpdateRequest, sdProductAdUpdateRequest } from '../services/advertising/sd/sd-manage.client.js'
 import { SPONSORED_BRANDS, SPONSORED_DISPLAY, adProductLabel, adProductOf, type AdWrite } from '@nexus/shared/ads-ad-product'
 import {
   checkAdsWriteGate,
@@ -203,6 +205,7 @@ function patchFromChanges(payload: AdMutationPayload): {
   bid?: number
   biddingStrategy?: CampaignPatch['biddingStrategy']
   endDate?: string | null
+  startDate?: string
 } {
   const out: Record<string, unknown> = {}
   for (const c of payload.fieldChanges) {
@@ -234,6 +237,10 @@ function patchFromChanges(payload: AdMutationPayload): {
       // 1a (CM-2) — never mapped either.
       const date = amazonDate(String(c.newValue))
       if (date) out.endDate = date
+    } else if (c.field === 'startDate') {
+      // P2b — a Sponsored Display campaign's start date (set-campaign-settings; the SD route sends it, sdCampaignUpdateRequest).
+      const date = amazonDate(String(c.newValue))
+      if (date) out.startDate = date
     }
   }
   return out
@@ -289,7 +296,8 @@ export interface SbSdRoute {
 
 /**
  * W4-11 — the route of a queue row the mutation layer marked as an SB/SD write (`sbSd` on its JSON). Null when the
- * row's campaign is not Sponsored Brands or Display (it then goes out as before) or cannot be read.
+ * row's campaign is not Sponsored Brands or Display (it then goes out as before) or cannot be read. P2b — an ad group's
+ * and a product ad's too (a Sponsored Display one is sent to its own endpoint, sbSdRequestFor).
  */
 export async function sbSdRouteOf(payload: Pick<AdMutationPayload, 'entityType' | 'entityId'>): Promise<SbSdRoute | null> {
   const product = (c: { adProduct: string | null; type: unknown } | null | undefined) => {
@@ -311,6 +319,14 @@ export async function sbSdRouteOf(payload: Pick<AdMutationPayload, 'entityType' 
       return p && t
         ? { adProduct: p, kind: t.kind == null ? null : String(t.kind), isNegative: t.isNegative === true, negativeLevel: t.negativeLevel ?? null, externalAdGroupId: t.adGroup?.externalAdGroupId ?? null, externalCampaignId: t.adGroup?.campaign?.externalCampaignId ?? null }
         : null
+    }
+    if (payload.entityType === 'AD_GROUP' || payload.entityType === 'PRODUCT_AD') {
+      const campaignSelect = { select: { adProduct: true, type: true, externalCampaignId: true } } as const
+      const campaign = payload.entityType === 'AD_GROUP'
+        ? (await prisma.adGroup.findUnique({ where: { id: payload.entityId }, select: { campaign: campaignSelect } }))?.campaign
+        : (await prisma.adProductAd.findUnique({ where: { id: payload.entityId }, select: { adGroup: { select: { campaign: campaignSelect } } } }))?.adGroup?.campaign
+      const p = product(campaign)
+      return p ? { adProduct: p, kind: null, isNegative: false, negativeLevel: null, externalAdGroupId: null, externalCampaignId: campaign?.externalCampaignId ?? null } : null
     }
     return null
   } catch {
@@ -352,6 +368,8 @@ async function marketCurrencyOf(market: string | null): Promise<string | null> {
  * state (SB 4.0 PUT /sb/v4/campaigns, SD PUT /sd/campaigns), an SB keyword's or product target's bid and state (PUT
  * /sb/keywords, PUT /sb/targets), an SD target's (PUT /sd/targets), and the retire of an SB negative keyword or SD
  * negative product target (their DELETE). Throws for anything else, which the gate already refused.
+ * P2b — a Sponsored Display campaign's name, start and end date and portfolio too, its archive (the update to archived),
+ * and an SD ad group's name, default bid and state and a product ad's state (sd/sd-manage.client.ts).
  */
 export function sbSdRequestFor(payload: AdMutationPayload, route: SbSdRoute): SbSdRequest {
   const p = patchFromChanges(payload)
@@ -363,7 +381,22 @@ export function sbSdRequestFor(payload: AdMutationPayload, route: SbSdRoute): Sb
   const externalId = String(payload.externalId)
   const label = adProductLabel(route.adProduct)
   if (payload.entityType === 'CAMPAIGN') {
-    return route.adProduct === SPONSORED_BRANDS ? sbCampaignUpdateRequest(externalId, patch) : sdCampaignUpdateRequest(externalId, patch)
+    if (route.adProduct === SPONSORED_BRANDS) return sbCampaignUpdateRequest(externalId, patch)
+    const sd: SdCampaignPatch = {
+      ...patch,
+      ...(p.name != null ? { name: p.name } : {}),
+      ...(p.startDate ? { startDate: p.startDate } : {}),
+      ...(p.endDate !== undefined ? { endDate: p.endDate } : {}),
+      ...(p.portfolioId !== undefined ? { portfolioId: p.portfolioId } : {}),
+    }
+    return sdCampaignUpdateRequest(externalId, sd)
+  }
+  if (route.adProduct === SPONSORED_DISPLAY && payload.entityType === 'AD_GROUP') {
+    return sdAdGroupUpdateRequest(externalId, { ...(p.state ? { state: p.state } : {}), ...(p.name != null ? { name: p.name } : {}), ...(p.defaultBid != null ? { defaultBid: p.defaultBid } : {}) })
+  }
+  if (route.adProduct === SPONSORED_DISPLAY && payload.entityType === 'PRODUCT_AD') {
+    if (!p.state) throw new Error(`a ${label} product ad changes only its state from Nexus`)
+    return sdProductAdUpdateRequest(externalId, p.state)
   }
   if (payload.entityType === 'AD_TARGET') {
     if (route.isNegative) {
