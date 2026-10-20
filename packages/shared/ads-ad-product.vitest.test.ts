@@ -88,13 +88,35 @@ describe('adWriteRefusal (W4-11)', () => {
       ok(c, { entity: 'CAMPAIGN', fields: ['dailyBudget'] })
       ok(c, { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'paused' })
       ok(c, { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'ENABLED' })
-      no(c, { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'ARCHIVED' }, /— not archiving the campaign —/)
       no(c, { entity: 'CAMPAIGN', fields: ['biddingStrategy'] }, /— not the campaign's biddingStrategy —/)
       no(c, { entity: 'PLACEMENT' }, /— not a change to the placement adjustments —/)
-      no(c, { entity: 'AD_GROUP', fields: ['defaultBid'] }, /— not a change to an ad group —/)
-      no(c, { entity: 'PRODUCT_AD', fields: ['status'], toStatus: 'PAUSED' }, /— not a change to an ad —/)
     }
+    no(SB, { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'ARCHIVED' }, /— not archiving the campaign —/)
+    no(SB, { entity: 'AD_GROUP', fields: ['defaultBid'] }, /— not a change to an ad group —/)
+    no(SB, { entity: 'PRODUCT_AD', fields: ['status'], toStatus: 'PAUSED' }, /— not a change to an ad —/)
     no(SB, { entity: 'CAMPAIGN', fields: ['endDate'] }, /^Brand test is a Sponsored Brands campaign\. Nexus changes its daily budget and on\/off state, the bids and on\/off state of its keywords and product targets, and its negative keywords in an ad group \(add and retire\) — not the campaign's endDate — so nothing was sent to Amazon; make this change in Amazon's advertising console\.$/)
+  })
+
+  it('P2b — a Sponsored Display campaign is managed whole, as Amazon\'s SD updates allow; what Amazon fixes at creation stays refused', () => {
+    for (const fields of [['name'], ['startDate'], ['endDate'], ['portfolioId'], ['name', 'endDate', 'portfolioId']]) ok(SD, { entity: 'CAMPAIGN', fields })
+    ok(SD, { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'ARCHIVED' })
+    no(SD, { entity: 'CAMPAIGN', fields: ['costType'] }, /^Display test is a Sponsored Display campaign\. Nexus changes its daily budget, name, start and end date, portfolio and state \(on, off or archived\), the name, default bid and state of its ad groups, the state of its product ads, the bids and state of its targets, and its negative product targets in an ad group \(add and retire\) — not the campaign's costType —/)
+    no(SD, { entity: 'CAMPAIGN', fields: ['tactic'] }, /— not the campaign's tactic —/)
+    // An ad group: name, default bid and state (PUT /sd/adGroups), archived for good; not its bid optimization or creative type.
+    ok(SD, { entity: 'AD_GROUP', fields: ['name', 'defaultBid'] })
+    for (const toStatus of ['PAUSED', 'ENABLED', 'ARCHIVED']) ok(SD, { entity: 'AD_GROUP', fields: ['status'], toStatus })
+    no(SD, { entity: 'AD_GROUP', fields: ['bidOptimization'] }, /— not an ad group's bidOptimization —/)
+    no(SD, { entity: 'AD_GROUP', fields: ['creativeType'] }, /— not an ad group's creativeType —/)
+    // A product ad: its state only.
+    for (const toStatus of ['PAUSED', 'ENABLED', 'ARCHIVED']) ok(SD, { entity: 'PRODUCT_AD', fields: ['status'], toStatus })
+    no(SD, { entity: 'PRODUCT_AD', fields: ['landingPageUrl'] }, /— not an ad's landingPageUrl —/)
+    // A target is archived too; a negative still only retired.
+    ok(SD, { entity: 'AD_TARGET', kind: 'PRODUCT', fields: ['status'], toStatus: 'ARCHIVED' })
+    no(SD, { entity: 'AD_TARGET', kind: 'PRODUCT', isNegative: true, fields: ['status'], toStatus: 'PAUSED' }, /not a change to a negative other than retiring it/)
+    // A default bid is a bid: per click only, and not when Nexus has not read how the campaign pays.
+    no({ ...SD, costType: 'vcpm' }, { entity: 'AD_GROUP', fields: ['defaultBid'] }, /pays per thousand viewable impressions \(vCPM\)/)
+    no({ ...SD, costType: null }, { entity: 'AD_GROUP', fields: ['defaultBid'] }, /has not read from Amazon whether it pays per click/)
+    ok({ ...SD, costType: 'vcpm' }, { entity: 'AD_GROUP', fields: ['name', 'status'], toStatus: 'PAUSED' })
   })
 
   it('a target: bid and on/off of SB keywords and product targets, and of SD targets', () => {
@@ -104,7 +126,7 @@ describe('adWriteRefusal (W4-11)', () => {
     ok(SD, { entity: 'AD_TARGET', kind: 'AUDIENCE', fields: ['bid'] })
     ok(SD, { entity: 'AD_TARGET', kind: 'PRODUCT', fields: ['status'], toStatus: 'ENABLED' })
     no(SD, { entity: 'AD_TARGET', kind: 'KEYWORD', fields: ['bid'] }, /not that kind of target/)
-    no(SD, { entity: 'AD_TARGET', kind: 'PRODUCT', fields: ['status'], toStatus: 'ARCHIVED' }, /not archiving a target/)
+    no(SB, { entity: 'AD_TARGET', kind: 'PRODUCT', fields: ['status'], toStatus: 'ARCHIVED' }, /not archiving a target/)
   })
 
   it('negatives: SB keyword and SD product target in an ad group, added and retired; nothing else', () => {

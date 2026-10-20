@@ -28,6 +28,12 @@
  *                lets above ask (IRREVERSIBLE_AUTO): by default it runs nothing alone, raising its level and its limits
  *                takes two separate codes (claude-trust.service.ts), and the advice is to keep it at ask. No undo.
  *
+ * P2b (2026-10-20) — Sponsored Display at every level: an SD campaign, ad group, target or product ad is paused, switched
+ * back on and archived like a Sponsored Products one, through SD's own endpoints (ads-sync.worker.ts sbSdRequestFor:
+ * PUT /sd/campaigns, /sd/adGroups, /sd/targets, /sd/productAds with state enabled|paused|archived — Amazon: archived "is
+ * permanent and can't be undone"). Sponsored Brands keeps W4-11's campaigns, keywords and targets on and off. An SD
+ * negative product target is retired by retire-negatives (its own record and undo), never here.
+ *
  * Negative Targeting (2026-10-11, PLAN D2) — "kept paused" (advertising/waste/hold.ts):
  *   pause-ads    keepPaused: true (and keepUntil: a date, or null/absent = always) also KEEPS each keyword and product
  *                target paused: from then on no rule, engine, the ads brain or Claude by rule may switch it back on (the lock
@@ -126,7 +132,7 @@ interface Ad {
   product?: string
   /** Why Nexus cannot change it at all (not by the kind of change), or null. */
   cannot: string | null
-  /** W4-11 — the status write as the gate judges it for a Sponsored Brands / Display campaign (campaigns and targets). */
+  /** W4-11 — the status write as the gate judges it for a Sponsored Brands / Display campaign (P2b: every level). */
   write?: AdWrite | null
   /** Negative Targeting — a keyword's or target's kept-paused hold as it holds now (waste/hold.ts); null: none. */
   hold?: KeptPaused | null
@@ -161,7 +167,7 @@ const campaignOf = (c: CampaignRow): Ad['campaign'] => ({
 /**
  * Why an ad cannot be paused or enabled at all, whatever the kind; null when it may be. W4-11 — `write`: a campaign's or
  * a keyword's / target's on/off state, which Nexus also sends for a Sponsored Brands or Display campaign (their own
- * endpoints; archive is not one of them). Without it (ad groups, product ads): Sponsored Products only.
+ * endpoints). P2b — every level's state of a Sponsored Display campaign too, archive included (adWriteRefusalOf).
  */
 function cannotChange(c: CampaignRow, status: string, externalId: string | null, orphaned: boolean, write: AdWrite | null = null): string | null {
   const notSp = write ? adWriteRefusalOf(c, write) : spOnlyRefusal({ type: c.type == null ? null : String(c.type), adProduct: c.adProduct, name: c.name })
@@ -213,7 +219,8 @@ async function loadAds(a: StatusArgs, kind: Kind): Promise<{ ads: Ad[]; missing:
   for (const id of groupIds) {
     const g = groupRows.get(id)
     if (!g) { missing.push(`ad group ${id}`); continue }
-    out.push({ level: 'adGroup', id, label: `ad group "${g.name}" (campaign "${g.campaign.name}")`, status: String(g.status), campaign: campaignOf(g.campaign), adGroupId: g.id, cannot: cannotChange(g.campaign, String(g.status), g.externalAdGroupId, !!g.orphanedAt) })
+    const write: AdWrite = { entity: 'AD_GROUP', fields: ['status'], toStatus }
+    out.push({ level: 'adGroup', id, label: `ad group "${g.name}" (campaign "${g.campaign.name}")`, status: String(g.status), campaign: campaignOf(g.campaign), adGroupId: g.id, cannot: cannotChange(g.campaign, String(g.status), g.externalAdGroupId, !!g.orphanedAt, write), write })
   }
   for (const id of targetIds) {
     const t = targetRows.get(id)
@@ -221,7 +228,10 @@ async function loadAds(a: StatusArgs, kind: Kind): Promise<{ ads: Ad[]; missing:
     const label = `${t.kind === 'KEYWORD' ? 'keyword' : 'target'} "${t.expressionValue}" (campaign "${t.adGroup.campaign.name}")`
     const write: AdWrite = { entity: 'AD_TARGET', fields: ['status'], toStatus, kind: t.kind == null ? null : String(t.kind), isNegative: false }
     const cannot = t.isNegative
-      ? 'it is a negative keyword: it blocks a search term and serves no ad (undo-ad-change retires one Claude created)'
+      ? t.kind === 'KEYWORD'
+        ? 'it is a negative keyword: it blocks a search term and serves no ad (undo-ad-change retires one Claude created)'
+        // P2b — an SD negative product target too: retire-negatives retires it (and its undo adds it again).
+        : 'it is a negative product target: it keeps the ads off that product and serves no ad (retire-negatives retires it)'
       : cannotChange(t.adGroup.campaign, String(t.status), t.externalTargetId, !!t.orphanedAt, write)
     out.push({ level: 'target', id, label, status: String(t.status), campaign: campaignOf(t.adGroup.campaign), adGroupId: t.adGroupId, cannot, write, hold: t.isNegative ? null : holdOf(t as HoldColumns) })
   }
@@ -230,9 +240,10 @@ async function loadAds(a: StatusArgs, kind: Kind): Promise<{ ads: Ad[]; missing:
     const row = ads.find((ad) => ad.adGroupId === p.adGroupId && ad.sku === p.product) ?? ads.find((ad) => ad.adGroupId === p.adGroupId && ad.asin === p.product)
     if (!row) { missing.push(`the ad of ${p.product} in ad group ${p.adGroupId}`); continue }
     if (out.some((ad) => ad.level === 'productAd' && ad.id === row.id)) continue
+    const write: AdWrite = { entity: 'PRODUCT_AD', fields: ['status'], toStatus }
     out.push({
       level: 'productAd', id: row.id, label: `the ad of ${row.sku ?? row.asin ?? p.product} (campaign "${row.adGroup.campaign.name}")`, status: String(row.status),
-      campaign: campaignOf(row.adGroup.campaign), adGroupId: row.adGroupId, product: p.product, cannot: cannotChange(row.adGroup.campaign, String(row.status), row.externalAdId, false),
+      campaign: campaignOf(row.adGroup.campaign), adGroupId: row.adGroupId, product: p.product, cannot: cannotChange(row.adGroup.campaign, String(row.status), row.externalAdId, false, write), write,
     })
   }
   return { ads: out, missing }
@@ -966,9 +977,10 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
   const done = new Set<string>()
   for (const ad of changing) {
     let out: MutationOutcome
-    // W4-11 — a Sponsored Brands / Display campaign's or keyword's / target's on/off state goes to its own endpoint.
+    // W4-11 — a Sponsored Brands / Display campaign's or keyword's / target's on/off state goes to its own endpoint. P2b —
+    // and a Sponsored Display ad group's and product ad's, archive included.
     if (ad.level === 'campaign') out = await updateCampaignWithSync({ campaignId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits, allowSbSd: true })
-    else if (ad.level === 'adGroup') out = await updateAdGroupWithSync({ adGroupId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits })
+    else if (ad.level === 'adGroup') out = await updateAdGroupWithSync({ adGroupId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits, allowSbSd: true })
     else if (ad.level === 'target') {
       out = await updateAdTargetWithSync({
         adTargetId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits, allowSbSd: true,
@@ -977,7 +989,7 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
         ...(kind === 'enable' && ad.hold ? { releaseKeptPaused: true } : {}),
       })
     }
-    else out = await updateProductAdWithSync({ productAdId: ad.id, status: to, ...common })
+    else out = await updateProductAdWithSync({ productAdId: ad.id, status: to, ...common, allowSbSd: true })
     if (!out.ok) failed.push(`${ad.label} (${out.error ?? 'refused'})`)
     else done.add(ad.id)
   }
@@ -1075,13 +1087,13 @@ const pauseAds: AgentTool = {
   withinLimits: (preview, limits) => holdReleaseRefusal(preview) ?? ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits),
   undo: PAUSE_UNDO,
   description:
-    `Pause Amazon Sponsored Products ads for real: campaigns, ad groups, keywords and product targets, or product ads, and Sponsored Brands / Display campaigns, keywords and targets (up to ${MAX_ADS} `
+    `Pause Amazon Sponsored Products and Sponsored Display ads for real: campaigns, ad groups, keywords and product targets (Display: its targets), or product ads, and Sponsored Brands campaigns, keywords and targets (up to ${MAX_ADS} `
     + 'in one request). Only when a real pause is meant: a paused ad serves again about an hour after it is switched back '
     + 'on. To stop an ad for a while, lower its bids instead (suppress-campaign, or a lower bid): it serves again about a '
     + 'minute after they go back. A person approves it in Nexus, unless the business lets it run by its rule inside its '
     + 'limits and the ads strategy. The preview lists each ad from Enabled to Paused, what a paused campaign or ad group '
     + 'holds, the daily budget that stops, where it lands (live at Amazon or sandbox) and each limit with where it comes '
-    + 'from. Refused, and not queued, when an ad is not found, archived, a draft or not Sponsored Products, or when '
+    + 'from. Refused, and not queued, when an ad is not found, archived, a draft, a negative (retire-negatives) or of a kind Nexus does not change (a Sponsored Brands ad group or product ad, Amazon DSP), or when '
     + 'Amazon\'s write gate would refuse it (a halt does not block a pause: it only lets go). enable-ads (or undo-change) '
     + 'switches them back on. keepPaused: true KEEPS each keyword and product target paused (keepUntil: a date, or always): no rule, '
     + 'engine, the ads brain or Claude by rule switches it back on, only a person releases it (enable-ads with releaseKeepPaused); '
@@ -1113,7 +1125,7 @@ const enableAds: AgentTool = {
   withinLimits: (preview, limits) => peoplesPauseRefusal(preview) ?? holdReleaseRefusal(preview) ?? ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? restartBidRefusal(preview),
   undo: ENABLE_UNDO,
   description:
-    `Switch paused Amazon Sponsored Products ads back on: campaigns, ad groups, keywords and product targets, or product ads, and Sponsored Brands / Display campaigns, keywords and targets `
+    `Switch paused Amazon Sponsored Products and Sponsored Display ads back on: campaigns, ad groups, keywords and product targets (Display: its targets), or product ads, and Sponsored Brands campaigns, keywords and targets `
     + `(up to ${MAX_ADS}). By default only what a Claude request paused (pause-ads). With includePeoplesPauses: true, also an `
     + 'ad no Claude request paused — a person, in Nexus or at Amazon (Seller Central), a writer Nexus did not record, or a '
     + 'Nexus rule that is off or deleted now: the preview says who paused it and when, and a person approves it (or the '
@@ -1152,14 +1164,14 @@ const archiveAds: AgentTool = {
   limits: STATUS_LIMITS,
   withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? archiveProtectedRefusal(preview),
   description:
-    `Archive Amazon Sponsored Products ads for good: campaigns, ad groups, keywords and product targets, or product ads (up `
+    `Archive Amazon Sponsored Products and Sponsored Display ads for good: campaigns, ad groups, keywords and product targets (Display: its targets), or product ads (up `
     + `to ${MAX_ADS}), enabled or paused. PERMANENT: Amazon cannot switch an archived ad on again (its API calls this `
     + 'delete); reports keep its history, and to advertise it again a new one is created. Only when it is meant for good: '
     + 'to stop an ad for a while lower its bids (suppress-campaign), for a real pause use pause-ads. A person approves it in '
     + 'Nexus, unless the business lets it run by its rule inside its limits and the ads strategy (by default nothing is '
     + 'archived by rule, and the advice is to keep it that way). The preview lists each ad, what a campaign or ad group '
     + 'holds that stops with it, the daily budget that stops, and where it lands. Refused, and not queued, when an ad is '
-    + 'not found, a draft or not Sponsored Products, or when Amazon\'s write gate would refuse it (a halt does not block an '
+    + 'not found, a draft, a negative (retire-negatives retires one) or not Sponsored Products or Display, or when Amazon\'s write gate would refuse it (a halt does not block an '
     + 'archive: it only lets go). buildRunId names every campaign a build (apply-ads-playbook, build-sp-wizard-campaigns) or a Replicate run (replicate-ad-structure) made. It cannot be undone.',
   async handler(args, ctx) {
     return (await decide('archive', args, ctx)).result

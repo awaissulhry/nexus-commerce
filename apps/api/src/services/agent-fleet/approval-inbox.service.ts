@@ -1196,6 +1196,11 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-aplus-content': ['op', 'target', 'basis', 'plan', 'images', 'asins'],
   'set-aplus-asins': ['target', 'basis', 'plan'],
   'submit-aplus-content': ['op', 'target', 'basis'],
+  // Sponsored Display extras (P3c, 2026-10-20) — the op, what it stands on at Amazon (the rule, the ad group's or campaign's
+  // rules, the deny list: `basis`) and where it lands (`reach`).
+  'set-sd-optimization-rule': ['op', 'basis', 'reach'],
+  'set-sd-budget-rule': ['op', 'basis', 'reach'],
+  'set-sd-brand-safety': ['op', 'basis', 'reach'],
   // I9 — the id read at preview time (and for unlink, the quantity it was advertising); for link, the channel's proof.
   'unlink-channel-id': ['changes', 'liveQuantity'],
   'link-channel-id': ['changes', 'verdict'],

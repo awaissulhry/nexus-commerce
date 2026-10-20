@@ -3301,6 +3301,11 @@ model Campaign {
   deliveryStatus  String? // DELIVERING | NOT_DELIVERING
   deliveryReasons String[] @default([])
 
+  /// SD-AUD (2026-10-20) — a Sponsored Display campaign's serving status as Amazon words it (CAMPAIGN_OUT_OF_BUDGET,
+  /// PENDING_START_DATE, …), read by the SD sync (sd/sd-entity-sync.service.ts from GET /sd/campaigns/extended), which
+  /// also fills tactic, costType, budget, dates, state and portfolio. Null: not SD, or not read yet.
+  servingStatus String?
+
   // ── Apex A.2a: per-campaign live-write allowlist + safety counters ──
   // liveBidWritesEnabled is a DEFAULT-DENY containment key: even when the
   // deploy-wide NEXUS_AMAZON_ADS_MODE=live flag and the per-connection
@@ -3437,6 +3442,12 @@ model AdGroup {
   deliveryStatus  String?
   deliveryReasons String[] @default([])
 
+  /// SD-AUD (2026-10-20) — a Sponsored Display ad group's bid optimization (clicks | conversions for cpc, reach for
+  /// vcpm) and Amazon's serving status (AD_GROUP_STATUS_ENABLED, AD_GROUP_LOW_BID, …), read by the SD sync
+  /// (sd/sd-entity-sync.service.ts from GET /sd/adGroups/extended). Null: not SD, or not read yet.
+  bidOptimization String?
+  servingStatus   String?
+
   /// AX2.0 — Amazon answered a write with entityNotFoundError: this entity no
   /// longer exists there. Set once, cleared on the next successful sync, and
   /// checked before enqueueing so a dead entity is never re-pushed daily.
@@ -3492,6 +3503,15 @@ model AdTarget {
   // ── H.2: v1 unified Ads API delivery signals ───────────────────────
   deliveryStatus  String?
   deliveryReasons String[] @default([])
+
+  /// SD-AUD (2026-10-20) — a Sponsored Display target (or negative target) as Amazon holds it, read by the SD sync
+  /// (sd/sd-entity-sync.service.ts from GET /sd/targets/extended and /sd/negativeTargets/extended): the expression as
+  /// sent (`[{ type: 'views', value: [{ type: 'exactProduct' }, { type: 'lookback', value: '30' }] }]`), the expression
+  /// Amazon resolved it to (names for ids), and Amazon's serving status (TARGET_STATUS_LIVE, …). The flat
+  /// kind/expressionValue columns above cannot hold a nested audience or a refined category. Null: not SD, or not read yet.
+  expressionJson         Json?
+  resolvedExpressionJson Json?
+  servingStatus          String?
 
   /// AX2.0 — Amazon answered a write with entityNotFoundError: this keyword /
   /// target no longer exists there. Set once, cleared on the next successful
@@ -3565,6 +3585,15 @@ model AdProductAd {
   adType          String? // PRODUCT_AD | BRAND_AD | VIDEO_AD ...
   deliveryStatus  String?
   deliveryReasons String[] @default([])
+
+  /// SD-AUD (2026-10-20) — what a Sponsored Display product ad holds at Amazon besides its SKU/ASIN, read by the SD sync
+  /// (services/advertising/sd/sd-entity-sync.service.ts from GET /sd/productAds/extended). A landing page (STORE,
+  /// OFF_AMAZON_LINK) and its ad name only exist on an ad without SKU/ASIN. servingStatus: Amazon's own word for why it
+  /// serves or not (AD_STATUS_LIVE, OUT_OF_STOCK, NOT_BUYABLE, …). Null: not an SD ad, or not read yet.
+  landingPageType String?
+  landingPageUrl  String?
+  adName          String?
+  servingStatus   String?
 
   @@unique([workspaceId, adGroupId, asin], name: "adGroupId_asin", map: "AdProductAd_adGroupId_asin_key")
   @@index([productId])

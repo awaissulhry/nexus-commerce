@@ -72,6 +72,7 @@ import {
   summarizeCycle as summarizeV1Cycle,
 } from '../services/advertising/ads-v1-sync.service.js'
 import { syncCampaignSettingsFromAmazon } from '../services/advertising/ads-campaign-settings-sync.service.js'
+import { syncSdEntitiesFromAmazon } from '../services/advertising/sd/sd-entity-sync.service.js'
 import {
   runBrandMetricsCycle,
   runBrandMetricsIngestCycle,
@@ -260,7 +261,12 @@ export async function runCampaignSettingsSyncCron(): Promise<void> {
       // locally mid-poll. Normally 0; a persistent non-zero means writes and
       // this sync are contending, which is worth seeing rather than inferring.
       const raced = r.racedOut ? ` racedOut=${r.racedOut}` : ''
-      return `profiles=${r.profiles} campaigns=${r.campaigns} updated=${r.updated}${raced} placements=${r.placementsFilled} errors=${r.errors.length}`
+      // SD-AUD — the same tick fills every Sponsored Display setting (the SP list above never returns SD campaigns).
+      const sd = await syncSdEntitiesFromAmazon()
+      const sdLine = sd.profiles
+        ? ` sd: campaigns=${sd.campaigns.updated} adGroups=${sd.adGroups.updated} ads=${sd.productAds.updated} targets=${sd.targets.updated} negatives=${sd.negativeTargets.updated} errors=${sd.errors.length}`
+        : ''
+      return `profiles=${r.profiles} campaigns=${r.campaigns} updated=${r.updated}${raced} placements=${r.placementsFilled} errors=${r.errors.length}${sdLine}`
     })
   } catch (err) {
     logger.error('ads-campaign-settings-sync cron: failure', { error: err instanceof Error ? err.message : String(err) })
