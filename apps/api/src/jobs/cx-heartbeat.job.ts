@@ -130,7 +130,42 @@ export async function runHeartbeatFor(row: Row, actor: Actor = CRON_ACTOR): Prom
   return { ok: false, connectionId: row.id, channelType: row.channelType, latencyMs: result.latencyMs, authStatus: next, scopeDrift: drift, message: result.message, errorClass: result.errorClass }
 }
 
+/**
+ * Meta (M1): a system-user token has no refresh token; a 60-day one expires by its own date. Nexus renews it once 30
+ * days are left (token.service.ts renewMetaToken), so reaching 14 days means the renewal kept failing: warn at 14, 7 and
+ * 1 days, once per level per day, with the date and what to do. A never-expiring token has no date and no alert.
+ */
+const META_EXPIRY_WARN_DAYS = [14, 7, 1]
+
+/** The warning level (14, 7 or 1 days) a Meta token's expiry is at now, or null. Pure. */
+export function metaTokenExpiryLevel(expiresAt: Date | null, now: number = Date.now()): number | null {
+  if (!expiresAt) return null
+  const daysLeft = Math.floor((expiresAt.getTime() - now) / 86_400_000)
+  return META_EXPIRY_WARN_DAYS.includes(daysLeft) ? daysLeft : null
+}
+
+async function metaExpiryAlerts(row: Row): Promise<void> {
+  const d = metaTokenExpiryLevel(row.accessTokenExpiresAt)
+  if (!row.accessTokenExpiresAt || d === null) return
+  // Once per day per level: skip if an identical event exists in the last 20 h.
+  const recent = await prisma.connectionEvent.findFirst({
+    where: { connectionId: row.id, type: 'status_change', createdAt: { gt: new Date(Date.now() - 20 * 3_600_000) }, detail: { path: ['metaTokenExpiryWarnDays'], equals: d } },
+    select: { id: true },
+  })
+  if (recent) return
+  const day = row.accessTokenExpiresAt.toISOString().slice(0, 10)
+  await recordConnectionEvent({ connectionId: row.id, channelKey: 'META', type: 'status_change', detail: { metaTokenExpiryWarnDays: d, accessTokenExpiresAt: row.accessTokenExpiresAt.toISOString() } })
+  await alertService.createAlert(
+    AlertType.CONNECTION_HEALTH,
+    `Meta account "${row.displayName ?? row.id}": its token expires in ${d} day${d === 1 ? '' : 's'}`,
+    `The Meta system-user token expires on ${day} and Nexus could not renew it. Make a new token in Meta Business settings → System users → Generate token, and enter it in Settings → Channels → Meta before then.`,
+    1,
+    [row.id],
+  )
+}
+
 async function expiryAlerts(row: Row): Promise<void> {
+  if (row.channelType === 'META') return metaExpiryAlerts(row)
   if (!row.refreshTokenExpiresAt) return
   const daysLeft = Math.floor((row.refreshTokenExpiresAt.getTime() - Date.now()) / 86_400_000)
   for (const d of EXPIRY_WARN_DAYS) {

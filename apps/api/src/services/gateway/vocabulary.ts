@@ -36,8 +36,10 @@ export const isRetryableClass = (cls: GatewayErrorClass): boolean => RETRYABLE.h
 /**
  * GOOGLE (2026-10-13) — one channel for every Google API Nexus calls (Google Ads, Merchant Center,
  * Analytics, the sign-in's userinfo); the rate bucket is per host (channels.bucketGroupOf).
+ * META (2026-10-20, Meta ads M1) — Meta's Graph and Marketing API (graph.facebook.com): Facebook, Instagram and
+ * Meta ads, read only in M1 (gateway.ts refuses anything but a GET); the rate bucket is per kind of call.
  */
-export type GatewayChannel = 'EBAY' | 'AMAZON_SP' | 'SHOPIFY' | 'AMAZON_ADS' | 'ETSY' | 'GOOGLE'
+export type GatewayChannel = 'EBAY' | 'AMAZON_SP' | 'SHOPIFY' | 'AMAZON_ADS' | 'ETSY' | 'GOOGLE' | 'META'
 
 /**
  * P3.1 — how bad the channel says it is.
@@ -329,6 +331,55 @@ function google(status: number, text: string): ChannelVerdict {
   return verdict(byStatus(status), code, message)
 }
 
+/**
+ * Meta's Graph API answers `{ error: { message, type, code, error_subcode, error_user_title, error_user_msg, fbtrace_id } }`
+ * (checked 2026-10-20: developers.facebook.com/docs/graph-api/guides/error-handling and
+ * /documentation/ads-commerce/marketing-api/error-reference, /docs/graph-api/overview/rate-limiting). Meta sends most of
+ * these with HTTP 400, so the class comes from `code` / `error_subcode`, never from the status alone:
+ *   190 (and 102) the token: subcode 463 = expired → auth_expired; any other (458 app removed, 460 password changed,
+ *       467 invalid, none) → auth_revoked: either way only a new token mends it
+ *   4, 17, 32, 613, 80000–80014 and 341 — a rate limit (app, user, ad account, Business Use Case) → rate_limited
+ *   10, 200–299 — a permission not given → forbidden;  3 — a capability the app does not have → forbidden;
+ *   368 — temporarily blocked for a policy → forbidden
+ *   100 — an invalid parameter → validation; with subcode 33 (the object does not exist or is not visible) → not_found
+ *   2635 — an API version Meta no longer serves → configuration (a Nexus fix, never the person's sign-in)
+ *   1, 2 — Meta is unwell → transient
+ * `channelCode` = "code" or "code/subcode" (e.g. "613/1487632"), so the ledger says exactly which limit.
+ */
+export const META_RATE_LIMIT_CODES: ReadonlySet<number> = new Set([4, 17, 32, 341, 613, 80000, 80001, 80002, 80003, 80004, 80005, 80006, 80008, 80009, 80014])
+
+export function metaErrorOf(text: string): { code: number | null; subcode: number | null; message: string | null; userMessage: string | null; type: string | null } {
+  const body = parseJson(text)
+  const error = body?.error && typeof body.error === 'object' ? body.error : null
+  const num = (value: unknown): number | null => {
+    const n = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN
+    return Number.isFinite(n) ? n : null
+  }
+  const str = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value.trim() : null)
+  return {
+    code: num(error?.code),
+    subcode: num(error?.error_subcode),
+    message: str(error?.message),
+    userMessage: str(error?.error_user_msg),
+    type: str(error?.type),
+  }
+}
+
+function meta(status: number, text: string): ChannelVerdict {
+  const { code, subcode, message, userMessage, type } = metaErrorOf(text)
+  const channelCode = code === null ? (status ? status : null) : subcode === null ? code : `${code}/${subcode}`
+  const words = userMessage ?? message ?? (text || null)
+  if (code === 190 || code === 102 || (code === null && type === 'OAuthException' && status === 401)) {
+    return verdict(subcode === 463 ? 'auth_expired' : 'auth_revoked', channelCode, words)
+  }
+  if (code !== null && META_RATE_LIMIT_CODES.has(code)) return verdict('rate_limited', channelCode, words)
+  if (code === 10 || code === 3 || code === 368 || (code !== null && code >= 200 && code <= 299)) return verdict('forbidden', channelCode, words)
+  if (code === 100) return verdict(subcode === 33 ? 'not_found' : 'validation', channelCode, words)
+  if (code === 2635) return verdict('configuration', channelCode, words)
+  if (code === 1 || code === 2) return verdict('transient', channelCode, words)
+  return verdict(byStatus(status), channelCode, words)
+}
+
 /** Classify a channel's answer. `status` 0 = no answer (network); `timedOut` wins over everything. */
 export function classifyChannelAnswer(channel: GatewayChannel, status: number, text: string, opts: { timedOut?: boolean } = {}): ChannelVerdict {
   if (opts.timedOut) return verdict('timeout', null, 'The channel did not answer in time.')
@@ -340,5 +391,6 @@ export function classifyChannelAnswer(channel: GatewayChannel, status: number, t
     case 'AMAZON_ADS': return amazonAds(status, text)
     case 'ETSY': return etsy(status, text)
     case 'GOOGLE': return google(status, text)
+    case 'META': return meta(status, text)
   }
 }

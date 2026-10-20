@@ -45,6 +45,13 @@ describe('P1.2 — the ratchet counts sends to a channel outside the gateway', (
   write('services/raw-storage.ts', "export const g7 = () => fetch('https://storage.googleapis.com/some-bucket/file')\n")
   write('services/raw-sign-in.ts', "export const g8 = () => fetch('https://accounts.google.com/o/oauth2/revoke')\n")
   write('services/lookalike.ts', "export const g9 = () => fetch('https://notgoogleapis.com/x')\n")
+  // Meta: the Graph hosts count, by host or by a meta/ or meta-ads/ path; a "metadata" file is not Meta.
+  write('services/raw-meta.ts', "export const m3 = () => fetch('https://graph.facebook.com/v26.0/me/adaccounts')\n")
+  write('services/raw-meta-video.ts', "export const m4 = () => fetch('https://graph-video.facebook.com/v26.0/act_1234567890/advideos')\n")
+  write('services/raw-instagram.ts', "export const m5 = () => fetch('https://graph.instagram.com/me')\n")
+  write('services/marketing/meta-ads/read-client.ts', 'export const m6 = (u: string) => fetch(u)\n')
+  write('services/metadata-thing.ts', 'export const m7 = (u: string) => fetch(u)\n')
+  write('services/facebook-share.ts', "export const m8 = () => fetch('https://www.facebook.com/sharer/sharer.php')\n")
 
   const sites = scan(root)
   const where = (file: string) => sites.filter((s) => s.file === file)
@@ -69,6 +76,11 @@ describe('P1.2 — the ratchet counts sends to a channel outside the gateway', (
       expect(where(file), file).toEqual([expect.objectContaining({ channel: 'GOOGLE', exempt: null })])
     }
     expect(where('services/lookalike.ts')).toEqual([])
+    for (const file of ['services/raw-meta.ts', 'services/raw-meta-video.ts', 'services/raw-instagram.ts', 'services/marketing/meta-ads/read-client.ts']) {
+      expect(where(file), file).toEqual([expect.objectContaining({ channel: 'META', exempt: null })])
+    }
+    expect(where('services/metadata-thing.ts')).toEqual([])
+    expect(where('services/facebook-share.ts')).toEqual([])
   })
   it('a file that mixes channels: each call counts for the channel its API path names', () => {
     expect(where('services/mixed-sync.ts').map((s) => s.channel)).toEqual(['EBAY', 'SHOPIFY'])
@@ -81,7 +93,7 @@ describe('P1.2 — the ratchet counts sends to a channel outside the gateway', (
     for (const file of ['services/gateway/inside.ts', 'services/not-a-channel.ts', 'services/comment-only.ts', 'services/raw-ebay.vitest.test.ts']) expect(where(file)).toEqual([])
   })
   it('the counts are per channel, exemptions left out', () => {
-    expect(counts(sites)).toEqual({ EBAY: 3, AMAZON_SP: 2, AMAZON_ADS: 2, SHOPIFY: 2, ETSY: 0, GOOGLE: 6 })
+    expect(counts(sites)).toEqual({ EBAY: 3, AMAZON_SP: 2, AMAZON_ADS: 2, SHOPIFY: 2, ETSY: 0, GOOGLE: 6, META: 4 })
   })
 })
 
@@ -100,6 +112,6 @@ describe('P1.2 — the real tree is at or below the baseline', () => {
     const out = execFileSync('npx', ['tsx', 'scripts/channel-gateway-ratchet.mts', '--check'], { cwd: api, encoding: 'utf8' })
     expect(out).toMatch(/channel sends outside the gateway: \{"EBAY":\d+,"AMAZON_SP":0,/)
     expect(out).toMatch(/queue rows created outside services\/outbound-rows\.ts: 0/)
-    expect(out).toMatch(/"GOOGLE":0\}/)
+    expect(out).toMatch(/"GOOGLE":0,"META":0\}/)
   }, 60_000)
 })

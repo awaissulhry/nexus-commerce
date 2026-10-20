@@ -47,6 +47,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Amazon A+ (2026-10-19) — aplus-content reads A+ content live from Amazon; set-aplus-content, set-aplus-asins and submit-aplus-content change it there.
 // SD creatives (2026-10-20) — ad-creatives and ad-assets read Sponsored Display creatives and the asset library live from Amazon; set-ad-creative and upload-ad-asset change them there.
 // Sponsored Display extras (P3c, 2026-10-20) — the sd-… reads ask Amazon live; set-sd-optimization-rule, set-sd-budget-rule and set-sd-brand-safety change it there.
+// Meta ads step 1 (2026-10-20) — meta-connection reads the Meta connection live from Meta (views check, permissions, app, assigned-apps).
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -66,7 +67,7 @@ const OPEN_WORLD = [
   'google-ads-numbers', 'google-ads-query', 'google-merchant-live', 'graduate-google-experiment', 'graduate-keyword',
   'harvest-search-term',
   'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
-  'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
+  'meta-connection', 'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
   'remove-google-conversion-actions', 'remove-google-labels', 'reopen-listing', 'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
   'request-review',

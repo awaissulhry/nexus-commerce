@@ -81,7 +81,8 @@ export default async function cxConnectionsRoutes(app: FastifyInstance): Promise
       authMode: s.auth.mode,
       connectMode: s.key === 'AMAZON_SP' && process.env.AMAZON_SP_AUTH_MODE === 'self'
         ? 'self_authorization'
-        : 'website_oauth',
+        // Meta: the business's app id, app secret and system-user token, entered in Nexus (POST /api/meta-ads/connect).
+        : s.key === 'META' ? 'token_entry' : 'website_oauth',
       permissionModel: s.auth.permissionModel ?? 'oauth_scopes',
       requiredScopes: s.auth.requiredScopes,
       reviewGatedScopes: s.auth.reviewGatedScopes ?? [],

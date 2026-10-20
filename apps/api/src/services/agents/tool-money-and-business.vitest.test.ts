@@ -489,6 +489,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // each answers why there is nothing to read or change, before any Google call (google-ads-change.tools.vitest.test.ts
   // runs them on an account).
   'google-ads-live': () => ({ view: 'campaigns' }),
+  // Meta ads step 1: the connection as Nexus keeps it (no Meta call; this seed has no Meta connection, so it says so).
+  'meta-connection': () => ({ view: 'summary' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

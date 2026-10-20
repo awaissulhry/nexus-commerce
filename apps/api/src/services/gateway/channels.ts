@@ -8,7 +8,8 @@ import { getEbayPublishMode } from '../ebay-publish-gate.service.js'
 import { getShopifyPublishMode } from '../shopify-publish-gate.service.js'
 import { getEtsyPublishMode } from '../etsy-publish-gate.service.js'
 import { tryGetChannelSpec, type ChannelKey, type RateLimitReading } from '../cx/catalog.js'
-import { amazonAdsRateReading, amazonSpRateReading, ebayRateReading, etsyRateReading, googleRateReading, shopifyRateReading } from '../cx/rate-readings.js'
+import { amazonAdsRateReading, amazonSpRateReading, ebayRateReading, etsyRateReading, googleRateReading, metaRateReading, shopifyRateReading } from '../cx/rate-readings.js'
+import { metaCallGroup } from './meta-calls.js'
 import type { GatewayChannel } from './vocabulary.js'
 import { customerOperationProblem } from './google-account-calls.js'
 import prisma from '../../db.js'
@@ -18,7 +19,7 @@ import { normalizeLanguage } from '../pim/content-language.js'
 export type PublishMode = 'gated' | 'dry-run' | 'sandbox' | 'live'
 
 export const SPEC_KEY: Record<GatewayChannel, ChannelKey> = {
-  EBAY: 'EBAY', AMAZON_SP: 'AMAZON_SP', SHOPIFY: 'SHOPIFY', AMAZON_ADS: 'AMAZON_ADS', ETSY: 'ETSY', GOOGLE: 'GOOGLE',
+  EBAY: 'EBAY', AMAZON_SP: 'AMAZON_SP', SHOPIFY: 'SHOPIFY', AMAZON_ADS: 'AMAZON_ADS', ETSY: 'ETSY', GOOGLE: 'GOOGLE', META: 'META',
 }
 
 /** The publish mode that governs WRITES on this channel today. */
@@ -38,6 +39,9 @@ export function publishModeOf(channel: GatewayChannel): PublishMode {
     // Google Ads writes (Owner 2026-10-15, pick A): live — each one is a change a person approved in Nexus.
     // The gateway still refuses every other Google change (googleCallKind); NEXUS_GOOGLE_ADS_WRITES=off is the brake.
     case 'GOOGLE': return googleAdsWritesMode()
+    // Meta (M1, 2026-10-20): Nexus only reads Meta. Writes have no switch to turn on — the gateway refuses every Meta
+    // call that is not a GET (META_READ_ONLY, meta-calls.ts), whatever this says. M3 brings the write allow-list.
+    case 'META': return 'gated'
   }
 }
 
@@ -53,6 +57,8 @@ const SANDBOX_HOSTS: Record<GatewayChannel, Array<[RegExp, (m: RegExpMatchArray)
   ETSY: [],
   // Google has no sandbox host: a Google Ads test account is a different account, chosen by the login.
   GOOGLE: [],
+  // Meta has no sandbox host: a sandbox ad account is a different account on the same Graph host.
+  META: [],
 }
 
 /** The URL in sandbox mode, or null when the channel has no sandbox host for it (then: no call). */
@@ -74,6 +80,8 @@ export function authHeadersOf(channel: GatewayChannel, token: string): Record<st
     case 'AMAZON_ADS': return { Authorization: `Bearer ${token}` }
     case 'ETSY': return { Authorization: `Bearer ${token}` }
     case 'GOOGLE': return { Authorization: `Bearer ${token}` }
+    // Meta: the token travels as the `access_token` parameter with its appsecret_proof (gateway.ts, meta-calls.ts).
+    case 'META': return {}
   }
 }
 
@@ -123,7 +131,7 @@ export async function ebayMarketHeaders(market: string, contentLanguage?: string
 }
 
 const RATE_READINGS: Record<GatewayChannel, (headers: Headers, status: number) => RateLimitReading | null> = {
-  AMAZON_SP: amazonSpRateReading, EBAY: ebayRateReading, SHOPIFY: shopifyRateReading, AMAZON_ADS: amazonAdsRateReading, ETSY: etsyRateReading, GOOGLE: googleRateReading,
+  AMAZON_SP: amazonSpRateReading, EBAY: ebayRateReading, SHOPIFY: shopifyRateReading, AMAZON_ADS: amazonAdsRateReading, ETSY: etsyRateReading, GOOGLE: googleRateReading, META: metaRateReading,
 }
 
 /** The rate reading of an answer — the connectors' own parsers (they existed, but nothing called them). */
@@ -703,6 +711,8 @@ export function isGoogleAdsBrandSuggestion(method: string, url: string): boolean
 export function bucketGroupOf(channel: GatewayChannel, method: string, url: string): string {
   if (channel === 'SHOPIFY') return /\/graphql\.json$/.test(new URL(url).pathname) ? 'graphql' : 'rest'
   if (channel === 'GOOGLE') return googleHostGroup(url)
+  // Meta: its Business Use Case quotas are per kind of call (ads management, insights), the sign-in apart.
+  if (channel === 'META') return metaCallGroup(url)
   if (channel !== 'AMAZON_SP') return 'all'
   // `/{api}/{version}/{resource}` — e.g. `/listings/2021-08-01/items`, `/orders/v0/orders` — never
   // the seller id or SKU that follow, so one bucket per operation family, not per SKU.

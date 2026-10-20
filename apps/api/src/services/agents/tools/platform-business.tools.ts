@@ -29,7 +29,7 @@ const iso = (at: Date | string | null | undefined) => (at == null ? null : typeo
 const profilesOn = () => process.env.NEXUS_WORKSPACES_ENABLED === '1'
 
 /** The channels an account can be on (AccountRow.channel). */
-const ACCOUNT_CHANNELS = ['AMAZON', 'AMAZON_ADS', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY', 'GOOGLE'] as const
+const ACCOUNT_CHANNELS = ['AMAZON', 'AMAZON_ADS', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY', 'GOOGLE', 'META'] as const
 
 // ── business-overview ─────────────────────────────────────────────────────────────────────────────────
 
@@ -223,7 +223,7 @@ const channelConnections: AgentTool = {
   title: 'Channel accounts',
   category: 'settings',
   description:
-    'The channel accounts (Amazon, Amazon Ads, eBay, Shopify, Etsy, Google, …) this business holds: name, health and why, '
+    'The channel accounts (Amazon, Amazon Ads, eBay, Shopify, Etsy, Google, Meta, …) this business holds: name, health and why, '
     + 'sign-in state, markets and permissions each reaches, permissions missing since the channel asked for more, last '
     + 'sync and last error, and whether the account is this business\'s own or shared with it by another business. '
     + 'Name one account (connectionId) for its last 10 events. Read only: connecting, reconnecting and sharing '

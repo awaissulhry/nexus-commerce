@@ -23,7 +23,27 @@ export const DEFAULT_BUCKETS: Record<GatewayChannel, BucketParams> = {
   ETSY: { capacity: 10, refillPerSec: 5 },
   // Google: a host with no group of its own (GOOGLE_BUCKETS below holds the four that have one).
   GOOGLE: { capacity: 5, refillPerSec: 1 },
+  // Meta: a call with no group of its own (META_BUCKETS below holds the three that have one).
+  META: { capacity: 5, refillPerSec: 0.2 },
 }
+
+/**
+ * Meta, per kind of call (the key's operation group, channels.bucketGroupOf → meta-calls.ts metaCallGroup), per
+ * connection. Sized for Meta's Limited (default) Marketing API tier (checked 2026-10-20:
+ * developers.facebook.com/documentation/ads-commerce/marketing-api/overview/rate-limiting): an ad account's score is
+ * at most 60, a read costs 1 point and the score decays over 300 s — so a burst of 40 refilled one read per 5 s keeps a
+ * daily read inside it. Insights (ads_insights, 600 an hour per account at Limited) refill one per 6 s. The sign-in
+ * calls (debug_token, the token renewal) are rare. Meta's own usage headers then hold a bucket (rate-readings.ts
+ * metaRateReading): the gateway backs off at 75 % and while Meta says access is blocked.
+ */
+export const META_BUCKETS: Record<'ads' | 'insights' | 'auth', BucketParams> = {
+  ads: { capacity: 40, refillPerSec: 0.2 },
+  insights: { capacity: 30, refillPerSec: 1 / 6 },
+  auth: { capacity: 5, refillPerSec: 1 },
+}
+
+/** The longest a channel's own wait holds a bucket: Meta names its block in minutes (up to an hour), others in seconds. */
+const MAX_HOLD_SEC: Partial<Record<GatewayChannel, number>> = { META: 3600 }
 
 /**
  * Google, per API (the key's operation group is the host's, channels.googleHostGroup). Google Ads is the
@@ -52,6 +72,10 @@ export function defaultsFor(channel: GatewayChannel, key: string): BucketParams 
   if (channel === 'GOOGLE') {
     const group = key.slice(key.lastIndexOf(':') + 1) as keyof typeof GOOGLE_BUCKETS
     return GOOGLE_BUCKETS[group] ?? DEFAULT_BUCKETS.GOOGLE
+  }
+  if (channel === 'META') {
+    const group = key.slice(key.lastIndexOf(':') + 1) as keyof typeof META_BUCKETS
+    return META_BUCKETS[group] ?? DEFAULT_BUCKETS.META
   }
   return DEFAULT_BUCKETS[channel]
 }
@@ -192,7 +216,7 @@ export async function observeRate(channel: GatewayChannel, key: string, reading:
   if (!reading) return
   const s = await store()
   try {
-    if (reading.retryAfterSec && reading.retryAfterSec > 0) await s.holdUntil(key, Date.now() + Math.min(reading.retryAfterSec, 60) * 1000)
+    if (reading.retryAfterSec && reading.retryAfterSec > 0) await s.holdUntil(key, Date.now() + Math.min(reading.retryAfterSec, MAX_HOLD_SEC[channel] ?? 60) * 1000)
     // Amazon reports the operation's sustained rate (requests per second), not its burst: the
     // refill follows the header, the burst stays at the default (10 — Amazon's bursts are 10–30).
     if (channel === 'AMAZON_SP' && reading.limit && reading.limit > 0) {

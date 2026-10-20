@@ -84,6 +84,8 @@ type Channel =
   | 'AMAZON_ADS'
   // 2026-10-13 — Google (Ads, Merchant Center, Analytics, sign-in userinfo), one gateway channel.
   | 'GOOGLE'
+  // 2026-10-20 — Meta (Graph and Marketing API: Facebook, Instagram, Meta ads), one gateway channel.
+  | 'META'
 
 export interface ApiCallContext {
   channel: Channel

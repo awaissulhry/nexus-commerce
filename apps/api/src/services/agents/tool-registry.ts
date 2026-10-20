@@ -78,6 +78,8 @@ import { GOOGLE_ADS_KEYWORDS_TOOLS } from './tools/google-ads-keywords.tools.js'
 import { GOOGLE_ADS_LIVE_TOOLS } from './tools/google-ads-live.tools.js'
 import { GOOGLE_ADS_CAMPAIGN_TOOLS } from './tools/google-ads-campaigns.tools.js'
 import { GOOGLE_ADS_BUILD_TOOLS } from './tools/google-ads-build.tools.js'
+// Meta ads step 1 (2026-10-20): the Meta connection, read only.
+import { META_ADS_CONNECTION_TOOLS } from './tools/meta-ads-connection.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -272,6 +274,8 @@ const ALL: AgentTool[] = [
   ...GOOGLE_ADS_BUILD_TOOLS,
   // Google Ads changes PR 3 (2026-10-15): ad groups, keywords and negative keywords of a campaign.
   ...GOOGLE_ADS_KEYWORDS_TOOLS,
+  // Meta ads step 1 (2026-10-20): meta-connection — the connection, its token health and its picks (read only).
+  ...META_ADS_CONNECTION_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

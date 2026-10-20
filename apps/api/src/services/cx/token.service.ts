@@ -106,6 +106,11 @@ const OWNER = `${process.env.RAILWAY_REPLICA_ID ?? process.env.HOSTNAME ?? 'loca
 
 const inflight = new Map<string, Promise<string>>()
 const lastFailureAt = new Map<string, number>()
+/**
+ * Meta (M1): a failed renewal of a token that still works is tried again after an hour, not 30 s — the token keeps
+ * serving every call meanwhile, and Meta asks callers not to hammer its sign-in endpoint.
+ */
+const META_RENEW_RETRY_MS = 60 * 60_000
 
 export function tokenServiceEnabled(): boolean {
   return process.env.NEXUS_CX_TOKEN_SERVICE !== '0'
@@ -380,11 +385,17 @@ async function accessTokenFor(connectionId: string, opts: { forceRefresh?: boole
   const creds = await readCredentials(row)
   if (!creds) throw new Error(`Connection ${connectionId} has no credentials — reconnect the account.`)
 
-  const { spec } = specFor(row)
+  const { key, spec } = specFor(row)
   if (!creds.accessTokenExpiresAt && spec.auth.accessTokenLifetimeSec === null) return creds.accessToken
   const bufferMs = (spec.tokenExpirationBufferSec ?? DEFAULT_BUFFER_SEC) * 1000
   const exp = creds.accessTokenExpiresAt ? Date.parse(creds.accessTokenExpiresAt) : 0
   if (!opts.forceRefresh && exp > Date.now() + bufferMs) return creds.accessToken
+  // Meta: inside the renewal window (spec.tokenExpirationBufferSec) the token still works until its own expiry. After a
+  // renewal that failed in the last hour, keep using it rather than asking Meta again on every call.
+  if (key === 'META' && !opts.forceRefresh && exp > Date.now()) {
+    const failedAt = lastFailureAt.get(connectionId)
+    if (failedAt && Date.now() - failedAt < META_RENEW_RETRY_MS) return creds.accessToken
+  }
 
   // Collapse concurrent callers in this process.
   const pending = inflight.get(connectionId)
@@ -473,6 +484,9 @@ async function refreshOwned(connectionId: string, force: boolean): Promise<strin
     const exp = creds.accessTokenExpiresAt ? Date.parse(creds.accessTokenExpiresAt) : 0
     if (!force && exp > Date.now() + bufferMs) return creds.accessToken
 
+    // Meta (M1, R2 trap 2): Meta gives no refresh token. A system-user token is renewed with itself (renewMetaToken),
+    // so "no refresh token" is NOT a dead sign-in for META.
+    if (key === 'META') return await renewMetaToken(row, creds)
     if (!creds.refreshToken) {
       await failRefresh(row, 'auth_expired', 'No refresh token stored — the grant must be renewed by the operator.')
       throw new RefreshFailed(connectionId, 'auth_expired', 'No refresh token stored')
@@ -622,6 +636,144 @@ async function failRefresh(row: ConnRow, errorClass: ErrorClass, message: string
   await recordConnectionEvent({ connectionId: row.id, channelKey: key, type: 'refresh_failed', detail: { errorClass, message, failures } })
   if (row.authStatus !== next) await announceTransition(row, next, message, SYSTEM_ACTOR)
   logger.warn('[cx-token] refresh failed', { connectionId: row.id, errorClass, failures })
+}
+
+// ── Meta (M1, 2026-10-20) ────────────────────────────────────────────────────
+//
+// A Meta connection holds, in its encrypted credentials, the business's system-user token (`accessToken`, no refresh
+// token: Meta has none) and the business's own Meta app (`extra.metaApp = { appId, appSecret }`). Nothing outside this
+// module reads the app secret: the gateway asks here for a call's appsecret_proof (metaRequestProof) and for the app
+// token debug_token needs (metaAppAccessToken).
+
+export interface MetaAppCredentials { appId: string; appSecret: string }
+
+function metaAppOf(creds: Credentials | null): MetaAppCredentials | null {
+  const app = (creds?.extra as { metaApp?: { appId?: unknown; appSecret?: unknown } } | undefined)?.metaApp
+  const appId = typeof app?.appId === 'string' ? app.appId.trim() : ''
+  const appSecret = typeof app?.appSecret === 'string' ? app.appSecret.trim() : ''
+  return appId && appSecret ? { appId, appSecret } : null
+}
+
+async function metaCredentialsOf(connectionId: string): Promise<{ row: ConnRow; creds: Credentials; app: MetaAppCredentials }> {
+  const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
+  if (!row || row.channelType !== 'META') throw new Error('This is not a Meta connection.')
+  if (row.isActive === false) throw new ConnectionNeedsReauth(connectionId, 'disconnected')
+  const creds = await readCredentials(row)
+  const app = metaAppOf(creds)
+  if (!creds || !app) throw new Error('No Meta app id and secret are stored for this connection.')
+  return { row, creds, app }
+}
+
+/** The appsecret_proof (and its time) for one call made with `token` on this Meta connection. Never the secret itself. */
+export async function metaRequestProof(connectionId: string, token: string): Promise<{ appsecret_proof: string; appsecret_time: string }> {
+  const { app } = await metaCredentialsOf(connectionId)
+  const { metaAppSecretProof } = await import('../gateway/meta-calls.js')
+  return metaAppSecretProof(token, app.appSecret)
+}
+
+/**
+ * The connection's Meta app token (`app-id|app-secret`), which debug_token needs ("an app access token … for the app
+ * associated with the input_token", checked 2026-10-20: developers.facebook.com/docs/graph-api/reference/debug_token).
+ * Only the gateway calls this, and it sends the value only to Meta's Graph API host.
+ */
+export async function metaAppAccessToken(connectionId: string): Promise<string> {
+  const { app } = await metaCredentialsOf(connectionId)
+  return `${app.appId}|${app.appSecret}`
+}
+
+/** The Meta app id of a connection (not a secret: Meta shows it on every app page); null when none is stored. */
+export async function metaAppIdOf(connectionId: string): Promise<string | null> {
+  try {
+    return (await metaCredentialsOf(connectionId)).app.appId
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Renew a 60-day Meta system-user token (called under the refresh lease, inside its renewal window). Meta's documented
+ * call: GET oauth/access_token?grant_type=fb_exchange_token&client_id&client_secret&set_token_expires_in_60_days=true
+ * &fb_exchange_token=<the current token> → { access_token, token_type, expires_in } — a token valid 60 days from now;
+ * the old one keeps working until its own expiry (checked 2026-10-20: developers.facebook.com/docs/marketing-api/
+ * businessmanager/systemuser/install-apps-and-generate-tokens, "Refresh Access Token", "Access Token Rotation"). So:
+ *   - renewed → the new token is stored (compare-and-set on the row read under the lease) and the old one is not revoked
+ *     (it simply expires; revoking it is the Owner's, in Meta);
+ *   - Meta says the token itself is dead (190) → needs_reauth: a person makes a new one;
+ *   - anything else while the token still works → the current token keeps serving; the failure is recorded and tried
+ *     again after an hour (META_RENEW_RETRY_MS); the expiry alerts warn 14, 7 and 1 days ahead (cx-heartbeat.job.ts);
+ *   - the token already expired → needs_reauth, with the date in the sentence.
+ */
+async function renewMetaToken(row: ConnRow, creds: Credentials): Promise<string> {
+  const connectionId = row.id
+  const exp = creds.accessTokenExpiresAt ? Date.parse(creds.accessTokenExpiresAt) : null
+  const expiryDay = exp ? new Date(exp).toISOString().slice(0, 10) : null
+  const stillValid = exp !== null && exp > Date.now()
+  const keepOrFail = async (errorClass: ErrorClass, message: string): Promise<string> => {
+    if (stillValid && errorClass !== 'auth_revoked' && errorClass !== 'auth_expired') {
+      lastFailureAt.set(connectionId, Date.now())
+      await recordConnectionEvent({ connectionId, channelKey: 'META', type: 'refresh_failed', detail: { errorClass, message, keptCurrentToken: true, expiresAt: expiryDay } })
+      await prisma.channelConnection.updateMany({ where: { id: connectionId }, data: { lastError: `${errorClass}: ${message}`.slice(0, 500), lastErrorAt: new Date() } })
+      logger.warn('[cx-token] Meta token renewal failed; the current token still works', { connectionId, errorClass, expiresAt: expiryDay })
+      return creds.accessToken
+    }
+    const sentence = stillValid
+      ? `${message} Make a new system-user token in Meta Business settings and enter it in Settings → Channels → Meta.`
+      : `The Meta system-user token expired on ${expiryDay ?? 'an unknown date'}. Make a new one in Meta Business settings and enter it in Settings → Channels → Meta.`
+    await failRefresh(row, stillValid ? errorClass : 'auth_expired', sentence)
+    throw new RefreshFailed(connectionId, stillValid ? errorClass : 'auth_expired', sentence)
+  }
+  if (!stillValid) return keepOrFail('auth_expired', 'The Meta system-user token has expired.')
+  const app = metaAppOf(creds)
+  if (!app) return keepOrFail('configuration', 'No Meta app id and secret are stored for this connection, so its token cannot be renewed.')
+  const { metaUrl } = await import('../gateway/meta.js')
+  const { gatewayCall, GatewayRefusal } = await import('../gateway/gateway.js')
+  const started = Date.now()
+  let answer: Awaited<ReturnType<typeof gatewayCall>>
+  try {
+    answer = await gatewayCall({
+      channel: 'META',
+      operation: 'token.renew',
+      kind: 'read',
+      connectionId,
+      url: metaUrl('oauth/access_token', {
+        grant_type: 'fb_exchange_token',
+        client_id: app.appId,
+        client_secret: app.appSecret,
+        set_token_expires_in_60_days: 'true',
+        fb_exchange_token: creds.accessToken,
+      }),
+      method: 'GET',
+      auth: 'none',
+      maxTransientRetries: 0,
+      max429Retries: 0,
+      timeoutMs: TOKEN_REQUEST_TIMEOUT_MS,
+    })
+  } catch (err) {
+    if (err instanceof GatewayRefusal) return keepOrFail(err.code === 'RATE_LIMITED_LOCAL' ? 'rate_limited' : 'unknown', `Nexus did not ask Meta to renew the token (${err.code}).`)
+    return keepOrFail('network', 'Meta could not be reached to renew the token.')
+  }
+  if (answer.status === 0) return keepOrFail('network', 'Meta did not answer the token renewal.')
+  if (!answer.ok) {
+    const cls = (answer.verdict?.errorClass ?? 'unknown') as ErrorClass
+    // Provider error bodies can echo credentials; keep them out of logs and account cards (the code only).
+    return keepOrFail(cls, `Meta refused to renew the token (${answer.verdict?.channelCode ?? answer.status}).`)
+  }
+  const json = answer.json<{ access_token?: unknown; expires_in?: unknown }>()
+  const token = typeof json?.access_token === 'string' ? json.access_token.trim() : ''
+  const expiresIn = typeof json?.expires_in === 'number' ? json.expires_in : Number(json?.expires_in)
+  if (!token || !Number.isFinite(expiresIn) || expiresIn <= 0) return keepOrFail('unknown', 'Meta answered the token renewal without a usable token.')
+  const next: Credentials = {
+    accessToken: token,
+    refreshToken: null,
+    accessTokenExpiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+    refreshTokenExpiresAt: null,
+    extra: creds.extra,
+  }
+  await writeCredentials(connectionId, next, { lastRefreshAt: new Date(), consecutiveFailures: 0, lastError: null, lastErrorAt: null, authStatus: 'connected' }, row)
+  if (row.authStatus !== 'connected') await announceTransition(row, 'connected', 'Meta token renewed', SYSTEM_ACTOR)
+  await recordConnectionEvent({ connectionId, channelKey: 'META', type: 'refresh', detail: { latencyMs: Date.now() - started, rotated: true, expiresInSec: expiresIn, meta: 'system-user token renewed for 60 days' } })
+  lastFailureAt.delete(connectionId)
+  return token
 }
 
 // ── state machine ────────────────────────────────────────────────────────────
@@ -859,6 +1011,8 @@ export async function revoke(connectionId: string, actor: Actor, reason: 'operat
   // GOOGLE: a disconnected business lets go of the Google Ads / Merchant Center / GA4 accounts it picked, so another
   // business may pick them (each id belongs to ONE business, 20261013b). A reconnect here asks to pick again.
   if (key === 'GOOGLE') await prisma.googleAccountLink.deleteMany({ where: { connectionId } })
+  // META: likewise for the Meta ad account, Page and Instagram account it picked (each id in ONE business, 20261020e).
+  if (key === 'META') await prisma.metaAccountLink.deleteMany({ where: { connectionId } })
   await recordConnectionEvent({ connectionId, channelKey: key, type: reason === 'channel' ? 'revoke' : 'disconnect', actor, detail: { reason, revokedAtChannel, legacy } })
   await recordConnectionEvent({ connectionId, channelKey: key, type: 'status_change', actor, detail: { from: row.authStatus, to: next, reason } })
   return { revokedAtChannel }
