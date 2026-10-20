@@ -23,6 +23,11 @@
  * — restore-campaign — are separate kinds, each allowed on its own): only inside the ads strategy where its products are
  * (C1–C7, the month), with Claude's limits for a new campaign's daily budget (0 by default: every one waits for a person)
  * and its products, every planned bid under the strategy's highest bid, and never the first campaign of a market.
+ *
+ * SD CREATE P2a (2026-10-20) — `adProduct: 'SD'` asks for a Sponsored Display campaign instead (ads-sd-create-kit.ts):
+ * tactic, cost type, budget, first and last day, portfolio and, in the same call, one ad group with its product ads and
+ * targets — born PAUSED and off the allowlist, through the screens' own SD creates. It always waits for a person. The
+ * Sponsored Products path above is unchanged (its own schema, `SP_INPUT`, still reads its arguments).
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -36,6 +41,10 @@ import { approvedRun, notRun, reachNote, reachRefusal, recheck, requesterOf, sto
 import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote } from './ads-autonomy-kit.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import {
+  bidOptimizationArg, creativeTypeArg, includeOutOfStockArg, sdArgsGiven, sdByRuleRefusal, sdCampaignPreview, sdCampaignRun, sdTargetsArg,
+  SD_COST_TYPES, SD_LIST_MAX, SD_TACTICS,
+} from './ads-sd-create-kit.js'
 
 const LIST_MAX = 250
 const BID_MAX_CENTS = 10_000
@@ -50,7 +59,8 @@ const negativeArg = z.object({
   matchType: z.enum(['EXACT', 'PHRASE']).describe('how it blocks a search'),
 })
 
-const input = z.object({
+/** The Sponsored Products arguments, read exactly as before P2a (the tool's own `input` below adds Sponsored Display's). */
+const SP_INPUT = z.object({
   market: z.string().trim().toUpperCase().min(2).max(20).describe('the Amazon marketplace code: IT, DE, FR, ES, UK, …'),
   name: z.string().trim().min(1).max(128).describe('the campaign name; it must be new in its market'),
   skus: z.array(z.string().trim().min(1).max(64)).min(1).max(LIST_MAX).describe('the Nexus SKUs it advertises (one product ad each), at most 250'),
@@ -65,7 +75,31 @@ const input = z.object({
   portfolioId: z.string().trim().min(1).max(64).optional().describe('the portfolio it is born in (Amazon\'s portfolio id, from ad-portfolios; default: none)'),
   why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
 })
-type Args = z.infer<typeof input>
+type Args = z.infer<typeof SP_INPUT>
+
+/**
+ * P2a — what the tool takes: the Sponsored Products arguments (skus and defaultBidCents become optional here: a Sponsored
+ * Display campaign may be made without an ad group; SP_INPUT still requires them for Sponsored Products) and Sponsored
+ * Display's own.
+ */
+const input = SP_INPUT.extend({
+  adProduct: z.enum(['SP', 'SD']).default('SP')
+    .describe('SP (default): a Sponsored Products campaign; SD: a Sponsored Display campaign — born PAUSED, with tactic, costType, and optionally its ad group (adGroupName, defaultBidCents, bidOptimization, creativeType), skus and sdTargets'),
+  skus: z.array(z.string().trim().min(1).max(64)).max(SD_LIST_MAX).optional()
+    .describe('the Nexus SKUs it advertises (one product ad each), at most 250 — Sponsored Products: required; Sponsored Display: optional (its ad group\'s product ads, by seller SKU)'),
+  defaultBidCents: z.coerce.number().int().min(2).max(BID_MAX_CENTS).optional()
+    .describe('the ad group\'s default bid in minor units of the market\'s currency — Sponsored Products: required (also every keyword\'s and product target\'s without its own); Sponsored Display: required with an ad group (per click for cpc, per thousand viewable impressions for vcpm)'),
+  tactic: z.enum(SD_TACTICS).optional()
+    .describe('Sponsored Display only, required: T00020 contextual (product, category and similar-products targets) or T00030 audiences (views, purchases and Amazon audiences, and contextual targets too)'),
+  costType: z.enum(SD_COST_TYPES).optional()
+    .describe('Sponsored Display only: how it pays — cpc (default: per click) or vcpm (per thousand viewable impressions); fixed once the campaign exists'),
+  startDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'a day is YYYY-MM-DD').optional().describe('Sponsored Display only: its first day, YYYY-MM-DD (default today; never in the past)'),
+  endDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'a day is YYYY-MM-DD').optional().describe('Sponsored Display only: its last day, YYYY-MM-DD (default: no end)'),
+  bidOptimization: bidOptimizationArg,
+  creativeType: creativeTypeArg,
+  sdTargets: sdTargetsArg(' (a contextual T00020 campaign takes product, category and similarProducts only)').optional(),
+  includeOutOfStock: includeOutOfStockArg,
+})
 
 interface Plan {
   market: string
@@ -97,8 +131,14 @@ function twice(values: string[]): string[] {
 /** What every preview says about undoing it. */
 const UNDO_WORDS = 'Undo archives it (archive-ads), and that is permanent at Amazon: an archived campaign never comes back.'
 
+/** P2a — what the Sponsored Display path is handed: this tool's name, limits and undo words. */
+const sdOpts = () => ({ tool: 'create-ad-campaign', limits: CREATE_LIMITS, undoNote: UNDO_WORDS })
+
 async function createPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'> = {}): Promise<ToolResult> {
-  const parsed = input.safeParse(raw)
+  // P2a — a Sponsored Display argument is never dropped silently from a Sponsored Products request.
+  const sdOnly = sdArgsGiven(raw)
+  if (sdOnly.length) return { ok: false, error: `${sdOnly.join(', ')} ${sdOnly.length === 1 ? 'is' : 'are'} for a Sponsored Display campaign: ask with adProduct "SD", or leave ${sdOnly.length === 1 ? 'it' : 'them'} out for Sponsored Products.` }
+  const parsed = SP_INPUT.safeParse(raw)
   if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; ') }
   const a: Args = parsed.data
   const keywords = a.keywords ?? []
@@ -282,7 +322,8 @@ const createAdCampaign: AgentTool = {
   reversibility: 'partial',
   maxClaudeTrust: 'auto',
   limits: CREATE_LIMITS,
-  withinLimits: (preview, limits) => commonRefusal(preview, limits) ?? createRefusal(preview, limits),
+  // P2a — a Sponsored Display create never runs by rule (sdByRuleRefusal), whatever the limits say.
+  withinLimits: (preview, limits) => sdByRuleRefusal(preview) ?? commonRefusal(preview, limits) ?? createRefusal(preview, limits),
   undo: CREATE_CAMPAIGN_UNDO,
   description:
     'Create a new Amazon Sponsored Products campaign: one manual campaign in one market, one ad group, its products '
@@ -294,12 +335,21 @@ const createAdCampaign: AgentTool = {
     + 'when the market has no spend ceiling or the budget is above it, the name is taken, a SKU is not found, or '
     + 'Amazon\'s write gate would refuse it. The preview shows the whole plan, where it lands (live at Amazon or sandbox) '
     + 'and each limit with where it comes from. Undo archives the campaign (archive-ads): permanent at Amazon, an archived '
-    + 'campaign never comes back. Sponsored Brands and Sponsored Display campaigns are created on the Nexus screens, not '
-    + 'here (the ad tools change the ones that exist).',
+    + 'campaign never comes back. With adProduct "SD" it creates a Sponsored Display campaign instead: tactic T00020 '
+    + '(contextual) or T00030 (audiences), costType cpc or vcpm, daily budget, startDate/endDate and portfolio, and in the '
+    + 'same call optionally one ad group (adGroupName, defaultBidCents, bidOptimization, creativeType) with its product ads '
+    + '(skus; out-of-stock products included unless includeOutOfStock is false) and its targets (sdTargets, in plain '
+    + 'words: product, category with brand/price/rating/Prime refinements, similarProducts, views or purchases '
+    + 'remarketing with a lookback, an Amazon audience). A Sponsored Display campaign is born PAUSED and off the '
+    + 'live-write allowlist: switching it on is its own request (enable-ads) and SPENDS MONEY. It never runs by the '
+    + 'business\'s rule: a person approves each one. The preview lists the campaign, the ad group, each product (SKU → ASIN, in stock or not), '
+    + 'each target in words with its bid, the budget and where it lands. Sponsored Brands campaigns are created on the '
+    + 'Nexus screens, not here.',
   async handler(args, ctx) {
-    return createPreview(args, ctx)
+    return args.adProduct === 'SD' ? sdCampaignPreview(args, ctx, sdOpts()) : createPreview(args, ctx)
   },
   async execute(args, ctx) {
+    if (args.adProduct === 'SD') return sdCampaignRun(args, ctx, sdOpts())
     const fresh = await createPreview(args, ctx)
     const refusal = recheck(ctx, fresh, ['plan', 'ceiling', 'reach'])
     if (refusal) return notRun(refusal)

@@ -100,7 +100,7 @@ describe('adWriteRefusal (W4-11)', () => {
   it('P2b — a Sponsored Display campaign is managed whole, as Amazon\'s SD updates allow; what Amazon fixes at creation stays refused', () => {
     for (const fields of [['name'], ['startDate'], ['endDate'], ['portfolioId'], ['name', 'endDate', 'portfolioId']]) ok(SD, { entity: 'CAMPAIGN', fields })
     ok(SD, { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'ARCHIVED' })
-    no(SD, { entity: 'CAMPAIGN', fields: ['costType'] }, /^Display test is a Sponsored Display campaign\. Nexus changes its daily budget, name, start and end date, portfolio and state \(on, off or archived\), the name, default bid and state of its ad groups, the state of its product ads, the bids and state of its targets, and its negative product targets in an ad group \(add and retire\) — not the campaign's costType —/)
+    no(SD, { entity: 'CAMPAIGN', fields: ['costType'] }, /^Display test is a Sponsored Display campaign\. Nexus changes its daily budget, name, start and end date, portfolio and state \(on, off or archived\), the name, default bid and state of its ad groups, the state of its product ads, the bids and state of its targets, and its negative product targets and brands in an ad group \(add and retire\) — not the campaign's costType —/)
     no(SD, { entity: 'CAMPAIGN', fields: ['tactic'] }, /— not the campaign's tactic —/)
     // An ad group: name, default bid and state (PUT /sd/adGroups), archived for good; not its bid optimization or creative type.
     ok(SD, { entity: 'AD_GROUP', fields: ['name', 'defaultBid'] })
@@ -134,7 +134,12 @@ describe('adWriteRefusal (W4-11)', () => {
     no(SB, { entity: 'NEGATIVE_CREATE', kind: 'KEYWORD', negativeLevel: 'CAMPAIGN' }, /not a negative other than a keyword in an ad group/)
     no(SB, { entity: 'NEGATIVE_CREATE', kind: 'PRODUCT' }, /not a negative other than a keyword in an ad group/)
     ok(SD, { entity: 'NEGATIVE_CREATE', kind: 'PRODUCT', negativeLevel: null })
-    no(SD, { entity: 'NEGATIVE_CREATE', kind: 'KEYWORD' }, /not a negative other than a product target \(an ASIN\) in an ad group/)
+    // P2a — an SD negative brand (asinBrandSameAs) in an ad group, added and retired; never in SB, never campaign-wide.
+    ok(SD, { entity: 'NEGATIVE_CREATE', kind: 'BRAND', negativeLevel: 'AD_GROUP' })
+    ok(SD, { entity: 'AD_TARGET', kind: 'BRAND', isNegative: true, fields: ['status'], toStatus: 'ARCHIVED' })
+    no(SD, { entity: 'NEGATIVE_CREATE', kind: 'BRAND', negativeLevel: 'CAMPAIGN' }, /or a brand in an ad group/)
+    no(SB, { entity: 'NEGATIVE_CREATE', kind: 'BRAND' }, /not a negative other than a keyword in an ad group/)
+    no(SD, { entity: 'NEGATIVE_CREATE', kind: 'KEYWORD' }, /not a negative other than a product target \(an ASIN\) or a brand in an ad group/)
     ok(SB, { entity: 'AD_TARGET', kind: 'KEYWORD', isNegative: true, negativeLevel: 'AD_GROUP', fields: ['status'], toStatus: 'ARCHIVED' })
     ok(SD, { entity: 'AD_TARGET', kind: 'PRODUCT', isNegative: true, fields: ['status'], toStatus: 'archived' })
     no(SB, { entity: 'AD_TARGET', kind: 'KEYWORD', isNegative: true, fields: ['status'], toStatus: 'PAUSED' }, /not a change to a negative other than retiring it/)
