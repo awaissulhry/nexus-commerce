@@ -20,6 +20,9 @@
  *   businesses  one business's strategy never narrows in another
  *   watch       AA-W2-4 — the strategy may hold a kind at watch: checked as auto would, recorded with the strategy row;
  *               a kind at watch the strategy holds lower is recorded as held by the strategy; the history test counts it
+ *   no approval NA — "Claude's changes need no approval" never runs what the strategy turns off where the change lands,
+ *               also when only the preview places it: a person decides (a plan step too), and an off saved inside the
+ *               window hands it back at the commit
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -56,12 +59,12 @@ vi.mock('../pim/readiness-index.service.js', async () => (await import('../../te
 
 import { __stepUpTest } from '../../lib/auth/step-up.js'
 import { commitScheduledApproval } from '../agent-fleet/approval-inbox.service.js'
-import { __claudeStrategyTest } from '../advertising/ads-strategy/claude.js'
+import { __claudeStrategyTest, PLACES } from '../advertising/ads-strategy/claude.js'
 import { CLAUDE_ACTION_TYPES } from '../advertising/ads-strategy/fields.js'
 import { readStrategy } from '../advertising/ads-strategy/read.js'
 import type { McpPrincipal } from '../mcp/mcp-auth.js'
 import { runToolForClaude } from '../mcp/mcp-tool-call.js'
-import { claudeRuleForChange, claudeRuleOf, setClaudeRule } from './claude-trust.service.js'
+import { claudeRuleForChange, claudeRuleOf, setClaudeRule, setNoApproval } from './claude-trust.service.js'
 import { simulateClaudeRule } from './claude-rule-simulate.service.js'
 import { getTool } from './tool-registry.js'
 
@@ -621,5 +624,61 @@ describe('AA-W2-9 — stop, restore and the allowlist run by rule only inside th
     const playbook = (await call('set-campaign-live-writes', { campaignId: 'c-pb-built', enabled: true })).answer
     expect(playbook).toMatchObject({ status: 'waiting_for_approval' })
     expect(playbook.trust.why).toMatch(/only a campaign a Claude request created in this business goes on the live-write allowlist by rule/)
+  })
+})
+
+describe('NA — "Claude\'s changes need no approval" never runs what the ads strategy turns off where it lands', { timeout: TIMEOUT }, () => {
+  const STRATEGY_OFF_UK = /the ads strategy turns bid changes off for Claude here \(UK: market "Test market \(UK\)", version 1/
+  /**
+   * set-price stands in as a bid change that only its preview places (as assign-ad-rules' removed campaigns, an hourly
+   * plan's campaigns or a harvest's destination do): its arguments name no campaign; its preview lands in c-uk (UK).
+   */
+  async function placedByItsPreview<T>(work: () => Promise<T>): Promise<T> {
+    __claudeStrategyTest.treatAs('set-price', 'bid')
+    const places = PLACES as Record<string, (typeof PLACES)[string]>
+    places['set-price'] = async (place, _args, preview) => {
+      if (!preview) {
+        place.outside = true
+        return
+      }
+      await place.campaignIds(['c-uk'])
+    }
+    try {
+      expect(await inside(() => setNoApproval({ userId: ids.person, label: 'Stella Strategy', canManage: true }, { noApproval: true }))).toMatchObject({ ok: true })
+      return await work()
+    } finally {
+      delete places['set-price']
+    }
+  }
+  const priceNow = async () => Number((await inside(() => db().product.findUniqueOrThrow({ where: { id: ids.priced } }))).basePrice)
+
+  it('off where only the preview places it: a person decides, naming the row — one change and a plan step', async () => {
+    await placedByItsPreview(async () => {
+      await strategy('MARKET', '*', 'Test market (UK)', { bid: 'off' }, 'UK')
+      const one = (await call('set-price', { productId: ids.priced, price: (await priceNow()) + 1 })).answer
+      expect(one).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'ask', why: expect.stringMatching(STRATEGY_OFF_UK), strategy: { market: 'UK' } } })
+      expect(await approvalOf(one.approvalId)).toMatchObject({ status: 'pending', decisionVia: null })
+      const plan = (await call('submit-change-plan', { title: 'One bid', steps: [{ tool: 'set-price', args: { productId: ids.priced, price: (await priceNow()) + 2 } }] })).answer
+      expect(plan).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringMatching(/^step 1 \(set-price\): the ads strategy turns bid changes off for Claude here \(UK/) } })
+      expect(await approvalOf(plan.approvalId)).toMatchObject({ status: 'pending', decisionVia: null })
+      // Where the strategy does not turn it off, the switch runs it.
+      await inside(() => db().adsStrategy.deleteMany({}))
+      expect((await call('set-price', { productId: ids.priced, price: (await priceNow()) + 3 })).answer).toMatchObject({ status: 'runs_by_rule', trust: { noApproval: true } })
+    })
+  })
+
+  it('turned off by the strategy inside the window: back to a person at the commit, naming the row; nothing ran', async () => {
+    await placedByItsPreview(async () => {
+      const before = await priceNow()
+      const parked = (await call('set-price', { productId: ids.priced, price: before + 1 })).answer
+      expect(parked).toMatchObject({ status: 'runs_by_rule', trust: { noApproval: true } })
+      expect(await approvalOf(parked.approvalId)).toMatchObject({ status: 'scheduled', decisionVia: 'no-approval' })
+      await strategy('MARKET', '*', 'Test market (UK)', { bid: 'off' }, 'UK')
+      await inside(() => db().agentApproval.update({ where: { id: parked.approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
+      const out = await inside(() => commitScheduledApproval(parked.approvalId))
+      expect(out).toMatchObject({ ok: false, error: expect.stringMatching(STRATEGY_OFF_UK) })
+      expect(await approvalOf(parked.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, reason: expect.stringMatching(/^not run — the ads strategy turns bid changes off/) })
+      expect(await priceNow()).toBe(before)
+    })
   })
 })

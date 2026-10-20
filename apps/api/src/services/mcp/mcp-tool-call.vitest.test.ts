@@ -223,6 +223,28 @@ describe('N4 — what a single change does once it runs', () => {
     expect(answerOf(await runToolForClaude(principal, reaching, { business: principal.business.name })).trust.watch).toEqual({ wouldRun: false, check: 'limits', why: watch.why, steps: { total: 2, wouldRun: 1 } })
   })
 
+  it('NA — scheduled by "Claude\'s changes need no approval": runs_by_rule, marked, and the next step names the switch', async () => {
+    gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-7', rule: { by: 'rule', level: 'auto', executeAfter: '2026-10-20T12:00:20.000Z', noApproval: true } })
+    const answer = answerOf(await runToolForClaude(principal, reaching, { business: 'Xavia Racing' }))
+    expect(answer).toMatchObject({
+      status: 'runs_by_rule',
+      approvalId: 'approval-7',
+      runsAt: '2026-10-20T12:00:20.000Z',
+      stopAt: 'https://web.example.test/fleet/approvals?item=approval-7',
+      trust: { level: 'auto', noApproval: true },
+      next: 'Xavia Racing turned on "Claude\'s changes need no approval": nobody needs to approve it. It runs at runsAt, after a short '
+        + 'window in which anyone with permission can stop it in the Nexus Approvals page. Call approval-status with the approvalId '
+        + 'to see what became of it; undo-change puts it back where it can.',
+    })
+    expect(db.agentRun.update.mock.calls.at(-1)![0].data).toMatchObject({ status: 'done', ok: true, output: { mode: 'no-approval', approvalId: 'approval-7' } })
+    // By the kind's own rule: the words it always had, and no marker.
+    gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-8', rule: { by: 'rule', level: 'auto', executeAfter: '2026-10-20T12:00:20.000Z' } })
+    const byRule = answerOf(await runToolForClaude(principal, reaching, { business: 'Xavia Racing' }))
+    expect(byRule.trust).toEqual({ level: 'auto' })
+    expect(byRule.next).toMatch(/^Xavia Racing lets Claude run this change by its rule \(auto, inside its limits\)/)
+    expect(db.agentRun.update.mock.calls.at(-1)![0].data).toMatchObject({ output: { mode: 'auto' } })
+  })
+
   it('set to confirm, the next step names the code as well as the Approvals page', async () => {
     gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-4', rule: { by: 'person', level: 'confirm', confirm: { summary: 's', planHash: 'h' } } })
     expect(answerOf(await runToolForClaude(principal, reaching, { business: 'Xavia Racing' })).next)

@@ -8,7 +8,9 @@
  *                                   Approvals grid — what that rule would have done with Claude's requests of the tool in
  *                                   the last days (max 90): RuleSimulation (services/agents/claude-rule-simulate.service.ts).
  *                                   Read-only; ai.view, like GET /claude/trust
- *   PUT  /api/claude/autonomy       { dailyAutoCap } — raising the cap needs settings.security.manage
+ *   PUT  /api/claude/autonomy       { dailyAutoCap?, noApproval? } — raising the cap, or turning noApproval on ("Claude's
+ *                                   changes need no approval"), needs settings.security.manage; turning it off does not.
+ *                                   With noApproval: { ok, noApproval: { on, since, by }, dailyAutoCap, handedBack }
  *   POST /api/claude/pause          { reason? } — at once; what waits to run by rule goes back to a person
  *   POST /api/claude/resume         {} — needs settings.security.manage
  *   GET  /api/claude/activity       C8 — what Claude did here: ?from&to&tool&outcome&connectionId&cursor&limit
@@ -16,8 +18,9 @@
  *   POST /api/claude/changes/:id/undo  C8 — Undo on the activity page: the click approves the inverse change, which then
  *                                   waits out the same undo window (services/agents/change-undo.service.ts); ai.run
  *
- * Reading needs ai.view. A brake is easy: Pause and lowering need only ai.run (anyone who may use Claude here). Resume
- * needs settings.security.manage; raising a level, loosening limits or raising the cap are refused by the service
+ * Reading needs ai.view. A brake is easy: Pause, lowering and turning noApproval off need only ai.run (anyone who may
+ * use Claude here). Resume needs settings.security.manage; raising a level, loosening limits, raising the cap or turning
+ * noApproval on are refused by the service
  * without settings.security.manage (permissions-manifest.ts; the business the workspace hook verified). No
  * authenticator code since 2026-10-12 (Owner, "B"). Claude has no tool for any of it: raising its own levels and
  * limits is never for Claude.
@@ -37,6 +40,7 @@ import {
   resumeAutoRuns,
   setClaudeRule,
   setDailyAutoCap,
+  setNoApproval,
   type TrustActor,
   type TrustRefusal,
 } from '../services/agents/claude-trust.service.js'
@@ -102,7 +106,9 @@ const claudeControlRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.put('/claude/autonomy', async (request, reply) => {
-    const { dailyAutoCap } = body(request)
+    const { dailyAutoCap, noApproval } = body(request)
+    // NA — the switch, alone or with the cap: the service checks both before it saves either.
+    if (noApproval !== undefined) return answer(reply, await setNoApproval(await actorOf(request), { noApproval, dailyAutoCap }))
     return answer(reply, await setDailyAutoCap(await actorOf(request), { dailyAutoCap }))
   })
 

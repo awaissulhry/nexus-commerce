@@ -48,7 +48,7 @@ import type { McpPrincipal } from '../mcp/mcp-auth.js'
 import { runToolForClaude } from '../mcp/mcp-tool-call.js'
 import { storedOutputOf, type UserPrincipal } from './call-tool.js'
 import { claudeActivity, type ActivityRow } from './claude-activity.service.js'
-import { pauseAutoRuns, setClaudeRule } from './claude-trust.service.js'
+import { pauseAutoRuns, setClaudeRule, setNoApproval } from './claude-trust.service.js'
 import { undoChangeByClick } from './change-undo.service.js'
 import { getTool } from './tool-registry.js'
 
@@ -382,5 +382,27 @@ describe('AA-W2-4 — the watch report: would-have-run against what a person dec
     expect((await activity()).watch?.kinds).toEqual([expect.objectContaining({ tool: 'set-price', level: 'ask', watchingSince: expect.any(String) })])
     // Another business: nothing of this one's.
     expect(await activity({}, reader(EVERYTHING), B)).not.toHaveProperty('watch')
+  })
+})
+
+describe('NA — a change "Claude\'s changes need no approval" ran: run without a person, and its door says which', { timeout: TIMEOUT }, () => {
+  it('outcome auto (nobody approved it), decisionVia no-approval; the outcome filter finds it', async () => {
+    await inside(() => db().agentAutonomy.deleteMany({}))
+    const on = await inside(() => setNoApproval({ userId: ids.person, label: 'Ada Audit', canManage: true }, { noApproval: true }))
+    expect(on).toMatchObject({ ok: true, noApproval: { on: true } })
+    try {
+      const ran = await call('set-price', { productId: ids.product, price: (await priceOf(ids.product)) + 1 })
+      expect(ran).toMatchObject({ status: 'runs_by_rule', trust: { noApproval: true } })
+      expect(await windowCloses(ran.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+      const runId = await runIdOf(ran.approvalId)
+      expect(byRun((await activity()).rows).get(runId)).toMatchObject({
+        outcome: 'auto',
+        approval: { id: ran.approvalId, status: 'executed', decisionVia: 'no-approval', decidedBy: 'Ada Audit' },
+      })
+      expect((await activity({ outcome: 'auto' })).rows.map((row) => row.runId)).toContain(runId)
+      expect((await activity({ outcome: 'approved' })).rows.map((row) => row.runId)).not.toContain(runId)
+    } finally {
+      await inside(() => db().agentAutonomy.deleteMany({}))
+    }
   })
 })

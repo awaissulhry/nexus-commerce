@@ -60,6 +60,46 @@ export interface Autonomy {
   reason: string | null
   dailyAutoCap: number
   autoRunsLastDay: number
+  /** Absent from an older API answer: read it with noApprovalOf, which then says off. */
+  noApproval?: NoApproval
+}
+
+/**
+ * "Claude’s changes need no approval" — one switch per business (Owner 2026-10-20). On: every change Claude is asked for
+ * runs after the normal stop window, without the Approvals page, whatever its kind's level; a kind at Off stays off and
+ * Pause still stops everything. Off: each kind follows its own level. Turning it on needs settings.security.manage.
+ */
+export interface NoApproval {
+  on: boolean
+  /** When it was turned on (ISO); null when off. */
+  since: string | null
+  /** Who turned it on, by name. */
+  by: string | null
+}
+
+/** The switch as this page reads it: an older API answer without it, or anything but `on: true`, is off. */
+export function noApprovalOf(autonomy: Autonomy): NoApproval {
+  const state = autonomy.noApproval
+  if (state?.on !== true) return { on: false, since: null, by: null }
+  return { on: true, since: typeof state.since === 'string' ? state.since : null, by: typeof state.by === 'string' && state.by ? state.by : null }
+}
+
+export const NO_APPROVAL_LABEL = 'Claude’s changes need no approval'
+
+/** Shown above the tools while the switch is on: their levels wait, and may still be set for later. */
+export const NO_APPROVAL_NOTICE = 'No approval needed is on: the levels below apply only when it is off.'
+
+/** The sentence under the switch. */
+export function noApprovalSentence(state: Pick<NoApproval, 'on'>): string {
+  return state.on
+    ? 'Every change you ask Claude for runs about 20 seconds later, without the Approvals page. This includes refunds, buyer messages, deletes and Google Ads. A kind set to Off stays off. Pause still stops everything.'
+    : 'Each kind below follows its own level.'
+}
+
+/** "On since 20 Oct, 14:05 by Ada."; null when it is off or nothing was recorded. */
+export function noApprovalSince(state: NoApproval): string | null {
+  if (!state.on || (!state.since && !state.by)) return null
+  return `On${state.since ? ` since ${dateTime(state.since)}` : ''}${state.by ? ` by ${state.by}` : ''}.`
 }
 
 export interface ClaudeRules {
@@ -77,6 +117,7 @@ export type Raise =
   | { kind: 'limits'; rule: ClaudeRule; limits: Record<string, number> | null }
   | { kind: 'cap'; value: number }
   | { kind: 'resume' }
+  | { kind: 'no-approval' }
 
 /** What a raise did, as a title and one sentence: shown when it is saved. */
 export function raiseText(raise: Raise): { title: string; sentence: string } {
@@ -95,6 +136,11 @@ export function raiseText(raise: Raise): { title: string; sentence: string } {
       }
     case 'cap':
       return { title: 'Raise the daily limit', sentence: `Up to ${raise.value} changes may then run by your rule in 24 hours.` }
+    case 'no-approval':
+      return {
+        title: `Turn on “${NO_APPROVAL_LABEL}”`,
+        sentence: 'Every change you ask Claude for now runs about 20 seconds later, without the Approvals page. A kind set to Off stays off; Pause still stops everything.',
+      }
     default:
       return { title: 'Resume changes that run by rule', sentence: 'Changes set to Auto run by your rule again, inside their limits.' }
   }
@@ -230,6 +276,15 @@ export const OUTCOME_TONE: Record<Outcome, 'neutral' | 'info' | 'success' | 'war
   undone: 'warning',
 }
 
+/** A change the switch let run (approval.decisionVia `no-approval`): no person and no rule decided it. */
+export const NO_APPROVAL_DECIDED = 'No approval needed (switch on)'
+
+/** The outcome in words; a change that ran because "Claude’s changes need no approval" was on says so. */
+export function outcomeLabel(row: Pick<ActivityRow, 'outcome' | 'approval'>): string {
+  if (row.approval?.decisionVia === 'no-approval' && (row.outcome === 'approved' || row.outcome === 'auto')) return NO_APPROVAL_DECIDED
+  return OUTCOME_LABEL[row.outcome]
+}
+
 export type UndoState = 'possible' | 'waiting' | 'done' | 'not possible'
 
 /** One row of GET /api/claude/activity. */
@@ -278,5 +333,10 @@ export function when(iso: string, now = Date.now()): string {
   if (seconds < 60) return 'just now'
   if (seconds < 3600) return `${Math.round(seconds / 60)} min ago`
   if (seconds < 86_400) return `${Math.round(seconds / 3600)} h ago`
+  return dateTime(iso)
+}
+
+/** The date and time, as this page writes them: "20 Oct, 14:05". */
+export function dateTime(iso: string): string {
   return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }

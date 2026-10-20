@@ -88,14 +88,20 @@ export type StrategyBound = 'amazon-ads'
 /**
  * AA-W2-1 — who decided the request an `execute` carries out (ToolContext.decidedVia): a person in Nexus (`nexus`, with
  * their code where a preview's stepUp asks it), the person who asked, with their code in Claude (`claude`, confirm-change), or the
- * business's rule (`auto`).
+ * business's rule (`auto`). NA — the person who asked, in Claude, under "Claude's changes need no approval" is `claude` too.
  */
 export type DecidedVia = 'nexus' | 'claude' | 'auto'
 
-/** AA-W2-1 — ToolContext.decidedVia from AgentApproval.decisionVia (auto · claude-confirm · nexus · nexus-step-up · none). */
+/**
+ * NA — AgentApproval.decisionVia of a change the business's switch "Claude's changes need no approval" approved in the
+ * name of the person who asked (AgentAutonomy.claudeNoApprovalAt): a person's approval, never the rule's.
+ */
+export const NO_APPROVAL_VIA = 'no-approval'
+
+/** AA-W2-1 — ToolContext.decidedVia from AgentApproval.decisionVia (auto · claude-confirm · no-approval · nexus · nexus-step-up · none). */
 export function decidedViaOf(decisionVia: string | null | undefined): DecidedVia {
   if (decisionVia === 'auto') return 'auto'
-  if (decisionVia === 'claude-confirm') return 'claude'
+  if (decisionVia === 'claude-confirm' || decisionVia === NO_APPROVAL_VIA) return 'claude'
   return 'nexus'
 }
 
@@ -200,7 +206,8 @@ export interface ToolContext {
   approvalId?: string
   /**
    * 4A (Owner decided 2026-10-06) — `execute` only: a PERSON approved this request (in Nexus, or with his code in
-   * Claude), not a standing rule (`decisionVia: 'auto'`). Such a run counts as his own click: an ads write carries his
+   * Claude; NA — or asked for it in Claude while "Claude's changes need no approval" was on), not a standing rule
+   * (`decisionVia: 'auto'`). Such a run counts as his own click: an ads write carries his
    * manual mark (it passes a halt, autonomy OFF, pins and the allowlist) and his approval counts as "Send anyway" past
    * his own limits, which the card showed before he approved.
    */

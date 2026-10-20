@@ -7,10 +7,15 @@ import { describe, expect, it } from 'vitest'
 import {
   changeWords,
   connectionWords,
+  dateTime,
   levelLabel,
   limitFields,
   limitsSummary,
+  noApprovalOf,
+  noApprovalSentence,
+  noApprovalSince,
   OUTCOME_LABEL,
+  outcomeLabel,
   OUTCOMES,
   parseLimits,
   pauseSentence,
@@ -94,6 +99,40 @@ describe('the brakes', () => {
   })
 })
 
+describe('“Claude’s changes need no approval”', () => {
+  const base = { paused: false, pausedAt: null, pausedBy: null, reason: null, dailyAutoCap: 200, autoRunsLastDay: 3 }
+
+  it('an older API answer without the switch, or anything but on: true, reads as off', () => {
+    const off = { on: false, since: null, by: null }
+    expect(noApprovalOf(base)).toEqual(off)
+    expect(noApprovalOf({ ...base, noApproval: { on: false, since: '2026-10-20T08:00:00.000Z', by: 'Ada' } })).toEqual(off)
+    expect(noApprovalOf({ ...base, noApproval: { on: 'yes', since: null, by: null } as never })).toEqual(off)
+    expect(noApprovalOf({ ...base, noApproval: { on: true, since: '2026-10-20T08:00:00.000Z', by: 'Ada' } }))
+      .toEqual({ on: true, since: '2026-10-20T08:00:00.000Z', by: 'Ada' })
+  })
+
+  it('on: what it lets run and what still holds; off: the levels decide', () => {
+    expect(noApprovalSentence({ on: true })).toBe(
+      'Every change you ask Claude for runs about 20 seconds later, without the Approvals page. This includes refunds, buyer messages, deletes and Google Ads. A kind set to Off stays off. Pause still stops everything.',
+    )
+    expect(noApprovalSentence({ on: false })).toBe('Each kind below follows its own level.')
+  })
+
+  it('on says since when and by whom, with the page\'s own date format; off says nothing', () => {
+    const since = '2026-10-20T08:00:00.000Z'
+    expect(noApprovalSince({ on: true, since, by: 'Ada' })).toBe(`On since ${dateTime(since)} by Ada.`)
+    expect(noApprovalSince({ on: true, since: null, by: 'Ada' })).toBe('On by Ada.')
+    expect(noApprovalSince({ on: true, since: null, by: null })).toBeNull()
+    expect(noApprovalSince({ on: false, since, by: 'Ada' })).toBeNull()
+  })
+
+  it('turning it on is a raise whose notice says what it lets Claude do', () => {
+    const text = raiseText({ kind: 'no-approval' })
+    expect(text.title).toBe('Turn on “Claude’s changes need no approval”')
+    expect(text.sentence).toContain('without the Approvals page')
+  })
+})
+
 describe('activity', () => {
   const row = (extra: Partial<ActivityRow>): ActivityRow => ({
     runId: 'r1', at: new Date().toISOString(), who: { userId: 'u1', name: 'Ada' }, connection: { id: 'grant_123456789', app: null }, tool: 'set-price', outcome: 'auto', ...extra,
@@ -109,6 +148,15 @@ describe('activity', () => {
     expect(changeWords(row({ change: { id: 'c1', reversibility: 'none', undo: 'not possible', outbound: true } }))).toBe('Cannot be undone')
     expect(changeWords(row({ plan: { steps: 3, byStatus: { done: 2, skipped: 1 } } }))).toBe('Plan of 3: 2 ran, 1 did not')
     expect(changeWords(row({ outcome: 'refused', note: 'Product not found' }))).toBe('Product not found')
+  })
+
+  it('a change the switch let run says so, not "Approved" or "Ran by your rule"', () => {
+    const approval = (decisionVia: string | null) => ({ id: 'a1', tool: 'set-price', status: 'executed', decidedBy: null, decisionVia, note: null })
+    expect(outcomeLabel(row({ outcome: 'approved', approval: approval('no-approval') }))).toBe('No approval needed (switch on)')
+    expect(outcomeLabel(row({ outcome: 'auto', approval: approval('no-approval') }))).toBe('No approval needed (switch on)')
+    expect(outcomeLabel(row({ outcome: 'undone', approval: approval('no-approval') }))).toBe('Undone')
+    expect(outcomeLabel(row({ outcome: 'confirmed', approval: approval('claude-confirm') }))).toBe('Confirmed in Claude')
+    expect(outcomeLabel(row({ outcome: 'auto', approval: approval('auto') }))).toBe('Ran by your rule')
   })
 
   it('a connection by its app, else the start of its id', () => {

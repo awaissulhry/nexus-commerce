@@ -14,7 +14,7 @@ import { useCallback, useEffect, useId, useState } from 'react'
 import { Banner, Card, EmptyState, Field, useActionConfirm } from '@/design-system/components'
 import { Button, Input, Pill, Select } from '@/design-system/primitives'
 import { claudeApi } from './claudeApi'
-import { changeWords, connectionWords, OUTCOME_LABEL, OUTCOME_TONE, OUTCOMES, when, type ActivityRow, type Outcome } from './claudeWords'
+import { changeWords, connectionWords, OUTCOME_LABEL, OUTCOME_TONE, OUTCOMES, outcomeLabel, when, type ActivityRow, type Outcome } from './claudeWords'
 
 /** Which tool: the one Claude called, and the change it asked for when that is another tool. */
 const toolOf = (row: ActivityRow) => (row.approval && row.approval.tool !== row.tool ? `${row.tool} → ${row.approval.tool}` : row.tool)
@@ -37,7 +37,7 @@ export function ActivityRows({ rows, busy, onUndo }: { rows: ActivityRow[]; busy
             <span className="claude-activity-who">{row.who.name ?? '—'}</span>
             <span className="claude-activity-connection">{connectionWords(row)}</span>
             <span className="claude-activity-tool">{toolOf(row)}</span>
-            <span className="claude-activity-outcome"><Pill tone={OUTCOME_TONE[row.outcome]} size="sm">{OUTCOME_LABEL[row.outcome]}</Pill></span>
+            <span className="claude-activity-outcome"><Pill tone={OUTCOME_TONE[row.outcome]} size="sm">{outcomeLabel(row)}</Pill></span>
             <span className="claude-activity-what">{changeWords(row)}</span>
             <span className="claude-activity-undo">
               {row.change?.undo === 'possible' && (

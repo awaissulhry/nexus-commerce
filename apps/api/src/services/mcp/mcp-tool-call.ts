@@ -46,6 +46,12 @@
  * ADS AUTONOMY AA-W2-4 — at `watch` (the kind's level, or the ads strategy's where it lands) the request goes through
  * every check auto makes and the verdict is recorded on it (AgentApproval.ruleVerdict; a plan per step), but it is never
  * scheduled: it waits for a person as at confirm, and Claude reads `trust.watch` — would it have run by rule, or why not.
+ *
+ * NA (Owner, 2026-10-20) — with the business's switch "Claude's changes need no approval" on, Claude not paused and the
+ * connection's nexus.run, every stored change (a plan, an undo) is scheduled in the name of the person who asked
+ * (decisionVia no-approval) without any level above off, ceiling, watch, limit or daily cap; Claude reads `runs_by_rule`
+ * with `trust.noApproval`. A kind (or the ads strategy where it lands, read on the preview) set to off, a raise that asks
+ * for a code, a Pause or a connection without nexus.run: the request goes the way it goes without the switch.
  */
 
 import { Prisma } from '@nexus/database'
@@ -57,16 +63,19 @@ import { logger } from '../../utils/logger.js'
 import { isAiKillSwitchOn } from '../ai/providers/index.js'
 import { runOrQueueTool, type GateOutcome, type GateRule, type RuleVerdict } from '../agents/approval-gate.service.js'
 import { runOrigin } from '../agents/call-tool.js'
-import type { AgentTool } from '../agents/tool-types.js'
+import { NO_APPROVAL_VIA, type AgentTool } from '../agents/tool-types.js'
 import { argumentsRefusal } from '../agents/tool-arguments.js'
 import { getTool } from '../agents/tool-registry.js'
 import {
+  autonomyOf,
   autoRefusal,
   claudeRuleForChange,
+  claudeRulesForSteps,
   CONFIRM_IN_CLAUDE,
   isWatched,
   narrowedDecision,
   narrowedWhy,
+  NO_APPROVAL_NAME,
   overDailyCap,
   planRuleRefusal,
   recordWatch,
@@ -78,6 +87,7 @@ import {
 import type { WatchVerdict } from '@nexus/shared/approval-queue'
 import { confirmByCode, prepareConfirm } from '../agents/claude-confirm.service.js'
 import { scheduleApproval } from '../agent-fleet/approval-inbox.service.js'
+import { approvalStepUp } from '../agents/step-up-approval.js'
 import { oauthIssuer } from '../oauth/oauth-config.js'
 import { BUSINESS_ARGUMENT, type McpPrincipal } from './mcp-auth.js'
 import { marketRefusal } from '../agents/market-check.js'
@@ -152,6 +162,22 @@ const capitalised = (text: string) => text.charAt(0).toUpperCase() + text.slice(
  */
 export function claudeGateRule(principal: McpPrincipal): GateRule {
   const runScope = principal.scopes?.includes('nexus.run') ?? false
+  // NA — "Claude's changes need no approval": scheduled as the person who asked, through the normal window and commit. Null:
+  // not by the switch — a kind (or the ads strategy, where the preview places it) is off for Claude, or a raise asks for
+  // the approver's code (W1-3: the switch is no code); the request then goes the way it goes without the switch.
+  const noApproval = async (queued: Parameters<GateRule['decide']>[0]): Promise<RuleVerdict | null> => {
+    const { approvalId, tool, preview, args, steps } = queued
+    const rules = steps
+      ? await claudeRulesForSteps(steps.map((step) => ({ toolName: step.tool.name, args: step.args ?? {}, preview: step.preview })))
+      : [await claudeRuleForChange(tool.name, args ?? {}, preview)]
+    if (rules.some((rule) => rule?.level === 'off')) return null
+    if (await approvalStepUp(approvalId)) return null
+    const parked = await scheduleApproval({ id: approvalId, actor: principal, via: NO_APPROVAL_VIA })
+    if (!parked.ok || !parked.executeAfter) {
+      return { by: 'person', level: 'ask', why: `it could not be scheduled (${parked.error ?? 'unknown'}); a person approves it in Nexus` }
+    }
+    return { by: 'rule', level: 'auto', executeAfter: parked.executeAfter, noApproval: true }
+  }
   return {
     async refusal(tool, args) {
       const rule = await claudeRuleForChange(tool.name, args ?? {})
@@ -163,7 +189,15 @@ export function claudeGateRule(principal: McpPrincipal): GateRule {
     async confirm(input) {
       return confirmByCode(principal, input, { runScope })
     },
-    async decide({ approvalId, tool, preview, args, steps }): Promise<RuleVerdict> {
+    async decide(queued): Promise<RuleVerdict> {
+      const { approvalId, tool, preview, args, steps } = queued
+      // NA — the switch on, Claude not paused and nexus.run: no level above off, ceiling, watch, limit or cap decides (a
+      // plan too). Otherwise, or when the switch leaves it (`noApproval` null): as without the switch.
+      const autonomy = await autonomyOf()
+      if (autonomy.noApproval.on && !autonomy.paused && runScope) {
+        const verdict = await noApproval(queued)
+        if (verdict) return verdict
+      }
       // C7 — at confirm: the summary and planHash the person's code will be bound to (with nexus.run only). AA-W2-4 — at
       // watch the same (watch allows all confirm allows); its words already say who decides with or without nexus.run.
       const confirmable = async (level: 'confirm' | 'watch', why: string, extra: { strategy?: StrategyNarrowed; watch?: WatchVerdict } = {}): Promise<RuleVerdict> => {
@@ -257,6 +291,7 @@ function answer(outcome: GateOutcome, principal: McpPrincipal, tool?: Pick<Agent
   switch (outcome.mode) {
     case 'queued':
       if (outcome.rule?.by === 'rule') {
+        const noApproval = !!outcome.rule.noApproval
         return ok(principal, {
           status: 'runs_by_rule',
           approvalId: outcome.approvalId,
@@ -264,13 +299,17 @@ function answer(outcome: GateOutcome, principal: McpPrincipal, tool?: Pick<Agent
           stopAt: approvalsPageUrl(principal.workspace.workspaceId, outcome.approvalId),
           preview: outcome.preview ?? null,
           ...(consequences ? { consequences } : {}),
-          trust: { level: 'auto' },
+          // NA — scheduled by the switch, not by the kind's own level.
+          trust: { level: 'auto', ...(noApproval ? { noApproval: true } : {}) },
           ...(outcome.plan ? { plan: outcome.plan } : {}),
           ...(outcome.undoes ? { undoes: { changeId: outcome.undoes } } : {}),
-          next:
-            `${principal.business.name} lets Claude run this change by its rule (auto, inside its limits): nobody needs ` +
-            'to approve it. It runs at runsAt, after a short window in which anyone with permission can stop it in the ' +
-            'Nexus Approvals page. Call approval-status with the approvalId to see what became of it; undo-change puts it back.',
+          next: noApproval
+            ? `${principal.business.name} turned on ${NO_APPROVAL_NAME}: nobody needs to approve it. It runs at runsAt, after ` +
+              'a short window in which anyone with permission can stop it in the Nexus Approvals page. Call approval-status ' +
+              'with the approvalId to see what became of it; undo-change puts it back where it can.'
+            : `${principal.business.name} lets Claude run this change by its rule (auto, inside its limits): nobody needs ` +
+              'to approve it. It runs at runsAt, after a short window in which anyone with permission can stop it in the ' +
+              'Nexus Approvals page. Call approval-status with the approvalId to see what became of it; undo-change puts it back.',
         })
       }
       return ok(principal, {
@@ -336,9 +375,9 @@ function answer(outcome: GateOutcome, principal: McpPrincipal, tool?: Pick<Agent
 
 /** How the run ends, for each way the gate can end. */
 function ending(outcome: GateOutcome): Prisma.AgentRunUpdateInput {
-  // C5 — scheduled by the business's rule: Claude's call is done; the approval carries the rest.
+  // C5 — scheduled by the business's rule (NA — or its no-approval switch): Claude's call is done; the approval carries the rest.
   if (outcome.mode === 'queued' && outcome.rule?.by === 'rule') {
-    return { status: 'done', ok: true, output: { mode: 'auto', approvalId: outcome.approvalId ?? null } }
+    return { status: 'done', ok: true, output: { mode: outcome.rule.noApproval ? NO_APPROVAL_VIA : 'auto', approvalId: outcome.approvalId ?? null } }
   }
   if (outcome.mode === 'queued') {
     return { status: 'awaiting_approval', ok: true, output: { mode: 'queued', approvalId: outcome.approvalId ?? null } }

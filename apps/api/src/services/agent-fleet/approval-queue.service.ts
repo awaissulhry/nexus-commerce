@@ -46,7 +46,7 @@ import prisma from '../../db.js'
 import { actorLabel, missingPermissions, storedOutputOf, type ToolPrincipal } from '../agents/call-tool.js'
 import { EXPIRY_HOURS } from '../agents/approval-gate.service.js'
 import { getTool, listTools } from '../agents/tool-registry.js'
-import { PLAN_TOOL, type AgentTool, type ClaudeTrust } from '../agents/tool-types.js'
+import { NO_APPROVAL_VIA, PLAN_TOOL, type AgentTool, type ClaudeTrust } from '../agents/tool-types.js'
 import { autonomyOf, autoRunsInLastDay, CLAUDE_CHARTER, narrowedWhy, ruleFrom, type Autonomy } from '../agents/claude-trust.service.js'
 import { strategyLevelFor, strategyMemo, type StrategyMemo } from '../advertising/ads-strategy/claude.js'
 import { undoStateOf } from '../agents/claude-activity.service.js'
@@ -424,6 +424,8 @@ function deciderOf(ap: ApprovalRow, state: QueueState, title: string): QueueDeci
   if (!ap.decidedBy) return { kind: 'system', label: ap.decisionVia === 'claude-confirm' ? 'Code in Claude · name not recorded' : 'Name not recorded' }
   const name = ap.decidedBy
   if (ap.decisionVia === 'claude-confirm') return { kind: 'claude-code', label: `${name}, code in Claude` }
+  // NA — approved in the name of the person who asked, by the business's switch: a person's approval, never "your rule".
+  if (ap.decisionVia === NO_APPROVAL_VIA) return { kind: 'person', label: `${name} (no approval needed: switch on)` }
   // W1-3 — a raise approved in Nexus with the approver's authenticator code.
   if (ap.decisionVia === 'nexus-step-up') return { kind: 'person', label: `${name}, with code` }
   // A duplicate undo withdrawn by Nexus (approval-gate.service.ts askedFor): decidedBy is the control tool's name.
