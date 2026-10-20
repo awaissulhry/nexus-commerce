@@ -2827,6 +2827,12 @@
           "kind": "object",
           "type": "GoogleAccountLink",
           "relationFromFields": []
+        },
+        {
+          "name": "metaAccountLinks",
+          "kind": "object",
+          "type": "MetaAccountLink",
+          "relationFromFields": []
         }
       ]
     },
@@ -7943,6 +7949,44 @@
     },
     {
       "name": "GoogleAdsAutoApply",
+      "fields": []
+    },
+    {
+      "name": "MetaAccountLink",
+      "fields": [
+        {
+          "name": "connection",
+          "kind": "object",
+          "type": "ChannelConnection",
+          "relationFromFields": [
+            "connectionId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "MetaAdAccount",
+      "fields": []
+    },
+    {
+      "name": "MetaAdsCampaign",
+      "fields": []
+    },
+    {
+      "name": "MetaAdsAdSet",
+      "fields": []
+    },
+    {
+      "name": "MetaAdsAd",
+      "fields": []
+    },
+    {
+      "name": "MetaAdsDailyMetric",
+      "fields": []
+    },
+    {
+      "name": "MetaAdsReadState",
       "fields": []
     }
   ]

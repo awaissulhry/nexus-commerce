@@ -7221,5 +7221,86 @@
       ]
     },
     "relations": []
+  },
+  "MetaAccountLink": {
+    "scalar": {},
+    "compound": {
+      "meta_link_product": [
+        "product"
+      ]
+    },
+    "relations": [
+      {
+        "field": "connection",
+        "model": "ChannelConnection",
+        "from": [
+          "connectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "MetaAdAccount": {
+    "scalar": {},
+    "compound": {
+      "meta_ad_account": [
+        "adAccountId"
+      ]
+    },
+    "relations": []
+  },
+  "MetaAdsCampaign": {
+    "scalar": {},
+    "compound": {
+      "meta_ads_campaign": [
+        "adAccountId",
+        "campaignId"
+      ]
+    },
+    "relations": []
+  },
+  "MetaAdsAdSet": {
+    "scalar": {},
+    "compound": {
+      "meta_ads_ad_set": [
+        "adAccountId",
+        "adSetId"
+      ]
+    },
+    "relations": []
+  },
+  "MetaAdsAd": {
+    "scalar": {},
+    "compound": {
+      "meta_ads_ad": [
+        "adAccountId",
+        "adId"
+      ]
+    },
+    "relations": []
+  },
+  "MetaAdsDailyMetric": {
+    "scalar": {},
+    "compound": {
+      "meta_ads_daily_metric": [
+        "adAccountId",
+        "entityType",
+        "entityId",
+        "date"
+      ]
+    },
+    "relations": []
+  },
+  "MetaAdsReadState": {
+    "scalar": {},
+    "compound": {
+      "meta_ads_read_state": [
+        "adAccountId",
+        "resource"
+      ]
+    },
+    "relations": []
   }
 }

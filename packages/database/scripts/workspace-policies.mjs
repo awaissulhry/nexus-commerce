@@ -119,5 +119,8 @@ export function workspacePolicySql() {
   // Google Ads AAA — which Google ids (Ads account, Merchant Center account, GA4 property) another business already picked,
   // for the account picker; yes or no per id, never naming the business. Byte-for-byte the tail of 20261013d.
   sql.push(readFileSync(new URL('../workspaces/google-links-taken.sql', import.meta.url), 'utf8'))
+  // Meta ads M1 — which Meta ids (ad account, Facebook Page, Instagram account) another business already picked, for the
+  // asset picker; yes or no per id, never naming the business. Byte-for-byte the tail of 20261020f.
+  sql.push(readFileSync(new URL('../workspaces/meta-links-taken.sql', import.meta.url), 'utf8'))
   return sql.join('\n') + '\n' 
 }
