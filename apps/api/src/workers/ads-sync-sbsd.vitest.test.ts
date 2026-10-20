@@ -174,9 +174,9 @@ describe('the worker routes a marked row to its ad product\'s own endpoint, and 
       { method: 'DELETE', path: '/sb/negativeKeywords/400000000001', body: undefined },
       { method: 'DELETE', path: '/sd/negativeTargets/400000000002', body: undefined },
     ]))
-    // A negative is only retired from Nexus: a pause of an SB negative is refused before anything is queued.
-    const paused = await inside(() => updateAdTargetWithSync({ adTargetId: 'wt-sd-pt', patch: { status: 'ARCHIVED' }, actor: CLAUDE, allowSbSd: true }))
-    expect(paused).toMatchObject({ ok: false, error: expect.stringContaining('not archiving a target') })
+    // An SB target is not archived from Nexus (P2b archives a Sponsored Display one): refused before anything is queued.
+    const archived = await inside(() => updateAdTargetWithSync({ adTargetId: 'wt-sb-pt', patch: { status: 'ARCHIVED' }, actor: CLAUDE, allowSbSd: true }))
+    expect(archived).toMatchObject({ ok: false, error: expect.stringContaining('not archiving a target') })
   })
 
   it('🔴 an SD row queued WITHOUT the mark is not described to the gate (whose 6a door then refuses it live) and is not routed to SD', async () => {

@@ -10,6 +10,7 @@ import prisma from '../../db.js'
 export const AD_GROUP_CAMPAIGN_SELECT = {
   id: true, name: true, type: true, adProduct: true, marketplace: true, status: true, externalCampaignId: true, dailyBudget: true,
   dailyBudgetCurrency: true, targetingType: true, liveBidWritesEnabled: true, bidsSuppressedAt: true, bidsSuppressedBy: true, dynamicBidding: true,
+  costType: true, // P2b — a Sponsored Display default bid is changed only in a campaign that pays per click
 } as const
 
 /** One ad group with what a change of it needs: its bids, its floor, whether Amazon holds it, and its campaign. */

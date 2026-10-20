@@ -2158,14 +2158,38 @@ export function sbCampaignUpdateRequest(externalCampaignId: string, patch: SbSdP
 }
 
 /**
- * SD 3.0 `updateCampaigns` — PUT /sd/campaigns, `application/json`, `[{ campaignId (int64), state?: enabled|paused,
- * budget? }]`; answered 207 `[{ code, description, campaignId }]`. Only a daily budget exists on SD (`budgetType: daily`).
+ * P2b — a Sponsored Display campaign's update also carries what PUT /sd/campaigns changes besides the budget and state:
+ * "the mutable fields are name, state, budget, startDate, and endDate", and `portfolioId` ("if null then the campaign
+ * will be disassociated from existing portfolio"). Dates as YYYY-MM-DD here; endDate null = none.
  */
-export function sdCampaignUpdateRequest(externalCampaignId: string, patch: SbSdPatch): SbSdRequest {
+export interface SdCampaignPatch extends SbSdPatch {
+  name?: string
+  startDate?: string
+  endDate?: string | null
+  portfolioId?: string | null
+}
+
+/**
+ * SD 3.0 `updateCampaigns` — PUT /sd/campaigns, `application/json`, `[{ campaignId (int64), state?: enabled|paused|
+ * archived, budget?, name?, startDate? (YYYYMMDD), endDate? (YYYYMMDD | null), portfolioId? (int64 | null) }]`; answered
+ * 207 `[{ code, description, campaignId }]`. Only a daily budget exists on SD (`budgetType: daily`). Archived is for good.
+ */
+export function sdCampaignUpdateRequest(externalCampaignId: string, patch: SdCampaignPatch): SbSdRequest {
   const campaign: Record<string, unknown> = { campaignId: amazonIntId(externalCampaignId) }
   if (patch.state) campaign.state = patch.state
   if (patch.dailyBudget != null) campaign.budget = patch.dailyBudget
+  if (patch.name != null) campaign.name = patch.name
+  if (patch.startDate != null) campaign.startDate = sdDay(patch.startDate)
+  if (patch.endDate !== undefined) campaign.endDate = patch.endDate == null ? null : sdDay(patch.endDate)
+  if (patch.portfolioId !== undefined) campaign.portfolioId = patch.portfolioId == null ? null : amazonIntId(patch.portfolioId)
   return { method: 'PUT', path: '/sd/campaigns', body: [campaign], contentType: 'application/json', acceptHeader: 'application/json', answer: 'items' }
+}
+
+/** P2b — a YYYY-MM-DD day as SD 3.0 takes it (YYYYMMDD). Anything else is refused (thrown: nothing is sent). */
+export function sdDay(day: string): string {
+  const d = String(day).trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new Error(`"${day}" is not a YYYY-MM-DD date, so nothing was sent to Amazon`)
+  return d.replace(/-/g, '')
 }
 
 /** The Amazon ids an SB 3.0 keyword or target update needs besides its own (the API requires them on a keyword). */

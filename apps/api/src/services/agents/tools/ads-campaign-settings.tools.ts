@@ -24,20 +24,30 @@
  * day-to-day change: a person's approval sends it with no authenticator code (settingsStepUp decides it). Strategy-bound
  * (ads-autonomy-kit.ts): the settings kind; by default nothing runs by rule (maxItems 0, no market or campaign listed).
  * Undo asks this tool to put each campaign's settings back.
+ *
+ * P2b (2026-10-20) — and of Sponsored Display campaigns, through SD's own endpoint (PUT /sd/campaigns, Amazon: "the mutable
+ * fields are name, state, budget, startDate, and endDate", and its portfolioId): a new name, an end date set or removed,
+ * a portfolio of its own market joined or left, and its start date — only while it has not started, to a day from today in
+ * its market (Amazon: "the date must be today or in the future"); moved earlier it spends sooner (a raise). What Amazon
+ * fixes when an SD campaign is made — how it pays (costType: cpc or vcpm) and its tactic — and the bidding strategy an SD
+ * campaign does not have are refused in words.
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { campaignNameKey, campaignNameProblem } from '@nexus/shared/ads-campaign-name'
+import { SPONSORED_DISPLAY, adProductOf, type AdWrite } from '@nexus/shared/ads-ad-product'
 import prisma from '../../../db.js'
 import { updateCampaignWithSync, type CampaignPatch } from '../../advertising/ads-mutation.service.js'
 import { campaignNamedInMarket } from '../../advertising/ads-create.service.js'
 import { portfolioDetails, type PortfolioDetail } from '../../advertising/ads-portfolio.service.js'
 import { playbookHolds } from '../../advertising/ads-playbook/held.js'
+import { MARKET_TIME_ZONE } from '../../advertising/ads-market-time.js'
+import { isoDayIn } from '../../advertising/ads-local-day.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { ADDS_NO_SPEND, addsSpendWords, codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import { checkLiveReach, type LiveReach } from './ads-tool-guards.js'
-import { approvedRun, BY_RULE_WORDS, canonical, notRun, queuedNote, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, SENT_WHEN_WORDS, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { adWriteRefusalOf, approvedRun, BY_RULE_WORDS, canonical, notRun, queuedNote, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, SENT_WHEN_WORDS, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, type KitItem } from './ads-autonomy-kit.js'
 import { capMove, capOf, currencyOfMarket, type HeldCap } from './ads-portfolio.tools.js'
 import type { AgentTool, PlanEntities, PlanEntityKey, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
@@ -58,18 +68,24 @@ const STRATEGY_WORDS: Record<Strategy, string> = { legacyForSales: 'Dynamic bids
 /** How high Amazon may bid with each: down only (at most the bid) < fixed (the bid) < up and down (up to twice it). */
 const STRATEGY_RANK: Record<Strategy, number> = { legacyForSales: 0, manual: 1, autoForSales: 2 }
 
-const SETTINGS = ['portfolioId', 'name', 'endDate', 'biddingStrategy'] as const
+const SETTINGS = ['portfolioId', 'name', 'endDate', 'biddingStrategy', 'startDate'] as const
 type Setting = (typeof SETTINGS)[number]
-const SETTING_WORDS: Record<Setting, string> = { portfolioId: 'Portfolio', name: 'Name', endDate: 'End date', biddingStrategy: 'Bidding strategy' }
+const SETTING_WORDS: Record<Setting, string> = { portfolioId: 'Portfolio', name: 'Name', endDate: 'End date', biddingStrategy: 'Bidding strategy', startDate: 'Start date' }
 
 /** The settings of one campaign, in this tool's own words (what a request asks, and what a change records). */
-interface Values { portfolioId?: string | null; name?: string; endDate?: string | null; biddingStrategy?: Strategy }
+interface Values { portfolioId?: string | null; name?: string; endDate?: string | null; biddingStrategy?: Strategy; startDate?: string }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 const hash = (value: unknown) => createHash('sha256').update(canonical(value)).digest('base64url').slice(0, 32)
 const today = () => new Date().toISOString().slice(0, 10)
 const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null)
+/** A YYYY-MM-DD that is a real calendar day. */
+const realDay = (d: string) => !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d
 const named = (list: string[], shown = 3) => (list.length > shown ? `${list.slice(0, shown).join(', ')} and ${list.length - shown} more` : list.join(', '))
+/** P2b — today in a campaign's market (its own time zone; UTC when Nexus knows none): Amazon judges an SD start date there. */
+const marketToday = (market: string | null) => isoDayIn(new Date(), MARKET_TIME_ZONE[(market ?? '').toUpperCase()] ?? null)
+/** P2b — Amazon's rule for what an SD campaign keeps from its creation, in its words (PUT /sd/campaigns' mutable fields). */
+const SD_FIXED = "Amazon fixes how a Sponsored Display campaign pays (costType: cpc or vcpm) and its tactic when it is made: its update changes only the name, state, budget, start date and end date (and its portfolio). To pay or target another way, make a new campaign (create-ad-campaign)"
 
 // ── What a request names ──────────────────────────────────────────────────────────────────────────
 
@@ -81,7 +97,13 @@ const settingArgs = {
   name: z.string().trim().min(1).max(128).optional().describe('a new name (one campaign per name in a market)'),
   endDate: DATE.nullable().optional().describe('the last day it runs (YYYY-MM-DD, today or later); null = no end date: it runs until stopped'),
   biddingStrategy: z.enum(STRATEGIES).optional()
-    .describe('Amazon\'s bidding strategy: legacyForSales = "Dynamic bids - down only"; autoForSales = "Dynamic bids - up and down" (Amazon may raise each bid up to 100 %); manual = "Fixed bids"'),
+    .describe('Amazon\'s bidding strategy (Sponsored Products only): legacyForSales = "Dynamic bids - down only"; autoForSales = "Dynamic bids - up and down" (Amazon may raise each bid up to 100 %); manual = "Fixed bids"'),
+  startDate: DATE.optional()
+    .describe('Sponsored Display only: the first day it runs (YYYY-MM-DD, today or later in its market), only while it has not started yet'),
+  costType: z.enum(['cpc', 'vcpm']).optional()
+    .describe('Sponsored Display: how it pays. Amazon fixes it when the campaign is made, so asking for it is refused (make a new campaign)'),
+  tactic: z.enum(['T00020', 'T00030']).optional()
+    .describe('Sponsored Display: its targeting tactic. Amazon fixes it when the campaign is made, so asking for it is refused (make a new campaign)'),
 }
 const input = z.object({
   campaignIds: z.array(ID).max(MAX_CAMPAIGNS).optional()
@@ -96,14 +118,20 @@ type Args = z.infer<typeof input>
 
 const CAMPAIGN_SELECT = {
   id: true, name: true, type: true, adProduct: true, marketplace: true, status: true, externalCampaignId: true, portfolioId: true,
-  startDate: true, endDate: true, biddingStrategy: true,
+  startDate: true, endDate: true, biddingStrategy: true, costType: true,
 } as const
-type CampaignRow = { id: string; name: string; type: unknown; adProduct: string | null; marketplace: string | null; status: unknown; externalCampaignId: string | null; portfolioId: string | null; startDate: Date; endDate: Date | null; biddingStrategy: unknown }
+type CampaignRow = { id: string; name: string; type: unknown; adProduct: string | null; marketplace: string | null; status: unknown; externalCampaignId: string | null; portfolioId: string | null; startDate: Date; endDate: Date | null; biddingStrategy: unknown; costType: string | null }
 
 /** A campaign's settings now, in this tool's words. */
 const valuesOf = (c: CampaignRow): Required<Values> => ({
-  portfolioId: c.portfolioId ?? null, name: c.name, endDate: day(c.endDate), biddingStrategy: API_NAME[String(c.biddingStrategy)] ?? 'legacyForSales',
+  portfolioId: c.portfolioId ?? null, name: c.name, endDate: day(c.endDate), biddingStrategy: API_NAME[String(c.biddingStrategy)] ?? 'legacyForSales', startDate: day(c.startDate)!,
 })
+
+/** P2b — a Sponsored Display campaign (its settings go to SD's own endpoint). */
+const isSd = (c: Pick<CampaignRow, 'type' | 'adProduct'>) => adProductOf({ type: c.type == null ? null : String(c.type), adProduct: c.adProduct }) === SPONSORED_DISPLAY
+
+/** P2b — the settings write as the gate and the mutation layer judge it for a Sponsored Display campaign (adWriteRefusal). */
+const settingsWriteOf = (settings: readonly string[]): AdWrite => ({ entity: 'CAMPAIGN', fields: [...settings] })
 
 /** A value as a person reads it. */
 function wordsOf(setting: Setting, value: unknown, portfolios: ReadonlyMap<string, PortfolioDetail>): string {
@@ -113,6 +141,7 @@ function wordsOf(setting: Setting, value: unknown, portfolios: ReadonlyMap<strin
     return pf ? `portfolio "${pf.name}"` : `portfolio ${String(value)}`
   }
   if (setting === 'endDate') return value == null ? 'no end date' : String(value)
+  if (setting === 'startDate') return String(value)
   if (setting === 'biddingStrategy') return STRATEGY_WORDS[value as Strategy] ?? String(value)
   return `"${String(value)}"`
 }
@@ -167,6 +196,11 @@ export function settingMove(setting: Setting, from: unknown, to: unknown, ctx: {
     if (b > a) return { direction: 'raise', why: `its bidding strategy moves from ${ctx.words(setting, from)} to ${ctx.words(setting, to)}: Amazon may bid ${to === 'autoForSales' ? 'up to twice its bids' : 'its full bids, never lowering them'}` }
     return { direction: b < a ? 'cut' : 'same', why: null }
   }
+  if (setting === 'startDate') {
+    // P2b — a Sponsored Display campaign that has not started: moved earlier it spends sooner.
+    if (String(to) < String(from)) return { direction: 'raise', why: `its start date moves earlier, from ${String(from)} to ${String(to)}: it spends sooner` }
+    return { direction: String(to) > String(from) ? 'cut' : 'same', why: null }
+  }
   if (setting === 'endDate') {
     if (to == null && from != null) return { direction: 'raise', why: `its end date ${String(from)} is removed: it keeps spending until stopped` }
     if (from == null && to != null) return { direction: 'cut', why: null }
@@ -186,10 +220,22 @@ export function settingMove(setting: Setting, from: unknown, to: unknown, ctx: {
 /** A campaign's portfolio Nexus holds no row for: its cap is unknown, so leaving it counts as a raise (fail closed). */
 const UNKNOWN_PORTFOLIO: HeldCap = { unread: true, why: 'Nexus holds no copy of that portfolio', policy: null, amountCents: null, currency: null }
 
-/** Why Nexus cannot change this campaign's settings at all; null when it may. */
-function cannotChange(c: CampaignRow): string | null {
-  const notSp = spOnlyRefusal({ type: c.type == null ? null : String(c.type), adProduct: c.adProduct, name: c.name })
-  if (notSp) return notSp
+/**
+ * Why Nexus cannot change this campaign's settings at all; null when it may. P2b — `asked`: the settings named for it; a
+ * Sponsored Display campaign's go to SD's own endpoint, all but a bidding strategy (an SD campaign has none); a start
+ * date only for Sponsored Display.
+ */
+function cannotChange(c: CampaignRow, asked: Values): string | null {
+  const fields = SETTINGS.filter((s) => asked[s] !== undefined)
+  if (isSd(c)) {
+    if (fields.includes('biddingStrategy')) return 'a Sponsored Display campaign has no bidding strategy (Amazon bids for it by each ad group\'s bid optimization, fixed when the ad group is made)'
+    const notSent = adWriteRefusalOf(c, settingsWriteOf(fields))
+    if (notSent) return notSent
+  } else {
+    const notSp = spOnlyRefusal({ type: c.type == null ? null : String(c.type), adProduct: c.adProduct, name: c.name })
+    if (notSp) return notSp
+    if (fields.includes('startDate')) return 'Nexus changes the start date of a Sponsored Display campaign only'
+  }
   if (String(c.status) === 'ARCHIVED') return 'it is archived: Amazon does not change an archived campaign'
   if (String(c.status) === 'DRAFT') return 'it is a draft in Nexus and was never sent to Amazon'
   if (!c.externalCampaignId) return 'Nexus holds no Amazon id for it: it is not at Amazon'
@@ -219,6 +265,8 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
   const parsed = input.safeParse(raw)
   if (!parsed.success) return refuse(parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; '))
   const a: Args = parsed.data
+  // P2b — what Amazon fixes when a Sponsored Display campaign is made is never sent: refused in its words.
+  if (a.costType || a.tactic || a.campaigns?.some((c) => c.costType || c.tactic)) return refuse(`Not queued: ${SD_FIXED}.`)
   const shared: Values = Object.fromEntries(SETTINGS.filter((s) => a[s] !== undefined).map((s) => [s, a[s]])) as Values
   if (a.campaignIds?.length && a.campaigns?.length) return refuse('Name the campaigns one way: campaignIds (all take the settings beside them) or campaigns (each with its own settings), not both.')
   if (a.campaigns?.length && Object.keys(shared).length) return refuse('With campaigns, each campaign carries its own settings: give none beside the list.')
@@ -237,10 +285,10 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
   const missing = asks.filter((x) => !byId.has(x.campaignId)).map((x) => x.campaignId)
   if (missing.length) return refuse(`Not queued: campaign ${named(missing)} ${missing.length === 1 ? 'was' : 'were'} not found in this business.`)
   const label = (c: CampaignRow) => `campaign "${c.name}"`
-  const cannot = asks.map((x) => byId.get(x.campaignId)!).filter((c) => cannotChange(c))
-  if (cannot.length) return refuse(`Not queued: ${named(cannot.map((c) => `${label(c)}: ${cannotChange(c)}`))}.`)
+  const cannot = asks.map((x) => ({ c: byId.get(x.campaignId)!, why: cannotChange(byId.get(x.campaignId)!, x.values) })).filter((x) => x.why)
+  if (cannot.length) return refuse(`Not queued: ${named(cannot.map((x) => `${label(x.c)}: ${x.why}`))}.`)
   const empty = asks.filter((x) => !Object.keys(x.values).length)
-  if (empty.length) return refuse(`Nothing to change for ${named(empty.map((x) => label(byId.get(x.campaignId)!)))}: give portfolioId, name, endDate or biddingStrategy.`)
+  if (empty.length) return refuse(`Nothing to change for ${named(empty.map((x) => label(byId.get(x.campaignId)!)))}: give portfolioId, name, endDate, biddingStrategy or (Sponsored Display) startDate.`)
 
   // Portfolios — where they go (Amazon must hold it, in the campaign's own market: CM-21) and where they are now.
   const targetIds = [...new Set(asks.map((x) => x.values.portfolioId).filter((id): id is string => typeof id === 'string'))]
@@ -286,12 +334,21 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
       if (other) return refuse(`Not queued: two campaigns of this request would both be named "${name}" (${other} and ${label(c)}).`)
       newNames.set(campaignNameKey(name), label(c))
     }
+    // P2b — a Sponsored Display start date: only before the campaign starts, to today or later in its market (Amazon's rule).
+    const start = set.startDate ? String(set.startDate.to) : day(c.startDate)!
+    if (set.startDate) {
+      const now = marketToday(c.marketplace)
+      if (!realDay(start)) return refuse(`Not queued: ${start} is not a real date (YYYY-MM-DD).`)
+      if (day(c.startDate)! <= now) return refuse(`Not queued: ${label(c)} started on ${day(c.startDate)}: Amazon changes the start date of a campaign that has not started yet only.`)
+      if (start < now) return refuse(`Not queued: the start date ${start} of ${label(c)} is in the past in ${c.marketplace ?? 'its market'} (today is ${now}): Amazon takes a start date of today or later.`)
+    }
     if (set.endDate && set.endDate.to != null) {
       const end = String(set.endDate.to)
-      const valid = !Number.isNaN(Date.parse(`${end}T00:00:00Z`)) && new Date(`${end}T00:00:00Z`).toISOString().slice(0, 10) === end
-      if (!valid) return refuse(`Not queued: ${end} is not a real date (YYYY-MM-DD).`)
+      if (!realDay(end)) return refuse(`Not queued: ${end} is not a real date (YYYY-MM-DD).`)
       if (end < today()) return refuse(`Not queued: the end date ${end} of ${label(c)} is in the past, which would end it at once. To stop a campaign for a while lower its bids (suppress-campaign); for a real stop pause it (pause-ads).`)
-      if (end < day(c.startDate)!) return refuse(`Not queued: the end date ${end} of ${label(c)} is before its start date ${day(c.startDate)}.`)
+      if (end < start) return refuse(`Not queued: the end date ${end} of ${label(c)} is before its start date ${start}.`)
+    } else if (set.startDate && c.endDate && start > day(c.endDate)!) {
+      return refuse(`Not queued: the start date ${start} of ${label(c)} is after its end date ${day(c.endDate)}: move or remove the end date in the same request.`)
     }
     const raisesWhy: string[] = []
     const raising: Setting[] = []
@@ -318,6 +375,8 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
   const writes: RuleWrite[] = items.map((i) => ({
     campaignId: i.campaignId, marketplace: i.market,
     changes: (Object.keys(i.set) as Setting[]).map((s) => ({ field: s, valueCents: null })), label: i.label,
+    // P2b — a Sponsored Display campaign's settings, described: the gate lets them through to SD's own endpoint.
+    ...(isSd(byId.get(i.campaignId)!) ? { write: settingsWriteOf(Object.keys(i.set)) } : {}),
   }))
   const reach = await reachOf(writes)
   if ('refused' in reach) return refuse(reachRefusal(reach.refused))
@@ -344,7 +403,9 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
   }))
   const warnings = items.filter((i) => i.playbookBuilt).map((i) => `${i.label} was built by an ads playbook: a portfolio move here leaves the playbook's own portfolio (its next build or sync still uses that one). A person decides; it never runs by rule.`)
   const counts = SETTINGS.map((s) => [s, items.filter((i) => i.set[s]).length] as const).filter(([, n]) => n)
-  const effect = `Changes the settings of ${plural(items.length, 'Sponsored Products campaign')} (${counts.map(([s, n]) => `${SETTING_WORDS[s].toLowerCase()} on ${n}`).join(', ')}): `
+  const sd = items.filter((i) => isSd(byId.get(i.campaignId)!)).length
+  const kinds = sd === items.length ? 'Sponsored Display campaign' : sd ? 'Sponsored Products and Display campaign' : 'Sponsored Products campaign'
+  const effect = `Changes the settings of ${plural(items.length, kinds)} (${counts.map(([s, n]) => `${SETTING_WORDS[s].toLowerCase()} on ${n}`).join(', ')}): `
     + `${named(lines.map((l) => `${l.label} — ${l.changes.map((x) => `${x.label.toLowerCase()} ${x.from} → ${x.to}`).join(', ')}`))}.`
     + (already.length ? ` ${plural(already.length, 'campaign')} already set so ${already.length === 1 ? 'is' : 'are'} left as ${already.length === 1 ? 'it is' : 'they are'}.` : '')
     + ` Queued for Amazon: ${SENT_WHEN_WORDS}.`
@@ -397,6 +458,7 @@ export async function settingsUndoRefusal(rows: ReadonlyArray<{ entityType: stri
     if ('biddingStrategy' in before && before.biddingStrategy !== after.biddingStrategy && API_NAME[String(before.biddingStrategy)]) back.biddingStrategy = API_NAME[String(before.biddingStrategy)]
     if ('endDate' in before && before.endDate !== after.endDate) back.endDate = before.endDate ? String(before.endDate).slice(0, 10) : null
     if ('portfolioId' in before && (before.portfolioId ?? null) !== (after.portfolioId ?? null)) back.portfolioId = (before.portfolioId as string | null | undefined) ?? null
+    if (typeof before.startDate === 'string' && before.startDate !== after.startDate) back.startDate = before.startDate.slice(0, 10)
     return { campaignId: r.entityId, back }
   }).filter((x) => Object.keys(x.back).length)
   if (!asked.length) return null
@@ -439,6 +501,7 @@ const SETTINGS_LIMITS = adKitLimits({ maxItems: 0 }, {
   allowRename: z.boolean().default(false).describe('let a campaign be renamed by rule; never by default'),
   allowUpAndDown: z.boolean().default(false).describe('let a campaign switch to up-and-down bidding (autoForSales: Amazon may raise each bid up to 100 %) by rule; never by default'),
   allowEndDateRemoval: z.boolean().default(false).describe('let a campaign\'s end date be removed or moved later by rule (it keeps spending longer); never by default'),
+  allowStartEarlier: z.boolean().default(false).describe('let a Sponsored Display campaign\'s start date move earlier by rule (it spends sooner); never by default'),
 })
 
 /** set-campaign-settings' own checks around the kit's (C1–C7). Pure. */
@@ -461,6 +524,9 @@ function settingsRefusal(preview: unknown, limits: Record<string, unknown>): str
   if (p.items.some((i) => i.set.endDate && i.set.endDate.from != null && (i.set.endDate.to == null || String(i.set.endDate.to) > String(i.set.endDate.from))) && limits.allowEndDateRemoval !== true) {
     return 'removing an end date (or moving it later) keeps a campaign spending longer: it runs by rule only with allowEndDateRemoval; a person decides'
   }
+  if (p.items.some((i) => i.set.startDate && String(i.set.startDate.to) < String(i.set.startDate.from)) && limits.allowStartEarlier !== true) {
+    return 'moving a start date earlier makes a campaign spend sooner: it runs by rule only with allowStartEarlier; a person decides'
+  }
   if (p.items.some((i) => i.playbookBuilt)) return 'it moves a campaign an ads playbook built out of the playbook\'s portfolio; a person decides'
   return null
 }
@@ -475,6 +541,7 @@ const patchOf = (values: Values): CampaignPatch => ({
   ...(values.portfolioId !== undefined ? { portfolioId: values.portfolioId } : {}),
   ...(values.endDate !== undefined ? { endDate: values.endDate == null ? null : new Date(`${values.endDate}T00:00:00.000Z`) } : {}),
   ...(values.biddingStrategy !== undefined ? { biddingStrategy: STORED[values.biddingStrategy] } : {}),
+  ...(values.startDate !== undefined ? { startDate: new Date(`${values.startDate}T00:00:00.000Z`) } : {}),
 })
 
 /** What is stored NOW for each campaign of a change record, in its own shape (the undo guard compares it with `after`). */
@@ -527,6 +594,7 @@ async function runApproved(args: Record<string, unknown>, ctx: ToolContext): Pro
       actor: run.actor, reason: run.reason, changeSetId: run.changeSetId,
       manual: run.manual, // 4A — a person approved it: his own click
       confirmOwnLimits: run.confirmOwnLimits,
+      allowSbSd: true, // P2b — a Sponsored Display campaign's settings go to its own endpoint
     })
     if (!out.ok) { failed.push(`${item.label} (${out.error ?? 'refused'})`); continue }
     before.push({ campaignId: item.campaignId, ...from })
@@ -564,18 +632,20 @@ const setCampaignSettings: AgentTool = {
   withinLimits: settingsRefusal,
   undo: SET_CAMPAIGN_SETTINGS_UNDO,
   description:
-    `Change the settings of Amazon Sponsored Products campaigns, as the campaign's Details tab and the Ad Manager's bulk Portfolio menu do (up to ${MAX_CAMPAIGNS} in one request): `
+    `Change the settings of Amazon Sponsored Products and Sponsored Display campaigns, as the campaign's Details tab and the Ad Manager's bulk Portfolio menu do (up to ${MAX_CAMPAIGNS} in one request): `
     + 'move them into a portfolio (portfolioId from ad-portfolios, one of their own market that Amazon holds) or out of '
-    + 'one (null), rename one campaign, set or remove an end date, and set the bidding strategy (legacyForSales = '
-    + '"Dynamic bids - down only", autoForSales = "Dynamic bids - up and down", manual = "Fixed bids"). campaignIds take '
+    + 'one (null), rename one campaign, set or remove an end date, and set the bidding strategy (Sponsored Products only: legacyForSales = '
+    + '"Dynamic bids - down only", autoForSales = "Dynamic bids - up and down", manual = "Fixed bids"). A Sponsored Display '
+    + 'campaign also takes a new start date while it has not started (today or later in its market; earlier spends sooner, a '
+    + 'raise); its cost type (cpc or vcpm) and tactic are fixed by Amazon when it is made and are refused. campaignIds take '
     + 'the same settings; campaigns gives each its own. Budgets, bids, placements and status have their own tools. '
     + `${BY_RULE_WORDS} (by default it does not: maxItems 0, no market or campaign listed), and by rule only on a campaign `
     + 'on the live-write allowlist. Whatever can add spend — up-and-down bidding (or fixed bids after down only), an end '
-    + "date removed or moved later, leaving a portfolio's budget cap for a looser one or none — is listed in raises and "
+    + "date removed or moved later, a start date moved earlier, leaving a portfolio's budget cap for a looser one or none — is listed in raises and "
     + 'said in the preview: a day-to-day change, so a person\'s approval sends it with no authenticator code. The preview '
     + 'lists each campaign from → to, where it lands (live at Amazon or sandbox), the '
     + `rules that also move it and the limits that apply; ${SENT_WHEN_WORDS}. `
-    + 'Refused, and not queued, when a campaign is not found, archived, a draft or not Sponsored Products, a portfolio is '
+    + 'Refused, and not queued, when a campaign is not found, archived, a draft or not Sponsored Products or Display, a portfolio is '
     + 'not found, archived, made in Nexus only or in another market, a name is taken in the market, an end date is in '
     + 'the past, or Amazon\'s write gate would refuse it. A campaign an ads playbook built may be moved out of its '
     + 'portfolio, with a warning (never by rule). Undo puts each campaign\'s settings back.',

@@ -286,6 +286,8 @@ async function reverseOne(
         patch.name = before.name
       if ('portfolioId' in before && (after.portfolioId ?? null) !== (before.portfolioId ?? null))
         patch.portfolioId = (before.portfolioId as string | null | undefined) ?? null
+      // P2b — a Sponsored Display campaign's start date, recorded only by a write that moved it.
+      if (typeof before.startDate === 'string' && after.startDate !== before.startDate) patch.startDate = new Date(before.startDate)
       if (Object.keys(patch).length === 0) return { ok: true, skipped: true, reason: NO_DIFF }
       const result = await updateCampaignWithSync({
         campaignId: log.entityId,
@@ -317,6 +319,7 @@ async function reverseOne(
         manual,
         reversal: true,
         changeSetId,
+        ...(sbSd && (await wasSbSdWrite(log)) ? { allowSbSd: true } : {}), // P2b — a Sponsored Display ad group's goes back on its own route
         ...(opts.evidence ? { evidence: opts.evidence } : {}),
         ...(opts.askGate ? { askGate: true } : {}),
         ...(opts.expectAfter ? { expected: expectedAfter(log, Object.keys(patch)) } : {}),
@@ -548,7 +551,7 @@ export async function judgedWriteStands(log: { id: string; entityType: string; e
 const UNDO_FIELDS: Record<string, readonly string[]> = {
   AD_TARGET: ['bidCents', 'status'],
   AD_GROUP: ['defaultBidCents', 'status'],
-  CAMPAIGN: ['dailyBudget', 'dailyBudgetCurrency', 'status', 'biddingStrategy', 'endDate', 'name', 'portfolioId'],
+  CAMPAIGN: ['dailyBudget', 'dailyBudgetCurrency', 'status', 'biddingStrategy', 'endDate', 'name', 'portfolioId', 'startDate'],
 }
 
 type StandRow = { id: string; entityType: string; entityId: string; actionType: string; payloadBefore: unknown; payloadAfter: unknown; createdAt: Date }
@@ -594,8 +597,8 @@ function valueWords(entityType: string, field: string, value: unknown, currency:
     const list = (Array.isArray(value) ? value : []) as Placements
     return `placements ${list.length ? list.map((p) => `${String(p.placement ?? '').replace(/^PLACEMENT_/, '').toLowerCase().replace(/_/g, ' ')} ${p.percentage ?? 0} %`).join(', ') : 'none'}`
   }
-  const label: Record<string, string> = { dailyBudgetCurrency: 'currency', biddingStrategy: 'bidding strategy', endDate: 'end date', portfolioId: 'portfolio' }
-  const shown = value == null || value === '' ? 'none' : field === 'endDate' ? String(value).slice(0, 10) : field === 'status' ? String(value).toLowerCase() : String(value)
+  const label: Record<string, string> = { dailyBudgetCurrency: 'currency', biddingStrategy: 'bidding strategy', endDate: 'end date', startDate: 'start date', portfolioId: 'portfolio' }
+  const shown = value == null || value === '' ? 'none' : field === 'endDate' || field === 'startDate' ? String(value).slice(0, 10) : field === 'status' ? String(value).toLowerCase() : String(value)
   return `${label[field] ?? field} ${field === 'name' && shown !== 'none' ? `"${shown}"` : shown}`
 }
 
@@ -612,13 +615,13 @@ async function currentValues(entityType: string, entityId: string): Promise<{ va
   if (entityType === 'CAMPAIGN') {
     const c = await prisma.campaign.findUnique({
       where: { id: entityId },
-      select: { dailyBudget: true, dailyBudgetCurrency: true, status: true, biddingStrategy: true, endDate: true, name: true, portfolioId: true, dynamicBidding: true },
+      select: { dailyBudget: true, dailyBudgetCurrency: true, status: true, biddingStrategy: true, endDate: true, name: true, portfolioId: true, startDate: true, dynamicBidding: true },
     })
     if (!c) return null
     const { dynamicBidding, ...rest } = c
     const placements = (dynamicBidding as { placementBidding?: Placements } | null)?.placementBidding ?? []
     return {
-      values: { ...rest, dailyBudget: Number(c.dailyBudget), endDate: c.endDate?.toISOString() ?? null, placements },
+      values: { ...rest, dailyBudget: Number(c.dailyBudget), endDate: c.endDate?.toISOString() ?? null, startDate: c.startDate.toISOString(), placements },
       currency: c.dailyBudgetCurrency ?? null,
     }
   }
