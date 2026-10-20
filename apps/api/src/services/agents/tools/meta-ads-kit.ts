@@ -2,10 +2,11 @@
  * Meta ads changes (step 17, 2026-10-21; mirrors google-ads-kit.ts, Google #632) — what every Meta change tool shares:
  *
  *   preview   the change is built from the request and the ad account's LIVE state (marketing/meta-ads/live-*.ts), then
- *             Meta checks each request it has a check for (`execution_options=["validate_only"]`: Meta answers whether it
- *             would accept it and changes nothing — documented on campaign updates and creates only). A change Meta would
- *             refuse is never queued: the answer says why. A request Meta has no check for says so ("Meta has no check
- *             for this change"). The preview says what changes (from → to), what can make the account spend more
+ *             Meta checks each request Nexus uses its check for (`execution_options=["validate_only"]`: Meta answers whether
+ *             it would accept it and changes nothing — documented on campaign updates and creates only; until LIVE-PROBE
+ *             ST17-01, only a campaign pause: gateway META_UPDATE_CHECK_PROVEN). A change Meta would refuse is never
+ *             queued: the answer says why. Any other request says why it was not checked ("Meta has no check for this
+ *             change" / "Meta's check is not used for this change yet"). With Meta changes switched off, no check is sent. The preview says what changes (from → to), what can make the account spend more
  *             ("SPENDS MONEY": switching on, a budget or bid raise — the person decides each), each request it sends, and
  *             Meta's limits it meets (one change of the same object every 30 s; an ad set's budget 4 times an hour).
  *   re-check  when the approved request runs, the gate takes the dry run again (ctx.approvalId): the live state is read
@@ -15,9 +16,11 @@
  *             decidedVia auto. The change is built again from the live state, refused when what was approved has moved,
  *             and sent request by request, in order: Meta has no all-or-nothing request for several objects (a batch runs
  *             its parts one by one), so the answer says step by step what Meta did. A request Meta refuses changes
- *             nothing for that object and the next goes on; one Meta did not confirm (no answer, a 5xx) stops the rest and
- *             is never sent again by Nexus. Each request is read back (read-after-write). Meta writes have no cancel
- *             window: the approval is the brake.
+ *             nothing for that object and the next pause or archive goes on — but no switch-on (or raise) is sent after a
+ *             step that did not happen (review fix A1); one Meta did not confirm, a throttle, or any error of Nexus's own
+ *             stops the rest (never sent again by Nexus), and what was done keeps its record and undo (A3). Each request is
+ *             read back; an answer that is not a plain success is judged by reading the object (write-client.ts, B1).
+ *             Meta writes have no cancel window: the approval is the brake.
  *
  * Every Meta change tool is alwaysAsk, maxClaudeTrust 'ask'. Nothing here names a business: the account is the
  * business's chosen Meta ad account (marketing/meta-ads/change-account.ts), and the gateway checks every object of every
@@ -52,8 +55,9 @@ export const META_MATERIAL = ['basis', 'plan', 'reach'] as const
 export const META_CHANGE_RULES =
   ' Nothing changes until a person approves it in Nexus (Approvals) — or, when this business\'s "Claude\'s changes need no '
   + 'approval" switch is on, it runs 20 s after the request unless stopped; either way it runs as that person, never by a '
-  + 'rule of its own. Meta checks a request first where it has a check for it (validate_only: campaign changes); for '
-  + 'any other the preview says "Meta has no check for this change", and the run reads the live state again first. The '
+  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause); '
+  + 'for any other the preview says why not, and the run reads the live state again first. With Meta changes switched off '
+  + 'nothing is sent, not even a check. The '
   + 'preview says what changes (from → to), what can make the account spend more (spendsMoney — the person\'s decision) '
   + 'and every request it sends. Meta has no all-or-nothing request: each is sent on its own, in order, and the answer '
   + 'says step by step what Meta did; a change sent to Meta has no cancel window.'
@@ -75,8 +79,11 @@ function reachOf(account: MetaChangeAccount): { reach: MetaReach; warning: strin
 /** Builds the change from the account's live state; reads Meta (live-*.ts), never writes. */
 export type MetaDraftBuilder = (account: MetaChangeAccount) => Promise<MetaChangeDraft | { refusal: string }>
 
-/** What Meta made of each request's check: it would accept it, it has no check for it, or this is a re-check. */
-export type MetaRequestCheck = 'accepted' | 'no-check' | 'not-asked-again'
+/**
+ * What became of each request's check: Meta would accept it; Meta has no check for it; Meta has one but Nexus does not use
+ * it for this change yet (META_UPDATE_CHECK_PROVEN); Meta changes are switched off (no check is sent); a re-check.
+ */
+export type MetaRequestCheck = 'accepted' | 'no-check' | 'not-used-yet' | 'writes-off' | 'not-asked-again'
 
 export interface MetaPreview {
   summary: string
@@ -116,10 +123,27 @@ async function draftFor(args: Record<string, unknown>, build: MetaDraftBuilder):
 /** The exact plan of a change: its requests (object, form fields), in order — never their labels. */
 const planOf = (draft: MetaChangeDraft): string => factHash(draft.requests.map((r) => ({ objectId: r.objectId, params: r.params })))
 
-const CHECK_SENTENCE: Record<MetaPreview['metaCheck']['checked'], string> = {
-  all: 'Meta checked every request of this change (validate_only) and would accept it.',
-  some: 'Meta checked the campaign requests (validate_only) and would accept them. Meta has no check for the other requests (its reference documents validate_only on campaign changes and creates only): they are built from the live state, read again before they are sent.',
-  none: 'Meta has no check for this change (its reference documents validate_only on campaign changes and creates only): the preview is built from the live state, and when the approved change runs Nexus reads it again and sends it only if nothing it stands on moved.',
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+/** The preview's sentence about Meta's check, from what became of each request's. */
+function checkSummary(checks: MetaRequestCheck[], recheck: boolean): MetaPreview['metaCheck'] {
+  if (recheck) return { checked: 'none', sentence: 'Re-check before running: the live state was read again; Meta was not asked to check it twice.' }
+  if (checks.some((c) => c === 'writes-off')) return { checked: 'none', sentence: 'Meta changes are switched off in Nexus (NEXUS_META_ADS_WRITES): Meta was not asked to check it, and after approval nothing is sent.' }
+  const n = (c: MetaRequestCheck) => checks.filter((x) => x === c).length
+  const accepted = n('accepted')
+  if (accepted === checks.length) return { checked: 'all', sentence: 'Meta checked every request of this change (validate_only) and would accept it.' }
+  const none = n('no-check')
+  const notYet = n('not-used-yet')
+  if (none === checks.length) {
+    return { checked: 'none', sentence: 'Meta has no check for this change (its reference documents validate_only on campaign changes and creates only): the preview is built from the live state, and when the approved change runs Nexus reads it again and sends it only if nothing it stands on moved.' }
+  }
+  const parts = [
+    accepted ? `Meta checked ${plural(accepted, 'request')} (validate_only) and would accept ${accepted === 1 ? 'it' : 'them'}.` : '',
+    notYet ? `Meta's check is not used for this change yet for ${plural(notYet, 'request')}: Nexus asks it only of a pause until a live probe shows Meta honours validate_only on campaign updates.` : '',
+    none ? `Meta has no check for ${plural(none, 'request')} (its reference documents validate_only on campaign changes and creates only).` : '',
+    'What Meta did not check is built from the live state and read again before it is sent.',
+  ]
+  return { checked: accepted ? 'some' : 'none', sentence: parts.filter(Boolean).join(' ') }
 }
 
 /**
@@ -154,10 +178,7 @@ function previewOf(account: MetaChangeAccount, draft: MetaChangeDraft, checks: M
   const { reach, warning } = reachOf(account)
   const spends = draft.spendsMoney
   const warnings = [...spends.map((s) => `SPENDS MONEY (your decision): ${s}`), ...(warning ? [warning] : []), ...draft.warnings, ...limits]
-  const checked = checks.filter((c) => c === 'accepted').length
-  const metaCheck: MetaPreview['metaCheck'] = recheck
-    ? { checked: 'none', sentence: 'Re-check before running: the live state was read again; Meta was not asked to check it twice.' }
-    : { checked: checked === 0 ? 'none' : checked === checks.length ? 'all' : 'some', sentence: CHECK_SENTENCE[checked === 0 ? 'none' : checked === checks.length ? 'all' : 'some'] }
+  const metaCheck = checkSummary(checks, recheck)
   return {
     summary: draft.summary,
     changes: draft.changes,
@@ -208,13 +229,15 @@ export async function metaChangePreview(args: Record<string, unknown>, ctx: Tool
   const { account, draft } = built
   const limits = await limitWarnings(account, draft)
   if (isRecheck(ctx)) return { ok: true, preview: previewOf(account, draft, draft.requests.map(() => 'not-asked-again'), true, limits) }
-  const checkable = draft.requests.filter((r) => r.checkable)
+  // Review fix A2 — with Meta changes switched off, no check is sent either (the gateway refuses it too).
+  if (metaAdsWritesMode() !== 'live') return { ok: true, preview: previewOf(account, draft, draft.requests.map(() => 'writes-off'), false, limits) }
+  const checkable = draft.requests.filter((r) => r.check === 'meta')
   const plan = planOf(draft)
   const remembered = checkable.length ? await rememberedCheck(account.adAccountId, plan) : null
   if (checkable.length && !remembered) {
     for (const request of checkable) {
       try {
-        await metaCheckChange(account.target, { objectId: request.objectId, params: request.params, operation: `${request.kind}.status` })
+        await metaCheckChange(account.target, { objectId: request.objectId, kind: request.kind, params: request.params, operation: `${request.kind}.status` })
       } catch (err) {
         if (!(err instanceof MetaWriteError)) throw err
         return { ok: false, error: err.outcome === 'refused'
@@ -224,7 +247,7 @@ export async function metaChangePreview(args: Record<string, unknown>, ctx: Tool
     }
     await rememberCheck(account.adAccountId, plan)
   }
-  return { ok: true, preview: previewOf(account, draft, draft.requests.map((r) => (r.checkable ? 'accepted' : 'no-check')), false, limits) }
+  return { ok: true, preview: previewOf(account, draft, draft.requests.map((r) => (r.check === 'meta' ? 'accepted' : r.check === 'not-yet' ? 'not-used-yet' : 'no-check')), false, limits) }
 }
 
 // ── run ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -252,7 +275,9 @@ function doneSentence(request: MetaChangeRequest, result: MetaChangeResult): str
   const status = typeof result.node?.status === 'string' ? result.node.status : null
   const effective = typeof result.node?.effective_status === 'string' ? result.node.effective_status : null
   const wanted = request.params.status
-  const read = result.readBack === 'none'
+  const read = result.afterError
+    ? `Meta's answer was not a success (${result.afterError.replace(/\.$/, '')}), but Nexus read it back as ${status ?? wanted}: Meta made it.`
+    : result.readBack === 'none'
     ? 'Meta confirmed it; Nexus could not read it back (meta-ads-live shows it).'
     : wanted && status && status !== wanted
       ? `Meta answered success, but reads it back as ${status}${effective ? ` (${effective})` : ''}.`
@@ -294,26 +319,42 @@ export async function runMetaChange(
   const steps: MetaRunStep[] = []
   const done: Array<{ request: MetaChangeRequest; result: MetaChangeResult }> = []
   let stoppedAt: number | null = null
+  // Review fix A1 — the first request of this change that did not happen: a later switch-on (or raise) is never sent,
+  // because what its "nothing spends yet" stood on may be exactly that request.
+  let missedAt: number | null = null
   for (const request of draft.requests) {
     if (stoppedAt !== null) {
       steps.push({ step: request.step, label: request.label, outcome: 'not_sent', sentence: `${request.label}: not sent — Nexus stopped after step ${stoppedAt}.` })
       continue
     }
+    if (missedAt !== null && request.raisesSpend) {
+      steps.push({ step: request.step, label: request.label, outcome: 'not_sent', sentence: `${request.label}: not sent — step ${missedAt} did not happen, and Nexus sends nothing that can make the account spend more after a step of the same change that did not (what it stood on may have been that step).` })
+      continue
+    }
     try {
-      const result = await metaSendChange(account.target, { objectId: request.objectId, params: request.params, operation: `${request.kind}.status`, budget: request.budget })
+      const result = await metaSendChange(account.target, {
+        objectId: request.objectId, kind: request.kind, params: request.params, operation: `${request.kind}.status`, budget: request.budget, readBackInPost: request.readBackInPost,
+      })
       done.push({ request, result })
       steps.push({
         step: request.step, label: request.label, outcome: 'done', sentence: doneSentence(request, result),
         readBack: result.node ? { status: typeof result.node.status === 'string' ? result.node.status : null, effectiveStatus: typeof result.node.effective_status === 'string' ? result.node.effective_status : null } : null,
       })
     } catch (err) {
-      if (!(err instanceof MetaWriteError)) throw err
+      // Review fix A3 — EVERY error ends in a step, never in a lost run: what was already done keeps its record and undo.
+      missedAt ??= request.step
+      if (!(err instanceof MetaWriteError)) {
+        // metaSendChange turns every error of a send into a MetaWriteError; anything else came before Meta was reached.
+        steps.push({ step: request.step, label: request.label, outcome: 'not_sent', sentence: `${request.label}: not sent — Nexus hit a problem of its own (${err instanceof Error ? err.message : String(err)}).` })
+        stoppedAt = request.step
+        continue
+      }
       if (err.outcome === 'refused' && !err.failure.throttled && !err.failure.authLost) {
         // Meta said no for this one object: nothing changed for it, and the next object is its own request.
         steps.push({ step: request.step, label: request.label, outcome: 'refused', sentence: `${request.label}: ${err.message}` })
         continue
       }
-      // No answer, a throttle, a lost token, a hold: the next requests would meet the same; Nexus stops here.
+      // Not confirmed, a throttle, a lost token, a hold: the next requests would meet the same; Nexus stops here.
       steps.push({ step: request.step, label: request.label, outcome: err.outcome === 'unknown' ? 'not_confirmed' : 'not_sent', sentence: `${request.label}: ${err.message}` })
       stoppedAt = request.step
     }

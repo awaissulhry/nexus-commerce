@@ -101,7 +101,7 @@ export function mcpInstructions(business: McpBusiness): string {
     'enabling anything is set-google-status (SPENDS MONEY); remove-google-… tools delete only what the person asked to',
     'delete. New parts that point at new parts are ONE call (build-google-campaigns, copy-google-campaign,',
     'build-google-pmax, copy-google-pmax, create-google-…-campaign), never steps of a change plan.',
-    'Meta is read only for now (meta-… tools); never take a Meta app secret or token in chat.',
+    'Meta changes go through set-meta-… tools; never take a Meta app secret or token in chat.',
   ].join(' ')
 }
 

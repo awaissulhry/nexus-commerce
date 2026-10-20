@@ -43,7 +43,7 @@ describe('Meta\'s answer, read as a status object', () => {
 describe('statusDraft', () => {
   it('a pause is one safe request; it says what stops with it; undo reads before → after', () => {
     const d = draft({ items: [{ kind: 'campaign', id: '120000000000001' }], status: 'PAUSED' }, liveOf(campaign('120000000000001', 'ACTIVE')))
-    expect(d.requests).toEqual([{ step: 1, label: 'Pause campaign "Campaign 1" (120000000000001)', kind: 'campaign', objectId: '120000000000001', params: { status: 'PAUSED' }, checkable: true, budget: false, undoable: true }])
+    expect(d.requests).toEqual([{ step: 1, label: 'Pause campaign "Campaign 1" (120000000000001)', kind: 'campaign', objectId: '120000000000001', params: { status: 'PAUSED' }, check: 'meta', budget: false, undoable: true, raisesSpend: false, readBackInPost: true }])
     expect(d.spendsMoney).toEqual([])
     expect(d.warnings.join(' ')).toMatch(/stops every ad set and ad in it .*CAMPAIGN_PAUSED/)
     expect(d.changes).toEqual({ 'campaign "Campaign 1" (120000000000001)': { from: 'ACTIVE', to: 'PAUSED' } })
@@ -62,26 +62,40 @@ describe('statusDraft', () => {
     expect(on.spendsMoney.join(' ')).toMatch(/ad set "Ad set 2".*start delivering and spending/)
     expect(on.requests.map((r) => r.kind)).toEqual(['adset', 'campaign'])
   })
-  it('pauses and archives go first, activations last (ads, then ad sets, then campaigns)', () => {
+  it('pauses and archives go first, activations last; inside each, ads before ad sets before campaigns (review fix B5)', () => {
     const d = draft({ items: [
       { kind: 'campaign', id: '120000000000011', status: 'ACTIVE' }, { kind: 'ad', id: '120000000000013', status: 'ACTIVE' },
       { kind: 'campaign', id: '120000000000021', status: 'PAUSED' }, { kind: 'adset', id: '120000000000012', status: 'ACTIVE' },
-    ] }, liveOf(campaign('120000000000011', 'PAUSED'), ad('120000000000013', 'PAUSED', 'ACTIVE', 'ACTIVE'), campaign('120000000000021', 'ACTIVE'), adSet('120000000000012', 'PAUSED', '120000000000011', 'PAUSED')))
-    expect(d.requests.map((r) => `${r.params.status}:${r.kind}`)).toEqual(['PAUSED:campaign', 'ACTIVE:ad', 'ACTIVE:adset', 'ACTIVE:campaign'])
-    expect(d.requests.map((r) => r.step)).toEqual([1, 2, 3, 4])
-    expect(d.totals).toMatchObject({ pause: 1, switchOn: 3, archive: 0, requests: 4 })
+      { kind: 'adset', id: '120000000000022', status: 'ARCHIVED' }, { kind: 'ad', id: '120000000000023', status: 'PAUSED' },
+    ] }, liveOf(campaign('120000000000011', 'PAUSED'), ad('120000000000013', 'PAUSED', 'ACTIVE', 'ACTIVE'), campaign('120000000000021', 'ACTIVE'),
+      adSet('120000000000012', 'PAUSED', '120000000000011', 'PAUSED'), adSet('120000000000022', 'PAUSED', '120000000000021', 'ACTIVE'), ad('120000000000023', 'ACTIVE', 'ACTIVE', 'ACTIVE')))
+    expect(d.requests.map((r) => `${r.params.status}:${r.kind}`)).toEqual(['PAUSED:ad', 'ARCHIVED:adset', 'PAUSED:campaign', 'ACTIVE:ad', 'ACTIVE:adset', 'ACTIVE:campaign'])
+    expect(d.requests.map((r) => r.step)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(d.requests.map((r) => r.raisesSpend)).toEqual([false, false, false, true, true, true])
+    expect(d.totals).toMatchObject({ pause: 2, switchOn: 3, archive: 1, requests: 6 })
   })
   it('an archive is for good and says so (children archived with a campaign); only campaigns are checkable', () => {
     const d = draft({ items: [{ kind: 'campaign', id: '120000000000001' }, { kind: 'adset', id: '120000000000002' }], status: 'ARCHIVED' },
       liveOf(campaign('120000000000001', 'PAUSED'), adSet('120000000000002', 'PAUSED', '120000000000009', 'ACTIVE')))
     expect(d.warnings.join(' ')).toMatch(/Archiving campaign .* is for good.*ad sets and ads are archived with it.*cannot be undone/)
-    expect(d.requests.map((r) => r.checkable)).toEqual([true, false])
+    // Children before parents: an archived campaign would archive the ad set first, and an archived item cannot be archived.
+    expect(d.requests.map((r) => r.kind)).toEqual(['adset', 'campaign'])
+    // Meta's check: none for an ad set; for a campaign only a pause until LIVE-PROBE ST17-01 (META_UPDATE_CHECK_PROVEN).
+    expect(d.requests.map((r) => r.check)).toEqual(['none', 'not-yet'])
     expect(d.requests.map((r) => r.undoable)).toEqual([false, false])
+    expect(d.requests.map((r) => r.readBackInPost)).toEqual([false, true])
   })
   it('Meta\'s rules refuse in words: deleted, archived → anything but archived, a rejected ad, an ended ad set, a sequenced ad', () => {
     expect(refusal({ items: [{ kind: 'campaign', id: '120000000000001' }], status: 'PAUSED' }, liveOf(campaign('120000000000001', 'DELETED')))).toMatch(/deleted on Meta/)
     expect(refusal({ items: [{ kind: 'campaign', id: '120000000000001' }], status: 'ACTIVE' }, liveOf(campaign('120000000000001', 'ARCHIVED')))).toMatch(/archived: Meta lets an archived item only be deleted/)
-    expect(refusal({ items: [{ kind: 'ad', id: '120000000000003' }], status: 'ACTIVE' }, liveOf(ad('120000000000003', 'PAUSED', 'ACTIVE', 'ACTIVE', { effectiveStatus: 'DISAPPROVED' })))).toMatch(/rejected in Meta's review/)
+    expect(refusal({ items: [{ kind: 'ad', id: '120000000000003' }], status: 'ACTIVE' }, liveOf(ad('120000000000003', 'PAUSED', 'ACTIVE', 'ACTIVE', { effectiveStatus: 'DISAPPROVED' })))).toMatch(/rejected in Meta's review: Meta does not switch a rejected ad on by a status change alone/)
+    // 1487007: an ad of a scheduled ad set past its end date takes no edit at all — a pause included.
+    const ofEnded = ad('120000000000003', 'ACTIVE', 'ACTIVE', 'ACTIVE')
+    ofEnded.adSet!.endTime = '2026-10-01T00:00:00+0000'
+    for (const status of ['PAUSED', 'ACTIVE', 'ARCHIVED'] as const) {
+      expect(refusal({ items: [{ kind: 'ad', id: '120000000000003' }], status: status === 'ACTIVE' ? 'PAUSED' : status }, liveOf(ofEnded))).toMatch(/ended on 2026-10-01: Meta refuses any edit of such an ad .*1487007/)
+    }
+    expect(refusal({ items: [{ kind: 'ad', id: '120000000000003' }], status: 'ACTIVE' }, liveOf({ ...ofEnded, status: 'PAUSED' }))).toMatch(/1487007/)
     expect(refusal({ items: [{ kind: 'adset', id: '120000000000002' }], status: 'ACTIVE' }, liveOf(adSet('120000000000002', 'PAUSED', '120000000000001', 'ACTIVE', { endTime: '2026-10-01T00:00:00+0000' })))).toMatch(/ended on 2026-10-01/)
     const sequenced = ad('120000000000003', 'ACTIVE', 'ACTIVE', 'ACTIVE')
     sequenced.adSet!.creativeSequence = true

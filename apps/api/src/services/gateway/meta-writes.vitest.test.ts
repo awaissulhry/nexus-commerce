@@ -25,7 +25,7 @@ import { gatewayLedger, gatewayMetaChosen, gatewayMetaStored } from '../../test-
 import { __rateTest, bucketKey, takeToken } from './rate.js'
 import { gatewayCall, GatewayRefusal } from './gateway.js'
 import { metaCall, metaWriteCall } from './meta.js'
-import { META_BATCH_KINDS_ALLOWED, metaBatchProblem, metaWriteVerdict } from './meta-calls.js'
+import { META_BATCH_KINDS_ALLOWED, META_UPDATE_CHECK_PROVEN, metaBatchProblem, metaCheckAllowed, metaWriteVerdict } from './meta-calls.js'
 import { __metaObjectLimitsTest, metaObjectState, metaObjectWait } from './meta-object-limits.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
 
@@ -33,6 +33,8 @@ const BASE = `https://graph.facebook.com/${META_DEFAULT_GRAPH_API_VERSION}`
 const CAMPAIGN = '120000000000001'
 const AD_SET = '120000000000002'
 const OTHER_BUSINESS_CAMPAIGN = '120000000000099'
+const CAMPAIGN_KIND = 'campaign' as const
+const ADSET_KIND = 'adset' as const
 
 const verdict = (input: Partial<Parameters<typeof metaWriteVerdict>[0]> & { body?: unknown }) =>
   metaWriteVerdict({ method: 'POST', url: `${BASE}/${CAMPAIGN}`, kind: 'write', ...input })
@@ -64,15 +66,24 @@ describe('the write allow-list (metaWriteVerdict)', () => {
     expect(verdict({ body: 'fields=id%2Cstatus%2Ceffective_status&status=ACTIVE' })).toMatchObject({ write: { body: 'status=ACTIVE&fields=id%2Cstatus%2Ceffective_status' } })
     expect(verdict({ body: 'status=ARCHIVED' })).toMatchObject({ write: { check: false } })
   })
-  it('Meta\'s check (validate_only) is a read: exactly ["validate_only"], never with a read-back', () => {
-    expect(verdict({ kind: 'read', body: 'status=ACTIVE&execution_options=%5B%22validate_only%22%5D' })).toMatchObject({ write: { check: true } })
-    expect(problem({ kind: 'write', body: 'status=ACTIVE&execution_options=["validate_only"]' })).toMatch(/goes as a read/)
-    expect(problem({ kind: 'read', body: 'status=ACTIVE' })).toMatch(/goes as a write/)
-    expect(problem({ kind: 'read', body: 'status=ACTIVE&execution_options=["include_recommendations"]' })).toMatch(/only execution_options/)
-    expect(problem({ kind: 'read', body: 'status=ACTIVE&execution_options=["validate_only","include_recommendations"]' })).toMatch(/only execution_options/)
-    expect(problem({ kind: 'read', body: 'status=ACTIVE&execution_options=validate_only' })).toMatch(/JSON list/)
-    expect(problem({ kind: 'read', body: 'status=ACTIVE&execution_options=["validate_only"]&fields=id' })).toMatch(/reads nothing back/)
+  it('Meta\'s check (validate_only) is a read: exactly the string ["validate_only"], never with a read-back', () => {
+    expect(verdict({ kind: 'read', body: 'status=PAUSED&execution_options=%5B%22validate_only%22%5D' })).toMatchObject({ write: { check: true, body: 'status=PAUSED&execution_options=%5B%22validate_only%22%5D' } })
+    expect(problem({ kind: 'write', body: 'status=PAUSED&execution_options=["validate_only"]' })).toMatch(/goes as a read/)
+    expect(problem({ kind: 'read', body: 'status=PAUSED' })).toMatch(/goes as a write/)
+    expect(problem({ kind: 'read', body: 'status=PAUSED&execution_options=["include_recommendations"]' })).toMatch(/only execution_options/)
+    expect(problem({ kind: 'read', body: 'status=PAUSED&execution_options=["validate_only","include_recommendations"]' })).toMatch(/only execution_options/)
+    expect(problem({ kind: 'read', body: 'status=PAUSED&execution_options=validate_only' })).toMatch(/exactly \["validate_only"\]/)
+    // Another spelling of the same list is refused: what is sent is exactly the string judged.
+    expect(problem({ kind: 'read', body: 'status=PAUSED&execution_options=[ "validate_only" ]' })).toMatch(/exactly/)
+    expect(problem({ kind: 'read', body: 'status=PAUSED&execution_options=["validate_only"]&fields=id' })).toMatch(/reads nothing back/)
     expect(problem({ kind: 'action', body: 'status=PAUSED' })).toMatch(/goes as a write/)
+  })
+  it('review fix A2 — until LIVE-PROBE ST17-01, Meta\'s check only of a pause; after it (the flag flipped), of every status', () => {
+    expect(META_UPDATE_CHECK_PROVEN).toBe(false)
+    expect(['PAUSED', 'ACTIVE', 'ARCHIVED', 'DELETED'].map((s) => metaCheckAllowed(s))).toEqual([true, false, false, false])
+    expect(['PAUSED', 'ACTIVE', 'ARCHIVED', 'DELETED'].map((s) => metaCheckAllowed(s, true))).toEqual([true, true, true, false])
+    expect(problem({ kind: 'read', body: 'status=ACTIVE&execution_options=["validate_only"]' })).toMatch(/does not use Meta's check for a change to ACTIVE yet/)
+    expect(problem({ kind: 'read', body: 'status=ARCHIVED&execution_options=["validate_only"]' })).toMatch(/to ARCHIVED yet/)
   })
   it('refuses DELETED (its own tool), any other status, any other key, and a read-back outside its fields', () => {
     expect(problem({ body: 'status=DELETED' })).toMatch(/deletes nothing/)
@@ -150,7 +161,7 @@ describe('batches (ACC-022/023/025–027): the plumbing judges each part, and no
 
 describe('a change through the gateway', () => {
   it('a status change of a stored campaign of the chosen account goes once: POST, the judged form body, the token on the URL only', async () => {
-    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status', objectId: CAMPAIGN, params: { status: 'PAUSED', fields: 'id,status,effective_status' }, check: false })
+    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status', objectId: CAMPAIGN, objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED', fields: 'id,status,effective_status' }, check: false })
     expect(res.ok).toBe(true)
     expect(h.calls).toHaveLength(1)
     const call = sent(0)
@@ -163,59 +174,81 @@ describe('a change through the gateway', () => {
     expect(gatewayLedger).toEqual([expect.objectContaining({ channel: 'META', method: 'POST', outcome: 'sent', success: true, endpoint: `graph.facebook.com/v26.0/${CAMPAIGN}` })])
     expect(JSON.stringify(gatewayLedger)).not.toContain('meta-system-user-token')
   })
-  it('writes switched off (NEXUS_META_ADS_WRITES=off): a change is gated, whatever the caller says; Meta\'s check still runs', async () => {
-    vi.stubEnv('NEXUS_META_ADS_WRITES', 'off')
-    const err = await gatewayCall({ channel: 'META', operation: 'campaign.status', kind: 'write', connectionId: 'm-1', url: `${BASE}/${CAMPAIGN}`, method: 'POST', body: 'status=ACTIVE', modeAppliedByCaller: true }).catch((e) => e)
-    expect(err).toMatchObject({ outcome: 'gated', code: 'PUBLISH_GATED' })
+  it('writes switched off (off, false, 0, no — any case): a change AND Meta\'s check are gated, whatever the caller says', async () => {
+    for (const brake of ['off', 'FALSE', '0', 'No']) {
+      vi.stubEnv('NEXUS_META_ADS_WRITES', brake)
+      const err = await gatewayCall({ channel: 'META', operation: 'campaign.status', kind: 'write', connectionId: 'm-1', url: `${BASE}/${CAMPAIGN}`, method: 'POST', body: 'status=ACTIVE', modeAppliedByCaller: true, metaObjectKind: 'campaign' }).catch((e) => e)
+      expect(err, brake).toMatchObject({ outcome: 'gated', code: 'PUBLISH_GATED' })
+      const check = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status.check', objectId: CAMPAIGN, objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: true }).catch((e) => e)
+      expect(check, brake).toMatchObject({ outcome: 'gated', code: 'PUBLISH_GATED', message: expect.stringMatching(/not asked to check one either/) })
+    }
+    expect(h.calls).toHaveLength(0)
+    vi.stubEnv('NEXUS_META_ADS_WRITES', 'on')
     h.answers.push(json({ success: true }))
-    const check = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status.check', objectId: CAMPAIGN, params: { status: 'ACTIVE' }, check: true })
+    const check = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status.check', objectId: CAMPAIGN, objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: true })
     expect(check.ok).toBe(true)
-    expect(h.calls).toHaveLength(1)
-    expect(sent(0).body).toBe('status=ACTIVE&execution_options=%5B%22validate_only%22%5D')
+    expect(sent(0).body).toBe('status=PAUSED&execution_options=%5B%22validate_only%22%5D')
   })
   it('Meta has a check only for campaigns: an ad set\'s check is refused, nothing sent', async () => {
-    const err = await metaWriteCall({ connectionId: 'm-1', operation: 'adset.status.check', objectId: AD_SET, params: { status: 'ACTIVE' }, check: true }).catch((e) => e)
+    const err = await metaWriteCall({ connectionId: 'm-1', operation: 'adset.status.check', objectId: AD_SET, objectKind: ADSET_KIND, params: { status: 'PAUSED' }, check: true }).catch((e) => e)
     expect(err).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/only for campaign changes/) })
     expect(h.calls).toHaveLength(0)
   })
+  it('review fix B4 — the KIND is confirmed: none named, a stored row of another kind, a creative id: refused, no change sent', async () => {
+    const none = await gatewayCall({ channel: 'META', operation: 'x', kind: 'write', connectionId: 'm-1', url: `${BASE}/${CAMPAIGN}`, method: 'POST', body: 'status=PAUSED' }).catch((e) => e)
+    expect(none).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/names the kind of object/) })
+    const wrong = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: AD_SET, objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: false }).catch((e) => e)
+    expect(wrong).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/not a campaign Nexus can confirm \(Nexus has it as a ad set\)/) })
+    expect(h.calls).toHaveLength(0)
+    // A creative of the chosen account, named an ad: Meta has no adset_id on a creative, so the one read refuses it.
+    h.answers.push(json({ error: { code: 100, message: 'Tried accessing nonexisting field (adset_id) on node type (AdCreative)' } }, 400))
+    const creative = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000077', objectKind: 'ad', params: { status: 'PAUSED' }, check: false }).catch((e) => e)
+    expect(creative).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/not a ad Nexus can confirm.*nonexisting field/) })
+    expect(sent(0).url.searchParams.get('fields')).toBe('account_id,adset_id')
+    // Meta answers the account but not the kind's own field: not confirmed as that kind either.
+    h.answers.push(json({ id: '120000000000078', account_id: '1234567890' }))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000078', objectKind: ADSET_KIND, params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
+    expect(sent(1).url.searchParams.get('fields')).toBe('account_id,optimization_goal')
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
+  })
   it('an object stored for another account of this business, or no ad account chosen: refused, nothing sent', async () => {
     gatewayMetaStored[CAMPAIGN] = { adAccountId: '1234567891', kind: 'campaign' }
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
     gatewayMetaChosen['m-2'] = null
-    expect(await metaWriteCall({ connectionId: 'm-2', operation: 'x', objectId: AD_SET, params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/no Meta ad account chosen/) })
+    expect(await metaWriteCall({ connectionId: 'm-2', operation: 'x', objectId: AD_SET, objectKind: ADSET_KIND, params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/no Meta ad account chosen/) })
     expect(h.calls).toHaveLength(0)
   })
   it('a FORGED id of another business\'s ad account: ONE live read of its account_id, then refused — no change sent, the other account never named', async () => {
     // Not in this business's rows (row-level security hides the other business's); the shared system user can still see it.
     h.answers.push(json({ account_id: '5555555555', id: OTHER_BUSINESS_CAMPAIGN }))
-    const err = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status', objectId: OTHER_BUSINESS_CAMPAIGN, params: { status: 'ACTIVE' }, check: false }).catch((e) => e)
+    const err = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status', objectId: OTHER_BUSINESS_CAMPAIGN, objectKind: CAMPAIGN_KIND, params: { status: 'ACTIVE' }, check: false }).catch((e) => e)
     expect(err).toBeInstanceOf(GatewayRefusal)
     expect(err).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', outcome: 'refused' })
     expect(err.message).not.toContain('5555555555')
     expect(h.calls).toHaveLength(1)
     expect(sent(0).method).toBe('GET')
     expect(sent(0).url.pathname).toBe(`/v26.0/${OTHER_BUSINESS_CAMPAIGN}`)
-    expect(sent(0).url.searchParams.get('fields')).toBe('account_id')
+    expect(sent(0).url.searchParams.get('fields')).toBe('account_id,objective')
     expect(gatewayLedger.map((r) => [r.operation, r.outcome, r.errorCode ?? null])).toEqual([['write.ownerCheck', 'sent', null], ['campaign.status', 'refused', 'META_ACCOUNT_NOT_CHOSEN']])
   })
   it('a campaign made since the last daily read: the live read places it in the chosen account, then the change goes', async () => {
-    h.answers.push(json({ account_id: '1234567890', id: '120000000000005' }), json({ id: '120000000000005', status: 'PAUSED' }))
-    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status', objectId: '120000000000005', params: { status: 'PAUSED' }, check: false })
+    h.answers.push(json({ account_id: '1234567890', id: '120000000000005', objective: 'OUTCOME_SALES' }), json({ id: '120000000000005', status: 'PAUSED' }))
+    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'campaign.status', objectId: '120000000000005', objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: false })
     expect(res.ok).toBe(true)
     expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'POST'])
   })
   it('a check of an object Nexus has not read asks account_id and objective: an ad set (no objective) is refused', async () => {
     h.answers.push(json({ error: { code: 100, message: 'Tried accessing nonexisting field (objective) on node type (AdSet)' } }, 400))
-    const err = await metaWriteCall({ connectionId: 'm-1', operation: 'x.check', objectId: '120000000000006', params: { status: 'ACTIVE' }, check: true }).catch((e) => e)
+    const err = await metaWriteCall({ connectionId: 'm-1', operation: 'x.check', objectId: '120000000000006', objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: true }).catch((e) => e)
     expect(err).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
     expect(sent(0).url.searchParams.get('fields')).toBe('account_id,objective')
     expect(h.calls).toHaveLength(1)
   })
   it('Meta does not place the object (an error, or no account_id): refused META_ACCOUNT_UNCONFIRMED', async () => {
     h.answers.push(json({ error: { code: 100, error_subcode: 33, message: 'Object does not exist' } }, 400))
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000007', params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED' })
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000007', objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED' })
     h.answers.push(json({ id: '120000000000008' }))
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000008', params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED' })
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000008', objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED' })
     expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
   })
   it('a change names its connection', async () => {
@@ -224,19 +257,19 @@ describe('a change through the gateway', () => {
   })
   it('a change is never retried (5xx: one call), not even when a caller calls it idempotent; Meta\'s check is, once', async () => {
     h.answers.push(json({ error: { code: 1, message: 'Unknown error' } }, 500))
-    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, params: { status: 'PAUSED' }, check: false })
+    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: false })
     expect(res.ok).toBe(false)
     expect(h.calls).toHaveLength(1)
     h.calls = []
     __metaObjectLimitsTest.useMemory()
     h.answers.push(json({ error: { code: 1, message: 'Unknown error' } }, 500), json({ id: CAMPAIGN, status: 'PAUSED' }))
-    const forced = await gatewayCall({ channel: 'META', operation: 'x', kind: 'write', connectionId: 'm-1', url: `${BASE}/${CAMPAIGN}`, method: 'POST', body: 'status=PAUSED', idempotent: true, maxTransientRetries: 3, retryBackoffMs: 1 })
+    const forced = await gatewayCall({ channel: 'META', operation: 'x', kind: 'write', connectionId: 'm-1', url: `${BASE}/${CAMPAIGN}`, method: 'POST', body: 'status=PAUSED', idempotent: true, maxTransientRetries: 3, retryBackoffMs: 1, metaObjectKind: 'campaign' })
     expect(forced.ok).toBe(false)
     expect(h.calls).toHaveLength(1)
     h.calls = []; h.answers = []
     __metaObjectLimitsTest.useMemory()
     h.answers.push(json({ error: { code: 1, message: 'Unknown error' } }, 500), json({ success: true }))
-    const check = await gatewayCall({ channel: 'META', operation: 'x.check', kind: 'read', connectionId: 'm-1', url: `${BASE}/${CAMPAIGN}`, method: 'POST', body: 'status=PAUSED&execution_options=["validate_only"]', retryBackoffMs: 1 })
+    const check = await gatewayCall({ channel: 'META', operation: 'x.check', kind: 'read', connectionId: 'm-1', url: `${BASE}/${CAMPAIGN}`, method: 'POST', body: 'status=PAUSED&execution_options=["validate_only"]', retryBackoffMs: 1, metaObjectKind: 'campaign' })
     expect(check.ok).toBe(true)
     expect(h.calls).toHaveLength(2)
   })
@@ -244,7 +277,7 @@ describe('a change through the gateway', () => {
     await metaCall({ connectionId: 'm-5', operation: 'r', path: 'act_1234567890/campaigns', query: { fields: 'id' } })
     const afterRead = await takeToken('META', bucketKey('META', 'm-5', 'ads'), 0)
     gatewayMetaChosen['m-6'] = '1234567890'
-    await metaWriteCall({ connectionId: 'm-6', operation: 'w', objectId: CAMPAIGN, params: { status: 'PAUSED' }, check: false })
+    await metaWriteCall({ connectionId: 'm-6', operation: 'w', objectId: CAMPAIGN, objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: false })
     const afterWrite = await takeToken('META', bucketKey('META', 'm-6', 'ads'), 0)
     expect(afterRead.tokensLeft - afterWrite.tokensLeft).toBeCloseTo(2, 0)
   })
@@ -252,19 +285,19 @@ describe('a change through the gateway', () => {
 
 describe('Meta\'s per-object limits hold only that object', () => {
   it('a second change of the same object within 30 s is refused RATE_LIMITED_LOCAL (nothing sent); another object goes; a check is not held', async () => {
-    await metaWriteCall({ connectionId: 'm-1', operation: 'w', objectId: CAMPAIGN, params: { status: 'PAUSED' }, check: false })
-    const err = await metaWriteCall({ connectionId: 'm-1', operation: 'w', objectId: CAMPAIGN, params: { status: 'ACTIVE' }, check: false }).catch((e) => e)
+    await metaWriteCall({ connectionId: 'm-1', operation: 'w', objectId: CAMPAIGN, objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: false })
+    const err = await metaWriteCall({ connectionId: 'm-1', operation: 'w', objectId: CAMPAIGN, objectKind: CAMPAIGN_KIND, params: { status: 'ACTIVE' }, check: false }).catch((e) => e)
     expect(err).toMatchObject({ code: 'RATE_LIMITED_LOCAL', message: expect.stringMatching(/one change of the same object every 30 s/) })
     expect(err.retryAfterMs).toBeGreaterThan(25_000)
     expect(err.retryAfterMs).toBeLessThanOrEqual(30_000)
-    await metaWriteCall({ connectionId: 'm-1', operation: 'w', objectId: AD_SET, params: { status: 'PAUSED' }, check: false })
+    await metaWriteCall({ connectionId: 'm-1', operation: 'w', objectId: AD_SET, objectKind: ADSET_KIND, params: { status: 'PAUSED' }, check: false })
     h.answers.push(json({ success: true }))
-    await metaWriteCall({ connectionId: 'm-1', operation: 'c', objectId: CAMPAIGN, params: { status: 'ACTIVE' }, check: true })
+    await metaWriteCall({ connectionId: 'm-1', operation: 'c', objectId: CAMPAIGN, objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: true })
     expect(h.calls).toHaveLength(3)
   })
   it('613/4841018 holds that object 30 s, never the account\'s bucket', async () => {
     h.answers.push(json({ error: { code: 613, error_subcode: 4841018, message: 'Calls to this api have exceeded the rate limit.' } }, 400))
-    const res = await metaWriteCall({ connectionId: 'm-7', operation: 'w', objectId: CAMPAIGN, params: { status: 'PAUSED' }, check: false })
+    const res = await metaWriteCall({ connectionId: 'm-7', operation: 'w', objectId: CAMPAIGN, objectKind: CAMPAIGN_KIND, params: { status: 'PAUSED' }, check: false })
     expect(res.ok).toBe(false)
     const state = await metaObjectState('m-7', CAMPAIGN)
     expect(state.heldUntil! - Date.now()).toBeGreaterThan(25_000)
@@ -274,7 +307,7 @@ describe('Meta\'s per-object limits hold only that object', () => {
   })
   it('613/1487632 holds only that ad set\'s BUDGET changes for an hour (Meta: "the budget change for that ad set is blocked"), never the bucket', async () => {
     h.answers.push(json({ error: { code: 613, error_subcode: 1487632, message: 'You can only change your ad set budget 4 times per hour.' } }, 400))
-    await metaWriteCall({ connectionId: 'm-8', operation: 'w', objectId: AD_SET, params: { status: 'PAUSED' }, check: false })
+    await metaWriteCall({ connectionId: 'm-8', operation: 'w', objectId: AD_SET, objectKind: ADSET_KIND, params: { status: 'PAUSED' }, check: false })
     const state = await metaObjectState('m-8', AD_SET)
     expect(state.budgetHeldUntil! - Date.now()).toBeGreaterThan(3_500_000)
     expect(metaObjectWait(state, true)?.why).toMatch(/1487632/)

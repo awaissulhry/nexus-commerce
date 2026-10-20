@@ -9,16 +9,23 @@
  *     inherited by everything below it; a child's status never changes its parent. So an archive is for good (no undo).
  *   - reference/ad-campaign-group.md — `status` on update; PAUSED gives the campaign's active children effective_status
  *     CAMPAIGN_PAUSED while their own status stays (undo of a parent's pause = set the parent back only).
- *   - reference/ad-campaign.md — an archived ad set can only be deleted; an ad set past its end_time cannot be switched on
- *     until its end time moves (error 1487007, error-reference).
+ *   - reference/ad-campaign.md — an archived ad set can only be deleted.
+ *   - error-reference.md 1487007 — "You can't edit this ad because it's part of a scheduled ad set that has reached its end
+ *     date": no status change of such an AD (review fix B2). Switching on an ad set past its own end time is refused too —
+ *     UNVERIFIED (no Meta page says so; it would not deliver anyway until its end time moves).
  *   - reference/adgroup.md — ads in an ad set with creative_sequence "cannot be changed to PAUSED, ARCHIVED, or DELETED";
- *     a rejected ad cannot be switched on again (2490427 / 2490468: "create a new ad").
- *   - facts F1 X8 — a status change sends no ad back to review.
+ *     error-reference.md 2490427 / 2490468 — a rejected ad "is currently disabled … you will need to make updates to it and
+ *     create a new ad": a status change alone does not switch it on.
+ *   - best-practices.md "Ad changes triggering ad reviews" — creative, targeting, optimization goal and billing event; Meta
+ *     does not list a status change among its ad review triggers.
  * Spending: switching anything on is the person's decision and always a spendsMoney line; the line says when a parent is
- * paused, so nothing spends yet. Pausing is a safe step. Activations go LAST, children before their campaign, so a request
- * that fails half way leaves less switched on.
+ * paused, so nothing spends yet. Pausing is a safe step. Order (review fix B5): pauses and archives first, then
+ * activations; inside each, ads before ad sets before campaigns (an archived parent archives its children, which then
+ * cannot be archived themselves; a switch-on half done leaves the campaign off). A switch-on is never sent after a request
+ * of the same change that did not happen (review fix A1, meta-ads-kit.ts).
  */
 import { changeLines, plural, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
+import { metaCheckAllowed } from '../../gateway/meta-calls.js'
 import { itemKey, KIND_WORD, type MetaParentState, type MetaStatusKind, type MetaStatusObject } from './live-status.js'
 
 export type MetaStatusValue = 'ACTIVE' | 'PAUSED' | 'ARCHIVED'
@@ -69,8 +76,13 @@ export function statusDraft(request: StatusRequest, live: { objects: Map<string,
     if (object.status === 'ARCHIVED' && to !== 'ARCHIVED') { refusals.push(`${who} is archived: Meta lets an archived item only be deleted, never paused or switched on again.`); continue }
     if (object.status === to) { skipped.push(`${who} is already ${to}.`); continue }
     if (to === 'ACTIVE') {
-      if (object.kind === 'ad' && object.effectiveStatus === 'DISAPPROVED') { refusals.push(`${who} was rejected in Meta's review: Meta never switches a rejected ad on again (it asks for a new ad).`); continue }
-      if (object.kind === 'adset' && ended(object.endTime, now)) { refusals.push(`${who} ended on ${object.endTime!.slice(0, 10)}: Meta refuses to switch it on until its end time is moved later.`); continue }
+      if (object.kind === 'ad' && object.effectiveStatus === 'DISAPPROVED') { refusals.push(`${who} was rejected in Meta's review: Meta does not switch a rejected ad on by a status change alone (it asks for a new ad; 2490427).`); continue }
+      // UNVERIFIED (see the header): an ended ad set would not deliver anyway.
+      if (object.kind === 'adset' && ended(object.endTime, now)) { refusals.push(`${who} ended on ${object.endTime!.slice(0, 10)}: switched on it would not deliver until its end time is moved later, and Meta may refuse it.`); continue }
+    }
+    if (object.kind === 'ad' && object.adSet && ended(object.adSet.endTime, now)) {
+      refusals.push(`${who} is in ${parentWords('ad set', object.adSet)}, which ended on ${object.adSet.endTime!.slice(0, 10)}: Meta refuses any edit of such an ad until the ad set's end date moves (1487007).`)
+      continue
     }
     if (to !== 'ACTIVE' && object.kind === 'ad' && object.adSet?.creativeSequence) {
       refusals.push(`${who} is in an ad set that shows its ads in a sequence: Meta refuses to pause or archive such an ad (pause the ad set instead).`)
@@ -81,11 +93,11 @@ export function statusDraft(request: StatusRequest, live: { objects: Map<string,
   if (refusals.length) return { refusal: `Nothing was asked of Meta: ${refusals.join(' ')}` }
   if (!changing.length) return { refusal: `Nothing to change: ${skipped.join(' ')}` }
 
-  // Pauses and archives first (safe), in the order asked; then activations, ads before ad sets before campaigns.
+  // Pauses and archives first (safe), then activations; inside each, ads before ad sets before campaigns (stable).
   const order = [...changing].sort((a, b) => {
     const on = (x: typeof a) => (x.to === 'ACTIVE' ? 1 : 0)
     if (on(a) !== on(b)) return on(a) - on(b)
-    return on(a) ? ORDER[a.object.kind] - ORDER[b.object.kind] : 0
+    return ORDER[a.object.kind] - ORDER[b.object.kind]
   })
   for (const { object, to } of order) {
     const who = named(object)
@@ -114,7 +126,6 @@ export function statusDraft(request: StatusRequest, live: { objects: Map<string,
         spendsMoney.push(off.length === 0
           ? `Switching on ${who}: once approved it delivers and spends (its ad set and campaign are on).`
           : `Switching on ${who}: nothing spends yet — its ${off.join(' and its ')} ${off.length > 1 ? 'are' : 'is'} not on; it spends once ${off.length > 1 ? 'they are' : 'that is'} switched on.`)
-        if (object.adSet && ended(object.adSet.endTime, now)) warnings.push(`${who}: its ${parentWords('ad set', object.adSet)} ended on ${object.adSet.endTime!.slice(0, 10)}, so the ad does not deliver until the ad set's end time moves.`)
       }
     }
   }
@@ -126,10 +137,12 @@ export function statusDraft(request: StatusRequest, live: { objects: Map<string,
     objectId: object.id,
     params: { status: to },
     // Meta documents validate_only on a campaign update only (reference/ad-campaign-group.md "Updating"); the ad set and
-    // ad update tables are missing from Meta's reference (LIVE-PROBES ST17-02).
-    checkable: object.kind === 'campaign',
+    // ad update tables are missing from Meta's reference (LIVE-PROBES ST17-02). Until ST17-01, only a pause is checked.
+    check: object.kind !== 'campaign' ? 'none' : metaCheckAllowed(to) ? 'meta' : 'not-yet',
     budget: false,
     undoable: to !== 'ARCHIVED',
+    raisesSpend: to === 'ACTIVE',
+    readBackInPost: object.kind === 'campaign',
   }))
   const { changes, more } = changeLines(order.map(({ object, to }) => [named(object), object.status, to]))
   const count = (status: MetaStatusValue) => changing.filter((c) => c.to === status).length

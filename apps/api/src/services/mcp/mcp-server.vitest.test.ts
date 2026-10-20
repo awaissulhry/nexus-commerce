@@ -139,8 +139,9 @@ const HARD_RULES = [
   'make the account spend more is marked SPENDS MONEY in the preview', 'A new campaign is always made paused',
   'enabling anything is set-google-status (SPENDS MONEY)', 'remove-google-… tools delete only what the person asked to delete',
   'New parts that point at new parts are ONE call (build-google-campaigns', 'never steps of a change plan',
-  // Meta ads step 2 (2026-10-20) — read only for now; a Meta app secret or token is a person's to enter in Settings, never Claude's.
-  'Meta is read only for now (meta-… tools); never take a Meta app secret or token in chat',
+  // Meta ads step 17 (2026-10-21) — Meta changes are the set-meta-… tools; a Meta app secret or token is a person's to enter in
+  // Settings, never Claude's.
+  'Meta changes go through set-meta-… tools; never take a Meta app secret or token in chat',
 ]
 
 /**

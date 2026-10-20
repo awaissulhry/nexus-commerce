@@ -225,8 +225,12 @@ describe('read only by construction', () => {
   })
   it('step 17 — the publish mode is live (only the write allow-list reaches it); NEXUS_META_ADS_WRITES=off is the brake', () => {
     expect(publishModeOf('META')).toBe('live')
-    vi.stubEnv('NEXUS_META_ADS_WRITES', 'off')
-    expect(publishModeOf('META')).toBe('gated')
+    for (const brake of ['off', 'OFF', 'false', '0', 'no', ' No ']) {
+      vi.stubEnv('NEXUS_META_ADS_WRITES', brake)
+      expect(publishModeOf('META'), brake).toBe('gated')
+    }
+    vi.stubEnv('NEXUS_META_ADS_WRITES', 'on')
+    expect(publishModeOf('META')).toBe('live')
   })
 })
 

@@ -70,9 +70,14 @@ describe('the tool', () => {
     expect(tool.description).toMatch(/SPENDS MONEY/)
     expect(MATERIAL_PREVIEW_FIELDS['set-meta-status']).toEqual(['basis', 'plan', 'reach'])
     expect(tool.consequencesFor!({ items: [{ kind: 'campaign', id: '1' }], status: 'PAUSED' })).toEqual({ reversibility: 'full' })
-    expect(tool.consequencesFor!({ items: [{ kind: 'campaign', id: '1', status: 'ARCHIVED' }] })).toBeNull()
+    expect(tool.consequencesFor!({ items: [{ kind: 'campaign', id: '1', status: 'ARCHIVED' }] })).toEqual({ reversibility: 'none' })
+    expect(tool.consequencesFor!({ items: [{ kind: 'campaign', id: '1', status: 'ARCHIVED' }, { kind: 'ad', id: '2', status: 'PAUSED' }] })).toBeNull()
     expect(() => tool.input.parse({ items: [{ kind: 'campaign', id: '1' }], status: 'DELETED' })).toThrow()
-    expect(() => tool.input.parse({ items: Array.from({ length: 21 }, (_, i) => ({ kind: 'ad', id: String(i + 1) })), status: 'PAUSED' })).toThrow()
+    // Review fix A4 — at most 8 items (Meta's Limited access tier), said in the description.
+    expect(() => tool.input.parse({ items: Array.from({ length: 8 }, (_, i) => ({ kind: 'ad', id: String(i + 1) })), status: 'PAUSED' })).not.toThrow()
+    expect(() => tool.input.parse({ items: Array.from({ length: 9 }, (_, i) => ({ kind: 'ad', id: String(i + 1) })), status: 'PAUSED' })).toThrow()
+    expect(tool.description).toMatch(/At most 8 items .*about 3 reads and a change/)
+    expect(tool.description).toMatch(/Meta does not list a status change among its ad review triggers/)
   })
 })
 
@@ -81,7 +86,7 @@ describe('the preview', () => {
     const out = await preview({ items: [{ kind: 'campaign', id: CAMPAIGN.id }], status: 'PAUSED' })
     expect(out.ok).toBe(true)
     expect(h.check).toHaveBeenCalledTimes(1)
-    expect(h.check).toHaveBeenCalledWith({ connectionId: 'm-1', adAccountId: '1234567890' }, { objectId: CAMPAIGN.id, params: { status: 'PAUSED' }, operation: 'campaign.status' })
+    expect(h.check).toHaveBeenCalledWith({ connectionId: 'm-1', adAccountId: '1234567890' }, { objectId: CAMPAIGN.id, kind: 'campaign', params: { status: 'PAUSED' }, operation: 'campaign.status' })
     expect(out.preview).toMatchObject({ spendsMoney: false, metaCheck: { checked: 'all' }, requests: [{ step: 1, label: 'Pause campaign "Campaign A" (120000000000001)', metaCheck: 'accepted' }], reach: { mode: 'live', accountId: 'm-1', adAccountId: '1234567890' } })
     expect(out.preview.warnings.join(' ')).toMatch(/Its undo changes the same objects again: Meta takes that only 30 s after this change/)
     expect(out.preview.basis).toMatch(/\w+/)
@@ -100,10 +105,20 @@ describe('the preview', () => {
     const both = await preview({ items: [{ kind: 'campaign', id: CAMPAIGN.id, status: 'PAUSED' }, { kind: 'adset', id: AD_SET.id, status: 'ACTIVE' }] })
     expect(both.preview.metaCheck.checked).toBe('some')
     h.check.mockImplementationOnce(async () => { throw new MetaWriteError(localFailure('Meta refused it (100): Invalid parameter. Nothing was changed.', 'X'), 'c', 'refused') })
-    const refused = await preview({ items: [{ kind: 'campaign', id: CAMPAIGN.id }], status: 'ARCHIVED' })
-    expect(refused).toEqual({ ok: false, error: expect.stringMatching(/^Meta would refuse step 1 \(Archive campaign "Campaign A".*Invalid parameter.*Nothing was queued\.$/) })
+    const refused = await preview({ items: [{ kind: 'campaign', id: CAMPAIGN.id }], status: 'PAUSED' })
+    expect(refused).toEqual({ ok: false, error: expect.stringMatching(/^Meta would refuse step 1 \(Pause campaign "Campaign A".*Invalid parameter.*Nothing was queued\.$/) })
     h.check.mockImplementationOnce(async () => { throw new MetaWriteError(localFailure('Meta did not answer.', 'X'), 'c', 'not_sent') })
-    expect(await preview({ items: [{ kind: 'campaign', id: '120000000000001' }], status: 'ARCHIVED' })).toEqual({ ok: false, error: expect.stringMatching(/^Not queued: Meta could not check step 1/) })
+    expect(await preview({ items: [{ kind: 'campaign', id: '120000000000001' }], status: 'PAUSED' })).toEqual({ ok: false, error: expect.stringMatching(/^Not queued: Meta could not check step 1/) })
+  })
+  it('review fix A2 — until LIVE-PROBE ST17-01 Meta checks only a pause: a campaign archived or switched on is previewed without it, and says so', async () => {
+    const archive = await preview({ items: [{ kind: 'campaign', id: CAMPAIGN.id }], status: 'ARCHIVED' })
+    expect(h.check).not.toHaveBeenCalled()
+    expect(archive.preview.requests[0].metaCheck).toBe('not-used-yet')
+    expect(archive.preview.metaCheck).toEqual({ checked: 'none', sentence: expect.stringMatching(/Meta's check is not used for this change yet for 1 request: Nexus asks it only of a pause/) })
+    h.live.set(`campaign:${CAMPAIGN.id}`, { ...CAMPAIGN, status: 'PAUSED' })
+    const on = await preview({ items: [{ kind: 'campaign', id: CAMPAIGN.id }], status: 'ACTIVE' })
+    expect(h.check).not.toHaveBeenCalled()
+    expect(on.preview.requests[0].metaCheck).toBe('not-used-yet')
   })
   it('the re-check reads the live state again without asking Meta to check twice: same basis and plan', async () => {
     const first = await preview({ items: [{ kind: 'campaign', id: CAMPAIGN.id }], status: 'PAUSED' })
@@ -118,6 +133,10 @@ describe('the preview', () => {
     const off = await preview({ items: [{ kind: 'campaign', id: CAMPAIGN.id }], status: 'PAUSED' })
     expect(off.preview.reach.mode).toBe('off')
     expect(off.preview.warnings.join(' ')).toMatch(/NEXUS_META_ADS_WRITES=off/)
+    // Review fix A2: no check is sent with Meta changes switched off.
+    expect(h.check).not.toHaveBeenCalled()
+    expect(off.preview.metaCheck.sentence).toMatch(/switched off in Nexus .*Meta was not asked to check it/)
+    expect(off.preview.requests[0].metaCheck).toBe('writes-off')
     h.account = { refusal: 'No Meta ad account is chosen for this business yet.' }
     expect(await preview({ items: [{ kind: 'campaign', id: CAMPAIGN.id }], status: 'PAUSED' })).toEqual({ ok: false, error: 'No Meta ad account is chosen for this business yet.' })
   })
@@ -140,7 +159,7 @@ describe('the run', () => {
     const p = (await preview(args)).preview
     h.send.mockImplementationOnce(done('PAUSED')).mockImplementationOnce(done('ACTIVE'))
     const ran = await tool.execute!(ask(args), approved(p)) as ToolResult & { data: Record<string, any> }
-    expect(h.send.mock.calls.map((c) => [c[1].objectId, c[1].params.status])).toEqual([[CAMPAIGN.id, 'PAUSED'], [AD_SET.id, 'ACTIVE']])
+    expect(h.send.mock.calls.map((c) => [c[1].objectId, c[1].kind, c[1].params.status, c[1].readBackInPost])).toEqual([[CAMPAIGN.id, 'campaign', 'PAUSED', true], [AD_SET.id, 'adset', 'ACTIVE', false]])
     expect(ran.data).toMatchObject({ done: 2, of: 2, sentence: 'Meta made all 2 requests.', steps: [{ step: 1, outcome: 'done' }, { step: 2, outcome: 'done' }], changeSetId: 'ap-1' })
     expect(ran.change).toEqual({
       before: { items: [{ kind: 'campaign', id: CAMPAIGN.id, name: 'Campaign A', status: 'ACTIVE' }, { kind: 'adset', id: AD_SET.id, name: 'Ad set B', status: 'PAUSED' }], accountId: 'm-1', adAccountId: '1234567890' },
@@ -158,14 +177,45 @@ describe('the run', () => {
     expect(await tool.execute!(ask(args), approved(p))).toEqual({ ok: false, error: expect.stringMatching(/approved for Meta .* nowhere \(writes off\)/) })
     expect(h.send).not.toHaveBeenCalled()
   })
-  it('NOT atomic: Meta refusing step 1 does not stop step 2; the record holds only what Meta made', async () => {
+  it('review fix A1 — a switch-on is never sent after a step that did not happen (its "nothing spends yet" may rest on it)', async () => {
     const p = (await preview(args)).preview
-    h.send.mockImplementationOnce(async () => { throw new MetaWriteError(localFailure('Meta refused it (100): x. Nothing was changed.', 'X'), 'w', 'refused') }).mockImplementationOnce(done('ACTIVE'))
-    const ran = await tool.execute!(ask(args), approved(p)) as ToolResult & { data: Record<string, any> }
+    // Step 1 (pausing the campaign) is refused: the ad set's switch-on said "its campaign is on" — but it is not sent at all.
+    h.send.mockImplementationOnce(async () => { throw new MetaWriteError(localFailure('Meta refused it (100): x. Nothing was changed.', 'X'), 'w', 'refused') })
+    const ran = await tool.execute!(ask(args), approved(p))
+    expect(ran).toEqual({ ok: false, error: expect.stringMatching(/^Not run: Meta changed nothing\. 1\. Pause campaign .*refused.* 2\. Switch on ad set .*not sent — step 1 did not happen/) })
+    expect(h.send).toHaveBeenCalledTimes(1)
+  })
+  it('NOT atomic: Meta refusing step 1 does not stop a later pause or archive; the record holds only what Meta made', async () => {
+    const twoStops = { items: [{ kind: 'campaign', id: CAMPAIGN.id, status: 'PAUSED' }, { kind: 'adset', id: AD_SET.id, status: 'ARCHIVED' }] }
+    const p = (await preview(twoStops)).preview
+    // Children first: the ad set's archive is step 1, the campaign's pause step 2.
+    h.send.mockImplementationOnce(async () => { throw new MetaWriteError(localFailure('Meta refused it (100): x. Nothing was changed.', 'X'), 'w', 'refused') }).mockImplementationOnce(done('PAUSED'))
+    const ran = await tool.execute!(ask(twoStops), approved(p)) as ToolResult & { data: Record<string, any> }
     expect(ran.ok).toBe(true)
-    expect(ran.data.steps.map((s: { outcome: string }) => s.outcome)).toEqual(['refused', 'done'])
+    expect(ran.data.steps.map((s: { label: string; outcome: string }) => [s.label.split(' ')[0], s.outcome])).toEqual([['Archive', 'refused'], ['Pause', 'done']])
     expect(ran.data.sentence).toMatch(/Meta made 1 of 2 requests/)
-    expect((ran.change!.after as { items: unknown[] }).items).toEqual([{ kind: 'adset', id: AD_SET.id, status: 'ACTIVE' }])
+    expect((ran.change!.after as { items: unknown[] }).items).toEqual([{ kind: 'campaign', id: CAMPAIGN.id, status: 'PAUSED' }])
+  })
+  it('review fix A3 — any error of a request (the database too) ends in a not-sent step: what was done keeps its record and undo', async () => {
+    const twoStops = { items: [{ kind: 'campaign', id: CAMPAIGN.id, status: 'PAUSED' }, { kind: 'adset', id: AD_SET.id, status: 'ARCHIVED' }] }
+    const p = (await preview(twoStops)).preview
+    h.send.mockImplementationOnce(done('ARCHIVED')).mockImplementationOnce(async () => { throw new Error('connection to the database lost') })
+    const ran = await tool.execute!(ask(twoStops), approved(p)) as ToolResult & { data: Record<string, any> }
+    expect(ran.ok).toBe(true)
+    expect(ran.data.steps).toEqual([
+      expect.objectContaining({ step: 1, outcome: 'done' }),
+      expect.objectContaining({ step: 2, outcome: 'not_sent', sentence: expect.stringMatching(/problem of its own \(connection to the database lost\)/) }),
+    ])
+    expect(ran.change).toEqual({
+      before: { items: [{ kind: 'adset', id: AD_SET.id, name: 'Ad set B', status: 'PAUSED' }], accountId: 'm-1', adAccountId: '1234567890' },
+      after: { items: [{ kind: 'adset', id: AD_SET.id, status: 'ARCHIVED' }], accountId: 'm-1', adAccountId: '1234567890' },
+    })
+  })
+  it('Meta\'s answer was not a success but the object reads as asked: done, in words', async () => {
+    const p = (await preview({ items: [args.items[0]] })).preview
+    h.send.mockImplementationOnce(async () => ({ node: { id: CAMPAIGN.id, status: 'PAUSED' }, readBack: 'second-read', waitedMs: 0, afterError: 'Meta refused it (1): An unknown error occurred. Nothing was changed.' }))
+    const ran = await tool.execute!(ask({ items: [args.items[0]] }), approved(p)) as ToolResult & { data: Record<string, any> }
+    expect(ran.data.steps[0]).toMatchObject({ outcome: 'done', sentence: expect.stringMatching(/not a success .*read it back as PAUSED: Meta made it/) })
   })
   it('a request Meta did not confirm stops the rest (never sent again); nothing made = not run, in words', async () => {
     const p = (await preview(args)).preview

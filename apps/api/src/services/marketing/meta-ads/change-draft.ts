@@ -19,8 +19,19 @@ export interface MetaChangeRequest {
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
-  /** Meta documents a check (validate_only) for this request: a campaign update (create edges later). */
-  checkable: boolean
+  /**
+   * Meta's check (validate_only) for this request: `meta` — asked before it is queued; `none` — Meta documents none for it
+   * (ad set and ad updates); `not-yet` — Meta documents one, but Nexus does not use it for this change until a live probe
+   * shows Meta honours it (gateway meta-calls.ts META_UPDATE_CHECK_PROVEN: today only a pause is checked).
+   */
+  check: 'meta' | 'none' | 'not-yet'
+  /**
+   * It can make the account spend more (a switch-on, a raise): after any earlier request of the same change that did not
+   * happen, it is not sent (review fix A1: its "nothing spends yet" may have rested on that request).
+   */
+  raisesSpend: boolean
+  /** Ask Meta for the object back in the same POST (read-after-write is documented for a campaign update only). */
+  readBackInPost: boolean
   /** It moves an ad set's daily or lifetime budget (Meta allows 4 an hour per ad set; an undo counts too). */
   budget: boolean
   /** Its undo is a change of the same object (so it meets Meta's per-object limits too); false: it has none (an archive). */

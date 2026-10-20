@@ -71,6 +71,8 @@ export interface MetaWriteRequest {
   operation: string
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
+  /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
+  objectKind: 'campaign' | 'adset' | 'ad'
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -97,6 +99,7 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
     url: metaUrl(req.objectId),
     method: 'POST',
     body,
+    metaObjectKind: req.objectKind,
     maxTransientRetries: req.check ? 1 : 0,
     max429Retries: 0,
     maxRateWaitMs: req.maxRateWaitMs,

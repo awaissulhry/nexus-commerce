@@ -391,6 +391,20 @@ export const META_READ_BACK_FIELDS: ReadonlySet<string> = new Set(['id', 'status
 export const META_VALIDATE_ONLY = '["validate_only"]'
 
 /**
+ * Review fix A2 (2026-10-21) — Meta documents validate_only on a campaign UPDATE (reference/ad-campaign-group.md
+ * "Updating"), but Nexus has not seen it honoured live yet. Until LIVE-PROBE ST17-01 shows Meta checks an update and
+ * changes nothing, Nexus asks Meta's check ONLY of a change to PAUSED: had Meta wrongly applied it, a pause is harmless
+ * and undoable. A change to ACTIVE or ARCHIVED is then previewed without Meta's check ("Meta's check is not used for this
+ * change yet"). THE LEADER FLIPS THIS TO true after ST17-01 (meta-writes.vitest.test.ts tests both states).
+ */
+export const META_UPDATE_CHECK_PROVEN = false
+
+/** May Nexus ask Meta's check (validate_only) of a status change to `status`? (Both states: see META_UPDATE_CHECK_PROVEN.) */
+export function metaCheckAllowed(status: string, proven: boolean = META_UPDATE_CHECK_PROVEN): boolean {
+  return proven ? (META_WRITE_STATUSES as readonly string[]).includes(status) : status === 'PAUSED'
+}
+
+/**
  * One kind of Meta change Nexus sends: the method, the path's shape, the body keys it must and may carry and a judge of
  * their values. `budget`: it moves an ad set's daily or lifetime budget (Meta's 4-an-hour limit, meta-object-limits.ts).
  * Each later step adds only the rules its own tools send, with tests (meta.vitest.test.ts).
@@ -415,11 +429,9 @@ const fieldsValueProblem = (value: string): string | null => {
   return null
 }
 
-const executionProblem = (value: string): string | null => {
-  let parsed: unknown
-  try { parsed = JSON.parse(value) } catch { return 'execution_options is a JSON list' }
-  return Array.isArray(parsed) && parsed.length === 1 && parsed[0] === 'validate_only' ? null : 'the only execution_options Nexus sends is ["validate_only"] (Meta\'s check, which changes nothing)'
-}
+// Review fix A5 — exactly the string judged is the string sent: no other spelling of the same list.
+const executionProblem = (value: string): string | null =>
+  value === META_VALIDATE_ONLY ? null : `the only execution_options Nexus sends is exactly ${META_VALIDATE_ONLY} (Meta's check, which changes nothing)`
 
 /** Step 17 — the write allow-list. */
 const META_WRITE_RULES: readonly MetaWriteRule[] = [
@@ -439,6 +451,7 @@ const META_WRITE_RULES: readonly MetaWriteRule[] = [
         const problem = executionProblem(params.get('execution_options')!)
         if (problem) return problem
         if (params.has('fields')) return 'Meta\'s check (validate_only) changes nothing, so it reads nothing back (no fields)'
+        if (!metaCheckAllowed(status)) return `Nexus does not use Meta's check for a change to ${status} yet (only for a pause, until a live probe shows Meta honours validate_only on updates)`
       }
       if (params.has('fields')) return fieldsValueProblem(params.get('fields')!)
       return null

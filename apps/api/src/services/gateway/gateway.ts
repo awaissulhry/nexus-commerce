@@ -123,6 +123,12 @@ export interface GatewayRequest {
   /** The caller's own deadline or cancel signal; combined with the gateway's timeout. */
   signal?: AbortSignal | null
   ledger?: { productId?: string | null; listingId?: string | null; orderId?: string | null; triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook' }
+  /**
+   * Meta step 17 (review fix B4): a change of an object by id names the KIND of object it changes. The gateway does not
+   * trust it: it confirms it (the business's stored row, or a field only that kind has in its one live read) and refuses
+   * the change otherwise, so the write allow-list is literally a campaign, an ad set or an ad — never a creative or a Page.
+   */
+  metaObjectKind?: 'campaign' | 'adset' | 'ad'
 }
 
 export interface GatewayResponse {
@@ -338,6 +344,10 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       return refuse('refused', judged.batch ? 'META_BATCH_NOT_ALLOWED' : 'META_WRITE_NOT_ALLOWED', `Nothing was sent to Meta: ${judged.problem} (${req.method} ${safePath(req.url)}).`, 403)
     }
     if (!req.connectionId) return refuse('refused', 'ACCOUNT_REQUIRED', 'Nothing was sent to Meta: a change names the Meta connection it is for.', 400)
+    // Review fix A2 — Meta's check is a POST Meta must honour: with Meta changes switched off, none is sent either.
+    if (judged.write.check && publishModeOf('META') !== 'live') {
+      return refuse('gated', 'PUBLISH_GATED', 'Nothing was sent to Meta: Meta changes are switched off in Nexus (NEXUS_META_ADS_WRITES), so Meta is not asked to check one either.', 503)
+    }
     metaWrite = judged.write
   } else if (req.channel === 'META') {
     // One verdict on one canonical parse (meta-calls.ts): the refusal, and for the renewal the client_id it names.
@@ -380,7 +390,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // only). Then Meta's per-object limits: a change waits 30 s after the last one of the same object, and an ad set's
   // budget changes wait out Meta's hour (meta-object-limits.ts).
   if (metaWrite && req.connectionId) {
-    const owner = await metaOwnerProblem(req.connectionId, metaWrite)
+    const owner = await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
     if (!metaWrite.check) {
       const wait = metaObjectWait(await metaObjectState(req.connectionId, metaWrite.objectId), metaWrite.budget)
@@ -616,39 +626,53 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
 const sleepMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * Step 17 — why a Meta change (or Meta's check of one) of this object is refused for this connection, or null: the object
- * must be of the ad account the business chose through it. From the business's own stored rows (row-level security), else
- * ONE live read through this gateway (`GET /<id>?fields=account_id`, plus `objective` for a check: only a campaign has
- * it). An object Nexus cannot place, or of any other account (another business's too), gets nothing sent; the sentence
- * never names the other account.
+ * A field only that kind of object has (checked 2026-10-21 on the field tables of reference/ad-campaign-group.md,
+ * ad-campaign.md and adgroup.md): `objective` only a campaign, `optimization_goal` only an ad set, `adset_id` only an ad. A
+ * live read asking it of another kind (a creative, a Page, an ad account) is answered with an error, never the field.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite): Promise<{ code: string; sentence: string } | null> {
+const META_KIND_FIELD: Readonly<Record<'campaign' | 'adset' | 'ad', string>> = { campaign: 'objective', adset: 'optimization_goal', ad: 'adset_id' }
+const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad', string>> = { campaign: 'campaign', adset: 'ad set', ad: 'ad' }
+
+/**
+ * Step 17 — why a Meta change (or Meta's check of one) of this object is refused for this connection, or null: the object
+ * must be of the ad account the business chose through it, AND of the kind the change names (review fix B4: the
+ * allow-list is a campaign, an ad set or an ad — nothing else Meta numbers the same way). From the business's own stored
+ * rows (row-level security), else ONE live read through this gateway (`GET /<id>?fields=account_id,<a field only that
+ * kind has>`). Meta's check only for a campaign (Meta documents validate_only on campaign updates only). An object Nexus
+ * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
+ * names the other account.
+ */
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | undefined): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
+  if (!kind || !Object.prototype.hasOwnProperty.call(META_KIND_FIELD, kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of ${id} names the kind of object it changes (a campaign, an ad set or an ad).` }
+  if (write.check && kind !== 'campaign') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has a check (validate_only) only for campaign changes, and ${id} is named a ${META_KIND_WORD[kind]}.` }
   const chosen = await metaChosenAdAccountOf(connectionId)
   if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus changes nothing on Meta.' }
   const notChosen = { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: object ${id} is not of the Meta ad account this business chose through this connection.` }
-  const notCampaign = (detail = '') => ({ code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has a check (validate_only) only for campaign changes, and ${id} is not a campaign Nexus can confirm${detail}.` })
+  const notKind = (detail = '') => ({ code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${id} is not a ${META_KIND_WORD[kind]} Nexus can confirm${detail}; a Nexus change writes only a campaign, an ad set or an ad of its own kind.` })
   const stored = await metaStoredObject(id)
   if (stored) {
     if (stored.adAccountId !== chosen) return notChosen
-    return write.check && stored.kind !== 'campaign' ? notCampaign() : null
+    return stored.kind !== kind ? notKind(` (Nexus has it as a ${META_KIND_WORD[stored.kind]})`) : null
   }
   const url = new URL(`${metaGraphBase()}/${id}`)
-  url.searchParams.set('fields', write.check ? 'account_id,objective' : 'account_id')
+  url.searchParams.set('fields', `account_id,${META_KIND_FIELD[kind]}`)
   let answer: GatewayResponse
   try {
     answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
   } catch (err) {
     return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: Nexus could not confirm which ad account ${id} belongs to (${err instanceof Error ? err.message : String(err)}).` }
   }
-  const body = answer.ok ? answer.json<{ account_id?: unknown; objective?: unknown }>() : null
+  const body = answer.ok ? answer.json<Record<string, unknown>>() : null
   const account = body && (typeof body.account_id === 'string' || typeof body.account_id === 'number') ? String(body.account_id).replace(/^act_/, '') : null
   if (!account || !/^\d{1,25}$/.test(account)) {
-    if (write.check) return notCampaign(answer.verdict?.channelMessage ? ` (Meta: ${answer.verdict.channelMessage})` : '')
+    // Meta refuses the kind's own field for another kind ("nonexisting field"): not the kind named.
+    if (!answer.ok && /nonexisting field/i.test(answer.verdict?.channelMessage ?? '')) return notKind(` (Meta: ${answer.verdict!.channelMessage})`)
     return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: Nexus could not confirm which ad account ${id} belongs to${answer.verdict?.channelMessage ? ` (Meta: ${answer.verdict.channelMessage})` : ''}.` }
   }
   if (account !== chosen) return notChosen
-  if (write.check && !(typeof body?.objective === 'string' && body.objective)) return notCampaign()
+  const field = body?.[META_KIND_FIELD[kind]]
+  if (field === undefined || field === null || field === '') return notKind()
   return null
 }
 

@@ -15,6 +15,13 @@ import { liveStatusObjects } from '../../marketing/meta-ads/live-status.js'
 import { recordStatusReadBack } from '../../marketing/meta-ads/store.js'
 
 const STATUSES = ['PAUSED', 'ACTIVE', 'ARCHIVED'] as const
+/**
+ * Review fix A4 — the most items one request changes, sized for Meta's Limited access tier (rate-limiting.md: score 60 per
+ * ad account, a read 1 point, a write 3, decaying over 300 s). Each item is read at the preview, at the gate's re-check and
+ * at the run (3), changed (3), and a campaign pause is checked (3) / an ad set or ad read back (1): about 7–9 points, so 8
+ * items stay within one window.
+ */
+const MAX_ITEMS = 8
 const statusArg = z.enum(STATUSES)
 
 const statusRequest = (args: Record<string, unknown>): StatusRequest => ({ items: (args.items as StatusRequest['items']) ?? [], status: args.status as StatusRequest['status'] })
@@ -70,10 +77,13 @@ const setMetaStatus: AgentTool = {
   openWorld: true,
   // Pausing and switching on are undone in full; an archive cannot be (Meta: archived → only deleted).
   reversibility: 'partial',
+  // One request's own reach: only pauses and switch-ons → undone in full; only archives → none (review fix A5).
   consequencesFor: (args) => {
     const items = Array.isArray(args.items) ? (args.items as Array<{ status?: string }>) : []
     const statuses = items.map((i) => i.status ?? (args.status as string | undefined))
-    return statuses.length && statuses.every((s) => s === 'PAUSED' || s === 'ACTIVE') ? { reversibility: 'full' } : null
+    if (!statuses.length) return null
+    if (statuses.every((s) => s === 'PAUSED' || s === 'ACTIVE')) return { reversibility: 'full' }
+    return statuses.every((s) => s === 'ARCHIVED') ? { reversibility: 'none' } : null
   },
   maxClaudeTrust: 'ask',
   requires: [F.adsCampaignsManage],
@@ -83,20 +93,24 @@ const setMetaStatus: AgentTool = {
       kind: z.enum(['campaign', 'adset', 'ad']).describe('campaign, adset or ad'),
       id: metaIdArg('its id'),
       status: statusArg.optional().describe('its status from now: PAUSED, ACTIVE (switch on) or ARCHIVED (for good); default: the request\'s status'),
-    })).min(1).max(20).describe('what to pause, switch on or archive (at most 20: Meta\'s Limited access tier takes about 20 changes per 5 minutes)'),
+    })).min(1).max(MAX_ITEMS).describe(`what to pause, switch on or archive (at most ${MAX_ITEMS}: at Meta's Limited access tier an ad account has about 60 points per 5 minutes — a read 1, a change 3 — and each item costs about 3 reads and a change, plus Meta's check of a campaign pause and the read-back of an ad set or ad)`),
     status: statusArg.optional().describe('the status for every item that names none'),
     why: metaWhyArg,
   }),
   description:
     'Pause, switch on (ACTIVE) or archive campaigns, ad sets and ads of the business\'s chosen Meta ad account, by their '
     + 'Meta ids (meta-ads-live or meta-ads-overview shows them; the kind must be right — Meta confirms it). One request per '
-    + 'object, in order: pauses and archives first, then what is switched on, ads before ad sets before campaigns. Pausing '
+    + 'object, in order: pauses and archives first, then what is switched on, each ads before ad sets before campaigns; a '
+    + 'switch-on is never sent after a request of the same change that did not happen. At most 8 items (Meta\'s Limited access '
+    + 'tier: each item costs about 3 reads and a change). Pausing '
     + 'is a safe step (a paused campaign\'s ad sets and ads stop with it, and come back when it is switched on again). '
     + 'SWITCHING ON is the person\'s decision and always marked SPENDS MONEY — the line says when a parent is still off, so '
     + 'nothing spends yet. ARCHIVING is for good: Meta lets an archived item only be deleted afterwards, never switched on '
-    + 'again, and a campaign\'s ad sets and ads are archived with it. A deleted item, a rejected ad (switching on), an ad set '
-    + 'past its end time (switching on) and an ad in a sequenced ad set (pause, archive) are refused in Meta\'s words. No '
-    + 'status change sends an ad back to review. Deleting is not here. Undo puts back the statuses it replaced (an archive '
+    + 'again, and a campaign\'s ad sets and ads are archived with it. A deleted item, a rejected ad (switching on), an ad in '
+    + 'an ad set past its end date (any change, Meta 1487007), an ad set past its end time (switching on) and an ad in a '
+    + 'sequenced ad set (pause, archive) are refused in words. Meta does not list a status change among its ad review '
+    + 'triggers. An answer from Meta that is not a plain success is checked by reading the object back. Deleting is not '
+    + 'here. Undo puts back the statuses it replaced (an archive '
     + 'stays); Meta takes a change of the same object only 30 s after the last one, so Nexus waits that out.'
     + META_CHANGE_RULES,
   undo: statusUndo,

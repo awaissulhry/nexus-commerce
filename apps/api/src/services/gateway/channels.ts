@@ -191,11 +191,12 @@ export function googleAdsWritesMode(): PublishMode {
  * Meta ads writes (step 17, 2026-10-21, mirroring Google's pick A): `live` — every Meta change Nexus sends is on the
  * gateway's write allow-list and is one a person approved in Nexus (or the business's "Claude's changes need no approval"
  * switch ran in that person's name), and that approval is the gate. `NEXUS_META_ADS_WRITES=off` is the brake: real
- * changes are then refused before anything is sent (`gated`); Meta's check of a change (validate_only) still runs, as it
- * changes nothing.
+ * changes are then refused before anything is sent (`gated`), and so is Meta's check of one (review fix A2: a check is
+ * a POST Meta must honour; with writes off Nexus sends Meta no POST at all).
  */
 export function metaAdsWritesMode(): PublishMode {
-  return process.env.NEXUS_META_ADS_WRITES?.trim().toLowerCase() === 'off' ? 'gated' : 'live'
+  // Review fix A5: any common "no" spelling brakes (off, false, 0, no — any case).
+  return /^(off|false|0|no)$/.test(process.env.NEXUS_META_ADS_WRITES?.trim().toLowerCase() ?? '') ? 'gated' : 'live'
 }
 
 /**
