@@ -9,10 +9,11 @@ export interface MetaAdsTarget {
   adAccountId: string
 }
 
-export type MetaAdsEntityType = 'CAMPAIGN' | 'ADSET' | 'AD'
+/** ACCOUNT: the account's own daily totals (level=account; entityId = the ad account id, campaignId ''). */
+export type MetaAdsEntityType = 'ACCOUNT' | 'CAMPAIGN' | 'ADSET' | 'AD'
 
 /** The steps of a read whose state is kept in MetaAdsReadState (the campaign days stay on MetaAdAccount). */
-export type MetaAdsReadResource = 'ACCOUNT' | 'CAMPAIGNS' | 'ADSETS' | 'ADS' | 'ADSET_DAYS' | 'AD_DAYS'
+export type MetaAdsReadResource = 'ACCOUNT' | 'CAMPAIGNS' | 'ADSETS' | 'ADS' | 'ACCOUNT_DAYS' | 'ADSET_DAYS' | 'AD_DAYS'
 
 /** How a read ended (MetaAdAccount.lastSyncStatus). */
 export type MetaAdsSyncStatus = 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'AUTH_LOST' | 'THROTTLED'

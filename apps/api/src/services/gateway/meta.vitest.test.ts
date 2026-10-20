@@ -139,7 +139,8 @@ describe('read only by construction', () => {
     ['me?fields=accounts{,}', /every \{…\} in fields names a field/],
     ['me?fields=accounts{%20}', /every \{…\} in fields names a field/],
     ['me?fields=accounts.limit(5){}', /every \{…\} in fields names a field/],
-    ['me?fields=businesses{owned_pages{}}', /every \{…\} in fields names a field/],
+    ['me?fields=businesses{id,picture{}}', /every \{…\} in fields names a field/],
+    ['me?fields=businesses{owned_pages{id}}', /never expands "owned_pages"/],
     ['me?fields=accounts{id', /a \{ with no \}/],
     ['me/accounts?fields=_', /fields names no field/],
     ['me?fields=id&debug=all', /"debug" is not one a Nexus read of Meta uses/],
@@ -154,12 +155,29 @@ describe('read only by construction', () => {
   ])('refuses %s', (path, why) => {
     expect(ok(`${BASE}/${path}`)).toMatch(why)
   })
+  it('step 2 review A1 — the reviewer\'s field-expansion probe: no other portfolio\'s accounts, people or lead answers inside fields', () => {
+    for (const q of [
+      'act_1234567890?fields=' + encodeURIComponent('business{owned_ad_accounts{id,name,amount_spent}}'),
+      'act_1234567890?fields=' + encodeURIComponent('business{client_ad_accounts{name,insights{spend}}}'),
+      'act_1234567890?fields=' + encodeURIComponent('users{id,name,tasks}'),
+      '120000000000010?fields=' + encodeURIComponent('leadgen_forms{leads{field_data}}'),
+    ]) expect(ok(`${BASE}/${q}`), q).toMatch(/never expands/)
+    // What Nexus's own reads ask still goes: the account's portfolio by id and name.
+    expect(ok(`${BASE}/act_1234567890?fields=account_id,name,business{id,name}`)).toBeNull()
+  })
   it('step 2 — the daily read and the live views add only their own keys, each where it is used', () => {
     expect(ok(`${BASE}/act_1234567890/campaigns?fields=id&effective_status=["ACTIVE"]&limit=200`)).toBeNull()
-    expect(ok(`${BASE}/act_1234567890/ads?fields=id&filtering=[]`)).toBeNull()
+    // Review B5 — a campaign's or ad set's own edge, not `filtering` on act_<id>/adsets | ads (undocumented on v26).
+    expect(ok(`${BASE}/120000000000101/adsets?fields=id&effective_status=["ACTIVE"]`)).toBeNull()
+    expect(ok(`${BASE}/120000000000201/ads?fields=id&effective_status=["ACTIVE"]`)).toBeNull()
+    expect(ok(`${BASE}/act_1234567890/ads?fields=id&filtering=[]`)).toMatch(/"filtering" is not one/)
+    // AA-002 — the portfolio's own ad accounts take search_query (documented); the client list does not.
+    expect(ok(`${BASE}/9876543210/owned_ad_accounts?fields=account_id&search_query=shop`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/client_ad_accounts?fields=account_id&search_query=shop`)).toMatch(/"search_query" is not one/)
     expect(ok(`${BASE}/act_1234567890/insights?level=adset&time_increment=1&time_range={"since":"2026-10-01","until":"2026-10-19"}&fields=spend&limit=500`)).toBeNull()
     expect(ok(`${BASE}/120000000000101/insights?time_range={"since":"2026-10-01","until":"2026-10-19"}&fields=spend`)).toBeNull()
-    expect(ok(`${BASE}/act_1234567890/async_requests?status=COMPLETED&type=ASYNC_ADGROUP`)).toBeNull()
+    // Review B6 — Meta's enums: status ERROR | EXECUTING | FINISHED | INITIALIZED, type ASYNC_ADGROUP_CREATION | BATCH_API | DRAFTS.
+    expect(ok(`${BASE}/act_1234567890/async_requests?status=FINISHED&type=ASYNC_ADGROUP_CREATION`)).toBeNull()
     // Meta ignores both since 2025-06-10 (facts F2 T1): never sent, so never allowed.
     expect(ok(`${BASE}/act_1234567890/insights?fields=spend&use_unified_attribution_setting=true`)).toMatch(/"use_unified_attribution_setting" is not one/)
     expect(ok(`${BASE}/act_1234567890/insights?fields=spend&action_report_time=mixed`)).toMatch(/"action_report_time" is not one/)

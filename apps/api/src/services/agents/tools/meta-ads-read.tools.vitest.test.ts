@@ -15,15 +15,18 @@ const h = vi.hoisted(() => ({
   rows: [] as Record<string, unknown>[],
   known: new Set<string>(),
   taken: [] as Array<{ id: string }>,
+  refuseAll: null as null | ((req: { operation: string; path: string; query?: Record<string, unknown> }) => Error | null),
 }))
 vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => h.connections) }))
-vi.mock('../../marketing/meta-ads/read-client.js', () => ({
+vi.mock('../../marketing/meta-ads/read-client.js', async () => ({
   metaReadOne: vi.fn(async (_t: unknown, req: { operation: string; path: string; query?: Record<string, unknown> }) => {
     h.calls.push(req)
     return { body: h.one?.(req) ?? {}, calls: 1 }
   }),
   metaReadAll: vi.fn(async (_t: unknown, req: { operation: string; path: string; query?: Record<string, unknown> }, onRows: (rows: Record<string, unknown>[]) => void) => {
     h.calls.push(req)
+    const refusal = h.refuseAll?.(req)
+    if (refusal) throw refusal
     onRows(h.rows)
     return { rows: h.rows.length, calls: 1, truncated: false }
   }),
@@ -64,7 +67,7 @@ const CHOSEN = {
   page: { pageId: '120000000000010' }, instagram: null, read: {},
 }
 
-beforeEach(() => { h.connections = [CHOSEN]; h.calls.length = 0; h.one = null; h.rows = []; h.known = new Set(); h.taken = [] })
+beforeEach(() => { h.connections = [CHOSEN]; h.calls.length = 0; h.one = null; h.rows = []; h.known = new Set(); h.taken = []; h.refuseAll = null })
 
 describe('the four tools are reads', () => {
   it('none changes anything; the live ones reach Meta (open world); graph-read needs the ad-spend money permission', () => {
@@ -78,9 +81,9 @@ describe('the four tools are reads', () => {
 describe('meta-ads-graph-read — the chosen ad account and its own objects only', () => {
   it('reads act_<chosen>/<edge> with the fields and parameters asked; strips paging links and tokens', async () => {
     h.one = () => ({ data: [{ id: '1', status: 'DONE' }], paging: { cursors: { after: 'c1' }, next: 'https://graph.facebook.com/v26.0/act_1234567890/async_requests?access_token=SECRET&after=c1' } })
-    const res = await run('meta-ads-graph-read', { path: 'act_1234567890/async_requests', fields: 'id,status', params: { status: 'COMPLETED' }, limit: 50 })
+    const res = await run('meta-ads-graph-read', { path: 'act_1234567890/async_requests', fields: 'id,status', params: { status: 'FINISHED' }, limit: 50 })
     expect(res.ok).toBe(true)
-    expect(h.calls).toEqual([{ operation: 'graph.read.async_requests', path: 'act_1234567890/async_requests', query: { status: 'COMPLETED', fields: 'id,status', limit: 50 } }])
+    expect(h.calls).toEqual([{ operation: 'graph.read.async_requests', path: 'act_1234567890/async_requests', query: { status: 'FINISHED', fields: 'id,status', limit: 50 } }])
     h.calls.length = 0
     // A parameter the gateway's allow-list does not carry on that path is refused in words before any call.
     expect((await run('meta-ads-graph-read', { path: 'act_1234567890/campaigns', params: { date_preset: 'last_7d' } })).error).toMatch(/does not send the parameter "date_preset"/)
@@ -100,6 +103,26 @@ describe('meta-ads-graph-read — the chosen ad account and its own objects only
       expect({ args, ok: res.ok }).toEqual({ args, ok: false })
     }
     expect(h.calls).toHaveLength(0)
+  })
+  it('review A1 — no other portfolio, ad account, person or lead form through field expansion, at any depth', async () => {
+    for (const [path, fields] of [
+      ['act_1234567890', 'business{owned_ad_accounts{id,name,amount_spent}}'],
+      ['act_1234567890', 'business{client_ad_accounts{name,insights{spend}}}'],
+      ['act_1234567890', 'users{id,name,tasks}'],
+      ['120000000000010', 'leadgen_forms{leads{field_data}}'],
+      ['act_1234567890', 'id,name,campaigns{adsets{name}}'],
+      ['act_1234567890', 'insights{spend,owner}'],
+      ['act_1234567890', 'owned_pages'],
+    ] as const) {
+      const res = await run('meta-ads-graph-read', { path, fields })
+      expect({ path, fields, ok: res.ok }).toEqual({ path, fields, ok: false })
+    }
+    expect((await run('meta-ads-graph-read', { path: '120000000000010/leadgen_forms' })).error).toMatch(/not read by meta-ads-graph-read/)
+    expect(h.calls).toHaveLength(0)
+    // What the views need still reads: the account's numbers, an ad's creative.
+    expect((await run('meta-ads-graph-read', { path: 'act_1234567890', fields: 'id,name,insights.date_preset(last_7d){spend,impressions}' })).ok).toBe(true)
+    h.known.add('120000000000301')
+    expect((await run('meta-ads-graph-read', { path: '120000000000301', fields: 'id,creative{title,body}' })).ok).toBe(true)
   })
   it('an edge that lists people needs the users permission', async () => {
     expect((await run('meta-ads-graph-read', { path: 'act_1234567890/users' })).error).toMatch(/users permission/)
@@ -151,6 +174,21 @@ describe('meta-ad-accounts', () => {
     await run('meta-ad-accounts', { list: 'pending' })
     expect(h.calls.map((c) => c.path)).toEqual(['9876543210/pending_owned_ad_accounts', '9876543210/pending_client_ad_accounts'])
   })
+  it('review B2 — a pending request is { id, ad_account }: the account is asked inside ad_account{…} and read from there', async () => {
+    h.rows = [{ id: '700000000000001', ad_account: { account_id: '1234567892', name: 'Shop C ads', currency: 'EUR', timezone_name: 'Europe/Rome', account_status: 1, business: { id: '9876543210', name: 'Portfolio' } } }]
+    const res = await run('meta-ad-accounts', { list: 'pending' })
+    expect(h.calls[0].query).toMatchObject({ fields: 'id,ad_account{account_id,name,currency,timezone_name,account_status,business{id,name}}' })
+    expect((res.data as { items: unknown[] }).items[0]).toEqual(expect.objectContaining({ adAccountId: '1234567892', name: 'Shop C ads', statusText: 'Active', requestId: '700000000000001', edge: 'pending_owned_ad_accounts' }))
+    // The owned and client lists ask the account's own fields.
+    h.calls.length = 0
+    await run('meta-ad-accounts', { list: 'client' })
+    expect(h.calls[0].query).toMatchObject({ fields: 'account_id,name,currency,timezone_name,account_status,business{id,name}' })
+  })
+  it('AA-002 — the owned list takes Meta\'s search_query; the client and pending lists have none (said so)', async () => {
+    await run('meta-ad-accounts', { list: 'owned', search: 'shop' })
+    expect(h.calls[0]).toMatchObject({ path: '9876543210/owned_ad_accounts', query: { search_query: 'shop' } })
+    expect((await run('meta-ad-accounts', { list: 'client', search: 'shop' })).error).toMatch(/search only for the portfolio's own/)
+  })
 })
 
 describe('meta-ads-live and meta-ads-overview', () => {
@@ -163,6 +201,7 @@ describe('meta-ads-live and meta-ads-overview', () => {
     expect(h.calls[0]).toMatchObject({ path: 'act_1234567890/insights', query: { level: 'adset', time_increment: 1, time_range: { since: '2026-10-19', until: '2026-10-20' } } })
   })
   it('every live view asks only what the real gateway lets through (its query-key allow-list and fields rules)', async () => {
+    h.known = new Set(['120000000000101', '120000000000201'])
     for (const args of [
       { view: 'account' }, { view: 'campaigns', numbers: 'last_7d' }, { view: 'adsets', campaignId: '120000000000101', numbers: 'today' },
       { view: 'ads', adSetId: '120000000000201' }, { view: 'insights', level: 'ad', from: '2026-10-01', to: '2026-10-19', campaignId: '120000000000101' },
@@ -173,6 +212,61 @@ describe('meta-ads-live and meta-ads-overview', () => {
     expect(h.calls.length).toBeGreaterThan(10)
     const refused = h.calls.map((c) => [c.operation, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' })]).filter(([, problem]) => problem)
     expect(refused).toEqual([])
+  })
+  it('review B5 — one campaign\'s ad sets and one ad set\'s ads through Meta\'s own edges, each checked to be the account\'s', async () => {
+    h.known = new Set(['120000000000101', '120000000000201'])
+    await run('meta-ads-live', { view: 'adsets', campaignId: '120000000000101' })
+    await run('meta-ads-live', { view: 'ads', adSetId: '120000000000201' })
+    await run('meta-ads-live', { view: 'ads', campaignId: '120000000000101' })
+    expect(h.calls.map((c) => [c.path, Object.keys(c.query ?? {}).sort().join(',')])).toEqual([
+      ['120000000000101/adsets', 'effective_status,fields,limit'], ['120000000000201/ads', 'effective_status,fields,limit'], ['120000000000101/ads', 'effective_status,fields,limit'],
+    ])
+    h.calls.length = 0
+    h.one = () => ({ account_id: '5550001112' })
+    expect((await run('meta-ads-live', { view: 'adsets', campaignId: '120000000000999' })).error).toMatch(/does not belong to the ad account/)
+    expect(h.calls.map((c) => c.operation)).toEqual(['graph.ownerCheck'])
+  })
+  it('review B1 — live insights include archived and deleted objects (an effective_status filter at each object level)', async () => {
+    await run('meta-ads-live', { view: 'insights', level: 'ad', from: '2026-10-01', to: '2026-10-19', campaignId: '120000000000101' })
+    expect(h.calls[0].query!.filtering).toEqual([
+      { field: 'ad.effective_status', operator: 'IN', value: expect.arrayContaining(['ARCHIVED', 'DELETED']) },
+      { field: 'campaign.id', operator: 'EQUAL', value: '120000000000101' },
+    ])
+    h.calls.length = 0
+    await run('meta-ads-live', { view: 'insights', level: 'account', from: '2026-10-19', to: '2026-10-19' })
+    expect(h.calls[0].query!.filtering).toBeUndefined()
+  })
+  it('review A4 — when Meta refuses the inline numbers, the list is read again without them and says so', async () => {
+    const { MetaReadError, failureOfAnswer } = await import('../../marketing/meta-ads/errors.js')
+    h.refuseAll = (req) => (String(req.query?.fields ?? '').includes('insights.date_preset')
+      ? new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'validation', channelCode: '100', channelMessage: 'Unsupported field expansion' } as never }), req.operation, 1)
+      : null)
+    h.rows = [{ id: '120000000000101', name: 'Shop A campaign', status: 'ACTIVE' }]
+    const res = await run('meta-ads-live', { view: 'campaigns', numbers: 'last_7d' })
+    expect(res).toMatchObject({ ok: true, data: { numbers: null, numbersNote: expect.stringMatching(/refused the numbers inside the list.*view insights/) } })
+    expect(h.calls.map((c) => String(c.query?.fields).includes('insights.'))).toEqual([true, false])
+    // A throttle is never retried without numbers: it ends the read.
+    h.calls.length = 0
+    h.refuseAll = (req) => new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'rate_limited', channelCode: '17', channelMessage: 'limit' } as never }), req.operation, 1)
+    expect((await run('meta-ads-live', { view: 'campaigns', numbers: 'last_7d' })).ok).toBe(false)
+    expect(h.calls).toHaveLength(1)
+  })
+  it('review A1 — a promoted Page or Instagram account another business uses is its id and the flag only', async () => {
+    h.rows = [{ id: '120000000000010', name: 'Shop A Page' }, { id: '120000000000011', name: 'Shop B Page' }]
+    h.taken = [{ id: '120000000000011' }]
+    const pages = await run('meta-ads-live', { view: 'pages' })
+    expect((pages.data as { items: unknown[] }).items).toEqual([
+      { pageId: '120000000000010', name: 'Shop A Page', chosenHere: true, takenByAnotherBusiness: false },
+      { pageId: '120000000000011', takenByAnotherBusiness: true },
+    ])
+    h.rows = [{ id: '170000000000002', username: 'shop_b' }]
+    h.taken = [{ id: '170000000000002' }]
+    const ig = await run('meta-ads-live', { view: 'instagram' })
+    expect((ig.data as { items: unknown[] }).items).toEqual([{ instagramId: '170000000000002', takenByAnotherBusiness: true }])
+    expect(JSON.stringify([pages, ig])).not.toMatch(/Shop B Page|shop_b/)
+  })
+  it('review A8 — the context view\'s share of spend is money', () => {
+    expect(tool('meta-ads-overview').restrictedFields).toMatchObject({ spendShare: 'financials.adspend.view' })
   })
   it('benchmarks: Meta has no public API for them, said plainly', async () => {
     expect(await run('meta-ads-overview', { view: 'benchmarks' })).toMatchObject({ ok: true, data: { sentence: expect.stringMatching(/no public API.*Meta's own MCP/) } })

@@ -19,9 +19,25 @@ export interface MetaFailure {
   /** The system user may not read this (permission or asset not assigned). */
   permissionDenied: boolean
   notFound: boolean
+  /**
+   * Review B4 — Meta could not answer so many days or rows at once (an insights timeout or its data limit): the read
+   * asks again for half the days, down to one day.
+   */
+  shrink?: boolean
   /** One plain sentence for a person. Never a token or a request body. */
   sentence: string
 }
+
+/**
+ * Review B4 — Meta's codes for "too much at once" on insights: the request timed out (100/1504018, 2/1504038) or asked
+ * for more data than Meta answers in one go (100/1487534, "Please reduce the amount of data you're asking for").
+ */
+export const META_SHRINK_CODES: ReadonlySet<string> = new Set(['100/1504018', '2/1504038', '100/1487534'])
+/** Review B4 — 100/3191001: Meta refuses this read for the account (no access to its insights): a permission refusal. */
+export const META_FORBIDDEN_CODES: ReadonlySet<string> = new Set(['100/3191001'])
+/** Gateway refusals that mean the token is gone (a person signs in again); a KMS or app-secret read failure is not one. */
+const SIGN_IN_CODES: ReadonlySet<string> = new Set(['ACCOUNT_NEEDS_SIGNIN'])
+const TOKEN_GONE = /needs[_ ]reauth|revoked|auth_expired|auth_revoked|expired|disconnected|no credentials/i
 
 export class MetaReadError extends Error {
   constructor(readonly failure: MetaFailure, readonly operation: string, readonly callsSpent: number = 0) {
@@ -47,6 +63,12 @@ export function failureOfAnswer(answer: Pick<GatewayResponse, 'status' | 'verdic
   const code = answer.verdict?.channelCode ?? null
   const words = cut(answer.verdict?.channelMessage)
   const base = { origin: 'meta' as const, httpStatus: answer.status, code, authLost: false, throttled: false, permissionDenied: false, notFound: false }
+  if (code && META_SHRINK_CODES.has(code)) {
+    return { ...base, shrink: true, sentence: `Meta could not answer that many days at once (${code}${words ? `: ${words}` : ''}). Nexus asks for fewer days.` }
+  }
+  if (code && META_FORBIDDEN_CODES.has(code)) {
+    return { ...base, permissionDenied: true, sentence: `Meta does not let this system user read these numbers${words ? `: ${words}` : '.'} Check that the ad account is assigned to the system user and the token carries ads_read.` }
+  }
   switch (cls) {
     case 'auth_expired':
     case 'auth_revoked':
@@ -71,8 +93,11 @@ export function failureOfThrow(err: unknown): MetaFailure | null {
   if (err instanceof GatewayRefusal) {
     const held = err.outcome === 'held'
     const throttled = err.code === 'RATE_LIMITED_LOCAL'
+    // Review A2 — only a token that is gone is "auth lost": a held call because the stored token, app secret or KMS could
+    // not be read (META_TOKEN_UNAVAILABLE, META_APP_SECRET_UNAVAILABLE, a decrypt failure) is Nexus's own problem.
+    const tokenGone = held && (SIGN_IN_CODES.has(err.code) || (err.code === 'TOKEN_UNAVAILABLE' && TOKEN_GONE.test(err.message)))
     return {
-      origin: 'gateway', httpStatus: 0, code: err.code, authLost: held && err.code !== 'META_APP_SECRET_UNAVAILABLE', throttled, permissionDenied: false, notFound: false,
+      origin: 'gateway', httpStatus: 0, code: err.code, authLost: tokenGone, throttled, permissionDenied: false, notFound: false,
       sentence: throttled ? 'Nexus is holding back Meta calls for this account for a while (Meta said it was near its limit). It reads again at the next run.' : err.message,
     }
   }

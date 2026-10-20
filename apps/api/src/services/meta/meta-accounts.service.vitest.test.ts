@@ -111,7 +111,11 @@ describe('the token as a person reads it', () => {
     expect(at({})).toMatchObject({ state: 'first_read_pending', stateText: expect.stringMatching(/not finished reading/) })
     expect(metaConnectionState({ isActive: true, authStatus: 'connected', token, adAccountLinked: true, accountName: 'Shop A', account: null, readingOn: false })).toMatchObject({ state: 'first_read_pending', stateText: expect.stringMatching(/switched off/) })
     expect(at({ lastSyncStatus: 'FAILED', lastSyncError: 'Meta was down.' })).toMatchObject({ state: 'read_failed', stateText: expect.stringMatching(/could not read “Shop A”\. Meta was down\./) })
-    expect(at({ lastSyncStatus: 'AUTH_LOST' }).state).toBe('sign_in_needed')
+    // The read that lost the token came after the last good check: a new token is needed.
+    expect(at({ lastSyncStatus: 'AUTH_LOST', lastSyncAt: new Date(Date.now() + 60_000) }).state).toBe('sign_in_needed')
+    // Review A2 — a good token check after the read that lost the token ends it (a replaced or re-checked token).
+    const goodLater = metaTokenView(health({ checkedAt: new Date().toISOString() }) as never, {})
+    expect(metaConnectionState({ isActive: true, authStatus: 'connected', token: goodLater, adAccountLinked: true, accountName: 'Shop A', account: { lastSyncAt: new Date(Date.now() - 60_000), lastSuccessAt: null, lastSyncStatus: 'AUTH_LOST', lastSyncError: 'Meta no longer accepts it.', metricsReadThrough: null } as never, readingOn: true }).state).toBe('first_read_pending')
     expect(at({ lastSyncStatus: 'FAILED', metricsReadThrough: new Date() })).toMatchObject({ state: 'read_failed', stateText: expect.stringMatching(/from an earlier read/) })
   })
   it('C1 shows the system user, the app id (never the secret) and the picks', async () => {

@@ -23,6 +23,7 @@ import {
   requestMetaRead,
   type MetaAdsAdRow,
   type MetaAdsAdSetRow,
+  type MetaAdsCoverage,
   type MetaAdsCampaignRow,
   type MetaAdsOverview,
 } from '@/lib/meta-ads/contract'
@@ -31,21 +32,21 @@ import { lastCompleteDays } from '../_shell/DateRangePicker'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../campaigns/_grid/AdsDataGrid'
 import { MetaCampaignModal } from './MetaCampaignModal'
 import {
-  STATUS_FILTER_OPTIONS, accountLine, bidStrategyLabel, budgetText, chartHasMoney, chartPoints, comparedWindow, coverageNote, creativeText,
-  dataLine, effectiveText, formatInt, formatMoney, formatPurchases, formatRate, formatRoas, formatWindow, goalLabel, metaPageState,
+  STATUS_FILTER_OPTIONS, accountLine, bidStrategyLabel, budgetText, chartEmptyText, chartHasMoney, chartPoints, comparedWindow, coverageNote, creativeText,
+  dataLine, effectiveText, formatInt, formatMoney, formatPurchases, formatRate, formatRoas, formatWindow, goalLabel, listCoverageNote, metaPageState,
   metricTiles, metricsView, objectiveLabel, provisionalDays, provisionalNote, ratiosOf, readNowNote, statusLabel, sumMetrics, toMinor, ymd,
   type Ratios, type Sums,
 } from './metaAds'
 import './meta.css'
 
-type Loaded<T> = { key: string; data: T | null; error: string | null; truncated?: boolean }
+type Loaded<T> = { key: string; data: T | null; error: string | null; truncated?: boolean; coverage?: MetaAdsCoverage | null }
 type View = 'campaigns' | 'adsets' | 'ads'
 const VIEW_TABS_ID = 'mads-views'
 
 const sortable = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? null : v)
 
 /** Loads a list for the current window when `enabled`; keeps the answer per key. */
-function useList<T>(enabled: boolean, key: string, load: () => Promise<{ items: T[]; truncated: boolean }>) {
+function useList<T>(enabled: boolean, key: string, load: () => Promise<{ items: T[]; truncated: boolean; coverage: MetaAdsCoverage }>) {
   const [state, setState] = useState<Loaded<T[]> | null>(null)
   const seq = useRef(0)
   const loadRef = useRef(load)
@@ -55,7 +56,7 @@ function useList<T>(enabled: boolean, key: string, load: () => Promise<{ items: 
     if (!enabled) return
     const mine = ++seq.current
     loadRef.current()
-      .then((page) => { if (seq.current === mine) setState({ key, data: page.items, error: null, truncated: page.truncated }) })
+      .then((page) => { if (seq.current === mine) setState({ key, data: page.items, error: null, truncated: page.truncated, coverage: page.coverage ?? null }) })
       .catch((err: unknown) => { if (seq.current === mine) setState({ key, data: null, error: err instanceof Error ? err.message : 'Nexus could not load this list.' }) })
   }, [enabled, key, attempt])
   const now = state?.key === key ? state : null
@@ -179,6 +180,7 @@ export function MetaAdsClient() {
       {page.showData && shown && (
         <>
           {page.banner && <Banner tone={page.banner.tone} title={page.banner.title}>{page.banner.text}</Banner>}
+          {page.readNote && <Banner tone={page.readNote.tone} title={page.readNote.title}>{page.readNote.text}</Banner>}
           <p className="mads-meta">
             <span>Read from Meta <AsOf at={shown.dataAsOf ?? page.connection?.read.lastReadAt ?? null} kind="event" /></span>
             {dataLine(shown, page.connection).map((part) => <span key={part}>· {part}</span>)}
@@ -206,7 +208,7 @@ export function MetaAdsClient() {
                 height={240}
               />
             ) : (
-              <p className="mads-meta">No amount spent or purchase value to draw for these days.</p>
+              <p className="mads-meta">{chartEmptyText(shown.days)}</p>
             )}
             {provisionalNote(provisionalDays(shown.days, shown.window.provisionalFrom)) && (
               <p className="mads-note">{provisionalNote(provisionalDays(shown.days, shown.window.provisionalFrom))}</p>
@@ -313,7 +315,7 @@ export function MetaAdsClient() {
 }
 
 /** A list's failure banner, its "first rows only" note, and the grid — never an empty grid after a failed load. */
-function ListView({ state, reload, what, children }: { state: Loaded<unknown[]> | null; reload: () => void; what: string; children: ReactNode }) {
+function ListView({ state, reload, what, children }: { state: Loaded<unknown[]> | null; reload: () => void; what: 'campaigns' | 'ad sets' | 'ads'; children: ReactNode }) {
   if (state?.error) {
     return (
       <Banner tone="danger" title={`The ${what} could not be loaded`} action={<Button onClick={reload}>Try again</Button>}>
@@ -321,8 +323,11 @@ function ListView({ state, reload, what, children }: { state: Loaded<unknown[]> 
       </Banner>
     )
   }
+  // Each list is read day by day on its own: its own coverage, never the overview's.
+  const gaps = state && !state.error ? listCoverageNote(what, state.coverage) : null
   return (
     <>
+      {gaps && <Banner tone="warning">{gaps}</Banner>}
       {state?.truncated && <Banner tone="warning">{`This ad account has more ${what} than this page loads at once; the list and its totals show the first ones only.`}</Banner>}
       {children}
     </>
@@ -342,7 +347,7 @@ function numberColumns<T extends WithMetrics>(currency: string | null): GridColu
     { key: 'spend', label: 'Amount spent', sortValue: (r) => sortable(m(r)?.spendCents), render: (r) => formatMoney(m(r)?.spendCents, currency), total: (vr) => formatMoney(total(vr)?.spendCents, currency) },
     { key: 'value', label: 'Purchase value', sortValue: (r) => sortable(m(r)?.purchaseValueCents), render: (r) => formatMoney(m(r)?.purchaseValueCents, currency), total: (vr) => formatMoney(total(vr)?.purchaseValueCents, currency) },
     { key: 'roas', label: 'Return on ad spend', tip: 'Purchase value ÷ amount spent.', sortValue: (r) => sortable(m(r)?.roas), render: (r) => formatRoas(m(r)?.roas), total: (vr) => formatRoas(total(vr)?.roas) },
-    { key: 'purchases', label: 'Purchases', tip: "Meta's count, with each ad set's attribution setting.", sortValue: (r) => sortable(m(r)?.purchases), render: (r) => formatPurchases(m(r)?.purchases), total: (vr) => formatPurchases(total(vr)?.purchases) },
+    { key: 'purchases', label: 'Purchases', tip: "Meta's count, with each ad set's own attribution setting.", sortValue: (r) => sortable(m(r)?.purchases), render: (r) => formatPurchases(m(r)?.purchases), total: (vr) => formatPurchases(total(vr)?.purchases) },
     { key: 'cpp', label: 'Cost per purchase', tip: 'Amount spent ÷ purchases.', sortValue: (r) => sortable(m(r)?.costPerPurchaseCents), render: (r) => formatMoney(m(r)?.costPerPurchaseCents, currency), total: (vr) => formatMoney(total(vr)?.costPerPurchaseCents, currency) },
     { key: 'clicks', label: 'Clicks', sortValue: (r) => sortable(m(r)?.clicks), render: (r) => formatInt(m(r)?.clicks), total: (vr) => formatInt(total(vr)?.clicks) },
     { key: 'impressions', label: 'Impressions', sortValue: (r) => sortable(m(r)?.impressions), render: (r) => formatInt(m(r)?.impressions), total: (vr) => formatInt(total(vr)?.impressions) },

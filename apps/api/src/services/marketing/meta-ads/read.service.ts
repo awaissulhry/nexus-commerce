@@ -179,7 +179,8 @@ const range = (from: Date | null | undefined, to: Date | null | undefined): DayW
 async function readRangeOf(ctx: MetaAdsAccountContext, grain: MetaAdsEntityType): Promise<DayWindow | null> {
   if (!ctx.adAccountId) return null
   if (grain === 'CAMPAIGN') return range(ctx.account?.metricsReadFrom, ctx.account?.metricsReadThrough)
-  const state = await prisma.metaAdsReadState.findFirst({ where: { adAccountId: ctx.adAccountId, resource: grain === 'ADSET' ? 'ADSET_DAYS' : 'AD_DAYS' }, select: { readFrom: true, readThrough: true } })
+  const resource = grain === 'ACCOUNT' ? 'ACCOUNT_DAYS' : grain === 'ADSET' ? 'ADSET_DAYS' : 'AD_DAYS'
+  const state = await prisma.metaAdsReadState.findFirst({ where: { adAccountId: ctx.adAccountId, resource }, select: { readFrom: true, readThrough: true } })
   return range(state?.readFrom, state?.readThrough)
 }
 
@@ -281,15 +282,17 @@ function accountSummary(ctx: MetaAdsAccountContext): MetaAdsAccountSummary | nul
 export async function metaAdsOverview(input: { connectionId?: string | null } & WindowInput, now: Date = new Date()): Promise<MetaAdsOverview> {
   const ctx = await metaAdsAccount(input.connectionId)
   const window = resolveWindow(input, ctx.timeZone, !!ctx.adAccountId, now)
-  const r = await readRangeOf(ctx, 'CAMPAIGN')
+  // Review B1 — the account's own days (level=account): every child included, archived and deleted ones too, and Meta's
+  // own daily reach — never a sum of campaigns, which leaves out the objects Meta drops and counts a person twice.
+  const r = await readRangeOf(ctx, 'ACCOUNT')
   const inWindow = overlap(window, r)
   const exponent = currencyExponent(ctx.currency)
   const coverage = coverageOf(window, r)
-  const sums = ctx.adAccountId && inWindow ? await sumsByDay(ctx.adAccountId, 'CAMPAIGN', inWindow) : new Map<string, { sums: Sums; reach: number | null }>()
+  const sums = ctx.adAccountId && inWindow ? await sumsByDay(ctx.adAccountId, 'ACCOUNT', inWindow) : new Map<string, { sums: Sums; reach: number | null }>()
   const length = dayCount(window)
   const before = { from: addDays(window.from, -length), to: addDays(window.from, -1) }
   const bothRead = coverage.daysRead === coverage.daysInWindow && !!r && before.from >= r.from && before.to <= r.to
-  const previous = ctx.adAccountId && bothRead ? { from: before.from, to: before.to, ...metricsOf(await sumOver(ctx.adAccountId, 'CAMPAIGN', before), exponent) } : null
+  const previous = ctx.adAccountId && bothRead ? { from: before.from, to: before.to, ...metricsOf(await sumOver(ctx.adAccountId, 'ACCOUNT', before), exponent) } : null
   const total = [...sums.values()].map((d) => d.sums).reduce(addSums, ZERO)
   return {
     connections: ctx.connections,

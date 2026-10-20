@@ -4,6 +4,8 @@
  *   BACKFILL  the first read, queued when a person saves the ad account choice
  *   DAILY     the 06:50 UTC cron (jobs/ads-meta-sync.job.ts)
  *   MANUAL    "Read now" (POST /api/meta-ads/sync): at most once an hour per account, refused in words otherwise
+ *   TOKEN     after a good token (credentials replaced, or "Check now" valid) when the last read lost the token: at once,
+ *             outside the hourly limit (review A2)
  *
  * With queue workers (ENABLE_QUEUE_WORKERS=1) the read goes on the `meta-ads-sync` queue — one job per account and day
  * (DAILY) or hour (MANUAL, BACKFILL), so a second ask while one is kept adds nothing; without them (or when the queue
@@ -29,9 +31,10 @@ const NO_ACCOUNT_SENTENCE = 'Choose a Meta ad account first, in Settings › Cha
 const NOT_THIS_ACCOUNT_SENTENCE = 'This business does not read that Meta ad account.'
 const hhmm = (at: Date) => `${at.toISOString().slice(11, 16)} UTC`
 
-/** The deterministic job id: per account and UTC day (DAILY), per account and UTC hour (MANUAL, BACKFILL). */
+/** The deterministic job id: per account and UTC day (DAILY), hour (MANUAL, BACKFILL) or minute (TOKEN). */
 export function metaAdsSyncJobId(kind: MetaAdsSyncKind, adAccountId: string, now: Date = new Date()): string {
-  const stamp = kind === 'DAILY' ? now.toISOString().slice(0, 10) : now.toISOString().slice(0, 13)
+  // TOKEN: per minute (a new token is a person's act; a second save in the same minute adds nothing).
+  const stamp = kind === 'DAILY' ? now.toISOString().slice(0, 10) : kind === 'TOKEN' ? now.toISOString().slice(0, 16) : now.toISOString().slice(0, 13)
   return safeJobId('meta-ads', kind.toLowerCase(), adAccountId, stamp)
 }
 
@@ -111,4 +114,24 @@ export async function enqueueMetaAdsSync({ adAccountId, kind }: { adAccountId?: 
     queued = true
   }
   return { queued, reason: queued ? null : reason }
+}
+
+/**
+ * Review A2 — a good token for this connection (its credentials were replaced and checked, or "Check now" found it
+ * valid): a read that ended AUTH_LOST no longer stands. Its status is cleared and a read is queued at once (TOKEN: not
+ * held to the hourly limit of "Read now"). Never throws: a person's save is never failed by it.
+ */
+export async function metaReadAfterGoodToken(connectionId: string): Promise<void> {
+  try {
+    const { default: prisma } = await import('../../../db.js')
+    const { workspaceKey } = await import('../../../lib/workspace-context.js')
+    const lost = await prisma.metaAdAccount.findMany({ where: { connectionId, lastSyncStatus: 'AUTH_LOST' }, select: { adAccountId: true } })
+    for (const { adAccountId } of lost) {
+      await prisma.metaAdAccount.update({ where: { meta_ad_account: workspaceKey({ adAccountId }) }, data: { lastSyncStatus: null, lastSyncError: null } })
+      const queued = await enqueueMetaAdsSync({ adAccountId, kind: 'TOKEN' })
+      if (!queued.queued) logger.info('[meta-ads-sync] read after a good token not queued', { reason: queued.reason })
+    }
+  } catch (error) {
+    logger.warn('[meta-ads-sync] could not clear a lost-token read', { error: error instanceof Error ? error.message : String(error) })
+  }
 }

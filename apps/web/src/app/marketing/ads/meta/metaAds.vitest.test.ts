@@ -5,8 +5,8 @@
 import { describe, expect, it } from 'vitest'
 import type { MetaAdsDay, MetaAdsOverview, MetaConnection } from '@/lib/meta-ads/contract'
 import {
-  accountLine, budgetText, chartHasMoney, chartPoints, comparedWindow, coverageNote, creativeText, dayRows, effectiveText, metaPageState,
-  metricTiles, objectiveLabel, provisionalNote, ratiosOf, readNowNote, statusLabel, sumMetrics, tokenExpiryBanner,
+  accountLine, budgetText, chartEmptyText, chartHasMoney, chartPoints, comparedWindow, coverageNote, creativeText, dayRows, effectiveText, incompleteReadNote,
+  listCoverageNote, metaPageState, metricTiles, moneyHidden, objectiveLabel, provisionalNote, ratiosOf, readNowNote, statusLabel, sumMetrics, tokenExpiryBanner,
 } from './metaAds'
 
 const DAY = 86_400_000
@@ -56,6 +56,36 @@ describe('what the page may show', () => {
     expect(tokenExpiryBanner(soon, now)).toMatchObject({ tone: 'warning', title: 'The Meta token expires on 30 Oct 2026' })
     expect(tokenExpiryBanner(connection({ token: { ...connection().token, expiresAt: new Date(now + 40 * DAY).toISOString() } }), now)).toBeNull()
   })
+  it('a PARTIAL or THROTTLED last read is a warning with its own sentence, never a plain ok', () => {
+    expect(metaPageState({ loading: false, error: null, overview: overview() })).toMatchObject({ kind: 'ok', readNote: null })
+    const partial = connection({ read: { ...connection().read, lastStatus: 'PARTIAL', lastError: 'The ad numbers could not be read.' } })
+    expect(metaPageState({ loading: false, error: null, overview: overview({ connection: partial, connections: [partial] }) })).toMatchObject({
+      kind: 'ok', showData: true, readNote: { tone: 'warning', title: 'The last read from Meta was not complete', text: expect.stringMatching(/^The ad numbers could not be read\. Some numbers below may be missing/) },
+    })
+    const throttled = connection({ read: { ...connection().read, lastStatus: 'THROTTLED', lastError: null } })
+    expect(incompleteReadNote(throttled)).toMatchObject({ title: expect.stringMatching(/slow down/), text: expect.stringMatching(/^Meta asked Nexus to slow down\./) })
+    expect(incompleteReadNote(connection())).toBeNull()
+  })
+  it('each list says its own missing days, and a list never read says so plainly', () => {
+    expect(listCoverageNote('ad sets', { daysInWindow: 3, daysRead: 3, missingDays: [] })).toBeNull()
+    expect(listCoverageNote('ads', { daysInWindow: 3, daysRead: 1, missingDays: ['2026-10-17', '2026-10-18'] })).toBe('The ads have no Meta numbers for 17 Oct – 18 Oct 2026; their numbers and totals leave those days out.')
+    expect(listCoverageNote('ad sets', { daysInWindow: 3, daysRead: 0, missingDays: ['2026-10-17', '2026-10-18', '2026-10-19'] })).toMatch(/has not read the ad sets' numbers for these days yet/)
+    expect(listCoverageNote('campaigns', null)).toBeNull()
+  })
+  it('money hidden for the role says so in the chart, never "nothing spent"; nothing spent says that', () => {
+    const hiddenDays: MetaAdsDay[] = [
+      { date: '2026-10-18', provisional: false, read: true, reach: 10, impressions: 100, clicks: 5, linkClicks: 4, purchases: 1 },
+      { date: '2026-10-19', provisional: true, read: false, reach: null, impressions: null, clicks: null, linkClicks: null, purchases: null },
+    ]
+    expect(moneyHidden(hiddenDays)).toBe(true)
+    expect(chartHasMoney(hiddenDays)).toBe(false)
+    expect(chartEmptyText(hiddenDays)).toBe('Money is hidden for your role.')
+    const nothing: MetaAdsDay[] = [{ date: '2026-10-18', provisional: false, read: true, reach: 0, impressions: 0, clicks: 0, linkClicks: 0, spendCents: 0, purchases: 0, purchaseValueCents: 0 }]
+    expect(moneyHidden(nothing)).toBe(false)
+    expect(chartEmptyText(nothing)).toBe('No amount spent or purchase value to draw for these days.')
+    // No day read at all is not "hidden" either.
+    expect(moneyHidden([hiddenDays[1]!])).toBe(false)
+  })
   it('a failed load says so; while loading nothing is claimed', () => {
     expect(metaPageState({ loading: false, error: 'The server did not answer.', overview: null })).toMatchObject({ kind: 'load_error', text: 'The server did not answer.' })
     expect(metaPageState({ loading: true, error: null, overview: null })).toMatchObject({ kind: 'loading', showData: false })
@@ -94,7 +124,9 @@ describe('numbers', () => {
   })
   it('days not read are named, and late attribution is said', () => {
     expect(coverageNote(overview({ coverage: { daysInWindow: 3, daysRead: 1, missingDays: ['2026-10-17', '2026-10-18'] } }))).toBe('No Meta numbers for 17 Oct – 18 Oct 2026; totals leave them out.')
-    expect(provisionalNote(3)).toMatch(/last 3 days can still change: Meta attributes purchases/)
+    expect(provisionalNote(3)).toMatch(/last 3 days can still change: Meta adds purchases up to each ad set's attribution window later/)
+    // Since 2025-06-10: on-Meta purchases on the impression's day, purchases in the shop on the day they happen; 28 days re-read.
+    expect(provisionalNote(1)).toMatch(/on the day of the ad's impression, purchases in the shop on the day they happen.*28 days/)
   })
   it('the account line: status, and the spending limit or none', () => {
     expect(accountLine({ currency: 'EUR', account: { adAccountId: '1', name: 'Shop A', statusText: 'Active', accountStatus: 1, disableReason: 0, amountSpentCents: 1500, spendCapCents: 50000, balanceCents: 0, settingsReadAt: null, lastReadAt: null, lastSyncStatus: null, lastSyncError: null } }))

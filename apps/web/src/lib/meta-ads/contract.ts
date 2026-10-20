@@ -179,6 +179,10 @@ export interface MetaAdsDay {
   date: string
   provisional: boolean
   read: boolean
+  /**
+   * Meta's own reach for this one day (people reached that day, deduplicated by Meta at the account level). Per day
+   * only: never summed over days — a person reached on two days is one person.
+   */
   reach: number | null
   impressions: number | null
   clicks: number | null

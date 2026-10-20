@@ -2,9 +2,11 @@
  * Meta ads M1 — the windows of the read, in the AD ACCOUNT's time zone (Meta's insight days — `date_start` of a
  * one-day row — are days in the account's `timezone_name`). The day arithmetic is the same pure code as Google's.
  *
- *   daily     the last 28 account days, ending yesterday (never today: today is still moving). Meta attributes a
- *             purchase to the day of the ad's impression up to its attribution window later (default 7-day click,
- *             1-day view), so recent days change for a week or more: 28 days re-read covers them
+ *   daily     the last 28 account days, ending yesterday (never today: today is still moving). Since 2025-06-10 Meta
+ *             reports an on-Meta action on the day of the impression and an off-Meta purchase (the shop, through the
+ *             pixel or the Conversions API) on the day it happens ("mixed"), within each ad set's attribution window
+ *             (default 7-day click, 1-day view): recent days still change for a week or more, so 28 days are re-read
+ *             and shown as provisional
  *   backfill  180 days ending yesterday, once, on the first read, in pieces of 30 days (one insights read each)
  */
 import { addDays, accountToday, accountYesterday, chunkWindow, dateToDay, dayCount, dayToDate, daysOf, type DayWindow } from '../google-ads/dates.js'

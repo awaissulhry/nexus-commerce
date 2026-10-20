@@ -87,8 +87,10 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *   - any read: fields, limit, after, before, summary;
  *   - debug_token: input_token (the token inspected);
  *   - <app>/authorized_adaccounts: business (the business portfolio asked about; meta-connection view app);
- *   - step 2, the ad account's lists act_<id>/campaigns | adsets | ads: effective_status, filtering (the daily read and
- *     meta-ads-live);
+ *   - step 2, the ad account's lists act_<id>/campaigns | adsets | ads, and a campaign's or ad set's own
+ *     <id>/adsets | ads (meta-ads-live, review B5: Meta documents these, not `filtering` on act_<id>/adsets | ads):
+ *     effective_status;
+ *   - step 2, a portfolio's <id>/owned_ad_accounts: search_query (AA-002, documented; client and pending have none);
  *   - step 2, insights (act_<id>/insights, <object>/insights): level, time_range, time_increment, filtering — never
  *     use_unified_attribution_setting or action_report_time (Meta ignores both since 2025-06-10, facts F2 T1);
  *   - step 2, act_<id>/async_requests: status, type (master ACC-028, SDK only: a refusal from Meta answers plainly;
@@ -98,7 +100,9 @@ const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
 const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string> }> = [
   { route: /^debug_token$/, keys: new Set(['input_token']) },
   { route: /^\d+\/authorized_adaccounts$/, keys: new Set(['business']) },
-  { route: /^act_\d+\/(campaigns|adsets|ads)$/, keys: new Set(['effective_status', 'filtering']) },
+  { route: /^act_\d+\/(campaigns|adsets|ads)$/, keys: new Set(['effective_status']) },
+  { route: /^\d+\/(adsets|ads)$/, keys: new Set(['effective_status']) },
+  { route: /^\d+\/owned_ad_accounts$/, keys: new Set(['search_query']) },
   { route: /^(act_)?\d+\/insights$/, keys: new Set(['level', 'time_range', 'time_increment', 'filtering']) },
   { route: /^act_\d+\/async_requests$/, keys: new Set(['status', 'type']) },
 ]
@@ -115,6 +119,16 @@ const TOKEN_NAME = /token/i
 const ACCOUNTS_FIELD = /(?<![A-Za-z0-9_])accounts(?![A-Za-z0-9_])/gi
 /** Field modifiers that may sit between a field and its own `{…}` list: `.limit(100)`, `.summary(true)`. */
 const MODIFIERS = /^(?:\s*\.\s*[A-Za-z_]+\s*\([^(){}]*\))*\s*/
+
+/**
+ * Step 2 review A1 (defence in depth under meta-ads-graph-read's own guard): names no Nexus read asks inside `fields` —
+ * other businesses' ad accounts and Pages, people, buyers' messages and lead-form answers. Nexus reads its own lists
+ * through their edge (the path), never by expanding them into another object.
+ */
+const FIELD_DENIED = new Set([
+  'owned_ad_accounts', 'client_ad_accounts', 'pending_owned_ad_accounts', 'pending_client_ad_accounts', 'owned_pages', 'client_pages',
+  'users', 'assigned_users', 'system_users', 'business_users', 'agencies', 'leadgen_forms', 'leads', 'conversations', 'messages', 'comments',
+])
 
 /** A real field name: a letter first. */
 const FIELD_NAME = /^[A-Za-z][A-Za-z0-9_]*$/
@@ -152,6 +166,8 @@ function fieldsProblem(value: string): string | null {
   if (!/^[\x20-\x7e]*$/.test(value)) return 'fields is plain ASCII letters, digits and punctuation'
   const names = value.split(/[^A-Za-z0-9_]+/).filter(Boolean)
   if (names.some((name) => TOKEN_NAME.test(name))) return 'a read never asks Meta for a token'
+  const denied = names.find((name) => FIELD_DENIED.has(name.toLowerCase()))
+  if (denied) return `a read never expands "${denied}" inside fields (another business's assets, people or messages)`
   if (!names.some((name) => FIELD_NAME.test(name))) return 'fields names no field'
   const braces = bracesProblem(value)
   if (braces) return braces

@@ -233,11 +233,17 @@ export function mergeReadRange(current: ReadRange | null, window: DayWindow): Re
   return window.to > current.to ? { from: window.from, to: window.to } : current
 }
 
-const DAYS_RESOURCE: Record<Exclude<MetaAdsEntityType, 'CAMPAIGN'>, MetaAdsReadResource> = { ADSET: 'ADSET_DAYS', AD: 'AD_DAYS' }
+const DAYS_RESOURCE: Record<Exclude<MetaAdsEntityType, 'CAMPAIGN'>, MetaAdsReadResource> = { ACCOUNT: 'ACCOUNT_DAYS', ADSET: 'ADSET_DAYS', AD: 'AD_DAYS' }
+/** Entities per delete (an IN list stays small). */
+const DELETE_CHUNK = 1000
 
 /**
- * Replace the stored days of `window` for one account and grain with `rows`, and move that grain's range of days read —
+ * Store the days of `window` for one account and grain that Meta sent (`rows`), and move that grain's range of days read —
  * in one transaction. A failure leaves the stored days and the range as they were.
+ *
+ * Review B1 — only the entities Meta sent are replaced: inside the window, an entity Meta sent has exactly the days Meta
+ * sent (a day with no row is a zero day). An entity Meta left out this time (deleted or archived beyond what Meta still
+ * reports) keeps every day already stored: a re-read never erases a day it did not get back.
  */
 export async function replaceDailyMetrics(adAccountId: string, entityType: MetaAdsEntityType, window: DayWindow, rows: MetaDailyMetricData[], pulledAt: Date): Promise<{ rows: number; range: ReadRange }> {
   const from = dayToDate(window.from)
@@ -248,8 +254,11 @@ export async function replaceDailyMetrics(adAccountId: string, entityType: MetaA
     byKey.set(`${row.entityId}|${dateToDay(row.date)}`, row)
   }
   const data = [...byKey.values()].map((row) => ({ ...row, extra: (row.extra ?? undefined) as Prisma.InputJsonValue | undefined, pulledAt }))
+  const entities = [...new Set(data.map((row) => row.entityId))]
   return prisma.$transaction(async (tx) => {
-    await tx.metaAdsDailyMetric.deleteMany({ where: { adAccountId, entityType, date: { gte: from, lte: to } } })
+    for (let i = 0; i < entities.length; i += DELETE_CHUNK) {
+      await tx.metaAdsDailyMetric.deleteMany({ where: { adAccountId, entityType, entityId: { in: entities.slice(i, i + DELETE_CHUNK) }, date: { gte: from, lte: to } } })
+    }
     for (let i = 0; i < data.length; i += CREATE_CHUNK) await tx.metaAdsDailyMetric.createMany({ data: data.slice(i, i + CREATE_CHUNK) })
     let range: ReadRange
     if (entityType === 'CAMPAIGN') {

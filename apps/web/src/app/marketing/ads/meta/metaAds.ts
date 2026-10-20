@@ -11,6 +11,8 @@
  *  - Ratios come from the sums and are "—" when the denominator is 0.
  *  - Meta's own words: amount spent, purchases, purchase value, return on ad spend — Meta's count with each ad set's
  *    attribution, never Nexus's orders; nothing that claims Nexus changes Meta.
+ *  - Reach is Meta's own per day (a person reached on two days is one person): it is never summed over days.
+ *  - Money hidden for the role says so ("Money is hidden for your role"), never "nothing spent".
  * The day and money formatting is the Google page's own (googleAds.ts): one rule for both channels.
  */
 import type { MetaAdsAdRow, MetaAdsAdSetRow, MetaAdsCampaignRow, MetaAdsDay, MetaAdsMetrics, MetaAdsOverview, MetaConnection, MetaSyncAnswer } from '@/lib/meta-ads/contract'
@@ -101,6 +103,11 @@ export interface PageView {
   banner: { tone: 'danger' | 'warning' | 'info'; title: string; text: string } | null
   /** May "Read now" be offered? (Only once an ad account is chosen and the token works.) */
   canReadNow: boolean
+  /**
+   * The last read was not complete (Meta asked Nexus to slow down, or a part failed): its sentence, as a warning above
+   * the numbers — the page never reads as plainly "ok" then. Null when the last read was complete.
+   */
+  readNote: { tone: 'warning'; title: string; text: string } | null
 }
 
 const SETTINGS_HREF = '/settings/channels/meta'
@@ -129,7 +136,7 @@ export function tokenExpiryBanner(c: MetaConnection, now: number = Date.now()): 
 
 /** What the page shows, from the overview and how loading it went. */
 export function metaPageState(input: { loading: boolean; error: string | null; overview: MetaAdsOverview | null; timeZone?: string; now?: number }): PageView {
-  const base: PageView = { kind: 'loading', connection: null, title: null, text: null, action: null, showData: false, banner: null, canReadNow: false }
+  const base: PageView = { kind: 'loading', connection: null, title: null, text: null, action: null, showData: false, banner: null, canReadNow: false, readNote: null }
   const { overview } = input
   if (!overview) {
     if (input.error) return { ...base, kind: 'load_error', title: 'Meta numbers could not be loaded', text: input.error }
@@ -171,7 +178,19 @@ export function metaPageState(input: { loading: boolean; error: string | null; o
     }
     case 'ok':
     default:
-      return { ...base, kind: 'ok', connection: c, showData: true, canReadNow: true, banner: tokenExpiryBanner(c, input.now) }
+      return { ...base, kind: 'ok', connection: c, showData: true, canReadNow: true, banner: tokenExpiryBanner(c, input.now), readNote: incompleteReadNote(c, input.timeZone) }
+  }
+}
+
+/** A PARTIAL or THROTTLED last read, in words (the read's own sentence); null when the last read was complete. */
+export function incompleteReadNote(c: MetaConnection, timeZone?: string): PageView['readNote'] {
+  const status = c.read.lastStatus
+  if (status !== 'PARTIAL' && status !== 'THROTTLED') return null
+  const why = c.read.lastError?.trim() || (status === 'THROTTLED' ? 'Meta asked Nexus to slow down.' : 'Meta did not say why.')
+  return {
+    tone: 'warning',
+    title: status === 'THROTTLED' ? 'Meta asked Nexus to slow down: the last read was not complete' : 'The last read from Meta was not complete',
+    text: `${why} Some numbers below may be missing or older; Nexus reads the rest at the next read. ${readTimes(c, timeZone)}`,
   }
 }
 
@@ -204,15 +223,31 @@ export function coverageNote(o: Pick<MetaAdsOverview, 'coverage'>): string | nul
   return `No Meta numbers for ${missingDaysText(missing)}; totals leave ${missing.length === 1 ? 'it' : 'them'} out.`
 }
 
+/**
+ * One list's own coverage (campaigns, ad sets and ads are read day by day on their own): which days of the window it
+ * has no numbers for, in words, or null when it has every day. A list with no day read says so plainly.
+ */
+export function listCoverageNote(what: 'campaigns' | 'ad sets' | 'ads', coverage: MetaAdsOverview['coverage'] | null | undefined): string | null {
+  if (!coverage || coverage.daysInWindow <= 0) return null
+  if (coverage.daysRead === 0) return `Nexus has not read the ${what}' numbers for these days yet; the list shows no amounts for them.`
+  const missing = coverage.missingDays
+  if (!missing.length) return null
+  return `The ${what} have no Meta numbers for ${missingDaysText(missing)}; their numbers and totals leave ${missing.length === 1 ? 'that day' : 'those days'} out.`
+}
+
 export function provisionalDays(days: Array<Pick<MetaAdsDay, 'date' | 'provisional' | 'read'>>, provisionalFrom: string | null): number {
   return days.filter((d) => d.read && (d.provisional || (provisionalFrom != null && d.date >= provisionalFrom))).length
 }
 
+/**
+ * Why recent days can still change, truthfully: since 2025-06-10 Meta reports purchases made on Meta on the day of the
+ * ad's impression and purchases made off Meta (the shop) on the day they happen, each ad set with its own attribution
+ * setting — so a purchase can still land on a recent day, up to the attribution window later (Nexus re-reads 28 days).
+ */
 export function provisionalNote(count: number): string | null {
   if (count <= 0) return null
-  return count === 1
-    ? 'The last day can still change: Meta attributes purchases up to its attribution window later.'
-    : `The last ${count} days can still change: Meta attributes purchases up to its attribution window later.`
+  const why = 'Meta adds purchases up to each ad set\'s attribution window later (purchases on Meta count on the day of the ad\'s impression, purchases in the shop on the day they happen), and Nexus reads the last 28 days again every day.'
+  return count === 1 ? `The last day can still change: ${why}` : `The last ${count} days can still change: ${why}`
 }
 
 // ─── Tiles ─────────────────────────────────────────────────────────────
@@ -271,6 +306,20 @@ export function chartPoints(days: MetaAdsDay[], currency: string | null): Array<
 
 export function chartHasMoney(days: MetaAdsDay[]): boolean {
   return days.some((d) => d.read && (typeof d.spendCents === 'number' || typeof d.purchaseValueCents === 'number'))
+}
+
+/**
+ * Is the money hidden for this person's role? The server leaves the money keys out of every read day for a role that
+ * may not see ad spend (while impressions and clicks are there) — that is "hidden", never "nothing spent".
+ */
+export function moneyHidden(days: MetaAdsDay[]): boolean {
+  const read = days.filter((d) => d.read)
+  return read.length > 0 && read.every((d) => !('spendCents' in d) && !('purchaseValueCents' in d))
+}
+
+/** What the chart says when it has no money line to draw: hidden for the role, or nothing spent on the days read. */
+export function chartEmptyText(days: MetaAdsDay[]): string {
+  return moneyHidden(days) ? 'Money is hidden for your role.' : 'No amount spent or purchase value to draw for these days.'
 }
 
 // ─── Words ─────────────────────────────────────────────────────────────

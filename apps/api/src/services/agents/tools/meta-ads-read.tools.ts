@@ -29,6 +29,8 @@ const ADSPEND = FIELDS.financialsAdspendView
 export const META_MONEY = {
   spendCents: ADSPEND, purchaseValueCents: ADSPEND, cpcCents: ADSPEND, cpmCents: ADSPEND, roas: ADSPEND, costPerPurchaseCents: ADSPEND,
   dailyBudgetCents: ADSPEND, lifetimeBudgetCents: ADSPEND, budgetRemainingCents: ADSPEND, spendCapCents: ADSPEND, bidAmountCents: ADSPEND,
+  // Review A8 — the context view's share of spend per objective tells the spend apart: money too.
+  spendShare: ADSPEND,
   amountSpentCents: ADSPEND, balanceCents: ADSPEND, minDailyBudgetCents: ADSPEND,
 } as const
 
@@ -62,6 +64,7 @@ const metaAdAccounts: AgentTool = {
     list: z.preprocess(lower, z.enum(['chosen', ...AD_ACCOUNT_LISTS])).default('chosen')
       .describe('chosen (what this business reads; no Meta call) | owned | client | pending (the business portfolio\'s, live)'),
     portfolioId: metaIdArg('owned / client / pending: the Meta business portfolio (an ad account\'s businessId in meta-connection view choices); default: the chosen account\'s'),
+    search: z.string().trim().min(1).max(100).optional().describe('owned only: Meta\'s search_query (a word of the name or the id); the client and pending lists have no search'),
     maxRows: z.number().int().min(1).max(500).optional().describe('at most this many accounts (default 200)'),
     connectionId: connectionArg,
   }),
@@ -82,7 +85,7 @@ const metaAdAccounts: AgentTool = {
       if (!c) return { ok: true, data: { connected: false, sentence: 'Meta is not connected for this business. A person connects it in Settings › Channels › Meta.' } }
       return { ok: true, data: { connected: true, connectionId: c.connectionId, state: c.state, stateText: c.stateText, adAccount: c.adAccount, page: c.page, instagram: c.instagram, read: c.read } }
     }
-    return guarded(() => liveAdAccounts({ connectionId, list, portfolioId: typeof args.portfolioId === 'string' ? args.portfolioId : null, maxRows: typeof args.maxRows === 'number' ? args.maxRows : undefined }))
+    return guarded(() => liveAdAccounts({ connectionId, list, portfolioId: typeof args.portfolioId === 'string' ? args.portfolioId : null, search: typeof args.search === 'string' ? args.search : null, maxRows: typeof args.maxRows === 'number' ? args.maxRows : undefined }))
   },
 }
 
@@ -148,8 +151,9 @@ const metaAdsOverviewTool: AgentTool = {
     + 'purchases). campaigns: each with status, objective, budget and its numbers; campaign-days: one campaign\'s days; '
     + 'adsets, ads: with their numbers. trend: weekly CPC, CPM, cost per purchase, ROAS, CTR and conversion rate, computed '
     + 'from the stored days. context: the account, its campaigns by objective and their share of spend. benchmarks: Meta '
-    + 'has no public API for industry or auction benchmarks — use Meta\'s own MCP or Ads Manager. Numbers today and '
-    + 'breakdowns: meta-ads-live. Read only; money in minor units (cents) of the account currency.',
+    + 'has no public API for industry or auction benchmarks — use Meta\'s own MCP or Ads Manager. Today\'s numbers: '
+    + 'meta-ads-live. The totals and days are the account\'s own (Meta\'s level=account read: every campaign, archived and '
+    + 'deleted ones included, and Meta\'s own daily reach). Read only; money in minor units (cents) of the account currency.',
   async handler(args): Promise<ToolResult> {
     const view = (args.view ?? 'overview') as OverviewView
     const window = { from: (args.from as string | undefined) ?? null, to: (args.to as string | undefined) ?? null, days: (args.days as number | undefined) ?? null }
@@ -219,9 +223,11 @@ const metaAdsLive: AgentTool = {
     'The business\'s chosen Meta ad account read LIVE from Meta now (not the daily read), to see it as it is this minute. '
     + 'view account: status and disable reason, amount spent, spending limit, balance, minimum daily budget, prepay, '
     + 'capabilities, terms accepted, failed delivery checks, inventory filter levels, opportunity score. campaigns, adsets, '
-    + 'ads: every one with status, objective, budgets, bids, schedule, targeting, creative and issues, with numbers inline '
-    + 'for a period (numbers). insights (from, to; today allowed): spend, impressions, reach, clicks, purchases and value '
-    + 'at account, campaign, ad set or ad level, by day or for the whole period, with each ad set\'s attribution setting. '
+    + 'ads: every one with status, objective, budgets, bids, schedule, targeting, creative and issues (one campaign\'s ad '
+    + 'sets or ads, or one ad set\'s ads, through Meta\'s own edges), with numbers inline for a period (numbers; when Meta '
+    + 'refuses them inline the list comes without them and says so — view insights reads them). insights (from, to; today '
+    + 'allowed): spend, impressions, reach, clicks, purchases and value at account, campaign, ad set or ad level, archived '
+    + 'and deleted ones included, by day or for the whole period, with each ad set\'s own attribution setting. '
     + 'pages: Pages promoted by the account; instagram: its Instagram accounts; minimum-budgets; ads-volume. Only the '
     + 'chosen ad account is ever read. Read only; money in minor units (cents) of the account currency.',
   async handler(args): Promise<ToolResult> {
@@ -258,7 +264,7 @@ const metaAdsGraphRead: AgentTool = {
     path: z.string().trim().min(1).max(120).describe('act_<the chosen ad account> or a Meta object id of it (campaign, ad set, ad, creative …), and at most one edge: e.g. act_1234567890/async_requests, act_1234567890/audience_funnel, 120000000000001/insights'),
     fields: z.string().trim().min(1).max(800).optional().describe('Meta\'s field list, as the Graph API takes it (e.g. id,name,status or spend,impressions)'),
     params: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,40}$/), z.union([z.string().max(500), z.number(), z.boolean()])).optional()
-      .describe('other query parameters Meta\'s reference names for that edge (e.g. date_preset, level, time_increment, effective_status); never a token'),
+      .describe('other query parameters, only those Nexus sends on that path: insights → level, time_range, time_increment, filtering; act_<id>/campaigns | adsets | ads and <campaign or ad set id>/adsets | ads → effective_status; act_<id>/async_requests → status, type; never a token'),
     limit: z.number().int().min(1).max(MAX_GRAPH_ROWS).optional().describe(`an edge: at most this many rows (default 100, at most ${MAX_GRAPH_ROWS})`),
     after: z.string().trim().min(1).max(500).optional().describe('the nextAfter of the answer before'),
     connectionId: connectionArg,
@@ -268,7 +274,9 @@ const metaAdsGraphRead: AgentTool = {
     + 'objects (a campaign, ad set, ad, creative …, or the chosen Page or Instagram account) and at most one edge, with '
     + 'the fields and parameters Meta\'s Marketing API reference names (e.g. act_<id>/async_requests, act_<id>/'
     + 'audience_funnel, <ad id>/insights). Another account, an object of another account, a batch or anything but a read '
-    + 'is refused before a call. Edges that list people need the users permission; the payment method is not read here. '
+    + 'is refused before a call. Edges that list people need the users permission; other portfolios, ad accounts, Pages, '
+    + 'people, messages, comments, lead forms and the payment method are never read here — as the edge or as a name '
+    + 'anywhere in fields — and a {…} expansion is allowed only after insights, creative, adcreatives or targeting. '
     + 'Meta\'s raw answer, paging links removed (use nextAfter): money in Meta\'s own units (budgets in the currency\'s '
     + 'smallest unit for most currencies, insights spend a decimal of the currency); needs the ad-spend money permission. '
     + 'Prefer meta-ads-live and meta-ads-overview where they answer.',

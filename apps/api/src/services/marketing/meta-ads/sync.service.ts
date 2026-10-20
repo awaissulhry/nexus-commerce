@@ -7,7 +7,11 @@
  *      a failure kept in words in the settings)
  *   2. campaigns, 3. ad sets, 4. ads — every status but DELETED; after a full read, the ones Meta no longer returns
  *      get `removedAt`
- *   5–7. daily numbers per campaign, ad set and ad (`GET act_<id>/insights`, time_increment=1; Meta reports with each
+ *   5–8. daily numbers of the account itself (level=account: Ads › Meta's totals and days, every child included, Meta's
+ *      own reach), then per campaign, ad set and ad with an effective_status filter naming every status, ARCHIVED and
+ *      DELETED included (review B1: without it Meta leaves them out); a piece Meta finds too big is halved, down to one
+ *      day (review B4); a re-read never erases a stored day of an object Meta left out (store.ts)
+ *      (`GET act_<id>/insights`, time_increment=1; Meta reports with each
  *      ad set's own attribution setting, as Ads Manager — since 2025-06-10 it ignores use_unified_attribution_setting and
  *      action_report_time, so neither is sent, facts F2 T1): never read → the last 180 account days in
  *      pieces of 30 (BACKFILL); otherwise the last 28 days, reaching back to the day after the last day read when runs
@@ -21,11 +25,11 @@
  */
 import { logger } from '../../../utils/logger.js'
 import { publishMarketingEvent } from '../../marketing-events.service.js'
-import { accountYesterday, chunkWindow, dateToDay, metaBackfillWindow, metaReadWindow, META_INSIGHTS_CHUNK_DAYS, type DayWindow } from './dates.js'
+import { accountYesterday, addDays, chunkWindow, dateToDay, dayCount, metaBackfillWindow, metaReadWindow, META_INSIGHTS_CHUNK_DAYS, type DayWindow } from './dates.js'
 import { localFailure, MetaReadError, type MetaFailure } from './errors.js'
 import {
-  ACCOUNT_CORE_FIELDS, ACCOUNT_MONEY_FIELDS, ACCOUNT_SETTINGS_FIELDS, ADSET_FIELDS, ADSET_STATUSES_READ, AD_FIELDS, AD_STATUSES_READ, CAMPAIGN_FIELDS,
-  CAMPAIGN_STATUSES_READ, insightFields, mapAccount, mapAd, mapAdSet, mapCampaign, mapInsightDay,
+  ACCOUNT_CORE_FIELDS, ACCOUNT_FUNDING_FIELDS, ACCOUNT_MONEY_FIELDS, ACCOUNT_SETTINGS_FIELDS, ADSET_FIELDS, ADSET_STATUSES_READ, AD_FIELDS, AD_STATUSES_READ, CAMPAIGN_FIELDS,
+  CAMPAIGN_STATUSES_READ, insightFields, insightStatusFilter, mapAccount, mapAd, mapAdSet, mapCampaign, mapInsightDay,
 } from './mappers.js'
 import { metaReadAll, metaReadOne } from './read-client.js'
 import {
@@ -33,9 +37,11 @@ import {
   upsertCampaigns,
 } from './store.js'
 import { metaReadTargetFor } from './targets.js'
+import { maskTakenAssets } from './taken.js'
 import type { MetaAdData, MetaAdSetData, MetaAdsEntityType, MetaAdsReadResource, MetaAdsSyncStatus, MetaAdsTarget, MetaCampaignData, MetaDailyMetricData } from './types.js'
 
-export type MetaAdsSyncKind = 'BACKFILL' | 'DAILY' | 'MANUAL'
+/** TOKEN: the read queued at once after a good token, when the last read lost the token (review A2). */
+export type MetaAdsSyncKind = 'BACKFILL' | 'DAILY' | 'MANUAL' | 'TOKEN'
 
 /** More daily rows than this in one grain's read is not kept (memory); the read says so. */
 export const MAX_METRIC_ROWS = 200_000
@@ -121,6 +127,8 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
       }
     }
     const money = await optional('money', 'adAccount.money', act(adAccountId), { fields: ACCOUNT_MONEY_FIELDS })
+    // Review A7 — the payment method on its own: it needs MANAGE, and a refusal must never null the money above.
+    const funding = await optional('fundingSource', 'adAccount.fundingSource', act(adAccountId), { fields: ACCOUNT_FUNDING_FIELDS })
     const more = await optional('settings', 'adAccount.settings', act(adAccountId), { fields: ACCOUNT_SETTINGS_FIELDS })
     if (more) for (const [k, v] of Object.entries(more)) if (k !== 'id') settings[k] = v
     const edge = async (key: string, path: string, fields?: string) => {
@@ -132,7 +140,9 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
     await edge('promotePages', 'promote_pages', 'id,name')
     await edge('instagramAccounts', 'instagram_accounts', 'id,username')
     if (Object.keys(missing).length) settings.notRead = missing
-    const details = mapAccount(core.body, money, settings)
+    // Review A1 — a promoted Page or Instagram account another business in Nexus uses is kept by its id and the flag only.
+    await maskTakenAssets(settings)
+    const details = mapAccount(core.body, money, settings, funding)
     if (!details || details.adAccountId !== adAccountId) throw new MetaReadError(localFailure('Meta sent no usable details for this ad account (currency or time zone missing), so Nexus read nothing.', 'NO_ACCOUNT'), 'adAccount.read')
     try {
       accountYesterday(details.timeZone, now)
@@ -191,24 +201,26 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
     const states = await getReadStates(adAccountId)
     const readThroughOf = (grain: MetaAdsEntityType): string | null => {
       if (grain === 'CAMPAIGN') return account.metricsReadThrough ? dateToDay(account.metricsReadThrough) : null
-      const state = states.get(grain === 'ADSET' ? 'ADSET_DAYS' : 'AD_DAYS')
+      const state = states.get(grain === 'ACCOUNT' ? 'ACCOUNT_DAYS' : grain === 'ADSET' ? 'ADSET_DAYS' : 'AD_DAYS')
       return state?.readThrough ? dateToDay(state.readThrough) : null
     }
     const windowOf = (grain: MetaAdsEntityType): DayWindow => (backfill || !readThroughOf(grain)
       ? metaBackfillWindow(context.timeZone, now)
       : metaReadWindow(context.timeZone, now, readThroughOf(grain)))
     result.window = windowOf('CAMPAIGN')
-    const level = { CAMPAIGN: 'campaign', ADSET: 'adset', AD: 'ad' } as const
-    const days = async (grain: MetaAdsEntityType): Promise<number> => {
-      const window = windowOf(grain)
-      let total = 0
-      for (const piece of chunkWindow(window, META_INSIGHTS_CHUNK_DAYS)) {
-        const rows: MetaDailyMetricData[] = []
-        const read = await metaReadAll(target, {
+    const level = { ACCOUNT: 'account', CAMPAIGN: 'campaign', ADSET: 'adset', AD: 'ad' } as const
+    /** One piece of days at one grain; Meta's "too much at once" halves it, down to one day (review B4). */
+    const readPiece = async (grain: MetaAdsEntityType, piece: DayWindow): Promise<number> => {
+      const rows: MetaDailyMetricData[] = []
+      let read: Awaited<ReturnType<typeof metaReadAll>>
+      try {
+        read = await metaReadAll(target, {
           operation: `insights.${level[grain]}Days`,
           path: `${act(adAccountId)}/insights`,
           query: {
             level: level[grain], time_increment: 1, time_range: { since: piece.from, until: piece.to }, fields: insightFields(grain),
+            // Review B1 — archived and deleted objects too: without the filter Meta returns live objects only.
+            ...(grain === 'ACCOUNT' ? {} : { filtering: insightStatusFilter(grain) }),
             limit: INSIGHTS_PAGE,
           },
           maxPages: 400,
@@ -219,20 +231,36 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
             throw new MetaReadError(localFailure(`Meta sent more than ${MAX_METRIC_ROWS.toLocaleString('en-US')} rows of daily numbers for one piece of this read; Nexus kept none of that piece.`, 'TOO_MANY_ROWS'), 'insights')
           }
         })
-        result.calls += read.calls
-        if (read.truncated) throw new MetaReadError(localFailure('Meta sent more pages of numbers than Nexus reads at once; Nexus kept none of that piece.', 'TOO_MANY_PAGES'), 'insights', 0)
-        const saved = await replaceDailyMetrics(adAccountId, grain, piece, rows, new Date())
-        total += saved.rows
-        metricsStored = true
-        stored = true
+      } catch (err) {
+        if (err instanceof MetaReadError && err.failure.shrink && dayCount(piece) > 1) {
+          result.calls += err.callsSpent
+          const half = Math.floor(dayCount(piece) / 2)
+          const first = { from: piece.from, to: addDays(piece.from, half - 1) }
+          const second = { from: addDays(piece.from, half), to: piece.to }
+          return (await readPiece(grain, first)) + (await readPiece(grain, second))
+        }
+        throw err
       }
+      result.calls += read.calls
+      if (read.truncated) throw new MetaReadError(localFailure('Meta sent more pages of numbers than Nexus reads at once; Nexus kept none of that piece.', 'TOO_MANY_PAGES'), 'insights', 0)
+      const saved = await replaceDailyMetrics(adAccountId, grain, piece, rows, new Date())
+      metricsStored = true
+      stored = true
+      return saved.rows
+    }
+    const days = async (grain: MetaAdsEntityType): Promise<number> => {
+      let total = 0
+      for (const piece of chunkWindow(windowOf(grain), META_INSIGHTS_CHUNK_DAYS)) total += await readPiece(grain, piece)
       result.metricRows += total
       return total
     }
+    // Review B1 — the account's own days first: its totals include every child (live, archived, deleted) and its reach
+    // is Meta's own; Ads › Meta's totals and days come from these, never from a sum of campaigns.
+    const accountDaysOk = await step('accountDays', null, () => days('ACCOUNT'))
     const campaignDaysOk = await step('campaignDays', null, () => days('CAMPAIGN'))
     await step('adSetDays', null, () => days('ADSET'))
     await step('adDays', null, () => days('AD'))
-    if (backfill && campaignDaysOk) outcome.backfillCompletedAt = new Date()
+    if (backfill && campaignDaysOk && accountDaysOk) outcome.backfillCompletedAt = new Date()
   }
 
   if (failures.length === 0) result.status = 'SUCCESS'

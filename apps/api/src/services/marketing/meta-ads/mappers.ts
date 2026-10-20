@@ -10,7 +10,12 @@ import { metaAdAccountId, metaObjectId } from '../../cx/connectors/meta/discover
 
 /** The fields the daily read asks for (one place, so the read and its tests agree). */
 export const ACCOUNT_CORE_FIELDS = 'account_id,name,currency,timezone_name,timezone_offset_hours_utc,account_status,disable_reason,business{id,name}'
-export const ACCOUNT_MONEY_FIELDS = 'amount_spent,spend_cap,balance,min_daily_budget,min_campaign_group_spend_cap,is_prepay_account,funding_source_details'
+export const ACCOUNT_MONEY_FIELDS = 'amount_spent,spend_cap,balance,min_daily_budget,min_campaign_group_spend_cap,is_prepay_account'
+/**
+ * The payment method, read on its own: Meta answers funding_source_details only with MANAGE on the account, so in the
+ * same request a refusal would null the money above (review A7). Only its TYPE is kept, never its display string.
+ */
+export const ACCOUNT_FUNDING_FIELDS = 'funding_source_details'
 export const ACCOUNT_SETTINGS_FIELDS = 'capabilities,created_time,age,tos_accepted,offsite_pixels_tos_accepted,failed_delivery_checks,brand_safety_content_filter_levels,opportunity_score,is_notifications_enabled'
 export const CAMPAIGN_FIELDS = 'id,name,status,effective_status,objective,buying_type,bid_strategy,daily_budget,lifetime_budget,budget_remaining,spend_cap,start_time,stop_time,created_time,updated_time'
 export const ADSET_FIELDS = 'id,campaign_id,name,status,effective_status,optimization_goal,billing_event,bid_strategy,bid_amount,daily_budget,lifetime_budget,budget_remaining,destination_type,start_time,end_time,targeting'
@@ -20,9 +25,21 @@ export const CAMPAIGN_STATUSES_READ = ['ACTIVE', 'PAUSED', 'IN_PROCESS', 'WITH_I
 export const ADSET_STATUSES_READ = [...CAMPAIGN_STATUSES_READ, 'CAMPAIGN_PAUSED']
 export const AD_STATUSES_READ = [...ADSET_STATUSES_READ, 'ADSET_PAUSED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO']
 
+/**
+ * Review B1 — `act_<id>/insights?level=…` returns LIVE objects only ("…?level=ad does not return stats for the deleted
+ * object", Meta's manage-your-ad-object-status page): the numbers of an archived or deleted campaign, ad set or ad come
+ * only with an effective_status filter that names every status, DELETED and ARCHIVED included. The ad form
+ * (`ad.effective_status`) is documented; the campaign and ad set forms follow it (LIVE-PROBES).
+ */
+export function insightStatusFilter(level: Exclude<MetaAdsEntityType, 'ACCOUNT'>): Array<{ field: string; operator: 'IN'; value: string[] }> {
+  const all = { CAMPAIGN: CAMPAIGN_STATUSES_READ, ADSET: ADSET_STATUSES_READ, AD: AD_STATUSES_READ }[level]
+  const field = { CAMPAIGN: 'campaign.effective_status', ADSET: 'adset.effective_status', AD: 'ad.effective_status' }[level]
+  return [{ field, operator: 'IN', value: [...all, 'DELETED'] }]
+}
+
 const INSIGHT_BASE_FIELDS = ['impressions', 'reach', 'clicks', 'inline_link_clicks', 'spend', 'frequency', 'actions', 'action_values']
 export function insightFields(level: MetaAdsEntityType): string {
-  const ids = level === 'CAMPAIGN' ? ['campaign_id', 'campaign_name'] : level === 'ADSET' ? ['campaign_id', 'adset_id', 'adset_name'] : ['campaign_id', 'adset_id', 'ad_id', 'ad_name']
+  const ids = level === 'ACCOUNT' ? ['account_id'] : level === 'CAMPAIGN' ? ['campaign_id', 'campaign_name'] : level === 'ADSET' ? ['campaign_id', 'adset_id', 'adset_name'] : ['campaign_id', 'adset_id', 'ad_id', 'ad_name']
   return [...ids, ...INSIGHT_BASE_FIELDS].join(',')
 }
 
@@ -47,13 +64,13 @@ const time = (value: unknown): Date | null => {
 const obj = (value: unknown): Record<string, unknown> | null => (value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null)
 
 /** The account's core and money fields (two reads merged); null when Meta sent no usable account. */
-export function mapAccount(core: Record<string, unknown>, money: Record<string, unknown> | null, settings: Record<string, unknown>): MetaAdAccountData | null {
+export function mapAccount(core: Record<string, unknown>, money: Record<string, unknown> | null, settings: Record<string, unknown>, fundingRead: Record<string, unknown> | null = null): MetaAdAccountData | null {
   const adAccountId = metaAdAccountId(core.account_id ?? core.id)
   const currency = text(core.currency)
   const timeZone = text(core.timezone_name)
   if (!adAccountId || !currency || !timeZone) return null
   const business = obj(core.business)
-  const funding = obj(money?.funding_source_details)
+  const funding = obj(fundingRead?.funding_source_details ?? money?.funding_source_details)
   return {
     adAccountId,
     name: text(core.name),
@@ -165,6 +182,7 @@ export function purchasesOf(actions: unknown, values: unknown): { type: string |
 export function mapInsightDay(row: Record<string, unknown>, ctx: { adAccountId: string; currencyCode: string; level: MetaAdsEntityType }): MetaDailyMetricData | null {
   const day = text(row.date_start)
   if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day) || text(row.date_stop) !== day) return null
+  if (ctx.level === 'ACCOUNT') return accountDay(row, day, ctx)
   const campaignId = metaObjectId(row.campaign_id)
   const adSetId = metaObjectId(row.adset_id)
   const entityId = ctx.level === 'CAMPAIGN' ? campaignId : ctx.level === 'ADSET' ? adSetId : metaObjectId(row.ad_id)
@@ -179,6 +197,33 @@ export function mapInsightDay(row: Record<string, unknown>, ctx: { adAccountId: 
     campaignId,
     adSetId: ctx.level === 'CAMPAIGN' ? null : adSetId,
     label: text(ctx.level === 'CAMPAIGN' ? row.campaign_name : ctx.level === 'ADSET' ? row.adset_name : row.ad_name),
+    impressions: int(row.impressions) ?? 0,
+    reach: int(row.reach),
+    clicks: int(row.clicks) ?? 0,
+    linkClicks: int(row.inline_link_clicks),
+    spendMicros: decimalToMicros(row.spend) ?? 0n,
+    purchases: purchases.count,
+    purchaseValueMicros: purchases.valueMicros,
+    currencyCode: ctx.currencyCode,
+    extra: { purchaseActionType: purchases.type, ...(frequency !== null ? { frequency } : {}) },
+  }
+}
+
+/**
+ * Review B1 — one level=account row: the account's own day. Its totals include every child, live, archived or deleted,
+ * and its reach is Meta's own (people are not summed over campaigns, which would count one person twice).
+ */
+function accountDay(row: Record<string, unknown>, day: string, ctx: { adAccountId: string; currencyCode: string }): MetaDailyMetricData {
+  const purchases = purchasesOf(row.actions, row.action_values)
+  const frequency = float(row.frequency)
+  return {
+    adAccountId: ctx.adAccountId,
+    date: dayToDate(day),
+    entityType: 'ACCOUNT',
+    entityId: ctx.adAccountId,
+    campaignId: '',
+    adSetId: null,
+    label: null,
     impressions: int(row.impressions) ?? 0,
     reach: int(row.reach),
     clicks: int(row.clicks) ?? 0,

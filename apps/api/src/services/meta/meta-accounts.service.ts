@@ -161,7 +161,11 @@ export function metaConnectionState(input: { isActive: boolean; authStatus: stri
   const name = input.accountName ? `“${input.accountName}”` : 'the chosen ad account'
   const status = input.account?.lastSyncStatus ?? null
   const error = input.account?.lastSyncError ?? null
-  if (status === 'AUTH_LOST') return { state: 'sign_in_needed', stateText: error ?? 'Meta no longer accepts the token. Enter a new system-user token in Settings › Channels › Meta.' }
+  // Review A2 — a read that lost the token counts only while no good token check came after it (a replaced token, or
+  // "Check now" valid, ends it: the read is cleared and queued again — enqueue.ts metaReadAfterGoodToken).
+  const goodCheckAfter = input.token.isValid && !!input.token.checkedAt && !!input.account?.lastSyncAt
+    && Date.parse(input.token.checkedAt) > input.account.lastSyncAt.getTime()
+  if (status === 'AUTH_LOST' && !goodCheckAfter) return { state: 'sign_in_needed', stateText: error ?? 'Meta no longer accepts the token. Enter a new system-user token in Settings › Channels › Meta.' }
   if (!input.account?.metricsReadThrough) {
     if (status === 'FAILED' || status === 'PARTIAL') return { state: 'read_failed', stateText: `Nexus could not read ${name}. ${error ?? 'Meta did not say why.'}` }
     if (input.readingOn === false) return { state: 'first_read_pending', stateText: `Nexus has not read ${name} yet: reading Meta ads is switched off on the server for now.` }

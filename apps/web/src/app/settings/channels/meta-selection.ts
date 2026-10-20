@@ -27,6 +27,21 @@ const held = (taken: boolean, reason: string = TAKEN_ELSEWHERE) => (taken ? { he
 
 // ─── The form ───────────────────────────────────────────────────────────
 
+/**
+ * The app secret and the system-user token are typed in once and never kept: the DS secret pattern (a masked input with
+ * autoComplete="new-password", as the app-secrets card) plus the password managers' own "ignore this field" attributes
+ * (1Password, LastPass, Bitwarden, Dashlane), so no browser or manager offers to save or fill them.
+ */
+export const SECRET_INPUT_PROPS = {
+  type: 'password',
+  autoComplete: 'new-password',
+  spellCheck: false,
+  'data-1p-ignore': 'true',
+  'data-lpignore': 'true',
+  'data-bwignore': 'true',
+  'data-form-type': 'other',
+} as const
+
 export interface CredentialsDraft { appId: string; appSecret: string; systemUserToken: string }
 export const EMPTY_CREDENTIALS: CredentialsDraft = { appId: '', appSecret: '', systemUserToken: '' }
 

@@ -3,10 +3,12 @@
  * token in words, the asset picker (one ad account required, an asset another business picked is held and never
  * chosen for the person), every refusal in words without naming another business. Made-up ids and names only.
  */
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { MetaChoices, MetaConnection, MetaTokenHealth, MetaTokenView } from '@/lib/meta-ads/contract'
 import {
-  EMPTY_CREDENTIALS, NONE, PAGE_TAKEN_ELSEWHERE, TAKEN_ELSEWHERE, adAccountOptions, canSaveMeta, canSubmitCredentials, connectRefusal, credentialProblems,
+  EMPTY_CREDENTIALS, NONE, PAGE_TAKEN_ELSEWHERE, SECRET_INPUT_PROPS, TAKEN_ELSEWHERE, adAccountOptions, canSaveMeta, canSubmitCredentials, connectRefusal, credentialProblems,
   credentialsBody, initialMetaDraft, instagramOptions, metaChips, metaConflictText, metaConnectedNotice, metaSaveHeldReason, metaSavedNotice,
   metaSelectionBody, missingPermissionLines, needsMetaChoice, pageOptions, reconcileMetaDraft, tokenCheckNote, tokenLines,
 } from './meta-selection'
@@ -37,6 +39,20 @@ const choices = (over: Partial<MetaChoices> = {}): MetaChoices => ({
   pages: { items: [{ pageId: '100000000000001', name: 'Shop A Page', instagram: null, takenByAnotherBusiness: false as const }], error: null },
   instagram: { items: [{ instagramId: '170000000000001', username: 'shop_a', pageId: '100000000000001', takenByAnotherBusiness: false as const }], error: null },
   ...over,
+})
+
+describe('the secret fields', () => {
+  it('are masked and carry every password manager\'s ignore attribute, so nothing offers to save or fill them', () => {
+    expect(SECRET_INPUT_PROPS).toEqual({
+      type: 'password', autoComplete: 'new-password', spellCheck: false,
+      'data-1p-ignore': 'true', 'data-lpignore': 'true', 'data-bwignore': 'true', 'data-form-type': 'other',
+    })
+  })
+  it('both the app secret and the token use them, and no other password input is in the dialog', () => {
+    const source = readFileSync(fileURLToPath(new URL('./MetaCredentialsDialog.tsx', import.meta.url)), 'utf8')
+    expect(source.match(/<Input \{\.\.\.SECRET_INPUT_PROPS\} value=\{draft\.(appSecret|systemUserToken)\}/g)).toHaveLength(2)
+    expect(source).not.toMatch(/type="password"/)
+  })
 })
 
 describe('the form', () => {

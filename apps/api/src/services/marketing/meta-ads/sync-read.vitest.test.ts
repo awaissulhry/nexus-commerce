@@ -46,7 +46,9 @@ function answerFor(req: { operation: string; path: string; query: Record<string,
       if (date < range.since || date > range.until) continue
       rows.push({
         date_start: date, date_stop: date, campaign_id: '120000000000101', campaign_name: 'Shop A campaign 1', adset_id: '120000000000201', adset_name: 'Italy',
-        ad_id: '120000000000301', ad_name: 'Ad 1', impressions: '1000', clicks: '20', inline_link_clicks: '15', reach: '800', spend: level === 'campaign' ? '12.34' : '10.00',
+        ad_id: '120000000000301', ad_name: 'Ad 1', impressions: '1000', clicks: '20', inline_link_clicks: '15',
+        // level=account: the account's own day — its spend includes a deleted campaign's, its reach is Meta's own.
+        reach: level === 'account' ? '900' : '800', spend: level === 'account' ? '15.00' : level === 'campaign' ? '12.34' : '10.00',
         actions: [{ action_type: 'omni_purchase', value: '2' }], action_values: [{ action_type: 'omni_purchase', value: '99.80' }],
       })
     }
@@ -116,14 +118,20 @@ describe('the first read', () => {
   it('stores the account, the structure and 180 days per grain in pieces of 30, all through GET reads', async () => {
     const result = await inA(() => syncMetaAdAccount({ connectionId: conn[A], adAccountId: AD_ACCOUNT }, { kind: 'BACKFILL', now: NOW }))
     expect(result).toMatchObject({ status: 'SUCCESS', mode: 'BACKFILL', campaigns: 2, adSets: 1, ads: 1, window: { from: '2026-04-23', to: '2026-10-19' } })
-    // 3 grains × 6 pieces of 30 days.
-    expect(h.calls.filter((c) => c.operation.startsWith('insights.'))).toHaveLength(18)
+    // 4 grains (the account's own, campaign, ad set, ad) × 6 pieces of 30 days.
+    expect(h.calls.filter((c) => c.operation.startsWith('insights.'))).toHaveLength(24)
     expect(h.calls.every((c) => c.connectionId === conn[A])).toBe(true)
     const insights = h.calls.find((c) => c.operation === 'insights.campaignDays')!.query as Record<string, unknown>
     expect(insights).toMatchObject({ level: 'campaign', time_increment: 1 })
     // Meta ignores both since 2025-06-10 (each ad set's own attribution is used): never sent (facts F2 T1).
     expect(Object.keys(insights)).not.toContain('use_unified_attribution_setting')
     expect(Object.keys(insights)).not.toContain('action_report_time')
+    // Review B1 — every status, ARCHIVED and DELETED included, at each object level; the account's own day needs none.
+    expect(insights.filtering).toEqual([{ field: 'campaign.effective_status', operator: 'IN', value: expect.arrayContaining(['ACTIVE', 'PAUSED', 'ARCHIVED', 'DELETED']) }])
+    expect((h.calls.find((c) => c.operation === 'insights.adsetDays')!.query as { filtering: Array<{ field: string }> }).filtering[0].field).toBe('adset.effective_status')
+    expect((h.calls.find((c) => c.operation === 'insights.adDays')!.query as { filtering: Array<{ field: string }> }).filtering[0].field).toBe('ad.effective_status')
+    expect(h.calls.find((c) => c.operation === 'insights.accountDays')!.query).toMatchObject({ level: 'account', time_increment: 1 })
+    expect(h.calls.find((c) => c.operation === 'insights.accountDays')!.query.filtering).toBeUndefined()
     // Every call the daily read made is one the real gateway lets through (its query-key allow-list, the fields rules).
     const refused = h.calls.map((c) => [c.operation, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, c.query as never), kind: 'read' })]).filter(([, problem]) => problem)
     expect(refused).toEqual([])
@@ -133,8 +141,8 @@ describe('the first read', () => {
       expect(account.backfillCompletedAt).not.toBeNull()
       expect([account.metricsReadFrom?.toISOString().slice(0, 10), account.metricsReadThrough?.toISOString().slice(0, 10)]).toEqual(['2026-04-23', '2026-10-19'])
       const states = await db().metaAdsReadState.findMany({ where: { adAccountId: AD_ACCOUNT }, orderBy: { resource: 'asc' } })
-      expect(states.map((s) => [s.resource, s.lastStatus])).toEqual([['ACCOUNT', 'SUCCESS'], ['ADS', 'SUCCESS'], ['ADSETS', 'SUCCESS'], ['ADSET_DAYS', 'SUCCESS'], ['AD_DAYS', 'SUCCESS'], ['CAMPAIGNS', 'SUCCESS']])
-      expect(await db().metaAdsDailyMetric.count({ where: { adAccountId: AD_ACCOUNT } })).toBe(6)
+      expect(states.map((s) => [s.resource, s.lastStatus])).toEqual([['ACCOUNT', 'SUCCESS'], ['ACCOUNT_DAYS', 'SUCCESS'], ['ADS', 'SUCCESS'], ['ADSETS', 'SUCCESS'], ['ADSET_DAYS', 'SUCCESS'], ['AD_DAYS', 'SUCCESS'], ['CAMPAIGNS', 'SUCCESS']])
+      expect(await db().metaAdsDailyMetric.count({ where: { adAccountId: AD_ACCOUNT } })).toBe(8)
     })
   })
 })
@@ -144,10 +152,11 @@ describe('the reads behind Ads › Meta', () => {
     const overview = await inA(() => metaAdsOverview({ from: '2026-04-20', to: '2026-10-19' }, NOW))
     expect(overview.window).toMatchObject({ from: '2026-04-20', to: '2026-10-19', provisionalFrom: '2026-09-22' })
     expect(overview.coverage).toMatchObject({ daysRead: overview.coverage.daysInWindow - 3, missingDays: ['2026-04-20', '2026-04-21', '2026-04-22'] })
-    expect(overview.totals).toMatchObject({ impressions: 2000, clicks: 40, spendCents: 2468, purchases: 4, purchaseValueCents: 19960, cpcCents: 62 })
-    expect(overview.totals!.roas).toBeCloseTo(199.6 / 24.68, 6)
+    // Review B1 — the account's own days (level=account), not a sum of campaigns: 15.00 a day, reach 900 (Meta's own).
+    expect(overview.totals).toMatchObject({ impressions: 2000, clicks: 40, spendCents: 3000, purchases: 4, purchaseValueCents: 19960, cpcCents: 75 })
+    expect(overview.totals!.roas).toBeCloseTo(199.6 / 30, 6)
     const byDay = new Map(overview.days.map((d) => [d.date, d]))
-    expect(byDay.get('2026-10-10')).toMatchObject({ read: true, spendCents: 1234, reach: 800, provisional: true })
+    expect(byDay.get('2026-10-10')).toMatchObject({ read: true, spendCents: 1500, reach: 900, provisional: true })
     expect(byDay.get('2026-10-11')).toMatchObject({ read: true, spendCents: 0, impressions: 0 })
     expect(byDay.get('2026-04-20')).toMatchObject({ read: false, spendCents: null, impressions: null })
     expect(overview.previous).toBeNull()
@@ -190,6 +199,75 @@ describe('later reads', () => {
     expect(result).toMatchObject({ status: 'SUCCESS', mode: 'DAILY', removed: 1, window: { from: '2026-09-23', to: '2026-10-20' } })
     const campaigns = await inA(() => metaAdsCampaigns({ days: 30 }, NEXT_DAY))
     expect(campaigns.items.map((c) => [c.metaCampaignId, c.status])).toEqual([['120000000000101', 'ACTIVE'], ['120000000000102', 'DELETED']])
+  })
+  it('review B1 — a re-read never erases a stored day of an object Meta now leaves out; a returned one is replaced', async () => {
+    const DAY = new Date('2026-10-13T06:50:00Z')
+    // Meta now returns no ad set or ad rows at all (they were deleted beyond what Meta still reports) and the campaign
+    // only on 2026-10-12.
+    h.override = (req) => {
+      if (req.operation === 'insights.adsetDays' || req.operation === 'insights.adDays') return { ok: true, status: 200, body: { data: [] } }
+      if (req.operation === 'insights.campaignDays') {
+        return { ok: true, status: 200, body: { data: [{ date_start: '2026-10-12', date_stop: '2026-10-12', campaign_id: '120000000000101', campaign_name: 'Shop A campaign 1', impressions: '500', clicks: '5', spend: '5.00' }] } }
+      }
+      return null
+    }
+    await inA(() => syncMetaAdAccount({ connectionId: conn[A], adAccountId: AD_ACCOUNT }, { kind: 'DAILY', now: DAY }))
+    await inA(async () => {
+      const kept = await db().metaAdsDailyMetric.findMany({ where: { adAccountId: AD_ACCOUNT, entityType: { in: ['ADSET', 'AD'] } }, select: { entityType: true, date: true } })
+      expect(kept.map((k) => [k.entityType, k.date.toISOString().slice(0, 10)]).sort()).toEqual([['AD', '2026-10-10'], ['AD', '2026-10-12'], ['ADSET', '2026-10-10'], ['ADSET', '2026-10-12']])
+      // The campaign Meta returned has exactly the days Meta sent in the window read: 2026-10-10 is now a zero day.
+      const campaign = await db().metaAdsDailyMetric.findMany({ where: { adAccountId: AD_ACCOUNT, entityType: 'CAMPAIGN', entityId: '120000000000101' }, select: { date: true, spendMicros: true } })
+      expect(campaign.map((c) => [c.date.toISOString().slice(0, 10), c.spendMicros])).toEqual([['2026-10-12', 5_000_000n]])
+    })
+  })
+  it('review B4 — Meta\'s "too much at once" halves the piece, down to one day; 100/3191001 is a permission refusal', async () => {
+    const asked: string[] = []
+    h.override = (req) => {
+      if (req.operation !== 'insights.accountDays') return null
+      const range = req.query.time_range as { since: string; until: string }
+      asked.push(`${range.since}..${range.until}`)
+      // More than 7 days at once: Meta's data limit (100/1487534); 7 days or fewer answer.
+      const days = (Date.parse(range.until) - Date.parse(range.since)) / 86_400_000 + 1
+      return days > 7 ? { ok: false, status: 400, body: {}, verdict: { errorClass: 'validation', channelCode: '100/1487534', channelMessage: 'Please reduce the amount of data' } } : { ok: true, status: 200, body: { data: [] } }
+    }
+    const result = await inA(() => syncMetaAdAccount({ connectionId: conn[A], adAccountId: AD_ACCOUNT }, { kind: 'DAILY', now: new Date('2026-10-14T06:50:00Z') }))
+    expect(result.status).toBe('SUCCESS')
+    // The 28-day window: refused, then 14 + 14 refused, then 7-day halves answer.
+    expect(asked[0]).toBe('2026-09-16..2026-10-13')
+    expect(asked.filter((a) => (Date.parse(a.split('..')[1]) - Date.parse(a.split('..')[0])) / 86_400_000 + 1 <= 7)).toHaveLength(4)
+    h.override = (req) => (req.operation === 'insights.accountDays' ? { ok: false, status: 400, body: {}, verdict: { errorClass: 'validation', channelCode: '100/3191001', channelMessage: 'No access' } } : null)
+    h.calls.length = 0
+    const refused = await inA(() => syncMetaAdAccount({ connectionId: conn[A], adAccountId: AD_ACCOUNT }, { kind: 'DAILY', now: new Date('2026-10-14T06:50:00Z') }))
+    expect(refused).toMatchObject({ status: 'PARTIAL', error: expect.stringMatching(/does not let this system user read these numbers/) })
+    // A permission refusal stops the run (the other grains would be refused too); nothing is halved.
+    expect(h.calls.filter((c) => c.operation === 'insights.accountDays')).toHaveLength(1)
+    expect(h.calls.some((c) => c.operation === 'insights.campaignDays')).toBe(false)
+  })
+  it('review A7 — the payment method is read on its own: its refusal (it needs MANAGE) never nulls the money', async () => {
+    h.override = (req) => (req.operation === 'adAccount.fundingSource' ? { ok: false, status: 403, body: {}, verdict: { errorClass: 'forbidden', channelCode: '200', channelMessage: 'Requires MANAGE' } } : null)
+    await inA(() => syncMetaAdAccount({ connectionId: conn[A], adAccountId: AD_ACCOUNT }, { kind: 'DAILY', now: NOW }))
+    expect(String(h.calls.find((c) => c.operation === 'adAccount.money')!.query.fields)).not.toContain('funding_source_details')
+    expect(h.calls.find((c) => c.operation === 'adAccount.fundingSource')!.query).toEqual({ fields: 'funding_source_details' })
+    await inA(async () => {
+      const account = await db().metaAdAccount.findFirstOrThrow({ where: { adAccountId: AD_ACCOUNT } })
+      expect(account.amountSpentMicros).toBe(1_234_560_000n)
+      expect((account.settings as { notRead?: Record<string, string> }).notRead?.fundingSource).toMatch(/does not let this system user read this/)
+    })
+  })
+  it('review A1 — a promoted Page or Instagram account another business uses is kept by its id and the flag only', async () => {
+    await inB(() => db().metaAccountLink.create({ data: { connectionId: conn[B], product: 'PAGE', externalId: '120000000000077', label: 'Bravo Page', selectedByUserId: 'u-2' } }))
+    h.override = (req) => {
+      if (req.operation === 'adAccount.promotePages') return { ok: true, status: 200, body: { data: [{ id: '120000000000010', name: 'Shop A Page' }, { id: '120000000000077', name: 'Bravo Page' }] } }
+      if (req.operation === 'adAccount.instagramAccounts') return { ok: true, status: 200, body: { data: [{ id: '170000000000001', username: 'shop_a' }] } }
+      return null
+    }
+    await inA(() => syncMetaAdAccount({ connectionId: conn[A], adAccountId: AD_ACCOUNT }, { kind: 'DAILY', now: NOW }))
+    await inA(async () => {
+      const settings = (await db().metaAdAccount.findFirstOrThrow({ where: { adAccountId: AD_ACCOUNT } })).settings as Record<string, unknown>
+      expect(settings.promotePages).toEqual([{ id: '120000000000010', name: 'Shop A Page', takenByAnotherBusiness: false }, { id: '120000000000077', takenByAnotherBusiness: true }])
+      expect(settings.instagramAccounts).toEqual([{ id: '170000000000001', username: 'shop_a', takenByAnotherBusiness: false }])
+      expect(JSON.stringify(settings)).not.toContain('Bravo Page')
+    })
   })
   it('Meta asking to slow down stops the run: THROTTLED, the days stored stay as they were', async () => {
     h.override = (req) => (req.operation === 'insights.campaignDays' ? { ok: false, status: 400, body: {}, verdict: { errorClass: 'rate_limited', channelCode: '17/2446079', channelMessage: 'User request limit reached' } } : null)

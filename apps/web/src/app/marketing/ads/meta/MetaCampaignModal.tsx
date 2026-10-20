@@ -12,7 +12,7 @@ import { Button, Pill, Skeleton } from '@/design-system/primitives'
 import { chart } from '@/design-system/tokens'
 import { fetchMetaCampaignDays, type MetaAdsCampaignDays, type MetaAdsCampaignRow } from '@/lib/meta-ads/contract'
 import {
-  DAY_COLUMNS, bidStrategyLabel, budgetText, chartHasMoney, chartPoints, coverageNote, dayRows, effectiveText, formatDay,
+  DAY_COLUMNS, bidStrategyLabel, budgetText, chartEmptyText, chartHasMoney, chartPoints, coverageNote, dayRows, effectiveText, formatDay,
   formatMoment, formatMoney, formatWindow, objectiveLabel, provisionalDays, provisionalNote, statusLabel, toMinor,
 } from './metaAds'
 
@@ -75,7 +75,7 @@ export function MetaCampaignModal({ campaign, currency, range, onClose }: {
                 height={200}
               />
             ) : (
-              <p className="mads-meta">No amount spent or purchase value to draw for these days.</p>
+              <p className="mads-meta">{chartEmptyText(d.days)}</p>
             )}
             {note && <p className="mads-note">{note}</p>}
             <div className="mads-table" tabIndex={0} role="region" aria-label="Days table">

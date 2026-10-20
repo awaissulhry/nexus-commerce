@@ -295,8 +295,14 @@ test.describe('Settings › Channels: Connect Meta and the asset picker (1440, l
     await page.getByRole('button', { name: 'Connect Meta' }).click()
     const form = page.getByRole('dialog', { name: 'Connect Meta' })
     await expect(form).toBeVisible()
-    await expect(form.getByLabel('App secret')).toHaveAttribute('type', 'password')
-    await expect(form.getByLabel('System-user token')).toHaveAttribute('type', 'password')
+    // Masked, and no browser or password manager offers to save or fill them.
+    for (const label of ['App secret', 'System-user token']) {
+      const field = form.getByLabel(label)
+      await expect(field).toHaveAttribute('type', 'password')
+      await expect(field).toHaveAttribute('autocomplete', 'new-password')
+      for (const attr of ['data-1p-ignore', 'data-lpignore', 'data-bwignore']) await expect(field).toHaveAttribute(attr, 'true')
+      await expect(field).toHaveAttribute('data-form-type', 'other')
+    }
     await form.getByLabel('App ID').fill('1234567')
     await form.getByLabel('App secret').fill('0123456789abcdef0123456789abcdef')
     await form.getByLabel('System-user token').fill('fixture-system-user-token-000000')

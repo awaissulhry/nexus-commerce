@@ -4,8 +4,8 @@
  * Meta ads step 1 — "Connect Meta" / "Replace credentials": the business's own Meta app (App ID, App secret) and its
  * system-user token, typed in once (POST /api/meta-ads/connect, or PUT …/connections/:id/credentials to replace them).
  *
- * Centred DS `Modal`; every control is a DS `Field` + `Input`. The secret and the token are password fields: Nexus never
- * shows them back, they are kept in this dialog's memory only (never in browser storage), and they are cleared the
+ * Centred DS `Modal`; every control is a DS `Field` + `Input`. The secret and the token are password fields that no browser
+ * or password manager offers to save or fill (SECRET_INPUT_PROPS): Nexus never shows them back, they are kept in this dialog's memory only (never in browser storage), and they are cleared the
  * moment they are sent, whatever Meta answers. Meta checks the token before anything is saved; a refusal is said in
  * words. The words and every decision are in `./meta-selection.ts`.
  */
@@ -13,7 +13,7 @@ import { useId, useRef, useState, type FormEvent } from 'react'
 import { Banner, Field, Modal } from '@/design-system/components'
 import { Button, Input } from '@/design-system/primitives'
 import { saveMetaCredentials, type MetaConnectAnswer } from '@/lib/meta-ads/contract'
-import { EMPTY_CREDENTIALS, canSubmitCredentials, connectRefusal, credentialProblems, credentialsBody, type CredentialsDraft } from './meta-selection'
+import { EMPTY_CREDENTIALS, SECRET_INPUT_PROPS, canSubmitCredentials, connectRefusal, credentialProblems, credentialsBody, type CredentialsDraft } from './meta-selection'
 
 export function MetaCredentialsDialog({ connectionId, appId, onClose, onSaved }: {
   /** Replace the credentials of this connection; null connects Meta in this business. */
@@ -76,11 +76,11 @@ export function MetaCredentialsDialog({ connectionId, appId, onClose, onSaved }:
       </Field>
       <Field label="App secret" required error={tried ? problems.appSecret : null}
         hint={replacing ? 'The saved secret is never shown. Paste it again, or paste a new one.' : 'On the same page. Stored encrypted and never shown again.'}>
-        <Input type="password" value={draft.appSecret} onChange={set('appSecret')} autoComplete="new-password" spellCheck={false} disabled={busy} />
+        <Input {...SECRET_INPUT_PROPS} value={draft.appSecret} onChange={set('appSecret')} disabled={busy} />
       </Field>
       <Field label="System-user token" required error={tried ? problems.systemUserToken : null}
-        hint="In Meta Business settings › Users › System users: generate a token for this app. ads_read is required; business_management, pages_show_list and instagram_basic let Nexus list the Pages and Instagram accounts. Stored encrypted and never shown again.">
-        <Input type="password" value={draft.systemUserToken} onChange={set('systemUserToken')} autoComplete="new-password" spellCheck={false} disabled={busy} />
+        hint="In Meta Business settings › Users › System users: generate a token for this app. ads_read is required; business_management, pages_show_list and instagram_basic let Nexus list the Pages and Instagram accounts, and pages_manage_ads lets it read the Pages the ad account can promote. Stored encrypted and never shown again.">
+        <Input {...SECRET_INPUT_PROPS} value={draft.systemUserToken} onChange={set('systemUserToken')} disabled={busy} />
       </Field>
     </form>
   </Modal>

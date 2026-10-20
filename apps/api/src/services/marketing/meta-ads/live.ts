@@ -14,7 +14,7 @@
  *     use_unified_attribution_setting and action_report_time, so neither is sent — facts F2 T1)
  *   - numbers inline in a list (`insights.date_preset(last_7d){…}` field expansion, master row IN-006): the Graph field
  *     expansion syntax is documented (graph-api/guides/field-expansion); this exact use on ads lists is UNVERIFIED —
- *     when Meta refuses it, the view says so and lists without numbers
+ *     when Meta refuses it, the list is read again without numbers and says so (listWithNumbers; LIVE-PROBES)
  */
 import { FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
@@ -22,10 +22,11 @@ import { listMetaConnections, type MetaConnection } from '../../meta/meta-accoun
 import { metaAdAccountId, metaObjectId, AD_ACCOUNT_STATUS_WORDS } from '../../cx/connectors/meta/discovery.js'
 import { metaReadAll, metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
-import { ACCOUNT_CORE_FIELDS, ACCOUNT_MONEY_FIELDS, ACCOUNT_SETTINGS_FIELDS, AD_FIELDS, AD_STATUSES_READ, ADSET_FIELDS, ADSET_STATUSES_READ, CAMPAIGN_FIELDS, CAMPAIGN_STATUSES_READ, insightFields, mapAd, mapAdSet, mapCampaign, purchasesOf } from './mappers.js'
+import { ACCOUNT_CORE_FIELDS, ACCOUNT_MONEY_FIELDS, ACCOUNT_SETTINGS_FIELDS, AD_FIELDS, AD_STATUSES_READ, ADSET_FIELDS, ADSET_STATUSES_READ, CAMPAIGN_FIELDS, CAMPAIGN_STATUSES_READ, insightFields, insightStatusFilter, mapAd, mapAdSet, mapCampaign, purchasesOf } from './mappers.js'
 import { decimalToMicros, metaUnitsToMicros, minorOf } from './money.js'
 import type { MetaQueryValue } from '../../gateway/meta.js'
 import { metaQueryKeyAllowed } from '../../gateway/meta-calls.js'
+import { maskTakenRows, takenIds } from './taken.js'
 
 /** A refusal in words (no Meta call was made, or Meta's answer was not usable). */
 export class MetaLiveRefusal extends Error {
@@ -93,6 +94,12 @@ export const AD_ACCOUNT_LISTS = ['owned', 'client', 'pending'] as const
 export type AdAccountList = typeof AD_ACCOUNT_LISTS[number]
 
 const AD_ACCOUNT_FIELDS = 'account_id,name,currency,timezone_name,account_status,business{id,name}'
+/**
+ * Review B2 — pending_owned_ad_accounts / pending_client_ad_accounts answer BusinessAdAccountRequest nodes, `{ id,
+ * ad_account }`: the account is asked inside `ad_account{…}` and read from there (the request's own id is kept apart).
+ */
+const PENDING_FIELDS = `id,ad_account{${AD_ACCOUNT_FIELDS}}`
+const PENDING_EDGES = new Set(['pending_owned_ad_accounts', 'pending_client_ad_accounts'])
 
 /** One ad account as answered; one another business uses is its id only (its details are that business's). */
 function adAccountRow(row: Record<string, unknown>, taken: Set<string>, chosen: string | null) {
@@ -114,10 +121,13 @@ function adAccountRow(row: Record<string, unknown>, taken: Set<string>, chosen: 
 }
 
 /** Which ids another business already picked (never which business). */
-async function takenAdAccounts(ids: string[]): Promise<Set<string>> {
-  if (ids.length === 0) return new Set()
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>`SELECT t.id FROM nexus_meta_links_taken('AD_ACCOUNT', ${ids}::text[]) AS t(id)`
-  return new Set(rows.map((r) => r.id))
+const takenAdAccounts = (ids: string[]) => takenIds('AD_ACCOUNT', ids)
+
+/** The account row of a list row: itself, or a pending request's `ad_account`. */
+function accountOfRow(row: Record<string, unknown>, edge: string): Record<string, unknown> | null {
+  if (!PENDING_EDGES.has(edge)) return row
+  const account = row.ad_account
+  return account && typeof account === 'object' ? account as Record<string, unknown> : null
 }
 
 /**
@@ -125,7 +135,7 @@ async function takenAdAccounts(ids: string[]): Promise<Set<string>> {
  * clients', and the claims still pending (the chosen account's portfolio, unless `portfolioId` names another one this
  * system user reaches) — needs business_management.
  */
-export async function liveAdAccounts(input: { connectionId?: string | null; list: AdAccountList; portfolioId?: string | null; maxRows?: number }) {
+export async function liveAdAccounts(input: { connectionId?: string | null; list: AdAccountList; portfolioId?: string | null; search?: string | null; maxRows?: number }) {
   const connection = await metaConnectionFor(input.connectionId)
   const chosen = connection.adAccount?.adAccountId ?? null
   const maxRows = Math.min(500, Math.max(1, input.maxRows ?? 200))
@@ -140,12 +150,20 @@ export async function liveAdAccounts(input: { connectionId?: string | null; list
   const edges: Record<AdAccountList, string[]> = {
     owned: ['owned_ad_accounts'], client: ['client_ad_accounts'], pending: ['pending_owned_ad_accounts', 'pending_client_ad_accounts'],
   }
-  const items: Array<NonNullable<ReturnType<typeof adAccountRow>> & { edge: string }> = []
+  // AA-002 — owned_ad_accounts documents one read parameter, search_query; client and pending ones document none.
+  const search = input.search?.trim() || null
+  if (search && input.list !== 'owned') throw new MetaLiveRefusal('Meta documents a search only for the portfolio\'s own ad accounts (list owned); the client and pending lists have no search parameter.')
+  const items: Array<NonNullable<ReturnType<typeof adAccountRow>> & { edge: string; requestId?: string | null }> = []
   let more = false
   for (const edge of edges[input.list]) {
-    const read = await list(connection.connectionId, `adAccounts.${edge}`, `${businessId}/${edge}`, { fields: AD_ACCOUNT_FIELDS }, maxRows)
-    const taken = await takenAdAccounts(read.rows.map((r) => metaAdAccountId(r.account_id ?? r.id)).filter((id): id is string => !!id))
-    for (const r of read.rows) { const row = adAccountRow(r, taken, chosen); if (row) items.push({ ...row, edge }) }
+    const pending = PENDING_EDGES.has(edge)
+    const read = await list(connection.connectionId, `adAccounts.${edge}`, `${businessId}/${edge}`, { fields: pending ? PENDING_FIELDS : AD_ACCOUNT_FIELDS, ...(search ? { search_query: search } : {}) }, maxRows)
+    const accounts = read.rows.map((r) => ({ request: r, account: accountOfRow(r, edge) }))
+    const taken = await takenAdAccounts(accounts.map(({ account }) => metaAdAccountId(account?.account_id ?? account?.id)).filter((id): id is string => !!id))
+    for (const { request, account } of accounts) {
+      const row = account ? adAccountRow(account, taken, chosen) : null
+      if (row) items.push({ ...row, edge, ...(pending ? { requestId: text(request.id) } : {}) })
+    }
     more = more || read.more
   }
   return { list: input.list, businessId, items, more }
@@ -175,6 +193,33 @@ function inlineNumbers(row: Record<string, unknown>, currency: string | null) {
 
 const inlineField = (preset: string | null) => (preset ? `,insights.date_preset(${preset}){impressions,clicks,spend,actions,action_values}` : '')
 
+/**
+ * A list with its numbers inline (master IN-006: the insights field expansion on a list, UNVERIFIED on v26). When Meta
+ * refuses the expansion, the list is read again without numbers and says so (review A4); a lost token, a throttle or a
+ * gateway refusal is not retried.
+ */
+async function listWithNumbers(connectionId: string, operation: string, path: string, fields: string, query: Record<string, MetaQueryValue>, preset: string | null, maxRows: number) {
+  if (!preset) return { read: await list(connectionId, operation, path, { fields, ...query }, maxRows), numbers: null, numbersNote: null }
+  try {
+    return { read: await list(connectionId, operation, path, { fields: fields + inlineField(preset), ...query }, maxRows), numbers: preset, numbersNote: null }
+  } catch (err) {
+    if (!(err instanceof MetaReadError) || err.failure.authLost || err.failure.throttled || err.failure.origin !== 'meta') throw err
+    return {
+      read: await list(connectionId, operation, path, { fields, ...query }, maxRows),
+      numbers: null,
+      numbersNote: `Meta refused the numbers inside the list (${err.failure.sentence}); this list has no numbers. view insights reads them.`,
+    }
+  }
+}
+
+/** A campaign or ad set id from a caller, read only when it is the chosen account's own (else refused in words). */
+async function ownObject(account: MetaChosenAccount, id: string, what: string): Promise<string> {
+  const objectId = metaObjectId(id)
+  if (!objectId) throw new MetaLiveRefusal(`"${id}" is not a Meta ${what} id (digits).`)
+  if (!(await objectInAccount(account, objectId))) throw new MetaLiveRefusal(`That ${what} does not belong to the ad account this business chose, so it is not read.`)
+  return objectId
+}
+
 /** One live view of the chosen ad account. */
 export async function liveView(input: { connectionId?: string | null; view: LiveView; campaignId?: string | null; adSetId?: string | null; numbers?: string | null; from?: string | null; to?: string | null; level?: string | null; daily?: boolean; maxRows?: number }) {
   const account = await metaChosenAccount(input.connectionId)
@@ -182,11 +227,11 @@ export async function liveView(input: { connectionId?: string | null; view: Live
   const maxRows = Math.min(500, Math.max(1, input.maxRows ?? 200))
   const ctx = { adAccountId, currencyCode: currency ?? '' }
   const preset = input.numbers && (INLINE_PRESETS as readonly string[]).includes(input.numbers) ? input.numbers : null
-  const filterOf = (key: string, id: string | null | undefined) => (id ? { filtering: [{ field: key, operator: 'EQUAL', value: id }] } : {})
   const base = { account: { adAccountId, name: account.name, currency, timeZone: account.timeZone } }
   switch (input.view) {
     case 'account': {
-      const core = await metaReadOne({ connectionId }, { operation: 'live.account', path: act(adAccountId), query: { fields: `${ACCOUNT_CORE_FIELDS},${ACCOUNT_MONEY_FIELDS.replace(',funding_source_details', '')},${ACCOUNT_SETTINGS_FIELDS}` } })
+      // The payment method (funding_source_details, MANAGE) is not asked here (review A7): it would null the money.
+      const core = await metaReadOne({ connectionId }, { operation: 'live.account', path: act(adAccountId), query: { fields: `${ACCOUNT_CORE_FIELDS},${ACCOUNT_MONEY_FIELDS},${ACCOUNT_SETTINGS_FIELDS}` } })
       const b = core.body as Record<string, unknown>
       const status = num(b.account_status)
       return {
@@ -207,25 +252,32 @@ export async function liveView(input: { connectionId?: string | null; view: Live
       }
     }
     case 'campaigns': {
-      const read = await list(connectionId, 'live.campaigns', `${act(adAccountId)}/campaigns`, { fields: CAMPAIGN_FIELDS + inlineField(preset), effective_status: CAMPAIGN_STATUSES_READ }, maxRows)
-      return { ...base, numbers: preset, items: read.rows.map((r) => withNumbers(money(mapCampaign(r, ctx), currency), r, preset, currency)).filter((r) => r.campaignId), more: read.more }
+      const { read, numbers, numbersNote } = await listWithNumbers(connectionId, 'live.campaigns', `${act(adAccountId)}/campaigns`, CAMPAIGN_FIELDS, { effective_status: CAMPAIGN_STATUSES_READ }, preset, maxRows)
+      return { ...base, numbers, numbersNote, items: read.rows.map((r) => withNumbers(money(mapCampaign(r, ctx), currency), r, numbers, currency)).filter((r) => r.campaignId), more: read.more }
     }
     case 'adsets': {
-      const read = await list(connectionId, 'live.adsets', `${act(adAccountId)}/adsets`, { fields: ADSET_FIELDS + inlineField(preset), effective_status: ADSET_STATUSES_READ, ...filterOf('campaign.id', input.campaignId) }, maxRows)
-      return { ...base, numbers: preset, items: read.rows.map((r) => withNumbers(money(mapAdSet(r, ctx), currency), r, preset, currency)).filter((r) => r.adSetId), more: read.more }
+      // Review B5 — one campaign's ad sets through Meta's documented edge (/{campaign_id}/adsets), after checking the
+      // campaign is the chosen account's; never `filtering` on act_<id>/adsets (not documented on v26).
+      const path = input.campaignId ? `${await ownObject(account, input.campaignId, 'campaign')}/adsets` : `${act(adAccountId)}/adsets`
+      const { read, numbers, numbersNote } = await listWithNumbers(connectionId, 'live.adsets', path, ADSET_FIELDS, { effective_status: ADSET_STATUSES_READ }, preset, maxRows)
+      return { ...base, numbers, numbersNote, items: read.rows.map((r) => withNumbers(money(mapAdSet(r, ctx), currency), r, numbers, currency)).filter((r) => r.adSetId), more: read.more }
     }
     case 'ads': {
-      const read = await list(connectionId, 'live.ads', `${act(adAccountId)}/ads`, { fields: AD_FIELDS + inlineField(preset), effective_status: AD_STATUSES_READ, ...filterOf('adset.id', input.adSetId), ...filterOf('campaign.id', input.adSetId ? null : input.campaignId) }, maxRows)
-      return { ...base, numbers: preset, items: read.rows.map((r) => ({ ...(mapAd(r, { adAccountId }) ?? {}), ...(preset ? { numbers: inlineNumbers(r, currency) } : {}) })).filter((r) => (r as { adId?: string }).adId), more: read.more }
+      // Review B5 — /{adset_id}/ads or /{campaign_id}/ads (documented), each checked against the chosen account first.
+      const path = input.adSetId ? `${await ownObject(account, input.adSetId, 'ad set')}/ads` : input.campaignId ? `${await ownObject(account, input.campaignId, 'campaign')}/ads` : `${act(adAccountId)}/ads`
+      const { read, numbers, numbersNote } = await listWithNumbers(connectionId, 'live.ads', path, AD_FIELDS, { effective_status: AD_STATUSES_READ }, preset, maxRows)
+      return { ...base, numbers, numbersNote, items: read.rows.map((r) => ({ ...(mapAd(r, { adAccountId }) ?? {}), ...(numbers ? { numbers: inlineNumbers(r, currency) } : {}) })).filter((r) => (r as { adId?: string }).adId), more: read.more }
     }
     case 'insights': {
       const level = input.level && (INSIGHT_LEVELS as readonly string[]).includes(input.level) ? input.level : 'campaign'
       if (!input.from || !input.to) throw new MetaLiveRefusal('Name the days (from and to, YYYY-MM-DD, the account\'s time zone); today is allowed.')
       const grain = level === 'adset' ? 'ADSET' : level === 'ad' ? 'AD' : 'CAMPAIGN'
       const fields = level === 'account' ? 'impressions,reach,clicks,inline_link_clicks,spend,frequency,actions,action_values' : insightFields(grain)
+      // Review B1 — archived and deleted objects too (Meta leaves them out of level=… without this filter).
+      const filtering = level === 'account' ? [] : [...insightStatusFilter(grain), ...(input.campaignId ? [{ field: 'campaign.id', operator: 'EQUAL', value: input.campaignId }] : [])]
       const read = await list(connectionId, `live.insights.${level}`, `${act(adAccountId)}/insights`, {
         level, time_range: { since: input.from, until: input.to }, time_increment: input.daily ? 1 : 'all_days', fields,
-        ...filterOf('campaign.id', level !== 'account' ? input.campaignId : null),
+        ...(filtering.length ? { filtering } : {}),
       }, maxRows)
       return {
         ...base, level, from: input.from, to: input.to, daily: !!input.daily,
@@ -244,11 +296,15 @@ export async function liveView(input: { connectionId?: string | null; view: Live
     }
     case 'pages': {
       const read = await list(connectionId, 'live.promotePages', `${act(adAccountId)}/promote_pages`, { fields: 'id,name' }, maxRows)
-      return { ...base, items: read.rows.map((r) => ({ pageId: text(r.id), name: text(r.name), chosenHere: text(r.id) === account.pageId })), more: read.more }
+      // Review A1 — a Page another business in Nexus uses is its id and the flag only.
+      const rows = await maskTakenRows('PAGE', read.rows) as Array<Record<string, unknown>>
+      return { ...base, items: rows.map((r) => (r.takenByAnotherBusiness === true ? { pageId: text(r.id), takenByAnotherBusiness: true } : { pageId: text(r.id), name: text(r.name), chosenHere: text(r.id) === account.pageId, takenByAnotherBusiness: false })), more: read.more }
     }
     case 'instagram': {
       const read = await list(connectionId, 'live.instagramAccounts', `${act(adAccountId)}/instagram_accounts`, { fields: 'id,username' }, maxRows)
-      return { ...base, items: read.rows.map((r) => ({ instagramId: text(r.id), username: text(r.username), chosenHere: text(r.id) === account.instagramId })), more: read.more }
+      // Review A1 — an Instagram account another business in Nexus uses is its id and the flag only.
+      const rows = await maskTakenRows('INSTAGRAM', read.rows) as Array<Record<string, unknown>>
+      return { ...base, items: rows.map((r) => (r.takenByAnotherBusiness === true ? { instagramId: text(r.id), takenByAnotherBusiness: true } : { instagramId: text(r.id), username: text(r.username), chosenHere: text(r.id) === account.instagramId, takenByAnotherBusiness: false })), more: read.more }
     }
     case 'minimum-budgets': {
       const read = await list(connectionId, 'live.minimumBudgets', `${act(adAccountId)}/minimum_budgets`, {}, maxRows)
@@ -281,7 +337,52 @@ function withNumbers(row: Record<string, unknown>, raw: Record<string, unknown>,
 // ── meta-ads-graph-read ──────────────────────────────────────────────────────────────────────────────────────────
 
 /** Edges that list people: they need the users permission. */
-export const PEOPLE_EDGES = new Set(['users', 'assigned_users', 'agencies', 'leads', 'comments', 'conversations', 'messages'])
+/** Edges that list people with access: as the path's edge they need the users permission. */
+export const PEOPLE_EDGES = new Set(['users', 'assigned_users', 'agencies'])
+/**
+ * Review A1 — never read by meta-ads-graph-read, as the path's edge or as a name ANYWHERE in `fields` (any depth): other
+ * businesses' portfolios and ad accounts, people, buyers' messages and lead-form answers, the payment method. A people
+ * edge inside `fields` is refused too (the path edge, with the users permission, is the one way to read it).
+ */
+export const GRAPH_DENIED_NAMES = new Set([
+  'business', 'businesses', 'owner', 'owner_business', 'owned_ad_accounts', 'client_ad_accounts', 'pending_owned_ad_accounts', 'pending_client_ad_accounts',
+  'adaccounts', 'accounts', 'owned_pages', 'client_pages', 'owned_businesses', 'client_businesses', 'owned_instagram_accounts', 'business_users', 'system_users',
+  'leadgen_forms', 'leads', 'comments', 'conversations', 'messages', 'funding_source_details',
+  ...PEOPLE_EDGES,
+])
+/** Review A1 — the only names a `{…}` list may follow in graph-read's `fields`: the chosen account's own numbers and ads' parts. */
+export const GRAPH_NESTABLE = new Set(['insights', 'creative', 'adcreatives', 'targeting'])
+
+/**
+ * Why graph-read's `fields` is refused, or null: every field name at any depth is checked against GRAPH_DENIED_NAMES, and
+ * a `{…}` list may only follow a GRAPH_NESTABLE name. Modifier names (after a `.`) and their arguments are not fields.
+ */
+export function graphFieldsProblem(fields: string): string | null {
+  const parents: string[] = []
+  let paren = 0
+  let lastName: string | null = null
+  for (let i = 0; i < fields.length; i++) {
+    const c = fields[i]
+    if (c === '(') { paren++; continue }
+    if (c === ')') { paren = Math.max(0, paren - 1); continue }
+    if (paren > 0) continue
+    if (c === '{') {
+      if (!lastName || !GRAPH_NESTABLE.has(lastName.toLowerCase())) return `"${lastName ?? '{'}" cannot be expanded with {…} here; only ${[...GRAPH_NESTABLE].join(', ')} can.`
+      parents.push(lastName)
+      lastName = null
+      continue
+    }
+    if (c === '}') { parents.pop(); lastName = null; continue }
+    if (/[A-Za-z_]/.test(c) && (i === 0 || !/[A-Za-z0-9_]/.test(fields[i - 1]))) {
+      const name = /^[A-Za-z_][A-Za-z0-9_]*/.exec(fields.slice(i))![0]
+      i += name.length - 1
+      if (fields[i - name.length] === '.') continue // a modifier (.limit, .date_preset), not a field
+      if (GRAPH_DENIED_NAMES.has(name.toLowerCase())) return `"${name}" is not read by meta-ads-graph-read${parents.length ? ` (inside ${parents.join(' › ')})` : ''}.`
+      lastName = name
+    }
+  }
+  return null
+}
 /** Fields a graph read never asks for: the payment method's details live in Meta's billing screen (meta-billing reads them). */
 const REFUSED_FIELDS = /(^|[,{])\s*funding_source_details\b/
 const GATEWAY_KEYS = /^(access_token|appsecret_proof|appsecret_time|_?method|batch|fields|limit|after)$/i
@@ -346,6 +447,7 @@ export async function graphRead(input: GraphReadInput) {
   const [node, edge] = segments
   if (edge !== undefined && !/^[a-z][a-z0-9_]{0,60}$/.test(edge)) throw new MetaLiveRefusal(`"${edge}" is not an edge name (lower case letters, digits and _).`)
   if (edge && PEOPLE_EDGES.has(edge) && !input.canSeePeople) throw new MetaLiveRefusal(`The edge "${edge}" lists people; it needs the users permission.`)
+  if (edge && !PEOPLE_EDGES.has(edge) && GRAPH_DENIED_NAMES.has(edge)) throw new MetaLiveRefusal(`The edge "${edge}" is not read by meta-ads-graph-read.`)
   if (/^act_/.test(node)) {
     if (metaAdAccountId(node) !== account.adAccountId) throw new MetaLiveRefusal('Only the ad account this business chose may be read (another account is refused, never read).')
   } else {
@@ -358,6 +460,8 @@ export async function graphRead(input: GraphReadInput) {
   const fields = input.fields?.trim() || (!edge && !/^act_/.test(node) ? 'id,name' : '')
   if (fields && !/^[a-z0-9_.,{}()\s]{1,800}$/i.test(fields)) throw new MetaLiveRefusal('fields holds characters a Graph field list never has.')
   if (REFUSED_FIELDS.test(fields)) throw new MetaLiveRefusal('funding_source_details (the payment method) is not read here; it is shown on Meta\'s billing screen.')
+  const fieldProblem = graphFieldsProblem(fields)
+  if (fieldProblem) throw new MetaLiveRefusal(fieldProblem)
   const params: Record<string, MetaQueryValue> = {}
   for (const [key, value] of Object.entries(input.params ?? {})) {
     if (!/^[a-z][a-z0-9_]{0,40}$/.test(key) || GATEWAY_KEYS.test(key)) throw new MetaLiveRefusal(`The parameter "${key}" is not one a read may set here.`)
