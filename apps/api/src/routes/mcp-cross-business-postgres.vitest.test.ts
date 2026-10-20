@@ -1100,6 +1100,10 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   get 'set-aplus-content'() { return { op: 'update', market: seeded.b.market, contentReferenceKey: 'MCP8-PROBE', name: 'MCP8 probe', summary: 'MCP8 probe', accountId: undefined, fromMarket: undefined, kind: undefined, language: undefined, modules: undefined, asins: undefined } },
   get 'set-aplus-asins'() { return { market: seeded.b.market, contentReferenceKey: 'MCP8-PROBE', add: ['B000000001'], accountId: undefined, asins: undefined, remove: undefined } },
   get 'submit-aplus-content'() { return { op: 'submit', market: seeded.b.market, contentReferenceKey: 'MCP8-PROBE', accountId: undefined } },
+  // SD creatives (2026-10-20) — a headline for B's ad group (inside B its campaign is refused by name: it is not Sponsored
+  // Display; from A the ad group is not found), and an upload of B's library photo (from A it is not found, before any fetch).
+  get 'set-ad-creative'() { return { op: 'update', adGroupId: seeded.b.adGroupId, headline: 'MCP8 probe', brandLogo: undefined, customImage: undefined, video: undefined, properties: undefined, consentToTranslate: undefined } },
+  get 'upload-ad-asset'() { return { market: seeded.b.market, use: 'brandLogo', photoId: `da_${seeded.b.assetId}`, url: undefined, subType: undefined, name: undefined } },
   // Sponsored Display extras (P3c, 2026-10-20) — aimed at B's market, campaign or ad group, with every key given (no Amazon id
   // of B exists): from A the market, campaign or ad group is not found, before any Amazon call.
   get 'sd-optimization-rules'() { return { market: seeded.b.market, ruleId: undefined, adGroupId: undefined, withAdGroups: false, startIndex: 0 } },
@@ -1340,6 +1344,9 @@ const BUSINESS_WIDE = new Set(['set-business-settings'])
 const LIVE_READS = new Set(['shopify-content', 'set-shopify-content', 'listing-live-content',
   // Amazon A+ (2026-10-19) — read and changed live at Amazon: from A, B's market is not found before any Amazon call.
   'aplus-content', 'set-aplus-content', 'set-aplus-asins', 'submit-aplus-content',
+  // SD creatives (2026-10-20) — the asset library is read live at Amazon (sandbox here: nothing to read inside B), and an
+  // upload fetches its photo: from A, B's photo is not found before any fetch or Amazon call.
+  'ad-assets', 'upload-ad-asset',
   // Sponsored Display extras (P3c) — read and changed live at Amazon: from A, B's market, campaign or ad group is not found first.
   'sd-optimization-rules', 'set-sd-optimization-rule', 'sd-budget-rules', 'sd-budget-insights', 'set-sd-budget-rule', 'sd-forecast',
   'sd-brand-safety', 'set-sd-brand-safety'])

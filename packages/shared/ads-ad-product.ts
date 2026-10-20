@@ -25,6 +25,8 @@
  * portfolioId; PUT /sd/adGroups: "name, defaultBid, and state"; PUT /sd/productAds: "the only mutable field, state"; PUT
  * /sd/targets: "bid and state"), and archived (each one's DELETE). What Amazon fixes when it is made — a campaign's cost
  * type and tactic, an ad group's bid optimization and creative type — stays refused, by the tools in Amazon's words.
+ * SD creatives (2026-10-20) — and a Sponsored Display ad group's creative (its headline, brand logo, custom image or
+ * video, /sd/creatives), with the asset it is made from: `CREATIVE`.
  */
 
 export type AdProduct = 'SPONSORED_PRODUCTS' | 'SPONSORED_BRANDS' | 'SPONSORED_DISPLAY' | 'SPONSORED_TELEVISION' | 'DSP'
@@ -105,8 +107,11 @@ export function adProductRefusal(
 
 /** W4-11 — one write, as the mutation layer, the write gate and the change tools describe it. */
 export interface AdWrite {
-  /** What is written. `NEGATIVE_CREATE`: a new negative. `PLACEMENT`: a placement adjustment (Sponsored Products only). */
-  entity: 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD' | 'PORTFOLIO' | 'PLACEMENT' | 'NEGATIVE_CREATE'
+  /**
+   * What is written. `NEGATIVE_CREATE`: a new negative. `PLACEMENT`: a placement adjustment (Sponsored Products only).
+   * `CREATIVE`: a Sponsored Display ad group's creative, or an asset uploaded for one (Sponsored Display only).
+   */
+  entity: 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD' | 'PORTFOLIO' | 'PLACEMENT' | 'NEGATIVE_CREATE' | 'CREATIVE'
   /** Every field it changes (`dailyBudget`, `status`, `bid`, …). */
   fields?: ReadonlyArray<string | null | undefined> | null
   /** The state a `status` change sets: ENABLED | PAUSED | ARCHIVED (any case). */
@@ -130,7 +135,7 @@ const SD_AD_GROUP_FIELDS = new Set(['name', 'defaultBid', 'status'])
 const SD_STATES = new Set([...ON_OFF, 'ARCHIVED'])
 const ENTITY_WORDS: Record<AdWrite['entity'], string> = {
   CAMPAIGN: 'the campaign', AD_GROUP: 'an ad group', AD_TARGET: 'a target', PRODUCT_AD: 'an ad',
-  PORTFOLIO: 'a portfolio', PLACEMENT: 'the placement adjustments', NEGATIVE_CREATE: 'a new negative',
+  PORTFOLIO: 'a portfolio', PLACEMENT: 'the placement adjustments', NEGATIVE_CREATE: 'a new negative', CREATIVE: 'a creative',
 }
 
 /**
@@ -187,6 +192,9 @@ function sbSdProblem(product: string, w: AdWrite): string | null {
     }
     case 'NEGATIVE_CREATE':
       return negativeSupported(product, kind, level) ? null : negativeWords
+    // SD creatives — a Display ad group's creative goes to /sd/creatives; a Sponsored Brands ad's creative is not sent.
+    case 'CREATIVE':
+      return product === SPONSORED_DISPLAY ? null : 'a creative'
     default:
       return `a change to ${ENTITY_WORDS[w.entity] ?? 'it'}`
   }

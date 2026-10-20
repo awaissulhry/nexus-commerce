@@ -262,6 +262,9 @@ export const TOOL_PHRASE: Record<string, string> = {
   'set-aplus-content': 'make or change an Amazon A+ draft',
   'set-aplus-asins': 'change which ASINs show an A+ document',
   'submit-aplus-content': 'submit or suspend Amazon A+ content',
+  // SD creatives (2026-10-20) — a Display ad's look, and an asset for it, at Amazon.
+  'set-ad-creative': 'make or change a Sponsored Display ad creative',
+  'upload-ad-asset': 'upload an image to the Amazon ads asset library',
   // Sponsored Display extras (P3c, 2026-10-20) — Amazon's own rules and the deny list, at Amazon.
   'set-sd-optimization-rule': 'change a Sponsored Display cost control',
   'set-sd-budget-rule': 'change a Sponsored Display budget rule',
