@@ -33,7 +33,7 @@ import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock
 import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade } from './account.js'
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
-import { metaAppSecretProof, metaReadOnlyProblem, metaRenewalOf, metaSendUrl } from './meta-calls.js'
+import { metaAppSecretProof, metaCallVerdict, metaSendUrl, scrubMetaAnswer } from './meta-calls.js'
 import { writeLedgerRow } from './ledger.js'
 import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
@@ -325,14 +325,16 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // 1d. Meta (M1, 2026-10-20) — Nexus only READS Meta: a GET with no body, to the pinned Graph version, that is not a
   // method override, a batch, a token revoke or any sign-in call but the system-user token renewal (meta-calls.ts).
   // Refused before the account, the token or the network, by the kind declared AND by the method and URL themselves.
+  let metaRenewal = false
   if (req.channel === 'META') {
-    const problem = metaReadOnlyProblem({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
-    if (problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${problem} (${req.method} ${safePath(req.url)}).`, 403)
+    // One verdict on one canonical parse (meta-calls.ts): the refusal, and for the renewal the client_id it names.
+    const judged = metaCallVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
+    if (judged.problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${judged.problem} (${req.method} ${safePath(req.url)}).`, 403)
     // The renewal names the app it is for: it must be THIS connection's own app, never another.
-    const renewal = metaRenewalOf(req.url)
-    if (renewal) {
+    if (judged.renewalClientId !== null) {
       const appId = req.connectionId ? await (await import('../cx/token.service.js')).metaAppIdOf(req.connectionId) : null
-      if (!appId || renewal.clientId !== appId) return refuse('refused', 'META_READ_ONLY', 'Nothing was sent to Meta: a token renewal is sent only for the connection\'s own Meta app.', 403)
+      if (!appId || judged.renewalClientId !== appId) return refuse('refused', 'META_READ_ONLY', 'Nothing was sent to Meta: a token renewal is sent only for the connection\'s own Meta app.', 403)
+      metaRenewal = true
     }
   }
 
@@ -455,6 +457,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   let timedOut = false
   let reading: { remaining?: number; limit?: number; retryAfterSec?: number } | null = null
   let graphqlErrors = false
+  let metaScrubbed = 0
   for (;;) {
     const slot = await takeToken(req.channel, key, req.maxRateWaitMs ?? 30_000)
     if (!slot.ok) {
@@ -469,6 +472,12 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       status = res.status
       responseHeaders = res.headers
       text = await res.text()
+      // Review 2 — no token leaves the gateway in a Meta answer (the renewal's own answer IS the new token).
+      if (req.channel === 'META' && !metaRenewal) {
+        const clean = scrubMetaAnswer(text)
+        text = clean.text
+        metaScrubbed += clean.scrubbed
+      }
     } catch (err) {
       status = 0
       timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
@@ -505,7 +514,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   const verdict = ok ? null : classifyChannelAnswer(req.channel, status, text, { timedOut })
   if (req.channel === 'META' && verdict) {
     // Meta answers a throttle with an error code (often with no usage header): hold the bucket all the same — 300 s, the
-    // block Meta's rate-limit page names for an ad account's score; an hour for ad-set budget changes (613/1487632).
+    // block Meta's rate-limit page names for an ad account's score. 613/1487632 is the per-ad-set budget-change limit: it
+    // cannot occur while Nexus only reads; step 17 (writes) will hold only that ad set's writes, not the whole bucket.
     if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec) {
       await observeRate(req.channel, key, { retryAfterSec: verdict.channelCode === '613/1487632' ? 3600 : 300 })
     }
@@ -531,7 +541,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     rateLimitLimit: reading?.limit ?? null,
     attempts,
     requestPayload: ok ? undefined : typeof req.body === 'string' || req.body == null ? ledgerSafeBody(req.body ?? null) : { __binary: true, bytes: req.body instanceof Uint8Array ? req.body.byteLength : null },
-    responsePayload: ok ? undefined : ledgerSafeBody(text),
+    // Review 2 — how many access_token keys were dropped from a Meta answer (it never reaches the ledger either).
+    responsePayload: metaScrubbed ? { scrubbed: metaScrubbed, ...(ok ? {} : { body: ledgerSafeBody(text) }) } : ok ? undefined : ledgerSafeBody(text),
   })
 
   return {

@@ -75,8 +75,10 @@ async function heartbeat(handle: ConnectionHandle): Promise<HeartbeatResult> {
   }
   const row = await prisma.channelConnection.findUnique({ where: { id: handle.id }, select: { connectionMetadata: true } })
   const kept = storedTokenHealth(row?.connectionMetadata)
+  const stored = handle.identity?.userId ?? null
   if (kept?.isValid && kept.checkedAt && Date.now() - Date.parse(kept.checkedAt) < CHECK_EVERY_MS && (!kept.expiresAt || Date.parse(kept.expiresAt) > Date.now())) {
-    return { ok: true, latencyMs: Date.now() - started, scopes: kept.scopes, ...(kept.userId ? { identity: { userId: kept.userId } } : {}) }
+    // The identity is /me's, as connect stored it: a kept debug_token user id is reported only when it is that one.
+    return { ok: true, latencyMs: Date.now() - started, scopes: kept.scopes, ...(kept.userId && kept.userId === stored ? { identity: { userId: kept.userId } } : {}) }
   }
   let health: MetaTokenHealth
   try {
@@ -96,7 +98,24 @@ async function heartbeat(handle: ConnectionHandle): Promise<HeartbeatResult> {
   if (!health.isValid) {
     return failed(health.appMatches ? 'auth_revoked' : 'identity_mismatch', `${health.problem ?? 'Meta says the token is not valid.'} Make a new system-user token in Meta Business settings and enter it in Settings → Channels → Meta.`)
   }
-  return { ok: true, latencyMs: Date.now() - started, scopes: health.scopes, ...(health.userId ? { identity: { userId: health.userId } } : {}) }
+  return { ok: true, latencyMs: Date.now() - started, scopes: health.scopes, ...(await confirmedIdentity(handle, health.userId)) }
+}
+
+/**
+ * Review 2 (B1) — who the token acts as, as the heartbeat reports it. Connect stores `/me`'s id; Meta may name another
+ * user in debug_token for the same token (a warning at connect, never a refusal). So debug_token's id stands only when
+ * it IS the stored one; otherwise `/me` is asked again and its id is reported (another user then is a real mismatch).
+ * Nothing is reported when `/me` does not answer: no answer is never a claim of another user.
+ */
+async function confirmedIdentity(handle: ConnectionHandle, debugUserId: string | null): Promise<{ identity?: { userId: string } }> {
+  const stored = handle.identity?.userId ?? null
+  if (debugUserId && (!stored || debugUserId === stored)) return { identity: { userId: debugUserId } }
+  try {
+    const me = await identity(handle)
+    return me ? { identity: { userId: me.userId } } : {}
+  } catch {
+    return {}
+  }
 }
 
 /** Who the token acts as (`GET /me`), through the gateway, for a connection that already holds it. */

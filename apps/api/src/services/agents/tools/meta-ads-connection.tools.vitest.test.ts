@@ -37,6 +37,11 @@ const META = {
 beforeEach(() => { h.connections = [META]; h.live = [] })
 
 describe('meta-connection', () => {
+  it('view choices needs settings.integrations.manage, as Settings\' own list of choices does', async () => {
+    const res = await tool.handler(tool.input.parse({ view: 'choices' }), { can: (p: string) => p !== 'settings.integrations.manage', via: 'claude' as const } as never)
+    expect(res).toMatchObject({ ok: false, error: expect.stringMatching(/settings\.integrations\.manage/) })
+    expect(h.live).toEqual([])
+  })
   it('is a read: no change, no secret argument, reads Meta live in some views (open world)', () => {
     expect(tool).toMatchObject({ readOnly: true, openWorld: true, riskTier: 'low' })
     expect(tool.execute).toBeUndefined()

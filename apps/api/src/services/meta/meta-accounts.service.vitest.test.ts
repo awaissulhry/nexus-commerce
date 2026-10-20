@@ -107,11 +107,12 @@ describe('the choice', () => {
     expect(() => parseMetaSelection({})).toThrow(/Choose the Meta ad account/)
     expect(() => parseMetaSelection({ adAccountId: '1', pageId: 'x' })).toThrow(/Facebook Page/)
   })
-  it('C2 marks an asset another business already picked, without naming it', async () => {
+  it('C2 marks an asset another business already picked, by its id only, never naming it', async () => {
     h.takenRows = [{ product: 'PAGE', id: '120000000000010' }]
     const answer = await metaChoicesAnswer(await getMetaChoices('conn-1'))
-    expect(answer.adAccounts.items[0].takenByAnotherBusiness).toBe(false)
-    expect(answer.pages.items[0].takenByAnotherBusiness).toBe(true)
+    expect(answer.adAccounts.items[0]).toMatchObject({ adAccountId: '1234567890', name: 'Shop A', takenByAnotherBusiness: false })
+    // Review 2: an asset another business uses is its id only — its name and Instagram account are that business's.
+    expect(answer.pages.items[0]).toEqual({ pageId: '120000000000010', takenByAnotherBusiness: true })
   })
   it('saves only what Meta offered, records accounts_linked, and the same choice twice changes nothing', async () => {
     const first = await saveMetaSelection('conn-1', { adAccountId: '1234567890', pageId: '120000000000010', instagramId: '170000000000001' }, { userId: 'u-1' })

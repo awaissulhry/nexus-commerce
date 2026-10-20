@@ -145,11 +145,12 @@ describe('connect', () => {
     expect(result.warnings).toContainEqual(expect.stringMatching(/one user in the token check and another/))
     expect(h.stored.at(-1)!.grant.tokenResponseMetadata).toMatchObject({ debugUserId: '120000000000009' })
   })
-  it('refuses a token of another app, an invalid one, one without ads_read, and two different users — nothing stored', async () => {
-    const refuse = async (answer: () => { ok: boolean; status: number; body: unknown }, code: string, meId?: string) => {
+  // Two different users (debug_token's and /me's) are a warning, never a refusal: the test above.
+  it('refuses a token of another app, an invalid one, one without ads_read, and an app id or secret Meta refuses — nothing stored', async () => {
+    const refuse = async (answer: () => { ok: boolean; status: number; body: unknown }, code: string) => {
       h.stored.length = 0
       h.answers.set('token.debug', answer)
-      h.answers.set('identity.me', me(meId))
+      h.answers.set('identity.me', me())
       const err = await connectMeta({ body: BODY, actor: { kind: 'operator' } }).catch((e) => e)
       expect(err).toBeInstanceOf(MetaConnectError)
       expect(err.code).toBe(code)

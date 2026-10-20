@@ -144,7 +144,8 @@ export function metaTokenExpiryLevel(expiresAt: Date | null, now: number = Date.
   return META_EXPIRY_WARN_DAYS.includes(daysLeft) ? daysLeft : null
 }
 
-async function metaExpiryAlerts(row: Row): Promise<void> {
+/** A Meta token's expiry warnings at 14, 7 and 1 days; exported for its real-PostgreSQL test (meta-links-postgres). */
+export async function metaExpiryAlerts(row: Pick<Row, 'id' | 'accessTokenExpiresAt' | 'displayName'>): Promise<void> {
   const d = metaTokenExpiryLevel(row.accessTokenExpiresAt)
   if (!row.accessTokenExpiresAt || d === null) return
   // Once per level per token: a renewed or replaced token has another expiry, and warns afresh.

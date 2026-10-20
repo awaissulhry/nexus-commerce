@@ -12,12 +12,13 @@
  *   view permissions        LIVE: the permissions the token holds, granted or declined (ACC-011)
  *   view app                LIVE: the app's roles, the ad accounts it is authorised for in the business, its connected
  *                           client businesses (ACC-037, ACC-038, ACC-903; app token)
- *   view choices            LIVE (kept 5 minutes): the ad accounts, Pages and Instagram accounts the system user can see,
- *                           each marked when another business in Nexus already uses it (never which)
+ *   view choices            LIVE (kept 5 minutes; settings.integrations.manage, as Settings' own list): the ad accounts,
+ *                           Pages and Instagram accounts the system user can see; one another business uses is its id only
  * (ACC-900, the apps a user is assigned to, needs manage_app_solution — not a system-user permission: not offered.)
  *
  * set-meta-connection (Owner 2026-10-20 "yes 1"): ask to choose the business's ad account, Page and Instagram account
- * from what its system user can see. A Nexus-only change a person approves in Nexus; it runs as that person. It saves
+ * from what its system user can see. A Nexus-only change a person approves in Nexus (or, with the business's #691 "no
+ * approval" switch on, it runs 20 s after the request unless stopped); it runs as that person. It saves
  * through the same service as the Settings card (saveMetaSelection), so a Meta id another business uses is refused there
  * too (the unique index). Undo puts the previous choice back.
  *
@@ -72,12 +73,17 @@ const metaConnection: AgentTool = {
     + 'API version. check: debug_token now and the usage Meta reports on one cheap read (Business Use Case, ad account '
     + 'and app usage in percent, the access tier, a version warning). permissions: granted and declined permissions. app: '
     + 'the app\'s roles, the ad accounts it is authorised for in the business portfolio, its connected client businesses. '
-    + 'choices: the ad accounts, Facebook Pages and Instagram accounts the system user can see (read live, kept 5 minutes), '
-    + 'each marked when another business in Nexus already uses it (a Meta id belongs to one business; never which) — '
-    + 'set-meta-connection asks to choose among them. Connecting Meta and replacing its credentials are a person\'s in '
+    + 'choices (needs settings.integrations.manage, as in Settings): the ad accounts, Facebook Pages and Instagram accounts '
+    + 'the system user can see (read live, kept 5 minutes); one another business in Nexus already uses is shown by its id '
+    + 'only, marked takenByAnotherBusiness (a Meta id belongs to one business; never which) — set-meta-connection asks to '
+    + 'choose among the others. Connecting Meta and replacing its credentials are a person\'s in '
     + 'Settings › Channels › Meta; Claude never takes an app secret or a token. Nexus only reads Meta for now.',
-  async handler(args): Promise<ToolResult> {
+  async handler(args, ctx): Promise<ToolResult> {
     const view = (args.view ?? 'summary') as View
+    // Review 2 — the same permission as Settings › Channels › Meta's own list of choices (GET …/choices).
+    if (view === 'choices' && !ctx.can(F.settingsIntegrationsManage)) {
+      return { ok: false, error: 'view choices needs the settings.integrations.manage permission, as the list of choices in Settings › Channels › Meta does.' }
+    }
     const connections = await listMetaConnections()
     const connection = pick(connections, typeof args.connectionId === 'string' ? args.connectionId : undefined)
     if (!connection) {
@@ -177,13 +183,13 @@ async function setPlanOf(args: Record<string, unknown>): Promise<SetPlan | { err
     + 'Assign it to the system user in Meta Business settings, or choose one meta-connection view choices lists.'
   const account = answer.adAccounts.items.find((a) => a.adAccountId === selection.adAccountId)
   if (!account) return { error: cannotSee('ad account', answer.adAccounts.error) }
-  if (account.takenByAnotherBusiness) return { error: TAKEN_HERE.adAccount }
+  if (account.takenByAnotherBusiness === true) return { error: TAKEN_HERE.adAccount }
   const page = selection.pageId ? answer.pages.items.find((p) => p.pageId === selection.pageId) : null
   if (selection.pageId && !page) return { error: cannotSee('Facebook Page', answer.pages.error) }
-  if (page?.takenByAnotherBusiness) return { error: TAKEN_HERE.page }
+  if (page?.takenByAnotherBusiness === true) return { error: TAKEN_HERE.page }
   const instagram = selection.instagramId ? answer.instagram.items.find((i) => i.instagramId === selection.instagramId) : null
   if (selection.instagramId && !instagram) return { error: cannotSee('Instagram account', answer.instagram.error) }
-  if (instagram?.takenByAnotherBusiness) return { error: TAKEN_HERE.instagram }
+  if (instagram?.takenByAnotherBusiness === true) return { error: TAKEN_HERE.instagram }
 
   const plan: MetaPicks = { connectionId: connection.connectionId, adAccountId: account.adAccountId, pageId: page?.pageId ?? null, instagramId: instagram?.instagramId ?? null }
   const changes: SetPlan['changes'] = {}
@@ -247,8 +253,9 @@ const setMetaConnection: AgentTool = {
     + 'only from what the business\'s Meta system user can see (meta-connection view choices lists them). A Meta id belongs '
     + 'to one business only: one another business in Nexus already uses is refused, without naming it. A field left out '
     + 'keeps the current choice; pageId or instagramId null takes that choice away. The preview shows each choice from → '
-    + 'to with its name and id. Nothing changes until a person approves it in Nexus (Approvals); it then runs as that '
-    + 'person, never by a rule, and only if the choice it stands on did not move. Saved in Nexus only: nothing is sent to '
+    + 'to with its name and id. A person approves it in Nexus (Approvals) — or, when this business\'s "Claude\'s changes '
+    + 'need no approval" switch is on, it runs 20 s after the request unless stopped. It runs as that person, never by a '
+    + 'rule of its own, and only if the choice it stands on did not move. Saved in Nexus only: nothing is sent to '
     + 'Meta. It never takes or returns an app secret or a token and cannot renew or revoke a token (Nexus renews it on its '
     + 'own); connecting Meta and replacing its credentials stay a person\'s, in Settings › Channels › Meta. Undo puts the '
     + 'previous choice back; a first choice cannot be taken back here.',

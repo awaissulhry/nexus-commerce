@@ -256,15 +256,27 @@ async function takenByOtherBusinesses(choices: MetaChoices): Promise<Map<MetaPro
   return taken
 }
 
-/** C2 as answered: every asset with `takenByAnotherBusiness`. */
+/**
+ * C2 as answered: every asset with `takenByAnotherBusiness`. An asset another business uses is answered by its id ONLY
+ * (review 2): its name, currency, time zone, business portfolio or Instagram account are that business's, never shown here.
+ */
 export async function metaChoicesAnswer(choices: MetaChoices) {
   const taken = await takenByOtherBusinesses(choices)
   const isTaken = (product: MetaProduct, id: string) => taken.get(product)?.has(id) ?? false
   return {
     systemUser: choices.systemUser,
-    adAccounts: { items: choices.adAccounts.items.map((a) => ({ ...a, takenByAnotherBusiness: isTaken(META_PRODUCT.adAccount, a.adAccountId) })), total: choices.adAccounts.total, error: choices.adAccounts.error },
-    pages: { items: choices.pages.items.map((p) => ({ ...p, takenByAnotherBusiness: isTaken(META_PRODUCT.page, p.pageId) })), total: choices.pages.total, error: choices.pages.error },
-    instagram: { items: choices.instagram.items.map((i) => ({ ...i, takenByAnotherBusiness: isTaken(META_PRODUCT.instagram, i.instagramId) })), total: choices.instagram.total, error: choices.instagram.error },
+    adAccounts: {
+      items: choices.adAccounts.items.map((a) => (isTaken(META_PRODUCT.adAccount, a.adAccountId) ? { adAccountId: a.adAccountId, takenByAnotherBusiness: true as const } : { ...a, takenByAnotherBusiness: false as const })),
+      total: choices.adAccounts.total, error: choices.adAccounts.error,
+    },
+    pages: {
+      items: choices.pages.items.map((p) => (isTaken(META_PRODUCT.page, p.pageId) ? { pageId: p.pageId, takenByAnotherBusiness: true as const } : { ...p, takenByAnotherBusiness: false as const })),
+      total: choices.pages.total, error: choices.pages.error,
+    },
+    instagram: {
+      items: choices.instagram.items.map((i) => (isTaken(META_PRODUCT.instagram, i.instagramId) ? { instagramId: i.instagramId, takenByAnotherBusiness: true as const } : { ...i, takenByAnotherBusiness: false as const })),
+      total: choices.instagram.total, error: choices.instagram.error,
+    },
   }
 }
 
