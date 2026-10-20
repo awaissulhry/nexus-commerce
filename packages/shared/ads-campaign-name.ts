@@ -7,7 +7,9 @@
  *   - an empty name;
  *   - more than 128 characters (the limit create-ad-campaign already holds every name to);
  *   - a character this codebase has recorded Amazon refusing in names: the middle dot "·" (U+00B7), which Amazon drops
- *     into the error array for portfolio and ad-group names (`pushCampaignStructure`, ads-create.service.ts).
+ *     into the error array for portfolio and ad-group names (`pushCampaignStructure`, ads-create.service.ts), and the
+ *     em dash "—" (U+2014), refused for a Sponsored Display ad group on 2026-10-20 ("Adgroup name invalid characters");
+ *     the en dash "–" (U+2013) is held to the same rule.
  * "Already used in this market" needs the database and lives with the launch checks (ads-launch-checks.service.ts);
  * `campaignNameKey` is the one comparison both use (case and outer spaces ignored, as Replicate's collision gate does).
  */
@@ -18,6 +20,8 @@ export const CAMPAIGN_NAME_MAX = 128
 /** Characters this codebase has recorded Amazon refusing in an ads name, with the one to use instead. */
 export const REFUSED_NAME_CHARACTERS: ReadonlyArray<{ char: string; replaceWith: string }> = [
   { char: '·', replaceWith: '-' },
+  { char: '—', replaceWith: '-' },
+  { char: '–', replaceWith: '-' },
 ]
 
 /** The form two names are compared in: "Gale Exact" and " gale exact " are the same campaign name. */
@@ -36,6 +40,16 @@ export function campaignNameProblem(name: string | null | undefined): string | n
     if (n.includes(char)) return `"${n}" contains "${char}", which Amazon refuses in names; use "${replaceWith}" instead.`
   }
   return null
+}
+
+/**
+ * The name as Amazon will take it: each refused character becomes its replacement ("A — B" → "A - B"), nothing else
+ * changes. The last step before a name is sent (ads-create.service.ts), so a name typed past every check still lands.
+ */
+export function amazonSafeName(name: string): string {
+  let out = name
+  for (const { char, replaceWith } of REFUSED_NAME_CHARACTERS) out = out.split(char).join(replaceWith)
+  return out
 }
 
 /**

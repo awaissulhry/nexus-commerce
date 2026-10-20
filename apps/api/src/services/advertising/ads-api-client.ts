@@ -2396,7 +2396,7 @@ export interface CreateSdCampaignInput {
   portfolioId?: string
   dryRun?: boolean
 }
-export async function createSdCampaign(ctx: ClientContext, input: CreateSdCampaignInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+export async function createSdCampaign(ctx: ClientContext, input: CreateSdCampaignInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown; error?: string | null }> {
   const body = [{
     name: input.name,
     budgetType: 'daily',
@@ -2413,36 +2413,40 @@ export async function createSdCampaign(ctx: ClientContext, input: CreateSdCampai
     logger.info('[ADS-SANDBOX] createSdCampaign', { input, externalId })
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
   }
-  // SD answers with a bare array of per-entity results; `code` is 'SUCCESS' on the happy path.
-  const response = await liveCall<Array<{ code?: string; campaignId?: number | string; details?: string }>>({
+  // SD answers with a bare array of per-entity results (HTTP 207); a refusal carries Amazon's `code` + `description`.
+  const response = await liveCall<Array<{ code?: string; campaignId?: number | string; description?: string }>>({
     ...ctx, method: 'POST', path: '/sd/campaigns', body,
     contentType: 'application/json', acceptHeader: 'application/json',
   })
-  const first = response?.[0]
-  const id = first?.campaignId == null ? null : String(first.campaignId)
-  if (!id) logger.warn('[ACR.5] createSdCampaign returned no campaignId', { response })
-  return { ok: !!id, mode: 'live', externalId: id, rawResponse: response }
+  const made = sdCreateResult(response, 'campaignId')
+  if (!made.externalId) logger.warn('[ACR.5] createSdCampaign returned no campaignId', { response })
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
+/**
+ * SD 3.0 `CreateAdGroup`: campaignId, name, state, defaultBid, bidOptimization, creativeType. There is NO `tactic` on an
+ * ad group (it belongs to the campaign); it was sent here until 2026-10-20. `bidOptimization` follows how the campaign
+ * pays: `clicks` or `conversions` for cpc, `reach` for vcpm.
+ */
 export interface CreateSdAdGroupInput {
   externalCampaignId: string
   name: string
   defaultBid: number
   state?: 'enabled' | 'paused'
-  tactic?: SdTactic
-  /** Amazon rejects an SD ad group whose tactic disagrees with its campaign's. */
+  /** How the campaign pays; picks the default `bidOptimization` (cpc → conversions, vcpm → reach). Default cpc. */
+  costType?: 'cpc' | 'vcpm'
+  /** The caller's choice is sent as given; Amazon refuses one that does not fit the campaign's costType, in its words. */
   bidOptimization?: 'clicks' | 'conversions' | 'reach'
   creativeType?: 'IMAGE' | 'VIDEO'
   dryRun?: boolean
 }
-export async function createSdAdGroup(ctx: ClientContext, input: CreateSdAdGroupInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+export async function createSdAdGroup(ctx: ClientContext, input: CreateSdAdGroupInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown; error?: string | null }> {
   const body = [{
     campaignId: Number(input.externalCampaignId),
     name: input.name,
     defaultBid: input.defaultBid,
     state: input.state ?? 'paused',
-    tactic: input.tactic ?? 'T00020',
-    bidOptimization: input.bidOptimization ?? 'conversions',
+    bidOptimization: input.bidOptimization ?? (input.costType === 'vcpm' ? 'reach' : 'conversions'),
     creativeType: input.creativeType ?? 'IMAGE',
   }]
   if (input.dryRun) return { ok: true, mode: 'dry-run', externalId: null, rawResponse: { wouldSend: { method: 'POST', path: '/sd/adGroups', body } } }
@@ -2451,14 +2455,14 @@ export async function createSdAdGroup(ctx: ClientContext, input: CreateSdAdGroup
     logger.info('[ADS-SANDBOX] createSdAdGroup', { input, externalId })
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
   }
-  const response = await liveCall<Array<{ code?: string; adGroupId?: number | string; details?: string }>>({
+  const response = await liveCall<Array<{ code?: string; adGroupId?: number | string; description?: string }>>({
     ...ctx, method: 'POST', path: '/sd/adGroups', body,
     contentType: 'application/json', acceptHeader: 'application/json',
   })
-  const first = response?.[0]
-  const id = first?.adGroupId == null ? null : String(first.adGroupId)
-  if (!id) logger.warn('[ACR.5] createSdAdGroup returned no adGroupId', { response })
-  return { ok: !!id, mode: 'live', externalId: id, rawResponse: response }
+  // Amazon's refusal in its own words (it was dropped, and the person read "Amazon answered without an id").
+  const made = sdCreateResult(response, 'adGroupId')
+  if (!made.externalId) logger.warn('[ACR.5] createSdAdGroup returned no adGroupId', { response })
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 /**
@@ -2523,7 +2527,7 @@ export interface CreateSbKeywordInput {
   state?: 'enabled' | 'paused'
   dryRun?: boolean
 }
-export async function createSbKeyword(ctx: ClientContext, input: CreateSbKeywordInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+export async function createSbKeyword(ctx: ClientContext, input: CreateSbKeywordInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown; error?: string | null }> {
   const body = [{
     campaignId: Number(input.externalCampaignId),
     adGroupId: Number(input.externalAdGroupId),
@@ -2542,10 +2546,9 @@ export async function createSbKeyword(ctx: ClientContext, input: CreateSbKeyword
     ...ctx, method: 'POST', path: '/sb/keywords', body,
     contentType: SB_KEYWORD_MIME, acceptHeader: SB_KEYWORD_MIME,
   })
-  const first = response?.[0]
-  const id = first?.keywordId == null ? null : String(first.keywordId)
-  if (!id) logger.warn('[ACR.5] createSbKeyword returned no keywordId', { response })
-  return { ok: !!id, mode: 'live', externalId: id, rawResponse: response }
+  const made = sdCreateResult(response, 'keywordId')
+  if (!made.externalId) logger.warn('[ACR.5] createSbKeyword returned no keywordId', { response })
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 /**
@@ -2640,7 +2643,7 @@ export interface CreateSbAdGroupInput {
   state?: 'enabled' | 'paused'
   dryRun?: boolean
 }
-export async function createSbAdGroup(ctx: ClientContext, input: CreateSbAdGroupInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+export async function createSbAdGroup(ctx: ClientContext, input: CreateSbAdGroupInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown; error?: string | null }> {
   const body = {
     adGroups: [{
       name: input.name,
@@ -2659,9 +2662,9 @@ export async function createSbAdGroup(ctx: ClientContext, input: CreateSbAdGroup
     contentType: 'application/vnd.sbadgroupresource.v4+json',
     acceptHeader: 'application/vnd.sbadgroupresource.v4+json',
   })
-  const id = response?.adGroups?.success?.[0]?.adGroupId ?? null
-  if (!id) logger.warn('[ACR.5] createSbAdGroup returned no adGroupId', { response })
-  return { ok: !!id, mode: 'live', externalId: id, rawResponse: response }
+  const made = v3CreateResult(response, 'adGroups', 'adGroupId')
+  if (!made.externalId) logger.warn('[ACR.5] createSbAdGroup returned no adGroupId', { response })
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 export interface CreateSbCampaignInput {
@@ -2679,7 +2682,7 @@ export interface CreateSbCampaignInput {
   bidOptimization?: boolean
   dryRun?: boolean
 }
-export async function createSbCampaign(ctx: ClientContext, input: CreateSbCampaignInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+export async function createSbCampaign(ctx: ClientContext, input: CreateSbCampaignInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown; error?: string | null }> {
   const body = {
     campaigns: [{
       name: input.name,
@@ -2707,9 +2710,9 @@ export async function createSbCampaign(ctx: ClientContext, input: CreateSbCampai
     contentType: 'application/vnd.sbcampaignresource.v4+json',
     acceptHeader: 'application/vnd.sbcampaignresource.v4+json',
   })
-  const id = response?.campaigns?.success?.[0]?.campaignId ?? null
-  if (!id) logger.warn('[ACR.5] createSbCampaign returned no campaignId', { response })
-  return { ok: !!id, mode: 'live', externalId: id, rawResponse: response }
+  const made = v3CreateResult(response, 'campaigns', 'campaignId')
+  if (!made.externalId) logger.warn('[ACR.5] createSbCampaign returned no campaignId', { response })
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 export interface CreateKeywordInput { externalCampaignId: string; externalAdGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' | 'BROAD'; bid: number; state?: 'enabled' | 'paused' }
@@ -2760,26 +2763,25 @@ export async function createProductAd(ctx: ClientContext, input: CreateProductAd
 /**
  * ACR Stage 5 — SD product ads. `createProductAd` above is `/sp/productAds` and SP-only, so
  * routing an SD ad through it would attach the ad to nothing — the same silent failure the
- * campaign create had. Shape read off this account's 230 existing SD product ads: numeric ids,
- * lowercase state, and `sku`/`asin` side by side.
+ * campaign create had. Numeric ids, lowercase state.
  *
- * SD accepts either identifier (unlike SP, which genuinely needs the seller SKU — see
- * `resolveSellerSku`), so prefer the SKU when we hold one and fall back to the ASIN.
+ * SD 3.0 `CreateProductAd`: `sku` is "defined for seller accounts only", `asin` "for vendors only". Nexus advertises as
+ * a seller, so it sends the seller SKU and never the ASIN beside it (it sent both until 2026-10-20). An ad with no SKU
+ * is refused before this is called (`createProductAdLocal`), as for Sponsored Products.
  */
 export interface CreateSdProductAdInput {
   externalCampaignId: string
   externalAdGroupId: string
-  sku?: string
-  asin?: string
+  /** The seller SKU (see `resolveSellerSku`). */
+  sku: string
   state?: 'enabled' | 'paused'
   dryRun?: boolean
 }
-export async function createSdProductAd(ctx: ClientContext, input: CreateSdProductAdInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown }> {
+export async function createSdProductAd(ctx: ClientContext, input: CreateSdProductAdInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown; error?: string | null }> {
   const body = [{
     campaignId: Number(input.externalCampaignId),
     adGroupId: Number(input.externalAdGroupId),
-    ...(input.sku ? { sku: input.sku } : {}),
-    ...(input.asin ? { asin: input.asin } : {}),
+    sku: input.sku,
     state: input.state ?? 'paused',
   }]
   if (input.dryRun) return { ok: true, mode: 'dry-run', externalId: null, rawResponse: { wouldSend: { method: 'POST', path: '/sd/productAds', body } } }
@@ -2788,14 +2790,13 @@ export async function createSdProductAd(ctx: ClientContext, input: CreateSdProdu
     logger.info('[ADS-SANDBOX] createSdProductAd', { input, externalId })
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
   }
-  const response = await liveCall<Array<{ code?: string; adId?: number | string; details?: string }>>({
+  const response = await liveCall<Array<{ code?: string; adId?: number | string; description?: string }>>({
     ...ctx, method: 'POST', path: '/sd/productAds', body,
     contentType: 'application/json', acceptHeader: 'application/json',
   })
-  const first = response?.[0]
-  const id = first?.adId == null ? null : String(first.adId)
-  if (!id) logger.warn('[ACR.5] createSdProductAd returned no adId', { response })
-  return { ok: !!id, mode: 'live', externalId: id, rawResponse: response }
+  const made = sdCreateResult(response, 'adId')
+  if (!made.externalId) logger.warn('[ACR.5] createSdProductAd returned no adId', { response })
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 // ── Product / category / auto targeting (AX2.1) — v3 SP /sp/targets POST.
@@ -2907,7 +2908,8 @@ export function sdCreateResult(response: unknown, idField: string): { externalId
   const id = first?.[idField]
   if (id != null && String(id) !== '') return { externalId: String(id), error: null }
   if (first && (first.code || first.description || first.details)) {
-    return { externalId: null, error: `Amazon refused it: ${[first.code, first.description ?? first.details].filter(Boolean).join(' — ')}`.slice(0, 300) }
+    const words = [first.code, first.description ?? first.details].map((w) => String(w ?? '').trim()).filter(Boolean)
+    return { externalId: null, error: `Amazon refused it: ${words.join(' — ')}`.slice(0, 300) }
   }
   return { externalId: null, error: CREATE_NO_ID }
 }
@@ -3054,7 +3056,7 @@ export function sbAdCreateRequest(input: CreateSbAdInput): { path: string; body:
   return { path: sbAdCreatePath(input.creativeType), body: { ads: [ad] } }
 }
 
-export async function createSbAd(ctx: ClientContext, input: CreateSbAdInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+export async function createSbAd(ctx: ClientContext, input: CreateSbAdInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown; error?: string | null }> {
   if (adsMode() === 'sandbox') {
     const externalId = `sb-sbad-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createSbAd', { input, externalId })
@@ -3069,7 +3071,8 @@ export async function createSbAd(ctx: ClientContext, input: CreateSbAdInput): Pr
     contentType: 'application/vnd.sbAdResource.v4+json',
     acceptHeader: 'application/vnd.sbAdResource.v4+json',
   })
-  return { ok: true, mode: 'live', externalId: response?.ads?.success?.[0]?.adId ?? null, rawResponse: response }
+  const made = v3CreateResult(response, 'ads', 'adId')
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 // ── Reports (Amazon's async request → poll → download pattern) ─────────

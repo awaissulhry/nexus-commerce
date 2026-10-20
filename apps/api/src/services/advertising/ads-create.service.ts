@@ -26,7 +26,7 @@ import {
   createTarget, createSdTarget, createSbAd, updateCampaign,
   listNegativeKeywords, listAdGroupsV3, listCampaignsServing, listCampaignsV3,
   createSdCampaign, createSbCampaign, createSdAdGroup, createSdProductAd, createSbAdGroup, listSbAds, createSbKeyword,
-  listKeywords, listSbKeywords, adsMode, CREATE_NO_ID, sbAdCreateRequest, v3ErrorText, listTargets, updateTarget, ALL_STATES,
+  listKeywords, listSbKeywords, adsMode, CREATE_NO_ID, sbAdCreateRequest, listTargets, updateTarget, ALL_STATES,
   type AdsRegion,
 } from './ads-api-client.js'
 import { CAMPAIGN_NOT_ON_AMAZON } from './launch-outcome.js'
@@ -42,7 +42,7 @@ import { marketCurrency } from '../pim/market-currency.js'
 import { readScheduleMembers, releaseScheduleMembers, type ReleaseReport } from './rank-release.service.js'
 import { isPersonCreate, isPersonEdit } from './ads-mutation.service.js'
 import { AD_PRODUCT_UNSUPPORTED, SPONSORED_PRODUCTS, adProductOf, adProductRefusal } from '@nexus/shared/ads-ad-product'
-import { campaignNameKey } from '@nexus/shared/ads-campaign-name'
+import { amazonSafeName, campaignNameKey } from '@nexus/shared/ads-campaign-name'
 // 5b — every negative this file writes goes through the one negative write service.
 import { mirrorNegativeKeyword, pushLocalNegative, writeNegativeKeyword, writeNegativeProductTarget, type NegativeWriteResult } from './ads-negative-kw.service.js'
 
@@ -224,6 +224,8 @@ export interface NewCampaign {
 /** W2-A (CC-3) — `reason`: why the campaign is not on Amazon (Amazon's words, the gate's, or no connection); null when it is. */
 type CampaignCreateResult = { id: string; externalCampaignId: string | null; mode: string; dryRun?: unknown; reason?: string | null }
 export async function createCampaignLocal(input: NewCampaign): Promise<CampaignCreateResult> {
+  // SD-P1 — the name as Amazon takes it ("—", "–" and "·" become "-"), for the create, the dedupe and the local row alike.
+  input = { ...input, name: amazonSafeName(input.name) }
   if (input.dryRun) return createCampaignOnce(input)
   // CC-24 / CM-33 — one campaign per name and market. Amazon refuses a second campaign with a name already in use, so
   // a double click, a second tab or a retry used to leave a local row with no Amazon id beside the real one. The claim
@@ -299,7 +301,8 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
       if (r.mode === 'dry-run') dryRunPayload = r.rawResponse
       else {
         externalId = r.externalId; mode = r.mode
-        if (!externalId) notSent = campaignRefusalText(r)
+        // W2-A (CC-3) — Amazon's words when a create came back without an id (each family's create reads its own 207).
+        if (!externalId) notSent = r.error ?? CAMPAIGN_NOT_ON_AMAZON
       }
     } else notSent = `Not sent to Amazon: ${gateReason(gate)}`
   }
@@ -320,7 +323,7 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
       externalCampaignId: externalId, dailyBudget: input.dailyBudgetEur, biddingStrategy: (input.biddingStrategy === 'autoForSales' ? 'AUTO_FOR_SALES' : input.biddingStrategy === 'manual' ? 'MANUAL' : 'LEGACY_FOR_SALES'),
       portfolioId: input.portfolioId || null,
       ...(brandEntityId ? { brandEntityId } : {}),
-      // CC-12 — an SD campaign keeps its tactic, so its ad group is created with the same one (see createAdGroupLocal).
+      // CC-12 — an SD campaign keeps the tactic it was created with, as Amazon holds it.
       ...(input.type === 'SD' ? { tactic: input.sdTactic ?? 'T00020' } : {}),
       // CC-27 — the Sponsored Products targeting type this create asked Amazon for (the same value `createCampaign`
       // sends). The list, the export and the receipt showed it blank until the settings sync read it back.
@@ -345,19 +348,6 @@ async function startDateTimeZone(profileId: string, marketplace: string): Promis
   return found?.timeZone ?? null
 }
 
-/**
- * W2-A (CC-3) — Amazon's words when a campaign create came back without an id: SP v3 / SB v4 carry a per-item error
- * (`{ campaigns: { error: [...] } }`), SD answers a bare array whose item carries `code` + `description`.
- */
-function campaignRefusalText(r: { rawResponse?: unknown; error?: string | null }): string {
-  if (r.error) return r.error
-  const v3 = v3ErrorText(r.rawResponse)
-  if (v3) return `Amazon refused it: ${v3}`
-  const first = Array.isArray(r.rawResponse) ? (r.rawResponse[0] as { code?: string; description?: string } | undefined) : undefined
-  if (first && first.code && first.code !== 'SUCCESS') return `Amazon refused it: ${first.description || first.code}`
-  return CAMPAIGN_NOT_ON_AMAZON
-}
-
 export interface NewAdGroup {
   campaignId: string; name: string; defaultBidEur: number; userId?: string; startEnabled?: boolean
   /** 1e — a person's own add from a screen or an upload (isPersonCreate): passes the halt and autonomy OFF. Set only by the routes. */
@@ -372,12 +362,13 @@ export interface NewAdGroup {
   changeSetId?: string | null
 }
 export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: string | null; externalAdGroupId: string | null; /** W2-A — why it did not reach Amazon (every caller; a launch lists it). */ notSent?: NotSent | null } & PersonAddResult> {
-  const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true, tactic: true } })
+  const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true, costType: true } })
   if (!campaign) throw new Error('campaign not found')
+  // SD-P1 — the name as Amazon takes it: an em dash refused this SD ad group on 2026-10-20 ("Adgroup name invalid characters").
+  const name = amazonSafeName(input.name)
   let externalId: string | null = null
   // ACR Stage 5 — same endpoint-family split as the campaign create above. An SD ad group
-  // carries `tactic` and `creativeType` and must agree with its campaign's tactic; posting it
-  // to `/sp/adGroups` would attach it to nothing.
+  // carries `bidOptimization` and `creativeType`; posting it to `/sp/adGroups` would attach it to nothing.
   const isSd = campaign.adProduct === 'SPONSORED_DISPLAY'
   const isSb = campaign.adProduct === 'SPONSORED_BRANDS'
   /**
@@ -400,14 +391,14 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
       if (gate.allowed) {
         try {
           const r = isSd
-            // CC-12 — the campaign's own tactic: an audiences (T00030) campaign's ad group used to go out as T00020.
-            ? await createSdAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name: input.name, defaultBid: input.defaultBidEur, state, tactic: campaign.tactic === 'T00030' ? 'T00030' : 'T00020' })
+            // SD-P1 — no tactic on an SD ad group (it is the campaign's); how the campaign pays picks its bidOptimization.
+            ? await createSdAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name, defaultBid: input.defaultBidEur, state, costType: campaign.costType === 'vcpm' ? 'vcpm' : 'cpc' })
             // SB ad groups take no bid at all — see CreateSbAdGroupInput.
             : isSb
-              ? await createSbAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name: input.name, state })
-              : await createAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name: input.name, defaultBid: input.defaultBidEur, state })
+              ? await createSbAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name, state })
+              : await createAdGroup(ctx, { externalCampaignId: campaign.externalCampaignId, name, defaultBid: input.defaultBidEur, state })
           externalId = r.externalId
-          if (!externalId) notSent = { outcome: 'failed', reason: (r as { error?: string | null }).error ?? CREATE_NO_ID }
+          if (!externalId) notSent = { outcome: 'failed', reason: r.error ?? CREATE_NO_ID }
         } catch (e) {
           if (!input.requireAmazon) throw e
           notSent = { outcome: 'failed', reason: (e as Error).message }
@@ -420,8 +411,8 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
     logger.warn('[CM-8] ad group not created — nothing written', { campaignId: input.campaignId, outcome: notSent.outcome, reason: notSent.reason })
     return { id: null, externalAdGroupId: null, ...personAdd(notSent.outcome, notSent.reason, notSent.limits) }
   }
-  const ag = await prisma.adGroup.create({ data: { campaignId: input.campaignId, name: input.name, defaultBidCents: Math.round(input.defaultBidEur * 100), status: 'ENABLED', externalAdGroupId: externalId } })
-  await audit('create_ad_group', 'AD_GROUP', ag.id, { name: input.name, externalId }, input.userId, {}, 'SUCCESS', pastNote, input.changeSetId)
+  const ag = await prisma.adGroup.create({ data: { campaignId: input.campaignId, name, defaultBidCents: Math.round(input.defaultBidEur * 100), status: 'ENABLED', externalAdGroupId: externalId } })
+  await audit('create_ad_group', 'AD_GROUP', ag.id, { name, externalId }, input.userId, {}, 'SUCCESS', pastNote, input.changeSetId)
   return {
     id: ag.id, externalAdGroupId: externalId, notSent,
     ...(input.requireAmazon ? personAdd(externalId ? 'created' : 'local', externalId ? null : NOT_ON_AMAZON_YET) : {}),
@@ -873,26 +864,25 @@ async function createProductAdOnce(input: NewProductAd): Promise<ProductAdCreate
     if (ctx) {
       const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, null, 'structure') })
       if (gate.allowed) {
-        // SD takes either identifier; SP genuinely needs the seller SKU, so only SP hard-fails.
-        if (!resolved && !isSd) {
-          const noSku = skuConflict ?? new Error(`no seller SKU for "${input.asin ?? input.sku ?? '?'}" — a Sponsored Products ad needs one`)
+        // SP and SD both advertise a seller's SKU (SD-P1: an SD `asin` is for vendor accounts only), so both refuse without one.
+        if (!resolved) {
+          const noSku = skuConflict ?? new Error(isSd
+            ? `no seller SKU for "${input.asin ?? input.sku ?? '?'}" — a Sponsored Display ad from a seller account names its SKU (Amazon takes an ASIN alone only from vendors), so nothing was sent`
+            : `no seller SKU for "${input.asin ?? input.sku ?? '?'}" — a Sponsored Products ad needs one`)
           if (!keepRefused) throw noSku
           notSent = { outcome: 'refused', reason: noSku.message }
         } else try {
           const r = isSd
             // ENABLED like the SP path: the campaign is the delivery gate, not the ad. See the
             // `state` docblock in createAdGroupLocal.
-            ? await createSdProductAd(ctx, {
-                externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId,
-                sku: resolved?.sku ?? input.sku, asin: resolved?.asin ?? input.asin, state: 'enabled',
-              })
-            : await createProductAd(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, sku: resolved!.sku, state: 'enabled' })
+            ? await createSdProductAd(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, sku: resolved.sku, state: 'enabled' })
+            : await createProductAd(ctx, { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, sku: resolved.sku, state: 'enabled' })
           externalId = r.externalId
           // Amazon answers 200 with an empty success list when it rejects an ad.
           // Silence here is what made 200 phantom product ads look like a clean run.
           // CM-8 — and with a per-item error when it refuses one: that is the reason given.
           if (!externalId) {
-            const why = (r as { error?: string | null }).error ?? JSON.stringify(r.rawResponse).slice(0, 200)
+            const why = r.error ?? JSON.stringify(r.rawResponse).slice(0, 200)
             if (!keepRefused) throw new Error(`Amazon did not create the ad for "${resolved?.sku ?? input.asin ?? '?'}": ${why}`)
             notSent = { outcome: 'failed', reason: why }
           }
@@ -925,7 +915,7 @@ async function createProductAdOnce(input: NewProductAd): Promise<ProductAdCreate
 // external id and reuses the existing local rows — never duplicates. Campaign must be allowlisted.
 export async function pushCampaignStructure(campaignId: string): Promise<{ ok: boolean; adGroups: number; keywords: number; targets: number; productAds: number; negKeywords: number; errors: string[] }> {
   const out = { ok: true, adGroups: 0, keywords: 0, targets: 0, productAds: 0, negKeywords: 0, errors: [] as string[] }
-  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true, tactic: true } })
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true, costType: true } })
   if (!campaign?.externalCampaignId || !campaign.marketplace) { out.ok = false; out.errors.push('campaign missing externalCampaignId/marketplace'); return out }
   const ctx = await resolveCtx(campaign.marketplace)
   if (!ctx) { out.ok = false; out.errors.push('no connection for ' + campaign.marketplace); return out }
@@ -939,23 +929,23 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
   const adGroups = await prisma.adGroup.findMany({ where: { campaignId } })
   for (const ag of adGroups) {
     let extAg = ag.externalAdGroupId
-    // Amazon rejects the `·` middle-dot (U+00B7) in ad group names (same constraint as portfolio
-    // names) — it silently drops the item into the error array so no adGroupId comes back. Sanitize.
-    const safeName = ag.name.replace(/\s*·\s*/g, ' - ')
+    // Amazon rejects the middle dot "·" in ad group and portfolio names, and the em dash in an SD ad group name — the item
+    // lands in the error array and no adGroupId comes back. The same cleanup every create uses (amazonSafeName).
+    const safeName = amazonSafeName(ag.name)
     if (!extAg) {
       try {
         // A missing SD / SB ad group is re-created on its own family's endpoint, as createAdGroupLocal does: the SP
         // create attached it to nothing (an SD/SB campaign id is unknown to /sp/adGroups).
         const bid = (ag.defaultBidCents ?? 75) / 100
         const r = isSd
-          ? await createSdAdGroup(ctx, { externalCampaignId: extC, name: safeName, defaultBid: bid, state: 'enabled', tactic: campaign.tactic === 'T00030' ? 'T00030' : 'T00020' })
+          ? await createSdAdGroup(ctx, { externalCampaignId: extC, name: safeName, defaultBid: bid, state: 'enabled', costType: campaign.costType === 'vcpm' ? 'vcpm' : 'cpc' })
           : campaign.adProduct === 'SPONSORED_BRANDS'
             ? await createSbAdGroup(ctx, { externalCampaignId: extC, name: safeName, state: 'enabled' })
             : await createAdGroup(ctx, { externalCampaignId: extC, name: safeName, defaultBid: bid, state: 'enabled' })
         extAg = r.externalId
         await prisma.adGroup.update({ where: { id: ag.id }, data: { externalAdGroupId: extAg, name: safeName, lastSyncStatus: extAg ? 'SUCCESS' : 'FAILED' } })
         if (extAg) out.adGroups++
-        else out.errors.push('adGroup "' + safeName + '": no external id — ' + JSON.stringify(r.rawResponse).slice(0, 300))
+        else out.errors.push('adGroup "' + safeName + '": ' + (r.error ?? 'no external id — ' + JSON.stringify(r.rawResponse).slice(0, 300)))
       } catch (e) { out.errors.push('adGroup "' + safeName + '": ' + ((e as Error)?.message || '')); continue }
     }
     if (!extAg) continue
@@ -996,7 +986,10 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
         const resolved = await resolveSellerSku({ ...pa, marketplace: campaign.marketplace })
         if (!resolved) { out.errors.push('productAd "' + (pa.asin || pa.sku || '') + '": no seller SKU in the catalog for this product'); continue }
         const sku = resolved.sku
-        const r = await createProductAd(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, sku, state: 'enabled' })
+        // SD-P1 — an SD ad on SD's own endpoint (it went to /sp/productAds, where an SD ad group is unknown).
+        const r = isSd
+          ? await createSdProductAd(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, sku, state: 'enabled' })
+          : await createProductAd(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, sku, state: 'enabled' })
         // Write the real ASIN back too: rows created from the builders' flat list
         // carry a SKU in `asin`, and leaving that lie in place breaks every later
         // join that trusts the column's name.
@@ -1702,7 +1695,7 @@ export async function createSbAdLocal(input: NewSbAd): Promise<{ id: string; ext
   // answers 200 with an empty success list when it REJECTS a creative (unusable logo,
   // ineligible ASIN, bad headline). Without this, a rejected creative stored a local row
   // with externalAdId null and looked like a clean launch.
-  if (!externalId) throw new Error(`Amazon did not create the SB creative: ${JSON.stringify(r.rawResponse).slice(0, 300)}`)
+  if (!externalId) throw new Error(`Amazon did not create the SB creative: ${r.error ?? JSON.stringify(r.rawResponse).slice(0, 300)}`)
   const creativeJson = { brandName, headline: input.headline, logoAssetId: logoAssetId ?? null, creativeType, landingType, landingUrl: landingUrl ?? null, asins }
   const ad = await prisma.adProductAd.create({ data: { adGroupId: input.adGroupId!, asin: asins[0], status: 'ENABLED', externalAdId: externalId, adType: 'BRAND_AD', creativeJson: creativeJson as never } })
   await audit('create_sb_ad', 'PRODUCT_AD', ad.id, { ...creativeJson, externalId, mode }, input.userId)

@@ -39,14 +39,14 @@ export async function launchProductFunnel(input: LaunchInput): Promise<{ autoCam
   // CM-20 — `creationFlow`: every add below belongs to a campaign this launch creates.
   const ad = { sku: product.sku ?? undefined, asin: product.amazonAsin ?? undefined, productId: product.id, userId: input.userId, creationFlow: true }
 
-  const autoCamp = await createCampaignLocal({ name: `${base} — Auto`, type: 'SP', marketplace: input.marketplace, targetingType: 'AUTO', dailyBudgetEur: budget, userId: input.userId })
-  const autoAg = await createAdGroupLocal({ campaignId: autoCamp.id, name: `${base} — Auto`, defaultBidEur: bid, userId: input.userId, creationFlow: true })
+  const autoCamp = await createCampaignLocal({ name: `${base} - Auto`, type: 'SP', marketplace: input.marketplace, targetingType: 'AUTO', dailyBudgetEur: budget, userId: input.userId })
+  const autoAg = await createAdGroupLocal({ campaignId: autoCamp.id, name: `${base} - Auto`, defaultBidEur: bid, userId: input.userId, creationFlow: true })
   await createProductAdLocal({ adGroupId: autoAg.id, ...ad })
 
-  const manualCamp = await createCampaignLocal({ name: `${base} — Manual`, type: 'SP', marketplace: input.marketplace, targetingType: 'MANUAL', dailyBudgetEur: budget, userId: input.userId })
+  const manualCamp = await createCampaignLocal({ name: `${base} - Manual`, type: 'SP', marketplace: input.marketplace, targetingType: 'MANUAL', dailyBudgetEur: budget, userId: input.userId })
   const adGroups: Record<string, string> = { AUTO: autoAg.id }
   for (const role of ['EXACT', 'PHRASE', 'BROAD'] as const) {
-    const ag = await createAdGroupLocal({ campaignId: manualCamp.id, name: `${base} — ${role}`, defaultBidEur: bid, userId: input.userId, creationFlow: true })
+    const ag = await createAdGroupLocal({ campaignId: manualCamp.id, name: `${base} - ${role}`, defaultBidEur: bid, userId: input.userId, creationFlow: true })
     await createProductAdLocal({ adGroupId: ag.id, ...ad })
     adGroups[role] = ag.id
     for (const kw of input.keywords ?? []) {
