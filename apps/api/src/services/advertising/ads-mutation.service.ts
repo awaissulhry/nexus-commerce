@@ -1336,6 +1336,8 @@ export interface CampaignPatch {
   status?: 'ENABLED' | 'PAUSED' | 'ARCHIVED'
   biddingStrategy?: 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL'
   endDate?: Date | null
+  /** P2b — a Sponsored Display campaign's start date (sent on its own route only: set-campaign-settings asks it for SD). */
+  startDate?: Date
 }
 
 export async function updateCampaignWithSync(args: {
@@ -1358,7 +1360,8 @@ export async function updateCampaignWithSync(args: {
   letsGo?: boolean
   /**
    * W4-11 — a Claude request: a Sponsored Brands or Display campaign's daily budget and on/off state are sent to their
-   * own endpoints (see adProductRefused). Absent: Sponsored Products only, as before.
+   * own endpoints (see adProductRefused). Absent: Sponsored Products only, as before. P2b — and a Sponsored Display
+   * campaign's name, start and end date, portfolio and archive.
    */
   allowSbSd?: boolean
   /**
@@ -1386,6 +1389,7 @@ export async function updateCampaignWithSync(args: {
       status: true,
       biddingStrategy: true,
       endDate: true,
+      startDate: true, // P2b
       adProduct: true, // 6a
       type: true,
       budgetJson: true, // W4-11 — an SB lifetime budget is not set from Nexus
@@ -1403,6 +1407,11 @@ export async function updateCampaignWithSync(args: {
     : null
   const notSp = adProductRefused('CAMPAIGN', args.campaignId, args.actor, existing, sbSdWrite)
   if (notSp) return notSp
+  // P2b — a start date goes out on the Sponsored Display route only; the Sponsored Products update sends none, so it would
+  // read as done while Amazon kept the old one.
+  if (args.patch.startDate != null && adProductOf(existing) !== SPONSORED_DISPLAY) {
+    return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'Nexus changes the start date of a Sponsored Display campaign only, so nothing was sent to Amazon.' }
+  }
 
   // SYNC.1 — see isSchedulingEngineActor. Refuse before the diff, so the refusal does not depend on
   // whether the status happens to differ this tick: an engine asking for a campaign state at all is
@@ -1493,6 +1502,8 @@ export async function updateCampaignWithSync(args: {
       newValue: args.patch.endDate?.toISOString() ?? null,
     })
   }
+  const startMoves = args.patch.startDate != null && args.patch.startDate.toISOString() !== existing.startDate.toISOString()
+  if (startMoves) changes.push({ field: 'startDate', oldValue: existing.startDate.toISOString(), newValue: args.patch.startDate!.toISOString() })
   if (changes.length === 0) {
     return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
   }
@@ -1525,6 +1536,8 @@ export async function updateCampaignWithSync(args: {
     status: existing.status,
     biddingStrategy: existing.biddingStrategy,
     endDate: existing.endDate?.toISOString() ?? null,
+    // P2b — only when this write moves it (every other write's audit row keeps its shape).
+    ...(startMoves ? { startDate: existing.startDate.toISOString() } : {}),
   }
 
   // Local write
@@ -1536,6 +1549,7 @@ export async function updateCampaignWithSync(args: {
   if (args.patch.status) data.status = args.patch.status
   if (args.patch.biddingStrategy) data.biddingStrategy = args.patch.biddingStrategy
   if (args.patch.endDate !== undefined) data.endDate = args.patch.endDate
+  if (startMoves) data.startDate = args.patch.startDate
   // Editing correctness (group 3) — compare-and-set when the caller named what it expects: a write that landed since the
   // read above leaves this one unwritten and unqueued.
   if (args.expected) {
@@ -1583,6 +1597,7 @@ export async function updateCampaignWithSync(args: {
     ...(args.patch.status ? { status: args.patch.status } : {}),
     ...(args.patch.biddingStrategy ? { biddingStrategy: args.patch.biddingStrategy } : {}),
     ...(args.patch.endDate !== undefined ? { endDate: args.patch.endDate?.toISOString() ?? null } : {}),
+    ...(startMoves ? { startDate: args.patch.startDate!.toISOString() } : {}),
   }
   const actionLogId = await writeAdvertisingActionLog({
     changeSetId: args.changeSetId ?? null,
@@ -1641,6 +1656,11 @@ export async function updateAdGroupWithSync(args: {
   confirmOwnLimits?: boolean
   /** AA-W2-12 — a deliberate pause or archive (pause-ads, archive-ads): the halt does not hold it (isLetGoWrite). Unlike `force`, nothing else is skipped. */
   letsGo?: boolean
+  /**
+   * P2b — a Claude request (or its suppression and undo): a Sponsored Display ad group's name, default bid and state
+   * (archive too) are sent to its own endpoint (see adProductRefused). Absent: Sponsored Products only, as before.
+   */
+  allowSbSd?: boolean
   /** Editing correctness (group 3) — the values this write is judged against (see updateCampaignWithSync `expected`). */
   expected?: ExpectedValues | null
 }): Promise<MutationOutcome> {
@@ -1655,7 +1675,7 @@ export async function updateAdGroupWithSync(args: {
       suppressedFromBidCents: true, // 1e (CM-9)
       status: true,
       orphanedAt: true,
-      campaign: { select: { id: true, marketplace: true, name: true, adProduct: true, type: true, ...BOUNDS_SELECT } },
+      campaign: { select: { id: true, marketplace: true, name: true, adProduct: true, type: true, costType: true, ...BOUNDS_SELECT } },
     },
   })
   if (!existing) {
@@ -1664,8 +1684,11 @@ export async function updateAdGroupWithSync(args: {
   // Editing correctness (group 3) — see `expected`.
   const movedNow = movedField(args.expected, existing)
   if (movedNow) return changedSinceOutcome(movedNow, (existing as Record<string, unknown>)[movedNow], args.expected![movedNow])
-  // 6a — see adProductRefused.
-  const notSp = adProductRefused('AD_GROUP', args.adGroupId, args.actor, existing.campaign)
+  // 6a — see adProductRefused. P2b — the write, described from the patch, for a caller that may change SD.
+  const sbSdWrite: AdWrite | null = args.allowSbSd === true
+    ? { entity: 'AD_GROUP', fields: [args.patch.defaultBidCents != null ? 'defaultBid' : null, args.patch.status ? 'status' : null, args.patch.name ? 'name' : null], toStatus: args.patch.status ?? null }
+    : null
+  const notSp = adProductRefused('AD_GROUP', args.adGroupId, args.actor, existing.campaign, sbSdWrite)
   if (notSp) return notSp
   // 1f — see isAutomatedPause: an automation lowers an ad group's bids, it never pauses it.
   if (isAutomatedPause(args.actor, args.patch.status)) {
@@ -1716,7 +1739,7 @@ export async function updateAdGroupWithSync(args: {
   // safety belongs in the user path so a slip-up can't zero impressions.
   // 1e (CM-19) — a person's floor is Amazon's own minimum in the market (bidFloorRefusal).
   const belowFloor = !args.force && args.patch.defaultBidCents != null
-    ? bidFloorRefusal(args.patch.defaultBidCents, person, existing.campaign?.marketplace, 'defaultBid')
+    ? bidFloorRefusal(args.patch.defaultBidCents, person, existing.campaign?.marketplace, 'defaultBid', existing.campaign) // P2b — an SD ad group's floor is SD's
     : null
   if (belowFloor) {
     return {
@@ -1742,7 +1765,7 @@ export async function updateAdGroupWithSync(args: {
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'AD_GROUP', entityId: args.adGroupId,
     campaignId: existing.campaign?.id, marketplace: existing.campaign?.marketplace, changes, force: args.force,
-    manual: args.manual, confirmOwnLimits, past, adGroupId: args.adGroupId, letsGo: args.letsGo,
+    manual: args.manual, confirmOwnLimits, past, adGroupId: args.adGroupId, letsGo: args.letsGo, write: sbSdWrite,
   })
   if (atDispatch) return atDispatch
 
@@ -1788,6 +1811,7 @@ export async function updateAdGroupWithSync(args: {
     manual: person,
     confirmOwnLimits,
     letsGo: args.letsGo,
+    sbSd: sbSdWrite != null && isSbSdCampaign(existing.campaign),
   })
 
   const bidHistoryIds = await writeBidHistory({
@@ -1839,14 +1863,17 @@ export async function updateProductAdWithSync(args: {
   confirmOwnLimits?: boolean
   /** AA-W2-12 — a deliberate pause or archive (pause-ads, archive-ads): the halt does not hold it (isLetGoWrite). Nothing else is skipped. */
   letsGo?: boolean
+  /** P2b — a Claude request: a Sponsored Display product ad's state (archive too) is sent to its own endpoint (adProductRefused). */
+  allowSbSd?: boolean
 }): Promise<MutationOutcome> {
   const existing = await prisma.adProductAd.findUnique({
     where: { id: args.productAdId },
     select: { id: true, externalAdId: true, status: true, adGroup: { select: { campaign: { select: { id: true, marketplace: true, name: true, adProduct: true, type: true } } } } },
   })
   if (!existing) return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
-  // 6a — see adProductRefused.
-  const notSp = adProductRefused('PRODUCT_AD', args.productAdId, args.actor, existing.adGroup?.campaign)
+  // 6a — see adProductRefused. P2b — the write described, for a caller that may change SD.
+  const sbSdWrite: AdWrite | null = args.allowSbSd === true ? { entity: 'PRODUCT_AD', fields: ['status'], toStatus: args.status } : null
+  const notSp = adProductRefused('PRODUCT_AD', args.productAdId, args.actor, existing.adGroup?.campaign, sbSdWrite)
   if (notSp) return notSp
   if (args.status === existing.status) return { ok: true, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'no_changes' }
 
@@ -1854,7 +1881,7 @@ export async function updateProductAdWithSync(args: {
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'PRODUCT_AD', entityId: args.productAdId,
     campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes,
-    manual: args.manual, letsGo: args.letsGo,
+    manual: args.manual, letsGo: args.letsGo, write: sbSdWrite,
   })
   if (atDispatch) return atDispatch
   await prisma.adProductAd.update({ where: { id: args.productAdId }, data: { status: args.status } })
@@ -1871,6 +1898,7 @@ export async function updateProductAdWithSync(args: {
     applyImmediately: args.applyImmediately ?? false,
     manual: isPersonEdit(args.manual, args.actor),
     letsGo: args.letsGo,
+    sbSd: sbSdWrite != null && isSbSdCampaign(existing.adGroup?.campaign),
   })
   const actionLogId = await writeAdvertisingActionLog({
     changeSetId: args.changeSetId ?? null,

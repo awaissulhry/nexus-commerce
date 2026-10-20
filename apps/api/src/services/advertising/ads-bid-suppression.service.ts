@@ -203,7 +203,9 @@ export async function suppressCampaignBids(
   // audit row (the recommendation the stop carries out); absent, nothing changes.
   // PB-5b — `manual` (optional): a person approved it (a playbook STOP he approved): his writes pass the allowlist like
   // his other edits (isPersonEdit). Absent for every existing caller.
-  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null; changeSetId?: string | null; evidence?: AdWriteEvidence | null; manual?: boolean },
+  // P2b — `allowSbSd` (optional): suppress-campaign on a Sponsored Display campaign: its ad group default bids and target
+  // bids go to SD's own endpoints (ads-mutation.service.ts adProductRefused). Absent: Sponsored Products only, as before.
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null; changeSetId?: string | null; evidence?: AdWriteEvidence | null; manual?: boolean; allowSbSd?: boolean },
 ): Promise<number> {
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true, bidsSuppressedBy: true } })
   if (!camp) return 0
@@ -228,7 +230,7 @@ export async function suppressCampaignBids(
     // A1 — save the prior BEFORE flooring (so the floor can never lose it) + isolate each entity.
     try {
       await prisma.adGroup.update({ where: { id: g.id }, data: { suppressedFromBidCents: g.defaultBidCents } })
-      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, ...(opts.evidence ? { evidence: opts.evidence } : {}), ...(opts.manual ? { manual: true } : {}) })
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, ...(opts.evidence ? { evidence: opts.evidence } : {}), ...(opts.manual ? { manual: true } : {}), ...(opts.allowSbSd ? { allowSbSd: true } : {}) })
       if (r.ok) touched++
     } catch (e) { logger.warn('[no-pause] suppress group threw — skipping', { adGroupId: g.id, error: (e as Error).message }) }
   }
@@ -241,7 +243,7 @@ export async function suppressCampaignBids(
   for (const t of targets) {
     try {
       await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: t.bidCents } })
-      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, ...(opts.evidence ? { evidence: opts.evidence } : {}), ...(opts.manual ? { manual: true } : {}) })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, ...(opts.evidence ? { evidence: opts.evidence } : {}), ...(opts.manual ? { manual: true } : {}), ...(opts.allowSbSd ? { allowSbSd: true } : {}) })
       if (r.ok) touched++
     } catch (e) { logger.warn('[no-pause] suppress target threw — skipping', { adTargetId: t.id, error: (e as Error).message }) }
   }
@@ -360,6 +362,8 @@ export async function restoreCampaignBids(
   opts: {
     actor: AdsActor; reason?: string; applyImmediately?: boolean; changeSetId?: string | null; manual?: boolean; holds?: BidHoldLog
     planned?: { floorCents: number; left: Array<{ kind: 'adGroup' | 'target'; id: string; bidCents: number; rememberedCents: number }> }
+    /** P2b — restore-campaign on a Sponsored Display campaign: its bids go back on SD's own endpoints (as suppressCampaignBids). */
+    allowSbSd?: boolean
   },
 ): Promise<number> {
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true, bidsSuppressedBy: true, suppressedFromPlacements: true, suppressedFromBiddingStrategy: true } })
@@ -435,7 +439,7 @@ export async function restoreCampaignBids(
         opts.planned!.left.push({ kind: 'adGroup', id: g.id, bidCents: g.defaultBidCents, rememberedCents: g.suppressedFromBidCents as number })
         continue
       }
-      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual })
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual, ...(opts.allowSbSd ? { allowSbSd: true } : {}) })
       if (r.ok || r.error === 'not_found') { await prisma.adGroup.update({ where: { id: g.id }, data: { suppressedFromBidCents: null } }); if (r.ok) touched++ }
       else { failed++; logger.warn('[no-pause] restore group not accepted — keeping prior for retry', { adGroupId: g.id, error: r.error }) }
     } catch (e) { failed++; logger.warn('[no-pause] restore group threw — keeping prior for retry', { adGroupId: g.id, error: (e as Error).message }) }
@@ -449,7 +453,7 @@ export async function restoreCampaignBids(
         opts.planned!.left.push({ kind: 'target', id: t.id, bidCents: t.bidCents, rememberedCents: t.suppressedFromBidCents as number })
         continue
       }
-      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual, ...(opts.allowSbSd ? { allowSbSd: true } : {}) })
       if (r.ok || r.error === 'not_found') { await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: null } }); if (r.ok) touched++ }
       else { failed++; logger.warn('[no-pause] restore target not accepted — keeping prior for retry', { adTargetId: t.id, error: r.error }) }
     } catch (e) { failed++; logger.warn('[no-pause] restore target threw — keeping prior for retry', { adTargetId: t.id, error: (e as Error).message }) }
