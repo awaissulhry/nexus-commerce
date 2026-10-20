@@ -109,7 +109,37 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string> }> = [
   { route: /^\d+\/(owned|client)_ad_accounts$/, keys: new Set(['search_query']) },
   { route: /^(act_)?\d+\/insights$/, keys: new Set(['level', 'time_range', 'time_increment', 'filtering']) },
   { route: /^act_\d+\/async_requests$/, keys: new Set(['status', 'type']) },
+  // Step 9 (meta-targeting-search / meta-targeting-check, live-targeting.ts) — each key only on its own path:
+  //   - Graph's targeting search /search (not an account path; `type` only from META_SEARCH_TYPES, below);
+  //   - the chosen account's targeting edges and estimates, an ad set's delivery / message estimate and plain words;
+  //   - a custom audience's special-ad-category eligibility (GET /<audience id>, audiences/special-ad-category).
+  {
+    route: /^search$/,
+    keys: new Set([
+      'type', 'q', 'class', 'location_types', 'country_code', 'region_id', 'match_country_code', 'locale', 'interest_list', 'interest_fbid_list',
+      'countries', 'regions', 'cities', 'zips', 'country_groups', 'latitude', 'longitude', 'distance_unit', 'targeting_option_list',
+    ]),
+  },
+  { route: /^act_\d+\/targetingsearch$/, keys: new Set(['q', 'limit_type', 'locale', 'objective', 'regulated_categories', 'allow_only_fat_head_interests']) },
+  { route: /^act_\d+\/targetingsuggestions$/, keys: new Set(['targeting_list', 'limit_type', 'locale', 'regulated_categories']) },
+  { route: /^act_\d+\/targetingbrowse$/, keys: new Set(['limit_type', 'locale', 'regulated_categories']) },
+  { route: /^act_\d+\/targetingvalidation$/, keys: new Set(['targeting_list', 'id_list', 'name_list', 'is_exclusion', 'locale']) },
+  { route: /^act_\d+\/broadtargetingcategories$/, keys: new Set(['custom_categories_only']) },
+  { route: /^act_\d+\/deprecatedtargetingadsets$/, keys: new Set(['type']) },
+  { route: /^act_\d+\/reachestimate$/, keys: new Set(['targeting_spec']) },
+  { route: /^(act_)?\d+\/delivery_estimate$/, keys: new Set(['optimization_goal', 'targeting_spec', 'promoted_object']) },
+  { route: /^(act_)?\d+\/message_delivery_estimate$/, keys: new Set(['targeting_spec', 'promoted_object', 'optimization_goal', 'bid_amount', 'lifetime_budget', 'lifetime_in_days', 'pacing_type']) },
+  { route: /^act_\d+\/targetingsentencelines$/, keys: new Set(['targeting_spec', 'hide_targeting_spec_from_return']) },
+  { route: /^\d+$/, keys: new Set(['ad_account_id', 'special_ad_categories', 'special_ad_category_countries']) },
 ]
+/**
+ * Step 9 — the `type` values a /search read may carry: targeting options only (targeting-search reference), never
+ * people, Pages or places. live-targeting.ts SEARCH_TYPE_OF sends exactly these.
+ */
+export const META_SEARCH_TYPES: ReadonlySet<string> = new Set([
+  'adgeolocation', 'adgeolocationmeta', 'adradiussuggestion', 'adinterest', 'adinterestsuggestion', 'adinterestvalid', 'adTargetingCategory',
+  'adeducationschool', 'adeducationmajor', 'adworkemployer', 'adworkposition', 'adlocale', 'targetingoptionstatus',
+])
 /** May a read of this route (the canonical one: lower case, no version) carry this query key? (meta-ads-graph-read asks.) */
 export function metaQueryKeyAllowed(route: string, key: string): boolean {
   return READ_KEYS.has(key) || ROUTE_KEYS.some((r) => r.route.test(route) && r.keys.has(key))
@@ -252,6 +282,8 @@ export function metaCallVerdict(input: { method: string; url: string; kind: stri
   for (const key of seen) {
     if (!keyAllowed(route, key)) return refuse(`the query key "${key}" is not one a Nexus read of Meta uses here`)
   }
+  // Step 9 — /search reads targeting options only (META_SEARCH_TYPES), never a person, a Page or a place.
+  if (route === 'search' && !META_SEARCH_TYPES.has(search.get('type') ?? '')) return refuse('a Meta search reads targeting options only: its type is one Nexus names (META_SEARCH_TYPES)')
   const fields = search.get('fields')
   if (fields !== null) {
     const problem = fieldsProblem(fields)
