@@ -435,6 +435,19 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     if (!proof) return refuse('held', 'META_APP_SECRET_UNAVAILABLE', 'Held, nothing sent: no Meta app secret is stored for this account, so the call cannot carry its appsecret_proof. Enter the app id and secret again in Settings → Channels → Meta.', 409)
     sendUrl = metaSendUrl(url, token, proof)
   }
+  // Review 3 — the token a renewal exchanges is the connection's own stored token, filled here (a caller cannot name one:
+  // meta-calls.ts refuses it). Like the token above, it goes only on the URL that is sent.
+  if (req.channel === 'META' && metaRenewal) {
+    let current: string
+    try {
+      current = await (await import('../cx/token.service.js')).metaRenewalToken(req.connectionId!)
+    } catch (err) {
+      return refuse('held', 'META_TOKEN_UNAVAILABLE', `Held, nothing sent: the stored Meta token of this account could not be read (${err instanceof Error ? err.message : String(err)}).`, 409)
+    }
+    const renewal = new URL(url)
+    renewal.searchParams.set('fb_exchange_token', current)
+    sendUrl = renewal.toString()
+  }
   if (req.channel === 'EBAY' && (req.sign || ebaySignatureAppliesTo(url, req.method))) {
     if (req.body != null && typeof req.body !== 'string') {
       return refuse('refused', 'SIGNING_BINARY_BODY', 'Nothing was sent to eBay: a signed call with a file body is not supported by the gateway.', 400)

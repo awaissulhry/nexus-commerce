@@ -114,6 +114,17 @@ describe('the choice', () => {
     // Review 2: an asset another business uses is its id only — its name and Instagram account are that business's.
     expect(answer.pages.items[0]).toEqual({ pageId: '120000000000010', takenByAnotherBusiness: true })
   })
+  it('review 3 — a nested asset another business uses is its id and the flag only (a Page\'s Instagram, an Instagram\'s Page)', async () => {
+    h.takenRows = [{ product: 'INSTAGRAM', id: '170000000000001' }]
+    const igTaken = await metaChoicesAnswer(await getMetaChoices('conn-1'))
+    expect(igTaken.pages.items[0]).toEqual({ pageId: '120000000000010', name: 'Shop A Page', instagram: { id: '170000000000001', takenByAnotherBusiness: true }, takenByAnotherBusiness: false })
+    expect(igTaken.instagram.items[0]).toEqual({ instagramId: '170000000000001', takenByAnotherBusiness: true })
+    expect(JSON.stringify(igTaken)).not.toContain('shop_a')
+    h.takenRows = [{ product: 'PAGE', id: '120000000000010' }]
+    const pageTaken = await metaChoicesAnswer(await getMetaChoices('conn-1'))
+    expect(pageTaken.instagram.items[0]).toEqual({ instagramId: '170000000000001', username: 'shop_a', pageId: '120000000000010', pageTakenByAnotherBusiness: true, takenByAnotherBusiness: false })
+    expect(JSON.stringify(pageTaken)).not.toContain('Shop A Page')
+  })
   it('saves only what Meta offered, records accounts_linked, and the same choice twice changes nothing', async () => {
     const first = await saveMetaSelection('conn-1', { adAccountId: '1234567890', pageId: '120000000000010', instagramId: '170000000000001' }, { userId: 'u-1' })
     expect(first.changed).toBe(true)

@@ -681,6 +681,16 @@ export async function metaAppAccessToken(connectionId: string): Promise<string> 
   return `${app.appId}|${app.appSecret}`
 }
 
+/**
+ * The token a renewal exchanges: the connection's own stored system-user token, read without renewing it. Only the
+ * gateway calls this, for the renewal call alone (review 3: a caller never names the token to exchange).
+ */
+export async function metaRenewalToken(connectionId: string): Promise<string> {
+  const { creds } = await metaCredentialsOf(connectionId)
+  if (!creds.accessToken) throw new Error('No Meta token is stored for this connection.')
+  return creds.accessToken
+}
+
 /** The Meta app id of a connection (not a secret: Meta shows it on every app page); null when none is stored. */
 export async function metaAppIdOf(connectionId: string): Promise<string | null> {
   try {
@@ -693,7 +703,8 @@ export async function metaAppIdOf(connectionId: string): Promise<string | null> 
 /**
  * Renew a 60-day Meta system-user token (called under the refresh lease, inside its renewal window). Meta's documented
  * call: GET oauth/access_token?grant_type=fb_exchange_token&client_id&client_secret&set_token_expires_in_60_days=true
- * &fb_exchange_token=<the current token> → { access_token, token_type, expires_in } — a token valid 60 days from now;
+ * &fb_exchange_token=<the current token> (the gateway adds this one: metaRenewalToken) → { access_token, token_type,
+ * expires_in } — a token valid 60 days from now;
  * the old one keeps working until its own expiry (checked 2026-10-20: developers.facebook.com/docs/marketing-api/
  * businessmanager/systemuser/install-apps-and-generate-tokens, "Refresh Access Token", "Access Token Rotation"). So:
  *   - renewed → the new token is stored (compare-and-set on the row read under the lease) and the old one is not revoked
@@ -740,7 +751,7 @@ async function renewMetaToken(row: ConnRow, creds: Credentials): Promise<string>
         client_id: app.appId,
         client_secret: app.appSecret,
         set_token_expires_in_60_days: 'true',
-        fb_exchange_token: creds.accessToken,
+        // fb_exchange_token: the gateway adds this connection's own stored token (review 3).
       }),
       method: 'GET',
       auth: 'none',

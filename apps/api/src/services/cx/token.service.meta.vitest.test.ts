@@ -121,7 +121,7 @@ describe('Meta: no refresh token is not a dead sign-in', () => {
     await expect(getAccessToken(id)).resolves.toBe('current-token')
     expect(h.calls).toHaveLength(0)
   })
-  it('inside the last 30 days it is renewed with itself — fb_exchange_token, no account token — and the new 60-day token is stored', async () => {
+  it('inside the last 30 days it is renewed with itself — the gateway adds fb_exchange_token, no account token — and the new 60-day token is stored', async () => {
     const id = await seed(20)
     await expect(getAccessToken(id)).resolves.toBe('renewed-token')
     expect(h.calls).toHaveLength(1)
@@ -129,7 +129,8 @@ describe('Meta: no refresh token is not a dead sign-in', () => {
     expect(h.calls[0]).toMatchObject({ auth: 'none', operation: 'token.renew' })
     expect(url.pathname).toBe('/v26.0/oauth/access_token')
     expect(Object.fromEntries(url.searchParams)).toEqual({
-      grant_type: 'fb_exchange_token', client_id: APP.appId, client_secret: APP.appSecret, set_token_expires_in_60_days: 'true', fb_exchange_token: 'current-token',
+      // Review 3: the token exchanged is never the caller's to name; the gateway fills it (metaRenewalToken).
+      grant_type: 'fb_exchange_token', client_id: APP.appId, client_secret: APP.appSecret, set_token_expires_in_60_days: 'true',
     })
     const creds = await credsOf(id)
     expect(creds.accessToken).toBe('renewed-token')

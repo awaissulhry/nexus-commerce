@@ -15,6 +15,7 @@ vi.mock('../cx/token.service.js', () => ({
   getAccessToken: vi.fn(async () => 'meta-system-user-token'),
   metaAppAccessToken: vi.fn(async () => '1234567|app-secret-for-tests'),
   metaAppIdOf: vi.fn(async () => '1234567'),
+  metaRenewalToken: vi.fn(async () => 'stored-meta-token'),
   metaRequestProof: vi.fn(async (_connectionId: string, token: string) => {
     h.proofs.push(token)
     return { appsecret_proof: `proof-of-${token.length}`, appsecret_time: '1760000000' }
@@ -89,8 +90,10 @@ describe('read only by construction', () => {
     expect(ok(`${BASE}/me?appsecret_proof=x`)).toMatch(/only the gateway sets/)
   })
   it('the only sign-in call is the system-user token renewal, exactly Meta\'s five keys once each, with no account token', () => {
-    const renew = `${BASE}/oauth/access_token?grant_type=fb_exchange_token&client_id=1&client_secret=s&set_token_expires_in_60_days=true&fb_exchange_token=t`
+    const renew = `${BASE}/oauth/access_token?grant_type=fb_exchange_token&client_id=1&client_secret=s&set_token_expires_in_60_days=true`
     expect(ok(renew, { auth: 'none' })).toBeNull()
+    // Review 3: the token exchanged is the gateway's to fill, never the caller's.
+    expect(ok(`${renew}&fb_exchange_token=t`, { auth: 'none' })).toMatch(/names no fb_exchange_token/)
     expect(ok(renew, { auth: 'account' })).toMatch(/token renewal/)
     expect(ok(`${BASE}/oauth/access_token?grant_type=client_credentials`, { auth: 'none' })).toMatch(/token renewal/)
     expect(ok(`${renew}&client_id=2`, { auth: 'none' })).toMatch(/"client_id" more than once/)
@@ -130,8 +133,36 @@ describe('read only by construction', () => {
   ])('refuses %s', (path, why) => {
     expect(ok(`${BASE}/${path}`)).toMatch(why)
   })
+  // Review 3 — the reviewer's second probe (scratchpad probe2.mts): what still passed is refused now.
+  it.each([
+    ['me?fields=accounts{}', /every \{…\} in fields names a field/],
+    ['me?fields=accounts{,}', /every \{…\} in fields names a field/],
+    ['me?fields=accounts{%20}', /every \{…\} in fields names a field/],
+    ['me?fields=accounts.limit(5){}', /every \{…\} in fields names a field/],
+    ['me?fields=businesses{owned_pages{}}', /every \{…\} in fields names a field/],
+    ['me?fields=accounts{id', /a \{ with no \}/],
+    ['me/accounts?fields=_', /fields names no field/],
+    ['me?fields=id&debug=all', /"debug" is not one a Nexus read of Meta uses/],
+    ['me?fields=id&metadata=1', /"metadata" is not one a Nexus read of Meta uses/],
+    ['me?metadata=1', /"metadata" is not one a Nexus read of Meta uses/],
+    ['me?fields=id&pretty=1', /"pretty" is not one a Nexus read of Meta uses/],
+    ['me?fields=id&input_token=x', /"input_token" is not one a Nexus read of Meta uses here/],
+    ['me/adaccounts?fields=id&business=1', /"business" is not one a Nexus read of Meta uses here/],
+    ['me?fields=' + 'a'.repeat(4001), /at most 4000 characters/],
+    ['me?fields=' + encodeURIComponent('аccounts'), /plain ASCII/],
+    ['me?fields=' + encodeURIComponent('accounts\t{id}'), /plain ASCII/],
+  ])('refuses %s', (path, why) => {
+    expect(ok(`${BASE}/${path}`)).toMatch(why)
+  })
+  it('review 3 — query keys are an allow-list: the keys step 1 reads, each only where it is used', () => {
+    expect(ok(`${BASE}/me/adaccounts?fields=account_id,name,business{id,name}&limit=100&summary=total_count&after=c1`)).toBeNull()
+    expect(ok(`${BASE}/me/adaccounts?fields=id&before=c0`)).toBeNull()
+    expect(ok(`${BASE}/me?fields=accounts{id,name}.limit(5)`)).toBeNull()
+    expect(ok(`${BASE}/debug_token?input_token=x`)).toBeNull()
+    expect(ok(`${BASE}/1234567/authorized_adaccounts?business=9876543210&fields=account_id,name&limit=100`)).toBeNull()
+  })
   it('review 2 — the renewal is recognised on the same parse: an odd path is refused and is never a renewal', () => {
-    const keys = 'grant_type=fb_exchange_token&client_id=OTHER&client_secret=s&set_token_expires_in_60_days=true&fb_exchange_token=t'
+    const keys = 'grant_type=fb_exchange_token&client_id=OTHER&client_secret=s&set_token_expires_in_60_days=true'
     for (const path of [`oauth//access_token?${keys}`, `%6Fauth/access_token?${keys}`, `%6Fauth/revoke`, `oauth/%72evoke`, `OAUTH/access_token?${keys}&x=1`]) {
       expect(ok(`${BASE}/${path}`, { auth: 'none' }), path).not.toBeNull()
       expect(metaRenewalOf(`${BASE}/${path}`), path).toBeNull()
@@ -153,7 +184,7 @@ describe('signing and the token', () => {
     expect(proof).toEqual({ appsecret_proof: createHmac('sha256', 'secret-1').update('token-1|1760000000').digest('hex'), appsecret_time: '1760000000' })
   })
   it('a read goes once, with the token and its proof on the URL sent — never on the URL the ledger and the answer carry', async () => {
-    const res = await metaCall({ connectionId: 'm-1', operation: 'campaigns.list', path: 'act_1234567890/campaigns', query: { fields: 'id,name', effective_status: ['ACTIVE', 'PAUSED'] } })
+    const res = await metaCall({ connectionId: 'm-1', operation: 'campaigns.list', path: 'act_1234567890/campaigns', query: { fields: ['id', 'name'], limit: 100 } })
     expect(res.status).toBe(200)
     expect(h.calls).toHaveLength(1)
     expect(h.calls[0].init.method).toBe('GET')
@@ -161,7 +192,8 @@ describe('signing and the token', () => {
     expect(sent.searchParams.get('access_token')).toBe('meta-system-user-token')
     expect(sent.searchParams.get('appsecret_proof')).toBe('proof-of-22')
     expect(sent.searchParams.get('appsecret_time')).toBe('1760000000')
-    expect(sent.searchParams.get('effective_status')).toBe('["ACTIVE","PAUSED"]')
+    // A list goes as JSON (metaUrl).
+    expect(sent.searchParams.get('fields')).toBe('["id","name"]')
     expect(h.proofs).toEqual(['meta-system-user-token'])
     expect(res.url).not.toContain('access_token')
     expect(res.url).not.toContain('appsecret_proof')
@@ -184,10 +216,15 @@ describe('signing and the token', () => {
     expect(h.calls).toHaveLength(0)
   })
   it('the token renewal goes with no account token at all, and only for the connection\'s own app', async () => {
-    const renewal = (clientId: string) => metaUrl('oauth/access_token', { grant_type: 'fb_exchange_token', client_id: clientId, client_secret: 's', set_token_expires_in_60_days: 'true', fb_exchange_token: 't' })
+    const renewal = (clientId: string) => metaUrl('oauth/access_token', { grant_type: 'fb_exchange_token', client_id: clientId, client_secret: 's', set_token_expires_in_60_days: 'true' })
     await gatewayCall({ channel: 'META', operation: 'token.renew', kind: 'read', connectionId: 'm-1', url: renewal('1234567'), method: 'GET', auth: 'none' })
     expect(sentUrl().searchParams.get('access_token')).toBeNull()
     expect(sentUrl().searchParams.get('appsecret_proof')).toBeNull()
+    // Review 3: the token exchanged is the connection's own stored one, filled by the gateway on the URL sent only.
+    expect(sentUrl().searchParams.get('fb_exchange_token')).toBe('stored-meta-token')
+    expect(JSON.stringify(gatewayLedger)).not.toContain('stored-meta-token')
+    const named = await gatewayCall({ channel: 'META', operation: 'token.renew', kind: 'read', connectionId: 'm-1', url: `${renewal('1234567')}&fb_exchange_token=another-token`, method: 'GET', auth: 'none' }).catch((e) => e)
+    expect(named).toMatchObject({ code: 'META_READ_ONLY', message: expect.stringMatching(/names no fb_exchange_token/) })
     const err = await gatewayCall({ channel: 'META', operation: 'token.renew', kind: 'read', connectionId: 'm-1', url: renewal('7654321'), method: 'GET', auth: 'none' }).catch((e) => e)
     expect(err).toMatchObject({ code: 'META_READ_ONLY', message: expect.stringMatching(/connection's own Meta app/) })
     expect(h.calls).toHaveLength(1)
@@ -206,13 +243,45 @@ describe('signing and the token', () => {
     expect(failed.text).not.toMatch(/PAGE-TOKEN/)
     expect(gatewayLedger.at(-1)).toMatchObject({ success: false, responsePayload: { scrubbed: 1 } })
     expect(JSON.stringify(gatewayLedger)).not.toMatch(/PAGE-TOKEN/)
-    // Not JSON: the value is masked; nothing to drop: the text is untouched.
-    expect(scrubMetaAnswer('access_token=SECRET&x=1')).toEqual({ text: 'access_token="[dropped]"&x=1', scrubbed: 1 })
+    // Not JSON: the parameter is dropped; nothing to remove: the text is untouched.
+    expect(scrubMetaAnswer('access_token=SECRET&x=1')).toEqual({ text: 'x=1', scrubbed: 1 })
     expect(scrubMetaAnswer('{"id":"1"}')).toEqual({ text: '{"id":"1"}', scrubbed: 0 })
+  })
+  it('review 3 — a token inside a string never travels: paging links, connection links, a message, an app token; an escaped key', () => {
+    const USER = 'EAAB' + 'x1Y2z3'.repeat(6)
+    const APPTOKEN = '1234567|' + 'aB3_cD4-eF5gH6iJ7kL8'
+    const answer = {
+      data: [{ id: '120000000000010', name: 'Page', access_token: USER }],
+      paging: {
+        cursors: { after: 'c2', before: 'c1' },
+        next: `https://graph.facebook.com/v26.0/120000000000001/accounts?access_token=${USER}&limit=100&after=c2`,
+        previous: `https://graph.facebook.com/v26.0/1234567/roles?limit=100&access_token=${encodeURIComponent(APPTOKEN)}&appsecret_proof=abc&appsecret_time=1760000000`,
+      },
+      metadata: { connections: { accounts: `https://graph.facebook.com/v26.0/120000000000001/accounts?access_token=${USER}` } },
+      message: `see access_token=${USER} and the app token ${APPTOKEN}; client_secret=s3cr3t`,
+    }
+    const res = scrubMetaAnswer(JSON.stringify(answer))
+    expect(res.text).not.toMatch(/EAAB|aB3_cD4|s3cr3t|appsecret_proof=|access_token/)
+    const clean = JSON.parse(res.text)
+    expect(clean.paging).toEqual({
+      cursors: { after: 'c2', before: 'c1' },
+      next: 'https://graph.facebook.com/v26.0/120000000000001/accounts?limit=100&after=c2',
+      previous: 'https://graph.facebook.com/v26.0/1234567/roles?limit=100',
+    })
+    expect(clean.metadata.connections.accounts).toBe('https://graph.facebook.com/v26.0/120000000000001/accounts')
+    expect(clean.message).toBe('see  and the app token [removed]; ')
+    expect(res.scrubbed).toBe(9)
+    // A JSON-escaped key is the key Meta means; a "__proto__" key stays a key and is scrubbed inside.
+    const escaped = scrubMetaAnswer(`{"id":"1","access\\u005ftoken":"${USER}","__proto__":{"access_token":"${USER}"}}`)
+    expect(escaped.text).not.toContain(USER)
+    expect(escaped.scrubbed).toBe(2)
+    expect(JSON.parse(escaped.text)).toEqual(JSON.parse('{"id":"1","__proto__":{}}'))
+    // Not JSON at all: one string.
+    expect(scrubMetaAnswer(`access_token=${USER}&token_type=bearer`)).toEqual({ text: 'token_type=bearer', scrubbed: 1 })
   })
   it('review 2 — the renewal\'s own answer keeps its access_token: it IS the new token', async () => {
     h.answers.push(() => new Response(JSON.stringify({ access_token: 'NEW-TOKEN', token_type: 'bearer', expires_in: 5183944 }), { status: 200 }))
-    const url = metaUrl('oauth/access_token', { grant_type: 'fb_exchange_token', client_id: '1234567', client_secret: 's', set_token_expires_in_60_days: 'true', fb_exchange_token: 't' })
+    const url = metaUrl('oauth/access_token', { grant_type: 'fb_exchange_token', client_id: '1234567', client_secret: 's', set_token_expires_in_60_days: 'true' })
     const res = await gatewayCall({ channel: 'META', operation: 'token.renew', kind: 'read', connectionId: 'm-1', url, method: 'GET', auth: 'none' })
     expect(res.json()).toMatchObject({ access_token: 'NEW-TOKEN' })
   })

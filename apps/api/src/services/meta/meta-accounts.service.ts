@@ -259,6 +259,8 @@ async function takenByOtherBusinesses(choices: MetaChoices): Promise<Map<MetaPro
 /**
  * C2 as answered: every asset with `takenByAnotherBusiness`. An asset another business uses is answered by its id ONLY
  * (review 2): its name, currency, time zone, business portfolio or Instagram account are that business's, never shown here.
+ * So is a nested one (review 3): a free Page's Instagram account, or a free Instagram account's Page, another business uses
+ * is its id and the flag.
  */
 export async function metaChoicesAnswer(choices: MetaChoices) {
   const taken = await takenByOtherBusinesses(choices)
@@ -270,11 +272,17 @@ export async function metaChoicesAnswer(choices: MetaChoices) {
       total: choices.adAccounts.total, error: choices.adAccounts.error,
     },
     pages: {
-      items: choices.pages.items.map((p) => (isTaken(META_PRODUCT.page, p.pageId) ? { pageId: p.pageId, takenByAnotherBusiness: true as const } : { ...p, takenByAnotherBusiness: false as const })),
+      items: choices.pages.items.map((p) => (isTaken(META_PRODUCT.page, p.pageId)
+        ? { pageId: p.pageId, takenByAnotherBusiness: true as const }
+        // Review 3: a free Page's Instagram account another business uses is its id and the flag only.
+        : { ...p, instagram: p.instagram && isTaken(META_PRODUCT.instagram, p.instagram.id) ? { id: p.instagram.id, takenByAnotherBusiness: true as const } : p.instagram, takenByAnotherBusiness: false as const })),
       total: choices.pages.total, error: choices.pages.error,
     },
     instagram: {
-      items: choices.instagram.items.map((i) => (isTaken(META_PRODUCT.instagram, i.instagramId) ? { instagramId: i.instagramId, takenByAnotherBusiness: true as const } : { ...i, takenByAnotherBusiness: false as const })),
+      items: choices.instagram.items.map((i) => (isTaken(META_PRODUCT.instagram, i.instagramId)
+        ? { instagramId: i.instagramId, takenByAnotherBusiness: true as const }
+        // Review 3: a free Instagram account's Page another business uses is its id and the flag only.
+        : { ...i, ...(isTaken(META_PRODUCT.page, i.pageId) ? { pageTakenByAnotherBusiness: true as const } : {}), takenByAnotherBusiness: false as const })),
       total: choices.instagram.total, error: choices.instagram.error,
     },
   }
