@@ -167,7 +167,10 @@ export function metaPageState(input: { loading: boolean; error: string | null; o
     case 'first_read_pending':
       return { ...base, kind: 'first_read_pending', connection: c, canReadNow: true, title: `Nexus has not finished reading ${name} yet.`, text: `Campaigns appear when it does. ${readTimes(c, input.timeZone)}` }
     case 'read_failed': {
-      const error = c.read.lastError?.trim() || 'Meta did not say why.'
+      // The read failed because Meta refused the token then, and the token has been checked valid since: the read's own
+      // sentence ("Make a new token…") is out of date — the state's sentence says what is true now.
+      const checkedSince = c.read.lastStatus === 'AUTH_LOST' && !!c.token.checkedAt && !!c.read.lastReadAt && Date.parse(c.token.checkedAt) > Date.parse(c.read.lastReadAt)
+      const error = (checkedSince ? c.stateText?.trim() : c.read.lastError?.trim()) || 'Meta did not say why.'
       if (c.read.lastDataDay) {
         return {
           ...base, kind: 'read_failed', connection: c, canReadNow: true, showData: true,

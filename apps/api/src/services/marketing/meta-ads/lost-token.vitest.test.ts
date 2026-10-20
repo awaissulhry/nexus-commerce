@@ -71,9 +71,16 @@ describe('review A2 — a good token ends a read that lost the token', () => {
     await expect(metaReadAfterGoodToken('conn-1')).resolves.toBeUndefined()
     expect(h.updates).toEqual([])
   })
-  it('a TOKEN read has its own job id per minute (outside the hourly "Read now" id)', () => {
+  it('one TOKEN read at a time: one job id per account and hour (apart from "Read now"), and never two in this process', async () => {
     const at = new Date('2026-10-20T10:15:30Z')
+    expect(metaAdsSyncJobId('TOKEN', '1234567890', at)).toBe(metaAdsSyncJobId('TOKEN', '1234567890', new Date('2026-10-20T10:59:00Z')))
     expect(metaAdsSyncJobId('TOKEN', '1234567890', at)).not.toBe(metaAdsSyncJobId('MANUAL', '1234567890', at))
-    expect(metaAdsSyncJobId('TOKEN', '1234567890', at)).toContain('2026-10-20T10-15')
+    // "Check token now" pressed three times while the read waits: one read.
+    h.accounts = [{ adAccountId: '1234567890', connectionId: 'conn-1', lastSyncStatus: 'AUTH_LOST' }]
+    await metaReadAfterGoodToken('conn-1')
+    await metaReadAfterGoodToken('conn-1')
+    await metaReadAfterGoodToken('conn-1')
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(h.reads).toEqual([{ adAccountId: '1234567890', kind: 'TOKEN' }])
   })
 })

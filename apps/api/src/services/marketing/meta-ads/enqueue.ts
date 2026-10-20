@@ -31,10 +31,11 @@ const NO_ACCOUNT_SENTENCE = 'Choose a Meta ad account first, in Settings › Cha
 const NOT_THIS_ACCOUNT_SENTENCE = 'This business does not read that Meta ad account.'
 const hhmm = (at: Date) => `${at.toISOString().slice(11, 16)} UTC`
 
-/** The deterministic job id: per account and UTC day (DAILY), hour (MANUAL, BACKFILL) or minute (TOKEN). */
+/** The deterministic job id: per account and UTC day (DAILY), per account and UTC hour (MANUAL, BACKFILL, TOKEN). */
 export function metaAdsSyncJobId(kind: MetaAdsSyncKind, adAccountId: string, now: Date = new Date()): string {
-  // TOKEN: per minute (a new token is a person's act; a second save in the same minute adds nothing).
-  const stamp = kind === 'DAILY' ? now.toISOString().slice(0, 10) : kind === 'TOKEN' ? now.toISOString().slice(0, 16) : now.toISOString().slice(0, 13)
+  // TOKEN: per hour, like MANUAL — pressing "Check token now" again cannot queue a second full read while one waits
+  // or runs (and in this process, a read already running for the account is never started twice: runInline).
+  const stamp = kind === 'DAILY' ? now.toISOString().slice(0, 10) : now.toISOString().slice(0, 13)
   return safeJobId('meta-ads', kind.toLowerCase(), adAccountId, stamp)
 }
 

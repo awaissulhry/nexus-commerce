@@ -49,6 +49,20 @@ describe('what the page may show', () => {
     const view = metaPageState({ loading: false, error: null, overview: overview({ connection: failed }) })
     expect(view).toMatchObject({ kind: 'read_failed', showData: true, banner: { tone: 'danger', text: expect.stringMatching(/19 Oct 2026/) } })
   })
+  it('a read that lost the token, with a good token check since: the banner says what is true now, not "make a new token"', () => {
+    const lost = (checkedAt: string | null) => connection({
+      state: 'read_failed',
+      stateText: 'The last read of “Shop A” stopped because Meta refused the token then; the token has been checked valid since, and Nexus reads again now.',
+      token: { ...connection().token, checkedAt },
+      read: { ...connection().read, lastStatus: 'AUTH_LOST', lastReadAt: '2026-10-20T06:50:00.000Z', lastError: 'Meta no longer accepts this business\'s system-user token. Make a new token in Meta Business settings.' },
+    })
+    const after = metaPageState({ loading: false, error: null, overview: overview({ connection: lost('2026-10-20T09:00:00.000Z') }) })
+    expect(after).toMatchObject({ kind: 'read_failed', banner: { text: expect.stringMatching(/checked valid since, and Nexus reads again now/) } })
+    expect(`${after.banner?.title} ${after.banner?.text}`).not.toMatch(/Make a new token/)
+    // No good check after the failed read: the read's own sentence stands.
+    const before = metaPageState({ loading: false, error: null, overview: overview({ connection: lost('2026-10-20T05:00:00.000Z') }) })
+    expect(before).toMatchObject({ kind: 'read_failed', banner: { text: expect.stringMatching(/Make a new token/) } })
+  })
   it('ok shows the numbers; a token 14 days or less from expiry adds a warning with the date', () => {
     const now = Date.UTC(2026, 9, 20)
     expect(metaPageState({ loading: false, error: null, overview: overview(), now })).toMatchObject({ kind: 'ok', showData: true, banner: null })
