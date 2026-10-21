@@ -1,6 +1,6 @@
 ---
 name: ads-weekly-review
-description: Weekly advertising review in Nexus, market by market, for Amazon Sponsored Products and eBay Promoted Listings, and Google Ads (campaigns, numbers, search terms and the brand split, what Google does on its own, its recommendations and alerts) - read spend, sales and ACoS, wasteful search terms, the harvest engine's candidates and the verdicts of past harvests, bids and the engines' recommendations, explain them in plain words, then offer the changes as one change plan (negatives, harvests, lower bids, budgets, eBay rates, Google Ads changes) that a person approves. A temporary stop is lower bids; it pauses an ad only when the person means a real pause. Use when the person asks how their ads are doing, for a weekly ads or bid review, or what to change in their campaigns.
+description: Weekly advertising review in Nexus, market by market, for Amazon Sponsored Products and eBay Promoted Listings, and Google Ads (campaigns, numbers, search terms and the brand split, what Google does on its own, its recommendations and alerts), and Meta ads on Facebook and Instagram (the account's health, Nexus's daily read, changes made outside Nexus, Meta's recommendations, tests and automated rules) - read spend, sales and ACoS, wasteful search terms, the harvest engine's candidates and the verdicts of past harvests, bids and the engines' recommendations, explain them in plain words, then offer the changes as one change plan (negatives, harvests, lower bids, budgets, eBay rates, Google Ads changes, Meta ads changes) that a person approves. A temporary stop is lower bids; it pauses an ad only when the person means a real pause. Use when the person asks how their ads are doing, for a weekly ads or bid review, or what to change in their campaigns.
 ---
 
 # Ads weekly review
@@ -35,7 +35,7 @@ Say each with its grain (campaign, keyword, search query, ASIN), its window (a d
 
 ## 1. Per market: read
 
-Ask which channel (`amazon`, the default, `ebay` or `google`) and markets, or take every market with spend. Google Ads is read per account, not per market: see "Google Ads" below.
+Ask which channel (`amazon`, the default, `ebay` or `google`) and markets, or take every market with spend. Google Ads is read per account, not per market: see "Google Ads" below. Meta ads (Facebook and Instagram) are read per ad account with their own tools: see "Meta ads" below.
 
 1. `ads-overview` (`channel`, `market`, `days`: 7 by default): spend, sales, ACoS, ROAS, against the period before; top spenders; the automation dial; data feed health. eBay: pacing against the monthly ceilings and findings (rates above break-even, missing costs, unpromoted listings). This eBay read also checks the ceilings: a market at its monthly ceiling halts every eBay ad write of the business until a person resumes it — say so if it happens.
 2. `ad-campaigns` (`channel`, `market`, `status`, `days`): Amazon per campaign budget, `targetAcos` (a fraction), ACoS, `liveWrites`, suppressed bids, pins. eBay per campaign funding model, campaign rate (`bidPercentage`), daily budget (Priority), `automation` (posture, rules), account; eBay statuses are RUNNING, PAUSED, SYSTEM_PAUSED, ENDED, SUSPENDED, SCHEDULED.
@@ -67,11 +67,35 @@ reads its numbers live, today included.
 - Conversions can be fractional, and the last 14 days can still rise as Google adds late conversions (`provisionalFrom`). A day with `read: false` has no numbers: say "not read", never 0, and name `coverage.missingDays`. `previous` is there only when Nexus read every day of the window before.
 - Changes go through the Google Ads change tools (`writes.mode` approval; every tool, and what Google's API cannot do, in the `google-ads` skill): `set-google-negatives`, `set-google-negative-list`, `set-google-keywords` (bids, bulk bid change), `set-google-status` (pause; enabling is SPENDS MONEY), `set-google-budget`, `set-google-campaign`, `set-google-targeting`, `set-google-product-groups`, `apply-google-recommendations`, … Each is a request a person approves in Nexus, never run by a rule; Google checks most of them first (the preview says when it cannot). Several changes to EXISTING things go in one change plan; new things that point at new things (a campaign and its parts) are one build call (`build-google-campaigns`, `build-google-pmax`). The preview marks what can spend more (SPENDS MONEY): repeat those lines to the person. A temporary stop is lower bids or a lower budget; a pause (`set-google-status`) when the person asks for one.
 
+### Meta ads
+
+Nexus reads the Meta ad account a person chose for the business, with its Facebook Page and Instagram account, per ad account, never per market. The `meta-…` tools read it; they take no `channel`, and `ads-overview`, `ad-campaigns`, `ad-search-terms`, `ad-targets`, `ad-changes` and `ad-recommendations` do not read Meta. Every Meta tool, and what Meta's API cannot do, is in the `meta-ads` skill. With no Meta connection every Meta tool says so: leave Meta out and say why.
+
+Read, in this order:
+1. `meta-account-health` (`view: "summary"`: Nexus's own records, no Meta call): the connection and its token, the ad account's status, the daily read. When something does not deliver, `view: "problems"` (live, with Meta's reasons).
+2. `meta-ads-overview` (`days: 7`): Nexus's daily read — spend, purchases and purchase value as Meta counts them, ROAS, the window before; then `view: "campaigns"`, `view: "adsets"` and `view: "trend"`.
+3. `meta-activity-log` over the week: what changed, who changed it (made outside Nexus too) and why something stopped.
+4. `meta-recommendations` (`view: "overview"`): Meta's opportunity score and its recommendations, each with the signature an apply takes.
+5. `meta-ad-rules`: Meta's own automated rules, which act inside Meta on their own (trigger rules never show in Ads Manager).
+6. `meta-experiments`: the tests that run. Before proposing a change to a campaign, ad set or ad, `view: "object"`: a change can spoil its test.
+7. When a question needs it: `meta-ads-numbers` (breakdowns by placement, age, country …; today included), `meta-ad-details` (`view: "diagnostics"`: auction overlap between the account's own ad sets, creative fatigue), `meta-ad-sets` (still learning, where it really runs).
+
+How Meta's numbers differ:
+- Purchases and purchase value are Meta's attributed numbers, counted with each ad set's own attribution setting. Never call them sales, orders or ACoS, and never add them to Amazon's or Google's; ROAS is purchase value ÷ spend, as Meta counts them. Amounts are minor units of the ad account's currency.
+- The last 28 days of the daily read are provisional (Meta still adds late purchases). A day Nexus did not read is "not read", never 0; the window before is shown only when both were read in full.
+- A breakdown switched off for the ad account answers nothing: say "switched off or no delivery", never 0. Audience sizes and reach are Meta's ranges and estimates, never one exact number.
+
+What to propose, with the Meta change tools, as steps of the review's one plan: a pause (`set-meta-status`) or a lower bid or budget (`set-meta-ad-set`, `set-meta-campaign`) where Meta spends with no purchase; budget moved toward what sells (a raise is SPENDS MONEY); targeting or placements (`set-meta-targeting`, `set-meta-placements`); the recommendations the person agrees with (`apply-meta-recommendations`; a dismiss is Ads Manager only). Each waits for a person — or runs after the short window when the business switched "Claude's changes need no approval" on — and never by a rule of its own. Meta has no ads strategy in Nexus: judge against the numbers the person gives, never targets of your own.
+
+Never: ask to switch on anything (an ad, an ad set, a campaign, a Meta rule) the person did not ask for; delete what they did not ask to delete (`confirmDelete` only on their word); make or switch on a Meta automated rule unless they ask (it then acts inside Meta on its own); switch an Advantage+ creative feature on unless they name it; add people to a customer list (Nexus adds nobody: its customers carry no marketing consent yet). New campaigns, ad sets and ads are born paused and asked for one after another, never as steps of one plan.
+
 ## 2. Explain
 
 Per market, a few lines: spend and sales against last week, ACoS against the target the business holds in Nexus (`ads-strategy`), the 3 biggest wastes, the 3 best terms ready to harvest and the verdicts of past harvests (Amazon: `harvest-candidates`, `harvest-history`), campaigns over budget or starved, anything an engine flags. For each product the ads brain runs: what it did or would do in shadow, what waits for a person, its clashes and the tools not set up. Then a short list of proposed changes with why — none on a lever the brain owns.
 
 Google Ads, per account: cost, conversions and conversion value against the period before (only when `previous` is there), the alerts, the brand split, the search terms that cost most with no conversion, what Google did on its own, and the Google Ads changes you would ask for and why.
+
+Meta ads, per ad account: spend, purchases and purchase value as Meta counts them against the window before (only when both were read in full), the account's problems, the campaigns and ad sets that spend with no purchase, what changed outside Nexus, what Meta's rules and tests are doing, and the Meta changes you would ask for and why.
 
 ## 3. Propose (one plan per review)
 
@@ -98,6 +122,7 @@ Google Ads, per account: cost, conversions and conversion value against the peri
 | Carry out the engines' recommendations, autopilot decisions and Keyword Tracker proposals (Amazon) | `apply-ad-recommendations` (ids from `ad-recommendations`, up to 100: one change plan of its own); set aside the wrong ones with `mute-ad-recommendations` (`mute`, or `dismiss` for a rule's suggestion, an autopilot decision or a proposal) |
 | eBay: rates, keywords, budgets, promote listings | `set-ebay-ad-rates` (General, fixed-rate campaigns; a rate above a listing's known break-even is refused, an unknown one only warns), `ebay-keywords-change` (manual Priority, keyword ids from `ebay-ad-details` or a proposal), `set-ebay-campaign-budget` (Priority; 15 changes per campaign per day), `promote-ebay-listings` |
 | Google Ads: negatives, keywords and bids, budgets, a pause, targeting, product groups, Google's recommendations | the Google Ads change tools ("Google Ads" above; every tool in the `google-ads` skill), as steps of the same plan. Enabling, a raise or anything that reaches more people is SPENDS MONEY: the person's decision. A new campaign and its parts: one build call, never steps of the plan |
+| Meta ads: a pause, budgets and bids, targeting and placements, Meta's recommendations | the Meta change tools ("Meta ads" above; every tool in the `meta-ads` skill), as steps of the same plan. Switching on, a raise or anything that reaches more people is SPENDS MONEY: the person's decision. A stop is a pause or a lower bid or budget; archive only for good; delete only on the person's ask. New campaigns, ad sets and ads: one request after another, born paused, never steps of the plan |
 
 - Give `why` on every change: the approver reads it, and it stays in the ads audit.
 - Put the review's changes in ONE `submit-change-plan` (a bulk bid change is one step). Show the table first: campaign, what, from → to, currency, live or sandbox.
@@ -106,4 +131,4 @@ Google Ads, per account: cost, conversions and conversion value against the peri
 
 ## 4. After
 
-`approval-status` shows `ads` (Amazon writes waiting, sent, refused by the write gate, failed, or run in sandbox) and `ebay` for eBay writes (sent, sandbox, partly, failed). A Google Ads change shows in `google-ads-live` at once, and in Nexus's stored Google views after its next read. A harvest that ran shows in `harvest-history` with its keyword and blocks; its verdict comes after the attribution window + 72 hours. `undo-change` asks to put an approved change back (see `review-and-undo`); on eBay an undo never removes anything: promoted listings drop to the 2 % rate, added keywords to a 2-cent bid, added negatives stay, and a created campaign stays.
+`approval-status` shows `ads` (Amazon writes waiting, sent, refused by the write gate, failed, or run in sandbox) and `ebay` for eBay writes (sent, sandbox, partly, failed). A Google Ads change shows in `google-ads-live` at once, and in Nexus's stored Google views after its next read. A Meta change shows in `meta-ads-live` at once, and in `meta-ads-overview` after Nexus's next daily read. A harvest that ran shows in `harvest-history` with its keyword and blocks; its verdict comes after the attribution window + 72 hours. `undo-change` asks to put an approved change back (see `review-and-undo`); on eBay an undo never removes anything: promoted listings drop to the 2 % rate, added keywords to a 2-cent bid, added negatives stay, and a created campaign stays.

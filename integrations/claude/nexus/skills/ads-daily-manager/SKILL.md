@@ -1,11 +1,11 @@
 ---
 name: ads-daily-manager
-description: The daily Amazon Sponsored Products run for ONE Nexus business, made for a scheduled Claude routine with no person in the chat - start the run with report-ads-run, read the ads strategy, overview, alerts, earlier runs, campaigns, search terms, the engines' recommendations and stock risk, decide in a fixed order (safety, stock, waste, growth with the harvest engine's candidates and verdicts, bids, budgets; structure only on the weekly day, as a proposal), ask for the changes as one change plan (what the business set to run by its rule runs, the rest waits for a person), and end with a short report in words while Nexus adds every number. Never approves, never touches an FBA quantity; a temporary stop is lower bids. For a product Nexus's ads brain runs it is the supervisor: it reads the brain's map and daily product report first, never asks for a lever the brain owns, reports the brain's clashes and tool gaps, and raises the Owner's decisions instead of acting. Use when a routine or a person asks for the daily ads run or the daily ads manager, or to set up the scheduled ads routine.
+description: The daily Amazon Sponsored Products run for ONE Nexus business, made for a scheduled Claude routine with no person in the chat - start the run with report-ads-run, read the ads strategy, overview, alerts, earlier runs, campaigns, search terms, the engines' recommendations and stock risk, decide in a fixed order (safety, stock, waste, growth with the harvest engine's candidates and verdicts, bids, budgets; structure only on the weekly day, as a proposal), ask for the changes as one change plan (what the business set to run by its rule runs, the rest waits for a person), and end with a short report in words while Nexus adds every number. Never approves, never touches an FBA quantity; a temporary stop is lower bids. For a product Nexus's ads brain runs it is the supervisor: it reads the brain's map and daily product report first, never asks for a lever the brain owns, reports the brain's clashes and tool gaps, and raises the Owner's decisions instead of acting. Meta ads (Facebook and Instagram) are only read for problems; it asks for no Meta change. Use when a routine or a person asks for the daily ads run or the daily ads manager, or to set up the scheduled ads routine.
 ---
 
 # Ads daily manager
 
-One run a day, for one business, on Amazon Sponsored Products: read, decide inside the business's ads strategy, ask once, report. It is made for a Claude routine. Nobody answers in the chat during the run, so the change plan waits on the Nexus Approvals page for a person; only what the business set to run by its rule runs by itself. This file holds steps only: every number (targets, caps, bids, thresholds, money) is read from Nexus at run time. eBay and Google ads are not part of this run; they stay with `ads-weekly-review` and a person.
+One run a day, for one business, on Amazon Sponsored Products: read, decide inside the business's ads strategy, ask once, report. It is made for a Claude routine. Nobody answers in the chat during the run, so the change plan waits on the Nexus Approvals page for a person; only what the business set to run by its rule runs by itself. This file holds steps only: every number (targets, caps, bids, thresholds, money) is read from Nexus at run time. eBay and Google ads are not part of this run; they stay with `ads-weekly-review` and a person. Meta ads (Facebook and Instagram) are only read here, for problems ("Meta ads" below); their changes stay with `ads-weekly-review`, the `meta-ads` skill and a person.
 
 ## Hard rules
 
@@ -34,6 +34,15 @@ What Nexus has from Amazon, free:
 What it does not have: an organic or an ad (sponsored) keyword rank or position. Amazon offers no source for either: never estimate, invent or buy one, and never call a share a rank or a position.
 
 Say each with its grain (campaign, keyword, search query, ASIN), its window (a day, the week of …, 30 days) and its date; "not reported" when there is none, never 0. A value Nexus computes (a weighted average, a sum over ASINs) says "computed by Nexus from Amazon's …"; only a value Amazon reports is Amazon's. In the run's report (7) they are words, never figures.
+
+## Meta ads (Facebook and Instagram): read for problems, never change
+
+This run asks for no Meta change of any kind: no pause, budget, bid, switch-on, delete or Meta automated rule. Meta has no ads strategy in Nexus, so an unattended run has no number of the Owner's to judge a Meta change by, and every Meta change is a person's decision (with "Claude's changes need no approval" on, a change asked for here would run without anyone reading it).
+
+- Once per run, after `platform-health-checks` (its `meta-ads` check judges the Meta connection daily): when the business has Meta connected, `meta-account-health` (`view: "summary"`: Nexus's own records, no Meta call) and `meta-ads-overview` (Nexus's stored daily read, no Meta call: the window against the one before). Without a Meta connection the tools say so: nothing to report.
+- A Meta problem is a `problems` line, in words with no figures: the token refused or near its expiry, the ad account not active or its payment failing, the daily read failing, campaigns or ad sets that stopped delivering. The `markets` lines are Amazon's only.
+- Spend that looks wrong on Meta (spending with no purchase, a budget spent early) is a line for the Owner in `nextFocus`, in words with no figures: where it is, and what a person could ask for (a pause with `set-meta-status`, a lower budget with `set-meta-ad-set`) — never a step of the run's plan.
+- Read Meta's numbers as Meta counts them: purchases with each ad set's own attribution setting, the last 28 days still provisional, a day not read is "not read", never 0. Never add them to Amazon's.
 
 ## 1. Start
 
