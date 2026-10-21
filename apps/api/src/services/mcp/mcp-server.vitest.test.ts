@@ -75,6 +75,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 31 (2026-10-21) — create-meta-audience, set-meta-audience, set-meta-audience-members, set-meta-audience-sharing and
 // remove-meta-audience read Meta live and change it.
 // Meta ads step 36 (2026-10-21) — create-meta-lead-form and set-meta-lead-form read Meta live and change it (as the Page).
+// Meta ads step 26 (2026-10-21) — create-meta-boost and set-meta-partnership-access boost posts and change partnership access on Meta.
 // Meta ads step 32 (2026-10-21) — create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion and
 // remove-meta-signal-items read Meta live and change it.
 
@@ -88,7 +89,7 @@ const OPEN_WORLD = [
   'channel-identity-check', 'check-google-ads-build', 'close-listing', 'confirm-shipment', 'copy-google-campaign',
   'copy-google-pmax', 'copy-meta-ads', 'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
   'create-google-app-campaign', 'create-google-campaign', 'create-google-demand-gen-campaign',
-  'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-meta-ad-set', 'create-meta-audience', 'create-meta-campaign',
+  'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-meta-ad-set', 'create-meta-audience', 'create-meta-boost', 'create-meta-campaign',
   'create-meta-creative', 'create-meta-dataset', 'create-meta-experiment', 'create-meta-lead-form', 'create-meta-media', 'create-meta-reach-frequency', 'create-negative-keyword',
   'decide-automation-suggestions',
   'delete-listing', 'dismiss-google-recommendations', 'dispose-return-items', 'ebay-categories',
@@ -133,7 +134,7 @@ const OPEN_WORLD = [
   'set-master-prices', 'set-meta-ad-rule', 'set-meta-ad-set', 'set-meta-audience', 'set-meta-audience-members', 'set-meta-audience-sharing', 'set-meta-block-list',
   'set-meta-brand-safety', 'set-meta-budget-schedule', 'set-meta-campaign', 'set-meta-connection', 'set-meta-creative', 'set-meta-custom-conversion', 'set-meta-dataset', 'set-meta-dataset-access',
   'set-meta-experiment', 'set-meta-labels', 'set-meta-lead-form',
-  'set-meta-status', 'set-meta-value-rules', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
+  'set-meta-partnership-access', 'set-meta-status', 'set-meta-value-rules', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
   'set-promotion', 'set-sd-brand-safety', 'set-sd-budget-rule', 'set-sd-optimization-rule', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
   'shipping-rates', 'shopify-content', 'submit-aplus-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock',
   'tune-ad-engine', 'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change',

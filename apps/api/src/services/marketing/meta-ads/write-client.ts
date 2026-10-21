@@ -20,8 +20,8 @@
  *   first.
  * Never logs a token, a request body or an answer.
  */
-import { metaRuploadCall, metaWriteCall, type MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import { metaRestWriteCall, metaRuploadCall, metaWriteCall, type MetaRestWriteRequest, type MetaWriteEdge } from '../../gateway/meta.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
@@ -68,6 +68,8 @@ export interface MetaObjectChange {
     | 'customaudience'
     // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
     | MetaPageKind
+    // Step 26 — the chosen Instagram account or a media of it (set-meta-partnership-access; its Page is step 28's `page`).
+    | MetaBoostWriteKind
     // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
     | MetaSignalsKind
   params: Record<string, string>
@@ -417,4 +419,32 @@ export async function metaSendRupload(target: MetaWriteTarget, upload: { videoId
   const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer)
   if (answer.status === 0 || answer.status >= 500) throw new MetaWriteError({ ...failure, sentence: META_UNKNOWN_OUTCOME }, upload.operation, 'unknown')
   throw new MetaWriteError(failure, upload.operation, 'refused')
+}
+
+/** Big integers (Page and post ids on Meta's partnership host come as JSON numbers) kept exact as text before parsing. */
+function parseExactJson(raw: string): unknown {
+  try { return JSON.parse(raw.replace(/([:[,]\s*)(\d{16,})(?=\s*[,\]}])/g, '$1"$2"')) } catch { return null }
+}
+
+/**
+ * Step 26 (review B1) — one change on Meta's partnership REST host (metaRestWriteCall). Resolves with Meta's answer (a list of
+ * per-item results, or an object) as `node`; rejects with a MetaWriteError: not_sent (the gateway refused it, nothing left),
+ * refused (Meta answered an error: it changed nothing), unknown (no answer, or Meta failed on its side). Never retried. Meta
+ * answers each item of a list on its own (not all or nothing): the caller reads them.
+ */
+export async function metaSendRest(target: MetaWriteTarget, change: Omit<MetaRestWriteRequest, 'connectionId'>): Promise<MetaChangeResult> {
+  let answer: GatewayResponse
+  try {
+    answer = await metaRestWriteCall({ ...change, connectionId: target.connectionId, maxRateWaitMs: WRITE_RATE_WAIT_MS })
+  } catch (err) {
+    const failure = failureOfThrow(err) ?? localFailure(`Nexus could not send it (${err instanceof Error ? err.message : String(err)}). Nothing was sent.`, 'NEXUS_ERROR')
+    throw new MetaWriteError(failure, change.operation, 'not_sent')
+  }
+  if (answer.ok) {
+    const body = parseExactJson(answer.text)
+    return { node: Array.isArray(body) ? { items: body } : body && typeof body === 'object' ? body as Record<string, unknown> : null, readBack: 'same-request', waitedMs: 0 }
+  }
+  const failure = changeFailure(answer)
+  if (answer.status === 0 || answer.status >= 500) throw new MetaWriteError({ ...failure, sentence: META_UNKNOWN_OUTCOME }, change.operation, 'unknown')
+  throw new MetaWriteError(failure, change.operation, 'refused')
 }

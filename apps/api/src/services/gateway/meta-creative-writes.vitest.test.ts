@@ -71,7 +71,8 @@ const complete = (c: Record<string, unknown>): Record<string, any> => {
 /** A creative of the chosen Page with this story (and its silent keys). */
 const withStory = (story: Record<string, unknown>, over: Record<string, unknown> = {}) => complete({ name: 'Creative A', object_story_spec: { page_id: PAGE, ...story }, ...over })
 /** The silent keys a creative of an existing post with no website link names. */
-const postSilent = () => ({ degrees_of_freedom_spec: { creative_features_spec: Object.fromEntries(META_CREATIVE_FEATURES.map((f) => [f, { enroll_status: 'OPT_OUT' }])) }, contextual_multi_ads: { enroll_status: 'OPT_OUT' } })
+// Step 26 (review B4) — the gateway requires the product-tag opt-out on every existing post too.
+const postSilent = () => ({ degrees_of_freedom_spec: { creative_features_spec: Object.fromEntries(META_CREATIVE_FEATURES.map((f) => [f, { enroll_status: 'OPT_OUT' }])) }, contextual_multi_ads: { enroll_status: 'OPT_OUT' }, interactive_components_spec: { components: [{ type: 'product_tag', enroll_status: 'opt_out' }] } })
 /** A full image creative, as decoded keys. */
 const creative = (over: Record<string, unknown> = {}) => complete({
   name: 'Creative A',

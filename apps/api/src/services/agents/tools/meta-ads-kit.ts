@@ -129,10 +129,11 @@ async function draftFor(args: Record<string, unknown>, build: MetaDraftBuilder):
 /**
  * The exact plan of a change: its requests (object, form fields), in order — never their labels. Step 36 review A3 — and a
  * request's method, edge and object kind, ONLY when it names them: a status change's plan hash stays byte for byte what
- * step 17 made (a pending approval does not go stale at a deploy).
+ * step 17 made (a pending approval does not go stale at a deploy). Step 26 (review A3): a request may give the fields its
+ * plan reads (`planParams`: a creator's ad code replaced in this hash; the request's arguments still carry it).
  */
 export const planOf = (draft: MetaChangeDraft): string => factHash(draft.requests.map((r) => ({
-  objectId: r.objectId, params: r.params,
+  objectId: r.objectId, params: r.planParams ?? r.params,
   ...(r.method ? { method: r.method } : {}), ...(r.edge ? { edge: r.edge } : {}), ...(r.objectKind ? { objectKind: r.objectKind } : {}),
 })))
 

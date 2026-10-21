@@ -48,6 +48,10 @@ import { metaCatalogProblem, newCatalogRuleMemo } from './catalog-rule.js'
 import type { MetaWriteBodyId } from '../../gateway/meta-calls.js'
 
 export const CREATIVE_TOOL = 'create-meta-creative'
+/** Step 26 — create-meta-boost: a creative of an existing post (marketing/meta-ads/change-boosts.ts), made by this builder. */
+export const BOOST_TOOL = 'create-meta-boost'
+/** Step 26 — the tools whose records claim a creative made (a creative one of them claims is never "new" to another). */
+export const CREATIVE_RECORD_TOOLS: readonly string[] = [CREATIVE_TOOL, BOOST_TOOL]
 /**
  * Master CR-207 (review B2) — saved welcome-message flows (`GET/POST/DELETE /{page_id}/welcome_message_flows`, SDK only) are
  * a Page write that needs the Page's own access token (lane question Q1). C2-PAGE-TOKEN: lane C4's step 36 builds the
@@ -102,6 +106,15 @@ export interface CreativeRequest {
   async?: boolean | null
   /** undo: the creatives an earlier create-meta-creative made new. */
   creatives?: string[]
+  /**
+   * Step 26 (create-meta-boost) — an existing post's source and identity, already built (object_story_id; or
+   * source_instagram_media_id / instagram_permalink_url / a creator's ad code under object_id, with instagram_user_id or the
+   * sponsors): in place of story, postId and partner. Everything else — parts, music, every silent key, the judge — is this
+   * builder's, exactly as for a creative of a post of the chosen Page.
+   */
+  base?: Record<string, unknown> | null
+  /** Step 26 — an existing post's destinations (asset_feed_spec optimization_type + call_to_actions); music is named beside them. */
+  existingFeed?: Record<string, unknown> | null
 }
 
 /** What a create made (AgentChange after; undo reads it). Only facts that do not move with time. */
@@ -177,7 +190,10 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
   const name = request.name?.trim() ?? ''
   const nameProblem = metaCreativeTextProblem(name, META_CREATIVE_TEXT.name, 'name')
   if (nameProblem) return { refusal: `Nothing was asked of Meta: ${nameProblem}.` }
-  if (!!request.story === !!request.postId) return { refusal: 'Describe the creative by story (Meta\'s object_story_spec: link_data, photo_data, video_data, text_data or template_data) or name an existing post of the chosen Page (postId) — one of them.' }
+  // Step 26 — create-meta-boost hands its source and identity ready-made (base): then no story, postId or partner.
+  const base = isObject(request.base) ? request.base : null
+  if (base && (request.story || request.postId || request.partner)) return { refusal: 'An existing post\'s creative names its source once (create-meta-boost builds it): no story, postId or partner beside it.' }
+  if (!base && !!request.story === !!request.postId) return { refusal: 'Describe the creative by story (Meta\'s object_story_spec: link_data, photo_data, video_data, text_data or template_data) or name an existing post of the chosen Page (postId) — one of them.' }
   const parts = isObject(request.parts) ? clean(request.parts) as Record<string, unknown> : {}
   for (const key of Object.keys(parts)) {
     if (OWN_KEYS[key]) return { refusal: `Nothing was asked of Meta: ${key} is this tool's own argument (${OWN_KEYS[key]}), not a part.` }
@@ -189,7 +205,7 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
   const partner = request.partner ?? null
   if (partner && !partner.pageId && !partner.instagramId) return { refusal: 'Name the partner\'s Facebook Page (partner.pageId) or Instagram account (partner.instagramId), or both.' }
   let pageId = chosen.pageId
-  let igId = withIg ? chosen.instagramId : null
+  let igId = base ? (typeof base.instagram_user_id === 'string' ? base.instagram_user_id : null) : withIg ? chosen.instagramId : null
   const branded: Record<string, unknown> = {}
   if (partner?.mainIdentity === 'creator') {
     // Creator as main identity: the creator's Page (else the brand's: then no Facebook delivery) and Instagram account; the
@@ -206,7 +222,8 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
     if (partner.instagramId) branded.instagram_branded_content = { sponsor_id: partner.instagramId }
   }
   const creative: Record<string, unknown> = { name }
-  if (request.story) {
+  if (base) Object.assign(creative, base)
+  else if (request.story) {
     const story = clean(request.story) as Record<string, unknown>
     if (!isObject(story)) return { refusal: 'story is Meta\'s object_story_spec, a JSON object.' }
     for (const [key, mine] of [['page_id', chosen.pageId], ['instagram_user_id', chosen.instagramId]] as const) {
@@ -223,11 +240,14 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
   Object.assign(creative, parts, branded)
   if (request.shopDestination) return { refusal: `Nothing was asked of Meta: shop routing (WEBSITE_AND_SHOP) sends people to the Page's Facebook or Instagram shop, and Nexus cannot confirm a shop is this business's own (nor its commerce account): it comes with the catalog / commerce steps. Shop routing stays off.` }
   const music = request.music === 'random' ? [{ type: 'random' }] : []
-  if (request.postId) {
+  if (request.postId || base) {
     if (Object.keys(feed).length) return { refusal: 'Nothing was asked of Meta: a creative of an existing post takes no asset feed here (only music, by the argument music).' }
     // No asset feed on an existing post unless music is asked: Meta's music is an asset-feed opt-in, and the post keeps its
-    // own media (LIVE-PROBES CR-416p).
-    if (music.length) creative.asset_feed_spec = { audios: music }
+    // own media (LIVE-PROBES CR-416p). Step 26 — or Meta's messaging / profile-visit destinations (create-meta-boost
+    // existingFeed): then music is named beside them (audios, empty unless asked).
+    const destinations = isObject(request.existingFeed) ? clean(request.existingFeed) as Record<string, unknown> : null
+    if (destinations) creative.asset_feed_spec = { ...destinations, audios: music }
+    else if (music.length) creative.asset_feed_spec = { audios: music }
   } else creative.asset_feed_spec = { ...feed, audios: music }
   // Review A1 — a carousel's card order: Meta reorders the cards by itself (multi_share_optimized, default true) unless told.
   const auto = request.carouselAutoOrder === true
@@ -332,7 +352,8 @@ function featuresOn(node: Record<string, unknown> | null): string[] {
 async function claimedBefore(creativeId: string, adAccountId: string): Promise<boolean> {
   try {
     const rows = await prisma.agentChange.findMany({
-      where: { toolName: CREATIVE_TOOL, undoneAt: null, after: { path: ['items'], array_contains: [{ creativeId }] } },
+      // Step 26 — a creative create-meta-boost claims is claimed too (and the other way round).
+      where: { toolName: { in: [...CREATIVE_RECORD_TOOLS] }, undoneAt: null, after: { path: ['items'], array_contains: [{ creativeId }] } },
       select: { id: true, after: true },
       take: 20,
     })
@@ -350,10 +371,17 @@ async function claimedBefore(creativeId: string, adAccountId: string): Promise<b
  * already claims this creative id, or when the post is older. A creative of an existing post (object_story_id), or a post
  * Nexus cannot read = not proven new. Only `true` lets an undo delete it.
  */
-async function creativeWasNew(target: MetaWriteTarget, creativeId: string, node: Record<string, unknown>, sentAt: number, made: { name: string; fromExistingPost: boolean }): Promise<boolean | null> {
+/**
+ * How a send knows what it made. Step 26 — `before`: the ids of the ad account's creatives read just before the send (the
+ * whole list, or null when it is longer than Nexus reads): a creative of an existing post has no new post of its own, so it
+ * is new only when Meta answers an id that was NOT there before (Meta answers the existing creative for a duplicate).
+ */
+export interface MadeCreative { name: string; fromExistingPost: boolean; before?: ReadonlySet<string> | null }
+
+async function creativeWasNew(target: MetaWriteTarget, creativeId: string, node: Record<string, unknown>, sentAt: number, made: MadeCreative): Promise<boolean | null> {
   if (typeof node.name === 'string' && node.name !== made.name) return false
   if (await claimedBefore(creativeId, target.adAccountId)) return false
-  if (made.fromExistingPost) return null
+  if (made.fromExistingPost) return made.before ? !made.before.has(creativeId) : null
   const post = typeof node.effective_object_story_id === 'string' && /^\d{1,25}_\d{1,25}$/.test(node.effective_object_story_id) ? node.effective_object_story_id : null
   if (!post) return null
   try {
@@ -391,7 +419,7 @@ function silentRead(read: Record<string, unknown>) {
 }
 
 /** The run's node of a creative Meta made: its id, "was it new?", what Meta kept of the features asked, and what else. */
-async function madeNode(target: MetaWriteTarget, creativeId: string, node: Record<string, unknown> | null, sentAt: number, asked: string[], made: { name: string; fromExistingPost: boolean }, jobId: string | null = null) {
+async function madeNode(target: MetaWriteTarget, creativeId: string, node: Record<string, unknown> | null, sentAt: number, asked: string[], made: MadeCreative, jobId: string | null = null) {
   const read = node && 'degrees_of_freedom_spec' in node ? node : (await readCreative(target, creativeId)) ?? node ?? {}
   const on = featuresOn(read)
   const generated = Array.isArray((read.asset_feed_spec as { bodies?: unknown } | undefined)?.bodies) ? ((read.asset_feed_spec as { bodies: unknown[] }).bodies.length) : 0
@@ -412,19 +440,24 @@ async function madeNode(target: MetaWriteTarget, creativeId: string, node: Recor
   }
 }
 
-function sendCreate(act: string, params: Record<string, string>, asked: string[], made: { name: string; fromExistingPost: boolean }) {
+/**
+ * The sender of ONE creative on the chosen account's creative edge (create-meta-creative; step 26: create-meta-boost too):
+ * sent, read back, "was it new?". `knownBefore` (step 26): read the account's creatives just before the send (MadeCreative).
+ */
+export function sendCreate(act: string, params: Record<string, string>, asked: string[], made: MadeCreative & { knownBefore?: (target: MetaWriteTarget) => Promise<ReadonlySet<string> | null> }) {
   return async (target: MetaWriteTarget): Promise<MetaChangeResult> => {
     const operation = 'creative.create'
+    const before = made.knownBefore ? await made.knownBefore(target).catch(() => null) : undefined
     const sentAt = nowSec()
     const result = await metaSendChange(target, { objectId: act, kind: 'adaccount', params, operation, edge: 'adcreatives', readBackFields: CREATIVE_READ_BACK, timeoutMs: 120_000 })
     const creativeId = idOf(result.node?.id)
     if (!creativeId) throw new MetaWriteError(localFailure(`Meta answered the creative without an id, so Nexus cannot say what it made. ${META_UNKNOWN_OUTCOME}`, 'NO_CREATIVE_ID'), operation, 'unknown')
-    return { node: await madeNode(target, creativeId, result.node, sentAt, asked, made), readBack: result.readBack, waitedMs: result.waitedMs }
+    return { node: await madeNode(target, creativeId, result.node, sentAt, asked, { name: made.name, fromExistingPost: made.fromExistingPost, ...(before !== undefined ? { before } : {}) }), readBack: result.readBack, waitedMs: result.waitedMs }
   }
 }
 
 /** M5-33 — the async job: sent, then its requests read until Meta names the creative it made (or the polls run out). */
-function sendAsync(act: string, params: Record<string, string>, asked: string[], made: { name: string; fromExistingPost: boolean }) {
+function sendAsync(act: string, params: Record<string, string>, asked: string[], made: MadeCreative) {
   return async (target: MetaWriteTarget): Promise<MetaChangeResult> => {
     const operation = 'creative.async'
     const sentAt = nowSec()
@@ -457,7 +490,7 @@ const newWords = (isNew: unknown) => (isNew === true
     : 'not proven new (its undo never deletes it)')
 
 /** The step's sentence once Meta made it: the id, "was it new?", the features Meta kept, and what to do next. */
-function createdSentence(label: string, node: Record<string, unknown> | null): string {
+export function createdSentence(label: string, node: Record<string, unknown> | null): string {
   const n = (node ?? {}) as {
     creativeId?: string | null; jobId?: string | null; status?: string | null; new?: unknown; featuresRead?: boolean; featuresOn?: string[]; droppedByMeta?: string[]; onWithoutAsking?: string[]; multiAdvertiser?: unknown; authorization?: string | null
     destination?: unknown; formatsOn?: string[] | null; music?: boolean | null; productTags?: unknown; carouselAutoOrder?: boolean | null
@@ -486,6 +519,47 @@ function createdSentence(label: string, node: Record<string, unknown> | null): s
 function taggedByHand(creative: Record<string, unknown>): string[] {
   const components = (creative.interactive_components_spec as { components?: Array<{ product_tag_spec?: { product_id?: string }; position_spec?: { x?: number; y?: number } }> } | undefined)?.components ?? []
   return components.filter((c) => c.product_tag_spec).map((c) => `item ${c.product_tag_spec!.product_id} at (${c.position_spec?.x}, ${c.position_spec?.y})`)
+}
+
+/**
+ * What a person reads about a creative before approving it: it spends nothing, it cannot change once made, and EVERY silent
+ * key it carries (each feature, multi-advertiser ads, music, format automation, shop routing, product tags, card order, any
+ * opt-in in its own parts). Step 26 — create-meta-boost says the same of a creative of an existing post (never a copy).
+ */
+export function creativeWarnings(built: BuiltCreative, request: CreativeRequest, opts: { async?: boolean; instagram: boolean; catalog?: ReadonlyArray<{ kind: string; id: string }> }): string[] {
+  const asked = built.featuresOn
+  const async = opts.async === true
+  const instagram = opts.instagram
+  const ai = asked.filter((f) => META_AI_GENERATED_FEATURES.has(f))
+  const silent = built.silent
+  const optIns = partsOptIns(built.creative)
+  // Step 25b — the product sets and catalog items the caller checked with step 18's catalog rule (createDraft); none on a boost.
+  const catalog = opts.catalog ?? []
+  return [
+    'A creative spends nothing: it serves only once an ad uses it (create-meta-ad) and that ad, its ad set and its campaign are on.',
+    'Creatives cannot be changed once made (Meta lets only their name, labels and status change: set-meta-creative): a change is a new creative swapped onto the ad, and a swap on an ACTIVE ad sends that ad back to Meta\'s review.',
+    asked.length
+      ? `Advantage+ creative features switched ON at your request: ${asked.join(', ')}. Every other one of the ${META_CREATIVE_FEATURES.length} features Meta documents is sent OFF. Meta drops an opt-in it finds ineligible without a word: the run reads the creative back and says what Meta kept.`
+      : `Every one of the ${META_CREATIVE_FEATURES.length} Advantage+ creative features Meta documents is sent OFF (Meta switches some on by default otherwise: adapt_to_placement, inline_comment, description_automation); the run reads the creative back and says what Meta has.`,
+    ...ai.map((f) => `${f} is generated with AI: an ad using this creative must be created PAUSED and previewed first (meta-ad-preview view ad or creative, creativeFeature ${f}) and only then switched on — Meta's rule; create-meta-ad enforces it.`),
+    request.multiAdvertiser ? 'Multi-advertiser ads: ON at your request (Meta may show this ad next to other advertisers\' ads).' : 'Multi-advertiser ads: OFF (contextual_multi_ads OPT_OUT; Meta opts a creative in when it is not said).',
+    `A ${built.type} creative${silent.destination ? ' with a website destination or catalog part' : ''}: Nexus says each silent key it carries — every Advantage+ feature and multi-advertiser ads${silent.audios ? ', music' : ''}${silent.formats ? ', format automation' : ''}${silent.destination ? ', shop routing' : ''}${silent.productTags && built.productTags !== 'manual' ? ', automatic product tags' : ''}.`,
+    request.music === 'random' ? 'Music: Meta adds a track of its choice (asset_feed_spec.audios random).' : silent.audios || request.existingFeed ? 'Music: none (asset_feed_spec.audios empty, Meta\'s way to opt out).' : 'Music: none (an existing post keeps its own media; no asset feed is sent).',
+    ...(silent.formats ? [(request.formatAutomation ?? []).length ? `Format automation ON at your request: ${(request.formatAutomation ?? []).map((f) => `${f.format} from ${f.dataSources.join(', ')}`).join('; ')}; every other format (${silent.formats.join(', ')}) is sent with data_source none.` : `Format automation: none (${silent.formats.join(', ')} each sent with data_source none).`] : []),
+    ...(silent.destination ? ['Shop routing: OFF (destination_spec WEBSITE_AND_SHOP_OPT_OUT; v26 sends an eligible creative to the shop by itself otherwise).'] : []),
+    ...(catalog.length ? [`Catalog: ${catalog.map((i) => `${i.kind === 'productset' ? 'product set' : 'catalog item'} ${i.id}`).join(', ')} — each passed the catalog rule (a catalog of the chosen ad account's business portfolio, or a client catalog whose owner is no other business in Nexus); the gateway checks again before it sends.`] : []),
+    ...(built.productTags === 'manual' ? [`Products tagged by hand: ${taggedByHand(built.creative).join(', ')}; Meta's automatic product tagging is off for this ad (Meta's guide: tags by hand switch it off).`] : []),
+    ...(built.productTags === 'off' ? ['Automatic product tags: OFF (interactive_components_spec product_tag opt_out; Meta tags catalog products on single and carousel images by itself otherwise — autoProductTags switches it on).'] : built.productTags === 'on' ? ['Automatic product tags: ON at your request (product_tag opt_in: Meta may tag catalog products on the images by itself).'] : []),
+    ...(built.carousel ? [request.carouselAutoOrder ? 'Carousel order: Meta may reorder the cards at your request (multi_share_optimized true).' : 'Carousel order: as given (multi_share_optimized false; Meta reorders the cards by itself otherwise — carouselAutoOrder switches it on).'] : []),
+    ...(optIns.length ? [`Opt-ins inside the creative's own parts, at your request: ${optIns.join('; ')}.`] : []),
+    ...(request.partner ? ['A partnership ad needs the partner\'s permission: without it Meta keeps the ad "pending delivery" and Meta itself sends the partner a permission request.'] : []),
+    'If Meta already holds the same creative, it answers that one\'s id: nothing new is made then, and the undo never deletes it.',
+    ...(async ? ['Meta makes it in the background (asyncadcreatives; Meta has no check for that edge): the run reads the job and says the creative it made. A creative Nexus did not read back is never deleted by the undo.'] : []),
+    // Master CR-445 (asset-feed-spec/multi-language-ads): Meta's automatic translation starts only from these languages.
+    ...(Array.isArray((built.creative.asset_feed_spec as { autotranslate?: unknown } | undefined)?.autotranslate) ? ['Meta\'s automatic translation starts only from English, German, Arabic, Hebrew, Spanish, Japanese, Norwegian, French, Dutch or Swedish (a non-English source only into English): Italian text cannot be its source. Edits to a translated copy are dropped while its language stays in autotranslate.'] : []),
+    ...textAdvice(built.creative, instagram),
+    ...built.warnings,
+  ]
 }
 
 export interface CreativeDraft extends MetaChangeDraft {
@@ -525,34 +599,7 @@ async function createDraft(account: MetaChangeAccount, request: CreativeRequest)
     send: async ? sendAsync(act, params, asked, { name, fromExistingPost }) : sendCreate(act, params, asked, { name, fromExistingPost }),
     doneSentence: (result) => createdSentence(label, result.node),
   }
-  const ai = asked.filter((f) => META_AI_GENERATED_FEATURES.has(f))
-  const silent = built.silent
-  const optIns = partsOptIns(built.creative)
-  const warnings = [
-    'A creative spends nothing: it serves only once an ad uses it (create-meta-ad) and that ad, its ad set and its campaign are on.',
-    'Creatives cannot be changed once made (Meta lets only their name, labels and status change: set-meta-creative): a change is a new creative swapped onto the ad, and a swap on an ACTIVE ad sends that ad back to Meta\'s review.',
-    asked.length
-      ? `Advantage+ creative features switched ON at your request: ${asked.join(', ')}. Every other one of the ${META_CREATIVE_FEATURES.length} features Meta documents is sent OFF. Meta drops an opt-in it finds ineligible without a word: the run reads the creative back and says what Meta kept.`
-      : `Every one of the ${META_CREATIVE_FEATURES.length} Advantage+ creative features Meta documents is sent OFF (Meta switches some on by default otherwise: adapt_to_placement, inline_comment, description_automation); the run reads the creative back and says what Meta has.`,
-    ...ai.map((f) => `${f} is generated with AI: an ad using this creative must be created PAUSED and previewed first (meta-ad-preview view ad or creative, creativeFeature ${f}) and only then switched on — Meta's rule; create-meta-ad enforces it.`),
-    request.multiAdvertiser ? 'Multi-advertiser ads: ON at your request (Meta may show this ad next to other advertisers\' ads).' : 'Multi-advertiser ads: OFF (contextual_multi_ads OPT_OUT; Meta opts a creative in when it is not said).',
-    `A ${built.type} creative${silent.destination ? ' with a website destination or catalog part' : ''}: Nexus says each silent key it carries — every Advantage+ feature and multi-advertiser ads${silent.audios ? ', music' : ''}${silent.formats ? ', format automation' : ''}${silent.destination ? ', shop routing' : ''}${silent.productTags && built.productTags !== 'manual' ? ', automatic product tags' : ''}.`,
-    request.music === 'random' ? 'Music: Meta adds a track of its choice (asset_feed_spec.audios random).' : silent.audios ? 'Music: none (asset_feed_spec.audios empty, Meta\'s way to opt out).' : 'Music: none (an existing post keeps its own media; no asset feed is sent).',
-    ...(silent.formats ? [(request.formatAutomation ?? []).length ? `Format automation ON at your request: ${(request.formatAutomation ?? []).map((f) => `${f.format} from ${f.dataSources.join(', ')}`).join('; ')}; every other format (${silent.formats.join(', ')}) is sent with data_source none.` : `Format automation: none (${silent.formats.join(', ')} each sent with data_source none).`] : []),
-    ...(silent.destination ? ['Shop routing: OFF (destination_spec WEBSITE_AND_SHOP_OPT_OUT; v26 sends an eligible creative to the shop by itself otherwise).'] : []),
-    ...(catalog.length ? [`Catalog: ${catalog.map((i) => `${i.kind === 'productset' ? 'product set' : 'catalog item'} ${i.id}`).join(', ')} — each passed the catalog rule (a catalog of the chosen ad account's business portfolio, or a client catalog whose owner is no other business in Nexus); the gateway checks again before it sends.`] : []),
-    ...(built.productTags === 'manual' ? [`Products tagged by hand: ${taggedByHand(built.creative).join(', ')}; Meta's automatic product tagging is off for this ad (Meta's guide: tags by hand switch it off).`] : []),
-    ...(built.productTags === 'off' ? ['Automatic product tags: OFF (interactive_components_spec product_tag opt_out; Meta tags catalog products on single and carousel images by itself otherwise — autoProductTags switches it on).'] : built.productTags === 'on' ? ['Automatic product tags: ON at your request (product_tag opt_in: Meta may tag catalog products on the images by itself).'] : []),
-    ...(built.carousel ? [request.carouselAutoOrder ? 'Carousel order: Meta may reorder the cards at your request (multi_share_optimized true).' : 'Carousel order: as given (multi_share_optimized false; Meta reorders the cards by itself otherwise — carouselAutoOrder switches it on).'] : []),
-    ...(optIns.length ? [`Opt-ins inside the creative's own parts, at your request: ${optIns.join('; ')}.`] : []),
-    ...(request.partner ? ['A partnership ad needs the partner\'s permission: without it Meta keeps the ad "pending delivery" and Meta itself sends the partner a permission request.'] : []),
-    'If Meta already holds the same creative, it answers that one\'s id: nothing new is made then, and the undo never deletes it.',
-    ...(async ? ['Meta makes it in the background (asyncadcreatives; Meta has no check for that edge): the run reads the job and says the creative it made. A creative Nexus did not read back is never deleted by the undo.'] : []),
-    // Master CR-445 (asset-feed-spec/multi-language-ads): Meta's automatic translation starts only from these languages.
-    ...(Array.isArray((built.creative.asset_feed_spec as { autotranslate?: unknown } | undefined)?.autotranslate) ? ['Meta\'s automatic translation starts only from English, German, Arabic, Hebrew, Spanish, Japanese, Norwegian, French, Dutch or Swedish (a non-English source only into English): Italian text cannot be its source. Edits to a translated copy are dropped while its language stays in autotranslate.'] : []),
-    ...textAdvice(built.creative, instagram),
-    ...built.warnings,
-  ]
+  const warnings = creativeWarnings(built, request, { async, instagram, catalog })
   const identity = request.partner ? `partnership (${request.partner.mainIdentity === 'creator' ? 'the creator as main identity, this business as sponsor' : 'this business as main identity, the partner as sponsor'})` : instagram ? 'the chosen Facebook Page and Instagram account' : 'the chosen Facebook Page'
   const { changes } = changeLines([
     [`Creative "${name}"`, 'not in the ad account', 'made (Meta answers its id)'],
@@ -573,9 +620,9 @@ async function createDraft(account: MetaChangeAccount, request: CreativeRequest)
 // ── undo: take back a creative a create made new ────────────────────────────────────────────────────────────────────
 
 /** The change record of THIS business that made this creative NEW in this ad account (not undone), or null (RLS). */
-async function recordOf(creativeId: string, adAccountId: string): Promise<string | null> {
+async function recordOf(creativeId: string, adAccountId: string, tool: string): Promise<string | null> {
   const rows = await prisma.agentChange.findMany({
-    where: { toolName: CREATIVE_TOOL, undoneAt: null, after: { path: ['items'], array_contains: [{ creativeId, new: true }] } },
+    where: { toolName: tool, undoneAt: null, after: { path: ['items'], array_contains: [{ creativeId, new: true }] } },
     select: { id: true, after: true },
     take: 20,
   })
@@ -585,7 +632,11 @@ async function recordOf(creativeId: string, adAccountId: string): Promise<string
 /** Every ad status but DELETED (an archived ad still uses its creative). */
 const AD_STATUSES_BUT_DELETED = ['ACTIVE', 'PAUSED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO', 'CAMPAIGN_PAUSED', 'ARCHIVED', 'ADSET_PAUSED', 'IN_PROCESS', 'WITH_ISSUES']
 
-async function undoDraft(account: MetaChangeAccount, ids: string[]): Promise<CreativeDraft | { refusal: string }> {
+/**
+ * The undo of a create: delete the creatives a create of THIS tool (create-meta-creative; step 26: create-meta-boost) made NEW
+ * in this ad account, still there and used by no ad. Its own records only: a tool never deletes what the other one made.
+ */
+export async function creativeUndoDraft(account: MetaChangeAccount, ids: string[], tool: string = CREATIVE_TOOL): Promise<CreativeDraft | { refusal: string }> {
   if (!ids.length) return { refusal: 'Name the creatives to take back (creatives: their ids).' }
   if (ids.length > MAX_CREATIVE_UNDO) return { refusal: `At most ${MAX_CREATIVE_UNDO} creatives per request.` }
   if (new Set(ids).size !== ids.length) return { refusal: 'Name each creative once.' }
@@ -593,7 +644,7 @@ async function undoDraft(account: MetaChangeAccount, ids: string[]): Promise<Cre
   const act = `act_${account.adAccountId}`
   const refusals: string[] = []
   for (const id of ids) {
-    if (!(await recordOf(id, account.adAccountId))) refusals.push(`creative ${id} is not one a create-meta-creative of this business made new in ad account ${act} (Nexus deletes only that: never a creative it did not make, and never one Meta answered as a duplicate).`)
+    if (!(await recordOf(id, account.adAccountId, tool))) refusals.push(`creative ${id} is not one a ${tool} of this business made new in ad account ${act} (Nexus deletes only that: never a creative it did not make, and never one Meta answered as a duplicate).`)
   }
   if (refusals.length) return { refusal: `Nothing was asked of Meta: ${refusals.join(' ')}` }
   const statuses = new Map<string, string | null>()
@@ -630,7 +681,7 @@ async function undoDraft(account: MetaChangeAccount, ids: string[]): Promise<Cre
     changes: changeLines(going.map((id) => [`Creative ${id}`, 'in the ad account, used by no ad', 'deleted'])).changes,
     totals: { delete: going.length, requests: requests.length, ...(skipped.length ? { stays: skipped.length } : {}) },
     warnings: [
-      'Meta has no check for a delete (its DELETE /<creative id> lists no validate_only), and a deleted creative is final: Nexus cannot put it back (make it again with create-meta-creative).',
+      `Meta has no check for a delete (its DELETE /<creative id> lists no validate_only), and a deleted creative is final: Nexus cannot put it back (make it again with ${tool}).`,
       'A creative an ad uses stays (Nexus reads the account\'s ads first). A delete spends nothing.',
     ],
     spendsMoney: [], skipped, requests,
@@ -644,7 +695,7 @@ async function undoDraft(account: MetaChangeAccount, ids: string[]): Promise<Cre
 /** The draft of one create-meta-creative request, from what Meta holds now (reads only). */
 export async function creativeDraft(account: MetaChangeAccount, request: CreativeRequest): Promise<CreativeDraft | { refusal: string }> {
   try {
-    return request.action === 'undo' ? await undoDraft(account, request.creatives ?? []) : await createDraft(account, request)
+    return request.action === 'undo' ? await creativeUndoDraft(account, request.creatives ?? []) : await createDraft(account, request)
   } catch (err) {
     if (err instanceof MetaLiveRefusal) return { refusal: err.message }
     throw err

@@ -340,8 +340,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/agents/tools/meta-ads-campaign-settings.tools.ts': 1, // reads a done request's method (no sender)
       'services/agents/tools/meta-ads-kit.ts': 2, // the step's sentence for a done DELETE (no sender)
       'services/gateway/gateway.ts': 2, // the request type; a repeatable method
-      'services/gateway/meta.ts': 3, // metaWriteCall: the type and the method it sends
-      'services/gateway/meta-calls.ts': 10, // the allow-list's verdict on a DELETE, with or without a body, and step 31's refusal of a non-text body (a judge, no sender)
+      'services/gateway/meta.ts': 4, // metaWriteCall: the type and the method it sends; step 26: metaRestWriteCall's type (the partnership host)
+      'services/gateway/meta-calls.ts': 11, // the allow-list's verdict on a DELETE, with or without a body, and step 31's refusal of a non-text body; step 26's refusal on a partnership edge (a judge, no sender)
       'services/gateway/meta-create-rules.ts': 1, // the object.delete rule (a judge)
       'services/gateway/meta-remove-rules.ts': 4, // step 22: creative.delete, image.delete, video.remove, canvaselement.delete (judges)
       'services/gateway/meta-settings-rules.ts': 1, // the budget_schedule.delete rule (a judge)
@@ -364,6 +364,10 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
       'services/gateway/meta-audience-rules.ts': 4, // step 31: the people out, the opt-out everywhere, the unshare, the audience delete (judges)
       'services/marketing/meta-ads/change-audiences.ts': 5, // step 31: the request type, the two people-out DELETEs, the unshare, remove-meta-audience's delete (explicit ask: confirmDelete)
+      // Step 26 — set-meta-partnership-access: creators off the tag-approval list (also the undo of an approval), an ad code's
+      // removal, creators off the Page's allowlist, the sponsor tag off posts (each its own action, never a bulk delete).
+      'services/gateway/meta-boost-rules.ts': 6, // the tag-approval and ad-code DELETE rules, the partnership host's two DELETE routes (judges)
+      'services/marketing/meta-ads/change-boosts.ts': 5, // the tag-approval removal, the ad code's removal, the allowlist removal, the untag
       'services/gateway/meta-signals-rules.ts': 2, // step 32: dataset.disconnectAccount, customConversion.delete (judges)
       'services/marketing/meta-ads/change-signals.ts': 2, // step 32: a dataset's disconnect from the chosen ad account, remove-meta-signal-items' delete (explicit ask: confirmDelete; only what Nexus made)
     })
@@ -408,6 +412,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
 const EXPECTED_COMPUTED: string[] = [
   // Step 31 — an audience rule's aggregation method (absolute | percentile), not an HTTP method.
   'services/agents/tools/meta-ads-audience-changes.tools.ts: z.enum([\'absolute\'',
+  // Step 26 — a creator's video copied by create-meta-boost: its upload method in the record (advideos), not an HTTP method.
+  'services/agents/tools/meta-ads-boosts.tools.ts: \'advideos\'',
   // Step 36 — the kit's plan hash names a request's own method (planOf: no sender).
   'services/agents/tools/meta-ads-kit.ts: r.method',
   'services/agents/tools/meta-ads-kit.ts: request.method',
@@ -417,6 +423,8 @@ const EXPECTED_COMPUTED: string[] = [
   'services/agents/tools/meta-ads-media-upload.tools.ts: z.enum(VIDEO_METHODS).optional().describe(\'advideos (default: Meta fetches the link onto the ad account)',
   // Step 39 — the sixth: the content-block-list export's one PUT (metaRestFileExportOf judges it; no DELETE).
   ...Array(6).fill('services/gateway/gateway.ts: req.method'),
+  // Step 26 — metaRestWriteVerdict's input type (the partnership host's judge, no sender).
+  'services/gateway/meta-boost-rules.ts: string; url: string; kind: string; body?: unknown; objectKind?: string',
   'services/gateway/meta-calls.ts: \'POST\' | \'DELETE\'',
   'services/gateway/meta-calls.ts: string',
   'services/gateway/meta-calls.ts: string',
@@ -426,9 +434,16 @@ const EXPECTED_COMPUTED: string[] = [
   'services/gateway/meta-calls.ts: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string',
   // Step 23 — the rupload judge's input type (a judge, no sender).
   'services/gateway/meta-media-rules.ts: string; url: string; kind: string; body?: unknown; objectKind?: string',
+  // Step 26 — metaRestWriteCall: its request type and the method it passes on (the partnership host).
+  'services/gateway/meta.ts: \'POST\' | \'PUT\' | \'DELETE\'',
   'services/gateway/meta.ts: remove ? \'DELETE\' : \'POST\'',
+  'services/gateway/meta.ts: req.method',
   // Step 31 — audienceRequest passes on the literal method its caller names (a delete, the people out, an unshare).
   'services/marketing/meta-ads/change-audiences.ts: o.method',
+  // Step 26 — the creator's video's upload method in the record (advideos), and a partnership-host request's own method
+  // passed on to its sender (each literal where the request is built).
+  'services/marketing/meta-ads/change-boosts.ts: \'advideos\'',
+  'services/marketing/meta-ads/change-boosts.ts: call.method',
   // Step 23 — a video's upload method again (advideos | video_ads).
   'services/marketing/meta-ads/change-media.ts: \'advideos\' | \'video_ads\' = video.method === \'video_ads\' ? \'video_ads\' : \'advideos\'',
   'services/marketing/meta-ads/change-media.ts: \'advideos\' | \'video_ads\'; new: boolean | null',

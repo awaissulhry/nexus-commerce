@@ -9,7 +9,7 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
 import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
 import type { MetaChangeResult, MetaWriteTarget } from './write-client.js'
 
@@ -24,6 +24,12 @@ export interface MetaChangeRequest {
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
+  /**
+   * Step 26 (review A3) — the fields as this preview's plan hash reads them, when they differ from `params`: a creator's
+   * partnership ad code is replaced in it (a short code could be reversed from a hash; the request's arguments still carry the
+   * code). Default: `params`.
+   */
+  planParams?: Record<string, string>
   /**
    * Meta's check (validate_only) for this request: `meta` — asked before it is queued; `none` — Meta documents none for it
    * (ad set and ad updates); `not-yet` — Meta documents one, but Nexus does not use it for this change until a live probe
@@ -67,6 +73,9 @@ export interface MetaChangeRequest {
     | 'customaudience'
     // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
     | MetaPageKind
+    // Step 26 — the chosen Instagram account (`iguser`) or a media of it (`igmedia`); the chosen Page on Meta's partnership
+    // host is step 28's `page` (set-meta-partnership-access).
+    | MetaBoostWriteKind
     // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
     | MetaSignalsKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */

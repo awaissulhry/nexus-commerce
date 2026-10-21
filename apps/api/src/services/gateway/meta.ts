@@ -19,7 +19,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST, type MetaBrandSafetyKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
+import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
 import { metaRuploadUrl } from './meta-media-rules.js'
 import type { MetaSignalsKind } from './meta-signals-rules.js'
 
@@ -88,6 +88,8 @@ export interface MetaWriteRequest {
     | 'customaudience'
     // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
     | MetaPageKind
+    // Step 26 — the chosen Instagram account or a media of it (set-meta-partnership-access; its Page is step 28's `page`).
+    | MetaBoostWriteKind
     // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
     | MetaSignalsKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
@@ -122,7 +124,9 @@ export interface MetaWriteRequest {
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
-  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaSignalsEdge
+  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaBoostEdge | MetaSignalsEdge
+/** Step 26 — set-meta-partnership-access: the chosen Instagram account's partnership edges and a media's ad code. */
+export type MetaBoostEdge = 'branded_content_ad_permissions' | 'branded_content_tag_approval' | 'collaboration_invites' | 'partnership_ad_code'
 /**
  * Step 32 — a dataset made on the ad account or the business portfolio (`adspixels`) or for a Page / Instagram account
  * (`dataset`), a custom conversion (`customconversions`), a dataset's or an event source group's ad account
@@ -237,6 +241,40 @@ export async function metaRestCall(req: Omit<MetaCallRequest, 'auth'>): Promise<
     max429Retries: 0,
     timeoutMs: req.timeoutMs ?? 60_000,
     ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
+  })
+}
+
+export interface MetaRestWriteRequest {
+  connectionId: string
+  operation: string
+  /** The path below the host, e.g. `partnership-ads/fb-account-level-permissions/<page id>` (the gateway confirms the Page is the chosen one). */
+  path: string
+  method: 'POST' | 'PUT' | 'DELETE'
+  query?: Record<string, string>
+  /** The JSON body as text, in Nexus's one spelling (meta-boost-rules.ts). */
+  body?: string
+  maxRateWaitMs?: number
+}
+
+/**
+ * Step 26 (review B1) — one change on Meta's partnership REST host (api.facebook.com) through the gateway: the account's
+ * system-user token as `Authorization: Bearer` with `X-API-Version: 1.0.0` (the gateway adds both), the chosen Page in the
+ * path, a JSON body or a judged query (meta-boost-rules.ts metaRestWriteVerdict). Never retried.
+ */
+export async function metaRestWriteCall(req: MetaRestWriteRequest): Promise<GatewayResponse> {
+  return gatewayCall({
+    channel: 'META',
+    operation: req.operation,
+    kind: 'write',
+    connectionId: req.connectionId,
+    url: metaRestUrl(req.path, req.query ?? {}),
+    method: req.method,
+    ...(req.body ? { body: req.body } : {}),
+    metaObjectKind: 'page',
+    maxTransientRetries: 0,
+    max429Retries: 0,
+    maxRateWaitMs: req.maxRateWaitMs,
+    timeoutMs: 60_000,
   })
 }
 
