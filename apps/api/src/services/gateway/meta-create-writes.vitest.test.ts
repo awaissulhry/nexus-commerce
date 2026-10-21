@@ -364,6 +364,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
       'services/gateway/meta-audience-rules.ts': 4, // step 31: the people out, the opt-out everywhere, the unshare, the audience delete (judges)
       'services/marketing/meta-ads/change-audiences.ts': 5, // step 31: the request type, the two people-out DELETEs, the unshare, remove-meta-audience's delete (explicit ask: confirmDelete)
+      'services/gateway/meta-signals-rules.ts': 2, // step 32: dataset.disconnectAccount, customConversion.delete (judges)
+      'services/marketing/meta-ads/change-signals.ts': 2, // step 32: a dataset's disconnect from the chosen ad account, remove-meta-signal-items' delete (explicit ask: confirmDelete; only what Nexus made)
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.
     const computed = world.flatMap((f) => [...f.text.matchAll(/\bmethod:\s*([^,}\n]+)/g)].map((m) => m[1].trim())
