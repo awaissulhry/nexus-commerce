@@ -176,6 +176,13 @@ function organicInsightRead(query: URLSearchParams): boolean {
   const metrics = (query.get('metric') ?? '').split(',')
   return !query.has('fields') && metrics.length > 0 && metrics.every((m) => META_ORGANIC_METRICS.has(m))
 }
+/** Step 13 review A7 — a JSON list of 1–20 field names ([a-z0-9_]), as Nexus sends a facets read. */
+function jsonFieldNames(value: string | null): boolean {
+  try {
+    const list: unknown = JSON.parse(value ?? '')
+    return Array.isArray(list) && list.length > 0 && list.length <= 20 && list.every((f) => typeof f === 'string' && /^[a-z0-9_]{1,64}$/.test(f))
+  } catch { return false }
+}
 /**
  * Step 12 round 4 item 7 (the same check as step 13's facets `filter`) — a JSON object (an item filter rule Nexus
  * built), never a list, a string or a number.
@@ -323,9 +330,12 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   // Step 13 — product sets, facets, Instagram product search and appeals (marketing/meta-ads/live-commerce.ts), each key on
   // its own edge (a set's items take the products edge's filter, error_priority, error_type above).
   { route: /^\d+\/product_sets$/, keys: new Set(['parent_id', 'ancestor_id', 'has_children', 'retailer_id']) },
-  { route: /^\d+\/facets$/, keys: new Set(['facets', 'filter']) },
-  { route: /^\d+\/catalog_product_search$/, keys: new Set(['catalog_id', 'q']) },
-  { route: /^\d+\/product_appeal$/, keys: new Set(['product_id']) },
+  // Review A7 — and only in the shape Nexus sends: facets a JSON list of field names, filter a JSON object, ids digits.
+  { route: /^\d+\/facets$/, keys: new Set(['facets']), when: (query) => jsonFieldNames(query.get('facets')) },
+  { route: /^\d+\/facets$/, keys: new Set(['filter']), when: (query) => jsonObject(query.get('filter')) },
+  { route: /^\d+\/catalog_product_search$/, keys: new Set(['catalog_id']), when: (query) => /^\d{1,25}$/.test(query.get('catalog_id') ?? '') },
+  { route: /^\d+\/catalog_product_search$/, keys: new Set(['q']) },
+  { route: /^\d+\/product_appeal$/, keys: new Set(['product_id']), when: (query) => /^\d{1,25}$/.test(query.get('product_id') ?? '') },
 ]
 /** Step 14 review A2 — the key's value is one of these. */
 function valueIn(key: string, values: readonly string[]): (query: URLSearchParams) => boolean {

@@ -2,8 +2,11 @@
  * Meta ads step 13 (2026-10-21) — product sets, commerce accounts and shops, and Instagram product tags, read LIVE from
  * Meta through the gateway (GET only). Nothing here stores anything; a caller never names a Graph field or path (fixed
  * field lists per node type), and a product-set filter is built by Nexus from typed conditions (productSetFilter), never
- * taken as a caller's JSON. Lane C4's writes (steps 34, 35) reuse productSetFilter, setFilterPriceAmount and the owner
- * checks below.
+ * taken as a caller's JSON. Lane C4's set writes (steps 34, 35) reuse, never copy: setConditionArg (THE zod schema of one
+ * condition), assertPriceFilterAllowed (a price condition only for a person who may see revenue), productSetFilter with
+ * { maxBytes: MAX_SET_FILTER_WRITE_BYTES, everyItem: false } (no condition = rule null = EVERY item: a write passes
+ * everyItem true only when the request says "every item" explicitly), setFilterPriceAmount (Meta's price × 100) and
+ * setFilterOut (a rule in words, a priced one only under the restricted key).
  *
  * WHICH objects a business may read (one rule each, all reused, none copied):
  *   - product sets, their items, a filter preview and facets: only of a catalog step 12's readableCatalog allows (the
@@ -73,20 +76,31 @@
  *     (product_id; IGShoppingProductAppeal: eligible_for_appeal, product_appeal_status, product_id, rejection_reasons,
  *     review_status); /{ig-media}/children for carousel slides. Limits: no tags on Stories or Live, none for Creator
  *     accounts, 25 tagged posts per 24 h; since 2023-08-10 businesses without checkout-enabled Shops may lose tagging.
+ *   - instagram-graph-api/reference/ig-media/product_tags.md (review B3): GET "Stories, Instagram TV, Reels, Live, and
+ *     Mentions are not supported" (POST: Stories, IGTV, Live, Mentions; 20 tags on a feed post, 30 on a Reel);
+ *     ig-user/product_appeal.md (review B1): GET answers eligible_for_appeal, product_id, review_status (the SDK adds
+ *     product_appeal_status, rejection_reasons); both need an admin role on the business portfolio that owns the Shop,
+ *     catalog_management, instagram_basic, instagram_shopping_tag_products, and ads_read / ads_management when the role
+ *     on the Page comes through Business Manager (review B4).
+ *   - catalog/guides/commerce-merchant-settings-api.md: privacy_policy_localized `locale` "follows BCP 47 format" (B6).
+ *   - shop.md (review B2): documents fb_sales_channel and ig_sales_channel only; shop_status and workspace are SDK only.
  */
+import { z } from 'zod'
+import { FIELDS } from '@nexus/shared/permissions'
 import { metaObjectId } from '../../cx/connectors/meta/discovery.js'
 import type { MetaQueryValue } from '../../gateway/meta.js'
 import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
 import { metaChosenAccount, MetaLiveRefusal, type MetaChosenAccount } from './live.js'
-import { listGroups, listPaged, readGroups, type FieldGroup } from './live-objects.js'
-import { instagramOf, listWithFallback, oneWithFallback, ownMedia, part, portfolioTaken, tidy } from './live-media.js'
+import { listGroups, readGroups, type FieldGroup } from './live-objects.js'
+import { listPaged, listWithFallback, oneWithFallback, part } from './paging.js'
+import { instagramOf, ownMedia, tidy } from './live-media.js'
 import {
-  CATALOG_OF_ANOTHER_BUSINESS, catalogChild, catalogPortfolio, ITEM_LIST_FIELDS, itemMoney, itemRow, PRICE_NOTE, readableCatalog, withNote,
-  type ReadableCatalog,
-} from './live-catalog.js'
+  CATALOG_NO_OWNER, CATALOG_OF_ANOTHER_BUSINESS, catalogChild, catalogPortfolio, need, readableCatalog, type ReadableCatalog,
+} from './catalog-rule.js'
+import { ITEM_LIST_FIELDS, itemMoney, itemRow, PRICE_NOTE, withNote } from './live-catalog.js'
 import { currencyExponent } from './money.js'
-import { takenIds } from './taken.js'
+import { portfolioTaken, takenIds } from './taken.js'
 
 type Row = Record<string, unknown>
 
@@ -97,39 +111,57 @@ const bool = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null)
 const obj = (v: unknown): Row | null => (v && typeof v === 'object' && !Array.isArray(v) ? v as Row : null)
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.map(text).filter((s): s is string => !!s) : [])
 const clampRows = (n: number | undefined, dflt: number) => Math.min(500, Math.max(1, Math.trunc(n ?? dflt)))
-const need = (value: string | null | undefined, sentence: string): string => {
-  if (!value) throw new MetaLiveRefusal(sentence)
-  return value
-}
 
 // ── product-set filters: built by Nexus from typed conditions (lane C4's writes reuse this) ──────────────────────────
 
-/** Text fields of a product item a set may test (Meta's product-set filter fields; internal_label: LIVE-PROBES CT-063b). */
-export const SET_FILTER_TEXT_FIELDS = [
+/**
+ * Text fields of a product item a set may test (Meta's product-set filter fields). `internal_label` is on no Meta page —
+ * the documented field is `tags` — and stays behind LIVE-PROBES CT-063b: Meta may answer it with an error or with a silent
+ * 0 matches (a set that never delivers), so an answer that uses it says so.
+ */
+const SET_FILTER_TEXT_FIELDS = [
   'retailer_id', 'retailer_product_group_id', 'name', 'brand', 'category', 'product_type', 'color', 'size', 'material', 'pattern',
   'custom_label_0', 'custom_label_1', 'custom_label_2', 'custom_label_3', 'custom_label_4', 'internal_label', 'tags',
 ] as const
 /** Fields with Meta's fixed values (product items), tested with eq / neq / is_any / is_not_any only. */
-export const SET_FILTER_ENUMS: Readonly<Record<'availability' | 'condition' | 'gender' | 'age_group', readonly string[]>> = {
+const SET_FILTER_ENUMS: Readonly<Record<'availability' | 'condition' | 'gender' | 'age_group', readonly string[]>> = {
   availability: ['in stock', 'out of stock', 'preorder', 'available for order'],
   condition: ['new', 'refurbished', 'used'],
   gender: ['female', 'male', 'unisex'],
   age_group: ['adult', 'infant', 'kids', 'newborn', 'toddler'],
 }
 /** Price fields: Meta's number is the price × 100 in every currency (setFilterPriceAmount). */
-export const SET_FILTER_PRICE_FIELDS = ['price_amount', 'sale_price_amount'] as const
-export const SET_FILTER_FIELDS = [...SET_FILTER_TEXT_FIELDS, 'availability', 'condition', 'gender', 'age_group', ...SET_FILTER_PRICE_FIELDS] as const
-export type SetFilterField = typeof SET_FILTER_FIELDS[number]
-export const SET_FILTER_OPS = ['eq', 'neq', 'contains', 'not_contains', 'i_contains', 'is_any', 'is_not_any', 'starts_with', 'lt', 'lte', 'gt', 'gte'] as const
-export type SetFilterOp = typeof SET_FILTER_OPS[number]
+const SET_FILTER_PRICE_FIELDS = ['price_amount', 'sale_price_amount'] as const
+const SET_FILTER_FIELDS = [...SET_FILTER_TEXT_FIELDS, 'availability', 'condition', 'gender', 'age_group', ...SET_FILTER_PRICE_FIELDS] as const
+type SetFilterField = typeof SET_FILTER_FIELDS[number]
+const SET_FILTER_OPS = ['eq', 'neq', 'contains', 'not_contains', 'i_contains', 'is_any', 'is_not_any', 'starts_with', 'lt', 'lte', 'gt', 'gte'] as const
+type SetFilterOp = typeof SET_FILTER_OPS[number]
+export const SET_MATCH = ['all', 'any'] as const
 /** Fields a facets read may count (no price: a facet of prices would be money). */
 export const SET_FACET_FIELDS = [
   'brand', 'product_type', 'category', 'availability', 'condition', 'color', 'size', 'material', 'pattern', 'gender', 'age_group',
   'custom_label_0', 'custom_label_1', 'custom_label_2', 'custom_label_3', 'custom_label_4',
 ] as const
 export const MAX_SET_CONDITIONS = 20
-export const MAX_SET_VALUES = 100
-const MAX_VALUE_CHARS = 200
+const MAX_SET_VALUES = 100
+const MAX_SET_VALUE_CHARS = 200
+/** At most this many bytes of encoded rule on a read (preview, items, facets): a read never needs a big filter. */
+const MAX_SET_FILTER_READ_BYTES = 8 * 1024
+/** Meta's cap on a set's filter ("max length: 500 KiB"): lane C4's set writes pass it as maxBytes. */
+export const MAX_SET_FILTER_WRITE_BYTES = 500 * 1024
+
+const lowerArg = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v)
+/**
+ * THE schema of one condition: the read tools and lane C4's set writes validate with exactly this (productSetFilter
+ * checks the same again at run time, in words, for a caller that did not go through it).
+ */
+export const setConditionArg = z.object({
+  field: z.preprocess(lowerArg, z.enum(SET_FILTER_FIELDS)).describe(`the item field: ${SET_FILTER_FIELDS.join(' | ')} (price_amount, sale_price_amount: a price; internal_label is on no Meta page — 0 matches may mean "not known", prefer tags)`),
+  op: z.preprocess(lowerArg, z.enum(SET_FILTER_OPS)).describe('eq | neq | contains | not_contains | i_contains | is_any | is_not_any | starts_with (category only) | lt | lte | gt | gte (prices)'),
+  value: z.string().max(MAX_SET_VALUE_CHARS).optional().describe('the one value (eq, neq, contains, not_contains, i_contains, starts_with)'),
+  values: z.array(z.string().max(MAX_SET_VALUE_CHARS)).max(MAX_SET_VALUES).optional().describe('the values (is_any, is_not_any)'),
+  amountMinor: z.number().int().min(0).max(1_000_000_000).optional().describe('a price condition: minor units of currency (4990 = 49.90); only for a person who may see revenue'),
+})
 
 const TEXT_OPS: ReadonlySet<string> = new Set(['eq', 'neq', 'contains', 'not_contains', 'i_contains', 'is_any', 'is_not_any', 'starts_with'])
 const ENUM_OPS: ReadonlySet<string> = new Set(['eq', 'neq', 'is_any', 'is_not_any'])
@@ -141,6 +173,25 @@ const PLAIN_ASCII = /^[\x20-\x7e]+$/
 
 export interface SetCondition { field: SetFilterField; op: SetFilterOp; value?: string | null; values?: string[] | null; amountMinor?: number | null }
 export interface SetFilterInput { conditions?: SetCondition[] | null; match?: 'all' | 'any' | null; currency?: string | null }
+/**
+ * maxBytes: the encoded rule's cap (reads MAX_SET_FILTER_READ_BYTES, the default; a set write MAX_SET_FILTER_WRITE_BYTES).
+ * everyItem: may no condition mean "every item of the catalog" (rule null)? True for reads (no filter); a set WRITE passes
+ * false unless the request said so explicitly — then no condition is refused instead of quietly making an all-items set.
+ */
+export interface SetFilterOptions { maxBytes?: number; everyItem?: boolean }
+
+/** Who may filter by price: a price condition's counts and members give prices away (~30 previews = the exact price). */
+export const PRICE_FILTER_REFUSED = 'A price condition (price_amount, sale_price_amount) is only for a person who may see revenue in Nexus: counting the items under a price gives the prices away. Filter on other fields, or ask a person who may see revenue.'
+type FieldGate = (permission: (typeof FIELDS)[keyof typeof FIELDS]) => boolean
+/** May this caller send price conditions? (revenue view or the whole financial view — as the money keys are stripped). */
+function mayFilterByPrice(can: FieldGate): boolean {
+  return can(FIELDS.financialsRevenueView) || can(FIELDS.financialsView)
+}
+/** Refuses (in words) any price condition from a caller who may not see revenue — before any call. Lane C4 reuses it. */
+export function assertPriceFilterAllowed(conditions: unknown, can: FieldGate): void {
+  const priced = Array.isArray(conditions) && conditions.some((c) => PRICE_FIELDS.has(String(obj(c)?.field ?? '').trim().toLowerCase()))
+  if (priced && !mayFilterByPrice(can)) throw new MetaLiveRefusal(PRICE_FILTER_REFUSED)
+}
 
 /**
  * Meta's product-set price filter value: "the price multiplied by 100, for all currencies" (EUR 49.90 → 4990, JPY 490 →
@@ -166,49 +217,81 @@ const OP_HINT: Readonly<Record<'text' | 'enum' | 'price', string>> = {
 
 /**
  * THE product-set filter Nexus sends (a preview here; lane C4's set writes): one rule per condition, joined with `and`
- * (match all, the default) or `or` (match any). Every field, operator and value is checked against Meta's documented
- * rules; a price is given in minor units of `currency` (default: the ad account's) and sent as Meta's price × 100.
- * No condition = no filter (every item of the catalog). Refused in words when a condition breaks a rule.
+ * (match all, the default) or `or` (match any). Every field, operator, value and value TYPE is checked against Meta's
+ * documented rules at run time (a refusal in words, never a TypeError); a price is minor units of `currency` (default:
+ * the ad account's), sent as Meta's price × 100; the encoded rule is capped (options.maxBytes). No condition = rule null
+ * = every item of the catalog — refused unless options.everyItem (true by default, for reads). Price permission is
+ * assertPriceFilterAllowed's, checked by the caller before this.
  */
-export function productSetFilter(input: SetFilterInput, defaultCurrency: string | null): { rule: Row | null; priceCurrency: string | null } {
-  const conditions = input.conditions ?? []
+export function productSetFilter(input: SetFilterInput, defaultCurrency: string | null, options: SetFilterOptions = {}): { rule: Row | null; priceCurrency: string | null } {
+  const maxBytes = options.maxBytes ?? MAX_SET_FILTER_READ_BYTES
+  const raw: unknown = input.conditions
+  if (raw !== null && raw !== undefined && !Array.isArray(raw)) throw new MetaLiveRefusal('conditions is a list of conditions (field, op, value / values / amountMinor).')
+  const conditions: unknown[] = Array.isArray(raw) ? raw : []
   if (conditions.length > MAX_SET_CONDITIONS) throw new MetaLiveRefusal(`At most ${MAX_SET_CONDITIONS} conditions in one filter.`)
+  const match: unknown = input.match
+  if (match !== null && match !== undefined && match !== 'all' && match !== 'any') throw new MetaLiveRefusal('match is all (every condition) or any (one of them).')
+  if (input.currency !== null && input.currency !== undefined && typeof input.currency !== 'string') throw new MetaLiveRefusal('currency is a currency code (e.g. EUR).')
+  if (conditions.length === 0 && options.everyItem === false) throw new MetaLiveRefusal('No condition means every item of the catalog: say so explicitly (every item), or give the conditions.')
   let priceCurrency: string | null = null
-  const parts = conditions.map((c, i): Row => {
-    const at = `Condition ${i + 1} (${c.field} ${c.op})`
-    const kind = PRICE_FIELDS.has(c.field) ? 'price' : c.field in SET_FILTER_ENUMS ? 'enum' : 'text'
-    if (!(SET_FILTER_FIELDS as readonly string[]).includes(c.field)) throw new MetaLiveRefusal(`${at}: Nexus filters only on ${SET_FILTER_FIELDS.join(', ')}.`)
-    if (!(kind === 'price' ? PRICE_OPS : kind === 'enum' ? ENUM_OPS : TEXT_OPS).has(c.op)) throw new MetaLiveRefusal(`${at}: ${OP_HINT[kind]}.`)
-    if (c.op === 'starts_with' && c.field !== 'category') throw new MetaLiveRefusal(`${at}: Meta allows starts_with on category only now; use contains.`)
+  const parts = conditions.map((given, i): Row => {
+    const c = obj(given)
+    if (!c) throw new MetaLiveRefusal(`Condition ${i + 1} is not a condition (field, op, value / values / amountMinor).`)
+    const field = typeof c.field === 'string' ? c.field.trim().toLowerCase() : ''
+    const op = typeof c.op === 'string' ? c.op.trim().toLowerCase() : ''
+    const at = `Condition ${i + 1} (${field || '?'} ${op || '?'})`
+    if (!(SET_FILTER_FIELDS as readonly string[]).includes(field)) throw new MetaLiveRefusal(`${at}: Nexus filters only on ${SET_FILTER_FIELDS.join(', ')}.`)
+    if (!(SET_FILTER_OPS as readonly string[]).includes(op)) throw new MetaLiveRefusal(`${at}: the operator is one of ${SET_FILTER_OPS.join(', ')}.`)
+    const given1 = c.value
+    const givenN = c.values
+    const amountMinor = c.amountMinor
+    if (given1 !== null && given1 !== undefined && typeof given1 !== 'string') throw new MetaLiveRefusal(`${at}: value is text.`)
+    if (givenN !== null && givenN !== undefined && !Array.isArray(givenN)) throw new MetaLiveRefusal(`${at}: values is a list of texts.`)
+    // Bounded before any work on it (a caller that did not go through setConditionArg may send any length).
+    if (Array.isArray(givenN) && givenN.length > MAX_SET_VALUES) throw new MetaLiveRefusal(`${at}: at most ${MAX_SET_VALUES} values.`)
+    if (Array.isArray(givenN) && givenN.some((v) => typeof v !== 'string')) throw new MetaLiveRefusal(`${at}: values is a list of texts.`)
+    if (amountMinor !== null && amountMinor !== undefined && typeof amountMinor !== 'number') throw new MetaLiveRefusal(`${at}: amountMinor is a whole number (minor units).`)
+    const value = given1 as string | null | undefined
+    const values = givenN as string[] | null | undefined
+    const kind = PRICE_FIELDS.has(field) ? 'price' : field in SET_FILTER_ENUMS ? 'enum' : 'text'
+    if (!(kind === 'price' ? PRICE_OPS : kind === 'enum' ? ENUM_OPS : TEXT_OPS).has(op)) throw new MetaLiveRefusal(`${at}: ${OP_HINT[kind]}.`)
+    if (op === 'starts_with' && field !== 'category') throw new MetaLiveRefusal(`${at}: Meta allows starts_with on category only now; use contains.`)
     if (kind === 'price') {
-      if (typeof c.amountMinor !== 'number' || c.value || c.values?.length) throw new MetaLiveRefusal(`${at}: give the price as amountMinor only (minor units of the currency: 4990 = 49.90).`)
+      if (typeof amountMinor !== 'number' || value || values?.length) throw new MetaLiveRefusal(`${at}: give the price as amountMinor only (minor units of the currency: 4990 = 49.90).`)
       const currency = (input.currency ?? defaultCurrency ?? '').trim().toUpperCase()
       if (!/^[A-Z]{3}$/.test(currency)) throw new MetaLiveRefusal(`${at}: name the currency of the price (currency, e.g. EUR).`)
-      const amount = setFilterPriceAmount(c.amountMinor, currency)
-      if (amount === null) throw new MetaLiveRefusal(`${at}: Meta compares prices in hundredths of the currency; ${c.amountMinor} is not a whole, non-negative hundredth in ${currency}.`)
+      const amount = setFilterPriceAmount(amountMinor, currency)
+      if (amount === null) throw new MetaLiveRefusal(`${at}: Meta compares prices in hundredths of the currency; ${amountMinor} is not a whole, non-negative hundredth in ${currency}.`)
       priceCurrency = currency
-      return { [c.field]: { [c.op]: amount } }
+      return { [field]: { [op]: amount } }
     }
-    if (c.amountMinor !== null && c.amountMinor !== undefined) throw new MetaLiveRefusal(`${at}: amountMinor is for price_amount or sale_price_amount only.`)
-    const list = LIST_OPS.has(c.op)
-    if (list ? !!c.value : !!c.values?.length) throw new MetaLiveRefusal(`${at}: ${list ? `${c.op} takes a list (values)` : `${c.op} takes one value (value); is_any / is_not_any take a list (values)`}.`)
-    const values = [...new Set((list ? c.values ?? [] : c.value ? [c.value] : []).map((v) => v.trim()).filter(Boolean))]
-    if (!values.length) throw new MetaLiveRefusal(`${at}: give ${list ? 'values' : 'value'}.`)
-    if (values.length > MAX_SET_VALUES) throw new MetaLiveRefusal(`${at}: at most ${MAX_SET_VALUES} values.`)
-    for (const v of values) {
-      if (v.length > MAX_VALUE_CHARS) throw new MetaLiveRefusal(`${at}: a value is at most ${MAX_VALUE_CHARS} characters.`)
+    if (amountMinor !== null && amountMinor !== undefined) throw new MetaLiveRefusal(`${at}: amountMinor is for price_amount or sale_price_amount only.`)
+    const list = LIST_OPS.has(op)
+    if (list ? !!value : !!values?.length) throw new MetaLiveRefusal(`${at}: ${list ? `${op} takes a list (values)` : `${op} takes one value (value); is_any / is_not_any take a list (values)`}.`)
+    const texts = [...new Set((list ? values ?? [] : value ? [value] : []).map((v) => v.trim()).filter(Boolean))]
+    if (!texts.length) throw new MetaLiveRefusal(`${at}: give ${list ? 'values' : 'value'}.`)
+    if (texts.length > MAX_SET_VALUES) throw new MetaLiveRefusal(`${at}: at most ${MAX_SET_VALUES} values.`)
+    for (const v of texts) {
+      if (v.length > MAX_SET_VALUE_CHARS) throw new MetaLiveRefusal(`${at}: a value is at most ${MAX_SET_VALUE_CHARS} characters.`)
       if (/[\u0000-\u001f\u007f]/.test(v)) throw new MetaLiveRefusal(`${at}: a value holds no control characters.`)
-      if (LABEL_FIELD.test(c.field) && !PLAIN_ASCII.test(v)) throw new MetaLiveRefusal(`${at}: Meta takes no non-English characters in a label filter ("${v}").`)
-      if (kind === 'enum' && !SET_FILTER_ENUMS[c.field as keyof typeof SET_FILTER_ENUMS].includes(v.toLowerCase())) {
-        throw new MetaLiveRefusal(`${at}: "${v}" is not one of Meta's values (${SET_FILTER_ENUMS[c.field as keyof typeof SET_FILTER_ENUMS].join(', ')}).`)
+      if (LABEL_FIELD.test(field) && !PLAIN_ASCII.test(v)) throw new MetaLiveRefusal(`${at}: Meta takes no non-English characters in a label filter ("${v}").`)
+      if (kind === 'enum' && !SET_FILTER_ENUMS[field as keyof typeof SET_FILTER_ENUMS].includes(v.toLowerCase())) {
+        throw new MetaLiveRefusal(`${at}: "${v}" is not one of Meta's values (${SET_FILTER_ENUMS[field as keyof typeof SET_FILTER_ENUMS].join(', ')}).`)
       }
     }
-    const sent = kind === 'enum' ? values.map((v) => v.toLowerCase()) : values
-    return { [c.field]: { [c.op]: list ? sent : sent[0] } }
+    const sent = kind === 'enum' ? texts.map((v) => v.toLowerCase()) : texts
+    return { [field]: { [op]: list ? sent : sent[0] } }
   })
-  const rule = parts.length === 0 ? null : parts.length === 1 ? parts[0] : { [input.match === 'any' ? 'or' : 'and']: parts }
+  const rule = parts.length === 0 ? null : parts.length === 1 ? parts[0] : { [match === 'any' ? 'or' : 'and']: parts }
+  // The ENCODED size: the rule's JSON text in UTF-8 bytes, what Meta's "max length: 500 KiB" on a set's filter counts.
+  const bytes = rule ? Buffer.byteLength(JSON.stringify(rule), 'utf8') : 0
+  if (bytes > maxBytes) throw new MetaLiveRefusal(`The filter is ${bytes} bytes once encoded; at most ${maxBytes} here. Use fewer or shorter values.`)
   return { rule, priceCurrency }
 }
+
+/** Does a rule name internal_label (on no Meta page: LIVE-PROBES CT-063b)? */
+const usesInternalLabel = (rule: unknown) => !!rule && /"internal_label"/.test(JSON.stringify(rule))
+export const INTERNAL_LABEL_NOTE = 'internal_label as a set filter field is on no Meta page (the documented field is tags): Meta may refuse it, or answer 0 matches without an error — a set built on it would then never deliver. Until LIVE-PROBES CT-063b settles it, read 0 matches here as "not known", and prefer tags.'
 
 const PRICE_KEY = /^(sale_)?price(_amount)?$|^base_price(_amount)?$/i
 const OP_WORDS: Readonly<Record<string, string>> = {
@@ -216,8 +299,9 @@ const OP_WORDS: Readonly<Record<string, string>> = {
   is_not_any: 'is none of', starts_with: 'starts with', lt: '<', lte: '≤', gt: '>', gte: '≥',
 }
 
-/** Does a rule name a price field anywhere (a key at any depth)? */
+/** Does a rule name a price anywhere (a price key at any depth, or "price" anywhere in its text)? */
 function rulePrices(rule: unknown, depth = 0): boolean {
+  if (depth === 0 && /price/i.test(JSON.stringify(rule) ?? '')) return true
   if (depth > 10) return true
   if (Array.isArray(rule)) return rule.some((r) => rulePrices(r, depth + 1))
   const r = obj(rule)
@@ -250,19 +334,21 @@ export function setFilterWords(rule: unknown, depth = 0): string | null {
   return depth === 0 && words.startsWith('(') && words.endsWith(')') && parts.length === 1 ? words.slice(1, -1) : words
 }
 
+export const SET_PRICE_UNIT = 'price_amount and sale_price_amount are Meta\'s price × 100 in every currency (4990 = 49.90 EUR, 49000 = 490 JPY), not minor units.'
+
 /**
  * A set's filter for an answer: Meta's string parsed, in plain words. A filter that names a price is answered ONLY
- * under filterWithPricesShown (a restricted key: financials.revenue.view), never as `filter`.
+ * under filterWithPricesShown (a restricted key: financials.revenue.view), with Meta's ×100 unit said next to the words.
  */
 export function setFilterOut(value: unknown): Row {
   const raw = typeof value === 'string' ? value.trim() : value === null || value === undefined ? '' : JSON.stringify(value)
   let rule: unknown = raw === '' ? {} : null
   if (typeof value === 'object' && value !== null) rule = value
   else if (raw !== '') { try { rule = JSON.parse(raw) } catch { rule = null } }
-  const priced = rule === null ? /price/i.test(raw) : rulePrices(rule)
+  const priced = /price/i.test(raw) || (rule !== null && rulePrices(rule))
   const shown = rule === null ? raw : rule
   const words = rule === null ? null : setFilterWords(rule)
-  if (priced) return { filter: null, filterHasPrices: true, filterWithPricesShown: { rule: shown, words } }
+  if (priced) return { filter: null, filterHasPrices: true, filterWithPricesShown: { rule: shown, words, unit: SET_PRICE_UNIT } }
   return { filter: shown, filterWords: words, filterHasPrices: false }
 }
 
@@ -307,10 +393,35 @@ export interface ProductSetsInput extends SetFilterInput {
   errorPriority?: typeof SET_ERROR_PRIORITIES[number] | null
   facetFields?: string[] | null
   maxRows?: number
+  /** The caller's field permissions (ToolContext.can): price conditions need revenue view (assertPriceFilterAllowed). */
+  can?: FieldGate
 }
 
+/** Review A8 — every plain argument (and the price permission) checked before any call (database or Meta). */
+function checkedSetArgs(input: ProductSetsInput): string[] {
+  assertPriceFilterAllowed(input.conditions, input.can ?? (() => false))
+  for (const [name, value] of [['parentId', input.parentId], ['ancestorId', input.ancestorId], ['productSetId', input.productSetId], ['catalogId', input.catalogId]] as const) {
+    if (value && !metaObjectId(value)) throw new MetaLiveRefusal(`${name} is a Meta id (digits).`)
+  }
+  if (input.errorType && !/^[A-Z][A-Z0-9_]{2,79}$/.test(input.errorType)) throw new MetaLiveRefusal('errorType is one of Meta\'s error types (e.g. IMAGE_RESOLUTION_LOW).')
+  if (input.errorPriority && !(SET_ERROR_PRIORITIES as readonly string[]).includes(input.errorPriority)) throw new MetaLiveRefusal('errorPriority is HIGH, MEDIUM or LOW.')
+  if (input.retailerId && (input.retailerId.length > 100 || /[\u0000-\u001f\u007f]/.test(input.retailerId))) throw new MetaLiveRefusal('retailerId is at most 100 characters of text.')
+  const facetFields = [...new Set(input.facetFields?.length ? input.facetFields : ['brand', 'product_type', 'availability'])]
+  const badFacet = facetFields.find((f) => !(SET_FACET_FIELDS as readonly string[]).includes(f))
+  if (badFacet) throw new MetaLiveRefusal(`"${badFacet}" is not a field Nexus counts (${SET_FACET_FIELDS.join(', ')}).`)
+  return facetFields
+}
+
+/** What an answer that used a filter says next to it (the rule as Nexus sent it; internal_label's open question). */
+const narrowed = (rule: Row | null, priceCurrency: string | null) => (rule ? { narrowedBy: { ...setFilterOut(rule), priceCurrency }, ...(usesInternalLabel(rule) ? { internalLabelNote: INTERNAL_LABEL_NOTE } : {}) } : {})
+
 export async function liveProductSets(input: ProductSetsInput) {
+  const facetFields = checkedSetArgs(input)
   const account = await metaChosenAccount(input.connectionId)
+  // The filter right after Nexus's own account row (a price condition's default currency is the ad account's), before any
+  // Meta call.
+  const { rule, priceCurrency } = input.view === 'items' || input.view === 'preview' || input.view === 'facets'
+    ? productSetFilter(input, account.currency) : { rule: null, priceCurrency: null }
   await catalogPortfolio(account)
   const { connectionId } = account
   const base = { view: input.view }
@@ -349,13 +460,12 @@ export async function liveProductSets(input: ProductSetsInput) {
     case 'items': {
       // CT-062 — the items in a set now, with prices (restricted), narrowed by conditions, an error type or priority.
       const { id, catalog } = await setOf()
-      const { rule, priceCurrency } = productSetFilter(input, account.currency)
       const read = await withNote(() => listPaged(connectionId, 'productSets.items', `${id}/products`, {
         fields: ITEM_LIST_FIELDS, ...(rule ? { filter: rule } : {}), ...(input.errorType ? { error_type: input.errorType } : {}),
         ...(input.errorPriority ? { error_priority: input.errorPriority } : {}),
       }, clampRows(input.maxRows, 100), true))
       return {
-        ...base, catalogId: catalog.catalogId, productSetId: id, total: read.totalCount, ...(rule ? { narrowedBy: { ...setFilterOut(rule), priceCurrency } } : {}),
+        ...base, catalogId: catalog.catalogId, productSetId: id, total: read.totalCount, ...narrowed(rule, priceCurrency),
         items: read.rows.map(itemRow), more: read.more, priceNote: PRICE_NOTE,
       }
     }
@@ -364,7 +474,6 @@ export async function liveProductSets(input: ProductSetsInput) {
       // set — its count now, so a change shows items before → after (lane C4's set-meta-product-set reads this).
       const set = input.productSetId ? await setOf() : null
       const catalog: ReadableCatalog = set ? set.catalog : await catalogOf()
-      const { rule, priceCurrency } = productSetFilter(input, account.currency)
       const read = await withNote(() => listPaged(connectionId, 'productSets.preview', `${catalog.catalogId}/products`, { fields: ITEM_LIST_FIELDS, ...(rule ? { filter: rule } : {}) }, clampRows(input.maxRows, 10), true))
       const matching = read.totalCount ?? (read.more ? null : read.rows.length)
       let current: Row | null = null
@@ -378,17 +487,16 @@ export async function liveProductSets(input: ProductSetsInput) {
         ...base, catalogId: catalog.catalogId, ...setFilterOut(rule ?? {}), priceCurrency, matchingItems: matching,
         willDeliver: matching === null ? null : matching > 0,
         ...(matching === 0 ? { warning: 'No item matches: a product set with this filter would be empty, and ads on it will not deliver (Meta).' } : {}),
+        ...(usesInternalLabel(rule) ? { internalLabelNote: INTERNAL_LABEL_NOTE } : {}),
         current, sample: read.rows.map(itemRow), moreItems: read.more, priceNote: PRICE_NOTE, note: PREVIEW_NOTE,
       }
     }
     case 'facets': {
       // CT-903 — distinct values and counts of some fields (brands, types…), optionally under a filter: helps build a set.
       const catalog = await catalogOf()
-      const { rule, priceCurrency } = productSetFilter(input, account.currency)
-      const fields = [...new Set(input.facetFields?.length ? input.facetFields : ['brand', 'product_type', 'availability'])]
-      const read = await withNote(() => listWithFallback(connectionId, 'productSets.facets', `${catalog.catalogId}/facets`, 'facets', 'item_count', { facets: fields, ...(rule ? { filter: rule } : {}) }, 50))
+      const read = await withNote(() => listWithFallback(connectionId, 'productSets.facets', `${catalog.catalogId}/facets`, 'facets', 'item_count', { facets: facetFields, ...(rule ? { filter: rule } : {}) }, 50))
       return {
-        ...base, catalogId: catalog.catalogId, facetFields: fields, ...(rule ? { narrowedBy: { ...setFilterOut(rule), priceCurrency } } : {}),
+        ...base, catalogId: catalog.catalogId, facetFields, ...narrowed(rule, priceCurrency),
         items: read.rows.map((r) => ({ itemCount: num(r.item_count), facets: tidy(facetsSafe(r.facets ?? null)) })), fieldsNote: read.note,
         note: 'Meta documents this read but not the shape of its facet request: Nexus sends the field names as a list. When Meta refuses, its words say why. Prices are never counted here.',
       }
@@ -404,9 +512,12 @@ const COMMERCE_NO_PORTFOLIO = 'The chosen ad account names no business portfolio
 const COMMERCE_NOTHING = 'No Facebook Page is chosen for this business and its business portfolio cannot be read here, so no commerce account is read. A person chooses the Page in Settings › Channels › Meta.'
 export const COMMERCE_NOT_OWN = 'That commerce account is not the chosen Facebook Page\'s nor the business portfolio\'s, so it is not read.'
 const COMMERCE_OF_ANOTHER_BUSINESS = 'That commerce account is the shop of a Facebook Page another business in Nexus uses, so it is not read here.'
+export const COMMERCE_UNVERIFIED = 'Meta did not name that commerce account\'s Facebook Page, so Nexus cannot check that it is not another business\'s shop; it is not read (only its id is shown).'
 const CMS_LIST_CORE = 'id,display_name,merchant_status'
+// Review B2 — the shop's own id alone is the core; shop_status (SDK only) is a group of its own.
 const SHOP_GROUPS: FieldGroup[] = [
-  { name: 'core', fields: 'id,shop_status' },
+  { name: 'core', fields: 'id' },
+  { name: 'status', fields: 'shop_status' },
   { name: 'channels', fields: 'fb_sales_channel{status,fb_page{id,name}},ig_sales_channel{status,ig_user{id,username}}' },
   { name: 'links', fields: 'commerce_merchant_settings{id},workspace' },
 ]
@@ -427,7 +538,11 @@ async function withPermissionNote<T>(note: string, work: () => Promise<T>): Prom
 }
 const withCommerceNote = <T>(work: () => Promise<T>) => withPermissionNote(COMMERCE_PERMISSION_NOTE, work)
 
-interface CommerceRow { commerceAccountId: string; on: 'page' | 'portfolio'; row: Row; takenByAnotherBusiness: boolean }
+/**
+ * unverified (review A3): a portfolio account whose Page Meta did not name (merchant_page missing or refused) — Nexus cannot
+ * check it is not another business's shop, so it fails CLOSED: its id only, never read.
+ */
+interface CommerceRow { commerceAccountId: string; on: 'page' | 'portfolio'; row: Row; takenByAnotherBusiness: boolean; unverified: boolean }
 
 /** The chosen Page's and the (unshared) portfolio's commerce accounts; each list may fail alone (its words kept). */
 async function commerceLists(account: MetaChosenAccount, maxRows: number) {
@@ -448,25 +563,27 @@ async function commerceLists(account: MetaChosenAccount, maxRows: number) {
   const rows: CommerceRow[] = []
   for (const r of page?.value?.rows ?? []) {
     const id = idText(r.id)
-    if (id) rows.push({ commerceAccountId: id, on: 'page', row: r, takenByAnotherBusiness: false })
+    if (id) rows.push({ commerceAccountId: id, on: 'page', row: r, takenByAnotherBusiness: false, unverified: false })
   }
   for (const r of portfolio?.rows ?? []) {
     const id = idText(r.id)
     if (!id || rows.some((x) => x.commerceAccountId === id)) continue
-    rows.push({ commerceAccountId: id, on: 'portfolio', row: r, takenByAnotherBusiness: pageIds.has(idText(obj(r.merchant_page)?.id) ?? '') })
+    const merchantPage = idText(obj(r.merchant_page)?.id)
+    rows.push({ commerceAccountId: id, on: 'portfolio', row: r, takenByAnotherBusiness: !!merchantPage && pageIds.has(merchantPage), unverified: !merchantPage })
   }
   return { rows, pageNotRead: page?.notRead ?? null, portfolioNotRead: portfolio?.notRead ?? null, portfolioNote }
 }
 
 /** A caller's commerce-account id (or the only one) — read only when it is the chosen Page's or the unshared portfolio's. */
-export async function ownCommerceAccount(account: MetaChosenAccount, wanted: string | null | undefined): Promise<{ commerceAccountId: string; on: 'page' | 'portfolio' }> {
+async function ownCommerceAccount(account: MetaChosenAccount, wanted: string | null | undefined): Promise<{ commerceAccountId: string; on: 'page' | 'portfolio' }> {
   const id = wanted ? metaObjectId(wanted) : null
   if (wanted && !id) throw new MetaLiveRefusal(`"${wanted}" is not a Meta commerce account id (digits).`)
   const lists = await commerceLists(account, 100)
   const unread = [lists.pageNotRead, lists.portfolioNotRead].filter(Boolean).join(' ')
-  const own = lists.rows.filter((r) => !r.takenByAnotherBusiness)
+  const own = lists.rows.filter((r) => !r.takenByAnotherBusiness && !r.unverified)
   if (id) {
     if (lists.rows.some((r) => r.commerceAccountId === id && r.takenByAnotherBusiness)) throw new MetaLiveRefusal(COMMERCE_OF_ANOTHER_BUSINESS)
+    if (lists.rows.some((r) => r.commerceAccountId === id && r.unverified)) throw new MetaLiveRefusal(COMMERCE_UNVERIFIED)
     const hit = own.find((r) => r.commerceAccountId === id)
     if (!hit) throw new MetaLiveRefusal(`${COMMERCE_NOT_OWN}${unread ? ` (Meta did not answer one of the lists: ${unread})` : ''}`)
     return { commerceAccountId: hit.commerceAccountId, on: hit.on }
@@ -489,20 +606,40 @@ function idsIn(value: unknown, out: Set<string> = new Set(), depth = 0): Set<str
   return out
 }
 
-/** Meta's answer with every Page or Instagram account another Nexus business uses reduced to its id and the flag. */
-async function maskAssets(value: unknown): Promise<unknown> {
+/** Keys kept from an object of no documented shape: its id, states and kinds, on/off flags, counts, country codes. */
+const KNOWN_KEY = /^(id|status|state|type|enabled|count|country|countries|country_code|is_[a-z0-9_]+|[a-z0-9_]+_(status|state|type|enabled|count))$/
+/** A name, kept only next to the chosen Page's or Instagram account's own id. */
+const NAME_KEY = /^(name|username|display_name)$/
+const NAMES_HIDDEN = 'Meta\'s channel and workspace objects have no documented shape (Meta\'s SDK only): Nexus keeps only ids, states, kinds, on/off flags and country codes, and a name only next to the chosen Page or Instagram account (next to any other id Nexus cannot check whose it is); a Page or account another business in Nexus uses is its id and the flag only.'
+
+/**
+ * Review A6 — an SDK-only object of unknown shape (a commerce account's channels, a shop's workspace), by ALLOW-list:
+ * only KNOWN_KEY leaves (and the lists / objects that hold them) are kept; a name (NAME_KEY) only next to the chosen
+ * Page's or Instagram account's own id; every Page, Instagram account or portfolio another Nexus business uses is its id
+ * and the flag only. Anything else — a link, a URL, a text, an id under another key, a name next to an id Nexus could not
+ * check or on an object with no id — is left out.
+ */
+async function maskAssets(value: unknown, account: MetaChosenAccount): Promise<unknown> {
   const ids = [...idsIn(value)]
-  const taken = new Set([...(await takenIds('PAGE', ids)), ...(await takenIds('INSTAGRAM', ids))])
-  const walk = (v: unknown, depth: number): unknown => {
-    if (depth > 8) return null
-    if (Array.isArray(v)) return v.map((x) => walk(x, depth + 1))
+  const taken = new Set([...(await takenIds('PAGE', ids)), ...(await takenIds('INSTAGRAM', ids)), ...(await takenIds('PORTFOLIO', ids))])
+  const ours = new Set([account.pageId, account.instagramId].filter((id): id is string => !!id))
+  /** known: the key this value sits under is one Nexus keeps (a plain value is kept only then). */
+  const walk = (v: unknown, depth: number, known: boolean): unknown => {
+    if (depth > 8) return undefined
+    if (Array.isArray(v)) return v.map((x) => walk(x, depth + 1, known)).filter((x) => x !== undefined)
     const r = obj(v)
-    if (!r) return v
+    if (!r) return known ? v : undefined
     const id = idText(r.id)
     if (id && taken.has(id)) return { id, takenByAnotherBusiness: true }
-    return Object.fromEntries(Object.entries(r).map(([k, x]) => [k, walk(x, depth + 1)]))
+    const named = !!id && ours.has(id)
+    const out: Row = {}
+    for (const [k, x] of Object.entries(r)) {
+      const kept = walk(x, depth + 1, KNOWN_KEY.test(k) || (named && NAME_KEY.test(k)))
+      if (kept !== undefined) out[k] = kept
+    }
+    return out
   }
-  return tidy(walk(value, 0))
+  return tidy(walk(value, 0, false) ?? null)
 }
 
 /** A shop's sales channel: its status in words and the Page or Instagram account (by id; another business's is the flag only). */
@@ -525,7 +662,7 @@ async function shopsOf(account: MetaChosenAccount, rows: Row[]) {
   const taken = new Set([...(await takenIds('PAGE', ids)), ...(await takenIds('INSTAGRAM', ids))])
   return Promise.all(rows.map(async (r) => ({
     shopId: idText(r.id), status: text(r.shop_status), facebook: channelOf(r.fb_sales_channel, 'page', account, taken), instagram: channelOf(r.ig_sales_channel, 'instagram', account, taken),
-    commerceAccountId: idText(obj(r.commerce_merchant_settings)?.id), workspace: r.workspace === undefined ? undefined : await maskAssets(r.workspace ?? null),
+    commerceAccountId: idText(obj(r.commerce_merchant_settings)?.id), workspace: r.workspace === undefined ? undefined : await maskAssets(r.workspace ?? null, account),
   })))
 }
 
@@ -539,11 +676,21 @@ function setupOf(r: Row) {
 export interface CommerceInput { connectionId?: string | null; view: typeof COMMERCE_VIEWS[number]; commerceAccountId?: string | null; shopId?: string | null; country?: string | null; countries?: string[] | null; locale?: string | null; maxRows?: number }
 
 export async function liveCommerce(input: CommerceInput) {
+  // Every argument checked before any call (database or Meta).
+  const country = input.country ? input.country.trim().toUpperCase() : null
+  if (country && !/^[A-Z]{2}$/.test(country)) throw new MetaLiveRefusal(`"${input.country}" is not a country code (two letters, e.g. IT).`)
+  const locale = input.locale ? input.locale.trim() : null
+  if (locale && !/^[a-z]{2,3}(?:[-_][A-Z]{2})?$/.test(locale)) throw new MetaLiveRefusal(`"${input.locale}" is not a language code (BCP 47, e.g. it, en-US).`)
+  const countries = [...new Set((input.countries ?? (country ? [country] : [])).map((c) => String(c).trim().toUpperCase()))]
+  const badCountry = countries.find((c) => !/^[A-Z]{2}$/.test(c))
+  if (badCountry) throw new MetaLiveRefusal(`"${badCountry}" is not a country code (two letters, e.g. IT).`)
+  if (countries.length > 5) throw new MetaLiveRefusal('At most 5 countries in one read.')
+  for (const [name, value] of [['commerceAccountId', input.commerceAccountId], ['shopId', input.shopId]] as const) {
+    if (value && !metaObjectId(value)) throw new MetaLiveRefusal(`${name} is a Meta id (digits).`)
+  }
   const account = await metaChosenAccount(input.connectionId)
   const { connectionId } = account
   const base = { view: input.view }
-  const country = input.country ? input.country.trim().toUpperCase() : null
-  if (country && !/^[A-Z]{2}$/.test(country)) throw new MetaLiveRefusal(`"${input.country}" is not a country code (two letters, e.g. IT).`)
   switch (input.view) {
     case 'accounts': {
       // CT-140 — the chosen Page's and the business portfolio's commerce accounts (a shop on Facebook / Instagram).
@@ -552,6 +699,7 @@ export async function liveCommerce(input: CommerceInput) {
         ...base, pageId: account.pageId, portfolioId: account.businessId,
         items: lists.rows.map((r) => r.takenByAnotherBusiness
           ? { commerceAccountId: r.commerceAccountId, takenByAnotherBusiness: true }
+          : r.unverified ? { commerceAccountId: r.commerceAccountId, unverified: true, why: COMMERCE_UNVERIFIED }
           : { commerceAccountId: r.commerceAccountId, name: text(r.row.display_name), status: text(r.row.merchant_status), statusWords: STATUS_WORDS[text(r.row.merchant_status) ?? ''] ?? null, foundOn: r.on === 'page' ? 'the chosen Facebook Page' : 'the business portfolio', takenByAnotherBusiness: false }),
         pageNotRead: lists.pageNotRead, portfolioNotRead: lists.portfolioNotRead, portfolioNote: lists.portfolioNote,
         note: 'A commerce account is what Meta calls a shop\'s "commerce merchant settings" (made by Commerce Manager or a shop platform such as Shopify). Its catalogs: meta-catalogs view shop-catalogs.',
@@ -571,23 +719,22 @@ export async function liveCommerce(input: CommerceInput) {
       ]
       const read = await withCommerceNote(() => readGroups(connectionId, 'commerce.account', id, groups))
       const b = read.body
-      const locale = input.locale ? input.locale.trim() : null
-      if (locale && !/^[a-z]{2,3}(?:[-_][A-Z]{2})?$/.test(locale)) throw new MetaLiveRefusal(`"${input.locale}" is not a language code (e.g. it, en_US).`)
+      // Review A3 — the Page check straight after the read, before anything else is read or returned.
+      const page = obj(b.merchant_page)
+      const pageId = idText(page?.id)
+      if (pageId && pageId !== account.pageId && (await takenIds('PAGE', [pageId])).has(pageId)) throw new MetaLiveRefusal(COMMERCE_OF_ANOTHER_BUSINESS)
       const perCountry = country ? await Promise.all([['checkoutConfig', 'checkout_config'], ['callToAction', 'cta'], ['shopsAdsSetup', 'shops_ads_setup']].map(async ([key, field]) => {
         const got = await part(() => metaReadOne({ connectionId }, { operation: `commerce.account.${field}`, path: id, query: { fields: `id,${field}.country_code(${country})` } }))
         return [key, got.value ? tidy((got.value.body as Row)[field] ?? null) : { notRead: got.notRead }] as const
       })) : null
       const policy = locale ? await part(() => metaReadOne({ connectionId }, { operation: 'commerce.account.policy', path: id, query: { fields: `id,privacy_policy_localized.locale(${locale})` } })) : null
-      const page = obj(b.merchant_page)
-      const pageId = idText(page?.id)
-      if (pageId && pageId !== account.pageId && (await takenIds('PAGE', [pageId])).has(pageId)) throw new MetaLiveRefusal(COMMERCE_OF_ANOTHER_BUSINESS)
       const status = text(b.merchant_status)
       return {
         ...base, commerceAccountId: id, foundOn: own.on === 'page' ? 'the chosen Facebook Page' : 'the business portfolio', name: text(b.display_name),
         status, statusWords: status ? STATUS_WORDS[status] ?? null : null, contactEmail: text(b.contact_email), terms: text(b.terms),
-        page: page ? { pageId, name: text(page.name), chosenHere: pageId === account.pageId } : null,
+        page: page ? { pageId, ...(pageId === account.pageId ? { name: text(page.name) } : {}), chosenHere: pageId === account.pageId } : null,
         offsiteCheckoutCountries: Array.isArray(b.offsite_iab_checkout_enabled_countries) ? strings(b.offsite_iab_checkout_enabled_countries) : null,
-        facebookChannel: b.facebook_channel === undefined ? null : await maskAssets(b.facebook_channel), instagramChannel: b.instagram_channel === undefined ? null : await maskAssets(b.instagram_channel),
+        facebookChannel: b.facebook_channel === undefined ? null : await maskAssets(b.facebook_channel, account), instagramChannel: b.instagram_channel === undefined ? null : await maskAssets(b.instagram_channel, account),
         paymentProvider: text(b.payment_provider),
         ...(country ? { country, perCountry: Object.fromEntries(perCountry ?? []) } : {}),
         ...(locale ? { locale, privacyPolicy: policy?.value ? tidy((policy.value.body as Row).privacy_policy_localized ?? null) : { notRead: policy?.notRead ?? null } } : {}),
@@ -595,6 +742,7 @@ export async function liveCommerce(input: CommerceInput) {
         notes: [
           'Checkout, call to action and shop ads set-up are per country (country); the privacy policy per language (locale). Meta: checkout set-up needs a shop platform\'s (partner) integration.',
           'offsiteCheckoutCountries, the Page, channels and payment provider are in Meta\'s SDK only: missing names any Meta refused. Changing these is in Commerce Manager (Meta documents a status, policy and checkout change for shop platforms only).',
+          NAMES_HIDDEN,
         ],
       }
     }
@@ -604,16 +752,15 @@ export async function liveCommerce(input: CommerceInput) {
       const read = await withCommerceNote(() => listGroups(connectionId, 'commerce.shops', `${own.commerceAccountId}/shops`, SHOP_GROUPS, {}, clampRows(input.maxRows, 25)))
       return {
         ...base, commerceAccountId: own.commerceAccountId, items: await shopsOf(account, read.rows), more: read.more, missing: read.missing,
-        note: 'A shop\'s id is what a product set needs to show as a shop collection (publish_to_shops, a change in a later Nexus step). Only sales channels set up appear (Meta).',
+        note: `A shop's id is what a product set needs to show as a shop collection (publish_to_shops, a change in a later Nexus step). Only sales channels set up appear (Meta). ${NAMES_HIDDEN}`,
       }
     }
     case 'shop': {
       // CT-144 — one shop (checked to be a shop of one of the business's commerce accounts first).
-      const shopId = metaObjectId(need(input.shopId, 'Name the shop (shopId, from view shops).'))
-      if (!shopId) throw new MetaLiveRefusal(`"${input.shopId}" is not a Meta shop id (digits).`)
+      const shopId = need(metaObjectId(input.shopId), 'Name the shop (shopId, from view shops).')
       const candidates = input.commerceAccountId
         ? [await ownCommerceAccount(account, input.commerceAccountId)]
-        : (await commerceLists(account, 25)).rows.filter((r) => !r.takenByAnotherBusiness).slice(0, 5)
+        : (await commerceLists(account, 25)).rows.filter((r) => !r.takenByAnotherBusiness && !r.unverified).slice(0, 5)
       let owner: string | null = null
       for (const c of candidates) {
         const shops = await withCommerceNote(() => listPaged(connectionId, 'commerce.shopCheck', `${c.commerceAccountId}/shops`, { fields: 'id' }, 100))
@@ -621,7 +768,7 @@ export async function liveCommerce(input: CommerceInput) {
       }
       if (!owner) throw new MetaLiveRefusal('That shop is not one of the shops of the business\'s commerce accounts (the chosen Page\'s or the business portfolio\'s), so it is not read.')
       const read = await withCommerceNote(() => readGroups(connectionId, 'commerce.shop', shopId, SHOP_GROUPS))
-      return { ...base, commerceAccountId: owner, shop: (await shopsOf(account, [read.body]))[0], missing: read.missing }
+      return { ...base, commerceAccountId: owner, shop: (await shopsOf(account, [read.body]))[0], missing: read.missing, note: NAMES_HIDDEN }
     }
     case 'setup-status': {
       // CT-143 — the shop set-up status: of a commerce account (commerceAccountId), else the chosen Page's shop.
@@ -637,12 +784,9 @@ export async function liveCommerce(input: CommerceInput) {
       // CT-147 — where Shop checkout sends buyers to the website (offsite_iab_checkout_enabled_countries, SDK only), and the
       // documented checkout set-up per country (checkout_config.country_code(XX)).
       const own = await ownCommerceAccount(account, input.commerceAccountId)
-      const countries = [...new Set((input.countries ?? (country ? [country] : [])).map((c) => c.trim().toUpperCase()))]
-      const bad = countries.find((c) => !/^[A-Z]{2}$/.test(c))
-      if (bad) throw new MetaLiveRefusal(`"${bad}" is not a country code (two letters, e.g. IT).`)
       const read = await withCommerceNote(() => oneWithFallback(connectionId, 'commerce.checkoutCountries', own.commerceAccountId, 'id,display_name', 'offsite_iab_checkout_enabled_countries'))
       const perCountry = []
-      for (const c of countries.slice(0, 5)) {
+      for (const c of countries) {
         const got = await part(() => metaReadOne({ connectionId }, { operation: 'commerce.checkoutConfig', path: own.commerceAccountId, query: { fields: `id,checkout_config.country_code(${c})` } }))
         perCountry.push({ country: c, checkoutConfig: got.value ? tidy((got.value.body as Row).checkout_config ?? null) : null, notRead: got.notRead })
       }
@@ -659,12 +803,17 @@ export async function liveCommerce(input: CommerceInput) {
 // ── meta-instagram-product-tags (only the chosen Instagram account and its own media) ────────────────────────────────
 
 export const IG_TAG_VIEWS = ['eligibility', 'catalogs', 'search', 'tags', 'appeal'] as const
-const IG_SHOP_NOTE = 'If Meta\'s words name a permission: the token needs instagram_basic, instagram_shopping_tag_products and catalog_management, the Instagram account an approved Instagram Shop, and the system user an admin role on the business portfolio that owns the Shop (Meta\'s product-tagging requirements).'
+// Review B4 — Meta's product-tagging requirements, for a system-user token (no Page token is needed).
+const IG_SHOP_NOTE = 'If Meta\'s words name a permission: the system user must be an ADMIN of the business portfolio that owns the Instagram Shop (with the Page role through Business Manager), and its token needs catalog_management, instagram_basic, instagram_shopping_tag_products and ads_read or ads_management; the Instagram account needs an approved Instagram Shop. No Page token is needed.'
 const TAG_CORE = 'product_id,merchant_id,name,price_string,image_url,review_status,is_checkout,stripped_price_string,x,y'
 const TAG_MORE = 'stripped_sale_price_string,product_url'
 const SEARCH_FIELDS = 'product_id,product_name,retailer_id,image_url,review_status,is_checkout_flow,merchant_id,product_variants'
-const APPEAL_FIELDS = 'product_id,review_status,eligible_for_appeal,product_appeal_status,rejection_reasons'
-const TAG_LIMITS = 'Meta: at most 20 tags on a photo or video post, 5 per carousel slide (20 per carousel), 30 on a Reel; 25 tagged posts per 24 hours; no tags on Stories or Live; none for Creator accounts. Only products whose review status is approved show on a post.'
+// Review B1 — the appeal fields documented on Meta's page are the core; the rest (SDK only) are dropped and named if refused.
+const APPEAL_CORE = 'product_id,review_status,eligible_for_appeal'
+const APPEAL_MORE = 'product_appeal_status,rejection_reasons'
+/** Review B3 — Meta's tag read (GET /{ig-media}/product_tags) does not cover these media types. */
+const NO_TAG_READ: Readonly<Record<string, string>> = { STORY: 'Stories', REELS: 'Reels', IGTV: 'IGTV videos', LIVE: 'Live videos' }
+const TAG_LIMITS = 'Meta: at most 20 tags on a photo or video feed post, 5 per carousel slide (20 per carousel), 30 on a Reel; Stories, IGTV, Live and mentions take no tags, and Meta\'s tag read does not cover Reels either (the Instagram app shows a Reel\'s tags); 25 tagged posts per 24 hours (a carousel counts as one); none for Creator accounts. Only products whose review status is approved show on a post.'
 
 /** An Instagram shopping read Meta may refuse for a permission: said plainly. */
 const withShopNote = <T>(work: () => Promise<T>) => withPermissionNote(IG_SHOP_NOTE, work)
@@ -678,6 +827,9 @@ async function taggingCatalogs(account: MetaChosenAccount, instagramId: string) 
     if (!catalogId) continue
     const check = await part(() => readableCatalog(account, catalogId))
     if (check.notRead === CATALOG_OF_ANOTHER_BUSINESS) items.push({ catalogId, takenByAnotherBusiness: true })
+    // A client catalog Meta names no owner for (step 12): Nexus cannot tell whose it is, so its id only — never its name or
+    // shop name (it may be another Nexus business's).
+    else if (check.notRead === CATALOG_NO_OWNER) items.push({ catalogId, readable: false, ownerUnknown: true, why: CATALOG_NO_OWNER })
     else if (!check.value) items.push({ catalogId, readable: false, why: check.notRead })
     else items.push({ catalogId, name: text(r.catalog_name), shopName: text(r.shop_name), productCount: num(r.product_count), relation: check.value.relation, readable: true, takenByAnotherBusiness: false })
   }
@@ -717,7 +869,7 @@ export async function liveInstagramProductTags(input: InstagramTagsInput) {
     case 'catalogs': {
       // CT-150 — the catalogs it may tag from (Meta answers one; collaborative catalogs are not supported), each checked.
       await catalogPortfolio(account)
-      return { ...base, items: await taggingCatalogs(account, instagramId), note: 'Instagram Shops use one catalog. A catalog is shown only when Nexus may read it (the chosen ad account\'s business portfolio owns it or it is a client catalog of it).' }
+      return { ...base, items: await taggingCatalogs(account, instagramId), note: 'Instagram Shops use one catalog. A catalog is shown only when Nexus may read it (the chosen ad account\'s business portfolio owns it, or it is a client catalog of it whose owner Meta names and no other business in Nexus uses).' }
     }
     case 'search': {
       // CT-151 — tag-eligible products of a readable catalog (by name or SKU), with their review status.
@@ -747,7 +899,8 @@ export async function liveInstagramProductTags(input: InstagramTagsInput) {
     case 'tags': {
       // CT-153 — the product tags on one of the chosen account's own posts (and its carousel slides on request).
       const media = await ownMedia(account, need(input.mediaId, 'Name the Instagram post (mediaId, from meta-instagram-media view media).'))
-      if (media.productType === 'STORY') return { ...base, mediaId: media.mediaId, productType: media.productType, items: [], note: 'Instagram has no product tags on Stories (Meta).' }
+      const unread = media.productType ? NO_TAG_READ[media.productType.toUpperCase()] : undefined
+      if (unread) throw new MetaLiveRefusal(`Meta's product-tag read does not cover ${unread} (it reads tags on feed photos, videos and carousels only), so this post's tags are not read. The Instagram app shows them.`)
       const read = await withShopNote(() => listWithFallback(connectionId, 'igTags.tags', `${media.mediaId}/product_tags`, TAG_CORE, TAG_MORE, {}, 30))
       let slides: Row[] | null = null
       if (input.slides) {
@@ -769,10 +922,11 @@ export async function liveInstagramProductTags(input: InstagramTagsInput) {
     case 'appeal': {
       // CT-157 — the appeal state of a product rejected for tagging (an item of a readable catalog, checked first).
       const { id, catalog } = await catalogChild(account, { kind: 'item', id: need(input.itemId, 'Name the product (itemId: Meta\'s product id, from view search or meta-catalog-items).'), catalogId: input.catalogId })
-      const read = await withShopNote(() => listPaged(connectionId, 'igTags.appeal', `${instagramId}/product_appeal`, { product_id: id, fields: APPEAL_FIELDS }, 5))
+      const read = await withShopNote(() => listWithFallback(connectionId, 'igTags.appeal', `${instagramId}/product_appeal`, APPEAL_CORE, APPEAL_MORE, { product_id: id }, 5))
       return {
         ...base, catalogId: catalog.catalogId, productId: id,
         items: read.rows.map((r) => ({ productId: idText(r.product_id), reviewStatus: text(r.review_status), eligibleForAppeal: bool(r.eligible_for_appeal), appealStatus: text(r.product_appeal_status), rejectionReasons: strings(r.rejection_reasons) })),
+        fieldsNote: read.note,
         note: 'Sending an appeal is a change (a later Nexus step); Meta answers it with success only, not the outcome — read this view again later.',
       }
     }

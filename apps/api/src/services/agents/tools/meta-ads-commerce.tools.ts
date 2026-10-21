@@ -21,8 +21,8 @@ import type { AgentTool, ToolResult } from '../tool-types.js'
 import { connectionArg, guarded, lower, metaIdArg } from './meta-ads-read.tools.js'
 import { META_CATALOG_MONEY } from './meta-ads-catalog.tools.js'
 import {
-  COMMERCE_VIEWS, IG_TAG_VIEWS, liveCommerce, liveInstagramProductTags, liveProductSets, MAX_SET_CONDITIONS, MAX_SET_VALUES, PRODUCT_SET_VIEWS,
-  SET_ERROR_PRIORITIES, SET_FACET_FIELDS, SET_FILTER_FIELDS, SET_FILTER_OPS, type CommerceInput, type InstagramTagsInput, type ProductSetsInput, type SetCondition,
+  assertPriceFilterAllowed, COMMERCE_VIEWS, IG_TAG_VIEWS, liveCommerce, liveInstagramProductTags, liveProductSets, MAX_SET_CONDITIONS, PRODUCT_SET_VIEWS,
+  SET_ERROR_PRIORITIES, SET_FACET_FIELDS, SET_MATCH, setConditionArg, type CommerceInput, type InstagramTagsInput, type ProductSetsInput, type SetCondition,
 } from '../../marketing/meta-ads/live-commerce.js'
 
 /** meta-product-sets: item prices (step 12's keys) and a set filter that names a price. */
@@ -36,14 +36,6 @@ const catalogArg = (what: string) => metaIdArg(`${what} (Meta's catalog id, from
 const READ_ONLY = { category: 'insights', riskTier: 'low', readOnly: true, openWorld: true } as const
 
 // ── meta-product-sets ────────────────────────────────────────────────────────────────────────────────────────────
-
-const conditionArg = z.object({
-  field: z.preprocess(lower, z.enum(SET_FILTER_FIELDS)).describe(`the item field: ${SET_FILTER_FIELDS.join(' | ')} (price_amount, sale_price_amount: a price)`),
-  op: z.preprocess(lower, z.enum(SET_FILTER_OPS)).describe('eq | neq | contains | not_contains | i_contains | is_any | is_not_any | starts_with (category only) | lt | lte | gt | gte (prices)'),
-  value: z.string().max(200).optional().describe('the one value (eq, neq, contains, not_contains, i_contains, starts_with)'),
-  values: z.array(z.string().max(200)).max(MAX_SET_VALUES).optional().describe('the values (is_any, is_not_any)'),
-  amountMinor: z.number().int().min(0).max(1_000_000_000).optional().describe('a price condition: minor units of currency (4990 = 49.90)'),
-})
 
 const metaProductSets: AgentTool = {
   name: 'meta-product-sets',
@@ -59,9 +51,9 @@ const metaProductSets: AgentTool = {
     ancestorId: metaIdArg('list: only the sets below this set'),
     hasChildren: z.boolean().optional().describe('list: only sets with (true) or without (false) sets below them'),
     retailerId: z.string().trim().min(1).max(100).optional().describe('list: only the set with this retailer id (your own id for a set)'),
-    conditions: z.array(conditionArg).max(MAX_SET_CONDITIONS).optional()
-      .describe('preview: the filter a set would have; items, facets: narrow to these. Nexus builds Meta\'s rule from them (no condition = every item)'),
-    match: z.preprocess(lower, z.enum(['all', 'any'])).optional().describe('conditions: all (default, and) | any (or)'),
+    conditions: z.array(setConditionArg).max(MAX_SET_CONDITIONS).optional()
+      .describe('preview: the filter a set would have; items, facets: narrow to these. Nexus builds Meta\'s rule from them (no condition = every item). A price condition only for a person who may see revenue'),
+    match: z.preprocess(lower, z.enum(SET_MATCH)).optional().describe('conditions: all (default, and) | any (or)'),
     currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional().describe('price conditions: the currency of amountMinor (default the ad account\'s)'),
     errorType: z.string().trim().regex(/^[A-Z][A-Z0-9_]{2,79}$/).optional().describe('items: only items with this Meta error type (e.g. IMAGE_RESOLUTION_LOW)'),
     errorPriority: z.preprocess(upper, z.enum(SET_ERROR_PRIORITIES)).optional().describe('items: only items with errors of this priority: HIGH | MEDIUM | LOW'),
@@ -81,27 +73,33 @@ const metaProductSets: AgentTool = {
     + 'and counts (brands, types…) to build a filter. Conditions are typed (field, op, value / values / amountMinor): Nexus '
     + 'builds Meta\'s rule and checks Meta\'s rules (contains is for text, fixed-value fields take eq / is_any, '
     + 'starts_with only on category, no non-English characters in label filters; a price is minor units, sent as Meta\'s '
-    + 'price × 100). Prices are minor units of each item\'s currency (priceCents) with Meta\'s text; a set filter that '
+    + 'price × 100; only for a person who may see revenue — counts under a price give prices away). Prices are minor units of each item\'s currency (priceCents) with Meta\'s text; a set filter that '
     + 'names a price is under filterWithPricesShown. The sets an item is in: meta-catalog-items view item-sets. Changing '
     + 'sets is a change tool (a later Nexus step). Read only.',
-  async handler(args): Promise<ToolResult> {
-    return guarded(() => liveProductSets({
-      connectionId: str(args.connectionId),
-      view: args.view as ProductSetsInput['view'],
-      catalogId: str(args.catalogId),
-      productSetId: str(args.productSetId),
-      parentId: str(args.parentId),
-      ancestorId: str(args.ancestorId),
-      hasChildren: typeof args.hasChildren === 'boolean' ? args.hasChildren : null,
-      retailerId: str(args.retailerId),
-      conditions: (args.conditions as SetCondition[] | undefined) ?? null,
-      match: (args.match as ProductSetsInput['match']) ?? null,
-      currency: str(args.currency),
-      errorType: str(args.errorType),
-      errorPriority: (args.errorPriority as ProductSetsInput['errorPriority']) ?? null,
-      facetFields: (args.facetFields as string[] | undefined) ?? null,
-      maxRows: args.maxRows as number | undefined,
-    }))
+  async handler(args, ctx): Promise<ToolResult> {
+    // Review A1 — a price condition only for a person who may see revenue (counts and members under a price give it away).
+    const can = (permission: Parameters<typeof ctx.can>[0]) => ctx.can(permission)
+    return guarded(async () => {
+      assertPriceFilterAllowed(args.conditions, can)
+      return liveProductSets({
+        connectionId: str(args.connectionId),
+        view: args.view as ProductSetsInput['view'],
+        catalogId: str(args.catalogId),
+        productSetId: str(args.productSetId),
+        parentId: str(args.parentId),
+        ancestorId: str(args.ancestorId),
+        hasChildren: typeof args.hasChildren === 'boolean' ? args.hasChildren : null,
+        retailerId: str(args.retailerId),
+        conditions: (args.conditions as SetCondition[] | undefined) ?? null,
+        match: (args.match as ProductSetsInput['match']) ?? null,
+        currency: str(args.currency),
+        errorType: str(args.errorType),
+        errorPriority: (args.errorPriority as ProductSetsInput['errorPriority']) ?? null,
+        facetFields: (args.facetFields as string[] | undefined) ?? null,
+        maxRows: args.maxRows as number | undefined,
+        can,
+      })
+    })
   },
 }
 
@@ -120,7 +118,7 @@ const metaCommerce: AgentTool = {
     shopId: metaIdArg('shop: the shop (from view shops)'),
     country: countryArg.optional().describe('account: checkout, call to action and shop ads set-up for this country (ISO code, e.g. IT)'),
     countries: z.array(countryArg).max(5).optional().describe('checkout-countries: also the checkout set-up for these countries (at most 5)'),
-    locale: z.string().trim().regex(/^[a-z]{2,3}(?:[-_][A-Z]{2})?$/).optional().describe('account: the privacy policy in this language (e.g. it, en_US)'),
+    locale: z.string().trim().regex(/^[a-z]{2,3}(?:[-_][A-Z]{2})?$/).optional().describe('account: the privacy policy in this language (BCP 47, e.g. it, en-US)'),
     maxRows: maxRowsArg(25),
     connectionId: connectionArg,
   }),
@@ -173,7 +171,7 @@ const metaInstagramProductTags: AgentTool = {
     + 'view eligibility: may it tag products (an approved Instagram Shop), its shopping review status, and Meta\'s limits. '
     + 'catalogs: the catalogs it may tag from (a catalog Nexus may not read is not shown). search (search, catalogId): '
     + 'tag-eligible products by name or SKU with their review status — only approved products show on a post. tags '
-    + '(mediaId, slides): the tags on a post with their place, review status and price. appeal (itemId): the appeal '
+    + '(mediaId, slides): the tags on a feed post or carousel with their place, review status and price (Meta\'s tag read does not cover Reels, Stories, IGTV or Live). appeal (itemId): the appeal '
     + 'state of a product rejected for tagging. Prices are Meta\'s text under restricted keys (priceCents only when the '
     + 'text names an ISO currency). Meta cannot: tag Stories or Live, tag for Creator accounts, or remove a tag by API '
     + '(Instagram app only). Adding tags and appealing are change tools (a later Nexus step). Read only.',

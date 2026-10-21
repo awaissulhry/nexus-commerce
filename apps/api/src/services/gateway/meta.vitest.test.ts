@@ -511,7 +511,7 @@ describe('read only by construction', () => {
       '170000000000001/catalog_product_search?fields=product_id,product_name&catalog_id=120000000000700&q=SKU-1',
       '170000000000001/product_appeal?fields=product_id,review_status&product_id=120000000000740',
       '130000000000001?fields=id,checkout_config.country_code(IT),shops_ads_setup.country_code(IT)',
-      '130000000000001?fields=id,privacy_policy_localized.locale(en_US)',
+      '130000000000001?fields=id,privacy_policy_localized.locale(en_US)', '130000000000001?fields=id,privacy_policy_localized.locale(en-US)',
       '130000000000001/shops?fields=id,shop_status,fb_sales_channel{status,fb_page{id,name}},ig_sales_channel{status,ig_user{id,username}}',
       '120000000000010/shop_setup_status?fields=shop_setup,payment_setup,review_status',
     ]) expect(q(path), path).toBeNull()
@@ -522,6 +522,12 @@ describe('read only by construction', () => {
       [`120000000000700/product_feeds?fields=id&filter=${filter}`, 'filter'], ['170000000000001/media?fields=id&q=x', 'q'],
       ['170000000000001/media?fields=id&catalog_id=120000000000700', 'catalog_id'], ['178000000000001/product_tags?fields=product_id&product_id=1', 'product_id'],
       ['170000000000001/product_appeal?fields=product_id&appeal_reason=x', 'appeal_reason'], ['130000000000001/shops?fields=id&filter=x', 'filter'],
+      // Review A7 — only in the shape Nexus sends: digits, a JSON list of field names, a JSON object.
+      ['170000000000001/catalog_product_search?fields=product_id&catalog_id=abc', 'catalog_id'], ['170000000000001/catalog_product_search?fields=product_id&catalog_id=1,2', 'catalog_id'],
+      ['170000000000001/product_appeal?fields=product_id&product_id=SKU-1', 'product_id'],
+      [`120000000000700/facets?fields=facets&facets=${encodeURIComponent('brand')}`, 'facets'], [`120000000000700/facets?fields=facets&facets=${encodeURIComponent('["Brand Name"]')}`, 'facets'],
+      [`120000000000700/facets?fields=facets&facets=${encodeURIComponent('[]')}`, 'facets'], [`120000000000700/facets?fields=facets&facets=${encodeURIComponent('[{"field":"brand"}]')}`, 'facets'],
+      [`120000000000700/facets?fields=facets&filter=${encodeURIComponent('["brand"]')}`, 'filter'], ['120000000000700/facets?fields=facets&filter=brand', 'filter'],
     ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
   })
 })
