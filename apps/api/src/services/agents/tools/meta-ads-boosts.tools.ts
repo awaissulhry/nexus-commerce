@@ -10,7 +10,8 @@
  *
  * Nothing here spends money: a boost is a creative, and a creative serves only once an ad uses it (create-meta-ad, step 27).
  * The Facebook side of partnership access goes to Meta's partnership host with the system-user token (review B1); making an ad
- * code is answered in words (review A2: nobody could read it). create-meta-boost is Claude's door only (review A1).
+ * code is answered in words (review A2: nobody could read it). Both tools are on both doors (review round 2: the Undo button
+ * and the in-app assistant run create-meta-boost's undo); a creator's ad code is kept in plain text with its request (AD_CODE_KEPT).
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
@@ -58,14 +59,14 @@ function boostRequestOf(args: Record<string, unknown>): BoostRequest {
 
 const boostBuild = (args: Record<string, unknown>): MetaDraftBuilder => (account) => boostDraft(account, boostRequestOf(args))
 
-/** What the change record keeps: only facts that do not move — never the creator's ad code nor a hash of it (review A3). */
+/** What the change record keeps: only facts that do not move — the content a creator's code unlocked, not the code (review A3). */
 function boostFinish(draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult }>): MetaRunOutcome {
   const d = draft as BoostDraft & { creative: { action: string } }
   if (d.creative.action === 'undo') {
     const items = done.map(({ request }) => ({ kind: 'creative' as const, creativeId: request.objectId, deleted: true as const }))
     return { data: { deleted: items, note: 'Meta cannot bring a deleted creative back: boost the post again with create-meta-boost.' }, before: { kind: 'undo', items: items.map((i) => ({ kind: 'creative', creativeId: i.creativeId, present: true })) }, after: { kind: 'undo', items } }
   }
-  // Review A3 — the record names the content a creator's code unlocked (contentId), never the code or a hash of it.
+  // Review A3 — the change record names the content a creator's code unlocked (contentId), not the code.
   const contentId = d.boost?.contentId ?? null
   if (d.boost?.source === 'video') {
     const items = done.map(({ result }) => {
@@ -143,20 +144,19 @@ const createMetaBoost: AgentTool = {
   consequencesFor: (args) => (args.action === 'undo' ? { reversibility: 'none' } : { reversibility: 'partial' }),
   maxClaudeTrust: 'ask',
   requires: [F.adsCampaignsManage],
-  // The creator's ad code is credential-like: not in the MCP run record (C7), a preview or a change record. Review A1 — it IS
-  // kept with the request (approval / plan-step arguments) until it runs, and the description says so. Claude's door only:
-  // the in-app assistant keeps its steps' arguments (tool-loop.service.ts), which secretArgs does not cover.
-  surfaces: ['mcp'],
+  // The creator's ad code is an argument: kept in plain text with the request and its records, also after it runs
+  // (AD_CODE_KEPT, said in the description and every preview that carries one). secretArgs keeps it out of a direct MCP
+  // call's run record only. Review round 2 — on both doors again: the Undo button and the in-app assistant run this tool.
   secretArgs: ['adCode'],
   input: z.object({
     connectionId: metaConnectionArg,
     action: z.enum(['create', 'undo', 'copy-creator-video']).optional().describe('create (default): one creative of an existing post; copy-creator-video: copy a creator\'s Instagram video into the ad account\'s video library with the creator\'s ad code (Meta\'s fix for "Instagram Video Must Be Uploaded To Facebook"); undo: delete creatives an earlier create-meta-boost made new (undo-change fills it)'),
     name: z.string().trim().min(1).max(META_CREATIVE_TEXT.name).optional().describe('create: the creative\'s name in the ad account (1 to 100 characters)'),
     source: z.enum(BOOST_SOURCES).optional().describe('create: facebook-post (a post of the chosen Page: postId), instagram-media (a feed post, Reel, carousel or active story of the chosen Instagram account: mediaId), instagram-link (the chosen Instagram account\'s post by its public link: permalink), creator-instagram-media / creator-facebook-post (a creator\'s content Meta lists for the business: mediaId / postId), creator-instagram-code / creator-facebook-code (a creator\'s content by the ad code they shared: adCode)'),
-    postId: z.string().trim().regex(/^\d{1,25}_\d{1,25}$/, 'a post id: <Page id>_<post id>').optional().describe('facebook-post: a post of the chosen Page; creator-facebook-post: the creator\'s post (<Page id>_<post id>; meta-page-posts / meta-partnership-content list them)'),
-    mediaId: z.string().trim().regex(/^\d{1,25}$/, 'an Instagram media id: digits').optional().describe('instagram-media: the chosen Instagram account\'s media (meta-instagram-media lists it); creator-instagram-media and copy-creator-video: the creator\'s media'),
+    postId: z.string().trim().regex(/^[1-9]\d{0,24}_[1-9]\d{0,24}$/, 'a post id: <Page id>_<post id>').optional().describe('facebook-post: a post of the chosen Page; creator-facebook-post: the creator\'s post (<Page id>_<post id>; meta-page-posts / meta-partnership-content list them)'),
+    mediaId: z.string().trim().regex(/^[1-9]\d{0,24}$/, 'an Instagram media id: digits').optional().describe('instagram-media: the chosen Instagram account\'s media (meta-instagram-media lists it); creator-instagram-media and copy-creator-video: the creator\'s media'),
     permalink: z.string().trim().url().max(300).optional().describe('instagram-link: the post\'s public link (https://www.instagram.com/p/<code>/) — only the chosen Instagram account\'s own media'),
-    adCode: z.string().trim().regex(META_AD_CODE, 'a partnership ad code: letters, digits and _ = + / -').optional().describe('creator-instagram-code, creator-facebook-code, copy-creator-video: the partnership ad code the creator shared — kept with this request until it runs (people who can read this business\'s requests can read it); never in the preview, the change record or the call ledger'),
+    adCode: z.string().trim().regex(META_AD_CODE, 'a partnership ad code: letters, digits and _ = + / -').optional().describe('creator-instagram-code, creator-facebook-code, copy-creator-video: the partnership ad code the creator shared — kept in plain text with this request and its records, also after it runs; anyone who can read this business\'s Claude requests can read it'),
     withInstagram: z.boolean().optional().describe('facebook-post: run on Instagram too, as the chosen Instagram account (default: true when one is chosen and Meta says the post can)'),
     threads: z.boolean().optional().describe('create: meant for Threads too — Nexus checks Threads\' rules (image, video or image carousel; no story; no partnership); Threads delivery is the ad set\'s Threads placement with the chosen Instagram account'),
     button: z.object({
@@ -284,7 +284,7 @@ const partnershipUndo: ToolUndo = {
 }
 
 const creatorArg = z.object({
-  instagramId: z.string().trim().regex(/^\d{1,25}$/, 'an Instagram account id: digits').optional().describe('the creator\'s Instagram account id'),
+  instagramId: z.string().trim().regex(/^[1-9]\d{0,24}$/, 'an Instagram account id: digits').optional().describe('the creator\'s Instagram account id'),
   username: z.string().trim().regex(/^@?[A-Za-z0-9._]{1,30}$/, 'an Instagram username').optional().describe('or the creator\'s Instagram username (a professional account; Nexus finds its id)'),
 })
 
@@ -307,11 +307,11 @@ const setMetaPartnershipAccess: AgentTool = {
     connectionId: metaConnectionArg,
     action: z.enum(PARTNERSHIP_ACTIONS).describe('Instagram (the chosen account): request (ask creators for account-level partnership permission), revoke, approve-creators / unapprove-creators (the approved-tagging list), delete-ad-code (the partnership ad code of its own media; create-ad-code is answered in words), collab-invite (accept or decline). Facebook (the chosen Page): facebook-request, facebook-cancel, facebook-accept, facebook-reject, facebook-remove (account-level permissions with partner Pages), facebook-allowlist (on / off), facebook-allow-creators, facebook-disallow-creators (the branded-content allowlist), facebook-untag (remove its sponsor tag from posts)'),
     creators: z.array(creatorArg).min(1).max(Math.max(MAX_CREATORS, META_TAG_APPROVAL_MAX)).optional().describe(`request, revoke: up to ${MAX_CREATORS} creators; approve-creators, unapprove-creators: up to ${META_TAG_APPROVAL_MAX}`),
-    mediaId: z.string().trim().regex(/^\d{1,25}$/, 'an Instagram media id: digits').optional().describe('delete-ad-code: a media of the chosen Instagram account; collab-invite: the invited media (meta-partnership-content view collab-invites)'),
+    mediaId: z.string().trim().regex(/^[1-9]\d{0,24}$/, 'an Instagram media id: digits').optional().describe('delete-ad-code: a media of the chosen Instagram account; collab-invite: the invited media (meta-partnership-content view collab-invites)'),
     accept: z.boolean().optional().describe('collab-invite: true accepts, false declines'),
-    pages: z.array(z.string().trim().regex(/^\d{1,25}$/, 'a Facebook Page id: digits')).min(1).max(META_FB_LIST_MAX).optional().describe(`facebook-request … facebook-remove: up to ${META_FB_PARTNERS_MAX} partner Pages; facebook-allow-creators, facebook-disallow-creators: up to ${META_FB_LIST_MAX} creator Pages (their ids; meta-partnership-content views facebook-permissions and allowlist list them)`),
+    pages: z.array(z.string().trim().regex(/^[1-9]\d{0,24}$/, 'a Facebook Page id: digits')).min(1).max(META_FB_LIST_MAX).optional().describe(`facebook-request … facebook-remove: up to ${META_FB_PARTNERS_MAX} partner Pages; facebook-allow-creators, facebook-disallow-creators: up to ${META_FB_LIST_MAX} creator Pages (their ids; meta-partnership-content views facebook-permissions and allowlist list them)`),
     enabled: z.boolean().optional().describe('facebook-allowlist: true — only allowlisted creator Pages may tag the Page; false — any creator allowed to make branded content may'),
-    postIds: z.array(z.string().trim().regex(/^\d{1,25}$/, 'a post id: digits')).min(1).max(META_FB_LIST_MAX).optional().describe(`facebook-untag: up to ${META_FB_LIST_MAX} branded-content posts that tag the Page (their ids, as meta-partnership-content view tagged-posts lists them)`),
+    postIds: z.array(z.string().trim().regex(/^[1-9]\d{0,24}$/, 'a post id: digits')).min(1).max(META_FB_LIST_MAX).optional().describe(`facebook-untag: up to ${META_FB_LIST_MAX} branded-content posts that tag the Page (their ids, as meta-partnership-content view tagged-posts lists them)`),
     why: metaWhyArg,
   }),
   description:

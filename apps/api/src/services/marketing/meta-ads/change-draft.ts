@@ -27,8 +27,9 @@ export interface MetaChangeRequest {
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
   /**
-   * Step 26 (review A3) — the fields as the plan hash reads them, when they differ from `params`: a creator's partnership ad code
-   * is left out of the hash (a short code could be reversed from it). Default: `params`.
+   * Step 26 (review A3) — the fields as this preview's plan hash reads them, when they differ from `params`: a creator's
+   * partnership ad code is replaced in it (a short code could be reversed from a hash; the request's arguments still carry the
+   * code). Default: `params`.
    */
   planParams?: Record<string, string>
   /**

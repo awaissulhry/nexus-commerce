@@ -122,7 +122,8 @@ async function draftFor(args: Record<string, unknown>, build: MetaDraftBuilder):
 
 /**
  * The exact plan of a change: its requests (object, form fields), in order — never their labels. Step 26 (review A3): a
- * request may give the fields its plan reads (`planParams`: a creator's ad code left out of the hash).
+ * request may give the fields its plan reads (`planParams`: a creator's ad code replaced in this hash; the request's arguments
+ * still carry it).
  */
 const planOf = (draft: MetaChangeDraft): string => factHash(draft.requests.map((r) => ({ objectId: r.objectId, params: r.planParams ?? r.params })))
 

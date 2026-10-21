@@ -66,7 +66,12 @@ import { META_AD_CODE } from './meta-creative-rules.js'
 
 type Params = ReadonlyMap<string, string>
 
-const isDigits = (value: string | undefined) => !!value && /^\d{1,25}$/.test(value)
+/**
+ * Review round 2 — a Meta id never starts with 0: `0<id>` would pass a "not the chosen one / not another business's" string
+ * compare while Meta reads it as the same id. Every id of this step is `[1-9]` then digits.
+ */
+export const META_ID = /^[1-9]\d{0,24}$/
+const isDigits = (value: string | undefined) => !!value && META_ID.test(value)
 /** How many creators one tag-approval change names (Meta reads 100 per check; Nexus keeps a change small). */
 export const META_TAG_APPROVAL_MAX = 25
 
@@ -101,7 +106,7 @@ export const META_BOOST_WRITE_RULES: readonly MetaWriteRule[] = [
   {
     // CR-344 / CR-346: ask a creator for account-level partnership permission, or revoke it — by the creator's Instagram id
     // only (Nexus resolves a username first, so the gateway can check the account is no other Nexus business's).
-    name: 'iguser.partnership.permission', method: 'POST', path: /^\d{1,25}\/branded_content_ad_permissions$/, kinds: IG_USER,
+    name: 'iguser.partnership.permission', method: 'POST', path: /^[1-9]\d{0,24}\/branded_content_ad_permissions$/, kinds: IG_USER,
     required: ['creator_instagram_account'], optional: ['revoke'], edgeCall: true, budget: false,
     values: (params) => {
       if (!isDigits(params.get('creator_instagram_account'))) return 'creator_instagram_account is an Instagram account id (digits only)'
@@ -111,27 +116,27 @@ export const META_BOOST_WRITE_RULES: readonly MetaWriteRule[] = [
   },
   {
     // CR-354: creators added to the chosen Instagram account's approved-tagging list (all or nothing).
-    name: 'iguser.tagApproval.add', method: 'POST', path: /^\d{1,25}\/branded_content_tag_approval$/, kinds: IG_USER,
+    name: 'iguser.tagApproval.add', method: 'POST', path: /^[1-9]\d{0,24}\/branded_content_tag_approval$/, kinds: IG_USER,
     required: ['user_ids'], optional: [], edgeCall: true, budget: false,
     values: (params) => metaUserIdsProblem(params.get('user_ids') ?? ''),
     assets: creators,
   },
   {
     // CR-355: creators taken off that list (all or nothing) — also the undo of CR-354.
-    name: 'iguser.tagApproval.remove', method: 'DELETE', path: /^\d{1,25}\/branded_content_tag_approval$/, kinds: IG_USER,
+    name: 'iguser.tagApproval.remove', method: 'DELETE', path: /^[1-9]\d{0,24}\/branded_content_tag_approval$/, kinds: IG_USER,
     required: ['user_ids'], optional: [], edgeCall: true, budget: false,
     values: (params) => metaUserIdsProblem(params.get('user_ids') ?? ''),
     assets: creators,
   },
   {
-    // CR-364: the ad code taken off a media of the chosen Instagram account — also the undo of CR-363.
-    name: 'igmedia.adCode.remove', method: 'DELETE', path: /^\d{1,25}\/partnership_ad_code$/, kinds: IG_MEDIA,
+    // CR-364: the ad code taken off a media of the chosen Instagram account (Nexus makes none: CR-363 is answered in words).
+    name: 'igmedia.adCode.remove', method: 'DELETE', path: /^[1-9]\d{0,24}\/partnership_ad_code$/, kinds: IG_MEDIA,
     required: [], optional: [], edgeCall: true, budget: false,
     values: () => null,
   },
   {
     // MD-132: accept or decline a Collab invite the chosen Instagram account has pending.
-    name: 'iguser.collab.respond', method: 'POST', path: /^\d{1,25}\/collaboration_invites$/, kinds: IG_USER,
+    name: 'iguser.collab.respond', method: 'POST', path: /^[1-9]\d{0,24}\/collaboration_invites$/, kinds: IG_USER,
     required: ['media_id', 'accept'], optional: [], edgeCall: true, budget: false,
     values: (params) => {
       if (!isDigits(params.get('media_id'))) return 'media_id is an Instagram media id (digits only)'
@@ -152,7 +157,7 @@ export const META_FB_PARTNERS_MAX = 10
 /** Creator Pages or posts one allowlist / untag change names. */
 export const META_FB_LIST_MAX = 25
 
-const ID = '\\d{1,25}'
+const ID = '[1-9]\\d{0,24}'
 const ids = (list: string) => list.slice(1, -1).split(',')
 const listOf = (value: string | null, max: number): string[] | null => {
   if (value === null || !new RegExp(`^\\[${ID}(,${ID})*\\]$`).test(value)) return null
@@ -207,20 +212,20 @@ export function metaRestWriteVerdict(input: RestInput): MetaWriteVerdict | null 
   const write = (rule: string, pageId: string, assets: MetaWriteAsset[], sent: string): MetaWriteVerdict => ({
     write: { rule, objectId: pageId, check: false, body: sent, budget: false, kinds: PAGE, edgeCall: true, host: 'rest', ...(method === 'DELETE' ? { method: 'DELETE' as const } : method === 'PUT' ? { method: 'PUT' as const } : {}), ...(assets.length ? { assets } : {}) },
   })
-  let m = /^partnership-ads\/fb-account-level-permissions\/(\d{1,25})$/.exec(route)
+  let m = /^partnership-ads\/fb-account-level-permissions\/([1-9]\d{0,24})$/.exec(route)
   if (m && method === 'POST') {
     if (!onlyQuery(null)) return refuse('an account-level permission change carries no query')
     const items = permissionItems(body)
     if (!items) return refuse(`the permission change is [{"partner_page_id":<Page id>,"action":"${META_FB_PERMISSION_ACTIONS.join('|')}"}, …] in Nexus's one spelling: 1 to ${META_FB_PARTNERS_MAX} partner Pages, each once`)
     return write('page.fbPermissions', m[1], items.map((i) => ({ id: i.pageId, kind: 'partnerpage' as const })), body)
   }
-  m = /^partnership-ads\/fb-branded-content\/(\d{1,25})\/brand-allowlist-status$/.exec(route)
+  m = /^partnership-ads\/fb-branded-content\/([1-9]\d{0,24})\/brand-allowlist-status$/.exec(route)
   if (m && method === 'PUT') {
     if (body) return refuse('the allowlist switch carries no body')
     if (!onlyQuery('is_enabled') || !['true', 'false'].includes(url.searchParams.get('is_enabled') ?? '')) return refuse('the allowlist switch is ?is_enabled=true or false, nothing else')
     return write('page.fbAllowlistStatus', m[1], [], '')
   }
-  m = /^partnership-ads\/fb-branded-content\/(\d{1,25})\/brand-allowlisted-creators$/.exec(route)
+  m = /^partnership-ads\/fb-branded-content\/([1-9]\d{0,24})\/brand-allowlisted-creators$/.exec(route)
   if (m && method === 'POST') {
     if (!onlyQuery(null)) return refuse('adding creators to the allowlist carries no query (the Page ids go in the JSON body)')
     const list = /^\{"creator_page_ids":(\[[^\]]*\])\}$/.exec(body)
@@ -234,7 +239,7 @@ export function metaRestWriteVerdict(input: RestInput): MetaWriteVerdict | null 
     if (!pages) return refuse(`removing creators is ?creator_page_ids=[<Page id>, …]: 1 to ${META_FB_LIST_MAX} Pages, each once`)
     return write('page.fbDisallowCreators', m[1], pages.map((id) => ({ id, kind: 'partnerpage' as const })), '')
   }
-  m = /^partnership-ads\/fb-branded-content\/(\d{1,25})\/branded-content-posts$/.exec(route)
+  m = /^partnership-ads\/fb-branded-content\/([1-9]\d{0,24})\/branded-content-posts$/.exec(route)
   if (m && method === 'DELETE') {
     if (body) return refuse('removing the sponsor tag carries no body')
     const posts = onlyQuery('post_ids') ? listOf(url.searchParams.get('post_ids'), META_FB_LIST_MAX) : null

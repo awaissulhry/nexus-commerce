@@ -155,9 +155,7 @@ export async function metaRestCall(req: Omit<MetaCallRequest, 'auth'>): Promise<
 export interface MetaRestWriteRequest {
   connectionId: string
   operation: string
-  /** The chosen Facebook Page the change is for (in its path; the gateway confirms it is the chosen one). */
-  pageId: string
-  /** The path below the host, e.g. `partnership-ads/fb-account-level-permissions/<page id>`. */
+  /** The path below the host, e.g. `partnership-ads/fb-account-level-permissions/<page id>` (the gateway confirms the Page is the chosen one). */
   path: string
   method: 'POST' | 'PUT' | 'DELETE'
   query?: Record<string, string>

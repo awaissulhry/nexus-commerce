@@ -26,6 +26,7 @@ vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: v
 import { GATEWAY_META_PAGE, gatewayLedger, gatewayMetaChosen, gatewayMetaMedia, gatewayMetaTakenLinks } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { metaRestWriteCall, metaWriteCall } from './meta.js'
+import { metaSecretForms } from './gateway.js'
 import { metaCallVerdict, metaWriteVerdict } from './meta-calls.js'
 import { isExistingPostCreative, isJsonCreativeKey, judgeCreativeForm, META_CREATIVE_FEATURES, META_NON_CATALOG_FORMATS, silentKeysFor, silentKeysToSend } from './meta-creative-rules.js'
 import { META_BOOST_WRITE_RULES, META_PARTNERSHIP_REST_HOST, metaPermissionBodyOf, metaRestWriteVerdict, metaUserIdsProblem } from './meta-boost-rules.js'
@@ -305,6 +306,43 @@ describe('round 1 — product tags, the app link\'s user id, every spelling of a
   })
 })
 
+describe('round 2 — no leading 0 in an id; no post without its creator; every spelling of a code', () => {
+  it('an id never starts with 0 (`0<id>` is the same id to Meta): refused in every judge of this step', () => {
+    const z = (id: string) => `0${id}`
+    // The Page in the path, a partner in the body, a creator in a query.
+    const perm = (page: string, partner: string) => metaRestWriteVerdict({ method: 'POST', url: `https://api.facebook.com/partnership-ads/fb-account-level-permissions/${page}`, kind: 'write', objectKind: 'page', body: metaPermissionBodyOf([{ pageId: partner, action: 'send-request' }]) })
+    expect(perm(z(PAGE), CREATOR_PAGE)).toMatchObject({ problem: expect.stringMatching(/Nexus changes only/) })
+    expect(perm(PAGE, z(PAGE))).toMatchObject({ problem: expect.stringMatching(/one spelling/) })
+    expect(perm(PAGE, '0')).toMatchObject({ problem: expect.stringMatching(/one spelling/) })
+    expect(metaRestWriteVerdict({ method: 'DELETE', url: `https://api.facebook.com/partnership-ads/fb-branded-content/${PAGE}/brand-allowlisted-creators?creator_page_ids=[${z(CREATOR_PAGE)}]`, kind: 'write', objectKind: 'page' })).toMatchObject({ problem: expect.any(String) })
+    expect(metaUserIdsProblem(z(CREATOR_IG))).toMatch(/comma-separated/)
+    expect(problem({ url: `${BASE}/${z(IG)}/branded_content_ad_permissions`, objectKind: 'iguser' as never, body: `creator_instagram_account=${CREATOR_IG}` })).toMatch(/only Meta change/)
+    expect(problem({ url: `${BASE}/${IG}/branded_content_ad_permissions`, objectKind: 'iguser' as never, body: `creator_instagram_account=${z(IG)}` })).toMatch(/Instagram account id/)
+    // Inside a creative: a sponsor, a post, a media.
+    expect(problem({ body: form(creatorMedia({ facebook_branded_content: { sponsor_page_id: z(PAGE) } })) })).toMatch(/sponsor_page_id is a Meta id/)
+    expect(problem({ body: form(ownPost({ object_story_id: `${z(PAGE)}_500000000000001` })) })).toMatch(/post id/)
+    expect(problem({ body: form(ownMedia({ source_instagram_media_id: z(MEDIA) })) })).toMatch(/Meta id/)
+  })
+
+  it('a branded-content post whose creator Page Meta does not name is not untagged', async () => {
+    h.answers.push(json([{ fb_post_id: 505613696297499 }]))
+    await expect(metaRestWriteCall({ connectionId: 'm-1', operation: 'partnership.test', path: `partnership-ads/fb-branded-content/${PAGE}/branded-content-posts`, method: 'DELETE', query: { post_ids: '[505613696297499]' } })).rejects.toThrow(/names no creator Page/)
+    expect(h.calls.filter((c) => c.init.method === 'DELETE')).toHaveLength(0)
+  })
+
+  it('a code is cut out in lower-case %-encoding and escaped twice too', async () => {
+    const code = 'Ab/Cd+Ef=1234'
+    const forms = metaSecretForms(code)
+    expect(forms).toEqual(expect.arrayContaining([code, 'Ab\\/Cd+Ef=1234', 'Ab\\\\/Cd+Ef=1234', 'Ab%2FCd%2BEf%3D1234', 'Ab%2fCd%2bEf%3d1234']))
+    const echoes = ['Ab%2fCd%2bEf%3d1234', JSON.stringify(JSON.stringify(code).slice(1, -1).replace(/\//g, '\\/')).slice(1, -1)]
+    // The echoes as Meta's answer would carry them (each already a valid JSON string spelling).
+    h.answers.push(discovery({ ig_user_id: CREATOR_IG }), () => new Response(`{"error":{"message":"bad ${echoes.join(' and ')}","code":100}}`, { status: 400 }))
+    const answer = await sendCreative(creatorCode({ branded_content: { instagram_boost_post_access_token: code, ad_format: 1 } }))
+    for (const e of echoes) expect(answer.text).not.toContain(e)
+    expect(answer.text).not.toContain('Cd')
+  })
+})
+
 describe('set-meta-partnership-access on the gateway', () => {
   const ig = (edge: string, method: 'POST' | 'DELETE' = 'POST', params: Record<string, string> = {}, objectId = IG) =>
     metaWriteCall({ connectionId: 'm-1', operation: 'partnership.test', objectId, objectKind: edge === 'partnership_ad_code' ? 'igmedia' : 'iguser', edge: edge as never, method, params })
@@ -427,8 +465,8 @@ describe('set-meta-partnership-access on the gateway', () => {
   })
 
   it('review B1 — sent with the system-user token as Bearer and X-API-Version, a JSON body; only the chosen Page; partners and posts checked', async () => {
-    const send = (method: 'POST' | 'PUT' | 'DELETE', path: string, opts: { body?: string; query?: Record<string, string> } = {}, pageId = PAGE) =>
-      metaRestWriteCall({ connectionId: 'm-1', operation: 'partnership.test', pageId, path, method, ...opts })
+    const send = (method: 'POST' | 'PUT' | 'DELETE', path: string, opts: { body?: string; query?: Record<string, string> } = {}) =>
+      metaRestWriteCall({ connectionId: 'm-1', operation: 'partnership.test', path, method, ...opts })
     h.answers.push(json([{ partner_page_id: Number(CREATOR_PAGE), alp_permission_id: 9, alp_permission_status: 1, status: 'success' }]))
     const answer = await send('POST', `partnership-ads/fb-account-level-permissions/${PAGE}`, { body: metaPermissionBodyOf([{ pageId: CREATOR_PAGE, action: 'send-request' }]) })
     expect(answer.ok).toBe(true)
@@ -443,7 +481,7 @@ describe('set-meta-partnership-access on the gateway', () => {
     expect(sent.init.body).toBe(`[{"partner_page_id":${CREATOR_PAGE},"action":"send-request"}]`)
     // Another Page in the path, the chosen Page as partner, another Nexus business's Page: nothing sent.
     h.calls = []
-    await expect(send('POST', `partnership-ads/fb-account-level-permissions/120000000000099`, { body: metaPermissionBodyOf([{ pageId: CREATOR_PAGE, action: 'send-request' }]) }, '120000000000099')).rejects.toThrow(/not the one this business chose/)
+    await expect(send('POST', `partnership-ads/fb-account-level-permissions/120000000000099`, { body: metaPermissionBodyOf([{ pageId: CREATOR_PAGE, action: 'send-request' }]) })).rejects.toThrow(/not the one this business chose/)
     await expect(send('POST', `partnership-ads/fb-account-level-permissions/${PAGE}`, { body: metaPermissionBodyOf([{ pageId: PAGE, action: 'send-request' }]) })).rejects.toThrow(/business's own chosen Page/)
     gatewayMetaTakenLinks.add(`PAGE:${CREATOR_PAGE}`)
     await expect(send('POST', `partnership-ads/fb-branded-content/${PAGE}/brand-allowlisted-creators`, { body: `{"creator_page_ids":[${CREATOR_PAGE}]}` })).rejects.toThrow(/another business in Nexus uses/)

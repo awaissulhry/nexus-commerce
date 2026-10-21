@@ -575,10 +575,10 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // Step 26 — a creator's partnership ad code (in a change's body, or a content look-up's query) never leaves the gateway
     // in Meta's answer: not to the caller, a sentence or the ledger.
     if (req.channel === 'META') {
-      // Review A4 — in every spelling an answer may carry it: as is, JSON-escaped (\" and \/), %-encoded.
+      // Review A4 / round 2 — in every spelling an answer may carry it (metaSecretForms): as is, JSON-escaped (\" and \/),
+      // escaped twice, %-encoded in upper or lower case.
       for (const secret of metaWrite?.secrets ?? metaReadSecrets(req.url)) {
-        const forms = [...new Set([secret, JSON.stringify(secret).slice(1, -1), JSON.stringify(secret).slice(1, -1).replace(/\//g, '\\/'), encodeURIComponent(secret), new URLSearchParams({ s: secret }).toString().slice(2)])].sort((a, b) => b.length - a.length)
-        for (const form of forms) if (form && text.includes(form)) { text = text.split(form).join('[removed]'); metaScrubbed += 1 }
+        for (const form of metaSecretForms(secret)) if (text.includes(form)) { text = text.split(form).join('[removed]'); metaScrubbed += 1 }
       }
     }
     reading = status ? rateReadingOf(req.channel, responseHeaders, status) : null
@@ -845,6 +845,19 @@ async function metaInstagramOwnerProblem(connectionId: string, write: MetaJudged
 }
 
 /**
+ * Step 26 (review A4, round 2) — every spelling of a secret an answer may carry, longest first: as is; JSON-escaped once (with
+ * `/` as is and as `\/`) and twice; %-encoded (encodeURIComponent and a form's `+` for a space), in upper and lower case.
+ */
+export function metaSecretForms(secret: string): string[] {
+  const json1 = JSON.stringify(secret).slice(1, -1)
+  const json1Slash = json1.replace(/\//g, '\\/')
+  const pct = [encodeURIComponent(secret), new URLSearchParams({ s: secret }).toString().slice(2)]
+  const lower = (v: string) => v.replace(/%[0-9A-F]{2}/g, (m) => m.toLowerCase())
+  const forms = [secret, json1, json1Slash, JSON.stringify(json1).slice(1, -1), JSON.stringify(json1Slash).slice(1, -1), ...pct, ...pct.map(lower)]
+  return [...new Set(forms.filter((f) => f.length >= 4))].sort((a, b) => b.length - a.length)
+}
+
+/**
  * Review B1 (step 26) — a change on Meta's partnership host names a Page in its path: it IS the Page this business chose
  * (MetaAccountLink PAGE). Meta documents no check (validate_only) there.
  */
@@ -990,7 +1003,8 @@ async function metaCreativeAssetProblem(
     return typeof owner === 'string' || typeof owner === 'number' ? String(owner) : null
   }
   const partner = async (product: 'PAGE' | 'INSTAGRAM', id: string, chosenId: string | null, word: string) => {
-    if (!/^\d{1,25}$/.test(id)) return notChosenMedia(`${where}${id} is not a ${word} id.`)
+    // Review round 2 (step 26) — never a leading 0: `0<id>` is the same id to Meta and would pass the compares below.
+    if (!/^[1-9]\d{0,24}$/.test(id)) return notChosenMedia(`${where}${id} is not a ${word} id.`)
     if (id === chosenId) return notChosenMedia(`${where}the partner ${word} ${id} is the business's own chosen ${word}: a partnership ad names another one.`)
     if (await metaLinkTaken(product, id)) return notChosenMedia(`${where}${word} ${id} is one another business in Nexus uses, so no creative of this business names it.`)
     return null
@@ -1105,7 +1119,9 @@ async function metaBoostAssetProblem(
       const posts = lists.get(key) as unknown as Map<string, string | null> | null
       if (!posts?.has(asset.id)) return notChosenMedia(`${where}post ${asset.id} is not one Nexus can confirm among the branded-content posts that tag the chosen Page (it reads the first ${META_MEDIA_LIST_MAX}).`)
       const creator = posts.get(asset.id)
-      if (creator && await metaLinkTaken('PAGE', creator)) return notChosenMedia(`${where}post ${asset.id} is by a Page another business in Nexus uses, so Nexus does not change it.`)
+      // Review round 2 — a post whose creator Page Meta does not name: Nexus cannot tell whose it is, so nothing is sent.
+      if (!creator) return notChosenMedia(`${where}Meta names no creator Page for post ${asset.id}, so Nexus cannot confirm it is no other business's in Nexus.`)
+      if (await metaLinkTaken('PAGE', creator)) return notChosenMedia(`${where}post ${asset.id} is by a Page another business in Nexus uses, so Nexus does not change it.`)
       return null
     }
     case 'collabinvite': {

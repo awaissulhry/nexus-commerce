@@ -3,10 +3,11 @@
  * partnership reads and the records are stand-ins): a boost is a creative of an EXISTING post made by step 25's builder —
  * every silent feature OFF unless asked, Meta's check first, nothing spends — from the chosen Page's post, the chosen Instagram
  * account's media or link, or a creator's content (the chosen Page and Instagram account as its sponsors; never the
- * business's own, never another Nexus business's); its eligibility is read first; a creator's ad code is never in a preview or
- * a record; "was it new?" from the account's creatives read just before the send. The partnership tool asks only for the
- * chosen Instagram account, answers the Facebook side in words (C2-PAGE-TOKEN), shows a code Meta makes once and keeps its
- * fingerprint only, and each action's undo is its inverse (or says why there is none). Made-up ids.
+ * business's own, never another Nexus business's); its eligibility is read first; a creator's ad code is said to be kept in
+ * plain text with the request and its records (AD_CODE_KEPT) and is not in the preview's words or the change record; "was it
+ * new?" from the account's creatives read just before the send. The partnership tool acts for the chosen Instagram account and
+ * the chosen Page (Meta's partnership host, per item), answers the making of an ad code in words, and each action's undo is
+ * its inverse (or says why there is none); undo-change runs a boost's undo. Made-up ids.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -73,6 +74,7 @@ import { META_CREATIVE_FEATURES, META_NON_CATALOG_FORMATS } from '../../gateway/
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
 import { __metaObjectLimitsTest } from '../../gateway/meta-object-limits.js'
 import type { ToolContext, ToolResult } from '../tool-types.js'
+import { callTool, offeredOn, surfaceOf } from '../call-tool.js'
 
 const boost = META_ADS_BOOSTS_TOOLS.find((t) => t.name === 'create-meta-boost')!
 const access = META_ADS_BOOSTS_TOOLS.find((t) => t.name === 'set-meta-partnership-access')!
@@ -140,10 +142,11 @@ describe('the tools', () => {
       expect(MATERIAL_PREVIEW_FIELDS[tool.name]).toEqual(['basis', 'plan', 'reach'])
     }
     expect(boost.secretArgs).toEqual(['adCode'])
-    // Review A1 — Claude's door only (the in-app assistant keeps its steps' arguments), and the truth about the code said.
-    expect(boost.surfaces).toEqual(['mcp'])
+    // Review round 2 — on both doors (the Undo button and the in-app assistant run it), and the truth about the code said.
+    expect(boost.surfaces).toBeUndefined()
     expect(boost.description).toContain(AD_CODE_KEPT)
-    expect(boost.description).not.toMatch(/never (shown, )?recorded/)
+    expect(AD_CODE_KEPT).toMatch(/plain text .* also after it runs/)
+    expect(boost.description).not.toMatch(/never (shown, )?recorded|until it runs|not in the change record|no hash/)
     expect(boost.description).toMatch(/SPENDS NOTHING/)
     expect(boost.consequencesFor!({ action: 'undo' })).toEqual({ reversibility: 'none' })
     expect(access.consequencesFor!({ action: 'delete-ad-code' })).toEqual({ reversibility: 'none' })
@@ -248,7 +251,7 @@ describe('create-meta-boost — the preview', () => {
     expect(h.check).not.toHaveBeenCalled()
   })
 
-  it('a creator\'s ad code: sent to Meta, never in the preview; its fingerprint is what the plan stands on', async () => {
+  it('a creator\'s ad code: sent to Meta, not in the preview\'s words; the content it unlocks is what the preview stands on', async () => {
     h.partners.mockImplementation(async () => ({ items: [lookupRow()] }))
     const p = await preview({ name: 'B', source: 'creator-instagram-code', adCode: CODE })
     expect(p.ok, JSON.stringify(p)).toBe(true)
@@ -256,7 +259,7 @@ describe('create-meta-boost — the preview', () => {
     expect(sentJson('branded_content')).toEqual({ instagram_boost_post_access_token: CODE, ad_format: 1 })
     expect(JSON.stringify(p.preview)).not.toContain(CODE)
     expect(p.preview.warnings).toContain(AD_CODE_KEPT)
-    // Review A3 — the code is in no hash: the plan reads it replaced, the basis stands on the content it unlocks.
+    // Review A3 — this preview's plan reads the code replaced, its basis stands on the content the code unlocks.
     expect(withoutAdCode(checked().params).branded_content).not.toContain(CODE)
     const again = await preview({ name: 'B', source: 'creator-instagram-code', adCode: 'Other0Code9' })
     expect(again.preview.plan).toBe(p.preview.plan)
@@ -356,7 +359,7 @@ describe('create-meta-boost — the run', () => {
     expect((await run({ name: 'Boost A', source: 'facebook-post', postId: POST })).change.after.items[0].new).toBeNull()
   })
 
-  it('a creator\'s ad code: the record keeps its fingerprint, never the code', async () => {
+  it('a creator\'s ad code: the change record names the content it unlocked, not the code', async () => {
     h.listPaged.mockImplementation(async () => ({ rows: [], more: false, totalCount: null }))
     h.send.mockImplementation(made('120000000000303'))
     const r = await run({ name: 'Boost A', source: 'creator-instagram-code', adCode: CODE })
@@ -364,6 +367,23 @@ describe('create-meta-boost — the run', () => {
     expect(JSON.stringify(r.change)).not.toContain(CODE)
     expect(r.change.after.items[0].contentId).toBe(MEDIA)
     expect(r.change.after.items[0].adCode).toBeUndefined()
+  })
+
+  it('review round 2 — undo-change runs a boost\'s undo on both doors (the Undo button and the in-app assistant: app; Claude: mcp)', async () => {
+    h.listPaged.mockImplementation(async () => ({ rows: [], more: false, totalCount: null }))
+    h.send.mockImplementation(made('120000000000306'))
+    const r = await run({ name: 'Boost A', source: 'facebook-post', postId: POST })
+    const undo = boost.undo!.request(r.change) as { tool: string; args: Record<string, unknown> }
+    expect(undo.tool).toBe('create-meta-boost')
+    h.records = [{ toolName: 'create-meta-boost', after: { adAccountId: '1234567890', items: [{ creativeId: '120000000000306', new: true }] } }]
+    h.read.mockImplementation(async () => ({ body: { id: '120000000000306', status: 'ACTIVE' }, calls: 1 }))
+    for (const via of ['app', 'claude'] as const) {
+      expect(offeredOn(boost, surfaceOf(via)), via).toBe(true)
+      // The gate's own dry run (callTool) as a person on that door: the tool exists there and previews the delete.
+      const call = await callTool({ kind: 'user', userId: 'u-owner', label: 'Owner', permissions: { isOwner: true, permissions: new Set() } as never, via }, undo.tool, undo.args)
+      expect(call.raw.ok, JSON.stringify(call.raw)).toBe(true)
+      expect((call.raw as { preview: { requests: Array<{ label: string }> } }).preview.requests[0].label).toMatch(/Delete creative 120000000000306/)
+    }
   })
 
   it('undo: deletes only a creative a create-meta-boost of this business made new, while no ad uses it', async () => {
@@ -411,7 +431,7 @@ describe('set-meta-partnership-access', () => {
     expect(p.preview.metaCheck.sentence).toMatch(/Meta has no check/)
     expect(p.preview.warnings.join(' ')).toMatch(/not all or nothing/)
     const r = await run({ action: 'facebook-request', pages: [PARTNER, OTHER] }, access)
-    expect(h.rest.mock.calls[0][1]).toMatchObject({ pageId: PAGE, path: `partnership-ads/fb-account-level-permissions/${PAGE}`, method: 'POST', body: `[{"partner_page_id":${PARTNER},"action":"send-request"}]` })
+    expect(h.rest.mock.calls[0][1]).toMatchObject({ path: `partnership-ads/fb-account-level-permissions/${PAGE}`, method: 'POST', body: `[{"partner_page_id":${PARTNER},"action":"send-request"}]` })
     expect(r.data.steps[0].sentence).toMatch(/120000000000555 done \(status 1\)/)
     expect(r.change.after.pages).toEqual([{ pageId: PARTNER }])
     const undo = access.undo!.request(r.change)
@@ -433,6 +453,25 @@ describe('set-meta-partnership-access', () => {
     expect(access.undo!.request({ before: {}, after: { kind: 'partnership', action: 'facebook-reject', pageId: PAGE, pages: [{ pageId: PARTNER }] } })).toMatchObject({ refusal: expect.stringMatching(/rejected partnership request/) })
     expect(access.consequencesFor!({ action: 'facebook-reject' })).toEqual({ reversibility: 'none' })
     expect(access.consequencesFor!({ action: 'facebook-untag' })).toEqual({ reversibility: 'none' })
+  })
+
+  it('round 2 — a MIXED answer (some made, some refused): only what Meta made is recorded and undone; ids never start with 0', async () => {
+    const A = '120000000000561'
+    const B = '120000000000562'
+    h.partners.mockImplementation(async () => ({ allowlistStatus: 'ENABLED', creators: [] }))
+    h.rest.mockImplementation(async () => ({ node: { items: [{ creator_page_id: A, status_code: 200 }, { creator_page_id: B, status_code: 400, error_message: 'Creator is not eligible for branded content.' }] }, readBack: 'same-request', waitedMs: 0 }))
+    const r = await run({ action: 'facebook-allow-creators', pages: [A, B] }, access)
+    expect(r.ok, JSON.stringify(r)).toBe(true)
+    expect(r.data.steps[0].sentence).toMatch(/120000000000561 done; 120000000000562 Meta refused it: Creator is not eligible/)
+    expect(r.change.after.pages).toEqual([{ pageId: A, listed: true }])
+    expect(r.change.before.pages).toEqual([{ pageId: A, listed: false }])
+    expect(access.undo!.request(r.change)).toMatchObject({ args: { action: 'facebook-disallow-creators', pages: [A] } })
+    // Review round 2 — an id with a leading 0 is not an id (it would pass "not the chosen one" while Meta reads the same id).
+    for (const args of [{ action: 'facebook-request', pages: [`0${PAGE}`] }, { action: 'facebook-untag', postIds: ['0505613696297499'] }, { action: 'request', creators: [{ instagramId: `0${IG}` }] }, { action: 'delete-ad-code', mediaId: `0${MEDIA}` }]) {
+      expect(access.input.safeParse(args).success, JSON.stringify(args)).toBe(false)
+    }
+    expect(boost.input.safeParse({ name: 'B', source: 'facebook-post', postId: `0${POST}` }).success).toBe(false)
+    expect(boost.input.safeParse({ name: 'B', source: 'instagram-media', mediaId: `0${MEDIA}` }).success).toBe(false)
   })
 
   it('review B1 — the branded-content allowlist: switched from what it reads, creators added / taken off, posts untagged', async () => {
@@ -460,6 +499,9 @@ describe('set-meta-partnership-access', () => {
     expect(h.rest.mock.calls[0][1]).toMatchObject({ method: 'DELETE', path: `partnership-ads/fb-branded-content/${PAGE}/branded-content-posts`, query: { post_ids: '[505613696297499]' } })
     expect(access.undo!.request(untag.change)).toMatchObject({ refusal: expect.stringMatching(/only the creator can tag the Page again/) })
     expect(await refusal({ action: 'facebook-untag', postIds: ['505613696297400'] }, access)).toMatch(/not among the branded-content posts/)
+    // Round 2 — a post whose creator Page Meta does not name is refused (Nexus cannot tell whose it is).
+    h.partners.mockImplementation(async (input: { view: string }) => (input.view === 'tagged-posts' ? { items: [{ postId: '505613696297499' }] } : { items: [] }))
+    expect(await refusal({ action: 'facebook-untag', postIds: ['505613696297499'] }, access)).toMatch(/names no creator Page/)
     h.partners.mockImplementation(async (input: { view: string }) => (input.view === 'tagged-posts' ? { items: [{ postId: '505613696297499', creatorPageId: CREATOR, takenByAnotherBusiness: true }] } : { items: [] }))
     expect(await refusal({ action: 'facebook-untag', postIds: ['505613696297499'] }, access)).toMatch(/another business in Nexus uses/)
     h.partners.mockImplementation(async () => ({ allowlistStatusNotRead: 'Meta: (#200) Permissions error' }))

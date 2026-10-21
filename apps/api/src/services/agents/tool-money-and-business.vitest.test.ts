@@ -1366,8 +1366,7 @@ describe('MCP.2 — money a person may not see never comes back', () => {
   // report-ads-run is Claude's door only too; it needs the ad-spend money permission (ads-manager.tools.vitest.test.ts).
   // Meta ads step 10 — meta-ad-preview is Claude's door only as well (its public links never reach the in-app chat); it holds no money.
   // Meta ads step 14 — so are meta-leads and meta-comments (people's data is never kept in an in-app run); no money either.
-  // Meta ads step 26 (review A1) — and create-meta-boost (the in-app chat keeps its steps' arguments: a creator's ad code); no money.
-  const mcpOnlyMeta = new Set(['meta-ad-preview', 'meta-leads', 'meta-comments', 'create-meta-boost'])
+  const mcpOnlyMeta = new Set(['meta-ad-preview', 'meta-leads', 'meta-comments'])
   const tools = () => listTools().filter((tool) => !AI_DRAFTS.has(tool.name) && tool.name !== 'confirm-change' && tool.name !== 'report-ads-run' && !mcpOnlyMeta.has(tool.name))
 
   it('the money-cleared run really reads the seeded money (positive control)', async () => {
