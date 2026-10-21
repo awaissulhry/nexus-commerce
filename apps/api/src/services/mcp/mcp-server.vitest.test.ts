@@ -72,6 +72,8 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 29 (2026-10-21) — set-meta-ad-rule and remove-meta-ad-rule read Meta live and change it.
 // Meta ads step 7 (2026-10-21) — meta-ads-numbers, meta-ads-report and meta-ads-saved-reports read Meta live.
 // Meta ads step 39 (2026-10-21) — set-meta-brand-safety, set-meta-block-list and remove-meta-block-list read Meta live and change it.
+// Meta ads step 31 (2026-10-21) — create-meta-audience, set-meta-audience, set-meta-audience-members, set-meta-audience-sharing and
+// remove-meta-audience read Meta live and change it.
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -83,7 +85,7 @@ const OPEN_WORLD = [
   'channel-identity-check', 'check-google-ads-build', 'close-listing', 'confirm-shipment', 'copy-google-campaign',
   'copy-google-pmax', 'copy-meta-ads', 'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
   'create-google-app-campaign', 'create-google-campaign', 'create-google-demand-gen-campaign',
-  'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-meta-ad-set', 'create-meta-campaign',
+  'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-meta-ad-set', 'create-meta-audience', 'create-meta-campaign',
   'create-meta-creative', 'create-meta-experiment', 'create-meta-media', 'create-meta-reach-frequency', 'create-negative-keyword',
   'decide-automation-suggestions',
   'delete-listing', 'dismiss-google-recommendations', 'dispose-return-items', 'ebay-categories',
@@ -101,7 +103,7 @@ const OPEN_WORLD = [
   'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
-  'remove-google-conversion-actions', 'remove-google-labels', 'remove-meta-ad-rule', 'remove-meta-ads-items', 'remove-meta-block-list', 'reopen-listing',
+  'remove-google-conversion-actions', 'remove-google-labels', 'remove-meta-ad-rule', 'remove-meta-ads-items', 'remove-meta-audience', 'remove-meta-block-list', 'reopen-listing',
   'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
   'request-review',
   'resend-prices', 'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign',
@@ -125,10 +127,9 @@ const OPEN_WORLD = [
   'set-google-shopping-settings', 'set-google-status', 'set-google-targeting', 'set-google-urls',
   'set-google-user-access', 'set-google-user-lists', 'set-google-value-rules', 'set-hourly-bid-plan', 'set-listing-price',
   'set-listing-stock',
-  'set-master-prices', 'set-meta-ad-rule', 'set-meta-ad-set', 'set-meta-block-list', 'set-meta-brand-safety', 'set-meta-budget-schedule', 'set-meta-campaign', 'set-meta-connection',
-  'set-meta-creative',
-  'set-meta-experiment', 'set-meta-labels', 'set-meta-status', 'set-meta-value-rules', 'set-monthly-ad-budget', 'set-placement-multipliers',
-  'set-portfolio', 'set-price',
+  'set-master-prices', 'set-meta-ad-rule', 'set-meta-ad-set', 'set-meta-audience', 'set-meta-audience-members', 'set-meta-audience-sharing', 'set-meta-block-list',
+  'set-meta-brand-safety', 'set-meta-budget-schedule', 'set-meta-campaign', 'set-meta-connection', 'set-meta-creative', 'set-meta-experiment', 'set-meta-labels',
+  'set-meta-status', 'set-meta-value-rules', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
   'set-promotion', 'set-sd-brand-safety', 'set-sd-budget-rule', 'set-sd-optimization-rule', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
   'shipping-rates', 'shopify-content', 'submit-aplus-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock',
   'tune-ad-engine', 'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change',

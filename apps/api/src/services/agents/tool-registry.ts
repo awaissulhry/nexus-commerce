@@ -117,6 +117,8 @@ import { META_ADS_RULES_TOOLS } from './tools/meta-ads-rules.tools.js'
 import { META_ADS_INSIGHTS_TOOLS } from './tools/meta-ads-insights.tools.js'
 // Meta ads step 39 (2026-10-21): brand safety — set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
 import { META_ADS_BRAND_SAFETY_TOOLS } from './tools/meta-ads-brand-safety.tools.js'
+// Meta ads step 31 (2026-10-21): audiences — create, change, people (opt-outs out; D8), sharing, delete.
+import { META_ADS_AUDIENCE_CHANGES_TOOLS } from './tools/meta-ads-audience-changes.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -362,6 +364,9 @@ const ALL: AgentTool[] = [
   ...META_ADS_INSIGHTS_TOOLS,
   // Meta ads step 39 (2026-10-21): set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
   ...META_ADS_BRAND_SAFETY_TOOLS,
+  // Meta ads step 31 (2026-10-21): create-meta-audience, set-meta-audience, set-meta-audience-members,
+  // set-meta-audience-sharing, remove-meta-audience.
+  ...META_ADS_AUDIENCE_CHANGES_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).
