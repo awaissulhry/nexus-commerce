@@ -233,9 +233,9 @@ describe('object.delete: the undo of a create or a copy', () => {
     for (const kind of ['campaign', 'adset', 'ad']) {
       expect(verdict({ url: `${BASE}/${CAMPAIGN}`, method: 'DELETE', objectKind: kind })).toMatchObject({ write: { rule: 'object.delete', method: 'DELETE', body: '' } })
     }
-    expect(problem({ url: `${BASE}/${CAMPAIGN}`, method: 'DELETE', objectKind: 'campaign', body: 'x=1' })).toMatch(/deletes nothing on Meta yet/)
-    expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${CAMPAIGN}`, kind: 'write' })).toMatchObject({ problem: expect.stringMatching(/deletes nothing/) })
-    expect(problem({ url: `${BASE}/${ACT}`, method: 'DELETE', objectKind: 'adaccount' })).toMatch(/deletes nothing/)
+    expect(problem({ url: `${BASE}/${CAMPAIGN}`, method: 'DELETE', objectKind: 'campaign', body: 'x=1' })).toMatch(/deletes on Meta only/)
+    expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${CAMPAIGN}`, kind: 'write' })).toMatchObject({ problem: expect.stringMatching(/deletes on Meta only/) })
+    expect(problem({ url: `${BASE}/${ACT}`, method: 'DELETE', objectKind: 'adaccount' })).toMatch(/deletes on Meta only/)
   })
 })
 
@@ -291,7 +291,7 @@ describe('review B3 — the WhatsApp marketing-messages field: read on the ad ac
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 
-describe('review A2 — every Meta DELETE has one sender today: removalDraft (step 22 adds an explicit-ask delete)', () => {
+describe('review A2 — every Meta DELETE has two senders: removalDraft (undo of a create) and metaRemoveDraft (step 22, explicit ask)', () => {
   const SRC = join(HERE, '../..')
   /** Every non-test .ts file under apps/api/src, by its path from there. */
   const files = (dir: string, out: string[] = []): string[] => {
@@ -308,12 +308,17 @@ describe('review A2 — every Meta DELETE has one sender today: removalDraft (st
   const META_IMPORT = /from '[^']*(meta-ads\/[\w-]+|meta-ads-kit|gateway\/meta[\w-]*)\.js'|channel:\s*['"`]META['"`]/
   const metaWorld = (f: { path: string; text: string }) => /^services\/(marketing\/meta-ads\/|agents\/tools\/meta-ads-|gateway\/(meta|gateway\.ts))/.test(f.path) || META_IMPORT.test(f.text)
   const callers = (name: string) => all.filter((f) => new RegExp(`(?<!function |\\.)\\b${name}\\(`).test(f.text)).map((f) => f.path).sort()
-  it('metaWriteCall, metaSendChange, metaCheckChange and removalDraft have the callers they have today, and no other', () => {
+  it('metaWriteCall, metaSendChange, metaCheckChange, removalDraft and metaRemoveDraft have the callers they have today, and no other', () => {
     expect(callers('metaWriteCall')).toEqual(['services/marketing/meta-ads/write-client.ts'])
     expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
     expect(callers('metaCheckChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
     expect(callers('removalDraft')).toEqual(['services/agents/tools/meta-ads-create.tools.ts'])
     expect(all.find((f) => f.path === 'services/agents/tools/meta-ads-create.tools.ts')!.text.match(/\bremovalDraft\(/g)).toHaveLength(1)
+    // Step 22 — the explicit-ask delete: metaRemoveDraft, called by remove-meta-ads-items only (which requires confirmDelete: true).
+    expect(callers('metaRemoveDraft')).toEqual(['services/agents/tools/meta-ads-remove.tools.ts'])
+    const remove = all.find((f) => f.path === 'services/agents/tools/meta-ads-remove.tools.ts')!.text
+    expect(remove.match(/\bmetaRemoveDraft\(/g)).toHaveLength(1)
+    expect(remove).toMatch(/confirmDelete: z\.literal\(true\)/)
   })
   it('no gateway call of Meta outside the gateway names a method but GET', () => {
     const META_CALL = /gateway(Call|Fetch)\(\{[^]*?channel:\s*['"`]META['"`][^]*?\}\)/g
@@ -329,12 +334,14 @@ describe('review A2 — every Meta DELETE has one sender today: removalDraft (st
       'services/agents/tools/meta-ads-kit.ts': 2, // the step's sentence for a done DELETE (no sender)
       'services/gateway/gateway.ts': 2, // the request type; a repeatable method
       'services/gateway/meta.ts': 3, // metaWriteCall: the type and the method it sends
-      'services/gateway/meta-calls.ts': 6, // the allow-list's verdict on a DELETE (a judge, no sender)
+      'services/gateway/meta-calls.ts': 9, // the allow-list's verdict on a DELETE, with or without a body (a judge, no sender)
       'services/gateway/meta-create-rules.ts': 1, // the object.delete rule (a judge)
+      'services/gateway/meta-remove-rules.ts': 4, // step 22: creative.delete, image.delete, video.remove, canvaselement.delete (judges)
       'services/gateway/meta-settings-rules.ts': 1, // the budget_schedule.delete rule (a judge)
       'services/marketing/meta-ads/change-budget-schedule.ts': 1, // a budget schedule's delete (kind highdemandperiod)
       'services/marketing/meta-ads/change-create-common.ts': 1, // removalDraft: the undo of a create or a copy
       'services/marketing/meta-ads/change-draft.ts': 1, // the request type
+      'services/marketing/meta-ads/change-remove.ts': 1, // step 22: metaRemoveDraft's one delete request builder (explicit ask)
       'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.
@@ -344,6 +351,10 @@ describe('review A2 — every Meta DELETE has one sender today: removalDraft (st
     const common = all.find((f) => f.path === 'services/marketing/meta-ads/change-create-common.ts')!.text
     const removal = common.slice(common.indexOf('export function removalDraft'), common.indexOf('export function scheduleSpecs'))
     expect(removal.match(/method: 'DELETE'/g)).toHaveLength(1)
+    // Step 22 — change-remove.ts builds its deletes in ONE place (deleteOf), used only inside the module (metaRemoveDraft).
+    const removeFile = all.find((f) => f.path === 'services/marketing/meta-ads/change-remove.ts')!.text
+    expect(removeFile.match(/method: 'DELETE' as const/g)).toHaveLength(1)
+    expect(removeFile).not.toMatch(/export (const|function) deleteOf/)
     expect(all.find((f) => f.path === 'services/marketing/meta-ads/change-budget-schedule.ts')!.text).toMatch(/objectKind: 'highdemandperiod', method: 'DELETE'/)
   })
 })

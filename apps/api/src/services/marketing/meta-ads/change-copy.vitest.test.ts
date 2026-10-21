@@ -148,7 +148,7 @@ describe('what a copy made, and the undo of a create or a copy', () => {
     expect(v).toMatchObject({ write: { rule: 'object.delete' } })
   })
   it('keeps what holds something else, what spent, what Nexus cannot read, and says so pointing to remove-meta-ads-items', () => {
-    expect(removalDraft(record, [now({ children: ['120000000000010', '120000000000099'] })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/did not make \(120000000000099\).*remove-meta-ads-items \(step 22, not built yet\)/) })
+    expect(removalDraft(record, [now({ children: ['120000000000010', '120000000000099'] })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/did not make \(120000000000099\).*delete it with remove-meta-ads-items \(only when the person asks to delete it\)/) })
     expect(removalDraft(record, [now({ spend: 1.5 })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/has spent since it was made/) })
     expect(removalDraft(record, [now({ spend: null })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/could not read what/) })
     expect(removalDraft(record, [now({ childrenMore: true })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/more ad sets or ads than Nexus reads/) })

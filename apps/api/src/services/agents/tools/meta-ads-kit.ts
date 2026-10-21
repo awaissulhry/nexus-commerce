@@ -103,6 +103,8 @@ export interface MetaPreview {
   plan: string
   /** Step 19 — what Meta's check of a create recommended (include_recommendations, master CMP-031), when it had any. */
   metaRecommendations?: unknown[]
+  /** Step 22 — everything a delete takes with it, in full (change-draft.ts alsoDeleted). */
+  alsoDeleted?: unknown
 }
 
 /** A re-check of an approval (the gate's fresh dry run): it reads, it does not ask Meta to check again. */
@@ -196,6 +198,7 @@ function previewOf(account: MetaChangeAccount, draft: MetaChangeDraft, checks: M
     basis: factHash(draft.stands),
     plan: planOf(draft),
     ...(recommendations.length ? { metaRecommendations: recommendations } : {}),
+    ...(draft.alsoDeleted !== undefined ? { alsoDeleted: draft.alsoDeleted } : {}),
   }
 }
 
@@ -376,6 +379,13 @@ export async function runMetaChange(
     }
     if (missedAt !== null && request.raisesSpend) {
       steps.push({ step: request.step, label: request.label, outcome: 'not_sent', sentence: `${request.label}: not sent — step ${missedAt} did not happen, and Nexus sends nothing that can make the account spend more after a step of the same change that did not (what it stood on may have been that step).` })
+      continue
+    }
+    // Step 22 — a request that stands on earlier steps of the same change goes only when each of them happened as asked.
+    const missing = (request.needs ?? []).filter((s) => !done.some((d) => d.request.step === s && !d.notAsAsked))
+    if (missing.length) {
+      missedAt ??= request.step
+      steps.push({ step: request.step, label: request.label, outcome: 'not_sent', sentence: `${request.label}: not sent — it stands on step ${missing.join(', ')} of this change, which did not happen as asked.` })
       continue
     }
     try {

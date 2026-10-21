@@ -1067,7 +1067,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
       'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
-      'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads']) {
+      'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads',
+      'remove-meta-ads-items']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

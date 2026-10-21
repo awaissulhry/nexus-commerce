@@ -21,6 +21,7 @@
  * Never logs a token, a request body or an answer.
  */
 import { metaWriteCall, type MetaWriteEdge } from '../../gateway/meta.js'
+import type { MetaRemoveKind } from '../../gateway/meta-calls.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
@@ -54,8 +55,8 @@ export const META_UNKNOWN_OUTCOME = 'Sent to Meta, but Meta did not confirm whet
 export interface MetaWriteTarget { connectionId: string; adAccountId: string }
 export interface MetaObjectChange {
   objectId: string
-  /** The kind of object (the gateway confirms it before anything is sent). */
-  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount'
+  /** The kind of object (the gateway confirms it before anything is sent). Step 22: a creative, a video, an Instant Experience part. */
+  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -74,7 +75,7 @@ export interface MetaObjectChange {
    * a background copy (`act_<id>/async_batch_requests`) and an asynchronous ad copy (`act_<id>/asyncadcopies`).
    */
   edge?: MetaWriteEdge
-  /** Step 18 — DELETE (a budget schedule's): Meta's {"success": true} is the answer, nothing is read back. */
+  /** Step 18 — DELETE (a budget schedule's; step 22's deletes): Meta's {"success": true} is the answer, nothing is read back. */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }

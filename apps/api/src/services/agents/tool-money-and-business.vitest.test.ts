@@ -192,6 +192,7 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'create-meta-campaign': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-create.tools test)',
   'create-meta-ad-set': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-create.tools test)',
   'copy-meta-ads': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-create.tools test)',
+  'remove-meta-ads-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-remove.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -545,6 +546,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'create-meta-campaign': () => ({ name: 'Campaign A', objective: 'OUTCOME_SALES', dailyBudgetCents: 5000 }),
   'create-meta-ad-set': () => ({ campaignId: '120000000000001', name: 'Ad set B', optimizationGoal: 'LINK_CLICKS', targeting: { countries: ['IT'] } }),
   'copy-meta-ads': () => ({ kind: 'campaign', sourceId: '120000000000001' }),
+  // Meta ads step 22: the delete refuses in words here (no business has Meta; its own test runs it).
+  'remove-meta-ads-items': () => ({ items: [{ kind: 'campaign', id: '120000000000001' }], confirmDelete: true }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),
