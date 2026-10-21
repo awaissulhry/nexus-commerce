@@ -30,7 +30,7 @@ vi.mock('./taken.js', () => {
   }
 })
 
-import { metaCatalogProblem } from './catalog-rule.js'
+import { metaCatalogProblem, newCatalogRuleMemo } from './catalog-rule.js'
 
 const target = { connectionId: 'm-1', adAccountId: '1234567890' }
 const PORTFOLIO = '120000000000090'
@@ -73,6 +73,37 @@ describe('the catalog rule for a change = step 12\'s read rule', () => {
     expect(await metaCatalogProblem(target, { catalogId: '120000000000069' })).toMatch(/not owned by the chosen ad account's business portfolio, nor shared with it as a client catalog\. .*nothing is sent/)
     expect(await metaCatalogProblem(target, { productSetId: '120000000000067' })).toMatch(/not owned by the chosen ad account's business portfolio/)
     expect(await metaCatalogProblem(target, { catalogId: '120000000000062', productSetId: '120000000000061' })).toMatch(/not in the catalog named/)
+  })
+  it('step 25 — a catalog item (a creative\'s product tag or product data) counts as its catalog, by the same read rule', async () => {
+    h.answers.set('120000000000071', { id: '120000000000071', product_catalog: { id: '120000000000060' } }) // an item of the owned catalog
+    h.answers.set('120000000000072', { id: '120000000000072', product_catalog: { id: '120000000000063' } }) // of another Nexus business's
+    h.answers.set('120000000000073', { id: '120000000000073', product_catalog: { id: '120000000000068' } }) // of a foreign catalog
+    expect(await metaCatalogProblem(target, { productItemId: '120000000000071' })).toBeNull()
+    expect(h.reads).toEqual(['act_1234567890', '120000000000071', '120000000000060'])
+    expect(await metaCatalogProblem(target, { productItemId: '120000000000072' })).toMatch(/another business in Nexus uses\. .*nothing is sent/)
+    expect(await metaCatalogProblem(target, { productItemId: '120000000000073' })).toMatch(/not owned by the chosen ad account's business portfolio/)
+    expect(await metaCatalogProblem(target, { productItemId: '120000000000071', catalogId: '120000000000062' })).toMatch(/not in the catalog named/)
+    h.answers.set('120000000000071', new Error('Meta refused it (100): Unsupported get request.'))
+    expect(await metaCatalogProblem(target, { productItemId: '120000000000071' })).toMatch(/could not confirm that this catalog item is in one of the business's catalogs.*nothing is sent/)
+    h.taken.add(PORTFOLIO)
+    expect(await metaCatalogProblem(target, { productItemId: '120000000000071' })).toMatch(/shared with another business in Nexus/)
+  })
+  it('step 25b — with one change\'s memo: the portfolio and each catalog are read once, a refusal is remembered too; without one, as before', async () => {
+    h.answers.set('120000000000071', { id: '120000000000071', product_catalog: { id: '120000000000060' } })
+    h.answers.set('120000000000072', { id: '120000000000072', product_catalog: { id: '120000000000060' } })
+    const memo = newCatalogRuleMemo()
+    expect(await metaCatalogProblem(target, { productItemId: '120000000000071' }, memo)).toBeNull()
+    expect(await metaCatalogProblem(target, { productItemId: '120000000000072' }, memo)).toBeNull()
+    expect(await metaCatalogProblem(target, { productSetId: '120000000000061' }, memo)).toBeNull()
+    expect(await metaCatalogProblem(target, { productItemId: '120000000000071' }, memo)).toBeNull()
+    expect(h.reads).toEqual(['act_1234567890', '120000000000071', '120000000000060', '120000000000072', '120000000000061'])
+    h.reads = []
+    expect(await metaCatalogProblem(target, { catalogId: '120000000000063' }, memo)).toMatch(/another business in Nexus uses/)
+    expect(await metaCatalogProblem(target, { catalogId: '120000000000063' }, memo)).toMatch(/another business in Nexus uses/)
+    expect(h.reads).toEqual(['120000000000063', `${PORTFOLIO}/client_product_catalogs`])
+    h.reads = []
+    expect(await metaCatalogProblem(target, { productItemId: '120000000000071' })).toBeNull()
+    expect(h.reads).toEqual(['act_1234567890', '120000000000071', '120000000000060'])
   })
   it('a portfolio another Nexus business uses: refused before any catalog is read', async () => {
     h.taken.add(PORTFOLIO)

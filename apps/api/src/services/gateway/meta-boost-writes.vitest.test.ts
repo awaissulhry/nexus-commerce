@@ -187,8 +187,8 @@ describe('a boost goes through step 25\'s ONE creative judge', () => {
     expect('write' in job && job.write.secrets).toEqual([CODE])
   })
 
-  it('answers in words what is not a boost: a catalog intro card (step 18), several partners', () => {
-    expect(problem({ body: form(creatorMedia({ branded_content: { ad_format: 1, parent_source_instagram_media_id: MEDIA } })) })).toMatch(/catalog creative: it comes with lane C1's catalog rule/)
+  it('answers in words what is not a boost: a catalog intro card (lane C2\'s catalog follow-up), several partners', () => {
+    expect(problem({ body: form(creatorMedia({ branded_content: { ad_format: 1, parent_source_instagram_media_id: MEDIA } })) })).toMatch(/catalog creative: it comes with lane C2's catalog follow-up/)
     expect(problem({ body: form(creatorMedia({ branded_content: { ad_format: 1, partners: [] } })) })).toMatch(/ONE partner/)
     expect(problem({ body: form(ownPost({ source_facebook_post_id: '500000000000001' })) })).toMatch(/create-meta-boost/)
   })
