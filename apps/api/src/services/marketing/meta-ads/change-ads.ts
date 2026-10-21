@@ -33,7 +33,7 @@ import {
   AD_STATUSES_BUT_DELETED, AD_TOOL, buildCreative, cleanCreativeJson, createdSentence, creativeWarnings, madeNode, type CreativeRequest,
 } from './change-creatives.js'
 import {
-  aiFeaturesOn, judgeAdCreative, META_ACTIVATE_FEATURES, META_AD_CHECK, META_AD_CHECK_WITH_RECOMMENDATIONS, META_AD_NAME_MAX, META_CONVERSION_DOMAIN, metaActivationProblem, trackingPixels,
+  aiFeaturesOn, judgeAdCreative, META_ACTIVATE_FEATURES, META_AD_NAME_MAX, META_CONVERSION_DOMAIN, metaActivationProblem, trackingPixels,
 } from '../../gateway/meta-ad-rules.js'
 import { judgeAdPersona, judgeAssetGroups, META_AI_GENERATED_FEATURES, META_CREATIVE_TEXT, metaCreativeTextProblem, partsOptIns } from '../../gateway/meta-creative-rules.js'
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
@@ -136,17 +136,6 @@ export function targetsDsaArea(targeting: unknown): boolean {
     return true
   }
   return false
-}
-
-/** Meta's recommendations in its check's answer (AdRecommendation, SDK adrecommendation.py): read-only words for the preview. */
-export function recommendationWords(answer: Row | null): string[] {
-  const list = Array.isArray(answer?.recommendations) ? (answer!.recommendations as unknown[]) : isObject(answer?.recommendations) && Array.isArray((answer!.recommendations as Row).data) ? ((answer!.recommendations as Row).data as unknown[]) : []
-  const cut = (v: unknown, n: number) => { const t = text(v); return t ? (t.length > n ? `${t.slice(0, n - 1)}…` : t) : null }
-  return list.filter(isObject).slice(0, 5).map((r) => {
-    const words = [cut(r.title, 120), cut(r.message, 300)].filter(Boolean).join(': ')
-    const meta = [text(r.importance) ? `importance ${text(r.importance)}` : null, text(r.blame_field) ? `field ${text(r.blame_field)}` : null].filter(Boolean).join(', ')
-    return `Meta recommends (read only — nothing is changed by it): ${words || 'a recommendation without words'}${meta ? ` (${meta})` : ''}.`
-  })
 }
 
 // ── the request ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -494,13 +483,10 @@ async function createAdDraft(account: MetaChangeAccount, request: AdRequest): Pr
 
   const label = `Create ad "${name}" in ad set ${adSetId}${activate ? ' (ACTIVE)' : ' (PAUSED)'}`
   const request1: MetaChangeRequest = {
-    step: 1, label, kind: 'adaccount', objectId: act, params,
-    // Meta documents validate_only + synchronous_ad_review on POST /act_<id>/ads (reference/ad-account/ads.md).
-    check: 'meta', checkOptions: request.recommendations ? META_AD_CHECK_WITH_RECOMMENDATIONS : META_AD_CHECK,
-    checkWords: (answer) => [
-      'Meta\'s integrity review (synchronous_ad_review: its text and image checks) found nothing to refuse; Meta\'s full review after the ad is made may still decide otherwise.',
-      ...(request.recommendations ? (recommendationWords(answer).length ? recommendationWords(answer) : ['Meta had no recommendation for this ad.']) : []),
-    ],
+    step: 1, label, kind: 'ad', objectKind: 'adaccount', objectId: act, params,
+    // Meta documents validate_only + synchronous_ad_review on POST /act_<id>/ads (reference/ad-account/ads.md); its
+    // recommendations (include_recommendations) come back in the preview as step 19's metaRecommendations.
+    check: 'meta', adReview: true, ...(request.recommendations ? { recommendations: true } : {}),
     raisesSpend: activate, readBackInPost: false, budget: false, undoable: false,
     operation: 'ad.create', edge: 'ads',
     send: sendAd(act, params, inline),
@@ -512,6 +498,7 @@ async function createAdDraft(account: MetaChangeAccount, request: AdRequest): Pr
     changes: changeLines(lines).changes,
     totals: { ads: 1, requests: 1, ...(inline ? { creatives: 1 } : {}) },
     warnings: [
+      'Meta\'s check of a new ad runs its synchronous integrity review too (synchronous_ad_review: text and image checks); its yes "does not represent the final decision" — Meta reviews the ad again once made.',
       activate ? 'Meta reviews every new ad first (PENDING_REVIEW); it runs once approved.' : 'The ad is created PAUSED: it spends nothing until a person switches it on (set-meta-status, SPENDS MONEY). Meta reviews it first; a paused ad stays paused after review.',
       ...(aiOn.length ? [`The creative uses ${aiOn.join(', ')} (generated with AI): Meta's rule — keep the ad PAUSED, see each feature in the preview (meta-ad-preview view ad, creativeFeature) before switching it on.`] : []),
       ...(adSet.dynamicCreative ? ['A Dynamic Creative ad cannot be deleted or archived once made (Meta: delete or archive its ad set instead), so its undo cannot take it back.'] : []),
@@ -572,11 +559,12 @@ async function everRan(chosen: MetaChosenAccount, adId: string, createdTime: str
 /** The creative of an ad being taken back goes only once that ad reads DELETED (else the creative stays: nothing is sent). */
 function sendCreativeRemoval(adId: string, creativeId: string) {
   return async (target: MetaWriteTarget): Promise<MetaChangeResult> => {
-    const operation = 'creative.remove'
+    const operation = 'creative.delete'
     const ad = await readAd(target, adId, 'ad.removedCheck', 'id,status')
     if (text(ad?.status) !== 'DELETED') {
       throw new MetaWriteError(localFailure(`Not sent: ad ${adId} does not read as deleted, so its creative ${creativeId} stays (an ad still showing it would break).`, 'AD_NOT_DELETED'), operation, 'not_sent')
     }
+    // Step 22's creative.delete rule (meta-remove-rules.ts), as create-meta-creative's undo sends it.
     return metaSendChange(target, { objectId: creativeId, kind: 'creative', params: {}, operation, method: 'DELETE' })
   }
 }
@@ -638,14 +626,14 @@ export async function adUndoDraft(account: MetaChangeAccount, ids: string[]): Pr
   const after: Array<Record<string, unknown>> = []
   for (const g of going) {
     const label = `Delete ad ${g.adId} (made by Nexus, never run) from ad account ${act}`
-    requests.push({ step: requests.length + 1, label, kind: 'ad', objectId: g.adId, params: {}, check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, operation: 'ad.remove', method: 'DELETE', doneSentence: () => `${label}: Meta deleted it.` })
+    requests.push({ step: requests.length + 1, label, kind: 'ad', objectId: g.adId, params: {}, check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, operation: 'ad.delete', method: 'DELETE', doneSentence: () => `${label}: Meta deleted it.` })
     after.push({ kind: 'ad', adId: g.adId, deleted: true })
     if (!g.creativeId) continue
     const users = others.filter((r) => idOf(isObject(r.creative) ? r.creative.id : null) === g.creativeId && idOf(r.id) !== g.adId).map((r) => String(r.id))
     if (users.length) { skipped.push(`Its creative ${g.creativeId} stays: ad${users.length === 1 ? '' : 's'} ${users.slice(0, 5).join(', ')} use${users.length === 1 ? 's' : ''} it too.`); continue }
     if (more) { skipped.push(`Its creative ${g.creativeId} stays: the ad account has more than ${ADS_READ_MAX} ads, so Nexus cannot confirm no other ad uses it.`); continue }
     const creativeLabel = `Delete creative ${g.creativeId} (made new with ad ${g.adId}) once that ad is deleted`
-    requests.push({ step: requests.length + 1, label: creativeLabel, kind: 'creative', objectId: g.creativeId, params: {}, check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, operation: 'creative.remove', method: 'DELETE', send: sendCreativeRemoval(g.adId, g.creativeId), doneSentence: () => `${creativeLabel}: Meta deleted it.` })
+    requests.push({ step: requests.length + 1, label: creativeLabel, kind: 'ad', objectKind: 'creative', objectId: g.creativeId, params: {}, check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, operation: 'creative.delete', method: 'DELETE', send: sendCreativeRemoval(g.adId, g.creativeId), doneSentence: () => `${creativeLabel}: Meta deleted it.` })
     after.push({ kind: 'creative', creativeId: g.creativeId, adId: g.adId, deleted: true })
   }
   return {

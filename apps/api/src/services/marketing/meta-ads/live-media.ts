@@ -67,11 +67,14 @@ import type { MetaQueryValue } from '../../gateway/meta.js'
 import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
 import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectInAccount, objectKindOf, type MetaChosenAccount } from './live.js'
-import { fieldRefused, listPaged } from './live-objects.js'
+import { listPaged, listWithFallback, oneWithFallback, part, refusedFields } from './paging.js'
 import { AD_FORMATS, IG_ACCOUNT_METRICS, IG_MEDIA_METRICS, PAGE_METRICS, POST_METRICS } from '../../meta/meta-media-lists.js'
 
 export { AD_FORMATS, IG_ACCOUNT_METRICS, IG_MEDIA_METRICS, PAGE_METRICS, POST_METRICS }
-import { maskTakenRows, takenIds } from './taken.js'
+import { maskTakenRows, portfolioTaken, PORTFOLIO_TAKEN } from './taken.js'
+
+// Step 12 fix A4 — the read helpers moved to the leaf paging.ts and the portfolio check to taken.ts; re-exported here.
+export { listWithFallback, oneWithFallback, part, portfolioTaken, PORTFOLIO_TAKEN, refusedFields }
 
 type Row = Record<string, unknown>
 
@@ -100,55 +103,6 @@ export function tidy(value: unknown, depth = 0): unknown {
   return safe
 }
 
-/**
- * The SDK-only fields Meta refused: the ones its words name ("nonexisting field (x)"), else all of them. Only those are
- * dropped, so one refused field never takes the others with it.
- */
-export function refusedFields(more: string[], err: MetaReadError): string[] {
-  const named = [...err.failure.sentence.matchAll(/\(([a-z_]+)\)/g)].map((m) => m[1]).filter((f) => more.includes(f))
-  return named.length ? named : more
-}
-
-/** Read with the documented fields plus the SDK-only ones; each refused SDK-only field is dropped (at most 4 tries). */
-async function withFallback<T>(core: string, more: string, read: (fields: string) => Promise<T>): Promise<{ value: T; note: string | null }> {
-  let asked = more ? more.split(',') : []
-  const dropped: string[] = []
-  let last = ''
-  for (let attempt = 0; ; attempt++) {
-    try {
-      const value = await read(asked.length ? `${core},${asked.join(',')}` : core)
-      return { value, note: dropped.length ? `Meta refused ${dropped.join(', ')} here, so ${dropped.length === 1 ? 'it is' : 'they are'} missing: ${last}` : null }
-    } catch (err) {
-      if (!asked.length || !fieldRefused(err) || attempt >= 3) throw err
-      const refused = attempt === 2 ? asked : refusedFields(asked, err)
-      dropped.push(...refused)
-      asked = asked.filter((f) => !refused.includes(f))
-      last = err.failure.sentence
-    }
-  }
-}
-
-async function oneWithFallback(connectionId: string, operation: string, path: string, core: string, more: string, query: Record<string, MetaQueryValue> = {}) {
-  const read = await withFallback(core, more, async (fields) => (await metaReadOne({ connectionId }, { operation, path, query: { ...query, fields } })).body as Row)
-  return { body: read.value, note: read.note }
-}
-
-async function listWithFallback(connectionId: string, operation: string, path: string, core: string, more: string, query: Record<string, MetaQueryValue>, maxRows: number) {
-  const read = await withFallback(core, more, (fields) => listPaged(connectionId, operation, path, { ...query, fields }, maxRows))
-  return { ...read.value, note: read.note }
-}
-
-/** One part of an answer that may fail on its own (an edge Meta may refuse): its rows, or Meta's sentence. */
-export async function part<T>(work: () => Promise<T>): Promise<{ value: T | null; notRead: string | null }> {
-  try {
-    return { value: await work(), notRead: null }
-  } catch (err) {
-    if (err instanceof MetaReadError && !err.failure.authLost && !err.failure.throttled) return { value: null, notRead: err.failure.sentence }
-    if (err instanceof MetaLiveRefusal) return { value: null, notRead: err.message }
-    throw err
-  }
-}
-
 // ── the chosen assets ────────────────────────────────────────────────────────────────────────────────────────────
 
 const NO_PAGE = 'No Facebook Page is chosen for this business yet. A person chooses it in Settings › Channels › Meta, or Claude asks for it with set-meta-connection (a person approves it).'
@@ -168,16 +122,6 @@ export function instagramOf(account: MetaChosenAccount): string {
 function portfolioOf(account: MetaChosenAccount): string {
   if (!account.businessId) throw new MetaLiveRefusal('The chosen ad account names no business portfolio, so a portfolio\'s media library is not read (only the ad account\'s own: views images and videos).')
   return account.businessId
-}
-
-export const PORTFOLIO_TAKEN = 'Another business in Nexus reads an ad account of this Meta business portfolio, so the portfolio\'s media library, folders and tags are not read here (they would show that business\'s media too). Read this ad account\'s own media with views images and videos.'
-
-/**
- * Step 10 review A1 — a portfolio another business's chosen ad account belongs to (nexus_meta_links_taken PORTFOLIO) is
- * its id and the flag only, before any call: two businesses in one portfolio never read each other's library.
- */
-async function portfolioTaken(portfolioId: string): Promise<{ portfolioId: string; takenByAnotherBusiness: true; sentence: string } | null> {
-  return (await takenIds('PORTFOLIO', [portfolioId])).has(portfolioId) ? { portfolioId, takenByAnotherBusiness: true, sentence: PORTFOLIO_TAKEN } : null
 }
 
 /** Meta's words when a read needs the Page's own token (its #190 "must be called with a Page Access Token"). */
@@ -265,7 +209,7 @@ export async function ownMedia(account: MetaChosenAccount, id: string): Promise<
 }
 
 /** An object whose `owner` must be the chosen Page (an Instant Experience, a video playlist). */
-async function ownedByPage(account: MetaChosenAccount, id: string, what: string, operation: string): Promise<string> {
+export async function ownedByPage(account: MetaChosenAccount, id: string, what: string, operation: string): Promise<string> {
   const pageId = pageOf(account)
   const objectId = metaObjectId(id)
   if (!objectId) throw new MetaLiveRefusal(`"${id}" is not a Meta ${what} id (digits).`)

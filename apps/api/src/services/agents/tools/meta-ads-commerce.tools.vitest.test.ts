@@ -1,0 +1,744 @@
+/**
+ * Meta ads step 13 — meta-product-sets, meta-commerce, meta-instagram-product-tags. Product sets are read only in a
+ * catalog step 12's rule allows (a set is checked to be in one before it is read); a set filter is Nexus's own rule from
+ * typed conditions; commerce accounts and shops only of the chosen Page and of a business portfolio no other Nexus
+ * business uses; Instagram product tags only of the chosen Instagram account and its own posts; prices only under
+ * restricted keys; every call is one the real gateway lets through. Meta and the database are stubbed; made-up ids only.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+type Req = { operation: string; path: string; query?: Record<string, unknown> }
+const h = vi.hoisted(() => ({
+  connections: [] as Array<Record<string, unknown>>,
+  calls: [] as Array<{ operation: string; path: string; query?: Record<string, unknown> }>,
+  /** Answers by exact path: an array is a list's rows, anything else an object's body, an Error a refusal. */
+  routes: {} as Record<string, unknown>,
+  /** Called first: return undefined to fall back to routes. */
+  override: null as null | ((req: { operation: string; path: string; query?: Record<string, unknown> }) => unknown),
+  taken: [] as Array<{ product: string; id: string }>,
+}))
+vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => h.connections) }))
+vi.mock('../../marketing/meta-ads/read-client.js', async () => ({
+  metaReadOne: vi.fn(async (_t: unknown, req: Req) => {
+    h.calls.push(req)
+    const over = h.override?.(req)
+    const answer = over !== undefined ? over : h.routes[req.path]
+    if (answer instanceof Error) throw answer
+    if (Array.isArray(answer)) return { body: { data: answer, ...(req.query?.summary ? { summary: { total_count: answer.length } } : {}) }, calls: 1 }
+    if (answer === undefined && req.query?.limit !== undefined) return { body: { data: [] }, calls: 1 }
+    return { body: answer ?? {}, calls: 1 }
+  }),
+  metaReadAll: vi.fn(async () => { throw new Error('step 13 reads page by page with metaReadOne') }),
+}))
+vi.mock('../../../db.js', () => ({
+  default: {
+    metaAdsCampaign: { findFirst: vi.fn(async () => null) },
+    metaAdsAdSet: { findFirst: vi.fn(async () => null) },
+    metaAdsAd: { findFirst: vi.fn(async () => null) },
+    // nexus_meta_links_taken(product, ids): the ids of that product another business picked.
+    $queryRaw: vi.fn(async (_s: unknown, product: string, ids: string[]) => h.taken.filter((t) => t.product === product && ids.includes(t.id)).map((t) => ({ id: t.id }))),
+  },
+}))
+
+import { FEATURES, FIELDS } from '@nexus/shared/permissions'
+import { META_ADS_COMMERCE_TOOLS, META_PRODUCT_SET_MONEY } from './meta-ads-commerce.tools.js'
+import { META_CATALOG_MONEY } from './meta-ads-catalog.tools.js'
+import { CATALOG_NO_OWNER, CATALOG_NOT_READABLE, CATALOG_PORTFOLIO_SHARED } from '../../marketing/meta-ads/catalog-rule.js'
+import { visibleTo } from '../call-tool.js'
+import {
+  assertPriceFilterAllowed, COMMERCE_NOT_OWN, CONFIG_TEXT_NOT_SHOWN, IDS_NOT_EXACT, IG_SHOP_NOTE, IG_TAG_READ_NOTE, SHOP_CHANNELS_PLAIN, COMMERCE_PORTFOLIO_SHARED, COMMERCE_UNVERIFIED, EMPTY_SET, INTERNAL_LABEL_NOTE, liveCommerce, liveProductSets,
+  MAX_SET_FILTER_WRITE_BYTES, PRICE_FILTER_REFUSED, productSetFilter, setConditionArg, setFilterOut, setFilterPriceAmount, setFilterWords, SET_PRICE_UNIT,
+} from '../../marketing/meta-ads/live-commerce.js'
+import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
+import { metaUrl } from '../../gateway/meta.js'
+import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
+import { PAGE_TOKEN_NOTE } from '../../marketing/meta-ads/live-media.js'
+
+const tool = (name: string) => META_ADS_COMMERCE_TOOLS.find((t) => t.name === name)!
+const ctx = { can: () => true, via: 'claude' as const }
+const run = async (name: string, args: Record<string, unknown>, context: { can: (p: string) => boolean } = ctx) => tool(name).handler(tool(name).input.parse(args), { ...ctx, ...context } as never) as Promise<{ ok: boolean; data?: any; error?: string }>
+const PORTFOLIO = '9876543210'
+const OTHER_PORTFOLIO = '9876543299'
+const CATALOG = '120000000000700'
+const CLIENT_CATALOG = '120000000000701'
+const FOREIGN_CATALOG = '120000000000799'
+const ITEM = '120000000000740'
+const SET = '120000000000800'
+const PRICED_SET = '120000000000801'
+const FOREIGN_SET = '120000000000899'
+const PAGE = '120000000000010'
+const OTHER_PAGE = '120000000000011'
+const IG = '170000000000001'
+const OTHER_IG = '170000000000002'
+const CMS = '130000000000001'
+const CMS_PORTFOLIO = '130000000000002'
+const CMS_TAKEN = '130000000000003'
+const CMS_UNNAMED = '130000000000004'
+const SHOP = '135000000000001'
+const MEDIA = '178000000000001'
+const SLIDE = '178000000000002'
+const CHOSEN = {
+  connectionId: 'conn-1', state: 'ok', stateText: 'ok', appId: '310000000000001', systemUser: { id: '100000000000001', name: null },
+  adAccount: { adAccountId: '1234567890', name: 'Shop A ads', currency: 'EUR', timeZone: 'Europe/Rome', businessId: PORTFOLIO },
+  page: { pageId: PAGE, name: 'Shop A' }, instagram: { instagramId: IG, username: 'shop_a' }, read: {},
+}
+const metaError = (code: string, words: string, errorClass = 'validation') => new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass, channelCode: code, channelMessage: words } as never }), 'x', 1)
+const gatewayProblems = () => h.calls.map((c) => [c.operation, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' })]).filter(([, problem]) => problem)
+const catalogNode = (id: string, owner: string) => ({ id, name: `Catalog ${id.slice(-3)}`, business: { id: owner, name: 'Shop A' }, vertical: 'commerce', product_count: 3, is_catalog_segment: false })
+const ITEM_BODY = { id: ITEM, retailer_id: 'SKU-1', name: 'Jacket', availability: 'in stock', price: '€49.90', sale_price: '€39.90', currency: 'EUR', product_catalog: { id: CATALOG } }
+const SET_BODY = { id: SET, name: 'Jackets', retailer_id: 'SET-1', product_count: 3, filter: '{"product_type":{"i_contains":"jacket"}}', product_catalog: { id: CATALOG } }
+const PRICED_SET_BODY = { id: PRICED_SET, name: 'Cheap', product_count: 0, filter: '{"and":[{"price_amount":{"lt":5000}},{"brand":{"eq":"Shop A"}}]}', product_catalog: { id: CATALOG } }
+const SHOP_ROW = {
+  id: SHOP, shop_status: 'ENABLED', fb_sales_channel: { status: 'ENABLED', fb_page: { id: PAGE, name: 'Shop A' } },
+  ig_sales_channel: { status: 'STAGING', ig_user: { id: OTHER_IG, username: 'shop_b' } }, commerce_merchant_settings: { id: CMS },
+  workspace: { id: '140000000000001', name: 'Shop G space', link: 'https://shop-g.example', is_active: true },
+}
+
+function defaultRoutes(): Record<string, unknown> {
+  return {
+    [CATALOG]: catalogNode(CATALOG, PORTFOLIO),
+    [CLIENT_CATALOG]: catalogNode(CLIENT_CATALOG, OTHER_PORTFOLIO),
+    [FOREIGN_CATALOG]: catalogNode(FOREIGN_CATALOG, OTHER_PORTFOLIO),
+    [`${PORTFOLIO}/client_product_catalogs`]: [{ id: CLIENT_CATALOG }],
+    [SET]: SET_BODY,
+    [PRICED_SET]: PRICED_SET_BODY,
+    [FOREIGN_SET]: { ...SET_BODY, id: FOREIGN_SET, product_catalog: { id: FOREIGN_CATALOG } },
+    [`${CATALOG}/product_sets`]: [SET_BODY, PRICED_SET_BODY],
+    [`${SET}/products`]: [ITEM_BODY],
+    [`${CATALOG}/products`]: [ITEM_BODY],
+    [`${CATALOG}/facets`]: [{ item_count: 3, facets: [{ brand: [{ value: 'Shop A', count: 3 }] }, { price_amount: [{ value: 4990, count: 1 }] }] }],
+    [ITEM]: ITEM_BODY,
+    [`${PAGE}/commerce_merchant_settings`]: [{ id: CMS, display_name: 'Shop A shop', merchant_status: 'ENABLED' }],
+    [`${PORTFOLIO}/commerce_merchant_settings`]: [
+      { id: CMS, display_name: 'Shop A shop', merchant_status: 'ENABLED', merchant_page: { id: PAGE } },
+      { id: CMS_PORTFOLIO, display_name: 'Shop A outlet', merchant_status: 'EXTERNALLY_DISABLED', merchant_page: { id: '120000000000012' } },
+      { id: CMS_UNNAMED, display_name: 'Shop C shop', merchant_status: 'ENABLED' },
+      { id: CMS_TAKEN, display_name: 'Shop B shop', merchant_status: 'ENABLED', merchant_page: { id: OTHER_PAGE } },
+    ],
+    [CMS]: {
+      id: CMS, display_name: 'Shop A shop', merchant_status: 'ENABLED', contact_email: 'shop@example.com', terms: 'https://shop-a.example/terms',
+      offsite_iab_checkout_enabled_countries: ['IT', 'DE'], merchant_page: { id: PAGE, name: 'Shop A' }, payment_provider: 'external',
+      facebook_channel: {
+        pages: [{ id: OTHER_PAGE, name: 'Shop B' }, { id: PAGE, name: 'Shop A', link: 'https://shop-a.example/page' }, { id: '120000000000013', name: 'Shop D', link: 'https://shop-d.example' }],
+        owner: { name: 'Shop E' }, status: 'ENABLED', page_id: '120000000000014', about: 'Shop F text', links: ['https://shop-f.example'],
+        'Shop H Page': { id: '120000000000015', status: 'ENABLED' }, 'https://shop-h.example': { is_live: true },
+      },
+      instagram_channel: { instagram_users: [{ id: IG, username: 'shop_a' }] },
+    },
+    [CMS_TAKEN]: { id: CMS_TAKEN, display_name: 'Shop B shop' },
+    [`${CMS}/shops`]: [SHOP_ROW],
+    [SHOP]: SHOP_ROW,
+    [`${PAGE}/shop_setup_status`]: [{ shop_setup: 'SETUP', payment_setup: 'SETUP', review_status: { status: 'APPROVED' } }],
+    [`${CMS}/setup_status`]: [{ shop_setup: 'SETUP', payment_setup: 'NOT_SETUP' }],
+    [IG]: { id: IG, username: 'shop_a', shopping_product_tag_eligibility: true, shopping_review_status: 'approved' },
+    [`${IG}/available_catalogs`]: [{ catalog_id: CATALOG, catalog_name: 'Catalog 700', shop_name: 'Shop A', product_count: 3 }],
+    // Round 2 B1 — the Instagram shopping edges send product_id / merchant_id as JSON NUMBERS (Meta's examples, SDK int).
+    [`${IG}/catalog_product_search`]: [{ product_id: Number(ITEM), product_name: 'Jacket', retailer_id: 'SKU-1', review_status: 'approved', is_checkout_flow: false, merchant_id: Number(CMS), product_variants: [{ product_id: 120000000000741, variant_name: 'Red' }] }],
+    [MEDIA]: { id: MEDIA, owner: { id: IG }, media_product_type: 'FEED' },
+    [`${MEDIA}/product_tags`]: [{ product_id: Number(ITEM), merchant_id: Number(CMS), name: 'Jacket', price_string: '49.90 EUR', stripped_price_string: '€49.90', stripped_sale_price_string: '39.90', review_status: 'approved', is_checkout: false, x: 0.5, y: 0.8 }],
+    [`${MEDIA}/children`]: [{ id: SLIDE, media_type: 'IMAGE' }],
+    [`${SLIDE}/product_tags`]: [{ product_id: Number(ITEM), name: 'Jacket', price_string: '€49.90', review_status: 'pending', x: 0.1, y: 0.2 }],
+    [`${IG}/product_appeal`]: [{ product_id: Number(ITEM), review_status: 'rejected', eligible_for_appeal: true, product_appeal_status: 'none', rejection_reasons: ['POLICY'] }],
+  }
+}
+
+beforeEach(() => { h.connections = [CHOSEN]; h.calls.length = 0; h.routes = defaultRoutes(); h.override = null; h.taken = [] })
+
+describe('the three tools are reads', () => {
+  it('none changes anything; each reaches Meta with ads.view; prices are restricted to revenue view, commerce holds none', () => {
+    expect(META_ADS_COMMERCE_TOOLS.map((t) => t.name)).toEqual(['meta-product-sets', 'meta-commerce', 'meta-instagram-product-tags'])
+    for (const t of META_ADS_COMMERCE_TOOLS) {
+      expect({ readOnly: t.readOnly, execute: t.execute, openWorld: t.openWorld, requires: t.requires, riskTier: t.riskTier, category: t.category })
+        .toEqual({ readOnly: true, execute: undefined, openWorld: true, requires: ['ads.view'], riskTier: 'low', category: 'insights' })
+    }
+    expect(tool('meta-product-sets').restrictedFields).toEqual(META_PRODUCT_SET_MONEY)
+    expect(META_PRODUCT_SET_MONEY).toEqual({ ...META_CATALOG_MONEY, filterWithPricesShown: FIELDS.financialsRevenueView })
+    expect(tool('meta-instagram-product-tags').restrictedFields).toEqual(META_CATALOG_MONEY)
+    expect(new Set(Object.values(META_PRODUCT_SET_MONEY))).toEqual(new Set([FIELDS.financialsRevenueView]))
+    expect(tool('meta-commerce').restrictedFields).toBeUndefined()
+  })
+})
+
+describe('product sets: only of a readable catalog, a set checked before it is read', () => {
+  it('a portfolio another Nexus business uses: every set view (and the Instagram catalog views) refused before any call', async () => {
+    h.taken = [{ product: 'PORTFOLIO', id: PORTFOLIO }]
+    for (const [name, args] of [
+      ['meta-product-sets', { view: 'list', catalogId: CATALOG }], ['meta-product-sets', { view: 'set', productSetId: SET }],
+      ['meta-product-sets', { view: 'items', productSetId: SET }], ['meta-product-sets', { view: 'preview', catalogId: CATALOG }],
+      ['meta-product-sets', { view: 'facets', catalogId: CATALOG }], ['meta-instagram-product-tags', { view: 'catalogs' }],
+      ['meta-instagram-product-tags', { view: 'search', catalogId: CATALOG }], ['meta-instagram-product-tags', { view: 'appeal', itemId: ITEM }],
+    ] as Array<[string, Record<string, unknown>]>) expect((await run(name, args)).error, `${name} ${args.view}`).toBe(CATALOG_PORTFOLIO_SHARED)
+    expect(h.calls).toHaveLength(0)
+  })
+  it('a catalog the portfolio neither owns nor is a client of: refused before its sets are read', async () => {
+    expect((await run('meta-product-sets', { view: 'list', catalogId: FOREIGN_CATALOG })).error).toBe(CATALOG_NOT_READABLE)
+    expect(h.calls.map((c) => c.operation)).toEqual(['catalog.ownerCheck', 'catalog.clientCheck'])
+  })
+  it('a set of another catalog is refused after its owner-only read; one named with another catalog too; an id that is no set too', async () => {
+    expect((await run('meta-product-sets', { view: 'items', productSetId: FOREIGN_SET })).error).toBe(CATALOG_NOT_READABLE)
+    expect(h.calls[0]).toMatchObject({ operation: 'catalog.product_set.ownerCheck', path: FOREIGN_SET, query: { fields: 'product_catalog{id},filter' } })
+    expect(h.calls.some((c) => c.path === `${FOREIGN_SET}/products`)).toBe(false)
+    expect((await run('meta-product-sets', { view: 'set', productSetId: SET, catalogId: CLIENT_CATALOG })).error).toMatch(/not in the catalog named/)
+    h.routes[SET] = metaError('100', 'Tried accessing nonexisting field (filter) on node type (ProductItem)')
+    expect((await run('meta-product-sets', { view: 'set', productSetId: SET })).error).toMatch(/is not a product set/)
+  })
+  it('list: the set tree filters on their own keys, the filter in plain words, an empty set warned, a price filter only restricted', async () => {
+    const res = await run('meta-product-sets', { view: 'list', catalogId: CATALOG, parentId: '0', hasChildren: false, retailerId: 'SET-1' })
+    expect(h.calls.at(-1)?.query).toMatchObject({ parent_id: '0', has_children: false, retailer_id: 'SET-1', summary: 'total_count' })
+    const [plain, priced] = res.data.items
+    expect(plain).toMatchObject({ productSetId: SET, productCount: 3, filter: { product_type: { i_contains: 'jacket' } }, filterWords: 'product_type contains (any case) "jacket"', filterHasPrices: false })
+    expect(priced).toMatchObject({ productSetId: PRICED_SET, filter: null, filterHasPrices: true, warning: EMPTY_SET })
+    expect(priced.filterWithPricesShown.rule).toEqual({ and: [{ price_amount: { lt: 5000 } }, { brand: { eq: 'Shop A' } }] })
+    expect(Object.keys(META_PRODUCT_SET_MONEY)).toContain('filterWithPricesShown')
+  })
+  it('set: one set with its metadata; ordering_info (SDK only) dropped and named when Meta refuses it', async () => {
+    h.override = (req) => (req.operation === 'productSets.one' && String(req.query?.fields).includes('ordering_info') ? metaError('100', 'Tried accessing nonexisting field (ordering_info)') : undefined)
+    const res = await run('meta-product-sets', { view: 'set', productSetId: SET })
+    expect(res.data).toMatchObject({ catalogId: CATALOG, relation: 'owned', productSetId: SET, name: 'Jackets', orderingInfo: null })
+    expect(res.data.fieldsNote).toMatch(/ordering_info/)
+  })
+  it('items: the set\'s items with prices in minor units under restricted keys, narrowed by Nexus\'s own rule', async () => {
+    const res = await run('meta-product-sets', { view: 'items', productSetId: SET, conditions: [{ field: 'availability', op: 'eq', value: 'In Stock' }], errorPriority: 'high' })
+    expect(h.calls.at(-1)).toMatchObject({ path: `${SET}/products`, query: { filter: { availability: { eq: 'in stock' } }, error_priority: 'HIGH' } })
+    expect(res.data.items[0]).toMatchObject({ itemId: ITEM, sku: 'SKU-1', currency: 'EUR', priceCents: 4990, salePriceCents: 3990 })
+    for (const key of ['priceCents', 'salePriceCents', 'priceShown', 'salePriceShown']) expect(META_PRODUCT_SET_MONEY).toHaveProperty(key)
+  })
+  it('preview: Nexus builds the rule, counts the matches, shows a sample, and compares with the set\'s count now (before → after)', async () => {
+    h.override = (req) => (req.operation === 'productSets.preview' ? [ITEM_BODY, { ...ITEM_BODY, id: '120000000000742' }] : undefined)
+    const res = await run('meta-product-sets', {
+      view: 'preview', productSetId: SET, match: 'any',
+      conditions: [{ field: 'brand', op: 'is_any', values: ['Shop A', 'Shop A'] }, { field: 'price_amount', op: 'lte', amountMinor: 4990 }],
+    })
+    const sent = h.calls.find((c) => c.operation === 'productSets.preview')!
+    expect(sent.path).toBe(`${CATALOG}/products`)
+    expect(sent.query?.filter).toEqual({ or: [{ brand: { is_any: ['Shop A'] } }, { price_amount: { lte: 4990 } }] })
+    expect(res.data).toMatchObject({ matchingItems: 2, willDeliver: true, priceCurrency: 'EUR', filter: null, filterHasPrices: true, current: { productSetId: SET, itemsNow: 3, itemsWithThisFilter: 2, change: -1 } })
+    expect(res.data.note).toMatch(/no check/)
+    h.override = (req) => (req.operation === 'productSets.preview' ? [] : undefined)
+    const empty = await run('meta-product-sets', { view: 'preview', catalogId: CATALOG, conditions: [{ field: 'brand', op: 'eq', value: 'Nobody' }] })
+    expect(empty.data).toMatchObject({ matchingItems: 0, willDeliver: false, filter: { brand: { eq: 'Nobody' } }, filterWords: 'brand is "Nobody"' })
+    expect(empty.data.warning).toMatch(/will not deliver/)
+  })
+  it('facets: the fields Nexus names are sent as a list; a facet of prices is never answered', async () => {
+    const res = await run('meta-product-sets', { view: 'facets', catalogId: CATALOG, facetFields: ['brand', 'color'] })
+    expect(h.calls.at(-1)).toMatchObject({ path: `${CATALOG}/facets`, query: { facets: ['brand', 'color'] } })
+    expect(JSON.stringify(res.data.items)).not.toMatch(/price/i)
+    expect(res.data.items[0].facets).toEqual([{ brand: [{ value: 'Shop A', count: 3 }] }, {}])
+    expect(() => tool('meta-product-sets').input.parse({ view: 'facets', catalogId: CATALOG, facetFields: ['price_amount'] })).toThrow()
+  })
+})
+
+describe('review A1 — a price condition only for a person who may see revenue', () => {
+  const priced = { view: 'preview', catalogId: CATALOG, conditions: [{ field: 'price_amount', op: 'lt', amountMinor: 4990 }] }
+  it('refused before any call without revenue view (or the whole financial view); allowed with either', async () => {
+    for (const view of ['preview', 'items', 'facets']) {
+      expect((await run('meta-product-sets', { ...priced, view, productSetId: SET }, { can: () => false })).error, view).toBe(PRICE_FILTER_REFUSED)
+    }
+    expect(h.calls).toHaveLength(0)
+    expect((await run('meta-product-sets', priced, { can: (p) => p === FIELDS.financialsRevenueView })).ok).toBe(true)
+    expect((await run('meta-product-sets', priced, { can: (p) => p === FIELDS.financialsView })).ok).toBe(true)
+    // Other conditions stay open to ads.view.
+    expect((await run('meta-product-sets', { view: 'preview', catalogId: CATALOG, conditions: [{ field: 'brand', op: 'eq', value: 'A' }] }, { can: () => false })).ok).toBe(true)
+  })
+  it('the exported check lane C4\'s set writes call: any price field, in any case, refused without revenue view', () => {
+    const none = () => false
+    expect(() => assertPriceFilterAllowed([{ field: ' Sale_Price_Amount ', op: 'gt', amountMinor: 1 }], none)).toThrow(PRICE_FILTER_REFUSED)
+    expect(() => assertPriceFilterAllowed([{ field: 'brand', op: 'eq', value: 'A' }, { field: 'price_amount', op: 'lt', amountMinor: 1 }], none)).toThrow(PRICE_FILTER_REFUSED)
+    expect(() => assertPriceFilterAllowed([{ field: 'brand', op: 'eq', value: 'A' }], none)).not.toThrow()
+    expect(() => assertPriceFilterAllowed([{ field: 'price_amount', op: 'lt', amountMinor: 1 }], (p) => p === FIELDS.financialsRevenueView)).not.toThrow()
+    expect(() => assertPriceFilterAllowed([{ field: 'price_amount', op: 'lt', amountMinor: 1 }], (p) => p === FIELDS.financialsAdspendView)).toThrow(PRICE_FILTER_REFUSED)
+  })
+})
+
+describe('the product-set filter: Nexus\'s own rule from typed conditions (lane C4 reuses it)', () => {
+  const f = (conditions: unknown[], extra: Record<string, unknown> = {}) => productSetFilter({ conditions: conditions as never, ...extra }, 'EUR', { everyItem: true })
+  it('one condition alone, several joined by and (all) or or (any), lists de-duplicated, fixed values lower-cased', () => {
+    expect(f([])).toEqual({ rule: null, priceCurrency: null })
+    expect(f([{ field: 'retailer_product_group_id', op: 'eq', value: ' GROUP-1 ' }]).rule).toEqual({ retailer_product_group_id: { eq: 'GROUP-1' } })
+    expect(f([{ field: 'availability', op: 'is_any', values: ['In Stock', 'preorder'] }, { field: 'category', op: 'starts_with', value: 'Apparel' }]).rule)
+      .toEqual({ and: [{ availability: { is_any: ['in stock', 'preorder'] } }, { category: { starts_with: 'Apparel' } }] })
+    expect(f([{ field: 'brand', op: 'eq', value: 'A' }, { field: 'brand', op: 'eq', value: 'B' }], { match: 'any' }).rule).toEqual({ or: [{ brand: { eq: 'A' } }, { brand: { eq: 'B' } }] })
+  })
+  it('Meta\'s rules are refused in words: contains on a fixed-value field, starts_with off category, a value Meta does not know, non-English labels', () => {
+    expect(() => f([{ field: 'availability', op: 'contains', value: 'stock' }])).toThrow(/fixed values/)
+    expect(() => f([{ field: 'brand', op: 'starts_with', value: 'Sh' }])).toThrow(/category only/)
+    expect(() => f([{ field: 'condition', op: 'eq', value: 'broken' }])).toThrow(/not one of Meta's values/)
+    expect(() => f([{ field: 'custom_label_0', op: 'eq', value: 'giacca è' }])).toThrow(/non-English characters/)
+    expect(() => f([{ field: 'brand', op: 'eq', values: ['A'] }])).toThrow(/takes one value/)
+    expect(() => f([{ field: 'brand', op: 'is_any', value: 'A' }])).toThrow(/takes a list/)
+    expect(() => f([{ field: 'brand', op: 'lt', value: 'A' }])).toThrow(/text field takes/)
+    expect(() => f([{ field: 'brand', op: 'eq', value: 'A', amountMinor: 5 }])).toThrow(/price_amount or sale_price_amount only/)
+    expect(() => f(Array.from({ length: 21 }, () => ({ field: 'brand', op: 'eq', value: 'A' })))).toThrow(/At most 20/)
+  })
+  it('review A4 — run-time types refused in words (never a TypeError); match other than all / any refused; the encoded size capped', () => {
+    expect(() => f('brand' as never)).toThrow(/conditions is a list/)
+    expect(() => f([null])).toThrow(/is not a condition/)
+    expect(() => f([{ field: 1, op: 'eq', value: 'A' }])).toThrow(/filters only on/)
+    expect(() => f([{ field: 'brand', op: 'eq', value: 5 }])).toThrow(/value is text/)
+    expect(() => f([{ field: 'brand', op: 'is_any', values: ['A', 7] }])).toThrow(/values is a list of texts/)
+    expect(() => f([{ field: 'price_amount', op: 'lt', amountMinor: '4990' }])).toThrow(/amountMinor is a whole number/)
+    expect(() => f([{ field: 'brand', op: 'eq', value: 'A' }], { match: 'none' })).toThrow(/match is all/)
+    expect(() => f([{ field: 'brand', op: 'eq', value: 'A' }], { match: 1 })).toThrow(/match is all/)
+    expect(() => f([{ field: 'brand', op: 'is_any', values: 'A' }])).toThrow(/values is a list of texts/)
+    // Bounded before any work on it: a list longer than 100 is refused, not de-duplicated first.
+    expect(() => f([{ field: 'brand', op: 'is_any', values: Array.from({ length: 101 }, () => 'A') }])).toThrow(/at most 100 values/)
+    expect(() => f([{ field: 'brand', op: 'eq', value: 'x'.repeat(201) }])).toThrow(/at most 200 characters/)
+    const big = [{ field: 'retailer_id', op: 'is_any', values: Array.from({ length: 100 }, (_, i) => `SKU-${i}-${'x'.repeat(150)}`) }]
+    expect(() => f(big)).toThrow(/at most 8192 here/)
+    expect(productSetFilter({ conditions: big as never }, 'EUR', { maxBytes: MAX_SET_FILTER_WRITE_BYTES, everyItem: false }).rule).not.toBeNull()
+    // A WRITE says "every item" explicitly: no condition is refused there, and means no filter on a read.
+    expect(() => productSetFilter({ conditions: [] }, 'EUR', { everyItem: false })).toThrow(/every item of the catalog/)
+    // Round 2 A-F1 — everyItem is REQUIRED: an empty list without it (or with anything but true) is refused.
+    expect(() => productSetFilter({ conditions: [] }, 'EUR', { maxBytes: MAX_SET_FILTER_WRITE_BYTES } as never)).toThrow(/every item of the catalog/)
+    expect(() => productSetFilter({ conditions: null }, 'EUR', undefined as never)).toThrow(/every item of the catalog/)
+    expect(() => productSetFilter({ conditions: [] }, 'EUR', { everyItem: 'yes' } as never)).toThrow(/every item of the catalog/)
+    expect(productSetFilter({ conditions: [] }, 'EUR', { everyItem: true }).rule).toBeNull()
+    // C4 validates with the same schema the tools use.
+    expect(setConditionArg.safeParse({ field: 'Brand', op: 'EQ', value: 'A' })).toMatchObject({ success: true, data: { field: 'brand', op: 'eq' } })
+    expect(setConditionArg.safeParse({ field: 'review_status', op: 'eq' }).success).toBe(false)
+  })
+  it('review A8 — every plain argument (and the price permission) is refused before any call, database or Meta', async () => {
+    // No connection: had the account been read first, its refusal would answer instead.
+    h.connections = []
+    for (const [extra, words] of [
+      [{ view: 'facets', facetFields: ['price_amount'] }, /not a field Nexus counts/], [{ view: 'list', parentId: 'top' }, /parentId is a Meta id/],
+      [{ view: 'list', ancestorId: '12a' }, /ancestorId is a Meta id/], [{ view: 'items', errorType: 'FOO_BAR' }, /errorType is one of Meta's item error types/],
+      [{ view: 'items', errorPriority: 'URGENT' }, /errorPriority is HIGH/], [{ view: 'list', retailerId: 'x'.repeat(101) }, /retailerId is at most/],
+      [{ view: 'preview', conditions: [{ field: 'price_amount', op: 'lt', amountMinor: 1 }] }, /only for a person who may see revenue/],
+    ] as Array<[Record<string, unknown>, RegExp]>) {
+      await expect(liveProductSets({ catalogId: CATALOG, ...extra } as never), JSON.stringify(extra)).rejects.toThrow(words)
+    }
+    await expect(liveCommerce({ view: 'account', locale: 'Italian' })).rejects.toThrow(/BCP 47, e.g. it, en-US/)
+    await expect(liveCommerce({ view: 'account', locale: 'en__US' })).rejects.toThrow(/BCP 47/)
+    await expect(liveCommerce({ view: 'checkout-countries', countries: ['IT', 'ITA'] })).rejects.toThrow(/"ITA" is not a country code/)
+    await expect(liveCommerce({ view: 'shop', shopId: 'shop-1' })).rejects.toThrow(/shopId is a Meta id/)
+    expect(h.calls).toHaveLength(0)
+    // The same with a connection: still no call.
+    h.connections = [CHOSEN]
+    await expect(liveProductSets({ view: 'facets', catalogId: CATALOG, facetFields: ['price_amount'] })).rejects.toThrow(/not a field Nexus counts/)
+    // Round 2 A-F2 — an error type not in step 12's list of Meta's: refused before any call (the tool's schema refuses it too).
+    await expect(liveProductSets({ view: 'items', productSetId: SET, errorType: 'FOO_BAR' })).rejects.toThrow(/errorType is one of Meta's item error types/)
+    expect(h.calls).toHaveLength(0)
+    expect(tool('meta-product-sets').input.safeParse({ view: 'items', productSetId: SET, errorType: 'FOO_BAR' }).success).toBe(false)
+    expect(tool('meta-product-sets').input.safeParse({ view: 'items', productSetId: SET, errorType: 'image_resolution_low' }).success).toBe(true)
+  })
+  it('review B5 — a filter on internal_label (on no Meta page) says a 0 may mean "not known"', async () => {
+    h.override = (req) => (req.operation === 'productSets.preview' ? [] : undefined)
+    const res = await run('meta-product-sets', { view: 'preview', catalogId: CATALOG, conditions: [{ field: 'internal_label', op: 'eq', value: 'summer' }] })
+    expect(res.data).toMatchObject({ matchingItems: 0, internalLabelNote: INTERNAL_LABEL_NOTE })
+  })
+  it('a price is minor units of its currency, sent as Meta\'s price × 100 in every currency (one helper)', () => {
+    expect(setFilterPriceAmount(4990, 'EUR')).toBe(4990)
+    expect(setFilterPriceAmount(490, 'JPY')).toBe(49000)
+    expect(setFilterPriceAmount(4900, 'BHD')).toBe(490)
+    expect(setFilterPriceAmount(4905, 'BHD')).toBeNull()
+    expect(setFilterPriceAmount(-1, 'EUR')).toBeNull()
+    expect(f([{ field: 'sale_price_amount', op: 'gt', amountMinor: 100 }], { currency: 'jpy' })).toEqual({ rule: { sale_price_amount: { gt: 10000 } }, priceCurrency: 'JPY' })
+    expect(() => f([{ field: 'price_amount', op: 'contains', amountMinor: 1 }])).toThrow(/a price takes/)
+    expect(() => f([{ field: 'price_amount', op: 'gt', value: '49.90' }])).toThrow(/amountMinor only/)
+    expect(() => productSetFilter({ conditions: [{ field: 'price_amount', op: 'gt', amountMinor: 1 }] }, null, { everyItem: false })).toThrow(/name the currency/)
+  })
+  it('a set filter read back: parsed, in words, and any price only under the restricted key (also an unparsable text naming a price)', () => {
+    expect(setFilterOut('')).toEqual({ filter: {}, filterWords: 'every item of the catalog', filterHasPrices: false })
+    expect(setFilterOut('{"or":[{"brand":{"eq":"A"}},{"tags":{"is_any":["x","y"]}}]}')).toMatchObject({ filterWords: 'brand is "A" or tags is one of "x", "y"' })
+    expect(setFilterOut("{'price': {'lt': 5}}")).toEqual({ filter: null, filterHasPrices: true, filterWithPricesShown: { rule: "{'price': {'lt': 5}}", words: null, unit: SET_PRICE_UNIT } })
+    // Review A5 — "price" anywhere in the rule's text counts (a key Nexus does not know, e.g. unit_price_amount).
+    expect(setFilterOut({ unit_price_amount: { gt: 1 } })).toMatchObject({ filter: null, filterHasPrices: true })
+    expect(setFilterOut({ sale_price_amount: { gt: 1 } })).toMatchObject({ filter: null, filterHasPrices: true })
+    expect(setFilterWords({ and: [{ brand: { eq: 'A' } }, { or: [{ color: { eq: 'red' } }, { color: { eq: 'blue' } }] }] })).toBe('brand is "A" and (color is "red" or color is "blue")')
+  })
+})
+
+describe('commerce accounts: only the chosen Page\'s and an unshared portfolio\'s', () => {
+  it('accounts: both lists, one row per account; a portfolio account whose Page another business uses is its id only', async () => {
+    h.taken = [{ product: 'PAGE', id: OTHER_PAGE }]
+    const res = await run('meta-commerce', { view: 'accounts' })
+    expect(res.data.items).toEqual([
+      expect.objectContaining({ commerceAccountId: CMS, foundOn: 'the chosen Facebook Page', statusWords: 'on' }),
+      expect.objectContaining({ commerceAccountId: CMS_PORTFOLIO, foundOn: 'the business portfolio', statusWords: expect.stringMatching(/outside Meta/) }),
+      { commerceAccountId: CMS_UNNAMED, unverified: true, why: COMMERCE_UNVERIFIED },
+      { commerceAccountId: CMS_TAKEN, takenByAnotherBusiness: true },
+    ])
+    expect(JSON.stringify(res.data)).not.toMatch(/Shop B|Shop C/)
+  })
+  it('a portfolio another Nexus business uses: only the Page\'s accounts, said why; no Page as well: refused before any Meta call', async () => {
+    h.taken = [{ product: 'PORTFOLIO', id: PORTFOLIO }]
+    const res = await run('meta-commerce', { view: 'accounts' })
+    expect(res.data.portfolioNote).toBe(COMMERCE_PORTFOLIO_SHARED)
+    expect(res.data.items.map((i: { commerceAccountId: string }) => i.commerceAccountId)).toEqual([CMS])
+    expect(h.calls.some((c) => c.path === `${PORTFOLIO}/commerce_merchant_settings`)).toBe(false)
+    h.calls.length = 0
+    h.connections = [{ ...CHOSEN, page: null }]
+    expect((await run('meta-commerce', { view: 'accounts' })).error).toMatch(/shared with another business in Nexus.*No Facebook Page/)
+    h.connections = [{ ...CHOSEN, page: null, adAccount: { ...CHOSEN.adAccount, businessId: null } }]
+    expect((await run('meta-commerce', { view: 'shops' })).error).toMatch(/No Facebook Page is chosen/)
+    expect(h.calls).toHaveLength(0)
+  })
+  it('a commerce account that is not the Page\'s nor the portfolio\'s, or is another business\'s, is refused before it is read', async () => {
+    expect((await run('meta-commerce', { view: 'account', commerceAccountId: '130000000000009' })).error).toMatch(new RegExp(COMMERCE_NOT_OWN.slice(0, 40)))
+    h.taken = [{ product: 'PAGE', id: OTHER_PAGE }]
+    expect((await run('meta-commerce', { view: 'shops', commerceAccountId: CMS_TAKEN })).error).toMatch(/Page another business in Nexus uses/)
+    expect(h.calls.some((c) => c.path === '130000000000009' || c.path === CMS_TAKEN || c.path === `${CMS_TAKEN}/shops`)).toBe(false)
+    expect((await run('meta-commerce', { view: 'account' })).error).toMatch(/several commerce accounts/)
+  })
+  it('review A3 — a portfolio account whose Page Meta does not name (or a list read without merchant_page) fails closed: never read', async () => {
+    for (const view of ['account', 'shops', 'setup-status', 'checkout-countries']) {
+      h.calls.length = 0
+      expect((await run('meta-commerce', { view, commerceAccountId: CMS_UNNAMED })).error, view).toBe(COMMERCE_UNVERIFIED)
+      expect(h.calls.some((c) => c.path.startsWith(CMS_UNNAMED)), view).toBe(false)
+    }
+    // Meta refuses merchant_page on the portfolio list: every portfolio-only account is unverified; the Page's still reads.
+    h.override = (req) => {
+      if (req.path !== `${PORTFOLIO}/commerce_merchant_settings`) return undefined
+      if (String(req.query?.fields).includes('merchant_page')) return metaError('100', 'Tried accessing nonexisting field (merchant_page)')
+      return (h.routes[req.path] as Array<Record<string, unknown>>).map(({ merchant_page: _p, ...row }) => row)
+    }
+    expect((await run('meta-commerce', { view: 'shops', commerceAccountId: CMS_PORTFOLIO })).error).toBe(COMMERCE_UNVERIFIED)
+    expect((await run('meta-commerce', { view: 'shops', commerceAccountId: CMS })).ok).toBe(true)
+  })
+  it('review A3 — an account whose own Page is another business\'s is refused straight after its read, before any per-country read', async () => {
+    h.taken = [{ product: 'PAGE', id: OTHER_PAGE }]
+    h.routes[CMS] = { ...(h.routes[CMS] as object), merchant_page: { id: OTHER_PAGE, name: 'Shop B' } }
+    expect((await run('meta-commerce', { view: 'account', commerceAccountId: CMS, country: 'IT', locale: 'it' })).error).toMatch(/Page another business in Nexus uses/)
+    expect(h.calls.filter((c) => c.path === CMS).map((c) => c.operation)).toEqual(['commerce.account'])
+  })
+  it('review A8 — a bad locale, country or id is refused before any call', async () => {
+    for (const args of [{ view: 'account', locale: 'Italian' }, { view: 'checkout-countries', countries: ['ITA'] }, { view: 'account', country: 'I1' }]) {
+      expect((await run('meta-commerce', args).catch((e: Error) => ({ error: e.message }))).error).toBeTruthy()
+    }
+    expect(h.calls).toHaveLength(0)
+  })
+  it('account: settings, the Page, channels with another business\'s Page as its id only, checkout per country, policy per language', async () => {
+    h.taken = [{ product: 'PAGE', id: OTHER_PAGE }]
+    h.override = (req) => {
+      const fields = String(req.query?.fields ?? '')
+      if (req.path !== CMS) return undefined
+      // Round 2 A-F6 — no documented shape: another business's Page inside it is its id and the flag, a URL or a text left out.
+      if (fields.includes('checkout_config.country_code(IT)')) return { id: CMS, checkout_config: { checkout_url: 'https://shop-a.example/checkout', country_code: 'IT', page: { id: OTHER_PAGE, name: 'Shop B' } } }
+      if (fields.includes('cta.country_code(IT)')) return metaError('100', 'Tried accessing nonexisting field (cta)')
+      if (fields.includes('shops_ads_setup.country_code(IT)')) return { id: CMS, shops_ads_setup: { status: 'ok' } }
+      if (fields.includes('privacy_policy_localized.locale(it)')) return { id: CMS, privacy_policy_localized: { url: 'https://shop-a.example/privacy' } }
+      return undefined
+    }
+    const res = await run('meta-commerce', { view: 'account', commerceAccountId: CMS, country: 'it', locale: 'it' })
+    expect(res.data).toMatchObject({
+      commerceAccountId: CMS, name: 'Shop A shop', status: 'ENABLED', offsiteCheckoutCountries: ['IT', 'DE'], page: { pageId: PAGE, chosenHere: true }, paymentProvider: 'external',
+      country: 'IT', perCountry: { shopsAdsSetup: { status: 'ok' } }, privacyPolicy: { url: 'https://shop-a.example/privacy' },
+    })
+    expect(res.data.perCountry.checkoutConfig).toEqual({ countryCode: 'IT', page: { id: OTHER_PAGE, takenByAnotherBusiness: true } })
+    expect(res.data.perCountry.callToAction.notRead).toMatch(/nonexisting field/)
+    // Review A6 — another business's Page is its id and the flag; a name survives only next to the chosen Page's id.
+    // Review A6 — an ALLOW-list of keys: another business's Page is its id and the flag; a name survives only next to the
+    // chosen Page's id; a link, a text, an id under another key are left out.
+    // Round 2 A-F4 — an empty object or list under a key Nexus does not know is left out, and so is a data-shaped key.
+    expect(res.data.facebookChannel).toEqual({ pages: [{ id: OTHER_PAGE, takenByAnotherBusiness: true }, { id: PAGE, name: 'Shop A' }, { id: '120000000000013' }], status: 'ENABLED' })
+    expect(res.data.instagramChannel).toEqual({ instagramUsers: [{ id: IG, username: 'shop_a' }] })
+    expect(JSON.stringify(res.data)).not.toMatch(/Shop B|Shop D|Shop E|Shop F|Shop H|shop-d|shop-f|shop-h|shop-a\.example\/checkout|120000000000014|120000000000015/)
+  })
+  it('account: one SDK-only field Meta refuses is named in missing; the others still answer', async () => {
+    // Meta answers only the fields asked: each group read alone gets its own fields.
+    const asked = (fields: unknown) => String(fields).split(',').map((f) => f.replace(/[{.(].*$/, ''))
+    h.override = (req) => {
+      if (req.path !== CMS) return undefined
+      if (String(req.query?.fields).includes('offsite_iab_checkout_enabled_countries')) return metaError('100', 'Tried accessing nonexisting field (offsite_iab_checkout_enabled_countries)')
+      const body = h.routes[CMS] as Record<string, unknown>
+      return Object.fromEntries(asked(req.query?.fields).map((f) => [f, body[f]]))
+    }
+    const res = await run('meta-commerce', { view: 'account', commerceAccountId: CMS })
+    expect(res.data).toMatchObject({ name: 'Shop A shop', offsiteCheckoutCountries: null, paymentProvider: 'external' })
+    expect(res.data.missing).toEqual([{ part: 'offsite checkout countries', sentence: expect.stringMatching(/nonexisting field/) }])
+  })
+  it('shops and shop: sales channels with status; another business\'s Instagram account is its id only; a shop not in the business\'s accounts is refused', async () => {
+    h.taken = [{ product: 'INSTAGRAM', id: OTHER_IG }]
+    const shops = await run('meta-commerce', { view: 'shops', commerceAccountId: CMS })
+    expect(shops.data.items[0]).toMatchObject({ shopId: SHOP, status: 'ENABLED', facebook: { status: 'ENABLED', page: { id: PAGE, name: 'Shop A', chosenHere: true } }, instagram: { status: 'STAGING', statusWords: expect.stringMatching(/set up/), instagramAccount: { id: OTHER_IG, takenByAnotherBusiness: true } } })
+    expect(JSON.stringify(shops.data)).not.toContain('shop_b')
+    // Review A6 — the shop's workspace (SDK only, no documented shape): only its id and on/off flags.
+    expect(shops.data.items[0].workspace).toEqual({ id: '140000000000001', isActive: true })
+    expect(JSON.stringify(shops.data)).not.toMatch(/Shop G|shop-g/)
+    const one = await run('meta-commerce', { view: 'shop', shopId: SHOP, commerceAccountId: CMS })
+    expect(one.data).toMatchObject({ commerceAccountId: CMS, shop: { shopId: SHOP } })
+    h.calls.length = 0
+    expect((await run('meta-commerce', { view: 'shop', shopId: '135000000000009', commerceAccountId: CMS })).error).toMatch(/not one of the shops/)
+    expect(h.calls.some((c) => c.path === '135000000000009')).toBe(false)
+  })
+  it('round 2 B3 — the documented shop fields (id, the Facebook and Instagram sales channels) are the core; each SDK-only field Meta refuses is dropped and named', async () => {
+    const SDK_ONLY = ['shop_status', 'commerce_merchant_settings', 'workspace']
+    // Meta answers only the fields asked, and refuses every SDK-only one (naming it).
+    const only = (row: Record<string, unknown>, fields: unknown) => Object.fromEntries(String(fields).split(',').map((f) => f.replace(/[{.(].*$/, '')).filter((f) => f in row).map((f) => [f, row[f]]))
+    h.override = (req) => {
+      const fields = String(req.query?.fields ?? '')
+      if (req.path !== `${CMS}/shops` && req.path !== SHOP) return undefined
+      if (req.path === `${CMS}/shops` && fields === 'id') return [{ id: SHOP }]
+      const sdk = SDK_ONLY.find((f) => fields.split(',').includes(f))
+      if (sdk) return metaError('100', `Tried accessing nonexisting field (${sdk})`)
+      return req.path === SHOP ? only(SHOP_ROW, fields) : [only(SHOP_ROW, fields)]
+    }
+    const core = 'id,fb_sales_channel{status,fb_page{id,name}},ig_sales_channel{status,ig_user{id,username}}'
+    const shops = await run('meta-commerce', { view: 'shops', commerceAccountId: CMS })
+    expect(h.calls.filter((c) => c.path === `${CMS}/shops`).at(-1)?.query?.fields).toBe(core)
+    expect(shops.data.items).toEqual([expect.objectContaining({ shopId: SHOP, status: null, facebook: expect.objectContaining({ status: 'ENABLED' }), commerceAccountId: null })])
+    for (const f of SDK_ONLY) expect(shops.data.fieldsNote).toContain(f)
+    h.calls.length = 0
+    const one = await run('meta-commerce', { view: 'shop', shopId: SHOP, commerceAccountId: CMS })
+    expect(h.calls.filter((c) => c.path === SHOP).at(-1)?.query?.fields).toBe(core)
+    expect(one.data.shop).toMatchObject({ shopId: SHOP, status: null, facebook: { status: 'ENABLED' } })
+    for (const f of SDK_ONLY) expect(one.data.fieldsNote).toContain(f)
+  })
+  it('round 3 — Meta refuses the sub-fields inside the sales channels: the plain documented channels are read, a Page without an id not shown', async () => {
+    // Meta's sample answer for the plain channels: fb_page{name}, ig_user{username}, no id (shop.md).
+    const plain = { id: SHOP, shop_status: 'ENABLED', fb_sales_channel: { status: 'ENABLED', fb_page: { name: 'Shop A' } }, ig_sales_channel: { status: 'STAGING', ig_user: { username: 'shop_b' } } }
+    h.override = (req) => {
+      const fields = String(req.query?.fields ?? '')
+      if (req.path === `${CMS}/shops` && fields === 'id') return [{ id: SHOP }]
+      if (req.path !== `${CMS}/shops` && req.path !== SHOP) return undefined
+      if (/_sales_channel\{/.test(fields)) return metaError('100', 'Tried accessing nonexisting field (fb_page) on node type (Object)')
+      return req.path === SHOP ? plain : [plain]
+    }
+    for (const args of [{ view: 'shops', commerceAccountId: CMS }, { view: 'shop', shopId: SHOP, commerceAccountId: CMS }]) {
+      h.calls.length = 0
+      const res = await run('meta-commerce', args)
+      const shop = args.view === 'shops' ? res.data.items[0] : res.data.shop
+      expect(shop, args.view).toMatchObject({ shopId: SHOP, status: 'ENABLED', facebook: { status: 'ENABLED', page: { id: null, note: expect.stringMatching(/without an id/) } }, instagram: { status: 'STAGING', instagramAccount: { id: null } } })
+      expect(res.data.channelsNote, args.view).toContain(SHOP_CHANNELS_PLAIN)
+      expect(h.calls.filter((c) => c.path !== `${CMS}/shops` || c.query?.fields !== 'id').at(-1)?.query?.fields, args.view).toMatch(/^id,fb_sales_channel,ig_sales_channel(,|$)/)
+      expect(JSON.stringify(shop), args.view).not.toMatch(/shop_b|Shop A/)
+    }
+  })
+  it('round 3 — ids Meta sends as numbers too long to be exact are left out everywhere (shop, channels, workspace), and an account Page that is not exact fails closed', async () => {
+    const lost = ['9007199254740992', '1152921504606846976', '2305843009213693952', '4611686018427387904', '9223372036854775808']
+    h.routes[`${CMS}/shops`] = [{
+      id: 9007199254740993, shop_status: 'ENABLED', fb_sales_channel: { status: 'ENABLED', fb_page: { id: 2 ** 60, name: 'Shop X' } },
+      ig_sales_channel: { status: 'ENABLED', ig_user: { id: Number(IG), username: 'shop_a' } }, commerce_merchant_settings: { id: 2 ** 61 },
+      workspace: { id: 2 ** 62, is_active: true, pages: [{ id: 2 ** 63, name: 'Shop Y' }] },
+    }]
+    const res = await run('meta-commerce', { view: 'shops', commerceAccountId: CMS })
+    expect(res.data.items[0]).toMatchObject({ shopId: null, commerceAccountId: null, facebook: { page: { id: null, note: expect.stringMatching(/cannot read exactly/) } }, instagram: { instagramAccount: { id: IG, username: 'shop_a', chosenHere: true } } })
+    expect(res.data.items[0].workspace).toEqual({ isActive: true })
+    expect(res.data).toMatchObject({ idsNotExact: 5, idsNote: IDS_NOT_EXACT })
+    for (const digits of lost) expect(JSON.stringify(res.data)).not.toContain(digits)
+    expect(JSON.stringify(res.data)).not.toMatch(/Shop X|Shop Y/)
+    h.routes[CMS] = { ...(h.routes[CMS] as object), merchant_page: { id: 2 ** 60, name: 'Shop Z' } }
+    expect((await run('meta-commerce', { view: 'account', commerceAccountId: CMS })).error).toBe(COMMERCE_UNVERIFIED)
+  })
+  it('round 3 — a per-country set-up Meta answers as text (SDK: checkout_config is a string) says "text not shown", never null', async () => {
+    h.override = (req) => (req.path === CMS && /checkout_config\.country_code/.test(String(req.query?.fields)) ? { id: CMS, checkout_config: 'https://shop-a.example/checkout?shop=x' } : undefined)
+    const account = await run('meta-commerce', { view: 'account', commerceAccountId: CMS, country: 'IT' })
+    expect(account.data.perCountry.checkoutConfig).toEqual({ textNotShown: true, note: CONFIG_TEXT_NOT_SHOWN })
+    const countries = await run('meta-commerce', { view: 'checkout-countries', commerceAccountId: CMS, countries: ['IT'] })
+    expect(countries.data.perCountry[0].checkoutConfig).toEqual({ textNotShown: true, note: CONFIG_TEXT_NOT_SHOWN })
+    expect(JSON.stringify([account.data, countries.data])).not.toContain('shop-a.example/checkout')
+  })
+  it('round 2 A-F5 — a sales channel names only the chosen Page / Instagram account; any other is its id only', async () => {
+    const shops = await run('meta-commerce', { view: 'shops', commerceAccountId: CMS })
+    expect(shops.data.items[0].facebook.page).toEqual({ id: PAGE, name: 'Shop A', chosenHere: true, takenByAnotherBusiness: false })
+    expect(shops.data.items[0].instagram.instagramAccount).toEqual({ id: OTHER_IG, chosenHere: false, takenByAnotherBusiness: false })
+    expect(JSON.stringify(shops.data.items)).not.toContain('shop_b')
+  })
+  it('setup-status: the chosen Page\'s shop by default, a commerce account\'s when named; checkout-countries: the list and per country', async () => {
+    expect((await run('meta-commerce', { view: 'setup-status' })).data).toMatchObject({ pageId: PAGE, items: [{ shopSetup: 'SETUP', reviewStatus: { status: 'APPROVED' } }] })
+    // Round 2 A-F6 — the approval details (SDK only, no documented shape) go through the mask: a text or a name is left out.
+    h.routes[`${PAGE}/shop_setup_status`] = [{ shop_setup: 'SETUP', marketplace_approval_status_details: { reasons: [{ status: 'REJECTED', text: 'Shop B listed as seller' }], owner: { id: OTHER_PAGE, name: 'Shop B' } } }]
+    h.taken = [{ product: 'PAGE', id: OTHER_PAGE }]
+    const masked = await run('meta-commerce', { view: 'setup-status' })
+    expect(masked.data.items[0].marketplaceApprovalDetails).toEqual({ reasons: [{ status: 'REJECTED' }], owner: { id: OTHER_PAGE, takenByAnotherBusiness: true } })
+    expect(JSON.stringify(masked.data.items)).not.toContain('Shop B')
+    h.taken = []
+    expect((await run('meta-commerce', { view: 'setup-status', commerceAccountId: CMS })).data).toMatchObject({ commerceAccountId: CMS, items: [{ paymentSetup: 'NOT_SETUP' }] })
+    h.override = (req) => (req.path === CMS && String(req.query?.fields).includes('checkout_config.country_code(DE)') ? { id: CMS, checkout_config: { country_code: 'DE' } } : undefined)
+    const res = await run('meta-commerce', { view: 'checkout-countries', commerceAccountId: CMS, countries: ['de'] })
+    expect(res.data).toMatchObject({ offsiteCheckoutCountries: ['IT', 'DE'], perCountry: [{ country: 'DE', checkoutConfig: { countryCode: 'DE' }, notRead: null }] })
+  })
+})
+
+describe('Instagram product tags: only the chosen Instagram account and its own posts', () => {
+  it('no Instagram account chosen: every view refused before any call', async () => {
+    h.connections = [{ ...CHOSEN, instagram: null }]
+    for (const view of ['eligibility', 'catalogs', 'search', 'tags', 'appeal']) expect((await run('meta-instagram-product-tags', { view, mediaId: MEDIA, itemId: ITEM })).error, view).toMatch(/No Instagram account is chosen/)
+    expect(h.calls).toHaveLength(0)
+  })
+  it('eligibility: Meta\'s answer in words; shopping_review_status (SDK only) dropped and named when refused', async () => {
+    expect((await run('meta-instagram-product-tags', { view: 'eligibility' })).data).toMatchObject({ instagramId: IG, eligible: true, shoppingReviewStatus: 'approved', sentence: expect.stringMatching(/may tag/) })
+    h.override = (req) => (req.path === IG && String(req.query?.fields).includes('shopping_review_status') ? metaError('100', 'Tried accessing nonexisting field (shopping_review_status)') : req.path === IG ? { id: IG, shopping_product_tag_eligibility: false } : undefined)
+    const res = await run('meta-instagram-product-tags', { view: 'eligibility' })
+    expect(res.data).toMatchObject({ eligible: false, sentence: expect.stringMatching(/may not tag/) })
+    expect(res.data.fieldsNote).toMatch(/shopping_review_status/)
+  })
+  it('catalogs: each checked against the catalog rule (readable, another business\'s by id only, or not readable)', async () => {
+    h.taken = [{ product: 'PORTFOLIO', id: OTHER_PORTFOLIO }]
+    h.routes[`${IG}/available_catalogs`] = [{ catalog_id: CATALOG, catalog_name: 'Catalog 700' }, { catalog_id: CLIENT_CATALOG, catalog_name: 'Shop B catalog' }, { catalog_id: FOREIGN_CATALOG, catalog_name: 'Other' }]
+    h.routes[`${PORTFOLIO}/client_product_catalogs`] = [{ id: CLIENT_CATALOG }]
+    const res = await run('meta-instagram-product-tags', { view: 'catalogs' })
+    expect(res.data.items).toEqual([
+      expect.objectContaining({ catalogId: CATALOG, readable: true, relation: 'owned' }),
+      { catalogId: CLIENT_CATALOG, takenByAnotherBusiness: true },
+      { catalogId: FOREIGN_CATALOG, readable: false, why: CATALOG_NOT_READABLE },
+    ])
+    expect(JSON.stringify(res.data)).not.toContain('Shop B catalog')
+  })
+  it('catalogs: a client catalog Meta names no owner for is its id only (step 12 refuses it), and search never defaults to it', async () => {
+    const UNNAMED = '120000000000702'
+    h.routes[UNNAMED] = { ...catalogNode(UNNAMED, OTHER_PORTFOLIO), business: null }
+    h.routes[`${PORTFOLIO}/client_product_catalogs`] = [{ id: CLIENT_CATALOG }, { id: UNNAMED }]
+    h.routes[`${IG}/available_catalogs`] = [{ catalog_id: UNNAMED, catalog_name: 'Shop C catalog', shop_name: 'Shop C' }]
+    const res = await run('meta-instagram-product-tags', { view: 'catalogs' })
+    expect(res.data.items).toEqual([{ catalogId: UNNAMED, readable: false, ownerUnknown: true, why: CATALOG_NO_OWNER }])
+    expect(JSON.stringify(res.data)).not.toContain('Shop C')
+    h.calls.length = 0
+    expect((await run('meta-instagram-product-tags', { view: 'search', search: 'SKU-1' })).error).toMatch(/finds no catalog this Instagram account may tag from/)
+    expect(h.calls.some((c) => c.path.endsWith('/catalog_product_search'))).toBe(false)
+    expect((await run('meta-instagram-product-tags', { view: 'search', catalogId: UNNAMED })).error).toBe(CATALOG_NO_OWNER)
+    expect(h.calls.some((c) => c.path.endsWith('/catalog_product_search'))).toBe(false)
+  })
+  it('search: in the one catalog the account tags from by default, or a named readable one; a foreign catalog is refused before the search', async () => {
+    const res = await run('meta-instagram-product-tags', { view: 'search', search: 'SKU-1' })
+    expect(h.calls.at(-1)).toMatchObject({ path: `${IG}/catalog_product_search`, query: { catalog_id: CATALOG, q: 'SKU-1' } })
+    expect(res.data.items[0]).toEqual({ productId: ITEM, name: 'Jacket', sku: 'SKU-1', reviewStatus: 'approved', taggable: true, checkoutInInstagram: false, merchantId: CMS, imageUrl: null, variants: [{ productId: '120000000000741', name: 'Red' }] })
+    h.calls.length = 0
+    expect((await run('meta-instagram-product-tags', { view: 'search', catalogId: FOREIGN_CATALOG })).error).toBe(CATALOG_NOT_READABLE)
+    expect(h.calls.some((c) => c.path.endsWith('/catalog_product_search'))).toBe(false)
+  })
+  it('tags: only on the chosen account\'s own post; prices only under restricted keys; slides on request; a Story needs no call', async () => {
+    const res = await run('meta-instagram-product-tags', { view: 'tags', mediaId: MEDIA, slides: true })
+    expect(res.data.items[0]).toMatchObject({ productId: ITEM, showsOnPost: true, x: 0.5, y: 0.8, currency: 'EUR', priceCents: 4990, priceShown: '49.90 EUR', salePriceCents: 3990, otherPriceShown: '€49.90' })
+    expect(res.data.slides).toEqual([{ slideId: SLIDE, mediaType: 'IMAGE', items: [expect.objectContaining({ productId: ITEM, showsOnPost: false, priceCents: null, priceShown: '€49.90' })], notRead: null }])
+    for (const key of ['priceCents', 'salePriceCents', 'priceShown', 'salePriceShown', 'otherPriceShown']) expect(META_CATALOG_MONEY).toHaveProperty(key)
+    h.routes['178000000000009'] = { id: '178000000000009', owner: { id: OTHER_IG }, username: 'shop_b' }
+    h.calls.length = 0
+    expect((await run('meta-instagram-product-tags', { view: 'tags', mediaId: '178000000000009' })).error).toMatch(/not the chosen Instagram account's/)
+    expect(h.calls.some((c) => c.path.endsWith('/product_tags'))).toBe(false)
+    // Review B3 — Meta's tag read does not cover Stories, Reels, IGTV or Live: refused in words before the read.
+    for (const [type, words] of [['STORY', /Stories/], ['REELS', /Reels/]] as const) {
+      h.routes[MEDIA] = { id: MEDIA, owner: { id: IG }, media_product_type: type }
+      h.calls.length = 0
+      expect((await run('meta-instagram-product-tags', { view: 'tags', mediaId: MEDIA })).error).toMatch(words)
+      expect(h.calls.map((c) => c.operation)).toEqual(['instagram.mediaOwnerCheck'])
+    }
+  })
+  it('appeal: only for an item of a readable catalog (checked first)', async () => {
+    expect((await run('meta-instagram-product-tags', { view: 'appeal', itemId: ITEM })).data).toMatchObject({ productId: ITEM, items: [{ reviewStatus: 'rejected', eligibleForAppeal: true, rejectionReasons: ['POLICY'] }] })
+    expect(h.calls.at(-1)).toMatchObject({ path: `${IG}/product_appeal`, query: { product_id: ITEM, fields: 'product_id,review_status,eligible_for_appeal,product_appeal_status,rejection_reasons' } })
+    // Review B1 — the SDK-only appeal fields are dropped and named when Meta refuses them; the documented ones still answer.
+    h.override = (req) => (req.path === `${IG}/product_appeal` && String(req.query?.fields).includes('product_appeal_status') ? metaError('100', 'Tried accessing nonexisting field (product_appeal_status)') : undefined)
+    const fallback = await run('meta-instagram-product-tags', { view: 'appeal', itemId: ITEM })
+    expect(fallback.data.items[0]).toMatchObject({ reviewStatus: 'rejected', eligibleForAppeal: true })
+    expect(fallback.data.fieldsNote).toMatch(/product_appeal_status/)
+    h.override = null
+    h.routes[ITEM] = { ...ITEM_BODY, product_catalog: { id: FOREIGN_CATALOG } }
+    h.calls.length = 0
+    expect((await run('meta-instagram-product-tags', { view: 'appeal', itemId: ITEM })).error).toBe(CATALOG_NOT_READABLE)
+    expect(h.calls.some((c) => c.path.endsWith('/product_appeal'))).toBe(false)
+  })
+  it('a permission Meta refuses is said with what a person can do', async () => {
+    h.routes[`${IG}/catalog_product_search`] = metaError('10', 'Application does not have permission for this action', 'forbidden')
+    expect((await run('meta-instagram-product-tags', { view: 'search', catalogId: CATALOG })).error).toMatch(/ADMIN of the business portfolio.*instagram_shopping_tag_products.*No Page token/)
+  })
+  it('round 2 B2 — the permission words per edge: the tag read needs ads_read AND ads_management, the others one of them', async () => {
+    const denied = () => metaError('10', 'Application does not have permission for this action', 'forbidden')
+    h.routes[`${MEDIA}/product_tags`] = denied()
+    const tags = await run('meta-instagram-product-tags', { view: 'tags', mediaId: MEDIA })
+    expect(tags.error).toContain(IG_TAG_READ_NOTE)
+    expect(tags.error).toMatch(/ads_read AND ads_management/)
+    h.routes[`${IG}/catalog_product_search`] = denied()
+    h.routes[`${IG}/product_appeal`] = denied()
+    h.routes[`${IG}/available_catalogs`] = denied()
+    for (const args of [{ view: 'search', catalogId: CATALOG }, { view: 'appeal', itemId: ITEM }, { view: 'catalogs' }]) {
+      const res = await run('meta-instagram-product-tags', args)
+      expect(res.error, args.view).toContain(IG_SHOP_NOTE)
+      expect(res.error, args.view).not.toMatch(/AND ads_management/)
+    }
+  })
+  it('round 3 — each read its own permission words: the slides (an Instagram media read) step 10\'s, each slide\'s tags the tag read\'s', async () => {
+    const denied = () => metaError('10', 'Application does not have permission for this action', 'forbidden')
+    h.routes[`${MEDIA}/children`] = denied()
+    const children = await run('meta-instagram-product-tags', { view: 'tags', mediaId: MEDIA, slides: true })
+    expect(children.error).toContain(PAGE_TOKEN_NOTE)
+    expect(children.error).not.toContain(IG_TAG_READ_NOTE)
+    h.routes = defaultRoutes()
+    h.routes[`${SLIDE}/product_tags`] = denied()
+    const slides = await run('meta-instagram-product-tags', { view: 'tags', mediaId: MEDIA, slides: true })
+    expect(slides.data.slides).toEqual([expect.objectContaining({ slideId: SLIDE, items: null, notRead: expect.stringContaining(IG_TAG_READ_NOTE) })])
+  })
+  it('round 2 B1 — product and merchant ids that arrive as numbers too long to be exact are null and counted, never a wrong id', async () => {
+    // 2^53 + 1 cannot be held by a JSON number: JSON.parse (the gateway's) gives 2^53, a different id.
+    const big = 9007199254740993
+    h.routes[`${MEDIA}/product_tags`] = [{ product_id: big, merchant_id: 2 ** 60, name: 'Jacket', review_status: 'approved' }, { product_id: Number(ITEM), merchant_id: Number(CMS), name: 'Jacket' }]
+    const tags = await run('meta-instagram-product-tags', { view: 'tags', mediaId: MEDIA })
+    expect(tags.data.items.map((t: { productId: unknown; merchantId: unknown }) => [t.productId, t.merchantId])).toEqual([[null, null], [ITEM, CMS]])
+    expect(tags.data).toMatchObject({ idsNotExact: 2, idsNote: IDS_NOT_EXACT })
+    expect(JSON.stringify(tags.data)).not.toMatch(/900719925474099|1152921504606846976/)
+    h.routes[`${IG}/catalog_product_search`] = [{ product_id: big, product_name: 'Jacket', retailer_id: 'SKU-1', merchant_id: Number(CMS), product_variants: [{ product_id: big, variant_name: 'Red' }, { product_id: 120000000000741, variant_name: 'Blue' }] }]
+    const search = await run('meta-instagram-product-tags', { view: 'search', catalogId: CATALOG })
+    expect(search.data.items[0]).toMatchObject({ productId: null, sku: 'SKU-1', merchantId: CMS, variants: [{ productId: null, name: 'Red' }, { productId: '120000000000741', name: 'Blue' }] })
+    expect(search.data).toMatchObject({ idsNotExact: 2, idsNote: IDS_NOT_EXACT })
+    h.routes[`${IG}/product_appeal`] = [{ product_id: big, review_status: 'rejected', eligible_for_appeal: true }]
+    const appeal = await run('meta-instagram-product-tags', { view: 'appeal', itemId: ITEM })
+    expect(appeal.data).toMatchObject({ productId: ITEM, items: [{ productId: null, reviewStatus: 'rejected' }], idsNotExact: 1, idsNote: IDS_NOT_EXACT })
+    // Exact numbers (the default answers) carry no note.
+    h.routes = defaultRoutes()
+    expect((await run('meta-instagram-product-tags', { view: 'search', catalogId: CATALOG })).data.idsNotExact).toBeUndefined()
+  })
+})
+
+describe('every view asks only what the real gateway lets through', () => {
+  it('all views of the three tools, with made-up answers', async () => {
+    const views: Array<[string, Record<string, unknown>]> = [
+      ['meta-product-sets', { view: 'list', catalogId: CATALOG, parentId: '0', ancestorId: SET, hasChildren: true, retailerId: 'SET-1' }],
+      ['meta-product-sets', { view: 'set', productSetId: SET }], ['meta-product-sets', { view: 'set', productSetId: SET, catalogId: CATALOG }],
+      ['meta-product-sets', { view: 'items', productSetId: SET, conditions: [{ field: 'name', op: 'i_contains', value: 'jacket' }], errorType: 'IMAGE_RESOLUTION_LOW', errorPriority: 'low' }],
+      ['meta-product-sets', { view: 'preview', catalogId: CATALOG, conditions: [{ field: 'custom_label_0', op: 'eq', value: 'summer' }, { field: 'price_amount', op: 'gte', amountMinor: 1000 }] }],
+      ['meta-product-sets', { view: 'preview', productSetId: SET }],
+      ['meta-product-sets', { view: 'facets', catalogId: CATALOG, conditions: [{ field: 'availability', op: 'eq', value: 'in stock' }] }],
+      ['meta-commerce', { view: 'accounts' }], ['meta-commerce', { view: 'account', commerceAccountId: CMS, country: 'IT', locale: 'en_US' }],
+      ['meta-commerce', { view: 'shops', commerceAccountId: CMS }], ['meta-commerce', { view: 'shop', shopId: SHOP, commerceAccountId: CMS }],
+      ['meta-commerce', { view: 'setup-status' }], ['meta-commerce', { view: 'setup-status', commerceAccountId: CMS }],
+      ['meta-commerce', { view: 'checkout-countries', commerceAccountId: CMS, countries: ['IT', 'DE'] }],
+      ['meta-instagram-product-tags', { view: 'eligibility' }], ['meta-instagram-product-tags', { view: 'catalogs' }],
+      ['meta-instagram-product-tags', { view: 'search', search: 'Jacket' }], ['meta-instagram-product-tags', { view: 'tags', mediaId: MEDIA, slides: true }],
+      ['meta-instagram-product-tags', { view: 'appeal', itemId: ITEM, catalogId: CATALOG }],
+    ]
+    const failed: unknown[] = []
+    for (const [name, args] of views) {
+      const res = await run(name, args)
+      if (!res.ok) failed.push([name, args.view, res.error])
+    }
+    expect(failed).toEqual([])
+    expect(gatewayProblems()).toEqual([])
+    // Round 2 B4 — en_US was given: BCP 47 en-US was sent (below).
+    // Nexus's own rule went to Meta, never a caller's JSON; a price as Meta's price × 100.
+    expect(h.calls.find((c) => c.operation === 'productSets.preview' && c.query?.filter)?.query?.filter).toEqual({ and: [{ custom_label_0: { eq: 'summer' } }, { price_amount: { gte: 1000 } }] })
+    expect(h.calls.find((c) => c.path === CMS && String(c.query?.fields).includes('privacy_policy_localized'))?.query?.fields).toBe('id,privacy_policy_localized.locale(en-US)')
+  })
+  it('a condition is typed: raw JSON, an unknown field or operator never reaches Meta', () => {
+    const parse = (args: Record<string, unknown>) => tool('meta-product-sets').input.safeParse({ view: 'preview', catalogId: CATALOG, ...args }).success
+    expect(parse({ conditions: [{ field: 'brand', op: 'eq', value: 'A' }] })).toBe(true)
+    expect(parse({ filter: '{"brand":{"eq":"A"}}' })).toBe(true) // an unknown key is dropped by the schema, never sent
+    expect(parse({ conditions: [{ field: 'review_status', op: 'eq', value: 'x' }] })).toBe(false)
+    expect(parse({ conditions: [{ field: 'brand', op: 'regex', value: 'x' }] })).toBe(false)
+    expect(parse({ conditions: Array.from({ length: 21 }, () => ({ field: 'brand', op: 'eq', value: 'A' })) })).toBe(false)
+  })
+})
+
+describe('round 2 A-test — a priced answer through visibleTo for a person who may not see revenue', () => {
+  const all = [...Object.values(FEATURES), ...Object.values(FIELDS)] as string[]
+  const principal = (perms: string[]) => ({ kind: 'user' as const, userId: 'u', label: 'u', via: 'claude' as const, permissions: { isOwner: false, permissions: new Set<string>(perms) } })
+  const keysOf = (v: unknown, out = new Set<string>()): Set<string> => {
+    if (Array.isArray(v)) for (const x of v) keysOf(x, out)
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { out.add(k); keysOf(x, out) }
+    return out
+  }
+  it('narrowedBy, current.currentFilter, the preview\'s own filter and the item prices lose every price', async () => {
+    const preview = await run('meta-product-sets', { view: 'preview', productSetId: PRICED_SET, conditions: [{ field: 'price_amount', op: 'lte', amountMinor: 1234 }] })
+    const items = await run('meta-product-sets', { view: 'items', productSetId: SET, conditions: [{ field: 'sale_price_amount', op: 'gt', amountMinor: 1234 }] })
+    // The raw answers do hold them (what the restricted keys must take away).
+    expect(preview.data.current.currentFilter.filterWithPricesShown.rule).toEqual({ and: [{ price_amount: { lt: 5000 } }, { brand: { eq: 'Shop A' } }] })
+    expect(preview.data.filterWithPricesShown.rule).toEqual({ price_amount: { lte: 1234 } })
+    expect(items.data.narrowedBy.filterWithPricesShown.rule).toEqual({ sale_price_amount: { gt: 1234 } })
+    for (const answer of [preview.data, items.data]) {
+      const seen = visibleTo(principal(all.filter((p) => !p.startsWith('financials.'))) as never, tool('meta-product-sets'), answer)
+      expect([...keysOf(seen)].filter((k) => k in META_PRODUCT_SET_MONEY)).toEqual([])
+      expect(JSON.stringify(seen)).not.toMatch(/price_amount|1234|5000/)
+      expect(visibleTo(principal(all) as never, tool('meta-product-sets'), answer)).toEqual(answer)
+    }
+  })
+})

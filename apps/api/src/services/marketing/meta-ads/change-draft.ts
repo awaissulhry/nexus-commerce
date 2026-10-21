@@ -9,6 +9,7 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
 import type { MetaChangeResult, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
@@ -17,12 +18,8 @@ export interface MetaChangeRequest {
   step: number
   /** What a person reads, e.g. 'Pause campaign "Spring sale" (120000000000001)'. */
   label: string
-  /**
-   * The kind of object it changes; step 23: `adaccount` / `portfolio` for an upload on that object's edge, `libraryvideo`
-   * for a video of the chosen account's library (its captions). Step 26: `iguser` the chosen Instagram account, `igmedia` a
-   * media of it (set-meta-partnership-access).
-   */
-  kind: MetaStatusKind | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative' | 'iguser' | 'igmedia' | 'page'
+  /** A campaign, ad set or ad (step 39: a request of another kind names it in `objectKind` and leaves this out). */
+  kind?: MetaStatusKind
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
@@ -56,14 +53,49 @@ export interface MetaChangeRequest {
   expect?: Record<string, string>
   /** The fields read back (default id,status,effective_status). */
   readBackFields?: string
-  /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`). */
-  objectKind?: 'highdemandperiod'
-  /** A create on the object's edge (POST /<id>/budget_schedules). */
+  /**
+   * The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 19: a create names
+   * the chosen ad account itself, `adaccount`). Step 29: a Meta automated rule (`adrule`) or the ad account's rule
+   * library (`adaccount`, a rule's create); `kind` then only types the request (`campaign` by convention).
+   * Step 23: an upload names the chosen ad account (`adaccount`) or its business portfolio (step 28's `business`);
+   * captions name the library video (step 22's `video`). Its `kind` is then `ad`, as for step 22's deletes.
+   * Step 31: an audience (`customaudience`) or the chosen ad account (`adaccount`: its audiences, opt-outs, settings).
+   */
+  objectKind?: 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
+    // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
+    | MetaOptimizeKind
+    // Step 29 — a Meta automated rule.
+    | 'adrule'
+    // Step 39 — an ad set's targeting, a publisher or content block list (brand safety).
+    | MetaBrandSafetyKind
+    // Step 31 — one of the chosen ad account's own custom audiences.
+    | 'customaudience'
+    // Step 26 — the chosen Instagram account (`iguser`) or a media of it (`igmedia`); the chosen Page on Meta's partnership
+    // host is step 28's `page` (set-meta-partnership-access).
+    | MetaBoostWriteKind
+  /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
   /** A budget schedule's campaign or ad set. */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 19 — Meta's check of this create asks its setup recommendations too (master CMP-031). */
+  recommendations?: boolean
+  /**
+   * Step 19 (review A4) — a create or a copy: when Meta answers success but the new object reads back otherwise, it is still
+   * recorded as made (with what it reads), so its undo can delete it; never "no record" for an object Meta made.
+   */
+  recordEvenIfNotAsAsked?: boolean
+  /**
+   * Step 22 — the steps of the same change this request stands on (a creative deleted after the ads that use it, an image
+   * after the creatives that use it): when one of them did not happen as asked, it is not sent.
+   */
+  needs?: number[]
+  /**
+   * Step 21 — an edge that changes the object itself (labels ADDED to a campaign: POST /<campaign>/adlabels answers
+   * {"success": true}): the object is read back, never a new one.
+   */
+  readBackObject?: true
   // ── step 23: a request that brings its own sender ──
   /**
    * Sends the request itself (an upload whose answer is read again, or Meta's video-ads upload, whose later calls need the
@@ -73,11 +105,20 @@ export interface MetaChangeRequest {
   send?: (target: MetaWriteTarget) => Promise<MetaChangeResult>
   /** The step's sentence when Meta made it (else the kit's own). */
   doneSentence?: (result: MetaChangeResult) => string
-  // ── step 27: Meta's check with more than validate_only ──
-  /** The execution_options of its check (a new ad's: `["validate_only","synchronous_ad_review"]`, AD-026 … AD-028). */
-  checkOptions?: string
-  /** What the preview says of Meta's answer to its check (Meta's recommendations: read-only words). */
-  checkWords?: (answer: Record<string, unknown> | null) => string[]
+  // ── step 39 (brand safety) ──
+  /** The read-back that judges it (meta write-client `judge`), and what is read (default the object). */
+  judge?: (node: Record<string, unknown>) => { moved: string[]; reads: string }
+  readBackOf?: string
+  /**
+   * Params it takes from an earlier request of the same change, just before it is sent (a list made from the draft step 1
+   * uploaded): its plan holds the rest. A MetaWriteError it throws ends the run there (nothing more is sent).
+   */
+  prepare?: (done: ReadonlyArray<{ request: MetaChangeRequest; result: MetaChangeResult }>) => Promise<Record<string, string>>
+  /** The capability grant Meta needs for it (D6): Meta refusing it for access answers with the no-grant controls. */
+  grant?: string
+  // ── step 27 ──
+  /** A new ad's check runs Meta's synchronous integrity review with it (synchronous_ad_review, AD-026 … AD-028). */
+  adReview?: boolean
 }
 
 export interface MetaChangeDraft {
@@ -98,6 +139,8 @@ export interface MetaChangeDraft {
   /** What it replaces and what it writes, in one shape per tool (AgentChange; undo reads them). */
   before: unknown
   after: unknown
+  /** Step 22 — everything a delete takes with it (every ad set and ad of a campaign or ad set, by id), shown in full. */
+  alsoDeleted?: unknown
 }
 
 export const MAX_CHANGE_LINES = 20

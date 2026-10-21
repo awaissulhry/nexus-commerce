@@ -14,9 +14,10 @@
  *                                                   ad's own start / end time, its tracking, conversion domain and persona
  *                                                   (each also cleared: Meta's "update the value to empty")
  *   ad.adlabels           POST /<ad id>/adlabels    labels added
- *   ad.remove             DELETE /<ad id>           ONLY create-meta-ad's undo of an ad THAT change made (change-ads.ts
- *                                                   adUndoDraft is the one draft that builds it, from the change's own
- *                                                   record; lane C1's step 22 owns the general delete and may widen it)
+ * The undo of create-meta-ad deletes an ad by step 19's `object.delete` rule (meta-create-rules.ts: DELETE /<campaign | ad
+ * set | ad id>, no body) and its inline creative by step 22's `creative.delete` (meta-remove-rules.ts); change-ads.ts
+ * adUndoDraft builds both only from the change's own record, with its guards (made by this tool, not ACTIVE, never ran, the
+ * insights lag, not Dynamic Creative, not in an ad sequence).
  *
  * Checked 2026-10-21 (curl ≥ 4 s apart; .md pages under developers.facebook.com/documentation/ads-commerce/marketing-api/;
  * Meta's Python Business SDK main, facebook_business/adobjects/adaccount.py create_ad and ad.py api_update / create_ad_label):
@@ -92,7 +93,7 @@ const UNIX_SECONDS = /^\d{10}$/
 export const META_CONVERSION_DOMAIN = /^(?=.{3,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
 
 /** The ad's `creative`: an existing creative by its id, or (a new ad only) an inline creative judged by step 25's judge. */
-export type JudgedAdCreative = { creativeId: string } | { creative: Record<string, unknown>; assets: MetaWriteAsset[] } | { problem: string }
+export type JudgedAdCreative = { creativeId: string } | { creative: Record<string, unknown>; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[] } | { problem: string }
 export function judgeAdCreative(raw: string | undefined, inline: boolean): JudgedAdCreative {
   let parsed: unknown
   try { parsed = JSON.parse(raw ?? '') } catch { return { problem: 'creative is JSON' } }
@@ -106,7 +107,7 @@ export function judgeAdCreative(raw: string | undefined, inline: boolean): Judge
   if (!inline) return { problem: 'an ad\'s creative changes by its id only ({"creative_id":"<id>"}): a creative cannot change once made, so a new look is a new creative (create-meta-creative) swapped onto the ad' }
   if (keys.length === 1 && keys[0] === 'creative') return { problem: 'Nexus sends an inline creative as Meta\'s guides do: the creative spec itself as creative, not wrapped in {"creative": …}' }
   const judged = judgeCreativeSpec(raw, 'creative')
-  return 'problem' in judged ? judged : { creative: judged.creative, assets: judged.assets }
+  return 'problem' in judged ? judged : { creative: judged.creative, assets: judged.assets, ids: judged.ids }
 }
 
 /** Every Advantage+ creative feature Meta documents, and the deprecated bundle by its own name: an ACTIVE ad's creative says OPT_OUT for each. */
@@ -230,12 +231,17 @@ function adIds(params: Params, create: boolean): MetaWriteBodyId[] {
     const activation = create ? (params.get('status') === 'ACTIVE' ? 'always' as const : null) : 'if-ad-active' as const
     out.push({ id: creative.creativeId, kind: 'creative', ...(activation ? { activation } : {}) })
   }
+  // An inline creative's own body ids (a library video, the chosen Page of a button: step 22's `video`, step 19's `page`),
+  // and a flexible-format group's videos.
+  if (creative && 'ids' in creative) out.push(...creative.ids)
+  const groups = create && params.has('creative_asset_groups_spec') ? judgeAssetGroups(params.get('creative_asset_groups_spec')) : null
+  if (groups && 'ids' in groups) out.push(...groups.ids)
   const tracking = params.has('tracking_specs') && params.get('tracking_specs') !== '' ? trackingPixels(params.get('tracking_specs')) : null
   if (tracking && 'pixels' in tracking) out.push(...tracking.pixels.map((id) => ({ id, kind: 'pixel' as const })))
   return out
 }
 
-/** The media ids inside a new ad's body: its inline creative's, and its flexible-format groups' images and videos. */
+/** The media ids inside a new ad's body: its inline creative's, and its flexible-format groups' images. */
 function adAssets(params: Params): MetaWriteAsset[] {
   const creative = params.has('creative') ? judgeAdCreative(params.get('creative'), true) : null
   const groups = params.has('creative_asset_groups_spec') ? judgeAssetGroups(params.get('creative_asset_groups_spec')) : null
@@ -270,7 +276,7 @@ export const META_AD_WRITE_RULES: readonly MetaWriteRule[] = [
     ],
     // A creator's ad code inside an inline creative (step 26's rule): never in the ledger, cut out of Meta's answer.
     secret: (params) => adCodesIn(params.get('creative'), true),
-    text: AD_TEXT, maxBody: META_CREATIVE_MAX_BODY, edgeCall: true, budget: false, check: true,
+    text: AD_TEXT, maxBody: META_CREATIVE_MAX_BODY, edgeCall: true, budget: false,
     values: (params) => adValues(params, true),
     ids: (params) => adIds(params, true),
     assets: adAssets,
@@ -288,11 +294,5 @@ export const META_AD_WRITE_RULES: readonly MetaWriteRule[] = [
     name: 'ad.adlabels', method: 'POST', path: /^\d{1,20}\/adlabels$/, kinds: AD,
     required: ['adlabels'], optional: [], text: { adlabels: META_MEDIA_TEXT_PATTERN }, maxBody: META_AD_UPDATE_MAX_BODY, budget: false,
     values: (params) => labelsJudge(params.get('adlabels')!),
-  },
-  {
-    // M6-08: create-meta-ad's undo of an ad its change made, never spent (no body). Lane C1's step 22 owns the general delete.
-    name: 'ad.remove', method: 'DELETE', path: /^\d{1,20}$/, kinds: AD,
-    required: [], optional: [], budget: false,
-    values: () => null,
   },
 ]

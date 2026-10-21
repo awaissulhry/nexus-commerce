@@ -57,8 +57,23 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 16 (2026-10-21) — meta-partnership-content, meta-ad-library, meta-brand-safety and meta-webhooks read Meta live.
 // Meta ads step 8 (2026-10-21) — meta-recommendations, meta-experiments and meta-ad-rules read Meta live.
 // Meta ads step 14 (2026-10-21) — meta-lead-forms, meta-leads and meta-comments read Meta live.
+// Meta ads step 12 (2026-10-21) — meta-catalogs, meta-catalog-items, meta-catalog-feeds and meta-catalog-health read Meta live.
+// Meta ads step 3 (2026-10-21) — meta-ad-account, meta-billing and meta-account-access read Meta live.
+// Meta ads step 5 (2026-10-21) — meta-account-health (its live views) and meta-activity-log read Meta live.
+// Meta ads step 11 (2026-10-21) — meta-audiences and meta-datasets read Meta live.
+// Meta ads step 18 (2026-10-21) — set-meta-campaign, set-meta-ad-set and set-meta-budget-schedule read Meta live and change it.
+// Meta ads step 19 (2026-10-21) — create-meta-campaign, create-meta-ad-set and copy-meta-ads read Meta live and change it.
+// Meta ads step 22 (2026-10-21) — remove-meta-ads-items reads Meta live and deletes there (on the person's explicit ask).
+// Meta ads step 21 (2026-10-21) — set-meta-labels, set-meta-value-rules and create-meta-reach-frequency read Meta live and change it.
+// Meta ads step 28 (2026-10-21) — apply-meta-recommendations, create-meta-experiment, set-meta-experiment and end-meta-experiment.
+// Meta ads step 13 (2026-10-21) — meta-product-sets, meta-commerce and meta-instagram-product-tags read Meta live.
 // Meta ads step 23 (2026-10-21) — create-meta-media uploads images, videos and folders to Meta (and takes back what it made new).
 // Meta ads step 25 (2026-10-21) — create-meta-creative and set-meta-creative make and change creatives on Meta.
+// Meta ads step 29 (2026-10-21) — set-meta-ad-rule and remove-meta-ad-rule read Meta live and change it.
+// Meta ads step 7 (2026-10-21) — meta-ads-numbers, meta-ads-report and meta-ads-saved-reports read Meta live.
+// Meta ads step 39 (2026-10-21) — set-meta-brand-safety, set-meta-block-list and remove-meta-block-list read Meta live and change it.
+// Meta ads step 31 (2026-10-21) — create-meta-audience, set-meta-audience, set-meta-audience-members, set-meta-audience-sharing and
+// remove-meta-audience read Meta live and change it.
 // Meta ads step 26 (2026-10-21) — create-meta-boost and set-meta-partnership-access boost posts and change partnership access on Meta.
 // Meta ads step 27 (2026-10-21) — create-meta-ad and set-meta-ad make and change ads on Meta.
 
@@ -66,27 +81,32 @@ const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
   'advance-purchase-order', 'aplus-content',
   'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'apply-google-recommendations',
-  'apply-harvest',
+  'apply-harvest', 'apply-meta-recommendations',
   'archive-ads', 'build-google-campaigns', 'build-google-pmax', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
   'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label', 'cancel-order',
   'channel-identity-check', 'check-google-ads-build', 'close-listing', 'confirm-shipment', 'copy-google-campaign',
-  'copy-google-pmax', 'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
+  'copy-google-pmax', 'copy-meta-ads', 'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
   'create-google-app-campaign', 'create-google-campaign', 'create-google-demand-gen-campaign',
-  'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-meta-ad', 'create-meta-boost', 'create-meta-creative', 'create-meta-media', 'create-negative-keyword',
+  'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-meta-ad', 'create-meta-ad-set', 'create-meta-audience', 'create-meta-boost', 'create-meta-campaign',
+  'create-meta-creative', 'create-meta-experiment', 'create-meta-media', 'create-meta-reach-frequency', 'create-negative-keyword',
   'decide-automation-suggestions',
   'delete-listing', 'dismiss-google-recommendations', 'dispose-return-items', 'ebay-categories',
   'ebay-keywords-change', 'edit-google-assets', 'edit-google-campaign-type-ads', 'edit-google-rsa', 'email-supplier',
-  'enable-ads', 'enable-google-pmax-brand-guidelines', 'end-google-experiment', 'end-listing', 'google-ads-experiments', 'google-ads-live',
+  'enable-ads', 'enable-google-pmax-brand-guidelines', 'end-google-experiment', 'end-listing', 'end-meta-experiment', 'google-ads-experiments', 'google-ads-live',
   'google-ads-numbers', 'google-ads-query', 'google-merchant-live', 'graduate-google-experiment', 'graduate-keyword',
   'harvest-search-term',
   'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
-  'meta-ad-accounts', 'meta-ad-details', 'meta-ad-library', 'meta-ad-preview', 'meta-ad-rules', 'meta-ad-sets', 'meta-ads-graph-read',
-  'meta-ads-live', 'meta-brand-safety', 'meta-campaigns', 'meta-comments', 'meta-connection', 'meta-experiments', 'meta-instagram-media',
-  'meta-instant-experiences', 'meta-labels', 'meta-lead-forms', 'meta-leads', 'meta-media-library', 'meta-page-posts', 'meta-partnership-content',
-  'meta-recommendations', 'meta-targeting-check', 'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
+  'meta-account-access', 'meta-account-health', 'meta-activity-log', 'meta-ad-account', 'meta-ad-accounts', 'meta-ad-details', 'meta-ad-library',
+  'meta-ad-preview', 'meta-ad-rules', 'meta-ad-sets', 'meta-ads-graph-read', 'meta-ads-live', 'meta-ads-numbers', 'meta-ads-report',
+  'meta-ads-saved-reports', 'meta-audiences', 'meta-billing', 'meta-brand-safety', 'meta-campaigns', 'meta-catalog-feeds', 'meta-catalog-health',
+  'meta-catalog-items', 'meta-catalogs', 'meta-comments', 'meta-commerce', 'meta-connection', 'meta-datasets', 'meta-experiments',
+  'meta-instagram-media', 'meta-instagram-product-tags', 'meta-instant-experiences', 'meta-labels', 'meta-lead-forms', 'meta-leads',
+  'meta-media-library', 'meta-page-posts', 'meta-partnership-content', 'meta-product-sets', 'meta-recommendations', 'meta-targeting-check',
+  'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
-  'remove-google-conversion-actions', 'remove-google-labels', 'reopen-listing', 'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
+  'remove-google-conversion-actions', 'remove-google-labels', 'remove-meta-ad-rule', 'remove-meta-ads-items', 'remove-meta-audience', 'remove-meta-block-list', 'reopen-listing',
+  'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
   'request-review',
   'resend-prices', 'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign',
   'resume-automation', 'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
@@ -109,7 +129,9 @@ const OPEN_WORLD = [
   'set-google-shopping-settings', 'set-google-status', 'set-google-targeting', 'set-google-urls',
   'set-google-user-access', 'set-google-user-lists', 'set-google-value-rules', 'set-hourly-bid-plan', 'set-listing-price',
   'set-listing-stock',
-  'set-master-prices', 'set-meta-ad', 'set-meta-connection', 'set-meta-creative', 'set-meta-partnership-access', 'set-meta-status', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
+  'set-master-prices', 'set-meta-ad', 'set-meta-ad-rule', 'set-meta-ad-set', 'set-meta-audience', 'set-meta-audience-members', 'set-meta-audience-sharing', 'set-meta-block-list',
+  'set-meta-brand-safety', 'set-meta-budget-schedule', 'set-meta-campaign', 'set-meta-connection', 'set-meta-creative', 'set-meta-experiment', 'set-meta-labels',
+  'set-meta-partnership-access', 'set-meta-status', 'set-meta-value-rules', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
   'set-promotion', 'set-sd-brand-safety', 'set-sd-budget-rule', 'set-sd-optimization-rule', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
   'shipping-rates', 'shopify-content', 'submit-aplus-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock',
   'tune-ad-engine', 'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change',

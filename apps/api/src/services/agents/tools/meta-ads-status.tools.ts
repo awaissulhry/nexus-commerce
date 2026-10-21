@@ -4,7 +4,7 @@
  * Meta change (meta-ads-kit.ts): a preview from the live state (Meta checks the campaign requests, validate_only), an
  * approvalId, a person approves it, it runs as that person request by request, and undo puts back what it changed.
  *
- * Deleting is not here: it is its own tool (master step 22), only on the person's explicit ask.
+ * Deleting is not here: it is its own tool (remove-meta-ads-items, step 22), only on the person's explicit ask.
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'

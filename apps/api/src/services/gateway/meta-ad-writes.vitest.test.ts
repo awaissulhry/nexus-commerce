@@ -22,7 +22,7 @@ vi.mock('../cx/token.service.js', () => ({
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
 
-import { GATEWAY_META_PAGE, gatewayLedger, gatewayMetaChosen, gatewayMetaMedia } from '../../test-support/gateway-stubs.js'
+import { gatewayLedger, gatewayMetaChosen, gatewayMetaPage } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { metaWriteCall } from './meta.js'
 import { metaWriteVerdict } from './meta-calls.js'
@@ -33,7 +33,7 @@ import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
 
 const BASE = `https://graph.facebook.com/${META_DEFAULT_GRAPH_API_VERSION}`
 const ACT = 'act_1234567890'
-const PAGE = GATEWAY_META_PAGE
+const PAGE = '120000000000010'
 const ADSET = '120000000000002'
 const AD = '120000000000003'
 const CREATIVE = '120000000000301'
@@ -68,7 +68,8 @@ beforeEach(() => {
   __metaObjectLimitsTest.useMemory()
   h.calls = []; h.answers = []; gatewayLedger.length = 0
   for (const key of Object.keys(gatewayMetaChosen)) delete gatewayMetaChosen[key]
-  for (const key of Object.keys(gatewayMetaMedia)) delete gatewayMetaMedia[key]
+  for (const key of Object.keys(gatewayMetaPage)) delete gatewayMetaPage[key]
+  gatewayMetaPage['m-1'] = PAGE
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     h.calls.push({ url: String(url), init })
     return h.answers.shift()?.() ?? new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -79,7 +80,7 @@ afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); __rateTest.reset();
 describe('a new ad: exact keys, every value judged', () => {
   it('from an existing creative, PAUSED or ACTIVE; its ids are handed to the gateway (the ad set, the creative, the pixels)', () => {
     const v = verdict({ body: form(ad({ tracking_specs: JSON.stringify([{ 'action.type': ['offsite_conversion'], fb_pixel: [PIXEL] }]) })) })
-    expect('write' in v && v.write).toMatchObject({ rule: 'adaccount.ad.create', objectId: ACT, check: false, edgeCall: true, checkable: true, ids: [{ id: ADSET, kind: 'adset' }, { id: CREATIVE, kind: 'creative' }, { id: PIXEL, kind: 'pixel' }] })
+    expect('write' in v && v.write).toMatchObject({ rule: 'adaccount.ad.create', objectId: ACT, check: false, edgeCall: true, ids: [{ id: ADSET, kind: 'adset' }, { id: CREATIVE, kind: 'creative' }, { id: PIXEL, kind: 'pixel' }] })
     // Review A1 — created ACTIVE, an existing creative goes to the gateway's activation read (its switches with its account_id).
     const active = verdict({ body: form(ad({ status: 'ACTIVE' })) })
     expect('write' in active && active.write.ids).toEqual([{ id: ADSET, kind: 'adset' }, { id: CREATIVE, kind: 'creative', activation: 'always' }])
@@ -203,19 +204,18 @@ describe('an ad\'s update, labels and delete', () => {
     expect(upd({ creative: JSON.stringify({ name: 'Creative B', object_story_spec: { page_id: PAGE } }) })).toMatchObject({ problem: expect.stringMatching(/changes by its id only/) })
     expect(upd({ name: 'Ad B', status: 'PAUSED' })).toMatchObject({ problem: expect.stringMatching(/only Meta change Nexus sends/) })
     expect(upd({ adset_id: ADSET })).toMatchObject({ problem: expect.stringMatching(/only Meta change Nexus sends/) })
-    expect(upd({ name: 'Ad B' }, { objectKind: 'campaign' })).toMatchObject({ problem: expect.stringMatching(/only Meta change Nexus sends/) })
+    expect(upd({ name: 'Ad B' }, { objectKind: 'campaign' })).not.toMatchObject({ write: { rule: 'ad.update' } })
     expect(metaWriteVerdict({ method: 'POST', url: `${BASE}/${AD}/adlabels`, kind: 'write', objectKind: 'ad', body: form({ adlabels: '[{"name":"Estate"}]' }) })).toMatchObject({ write: { rule: 'ad.adlabels' } })
   })
 
-  it('DELETE /<ad id> only as an ad (create-meta-ad\'s undo), no body; a campaign or ad set is still not deleted', () => {
-    expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${AD}`, kind: 'write', objectKind: 'ad' })).toMatchObject({ write: { rule: 'ad.remove', method: 'DELETE', body: '' } })
-    expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${AD}`, kind: 'write', objectKind: 'adset' })).toMatchObject({ problem: expect.stringMatching(/deletes nothing on Meta yet/) })
-    expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${AD}`, kind: 'write', objectKind: 'ad', body: 'x=1' })).toMatchObject({ problem: expect.stringMatching(/deletes nothing/) })
+  it('create-meta-ad\'s undo deletes an ad by step 19\'s object.delete rule (no body); step 27 adds no DELETE rule of its own', () => {
+    expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${AD}`, kind: 'write', objectKind: 'ad' })).toMatchObject({ write: { rule: 'object.delete', method: 'DELETE', body: '' } })
+    expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${AD}`, kind: 'write', objectKind: 'ad', body: 'x=1' })).toMatchObject({ problem: expect.stringMatching(/Nexus deletes on Meta only/) })
   })
 })
 
 describe('on the network: the chosen account and every id inside', () => {
-  const send = (params: Record<string, string>, check = false) => metaWriteCall({ connectionId: 'm-1', operation: 'ad.create', objectId: ACT, objectKind: 'adaccount', edge: 'ads', params, check, ...(check ? { checkOptions: META_AD_CHECK } : {}) })
+  const send = (params: Record<string, string>, check = false) => metaWriteCall({ connectionId: 'm-1', operation: 'ad.create', objectId: ACT, objectKind: 'adaccount', edge: 'ads', params, check, ...(check ? { adReview: true } : {}) })
 
   it('the ad set and the creative are the chosen account\'s, the pixel one of its own: then the ad goes; the check carries the integrity review', async () => {
     h.answers.push(
@@ -267,7 +267,7 @@ describe('on the network: the chosen account and every id inside', () => {
     await expect(send(ad())).rejects.toThrow(/is not a creative Nexus can confirm/)
     h.answers.push(json({ id: ADSET, account_id: '1234567890', optimization_goal: 'REACH', billing_event: 'IMPRESSIONS' }), json({ id: CREATIVE, account_id: '1234567890', object_type: 'SHARE', status: 'ACTIVE' }), json({ data: [{ id: '120000000000111' }] }))
     await expect(send(ad({ tracking_specs: JSON.stringify([{ 'action.type': ['offsite_conversion'], fb_pixel: [PIXEL] }]) }))).rejects.toThrow(/pixel 120000000000777 is not one Nexus can confirm/)
-    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'ad.create', objectId: 'act_5555555555', objectKind: 'adaccount', edge: 'ads', params: ad(), check: false })).rejects.toThrow(/not the one this business chose/)
+    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'ad.create', objectId: 'act_5555555555', objectKind: 'adaccount', edge: 'ads', params: ad(), check: false })).rejects.toThrow(/goes only to the Meta ad account this business chose/)
     expect(posts()).toHaveLength(0)
   })
 })

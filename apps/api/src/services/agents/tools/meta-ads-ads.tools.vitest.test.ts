@@ -52,8 +52,8 @@ vi.mock('../../../db.js', () => ({
 
 import { META_ADS_ADS_TOOLS } from './meta-ads-ads.tools.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
-import { targetsDsaArea, recommendationWords, isoOf } from '../../marketing/meta-ads/change-ads.js'
-import { META_ACTIVATE_FEATURES, META_AD_CHECK, META_AD_CHECK_WITH_RECOMMENDATIONS } from '../../gateway/meta-ad-rules.js'
+import { targetsDsaArea, isoOf } from '../../marketing/meta-ads/change-ads.js'
+import { META_ACTIVATE_FEATURES } from '../../gateway/meta-ad-rules.js'
 import { META_CREATIVE_FEATURES } from '../../gateway/meta-creative-rules.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
 import { __metaObjectLimitsTest } from '../../gateway/meta-object-limits.js'
@@ -86,7 +86,7 @@ const AD = '120000000000003'
 const CREATIVE = '120000000000301'
 const NEW_CREATIVE = '120000000000302'
 const PIXEL = '120000000000777'
-const checked = () => h.check.mock.calls[0][1] as { objectId: string; kind: string; edge: string; params: Record<string, string>; checkOptions?: string }
+const checked = () => h.check.mock.calls[0][1] as { objectId: string; kind: string; edge: string; params: Record<string, string>; adReview?: boolean; recommendations?: boolean }
 const base = { name: 'Ad A', adSetId: ADSET }
 /** A creative that reads OFF for every Advantage+ feature (the only kind an ACTIVE ad may show). */
 const allOff = (on: string[] = []) => ({ creative_features_spec: Object.fromEntries(META_ACTIVATE_FEATURES.map((f) => [f, { enroll_status: on.includes(f) ? 'OPT_IN' : 'OPT_OUT' }])) })
@@ -124,7 +124,7 @@ describe('the tools', () => {
       expect(MATERIAL_PREVIEW_FIELDS[tool.name]).toEqual(['basis', 'plan', 'reach'])
     }
     expect(create.consequencesFor!({ action: 'undo' })).toEqual({ reversibility: 'none' })
-    expect(META_CHANGE_RULES).toMatch(/a new ad/)
+    expect(META_CHANGE_RULES).toMatch(/a creative or an ad\)/)
     // Instant Experiences wait for the Page-token mode (C2-PAGE-TOKEN): no tool that could only answer in words.
     expect(META_ADS_ADS_TOOLS.map((t) => t.name)).toEqual(['create-meta-ad', 'set-meta-ad'])
   })
@@ -134,7 +134,8 @@ describe('create-meta-ad — the preview', () => {
   it('from an existing creative: born PAUSED, Meta checks it with its integrity review, nothing spends', async () => {
     const p = await preview({ ...base, creativeId: CREATIVE })
     expect(p.ok, JSON.stringify(p)).toBe(true)
-    expect(checked()).toMatchObject({ objectId: ACT, kind: 'adaccount', edge: 'ads', checkOptions: META_AD_CHECK })
+    expect(checked()).toMatchObject({ objectId: ACT, kind: 'adaccount', edge: 'ads', adReview: true })
+    expect(checked().recommendations).toBeUndefined()
     expect(checked().params).toEqual({ name: 'Ad A', adset_id: ADSET, creative: JSON.stringify({ creative_id: CREATIVE }), status: 'PAUSED' })
     expect(p.preview.spendsMoney).toBe(false)
     expect(p.preview.metaCheck.checked).toBe('all')
@@ -291,13 +292,12 @@ describe('create-meta-ad — the preview', () => {
   it('AD-034 / AD-028: display_sequence and priority only when asked (no explained effect); Meta\'s recommendations as read-only words', async () => {
     h.check.mockImplementation(async () => ({ success: true, recommendations: [{ title: 'Add a video', message: 'Ads with video do better.', importance: 'HIGH' }] }))
     const p = await preview({ ...base, creativeId: CREATIVE, displaySequence: 2, priority: 1, recommendations: true })
-    expect(checked().checkOptions).toBe(META_AD_CHECK_WITH_RECOMMENDATIONS)
+    expect(checked()).toMatchObject({ adReview: true, recommendations: true })
     expect(checked().params).toMatchObject({ display_sequence: '2', priority: '1' })
     const words = p.preview.warnings.join(' ')
     expect(words).toMatch(/explains no effect/)
-    expect(words).toMatch(/Meta recommends \(read only — nothing is changed by it\): Add a video: Ads with video do better\. \(importance HIGH\)/)
-    expect(recommendationWords({ recommendations: { data: [{ title: 'T' }] } })).toEqual(['Meta recommends (read only — nothing is changed by it): T.'])
-    expect(recommendationWords(null)).toEqual([])
+    // Step 19's way: Meta's recommendations come back in the preview as metaRecommendations (read-only).
+    expect(JSON.stringify(p.preview.metaRecommendations)).toMatch(/Add a video/)
     // Review A6 — a check with recommendations is another plan than one without (never answered from the other's memory).
     const without = await preview({ ...base, creativeId: CREATIVE, displaySequence: 2, priority: 1 })
     expect(without.preview.plan).not.toBe(p.preview.plan)
@@ -348,7 +348,7 @@ describe('create-meta-ad — the run and its undo', () => {
     const r = await create.execute!(parse()({ action: 'undo', ads: [AD] }), approved(p.preview)) as ToolResult & { data: Record<string, any> }
     expect(r.data.steps.map((s: { outcome: string }) => s.outcome)).toEqual(['done', 'not_sent'])
     expect(r.data.steps[1].sentence).toMatch(/does not read as deleted, so its creative 120000000000302 stays/)
-    expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: AD, kind: 'ad', method: 'DELETE', operation: 'ad.remove' })
+    expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: AD, kind: 'ad', method: 'DELETE', operation: 'ad.delete' })
     // A Dynamic Creative ad and an ad of an ad set with a sequence stay.
     reads[ADSET] = { ...reads[ADSET], is_dynamic_creative: true }
     expect(await refusal({ action: 'undo', ads: [AD] })).toMatch(/Dynamic Creative ad.*1340029/)

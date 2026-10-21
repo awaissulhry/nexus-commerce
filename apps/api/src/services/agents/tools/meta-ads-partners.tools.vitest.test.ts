@@ -146,6 +146,12 @@ describe('meta-partnership-content', () => {
     expect((await run('meta-partnership-content', { view: 'allowlist' })).data).toMatchObject({ creators: [{ creatorPageId: '120000000000020', creatorPageName: 'Rider', ineligibleForBrandedContent: true }] })
     expect(refusedByGateway()).toEqual([])
   })
+  it('step 12 round 3 — a throttle on one allowlist part keeps the other part (as #706)', async () => {
+    h.rest = (req) => (req.path.endsWith('brand-allowlist-status')
+      ? { status: 200, text: '{"allowlist_status": "ENABLED"}' }
+      : { status: 400, text: '{"error":{"code":17}}', verdict: { errorClass: 'rate_limited', channelCode: '17', channelMessage: 'User request limit reached' } })
+    expect(await run('meta-partnership-content', { view: 'allowlist' })).toMatchObject({ ok: true, data: { allowlistStatus: 'ENABLED', creators: null, creatorsNotRead: expect.stringMatching(/slow down/) } })
+  })
   it('tagged-posts and instagram-permissions read the chosen Page / Instagram account; tag-approvals says what Meta needs when it refuses', async () => {
     await run('meta-partnership-content', { view: 'tagged-posts', from: '2026-10-01', to: '2026-10-21', creatorPageIds: ['120000000000020'], limit: 900, offset: 100 })
     expect(h.calls[0]).toMatchObject({ host: 'rest', path: `partnership-ads/fb-branded-content/${PAGE}/branded-content-posts`, query: { start_date: '2026-10-01', end_date: '2026-10-21', creator_page_ids: '[120000000000020]', limit: 500, offset: 100 } })

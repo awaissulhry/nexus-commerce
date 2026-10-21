@@ -2,9 +2,10 @@
  * Meta on the gateway, step 23 (create-meta-media): an upload reaches Meta ONLY as one of its exact allow-list entries
  * (meta-media-rules.ts) — an image's strict Base64 bytes (a JPG or PNG of at most 8 MB), a video's public link (Meta
  * fetches it), a video of the chosen Instagram account, Meta's video-ads upload (start, the link on rupload.facebook.com as
- * its file_url header, finish), a folder in the chosen portfolio, and the removal of an image or a video — on the business's
+ * its file_url header, finish), a folder in the chosen portfolio, captions and a video's default caption — on the business's
  * CHOSEN ad account (the act_<id> in the path), its own portfolio (not shared with another Nexus business), its chosen
- * Instagram account's media, a video upload THIS connection started. Image bytes never reach the ledger; no 30-s
+ * Instagram account's media, a video upload THIS connection started (`startedvideo`), a video of its library (step 22's
+ * `video`). The undo's removals go through step 22's rules (meta-remove-writes.vitest.test.ts). Image bytes never reach the ledger; no 30-s
  * per-object gap holds an edge call; the token goes to the upload host only in its Authorization header. Made-up ids only.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,7 +23,7 @@ vi.mock('../cx/token.service.js', () => ({
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
 
-import { gatewayLedger, gatewayMetaChosen, gatewayMetaMedia, gatewayMetaSharedPortfolios } from '../../test-support/gateway-stubs.js'
+import { gatewayLedger, gatewayMetaChosen, gatewayMetaInstagram, gatewayMetaSharedPortfolios } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { gatewayCall } from './gateway.js'
 import { metaRuploadCall, metaWriteCall } from './meta.js'
@@ -56,7 +57,9 @@ beforeEach(() => {
   __metaMediaRulesTest.reset()
   h.calls = []; h.answers = []; gatewayLedger.length = 0
   for (const key of Object.keys(gatewayMetaChosen)) delete gatewayMetaChosen[key]
-  for (const key of Object.keys(gatewayMetaMedia)) delete gatewayMetaMedia[key]
+  for (const key of Object.keys(gatewayMetaInstagram)) delete gatewayMetaInstagram[key]
+  // Step 21's chosen Instagram account (metaChosenInstagramOf) of the connection these tests use.
+  gatewayMetaInstagram['m-1'] = IG
   gatewayMetaSharedPortfolios.clear()
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     h.calls.push({ url: String(url), init })
@@ -147,18 +150,10 @@ describe('the write allow-list for media (metaWriteVerdict)', () => {
   })
   it('a folder on the portfolio\'s edge (BM-058): a name, a description, a parent folder (checked)', () => {
     const url = `${BASE}/${PORTFOLIO}/creative_folders`
-    expect(verdict({ url, objectKind: 'portfolio', body: form({ name: 'Spring 2026', parent_folder_id: '120000000000701' }) })).toMatchObject({ write: { rule: 'portfolio.folder.create', objectId: PORTFOLIO, assets: [{ id: '120000000000701', kind: 'creativefolder' }] } })
+    expect(verdict({ url, objectKind: 'business', body: form({ name: 'Spring 2026', parent_folder_id: '120000000000701' }) })).toMatchObject({ write: { rule: 'portfolio.folder.create', objectId: PORTFOLIO, assets: [{ id: '120000000000701', kind: 'creativefolder' }] } })
     expect(problem({ url, objectKind: 'adaccount', body: form({ name: 'x' }) })).toMatch(/only Meta change/)
-    expect(problem({ url, objectKind: 'portfolio', body: form({ name: ' ' }) })).toMatch(/name is 1 to 100/)
-    expect(problem({ url, objectKind: 'portfolio', body: form({ name: 'x', parent_folder_id: 'abc' }) })).toMatch(/digits only/)
-  })
-  it('a removal: DELETE with its one key in the form body (an image\'s hash, a video\'s id); no body, no removal', () => {
-    expect(verdict({ method: 'DELETE', body: form({ hash: '0123456789abcdef0123456789abcdef' }) })).toEqual({ write: { rule: 'adaccount.image.remove', objectId: ACT, check: false, body: 'hash=0123456789abcdef0123456789abcdef', budget: false, kinds: ['adaccount'], edgeCall: true, method: 'DELETE' } })
-    expect(verdict({ method: 'DELETE', url: `${BASE}/${ACT}/advideos`, body: form({ video_id: VIDEO }) })).toMatchObject({ write: { rule: 'adaccount.video.remove', method: 'DELETE', assets: [{ id: VIDEO, kind: 'libraryvideo' }] } })
-    expect(problem({ method: 'DELETE', body: undefined })).toMatch(/form body/)
-    expect(problem({ method: 'DELETE', body: form({ hash: 'abc', image_id: '1' }) })).toMatch(/only Meta change/)
-    expect(problem({ method: 'DELETE', body: form({ hash: 'ab/c' }) })).toMatch(/hash is an image hash/)
-    expect(problem({ method: 'DELETE', url: `${BASE}/${ACT}/video_ads`, body: form({ video_id: VIDEO }) })).toMatch(/deletes nothing on Meta yet/)
+    expect(problem({ url, objectKind: 'business', body: form({ name: ' ' }) })).toMatch(/name is 1 to 100/)
+    expect(problem({ url, objectKind: 'business', body: form({ name: 'x', parent_folder_id: 'abc' }) })).toMatch(/digits only/)
   })
   it('review A6 — step 23\'s own text: no bidirectional control, a visible character, a title counted in UTF-8 bytes', () => {
     const url = `${BASE}/${ACT}/advideos`
@@ -169,7 +164,7 @@ describe('the write allow-list for media (metaWriteVerdict)', () => {
     expect(problem({ url, body: form({ file_url: link, name: '\u3164\u2800' }) })).toMatch(/visible character/)
     expect(problem({ url, body: form({ file_url: link, title: 'ä'.repeat(127) }) })).toBeNull()
     expect(problem({ url, body: form({ file_url: link, title: 'ä'.repeat(128) }) })).toMatch(/254 bytes/)
-    expect(problem({ url: `${BASE}/${PORTFOLIO}/creative_folders`, objectKind: 'portfolio', body: form({ name: '\u200E\uFEFF' }) })).toMatch(/no control or format characters/)
+    expect(problem({ url: `${BASE}/${PORTFOLIO}/creative_folders`, objectKind: 'business', body: form({ name: '\u200E\uFEFF' }) })).toMatch(/no control or format characters/)
     expect(metaMediaTextProblem('Spring 2026 è ✓', 100, 'name')).toBeNull()
     // Review round 2 — blanks that draw nothing (Hangul fillers, braille blank) and a combining mark alone are not visible;
     // a mark on a base is, and a joiner only between two emoji is fine.
@@ -179,45 +174,48 @@ describe('the write allow-list for media (metaWriteVerdict)', () => {
     expect(metaMediaTextProblem('Te\u200Dam', 100, 'name')).toMatch(/control or format character/)
     expect(metaMediaTextProblem('Spot\u00ADA', 100, 'name')).toMatch(/control or format character/)
   })
-  it('MD-026 captions: an SRT file part the gateway encodes, its name <name>.<locale>.srt, at most 200,000 bytes; the undo by locales_to_delete', () => {
+  it('MD-026 captions: an SRT file part the gateway encodes, its name <name>.<locale>.srt, at most 200,000 bytes; the undo by step 22\'s locales_to_delete, then the default caption alone', () => {
     const url = `${BASE}/${VIDEO}/captions`
     const srt = '1\n00:00:01,000 --> 00:00:03,500\nCiao!\n\n2\n00:00:04,000 --> 00:00:06,000\nSpedizione gratuita ✓'
-    const ok = verdict({ url, objectKind: 'libraryvideo', body: form({ captions_file: srt, captions_file_name: 'spot.it_IT.srt', default_locale: 'it_IT' }) })
-    expect(ok).toEqual({ write: { rule: 'video.captions.upload', objectId: VIDEO, check: false, body: '', budget: false, kinds: ['libraryvideo'], edgeCall: true, bulky: true, multipart: { fields: [['default_locale', 'it_IT']], file: { key: 'captions_file', filename: 'spot.it_IT.srt', contentType: 'application/x-subrip', text: srt } } } })
-    expect(problem({ url, objectKind: 'libraryvideo', body: form({ captions_file: srt, captions_file_name: 'spot.srt' }) })).toMatch(/<name>\.<locale>\.srt/)
-    expect(problem({ url, objectKind: 'libraryvideo', body: form({ captions_file: srt, captions_file_name: '../x.it_IT.srt' }) })).toMatch(/<name>\.<locale>\.srt/)
-    expect(problem({ url, objectKind: 'libraryvideo', body: form({ captions_file: 'not subtitles', captions_file_name: 'a.it_IT.srt' }) })).toMatch(/SubRip/)
-    expect(problem({ url, objectKind: 'libraryvideo', body: form({ captions_file: `${srt}\u0000`, captions_file_name: 'a.it_IT.srt' }) })).toMatch(/plain text/)
-    expect(problem({ url, objectKind: 'libraryvideo', body: form({ captions_file: srt, captions_file_name: 'a.it_IT.srt', default_locale: 'Italian' }) })).toMatch(/default_locale is a locale/)
-    expect(problem({ url, objectKind: 'libraryvideo', body: form({ captions_file: srt, captions_file_name: 'a.it_IT.srt', locales_to_delete: '["it_IT"]' }) })).toMatch(/only Meta change/)
+    const ok = verdict({ url, objectKind: 'video', body: form({ captions_file: srt, captions_file_name: 'spot.it_IT.srt', default_locale: 'it_IT' }) })
+    expect(ok).toEqual({ write: { rule: 'video.captions.upload', objectId: VIDEO, check: false, body: '', budget: false, kinds: ['video'], edgeCall: true, bulky: true, multipart: { fields: [['default_locale', 'it_IT']], file: { key: 'captions_file', filename: 'spot.it_IT.srt', contentType: 'application/x-subrip', text: srt } } } })
+    expect(problem({ url, objectKind: 'video', body: form({ captions_file: srt, captions_file_name: 'spot.srt' }) })).toMatch(/<name>\.<locale>\.srt/)
+    expect(problem({ url, objectKind: 'video', body: form({ captions_file: srt, captions_file_name: '../x.it_IT.srt' }) })).toMatch(/<name>\.<locale>\.srt/)
+    expect(problem({ url, objectKind: 'video', body: form({ captions_file: 'not subtitles', captions_file_name: 'a.it_IT.srt' }) })).toMatch(/SubRip/)
+    expect(problem({ url, objectKind: 'video', body: form({ captions_file: `${srt}\u0000`, captions_file_name: 'a.it_IT.srt' }) })).toMatch(/plain text/)
+    expect(problem({ url, objectKind: 'video', body: form({ captions_file: srt, captions_file_name: 'a.it_IT.srt', default_locale: 'Italian' }) })).toMatch(/default_locale is a locale/)
+    expect(problem({ url, objectKind: 'video', body: form({ captions_file: srt, captions_file_name: 'a.it_IT.srt', locales_to_delete: '["it_IT"]' }) })).toMatch(/only Meta change/)
     expect(problem({ url, objectKind: 'adaccount', body: form({ captions_file: srt, captions_file_name: 'a.it_IT.srt' }) })).toMatch(/only Meta change/)
     const big = `1\n00:00:01,000 --> 00:00:02,000\n${'x'.repeat(META_CAPTIONS_MAX_BYTES)}`
     expect(META_CAPTIONS_MAX_BYTES).toBe(200_000)
     expect(metaSrtProblem(big)).toMatch(/at most 200,000 bytes/)
-    expect(problem({ url, objectKind: 'libraryvideo', body: form({ captions_file: big, captions_file_name: 'a.it_IT.srt' }) })).toMatch(/at most 200,000 bytes|at most \d+ characters/)
+    expect(problem({ url, objectKind: 'video', body: form({ captions_file: big, captions_file_name: 'a.it_IT.srt' }) })).toMatch(/at most 200,000 bytes|at most \d+ characters/)
     // Review round 2 — every control character but tab, line feed and carriage return: C0 and C1 (U+0080–U+009F).
     for (const bad of ['\u0085', '\u0080', '\u009F', '\u001B', '\u007F']) expect(metaSrtProblem(`${srt}${bad}`), JSON.stringify(bad)).toMatch(/plain text/)
     expect(metaSrtProblem(srt.replace(/\n/g, '\r\n').replace('Ciao!', 'Ciao!\tok'))).toBeNull()
-    expect(verdict({ url, objectKind: 'libraryvideo', body: form({ locales_to_delete: '["it_IT"]', default_locale: 'none' }) })).toMatchObject({ write: { rule: 'video.captions.remove', body: 'locales_to_delete=%5B%22it_IT%22%5D&default_locale=none' } })
-    expect(problem({ url, objectKind: 'libraryvideo', body: form({ locales_to_delete: '[ "it_IT" ]' }) })).toMatch(/JSON list/)
-    expect(problem({ url, objectKind: 'libraryvideo', body: form({ locales_to_delete: '["it_IT","it_IT"]' }) })).toMatch(/JSON list/)
-    expect(problem({ url, objectKind: 'libraryvideo', method: 'DELETE', body: form({ locales_to_delete: '["it_IT"]' }) })).toMatch(/deletes nothing/)
+    // The undo: the language by step 22's captions.delete (alone), then the default caption it replaced by this step's own call.
+    expect(verdict({ url, objectKind: 'video', body: form({ locales_to_delete: '["it_IT"]' }) })).toMatchObject({ write: { rule: 'captions.delete', body: 'locales_to_delete=%5B%22it_IT%22%5D', kinds: ['video'] } })
+    expect(verdict({ url, objectKind: 'video', body: form({ default_locale: 'en_US' }) })).toEqual({ write: { rule: 'video.captions.default', objectId: VIDEO, check: false, body: 'default_locale=en_US', budget: false, kinds: ['video'], edgeCall: true } })
+    expect(verdict({ url, objectKind: 'video', body: form({ default_locale: 'none' }) })).toMatchObject({ write: { rule: 'video.captions.default' } })
+    expect(problem({ url, objectKind: 'video', body: form({ default_locale: 'English' }) })).toMatch(/default_locale is a locale/)
+    expect(problem({ url, objectKind: 'video', body: form({ locales_to_delete: '["it_IT"]', default_locale: 'none' }) })).toMatch(/only Meta change/)
+    expect(problem({ url, objectKind: 'ad', body: form({ default_locale: 'en_US' }) })).toMatch(/only Meta change/)
   })
-  it('Meta\'s upload host: exactly the documented address, a write of kind video, one file_url — sent as its header, no body', () => {
+  it('Meta\'s upload host: exactly the documented address, a write of kind startedvideo, one file_url — sent as its header, no body', () => {
     const url = metaRuploadUrl(VIDEO)
     expect(url).toBe(`https://rupload.facebook.com/video-ads-upload/v26.0/${VIDEO}`)
-    expect(verdict({ url, objectKind: 'video', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toEqual({ write: { rule: 'video.rupload', objectId: VIDEO, check: false, body: '', budget: false, kinds: ['video'], edgeCall: true, host: 'rupload', headers: { file_url: 'https://cdn.example.com/v.mp4' } } })
-    expect(problem({ url: `${url}?x=1`, objectKind: 'video', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/nothing else on the address/)
-    expect(problem({ url: url.replace('v26.0', 'v25.0'), objectKind: 'video', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/only https:\/\/rupload/)
-    expect(problem({ url: url.replace('video-ads-upload', 'upload'), objectKind: 'video', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/only https:\/\/rupload/)
-    expect(problem({ url: `https://rupload.facebook.com:8443/video-ads-upload/v26.0/${VIDEO}`, objectKind: 'video', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/only https:\/\/rupload/)
-    expect(problem({ url, objectKind: 'adaccount', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/kind video/)
-    expect(problem({ url, objectKind: 'video', body: form({ file_url: 'https://cdn.example.com/v.mp4', offset: '0' }) })).toMatch(/exactly one key/)
-    expect(problem({ url, objectKind: 'video', body: 'raw-video-bytes' })).toMatch(/exactly one key/)
-    expect(problem({ url, objectKind: 'video', body: form({ file_url: 'https://cdn.example.com/v.mp4?Signature=x' }) })).toMatch(/no key, signature/)
-    expect(problem({ url, objectKind: 'video', method: 'PUT', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/POST only/)
-    expect(problem({ url, objectKind: 'video', headers: { file_url: 'https://cdn.example.com/v.mp4' }, body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/no header/)
-    expect(problem({ url, objectKind: 'video', auth: 'app', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/system-user token/)
+    expect(verdict({ url, objectKind: 'startedvideo', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toEqual({ write: { rule: 'video.rupload', objectId: VIDEO, check: false, body: '', budget: false, kinds: ['startedvideo'], edgeCall: true, host: 'rupload', headers: { file_url: 'https://cdn.example.com/v.mp4' } } })
+    expect(problem({ url: `${url}?x=1`, objectKind: 'startedvideo', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/nothing else on the address/)
+    expect(problem({ url: url.replace('v26.0', 'v25.0'), objectKind: 'startedvideo', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/only https:\/\/rupload/)
+    expect(problem({ url: url.replace('video-ads-upload', 'upload'), objectKind: 'startedvideo', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/only https:\/\/rupload/)
+    expect(problem({ url: `https://rupload.facebook.com:8443/video-ads-upload/v26.0/${VIDEO}`, objectKind: 'startedvideo', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/only https:\/\/rupload/)
+    expect(problem({ url, objectKind: 'adaccount', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/kind startedvideo/)
+    expect(problem({ url, objectKind: 'startedvideo', body: form({ file_url: 'https://cdn.example.com/v.mp4', offset: '0' }) })).toMatch(/exactly one key/)
+    expect(problem({ url, objectKind: 'startedvideo', body: 'raw-video-bytes' })).toMatch(/exactly one key/)
+    expect(problem({ url, objectKind: 'startedvideo', body: form({ file_url: 'https://cdn.example.com/v.mp4?Signature=x' }) })).toMatch(/no key, signature/)
+    expect(problem({ url, objectKind: 'startedvideo', method: 'PUT', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/POST only/)
+    expect(problem({ url, objectKind: 'startedvideo', headers: { file_url: 'https://cdn.example.com/v.mp4' }, body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/no header/)
+    expect(problem({ url, objectKind: 'startedvideo', auth: 'app', body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/system-user token/)
     // The graph-video host stays refused (no Nexus path uses it: Meta's v26 advideos reference names graph.facebook.com).
     expect(problem({ url: `https://graph-video.facebook.com/v26.0/${ACT}/advideos`, body: form({ file_url: 'https://cdn.example.com/v.mp4' }) })).toMatch(/graph\.facebook\.com/)
   })
@@ -241,9 +239,9 @@ describe('through the gateway', () => {
     h.answers.push(json({ images: { bytes: { hash: 'ffffffffffffffffffffffffffffffff' } } }))
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'media.imageUpload', objectId: ACT, objectKind: 'adaccount', edge: 'adimages', params: { bytes: JPG }, check: false })).ok).toBe(true)
   })
-  it('another ad account (another business\'s, or none chosen): refused before anything is sent, the other account never read', async () => {
+  it('another ad account (another business\'s, or none chosen): refused by step 19\'s ad-account check before anything is sent, the other account never read', async () => {
     const err = await metaWriteCall({ connectionId: 'm-1', operation: 'media.imageUpload', objectId: OTHER_ACT, objectKind: 'adaccount', edge: 'adimages', params: { bytes: PNG }, check: false }).catch((e) => e)
-    expect(err).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/the ad account this change names is not the one this business chose/) })
+    expect(err).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/goes only to the Meta ad account this business chose/) })
     expect(err.message).not.toContain('5555555555')
     gatewayMetaChosen['m-2'] = null
     expect(await metaWriteCall({ connectionId: 'm-2', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'adimages', params: { bytes: PNG }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
@@ -274,7 +272,6 @@ describe('through the gateway', () => {
     expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'POST'])
     // No Instagram account chosen: refused before any read.
     h.calls = []
-    gatewayMetaMedia['m-3'] = { instagramId: null, portfolioId: PORTFOLIO }
     expect(await metaWriteCall({ connectionId: 'm-3', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'advideos', params: { source_instagram_media_id: '17900000000000001' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
     expect(h.calls).toHaveLength(0)
   })
@@ -308,72 +305,45 @@ describe('through the gateway', () => {
   })
   it('review round 2 — the parent folder is confirmed when SEEN in the first 500 rows (counted in rows): row 450 of 600 passes, row 550 is refused', async () => {
     const page = (from: number, more: boolean) => json({ data: Array.from({ length: 100 }, (_, i) => ({ id: String(120000000001000 + from + i) })), ...(more ? { paging: { cursors: { after: `c${from}` }, next: 'more' } } : {}) })
-    const folderCall = (parent: string) => metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: parent }, check: false })
+    const folderCall = (parent: string) => metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'business', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: parent }, check: false })
+    h.answers.push(json({ id: ACT, business: { id: PORTFOLIO } }))
     for (let p = 0; p < 6; p++) h.answers.push(page(1 + p * 100, p < 5))
     expect((await folderCall(String(120000000001000 + 450))).ok).toBe(true)
-    // Five reads of 100 rows (500), never the sixth page, then the POST.
-    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'GET', 'GET', 'GET', 'POST'])
+    // Step 28's read of the chosen account's portfolio, five reads of 100 rows (500), never the sixth page, then the POST.
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'GET', 'GET', 'GET', 'GET', 'POST'])
     h.calls = []; h.answers = []
+    h.answers.push(json({ id: ACT, business: { id: PORTFOLIO } }))
     for (let p = 0; p < 6; p++) h.answers.push(page(1 + p * 100, p < 5))
     expect(await folderCall(String(120000000001000 + 550)).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/folder 120000000001550 is not one Nexus can confirm/) })
     expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
   })
-  it('a folder: on the chosen account\'s OWN portfolio, never one another Nexus business shares; its parent among the portfolio\'s folders', async () => {
-    h.answers.push(json({ id: '120000000000702' }))
-    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'Spring 2026' }, check: false })).ok).toBe(true)
-    expect(sent(0).url.pathname).toBe(`/v26.0/${PORTFOLIO}/creative_folders`)
+  it('a folder: on the chosen account\'s OWN portfolio (step 28\'s `business` check), never one another Nexus business shares; its parent among the portfolio\'s folders', async () => {
+    const business = () => json({ id: ACT, business: { id: PORTFOLIO } })
+    h.answers.push(business(), json({ id: '120000000000702' }))
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'business', edge: 'creative_folders', params: { name: 'Spring 2026' }, check: false })).ok).toBe(true)
+    expect([sent(0).method, sent(0).url.pathname, sent(0).url.searchParams.get('fields')]).toEqual(['GET', `/v26.0/${ACT}`, 'business{id}'])
+    expect([sent(1).method, sent(1).url.pathname]).toEqual(['POST', `/v26.0/${PORTFOLIO}/creative_folders`])
     h.calls = []
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: '1111111111', objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'x' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/business portfolio this change names is not the one/) })
+    h.answers.push(business())
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: '1111111111', objectKind: 'business', edge: 'creative_folders', params: { name: 'x' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/is not the business portfolio of the ad account this business chose/) })
     gatewayMetaSharedPortfolios.add(PORTFOLIO)
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'x' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/another business in Nexus uses an ad account of this business portfolio/) })
+    h.answers.push(business())
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'business', edge: 'creative_folders', params: { name: 'x' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/another business in Nexus uses an ad account of this business portfolio/) })
     gatewayMetaSharedPortfolios.clear()
-    expect(h.calls).toHaveLength(0)
-    h.answers.push(json({ data: [{ id: '120000000000701' }] }), json({ id: '120000000000703' }))
-    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: '120000000000701' }, check: false })).ok).toBe(true)
-    expect(sent(0).url.pathname).toBe(`/v26.0/${PORTFOLIO}/creative_folders`)
-    expect(sent(0).method).toBe('GET')
-    h.calls = []
-    h.answers.push(json({ data: [{ id: '120000000000701' }] }))
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: '120000000000799' }, check: false }).catch((e) => e)).toMatchObject({ message: expect.stringMatching(/folder 120000000000799 is not one Nexus can confirm/) })
-    expect(h.calls.map((c) => c.init.method)).toEqual(['GET'])
-  })
-  it('a removal goes as DELETE with its key in the form body, on the chosen account only', async () => {
-    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'media.imageRemove', objectId: ACT, objectKind: 'adaccount', edge: 'adimages', method: 'DELETE', params: { hash: '0123456789abcdef0123456789abcdef' }, check: false })
-    expect(res.ok).toBe(true)
-    expect(sent(0).method).toBe('DELETE')
-    expect(sent(0).body).toBe('hash=0123456789abcdef0123456789abcdef')
-    expect(sent(0).headers['Content-Type']).toBe('application/x-www-form-urlencoded')
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: OTHER_ACT, objectKind: 'adaccount', edge: 'advideos', method: 'DELETE', params: { video_id: VIDEO }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
-    expect(h.calls).toHaveLength(1)
-  })
-  it('review A2 — a video removal names a video of the chosen account\'s library (advideos, else video_ads), read before anything is sent', async () => {
-    // Listed on advideos: one read, then the DELETE.
-    h.answers.push(json({ data: [{ id: VIDEO }] }), json({ success: true }))
-    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'media.videoRemove', objectId: ACT, objectKind: 'adaccount', edge: 'advideos', method: 'DELETE', params: { video_id: VIDEO }, check: false })).ok).toBe(true)
-    expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname])).toEqual([['GET', `/v26.0/${ACT}/advideos`], ['DELETE', `/v26.0/${ACT}/advideos`]])
-    // Only on video_ads (a video-ads upload): both read, then the DELETE.
-    h.calls = []
-    h.answers.push(json({ data: [] }), json({ data: [{ id: VIDEO }] }), json({ success: true }))
-    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'media.videoRemove', objectId: ACT, objectKind: 'adaccount', edge: 'advideos', method: 'DELETE', params: { video_id: VIDEO }, check: false })).ok).toBe(true)
-    expect(h.calls.map((c) => new URL(c.url).pathname)).toEqual([`/v26.0/${ACT}/advideos`, `/v26.0/${ACT}/video_ads`, `/v26.0/${ACT}/advideos`])
-    // Another business's video (in neither list): refused, nothing deleted.
-    h.calls = []
-    h.answers.push(json({ data: [{ id: '120000000000599' }] }), json({ data: [] }))
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'advideos', method: 'DELETE', params: { video_id: VIDEO }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/not one Nexus can confirm in the chosen ad account's video library/) })
     expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
-    // An id not seen in the rows Nexus reads (here the list ends without it, then video_ads cannot be read): not confirmed,
-    // nothing deleted (fail closed).
     h.calls = []
-    for (let i = 0; i < 5; i++) h.answers.push(json({ data: [{ id: `12000000000070${i}` }], paging: { cursors: { after: `c${i}` }, next: 'more' } }))
-    h.answers.push(json({ data: [] }))
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'advideos', method: 'DELETE', params: { video_id: VIDEO }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
-    expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
-    expect(new URL(h.calls[1].url).searchParams.get('after')).toBe('c0')
+    h.answers.push(business(), json({ data: [{ id: '120000000000701' }] }), json({ id: '120000000000703' }))
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'business', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: '120000000000701' }, check: false })).ok).toBe(true)
+    expect([sent(1).method, sent(1).url.pathname]).toEqual(['GET', `/v26.0/${PORTFOLIO}/creative_folders`])
+    h.calls = []
+    h.answers.push(business(), json({ data: [{ id: '120000000000701' }] }))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'business', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: '120000000000799' }, check: false }).catch((e) => e)).toMatchObject({ message: expect.stringMatching(/folder 120000000000799 is not one Nexus can confirm/) })
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
   })
   it('MD-026 — captions go as ONE multipart body the gateway builds (no form type, no caller header), on a library video, never to the ledger', async () => {
     const srt = '1\n00:00:01,000 --> 00:00:03,500\nCiao!'
     h.answers.push(json({ data: [{ id: VIDEO }] }), json({ success: true }))
-    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'media.captionsUpload', objectId: VIDEO, objectKind: 'libraryvideo', edge: 'captions', params: { captions_file: srt, captions_file_name: 'spot.it_IT.srt' }, check: false })
+    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'media.captionsUpload', objectId: VIDEO, objectKind: 'video', edge: 'captions', params: { captions_file: srt, captions_file_name: 'spot.it_IT.srt' }, check: false })
     expect(res.ok).toBe(true)
     const call = sent(1)
     expect(call.method).toBe('POST')
@@ -384,16 +354,16 @@ describe('through the gateway', () => {
     expect([...body.keys()]).toEqual(['captions_file'])
     const file = body.get('captions_file') as File
     expect([file.name, file.type, await file.text()]).toEqual(['spot.it_IT.srt', 'application/x-subrip', srt])
-    // Not a library video: refused before anything is sent.
+    // Not a library video (step 22's check: listed on the chosen account's advideos): refused before anything is sent.
     h.calls = []
-    h.answers.push(json({ data: [] }), json({ data: [] }))
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000599', objectKind: 'libraryvideo', edge: 'captions', params: { captions_file: srt, captions_file_name: 'spot.it_IT.srt' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    h.answers.push(json({ data: [] }))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000599', objectKind: 'video', edge: 'captions', params: { captions_file: srt, captions_file_name: 'spot.it_IT.srt' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
     expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
     // A failed upload keeps the body's length only.
     h.calls = []
     gatewayLedger.length = 0
     h.answers.push(json({ data: [{ id: VIDEO }] }), json({ error: { code: 100, error_subcode: 482, message: 'locale already applied' } }, 400))
-    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'media.captionsUpload', objectId: VIDEO, objectKind: 'libraryvideo', edge: 'captions', params: { captions_file: srt, captions_file_name: 'spot.it_IT.srt' }, check: false })).ok).toBe(false)
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'media.captionsUpload', objectId: VIDEO, objectKind: 'video', edge: 'captions', params: { captions_file: srt, captions_file_name: 'spot.it_IT.srt' }, check: false })).ok).toBe(false)
     expect(JSON.stringify(gatewayLedger)).not.toContain('Ciao')
   })
   it('writes switched off: no upload, no upload-host call', async () => {
@@ -405,7 +375,7 @@ describe('through the gateway', () => {
   })
   it('a caller cannot slip a header or a raw rupload call past the judge', async () => {
     noteMetaVideoStarted('m-1', '1234567890', VIDEO)
-    const raw = await gatewayCall({ channel: 'META', operation: 'x', kind: 'write', connectionId: 'm-1', url: metaRuploadUrl(VIDEO), method: 'POST', headers: { file_url: 'https://cdn.example.com/v.mp4', offset: '0' }, body: 'bytes', metaObjectKind: 'video' }).catch((e) => e)
+    const raw = await gatewayCall({ channel: 'META', operation: 'x', kind: 'write', connectionId: 'm-1', url: metaRuploadUrl(VIDEO), method: 'POST', headers: { file_url: 'https://cdn.example.com/v.mp4', offset: '0' }, body: 'bytes', metaObjectKind: 'startedvideo' }).catch((e) => e)
     expect(raw).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
     expect(h.calls).toHaveLength(0)
   })
