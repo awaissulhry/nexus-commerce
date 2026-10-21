@@ -26,6 +26,9 @@
  *   - Threads: only the Threads post of an ad of the chosen ad account (objectInAccount, then its creative's
  *     `threads_media_id`) and its direct replies (threadsMediaOf).
  *
+ * Step 37 (set-meta-comments) uses these same checks for a comment change (ownFacebookComment, postOf, mediaOf,
+ * ownInstagramComment, threadsMediaOf — exported, unchanged).
+ *
  * Page reads go with the business's system-user token (master ACC-014, the Page's own token, is a later step): when Meta
  * refuses, the answer says so plainly (step 10's PAGE_TOKEN_NOTE) and LIVE-PROBES.md names the read to try once live.
  * Real leads need App Review (leads_retrieval) + Business Verification + a Live app (Owner decision D4 = B: forms and TEST
@@ -547,7 +550,7 @@ const NOT_ON_POST = 'That comment is not on that post of the Facebook Page this 
  * (the post's attachments' targets). Anything else is refused (fail closed). Returns the id prefixes the comment's replies
  * may carry.
  */
-async function ownFacebookComment(account: MetaChosenAccount, postIdArg: string, commentIdArg: string): Promise<{ postId: string; commentId: string; prefixes: string[] }> {
+export async function ownFacebookComment(account: MetaChosenAccount, postIdArg: string, commentIdArg: string): Promise<{ postId: string; commentId: string; prefixes: string[] }> {
   const pageId = pageOf(account)
   const shape = facebookCommentId(pageId, postIdArg, commentIdArg)
   const postId = await postOf(account, { view: 'comment', postId: shape.postId })
@@ -641,7 +644,7 @@ export interface CommentsInput {
 }
 
 /** The chosen Page's post a view is about: postId, or the post behind one of the chosen account's ads (step 10's ad-post). */
-async function postOf(account: MetaChosenAccount, input: CommentsInput): Promise<string> {
+export async function postOf(account: MetaChosenAccount, input: CommentsInput): Promise<string> {
   const pageId = pageOf(account)
   let postId = input.postId ?? null
   if (!postId && input.adId) {
@@ -658,7 +661,7 @@ async function postOf(account: MetaChosenAccount, input: CommentsInput): Promise
 }
 
 /** The chosen Instagram account's media a view is about: mediaId, or the Instagram media behind one of the chosen account's ads. */
-async function mediaOf(account: MetaChosenAccount, input: CommentsInput): Promise<string> {
+export async function mediaOf(account: MetaChosenAccount, input: CommentsInput): Promise<string> {
   instagramOf(account)
   let mediaId = input.mediaId ?? null
   if (!mediaId && input.adId) {
@@ -671,7 +674,7 @@ async function mediaOf(account: MetaChosenAccount, input: CommentsInput): Promis
 }
 
 /** An Instagram comment of the chosen account's media: its media is read first (`media{id}` alone), then checked. */
-async function ownInstagramComment(account: MetaChosenAccount, id: string): Promise<{ commentId: string; mediaId: string }> {
+export async function ownInstagramComment(account: MetaChosenAccount, id: string): Promise<{ commentId: string; mediaId: string }> {
   instagramOf(account)
   const commentId = metaObjectId(id)
   if (!commentId) throw new MetaLiveRefusal(`"${id}" is not an Instagram comment id (digits).`)
@@ -712,7 +715,7 @@ export async function liveComments(input: CommentsInput) {
       return {
         pageId, postId, filter: input.filter ?? 'toplevel', order: input.order ?? 'newest', since: input.since ?? null,
         totalCount: read.totalCount, items: read.rows.map((r) => facebookComment(pageId, r)), more: read.more,
-        note: `toplevel: comments on the post itself (replies: view replies); stream: every comment and reply in time order. totalCount is Meta's count for that filter (it can be higher than what Meta shows, for privacy or deleted comments). Replying, hiding and deleting are change tools (a later Nexus step). ${COMMENTS_EMPTY_NOTE}`,
+        note: `toplevel: comments on the post itself (replies: view replies); stream: every comment and reply in time order. totalCount is Meta's count for that filter (it can be higher than what Meta shows, for privacy or deleted comments). Replying, hiding and deleting: set-meta-comments. ${COMMENTS_EMPTY_NOTE}`,
       }
     }
     case 'comment':
@@ -833,7 +836,7 @@ export async function liveComments(input: CommentsInput) {
         return {
           instagramId,
           mention: { commentId: idText(found.id), createdTime: text(found.timestamp), text: text(found.text), likes: num(found.like_count), media: media ? { mediaId: idText(media.id), permalink: text(media.permalink), username: text(media.username) } : null },
-          note: 'A comment someone wrote on another account\'s media naming this account. Replying is a change tool (a later Nexus step). Meta refuses this when comments are off on that media.',
+          note: 'A comment someone wrote on another account\'s media naming this account. Replying: set-meta-comments action reply-to-mention. Meta refuses this when comments are off on that media.',
         }
       }
       return {
@@ -862,7 +865,7 @@ export async function liveComments(input: CommentsInput) {
     case 'blocked': {
       const pageId = pageOf(account)
       const read = await onPage(() => listPaged(connectionId, 'comments.blocked', `${pageId}/blocked`, { fields: COMMENT_FIELDS.Blocked }, maxRows))
-      return { pageId, items: read.rows.map((r) => ({ id: idText(r.id), name: text(r.name) })), more: read.more, note: 'People and Pages blocked from the chosen Page (Page-scoped ids). Blocking and unblocking are change tools (a later Nexus step). Meta answers this to a Page token.' }
+      return { pageId, items: read.rows.map((r) => ({ id: idText(r.id), name: text(r.name) })), more: read.more, note: 'People and Pages blocked from the chosen Page (Page-scoped ids). Blocking and unblocking: set-meta-comments. Meta answers this to a Page token.' }
     }
     case 'threads':
     case 'threads-replies': {
@@ -901,7 +904,7 @@ export async function liveComments(input: CommentsInput) {
  * (objectInAccount), then its creative's `threads_media_id` (v26 ad-creative reference; not in Meta's SDK) names the post;
  * the reads are Meta's reply-moderation ones (ads_read of the ad account that owns the ad).
  */
-async function threadsMediaOf(account: MetaChosenAccount, adIdArg: string | null | undefined): Promise<string> {
+export async function threadsMediaOf(account: MetaChosenAccount, adIdArg: string | null | undefined): Promise<string> {
   if (!adIdArg) throw new MetaLiveRefusal('Name the ad (adId: an ad of the chosen ad account that runs on Threads).')
   const adId = await objectInAccount(account, adIdArg, 'ad', 'comments.threadsAdCheck')
   let body: Row

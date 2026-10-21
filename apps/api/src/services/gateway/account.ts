@@ -71,10 +71,14 @@ export async function metaChosenPageOf(connectionId: string): Promise<string | n
   return link?.externalId && /^\d{1,25}$/.test(link.externalId) ? link.externalId : null
 }
 
-/** Meta step 21: the Instagram account this business chose through this connection (its INSTAGRAM MetaAccountLink), or null. */
+/**
+ * Meta step 21: the Instagram account this business chose through this connection (its INSTAGRAM MetaAccountLink), or null.
+ * Step 37 (comments): digits only, read in the business the call runs in (row-level security): an account another business
+ * chose is never this one. The only Instagram account whose media, comments and own node a comment change names.
+ */
 export async function metaChosenInstagramOf(connectionId: string): Promise<string | null> {
   const link = await prisma.metaAccountLink.findFirst({ where: { connectionId, product: 'INSTAGRAM' }, select: { externalId: true } })
-  return link?.externalId ?? null
+  return link?.externalId && /^\d{1,25}$/.test(link.externalId) ? link.externalId : null
 }
 
 /**
@@ -149,3 +153,6 @@ export async function metaPageObjectNexusMade(kind: 'leadform' | 'testlead' | 'c
   })
   return row !== null
 }
+
+/** The tool whose change records name the comments and replies Nexus made (step 37). */
+export const META_COMMENTS_TOOL = 'set-meta-comments'

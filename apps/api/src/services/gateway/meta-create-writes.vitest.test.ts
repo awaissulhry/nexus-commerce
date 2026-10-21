@@ -384,6 +384,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/change-alert-subscriptions.ts': 1, // step 30: remove-meta-alert-subscription's delete of one alert subscription of the chosen ad account
       'services/gateway/meta-catalog-rules.ts': 11, // step 34: nine catalog DELETE rules and the items_batch DELETE judge (judges)
       'services/marketing/meta-ads/change-catalog-admin.ts': 8, // step 34: remove-meta-catalog-items' deletes (explicit ask), the undo of a catalog / set Nexus made, a pixel, person or partner off a catalog (meta-catalog-writes test)
+      'services/gateway/meta-comment-rules.ts': 4, // step 37: fbcomment.delete, fblike.delete, pageblock.delete, igcomment.delete (judges)
+      'services/marketing/meta-ads/change-comments.ts': 4, // step 37: set-meta-comments' comment delete (explicit ask) and a reply's undo, an unlike, an unblock, an Instagram comment's delete (meta-comment-writes test)
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.
     const computed = world.flatMap((f) => [...f.text.matchAll(/\bmethod:\s*([^,}\n]+)/g)].map((m) => m[1].trim())

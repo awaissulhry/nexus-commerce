@@ -364,6 +364,9 @@ function doneSettingsSentence(request: MetaChangeRequest, result: MetaChangeResu
         // Step 36 — a request never read back on purpose (a test lead): Meta's answer names its id.
         : request.skipReadBack && result.node && (typeof result.node.id === 'string' || typeof result.node.id === 'number')
           ? `Meta made it (id ${result.node.id}).`
+        // Step 37 (review A6) — a request whose success IS the answer (a like, a block; set only by set-meta-comments).
+        : request.answerOnly && result.node
+          ? 'Meta confirmed it.'
         : result.readBack === 'none' || !result.node
           ? 'Meta confirmed it; Nexus could not read it back (meta-ads-live shows it).'
           // Step 21 — a create whose read-back judges no field (a reach & frequency prediction is worked out later): made.

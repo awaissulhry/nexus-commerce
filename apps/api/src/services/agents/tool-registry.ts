@@ -136,6 +136,8 @@ import { META_ADS_CATALOG_ADMIN_TOOLS } from './tools/meta-ads-catalog-admin.too
 import { META_ADS_ACCOUNT_SETTINGS_TOOLS } from './tools/meta-ads-account-settings.tools.js'
 // Meta ads step 27b (2026-10-21): Instant Experiences of the chosen Page (changes made as the Page).
 import { META_ADS_INSTANT_EXPERIENCE_TOOLS } from './tools/meta-ads-instant-experiences.tools.js'
+// Meta ads step 37 (2026-10-21): comments and moderation (Facebook and Instagram as the chosen Page, Threads ads).
+import { META_ADS_COMMENTS_TOOLS } from './tools/meta-ads-comments.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -409,6 +411,8 @@ const ALL: AgentTool[] = [
   // Meta ads step 27b (2026-10-21): create-meta-instant-experience (parts + the experience, UNPUBLISHED; undo hides it) and
   // set-meta-instant-experience (edit while unpublished, publish one way, hide / show again) — as the chosen Page.
   ...META_ADS_INSTANT_EXPERIENCE_TOOLS,
+  // Meta ads step 37 (2026-10-21): set-meta-comments (hide, delete, reply, edit, like, block, comments off, mention replies).
+  ...META_ADS_COMMENTS_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

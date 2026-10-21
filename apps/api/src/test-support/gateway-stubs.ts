@@ -59,6 +59,8 @@ export const accountModule = {
   // Meta step 27b: the Instant Experience tools.
   META_IX_CREATE_TOOL: 'create-meta-instant-experience',
   META_IX_SET_TOOL: 'set-meta-instant-experience',
+  // Meta step 37: the comment tool.
+  META_COMMENTS_TOOL: 'set-meta-comments',
 }
 export const ledgerModule = {
   writeLedgerRow: async (row: GatewayLedgerRow): Promise<void> => { gatewayLedger.push(row) },
