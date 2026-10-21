@@ -205,6 +205,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-brand-safety': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
   'set-meta-block-list': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
   'remove-meta-block-list': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
+  'create-meta-lead-form': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-lead-forms.tools test)',
+  'set-meta-lead-form': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-lead-forms.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -278,6 +280,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-instagram-product-tags': 'it reads the business\'s chosen Instagram account live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
   // Meta ads step 23: an upload reads the business's chosen Meta ad account before anything (meta-ads-media-upload.tools test).
   'create-meta-media': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-media-upload.tools test)',
+  // Meta ads step 25: a creative reads the business's chosen Meta ad account before anything (meta-ads-creatives.tools test).
+  'create-meta-creative': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-creatives.tools test)',
+  'set-meta-creative': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-creatives.tools test)',
   // Meta ads step 7: the numbers, report runs and saved reports read the chosen ad account live from Meta (meta-ads-insights.tools test).
   'meta-ads-numbers': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
   'meta-ads-report': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
@@ -612,6 +617,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-brand-safety': () => ({ adSets: [{ adSetId: '120000000000002', addCategories: ['gambling'] }] }),
   'set-meta-block-list': () => ({ action: 'apply-account', blockListId: '120000000000601' }),
   'remove-meta-block-list': () => ({ kind: 'publisher', blockListId: '120000000000601', confirmDelete: true }),
+  // Meta ads step 36: lead forms and test leads refuse in words here (no business has Meta; their own test runs them).
+  'create-meta-lead-form': () => ({ name: 'Form A', questions: [{ type: 'FULL_NAME' }, { type: 'EMAIL' }], privacyPolicy: { url: 'https://example.com/privacy' } }),
+  'set-meta-lead-form': () => ({ action: 'archive', formId: '600000000000001' }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),
@@ -667,6 +675,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-instagram-product-tags': () => ({ view: 'eligibility' }),
   // Meta ads step 23: an upload refuses in words before any fetch or call (no business here has Meta; its own test runs it).
   'create-meta-media': () => ({ kind: 'image', images: [{ libraryImageId: 'da_test_asset' }] }),
+  // Meta ads step 25: a creative refuses in words before any call (no business here has Meta; its own test runs it).
+  'create-meta-creative': () => ({ name: 'Creative A', story: { link_data: { link: 'https://www.example.com/', message: 'Hello', image_hash: 'abc123' } } }),
+  'set-meta-creative': () => ({ creativeId: '120000000000301', name: 'Creative B' }),
   // Meta ads step 7: each refuses in words because no business here has Meta (meta-ads-insights.tools.vitest.test.ts runs
   // every view on an account).
   'meta-ads-numbers': () => ({ view: 'numbers' }),

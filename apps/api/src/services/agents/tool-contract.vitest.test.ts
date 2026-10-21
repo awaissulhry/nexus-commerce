@@ -926,6 +926,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { kind: 'image', items: [{ kind: 'image', source: 'da_test', inLibrary: false }] },
         after: { kind: 'image', items: [{ kind: 'image', source: 'da_test', hash: '0123456789abcdef0123456789abcdef', new: true }], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 25: a creative a create made new is deleted again; a creative's old name and labels go back.
+      'create-meta-creative': {
+        before: { kind: 'create', items: [] },
+        after: { kind: 'create', items: [{ kind: 'creative', creativeId: '120000000000301', name: 'Creative A', new: true }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-creative': {
+        before: { kind: 'set', creativeId: '120000000000301', name: 'Creative A', status: 'ACTIVE', labels: ['Spring'] },
+        after: { kind: 'set', creativeId: '120000000000301', name: 'Creative B', labels: [], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 29: a rule switched off is switched on again; a deleted rule is made again (a new rule) by set-meta-ad-rule.
       'set-meta-ad-rule': {
         before: { kind: 'adrule', action: 'status', id: '120000000000101', exists: 'yes', undo: { action: 'status', ruleId: '120000000000101', enabled: true }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
@@ -964,6 +973,15 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-meta-audience-sharing': {
         before: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: false, accountId: 'conn-1', adAccountId: '1234567890' },
         after: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: true, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 36: a form it made is archived (Meta deletes no form); archive ⇄ re-activate; a test lead it made is deleted.
+      'create-meta-lead-form': {
+        before: { pageId: '120000000000010', formId: null, name: 'Form A', archived: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { pageId: '120000000000010', formId: '600000000000001', name: 'Form A', archived: false, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-lead-form': {
+        before: { action: 'test-lead', pageId: '120000000000010', formId: '600000000000001', name: 'Form A', testLeadId: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'test-lead', pageId: '120000000000010', formId: '600000000000001', name: 'Form A', testLeadId: '700000000000001', accountId: 'conn-1', adAccountId: '1234567890' },
       },
       // Meta step 32: a dataset's settings, its access and a custom conversion's go back through the tool the record names;
       // a custom conversion made is deleted again (remove-meta-signal-items, a person approves).
@@ -1152,9 +1170,10 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads',
       'remove-meta-ads-items', 'set-meta-labels', 'set-meta-value-rules', 'create-meta-reach-frequency',
       'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment', 'create-meta-media',
-      'set-meta-ad-rule', 'remove-meta-ad-rule',
+      'create-meta-creative', 'set-meta-creative', 'set-meta-ad-rule', 'remove-meta-ad-rule',
       'set-meta-brand-safety', 'set-meta-block-list', 'remove-meta-block-list',
       'create-meta-audience', 'set-meta-audience', 'set-meta-audience-members', 'set-meta-audience-sharing', 'remove-meta-audience',
+      'create-meta-lead-form', 'set-meta-lead-form',
       'create-meta-dataset', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion', 'remove-meta-signal-items']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
