@@ -20,7 +20,7 @@
  *   first.
  * Never logs a token, a request body or an answer.
  */
-import { metaWriteCall, type MetaWriteEdge } from '../../gateway/meta.js'
+import { metaRuploadCall, metaWriteCall, type MetaWriteEdge } from '../../gateway/meta.js'
 import type { MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
@@ -75,6 +75,8 @@ export interface MetaObjectChange {
    * Step 18 — a create on the object's edge (POST /<id>/budget_schedules): the new object is read back, not the parent.
    * Step 19 — a campaign's or ad set's create on the ad account (`act_<id>/campaigns | adsets`), a copy (`<id>/copies`),
    * a background copy (`act_<id>/async_batch_requests`) and an asynchronous ad copy (`act_<id>/asyncadcopies`).
+   * Step 23 — an upload on the ad account (`act_<id>/adimages | advideos | video_ads`), a folder on its business portfolio
+   * (`<id>/creative_folders`), a library video's captions (`<id>/captions`).
    */
   edge?: MetaWriteEdge
   /** Step 18 — DELETE (a budget schedule's; step 22's deletes): Meta's {"success": true} is the answer, nothing is read back. */
@@ -85,6 +87,8 @@ export interface MetaObjectChange {
   recommendations?: boolean
   /** Step 21 — an edge that changes the object itself (a campaign's labels edge): the object is read back, not a new one. */
   readBackObject?: true
+  /** Step 23 — how long the call may take (an image's bytes: longer than the 60 s default). */
+  timeoutMs?: number
 }
 
 /**
@@ -289,6 +293,7 @@ export async function metaSendChange(
       connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind,
       params: { ...change.params, ...(change.readBackInPost ? { fields } : {}) }, check: false, maxRateWaitMs: WRITE_RATE_WAIT_MS,
       ...(change.edge ? { edge: change.edge } : {}), ...(change.method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...(change.parent ? { parent: change.parent } : {}),
+      ...(change.timeoutMs ? { timeoutMs: change.timeoutMs } : {}),
     })
   } catch (err) {
     // The gateway throws only before it sends (a refusal, or a problem of Nexus's own such as the database): nothing left.
@@ -342,4 +347,25 @@ export async function metaSendChange(
     throw new MetaWriteError({ ...failure, sentence: `Meta did not confirm it; ${reads}, but Meta may still apply it. Nexus never sends it again by itself; meta-ads-live shows it.` }, operation, 'unknown')
   }
   throw new MetaWriteError({ ...failure, sentence: `${failure.sentence.replace(/\.$/, '')} (${reads}).` }, operation, 'refused')
+}
+
+/**
+ * Meta step 23 (MD-016) — hand Meta the public link of a video upload THIS change started (video_ads upload_phase=start),
+ * on Meta's resumable upload host: Meta fetches the file itself (Nexus relays no byte). Resolves when Meta answered a
+ * success; rejects with a MetaWriteError: not_sent (the gateway refused it, nothing left), refused (Meta answered an error:
+ * it took no file), unknown (no answer, or Meta failed on its side: it may be fetching it). Never retried.
+ */
+export async function metaSendRupload(target: MetaWriteTarget, upload: { videoId: string; fileUrl: string; operation: string }): Promise<{ node: Record<string, unknown> | null }> {
+  let answer: GatewayResponse
+  try {
+    answer = await metaRuploadCall({ connectionId: target.connectionId, operation: upload.operation, videoId: upload.videoId, fileUrl: upload.fileUrl, maxRateWaitMs: WRITE_RATE_WAIT_MS })
+  } catch (err) {
+    const failure = failureOfThrow(err) ?? localFailure(`Nexus could not send it (${err instanceof Error ? err.message : String(err)}). Nothing was sent.`, 'NEXUS_ERROR')
+    throw new MetaWriteError(failure, upload.operation, 'not_sent')
+  }
+  const body = answer.ok ? answer.json<Record<string, unknown>>() : null
+  if (answer.ok && !(body && body.success === false)) return { node: body }
+  const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer)
+  if (answer.status === 0 || answer.status >= 500) throw new MetaWriteError({ ...failure, sentence: META_UNKNOWN_OUTCOME }, upload.operation, 'unknown')
+  throw new MetaWriteError(failure, upload.operation, 'refused')
 }

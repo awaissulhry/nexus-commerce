@@ -83,8 +83,8 @@ const metaMediaLibrary: AgentTool = {
     + 'the system user may use. website-assets (link): what Meta pulls from a landing page by itself for Advantage+ creative; asset-urls: the '
     + 'addresses it pulls from. campaign-videos (campaignId): a campaign\'s video groups. live-videos, playlists, '
     + 'playlist-videos: the chosen Page\'s live broadcasts (a finished one can be boosted) and video playlists. Only the '
-    + 'chosen ad account, its portfolio and the chosen Page are read. Uploading, copying and removing media are change '
-    + 'tools (a later Nexus step). Read only.',
+    + 'chosen ad account, its portfolio and the chosen Page are read. Uploading images and videos, making a folder and '
+    + 'taking back an upload are create-meta-media (a request a person approves). Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => liveMedia({
       connectionId: str(args.connectionId),
