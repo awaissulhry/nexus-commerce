@@ -352,7 +352,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // 1d. Meta (M1, 2026-10-20) — a READ is a GET with no body, to the pinned Graph version, that is not a method override,
   // a batch, a token revoke or any sign-in call but the system-user token renewal (meta-calls.ts metaCallVerdict).
   // Step 17 (2026-10-21) — anything else is judged by the write ALLOW-list (metaWriteVerdict): today a status change of
-  // one campaign, ad set or ad, or Meta's check of one (validate_only: a read). Every batch is refused (none allowed yet).
+  // one campaign, ad set or ad, or Meta's check of one (validate_only: a read); step 7 — or a report run of the chosen ad
+  // account's numbers (POST /act_<id>/insights: a read, never braked by NEXUS_META_ADS_WRITES, since it changes nothing on
+  // the account). Every batch is refused (none allowed yet).
   // Refused before the account, the token or the network, by the kind declared AND by the method, URL and body
   // themselves; what is sent is the body as it was judged. The object's ad account is checked after the status (3b).
   let metaRenewal = false
@@ -416,7 +418,12 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // read of its account_id), and Meta's check only for a campaign (Meta documents validate_only on campaign updates
   // only). Then Meta's per-object limits: a change waits 30 s after the last one of the same object, and an ad set's
   // budget changes wait out Meta's hour (meta-object-limits.ts).
-  if (metaWrite && req.connectionId) {
+  // Step 7 — a report run (POST /act_<id>/insights, a read: it changes nothing) only of the ad account THIS business chose
+  // through THIS connection; no object limit applies to it.
+  if (metaWrite?.reportRun && req.connectionId) {
+    const chosen = await metaChosenAdAccountOf(req.connectionId)
+    if (!chosen || chosen !== metaWrite.objectId) return refuse('refused', 'META_ACCOUNT_NOT_CHOSEN', 'Nothing was sent to Meta: a report run is only of the Meta ad account this business chose through this connection.', 403)
+  } else if (metaWrite && req.connectionId) {
     // Step 39 — brand safety: an ad set's targeting is compared with its live targeting only once the call holds its rate
     // slot, right before it is sent (review A2, see 6–7); a brand-safety RULE's write (an ad account, portfolio or block list
     // of the chosen ad account) is checked by meta-brand-safety-owner.ts (its own reads through this gateway), with every id
@@ -573,7 +580,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   let metaScrubbed = 0
   for (;;) {
     // Meta scores a write 3 points and a read 1 (rate-limiting page); its check of a change is counted as a write.
-    const slot = await takeToken(req.channel, key, req.maxRateWaitMs ?? 30_000, undefined, metaWrite ? 3 : 1)
+    // Step 7 — a report run is an insights read (1 point).
+    const slot = await takeToken(req.channel, key, req.maxRateWaitMs ?? 30_000, undefined, metaWrite && !metaWrite.reportRun ? 3 : 1)
     if (!slot.ok) {
       return refuse('refused', 'RATE_LIMITED_LOCAL', `Not sent yet: the ${name} rate limit for this account needs ${Math.ceil(slot.waitMs / 1000)} s more. Retry later.`, 429, slot.waitMs)
     }
@@ -636,7 +644,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // Step 17 — what Meta's per-object limits learn from a change or a check of one: it reached Meta (or may have), or Meta
   // held that one object (613/4841018: 30 s for its changes; 613/1487632: an hour for that ad set's budget changes).
   const objectLimit = verdict?.channelCode === '613/4841018' ? 'edits' : verdict?.channelCode === '613/1487632' ? 'budget' : null
-  if (req.channel === 'META' && metaWrite && req.connectionId) {
+  if (req.channel === 'META' && metaWrite && !metaWrite.reportRun && req.connectionId) {
     // Step 39 — a block-list draft Meta made: only this run may make a list from it, once (its next request).
     if (ok && metaWrite.rule === 'blocklist.draft') noteBlockListDraftMade(req.connectionId, req.metaRun, text)
     if (objectLimit) await holdMetaObject(req.connectionId, metaWrite.objectId, objectLimit)

@@ -69,6 +69,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 13 (2026-10-21) — meta-product-sets, meta-commerce and meta-instagram-product-tags read Meta live.
 // Meta ads step 23 (2026-10-21) — create-meta-media uploads images, videos and folders to Meta (and takes back what it made new).
 // Meta ads step 29 (2026-10-21) — set-meta-ad-rule and remove-meta-ad-rule read Meta live and change it.
+// Meta ads step 7 (2026-10-21) — meta-ads-numbers, meta-ads-report and meta-ads-saved-reports read Meta live.
 // Meta ads step 39 (2026-10-21) — set-meta-brand-safety, set-meta-block-list and remove-meta-block-list read Meta live and change it.
 
 const OPEN_WORLD = [
@@ -91,11 +92,12 @@ const OPEN_WORLD = [
   'harvest-search-term',
   'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
   'meta-account-access', 'meta-account-health', 'meta-activity-log', 'meta-ad-account', 'meta-ad-accounts', 'meta-ad-details', 'meta-ad-library',
-  'meta-ad-preview', 'meta-ad-rules', 'meta-ad-sets', 'meta-ads-graph-read', 'meta-ads-live', 'meta-audiences', 'meta-billing', 'meta-brand-safety',
-  'meta-campaigns', 'meta-catalog-feeds', 'meta-catalog-health', 'meta-catalog-items', 'meta-catalogs', 'meta-comments', 'meta-commerce',
-  'meta-connection', 'meta-datasets', 'meta-experiments', 'meta-instagram-media', 'meta-instagram-product-tags', 'meta-instant-experiences',
-  'meta-labels', 'meta-lead-forms', 'meta-leads', 'meta-media-library', 'meta-page-posts', 'meta-partnership-content', 'meta-product-sets',
-  'meta-recommendations', 'meta-targeting-check', 'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
+  'meta-ad-preview', 'meta-ad-rules', 'meta-ad-sets', 'meta-ads-graph-read', 'meta-ads-live', 'meta-ads-numbers', 'meta-ads-report',
+  'meta-ads-saved-reports', 'meta-audiences', 'meta-billing', 'meta-brand-safety', 'meta-campaigns', 'meta-catalog-feeds', 'meta-catalog-health',
+  'meta-catalog-items', 'meta-catalogs', 'meta-comments', 'meta-commerce', 'meta-connection', 'meta-datasets', 'meta-experiments',
+  'meta-instagram-media', 'meta-instagram-product-tags', 'meta-instant-experiences', 'meta-labels', 'meta-lead-forms', 'meta-leads',
+  'meta-media-library', 'meta-page-posts', 'meta-partnership-content', 'meta-product-sets', 'meta-recommendations', 'meta-targeting-check',
+  'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
   'remove-google-conversion-actions', 'remove-google-labels', 'remove-meta-ad-rule', 'remove-meta-ads-items', 'remove-meta-block-list', 'reopen-listing',
