@@ -26,6 +26,7 @@ import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
 import { metaReadOne } from './read-client.js'
+import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
 
 /** The fields a change reads back (gateway meta-calls.ts META_READ_BACK_FIELDS holds the allow-list). */
 export const READ_BACK = 'id,status,effective_status'
@@ -67,6 +68,8 @@ export interface MetaObjectChange {
     | 'customaudience'
     // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
     | MetaPageKind
+    // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
+    | MetaSignalsKind
   params: Record<string, string>
   operation: string
   budget?: boolean

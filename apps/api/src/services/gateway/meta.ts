@@ -21,6 +21,7 @@ import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { META_REST_HOST, type MetaBrandSafetyKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
 import { metaRuploadUrl } from './meta-media-rules.js'
+import type { MetaSignalsKind } from './meta-signals-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -87,6 +88,8 @@ export interface MetaWriteRequest {
     | 'customaudience'
     // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
     | MetaPageKind
+    // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
+    | MetaSignalsKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -100,7 +103,8 @@ export interface MetaWriteRequest {
    * rule made on the ad account's rule library (`POST /act_<id>/adrules_library`) and a rule's run now (`POST /<rule
    * id>/execute`, no body).
    * Step 39: the brand-safety edges (a block list's draft, list, shares, people, ad accounts and posts; the account's
-   * inventory filter). Step 31: an ad account's audiences, an audience's people and shares.
+   * inventory filter). Step 31: an ad account's audiences, an audience's people and shares. Step 32: a dataset's and a
+   * custom conversion's creates, a dataset's ad account, an event source group and its share, a claim (MetaSignalsEdge).
    */
   edge?: MetaWriteEdge
   /** Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body; step 39: a share's agency, a list's posts; step 31: an audience's people or share); default POST. */
@@ -118,7 +122,13 @@ export interface MetaWriteRequest {
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
-  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge
+  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaSignalsEdge
+/**
+ * Step 32 — a dataset made on the ad account or the business portfolio (`adspixels`) or for a Page / Instagram account
+ * (`dataset`), a custom conversion (`customconversions`), a dataset's or an event source group's ad account
+ * (`shared_accounts`), an event source group (`event_source_groups`), a claim (`claim_custom_conversions`).
+ */
+export type MetaSignalsEdge = 'adspixels' | 'dataset' | 'customconversions' | 'shared_accounts' | 'event_source_groups' | 'claim_custom_conversions'
 /** Step 31 — an ad account's new audiences and product audiences, its opt-outs; an audience's people and its shares. */
 export type MetaAudienceEdge = 'customaudiences' | 'product_audiences' | 'usersofanyaudience' | 'users' | 'ad_accounts'
 /** Step 29 — a rule made on the ad account's rule library (`act_<id>/adrules_library`), a rule's run now (`<rule id>/execute`). */
