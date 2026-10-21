@@ -1096,7 +1096,8 @@ const META_WRITE_RULES: readonly MetaWriteRule[] = [
     // (services/meta/meta-insights-lists.ts reportRunProblem).
     name: 'insights.reportRun',
     method: 'POST',
-    path: /^act_\d{1,25}\/insights$/,
+    // Follow-up of the step 7 merge review — an account id has no leading zero (act_0… is no ad account's id).
+    path: /^act_[1-9]\d{0,24}\/insights$/,
     required: ['level'],
     optional: ['fields', 'breakdowns', 'action_breakdowns', 'summary_action_breakdowns', 'action_attribution_windows', 'date_preset', 'time_range', 'time_ranges', 'time_increment', 'filtering', 'sort', 'default_summary', 'use_account_attribution_setting', 'product_id_limit', 'export_format', 'export_name'],
     values: (params) => reportRunProblem(params),
@@ -1244,8 +1245,11 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const check = parsed.params.has('execution_options')
   if (rule.reportRun) {
     if (input.kind !== 'read') return refuse('a report run changes nothing on Meta and goes as a read; this one is declared otherwise')
-    // Review A F6 — the path exactly as Nexus writes it: act_<digits>/insights, lower case.
-    if (!/^act_\d{1,25}\/insights$/.test(graph.segments.join('/'))) return refuse('a report run is POST /act_<id>/insights, written in lower case')
+    // Review A F6 — the path exactly as Nexus writes it: act_<digits>/insights, lower case (no leading zero).
+    if (!/^act_[1-9]\d{0,24}\/insights$/.test(graph.segments.join('/'))) return refuse('a report run is POST /act_<id>/insights, written in lower case')
+    // Follow-up of the step 7 merge review — a report run is of the chosen ad account itself: a call that names an object
+    // kind (a campaign, an ad set, an ad …) is no report run; an object goes as a filter in the body.
+    if (input.objectKind) return refuse('a report run names no object: it is of the chosen ad account itself (a campaign, ad set or ad goes as a filter)')
   } else if (input.kind !== (check ? 'read' : 'write')) {
     return refuse(check ? 'Meta\'s check (validate_only) changes nothing and goes as a read; this one is declared otherwise' : 'a Meta change goes as a write; this one is declared otherwise')
   }
