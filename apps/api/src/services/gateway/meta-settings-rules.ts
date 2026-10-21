@@ -37,7 +37,7 @@
  *     budget_value_type, time_start, time_end; api_delete) — STILL-UNVERIFIED (LIVE-PROBES CMP-059 / CMP-060).
  */
 import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
-import { META_VALIDATE_ONLY } from './meta-calls.js'
+import { META_VALIDATE_ONLY } from './meta-write-check.js'
 
 import { META_NAME_TEXT, META_STRICT_TEXT } from './meta-write-text.js'
 

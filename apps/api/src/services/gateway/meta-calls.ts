@@ -66,6 +66,7 @@ import { META_OPTIMIZE_WRITE_RULES } from './meta-optimize-rules.js'
 import { META_IMAGE_MAX_BODY, META_MEDIA_WRITE_RULES, metaRuploadVerdict } from './meta-media-rules.js'
 import { metaAdRuleWriteRules } from './meta-ad-rule-rules.js'
 import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
+import { META_VALIDATE_ONLY } from './meta-write-check.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -873,8 +874,6 @@ export type MetaWriteStatus = typeof META_WRITE_STATUSES[number]
  */
 export const META_READ_BACK_FIELDS: ReadonlySet<string> = new Set(['id', 'status', 'configured_status', 'effective_status', 'updated_time'])
 
-/** The ONE value of `execution_options` Nexus sends: Meta's check (validate_only), which changes nothing. */
-export const META_VALIDATE_ONLY = '["validate_only"]'
 
 /**
  * Review fix A2 (2026-10-21) — Meta documents validate_only on a campaign UPDATE (reference/ad-campaign-group.md
