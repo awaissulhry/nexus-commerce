@@ -47,7 +47,7 @@ vi.mock('../../../db.js', () => ({
 
 import { META_ADS_ACCOUNT_TOOLS, META_BILLING_MONEY } from './meta-ads-account.tools.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
-import { currencyAmountMicros, metaAccountSpendCapMicros, minorToMetaStandard, minorToMetaUnits } from '../../marketing/meta-ads/money.js'
+import { currencyAmountMicros, META_CURRENCY_OFFSETS, META_OFFSET_ONE, metaAccountSpendCapMicros, metaCurrencyOffset, minorOf, minorToMetaStandard, minorToMetaUnits } from '../../marketing/meta-ads/money.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
 
@@ -106,7 +106,7 @@ function answers(req: Req): unknown {
   }
   if (req.path.endsWith('/applications') || req.path.endsWith('/advertisable_applications')) return { data: [{ id: APP, name: 'App A' }] }
   if (req.path.endsWith('/adspixels')) return { data: [{ id: PIXEL }] }
-  if (req.path === CATALOG) return { business: { id: PORTFOLIO } }
+  if (req.path.endsWith('/owned_product_catalogs')) return { data: [{ id: CATALOG }] }
   if (req.path.endsWith('/extendedcredits')) return { data: [{ id: CREDIT, credit_type: 'ADS_BUSINESS', owner_business: { id: PORTFOLIO, name: 'Shop A' }, legal_entity_name: 'Shop A ltd', balance: { amount: '100.00', currency: 'USD', offsetted_amount: '10000' } }] }
   if (req.path.endsWith('/owned_instagram_assets')) return { data: [{ id: IG_ASSET, ig_user_id: IG }] }
   if (req.path.endsWith('/extended_credit_invoice_groups')) return { data: [{ id: GROUP, name: 'Group A', emails: ['a@example.com', 'b@example.com'] }] }
@@ -190,6 +190,13 @@ describe('meta-ad-account', () => {
     // Its own sub-fields, never the client's e-mail (review A4).
     expect(h.calls.find((c) => fieldsOf(c).startsWith('agency_client_declaration'))?.query?.fields).toMatch(/^agency_client_declaration\{agency_representing_client,.*\}$/)
   })
+  it('settings: custom_audience_info is not in v26\'s Reading table, so a refusal costs only sdkOther, never the settings (review round 2, B1)', async () => {
+    h.answer = (req) => (/custom_audience_info/.test(fieldsOf(req)) ? refusedByMeta('(#100) Tried accessing nonexisting field (custom_audience_info)') : answers(req))
+    const out = data(await run('meta-ad-account', { view: 'settings' }))
+    expect(out.name).toBe('Shop A ads')
+    expect(out.missing).toEqual([{ part: 'sdkOther', sentence: expect.stringMatching(/custom_audience_info/) }])
+    expect(fieldsOf(h.calls.find((c) => c.operation === 'account.settings.core')!)).not.toMatch(/custom_audience_info/)
+  })
   it('when Meta refuses the declaration\'s sub-field list, the whole field is read once more and the e-mail is still dropped', async () => {
     h.answer = (req) => (fieldsOf(req).startsWith('agency_client_declaration{') ? refusedByMeta('(#100) Unknown fields') : answers(req))
     const out = data(await run('meta-ad-account', { view: 'settings' }))
@@ -202,6 +209,8 @@ describe('meta-ad-account', () => {
     const out = data(await run('meta-ad-account', { view: 'settings' }))
     expect(out.name).toBe('Shop A ads')
     expect(out.missing).toEqual([{ part: 'agencyDeclaration', sentence: expect.stringMatching(/Business Manager admin/) }])
+    // Review round 2 — a permission refusal (#200) is not a refused field list: no second, whole-field read.
+    expect(h.calls.filter((c) => fieldsOf(c).startsWith('agency_client_declaration'))).toHaveLength(1)
   })
   it('terms never asks user_tos_accepted (system users cannot have it) and says why', async () => {
     const out = data(await run('meta-ad-account', { view: 'terms' }))
@@ -328,9 +337,66 @@ describe('meta-billing', () => {
     ] } : answers(req))
     const out = data(await run('meta-billing', { view: 'events', from: '2026-10-01', to: '2026-10-20' }))
     // Review A4 — only the plain keys Nexus knows; a nested object or an unknown key is left out and counted.
-    expect(out.events).toEqual([expect.objectContaining({ type: 'ad_account_billing_charge', metaRaw: { amount: '1000', currency: 'EUR' }, detailsLeftOut: 2 })])
+    expect(out.events).toEqual([expect.objectContaining({ type: 'ad_account_billing_charge', metaRaw: { amount: '1000', currency: 'EUR' }, detailsLeftOut: 2, leftOutKeys: ['card', 'note_x'] })])
+    expect(JSON.stringify(out)).not.toMatch(/last4/)
     expect(h.calls.find((c) => c.path.endsWith('/activities'))?.query).toMatchObject({ category: 'ACCOUNT', since: Date.UTC(2026, 9, 1) / 1000, until: Date.UTC(2026, 9, 21) / 1000 })
+    // The ACCOUNT read held a billing event: it answers alone (review round 2, B2).
+    expect(h.calls.filter((c) => c.path.endsWith('/activities'))).toHaveLength(1)
+    expect(out.answeredBy).toBe('category ACCOUNT')
+    expect(out.accountCategoryRead).toBeUndefined()
     expect((await run('meta-billing', { view: 'events', from: '2025-01-01', to: '2026-10-20' })).error).toMatch(/at most 366 days/)
+  })
+})
+
+describe('meta-billing, review round 2', () => {
+  const days = { view: 'events', from: '2026-10-01', to: '2026-10-20' }
+  const activityReads = () => h.calls.filter((c) => c.path.endsWith('/activities'))
+  it('events: an ACCOUNT read with no billing event → the same days ONCE more without a category, the same cap; the answer says which read answered (B2)', async () => {
+    h.answer = (req) => {
+      if (!req.path.endsWith('/activities')) return answers(req)
+      if (req.query?.category === 'ACCOUNT') return { data: [{ event_type: 'update_ad_account_spend_cap', event_time: '2026-10-02T10:00:00+0000' }] }
+      return { data: [{ event_type: 'ad_account_billing_charge', event_time: '2026-10-03T10:00:00+0000', extra_data: { amount: '1000', old_value: 'someone@example.com', payer_note: 'kept out', 'other@example.com': 1 } }] }
+    }
+    const out = data(await run('meta-billing', days))
+    const [first, second, ...rest] = activityReads()
+    expect([first.query?.category, second.query?.category, rest.length]).toEqual(['ACCOUNT', undefined, 0])
+    expect(second.query).toEqual({ fields: first.query?.fields, since: first.query?.since, until: first.query?.until, limit: first.query?.limit })
+    expect(out).toMatchObject({ answeredBy: 'every category', accountCategoryRead: { scanned: 1, billingEvents: 0 }, scanned: 1 })
+    // A value that looks like an e-mail address is never passed on; the keys left out are named, never their values (A6).
+    // A key that is not a plain name (here an address) is counted, never named.
+    expect(out.events).toEqual([expect.objectContaining({ type: 'ad_account_billing_charge', metaRaw: { amount: '1000' }, detailsLeftOut: 3, leftOutKeys: ['old_value', 'payer_note'] })])
+    expect(JSON.stringify(out)).not.toMatch(/@example\.com|kept out/)
+    expect(metaReadOnlyProblem({ method: 'GET', url: metaUrl(second.path, second.query as never), kind: 'read' })).toBeNull()
+  })
+  it('events: a category Meta refuses (#100) is read once without it; a throttle is not, and ends the read', async () => {
+    h.answer = (req) => (req.path.endsWith('/activities') ? (req.query?.category ? refusedByMeta('(#100) Invalid parameter category') : { data: [{ event_type: 'ad_account_billing_refund' }] }) : answers(req))
+    const out = data(await run('meta-billing', days))
+    expect(activityReads().map((c) => c.query?.category ?? null)).toEqual(['ACCOUNT', null])
+    expect(out).toMatchObject({ answeredBy: 'every category', accountCategoryRead: { refused: expect.stringMatching(/Invalid parameter/) }, events: [expect.objectContaining({ type: 'ad_account_billing_refund' })] })
+    h.calls.length = 0
+    h.answer = (req) => (req.path.endsWith('/activities') ? refusedByMeta('(#80004) too many calls', '80004', 'rate_limited') : answers(req))
+    expect((await run('meta-billing', days)).error).toMatch(/slow down/)
+    expect(activityReads()).toHaveLength(1)
+  })
+  it('tax: when Meta does not say the account is for business use (no is_personal), the tax numbers are masked (A6)', async () => {
+    h.answer = (req) => (/tax_id/.test(fieldsOf(req)) ? { tax_id: 'IT00000000000', tax_id_status: 3, liable_address: { city: 'Rome', vat_tax_id: 'IT00000000000' } } : answers(req))
+    const out = data(await run('meta-billing', { view: 'tax' }))
+    expect(out).toMatchObject({ taxId: null, personalUse: null, addresses: { liable: { city: 'Rome' } } })
+    expect(JSON.stringify(out)).not.toMatch(/IT00000000000/)
+    expect(out.notes.join(' ')).toMatch(/did not say/)
+    h.answer = (req) => {
+      if (fieldsOf(req) === 'is_personal,tax_id_status') return { tax_id_status: 3 }
+      if (req.path.endsWith('/extended_credit_invoice_groups')) return { data: [{ id: GROUP, name: 'Group A', bill_to_address: { city: 'Rome', vat_tax_id: 'IT00000000000' } }] }
+      return answers(req)
+    }
+    expect(JSON.stringify(data(await run('meta-billing', { view: 'invoice-groups' })))).not.toMatch(/IT00000000000/)
+  })
+  it('credit lines: one whose owner Meta does not name is treated as another business\'s — no amounts, no names (A3)', async () => {
+    h.answer = (req) => (req.path.endsWith('/extendedcredits') ? { data: [
+      { id: '500000000000004', credit_type: 'ADS_BUSINESS', legal_entity_name: 'Unknown ltd', owner_business_name: 'Unknown owner', partition_from: 'Unknown grant', balance: { amount: '4.00', currency: 'USD', offsetted_amount: '400' } },
+    ] } : answers(req))
+    const lines = data(await run('meta-billing', { view: 'credit-lines' })).creditLines
+    expect(lines).toEqual([{ creditLineId: '500000000000004', creditType: 'ADS_BUSINESS', accessRevoked: null, automated: null, owner: null, ownedByThisPortfolio: false }])
   })
 })
 
@@ -364,7 +430,7 @@ describe('meta-account-access', () => {
   })
   it('by-person: a catalog, pixel, app … shows its name only when this portfolio owns it (review A2)', async () => {
     h.answer = (req) => {
-      if (req.path === `${SYSTEM_USER}/assigned_product_catalogs`) return { data: [{ id: CATALOG, name: 'Catalog A', owner_business: { id: PORTFOLIO } }, { id: '600000000000009', name: 'Catalog of another', owner_business: { id: '9000000000007' } }, { id: '600000000000010', name: 'No owner said' }] }
+      if (req.path === `${SYSTEM_USER}/assigned_product_catalogs`) return { data: [{ id: CATALOG, name: 'Catalog A', business: { id: PORTFOLIO } }, { id: '600000000000009', name: 'Catalog of another', business: { id: '9000000000007' } }, { id: '600000000000010', name: 'No owner said' }] }
       if (req.path === `${SYSTEM_USER}/assigned_monetization_properties`) return { data: [{ id: '650000000000001' }] }
       return answers(req)
     }
@@ -372,11 +438,12 @@ describe('meta-account-access', () => {
     expect(out.assets.catalogs).toEqual([{ id: CATALOG, name: 'Catalog A', ownedByThisPortfolio: true }, { id: '600000000000009', takenByAnotherBusiness: null }, { id: '600000000000010', takenByAnotherBusiness: null }])
     expect(out.assets.monetization).toEqual([{ id: '650000000000001', takenByAnotherBusiness: null }])
     expect(JSON.stringify(out)).not.toMatch(/Catalog of another|No owner said/)
-    expect(h.calls.find((c) => c.path === `${SYSTEM_USER}/assigned_product_catalogs`)?.query?.fields).toBe('id,name,owner_business{id}')
+    // v26 product-catalog documents `business` ("Business that owns a catalog"); owner_business is SDK only (review round 2, B4).
+    expect(h.calls.find((c) => c.path === `${SYSTEM_USER}/assigned_product_catalogs`)?.query?.fields).toBe('id,name,business{id}')
   })
   it('by-person in a portfolio another business shares: catalogs and the rest are ids only', async () => {
     h.taken = [{ product: 'PORTFOLIO', id: PORTFOLIO }]
-    h.answer = (req) => (req.path.endsWith('/assigned_product_catalogs') ? { data: [{ id: CATALOG, name: 'Catalog A', owner_business: { id: PORTFOLIO } }] } : answers(req))
+    h.answer = (req) => (req.path.endsWith('/assigned_product_catalogs') ? { data: [{ id: CATALOG, name: 'Catalog A', business: { id: PORTFOLIO } }] } : answers(req))
     const out = data(await run('meta-account-access', { view: 'by-person', kinds: ['catalogs'] }))
     expect(out.assets.catalogs).toEqual([{ id: CATALOG, takenByAnotherBusiness: null }])
     expect(JSON.stringify(out)).not.toMatch(/Catalog A/)
@@ -384,8 +451,7 @@ describe('meta-account-access', () => {
   it('asset-people: only the chosen Page / Instagram account, a catalog of the portfolio, a pixel of the account', async () => {
     expect((await run('meta-account-access', { view: 'asset-people', asset: 'page', assetId: '120000000000099' })).error).toMatch(/Only the Facebook Page this business chose/)
     expect((await run('meta-account-access', { view: 'asset-people', asset: 'pixel', assetId: '400000000000999' })).error).toMatch(/not one of the chosen ad account's pixels/)
-    h.answer = (req) => (req.path === '600000000000002' ? { business: { id: '9000000000009' } } : answers(req))
-    expect((await run('meta-account-access', { view: 'asset-people', asset: 'catalog', assetId: '600000000000002' })).error).toMatch(/not owned by the chosen ad account's business portfolio/)
+    expect((await run('meta-account-access', { view: 'asset-people', asset: 'catalog', assetId: '600000000000002' })).error).toMatch(/not a catalog of the chosen ad account's business portfolio/)
     h.taken = [{ product: 'PORTFOLIO', id: PORTFOLIO }]
     expect((await run('meta-account-access', { view: 'asset-people', asset: 'catalog', assetId: CATALOG })).error).toMatch(/cannot tell whose this catalog is/)
     expect(h.calls.some((c) => c.path.endsWith('/assigned_users') && c.path !== `act_${ACCOUNT}/assigned_users`)).toBe(false)
@@ -414,6 +480,106 @@ describe('meta-account-access', () => {
   })
 })
 
+describe('meta-account-access, review round 2', () => {
+  const OTHER_PORTFOLIO = '9000000000008'
+  const people = (req: Req) => {
+    if (req.path === `${SYSTEM_USER}/assigned_ad_accounts`) return { data: [
+      { account_id: ACCOUNT, name: 'Shop A ads', business: { id: PORTFOLIO } },
+      { account_id: '5550001113', name: 'Shop A second', business: { id: PORTFOLIO } },
+      { account_id: '5550001114', name: 'Unpicked of another', business: { id: OTHER_PORTFOLIO } },
+      { account_id: '5550001115', name: 'Owner not said' },
+    ] }
+    if (req.path === `${SYSTEM_USER}/assigned_pages`) return { data: [
+      { id: PAGE, name: 'Shop A page', business: { id: OTHER_PORTFOLIO } },
+      { id: '120000000000011', name: 'Shop A other page', business: { id: PORTFOLIO } },
+      { id: '120000000000012', name: 'Page of another', business: { id: OTHER_PORTFOLIO } },
+    ] }
+    if (req.path === `${SYSTEM_USER}/assigned_instagram_accounts`) return { data: [{ id: IG, username: 'shop_a' }, { id: '170000000000002', username: 'shop_a_two' }, { id: '170000000000003', username: 'someone_else' }] }
+    if (req.path === `${PORTFOLIO}/owned_instagram_assets`) return { data: [{ id: IG_ASSET, ig_user_id: '170000000000002' }] }
+    if (req.path === `${PORTFOLIO}/client_instagram_assets`) return { data: [{ id: '180000000000003', ig_user_id: '170000000000003' }] }
+    return answers(req)
+  }
+  const unnamed = /Unpicked of another|Owner not said|Page of another|someone_else/
+  it('by-person: ad accounts, Pages and Instagram accounts are named only when chosen here, or owned by the chosen portfolio (A1)', async () => {
+    h.answer = people
+    const out = data(await run('meta-account-access', { view: 'by-person', kinds: ['adAccounts', 'pages', 'instagram'] }))
+    expect(out.assets.adAccounts).toEqual([
+      { id: ACCOUNT, name: 'Shop A ads', chosenHere: true, ownedByThisPortfolio: true, takenByAnotherBusiness: false },
+      { id: '5550001113', name: 'Shop A second', chosenHere: false, ownedByThisPortfolio: true, takenByAnotherBusiness: false },
+      { id: '5550001114', takenByAnotherBusiness: null },
+      { id: '5550001115', takenByAnotherBusiness: null },
+    ])
+    expect(out.assets.pages).toEqual([
+      { id: PAGE, name: 'Shop A page', chosenHere: true, ownedByThisPortfolio: false, takenByAnotherBusiness: false },
+      { id: '120000000000011', name: 'Shop A other page', chosenHere: false, ownedByThisPortfolio: true, takenByAnotherBusiness: false },
+      { id: '120000000000012', takenByAnotherBusiness: null },
+    ])
+    // Instagram: the portfolio's OWN Instagram business assets decide; a client asset is another portfolio's (id only).
+    expect(out.assets.instagram).toEqual([
+      { id: IG, name: 'shop_a', chosenHere: true, ownedByThisPortfolio: false, takenByAnotherBusiness: false },
+      { id: '170000000000002', name: 'shop_a_two', chosenHere: false, ownedByThisPortfolio: true, takenByAnotherBusiness: false },
+      { id: '170000000000003', takenByAnotherBusiness: null },
+    ])
+    expect(JSON.stringify(out)).not.toMatch(unnamed)
+    expect(h.calls.find((c) => c.path === `${SYSTEM_USER}/assigned_ad_accounts`)?.query?.fields).toBe('account_id,name,business{id}')
+    expect(h.calls.find((c) => c.path === `${SYSTEM_USER}/assigned_pages`)?.query?.fields).toBe('id,name,business{id}')
+    expect(h.calls.some((c) => c.path === `${PORTFOLIO}/client_instagram_assets`)).toBe(false)
+    for (const c of h.calls) expect(metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' }), c.path).toBeNull()
+  })
+  it('by-person in a portfolio another business shares: only the assets chosen here are named, and the portfolio\'s Instagram list is not read', async () => {
+    h.answer = people
+    h.taken = [{ product: 'PORTFOLIO', id: PORTFOLIO }]
+    const out = data(await run('meta-account-access', { view: 'by-person', kinds: ['adAccounts', 'pages', 'instagram'] }))
+    expect(out.assets.adAccounts.map((a: Record<string, unknown>) => a.name ?? null)).toEqual(['Shop A ads', null, null, null])
+    expect(out.assets.pages.map((a: Record<string, unknown>) => a.name ?? null)).toEqual(['Shop A page', null, null])
+    expect(out.assets.instagram.map((a: Record<string, unknown>) => a.name ?? null)).toEqual(['shop_a', null, null])
+    expect(JSON.stringify(out)).not.toMatch(/Shop A second|Shop A other page|shop_a_two/)
+    expect(h.calls.some((c) => c.path.endsWith('_instagram_assets'))).toBe(false)
+  })
+  it('by-person Instagram: an owned list Meta refuses names only the chosen one and says why; a throttle ends the read', async () => {
+    h.answer = (req) => (req.path === `${PORTFOLIO}/owned_instagram_assets` ? refusedByMeta('(#200) Requires business_management', '200', 'forbidden') : people(req))
+    const out = data(await run('meta-account-access', { view: 'by-person', kinds: ['instagram'] }))
+    expect(out.assets.instagram.map((a: Record<string, unknown>) => a.name ?? null)).toEqual(['shop_a', null, null])
+    expect(out.missing).toEqual([{ part: 'instagram owner', sentence: expect.stringMatching(/could not list .*business_management/) }])
+    h.answer = (req) => (req.path === `${PORTFOLIO}/owned_instagram_assets` ? refusedByMeta('(#80004) too many calls', '80004', 'rate_limited') : people(req))
+    expect((await run('meta-account-access', { view: 'by-person', kinds: ['instagram'] })).error).toMatch(/slow down/)
+  })
+  it('asset-people catalog: the id must be in the portfolio\'s owned or client catalogs — a Page id of the same portfolio is refused before any people read (A5)', async () => {
+    h.answer = (req) => (req.path === `${PORTFOLIO}/client_product_catalogs` ? { data: [{ id: '600000000000003' }] } : answers(req))
+    expect((await run('meta-account-access', { view: 'asset-people', asset: 'catalog', assetId: '120000000000011' })).error).toMatch(/not a catalog of the chosen ad account's business portfolio/)
+    expect(h.calls.map((c) => c.path)).toEqual([`${PORTFOLIO}/owned_product_catalogs`, `${PORTFOLIO}/client_product_catalogs`])
+    expect(h.calls.some((c) => c.path.endsWith('/assigned_users'))).toBe(false)
+    h.calls.length = 0
+    expect(data(await run('meta-account-access', { view: 'asset-people', asset: 'catalog', assetId: '600000000000003' })).assetId).toBe('600000000000003')
+    expect(h.calls.find((c) => c.path === '600000000000003/assigned_users')?.query?.business).toBe(PORTFOLIO)
+    // A list Meta refuses is said with Meta's words; a throttle ends the read before the next list.
+    h.calls.length = 0
+    h.answer = (req) => (req.path === `${PORTFOLIO}/owned_product_catalogs` ? refusedByMeta('(#200) Requires catalog_management', '200', 'forbidden') : answers(req))
+    expect((await run('meta-account-access', { view: 'asset-people', asset: 'catalog', assetId: CATALOG })).error).toMatch(/could not list the business portfolio's catalogs .*catalog_management/)
+    h.calls.length = 0
+    h.answer = (req) => (req.path === `${PORTFOLIO}/owned_product_catalogs` ? refusedByMeta('(#80004) too many calls', '80004', 'rate_limited') : answers(req))
+    expect((await run('meta-account-access', { view: 'asset-people', asset: 'catalog', assetId: CATALOG })).error).toMatch(/slow down/)
+    expect(h.calls.map((c) => c.path)).toEqual([`${PORTFOLIO}/owned_product_catalogs`])
+  })
+  it('asset-people instagram: a throttle or a lost token ends the read; another refusal is said, never "not an asset of the portfolio" (B5)', async () => {
+    h.answer = (req) => (req.path === `${PORTFOLIO}/owned_instagram_assets` ? refusedByMeta('(#80004) too many calls', '80004', 'rate_limited') : answers(req))
+    expect((await run('meta-account-access', { view: 'asset-people', asset: 'instagram' })).error).toMatch(/slow down/)
+    expect(h.calls.map((c) => c.path)).toEqual([`${PORTFOLIO}/owned_instagram_assets`])
+    h.calls.length = 0
+    h.answer = (req) => (req.path === `${PORTFOLIO}/owned_instagram_assets` ? refusedByMeta('Error validating access token', '190', 'auth_expired') : answers(req))
+    expect((await run('meta-account-access', { view: 'asset-people', asset: 'instagram' })).error).toMatch(/no longer accepts this business's system-user token/)
+    expect(h.calls.map((c) => c.path)).toEqual([`${PORTFOLIO}/owned_instagram_assets`])
+    h.calls.length = 0
+    h.answer = (req) => (req.path === `${PORTFOLIO}/owned_instagram_assets` ? refusedByMeta('(#200) Requires business_management', '200', 'forbidden') : req.path.endsWith('/client_instagram_assets') ? { data: [] } : answers(req))
+    const refused = (await run('meta-account-access', { view: 'asset-people', asset: 'instagram' })).error
+    expect(refused).toMatch(/could not list the business portfolio's Instagram assets .*business_management/)
+    expect(refused).not.toMatch(/is not an Instagram asset/)
+    h.calls.length = 0
+    h.answer = (req) => (req.path === `${PORTFOLIO}/owned_instagram_assets` ? refusedByMeta('(#200) Requires business_management', '200', 'forbidden') : req.path.endsWith('/client_instagram_assets') ? { data: [{ id: IG_ASSET, ig_user_id: IG }] } : answers(req))
+    expect(data(await run('meta-account-access', { view: 'asset-people', asset: 'instagram' })).assetId).toBe(IG_ASSET)
+  })
+})
+
 describe('the units (facts F1 X4, SDK currencyamount.py)', () => {
   it('spend_cap is read in offset units, 0 is no cap', () => {
     expect(metaAccountSpendCapMicros('2350', 'USD')).toBe(23_500_000n)
@@ -423,23 +589,56 @@ describe('the units (facts F1 X4, SDK currencyamount.py)', () => {
     // BHD: Meta's offset is 100 (hundredths), so "2350" is 23.50 BHD.
     expect(metaAccountSpendCapMicros('2350', 'BHD')).toBe(23_500_000n)
   })
-  it('minor units → the standard-unit string Meta reads on a spend_cap WRITE (set-meta-spend-cap, step 40)', () => {
+  it('minor units → the standard-unit string Meta reads on a spend_cap WRITE (set-meta-spend-cap, step 40), from Meta\'s offset', () => {
     expect(minorToMetaStandard(50000, 'EUR')).toBe('500.00')
     expect(minorToMetaStandard(5, 'EUR')).toBe('0.05')
-    expect(minorToMetaStandard(0, 'EUR')).toBe('0.00')
     expect(minorToMetaStandard(1250, 'JPY')).toBe('1250')
-    expect(minorToMetaStandard(0, 'JPY')).toBe('0')
-    expect(minorToMetaStandard(1250, 'BHD')).toBe('1.250')
-    expect(minorToMetaStandard(5, 'BHD')).toBe('0.005')
-    expect(minorToMetaStandard(-250, 'USD')).toBe('-2.50')
+    // Review round 2 (A2, B3) — Meta's offset, never the currency's own decimals: BHD / JOD in hundredths (1250 = 1.250
+    // BHD → "1.25"; 5 = 0.005 BHD is no whole hundredth → null), CRC / TWD in whole units.
+    expect(minorToMetaStandard(1250, 'BHD')).toBe('1.25')
+    expect(minorToMetaStandard(12500, 'BHD')).toBe('12.50')
+    expect(minorToMetaStandard(5, 'BHD')).toBeNull()
+    expect(minorToMetaStandard(12340, 'JOD')).toBe('12.34')
+    expect(minorToMetaStandard(12345, 'JOD')).toBeNull()
+    expect(minorToMetaStandard(125000, 'CRC')).toBe('1250')
+    expect(minorToMetaStandard(125050, 'CRC')).toBeNull()
+    expect(minorToMetaStandard(1200, 'TWD')).toBe('12')
+    expect(minorToMetaStandard(1250, 'TWD')).toBeNull()
+    expect(minorToMetaStandard(2350, 'usd')).toBe('23.50')
+    // 0 would REMOVE the cap ("A value of 0 signifies no spending-cap"); a negative cap is none: never a string to send.
+    expect(minorToMetaStandard(0, 'EUR')).toBeNull()
+    expect(minorToMetaStandard(0, 'JPY')).toBeNull()
+    expect(minorToMetaStandard(-250, 'USD')).toBeNull()
+    // No currency, or one Meta does not list: never guessed.
+    expect(minorToMetaStandard(1250, null)).toBeNull()
+    expect(minorToMetaStandard(1250, undefined)).toBeNull()
+    expect(minorToMetaStandard(1250, '')).toBeNull()
+    expect(minorToMetaStandard(1250, 'KWD')).toBeNull()
+    expect(minorToMetaStandard(1250, 'XYZ')).toBeNull()
     expect(minorToMetaStandard(1.5, 'EUR')).toBeNull()
   })
-  it('minor units → Meta\'s offset units, only when whole', () => {
+  it('a spend cap read and written back is the same cap, in every Meta currency', () => {
+    for (const [currency, offset] of Object.entries(META_CURRENCY_OFFSETS)) {
+      // Meta READS "2300" in offset units; Nexus answers minor units; the WRITE string is the same amount in standard units.
+      const minor = minorOf(metaAccountSpendCapMicros('2300', currency), currency)!
+      expect(minorToMetaStandard(minor, currency), currency).toBe(offset === 100 ? '23.00' : '2300')
+    }
+    for (const currency of ['EUR', 'USD', 'BHD', 'JOD']) expect(minorToMetaStandard(minorOf(metaAccountSpendCapMicros('2350', currency), currency)!, currency), currency).toBe('23.50')
+  })
+  it('Meta\'s currency table: the offset-1 currencies are exactly those metaOffset counts in whole units', () => {
+    expect(Object.keys(META_CURRENCY_OFFSETS)).toHaveLength(66)
+    expect(Object.entries(META_CURRENCY_OFFSETS).filter(([, o]) => o === 1).map(([c]) => c).sort()).toEqual([...META_OFFSET_ONE].sort())
+    expect([metaCurrencyOffset('bhd'), metaCurrencyOffset('JOD'), metaCurrencyOffset('CRC'), metaCurrencyOffset('TWD'), metaCurrencyOffset('KWD'), metaCurrencyOffset(null)]).toEqual([100, 100, 1, 1, null, null])
+  })
+  it('minor units → Meta\'s offset units, only when whole, never below 0, never without a currency (the one helper)', () => {
     expect(minorToMetaUnits(1250, 'EUR')).toBe(1250)
     expect(minorToMetaUnits(1250, 'JPY')).toBe(1250)
     expect(minorToMetaUnits(1250, 'BHD')).toBe(125)
     expect(minorToMetaUnits(1255, 'BHD')).toBeNull()
     expect(minorToMetaUnits(1.5, 'EUR')).toBeNull()
+    expect(minorToMetaUnits(-1, 'EUR')).toBeNull()
+    expect(minorToMetaUnits(1250, '')).toBeNull()
+    expect(minorToMetaUnits(1250, null)).toBeNull()
   })
   it('a CurrencyAmount in its own currency: offsetted_amount first, else the decimal amount', () => {
     expect(currencyAmountMicros({ amount: '100.00', currency: 'USD', offsetted_amount: '10000' })).toEqual({ micros: 100_000_000n, currency: 'USD' })

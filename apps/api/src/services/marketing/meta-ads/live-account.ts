@@ -7,8 +7,8 @@
  * ONLY the business's chosen assets: the chosen ad account (metaChosenAccount); its own business portfolio — and the
  * portfolio's billing (invoices, credit lines, cards) only when no other business in Nexus uses an ad account of that
  * portfolio (nexus_meta_links_taken PORTFOLIO: its id and a flag, no call); the chosen Facebook Page and Instagram account;
- * a catalog of the chosen account's own portfolio; a pixel of the chosen ad account. A Page, Instagram account, ad account
- * or portfolio another business in Nexus uses is `{ id, takenByAnotherBusiness: true }` only. Fields are FIXED lists per
+ * a catalog of the chosen account's portfolio (owned, or shared with it); a pixel of the chosen ad account. A Page,
+ * Instagram account, ad account or portfolio another business in Nexus uses is `{ id, takenByAnotherBusiness: true }` only. Fields are FIXED lists per
  * node type (a caller never names a Graph field or path); fields Meta's v26 reference does not list are asked in their own
  * group, and a group Meta refuses is named with Meta's sentence (live-objects.ts readGroups / listGroups).
  *
@@ -21,13 +21,16 @@
  * Checked 2026-10-21 (curl ≥ 3 s apart: developers.facebook.com/documentation/ads-commerce/marketing-api/reference/<page>.md
  * and developers.facebook.com/docs/marketing-api/reference/<node>/?locale=en_US; business-asset-management guides
  * ad-accounts, pages, instagram-accounts; Meta's Python Business SDK main, facebook_business/adobjects/<node>.py):
- *   - ad-account (v26 field table): every field read here, incl. direct_deals_tos_accepted (not in the SDK); SDK only:
- *     liable_address, send_bill_to_address, sold_to_address, owner_business, viewable_business, user_access_expire_time,
- *     custom_audience_info, is_ba_skip_delayed_eligible, all_capabilities (their own groups); funding_source_details and
+ *   - ad-account (v26 Reading table): every field of the settings' core group and of the other views, incl.
+ *     direct_deals_tos_accepted (not in the SDK); NOT in the Reading table (SDK fields only, each in a group of its own so
+ *     a refusal never costs the core): liable_address, send_bill_to_address, sold_to_address (sdkAddresses), owner_business,
+ *     viewable_business (sdkPortfolios), user_access_expire_time, is_ba_skip_delayed_eligible and custom_audience_info
+ *     (sdkOther — v26 lists custom_audience_info only as an Updating parameter), all_capabilities; funding_source_details and
  *     expired_funding_source_details need MANAGE ("the user making the API call must have a MANAGE task"), is_prepay_account
  *     and is_tax_id_required ADVERTISE or MANAGE; agency_client_declaration needs Business Manager Admin;
  *     user_tos_accepted "is not valid for system users" (so it is not asked); spend_cap is read in the currency's basic unit
- *     ("cents") and written in standard units (money.ts metaAccountSpendCapMicros); disable_reason 0–15; tax_id_status 0–5
+ *     ("cents": money.ts metaAccountSpendCapMicros, the READ helper) and written in standard units ("23.50 for USD
+ *     $23.50": money.ts minorToMetaStandard, the WRITE helper for step 40); disable_reason 0–15; tax_id_status 0–5
  *   - ad-account edges: users (AdAccountUser id, name, tasks), assigned_users (business REQUIRED; tasks, permitted_tasks,
  *     summary total_count), agencies (Business + access_requested_time, access_status, access_updated_time,
  *     permitted_tasks), applications, advertisable_applications (app_id, business_id), promote_pages, instagram_accounts
@@ -38,8 +41,8 @@
  *     min_daily_budget_imp / _video_views / _high_freq / _low_freq), dsa_recommendations (recommendations),
  *     mcmeconversions (AdsMcmeConversion, SDK fields), conversion_goals (SDK only: AdsConversionGoal),
  *     campaign_attribution_options (app_id and optimization_goal REQUIRED, event_name: it answers for an app's events),
- *     activities (the edge page lists no parameter; the SDK has since / until; AdActivity event types incl. the billing
- *     ones below)
+ *     activities (the edge page lists no parameter; the SDK has since / until and category — adactivity.py Category
+ *     ACCOUNT, AD, AD_SET … — nothing says where billing events sit; AdActivity event types incl. the billing ones below)
  *   - insights/breakdowns "Insights feature settings": GET act_<id>/insights/feature-settings/list-features (feature_name,
  *     feature_type) and GET act_<id>/insights/feature-settings (insights_feature filter; enabled ones only, with
  *     insights_effective_date); switching one on is a POST that cannot be undone (not here)
@@ -55,10 +58,13 @@
  *   - system-user / business-user assigned_ad_accounts, assigned_pages, assigned_product_catalogs,
  *     assigned_business_asset_groups, assigned_whatsapp_business_accounts (SDK); assigned_instagram_accounts,
  *     assigned_ads_pixels, assigned_apps, assigned_creative_folders, assigned_offline_conversion_data_sets,
- *     assigned_monetization_properties (Meta's reference index only); their nodes' owner_business (SDK) for names;
+ *     assigned_monetization_properties (Meta's reference index only); for names, the owner: business{id} on ad
+ *     accounts, Pages and catalogs (v26 ad-account, page, product-catalog), owner_business{id} on the others (SDK), the
+ *     portfolio's owned_instagram_assets for Instagram accounts (PERSON_ASSET_EDGES);
  *     page / IG business asset / product-catalog / ads-pixel assigned_users (business REQUIRED: "the id of the business
  *     that owns" the asset); the IG business asset of an Instagram account: business/owned_instagram_assets and
- *     client_instagram_assets (InstagramBusinessAsset id, ig_user_id — SDK)
+ *     client_instagram_assets (InstagramBusinessAsset id, ig_user_id — SDK); a catalog: business/owned_product_catalogs
+ *     and client_product_catalogs (reference business)
  *   - ig-user authorized_adaccounts (business REQUIRED; only that business's ad accounts)
  * Whatever is SDK-only or not documented is built and Meta's own answer decides (LIVE-PROBES.md, step 3 rows).
  */
@@ -67,10 +73,10 @@ import type { MetaQueryValue } from '../../gateway/meta.js'
 import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
 import { liveView, metaChosenAccount, MetaLiveRefusal, graphSafe, type MetaChosenAccount } from './live.js'
-import { fieldRefused, listGroups, listPaged, pageAdLimits, readGroups, type FieldGroup, type MissingPart } from './live-objects.js'
+import { listGroups, listPaged, pageAdLimits, readGroups, type FieldGroup, type MissingPart } from './live-objects.js'
 import { PAGE_TOKEN_NOTE, tidy } from './live-media.js'
 // Step 16's one exported "part of an answer" helper (a part Meta refuses says why and never hides the others).
-import { part } from './live-partners.js'
+import { fieldsRefused, part } from './live-partners.js'
 import { currencyAmountMicros, metaAccountSpendCapMicros, metaUnitsToMicros, minorOf, minorToMetaUnits } from './money.js'
 import { takenIds } from './taken.js'
 
@@ -165,13 +171,14 @@ export const ACCOUNT_SETTINGS_GROUPS: FieldGroup[] = [
       'fb_entity', 'io_number', 'line_numbers', 'user_tasks', 'has_migrated_permissions', 'is_notifications_enabled',
       'brand_safety_content_filter_levels', 'default_dsa_payor', 'default_dsa_beneficiary', 'business_name', 'business_street',
       'business_street2', 'business_city', 'business_state', 'business_zip', 'business_country_code', 'ad_account_promotable_objects',
-      'marketing_messages_settings', 'custom_audience_info',
+      'marketing_messages_settings',
     ].join(','),
   },
-  // SDK only (AA-022), in three groups so one field Meta refuses never hides the others.
+  // SDK only (AA-022), in three groups so one field Meta refuses never hides the others or the core. custom_audience_info
+  // (review round 2, B1): v26 lists it only as an Updating parameter, never in the Reading table.
   { name: 'sdkAddresses', fields: 'liable_address,send_bill_to_address,sold_to_address' },
   { name: 'sdkPortfolios', fields: 'owner_business{id,name},viewable_business{id,name}' },
-  { name: 'sdkOther', fields: 'user_access_expire_time,is_ba_skip_delayed_eligible' },
+  { name: 'sdkOther', fields: 'user_access_expire_time,is_ba_skip_delayed_eligible,custom_audience_info' },
 ]
 /**
  * AA-021 — needs Business Manager Admin: read on its own, so a refusal never costs the settings. Asked by its own
@@ -199,7 +206,9 @@ async function accountSettings(account: MetaChosenAccount) {
     try {
       return await metaReadOne({ connectionId }, { operation: 'account.agencyDeclaration', path: act(adAccountId), query: { fields: AGENCY_DECLARATION_FIELDS } })
     } catch (err) {
-      if (!fieldRefused(err)) throw err
+      // Review round 2 — only when Meta refuses the sub-field LIST (#100); a permission refusal (#200: not a Business
+      // Manager admin) would refuse the whole field too, so no second call.
+      if (!fieldsRefused(err)) throw err
       return metaReadOne({ connectionId }, { operation: 'account.agencyDeclaration.whole', path: act(adAccountId), query: { fields: 'agency_client_declaration' } })
     }
   })
@@ -604,69 +613,102 @@ async function billingTax(account: MetaChosenAccount) {
     { name: 'addresses', fields: 'liable_address,send_bill_to_address,sold_to_address' },
   ])
   const status = num(body.tax_id_status)
-  const personal = personalUse(body)
+  const taxIds = businessUse(body)
   return {
     adAccountId: account.adAccountId,
-    taxId: personal ? null : text(body.tax_id), taxIdType: text(body.tax_id_type), taxIdStatus: status, taxIdStatusText: status === null ? null : TAX_STATUS_WORDS[status] ?? `Status ${status}`,
+    taxId: taxIds ? text(body.tax_id) : null, taxIdType: text(body.tax_id_type), taxIdStatus: status, taxIdStatusText: status === null ? null : TAX_STATUS_WORDS[status] ?? `Status ${status}`,
     taxIdRequired: bool(body.is_tax_id_required), personalUse: flag(body.is_personal),
-    addresses: { liable: addressOf(body.liable_address, !personal), sendBillTo: addressOf(body.send_bill_to_address, !personal), soldTo: addressOf(body.sold_to_address, !personal) },
+    addresses: { liable: addressOf(body.liable_address, taxIds), sendBillTo: addressOf(body.send_bill_to_address, taxIds), soldTo: addressOf(body.sold_to_address, taxIds) },
     missing,
     notes: [
       'Meta has no documented API to set the VAT number or the business address used for tax: a person sets them in Meta Business settings › Billing and payments.',
       'personalUse: the account is used for private purposes, so Meta charges VAT as to a consumer.',
-      ...(personal ? ['A personal-use account: its tax and registration numbers are a person\'s, so Nexus does not show them.'] : []),
+      ...(taxIds ? [] : [flag(body.is_personal) === null && num(body.tax_id_status) !== 5
+        ? 'Meta did not say whether the account is for personal use, so Nexus does not show its tax and registration numbers (they could be a person\'s).'
+        : 'A personal-use account: its tax and registration numbers are a person\'s, so Nexus does not show them.']),
     ],
   }
 }
 
-/** A personal-use account (is_personal, or tax_id_status 5): its tax numbers are a person's, never shown. */
-const personalUse = (b: Row) => flag(b.is_personal) === true || num(b.tax_id_status) === 5
+/**
+ * Review round 2 (A6) — tax and registration numbers are shown only for an account Meta says is NOT for personal use:
+ * is_personal explicitly 0 and tax_id_status not 5 ("a personal account"). Meta silent: they could be a person's, masked.
+ */
+const businessUse = (b: Row) => flag(b.is_personal) === false && num(b.tax_id_status) !== 5
 
 /**
  * LG-003 — the keys of a billing event's extra_data Nexus passes on (Meta documents the field only as "JSON encoded extra
- * information"): plain values only, never a nested object (a payment method's details could sit there).
+ * information"): plain values only, never a nested object (a payment method's details could sit there), and never a
+ * value that looks like an e-mail address (review round 2: a PayPal method's old / new value can be one). The names of
+ * the keys left out are answered (never their values), so the list can grow from LIVE-PROBES LG-003.
  */
 export const BILLING_EXTRA_KEYS: ReadonlySet<string> = new Set(['amount', 'currency', 'old_value', 'new_value', 'value', 'type', 'reason', 'status', 'payment_status', 'charge_type', 'billing_reason', 'transaction_id', 'funding_source_type'])
-function billingExtraOf(raw: unknown): { kept: Record<string, string | number | boolean> | null; dropped: number } {
+const EMAIL_LIKE = /[^\s@]+@[^\s@]+\.[^\s@]+/
+/** A key name Meta sent, passed on only when it is a plain name (never data shaped like a key). */
+const KEY_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/
+function billingExtraOf(raw: unknown): { kept: Record<string, string | number | boolean> | null; dropped: number; droppedKeys: string[] } {
   let extra: unknown = raw ?? null
-  if (typeof extra === 'string') { try { extra = JSON.parse(extra) } catch { return { kept: null, dropped: 1 } } }
+  if (typeof extra === 'string') { try { extra = JSON.parse(extra) } catch { return { kept: null, dropped: 1, droppedKeys: [] } } }
   const o = obj(extra)
-  if (!o) return { kept: null, dropped: extra === null ? 0 : 1 }
+  if (!o) return { kept: null, dropped: extra === null ? 0 : 1, droppedKeys: [] }
   const kept: Record<string, string | number | boolean> = {}
+  const droppedKeys: string[] = []
   let dropped = 0
   for (const [key, value] of Object.entries(o)) {
-    if (BILLING_EXTRA_KEYS.has(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) kept[key] = typeof value === 'string' ? (graphSafe(value) as string) : value
-    else dropped++
+    const plain = typeof value === 'string' ? !EMAIL_LIKE.test(value) : typeof value === 'number' || typeof value === 'boolean'
+    if (BILLING_EXTRA_KEYS.has(key) && plain) kept[key] = typeof value === 'string' ? (graphSafe(value) as string) : value as number | boolean
+    else {
+      dropped++
+      if (KEY_NAME.test(key) && !droppedKeys.includes(key)) droppedKeys.push(key)
+    }
   }
-  return { kept: Object.keys(kept).length ? kept : null, dropped }
+  return { kept: Object.keys(kept).length ? kept : null, dropped, droppedKeys }
 }
 
 /** A day (YYYY-MM-DD) → Unix seconds at 00:00 UTC. */
 const unixOf = (day: string) => Math.floor(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10)) / 1000)
 
+const ACTIVITY_FIELDS = 'event_time,event_type,translated_event_type,actor_id,actor_name,application_id,application_name,object_id,object_name,object_type,date_time_in_timezone,extra_data'
+const isBillingEvent = (r: Row) => BILLING_EVENT_TYPES.has(text(r.event_type) ?? '')
+
 async function billingEvents(account: MetaChosenAccount, input: { from: string; to: string; maxRows: number }) {
   const { connectionId, adAccountId } = account
-  const read = await listPaged(connectionId, 'billing.events', `${act(adAccountId)}/activities`, {
-    fields: 'event_time,event_type,translated_event_type,actor_id,actor_name,application_id,application_name,object_id,object_name,object_type,date_time_in_timezone,extra_data',
-    // The account's own events only (AdActivity category ACCOUNT: billing and spending-limit events, not every ad edit),
-    // so 500 entries reach further back (LIVE-PROBES LG-003 confirms billing events sit there).
-    category: 'ACCOUNT', since: unixOf(input.from), until: unixOf(input.to) + 86_400,
-  }, 500)
-  const events = read.rows.filter((r) => BILLING_EVENT_TYPES.has(text(r.event_type) ?? '')).slice(0, input.maxRows).map((r) => {
+  const days = { since: unixOf(input.from), until: unixOf(input.to) + 86_400 }
+  // First the account's own events (AdActivity category ACCOUNT — SDK only, adactivity.py Category; the v26 edge page lists
+  // no parameter), so 500 entries reach further back. Review round 2 (B2): nothing proves billing events sit under
+  // ACCOUNT, so when that read holds none — or Meta refuses the category (#100) — the same days are read ONCE more without
+  // a category, with the same cap, and the answer says which read answered (LIVE-PROBES LG-003 settles it).
+  let read: Awaited<ReturnType<typeof listPaged>> | null = null
+  let accountRead: { scanned: number; billingEvents: number } | { refused: string }
+  try {
+    read = await listPaged(connectionId, 'billing.events', `${act(adAccountId)}/activities`, { fields: ACTIVITY_FIELDS, category: 'ACCOUNT', ...days }, 500)
+    accountRead = { scanned: read.rows.length, billingEvents: read.rows.filter(isBillingEvent).length }
+  } catch (err) {
+    if (!fieldsRefused(err)) throw err
+    accountRead = { refused: err.failure.sentence }
+  }
+  let answeredBy: 'category ACCOUNT' | 'every category' = 'category ACCOUNT'
+  if (!read || !read.rows.some(isBillingEvent)) {
+    read = await listPaged(connectionId, 'billing.eventsAll', `${act(adAccountId)}/activities`, { fields: ACTIVITY_FIELDS, ...days }, 500)
+    answeredBy = 'every category'
+  }
+  const events = read.rows.filter(isBillingEvent).slice(0, input.maxRows).map((r) => {
     const extra = billingExtraOf(r.extra_data)
     return {
       time: text(r.event_time), timeInAccountZone: text(r.date_time_in_timezone), type: text(r.event_type), typeText: text(r.translated_event_type),
       actorId: idText(r.actor_id), actorName: text(r.actor_name), appName: text(r.application_name), objectId: idText(r.object_id) ?? text(r.object_id), objectName: text(r.object_name),
       // Meta's details, only the plain keys Nexus knows (they may hold amounts, in Meta's units): money all the same.
-      metaRaw: extra.kept, ...(extra.dropped ? { detailsLeftOut: extra.dropped } : {}),
+      metaRaw: extra.kept, ...(extra.dropped ? { detailsLeftOut: extra.dropped, leftOutKeys: extra.droppedKeys } : {}),
     }
   })
   return {
-    adAccountId, from: input.from, to: input.to, events, scanned: read.rows.length,
+    adAccountId, from: input.from, to: input.to, events, scanned: read.rows.length, answeredBy,
+    ...(answeredBy === 'every category' ? { accountCategoryRead: accountRead } : {}),
     more: read.more ? 'Nexus read the first 500 entries of the activity log in these days; narrow the days to see older billing events.' : null,
     notes: [
-      'Charges, failed and declined charges, refunds, chargebacks and payment-method changes from the account\'s activity log (its account events). Spending-limit changes and other account events are in the activity log itself.',
-      'metaRaw: only the plain details Nexus knows (amount, currency, old and new value, reason, status …); detailsLeftOut counts what Meta sent besides.',
+      'Charges, failed and declined charges, refunds, chargebacks and payment-method changes from the account\'s activity log. Spending-limit changes and other account events are in the activity log itself.',
+      'answeredBy: "category ACCOUNT" — Meta\'s account events held them; "every category" — that read held none (accountCategoryRead: what it held, or Meta\'s refusal), so the whole activity log of these days was read once more.',
+      'metaRaw: only the plain details Nexus knows (amount, currency, old and new value, reason, status …; never an e-mail address); detailsLeftOut counts what Meta sent besides and leftOutKeys names those keys (never their values).',
       'Receipts and invoices of card-paid accounts are in Ads Manager › Billing (Meta has no API for card receipts); monthly invoices of a credit line: view invoices.',
     ],
   }
@@ -755,7 +797,8 @@ async function billingPortfolioView(account: MetaChosenAccount, view: BillingVie
           // Review A1 — a line another portfolio owns: never its legal names; one another Nexus business owns: its id only.
           const ownedHere = owner?.portfolioId === portfolioId
           const base = { creditLineId: idText(r.id), creditType: text(r.credit_type), accessRevoked: bool(r.is_access_revoked), automated: bool(r.is_automated_experience), owner, ownedByThisPortfolio: ownedHere }
-          if (ownerTaken) return base
+          // Review round 2 (A3) — a line whose owner Meta does not name is treated as another business's: no amounts either.
+          if (!owner || ownerTaken) return base
           const [allocated, balance, available, max, onlineMax] = [r.allocated_amount, r.balance, r.credit_available, r.max_balance, r.online_max_balance].map(money)
           return {
             ...base,
@@ -769,7 +812,7 @@ async function billingPortfolioView(account: MetaChosenAccount, view: BillingVie
         more: read.more,
         notes: [
           'A Meta credit line pays the portfolio\'s ad accounts by monthly invoice. Its amounts are in their own currency (Meta measures credit lines in USD at the top level), never converted.',
-          'A line another business portfolio shares into this one shows no legal names; one another business in Nexus owns shows no amounts either.',
+          'A line another business portfolio shares into this one shows no legal names; one another business in Nexus owns, or whose owner Meta does not name, shows no amounts either.',
           ...(read.rows.length ? [] : [NO_CREDIT_LINE]),
           'Meta has no API to open, raise or close a credit line: a person applies in Meta Business settings › Billing and payments.',
         ],
@@ -782,7 +825,7 @@ async function billingPortfolioView(account: MetaChosenAccount, view: BillingVie
       let groupsRead = 0
       // Review A4 — a personal-use account's tax numbers are a person's: when it is (or Meta does not say), none shown.
       const personal = await part(() => metaReadOne({ connectionId }, { operation: 'billing.personalCheck', path: act(account.adAccountId), query: { fields: 'is_personal,tax_id_status' } }))
-      const taxIds = !!personal.value && !personalUse(personal.value.body as Row)
+      const taxIds = !!personal.value && businessUse(personal.value.body as Row)
       for (const creditLineId of lines.owned) {
         const groups = await part(() => listGroups(connectionId, 'billing.invoiceGroups', `${creditLineId}/extended_credit_invoice_groups`, [
           // Never `email` / `emails`: the invoice e-mail addresses are people's addresses (Business settings shows them).
@@ -925,25 +968,35 @@ export const ASSET_KINDS = ['page', 'instagram', 'catalog', 'pixel'] as const
 export type AssetKind = typeof ASSET_KINDS[number]
 
 /**
- * BM-008 — what one person or system user can reach: the edge and the fields Nexus asks of each kind. Ad accounts, Pages
- * and Instagram accounts are masked by Nexus's own table of what another business uses; every other kind (review A2) shows
- * its name only when its owner (`owner_business`, on each of these nodes in Meta's SDK: productcatalog, adspixel,
- * application, businessassetgroup, businesscreativefolder, offlineconversiondataset, whatsappbusinessaccount) is the
- * chosen portfolio AND no other business in Nexus uses that portfolio; else its id only. Monetization properties have no
- * owner field Nexus knows: ids only.
+ * BM-008 — what one person or system user can reach: the edge and the fields Nexus asks of each kind. Review round 2
+ * (A1): a system user may serve several businesses in Nexus, so EVERY kind shows a name only when Nexus knows it is this
+ * business's — the one chosen here, or one the chosen portfolio OWNS while no other business in Nexus uses that portfolio.
+ * One another business in Nexus picked is its id and the flag; any other is its id only (takenByAnotherBusiness null:
+ * Nexus does not know whose). The owner, asked with the name (a refused owner group costs the names, never shows one):
+ * ad accounts, Pages and catalogs `business{id}` (v26 reference: ad-account "business", page "business — The Business
+ * associated with this Page", product-catalog "Business that owns a catalog"); pixels, apps, asset groups, creative
+ * folders, offline datasets and WhatsApp accounts `owner_business{id}` (on each node in Meta's SDK only: adspixel,
+ * application, businessassetgroup, businesscreativefolder, offlineconversiondataset, whatsappbusinessaccount). An Instagram
+ * account has no owner field: the chosen portfolio's owned_instagram_assets (InstagramBusinessAsset ig_user_id, SDK)
+ * decide — a client asset is another portfolio's, like a client Page. Monetization properties have no owner field Nexus
+ * knows: ids only.
  */
-export const PERSON_ASSET_EDGES: Readonly<Record<string, { edge: string; fields: string; ownerFields?: string }>> = {
-  adAccounts: { edge: 'assigned_ad_accounts', fields: 'account_id,name' },
-  pages: { edge: 'assigned_pages', fields: 'id,name' },
+export const PERSON_ASSET_EDGES: Readonly<Record<string, { edge: string; fields: string; owner?: 'business' | 'owner_business' }>> = {
+  adAccounts: { edge: 'assigned_ad_accounts', fields: 'account_id', owner: 'business' },
+  pages: { edge: 'assigned_pages', fields: 'id', owner: 'business' },
   instagram: { edge: 'assigned_instagram_accounts', fields: 'id,username' },
-  catalogs: { edge: 'assigned_product_catalogs', fields: 'id', ownerFields: 'name,owner_business{id}' },
-  pixels: { edge: 'assigned_ads_pixels', fields: 'id', ownerFields: 'name,owner_business{id}' },
-  apps: { edge: 'assigned_apps', fields: 'id', ownerFields: 'name,owner_business{id}' },
-  assetGroups: { edge: 'assigned_business_asset_groups', fields: 'id', ownerFields: 'name,owner_business{id}' },
-  creativeFolders: { edge: 'assigned_creative_folders', fields: 'id', ownerFields: 'name,owner_business{id}' },
-  offlineDatasets: { edge: 'assigned_offline_conversion_data_sets', fields: 'id', ownerFields: 'name,owner_business{id}' },
-  whatsapp: { edge: 'assigned_whatsapp_business_accounts', fields: 'id', ownerFields: 'name,owner_business{id}' },
+  catalogs: { edge: 'assigned_product_catalogs', fields: 'id', owner: 'business' },
+  pixels: { edge: 'assigned_ads_pixels', fields: 'id', owner: 'owner_business' },
+  apps: { edge: 'assigned_apps', fields: 'id', owner: 'owner_business' },
+  assetGroups: { edge: 'assigned_business_asset_groups', fields: 'id', owner: 'owner_business' },
+  creativeFolders: { edge: 'assigned_creative_folders', fields: 'id', owner: 'owner_business' },
+  offlineDatasets: { edge: 'assigned_offline_conversion_data_sets', fields: 'id', owner: 'owner_business' },
+  whatsapp: { edge: 'assigned_whatsapp_business_accounts', fields: 'id', owner: 'owner_business' },
   monetization: { edge: 'assigned_monetization_properties', fields: 'id' },
+}
+/** The kinds Nexus's table of what another business picked answers (taken.ts), and the chosen one of each. */
+const PICKED_KINDS: Readonly<Record<string, { product: 'AD_ACCOUNT' | 'PAGE' | 'INSTAGRAM'; chosen: (a: MetaChosenAccount) => string | null }>> = {
+  adAccounts: { product: 'AD_ACCOUNT', chosen: (a) => a.adAccountId }, pages: { product: 'PAGE', chosen: (a) => a.pageId }, instagram: { product: 'INSTAGRAM', chosen: (a) => a.instagramId },
 }
 export const PERSON_ASSET_KINDS = Object.keys(PERSON_ASSET_EDGES)
 
@@ -1088,42 +1141,75 @@ async function accessByPerson(account: MetaChosenAccount, input: { personId: str
   }
   const kinds = input.kinds?.length ? input.kinds.filter((k) => PERSON_ASSET_EDGES[k]) : PERSON_ASSET_KINDS
   const portfolioShared = account.businessId ? (await takenIds('PORTFOLIO', [account.businessId])).has(account.businessId) : false
+  /** The portfolio whose own assets Nexus may name: the chosen account's, when no other business in Nexus uses it. */
+  const namingPortfolio = account.businessId && !portfolioShared ? account.businessId : null
   const assets: Record<string, unknown> = {}
   const missing: MissingPart[] = []
   for (const kind of kinds) {
-    const { edge, fields, ownerFields } = PERSON_ASSET_EDGES[kind]
-    const groups: FieldGroup[] = [{ name: 'core', fields }, ...(ownerFields ? [{ name: 'owner', fields: ownerFields }] : [])]
+    const { edge, fields, owner } = PERSON_ASSET_EDGES[kind]
+    const groups: FieldGroup[] = [{ name: 'core', fields }, ...(owner ? [{ name: 'owner', fields: `name,${owner}{id}` }] : [])]
     const read = await part(() => listGroups(connectionId, `access.person.${edge}`, `${personId}/${edge}`, groups, {}, input.maxRows))
     if (!read.value) { missing.push({ part: kind, sentence: read.notRead! }); continue }
     missing.push(...read.value.missing.map((m) => ({ part: `${kind} ${m.part}`, sentence: m.sentence })))
     const rows = read.value.rows
-    if (kind === 'adAccounts') {
-      const ids = rows.map((r) => metaAdAccountId(r.account_id ?? r.id)).filter((id): id is string => !!id)
-      const taken = await takenIds('AD_ACCOUNT', ids)
-      assets[kind] = rows.map((r) => { const id = metaAdAccountId(r.account_id ?? r.id); return id && taken.has(id) ? { id, takenByAnotherBusiness: true } : { id, name: text(r.name), chosenHere: id === account.adAccountId, takenByAnotherBusiness: false } })
-    } else if (kind === 'pages' || kind === 'instagram') {
-      const ids = rows.map((r) => idText(r.id)).filter((id): id is string => !!id)
-      const taken = await takenIds(kind === 'pages' ? 'PAGE' : 'INSTAGRAM', ids)
-      const chosen = kind === 'pages' ? account.pageId : account.instagramId
-      assets[kind] = rows.map((r) => { const id = idText(r.id); return id && taken.has(id) ? { id, takenByAnotherBusiness: true } : { id, name: text(r.name ?? r.username), chosenHere: id === chosen, takenByAnotherBusiness: false } })
-    } else {
-      // Review A2 — a name only for an asset this portfolio owns, when no other business in Nexus uses the portfolio.
-      assets[kind] = rows.map((r) => {
-        const owned = !portfolioShared && !!account.businessId && idText(obj(r.owner_business)?.id) === account.businessId
-        return owned ? { id: idText(r.id), name: text(r.name), ownedByThisPortfolio: true } : { id: idText(r.id), takenByAnotherBusiness: null }
-      })
+    const idOf = (r: Row) => (kind === 'adAccounts' ? metaAdAccountId(r.account_id ?? r.id) : idText(r.id))
+    const picked = PICKED_KINDS[kind]
+    const chosen = picked?.chosen(account) ?? null
+    const taken = picked ? await takenIds(picked.product, rows.map(idOf).filter((id): id is string => !!id)) : new Set<string>()
+    // Review round 2 (A1) — an Instagram account has no owner field: the chosen portfolio's own Instagram business assets
+    // decide (read only when a row is neither the chosen one nor picked by another business).
+    let ownedInstagram: ReadonlySet<string> = new Set()
+    if (kind === 'instagram' && namingPortfolio && rows.some((r) => { const id = idOf(r); return !!id && id !== chosen && !taken.has(id) })) {
+      const list = await portfolioList(connectionId, 'access.person.instagramOwner', `${namingPortfolio}/owned_instagram_assets`, 'id,ig_user_id')
+      if ('rows' in list) ownedInstagram = new Set(list.rows.map((r) => idText(r.ig_user_id)).filter((id): id is string => !!id))
+      else missing.push({ part: 'instagram owner', sentence: `Nexus could not list the business portfolio's own Instagram accounts (${list.notListed}), so only the chosen one is named.` })
     }
+    assets[kind] = rows.map((r) => {
+      const id = idOf(r)
+      if (id && taken.has(id)) return { id, takenByAnotherBusiness: true }
+      const chosenHere = !!id && id === chosen
+      const owned = !!namingPortfolio && !!id && (kind === 'instagram' ? ownedInstagram.has(id) : !!owner && idText(obj(r[owner])?.id) === namingPortfolio)
+      if (!chosenHere && !owned) return { id, takenByAnotherBusiness: null }
+      const name = text(r.name ?? r.username)
+      return picked ? { id, name, chosenHere, ownedByThisPortfolio: owned, takenByAnotherBusiness: false } : { id, name, ownedByThisPortfolio: true }
+    })
     if (read.value.more) assets[`${kind}More`] = true
   }
   return {
     adAccountId: account.adAccountId, personId, personName, nexusSystemUser: personId === systemUser, assets, missing,
     notes: [
       'Everything this person (or Nexus\'s system user) is assigned in the business portfolio, kind by kind. For the system user it proves Nexus holds only this business\'s assets: anything another business in Nexus uses is its id only.',
-      'Catalogs, pixels, apps, asset groups, folders, datasets, WhatsApp accounts and monetization properties show a name only when this business portfolio owns them and no other business in Nexus uses the portfolio; any other is its id only (takenByAnotherBusiness null: Nexus does not know whose it is). A system user may serve several businesses, so this holds for it too.',
-      ...(portfolioShared ? ['This business portfolio is shared with another business in Nexus: every one of those kinds is an id only.'] : []),
+      'A name is shown only for the ad account, Page or Instagram account chosen here, or an asset this business portfolio owns while no other business in Nexus uses the portfolio; one another business in Nexus picked is its id and takenByAnotherBusiness true; any other is its id only (takenByAnotherBusiness null: Nexus does not know whose). A system user may serve several businesses, so this holds for it too.',
+      ...(portfolioShared ? ['This business portfolio is shared with another business in Nexus: everything but the assets chosen here is an id only.'] : []),
       NO_EMAILS,
     ],
   }
+}
+
+/**
+ * Review round 2 (B5) — one list of the chosen portfolio (its owned / client Instagram assets or catalogs). A throttle or
+ * a lost token ends the whole read (rethrown); any other refusal is `notListed`, Meta's sentence, so the caller says
+ * Nexus could not list it — never "not one of the portfolio's".
+ */
+async function portfolioList(connectionId: string, operation: string, path: string, fields: string): Promise<{ rows: Row[] } | { notListed: string }> {
+  try {
+    return { rows: (await listPaged(connectionId, operation, path, { fields }, 500)).rows }
+  } catch (err) {
+    if (err instanceof MetaReadError && !err.failure.authLost && !err.failure.throttled) return { notListed: err.failure.sentence }
+    throw err
+  }
+}
+
+/** The first row of the portfolio's lists (in this order) that matches, and the lists Meta did not answer (with its words). */
+async function findInPortfolio(connectionId: string, portfolioId: string, operation: string, edges: readonly string[], fields: string, matches: (r: Row) => boolean): Promise<{ row: Row | null; notListed: string[] }> {
+  const notListed: string[] = []
+  for (const edge of edges) {
+    const list = await portfolioList(connectionId, `${operation}.${edge}`, `${portfolioId}/${edge}`, fields)
+    if ('notListed' in list) { notListed.push(`${edge}: ${list.notListed}`); continue }
+    const row = list.rows.find(matches)
+    if (row) return { row, notListed }
+  }
+  return { row: null, notListed }
 }
 
 async function accessAssetPeople(account: MetaChosenAccount, input: { asset: AssetKind; assetId: string | null; maxRows: number }) {
@@ -1142,14 +1228,15 @@ async function accessAssetPeople(account: MetaChosenAccount, input: { asset: Ass
       if (input.assetId && metaObjectId(input.assetId) !== account.instagramId) throw new MetaLiveRefusal('Only the Instagram account this business chose is read here.')
       // Review B1 — people hold tasks on the portfolio's Instagram BUSINESS ASSET, not on the IG user: find the asset whose
       // ig_user_id is the chosen account (business owned_instagram_assets, then client_instagram_assets; SDK
-      // instagrambusinessasset.py id, ig_user_id), then read that asset's people.
-      let found: string | null = null
-      for (const edge of ['owned_instagram_assets', 'client_instagram_assets'] as const) {
-        const assets = await part(() => listPaged(connectionId, `access.instagramAssets.${edge}`, `${portfolioId}/${edge}`, { fields: 'id,ig_user_id' }, 500))
-        found = idText(assets.value?.rows.find((r) => idText(r.ig_user_id) === account.instagramId)?.id)
-        if (found) break
+      // instagrambusinessasset.py id, ig_user_id), then read that asset's people. Review round 2 (B5): a throttle or a lost
+      // token ends the read; a list Meta refused otherwise is said, never taken for "not an asset of the portfolio".
+      const { row, notListed } = await findInPortfolio(connectionId, portfolioId, 'access.instagramAssets', ['owned_instagram_assets', 'client_instagram_assets'], 'id,ig_user_id', (r) => idText(r.ig_user_id) === account.instagramId)
+      const found = idText(row?.id)
+      if (!found) {
+        throw new MetaLiveRefusal(notListed.length
+          ? `Nexus could not list the business portfolio's Instagram assets (${notListed.join('; ')}), so it cannot find the chosen Instagram account's business asset: the people holding tasks on it are not read.`
+          : 'The chosen Instagram account is not an Instagram asset of the chosen ad account\'s business portfolio (owned or client), so the people holding tasks on it are not read.')
       }
-      if (!found) throw new MetaLiveRefusal('The chosen Instagram account is not an Instagram asset of the chosen ad account\'s business portfolio (owned or client), so the people holding tasks on it are not read.')
       assetId = found
       break
     }
@@ -1158,15 +1245,15 @@ async function accessAssetPeople(account: MetaChosenAccount, input: { asset: Ass
       if (!id) throw new MetaLiveRefusal('Name the catalog (assetId, digits).')
       const { shared } = await ownPortfolio(account, 'a catalog\'s people')
       if (shared) throw new MetaLiveRefusal('Another business in Nexus uses an ad account of this business portfolio, so Nexus cannot tell whose this catalog is: its people are not read here.')
-      // Like step 6's catalog check (live-objects.ts catalogCategories): the catalog's owner must be the chosen portfolio.
-      let owner: string | null = null
-      try {
-        owner = idText(obj((await metaReadOne({ connectionId }, { operation: 'access.catalogOwnerCheck', path: id, query: { fields: 'business{id}' } })).body.business)?.id)
-      } catch (err) {
-        if (!(err instanceof MetaReadError)) throw err
-        throw new MetaLiveRefusal(`Nexus could not confirm that this catalog is the chosen ad account's business portfolio's (${err.failure.sentence}), so it is not read.`)
+      // Review round 2 (A5) — the id must be one of the portfolio's CATALOGS (business owned_product_catalogs, then
+      // client_product_catalogs; reference business), as the pixel check looks in the account's pixels: an owner check
+      // alone would let a Page, dataset or folder id of the same portfolio through.
+      const { row, notListed } = await findInPortfolio(connectionId, portfolioId, 'access.catalogCheck', ['owned_product_catalogs', 'client_product_catalogs'], 'id', (r) => idText(r.id) === id)
+      if (!row) {
+        throw new MetaLiveRefusal(notListed.length
+          ? `Nexus could not list the business portfolio's catalogs (${notListed.join('; ')}), so it cannot confirm this is one of them: its people are not read.`
+          : 'That is not a catalog of the chosen ad account\'s business portfolio (owned, or shared with it), so its people are not read.')
       }
-      if (owner !== portfolioId) throw new MetaLiveRefusal('That catalog is not owned by the chosen ad account\'s business portfolio, so its people are not read.')
       assetId = id
       break
     }

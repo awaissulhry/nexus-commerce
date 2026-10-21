@@ -181,9 +181,10 @@ const metaAccountAccess: AgentTool = {
     + 'Meta app marked) and the advertisable ones. pages: the Pages promoted under the account. instagram: its Instagram '
     + 'accounts (also through the portfolio) and which of the portfolio\'s ad accounts may advertise for the chosen one. '
     + 'by-person (personId, default Nexus\'s system user): everything that person can reach in the portfolio — ad accounts, '
-    + 'Pages, Instagram accounts, catalogs, pixels, apps, asset groups, folders, datasets, WhatsApp accounts (a catalog, '
-    + 'pixel, app … named only when this portfolio owns it; else its id) — proving the system user holds only this '
-    + 'business\'s assets. asset-people (asset, assetId): who holds tasks on the chosen Page or '
+    + 'Pages, Instagram accounts, catalogs, pixels, apps, asset groups, folders, datasets, WhatsApp accounts (each named '
+    + 'only when it is the one chosen here, or this portfolio owns it and no other business in Nexus uses the portfolio; '
+    + 'else its id) — proving the system user holds only this business\'s assets. asset-people (asset, assetId): who '
+    + 'holds tasks on the chosen Page or '
     + 'Instagram account, a catalog of the portfolio or a pixel of the account (a Page may need its own Page token: Meta says '
     + 'so). Meta cannot: add an agency to an ad account (the agency asks, an admin accepts in Business settings). Giving or '
     + 'removing tasks and people is a set-meta-… change a person approves. ' + READ_LINE,
