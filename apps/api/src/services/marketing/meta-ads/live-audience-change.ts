@@ -49,8 +49,8 @@ export interface AudienceUse {
 }
 
 export interface AudienceSharing {
-  /** The ad accounts it is shared with (Meta's /adaccounts edge). */
-  accounts: string[]
+  /** The ad accounts it is shared with (Meta's /adaccounts edge); null when Meta did not answer them (re-review N1). */
+  accounts: string[] | null
   /** Why it may not be changed: shared with an account or portfolio another business in Nexus uses, or not checked. */
   problem: string | null
 }
@@ -127,7 +127,7 @@ export async function liveAudienceSharing(account: MetaChosenAccount, audienceId
   const list = (part: unknown): Array<Record<string, unknown>> | null => (Array.isArray(part) ? part as Array<Record<string, unknown>> : null)
   const accounts = list(view.sharedWithAdAccounts)
   const recipients = list(view.recipients)
-  if (!accounts) return { accounts: [], problem: `Nexus could not read who the audience is shared with (${(view.sharedWithAdAccounts as { refused?: string })?.refused ?? 'no answer'}), so it changes nothing of it.` }
+  if (!accounts) return { accounts: null, problem: `Nexus could not read who the audience is shared with (${(view.sharedWithAdAccounts as { refused?: string })?.refused ?? 'no answer'}), so it changes nothing of it.` }
   const taken = [...accounts, ...(recipients ?? [])].some((r) => r.takenByAnotherBusiness === true || r.businessTakenByAnotherBusiness === true)
   return {
     accounts: accounts.map((r) => (typeof r.adAccountId === 'string' ? r.adAccountId : null)).filter((id): id is string => !!id),

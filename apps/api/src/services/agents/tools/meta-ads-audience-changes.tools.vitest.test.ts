@@ -326,6 +326,38 @@ describe('set-meta-audience-sharing', () => {
   })
 })
 
+describe('re-review follow-ups', () => {
+  it('N2 — approved as "no SPENDS MONEY", refused at run when a shared account\'s ads started using it', async () => {
+    const out = await preview('set-meta-audience', { audienceId: A, retentionDays: 10 })
+    expect(out.preview.spendsMoney).toBe(false)
+    h.use = { ...h.use, otherAccounts: [{ adAccountId: '1234567891', ads: 3, takenByAnotherBusiness: false }] }
+    const ran = await run('set-meta-audience', { audienceId: A, retentionDays: 10 }, out.preview)
+    expect(ran).toEqual({ ok: false, error: expect.stringMatching(/^Not run: the Meta ad account changed since this was approved/) })
+    expect(h.send).not.toHaveBeenCalled()
+  })
+  it('N2 — existingCustomers approved with none reading it, refused at run once an active ad set reads it', async () => {
+    h.terms.existingCustomers = ['120000000000044']
+    const out = await preview('set-meta-audience', { existingCustomers: [A] })
+    expect(out.preview.spendsMoney).toBe(false)
+    h.existingUsers = { adSets: [{ id: '120000000000002', name: 'Ad set B', campaignId: '120000000000001' }], problem: null }
+    const ran = await run('set-meta-audience', { existingCustomers: [A] }, out.preview)
+    expect(ran).toEqual({ ok: false, error: expect.stringMatching(/^Not run: the Meta ad account changed since this was approved/) })
+    expect(h.send).not.toHaveBeenCalled()
+  })
+  it('N1 — an unshare when who it is shared with could not be read: the read problem, never "not shared"', async () => {
+    h.sharing = { accounts: null as unknown as string[], problem: 'Nexus could not read who the audience is shared with (Meta refused), so it changes nothing of it.' }
+    expect(await preview('set-meta-audience-sharing', { audienceId: A, action: 'unshare', adAccountIds: ['1234567891'] })).toEqual({ ok: false, error: expect.stringMatching(/could not read who the audience is shared with/) })
+  })
+  it('M5 — an unshare from an account another business uses goes through (no recipient check); a share of that audience is refused', async () => {
+    h.sharing = { accounts: ['1234567891'], problem: 'The audience is shared with an ad account another business in Nexus uses, so it is also that business\'s.' }
+    h.idProblems = ['ad account 1234567891 is one another business in Nexus uses: an audience is never shared across Nexus businesses.']
+    const out = await preview('set-meta-audience-sharing', { audienceId: A, action: 'unshare', adAccountIds: ['1234567891'] })
+    expect(out.ok).toBe(true)
+    expect(out.preview.requests).toHaveLength(1)
+    expect(await preview('set-meta-audience-sharing', { audienceId: A, action: 'share', adAccountIds: ['1234567892'] })).toEqual({ ok: false, error: expect.stringMatching(/another business in Nexus uses/) })
+  })
+})
+
 describe('remove-meta-audience', () => {
   it('a seed with lookalikes: refused unless they go first; the ads that stop are listed; no undo', async () => {
     h.audiences[A] = { ...LIST, lookalikeIds: [L] }

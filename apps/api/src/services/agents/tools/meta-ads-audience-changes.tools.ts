@@ -485,6 +485,8 @@ const shareUndo: ToolUndo = {
     if (!account) return null
     const chosen = await chosenOf(account.accountId)
     const sharing = await liveAudienceSharing(chosen, after.audienceId)
+    // Re-review N1 — unread is not "not shared": undo then says it cannot tell (nothing is compared against an empty list).
+    if (sharing.accounts === null) return null
     const now = new Set(sharing.accounts)
     const allSo = after.adAccountIds.every((id) => now.has(id) === (after.shared === true))
     return { ...after, shared: allSo ? after.shared : !after.shared, accountId: account.accountId, adAccountId: account.adAccountId }

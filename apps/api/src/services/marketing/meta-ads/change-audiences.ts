@@ -603,7 +603,11 @@ export function setAudienceDraft(request: AudienceSetRequest, live: AudienceSetL
     skipped,
     requests,
     stands: {
-      audience: a ? { ...a } : null, activeAds: live.use?.activeAds ?? null, existingCustomers: request.existingCustomers !== undefined ? live.terms?.existingCustomers ?? null : undefined,
+      // Re-review N2 — every fact a SPENDS MONEY verdict rests on: the ads that use it here AND in the accounts it is
+      // shared with, and the active ad sets that read the existing-customer list.
+      audience: a ? { ...a } : null, use: live.use ? { activeAds: live.use.activeAds, otherAccounts: live.use.otherAccounts } : null,
+      existingCustomers: request.existingCustomers !== undefined ? live.terms?.existingCustomers ?? null : undefined,
+      existingUsers: request.existingCustomers !== undefined ? live.existingUsers ?? null : undefined,
       tags: request.audienceTypeTags !== undefined ? live.tags : undefined,
     },
     before,
@@ -687,6 +691,8 @@ export function shareDraft(request: AudienceShareRequest, live: AudienceShareLiv
   // Review A1 — an audience shared with another business's account is changed by nothing but its unshare (that is how
   // such a share ends): a share of it is refused.
   if (live.sharing.problem && request.action === 'share') return { refusal: live.sharing.problem }
+  // Re-review N1 — who it is shared with could not be read: an unshare is not judged against an empty list.
+  if (live.sharing.accounts === null) return { refusal: live.sharing.problem ?? 'Nexus could not read who the audience is shared with, so it changes nothing of it.' }
   if (live.idProblems.length) return { refusal: `Not shared: ${live.idProblems.join(' ')}` }
   const asked = [...new Set(request.adAccountIds)]
   const shared = new Set(live.sharing.accounts)

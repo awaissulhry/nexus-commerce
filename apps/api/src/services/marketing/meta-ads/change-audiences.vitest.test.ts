@@ -101,6 +101,17 @@ describe('setAudienceDraft', () => {
     expect(wide.warnings.join(' ')).toMatch(/3–5% becomes 0–5%/)
     expect((wide.before as { undo: unknown }).undo).toEqual({ audienceId: A.id, lookalike: { percent: 5, fromPercent: 3 } })
   })
+  it('re-review N2 — what SPENDS MONEY rests on is in the basis: a shared account\'s ads, the ad sets reading the list', () => {
+    const quiet = ok(setAudienceDraft({ audienceId: A.id, retentionDays: 10 }, live()))
+    const shared = ok(setAudienceDraft({ audienceId: A.id, retentionDays: 10 }, live({ use: { ...NO_USE, otherAccounts: [{ adAccountId: '1234567891', ads: 3, takenByAnotherBusiness: false }] } })))
+    expect([quiet.spendsMoney.length, shared.spendsMoney.length]).toEqual([0, 1])
+    expect(JSON.stringify(shared.stands)).not.toBe(JSON.stringify(quiet.stands))
+    const base = { audience: null, use: null, terms: { ...TERMS, existingCustomers: ['120000000000044'] } }
+    const none = ok(setAudienceDraft({ existingCustomers: [A.id] }, live({ ...base, existingUsers: { adSets: [], problem: null } })))
+    const read = ok(setAudienceDraft({ existingCustomers: [A.id] }, live({ ...base, existingUsers: { adSets: [{ id: '120000000000002', name: 'B', campaignId: null }], problem: null } })))
+    expect([none.spendsMoney.length, read.spendsMoney.length]).toEqual([0, 1])
+    expect(JSON.stringify(read.stands)).not.toBe(JSON.stringify(none.stands))
+  })
   it('review A3 — a new existing-customer list that active ad sets read spends (they are listed); unread, it spends too', () => {
     const base = { audience: null, terms: { ...TERMS, existingCustomers: ['120000000000044'] } }
     const named = ok(setAudienceDraft({ existingCustomers: [A.id] }, live({ ...base, existingUsers: { adSets: [{ id: '120000000000002', name: 'Ad set B', campaignId: '120000000000001' }], problem: null } })))
@@ -132,6 +143,7 @@ describe('membersDraft', () => {
     expect(ok(membersDraft({ mode: 'remove', audienceId: A.id }, { adAccountId: '1234567890', terms: TERMS, audience: A, use: NO_USE, people: one })).spendsMoney).toEqual([])
     const all = ok(membersDraft({ mode: 'opt_out_everywhere' }, { adAccountId: '1234567890', terms: TERMS, audience: null, use: null, people: one }))
     expect(all.spendsMoney[0]).toMatch(/EVERY customer list/)
+    expect(all.requests.every((r) => r.raisesSpend === true && Object.keys(r.params).join() === 'payload')).toBe(true)
     expect(all.warnings.join(' ')).toMatch(/honoured everywhere/)
     expect(JSON.stringify(all.stands)).not.toContain(one.hashes[0])
     expect(JSON.stringify({ ...d, requests: d.requests.map((r) => r.label) })).not.toContain(one.hashes[0])
@@ -143,6 +155,11 @@ describe('shareDraft and removeDraft', () => {
     const taken = { audience: A, sharing: { accounts: ['1234567891'], problem: 'The audience is shared with an ad account another business in Nexus uses.' }, use: NO_USE, idProblems: [] }
     expect(shareDraft({ audienceId: A.id, action: 'share', adAccountIds: ['1234567892'] }, taken)).toEqual({ refusal: expect.stringMatching(/another business in Nexus uses/) })
     expect(ok(shareDraft({ audienceId: A.id, action: 'unshare', adAccountIds: ['1234567891'] }, taken)).requests).toHaveLength(1)
+  })
+  it('re-review N1 — who it is shared with could not be read: an unshare (and a share) says so, never "not shared"', () => {
+    const unread = { audience: A, sharing: { accounts: null, problem: 'Nexus could not read who the audience is shared with (Meta refused), so it changes nothing of it.' }, use: NO_USE, idProblems: [] }
+    expect(shareDraft({ audienceId: A.id, action: 'unshare', adAccountIds: ['1234567891'] }, unread)).toEqual({ refusal: expect.stringMatching(/could not read who the audience is shared with/) })
+    expect(shareDraft({ audienceId: A.id, action: 'share', adAccountIds: ['1234567891'] }, unread)).toEqual({ refusal: expect.stringMatching(/could not read who the audience is shared with/) })
   })
   it('an unshare of an account it is not shared with is skipped; permissions go with a share only', () => {
     const live = { audience: A, sharing: { accounts: ['1234567891'], problem: null }, use: NO_USE, idProblems: [] }
