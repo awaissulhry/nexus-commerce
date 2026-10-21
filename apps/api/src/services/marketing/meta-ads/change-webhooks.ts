@@ -61,6 +61,15 @@ export const DASHBOARD_ONLY = 'Instagram and WhatsApp webhook fields are set onl
 export const PAGE_INSTALL_ROADS = 'Nexus does not install the app on a Page: Meta takes that (page/subscribed_apps) only with a Page access token of a person with a task on the Page, and Nexus has no Page-token mode yet. Meta\'s documented roads: Meta Business Suite › All Tools › Business Apps (adds the app to the Page), or the Graph API Explorer with a Page token (POST /<page id>/subscribed_apps with the fields). meta-webhooks reads the app subscription; the Page\'s own list Meta answers only to a Page token too.'
 const APP_WIDE = (n: number) => `This subscription is app-wide: ${n === 1 ? 'another business' : `${n} other businesses`} in Nexus use${n === 1 ? 's' : ''} the same Meta app, so this also changes what ${n === 1 ? 'it receives' : 'they receive'} (each still gets only its own ad accounts' and Pages' notifications).`
 const APP_WIDE_REFUSAL = 'Another business in Nexus uses this Meta app; an app-wide unsubscribe would stop its notifications too — change it in Meta\'s App Dashboard (Webhooks of the app).'
+const APP_WIDE_NO_UNDO = 'another business in Nexus uses this Meta app, so once Nexus subscribes, only Meta\'s App Dashboard can remove it (an app-wide unsubscribe would stop that business\'s notifications too).'
+const APP_WIDE_UNKNOWN_NO_UNDO = 'Nexus could not tell whether another business in Nexus uses this Meta app, so once Nexus subscribes, only Meta\'s App Dashboard can remove it.'
+/**
+ * Re-review 3 — the receiver routes a change that names no business (application dev_alerts and async_requests, every
+ * catalog change) only when ONE business uses the app (webhook-receiver.ts routeMetaChanges).
+ */
+const UNROUTED_WHEN_SHARED = (object: string) => (object === 'catalog'
+  ? 'With another business on this Meta app, Nexus\'s receiver routes no catalog notification (they name no business): subscribing catalog reaches nobody in Nexus.'
+  : 'With another business on this Meta app, Nexus\'s receiver routes no app-level application notification (dev_alerts, async_requests name no business): those reach nobody in Nexus; ad_account status and trigger rules still reach the business whose ad account they name.')
 
 const sorted = (list: readonly string[]) => [...list].sort()
 const same = (a: readonly string[], b: readonly string[]) => JSON.stringify(sorted(a)) === JSON.stringify(sorted(b))
@@ -77,7 +86,9 @@ function draft(input: {
   const { changes, more } = changeLines(input.lines)
   return {
     summary: input.summary, changes, totals: { requests: input.requests.length, ...(more ? { moreLines: more } : {}) },
-    warnings: input.warnings ?? [], spendsMoney: [], skipped: input.skipped ?? [], requests: input.requests, stands: input.stands,
+    // Re-review 1 — the approver reads what has no way back (as set-meta-ad-set says it).
+    warnings: [...(input.warnings ?? []), ...(input.before.noUndo?.length ? [`No undo for: ${input.before.noUndo.join(' ')}`] : [])],
+    spendsMoney: [], skipped: input.skipped ?? [], requests: input.requests, stands: input.stands,
     before: input.before, after: input.after,
   }
 }
@@ -119,6 +130,7 @@ export function webhooksDraft(req: WebhooksRequest, live: WebhooksLive): MetaCha
       const noUndo: string[] = []
       if (others === null) warnings.push('Nexus could not tell whether another business in Nexus uses this Meta app: the subscription is app-wide, so it may change what that business receives too.')
       else if (others > 0) warnings.push(APP_WIDE(others))
+      if (others !== 0 && (object === 'application' || object === 'catalog')) warnings.push(UNROUTED_WHEN_SHARED(object))
       if (current && !current.nexusCallback) {
         warnings.push(`The app's ${object} subscription now calls ${current.callbackOrigin ?? 'another address'}; this change points it at Nexus's receiver (Meta keeps one callback per object). Nexus never writes another callback back.`)
         noUndo.push(`The earlier callback (${current.callbackOrigin ?? 'another address'}) is not put back: Nexus only ever gives Meta its own.`)
@@ -127,7 +139,7 @@ export function webhooksDraft(req: WebhooksRequest, live: WebhooksLive): MetaCha
       warnings.push('Meta first sends a verification request to Nexus\'s receiver; the change fails when it is not answered (META_WEBHOOK_VERIFY_TOKEN must be set on the API service). Apps in development mode receive only the App Dashboard\'s test notifications and those of people with a role on the app.')
       // Review A1 / D-1 — an undo is an app-wide unsubscribe: never while another business (or maybe one) uses the app.
       let undo: WebhooksUndoArgs | null = !current ? { action: 'unsubscribe-app', object } : added.length ? { action: 'unsubscribe-app', object, fields: added } : null
-      if (undo && others !== 0) { undo = null; noUndo.push(others === null ? 'Nexus could not tell whether another business uses this Meta app, so its undo (an app-wide unsubscribe) is not offered.' : APP_WIDE_REFUSAL) }
+      if (undo && others !== 0) { undo = null; noUndo.push(others === null ? APP_WIDE_UNKNOWN_NO_UNDO : `This subscription: ${APP_WIDE_NO_UNDO}`) }
       else if (!undo && !noUndo.length) noUndo.push('Switching an inactive subscription on again has no undo of its own (Meta has no switch to make it inactive).')
       const all = sorted([...new Set([...(current?.fields ?? []), ...wanted])])
       return draft({

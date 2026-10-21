@@ -79,6 +79,8 @@ describe('routing keys', () => {
     expect(metaRouteOf(change('application', 'dev_alerts', {}, APP))).toEqual({ kind: 'APP', id: null })
     expect(metaRouteOf(change('catalog', 'items_batch', {}, '120000000000777'))).toEqual({ kind: 'APP', id: null })
     expect(metaRouteOf(change('user', 'photos'))).toBeNull()
+    // M13 — own keys only: an object named after Object's own properties is no object Nexus routes.
+    for (const object of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) expect(metaRouteOf(change(object, 'x'))).toBeNull()
     expect(metaRouteOf(change('whatsapp_business_account', 'messages'))).toBeNull()
   })
 })

@@ -168,7 +168,9 @@ function request(fields: Omit<MetaChangeRequest, 'step' | 'check' | 'raisesSpend
 
 function draft(summary: string, lines: Array<[string, unknown, unknown]>, requests: MetaChangeRequest[], stands: unknown, before: AlertRecord, after: AlertRecord, extra: { warnings?: string[]; skipped?: string[] } = {}): MetaChangeDraft {
   const { changes, more } = changeLines(lines)
-  return { summary, changes, totals: { requests: requests.length, ...(more ? { moreLines: more } : {}) }, warnings: extra.warnings ?? [], spendsMoney: [], skipped: extra.skipped ?? [], requests, stands, before, after }
+  // Re-review 1 — the approver reads what has no way back.
+  const warnings = [...(extra.warnings ?? []), ...(before.noUndo?.length ? [`No undo for: ${before.noUndo.join(' ')}`] : [])]
+  return { summary, changes, totals: { requests: requests.length, ...(more ? { moreLines: more } : {}) }, warnings, spendsMoney: [], skipped: extra.skipped ?? [], requests, stands, before, after }
 }
 
 const DELIVERY = 'Meta sends a fired alert to the app\'s webhook (ad_account field subscriptions): it reaches Nexus\'s alerts inbox only when the app is subscribed to it and the ad account is connected (set-meta-webhooks, or Meta\'s App Dashboard).'

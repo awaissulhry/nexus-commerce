@@ -42,7 +42,7 @@ import { META_ADS_WEBHOOKS_TOOLS } from './meta-ads-webhooks.tools.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
 import { __metaObjectLimitsTest } from '../../gateway/meta-object-limits.js'
-import { DASHBOARD_ONLY, PAGE_INSTALL_ROADS } from '../../marketing/meta-ads/change-webhooks.js'
+import { DASHBOARD_ONLY, PAGE_INSTALL_ROADS, webhooksDraft } from '../../marketing/meta-ads/change-webhooks.js'
 import { alertParamsOf, alertSpecOf } from '../../marketing/meta-ads/change-alert-subscriptions.js'
 import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
 
@@ -116,7 +116,10 @@ describe('set-meta-webhooks', () => {
     h.app = [{ object: 'page', fields: ['leadgen'], active: true, nexusCallback: false, callbackOrigin: 'https://other.example' }]
     const out = await preview(webhooks, { action: 'subscribe-app', object: 'page', fields: ['leadgen'] })
     expect(out.preview.warnings.join(' ')).toMatch(/now calls https:\/\/other\.example; this change points it at Nexus's receiver/)
+    expect(out.preview.warnings).toContainEqual(expect.stringMatching(/^No undo for: The earlier callback \(https:\/\/other\.example\) is not put back/))
     expect(await preview(webhooks, { action: 'subscribe-app', object: 'instagram' })).toEqual({ ok: false, error: DASHBOARD_ONLY })
+    // M22 — the per-account Instagram step Nexus cannot do yet is named.
+    expect(DASHBOARD_ONLY).toMatch(/linked Facebook Page's \/subscribed_apps with the Instagram fields — which Nexus cannot do yet/)
     expect(() => webhooks.input.parse({ action: 'subscribe-app', object: 'ad_account', fields: ['photos'] })).toThrow()
     expect(await preview(webhooks, { action: 'subscribe-app', object: 'catalog', fields: ['leadgen'] })).toEqual({ ok: false, error: expect.stringMatching(/does not take leadgen on catalog/) })
     vi.stubEnv('NEXUS_PUBLIC_API_URL', ''); vi.stubEnv('PUBLIC_API_URL', ''); vi.stubEnv('RAILWAY_PUBLIC_DOMAIN', '')
@@ -158,6 +161,7 @@ describe('set-meta-webhooks', () => {
     expect(PAGE_INSTALL_ROADS).toMatch(/Graph API Explorer with a Page token/)
     const out = await preview(webhooks, { action: 'remove-page' })
     expect(out.preview.warnings.join(' ')).toMatch(/Nexus cannot read which apps are installed on the Page/)
+    expect(out.preview.warnings).toContainEqual(expect.stringMatching(/^No undo for: It has no undo: Nexus does not install the app on a Page/))
     const off = await run(webhooks, { action: 'remove-page' })
     expect(sent()[0]).toMatchObject({ objectId: '120000000000010', kind: 'page', method: 'DELETE', via: { auth: 'app' } })
     expect(webhooks.undo!.request(off.change)).toEqual({ refusal: expect.stringMatching(/It has no undo: Nexus does not install the app on a Page/) })
@@ -171,11 +175,39 @@ describe('set-meta-webhooks', () => {
     expect(out.preview.warnings.join(' ')).toMatch(/app-wide: another business in Nexus uses the same Meta app, so this also changes what it receives/)
     expect(JSON.stringify(out.preview)).not.toMatch(/ws-other|m-9/)
     const done = await run(webhooks, { action: 'subscribe-app', object: 'ad_account' })
-    expect(webhooks.undo!.request(done.change)).toEqual({ refusal: expect.stringMatching(/Another business in Nexus uses this Meta app; an app-wide unsubscribe would stop its notifications too/) })
+    expect(webhooks.undo!.request(done.change)).toEqual({ refusal: expect.stringMatching(/once Nexus subscribes, only Meta's App Dashboard can remove it/) })
+    // Re-review 1 — and the approver read it before approving.
+    expect(out.preview.warnings).toContainEqual(expect.stringMatching(/^No undo for: This subscription: another business in Nexus uses this Meta app, so once Nexus subscribes, only Meta's App Dashboard can remove it/))
     h.app = [{ object: 'ad_account', fields: ['effective_status'], active: true, nexusCallback: true, callbackOrigin: 'https://api.example.test' }]
     expect(await preview(webhooks, { action: 'unsubscribe-app', object: 'ad_account' })).toEqual({ ok: false, error: expect.stringMatching(/Another business in Nexus uses this Meta app.*App Dashboard/) })
     h.users = new Error('database unavailable')
     expect(await preview(webhooks, { action: 'unsubscribe-app', object: 'ad_account' })).toEqual({ ok: false, error: expect.stringMatching(/could not tell whether another business/) })
+    // M5b — an app id that could not be read (unsure, no throw) is "could not tell" too.
+    h.users = { users: [{ workspaceId: 'nexus_legacy_workspace', connectionId: 'm-1' }], unsure: true }
+    expect(await preview(webhooks, { action: 'unsubscribe-app', object: 'ad_account' })).toEqual({ ok: false, error: expect.stringMatching(/could not tell whether another business/) })
+  })
+
+  it('M3 / M4 — the count is part of what the change stands on; unknown, a first subscribe has no undo, said before approval', async () => {
+    const live = { appId: '1234567', adAccountId: '1234567890', pageId: null, callback: { url: 'https://api.example.test/webhooks/meta/1234567' }, app: [] }
+    const one = webhooksDraft({ action: 'subscribe-app', object: 'ad_account' }, { ...live, otherBusinesses: 1 }) as { stands: { otherBusinesses: number | null } }
+    const none = webhooksDraft({ action: 'subscribe-app', object: 'ad_account' }, { ...live, otherBusinesses: 0 }) as { stands: { otherBusinesses: number | null } }
+    expect([one.stands.otherBusinesses, none.stands.otherBusinesses]).toEqual([1, 0])
+    const alone = await preview(webhooks, { action: 'subscribe-app', object: 'ad_account' })
+    h.users = { users: [{ workspaceId: 'nexus_legacy_workspace', connectionId: 'm-1' }, { workspaceId: 'ws-other', connectionId: 'm-9' }], unsure: false }
+    const shared = await preview(webhooks, { action: 'subscribe-app', object: 'ad_account' })
+    expect(shared.preview.basis).not.toBe(alone.preview.basis)
+    h.users = { users: [{ workspaceId: 'nexus_legacy_workspace', connectionId: 'm-1' }], unsure: true }
+    const unknown = await preview(webhooks, { action: 'subscribe-app', object: 'ad_account' })
+    expect(unknown.preview.warnings).toContainEqual(expect.stringMatching(/^No undo for: Nexus could not tell whether another business .*only Meta's App Dashboard can remove it/))
+    const done = await run(webhooks, { action: 'subscribe-app', object: 'ad_account' })
+    expect(webhooks.undo!.request(done.change)).toEqual({ refusal: expect.stringMatching(/could not tell whether another business/) })
+  })
+
+  it('re-review 3 — with another business on the app, an application or catalog subscription is said to reach nobody', async () => {
+    h.users = { users: [{ workspaceId: 'nexus_legacy_workspace', connectionId: 'm-1' }, { workspaceId: 'ws-other', connectionId: 'm-9' }], unsure: false }
+    expect((await preview(webhooks, { action: 'subscribe-app', object: 'catalog' })).preview.warnings).toContainEqual(expect.stringMatching(/routes no catalog notification .*reaches nobody in Nexus/))
+    expect((await preview(webhooks, { action: 'subscribe-app', object: 'application' })).preview.warnings).toContainEqual(expect.stringMatching(/dev_alerts, async_requests name no business/))
+    expect((await preview(webhooks, { action: 'subscribe-app', object: 'ad_account' })).preview.warnings.join(' ')).not.toMatch(/reaches nobody|reach nobody/)
   })
 
   it('review A2 / A3 — fields kept sorted whatever Meta\'s order; an undo subscribes back only fields Nexus takes, naming the rest', async () => {
@@ -247,8 +279,13 @@ describe('set-meta-alert-subscription and remove-meta-alert-subscription', () =>
     expect(sent()[0]).toMatchObject({ objectId: 'act_1234567890', method: 'DELETE', params: {}, via: { path: 'act_1234567890/subscriptions/120000000000040' } })
     const undo = remove.undo!.request(done.change) as { tool: string; args: Record<string, unknown> }
     expect(undo).toMatchObject({ tool: 'set-meta-alert-subscription', args: { action: 'create', eventType: 'INSIGHTS_UPDATED', entityType: 'CAMPAIGN', field: 'cpc', operator: 'IN_RANGE', thresholdCents: [100, 250], filters: [{ field: 'objective', operator: 'IN', values: ['OUTCOME_SALES'] }] } })
-    // Review A7 — that it is made again is said, not listed as something with no way back.
+    // Review A7 — that it is made again is said, not listed as something with no way back (M21: said in the preview).
     expect(done.change.before.noUndo).toEqual([])
+    h.alert = { ...ALERT }
+    expect((await preview(remove, { subscriptionId: ALERT.subscriptionId, confirmDelete: true })).preview.warnings).toContain('Its undo makes it again with the same conditions; Meta gives it a new id.')
+    // Re-review 1 — an alert Nexus cannot write the same way: no undo, said before approval.
+    h.alert = { ...ALERT, filters: [{ field: 'entity_type', value: 'PAGE', operator: 'EQUAL' }] }
+    expect((await preview(remove, { subscriptionId: ALERT.subscriptionId, confirmDelete: true })).preview.warnings).toContainEqual(expect.stringMatching(/^No undo for: Nexus cannot write these conditions again the same way/))
     const parsed = alerts.input.parse(undo.args) as Record<string, unknown>
     // Made again, it is the same request Meta got before.
     expect(alertParamsOf(parsed as never)).toEqual({ params: { event_type: 'INSIGHTS_UPDATED', filters: '[{"field":"entity_type","value":"CAMPAIGN","operator":"EQUAL"},{"field":"objective","value":["OUTCOME_SALES"],"operator":"IN"}]', field: 'cpc', operator: 'IN_RANGE', value: '["100","250"]' } })

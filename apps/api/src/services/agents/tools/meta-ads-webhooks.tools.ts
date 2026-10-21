@@ -2,8 +2,10 @@
  * Meta ads changes, step 30 part 2 — webhook subscriptions and alert subscriptions of the business's Meta app and chosen
  * ad account (master rows WH-005, 007–010, 012, 013, 051–054, 056, 057; the receiver is part 1):
  *   set-meta-webhooks                the app's webhook subscription of one object (fields, Nexus's receiver as the
- *                                    callback, include_values), the chosen ad account connected to the app, the app
- *                                    installed on the chosen Page; Instagram / WhatsApp fields only in the App Dashboard
+ *                                    callback, include_values; app-wide), the chosen ad account connected to the app, the
+ *                                    app removed from the chosen Page (installing takes a Page token: Meta Business Suite ›
+ *                                    All Tools › Business Apps, or the Graph API Explorer); Instagram / WhatsApp fields only
+ *                                    in the App Dashboard
  *   set-meta-alert-subscription      a new alert on the ad account (a new object, a setting changing, a metric crossing a
  *                                    threshold, a milestone), or one switched on / off
  *   remove-meta-alert-subscription   an alert removed (only on the person's explicit ask)
@@ -121,7 +123,8 @@ const setMetaWebhooks: AgentTool = {
   alwaysAsk: true,
   requiresApprovalDefault: true,
   openWorld: true,
-  // Switching an inactive subscription on again, a foreign callback replaced, a Page whose apps could not be read: no way back.
+  // No way back: switching an inactive subscription on again, a foreign callback replaced, a subscription of an app another
+  // business uses, removing the app from a Page (Nexus cannot install it back: Business Apps or the Graph API Explorer).
   reversibility: 'partial',
   maxClaudeTrust: 'ask',
   requires: [F.adsCampaignsManage],
