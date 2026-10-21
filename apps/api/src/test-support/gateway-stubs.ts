@@ -23,7 +23,11 @@ export const gatewayMetaChosen: Record<string, string | null> = {}
 /** Meta step 17: Meta objects in this business's stored rows (`objectId` → account and kind); every other is not stored. */
 export const gatewayMetaStored: Record<string, { adAccountId: string; kind: 'campaign' | 'adset' | 'ad' }> = {}
 /** Meta step 23: each connection's chosen Instagram account and portfolio; a connection not here chose `17841400000000001` and `9876543210`. */
-export const gatewayMetaMedia: Record<string, { instagramId: string | null; portfolioId: string | null }> = {}
+export const gatewayMetaMedia: Record<string, { instagramId: string | null; portfolioId: string | null; pageId?: string | null }> = {}
+/** Meta step 25: the chosen Page of a connection not in gatewayMetaMedia (or one there without pageId). */
+export const GATEWAY_META_PAGE = '120000000000010'
+/** Meta step 25: Pages and Instagram accounts another business chose (`PAGE:<id>`, `INSTAGRAM:<id>`). */
+export const gatewayMetaTakenLinks = new Set<string>()
 /** Meta step 23: business portfolios another business's chosen ad account is of. */
 export const gatewayMetaSharedPortfolios = new Set<string>()
 
@@ -35,8 +39,9 @@ export const accountModule = {
   googleMerchantDataSourceNexusMade: async (merchantId: string, dataSourceId: string): Promise<boolean> => !gatewayMerchantForeignSources.has(`${merchantId}:${dataSourceId}`),
   metaChosenAdAccountOf: async (connectionId: string): Promise<string | null> => (connectionId in gatewayMetaChosen ? gatewayMetaChosen[connectionId] : '1234567890'),
   metaStoredObject: async (objectId: string): Promise<{ adAccountId: string; kind: 'campaign' | 'adset' | 'ad' } | null> => gatewayMetaStored[objectId] ?? null,
-  metaChosenMediaAssetsOf: async (connectionId: string): Promise<{ instagramId: string | null; portfolioId: string | null }> =>
-    gatewayMetaMedia[connectionId] ?? { instagramId: '17841400000000001', portfolioId: '9876543210' },
+  metaChosenMediaAssetsOf: async (connectionId: string): Promise<{ instagramId: string | null; portfolioId: string | null; pageId?: string | null }> =>
+    ({ pageId: GATEWAY_META_PAGE, ...(gatewayMetaMedia[connectionId] ?? { instagramId: '17841400000000001', portfolioId: '9876543210' }) }),
+  metaLinkTaken: async (product: 'PAGE' | 'INSTAGRAM', id: string): Promise<boolean> => gatewayMetaTakenLinks.has(`${product}:${id}`),
   metaPortfolioShared: async (portfolioId: string): Promise<boolean> => gatewayMetaSharedPortfolios.has(portfolioId),
 }
 export const ledgerModule = {

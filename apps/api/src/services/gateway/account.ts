@@ -87,12 +87,22 @@ export async function metaStoredObject(objectId: string): Promise<{ adAccountId:
  * chosen: the AD_ACCOUNT link's metadata.businessId), each null when there is none. Read in the business the call runs in
  * (row-level security): another business's choice is never this one.
  */
-export async function metaChosenMediaAssetsOf(connectionId: string): Promise<{ instagramId: string | null; portfolioId: string | null }> {
-  const links = await prisma.metaAccountLink.findMany({ where: { connectionId, product: { in: ['AD_ACCOUNT', 'INSTAGRAM'] } }, select: { product: true, externalId: true, metadata: true } })
+export async function metaChosenMediaAssetsOf(connectionId: string): Promise<{ instagramId: string | null; portfolioId: string | null; pageId?: string | null }> {
+  // Step 25 — the chosen Facebook Page too (its PAGE link): a creative runs as it.
+  const links = await prisma.metaAccountLink.findMany({ where: { connectionId, product: { in: ['AD_ACCOUNT', 'INSTAGRAM', 'PAGE'] } }, select: { product: true, externalId: true, metadata: true } })
   const instagram = links.find((l) => l.product === 'INSTAGRAM')?.externalId ?? null
   const meta = links.find((l) => l.product === 'AD_ACCOUNT')?.metadata
   const portfolio = meta && typeof meta === 'object' && !Array.isArray(meta) ? (meta as { businessId?: unknown }).businessId : null
-  return { instagramId: instagram, portfolioId: typeof portfolio === 'string' && /^\d{1,20}$/.test(portfolio) ? portfolio : null }
+  return { instagramId: instagram, portfolioId: typeof portfolio === 'string' && /^\d{1,20}$/.test(portfolio) ? portfolio : null, pageId: links.find((l) => l.product === 'PAGE')?.externalId ?? null }
+}
+
+/**
+ * Meta step 25: is this Facebook Page or Instagram account one ANOTHER business in Nexus chose (nexus_meta_links_taken,
+ * step 2)? A creative of this business never names it (a partnership ad's partner included).
+ */
+export async function metaLinkTaken(product: 'PAGE' | 'INSTAGRAM', id: string): Promise<boolean> {
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`SELECT t.id FROM nexus_meta_links_taken(${product}, ${[id]}::text[]) AS t(id)`
+  return rows.some((row) => row.id === id)
 }
 
 /**
