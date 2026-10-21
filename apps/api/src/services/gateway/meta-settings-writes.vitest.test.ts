@@ -9,12 +9,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response>, takenPortfolios: new Set<string>(), takenFails: false }))
 // Review A4 — which portfolios another Nexus business uses (nexus_meta_links_taken PORTFOLIO): a stand-in.
-vi.mock('../marketing/meta-ads/taken.js', () => ({
-  takenIds: vi.fn(async (_product: string, ids: string[]) => {
+vi.mock('../marketing/meta-ads/taken.js', () => {
+  const takenIds = vi.fn(async (_product: string, ids: string[]) => {
     if (h.takenFails) throw new Error('connection to the database lost')
     return new Set(ids.filter((id) => h.takenPortfolios.has(id)))
-  }),
-}))
+  })
+  return {
+    takenIds,
+    portfolioTaken: vi.fn(async (id: string) => ((await takenIds('PORTFOLIO', [id])).has(id) ? { portfolioId: id, takenByAnotherBusiness: true, sentence: 'taken' } : null)),
+  }
+})
 vi.mock('./account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
 vi.mock('./ledger.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
 vi.mock('../cx/token.service.js', () => ({
@@ -229,8 +233,10 @@ describe('budget schedules', () => {
   it('a change of a period (SDK only) names it a high-demand period; a DELETE only so, with no body', () => {
     expect(verdict({ url: `${BASE}/${PERIOD}`, body: form({ budget_value: '30' }), objectKind: 'highdemandperiod' })).toMatchObject({ write: { rule: 'budget_schedule.update', kinds: ['highdemandperiod'] } })
     expect(verdict({ url: `${BASE}/${PERIOD}`, method: 'DELETE', objectKind: 'highdemandperiod' })).toEqual({ write: { rule: 'budget_schedule.delete', objectId: PERIOD, check: false, body: '', budget: false, kinds: ['highdemandperiod'], method: 'DELETE' } })
-    expect(problem({ url: `${BASE}/${PERIOD}`, method: 'DELETE', objectKind: 'highdemandperiod', body: 'x=1' })).toMatch(/deletes nothing on Meta yet but a scheduled budget increase/)
-    expect(problem({ url: `${BASE}/${CAMPAIGN}`, method: 'DELETE', objectKind: 'campaign' })).toMatch(/deletes nothing on Meta yet/)
+    expect(problem({ url: `${BASE}/${PERIOD}`, method: 'DELETE', objectKind: 'highdemandperiod', body: 'x=1' })).toMatch(/deletes on Meta only a scheduled budget increase/)
+    // Step 19 — a campaign's DELETE is on the list now (object.delete: the undo of a create or a copy); with a body, never.
+    expect(verdict({ url: `${BASE}/${CAMPAIGN}`, method: 'DELETE', objectKind: 'campaign' })).toMatchObject({ write: { rule: 'object.delete', method: 'DELETE' } })
+    expect(problem({ url: `${BASE}/${CAMPAIGN}`, method: 'DELETE', objectKind: 'campaign', body: 'x=1' })).toMatch(/deletes on Meta only/)
     expect(problem({ url: `${BASE}/${PERIOD}`, method: 'DELETE', objectKind: 'highdemandperiod', kind: 'read' })).toMatch(/goes as a write/)
   })
 })
@@ -271,34 +277,42 @@ describe('through the gateway: the ids inside a body and a period\'s campaign ar
     expect(new URL(h.calls[0].url).searchParams.get('fields')).toBe('account_id,subtype,time_created')
     expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'POST'])
   })
-  it('review A4 — a catalog or a product set inside a promoted object follows the catalog rule (portfolio, not another business\'s)', async () => {
+  it('review A4 + owner fix — a catalog or a product set inside a promoted object follows step 12\'s read rule (portfolio, owner not another business\'s)', async () => {
     const PORTFOLIO = '120000000000090'
     const promoted = (o: Record<string, string>) => ({ promoted_object: JSON.stringify(o) })
     expect(verdict({ body: form(promoted({ product_catalog_id: '120000000000060', product_set_id: '120000000000061' })), objectKind: 'campaign' }))
       .toMatchObject({ write: { ids: [{ id: '120000000000060', kind: 'catalog' }, { id: '120000000000061', kind: 'productset' }] } })
-    // A forged catalog id: the portfolio's catalogs do not hold it.
-    h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }), json({ data: [{ id: '120000000000060' }] }), json({ data: [] }))
+    // A forged catalog id: neither the portfolio's own nor one of its client catalogs.
+    h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }), json({ id: '120000000000069', business: { id: '120000000000099' } }), json({ data: [] }))
     const forged = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, objectKind: 'campaign', params: promoted({ product_catalog_id: '120000000000069' }), check: false }).catch((e) => e)
-    expect(forged).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/inside this change, Catalog 120000000000069 is not one the chosen ad account's business portfolio owns or was given/) })
-    expect(h.calls.map((c) => new URL(c.url).pathname)).toEqual(['/v26.0/act_1234567890', `/v26.0/${PORTFOLIO}/owned_product_catalogs`, `/v26.0/${PORTFOLIO}/client_product_catalogs`])
+    expect(forged).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/inside this change, That catalog is not owned by the chosen ad account's business portfolio, nor shared with it as a client catalog/) })
+    expect(h.calls.map((c) => new URL(c.url).pathname)).toEqual(['/v26.0/act_1234567890', '/v26.0/120000000000069', `/v26.0/${PORTFOLIO}/client_product_catalogs`])
+    // OWNER FIX — a client catalog whose owner is a portfolio another business in Nexus uses: refused, nothing is sent.
+    h.calls = []
+    h.takenPortfolios.add('120000000000081')
+    h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }), json({ id: '120000000000063', business: { id: '120000000000081' } }), json({ data: [{ id: '120000000000063' }] }))
+    const ofAnother = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, objectKind: 'campaign', params: promoted({ product_catalog_id: '120000000000063' }), check: false }).catch((e) => e)
+    expect(ofAnother).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/belongs to a business portfolio another business in Nexus uses/) })
+    expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
+    h.takenPortfolios.clear()
     // A product set of a foreign catalog.
     h.calls = []
-    h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }), json({ id: '120000000000061', product_catalog: { id: '120000000000068' } }), json({ data: [{ id: '120000000000060' }] }), json({ data: [] }))
+    h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }), json({ id: '120000000000061', product_catalog: { id: '120000000000068' } }), json({ id: '120000000000068', business: { id: '120000000000099' } }), json({ data: [] }))
     const foreignSet = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: AD_SET, objectKind: 'adset', params: promoted({ product_set_id: '120000000000061' }), check: false }).catch((e) => e)
     expect(foreignSet).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
-    // A portfolio another Nexus business uses: nothing is named from it, before any catalog list is read.
+    // A portfolio another Nexus business uses: nothing is named from it, before any catalog is read.
     h.calls = []
     h.takenPortfolios.add(PORTFOLIO)
     h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }))
     const taken = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, objectKind: 'campaign', params: promoted({ product_catalog_id: '120000000000060' }), check: false }).catch((e) => e)
-    expect(taken).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/Another business in Nexus uses an ad account of this Meta business portfolio/) })
+    expect(taken).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/shared with another business in Nexus/) })
     expect(h.calls).toHaveLength(1)
     // The portfolio's own catalog goes.
     h.calls = []
     h.takenPortfolios.clear()
-    h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }), json({ data: [] }), json({ data: [{ id: '120000000000060' }] }), json({ id: CAMPAIGN }))
+    h.answers.push(json({ id: 'act_1234567890', business: { id: PORTFOLIO } }), json({ id: '120000000000060', business: { id: PORTFOLIO } }), json({ id: CAMPAIGN }))
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: CAMPAIGN, objectKind: 'campaign', params: promoted({ product_catalog_id: '120000000000060' }), check: false })).ok).toBe(true)
-    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'GET', 'POST'])
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'POST'])
   })
   it('round 2 — a catalog lookup that FAILS (Meta refuses it, or the database) refuses the change: nothing is sent', async () => {
     const promoted = { promoted_object: JSON.stringify({ product_catalog_id: '120000000000060' }) }

@@ -173,9 +173,9 @@ describe('set-meta-block-list', () => {
       .mockImplementationOnce(async () => ({ node: { id: '120000000000602', name: 'List B' }, readBack: 'second-read', waitedMs: 0 }))
     const ran = await run('set-meta-block-list', { action: 'create', name: 'List B', urls: ['example.com', 'https://www.facebook.com/a-page'] })
     expect(ran.ok).toBe(true)
-    expect(h.send.mock.calls.map((c) => [c[1].objectId, c[1].edge, c[1].params, c[1].file ?? null])).toEqual([
-      ['9876543210', 'block_list_drafts', {}, 'example.com\nhttps://www.facebook.com/a-page'],
-      ['9876543210', 'publisher_block_lists', { name: 'List B', draft_id: '120000000000801' }, null],
+    expect(h.send.mock.calls.map((c) => [c[1].objectId, c[1].edge, c[1].params])).toEqual([
+      ['9876543210', 'block_list_drafts', { publisher_urls_file: 'example.com\nhttps://www.facebook.com/a-page', publisher_urls_file_name: 'publisher_urls.txt' }],
+      ['9876543210', 'publisher_block_lists', { name: 'List B', draft_id: '120000000000801' }],
     ])
     expect(h.wait).toHaveBeenCalledWith('m-1', '120000000000801')
     expect(ran.change!.after).toMatchObject({ action: 'create', blockListId: '120000000000602', name: 'List B' })

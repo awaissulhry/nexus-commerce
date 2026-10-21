@@ -41,7 +41,7 @@ vi.mock('../../utils/otel-setup.js', () => ({
   withSpan: vi.fn(async (name: string, attrs: Record<string, unknown>, fn: (span: null) => Promise<unknown>) => { h.spans.push({ name, attrs }); return fn(null) }),
 }))
 
-import { gatewayLedger, gatewayMetaNexusMade, gatewayMetaPages, gatewayMetaStored } from '../../test-support/gateway-stubs.js'
+import { gatewayLedger, gatewayMetaNexusMade, gatewayMetaPage, gatewayMetaStored } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { gatewayCall, GatewayRefusal } from './gateway.js'
 import { metaCall, metaWriteCall } from './meta.js'
@@ -82,7 +82,9 @@ beforeEach(() => {
   __rateTest.useMemory()
   __metaObjectLimitsTest.useMemory()
   h.calls = []; h.answers = []; h.proofs = []; h.spans = []; gatewayLedger.length = 0
-  for (const key of Object.keys(gatewayMetaPages)) delete gatewayMetaPages[key]
+  // The merge with main: step 19's Page stub (no Page unless a test sets one); m-1 chose PAGE.
+  for (const key of Object.keys(gatewayMetaPage)) delete gatewayMetaPage[key]
+  gatewayMetaPage['m-1'] = PAGE
   for (const key of Object.keys(gatewayMetaStored)) delete gatewayMetaStored[key]
   gatewayMetaNexusMade.clear()
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
@@ -258,7 +260,7 @@ describe('THE Page token mode', () => {
     __metaObjectLimitsTest.useMemory()
     await metaWriteCall({ connectionId: 'm-1', operation: 'leadform.create', objectId: PAGE, objectKind: 'page', edge: 'leadgen_forms', params: formParams(), check: false })
     expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'POST', 'GET', 'POST'])
-    gatewayMetaPages['m-2'] = OTHER_PAGE
+    gatewayMetaPage['m-2'] = OTHER_PAGE
     h.calls = []
     h.answers.push(tokenAnswer('pagetokenOTHER0123456789abcdefgh', OTHER_PAGE), json({ id: OTHER_FORM }))
     await metaWriteCall({ connectionId: 'm-2', operation: 'leadform.create', objectId: OTHER_PAGE, objectKind: 'page', edge: 'leadgen_forms', params: formParams(), check: false })
@@ -345,7 +347,7 @@ describe('the owner check of a change made as the Page', () => {
   it('the Page itself: only the chosen one; none chosen, or another Page (another business\'s too): refused, nothing sent at all', async () => {
     const err = await metaWriteCall({ connectionId: 'm-1', operation: 'leadform.create', objectId: OTHER_PAGE, objectKind: 'page', edge: 'leadgen_forms', params: formParams(), check: false }).catch((e) => e)
     expect(err).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN', message: expect.stringMatching(/not the Facebook Page this business chose/) })
-    gatewayMetaPages['m-3'] = null
+    delete gatewayMetaPage['m-3']
     expect(await metaWriteCall({ connectionId: 'm-3', operation: 'leadform.create', objectId: PAGE, objectKind: 'page', edge: 'leadgen_forms', params: formParams(), check: false }).catch((e) => e)).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
     // No token read, no change.
     expect(h.calls).toHaveLength(0)

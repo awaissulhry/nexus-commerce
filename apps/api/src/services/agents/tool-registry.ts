@@ -95,7 +95,24 @@ import { META_ADS_SAFETY_TOOLS } from './tools/meta-ads-safety.tools.js'
 import { META_ADS_OPTIMIZE_TOOLS } from './tools/meta-ads-optimize.tools.js'
 // Meta ads step 14 (2026-10-21): lead forms, leads and comments (read only; leads and comments are Claude's door only).
 import { META_ADS_ENGAGEMENT_TOOLS } from './tools/meta-ads-engagement.tools.js'
+import { META_ADS_CATALOG_TOOLS } from './tools/meta-ads-catalog.tools.js'
+import { META_ADS_ACCOUNT_TOOLS } from './tools/meta-ads-account.tools.js'
+import { META_ADS_HEALTH_TOOLS } from './tools/meta-ads-health.tools.js'
+// Meta ads step 11 (2026-10-21): audiences and datasets (pixels), read only.
+import { META_ADS_AUDIENCES_TOOLS } from './tools/meta-ads-audiences.tools.js'
+import { META_ADS_DATASETS_TOOLS } from './tools/meta-ads-datasets.tools.js'
 import { META_ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/meta-ads-campaign-settings.tools.js'
+import { META_ADS_CREATE_TOOLS } from './tools/meta-ads-create.tools.js'
+import { META_ADS_REMOVE_TOOLS } from './tools/meta-ads-remove.tools.js'
+import { META_ADS_LABELS_RULES_TOOLS } from './tools/meta-ads-labels-rules.tools.js'
+// Meta ads step 28 (2026-10-21): apply recommendations; make, change and end experiments.
+import { META_ADS_OPTIMIZE_CHANGES_TOOLS } from './tools/meta-ads-optimize-changes.tools.js'
+import { META_ADS_COMMERCE_TOOLS } from './tools/meta-ads-commerce.tools.js'
+import { META_ADS_MEDIA_UPLOAD_TOOLS } from './tools/meta-ads-media-upload.tools.js'
+// Meta ads step 29 (2026-10-21): Meta's automated rules.
+import { META_ADS_RULES_TOOLS } from './tools/meta-ads-rules.tools.js'
+// Meta ads step 7 (2026-10-21): insights at every level, background report runs, saved and partner reports (read only).
+import { META_ADS_INSIGHTS_TOOLS } from './tools/meta-ads-insights.tools.js'
 // Meta ads step 39 (2026-10-21): brand safety — set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
 import { META_ADS_BRAND_SAFETY_TOOLS } from './tools/meta-ads-brand-safety.tools.js'
 // Meta ads step 36 (2026-10-21): lead forms and test leads (changes made as the chosen Page).
@@ -314,8 +331,33 @@ const ALL: AgentTool[] = [
   ...META_ADS_OPTIMIZE_TOOLS,
   // Meta ads step 14 (2026-10-21): meta-lead-forms, meta-leads, meta-comments (read only).
   ...META_ADS_ENGAGEMENT_TOOLS,
+  // Meta ads step 12 (2026-10-21): meta-catalogs, meta-catalog-items, meta-catalog-feeds, meta-catalog-health (read only).
+  ...META_ADS_CATALOG_TOOLS,
+  // Meta ads step 3 (2026-10-21): meta-ad-account, meta-billing, meta-account-access (read only).
+  ...META_ADS_ACCOUNT_TOOLS,
+  // Meta ads step 5 (2026-10-21): meta-account-health, meta-activity-log (read only).
+  ...META_ADS_HEALTH_TOOLS,
+  // Meta ads step 11 (2026-10-21): meta-audiences, meta-datasets (read only; datasets view sources = the D2 check).
+  ...META_ADS_AUDIENCES_TOOLS,
+  ...META_ADS_DATASETS_TOOLS,
   // Meta ads step 18 (2026-10-21): set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule (settings, budgets, bids).
   ...META_ADS_CAMPAIGN_SETTINGS_TOOLS,
+  // Meta ads step 19 (2026-10-21): create-meta-campaign, create-meta-ad-set, copy-meta-ads (born PAUSED; undo deletes what they made).
+  ...META_ADS_CREATE_TOOLS,
+  // Meta ads step 22 (2026-10-21): remove-meta-ads-items (delete for good, on the person's explicit ask only; no undo).
+  ...META_ADS_REMOVE_TOOLS,
+  // Meta ads step 21 (2026-10-21): set-meta-labels, set-meta-value-rules, create-meta-reach-frequency (a booking SPENDS MONEY).
+  ...META_ADS_LABELS_RULES_TOOLS,
+  // Meta ads step 28 (2026-10-21): apply-meta-recommendations, create-meta-experiment, set-meta-experiment, end-meta-experiment.
+  ...META_ADS_OPTIMIZE_CHANGES_TOOLS,
+  // Meta ads step 13 (2026-10-21): meta-product-sets, meta-commerce, meta-instagram-product-tags (read only).
+  ...META_ADS_COMMERCE_TOOLS,
+  // Meta ads step 23 (2026-10-21): create-meta-media — images, videos and folders into the chosen ad account, and the undo.
+  ...META_ADS_MEDIA_UPLOAD_TOOLS,
+  // Meta ads step 29 (2026-10-21): set-meta-ad-rule (make, change, switch, run Meta's rules), remove-meta-ad-rule.
+  ...META_ADS_RULES_TOOLS,
+  // Meta ads step 7 (2026-10-21): meta-ads-numbers, meta-ads-report, meta-ads-saved-reports (read only).
+  ...META_ADS_INSIGHTS_TOOLS,
   // Meta ads step 39 (2026-10-21): set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
   ...META_ADS_BRAND_SAFETY_TOOLS,
   // Meta ads step 36 (2026-10-21): create-meta-lead-form, set-meta-lead-form (lead forms and test leads, as the Page).

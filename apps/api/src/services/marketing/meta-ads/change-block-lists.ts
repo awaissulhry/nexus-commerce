@@ -21,7 +21,7 @@
  * Meta has no check (validate_only) for any of these: "Meta has no check for this change".
  */
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
-import { BLOCK_LIST_ROLES, blockListEntry, blockListFileOf, MAX_POSTS_PER_PLATFORM } from '../../gateway/meta-brand-safety-rules.js'
+import { BLOCK_LIST_FILE, BLOCK_LIST_ROLES, blockListEntry, blockListFileOf, MAX_POSTS_PER_PLATFORM } from '../../gateway/meta-brand-safety-rules.js'
 import { META_NAME_TEXT } from '../../gateway/meta-write-text.js'
 import { MetaWriteError, type MetaChangeResult } from './write-client.js'
 import { localFailure } from './errors.js'
@@ -205,7 +205,7 @@ export function blockListDraft(request: BlockListRequest, live: BlockListLive, w
       }
       requests.push({
         step: 1, label: `Upload ${file.entries.length} host${file.entries.length === 1 ? '' : 's'} or URL${file.entries.length === 1 ? '' : 's'} as a draft block list (a text file Nexus makes, one per line)`,
-        objectKind: 'business', objectId: portfolio, edge: 'block_list_drafts', params: {}, file: file.text, ...NO_CHECK, raisesSpend: false, undoable: false,
+        objectKind: 'business', objectId: portfolio, edge: 'block_list_drafts', params: { [BLOCK_LIST_FILE.key]: file.text, [BLOCK_LIST_FILE.nameKey]: BLOCK_LIST_FILE.filename }, ...NO_CHECK, raisesSpend: false, undoable: false,
         operation: 'blockList.draft', readBackFields: 'id,async_job_status,async_percent_completion', grant: GRANT_LISTS,
       })
       requests.push({

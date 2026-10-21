@@ -62,6 +62,22 @@ export async function metaChosenAdAccountOf(connectionId: string): Promise<strin
 }
 
 /**
+ * Meta step 19: the Facebook Page this business chose through this connection (its PAGE MetaAccountLink, digits only), or
+ * null. Step 36 (Q1, the Page token mode): read in the business the call runs in (row-level security), so a Page another
+ * business chose is never this one; the ONLY Page whose own token the gateway ever reads (meta-page-token.ts).
+ */
+export async function metaChosenPageOf(connectionId: string): Promise<string | null> {
+  const link = await prisma.metaAccountLink.findFirst({ where: { connectionId, product: 'PAGE' }, select: { externalId: true } })
+  return link?.externalId && /^\d{1,25}$/.test(link.externalId) ? link.externalId : null
+}
+
+/** Meta step 21: the Instagram account this business chose through this connection (its INSTAGRAM MetaAccountLink), or null. */
+export async function metaChosenInstagramOf(connectionId: string): Promise<string | null> {
+  const link = await prisma.metaAccountLink.findFirst({ where: { connectionId, product: 'INSTAGRAM' }, select: { externalId: true } })
+  return link?.externalId ?? null
+}
+
+/**
  * Meta step 39 (brand safety): the business portfolio of the ad account this business chose through this connection, from
  * its AD_ACCOUNT MetaAccountLink (metadata.businessId, stored on Save), or null when the link names none.
  */
@@ -71,16 +87,6 @@ export async function metaChosenPortfolioOf(connectionId: string): Promise<strin
   const id = meta?.businessId
   return (typeof id === 'string' || typeof id === 'number') && /^\d{1,25}$/.test(String(id)) ? String(id) : null
 }
-
-/**
- * Meta step 39: is this business portfolio one ANOTHER business in Nexus uses (its chosen ad account sits in it)? The
- * step-10 function nexus_meta_links_taken('PORTFOLIO', …) answers yes or no, never which business.
- */
-export async function metaPortfolioTakenByAnother(portfolioId: string): Promise<boolean> {
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>`SELECT t.id FROM nexus_meta_links_taken('PORTFOLIO', ${[portfolioId]}::text[]) AS t(id)`
-  return rows.some((r) => r.id === portfolioId)
-}
-
 /** The kinds of Meta object Nexus's daily read stores (and a change by object id may name). */
 export type MetaStoredKind = 'campaign' | 'adset' | 'ad'
 
@@ -102,13 +108,12 @@ export async function metaStoredObject(objectId: string): Promise<{ adAccountId:
 }
 
 /**
- * Meta step 36 (Q1, the Page token mode): the Facebook Page this business chose through this Meta connection (its PAGE
- * MetaAccountLink, digits only), or null. Read in the business the call runs in (row-level security): a Page another
- * business chose is never this one. The ONLY Page whose own token the gateway ever reads (meta-page-token.ts).
+ * Meta step 23: is this business portfolio also that of ANOTHER business's chosen ad account (nexus_meta_links_taken
+ * PORTFOLIO, step 10)? Then its media library is that business's too, and no Nexus change writes there.
  */
-export async function metaChosenPageOf(connectionId: string): Promise<string | null> {
-  const link = await prisma.metaAccountLink.findFirst({ where: { connectionId, product: 'PAGE' }, select: { externalId: true } })
-  return link?.externalId && /^\d{1,25}$/.test(link.externalId) ? link.externalId : null
+export async function metaPortfolioShared(portfolioId: string): Promise<boolean> {
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`SELECT t.id FROM nexus_meta_links_taken('PORTFOLIO', ${[portfolioId]}::text[]) AS t(id)`
+  return rows.some((row) => row.id === portfolioId)
 }
 
 /** The tools whose change records name what Nexus made on a Page (step 36: lead forms and test leads). */

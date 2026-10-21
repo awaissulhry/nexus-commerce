@@ -9,8 +9,8 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaWriteKind } from '../../gateway/meta-calls.js'
-import type { MetaChangeResult } from './write-client.js'
+import type { MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaChangeResult, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -47,17 +47,55 @@ export interface MetaChangeRequest {
   expect?: Record<string, string>
   /** The fields read back (default id,status,effective_status). */
   readBackFields?: string
-  /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 39: an ad set's targeting, an ad account, its portfolio, a block list). */
-  objectKind?: MetaWriteKind
-  /** A create on the object's edge (POST /<id>/budget_schedules; step 39: the brand-safety edges). */
+  /**
+   * The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 19: a create names
+   * the chosen ad account itself, `adaccount`). Step 29: a Meta automated rule (`adrule`) or the ad account's rule
+   * library (`adaccount`, a rule's create); `kind` then only types the request (`campaign` by convention).
+   * Step 23: an upload names the chosen ad account (`adaccount`) or its business portfolio (step 28's `business`);
+   * captions name the library video (step 22's `video`). Its `kind` is then `ad`, as for step 22's deletes.
+   */
+  objectKind?: 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
+    // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
+    | MetaOptimizeKind
+    // Step 29 — a Meta automated rule.
+    | 'adrule'
+    // Step 39 — an ad set's targeting, a publisher or content block list (brand safety).
+    | MetaBrandSafetyKind
+    // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
+    | MetaPageKind
+  /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
   /** A budget schedule's campaign or ad set. */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 19 — Meta's check of this create asks its setup recommendations too (master CMP-031). */
+  recommendations?: boolean
+  /**
+   * Step 19 (review A4) — a create or a copy: when Meta answers success but the new object reads back otherwise, it is still
+   * recorded as made (with what it reads), so its undo can delete it; never "no record" for an object Meta made.
+   */
+  recordEvenIfNotAsAsked?: boolean
+  /**
+   * Step 22 — the steps of the same change this request stands on (a creative deleted after the ads that use it, an image
+   * after the creatives that use it): when one of them did not happen as asked, it is not sent.
+   */
+  needs?: number[]
+  /**
+   * Step 21 — an edge that changes the object itself (labels ADDED to a campaign: POST /<campaign>/adlabels answers
+   * {"success": true}): the object is read back, never a new one.
+   */
+  readBackObject?: true
+  // ── step 23: a request that brings its own sender ──
+  /**
+   * Sends the request itself (an upload whose answer is read again, or Meta's video-ads upload, whose later calls need the
+   * first one's answer): the kit runs it as ONE step in place of metaSendChange. It goes only through the write client
+   * (the gateway), and rejects with a MetaWriteError exactly like metaSendChange (not_sent, refused, unknown).
+   */
+  send?: (target: MetaWriteTarget) => Promise<MetaChangeResult>
+  /** The step's sentence when Meta made it (else the kit's own). */
+  doneSentence?: (result: MetaChangeResult) => string
   // ── step 39 (brand safety) ──
-  /** The text of the one file Nexus made for this request (a block list's URL file; part of the approved plan). */
-  file?: string
   /** The read-back that judges it (meta write-client `judge`), and what is read (default the object). */
   judge?: (node: Record<string, unknown>) => { moved: string[]; reads: string }
   readBackOf?: string
@@ -93,6 +131,8 @@ export interface MetaChangeDraft {
   /** What it replaces and what it writes, in one shape per tool (AgentChange; undo reads them). */
   before: unknown
   after: unknown
+  /** Step 22 — everything a delete takes with it (every ad set and ad of a campaign or ad set, by id), shown in full. */
+  alsoDeleted?: unknown
 }
 
 export const MAX_CHANGE_LINES = 20

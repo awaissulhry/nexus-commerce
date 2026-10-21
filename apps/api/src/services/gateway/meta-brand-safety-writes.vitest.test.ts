@@ -27,7 +27,7 @@ vi.mock('../cx/token.service.js', () => ({
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
 
-import { gatewayLedger, gatewayMetaChosen, gatewayMetaPortfolio, gatewayMetaStored, gatewayMetaTakenPortfolios } from '../../test-support/gateway-stubs.js'
+import { gatewayLedger, gatewayMetaChosen, gatewayMetaPortfolio, gatewayMetaStored, gatewayMetaSharedPortfolios } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { gatewayCall } from './gateway.js'
 import { metaRestFileExport, metaWriteCall } from './meta.js'
@@ -64,7 +64,7 @@ beforeEach(() => {
   __brandSafetyOwnerTest.reset()
   h.calls = []; h.answers = []; h.events = []; gatewayLedger.length = 0
   for (const record of [gatewayMetaChosen, gatewayMetaStored, gatewayMetaPortfolio]) for (const key of Object.keys(record)) delete (record as Record<string, unknown>)[key]
-  gatewayMetaTakenPortfolios.clear()
+  gatewayMetaSharedPortfolios.clear()
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     h.calls.push({ url: String(url), init })
     h.events.push(`${init.method}:${new URL(String(url)).pathname}`)
@@ -86,7 +86,7 @@ describe('the brand-safety allow-list entries (metaWriteVerdict)', () => {
     expect(problem({ body: form({ targeting: JSON.stringify(LIVE), status: 'PAUSED' }), objectKind: 'adsettargeting' })).toMatch(/only Meta change/)
     expect(problem({ body: form({ targeting: '{"custom_audiences":[{"id":123456789012345678}]}' }), objectKind: 'adsettargeting' })).toMatch(/one spelling only|exactly/)
     expect(problem({ body: form({ targeting: `{"a":"x${String.fromCharCode(7)}"}` }), objectKind: 'adsettargeting' })).toMatch(/printable text/)
-    expect(problem({ body: form({ targeting: JSON.stringify({ zips: Array.from({ length: 12000 }, (_, i) => `IT:${i}`) }) }), objectKind: 'adsettargeting' })).toMatch(/200000 for the largest brand-safety change/)
+    expect(problem({ body: form({ targeting: JSON.stringify({ zips: Array.from({ length: 12000 }, (_, i) => `IT:${i}`) }) }), objectKind: 'adsettargeting' })).toMatch(/at most 200000 characters/)
   })
   it('the account\'s filter: documented levels only, one per placement, on act_<id> named an ad account', () => {
     const url = `${BASE}/act_${ACCOUNT}/brand_safety_content_filter_levels`
@@ -103,11 +103,15 @@ describe('the brand-safety allow-list entries (metaWriteVerdict)', () => {
     const file = blockListFileOf(['Example.com', 'https://www.facebook.com/a-page', 'example.com'])
     expect(file).toEqual({ text: 'example.com\nhttps://www.facebook.com/a-page', entries: ['example.com', 'https://www.facebook.com/a-page'] })
     const text = (file as { text: string }).text
-    expect(verdict({ url, file: text, objectKind: 'business' })).toMatchObject({ write: { rule: 'blocklist.draft', objectId: PORTFOLIO, body: '', file: { key: 'publisher_urls_file', filename: 'publisher_urls.txt', contentType: 'text/plain', text } } })
-    expect(problem({ url, file: text, body: 'name=x', objectKind: 'business' })).toMatch(/only part/)
-    expect(problem({ url, objectKind: 'business', body: 'publisher_urls_file=example.com' })).toMatch(/only as a block list's URL file/)
-    expect(problem({ url: `${BASE}/${PORTFOLIO}/publisher_block_lists`, file: text, objectKind: 'business' })).toMatch(/only as a block list's URL file/)
-    expect(problem({ url, file: text })).toMatch(/only as a block list's URL file/)
+    // The merge with step 23: the text and its name go as form keys; the gateway makes them the ONE file part (MetaWriteRule.file).
+    const body = form({ publisher_urls_file: text, publisher_urls_file_name: 'publisher_urls.txt' })
+    expect(verdict({ url, body, objectKind: 'business' })).toMatchObject({ write: { rule: 'blocklist.draft', objectId: PORTFOLIO, body: '', bulky: true, multipart: { fields: [], file: { key: 'publisher_urls_file', filename: 'publisher_urls.txt', contentType: 'text/plain', text } } } })
+    expect(problem({ url, body: form({ publisher_urls_file: text, publisher_urls_file_name: 'publisher_urls.txt', name: 'x' }), objectKind: 'business' })).toMatch(/only Meta change/)
+    expect(problem({ url, objectKind: 'business', body: 'publisher_urls_file=example.com' })).toMatch(/only Meta change/)
+    expect(problem({ url, body: form({ publisher_urls_file: text, publisher_urls_file_name: 'other.txt' }), objectKind: 'business' })).toMatch(/not a file name this change sends/)
+    expect(problem({ url, body: form({ publisher_urls_file: 'http://example.com', publisher_urls_file_name: 'publisher_urls.txt' }), objectKind: 'business' })).toMatch(/block-list file/)
+    expect(problem({ url: `${BASE}/${PORTFOLIO}/publisher_block_lists`, body, objectKind: 'business' })).toMatch(/only Meta change/)
+    expect(problem({ url, body })).toMatch(/only Meta change/)
     for (const bad of ['Example.com', 'http://example.com', 'https://user:pw@example.com', 'https://example.com/?access_token=EAAAAAAAAAAAAAAAAAAAAAAAAA', 'https://example.com/x?sig=1',
       'https://example.com:8443/x', 'example.com\nexample.com', '', 'https://example.com/#top', 'ftp://example.com', 'exa mple.com']) {
       expect(blockListFileProblem(bad), bad).not.toBeNull()
@@ -128,12 +132,13 @@ describe('the brand-safety allow-list entries (metaWriteVerdict)', () => {
   })
   it('DELETEs: a list or a content list with no body; an unshare, a person, posts or an ad account with their keys in the body', () => {
     expect(verdict({ method: 'DELETE', url: `${BASE}/${LIST}`, objectKind: 'publisherblocklist' })).toMatchObject({ write: { rule: 'blocklist.delete', method: 'DELETE', body: '' } })
-    expect(problem({ method: 'DELETE', url: `${BASE}/${LIST}`, objectKind: 'publisherblocklist', body: 'agency_id=1' })).toMatch(/deletes nothing on Meta yet/)
+    expect(problem({ method: 'DELETE', url: `${BASE}/${LIST}`, objectKind: 'publisherblocklist', body: 'agency_id=1' })).toMatch(/Nexus deletes on Meta only/)
     expect(verdict({ method: 'DELETE', url: `${BASE}/${LIST}/agencies`, objectKind: 'publisherblocklist', body: form({ agency_id: OTHER_PORTFOLIO }) })).toMatchObject({ write: { rule: 'blocklist.unshare', method: 'DELETE', body: `agency_id=${OTHER_PORTFOLIO}` } })
-    expect(problem({ method: 'DELETE', url: `${BASE}/${LIST}/agencies`, objectKind: 'publisherblocklist' })).toMatch(/deletes nothing/)
+    expect(problem({ method: 'DELETE', url: `${BASE}/${LIST}/agencies`, objectKind: 'publisherblocklist' })).toMatch(/Nexus deletes on Meta only/)
     expect(verdict({ method: 'DELETE', url: `${BASE}/${CBL}/content`, objectKind: 'contentblocklist', body: form({ facebook_ids: '["120000000000901_120000000000902"]' }) })).toMatchObject({ write: { rule: 'contentblocklist.remove', method: 'DELETE' } })
     expect(verdict({ method: 'DELETE', url: `${BASE}/${CBL}/applied_ad_accounts`, objectKind: 'contentblocklist', body: form({ account_id: ACCOUNT }) })).toMatchObject({ write: { ids: [{ id: ACCOUNT, kind: 'adaccount' }] } })
-    expect(problem({ method: 'DELETE', url: `${BASE}/${AD_SET}`, objectKind: 'adset' })).toMatch(/deletes nothing on Meta yet/)
+    // Since step 22 (main): an ad set's DELETE is step 19's object.delete rule (the undo of a create, or an explicit ask).
+    expect(verdict({ method: 'DELETE', url: `${BASE}/${AD_SET}`, objectKind: 'adset' })).toMatchObject({ write: { rule: 'object.delete', method: 'DELETE' } })
     expect(problem({ method: 'DELETE', url: `${BASE}/${AD_SET}` })).toMatch(/cancels no async batch/)
   })
   it('shares, roles, ad accounts and posts: exact keys and values', () => {
@@ -247,9 +252,9 @@ describe('owners of the account, portfolio and lists', () => {
   it('the portfolio: only the chosen ad account\'s own, never one another business in Nexus uses, never when there is none', async () => {
     expect((await call(`${PORTFOLIO}/content_block_lists`, 'business', { name: 'List A' })).ok).toBe(true)
     expect(await call(`${OTHER_PORTFOLIO}/content_block_lists`, 'business', { name: 'List A' }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/not the chosen ad account's own/) })
-    gatewayMetaTakenPortfolios.add(PORTFOLIO)
+    gatewayMetaSharedPortfolios.add(PORTFOLIO)
     expect(await call(`${PORTFOLIO}/content_block_lists`, 'business', { name: 'List B' }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/also used by another business in Nexus/) })
-    gatewayMetaTakenPortfolios.clear()
+    gatewayMetaSharedPortfolios.clear()
     gatewayMetaPortfolio['m-1'] = null
     expect(await call(`${PORTFOLIO}/content_block_lists`, 'business', { name: 'List C' }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/names no business portfolio/) })
     expect(h.calls).toHaveLength(1)
@@ -257,7 +262,7 @@ describe('owners of the account, portfolio and lists', () => {
   it('the URL file goes as ONE multipart part (the rule\'s key, name, type); a list is made only from a draft this gateway saw made here', async () => {
     const text = 'example.com\nexample.org'
     h.answers.push(json({ id: '120000000000801' }))
-    const draft = await metaWriteCall({ connectionId: 'm-1', operation: 'blockList.draft', objectId: PORTFOLIO, edge: 'block_list_drafts', objectKind: 'business', params: {}, file: text, check: false, run: 'run-a' })
+    const draft = await metaWriteCall({ connectionId: 'm-1', operation: 'blockList.draft', objectId: PORTFOLIO, edge: 'block_list_drafts', objectKind: 'business', params: { publisher_urls_file: text, publisher_urls_file_name: 'publisher_urls.txt' }, check: false, run: 'run-a' })
     expect(draft.ok).toBe(true)
     const upload = sent(0)
     expect(upload.method).toBe('POST')
@@ -286,7 +291,7 @@ describe('owners of the account, portfolio and lists', () => {
     expect(h.calls).toHaveLength(2)
     h.calls = []
     // A bad file never leaves Nexus.
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PORTFOLIO, edge: 'block_list_drafts', objectKind: 'business', params: {}, file: 'http://example.com', check: false }).catch((e) => e)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PORTFOLIO, edge: 'block_list_drafts', objectKind: 'business', params: { publisher_urls_file: 'http://example.com', publisher_urls_file_name: 'publisher_urls.txt' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
     expect(h.calls).toHaveLength(0)
   })
   it('a publisher list: owned by the chosen ad account or its own portfolio; another business\'s is never changed (even one shared with it)', async () => {
@@ -296,13 +301,15 @@ describe('owners of the account, portfolio and lists', () => {
     __metaObjectLimitsTest.useMemory()
     h.answers.push(json({ id: LIST, business_owner_id: PORTFOLIO }), json({ success: true }))
     expect((await call(LIST, 'publisherblocklist', {}, 'DELETE')).ok).toBe(true)
-    expect(sent(1)).toMatchObject({ method: 'DELETE', body: undefined })
+    // The merge with main: a DELETE without keys sends no form field (main's gateway passes its empty body on).
+    expect(sent(1).method).toBe('DELETE')
+    expect(sent(1).body ?? '').toBe('')
     h.calls = []
     __metaObjectLimitsTest.useMemory()
-    gatewayMetaTakenPortfolios.add(PORTFOLIO)
+    gatewayMetaSharedPortfolios.add(PORTFOLIO)
     h.answers.push(json({ id: LIST, business_owner_id: PORTFOLIO }))
     expect(await call(LIST, 'publisherblocklist', {}, 'DELETE').catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
-    gatewayMetaTakenPortfolios.clear()
+    gatewayMetaSharedPortfolios.clear()
     h.answers.push(json({ id: LIST, owner_ad_account_id: '5555555555', business_owner_id: OTHER_PORTFOLIO }))
     expect(await call(`${LIST}/assigned_users`, 'publisherblocklist', { user: '100000000000001', permitted_roles: '["MANAGE_BLOCK_LIST"]' }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
     expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
@@ -310,7 +317,7 @@ describe('owners of the account, portfolio and lists', () => {
   it('shared only with another business\'s portfolio — never this business\'s own, never one another business in Nexus uses', async () => {
     h.answers.push(json({ id: LIST, owner_ad_account_id: ACCOUNT }))
     expect(await call(`${LIST}/agencies`, 'publisherblocklist', { agency_id: PORTFOLIO, permitted_roles: '["APPLY_BLOCK_LIST"]' }).catch((e) => e)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/this business's own portfolio/) })
-    gatewayMetaTakenPortfolios.add(OTHER_PORTFOLIO)
+    gatewayMetaSharedPortfolios.add(OTHER_PORTFOLIO)
     h.answers.push(json({ id: LIST, owner_ad_account_id: ACCOUNT }))
     expect(await call(`${LIST}/agencies`, 'publisherblocklist', { agency_id: OTHER_PORTFOLIO, permitted_roles: '["APPLY_BLOCK_LIST"]' }).catch((e) => e)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/another business in Nexus uses/) })
     // Review A6 — an unshare is judged the same way.

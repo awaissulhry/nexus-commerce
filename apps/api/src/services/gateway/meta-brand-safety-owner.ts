@@ -20,7 +20,7 @@
  * the brand-safety keys that is not exactly Meta's (meta-brand-safety-rules.ts targetingOutsideProblem). No live read:
  * nothing is sent. A sentence never names another business's account or portfolio.
  */
-import { metaChosenAdAccountOf, metaChosenPortfolioOf, metaPortfolioTakenByAnother } from './account.js'
+import { metaChosenAdAccountOf, metaChosenPortfolioOf, metaPortfolioShared } from './account.js'
 import { holdsInexactNumber, targetingOutsideProblem } from './meta-brand-safety-rules.js'
 import type { MetaJudgedWrite, MetaWriteBodyId } from './meta-calls.js'
 
@@ -32,8 +32,6 @@ export type MetaCheckRead = (path: string, query: Record<string, string>) => Pro
 
 export type OwnerProblem = { code: string; sentence: string } | null
 
-/** The step-39 kinds a change names (gateway.ts routes them here). */
-export const BRAND_SAFETY_KINDS: ReadonlySet<string> = new Set(['adaccount', 'business', 'publisherblocklist', 'contentblocklist'])
 /** The rules that only APPLY a publisher block list (a list Meta lists for the chosen ad account may be one shared with it). */
 const APPLY_ONLY_RULES: ReadonlySet<string> = new Set(['blocklist.apply_account'])
 
@@ -92,7 +90,7 @@ async function ownPortfolioProblem(owner: Owner, id: string): Promise<OwnerProbl
   const portfolio = await portfolioOf(owner)
   if (!portfolio) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `${NOTHING}the chosen ad account names no business portfolio, so Nexus changes no brand-safety list of one.` }
   if (id !== portfolio) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `${NOTHING}business portfolio ${id} is not the chosen ad account's own.` }
-  if (await metaPortfolioTakenByAnother(portfolio)) {
+  if (await metaPortfolioShared(portfolio)) {
     return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `${NOTHING}the chosen ad account's business portfolio is also used by another business in Nexus, so Nexus changes no brand-safety list there (it would be that business's too).` }
   }
   return null
@@ -110,7 +108,7 @@ async function publisherBlockListProblem(owner: Owner, id: string, apply: boolea
   if (read.body) {
     if (accountOf(read.body.owner_ad_account_id) === owner.chosen) return null
     const business = idOf(read.body.business_owner_id)
-    if (business && business === (await portfolioOf(owner)) && !(await metaPortfolioTakenByAnother(business))) return null
+    if (business && business === (await portfolioOf(owner)) && !(await metaPortfolioShared(business))) return null
   }
   if (apply && owner.chosen) {
     const listed = await owner.read(`act_${owner.chosen}/publisher_block_lists`, { fields: 'id', limit: '100' })
@@ -166,7 +164,7 @@ async function kindProblem(owner: Owner, kind: string, id: string, rule: string)
     case 'agency': {
       if (!/^\d{1,25}$/.test(id)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}a block list is shared with a business portfolio named by its id (digits).` }
       if (id === (await portfolioOf(owner))) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}${id} is this business's own portfolio: a block list is shared with another business.` }
-      if (await metaPortfolioTakenByAnother(id)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}${id} is a business portfolio another business in Nexus uses: Nexus never shares a block list with another business of its own.` }
+      if (await metaPortfolioShared(id)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}${id} is a business portfolio another business in Nexus uses: Nexus never shares a block list with another business of its own.` }
       return null
     }
     case 'blocklistdraft':

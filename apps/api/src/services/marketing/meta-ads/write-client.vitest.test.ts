@@ -166,14 +166,14 @@ describe('step 39 — a change judged by its own read-back, a DELETE with keys, 
     h.readAnswer = { data: [] }
     expect(await outcomeOf(metaSendChange(target, share))).toMatchObject({ outcome: 'refused', message: expect.stringMatching(/Invalid parameter.*it reads its shares none/) })
   })
-  it('a DELETE with keys and a file pass through as asked; a DELETE answered with an error (no judge) made nothing', async () => {
+  it('a DELETE with keys and the file (as its form keys) pass through as asked; a DELETE answered with an error (no judge) made nothing', async () => {
     h.answers.push(answer(200, { success: true }))
     await metaSendChange(target, { objectId: '120000000000601', kind: 'publisherblocklist', params: { agency_id: '5550000002' }, operation: 'blockList.unshare', edge: 'agencies', method: 'DELETE' })
     expect(h.writes[0]).toMatchObject({ method: 'DELETE', edge: 'agencies', params: { agency_id: '5550000002' } })
     h.answers.push(answer(200, { id: '120000000000801' }))
     h.readAnswer = { id: '120000000000801', async_job_status: 'scheduled' }
-    const draft = await metaSendChange(target, { objectId: '9876543210', kind: 'business', params: {}, operation: 'blockList.draft', edge: 'block_list_drafts', file: 'example.com', readBackFields: 'id,async_job_status' })
-    expect(h.writes[1]).toMatchObject({ edge: 'block_list_drafts', file: 'example.com', params: {} })
+    const draft = await metaSendChange(target, { objectId: '9876543210', kind: 'business', params: { publisher_urls_file: 'example.com', publisher_urls_file_name: 'publisher_urls.txt' }, operation: 'blockList.draft', edge: 'block_list_drafts', readBackFields: 'id,async_job_status' })
+    expect(h.writes[1]).toMatchObject({ edge: 'block_list_drafts', params: { publisher_urls_file: 'example.com', publisher_urls_file_name: 'publisher_urls.txt' } })
     expect(draft.node).toEqual({ id: '120000000000801', async_job_status: 'scheduled' })
     h.answers.push(metaError(400, '100', 'validation', 'Cannot delete'))
     expect(await outcomeOf(metaSendChange(target, { objectId: '120000000000601', kind: 'publisherblocklist', params: {}, operation: 'blockList.delete', method: 'DELETE' }))).toMatchObject({ outcome: 'refused' })
