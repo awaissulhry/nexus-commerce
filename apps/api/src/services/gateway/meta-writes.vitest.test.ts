@@ -117,7 +117,7 @@ describe('the write allow-list (metaWriteVerdict)', () => {
     expect(problem({ body: `status=PAUSED&fields=${'id,'.repeat(800)}id` })).toMatch(/at most 2000/)
   })
   it('refuses DELETE, PUT, a caller\'s header, any token but the account\'s, another host, version or an odd path', () => {
-    expect(problem({ method: 'DELETE', body: undefined })).toMatch(/deletes nothing on Meta yet/)
+    expect(problem({ method: 'DELETE', body: undefined })).toMatch(/deletes on Meta only/)
     expect(problem({ method: 'PUT', body: 'status=PAUSED' })).toMatch(/no PUT/)
     expect(problem({ body: 'status=PAUSED', headers: { 'X-HTTP-Method-Override': 'DELETE' } })).toMatch(/no header/)
     expect(problem({ body: 'status=PAUSED', auth: 'app' })).toMatch(/system-user token/)
@@ -130,23 +130,24 @@ describe('the write allow-list (metaWriteVerdict)', () => {
   })
 })
 
-describe('batches (ACC-022/023/025–027): the plumbing judges each part, and nothing is allowed through it yet', () => {
+describe('batches (ACC-022/023/025–027): the plumbing judges each part; only step 19\'s background copy goes through it', () => {
   const batch = (parts: unknown[]) => `batch=${encodeURIComponent(JSON.stringify(parts))}`
-  it('no batch kind is allowed', () => {
-    expect([...META_BATCH_KINDS_ALLOWED]).toEqual([])
+  it('step 19 — only the async batch is allowed (copy-meta-ads in the background: meta-create-writes.vitest.test.ts); a Graph batch never', () => {
+    expect([...META_BATCH_KINDS_ALLOWED]).toEqual(['async-batch'])
   })
   it('a Graph batch is refused as a batch, naming the first part Nexus would not send even on its own', () => {
     const ok = verdict({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: `v26.0/${CAMPAIGN}`, body: 'status=PAUSED' }]) })
     expect(ok).toMatchObject({ batch: true, problem: expect.stringMatching(/sends no Meta batch request yet.*not all|one by one/) })
-    expect(problem({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: CAMPAIGN, body: 'status=PAUSED' }, { method: 'DELETE', relative_url: AD_SET }]) })).toMatch(/part 2: Nexus deletes nothing/)
+    expect(problem({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: CAMPAIGN, body: 'status=PAUSED' }, { method: 'DELETE', relative_url: AD_SET }]) })).toMatch(/part 2: Nexus deletes on Meta only/)
     expect(problem({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: CAMPAIGN, body: 'status={result=one:$.id}' }]) })).toMatch(/depends on another part/)
     expect(problem({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: 'v26.0/', body: 'batch=[]' }]) })).toMatch(/batch inside a batch/)
     expect(problem({ url: `${BASE}/`, body: batch(Array.from({ length: 51 }, () => ({ method: 'POST', relative_url: CAMPAIGN, body: 'status=PAUSED' }))) })).toMatch(/at most 50/)
     expect(problem({ url: `${BASE}/`, body: 'batch=not-json' })).toMatch(/batch is not JSON/)
   })
-  it('an async batch is refused too; renaming or cancelling an async request set is not on the allow-list', () => {
+  it('an async batch of anything but copies is refused (step 19: its one rule takes copies only); renaming or cancelling an async request set is not on the allow-list', () => {
     const body = `name=Set%20A&adbatch=${encodeURIComponent(JSON.stringify([{ name: 'one', relative_url: `v26.0/${CAMPAIGN}`, body: 'status=PAUSED' }]))}`
-    expect(verdict({ url: `${BASE}/act_1234567890/async_batch_requests`, body })).toMatchObject({ batch: true, problem: expect.stringMatching(/no Meta async batch yet/) })
+    expect(verdict({ url: `${BASE}/act_1234567890/async_batch_requests`, body, objectKind: 'adaccount' })).toMatchObject({ problem: expect.stringMatching(/adbatch part 1 is named campaign_copy_1, adset_copy_1 or ad_copy_1/) })
+    expect(verdict({ url: `${BASE}/act_1234567890/async_batch_requests`, body })).toMatchObject({ problem: expect.stringMatching(/only Meta change/) })
     expect(metaBatchProblem('POST', 'act_1234567890/async_batch_requests', 'name=x')).toMatch(/names no adbatch/)
     expect(problem({ body: 'name=Set%20B&notification_mode=OFF' })).toMatch(/only Meta change/)
     expect(problem({ method: 'DELETE', body: undefined })).toMatch(/cancels no async batch/)
@@ -408,6 +409,28 @@ describe('step 7 — a report run (POST /act_<id>/insights) is a READ of the cho
     expect(runProblem({ level: 'ad', fields: 'spend' }, 'read', `${BASE}/ACT_1234567890/insights`)).toMatch(/written in lower case/)
     expect(runProblem({ level: 'ad', fields: 'spend' }, 'read', `${BASE}/act_1234567890/INSIGHTS`)).toMatch(/written in lower case/)
     expect(runProblem({ level: 'ad', fields: 'spend' })).toBeNull()
+  })
+  it('merge with steps 18–22 — no change rule takes a report-run path, and the report-run rule takes no change path', () => {
+    const KINDS = [undefined, 'campaign', 'adset', 'ad', 'adaccount', 'highdemandperiod', 'creative', 'video', 'canvaselement', 'adlabel', 'valueruleset']
+    const body = form({ level: 'campaign', fields: 'spend' })
+    for (const objectKind of KINDS) {
+      // As a write (a change's kind): never judged a change, whatever kind the call names.
+      expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'write', body, objectKind }), String(objectKind)).toHaveProperty('problem')
+      // No DELETE and no bare POST on the report-run path.
+      expect(metaWriteVerdict({ method: 'DELETE', url: RUN_URL, kind: 'write', objectKind }), String(objectKind)).toHaveProperty('problem')
+      expect(metaWriteVerdict({ method: 'DELETE', url: RUN_URL, kind: 'write', body, objectKind }), String(objectKind)).toHaveProperty('problem')
+      expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'write', objectKind }), String(objectKind)).toHaveProperty('problem')
+      expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'read', objectKind }), String(objectKind)).toHaveProperty('problem')
+    }
+    // A report run names no kind: a call naming one is not a report run (only the status rule matches an unnamed kind).
+    expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'read', body, objectKind: 'adaccount' })).toHaveProperty('problem')
+    expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'read', body })).toMatchObject({ write: { rule: 'insights.reportRun', reportRun: true } })
+    // The report-run body on any other path (an object's insights, the account's create edges, the account itself): refused.
+    for (const path of [`${CAMPAIGN}/insights`, 'act_1234567890/campaigns', 'act_1234567890/adsets', 'act_1234567890', CAMPAIGN]) {
+      for (const kind of ['read', 'write']) expect(metaWriteVerdict({ method: 'POST', url: `${BASE}/${path}`, kind, body }), `${path} ${kind}`).toHaveProperty('problem')
+    }
+    // Its body may be longer than a status change's, never than its own maximum.
+    expect(runProblem({ level: 'ad', fields: Array.from({ length: 800 }, () => 'impressions').join(',') })).toMatch(/at most 8000 characters/)
   })
   it('metaReportRunCall sends exactly that: the form body of the read, as a read, for the named account', async () => {
     h.answers.push(json({ report_run_id: '6000000000002' }))

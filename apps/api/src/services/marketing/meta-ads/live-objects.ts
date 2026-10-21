@@ -395,7 +395,7 @@ export async function objectRules(input: { connectionId?: string | null; kind: '
   }
 }
 
-const HDP_CORE = 'id,budget_value,budget_value_type,recurrence_type,time_start,time_end'
+export const HDP_CORE = 'id,budget_value,budget_value_type,recurrence_type,time_start,time_end'
 /** SDK-only fields of a high-demand period: their own group. */
 const HDP_EXTRA = 'ad_object_id,weekly_schedule'
 const HDP_NOTE = 'budgetValue is Meta\'s number as sent: an increase by an amount (ABSOLUTE; Meta does not document whether it is in whole currency units or the smallest unit — Nexus does not convert it) or by a multiplier (MULTIPLIER). Budget scheduling needs a daily budget, ≤ 50 periods, each ≥ 3 hours, at most 8× the daily budget. A schedule cannot be edited or deleted by API once made.'
@@ -861,7 +861,7 @@ export async function creativeDetail(input: { connectionId?: string | null; crea
  * name), and a Page another business in Nexus uses is its id and the flag only; never the business portfolio a limit is
  * scoped to (ad_limit_scope_business… is not asked). Counts Meta's docs name, the rest from Meta's SDK in their own group.
  */
-async function pageAdLimits(account: MetaChosenAccount) {
+export async function pageAdLimits(account: MetaChosenAccount) {
   const read = await listGroups(account.connectionId, 'objects.problems.adsVolume', `${act(account.adAccountId)}/ads_volume`, [
     { name: 'core', fields: 'actor_id,ads_running_or_in_review_count,current_account_ads_running_or_in_review_count,limit_on_ads_running_or_in_review' },
     { name: 'sdk', fields: 'future_limit_on_ads_running_or_in_review,future_limit_activation_date,ad_limit_set_by_page_admin' },
