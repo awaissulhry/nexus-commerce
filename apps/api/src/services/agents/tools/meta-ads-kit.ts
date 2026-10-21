@@ -55,7 +55,7 @@ export const META_MATERIAL = ['basis', 'plan', 'reach'] as const
 export const META_CHANGE_RULES =
   ' Nothing changes until a person approves it in Nexus (Approvals) — or, when this business\'s "Claude\'s changes need no '
   + 'approval" switch is on, it runs 20 s after the request unless stopped; either way it runs as that person, never by a '
-  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause); '
+  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause and a new creative); '
   + 'for any other the preview says why not, and the run reads the live state again first. With Meta changes switched off '
   + 'nothing is sent, not even a check. The '
   + 'preview says what changes (from → to), what can make the account spend more (spendsMoney — the person\'s decision) '

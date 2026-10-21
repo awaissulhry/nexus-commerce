@@ -97,6 +97,8 @@ import { META_ADS_OPTIMIZE_TOOLS } from './tools/meta-ads-optimize.tools.js'
 import { META_ADS_ENGAGEMENT_TOOLS } from './tools/meta-ads-engagement.tools.js'
 import { META_ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/meta-ads-campaign-settings.tools.js'
 import { META_ADS_MEDIA_UPLOAD_TOOLS } from './tools/meta-ads-media-upload.tools.js'
+// Meta ads step 25 (2026-10-21): creatives (create-meta-creative, set-meta-creative).
+import { META_ADS_CREATIVES_TOOLS } from './tools/meta-ads-creatives.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -315,6 +317,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_CAMPAIGN_SETTINGS_TOOLS,
   // Meta ads step 23 (2026-10-21): create-meta-media — images, videos and folders into the chosen ad account, and the undo.
   ...META_ADS_MEDIA_UPLOAD_TOOLS,
+  // Meta ads step 25 (2026-10-21): create-meta-creative (every format, silent features off) and set-meta-creative.
+  ...META_ADS_CREATIVES_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

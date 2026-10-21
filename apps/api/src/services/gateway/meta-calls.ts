@@ -53,6 +53,7 @@ import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
 import { META_SETTINGS_WRITE_RULES } from './meta-settings-rules.js'
 import { META_IMAGE_MAX_BODY, META_MEDIA_WRITE_RULES, metaRuploadVerdict } from './meta-media-rules.js'
+import { META_CREATIVE_WRITE_RULES } from './meta-creative-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -748,17 +749,35 @@ export interface MetaWriteRule {
    * reuse it.
    */
   file?: { key: string; nameKey: string; name: RegExp; contentType: string; maxBytes: number; judge: (text: string) => string | null }
+  /**
+   * Step 25 — Meta documents validate_only on this rule's edge (POST /act_<id>/adcreatives): its check (execution_options,
+   * judged by the rule) may go for a kind other than a campaign. Only the creative create carries it.
+   */
+  check?: true
 }
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
-export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | MetaMediaWriteKind
+export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'creative' | MetaMediaWriteKind
 /**
  * Step 23 — what a media change names: the chosen ad account (`act_<id>/adimages | advideos | video_ads`), its business
  * portfolio (`<portfolio>/creative_folders`), or a video upload Nexus started (Meta's rupload host).
  */
 export type MetaMediaWriteKind = 'adaccount' | 'portfolio' | 'video' | 'libraryvideo'
-/** Step 23 — a media id inside a change's body, and what the gateway checks it is (meta-media-rules.ts). */
-export interface MetaWriteAsset { id: string; kind: 'instagrammedia' | 'startedvideo' | 'creativefolder' | 'libraryvideo' }
+/**
+ * Step 23 — a media id inside a change's body, and what the gateway checks it is (meta-media-rules.ts). Step 25 — the ids
+ * inside a creative (meta-creative-rules.ts): the identity Page and Instagram account (the chosen ones; for a partnership ad
+ * the partner's, when the chosen one is its sponsor — `with`), a partner's Page or Instagram account (never the chosen one,
+ * never another Nexus business's), the chosen Page (a call-to-action's), an image of the chosen account's library (by its
+ * hash), a post of the chosen Page, an Instant Experience of the chosen Page and an element of it (`with`: the
+ * experience), a lead form of the chosen Page, an event of the chosen Page or of the chosen Instagram account.
+ */
+export interface MetaWriteAsset {
+  id: string
+  kind: 'instagrammedia' | 'startedvideo' | 'creativefolder' | 'libraryvideo'
+    | 'identitypage' | 'identityinstagram' | 'partnerpage' | 'partnerinstagram' | 'chosenpage' | 'adimage' | 'pagepost'
+    | 'canvas' | 'canvaselement' | 'leadform' | 'pageevent' | 'igevent'
+  with?: string
+}
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
 export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' }
 
@@ -836,6 +855,8 @@ export interface MetaJudgedWrite {
   headers?: Record<string, string>
   /** Step 23 — a write with a file part (MetaWriteRule.file): the gateway sends this multipart body instead of `body`. */
   multipart?: { fields: Array<[string, string]>; file: { key: string; filename: string; contentType: string; text: string } }
+  /** Step 25 — Meta documents validate_only on this rule's edge (MetaWriteRule.check): the gateway lets its check go. */
+  checkable?: true
 }
 
 /** The gateway's verdict on a Meta call that is not a GET: why it is refused (and whether as a batch), or the judged write. */
@@ -889,6 +910,11 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     if (/^act_\d+\/(adimages|advideos|video_ads)$|^\d+\/(creative_folders|captions)$/.test(graph.route)) {
       return refuse(`the only Meta change Nexus sends on a media edge is create-meta-media's, named with its kind (an image's bytes, a video's link or the chosen Instagram account's video, a video-ads upload, a portfolio folder, captions, or the undo of one), each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
     }
+    // Step 25 — a call on a creative (its edges, or a creative named by its kind) that matches none of create-meta-creative's
+    // or set-meta-creative's rules, in its own words.
+    if (/^act_\d+\/(adcreatives|asyncadcreatives)$/.test(graph.route) || input.objectKind === 'creative') {
+      return refuse(`the only Meta change Nexus sends on a creative is create-meta-creative's (a creative of the chosen ad account, or its async job) or set-meta-creative's (a creative's name, status or labels), each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    }
     return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys); this one is POST /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
@@ -926,7 +952,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const multipart = rule.file
     ? { fields: order.filter((k) => k !== rule.file!.key && k !== rule.file!.nameKey).map((k): [string, string] => [k, parsed.params.get(k)!]), file: { key: rule.file.key, filename: parsed.params.get(rule.file.nameKey)!, contentType: rule.file.contentType, text: parsed.params.get(rule.file.key)! } }
     : null
-  const media = { ...(assets.length ? { assets } : {}), ...(rule.edgeCall ? { edgeCall: true as const } : {}), ...(rule.bulky ? { bulky: true as const } : {}), ...(method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...(multipart ? { multipart } : {}) }
+  const media = { ...(assets.length ? { assets } : {}), ...(rule.edgeCall ? { edgeCall: true as const } : {}), ...(rule.bulky ? { bulky: true as const } : {}), ...(method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...(multipart ? { multipart } : {}), ...(rule.check ? { checkable: true as const } : {}) }
   // A write with a file goes as its multipart body only (`body` stays empty: nothing else of it is ever sent).
   return { write: { rule: rule.name, objectId: graph.segments[0], check, body: multipart ? '' : body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}), ...media } }
 }
@@ -940,7 +966,8 @@ const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kin
 const MAX_ANY_WRITE_BODY = Math.max(16_000, META_IMAGE_MAX_BODY)
 /** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts) — read when judged, never at load. */
 // Step 23 — then create-meta-media's media rules (meta-media-rules.ts).
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...META_MEDIA_WRITE_RULES]
+// Step 25 — then create-meta-creative's and set-meta-creative's rules (meta-creative-rules.ts).
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...META_MEDIA_WRITE_RULES, ...META_CREATIVE_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

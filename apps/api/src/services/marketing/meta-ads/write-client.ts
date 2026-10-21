@@ -55,7 +55,7 @@ export interface MetaWriteTarget { connectionId: string; adAccountId: string }
 export interface MetaObjectChange {
   objectId: string
   /** The kind of object (the gateway confirms it before anything is sent). */
-  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'portfolio' | 'libraryvideo'
+  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative'
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -132,7 +132,8 @@ export async function metaCheckChange(target: MetaWriteTarget, change: MetaObjec
   const operation = `${change.operation}.check`
   let answer: GatewayResponse
   try {
-    answer = await metaWriteCall({ connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind, params: change.params, check: true, ...(change.parent ? { parent: change.parent } : {}) })
+    // Step 25 — a create on an edge is checked on that edge (POST /act_<id>/adcreatives with validate_only).
+    answer = await metaWriteCall({ connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind, params: change.params, check: true, ...(change.parent ? { parent: change.parent } : {}), ...(change.edge ? { edge: change.edge } : {}) })
   } catch (err) {
     const failure = failureOfThrow(err) ?? localFailure(`Nexus could not ask Meta's check (${err instanceof Error ? err.message : String(err)}).`, 'NEXUS_ERROR')
     throw new MetaWriteError(failure, operation, 'not_sent')

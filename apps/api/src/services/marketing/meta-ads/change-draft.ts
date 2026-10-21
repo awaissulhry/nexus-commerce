@@ -21,7 +21,7 @@ export interface MetaChangeRequest {
    * The kind of object it changes; step 23: `adaccount` / `portfolio` for an upload on that object's edge, `libraryvideo`
    * for a video of the chosen account's library (its captions).
    */
-  kind: MetaStatusKind | 'adaccount' | 'portfolio' | 'libraryvideo'
+  kind: MetaStatusKind | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative'
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
