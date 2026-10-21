@@ -19,7 +19,7 @@ vi.mock('./read-client.js', () => ({
   }),
 }))
 
-import { metaSendChange, readBackMismatch } from './write-client.js'
+import { metaSendChange, readBackMismatch, readsOf } from './write-client.js'
 import { __metaObjectLimitsTest } from '../../gateway/meta-object-limits.js'
 
 const target = { connectionId: 'm-1', adAccountId: '1234567890' }
@@ -29,6 +29,28 @@ const L1 = '120000000000070'
 const L2 = '120000000000071'
 
 beforeEach(() => { h.writes = []; h.answers = []; h.reads = []; h.readAnswer = null; __metaObjectLimitsTest.useMemory() })
+
+describe('round 2 — a value rule set read back by its rules, not only its name', () => {
+  const asked = JSON.stringify([{ id: '120000000000082', name: 'Young', adjust_sign: 'INCREASE', adjust_value: 40, status: 'ACTIVE', criterias: [{ criteria_type: 'GENDER', operator: 'CONTAINS', criteria_values: ['MALE'], criteria_value_types: ['NONE'] }] }])
+  const read = (over: Record<string, unknown> = {}, values = ['male']) => ({ id: '120000000000080', name: 'Set A', rules: { data: [{ id: '120000000000082', name: 'Young', adjust_sign: 'INCREASE', adjust_value: 40, status: 'ACTIVE', criterias: { data: [{ id: '1', criteria_type: 'GENDER', operator: 'CONTAINS', criteria_values: values, criteria_value_types: ['NONE'] }] }, ...over }] } })
+  const expect_ = { name: 'Set A', rules: asked }
+  it('the rules as asked match (GENDER without case); another percentage, value or rule id does not', () => {
+    expect(readBackMismatch(read(), expect_)).toEqual([])
+    expect(readBackMismatch(read({ adjust_value: 20 }), expect_)).toEqual(['rules'])
+    expect(readBackMismatch(read({}, ['female']), expect_)).toEqual(['rules'])
+    expect(readBackMismatch(read({ id: '9' }), expect_)).toEqual(['rules'])
+    expect(readsOf(read(), expect_)).toBe('name Set A, rules (1)')
+  })
+  it('an error answer with the same name but other rules is Meta\'s refusal, never done', async () => {
+    h.answers.push(answer(400, { error: { message: 'Invalid parameter', code: 100 } }))
+    h.readAnswer = read({ adjust_value: 20 })
+    const change = { objectId: '120000000000080', kind: 'valueruleset' as const, params: { name: 'Set A', rules: asked }, operation: 'valueRuleSet.change', expect: expect_, readBackFields: 'id,name,rules' }
+    await expect(metaSendChange(target, change, { sleep: async () => undefined })).rejects.toMatchObject({ outcome: 'refused' })
+    h.answers.push(answer(400, { error: { message: 'Invalid parameter', code: 100 } }))
+    h.readAnswer = read()
+    expect(await metaSendChange(target, change, { sleep: async () => undefined })).toMatchObject({ readBack: 'second-read', afterError: expect.stringMatching(/Meta refused it/) })
+  })
+})
 
 describe('a campaign\'s labels edge', () => {
   const add = {

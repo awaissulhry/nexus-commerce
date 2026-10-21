@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   account: { target: { connectionId: 'm-1', adAccountId: '1234567890' }, accountId: 'm-1', adAccountId: '1234567890', name: 'Shop A ads', currency: 'EUR' } as Record<string, unknown> | { refusal: string },
   labels: [] as Array<{ id: string; name: string | null }>,
+  labelsMore: false,
   objects: new Map<string, { kind: 'campaign' | 'adset'; id: string; name: string | null; status: string | null; labels: Array<{ id: string; name: string | null }> }>(),
   sets: [] as unknown[],
   users: [] as unknown[],
@@ -23,7 +24,7 @@ const h = vi.hoisted(() => ({
 vi.mock('../../marketing/meta-ads/change-account.js', () => ({ metaChangeAccount: vi.fn(async () => h.account) }))
 vi.mock('../../marketing/meta-ads/live-labels-rules.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/live-labels-rules.js')>()),
-  liveAccountLabels: vi.fn(async () => ({ labels: structuredClone(h.labels), more: false })),
+  liveAccountLabels: vi.fn(async () => ({ labels: structuredClone(h.labels), more: h.labelsMore })),
   liveLabelledObject: vi.fn(async (_t: unknown, kind: string, id: string) => structuredClone(h.objects.get(`${kind}:${id}`))),
   liveLabelCarriers: vi.fn(async () => ({ campaigns: [], adSets: [], ads: [], creatives: [], more: false })),
   liveValueRuleSets: vi.fn(async () => structuredClone(h.sets)),
@@ -106,6 +107,7 @@ beforeEach(() => {
   h.prediction = { id: P, status: 1, predictionMode: 1, reservationStatus: 0, adSetId: null, campaignId: null, start: 4070908800, stop: 4072118400, expiration: null, budgetCents: 500000, reach: 1200000, impressions: 3600000, frequencyCap: 3, intervalFrequencyCap: null, intervalResetHours: null, destinationId: null, instagramDestinationId: null, unread: [] }
   h.capabilities = ['CAN_USE_REACH_AND_FREQUENCY']
   h.rules = { items: [], more: false }
+  h.labelsMore = false
 })
 
 describe('the change contract', () => {
@@ -191,6 +193,9 @@ describe('set-meta-labels', () => {
     const r = await run(labelsTool, { action: 'create', name: 'Autumn' }, p)
     expect(r.change.after).toMatchObject({ op: 'create', label: { id: '120000000000072', name: 'Autumn' } })
     expect(undoOf(labelsTool, r.change)).toMatchObject({ args: { action: 'delete', labelId: '120000000000072', confirmDelete: true } })
+    // Round 2 — beyond the first 500 labels Nexus reads, undo's read says it cannot see the label (never a silent "changed").
+    h.labelsMore = true
+    expect(await labelsTool.undo!.current(r.change)).toMatchObject({ unreadable: expect.stringMatching(/not among the first 500 labels/) })
     expect(labelsTool.undo!.request({ before: { op: 'delete' }, after: { op: 'delete', label: { id: L1, name: 'Spring' } } })).toMatchObject({ refusal: expect.stringMatching(/no way back/) })
   })
   it('a run only as a request a person approved', async () => {
@@ -226,6 +231,11 @@ describe('set-meta-value-rules', () => {
     h.sets = [...h.sets, { id: '120000000000081', name: 'Set B', status: 'ACTIVE', productType: null, rules: [{ id: '120000000000088', name: 'Desktop', sign: 'DECREASE', percent: 20, status: 'ACTIVE', criteria: [{ id: '120000000000089', type: 'DEVICE_PLATFORM', values: ['DESKTOP'], valueTypes: ['NONE'] }] }] }]
     await unmoved(rulesTool, made.change)
     expect(undoOf(rulesTool, made.change)).toMatchObject({ args: { action: 'delete', ruleSetId: '120000000000081', confirmDelete: true } })
+    // Round 2 — once the set moved (another percentage), undo's read differs from the record.
+    const moved = structuredClone(h.sets) as Array<{ id: string; rules: Array<{ percent: number }> }>
+    moved[moved.length - 1].rules[0].percent = 30
+    h.sets = moved
+    expect(canonical(await rulesTool.undo!.current(made.change))).not.toBe(canonical(made.change.after))
     // A change that ADDS a rule (Meta gives it an id): recorded as Meta read it back, so undo can run.
     const change = { action: 'change', ruleSetId: SET, rules: [{ ruleId: '120000000000082', name: 'Young', adjust: 'INCREASE', percent: 40, criteria: [{ type: 'AGE', values: ['18-24'] }] }, { name: 'Men', adjust: 'DECREASE', percent: 10, criteria: [{ type: 'GENDER', values: ['MALE'] }] }] }
     const q = (await preview(rulesTool, change)).preview
@@ -278,6 +288,13 @@ describe('create-meta-reach-frequency', () => {
     await unmoved(rfTool, r.change)
     h.prediction = { ...h.prediction!, reservationStatus: 2, adSetId: S }
     expect(await rfTool.undo!.current(r.change)).toMatchObject({ state: expect.stringMatching(/attached to ad set 120000000000002/) })
+  })
+  it('round 2 — a booking that released a reservation: its undo says that one does not come back', () => {
+    const change = {
+      before: { op: 'reserve', predictionId: P, reservationId: null, noUndo: ['Reservation 120000000000092 released by this booking does not come back by undo: book it again (a new reservation).'] },
+      after: { op: 'reserve', predictionId: P, reservationId: R, accountId: 'm-1' },
+    }
+    expect(undoOf(rfTool, change)).toMatchObject({ args: { action: 'cancel', predictionId: R, why: expect.stringMatching(/stays as it is: Reservation 120000000000092 released by this booking does not come back by undo/) } })
   })
   it('predict: a quote (nothing spends), the chosen Page as destination; its run has no undo', async () => {
     const args = { action: 'predict', mode: 'reach-from-budget', budgetCents: 500000, startTime: '2099-01-01T00:00:00Z', stopTime: '2099-01-10T00:00:00Z', frequencyCap: 2, targeting: { country: 'IT' } }

@@ -159,7 +159,7 @@ export function valueRulesDraft(request: ValueRulesRequest, live: ValueRulesLive
         requests: [{
           ...base, step: 1, label: `Make value rule set "${name}"`, kind: 'ad', objectKind: 'adaccount', objectId: `act_${live.adAccountId}`, edge: 'value_rule_set',
           params: { name, rules: wire.value, ...(request.productType ? { product_type: request.productType } : {}) }, operation: 'valueRuleSet.create', undoable: false,
-          expect: { name }, readBackFields: VALUE_RULE_SET_FIELDS,
+          expect: { name, rules: wire.value }, readBackFields: VALUE_RULE_SET_FIELDS,
         }],
         stands: { sets: live.ruleSets.map((s) => [s.id, s.name]).sort() },
         before: { op: 'create', ruleSet: null } satisfies ValueRulesRecord,
@@ -186,7 +186,7 @@ export function valueRulesDraft(request: ValueRulesRequest, live: ValueRulesLive
       skipped: [],
       requests: [{
         ...base, raisesSpend: spends.length > 0, step: 1, label: `Change value rule set ${quoted(keep!.name)}(${keep!.id})`, kind: 'ad', objectKind: 'valueruleset', objectId: keep!.id,
-        params: { name, rules: wire.value }, operation: 'valueRuleSet.change', undoable: true, expect: { name }, readBackFields: VALUE_RULE_SET_FIELDS,
+        params: { name, rules: wire.value }, operation: 'valueRuleSet.change', undoable: true, expect: { name, rules: wire.value }, readBackFields: VALUE_RULE_SET_FIELDS,
       }],
       stands: { set: { id: keep!.id, name: keep!.name, rules: old }, users: users.map((u) => [u.id, u.status, u.campaignStatus]).sort() },
       before: { op: 'change', ruleSet: { id: keep!.id, name: keep!.name, rules: old } } satisfies ValueRulesRecord,

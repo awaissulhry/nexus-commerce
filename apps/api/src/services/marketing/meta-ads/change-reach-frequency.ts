@@ -338,7 +338,7 @@ export function reachFrequencyDraft(request: ReachFrequencyRequest, live: ReachF
   if (live.adSetHasAds === false) return { refusal: `${who} has no ad: Meta gives a reservation only to an ad set with an ad (reservation.md, error 1487583). Add one first.` }
   // Review B4 — only a booking Meta finished (status 1): 2 is still pending, 15 found not enough inventory.
   if (p.status !== 1) return { refusal: `${p.id} is not a finished booking — status: ${rfStatusWords(p.status)}. Attach it once it reads ready (ask again).` }
-  if (p.reservationStatus !== null && p.reservationStatus !== 1) return { refusal: `${p.id} is not a booked reservation free to take (${RESERVATION_WORDS[p.reservationStatus] ?? `reservation status ${p.reservationStatus}`}): book a prediction first (action reserve).` }
+  if (p.reservationStatus !== 1) return { refusal: `${p.id} is not a booked reservation free to take (${p.reservationStatus === null ? 'Meta did not say it is reserved' : RESERVATION_WORDS[p.reservationStatus] ?? `reservation status ${p.reservationStatus}`}): book a prediction first (action reserve).` }
   const nowSec = Math.floor(live.now.getTime() / 1000)
   if (p.expiration && p.expiration <= nowSec) return { refusal: `Reservation ${p.id} expired at ${day(p.expiration)}: Meta holds inventory about an hour. Predict and book again.` }
   const on = isOn(a.status, a.campaign.status)
@@ -350,7 +350,6 @@ export function reachFrequencyDraft(request: ReachFrequencyRequest, live: ReachF
     totals: { adSets: 1 },
     warnings: [
       'Meta takes the ad set\'s start, end, targeting, bid and budget from the reservation; while attached, an ad set\'s settings mostly cannot change (Meta: detach first). Undo detaches it while the ad set is not active.',
-      ...(p.reservationStatus === null ? ['Meta did not say whether the reservation is free to take: its answer decides.'] : []),
       ...grantUnknown, noCheck,
     ],
     spendsMoney: spends,

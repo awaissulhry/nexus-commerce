@@ -53,28 +53,61 @@ export interface LabelRule {
   canRaiseSpend: boolean
   /** It pauses, or lowers a budget or bid (holds spending back). */
   lowers: boolean
-  /** Each adlabel_ids filter: its operator and label ids. */
-  filters: Array<{ operator: string | null; labelIds: string[] }>
+  /**
+   * Each adlabel_ids filter: its operator, label ids, and its level prefix (evaluation-spec.md: `ad.`, `adset.`,
+   * `campaign.adlabel_ids` — the labels of the object's ad set or campaign, so a label on a campaign reaches its children).
+   */
+  filters: Array<{ operator: string | null; labelIds: string[]; level: 'ad' | 'adset' | 'campaign' | null }>
 }
 
 /** Rule filters that hold what CARRIES a label, and those that hold what does NOT (Meta's filter operators). */
 const POSITIVE_OPS = new Set(['ANY', 'ALL', 'IN', 'CONTAIN', 'EQUAL', 'IN_RANGE'])
 const NEGATIVE_OPS = new Set(['NONE', 'NOT_IN', 'NOT_CONTAIN', 'NOT_EQUAL', 'NOT_IN_RANGE'])
-const LOWERING = new Set(['PAUSE', 'CHANGE_BUDGET', 'CHANGE_CAMPAIGN_BUDGET', 'CHANGE_BID'])
+/** Execution types that move neither budgets, bids nor delivery (live-optimize.ts EXECUTION_WORDS). */
+const NEUTRAL = new Set(['NOTIFICATION', 'PING_ENDPOINT', 'ROTATE'])
+const CHANGES = new Set(['CHANGE_BUDGET', 'CHANGE_CAMPAIGN_BUDGET', 'CHANGE_BID'])
+/** The label filter field, plain or with its level prefix (evaluation-spec.md). */
+const LABEL_FIELD = /^((ad|adset|campaign)\.)?adlabel_ids$/
+
+/**
+ * Which way a rule can move spending (review round 2): UNPAUSE raises, PAUSE lowers; a budget or bid change by a known
+ * amount raises (> 0) or lowers (< 0); one towards a target, one whose amount Nexus did not read, REBALANCE_BUDGET and any
+ * execution type Nexus does not know count as BOTH; a notification, a webhook or an ad rotation as neither.
+ */
+function directionOf(action: { type?: unknown; options?: unknown }): { raises: boolean; lowers: boolean } {
+  const type = typeof action.type === 'string' ? action.type : null
+  if (type === 'UNPAUSE') return { raises: true, lowers: false }
+  if (type === 'PAUSE') return { raises: false, lowers: true }
+  if (type && NEUTRAL.has(type)) return { raises: false, lowers: false }
+  if (type && CHANGES.has(type)) {
+    const spec = (Array.isArray(action.options) ? action.options : []).find((o) => o && typeof o === 'object' && (o as Record<string, unknown>).option === 'change_spec') as Record<string, unknown> | undefined
+    const amount = spec ? (spec.amountCents ?? spec.amountPercent) : undefined
+    if (!spec || spec.targetField || typeof amount !== 'number') return { raises: true, lowers: true }
+    return { raises: amount > 0, lowers: amount < 0 }
+  }
+  return { raises: true, lowers: true }
+}
 
 /** The labels rules among step 8's mapped rules (live-optimize.ts mapRule): ENABLED ones with an adlabel_ids filter. */
 export function labelRulesOf(items: ReadonlyArray<Record<string, unknown>>): LabelRule[] {
   const out: LabelRule[] = []
   for (const r of items) {
     if (r.status !== 'ENABLED') continue
-    const filters = (Array.isArray(r.filters) ? r.filters : []).filter((f): f is Record<string, unknown> => !!f && typeof f === 'object' && (f as Record<string, unknown>).field === 'adlabel_ids')
-      .map((f) => ({ operator: typeof f.operator === 'string' ? f.operator.toUpperCase() : null, labelIds: (Array.isArray(f.value) ? f.value : [f.value]).filter((v) => typeof v === 'string' || typeof v === 'number').map(String) }))
+    const filters = (Array.isArray(r.filters) ? r.filters : []).filter((f): f is Record<string, unknown> => !!f && typeof f === 'object' && typeof (f as Record<string, unknown>).field === 'string' && LABEL_FIELD.test(((f as Record<string, unknown>).field as string).toLowerCase()))
+      .map((f) => {
+        const prefix = LABEL_FIELD.exec((f.field as string).toLowerCase())![2]
+        return {
+          operator: typeof f.operator === 'string' ? f.operator.toUpperCase() : null,
+          labelIds: (Array.isArray(f.value) ? f.value : [f.value]).filter((v) => typeof v === 'string' || typeof v === 'number').map(String),
+          level: (prefix === 'ad' || prefix === 'adset' || prefix === 'campaign' ? prefix : null) as LabelRule['filters'][number]['level'],
+        }
+      })
     if (!filters.length || typeof r.ruleId !== 'string') continue
-    const action = (r.action ?? {}) as { type?: unknown; text?: unknown }
-    const canRaiseSpend = r.canRaiseSpend === true
+    const action = (r.action ?? {}) as { type?: unknown; text?: unknown; options?: unknown }
+    const direction = directionOf(action)
     out.push({
       id: r.ruleId, name: typeof r.name === 'string' ? r.name : null, actionText: typeof action.text === 'string' ? action.text : typeof action.type === 'string' ? action.type : null,
-      canRaiseSpend, lowers: !canRaiseSpend && typeof action.type === 'string' && LOWERING.has(action.type), filters,
+      canRaiseSpend: direction.raises, lowers: direction.lowers, filters,
     })
   }
   return out
@@ -102,8 +135,10 @@ function ruleEffects(changes: Array<{ key: string; who: string; added: string[];
         const negative = !known || NEGATIVE_OPS.has(f.operator!)
         const bringsIn = (added.length > 0 && positive) || (removed.length > 0 && negative)
         const takesOut = (removed.length > 0 && positive) || (added.length > 0 && negative)
-        if (bringsIn && !under.includes(c.who)) under.push(c.who)
-        if (takesOut && !out.includes(c.who)) out.push(c.who)
+        // A prefixed filter (campaign.adlabel_ids) holds the labelled object's children: they come with it.
+        const who = f.level ? `${c.who} (with what is under it)` : c.who
+        if (bringsIn && !under.includes(who)) under.push(who)
+        if (takesOut && !out.includes(who)) out.push(who)
         if ((bringsIn && rule.canRaiseSpend) || (takesOut && rule.lowers)) { raises = true; raising.add(c.key) }
       }
     }
@@ -111,7 +146,7 @@ function ruleEffects(changes: Array<{ key: string; who: string; added: string[];
     const what = `Meta's automated rule ${rule.name ? `"${rule.name}" ` : ''}(${rule.id}) ${rule.actionText ?? 'acts'} on what its label filter holds`
     const moves = [under.length ? `brings ${under.slice(0, 5).join(', ')}${under.length > 5 ? ', …' : ''} under it` : '', out.length ? `takes ${out.slice(0, 5).join(', ')}${out.length > 5 ? ', …' : ''} out of it` : ''].filter(Boolean).join(' and ')
     warnings.push(`${what}: this change ${moves}.`)
-    if (raises) spends.push(`${what}: this change ${moves} — the rule runs on its own (no one asked each time), so it can make the account spend more (${rule.canRaiseSpend ? 'it switches on or raises' : 'it no longer holds them back'}).`)
+    if (raises) spends.push(`${what}: this change ${moves} — the rule runs on its own (no one asked each time), so it can make the account spend more (${rule.canRaiseSpend && rule.lowers ? 'it can move spending either way' : rule.canRaiseSpend ? 'it switches on or raises' : 'it no longer holds them back'}).`)
   }
   return { warnings, spends, raising }
 }

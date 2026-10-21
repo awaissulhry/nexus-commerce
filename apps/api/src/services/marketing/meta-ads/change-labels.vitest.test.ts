@@ -115,9 +115,34 @@ describe('review A2 — Meta\'s automated rules that filter on labels', () => {
       { ruleId: '3', name: 'C', status: 'ENABLED', canRaiseSpend: false, action: { type: 'PAUSE', text: 'pauses' }, filters: [{ field: 'entity_type', operator: 'EQUAL', value: 'AD' }] },
       { ruleId: '4', name: 'D', status: 'ENABLED', canRaiseSpend: false, action: { type: 'PAUSE', text: 'pauses' }, filters: [{ field: 'adlabel_ids', operator: 'NONE', value: L2 }] },
     ])).toEqual([
-      { id: '1', name: 'A', actionText: 'switches the matching objects on', canRaiseSpend: true, lowers: false, filters: [{ operator: 'ANY', labelIds: [L1, '1200'] }] },
-      { id: '4', name: 'D', actionText: 'pauses', canRaiseSpend: false, lowers: true, filters: [{ operator: 'NONE', labelIds: [L2] }] },
+      { id: '1', name: 'A', actionText: 'switches the matching objects on', canRaiseSpend: true, lowers: false, filters: [{ operator: 'ANY', labelIds: [L1, '1200'], level: null }] },
+      { id: '4', name: 'D', actionText: 'pauses', canRaiseSpend: false, lowers: true, filters: [{ operator: 'NONE', labelIds: [L2], level: null }] },
     ])
+  })
+  it('round 2 — a prefixed filter (campaign.adlabel_ids): an UNPAUSE rule on ads, a label added to their campaign → SPENDS MONEY', () => {
+    const rules = labelRulesOf([{ ruleId: '120000000000062', name: 'Wake ads', status: 'ENABLED', canRaiseSpend: true, action: { type: 'UNPAUSE', text: 'switches the matching objects on (they can spend)' },
+      filters: [{ field: 'entity_type', operator: 'EQUAL', value: 'AD' }, { field: 'campaign.adlabel_ids', operator: 'ANY', value: [L2] }] }])
+    expect(rules).toEqual([expect.objectContaining({ id: '120000000000062', canRaiseSpend: true, filters: [{ operator: 'ANY', labelIds: [L2], level: 'campaign' }] })])
+    const d = ok({ action: 'add', objects: [{ kind: 'campaign', id: C }], labelIds: [L2] }, { adRules: rules })
+    expect(d.requests[0].raisesSpend).toBe(true)
+    expect(d.spendsMoney.join(' ')).toMatch(/"Wake ads".*brings campaign "Campaign A" \(120000000000001\) \(with what is under it\) under it/)
+  })
+  it('round 2 — rules that can move spend either way count both ways; neutral ones neither', () => {
+    const mapped = (id: string, action: Record<string, unknown>) => ({ ruleId: id, name: id, status: 'ENABLED', action, filters: [{ field: 'adlabel_ids', operator: 'ANY', value: [L1] }] })
+    const [rebalance, target, unread, unknown, lower, notify] = labelRulesOf([
+      mapped('1', { type: 'REBALANCE_BUDGET' }),
+      mapped('2', { type: 'CHANGE_BUDGET', options: [{ option: 'change_spec', targetField: 'cost_per_result', targetValueAsMeta: 5 }] }),
+      mapped('3', { type: 'CHANGE_BID', options: [] }),
+      mapped('4', { type: 'SOMETHING_NEW' }),
+      mapped('5', { type: 'CHANGE_BUDGET', options: [{ option: 'change_spec', unit: 'PERCENTAGE', amountPercent: -10 }] }),
+      mapped('6', { type: 'NOTIFICATION' }),
+    ])
+    for (const r of [rebalance, target, unread, unknown]) expect([r.id, r.canRaiseSpend, r.lowers]).toEqual([r.id, true, true])
+    expect([lower.canRaiseSpend, lower.lowers]).toEqual([false, true])
+    expect([notify.canRaiseSpend, notify.lowers]).toEqual([false, false])
+    // Taking an object out of a two-way rule is SPENDS MONEY too; out of a notification rule it is not.
+    expect(ok({ action: 'remove', objects: [{ kind: 'campaign', id: C }], labelIds: [L1] }, { adRules: [rebalance] }).spendsMoney.join(' ')).toMatch(/can move spending either way/)
+    expect(ok({ action: 'remove', objects: [{ kind: 'campaign', id: C }], labelIds: [L1] }, { adRules: [notify] }).spendsMoney).toEqual([])
   })
   it('adding a label a raising rule filters on: SPENDS MONEY for that object only; the rule named', () => {
     const d = ok({ action: 'add', objects: [{ kind: 'campaign', id: C }, { kind: 'adset', id: S }], labelIds: [L2] }, { adRules: [raise] })

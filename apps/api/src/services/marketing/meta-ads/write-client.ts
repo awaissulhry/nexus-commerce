@@ -111,6 +111,8 @@ export const expectedOf = (change: Pick<MetaObjectChange, 'params' | 'expect'>):
 export function readsOf(node: Record<string, unknown>, expected: Record<string, string>): string {
   const parts = Object.keys(expected).map((field) => {
     const got = node[field]
+    // Step 21 — a value rule set's rules: counted, not printed whole (up to 10 rules of 4 criteria).
+    if (field === 'rules' && got !== undefined && got !== null) return `rules (${listOf(got)?.length ?? '?'})`
     return `${field} ${got === undefined || got === null ? '(not sent back)' : typeof got === 'object' ? JSON.stringify(got) : String(got)}`
   })
   return parts.length ? parts.join(', ') : 'as before'
@@ -145,6 +147,29 @@ function labelListMatches(got: unknown, value: string): boolean {
   })
 }
 
+const listOf = (v: unknown): unknown[] | null => (Array.isArray(v) ? v : v && typeof v === 'object' && Array.isArray((v as { data?: unknown }).data) ? (v as { data: unknown[] }).data : null)
+
+/**
+ * Step 21 — a value rule set's rules as asked (the `rules` JSON sent: in order, the first match wins) against Meta's read-back
+ * (`rules{id,name,adjust_sign,adjust_value,status,criterias}`): the same number, and each in its place with its id when one
+ * was named, its name, sign, percentage and criteria (type and values; GENDER is read back lower case, so values compare
+ * without case). An error answer whose set reads otherwise is never taken for done.
+ */
+function valueRulesMatch(got: unknown, value: string): boolean {
+  let asked: unknown
+  try { asked = JSON.parse(value) } catch { return false }
+  const rows = listOf(got)
+  if (!Array.isArray(asked) || !rows || rows.length !== asked.length) return false
+  const row = (v: unknown) => (v && typeof v === 'object' ? v as Record<string, unknown> : {})
+  const criteria = (v: unknown) => JSON.stringify((listOf(v) ?? []).map(row).map((c) => [String(c.criteria_type), (Array.isArray(c.criteria_values) ? c.criteria_values : []).map((x) => String(x).toUpperCase()).sort()]).sort())
+  return asked.every((a, i) => {
+    const want = row(a)
+    const r = row(rows[i])
+    return (want.id === undefined || String(r.id) === String(want.id)) && r.name === want.name && r.adjust_sign === want.adjust_sign
+      && Number(r.adjust_value) === Number(want.adjust_value) && criteria(r.criterias) === criteria(want.criterias)
+  })
+}
+
 /** Step 18 — the fields of a read-back that do not show what was asked (a field not sent back is not judged). */
 export function readBackMismatch(node: Record<string, unknown> | null, expected: Record<string, string>): string[] {
   if (!node) return []
@@ -152,6 +177,7 @@ export function readBackMismatch(node: Record<string, unknown> | null, expected:
     const got = node[field]
     if (got === undefined || got === null) return false
     if (field === 'adlabels') return !labelListMatches(got, value)
+    if (field === 'rules') return !valueRulesMatch(got, value)
     if (TIME_FIELDS.has(field)) return unixOf(got) !== unixOf(value)
     return (typeof got === 'string' || typeof got === 'number' || typeof got === 'boolean' ? String(got) : JSON.stringify(got)) !== value
   }).map(([field]) => field)

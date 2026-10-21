@@ -153,6 +153,7 @@ describe('an ad set takes a reservation, or lets it go', () => {
     expect(no({ action: 'attach', adSetId: S, predictionId: P }, { prediction: reserved, adSet: { ...AD_SET, rfPredictionId: '120000000000091' } })).toMatch(/detach it first/)
     expect(no({ action: 'attach', adSetId: S, predictionId: P }, { prediction: reserved, adSet: { ...AD_SET, effectiveStatus: 'ACTIVE' } })).toMatch(/is active/)
     expect(no({ action: 'attach', adSetId: S, predictionId: P }, { prediction: { ...READY, reservationStatus: 0 } })).toMatch(/not a booked reservation/)
+    expect(no({ action: 'attach', adSetId: S, predictionId: P }, { prediction: { ...READY, reservationStatus: null } })).toMatch(/not a booked reservation free to take \(Meta did not say it is reserved\)/)
     // Review B4 — only a finished booking (status 1): 2 still pending, 15 not enough inventory.
     expect(no({ action: 'attach', adSetId: S, predictionId: P }, { prediction: { ...reserved, status: 2 } })).toMatch(/not a finished booking — status: still being worked out/)
     expect(no({ action: 'attach', adSetId: S, predictionId: P }, { prediction: { ...reserved, status: 15 } })).toMatch(/not enough inventory/)
