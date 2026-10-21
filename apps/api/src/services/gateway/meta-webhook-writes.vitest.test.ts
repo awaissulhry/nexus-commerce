@@ -1,6 +1,7 @@
 /**
  * Meta step 30 part 2 on the gateway: the webhook and alert-subscription changes reach Meta only on their EXACT
- * allow-list entries — the connection's OWN app with its app token, the callback exactly Nexus's receiver, the verify
+ * allow-list entries — the connection's OWN app with its app token (by the rule, as step 36's Page token: never at a
+ * caller's ask), the callback exactly Nexus's receiver, the verify
  * token added by the gateway (never a caller's, never on the ledger), a DELETE always naming its object, the CHOSEN ad
  * account and Page only, every alert condition judged — and nothing else changes for the older rules. Made-up ids only.
  */
@@ -34,10 +35,10 @@ const ACT = 'act_1234567890'
 const PAGE = '120000000000010'
 const CALLBACK = 'https://api.example.test/webhooks/meta/1234567'
 const form = (o: Record<string, string>) => new URLSearchParams(o).toString()
-const verdict = (input: { url: string; body?: unknown; objectKind?: string; method?: string; auth?: unknown }) =>
-  metaWriteVerdict({ method: input.method ?? 'POST', url: input.url, kind: 'write', body: input.body, objectKind: input.objectKind, auth: input.auth })
+const verdict = (input: { url: string; body?: unknown; objectKind?: string; method?: string; auth?: unknown; kind?: string }) =>
+  metaWriteVerdict({ method: input.method ?? 'POST', url: input.url, kind: input.kind ?? 'write', body: input.body, objectKind: input.objectKind, auth: input.auth })
 const problem = (input: Parameters<typeof verdict>[0]) => { const v = verdict(input); return 'problem' in v ? v.problem : null }
-const subscribe = (o: Record<string, string>, auth: unknown = 'app') => problem({ url: `${BASE}/${APP}/subscriptions`, body: form(o), objectKind: 'app', auth })
+const subscribe = (o: Record<string, string>, auth?: unknown) => problem({ url: `${BASE}/${APP}/subscriptions`, body: form(o), objectKind: 'app', auth })
 const SUB = { object: 'ad_account', callback_url: CALLBACK, fields: 'effective_status,with_issues_ad_objects', include_values: 'true' }
 const filters = (extra: unknown[] = []) => JSON.stringify([{ field: 'entity_type', value: 'AD', operator: 'EQUAL' }, ...extra])
 const alert = (o: Record<string, string>) => problem({ url: `${BASE}/${ACT}/subscriptions`, body: form(o), objectKind: 'adaccount' })
@@ -61,10 +62,12 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); __rateTest.reset(); __metaObjectLimitsTest.reset() })
 
 describe('the app subscription (POST / DELETE /<app>/subscriptions)', () => {
-  it('only with the app token, Nexus\'s own callback for that app, include_values on, fields Nexus\'s receiver takes', () => {
-    const v = verdict({ url: `${BASE}/${APP}/subscriptions`, body: form(SUB), objectKind: 'app', auth: 'app' })
+  it('with the app token by its rule, Nexus\'s own callback for that app, include_values on, fields Nexus\'s receiver takes', () => {
+    const v = verdict({ url: `${BASE}/${APP}/subscriptions`, body: form(SUB), objectKind: 'app' })
     expect(v).toMatchObject({ write: { rule: 'app.subscriptions', objectId: APP, auth: 'app', verifyToken: true, appId: APP } })
-    expect(subscribe(SUB, 'account')).toMatch(/only with the connection's own app token/)
+    // The token is the rule's (step 36's model): a caller never asks for one, the app's nor a Page's.
+    expect(subscribe(SUB, 'app')).toMatch(/only with the account's own system-user token/)
+    expect(subscribe(SUB, 'page')).toMatch(/only with the account's own system-user token/)
     expect(subscribe({ ...SUB, callback_url: 'https://elsewhere.example/hook' })).toMatch(/exactly Nexus's own Meta receiver/)
     expect(subscribe({ ...SUB, callback_url: 'https://api.example.test/webhooks/meta/7654321' })).toMatch(/exactly Nexus's own Meta receiver/)
     expect(subscribe({ ...SUB, include_values: 'false' })).toMatch(/include_values is true/)
@@ -76,7 +79,7 @@ describe('the app subscription (POST / DELETE /<app>/subscriptions)', () => {
     expect(subscribe({ ...SUB, include_client_certificate: 'true' })).toMatch(/the only Meta change Nexus sends/)
     // Review A4 — own keys only: never an object (or field) named after Object's own properties.
     for (const object of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) expect(subscribe({ ...SUB, object })).toMatch(/^object is ad_account/)
-    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=constructor`, method: 'DELETE', objectKind: 'app', auth: 'app' })).toMatch(/would remove every subscription/)
+    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=constructor`, method: 'DELETE', objectKind: 'app' })).toMatch(/would remove every subscription/)
     vi.stubEnv('NEXUS_PUBLIC_API_URL', '')
     vi.stubEnv('PUBLIC_API_URL', '')
     vi.stubEnv('RAILWAY_PUBLIC_DOMAIN', '')
@@ -84,14 +87,31 @@ describe('the app subscription (POST / DELETE /<app>/subscriptions)', () => {
   })
 
   it('a DELETE names its object (Meta would otherwise remove every subscription), in the query, with the app token', () => {
-    expect(verdict({ url: `${BASE}/${APP}/subscriptions?object=page`, method: 'DELETE', objectKind: 'app', auth: 'app' })).toMatchObject({ write: { rule: 'app.subscriptions.delete', method: 'DELETE', appId: APP } })
-    expect(verdict({ url: `${BASE}/${APP}/subscriptions?object=page&fields=leadgen,feed`, method: 'DELETE', objectKind: 'app', auth: 'app' })).toHaveProperty('write')
-    expect(problem({ url: `${BASE}/${APP}/subscriptions`, method: 'DELETE', objectKind: 'app', auth: 'app' })).toMatch(/takes object, fields/)
-    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=user`, method: 'DELETE', objectKind: 'app', auth: 'app' })).toMatch(/would remove every subscription/)
-    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=page&object=catalog`, method: 'DELETE', objectKind: 'app', auth: 'app' })).toMatch(/each parameter once/)
-    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=page`, method: 'DELETE', objectKind: 'app', auth: 'app', body: 'object=page' })).toMatch(/deletes nothing on Meta yet/)
-    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=page`, method: 'DELETE', objectKind: 'app' })).toMatch(/only with the connection's own app token/)
-    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=page&access_token=x`, method: 'DELETE', objectKind: 'app', auth: 'app' })).toMatch(/takes object, fields/)
+    expect(verdict({ url: `${BASE}/${APP}/subscriptions?object=page`, method: 'DELETE', objectKind: 'app' })).toMatchObject({ write: { rule: 'app.subscriptions.delete', method: 'DELETE', body: '', auth: 'app', appId: APP } })
+    expect(verdict({ url: `${BASE}/${APP}/subscriptions?object=page&fields=leadgen,feed`, method: 'DELETE', objectKind: 'app' })).toHaveProperty('write')
+    expect(problem({ url: `${BASE}/${APP}/subscriptions`, method: 'DELETE', objectKind: 'app' })).toMatch(/takes object, fields/)
+    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=user`, method: 'DELETE', objectKind: 'app' })).toMatch(/would remove every subscription/)
+    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=page&object=catalog`, method: 'DELETE', objectKind: 'app' })).toMatch(/each parameter once/)
+    // Its keys ride in the query only: never as a form body (main's keyed DELETE), nor in both.
+    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=page`, method: 'DELETE', objectKind: 'app', body: 'object=page' })).toMatch(/in the URL's query, never in a body/)
+    expect(problem({ url: `${BASE}/${APP}/subscriptions`, method: 'DELETE', objectKind: 'app', body: 'object=page' })).toMatch(/in the URL's query, never in a body/)
+    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=page`, method: 'DELETE', objectKind: 'app', auth: 'app' })).toMatch(/only with the account's own system-user token/)
+    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=page&access_token=x`, method: 'DELETE', objectKind: 'app' })).toMatch(/takes object, fields/)
+    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=page`, method: 'DELETE', objectKind: 'app', kind: 'read' })).toMatch(/goes as a write/)
+  })
+
+  it('a query is judged ONLY on a DELETE rule made for one: every other call with a query is refused', () => {
+    // Main's bare DELETE (a budget schedule's), main's keyed DELETE (an image's hash as the body), a POST, a PATCH.
+    expect(problem({ url: `${BASE}/120000000000020?object=page`, method: 'DELETE', objectKind: 'highdemandperiod' })).toMatch(/never in the URL/)
+    expect(problem({ url: `${BASE}/${ACT}/adimages?hash=abc`, method: 'DELETE', objectKind: 'adaccount' })).toMatch(/never in the URL/)
+    expect(problem({ url: `${BASE}/${ACT}/adimages?hash=abc`, method: 'DELETE', objectKind: 'adaccount', body: 'hash=abc' })).toMatch(/never in the URL/)
+    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=page`, body: form(SUB), objectKind: 'app' })).toMatch(/never in the URL/)
+    expect(problem({ url: `${BASE}/${ACT}/subscriptions/120000000000040?status=DISABLED`, method: 'PATCH', body: form({ status: 'DISABLED' }), objectKind: 'adaccount' })).toMatch(/never in the URL/)
+    // The query rules are kind-bound: the app's path named another kind is no app subscription.
+    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=page`, method: 'DELETE', objectKind: 'campaign' })).toMatch(/never in the URL/)
+    // The ad account's connected app: app_id in the query, never a body; a form body on its DELETE is refused.
+    expect(verdict({ url: `${BASE}/${ACT}/subscribed_apps?app_id=${APP}`, method: 'DELETE', objectKind: 'adaccount' })).toMatchObject({ write: { rule: 'adaccount.subscribed_apps.delete', appId: APP } })
+    expect(problem({ url: `${BASE}/${ACT}/subscribed_apps`, method: 'DELETE', objectKind: 'adaccount', body: `app_id=${APP}` })).toMatch(/in the URL's query, never in a body/)
   })
 
   it('every field Nexus subscribes is a topic its receiver knows, and every topic it acts on can be subscribed', () => {
@@ -105,7 +125,7 @@ describe('the app subscription (POST / DELETE /<app>/subscriptions)', () => {
   })
 
   it('on the wire: the app token, the verify token added from the server (never on the ledger); none set → held, nothing sent', async () => {
-    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'webhooks.subscribeApp', objectId: APP, objectKind: 'app', edge: 'subscriptions', params: SUB, check: false, auth: 'app' })
+    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'webhooks.subscribeApp', objectId: APP, objectKind: 'app', edge: 'subscriptions', params: SUB, check: false })
     expect(res.ok).toBe(true)
     const sent = h.calls[0]
     expect(sent.init.method).toBe('POST')
@@ -114,13 +134,13 @@ describe('the app subscription (POST / DELETE /<app>/subscriptions)', () => {
     expect(JSON.stringify(gatewayLedger)).not.toContain('a-long-verify-token-for-tests')
     vi.stubEnv('META_WEBHOOK_VERIFY_TOKEN', '')
     h.calls = []
-    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: APP, objectKind: 'app', edge: 'subscriptions', params: SUB, check: false, auth: 'app' })).rejects.toMatchObject({ code: 'META_VERIFY_TOKEN_UNSET' })
+    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: APP, objectKind: 'app', edge: 'subscriptions', params: SUB, check: false })).rejects.toMatchObject({ code: 'META_VERIFY_TOKEN_UNSET' })
     expect(h.calls).toEqual([])
   })
 
   it('another app than the connection\'s own: nothing sent', async () => {
     h.appId = '7654321'
-    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: APP, objectKind: 'app', edge: 'subscriptions', params: SUB, check: false, auth: 'app' })).rejects.toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
+    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: APP, objectKind: 'app', edge: 'subscriptions', params: SUB, check: false })).rejects.toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
     expect(h.calls).toEqual([])
   })
 })
@@ -131,7 +151,9 @@ describe('the chosen ad account\'s connected app and the chosen Page', () => {
     expect(String(h.calls[0].init.body)).toBe('app_id=1234567')
     nextMoment()
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'subscribed_apps', params: {}, query: { app_id: APP }, method: 'DELETE', check: false })).ok).toBe(true)
-    expect([h.calls[1].init.method, new URL(h.calls[1].url).pathname, new URL(h.calls[1].url).searchParams.get('app_id'), h.calls[1].init.body]).toEqual(['DELETE', `/v26.0/${ACT}/subscribed_apps`, APP, undefined])
+    expect([h.calls[1].init.method, new URL(h.calls[1].url).pathname, new URL(h.calls[1].url).searchParams.get('app_id'), String(h.calls[1].init.body ?? '')]).toEqual(['DELETE', `/v26.0/${ACT}/subscribed_apps`, APP, ''])
+    // The ad account's connected app goes with the account's system-user token (its rule names no other).
+    expect(new URL(h.calls[1].url).searchParams.get('access_token')).toBe('meta-system-user-token')
     nextMoment()
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'subscribed_apps', params: { app_id: '7654321' }, check: false })).rejects.toMatchObject({ code: 'META_WRITE_NOT_ALLOWED' })
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: 'act_5555555555', objectKind: 'adaccount', edge: 'subscribed_apps', params: { app_id: APP }, check: false })).rejects.toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
@@ -141,16 +163,19 @@ describe('the chosen ad account\'s connected app and the chosen Page', () => {
   })
 
   it('the CHOSEN Page: the app removed with the app token; installing (a Page token) is never sent; another Page never', async () => {
+    gatewayMetaPage['m-1'] = PAGE
     // Review B1 / D-2 — Meta installs an app on a Page only with a Page access token: no rule sends it.
     expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, body: form({ subscribed_fields: 'leadgen,feed' }), objectKind: 'page' })).toMatch(/the only Meta change Nexus sends/)
-    expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, method: 'DELETE', objectKind: 'page' })).toMatch(/only with the connection's own app token/)
-    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: {}, method: 'DELETE', check: false, auth: 'app' })).ok).toBe(true)
+    // The removal is the app's (its rule's token), never the Page's: step 36's Page token goes only on a rule marked `page`.
+    expect(verdict({ url: `${BASE}/${PAGE}/subscribed_apps`, method: 'DELETE', objectKind: 'page' })).toMatchObject({ write: { rule: 'page.subscribed_apps.delete', auth: 'app' } })
+    expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, method: 'DELETE', objectKind: 'page', auth: 'page' })).toMatch(/only with the account's own system-user token/)
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: {}, method: 'DELETE', check: false })).ok).toBe(true)
     expect(new URL(h.calls[0].url).searchParams.get('access_token')).toBe('1234567|app-secret-for-tests')
     nextMoment()
     gatewayMetaPage['m-1'] = '120000000000011'
-    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: {}, method: 'DELETE', check: false, auth: 'app' })).rejects.toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
-    gatewayMetaPage['m-1'] = null
-    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: {}, method: 'DELETE', check: false, auth: 'app' })).rejects.toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: {}, method: 'DELETE', check: false })).rejects.toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    delete gatewayMetaPage['m-1']
+    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: {}, method: 'DELETE', check: false })).rejects.toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
     expect(h.calls).toHaveLength(1)
   })
 })
@@ -206,6 +231,7 @@ describe('alert subscriptions (act_<id>/subscriptions)', () => {
     expect(problem({ url: `${BASE}/${ACT}/subscriptions/120000000000040`, method: 'PUT', body: form({ status: 'DISABLED' }), objectKind: 'adaccount' })).toMatch(/Nexus sends Meta no PUT/)
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: ACT, objectKind: 'adaccount', path: `${ACT}/subscriptions/120000000000040`, params: { status: 'DISABLED' }, method: 'PATCH', check: false })).ok).toBe(true)
     expect([h.calls[0].init.method, String(h.calls[0].init.body)]).toEqual(['PATCH', 'status=DISABLED'])
+    expect(new URL(h.calls[0].url).searchParams.get('access_token')).toBe('meta-system-user-token')
     nextMoment()
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: ACT, objectKind: 'adaccount', path: `${ACT}/subscriptions/120000000000040`, params: {}, method: 'DELETE', check: false })).ok).toBe(true)
     nextMoment()
@@ -216,9 +242,12 @@ describe('alert subscriptions (act_<id>/subscriptions)', () => {
 })
 
 describe('the older rules are untouched', () => {
-  it('a status change still goes; a DELETE of a campaign is still refused; the app token never changes a campaign', () => {
-    expect(problem({ url: `${BASE}/120000000000001`, body: form({ status: 'PAUSED' }) })).toBeNull()
-    expect(problem({ url: `${BASE}/120000000000001`, method: 'DELETE', objectKind: 'campaign' })).toMatch(/deletes nothing on Meta yet/)
+  it('a status change still goes; a DELETE of a campaign goes by main\'s rule only; the app token never changes a campaign', () => {
+    expect(verdict({ url: `${BASE}/120000000000001`, body: form({ status: 'PAUSED' }) })).toMatchObject({ write: { rule: 'object.status' } })
+    expect(verdict({ url: `${BASE}/120000000000001`, body: form({ status: 'PAUSED' }) })).not.toHaveProperty('write.auth')
+    expect(verdict({ url: `${BASE}/120000000000001`, method: 'DELETE', objectKind: 'campaign' })).toMatchObject({ write: { rule: 'object.delete', method: 'DELETE' } })
+    expect(verdict({ url: `${BASE}/120000000000001`, method: 'DELETE', objectKind: 'campaign' })).not.toHaveProperty('write.auth')
+    expect(problem({ url: `${BASE}/120000000000001`, method: 'DELETE', objectKind: 'app' })).toMatch(/Nexus deletes on Meta only/)
     expect(problem({ url: `${BASE}/120000000000001`, body: form({ status: 'PAUSED' }), auth: 'app' })).toMatch(/system-user token/)
     expect(problem({ url: `${BASE}/120000000000001?status=PAUSED`, body: form({ status: 'PAUSED' }) })).toMatch(/never in the URL/)
   })

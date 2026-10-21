@@ -100,10 +100,12 @@ describe('set-meta-webhooks', () => {
     const done = await run(webhooks, { action: 'subscribe-app', object: 'ad_account', fields: ['effective_status', 'with_issues_ad_objects'] })
     expect(done.ok).toBe(true)
     expect(sent()[0]).toMatchObject({
-      objectId: '1234567', kind: 'app', edge: 'subscriptions', operation: 'webhooks.subscribeApp', via: { auth: 'app' },
+      objectId: '1234567', kind: 'app', edge: 'subscriptions', operation: 'webhooks.subscribeApp', via: {},
       params: { object: 'ad_account', callback_url: 'https://api.example.test/webhooks/meta/1234567', fields: 'effective_status,with_issues_ad_objects', include_values: 'true' },
     })
     expect(sent()[0].params).not.toHaveProperty('verify_token')
+    // The app token is its gateway rule's (meta-webhook-rules.ts `auth: 'app'`): the draft never asks for a token.
+    expect(sent()[0].via).toEqual({})
     const undo = webhooks.undo!.request(done.change)
     expect(undo).toEqual({ tool: 'set-meta-webhooks', args: { connectionId: 'm-1', action: 'unsubscribe-app', object: 'ad_account', fields: ['with_issues_ad_objects'], why: expect.any(String) } })
     expect(webhooks.input.safeParse((undo as { args: unknown }).args).success).toBe(true)
@@ -129,11 +131,11 @@ describe('set-meta-webhooks', () => {
   it('unsubscribe-app: a DELETE that always names its object; the undo subscribes back to Nexus only', async () => {
     h.app = [{ object: 'catalog', fields: ['items_batch', 'product_feed'], active: true, nexusCallback: true, callbackOrigin: 'https://api.example.test' }]
     const done = await run(webhooks, { action: 'unsubscribe-app', object: 'catalog' })
-    expect(sent()[0]).toMatchObject({ objectId: '1234567', method: 'DELETE', params: {}, via: { auth: 'app', query: { object: 'catalog' } } })
+    expect(sent()[0]).toMatchObject({ objectId: '1234567', method: 'DELETE', params: {}, via: { query: { object: 'catalog' } } })
     expect(webhooks.undo!.request(done.change)).toMatchObject({ tool: 'set-meta-webhooks', args: { action: 'subscribe-app', object: 'catalog', fields: ['items_batch', 'product_feed'] } })
     h.send.mockClear()
     await run(webhooks, { action: 'unsubscribe-app', object: 'catalog', fields: ['product_feed'] })
-    expect(sent()[0].via).toEqual({ auth: 'app', query: { object: 'catalog', fields: 'product_feed' } })
+    expect(sent()[0].via).toEqual({ query: { object: 'catalog', fields: 'product_feed' } })
     expect(await preview(webhooks, { action: 'unsubscribe-app' })).toEqual({ ok: false, error: expect.stringMatching(/^Name the object/) })
     h.app = [{ object: 'catalog', fields: ['items_batch'], active: true, nexusCallback: false, callbackOrigin: 'https://other.example' }]
     const foreign = await run(webhooks, { action: 'unsubscribe-app', object: 'catalog' })
@@ -163,7 +165,8 @@ describe('set-meta-webhooks', () => {
     expect(out.preview.warnings.join(' ')).toMatch(/Nexus cannot read which apps are installed on the Page/)
     expect(out.preview.warnings).toContainEqual(expect.stringMatching(/^No undo for: It has no undo: Nexus does not install the app on a Page/))
     const off = await run(webhooks, { action: 'remove-page' })
-    expect(sent()[0]).toMatchObject({ objectId: '120000000000010', kind: 'page', method: 'DELETE', via: { auth: 'app' } })
+    expect(sent()[0]).toMatchObject({ objectId: '120000000000010', kind: 'page', method: 'DELETE', via: {} })
+    expect(sent()[0].via).toEqual({})
     expect(webhooks.undo!.request(off.change)).toEqual({ refusal: expect.stringMatching(/It has no undo: Nexus does not install the app on a Page/) })
     h.pageId = null
     expect(await preview(webhooks, { action: 'remove-page' })).toEqual({ ok: false, error: expect.stringMatching(/no Facebook Page chosen/) })

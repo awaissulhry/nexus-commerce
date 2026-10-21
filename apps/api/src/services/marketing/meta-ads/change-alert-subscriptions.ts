@@ -163,7 +163,7 @@ export function alertWords(spec: AlertSpecArgs): string {
 
 function request(fields: Omit<MetaChangeRequest, 'step' | 'check' | 'raisesSpend' | 'readBackInPost' | 'budget' | 'kind' | 'objectKind'>): MetaChangeRequest {
   // `kind` is a status change's and is not read here: objectKind names the object (change-draft.ts).
-  return { step: 1, check: 'none', raisesSpend: false, readBackInPost: false, budget: false, kind: 'campaign', objectKind: 'adaccount', ...fields }
+  return { step: 1, check: 'none', raisesSpend: false, readBackInPost: false, budget: false, objectKind: 'adaccount', ...fields }
 }
 
 function draft(summary: string, lines: Array<[string, unknown, unknown]>, requests: MetaChangeRequest[], stands: unknown, before: AlertRecord, after: AlertRecord, extra: { warnings?: string[]; skipped?: string[] } = {}): MetaChangeDraft {

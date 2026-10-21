@@ -103,9 +103,11 @@ function fieldsFor(allowed: readonly string[], object: string, asked: string[] |
 
 /** The draft of one set-meta-webhooks action, from the live state; a refusal in words. */
 export function webhooksDraft(req: WebhooksRequest, live: WebhooksLive): MetaChangeDraft | { refusal: string } {
-  // `kind` is a status change's and is not read here: objectKind names the object (change-draft.ts).
-  const appPath = { objectId: live.appId, kind: 'campaign' as const, objectKind: 'app' as const, edge: 'subscriptions' as const }
-  const accountPath = { objectId: `act_${live.adAccountId}`, kind: 'campaign' as const, objectKind: 'adaccount' as const, edge: 'subscribed_apps' as const }
+  // objectKind names the object (a status change's `kind` is left out: change-draft.ts). An app request goes with the app
+  // token by its gateway rule (meta-webhook-rules.ts `auth: 'app'`), never at this draft's ask; `via` marks Meta's answer
+  // as the result.
+  const appPath = { objectId: live.appId, objectKind: 'app' as const, edge: 'subscriptions' as const }
+  const accountPath = { objectId: `act_${live.adAccountId}`, objectKind: 'adaccount' as const, edge: 'subscribed_apps' as const }
 
   if (req.action === 'install-page') return { refusal: PAGE_INSTALL_ROADS }
 
@@ -145,7 +147,7 @@ export function webhooksDraft(req: WebhooksRequest, live: WebhooksLive): MetaCha
       return draft({
         summary: `Subscribe the business's Meta app to ${object} notifications (${words(wanted)}), sent to Nexus's receiver.`,
         lines: [[`App subscription ${object}`, current ? words(current.fields) : 'none', words(all)]],
-        requests: [request({ ...appPath, label: `Subscribe the app to ${object}: ${words(wanted)}`, params: { object, callback_url: live.callback.url, fields: wanted.join(','), include_values: 'true' }, undoable: !!undo, operation: 'webhooks.subscribeApp', via: { auth: 'app' } })],
+        requests: [request({ ...appPath, label: `Subscribe the app to ${object}: ${words(wanted)}`, params: { object, callback_url: live.callback.url, fields: wanted.join(','), include_values: 'true' }, undoable: !!undo, operation: 'webhooks.subscribeApp', via: {} })],
         stands, warnings,
         before: { action: req.action, object, fields: current?.fields ?? null, undo, noUndo },
         after: { action: req.action, object, fields: all },
@@ -170,7 +172,7 @@ export function webhooksDraft(req: WebhooksRequest, live: WebhooksLive): MetaCha
     return draft({
       summary: whole ? `Remove the business's Meta app's ${object} subscription (Nexus no longer gets ${object} notifications).` : `Remove ${words(removing)} from the app's ${object} subscription.`,
       lines: [[`App subscription ${object}`, words(current.fields), whole ? 'none' : words(left)]],
-      requests: [request({ ...appPath, label: whole ? `Remove the app's ${object} subscription` : `Remove ${words(removing)} from the app's ${object} subscription`, params: {}, method: 'DELETE', undoable: !!undo, operation: 'webhooks.unsubscribeApp', via: { auth: 'app', query: whole ? { object } : { object, fields: removing.join(',') } } })],
+      requests: [request({ ...appPath, label: whole ? `Remove the app's ${object} subscription` : `Remove ${words(removing)} from the app's ${object} subscription`, params: {}, method: 'DELETE', undoable: !!undo, operation: 'webhooks.unsubscribeApp', via: { query: whole ? { object } : { object, fields: removing.join(',') } } })],
       stands, warnings: object === 'ad_account' ? ['Without ad_account fields no ads notification reaches Nexus (alert subscriptions included); the daily read still runs.'] : [],
       before: { action: req.action, object, fields: current.fields, undo, noUndo },
       after: { action: req.action, object, fields: whole ? null : left },
@@ -198,11 +200,11 @@ export function webhooksDraft(req: WebhooksRequest, live: WebhooksLive): MetaCha
 
   // remove-page — the CHOSEN Page, with the app token. Nexus cannot read the Page's apps (a Page token) nor install it back.
   if (!live.pageId) return { refusal: 'This business has no Facebook Page chosen (set-meta-connection chooses one).' }
-  const pagePath = { objectId: live.pageId, kind: 'campaign' as const, objectKind: 'page' as const, edge: 'subscribed_apps' as const }
+  const pagePath = { objectId: live.pageId, objectKind: 'page' as const, edge: 'subscribed_apps' as const }
   return draft({
     summary: `Remove the business's Meta app from Page ${live.pageId} (no more Page notifications to Nexus).`,
     lines: [[`Page ${live.pageId}: the app`, 'installed or not (Nexus cannot read it)', 'not installed']],
-    requests: [request({ ...pagePath, label: `Remove the app from Page ${live.pageId}`, params: {}, method: 'DELETE', undoable: false, operation: 'webhooks.removePage', via: { auth: 'app' } })],
+    requests: [request({ ...pagePath, label: `Remove the app from Page ${live.pageId}`, params: {}, method: 'DELETE', undoable: false, operation: 'webhooks.removePage', via: {} })],
     stands: { action: req.action, pageId: live.pageId },
     warnings: ['Nexus cannot read which apps are installed on the Page (Meta answers that to a Page access token only): when the app is not installed, Meta answers and nothing changes.'],
     before: { action: req.action, fields: null, undo: null, noUndo: [`It has no undo: ${PAGE_INSTALL_ROADS}`] },

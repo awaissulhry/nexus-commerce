@@ -884,6 +884,119 @@ describe('C1 — every registered tool keeps the contract', () => {
         },
         after: { kind: 'highdemandperiod', id: '120000000000031', parent: { kind: 'campaign', id: '120000000000001' }, fields: { budget_value: '30', exists: 'yes' }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 19: a create's or a copy's undo deletes what it made (its record names it) through the same tool.
+      'create-meta-campaign': {
+        before: { op: 'create', made: [], top: [], madeAt: '', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'create', made: [{ kind: 'campaign', id: '120000000000001', name: 'Campaign A' }], top: [{ kind: 'campaign', id: '120000000000001' }], madeAt: '2026-10-21T08:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'create-meta-ad-set': {
+        before: { op: 'create', made: [], top: [], madeAt: '', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'create', made: [{ kind: 'adset', id: '120000000000002', name: 'Ad set B' }], top: [{ kind: 'adset', id: '120000000000002' }], madeAt: '2026-10-21T08:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 21: label lists go back as they were, a label made is deleted, a rename goes back; a value rule change
+      // puts the earlier rules back, an attach the earlier set; a booking is cancelled, an ad set's reservation detached.
+      'set-meta-labels': {
+        before: { op: 'objects', objects: [{ kind: 'adset', id: '120000000000002', labels: [{ id: '120000000000070', name: 'Label A' }] }], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'objects', objects: [{ kind: 'adset', id: '120000000000002', labels: [{ id: '120000000000070', name: 'Label A' }, { id: '120000000000071', name: 'Label B' }] }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-value-rules': {
+        before: { op: 'attach', adSet: { id: '120000000000002', valueRuleSetId: null }, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'attach', adSet: { id: '120000000000002', valueRuleSetId: '120000000000080' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'create-meta-reach-frequency': {
+        before: { op: 'reserve', predictionId: '120000000000090', reservationId: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'reserve', predictionId: '120000000000090', reservationId: '120000000000091', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'copy-meta-ads': {
+        before: { op: 'copy', made: [], top: [], madeAt: '', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'copy', made: [{ kind: 'campaign', id: '120000000000009' }, { kind: 'adset', id: '120000000000010' }], top: [{ kind: 'campaign', id: '120000000000009' }], madeAt: '2026-10-21T08:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 28: an applied budget raise goes back through the apply tool's restore; a study's name, dates, split and
+      // viewers go back through set-meta-experiment.
+      'apply-meta-recommendations': {
+        before: { type: 'SCALE_GOOD_CAMPAIGN', signature: '1234567', currency: 'EUR', objects: [{ kind: 'adset', id: '120000000000002', name: 'Ad set B', fields: { daily_budget: '5000', lifetime_budget: null } }], undo: [{ kind: 'adset', id: '120000000000002', dailyBudgetCents: 5000 }], noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { type: 'SCALE_GOOD_CAMPAIGN', signature: '1234567', currency: 'EUR', objects: [{ kind: 'adset', id: '120000000000002', name: 'Ad set B', fields: { daily_budget: '11000', lifetime_budget: null } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-experiment': {
+        before: { kind: 'study', id: '120000000000041', type: 'SPLIT_TEST', fields: { name: 'Test A', end_time: '4102444800' }, undo: { action: 'update', studyId: '120000000000041', name: 'Test A', endTime: '2100-01-01T00:00:00Z' }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'study', id: '120000000000041', type: 'SPLIT_TEST', fields: { name: 'Test B', end_time: '4102531200' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 23: what an upload made new comes out of the ad account's library again (create-meta-media kind undo).
+      'create-meta-media': {
+        before: { kind: 'image', items: [{ kind: 'image', source: 'da_test', inLibrary: false }] },
+        after: { kind: 'image', items: [{ kind: 'image', source: 'da_test', hash: '0123456789abcdef0123456789abcdef', new: true }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 25: a creative a create made new is deleted again; a creative's old name and labels go back.
+      'create-meta-creative': {
+        before: { kind: 'create', items: [] },
+        after: { kind: 'create', items: [{ kind: 'creative', creativeId: '120000000000301', name: 'Creative A', new: true }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-creative': {
+        before: { kind: 'set', creativeId: '120000000000301', name: 'Creative A', status: 'ACTIVE', labels: ['Spring'] },
+        after: { kind: 'set', creativeId: '120000000000301', name: 'Creative B', labels: [], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 29: a rule switched off is switched on again; a deleted rule is made again (a new rule) by set-meta-ad-rule.
+      'set-meta-ad-rule': {
+        before: { kind: 'adrule', action: 'status', id: '120000000000101', exists: 'yes', undo: { action: 'status', ruleId: '120000000000101', enabled: true }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'adrule', action: 'status', id: '120000000000101', exists: 'yes', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'remove-meta-ad-rule': {
+        before: {
+          kind: 'adrule', action: 'remove', id: '120000000000101', exists: 'yes', noUndo: [], accountId: 'conn-1', adAccountId: '1234567890',
+          undo: {
+            action: 'create', name: 'Rule A', enable: true,
+            evaluation: { type: 'SCHEDULE', filters: [{ field: 'entity_type', operator: 'EQUAL', value: 'ADSET' }, { field: 'time_preset', operator: 'EQUAL', value: 'LAST_7D' }, { field: 'spent', operator: 'GREATER_THAN', valueCents: 5000 }] },
+            execution: { type: 'PAUSE' }, schedule: { type: 'DAILY' },
+          },
+        },
+        after: { kind: 'adrule', action: 'remove', id: '120000000000101', exists: 'no', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 39: an ad set's brand-safety keys go back (the account's filter too, where it had one); a block list made
+      // is deleted (remove-meta-block-list), a share unshared.
+      'set-meta-brand-safety': {
+        before: { adSets: [{ id: '120000000000002', name: 'Ad set B', safety: { brand_safety_content_filter_levels: ['FEED_STANDARD'], excluded_publisher_categories: [], excluded_publisher_list_ids: [], brand_safety_content_severity_levels: [], excluded_brand_safety_content_types: [] } }], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { adSets: [{ id: '120000000000002', name: 'Ad set B', safety: { brand_safety_content_filter_levels: ['FEED_STRICT'], excluded_publisher_categories: ['gambling'], excluded_publisher_list_ids: [], brand_safety_content_severity_levels: [], excluded_brand_safety_content_types: [] } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-block-list': {
+        before: { action: 'share', blockListId: '120000000000601', agencyId: '5550000002', shared: false, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'share', blockListId: '120000000000601', agencyId: '5550000002', role: 'APPLY_BLOCK_LIST', shared: true, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 31: an audience made is deleted again; an audience change goes back through the same tool; a share is undone.
+      'create-meta-audience': {
+        before: { created: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { created: [{ audienceId: '120000000000040', name: 'List A', kind: 'website' }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-audience': {
+        before: { audienceId: '120000000000040', fields: { name: 'List A' }, undo: { audienceId: '120000000000040', name: 'List A', existingCustomers: [] }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { audienceId: '120000000000040', fields: { name: 'List B' }, undo: null, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-audience-sharing': {
+        before: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: false, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: true, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 36: a form it made is archived (Meta deletes no form); archive ⇄ re-activate; a test lead it made is deleted.
+      'create-meta-lead-form': {
+        before: { pageId: '120000000000010', formId: null, name: 'Form A', archived: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { pageId: '120000000000010', formId: '600000000000001', name: 'Form A', archived: false, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-lead-form': {
+        before: { action: 'test-lead', pageId: '120000000000010', formId: '600000000000001', name: 'Form A', testLeadId: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'test-lead', pageId: '120000000000010', formId: '600000000000001', name: 'Form A', testLeadId: '700000000000001', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 32: a dataset's settings, its access and a custom conversion's go back through the tool the record names;
+      // a custom conversion made is deleted again (remove-meta-signal-items, a person approves).
+      'set-meta-dataset': {
+        before: { part: 'pixel', id: '120000000000050', fields: { name: 'Shop A old' }, undo: { tool: 'set-meta-dataset', args: { pixelId: '120000000000050', name: 'Shop A old' } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { part: 'pixel', id: '120000000000050', fields: { name: 'Shop A' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-dataset-access': {
+        before: { part: 'access', id: '120000000000050', fields: { connected: 'no' }, undo: { tool: 'set-meta-dataset-access', args: { pixelId: '120000000000050', action: 'disconnect-ad-account' } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { part: 'access', id: '120000000000050', fields: { connected: 'yes' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-custom-conversion': {
+        before: { part: 'conversion', id: '', fields: {}, created: false, undo: { tool: 'remove-meta-signal-items', args: { items: [{ kind: 'customConversion', id: '120000000000060' }], confirmDelete: true } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { part: 'conversion', id: '120000000000060', customConversionId: '120000000000060', fields: { exists: 'yes' }, created: true, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 30 part 2: fields a subscription added are removed; a new alert is removed, a status goes back, a removed
       // alert is made again with the same conditions.
       'set-meta-webhooks': {
@@ -1068,6 +1181,14 @@ describe('C1 — every registered tool keeps the contract', () => {
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
       'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
+      'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads',
+      'remove-meta-ads-items', 'set-meta-labels', 'set-meta-value-rules', 'create-meta-reach-frequency',
+      'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment', 'create-meta-media',
+      'create-meta-creative', 'set-meta-creative', 'set-meta-ad-rule', 'remove-meta-ad-rule',
+      'set-meta-brand-safety', 'set-meta-block-list', 'remove-meta-block-list',
+      'create-meta-audience', 'set-meta-audience', 'set-meta-audience-members', 'set-meta-audience-sharing', 'remove-meta-audience',
+      'create-meta-lead-form', 'set-meta-lead-form',
+      'create-meta-dataset', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion', 'remove-meta-signal-items',
       'set-meta-webhooks', 'set-meta-alert-subscription', 'remove-meta-alert-subscription']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
