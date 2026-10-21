@@ -15,7 +15,14 @@
  *   remove   POST /<campaign | ad set> adlabels [its WHOLE new list] (CMP-066: "the only documented way to remove a label")
  *   replace  the same, with the list named (what undo sends back)
  * Every label is the chosen ad account's own (its list, read live; the gateway checks each id again). Every object's list is
- * read live first and read back after (write-client.ts compares the label lists). Labels never change what an ad spends.
+ * read live first and read back after (write-client.ts compares the label lists).
+ *
+ * A label changes nothing by itself, but Meta's automated rules can filter on labels (`adlabel_ids`, master RU-010): adding
+ * or removing one brings an object under a rule, or takes it out of one. The account's ENABLED rules are read (step 8's
+ * reader, live-optimize.ts metaAdRules) and every rule that filters on a label this change adds, removes or deletes is named;
+ * when that can make the account spend more — an object brought under a rule that switches on or raises a budget or bid,
+ * or taken out of one that pauses or lowers — the request is SPENDS MONEY (raisesSpend) with a sentence. A rules read that
+ * failed is said (a warning, not a refusal).
  */
 import { changeLines, plural, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { LabelCarriers, LabelledObject, LiveLabel } from './live-labels-rules.js'
@@ -36,6 +43,81 @@ export interface LabelsRequest {
   sets?: Array<{ kind: LabelledKind; id: string; labelIds: string[] }>
 }
 
+/** One of Meta's ENABLED automated rules that filters on labels, as this draft needs it (labelRulesOf). */
+export interface LabelRule {
+  id: string
+  name: string | null
+  /** In words (live-optimize.ts mapRule). */
+  actionText: string | null
+  /** It switches on, raises a budget or bid, or moves budget (can make the account spend more). */
+  canRaiseSpend: boolean
+  /** It pauses, or lowers a budget or bid (holds spending back). */
+  lowers: boolean
+  /** Each adlabel_ids filter: its operator and label ids. */
+  filters: Array<{ operator: string | null; labelIds: string[] }>
+}
+
+/** Rule filters that hold what CARRIES a label, and those that hold what does NOT (Meta's filter operators). */
+const POSITIVE_OPS = new Set(['ANY', 'ALL', 'IN', 'CONTAIN', 'EQUAL', 'IN_RANGE'])
+const NEGATIVE_OPS = new Set(['NONE', 'NOT_IN', 'NOT_CONTAIN', 'NOT_EQUAL', 'NOT_IN_RANGE'])
+const LOWERING = new Set(['PAUSE', 'CHANGE_BUDGET', 'CHANGE_CAMPAIGN_BUDGET', 'CHANGE_BID'])
+
+/** The labels rules among step 8's mapped rules (live-optimize.ts mapRule): ENABLED ones with an adlabel_ids filter. */
+export function labelRulesOf(items: ReadonlyArray<Record<string, unknown>>): LabelRule[] {
+  const out: LabelRule[] = []
+  for (const r of items) {
+    if (r.status !== 'ENABLED') continue
+    const filters = (Array.isArray(r.filters) ? r.filters : []).filter((f): f is Record<string, unknown> => !!f && typeof f === 'object' && (f as Record<string, unknown>).field === 'adlabel_ids')
+      .map((f) => ({ operator: typeof f.operator === 'string' ? f.operator.toUpperCase() : null, labelIds: (Array.isArray(f.value) ? f.value : [f.value]).filter((v) => typeof v === 'string' || typeof v === 'number').map(String) }))
+    if (!filters.length || typeof r.ruleId !== 'string') continue
+    const action = (r.action ?? {}) as { type?: unknown; text?: unknown }
+    const canRaiseSpend = r.canRaiseSpend === true
+    out.push({
+      id: r.ruleId, name: typeof r.name === 'string' ? r.name : null, actionText: typeof action.text === 'string' ? action.text : typeof action.type === 'string' ? action.type : null,
+      canRaiseSpend, lowers: !canRaiseSpend && typeof action.type === 'string' && LOWERING.has(action.type), filters,
+    })
+  }
+  return out
+}
+
+/**
+ * What the rules make of a label change: each rule a change touches named, and — where it can make the account spend more —
+ * a SPENDS MONEY sentence and the objects (by key) whose request is marked raisesSpend.
+ */
+function ruleEffects(changes: Array<{ key: string; who: string; added: string[]; removed: string[] }>, rules: LabelRule[]): { warnings: string[]; spends: string[]; raising: Set<string> } {
+  const warnings: string[] = []
+  const spends: string[] = []
+  const raising = new Set<string>()
+  for (const rule of rules) {
+    const under: string[] = []
+    const out: string[] = []
+    let raises = false
+    for (const c of changes) {
+      for (const f of rule.filters) {
+        const added = c.added.filter((id) => f.labelIds.includes(id))
+        const removed = c.removed.filter((id) => f.labelIds.includes(id))
+        if (!added.length && !removed.length) continue
+        const known = f.operator !== null && (POSITIVE_OPS.has(f.operator) || NEGATIVE_OPS.has(f.operator))
+        const positive = !known || POSITIVE_OPS.has(f.operator!)
+        const negative = !known || NEGATIVE_OPS.has(f.operator!)
+        const bringsIn = (added.length > 0 && positive) || (removed.length > 0 && negative)
+        const takesOut = (removed.length > 0 && positive) || (added.length > 0 && negative)
+        if (bringsIn && !under.includes(c.who)) under.push(c.who)
+        if (takesOut && !out.includes(c.who)) out.push(c.who)
+        if ((bringsIn && rule.canRaiseSpend) || (takesOut && rule.lowers)) { raises = true; raising.add(c.key) }
+      }
+    }
+    if (!under.length && !out.length) continue
+    const what = `Meta's automated rule ${rule.name ? `"${rule.name}" ` : ''}(${rule.id}) ${rule.actionText ?? 'acts'} on what its label filter holds`
+    const moves = [under.length ? `brings ${under.slice(0, 5).join(', ')}${under.length > 5 ? ', …' : ''} under it` : '', out.length ? `takes ${out.slice(0, 5).join(', ')}${out.length > 5 ? ', …' : ''} out of it` : ''].filter(Boolean).join(' and ')
+    warnings.push(`${what}: this change ${moves}.`)
+    if (raises) spends.push(`${what}: this change ${moves} — the rule runs on its own (no one asked each time), so it can make the account spend more (${rule.canRaiseSpend ? 'it switches on or raises' : 'it no longer holds them back'}).`)
+  }
+  return { warnings, spends, raising }
+}
+
+const RULES_UNREAD = 'Nexus could not read the ad account\'s automated rules: a rule that filters on these labels would act on what carries them (meta-ad-rules lists the rules).'
+
 export interface LabelsLive {
   adAccountId: string
   /** The chosen ad account's labels (up to 500) and whether there are more. */
@@ -45,6 +127,8 @@ export interface LabelsLive {
   objects: LabelledObject[]
   /** delete: everything that carries the label (Meta takes it off all of them). */
   carriers?: LabelCarriers | null
+  /** add, remove, replace, delete: the account's ENABLED rules that filter on labels (null: the read failed). */
+  adRules?: LabelRule[] | null
 }
 
 /** One object's label list in a record: as Meta read it (ids and names), or as planned (a new label by its name only). */
@@ -126,6 +210,12 @@ export function labelsDraft(request: LabelsRequest, live: LabelsLive): MetaChang
     if (request.confirmDelete !== true) return { refusal: 'A label is deleted only when the person explicitly asked to delete it (confirmDelete: true). To take it off some campaigns or ad sets, use action remove.' }
     const c = live.carriers ?? null
     const carried = c ? c.campaigns.length + c.adSets.length + c.ads.length + c.creatives.length : null
+    // Review A2 — what carries the label leaves every rule filter on it (unseen carriers too: Meta takes it off all of them).
+    const carriersOff = [
+      ...(c ? ([['campaign', c.campaigns], ['ad set', c.adSets], ['ad', c.ads], ['creative', c.creatives]] as const).flatMap(([word, list]) => list.map((x) => ({ key: `${word}:${x.id}`, who: `${word} ${quoted(x.name)}(${x.id})` }))) : []),
+      ...(!c || c.more ? [{ key: 'unread', who: 'what else carries it (Nexus could not read it all)' }] : []),
+    ].map((x) => ({ ...x, added: [], removed: [id] }))
+    const effects = live.adRules === undefined ? null : live.adRules === null ? { warnings: [RULES_UNREAD], spends: [], raising: new Set<string>() } : ruleEffects(carriersOff, live.adRules)
     return {
       summary: `Meta: DELETE label ${quoted(label.name)}(${id}) for good${carried ? `; Meta takes it off the ${plural(carried, 'object')} that carry it` : ''}.`,
       changes: { [`Label ${quoted(label.name)}(${id})`]: { from: carried === null ? 'carried by what Nexus could not read' : `on ${plural(carried, 'object')}`, to: 'deleted' } },
@@ -134,15 +224,16 @@ export function labelsDraft(request: LabelsRequest, live: LabelsLive): MetaChang
         'DELETING IS FINAL: Meta has no undelete for a label and no undo is offered. A label of the same name can be made again (action create — a new id) and put back on the objects listed (action add).',
         ...(c?.more ? ['More objects carry it than Nexus lists (it reads up to 100 of each kind): they lose it too.'] : []),
         ...(carried === null ? ['Nexus could not read what carries the label: whatever does loses it.'] : []),
-        'Meta has no check for a delete. A label never changes what an ad spends.',
+        ...(effects?.warnings ?? []),
+        'Meta has no check for a delete.',
       ],
-      spendsMoney: [],
+      spendsMoney: effects?.spends ?? [],
       skipped: [],
       requests: [{
         step: 1, label: `Delete label ${quoted(label.name)}(${id})`, kind: 'ad', objectKind: 'adlabel', objectId: id, params: {}, method: 'DELETE',
-        operation: 'label.delete', check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
+        operation: 'label.delete', check: 'none', raisesSpend: (effects?.spends.length ?? 0) > 0, readBackInPost: false, budget: false, undoable: false,
       }],
-      stands: { label: [label.id, label.name], carriers: c },
+      stands: { label: [label.id, label.name], carriers: c, rules: live.adRules ?? null },
       before: { op: 'delete', label: { id, name: label.name }, carriers: c, noUndo: ['Meta has no undelete for a label: make one of the same name (a new id) and put it on what the record lists.'] } satisfies LabelsRecord,
       after: { op: 'delete', label: { id, name: label.name } } satisfies LabelsRecord,
       alsoDeleted: c ? { takenOff: { campaigns: c.campaigns, adSets: c.adSets, ads: c.ads, creatives: c.creatives, more: c.more } } : { takenOff: 'not read' },
@@ -182,6 +273,8 @@ export function labelsDraft(request: LabelsRequest, live: LabelsLive): MetaChang
       const o = objectOf(s.kind, s.id)
       if (!o) return { refusal: `Nexus could not read ${WORD[s.kind]} ${s.id}.` }
       const gone = notOwn(s.labelIds)
+      // Review A6 — beyond the first 500 labels Nexus cannot tell a label gone from one it did not read: nothing is dropped.
+      if (gone.length && live.accountLabelsMore) return { refusal: `${gone.join(', ')} ${gone.length === 1 ? 'is' : 'are'} not among the first 500 labels of the account Nexus reads: it cannot tell whether ${gone.length === 1 ? 'it still exists' : 'they still exist'}, so it puts nothing back on ${WORD[s.kind]} ${s.id}.` }
       if (gone.length) warnings.push(`${gone.join(', ')} ${gone.length === 1 ? 'is' : 'are'} no longer a label of the ad account${moreNote}: not put on ${WORD[s.kind]} ${s.id}.`)
       const next: RecordedLabel[] = [...new Set(s.labelIds)].filter((id) => byId.has(id)).map((id) => ({ id, name: byId.get(id)!.name }))
       const same = next.length === o.labels.length && next.every((l) => o.labels.some((x) => x.id === l.id))
@@ -239,19 +332,27 @@ function objectsDraft(
   before: NonNullable<LabelsRecord['objects']>, after: NonNullable<LabelsRecord['objects']>, live: LabelsLive, warnings: string[],
 ): MetaChangeDraft {
   const { changes, more } = changeLines(lines)
+  // Review A2 — each object's labels added and taken off, against the account's rules that filter on labels.
+  const ids = (labels: RecordedLabel[]) => labels.map((l) => l.id).filter((x): x is string => !!x)
+  const moved = before.map((b, i) => ({
+    key: `${b.kind}:${b.id}`, who: `${WORD[b.kind]} ${quoted(b.name)}(${b.id})`,
+    added: ids(after[i].labels).filter((x) => !ids(b.labels).includes(x)), removed: ids(b.labels).filter((x) => !ids(after[i].labels).includes(x)),
+  }))
+  const effects = live.adRules === undefined ? null : live.adRules === null ? { warnings: [RULES_UNREAD], spends: [], raising: new Set<string>() } : ruleEffects(moved, live.adRules)
   return {
     summary,
     changes,
     totals: { objects: requests.length, ...(more ? { moreLines: more } : {}) },
     warnings: [
       ...warnings,
-      'An ad set\'s labels go as its whole new list (Meta documents no labels edge for an ad set), a campaign\'s added labels by Meta\'s add edge and a campaign\'s removals as its whole new list; each object is read again before it is sent and read back after. Labels never change what an ad spends.',
+      ...(effects?.warnings ?? []),
+      'An ad set\'s labels go as its whole new list (Meta documents no labels edge for an ad set), a campaign\'s added labels by Meta\'s add edge and a campaign\'s removals as its whole new list; each object is read again before it is sent and read back after. A label changes nothing by itself; Meta\'s automated rules that filter on labels act on what carries them (named above when there are any).',
       ...(requests.some((r) => r.kind === 'adset') ? ['Meta has no check for an ad set change.'] : []),
     ],
-    spendsMoney: [],
+    spendsMoney: effects?.spends ?? [],
     skipped,
-    requests,
-    stands: { objects: live.objects.map((o) => ({ kind: o.kind, id: o.id, labels: o.labels.map((l) => l.id).sort() })), labels: live.accountLabels.map((l) => [l.id, l.name]).sort() },
+    requests: requests.map((r) => (effects?.raising.has(`${r.kind}:${r.objectId}`) ? { ...r, raisesSpend: true } : r)),
+    stands: { objects: live.objects.map((o) => ({ kind: o.kind, id: o.id, labels: o.labels.map((l) => l.id).sort() })), labels: live.accountLabels.map((l) => [l.id, l.name]).sort(), rules: live.adRules ?? null },
     before: { op: 'objects', objects: before } satisfies LabelsRecord,
     after: { op: 'objects', objects: after } satisfies LabelsRecord,
   }

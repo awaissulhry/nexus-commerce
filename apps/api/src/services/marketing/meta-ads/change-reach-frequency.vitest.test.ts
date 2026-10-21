@@ -6,7 +6,7 @@
  * request judged by the gateway's exact rule. Made-up ids.
  */
 import { describe, expect, it } from 'vitest'
-import { reachFrequencyDraft, rfBudgetCents, rfBudgetParam, rfResetHours, rfStatusWords, type ReachFrequencyLive, type ReachFrequencyRequest } from './change-reach-frequency.js'
+import { reachFrequencyDraft, reservationUndoState, rfBudgetCents, rfBudgetParam, rfResetHours, rfStatusWords, type ReachFrequencyLive, type ReachFrequencyRequest } from './change-reach-frequency.js'
 import type { MetaChangeDraft } from './change-draft.js'
 import type { LivePrediction, RulesAdSet } from './live-labels-rules.js'
 import { metaWriteVerdict } from '../../gateway/meta-calls.js'
@@ -55,7 +55,8 @@ describe('predict: a quote', () => {
     expect(d.requests[0]).toMatchObject({ objectId: 'act_1234567890', edge: 'reachfrequencypredictions', objectKind: 'adaccount', raisesSpend: false, check: 'none' })
     expect(d.requests[0].params).toEqual({
       prediction_mode: '1', start_time: String(Date.parse('2026-11-01T00:00:00Z') / 1000), stop_time: String(Date.parse('2026-11-15T00:00:00Z') / 1000),
-      target_spec: '{"geo_locations":{"countries":["IT"]}}', destination_ids: JSON.stringify([PAGE]), budget: '500000', frequency_cap: '3',
+      target_spec: '{"geo_locations":{"countries":["IT"]},"publisher_platforms":["facebook"]}', destination_ids: JSON.stringify([PAGE]), budget: '500000', frequency_cap: '3',
+      story_event_type: '0',
     })
     expect(rule(d)).toBe('rf.predict')
     expect(d.spendsMoney).toEqual([])
@@ -65,6 +66,9 @@ describe('predict: a quote', () => {
     const d = ok({ ...PREDICT, mode: 'budget-from-reach', budgetCents: undefined, reach: 1000000, destinations: ['page', 'instagram'], frequencyCapDays: 7, targeting: { country: 'IT', platforms: ['facebook', 'instagram'], instagramPositions: ['stream', 'reels'], genders: ['female'] } })
     expect(d.requests[0].params).toMatchObject({ prediction_mode: '0', reach: '1000000', interval_frequency_cap_reset_period: '168', destination_ids: JSON.stringify([PAGE, IG]) })
     expect(JSON.parse(d.requests[0].params.target_spec)).toEqual({ geo_locations: { countries: ['IT'] }, genders: [2], publisher_platforms: ['facebook', 'instagram'], instagram_positions: ['stream', 'reels'] })
+    // Placements left out: Facebook only — or Facebook and Instagram when the Instagram account is a destination.
+    expect(JSON.parse(ok({ ...PREDICT, destinations: ['page', 'instagram'] }).requests[0].params.target_spec).publisher_platforms).toEqual(['facebook', 'instagram'])
+    expect(ok({ ...PREDICT, videoAds: 'video' }).requests[0].params.story_event_type).toBe('128')
     expect(rule(d)).toBe('rf.predict')
     const t = ok({ ...PREDICT, frequencyCap: undefined, targetFrequency: 2, targetFrequencyDays: 7 })
     expect(t.requests[0].params).toMatchObject({ target_frequency: '2', is_balanced_frequency: 'true', target_frequency_reset_period: '168' })
@@ -99,6 +103,32 @@ describe('reserve: a booking (SPENDS MONEY)', () => {
     expect(no({ action: 'reserve', predictionId: P }, { prediction: { ...READY, reservationStatus: 2, adSetId: S } })).toMatch(/attached to ad set/)
     expect(no({ action: 'reserve', predictionId: P }, { prediction: { ...READY, expiration: Date.parse('2026-10-21T07:00:00Z') / 1000 } })).toMatch(/expired/)
   })
+  it('review A4/A5 — never booked twice; never without an amount to name', () => {
+    expect(no({ action: 'reserve', predictionId: P }, { prediction: { ...READY, reservationStatus: 1 } })).toMatch(/already booked/)
+    expect(no({ action: 'reserve', predictionId: P }, { prediction: { ...READY, budgetCents: null } })).toMatch(/did not answer an amount .*name the point of its curve/)
+    expect(ok({ action: 'reserve', predictionId: P, point: { reach: 900000, budgetCents: 300000, impressions: 2000000 } }, { prediction: { ...READY, budgetCents: null } }).spendsMoney.join(' ')).toMatch(/about 3000\.00 EUR/)
+  })
+  it('review A3 — a released reservation: read, never one an ad set holds, its amount shown, in what the booking stands on, said not to come back', () => {
+    const R = '120000000000091'
+    const released = { ...READY, id: R, reservationStatus: 1, budgetCents: 200000 }
+    expect(no({ action: 'reserve', predictionId: P, releasePredictionId: R })).toMatch(/could not read reservation/)
+    expect(no({ action: 'reserve', predictionId: P, releasePredictionId: R }, { released: { ...released, reservationStatus: 2, adSetId: S } })).toMatch(/attached to ad set 120000000000002/)
+    expect(no({ action: 'reserve', predictionId: P, releasePredictionId: R }, { released: { ...released, reservationStatus: 0 } })).toMatch(/nothing to release/)
+    const d = ok({ action: 'reserve', predictionId: P, releasePredictionId: R }, { released })
+    expect(d.requests[0].params).toMatchObject({ rf_prediction_id_to_release: R })
+    expect(d.warnings.join(' ')).toMatch(/RELEASES reservation 120000000000091 \(about 2000\.00 EUR.*does not bring it back/)
+    expect(d.stands).toMatchObject({ released: { id: R } })
+    expect(d.before).toMatchObject({ noUndo: [expect.stringMatching(/does not come back by undo/)] })
+    expect(rule(d)).toBe('rf.reservation')
+  })
+  it('review A1 — a booking\'s undo stays possible only while it reads reserved, free, not expired, not running', () => {
+    const now = Date.parse('2026-10-21T08:00:00Z') / 1000
+    expect(reservationUndoState({ reservationStatus: 1, adSetId: null, expiration: null, start: READY.start }, now)).toBeNull()
+    expect(reservationUndoState({ reservationStatus: 2, adSetId: S, expiration: null, start: READY.start }, now)).toMatch(/attached to ad set .*let it go first/)
+    expect(reservationUndoState({ reservationStatus: 2, adSetId: S, expiration: null, start: now - 60 }, now)).toMatch(/it runs .*cannot cancel a running reservation/)
+    expect(reservationUndoState({ reservationStatus: 0, adSetId: null, expiration: null, start: READY.start }, now)).toMatch(/not reserved/)
+    expect(reservationUndoState({ reservationStatus: 1, adSetId: null, expiration: now - 1, start: READY.start }, now)).toMatch(/expired/)
+  })
 })
 
 describe('cancel', () => {
@@ -123,6 +153,9 @@ describe('an ad set takes a reservation, or lets it go', () => {
     expect(no({ action: 'attach', adSetId: S, predictionId: P }, { prediction: reserved, adSet: { ...AD_SET, rfPredictionId: '120000000000091' } })).toMatch(/detach it first/)
     expect(no({ action: 'attach', adSetId: S, predictionId: P }, { prediction: reserved, adSet: { ...AD_SET, effectiveStatus: 'ACTIVE' } })).toMatch(/is active/)
     expect(no({ action: 'attach', adSetId: S, predictionId: P }, { prediction: { ...READY, reservationStatus: 0 } })).toMatch(/not a booked reservation/)
+    // Review B4 — only a finished booking (status 1): 2 still pending, 15 not enough inventory.
+    expect(no({ action: 'attach', adSetId: S, predictionId: P }, { prediction: { ...reserved, status: 2 } })).toMatch(/not a finished booking — status: still being worked out/)
+    expect(no({ action: 'attach', adSetId: S, predictionId: P }, { prediction: { ...reserved, status: 15 } })).toMatch(/not enough inventory/)
   })
   it('detach: rf_prediction_id=0; nothing spends; refused while active or with nothing attached', () => {
     const d = ok({ action: 'detach', adSetId: S }, { adSet: { ...AD_SET, rfPredictionId: P } })

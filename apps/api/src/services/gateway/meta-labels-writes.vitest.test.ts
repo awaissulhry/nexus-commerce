@@ -242,8 +242,21 @@ describe('the destructive POST of step 21 (a value rule set\'s delete_rule_set) 
       return out
     }
     const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1')
-    const naming = Object.fromEntries(files(SRC).map((p) => [p.slice(SRC.length + 1), (code(readFileSync(p, 'utf8')).match(/edge: ['"`]delete_rule_set['"`]/g) ?? []).length]).filter(([, n]) => n))
+    const all = files(SRC).map((p) => ({ path: p.slice(SRC.length + 1), text: code(readFileSync(p, 'utf8')) }))
+    const naming = Object.fromEntries(all.map((f) => [f.path, (f.text.match(/edge: ['"`]delete_rule_set['"`]/g) ?? []).length]).filter(([, n]) => n))
     expect(naming).toEqual({ 'services/marketing/meta-ads/change-value-rules.ts': 1 })
+    // Review A6 — the word itself, anywhere in code: a computed edge would need it spelled somewhere else.
+    const word = Object.fromEntries(all.map((f) => [f.path, (f.text.match(/delete_rule_set/g) ?? []).length]).filter(([, n]) => n))
+    expect(word).toEqual({
+      'services/gateway/meta.ts': 1, // the edge's type (MetaLabelsEdge)
+      'services/gateway/meta-labels-rules.ts': 1, // the valueruleset.delete rule's path (a judge)
+      'services/marketing/meta-ads/change-value-rules.ts': 1, // the one request
+    })
+    // And no request builder computes its edge: only the kit passes on a request's own.
+    const builders = all.filter((f) => /^services\/(marketing\/meta-ads\/change-[\w-]+|agents\/tools\/meta-ads-[\w-]+(\.tools)?)\.ts$/.test(f.path))
+    const computed = builders.flatMap((f) => [...f.text.matchAll(/(?<=[{,]\s*)edge:\s*([^,}\n]+)/g)].map((m) => m[1].trim())
+      .filter((v) => !/^(['"`])[a-z_]+\1( as const)?$/.test(v)).map((v) => `${f.path}: ${v}`))
+    expect(computed).toEqual(['services/agents/tools/meta-ads-kit.ts: request.edge'])
     const draft = code(readFileSync(join(SRC, 'services/marketing/meta-ads/change-value-rules.ts'), 'utf8'))
     expect(draft.indexOf('request.confirmDelete !== true')).toBeGreaterThan(0)
     expect(draft.indexOf('request.confirmDelete !== true')).toBeLessThan(draft.indexOf("edge: 'delete_rule_set'"))

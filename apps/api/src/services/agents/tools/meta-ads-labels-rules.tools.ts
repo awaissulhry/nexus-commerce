@@ -19,10 +19,11 @@ import type { MetaChangeDraft, MetaChangeRequest } from '../../marketing/meta-ad
 import { metaChosenAccount, MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
 import { MetaReadError } from '../../marketing/meta-ads/errors.js'
 import { liveAccountCapabilities, liveCampaign } from '../../marketing/meta-ads/live-settings.js'
-import { liveAccountLabels, liveAdSetHasAds, liveLabelCarriers, liveLabelledObject, livePrediction, liveRuleSetUsers, liveRulesAdSet, liveValueRuleSets, type LabelledObject } from '../../marketing/meta-ads/live-labels-rules.js'
-import { LABEL_ACTIONS, labelsDraft, labelsReadBack, type LabelsRecord, type LabelsRequest } from '../../marketing/meta-ads/change-labels.js'
-import { undoRulesOf, VALUE_RULE_ACTIONS, valueRulesDraft, type ValueRulesRecord, type ValueRulesRequest } from '../../marketing/meta-ads/change-value-rules.js'
-import { predictionWords, RF_ACTIONS, RF_VIDEO_ADS, reachFrequencyDraft, type ReachFrequencyRecord, type ReachFrequencyRequest } from '../../marketing/meta-ads/change-reach-frequency.js'
+import { liveAccountLabels, liveAdSetHasAds, liveLabelCarriers, liveLabelledObject, livePrediction, liveRuleSetUsers, liveRulesAdSet, liveValueRuleSets, ruleSetFromRow, type LabelledObject } from '../../marketing/meta-ads/live-labels-rules.js'
+import { LABEL_ACTIONS, labelRulesOf, labelsDraft, labelsReadBack, type LabelRule, type LabelsRecord, type LabelsRequest } from '../../marketing/meta-ads/change-labels.js'
+import { metaAdRules } from '../../marketing/meta-ads/live-optimize.js'
+import { recordedOf, undoRulesOf, VALUE_RULE_ACTIONS, valueRulesDraft, type ValueRulesRecord, type ValueRulesRequest } from '../../marketing/meta-ads/change-value-rules.js'
+import { predictionWords, reservationUndoState, RF_ACTIONS, RF_VIDEO_ADS, reachFrequencyDraft, type ReachFrequencyRecord, type ReachFrequencyRequest } from '../../marketing/meta-ads/change-reach-frequency.js'
 import { createdIdOf, type MetaChangeResult } from '../../marketing/meta-ads/write-client.js'
 import { META_NAME_TEXT, OPTIMIZATION_GOALS, typedTextOk } from '../../gateway/meta-settings-rules.js'
 import {
@@ -77,6 +78,23 @@ const common = {
 
 const labelledArg = z.object({ kind: z.enum(['campaign', 'adset']).describe('campaign or adset'), id: idArg('its Meta id') })
 
+/**
+ * Review A2 — the account's ENABLED automated rules that filter on labels (step 8's reader: live-optimize.ts metaAdRules,
+ * view list), or null when they could not be read in full (said as a warning, never a refusal). A lost token or a throttle
+ * ends the change's read.
+ */
+async function labelRules(connectionId: string): Promise<LabelRule[] | null> {
+  try {
+    const read = await metaAdRules({ connectionId, view: 'list', status: 'ENABLED', maxRows: 500 })
+    if (!('items' in read) || !Array.isArray(read.items) || read.more) return null
+    return labelRulesOf(read.items as unknown as Array<Record<string, unknown>>)
+  } catch (err) {
+    if (err instanceof MetaReadError && (err.failure.authLost || err.failure.throttled)) throw err
+    if (err instanceof MetaReadError || err instanceof MetaLiveRefusal) return null
+    throw err
+  }
+}
+
 const buildLabels = (args: Record<string, unknown>): MetaDraftBuilder => guarded(async (account) => {
   const request = restOf<LabelsRequest>(args)
   const target = account.target
@@ -85,7 +103,8 @@ const buildLabels = (args: Record<string, unknown>): MetaDraftBuilder => guarded
   const objects: LabelledObject[] = []
   for (const o of named) if (!objects.some((x) => x.kind === o.kind && x.id === o.id)) objects.push(await liveLabelledObject(target, o.kind, o.id))
   const carriers = request.action === 'delete' && request.labelId && labels.some((l) => l.id === request.labelId) ? await optional(liveLabelCarriers(target, request.labelId)) : null
-  return labelsDraft(request, { adAccountId: account.adAccountId, accountLabels: labels, accountLabelsMore: more, objects, carriers })
+  const adRules = ['add', 'remove', 'replace', 'delete'].includes(request.action) ? await labelRules(account.accountId) : undefined
+  return labelsDraft(request, { adAccountId: account.adAccountId, accountLabels: labels, accountLabelsMore: more, objects, carriers, ...(adRules !== undefined ? { adRules } : {}) })
 })
 
 function labelsFinish(draft: MetaChangeDraft, done: Done) {
@@ -121,8 +140,9 @@ const labelsUndo: ToolUndo = {
         for (const o of after.objects ?? []) objects.push({ ...o, labels: (await liveLabelledObject(account.target, o.kind, o.id)).labels })
         return { ...after, objects }
       }
-      const { labels } = await liveAccountLabels(account.target)
+      const { labels, more } = await liveAccountLabels(account.target)
       const now = labels.find((l) => l.id === after.label?.id)
+      if (!now && more) return { ...after, label: { id: after.label?.id ?? null, name: null }, unreadable: 'it is not among the first 500 labels Nexus reads, so Nexus cannot see it now' }
       return { ...after, label: now ? { id: now.id, name: now.name } : { id: after.label?.id ?? null, name: null } }
     } catch (err) {
       if (err instanceof MetaLiveRefusal || err instanceof MetaReadError) return null
@@ -176,9 +196,11 @@ const setMetaLabels: AgentTool = {
     + 'them, and there is no undo); put labels on campaigns and ad sets (by id, or by name: a new name is made by Meta), '
     + 'take them off, or set an object\'s whole list. Meta adds a campaign\'s labels with its add edge; an ad set\'s go as '
     + 'its whole list (Meta has no labels edge for an ad set) and so do removals; each object is read first and read back '
-    + 'after. At most 50 labels on one object. Labels of ads and creatives are not here (they come with the ad and creative changes). Labels never '
-    + 'change what an ad spends. Meta has no check for these changes. Undo puts the earlier lists or name back, and deletes '
-    + 'a label it made.'
+    + 'after. At most 50 labels on one object. Labels of ads and creatives are not here (they come with the ad and creative changes). A label '
+    + 'changes nothing by itself, but Meta\'s automated rules can filter on labels: the preview names every ENABLED rule a '
+    + 'change touches, and when that can make the account spend more (an object brought under a rule that switches on or '
+    + 'raises, or taken out of one that pauses or lowers) it is SPENDS MONEY. Meta has no check for these changes. Undo puts '
+    + 'the earlier lists or name back, and deletes a label it made.'
     + META_CHANGE_RULES,
   undo: labelsUndo,
   handler: (args, ctx) => metaChangePreview(args, ctx, buildLabels(args)),
@@ -214,10 +236,17 @@ function valueRulesFinish(draft: MetaChangeDraft, done: Done) {
   const before = draft.before as ValueRulesRecord
   const planned = draft.after as ValueRulesRecord
   const node = done[0].result.node
-  if (planned.op === 'create') {
-    const id = createdIdOf(node)
-    const after: ValueRulesRecord = { ...planned, ruleSet: { ...planned.ruleSet!, id }, ...(id ? {} : { noUndo: ['Meta did not answer the new set\'s id, so undo cannot tell it apart.'] }) }
-    return { data: { ruleSetId: id }, before, after }
+  if (planned.op === 'create' || planned.op === 'change') {
+    // Review A1 — the set as Meta READ IT BACK (rules and criteria with Meta's ids): undo's later read of it then equals the
+    // record while nothing moved. A read-back without rules records none (undo compares the name only).
+    const id = planned.op === 'create' ? createdIdOf(node) : planned.ruleSet?.id ?? null
+    const read = node && node.rules !== undefined && node.rules !== null ? ruleSetFromRow(node) : null
+    const after: ValueRulesRecord = {
+      op: planned.op,
+      ruleSet: { id, name: typeof node?.name === 'string' ? node.name : planned.ruleSet?.name ?? null, rules: read ? read.rules.map(recordedOf) : null },
+      ...(id ? {} : { noUndo: ['Meta did not answer the new set\'s id, so undo cannot tell it apart.'] }),
+    }
+    return { data: { ruleSetId: id, ...(read ? {} : { note: 'Meta did not read the rules back: meta-value-rules shows them.' }) }, before, after }
   }
   if (planned.op === 'translate') {
     // Meta answers a proposal (value_rule_set) and, when one of the account's own matches, its id; nothing was made.
@@ -243,7 +272,8 @@ const valueRulesUndo: ToolUndo = {
       }
       const sets = await liveValueRuleSets(account.target)
       const now = sets.find((s) => s.id === after.ruleSet?.id)
-      return { ...after, ruleSet: now ? { id: now.id, name: now.name, rules: now.rules.map((r) => ({ id: r.id, name: r.name, sign: r.sign, percent: r.percent, criteria: r.criteria.map((c) => ({ type: c.type, values: c.values, valueTypes: c.valueTypes })) })) } : null }
+      // The same view of the set the run recorded (recordedOf of Meta's read); rules only where the record has them.
+      return { ...after, ruleSet: now ? { id: now.id, name: now.name, rules: Array.isArray(after.ruleSet?.rules) ? now.rules.map(recordedOf) : null } : null }
     } catch (err) {
       if (err instanceof MetaLiveRefusal || err instanceof MetaReadError) return null
       throw err
@@ -264,11 +294,14 @@ const valueRulesUndo: ToolUndo = {
         }
         return { tool: 'set-meta-value-rules', args: { ...head, action: 'change', ruleSetId: old.id, name: old.name, rules: undoRulesOf(old.rules, after.ruleSet?.rules ?? []) } }
       }
-      case 'attach':
+      case 'attach': {
         if (!after.adSet) return { refusal: 'This change recorded no ad set.' }
+        // Review A6 — what the undo cannot bring back (legacy bid multipliers removed) rides in its own preview's why.
+        const stays = before.noUndo?.length ? { why: `undo of an earlier Meta value rule change (stays as it is: ${before.noUndo.join(' ')})`.slice(0, 300) } : {}
         return before.adSet?.valueRuleSetId
-          ? { tool: 'set-meta-value-rules', args: { ...head, action: 'attach', adSetId: after.adSet.id, ruleSetId: before.adSet.valueRuleSetId } }
-          : { tool: 'set-meta-value-rules', args: { ...head, action: 'detach', adSetId: after.adSet.id } }
+          ? { tool: 'set-meta-value-rules', args: { ...head, ...stays, action: 'attach', adSetId: after.adSet.id, ruleSetId: before.adSet.valueRuleSetId } }
+          : { tool: 'set-meta-value-rules', args: { ...head, ...stays, action: 'detach', adSetId: after.adSet.id } }
+      }
       case 'detach':
         return before.adSet?.valueRuleSetId ? { tool: 'set-meta-value-rules', args: { ...head, action: 'attach', adSetId: before.adSet.id, ruleSetId: before.adSet.valueRuleSetId } } : { refusal: 'This change recorded no value rule set the ad set used.' }
       case 'translate':
@@ -322,12 +355,14 @@ const buildReachFrequency = (args: Record<string, unknown>): MetaDraftBuilder =>
   const chosen = await metaChosenAccount(account.accountId)
   const capabilities = request.action === 'predict' || request.action === 'reserve' || request.action === 'attach' ? await liveAccountCapabilities(target) : null
   const prediction = (request.action === 'reserve' || request.action === 'cancel' || request.action === 'attach') && request.predictionId ? await livePrediction(target, request.predictionId) : null
+  // Review A3 — the reservation a booking would release, read now (the draft refuses one an ad set holds).
+  const released = request.action === 'reserve' && request.releasePredictionId ? await livePrediction(target, request.releasePredictionId) : null
   const adSet = (request.action === 'attach' || request.action === 'detach') && request.adSetId ? await liveRulesAdSet(target, request.adSetId) : null
   const adSetHasAds = request.action === 'attach' && adSet ? await liveAdSetHasAds(target, adSet.id) : undefined
   const campaignBuyingType = request.action === 'predict' && request.campaignId ? (await liveCampaign(target, request.campaignId)).buyingType : null
   return reachFrequencyDraft(request, {
     adAccountId: account.adAccountId, currency: account.currency, now: new Date(), capabilities, pageId: chosen.pageId, instagramId: chosen.instagramId,
-    prediction, adSet, ...(adSetHasAds !== undefined ? { adSetHasAds } : {}), campaignBuyingType,
+    prediction, released, adSet, ...(adSetHasAds !== undefined ? { adSetHasAds } : {}), campaignBuyingType,
   })
 })
 
@@ -361,10 +396,12 @@ const reachFrequencyUndo: ToolUndo = {
         const a = await liveRulesAdSet(account.target, after.adSetId ?? '')
         return { ...after, adSetPrediction: a.rfPredictionId }
       }
-      const id = after.reservationId ?? after.predictionId
-      if (!id) return after
-      const p = await livePrediction(account.target, id)
-      return { ...after, state: predictionWords(p) }
+      // Review A1 — a booking's undo (a cancel) stays possible while the reservation reads reserved, free (not attached), not
+      // expired and not running: then what is there is what the change made (equal to its record). Otherwise the reason.
+      if (after.op !== 'reserve' || !after.reservationId) return after
+      const p = await livePrediction(account.target, after.reservationId)
+      const moved = reservationUndoState(p, Math.floor(Date.now() / 1000))
+      return moved ? { ...after, state: moved } : after
     } catch (err) {
       if (err instanceof MetaLiveRefusal || err instanceof MetaReadError) return null
       throw err
@@ -377,7 +414,8 @@ const reachFrequencyUndo: ToolUndo = {
     const head = { ...(connection ? { connectionId: connection } : {}), why: 'undo of an earlier Meta reach and frequency change' }
     switch (after.op) {
       case 'reserve':
-        return after.reservationId ? { tool: 'create-meta-reach-frequency', args: { ...head, action: 'cancel', predictionId: after.reservationId } } : { refusal: `There is nothing Nexus can cancel by itself: ${(after.noUndo ?? []).join(' ') || 'the change recorded no reservation id.'}` }
+        // Review A3 — a reservation this booking released does not come back: said in the undo's own preview (its why).
+        return after.reservationId ? { tool: 'create-meta-reach-frequency', args: { ...head, ...(before.noUndo?.length ? { why: `undo of an earlier Meta reach and frequency booking (stays as it is: ${before.noUndo.join(' ')})`.slice(0, 300) } : {}), action: 'cancel', predictionId: after.reservationId } } : { refusal: `There is nothing Nexus can cancel by itself: ${(after.noUndo ?? []).join(' ') || 'the change recorded no reservation id.'}` }
       case 'attach':
         return after.adSetId ? { tool: 'create-meta-reach-frequency', args: { ...head, action: 'detach', adSetId: after.adSetId } } : { refusal: 'This change recorded no ad set.' }
       case 'detach':
@@ -434,7 +472,7 @@ const createMetaReachFrequency: AgentTool = {
     campaignId: metaIdArg('predict: the RESERVED campaign it belongs to').optional(),
     shareAudienceOf: metaIdArg('predict: a prediction whose audience it reuses').optional(),
     existingAdSetId: metaIdArg('predict: a running reservation ad set it re-predicts (SDK only)').optional(),
-    productType: z.enum(RF_PRODUCT_TYPES).optional().describe('predict: Meta\'s product type (SDK only)'),
+    productType: z.enum(RF_PRODUCT_TYPES).optional().describe('predict: Meta\'s product type — STANDARD only (SDK only; the trending and burst products are not offered)'),
     instreamPackages: z.array(z.enum(RF_INSTREAM_PACKAGES)).min(1).max(RF_INSTREAM_PACKAGES.length).optional().describe('predict: in-stream video packages'),
     predictionId: metaIdArg('reserve: the prediction; cancel: the reservation; attach: the reservation (the id Meta answered for the reserve)').optional(),
     point: z.object({

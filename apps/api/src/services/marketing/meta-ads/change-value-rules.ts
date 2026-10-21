@@ -20,6 +20,8 @@ import { valueRulesProblem, VALUE_RULE_CRITERIA_TYPES, VALUE_RULE_PRODUCT_TYPES 
 
 export const VALUE_RULE_ACTIONS = ['create', 'change', 'delete', 'attach', 'detach', 'translate'] as const
 export type ValueRulesAction = typeof VALUE_RULE_ACTIONS[number]
+/** The fields a value rule set is read with — also its read-back after a create or a change (the record keeps Meta's ids). */
+export const VALUE_RULE_SET_FIELDS = 'id,name,status,rules{id,name,adjust_sign,adjust_value,status,criterias}'
 /** Meta's value-rules guide says 6 sets per ad account; its bid-multiplier guide says 20: Nexus refuses past 20 and warns past 6. */
 export const META_RULE_SETS_PER_ACCOUNT = 20
 const META_RULE_SETS_GUIDE = 6
@@ -62,7 +64,8 @@ export interface ValueRulesLive {
 export interface RecordedRule { id: string | null; name: string | null; sign: string | null; percent: number | null; criteria: Array<{ type: string; values: string[]; valueTypes: string[] }> }
 export interface ValueRulesRecord {
   op: ValueRulesAction
-  ruleSet?: { id: string | null; name: string | null; rules?: RecordedRule[] } | null
+  /** after a create or a change: the set as Meta read it back (rules null when Meta did not read them back). */
+  ruleSet?: { id: string | null; name: string | null; rules?: RecordedRule[] | null } | null
   adSet?: { id: string; valueRuleSetId: string | null; legacyBidMultipliers?: unknown }
   noUndo?: string[]
 }
@@ -70,7 +73,8 @@ export interface ValueRulesRecord {
 /** One rule on the wire (bidding/value-rules.md; `criterias` as every example writes it). */
 interface WireRule { id?: string; name: string; adjust_sign: string; adjust_value: number; status?: string; criterias: Array<{ id?: string; criteria_type: string; operator: 'CONTAINS'; criteria_values: string[]; criteria_value_types: string[] }> }
 
-const recordedOf = (r: LiveRule): RecordedRule => ({ id: r.id, name: r.name, sign: r.sign, percent: r.percent, criteria: r.criteria.map((c) => ({ type: c.type, values: c.values, valueTypes: c.valueTypes })) })
+/** A rule as a record keeps it: from the live read before, and from Meta's read-back after (so undo's read equals it). */
+export const recordedOf = (r: LiveRule): RecordedRule => ({ id: r.id, name: r.name, sign: r.sign, percent: r.percent, criteria: r.criteria.map((c) => ({ type: c.type, values: c.values, valueTypes: c.valueTypes })) })
 const wireToRecorded = (r: WireRule): RecordedRule => ({ id: r.id ?? null, name: r.name, sign: r.adjust_sign, percent: r.adjust_value, criteria: r.criterias.map((c) => ({ type: c.criteria_type, values: c.criteria_values, valueTypes: c.criteria_value_types })) })
 const effect = (r: { sign: string | null; percent: number | null }) => (r.sign === 'INCREASE' ? (r.percent ?? 0) : -(r.percent ?? 0))
 const criteriaKey = (r: RecordedRule) => JSON.stringify(r.criteria.map((c) => [c.type, c.values.map((v, i) => `${c.valueTypes[i]}:${v}`).sort()]).sort())
@@ -155,7 +159,7 @@ export function valueRulesDraft(request: ValueRulesRequest, live: ValueRulesLive
         requests: [{
           ...base, step: 1, label: `Make value rule set "${name}"`, kind: 'ad', objectKind: 'adaccount', objectId: `act_${live.adAccountId}`, edge: 'value_rule_set',
           params: { name, rules: wire.value, ...(request.productType ? { product_type: request.productType } : {}) }, operation: 'valueRuleSet.create', undoable: false,
-          expect: { name }, readBackFields: 'id,name',
+          expect: { name }, readBackFields: VALUE_RULE_SET_FIELDS,
         }],
         stands: { sets: live.ruleSets.map((s) => [s.id, s.name]).sort() },
         before: { op: 'create', ruleSet: null } satisfies ValueRulesRecord,
@@ -182,7 +186,7 @@ export function valueRulesDraft(request: ValueRulesRequest, live: ValueRulesLive
       skipped: [],
       requests: [{
         ...base, raisesSpend: spends.length > 0, step: 1, label: `Change value rule set ${quoted(keep!.name)}(${keep!.id})`, kind: 'ad', objectKind: 'valueruleset', objectId: keep!.id,
-        params: { name, rules: wire.value }, operation: 'valueRuleSet.change', undoable: true, expect: { name }, readBackFields: 'id,name',
+        params: { name, rules: wire.value }, operation: 'valueRuleSet.change', undoable: true, expect: { name }, readBackFields: VALUE_RULE_SET_FIELDS,
       }],
       stands: { set: { id: keep!.id, name: keep!.name, rules: old }, users: users.map((u) => [u.id, u.status, u.campaignStatus]).sort() },
       before: { op: 'change', ruleSet: { id: keep!.id, name: keep!.name, rules: old } } satisfies ValueRulesRecord,

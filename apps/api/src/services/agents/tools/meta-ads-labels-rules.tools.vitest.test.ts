@@ -16,11 +16,13 @@ const h = vi.hoisted(() => ({
   adSet: null as Record<string, unknown> | null,
   prediction: null as Record<string, unknown> | null,
   capabilities: ['CAN_USE_REACH_AND_FREQUENCY'] as string[] | null,
+  rules: { items: [] as unknown[], more: false } as { items: unknown[]; more: boolean } | Error,
   check: vi.fn(),
   send: vi.fn(),
 }))
 vi.mock('../../marketing/meta-ads/change-account.js', () => ({ metaChangeAccount: vi.fn(async () => h.account) }))
-vi.mock('../../marketing/meta-ads/live-labels-rules.js', () => ({
+vi.mock('../../marketing/meta-ads/live-labels-rules.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../marketing/meta-ads/live-labels-rules.js')>()),
   liveAccountLabels: vi.fn(async () => ({ labels: structuredClone(h.labels), more: false })),
   liveLabelledObject: vi.fn(async (_t: unknown, kind: string, id: string) => structuredClone(h.objects.get(`${kind}:${id}`))),
   liveLabelCarriers: vi.fn(async () => ({ campaigns: [], adSets: [], ads: [], creatives: [], more: false })),
@@ -34,6 +36,10 @@ vi.mock('../../marketing/meta-ads/live-settings.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/live-settings.js')>()),
   liveAccountCapabilities: vi.fn(async () => h.capabilities),
   liveCampaign: vi.fn(async () => ({ buyingType: 'RESERVED' })),
+}))
+vi.mock('../../marketing/meta-ads/live-optimize.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../marketing/meta-ads/live-optimize.js')>()),
+  metaAdRules: vi.fn(async () => { if (h.rules instanceof Error) throw h.rules; return structuredClone(h.rules) }),
 }))
 vi.mock('../../marketing/meta-ads/live.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/live.js')>()),
@@ -50,6 +56,14 @@ import { META_CHANGE_RULES } from './meta-ads-kit.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
 import { __metaObjectLimitsTest } from '../../gateway/meta-object-limits.js'
 import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
+import { MetaReadError } from '../../marketing/meta-ads/errors.js'
+
+/** What undo compares (change-record.service.ts): one text whatever the order of keys. */
+const canonical = (v: unknown): string => {
+  const sorted = (x: unknown): unknown => (Array.isArray(x) ? x.map(sorted) : x && typeof x === 'object' ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, sorted((x as Record<string, unknown>)[k])])) : x)
+  return JSON.stringify(sorted(JSON.parse(JSON.stringify(v ?? null))))
+}
+const unmoved = async (tool: AgentTool, change: { before: unknown; after: unknown }) => expect(canonical(await tool.undo!.current(change))).toBe(canonical(change.after))
 
 const [labelsTool, rulesTool, rfTool] = META_ADS_LABELS_RULES_TOOLS
 const asker: ToolContext = { can: () => true, via: 'claude', userId: 'u-claude-user' }
@@ -91,6 +105,7 @@ beforeEach(() => {
   h.adSet = structuredClone(AD_SET)
   h.prediction = { id: P, status: 1, predictionMode: 1, reservationStatus: 0, adSetId: null, campaignId: null, start: 4070908800, stop: 4072118400, expiration: null, budgetCents: 500000, reach: 1200000, impressions: 3600000, frequencyCap: 3, intervalFrequencyCap: null, intervalResetHours: null, destinationId: null, instagramDestinationId: null, unread: [] }
   h.capabilities = ['CAN_USE_REACH_AND_FREQUENCY']
+  h.rules = { items: [], more: false }
 })
 
 describe('the change contract', () => {
@@ -140,6 +155,28 @@ describe('set-meta-labels', () => {
     const undo = undoOf(labelsTool, r.change)
     expect(undo).toMatchObject({ tool: 'set-meta-labels', args: { action: 'replace', sets: [{ kind: 'campaign', id: C, labelIds: [L1] }, { kind: 'adset', id: S, labelIds: [] }], connectionId: 'm-1' } })
   })
+  it('review A1 — a replace (what undo sends) is recorded as read back: undo\'s read equals it while nothing moved', async () => {
+    const args = { action: 'replace', sets: [{ kind: 'adset', id: S, labelIds: [L1, L2] }] }
+    const p = (await preview(labelsTool, args)).preview
+    h.send.mockImplementationOnce(async () => ({ node: { id: S, adlabels: [{ id: L2, name: 'Summer' }, { id: L1, name: 'Spring' }] }, readBack: 'second-read', waitedMs: 0 }))
+    const r = await run(labelsTool, args, p)
+    h.objects.set(`adset:${S}`, { kind: 'adset', id: S, name: 'Ad set B', status: 'PAUSED', labels: [{ id: L2, name: 'Summer' }, { id: L1, name: 'Spring' }] })
+    await unmoved(labelsTool, r.change)
+    h.objects.set(`adset:${S}`, { kind: 'adset', id: S, name: 'Ad set B', status: 'PAUSED', labels: [] })
+    expect(canonical(await labelsTool.undo!.current(r.change))).not.toBe(canonical(r.change.after))
+  })
+  it('review A2 — an ENABLED rule filtering on an added label is named and SPENDS MONEY; a rules read that failed is a warning', async () => {
+    h.rules = { items: [{ ruleId: '120000000000060', name: 'Scale winners', status: 'ENABLED', canRaiseSpend: true, action: { type: 'CHANGE_BUDGET', text: 'changes ad set budgets' }, filters: [{ field: 'adlabel_ids', operator: 'ANY', value: [L2] }] }], more: false }
+    const r = await preview(labelsTool, { action: 'add', objects: [{ kind: 'adset', id: S }], labelIds: [L2] })
+    expect(r.preview).toMatchObject({ spendsMoney: true, spendsMoneyBecause: [expect.stringMatching(/"Scale winners"/)] })
+    h.rules = new MetaReadError({ origin: 'meta', sentence: 'Meta refused it.', code: '100' } as never, 'rules.library', 1)
+    const failed = await preview(labelsTool, { action: 'add', objects: [{ kind: 'adset', id: S }], labelIds: [L2] })
+    expect(failed.ok).toBe(true)
+    expect(failed.preview.warnings.join(' ')).toMatch(/could not read the ad account's automated rules/)
+    // A rename or a create touches no rule: the rules are not read.
+    h.rules = new Error('not read')
+    expect((await preview(labelsTool, { action: 'rename', labelId: L1, name: 'Spring sale' })).ok).toBe(true)
+  })
   it('a list read back otherwise is not confirmed (no record, no undo)', async () => {
     const args = { action: 'add', objects: [{ kind: 'adset', id: S }], labelIds: [L2] }
     const p = (await preview(labelsTool, args)).preview
@@ -180,14 +217,41 @@ describe('set-meta-value-rules', () => {
   it('create: the new set\'s id recorded, its undo deletes it; a change\'s undo sends the earlier rules', async () => {
     const rules = [{ name: 'Desktop', adjust: 'DECREASE', percent: 20, criteria: [{ type: 'DEVICE_PLATFORM', values: ['DESKTOP'] }] }]
     const p = (await preview(rulesTool, { action: 'create', name: 'Set B', rules })).preview
-    h.send.mockImplementationOnce(async () => ({ node: { id: '120000000000081', name: 'Set B' }, readBack: 'second-read', waitedMs: 0 }))
+    const madeSet = { id: '120000000000081', name: 'Set B', rules: { data: [{ id: '120000000000088', name: 'Desktop', adjust_sign: 'DECREASE', adjust_value: 20, status: 'ACTIVE', criterias: { data: [{ id: '120000000000089', criteria_type: 'DEVICE_PLATFORM', operator: 'CONTAINS', criteria_values: ['DESKTOP'], criteria_value_types: ['NONE'] }] } }] } }
+    h.send.mockImplementationOnce(async () => ({ node: madeSet, readBack: 'second-read', waitedMs: 0 }))
     const made = await run(rulesTool, { action: 'create', name: 'Set B', rules }, p)
+    expect(h.send.mock.calls[0][1]).toMatchObject({ readBackFields: 'id,name,status,rules{id,name,adjust_sign,adjust_value,status,criterias}' })
+    // Review A1 — Meta's read-back is the record (its ids): undo's read of the set equals it while nothing moved.
+    expect(made.change.after.ruleSet).toEqual({ id: '120000000000081', name: 'Set B', rules: [{ id: '120000000000088', name: 'Desktop', sign: 'DECREASE', percent: 20, criteria: [{ type: 'DEVICE_PLATFORM', values: ['DESKTOP'], valueTypes: ['NONE'] }] }] })
+    h.sets = [...h.sets, { id: '120000000000081', name: 'Set B', status: 'ACTIVE', productType: null, rules: [{ id: '120000000000088', name: 'Desktop', sign: 'DECREASE', percent: 20, status: 'ACTIVE', criteria: [{ id: '120000000000089', type: 'DEVICE_PLATFORM', values: ['DESKTOP'], valueTypes: ['NONE'] }] }] }]
+    await unmoved(rulesTool, made.change)
     expect(undoOf(rulesTool, made.change)).toMatchObject({ args: { action: 'delete', ruleSetId: '120000000000081', confirmDelete: true } })
-    const change = { action: 'change', ruleSetId: SET, rules: [{ ruleId: '120000000000082', name: 'Young', adjust: 'INCREASE', percent: 40, criteria: [{ type: 'AGE', values: ['18-24'] }] }] }
+    // A change that ADDS a rule (Meta gives it an id): recorded as Meta read it back, so undo can run.
+    const change = { action: 'change', ruleSetId: SET, rules: [{ ruleId: '120000000000082', name: 'Young', adjust: 'INCREASE', percent: 40, criteria: [{ type: 'AGE', values: ['18-24'] }] }, { name: 'Men', adjust: 'DECREASE', percent: 10, criteria: [{ type: 'GENDER', values: ['MALE'] }] }] }
     const q = (await preview(rulesTool, change)).preview
-    h.send.mockImplementationOnce(async () => ({ node: { id: SET, name: 'Set A' }, readBack: 'second-read', waitedMs: 0 }))
+    const readBack = { id: SET, name: 'Set A', rules: { data: [
+      { id: '120000000000082', name: 'Young', adjust_sign: 'INCREASE', adjust_value: 40, status: 'ACTIVE', criterias: { data: [{ id: '120000000000083', criteria_type: 'AGE', operator: 'CONTAINS', criteria_values: ['18-24'], criteria_value_types: ['NONE'] }] } },
+      // Meta reads GENDER back lower case (its guide's read example): read as written.
+      { id: '120000000000095', name: 'Men', adjust_sign: 'DECREASE', adjust_value: 10, status: 'ACTIVE', criterias: { data: [{ id: '120000000000096', criteria_type: 'GENDER', operator: 'CONTAINS', criteria_values: ['male'], criteria_value_types: ['NONE'] }] } },
+    ] } }
+    h.send.mockImplementationOnce(async () => ({ node: readBack, readBack: 'second-read', waitedMs: 0 }))
     const changed = await run(rulesTool, change, q)
+    expect(changed.change.after.ruleSet.rules.map((r: { id: string; criteria: Array<{ values: string[] }> }) => [r.id, r.criteria[0].values])).toEqual([['120000000000082', ['18-24']], ['120000000000095', ['MALE']]])
+    h.sets = [{ id: SET, name: 'Set A', status: 'ACTIVE', productType: null, rules: [
+      { id: '120000000000082', name: 'Young', sign: 'INCREASE', percent: 40, status: 'ACTIVE', criteria: [{ id: '120000000000083', type: 'AGE', values: ['18-24'], valueTypes: ['NONE'] }] },
+      { id: '120000000000095', name: 'Men', sign: 'DECREASE', percent: 10, status: 'ACTIVE', criteria: [{ id: '120000000000096', type: 'GENDER', values: ['MALE'], valueTypes: ['NONE'] }] },
+    ] }]
+    await unmoved(rulesTool, changed.change)
     expect(undoOf(rulesTool, changed.change)).toMatchObject({ args: { action: 'change', ruleSetId: SET, name: 'Set A', rules: [{ ruleId: '120000000000082', percent: 20 }] } })
+    // The rule the change added is not in the earlier set: undo's whole set leaves it out (Meta removes it).
+    expect((undoOf(rulesTool, changed.change).args.rules as unknown[])).toHaveLength(1)
+  })
+  it('review A6 — an attach that removed legacy multipliers: its undo says in its own why that they are not restored', () => {
+    const change = {
+      before: { op: 'attach', adSet: { id: S, valueRuleSetId: null, legacyBidMultipliers: { age: { '18-24': 0.5 } } }, noUndo: ['Meta: removing the legacy bid multipliers cannot be undone by Nexus (the record keeps them as they were).'] },
+      after: { op: 'attach', adSet: { id: S, valueRuleSetId: SET }, accountId: 'm-1' },
+    }
+    expect(undoOf(rulesTool, change)).toMatchObject({ args: { action: 'detach', adSetId: S, why: expect.stringMatching(/stays as it is: Meta: removing the legacy bid multipliers cannot be undone/) } })
   })
   it('translate: nothing made, the proposal answered; no undo', async () => {
     h.adSet = { ...AD_SET, legacyBidMultipliers: { age: { '18-24': 0.5 } } }
@@ -209,6 +273,11 @@ describe('create-meta-reach-frequency', () => {
     expect(r.data).toMatchObject({ reservationId: R })
     expect(r.data.steps[0].sentence).toMatch(/Meta made it\./)
     expect(undoOf(rfTool, r.change)).toMatchObject({ args: { action: 'cancel', predictionId: R } })
+    // Review A1 — while the reservation reads reserved and free, undo's read equals the record; attached, it says why not.
+    h.prediction = { ...h.prediction!, id: R, reservationStatus: 1 }
+    await unmoved(rfTool, r.change)
+    h.prediction = { ...h.prediction!, reservationStatus: 2, adSetId: S }
+    expect(await rfTool.undo!.current(r.change)).toMatchObject({ state: expect.stringMatching(/attached to ad set 120000000000002/) })
   })
   it('predict: a quote (nothing spends), the chosen Page as destination; its run has no undo', async () => {
     const args = { action: 'predict', mode: 'reach-from-budget', budgetCents: 500000, startTime: '2099-01-01T00:00:00Z', stopTime: '2099-01-10T00:00:00Z', frequencyCap: 2, targeting: { country: 'IT' } }

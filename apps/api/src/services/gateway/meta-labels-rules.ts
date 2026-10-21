@@ -80,8 +80,12 @@ export const RF_FACEBOOK_POSITIONS = ['feed', 'right_hand_column', 'instream_vid
 export const RF_INSTAGRAM_POSITIONS = ['stream', 'story', 'explore', 'explore_home', 'reels'] as const
 export const RF_DEVICE_PLATFORMS = ['mobile', 'desktop'] as const
 export const RF_STORY_EVENT_TYPES = [0, 128, 256, 384] as const
-/** SDK ReachFrequencyPrediction.ProductType. */
-export const RF_PRODUCT_TYPES = ['STANDARD', 'ADS_BURST', 'ADS_SUPER_BURST', 'REELS_TRENDING_ADS'] as const
+/**
+ * SDK ReachFrequencyPrediction.ProductType names STANDARD, ADS_BURST, ADS_SUPER_BURST and REELS_TRENDING_ADS. Nexus offers
+ * STANDARD only (review B6): REELS_TRENDING_ADS needs trending_topics_spec (a Meta-granted product Nexus never sends), and
+ * the burst products are documented nowhere beyond their names.
+ */
+export const RF_PRODUCT_TYPES = ['STANDARD'] as const
 /** reachfrequencypredictions.md instream_packages, without REGULAR_POLITICS (no political ads from Nexus). */
 export const RF_INSTREAM_PACKAGES = [
   'NORMAL', 'PREMIUM', 'SPORTS', 'ENTERTAINMENT', 'BEAUTY', 'FOOD', 'SPANISH', 'REGULAR_ANIMALS_PETS', 'REGULAR_FOOD', 'REGULAR_GAMES',

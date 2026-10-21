@@ -17,7 +17,10 @@
  *            reservation; undo: detach. SPENDS MONEY once the ad set is on and its time comes.
  *   detach   POST /<ad set> rf_prediction_id=0 (reservation.md "Detach predictions") — only before the ad set is active.
  * Meta grants reservation buying per ad account (CAN_USE_REACH_AND_FREQUENCY): without it the preview says so, and if Nexus
- * could not read the grant, Meta's refusal (1487680) answers in its words. Meta has no check (validate_only) for any of these.
+ * could not read the grant, Meta's refusal answers in its words. Meta has no check (validate_only) for any of these.
+ * The error codes named below (1487581, 1487583, 1487671, 1487680) are on marketing-api/reservation.md "Error codes"
+ * (checked 2026-10-21): an active ad set's reservation cannot change; an ad set with no ads cannot take one; no direct move
+ * from one reservation to another; no permission for reservation ad sets.
  */
 import type { MetaChangeDraft } from './change-draft.js'
 import type { LivePrediction, RulesAdSet } from './live-labels-rules.js'
@@ -81,6 +84,8 @@ export interface ReachFrequencyLive {
   instagramId: string | null
   /** reserve, cancel, attach: the prediction or reservation named, now. */
   prediction?: LivePrediction | null
+  /** reserve with releasePredictionId: the reservation it releases, now. */
+  released?: LivePrediction | null
   /** attach, detach: the ad set, now (and whether it has an ad). */
   adSet?: RulesAdSet | null
   adSetHasAds?: boolean
@@ -134,7 +139,7 @@ export function reachFrequencyDraft(request: ReachFrequencyRequest, live: ReachF
   const act = `act_${live.adAccountId}`
   const granted = live.capabilities === null ? null : live.capabilities.includes(RF_CAPABILITY)
   const grantWords = 'Meta has not granted reach and frequency (reservation) buying to this ad account (its capabilities lack CAN_USE_REACH_AND_FREQUENCY): Meta switches it on per account (ask a Meta sales representative).'
-  const grantUnknown = granted === null ? ['Nexus could not read whether Meta granted reservation buying to this account: if not, Meta refuses in its own words (1487680).'] : []
+  const grantUnknown = granted === null ? ['Nexus could not read whether Meta granted reservation buying to this account: if not, Meta refuses in its own words (reservation.md error 1487680: no permission to use reservation ad sets).'] : []
   const noCheck = 'Meta has no check for reach and frequency changes: the run reads the live state again first and sends nothing if it moved.'
 
   if (request.action === 'predict') {
@@ -171,13 +176,16 @@ export function reachFrequencyDraft(request: ReachFrequencyRequest, live: ReachF
       if (!id) return { refusal: d === 'page' ? 'No Facebook Page is chosen for this business (Settings › Channels › Meta): a prediction names the Page its ads come from.' : 'No Instagram account is chosen for this business: leave instagram out of destinations, or choose one first (set-meta-connection).' }
       destinationIds.push(id)
     }
-    if (t.platforms?.includes('instagram') && !destinations.includes('instagram')) return { refusal: 'Instagram placements need the chosen Instagram account among the destinations (Meta: destination_ids with the Instagram account).' }
+    // Review B5 — placements left out: Facebook only, or Facebook and Instagram when the chosen Instagram account is a
+    // destination (Meta: "include the Instagram account ID if instagramstream placement is used").
+    const platforms = t.platforms?.length ? [...new Set(t.platforms)] : destinations.includes('instagram') ? ['facebook', 'instagram'] : ['facebook']
+    if (platforms.includes('instagram') && !destinations.includes('instagram')) return { refusal: 'Instagram placements need the chosen Instagram account among the destinations (Meta: destination_ids with the Instagram account).' }
     const target = {
       geo_locations: { countries: [t.country] },
       ...(t.ageMin !== undefined ? { age_min: t.ageMin } : {}),
       ...(t.ageMax !== undefined ? { age_max: t.ageMax } : {}),
       ...(t.genders?.length ? { genders: [...new Set(t.genders)].map((g) => (g === 'male' ? 1 : 2)) } : {}),
-      ...(t.platforms?.length ? { publisher_platforms: [...new Set(t.platforms)] } : {}),
+      publisher_platforms: platforms,
       ...(t.facebookPositions?.length ? { facebook_positions: [...new Set(t.facebookPositions)] } : {}),
       ...(t.instagramPositions?.length ? { instagram_positions: [...new Set(t.instagramPositions)] } : {}),
       ...(t.devices?.length ? { device_platforms: [...new Set(t.devices)] } : {}),
@@ -198,7 +206,8 @@ export function reachFrequencyDraft(request: ReachFrequencyRequest, live: ReachF
       ...(request.optimizationGoal ? { optimization_goal: request.optimizationGoal } : {}),
       ...(request.dayParting ? { day_parting_schedule: JSON.stringify([{ start_minute: request.dayParting.startMinute, end_minute: request.dayParting.endMinute, days: [...new Set(request.dayParting.days)].sort(), ...(request.dayParting.timezone ? { timezone_type: request.dayParting.timezone } : {}) }]) } : {}),
       ...(request.curvePoints !== undefined ? { num_curve_points: String(request.curvePoints) } : {}),
-      ...(request.videoAds ? { story_event_type: String(RF_VIDEO_ADS[request.videoAds]) } : {}),
+      // Review B5 — always sent (Meta requires it when every mobile device is targeted): 0 unless video or canvas ads are named.
+      story_event_type: String(RF_VIDEO_ADS[request.videoAds ?? 'none']),
       ...(request.campaignId ? { campaign_group_id: request.campaignId } : {}),
       ...(request.shareAudienceOf ? { rf_prediction_id_to_share: request.shareAudienceOf } : {}),
       ...(request.existingAdSetId ? { existing_campaign_id: request.existingAdSetId } : {}),
@@ -237,8 +246,17 @@ export function reachFrequencyDraft(request: ReachFrequencyRequest, live: ReachF
       if (granted === false) return { refusal: grantWords }
       if (p.status !== 1) return { refusal: `Prediction ${p.id} is not ready to book — ${state}.` }
       if (p.reservationStatus === 2) return { refusal: `Prediction ${p.id} is attached to ad set ${p.adSetId ?? '(not said)'} already: nothing to book.` }
+      // Review A4 — a reservation already booked is not booked twice.
+      if (p.reservationStatus === 1) return { refusal: `${p.id} is already booked (reserved): nothing to book again. Give it to an ad set (action attach), or cancel it.` }
       if (p.expiration && p.expiration <= nowSec) return { refusal: `Prediction ${p.id} expired at ${day(p.expiration)}: predict again.` }
       const point = request.point
+      // Review A5 — the spending line names the amount: Meta's predicted budget, or the point of its curve named.
+      if (!point && rfBudgetCents(p.budgetCents, live.currency) === null) return { refusal: `Meta did not answer an amount for prediction ${p.id} (external_budget): name the point of its curve to book (point: reach, budgetCents, impressions) so the booking names what it costs.` }
+      // Review A3 — a reservation this booking releases: read now, never one an ad set holds; it does not come back by undo.
+      const released = request.releasePredictionId ? live.released ?? null : null
+      if (request.releasePredictionId && !released) return { refusal: `Nexus could not read reservation ${request.releasePredictionId} that this booking would release.` }
+      if (released && (released.adSetId || released.reservationStatus === 2)) return { refusal: `Reservation ${released.id} is attached to ad set ${released.adSetId ?? '(not said)'}: Nexus releases only a reservation no ad set holds (detach it first).` }
+      if (released && released.reservationStatus !== 1) return { refusal: `${released.id} is not a booked reservation (${released.reservationStatus === null ? 'no reservation state' : RESERVATION_WORDS[released.reservationStatus] ?? `reservation status ${released.reservationStatus}`}): there is nothing to release.` }
       let pointBudget: string | null = null
       try { if (point) pointBudget = rfBudgetParam(point.budgetCents, live.currency) } catch (err) { if (err instanceof MetaUnitError) return { refusal: err.message }; throw err }
       const plan = planWords(p, live.currency, point)
@@ -249,7 +267,7 @@ export function reachFrequencyDraft(request: ReachFrequencyRequest, live: ReachF
         totals: { reservations: 1 },
         warnings: [
           'Only book what you intend to run: Meta reserves real inventory. Once the campaign runs it cannot be paused or cancelled this way (delete its campaign to stop it; delivered impressions are charged). Undo cancels the reservation while it does not run.',
-          ...(request.releasePredictionId ? [`It releases reservation ${request.releasePredictionId} (its audience is reused for this one).`] : []),
+          ...(released ? [`It RELEASES reservation ${released.id} (${planWords(released, live.currency)}): its audience is reused for this one, and undo of this booking does not bring it back.`] : []),
           ...grantUnknown, noCheck,
         ],
         spendsMoney: spends,
@@ -263,8 +281,8 @@ export function reachFrequencyDraft(request: ReachFrequencyRequest, live: ReachF
           },
           operation: 'rf.reserve', raisesSpend: true, undoable: false, readBackFields: 'id,status,reservation_status',
         }],
-        stands: { prediction: p },
-        before: { op: 'reserve', predictionId: p.id, reservationId: null } satisfies ReachFrequencyRecord,
+        stands: { prediction: p, released },
+        before: { op: 'reserve', predictionId: p.id, reservationId: null, ...(released ? { noUndo: [`Reservation ${released.id} released by this booking does not come back by undo: book it again (a new reservation).`] } : {}) } satisfies ReachFrequencyRecord,
         after: { op: 'reserve', predictionId: p.id, reservationId: null } satisfies ReachFrequencyRecord,
       }
     }
@@ -295,7 +313,7 @@ export function reachFrequencyDraft(request: ReachFrequencyRequest, live: ReachF
   const a = live.adSet
   if (!request.adSetId || !a) return { refusal: `An ${request.action} names the ad set (adSetId).` }
   const who = `ad set ${a.name ? `"${a.name}" ` : ''}(${a.id})`
-  if (a.effectiveStatus === 'ACTIVE') return { refusal: `${who} is active: Meta changes the reservation of an active ad set never (1487581) — pause it first (set-meta-status) and ask again.` }
+  if (a.effectiveStatus === 'ACTIVE') return { refusal: `${who} is active: Meta never changes the reservation of an active ad set (reservation.md, error 1487581) — pause it first (set-meta-status) and ask again.` }
   if (request.action === 'detach') {
     if (!a.rfPredictionId) return { refusal: `Nothing to change: ${who} has no reservation.` }
     return {
@@ -316,8 +334,10 @@ export function reachFrequencyDraft(request: ReachFrequencyRequest, live: ReachF
   if (!request.predictionId || !p) return { refusal: 'An attach names the reservation (predictionId: the id Meta answered for a reserve).' }
   if (granted === false) return { refusal: grantWords }
   if (a.campaign.buyingType !== 'RESERVED') return { refusal: `${who} is in a campaign that buys by ${a.campaign.buyingType ?? 'auction'}: a reservation goes only to an ad set of a campaign made with buyingType RESERVED (create-meta-campaign).` }
-  if (a.rfPredictionId) return { refusal: `${who} has reservation ${a.rfPredictionId} already: Meta never moves an ad set from one to another directly (1487671) — detach it first (action detach).` }
-  if (live.adSetHasAds === false) return { refusal: `${who} has no ad: Meta gives a reservation only to an ad set with an ad (1487583). Add one first.` }
+  if (a.rfPredictionId) return { refusal: `${who} has reservation ${a.rfPredictionId} already: Meta never moves an ad set from one to another directly (reservation.md, error 1487671) — detach it first (action detach).` }
+  if (live.adSetHasAds === false) return { refusal: `${who} has no ad: Meta gives a reservation only to an ad set with an ad (reservation.md, error 1487583). Add one first.` }
+  // Review B4 — only a booking Meta finished (status 1): 2 is still pending, 15 found not enough inventory.
+  if (p.status !== 1) return { refusal: `${p.id} is not a finished booking — status: ${rfStatusWords(p.status)}. Attach it once it reads ready (ask again).` }
   if (p.reservationStatus !== null && p.reservationStatus !== 1) return { refusal: `${p.id} is not a booked reservation free to take (${RESERVATION_WORDS[p.reservationStatus] ?? `reservation status ${p.reservationStatus}`}): book a prediction first (action reserve).` }
   const nowSec = Math.floor(live.now.getTime() / 1000)
   if (p.expiration && p.expiration <= nowSec) return { refusal: `Reservation ${p.id} expired at ${day(p.expiration)}: Meta holds inventory about an hour. Predict and book again.` }
@@ -343,6 +363,21 @@ export function reachFrequencyDraft(request: ReachFrequencyRequest, live: ReachF
     before: { op: 'attach', adSetId: a.id, predictionId: p.id, adSetPrediction: null } satisfies ReachFrequencyRecord,
     after: { op: 'attach', adSetId: a.id, predictionId: p.id, adSetPrediction: p.id } satisfies ReachFrequencyRecord,
   }
+}
+
+/**
+ * Review A1 — why a booking's undo (a cancel) can no longer run, or null while it can: the reservation still reads reserved
+ * (reservation_status 1), attached to no ad set, not expired and not running.
+ */
+export function reservationUndoState(p: Pick<LivePrediction, 'reservationStatus' | 'adSetId' | 'expiration' | 'start'>, nowSec: number): string | null {
+  if (p.adSetId || p.reservationStatus === 2) {
+    return p.start && p.start <= nowSec
+      ? `it runs (ad set ${p.adSetId ?? '?'}, since ${day(p.start)}): Meta cannot cancel a running reservation — delete its campaign to stop it`
+      : `it is attached to ad set ${p.adSetId ?? '?'}: let it go first (undo of that attach), then cancel it`
+  }
+  if (p.reservationStatus !== 1) return `it reads ${p.reservationStatus === null ? 'no reservation state' : RESERVATION_WORDS[p.reservationStatus] ?? `reservation status ${p.reservationStatus}`}, not reserved`
+  if (p.expiration && p.expiration <= nowSec) return `it expired at ${day(p.expiration)}`
+  return null
 }
 
 /** A prediction's or reservation's state in words, for an answer. */

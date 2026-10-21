@@ -13,6 +13,7 @@ import { MetaReadError } from './errors.js'
 import { MetaLiveRefusal } from './live.js'
 import { AD_LIST_STATUSES, ADSET_LIST_STATUSES, MAX_ROWS, listGroups, listPaged, readGroups } from './live-objects.js'
 import type { MetaSettingsTarget } from './live-settings.js'
+import { VALUE_RULE_SET_FIELDS } from './change-value-rules.js'
 
 type Row = Record<string, unknown>
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : null)
@@ -86,26 +87,34 @@ export interface LiveCriterion { id: string | null; type: string; values: string
 export interface LiveRule { id: string | null; name: string | null; sign: 'INCREASE' | 'DECREASE' | null; percent: number | null; status: string | null; criteria: LiveCriterion[] }
 export interface LiveRuleSet { id: string; name: string | null; status: string | null; productType: string | null; rules: LiveRule[] }
 
-const ruleSetOf = (r: Row): LiveRuleSet => ({
+/**
+ * One value rule set as Meta answers it (a list row, or a read-back of one set): its rules and criteria with their ids.
+ * GENDER values come back lower case ("male", bidding/value-rules.md read example) though they are written MALE / FEMALE:
+ * read as written, so a set read again equals what a change recorded.
+ */
+export const ruleSetFromRow = (r: Row): LiveRuleSet => ({
   id: text(r.id) ?? '', name: text(r.name), status: text(r.status), productType: text(r.product_type),
   rules: rowsOf(r.rules).map((rule) => {
     const sign = text(rule.adjust_sign)
     return {
       id: text(rule.id), name: text(rule.name), sign: sign === 'INCREASE' || sign === 'DECREASE' ? sign : null, percent: num(rule.adjust_value), status: text(rule.status),
-      criteria: rowsOf(rule.criterias).map((c) => ({ id: text(c.id), type: text(c.criteria_type) ?? '', values: strings(c.criteria_values), valueTypes: strings(c.criteria_value_types) })),
+      criteria: rowsOf(rule.criterias).map((c) => {
+        const type = text(c.criteria_type) ?? ''
+        return { id: text(c.id), type, values: strings(c.criteria_values).map((v) => (type === 'GENDER' ? v.toUpperCase() : v)), valueTypes: strings(c.criteria_value_types) }
+      }),
     }
   }),
 })
 
 const RULE_SET_GROUPS = [
-  { name: 'core', fields: 'id,name,status,rules{id,name,adjust_sign,adjust_value,status,criterias}' },
+  { name: 'core', fields: VALUE_RULE_SET_FIELDS },
   { name: 'sdk', fields: 'product_type' },
 ]
 
 /** The chosen ad account's value rule sets with their rules (AS-091; Meta allows 20 per account). */
 export async function liveValueRuleSets(target: MetaSettingsTarget): Promise<LiveRuleSet[]> {
   const read = await listGroups(target.connectionId, 'valueRules.read.sets', `act_${target.adAccountId}/value_rule_set`, RULE_SET_GROUPS, {}, 100)
-  return read.rows.map(ruleSetOf).filter((s) => !!s.id)
+  return read.rows.map(ruleSetFromRow).filter((s) => !!s.id)
 }
 
 /** One ad set of the account as a value-rule or reservation change needs it, with its campaign. */
@@ -166,7 +175,7 @@ export async function liveRuleSetUsers(target: MetaSettingsTarget): Promise<{ us
   return { users, more: read.more }
 }
 
-/** Does an ad set have at least one ad that is not deleted (Meta: an ad set with no ads cannot take a reservation, 1487583)? */
+/** Does an ad set have at least one ad that is not deleted (marketing-api/reservation.md "Error codes", 1487583: an ad set with no ads cannot be assigned a reservation)? */
 export async function liveAdSetHasAds(target: MetaSettingsTarget, adSetId: string): Promise<boolean> {
   const read = await listPaged(target.connectionId, 'rf.read.adset.ads', `${adSetId}/ads`, { fields: 'id', effective_status: [...AD_LIST_STATUSES] }, 1)
   return read.rows.length > 0

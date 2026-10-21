@@ -5,7 +5,7 @@
  * Made-up ids.
  */
 import { describe, expect, it } from 'vitest'
-import { labelEntries, labelsDraft, labelsReadBack, type LabelsLive, type LabelsRequest } from './change-labels.js'
+import { labelEntries, labelRulesOf, labelsDraft, labelsReadBack, type LabelRule, type LabelsLive, type LabelsRequest } from './change-labels.js'
 import type { MetaChangeDraft, MetaChangeRequest } from './change-draft.js'
 import { readBackMismatch } from './write-client.js'
 import { metaWriteVerdict } from '../../gateway/meta-calls.js'
@@ -102,6 +102,49 @@ describe('labels of campaigns and ad sets', () => {
     expect(d.requests[0].params.adlabels).toBe(JSON.stringify([{ id: L2 }]))
     expect(d.warnings.join(' ')).toMatch(/5555555555 is no longer a label of the ad account/)
     expect(d.skipped).toEqual(['campaign "Campaign A" (120000000000001) carries exactly these labels already.'])
+  })
+})
+
+describe('review A2 — Meta\'s automated rules that filter on labels', () => {
+  const raise: LabelRule = { id: '120000000000060', name: 'Scale winners', actionText: 'changes ad set budgets', canRaiseSpend: true, lowers: false, filters: [{ operator: 'ANY', labelIds: [L2] }] }
+  const pause: LabelRule = { id: '120000000000061', name: 'Stop losers', actionText: 'pauses the matching objects', canRaiseSpend: false, lowers: true, filters: [{ operator: 'ANY', labelIds: [L1] }] }
+  it('from step 8\'s mapped rules: ENABLED ones with an adlabel_ids filter only', () => {
+    expect(labelRulesOf([
+      { ruleId: '1', name: 'A', status: 'ENABLED', canRaiseSpend: true, action: { type: 'UNPAUSE', text: 'switches the matching objects on' }, filters: [{ field: 'adlabel_ids', operator: 'any', value: [L1, 1200] }, { field: 'entity_type', operator: 'EQUAL', value: 'ADSET' }] },
+      { ruleId: '2', name: 'B', status: 'DISABLED', canRaiseSpend: true, action: { type: 'UNPAUSE' }, filters: [{ field: 'adlabel_ids', operator: 'ANY', value: [L1] }] },
+      { ruleId: '3', name: 'C', status: 'ENABLED', canRaiseSpend: false, action: { type: 'PAUSE', text: 'pauses' }, filters: [{ field: 'entity_type', operator: 'EQUAL', value: 'AD' }] },
+      { ruleId: '4', name: 'D', status: 'ENABLED', canRaiseSpend: false, action: { type: 'PAUSE', text: 'pauses' }, filters: [{ field: 'adlabel_ids', operator: 'NONE', value: L2 }] },
+    ])).toEqual([
+      { id: '1', name: 'A', actionText: 'switches the matching objects on', canRaiseSpend: true, lowers: false, filters: [{ operator: 'ANY', labelIds: [L1, '1200'] }] },
+      { id: '4', name: 'D', actionText: 'pauses', canRaiseSpend: false, lowers: true, filters: [{ operator: 'NONE', labelIds: [L2] }] },
+    ])
+  })
+  it('adding a label a raising rule filters on: SPENDS MONEY for that object only; the rule named', () => {
+    const d = ok({ action: 'add', objects: [{ kind: 'campaign', id: C }, { kind: 'adset', id: S }], labelIds: [L2] }, { adRules: [raise] })
+    expect(d.spendsMoney.join(' ')).toMatch(/automated rule "Scale winners" \(120000000000060\) changes ad set budgets .*brings campaign "Campaign A" .*can make the account spend more/)
+    expect(d.requests.map((q) => q.raisesSpend)).toEqual([true, true])
+    expect(d.warnings.join(' ')).toMatch(/brings campaign "Campaign A" \(120000000000001\), ad set "Ad set B" \(120000000000002\) under it/)
+    expect(ok({ action: 'add', objects: [{ kind: 'adset', id: S }], labelIds: [L2] }, { adRules: [pause] }).spendsMoney).toEqual([])
+  })
+  it('taking off a label a pausing rule filters on lets go of a brake: SPENDS MONEY; a NONE filter turns it round', () => {
+    const d = ok({ action: 'remove', objects: [{ kind: 'campaign', id: C }], labelIds: [L1] }, { adRules: [pause] })
+    expect(d.spendsMoney.join(' ')).toMatch(/"Stop losers".*takes campaign "Campaign A" .*out of it.*no longer holds them back/)
+    expect(d.requests[0].raisesSpend).toBe(true)
+    // NONE on L1: an object WITHOUT L1 is paused — removing L1 brings it under the pause (no raise).
+    expect(ok({ action: 'remove', objects: [{ kind: 'campaign', id: C }], labelIds: [L1] }, { adRules: [{ ...pause, filters: [{ operator: 'NONE', labelIds: [L1] }] }] }).spendsMoney).toEqual([])
+  })
+  it('a delete takes the label off everything that carries it (unseen carriers too); a rules read that failed is said, not refused', () => {
+    const carriers = { campaigns: [{ id: C, name: 'Campaign A' }], adSets: [], ads: [], creatives: [], more: true }
+    const d = ok({ action: 'delete', labelId: L1, confirmDelete: true }, { carriers, adRules: [pause] })
+    expect(d.requests[0].raisesSpend).toBe(true)
+    expect(d.spendsMoney.join(' ')).toMatch(/takes campaign "Campaign A" \(120000000000001\), what else carries it/)
+    const unread = ok({ action: 'add', objects: [{ kind: 'adset', id: S }], labelIds: [L2] }, { adRules: null })
+    expect(unread.warnings.join(' ')).toMatch(/could not read the ad account's automated rules/)
+    expect(unread.spendsMoney).toEqual([])
+    expect(unread.warnings.join(' ')).not.toMatch(/never change what an ad spends/)
+  })
+  it('review A6 — a replace beyond the first 500 labels refuses rather than drop a label it cannot see', () => {
+    expect(no({ action: 'replace', sets: [{ kind: 'adset', id: S, labelIds: [L2, '5555555555'] }] }, { accountLabelsMore: true })).toMatch(/not among the first 500 labels .*puts nothing back/)
   })
 })
 
