@@ -21,7 +21,7 @@
  * Never logs a token, a request body or an answer.
  */
 import { metaRestWriteCall, metaRuploadCall, metaWriteCall, type MetaRestWriteRequest, type MetaWriteEdge } from '../../gateway/meta.js'
-import { metaWriteRuleAuth, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaTargetingKind, type MetaWebhookKind } from '../../gateway/meta-calls.js'
+import { metaWriteRuleAuth, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaCommentKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaTargetingKind, type MetaWebhookKind } from '../../gateway/meta-calls.js'
 import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
@@ -81,6 +81,8 @@ export interface MetaObjectChange {
     | MetaTargetingKind
     // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
     | MetaCatalogKind
+    // Step 37 — a post or comment of the chosen Page, a branded-content comment, an Instagram comment, a Threads ad's post or reply.
+    | MetaCommentKind
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -105,8 +107,11 @@ export interface MetaObjectChange {
   edge?: MetaWriteEdge
   /** Step 18 — DELETE (a budget schedule's; step 22's deletes): Meta's {"success": true} is the answer, nothing is read back (step 39: unless `judge` reads it). */
   method?: 'POST' | 'DELETE'
-  /** Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own); step 34: a feed's catalog. */
-  parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }
+  /**
+   * Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own); step 34: a feed's
+   * catalog; step 37 — a Threads post's ad, a branded post.
+   */
+  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (include_recommendations, master CMP-031). */
   recommendations?: boolean
   /** Step 21 — an edge that changes the object itself (a campaign's labels edge): the object is read back, not a new one. */
@@ -252,6 +257,8 @@ const cut = (words: string | null | undefined) => (words ? (words.length > MAX_W
 
 /** Step 36 review B3 — the kinds a change makes AS the chosen Page (its own token: gateway meta-page-token.ts); step 27b: an Instant Experience. */
 const PAGE_KINDS: ReadonlySet<string> = new Set(['page', 'leadform', 'testlead', 'canvas'])
+/** Step 37 — the comment kinds made as the chosen Page (Facebook comments and the chosen Instagram account's). */
+const COMMENT_KINDS: ReadonlySet<string> = new Set(['fbpost', 'fbcomment', 'fbpagecomment', 'brandedcomment', 'igmedia', 'igcomment', 'iguser'])
 
 /** Step 30 part 3 review round 2 (A-L3) — the token a change goes with by its gateway rule (meta-calls.ts metaWriteRuleAuth). */
 function ruleAuthOf(change: MetaObjectChange): 'page' | 'app' | undefined {
@@ -280,6 +287,22 @@ function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>, chan
   }
   // Step 36 review B3 — a change made with the Page's own token: a refused token or permission is the Page's condition
   // (the system user's role or task on the chosen Page), never "make a new system-user token" or the ad account's.
+  // Step 37 — a comment change made as the chosen Page: the Page's MODERATE / CREATE_CONTENT tasks and the comment permissions.
+  // By its rule's token too (A-L3): step 26 names `iguser` / `igmedia` with the system user's token.
+  if (auth === 'page' && kind && COMMENT_KINDS.has(kind) && (failure.authLost || failure.permissionDenied)) {
+    return {
+      ...failure,
+      sentence: `Meta did not accept this comment change made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. The system user needs the Page's MODERATE task — and CREATE_CONTENT for a comment or like as the Page — (Meta Business settings › Users › System users › Assign assets) and its token pages_manage_engagement, pages_read_engagement, pages_read_user_engagement and, for Instagram, instagram_manage_comments. Nothing was changed.`,
+    }
+  }
+  // Step 37 (re-review B) — a block or unblock on the chosen Page (kind `page`): the Page token, the MODERATE task and the
+  // permissions Meta's error 283 names for /{page}/blocked; step 36's lead-form sentence below is unchanged.
+  if (kind === 'page' && change?.operation?.startsWith('pageblock.') && (failure.authLost || failure.permissionDenied)) {
+    return {
+      ...failure,
+      sentence: `Meta did not accept this block or unblock made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. It goes with the Page's own token: the system user needs the Page's MODERATE task (Meta Business settings › Users › System users › Assign assets) and its token pages_read_engagement and pages_manage_metadata (Meta's error 283 for the Page's blocked list). Nothing was changed.`,
+    }
+  }
   if (kind && PAGE_KINDS.has(kind) && (failure.authLost || failure.permissionDenied)) {
     // Step 30 part 3 review round 2 (B-3) — a webhook change made as the Page (install-page, `via`) brings its own words for
     // Meta's codes (`explain`, which the kit adds): the generic sentence here, never step 36's lead-form task advice.

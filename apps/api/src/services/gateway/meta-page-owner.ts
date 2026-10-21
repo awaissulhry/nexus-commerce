@@ -30,15 +30,17 @@
  *                   business portfolio, and that portfolio no other Nexus business's.
  * Anything else — another business's Page, form, lead, experience, media or catalog, a node of another kind, an id Meta
  * cannot place — gets nothing sent, and the sentence never names the other business's asset. Lanes C2 (posts) and C4
- * (comments, messages) add their own kinds here.
+ * (comments, messages) add their own kinds here — step 37's comment kinds are checked by meta-comment-owner.ts.
  */
 import { metaChosenAdAccountOf, metaChosenInstagramOf, metaChosenPageOf, metaPageObjectNexusMade } from './account.js'
 import type { MetaJudgedWrite, MetaWriteKind } from './meta-calls.js'
 // Step 39's one read for an owner check, through the gateway (its read gate, ledger and rate bucket).
 import type { MetaCheckRead } from './meta-brand-safety-owner.js'
+// Step 37 — the comment kinds made as the Page (posts, comments, the chosen Instagram account's media and comments).
+import { META_COMMENT_PAGE_KINDS, metaCommentOwnerProblem } from './meta-comment-owner.js'
 
 /** The kinds this check confirms (every rule marked `auth: 'page'` names one of them). */
-export const META_PAGE_KINDS: ReadonlySet<MetaWriteKind> = new Set<MetaWriteKind>(['page', 'leadform', 'testlead', 'canvas'])
+export const META_PAGE_KINDS: ReadonlySet<MetaWriteKind> = new Set<MetaWriteKind>(['page', 'leadform', 'testlead', 'canvas', ...META_COMMENT_PAGE_KINDS])
 
 type Problem = { code: string; sentence: string } | null
 const idOf = (v: unknown): string | null => (typeof v === 'string' || typeof v === 'number') && String(v).trim() ? String(v).trim() : null
@@ -78,12 +80,14 @@ export const __pageOwnerTest = { reset: () => parts.clear() }
 // ── the checks ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Why this change made as the chosen Page is refused for this connection, or null (its object and body ids are the Page's). */
-export async function metaPageOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: string | undefined, read: MetaCheckRead, run?: string): Promise<Problem> {
+export async function metaPageOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: string | undefined, read: MetaCheckRead, run?: string, parent?: { kind: string; id: string }): Promise<Problem> {
   const id = write.objectId
   if (!kind || !META_PAGE_KINDS.has(kind as MetaWriteKind) || !write.kinds?.includes(kind as MetaWriteKind)) {
-    return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change made as the Facebook Page names the kind of object it changes (the Page, a lead form of it, a test lead Nexus made, an Instant Experience of it), and ${id} is not named so.` }
+    return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change made as the Facebook Page names the kind of object it changes (the Page, a lead form of it, a test lead Nexus made, an Instant Experience of it, a post or comment of it, the chosen Instagram account's media or comments), and ${id} is not named so.` }
   }
   if (write.auth !== 'page') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${id} is a Page object, and only a change made as the Page writes one.` }
+  // Step 37 — a comment change: its own owner check (meta-comment-owner.ts), the ids inside its body included.
+  if (META_COMMENT_PAGE_KINDS.has(kind as MetaWriteKind)) return metaCommentOwnerProblem(connectionId, write, kind, read, parent)
   const pageId = await metaChosenPageOf(connectionId)
   if (!pageId) return { code: 'META_PAGE_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Facebook Page chosen through this connection, so Nexus changes nothing made as a Page.' }
   const problem = kind === 'page' ? (id === pageId ? null : { code: 'META_PAGE_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${id} is not the Facebook Page this business chose through this connection.` })

@@ -9,7 +9,7 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaTargetingKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaCommentKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaTargetingKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
 import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
 import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
 import type { MetaChangeResult, MetaRequestVia, MetaWriteTarget } from './write-client.js'
@@ -87,12 +87,16 @@ export interface MetaChangeRequest {
     | MetaTargetingKind
     // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
     | MetaCatalogKind
+    // Step 37 — a post or comment of the chosen Page, a comment on a branded-content post, a comment on the chosen Instagram
+    // account's media, a Threads ad's post or reply (set-meta-comments; its Instagram media and account are step 26's
+    // `igmedia` and `iguser`, a block names the chosen Page, `page`).
+    | MetaCommentKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
-  /** A budget schedule's campaign or ad set; step 34: a feed's catalog. */
-  parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }
+  /** A budget schedule's campaign or ad set; step 34: a feed's catalog; step 37 — a Threads post's or reply's ad, a branded-content comment's post. */
+  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost'; id: string }
   /** Step 19 — Meta's check of this create asks its setup recommendations too (master CMP-031). */
   recommendations?: boolean
   /**
@@ -150,6 +154,9 @@ export interface MetaChangeRequest {
    * limit (80001), not the ad account's — the kit's preview says so (and leaves it out of the ad account's count).
    */
   asPage?: true
+  // ── step 37 (comments) ──
+  /** Meta's success is the whole answer (a like, a block — no id, never read back): the step says "Meta confirmed it." */
+  answerOnly?: true
 }
 
 export interface MetaChangeDraft {

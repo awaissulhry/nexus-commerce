@@ -85,6 +85,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 34 (2026-10-21) — create-meta-catalog, set-meta-catalog, set-meta-catalog-access, set-meta-product-set and remove-meta-catalog-items read Meta live and change it.
 // Meta ads step 40 (2026-10-21) — set-meta-account-settings, set-meta-spend-cap and set-meta-insights-features read Meta live and change it.
 // Meta ads step 27b (2026-10-21) — create-meta-instant-experience and set-meta-instant-experience read Meta live and change it (as the Page).
+// Meta ads step 37 (2026-10-21) — set-meta-comments reads Meta live and changes it (comments, as the Page; Threads ads).
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -140,7 +141,7 @@ const OPEN_WORLD = [
   'set-listing-stock',
   'set-master-prices', 'set-meta-account-controls', 'set-meta-account-settings', 'set-meta-ad', 'set-meta-ad-rule', 'set-meta-ad-set', 'set-meta-alert-subscription', 'set-meta-audience',
   'set-meta-audience-members', 'set-meta-audience-sharing', 'set-meta-block-list', 'set-meta-brand-safety', 'set-meta-budget-schedule', 'set-meta-campaign', 'set-meta-catalog',
-  'set-meta-catalog-access', 'set-meta-connection', 'set-meta-creative', 'set-meta-custom-conversion', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-experiment',
+  'set-meta-catalog-access', 'set-meta-comments', 'set-meta-connection', 'set-meta-creative', 'set-meta-custom-conversion', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-experiment',
   'set-meta-insights-features', 'set-meta-instant-experience', 'set-meta-labels', 'set-meta-lead-form', 'set-meta-partnership-access', 'set-meta-placements', 'set-meta-product-set', 'set-meta-spend-cap', 'set-meta-status',
   'set-meta-targeting', 'set-meta-value-rules', 'set-meta-webhooks', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio', 'set-price',
   'set-promotion', 'set-sd-brand-safety', 'set-sd-budget-rule', 'set-sd-optimization-rule', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',

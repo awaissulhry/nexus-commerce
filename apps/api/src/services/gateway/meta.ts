@@ -19,7 +19,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaEventsKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaTargetingKind, type MetaWebhookKind } from './meta-calls.js'
+import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaCommentKind, type MetaEventsKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaTargetingKind, type MetaWebhookKind } from './meta-calls.js'
 import { metaRuploadUrl } from './meta-media-rules.js'
 import type { MetaSignalsKind } from './meta-signals-rules.js'
 import type { MetaCatalogKind } from './meta-catalog-rules.js'
@@ -101,6 +101,8 @@ export interface MetaWriteRequest {
     | MetaEventsKind
     // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
     | MetaCatalogKind
+    // Step 37 — a post or comment of the chosen Page, a branded-content comment, an Instagram comment, a Threads ad's post or reply.
+    | MetaCommentKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -140,8 +142,11 @@ export interface MetaWriteRequest {
   query?: Record<string, string>
   /** Step 20 (review A2) — the targeting keys this change's draft changed: the only ones the gateway lets differ from live. */
   targetingKeys?: string[]
-  /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own); step 34: a feed's catalog. */
-  parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }
+  /**
+   * Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own); step 34: a feed's
+   * catalog. Step 37 — a Threads post's or reply's ad (`ad`), a branded-content post's comment's post (`brandedpost`).
+   */
+  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
   recommendations?: boolean
   /**
@@ -157,7 +162,7 @@ export interface MetaWriteRequest {
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
   | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaBoostEdge | MetaSignalsEdge | MetaAdEdge
-  | MetaWebhookEdge | MetaTargetingEdge | MetaEventsEdge | MetaCatalogEdge | MetaAccountEdge
+  | MetaWebhookEdge | MetaTargetingEdge | MetaEventsEdge | MetaCatalogEdge | MetaAccountEdge | MetaCommentEdge
 /** Step 33 — upload-meta-events: Conversions API events of a pixel (`<pixel id>/events`). */
 export type MetaEventsEdge = 'events'
 /** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
@@ -209,6 +214,11 @@ export type MetaMediaEdge = 'video_ads' | 'creative_folders'
 export type MetaCreativeEdge = 'adcreatives' | 'asyncadcreatives'
 /** Step 40 — the chosen ad account's account-level tracking specs, and its insights features (switched on, never off). */
 export type MetaAccountEdge = 'tracking' | 'insights/feature-settings'
+/**
+ * Step 37 — set-meta-comments: a comment or reply, a like, a block (Facebook); a reply, a top-level comment, a mention reply
+ * (Instagram); a Threads reply's hide and a Threads reply.
+ */
+export type MetaCommentEdge = 'comments' | 'likes' | 'blocked' | 'replies' | 'mentions' | 'manage_reply' | 'add_reply'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):

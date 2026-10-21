@@ -7302,5 +7302,15 @@
       ]
     },
     "relations": []
+  },
+  "MetaInstagramCommentPoll": {
+    "scalar": {},
+    "compound": {
+      "meta_ig_comment_poll": [
+        "instagramId",
+        "mediaId"
+      ]
+    },
+    "relations": []
   }
 }
