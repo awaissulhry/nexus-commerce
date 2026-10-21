@@ -418,7 +418,8 @@ describe('review round 2', () => {
     // No website destination, no catalog part: no format or shop key (an Instant Experience, a photo post).
     const ix = withStory({ link_data: { link: 'https://fb.com/canvas_doc/120000000000901', image_hash: HASH } })
     expect(silentKeysFor(ix)).toMatchObject({ formats: null, destination: false })
-    expect(problem({ body: form({ ...ix, destination_spec: { destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' } }) })).toMatch(/Shops guide covers creatives with a website destination only/)
+    // Round 3 — an extra opt-out is accepted anywhere.
+    expect(problem({ body: form({ ...ix, destination_spec: { destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' } }) })).toBeNull()
     // An existing post: no asset feed unless music; with a website button, the website keys.
     const post = { ...postSilent(), name: 'From a post', object_story_id: `${PAGE}_500000000000001` }
     expect(problem({ body: form(post) })).toBeNull()
@@ -442,8 +443,8 @@ describe('review round 2', () => {
     // An explicit opt-in is said too; a component without its enroll_status is refused.
     expect(problem({ body: form({ ...carousel, interactive_components_spec: { components: [{ type: 'product_tag', enroll_status: 'opt_in' }] } }) })).toBeNull()
     expect(problem({ body: form({ ...carousel, interactive_components_spec: { components: [{ type: 'product_tag' }] } }) })).toMatch(/names enroll_status/)
-    // A video's thumbnail is not an image creative.
-    expect(silentKeysFor(withStory({ video_data: { video_id: '120000000000444', image_hash: HASH } })).productTags).toBe(false)
+    // Round 3 — fail-safe: a video's thumbnail counts as an image too.
+    expect(silentKeysFor(withStory({ video_data: { video_id: '120000000000444', image_hash: HASH } })).productTags).toBe(true)
   })
 
   it('4 — every OPT_IN inside the parts is named; a customization under a feature switched off is refused', () => {
@@ -475,5 +476,48 @@ describe('review round 2', () => {
     expect(problem({ body: form(promo({ allowed_coupon_code_sources: ['AD_CREATIVE_MANUAL_COUPON_CODES'] })) })).toMatch(/goes with its code/)
     expect(problem({ body: form(promo({ allowed_coupon_code_sources: ['AD_CREATIVE_PRIMARY_TEXT'], manual_coupon_codes: ['SPRING10'] })) })).toMatch(/goes only with the source AD_CREATIVE_MANUAL_COUPON_CODES/)
     expect(problem({ body: form(promo({ allowed_coupon_code_sources: ['AD_CREATIVE_PRIMARY_TEXT', 'AD_CREATIVE_MANUAL_COUPON_CODES'], manual_coupon_codes: ['SPRING10'] })) })).toBeNull()
+  })
+})
+
+describe('review round 3', () => {
+  const FORMATS_NONE = (formats: readonly string[]) => formats.map((format) => ({ format, data_source: ['none'] }))
+  const SHOP_OFF = { destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' }
+
+  it('1 — the gateway requires the minimum and accepts every extra opt-out; a format switched on only where documented', () => {
+    expect(problem({ body: form(creative({ format_transformation_spec: FORMATS_NONE(META_FORMAT_AUTOMATION_FORMATS) })) })).toBeNull()
+    const post = { ...postSilent(), name: 'From a post', object_story_id: `${PAGE}_500000000000001` }
+    expect(problem({ body: form({ ...post, format_transformation_spec: FORMATS_NONE(META_NON_CATALOG_FORMATS), destination_spec: SHOP_OFF }) })).toBeNull()
+    expect(problem({ body: form(withStory({ photo_data: { image_hash: HASH } }, { destination_spec: SHOP_OFF, format_transformation_spec: FORMATS_NONE(META_NON_CATALOG_FORMATS) })) })).toBeNull()
+    // Still required where it is the minimum; a catalog format switched ON on a website creative is not documented there.
+    expect(problem({ body: form(creative({ format_transformation_spec: FORMATS_NONE(['carousel']) })) })).toMatch(/missing: sa_collection/)
+    expect(problem({ body: form(creative({ format_transformation_spec: [...FORMATS_NONE(META_NON_CATALOG_FORMATS), { format: 'da_collection', data_source: ['catalog'] }] })) })).toMatch(/da_collection is switched on only where Meta documents it/)
+    expect(problem({ body: form(creative({ format_transformation_spec: [...FORMATS_NONE(META_NON_CATALOG_FORMATS), { format: 'carousel', data_source: ['none'] }] })) })).toMatch(/each format once/)
+  })
+
+  it('2 — product tags required wherever an image can show: any image key at any depth, or any link_data', () => {
+    const rules = withStory({ video_data: { video_id: '120000000000444', image_hash: HASH, call_to_action: { type: 'SHOP_NOW', value: { link: 'https://www.example.com/' } }, customization_rules_spec: [{ customization_spec: { language: 'it_IT' }, image_hash: HASH }] } })
+    expect(silentKeysFor(rules).productTags).toBe(true)
+    expect(problem({ body: form(Object.fromEntries(Object.entries(rules).filter(([k]) => k !== 'interactive_components_spec'))) })).toMatch(/product_tag enroll_status/)
+    const noImage = withStory({ link_data: { link: 'https://www.example.com/', message: 'Senza immagine' } })
+    expect(silentKeysFor(noImage).productTags).toBe(true)
+    expect(problem({ body: form(noImage) })).toBeNull()
+    expect(problem({ body: form(Object.fromEntries(Object.entries(noImage).filter(([k]) => k !== 'interactive_components_spec'))) })).toMatch(/product_tag enroll_status/)
+  })
+
+  it('3 — exactly one product_tag component', () => {
+    expect(problem({ body: form(creative({ interactive_components_spec: { components: [{ type: 'product_tag', enroll_status: 'opt_out' }, { type: 'product_tag', enroll_status: 'opt_in' }] } })) })).toMatch(/ONE product_tag component/)
+  })
+
+  it('4 — a reminder ad as Meta\'s guide writes it passes; Meta\'s own destinations are not website destinations', () => {
+    // instagram/marketing-api/guides/reminder-ads.md: LEARN_MORE, the dummy link https://fb.com/, upcoming_events.
+    const reminder = withStory({ instagram_user_id: IG, link_data: { call_to_action: { type: 'LEARN_MORE' }, image_hash: HASH, link: 'https://fb.com/' } }, { asset_feed_spec: { audios: [], upcoming_events: [{ event_id: '17900000000000001', event_title: 'Season Premiere', start_time: '2026-11-05T16:00:00+0000' }] } })
+    expect(creativeTypeOf(reminder)).toBe('standard')
+    expect(silentKeysFor(reminder)).toMatchObject({ formats: null, destination: false, productTags: true })
+    expect(problem({ body: form(reminder) })).toBeNull()
+    expect(problem({ body: form({ ...reminder, asset_feed_spec: { audios: [], upcoming_events: [{ event_id: '17900000000000001', start_time: 1762358400 }] } }) })).toMatch(/a time as Meta writes it/)
+    for (const link of ['https://fb.com/messenger_doc/', 'https://m.me/shop_a', 'https://www.instagram.com/shop_a', 'https://wa.me/15555550100', 'https://api.whatsapp.com/send', 'https://www.facebook.com/shop_a']) {
+      expect(silentKeysFor(withStory({ link_data: { link, image_hash: HASH } })).destination, link).toBe(false)
+    }
+    expect(silentKeysFor(withStory({ link_data: { link: 'https://www.example.com/', image_hash: HASH } })).destination).toBe(true)
   })
 })

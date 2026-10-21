@@ -416,3 +416,22 @@ describe('review round 2', () => {
     expect(stray.error).toMatch(/main button makes it a standard creative/)
   })
 })
+
+describe('review round 3', () => {
+  it('an existing post carries the shop and format opt-outs even with no website button (its own link may lead to one)', async () => {
+    const p = await preview({ name: 'From a post', postId: POST })
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    expect(sentJson('destination_spec')).toEqual({ destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' })
+    expect(sentJson('format_transformation_spec').every((f: any) => f.data_source.length === 1 && f.data_source[0] === 'none')).toBe(true)
+    expect(checked().params.asset_feed_spec).toBeUndefined()
+  })
+
+  it('a Click-to-Messenger link (Meta\'s own) gets no shop opt-out; a link ad with no image gets the product-tag opt-out', async () => {
+    await preview({ name: 'Chat A', story: { link_data: { link: 'https://fb.com/messenger_doc/', image_hash: 'abc123def456', call_to_action: { type: 'MESSAGE_PAGE', value: { app_destination: 'MESSENGER' } } } } })
+    expect(checked().params.destination_spec).toBeUndefined()
+    expect(checked().params.format_transformation_spec).toBeUndefined()
+    h.check.mockClear()
+    await preview({ name: 'Link A', story: { link_data: { link: 'https://www.example.com/', message: 'Senza immagine' } } })
+    expect(sentJson('interactive_components_spec')).toEqual({ components: [{ type: 'product_tag', enroll_status: 'opt_out' }] })
+  })
+})
