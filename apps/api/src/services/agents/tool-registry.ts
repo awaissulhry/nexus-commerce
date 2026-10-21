@@ -119,6 +119,8 @@ import { META_ADS_INSIGHTS_TOOLS } from './tools/meta-ads-insights.tools.js'
 import { META_ADS_BRAND_SAFETY_TOOLS } from './tools/meta-ads-brand-safety.tools.js'
 // Meta ads step 31 (2026-10-21): audiences — create, change, people (opt-outs out; D8), sharing, delete.
 import { META_ADS_AUDIENCE_CHANGES_TOOLS } from './tools/meta-ads-audience-changes.tools.js'
+// Meta ads step 36 (2026-10-21): lead forms and test leads (changes made as the chosen Page).
+import { META_ADS_LEAD_FORMS_TOOLS } from './tools/meta-ads-lead-forms.tools.js'
 // Meta ads step 26 (2026-10-21): boosts of existing posts and partnership access (create-meta-boost, set-meta-partnership-access).
 import { META_ADS_BOOSTS_TOOLS } from './tools/meta-ads-boosts.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -369,6 +371,8 @@ const ALL: AgentTool[] = [
   // Meta ads step 31 (2026-10-21): create-meta-audience, set-meta-audience, set-meta-audience-members,
   // set-meta-audience-sharing, remove-meta-audience.
   ...META_ADS_AUDIENCE_CHANGES_TOOLS,
+  // Meta ads step 36 (2026-10-21): create-meta-lead-form, set-meta-lead-form (lead forms and test leads, as the Page).
+  ...META_ADS_LEAD_FORMS_TOOLS,
   // Meta ads step 26 (2026-10-21): create-meta-boost (an existing post as a creative, partnership ads) and
   // set-meta-partnership-access (the chosen Instagram account's partnership side).
   ...META_ADS_BOOSTS_TOOLS,

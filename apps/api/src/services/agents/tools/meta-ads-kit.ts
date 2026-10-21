@@ -127,11 +127,15 @@ async function draftFor(args: Record<string, unknown>, build: MetaDraftBuilder):
 }
 
 /**
- * The exact plan of a change: its requests (object, form fields), in order — never their labels. Step 26 (review A3): a
- * request may give the fields its plan reads (`planParams`: a creator's ad code replaced in this hash; the request's arguments
- * still carry it).
+ * The exact plan of a change: its requests (object, form fields), in order — never their labels. Step 36 review A3 — and a
+ * request's method, edge and object kind, ONLY when it names them: a status change's plan hash stays byte for byte what
+ * step 17 made (a pending approval does not go stale at a deploy). Step 26 (review A3): a request may give the fields its
+ * plan reads (`planParams`: a creator's ad code replaced in this hash; the request's arguments still carry it).
  */
-const planOf = (draft: MetaChangeDraft): string => factHash(draft.requests.map((r) => ({ objectId: r.objectId, params: r.planParams ?? r.params })))
+export const planOf = (draft: MetaChangeDraft): string => factHash(draft.requests.map((r) => ({
+  objectId: r.objectId, params: r.planParams ?? r.params,
+  ...(r.method ? { method: r.method } : {}), ...(r.edge ? { edge: r.edge } : {}), ...(r.objectKind ? { objectKind: r.objectKind } : {}),
+})))
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -317,7 +321,16 @@ export function objectChangeOf(request: MetaChangeRequest): MetaObjectChange {
     // Step 39 — the read-back that judges it.
     ...(request.judge ? { judge: request.judge } : {}),
     ...(request.readBackOf ? { readBackOf: request.readBackOf } : {}),
+    // Step 36 — a request never read back (a test lead).
+    ...(request.skipReadBack ? { skipReadBack: request.skipReadBack } : {}),
   }
+}
+
+/** Step 36 — Meta's code of a failure in the request's own plain words (base code: `80005/123` → `80005`), or ''. */
+function explained(request: MetaChangeRequest, err: MetaWriteError): string {
+  const base = (err.failure.code ?? '').split('/')[0]
+  const words = base && request.explain ? request.explain[base] : undefined
+  return words ? ` ${words}` : ''
 }
 
 /** Step 18 — the step's sentence for a done request past status: what Meta reads back for the fields it asked. */
@@ -331,6 +344,9 @@ function doneSettingsSentence(request: MetaChangeRequest, result: MetaChangeResu
       ? `Meta made it; it now reads ${judged.reads}.`
       : request.method === 'DELETE'
         ? 'Meta confirmed it.'
+        // Step 36 — a request never read back on purpose (a test lead): Meta's answer names its id.
+        : request.skipReadBack && result.node && (typeof result.node.id === 'string' || typeof result.node.id === 'number')
+          ? `Meta made it (id ${result.node.id}).`
         : result.readBack === 'none' || !result.node
           ? 'Meta confirmed it; Nexus could not read it back (meta-ads-live shows it).'
           // Step 21 — a create whose read-back judges no field (a reach & frequency prediction is worked out later): made.
@@ -464,11 +480,11 @@ export async function runMetaChange(
         // Meta said no for this one object: nothing changed for it, and the next object is its own request. Step 39 (D6):
         // refused for access on a request that needs a Meta capability grant — the grant and the no-grant controls.
         const words = request.grant && err.failure.permissionDenied ? grantRefusal(err, request.grant).message : err.message
-        steps.push({ step: request.step, label: request.label, outcome: 'refused', sentence: `${request.label}: ${words}` })
+        steps.push({ step: request.step, label: request.label, outcome: 'refused', sentence: `${request.label}: ${words}${explained(request, err)}` })
         continue
       }
       // Not confirmed, a throttle, a lost token, a hold: the next requests would meet the same; Nexus stops here.
-      steps.push({ step: request.step, label: request.label, outcome: err.outcome === 'unknown' ? 'not_confirmed' : 'not_sent', sentence: `${request.label}: ${err.message}` })
+      steps.push({ step: request.step, label: request.label, outcome: err.outcome === 'unknown' ? 'not_confirmed' : 'not_sent', sentence: `${request.label}: ${err.message}${explained(request, err)}` })
       stoppedAt = request.step
     }
   }

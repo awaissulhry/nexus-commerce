@@ -208,12 +208,12 @@ const ctaLink: Judge = (value, path, walk) => (typeof value === 'string' && /^te
 const displayLink: Judge = (value, path, walk) => (typeof value === 'string' && /^(?!https?:)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(\/[A-Za-z0-9._~\-/]*)?$/.test(value) && value.length <= LINK_MAX ? ok(value) : link(value, path, walk))
 /**
  * An Instagram app link for the unified profile visit (master CR-225). Step 26 (review B5) — multidestination-profile-visit.md writes it `instagram://user?username=<IG_USERNAME>&userid=<IG_USER_ID>`:
- * the user id, when named, goes to the gateway's check (the chosen Instagram account).
+ * the user id, when named, goes to the gateway's check as step 31's `instagram` body id (the chosen Instagram account).
  */
 const instagramAppLink: Judge = (value, path, walk) => {
   const m = typeof value === 'string' ? /^instagram:\/\/user\?username=[A-Za-z0-9._]{1,30}(?:&userid=([1-9]\d{0,24}))?$/.exec(value) : null
   if (!m) return no(`${path} is instagram://user?username=<the Instagram username>[&userid=<its id>] (Nexus has no app of its own)`)
-  if (m[1]) walk.assets.push({ id: m[1], kind: 'choseninstagram' })
+  if (m[1]) walk.ids.push({ id: m[1], kind: 'instagram' })
   return ok(value)
 }
 // Review round 2 (step 26) — a Meta id never starts with 0 (`0<id>` would slip past a "not the chosen one" compare).
@@ -1089,8 +1089,8 @@ export function identityAssets(creative: Record<string, unknown>): MetaWriteAsse
  * content names branded_content.ad_format (Nexus always says which identities the ad shows) and, as Meta's boost-existing-post
  * guides write it, the business's chosen Page and Instagram account as its SPONSORS (facebook_branded_content.sponsor_page_id,
  * instagram_branded_content.sponsor_id); it names no instagram_user_id (the creator's own account runs it). Answers the ids
- * the gateway checks (each its kind; the chosen Page as step 19's `page` body id), and whether it is a creator's content (then
- * identityAssets does not apply).
+ * the gateway checks (each its kind; the chosen Page and Instagram account as step 19's `page` and step 31's `instagram` body
+ * ids), and whether it is a creator's content (then identityAssets does not apply).
  */
 export function sourceAssets(creative: Record<string, unknown>): { assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; creator: boolean } | { problem: string } {
   const code = adCodeOf(creative)
@@ -1115,7 +1115,7 @@ export function sourceAssets(creative: Record<string, unknown>): { assets: MetaW
     if (creative.instagram_user_id !== undefined) return { problem: 'a creator\'s content runs as the creator\'s own account: the creative names no instagram_user_id (the business\'s chosen Page and Instagram account are its sponsors)' }
     if (!sponsorPage && !sponsorIg) return { problem: 'a creator\'s content names the business as its sponsor (facebook_branded_content.sponsor_page_id and/or instagram_branded_content.sponsor_id)' }
     if (sponsorPage) ids.push({ id: sponsorPage, kind: 'page' })
-    if (sponsorIg) assets.push({ id: sponsorIg, kind: 'choseninstagram' })
+    if (sponsorIg) ids.push({ id: sponsorIg, kind: 'instagram' })
     if (post) assets.push({ id: post, kind: 'partnercontent' })
     if (media) assets.push({ id: media, kind: 'partnercontent' })
     if (code) assets.push({ id: code.code, kind: 'adcode', with: code.platform })

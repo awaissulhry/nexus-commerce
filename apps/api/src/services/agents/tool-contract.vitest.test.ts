@@ -974,6 +974,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: false, accountId: 'conn-1', adAccountId: '1234567890' },
         after: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: true, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 36: a form it made is archived (Meta deletes no form); archive ⇄ re-activate; a test lead it made is deleted.
+      'create-meta-lead-form': {
+        before: { pageId: '120000000000010', formId: null, name: 'Form A', archived: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { pageId: '120000000000010', formId: '600000000000001', name: 'Form A', archived: false, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-lead-form': {
+        before: { action: 'test-lead', pageId: '120000000000010', formId: '600000000000001', name: 'Form A', testLeadId: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'test-lead', pageId: '120000000000010', formId: '600000000000001', name: 'Form A', testLeadId: '700000000000001', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 26: a boost it made new is deleted again; a tag approval it added is taken off again.
       'create-meta-boost': {
         before: { kind: 'create', items: [] },
@@ -1159,6 +1168,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-creative', 'set-meta-creative', 'set-meta-ad-rule', 'remove-meta-ad-rule',
       'set-meta-brand-safety', 'set-meta-block-list', 'remove-meta-block-list',
       'create-meta-audience', 'set-meta-audience', 'set-meta-audience-members', 'set-meta-audience-sharing', 'remove-meta-audience',
+      'create-meta-lead-form', 'set-meta-lead-form',
       'create-meta-boost', 'set-meta-partnership-access']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }

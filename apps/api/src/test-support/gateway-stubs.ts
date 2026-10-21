@@ -30,6 +30,8 @@ export const gatewayMetaInstagram: Record<string, string> = {}
 export const gatewayMetaSharedPortfolios = new Set<string>()
 /** Meta step 25: Pages and Instagram accounts another business chose (`PAGE:<id>`, `INSTAGRAM:<id>`). */
 export const gatewayMetaTakenLinks = new Set<string>()
+/** Meta step 36: what Nexus's change records say it made on a Page (`${kind}:${objectId}:${pageId}`); nothing else is. */
+export const gatewayMetaNexusMade = new Set<string>()
 
 /** Meta step 39: each connection's chosen ad account's business portfolio; a connection not here has `9876543210`. */
 export const gatewayMetaPortfolio: Record<string, string | null> = {}
@@ -51,6 +53,9 @@ export const accountModule = {
   // Meta step 25: whether another business chose this Page or Instagram account.
   metaLinkTaken: async (product: 'PAGE' | 'INSTAGRAM', id: string): Promise<boolean> => gatewayMetaTakenLinks.has(`${product}:${id}`),
   metaChosenPortfolioOf: async (connectionId: string): Promise<string | null> => (connectionId in gatewayMetaPortfolio ? gatewayMetaPortfolio[connectionId] : '9876543210'),
+  metaPageObjectNexusMade: async (kind: 'leadform' | 'testlead', objectId: string, pageId: string): Promise<boolean> => gatewayMetaNexusMade.has(`${kind}:${objectId}:${pageId}`),
+  META_LEAD_FORM_CREATE_TOOL: 'create-meta-lead-form',
+  META_LEAD_FORM_SET_TOOL: 'set-meta-lead-form',
 }
 export const ledgerModule = {
   writeLedgerRow: async (row: GatewayLedgerRow): Promise<void> => { gatewayLedger.push(row) },
