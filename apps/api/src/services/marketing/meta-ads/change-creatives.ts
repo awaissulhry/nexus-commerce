@@ -482,7 +482,8 @@ async function createDraft(account: MetaChangeAccount, request: CreativeRequest)
     step: 1, label, kind: 'ad', objectKind: 'adaccount', objectId: act, params,
     // Meta documents validate_only on POST /act_<id>/adcreatives (reference/ad-account/adcreatives), not on asyncadcreatives.
     check: async ? 'none' : 'meta', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
-    operation: async ? 'creative.async' : 'creative.create', edge: async ? 'asyncadcreatives' : 'adcreatives',
+    // Each edge spelled as itself (no request builder computes its edge: step 21's pin).
+    ...(async ? { operation: 'creative.async', edge: 'asyncadcreatives' as const } : { operation: 'creative.create', edge: 'adcreatives' as const }),
     send: async ? sendAsync(act, params, asked, { name, fromExistingPost }) : sendCreate(act, params, asked, { name, fromExistingPost }),
     doneSentence: (result) => createdSentence(label, result.node),
   }

@@ -221,7 +221,8 @@ describe('the creative allow-list, at every depth', () => {
   it('Meta\'s check (validate_only) goes for the creative create only, exactly in Nexus\'s spelling, declared a read', () => {
     const body = form(creative(), { execution_options: '["validate_only"]' })
     const v = verdict({ body, kind: 'read' })
-    expect('write' in v && v.write).toMatchObject({ rule: 'adaccount.creative.create', check: true, checkable: true })
+    // Step 19's adaccount owner check lets Meta's check of a create go (validate_only is documented on creates).
+    expect('write' in v && v.write).toMatchObject({ rule: 'adaccount.creative.create', check: true })
     expect(problem({ body, kind: 'write' })).toMatch(/goes as a read/)
     expect(problem({ body: form(creative(), { execution_options: '["validate_only","include_recommendations"]' }), kind: 'read' })).toMatch(/only execution_options/)
     // The creative update and its labels have no check (not documented): refused.
@@ -248,7 +249,7 @@ describe('a creative on the gateway', () => {
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(other))) })).rejects.toThrow(/Page 120000000000099 is not the one this business chose/)
     h.answers.push(json({ data: [] }))
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(creative()))) })).rejects.toThrow(/image abc123def456 is not one Nexus can confirm/)
-    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: 'act_5555555555', objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(creative()))) })).rejects.toThrow(/not the one this business chose/)
+    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: 'act_5555555555', objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(creative()))) })).rejects.toThrow(/a create goes only to the Meta ad account this business chose/)
     expect(h.calls.filter((c) => c.init.method === 'POST')).toHaveLength(0)
   })
 
@@ -285,7 +286,7 @@ describe('a creative on the gateway', () => {
     expect(sent(0).url.searchParams.get('fields')).toBe('account_id,object_type,status')
     expect(sent(1).method).toBe('POST')
     expect(new URLSearchParams(sent(1).body!).get('name')).toBe('Creativo B — €')
-    expect(problem({ url: `${BASE}/${CREATIVE}`, objectKind: 'creative', body: new URLSearchParams({ status: 'DELETED' }).toString() })).toMatch(/DELETED is a delete/)
+    expect(problem({ url: `${BASE}/${CREATIVE}`, objectKind: 'creative', body: new URLSearchParams({ status: 'DELETED' }).toString() })).toMatch(/deletes nothing by a status change/)
     expect(problem({ url: `${BASE}/${CREATIVE}`, objectKind: 'creative', body: new URLSearchParams({ object_story_spec: '{}' }).toString() })).toMatch(/only Meta change/)
     expect(problem({ url: `${BASE}/${CREATIVE}`, objectKind: 'creative', body: new URLSearchParams({ adlabels: '[{"name":"a"} ]' }).toString() })).toMatch(/one spelling/)
     // Another account's creative: nothing sent.

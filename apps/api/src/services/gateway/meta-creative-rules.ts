@@ -1158,7 +1158,9 @@ export const META_CREATIVE_WRITE_RULES: readonly MetaWriteRule[] = [
     text: { name: META_MEDIA_TEXT_PATTERN, adlabels: META_MEDIA_TEXT_PATTERN }, budget: false,
     values: (params) => {
       if (params.has('name')) { const p = metaCreativeTextProblem(params.get('name')!, META_CREATIVE_TEXT.name, 'name'); if (p) return p }
-      if (params.has('status') && params.get('status') !== 'ACTIVE') return 'status is ACTIVE (DELETED is a delete, asked on its own; IN_PROCESS and WITH_ISSUES are Meta\'s own review states)'
+      // Step 22's wording for a delete by status (meta-calls.ts object.status): a creative's delete is its own explicit step.
+      if (params.get('status') === 'DELETED') return 'Nexus deletes nothing by a status change: deleting a creative is its own tool (remove-meta-ads-items, on a person\'s explicit ask, or create-meta-creative\'s undo)'
+      if (params.has('status') && params.get('status') !== 'ACTIVE') return 'status is ACTIVE (IN_PROCESS and WITH_ISSUES are Meta\'s own review states)'
       if (params.has('adlabels')) return labelsJudge(params.get('adlabels')!)
       return null
     },
