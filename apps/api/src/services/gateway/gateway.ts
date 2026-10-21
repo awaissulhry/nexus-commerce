@@ -34,7 +34,7 @@ import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, 
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite, type MetaMediaWriteKind } from './meta-calls.js'
-import { metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
+import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
@@ -472,7 +472,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     ...marketHeaders,
     ...(token ? authHeadersOf(req.channel, token) : {}),
     // A Meta change is a form (Meta's `-F` fields), as the gateway judged it.
-    ...(metaWrite && metaWrite.host !== 'rupload' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+    // (step 23: a call to the upload host has no body; a file part's multipart body brings its own boundary type)
+    ...(metaWrite && metaWrite.host !== 'rupload' && !metaWrite.multipart ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
     // Step 23 — Meta's upload host: the judged `file_url` header (the link Meta fetches), never a caller's own header.
     ...(metaWrite?.headers ?? {}),
   }
@@ -552,7 +553,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       // Never follow a redirect: a channel call carries its token in a header, and a custom token header
       // (x-amz-access-token, X-Shopify-Access-Token) would travel to the redirect's host.
       // Step 23 — nothing in the body of a call to Meta's upload host: Meta fetches the file from its link.
-      const res = await fetch(sendUrl, { method: req.method, headers, body: (metaWrite?.host === 'rupload' ? undefined : googleBody ?? metaWrite?.body ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
+      const res = await fetch(sendUrl, { method: req.method, headers, body: (metaWrite?.host === 'rupload' ? undefined : metaWrite?.multipart ? metaMultipartBody(metaWrite.multipart) : googleBody ?? metaWrite?.body ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
       status = res.status
       responseHeaders = res.headers
       text = await res.text()
@@ -687,8 +688,8 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
   const id = write.objectId
   // Step 18 — a budget schedule: its campaign or ad set first, then the period among that object's own.
   if (kind === 'highdemandperiod') return metaPeriodOwnerProblem(connectionId, write, parent)
-  // Step 23 — an edge of the chosen ad account or its portfolio, or a video upload this connection started.
-  if (kind === 'adaccount' || kind === 'portfolio' || kind === 'video') return metaMediaOwnerProblem(connectionId, write, kind)
+  // Step 23 — an edge of the chosen ad account or its portfolio, a video upload this connection started, a library video.
+  if (kind === 'adaccount' || kind === 'portfolio' || kind === 'video' || kind === 'libraryvideo') return metaMediaOwnerProblem(connectionId, write, kind)
   if (!kind || !Object.prototype.hasOwnProperty.call(META_KIND_FIELD, kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of ${id} names the kind of object it changes (a campaign, an ad set or an ad).` }
   if (write.check && kind !== 'campaign') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has a check (validate_only) only for campaign changes, and ${id} is named a ${META_KIND_WORD[kind]}.` }
   const chosen = await metaChosenAdAccountOf(connectionId)
@@ -798,6 +799,7 @@ async function metaMediaOwnerProblem(connectionId: string, write: MetaJudgedWrit
   if (!chosen) return notChosenMedia('this business has no Meta ad account chosen through this connection, so Nexus uploads nothing to Meta.')
   if (kind === 'adaccount') return write.objectId === `act_${chosen}` ? null : notChosenMedia('the ad account this change names is not the one this business chose through this connection.')
   if (kind === 'video') return metaVideoStartedOn(connectionId, write.objectId) === chosen ? null : notChosenMedia(`video ${write.objectId} is not an upload Nexus started on the chosen ad account through this connection.`)
+  if (kind === 'libraryvideo') return metaLibraryVideoProblem(connectionId, chosen, write.objectId, '')
   const assets = await metaChosenMediaAssetsOf(connectionId)
   if (!assets.portfolioId) return notChosenMedia('the chosen ad account names no business portfolio, so Nexus makes no folder in a portfolio\'s media library.')
   if (write.objectId !== assets.portfolioId) return notChosenMedia('the business portfolio this change names is not the one of the ad account this business chose.')
@@ -825,8 +827,14 @@ async function metaMediaAssetsProblem(connectionId: string, write: MetaJudgedWri
       continue
     }
     if (asset.kind === 'creativefolder') {
-      const folders = assets.portfolioId ? await metaListedIds(connectionId, `${assets.portfolioId}/creative_folders`) : null
-      if (!folders?.has(asset.id)) return notChosenMedia(`inside this change, folder ${asset.id} is not one Nexus can confirm among the chosen portfolio's media-library folders.`)
+      // Review A5 — the same reach as the tool's own check (META_MEDIA_LIST_MAX), failing closed past it.
+      const folders = assets.portfolioId ? await metaListedIdsUpTo(connectionId, `${assets.portfolioId}/creative_folders`) : null
+      if (!folders?.has(asset.id)) return notChosenMedia(`inside this change, folder ${asset.id} is not one Nexus can confirm among the chosen portfolio's media-library folders (it reads the first ${META_MEDIA_LIST_MAX}).`)
+      continue
+    }
+    if (asset.kind === 'libraryvideo') {
+      const problem = chosen ? await metaLibraryVideoProblem(connectionId, chosen, asset.id, 'inside this change, ') : notChosenMedia('this business has no Meta ad account chosen through this connection.')
+      if (problem) return problem
       continue
     }
     if (!assets.instagramId) return notChosenMedia('this business has no Instagram account chosen, so no Instagram media is brought into its ad account.')
@@ -835,6 +843,46 @@ async function metaMediaAssetsProblem(connectionId: string, write: MetaJudgedWri
     }
   }
   return null
+}
+
+/** The ids of one Meta list, page by page (100 a page, `after`), at most META_MEDIA_LIST_MAX; null when unread or longer. */
+async function metaListedIdsUpTo(connectionId: string, path: string): Promise<Set<string> | null> {
+  const ids = new Set<string>()
+  let after: string | null = null
+  for (let page = 0; page * 100 < META_MEDIA_LIST_MAX; page++) {
+    const url = new URL(`${metaGraphBase()}/${path}`)
+    url.searchParams.set('fields', 'id')
+    url.searchParams.set('limit', '100')
+    if (after) url.searchParams.set('after', after)
+    let body: { data?: Array<{ id?: unknown }>; paging?: { next?: unknown; cursors?: { after?: unknown } } } | null
+    try {
+      const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+      body = answer.ok ? answer.json<{ data?: Array<{ id?: unknown }>; paging?: { next?: unknown; cursors?: { after?: unknown } } }>() : null
+    } catch {
+      return null
+    }
+    if (!body || !Array.isArray(body.data)) return null
+    for (const row of body.data) if (typeof row?.id === 'string' || typeof row?.id === 'number') ids.add(String(row.id))
+    const next = body.paging?.next && typeof body.paging.cursors?.after === 'string' ? body.paging.cursors.after : null
+    if (!next) return ids
+    after = next
+  }
+  // Longer than Nexus reads: an id not seen may be past it — not confirmed.
+  return null
+}
+
+/**
+ * Review A2 / B1 — a video of the chosen ad account's library: listed on act_<id>/advideos or act_<id>/video_ads (a
+ * video-ads upload; whether advideos lists one is LIVE-PROBE MD-019u), each read up to META_MEDIA_LIST_MAX. Unread or
+ * longer lists: not confirmed, nothing sent.
+ */
+async function metaLibraryVideoProblem(connectionId: string, chosen: string, videoId: string, where: string): Promise<{ code: string; sentence: string } | null> {
+  if (!/^\d{1,20}$/.test(videoId)) return notChosenMedia(`${where}${videoId} is not a video id.`)
+  for (const edge of ['advideos', 'video_ads']) {
+    const listed = await metaListedIdsUpTo(connectionId, `act_${chosen}/${edge}`)
+    if (listed?.has(videoId)) return null
+  }
+  return notChosenMedia(`${where}video ${videoId} is not one Nexus can confirm in the chosen ad account's video library (it reads the first ${META_MEDIA_LIST_MAX} of advideos and of video_ads).`)
 }
 
 /** One read of a field list of a Meta object (fields as given), or null when it could not be read. */

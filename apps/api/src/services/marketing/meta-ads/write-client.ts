@@ -55,7 +55,7 @@ export interface MetaWriteTarget { connectionId: string; adAccountId: string }
 export interface MetaObjectChange {
   objectId: string
   /** The kind of object (the gateway confirms it before anything is sent). */
-  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'portfolio'
+  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'portfolio' | 'libraryvideo'
   params: Record<string, string>
   operation: string
   budget?: boolean

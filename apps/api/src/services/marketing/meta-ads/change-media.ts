@@ -34,10 +34,18 @@
  *   undo    takes back what an earlier create-meta-media upload of this business made NEW in this ad account — and only
  *           that (its change record says so; an image that was already there is never deleted): an image by its hash
  *           (DELETE /act_<id>/adimages hash, only while no creative uses it — M5-03), a video by its id (DELETE
- *           /act_<id>/advideos video_id — M5-09). Meta cannot put a removed file back: re-upload it.
- * Plain answers (no call): MD-024 thumbnails need the Page's own token and a Page-associated video (step 24 brings Nexus the
- * Page token; a creative sets its video's thumbnail itself), MD-026 captions are an SRT file Nexus does not hold, MD-029
- * playables are HTML5 files for app ads (no Nexus business promotes an app; Nexus holds none).
+ *           /act_<id>/advideos video_id — M5-09; review A1: only while no creative of the account uses it, read first; review
+ *           B3: the library is read on advideos AND video_ads), a caption locale by `locales_to_delete`. Meta cannot put a
+ *           removed file back: re-upload it.
+ *   captions MD-026 (review B1: "User has advertiser access on account that owns the video", docs/graph-api/reference/video/
+ *           captions): an SRT text the person gives (UTF-8, at most 200 KB, SubRip's shape) and its locale, onto a video of the
+ *           chosen account's library — POST /<video id>/captions with `captions_file` (`<name>.<locale>.srt`, a multipart
+ *           file part the gateway itself encodes: MetaWriteRule.file) and `default_locale` (a locale or none). Meta takes a
+ *           locale once (482), so an upload is always new; Meta has no DELETE there: its undo is `locales_to_delete` on the
+ *           same edge, with the default put back when Nexus read it before (MD-027).
+ * Plain answers (no call): MD-024 thumbnails only for a video associated with a Page ("Thumbnails can only be created on
+ * Videos that have been associated with a Page"; it comes with step 24's Page step; a creative sets its video's thumbnail
+ * itself), MD-029 Nexus holds no HTML5 playable files.
  *
  * Nothing here spends money: an image, a video or a folder is used only once a creative and an ad use it. Meta has no check
  * (validate_only) on any of these edges (reference/ad-account/adimages, advideos, video_ads guide, business/creative_folders
@@ -48,7 +56,7 @@ import sharp from 'sharp'
 import prisma from '../../../db.js'
 import { fetchPhoto, PhotoUrlError } from '../../images/photo-from-url.service.js'
 import { libraryImageLink } from '../google-ads/asset-images.js'
-import { META_IMAGE_MAX_BYTES, metaFileUrlProblem } from '../../gateway/meta-media-rules.js'
+import { META_CAPTIONS_FILE_NAME, META_IMAGE_MAX_BYTES, META_LOCALE, META_MEDIA_LIST_MAX, META_MEDIA_TEXT, metaFileUrlProblem, metaLinkSecretProblem, metaMediaTextProblem, metaSrtProblem } from '../../gateway/meta-media-rules.js'
 import { changeLines, plural, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { MetaChangeAccount } from './change-account.js'
 import { metaSendChange, metaSendRupload, MetaWriteError, META_UNKNOWN_OUTCOME, type MetaChangeResult, type MetaWriteTarget } from './write-client.js'
@@ -56,7 +64,7 @@ import { localFailure } from './errors.js'
 import { metaReadOne } from './read-client.js'
 import { metaChosenAccount, MetaLiveRefusal } from './live.js'
 import { ownMedia, videoStatusText } from './live-media.js'
-import { listPaged } from './live-objects.js'
+import { fieldRefused, listPaged } from './live-objects.js'
 import { takenIds } from './taken.js'
 
 export const MEDIA_KINDS = ['image', 'video', 'folder', 'undo', 'thumbnail', 'captions', 'playable'] as const
@@ -74,11 +82,9 @@ export const MEDIA_TOOL = 'create-meta-media'
 // ── plain answers (no call) ─────────────────────────────────────────────────────────────────────────────────────────
 
 /** MD-024 — checked 2026-10-21: developers.facebook.com/docs/graph-api/reference/video/thumbnails (F1 M5-10). */
-export const THUMBNAIL_ANSWER = 'Meta takes a custom video thumbnail (POST /<video id>/thumbnails) only for a video associated with a Facebook Page, and only with the Page\'s own access token ("Thumbnails can only be created on Videos that have been associated with a Page"). Nexus gets the Page\'s token with its Page-posts step (step 24), so this upload comes with it. For an ad you do not need it: the creative sets its video\'s thumbnail itself (video_data image_hash) — upload the picture with kind image and use its hash in the creative.'
-/** MD-026 — checked 2026-10-21: developers.facebook.com/docs/graph-api/reference/video/captions; routes/assets.routes.ts (images and videos only). */
-export const CAPTIONS_ANSWER = 'Meta takes captions only as an SRT file uploaded to the video (POST /<video id>/captions, captions_file named <name>.<locale>.srt, at most 200 KB). Nexus holds no caption files — its media library takes images and videos only — so it uploads none. A person adds the .srt file to the video in Meta\'s own screens (Meta Business Suite or Ads Manager, the video\'s captions).'
-/** MD-029 — checked 2026-10-21: reference/ad-account/adplayables.md; SDK adaccount.py create_ad_playable (app_id, name, source, source_url, source_zip). */
-export const PLAYABLE_ANSWER = 'Playable ads are for app-install campaigns only: Meta\'s adplayables edge takes an HTML5 file (or its link) together with the app it promotes. No Nexus business promotes an app and Nexus holds no HTML5 playable files, so Nexus uploads none.'
+export const THUMBNAIL_ANSWER = 'Meta takes a custom video thumbnail (POST /<video id>/thumbnails) only for a video associated with a Facebook Page ("Thumbnails can only be created on Videos that have been associated with a Page"), so this upload comes with Nexus\'s Page step (step 24). For an ad you do not need it: the creative sets its video\'s thumbnail itself (video_data image_hash) — upload the picture with kind image and use its hash in the creative.'
+/** MD-029 — checked 2026-10-21: reference/ad-account/adplayables.md; routes/assets.routes.ts (Nexus's library takes images and videos only). */
+export const PLAYABLE_ANSWER = 'Nexus holds no HTML5 playable files (its media library takes images and videos only), so it uploads no playable.'
 /** MD-011…MD-014 — checked 2026-10-21: reference/ad-account/advideos.md (upload_phase start, transfer, finish, cancel; RECHECK: the sequence is documented nowhere). */
 export const CHUNKED_ANSWER = 'Meta\'s chunked upload (advideos upload_phase start, transfer, finish, cancel) sends a video\'s bytes from the sender\'s own disk in pieces. Nexus holds its videos as files at public https links (its media library), so Meta fetches them itself and no video byte travels through Nexus: use method advideos (Meta fetches the link) or video_ads (Meta\'s resumable upload of the same link).'
 /** MD-006 — reference/ad-image.md "Copying Images": the token's user must read the source account; Nexus: one ad account per business. */
@@ -108,12 +114,21 @@ export interface VideoSource {
   description?: string | null
   swapAudioAssetId?: string | null
 }
-export type UploadRef = { kind: 'image'; hash: string } | { kind: 'video'; videoId: string }
+/**
+ * What an undo takes back: an image by its hash, a video by its id, a caption locale of a video (with the default
+ * locale to put back, when the upload set one and Nexus read the one before).
+ */
+export type UploadRef =
+  | { kind: 'image'; hash: string }
+  | { kind: 'video'; videoId: string }
+  | { kind: 'captions'; videoId: string; locale: string; restoreDefault?: string | null }
+export interface CaptionsSource { videoId: string; locale: string; srt: string; fileName?: string | null; defaultLocale?: string | null }
 export interface MediaUploadRequest {
-  kind: 'image' | 'video' | 'folder' | 'undo'
+  kind: 'image' | 'video' | 'folder' | 'captions' | 'undo'
   images?: ImageSource[]
   video?: VideoSource
   folder?: { name: string; description?: string | null; parentFolderId?: string | null }
+  captions?: CaptionsSource
   uploads?: UploadRef[]
 }
 
@@ -122,11 +137,17 @@ export type MediaRecordItem =
   | { kind: 'image'; source: string; hash: string; new: boolean | null }
   | { kind: 'video'; source: string; videoId: string; method: 'advideos' | 'video_ads'; new: boolean | null }
   | { kind: 'folder'; folderId: string; name: string; portfolioId: string }
-export interface MediaRecord { kind: 'image' | 'video' | 'folder' | 'undo'; items: Array<MediaRecordItem | (UploadRef & { removed?: true; present?: true })> }
+  | { kind: 'captions'; videoId: string; locale: string; new: true; setDefault: string | null; defaultBefore: string | null }
+export interface MediaRecord { kind: 'image' | 'video' | 'folder' | 'captions' | 'undo'; items: Array<MediaRecordItem | (UploadRef & { removed?: true; present?: true })> }
 
 /** The draft, with what the run's finish needs about each request (never recorded as is). */
 export interface MediaDraft extends MetaChangeDraft {
-  media: { kind: MediaUploadRequest['kind']; byStep: Map<number, { source: string; label: string }> }
+  media: {
+    kind: MediaUploadRequest['kind']
+    byStep: Map<number, { source: string; label: string }>
+    /** Captions: the default the upload sets, and the one before it (null when Nexus could not read it). */
+    captions?: { setDefault: string | null; defaultBefore: string | null }
+  }
 }
 
 // ── images ──────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -140,8 +161,11 @@ export interface PreparedMetaImage {
   height: number
   sha256: string
   md5: string
-  /** Base64 — sent to Meta and never stored, logged or shown. */
-  data: string
+  /**
+   * The file itself — held as bytes only (review A6, memory): its Base64 is made at send time, one image at a time, and
+   * never stored, logged, shown or hashed for the plan (the plan holds its sha256).
+   */
+  buffer: Buffer
 }
 
 const fileNameOf = (link: string): string | null => {
@@ -157,9 +181,18 @@ const fileNameOf = (link: string): string | null => {
  * (the one public-address fetch), at most 8 MB, JPG or PNG by its own bytes, width and height read from the file.
  */
 export async function prepareMetaImage(source: ImageSource): Promise<PreparedMetaImage | { problem: string }> {
-  const url = source.imageUrl?.trim() || null
+  let url = source.imageUrl?.trim() || null
   const libraryId = source.libraryImageId?.trim() || null
   if (!!url === !!libraryId) return { problem: 'give libraryImageId or imageUrl (one of them) for each image' }
+  if (url) {
+    // Review A3 — like a video's link: a link with a key, a signature or a sign-in in its query is refused (it would be
+    // recorded and shown), and the link recorded is the one given, in the URL parser's one spelling.
+    let parsed: URL
+    try { parsed = new URL(url) } catch { return { problem: 'the link is not a web address' } }
+    const secret = metaLinkSecretProblem(parsed)
+    if (secret) return { problem: `the link ${secret}` }
+    url = parsed.href
+  }
   let link = url!
   let label: string | null = null
   if (libraryId) {
@@ -175,7 +208,8 @@ export async function prepareMetaImage(source: ImageSource): Promise<PreparedMet
     if (err instanceof PhotoUrlError) return { problem: `${libraryId ?? 'the link'}: ${err.message.replace(/\.$/, '')}` }
     throw err
   }
-  const where = libraryId ?? fetched.url
+  // The place said and recorded: the library id or the link given — never where a redirect went (it may carry a signature).
+  const where = libraryId ?? url!
   if (!(META_IMAGE_TYPES as readonly string[]).includes(fetched.mimeType)) return { problem: `${where} is ${fetched.mimeType}: Meta's ads take JPG or PNG images` }
   if (fetched.bytes > META_IMAGE_MAX_BYTES) return { problem: `${where} is ${Math.ceil(fetched.bytes / 1024)} KB: Nexus sends Meta images of at most 8 MB` }
   let width = 0
@@ -187,15 +221,15 @@ export async function prepareMetaImage(source: ImageSource): Promise<PreparedMet
   } catch { /* not readable: said below */ }
   if (!width || !height) return { problem: `${where}: Nexus could not read the image's width and height` }
   return {
-    source: libraryId ?? fetched.url,
-    label: (label ?? fileNameOf(fetched.url) ?? 'image').slice(0, 100),
+    source: where,
+    label: (label ?? fileNameOf(url ?? link) ?? 'image').slice(0, 100),
     mimeType: fetched.mimeType as PreparedMetaImage['mimeType'],
     bytes: fetched.bytes,
     width,
     height,
     sha256: fetched.contentHash,
     md5: createHash('md5').update(fetched.buffer).digest('hex'),
-    data: fetched.buffer.toString('base64'),
+    buffer: fetched.buffer,
   }
 }
 
@@ -234,8 +268,12 @@ async function imageWasNew(target: MetaWriteTarget, act: string, image: Prepared
 function sendImage(act: string, image: PreparedMetaImage, foundBefore: boolean | null) {
   return async (target: MetaWriteTarget): Promise<MetaChangeResult> => {
     const operation = 'media.imageUpload'
+    // Exactly the approved picture (the plan holds its sha256): checked again before its Base64 is made, here, alone.
+    if (createHash('sha256').update(image.buffer).digest('hex') !== image.sha256) {
+      throw new MetaWriteError(localFailure(`"${image.label}" is not the picture that was approved; nothing was sent.`, 'IMAGE_MOVED'), operation, 'not_sent')
+    }
     const sentAt = nowSec()
-    const result = await metaSendChange(target, { objectId: act, kind: 'adaccount', params: { bytes: image.data }, operation, edge: 'adimages', timeoutMs: 120_000 })
+    const result = await metaSendChange(target, { objectId: act, kind: 'adaccount', params: { bytes: image.buffer.toString('base64') }, operation, edge: 'adimages', timeoutMs: 120_000 })
     const uploaded = uploadedImageOf(result.node)
     if (!uploaded) {
       throw new MetaWriteError(localFailure(`Meta answered the upload of "${image.label}" without one image hash, so Nexus cannot say what it made. ${META_UNKNOWN_OUTCOME}`, 'NO_HASH'), operation, 'unknown')
@@ -280,8 +318,9 @@ async function imageDraft(account: MetaChangeAccount, sources: ImageSource[]): P
     byStep.set(i + 1, { source: image.source, label: image.label })
     return {
       step: i + 1, label, kind: 'adaccount', objectId: act,
-      // The plan holds the bytes themselves: the run sends exactly the picture that was approved.
-      params: { bytes: image.data },
+      // A custom sender (review A6): the plan holds the picture's sha256, never its Base64; the sender sends `bytes` = the
+      // Base64 of exactly these bytes, made at send time.
+      params: { bytes_sha256: image.sha256 },
       check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
       operation: 'media.imageUpload', edge: 'adimages',
       send: sendImage(act, image, before[i]),
@@ -361,7 +400,11 @@ async function pollVideo(target: MetaWriteTarget, videoId: string, fields: strin
 }
 
 const settled = (state: VideoState) => state.videoStatus !== 'processing' || state.uploading === 'error'
-const swapSettled = (state: VideoState) => !!state.replaceAudioStatus && !/^(IN_PROGRESS|PENDING|PROCESSING|NOT_STARTED)$/i.test(state.replaceAudioStatus)
+/**
+ * Review B6 — the music swap is over only on SUCCESSFUL or a word that says it failed; any other word (one Meta does not
+ * document) counts as still running until the polls run out (OCC 2026-06-01 names only SUCCESSFUL).
+ */
+const swapSettled = (state: VideoState) => !!state.replaceAudioStatus && /^(SUCCESSFUL|SUCCESS|FAILED|FAILURE|ERROR|CANCELLED|CANCELED|REJECTED)$/i.test(state.replaceAudioStatus)
 
 /** D3 B step 3: Meta refused the system user's video upload as such — the Owner uploads it in Meta's screens. */
 function ownerUploads(err: unknown): unknown {
@@ -438,6 +481,16 @@ async function videoDraft(account: MetaChangeAccount, video: VideoSource): Promi
   if (sources.length !== 1) return { refusal: 'Name the video by exactly one of libraryVideoId (Nexus\'s library), videoUrl (a public https link) or instagramMediaId (the chosen Instagram account\'s video).' }
   const method: 'advideos' | 'video_ads' = video.method === 'video_ads' ? 'video_ads' : 'advideos'
   if (video.swapAudioAssetId && !video.instagramMediaId) return { refusal: 'Meta swaps the music only of an Instagram Reel brought in with instagramMediaId (its 2026-06-01 change): name the Reel.' }
+  // Review B4 — Meta's video-ads finish takes only the video (guide; SDK create_video_ad's title is not on its finish):
+  // a name, title or description is refused there in words, never dropped.
+  if (method === 'video_ads' && (video.name || video.title || video.description)) {
+    return { refusal: 'Meta\'s video_ads finish takes only the video: a name, title or description is not sent there. Use method advideos for a name, a title or a description.' }
+  }
+  // Review A6 — step 23's own text check (no bidirectional control, at least one visible character; a title in bytes).
+  const textProblem = (video.name ? metaMediaTextProblem(video.name, META_MEDIA_TEXT.name, 'name') : null)
+    ?? (video.title ? metaMediaTextProblem(video.title, META_MEDIA_TEXT.title, 'title', 'bytes') : null)
+    ?? (video.description ? metaMediaTextProblem(video.description, META_MEDIA_TEXT.description, 'description') : null)
+  if (textProblem) return { refusal: `Nothing was asked of Meta: ${textProblem}.` }
   const act = `act_${account.adAccountId}`
   const text = { ...(video.name ? { name: video.name } : {}), ...(video.title ? { title: video.title } : {}), ...(video.description ? { description: video.description } : {}) }
   let source: string
@@ -513,10 +566,15 @@ async function folderDraft(account: MetaChangeAccount, folder: NonNullable<Media
   const portfolio = chosen.businessId
   if (!portfolio) return { refusal: 'The chosen ad account names no business portfolio, so Nexus makes no folder in a portfolio\'s media library.' }
   if ((await takenIds('PORTFOLIO', [portfolio])).has(portfolio)) return { refusal: FOLDER_TAKEN }
-  const read = await listPaged(account.target.connectionId, 'media.folders', `${portfolio}/creative_folders`, { fields: 'id,name,parent_folder_id' }, 500)
+  // Review A6 — step 23's own text check.
+  const textProblem = metaMediaTextProblem(folder.name.trim(), META_MEDIA_TEXT.folderName, 'the folder\'s name')
+    ?? (folder.description?.trim() ? metaMediaTextProblem(folder.description.trim(), META_MEDIA_TEXT.folderDescription, 'its description') : null)
+  if (textProblem) return { refusal: `Nothing was asked of Meta: ${textProblem}.` }
+  // Review A5 — the same reach as the gateway's check (META_MEDIA_LIST_MAX), failing closed past it.
+  const read = await listPaged(account.target.connectionId, 'media.folders', `${portfolio}/creative_folders`, { fields: 'id,name,parent_folder_id' }, META_MEDIA_LIST_MAX)
   const parent = folder.parentFolderId?.trim() || null
   if (parent && !read.rows.some((row) => String(row.id ?? '') === parent)) {
-    return { refusal: `Nothing was asked of Meta: folder ${parent} is not one of the portfolio's media-library folders${read.more ? ' Nexus can read (it reads the first 500)' : ''} (meta-media-library view folders lists them).` }
+    return { refusal: `Nothing was asked of Meta: folder ${parent} is not one of the portfolio's media-library folders${read.more ? ` Nexus can read (it reads the first ${META_MEDIA_LIST_MAX})` : ''} (meta-media-library view folders lists them).` }
   }
   const name = folder.name.trim()
   const twin = read.rows.some((row) => typeof row.name === 'string' && row.name.trim().toLowerCase() === name.toLowerCase() && (String(row.parent_folder_id ?? '') || null) === parent)
@@ -551,38 +609,152 @@ async function folderDraft(account: MetaChangeAccount, folder: NonNullable<Media
   }
 }
 
+// ── a video of the chosen account's library (captions, undo) ───────────────────────────────────────────────────────
+
+/**
+ * Review A2 / B3 — the chosen ad account's library videos: listed on act_<id>/advideos or act_<id>/video_ads (a video-ads
+ * upload; whether advideos lists one is LIVE-PROBE MD-019u), each read up to META_MEDIA_LIST_MAX like the gateway's own
+ * check. `complete`: both lists were read to their end (else an id not seen is not confirmed).
+ */
+export async function libraryVideos(connectionId: string, adAccountId: string): Promise<{ ids: Set<string>; complete: boolean }> {
+  const ids = new Set<string>()
+  let complete = true
+  for (const edge of ['advideos', 'video_ads']) {
+    const read = await listPaged(connectionId, `media.${edge === 'advideos' ? 'videoLibrary' : 'videoAdsLibrary'}`, `act_${adAccountId}/${edge}`, { fields: 'id' }, META_MEDIA_LIST_MAX)
+    for (const row of read.rows) ids.add(String(row.id ?? ''))
+    if (read.more) complete = false
+  }
+  return { ids, complete }
+}
+
+/** Does any value under a `video_id` key, at any depth of this creative, name the video? */
+function namesVideo(value: unknown, videoId: string, depth = 0): boolean {
+  if (depth > 12 || !value || typeof value !== 'object') return false
+  if (Array.isArray(value)) return value.some((v) => namesVideo(v, videoId, depth + 1))
+  return Object.entries(value as Record<string, unknown>).some(([key, v]) => (key === 'video_id' && String(v) === videoId) || namesVideo(v, videoId, depth + 1))
+}
+
+/**
+ * Review A1 — the creatives of the chosen ad account that use a video (its `video_id`, the `object_story_spec` video data,
+ * the `asset_feed_spec` videos), read up to META_MEDIA_LIST_MAX; `complete` false: more creatives than that (not confirmed).
+ */
+async function creativesUsingVideos(connectionId: string, act: string, videoIds: string[]): Promise<{ by: Map<string, string[]>; complete: boolean }> {
+  const read = await listPaged(connectionId, 'media.videoUse', `${act}/adcreatives`, { fields: 'id,video_id,object_story_spec,asset_feed_spec' }, META_MEDIA_LIST_MAX)
+  const by = new Map<string, string[]>(videoIds.map((id) => [id, []]))
+  for (const row of read.rows) {
+    for (const id of videoIds) if (namesVideo(row, id)) by.get(id)!.push(String(row.id ?? '?'))
+  }
+  return { by, complete: !read.more }
+}
+
+/** A video's caption locales and its default one, as Meta answers them now (`is_default` is SDK only: null when refused). */
+export async function videoCaptions(connectionId: string, videoId: string): Promise<{ locales: Set<string>; defaultLocale: string | null; defaultKnown: boolean }> {
+  const read = async (fields: string) => listPaged(connectionId, 'media.videoCaptions', `${videoId}/captions`, { fields }, 100)
+  let rows: Array<Record<string, unknown>>
+  let defaultKnown = true
+  try {
+    rows = (await read('locale,is_default')).rows
+  } catch (err) {
+    if (!fieldRefused(err)) throw err
+    rows = (await read('locale')).rows
+    defaultKnown = false
+  }
+  const locales = new Set(rows.map((r) => (typeof r.locale === 'string' ? r.locale : '')).filter(Boolean))
+  const marked = rows.find((r) => r.is_default === true)
+  return { locales, defaultLocale: defaultKnown ? (typeof marked?.locale === 'string' ? marked.locale : 'none') : null, defaultKnown }
+}
+
+// ── captions (MD-026) ──────────────────────────────────────────────────────────────────────────────────────────────
+
+async function captionsDraft(account: MetaChangeAccount, captions: CaptionsSource): Promise<MediaDraft | { refusal: string }> {
+  const videoId = captions.videoId.trim()
+  const locale = captions.locale.trim()
+  if (!/^\d{1,20}$/.test(videoId)) return { refusal: 'Name the video by its id (digits; meta-media-library view videos lists them).' }
+  if (!META_LOCALE.test(locale)) return { refusal: 'Name the caption locale as Meta writes it (it_IT, en_US).' }
+  const srt = captions.srt.replace(/\r\n?/g, '\n')
+  const srtProblem = metaSrtProblem(srt)
+  if (srtProblem) return { refusal: `Nothing was asked of Meta: ${srtProblem}.` }
+  const base = (captions.fileName?.trim() || 'captions').toLowerCase().replace(/\.srt$/, '').replace(/[^a-z0-9_-]+/g, '-').replace(/^[-_]+/, '').slice(0, 40) || 'captions'
+  const fileName = `${base}.${locale}.srt`
+  if (!META_CAPTIONS_FILE_NAME.test(fileName)) return { refusal: `Nothing was asked of Meta: ${fileName} is not a caption file name Meta takes (<name>.<locale>.srt).` }
+  const library = await libraryVideos(account.target.connectionId, account.adAccountId)
+  if (!library.ids.has(videoId)) {
+    return { refusal: `Nothing was asked of Meta: video ${videoId} is not one Nexus can confirm in the chosen ad account's video library${library.complete ? '' : ` (it reads the first ${META_MEDIA_LIST_MAX} of advideos and of video_ads)`}.` }
+  }
+  const now = await videoCaptions(account.target.connectionId, videoId)
+  // Meta takes a locale once (482: "contain locales that had been applied to video"): an upload here is always new.
+  if (now.locales.has(locale)) return { refusal: `Nothing was asked of Meta: video ${videoId} already has captions in ${locale}, and Meta takes a locale only once. Take those back first (the undo of the upload that added them), or upload another locale.` }
+  const setDefault = captions.defaultLocale?.trim() || null
+  if (setDefault && setDefault !== 'none' && setDefault !== locale && !now.locales.has(setDefault)) {
+    return { refusal: `Nothing was asked of Meta: the default caption locale is none, ${locale} (this file) or one the video already has (${[...now.locales].join(', ') || 'none yet'}).` }
+  }
+  const label = `Add ${locale} captions (${fileName}, ${Math.ceil(Buffer.byteLength(srt, 'utf8') / 1024)} KB) to video ${videoId} of ad account act_${account.adAccountId}${setDefault ? `; default caption: ${setDefault}` : ''}`
+  const params: Record<string, string> = { captions_file: srt, captions_file_name: fileName, ...(setDefault ? { default_locale: setDefault } : {}) }
+  const request: MetaChangeRequest = {
+    step: 1, label, kind: 'libraryvideo', objectId: videoId, params,
+    check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
+    operation: 'media.captionsUpload', edge: 'captions',
+    doneSentence: () => `${label}: Meta took it.`,
+  }
+  return {
+    summary: `Meta: add ${locale} captions to video ${videoId} (captions spend nothing).`,
+    changes: changeLines([[`Video ${videoId} captions`, [...now.locales].join(', ') || 'none', [...now.locales, locale].join(', ')], ...(setDefault ? [[`Video ${videoId} default caption`, now.defaultKnown ? now.defaultLocale : 'not read', setDefault] as [string, unknown, unknown]] : [])]).changes,
+    totals: { captions: 1, requests: 1 },
+    warnings: [
+      'Meta has no check for captions (its captions edge lists no validate_only): the preview is built from the file and the video as they are now.',
+      'Captions spend nothing. The file is sent once and never kept by Nexus.',
+      `Its undo takes the ${locale} captions off the video again (Meta's locales_to_delete; Meta has no delete on this edge)${setDefault ? (now.defaultKnown ? ` and puts the default caption back to ${now.defaultLocale}` : ', but Nexus could not read the default caption before, so the undo cannot put it back') : ''}.`,
+    ],
+    spendsMoney: [], skipped: [], requests: [request],
+    stands: { kind: 'captions', videoId, locale, fileName, srtSha256: createHash('sha256').update(srt).digest('hex'), locales: [...now.locales].sort(), defaultLocale: now.defaultLocale, setDefault },
+    before: { kind: 'captions', items: [{ kind: 'captions', videoId, locales: [...now.locales].sort(), defaultLocale: now.defaultLocale }] },
+    after: { kind: 'captions', items: [] },
+    media: { kind: 'captions', byStep: new Map([[1, { source: videoId, label: locale }]]), captions: { setDefault, defaultBefore: now.defaultKnown ? now.defaultLocale : null } },
+  }
+}
+
 // ── undo: take back what an upload made new ─────────────────────────────────────────────────────────────────────────
+
+const keyOf = (u: UploadRef) => (u.kind === 'image' ? `image:${u.hash}` : u.kind === 'video' ? `video:${u.videoId}` : `captions:${u.videoId}:${u.locale}`)
 
 /**
  * The change record of THIS business that made this upload NEW in this ad account (an earlier create-meta-media change,
- * not undone), or null. Row-level security: another business's records are never read.
+ * not undone), or null. A caption's default to put back must be the one that record kept. Row-level security: another
+ * business's records are never read.
  */
 async function recordOf(ref: UploadRef, adAccountId: string): Promise<string | null> {
-  const item = ref.kind === 'image' ? { kind: 'image', hash: ref.hash, new: true } : { kind: 'video', videoId: ref.videoId, new: true }
+  const item = ref.kind === 'image' ? { kind: 'image', hash: ref.hash, new: true }
+    : ref.kind === 'video' ? { kind: 'video', videoId: ref.videoId, new: true }
+      : { kind: 'captions', videoId: ref.videoId, locale: ref.locale, new: true }
   const rows = await prisma.agentChange.findMany({
     where: { toolName: MEDIA_TOOL, undoneAt: null, after: { path: ['items'], array_contains: [item] } },
     select: { id: true, after: true },
     take: 20,
   })
-  const row = rows.find((r) => (r.after as { adAccountId?: unknown } | null)?.adAccountId === adAccountId)
+  const row = rows.find((r) => {
+    const after = r.after as { adAccountId?: unknown; items?: Array<Record<string, unknown>> } | null
+    if (after?.adAccountId !== adAccountId) return false
+    if (ref.kind !== 'captions' || !ref.restoreDefault) return true
+    // The default put back is only the one the upload replaced (its record says so).
+    return (after.items ?? []).some((i) => i.kind === 'captions' && i.videoId === ref.videoId && i.locale === ref.locale && i.setDefault && i.defaultBefore === ref.restoreDefault)
+  })
   return row?.id ?? null
 }
 
 async function undoDraft(account: MetaChangeAccount, uploads: UploadRef[]): Promise<MediaDraft | { refusal: string }> {
-  if (!uploads.length) return { refusal: 'Name the uploads to take back (each image by its hash, each video by its id).' }
+  if (!uploads.length) return { refusal: 'Name the uploads to take back (each image by its hash, each video by its id, each caption by its video and locale).' }
   if (uploads.length > MAX_UNDO) return { refusal: `At most ${MAX_UNDO} uploads per request.` }
-  const keyOf = (u: UploadRef) => (u.kind === 'image' ? `image:${u.hash}` : `video:${u.videoId}`)
-  if (uploads.some((u) => (u.kind === 'image' ? !u.hash : !u.videoId))) return { refusal: 'Name each image by its hash and each video by its videoId.' }
+  if (uploads.some((u) => (u.kind === 'image' ? !u.hash : !u.videoId || (u.kind === 'captions' && !META_LOCALE.test(u.locale ?? ''))))) return { refusal: 'Name each image by its hash, each video by its videoId and each caption by its videoId and locale.' }
   if (new Set(uploads.map(keyOf)).size !== uploads.length) return { refusal: 'Name each upload once.' }
   const act = `act_${account.adAccountId}`
   const refusals: string[] = []
   for (const upload of uploads) {
     if (!(await recordOf(upload, account.adAccountId))) {
-      refusals.push(`${upload.kind === 'image' ? `image ${upload.hash}` : `video ${upload.videoId}`} is not one a create-meta-media upload of this business made new in ad account ${act} (Nexus removes only that: never a file it did not create, and never one that was already there).`)
+      refusals.push(`${upload.kind === 'image' ? `image ${upload.hash}` : upload.kind === 'video' ? `video ${upload.videoId}` : `the ${upload.locale} captions of video ${upload.videoId}${upload.restoreDefault ? ` (with default ${upload.restoreDefault})` : ''}`} is not one a create-meta-media upload of this business made new in ad account ${act} (Nexus removes only that: never a file it did not create, and never one that was already there).`)
     }
   }
   if (refusals.length) return { refusal: `Nothing was asked of Meta: ${refusals.join(' ')}` }
-  const hashes = uploads.filter((u): u is Extract<UploadRef, { kind: 'image' }> => u.kind === 'image').map((u) => u.hash)
+  const hashes = uploads.flatMap((u) => (u.kind === 'image' ? [u.hash] : []))
   const images = new Map<string, { used: string[] }>()
   if (hashes.length) {
     const read = await metaReadOne<{ data?: Array<Record<string, unknown>> }>({ connectionId: account.target.connectionId }, { operation: 'media.imageUse', path: `${act}/adimages`, query: { hashes, fields: 'hash,status,creatives,is_associated_creatives_in_adgroups' } })
@@ -592,25 +764,48 @@ async function undoDraft(account: MetaChangeAccount, uploads: UploadRef[]): Prom
       images.set(row.hash, { used: creatives.length ? creatives : row.is_associated_creatives_in_adgroups === true ? ['an ad'] : [] })
     }
   }
-  const videoIds = uploads.filter((u): u is Extract<UploadRef, { kind: 'video' }> => u.kind === 'video').map((u) => u.videoId)
-  const library = videoIds.length ? await listPaged(account.target.connectionId, 'media.videoLibrary', `${act}/advideos`, { fields: 'id' }, 500) : null
-  const inLibrary = new Set((library?.rows ?? []).map((row) => String(row.id ?? '')))
+  const videoIds = uploads.flatMap((u) => (u.kind === 'video' ? [u.videoId] : []))
+  const captionVideos = [...new Set(uploads.flatMap((u) => (u.kind === 'captions' ? [u.videoId] : [])))]
+  // Review A2 / B3 — the library read on both edges (advideos and video_ads), failing closed past META_MEDIA_LIST_MAX.
+  const library = videoIds.length || captionVideos.length ? await libraryVideos(account.target.connectionId, account.adAccountId) : null
+  // Review A1 — one read of the account's creatives: a video a creative uses stays (an ad would lose its video).
+  const use = videoIds.length ? await creativesUsingVideos(account.target.connectionId, act, videoIds) : null
+  const captionsNow = new Map<string, Set<string>>()
+  for (const videoId of captionVideos) {
+    if (library?.ids.has(videoId)) captionsNow.set(videoId, (await videoCaptions(account.target.connectionId, videoId)).locales)
+  }
   const skipped: string[] = []
   const going: UploadRef[] = []
+  const notInLibrary = (videoId: string) => `Video ${videoId} is not in the ad account's video library${library?.complete ? '' : ` Nexus can read (the first ${META_MEDIA_LIST_MAX} of advideos and of video_ads)`} any more.`
   for (const upload of uploads) {
     if (upload.kind === 'image') {
       const image = images.get(upload.hash)
       if (!image) { skipped.push(`Image ${upload.hash} is no longer in the ad account's library.`); continue }
       // M5-03 — "You can only delete ad images not currently being used in an ad creative."
       if (image.used.length) { skipped.push(`Image ${upload.hash} stays: ${image.used.length === 1 && image.used[0] === 'an ad' ? 'an ad uses it' : `creative${image.used.length === 1 ? '' : 's'} ${image.used.slice(0, 5).join(', ')} use${image.used.length === 1 ? 's' : ''} it`}, and Meta deletes an image only while no creative uses it.`); continue }
-    } else if (!inLibrary.has(upload.videoId)) {
-      skipped.push(`Video ${upload.videoId} is not in the ad account's video library${library?.more ? ' Nexus can read (its first 500)' : ''} any more.`)
-      continue
+    } else if (upload.kind === 'video') {
+      if (!library?.ids.has(upload.videoId)) { skipped.push(notInLibrary(upload.videoId)); continue }
+      const users = use?.by.get(upload.videoId) ?? []
+      if (users.length) { skipped.push(`Video ${upload.videoId} stays: creative${users.length === 1 ? '' : 's'} ${users.slice(0, 5).join(', ')} use${users.length === 1 ? 's' : ''} it, and an ad would lose its video.`); continue }
+      if (!use?.complete) { skipped.push(`Video ${upload.videoId} stays: the ad account has more than ${META_MEDIA_LIST_MAX} creatives, so Nexus cannot confirm no ad uses it.`); continue }
+    } else {
+      if (!library?.ids.has(upload.videoId)) { skipped.push(notInLibrary(upload.videoId)); continue }
+      if (!captionsNow.get(upload.videoId)?.has(upload.locale)) { skipped.push(`Video ${upload.videoId} has no ${upload.locale} captions any more.`); continue }
     }
     going.push(upload)
   }
   if (!going.length) return { refusal: `Nothing to take back: ${skipped.join(' ')}` }
   const requests: MetaChangeRequest[] = going.map((upload, i) => {
+    if (upload.kind === 'captions') {
+      const label = `Take the ${upload.locale} captions (added by Nexus) off video ${upload.videoId} of ad account ${act}${upload.restoreDefault ? `; default caption back to ${upload.restoreDefault}` : ''}`
+      return {
+        step: i + 1, label, kind: 'libraryvideo', objectId: upload.videoId,
+        params: { locales_to_delete: JSON.stringify([upload.locale]), ...(upload.restoreDefault ? { default_locale: upload.restoreDefault } : {}) },
+        check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
+        operation: 'media.captionsRemove', edge: 'captions',
+        doneSentence: () => `${label}: Meta took it.`,
+      }
+    }
     const label = upload.kind === 'image' ? `Remove image ${upload.hash} (uploaded new by Nexus) from ad account ${act}` : `Remove video ${upload.videoId} (uploaded by Nexus) from ad account ${act}`
     return {
       step: i + 1, label, kind: 'adaccount', objectId: act,
@@ -620,12 +815,14 @@ async function undoDraft(account: MetaChangeAccount, uploads: UploadRef[]): Prom
       doneSentence: () => `${label}: Meta removed it.`,
     }
   })
+  const lineOf = (u: UploadRef): [string, unknown, unknown] => (u.kind === 'captions' ? [`Video ${u.videoId} ${u.locale} captions`, 'on the video', 'taken off'] : [u.kind === 'image' ? `Image ${u.hash}` : `Video ${u.videoId}`, 'in the ad account\'s library', 'removed'])
   return {
-    summary: `Meta: take back ${plural(going.length, 'upload')} Nexus made new in ad account ${act} (removed from its library).`,
-    changes: changeLines(going.map((u) => [u.kind === 'image' ? `Image ${u.hash}` : `Video ${u.videoId}`, 'in the ad account\'s library', 'removed'])).changes,
+    summary: `Meta: take back ${plural(going.length, 'upload')} Nexus made new in ad account ${act}.`,
+    changes: changeLines(going.map(lineOf)).changes,
     totals: { remove: going.length, requests: requests.length, ...(skipped.length ? { stays: skipped.length } : {}) },
     warnings: [
-      'Meta has no check for a removal (its adimages and advideos edges list no validate_only), and a removal cannot be put back by Nexus: upload the file again (an image gets the same hash).',
+      'Meta has no check for a removal (its adimages, advideos and captions edges list no validate_only), and a removal cannot be put back by Nexus: upload the file again (an image gets the same hash).',
+      ...(videoIds.length ? ['A video a creative of this account uses stays (Nexus reads the creatives first): an ad would lose its video. Meta may still refuse a removal it does not allow.'] : []),
       'A removal spends nothing.',
     ],
     spendsMoney: [], skipped, requests,
@@ -641,7 +838,6 @@ async function undoDraft(account: MetaChangeAccount, uploads: UploadRef[]): Prom
 /** A plain answer for a kind or a method Nexus does not send (no call), or null. */
 export function mediaPlainAnswer(kind: MediaKind, request: { video?: VideoSource | null; copyFrom?: unknown }): string | null {
   if (kind === 'thumbnail') return THUMBNAIL_ANSWER
-  if (kind === 'captions') return CAPTIONS_ANSWER
   if (kind === 'playable') return PLAYABLE_ANSWER
   if (kind === 'video' && request.video?.method === 'chunked') return CHUNKED_ANSWER
   if (kind === 'image' && request.copyFrom) return COPY_ANSWER
@@ -655,6 +851,7 @@ export async function mediaDraft(account: MetaChangeAccount, request: MediaUploa
       case 'image': return await imageDraft(account, request.images ?? [])
       case 'video': return request.video ? await videoDraft(account, request.video) : { refusal: 'Name the video (video.libraryVideoId, video.videoUrl or video.instagramMediaId).' }
       case 'folder': return request.folder?.name?.trim() ? await folderDraft(account, request.folder) : { refusal: 'Name the folder (folder.name).' }
+      case 'captions': return request.captions ? await captionsDraft(account, request.captions) : { refusal: 'Name the video, the locale and the SRT text (captions.videoId, captions.locale, captions.srt).' }
       case 'undo': return await undoDraft(account, request.uploads ?? [])
     }
   } catch (err) {

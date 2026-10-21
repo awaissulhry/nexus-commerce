@@ -75,7 +75,7 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'portfolio'
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'portfolio' | 'libraryvideo'
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -154,9 +154,9 @@ export async function metaRestCall(req: Omit<MetaCallRequest, 'auth'>): Promise<
 
 /**
  * The edges a change creates on (step 18: an object's budget schedules; step 23: the chosen ad account's images, videos
- * and video-ads uploads, its business portfolio's media-library folders).
+ * and video-ads uploads, its business portfolio's media-library folders, a library video's captions).
  */
-export type MetaWriteEdge = 'budget_schedules' | 'adimages' | 'advideos' | 'video_ads' | 'creative_folders'
+export type MetaWriteEdge = 'budget_schedules' | 'adimages' | 'advideos' | 'video_ads' | 'creative_folders' | 'captions'
 
 export interface MetaUploadRequest {
   connectionId: string

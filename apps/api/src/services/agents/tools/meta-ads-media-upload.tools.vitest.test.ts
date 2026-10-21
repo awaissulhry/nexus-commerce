@@ -18,6 +18,9 @@ const h = vi.hoisted(() => ({
   videos: new Map<string, { url: string; label: string | null }>(),
   files: new Map<string, { buffer: Buffer; mimeType: string }>(),
   records: [] as Array<{ id: string; after: unknown }>,
+  /** listPaged's answers by path (rows; `more` when the path is in `longer`). */
+  lists: new Map<string, Array<Record<string, unknown>>>(),
+  longer: new Set<string>(),
   read: vi.fn(),
   listPaged: vi.fn(),
   send: vi.fn(),
@@ -67,7 +70,7 @@ vi.mock('../../../db.js', () => ({
 
 import { META_ADS_MEDIA_UPLOAD_TOOLS } from './meta-ads-media-upload.tools.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
-import { __mediaTiming, CAPTIONS_ANSWER, CHUNKED_ANSWER, COPY_ANSWER, FOLDER_TAKEN, OWNER_UPLOAD_STEPS, PLAYABLE_ANSWER, THUMBNAIL_ANSWER } from '../../marketing/meta-ads/change-media.js'
+import { __mediaTiming, CHUNKED_ANSWER, COPY_ANSWER, FOLDER_TAKEN, OWNER_UPLOAD_STEPS, PLAYABLE_ANSWER, THUMBNAIL_ANSWER } from '../../marketing/meta-ads/change-media.js'
 import { MetaWriteError } from '../../marketing/meta-ads/write-client.js'
 import { localFailure } from '../../marketing/meta-ads/errors.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
@@ -115,7 +118,8 @@ beforeEach(async () => {
     return { buffer: file.buffer, mimeType: file.mimeType, bytes: file.buffer.length, contentHash: sha(file.buffer), host: new URL(link).hostname, url: new URL(link).toString() }
   })
   h.read.mockReset(); h.read.mockImplementation(async () => imagesHolding())
-  h.listPaged.mockReset(); h.listPaged.mockImplementation(async () => ({ rows: [], more: false, totalCount: null }))
+  h.lists = new Map(); h.longer = new Set()
+  h.listPaged.mockReset(); h.listPaged.mockImplementation(async (_c: string, _op: string, path: string) => ({ rows: h.lists.get(path) ?? [], more: h.longer.has(path), totalCount: null }))
   h.send.mockReset(); h.rupload.mockReset(); h.ownMedia.mockReset()
   h.taken.mockReset(); h.taken.mockImplementation(async () => new Set<string>())
 })
@@ -138,15 +142,15 @@ describe('the tool', () => {
   })
   it('thumbnail, captions, playable, chunked bytes and a copy from another account: plain answers, nothing read or sent', async () => {
     for (const [args, words] of [
-      [{ kind: 'thumbnail' }, THUMBNAIL_ANSWER], [{ kind: 'captions' }, CAPTIONS_ANSWER], [{ kind: 'playable' }, PLAYABLE_ANSWER],
+      [{ kind: 'thumbnail' }, THUMBNAIL_ANSWER], [{ kind: 'playable' }, PLAYABLE_ANSWER],
       [{ kind: 'video', video: { videoUrl: 'https://cdn.example.com/v.mp4', method: 'chunked' } }, CHUNKED_ANSWER],
       [{ kind: 'image', images: [{ libraryImageId: 'da_hero' }], copyFromAccount: { sourceAccountId: '5555555555', hash: 'abc' } }, COPY_ANSWER],
     ] as Array<[Record<string, unknown>, string]>) {
       expect(await tool.handler(ask(args), asker)).toEqual({ ok: false, error: words })
       expect(await tool.execute!(ask(args), approved({}))).toEqual({ ok: false, error: `Not run: ${words}` })
     }
-    expect(THUMBNAIL_ANSWER).toMatch(/Page's own access token/)
-    expect(CAPTIONS_ANSWER).toMatch(/Nexus holds no caption files/)
+    expect(THUMBNAIL_ANSWER).toMatch(/Thumbnails can only be created on Videos that have been associated with a Page.*step 24/)
+    expect(PLAYABLE_ANSWER).toBe('Nexus holds no HTML5 playable files (its media library takes images and videos only), so it uploads no playable.')
     expect(h.fetchPhoto).not.toHaveBeenCalled()
     expect(h.read).not.toHaveBeenCalled()
     expect(h.send).not.toHaveBeenCalled()
@@ -182,6 +186,10 @@ describe('images', () => {
     h.fetchPhoto.mockImplementationOnce(async () => { throw new PhotoUrlError('The address is not a public internet address.', 400) })
     expect(await preview({ kind: 'image', images: [{ imageUrl: 'https://cdn.example.com/given.png' }] })).toEqual({ ok: false, error: expect.stringMatching(/the link: The address is not a public internet address/) })
     expect(await preview({ kind: 'image', images: [{ libraryImageId: 'da_hero', imageUrl: 'https://cdn.example.com/given.png' }] })).toEqual({ ok: false, error: expect.stringMatching(/one of them/) })
+    // Review A3 — a link with a key or a signature is refused before any fetch (it would be recorded), like a video's.
+    h.fetchPhoto.mockClear()
+    expect(await preview({ kind: 'image', images: [{ imageUrl: 'https://cdn.example.com/given.png?X-Amz-Signature=abc&X-Amz-Expires=60' }] })).toEqual({ ok: false, error: expect.stringMatching(/the link carries no key, signature or sign-in/) })
+    expect(h.fetchPhoto).not.toHaveBeenCalled()
     expect(h.send).not.toHaveBeenCalled()
     h.account = { refusal: 'No Meta ad account is chosen for this business yet.' }
     expect(await preview({ kind: 'image', images: [{ libraryImageId: 'da_hero' }] })).toEqual({ ok: false, error: 'No Meta ad account is chosen for this business yet.' })
@@ -278,6 +286,55 @@ describe('videos', () => {
   })
 })
 
+describe('videos — review fixes', () => {
+  it('B4: video_ads takes only the video — a name, title or description is refused in words, never dropped; A6: text checked', async () => {
+    expect(await preview({ kind: 'video', video: { videoUrl: 'https://cdn.example.com/v.mp4', method: 'video_ads', title: 'Spot A' } })).toEqual({ ok: false, error: expect.stringMatching(/video_ads finish takes only the video.*Use method advideos/) })
+    expect(await preview({ kind: 'video', video: { libraryVideoId: 'da_clip', name: '\u200B\u200B' } })).toEqual({ ok: false, error: expect.stringMatching(/name has at least one visible character/) })
+    expect(await preview({ kind: 'video', video: { libraryVideoId: 'da_clip', title: 'Spot \u202Eabc' } })).toEqual({ ok: false, error: expect.stringMatching(/bidirectional control/) })
+    expect(h.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('captions (MD-026)', () => {
+  const SRT = '1\n00:00:01,000 --> 00:00:03,500\nCiao!\n\n2\n00:00:04,000 --> 00:00:06,000\nSpedizione gratuita'
+  const VIDEO = '120000000000501'
+  it('onto a library video only, a locale once, the SRT checked; the file goes once, never shown', async () => {
+    expect(await preview({ kind: 'captions', captions: { videoId: VIDEO, locale: 'it_IT', srt: SRT } })).toEqual({ ok: false, error: expect.stringMatching(/not one Nexus can confirm in the chosen ad account's video library/) })
+    h.lists.set(`${ACT}/video_ads`, [{ id: VIDEO }])
+    h.lists.set(`${VIDEO}/captions`, [{ locale: 'en_US', is_default: true }])
+    expect(await preview({ kind: 'captions', captions: { videoId: VIDEO, locale: 'en_US', srt: SRT } })).toEqual({ ok: false, error: expect.stringMatching(/already has captions in en_US, and Meta takes a locale only once/) })
+    expect(await preview({ kind: 'captions', captions: { videoId: VIDEO, locale: 'it_IT', srt: 'just words' } })).toEqual({ ok: false, error: expect.stringMatching(/SubRip/) })
+    expect(await preview({ kind: 'captions', captions: { videoId: VIDEO, locale: 'it_IT', srt: SRT, defaultLocale: 'de_DE' } })).toEqual({ ok: false, error: expect.stringMatching(/default caption locale is none, it_IT/) })
+    const out = await preview({ kind: 'captions', captions: { videoId: VIDEO, locale: 'it_IT', srt: SRT, fileName: 'Spot A', defaultLocale: 'it_IT' } })
+    expect(out.preview).toMatchObject({ spendsMoney: false, metaCheck: { checked: 'none' }, changes: { [`Video ${VIDEO} captions`]: { from: 'en_US', to: 'en_US, it_IT' }, [`Video ${VIDEO} default caption`]: { from: 'en_US', to: 'it_IT' } } })
+    expect(out.preview.requests[0].label).toMatch(/Add it_IT captions \(spot-a\.it_IT\.srt, 1 KB\) to video 120000000000501/)
+    expect(out.preview.warnings.join(' ')).toMatch(/puts the default caption back to en_US/)
+    expect(JSON.stringify(out.preview)).not.toContain('Ciao')
+    h.send.mockImplementationOnce(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
+    const ran = await tool.execute!(ask({ kind: 'captions', captions: { videoId: VIDEO, locale: 'it_IT', srt: SRT, fileName: 'Spot A', defaultLocale: 'it_IT' } }), approved(out.preview)) as ToolResult & { data: Record<string, any> }
+    expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: VIDEO, kind: 'libraryvideo', edge: 'captions', operation: 'media.captionsUpload', params: { captions_file: SRT, captions_file_name: 'spot-a.it_IT.srt', default_locale: 'it_IT' } })
+    expect(ran.change!.after).toEqual({ kind: 'captions', items: [{ kind: 'captions', videoId: VIDEO, locale: 'it_IT', new: true, setDefault: 'it_IT', defaultBefore: 'en_US' }], accountId: 'm-1', adAccountId: '1234567890' })
+    expect(JSON.stringify(ran)).not.toContain('Ciao')
+    // Its undo: the locale off again, the default back — through kind undo, valid for the tool's own input.
+    const back = tool.undo!.request(ran.change!)
+    expect(back).toEqual({ tool: 'create-meta-media', args: { connectionId: 'm-1', kind: 'undo', uploads: [{ kind: 'captions', videoId: VIDEO, locale: 'it_IT', restoreDefault: 'en_US' }], why: expect.any(String) } })
+    expect(() => ask((back as { args: Record<string, unknown> }).args)).not.toThrow()
+  })
+  it('the undo takes only the locale its record added, with only the default it replaced', async () => {
+    h.lists.set(`${ACT}/advideos`, [{ id: VIDEO }])
+    h.lists.set(`${VIDEO}/captions`, [{ locale: 'it_IT', is_default: true }, { locale: 'en_US' }])
+    h.records = [{ id: 'c-2', after: { kind: 'captions', items: [{ kind: 'captions', videoId: VIDEO, locale: 'it_IT', new: true, setDefault: 'it_IT', defaultBefore: 'en_US' }], accountId: 'm-1', adAccountId: '1234567890' } }]
+    expect(await preview({ kind: 'undo', uploads: [{ kind: 'captions', videoId: VIDEO, locale: 'en_US' }] })).toEqual({ ok: false, error: expect.stringMatching(/the en_US captions of video .* not one a create-meta-media upload/) })
+    expect(await preview({ kind: 'undo', uploads: [{ kind: 'captions', videoId: VIDEO, locale: 'it_IT', restoreDefault: 'none' }] })).toEqual({ ok: false, error: expect.stringMatching(/with default none/) })
+    const args = { kind: 'undo', uploads: [{ kind: 'captions', videoId: VIDEO, locale: 'it_IT', restoreDefault: 'en_US' }] }
+    const out = await preview(args)
+    h.send.mockImplementationOnce(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
+    const ran = await tool.execute!(ask(args), approved(out.preview)) as ToolResult & { data: Record<string, any> }
+    expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: VIDEO, kind: 'libraryvideo', edge: 'captions', operation: 'media.captionsRemove', params: { locales_to_delete: '["it_IT"]', default_locale: 'en_US' } })
+    expect(ran.change!.after).toEqual({ kind: 'undo', items: [{ kind: 'captions', videoId: VIDEO, locale: 'it_IT', removed: true }], accountId: 'm-1', adAccountId: '1234567890' })
+  })
+})
+
 describe('folders', () => {
   it('only in the chosen account\'s own portfolio, never a shared one; its parent must be the portfolio\'s; no undo', async () => {
     h.taken.mockImplementationOnce(async () => new Set(['9876543210']))
@@ -303,7 +360,7 @@ describe('undo', () => {
     expect(back).toEqual({ tool: 'create-meta-media', args: { connectionId: 'm-1', kind: 'undo', uploads: [{ kind: 'video', videoId: '120000000000501' }], why: expect.stringMatching(/only what it made new/) } })
     expect(() => ask((back as { args: Record<string, unknown> }).args)).not.toThrow()
     expect(tool.undo!.request({ before: {}, after: after([{ kind: 'image', source: 'da_hero', hash: 'a1', new: false }, { kind: 'image', source: 'pi_front', hash: 'b2', new: null }]) })).toEqual({ refusal: expect.stringMatching(/made nothing new/) })
-    expect(tool.undo!.request({ before: {}, after: { kind: 'undo', items: [] } })).toEqual({ refusal: expect.stringMatching(/cannot put a removed image or video back/) })
+    expect(tool.undo!.request({ before: {}, after: { kind: 'undo', items: [] } })).toEqual({ refusal: expect.stringMatching(/cannot put a removed image, video or caption back/) })
   })
   it('current(): what is there now, equal to the record when nothing moved', async () => {
     const record = after([{ kind: 'image', source: 'da_hero', hash: 'a1', new: true }, { kind: 'image', source: 'pi_front', hash: 'b2', new: false }])
@@ -311,6 +368,27 @@ describe('undo', () => {
     expect(await tool.undo!.current({ before: {}, after: record })).toEqual(record)
     h.read.mockImplementation(async () => ({ body: { data: [] }, calls: 1 }))
     expect(await tool.undo!.current({ before: {}, after: record })).not.toEqual(record)
+  })
+  it('review A1 / B3 — a video comes out only when no creative of the account uses it; the library is read on advideos AND video_ads', async () => {
+    const used = '120000000000511'
+    const free = '120000000000512'
+    h.records = [{ id: 'c-3', after: { kind: 'video', items: [{ kind: 'video', source: 'da_clip', videoId: used, method: 'advideos', new: true }, { kind: 'video', source: 'https://cdn.example.com/v.mp4', videoId: free, method: 'video_ads', new: true }], accountId: 'm-1', adAccountId: '1234567890' } }]
+    h.lists.set(`${ACT}/advideos`, [{ id: used }])
+    h.lists.set(`${ACT}/video_ads`, [{ id: free }])
+    h.lists.set(`${ACT}/adcreatives`, [{ id: '120000000000801', object_story_spec: { page_id: '1', video_data: { video_id: used, image_hash: 'a1' } } }, { id: '120000000000802', asset_feed_spec: { videos: [{ video_id: '120000000000599' }] } }])
+    const args = { kind: 'undo', uploads: [{ kind: 'video', videoId: used }, { kind: 'video', videoId: free }] }
+    const out = await preview(args)
+    expect(h.listPaged.mock.calls.map((c) => c[2])).toEqual(expect.arrayContaining([`${ACT}/advideos`, `${ACT}/video_ads`, `${ACT}/adcreatives`]))
+    expect(out.preview.requests.map((r: { label: string }) => r.label)).toEqual([`Remove video ${free} (uploaded by Nexus) from ad account ${ACT}`])
+    expect(out.preview.skipped[0]).toMatch(/Video 120000000000511 stays: creative 120000000000801 uses it, and an ad would lose its video/)
+    expect(out.preview.warnings.join(' ')).toMatch(/A video a creative of this account uses stays/)
+    // More creatives than Nexus reads: not confirmed unused, so it stays.
+    h.longer.add(`${ACT}/adcreatives`)
+    const longer = await preview({ kind: 'undo', uploads: [{ kind: 'video', videoId: free }] })
+    expect(longer).toEqual({ ok: false, error: expect.stringMatching(/more than 500 creatives, so Nexus cannot confirm no ad uses it/) })
+    // current(): a video-ads upload listed only on video_ads counts as there.
+    const record = h.records[0].after as Record<string, unknown>
+    expect(await tool.undo!.current({ before: {}, after: record })).toEqual(record)
   })
   it('kind undo: only an upload a record of this business made new here; an image a creative uses stays; DELETE with its key', async () => {
     expect(await preview({ kind: 'undo', uploads: [{ kind: 'image', hash: 'a1' }] })).toEqual({ ok: false, error: expect.stringMatching(/not one a create-meta-media upload of this business made new in ad account act_1234567890/) })

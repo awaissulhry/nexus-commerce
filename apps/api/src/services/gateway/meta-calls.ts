@@ -732,6 +732,15 @@ export interface MetaWriteRule {
   edgeCall?: boolean
   /** Step 23 — its body is bulky (an image's bytes): the ledger keeps its length only, never the body itself. */
   bulky?: boolean
+  /**
+   * Step 23 (review B1) — ONE file part the gateway encodes itself (Meta's `-F 'key=@file'`): the caller passes the file's
+   * TEXT as form key `key` and its file name as `nameKey`; the gateway judges both (the name against `name`, at most
+   * `maxBytes` UTF-8 bytes, `judge`) and sends a multipart body: `key` as a file part named by `nameKey`'s value with
+   * `contentType`, every other judged key as a plain field (`nameKey` itself is never sent). No caller header, nothing of
+   * the file stored or logged (with `bulky`). Used by MD-026's captions; lane C4 (step 39: a feed's CSV, a block list) can
+   * reuse it.
+   */
+  file?: { key: string; nameKey: string; name: RegExp; contentType: string; maxBytes: number; judge: (text: string) => string | null }
 }
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
@@ -740,9 +749,9 @@ export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | M
  * Step 23 — what a media change names: the chosen ad account (`act_<id>/adimages | advideos | video_ads`), its business
  * portfolio (`<portfolio>/creative_folders`), or a video upload Nexus started (Meta's rupload host).
  */
-export type MetaMediaWriteKind = 'adaccount' | 'portfolio' | 'video'
+export type MetaMediaWriteKind = 'adaccount' | 'portfolio' | 'video' | 'libraryvideo'
 /** Step 23 — a media id inside a change's body, and what the gateway checks it is (meta-media-rules.ts). */
-export interface MetaWriteAsset { id: string; kind: 'instagrammedia' | 'startedvideo' | 'creativefolder' }
+export interface MetaWriteAsset { id: string; kind: 'instagrammedia' | 'startedvideo' | 'creativefolder' | 'libraryvideo' }
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
 export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' }
 
@@ -818,6 +827,8 @@ export interface MetaJudgedWrite {
    */
   host?: 'rupload'
   headers?: Record<string, string>
+  /** Step 23 — a write with a file part (MetaWriteRule.file): the gateway sends this multipart body instead of `body`. */
+  multipart?: { fields: Array<[string, string]>; file: { key: string; filename: string; contentType: string; text: string } }
 }
 
 /** The gateway's verdict on a Meta call that is not a GET: why it is refused (and whether as a batch), or the judged write. */
@@ -873,12 +884,23 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
   if ((input.body as string).length > maxBody) return refuse(`a Meta change body is at most ${maxBody} characters`)
   for (const [key, value] of parsed.params) {
+    // Step 23 — a file's text is judged as the file (rule.file, below), never as a field.
+    if (rule.file?.key === key) continue
     if (rule.text?.has(key)) {
       if (!PRINTABLE_TEXT.test(value)) return refuse(`the value of "${key}" is printable text (no control characters)`)
     } else if (!/^[\x20-\x7e]*$/.test(value)) return refuse(`the value of "${key}" is plain ASCII`)
   }
   const problem = rule.values(parsed.params)
   if (problem) return refuse(problem)
+  // Step 23 — the file part: its name, its size and its own judge (the text is never quoted back).
+  if (rule.file) {
+    const text = parsed.params.get(rule.file.key) ?? ''
+    const fileName = parsed.params.get(rule.file.nameKey) ?? ''
+    if (!rule.file.name.test(fileName)) return refuse(`${rule.file.nameKey} is not a file name this change sends`)
+    if (Buffer.byteLength(text, 'utf8') > rule.file.maxBytes) return refuse(`${rule.file.key} is at most ${Math.floor(rule.file.maxBytes / 1024)} KB`)
+    const fileProblem = rule.file.judge(text)
+    if (fileProblem) return refuse(fileProblem)
+  }
   const check = parsed.params.has('execution_options')
   if (input.kind !== (check ? 'read' : 'write')) {
     return refuse(check ? 'Meta\'s check (validate_only) changes nothing and goes as a read; this one is declared otherwise' : 'a Meta change goes as a write; this one is declared otherwise')
@@ -889,8 +911,12 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const ids = rule.ids?.(parsed.params) ?? []
   // Step 23 — the media ids inside the body, an edge call, a bulky body, a DELETE with its keys.
   const assets = rule.assets?.(parsed.params) ?? []
-  const media = { ...(assets.length ? { assets } : {}), ...(rule.edgeCall ? { edgeCall: true as const } : {}), ...(rule.bulky ? { bulky: true as const } : {}), ...(method === 'DELETE' ? { method: 'DELETE' as const } : {}) }
-  return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}), ...media } }
+  const multipart = rule.file
+    ? { fields: order.filter((k) => k !== rule.file!.key && k !== rule.file!.nameKey).map((k): [string, string] => [k, parsed.params.get(k)!]), file: { key: rule.file.key, filename: parsed.params.get(rule.file.nameKey)!, contentType: rule.file.contentType, text: parsed.params.get(rule.file.key)! } }
+    : null
+  const media = { ...(assets.length ? { assets } : {}), ...(rule.edgeCall ? { edgeCall: true as const } : {}), ...(rule.bulky ? { bulky: true as const } : {}), ...(method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...(multipart ? { multipart } : {}) }
+  // A write with a file goes as its multipart body only (`body` stays empty: nothing else of it is ever sent).
+  return { write: { rule: rule.name, objectId: graph.segments[0], check, body: multipart ? '' : body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}), ...media } }
 }
 
 /** Step 18 — a rule with kinds matches only a call that names one of them; the status rule (no kinds) a campaign, ad set or ad. */
