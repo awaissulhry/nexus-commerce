@@ -51,10 +51,12 @@ describe('readGroups', () => {
 })
 
 describe('review fix A5 — fieldRefused: only a refused field makes a part-by-part read worth it', () => {
-  it('a #100 field refusal yes; Meta failing on its side, a timeout, no answer, a permission, a missing object, a throttle or a lost token no', () => {
+  it('a #100 field refusal or Meta\'s permission refusal yes; Meta failing on its side, a timeout, no answer, a blocked account, a missing object, a throttle or a lost token no', () => {
     expect(fieldRefused(refused('validation', '100', 'nonexisting field'))).toBe(true)
     expect(fieldRefused(refused('validation', '100/1487534', 'reduce the data'))).toBe(true)
-    for (const [cls, code] of [['transient', '2'], ['transient', '1'], ['timeout', '-'], ['forbidden', '10'], ['forbidden', '200'], ['not_found', '100/33'], ['rate_limited', '17'], ['auth_revoked', '190'], ['validation', '2635']]) {
+    // Re-review — a permission refusal FROM META (#3, #10, #200–#299) may be a gated field: worth a part-by-part read too.
+    for (const code of ['3', '10', '200', '299']) expect(fieldRefused(refused('forbidden', code, 'no permission')), code).toBe(true)
+    for (const [cls, code] of [['transient', '2'], ['transient', '1'], ['timeout', '-'], ['forbidden', '368'], ['forbidden', '100/3191001'], ['not_found', '100/33'], ['rate_limited', '17'], ['auth_revoked', '190'], ['validation', '2635']]) {
       expect(fieldRefused(refused(cls, code, 'x')), `${cls} ${code}`).toBe(false)
     }
     expect(fieldRefused(new MetaReadError(failureOfAnswer({ status: 0 } as never), 'x', 0))).toBe(false)

@@ -119,14 +119,18 @@ export interface FieldGroup { name: string; fields: string; query?: Record<strin
 export interface MissingPart { part: string; sentence: string }
 
 /**
- * Review fix A5 — Meta refused a FIELD it was asked (#100, "nonexisting field" and the like): only then does asking for
- * less help. Never on a lost token, a throttle, the gateway, an object that is not there, a permission refusal or Meta
- * failing on its side (transient: no answer, a 5xx, a timeout).
+ * Review fix A5 — Meta refused a FIELD it was asked: only then does asking for less help. Either a #100 ("nonexisting
+ * field" and the like), or (re-review) a permission refusal FROM META (#3, #10, #200–#299) — a gated field (the WhatsApp
+ * identity, learning stage, Instagram branded content) may be refused that way. Never on a lost token, a throttle, the
+ * gateway, an object that is not there, a blocked account (#368), an account-wide insights refusal (100/3191001) or Meta
+ * failing on its side (transient: no answer, a 5xx, a timeout). A refused core group still ends the read.
  */
 export function fieldRefused(err: unknown): err is MetaReadError {
   if (!(err instanceof MetaReadError)) return false
   const f = err.failure
-  return f.origin === 'meta' && !f.authLost && !f.throttled && !f.notFound && !f.permissionDenied && !f.transient && !!f.code && /^100(\/|$)/.test(f.code)
+  if (f.origin !== 'meta' || f.authLost || f.throttled || f.notFound || f.transient || !f.code) return false
+  if (f.permissionDenied) return /^(3|10|2\d\d)(\/|$)/.test(f.code)
+  return /^100(\/|$)/.test(f.code)
 }
 
 /** A read of its own that adds to an answer (Advantage+ state, placements, …) failed: said in Meta's words, unless the token or a throttle ends the read. */
@@ -860,16 +864,18 @@ async function pageAdLimits(account: MetaChosenAccount) {
     { name: 'sdk', fields: 'future_limit_on_ads_running_or_in_review,future_limit_activation_date,ad_limit_set_by_page_admin' },
   ], { show_breakdown_by_actor: true }, 50)
   const taken = await takenIds('PAGE', read.rows.map((r) => text(r.actor_id)).filter((id): id is string => !!id))
-  return read.rows.map((r) => {
+  const pages = read.rows.map((r) => {
     const pageId = text(r.actor_id)
     if (pageId && taken.has(pageId)) return { pageId, takenByAnotherBusiness: true }
     return {
       pageId, chosenHere: pageId ? pageId === account.pageId : null, takenByAnotherBusiness: false,
       adsRunningOrInReview: num(r.ads_running_or_in_review_count), thisAccountAdsRunningOrInReview: num(r.current_account_ads_running_or_in_review_count),
       limit: num(r.limit_on_ads_running_or_in_review), futureLimit: num(r.future_limit_on_ads_running_or_in_review), futureLimitFrom: text(r.future_limit_activation_date),
-      limitSetByPageAdmin: bool(r.ad_limit_set_by_page_admin),
+      // An unsigned int in Meta's SDK v26 (adaccountadvolume.py): the limit a Page admin set, a number.
+      pageAdminLimit: num(r.ad_limit_set_by_page_admin),
     }
   })
+  return { pages, missing: read.missing }
 }
 
 /** RC-029 — every problem that stops delivery, in one answer (like Meta's ads_get_errors, with the account's own state). */
@@ -889,7 +895,10 @@ export async function deliveryProblems(input: { connectionId?: string | null; in
   let adsVolume: unknown = null
   let adsVolumeNote: string | null = null
   try {
-    adsVolume = await pageAdLimits(account)
+    const limits = await pageAdLimits(account)
+    adsVolume = limits.pages
+    // Re-review — a refused group of SDK-only fields is said (LIVE-PROBES RC-029).
+    if (limits.missing.length) adsVolumeNote = `Meta did not answer part of the Page ad limits (${limits.missing.map((m) => `${m.part}: ${m.sentence}`).join('; ')}).`
   } catch (err) {
     if (!partFailed(err)) throw err
     adsVolumeNote = `Meta did not answer the Page ad limits: ${err.failure.sentence}`

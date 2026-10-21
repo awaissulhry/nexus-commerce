@@ -226,13 +226,18 @@ describe('only the chosen ad account\'s own objects', () => {
     await run('meta-labels', { view: 'objects', labelIds: ['120000000000601', '120000000000602', '120000000000603'], kind: 'campaigns' })
     expect(h.calls.filter((c) => c.path.endsWith('/adlabels'))).toHaveLength(1)
   })
-  it('review fix A5 — a transient failure or a permission refusal is never retried part by part', async () => {
-    for (const [cls, code] of [['transient', '2'], ['timeout', '-'], ['forbidden', '10'], ['not_found', '100/33']]) {
+  it('review fix A5 — a transient failure, a blocked account or a missing object is never retried part by part', async () => {
+    for (const [cls, code] of [['transient', '2'], ['timeout', '-'], ['forbidden', '368'], ['not_found', '100/33']]) {
       h.calls.length = 0
       h.answer = () => new MetaReadError(failureOfAnswer({ status: cls === 'transient' ? 500 : 400, verdict: { errorClass: cls, channelCode: code, channelMessage: 'x' } as never }), 'x', 1)
       expect((await run('meta-ad-details', { view: 'ad', adId: AD })).ok, cls).toBe(false)
       expect(h.calls.map((c) => c.operation), cls).toEqual(['objects.ad'])
     }
+    // Re-review — Meta's permission refusal (#10) is read group by group; the core refused that way ends the read.
+    h.calls.length = 0
+    h.answer = () => new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'forbidden', channelCode: '10', channelMessage: 'x' } as never }), 'x', 1)
+    expect((await run('meta-ad-details', { view: 'ad', adId: AD })).ok).toBe(false)
+    expect(h.calls.map((c) => c.operation)).toEqual(['objects.ad', 'objects.ad.core'])
   })
   it('a Page or Instagram account of another business is its id and the flag only', async () => {
     h.taken = [{ product: 'PAGE', id: '120000000000011' }]
@@ -431,6 +436,28 @@ describe('Meta\'s traps, said plainly', () => {
     await run('meta-ad-details', { view: 'creatives', adSetId: ADSET })
     expect(fieldsOf(h.calls.at(-1)!)).not.toMatch(/wamo_whatsapp_identity_spec/)
     expect(h.calls.at(-1)!.path).toBe(`${ADSET}/adcreatives`)
+  })
+  it('re-review — a gated field Meta refuses with a permission error (#10) costs only its group: the creative and the creatives list answer with missing whatsAppIdentity', async () => {
+    const forbidden = () => new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'forbidden', channelCode: '10', channelMessage: '(#10) Application does not have permission for this action' } as never }), 'x', 1)
+    h.answer = (req) => (fieldsOf(req).includes('wamo_whatsapp_identity_spec') ? forbidden()
+      : req.path.endsWith('/adcreatives') ? { data: [{ id: CREATIVE, account_id: '1234567890', name: 'Creative A' }] }
+      : fieldsOf(req).startsWith('object_story_spec{') ? {} : { id: CREATIVE, account_id: '1234567890', name: 'Creative A' })
+    const one = await run('meta-ad-details', { view: 'creative', creativeId: CREATIVE })
+    expect(one).toMatchObject({ ok: true, data: { creative: { creativeId: CREATIVE }, missing: [{ part: 'whatsAppIdentity', sentence: expect.stringMatching(/permission/) }] } })
+    const list = await run('meta-ad-details', { view: 'creatives' })
+    expect(list).toMatchObject({ ok: true, data: { items: [{ creativeId: CREATIVE }], missing: [{ part: 'whatsAppIdentity' }] } })
+    // The core refused that way still ends the read.
+    h.answer = () => forbidden()
+    expect((await run('meta-ad-details', { view: 'creative', creativeId: CREATIVE })).ok).toBe(false)
+  })
+  it('re-review — the Page admin\'s limit is a number; a refused group of Page-limit fields is said', async () => {
+    h.answer = (req) => (req.path.endsWith('/ads_volume')
+      ? (fieldsOf(req).includes('future_limit') ? refusedByMeta('(#100) Tried accessing nonexisting field (future_limit_activation_date)') : { data: [{ actor_id: '120000000000010', ads_running_or_in_review_count: 3 }] })
+      : req.path === 'act_1234567890' ? { account_status: 1 } : { data: [] })
+    const res = await run('meta-ad-details', { view: 'problems' })
+    expect(res.data).toMatchObject({ adsVolume: [{ pageId: '120000000000010', adsRunningOrInReview: 3, pageAdminLimit: null }], adsVolumeNote: expect.stringMatching(/part of the Page ad limits \(sdk: .*nonexisting field/) })
+    h.answer = (req) => (req.path.endsWith('/ads_volume') ? { data: [{ actor_id: '120000000000010', ad_limit_set_by_page_admin: 50 }] } : req.path === 'act_1234567890' ? { account_status: 1 } : { data: [] })
+    expect((await run('meta-ad-details', { view: 'problems' })).data).toMatchObject({ adsVolume: [{ pageAdminLimit: 50 }] })
   })
   it('review B F5 — a minimum-ROAS floor is read back as a plain ROAS (Meta writes ROAS × 10,000)', () => {
     expect(roasFloorOf({ roas_average_floor: 25000 })).toBe(2.5)
