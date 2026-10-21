@@ -99,6 +99,16 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *     use_unified_attribution_setting or action_report_time (Meta ignores both since 2025-06-10, facts F2 T1);
  *   - step 2, act_<id>/async_requests: status, type (master ACC-028, SDK only: a refusal from Meta answers plainly;
  *     LIVE-PROBES.md).
+ *   - step 6 (meta-campaigns, meta-ad-sets, meta-ad-details, meta-labels, meta-value-rules; checked on the v26 reference
+ *     and Meta's SDK, live-objects.ts): is_completed on the account's campaigns / ad sets and a campaign's ad sets;
+ *     updated_since on the account's ad sets / ads and a campaign's or ad set's ads; effective_status, is_completed on
+ *     <id>/copies; review_feedback_breakdown, thumbnail_width, thumbnail_height on one object; pass_evaluation on
+ *     <id>/adrules_governed; time_start, time_stop on <id>/budget_schedules; statuses on <id>/asyncadrequests;
+ *     is_completed on act_<id>/asyncadcreatives; bid_recommendation_type, groups on <id>/delivery_stats; breakdowns on
+ *     <object>/insights; ad_label_ids, operator on act_<id>/…bylabels; product_type, status on act_<id>/value_rule_set;
+ *     filtering on act_<id>/recommendations (one campaign's: the ad-recommendations page); the suggested_ads and
+ *     smart_suggested_ads parameters (never a pixel, product set, app or CMS id: not this step's to check); adlocale is
+ *     one of step 9's META_SEARCH_TYPES; categorization_criteria on <catalog>/categories.
  */
 const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
 /**
@@ -106,6 +116,18 @@ const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
  * parameters (live-targeting.ts, check audience-special-category): those keys go on a bare object id only with it.
  */
 export const META_AUDIENCE_SAC_FIELDS = 'id,name,is_eligible_for_sac_campaigns'
+/** Step 6 — does the read's `fields` name this field at its top level (not inside a `{…}` or `(…)`)? */
+function fieldNamed(query: URLSearchParams, name: string): boolean {
+  const fields = query.get('fields') ?? ''
+  let depth = 0
+  let top = ''
+  for (const c of fields) {
+    if (c === '{' || c === '(') depth++
+    else if (c === '}' || c === ')') depth = Math.max(0, depth - 1)
+    else if (depth === 0) top += c
+  }
+  return top.split(',').some((f) => f.trim() === name)
+}
 /** A route's own keys; `when`: they go only on a read whose query also passes this (review fix A1, step 9). */
 const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (query: URLSearchParams) => boolean }> = [
   { route: /^debug_token$/, keys: new Set(['input_token']) },
@@ -140,6 +162,27 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^act_\d+\/targetingsentencelines$/, keys: new Set(['targeting_spec', 'hide_targeting_spec_from_return']) },
   // Review fix A1 — only on the audience-eligibility read itself (its exact field list), never on another object read.
   { route: /^\d+$/, keys: new Set(['ad_account_id', 'special_ad_categories', 'special_ad_category_countries']), when: (query) => query.get('fields') === META_AUDIENCE_SAC_FIELDS },
+  // Step 6 — the detailed reads of campaigns, ad sets, ads, creatives, labels and value rules.
+  { route: /^act_\d+\/(campaigns|adsets)$|^\d+\/adsets$/, keys: new Set(['is_completed']) },
+  { route: /^act_\d+\/(adsets|ads)$|^\d+\/ads$/, keys: new Set(['updated_since']) },
+  { route: /^\d+\/copies$/, keys: new Set(['effective_status', 'is_completed']) },
+  // Only on the read that asks the field they shape (an ad's review feedback; a creative's thumbnail).
+  { route: /^\d+$/, keys: new Set(['review_feedback_breakdown']), when: (query) => fieldNamed(query, 'ad_review_feedback') },
+  { route: /^\d+$/, keys: new Set(['thumbnail_width', 'thumbnail_height']), when: (query) => fieldNamed(query, 'thumbnail_url') },
+  { route: /^\d+\/adrules_governed$/, keys: new Set(['pass_evaluation']) },
+  { route: /^\d+\/budget_schedules$/, keys: new Set(['time_start', 'time_stop']) },
+  { route: /^\d+\/asyncadrequests$/, keys: new Set(['statuses']) },
+  { route: /^act_\d+\/asyncadcreatives$/, keys: new Set(['is_completed']) },
+  { route: /^\d+\/delivery_stats$/, keys: new Set(['bid_recommendation_type', 'groups']) },
+  { route: /^\d+\/insights$/, keys: new Set(['breakdowns']) },
+  { route: /^act_\d+\/(campaigns|adsets|ads|adcreatives)bylabels$/, keys: new Set(['ad_label_ids', 'operator']) },
+  { route: /^act_\d+\/value_rule_set$/, keys: new Set(['product_type', 'status']) },
+  { route: /^act_\d+\/recommendations$/, keys: new Set(['filtering']) },
+  { route: /^act_\d+\/suggested_ads$/, keys: new Set(['use_case', 'objective', 'optimization_goal', 'optimization_event', 'countries', 'rank_by', 'promoted_object_page_id']) },
+  { route: /^act_\d+\/smart_suggested_ads$/, keys: new Set(['objective', 'optimization_goal', 'custom_event_type', 'destination_type']) },
+  { route: /^\d+\/categories$/, keys: new Set(['categorization_criteria']) },
+  // Review fix A6 — the Page ad limits per Page (problems view).
+  { route: /^act_\d+\/ads_volume$/, keys: new Set(['show_breakdown_by_actor']) },
 ]
 /**
  * Step 9 — the `type` values a /search read may carry: targeting options only (targeting-search reference), never

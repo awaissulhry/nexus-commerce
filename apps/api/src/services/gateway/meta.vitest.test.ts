@@ -251,6 +251,35 @@ describe('read only by construction', () => {
     expect(ok(`${BASE}/120000000000401/insights?fields=spend&ad_account_id=1`)).toMatch(/"ad_account_id" is not one/)
     expect(ok(`${BASE}/act_1234567890/adsets?fields=id&type=x`)).toMatch(/"type" is not one/)
   })
+  // Step 6 — each new key on its own route (allowed there), and refused on a neighbour that does not use it.
+  it.each([
+    ['act_1234567890/campaigns?fields=id&is_completed=true', 'act_1234567890/ads?fields=id&is_completed=true', 'is_completed'],
+    ['120000000000101/adsets?fields=id&is_completed=false', '120000000000101/adcreatives?fields=id&is_completed=false', 'is_completed'],
+    ['act_1234567890/ads?fields=id&updated_since=1760000000', 'act_1234567890/campaigns?fields=id&updated_since=1760000000', 'updated_since'],
+    ['120000000000201/ads?fields=id&updated_since=1760000000', '120000000000201/copies?fields=id&updated_since=1760000000', 'updated_since'],
+    ['120000000000101/copies?fields=id&effective_status=["PAUSED"]&is_completed=true', '120000000000101/ad_studies?fields=id&effective_status=["PAUSED"]', 'effective_status'],
+    ['120000000000301?fields=id,ad_review_feedback&review_feedback_breakdown=true', '120000000000301/ads?fields=id&review_feedback_breakdown=true', 'review_feedback_breakdown'],
+    ['120000000000401?fields=id,thumbnail_url&thumbnail_width=300&thumbnail_height=300', 'act_1234567890/adcreatives?fields=id&thumbnail_width=300', 'thumbnail_width'],
+    ['120000000000401?fields=id,name,thumbnail_url&thumbnail_height=300', '120000000000401?fields=id,creative{thumbnail_url}&thumbnail_height=300', 'thumbnail_height'],
+    ['120000000000301?fields=ad_review_feedback&review_feedback_breakdown=true', '120000000000301?fields=id,name&review_feedback_breakdown=true', 'review_feedback_breakdown'],
+    ['120000000000101/adrules_governed?fields=id,name&pass_evaluation=true', '120000000000101/ad_studies?fields=id&pass_evaluation=true', 'pass_evaluation'],
+    ['120000000000101/budget_schedules?fields=id&time_start=1760000000&time_stop=1770000000', '120000000000101/copies?fields=id&time_start=1760000000', 'time_start'],
+    ['120000000000201/asyncadrequests?fields=id&statuses=["ERROR"]', 'act_1234567890/asyncadcreatives?fields=id&statuses=["ERROR"]', 'statuses'],
+    ['act_1234567890/asyncadcreatives?fields=id&is_completed=true', 'act_1234567890/adlabels?fields=id&is_completed=true', 'is_completed'],
+    ['120000000000201/delivery_stats?groups=["LEARNING_STAGE_EXIT"]&bid_recommendation_type=LOWEST_COST_TO_COST_CAP', '120000000000201/targeting_insights?groups=["LEARNING_STAGE_EXIT"]', 'groups'],
+    ['120000000000201/insights?fields=spend&breakdowns=["body_asset"]&time_range={"since":"2026-10-01","until":"2026-10-19"}', 'act_1234567890/insights?fields=spend&breakdowns=["body_asset"]', 'breakdowns'],
+    ['act_1234567890/adsbylabels?fields=id&ad_label_ids=["120000000000601"]&operator=ANY', '120000000000601/ads?fields=id&ad_label_ids=["120000000000601"]', 'ad_label_ids'],
+    ['act_1234567890/value_rule_set?fields=id,name&product_type=AUDIENCE&status=ACTIVE', 'act_1234567890/campaigns?fields=id&product_type=AUDIENCE', 'product_type'],
+    ['act_1234567890/recommendations?fields=title&filtering=[{"field":"object_id","operator":"EQUAL","value":"120000000000101"}]', 'act_1234567890/adsets?fields=id&filtering=[]', 'filtering'],
+    ['act_1234567890/suggested_ads?fields=id&use_case=AUTOMATED_SHOPPING_ADS&countries=["IT"]&promoted_object_page_id=120000000000010', 'act_1234567890/suggested_ads?fields=id&pixel_id=120000000000020', 'pixel_id'],
+    ['act_1234567890/smart_suggested_ads?objective=OUTCOME_SALES&destination_type=WEBSITE', 'act_1234567890/smart_suggested_ads?product_set_id=120000000000030', 'product_set_id'],
+    ['search?type=adlocale&q=Italian', 'act_1234567890/campaigns?fields=id&q=Italian', 'q'],
+    ['120000000000700/categories?categorization_criteria=BRAND&fields=name', '120000000000700/products?categorization_criteria=BRAND&fields=name', 'categorization_criteria'],
+    ['act_1234567890/ads_volume?fields=actor_id,ads_running_or_in_review_count&show_breakdown_by_actor=true', 'act_1234567890/adsets?fields=id&show_breakdown_by_actor=true', 'show_breakdown_by_actor'],
+  ])('step 6 — %s is allowed; %s is refused (%s only where it is used)', (allowed, refused, key) => {
+    expect(ok(`${BASE}/${allowed}`)).toBeNull()
+    expect(ok(`${BASE}/${refused}`)).toMatch(new RegExp(`"${key}" is not one`))
+  })
   it('review 3 — query keys are an allow-list: the keys step 1 reads, each only where it is used', () => {
     expect(ok(`${BASE}/me/adaccounts?fields=account_id,name,business{id,name}&limit=100&summary=total_count&after=c1`)).toBeNull()
     expect(ok(`${BASE}/me/adaccounts?fields=id&before=c0`)).toBeNull()

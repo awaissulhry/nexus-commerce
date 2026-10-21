@@ -215,6 +215,12 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   // Meta ads step 9: targeting search and checks read Meta live (meta-ads-targeting.tools test runs them on an account).
   'meta-targeting-search': 'it reads Meta live for the business\'s Meta connection, and no business here has one (meta-ads-targeting.tools test)',
   'meta-targeting-check': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-targeting.tools test)',
+  // Meta ads step 6: the detailed reads of campaigns, ad sets, ads, creatives, labels and value rules.
+  'meta-campaigns': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-objects.tools test)',
+  'meta-ad-sets': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-objects.tools test)',
+  'meta-ad-details': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-objects.tools test)',
+  'meta-labels': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-objects.tools test)',
+  'meta-value-rules': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-objects.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -510,6 +516,13 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),
+  // Meta ads step 6: each tool's default view refuses in words (no business here has Meta; meta-ads-objects.tools.vitest.test.ts
+  // runs every view on an account).
+  'meta-campaigns': () => ({ view: 'list' }),
+  'meta-ad-sets': () => ({ view: 'list' }),
+  'meta-ad-details': () => ({ view: 'ads' }),
+  'meta-labels': () => ({ view: 'labels' }),
+  'meta-value-rules': () => ({ view: 'sets' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

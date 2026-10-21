@@ -36,6 +36,7 @@ import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-
 import { metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite } from './meta-calls.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
+import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
 import { writeLedgerRow } from './ledger.js'
 import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
 import { assertWriteAccount, type WriteTarget } from '../write-account-guard.js'
@@ -626,20 +627,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
 const sleepMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * TWO fields only that kind of object has together, both always set on it (re-review 2026-10-21: one is not enough — a
- * ReachFrequencyPrediction has account_id, objective, optimization_goal, buying_type and campaign_id). Checked 2026-10-21
- * on the field tables of reference/ad-campaign-group.md, ad-campaign.md and adgroup.md and on Meta's Python Business SDK
- * (facebook_business/adobjects campaign.py, adset.py, ad.py, adcreative.py, reachfrequencyprediction.py):
- *   campaign  objective + effective_status       (an ad set or ad has no objective; a reach-and-frequency prediction no
- *                                                 effective_status)
- *   ad set    optimization_goal + billing_event  (a campaign or ad has neither; a prediction no billing_event)
- *   ad        adset_id + creative                (a campaign, ad set, creative or prediction has neither)
- * A live read asking them of another kind is answered with an error ("nonexisting field") or without one of them: refused.
+ * TWO fields only that kind of object has together, both always set on it: the ONE table of kinds (services/meta/meta-kinds.ts,
+ * step 6 review fix A1), of which a change names a campaign, an ad set or an ad.
  */
 const META_KIND_FIELD: Readonly<Record<'campaign' | 'adset' | 'ad', readonly [string, string]>> = {
-  campaign: ['objective', 'effective_status'],
-  adset: ['optimization_goal', 'billing_event'],
-  ad: ['adset_id', 'creative'],
+  campaign: META_KIND_FIELDS.campaign,
+  adset: META_KIND_FIELDS.adset,
+  ad: META_KIND_FIELDS.ad,
 }
 const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad', string>> = { campaign: 'campaign', adset: 'ad set', ad: 'ad' }
 
