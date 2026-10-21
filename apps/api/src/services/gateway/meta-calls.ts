@@ -756,7 +756,7 @@ export type MetaMediaWriteKind = 'adaccount' | 'portfolio' | 'video' | 'libraryv
 /** Step 23 — a media id inside a change's body, and what the gateway checks it is (meta-media-rules.ts). */
 export interface MetaWriteAsset { id: string; kind: 'instagrammedia' | 'startedvideo' | 'creativefolder' | 'libraryvideo' }
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
-export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' }
+export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' }
 
 const fieldsValueProblem = (value: string): string | null => {
   const names = value.split(',')
