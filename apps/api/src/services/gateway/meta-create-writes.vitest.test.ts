@@ -350,6 +350,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/change-remove.ts': 1, // step 22: metaRemoveDraft's one delete request builder (explicit ask)
       'services/gateway/meta-labels-rules.ts': 1, // step 21: the adlabel.delete rule (a judge)
       'services/marketing/meta-ads/change-labels.ts': 1, // step 21: labelsDraft's label delete (explicit ask: confirmDelete)
+      'services/gateway/meta-optimize-rules.ts': 1, // step 28: the pageVideoTest.delete rule (a judge)
+      'services/marketing/meta-ads/change-experiments.ts': 1, // step 28: a concluded Page video test's delete (set-meta-experiment)
       'services/marketing/meta-ads/change-media.ts': 1, // step 23: create-meta-media's undo, through step 22's removal rules
       'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
     })
@@ -376,12 +378,17 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
     expect(naming(/locales_to_delete/g)).toEqual({
       'services/gateway/meta-remove-rules.ts': 6, // the captions.delete rule and its refusals (a judge)
       'services/marketing/meta-ads/change-remove.ts': 1, // metaRemoveDraft: the request's one body key
+      // Step 23 — create-meta-media's undo of captions it added (through step 22's captions.delete; its preview's warning
+      // names the key), and the tool reading a done undo request back into its record.
+      'services/marketing/meta-ads/change-media.ts': 2,
+      'services/agents/tools/meta-ads-media-upload.tools.ts': 2,
     })
     expect(naming(/['"`]captions\.delete['"`]/g)).toEqual({
       'services/gateway/meta-remove-rules.ts': 1, // the rule's name
       'services/marketing/meta-ads/change-remove.ts': 1, // metaRemoveDraft: the request's operation
     })
-    expect(naming(/edge: ['"`]captions['"`]/g)).toEqual({ 'services/marketing/meta-ads/change-remove.ts': 1 })
+    // Step 23 — create-meta-media on the captions edge: its upload, its undo's language removal and the default caption put back.
+    expect(naming(/edge: ['"`]captions['"`]/g)).toEqual({ 'services/marketing/meta-ads/change-remove.ts': 1, 'services/marketing/meta-ads/change-media.ts': 3 })
     expect(all.find((f) => f.path === 'services/marketing/meta-ads/change-budget-schedule.ts')!.text).toMatch(/objectKind: 'highdemandperiod', method: 'DELETE'/)
   })
 })

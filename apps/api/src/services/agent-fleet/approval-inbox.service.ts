@@ -914,6 +914,11 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-labels': ['basis', 'plan', 'reach'],
   'set-meta-value-rules': ['basis', 'plan', 'reach'],
   'create-meta-reach-frequency': ['basis', 'plan', 'reach'],
+  // Meta step 28 (2026-10-21): recommendations applied; experiments made, changed and ended.
+  'apply-meta-recommendations': ['basis', 'plan', 'reach'],
+  'create-meta-experiment': ['basis', 'plan', 'reach'],
+  'set-meta-experiment': ['basis', 'plan', 'reach'],
+  'end-meta-experiment': ['basis', 'plan', 'reach'],
   // Meta step 23 (2026-10-21): create-meta-media — the files and account it stands on, the requests (the bytes too), where.
   'create-meta-media': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).

@@ -23,7 +23,7 @@ vi.mock('../cx/token.service.js', () => ({
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
 
-import { gatewayLedger, gatewayMetaChosen, gatewayMetaInstagram, gatewayMetaPortfolio, gatewayMetaSharedPortfolios } from '../../test-support/gateway-stubs.js'
+import { gatewayLedger, gatewayMetaChosen, gatewayMetaInstagram, gatewayMetaSharedPortfolios } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { gatewayCall } from './gateway.js'
 import { metaRuploadCall, metaWriteCall } from './meta.js'
@@ -58,7 +58,6 @@ beforeEach(() => {
   h.calls = []; h.answers = []; gatewayLedger.length = 0
   for (const key of Object.keys(gatewayMetaChosen)) delete gatewayMetaChosen[key]
   for (const key of Object.keys(gatewayMetaInstagram)) delete gatewayMetaInstagram[key]
-  for (const key of Object.keys(gatewayMetaPortfolio)) delete gatewayMetaPortfolio[key]
   // Step 21's chosen Instagram account (metaChosenInstagramOf) of the connection these tests use.
   gatewayMetaInstagram['m-1'] = IG
   gatewayMetaSharedPortfolios.clear()
@@ -151,10 +150,10 @@ describe('the write allow-list for media (metaWriteVerdict)', () => {
   })
   it('a folder on the portfolio\'s edge (BM-058): a name, a description, a parent folder (checked)', () => {
     const url = `${BASE}/${PORTFOLIO}/creative_folders`
-    expect(verdict({ url, objectKind: 'portfolio', body: form({ name: 'Spring 2026', parent_folder_id: '120000000000701' }) })).toMatchObject({ write: { rule: 'portfolio.folder.create', objectId: PORTFOLIO, assets: [{ id: '120000000000701', kind: 'creativefolder' }] } })
+    expect(verdict({ url, objectKind: 'business', body: form({ name: 'Spring 2026', parent_folder_id: '120000000000701' }) })).toMatchObject({ write: { rule: 'portfolio.folder.create', objectId: PORTFOLIO, assets: [{ id: '120000000000701', kind: 'creativefolder' }] } })
     expect(problem({ url, objectKind: 'adaccount', body: form({ name: 'x' }) })).toMatch(/only Meta change/)
-    expect(problem({ url, objectKind: 'portfolio', body: form({ name: ' ' }) })).toMatch(/name is 1 to 100/)
-    expect(problem({ url, objectKind: 'portfolio', body: form({ name: 'x', parent_folder_id: 'abc' }) })).toMatch(/digits only/)
+    expect(problem({ url, objectKind: 'business', body: form({ name: ' ' }) })).toMatch(/name is 1 to 100/)
+    expect(problem({ url, objectKind: 'business', body: form({ name: 'x', parent_folder_id: 'abc' }) })).toMatch(/digits only/)
   })
   it('review A6 — step 23\'s own text: no bidirectional control, a visible character, a title counted in UTF-8 bytes', () => {
     const url = `${BASE}/${ACT}/advideos`
@@ -165,7 +164,7 @@ describe('the write allow-list for media (metaWriteVerdict)', () => {
     expect(problem({ url, body: form({ file_url: link, name: '\u3164\u2800' }) })).toMatch(/visible character/)
     expect(problem({ url, body: form({ file_url: link, title: 'ä'.repeat(127) }) })).toBeNull()
     expect(problem({ url, body: form({ file_url: link, title: 'ä'.repeat(128) }) })).toMatch(/254 bytes/)
-    expect(problem({ url: `${BASE}/${PORTFOLIO}/creative_folders`, objectKind: 'portfolio', body: form({ name: '\u200E\uFEFF' }) })).toMatch(/no control or format characters/)
+    expect(problem({ url: `${BASE}/${PORTFOLIO}/creative_folders`, objectKind: 'business', body: form({ name: '\u200E\uFEFF' }) })).toMatch(/no control or format characters/)
     expect(metaMediaTextProblem('Spring 2026 è ✓', 100, 'name')).toBeNull()
     // Review round 2 — blanks that draw nothing (Hangul fillers, braille blank) and a combining mark alone are not visible;
     // a mark on a base is, and a joiner only between two emoji is fine.
@@ -306,34 +305,40 @@ describe('through the gateway', () => {
   })
   it('review round 2 — the parent folder is confirmed when SEEN in the first 500 rows (counted in rows): row 450 of 600 passes, row 550 is refused', async () => {
     const page = (from: number, more: boolean) => json({ data: Array.from({ length: 100 }, (_, i) => ({ id: String(120000000001000 + from + i) })), ...(more ? { paging: { cursors: { after: `c${from}` }, next: 'more' } } : {}) })
-    const folderCall = (parent: string) => metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: parent }, check: false })
+    const folderCall = (parent: string) => metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'business', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: parent }, check: false })
+    h.answers.push(json({ id: ACT, business: { id: PORTFOLIO } }))
     for (let p = 0; p < 6; p++) h.answers.push(page(1 + p * 100, p < 5))
     expect((await folderCall(String(120000000001000 + 450))).ok).toBe(true)
-    // Five reads of 100 rows (500), never the sixth page, then the POST.
-    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'GET', 'GET', 'GET', 'POST'])
+    // Step 28's read of the chosen account's portfolio, five reads of 100 rows (500), never the sixth page, then the POST.
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'GET', 'GET', 'GET', 'GET', 'POST'])
     h.calls = []; h.answers = []
+    h.answers.push(json({ id: ACT, business: { id: PORTFOLIO } }))
     for (let p = 0; p < 6; p++) h.answers.push(page(1 + p * 100, p < 5))
     expect(await folderCall(String(120000000001000 + 550)).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/folder 120000000001550 is not one Nexus can confirm/) })
     expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
   })
-  it('a folder: on the chosen account\'s OWN portfolio, never one another Nexus business shares; its parent among the portfolio\'s folders', async () => {
-    h.answers.push(json({ id: '120000000000702' }))
-    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'Spring 2026' }, check: false })).ok).toBe(true)
-    expect(sent(0).url.pathname).toBe(`/v26.0/${PORTFOLIO}/creative_folders`)
+  it('a folder: on the chosen account\'s OWN portfolio (step 28\'s `business` check), never one another Nexus business shares; its parent among the portfolio\'s folders', async () => {
+    const business = () => json({ id: ACT, business: { id: PORTFOLIO } })
+    h.answers.push(business(), json({ id: '120000000000702' }))
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'business', edge: 'creative_folders', params: { name: 'Spring 2026' }, check: false })).ok).toBe(true)
+    expect([sent(0).method, sent(0).url.pathname, sent(0).url.searchParams.get('fields')]).toEqual(['GET', `/v26.0/${ACT}`, 'business{id}'])
+    expect([sent(1).method, sent(1).url.pathname]).toEqual(['POST', `/v26.0/${PORTFOLIO}/creative_folders`])
     h.calls = []
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: '1111111111', objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'x' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/business portfolio this change names is not the one/) })
+    h.answers.push(business())
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: '1111111111', objectKind: 'business', edge: 'creative_folders', params: { name: 'x' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/is not the business portfolio of the ad account this business chose/) })
     gatewayMetaSharedPortfolios.add(PORTFOLIO)
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'x' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/another business in Nexus uses an ad account of this business portfolio/) })
+    h.answers.push(business())
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'business', edge: 'creative_folders', params: { name: 'x' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/another business in Nexus uses an ad account of this business portfolio/) })
     gatewayMetaSharedPortfolios.clear()
-    expect(h.calls).toHaveLength(0)
-    h.answers.push(json({ data: [{ id: '120000000000701' }] }), json({ id: '120000000000703' }))
-    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: '120000000000701' }, check: false })).ok).toBe(true)
-    expect(sent(0).url.pathname).toBe(`/v26.0/${PORTFOLIO}/creative_folders`)
-    expect(sent(0).method).toBe('GET')
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
     h.calls = []
-    h.answers.push(json({ data: [{ id: '120000000000701' }] }))
-    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: '120000000000799' }, check: false }).catch((e) => e)).toMatchObject({ message: expect.stringMatching(/folder 120000000000799 is not one Nexus can confirm/) })
-    expect(h.calls.map((c) => c.init.method)).toEqual(['GET'])
+    h.answers.push(business(), json({ data: [{ id: '120000000000701' }] }), json({ id: '120000000000703' }))
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'business', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: '120000000000701' }, check: false })).ok).toBe(true)
+    expect([sent(1).method, sent(1).url.pathname]).toEqual(['GET', `/v26.0/${PORTFOLIO}/creative_folders`])
+    h.calls = []
+    h.answers.push(business(), json({ data: [{ id: '120000000000701' }] }))
+    expect(await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'business', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: '120000000000799' }, check: false }).catch((e) => e)).toMatchObject({ message: expect.stringMatching(/folder 120000000000799 is not one Nexus can confirm/) })
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
   })
   it('MD-026 — captions go as ONE multipart body the gateway builds (no form type, no caller header), on a library video, never to the ledger', async () => {
     const srt = '1\n00:00:01,000 --> 00:00:03,500\nCiao!'

@@ -384,7 +384,7 @@ describe('folders', () => {
     expect(twin.preview.warnings.join(' ')).toMatch(/no API to rename or delete/)
     h.send.mockImplementationOnce(async () => ({ node: { id: '120000000000702', name: 'Inner' }, readBack: 'second-read', waitedMs: 0 }))
     const ran = await run({ kind: 'folder', folder: { name: 'Inner', parentFolderId: '120000000000701' } })
-    expect(h.send.mock.calls[0][1]).toEqual({ objectId: '9876543210', kind: 'portfolio', params: { name: 'Inner', parent_folder_id: '120000000000701' }, operation: 'media.folderCreate', edge: 'creative_folders', readBackFields: 'id,name,creation_time' })
+    expect(h.send.mock.calls[0][1]).toEqual({ objectId: '9876543210', kind: 'business', params: { name: 'Inner', parent_folder_id: '120000000000701' }, operation: 'media.folderCreate', edge: 'creative_folders', readBackFields: 'id,name,creation_time' })
     expect(ran.change!.after).toEqual({ kind: 'folder', items: [{ kind: 'folder', folderId: '120000000000702', name: 'Inner', portfolioId: '9876543210' }], accountId: 'm-1', adAccountId: '1234567890' })
     expect(tool.undo!.request(ran.change!)).toEqual({ refusal: expect.stringMatching(/no API to delete or rename/) })
   })

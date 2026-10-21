@@ -9,9 +9,9 @@
  * locales_to_delete); only the default caption it puts back is this file's (video.captions.default).
  *
  * The object a call names (its kind) and every id in its body are checked by the gateway before anything is sent
- * (gateway.ts metaOwnerProblem, metaMediaOwnerProblem / metaMediaAssetsProblem): `act_<id>` IS the business's chosen ad
- * account (step 19's `adaccount`); a video of the library is listed there (step 22's `video`); the portfolio IS the chosen
- * ad account's own and is not shared with another Nexus business; an Instagram media is the chosen Instagram account's; a
+ * (gateway.ts metaOwnerProblem, metaFolderPortfolioProblem, metaStartedVideoProblem / metaMediaAssetsProblem): `act_<id>`
+ * IS the business's chosen ad account (step 19's `adaccount`); a video of the library is listed there (step 22's `video`);
+ * the portfolio IS the chosen ad account's own (step 28's `business`) and is not shared with another Nexus business; an Instagram media is the chosen Instagram account's; a
  * folder is the portfolio's; a video on the upload host or in a finish is one THIS connection started on the chosen ad
  * account (`startedvideo`: noteMetaVideoStarted, below).
  *
@@ -217,9 +217,10 @@ const audioSpec: Judge = (value) => {
   }
 }
 
-// Step 19's `adaccount` (the chosen ad account itself), step 23's portfolio, step 22's `video` (a video of the library).
+// Step 19's `adaccount` (the chosen ad account itself), step 28's `business` (its portfolio), step 22's `video` (a video of
+// the library).
 const ACCOUNT: readonly MetaWriteKind[] = ['adaccount']
-const PORTFOLIO: readonly MetaWriteKind[] = ['portfolio']
+const PORTFOLIO: readonly MetaWriteKind[] = ['business']
 const LIBRARY_VIDEO: readonly MetaWriteKind[] = ['video']
 const VIDEO_TEXT = { name: META_MEDIA_TEXT_PATTERN, title: META_MEDIA_TEXT_PATTERN, description: META_MEDIA_TEXT_PATTERN }
 const videoText = { name: textOf(META_MEDIA_TEXT.name, 'name'), title: textOf(META_MEDIA_TEXT.title, 'title', 'bytes'), description: textOf(META_MEDIA_TEXT.description, 'description') }

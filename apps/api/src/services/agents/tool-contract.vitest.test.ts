@@ -911,6 +911,16 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { op: 'copy', made: [], top: [], madeAt: '', accountId: 'conn-1', adAccountId: '1234567890' },
         after: { op: 'copy', made: [{ kind: 'campaign', id: '120000000000009' }, { kind: 'adset', id: '120000000000010' }], top: [{ kind: 'campaign', id: '120000000000009' }], madeAt: '2026-10-21T08:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 28: an applied budget raise goes back through the apply tool's restore; a study's name, dates, split and
+      // viewers go back through set-meta-experiment.
+      'apply-meta-recommendations': {
+        before: { type: 'SCALE_GOOD_CAMPAIGN', signature: '1234567', currency: 'EUR', objects: [{ kind: 'adset', id: '120000000000002', name: 'Ad set B', fields: { daily_budget: '5000', lifetime_budget: null } }], undo: [{ kind: 'adset', id: '120000000000002', dailyBudgetCents: 5000 }], noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { type: 'SCALE_GOOD_CAMPAIGN', signature: '1234567', currency: 'EUR', objects: [{ kind: 'adset', id: '120000000000002', name: 'Ad set B', fields: { daily_budget: '11000', lifetime_budget: null } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-experiment': {
+        before: { kind: 'study', id: '120000000000041', type: 'SPLIT_TEST', fields: { name: 'Test A', end_time: '4102444800' }, undo: { action: 'update', studyId: '120000000000041', name: 'Test A', endTime: '2100-01-01T00:00:00Z' }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'study', id: '120000000000041', type: 'SPLIT_TEST', fields: { name: 'Test B', end_time: '4102531200' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 23: what an upload made new comes out of the ad account's library again (create-meta-media kind undo).
       'create-meta-media': {
         before: { kind: 'image', items: [{ kind: 'image', source: 'da_test', inLibrary: false }] },
@@ -1087,7 +1097,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
       'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
       'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads',
-      'remove-meta-ads-items', 'set-meta-labels', 'set-meta-value-rules', 'create-meta-reach-frequency', 'create-meta-media']) {
+      'remove-meta-ads-items', 'set-meta-labels', 'set-meta-value-rules', 'create-meta-reach-frequency',
+      'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment', 'create-meta-media']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

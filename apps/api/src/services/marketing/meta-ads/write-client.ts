@@ -21,7 +21,7 @@
  * Never logs a token, a request body or an answer.
  */
 import { metaRuploadCall, metaWriteCall, type MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaLabelsKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
@@ -56,7 +56,9 @@ export interface MetaWriteTarget { connectionId: string; adAccountId: string }
 export interface MetaObjectChange {
   objectId: string
   /** The kind of object (the gateway confirms it before anything is sent). Step 22: a creative, a video, an Instant Experience part. */
-  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind | 'portfolio'
+  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
+    // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
+    | MetaOptimizeKind
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -123,7 +125,9 @@ export function readsOf(node: Record<string, unknown>, expected: Record<string, 
 }
 
 /** Step 18 review A7 — times are sent as UTC Unix seconds and read back as ISO 8601: both judged as Unix seconds. */
-const TIME_FIELDS = new Set(['start_time', 'end_time', 'time_start', 'time_end'])
+const TIME_FIELDS = new Set(['start_time', 'end_time', 'time_start', 'time_end',
+  // Step 28 — a study's windows and a Page video test's start.
+  'observation_end_time', 'cooldown_start_time', 'scheduled_experiment_timestamp'])
 const unixOf = (v: unknown): string => {
   const text = String(v)
   if (/^\d{1,11}$/.test(text)) return text
