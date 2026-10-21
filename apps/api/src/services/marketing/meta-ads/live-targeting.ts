@@ -78,7 +78,7 @@ import { MetaReadError } from './errors.js'
 import { metaReadAll, metaReadOne } from './read-client.js'
 import { metaChosenAccount, metaConnectionFor, MetaLiveRefusal, objectInAccount, type MetaChosenAccount } from './live.js'
 import type { MetaObjectKind } from '../../meta/meta-kinds.js'
-import { currencyExponent, metaOffset } from './money.js'
+import { currencyExponent, metaOffset, minorToMetaUnits } from './money.js'
 import { takenIds } from './taken.js'
 
 // ── enums (Meta's, narrowed to what Nexus sends) ─────────────────────────────────────────────────────────────────
@@ -651,20 +651,8 @@ function futurePlan(value: unknown): Array<{ date: string; status: string; words
   return plan.length ? plan.slice(0, 20).map((p) => ({ ...p, words: statusWords(p.status) })) : null
 }
 
-/**
- * Minor units of the account currency → Meta's own unit for a budget or bid (its offset unit); null when not whole.
- * "Minor units" are the currency's decimals as Nexus counts them everywhere (money.ts currencyExponent: Intl/CLDR — EUR 2,
- * JPY 0, HUF 0, TWD 2, BHD / JOD 3). Review fix A4, checked 2026-10-21 on documentation/ads-commerce/marketing-api/
- * currencies.md: Meta's offset is 1 for CLP, COP, CRC, HUF, ISK, IDR, JPY, KRW, PYG, TWD, VND and 100 for the rest —
- * BHD and JOD included (Meta counts hundredths of a dinar, so 3-decimal amounts must end in 0); KWD, OMR and TND are not
- * Meta ad-account currencies at all. A currency Nexus has not read is never assumed: the caller refuses first.
- */
-export function minorToMetaUnits(minor: number, currency: string): number | null {
-  if (!Number.isSafeInteger(minor) || minor < 0 || !currency) return null
-  const micros = BigInt(minor) * 10n ** BigInt(Math.max(0, 6 - currencyExponent(currency)))
-  const per = BigInt(1_000_000 / metaOffset(currency))
-  return micros % per === 0n ? Number(micros / per) : null
-}
+/** Minor units → Meta's offset unit for a budget or bid: the one helper, money.ts minorToMetaUnits (step 3 review round 2). */
+export { minorToMetaUnits }
 
 /** The spec's custom audiences and place page sets, each the chosen account's own (at most MAX_SPEC_OWNED), else refused. */
 async function checkSpecOwned(account: MetaChosenAccount, spec: TargetingSpec): Promise<void> {

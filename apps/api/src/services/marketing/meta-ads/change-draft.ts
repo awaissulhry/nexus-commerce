@@ -8,6 +8,8 @@
  * facts F1 X6): a change of N objects is N requests, sent in order, each with its own outcome (meta-ads-kit.ts).
  */
 import type { MetaStatusKind } from './live-status.js'
+import type { MetaWriteEdge } from '../../gateway/meta.js'
+import type { MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -44,22 +46,38 @@ export interface MetaChangeRequest {
   /** The fields read back (default id,status,effective_status). */
   readBackFields?: string
   /**
-   * The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`). Step 29: a Meta
-   * automated rule (`adrule`) or the ad account's rule library (`adaccount`, a rule's create); `kind` then only types the
-   * request (`campaign` by convention) — the operation, the gateway's kind and the read-back are the rule's own.
+   * The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 19: a create names
+   * the chosen ad account itself, `adaccount`). Step 29: a Meta automated rule (`adrule`) or the ad account's rule
+   * library (`adaccount`, a rule's create); `kind` then only types the request (`campaign` by convention).
    */
-  objectKind?: 'highdemandperiod' | 'adrule' | 'adaccount'
-  /** A create on the object's edge (POST /<id>/budget_schedules; step 29: act_<id>/adrules_library, <rule id>/execute). */
-  edge?: 'budget_schedules' | 'adrules_library' | 'execute'
+  objectKind?: 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
+    // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
+    | MetaOptimizeKind
+    // Step 29 — a Meta automated rule.
+    | 'adrule'
+  /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute). */
+  edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
   /** A budget schedule's campaign or ad set. */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 19 — Meta's check of this create asks its setup recommendations too (master CMP-031). */
+  recommendations?: boolean
   /**
-   * Step 29 — a create whose new object exists even when Meta reads it back otherwise than asked (a rule asked OFF, read
-   * ON): it is recorded as done (so its undo deletes it) and the tool's finish says what it reads; never sent again.
+   * Step 19 (review A4) — a create or a copy: when Meta answers success but the new object reads back otherwise, it is still
+   * recorded as made (with what it reads), so its undo can delete it; never "no record" for an object Meta made.
    */
-  recordWhenMoved?: true
+  recordEvenIfNotAsAsked?: boolean
+  /**
+   * Step 22 — the steps of the same change this request stands on (a creative deleted after the ads that use it, an image
+   * after the creatives that use it): when one of them did not happen as asked, it is not sent.
+   */
+  needs?: number[]
+  /**
+   * Step 21 — an edge that changes the object itself (labels ADDED to a campaign: POST /<campaign>/adlabels answers
+   * {"success": true}): the object is read back, never a new one.
+   */
+  readBackObject?: true
 }
 
 export interface MetaChangeDraft {
@@ -80,6 +98,8 @@ export interface MetaChangeDraft {
   /** What it replaces and what it writes, in one shape per tool (AgentChange; undo reads them). */
   before: unknown
   after: unknown
+  /** Step 22 — everything a delete takes with it (every ad set and ad of a campaign or ad set, by id), shown in full. */
+  alsoDeleted?: unknown
 }
 
 export const MAX_CHANGE_LINES = 20

@@ -565,7 +565,7 @@ export function createRuleDraft(request: AdRuleRequest, ctx: RuleDraftContext): 
   const request1: MetaChangeRequest = {
     step: 1, label: `Make the rule "${request.name!.trim()}" (${on ? 'switched on' : 'switched off'})`, kind: 'campaign', objectKind: 'adaccount', objectId: `act_${ctx.adAccountId}`,
     params, check: 'none', raisesSpend: !!raises, readBackInPost: false, budget: false, undoable: true, operation: 'adRule.create', edge: 'adrules_library',
-    expect: { status }, readBackFields: AD_RULE_READ_BACK, recordWhenMoved: true,
+    expect: { status }, readBackFields: AD_RULE_READ_BACK, recordEvenIfNotAsAsked: true,
   }
   const before: RuleRecord = { kind: 'adrule', action: 'create', id: '', exists: 'no', undo: null, noUndo: [] }
   const after: RuleRecord = { kind: 'adrule', action: 'create', id: '', exists: 'yes', rule: ruleStateOf(request.name!.trim(), status, { evaluation: specs.evaluation, execution: specs.execution, schedule: specs.schedule ?? null }) }

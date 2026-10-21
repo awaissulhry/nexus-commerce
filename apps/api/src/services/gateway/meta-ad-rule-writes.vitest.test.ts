@@ -170,8 +170,8 @@ describe('the rule entries of the write allow-list', () => {
     expect(problem({ url: `${BASE}/${CAMPAIGN}`, body: '' })).toMatch(/form body/)
     expect(problem({ url: `${BASE}/${RULE}`, objectKind: 'adrule', body: '' })).toMatch(/form body/)
     expect(verdict({ method: 'DELETE', objectKind: 'adrule', body: undefined })).toMatchObject({ write: { rule: 'adRule.delete', objectId: RULE, method: 'DELETE' } })
-    expect(problem({ method: 'DELETE', body: undefined })).toMatch(/deletes nothing on Meta yet/)
-    expect(problem({ method: 'DELETE', url: `${BASE}/${RULE}/execute`, objectKind: 'adrule', body: undefined })).toMatch(/deletes nothing on Meta yet/)
+    expect(problem({ method: 'DELETE', body: undefined })).toMatch(/deletes on Meta only/)
+    expect(problem({ method: 'DELETE', url: `${BASE}/${RULE}/execute`, objectKind: 'adrule', body: undefined })).toMatch(/deletes on Meta only/)
   })
   it('the ids inside a rule, with the kind of object each names', () => {
     const body = form({ evaluation_spec: JSON.stringify({ evaluation_type: 'SCHEDULE', filters: [
