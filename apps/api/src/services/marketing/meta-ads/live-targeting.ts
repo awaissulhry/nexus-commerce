@@ -16,9 +16,10 @@
  * ALLOW-LISTS ONLY (lesson from steps 1–2): the caller never names a Graph path, field or parameter. `/search` is sent
  * only with the `type` values below (the gateway holds the same list: meta-calls.ts META_SEARCH_TYPES); a targeting spec
  * is parsed by TARGETING_SPEC (allow-listed keys, every list capped, unknown keys refused) and re-encoded by Nexus; every
- * answer keeps only the keys named per kind. Every id a caller gives is the chosen account's own (Nexus's rows, else one
- * live account_id read: live.ts objectInAccount); a promoted object names only the chosen Page / Instagram account and a
- * pixel of the chosen ad account; a Page another business in Nexus uses is its id and the flag only.
+ * answer keeps only the keys named per kind. Every id a caller gives is the chosen account's own AND of the kind named
+ * (Nexus's rows, else one live read of its account_id and two fields only that kind has: ownId); a promoted object names
+ * only the chosen Page / Instagram account and a pixel of the chosen ad account; a Page another business in Nexus uses is
+ * its id and the flag only.
  *
  * Checked 2026-10-21 with `curl -sL <page>.md` (developers.facebook.com/documentation/ads-commerce/marketing-api/…) and
  * Meta's Python Business SDK (github.com/facebook/facebook-python-business-sdk, main, facebook_business/adobjects):
@@ -45,8 +46,10 @@
  *     estimate_mau_lower_bound, estimate_mau_upper_bound, estimate_ready, targeting_optimization_types; v26 removed
  *     daily_outcomes_curve, budget_guardrail and estimate_dau, all versions on 2026-10-27 — facts F1 M4-13),
  *     message_delivery_estimate (account: promoted_object and targeting_spec required, bid_amount, lifetime_budget,
- *     lifetime_in_days, optimization_goal, pacing_type; SDK messagedeliveryestimate.py: estimate_cost* are floats in an
- *     undocumented unit), ad_place_page_sets (list documented; the node GET /{id} is SDK only, adplacepageset.py);
+ *     lifetime_in_days, optimization_goal, pacing_type; SDK adaccount.py adds daily_budget and is_direct_send_campaign;
+ *     SDK messagedeliveryestimate.py: estimate_cost* are floats in an undocumented unit; audiences/reference/
+ *     placement-targeting: whatsapp_positions status | marketing_messages — status needs Instagram story, marketing
+ *     messages need the account onboarded, read as marketing_messages_settings{whatsapp_activation_status}), ad_place_page_sets (list documented; the node GET /{id} is SDK only, adplacepageset.py);
  *   - reference/ad-campaign/delivery_estimate (all optional; the ad set's own settings by default, overrides preview an
  *     edit), ad-campaign/message_delivery_estimate, ad-campaign/targetingsentencelines, adgroup/targetingsentencelines,
  *     audiences/reference/targeting-description (act_<id>/targetingsentencelines: targeting_spec,
@@ -59,16 +62,21 @@
  *     AdSavedKeywords: id, name, keywords {brands, product_categories, product_names, search_terms}, run_status,
  *     time_created, time_updated). These, the place page set node, a location cluster's fields and the message estimate
  *     are LIVE-PROBES rows (~/nexus-archive/2026-10-20-meta-ads/LIVE-PROBES.md): when Meta refuses, the tool says so.
+ * Review round 1 (2026-10-21): the spec takes no location_cluster_ids (a cluster cannot be checked to be the chosen
+ * account's inside a spec), and adds Meta's other geo lists (SDK targetinggeolocation.py), place_page_set_ids (each the
+ * chosen account's) and the WhatsApp placements; app optimization goals are not estimated.
  * Traps kept here: detailed-targeting exclusions error since v22 (only `exclusions.work_employers` is taken — facts F2
  * O2: estimates allow employer exclusions only); location_types home | recent only, never `recent` in an exclusion
  * (TG-049); Instagram `explore` and Messenger `story` placements are gone in v26; ISSUES_ELECTIONS_POLITICS and the
  * replaced CREDIT category are never sent (Nexus runs no political ads; FINANCIAL_PRODUCTS_SERVICES replaced CREDIT).
  */
 import { z } from 'zod'
-import { metaObjectId } from '../../cx/connectors/meta/discovery.js'
+import { metaAdAccountId, metaObjectId } from '../../cx/connectors/meta/discovery.js'
 import type { MetaQueryValue } from '../../gateway/meta.js'
+import { META_AUDIENCE_SAC_FIELDS } from '../../gateway/meta-calls.js'
+import { MetaReadError } from './errors.js'
 import { metaReadAll, metaReadOne } from './read-client.js'
-import { metaChosenAccount, metaConnectionFor, MetaLiveRefusal, objectInAccount, objectKindOf, type MetaChosenAccount } from './live.js'
+import { metaChosenAccount, metaConnectionFor, MetaLiveRefusal, objectKindOf, type MetaChosenAccount } from './live.js'
 import { currencyExponent, metaOffset } from './money.js'
 import { takenIds } from './taken.js'
 
@@ -105,10 +113,15 @@ export const DETAILED_TYPES = [
 export const REGULATED_CATEGORIES = ['NONE', 'EMPLOYMENT', 'HOUSING', 'FINANCIAL_PRODUCTS_SERVICES', 'ONLINE_GAMBLING_AND_GAMING'] as const
 export const SPECIAL_AD_CATEGORIES = ['HOUSING', 'EMPLOYMENT', 'FINANCIAL_PRODUCTS_SERVICES'] as const
 export const CAMPAIGN_OBJECTIVES = ['OUTCOME_AWARENESS', 'OUTCOME_ENGAGEMENT', 'OUTCOME_LEADS', 'OUTCOME_SALES', 'OUTCOME_TRAFFIC', 'OUTCOME_APP_PROMOTION'] as const
+/**
+ * Meta's optimization goals, without the app goals (APP_INSTALLS, IN_APP_VALUE, APP_INSTALLS_AND_OFFSITE_CONVERSIONS):
+ * they need an application_id and store URL in the promoted object, which Nexus does not send — app goals are not
+ * estimated here (review fix B6).
+ */
 export const OPTIMIZATION_GOALS = [
-  'APP_INSTALLS', 'AD_RECALL_LIFT', 'ENGAGED_USERS', 'EVENT_RESPONSES', 'IMPRESSIONS', 'LEAD_GENERATION', 'QUALITY_LEAD', 'LINK_CLICKS',
+  'AD_RECALL_LIFT', 'ENGAGED_USERS', 'EVENT_RESPONSES', 'IMPRESSIONS', 'LEAD_GENERATION', 'QUALITY_LEAD', 'LINK_CLICKS',
   'OFFSITE_CONVERSIONS', 'PAGE_LIKES', 'POST_ENGAGEMENT', 'QUALITY_CALL', 'REACH', 'LANDING_PAGE_VIEWS', 'VISIT_INSTAGRAM_PROFILE',
-  'ENGAGED_PAGE_VIEWS', 'VALUE', 'THRUPLAY', 'DERIVED_EVENTS', 'APP_INSTALLS_AND_OFFSITE_CONVERSIONS', 'CONVERSATIONS', 'IN_APP_VALUE',
+  'ENGAGED_PAGE_VIEWS', 'VALUE', 'THRUPLAY', 'DERIVED_EVENTS', 'CONVERSATIONS',
   'MESSAGING_PURCHASE_CONVERSION', 'MESSAGING_DEEP_CONVERSATION_AND_FOLLOW', 'SUBSCRIBERS', 'REMINDERS_SET', 'MEANINGFUL_CALL_ATTEMPT',
   'PROFILE_VISIT', 'PROFILE_AND_PAGE_ENGAGEMENT', 'ADVERTISER_SILOED_VALUE', 'AUTOMATIC_OBJECTIVE', 'MESSAGING_APPOINTMENT_CONVERSION',
 ] as const
@@ -127,6 +140,7 @@ const options = (max: number) => z.array(option).min(1).max(max)
 const distanceUnit = z.enum(['mile', 'kilometer'])
 const iso2 = z.string().trim().regex(/^[A-Z]{2}$/, 'a country is its ISO code in capitals (IT, DE)')
 
+const geoKeys = z.array(z.object({ key: digits }).strict()).min(1).max(200)
 const geoSpec = z.object({
   countries: z.array(iso2).min(1).max(250).optional(),
   regions: z.array(z.object({ key: digits }).strict()).min(1).max(200).optional(),
@@ -138,7 +152,12 @@ const geoSpec = z.object({
   }).strict()).min(1).max(200).optional(),
   geo_markets: z.array(z.object({ key: z.string().trim().regex(/^COMSCORE_MARKET:\d{1,6}$/) }).strict()).min(1).max(210).optional(),
   country_groups: z.array(z.enum(COUNTRY_GROUPS)).min(1).max(20).optional(),
-  location_cluster_ids: z.array(z.object({ key: digits }).strict()).min(1).max(50).optional(),
+  // Review fix B2 — Meta's other geo lists (SDK targetinggeolocation.py, TargetingGeoLocationGeoEntities {key}).
+  subcities: geoKeys.optional(), neighborhoods: geoKeys.optional(), large_geo_areas: geoKeys.optional(), medium_geo_areas: geoKeys.optional(),
+  small_geo_areas: geoKeys.optional(), metro_areas: geoKeys.optional(),
+  electoral_districts: z.array(z.object({ key: z.string().trim().regex(/^[A-Z]{2}:[A-Za-z0-9]{1,12}$/, 'an electoral district key is COUNTRY:CODE (US:CA14)') }).strict()).min(1).max(200).optional(),
+  // Review fix A2 — no location_cluster_ids: a cluster cannot be checked to be the chosen account's inside a spec; estimate
+  // the ad set that uses it (adSetId) instead.
   location_types: z.array(z.enum(['home', 'recent'])).min(1).max(2).optional(),
 }).strict()
 
@@ -172,13 +191,18 @@ export const TARGETING_SPEC = z.object({
   custom_audiences: audiences.optional(),
   excluded_custom_audiences: audiences.optional(),
   device_platforms: z.array(z.enum(['mobile', 'desktop'])).min(1).max(2).optional(),
-  publisher_platforms: z.array(z.enum(['facebook', 'instagram', 'threads', 'messenger', 'audience_network'])).min(1).max(5).optional(),
+  publisher_platforms: z.array(z.enum(['facebook', 'instagram', 'threads', 'messenger', 'audience_network', 'whatsapp'])).min(1).max(6).optional(),
   facebook_positions: z.array(z.enum(['feed', 'right_hand_column', 'marketplace', 'video_feeds', 'story', 'search', 'instream_video', 'facebook_reels', 'facebook_reels_overlay', 'profile_feed', 'notification'])).min(1).max(11).optional(),
   // v26 removed Instagram `explore` (Explore feed) and Messenger `story`.
   instagram_positions: z.array(z.enum(['stream', 'story', 'explore_home', 'reels', 'profile_feed', 'ig_search', 'profile_reels'])).min(1).max(7).optional(),
   audience_network_positions: z.array(z.enum(['classic', 'rewarded_video'])).min(1).max(2).optional(),
   messenger_positions: z.array(z.enum(['sponsored_messages'])).min(1).max(1).optional(),
   threads_positions: z.array(z.enum(['threads_stream'])).min(1).max(1).optional(),
+  // Review fix B1 — placement-targeting "whatsapp_positions": status needs the Instagram story placement too;
+  // marketing_messages needs the ad account onboarded to marketing messages (marketing_messages_settings).
+  whatsapp_positions: z.array(z.enum(['status', 'marketing_messages'])).min(1).max(2).optional(),
+  // Review fix B2 — place page sets (SDK targeting.py), each checked to be the chosen account's own.
+  place_page_set_ids: z.array(digits).min(1).max(50).optional(),
   user_os: z.array(z.string().trim().regex(/^[A-Za-z0-9_.]{1,40}$/)).min(1).max(10).optional(),
   user_device: z.array(z.string().trim().regex(/^[A-Za-z0-9_ .+-]{1,60}$/)).min(1).max(50).optional(),
   excluded_user_device: z.array(z.string().trim().regex(/^[A-Za-z0-9_ .+-]{1,60}$/)).min(1).max(50).optional(),
@@ -191,6 +215,8 @@ export const TARGETING_SPEC = z.object({
   ])).min(1).max(3).optional(),
 }).strict()
   .refine((s) => s.age_min === undefined || s.age_max === undefined || s.age_min <= s.age_max, 'age_min is at most age_max')
+  .refine((s) => !s.whatsapp_positions?.includes('status') || !!s.instagram_positions?.includes('story'), 'the WhatsApp status placement needs the Instagram story placement too (instagram_positions story)')
+  .refine((s) => !s.whatsapp_positions || !s.publisher_platforms || s.publisher_platforms.includes('whatsapp'), 'whatsapp_positions need whatsapp in publisher_platforms')
 export type TargetingSpec = z.infer<typeof TARGETING_SPEC>
 
 /** A promoted object for an estimate: the chosen Page / Instagram account, a pixel of the chosen ad account and its event. */
@@ -202,10 +228,13 @@ export const PROMOTED_OBJECT = z.object({
 }).strict().refine((p) => Object.keys(p).length > 0, 'a promoted object names at least one key')
 export type PromotedObject = z.infer<typeof PROMOTED_OBJECT>
 
-/** At most this many characters, a targeting spec as sent (it travels in the URL of a GET). */
+/** At most this many characters, a targeting spec as sent: URL-encoded, as it travels in the URL of a GET (review fix A5). */
 export const MAX_SPEC_CHARS = 8000
-/** At most this many custom audiences in one spec (each is checked to be the chosen account's, one read each at most). */
-export const MAX_SPEC_AUDIENCES = 25
+/** At most this many custom audiences and place page sets in one spec (each checked to be the chosen account's: a read each at most). */
+export const MAX_SPEC_OWNED = 25
+
+/** The length of a spec as it goes in the query string (form-encoded, as metaUrl / URLSearchParams send it). */
+export const encodedSpecLength = (spec: unknown) => new URLSearchParams([['targeting_spec', JSON.stringify(spec)]]).toString().length - 'targeting_spec='.length
 
 const refuse = (sentence: string): never => { throw new MetaLiveRefusal(sentence) }
 
@@ -214,7 +243,7 @@ export function parsedSpec(value: unknown, what = 'targeting'): TargetingSpec {
   const parsed = TARGETING_SPEC.safeParse(value)
   if (!parsed.success) refuse(`${what} is not a targeting spec Nexus sends: ${parsed.error.issues.map((i) => `${i.path.join('.') || what}: ${i.message}`).join('; ')}`)
   const spec = parsed.data!
-  if (JSON.stringify(spec).length > MAX_SPEC_CHARS) refuse(`${what} is longer than ${MAX_SPEC_CHARS} characters as sent: split it, or estimate the ad set itself (adSetId).`)
+  if (encodedSpecLength(spec) > MAX_SPEC_CHARS) refuse(`${what} is longer than ${MAX_SPEC_CHARS} characters as sent (URL-encoded): split it, or estimate the ad set itself (adSetId).`)
   const geo = spec.geo_locations
   const hasPlace = !!geo && Object.entries(geo).some(([key, list]) => key !== 'location_types' && Array.isArray(list) && list.length > 0)
   if (!hasPlace && !spec.custom_audiences?.length) refuse(`${what} names no location: Meta needs at least one country (or other place) in geo_locations, unless it targets a custom audience.`)
@@ -312,13 +341,45 @@ async function readRows(connectionId: string, operation: string, path: string, q
   return { rows: rows.slice(0, maxRows), more: read.truncated || rows.length > maxRows }
 }
 
-/** A Meta id of the chosen account's (a campaign, ad set, ad or other object whose account_id is it), else refused. */
-async function ownId(account: MetaChosenAccount, id: string, what: 'ad set' | 'ad' | 'custom audience' | 'place page set'): Promise<string> {
+type OwnKind = 'ad set' | 'ad' | 'custom audience' | 'place page set'
+/**
+ * Review fix A5 — TWO fields only that kind of object has together (as step 17's gateway owner check, gateway.ts
+ * META_KIND_FIELD), checked 2026-10-21 on Meta's Python Business SDK (adset.py, ad.py, customaudience.py,
+ * adplacepageset.py; campaign.py, adcreative.py, savedaudience.py and reachfrequencyprediction.py have neither pair): a
+ * read asking them of another kind is refused by Meta ("nonexisting field") or comes back without them.
+ */
+const OWN_KIND_FIELDS: Readonly<Record<OwnKind, readonly [string, string]>> = {
+  'ad set': ['optimization_goal', 'billing_event'],
+  ad: ['adset_id', 'creative'],
+  'custom audience': ['subtype', 'time_created'],
+  'place page set': ['parent_page', 'pages_count'],
+}
+const KIND_WORD: Readonly<Record<string, string>> = { campaign: 'campaign', adset: 'ad set', ad: 'ad', creative: 'creative' }
+const an = (word: string) => `${/^[aeiou]/.test(word) ? 'an' : 'a'} ${word}`
+
+/**
+ * A Meta id that is the chosen account's own AND of the kind named, else refused in words: Nexus's own rows of the daily
+ * read first, else ONE live read of its account_id and two fields only that kind has. An own campaign or audience is never
+ * taken as an ad set, nor an ad set as an ad.
+ */
+async function ownId(account: MetaChosenAccount, id: string, what: OwnKind): Promise<string> {
   const objectId = metaObjectId(id) ?? refuse(`"${id}" is not a Meta ${what} id (digits).`)
-  const kind = await objectKindOf(account, objectId)
-  const want = what === 'ad set' ? 'adset' : what === 'ad' ? 'ad' : null
-  if (kind && kind !== want) refuse(`That id is a ${kind} of this ad account, not a ${what}.`)
-  if (!kind && !(await objectInAccount(account, objectId))) refuse(`That ${what} does not belong to the ad account this business chose, so it is not read.`)
+  const stored = await objectKindOf(account, objectId)
+  if (stored) {
+    if (KIND_WORD[stored] !== what) refuse(`That id is ${an(KIND_WORD[stored])} of this ad account, not ${an(what)}.`)
+    return objectId
+  }
+  const fields = OWN_KIND_FIELDS[what]
+  let body: Record<string, unknown>
+  try {
+    body = (await metaReadOne({ connectionId: account.connectionId }, { operation: 'targeting.ownerCheck', path: objectId, query: { fields: ['account_id', ...fields].join(',') } })).body as Record<string, unknown>
+  } catch (err) {
+    if (!(err instanceof MetaReadError)) throw err
+    if (/nonexisting field/i.test(err.failure.sentence)) refuse(`That id is not ${an(what)} (Meta does not know ${an(what)}'s own fields on it), so it is not read.`)
+    refuse(`Nexus could not confirm that this ${what} is of the ad account this business chose (${err.failure.sentence}), so it is not read.`)
+  }
+  if (metaAdAccountId(body!.account_id) !== account.adAccountId) refuse(`That ${what} does not belong to the ad account this business chose, so it is not read.`)
+  if (fields.some((name) => { const value = body![name]; return value === undefined || value === null || value === '' })) refuse(`That id is not ${an(what)} of this ad account, so it is not read.`)
   return objectId
 }
 
@@ -526,7 +587,7 @@ async function placePageSets(account: MetaChosenAccount, placePageSetId: string 
       }
     }),
     more,
-    note: 'A place page set targets the people near the locations of a Page with many places (places in a spec). One set by id is Meta\'s SDK read; if Meta refuses it, the answer says so.',
+    note: 'A place page set targets the people near the locations of a Page with many places (place_page_set_ids in a spec). One set by id is Meta\'s SDK read; if Meta refuses it, the answer says so.',
   }
 }
 
@@ -536,17 +597,32 @@ async function locationCluster(account: MetaChosenAccount, adSetId: string | nul
   const id = await ownId(account, adSetId!, 'ad set')
   const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'targeting.adsetGeo', path: id, query: { fields: 'targeting{geo_locations,excluded_geo_locations}' } })
   const targeting = ((read.body as { targeting?: unknown }).targeting ?? {}) as Record<string, unknown>
+  // Review fix B5 — a cluster key is compared as text. One Meta sends as a JSON number past 2^53 has lost digits before
+  // Nexus sees it (JSON numbers are doubles): it is counted, never compared (LIVE-PROBES TG-017 settles how Meta sends it).
+  let inexact = 0
   const clustersOf = (geo: unknown) => {
     const list = geo && typeof geo === 'object' ? (geo as { location_cluster_ids?: unknown }).location_cluster_ids : null
-    return Array.isArray(list) ? list.map((c) => metaObjectId(c && typeof c === 'object' ? (c as { key?: unknown }).key : c)).filter((k): k is string => !!k) : []
+    if (!Array.isArray(list)) return []
+    return list.map((c) => {
+      const key = c && typeof c === 'object' ? (c as { key?: unknown }).key : c
+      if (typeof key === 'number' && !Number.isSafeInteger(key)) { inexact++; return null }
+      return metaObjectId(key)
+    }).filter((k): k is string => !!k)
   }
   const included = clustersOf(targeting.geo_locations)
   const excluded = clustersOf(targeting.excluded_geo_locations)
   const zipsOf = (geo: unknown) => { const z2 = geo && typeof geo === 'object' ? (geo as { zips?: unknown }).zips : null; return Array.isArray(z2) ? z2.length : 0 }
-  const base = { kind: 'location-cluster', adSetId: id, includedClusters: included, excludedClusters: excluded, zipsListed: zipsOf(targeting.geo_locations) }
+  const base = {
+    kind: 'location-cluster', adSetId: id, includedClusters: included, excludedClusters: excluded, zipsListed: zipsOf(targeting.geo_locations),
+    ...(inexact ? { clustersNotExact: inexact, clustersNote: 'Meta sent some cluster keys as numbers too long to keep exactly; they are not shown or compared.' } : {}),
+  }
   if (!locationClusterId) return { ...base, note: 'The ad set\'s location clusters (more than 2,500 postcodes become one cluster). Name one (locationClusterId) to read it.' }
   const clusterId = metaObjectId(locationClusterId) ?? refuse('locationClusterId is digits.')
-  if (!included.includes(clusterId) && !excluded.includes(clusterId)) refuse('That location cluster is not in this ad set\'s targeting, so it is not read.')
+  if (!included.includes(clusterId) && !excluded.includes(clusterId)) {
+    refuse(inexact
+      ? 'Nexus cannot confirm that location cluster is in this ad set\'s targeting: Meta sent its cluster keys as numbers too long to compare exactly, so it is not read.'
+      : 'That location cluster is not in this ad set\'s targeting, so it is not read.')
+  }
   // Meta documents GET /<location_cluster_id> but no field list (basic-targeting); the SDK has no node for it. Nexus asks
   // only its id until a live read names its fields (LIVE-PROBES TG-017).
   const cluster = await metaReadOne({ connectionId: account.connectionId }, { operation: 'targeting.locationCluster', path: clusterId, query: { fields: 'id' } })
@@ -578,6 +654,8 @@ export interface TargetingCheckInput {
   adId?: string | null
   bidAmountCents?: number | null
   lifetimeBudgetCents?: number | null
+  dailyBudgetCents?: number | null
+  directSend?: boolean | null
   lifetimeDays?: number | null
   pacingType?: string | null
   maxRows?: number | null
@@ -602,19 +680,28 @@ function futurePlan(value: unknown): Array<{ date: string; status: string; words
   return plan.length ? plan.slice(0, 20).map((p) => ({ ...p, words: statusWords(p.status) })) : null
 }
 
-/** Minor units (cents) of the account currency → Meta's own unit for a budget or bid (its offset unit); null when not whole. */
-export function minorToMetaUnits(minor: number, currency: string | null | undefined): number | null {
-  if (!Number.isSafeInteger(minor) || minor < 0) return null
+/**
+ * Minor units of the account currency → Meta's own unit for a budget or bid (its offset unit); null when not whole.
+ * "Minor units" are the currency's decimals as Nexus counts them everywhere (money.ts currencyExponent: Intl/CLDR — EUR 2,
+ * JPY 0, HUF 0, TWD 2, BHD / JOD 3). Review fix A4, checked 2026-10-21 on documentation/ads-commerce/marketing-api/
+ * currencies.md: Meta's offset is 1 for CLP, COP, CRC, HUF, ISK, IDR, JPY, KRW, PYG, TWD, VND and 100 for the rest —
+ * BHD and JOD included (Meta counts hundredths of a dinar, so 3-decimal amounts must end in 0); KWD, OMR and TND are not
+ * Meta ad-account currencies at all. A currency Nexus has not read is never assumed: the caller refuses first.
+ */
+export function minorToMetaUnits(minor: number, currency: string): number | null {
+  if (!Number.isSafeInteger(minor) || minor < 0 || !currency) return null
   const micros = BigInt(minor) * 10n ** BigInt(Math.max(0, 6 - currencyExponent(currency)))
   const per = BigInt(1_000_000 / metaOffset(currency))
   return micros % per === 0n ? Number(micros / per) : null
 }
 
-/** The spec's custom audiences, each the chosen account's own (at most MAX_SPEC_AUDIENCES), else refused in words. */
-async function checkSpecAudiences(account: MetaChosenAccount, spec: TargetingSpec): Promise<void> {
-  const ids = specAudienceIds(spec)
-  if (ids.length > MAX_SPEC_AUDIENCES) refuse(`The spec names ${ids.length} custom audiences; Nexus checks at most ${MAX_SPEC_AUDIENCES} per estimate (each must be this ad account's own).`)
-  for (const id of ids) await ownId(account, id, 'custom audience')
+/** The spec's custom audiences and place page sets, each the chosen account's own (at most MAX_SPEC_OWNED), else refused. */
+async function checkSpecOwned(account: MetaChosenAccount, spec: TargetingSpec): Promise<void> {
+  const audiences = specAudienceIds(spec)
+  const pageSets = [...new Set(spec.place_page_set_ids ?? [])]
+  if (audiences.length + pageSets.length > MAX_SPEC_OWNED) refuse(`The spec names ${audiences.length + pageSets.length} custom audiences and place page sets; Nexus checks at most ${MAX_SPEC_OWNED} per call (each must be this ad account's own).`)
+  for (const id of audiences) await ownId(account, id, 'custom audience')
+  for (const id of pageSets) await ownId(account, id, 'place page set')
 }
 
 /** A promoted object of the chosen assets only: its Page, its Instagram account, a pixel of the chosen ad account. */
@@ -625,6 +712,11 @@ async function checkPromotedObject(account: MetaChosenAccount, value: unknown): 
   if (promoted.page_id && promoted.page_id !== account.pageId) refuse('promotedObject.page_id must be the Facebook Page this business chose (meta-ad-accounts list chosen).')
   if (promoted.instagram_profile_id && promoted.instagram_profile_id !== account.instagramId) refuse('promotedObject.instagram_profile_id must be the Instagram account this business chose.')
   if (promoted.pixel_id) {
+    // Review note A3 — act_<id>/adspixels lists the pixels the ad account can use, also ones another business portfolio
+    // shared in, and taken.ts has no PIXEL kind yet (nexus_meta_links_taken answers ad accounts, Pages and Instagram
+    // accounts only). Enough for a READ (an estimate names the pixel; nothing of it is answered back). The pixel WRITE
+    // steps (M10 signals, M3b ad sets) must add the business's own pixel pick (a PIXEL link, one pixel in one business)
+    // and check against it instead.
     const read = await readRows(account.connectionId, 'targeting.pixelCheck', `${act(account.adAccountId)}/adspixels`, { fields: 'id' }, 200)
     if (!read.rows.some((r) => metaObjectId(r.id) === promoted.pixel_id)) refuse('promotedObject.pixel_id is not a pixel of the ad account this business chose.')
   }
@@ -680,10 +772,13 @@ export async function targetingCheck(input: TargetingCheckInput) {
           items.push({ id, ...(at.length ? { name: at[0].name, where: at.map((f) => f.where) } : {}), currentStatus: status, words: statusWords(status), futurePlan: futurePlan(r.future_plan) })
         }
       }
-      const retiring = items.filter((i) => i.currentStatus !== 'NORMAL').length
+      // Review fix B4 — retired or being retired: DEPRECATING and NON-DELIVERABLE; NON-DELIVERABLE-IN-EXCLUSION only for an
+      // option that sits under exclusions; never UNKNOWN or a status Meta did not give.
+      const retiring = items.filter((i) => i.currentStatus === 'DEPRECATING' || i.currentStatus === 'NON-DELIVERABLE'
+        || (i.currentStatus === 'NON-DELIVERABLE-IN-EXCLUSION' && Array.isArray(i.where) && (i.where as string[]).some((w) => w.startsWith('exclusions.')))).length
       return {
         ...base, ...(input.adSetId ? { adSetId: metaObjectId(input.adSetId) } : {}), items, retiring,
-        note: retiring ? `${retiring} option(s) are retired or being retired: remove them before the next edit of an ad set that holds them (Meta rejects that edit otherwise).` : 'Every option checked is in use.',
+        note: retiring ? `${retiring} option(s) are retired or being retired where they are used: remove them before the next edit of an ad set that holds them (Meta rejects that edit otherwise).` : 'No option checked is retired or being retired where it is used (see each one\'s words).',
       }
     }
     case 'retired-adsets': {
@@ -724,7 +819,7 @@ export async function targetingCheck(input: TargetingCheckInput) {
     }
     case 'reach': {
       const spec = parsedSpec(input.targeting)
-      await checkSpecAudiences(account, spec)
+      await checkSpecOwned(account, spec)
       const read = await metaReadOne({ connectionId }, { operation: 'targeting.reachestimate', path: `${act(adAccountId)}/reachestimate`, query: { targeting_spec: spec } })
       const r = dataRows(read.body)[0] ?? {}
       const lower = typeof r.users_lower_bound === 'number' ? r.users_lower_bound : null
@@ -742,7 +837,7 @@ export async function targetingCheck(input: TargetingCheckInput) {
     case 'delivery': {
       const goal = input.optimizationGoal ?? null
       const spec = input.targeting === undefined || input.targeting === null ? null : parsedSpec(input.targeting)
-      if (spec) await checkSpecAudiences(account, spec)
+      if (spec) await checkSpecOwned(account, spec)
       const promoted = input.promotedObject === undefined || input.promotedObject === null ? null : await checkPromotedObject(account, input.promotedObject)
       const overrides: Record<string, MetaQueryValue> = {}
       if (goal) overrides.optimization_goal = goal
@@ -761,7 +856,10 @@ export async function targetingCheck(input: TargetingCheckInput) {
         const after = Object.keys(overrides).length
           ? await metaReadOne({ connectionId }, { operation: 'targeting.adsetDeliveryEstimate', path: `${id}/delivery_estimate`, query: { ...overrides, fields: DELIVERY_FIELDS } })
           : null
-        return { ...base, adSetId: id, before: estimate(before.body), after: after ? estimate(after.body) : null, note: `${after ? 'before: the ad set as it is; after: with the changes named. ' : ''}${DAILY_CURVE_GONE}` }
+        return {
+          ...base, adSetId: id, before: estimate(before.body), after: after ? estimate(after.body) : null,
+          note: `${after ? `before: the ad set as it is; after: the ad set with ${spec ? 'THIS WHOLE targeting in place of its own (Meta does not merge a partial spec: name everything the ad set should keep)' : 'the goal / promoted object named'}. ` : ''}${DAILY_CURVE_GONE}`,
+        }
       }
       if (!goal || !spec) refuse('Name the optimization goal (optimizationGoal) and the targeting, or an ad set (adSetId) to estimate as it is.')
       const read = await metaReadOne({ connectionId }, { operation: 'targeting.deliveryEstimate', path: `${act(adAccountId)}/delivery_estimate`, query: { ...overrides, fields: DELIVERY_FIELDS } })
@@ -769,8 +867,12 @@ export async function targetingCheck(input: TargetingCheckInput) {
     }
     case 'message-delivery': {
       // TG-034 / TG-035 — marketing messages need Meta's grant; the cost unit is undocumented (LIVE-PROBES).
+      if (!currency && (input.bidAmountCents != null || input.lifetimeBudgetCents != null || input.dailyBudgetCents != null)) {
+        refuse('Nexus has not read this ad account\'s currency yet, so it cannot send an amount (it never assumes one). Read the account first (meta-ads-live view account) or leave the amounts out.')
+      }
+      if (input.adSetId && (input.dailyBudgetCents != null || input.directSend)) refuse('dailyBudgetCents and directSend go on the account estimate only (no adSetId).')
       const spec = input.targeting === undefined || input.targeting === null ? null : parsedSpec(input.targeting)
-      if (spec) await checkSpecAudiences(account, spec)
+      if (spec) await checkSpecOwned(account, spec)
       const promoted = input.promotedObject === undefined || input.promotedObject === null ? null : await checkPromotedObject(account, input.promotedObject)
       const query: Record<string, MetaQueryValue> = { fields: MESSAGE_FIELDS }
       if (spec) query.targeting_spec = spec
@@ -778,10 +880,13 @@ export async function targetingCheck(input: TargetingCheckInput) {
       if (input.optimizationGoal) query.optimization_goal = input.optimizationGoal
       if (input.pacingType) query.pacing_type = input.pacingType
       if (input.lifetimeDays) query.lifetime_in_days = input.lifetimeDays
-      for (const [key, cents] of [['bid_amount', input.bidAmountCents], ['lifetime_budget', input.lifetimeBudgetCents]] as const) {
+      // Review fix B1 — the account estimate also takes a daily budget and a direct send (SDK adaccount.py).
+      if (input.directSend) query.is_direct_send_campaign = true
+      const amounts = [['bid_amount', 'bidAmountCents', input.bidAmountCents], ['lifetime_budget', 'lifetimeBudgetCents', input.lifetimeBudgetCents], ['daily_budget', 'dailyBudgetCents', input.dailyBudgetCents]] as const
+      for (const [key, arg, cents] of amounts) {
         if (cents === null || cents === undefined) continue
-        const units = minorToMetaUnits(cents, currency)
-        if (units === null) refuse(`${key === 'bid_amount' ? 'bidAmountCents' : 'lifetimeBudgetCents'} is not a whole amount Meta takes in ${currency ?? 'this currency'}.`)
+        const units = minorToMetaUnits(cents, currency!)
+        if (units === null) refuse(`${arg} is not a whole amount Meta takes in ${currency} (Meta counts ${currency} in 1/${metaOffset(currency)} of a unit).`)
         query[key] = units
       }
       let path: string
@@ -790,17 +895,31 @@ export async function targetingCheck(input: TargetingCheckInput) {
         if (!spec || !promoted) refuse('Name the targeting and the promoted object (both required for an account estimate), or an ad set (adSetId).')
         path = `${act(adAccountId)}/message_delivery_estimate`
       }
+      // Review fix B1 — first, whether the account is onboarded to WhatsApp marketing messages (placement-targeting:
+      // "read marketing_messages_settings{whatsapp_activation_status} on the ad account"); Meta's refusal is said, not fatal.
+      let whatsappActivationStatus: string | null = null
+      let whatsappNote: string | null = null
+      try {
+        const settings = await metaReadOne({ connectionId }, { operation: 'targeting.marketingMessagesSettings', path: act(adAccountId), query: { fields: 'marketing_messages_settings{whatsapp_activation_status}' } })
+        const m = (settings.body as { marketing_messages_settings?: unknown }).marketing_messages_settings
+        whatsappActivationStatus = text(m && typeof m === 'object' ? (m as { whatsapp_activation_status?: unknown }).whatsapp_activation_status : null)
+      } catch (err) {
+        if (!(err instanceof MetaReadError) || err.failure.authLost || err.failure.throttled) throw err
+        whatsappNote = `Meta did not say whether this account is onboarded to WhatsApp marketing messages: ${err.failure.sentence}`
+      }
       const read = await metaReadOne({ connectionId }, { operation: 'targeting.messageDeliveryEstimate', path, query })
       const r = dataRows(read.body)[0] ?? {}
       const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
       return {
         ...base, ...(input.adSetId ? { adSetId: metaObjectId(input.adSetId) } : {}),
-        bidAmountCents: input.bidAmountCents ?? null, lifetimeBudgetCents: input.lifetimeBudgetCents ?? null,
+        whatsappActivationStatus, ...(whatsappNote ? { whatsappNote } : {}),
+        currency, minorUnitDigits: currency ? currencyExponent(currency) : null,
+        bidAmountCents: input.bidAmountCents ?? null, lifetimeBudgetCents: input.lifetimeBudgetCents ?? null, dailyBudgetCents: input.dailyBudgetCents ?? null,
         estimateStatus: text(r.estimate_status),
         estimateDelivery: num(r.estimate_delivery), estimateDeliveryLowerBound: num(r.estimate_delivery_lower_bound), estimateDeliveryUpperBound: num(r.estimate_delivery_upper_bound),
         estimateCoverageLowerBound: num(r.estimate_coverage_lower_bound), estimateCoverageUpperBound: num(r.estimate_coverage_upper_bound),
         estimateCostMetaUnits: num(r.estimate_cost), estimateCostLowerBoundMetaUnits: num(r.estimate_cost_lower_bound), estimateCostUpperBoundMetaUnits: num(r.estimate_cost_upper_bound),
-        note: 'Marketing-message estimates need a Meta grant for marketing messages; without it Meta refuses and this says so. The cost is Meta\'s number as it answers it: Meta does not document its unit, so it is not converted.',
+        note: 'Marketing-message estimates need the account onboarded to marketing messages (whatsappActivationStatus) and the WhatsApp marketing_messages placement (whatsapp_positions); without them Meta refuses and this says so. Amounts are in minor units of the account currency (minorUnitDigits decimals). The cost is Meta\'s number as it answers it: Meta does not document its unit, so it is not converted.',
       }
     }
     case 'describe': {
@@ -810,7 +929,7 @@ export async function targetingCheck(input: TargetingCheckInput) {
       else if (input.adSetId) path = `${await ownId(account, input.adSetId, 'ad set')}/targetingsentencelines`
       else if (input.targeting !== undefined && input.targeting !== null) {
         const spec = parsedSpec(input.targeting)
-        await checkSpecAudiences(account, spec)
+        await checkSpecOwned(account, spec)
         path = `${act(adAccountId)}/targetingsentencelines`
         Object.assign(query, { targeting_spec: spec, hide_targeting_spec_from_return: true })
       } else return refuse('Name what to describe: targeting (a spec), an ad set (adSetId) or an ad (adId).')

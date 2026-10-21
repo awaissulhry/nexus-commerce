@@ -25,9 +25,8 @@ import { MetaReadError } from './errors.js'
 import { ACCOUNT_CORE_FIELDS, ACCOUNT_MONEY_FIELDS, ACCOUNT_SETTINGS_FIELDS, AD_FIELDS, AD_STATUSES_READ, ADSET_FIELDS, ADSET_STATUSES_READ, CAMPAIGN_FIELDS, CAMPAIGN_STATUSES_READ, insightFields, insightStatusFilter, mapAd, mapAdSet, mapCampaign, purchasesOf } from './mappers.js'
 import { decimalToMicros, metaUnitsToMicros, minorOf } from './money.js'
 import type { MetaQueryValue } from '../../gateway/meta.js'
-import { metaQueryKeyAllowed } from '../../gateway/meta-calls.js'
 import { maskTakenRows, takenIds } from './taken.js'
-import { ACCOUNT_EDGES, GRAPH_DEFAULT_FIELDS, graphFieldsProblem, OBJECT_EDGES, OBJECT_NODE, type GraphNode, type GraphObjectKind } from './graph-allow.js'
+import { ACCOUNT_EDGES, GRAPH_DEFAULT_FIELDS, graphFieldsProblem, graphParamAllowed, OBJECT_EDGES, OBJECT_NODE, type GraphNode, type GraphObjectKind } from './graph-allow.js'
 
 /** A refusal in words (no Meta call was made, or Meta's answer was not usable). */
 export class MetaLiveRefusal extends Error {
@@ -379,7 +378,7 @@ export async function objectKindOf(account: MetaChosenAccount, objectId: string)
  * Does this campaign or ad set belong to the chosen ad account? Nexus's own rows first, else one live read of its
  * account_id (a campaign made since the last daily read). Never a Page or another account's object.
  */
-export async function objectInAccount(account: MetaChosenAccount, objectId: string): Promise<boolean> {
+async function objectInAccount(account: MetaChosenAccount, objectId: string): Promise<boolean> {
   if (await objectKindOf(account, objectId)) return true
   try {
     const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'graph.ownerCheck', path: objectId, query: { fields: 'account_id' } })
@@ -438,8 +437,9 @@ export async function graphRead(input: GraphReadInput) {
   const params: Record<string, MetaQueryValue> = {}
   for (const [key, value] of Object.entries(input.params ?? {})) {
     if (!/^[a-z][a-z0-9_]{0,40}$/.test(key) || GATEWAY_KEYS.test(key)) throw new MetaLiveRefusal(`The parameter "${key}" is not one a read may set here.`)
-    // The gateway reads only the query keys on its allow-list for this path (meta-calls.ts): say so before any call.
-    if (!metaQueryKeyAllowed(segments.join('/').toLowerCase(), key)) {
+    // Step 9 review fix A1 — graph-read's OWN allow-list per edge (graph-allow.ts GRAPH_EDGE_PARAMS), never the gateway's
+    // combined list (which later steps widen): say so before any call.
+    if (!graphParamAllowed(edge === undefined ? null : type, key)) {
       throw new MetaLiveRefusal(`Nexus does not send the parameter "${key}" on ${segments.join('/')}: Nexus reads Meta only with the parameters each of its reads needs.`)
     }
     params[key] = value

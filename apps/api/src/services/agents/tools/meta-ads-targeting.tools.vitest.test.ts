@@ -64,6 +64,9 @@ const CHOSEN = {
 }
 const SPEC = { geo_locations: { countries: ['IT'] }, age_min: 18, age_max: 65 }
 const OWN = '1234567890'
+/** Meta's answer to Nexus's owner check: the account asked, and a value for every field asked (as that kind has them). */
+const owned = (req: Req, account = OWN) => Object.fromEntries(String(req.query?.fields ?? '').split(',').map((f) => [f, f === 'account_id' ? account : 'x']))
+const OWNER = 'targeting.ownerCheck'
 /** Every call the gateway would refuse (none may be). */
 const refusedCalls = () => h.calls
   .map((c) => [c.operation, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' })])
@@ -81,7 +84,7 @@ describe('the two tools are reads', () => {
       ['meta-targeting-check', true, true, undefined, ['ads.view']],
     ])
     expect(tool('meta-targeting-check').restrictedFields).toEqual({
-      bidAmountCents: 'financials.adspend.view', lifetimeBudgetCents: 'financials.adspend.view', estimateCostMetaUnits: 'financials.adspend.view',
+      bidAmountCents: 'financials.adspend.view', lifetimeBudgetCents: 'financials.adspend.view', dailyBudgetCents: 'financials.adspend.view', estimateCostMetaUnits: 'financials.adspend.view',
       estimateCostLowerBoundMetaUnits: 'financials.adspend.view', estimateCostUpperBoundMetaUnits: 'financials.adspend.view',
     })
   })
@@ -137,7 +140,7 @@ describe('every kind and every check — only what the real gateway lets through
   ]
   it('covers every check', () => { expect(CHECK_ARGS.map(([c]) => c).sort()).toEqual([...CHECKS].sort()) })
   it.each(CHECK_ARGS)('check %s', async (name, args, path) => {
-    h.answer = (req) => (req.operation === 'graph.ownerCheck' ? { account_id: OWN } : { data: [] })
+    h.answer = (req) => (req.operation === OWNER ? owned(req) : { data: [] })
     const res = await check({ check: name, ...args })
     expect(res.ok, String(res.error)).toBe(true)
     expect(h.calls.at(-1)?.path).toBe(path)
@@ -189,11 +192,11 @@ describe('meta-targeting-search — fixed requests, answers through an allow-lis
     ])
   })
   it('one place page set by id only when it is the chosen account\'s (its account_id read first)', async () => {
-    h.answer = (req) => (req.operation === 'graph.ownerCheck' ? { account_id: '5550001112' } : {})
+    h.answer = (req) => (req.operation === OWNER ? owned(req, '5550001112') : {})
     expect((await search({ kind: 'place-page-sets', placePageSetId: '880000000000009' })).error).toMatch(/does not belong to the ad account/)
-    expect(h.calls.map((c) => c.operation)).toEqual(['graph.ownerCheck'])
+    expect(h.calls).toEqual([{ operation: OWNER, path: '880000000000009', query: { fields: 'account_id,parent_page,pages_count' } }])
     h.calls.length = 0
-    h.answer = (req) => (req.operation === 'graph.ownerCheck' ? { account_id: OWN } : { id: '880000000000001', account_id: OWN, name: 'Shops' })
+    h.answer = (req) => (req.operation === OWNER ? owned(req) : { id: '880000000000001', account_id: OWN, name: 'Shops' })
     expect(data(await search({ kind: 'place-page-sets', placePageSetId: '880000000000001' })).items).toEqual([{ id: '880000000000001', name: 'Shops', parentPage: null }])
     expect(h.calls.at(-1)).toMatchObject({ path: '880000000000001', query: { fields: 'id,account_id,name,location_types,pages_count,parent_page,targeted_area_type' } })
     expect(refusedCalls()).toEqual([])
@@ -207,11 +210,18 @@ describe('meta-targeting-search — fixed requests, answers through an allow-lis
     const res = await search({ kind: 'location-cluster', adSetId: '120000000000201', locationClusterId: '990000000000001' })
     expect(data(res)).toMatchObject({ includedClusters: ['990000000000001'], excludedClusters: [], zipsListed: 1, cluster: { id: '990000000000001' } })
     expect(h.calls.at(-1)).toEqual({ operation: 'targeting.locationCluster', path: '990000000000001', query: { fields: 'id' } })
+    // Review B5 — a cluster key Meta sends as a JSON number past 2^53 has lost digits: never compared.
+    h.calls.length = 0
+    h.answer = (req) => (req.path === '120000000000201' ? { targeting: { geo_locations: { location_cluster_ids: [{ key: 99000000000000012345 }] } } } : {})
+    const inexact = await search({ kind: 'location-cluster', adSetId: '120000000000201' })
+    expect(data(inexact)).toMatchObject({ includedClusters: [], clustersNotExact: 1 })
+    expect((await search({ kind: 'location-cluster', adSetId: '120000000000201', locationClusterId: '99000000000000012345' })).error).toMatch(/too long to compare exactly/)
+    expect(h.calls.map((c) => c.operation)).toEqual(['targeting.adsetGeo', 'targeting.adsetGeo'])
     // An ad set of another account is never read.
     h.calls.length = 0
-    h.answer = (req) => (req.operation === 'graph.ownerCheck' ? { account_id: '5550001112' } : {})
+    h.answer = (req) => (req.operation === OWNER ? owned(req, '5550001112') : {})
     expect((await search({ kind: 'location-cluster', adSetId: '120000000000999' })).error).toMatch(/does not belong/)
-    expect(h.calls.map((c) => c.operation)).toEqual(['graph.ownerCheck'])
+    expect(h.calls.map((c) => c.operation)).toEqual([OWNER])
   })
 })
 
@@ -230,12 +240,34 @@ describe('the targeting spec is an allow-list', () => {
     ['more than 250 countries', { geo_locations: { countries: Array.from({ length: 251 }, () => 'IT') } }],
     ['free JSON in a list', { ...SPEC, interests: [{ id: '6003000000001', extra: { a: 1 } }] }],
     ['a lower-case country', { geo_locations: { countries: ['it'] } }],
+    ['a location cluster (review A2: it cannot be checked inside a spec)', { geo_locations: { countries: ['IT'], location_cluster_ids: [{ key: '990000000000001' }] } }],
+    ['WhatsApp status without the Instagram story placement', { ...SPEC, publisher_platforms: ['whatsapp', 'instagram'], whatsapp_positions: ['status'] }],
+    ['WhatsApp positions without WhatsApp as a platform', { ...SPEC, publisher_platforms: ['facebook'], whatsapp_positions: ['marketing_messages'] }],
+    ['an electoral district that is not COUNTRY:CODE', { geo_locations: { electoral_districts: [{ key: 'CA14' }] } }],
+    ['a place page set id that is not digits', { ...SPEC, place_page_set_ids: ['x1'] }],
   ])('refuses %s', (_what, targeting) => { expect(parse(targeting)).toThrow() })
   it('takes employer exclusions, flexible groups, placements and Advantage+ switches', () => {
     expect(() => TARGETING_SPEC.parse({
       ...SPEC, exclusions: { work_employers: [{ id: '100000000000001' }] }, flexible_spec: [{ interests: [{ id: '6003000000001', name: 'Motorcycles' }] }, { behaviors: [{ id: '6003000000002' }] }],
       publisher_platforms: ['facebook', 'instagram'], instagram_positions: ['stream', 'reels'], targeting_automation: { advantage_audience: 0 }, targeting_optimization: 'none',
     })).not.toThrow()
+    // Review B1 / B2 — WhatsApp placements, Meta's other geo lists and place page sets.
+    expect(() => TARGETING_SPEC.parse({
+      geo_locations: { countries: ['IT'], subcities: [{ key: '2703980' }], neighborhoods: [{ key: '1' }], large_geo_areas: [{ key: '2' }], medium_geo_areas: [{ key: '3' }], small_geo_areas: [{ key: '4' }], metro_areas: [{ key: '5' }], electoral_districts: [{ key: 'US:CA14' }] },
+      publisher_platforms: ['instagram', 'whatsapp'], instagram_positions: ['story'], whatsapp_positions: ['status', 'marketing_messages'], place_page_set_ids: ['880000000000001'],
+    })).not.toThrow()
+  })
+  it('the size cap counts the spec as it travels: URL-encoded', async () => {
+    const interests = Array.from({ length: 30 }, (_, i) => ({ id: String(6003000000001 + i), name: 'é'.repeat(200) }))
+    const spec = { ...SPEC, interests }
+    expect(JSON.stringify(spec).length).toBeLessThan(8000)
+    expect((await check({ check: 'reach', targeting: spec })).error).toMatch(/longer than 8000 characters as sent \(URL-encoded\)/)
+    expect(h.calls).toHaveLength(0)
+  })
+  it('a place page set in a spec is checked to be the chosen account\'s (its own two fields)', async () => {
+    h.answer = (req) => (req.operation === OWNER ? owned(req, '5550001112') : { data: [] })
+    expect((await check({ check: 'reach', targeting: { ...SPEC, place_page_set_ids: ['880000000000009'] } })).error).toMatch(/place page set does not belong/)
+    expect(h.calls).toEqual([{ operation: OWNER, path: '880000000000009', query: { fields: 'account_id,parent_page,pages_count' } }])
   })
   it('a spec with no place and no audience, or too long to travel in a URL, is refused before any call', async () => {
     expect((await check({ check: 'reach', targeting: { age_min: 18 } })).error).toMatch(/names no location/)
@@ -244,12 +276,37 @@ describe('the targeting spec is an allow-list', () => {
     expect(h.calls).toHaveLength(0)
   })
   it('a custom audience of another account is refused before the estimate (each one checked)', async () => {
-    h.answer = (req) => (req.operation === 'graph.ownerCheck' ? { account_id: '5550001112' } : { data: [] })
+    h.answer = (req) => (req.operation === OWNER ? owned(req, '5550001112') : { data: [] })
     const res = await check({ check: 'reach', targeting: { ...SPEC, excluded_custom_audiences: [{ id: '23000000000009' }] } })
     expect(res.error).toMatch(/custom audience does not belong to the ad account/)
-    expect(h.calls.map((c) => c.operation)).toEqual(['graph.ownerCheck'])
+    expect(h.calls).toEqual([{ operation: OWNER, path: '23000000000009', query: { fields: 'account_id,subtype,time_created' } }])
     // A campaign id is not an audience.
     expect((await check({ check: 'reach', targeting: { ...SPEC, custom_audiences: [{ id: '120000000000101' }] } })).error).toMatch(/is a campaign of this ad account, not a custom audience/)
+  })
+})
+
+describe('review A5 — an id is the chosen account\'s AND of the kind named', () => {
+  it('an own campaign (Nexus\'s rows) is never an ad set; no call is made', async () => {
+    expect((await check({ check: 'delivery', adSetId: '120000000000101' })).error).toMatch(/is a campaign of this ad account, not an ad set\./)
+    expect(h.calls).toHaveLength(0)
+  })
+  it('an id Nexus has not read: one read of its account_id and two fields only an ad set has', async () => {
+    h.answer = (req) => (req.operation === OWNER ? { account_id: OWN, optimization_goal: 'REACH' } : { data: [] })
+    expect((await check({ check: 'delivery', adSetId: '120000000000777' })).error).toMatch(/is not an ad set of this ad account/)
+    expect(h.calls).toEqual([{ operation: OWNER, path: '120000000000777', query: { fields: 'account_id,optimization_goal,billing_event' } }])
+    const { MetaReadError, failureOfAnswer } = await import('../../marketing/meta-ads/errors.js')
+    h.answer = (req) => (req.operation === OWNER ? new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'validation', channelCode: '100', channelMessage: '(#100) Tried accessing nonexisting field (optimization_goal) on node type (CustomAudience)' } as never }), req.operation, 1) : { data: [] })
+    expect((await check({ check: 'delivery', adSetId: '120000000000778' })).error).toMatch(/is not an ad set \(Meta does not know/)
+    h.answer = (req) => (req.operation === OWNER ? owned(req) : { data: [{ estimate_ready: true }] })
+    expect((await check({ check: 'delivery', adSetId: '120000000000779' })).ok).toBe(true)
+    expect(h.calls.filter((c) => c.operation === OWNER).at(-1)).toMatchObject({ path: '120000000000779' })
+    expect(refusedCalls()).toEqual([])
+  })
+  it('an ad asks an ad\'s own fields; an audience a custom audience\'s', async () => {
+    h.answer = (req) => (req.operation === OWNER ? owned(req) : { data: [] })
+    await check({ check: 'describe', adId: '120000000000888' })
+    await check({ check: 'audience-special-category', audienceId: '23000000000001', specialAdCategories: ['HOUSING'], countries: ['IT'] })
+    expect(h.calls.filter((c) => c.operation === OWNER).map((c) => c.query?.fields)).toEqual(['account_id,adset_id,creative', 'account_id,subtype,time_created'])
   })
 })
 
@@ -275,6 +332,14 @@ describe('meta-targeting-check', () => {
       expect.objectContaining({ id: '100000000000001', where: ['exclusions.work_employers'], words: expect.stringMatching(/exclude/), futurePlan: [expect.objectContaining({ date: '2027-01-01T00:00:00+0000' })] }),
     ])
   })
+  it('review B4 — retiring counts DEPRECATING and NON-DELIVERABLE; not-for-exclusion only under exclusions; never UNKNOWN or none', async () => {
+    h.answer = () => ({ data: [
+      { id: '6003000000001', current_status: 'UNKNOWN' }, { id: '6003000000002', current_status: 'NON-DELIVERABLE-IN-EXCLUSION' },
+      { id: '6003000000003' }, { id: '6003000000004', current_status: 'NON-DELIVERABLE' },
+    ] })
+    const res = await check({ check: 'status', optionIds: ['6003000000001', '6003000000002', '6003000000003', '6003000000004'] })
+    expect(data(res).retiring).toBe(1)
+  })
   it('interests and options that Meta no longer takes are said plainly', async () => {
     h.answer = () => ({ data: [{ name: 'Japan', valid: true, id: 6003000000001, audience_size: 1000 }, { name: 'gone', valid: false }] })
     const res = await check({ check: 'interests', interestNames: ['Japan', 'gone'] })
@@ -291,7 +356,7 @@ describe('meta-targeting-check', () => {
     expect(data(res).items).toEqual([{ id: '120000000000201', name: 'Shop A set', effectiveStatus: 'ACTIVE' }])
   })
   it('reach: -1 from Meta is "no estimate for a custom audience", never an empty audience', async () => {
-    h.answer = (req) => (req.operation === 'graph.ownerCheck' ? { account_id: OWN } : { data: { users_lower_bound: -1, users_upper_bound: -1, estimate_ready: true } })
+    h.answer = (req) => (req.operation === OWNER ? owned(req) : { data: { users_lower_bound: -1, users_upper_bound: -1, estimate_ready: true } })
     const res = await check({ check: 'reach', targeting: { custom_audiences: [{ id: '23000000000001' }] } })
     expect(data(res)).toMatchObject({ usersLowerBound: null, usersUpperBound: null, note: expect.stringMatching(/NOT an empty audience/) })
     expect(h.calls.at(-1)).toEqual({ operation: 'targeting.reachestimate', path: `act_${OWN}/reachestimate`, query: { targeting_spec: { custom_audiences: [{ id: '23000000000001' }] } } })
@@ -306,7 +371,7 @@ describe('meta-targeting-check', () => {
       ['120000000000201/delivery_estimate', 'fields'], ['120000000000201/delivery_estimate', 'fields,targeting_spec'],
     ])
     expect(h.calls[0].query!.fields).toBe('estimate_mau_lower_bound,estimate_mau_upper_bound,estimate_ready,targeting_optimization_types')
-    expect(data(res)).toMatchObject({ before: { estimateMauLowerBound: 1000 }, after: { estimateMauLowerBound: 2000, targetingOptimizationTypes: [{ key: 'interests', value: 1 }] }, note: expect.stringMatching(/no longer estimates results per day.*2026-10-27/) })
+    expect(data(res)).toMatchObject({ before: { estimateMauLowerBound: 1000 }, after: { estimateMauLowerBound: 2000, targetingOptimizationTypes: [{ key: 'interests', value: 1 }] }, note: expect.stringMatching(/THIS WHOLE targeting in place of its own.*no longer estimates results per day.*2026-10-27/) })
     h.calls.length = 0
     expect((await check({ check: 'delivery', targeting: SPEC })).error).toMatch(/optimization goal/)
     expect(h.calls).toHaveLength(0)
@@ -325,14 +390,38 @@ describe('meta-targeting-check', () => {
     expect(h.calls[1].query).toMatchObject({ optimization_goal: 'OFFSITE_CONVERSIONS', promoted_object: { pixel_id: '330000000000001', custom_event_type: 'PURCHASE' } })
     expect(refusedCalls()).toEqual([])
   })
-  it('message-delivery: money goes in Meta\'s unit from minor units; Meta\'s cost comes back raw (unit undocumented)', async () => {
-    h.answer = () => ({ data: [{ estimate_cost: 12.5, estimate_delivery: 900, estimate_status: 'READY' }] })
+  it('message-delivery: the WhatsApp activation first; money goes in Meta\'s unit from minor units; Meta\'s cost comes back raw', async () => {
+    h.answer = (req) => (req.path === `act_${OWN}` ? { marketing_messages_settings: { whatsapp_activation_status: 'ACTIVE' } } : { data: [{ estimate_cost: 12.5, estimate_delivery: 900, estimate_status: 'READY' }] })
     const res = await check({ check: 'message-delivery', adSetId: '120000000000201', bidAmountCents: 150, lifetimeBudgetCents: 10000 })
-    expect(h.calls[0]).toMatchObject({ path: '120000000000201/message_delivery_estimate', query: { bid_amount: 150, lifetime_budget: 10000 } })
-    expect(data(res)).toMatchObject({ bidAmountCents: 150, lifetimeBudgetCents: 10000, estimateCostMetaUnits: 12.5, estimateDelivery: 900, estimateStatus: 'READY', note: expect.stringMatching(/Meta does not document its unit/) })
+    expect(h.calls.map((c) => [c.path, c.query])).toEqual([
+      [`act_${OWN}`, { fields: 'marketing_messages_settings{whatsapp_activation_status}' }],
+      ['120000000000201/message_delivery_estimate', expect.objectContaining({ bid_amount: 150, lifetime_budget: 10000 })],
+    ])
+    expect(data(res)).toMatchObject({
+      whatsappActivationStatus: 'ACTIVE', currency: 'EUR', minorUnitDigits: 2, bidAmountCents: 150, lifetimeBudgetCents: 10000,
+      estimateCostMetaUnits: 12.5, estimateDelivery: 900, estimateStatus: 'READY', note: expect.stringMatching(/Meta does not document its unit/),
+    })
+    // The account estimate takes a daily budget and a direct send; an ad set's does not.
+    h.calls.length = 0
+    const spec = { ...SPEC, publisher_platforms: ['whatsapp'], whatsapp_positions: ['marketing_messages'] }
+    expect((await check({ check: 'message-delivery', targeting: spec, promotedObject: { page_id: '120000000000010' }, dailyBudgetCents: 2500, directSend: true })).ok).toBe(true)
+    expect(h.calls.at(-1)).toMatchObject({ path: `act_${OWN}/message_delivery_estimate`, query: { daily_budget: 2500, is_direct_send_campaign: true, targeting_spec: spec } })
+    expect(refusedCalls()).toEqual([])
+    expect((await check({ check: 'message-delivery', adSetId: '120000000000201', dailyBudgetCents: 2500 })).error).toMatch(/account estimate only/)
+    // Meta refusing the activation read is said, not fatal.
+    const { MetaReadError, failureOfAnswer } = await import('../../marketing/meta-ads/errors.js')
+    h.answer = (req) => (req.path === `act_${OWN}` ? new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'validation', channelCode: '100', channelMessage: 'nonexisting field (marketing_messages_settings)' } as never }), req.operation, 1) : { data: [] })
+    expect(data(await check({ check: 'message-delivery', adSetId: '120000000000201' }))).toMatchObject({ whatsappActivationStatus: null, whatsappNote: expect.stringMatching(/did not say whether/) })
     // A currency with cents that Meta counts in whole units (offset 1: TWD) refuses a part of a unit.
+    h.answer = null
     h.connections = [{ ...CHOSEN, adAccount: { ...CHOSEN.adAccount, currency: 'TWD' } }]
     expect((await check({ check: 'message-delivery', adSetId: '120000000000201', bidAmountCents: 1250 })).error).toMatch(/not a whole amount Meta takes in TWD/)
+    // A currency Nexus has not read is never assumed (review fix A4).
+    h.connections = [{ ...CHOSEN, adAccount: { ...CHOSEN.adAccount, currency: null } }]
+    h.calls.length = 0
+    expect((await check({ check: 'message-delivery', adSetId: '120000000000201', bidAmountCents: 100 })).error).toMatch(/has not read this ad account's currency/)
+    expect(h.calls).toHaveLength(0)
+    h.connections = [CHOSEN]
     expect((await check({ check: 'message-delivery', targeting: SPEC })).error).toMatch(/promoted object/)
   })
   it('minorToMetaUnits: one helper, per currency', () => {
@@ -343,9 +432,14 @@ describe('meta-targeting-check', () => {
     expect(minorToMetaUnits(1250, 'TWD')).toBeNull()
     expect(minorToMetaUnits(1200, 'HUF')).toBe(1200)
     expect(minorToMetaUnits(-1, 'EUR')).toBeNull()
+    // Review fix A4 — 3 decimals (Intl) with Meta's offset 100 (currencies.md: BHD, JOD): only whole hundredths go.
+    expect(minorToMetaUnits(1230, 'BHD')).toBe(123)
+    expect(minorToMetaUnits(1234, 'JOD')).toBeNull()
+    // A currency Nexus has not read is never assumed.
+    expect(minorToMetaUnits(1234, '')).toBeNull()
   })
   it('audience-special-category: the chosen account\'s audience, Meta\'s own comma lists', async () => {
-    h.answer = (req) => (req.operation === 'graph.ownerCheck' ? { account_id: OWN } : { id: '23000000000001', name: 'Buyers', is_eligible_for_sac_campaigns: false })
+    h.answer = (req) => (req.operation === OWNER ? owned(req) : { id: '23000000000001', name: 'Buyers', is_eligible_for_sac_campaigns: false })
     const res = await check({ check: 'audience-special-category', audienceId: '23000000000001', specialAdCategories: ['HOUSING'], countries: ['it'] })
     expect(h.calls.at(-1)).toEqual({ operation: 'targeting.audienceSacEligibility', path: '23000000000001', query: { fields: 'id,name,is_eligible_for_sac_campaigns', ad_account_id: OWN, special_ad_categories: 'HOUSING', special_ad_category_countries: 'IT' } })
     expect(data(res)).toMatchObject({ eligible: false, name: 'Buyers', note: expect.stringMatching(/does not let this audience/) })
@@ -360,7 +454,7 @@ describe('meta-targeting-check', () => {
     expect(h.calls.at(-1)!.path).toBe('120000000000301/targetingsentencelines')
     await check({ check: 'describe', adSetId: '120000000000201' })
     expect(h.calls.at(-1)!.path).toBe('120000000000201/targetingsentencelines')
-    expect((await check({ check: 'describe', adId: '120000000000201' })).error).toMatch(/is a adset of this ad account, not a ad/)
+    expect((await check({ check: 'describe', adId: '120000000000201' })).error).toMatch(/is an ad set of this ad account, not an ad\./)
     expect(sentenceLines({ data: [{ content: 'Gender:', children: ['Men', 3] }] })).toEqual([{ content: 'Gender:', children: ['Men'] }])
     expect(refusedCalls()).toEqual([])
   })

@@ -9,8 +9,8 @@
  *     currencies and 1 for CLP, COP, CRC, HUF, ISK, IDR, JPY, KRW, PYG, TWD and VND
  *     (/documentation/ads-commerce/marketing-api/currencies, "Offset");
  *   - insights `spend` (and action values): a decimal string in the currency's own unit ("12.34").
- * Answers to people and tools are in MINOR units of the currency's ISO 4217 exponent (EUR 2, JPY 0), as Google's
- * reads: `…Cents`.
+ * Answers to people and tools are in MINOR units: the currency's decimals as Intl (CLDR) counts them (EUR 2, JPY 0 — and,
+ * unlike ISO 4217, HUF, COP and IDR 0; BHD and JOD 3, where Meta counts hundredths), as Google's reads: `…Cents`.
  */
 
 /** Currencies whose Meta offset is 1 (Meta's currencies page); every other currency's is 100. */
@@ -40,7 +40,7 @@ export function decimalToMicros(value: unknown): bigint | null {
   return sign === '-' ? -micros : micros
 }
 
-/** The currency's own number of decimals (ISO 4217, as Intl knows it — the web uses the same rule): EUR 2, JPY 0. */
+/** The currency's own number of decimals as Intl (CLDR) knows it — the web uses the same rule: EUR 2, JPY 0, HUF 0, BHD 3. */
 export function currencyExponent(currency: string | null | undefined): number {
   if (!currency) return 2
   try {

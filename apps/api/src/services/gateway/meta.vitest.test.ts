@@ -231,10 +231,18 @@ describe('read only by construction', () => {
     expect(ok(`${BASE}/act_1234567890/delivery_estimate?optimization_goal=REACH&targeting_spec={}&promoted_object={}&fields=estimate_ready`)).toBeNull()
     expect(ok(`${BASE}/120000000000201/delivery_estimate?targeting_spec={}&fields=estimate_ready`)).toBeNull()
     expect(ok(`${BASE}/act_1234567890/message_delivery_estimate?targeting_spec={}&promoted_object={}&bid_amount=100&lifetime_budget=1000&lifetime_in_days=7&pacing_type=STANDARD`)).toBeNull()
-    expect(ok(`${BASE}/act_1234567890/message_delivery_estimate?daily_budget=100`)).toMatch(/"daily_budget" is not one/)
+    // Review fix B1 — the account estimate also takes a daily budget and a direct send; an ad set's does not.
+    expect(ok(`${BASE}/act_1234567890/message_delivery_estimate?targeting_spec={}&daily_budget=100&is_direct_send_campaign=true`)).toBeNull()
+    expect(ok(`${BASE}/120000000000201/message_delivery_estimate?daily_budget=100`)).toMatch(/"daily_budget" is not one/)
+    expect(ok(`${BASE}/act_1234567890?fields=marketing_messages_settings{whatsapp_activation_status}`)).toBeNull()
     expect(ok(`${BASE}/act_1234567890/targetingsentencelines?targeting_spec={}&hide_targeting_spec_from_return=true`)).toBeNull()
     expect(ok(`${BASE}/120000000000301/targetingsentencelines?targeting_spec={}`)).toMatch(/"targeting_spec" is not one/)
-    expect(ok(`${BASE}/120000000000401?fields=id,is_eligible_for_sac_campaigns&ad_account_id=1234567890&special_ad_categories=HOUSING&special_ad_category_countries=IT`)).toBeNull()
+    // Review fix A1 — the audience keys go only on the audience-eligibility read itself (its exact field list).
+    expect(ok(`${BASE}/120000000000401?fields=id,name,is_eligible_for_sac_campaigns&ad_account_id=1234567890&special_ad_categories=HOUSING&special_ad_category_countries=IT`)).toBeNull()
+    expect(ok(`${BASE}/120000000000401?fields=id&ad_account_id=1`)).toMatch(/"ad_account_id" is not one/)
+    expect(ok(`${BASE}/120000000000401?fields=id,name,status&special_ad_categories=HOUSING`)).toMatch(/"special_ad_categories" is not one/)
+    expect(ok(`${BASE}/120000000000401?fields=id,name,is_eligible_for_sac_campaigns,account_id&ad_account_id=1`)).toMatch(/"ad_account_id" is not one/)
+    expect(ok(`${BASE}/120000000000401?ad_account_id=1`)).toMatch(/"ad_account_id" is not one/)
     // Each key only where it is used.
     expect(ok(`${BASE}/act_1234567890/campaigns?fields=id&targeting_spec={}`)).toMatch(/"targeting_spec" is not one/)
     expect(ok(`${BASE}/act_1234567890/insights?fields=spend&q=x`)).toMatch(/"q" is not one/)

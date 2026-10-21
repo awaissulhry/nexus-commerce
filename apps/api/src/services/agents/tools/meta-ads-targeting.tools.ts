@@ -29,7 +29,7 @@ import {
 const ADSPEND = FIELDS.financialsAdspendView
 /** Money keys of meta-targeting-check (the marketing-message estimate): the amounts asked and Meta's cost estimate. */
 export const META_TARGETING_MONEY = {
-  bidAmountCents: ADSPEND, lifetimeBudgetCents: ADSPEND,
+  bidAmountCents: ADSPEND, lifetimeBudgetCents: ADSPEND, dailyBudgetCents: ADSPEND,
   estimateCostMetaUnits: ADSPEND, estimateCostLowerBoundMetaUnits: ADSPEND, estimateCostUpperBoundMetaUnits: ADSPEND,
 } as const
 
@@ -170,19 +170,24 @@ const metaTargetingCheck: AgentTool = {
     targeting: TARGETING_SPEC.optional().describe(
       'reach, delivery, message-delivery, describe: a Meta targeting spec, allow-listed (unknown keys are refused): '
       + 'geo_locations / excluded_geo_locations {countries, regions, cities, zips, places, custom_locations, geo_markets, '
-      + 'country_groups, location_cluster_ids, location_types home | recent — never recent in an exclusion}, age_min, age_max, '
+      + 'country_groups, subcities, neighborhoods, large_geo_areas, medium_geo_areas, small_geo_areas, metro_areas, '
+      + 'electoral_districts, location_types home | recent — never recent in an exclusion; a location cluster: name the ad '
+      + 'set that uses it instead}, place_page_set_ids (the chosen account\'s own), age_min, age_max, '
       + 'genders [1 men, 2 women], locales, interests, behaviors, life_events, industries, income, family_statuses, '
       + 'user_adclusters, work_*, education_*, flexible_spec, exclusions {work_employers} (Meta refuses other detailed '
       + 'exclusions since v22: exclude custom audiences instead), custom_audiences / excluded_custom_audiences (the chosen '
-      + 'account\'s own), placements (publisher_platforms, facebook_positions, instagram_positions, …), devices, '
+      + 'account\'s own), placements (publisher_platforms, facebook_positions, instagram_positions, …, whatsapp_positions '
+      + 'status — with Instagram story — | marketing_messages), devices, '
       + 'targeting_automation {advantage_audience}, targeting_relaxation_types, targeting_optimization',
     ),
-    optimizationGoal: z.enum(OPTIMIZATION_GOALS).optional().describe('delivery (required for an account estimate), message-delivery: the ad set\'s optimization goal'),
+    optimizationGoal: z.enum(OPTIMIZATION_GOALS).optional().describe('delivery (required for an account estimate), message-delivery: the ad set\'s optimization goal (app goals are not estimated: they need an app and store URL)'),
     promotedObject: PROMOTED_OBJECT.optional().describe('delivery, message-delivery: what the ad set promotes — the chosen Page (page_id), the chosen Instagram account (instagram_profile_id), or a pixel of the chosen ad account (pixel_id) with its event (custom_event_type)'),
-    adSetId: metaId('delivery, message-delivery: estimate this ad set of the chosen account (with targeting etc.: before → after); status: check the options it holds; describe: its targeting in words'),
+    adSetId: metaId('delivery, message-delivery: estimate this ad set of the chosen account (with targeting: before → after, the after with THAT WHOLE targeting in place of the ad set\'s own); status: check the options it holds; describe: its targeting in words'),
     adId: metaId('describe: this ad\'s targeting in words'),
-    bidAmountCents: z.number().int().min(1).max(100_000_000).optional().describe('message-delivery: bid in minor units (cents) of the account currency'),
-    lifetimeBudgetCents: z.number().int().min(1).max(10_000_000_000).optional().describe('message-delivery: lifetime budget in minor units (cents) of the account currency'),
+    bidAmountCents: z.number().int().min(1).max(100_000_000).optional().describe('message-delivery: bid in minor units of the account currency (its smallest unit: cents for EUR, yen for JPY; minorUnitDigits in the answer)'),
+    lifetimeBudgetCents: z.number().int().min(1).max(10_000_000_000).optional().describe('message-delivery: lifetime budget in minor units of the account currency'),
+    dailyBudgetCents: z.number().int().min(1).max(10_000_000_000).optional().describe('message-delivery, account estimate only: daily budget in minor units of the account currency'),
+    directSend: z.boolean().optional().describe('message-delivery, account estimate only: a direct-send marketing-message campaign (Meta\'s is_direct_send_campaign)'),
     lifetimeDays: z.number().int().min(1).max(365).optional().describe('message-delivery: how many days the campaign runs'),
     pacingType: z.enum(PACING_TYPES).optional().describe('message-delivery: pacing'),
     maxRows: z.number().int().min(1).max(1000).optional().describe('retired-adsets, affected-adsets: at most this many ad sets (default 200)'),
@@ -198,11 +203,14 @@ const metaTargetingCheck: AgentTool = {
     + 'the answer says so). audience-special-category: may this custom audience go in a housing, employment or financial '
     + 'campaign in these countries. reach: people a spec reaches (a range; -1 from Meta means no estimate for a custom '
     + 'audience, not an empty one). delivery: monthly active people for a spec and goal, or an ad set as it is and with '
-    + 'changes (before → after) — Meta no longer estimates results per day for a budget (removed in v26, every version '
-    + 'from 2026-10-27). message-delivery: a marketing-message estimate (needs Meta\'s grant for marketing messages; Meta '
+    + 'THIS WHOLE targeting (before → after; Meta does not merge a partial spec, so name all it should keep) — Meta no '
+    + 'longer estimates results per day for a budget (removed in v26, every version from 2026-10-27); app goals are not '
+    + 'estimated. message-delivery: a WhatsApp marketing-message estimate (the account must be onboarded to marketing '
+    + 'messages — the answer says its activation status — and the spec use whatsapp_positions marketing_messages; Meta '
     + 'does not document the cost\'s unit, so it is given as Meta answers it). describe: who sees it in Meta\'s own words, '
     + 'for a spec, an ad set or an ad. Only the chosen ad account, its ad sets, ads and custom audiences, its Page, '
-    + 'Instagram account and pixels are used. Read only; money in minor units (cents) of the account currency.',
+    + 'Instagram account and pixels are used. Read only; money in minor units of the account currency (its smallest unit '
+    + 'as Nexus counts it: cents for EUR, yen for JPY — minorUnitDigits says how many decimals).',
   async handler(args): Promise<ToolResult> {
     return guarded(() => targetingCheck({
       connectionId: str(args.connectionId),
@@ -224,6 +232,8 @@ const metaTargetingCheck: AgentTool = {
       adId: str(args.adId),
       bidAmountCents: typeof args.bidAmountCents === 'number' ? args.bidAmountCents : null,
       lifetimeBudgetCents: typeof args.lifetimeBudgetCents === 'number' ? args.lifetimeBudgetCents : null,
+      dailyBudgetCents: typeof args.dailyBudgetCents === 'number' ? args.dailyBudgetCents : null,
+      directSend: args.directSend === true,
       lifetimeDays: typeof args.lifetimeDays === 'number' ? args.lifetimeDays : null,
       pacingType: str(args.pacingType),
       maxRows: typeof args.maxRows === 'number' ? args.maxRows : null,

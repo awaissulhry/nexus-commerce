@@ -175,6 +175,30 @@ describe('meta-ads-graph-read — the chosen ad account and its own objects only
     await run('meta-ads-graph-read', { path: '120000000000101' })
     expect(h.calls.at(-1)).toMatchObject({ operation: 'graph.read', path: '120000000000101', query: { fields: 'id,name,status' } })
   })
+  it('step 9 review A1 — graph-read keeps ITS OWN parameter list (step 2\'s), never a key a later step adds to the gateway', async () => {
+    h.known = new Map([['120000000000101', 'campaign'], ['120000000000201', 'adset']])
+    for (const [path, params] of [
+      ['120000000000101', { ad_account_id: '1234567890' }], ['120000000000101', { special_ad_categories: 'HOUSING' }],
+      ['act_1234567890/insights', { targeting_spec: '{}' }], ['act_1234567890', { q: 'x' }], ['120000000000101/adsets', { level: 'ad' }],
+      ['act_1234567890/async_requests', { effective_status: '["ACTIVE"]' }], ['act_1234567890/adcreatives', { effective_status: '["ACTIVE"]' }],
+    ] as Array<[string, Record<string, string>]>) {
+      expect((await run('meta-ads-graph-read', { path, params })).error, path).toMatch(/does not send the parameter/)
+    }
+    expect(h.calls).toHaveLength(0)
+    // Every step-2 parameter still works, each where step 2 sent it.
+    for (const [path, params] of [
+      ['act_1234567890/campaigns', { effective_status: '["ACTIVE"]' }], ['act_1234567890/adsets', { effective_status: '["PAUSED"]' }], ['act_1234567890/ads', { effective_status: '["ACTIVE"]' }],
+      ['120000000000101/adsets', { effective_status: '["ACTIVE"]' }], ['120000000000201/ads', { effective_status: '["ACTIVE"]' }],
+      ['act_1234567890/insights', { level: 'campaign', time_range: '{"since":"2026-10-01","until":"2026-10-19"}', time_increment: 1, filtering: '[]' }],
+      ['120000000000201/insights', { level: 'adset', time_increment: 'all_days' }],
+      ['act_1234567890/async_requests', { status: 'FINISHED', type: 'ASYNC_ADGROUP_CREATION' }],
+    ] as Array<[string, Record<string, string | number>]>) {
+      expect((await run('meta-ads-graph-read', { path, params })).ok, path).toBe(true)
+    }
+    expect(h.calls).toHaveLength(8)
+    const refused = h.calls.map((c) => [c.path, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' })]).filter(([, problem]) => problem)
+    expect(refused).toEqual([])
+  })
   it('an object id is read only when Nexus has read it for the chosen account — no live look-up, no Page; only its own edges', async () => {
     h.known = new Map([['120000000000201', 'adset']])
     h.one = () => ({ account_id: '1234567890' })
