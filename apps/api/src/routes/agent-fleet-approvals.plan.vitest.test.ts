@@ -40,7 +40,9 @@ import { queueDetail } from '../services/agent-fleet/approval-queue.service.js'
 import { runOrQueueTool } from '../services/agents/approval-gate.service.js'
 import type { UserPrincipal } from '../services/agents/call-tool.js'
 import { getTool } from '../services/agents/tool-registry.js'
+import { sealSecretArgs } from '../services/agents/secret-args.js'
 import agentFleetApprovalRoutes from './agent-fleet-approvals.routes.js'
+import agentFleetRoutes from './agent-fleet.routes.js'
 
 const A = LEGACY_WORKSPACE_ID
 const business = { workspaceId: A, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -125,6 +127,7 @@ beforeAll(async () => {
     })().catch(done)
   })
   await app.register(agentFleetApprovalRoutes)
+  await app.register(agentFleetRoutes)
   await app.ready()
 }, 120_000)
 
@@ -250,6 +253,62 @@ describe('Item 7 — a secret argument on the Approvals page: the mask in the li
       const after = await stepsOf((amended.json() as { approvalId: string }).approvalId)
       expect(after.map((step) => step.args)).toEqual([before[1]!.args])
       expect(after[0]!.preview).toMatchObject({ changes: { 'base price': { from: 60, to: 58 } } })
+    })
+  })
+
+  it('the fleet inbox (GET /agent/fleet/approvals, decided and expired list every tool): a creator ad code as the mask, sealed or plain', async () => {
+    const boost = getTool('create-meta-boost')!
+    const rows = await inside(async () => {
+      const db = database.client
+      const run = await db.agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'done', via: 'claude' } })
+      const row = (args: Record<string, unknown>, status: string) => db.agentApproval.create({
+        data: { agentRunId: run.id, toolName: 'create-meta-boost', riskTier: 'high', args: args as never, preview: {}, status, decidedAt: new Date(), expiresAt: new Date(Date.now() + 3_600_000) },
+      })
+      const sealed = await sealSecretArgs(boost, { source: 'creator-instagram-code', adCode: 'CODE_NEW_SEALED', name: 'Creator boost' }, A)
+      return {
+        sealed: await row(sealed, 'rejected'),
+        plain: await row({ source: 'creator-instagram-code', adCode: 'CODE_OLD_PLAIN', name: 'Creator boost' }, 'executed'),
+        expired: await row({ source: 'creator-instagram-code', adCode: 'CODE_OLD_EXPIRED' }, 'expired'),
+      }
+    })
+    expect((rows.sealed.args as { adCode: unknown }).adCode).toEqual(SEALED)
+    const decided = await get('all', '/agent/fleet/approvals?view=decided')
+    expect(decided.statusCode, decided.body).toBe(200)
+    const listed = (decided.json() as { approvals: Array<{ id: string; args: unknown }> }).approvals
+    expect(listed.find((a) => a.id === rows.sealed.id)!.args).toEqual({ source: 'creator-instagram-code', adCode: '[redacted]', name: 'Creator boost' })
+    expect(listed.find((a) => a.id === rows.plain.id)!.args).toEqual({ source: 'creator-instagram-code', adCode: '[redacted]', name: 'Creator boost' })
+    const expired = await get('all', '/agent/fleet/approvals?view=expired')
+    expect((expired.json() as { approvals: Array<{ id: string; args: unknown }> }).approvals.find((a) => a.id === rows.expired.id)!.args)
+      .toEqual({ source: 'creator-instagram-code', adCode: '[redacted]' })
+    for (const body of [decided.body, expired.body]) expect(body).not.toMatch(/CODE_NEW_SEALED|CODE_OLD_PLAIN|CODE_OLD_EXPIRED/)
+    expect(JSON.stringify(listed.filter((a) => a.id === rows.sealed.id))).not.toContain('__enc')
+  })
+
+  it('a sealed value copied from another business: the edit and the untick answer 409 in words, nothing is stored or superseded', async () => {
+    await withSecretPrice(async () => {
+      const fromB = await sealSecretArgs(getTool('set-price')!, { price: 59 }, 'business-b-test')
+      const words = /set-price: its secret argument price does not belong to this request \(it was sealed for another tool, argument or business profile\)\. Nothing was run\./
+      // An edit that brings it in.
+      const one = await queue('set-price', { productId: ids.p1, price: 54 })
+      const edited = await post('all', `/agent/fleet/approvals/${one}/amend`, { args: { price: fromB.price } })
+      expect(edited.statusCode, edited.body).toBe(409)
+      expect((edited.json() as { error: string }).error).toMatch(words)
+      expect((await approval(one)).status).toBe('pending')
+      // A plan whose kept step carries it (as a row copied in): the smaller plan is refused, the plan still waits.
+      const id = await queue('submit-change-plan', {
+        title: 'Secret plan, copied',
+        steps: [{ tool: 'set-price', args: { productId: ids.p1, price: 57 } }, { tool: 'set-price', args: { productId: ids.p2, price: 58 } }],
+      })
+      await inside(() => database.client.agentPlanStep.updateMany({ where: { approvalId: id, position: 2 }, data: { args: { productId: ids.p2, price: fromB.price } as never } }))
+      const amended = await post('all', `/agent/fleet/approvals/${id}/plan-amend`, { keep: [2] })
+      expect(amended.statusCode, amended.body).toBe(409)
+      expect(amended.json()).toMatchObject({ refusals: [{ step: 1, tool: 'set-price', status: 409, error: expect.stringMatching(words) }] })
+      expect((await approval(id)).status).toBe('pending')
+      // One that does not decrypt at all: the same 409, in words, never a 500.
+      await inside(() => database.client.agentPlanStep.updateMany({ where: { approvalId: id, position: 2 }, data: { args: { productId: ids.p2, price: { __enc: 'v1:AAAA.BBBB.CCCC' } } as never } }))
+      const broken = await post('all', `/agent/fleet/approvals/${id}/plan-amend`, { keep: [2] })
+      expect(broken.statusCode, broken.body).toBe(409)
+      expect((broken.json() as { error: string }).error).toMatch(/set-price: its secret argument price could not be decrypted \(bad_format\)\. Nothing was run\./)
     })
   })
 })

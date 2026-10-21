@@ -93,6 +93,21 @@ describe('getRunTrace', () => {
     expect(db.agentStep.findMany).not.toHaveBeenCalled()
   })
 
+  it('item 7 — a legacy run written before item 7: a tool step\'s secret argument (a creator ad code) as the mask', async () => {
+    const steps = [
+      { type: 'tool', name: 'create-meta-boost', args: { source: 'creator-instagram-code', adCode: 'CODE_OLD_STEP' }, result: { ok: true }, ms: 1 },
+      { type: 'tool', name: 'set-price', args: { price: 12 }, result: { ok: true }, ms: 1 },
+    ]
+    db.agentRun.findUnique.mockResolvedValue({
+      id: 'runL', agentKey: 'copilot', mode: null, trigger: 'manual', status: 'done',
+      ok: true, costUSD: '0', latencyMs: null, haltedReason: null, errorMessage: null,
+      createdAt: new Date(), findingCount: 0, output: null, steps,
+    } as never)
+    const t = await getRunTrace('runL')
+    expect(t!.output).toEqual([{ ...steps[0], args: { source: 'creator-instagram-code', adCode: '[redacted]' } }, steps[1]])
+    expect(JSON.stringify(t)).not.toContain('CODE_OLD_STEP')
+  })
+
   it('unknown run → null', async () => {
     db.agentRun.findUnique.mockResolvedValue(null as never)
     expect(await getRunTrace('ghost')).toBeNull()

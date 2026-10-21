@@ -32,7 +32,7 @@ import type { StrategyNarrowing } from '../advertising/ads-strategy/claude.js'
 import { logger } from '../../utils/logger.js'
 import { linkUndoRequest, recordExecutedChangeSafely } from './change-record.service.js'
 import { queuePlan } from './change-plan.service.js'
-import { maskSecretArgs, sealSecretArgs } from './secret-args.js'
+import { callBusinessId, maskSecretArgs, sealSecretArgs } from './secret-args.js'
 import {
   callTool,
   doorOf,
@@ -70,7 +70,7 @@ export interface GateOutcome {
   /** C6 — a queued change plan: how many steps, the Nexus-written summary, and its hash. */
   plan?: { steps: number; summary: string; planHash: string }
   /** C6 — a plan that was not stored: each step's refusal, to fix and submit again. */
-  refusals?: Array<{ step: number; tool: string; error: string }>
+  refusals?: Array<{ step: number; tool: string; error: string; status?: 409 | 503 }>
 }
 
 /**
@@ -176,15 +176,23 @@ export async function runOrQueueTool(
   if (!tool.execute) {
     return { ok: true, mode: 'preview', preview: visible.preview ?? visible.data }
   }
+  // Item 7 — its secret arguments sealed for this tool and this business (secret-args.ts); the door opens them when the
+  // request runs. No encryption key: refused in words, nothing stored.
+  let stored: Record<string, unknown>
+  try {
+    stored = await sealSecretArgs(tool, args, callBusinessId(principal))
+  } catch (err) {
+    if (err instanceof ToolAccessError) return { ok: false, mode: 'error', error: err.message }
+    throw err
+  }
   // The row keeps the raw preview: whoever reads it is filtered for their own
   // permissions then, and an approver cleared for money sees all of it.
-  // Item 7 — and its secret arguments sealed (secret-args.ts); the door opens them when the request runs.
   const ap = await prisma.agentApproval.create({
     data: {
       agentRunId,
       toolName: name,
       riskTier: policy.riskTier,
-      args: (await sealSecretArgs(tool, args)) as Prisma.InputJsonValue,
+      args: stored as Prisma.InputJsonValue,
       preview: (raw.preview ?? raw.data) as Prisma.InputJsonValue,
       status: 'pending',
       expiresAt: new Date(Date.now() + EXPIRY_HOURS * 3600 * 1000),

@@ -93,6 +93,7 @@ import prisma from '../../db.js'
 import { __test as cryptoTest } from '../../lib/crypto.js'
 import { decideApproval, listApprovals, requestApproval, runOrQueueTool } from './approval-gate.service.js'
 import { planHashOf } from './change-plan.service.js'
+import { sealSecretArgs } from './secret-args.js'
 import { systemPrincipal, type UserPrincipal } from './call-tool.js'
 import { withWorkspace } from '../../lib/workspace-context.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
@@ -352,14 +353,15 @@ describe('Item 7 — a secret argument is stored encrypted, and opened only for 
     expect(storedArgs()).toEqual({ price: 12 })
   })
 
-  it('without a key a request with a secret is refused and nothing is stored (one change, a plan); the words name no value', async () => {
+  it('without a key a request with a secret is refused in words, never thrown, and nothing is stored (one change; a plan lists the step as refused, 503); the words name no value', async () => {
     noKey()
-    const one = await runOrQueueTool('boost-code', { adCode: 'CODE_123' }, PRICE_PERSON, 'run1').catch((error: Error) => error)
-    const plan = await runOrQueueTool('submit-change-plan', { title: 'Boosts', steps: [{ tool: 'boost-code', args: { adCode: 'CODE_123' } }] }, PRICE_PERSON, 'run1').catch((error: Error) => error)
-    for (const error of [one, plan]) {
-      expect(error).toBeInstanceOf(Error)
-      expect((error as Error).message).toBe('boost-code: Nexus could not encrypt its secret argument adCode (no encryption key is set up), so the request was not stored.')
-    }
+    const words = 'boost-code: Nexus could not encrypt its secret argument adCode (no encryption key is set up), so the request was not stored.'
+    const one = await runOrQueueTool('boost-code', { adCode: 'CODE_123' }, PRICE_PERSON, 'run1')
+    expect(one).toEqual({ ok: false, mode: 'error', error: words })
+    const plan = await runOrQueueTool('submit-change-plan', { title: 'Boosts', steps: [{ tool: 'boost-code', args: { adCode: 'CODE_123' } }] }, PRICE_PERSON, 'run1')
+    expect(plan).toMatchObject({ ok: false, mode: 'error', refusals: [{ step: 1, tool: 'boost-code', error: words, status: 503 }] })
+    expect(plan.error).toContain(`step 1 (boost-code): ${words}`)
+    expect(JSON.stringify([one, plan])).not.toContain('CODE_123')
     expect(db.agentApproval.create).not.toHaveBeenCalled()
     expect(db.agentPlanStep.createMany).not.toHaveBeenCalled()
   })
@@ -375,9 +377,35 @@ describe('Item 7 — a secret argument is stored encrypted, and opened only for 
   it('the approved run opens it right before execute (the no-approval switch and the sweep commit through here too)', async () => {
     await runOrQueueTool('boost-code', { adCode: 'CODE_123' }, PRICE_PERSON, 'run1')
     db.agentApproval.findUnique.mockResolvedValue({ id: 'a1', status: 'pending', toolName: 'boost-code', args: storedArgs() } as never)
-    const out = await decideApproval('a1', 'approve', systemPrincipal('Awais'))
+    // The sweep runs a decision inside the request's business (WorkspaceWorker / workspace-sweep bind it).
+    const out = await withWorkspace(BUSINESS, () => decideApproval('a1', 'approve', systemPrincipal('Awais')))
     expect(out).toMatchObject({ ok: true, status: 'executed' })
     expect(execute).toHaveBeenCalledWith({ adCode: 'CODE_123' }, expect.anything())
+  })
+
+  it('a sealed code is bound to its business: run in another business it is refused in words and nothing runs', async () => {
+    await runOrQueueTool('boost-code', { adCode: 'CODE_123' }, PRICE_PERSON, 'run1')
+    const fromA = storedArgs()
+    // A member of two businesses copies business A's blob into business B: as a new request, and as a stored one.
+    const inB = { ...PRICE_PERSON, workspace: { ...BUSINESS, workspaceId: 'ws_beta_0002' } }
+    db.agentApproval.create.mockClear()
+    const asked = await runOrQueueTool('boost-code', { adCode: fromA.adCode }, inB, 'run2')
+    expect(asked).toMatchObject({ ok: false, mode: 'error', error: expect.stringMatching(/does not belong to this request/) })
+    expect(db.agentApproval.create).not.toHaveBeenCalled()
+    db.agentApproval.findUnique.mockResolvedValue({ id: 'a2', status: 'pending', toolName: 'boost-code', args: { adCode: fromA.adCode } } as never)
+    const out = await decideApproval('a2', 'approve', inB)
+    expect(out).toMatchObject({ ok: false })
+    expect(out.error).toMatch(/boost-code: its secret argument adCode does not belong to this request .*Nothing was run\./)
+    expect(JSON.stringify(out)).not.toMatch(/CODE_123|ws_alpha_0001/)
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('a sealed code of another tool is refused at the dry run; nothing is stored', async () => {
+    const other = await sealSecretArgs({ name: 'other-boost', secretArgs: ['adCode'] }, { adCode: 'CODE_123' }, BUSINESS.workspaceId)
+    const out = await runOrQueueTool('boost-code', { adCode: other.adCode }, PRICE_PERSON, 'run1')
+    expect(out).toMatchObject({ ok: false, mode: 'error', error: expect.stringMatching(/does not belong to this request/) })
+    expect(handler).not.toHaveBeenCalled()
+    expect(db.agentApproval.create).not.toHaveBeenCalled()
   })
 
   it('a request stored before item 7 (plain text) still runs', async () => {

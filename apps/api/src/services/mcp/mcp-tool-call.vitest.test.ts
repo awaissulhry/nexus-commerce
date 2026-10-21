@@ -270,6 +270,18 @@ describe('C7 / item 7 — a secret argument never reaches the run record', () =>
     expect(gate.runOrQueueTool.mock.calls[0]![1]).toMatchObject({ adCode: 'SECRET_CODE_1' })
   })
 
+  it('a secret Nexus cannot store (no encryption key: the gate\'s refusal in words) ends the run as failed, never crashed, and Claude reads the words', async () => {
+    const words = 'create-meta-boost: Nexus could not encrypt its secret argument adCode (no encryption key is set up), so the request was not stored.'
+    gate.runOrQueueTool.mockResolvedValue({ ok: false, mode: 'error', error: words })
+    db.agentRun.update.mockClear()
+    const result = await runToolForClaude(principal, getTool('create-meta-boost')!, { source: 'creator-instagram-code', adCode: 'SECRET_CODE_1', business: principal.business.name })
+    const finished = (db.agentRun.update.mock.calls.at(-1)![0] as { data: Record<string, unknown> }).data
+    expect(finished).toMatchObject({ status: 'failed', ok: false, errorMessage: words })
+    expect(JSON.stringify(finished)).not.toContain('crashed')
+    expect(JSON.stringify(result.content)).toContain('no encryption key is set up')
+    expect(JSON.stringify(result)).not.toContain('SECRET_CODE_1')
+  })
+
   it('nor one inside a change plan\'s steps', async () => {
     const steps = [{ tool: 'create-meta-boost', args: { source: 'creator-instagram-code', adCode: 'SECRET_CODE_1', name: 'Creator boost' } }]
     await runToolForClaude(principal, getTool('submit-change-plan')!, { title: 'Boosts', steps, business: principal.business.name })

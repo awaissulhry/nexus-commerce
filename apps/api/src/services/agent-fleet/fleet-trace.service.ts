@@ -7,6 +7,7 @@
  * untruncated except the evidence preview) — sentence → card → JSON.
  */
 import prisma from '../../db.js'
+import { maskRunSteps } from '../agents/secret-args.js'
 
 const EVIDENCE_PREVIEW_CHARS = 4000
 
@@ -129,7 +130,8 @@ export async function getRunTrace(runId: string): Promise<RunTrace | null> {
       run: { ...base, model: null },
       steps: [],
       evidence: [],
-      output: (run.steps as unknown) ?? [],
+      // Item 7 — a tool step's secret arguments as the mask (secret-args.ts), also on a run written before item 7.
+      output: maskRunSteps(run.steps ?? []),
       findings: [],
     }
   }

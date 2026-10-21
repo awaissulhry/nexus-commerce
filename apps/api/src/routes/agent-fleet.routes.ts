@@ -65,6 +65,7 @@ import { collectRefs, resolveFleetLabels } from '../services/agent-fleet/fleet-l
 import { getFleetSchedule } from '../services/agent-fleet/fleet-schedule.service.js'
 import { getRunTrace } from '../services/agent-fleet/fleet-trace.service.js'
 import { getSweepReport } from '../services/agent-fleet/sweep-report.service.js'
+import { maskRunSteps } from '../services/agents/secret-args.js'
 
 /** A bulk call's ids: strings only, each once. Anything else in the list is dropped, never decided. */
 function idsOf(value: unknown): string[] {
@@ -170,7 +171,8 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
         })
         return { shape: 'agent-step', steps }
       }
-      return { shape: 'legacy-json', steps: run.steps ?? [] }
+      // Item 7 — a tool step's secret arguments as the mask (secret-args.ts), also on a run written before item 7.
+      return { shape: 'legacy-json', steps: maskRunSteps(run.steps ?? []) }
     },
   )
 

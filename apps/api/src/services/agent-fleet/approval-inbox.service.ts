@@ -71,6 +71,7 @@ import { createWorkspaceService } from '../workspace.service.js'
 import { autoCommitRefusal, autoFreshRefusal, autoPlanCommitRefusal, freshCode, mayRaise, noApprovalCommitRefusal, noteAutoFailure, type RaiseWords } from '../agents/claude-trust.service.js'
 import { drainPlans, enqueuePlan } from '../agents/change-plan.service.js'
 import { approvalStepUp, stepUpOf, type StepUp } from '../agents/step-up-approval.js'
+import { maskSecretArgs } from '../agents/secret-args.js'
 import { approvedOnVersion, NO_APPROVAL_VIA, PLAN_TOOL } from '../agents/tool-types.js'
 import type { QueueBulkResult } from '@nexus/shared/approval-queue'
 import { BULK_MAX_IDS, bulkApproveRefusal } from './bulk-approve-policy.js'
@@ -195,6 +196,8 @@ export async function listInbox(view: InboxView, limit = 100) {
 
   return approvals.map((a) => ({
     ...a,
+    // Item 7 — a view: each secret argument as the mask, sealed or (a request stored before item 7) plain (secret-args.ts).
+    args: maskSecretArgs(a.toolName, a.args) as typeof a.args,
     charterKey: runById.get(a.agentRunId)?.agentKey ?? null,
     orchestrationId: runById.get(a.agentRunId)?.orchestrationId ?? null,
     assignmentId: runById.get(a.agentRunId)?.assignmentId ?? null,

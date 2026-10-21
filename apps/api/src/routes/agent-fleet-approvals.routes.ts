@@ -48,7 +48,7 @@ import { withStepChanges } from '../services/agent-fleet/approval-queue.service.
 import { PLAN_TOOL } from '../services/agents/tool-types.js'
 import { EXPIRY_HOURS } from '../services/agents/approval-gate.service.js'
 import { getTool } from '../services/agents/tool-registry.js'
-import { maskSecretArgs, sealSecretArgs } from '../services/agents/secret-args.js'
+import { callBusinessId, maskSecretArgs, sealSecretArgs } from '../services/agents/secret-args.js'
 import type { ToolResult } from '../services/agents/tool-types.js'
 import {
   callTool,
@@ -524,8 +524,11 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
       // MCP.1 — run as the editor: a proposal you could not have made
       // yourself is not one you may rewrite.
       let fresh: ToolResult
+      let business: string | null = null
       try {
-        fresh = (await callTool(await requestPrincipal(request), original.toolName, editedArgs)).raw
+        const editor = await requestPrincipal(request)
+        business = callBusinessId(editor)
+        fresh = (await callTool(editor, original.toolName, editedArgs)).raw
       } catch (err) {
         if (err instanceof ToolAccessError) {
           return reply.code(err.statusCode).send({ error: err.message })
@@ -539,8 +542,15 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
       const actor = resolveActor(
         (request as { authUser?: { id?: string; email?: string; displayName?: string } }).authUser,
       )
-      // Item 7 — a secret argument stays sealed on the new row (a patch may bring one in plain text).
-      const storedArgs = await sealSecretArgs(tool, editedArgs)
+      // Item 7 — a secret argument stays sealed on the new row, for this tool and this business (a patch may bring one in
+      // plain text). No encryption key: refused in words (503), nothing stored.
+      let storedArgs: Record<string, unknown>
+      try {
+        storedArgs = await sealSecretArgs(tool, editedArgs, business)
+      } catch (err) {
+        if (err instanceof ToolAccessError) return reply.code(err.statusCode).send({ error: err.message })
+        throw err
+      }
 
       const created = await prisma.$transaction(async (tx) => {
         await tx.agentApproval.update({

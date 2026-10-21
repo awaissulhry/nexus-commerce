@@ -38,7 +38,7 @@ import { deciderPrincipal, freshDryRun, movedFieldNames, movedFields, previewSta
 import { decideByRule, EXPIRY_HOURS, requestDoor, type GateOutcome, type GateRule } from './approval-gate.service.js'
 import { callTool, executeTool, ToolAccessError, type ToolPrincipal, type UserPrincipal } from './call-tool.js'
 import { recordExecutedChangeSafely } from './change-record.service.js'
-import { sealSecretArgs } from './secret-args.js'
+import { callBusinessId, sealSecretArgs } from './secret-args.js'
 import { autoFreshRefusal, autoPlanStepRefusal, noApprovalCommitRefusal, noteAutoFailure } from './claude-trust.service.js'
 import { mergedStepUp } from './step-up-approval.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
@@ -58,6 +58,8 @@ export interface PlanRefusal {
   step: number
   tool: string
   error: string
+  /** Item 7 — a step whose secret argument cannot be stored (503: no encryption key) or opened here (409): secret-args.ts. */
+  status?: 409 | 503
 }
 
 /** One kind of consequence: every step of one tool. The plan card asks one tick per kind. */
@@ -131,9 +133,10 @@ export async function queuePlan(
   }
   const planTool = getTool(PLAN_TOOL)!
   const refusals: PlanRefusal[] = []
-  const checked: Array<{ tool: AgentTool; args: Record<string, unknown>; raw: unknown; visible: unknown; undoes: string | null }> = []
+  const checked: Array<{ tool: AgentTool; args: Record<string, unknown>; stored: Record<string, unknown>; raw: unknown; visible: unknown; undoes: string | null }> = []
+  const business = callBusinessId(principal)
   for (const [index, step] of plan.steps.entries()) {
-    const refuse = (error: string) => refusals.push({ step: index + 1, tool: step.tool, error })
+    const refuse = (error: string, status?: 409 | 503) => refusals.push({ step: index + 1, tool: step.tool, error, ...(status ? { status } : {}) })
     const tool = getTool(step.tool)
     if (!tool || tool.readOnly || tool.control || !tool.execute) {
       refuse(`${step.tool} is not a change a plan can run (a read, a control tool, a preview-only or an unknown tool)`)
@@ -158,13 +161,16 @@ export async function queuePlan(
       checked.push({
         tool,
         args: step.args ?? {},
+        // Item 7 — its secret arguments sealed for this tool and this business before they are stored (secret-args.ts).
+        stored: await sealSecretArgs(tool, step.args ?? {}, business),
         raw: call.raw.preview ?? call.raw.data ?? null,
         visible: call.visible.preview ?? call.visible.data ?? null,
         undoes: plan.undoes?.[index] || null,
       })
     } catch (error) {
       if (!(error instanceof ToolAccessError)) throw error
-      refuse(error.message)
+      // Item 7 — a secret argument that cannot be stored or opened here is a refused step, in words, as any other.
+      refuse(error.message, error.statusCode === 409 || error.statusCode === 503 ? error.statusCode : undefined)
     }
   }
   if (refusals.length) {
@@ -181,10 +187,9 @@ export async function queuePlan(
 
   const kinds = kindsOf(checked.map((c) => c.tool))
   const summary = planSummary(kinds)
-  // Item 7 — each step's secret arguments sealed before they are stored (secret-args.ts). The hash is of what is stored:
-  // confirm-change recomputes it from the rows (claude-confirm.service.ts storedHash), and no hash covers a secret.
-  const stored = await Promise.all(checked.map((step) => sealSecretArgs(step.tool, step.args)))
-  const planHash = planHashOf({ title, steps: plan.steps.map((step, index) => ({ tool: step.tool, args: stored[index] })) })
+  // Item 7 — the hash is of what is stored (each step's secret arguments sealed): confirm-change recomputes it from the rows
+  // (claude-confirm.service.ts storedHash), and no hash covers a secret.
+  const planHash = planHashOf({ title, steps: plan.steps.map((step, index) => ({ tool: step.tool, args: checked[index].stored })) })
   const outbound = kinds.filter((kind) => kind.outbound).reduce((n, kind) => n + kind.count, 0)
   // ADS AUTONOMY W1-3 — a step that raises (its preview's `stepUp`) makes the whole plan one a person approves with their
   // authenticator code: said on the plan itself, where the Approvals page and the bulk approve read it.
@@ -215,7 +220,7 @@ export async function queuePlan(
         approvalId: created.id,
         position: index + 1,
         toolName: step.tool.name,
-        args: stored[index] as Prisma.InputJsonValue,
+        args: step.stored as Prisma.InputJsonValue,
         preview: step.raw == null ? Prisma.JsonNull : (step.raw as Prisma.InputJsonValue),
         undoesChangeId: step.undoes,
       })),
@@ -726,7 +731,7 @@ export async function planView(
 
 export type AmendResult =
   | { ok: true; supersededId: string; approvalId: string }
-  | { ok: false; status: 400 | 403 | 404 | 409; error: string; refusals?: PlanRefusal[] }
+  | { ok: false; status: 400 | 403 | 404 | 409 | 503; error: string; refusals?: PlanRefusal[] }
 
 /**
  * Untick steps of a waiting plan: a NEW, smaller plan of the steps kept, each dry-run again as the person (a step they
@@ -759,7 +764,9 @@ export async function amendPlan(approvalId: string, keep: unknown, principal: Us
   }
   const queued = await queuePlan(plan, principal, original.agentRunId)
   if (queued.mode !== 'queued' || !queued.approvalId) {
-    return { ok: false, status: 400, error: queued.error ?? 'the smaller plan could not be checked', ...(queued.refusals ? { refusals: queued.refusals } : {}) }
+    // Item 7 — a kept step whose secret argument does not open here (409) or cannot be stored (503) answers with its status.
+    const status = queued.refusals?.find((refusal) => refusal.status)?.status ?? 400
+    return { ok: false, status, error: queued.error ?? 'the smaller plan could not be checked', ...(queued.refusals ? { refusals: queued.refusals } : {}) }
   }
   const dropped = steps.length - kept.length
   const superseded = await prisma.agentApproval.updateMany({
