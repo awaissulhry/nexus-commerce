@@ -96,6 +96,7 @@ import { META_ADS_OPTIMIZE_TOOLS } from './tools/meta-ads-optimize.tools.js'
 // Meta ads step 14 (2026-10-21): lead forms, leads and comments (read only; leads and comments are Claude's door only).
 import { META_ADS_ENGAGEMENT_TOOLS } from './tools/meta-ads-engagement.tools.js'
 import { META_ADS_ACCOUNT_TOOLS } from './tools/meta-ads-account.tools.js'
+import { META_ADS_HEALTH_TOOLS } from './tools/meta-ads-health.tools.js'
 // Meta ads step 11 (2026-10-21): audiences and datasets (pixels), read only.
 import { META_ADS_AUDIENCES_TOOLS } from './tools/meta-ads-audiences.tools.js'
 import { META_ADS_DATASETS_TOOLS } from './tools/meta-ads-datasets.tools.js'
@@ -321,6 +322,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_ENGAGEMENT_TOOLS,
   // Meta ads step 3 (2026-10-21): meta-ad-account, meta-billing, meta-account-access (read only).
   ...META_ADS_ACCOUNT_TOOLS,
+  // Meta ads step 5 (2026-10-21): meta-account-health, meta-activity-log (read only).
+  ...META_ADS_HEALTH_TOOLS,
   // Meta ads step 11 (2026-10-21): meta-audiences, meta-datasets (read only; datasets view sources = the D2 check).
   ...META_ADS_AUDIENCES_TOOLS,
   ...META_ADS_DATASETS_TOOLS,

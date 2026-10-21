@@ -528,10 +528,11 @@ describe('read only by construction', () => {
       ['act_1234567890/ads?fields=id&since=1760000000', 'since'], ['act_1234567890/minimum_budgets?bid_amount=150&app_id=1', 'app_id'],
       ['9876543210/owned_ad_accounts?fields=id&type=INV', 'type'], ['9876543210/extendedcredits?fields=id&only_show_pending=true', 'only_show_pending'],
       ['act_1234567890/campaign_attribution_options?app_id=1&custom_event_str=x', 'custom_event_str'], ['9876543210/business_invoices?fields=id&root_id=1', 'root_id'],
-      ['act_1234567890/activities?fields=event_type&category=AD', 'category'], ['act_1234567890/activities?fields=event_type&category=account', 'category'],
-      ['120000000000101/activities?fields=event_type&category=BUDGET', 'category'], ['act_1234567890/campaigns?fields=id&category=BUDGET', 'category'],
-      // Review round 4 — BUDGET only (where Meta files billing events), exact case; the days only as Unix seconds.
-      ['act_1234567890/activities?fields=event_type&category=ACCOUNT', 'category'], ['act_1234567890/activities?fields=event_type&category=budget', 'category'],
+      // Step 5 widens category to Meta's own enum on the account's log and an ad set's (its own test below); never another value
+      // or another case. Step 3's round 4: the days only as Unix seconds.
+      ['act_1234567890/activities?fields=event_type&category=BILLING', 'category'], ['act_1234567890/activities?fields=event_type&category=account', 'category'],
+      ['120000000000101/activities?fields=event_type&category=account', 'category'], ['act_1234567890/campaigns?fields=id&category=BUDGET', 'category'],
+      ['act_1234567890/activities?fields=event_type&category=budget', 'category'],
       ['act_1234567890/activities?fields=event_type&since=yesterday', 'since'], ['act_1234567890/activities?fields=event_type&since=-5', 'since'],
       ['act_1234567890/activities?fields=event_type&since=1760000000&until=abc', 'until'], ['act_1234567890/activities?fields=event_type&since=1760000000.5', 'since'],
       ['act_1234567890/activities?fields=event_type&until=2026-10-21', 'until'], ['act_1234567890/activities?fields=event_type&since=1234567890123', 'since'],
@@ -944,6 +945,40 @@ describe('step 16 review fixes — no creator picked by gender or age; a backsla
     for (const path of ['me/partnership-ads-advertisable-content', 'act_1/partnership-ads-advertisable-content', '123/partnership-ads-advertisable-content/x', '123/456/partnership-ads-advertisable-content']) {
       expect(ok(`${BASE}/${path}?fields=content_id`), path).toMatch(/letters, digits and _ only/)
     }
+  })
+})
+
+describe('step 5 — the change history: each activity key only on its own route, only with a value Nexus sends', () => {
+  const q = (path: string) => metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${path}`, kind: 'read' })
+  it('the account\'s log and an ad set\'s own: days, Meta\'s categories, an actor; the object filter on the account\'s log only', () => {
+    for (const path of [
+      'act_1234567890/activities?fields=event_time,event_type&since=1760000000&until=1760086400&category=BUDGET',
+      'act_1234567890/activities?fields=event_type&category=TARGETING&uid=100000000000002',
+      'act_1234567890/activities?fields=event_type&since=1760000000&until=1760086400&oid=120000000000001&add_children=true',
+      'act_1234567890/activities?fields=event_type&oid=120000000000003&add_children=false',
+      '120000000000002/activities?fields=event_type&since=1760000000&until=1760086400&business_id=9876543210&category=AD_SET&uid=100000000000001',
+      // Step 3's billing read (category BUDGET) still goes.
+      'act_1234567890/activities?fields=event_type&category=BUDGET&since=1760000000&until=1760086400',
+    ]) expect(q(path), path).toBeNull()
+  })
+  it('anything else is refused by name', () => {
+    for (const [path, key] of [
+      ['act_1234567890/activities?fields=event_type&category=budget', 'category'], ['act_1234567890/activities?fields=event_type&category=BUDGET,BID', 'category'],
+      ['act_1234567890/activities?fields=event_type&uid=me', 'uid'], ['act_1234567890/activities?fields=event_type&oid=act_1', 'oid'],
+      ['act_1234567890/activities?fields=event_type&add_children=1', 'add_children'], ['act_1234567890/activities?fields=event_type&extra_oids=["1"]', 'extra_oids'],
+      ['act_1234567890/activities?fields=event_type&data_source=CALYPSO', 'data_source'], ['act_1234567890/activities?fields=event_type&business_id=9876543210', 'business_id'],
+      ['120000000000002/activities?fields=event_type&oid=120000000000001', 'oid'], ['120000000000002/activities?fields=event_type&add_children=true', 'add_children'],
+      ['120000000000002/activities?fields=event_type&since=yesterday', 'since'], ['120000000000002/activities?fields=event_type&business_id=x', 'business_id'],
+      ['act_1234567890/campaigns?fields=id&oid=120000000000001', 'oid'], ['act_1234567890/ads?fields=id&uid=100000000000002', 'uid'],
+      ['120000000000002/insights?fields=spend&business_id=9876543210', 'business_id'],
+    ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
+  })
+  it('the health reads go as plain reads: the Page\'s integrity, conversions and pixels, creatives', () => {
+    for (const path of [
+      '120000000000010/page_status', 'act_1234567890/customconversions?fields=id,name,custom_event_type,is_archived,is_unavailable,last_fired_time&limit=100',
+      'act_1234567890/adspixels?fields=id,name,is_unavailable,last_fired_time,owner_business{id}&limit=100', 'act_1234567890/adcreatives?fields=id,name,status&limit=100',
+      'act_1234567890?fields=failed_delivery_checks{check_name,summary,description,extra_info{adgroup_ids,campaign_ids,countries}}',
+    ]) expect(q(path), path).toBeNull()
   })
 })
 
