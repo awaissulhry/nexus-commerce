@@ -139,6 +139,11 @@ describe('a new ad: exact keys, every value judged', () => {
       expect(problem({ body: form(ad({ creative: JSON.stringify(one), status: 'PAUSED' })) }), feature).toBeNull()
     }
     expect(problem({ body: form(ad({ creative: JSON.stringify(inline()), status: 'ACTIVE' })) })).toBeNull()
+    // product_extensions ON beside a product set (allowed by step 25b) still keeps the ad PAUSED: the skip above is test-only.
+    const extensions = inline({ creative_sourcing_spec: { associated_product_set_id: '120000000000061' } })
+    extensions.degrees_of_freedom_spec.creative_features_spec.product_extensions = { enroll_status: 'OPT_IN', action_metadata: { type: 'MANUAL' } }
+    expect(problem({ body: form(ad({ creative: JSON.stringify(extensions), status: 'PAUSED' })) })).toBeNull()
+    expect(problem({ body: form(ad({ creative: JSON.stringify(extensions), status: 'ACTIVE' })) })).toMatch(/switches on product_extensions: create it PAUSED/)
     expect(metaActivationProblem({ degrees_of_freedom_spec: { creative_features_spec: { image_touchups: { enroll_status: 'OPT_OUT' } } } })).toMatch(/does not say OPT_OUT/)
     expect(metaActivationProblem({})).toMatch(/reads no Advantage\+ feature switches/)
     expect(metaActivationProblem({ degrees_of_freedom_spec: { creative_features_spec: { ...Object.fromEntries(META_ACTIVATE_FEATURES.map((f) => [f, { enroll_status: 'OPT_OUT' }])), some_new_feature: { enroll_status: 'OPT_IN' } } } })).toMatch(/some_new_feature/)
