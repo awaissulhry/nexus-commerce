@@ -904,6 +904,10 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-campaign': ['basis', 'plan', 'reach'],
   'set-meta-ad-set': ['basis', 'plan', 'reach'],
   'set-meta-budget-schedule': ['basis', 'plan', 'reach'],
+  // Meta step 19 (2026-10-21): new campaigns and ad sets, and copies (born PAUSED); their undo deletes only what they made.
+  'create-meta-campaign': ['basis', 'plan', 'reach'],
+  'create-meta-ad-set': ['basis', 'plan', 'reach'],
+  'copy-meta-ads': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

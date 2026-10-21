@@ -44,7 +44,7 @@ import { ATTRIBUTION_SPECS, BID_STRATEGIES, BILLING_EVENTS, FREQUENCY_EVENTS, ME
 
 export type AttributionPreset = '1d_click' | '7d_click' | '1d_click_1d_view' | '7d_click_1d_view'
 export const ATTRIBUTION_PRESETS: readonly AttributionPreset[] = ['1d_click', '7d_click', '1d_click_1d_view', '7d_click_1d_view']
-const PRESET_SPEC: Readonly<Record<AttributionPreset, string>> = {
+export const PRESET_SPEC: Readonly<Record<AttributionPreset, string>> = {
   '1d_click': ATTRIBUTION_SPECS[0], '7d_click': ATTRIBUTION_SPECS[1], '1d_click_1d_view': ATTRIBUTION_SPECS[2], '7d_click_1d_view': ATTRIBUTION_SPECS[3],
 }
 export type CustomerGoalType = 'broad' | 'exclude-existing' | 'exclude-existing-and-engaged'
