@@ -927,6 +927,12 @@ describe('step 7 review round 1 — insights GETs: step 2\'s keys by value too; 
       [`act_1234567890/insights?fields=spend&time_range=${q({ since: '2026-10-01', until: '2026-10-19', extra: 1 })}`, 'time_range'],
     ] as const) expect(ok(path), path).toMatch(new RegExp(`"${key}" is not one`))
   })
+  it('re-review 2 — a bad VALUE of a key Nexus sends there is said so; a key Nexus never sends there keeps its own words', () => {
+    expect(ok(`act_1234567890/insights?fields=spend&time_range=${encodeURIComponent("{'since':'2026-10-01','until':'2026-10-19'}")}`)).toMatch(/the value of "time_range" is not one Nexus sends here/)
+    expect(ok('act_1234567890/insights?fields=spend&level=everything')).toMatch(/the value of "level" is not one Nexus sends here/)
+    expect(ok('act_1234567890/insights?fields=spend&metadata=1')).toMatch(/the query key "metadata" is not one a Nexus read of Meta uses here/)
+    expect(ok('act_1234567890/campaigns?fields=id&level=ad')).toMatch(/the query key "level" is not one a Nexus read of Meta uses here/)
+  })
   it('A-F3 — a filter, breakdown or sort named after Object.prototype is refused plainly (no TypeError, its ledger row stands)', () => {
     for (const name of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
       expect(() => ok(`act_1234567890/insights?fields=spend&filtering=${q([{ field: name, operator: 'IN', value: ['1'] }])}`)).not.toThrow()

@@ -152,7 +152,7 @@ const PLACEMENT_WORDS: Readonly<Record<string, string>> = ownList<string>(Object
   an_classic: 'Audience Network', rewarded_video: 'Audience Network rewarded video', threads_feed: 'Threads feed',
 }))
 
-const FEATURE_NOTE = (name: string, feature: string) => `${name} may be switched off for this ad account: Meta then answers NOTHING, without an error (its insights feature "${feature}", since 2026-08-06) — no rows means switched off or no delivery, never 0. Whether it is on: meta-ad-account view insights-features (step 3); a person switches it on in Ads Manager. After that, a background report (meta-ads-report) returns its full history, min(10, number of ad sets) such runs per 24 hours.`
+const FEATURE_NOTE = (name: string, feature: string) => `${name} may be switched off for this ad account: Meta then answers NOTHING, without an error (its insights feature "${feature}", since 2026-08-06) — no rows means switched off or no delivery, never 0. Whether it is on: meta-ad-account view insights-features (step 3); a person switches it on in Ads Manager. After that, a background report (meta-ads-report) returns its full history, min(10, number of ads) such runs per 24 hours (Meta's "ad groups" are ads).`
 const TOO_MUCH = 'Meta could not answer this much at once. Ask fewer days, a lower level, fewer breakdowns or fewer metrics — or start the same read in the background: meta-ads-report action start with the same arguments (it may take up to an hour).'
 export const PORTFOLIO_SENTENCE = 'Meta has no insights for a whole business portfolio (its marketing-mix-modeling page: "the Insights API works on the ad account level and below" — a portfolio is read account by account). Each business in Nexus reads its own chosen ad account only: meta-ads-numbers reads it; another ad account of the portfolio may be another business\'s, so Nexus never adds them up.'
 
@@ -654,27 +654,30 @@ async function withSkus(rows: MappedRow[]): Promise<void> {
   }
 }
 
-/** Pages of an insights edge (cursor `after`; Meta's next link carries the token and is never followed), with Meta's total. */
-/** At most this many pages per read (Meta may answer fewer rows a page than asked). */
-const MAX_PAGES = 50
+/** Re-review 2 — pages one read may cost beyond the ones its rows need (Meta may answer fewer rows a page than asked). */
+const EXTRA_PAGES = 5
 
 /**
  * Pages of an insights edge (cursor `after`; Meta's next link carries the token and is never followed), with Meta's total.
  * Review A F1 — each page asks only for the rows still missing, so the read ends exactly at maxRows with the cursor of the
  * next row; were Meta to send more than asked, the extra rows are cut and there is no exact cursor (`cut`, nextAfter null).
+ * Re-review 2 — an empty page ends the read, and one read costs at most ceil(maxRows / 100) + 5 calls (then it hands back
+ * the cursor: more to page on).
  */
 async function readPages(connectionId: string, operation: string, path: string, query: Record<string, MetaQueryValue>, maxRows: number, after: string | null) {
   const rows: Row[] = []
   let summary: Row | null = null
   let cursor = after
-  for (let page = 0; page < MAX_PAGES; page++) {
+  const maxPages = Math.ceil(maxRows / PAGE_ROWS) + EXTRA_PAGES
+  for (let page = 0; page < maxPages; page++) {
     const { body } = await metaReadOne<Row>({ connectionId }, { operation, path, query: { ...query, limit: Math.min(PAGE_ROWS, maxRows - rows.length), ...(cursor ? { after: cursor } : {}) } })
     if (page === 0) summary = obj(body.summary)
-    rows.push(...rowsOf(body.data))
+    const got = rowsOf(body.data)
+    rows.push(...got)
     const paging = obj(body.paging)
     const next = paging?.next ? text(obj(paging.cursors)?.after) : null
     if (rows.length > maxRows) return { rows: rows.slice(0, maxRows), summary, nextAfter: null as string | null, cut: true }
-    if (!next) return { rows, summary, nextAfter: null as string | null, cut: false }
+    if (!next || got.length === 0) return { rows, summary, nextAfter: null as string | null, cut: false }
     if (rows.length === maxRows) return { rows, summary, nextAfter: next as string | null, cut: false }
     cursor = next
   }
@@ -842,7 +845,7 @@ export async function startReportRun(input: NumbersInput & { kind: typeof REPORT
     // Review B-8 — inside a background run, reach older than 13 months is not "a background report gets it": this run
     // counts against Meta's 10 such runs a day per ad account, and past that Meta leaves reach out without an error.
     notes = [...plan.notes.map((n) => (n.startsWith('Meta leaves reach, frequency and cost per 1,000 people reached out of a direct read')
-      ? 'Reach, frequency and cost per 1,000 people reached with breakdowns more than 13 months back: this background run counts against Meta\'s 10 such runs a day per ad account (its best practices); past that Meta leaves them out WITHOUT an error.'
+      ? 'Reach, frequency and cost per 1,000 people reached with breakdowns more than 13 months back: this background run counts against Meta\'s 10 such runs a day per ad account (its best practices); past that Meta leaves them out and says "Reach-related metric breakdowns are unavailable due to rate limit threshold".'
       : n)), REPORT_QUOTAS]
   }
   let answer: GatewayResponse
@@ -866,7 +869,7 @@ export async function startReportRun(input: NumbersInput & { kind: typeof REPORT
 
 const RUN_FIELDS = 'id,account_id,async_status,async_percent_completion,time_ref,time_completed'
 /** Review B-8 — Meta's quotas on background runs, said at the start. */
-const REPORT_QUOTAS = 'Meta\'s quotas: a breakdown switched on per account (impression_device, hourly by the audience\'s time zone, frequency_value) returns its full history only in background runs, min(10, number of ad sets) per 24 hours (out-of-cycle changes 2026-05-08); reach with breakdowns more than 13 months back, 10 runs a day per ad account (best practices) — past either, Meta answers without those numbers rather than an error.'
+const REPORT_QUOTAS = 'Meta\'s quotas: a breakdown switched on per account (impression_device, hourly by the audience\'s time zone, frequency_value) returns its full history only in background runs, min(10, number of ads) per 24 hours (out-of-cycle changes 2026-05-08; Meta\'s "ad groups" are ads) — past that it answers empty; reach with breakdowns more than 13 months back, 10 runs a day per ad account (best practices) — past that Meta leaves reach (and frequency, cost per 1,000 people reached) out and says "Reach-related metric breakdowns are unavailable due to rate limit threshold".'
 
 /**
  * The run, checked to be the chosen ad account's and a report run, with its state — in ONE read (review A F5): Nexus's
@@ -1161,7 +1164,7 @@ export async function savedReports(input: SavedInput) {
       const portfolio = input.scope === 'portfolio'
       const path = portfolio ? `${await ownPortfolio(account)}/ads_reporting_mmm_reports` : `${act(account.adAccountId)}/ads_reporting_mmm_reports`
       const read = await listPage(connectionId, `saved.mmmReports.${portfolio ? 'portfolio' : 'account'}`, path, { fields: MMM_REPORT_FIELDS }, maxRows, after)
-      return { ...base, scope: portfolio ? 'portfolio' : 'account', items: read.rows.map((r) => ({ reportId: text(r.id), name: text(r.export_name), format: text(r.export_format), type: text(r.export_type), status: text(r.async_status), mmmStatus: text(r.mmm_status), startedAt: text(r.time_start), seen: typeof r.has_seen === 'boolean' ? r.has_seen : null })), nextAfter: read.nextAfter, notes: [...cannot('reference/ad-account/ads_reporting_mmm_reports'), 'Meta documents these nodes\' fields only in its SDK; the file itself is downloaded in Ads Reporting. Nexus\'s own MMM export: meta-ads-report action start with kind mmm.'] }
+      return { ...base, scope: portfolio ? 'portfolio' : 'account', items: read.rows.map((r) => ({ reportId: text(r.id), name: text(r.export_name), format: text(r.export_format), type: text(r.export_type), status: text(r.async_status), mmmStatus: text(r.mmm_status), startedAt: text(r.time_start), seen: typeof r.has_seen === 'boolean' ? r.has_seen : null })), more: read.more, nextAfter: read.nextAfter, notes: [...cannot('reference/ad-account/ads_reporting_mmm_reports'), 'Meta documents these nodes\' fields only in its SDK; the file itself is downloaded in Ads Reporting. Nexus\'s own MMM export: meta-ads-report action start with kind mmm.'] }
     }
     case 'mmm-schedules': {
       // IN-073 — the scheduled MMM exports; a portfolio schedule that does not name the chosen account is its id only.
@@ -1175,13 +1178,13 @@ export async function savedReports(input: SavedInput) {
           if (portfolio && !accounts.includes(account.adAccountId)) return { scheduleId: text(r.id), namesThisAdAccount: false }
           return { scheduleId: text(r.id), name: text(r.report_name), frequency: text(r.schedule_frequency), namesThisAdAccount: true, otherAdAccounts: accounts.filter((x) => x !== account.adAccountId).length, filtering: raw(r.filtering) }
         }),
-        nextAfter: read.nextAfter, notes: cannot('reference/ad-account/ads_reporting_mmm_schedulers'),
+        more: read.more, nextAfter: read.nextAfter, notes: cannot('reference/ad-account/ads_reporting_mmm_schedulers'),
       }
     }
     case 'exports': {
       // IN-074 — the portfolio's Ads Reporting exports (never their file or sharing links).
       const read = await listPage(connectionId, 'saved.exports', `${await ownPortfolio(account)}/ads_reporting_exports`, { fields: EXPORT_FIELDS }, maxRows, after)
-      return { ...base, items: read.rows.map((r) => ({ exportId: text(r.id), name: text(r.export_name), format: text(r.export_format), type: text(r.export_type), status: text(r.async_status), percent: num(r.async_percent_completion), startedAt: text(r.time_start), completedAt: text(r.time_completed), expiresAt: text(r.expiry_time), downloadedAt: text(r.export_download_time), shared: typeof r.is_sharing === 'boolean' ? r.is_sharing : null, sharingExpiresAt: text(r.link_sharing_expiration_time), seen: typeof r.has_seen === 'boolean' ? r.has_seen : null })), nextAfter: read.nextAfter, notes: [...cannot('reference/business/ads_reporting_exports'), 'Nexus never reads an export\'s file or sharing link (they may open without signing in): the file is downloaded in Ads Manager › Reports › Exports.'] }
+      return { ...base, items: read.rows.map((r) => ({ exportId: text(r.id), name: text(r.export_name), format: text(r.export_format), type: text(r.export_type), status: text(r.async_status), percent: num(r.async_percent_completion), startedAt: text(r.time_start), completedAt: text(r.time_completed), expiresAt: text(r.expiry_time), downloadedAt: text(r.export_download_time), shared: typeof r.is_sharing === 'boolean' ? r.is_sharing : null, sharingExpiresAt: text(r.link_sharing_expiration_time), seen: typeof r.has_seen === 'boolean' ? r.has_seen : null })), more: read.more, nextAfter: read.nextAfter, notes: [...cannot('reference/business/ads_reporting_exports'), 'Nexus never reads an export\'s file or sharing link (they may open without signing in): the file is downloaded in Ads Manager › Reports › Exports.'] }
     }
     case 'report-builder': {
       // IN-075 — Ads Reporting's Report Builder table (the only edge with a comparison period, IN-026).
@@ -1226,14 +1229,14 @@ export async function savedReports(input: SavedInput) {
       return {
         ...base, query: { ...query }, rowSets: read.rows.length,
         tableAsMeta: { data: raw(read.rows), summary: raw(read.summary) },
-        nextAfter: read.nextAfter,
+        more: read.more, nextAfter: read.nextAfter,
         notes: [...cannot('reference/ad-account/reporting'), 'Meta documents this edge\'s parameters but not its metric and dimension names or its rows\' shape: tableAsMeta is Meta\'s answer as it is (amounts in Meta\'s own units), for a person who may see ad spend. When Meta refuses a name, its sentence says which. The insights numbers with Nexus\'s units: meta-ads-numbers.'],
       }
     }
     case 'custom-metrics': {
       // IN-076 — the account's custom metrics (formula columns); querying them in insights is not documented.
       const read = await listPage(connectionId, 'saved.customMetrics', `${act(account.adAccountId)}/ad_custom_derived_metrics`, { fields: CUSTOM_METRIC_FIELDS }, maxRows, after)
-      return { ...base, items: read.rows.filter((r) => !r.ad_account_id || metaAdAccountId(r.ad_account_id) === account.adAccountId).map((r) => ({ metricId: text(r.id), ...pickText(r, 'name,description,formula,format_type,custom_derived_metric_type,permission,scope,saved_report_id,has_attribution_windows,has_inline_attribution_window,creation_time,deletion_time') })), nextAfter: read.nextAfter, notes: [...cannot('reference/ad-account/ad_custom_derived_metrics'), 'Meta answers custom metrics in Ads Manager\'s reports; how to ask one in the insights API is not documented (its error 2/1504042 "Invalid Custom Metrics" shows it exists): meta-ads-numbers asks Meta\'s own metrics, and Nexus computes a formula from them on request.'] }
+      return { ...base, items: read.rows.filter((r) => !r.ad_account_id || metaAdAccountId(r.ad_account_id) === account.adAccountId).map((r) => ({ metricId: text(r.id), ...pickText(r, 'name,description,formula,format_type,custom_derived_metric_type,permission,scope,saved_report_id,has_attribution_windows,has_inline_attribution_window,creation_time,deletion_time') })), more: read.more, nextAfter: read.nextAfter, notes: [...cannot('reference/ad-account/ad_custom_derived_metrics'), 'Meta answers custom metrics in Ads Manager\'s reports; how to ask one in the insights API is not documented (its error 2/1504042 "Invalid Custom Metrics" shows it exists): meta-ads-numbers asks Meta\'s own metrics, and Nexus computes a formula from them on request.'] }
     }
     case 'custom-pivots': {
       // IN-077 — the portfolio's custom breakdowns of saved reports (people's ids are never asked).
@@ -1244,7 +1247,7 @@ export async function savedReports(input: SavedInput) {
         query.saved_report_id = input.savedReportId
       }
       const read = await listPage(connectionId, 'saved.customPivots', `${await ownPortfolio(account)}/custom_pivots`, query, maxRows, after)
-      return { ...base, items: read.rows.map((r) => ({ pivotId: text(r.id), ...pickText(r, 'name,description,permission,scope,rules,creation_time,update_time') })), nextAfter: read.nextAfter, notes: [...cannot('reference/business/custom_pivots'), 'Saved reports have ids (saved_report_id) but Meta has no API to list, make or change them.'] }
+      return { ...base, items: read.rows.map((r) => ({ pivotId: text(r.id), ...pickText(r, 'name,description,permission,scope,rules,creation_time,update_time') })), more: read.more, nextAfter: read.nextAfter, notes: [...cannot('reference/business/custom_pivots'), 'Saved reports have ids (saved_report_id) but Meta has no API to list, make or change them.'] }
     }
     case 'pivot-preview': {
       // IN-077 — which campaigns, ad sets and ads fall in each group of a custom breakdown, for the chosen ad account only.
@@ -1267,21 +1270,21 @@ export async function savedReports(input: SavedInput) {
       return {
         ...base,
         items: read.rows.filter((r) => metaAdAccountId(r.account_id) === account.adAccountId).map((r) => ({ campaignId: text(r.campaign_id), campaignName: text(r.campaign_name), adSetId: text(r.adset_id), adSetName: text(r.adset_name), adId: text(r.ad_id), adName: text(r.ad_name), groups: Array.isArray(r.custom_breakdown) ? r.custom_breakdown.map(text) : null })),
-        counts: raw(read.summary?.counts), nextAfter: read.nextAfter,
+        counts: raw(read.summary?.counts), more: read.more, nextAfter: read.nextAfter,
         notes: ['Asked about the chosen ad account only; a row of another ad account is left out. Meta does not document the preview\'s dimensions: its own answer decides.'],
       }
     }
     case 'report-specs': {
       // IN-078 — the page lists the edge with empty Reading / Creating sections: Nexus asks it plainly; Meta's answer decides.
       const read = await listPage(connectionId, 'saved.reportSpecs', `${act(account.adAccountId)}/report_specs`, {}, maxRows, after)
-      return { ...base, tableAsMeta: raw(read.rows), count: read.rows.length, nextAfter: read.nextAfter, notes: [...cannot('reference/ad-account/report_specs'), 'Meta documents no field of a report spec: Meta\'s answer as it is (it may hold amounts), for a person who may see ad spend.'] }
+      return { ...base, tableAsMeta: raw(read.rows), count: read.rows.length, more: read.more, nextAfter: read.nextAfter, notes: [...cannot('reference/ad-account/report_specs'), 'Meta documents no field of a report spec: Meta\'s answer as it is (it may hold amounts), for a person who may see ad spend.'] }
     }
     case 'measurement': {
       // IN-079 — measurement-partner reports (multi-touch attribution, partner lift, MMM v2); never their download links.
       const reportType = input.reportType ?? null
       if (!reportType) throw new MetaLiveRefusal(`Name the reportType (${MEASUREMENT_TYPES.join(', ')}): Meta requires it.`)
       const read = await listPage(connectionId, 'saved.measurement', `${await ownPortfolio(account)}/measurement_reports`, { fields: MEASUREMENT_FIELDS, report_type: reportType }, maxRows, after)
-      return { ...base, reportType, items: read.rows.map((r) => ({ reportId: text(r.id), type: text(r.report_type), status: text(r.status), metadataAsMeta: raw(r.metadata) })), nextAfter: read.nextAfter, notes: ['Only a Meta measurement partner (MTA, lift or MMM vendor) publishes these to the business; with none, the list is empty. Nexus never reads their download links (files that may open without signing in). metadataAsMeta is Meta\'s answer as it is.', ...cannot('reference/business/third_party_partner_panel_requests')] }
+      return { ...base, reportType, items: read.rows.map((r) => ({ reportId: text(r.id), type: text(r.report_type), status: text(r.status), metadataAsMeta: raw(r.metadata) })), more: read.more, nextAfter: read.nextAfter, notes: ['Only a Meta measurement partner (MTA, lift or MMM vendor) publishes these to the business; with none, the list is empty. Nexus never reads their download links (files that may open without signing in). metadataAsMeta is Meta\'s answer as it is.', ...cannot('reference/business/third_party_partner_panel_requests')] }
     }
     case 'partner-studies': {
       // IN-900 / IN-901 — third-party panel studies (brand lift, panel sales attribution, reach), one-off or recurring.
@@ -1293,7 +1296,7 @@ export async function savedReports(input: SavedInput) {
       for (const t of types) if (!(STUDY_TYPES as readonly string[]).includes(t)) throw new MetaLiveRefusal(`studyTypes are ${STUDY_TYPES.join(', ')}.`)
       const query: Record<string, MetaQueryValue> = { fields: recurring ? RECURRING_FIELDS : PANEL_FIELDS, ...(statuses.length ? { status: statuses } : {}), ...(types.length ? { study_type: types } : {}) }
       const read = await listPage(connectionId, `saved.partnerStudies.${recurring ? 'recurring' : 'once'}`, `${await ownPortfolio(account)}/${recurring ? 'third_party_partner_panel_recurring_requests' : 'third_party_partner_panel_requests'}`, query, maxRows, after)
-      return { ...base, recurring, items: read.rows.map((r) => ({ requestId: text(r.id), ...pickText(r, recurring ? 'description,country,status,study_type,cadence,start_time,end_time,created_time,modified_time,owner_panel_id,owner_panel_name,owner_instance_id,adentities_ids' : 'description,country,status,study_type,study_start_time,study_end_time,created_time,modified_time,owner_panel_id,owner_panel_name,owner_instance_id,adentities_ids') })), nextAfter: read.nextAfter, notes: ['Panel studies are run by a Meta-approved measurement partner; with none set up, the list is empty (or Meta refuses: its sentence says why).', ...cannot('reference/business/third_party_partner_panel_requests')] }
+      return { ...base, recurring, items: read.rows.map((r) => ({ requestId: text(r.id), ...pickText(r, recurring ? 'description,country,status,study_type,cadence,start_time,end_time,created_time,modified_time,owner_panel_id,owner_panel_name,owner_instance_id,adentities_ids' : 'description,country,status,study_type,study_start_time,study_end_time,created_time,modified_time,owner_panel_id,owner_panel_name,owner_instance_id,adentities_ids') })), more: read.more, nextAfter: read.nextAfter, notes: ['Panel studies are run by a Meta-approved measurement partner; with none set up, the list is empty (or Meta refuses: its sentence says why).', ...cannot('reference/business/third_party_partner_panel_requests')] }
     }
     case 'partner-viewability': {
       // IN-902 — third-party viewability reports (daily: start_ds / end_ds required).
@@ -1303,7 +1306,7 @@ export async function savedReports(input: SavedInput) {
       if (!isDay(from) || !isDay(to) || to < from) throw new MetaLiveRefusal('The days are YYYY-MM-DD, first before last.')
       const query: Record<string, MetaQueryValue> = { fields: VIEWABILITY_FIELDS, start_ds: from, end_ds: to, ...(input.platform ? { platform: input.platform } : {}), ...(input.type ? { type: input.type } : {}) }
       const read = await listPage(connectionId, 'saved.partnerViewability', `${await ownPortfolio(account)}/third_party_partner_viewability_requests`, query, maxRows, after)
-      return { ...base, from, to, items: read.rows.map((r) => ({ requestId: text(r.id), ...pickText(r, 'description,ds,hour,metric,platform,status,total_file_count,created_time,modified_time,owner_instance_id') })), nextAfter: read.nextAfter, notes: ['Viewability reports come from a viewability partner Meta set up for the business; with none, the list is empty (or Meta refuses). Their files are not read here.'] }
+      return { ...base, from, to, items: read.rows.map((r) => ({ requestId: text(r.id), ...pickText(r, 'description,ds,hour,metric,platform,status,total_file_count,created_time,modified_time,owner_instance_id') })), more: read.more, nextAfter: read.nextAfter, notes: ['Viewability reports come from a viewability partner Meta set up for the business; with none, the list is empty (or Meta refuses). Their files are not read here.'] }
     }
   }
 }

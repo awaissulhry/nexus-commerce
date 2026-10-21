@@ -426,7 +426,8 @@ export async function graphRead(input: GraphReadInput) {
   let type: GraphNode
   if (/^act_/.test(node)) {
     if (metaAdAccountId(node) !== account.adAccountId) throw new MetaLiveRefusal('Only the ad account this business chose may be read (another account is refused, never read).')
-    if (edge !== undefined && !ACCOUNT_EDGES[edge]) {
+    // Step 7 re-review 2 — own keys only: "constructor" is no edge (a plain refusal, never a TypeError).
+    if (edge !== undefined && !Object.prototype.hasOwnProperty.call(ACCOUNT_EDGES, edge)) {
       throw new MetaLiveRefusal(`meta-ads-graph-read does not read "${edge}" of the ad account; it reads ${Object.keys(ACCOUNT_EDGES).join(', ')} (Pages and Instagram accounts: meta-ads-live).`)
     }
     type = edge === undefined ? 'AdAccount' : ACCOUNT_EDGES[edge]
@@ -435,7 +436,7 @@ export async function graphRead(input: GraphReadInput) {
     if (!id) throw new MetaLiveRefusal(`"${node}" is not a Meta object id (digits) or act_<the chosen account>.`)
     const kind = await objectKindOf(account, id)
     if (!kind) throw new MetaLiveRefusal('meta-ads-graph-read reads only a campaign, ad set, ad or creative Nexus has read for the ad account this business chose; this id is none of them (a new one appears after the next daily read).')
-    if (edge !== undefined && !OBJECT_EDGES[kind][edge]) {
+    if (edge !== undefined && !Object.prototype.hasOwnProperty.call(OBJECT_EDGES[kind], edge)) {
       const edges = Object.keys(OBJECT_EDGES[kind])
       throw new MetaLiveRefusal(`meta-ads-graph-read does not read "${edge}" of a ${kind}${edges.length ? `; it reads ${edges.join(', ')}` : ''}.`)
     }

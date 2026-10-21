@@ -363,6 +363,10 @@ export const META_SEARCH_TYPES: ReadonlySet<string> = new Set([
 function keyAllowed(route: string, key: string, query: URLSearchParams): boolean {
   return READ_KEYS.has(key) || ROUTE_KEYS.some((r) => r.route.test(route) && r.keys.has(key) && (!r.when || r.when(query)))
 }
+/** Step 7 re-review 2 — is the key one Nexus sends on this route at all (its value aside)? Only for the refusal's words. */
+function keyKnownHere(route: string, key: string): boolean {
+  return READ_KEYS.has(key) || ROUTE_KEYS.some((r) => r.route.test(route) && r.keys.has(key))
+}
 /** At most this long, a `fields` value (the longest Nexus asks is far shorter). */
 const MAX_FIELDS_LENGTH = 4000
 /** A field name that is (or holds) a token: `access_token`, `page_access_token`, … — never asked for. */
@@ -518,7 +522,9 @@ export function metaCallVerdict(input: { method: string; url: string; kind: stri
     return { problem: null, renewalClientId: search.get('client_id') ?? '' }
   }
   for (const key of seen) {
-    if (!keyAllowed(route, key, search)) return refuse(`the query key "${key}" is not one a Nexus read of Meta uses here`)
+    if (!keyAllowed(route, key, search)) {
+      return refuse(keyKnownHere(route, key) ? `the value of "${key}" is not one Nexus sends here` : `the query key "${key}" is not one a Nexus read of Meta uses here`)
+    }
   }
   // Step 9 — /search reads targeting options only (META_SEARCH_TYPES), never a person, a Page or a place.
   if (route === 'search' && !META_SEARCH_TYPES.has(search.get('type') ?? '')) return refuse('a Meta search reads targeting options only: its type is one Nexus names (META_SEARCH_TYPES)')

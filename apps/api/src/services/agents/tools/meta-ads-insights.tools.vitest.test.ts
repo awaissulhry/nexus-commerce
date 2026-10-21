@@ -623,10 +623,47 @@ describe('step 7 review round 1', () => {
     expect(cannot.items.find((c: any) => c.proof === 'reference/ad-account/ad_custom_derived_metrics').sentence).toMatch(/^Meta documents no API to create or change a custom metric/)
     expect(cannot.items.find((c: any) => c.proof === 'reference/business/custom_pivots').sentence).toMatch(/^Meta cannot make or change a custom breakdown/)
     const started = await data('meta-ads-report', { action: 'start', breakdowns: ['age'], from: '2025-01-01', to: '2025-03-31' })
-    expect(started.notes.join(' ')).toMatch(/min\(10, number of ad sets\) per 24 hours/)
-    expect(started.notes.join(' ')).toMatch(/this background run counts against Meta's 10 such runs a day per ad account.*WITHOUT an error/)
+    expect(started.notes.join(' ')).toMatch(/min\(10, number of ads\) per 24 hours/)
+    expect(started.notes.join(' ')).not.toMatch(/number of ad sets/)
+    expect(started.notes.join(' ')).toMatch(/this background run counts against Meta's 10 such runs a day per ad account.*Reach-related metric breakdowns are unavailable due to rate limit threshold/)
     expect(started.notes.join(' ')).not.toMatch(/a background report \(meta-ads-report\) gets them/)
     const mmm = await data('meta-ads-report', { action: 'start', kind: 'mmm' })
     expect(mmm.notes.join(' ')).toMatch(/Meta's quotas/)
+  })
+})
+
+describe('step 7 review round 2', () => {
+  it('3 — an empty page ends a read; one read costs at most ceil(maxRows / 100) + 5 Meta calls, then hands back the cursor', async () => {
+    h.answer = () => ({ data: [], paging: { cursors: { after: 'c2' }, next: 'https://graph.facebook.com/x' } })
+    const empty = await data('meta-ads-numbers', { maxRows: 200 })
+    expect(insightCalls()).toHaveLength(1)
+    expect(empty).toMatchObject({ rows: [], more: false, nextAfter: null })
+    h.calls.length = 0
+    let n = 0
+    h.answer = () => ({ data: [{ ...ROW, campaign_id: String(120000000005000 + n++) }], paging: { cursors: { after: `c${n}` }, next: 'https://graph.facebook.com/x' } })
+    const trickle = await data('meta-ads-numbers', { maxRows: 200 })
+    expect(insightCalls()).toHaveLength(7)
+    expect(trickle.rows).toHaveLength(7)
+    expect(trickle).toMatchObject({ more: true, nextAfter: 'c7' })
+  })
+  it('4 — every saved-reports view says when there is more', async () => {
+    h.answer = () => ({ data: [{ id: '7700000000001' }], paging: { cursors: { after: 'c2' }, next: 'https://graph.facebook.com/x' } })
+    for (const args of [{ view: 'mmm-reports' }, { view: 'mmm-schedules' }, { view: 'exports' }, { view: 'report-builder' }, { view: 'custom-metrics' }, { view: 'custom-pivots' }, { view: 'pivot-preview' }, { view: 'report-specs' }, { view: 'measurement', reportType: 'mmm_report_v2' }, { view: 'partner-studies' }, { view: 'partner-viewability' }]) {
+      expect(await data('meta-ads-saved-reports', { ...args, maxRows: 1 }), args.view).toMatchObject({ more: true, nextAfter: 'c2' })
+    }
+  })
+  it('7 — meta-ads-graph-read: Object.prototype\'s names are no edge and no field modifier — refused in words, nothing sent', async () => {
+    const { META_ADS_READ_TOOLS } = await import('./meta-ads-read.tools.js')
+    const graph = META_ADS_READ_TOOLS.find((t) => t.name === 'meta-ads-graph-read')!
+    const ask = (args: Record<string, unknown>) => graph.handler(graph.input.parse(args), allMoney as never)
+    for (const path of ['act_1234567890/constructor', `${CAMPAIGN}/constructor`]) {
+      const res = await ask({ path })
+      expect(res, path).toMatchObject({ ok: false, error: expect.stringMatching(/does not read "constructor"/) })
+    }
+    for (const modifier of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      const res = await ask({ path: 'act_1234567890/campaigns', fields: `id,insights.${modifier}(1){spend}` })
+      expect(res, modifier).toMatchObject({ ok: false, error: expect.stringMatching(/is not a modifier meta-ads-graph-read sends/) })
+    }
+    expect(h.calls).toHaveLength(0)
   })
 })
