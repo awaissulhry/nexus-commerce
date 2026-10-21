@@ -412,6 +412,42 @@ describe('read only by construction', () => {
       expect(q(`act_1234567890?fields=${encodeURIComponent(`promote_pages{id,${nested}{id}}`)}`), nested).toMatch(new RegExp(`never expands "${nested}" inside another field`))
     }
   })
+  it('step 14 review A2 — each new key only with a value Nexus sends', () => {
+    const q = (path: string) => ok(`${BASE}/${path}`)
+    const comments = '120000000000010_500000000000001/comments?fields=id'
+    const tags = '170000000000001/tags?fields=id'
+    for (const path of [
+      `${comments}&filter=toplevel`, `${comments}&filter=stream`, `${comments}&order=chronological`, `${comments}&order=reverse_chronological`, `${comments}&since=1760000000`,
+      `${tags}&posted_after=2026-10-01T00:00:00&posted_before=2026-10-21T00:00:00`, `${tags}&media_type=IMAGE`, `${tags}&media_type=IMAGE,VIDEO,CAROUSEL_ALBUM`,
+    ]) expect(q(path), path).toBeNull()
+    for (const [path, key] of [
+      [`${comments}&filter=all`, 'filter'], [`${comments}&filter=`, 'filter'], [`${comments}&order=newest`, 'order'], [`${comments}&order=CHRONOLOGICAL`, 'order'],
+      [`${comments}&since=2026-10-01`, 'since'], [`${comments}&since=-1`, 'since'], [`${comments}&since=1760000000000000`, 'since'],
+      [`${tags}&posted_after=2026-10-01`, 'posted_after'], [`${tags}&posted_after=2026-13-01T00:00:00`, 'posted_after'], [`${tags}&posted_before=2026-02-30T00:00:00`, 'posted_before'],
+      [`${tags}&posted_before=2026-10-01T00:00:00Z`, 'posted_before'], [`${tags}&media_type=STORY`, 'media_type'], [`${tags}&media_type=IMAGE,IMAGE`, 'media_type'],
+      [`${tags}&media_type=`, 'media_type'], [`${tags}&media_type=image`, 'media_type'],
+    ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
+  })
+  it('step 14 review A3 — people\'s lists never inside fields; reactions only as a count', () => {
+    const f = (fields: string) => ok(`${BASE}/120000000000010_500000000000001?fields=${encodeURIComponent(fields)}`)
+    for (const name of ['test_leads', 'ordered_comments', 'sharedposts', 'replies', 'blocked', 'ratings', 'likes', 'tags']) {
+      expect(f(`id,${name}`), name).toMatch(new RegExp(`never expands "${name}" inside fields`))
+      expect(f(`id,${name}{id}`), name).toMatch(new RegExp(`never expands "${name}"`))
+      expect(ok(`${BASE}/170000000000001/media?fields=${encodeURIComponent(`id,${name}.limit(5){id}`)}`), name).toMatch(new RegExp(`never expands "${name}"`))
+    }
+    // Their own edges still read (the path is not `fields`).
+    for (const path of ['600000000000001/test_leads?fields=id', '180000000000001/ordered_comments?fields=id', '120000000000010/blocked?fields=id,name', '190000000000001/replies?fields=id']) {
+      expect(ok(`${BASE}/${path}`), path).toBeNull()
+    }
+    for (const fields of ['id,reactions.limit(0).summary(total_count)', 'id,reactions.type(LOVE).limit(0).summary(total_count)', 'id,reactions.type(SAD).limit(0).summary(total_count),shares']) {
+      expect(f(fields), fields).toBeNull()
+    }
+    for (const fields of [
+      'id,reactions', 'id,reactions{id,name}', 'id,reactions.limit(100)', 'id,reactions.limit(1).summary(total_count)', 'id,reactions.summary(total_count)',
+      'id,reactions.limit(0).summary(total_count){id,name}', 'id,reactions.limit(0).summary(total_count).as(r)', 'id,reactions.type(LOVE).limit(0).summary(total_count).fields(name)',
+      'id,attachments{reactions{id}}', 'id,reactions.type(love).limit(0).summary(total_count)',
+    ]) expect(f(fields), fields).toMatch(/reactions inside fields only as a count/)
+  })
 })
 
 describe('signing and the token', () => {

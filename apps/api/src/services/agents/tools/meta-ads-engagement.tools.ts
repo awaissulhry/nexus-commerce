@@ -11,7 +11,7 @@
  *   meta-comments    Facebook comments of a Page post or ad post, one comment, its replies, counts (reactions per type,
  *                    comments, shares), public shares, catalog-ad posts with their comments, Instagram comments (also in
  *                    Instagram's order), one Instagram comment, its replies, @mentions and tags, the Page's blocked people
- *                    and reviews; Threads answered in words (CR-238, CR-468, EN-003…EN-005, EN-011, EN-015, EN-017…EN-020,
+ *                    and reviews; an ad's Threads post and its replies (CR-238, CR-468, EN-003…EN-005, EN-011, EN-015, EN-017…EN-020,
  *                    EN-027, EN-029, EN-030, EN-063, EN-927, EN-928)
  *
  * PEOPLE'S DATA (leads and comments: names, e-mails, phones, user ids, messages):
@@ -29,12 +29,13 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import type { AgentTool, ToolResult } from '../tool-types.js'
 import { connectionArg, guarded, lower, metaIdArg } from './meta-ads-read.tools.js'
 import {
-  COMMENT_FILTERS, COMMENT_ORDERS, COMMENT_VIEWS, FORM_STATUSES, FORM_VIEWS, LEAD_VIEWS, liveComments, liveLeadForms, liveLeads, MAX_DYNAMIC_POSTS,
+  COMMENT_FILTERS, COMMENT_ORDERS, COMMENT_VIEWS, FORM_STATUSES, FORM_VIEWS, isRealDay, LEAD_VIEWS, liveComments, liveLeadForms, liveLeads, MAX_DYNAMIC_POSTS,
   TAG_MEDIA_TYPES, type CommentsInput, type FormsInput, type LeadsInput,
 } from '../../marketing/meta-ads/live-engagement.js'
 
 const maxRowsArg = (dflt: number) => z.number().int().min(1).max(500).optional().describe(`at most this many rows (default ${dflt}, at most 500)`)
-const utcDayArg = (what: string) => z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe(`${what} (YYYY-MM-DD, UTC)`)
+// Review fix A4 — a real calendar day only (2026-13-01 or 2026-02-30 is refused before any call).
+const utcDayArg = (what: string) => z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isRealDay, 'not a calendar day').optional().describe(`${what} (YYYY-MM-DD, UTC)`)
 
 /** The args as given (zod has checked them); empty strings and absent values are null. */
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
@@ -108,7 +109,7 @@ const metaLeads: AgentTool = {
     + 'used by several ads holds more); for a call ad, its callback requests. lead (leadId): one lead — read only when its '
     + 'ad is the chosen ad account\'s or its form the chosen Page\'s. test (formId): the form\'s test lead. Each lead: when, '
     + 'which form and ad (organic: no ad), the answers by question key, the consent boxes exactly as Meta gives them, the '
-    + 'catalog item for catalog lead ads. export: Meta\'s lead file is a download on www.facebook.com, not its API, so '
+    + 'catalog item for catalog lead ads. export: Meta\'s lead file is a download on www.facebook.com, not the Graph API, so '
     + 'Nexus does not fetch it (view form with from / to reads the same leads). Real leads need Meta\'s App Review for '
     + 'leads_retrieval, Business Verification and a Live app, which this business has not asked for yet: until then Meta '
     + 'answers test leads only, its words say so when it refuses, and real leads stay in Meta\'s Leads Center. Read only.',
@@ -142,7 +143,7 @@ const metaComments: AgentTool = {
   input: z.object({
     view: z.preprocess(lower, z.enum(COMMENT_VIEWS)).describe(COMMENT_VIEWS.join(' | ')),
     postId: z.string().trim().regex(/^\d{1,25}_\d{1,25}$/).optional().describe('post, comment, replies, engagement, shares, dynamic-posts, dynamic-comments: a post of the chosen Page (<Page id>_<post id>, from meta-page-posts)'),
-    adId: metaIdArg('post, engagement, shares, dynamic-posts, instagram, instagram-ordered: an ad of the chosen ad account instead (its Facebook post or Instagram media)'),
+    adId: metaIdArg('post, engagement, shares, dynamic-posts, instagram, instagram-ordered: an ad of the chosen ad account instead (its Facebook post or Instagram media); threads, threads-replies: the ad whose Threads post is read'),
     commentId: z.string().trim().regex(/^\d{1,25}(_\d{1,25})?$/).optional().describe('comment, replies, engagement: a Facebook comment of that post (<post id>_<comment id>); instagram-comment, instagram-replies, mentioned-comment: an Instagram comment id'),
     mediaId: metaIdArg('instagram, instagram-ordered: a media of the chosen Instagram account; mentioned-media: a media whose caption @mentions it'),
     dynamicPostId: z.string().trim().regex(/^\d{1,25}(_\d{1,25})?$/).optional().describe('dynamic-comments: a catalog-ad post made from that post (from view dynamic-posts)'),
@@ -167,8 +168,10 @@ const metaComments: AgentTool = {
     + 'call, top level, both the post\'s and the ad\'s for a boosted post); instagram-ordered: as Instagram shows them '
     + '(all media of an ad); instagram-comment, instagram-replies (commentId); mentioned-comment (commentId), '
     + 'mentioned-media (mediaId): where someone @mentioned the account; tags: other people\'s posts tagging it. Threads: '
-    + 'not read (Nexus has no Threads account chosen). Only the chosen Page\'s posts and the chosen Instagram account\'s '
-    + 'media are read; anything else is refused. Instagram comments arrive by these reads (Nexus has no comment webhooks). '
+    + 'threads (adId): the Threads post of an ad of the chosen ad account and its counts; threads-replies: its direct replies '
+    + '(not for catalog ads, boosted posts or Instagram- / Page-backed Threads accounts). Only the chosen Page\'s posts, the '
+    + 'chosen Instagram account\'s media and the chosen ad account\'s ads are read, and a comment is confirmed by Meta '
+    + 'first; anything else is refused. Instagram comments arrive by these reads (Nexus has no comment webhooks). '
     + 'Meta answers some Page reads only to a Page token, and may then answer an empty list: the answer says so. '
     + 'Replying, hiding and deleting are change tools (a later Nexus step). Read only.',
   async handler(args): Promise<ToolResult> {
