@@ -83,6 +83,8 @@ const NOW = new Date('2026-10-21T00:00:00Z')
 const metaError = (code: string, extra: Partial<MetaFailure> = {}) => new MetaReadError({
   origin: 'meta', httpStatus: 400, code, authLost: false, throttled: false, permissionDenied: false, notFound: false, sentence: `Meta refused the read (${code}).`, ...extra,
 }, 'test')
+/** The reads of the pixel check itself (owner, partner portfolios, ad accounts per portfolio). */
+const PIXEL_CHECK_OPERATIONS = new Set(['datasets.pixelOwner', 'datasets.pixelAgencies', 'datasets.sharedAccounts'])
 const refusedCalls = () => h.calls
   .map((c) => [c.path, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' })])
   .filter(([, problem]) => problem)
@@ -233,7 +235,7 @@ describe('a pixel another business in Nexus uses is never read (review A4)', () 
   it.each(['access', 'stats', 'sources', 'quality', 'diagnostics', 'gateway', 'event-setup', 'quality-offline'])('view %s refuses it before reading it', async (view) => {
     takenPixel()
     expect((await run({ view })).error).toMatch(/another business in Nexus uses/)
-    expect(h.calls.filter((c) => c.path.startsWith(PIXEL) && c.operation !== 'datasets.pixelOwner' && !c.path.endsWith('/shared_accounts')).map((c) => c.path)).toEqual([])
+    expect(h.calls.filter((c) => c.path.startsWith(PIXEL) && !PIXEL_CHECK_OPERATIONS.has(c.operation)).map((c) => c.path)).toEqual([])
     expect(h.calls.some((c) => c.path === 'dataset_quality')).toBe(false)
   })
   it('list and detail show it as its id and the flag only', async () => {
@@ -284,6 +286,34 @@ describe('a pixel another business in Nexus uses is never read (review A4)', () 
     h.sharedAccountsFor = () => [{ account_id: OWN }]
     expect((await run({ view: 'sources' })).error).toMatch(/shared with another business portfolio whose ad accounts Meta does not show/)
     expect(refusedCalls()).toEqual([])
+  })
+  it('A-N6 — an owner or partner portfolio another business in Nexus uses makes the pixel taken, whatever Meta\'s lists say', async () => {
+    const PARTNER = '3333333333'
+    h.taken = [{ id: PARTNER }]
+    h.agenciesFor = () => [{ id: PARTNER }]
+    h.sharedAccountsFor = (req) => (req.query?.business === PARTNER ? [] : [{ account_id: OWN }])
+    expect(data(await run({ view: 'list' })).items).toEqual([{ pixelId: PIXEL, takenByAnotherBusiness: true }])
+    expect(h.calls.some((c) => c.path === `${PIXEL}/shared_accounts` && c.query?.business === PARTNER)).toBe(false)
+    h.agenciesFor = null
+    h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/agencies` ? [{ id: PARTNER }] : [])
+    expect((await run({ view: 'sources' })).error).toMatch(/another business in Nexus uses/)
+    h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : [])
+    h.taken = [{ id: '2222222222' }]
+    h.ownerFor = () => ({ owner_business: { id: '2222222222' } })
+    expect(data(await run({ view: 'list' })).items).toEqual([{ pixelId: PIXEL, takenByAnotherBusiness: true }])
+  })
+  it('S2 — one answer checks a pixel once', async () => {
+    h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `act_${OWN}/offline_conversion_data_sets` ? [{ id: PIXEL, name: 'Our set' }] : [])
+    await run({ view: 'legacy-offline', pixelId: PIXEL })
+    expect(h.calls.filter((c) => c.operation === 'datasets.pixelOwner')).toHaveLength(1)
+  })
+  it('A-N7 — access: a partner portfolio another business in Nexus uses is its id and the flag', async () => {
+    h.taken = [{ id: '3333333333' }]
+    h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/shared_agencies` && req.operation === 'datasets.sharedAgencies'
+      ? [{ id: '3333333333', name: 'Shop B portfolio' }, { id: '4444444444', name: 'Agency X' }] : [])
+    const res = data(await run({ view: 'access' }))
+    expect(res.partnerBusinesses.sharedAgencies).toEqual([{ id: '3333333333', takenByAnotherBusiness: true }, { id: '4444444444', name: 'Agency X', takenByAnotherBusiness: false }])
+    expect(JSON.stringify(res)).not.toMatch(/Shop B/)
   })
   it('A-N2 — gateway and legacy-offline: full rows only for checked datasets, any other by its id', async () => {
     h.taken = [{ id: OTHER_ACCOUNT }]
@@ -388,6 +418,16 @@ describe('D2 — who sends the events (view sources)', () => {
   it('B-N2 — both send and Meta deduplicates nothing: dedup, even when the coverage reaches the goal', async () => {
     setup({ browser: { Purchase: 10 }, server: { Purchase: 9 }, dqa: { coverage: 80, goal: 75, dedup: [key('event_id', 0), key('fbp', 0)] } })
     expect(data(await run({ view: 'sources' })).answer).toMatchObject({ gap: 'dedup', deduplicated: 'no', dedupCoveragePercent: 0 })
+  })
+  it('D2-N1 — both send and Meta\'s coverage is 0: dedup (Meta matched none), or unknown when the dedup sum says otherwise; no goal above 0: unknown', async () => {
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 9 }, dqa: { coverage: 0, goal: 75, dedup: [key('event_id', null)] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ gap: 'dedup', dedupCoveragePercent: null })
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 9 }, dqa: { coverage: 0, goal: 75, dedup: [] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ gap: 'dedup' })
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 9 }, dqa: { coverage: 0, goal: 75, dedup: [key('event_id', 20)] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ gap: 'unknown' })
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 9 }, dqa: { coverage: 50, goal: 0, dedup: [key('event_id', 50)] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ gap: 'unknown' })
   })
   it('B-N3 — a missing per-key share is not 0: no dedup sum, never "deduplicates none"', async () => {
     setup({ browser: { Purchase: 10 }, server: { Purchase: 9 }, dqa: { coverage: 80, goal: 75, dedup: [key('event_id', 0), key('fbp', null)] } })
@@ -566,8 +606,8 @@ describe('A-N5 — a custom conversion is read only through a checked pixel', ()
 
 describe('debug feeds never carry a buyer\'s data', () => {
   it('A-S1 — addresses without a scheme lose their query too; event-setup and value diagnostics are stripped', async () => {
-    expect(stripUrls(['shop.example/thanks?order=55&email=a@b.c', '/checkout/thanks?email=a@b.c', '//cdn.shop.example/a?b=1', 'Is it ready? yes']))
-      .toEqual(['shop.example/thanks', '/checkout/thanks', '//cdn.shop.example/a', 'Is it ready? yes'])
+    expect(stripUrls(['shop.example/thanks?order=55&email=a@b.c', '/checkout/thanks?email=a@b.c', '//cdn.shop.example/a?b=1', 'Is it ready? yes', '10.0.0.1/thanks?email=a@b.c', 'localhost:3000/checkout?email=a@b.c', 'version 1.2? no']))
+      .toEqual(['shop.example/thanks', '/checkout/thanks', '//cdn.shop.example/a', 'Is it ready? yes', '10.0.0.1/thanks', 'localhost:3000/checkout', 'version 1.2? no'])
     h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels
       : req.path === `${PIXEL}/event_rules` ? [{ id: '1', event_type: 'Purchase', rule: '{"url":{"i_contains":"thanks"}}', sample_urls: ['https://shop.example/thanks?email=a@b.c', 'shop.example/thanks?order=55'] }]
         : req.path === `${PIXEL}/extractors` ? [{ id: '2', event_type: 'Purchase', domain_uri: 'https://shop.example/p?ref=x' }] : [])

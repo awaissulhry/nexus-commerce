@@ -246,38 +246,59 @@ export async function pixelAccounts(account: MetaChosenAccount, pixelId: string,
 }
 
 /**
- * Is this pixel also used by another business in Nexus? Checked every time, never assumed (review A-N1). Nexus can tell
- * only ad accounts another business chose (nexus_meta_links_taken: ad accounts, Pages, Instagram accounts — no business
- * portfolios), and Meta lists a pixel's ad accounts only per business portfolio (shared_accounts, `business` required;
- * ads-pixel reference: owner_business, edge shared_agencies "Agencies or other businesses this pixel is shared with").
- * So:
- *   - taken: an ad account it is connected to in the chosen portfolio, or in a portfolio it is shared with, is one
- *     another business in Nexus chose;
- *   - unchecked (every view refuses it): it is owned by another portfolio (Nexus cannot tell whose); the chosen ad
- *     account is not among its ad accounts in the chosen portfolio (then Meta's lists do not show where it is used); any
- *     of these reads is refused or cut; it is shared with more portfolios than Nexus checks at once;
+ * Is this pixel also used by another business in Nexus? Checked every time, never assumed (reviews A-N1, A-N6). Nexus
+ * knows the ad accounts another business chose and their business portfolios (nexus_meta_links_taken AD_ACCOUNT and
+ * PORTFOLIO, step 10), and Meta lists a pixel's ad accounts only per portfolio (shared_accounts, `business` required;
+ * ads-pixel reference: owner_business, edge shared_agencies "Agencies or other businesses this pixel is shared with";
+ * the sharing guides and SDK also read /agencies). So:
+ *   - taken: its owner portfolio or a portfolio it is shared with (shared_agencies or agencies) is one another
+ *     business's chosen ad account belongs to — whatever Meta's ad-account lists say —, or an ad account it is
+ *     connected to in the chosen portfolio or a partner portfolio is one another business chose. (The chosen portfolio
+ *     itself is not judged as a whole: two businesses may share one; its ad-account list is read in full instead);
+ *   - unchecked (every view refuses it): it is owned by another portfolio; the chosen ad account is not among its ad
+ *     accounts in the chosen portfolio; any of these reads is refused or cut; it is shared with more portfolios than
+ *     Nexus checks at once;
  *   - free: all of these read in full, and none of them hit.
+ * One answer checks each pixel once (review S2: verdicts are kept per chosen-account read, i.e. per answer).
  */
-export async function pixelVerdict(account: MetaChosenAccount, pixelId: string): Promise<{ taken: boolean } | { unchecked: string }> {
+export function pixelVerdict(account: MetaChosenAccount, pixelId: string): Promise<{ taken: boolean } | { unchecked: string }> {
+  let cache = VERDICTS.get(account)
+  if (!cache) { cache = new Map(); VERDICTS.set(account, cache) }
+  let verdict = cache.get(pixelId)
+  if (!verdict) { verdict = checkPixel(account, pixelId); cache.set(pixelId, verdict) }
+  return verdict
+}
+
+/** Verdicts per chosen-account object (one per answer: metaChosenAccount reads a fresh one each time). */
+const VERDICTS = new WeakMap<MetaChosenAccount, Map<string, Promise<{ taken: boolean } | { unchecked: string }>>>()
+
+async function checkPixel(account: MetaChosenAccount, pixelId: string): Promise<{ taken: boolean } | { unchecked: string }> {
   if (!account.businessId) return { unchecked: 'the chosen ad account belongs to no business portfolio Nexus knows, and Meta lists a pixel\'s ad accounts per portfolio' }
-  const owner = await part(async () => {
-    const body = (await metaReadOne({ connectionId: account.connectionId }, { operation: 'datasets.pixelOwner', path: pixelId, query: { fields: 'owner_business{id}' } })).body as { owner_business?: { id?: unknown } | null }
-    return { ownerId: body.owner_business && typeof body.owner_business === 'object' ? idText(body.owner_business.id) : null }
-  })
+  const [owner, sharedAgencies, agencies] = await Promise.all([
+    part(async () => {
+      const body = (await metaReadOne({ connectionId: account.connectionId }, { operation: 'datasets.pixelOwner', path: pixelId, query: { fields: 'owner_business{id}' } })).body as { owner_business?: { id?: unknown } | null }
+      return { ownerId: body.owner_business && typeof body.owner_business === 'object' ? idText(body.owner_business.id) : null }
+    }),
+    part(() => readRows(account.connectionId, 'datasets.pixelAgencies', `${pixelId}/shared_agencies`, { fields: 'id' }, MAX_PIXEL_AGENCIES + 1)),
+    part(() => readRows(account.connectionId, 'datasets.pixelAgencies', `${pixelId}/agencies`, { fields: 'id' }, MAX_PIXEL_AGENCIES + 1)),
+  ])
   if ('refused' in owner) return { unchecked: owner.refused }
+  if ('refused' in sharedAgencies) return { unchecked: sharedAgencies.refused }
+  if ('refused' in agencies) return { unchecked: agencies.refused }
   const { ownerId } = owner
-  if (ownerId !== account.businessId) return { unchecked: ownerId ? 'the pixel is owned by another business portfolio, and Nexus cannot tell whether that portfolio is another business in Nexus' : 'Meta names no owner portfolio for the pixel' }
+  const partners = [...new Set([...sharedAgencies.rows, ...agencies.rows].map((r) => idText(r.id)).filter((id): id is string => !!id && id !== account.businessId))]
+  // Review A-N6 — a portfolio another business's chosen ad account belongs to: taken, before any of Meta's lists.
+  const portfolios = [...partners, ...(ownerId && ownerId !== account.businessId ? [ownerId] : [])]
+  if ((await takenIds('PORTFOLIO', portfolios)).size > 0) return { taken: true }
+  if (ownerId !== account.businessId) return { unchecked: ownerId ? 'the pixel is owned by another business portfolio' : 'Meta names no owner portfolio for the pixel' }
   const accounts = await part(() => pixelAccounts(account, pixelId, 200))
   if ('refused' in accounts) return { unchecked: accounts.refused }
   if (accounts.usedByAnotherBusiness) return { taken: true }
   if (accounts.more) return { unchecked: 'the pixel is connected to more ad accounts than Nexus reads at once (200)' }
   if (!accounts.items.some((a) => a.adAccountId === account.adAccountId)) return { unchecked: 'Meta does not list the chosen ad account among the pixel\'s ad accounts in its portfolio, so where else it is used cannot be seen' }
-  // The portfolios it is shared with: their ad accounts it is connected to, each read like the chosen portfolio's.
-  const agencies = await part(() => readRows(account.connectionId, 'datasets.pixelAgencies', `${pixelId}/shared_agencies`, { fields: 'id' }, MAX_PIXEL_AGENCIES + 1))
-  if ('refused' in agencies) return { unchecked: agencies.refused }
-  const others = agencies.rows.map((r) => idText(r.id)).filter((id): id is string => !!id && id !== account.businessId)
-  if (agencies.more || others.length > MAX_PIXEL_AGENCIES) return { unchecked: `the pixel is shared with more business portfolios than Nexus checks at once (${MAX_PIXEL_AGENCIES})` }
-  for (const businessId of others) {
+  if (sharedAgencies.more || agencies.more || partners.length > MAX_PIXEL_AGENCIES) return { unchecked: `the pixel is shared with more business portfolios than Nexus checks at once (${MAX_PIXEL_AGENCIES})` }
+  // The partner portfolios: their ad accounts it is connected to, each read like the chosen portfolio's.
+  for (const businessId of partners) {
     const read = await part(() => readRows(account.connectionId, 'datasets.sharedAccounts', `${pixelId}/shared_accounts`, { business: businessId, fields: 'account_id' }, 200))
     if ('refused' in read) return { unchecked: `the pixel is shared with another business portfolio whose ad accounts Meta does not show (${read.refused})` }
     if (read.more) return { unchecked: 'the pixel is connected to more ad accounts of a partner portfolio than Nexus reads at once (200)' }
@@ -285,6 +306,17 @@ export async function pixelVerdict(account: MetaChosenAccount, pixelId: string):
     if (taken.size > 0) return { taken: true }
   }
   return { taken: false }
+}
+
+/** Portfolio rows (`{ id, name }`): one another business in Nexus uses is its id and the flag only (review A-N7). */
+export async function maskedPortfolios(rows: unknown[]): Promise<unknown[]> {
+  const ids = rows.map((r) => (r && typeof r === 'object' ? idText((r as { id?: unknown }).id) : null)).filter((id): id is string => !!id)
+  const taken = await takenIds('PORTFOLIO', ids)
+  return rows.map((r) => {
+    const id = r && typeof r === 'object' ? idText((r as { id?: unknown }).id) : null
+    if (!id) return r
+    return taken.has(id) ? { id, takenByAnotherBusiness: true } : { ...(plain(r, 1) as Record<string, unknown>), takenByAnotherBusiness: false }
+  })
 }
 
 /** At most this many partner portfolios of a pixel are checked (each one more read). */
@@ -678,8 +710,10 @@ export async function audiencesView(input: AudiencesInput) {
       const requestStatus = input.requestStatus && (SHARING_REQUEST_STATUSES as readonly string[]).includes(input.requestStatus) ? input.requestStatus : null
       const requests = (edge: 'initiated_audience_sharing_requests' | 'received_audience_sharing_requests', partnerKey: string) => part(async () => {
         const read = await readRows(connectionId, `audiences.${edge}`, `${businessId}/${edge}`, { fields: SHARING_REQUEST_FIELDS, ...(partner ? { [partnerKey]: partner } : {}), ...(requestStatus ? { request_status: requestStatus } : {}) }, maxRows)
-        return read.rows.map((r) => ({
-          requestId: idText(r.id), initiator: plain(r.initiator, 1) ?? null, recipient: plain(r.recipient, 1) ?? null, relationshipType: plain(r.relationship_type, 1) ?? null,
+        // Review A-N7 — the initiator and recipient portfolios: one another business in Nexus uses is its id and the flag.
+        const parties = await maskedPortfolios(read.rows.flatMap((r) => [r.initiator ?? null, r.recipient ?? null]))
+        return read.rows.map((r, i) => ({
+          requestId: idText(r.id), initiator: parties[2 * i] ?? null, recipient: parties[2 * i + 1] ?? null, relationshipType: plain(r.relationship_type, 1) ?? null,
           requestStatus: text(r.request_status), requestType: text(r.request_type),
           // Review A3 / A-N3 — the audiences of a sharing request (sent or received): their ids only.
           customAudiences: Array.isArray(r.custom_audiences) ? r.custom_audiences.map((a) => ({ audienceId: idOf(a) })).filter((a) => a.audienceId) : [],

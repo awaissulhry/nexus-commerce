@@ -296,7 +296,7 @@ describe('what an audience touches', () => {
     expect(res.signLink).toBe(`https://business.facebook.com/ads/manage/customaudiences/tos/?act=${OWN}`)
   })
   it('business-sharing: another account\'s audience is its id (and the flag); a received request offers audience ids only', async () => {
-    h.taken = [{ id: OTHER_ACCOUNT }]
+    h.taken = [{ id: OTHER_ACCOUNT }, { id: '2222222222' }]
     h.rowsFor = (req) => {
       if (req.path === '9876543210/shared_audience_permissions') {
         return [
@@ -306,7 +306,7 @@ describe('what an audience touches', () => {
         ]
       }
       if (req.path === '9876543210/received_audience_sharing_requests') return [{ id: '77', request_status: 'PENDING', custom_audiences: [{ id: '120000000000406', name: 'Offered' }] }]
-      if (req.path === '9876543210/initiated_audience_sharing_requests') return [{ id: '78', request_status: 'PENDING', custom_audiences: [{ id: AUD, name: 'Sent audience' }] }]
+      if (req.path === '9876543210/initiated_audience_sharing_requests') return [{ id: '78', request_status: 'PENDING', initiator: { id: '9876543210', name: 'Shop A portfolio' }, recipient: { id: '2222222222', name: 'Shop B portfolio' }, custom_audiences: [{ id: AUD, name: 'Sent audience' }] }]
       return []
     }
     const res = data(await run({ view: 'business-sharing' }))
@@ -317,7 +317,9 @@ describe('what an audience touches', () => {
     ])
     expect(res.requestsReceived[0].customAudiences).toEqual([{ audienceId: '120000000000406' }])
     expect(res.requestsSent[0].customAudiences).toEqual([{ audienceId: AUD }])
-    expect(JSON.stringify(res)).not.toMatch(/Theirs|Elsewhere|Offered|Sent audience/)
+    // Review A-N7 — a portfolio another business in Nexus uses is its id and the flag.
+    expect(res.requestsSent[0]).toMatchObject({ initiator: { id: '9876543210', name: 'Shop A portfolio', takenByAnotherBusiness: false }, recipient: { id: '2222222222', takenByAnotherBusiness: true } })
+    expect(JSON.stringify(res)).not.toMatch(/Theirs|Elsewhere|Offered|Sent audience|Shop B/)
     expect(h.calls.find((c) => c.path === '9876543210/shared_audience_permissions')?.query?.fields).toBe('audience{id,name,account_id},share_account_id,share_account_name')
   })
   it('business-sharing needs the chosen account\'s business portfolio', async () => {

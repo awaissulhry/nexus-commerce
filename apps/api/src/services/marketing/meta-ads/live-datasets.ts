@@ -74,7 +74,7 @@ import { MetaReadError } from './errors.js'
 import { metaChosenAccount, objectKindOf, type MetaChosenAccount } from './live.js'
 import { decimalToMicros, minorOf } from './money.js'
 import { takenIds } from './taken.js'
-import { act, audienceRow, bool, chosenPixelIds, num, ownPixel, ownPixelState, part, pickRow, pixelAccounts, pixelVerdict, plain, readRows, refuse, TAKEN_PIXEL, text } from './live-audiences.js'
+import { act, audienceRow, bool, chosenPixelIds, maskedPortfolios, num, ownPixel, ownPixelState, part, pickRow, pixelAccounts, pixelVerdict, plain, readRows, refuse, TAKEN_PIXEL, text } from './live-audiences.js'
 
 export const DATASET_VIEWS = [
   'list', 'portfolio', 'detail', 'access', 'stats', 'sources', 'quality', 'quality-offline', 'quality-legacy', 'diagnostics', 'gateway',
@@ -189,10 +189,11 @@ export function statsWindows(hours: number, now: Date = new Date()): Array<{ sta
   return Array.from({ length: count }, (_, i) => ({ start: start + i * length, end: i === count - 1 ? end : start + (i + 1) * length }))
 }
 
-const WEB_ADDRESS_QUERY = /((?:[a-z][a-z0-9+.-]*:)?\/\/[^\s?#"'<>]*|(?<![\w@.-])(?:[a-z0-9-]+\.)+[a-z]{2,63}(?::\d{1,5})?(?:\/[^\s?#"'<>]*)?|(?<![\w\/.:-])\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi
+const WEB_ADDRESS_QUERY = /((?:[a-z][a-z0-9+.-]*:)?\/\/[^\s?#"'<>]*|(?<![\w@.:-])(?:(?:[a-z0-9-]+\.)+[a-z]{2,63}|\d{1,3}(?:\.\d{1,3}){3}|localhost)(?::\d{1,5})?(?:\/[^\s?#"'<>]*)?|(?<![\w\/.:-])\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi
 /** Review A5 / A-S1 — every web address in Meta's answer without its query and fragment, at any depth. */
 export function stripUrls(value: unknown, depth = 0): unknown {
-  // With a scheme, or without one (shop.example/thanks?…, //shop.example?…, a path /thanks?…): never the query.
+  // With a scheme, or without one (shop.example/thanks?…, 10.0.0.1/…?…, localhost:3000/…?…, //shop.example?…, a path
+  // /thanks?…): never the query (review S1).
   if (typeof value === 'string') return value.replace(WEB_ADDRESS_QUERY, '$1')
   if (depth > 8) return value
   if (Array.isArray(value)) return value.map((v) => stripUrls(v, depth + 1))
@@ -364,8 +365,8 @@ export type QualityEvidence = { refused: true } | { row: boolean; matchQualitySc
  *   - server (review B2): SERVER_ONLY and the Dataset Quality API must agree — server events show there as a
  *     match-quality score, an event coverage or server events carrying a dedup key; else unknown;
  *   - browserAndServer: yes when both are yes; no only when one side is yes and the other no; else unknown;
- *   - the gap when both send: dedup first when Meta deduplicates nothing (the summed dedup coverage is 0: double
- *     counting, review B-N2); else Meta's documented pair alone, event_coverage.percentage against goal_percentage —
+ *   - the gap when both send: dedup first when Meta deduplicates nothing (the summed dedup coverage is 0, or Meta's
+ *     event coverage is 0 with no dedup sum above 0: double counting, reviews B-N2, D2-N1); else Meta's documented pair alone, event_coverage.percentage against goal_percentage —
  *     none at or above the goal, coverage below it (review B-N1; the summed dedup coverage is information only); no
  *     coverage or no goal: unknown. The dedup sum is null when any key's share is missing (review B-N3: missing data is
  *     never "deduplicates none").
@@ -391,7 +392,11 @@ export function sendersVerdict(input: { browserCount: number | null; serverCount
   const goal = read?.goalPercent ?? null
   const deduplicated: YesNo = both !== 'yes' || dedupCoverage === null ? 'unknown' : dedupCoverage > 0 ? 'yes' : 'no'
   const gap = both === 'yes'
-    ? dedupCoverage === 0 ? 'dedup' : eventCoverage === null || goal === null ? 'unknown' : eventCoverage >= goal ? 'none' : 'coverage'
+    // Review D2-N1 — Meta's coverage counts browser events that share a dedup key with a server event: 0 means Meta
+    // matched none (the double-counting signal), unless the dedup sum says otherwise; `none` needs a goal above 0.
+    ? dedupCoverage === 0 ? 'dedup'
+      : eventCoverage === 0 ? (dedupCoverage !== null && dedupCoverage > 0 ? 'unknown' : 'dedup')
+        : eventCoverage === null || goal === null || goal <= 0 ? 'unknown' : eventCoverage >= goal ? 'none' : 'coverage'
     : server === 'no' && browser === 'yes' ? 'server'
       : browser === 'no' && server === 'yes' ? 'browser'
         : 'unknown'
@@ -597,8 +602,9 @@ export async function datasetsView(input: DatasetsInput) {
         : Promise.resolve({ refused: 'The chosen ad account belongs to no business portfolio Nexus knows, and Meta lists a pixel\'s people per portfolio.' })
       const [accounts, sharedAgencies, agencies, users] = await Promise.all([
         part(() => pixelAccounts(account, pixelId, maxRows)),
-        part(async () => (await readRows(connectionId, 'datasets.sharedAgencies', `${pixelId}/shared_agencies`, { fields: 'id,name' }, maxRows)).rows.map((r) => pickRow(r, ['id', 'name']))),
-        part(async () => (await readRows(connectionId, 'datasets.agencies', `${pixelId}/agencies`, { fields: 'id,name' }, maxRows)).rows.map((r) => pickRow(r, ['id', 'name']))),
+        // Review A-N7 — a partner portfolio another business in Nexus uses: its id and the flag only.
+        part(async () => maskedPortfolios((await readRows(connectionId, 'datasets.sharedAgencies', `${pixelId}/shared_agencies`, { fields: 'id,name' }, maxRows)).rows.map((r) => pickRow(r, ['id', 'name'])))),
+        part(async () => maskedPortfolios((await readRows(connectionId, 'datasets.agencies', `${pixelId}/agencies`, { fields: 'id,name' }, maxRows)).rows.map((r) => pickRow(r, ['id', 'name'])))),
         people,
       ])
       return {
