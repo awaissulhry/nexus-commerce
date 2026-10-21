@@ -68,6 +68,11 @@ export interface MetaChangeRequest {
   prepare?: (done: ReadonlyArray<{ request: MetaChangeRequest; result: MetaChangeResult }>) => Promise<Record<string, string>>
   /** The capability grant Meta needs for it (D6): Meta refusing it for access answers with the no-grant controls. */
   grant?: string
+  // ── step 36 (lead forms, test leads) ──
+  /** Never read back after it is made (a test lead: Nexus keeps Meta's answer, the new id, and never reads a lead). */
+  skipReadBack?: true
+  /** Meta's codes this request may meet, in plain words (base code → sentence), added to the step's sentence. */
+  explain?: Readonly<Record<string, string>>
 }
 
 export interface MetaChangeDraft {

@@ -100,3 +100,32 @@ export async function metaStoredObject(objectId: string): Promise<{ adAccountId:
   if (ad) return { adAccountId: ad.adAccountId, kind: 'ad' }
   return null
 }
+
+/**
+ * Meta step 36 (Q1, the Page token mode): the Facebook Page this business chose through this Meta connection (its PAGE
+ * MetaAccountLink, digits only), or null. Read in the business the call runs in (row-level security): a Page another
+ * business chose is never this one. The ONLY Page whose own token the gateway ever reads (meta-page-token.ts).
+ */
+export async function metaChosenPageOf(connectionId: string): Promise<string | null> {
+  const link = await prisma.metaAccountLink.findFirst({ where: { connectionId, product: 'PAGE' }, select: { externalId: true } })
+  return link?.externalId && /^\d{1,25}$/.test(link.externalId) ? link.externalId : null
+}
+
+/** The tools whose change records name what Nexus made on a Page (step 36: lead forms and test leads). */
+export const META_LEAD_FORM_CREATE_TOOL = 'create-meta-lead-form'
+export const META_LEAD_FORM_SET_TOOL = 'set-meta-lead-form'
+
+/**
+ * Meta step 36: did Nexus make this object on this Page, for the business the call runs in? Its change records say so
+ * (AgentChange, row-level security: only this business's rows): a lead form create-meta-lead-form made (`after.formId`),
+ * or a TEST lead set-meta-lead-form made (`after.testLeadId`). A real lead is never in them, so it is never one.
+ */
+export async function metaPageObjectNexusMade(kind: 'leadform' | 'testlead', objectId: string, pageId: string): Promise<boolean> {
+  const row = await prisma.agentChange.findFirst({
+    where: kind === 'leadform'
+      ? { toolName: META_LEAD_FORM_CREATE_TOOL, AND: [{ after: { path: ['formId'], equals: objectId } }, { after: { path: ['pageId'], equals: pageId } }] }
+      : { toolName: META_LEAD_FORM_SET_TOOL, AND: [{ after: { path: ['testLeadId'], equals: objectId } }, { after: { path: ['pageId'], equals: pageId } }] },
+    select: { id: true },
+  })
+  return row !== null
+}

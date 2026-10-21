@@ -100,6 +100,8 @@ export interface MetaWriteRequest {
 /** The edges a Nexus change writes on: step 18's budget schedules; step 39's brand-safety edges. */
 export type MetaWriteEdge = 'budget_schedules' | 'brand_safety_content_filter_levels' | 'block_list_drafts' | 'publisher_block_lists' | 'agencies'
   | 'assigned_users' | 'auto_applied_ad_accounts' | 'content_block_lists' | 'content' | 'applied_ad_accounts'
+  // Step 36 — a lead form on the chosen Page, a test lead on a form of it.
+  | 'leadgen_forms' | 'test_leads'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):

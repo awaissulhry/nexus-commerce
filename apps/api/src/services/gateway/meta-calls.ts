@@ -31,6 +31,8 @@
  *     stored token (a caller that names one is refused); the verdict hands its client_id back and gateway.ts sends it
  *     only when that is the connection's own app;
  *   - a caller's own headers are refused (no method override or other header travels on a Meta call).
+ * Step 36: the lead-form changes of the chosen Facebook Page (meta-lead-form-rules.ts), each with the Page's own token,
+ * which the gateway alone reads (`auth: 'page'`, meta-page-token.ts).
  * Writes (step 17, 2026-10-21) are judged apart, by metaWriteVerdict below: an ALLOW-list of exact (method, path shape,
  * body keys and values) that Nexus's own change tools send — today a status change of one campaign, ad set or ad, and
  * Meta's check of it (validate_only, a campaign's only). Step 18 (2026-10-21) adds the settings changes of a campaign,
@@ -49,6 +51,7 @@ import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
 import { META_SETTINGS_WRITE_RULES } from './meta-settings-rules.js'
 import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
+import { META_LEAD_FORM_WRITE_RULES } from './meta-lead-form-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -757,6 +760,17 @@ export interface MetaWriteRule {
    * targeting, which the gateway reads itself (with its owner and kind check) once the write holds its rate slot.
    */
   targeting?: ReadonlySet<string>
+  /**
+   * Step 36 (Q1) — 'page': the change goes with the business's CHOSEN Facebook Page's own token, which the gateway itself
+   * reads for that one call (meta-page-token.ts) and never hands out. Only a rule marked so; every other rule and every
+   * read keep the system-user token. A caller can never ask for it (a caller's `auth` other than the account's is refused).
+   */
+  auth?: 'page'
+  /**
+   * Step 36 review A6 — what the ledger keeps of this change's body when it fails (default: the body, made safe): a test
+   * lead keeps its questions' names, never the answers.
+   */
+  ledger?: (params: ReadonlyMap<string, string>) => Record<string, string>
 }
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
@@ -764,12 +778,16 @@ export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
   // Step 39 — brand safety: an ad set's targeting (its brand-safety keys; the gateway reads the ad set itself), the chosen
   // ad account itself (`act_<id>`), its business portfolio, a publisher block list, a content block list.
   | 'adsettargeting' | 'adaccount' | 'business' | 'publisherblocklist' | 'contentblocklist'
+  // Step 36 — the chosen Facebook Page itself, a lead form of it, a test lead Nexus made on such a form (meta-page-owner.ts).
+  | 'page' | 'leadform' | 'testlead'
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
 export interface MetaWriteBodyId {
   id: string
   // Step 39: the chosen ad account (digits), its portfolio, a portfolio a list is shared with or unshared from (never one
   // another business in Nexus uses), a publisher block list, the draft this run made.
   kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' | 'adaccount' | 'business' | 'agency' | 'publisherblocklist' | 'blocklistdraft'
+    // Step 36: a photo of the chosen Facebook Page (a lead form's intro photo).
+    | 'pagephoto'
 }
 
 const fieldsValueProblem = (value: string): string | null => {
@@ -836,6 +854,10 @@ export interface MetaJudgedWrite {
   file?: { key: string; filename: string; contentType: string; text: string }
   /** Step 39 — the targeting sent and the keys it may change (the gateway compares the rest with the live targeting). */
   targeting?: { sent: Record<string, unknown>; keys: ReadonlySet<string> }
+  /** Step 36 (Q1) — the rule's own auth: 'page' = the chosen Page's token, read by the gateway for this one call. */
+  auth?: 'page'
+  /** Step 36 review A6 — the body as the ledger keeps it when the change fails (the rule's `ledger`). */
+  ledgerBody?: string
 }
 
 /** The gateway's verdict on a Meta call that is not a GET: why it is refused (and whether as a batch), or the judged write. */
@@ -870,12 +892,12 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   if (method === 'DELETE') {
     const deleteRule = bodyless ? candidates.find((r) => !r.required.length && !r.optional.length) : undefined
     if (!deleteRule && (bodyless || !candidates.some((r) => r.required.length || r.optional.length))) {
-      return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule) and what its brand-safety tools name (a block list, its shares, people, posts and ad accounts: set-meta-block-list, remove-meta-block-list; deleting campaigns, ad sets and ads is its own tool, not built yet), and cancels no async batch')
+      return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), a test lead Nexus made on a lead form of the chosen Page (set-meta-lead-form) and what its brand-safety tools name (a block list, its shares, people, posts and ad accounts: set-meta-block-list, remove-meta-block-list; deleting campaigns, ad sets and ads is its own tool, not built yet), and cancels no async batch')
     }
     if (deleteRule) {
       if (input.file !== undefined) return refuse('a Meta DELETE carries no file')
       if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
-      return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE' } }
+      return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE', ...(deleteRule.auth ? { auth: deleteRule.auth } : {}) } }
     }
   }
   // Step 39 (Q8) — a file upload: exactly the one file part its rule names (Nexus made the text), nothing else.
@@ -896,7 +918,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const rule = candidates.find((r) => r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k))
     && (!r.anyOf || r.anyOf.some((k) => parsed.params.has(k))))
   if (!rule) {
-    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a brand-safety change named with its kind (set-meta-brand-safety, set-meta-block-list, remove-meta-block-list); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a brand-safety change named with its kind (set-meta-brand-safety, set-meta-block-list, remove-meta-block-list), or a lead-form change of the chosen Facebook Page named with its kind (create-meta-lead-form, set-meta-lead-form); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
@@ -923,6 +945,8 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     write: {
       rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}),
       ...(method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...(targeting ? { targeting } : {}),
+      // Step 36 — the Page token mode, and what the ledger keeps of a failed test lead.
+      ...(rule.auth ? { auth: rule.auth } : {}), ...(rule.ledger ? { ledgerBody: new URLSearchParams(rule.ledger(parsed.params)).toString() } : {}),
     },
   }
 }
@@ -933,8 +957,8 @@ const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kin
   : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY); step 39: an ad set's whole targeting. */
 const MAX_ANY_WRITE_BODY = 200_000
-/** Step 17's status rule, step 18's settings rules, step 39's brand-safety rules — read when judged, never at load. */
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...META_BRAND_SAFETY_WRITE_RULES]
+/** Step 17's status rule, step 18's settings rules, step 39's brand-safety rules, step 36's lead-form rules — read when judged, never at load. */
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...META_BRAND_SAFETY_WRITE_RULES, ...META_LEAD_FORM_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

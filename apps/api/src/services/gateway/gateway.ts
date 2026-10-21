@@ -36,6 +36,8 @@ import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite } from './meta-calls.js'
 import { metaRestFileExportOf, type MetaWriteKind } from './meta-calls.js'
 import { BRAND_SAFETY_KINDS, metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwnerProblem, noteBlockListDraftMade, type MetaCheckRead } from './meta-brand-safety-owner.js'
+import { META_PAGE_KINDS, metaPageOwnerProblem } from './meta-page-owner.js'
+import { MetaPageTokenUnavailable, metaPageTokenFor, scrubExactToken } from './meta-page-token.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
@@ -422,7 +424,11 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // Step 39 — brand safety: an ad set's targeting is compared with its live targeting only once the call holds its rate
     // slot, right before it is sent (review A2, see 6–7); an ad account, portfolio or block list of the chosen ad account
     // is checked by meta-brand-safety-owner.ts (its own reads through this gateway), with every id inside the body.
-    const owner = metaWrite.targeting ? (req.metaObjectKind === 'adsettargeting' ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
+    // Step 36 (Q1) — a change made AS the chosen Facebook Page (`auth: 'page'`, or a Page kind named): its object must be
+    // that Page or a child of it the gateway confirms (meta-page-owner.ts), before the Page's token is read.
+    const owner = metaWrite.auth === 'page' || (req.metaObjectKind && META_PAGE_KINDS.has(req.metaObjectKind))
+      ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
+      : metaWrite.targeting ? (req.metaObjectKind === 'adsettargeting' ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
       : req.metaObjectKind && BRAND_SAFETY_KINDS.has(req.metaObjectKind) ? await metaBrandSafetyOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId), req.metaRun)
         : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | undefined, req.metaParent)
           ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
@@ -457,9 +463,18 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
 
   // 5. headers + signing
   let token: string | null
+  // Step 36 (Q1) — a change made as the chosen Page goes with the Page's OWN token, which the gateway reads here for this one
+  // call (meta-page-token.ts: with the system-user token, for the chosen Page only) and keeps in memory for this call only:
+  // it goes on the URL that is sent, never on `url` (the ledger, the trace, the answer), and is scrubbed from the answer.
+  let pageToken: string | null = null
   try {
-    token = await tokenFor(req)
+    if (metaWrite?.auth === 'page' && req.connectionId) token = pageToken = await metaPageTokenFor(req.connectionId)
+    else token = await tokenFor(req)
   } catch (err) {
+    if (err instanceof MetaPageTokenUnavailable) {
+      if (err.code === 'PUBLISH_GATED') return refuse('gated', err.code, err.message, 503)
+      return err.code === 'RATE_LIMITED_LOCAL' ? refuse('refused', err.code, err.message, 429, err.retryAfterMs) : refuse('held', err.code, err.message, 409)
+    }
     return refuse('held', 'TOKEN_UNAVAILABLE', `Held, nothing sent: no ${name} token for this account (${err instanceof Error ? err.message : String(err)}).`, 409)
   }
   // P1.5 — eBay's three market headers (X-EBAY-C-MARKETPLACE-ID, Content-Language, Accept-Language) from
@@ -599,6 +614,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
       text = err instanceof Error ? err.message : String(err)
     }
+    // Step 36 (Q1) — the Page's token never leaves the gateway, not even in an answer or an error that echoed it: as written,
+    // URL-encoded, and in every string of a JSON answer once decoded (an echo with JSON \u escapes).
+    if (pageToken) {
+      const clean = scrubExactToken(text, pageToken)
+      text = clean.text
+      metaScrubbed += clean.removed
+    }
     reading = status ? rateReadingOf(req.channel, responseHeaders, status) : null
     // Shopify GraphQL: errors and THROTTLED arrive inside a 200; the headroom is in the body.
     const gql = req.channel === 'SHOPIFY' && status === 200 ? shopifyGraphqlBodyOf(text) : null
@@ -665,7 +687,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     rateLimitRemaining: reading?.remaining ?? null,
     rateLimitLimit: reading?.limit ?? null,
     attempts,
-    requestPayload: ok ? undefined : typeof req.body === 'string' || req.body == null ? ledgerSafeBody(req.body ?? null) : { __binary: true, bytes: req.body instanceof Uint8Array ? req.body.byteLength : null },
+    // Step 36 review A6 — a Meta change whose rule names its ledger form (a test lead: the questions' names, never the
+    // answers) keeps only that.
+    requestPayload: ok ? undefined : metaWrite?.ledgerBody !== undefined ? ledgerSafeBody(metaWrite.ledgerBody) : typeof req.body === 'string' || req.body == null ? ledgerSafeBody(req.body ?? null) : { __binary: true, bytes: req.body instanceof Uint8Array ? req.body.byteLength : null },
     // Review 2 — how many access_token keys were dropped from a Meta answer (it never reaches the ledger either).
     responsePayload: metaScrubbed ? { scrubbed: metaScrubbed, ...(ok ? {} : { body: ledgerSafeBody(text) }) } : ok ? undefined : ledgerSafeBody(text),
   })

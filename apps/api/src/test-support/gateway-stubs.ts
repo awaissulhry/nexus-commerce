@@ -22,6 +22,10 @@ export const gatewayLedger: GatewayLedgerRow[] = []
 export const gatewayMetaChosen: Record<string, string | null> = {}
 /** Meta step 17: Meta objects in this business's stored rows (`objectId` → account and kind); every other is not stored. */
 export const gatewayMetaStored: Record<string, { adAccountId: string; kind: 'campaign' | 'adset' | 'ad' }> = {}
+/** Meta step 36: the Facebook Page each Meta connection chose (`connectionId` → digits); a connection not here chose `120000000000010`. */
+export const gatewayMetaPages: Record<string, string | null> = {}
+/** Meta step 36: what Nexus's change records say it made on a Page (`${kind}:${objectId}:${pageId}`); nothing else is. */
+export const gatewayMetaNexusMade = new Set<string>()
 
 /** Meta step 39: each connection's chosen ad account's business portfolio; a connection not here has `9876543210`. */
 export const gatewayMetaPortfolio: Record<string, string | null> = {}
@@ -38,6 +42,10 @@ export const accountModule = {
   metaStoredObject: async (objectId: string): Promise<{ adAccountId: string; kind: 'campaign' | 'adset' | 'ad' } | null> => gatewayMetaStored[objectId] ?? null,
   metaChosenPortfolioOf: async (connectionId: string): Promise<string | null> => (connectionId in gatewayMetaPortfolio ? gatewayMetaPortfolio[connectionId] : '9876543210'),
   metaPortfolioTakenByAnother: async (portfolioId: string): Promise<boolean> => gatewayMetaTakenPortfolios.has(portfolioId),
+  metaChosenPageOf: async (connectionId: string): Promise<string | null> => (connectionId in gatewayMetaPages ? gatewayMetaPages[connectionId] : '120000000000010'),
+  metaPageObjectNexusMade: async (kind: 'leadform' | 'testlead', objectId: string, pageId: string): Promise<boolean> => gatewayMetaNexusMade.has(`${kind}:${objectId}:${pageId}`),
+  META_LEAD_FORM_CREATE_TOOL: 'create-meta-lead-form',
+  META_LEAD_FORM_SET_TOOL: 'set-meta-lead-form',
 }
 export const ledgerModule = {
   writeLedgerRow: async (row: GatewayLedgerRow): Promise<void> => { gatewayLedger.push(row) },
