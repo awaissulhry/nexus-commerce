@@ -62,6 +62,7 @@ import { failureOfAnswer, failureOfThrow, localFailure, MetaReadError } from './
 import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectKindOf, type MetaChosenAccount } from './live.js'
 import { metaReadOne } from './read-client.js'
 import { takenIds } from './taken.js'
+import { pageTokenReadError } from './live-webhook-setup.js'
 import { fieldsRefused, graphPage, idOf, noted, num, obj, pageOf, part, portfolioOf, rowsOf, text, type Row } from './live-partners.js'
 
 // ── shared ────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -436,6 +437,9 @@ function blockListRow(r: Row) {
 export const WEBHOOK_VIEWS = ['all', 'app', 'ad-account', 'page', 'alerts'] as const
 export type WebhookView = typeof WEBHOOK_VIEWS[number]
 
+/** Step 30 part 3 review A-F6 — the page part while Meta changes are switched off: no Page token is read, so it is not read. */
+export const PAGE_PART_GATED = 'Not read: Meta answers a Page\'s connected apps only to the Page\'s own token, and Nexus reads no Page token while Meta changes are switched off (NEXUS_META_ADS_WRITES is not live). This part is seen in Meta Business Suite › All Tools › Business Apps meanwhile.'
+
 /**
  * ads-webhooks/subscriptions: budgets, spend, bid amounts and cost metrics in a subscription are in the account
  * currency's minor unit (cents). Each such field's value is answered as `…Cents` (money, restricted).
@@ -517,8 +521,13 @@ export async function liveWebhooks(input: { connectionId?: string | null; view: 
   }) : null
   const page = want('page') ? await part(async () => {
     const pageId = pageOf(account)
-    const read = await graphPage(connectionId, 'webhooks.pageApps', `${pageId}/subscribed_apps`, { fields: 'id,name,subscribed_fields', limit: 100 }).catch((err) => {
-      if (err instanceof MetaReadError && err.failure.permissionDenied) throw new MetaLiveRefusal(`${err.message} Meta answers a Page's connected apps only to the Page's own token, which Nexus reads with the business's system user: it needs the Manage, Create content or Moderate task on the Page (Meta Business settings › Users › System users › Assign assets) and pages_manage_metadata, pages_show_list on its token; until then this part is seen in Meta Business settings or the App Dashboard. set-meta-webhooks install-page installs the app on the Page.`)
+    const read = await graphPage(connectionId, 'webhooks.pageApps', `${pageId}/subscribed_apps`, { fields: 'id,name,subscribed_fields', limit: 100 }).catch((caught) => {
+      // Step 30 part 3 review A-F6 — with Meta changes switched off the gateway reads no Page token (step 36), so this part
+      // is not read at all; that gate stays.
+      if (caught instanceof MetaReadError && caught.failure.code === 'PUBLISH_GATED') throw new MetaLiveRefusal(PAGE_PART_GATED)
+      // Review A-F5 — Meta refusing the Page's own token is said in the Page token's words (never "the system-user token").
+      const err = pageTokenReadError(caught, pageId)
+      if (err instanceof MetaReadError && err.failure.permissionDenied) throw new MetaLiveRefusal(`${err.message} Meta answers a Page's connected apps only to the Page's own token, which Nexus reads with the business's system user: it needs the Manage, Create content or Moderate task on the Page (an employee system user also the Page assigned: Meta Business settings › Users › System users › Assign assets) and pages_manage_metadata, pages_show_list on its token; until then this part is seen in Meta Business settings or the App Dashboard. set-meta-webhooks install-page installs the app on the Page.`)
       throw err
     })
     return { pageId, apps: read.rows.map((r) => ({ appId: idOf(r.id), name: text(r.name), fields: (Array.isArray(r.subscribed_fields) ? r.subscribed_fields : []).map((f) => text(f) ?? text(obj(f)?.name)).filter(Boolean), isNexusApp: !!appId && idOf(r.id) === appId })) }

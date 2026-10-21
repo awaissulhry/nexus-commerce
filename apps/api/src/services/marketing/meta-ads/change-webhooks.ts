@@ -10,10 +10,21 @@
  *   install-page           POST /<page>/subscribed_apps subscribed_fields — the CHOSEN Page, with its own token (part 3:
  *                          step 36's mode, the gateway reads it), standing on the Page's apps read with the same token
  *                          (WH-010). The whole list it wants is sent (the Page's own fields Nexus takes, plus the asked
- *                          ones), so the Page ends with it whether Meta replaces or adds (LIVE-PROBES WH-010u); `exact`
- *                          makes it exactly the asked ones (the app removed first when one must go: the undo's way back)
+ *                          ones; by default the Page fields that are not Messenger's). Whether Meta replaces the Page's
+ *                          list or adds to it is not documented, and Nexus's own calls cannot tell the two apart (every
+ *                          POST it sends holds every Nexus field already on the Page): sending the whole list is safe
+ *                          either way. `exact` makes it exactly the asked ones: a removal (the app token) and a POST when
+ *                          one must go (the undo's way back); when only the removal happens, the app is off the Page until
+ *                          install-page runs again (the run says so; its undo installs the earlier fields)
  *   install-page instagram the per-account step of the Instagram account (WH-013): its linked Page — which must be the
- *                          chosen Page, linked to the chosen Instagram account — subscribed to any Page field
+ *                          chosen Page, linked to the chosen Instagram account — gets the app with ONE Page field. Meta's
+ *                          docs disagree on what this step takes: the v26 Instagram webhooks setup (Facebook Login) POSTs
+ *                          the linked Page's /subscribed_apps with subscribed_fields = the Instagram fields chosen in the
+ *                          App Dashboard; the page/subscribed_apps reference says subscribed_fields cannot subscribe
+ *                          Instagram webhooks and its list names no Instagram field; only Meta's older Instagram guide says
+ *                          any Page field. LIVE-PROBES WH-013p decides it. Nexus sends Page fields only (the gateway's
+ *                          list): if Meta needs the Instagram field names there, Nexus cannot do this step and the Owner
+ *                          does it in the App Dashboard. Nothing here says Meta delivers the Instagram notifications
  *   remove-page            DELETE /<page>/subscribed_apps with the app token (WH-012); its undo installs the fields it had
  *                          again (read with the Page token; when Nexus cannot read them, no undo)
  * App subscriptions are APP-WIDE (review A1, D-1): when another business in Nexus uses the same Meta app, an unsubscribe
@@ -72,16 +83,33 @@ export interface WebhooksLive {
   instagram?: { chosen: string | null; linked: string | null } | { error: string }
 }
 
-export const DASHBOARD_ONLY = 'Instagram and WhatsApp webhook fields are set only in Meta\'s App Dashboard (Meta\'s API does not take them: app/subscriptions): the Owner sets them there (Webhooks of the app, the callback Nexus\'s receiver). Instagram also needs a per-account step, its linked Facebook Page subscribed to the app: set-meta-webhooks install-page with object instagram does it (the chosen Page, linked to the chosen Instagram account, with the Page\'s own token). meta-webhooks reads the result.'
-/** Part 3 — what Meta needs to install an app on a Page (reference/page/subscribed_apps), in words. */
-export const PAGE_TOKEN_TASKS = 'Meta installs an app on a Page only with the Page\'s own token: Nexus reads the chosen Page\'s token with the business\'s system user (step 36), so the system user needs the Manage, Create content or Moderate task on the Page (Meta Business settings › Users › System users › Assign assets) and its token pages_manage_metadata and pages_show_list. Without them Meta gives no Page token or refuses, and nothing changes.'
+/**
+ * Review B-1 — what is not known yet about the Instagram per-account step (LIVE-PROBES WH-013p; Meta's docs disagree, see
+ * the header): never a promise that Meta delivers the Instagram account's notifications.
+ */
+const IG_STEP_UNCONFIRMED = 'whether the app on the linked Page is enough for the Instagram account\'s notifications is not yet confirmed: Meta\'s newer Instagram guide puts the Instagram fields chosen in the App Dashboard on that Page, which Nexus cannot send (it sends Page fields only) — if Meta needs them, the Owner does this step in the App Dashboard'
+export const DASHBOARD_ONLY = `Instagram and WhatsApp webhook fields are set only in Meta's App Dashboard (Meta's API does not take them: app/subscriptions): the Owner sets them there (Webhooks of the app, the callback Nexus's receiver). Instagram also needs a per-account step on its linked Facebook Page: set-meta-webhooks install-page with object instagram installs the app on the chosen Page (linked to the chosen Instagram account, with the Page's own token); ${IG_STEP_UNCONFIRMED}. meta-webhooks reads the result.`
+/**
+ * Review B-5 — who reaches a Page (access-tokens guide, System User Access Tokens): an ADMIN system user has the business's
+ * assets by default; an EMPLOYEE system user only the ones assigned to it.
+ */
+const ASSIGN_PAGE = 'An admin system user reaches the business\'s Pages without being assigned them; an employee system user needs the Page assigned (Meta Business settings › Users › System users › Assign assets).'
+/**
+ * Part 3 — what Meta needs to install an app on a Page (reference/page/subscribed_apps), in words. Review B-5 — and what
+ * the fields ask on top: leadgen the ADVERTISE task and leads_retrieval, ads_management, pages_read_engagement (Lead Ads
+ * webhooks guide, "Install Your App"), Messenger fields the MODERATE task and pages_messaging (Messenger Platform webhooks,
+ * "Subscribe your Page").
+ */
+export const PAGE_TOKEN_TASKS = `Meta installs an app on a Page only with the Page's own token: Nexus reads the chosen Page's token with the business's system user (step 36), so the system user needs the Manage, Create content or Moderate task on the Page and its token pages_manage_metadata and pages_show_list; leadgen also asks the Advertise task and leads_retrieval, ads_management and pages_read_engagement, Messenger fields the Moderate task and pages_messaging. ${ASSIGN_PAGE} Without them Meta gives no Page token or refuses, and nothing changes.`
 /** Part 3 — the Page fields that are Messenger's: Meta also needs pages_messaging for them. */
 const MESSENGER_FIELDS: ReadonlySet<string> = new Set(['messages', 'message_echoes', 'message_reads', 'message_deliveries', 'message_reactions', 'message_edits', 'messaging_postbacks', 'messaging_referrals', 'messaging_handovers', 'standby', 'messaging_policy_enforcement', 'messaging_integrity', 'messaging_in_thread_lead_form_submit'])
+/** Review B-5 — Meta's 200 / 10 on an install (a permission or task missing), in words. */
+const PAGE_PERMISSIONS = `Installing the app on a Page needs the Manage, Create content or Moderate task on it for the system user, and pages_manage_metadata and pages_show_list on its token; leadgen also the Advertise task and leads_retrieval, ads_management and pages_read_engagement, Messenger fields the Moderate task and pages_messaging. ${ASSIGN_PAGE}`
 /** Part 3 — Meta's codes an install on a Page may meet (graph-api errors), in plain words. */
 export const PAGE_INSTALL_EXPLAIN: Readonly<Record<string, string>> = {
-  200: 'Installing the app on a Page needs the Manage, Create content or Moderate task on it for the system user (Meta Business settings › Users › System users › Assign assets), and pages_manage_metadata and pages_show_list on its token (Messenger fields also pages_messaging).',
-  10: 'Installing the app on a Page needs the Manage, Create content or Moderate task on it for the system user (Meta Business settings › Users › System users › Assign assets), and pages_manage_metadata and pages_show_list on its token (Messenger fields also pages_messaging).',
-  210: 'Meta took the token as not the Page\'s own: Nexus sends the chosen Page\'s token, read for this change — the system user may have no task on the Page (Meta Business settings › Users › System users › Assign assets).',
+  200: PAGE_PERMISSIONS,
+  10: PAGE_PERMISSIONS,
+  210: 'Meta took the token as not the Page\'s own: Nexus sends the chosen Page\'s token, read for this change — the system user may have no task on the Page (an employee system user needs the Page assigned: Meta Business settings › Users › System users › Assign assets).',
   190: 'Meta did not accept the Page\'s own token, which Nexus reads for each change: the system user may have lost its role or task on the chosen Page; the business\'s system-user token itself is not the problem.',
 }
 const NO_PAGE = 'This business has no Facebook Page chosen (set-meta-connection chooses one).'
@@ -119,9 +147,9 @@ function draft(input: {
   }
 }
 
-/** The fields asked for one object: the list given (each one Nexus's receiver knows), or all of them. */
-function fieldsFor(allowed: readonly string[], object: string, asked: string[] | undefined): string[] | { refusal: string } {
-  if (!asked || !asked.length) return sorted(allowed)
+/** The fields asked for one object: the list given (each one Nexus's receiver knows), or the default (all of them). */
+function fieldsFor(allowed: readonly string[], object: string, asked: string[] | undefined, defaults: readonly string[] = allowed): string[] | { refusal: string } {
+  if (!asked || !asked.length) return sorted(defaults)
   const unknown = asked.filter((f) => !allowed.includes(f))
   if (unknown.length) return { refusal: `Nexus's receiver does not take ${unknown.join(', ')} on ${object}; its fields are ${allowed.join(', ')}.` }
   return sorted([...new Set(asked)])
@@ -230,6 +258,26 @@ export function webhooksDraft(req: WebhooksRequest, live: WebhooksLive): MetaCha
 
 /** The Page fields Nexus's receiver takes (META_WEBHOOK_FIELDS.page). */
 const PAGE_FIELDS: readonly string[] = metaWebhookFieldsOf('page') ?? []
+/**
+ * Review B-4 — install-page's default: the Page fields that are NOT Messenger's. Checked on the saved pages: of the 17,
+ * MESSENGER_FIELDS' 13 are Messenger fields — 11 in the field table of Meta Webhooks for Messenger Platform (messages,
+ * message_echoes, message_reads, message_deliveries, message_reactions, message_edits, messaging_postbacks,
+ * messaging_referrals, messaging_handovers, messaging_policy_enforcement, standby), and messaging_integrity and
+ * messaging_in_thread_lead_form_submit typed Messenger…Field on the Webhooks reference for Page. They need the MODERATE
+ * task and pages_messaging (Messenger Platform webhooks, "Subscribe your Page"), which step 36's token list does not name,
+ * and Meta then refuses the WHOLE install. leadgen, feed, mention and product_review are the Page's own fields (Webhooks
+ * reference for Page). Messenger fields go only when asked by name.
+ */
+const PAGE_DEFAULT_FIELDS: readonly string[] = PAGE_FIELDS.filter((f) => !MESSENGER_FIELDS.has(f))
+/**
+ * Review B-4 — the ONE Page field install-page instagram installs when the app is not on the Page (the step needs the app
+ * on the linked Page, not a field's notifications). leadgen asks the ADVERTISE task and leads_retrieval, ads_management,
+ * pages_read_engagement on top (Meta Webhooks for Lead Ads, "Install Your App"); feed, mention and product_review ask
+ * nothing beyond the install's own (page/subscribed_apps reference: CREATE_CONTENT, MANAGE or MODERATE, pages_manage_metadata,
+ * pages_show_list; the Webhooks reference for Page names no more for them). Of those three, product_review is the quietest
+ * ("changes to a page's product review settings"; feed is nearly every change of the Page's feed).
+ */
+const INSTAGRAM_PAGE_FIELD = 'product_review'
 const pagePathOf = (pageId: string) => ({ objectId: pageId, objectKind: 'page' as const, edge: 'subscribed_apps' as const })
 
 /** Part 3 — install-page (WH-010) and its Instagram per-account step (WH-013): the CHOSEN Page, with its own token. */
@@ -246,11 +294,18 @@ function pageInstallDraft(req: WebhooksRequest, live: WebhooksLive): MetaChangeD
     const ig = live.instagram
     if (!ig || 'error' in ig) return { refusal: `Nexus could not read which Instagram account is linked to Page ${pageId}${ig && 'error' in ig ? ` (${ig.error})` : ''}; nothing is sent.` }
     if (!ig.chosen) return { refusal: 'This business has no Instagram account chosen (set-meta-connection chooses one).' }
+    // Review B-6 — no instagram_business_account on the Page: none linked, OR the token cannot see that field (the Page
+    // reference: it needs a token of someone able to perform tasks on the Page).
+    if (!ig.linked) {
+      return { refusal: `Nexus cannot confirm that Page ${pageId} is the Page linked to the chosen Instagram account ${ig.chosen}: Meta names no Instagram account on it — either none is linked, or the token Nexus reads it with cannot see that field (Meta answers instagram_business_account only to a token of someone with a task on the Page). Meta delivers an Instagram account's webhooks only through its linked Page — link them in Meta Business settings, give the system user a task on the Page, or choose the linked Page (set-meta-connection).` }
+    }
     if (ig.linked !== ig.chosen) {
-      return { refusal: `Page ${pageId} is not the Page linked to the chosen Instagram account ${ig.chosen} (${ig.linked ? `it is linked to ${ig.linked}` : 'it has no Instagram account linked'}): Meta delivers an Instagram account's webhooks only through its linked Page — link them in Meta Business settings, or choose that Page (set-meta-connection).` }
+      return { refusal: `Page ${pageId} is not the Page linked to the chosen Instagram account ${ig.chosen} (it is linked to ${ig.linked}): Meta delivers an Instagram account's webhooks only through its linked Page — link them in Meta Business settings, or choose that Page (set-meta-connection).` }
     }
   }
-  const wanted = fieldsFor(PAGE_FIELDS, 'page', req.fields)
+  // Review B-4 — by default no Messenger field (they need pages_messaging, and one refused fails the whole install);
+  // instagram: ONE Page field.
+  const wanted = fieldsFor(PAGE_FIELDS, 'page', req.fields, object === 'instagram' ? [INSTAGRAM_PAGE_FIELD] : PAGE_DEFAULT_FIELDS)
   if ('refusal' in wanted) return wanted
   const current = { installed: live.page.installed, fields: sorted(live.page.fields) }
   const foreign = current.fields.filter((f) => !PAGE_FIELDS.includes(f))
@@ -258,7 +313,8 @@ function pageInstallDraft(req: WebhooksRequest, live: WebhooksLive): MetaChangeD
   const record = { action: req.action, ...(object ? { object } : {}), pageId }
   const stands = { ...record, current, exact: req.exact === true }
   if (object === 'instagram' && current.installed && !req.fields?.length) {
-    return draft({ summary: `The app is installed on Page ${pageId} (${words(current.fields)}): the Instagram account's per-account step is done.`, lines: [], requests: [], stands, skipped: [`Page ${pageId}: the app is installed, so Meta delivers the Instagram account's notifications (its fields are set in the App Dashboard).`], before: { ...record, fields: current.fields }, after: { ...record, fields: current.fields } })
+    // Review B-1 — the app on the linked Page is all Nexus can do here; it promises no delivery.
+    return draft({ summary: `The app is already on Page ${pageId} (${words(current.fields)}), the Page linked to the chosen Instagram account: nothing to change.`, lines: [], requests: [], stands, skipped: [`Page ${pageId}: the app is already on the Page linked to the chosen Instagram account; ${IG_STEP_UNCONFIRMED}.`], before: { ...record, fields: current.fields }, after: { ...record, fields: current.fields } })
   }
   if (current.installed && same(target, current.fields)) {
     return draft({ summary: `The app is already installed on Page ${pageId} with ${words(target)}.`, lines: [], requests: [], stands, skipped: [`Page ${pageId}: ${words(target)} already subscribed.`], before: { ...record, fields: current.fields }, after: { ...record, fields: current.fields } })
@@ -267,18 +323,27 @@ function pageInstallDraft(req: WebhooksRequest, live: WebhooksLive): MetaChangeD
   const removeFirst = req.exact === true && current.installed && current.fields.some((f) => !target.includes(f))
   const warnings = [PAGE_TOKEN_TASKS]
   const messenger = target.filter((f) => MESSENGER_FIELDS.has(f))
-  if (messenger.length) warnings.push(`${words(messenger)} ${messenger.length === 1 ? 'is a Messenger field' : 'are Messenger fields'}: Meta also needs pages_messaging on the token.`)
+  if (messenger.length) warnings.push(`${words(messenger)} ${messenger.length === 1 ? 'is a Messenger field' : 'are Messenger fields'}: Meta also needs the Moderate task on the Page and pages_messaging on the token, and without them refuses the whole install.`)
   warnings.push('Meta delivers a Page field to Nexus only when the app is subscribed to it as well (set-meta-webhooks subscribe-app object page, or the App Dashboard).')
-  if (object === 'instagram') warnings.push('The Instagram account\'s own fields (comments, mentions, messages …) are set in the App Dashboard (Webhooks of the app, object instagram); this step lets Meta deliver them for this account.')
-  if (removeFirst) warnings.push(`The app comes off Page ${pageId} first and goes on again with ${words(target)}: a notification Meta sends in between reaches nobody.`)
-  if (!req.exact && foreign.length) warnings.push(`The app on the Page also has ${words(foreign)}, which Nexus's receiver does not take and so does not send: if Meta replaces the list with this one (LIVE-PROBES WH-010u), ${foreign.length === 1 ? 'it goes' : 'they go'}.`)
+  if (object === 'instagram') warnings.push(`The Instagram account's own fields (comments, mentions, messages …) are set in the App Dashboard (Webhooks of the app, object instagram). This step installs the app on the linked Page with ${words(target)}; ${IG_STEP_UNCONFIRMED}.`)
+  if (removeFirst) {
+    warnings.push(`The app comes off Page ${pageId} first and goes on again with ${words(target)}: a notification Meta sends in between reaches nobody.`)
+    // Review A-F1 — step 2 stands on step 1, but step 1 can happen alone (Meta's rate limit, no Page token, a refusal).
+    warnings.push(`If step 2 does not happen, the app stays off Page ${pageId} — no lead, comment or message notification of the Page reaches Nexus — until install-page runs again.`)
+  }
+  if (!req.exact && foreign.length) warnings.push(`The app on the Page also has ${words(foreign)}, which Nexus's receiver does not take and so does not send: if Meta replaces the list with this one, ${foreign.length === 1 ? 'it goes' : 'they go'}.`)
   const noUndo: string[] = []
   let undo: WebhooksUndoArgs | null
   if (!current.installed) undo = { action: 'remove-page' }
   else {
     const back = current.fields.filter((f) => PAGE_FIELDS.includes(f))
     undo = back.length ? { action: 'install-page', fields: back, exact: true } : null
-    if (foreign.length) noUndo.push(`Nexus's receiver does not take ${words(foreign)}, so its undo does not subscribe ${foreign.length === 1 ? 'it' : 'them'} again.`)
+    // Review A-F3 — only fields the receiver does not take: there is no undo at all, said as such.
+    if (foreign.length) {
+      noUndo.push(back.length
+        ? `Nexus's receiver does not take ${words(foreign)}, so its undo does not subscribe ${foreign.length === 1 ? 'it' : 'them'} again.`
+        : `It has no undo at all: the app had only ${words(foreign)} on the Page, which Nexus's receiver does not take, so Nexus cannot put the Page back as it was.`)
+    }
   }
   const install = request({
     ...pagePathOf(pageId), step: removeFirst ? 2 : 1, ...(removeFirst ? { needs: [1] } : {}),
@@ -290,7 +355,7 @@ function pageInstallDraft(req: WebhooksRequest, live: WebhooksLive): MetaChangeD
     : [install]
   return draft({
     summary: object === 'instagram'
-      ? `Install the business's Meta app on Page ${pageId}, the Page linked to the chosen Instagram account, so Meta delivers that account's webhooks (${words(target)}).`
+      ? `Install the business's Meta app on Page ${pageId}, the Page linked to the chosen Instagram account, with ${words(target)} — that account's per-account step (whether it is enough for its notifications is not yet confirmed).`
       : `Install the business's Meta app on Page ${pageId} with ${words(target)}, so the Page's notifications reach Nexus.`,
     lines: [[`Page ${pageId}: the app`, current.installed ? words(current.fields) : 'not installed', words(target)]],
     requests, stands, warnings,

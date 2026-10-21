@@ -17,6 +17,7 @@ import { metaWebhookCallback } from '../../gateway/meta-webhook-rules.js'
 import { failureOfAnswer, failureOfThrow, localFailure, MetaReadError } from './errors.js'
 import { metaReadOne } from './read-client.js'
 import { graphPage, idOf, obj, rowsOf, text, type Row } from './live-partners.js'
+import { PAGE_INSTALL_EXPLAIN } from './change-webhooks.js'
 
 export interface AppSubscriptionState {
   object: string
@@ -70,9 +71,25 @@ export async function liveAdAccountApps(connectionId: string, adAccountId: strin
 /** Part 3 — the connection's app on the chosen Page: installed or not, and with which fields (sorted). */
 export interface PageAppState { installed: boolean; fields: string[] }
 
+/**
+ * Review A-F5 — the Page's connected apps are read with the chosen Page's OWN token (gateway.ts `pageRead`): Meta refusing
+ * THAT token (190, 102; 210, "not the Page's own") says nothing of the business's system-user token. Its failure is not
+ * "auth lost" and says the Page token's words (the install's PAGE_INSTALL_EXPLAIN), never errors.ts's "Meta no longer
+ * accepts this business's system-user token". Anything else goes on as it came.
+ */
+export function pageTokenReadError(err: unknown, pageId: string): unknown {
+  if (!(err instanceof MetaReadError) || err.failure.origin !== 'meta') return err
+  const base = (err.failure.code ?? '').split('/')[0]
+  const words = err.failure.authLost ? PAGE_INSTALL_EXPLAIN['190'] : base === '210' ? PAGE_INSTALL_EXPLAIN['210'] : null
+  if (!words) return err
+  const sentence = `Meta refused the chosen Page's own token for the read of Page ${pageId}'s connected apps${err.failure.code ? ` (${err.failure.code})` : ''}: ${words}`
+  return new MetaReadError({ ...err.failure, authLost: false, sentence }, err.operation, err.callsSpent)
+}
+
 /** Is the connection's app installed on the chosen Page, and with which fields? (The Page's own token: the gateway's.) */
 export async function livePageApps(connectionId: string, pageId: string, appId: string): Promise<PageAppState> {
   const read = await graphPage(connectionId, 'webhooks.setup.pageApps', `${pageId}/subscribed_apps`, { fields: 'id,subscribed_fields', limit: 100 })
+    .catch((err: unknown) => { throw pageTokenReadError(err, pageId) })
   const mine = read.rows.find((r) => idOf(r.id) === appId)
   return { installed: !!mine, fields: mine ? namesOf(mine.subscribed_fields).sort() : [] }
 }

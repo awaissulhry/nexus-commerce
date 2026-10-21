@@ -25,11 +25,19 @@
  *     ('GET', 'DELETE'): params=…`), so a DELETE here carries them there.
  *   - graph-api/reference/page/subscribed_apps: POST subscribed_fields (a Page access token of a person who can perform
  *     the CREATE_CONTENT, MANAGE or MODERATE task on the Page, pages_manage_metadata and pages_show_list; Messenger fields
- *     also pages_messaging; "cannot subscribe to Instagram" fields — an Instagram account's webhooks need its linked Page
- *     subscribed to any Page field, instagram-platform webhooks); GET (the same Page token) lists the installed apps with
- *     id, name, subscribed_fields; DELETE with an App Access Token ("an app can remove its own webhook subscription from a
- *     Page"); answers {success, messaging_success}. Whether a second POST replaces the field list or adds to it is not
- *     documented (LIVE-PROBES WH-010u): Nexus sends the whole list it wants, so either way the Page ends with it.
+ *     also the MODERATE task and pages_messaging, Messenger Platform webhooks; leadgen also the ADVERTISE task and
+ *     leads_retrieval, ads_management, pages_read_engagement, Lead Ads webhooks); GET (the same Page token) lists the
+ *     installed apps with id, name, subscribed_fields; DELETE with an App Access Token ("an app can remove its own webhook
+ *     subscription from a Page"); answers {success, messaging_success}. Whether a second POST replaces the field list or
+ *     adds to it is not documented, and Nexus's own calls cannot tell the two apart: every POST Nexus sends holds every
+ *     Nexus field already on the Page, so sending the whole list is safe either way (a removal never rides on a POST:
+ *     install-page `exact` stays a DELETE and a POST).
+ *   - Instagram (WH-013), Meta's docs CONFLICT: the v26 Instagram webhooks setup (instagram-platform/webhooks, Facebook
+ *     Login) POSTs the linked Page's /subscribed_apps with subscribed_fields = the Instagram fields selected in the App
+ *     Dashboard; the Page reference above says subscribed_fields cannot subscribe Instagram webhooks and its list names no
+ *     Instagram field; only Meta's older Instagram guide says "any Page field". LIVE-PROBES WH-013p decides it. This rule
+ *     takes Page fields only (META_WEBHOOK_FIELDS.page): if Meta needs the Instagram field names there, Nexus cannot do
+ *     that step and the Owner does it in the App Dashboard.
  *   - marketing-api/ads-webhooks/subscriptions.md: POST /act_<id>/subscriptions event_type, filters (≤ 20 {field, value,
  *     operator}, entity_type CAMPAIGN | ADSET | AD), field, value, operator, status ENABLED (default) | DISABLED; PATCH
  *     /act_<id>/subscriptions/<id> status; DELETE; money in the currency's minor unit, times epoch seconds; Meta's

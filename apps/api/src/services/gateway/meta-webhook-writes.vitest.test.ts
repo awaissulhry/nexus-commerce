@@ -23,7 +23,7 @@ vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: v
 import { gatewayLedger, gatewayMetaChosen, gatewayMetaPage } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { metaCall, metaWriteCall } from './meta.js'
-import { metaWriteVerdict } from './meta-calls.js'
+import { metaCallVerdict, metaWriteVerdict } from './meta-calls.js'
 import { alertFiltersProblem, alertValueProblem, META_WEBHOOK_FIELDS } from './meta-webhook-rules.js'
 import { META_WEBHOOK_TOPICS } from '../marketing/meta-ads/webhook-topics.js'
 import { __metaObjectLimitsTest } from './meta-object-limits.js'
@@ -240,6 +240,44 @@ describe('part 3 — the app installed on the CHOSEN Page with the Page\'s own t
     h.answers.push(() => new Response(JSON.stringify({ data: [] }), { status: 200 }))
     expect((await metaCall({ connectionId: 'm-1', operation: 'x', path: `${ACT}/subscribed_apps`, query: { fields: 'app_id,app_name' } })).ok).toBe(true)
     expect(new URL(h.calls[0].url).searchParams.get('access_token')).toBe('meta-system-user-token')
+  })
+
+  it('review A-F4 — the Page-token read takes limit as digits (≤ 100) and after as Meta\'s cursor only: nothing rides on them', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    const read = (query: Record<string, string>) => metaCallVerdict({ method: 'GET', url: `${BASE}/${PAGE}/subscribed_apps?${new URLSearchParams({ fields: 'id,subscribed_fields', ...query })}`, kind: 'read' })
+    for (const limit of ['1.fields(access_token)', '101', '1000', '-1', '1e2', ' 10', '']) {
+      expect(read({ limit }).problem, limit).toBe('a Page\'s connected apps are read with a limit of digits only, at most 100')
+    }
+    for (const after of ['QVFI&access_token=x', 'QVFI%26x', 'QVFI.fields(id)', 'QVFI(x)', 'QVFI x', '', 'Q'.repeat(513)]) {
+      expect(read({ after }).problem, after).toBe('a Page\'s connected apps are read with after as Meta\'s own cursor only (letters, digits, _, - and =, at most 512)')
+    }
+    expect(read({ limit: '100', after: 'QVFIUmxtX0Z6dGFCLTNnVXc9' })).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: PAGE } })
+    expect(read({ limit: '25' }).problem).toBeNull()
+    // Through the gateway: refused before any token is read, nothing sent.
+    await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: `${PAGE}/subscribed_apps`, query: { fields: 'id', limit: '1.fields(access_token)' } })).rejects.toMatchObject({ code: 'META_READ_ONLY' })
+    await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: `${PAGE}/subscribed_apps`, query: { fields: 'id', after: 'a&b' } })).rejects.toMatchObject({ code: 'META_READ_ONLY' })
+    expect(h.calls).toHaveLength(0)
+  })
+
+  it('review A-F5 / A-F6 — Meta refusing the PAGE token on that read never resets the system-user token\'s check; writes off: no Page token, not read', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    const forget = vi.mocked((await import('../cx/connectors/meta/token-check.js')).forgetMetaTokenCheck)
+    forget.mockClear()
+    const dead = () => new Response(JSON.stringify({ error: { message: 'Error validating access token', type: 'OAuthException', code: 190 } }), { status: 400 })
+    h.answers.push(() => new Response(JSON.stringify({ id: PAGE, access_token: 'EAAPageTokenForTests1234567890' }), { status: 200 }), dead)
+    const answer = await metaCall({ connectionId: 'm-1', operation: 'webhooks.setup.pageApps', path: `${PAGE}/subscribed_apps`, query: { fields: 'id,subscribed_fields', limit: 100 } })
+    expect(answer).toMatchObject({ ok: false, verdict: { errorClass: 'auth_revoked' } })
+    // The same answer to a read with the system-user token still does (the next heartbeat checks it at once) — once: the
+    // Page-token read before it did not.
+    h.answers.push(dead)
+    await metaCall({ connectionId: 'm-1', operation: 'x', path: `${ACT}/subscribed_apps`, query: { fields: 'app_id' } })
+    await vi.waitFor(() => expect(forget).toHaveBeenCalledWith('m-1'))
+    expect(forget).toHaveBeenCalledTimes(1)
+    // Meta changes switched off: the gateway reads no Page token, so the read is gated (nothing sent).
+    h.calls = []
+    vi.stubEnv('NEXUS_META_ADS_WRITES', 'off')
+    await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: `${PAGE}/subscribed_apps`, query: { fields: 'id' } })).rejects.toMatchObject({ code: 'PUBLISH_GATED', outcome: 'gated' })
+    expect(h.calls).toHaveLength(0)
   })
 })
 

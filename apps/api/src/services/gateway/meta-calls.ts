@@ -682,6 +682,8 @@ export interface MetaCallVerdict {
 /** Step 30 part 3 — what the read of a Page's connected apps may name (reference/page/subscribed_apps: id, name, subscribed_fields). */
 const PAGE_APPS_READ_KEYS: ReadonlySet<string> = new Set(['fields', 'limit', 'after'])
 const PAGE_APPS_READ_FIELDS: ReadonlySet<string> = new Set(['id', 'name', 'subscribed_fields'])
+/** Review A-F4 — Meta's paging cursor as Meta writes it (base64url-like: letters, digits, _, - and =). */
+const PAGE_APPS_CURSOR = /^[A-Za-z0-9_=-]{1,512}$/
 
 /**
  * The verdict on one Meta call, judged on the canonical parse. `auth` is how the caller asked the call to be authorised
@@ -752,6 +754,11 @@ export function metaCallVerdict(input: { method: string; url: string; kind: stri
     if (![...seen].every((k) => PAGE_APPS_READ_KEYS.has(k)) || fields === null || !names.every((n) => PAGE_APPS_READ_FIELDS.has(n))) {
       return refuse('a Page\'s connected apps are read with fields from id, name, subscribed_fields (and limit, after) only')
     }
+    // Review A-F4 — and their values exactly: this read goes with a Page's token, so nothing may ride on limit or after.
+    const limit = search.get('limit')
+    if (limit !== null && (!/^\d{1,3}$/.test(limit) || Number(limit) > 100)) return refuse('a Page\'s connected apps are read with a limit of digits only, at most 100')
+    const after = search.get('after')
+    if (after !== null && !PAGE_APPS_CURSOR.test(after)) return refuse('a Page\'s connected apps are read with after as Meta\'s own cursor only (letters, digits, _, - and =, at most 512)')
     return { problem: null, renewalClientId: null, pageRead: { pageId: pageApps[1] } }
   }
   return { problem: null, renewalClientId: null }

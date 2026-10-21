@@ -741,7 +741,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       await observeRate(req.channel, key, { retryAfterSec: 300 })
     }
     // Meta says the token is dead: the next heartbeat checks it again at once, rather than trusting a check kept for hours.
-    if ((verdict.errorClass === 'auth_revoked' || verdict.errorClass === 'auth_expired') && req.connectionId) {
+    // Step 30 part 3 review A-F5 — not when the dead token was the chosen Page's own, on the read of its connected apps:
+    // that says nothing of the business's system-user token.
+    if ((verdict.errorClass === 'auth_revoked' || verdict.errorClass === 'auth_expired') && req.connectionId && !metaPageRead) {
       const connectionId = req.connectionId
       void import('../cx/connectors/meta/token-check.js').then((m) => m.forgetMetaTokenCheck(connectionId)).catch(() => undefined)
     }

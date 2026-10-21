@@ -59,6 +59,9 @@ import { META_ADS_SAFETY_TOOLS } from './meta-ads-safety.tools.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
+import { PAGE_PART_GATED } from '../../marketing/meta-ads/live-safety.js'
+import { livePageApps } from '../../marketing/meta-ads/live-webhook-setup.js'
+import { PAGE_INSTALL_EXPLAIN } from '../../marketing/meta-ads/change-webhooks.js'
 
 const tool = (name: string) => META_ADS_SAFETY_TOOLS.find((t) => t.name === name)!
 const can = (granted: string[] = ['ads.view']) => ({ can: (p: string) => granted.includes(p), via: 'claude' as const })
@@ -255,6 +258,33 @@ describe('meta-webhooks', () => {
     const app = h.calls.find((c) => c.via === 'metaCall')!
     expect(app).toMatchObject({ path: '5550000001/subscriptions', auth: 'app', query: { fields: 'object,callback_url,fields,active' } })
     expect(refusedByGateway()).toEqual([])
+  })
+  it('step 30 part 3 review A-F5 — Meta refusing the PAGE token says the Page token\'s words, never "the system-user token"', async () => {
+    h.graph = (req) => (req.path === `${PAGE}/subscribed_apps` ? metaError('190', 'Error validating access token', 'auth_revoked') : { data: [] })
+    const res = await run('meta-webhooks', { view: 'page' })
+    const data = res.data as Record<string, unknown>
+    expect(data.pageApps).toBeNull()
+    expect(data.pageAppsNotRead).toBe(`Meta refused the chosen Page's own token for the read of Page ${PAGE}'s connected apps (190): ${PAGE_INSTALL_EXPLAIN['190']}`)
+    expect(data.pageAppsNotRead).not.toMatch(/no longer accepts this business's system-user token|Make a new token/)
+    // The draft's own read (install-page, remove-page): the same words, and not "auth lost" (the system-user token is fine).
+    const err = await livePageApps('conn-1', PAGE, '5550000001').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(MetaReadError)
+    expect((err as MetaReadError).failure).toMatchObject({ authLost: false, code: '190', sentence: expect.stringMatching(/^Meta refused the chosen Page's own token .*the business's system-user token itself is not the problem\.$/) })
+    // 210 ("not the Page's own"): its own words, then the part's.
+    h.graph = (req) => (req.path === `${PAGE}/subscribed_apps` ? metaError('210', 'User not visible', 'forbidden', 403) : { data: [] })
+    expect(((await run('meta-webhooks', { view: 'page' })).data as Record<string, unknown>).pageAppsNotRead).toMatch(/^Meta refused the chosen Page's own token .*\(210\): Meta took the token as not the Page's own.* Meta answers a Page's connected apps only to the Page's own token/)
+    // Any other failure goes on as it came.
+    h.graph = (req) => (req.path === `${PAGE}/subscribed_apps` ? metaError('17', 'User request limit reached', 'rate_limited') : { data: [] })
+    expect(((await run('meta-webhooks', { view: 'page' })).data as Record<string, unknown>).pageAppsNotRead).toMatch(/slow down/)
+  })
+  it('step 30 part 3 review A-F6 — with Meta changes switched off the page part is not read (no Page token), and the description says so', async () => {
+    h.graph = (req) => (req.path === `${PAGE}/subscribed_apps`
+      ? new MetaReadError({ origin: 'gateway', httpStatus: 0, code: 'PUBLISH_GATED', authLost: false, throttled: false, permissionDenied: false, notFound: false, sentence: 'Nothing was sent to Meta: Meta changes are switched off in Nexus (NEXUS_META_ADS_WRITES), so Nexus reads no Page token either.' }, 'webhooks.pageApps', 0)
+      : { data: [] })
+    const data = (await run('meta-webhooks', {})).data as Record<string, unknown>
+    expect(data).toMatchObject({ pageApps: null, pageAppsNotRead: PAGE_PART_GATED, adAccountApps: [] })
+    expect(PAGE_PART_GATED).toMatch(/Nexus reads no Page token while Meta changes are switched off \(NEXUS_META_ADS_WRITES is not live\)/)
+    expect(tool('meta-webhooks').description).toMatch(/while Meta changes are switched off — NEXUS_META_ADS_WRITES not live — Nexus reads no Page token, so this part is not read and the answer says so/)
   })
   it('alerts: one subscription by id; another view reads only its part', async () => {
     h.graph = () => ({ subscription_id: '900000000000001', event_type: 'OBJECT_CREATED', filters: [{ field: 'entity_type', value: 'CAMPAIGN', operator: 'EQUAL' }] })
