@@ -109,6 +109,8 @@ import { META_ADS_LABELS_RULES_TOOLS } from './tools/meta-ads-labels-rules.tools
 import { META_ADS_OPTIMIZE_CHANGES_TOOLS } from './tools/meta-ads-optimize-changes.tools.js'
 import { META_ADS_COMMERCE_TOOLS } from './tools/meta-ads-commerce.tools.js'
 import { META_ADS_MEDIA_UPLOAD_TOOLS } from './tools/meta-ads-media-upload.tools.js'
+// Meta ads step 29 (2026-10-21): Meta's automated rules.
+import { META_ADS_RULES_TOOLS } from './tools/meta-ads-rules.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -346,6 +348,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_COMMERCE_TOOLS,
   // Meta ads step 23 (2026-10-21): create-meta-media — images, videos and folders into the chosen ad account, and the undo.
   ...META_ADS_MEDIA_UPLOAD_TOOLS,
+  // Meta ads step 29 (2026-10-21): set-meta-ad-rule (make, change, switch, run Meta's rules), remove-meta-ad-rule.
+  ...META_ADS_RULES_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

@@ -37,6 +37,7 @@ import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl
 import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
+import { MAX_RULE_BODY_IDS, ruleBodyIds } from './meta-ad-rule-rules.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
 import { writeLedgerRow } from './ledger.js'
 import { SHOPIFY_API_VERSION } from '../shopify/api-version.js'
@@ -135,6 +136,8 @@ export interface GatewayRequest {
     | MetaOptimizeKind
     // Meta step 23: a video upload this connection started (Meta's upload host).
     | MetaMediaWriteKind
+    // Meta step 29: one of the chosen ad account's automated rules.
+    | 'adrule'
   /**
    * Meta step 18: a change of a budget schedule (high-demand period, `metaObjectKind: 'highdemandperiod'`) names the
    * campaign or ad set it belongs to; the gateway confirms that object is of the chosen ad account AND lists the period
@@ -606,7 +609,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   const objectLimit = verdict?.channelCode === '613/4841018' ? 'edits' : verdict?.channelCode === '613/1487632' ? 'budget' : null
   if (req.channel === 'META' && metaWrite && req.connectionId) {
     if (objectLimit) await holdMetaObject(req.connectionId, metaWrite.objectId, objectLimit)
-    else if (!metaWrite.edgeCall && (ok || status === 0 || status >= 500)) await noteMetaObjectTouched(req.connectionId, metaWrite.objectId, { budget: ok && metaWrite.budget && !metaWrite.check })
+    // Step 29 — a POST that only reads (Meta's preview of a rule) changes nothing: no 30-s hold of the object either.
+    else if (!metaWrite.edgeCall && !metaWrite.readOnly && (ok || status === 0 || status >= 500)) await noteMetaObjectTouched(req.connectionId, metaWrite.objectId, { budget: ok && metaWrite.budget && !metaWrite.check })
     // Step 23 — a video-ads upload Meta started on the chosen ad account: only this video may then go to Meta's upload
     // host and be finished, by this connection (meta-media-rules.ts).
     if (ok && metaWrite.rule === 'adaccount.video_ads.start') {
@@ -690,8 +694,11 @@ const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudie
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | 'adrule' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
+  // Step 29 — Meta's automated rules: the chosen ad account's rule library (a rule's create, with every id inside the
+  // rule checked), or one of its rules (and the ids inside).
+  if (kind === 'adrule' || (kind === 'adaccount' && write.rule === 'adRule.create')) return metaRuleOwnerProblem(connectionId, write, kind)
   // Step 19 — a create (and Meta's check of one: validate_only is documented on creates) names the ad account itself: it
   // goes only to act_<the account this business chose through this connection>, never another.
   if (kind === 'adaccount') {
@@ -896,6 +903,79 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
     // Step 22 — a video inside a body (the video a library removal names): listed in the chosen ad account's library.
     const problem = await metaOwnerProblem(connectionId, { ...write, objectId: inner.id, check: false }, inner.kind)
     if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, `Nothing was sent to Meta: inside this change, `) }
+  }
+  return null
+}
+
+/** One live read of a Meta object for a change's owner check (fields only), or null with Meta's words when it could not be made. */
+async function metaOwnerRead(connectionId: string, id: string, fields: string): Promise<{ body: Record<string, unknown> | null; words: string | null }> {
+  const url = new URL(`${metaGraphBase()}/${id}`)
+  url.searchParams.set('fields', fields)
+  try {
+    const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+    return { body: answer.ok ? answer.json<Record<string, unknown>>() : null, words: answer.ok ? null : answer.verdict?.channelMessage ?? null }
+  } catch (err) {
+    return { body: null, words: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/**
+ * Meta step 29 — Meta's automated rules (set-meta-ad-rule, remove-meta-ad-rule). A rule is made on the chosen ad account's
+ * own rule library (`POST act_<id>/adrules_library`, kind `adaccount`: the path's account must BE the chosen one); a change,
+ * run, preview or delete names a rule (kind `adrule`), which must be of the chosen ad account: not one of Nexus's stored
+ * campaigns, ad sets or ads, and ONE live read of `account_id` and the two fields only a rule has together
+ * (`evaluation_spec`, `execution_spec` — reference ad-rule: id, account_id "the ad account that owns the rule", …). Then
+ * every id INSIDE the body (meta-ad-rule-rules.ts ruleBodyIds): an ad, ad set or campaign named as such — of the chosen
+ * account and of that kind (metaOwnerProblem); an unprefixed id or an aggregation id (Meta works out its level) — one of
+ * Nexus's stored rows of the chosen account, else one live read of its account_id; an ad label — one live read of its
+ * account. The people a rule notifies (user_ids) are Facebook users, not objects of an account: Nexus cannot check them
+ * (the tool's preview says so). Anything else: nothing is sent.
+ */
+async function metaRuleOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'adrule' | 'adaccount'): Promise<{ code: string; sentence: string } | null> {
+  const id = write.objectId
+  const chosen = await metaChosenAdAccountOf(connectionId)
+  if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus changes nothing on Meta.' }
+  const notChosen = (what: string) => ({ code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${what} is not of the Meta ad account this business chose through this connection.` })
+  if (kind === 'adaccount') {
+    if (id !== `act_${chosen}`) return notChosen(`ad account ${id}`)
+  } else {
+    const notARule = (detail = '') => ({ code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${id} is not a Meta rule Nexus can confirm${detail}.` })
+    const stored = await metaStoredObject(id)
+    if (stored) return notARule(` (Nexus has it as a ${META_KIND_WORD[stored.kind]})`)
+    const read = await metaOwnerRead(connectionId, id, 'account_id,evaluation_spec,execution_spec')
+    const account = read.body && (typeof read.body.account_id === 'string' || typeof read.body.account_id === 'number') ? String(read.body.account_id).replace(/^act_/, '') : null
+    if (!account || !/^\d{1,25}$/.test(account)) {
+      if (read.words && /nonexisting field/i.test(read.words)) return notARule(` (Meta: ${read.words})`)
+      return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: Nexus could not confirm which ad account rule ${id} belongs to${read.words ? ` (Meta: ${read.words})` : ''}.` }
+    }
+    if (account !== chosen) return notChosen(`rule ${id}`)
+    if (['evaluation_spec', 'execution_spec'].some((f) => read.body![f] === undefined || read.body![f] === null)) return notARule()
+  }
+  if (!write.body) return null
+  const inner = ruleBodyIds(write.body)
+  if (inner.length > MAX_RULE_BODY_IDS) return { code: 'META_WRITE_NOT_ALLOWED', sentence: 'Nothing was sent to Meta: a rule names at most 150 objects and labels Nexus checks one by one; scope it by entity_type, a name or a label instead.' }
+  for (const item of inner) {
+    const inside = (sentence: string) => sentence.replace(/^Nothing was sent to Meta: /, 'Nothing was sent to Meta: inside this rule, ')
+    if (item.kind === 'campaign' || item.kind === 'adset' || item.kind === 'ad') {
+      const problem = await metaOwnerProblem(connectionId, { ...write, objectId: item.id, check: false, body: '' }, item.kind)
+      if (problem) return { code: problem.code, sentence: inside(problem.sentence) }
+      continue
+    }
+    if (item.kind === 'adobject') {
+      const stored = await metaStoredObject(item.id)
+      if (stored) { if (stored.adAccountId !== chosen) return notChosen(`inside this rule, ${item.id}`); continue }
+      const read = await metaOwnerRead(connectionId, item.id, 'account_id')
+      const account = read.body && (typeof read.body.account_id === 'string' || typeof read.body.account_id === 'number') ? String(read.body.account_id).replace(/^act_/, '') : null
+      if (!account) return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: inside this rule, Nexus could not confirm which ad account ${item.id} belongs to${read.words ? ` (Meta: ${read.words})` : ''}.` }
+      if (account !== chosen) return notChosen(`inside this rule, ${item.id}`)
+      continue
+    }
+    // An ad label (reference ad-label: account — the ad account it belongs to).
+    const read = await metaOwnerRead(connectionId, item.id, 'account{id}')
+    const owner = read.body?.account && typeof read.body.account === 'object' ? (read.body.account as Record<string, unknown>).id : null
+    const account = typeof owner === 'string' || typeof owner === 'number' ? String(owner).replace(/^act_/, '') : null
+    if (!account) return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: inside this rule, Nexus could not confirm that ad label ${item.id} is of this ad account${read.words ? ` (Meta: ${read.words})` : ''}.` }
+    if (account !== chosen) return notChosen(`inside this rule, ad label ${item.id}`)
   }
   return null
 }
