@@ -267,7 +267,8 @@ describe('read only by construction', () => {
     ['120000000000201/asyncadrequests?fields=id&statuses=["ERROR"]', 'act_1234567890/asyncadcreatives?fields=id&statuses=["ERROR"]', 'statuses'],
     ['act_1234567890/asyncadcreatives?fields=id&is_completed=true', 'act_1234567890/adlabels?fields=id&is_completed=true', 'is_completed'],
     ['120000000000201/delivery_stats?groups=["LEARNING_STAGE_EXIT"]&bid_recommendation_type=LOWEST_COST_TO_COST_CAP', '120000000000201/targeting_insights?groups=["LEARNING_STAGE_EXIT"]', 'groups'],
-    ['120000000000201/insights?fields=spend&breakdowns=["body_asset"]&time_range={"since":"2026-10-01","until":"2026-10-19"}', 'act_1234567890/insights?fields=spend&breakdowns=["body_asset"]', 'breakdowns'],
+    // Step 7 — breakdowns now also on act_<id>/insights (value-checked there and here): refused on any other route.
+    ['120000000000201/insights?fields=spend&breakdowns=["body_asset"]&time_range={"since":"2026-10-01","until":"2026-10-19"}', 'act_1234567890/campaigns?fields=id&breakdowns=["body_asset"]', 'breakdowns'],
     ['act_1234567890/adsbylabels?fields=id&ad_label_ids=["120000000000601"]&operator=ANY', '120000000000601/ads?fields=id&ad_label_ids=["120000000000601"]', 'ad_label_ids'],
     ['act_1234567890/value_rule_set?fields=id,name&product_type=AUDIENCE&status=ACTIVE', 'act_1234567890/campaigns?fields=id&product_type=AUDIENCE', 'product_type'],
     ['act_1234567890/recommendations?fields=title&filtering=[{"field":"object_id","operator":"EQUAL","value":"120000000000101"}]', 'act_1234567890/adsets?fields=id&filtering=[]', 'filtering'],
@@ -849,6 +850,62 @@ describe('step 16 review fixes — no creator picked by gender or age; a backsla
     for (const path of ['me/partnership-ads-advertisable-content', 'act_1/partnership-ads-advertisable-content', '123/partnership-ads-advertisable-content/x', '123/456/partnership-ads-advertisable-content']) {
       expect(ok(`${BASE}/${path}?fields=content_id`), path).toMatch(/letters, digits and _ only/)
     }
+  })
+})
+
+describe('step 7 — numbers, report runs and saved reports: each new key on its own route, only with a value on the insights lists', () => {
+  const ok = (path: string) => metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${path}`, kind: 'read' })
+  const q = (v: unknown) => encodeURIComponent(JSON.stringify(v))
+  it('allowed where meta-ads-numbers and meta-ads-saved-reports read', () => {
+    for (const path of [
+      `act_1234567890/insights?level=ad&fields=spend,impressions&breakdowns=${q(['publisher_platform', 'platform_position'])}&action_breakdowns=${q(['action_type', 'action_destination'])}&action_attribution_windows=${q(['1d_click', '7d_click', '1d_view', 'incrementality'])}&date_preset=last_7d&sort=${q(['spend_descending'])}&default_summary=true&summary_action_breakdowns=${q(['action_type'])}&use_account_attribution_setting=true`,
+      `120000000000101/insights?fields=spend&breakdowns=${q(['product_id'])}&product_id_limit=25&time_ranges=${q([{ since: '2026-10-01', until: '2026-10-07' }, { since: '2026-09-24', until: '2026-09-30' }])}`,
+      `act_1234567890/insights?fields=actions&sort=${q(['actions:omni_purchase_ascending'])}`,
+      // A report run's results take only paging.
+      '6000000000001/insights?limit=100&after=QVFI',
+      `act_1234567890/reporting?metrics=${q(['spend', 'impressions'])}&dimensions=${q(['campaign_name'])}&date_preset=last_30d&comparison_time_range=${q({ since: '2026-09-01', until: '2026-09-30' })}&attribution_windows=${q(['7d_click'])}&sorting=${q([{ field: 'spend', direction: 'desc' }])}&default_summary=true&summary_count=true&offset=100&filtering=${q([{ field: 'campaign.name', operator: 'CONTAIN', value: 'IT' }])}`,
+      'act_1234567890/ads_reporting_mmm_reports?fields=id,export_name', 'act_1234567890/ad_custom_derived_metrics?fields=id,name,formula', 'act_1234567890/report_specs',
+      '9876543210/custom_pivots?fields=id,name&permission=shared&saved_report_id=1234',
+      `9876543210/ads_custom_pivots_preview?fields=account_id&ad_account_ids=${q(['1234567890'])}&date_preset=last_30d&group_name=Group%201`,
+      '9876543210/measurement_reports?fields=id,status&report_type=mmm_report_v2',
+      `9876543210/third_party_partner_panel_requests?fields=id&status=${q(['SUCCESS'])}&study_type=${q(['BRAND_LIFT'])}`,
+      `9876543210/third_party_partner_panel_recurring_requests?fields=id&status=${q(['ONGOING'])}`,
+      '9876543210/third_party_partner_viewability_requests?fields=id&start_ds=2026-10-01&end_ds=2026-10-07&platform=INSTAGRAM&type=IMPRESSION',
+    ]) expect(ok(path), path).toBeNull()
+  })
+  it.each([
+    // A value off the lists is refused by its key's name, on the very route it belongs to.
+    [`act_1234567890/insights?fields=spend&breakdowns=${q(['dma'])}`, 'breakdowns'],
+    [`act_1234567890/insights?fields=spend&breakdowns=${q(['mmm'])}`, 'breakdowns'],
+    [`act_1234567890/insights?fields=spend&breakdowns=${q(['age', 'gender', 'country', 'region', 'zip'])}`, 'breakdowns'],
+    [`act_1234567890/insights?fields=spend&action_attribution_windows=${q(['7d_view'])}`, 'action_attribution_windows'],
+    [`act_1234567890/insights?fields=spend&action_attribution_windows=${q(['skan_click'])}`, 'action_attribution_windows'],
+    ['act_1234567890/insights?fields=spend&date_preset=lifetime', 'date_preset'],
+    [`act_1234567890/insights?fields=spend&sort=${q(['spend_descending', 'reach_descending'])}`, 'sort'],
+    [`act_1234567890/insights?fields=spend&sort=${q(['access_token_descending'])}`, 'sort'],
+    ['act_1234567890/insights?fields=spend&default_summary=false', 'default_summary'],
+    ['act_1234567890/insights?fields=spend&product_id_limit=5000', 'product_id_limit'],
+    [`act_1234567890/insights?fields=spend&time_ranges=${q([{ since: '2026-10-07', until: '2026-10-01' }])}`, 'time_ranges'],
+    [`act_1234567890/reporting?metrics=${q(['access_token'])}`, 'metrics'],
+    [`act_1234567890/reporting?dimensions=${q(['user_email'])}`, 'dimensions'],
+    [`act_1234567890/reporting?attribution_windows=${q(['28d_view'])}`, 'attribution_windows'],
+    [`act_1234567890/reporting?filtering=${q([{ field: 'user.email', operator: 'EQUAL', value: 'x' }])}`, 'filtering'],
+    ['9876543210/measurement_reports?fields=id&report_type=all', 'report_type'],
+    ['9876543210/custom_pivots?fields=id&creator_id=1234', 'creator_id'],
+    [`9876543210/ads_custom_pivots_preview?fields=account_id&ad_account_ids=${q(['1', '2'])}`, 'ad_account_ids'],
+    // Never sent anywhere (Meta ignores both since 2025-06-10).
+    ['act_1234567890/insights?fields=spend&use_unified_attribution_setting=true', 'use_unified_attribution_setting'],
+    ['act_1234567890/insights?fields=spend&action_report_time=mixed', 'action_report_time'],
+    ['act_1234567890/insights?fields=spend&export_format=csv', 'export_format'],
+    // Each key only on its own route.
+    [`act_1234567890/campaigns?fields=id&date_preset=last_7d`, 'date_preset'],
+    [`120000000000101/adsets?fields=id&action_attribution_windows=${q(['1d_click'])}`, 'action_attribution_windows'],
+    [`act_1234567890/insights?fields=spend&metrics=${q(['spend'])}`, 'metrics'],
+    [`act_1234567890/reporting?breakdowns=${q(['age'])}`, 'breakdowns'],
+    ['act_1234567890/adsets?fields=id&report_type=mmm_report_v2', 'report_type'],
+    ['9876543210/ads_reporting_exports?fields=id&start_ds=2026-10-01&end_ds=2026-10-07', 'start_ds'],
+  ])('refused: %s (%s)', (path, key) => {
+    expect(ok(path)).toMatch(new RegExp(`"${key}" is not one`))
   })
 })
 

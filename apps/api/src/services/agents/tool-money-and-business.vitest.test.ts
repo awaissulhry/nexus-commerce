@@ -239,6 +239,10 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-lead-forms': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has one (meta-ads-engagement.tools test)',
   'meta-leads': 'it reads the business\'s chosen Meta Page or ad account live from Meta, and no business here has one (meta-ads-engagement.tools test)',
   'meta-comments': 'it reads the business\'s chosen Meta Page or Instagram account live from Meta, and no business here has one (meta-ads-engagement.tools test)',
+  // Meta ads step 7: the numbers, report runs and saved reports read the chosen ad account live from Meta (meta-ads-insights.tools test).
+  'meta-ads-numbers': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
+  'meta-ads-report': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
+  'meta-ads-saved-reports': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -562,6 +566,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-lead-forms': () => ({ view: 'list' }),
   'meta-leads': () => ({ view: 'form', formId: '600000000000001' }),
   'meta-comments': () => ({ view: 'post', postId: '120000000000010_500000000000001' }),
+  // Meta ads step 7: each refuses in words because no business here has Meta (meta-ads-insights.tools.vitest.test.ts runs
+  // every view on an account).
+  'meta-ads-numbers': () => ({ view: 'numbers' }),
+  'meta-ads-report': () => ({ action: 'status', reportRunId: '6000000000001' }),
+  'meta-ads-saved-reports': () => ({ view: 'mmm-reports' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

@@ -34,7 +34,9 @@
  * Writes (step 17, 2026-10-21) are judged apart, by metaWriteVerdict below: an ALLOW-list of exact (method, path shape,
  * body keys and values) that Nexus's own change tools send — today a status change of one campaign, ad set or ad, and
  * Meta's check of it (validate_only, a campaign's only). Every other non-GET is refused; so is every batch (no Nexus
- * change sends one yet: metaBatchProblem).
+ * change sends one yet: metaBatchProblem). Step 7 adds the one POST that is a read: a report run of the chosen ad
+ * account's numbers (POST /act_<id>/insights — Meta makes an AdReportRun and changes nothing on the account), declared a
+ * read, every key and value judged on the insights lists, and its ad account checked to be the chosen one (gateway.ts 3b).
  *
  * Every call with a token carries `appsecret_proof` = HMAC-SHA256(key = the app secret, message = `<token>|<time>`) and
  * `appsecret_time` = that time in seconds, as Meta's Login Security page asks today (checked 2026-10-20:
@@ -45,6 +47,7 @@
 import { createHmac } from 'node:crypto'
 import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
+import { INSIGHTS_KEY_CHECKS, MAX_REPORT_RUN_BODY, REPORT_BUILDER_KEY_CHECKS, reportRunProblem } from '../meta/meta-insights-lists.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -134,6 +137,14 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *     product_item_ids and <ad | creative>/previews the same without creative; <page>/canvases is_hidden, is_published.
  *     The organic-insight keys go only on a read with no field list whose metrics are all Nexus's organic ones, the
  *     preview keys only with an ad_format of the v26 enum (services/meta/meta-media-lists.ts, `when` below).
+ *   - step 7 (numbers, report runs, saved reports — marketing/meta-ads/live-insights.ts), each only with a value on
+ *     services/meta/meta-insights-lists.ts: on act_<id>/insights and <object>/insights breakdowns, action_breakdowns,
+ *     summary_action_breakdowns, action_attribution_windows (never 7d_view / 28d_view), date_preset, time_ranges, sort,
+ *     default_summary, use_account_attribution_setting, product_id_limit; on act_<id>/reporting the Report Builder's
+ *     metrics, dimensions, dates, comparison_time_range, attribution_windows, filtering, sorting, summaries, offset; a
+ *     portfolio's custom_pivots (permission, saved_report_id), ads_custom_pivots_preview (one ad account id, dates,
+ *     group_name), measurement_reports (report_type), third_party_partner_* (status, study_type; viewability start_ds,
+ *     end_ds, platform, type). Still never use_unified_attribution_setting or action_report_time.
  */
 const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
 /**
@@ -207,7 +218,8 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/asyncadrequests$/, keys: new Set(['statuses']) },
   { route: /^act_\d+\/asyncadcreatives$/, keys: new Set(['is_completed']) },
   { route: /^\d+\/delivery_stats$/, keys: new Set(['bid_recommendation_type', 'groups']) },
-  { route: /^\d+\/insights$/, keys: new Set(['breakdowns']) },
+  // (Step 7: `breakdowns` on <object>/insights moved to step 7's entries below — the same key, now value-checked on both
+  // insights routes; step 6's asset breakdowns are on that list.)
   { route: /^act_\d+\/(campaigns|adsets|ads|adcreatives)bylabels$/, keys: new Set(['ad_label_ids', 'operator']) },
   { route: /^act_\d+\/value_rule_set$/, keys: new Set(['product_type', 'status']) },
   { route: /^act_\d+\/recommendations$/, keys: new Set(['filtering']) },
@@ -274,7 +286,31 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/tags$/, keys: new Set(['posted_after']), when: (query) => isoDateTime(query.get('posted_after')) },
   { route: /^\d+\/tags$/, keys: new Set(['posted_before']), when: (query) => isoDateTime(query.get('posted_before')) },
   { route: /^\d+\/tags$/, keys: new Set(['media_type']), when: (query) => subsetOf(query.get('media_type'), ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM']) },
+  // Step 7 — numbers, report runs and saved reports (marketing/meta-ads/live-insights.ts), each key only on its own route
+  // and only with a value on services/meta/meta-insights-lists.ts: the insights keys on act_<id>/insights and
+  // <object>/insights (a report run's results, GET /<run>/insights, take none of them); the Report Builder's on
+  // act_<id>/reporting; the portfolio's custom pivots, pivot preview, measurement reports and partner studies, each its own.
+  ...Object.entries(INSIGHTS_KEY_CHECKS).map(([key, check]) => ({ route: /^(act_)?\d+\/insights$/, keys: new Set([key]), when: (query: URLSearchParams) => check(query.get(key)) })),
+  ...Object.entries(REPORT_BUILDER_KEY_CHECKS).map(([key, check]) => ({ route: /^act_\d+\/reporting$/, keys: new Set([key]), when: (query: URLSearchParams) => check(query.get(key)) })),
+  { route: /^\d+\/custom_pivots$/, keys: new Set(['permission']), when: valueIn('permission', ['private', 'shared']) },
+  { route: /^\d+\/custom_pivots$/, keys: new Set(['saved_report_id']), when: (query) => /^\d{1,25}$/.test(query.get('saved_report_id') ?? '') },
+  { route: /^\d+\/ads_custom_pivots_preview$/, keys: new Set(['ad_account_ids']), when: (query) => /^\["?\d{1,25}"?\]$/.test(query.get('ad_account_ids') ?? '') },
+  { route: /^\d+\/ads_custom_pivots_preview$/, keys: new Set(['date_preset', 'time_range']), when: (query) => (!query.has('date_preset') || REPORT_BUILDER_KEY_CHECKS.date_preset(query.get('date_preset'))) && (!query.has('time_range') || REPORT_BUILDER_KEY_CHECKS.time_range(query.get('time_range'))) },
+  { route: /^\d+\/ads_custom_pivots_preview$/, keys: new Set(['group_name']), when: (query) => /^[^\u0000-\u001f"\\]{1,100}$/.test(query.get('group_name') ?? '') },
+  { route: /^\d+\/measurement_reports$/, keys: new Set(['report_type']), when: valueIn('report_type', ['third_party_mta_report', 'partner_lift_study_report', 'mmm_report_v2']) },
+  { route: /^\d+\/third_party_partner_panel_requests$/, keys: new Set(['status']), when: (query) => jsonSubset(query.get('status'), ['CREATED', 'FAILURE', 'IN_PROGRESS', 'SCHEDULED', 'SUCCESS']) },
+  { route: /^\d+\/third_party_partner_panel_recurring_requests$/, keys: new Set(['status']), when: (query) => jsonSubset(query.get('status'), ['CANCELLED', 'CREATED', 'FINISHED', 'ONGOING']) },
+  { route: /^\d+\/(third_party_partner_panel_requests|third_party_partner_panel_recurring_requests)$/, keys: new Set(['study_type']), when: (query) => jsonSubset(query.get('study_type'), ['BRAND_LIFT', 'PANEL_SALES_ATTRIBUTION', 'REACH']) },
+  { route: /^\d+\/third_party_partner_viewability_requests$/, keys: new Set(['start_ds', 'end_ds']), when: (query) => /^\d{4}-\d{2}-\d{2}$/.test(query.get('start_ds') ?? '') && /^\d{4}-\d{2}-\d{2}$/.test(query.get('end_ds') ?? '') },
+  { route: /^\d+\/third_party_partner_viewability_requests$/, keys: new Set(['platform']), when: valueIn('platform', ['AUDIENCE_NETWORK', 'FACEBOOK', 'INSTAGRAM']) },
+  { route: /^\d+\/third_party_partner_viewability_requests$/, keys: new Set(['type']), when: valueIn('type', ['DISPLAY_EVENT', 'IMPRESSION', 'VIDEO_EVENT']) },
 ]
+/** Step 7 — a JSON list of these values, each once, at least one (Meta's own array form, `["CREATED","SUCCESS"]`). */
+function jsonSubset(raw: string | null, allowed: readonly string[]): boolean {
+  let list: unknown
+  try { list = JSON.parse(raw ?? '') } catch { return false }
+  return Array.isArray(list) && list.length > 0 && list.every((v) => typeof v === 'string' && allowed.includes(v)) && new Set(list).size === list.length
+}
 /** Step 14 review A2 — the key's value is one of these. */
 function valueIn(key: string, values: readonly string[]): (query: URLSearchParams) => boolean {
   return (query) => values.includes(query.get(key) ?? '')
@@ -702,6 +738,11 @@ interface MetaWriteRule {
   /** Why a value is refused, or null. */
   values: (params: ReadonlyMap<string, string>) => string | null
   budget: boolean
+  /**
+   * Step 7 — a POST that changes nothing on the account (a report run: Meta makes an AdReportRun, a background read):
+   * declared a read, never braked, held or retried like a change; the gateway checks the path's ad account is the chosen one.
+   */
+  reportRun?: true
 }
 
 const fieldsValueProblem = (value: string): string | null => {
@@ -741,6 +782,19 @@ const META_WRITE_RULES: readonly MetaWriteRule[] = [
     },
     budget: false,
   },
+  {
+    // Step 7 (meta-ads-report, master IN-067 / IN-070 / IN-071): POST /act_<id>/insights starts a report run of the chosen ad
+    // account's numbers (Meta documents the POST on this path only: reference/ad-account/insights "Creating"). Every key and
+    // value is judged on the insights lists (services/meta/meta-insights-lists.ts reportRunProblem).
+    name: 'insights.reportRun',
+    method: 'POST',
+    path: /^act_\d{1,25}\/insights$/,
+    required: ['level'],
+    optional: ['fields', 'breakdowns', 'action_breakdowns', 'summary_action_breakdowns', 'action_attribution_windows', 'date_preset', 'time_range', 'time_ranges', 'time_increment', 'filtering', 'sort', 'default_summary', 'use_account_attribution_setting', 'product_id_limit', 'export_format', 'export_name'],
+    values: (params) => reportRunProblem(params),
+    budget: false,
+    reportRun: true,
+  },
 ]
 
 /** The longest body a Nexus change sends (a status change is a few dozen characters). */
@@ -758,6 +812,8 @@ export interface MetaJudgedWrite {
   body: string
   /** It moves an ad set's budget (Meta's 4-an-hour limit). */
   budget: boolean
+  /** Step 7 — a report run of the ad account `objectId` (digits): it changes nothing; the gateway checks the account is the chosen one. */
+  reportRun?: true
 }
 
 /** The gateway's verdict on a Meta call that is not a GET: why it is refused (and whether as a batch), or the judged write. */
@@ -786,29 +842,32 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   if (batch) return { problem: batch, batch: true }
   if (method === 'DELETE') return refuse('Nexus deletes nothing on Meta yet (deleting is its own tool, not built yet), and cancels no async batch')
   if (method !== 'POST') return refuse(`Nexus sends Meta no ${method}`)
-  const parsed = writeParams(input.body)
+  const parsed = writeParams(input.body, /^act_\d+\/insights$/.test(graph.route) ? MAX_REPORT_RUN_BODY : MAX_WRITE_BODY)
   if ('problem' in parsed) return refuse(parsed.problem)
   const keys = [...parsed.params.keys()]
   const rule = META_WRITE_RULES.find((r) => r.method === method && r.path.test(graph.route)
     && r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k)))
   if (!rule) {
-    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status); this one is POST /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), and the only other POST a report run of the chosen ad account's numbers (POST /act_<id>/insights, which changes nothing); this one is POST /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   const problem = rule.values(parsed.params)
   if (problem) return refuse(problem)
   const check = parsed.params.has('execution_options')
-  if (input.kind !== (check ? 'read' : 'write')) {
+  if (rule.reportRun) {
+    if (input.kind !== 'read') return refuse('a report run changes nothing on Meta and goes as a read; this one is declared otherwise')
+  } else if (input.kind !== (check ? 'read' : 'write')) {
     return refuse(check ? 'Meta\'s check (validate_only) changes nothing and goes as a read; this one is declared otherwise' : 'a Meta change goes as a write; this one is declared otherwise')
   }
   const order = [...rule.required, ...rule.optional].filter((k) => parsed.params.has(k))
   const body = new URLSearchParams(order.map((k): [string, string] => [k, parsed.params.get(k)!])).toString()
+  if (rule.reportRun) return { write: { rule: rule.name, objectId: graph.segments[0].replace(/^act_/i, ''), check: false, body, budget: false, reportRun: true } }
   return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget: rule.budget } }
 }
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
-function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {
+function writeParams(body: unknown, maxBody: number = MAX_WRITE_BODY): { params: Map<string, string> } | { problem: string } {
   if (typeof body !== 'string' || !body) return { problem: 'a Meta change carries its parameters as a form body' }
-  if (body.length > MAX_WRITE_BODY) return { problem: `a Meta change body is at most ${MAX_WRITE_BODY} characters` }
+  if (body.length > maxBody) return { problem: `a Meta change body is at most ${maxBody} characters` }
   const params = new Map<string, string>()
   for (const [key, value] of new URLSearchParams(body)) {
     if (!/^[a-z_][a-z0-9_]*$/.test(key)) return { problem: `the body key "${key.slice(0, 40)}" is not one Meta reads (lower-case letters, digits and _)` }

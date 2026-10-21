@@ -24,7 +24,7 @@ vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: v
 import { gatewayLedger, gatewayMetaChosen, gatewayMetaStored } from '../../test-support/gateway-stubs.js'
 import { __rateTest, bucketKey, takeToken } from './rate.js'
 import { gatewayCall, GatewayRefusal } from './gateway.js'
-import { metaCall, metaWriteCall } from './meta.js'
+import { metaCall, metaReportRunCall, metaWriteCall } from './meta.js'
 import { META_BATCH_KINDS_ALLOWED, META_UPDATE_CHECK_PROVEN, metaBatchProblem, metaCheckAllowed, metaWriteVerdict } from './meta-calls.js'
 import { __metaObjectLimitsTest, metaObjectState, metaObjectWait } from './meta-object-limits.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
@@ -335,5 +335,73 @@ describe('Meta\'s per-object limits hold only that object', () => {
     expect(metaObjectWait(state, true)?.why).toMatch(/1487632/)
     expect(metaObjectWait({ ...state, touchedAt: null }, false)).toBeNull()
     expect(await takeToken('META', bucketKey('META', 'm-8', 'ads'), 0)).toMatchObject({ ok: true })
+  })
+})
+
+describe('step 7 — a report run (POST /act_<id>/insights) is a READ of the chosen ad account: every key and value judged', () => {
+  const RUN_URL = `${BASE}/act_1234567890/insights`
+  const form = (params: Record<string, unknown>) => new URLSearchParams(Object.entries(params).map(([k, v]): [string, string] => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)])).toString()
+  const runProblem = (params: Record<string, unknown>, kind = 'read', url = RUN_URL) => {
+    const v = metaWriteVerdict({ method: 'POST', url, kind, body: form(params) })
+    return 'problem' in v ? v.problem : null
+  }
+  it('lets a report run through as a read of that ad account, the body written again in one order', () => {
+    const v = metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'read', body: form({ fields: 'campaign_id,spend', level: 'campaign', date_preset: 'last_7d' }) })
+    expect(v).toEqual({ write: { rule: 'insights.reportRun', objectId: '1234567890', check: false, body: form({ level: 'campaign', fields: 'campaign_id,spend', date_preset: 'last_7d' }), budget: false, reportRun: true } })
+    expect(runProblem({ level: 'adset', breakdowns: ['mmm'], export_format: 'csv', fields: 'impressions,spend', time_increment: 1, filtering: [{ field: 'country', operator: 'IN', value: ['IT'] }] })).toBeNull()
+    expect(runProblem({ level: 'ad', fields: 'ad_id,spend', breakdowns: ['age', 'gender'], time_ranges: [{ since: '2026-10-01', until: '2026-10-07' }], export_format: 'xls', export_name: 'Shop A' })).toBeNull()
+  })
+  it('refuses what a read would not send: a change kind, keys off the list, values off the lists, an MMM export Meta would not take', () => {
+    expect(runProblem({ level: 'campaign', fields: 'spend' }, 'write')).toMatch(/changes nothing on Meta and goes as a read/)
+    expect(runProblem({ fields: 'spend' })).toMatch(/only Meta change/)
+    expect(runProblem({ level: 'campaign', fields: 'spend', graph_cache: false })).toMatch(/only Meta change/)
+    expect(runProblem({ level: 'campaign', fields: 'spend', use_unified_attribution_setting: true })).toMatch(/only Meta change/)
+    expect(runProblem({ level: 'campaign', fields: 'spend,access_token' })).toMatch(/no Nexus change sends|only metrics on Nexus's insights list/)
+    expect(runProblem({ level: 'campaign', fields: 'spend,name' })).toMatch(/only metrics on Nexus's insights list/)
+    expect(runProblem({ level: 'everything', fields: 'spend' })).toMatch(/names its level/)
+    expect(runProblem({ level: 'campaign', breakdowns: ['dma'] })).toMatch(/breakdowns are breakdowns on Nexus's list/)
+    expect(runProblem({ level: 'campaign', breakdowns: ['country', 'age'] })).toMatch(/does not combine/)
+    expect(runProblem({ level: 'campaign', action_attribution_windows: ['28d_view'] })).toMatch(/action_attribution_windows is not a value/)
+    expect(runProblem({ level: 'campaign', filtering: [{ field: 'user.email', operator: 'EQUAL', value: 'x' }] })).toMatch(/not a filter Nexus sends/)
+    expect(runProblem({ level: 'campaign', export_format: 'pdf' })).toMatch(/csv or xls/)
+    expect(runProblem({ level: 'campaign', export_name: 'x' })).toMatch(/with an export_format/)
+    expect(runProblem({ level: 'campaign', breakdowns: ['mmm'], export_format: 'csv' })).toMatch(/level adset with export_format csv/)
+    expect(runProblem({ level: 'adset', breakdowns: ['mmm'] })).toMatch(/level adset with export_format csv/)
+    expect(runProblem({ level: 'adset', breakdowns: ['mmm'], export_format: 'csv', fields: 'reach' })).toMatch(/impressions and spend only/)
+    expect(runProblem({ level: 'adset', breakdowns: ['mmm'], export_format: 'csv', filtering: [{ field: 'campaign.name', operator: 'EQUAL', value: 'x' }] })).toMatch(/takes only these filters/)
+    expect(runProblem({ level: 'adset', breakdowns: ['mmm'], export_format: 'csv', time_increment: 7 })).toMatch(/by day \(1\) or for the whole period/)
+    // Only on the account's own insights edge: never an object's (Meta documents the POST on /act_{id}/insights only).
+    expect(runProblem({ level: 'campaign', fields: 'spend' }, 'read', `${BASE}/${CAMPAIGN}/insights`)).toMatch(/only Meta change/)
+    expect(runProblem({ level: 'campaign', fields: 'spend' }, 'read', `${RUN_URL}?level=ad`)).toMatch(/never in the URL/)
+  })
+  it('the gateway sends it as a read of the chosen account only — never braked by NEXUS_META_ADS_WRITES, never held per object, never retried', async () => {
+    vi.stubEnv('NEXUS_META_ADS_WRITES', 'off')
+    h.answers.push(json({ report_run_id: '6000000000001' }))
+    const res = await gatewayCall({ channel: 'META', operation: 'report.start', kind: 'read', connectionId: 'm-1', url: RUN_URL, method: 'POST', body: form({ level: 'campaign', fields: 'spend' }), maxTransientRetries: 0 })
+    expect(res.ok).toBe(true)
+    expect(sent(0)).toMatchObject({ method: 'POST', body: form({ level: 'campaign', fields: 'spend' }) })
+    expect(sent(0).headers['Content-Type']).toBe('application/x-www-form-urlencoded')
+    expect(sent(0).url.searchParams.get('appsecret_proof')).toBe('proof')
+    expect(await metaObjectState('m-1', '1234567890')).toMatchObject({ touchedAt: null, heldUntil: null })
+    // Another ad account than the one this business chose through this connection: nothing sent.
+    gatewayMetaChosen['m-2'] = '5550001112'
+    const err = await gatewayCall({ channel: 'META', operation: 'report.start', kind: 'read', connectionId: 'm-2', url: RUN_URL, method: 'POST', body: form({ level: 'campaign', fields: 'spend' }) }).catch((e) => e)
+    expect(err).toBeInstanceOf(GatewayRefusal)
+    expect(err).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    gatewayMetaChosen['m-3'] = null
+    expect(await gatewayCall({ channel: 'META', operation: 'report.start', kind: 'read', connectionId: 'm-3', url: RUN_URL, method: 'POST', body: form({ level: 'campaign', fields: 'spend' }) }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    expect(h.calls).toHaveLength(1)
+    // A 5xx is not sent again (a second run would only cost a read, but nobody asked for it).
+    h.answers.push(json({ error: { message: 'oops', code: 2 } }, 500))
+    const failed = await gatewayCall({ channel: 'META', operation: 'report.start', kind: 'read', connectionId: 'm-1', url: RUN_URL, method: 'POST', body: form({ level: 'campaign', fields: 'spend' }), maxTransientRetries: 3 })
+    expect(failed.ok).toBe(false)
+    expect(h.calls).toHaveLength(2)
+  })
+  it('metaReportRunCall sends exactly that: the form body of the read, as a read, for the named account', async () => {
+    h.answers.push(json({ report_run_id: '6000000000002' }))
+    const res = await metaReportRunCall({ connectionId: 'm-1', operation: 'report.start', adAccountId: '1234567890', params: { level: 'adset', breakdowns: ['mmm'], export_format: 'csv', fields: 'impressions,spend', time_increment: 1 } })
+    expect(res.json()).toEqual({ report_run_id: '6000000000002' })
+    expect(sent(0).url.pathname).toBe(`/${META_DEFAULT_GRAPH_API_VERSION}/act_1234567890/insights`)
+    expect(new URLSearchParams(String(sent(0).body)).get('breakdowns')).toBe('["mmm"]')
   })
 })

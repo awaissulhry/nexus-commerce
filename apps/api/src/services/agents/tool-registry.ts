@@ -95,6 +95,8 @@ import { META_ADS_SAFETY_TOOLS } from './tools/meta-ads-safety.tools.js'
 import { META_ADS_OPTIMIZE_TOOLS } from './tools/meta-ads-optimize.tools.js'
 // Meta ads step 14 (2026-10-21): lead forms, leads and comments (read only; leads and comments are Claude's door only).
 import { META_ADS_ENGAGEMENT_TOOLS } from './tools/meta-ads-engagement.tools.js'
+// Meta ads step 7 (2026-10-21): insights at every level, background report runs, saved and partner reports (read only).
+import { META_ADS_INSIGHTS_TOOLS } from './tools/meta-ads-insights.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -309,6 +311,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_OPTIMIZE_TOOLS,
   // Meta ads step 14 (2026-10-21): meta-lead-forms, meta-leads, meta-comments (read only).
   ...META_ADS_ENGAGEMENT_TOOLS,
+  // Meta ads step 7 (2026-10-21): meta-ads-numbers, meta-ads-report, meta-ads-saved-reports (read only).
+  ...META_ADS_INSIGHTS_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).
