@@ -110,6 +110,33 @@ describe('create-meta-ad-set', () => {
   })
 })
 
+describe('fix round 1', () => {
+  it('review B2 / B7 — under ad set budget sharing the campaign\'s bid strategy, read live; another refused; a daily budget only', () => {
+    const sharing = { campaign: { ...CAMPAIGN, budgetSharing: true, bidStrategy: 'COST_CAP' } }
+    const d = ok({ bidAmountCents: 150 }, sharing)
+    expect(d.requests[0].params).toMatchObject({ bid_strategy: 'COST_CAP', bid_amount: '150' })
+    expect(no({ bidStrategy: 'LOWEST_COST_WITHOUT_CAP' }, sharing)).toMatch(/4834009/)
+    expect(no({ dailyBudgetCents: undefined, lifetimeBudgetCents: 90000, endTime: '2026-12-01T00:00:00Z', bidAmountCents: 150 }, sharing)).toMatch(/daily budgets only/)
+    expect(no({}, { campaign: { ...CAMPAIGN, budgetSharing: true, bidStrategy: null } })).toMatch(/could not read its bid strategy/)
+  })
+  it('review B3 — WhatsApp marketing messages: named for an onboarded account on an eligible goal; said when unread; nothing otherwise', () => {
+    const onboarded = ok({}, { whatsApp: { status: 'MARKETING_MESSAGE_ONBOARDED' } })
+    expect(Object.values(onboarded.changes).map((c) => String(c.to)).join(' ')).toMatch(/Meta adds WhatsApp marketing messages to this ad set's placements/)
+    expect(ok({ activate: true }, { whatsApp: { status: 'MARKETING_MESSAGE_ONBOARDED' }, campaign: { ...CAMPAIGN, status: 'ACTIVE' } }).spendsMoney[0]).toMatch(/WhatsApp marketing messages/)
+    expect(ok({}, { whatsApp: { unread: 'Permissions error.' } }).warnings.join(' ')).toMatch(/could not read whether this ad account is onboarded to WhatsApp marketing messages/)
+    expect(Object.keys(ok({}, { whatsApp: { status: 'MARKETING_MESSAGE_NOT_ONBOARDED' } }).changes).join(' ')).not.toMatch(/WhatsApp/)
+    // REACH is not an eligible goal: nothing said even for an onboarded account.
+    expect(Object.keys(ok({ optimizationGoal: 'REACH' }, { whatsApp: { status: 'MARKETING_MESSAGE_ONBOARDED' } }).changes).join(' ')).not.toMatch(/WhatsApp/)
+  })
+  it('review A6 / B6 — the EU\'s outermost regions need the payer; under 18 refused in the EU, the EEA and CH', () => {
+    expect(no({ targeting: { countries: ['RE'] } }, { dsaDefaults: null })).toMatch(/it reaches RE/)
+    expect(() => createTargeting({ countries: ['NO'], ageMin: 16 })).toThrow(/EU, the EEA or Switzerland.*NO/)
+    expect(() => createTargeting({ countries: ['CH'], ageMin: 17 })).toThrow(/CH/)
+    expect(createTargeting({ countries: ['NO'] }).eu).toBe(false)
+    expect(createTargeting({ countries: ['GP'] }).eu).toBe(true)
+  })
+})
+
 describe('createTargeting', () => {
   it('one spelling the gateway takes; the EU and its minimum age; Advantage+ audience\'s age rules', () => {
     expect(createTargeting({ countries: ['it'], ageMin: 21, gender: 'female', customAudienceIds: ['120000000000070'] }).value)

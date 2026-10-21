@@ -269,6 +269,12 @@ export async function metaSendChange(
   if (node && Object.keys(wanted).length && Object.keys(wanted).every((f) => node[f] !== undefined && node[f] !== null) && !readBackMismatch(node, wanted).length) {
     return { node, readBack: 'second-read', waitedMs, afterError: unanswered ? 'Meta did not answer, or failed on its side' : failure.sentence }
   }
+  // Step 19 (review A4) — a copy with its children (deep_copy) or a background copy is not all or nothing: an error answer
+  // may come after part of it was made (reference/ad-campaign-group/copies.md limits; async batches run part by part).
+  const manyAtOnce = change.edge === 'async_batch_requests' || (change.edge === 'copies' && change.params.deep_copy === 'true')
+  if (manyAtOnce) {
+    throw new MetaWriteError({ ...failure, sentence: `Not confirmed: ${failure.sentence.replace(/ Nothing was changed\.$/, '').replace(/\.$/, '')} — but a copy with its children is not all or nothing, so part of the copy may exist (meta-campaigns view copies shows the source's copies). Nexus never sends it again by itself.` }, operation, 'unknown')
+  }
   // Step 18 — a create on an edge or a DELETE that Meta answered with an error made nothing (Meta judged it).
   if ((change.edge || change.method === 'DELETE') && !unanswered) throw new MetaWriteError(failure, operation, 'refused')
   if (!node) {

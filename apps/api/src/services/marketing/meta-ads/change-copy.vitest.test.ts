@@ -64,7 +64,10 @@ describe('copy-meta-ads', () => {
     const on = ok({ kind: 'campaign', sourceId: C, deepCopy: true, activate: true })
     expect(on.requests[0]).toMatchObject({ raisesSpend: true, params: expect.objectContaining({ status_option: 'ACTIVE' }) })
     expect(on.spendsMoney[0]).toMatch(/spend at once/)
-    expect(ok({ kind: 'campaign', sourceId: C, keepSourceStatus: true }).requests[0].params.status_option).toBe('INHERITED_FROM_SOURCE')
+    const kept = ok({ kind: 'campaign', sourceId: C, keepSourceStatus: true }).requests[0]
+    expect(kept.params.status_option).toBe('INHERITED_FROM_SOURCE')
+    // Review A5 — the copy must read back PAUSED too.
+    expect(kept.expect).toEqual({ status: 'PAUSED' })
     expect(no({ kind: 'campaign', sourceId: C, keepSourceStatus: true }, { source: { ...SOURCE, status: 'ACTIVE' } })).toMatch(/only from a paused source/)
     expect(no({ kind: 'campaign', sourceId: C, keepSourceStatus: true, activate: true })).toMatch(/Name one/)
   })
@@ -101,11 +104,20 @@ describe('copy-meta-ads', () => {
     expect(no({ kind: 'ad', sourceId: A, deepCopy: true }, { source: ad })).toMatch(/nothing under it/)
     expect(no({ kind: 'ad', sourceId: A, startTime: '2026-11-01T00:00:00Z' }, { source: ad })).toMatch(/no times of its own/)
   })
-  it('AD-048 — several ads in the background: asyncadcopies with their ids, Meta\'s answer decides, no undo', () => {
-    const d = ok({ kind: 'ad', adIds: [A, '120000000000004'], background: true }, { source: null })
-    expect(d.requests[0]).toMatchObject({ objectId: 'act_1234567890', edge: 'asyncadcopies', operation: 'ad.copy.background', params: { ad_ids: `["${A}","120000000000004"]`, status_option: 'PAUSED' } })
-    expect(d.warnings.join(' ')).toMatch(/LIVE-PROBE AD-048/)
-    expect(judged(d)).toMatchObject({ write: { rule: 'ad.copy.background' } })
+  it('review A1 / B1 — several ads in the background: the async batch of <ad id>/copies parts, PAUSED said for each; never asyncadcopies', () => {
+    const d = ok({ kind: 'ad', adIds: [A, '120000000000004'], background: true, targetAdSetId: S }, { source: null })
+    expect(d.requests[0]).toMatchObject({ objectId: 'act_1234567890', edge: 'async_batch_requests', operation: 'copy.background' })
+    expect(JSON.parse(d.requests[0].params.adbatch)).toEqual([
+      { name: 'ad_copy_1', relative_url: `${A}/copies`, body: `status_option=PAUSED&adset_id=${S}` },
+      { name: 'ad_copy_2', relative_url: '120000000000004/copies', body: `status_option=PAUSED&adset_id=${S}` },
+    ])
+    expect(d.warnings.join(' ')).toMatch(/asyncadcopies .* never sends it/)
+    expect(judged(d)).toMatchObject({ write: { rule: 'copy.background' } })
+    expect(d.before).toMatchObject({ op: 'background-copy' })
+  })
+  it('review A6 — an ad set in the EU\'s outermost regions needs its payer / beneficiary too', () => {
+    const re = { ...SOURCE, adSets: [{ id: S, name: 'Ad set B', countries: ['RE'], dsaPayor: null, dsaBeneficiary: null }] }
+    expect(no({ kind: 'campaign', sourceId: C, deepCopy: true }, { source: re })).toMatch(/3858079/)
   })
   it('refuses a legacy Advantage+ shopping source and a deleted one', () => {
     expect(no({ kind: 'campaign', sourceId: C }, { source: { ...SOURCE, smartPromotionType: 'AUTOMATED_SHOPPING_ADS' } })).toMatch(/legacy/)
@@ -120,7 +132,7 @@ describe('what a copy made, and the undo of a create or a copy', () => {
     expect(madeByCopy('ad', { copied_ad_id: '120000000000013' }, null)).toEqual([{ kind: 'ad', id: '120000000000013', name: null }])
   })
   const record: MadeRecord = { op: 'copy', made: [{ kind: 'campaign', id: '120000000000009' }, { kind: 'adset', id: '120000000000010' }, { kind: 'ad', id: '120000000000011' }], top: [{ kind: 'campaign', id: '120000000000009' }], madeAt: '2026-10-21T08:00:00.000Z' }
-  const now = (o: Partial<MadeNow>): MadeNow => ({ kind: 'campaign', id: '120000000000009', there: true, status: 'PAUSED', children: ['120000000000010', '120000000000011'], childrenMore: false, spend: 0, ...o })
+  const now = (o: Partial<MadeNow>): MadeNow => ({ kind: 'campaign', id: '120000000000009', there: true, status: 'PAUSED', effectiveStatus: 'PAUSED', children: ['120000000000010', '120000000000011'], childrenMore: false, childrenOn: [], spend: 0, undeletable: null, ...o })
   it('deletes only the top object the change made, when it holds only what the change made and has spent nothing', () => {
     const d = removalDraft(record, [now({})], 'copy-meta-ads')
     if ('refusal' in d) throw new Error(d.refusal)
@@ -136,6 +148,13 @@ describe('what a copy made, and the undo of a create or a copy', () => {
     expect(removalDraft(record, [now({ childrenMore: true })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/more ad sets or ads than Nexus reads/) })
     expect(removalDraft(record, [], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/could not read campaign/) })
     expect(removalDraft(record, [now({ there: false })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/deleted already/) })
+    // Review A3 — spend is reported late: nothing that delivers now is deleted (it, or anything under it).
+    expect(removalDraft(record, [now({ status: 'ACTIVE', effectiveStatus: 'ACTIVE' })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/is on: Meta reports spend late/) })
+    expect(removalDraft(record, [now({ childrenOn: ['120000000000011'] })], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/1 ad set or ad that deliver now/) })
+    // Review B8 — an ad Meta refuses to delete is said for that part.
+    const adRecord: MadeRecord = { op: 'copy', made: [{ kind: 'ad', id: '120000000000013' }], top: [{ kind: 'ad', id: '120000000000013' }], madeAt: '2026-10-21T08:00:00.000Z' }
+    expect(removalDraft(adRecord, [now({ kind: 'ad', id: '120000000000013', children: [], undeletable: 'Meta refuses to delete an ad that is part of its ad set\'s ad sequence (pause the ad set with set-meta-status instead).' })], 'copy-meta-ads'))
+      .toMatchObject({ refusal: expect.stringMatching(/ad sequence/) })
     expect(removalDraft({ ...record, op: 'background-copy', top: [] }, [], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/background copy/) })
     expect(removalDraft({ ...record, op: 'remove' }, [], 'copy-meta-ads')).toMatchObject({ refusal: expect.stringMatching(/final/) })
   })

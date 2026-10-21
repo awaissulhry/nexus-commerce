@@ -34,14 +34,20 @@
  *     is_dynamic_creative false — said when dynamic creative is asked.
  *   - advantage-campaigns.md: an ad set with Advantage+ audience on, no placement targeting, in a Sales / Leads campaign
  *     with a campaign budget makes the campaign read as Advantage+ — said.
+ *   - marketing-messages.md (OCC 2026-08-13): "With Advantage+ placements, marketing messages are added automatically for
+ *     eligible campaigns" (Sales: LINK_CLICKS, OFFSITE_CONVERSIONS, VALUE; Traffic: LINK_CLICKS; Leads:
+ *     OFFSITE_CONVERSIONS) of an account whose marketing_messages_settings.whatsapp_activation_status is
+ *     MARKETING_MESSAGE_ONBOARDED — a silent opt-in the preview names (a read that fails is said, not refused).
+ *   - adset-budget-sharing.md: under budget sharing every ad set takes the campaign's bid strategy (4834009) and a daily
+ *     budget. DSA: the EU with its outermost regions (RE, GP, MQ, GF, YT, MF); no one under 18 in the EU, EEA or CH.
  */
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import { money } from './change-settings-common.js'
 import { promotedMerged, promotedProblem, type MetaBidStrategy, type PromotedObjectAsk } from './change-campaign-settings.js'
 import { allowedAttribution, PRESET_SPEC, type AttributionPreset } from './change-ad-set-settings.js'
 import { createStatus, nothingMade, scheduleSpecs, type ScheduleAsk } from './change-create-common.js'
-import { EU_COUNTRIES, type LiveCampaign } from './live-settings.js'
-import type { DsaDefaults } from './live-create.js'
+import type { LiveCampaign } from './live-settings.js'
+import { DSA_COUNTRIES, NO_YOUTH_COUNTRIES, type DsaDefaults } from './live-create.js'
 import { adSetSpendCapParam, bidAmountMeaning, bidAmountParam, budgetParam, metaUnitsToMinor, MetaUnitError, minSpendTargetParam, roasFloorParam, unixSecondsParam } from './settings-units.js'
 
 /** A promoted object at create: step 18's keys, and what only a new ad set names. */
@@ -104,6 +110,8 @@ export interface AdSetCreateLive {
   catalogProblem?: string | null
   /** The Facebook Page this business chose (null: none). */
   pageId: string | null
+  /** WhatsApp marketing messages onboarding (read for an eligible campaign and goal): Meta's status, or why it was not read. */
+  whatsApp?: { status: string | null } | { unread: string }
   dsaDefaults: DsaDefaults | null
   capabilities: string[] | null
 }
@@ -119,6 +127,13 @@ const LEGACY = new Set(['AUTOMATED_SHOPPING_ADS', 'SMART_APP_PROMOTION'])
 const CAPS: ReadonlySet<string> = new Set(['LOWEST_COST_WITH_BID_CAP', 'COST_CAP'])
 const BETA_DESTINATIONS = new Set(['ON_AD', 'ON_POST', 'ON_VIDEO', 'ON_PAGE', 'ON_EVENT', 'SHOP_AUTOMATIC'])
 const ADVANTAGE_OBJECTIVES = new Set(['OUTCOME_SALES', 'OUTCOME_LEADS'])
+
+/** marketing-messages.md: the objectives and goals whose ad sets Meta gives WhatsApp marketing messages. */
+const WHATSAPP_GOALS: Readonly<Record<string, readonly string[]>> = {
+  OUTCOME_SALES: ['LINK_CLICKS', 'OFFSITE_CONVERSIONS', 'VALUE'], OUTCOME_TRAFFIC: ['LINK_CLICKS'], OUTCOME_LEADS: ['OFFSITE_CONVERSIONS'],
+}
+/** Would Advantage+ placements add WhatsApp marketing messages to an ad set of this objective and goal (onboarded account)? */
+export const whatsAppEligible = (objective: string | null, goal: string): boolean => !!objective && (WHATSAPP_GOALS[objective] ?? []).includes(goal)
 
 /** The billing events Meta pairs with a goal (billing-events.md). */
 export const billingFor = (goal: string): string[] => (goal === 'LINK_CLICKS' ? ['IMPRESSIONS', 'LINK_CLICKS'] : goal === 'THRUPLAY' ? ['IMPRESSIONS', 'THRUPLAY'] : ['IMPRESSIONS'])
@@ -143,14 +158,19 @@ export function createTargeting(t: CreateTargetingAsk): { value: string; eu: boo
       return { key: c.key, radius: c.radiusKm, distance_unit: 'kilometer' }
     })
   }
-  const euCountries = countries.filter((c) => EU_COUNTRIES.has(c))
-  const eu = euCountries.length > 0 || regions.length > 0 || cities.length > 0
+  // Review A6 / B6 — the EU's outermost regions count for the DSA; the under-18 rule covers the EU, the EEA and CH.
+  const euCountries = countries.filter((c) => DSA_COUNTRIES.has(c))
+  const keysOnly = regions.length > 0 || cities.length > 0
+  const eu = euCountries.length > 0 || keysOnly
   const euWhy = euCountries.length ? `it reaches ${euCountries.join(', ')}` : eu ? 'Nexus cannot tell which country a region or city key is in, so it counts them as the EU' : null
+  const youthCountries = countries.filter((c) => NO_YOUTH_COUNTRIES.has(c))
   const adv = t.advantageAudience === true
   if (t.ageMin !== undefined && (t.ageMin < 13 || t.ageMin > 65)) throw new MetaUnitError('The minimum age is 13 to 65.')
   if (t.ageMax !== undefined && (t.ageMax < 13 || t.ageMax > 65)) throw new MetaUnitError('The maximum age is 13 to 65.')
   if (t.ageMin !== undefined && t.ageMax !== undefined && t.ageMax < t.ageMin) throw new MetaUnitError('The maximum age is at least the minimum age.')
-  if (eu && (t.ageMin ?? 18) < 18) throw new MetaUnitError(`Meta does not let ads reach people under 18 in the EU, and ${euWhy}: the minimum age is 18 at least.`)
+  if ((youthCountries.length || keysOnly) && (t.ageMin ?? 18) < 18) {
+    throw new MetaUnitError(`Meta does not let ads reach people under 18 in the EU, the EEA or Switzerland, and ${youthCountries.length ? `it reaches ${youthCountries.join(', ')}` : 'Nexus cannot tell which country a region or city key is in'}: the minimum age is 18 at least.`)
+  }
   if (adv && t.ageMax !== undefined) throw new MetaUnitError('With Advantage+ audience Meta sets the maximum age itself (65): leave ageMax out.')
   if (adv && t.ageMin !== undefined && t.ageMin > 25) throw new MetaUnitError('With Advantage+ audience Meta takes a minimum age of 25 at most (the rest are suggestions).')
   const spec: Record<string, unknown> = { geo_locations: geo }
@@ -242,6 +262,8 @@ function draft(r: AdSetCreateRequest, live: AdSetCreateLive, now: Date): MetaCha
     if (r.dailyBudgetCents === undefined && r.lifetimeBudgetCents === undefined) return { refusal: `${camp} has no campaign budget: name this ad set's own budget (dailyBudgetCents or lifetimeBudgetCents). Meta needs a budget at one of the two.` }
     const type = r.dailyBudgetCents !== undefined ? 'daily' : 'lifetime'
     const cents = (type === 'daily' ? r.dailyBudgetCents : r.lifetimeBudgetCents)!
+    // Review B7 — ad set budget sharing shares DAILY budgets (bidding/guides/adset-budget-sharing.md).
+    if (type === 'lifetime' && c.budgetSharing === true) return { refusal: `${camp} shares budget between its ad sets: Meta shares daily budgets only — name a daily budget (dailyBudgetCents).` }
     if (type === 'lifetime' && !endSec) return { refusal: 'A lifetime budget needs an end time (endTime).' }
     if (type === 'daily' && endSec) {
       const start = startSec ?? nowSec
@@ -253,9 +275,13 @@ function draft(r: AdSetCreateRequest, live: AdSetCreateLive, now: Date): MetaCha
   }
 
   // ── bid strategy, bid, ROAS goal ──
-  const strategy = cbo ? c.bidStrategy : (r.bidStrategy ?? 'LOWEST_COST_WITHOUT_CAP')
+  // Review B2 — under ad set budget sharing every ad set takes the campaign's strategy (one spec, 4834009), read live.
+  const sharing = !cbo && c.budgetSharing === true
+  if (sharing && !c.bidStrategy) return { refusal: `${camp} shares budget between its ad sets, and Nexus could not read its bid strategy, which every ad set of it takes (4834009).` }
+  const strategy = cbo || sharing ? c.bidStrategy : (r.bidStrategy ?? 'LOWEST_COST_WITHOUT_CAP')
   if (cbo && r.bidStrategy && r.bidStrategy !== c.bidStrategy) return { refusal: `${camp} has a campaign budget: its bid strategy (${c.bidStrategy ?? 'unknown'}) is every ad set's — change it with set-meta-campaign.` }
-  if (!cbo) { params.bid_strategy = strategy!; lines.push(['Bid strategy (sent explicitly)', null, strategy]) }
+  if (sharing && r.bidStrategy && r.bidStrategy !== c.bidStrategy) return { refusal: `${camp} shares budget between its ad sets: every ad set takes its bid strategy (${c.bidStrategy}) — Meta refuses another (4834009).` }
+  if (!cbo) { params.bid_strategy = strategy!; lines.push([sharing ? 'Bid strategy (the campaign\'s: budget sharing)' : 'Bid strategy (sent explicitly)', null, strategy]) }
   if (strategy && CAPS.has(strategy)) {
     if (r.bidAmountCents === undefined) return { refusal: `A ${strategy === 'COST_CAP' ? 'cost cap' : 'bid cap'} strategy needs this ad set's cap (bidAmountCents, ${bidAmountMeaning(billing)}).` }
     if (strategy === 'COST_CAP' && billing !== 'IMPRESSIONS') return { refusal: 'A cost cap needs billing on impressions (Meta\'s bid strategy guide).' }
@@ -337,6 +363,17 @@ function draft(r: AdSetCreateRequest, live: AdSetCreateLive, now: Date): MetaCha
   lines.push(['Who sees it', null, t.words.join('; ')])
   lines.push(['Advantage+ audience (sent explicitly)', null, r.targeting.advantageAudience ? 'on (1): Meta may reach beyond the ages, gender and audiences named' : 'off (0)'])
   lines.push(['Placements', null, 'Advantage+ placements (Meta\'s default: all its placements; set-meta-placements narrows them)'])
+  // Review B3 — WhatsApp marketing messages: with Advantage+ placements Meta adds them for eligible campaigns of an
+  // onboarded account (marketing-api/marketing-messages.md; OCC 2026-08-13) — a silent opt-in, named here.
+  const whatsApp = whatsAppEligible(c.objective, r.optimizationGoal) ? live.whatsApp : undefined
+  let whatsAppOn = false
+  if (whatsApp && 'unread' in whatsApp) {
+    warnings.push(`Nexus could not read whether this ad account is onboarded to WhatsApp marketing messages (${whatsApp.unread.replace(/\.$/, '')}): if it is, Meta adds them to this ad set's Advantage+ placements (set-meta-placements leaves them out).`)
+  } else if (whatsApp && 'status' in whatsApp && whatsApp.status === 'MARKETING_MESSAGE_ONBOARDED') {
+    whatsAppOn = true
+    lines.push(['WhatsApp marketing messages', null, 'Meta adds WhatsApp marketing messages to this ad set\'s placements (Advantage+ placements; the account is onboarded)'])
+    warnings.push('Meta adds WhatsApp marketing messages to this ad set\'s placements: with Advantage+ placements an onboarded account\'s eligible ad sets also message its WhatsApp messaging customer base (set-meta-placements leaves them out).')
+  }
   if (r.targeting.advantageAudience) warnings.push('Advantage+ audience treats the ages, gender and audiences named as suggestions: Meta may show the ads to people outside them (never outside the locations, the minimum age or excluded audiences).')
   if ((c.specialAdCategories ?? []).some((x) => x !== 'NONE')) warnings.push(`${camp} is in a special ad category: Meta refuses age, gender and narrow-radius limits there; its check says so before anything is made.`)
   if (t.eu) {
@@ -360,9 +397,10 @@ function draft(r: AdSetCreateRequest, live: AdSetCreateLive, now: Date): MetaCha
   params.status = createStatus(r.activate)
   lines.push(['Status', null, r.activate ? 'ACTIVE (your decision)' : 'PAUSED (switch it on with set-meta-status: your decision)'])
   if (r.activate) {
+    const where = whatsAppOn ? ' (in its placements and in WhatsApp marketing messages)' : ''
     spendsMoney.push(c.status === 'ACTIVE'
-      ? `Made ACTIVE in an active campaign: ${who} spends once an ad under it is on and approved — none exists yet.`
-      : `Made ACTIVE, but nothing spends until ${camp} is on too (it is ${c.status ?? 'not on'}) and an ad under the ad set is on.`)
+      ? `Made ACTIVE in an active campaign: ${who} spends${where} once an ad under it is on and approved — none exists yet.`
+      : `Made ACTIVE, but nothing spends until ${camp} is on too (it is ${c.status ?? 'not on'}) and an ad under the ad set is on${whatsAppOn ? '; then it spends in its placements and in WhatsApp marketing messages' : ''}.`)
   }
 
   const { changes, more } = changeLines(lines)
@@ -376,6 +414,7 @@ function draft(r: AdSetCreateRequest, live: AdSetCreateLive, now: Date): MetaCha
     params,
     check: 'meta',
     recommendations: true,
+    recordEvenIfNotAsAsked: true,
     raisesSpend: r.activate === true,
     readBackInPost: false,
     budget: false,

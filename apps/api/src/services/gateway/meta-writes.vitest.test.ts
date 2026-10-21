@@ -146,7 +146,7 @@ describe('batches (ACC-022/023/025–027): the plumbing judges each part; only s
   })
   it('an async batch of anything but copies is refused (step 19: its one rule takes copies only); renaming or cancelling an async request set is not on the allow-list', () => {
     const body = `name=Set%20A&adbatch=${encodeURIComponent(JSON.stringify([{ name: 'one', relative_url: `v26.0/${CAMPAIGN}`, body: 'status=PAUSED' }]))}`
-    expect(verdict({ url: `${BASE}/act_1234567890/async_batch_requests`, body, objectKind: 'adaccount' })).toMatchObject({ problem: expect.stringMatching(/adbatch part 1 is named campaign_copy_1 or adset_copy_1/) })
+    expect(verdict({ url: `${BASE}/act_1234567890/async_batch_requests`, body, objectKind: 'adaccount' })).toMatchObject({ problem: expect.stringMatching(/adbatch part 1 is named campaign_copy_1, adset_copy_1 or ad_copy_1/) })
     expect(verdict({ url: `${BASE}/act_1234567890/async_batch_requests`, body })).toMatchObject({ problem: expect.stringMatching(/only Meta change/) })
     expect(metaBatchProblem('POST', 'act_1234567890/async_batch_requests', 'name=x')).toMatch(/names no adbatch/)
     expect(problem({ body: 'name=Set%20B&notification_mode=OFF' })).toMatch(/only Meta change/)

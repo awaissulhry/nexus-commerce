@@ -20,8 +20,9 @@
  *   - marketing-api/reference/ad-account/async_batch_requests.md (CMP-054): name + adbatch [{name, relative_url, body}] —
  *     a background copy of a campaign or ad set with more than 3 ads (Meta: up to 51). Not atomic; Meta answers a request
  *     set's id and makes the copies later: Nexus never has their ids, so that copy has no undo through Nexus.
- *   - marketing-api/reference/ad-account/asyncadcopies.md (AD-048 STILL-UNVERIFIED: "Creating" is empty): Nexus sends the
- *     ad copy's own keys with the ads' ids (ad_ids) and Meta's answer decides (LIVE-PROBES AD-048).
+ *   - marketing-api/reference/ad-account/asyncadcopies.md (AD-048): the edge exists but its "Creating" section is empty and
+ *     Meta's SDK has no method for it — Nexus never sends it (its default status is unknown). Several ads are copied in the
+ *     background as `<ad id>/copies` parts of the documented async batch instead, each with status_option said.
  *   - AD-054: Meta cannot move an ad ("adset_id … can not be updated", reference/adgroup.md): a copy into the other ad set
  *     is the way; the old ad stays (pause it with set-meta-status, or delete it with remove-meta-ads-items — step 22).
  *   - changelog 26.0 (from 2026-10-27, all versions): an ad set copy in a special-category campaign with constrained
@@ -30,8 +31,8 @@
 import { changeLines, plural, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import { money } from './change-settings-common.js'
 import { KIND_WORD, nothingMade, REMOVE_LATER, type MadeKind } from './change-create-common.js'
-import type { CopyAdSetFacts, CopySource, DsaDefaults } from './live-create.js'
-import { EU_COUNTRIES, type LiveCampaign } from './live-settings.js'
+import { DSA_COUNTRIES, type CopyAdSetFacts, type CopySource, type DsaDefaults } from './live-create.js'
+import type { LiveCampaign } from './live-settings.js'
 import { budgetParam, metaUnitsToMinor, MetaUnitError, unixSecondsParam } from './settings-units.js'
 
 /** Meta's limits on the ads one copy takes with it (copies references). */
@@ -44,7 +45,7 @@ export interface CopyRequest {
   kind: MadeKind
   /** The campaign, ad set or ad copied (not with adIds). */
   sourceId?: string
-  /** background ad copies (AD-048): up to 20 ads in one asynchronous request. */
+  /** background ad copies: up to 20 ads in one background request (an async batch of `<ad id>/copies` parts). */
   adIds?: string[]
   /** A campaign's or ad set's ads too (Meta: at most 3 in one request; more → background). */
   deepCopy?: boolean
@@ -86,12 +87,13 @@ export const COPY_NOT_SENT = [
   'Moving an ad: Meta cannot change an ad\'s ad set — copy it into the other ad set here; the old one stays (pause it with set-meta-status, or delete it with remove-meta-ads-items, step 22).',
   'A copy with a whole new creative: create-meta-creative and set-meta-ad (a copy here changes only the creative\'s name and URL tags).',
   'migrate_to_advantage_plus on a copy: Meta blocks it in v26 — not sent.',
+  'Meta\'s asyncadcopies edge: no documented parameters and no SDK method — never sent; several ads are copied in the background through Meta\'s documented async batch instead.',
 ]
 
 const LEGACY = new Set(['AUTOMATED_SHOPPING_ADS', 'SMART_APP_PROMOTION'])
 const named = (s: CopySource) => `${KIND_WORD[s.kind]} "${s.name ?? 'no name'}" (${s.id})`
 /** An ad set that may reach the EU (an EU country, or not only countries) without its own payer and beneficiary. */
-const euWithoutDsa = (a: CopyAdSetFacts) => (a.countries === null || a.countries.some((c) => EU_COUNTRIES.has(c.toUpperCase()))) && !(a.dsaPayor && a.dsaBeneficiary)
+const euWithoutDsa = (a: CopyAdSetFacts) => (a.countries === null || a.countries.some((c) => DSA_COUNTRIES.has(c.toUpperCase()))) && !(a.dsaPayor && a.dsaBeneficiary)
 
 export function copyDraft(request: CopyRequest, live: CopyLive, now: Date = new Date()): MetaChangeDraft | { refusal: string } {
   try {
@@ -115,24 +117,25 @@ function draft(r: CopyRequest, live: CopyLive, nowDate: Date): MetaChangeDraft |
   const statusOption = r.activate ? 'ACTIVE' : r.keepSourceStatus ? 'INHERITED_FROM_SOURCE' : 'PAUSED'
   const rename = renameOf(r.rename)
 
-  // ── background ad copies (AD-048): asyncadcopies with the ads' ids ──
+  // ── background ad copies (AD-048 answered): the documented async batch, one `<ad id>/copies` part per ad ──
   if (r.kind === 'ad' && r.background) {
     const ids = [...new Set(r.adIds ?? (r.sourceId ? [r.sourceId] : []))]
     if (!ids.length) return { refusal: 'Name the ads to copy in the background (adIds).' }
     if (ids.length > MAX_AD_IDS) return { refusal: `At most ${MAX_AD_IDS} ads in one background copy (Nexus confirms each is this account's first).` }
     if (r.keepSourceStatus) return { refusal: 'A background copy of several ads takes PAUSED or ACTIVE (keepSourceStatus is for one paused source).' }
     if (r.creative) return { refusal: 'A background copy of ads keeps each ad\'s creative: change a creative\'s name or URL tags on a copy of one ad (background off).' }
-    const params: Record<string, string> = { ad_ids: JSON.stringify(ids), status_option: statusOption }
-    if (r.targetAdSetId) params.adset_id = r.targetAdSetId
-    if (rename) params.rename_options = rename
-    lines.push(['Copy in the background', null, `${plural(ids.length, 'ad')}${r.targetAdSetId ? ` into ad set ${r.targetAdSetId}` : ' (each in its own ad set)'}, ${statusOption}`])
-    warnings.push('Meta documents the asyncadcopies edge but not its parameters: Nexus sends the ad copy\'s own (adset_id, rename_options, status_option) with the ads\' ids (ad_ids), and Meta\'s answer decides (LIVE-PROBE AD-048). For a sure path copy the ads one by one (background off).')
-    warnings.push(`A background copy is made by Meta later and Nexus never has the copies' ids: it has no undo through Nexus — ${REMOVE_LATER}.`)
+    const body: Record<string, string> = { status_option: statusOption }
+    if (r.targetAdSetId) body.adset_id = r.targetAdSetId
+    if (rename) body.rename_options = rename
+    const parts = ids.map((id, i) => ({ name: `ad_copy_${i + 1}`, relative_url: `${id}/copies`, body: new URLSearchParams(Object.entries(body)).toString() }))
+    lines.push(['Copy in the background', null, `${plural(ids.length, 'ad')}${r.targetAdSetId ? ` into ad set ${r.targetAdSetId}` : ' (each in its own ad set)'}, ${statusOption} (status_option sent explicitly for each)`])
+    warnings.push('Meta\'s asyncadcopies edge documents no parameters (and its SDK has no method for it), so Nexus never sends it: the ads go as parts of Meta\'s documented async batch, each a copy of one ad with its status_option said.')
+    warnings.push(`A background copy is made by Meta later (not all or nothing) and Nexus never has the copies' ids: it has no undo through Nexus — ${REMOVE_LATER}.`)
     if (r.activate) spendsMoney.push(`The copied ads are made ACTIVE: each spends once Meta approves it and its ad set and campaign are on${r.targetAdSetId && live.targetAdSet && !(live.targetAdSet.status === 'ACTIVE' && live.targetAdSet.campaignStatus === 'ACTIVE') ? ' — the target ad set or its campaign is not on, so nothing spends yet' : ''}.`)
     return finish({
       step: 1, label: `Copy ${plural(ids.length, 'ad')} in the background (${statusOption})`, kind: 'ad', objectKind: 'adaccount', objectId: `act_${live.adAccountId}`,
-      edge: 'asyncadcopies', params, check: 'none', raisesSpend: r.activate === true, readBackInPost: false, budget: false, undoable: false,
-      operation: 'ad.copy.background', readBackFields: 'id',
+      edge: 'async_batch_requests', params: { name: `Nexus copy of ${plural(ids.length, 'ad')}`, adbatch: JSON.stringify(parts) }, check: 'none',
+      raisesSpend: r.activate === true, readBackInPost: false, budget: false, undoable: false, operation: 'copy.background', readBackFields: 'id',
     }, lines, warnings, spendsMoney, live, 'background-copy')
   }
 
@@ -281,8 +284,10 @@ function draft(r: CopyRequest, live: CopyLive, nowDate: Date): MetaChangeDraft |
     step: 1, label: `Copy ${who}${deep ? ' with its children' : ''} (${statusOption})`, kind: r.kind, objectId: s.id, edge: 'copies', params,
     // Meta documents no check (validate_only) for copies.
     check: 'none', raisesSpend: r.activate === true, readBackInPost: false, budget: false, undoable: false, operation: `${r.kind}.copy`,
-    ...(statusOption !== 'INHERITED_FROM_SOURCE' ? { expect: { status: statusOption } } : {}),
+    // Review A5 — INHERITED_FROM_SOURCE only from a paused source: the copy must read back PAUSED too.
+    expect: { status: statusOption === 'INHERITED_FROM_SOURCE' ? 'PAUSED' : statusOption },
     readBackFields: 'id,name,status,effective_status',
+    recordEvenIfNotAsAsked: true,
   }, lines, warnings, spendsMoney, live, 'copy')
 }
 

@@ -7,8 +7,9 @@
  * Meta's rules it follows (checked 2026-10-21 on developers.facebook.com/documentation/ads-commerce/marketing-api/…):
  *   - reference/ad-campaign-group.md "Creating": name, objective, special_ad_categories (required; `[]` = none), status
  *     ACTIVE | PAUSED only, daily_budget / lifetime_budget (Advantage+ campaign budget: "All adsets under this campaign will
- *     share this budget"; never with ad set budgets), bid_strategy (Meta defaults a create WITHOUT one to a bid cap, so
- *     every ad set would need a bid: Nexus always sends one — facts F1 M3b-01), buying_type AUCTION | RESERVED (R&F: no
+ *     share this budget"; never with ad set budgets), bid_strategy — sent only with a campaign budget or with ad set
+ *     budget sharing, where it binds every ad set (review B2; Meta's create default is a bid cap, so then it is always
+ *     said); without either each ad set names its own (create-meta-ad-set) —, buying_type AUCTION | RESERVED (R&F: no
  *     spend cap, not with special categories), spend_cap (≈ USD 100 at least), promoted_object, budget_schedule_specs,
  *     source_campaign_id ("used if a campaign has been copied": bookkeeping), execution_options. "Objective Validation":
  *     legacy objectives are deprecated since v17 — the tool takes the six OUTCOME_ ones only (CMP-027).
@@ -28,8 +29,10 @@
  *     store URL — refused in words (master row: "refuse unless an app is linked").
  *   - CMP-074 (marketing-message campaigns, POST /act_{id}/message_campaign): Meta's SDK only (adaccount.py
  *     create_message_campaign: bid_amount, daily_budget, end_time, lifetime_budget, name, page_id, pixel_id, start_time —
- *     NO status, so Nexus could not make it paused; no reference page: RECHECK STILL-UNVERIFIED) and it needs Meta's
- *     marketing-messages onboarding — not built, said in words (CREATE_CAMPAIGN_NOT_SENT).
+ *     NO status, so Nexus could not make it paused; no reference page: RECHECK STILL-UNVERIFIED) — not built. WhatsApp
+ *     marketing messages are an AD SET PLACEMENT now (marketing-api/marketing-messages.md; OCC 2026-08-13): a Sales,
+ *     Traffic or Leads campaign made here takes them through its ad sets' placements (set-meta-placements, step 20;
+ *     create-meta-ad-set names when Advantage+ placements add them). Said in words (CREATE_CAMPAIGN_NOT_SENT).
  */
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import { money } from './change-settings-common.js'
@@ -79,7 +82,7 @@ export interface CampaignCreateLive {
 /** Answers in words for what create-meta-campaign does not make (CMP-026, CMP-074, AS-032's inline campaign). */
 export const CREATE_CAMPAIGN_NOT_SENT = [
   'App promotion campaigns: Nexus links no app to a business, and each ad set would need the app\'s id and store URL — make them in Ads Manager.',
-  'Marketing-message campaigns (Meta\'s message_campaign): only in Meta\'s SDK, with no status (so never paused) and Meta\'s marketing-messages onboarding — set them up in Ads Manager.',
+  'Marketing-message campaigns (Meta\'s message_campaign): only in Meta\'s SDK, with no status (so never paused) — not made. WhatsApp marketing messages are an ad set placement now: a Sales, Traffic or Leads campaign made here takes them through its ad sets (set-meta-placements; create-meta-ad-set says when Advantage+ placements add them for an onboarded account).',
   'Legacy objectives (CONVERSIONS, LINK_CLICKS, …): Meta deprecated them in v17 — the six OUTCOME_ objectives only.',
 ]
 
@@ -136,19 +139,25 @@ function draft(r: CampaignCreateRequest, live: CampaignCreateLive, now: Date): M
   } else {
     params.is_adset_budget_sharing_enabled = String(r.budgetSharing === true)
     lines.push(['Ad set budget sharing (sent explicitly: Meta requires the choice since v24)', null, r.budgetSharing ? 'on (ad sets may share up to 20% of their budgets)' : 'off'])
-    if (r.budgetSharing) warnings.push('With ad set budget sharing on, Meta needs every ad set to have one spec (same goal, billing and bid strategy) and lets it go off later but never on again for a running campaign.')
+    if (r.budgetSharing) warnings.push('With ad set budget sharing on, Meta needs every ad set to have one spec (same goal, billing and the campaign\'s bid strategy, daily budgets) and lets it go off later but never on again for a running campaign.')
     lines.push(['Budget', null, 'on each ad set (create-meta-ad-set names it)'])
   }
 
-  // ── bid strategy: always sent (Meta defaults a create without one to a bid cap) ──
-  const strategy = r.bidStrategy ?? 'LOWEST_COST_WITHOUT_CAP'
-  params.bid_strategy = strategy
-  lines.push(['Bid strategy (sent explicitly)', null, STRATEGY_WORDS[strategy]])
+  // ── bid strategy: the campaign's only with a campaign budget or with ad set budget sharing (review B2: Meta's campaign
+  // bid strategy governs its ad sets then — advantage-campaign-budget.md, adset-budget-sharing.md 4834005); without
+  // either, each ad set has its own (create-meta-ad-set), and none is sent here. ──
+  const campaignStrategy = cbo || r.budgetSharing === true
+  if (!campaignStrategy && r.bidStrategy) return { refusal: 'Without a campaign budget the bid strategy is each ad set\'s (create-meta-ad-set bidStrategy) — unless ad set budget sharing is on (budgetSharing: true), when the campaign\'s binds them all.' }
+  const strategy = campaignStrategy ? (r.bidStrategy ?? 'LOWEST_COST_WITHOUT_CAP') : null
+  if (strategy) {
+    params.bid_strategy = strategy
+    lines.push(['Bid strategy (sent explicitly; every ad set takes it)', null, STRATEGY_WORDS[strategy]])
+  } else lines.push(['Bid strategy', null, 'on each ad set (create-meta-ad-set bidStrategy)'])
   if (strategy === 'LOWEST_COST_WITH_MIN_ROAS') {
     if (!VALUE_OBJECTIVES.has(r.objective)) return { refusal: 'A ROAS goal is value optimisation: Meta allows it for Sales (OUTCOME_SALES) campaigns.' }
     if (cbo) warnings.push('A ROAS goal under a campaign budget is for good: Meta never switches it to another bid strategy afterwards (only a copy into a new campaign can). Each ad set then needs the VALUE goal and its minimum ROAS (create-meta-ad-set roasGoal).')
   }
-  if (CAPS.has(strategy)) warnings.push(`With a ${STRATEGY_WORDS[strategy]} every ad set needs its cap (create-meta-ad-set bidAmountCents).`)
+  if (strategy && CAPS.has(strategy)) warnings.push(`With a ${STRATEGY_WORDS[strategy]} every ad set needs its cap (create-meta-ad-set bidAmountCents).`)
 
   // ── spend cap, buying type (CMP-032) ──
   if (r.spendCapCents !== undefined) {
@@ -236,8 +245,10 @@ function draft(r: CampaignCreateRequest, live: CampaignCreateLive, now: Date): M
     undoable: false,
     operation: 'campaign.create',
     // What Meta must read back as sent (not the name: Meta may store a typed name in its own normal form).
-    expect: Object.fromEntries(Object.entries(params).filter(([k]) => ['objective', 'status', 'bid_strategy', 'daily_budget', 'lifetime_budget'].includes(k))),
-    readBackFields: 'id,name,status,effective_status,objective,bid_strategy,daily_budget,lifetime_budget',
+    expect: Object.fromEntries(Object.entries(params).filter(([k]) => ['objective', 'status', 'bid_strategy', 'daily_budget', 'lifetime_budget', 'is_pca_unified'].includes(k))),
+    readBackFields: `id,name,status,effective_status,objective,bid_strategy,daily_budget,lifetime_budget${params.is_pca_unified ? ',is_pca_unified' : ''}`,
+    // Review A4 — what Meta made is recorded even when it reads back otherwise (so undo can delete it).
+    recordEvenIfNotAsAsked: true,
   }
   return {
     summary: `Meta: ${request.label}.`,

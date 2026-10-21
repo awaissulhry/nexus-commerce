@@ -20,7 +20,7 @@ import { MetaReadError } from './errors.js'
 import { metaChosenAccount, MetaLiveRefusal } from './live.js'
 import { AD_LIST_STATUSES, ADSET_LIST_STATUSES, fieldRefused, listPaged } from './live-objects.js'
 import { metaReadOne } from './read-client.js'
-import type { MetaSettingsTarget } from './live-settings.js'
+import { EU_COUNTRIES, type MetaSettingsTarget } from './live-settings.js'
 
 type Row = Record<string, unknown>
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : null)
@@ -56,6 +56,15 @@ export async function liveChosenPage(target: MetaSettingsTarget): Promise<string
     throw err
   }
 }
+
+/**
+ * Where Meta asks an ad set for its EU payer and beneficiary (DSA): the EU countries and the EU's outermost regions Meta
+ * targets by codes of their own (Réunion RE, Guadeloupe GP, Martinique MQ, French Guiana GF, Mayotte YT, Saint-Martin MF —
+ * facts F1 X7: "the EU, associated territories").
+ */
+export const DSA_COUNTRIES: ReadonlySet<string> = new Set([...EU_COUNTRIES, 'RE', 'GP', 'MQ', 'GF', 'YT', 'MF'])
+/** Where Meta lets no ad reach people under 18: the EU (with its outermost regions), the EEA (NO, IS, LI) and CH (facts F1 M6). */
+export const NO_YOUTH_COUNTRIES: ReadonlySet<string> = new Set([...DSA_COUNTRIES, 'NO', 'IS', 'LI', 'CH'])
 
 /** The countries an ad set's targeting names (geo_locations.countries); null when it names regions or cities only, or none. */
 function countriesOf(targeting: unknown): string[] | null {
@@ -167,64 +176,111 @@ export interface MadeNow {
   /** false: Meta no longer has it (deleted, or not found). */
   there: boolean
   status: string | null
+  effectiveStatus: string | null
   /** Ad sets and ads under it now (not deleted), by id. */
   children: string[]
   childrenMore: boolean
+  /** Children that deliver now (effective_status ACTIVE), by id. */
+  childrenOn: string[]
   /** What it spent over its whole life, in Meta's insights unit (a decimal of the currency); null when Meta did not say. */
   spend: number | null
+  /** An ad Meta refuses to delete: one in an ad set with an ad sequence, or a dynamic creative ad (in words); null: none. */
+  undeletable: string | null
 }
 
 /**
- * One object a change made, now: one read of its own (its account, its kind's fields, its whole-life spend as an insights
- * expansion), then its children. Graph leaves an empty connection out of an expansion, so when `insights` is not in the
- * answer its spend is read once more on the insights edge, from the day before it was made to today (time_range); a read
- * that fails leaves the spend unknown (null), and undo then keeps the object. A DELETED object is read by its own id
- * (Meta keeps it readable); one Meta does not find is gone. Another account or another kind: refused.
+ * One object a change made, now: one read of its own (its account, status and effective status, its kind's fields, its
+ * whole-life spend as an insights expansion — an ad also its ad set's sequence and dynamic creative flag), then its
+ * children with their effective status. Graph leaves an empty connection out of an expansion, so when `insights` is not in
+ * the answer its spend is read once more on the insights edge, from the day before it was made to today in the AD
+ * ACCOUNT's time zone (Meta's insights dates); a read that fails leaves the spend unknown (null), and undo then keeps the
+ * object. Spend is reported late, so undo also keeps whatever delivers now (removalDraft). A DELETED object is read by its
+ * own id (Meta keeps it readable); one Meta does not find is gone. Another account or another kind: refused.
  */
-export async function liveMadeObject(target: MetaSettingsTarget, kind: MadeKind, objectId: string, madeAt: string): Promise<MadeNow> {
+export async function liveMadeObject(target: MetaSettingsTarget, kind: MadeKind, objectId: string, madeAt: string, timeZone: string | null = null): Promise<MadeNow> {
   const id = metaObjectId(objectId)
   if (!id) throw new MetaLiveRefusal(`"${objectId}" is not a Meta id.`)
+  const gone = (status: string | null): MadeNow => ({ kind, id, there: false, status, effectiveStatus: null, children: [], childrenMore: false, childrenOn: [], spend: null, undeletable: null })
   let body: Row
   try {
     body = (await metaReadOne({ connectionId: target.connectionId }, {
-      operation: `create.read.made.${kind}`, path: id, query: { fields: `id,account_id,status,${META_KIND_FIELDS[kind].join(',')},insights.date_preset(maximum){spend}` },
+      operation: `create.read.made.${kind}`, path: id,
+      query: { fields: `id,account_id,status,effective_status,${META_KIND_FIELDS[kind].join(',')},insights.date_preset(maximum){spend}${kind === 'ad' ? ',adset{id,creative_sequence,is_dynamic_creative}' : ''}` },
     })).body as Row
   } catch (err) {
-    if (err instanceof MetaReadError && err.failure.notFound) return { kind, id, there: false, status: null, children: [], childrenMore: false, spend: null }
+    if (err instanceof MetaReadError && err.failure.notFound) return gone(null)
     if (err instanceof MetaReadError) throw new MetaLiveRefusal(`Nexus could not read ${WORD[kind]} ${id} from Meta: ${err.message}`)
     throw err
   }
   if (metaAdAccountId(body.account_id) !== target.adAccountId) throw new MetaLiveRefusal(`${WORD[kind]} ${id} is not of the Meta ad account this business chose.`)
   const status = text(body.status)
-  if (status === 'DELETED') return { kind, id, there: false, status, children: [], childrenMore: false, spend: null }
+  if (status === 'DELETED') return gone(status)
   const insights = obj(body.insights)
   const sum = (rows: Row[]) => rows.reduce((n, r) => n + (Number(text(r.spend) ?? 0) || 0), 0)
   let spend: number | null = insights ? sum(Array.isArray(insights.data) ? insights.data as Row[] : []) : null
-  if (spend === null) spend = await spendSince(target, id, madeAt)
+  if (spend === null) spend = await spendSince(target, id, madeAt, timeZone)
+  let undeletable: string | null = null
+  if (kind === 'ad') {
+    const adSet = obj(body.adset)
+    const sequence = strings(obj(adSet?.creative_sequence)?.data ?? adSet?.creative_sequence) ?? []
+    // best-practices/manage-your-ad-object-status.md: ads in a creative_sequence cannot be deleted; reference/adgroup.md
+    // (1340029): a dynamic creative ad is deleted with its ad set only.
+    if (sequence.includes(id)) undeletable = `Meta refuses to delete an ad that is part of its ad set's ad sequence (pause the ad set with set-meta-status instead).`
+    else if (adSet?.is_dynamic_creative === true || adSet?.is_dynamic_creative === 'true') undeletable = `Meta refuses to delete a dynamic creative ad on its own (only its ad set can be deleted).`
+  }
   const children: string[] = []
+  const childrenOn: string[] = []
   let childrenMore = false
   const edges: Array<{ edge: string; statuses: readonly string[] }> = kind === 'campaign'
     ? [{ edge: 'adsets', statuses: ADSET_LIST_STATUSES }, { edge: 'ads', statuses: AD_LIST_STATUSES }]
     : kind === 'adset' ? [{ edge: 'ads', statuses: AD_LIST_STATUSES }] : []
   for (const e of edges) {
-    const read = await listPaged(target.connectionId, `create.read.made.${kind}.${e.edge}`, `${id}/${e.edge}`, { fields: 'id', effective_status: [...e.statuses] }, 200)
-    children.push(...read.rows.map((r) => text(r.id)).filter((x): x is string => !!x))
+    const read = await listPaged(target.connectionId, `create.read.made.${kind}.${e.edge}`, `${id}/${e.edge}`, { fields: 'id,effective_status', effective_status: [...e.statuses] }, 200)
+    for (const r of read.rows) {
+      const child = text(r.id)
+      if (!child) continue
+      children.push(child)
+      if (text(r.effective_status) === 'ACTIVE') childrenOn.push(child)
+    }
     childrenMore ||= read.more
   }
-  return { kind, id, there: true, status, children, childrenMore, spend }
+  return { kind, id, there: true, status, effectiveStatus: text(body.effective_status), children, childrenMore, childrenOn, spend, undeletable }
 }
 
-const day = (ms: number) => new Date(ms).toISOString().slice(0, 10)
+/** A day (YYYY-MM-DD) in a time zone (the ad account's; UTC when unknown or not one Intl knows). */
+export function dayIn(ms: number, timeZone: string | null): string {
+  try {
+    if (timeZone) return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms))
+  } catch { /* an unknown zone: UTC below */ }
+  return new Date(ms).toISOString().slice(0, 10)
+}
 
-/** What an object spent from the day before `madeAt` to today (UTC dates), or null when Meta did not answer. */
-async function spendSince(target: MetaSettingsTarget, id: string, madeAt: string): Promise<number | null> {
+/** What an object spent from the day before `madeAt` to today (the ad account's dates), or null when Meta did not answer. */
+async function spendSince(target: MetaSettingsTarget, id: string, madeAt: string, timeZone: string | null): Promise<number | null> {
   const made = Date.parse(madeAt)
   if (!Number.isFinite(made)) return null
   try {
-    const read = await listPaged(target.connectionId, 'create.read.made.spend', `${id}/insights`, { fields: 'spend', time_range: { since: day(made - 86_400_000), until: day(Date.now()) } }, 10)
+    const read = await listPaged(target.connectionId, 'create.read.made.spend', `${id}/insights`, { fields: 'spend', time_range: { since: dayIn(made - 86_400_000, timeZone), until: dayIn(Date.now(), timeZone) } }, 10)
     return read.rows.reduce((n, r) => n + (Number(text(r.spend) ?? 0) || 0), 0)
   } catch (err) {
     if (err instanceof MetaReadError) return null
+    throw err
+  }
+}
+
+// ── WhatsApp marketing messages (a silent placement of Advantage+ placements) ──────────────────────────────────────
+
+/**
+ * Whether the ad account is onboarded to WhatsApp marketing messages (marketing-api/marketing-messages.md: "With Advantage+
+ * placements, marketing messages are added automatically for eligible campaigns"): Meta's whatsapp_activation_status
+ * (MARKETING_MESSAGE_ONBOARDED, _NOT_ONBOARDED, _INELIGIBLE), or `unread` with Meta's words when it could not be read.
+ */
+export async function liveWhatsAppMarketing(target: MetaSettingsTarget): Promise<{ status: string | null } | { unread: string }> {
+  try {
+    const read = await metaReadOne({ connectionId: target.connectionId }, { operation: 'create.read.account.marketingMessages', path: `act_${target.adAccountId}`, query: { fields: 'marketing_messages_settings{whatsapp_activation_status}' } })
+    return { status: text(obj((read.body as Row).marketing_messages_settings)?.whatsapp_activation_status) }
+  } catch (err) {
+    if (err instanceof MetaReadError) return { unread: err.message }
     throw err
   }
 }

@@ -41,6 +41,10 @@ describe('create-meta-campaign', () => {
   it('without a campaign budget, ad set budget sharing is said explicitly (false unless asked); with one, never sent', () => {
     const abo = ok({ name: 'A', objective: 'OUTCOME_TRAFFIC' })
     expect(abo.requests[0].params.is_adset_budget_sharing_enabled).toBe('false')
+    // Review B2 — no campaign budget and no sharing: the bid strategy is each ad set's, none sent (and none taken).
+    expect(abo.requests[0].params).not.toHaveProperty('bid_strategy')
+    expect(no({ name: 'A', objective: 'OUTCOME_TRAFFIC', bidStrategy: 'COST_CAP' })).toMatch(/each ad set's/)
+    expect(ok({ name: 'A', objective: 'OUTCOME_TRAFFIC', budgetSharing: true, bidStrategy: 'COST_CAP' }).requests[0].params).toMatchObject({ is_adset_budget_sharing_enabled: 'true', bid_strategy: 'COST_CAP' })
     expect(Object.keys(abo.changes).some((k) => /budget sharing \(sent explicitly/.test(k))).toBe(true)
     expect(judged(abo)).toMatchObject({ write: { rule: 'campaign.create' } })
     expect(ok({ name: 'A', objective: 'OUTCOME_TRAFFIC', budgetSharing: true }).requests[0].params.is_adset_budget_sharing_enabled).toBe('true')
@@ -77,7 +81,11 @@ describe('create-meta-campaign', () => {
   it('CMP-087 — the unified PCA flow from 2026-10-22 only, Sales only', () => {
     expect(no({ name: 'A', objective: 'OUTCOME_SALES', dailyBudgetCents: 5000, pcaUnified: true })).toMatch(/2026-10-22/)
     const after = new Date(META_PCA_UNIFIED_FROM)
-    expect(ok({ name: 'A', objective: 'OUTCOME_SALES', dailyBudgetCents: 5000, pcaUnified: true }, {}, after).requests[0].params.is_pca_unified).toBe('true')
+    const pca = ok({ name: 'A', objective: 'OUTCOME_SALES', dailyBudgetCents: 5000, pcaUnified: true }, {}, after).requests[0]
+    expect(pca.params.is_pca_unified).toBe('true')
+    // Review B4 — read back and judged.
+    expect(pca.readBackFields).toMatch(/,is_pca_unified$/)
+    expect(pca.expect).toMatchObject({ is_pca_unified: 'true' })
     expect(no({ name: 'A', objective: 'OUTCOME_TRAFFIC', dailyBudgetCents: 5000, pcaUnified: true }, {}, after)).toMatch(/Sales/)
   })
   it('scheduled increases (CMP-058): a campaign daily budget, the account\'s capability, whole currency units, within 8 daily budgets', () => {

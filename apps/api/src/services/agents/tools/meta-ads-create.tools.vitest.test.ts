@@ -30,7 +30,12 @@ vi.mock('../../marketing/meta-ads/live-create.js', async (importActual) => ({
   liveChosenPage: vi.fn(async () => '120000000000080'),
   liveCopySource: vi.fn(async () => structuredClone(h.source)),
   liveCopyTargetAdSet: vi.fn(async () => null),
-  liveMadeObject: vi.fn(async (_t: unknown, kind: string, id: string) => ({ kind, id, there: true, status: 'PAUSED', children: [], childrenMore: false, spend: 0, ...(h.made[id] ?? {}) })),
+  liveMadeObject: vi.fn(async (_t: unknown, kind: string, id: string) => ({ kind, id, there: true, status: 'PAUSED', effectiveStatus: 'PAUSED', children: [], childrenMore: false, childrenOn: [], spend: 0, undeletable: null, ...(h.made[id] ?? {}) })),
+  liveWhatsAppMarketing: vi.fn(async () => ({ status: 'MARKETING_MESSAGE_ONBOARDED' })),
+}))
+vi.mock('../../marketing/meta-ads/live.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../marketing/meta-ads/live.js')>()),
+  metaChosenAccount: vi.fn(async () => ({ timeZone: 'Europe/Rome' })),
 }))
 vi.mock('../../marketing/meta-ads/catalog-rule.js', () => ({ metaCatalogProblem: vi.fn(async () => null) }))
 vi.mock('../../marketing/meta-ads/write-client.js', async (importActual) => ({
@@ -50,6 +55,7 @@ vi.mock('../../../db.js', () => ({
 }))
 
 import { META_ADS_CREATE_TOOLS } from './meta-ads-create.tools.js'
+import { liveMadeObject, liveWhatsAppMarketing } from '../../marketing/meta-ads/live-create.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
 import { MetaWriteError } from '../../marketing/meta-ads/write-client.js'
 import { localFailure } from '../../marketing/meta-ads/errors.js'
@@ -176,6 +182,35 @@ describe('create-meta-campaign', () => {
     h.changes['chg-5'] = { toolName: 'create-meta-campaign', after, undoneAt: new Date() }
     expect(await preview('create-meta-campaign', { removeMade: true, undoOf: 'chg-5' })).toEqual({ ok: false, error: expect.stringMatching(/undone already/) })
     expect(h.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('fix round 1', () => {
+  it('review A4 — a create that reads back otherwise is still recorded (with what it read), so its undo can delete it', async () => {
+    const p = (await preview('create-meta-campaign', CREATE)).preview
+    h.send.mockImplementationOnce(async () => ({ node: { id: NEW, status: 'ACTIVE', objective: 'OUTCOME_SALES', daily_budget: '5000' }, readBack: 'second-read', waitedMs: 0 }))
+    const ran = await run('create-meta-campaign', CREATE, p)
+    expect(ran.ok).toBe(true)
+    expect(ran.data.steps[0]).toMatchObject({ outcome: 'not_confirmed', sentence: expect.stringMatching(/Meta made it, but it reads back .*status ACTIVE, not what was asked \(status\)\. Nexus records what Meta made/) })
+    expect(ran.data.sentence).toMatch(/0 of 1 requests as asked/)
+    expect(ran.change!.after).toMatchObject({ op: 'create', top: [{ kind: 'campaign', id: NEW }], notAsAsked: expect.stringMatching(/status ACTIVE/) })
+    expect(tool('create-meta-campaign').undo!.request({ ...ran.change!, id: 'chg-9' })).toMatchObject({ tool: 'create-meta-campaign', args: { removeMade: true, undoOf: 'chg-9' } })
+  })
+  it('review A3 — the undo reads what the change made in the ad account\'s time zone', async () => {
+    h.changes['chg-6'] = { toolName: 'create-meta-campaign', after: { op: 'create', made: [{ kind: 'campaign', id: NEW }], top: [{ kind: 'campaign', id: NEW }], madeAt: '2026-10-21T08:00:00.000Z', accountId: 'm-1', adAccountId: '1234567890' }, undoneAt: null }
+    expect((await preview('create-meta-campaign', { removeMade: true, undoOf: 'chg-6' })).ok).toBe(true)
+    expect(vi.mocked(liveMadeObject).mock.calls.at(-1)).toEqual([expect.anything(), 'campaign', NEW, '2026-10-21T08:00:00.000Z', 'Europe/Rome'])
+    h.made[NEW] = { status: 'ACTIVE', effectiveStatus: 'ACTIVE' }
+    expect(await preview('create-meta-campaign', { removeMade: true, undoOf: 'chg-6' })).toEqual({ ok: false, error: expect.stringMatching(/is on: Meta reports spend late/) })
+  })
+  it('review B3 — the WhatsApp onboarding is read for an eligible goal only, and named in the preview', async () => {
+    vi.mocked(liveWhatsAppMarketing).mockClear()
+    const args = { campaignId: C, name: 'Ad set B', optimizationGoal: 'LINK_CLICKS', dailyBudgetCents: 2000, targeting: { countries: ['IT'] } }
+    const out = await preview('create-meta-ad-set', args)
+    expect(liveWhatsAppMarketing).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(out.preview.changes)).toMatch(/Meta adds WhatsApp marketing messages/)
+    await preview('create-meta-ad-set', { ...args, optimizationGoal: 'REACH' })
+    expect(liveWhatsAppMarketing).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -1,7 +1,7 @@
 /**
  * Meta ads changes, step 19 — new campaigns and ad sets, and copies, on the business's chosen Meta ad account:
  *   create-meta-campaign  a campaign (every OUTCOME_ objective but app promotion; campaign budget or ad set budgets with
- *                         sharing said explicitly; bid strategy always sent; special ad category always sent; spend cap;
+ *                         sharing said explicitly; the bid strategy with a campaign budget or sharing; special ad category always sent; spend cap;
  *                         reach and frequency; promoted object; scheduled increases; Advantage+ levers; the unified PCA
  *                         flow from 2026-10-22) — CMP-020–029, 031–033, 035, 040, 058, 074 (answered), 077, 087
  *   create-meta-ad-set    an ad set in one of its campaigns (goal, billing, destination, budget or the campaign's with a
@@ -27,14 +27,14 @@ import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
 import { metaChangePreview, metaConnectionArg, metaIdArg, metaWhyArg, META_CHANGE_RULES, recordAccount, runMetaChange, type MetaDraftBuilder } from './meta-ads-kit.js'
 import type { MetaChangeAccount } from '../../marketing/meta-ads/change-account.js'
 import type { MetaChangeDraft, MetaChangeRequest } from '../../marketing/meta-ads/change-draft.js'
-import { MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
+import { metaChosenAccount, MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
 import { liveAccountCapabilities, liveAccountPixels, liveCampaign } from '../../marketing/meta-ads/live-settings.js'
-import { liveChosenPage, liveCopySource, liveCopyTargetAdSet, liveDsaDefaults, liveMadeObject, type MadeNow } from '../../marketing/meta-ads/live-create.js'
+import { liveChosenPage, liveCopySource, liveCopyTargetAdSet, liveDsaDefaults, liveMadeObject, liveWhatsAppMarketing, type MadeNow } from '../../marketing/meta-ads/live-create.js'
 import { metaCatalogProblem } from '../../marketing/meta-ads/catalog-rule.js'
 import { promotedMerged } from '../../marketing/meta-ads/change-campaign-settings.js'
 import { ATTRIBUTION_PRESETS } from '../../marketing/meta-ads/change-ad-set-settings.js'
 import { campaignCreateDraft, CREATE_CAMPAIGN_NOT_SENT, type CampaignCreateRequest } from '../../marketing/meta-ads/change-create-campaign.js'
-import { adSetCreateDraft, CREATE_AD_SET_NOT_SENT, type AdSetCreateRequest } from '../../marketing/meta-ads/change-create-ad-set.js'
+import { adSetCreateDraft, CREATE_AD_SET_NOT_SENT, whatsAppEligible, type AdSetCreateRequest } from '../../marketing/meta-ads/change-create-ad-set.js'
 import { COPY_NOT_SENT, copyDraft, MAX_AD_IDS, type CopyRequest } from '../../marketing/meta-ads/change-copy.js'
 import { madeByCopy, nothingMade, removalDraft, REMOVE_LATER, type MadeRecord } from '../../marketing/meta-ads/change-create-common.js'
 import { createdIdOf, type MetaChangeResult } from '../../marketing/meta-ads/write-client.js'
@@ -104,9 +104,11 @@ async function removeMadeDraft(tool: CreateTool, args: Record<string, unknown>, 
   const record = (row.after ?? {}) as unknown as MadeRecord & { adAccountId?: string }
   if (record.adAccountId && record.adAccountId !== account.adAccountId) return { refusal: `Change ${changeId} made its objects on another Meta ad account than the one this business uses now: Nexus deletes nothing there.` }
   const live: MadeNow[] = []
+  // Review A3 — Meta's insights dates are the ad account's: its time zone dates the spend read.
+  const timeZone = await metaChosenAccount(account.accountId).then((a) => a.timeZone, () => null)
   for (const top of record.top ?? []) {
     try {
-      live.push(await liveMadeObject(account.target, top.kind, top.id, record.madeAt))
+      live.push(await liveMadeObject(account.target, top.kind, top.id, record.madeAt, timeZone))
     } catch (err) {
       // An object Nexus cannot read (another account now, a refusal) is kept: removalDraft says so.
       if (!(err instanceof MetaLiveRefusal)) throw err
@@ -116,7 +118,7 @@ async function removeMadeDraft(tool: CreateTool, args: Record<string, unknown>, 
 }
 
 /** The run's record: what the create or copy made (its ids from Meta's answer), or what the undo deleted. */
-function madeFinish(draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult }>) {
+function madeFinish(draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult; notAsAsked?: string }>) {
   const before = draft.before as MadeRecord
   const madeAt = new Date().toISOString()
   if (before.op === 'remove') {
@@ -135,7 +137,12 @@ function madeFinish(draft: MetaChangeDraft, done: Array<{ request: MetaChangeReq
     ? madeByCopy(request.kind, node, null)
     : (() => { const id = createdIdOf(node); return id ? [{ kind: request.kind, id, name }] : [] })()
   const top = made.length && made[0].kind !== 'creative' ? [{ kind: made[0].kind as MadeRecord['top'][number]['kind'], id: made[0].id }] : []
-  const after: MadeRecord = { op: before.op, made, top, madeAt, ...(top.length ? {} : { noUndo: ['Meta did not answer the new object\'s id, so undo cannot tell it apart.'] }) }
+  const notAsAsked = done[0].notAsAsked
+  const after: MadeRecord = {
+    op: before.op, made, top, madeAt,
+    ...(notAsAsked ? { notAsAsked: `Meta made it, but it read back ${notAsAsked}, not what was asked.` } : {}),
+    ...(top.length ? {} : { noUndo: ['Meta did not answer the new object\'s id, so undo cannot tell it apart.'] }),
+  }
   return {
     data: { made: made.map((m) => ({ kind: m.kind, id: m.id })), ...(top.length ? { id: top[0].id } : {}) },
     before,
@@ -218,7 +225,7 @@ const createMetaCampaign: AgentTool = {
     specialAdCategoryCountries: z.array(z.string().trim().regex(/^[A-Z]{2}$/)).min(1).max(250).optional().describe('the countries the category applies to (two letters; needed with a category)'),
     dailyBudgetCents: centsArg('a campaign daily budget (Advantage+ campaign budget: its ad sets share it)').optional(),
     lifetimeBudgetCents: centsArg('a campaign lifetime budget (each ad set then needs an end time)').optional(),
-    bidStrategy: z.enum(BID_STRATEGIES).optional().describe('the bid strategy (always sent; default LOWEST_COST_WITHOUT_CAP — highest volume; Meta would default to a bid cap). LOWEST_COST_WITH_MIN_ROAS: Sales only, for good under a campaign budget'),
+    bidStrategy: z.enum(BID_STRATEGIES).optional().describe('the campaign\'s bid strategy — only with a campaign budget or with budgetSharing (then sent, default LOWEST_COST_WITHOUT_CAP, and every ad set takes it); without either each ad set names its own. LOWEST_COST_WITH_MIN_ROAS: Sales only, for good under a campaign budget'),
     budgetSharing: z.boolean().optional().describe('no campaign budget only: let ad sets share up to 20% of their budgets (sent false unless true; Meta lets it go off later but never on again)'),
     spendCapCents: centsArg('a spend cap over its whole run (Meta asks about USD 100 at least)').optional(),
     buyingType: z.enum(['AUCTION', 'RESERVED']).optional().describe('AUCTION (default) or RESERVED (reach and frequency: needs Meta\'s eligibility and a reservation per ad set; no spend cap, no special category)'),
@@ -236,7 +243,7 @@ const createMetaCampaign: AgentTool = {
     'Make ONE new campaign on the business\'s chosen Meta ad account: its name, objective (Sales, Traffic, Engagement, '
     + 'Leads, Awareness), special ad category (always sent; [] when none — never political), its budget — a campaign '
     + 'budget (Advantage+ campaign budget) or budgets on its ad sets with ad set budget sharing said explicitly (Meta needs '
-    + 'it since v24) —, its bid strategy (always sent: Meta would otherwise default to a bid cap), spend cap, reach and '
+    + 'it since v24) —, its bid strategy (with a campaign budget or budget sharing only: then every ad set takes it), spend cap, reach and '
     + 'frequency buying, promoted object (the account\'s own pixel, its business portfolio\'s catalog), one-time budget '
     + 'increases, where it was copied from, the Advantage+ levers (Meta derives Advantage+; the preview says what its ad '
     + 'sets need) and the unified PCA flow (from 2026-10-22). Amounts in minor units of the account currency. It is made '
@@ -269,7 +276,9 @@ const buildAdSet = (args: Record<string, unknown>): MetaDraftBuilder => guarded(
   const pageId = ask.pageId ? await liveChosenPage(target) : null
   const dsaDefaults = await liveDsaDefaults(target)
   const capabilities = request.budgetSchedules?.length ? await liveAccountCapabilities(target) : null
-  return adSetCreateDraft(request, { adAccountId: account.adAccountId, currency: account.currency, campaign, pixels, catalogProblem, pageId, dsaDefaults, capabilities })
+  // Review B3 — read only when Advantage+ placements could add WhatsApp marketing messages (eligible objective and goal).
+  const whatsApp = request.optimizationGoal && whatsAppEligible(campaign.objective, request.optimizationGoal) ? await liveWhatsAppMarketing(target) : undefined
+  return adSetCreateDraft(request, { adAccountId: account.adAccountId, currency: account.currency, campaign, pixels, catalogProblem, pageId, dsaDefaults, capabilities, ...(whatsApp ? { whatsApp } : {}) })
 })
 
 const createMetaAdSet: AgentTool = {
@@ -313,8 +322,8 @@ const createMetaAdSet: AgentTool = {
       ageMin: z.number().int().min(13).max(65).optional().describe('the minimum age (Meta\'s default 18; 18 at least in the EU; with Advantage+ audience at most 25)'),
       ageMax: z.number().int().min(13).max(65).optional().describe('the maximum age (not with Advantage+ audience)'),
       gender: z.enum(['all', 'male', 'female']).optional().describe('everyone (default), men or women'),
-      customAudienceIds: z.array(z.string().trim().regex(/^\d{1,20}$/)).min(1).max(100).optional().describe('custom audiences it reaches (the account\'s own)'),
-      excludedCustomAudienceIds: z.array(z.string().trim().regex(/^\d{1,20}$/)).min(1).max(100).optional().describe('custom audiences it never reaches'),
+      customAudienceIds: z.array(z.string().trim().regex(/^\d{1,20}$/)).min(1).max(70).optional().describe('custom audiences it reaches (the account\'s own; at most 70 — Nexus confirms each, at most 150 ids in one change)'),
+      excludedCustomAudienceIds: z.array(z.string().trim().regex(/^\d{1,20}$/)).min(1).max(70).optional().describe('custom audiences it never reaches (the account\'s own; at most 70)'),
       advantageAudience: z.boolean().optional().describe('Advantage+ audience: Meta may reach beyond the ages, gender and audiences named (sent 0 unless true)'),
     }).optional().describe('required: who sees it — at least one location; placements, interests and the rest: set-meta-targeting / set-meta-placements after'),
     dsa: z.object({
@@ -333,7 +342,9 @@ const createMetaAdSet: AgentTool = {
     + 'units), start and end, attribution, promoted object (the account\'s own pixel and custom conversions, its business '
     + 'portfolio\'s catalog and product sets, the Page this business chose), dynamic creative, one-time budget increases '
     + 'and who sees it: countries, regions, cities, age, gender, custom audiences, with Advantage+ audience sent explicitly '
-    + '(off unless asked) — Meta\'s Advantage+ placements unless set-meta-placements narrows them later. An ad set that may '
+    + '(off unless asked) — Meta\'s Advantage+ placements unless set-meta-placements narrows them later (for an account '
+    + 'onboarded to WhatsApp marketing messages, Meta adds those to an eligible Sales, Traffic or Leads ad set: the preview '
+    + 'names it). An ad set that may '
     + 'reach the EU needs a payer and beneficiary: the account\'s saved defaults, else dsa — refused in words with neither. '
     + 'Amounts in minor units of the account currency. It is made PAUSED: activate makes it ACTIVE — SPENDS MONEY once an '
     + 'ad under it is on (the line says when its campaign is off, so nothing spends yet). Meta checks it first '
@@ -373,7 +384,7 @@ const copyMetaAds: AgentTool = {
     connectionId: metaConnectionArg,
     kind: z.enum(['campaign', 'adset', 'ad']).optional().describe('required: what is copied — campaign, adset or ad'),
     sourceId: idArg('the campaign, ad set or ad copied (of this ad account)').optional(),
-    adIds: z.array(z.string().trim().regex(/^\d{1,20}$/)).min(1).max(MAX_AD_IDS).optional().describe(`kind ad with background only: up to ${MAX_AD_IDS} ads copied in one asynchronous request (Meta documents no parameters for it: its answer decides)`),
+    adIds: z.array(z.string().trim().regex(/^\d{1,20}$/)).min(1).max(MAX_AD_IDS).optional().describe(`kind ad with background only: up to ${MAX_AD_IDS} ads copied in one background request (Meta's async batch, one copy per ad, each PAUSED unless activate)`),
     deepCopy: z.boolean().optional().describe('a campaign or ad set WITH its children (ad sets and ads): Meta copies at most 3 ads in one request (more: background, up to 51)'),
     targetCampaignId: idArg('an ad set copy: into this campaign of the account (it takes that campaign\'s settings, such as its budget)').optional(),
     targetAdSetId: idArg('an ad copy: into this ad set of the account (Meta cannot move an ad: this copy is the way)').optional(),

@@ -24,7 +24,10 @@ vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: v
 import { gatewayLedger, gatewayMetaChosen, gatewayMetaPage, gatewayMetaStored } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { metaWriteCall } from './meta.js'
-import { metaWriteVerdict } from './meta-calls.js'
+import { metaCallVerdict, metaWriteVerdict } from './meta-calls.js'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { META_PCA_UNIFIED_FROM } from './meta-create-rules.js'
 import { __metaObjectLimitsTest } from './meta-object-limits.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
@@ -74,7 +77,8 @@ describe('campaign.create: POST /act_<id>/campaigns', () => {
     expect(problem({ url: `${BASE}/${CAMPAIGN}/campaigns`, body: form(CAMPAIGN_CREATE) })).toMatch(/only Meta change/)
   })
   it('always says its bid strategy, its special ad category and its status; ad set budget sharing when it has no campaign budget', () => {
-    expect(campaignCreate({ bid_strategy: undefined })).toMatch(/only Meta change/)
+    // Review B2 — the campaign's bid strategy is optional (sent with a campaign budget or with budget sharing only).
+    expect(campaignCreate({ bid_strategy: undefined })).toBeNull()
     expect(campaignCreate({ special_ad_categories: undefined })).toMatch(/only Meta change/)
     expect(campaignCreate({ daily_budget: undefined })).toMatch(/is_adset_budget_sharing_enabled explicitly/)
     expect(campaignCreate({ daily_budget: undefined, is_adset_budget_sharing_enabled: 'false' })).toBeNull()
@@ -194,7 +198,7 @@ describe('copies: POST /<id>/copies, one rule per kind', () => {
   })
 })
 
-describe('background copies (CMP-054) and asynchronous ad copies (AD-048)', () => {
+describe('background copies (CMP-054, AD-048): the async batch of copies; asyncadcopies never', () => {
   const part = (o: Record<string, unknown>) => ({ name: 'campaign_copy_1', relative_url: `${CAMPAIGN}/copies`, body: 'status_option=PAUSED&deep_copy=true', ...o })
   const background = (parts: unknown[], name = 'Nexus copy') => verdict({ url: `${BASE}/${ACT}/async_batch_requests`, body: form({ name, adbatch: JSON.stringify(parts) }) })
   const backgroundProblem = (parts: unknown[]) => { const v = background(parts); return 'problem' in v ? v.problem : null }
@@ -206,14 +210,21 @@ describe('background copies (CMP-054) and asynchronous ad copies (AD-048)', () =
     expect(backgroundProblem([part({ relative_url: CAMPAIGN, body: 'status=PAUSED' })])).toMatch(/relative_url is <id>\/copies/)
     expect(backgroundProblem([part({ body: 'deep_copy=true&status_option=PAUSED&deep_copy=true' })])).toMatch(/one spelling, each key once/)
     expect(backgroundProblem([part({ body: 'status_option=PAUSED&deep_copy=true&campaign_id=1' })])).toMatch(/campaign_id is not a key/)
-    expect(backgroundProblem(Array.from({ length: 9 }, (_, i) => part({ name: `campaign_copy_${i + 1}`, relative_url: `12000000000000${i + 10}/copies` })))).toMatch(/1 to 8 copies/)
+    expect(backgroundProblem(Array.from({ length: 21 }, (_, i) => part({ name: `campaign_copy_${i + 1}`, relative_url: `1200000000000${i + 10}/copies` })))).toMatch(/1 to 20 copies/)
     expect(backgroundProblem([part({}), part({ name: 'campaign_copy_2' })])).toMatch(/each object once/)
     expect(backgroundProblem([{ ...part({}), method: 'DELETE' }])).toMatch(/exactly name, relative_url and body/)
   })
-  it('asyncadcopies: the ads\' ids and the copy\'s own keys, each ad named for the account check', () => {
-    const v = verdict({ url: `${BASE}/${ACT}/asyncadcopies`, body: form({ ad_ids: `["${AD}","120000000000004"]`, status_option: 'PAUSED', adset_id: AD_SET }) })
-    expect(v).toMatchObject({ write: { rule: 'ad.copy.background', ids: [{ id: AD, kind: 'ad' }, { id: '120000000000004', kind: 'ad' }, { id: AD_SET, kind: 'adset' }] } })
-    expect(problem({ url: `${BASE}/${ACT}/asyncadcopies`, body: form({ ad_ids: '[]', status_option: 'PAUSED' }) })).toMatch(/1 to 50 ad ids/)
+  it('review A1 / B1 — ads in the background are <ad id>/copies parts, each with its status_option, each ad and target named', () => {
+    const ad = (i: number, id: string, body = 'status_option=PAUSED') => ({ name: `ad_copy_${i}`, relative_url: `${id}/copies`, body })
+    expect(background([ad(1, AD, `status_option=PAUSED&adset_id=${AD_SET}`), ad(2, '120000000000004')]))
+      .toMatchObject({ write: { rule: 'copy.background', ids: [{ id: AD, kind: 'ad' }, { id: AD_SET, kind: 'adset' }, { id: '120000000000004', kind: 'ad' }] } })
+    expect(backgroundProblem([ad(1, AD, 'adset_id=1')])).toMatch(/names its status_option/)
+    expect(backgroundProblem([ad(1, AD, 'status_option=PAUSED&deep_copy=true')])).toMatch(/deep_copy is not a key/)
+  })
+  it('review A1 / B1 — asyncadcopies (no documented parameters) is refused: Nexus never sends it', () => {
+    const body = form({ ad_ids: `["${AD}"]`, status_option: 'PAUSED' })
+    expect(problem({ url: `${BASE}/${ACT}/asyncadcopies`, body })).toMatch(/only Meta change/)
+    expect(problem({ url: `${BASE}/${ACT}/asyncadcopies`, body: form({ adset_id: AD_SET }) })).toMatch(/only Meta change/)
   })
 })
 
@@ -266,5 +277,38 @@ describe('through the gateway: a create goes only to the chosen ad account; ever
     const ok = await metaWriteCall({ connectionId: 'm-1', operation: 'adset.delete', objectId: AD_SET, objectKind: 'adset', params: {}, check: false, method: 'DELETE' })
     expect(ok.ok).toBe(true)
     expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname, c.init.body || null])).toEqual([['DELETE', `/v26.0/${AD_SET}`, null]])
+  })
+})
+
+describe('review B3 — the WhatsApp marketing-messages field: read on the ad account only', () => {
+  const read = (path: string, fields: string) => metaCallVerdict({ method: 'GET', url: `${BASE}/${path}?fields=${encodeURIComponent(fields)}`, kind: 'read' }).problem
+  it('allowed on act_<id>, refused on any other node', () => {
+    expect(read(ACT, 'marketing_messages_settings{whatsapp_activation_status}')).toBeNull()
+    expect(read(CAMPAIGN, 'marketing_messages_settings{whatsapp_activation_status}')).toMatch(/read only on the ad account itself/)
+    expect(read(`${ACT}/campaigns`, 'id,marketing_messages_settings')).toMatch(/read only on the ad account itself/)
+  })
+})
+
+const HERE = fileURLToPath(new URL('.', import.meta.url))
+
+describe('review A2 — removalDraft is the ONE draft that sends object.delete today (step 22 adds an explicit-ask delete)', () => {
+  it('no other Meta change draft or tool builds a DELETE request but the budget schedule\'s own (a high-demand period)', () => {
+    const roots = [join(HERE, '../marketing/meta-ads'), join(HERE, '../agents/tools')]
+    const senders: string[] = []
+    for (const root of roots) {
+      for (const file of readdirSync(root)) {
+        // The drafts (change-*.ts) and the Meta tools name what is sent; write-client.ts only passes on what a draft named.
+        if (!file.endsWith('.ts') || file.includes('.test.') || !file.startsWith(root.endsWith('tools') ? 'meta-ads-' : 'change-')) continue
+        const text = readFileSync(join(root, file), 'utf8')
+        if (/method:\s*'DELETE'/.test(text)) senders.push(file)
+      }
+    }
+    expect(senders.sort()).toEqual(['change-budget-schedule.ts', 'change-create-common.ts'])
+    const common = readFileSync(join(HERE, '../marketing/meta-ads/change-create-common.ts'), 'utf8')
+    expect(common.match(/method:\s*'DELETE'/g)).toHaveLength(1)
+    const removal = common.slice(common.indexOf('export function removalDraft'), common.indexOf('// ── scheduled budget increases'))
+    expect(removal).toMatch(/method: 'DELETE'/)
+    const schedule = readFileSync(join(HERE, '../marketing/meta-ads/change-budget-schedule.ts'), 'utf8')
+    expect(schedule).toMatch(/objectKind: 'highdemandperiod'[^\n]*method: 'DELETE'|method: 'DELETE'[^\n]*objectKind: 'highdemandperiod'/)
   })
 })

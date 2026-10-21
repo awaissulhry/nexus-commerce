@@ -36,13 +36,16 @@
  *     spec", keys not documented — STILL-UNVERIFIED CMP-055: Nexus sends a daily or lifetime budget only, Meta's answer
  *     decides), an ad set's campaign_id (the copy "inherits all campaign settings, such as budget"), an ad's adset_id and
  *     creative_parameters (top-level overwrite of the creative spec: Nexus sends its name and url_tags only).
- *   - reference/ad-account/async_batch_requests.md: name + adbatch [{name, relative_url, body}] (≤ 1,000; Nexus: ≤ 8 copies
- *     of campaigns or ad sets, one per part, each judged exactly like the copy it is). reference/ad-account/asyncadcopies.md:
- *     the edge exists, its "Creating" section is empty (STILL-UNVERIFIED AD-048): Nexus sends the ad copy's own keys with the
- *     ads' ids (ad_ids) and Meta's answer decides (LIVE-PROBES AD-048).
+ *   - reference/ad-account/async_batch_requests.md: name + adbatch [{name, relative_url, body}] (≤ 1,000; Nexus: ≤ 20 copies,
+ *     one per part — a campaign or ad set with its ads, or an ad — each judged exactly like the copy it is; status_option
+ *     is documented on every copies edge, so a part is never left to Meta's default). reference/ad-account/asyncadcopies.md:
+ *     the edge exists but its "Creating" section is empty and Meta's SDK has no method for it (AD-048): Nexus NEVER sends
+ *     it — ads are copied in the background as `<ad id>/copies` parts of the async batch instead (no rule here: refused).
  *   - best-practices/manage-your-ad-object-status.md: DELETE /{id} = status DELETED, final. Until step 22
- *     (remove-meta-ads-items) builds on it, ONLY the undo of a create or a copy sends `object.delete` (the tools take the ids
- *     from the change's own record, never from a caller).
+ *     (remove-meta-ads-items) builds on it, ONLY the undo of a create or a copy sends `object.delete`:
+ *     change-create-common.ts removalDraft is the one draft that builds such a request (meta-create-writes.vitest.test.ts
+ *     pins it), and it takes the ids from the change's own record, never from a caller. Step 22 makes the rule an
+ *     explicit-ask delete of any own campaign, ad set or ad — so the rule itself is not tied to a record.
  */
 import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
 import {
@@ -74,8 +77,7 @@ export const COPY_STATUS_OPTIONS = ['PAUSED', 'ACTIVE', 'INHERITED_FROM_SOURCE']
 /** The two values of execution_options a create may carry: Meta's check, alone or with its recommendations (CMP-031). */
 export const CREATE_CHECK_VALUES = ['["validate_only"]', '["validate_only","include_recommendations"]'] as const
 /** Nexus's own limits: the most copies one background request holds, ads one async ad copy names, parts of a schedule. */
-export const MAX_BACKGROUND_COPIES = 8
-export const MAX_ASYNC_AD_COPIES = 50
+export const MAX_BACKGROUND_COPIES = 20
 const MAX_PERIODS = 50
 const AMOUNT_MAX = 100_000_000_000
 
@@ -303,24 +305,26 @@ export function metaCreateWriteRules(): readonly MetaWriteRule[] {
   const adCopyJudges: Record<string, MetaJudge> = { status_option: copyStatus, adset_id: digits, rename_options: renameOptions, creative_parameters: creativeParameters }
   const campaignCopyWhole = (p: Params) => ((p.has('start_time') || p.has('end_time')) && p.get('deep_copy') !== 'true' ? 'a campaign copy\'s start and end times are its copied ad sets\': with deep_copy=true only' : null)
 
-  // ── copy-meta-ads in the background (CMP-054): POST /act_{id}/async_batch_requests, each part one copy ──
-  const PART_NAME = /^(campaign|adset)_copy_([1-9]\d?)$/
-  const adbatchParts = (raw: string): Array<{ kind: 'campaign' | 'adset'; id: string; params: Map<string, string> }> | string => {
+  // ── copy-meta-ads in the background (CMP-054, AD-048): POST /act_{id}/async_batch_requests, each part one copy ──
+  const PART_NAME = /^(campaign|adset|ad)_copy_([1-9]\d?)$/
+  type Part = { kind: 'campaign' | 'adset' | 'ad'; id: string; params: Map<string, string> }
+  const adbatchParts = (raw: string): Part[] | string => {
     const list = metaCanonicalJson(raw)
     if (!Array.isArray(list) || list.length < 1 || list.length > MAX_BACKGROUND_COPIES) return `adbatch lists 1 to ${MAX_BACKGROUND_COPIES} copies, in one spelling`
-    const out: Array<{ kind: 'campaign' | 'adset'; id: string; params: Map<string, string> }> = []
+    const out: Part[] = []
     for (const [i, part] of list.entries()) {
       const where = `adbatch part ${i + 1}`
       if (!plainObject(part) || !exactKeys(part, ['name', 'relative_url', 'body'], ['name', 'relative_url', 'body'])) return `${where} has exactly name, relative_url and body`
       const name = typeof part.name === 'string' ? PART_NAME.exec(part.name) : null
-      if (!name || Number(name[2]) !== i + 1) return `${where} is named campaign_copy_${i + 1} or adset_copy_${i + 1} (the kind of what it copies)`
+      if (!name || Number(name[2]) !== i + 1) return `${where} is named campaign_copy_${i + 1}, adset_copy_${i + 1} or ad_copy_${i + 1} (the kind of what it copies)`
       const url = typeof part.relative_url === 'string' ? /^(\d{1,20})\/copies$/.exec(part.relative_url) : null
       if (!url) return `${where}'s relative_url is <id>/copies (a copy, nothing else)`
       const params = partParams(part.body)
       if (!params) return `${where}'s body is a form body in one spelling, each key once`
-      const kind = name[1] as 'campaign' | 'adset'
-      const judges = kind === 'campaign' ? campaignCopyJudges : adSetCopyJudges
-      if (!params.has('status_option') || params.get('deep_copy') !== 'true') return `${where} is a deep copy (deep_copy=true) with its status_option: a background copy is for copies with their ads`
+      const kind = name[1] as Part['kind']
+      const judges = kind === 'campaign' ? campaignCopyJudges : kind === 'adset' ? adSetCopyJudges : adCopyJudges
+      if (!params.has('status_option')) return `${where} names its status_option (never Meta's default)`
+      if (kind !== 'ad' && params.get('deep_copy') !== 'true') return `${where} is a deep copy (deep_copy=true): a campaign or ad set is copied in the background with its ads`
       const problem = metaJudged(judges, kind === 'campaign' ? campaignCopyWhole : undefined)(params)
       if (problem) return `${where}: ${problem}`
       out.push({ kind, id: url[1], params })
@@ -334,8 +338,8 @@ export function metaCreateWriteRules(): readonly MetaWriteRule[] {
       method: 'POST',
       path: /^act_\d{1,25}\/campaigns$/,
       kinds: ['adaccount'],
-      required: ['name', 'objective', 'special_ad_categories', 'status', 'bid_strategy'],
-      optional: ['special_ad_category_country', 'is_adset_budget_sharing_enabled', 'daily_budget', 'lifetime_budget', 'buying_type', 'spend_cap', 'promoted_object', 'budget_schedule_specs', 'source_campaign_id', 'is_pca_unified', 'execution_options'],
+      required: ['name', 'objective', 'special_ad_categories', 'status'],
+      optional: ['bid_strategy', 'special_ad_category_country', 'is_adset_budget_sharing_enabled', 'daily_budget', 'lifetime_budget', 'buying_type', 'spend_cap', 'promoted_object', 'budget_schedule_specs', 'source_campaign_id', 'is_pca_unified', 'execution_options'],
       text: { name: META_NAME_TEXT },
       maxBody: 8_000,
       values: metaJudged(campaignJudges, campaignWhole),
@@ -413,37 +417,17 @@ export function metaCreateWriteRules(): readonly MetaWriteRule[] {
       ids: (p) => {
         const parts = adbatchParts(p.get('adbatch') ?? '')
         if (typeof parts === 'string') return []
-        return parts.flatMap((part) => [{ id: part.id, kind: part.kind }, ...(isId(part.params.get('campaign_id')) ? [{ id: part.params.get('campaign_id')!, kind: 'campaign' as const }] : [])])
-      },
-    },
-    {
-      // AD-048 — STILL-UNVERIFIED: Meta documents the edge, not its parameters (LIVE-PROBES AD-048).
-      name: 'ad.copy.background',
-      method: 'POST',
-      path: /^act_\d{1,25}\/asyncadcopies$/,
-      kinds: ['adaccount'],
-      required: ['ad_ids', 'status_option'],
-      optional: ['adset_id', 'rename_options'],
-      text: { rename_options: META_NAME_TEXT },
-      values: metaJudged({
-        ad_ids: json('ad_ids', (list) => (Array.isArray(list) && list.length >= 1 && list.length <= MAX_ASYNC_AD_COPIES && list.every(isId) && new Set(list).size === list.length
-          ? null : `ad_ids lists 1 to ${MAX_ASYNC_AD_COPIES} ad ids (digits, as JSON strings), each once`)),
-        status_option: copyStatus,
-        adset_id: digits,
-        rename_options: renameOptions,
-      }),
-      budget: false,
-      ids: (p) => {
-        const list = metaCanonicalJson(p.get('ad_ids') ?? '')
-        return [
-          ...(Array.isArray(list) ? list.filter(isId).map((id) => ({ id, kind: 'ad' as const })) : []),
-          ...(isId(p.get('adset_id')) ? [{ id: p.get('adset_id')!, kind: 'adset' as const }] : []),
-        ]
+        return parts.flatMap((part): MetaWriteBodyId[] => [
+          { id: part.id, kind: part.kind },
+          ...(isId(part.params.get('campaign_id')) ? [{ id: part.params.get('campaign_id')!, kind: 'campaign' as const }] : []),
+          ...(isId(part.params.get('adset_id')) ? [{ id: part.params.get('adset_id')!, kind: 'adset' as const }] : []),
+        ])
       },
     },
     {
       // DELETE /{campaign | ad set | ad id}, no body. Until step 22 (remove-meta-ads-items) ONLY the undo of a create or a
-      // copy sends it, and only for the objects that change's own record says it made.
+      // copy sends it (change-create-common.ts removalDraft, pinned by a test), and only for the objects that change's own
+      // record says it made. Step 22 reuses this rule for an explicit-ask delete.
       name: 'object.delete',
       method: 'DELETE',
       path: /^\d{1,20}$/,

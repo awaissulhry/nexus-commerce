@@ -330,6 +330,14 @@ export const META_SEARCH_TYPES: ReadonlySet<string> = new Set([
 function keyAllowed(route: string, key: string, query: URLSearchParams): boolean {
   return READ_KEYS.has(key) || ROUTE_KEYS.some((r) => r.route.test(route) && r.keys.has(key) && (!r.when || r.when(query)))
 }
+/**
+ * Step 19 (2026-10-21) — fields a Nexus read asks on ONE kind of node only: the ad account's WhatsApp marketing-messages
+ * onboarding (`act_<id>?fields=marketing_messages_settings{whatsapp_activation_status}`, marketing-api/marketing-messages.md
+ * "Check whether an ad account is onboarded"; create-meta-ad-set names Meta's silent WhatsApp placement with it).
+ */
+const NODE_FIELDS: ReadonlyArray<{ field: string; route: RegExp; where: string }> = [
+  { field: 'marketing_messages_settings', route: /^act_\d+$/, where: 'the ad account itself (act_<id>)' },
+]
 /** At most this long, a `fields` value (the longest Nexus asks is far shorter). */
 const MAX_FIELDS_LENGTH = 4000
 /** A field name that is (or holds) a token: `access_token`, `page_access_token`, … — never asked for. */
@@ -493,6 +501,10 @@ export function metaCallVerdict(input: { method: string; url: string; kind: stri
   if (fields !== null) {
     const problem = fieldsProblem(fields)
     if (problem) return refuse(problem)
+    // Step 19 — a field Nexus reads only on one kind of node (NODE_FIELDS).
+    const names = new Set(fields.split(/[^A-Za-z0-9_]+/).filter(Boolean))
+    const misplaced = NODE_FIELDS.find((f) => names.has(f.field) && !f.route.test(route))
+    if (misplaced) return refuse(`${misplaced.field} is read only on ${misplaced.where}`)
   }
   if (segments.some((segment) => segment.toLowerCase() === 'accounts') && fields === null) {
     return refuse('a read of Pages (accounts) names its fields: Meta answers each Page\'s token by default')

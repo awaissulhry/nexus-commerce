@@ -63,6 +63,22 @@ describe('a create and a copy', () => {
     expect(err.outcome).toBe('refused')
     expect(h.reads).toHaveLength(0)
   })
+  it('review A4 — an error answer to a copy with its children (or a background copy) is NOT a refusal: part of it may exist', async () => {
+    const deep = { objectId: '120000000000001', kind: 'campaign' as const, edge: 'copies' as const, params: { status_option: 'PAUSED', deep_copy: 'true' }, operation: 'campaign.copy', expect: { status: 'PAUSED' } }
+    h.answers.push(answer(400, { error: { message: 'Invalid parameter' } }, { errorClass: 'invalid', channelCode: '100', channelMessage: 'Invalid parameter' }))
+    const err = await metaSendChange(target, deep, { sleep: async () => undefined }).catch((e) => e)
+    expect(err).toBeInstanceOf(MetaWriteError)
+    expect(err.outcome).toBe('unknown')
+    expect(err.message).toMatch(/^Not confirmed: .*part of the copy may exist/)
+    expect(err.message).not.toMatch(/Nothing was changed/)
+    h.answers.push(answer(400, { error: { message: 'Invalid parameter' } }, { errorClass: 'invalid', channelCode: '100', channelMessage: 'Invalid parameter' }))
+    const bg = await metaSendChange(target, { objectId: 'act_1234567890', kind: 'adaccount', edge: 'async_batch_requests', params: { name: 'x', adbatch: '[]' }, operation: 'copy.background' }, { sleep: async () => undefined }).catch((e) => e)
+    expect(bg.outcome).toBe('unknown')
+    // A copy of the object alone stays Meta's refusal.
+    h.answers.push(answer(400, { error: { message: 'Invalid parameter' } }, { errorClass: 'invalid', channelCode: '100', channelMessage: 'Invalid parameter' }))
+    const alone = await metaSendChange(target, { ...deep, params: { status_option: 'PAUSED', deep_copy: 'false' } }, { sleep: async () => undefined }).catch((e) => e)
+    expect(alone.outcome).toBe('refused')
+  })
   it('Meta\'s check of a create goes on the same edge, asks its recommendations when the change says so, and hands them back', async () => {
     h.answers.push(answer(200, { success: true, recommendations: [{ title: 'Use Advantage+ placements' }] }))
     const out = await metaCheckChange(target, { ...create, recommendations: true })

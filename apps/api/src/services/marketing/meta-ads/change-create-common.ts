@@ -39,6 +39,8 @@ export interface MadeRecord {
   removed?: Array<{ kind: MadeKind; id: string }>
   /** What has no way back, in words. */
   noUndo?: string[]
+  /** Review A4 — Meta made it but it read back otherwise: recorded all the same (its undo can delete it), with what it read. */
+  notAsAsked?: string
 }
 
 /** The record of a create or a copy before it ran (nothing made yet). */
@@ -70,7 +72,9 @@ export const REMOVE_LATER = 'remove it with remove-meta-ads-items (step 22, not 
 
 /**
  * The undo of a create or a copy as a draft: one DELETE per top object the change made that is still there, holds only
- * what the change made, and has spent nothing (all read live first: liveMadeObject). Anything else is said, not sent.
+ * what the change made, is not on (neither it nor anything under it delivers now — Meta reports spend late, so "spent
+ * nothing" alone is not enough), Meta lets be deleted, and has spent nothing (all read live first: liveMadeObject).
+ * Anything else is said, not sent.
  */
 export function removalDraft(record: MadeRecord, live: MadeNow[], tool: string): MetaChangeDraft | { refusal: string } {
   if (record.op === 'background-copy') return { refusal: `This was a background copy: Meta made the copies later, and Nexus never had their ids, so undo cannot tell them apart — meta-campaigns view copies shows them; ${REMOVE_LATER}.` }
@@ -91,6 +95,11 @@ export function removalDraft(record: MadeRecord, live: MadeNow[], tool: string):
       kept.push(`${who} now holds ${now.childrenMore ? 'more ad sets or ads than Nexus reads at once' : `${plural(foreign.length, 'ad set or ad', 'ad sets or ads')} this change did not make (${foreign.slice(0, 5).join(', ')}${foreign.length > 5 ? ', …' : ''})`}: deleting it would take those with it, so Nexus keeps it — ${REMOVE_LATER}.`)
       continue
     }
+    if (now.status === 'ACTIVE' || now.effectiveStatus === 'ACTIVE' || now.childrenOn.length) {
+      kept.push(`${who} ${now.status === 'ACTIVE' || now.effectiveStatus === 'ACTIVE' ? 'is on' : `has ${plural(now.childrenOn.length, 'ad set or ad', 'ad sets or ads')} that deliver now`}: Meta reports spend late, so Nexus deletes nothing that may be delivering — pause it with set-meta-status, then ask the undo again, or ${REMOVE_LATER}.`)
+      continue
+    }
+    if (now.undeletable) { kept.push(`${who}: ${now.undeletable}`); continue }
     if (now.spend === null) { kept.push(`Nexus could not read what ${who} spent, so it keeps it — ${REMOVE_LATER}.`); continue }
     if (now.spend > 0) { kept.push(`${who} has spent since it was made (${now.spend} in the account currency, Meta's number): Nexus keeps it with its results — pause it with set-meta-status, or ${REMOVE_LATER}.`); continue }
     requests.push({

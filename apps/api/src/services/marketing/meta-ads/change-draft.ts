@@ -57,6 +57,11 @@ export interface MetaChangeRequest {
   parent?: { kind: 'campaign' | 'adset'; id: string }
   /** Step 19 — Meta's check of this create asks its setup recommendations too (master CMP-031). */
   recommendations?: boolean
+  /**
+   * Step 19 (review A4) — a create or a copy: when Meta answers success but the new object reads back otherwise, it is still
+   * recorded as made (with what it reads), so its undo can delete it; never "no record" for an object Meta made.
+   */
+  recordEvenIfNotAsAsked?: boolean
 }
 
 export interface MetaChangeDraft {

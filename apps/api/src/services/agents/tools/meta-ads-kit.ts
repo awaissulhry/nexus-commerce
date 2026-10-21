@@ -341,7 +341,7 @@ export async function runMetaChange(
   args: Record<string, unknown>,
   ctx: ToolContext,
   build: MetaDraftBuilder,
-  finish: (draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult }>) => MetaRunOutcome,
+  finish: (draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult; notAsAsked?: string }>) => MetaRunOutcome,
   after?: (account: MetaChangeAccount, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult }>) => Promise<string>,
 ): Promise<ToolResult> {
   const run = approvedRun(ctx, String(args.why ?? ''))
@@ -364,7 +364,7 @@ export async function runMetaChange(
   }
 
   const steps: MetaRunStep[] = []
-  const done: Array<{ request: MetaChangeRequest; result: MetaChangeResult }> = []
+  const done: Array<{ request: MetaChangeRequest; result: MetaChangeResult; notAsAsked?: string }> = []
   let stoppedAt: number | null = null
   // Review fix A1 — the first request of this change that did not happen: a later switch-on (or raise) is never sent,
   // because what its "nothing spends yet" stood on may be exactly that request.
@@ -383,6 +383,15 @@ export async function runMetaChange(
       // Step 18 — a change past status: Meta said success, but a field it asked reads back otherwise: not done (no
       // record, no undo), and a missed step for what follows.
       const moved = request.expect ? readBackMismatch(result.node, expectedOf(request)) : []
+      // Step 19 (review A4) — a create or a copy Meta made that reads back otherwise: recorded as made (so undo can delete
+      // it), the step not confirmed, and a missed step for what follows.
+      if (moved.length && request.recordEvenIfNotAsAsked) {
+        missedAt ??= request.step
+        const reads = readsOf(result.node!, expectedOf(request))
+        done.push({ request, result, notAsAsked: reads })
+        steps.push({ step: request.step, label: request.label, outcome: 'not_confirmed', sentence: `${request.label}: Meta made it, but it reads back ${reads}, not what was asked (${moved.join(', ')}). Nexus records what Meta made (its undo can delete it) and never sends it again by itself; meta-ads-live shows it now.` })
+        continue
+      }
       if (moved.length) {
         missedAt ??= request.step
         steps.push({ step: request.step, label: request.label, outcome: 'not_confirmed', sentence: `${request.label}: Meta answered success but it reads back ${readsOf(result.node!, expectedOf(request))}, not what was asked (${moved.join(', ')}). Nexus records no change for it and never sends it again by itself; meta-ads-live shows it now.` })
@@ -429,14 +438,14 @@ export async function runMetaChange(
   const bookkeeping = after ? await after(account, done).catch(() => 'Nexus\'s pages show the change after the next daily read; meta-ads-live shows it now.') : null
   // Every record names the Meta account it was made on: undo reads that account and goes to it, never another.
   const stamp = (record: unknown) => (record && typeof record === 'object' && !Array.isArray(record) ? { ...record, accountId: account.accountId, adAccountId: account.adAccountId } : record)
-  const partial = done.length < draft.requests.length
+  const partial = done.length < draft.requests.length || done.some((d) => d.notAsAsked)
   return {
     ok: true,
     data: {
       summary: draft.summary,
       account: { accountId: account.accountId, adAccountId: account.adAccountId },
       sentence: partial
-        ? `Meta made ${done.length} of ${draft.requests.length} requests; the steps say what happened to each. Undo puts back only what Meta made.`
+        ? `Meta made ${done.filter((d) => !d.notAsAsked).length} of ${draft.requests.length} requests as asked; the steps say what happened to each. Undo puts back only what Meta made.`
         : `Meta made all ${draft.requests.length} request${draft.requests.length === 1 ? '' : 's'}.`,
       done: done.length,
       of: draft.requests.length,
