@@ -15,7 +15,7 @@ const S2 = '120000000000012'
 const A1 = '120000000000003'
 const A2 = '120000000000013'
 const CR = '120000000000040'
-const HASH = '0d500843a1d4699a0b41e99f4137a5c3'
+const HASH = 'abcdef0123456789abcdef0123456789'
 const VIDEO = '120000000000060'
 const PART = '120000000000070'
 
@@ -139,7 +139,7 @@ describe('creatives and images', () => {
   it('an image: out of the chosen account\'s library by its hash; refused while a creative uses it; a deleted creative is no user', () => {
     const image = { hash: HASH, name: 'photo.jpg', status: 'ACTIVE', creatives: ['120000000000041'] }
     expect(refusal([{ kind: 'image', hash: HASH }], live({ images: new Map([[HASH, image]]), imageCreatives: new Map([['120000000000041', { status: 'ACTIVE', ours: true }]]) })))
-      .toMatch(/Image "photo.jpg" \(0d500843a1d4699a0b41e99f4137a5c3\) is used by 1 creative this change does not delete \(120000000000041\)/)
+      .toMatch(/Image "photo.jpg" \(abcdef0123456789abcdef0123456789\) is used by 1 creative this change does not delete \(120000000000041\)/)
     expect(refusal([{ kind: 'image', hash: HASH }], live({ images: new Map([[HASH, image]]), imageCreatives: new Map([['120000000000041', null]]) }))).toMatch(/could not read some of them/)
     const d = draft([{ kind: 'image', hash: HASH }], live({ images: new Map([[HASH, image]]), imageCreatives: new Map([['120000000000041', { status: 'DELETED', ours: true }]]) }))
     expect(d.requests).toEqual([expect.objectContaining({ objectId: 'act_1234567890', objectKind: 'adaccount', edge: 'adimages', params: { hash: HASH }, method: 'DELETE', operation: 'image.delete' })])

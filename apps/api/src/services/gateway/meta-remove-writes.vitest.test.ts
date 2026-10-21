@@ -36,7 +36,7 @@ const CREATIVE = '120000000000040'
 const VIDEO = '120000000000060'
 const PART = '120000000000070'
 const PAGE = '120000000000080'
-const HASH = '0d500843a1d4699a0b41e99f4137a5c3'
+const HASH = 'abcdef0123456789abcdef0123456789'
 const verdict = (input: { body?: unknown; objectKind?: string; url: string; method?: string; kind?: string }) =>
   metaWriteVerdict({ method: input.method ?? 'DELETE', url: input.url, kind: input.kind ?? 'write', body: input.body, objectKind: input.objectKind })
 const problem = (input: Parameters<typeof verdict>[0]) => { const v = verdict(input); return 'problem' in v ? v.problem : null }
