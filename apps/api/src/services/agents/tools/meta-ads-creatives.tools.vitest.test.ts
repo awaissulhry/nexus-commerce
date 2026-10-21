@@ -216,7 +216,9 @@ describe('create-meta-creative — the preview', () => {
     expect(checked().params.instagram_user_id).toBe(IG)
     // Review B — an existing post carries no asset feed, format or shop key.
     // Round 2 — its button links to the website, so the website keys go too (fail-safe).
-    expect(Object.keys(checked().params).sort()).toEqual(['call_to_action', 'contextual_multi_ads', 'degrees_of_freedom_spec', 'destination_spec', 'format_transformation_spec', 'instagram_user_id', 'name', 'object_story_id'])
+    expect(Object.keys(checked().params).sort()).toEqual(['call_to_action', 'contextual_multi_ads', 'degrees_of_freedom_spec', 'destination_spec', 'format_transformation_spec', 'instagram_user_id', 'interactive_components_spec', 'name', 'object_story_id'])
+    // An existing post may be an image: Meta's automatic product tags are switched off on it too (fail safe).
+    expect(JSON.parse(checked().params.interactive_components_spec)).toEqual({ components: [{ type: 'product_tag', enroll_status: 'opt_out' }] })
   })
 })
 
