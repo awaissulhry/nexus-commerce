@@ -296,6 +296,12 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   // Meta ads step 26: a boost and a partnership change read the business's chosen Meta account first (meta-ads-boosts.tools test).
   'create-meta-boost': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-boosts.tools test)',
   'set-meta-partnership-access': 'it reads the business\'s chosen Meta Instagram account live from Meta, and no business here has Meta connected (meta-ads-boosts.tools test)',
+  // Meta ads step 32: datasets and custom conversions read and change Meta live (their own test runs them).
+  'create-meta-dataset': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'set-meta-dataset': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'set-meta-dataset-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'set-meta-custom-conversion': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'remove-meta-signal-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -689,6 +695,12 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // Meta ads step 26: a boost and a partnership change refuse in words before any call (no business here has Meta).
   'create-meta-boost': () => ({ name: 'Boost A', source: 'facebook-post', postId: '120000000000010_500000000000001' }),
   'set-meta-partnership-access': () => ({ action: 'approve-creators', creators: [{ instagramId: '17841400000000099' }] }),
+  // Meta ads step 32: no business here has Meta, so each refuses in words before any call.
+  'create-meta-dataset': () => ({ name: 'Shop A dataset' }),
+  'set-meta-dataset': () => ({ pixelId: '120000000000050', name: 'Shop A dataset' }),
+  'set-meta-dataset-access': () => ({ pixelId: '120000000000050', action: 'connect-ad-account' }),
+  'set-meta-custom-conversion': () => ({ action: 'update', customConversionId: '120000000000060', name: 'Shop A thanks' }),
+  'remove-meta-signal-items': () => ({ items: [{ kind: 'customConversion', id: '120000000000060' }], confirmDelete: true }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

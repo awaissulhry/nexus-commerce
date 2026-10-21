@@ -943,6 +943,12 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // Meta step 26 (2026-10-21): create-meta-boost / set-meta-partnership-access — the source or creators it stands on, the requests, where.
   'create-meta-boost': ['basis', 'plan', 'reach'],
   'set-meta-partnership-access': ['basis', 'plan', 'reach'],
+  // Meta step 32 (2026-10-21): datasets, their access, custom conversions, and the deletes of custom conversions Nexus made.
+  'create-meta-dataset': ['basis', 'plan', 'reach'],
+  'set-meta-dataset': ['basis', 'plan', 'reach'],
+  'set-meta-dataset-access': ['basis', 'plan', 'reach'],
+  'set-meta-custom-conversion': ['basis', 'plan', 'reach'],
+  'remove-meta-signal-items': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

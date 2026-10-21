@@ -41,6 +41,7 @@ import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
 import { metaPageOwnerProblem } from './meta-page-owner.js'
 import { MetaPageTokenUnavailable, metaPageTokenFor, scrubExactToken } from './meta-page-token.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
+import { META_SIGNALS_WRITE_RULES, type MetaSignalsKind } from './meta-signals-rules.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { MAX_RULE_BODY_IDS, ruleBodyIds } from './meta-ad-rule-rules.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
@@ -439,7 +440,10 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     const owner = metaWrite.auth === 'page' ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
       : metaWrite.targeting ? (req.metaObjectKind === 'adsettargeting' ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
         : isBrandSafetyRule(metaWrite.rule) ? await metaBrandSafetyOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind ?? '', metaCheckRead(req.connectionId), req.metaRun)
-          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind> | undefined, req.metaParent)
+          // Step 32 — a dataset, custom conversion or event source group change: chosen by its rule (it also names step 19's
+          // `adaccount` and step 28's `page`, whose own checks run first), then signals-rule.ts with every id inside the body.
+          : isSignalsRule(metaWrite.rule) ? await metaSignalsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
+          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind> | undefined, req.metaParent)
           ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
           ?? await metaMediaAssetsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
@@ -1030,6 +1034,31 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
 
 /** Meta step 39 — is this the name of a brand-safety write rule (meta-brand-safety-rules.ts)? Read when judged, never at load. */
 const isBrandSafetyRule = (name: string): boolean => META_BRAND_SAFETY_WRITE_RULES.some((rule) => rule.name === name)
+
+/** Meta step 32 — is this the name of a dataset / custom conversion write rule (meta-signals-rules.ts)? Read when judged. */
+const isSignalsRule = (name: string): boolean => META_SIGNALS_WRITE_RULES.some((rule) => rule.name === name)
+
+/**
+ * Meta step 32 — the owner check of a dataset, custom conversion or event source group change. What it shares with an
+ * earlier step is that step's own check, run first: a create on the ad account (`adaccount`: act_<the chosen account>,
+ * step 19), a Page's dataset (`page`: the chosen Page, step 28), an Instagram account's (`instagram`: the chosen account,
+ * step 31's audience-ids rule). Then marketing/meta-ads/signals-rule.ts: a pixel by step 11's verdict, the portfolio no other
+ * Nexus business shares, a custom conversion of a free pixel (Nexus-made to delete), an event source group, the ids inside
+ * the body (the custom conversion's dataset, the group's datasets, the chosen ad account in a connect).
+ */
+async function metaSignalsOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: MetaWriteKind | undefined): Promise<{ code: string; sentence: string } | null> {
+  if (kind === 'adaccount' || kind === 'page') {
+    const problem = await metaOwnerProblem(connectionId, write, kind)
+    if (problem) return problem
+  }
+  if (kind === 'instagram') {
+    const { metaAudienceIdProblem } = await import('../marketing/meta-ads/audience-ids.js')
+    const problem = await metaAudienceIdProblem(connectionId, { id: write.objectId, kind: 'instagram' })
+    if (problem) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${problem}` }
+  }
+  if (!kind) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of ${write.objectId} names the kind of object it changes.` }
+  return (await import('../marketing/meta-ads/signals-rule.js')).metaSignalsProblem(connectionId, write, kind)
+}
 
 /**
  * Meta step 39 — one Graph read for a brand-safety owner check, through this gateway (its read gate, ledger and rate
