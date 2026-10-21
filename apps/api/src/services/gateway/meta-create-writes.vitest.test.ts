@@ -311,7 +311,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
   it('metaWriteCall, metaSendChange, metaCheckChange, removalDraft and metaRemoveDraft have the callers they have today, and no other', () => {
     expect(callers('metaWriteCall')).toEqual(['services/marketing/meta-ads/write-client.ts'])
     // Step 23 — create-meta-media's requests bring their own senders (an upload read again, the video-ads upload's calls).
-    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-kit.ts', 'services/marketing/meta-ads/change-media.ts'])
+    // Step 25 — create-meta-creative's create and async job bring their own senders too (the creative read back).
+    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-kit.ts', 'services/marketing/meta-ads/change-creatives.ts', 'services/marketing/meta-ads/change-media.ts'])
     expect(callers('metaCheckChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
     expect(callers('removalDraft')).toEqual(['services/agents/tools/meta-ads-create.tools.ts'])
     expect(all.find((f) => f.path === 'services/agents/tools/meta-ads-create.tools.ts')!.text.match(/\bremovalDraft\(/g)).toHaveLength(1)
@@ -353,6 +354,7 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/gateway/meta-optimize-rules.ts': 1, // step 28: the pageVideoTest.delete rule (a judge)
       'services/marketing/meta-ads/change-experiments.ts': 1, // step 28: a concluded Page video test's delete (set-meta-experiment)
       'services/marketing/meta-ads/change-media.ts': 1, // step 23: create-meta-media's undo, through step 22's removal rules
+      'services/marketing/meta-ads/change-creatives.ts': 1, // step 25: create-meta-creative's undo, through step 22's creative.delete rule
       'services/gateway/meta-ad-rule-rules.ts': 1, // step 29: the adRule.delete rule (a judge)
       'services/marketing/meta-ads/change-ad-rule.ts': 1, // step 29: remove-meta-ad-rule's delete (explicit ask: confirmDelete)
       'services/gateway/meta-brand-safety-rules.ts': 6, // step 39: a list's delete, unshare, a person, posts, an ad account, a content list (judges)

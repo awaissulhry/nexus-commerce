@@ -109,6 +109,8 @@ import { META_ADS_LABELS_RULES_TOOLS } from './tools/meta-ads-labels-rules.tools
 import { META_ADS_OPTIMIZE_CHANGES_TOOLS } from './tools/meta-ads-optimize-changes.tools.js'
 import { META_ADS_COMMERCE_TOOLS } from './tools/meta-ads-commerce.tools.js'
 import { META_ADS_MEDIA_UPLOAD_TOOLS } from './tools/meta-ads-media-upload.tools.js'
+// Meta ads step 25 (2026-10-21): creatives (create-meta-creative, set-meta-creative).
+import { META_ADS_CREATIVES_TOOLS } from './tools/meta-ads-creatives.tools.js'
 // Meta ads step 29 (2026-10-21): Meta's automated rules.
 import { META_ADS_RULES_TOOLS } from './tools/meta-ads-rules.tools.js'
 // Meta ads step 7 (2026-10-21): insights at every level, background report runs, saved and partner reports (read only).
@@ -356,6 +358,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_COMMERCE_TOOLS,
   // Meta ads step 23 (2026-10-21): create-meta-media — images, videos and folders into the chosen ad account, and the undo.
   ...META_ADS_MEDIA_UPLOAD_TOOLS,
+  // Meta ads step 25 (2026-10-21): create-meta-creative (every format, silent features off) and set-meta-creative.
+  ...META_ADS_CREATIVES_TOOLS,
   // Meta ads step 29 (2026-10-21): set-meta-ad-rule (make, change, switch, run Meta's rules), remove-meta-ad-rule.
   ...META_ADS_RULES_TOOLS,
   // Meta ads step 7 (2026-10-21): meta-ads-numbers, meta-ads-report, meta-ads-saved-reports (read only).

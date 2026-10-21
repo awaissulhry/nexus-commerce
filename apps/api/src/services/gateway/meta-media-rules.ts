@@ -123,22 +123,31 @@ export function metaLinkSecretProblem(url: URL): string | null {
  * Nexus never fetches it: Meta does.
  */
 export function metaFileUrlProblem(value: string): string | null {
-  if (!value || value.length > 2000) return 'file_url is a link of at most 2000 characters'
-  if (!/^[\x21-\x7e]+$/.test(value)) return 'file_url is a plain link (no spaces, letters outside ASCII written %-encoded)'
+  return metaPublicLinkProblem(value, 'file_url', 2000)
+}
+
+/**
+ * Step 25 — this link rule, named for any key (a creative's link, a picture Meta fetches, a display link): one spelling
+ * (the URL parser's), https, a public host by its name, no user, password, port or #fragment, no key, signature or sign-in
+ * in its query, at most `max` characters (Meta: a creative's URL "≤1000"). `example` hosts are refused too.
+ */
+export function metaPublicLinkProblem(value: string, what: string, max: number): string | null {
+  if (!value || value.length > max) return `${what} is a link of at most ${max} characters`
+  if (!/^[\x21-\x7e]+$/.test(value)) return `${what} is a plain link (no spaces, letters outside ASCII written %-encoded)`
   let url: URL
-  try { url = new URL(value) } catch { return 'file_url is not a link' }
-  if (url.href !== value) return 'file_url is written as the URL parser writes it (one spelling only)'
-  if (url.protocol !== 'https:') return 'file_url is an https:// link'
-  if (url.username || url.password || url.port || url.hash) return 'file_url carries no user, password, port or #fragment'
+  try { url = new URL(value) } catch { return `${what} is not a link` }
+  if (url.href !== value) return `${what} is written as the URL parser writes it (one spelling only)`
+  if (url.protocol !== 'https:') return `${what} is an https:// link`
+  if (url.username || url.password || url.port || url.hash) return `${what} carries no user, password, port or #fragment`
   const host = url.hostname
-  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(host) || /^[\d.]+$/.test(host)) return 'file_url names a public host by its name (no address)'
-  if (/(^|\.)(localhost|local|internal|intranet|lan|home|corp|test|example|invalid|onion)$/.test(host)) return 'file_url names a public host (not a local or internal one)'
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(host) || /^[\d.]+$/.test(host)) return `${what} names a public host by its name (no address)`
+  if (/(^|\.)(localhost|local|internal|intranet|lan|home|corp|test|example|invalid|onion)$/.test(host)) return `${what} names a public host (not a local or internal one)`
   const secret = metaLinkSecretProblem(url)
-  return secret ? `file_url ${secret}` : null
+  return secret ? `${what} ${secret}` : null
 }
 
 /** Review A6 — bidirectional controls (embeddings, overrides, isolates, marks): text a person reads never carries them. */
-const BIDI_CONTROLS = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/u
+export const BIDI_CONTROLS = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/u
 /**
  * Step 23's text pattern for the gateway's text check (MetaWriteRule.text): no control, format or surrogate character, but
  * U+200D (zero-width joiner) BETWEEN two emoji, as a family emoji is written — the same rule as step 18's META_NAME_TEXT.
@@ -149,7 +158,7 @@ export const META_MEDIA_TEXT_PATTERN = /^(?:[^\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]|(?
  * character, not a Hangul or braille blank (U+115F, U+1160, U+3164, U+FFA0, U+2800), and not a combining mark alone (a mark
  * counts only on a visible base, which is then the visible character).
  */
-const VISIBLE = /[^\p{White_Space}\p{Z}\p{Cc}\p{Cf}\p{M}\u115F\u1160\u3164\uFFA0\u2800]/u
+export const VISIBLE = /[^\p{White_Space}\p{Z}\p{Cc}\p{Cf}\p{M}\u115F\u1160\u3164\uFFA0\u2800]/u
 
 /**
  * Review A6 — why step 23's own text (a name, a title, a description) is refused, or null: 1 to `max` characters (a

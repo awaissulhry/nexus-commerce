@@ -926,6 +926,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { kind: 'image', items: [{ kind: 'image', source: 'da_test', inLibrary: false }] },
         after: { kind: 'image', items: [{ kind: 'image', source: 'da_test', hash: '0123456789abcdef0123456789abcdef', new: true }], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 25: a creative a create made new is deleted again; a creative's old name and labels go back.
+      'create-meta-creative': {
+        before: { kind: 'create', items: [] },
+        after: { kind: 'create', items: [{ kind: 'creative', creativeId: '120000000000301', name: 'Creative A', new: true }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-creative': {
+        before: { kind: 'set', creativeId: '120000000000301', name: 'Creative A', status: 'ACTIVE', labels: ['Spring'] },
+        after: { kind: 'set', creativeId: '120000000000301', name: 'Creative B', labels: [], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 29: a rule switched off is switched on again; a deleted rule is made again (a new rule) by set-meta-ad-rule.
       'set-meta-ad-rule': {
         before: { kind: 'adrule', action: 'status', id: '120000000000101', exists: 'yes', undo: { action: 'status', ruleId: '120000000000101', enabled: true }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
@@ -1147,7 +1156,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads',
       'remove-meta-ads-items', 'set-meta-labels', 'set-meta-value-rules', 'create-meta-reach-frequency',
       'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment', 'create-meta-media',
-      'set-meta-ad-rule', 'remove-meta-ad-rule',
+      'create-meta-creative', 'set-meta-creative', 'set-meta-ad-rule', 'remove-meta-ad-rule',
       'set-meta-brand-safety', 'set-meta-block-list', 'remove-meta-block-list',
       'create-meta-audience', 'set-meta-audience', 'set-meta-audience-members', 'set-meta-audience-sharing', 'remove-meta-audience',
       'create-meta-lead-form', 'set-meta-lead-form']) {
