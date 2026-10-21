@@ -298,6 +298,45 @@ describe('meta-account-health', () => {
     const seen = financialPayloadCopy(out, { isOwner: false, permissions: new Set(['ads.view']) } as never, tool('meta-account-health').restrictedFields)
     expect(JSON.stringify(seen)).not.toMatch(/Visa|\*1234|Mastercard|\*5678|50\.00|100\.00|700000000000009|710000000000001|coupon|shownAs/)
   })
+  it('payment: a payment method Meta refused to show is unknown (null), never "none"; nothing found then is no all-clear (round 2, F1)', async () => {
+    // No funding_source in the answer AND the payment method refused: unknown, never "the account has no payment method".
+    h.funding = false
+    h.answer = (req) => {
+      const f = fieldsOf(req)
+      if (f.includes('funding_source_details')) return refusedByMeta('(#200) Requires the MANAGE task', '200', 'forbidden')
+      if (f === 'account_status,disable_reason') return { account_status: 1, disable_reason: 0 }
+      if (req.path === `act_${ACCOUNT}/ads` || req.operation.startsWith('billing.events')) return { data: [] }
+      return answers(req)
+    }
+    const out = data(await run('meta-account-health', { view: 'payment' }))
+    expect(out.paymentSetup).toEqual({ hasPaymentMethod: null, prepaid: false, paymentMethod: null, expiredPaymentMethod: null })
+    expect(out.missing).toEqual([{ part: 'paymentSetup.paymentMethod', sentence: expect.stringMatching(/MANAGE/) }])
+    expect(out.problems.join(' ')).not.toMatch(/no payment method/)
+    expect(out).toMatchObject({ trouble: null, troubleUnknown: expect.stringMatching(/not an all-clear/) })
+    // Every part answered and nothing found: then, and only then, "no trouble".
+    h.funding = true
+    h.answer = (req) => {
+      const f = fieldsOf(req)
+      if (f === 'account_status,disable_reason') return { account_status: 1, disable_reason: 0 }
+      if (req.path === `act_${ACCOUNT}/ads` || req.operation.startsWith('billing.events')) return { data: [] }
+      return answers(req)
+    }
+    expect(data(await run('meta-account-health', { view: 'payment' }))).toMatchObject({ trouble: false, missing: [], paymentSetup: { hasPaymentMethod: true, expiredPaymentMethod: true } })
+  })
+  it('payment: a failed-charge search Meta capped says so, and "no trouble" is then not proven (round 2, F2)', async () => {
+    h.funding = true
+    const page = { data: Array.from({ length: 100 }, () => activity({})), paging: { cursors: { after: 'next-page' }, next: 'https://graph.example/next' } }
+    h.answer = (req) => {
+      const f = fieldsOf(req)
+      if (f === 'account_status,disable_reason') return { account_status: 1, disable_reason: 0 }
+      if (req.path === `act_${ACCOUNT}/ads` || req.operation === 'billing.events') return { data: [] }
+      if (req.operation === 'billing.eventsChargeFailed') return page
+      return answers(req)
+    }
+    const out = data(await run('meta-account-health', { view: 'payment' }))
+    expect(out.trouble).toBeNull()
+    expect(out.missing).toEqual([{ part: 'billingEvents.capped', sentence: expect.stringMatching(/first 500 entries.*not proven/) }])
+  })
   it('signals: flagged conversions and unavailable pixels; a pixel of another business\'s portfolio is its id and a flag', async () => {
     h.taken = [{ product: 'PORTFOLIO', id: OTHER_PORTFOLIO }]
     const out = data(await run('meta-account-health', { view: 'signals' }))
@@ -396,7 +435,8 @@ describe('meta-activity-log', () => {
   it('campaign: when Meta refuses the object filter, the account\'s log is read once and kept to the campaign and its children', async () => {
     h.answer = (req) => (req.query?.oid ? refusedByMeta('(#100) Invalid parameter oid') : answers(req))
     const out = data(await run('meta-activity-log', { scope: 'campaign', id: CAMPAIGN }))
-    expect(out.answeredBy).toMatch(/kept to this object by Nexus/)
+    expect(out.answeredBy).toMatch(/kept to this object by Nexus.*one Nexus has not read yet is left out/)
+    expect(out.scanned).toBe(ACTIVITIES.length)
     expect(out.objectFilterRefused).toMatch(/Invalid parameter/)
     expect(new Set(out.events.map((e: { object: { id: string } }) => e.object.id))).toEqual(new Set([CAMPAIGN, ADSET, CHILD_AD]))
     // A throttle is never "refused filter": it ends the read.
@@ -440,6 +480,32 @@ describe('meta-activity-log', () => {
     expect(out.events[0].metaRaw).toEqual({ new_value: { value: 5000, currency: 'EUR' }, amount: '50.00' })
     const seen = financialPayloadCopy(out, { isOwner: false, permissions: new Set(['ads.view']) } as never, tool('meta-activity-log').restrictedFields)
     expect(JSON.stringify(seen)).not.toMatch(/5000|50\.00|EUR/)
+  })
+  it('bare amounts under a money marker in a plain event stay raw (round 2, F3)', async () => {
+    h.answer = (req) => (req.path.endsWith('/activities') ? { data: [activity({ event_type: 'create_campaign_group', extra_data: '{"old_value":0,"new_value":"2000","type":"lifetime_budget"}' })] } : answers(req))
+    const out = data(await run('meta-activity-log', {}))
+    expect(out.events[0]).not.toHaveProperty('change')
+    expect(out.events[0].metaRaw).toEqual({ old_value: 0, new_value: '2000', type: 'lifetime_budget' })
+    const seen = financialPayloadCopy(out, { isOwner: false, permissions: new Set(['ads.view']) } as never, tool('meta-activity-log').restrictedFields)
+    expect(JSON.stringify(seen)).not.toMatch(/"2000"|lifetime_budget/)
+  })
+  it('when Meta ignored the object filter and the first read stopped at maxRows, the log is read again to the cap and said so (round 2, F4)', async () => {
+    h.answer = (req) => {
+      if (req.operation === 'activity.ad') return { data: [activity({ object_id: CAMPAIGN }), activity({ object_id: ADSET })], paging: { cursors: { after: 'c1' }, next: 'https://graph.example/next' } }
+      if (req.operation === 'activity.ad.rescan') return { data: [activity({ object_id: CAMPAIGN }), activity({ object_id: AD })] }
+      return answers(req)
+    }
+    const out = data(await run('meta-activity-log', { scope: 'ad', id: AD, maxRows: 2 }))
+    expect(h.calls.find((c) => c.operation === 'activity.ad.rescan')?.query).toMatchObject({ oid: AD, limit: 100 })
+    expect(out.events.map((e: { object: { id: string } }) => e.object.id)).toEqual([AD])
+    expect(out.answeredBy).toMatch(/ignored the object filter.*kept this object's from the 2 entries/)
+    expect(out.filterCheck).toMatchObject({ otherObjects: 1 })
+  })
+  it('an entry at exactly the end of the window is inside it; one second later is not (round 2, F5)', async () => {
+    h.answer = (req) => (req.path.endsWith('/activities') ? { data: [activity({ event_time: `${dayAgo(0)}T00:00:00+0000` }), activity({ event_time: `${dayAgo(0)}T00:00:01+0000` })] } : answers(req))
+    const out = data(await run('meta-activity-log', { from: dayAgo(3), to: dayAgo(1) }))
+    expect(out.events).toHaveLength(1)
+    expect(out.filterCheck.outsideDays).toBe(1)
   })
   it('filters: topic, event types, made by, actor', async () => {
     expect(data(await run('meta-activity-log', { topic: 'account' })).events.map((e: { type: string }) => e.type)).toEqual(['ad_account_add_user_to_role', 'account_spending_limit_reached'])

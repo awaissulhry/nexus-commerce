@@ -348,31 +348,43 @@ async function healthPayment(account: MetaChosenAccount, input: HealthInput) {
   const status = num(state.account_status)
   const reason = num(state.disable_reason)
   const pay = setup.value as unknown as Row | null
+  const ev = events.value as unknown as Row | null
+  // Review round 2 (F1) — step 3's payment read answers null both when Meta has no payment method and when it REFUSED to
+  // say (the payment method needs the MANAGE task; a throttle there is "not read" too): a part Meta did not answer is
+  // unknown (null), never "no".
+  const setupMissing = rowsOf(pay?.missing).map((m) => ({ part: `paymentSetup.${text(m.part) ?? 'part'}`, sentence: text(m.sentence) ?? '' }))
+  const methodUnknown = setupMissing.some((m) => m.part === 'paymentSetup.paymentMethod')
   // Only the kind and time of a troubling event: never who made it or its amounts (meta-billing view events has them).
-  const trouble = rowsOf((events.value as unknown as Row | null)?.events).filter((e) => PAYMENT_TROUBLE_EVENTS.has(text(e.type) ?? '')).map((e) => ({ time: text(e.time), type: text(e.type), typeText: text(e.typeText) }))
+  const trouble = rowsOf(ev?.events).filter((e) => PAYMENT_TROUBLE_EVENTS.has(text(e.type) ?? '')).map((e) => ({ time: text(e.time), type: text(e.type), typeText: text(e.typeText) }))
   const waitingAds = (waiting.value?.rows ?? []).map((r) => ({ adId: idText(r.id), name: text(r.name), adSetId: idText(r.adset_id) }))
   const problems: string[] = []
   if (status === 3) problems.push('The account is unsettled: a payment is due and no ad runs until it is paid.')
   if (status === 9) problems.push('The account is in its grace period: ads still run, but the open balance must be paid before it ends.')
   if (status === 8) problems.push('A payment is being settled; ads still run.')
   if (reason === 3) problems.push('Meta disabled the account for a payment risk.')
-  if (pay && pay.hasPaymentMethod === false) problems.push('The account has no payment method: ads can be made but do not deliver.')
+  if (pay && !methodUnknown && pay.hasPaymentMethod === false) problems.push('The account has no payment method: ads can be made but do not deliver.')
   if (waitingAds.length) problems.push(`${waitingAds.length} ad${waitingAds.length === 1 ? ' waits' : 's wait'} for billing information (PENDING_BILLING_INFO).`)
   if (trouble.length) problems.push(`${trouble.length} failed or declined charge${trouble.length === 1 ? '' : 's'}, chargebacks or removed payment methods in the last ${days} days.`)
   const missing = [
     ...([['paymentSetup', setup], ['adsWaitingForBilling', waiting], ['billingEvents', events]] as const).filter(([, p]) => p.notRead).map(([part, p]) => ({ part, sentence: p.notRead! })),
     // Step 3 round 4 — failed charges come from a read of their own (they are in no Meta category): its refusal is said.
-    ...rowsOf((events.value as unknown as Row | null)?.missing).map((m) => ({ part: `billingEvents.${text(m.part) ?? 'part'}`, sentence: text(m.sentence) ?? '' })),
+    ...rowsOf(ev?.missing).map((m) => ({ part: `billingEvents.${text(m.part) ?? 'part'}`, sentence: text(m.sentence) ?? '' })),
+    ...setupMissing,
+    // Review round 2 (F2) — step 3 searches the first 500 entries of each read only: a capped search proves nothing.
+    ...(text(ev?.more) ? [{ part: 'billingEvents.capped', sentence: `${text(ev?.more)} Failed charges beyond those entries were not searched, so "no trouble" is not proven for these days.` }] : []),
   ]
+  // No problem found AND every part answered in full: only then is it "no trouble" (false); else unknown (null).
+  const troubleKnown = problems.length > 0 ? true : missing.length ? null : false
   return {
     adAccountId, from, to,
-    trouble: problems.length > 0, problems,
+    trouble: troubleKnown, problems,
+    ...(troubleKnown === null ? { troubleUnknown: 'No payment problem was found, but Meta did not answer every part (missing): this is not an all-clear.' } : {}),
     account: accountStateOf(status, reason),
     // Review A1 — the kind of payment method only: never Meta's masked text, its id or a coupon's amounts (meta-billing view
     // payment shows them to a person who may see ad spend).
     paymentSetup: pay ? {
-      hasPaymentMethod: bool(pay.hasPaymentMethod), prepaid: bool(pay.prepaid),
-      paymentMethod: paymentKindOf(pay.paymentMethod), expiredPaymentMethod: pay.expiredPaymentMethod === undefined ? null : !!obj(pay.expiredPaymentMethod),
+      hasPaymentMethod: methodUnknown ? null : bool(pay.hasPaymentMethod), prepaid: bool(pay.prepaid),
+      paymentMethod: methodUnknown ? null : paymentKindOf(pay.paymentMethod), expiredPaymentMethod: methodUnknown ? null : !!obj(pay.expiredPaymentMethod),
     } : null,
     adsWaitingForBilling: waitingAds, troubleEvents: trouble, missing,
     notes: [
@@ -634,9 +646,14 @@ export function activityDetailsOf(raw: unknown): { kept: Record<string, unknown>
 
 /** Keys that carry an amount: never in `change` (alone or inside a sub-object). */
 const MONEY_DETAIL_KEYS: ReadonlySet<string> = new Set(['amount', 'currency', 'value'])
+/** A details `type` that says the old and new values are amounts (a budget, a bid, a cap, a payment …). */
+const MONEY_MARKER = /budget|bid|payment|amount|spend|cap|cost|price|fee|balance|funding|charge/i
+const numeric = (v: unknown) => typeof v === 'number' || (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()))
 /** Details split into plain facts and the parts that carry an amount. Pure. */
 function splitMoney(kept: Record<string, unknown> | null): { plain: Record<string, unknown> | null; money: Record<string, unknown> | null } {
   if (!kept) return { plain: null, money: null }
+  // Review round 2 (F3) — bare numbers under a money marker (`type: "daily_budget"`, old 2000 → new 3000) are amounts: all raw.
+  if (typeof kept.type === 'string' && MONEY_MARKER.test(kept.type) && ['old_value', 'new_value', 'value'].some((k) => numeric(kept[k]))) return { plain: null, money: kept }
   const plain: Record<string, unknown> = {}
   const money: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(kept)) {
@@ -725,6 +742,7 @@ export async function activityLog(input: ActivityInput) {
   const ownIds = new Set<string>([adAccountId, ...(account.pageId ? [account.pageId] : [])])
   const objectIds = new Set<string>()
   let children = false
+  let scannedEntries: number | null = null
   let read: Awaited<ReturnType<typeof listPaged>>
   if (input.scope === 'account') {
     if (input.id) throw new MetaLiveRefusal('scope account reads the whole account: leave id out, or name scope campaign, adset or ad with its id.')
@@ -758,8 +776,11 @@ export async function activityLog(input: ActivityInput) {
         // Meta refused the object filter: the account's log of these days, once, kept to this object (and its children
         // Nexus has read) here.
         const all = await listPaged(connectionId, `activity.${input.scope}.filtered`, path, query, MAX_ROWS)
+        scannedEntries = all.rows.length
         read = { ...all, rows: all.rows.filter((r) => objectIds.has(idText(r.object_id) ?? '')) }
-        answeredBy = 'the account\'s log of these days, kept to this object by Nexus'
+        answeredBy = children
+          ? 'the account\'s log of these days, kept to this object by Nexus (with the ad sets and ads Nexus knows under it; one Nexus has not read yet is left out)'
+          : 'the account\'s log of these days, kept to this object by Nexus'
       }
     }
   }
@@ -768,19 +789,32 @@ export async function activityLog(input: ActivityInput) {
   // Graph may IGNORE a key it does not know: every answer is checked here. The days and the actor on every entry; the
   // object for an ad, or a campaign without its children; with its children, an entry about an object Nexus does not
   // know under the campaign is kept and flagged. Meta's category cannot be checked from the answer: said so.
-  const check = { outsideDays: 0, otherActors: 0, otherObjects: 0, outsideKnownObjects: 0 }
-  const flagged = new WeakSet<Row>()
   const accountLog = path === `${act(adAccountId)}/activities`
   const exactObject = accountLog && !!objectId && !children
-  const verified = read.rows.filter((r) => {
-    const at = Date.parse(text(r.event_time) ?? '') / 1000
-    if (!Number.isFinite(at) || at < since || at >= until) { check.outsideDays++; return false }
-    if (actorId && idText(r.actor_id) !== actorId) { check.otherActors++; return false }
-    const rowObject = idText(r.object_id) ?? text(r.object_id)
-    if (exactObject && rowObject !== objectId) { check.otherObjects++; return false }
-    if (accountLog && children && (!rowObject || !objectIds.has(rowObject))) { check.outsideKnownObjects++; flagged.add(r) }
-    return true
-  })
+  const verify = (list: Row[]) => {
+    const check = { outsideDays: 0, otherActors: 0, otherObjects: 0, outsideKnownObjects: 0 }
+    const flagged = new WeakSet<Row>()
+    const verified = list.filter((r) => {
+      const at = Date.parse(text(r.event_time) ?? '') / 1000
+      // Round 2 (F5) — the window Nexus sent, until included: an entry at exactly `until` is not "outside".
+      if (!Number.isFinite(at) || at < since || at > until) { check.outsideDays++; return false }
+      if (actorId && idText(r.actor_id) !== actorId) { check.otherActors++; return false }
+      const rowObject = idText(r.object_id) ?? text(r.object_id)
+      if (exactObject && rowObject !== objectId) { check.otherObjects++; return false }
+      if (accountLog && children && (!rowObject || !objectIds.has(rowObject))) { check.outsideKnownObjects++; flagged.add(r) }
+      return true
+    })
+    return { check, flagged, verified }
+  }
+  let { check, flagged, verified } = verify(read.rows)
+  // Round 2 (F4) — Meta answered other objects' events: it ignored the object filter. When the first read stopped at the
+  // asked rows, the log is read again up to the cap the refusal path uses, and kept to this object here.
+  const ignoredObjectFilter = exactObject && check.otherObjects > 0 && !objectFilterRefused
+  if (ignoredObjectFilter && read.more && scan < MAX_ROWS) {
+    read = await listPaged(connectionId, `activity.${input.scope}.rescan`, path, { ...query, oid: objectId }, MAX_ROWS)
+    ;({ check, flagged, verified } = verify(read.rows))
+  }
+  if (ignoredObjectFilter) answeredBy = `Meta's log, which also answered other objects' events (it ignored the object filter): Nexus kept this object's from the ${read.rows.length} entries it scanned`
   const filterCheck = {
     checked: ['days', ...(actorId ? ['actor'] : []), ...(exactObject ? ['object'] : children && accountLog ? ['object (known ad sets and ads)'] : [])],
     ...check,
@@ -810,8 +844,12 @@ export async function activityLog(input: ActivityInput) {
     adAccountId, scope: input.scope, objectId, from, to,
     filters: { category, topic, eventTypes: [...eventTypes], madeBy, actorId, ...(input.scope === 'campaign' ? { withChildren: input.withChildren !== false } : {}) },
     answeredBy, ...(objectFilterRefused ? { objectFilterRefused } : {}), filterCheck,
-    events, scanned: read.rows.length,
-    more: read.more || rows.length > maxRows ? `Nexus read ${read.rows.length} entries of these days${localFilter ? ' and kept the ones asked for' : ''}; narrow the days or the filters to see the rest.` : null,
+    events, scanned: scannedEntries ?? read.rows.length,
+    more: read.more || rows.length > maxRows
+      ? ignoredObjectFilter && read.more
+        ? `Meta answered other objects' events too, so Nexus scanned the first ${read.rows.length} entries of these days and kept this object's: older ones of this object may be beyond them; narrow the days to search further.`
+        : `Nexus read ${scannedEntries ?? read.rows.length} entries of these days${localFilter || objectFilterRefused ? ' and kept the ones asked for' : ''}; narrow the days or the filters to see the rest.`
+      : null,
     whyItStopped,
     notes: [
       'from and to are UTC days; timeInAccountZone is the same moment in the ad account\'s time zone.',
