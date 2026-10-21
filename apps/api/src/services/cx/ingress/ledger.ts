@@ -28,7 +28,7 @@ const unclaimedUnverifiedEbay: Prisma.WebhookEventWhereInput = {
 }
 
 /** What established trust for this event, or that nothing did. */
-export type VerifiedBy = 'ebay_ecdsa' | 'sqs_iam' | 'shopify_hmac' | 'none'
+export type VerifiedBy = 'ebay_ecdsa' | 'sqs_iam' | 'shopify_hmac' | 'meta_hmac' | 'none'
 
 /** A retry cannot turn an audit record of a rejected delivery into trusted work. */
 export function isVerifiedInbound(event: { channel: string; signatureOk?: boolean | null; verifiedBy?: string | null }): boolean {
@@ -54,6 +54,8 @@ const MAX_RAW_BODY_BYTES = 1024 * 1024
 const VERIFICATION_HEADERS = new Set([
   'x-shopify-hmac-sha256', 'x-shopify-webhook-id', 'x-shopify-topic', 'x-shopify-shop-domain',
   'webhook-id', 'webhook-timestamp', 'webhook-signature', 'x-ebay-signature',
+  // Meta ads step 30: kept with a REJECTED Meta delivery's raw body, so the signature can be checked again later.
+  'x-hub-signature-256',
 ])
 const MAX_VERIFICATION_HEADER_LENGTH = 8192
 
@@ -246,6 +248,68 @@ async function persistInbound(db: LedgerClient, rec: InboundRecord,
       code: typeof code === 'string' && /^P\d{4}$/.test(code) ? code : 'unavailable',
     })
     return { id: null, duplicate: false }
+  }
+}
+
+/**
+ * Meta ads step 30 — many VERIFIED arrivals of the current business in a few round trips (one insert, one read, one
+ * delivery count per repeat), for a channel that batches: Meta sends up to 1000 updates in one delivery and expects an
+ * answer within seconds. Per record the same contract as recordInbound: idempotent on `(channel, externalId)`, a
+ * redelivery adds to `deliveries` and reports the status the row already had, an arrival whose event type, trust
+ * verdict or account differs from the stored row is refused (id null, `identity_mismatch`; no rebinding of an account
+ * here). A trusted arrival with a handler is due at once. Every record needs its own `externalId`; never eBay, never
+ * an unverified arrival (each rejection keeps recordInbound's own row). Never throws: a failure is all ids null.
+ */
+export async function recordInboundBatch(recs: InboundRecordFields[]): Promise<InboundWriteResult[]> {
+  if (recs.length === 0) return []
+  if (recs.some((rec) => String(rec.channel) === 'EBAY' || !rec.externalId || rec.signatureOk !== true)) {
+    logger.error('[cx-ingress] a batch holds a record the batch writer does not take (eBay, no delivery id, or unverified)')
+    return recs.map(() => ({ id: null, duplicate: false }))
+  }
+  try {
+    const keyOf = (rec: { channel: string; externalId?: string | null }) => `${rec.channel}|${rec.externalId}`
+    const firsts = new Map<string, { id: string; rec: InboundRecordFields }>()
+    for (const rec of recs) if (!firsts.has(keyOf(rec))) firsts.set(keyOf(rec), { id: crypto.randomUUID(), rec })
+    const now = new Date()
+    await prisma.webhookEvent.createMany({
+      skipDuplicates: true,
+      data: [...firsts.values()].map(({ id, rec }) => {
+        const status: InboundStatus = rec.status ?? 'pending'
+        const due = status === 'pending' && isVerifiedInbound(rec) && canReplayInbound(rec.channel, rec.eventType)
+        return {
+          id, channel: rec.channel, eventType: rec.eventType, externalId: rec.externalId as string,
+          payload: (rec.payload ?? {}) as never, isProcessed: status === 'done', processedAt: status === 'done' ? now : null,
+          providerTimestamp: rec.providerTimestamp ?? null, connectionId: rec.connectionId ?? null, status,
+          nextAttemptAt: due ? now : null, deliveries: 1, signatureOk: rec.signatureOk, verifiedBy: rec.verifiedBy,
+          payloadDigest: digestOf(rec.rawBody ?? null), rawBody: null, verificationHeaders: verificationHeadersOf(rec.headers),
+          lastError: rec.lastError ?? null, error: rec.lastError ?? null,
+        }
+      }),
+    })
+    const stored = await prisma.webhookEvent.findMany({
+      where: { channel: { in: [...new Set(recs.map((r) => r.channel))] }, externalId: { in: [...new Set(recs.map((r) => r.externalId as string))] } },
+      select: { id: true, channel: true, externalId: true, status: true, eventType: true, signatureOk: true, verifiedBy: true, connectionId: true },
+    })
+    const byKey = new Map(stored.map((row) => [keyOf(row), row]))
+    const repeats = new Map<string, number>()
+    const results = recs.map((rec): InboundWriteResult => {
+      const row = byKey.get(keyOf(rec))
+      if (!row) return { id: null, duplicate: false }
+      const fresh = firsts.get(keyOf(rec))
+      if (row.id === fresh?.id && fresh.rec === rec) return { id: row.id, duplicate: false }
+      const same = row.eventType === rec.eventType && row.signatureOk === rec.signatureOk && row.verifiedBy === (rec.verifiedBy ?? null) && row.connectionId === (rec.connectionId ?? null)
+      if (!same) return { id: null, duplicate: true, conflict: 'identity_mismatch' }
+      repeats.set(row.id, (repeats.get(row.id) ?? 0) + 1)
+      return { id: row.id, duplicate: true, existingStatus: row.status as InboundStatus }
+    })
+    const byCount = new Map<number, string[]>()
+    for (const [id, count] of repeats) byCount.set(count, [...(byCount.get(count) ?? []), id])
+    for (const [count, ids] of byCount) await prisma.webhookEvent.updateMany({ where: { id: { in: ids } }, data: { deliveries: { increment: count } } })
+    return results
+  } catch (err) {
+    const code = (err as { code?: unknown })?.code
+    logger.error('[cx-ingress] could not record a batch of inbound events', { size: recs.length, code: typeof code === 'string' && /^P\d{4}$/.test(code) ? code : 'unavailable' })
+    return recs.map(() => ({ id: null, duplicate: false }))
   }
 }
 
