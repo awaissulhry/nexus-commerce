@@ -224,8 +224,8 @@ export function readBackMismatch(node: Record<string, unknown> | null, expected:
 const MAX_WORDS = 300
 const cut = (words: string | null | undefined) => (words ? (words.length > MAX_WORDS ? `${words.slice(0, MAX_WORDS - 1)}…` : words) : null)
 
-/** Step 36 review B3 — the kinds a change makes AS the chosen Page (its own token: gateway meta-page-token.ts). */
-const PAGE_KINDS: ReadonlySet<string> = new Set(['page', 'leadform', 'testlead'])
+/** Step 36 review B3 — the kinds a change makes AS the chosen Page (its own token: gateway meta-page-token.ts); step 27b: an Instant Experience. */
+const PAGE_KINDS: ReadonlySet<string> = new Set(['page', 'leadform', 'testlead', 'canvas'])
 
 /** The failure of a change's answer, in words about a CHANGE (errors.ts says them about a read). */
 function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>, kind?: string): MetaFailure {

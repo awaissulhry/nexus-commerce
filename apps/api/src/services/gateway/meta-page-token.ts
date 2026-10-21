@@ -47,7 +47,7 @@ export class MetaPageTokenUnavailable extends Error {
  * role other than Live Contributor on the Page; when the business requires two-factor authentication, an authenticated
  * user), the task the change needs (lead forms and test leads: Advertise, create guide) and the token's permissions.
  */
-export const META_PAGE_TOKEN_NEEDS = 'Meta answers a Page\'s own token only to someone with a role on the Page other than Live Contributor (and, when the business requires two-factor authentication, one who is authenticated): the system user needs the business\'s chosen Facebook Page assigned to it in Meta Business settings (Users › System users › Assign assets) with the task this change needs — lead forms and test leads: Advertise ("Create ads") — and its token needs ads_management, business_management, pages_manage_ads, pages_read_engagement and pages_show_list.'
+export const META_PAGE_TOKEN_NEEDS = 'Meta answers a Page\'s own token only to someone with a role on the Page other than Live Contributor (and, when the business requires two-factor authentication, one who is authenticated): the system user needs the business\'s chosen Facebook Page assigned to it in Meta Business settings (Users › System users › Assign assets) with the task this change needs — lead forms, test leads and Instant Experiences: Advertise ("Create ads") — and its token needs ads_management, business_management, pages_manage_ads, pages_read_engagement and pages_show_list (Instant Experiences: Meta\'s canvases reference also names pages_manage_posts and pages_read_user_content).'
 
 /**
  * Review A1 — one exact secret (the Page's token, the system-user token) out of a text: as written, and — when the text is

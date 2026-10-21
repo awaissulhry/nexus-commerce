@@ -1015,6 +1015,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { part: 'conversion', id: '', fields: {}, created: false, undo: { tool: 'remove-meta-signal-items', args: { items: [{ kind: 'customConversion', id: '120000000000060' }], confirmDelete: true } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
         after: { part: 'conversion', id: '120000000000060', customConversionId: '120000000000060', fields: { exists: 'yes' }, created: true, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 27b: an Instant Experience made is hidden (Meta deletes none); a hide is shown again; an edit goes back.
+      'create-meta-instant-experience': {
+        before: { action: 'create', pageId: '120000000000010', canvasId: null, name: 'Experience A', elementIds: [], hidden: null },
+        after: { action: 'create', pageId: '120000000000010', canvasId: '120000000000701', name: 'Experience A', elementIds: ['120000000000711'], hidden: false, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-instant-experience': {
+        before: { action: 'hide', pageId: '120000000000010', canvasId: '120000000000701', name: 'Experience A', hidden: false },
+        after: { action: 'hide', pageId: '120000000000010', canvasId: '120000000000701', name: 'Experience A', hidden: true, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1194,7 +1203,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-lead-form', 'set-meta-lead-form',
       'create-meta-boost', 'set-meta-partnership-access',
       'create-meta-dataset', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion', 'remove-meta-signal-items',
-      'create-meta-ad', 'set-meta-ad']) {
+      'create-meta-ad', 'set-meta-ad', 'create-meta-instant-experience', 'set-meta-instant-experience']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

@@ -9,11 +9,10 @@
  * (validate_only with its synchronous integrity review, and its recommendations when asked) — an approvalId, a person
  * approves it, it runs as that person.
  *
- * Not here (C2-PAGE-TOKEN): Instant Experiences (create-meta-instant-experience, set-meta-instant-experience — master CR-473 …
- * CR-485, CR-488, CR-491 … CR-493) are Page writes that need the Page's own token; lane C4's step 36 (#714) builds that
- * gateway mode, and lane C2 builds both tools on it once it is merged (a tool that could only answer in words is not
- * registered: nothing unused stays). An ad may already USE a published Instant Experience: its link
- * https://fb.com/canvas_doc/<id> in the creative, checked to be the chosen Page's (step 25's judge).
+ * Not here: Instant Experiences (create-meta-instant-experience, set-meta-instant-experience — master CR-473 … CR-485,
+ * CR-488, CR-491 … CR-493) are Page writes made with the Page's own token: their own tools, step 27b
+ * (meta-ads-instant-experiences.tools.ts, on step 36's Page token mode). An ad USES a published Instant Experience by its
+ * link https://fb.com/canvas_doc/<id> in the creative, checked to be the chosen Page's (step 25's judge).
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'

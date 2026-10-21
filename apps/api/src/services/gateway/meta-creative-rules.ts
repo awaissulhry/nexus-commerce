@@ -1053,7 +1053,8 @@ export const META_NON_CATALOG_FORMATS: readonly string[] = META_FORMAT_AUTOMATIO
  * Experience, Messenger (fb.com/messenger_doc, m.me), a Facebook Page, Instagram, WhatsApp (wa.me, api.whatsapp.com); nor tel:.
  */
 const DESTINATION_KEYS = ['link', 'product_link', 'website_url', 'carousel_see_more_url', 'site_link_url']
-const META_OWNED_HOST = /(^|\.)(fb\.com|facebook\.com|m\.me|messenger\.com|instagram\.com|wa\.me|whatsapp\.com|threads\.net)$/
+// Step 27b — exported: an Instant Experience part's links follow the same rule (meta-canvas-rules.ts).
+export const META_OWNED_HOST = /(^|\.)(fb\.com|facebook\.com|m\.me|messenger\.com|instagram\.com|wa\.me|whatsapp\.com|threads\.net)$/
 /**
  * Review round 4 — a Meta link that carries another site: a redirect host (`l.` / `lm.`), a redirect path (`/l.php`, `/l/`,
  * `/flx/`), or a query value that is itself a web address. The link judge refuses it; isWebsite counts it as a website

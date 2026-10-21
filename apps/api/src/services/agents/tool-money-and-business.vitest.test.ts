@@ -305,6 +305,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-dataset-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
   'set-meta-custom-conversion': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
   'remove-meta-signal-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  // Meta ads step 27b: Instant Experiences read the business's chosen Meta ad account and Page live (meta-ads-instant-experiences.tools test).
+  'create-meta-instant-experience': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-instant-experiences.tools test)',
+  'set-meta-instant-experience': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-instant-experiences.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -707,6 +710,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-dataset-access': () => ({ pixelId: '120000000000050', action: 'connect-ad-account' }),
   'set-meta-custom-conversion': () => ({ action: 'update', customConversionId: '120000000000060', name: 'Shop A thanks' }),
   'remove-meta-signal-items': () => ({ items: [{ kind: 'customConversion', id: '120000000000060' }], confirmDelete: true }),
+  // Meta ads step 27b: no business here has Meta, so each refuses in words before any call.
+  'create-meta-instant-experience': () => ({ name: 'Experience A', parts: [{ type: 'text', text: 'Hello' }] }),
+  'set-meta-instant-experience': () => ({ action: 'hide', canvasId: '120000000000701' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

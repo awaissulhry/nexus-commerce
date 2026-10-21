@@ -136,7 +136,7 @@ describe('the tools', () => {
     }
     expect(create.consequencesFor!({ action: 'undo' })).toEqual({ reversibility: 'none' })
     expect(META_CHANGE_RULES).toMatch(/a creative or an ad\)/)
-    // Instant Experiences wait for the Page-token mode (C2-PAGE-TOKEN): no tool that could only answer in words.
+    // Instant Experiences are their own tools (step 27b, meta-ads-instant-experiences.tools.ts), not ads tools.
     expect(META_ADS_ADS_TOOLS.map((t) => t.name)).toEqual(['create-meta-ad', 'set-meta-ad'])
   })
 })

@@ -127,6 +127,8 @@ import { META_ADS_BOOSTS_TOOLS } from './tools/meta-ads-boosts.tools.js'
 import { META_ADS_ADS_TOOLS } from './tools/meta-ads-ads.tools.js'
 // Meta ads step 32 (2026-10-21): datasets and custom conversions (changes).
 import { META_ADS_SIGNALS_TOOLS } from './tools/meta-ads-signals.tools.js'
+// Meta ads step 27b (2026-10-21): Instant Experiences of the chosen Page (changes made as the Page).
+import { META_ADS_INSTANT_EXPERIENCE_TOOLS } from './tools/meta-ads-instant-experiences.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -385,6 +387,9 @@ const ALL: AgentTool[] = [
   // Meta ads step 32 (2026-10-21): create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion,
   // remove-meta-signal-items.
   ...META_ADS_SIGNALS_TOOLS,
+  // Meta ads step 27b (2026-10-21): create-meta-instant-experience (parts + the experience, UNPUBLISHED; undo hides it) and
+  // set-meta-instant-experience (edit while unpublished, publish one way, hide / show again) — as the chosen Page.
+  ...META_ADS_INSTANT_EXPERIENCE_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).
