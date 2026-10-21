@@ -85,6 +85,23 @@ export const OBJECT_EDGES: Readonly<Record<GraphObjectKind, Readonly<Record<stri
   creative: {},
 }
 
+/**
+ * Step 9 review fix A1 — graph-read's OWN query parameters, per list it reads (the node type of the edge's rows): exactly
+ * what step 2 allowed — effective_status on campaign, ad set and ad lists; level, time_range, time_increment and
+ * filtering on insights; status and type on async requests. Nothing on an object itself. The gateway's combined key list
+ * (meta-calls.ts ROUTE_KEYS) grows with every later step; graph-read never follows it.
+ */
+export const GRAPH_EDGE_PARAMS: Readonly<Partial<Record<GraphNode, ReadonlySet<string>>>> = {
+  Campaign: list('effective_status'), AdSet: list('effective_status'), Ad: list('effective_status'),
+  AdsInsights: list('level', 'time_range', 'time_increment', 'filtering'),
+  AsyncRequest: list('status', 'type'),
+}
+
+/** May graph-read send this parameter on a read of an edge whose rows are `edgeNode` (null: an object itself)? */
+export function graphParamAllowed(edgeNode: GraphNode | null, key: string): boolean {
+  return !!edgeNode && !!GRAPH_EDGE_PARAMS[edgeNode]?.has(key)
+}
+
 /** Modifiers a field may carry, each with what its argument may be. */
 const MODIFIERS: Readonly<Record<string, RegExp>> = {
   limit: /^\d{1,4}$/,

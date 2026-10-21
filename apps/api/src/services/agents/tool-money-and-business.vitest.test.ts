@@ -212,6 +212,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'sd-bid-recommendations': 'it reads Amazon Ads live for an SD ad group or market, and no business here has one (ads-sd.tools test)',
   'meta-ads-live': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-read.tools test)',
   'meta-ads-graph-read': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-read.tools test)',
+  // Meta ads step 9: targeting search and checks read Meta live (meta-ads-targeting.tools test runs them on an account).
+  'meta-targeting-search': 'it reads Meta live for the business\'s Meta connection, and no business here has one (meta-ads-targeting.tools test)',
+  'meta-targeting-check': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-targeting.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -504,6 +507,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-ads-graph-read': () => ({ path: 'act_1234567890/campaigns' }),
   // Meta ads step 17: the write base's status change refuses in words here (no business has Meta; its own test runs it).
   'set-meta-status': () => ({ items: [{ kind: 'campaign', id: '120000000000001' }], status: 'PAUSED' }),
+  // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
+  'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
+  'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),
