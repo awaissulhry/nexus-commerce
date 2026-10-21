@@ -189,6 +189,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-campaign': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-campaign-settings.tools test)',
   'set-meta-ad-set': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-campaign-settings.tools test)',
   'set-meta-budget-schedule': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-campaign-settings.tools test)',
+  'create-meta-campaign': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-create.tools test)',
+  'create-meta-ad-set': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-create.tools test)',
+  'copy-meta-ads': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-create.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -545,6 +548,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-campaign': () => ({ campaignId: '120000000000001', dailyBudgetCents: 5000 }),
   'set-meta-ad-set': () => ({ adSetId: '120000000000002', bidAmountCents: 150 }),
   'set-meta-budget-schedule': () => ({ action: 'switch', level: 'campaign', objectId: '120000000000001', enabled: false }),
+  // Meta ads step 19: the creates and copies refuse in words here (no business has Meta; their own test runs them).
+  'create-meta-campaign': () => ({ name: 'Campaign A', objective: 'OUTCOME_SALES', dailyBudgetCents: 5000 }),
+  'create-meta-ad-set': () => ({ campaignId: '120000000000001', name: 'Ad set B', optimizationGoal: 'LINK_CLICKS', targeting: { countries: ['IT'] } }),
+  'copy-meta-ads': () => ({ kind: 'campaign', sourceId: '120000000000001' }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),

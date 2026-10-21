@@ -230,7 +230,9 @@ describe('budget schedules', () => {
     expect(verdict({ url: `${BASE}/${PERIOD}`, body: form({ budget_value: '30' }), objectKind: 'highdemandperiod' })).toMatchObject({ write: { rule: 'budget_schedule.update', kinds: ['highdemandperiod'] } })
     expect(verdict({ url: `${BASE}/${PERIOD}`, method: 'DELETE', objectKind: 'highdemandperiod' })).toEqual({ write: { rule: 'budget_schedule.delete', objectId: PERIOD, check: false, body: '', budget: false, kinds: ['highdemandperiod'], method: 'DELETE' } })
     expect(problem({ url: `${BASE}/${PERIOD}`, method: 'DELETE', objectKind: 'highdemandperiod', body: 'x=1' })).toMatch(/deletes nothing on Meta yet but a scheduled budget increase/)
-    expect(problem({ url: `${BASE}/${CAMPAIGN}`, method: 'DELETE', objectKind: 'campaign' })).toMatch(/deletes nothing on Meta yet/)
+    // Step 19 — a campaign's DELETE is on the list now (object.delete: the undo of a create or a copy); with a body, never.
+    expect(verdict({ url: `${BASE}/${CAMPAIGN}`, method: 'DELETE', objectKind: 'campaign' })).toMatchObject({ write: { rule: 'object.delete', method: 'DELETE' } })
+    expect(problem({ url: `${BASE}/${CAMPAIGN}`, method: 'DELETE', objectKind: 'campaign', body: 'x=1' })).toMatch(/deletes nothing on Meta yet/)
     expect(problem({ url: `${BASE}/${PERIOD}`, method: 'DELETE', objectKind: 'highdemandperiod', kind: 'read' })).toMatch(/goes as a write/)
   })
 })

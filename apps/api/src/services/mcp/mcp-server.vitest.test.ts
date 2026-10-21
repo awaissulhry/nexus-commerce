@@ -60,6 +60,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 3 (2026-10-21) — meta-ad-account, meta-billing and meta-account-access read Meta live.
 // Meta ads step 11 (2026-10-21) — meta-audiences and meta-datasets read Meta live.
 // Meta ads step 18 (2026-10-21) — set-meta-campaign, set-meta-ad-set and set-meta-budget-schedule read Meta live and change it.
+// Meta ads step 19 (2026-10-21) — create-meta-campaign, create-meta-ad-set and copy-meta-ads read Meta live and change it.
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -69,9 +70,9 @@ const OPEN_WORLD = [
   'archive-ads', 'build-google-campaigns', 'build-google-pmax', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
   'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label', 'cancel-order',
   'channel-identity-check', 'check-google-ads-build', 'close-listing', 'confirm-shipment', 'copy-google-campaign',
-  'copy-google-pmax', 'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
+  'copy-google-pmax', 'copy-meta-ads', 'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
   'create-google-app-campaign', 'create-google-campaign', 'create-google-demand-gen-campaign',
-  'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-negative-keyword',
+  'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-meta-ad-set', 'create-meta-campaign', 'create-negative-keyword',
   'decide-automation-suggestions',
   'delete-listing', 'dismiss-google-recommendations', 'dispose-return-items', 'ebay-categories',
   'ebay-keywords-change', 'edit-google-assets', 'edit-google-campaign-type-ads', 'edit-google-rsa', 'email-supplier',
