@@ -99,6 +99,7 @@ import { META_ADS_ENGAGEMENT_TOOLS } from './tools/meta-ads-engagement.tools.js'
 import { META_ADS_AUDIENCES_TOOLS } from './tools/meta-ads-audiences.tools.js'
 import { META_ADS_DATASETS_TOOLS } from './tools/meta-ads-datasets.tools.js'
 import { META_ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/meta-ads-campaign-settings.tools.js'
+import { META_ADS_CREATE_TOOLS } from './tools/meta-ads-create.tools.js'
 import { META_ADS_MEDIA_UPLOAD_TOOLS } from './tools/meta-ads-media-upload.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
@@ -319,6 +320,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_DATASETS_TOOLS,
   // Meta ads step 18 (2026-10-21): set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule (settings, budgets, bids).
   ...META_ADS_CAMPAIGN_SETTINGS_TOOLS,
+  // Meta ads step 19 (2026-10-21): create-meta-campaign, create-meta-ad-set, copy-meta-ads (born PAUSED; undo deletes what they made).
+  ...META_ADS_CREATE_TOOLS,
   // Meta ads step 23 (2026-10-21): create-meta-media — images, videos and folders into the chosen ad account, and the undo.
   ...META_ADS_MEDIA_UPLOAD_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).

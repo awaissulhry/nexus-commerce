@@ -17,11 +17,7 @@ export interface MetaChangeRequest {
   step: number
   /** What a person reads, e.g. 'Pause campaign "Spring sale" (120000000000001)'. */
   label: string
-  /**
-   * The kind of object it changes; step 23: `adaccount` / `portfolio` for an upload on that object's edge, `libraryvideo`
-   * for a video of the chosen account's library (its captions).
-   */
-  kind: MetaStatusKind | 'adaccount' | 'portfolio' | 'libraryvideo'
+  kind: MetaStatusKind
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
@@ -49,14 +45,26 @@ export interface MetaChangeRequest {
   expect?: Record<string, string>
   /** The fields read back (default id,status,effective_status). */
   readBackFields?: string
-  /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`). */
-  objectKind?: 'highdemandperiod'
-  /** A create on the object's edge (POST /<id>/budget_schedules). */
+  /**
+   * The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 19: a create names
+   * the chosen ad account itself, `adaccount`).
+   * Step 23: an upload names the chosen ad account (`adaccount`) or its business portfolio (`portfolio`); captions name
+   * the library video (`libraryvideo`). Its `kind` is then `ad` (what the media serves), never read for it.
+   */
+  objectKind?: 'highdemandperiod' | 'adaccount' | 'portfolio' | 'libraryvideo'
+  /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
   /** A budget schedule's campaign or ad set. */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 19 — Meta's check of this create asks its setup recommendations too (master CMP-031). */
+  recommendations?: boolean
+  /**
+   * Step 19 (review A4) — a create or a copy: when Meta answers success but the new object reads back otherwise, it is still
+   * recorded as made (with what it reads), so its undo can delete it; never "no record" for an object Meta made.
+   */
+  recordEvenIfNotAsAsked?: boolean
   // ── step 23: a request that brings its own sender ──
   /**
    * Sends the request itself (an upload whose answer is read again, or Meta's video-ads upload, whose later calls need the

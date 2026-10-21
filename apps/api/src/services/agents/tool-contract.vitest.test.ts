@@ -884,6 +884,19 @@ describe('C1 — every registered tool keeps the contract', () => {
         },
         after: { kind: 'highdemandperiod', id: '120000000000031', parent: { kind: 'campaign', id: '120000000000001' }, fields: { budget_value: '30', exists: 'yes' }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 19: a create's or a copy's undo deletes what it made (its record names it) through the same tool.
+      'create-meta-campaign': {
+        before: { op: 'create', made: [], top: [], madeAt: '', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'create', made: [{ kind: 'campaign', id: '120000000000001', name: 'Campaign A' }], top: [{ kind: 'campaign', id: '120000000000001' }], madeAt: '2026-10-21T08:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'create-meta-ad-set': {
+        before: { op: 'create', made: [], top: [], madeAt: '', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'create', made: [{ kind: 'adset', id: '120000000000002', name: 'Ad set B' }], top: [{ kind: 'adset', id: '120000000000002' }], madeAt: '2026-10-21T08:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'copy-meta-ads': {
+        before: { op: 'copy', made: [], top: [], madeAt: '', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'copy', made: [{ kind: 'campaign', id: '120000000000009' }, { kind: 'adset', id: '120000000000010' }], top: [{ kind: 'campaign', id: '120000000000009' }], madeAt: '2026-10-21T08:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 23: what an upload made new comes out of the ad account's library again (create-meta-media kind undo).
       'create-meta-media': {
         before: { kind: 'image', items: [{ kind: 'image', source: 'da_test', inLibrary: false }] },
@@ -1058,7 +1071,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-custom-goals', 'set-google-custom-audiences', 'set-google-user-lists', 'set-google-reusable-audiences',
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
-      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule', 'create-meta-media']) {
+      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
+      'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads', 'create-meta-media']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

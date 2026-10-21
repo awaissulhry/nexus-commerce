@@ -241,9 +241,9 @@ describe('through the gateway', () => {
     h.answers.push(json({ images: { bytes: { hash: 'ffffffffffffffffffffffffffffffff' } } }))
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'media.imageUpload', objectId: ACT, objectKind: 'adaccount', edge: 'adimages', params: { bytes: JPG }, check: false })).ok).toBe(true)
   })
-  it('another ad account (another business\'s, or none chosen): refused before anything is sent, the other account never read', async () => {
+  it('another ad account (another business\'s, or none chosen): refused by step 19\'s ad-account check before anything is sent, the other account never read', async () => {
     const err = await metaWriteCall({ connectionId: 'm-1', operation: 'media.imageUpload', objectId: OTHER_ACT, objectKind: 'adaccount', edge: 'adimages', params: { bytes: PNG }, check: false }).catch((e) => e)
-    expect(err).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/the ad account this change names is not the one this business chose/) })
+    expect(err).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/goes only to the Meta ad account this business chose/) })
     expect(err.message).not.toContain('5555555555')
     gatewayMetaChosen['m-2'] = null
     expect(await metaWriteCall({ connectionId: 'm-2', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'adimages', params: { bytes: PNG }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })

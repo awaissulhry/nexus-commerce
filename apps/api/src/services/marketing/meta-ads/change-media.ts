@@ -317,7 +317,7 @@ async function imageDraft(account: MetaChangeAccount, sources: ImageSource[]): P
     const label = `Upload image "${image.label}" (${image.source}; ${image.width}×${image.height}, ${Math.ceil(image.bytes / 1024)} KB) to ad account ${act}`
     byStep.set(i + 1, { source: image.source, label: image.label })
     return {
-      step: i + 1, label, kind: 'adaccount', objectId: act,
+      step: i + 1, label, kind: 'ad', objectKind: 'adaccount', objectId: act,
       // A custom sender (review A6): the plan holds the picture's sha256, never its Base64; the sender sends `bytes` = the
       // Base64 of exactly these bytes, made at send time.
       params: { bytes_sha256: image.sha256 },
@@ -530,7 +530,7 @@ async function videoDraft(account: MetaChangeAccount, video: VideoSource): Promi
     : `Upload video "${label}" (${source}) to ad account ${act}: Meta fetches it from ${host}${method === 'video_ads' ? ' through its video-ads upload (start, the link, finish)' : ''}`
   const swap = !!video.swapAudioAssetId
   const request: MetaChangeRequest = {
-    step: 1, label: stepLabel, kind: 'adaccount', objectId: act,
+    step: 1, label: stepLabel, kind: 'ad', objectKind: 'adaccount', objectId: act,
     // A custom sender: `params` are the keys its calls send (the plan Nexus compares) — for video_ads, the start's
     // upload_phase and the link the upload host gets as its file_url header (meta-media-rules.ts), then the finish.
     params,
@@ -581,7 +581,7 @@ async function folderDraft(account: MetaChangeAccount, folder: NonNullable<Media
   const label = `Create folder "${name}"${parent ? ` inside folder ${parent}` : ''} in the business portfolio's media library`
   const params: Record<string, string> = { name, ...(folder.description?.trim() ? { description: folder.description.trim() } : {}), ...(parent ? { parent_folder_id: parent } : {}) }
   const request: MetaChangeRequest = {
-    step: 1, label, kind: 'portfolio', objectId: portfolio, params,
+    step: 1, label, kind: 'ad', objectKind: 'portfolio', objectId: portfolio, params,
     check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
     operation: 'media.folderCreate', edge: 'creative_folders',
     send: async (target) => {
@@ -695,7 +695,7 @@ async function captionsDraft(account: MetaChangeAccount, captions: CaptionsSourc
   const label = `Add ${locale} captions (${fileName}, ${Math.ceil(Buffer.byteLength(srt, 'utf8') / 1024)} KB) to video ${videoId} of ad account act_${account.adAccountId}${setDefault ? `; default caption: ${setDefault}` : ''}`
   const params: Record<string, string> = { captions_file: srt, captions_file_name: fileName, ...(setDefault ? { default_locale: setDefault } : {}) }
   const request: MetaChangeRequest = {
-    step: 1, label, kind: 'libraryvideo', objectId: videoId, params,
+    step: 1, label, kind: 'ad', objectKind: 'libraryvideo', objectId: videoId, params,
     check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
     operation: 'media.captionsUpload', edge: 'captions',
     doneSentence: () => `${label}: Meta took it.`,
@@ -803,7 +803,7 @@ async function undoDraft(account: MetaChangeAccount, uploads: UploadRef[]): Prom
     if (upload.kind === 'captions') {
       const label = `Take the ${upload.locale} captions (added by Nexus) off video ${upload.videoId} of ad account ${act}${upload.restoreDefault ? `; default caption back to ${upload.restoreDefault}` : ''}`
       return {
-        step: i + 1, label, kind: 'libraryvideo', objectId: upload.videoId,
+        step: i + 1, label, kind: 'ad', objectKind: 'libraryvideo', objectId: upload.videoId,
         params: { locales_to_delete: JSON.stringify([upload.locale]), ...(upload.restoreDefault ? { default_locale: upload.restoreDefault } : {}) },
         check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
         operation: 'media.captionsRemove', edge: 'captions',
@@ -812,7 +812,7 @@ async function undoDraft(account: MetaChangeAccount, uploads: UploadRef[]): Prom
     }
     const label = upload.kind === 'image' ? `Remove image ${upload.hash} (uploaded new by Nexus) from ad account ${act}` : `Remove video ${upload.videoId} (uploaded by Nexus) from ad account ${act}`
     return {
-      step: i + 1, label, kind: 'adaccount', objectId: act,
+      step: i + 1, label, kind: 'ad', objectKind: 'adaccount', objectId: act,
       params: upload.kind === 'image' ? { hash: upload.hash } : { video_id: upload.videoId },
       check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
       operation: upload.kind === 'image' ? 'media.imageRemove' : 'media.videoRemove', edge: upload.kind === 'image' ? 'adimages' : 'advideos', method: 'DELETE',

@@ -300,11 +300,9 @@ export async function replaceDailyMetrics(adAccountId: string, entityType: MetaA
  * their children's effective status ("CAMPAIGN_PAUSED") follows at the next daily read. Never throws: a change that ran
  * is never failed by its bookkeeping.
  */
-export async function recordStatusReadBack(adAccountId: string, items: ReadonlyArray<{ kind: 'campaign' | 'adset' | 'ad' | 'adaccount' | 'portfolio' | 'libraryvideo'; id: string; status: string; effectiveStatus: string | null }>): Promise<number> {
+export async function recordStatusReadBack(adAccountId: string, items: ReadonlyArray<{ kind: 'campaign' | 'adset' | 'ad'; id: string; status: string; effectiveStatus: string | null }>): Promise<number> {
   let rows = 0
   for (const item of items) {
-    // Step 23 — a change request may name an edge (an upload, a video's captions): no stored status row of its own.
-    if (item.kind !== 'campaign' && item.kind !== 'adset' && item.kind !== 'ad') continue
     const data = { status: item.status, ...(item.effectiveStatus ? { effectiveStatus: item.effectiveStatus } : {}) }
     try {
       const done = item.kind === 'campaign'

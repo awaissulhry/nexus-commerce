@@ -87,11 +87,25 @@ export interface MetaWriteRequest {
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
   /** Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. */
   edge?: MetaWriteEdge
-  /** Step 18 — DELETE (a budget schedule's, no body; step 23: an image's or video's removal, its key in the body); default POST. */
+  /**
+   * Step 18 — DELETE (a budget schedule's, no body); default POST.
+   * Step 23 — an image's or a video's removal names it by a key (its hash, its video_id), sent as the form body.
+   */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
+  recommendations?: boolean
 }
+
+/**
+ * The edges a change posts to: a budget schedule (step 18); a campaign's or ad set's create on the ad account (`act_<id>`),
+ * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
+ * Step 23: the chosen ad account's images, videos and video-ads uploads, its business portfolio's media-library folders,
+ * a library video's captions.
+ */
+export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies'
+  | 'adimages' | 'advideos' | 'video_ads' | 'creative_folders' | 'captions'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):
@@ -101,8 +115,9 @@ export interface MetaWriteRequest {
  */
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
+  const check = req.recommendations ? '["validate_only","include_recommendations"]' : '["validate_only"]'
   // Step 23 — a DELETE that names its object by a key (an image's hash, a video's id) carries it as its form body.
-  const body = remove && !Object.keys(req.params).length ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
+  const body = remove && !Object.keys(req.params).length ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: check } : {}) }).toString()
   return gatewayCall({
     channel: 'META',
     operation: req.operation,
@@ -152,12 +167,6 @@ export async function metaRestCall(req: Omit<MetaCallRequest, 'auth'>): Promise<
     ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
   })
 }
-
-/**
- * The edges a change creates on (step 18: an object's budget schedules; step 23: the chosen ad account's images, videos
- * and video-ads uploads, its business portfolio's media-library folders, a library video's captions).
- */
-export type MetaWriteEdge = 'budget_schedules' | 'adimages' | 'advideos' | 'video_ads' | 'creative_folders' | 'captions'
 
 export interface MetaUploadRequest {
   connectionId: string

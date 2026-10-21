@@ -45,7 +45,7 @@
  *     operation on this endpoint" — a folder Nexus makes stays (no undo). Built from the SDK; Meta's answer decides
  *     (LIVE-PROBES BM-058).
  */
-import type { MetaMediaWriteKind, MetaWriteRule, MetaWriteVerdict } from './meta-calls.js'
+import type { MetaWriteKind, MetaWriteRule, MetaWriteVerdict } from './meta-calls.js'
 import { metaGraphApiVersion } from '../meta/api-version.js'
 
 /** Meta's resumable upload host (guides/videoads/fbvideoads.md, step 2). */
@@ -218,9 +218,10 @@ const audioSpec: Judge = (value) => {
 /** An image hash as Meta writes it (hex letters and digits; step 10's reads take the same). */
 const hashJudge: Judge = (value) => (/^[A-Za-z0-9]{1,64}$/.test(value) ? null : 'hash is an image hash (letters and digits)')
 
-const ACCOUNT: readonly MetaMediaWriteKind[] = ['adaccount']
-const PORTFOLIO: readonly MetaMediaWriteKind[] = ['portfolio']
-const LIBRARY_VIDEO: readonly MetaMediaWriteKind[] = ['libraryvideo']
+// Step 19's `adaccount` (the chosen ad account itself), and step 23's portfolio and library video.
+const ACCOUNT: readonly MetaWriteKind[] = ['adaccount']
+const PORTFOLIO: readonly MetaWriteKind[] = ['portfolio']
+const LIBRARY_VIDEO: readonly MetaWriteKind[] = ['libraryvideo']
 const VIDEO_TEXT = { name: META_MEDIA_TEXT_PATTERN, title: META_MEDIA_TEXT_PATTERN, description: META_MEDIA_TEXT_PATTERN }
 const videoText = { name: textOf(META_MEDIA_TEXT.name, 'name'), title: textOf(META_MEDIA_TEXT.title, 'title', 'bytes'), description: textOf(META_MEDIA_TEXT.description, 'description') }
 /** `default_locale`: a locale, or `none` (no default caption). */
