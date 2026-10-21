@@ -66,6 +66,7 @@ import { META_REMOVE_WRITE_RULES } from './meta-remove-rules.js'
 import { metaLabelsWriteRules } from './meta-labels-rules.js'
 import { META_OPTIMIZE_WRITE_RULES } from './meta-optimize-rules.js'
 import { META_IMAGE_MAX_BODY, META_MEDIA_WRITE_RULES, metaRuploadVerdict } from './meta-media-rules.js'
+import { metaAdRuleWriteRules } from './meta-ad-rule-rules.js'
 import { INSIGHTS_KEY_CHECKS, MAX_REPORT_RUN_BODY, REPORT_BUILDER_KEY_CHECKS, reportRunProblem } from '../meta/meta-insights-lists.js'
 
 /** Query keys only the gateway sets. */
@@ -962,6 +963,10 @@ export interface MetaWriteRule {
    * reuse it.
    */
   file?: { key: string; nameKey: string; name: RegExp; contentType: string; maxBytes: number; judge: (text: string) => string | null }
+  /** Step 29 — a POST with no body at all (a rule's run now, Meta's preview of a rule): no key, nothing judged but the path. */
+  emptyBody?: true
+  /** Step 29 — a POST that only reads (Meta's preview of a rule): it goes as a read, like Meta's check, and changes nothing. */
+  readOnly?: true
   /**
    * Step 7 — a POST that changes nothing on the account (a report run: Meta makes an AdReportRun, a background read):
    * declared a read, never braked, held or retried like a change; the gateway checks the path's ad account is the chosen one.
@@ -971,6 +976,8 @@ export interface MetaWriteRule {
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
 export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind
+  // Step 29 — one of the chosen ad account's automated rules (its create names act_<id>, `adaccount`).
+  | 'adrule'
 /** Step 28 — what only the recommendation and experiment tools name: a business portfolio (a new study), a study, a
  * Page, a Page video test (an apply names the chosen ad account itself, `adaccount`). */
 export type MetaOptimizeKind = 'business' | 'adstudy' | 'page' | 'pagevideotest'
@@ -1076,6 +1083,8 @@ export interface MetaJudgedWrite {
   ids?: MetaWriteBodyId[]
   /** Step 18 — a DELETE (a budget schedule's; step 22: remove-meta-ads-items'); every other change is a POST. */
   method?: 'DELETE'
+  /** Step 29 — a POST that only reads (Meta's preview of a rule): no per-object hold is noted for it. */
+  readOnly?: true
   /** Step 23 — the media ids inside the body (the gateway checks each). */
   assets?: MetaWriteAsset[]
   /** Step 23 — a call on an edge of the ad account or portfolio: no 30-s per-object gap (MetaWriteRule.edgeCall). */
@@ -1127,16 +1136,26 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const bareDelete = deleteRules.find((r) => !r.required.length && !r.optional.length)
   const noBody = input.body === undefined || input.body === ''
   if (method === 'DELETE' && !(bareDelete && noBody) && !(deleteRules.some((r) => r.required.length) && !noBody)) {
-    return refuse('Nexus deletes on Meta only a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), a concluded video test of the chosen Page (set-meta-experiment), the undo of a create or a copy, and what a person explicitly asked remove-meta-ads-items to delete: a campaign, ad set, ad or creative named with its kind (no body), an image or a video of the chosen ad account\'s library (its hash or video_id as the only body key) or a part of an Instant Experience of the chosen Page; it cancels no async batch')
+    return refuse('Nexus deletes on Meta only a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), a concluded video test of the chosen Page (set-meta-experiment), one of its automated rules (remove-meta-ad-rule), the undo of a create or a copy, and what a person explicitly asked remove-meta-ads-items to delete: a campaign, ad set, ad or creative named with its kind (no body), an image or a video of the chosen ad account\'s library (its hash or video_id as the only body key) or a part of an Instant Experience of the chosen Page; it cancels no async batch')
   }
   if (bareDelete && noBody) {
     if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
     return { write: { rule: bareDelete.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: bareDelete.kinds, method: 'DELETE' } }
   }
   if (method !== 'POST' && method !== 'DELETE') return refuse(`Nexus sends Meta no ${method}`)
+  // Step 29 — a POST with no body by a rule made for one (a rule's run now, or Meta's preview of it — that one goes as a
+  // read): judged before step 21's empty-body POST, which never takes such a rule.
+  if (method === 'POST' && noBody) {
+    const bare = writeRules().find((r) => r.method === 'POST' && r.emptyBody && r.path.test(graph.route) && kindMatches(r, input.objectKind))
+    if (bare) {
+      const check = bare.readOnly === true
+      if (input.kind !== (check ? 'read' : 'write')) return refuse(check ? 'this POST only reads and goes as a read; this one is declared otherwise' : 'a Meta change goes as a write; this one is declared otherwise')
+      return { write: { rule: bare.name, objectId: graph.segments[0], check, body: '', budget: false, ...(bare.kinds ? { kinds: bare.kinds } : {}), ...(check ? { readOnly: true as const } : {}) } }
+    }
+  }
   // Step 21 — a POST Meta documents with an EMPTY body (a value rule set's delete_rule_set): only by a rule that names no key
   // for the kind the call names, with no body at all.
-  const barePost = method === 'POST' && noBody ? writeRules().find((r) => r.method === 'POST' && !r.required.length && !r.optional.length && !r.anyOf && r.path.test(graph.route) && kindMatches(r, input.objectKind)) : undefined
+  const barePost = method === 'POST' && noBody ? writeRules().find((r) => r.method === 'POST' && !r.emptyBody && !r.required.length && !r.optional.length && !r.anyOf && r.path.test(graph.route) && kindMatches(r, input.objectKind)) : undefined
   if (barePost) {
     if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
     return { write: { rule: barePost.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: barePost.kinds } }
@@ -1152,7 +1171,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     if (method === 'POST' && /^act_\d+\/(adimages|advideos|video_ads)$|^\d+\/(creative_folders|captions)$/.test(graph.route)) {
       return refuse(`the only Meta change Nexus sends on a media edge is create-meta-media's upload, named with its kind (an image's bytes, a video's link or the chosen Instagram account's video, a video-ads upload, a portfolio folder, captions, a video's default caption), or a removal by remove-meta-ads-items' rules, each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
     }
-    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a create or a copy (create-meta-campaign, create-meta-ad-set, copy-meta-ads: each its own edge and keys), or a delete a person asked for (remove-meta-ads-items: each its own path and keys), or a label, value rule or reach & frequency change (set-meta-labels, set-meta-value-rules, create-meta-reach-frequency: each its own path and keys), or a report run of the chosen ad account's numbers (meta-ads-report: POST /act_<id>/insights, which changes nothing); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a create or a copy (create-meta-campaign, create-meta-ad-set, copy-meta-ads: each its own edge and keys), or a delete a person asked for (remove-meta-ads-items: each its own path and keys), or a label, value rule or reach & frequency change (set-meta-labels, set-meta-value-rules, create-meta-reach-frequency: each its own path and keys), or a change of one of the chosen ad account's automated rules (set-meta-ad-rule), or a report run of the chosen ad account's numbers (meta-ads-report: POST /act_<id>/insights, which changes nothing); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
@@ -1206,9 +1225,9 @@ const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kin
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
 // Step 23 — an image upload's bytes (META_IMAGE_MAX_BODY) are the largest body.
 const MAX_ANY_WRITE_BODY = Math.max(16_000, META_IMAGE_MAX_BODY)
-/** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts), step 19's, step 22's, step 21's (meta-labels-rules.ts) and step 28's (meta-optimize-rules.ts) — read when judged, never at load. */
+/** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts), step 19's, step 22's, step 21's (meta-labels-rules.ts) step 28's (meta-optimize-rules.ts) and step 29's rule changes (meta-ad-rule-rules.ts) — read when judged, never at load. */
 // Step 23 — then create-meta-media's media rules (meta-media-rules.ts).
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...metaCreateWriteRules(), ...META_REMOVE_WRITE_RULES, ...metaLabelsWriteRules(), ...META_OPTIMIZE_WRITE_RULES, ...META_MEDIA_WRITE_RULES]
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...metaCreateWriteRules(), ...META_REMOVE_WRITE_RULES, ...metaLabelsWriteRules(), ...META_OPTIMIZE_WRITE_RULES, ...META_MEDIA_WRITE_RULES, ...metaAdRuleWriteRules()]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

@@ -921,6 +921,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'end-meta-experiment': ['basis', 'plan', 'reach'],
   // Meta step 23 (2026-10-21): create-meta-media — the files and account it stands on, the requests (the bytes too), where.
   'create-meta-media': ['basis', 'plan', 'reach'],
+  // Meta step 29 (2026-10-21): Meta's automated rules — make, change, switch on / off, run now, delete.
+  'set-meta-ad-rule': ['basis', 'plan', 'reach'],
+  'remove-meta-ad-rule': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],
