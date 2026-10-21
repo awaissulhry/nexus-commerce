@@ -68,6 +68,12 @@ interface GraphRoute { version: string | null; segments: string[]; route: string
  * developers.facebook.com/documentation/ads-commerce/marketing-api/ad-creative/partnership-ads/content-discovery-api.md).
  */
 const GRAPH_HYPHEN_EDGES: ReadonlySet<string> = new Set(['partnership-ads-advertisable-content'])
+/**
+ * Step 3 — and the two hyphenated ROUTES of an ad account's insights feature settings, exactly as Meta writes them
+ * (marketing-api/insights/breakdowns, "Insights feature settings": act_<id>/insights/feature-settings and
+ * …/feature-settings/list-features). Every other segment stays letters, digits and _.
+ */
+const GRAPH_HYPHEN_ROUTES = /^act_\d+\/insights\/feature-settings(\/list-features)?$/
 
 function graphRouteOf(url: string): GraphRoute | { problem: string } | null {
   let parsed: URL
@@ -86,7 +92,9 @@ function graphRouteOf(url: string): GraphRoute | { problem: string } | null {
   const segments = version ? pieces.slice(1) : pieces
   // Step 16 review A6 — the hyphenated edge only as `<digits>/<edge>`: exactly two segments, the first a numeric id.
   const hyphenEdge = (piece: string, i: number) => i === 1 && segments.length === 2 && /^\d+$/.test(segments[0]) && GRAPH_HYPHEN_EDGES.has(piece)
-  if (segments.some((piece, i) => !/^[A-Za-z0-9_]+$/.test(piece) && !hyphenEdge(piece, i))) return { problem: 'a Meta path segment is letters, digits and _ only' }
+  // Step 3 — or one of the exact feature-settings routes.
+  const hyphenRoute = GRAPH_HYPHEN_ROUTES.test(segments.join('/'))
+  if (segments.some((piece, i) => !/^[A-Za-z0-9_]+$/.test(piece) && !hyphenEdge(piece, i) && !hyphenRoute)) return { problem: 'a Meta path segment is letters, digits and _ only' }
   return { version, segments, route: segments.join('/').toLowerCase(), search: parsed.searchParams }
 }
 
@@ -134,6 +142,13 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *     product_item_ids and <ad | creative>/previews the same without creative; <page>/canvases is_hidden, is_published.
  *     The organic-insight keys go only on a read with no field list whose metrics are all Nexus's organic ones, the
  *     preview keys only with an ad_format of the v26 enum (services/meta/meta-media-lists.ts, `when` below).
+ *   - step 3 (the account itself, its billing, who has access — marketing/meta-ads/live-account.ts), each only on its own
+ *     edge: business on act_<id>/assigned_users and <Page | IG asset | catalog | pixel>/assigned_users; business_id on
+ *     act_<id>/advertisable_applications and act_<id>/connected_instagram_accounts_with_iabp; bid_amount on
+ *     act_<id>/minimum_budgets; app_id, optimization_goal, event_name on act_<id>/campaign_attribution_options;
+ *     insights_feature on act_<id>/insights/feature-settings (with …/list-features: GRAPH_HYPHEN_ROUTES);
+ *     since, until on act_<id>/activities; start_date, end_date, issue_start_date, issue_end_date, invoice_id, type on
+ *     <portfolio>/business_invoices; only_show_pending on <portfolio>/extendedcreditapplications.
  */
 const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
 /**
@@ -274,6 +289,19 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/tags$/, keys: new Set(['posted_after']), when: (query) => isoDateTime(query.get('posted_after')) },
   { route: /^\d+\/tags$/, keys: new Set(['posted_before']), when: (query) => isoDateTime(query.get('posted_before')) },
   { route: /^\d+\/tags$/, keys: new Set(['media_type']), when: (query) => subsetOf(query.get('media_type'), ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM']) },
+  // Step 3 (meta-ad-account, meta-billing, meta-account-access — marketing/meta-ads/live-account.ts), each key only on its
+  // own edge: the business on assigned users (the ad account's, and a Page's, Instagram asset's, catalog's or pixel's —
+  // Meta requires it); the portfolio on an account's advertisable apps and Instagram accounts with IABP; a manual bid on
+  // minimum budgets; an app's event and goal on attribution options; a feature on the insights feature settings; the days
+  // of the activity log; an invoice query; pending credit applications.
+  { route: /^act_\d+\/assigned_users$|^\d+\/assigned_users$/, keys: new Set(['business']) },
+  { route: /^act_\d+\/(advertisable_applications|connected_instagram_accounts_with_iabp)$/, keys: new Set(['business_id']) },
+  { route: /^act_\d+\/minimum_budgets$/, keys: new Set(['bid_amount']) },
+  { route: /^act_\d+\/campaign_attribution_options$/, keys: new Set(['app_id', 'optimization_goal', 'event_name']) },
+  { route: /^act_\d+\/insights\/feature-settings$/, keys: new Set(['insights_feature']) },
+  { route: /^act_\d+\/activities$/, keys: new Set(['since', 'until']) },
+  { route: /^\d+\/business_invoices$/, keys: new Set(['start_date', 'end_date', 'issue_start_date', 'issue_end_date', 'invoice_id', 'type']) },
+  { route: /^\d+\/extendedcreditapplications$/, keys: new Set(['only_show_pending']) },
 ]
 /** Step 14 review A2 — the key's value is one of these. */
 function valueIn(key: string, values: readonly string[]): (query: URLSearchParams) => boolean {

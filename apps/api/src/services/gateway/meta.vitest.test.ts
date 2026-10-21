@@ -453,6 +453,40 @@ describe('read only by construction', () => {
     // A count closing an expansion is one too.
     expect(f('id,attachments{target{id},reactions.limit(0).summary(total_count)}')).toBeNull()
   })
+  it('step 3 — the account itself, its billing and who has access: each key only on its own edge; the feature settings are the only hyphenated paths', () => {
+    const q = (path: string) => ok(`${BASE}/${path}`)
+    for (const path of [
+      'act_1234567890/assigned_users?fields=id,name,tasks,permitted_tasks,business{id,name}&business=9876543210&summary=total_count',
+      '120000000000010/assigned_users?fields=id,name,tasks&business=9876543210', '170000000000001/assigned_users?fields=id,name,tasks&business=9876543210',
+      'act_1234567890/advertisable_applications?fields=id,name&business_id=9876543210',
+      'act_1234567890/connected_instagram_accounts_with_iabp?fields=id,username&business_id=9876543210',
+      'act_1234567890/minimum_budgets?fields=currency,min_daily_budget_imp&bid_amount=150',
+      'act_1234567890/campaign_attribution_options?app_id=300000000000001&optimization_goal=APP_INSTALLS&event_name=PURCHASE',
+      'act_1234567890/insights/feature-settings?insights_feature=comscore', 'act_1234567890/insights/feature-settings/list-features',
+      'act_1234567890/activities?fields=event_type,extra_data&since=1760000000&until=1760086400',
+      '9876543210/business_invoices?fields=id,amount_due&start_date=2026-01-01&end_date=2026-10-01&issue_start_date=2026-01-01&issue_end_date=2026-10-01&type=INV&summary=total_count',
+      '9876543210/business_invoices?fields=id&invoice_id=123456', '9876543210/extendedcreditapplications?fields=id,status&only_show_pending=true',
+      'act_1234567890/users?fields=id,name,tasks', 'act_1234567890/agencies?fields=id,name,access_status,permitted_tasks', '9876543210/extendedcredits?fields=id,balance',
+      '100000000000001/assigned_ad_accounts?fields=account_id,name', '100000000000001/extended_credit_invoice_groups?fields=id,name,emails',
+    ]) expect(q(path), path).toBeNull()
+    for (const [path, key] of [
+      ['act_1234567890/campaigns?fields=id&business=9876543210', 'business'], ['act_1234567890/users?fields=id&business=9876543210', 'business'],
+      ['act_1234567890/applications?fields=id&business_id=9876543210', 'business_id'], ['act_1234567890/insights?fields=spend&insights_feature=comscore', 'insights_feature'],
+      ['act_1234567890/ads?fields=id&since=1760000000', 'since'], ['act_1234567890/minimum_budgets?bid_amount=150&app_id=1', 'app_id'],
+      ['9876543210/owned_ad_accounts?fields=id&type=INV', 'type'], ['9876543210/extendedcredits?fields=id&only_show_pending=true', 'only_show_pending'],
+      ['act_1234567890/campaign_attribution_options?app_id=1&custom_event_str=x', 'custom_event_str'], ['9876543210/business_invoices?fields=id&root_id=1', 'root_id'],
+    ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
+    // A hyphen only in the two feature-settings paths, exactly as Meta writes them.
+    for (const path of [
+      'act_1234567890/insights/feature-settings/other-list', 'act_1234567890/feature-settings', '120000000000101/insights/feature-settings',
+      'act_1234567890/insights/feature-settings/list-features/x', 'act_1234567890/Insights/feature-settings', 'act_1234567890/insights/list-features',
+      'act_1234567890/ad-images', 'act_1234567890/insights/feature_settings-',
+    ]) expect(q(path), path).toMatch(/letters, digits and _ only|not one a Nexus read/)
+    // FIELD_DENIED stays: people and agencies are read through their own edge, never expanded into the account.
+    expect(q('act_1234567890?fields=id,users{name}')).toMatch(/never expands "users"/)
+    expect(q('act_1234567890?fields=id,agencies{name}')).toMatch(/never expands "agencies"/)
+    expect(q('act_1234567890?fields=id,assigned_users{name}')).toMatch(/never expands "assigned_users"/)
+  })
 })
 
 describe('signing and the token', () => {

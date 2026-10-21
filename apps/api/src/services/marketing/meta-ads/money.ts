@@ -61,3 +61,42 @@ export function microsToMinor(micros: bigint, exponent: number): number {
 export function minorOf(micros: bigint | null | undefined, currency: string | null | undefined): number | null {
   return micros === null || micros === undefined ? null : microsToMinor(micros, currencyExponent(currency))
 }
+
+/**
+ * Step 3 — the ad account's `spend_cap` as Meta READS it: offset units ("Value specified in basic unit of the currency,
+ * for example 'cents' for USD", reference/ad-account fields); "0" means no cap → null. Meta WRITES the same cap
+ * differently (POST /act_<id> spend_cap: "standard denomination of the currency, e.g. 23.50 for USD $23.50" — facts F1
+ * X4): that is the account change's own helper, never this one.
+ */
+export function metaAccountSpendCapMicros(value: unknown, currency: string | null | undefined): bigint | null {
+  const micros = metaUnitsToMicros(value, currency)
+  return micros === null || micros === 0n ? null : micros
+}
+
+/**
+ * Step 3 — minor units of the account currency (what Nexus's tools take) → Meta's offset units (what minimum_budgets'
+ * bid_amount, budgets and bids take): EUR 1250 → 1250, JPY 1250 → 1250, BHD 1250 (1.250) → 125. Null when it is not a
+ * whole number of Meta's units (BHD 1255) or not a whole number at all.
+ */
+export function minorToMetaUnits(minor: number, currency: string | null | undefined): number | null {
+  if (!Number.isSafeInteger(minor)) return null
+  const micros = BigInt(minor) * 10n ** BigInt(Math.max(0, 6 - currencyExponent(currency)))
+  const per = BigInt(1_000_000 / metaOffset(currency))
+  return micros % per === 0n ? Number(micros / per) : null
+}
+
+/**
+ * Step 3 — Meta's CurrencyAmount (credit lines, credit allocations, an invoice's amount due: `{ amount,
+ * amount_in_hundredths, currency, offsetted_amount }`, SDK currencyamount.py — Meta's node page answers 404) in micros of
+ * ITS OWN currency (a credit line is "measured in USD at the top level", reference extended-credit): offsetted_amount
+ * (Meta's offset units of that currency) when it is a whole number, else amount (a decimal of the currency). Null when
+ * neither is usable or no currency is named. Which of the two Meta fills is settled live (LIVE-PROBES BM-026).
+ */
+export function currencyAmountMicros(value: unknown): { micros: bigint; currency: string } | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const v = value as Record<string, unknown>
+  const currency = typeof v.currency === 'string' && /^[A-Za-z]{3}$/.test(v.currency.trim()) ? v.currency.trim().toUpperCase() : null
+  if (!currency) return null
+  const micros = metaUnitsToMicros(v.offsetted_amount, currency) ?? decimalToMicros(v.amount)
+  return micros === null ? null : { micros, currency }
+}
