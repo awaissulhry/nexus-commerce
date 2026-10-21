@@ -111,14 +111,15 @@ const metaWebhooks: AgentTool = {
     + 'subscriptions (object, fields, active, the callback shown by its origin only) — read with the app\'s own token; '
     + 'ad-account: the apps connected to the chosen ad account (events reach an app only when both are set up; isNexusApp '
     + 'marks the business\'s own); page: the apps and fields subscribed on the chosen Facebook Page (Meta answers this only to '
-    + 'a Page token: when it refuses, the answer says so); alerts: the ad account\'s alert subscriptions made by this app '
+    + 'the Page\'s own token, which Nexus reads with the system user: when there is none or Meta refuses, the answer says so; '
+    + 'while Meta changes are switched off — NEXUS_META_ADS_WRITES not live — Nexus reads no Page token, so this part is not '
+    + 'read and the answer says so); alerts: the ad account\'s alert subscriptions made by this app '
     + '(new objects, a field changing, a number crossing a threshold or reaching a milestone, with their filters; amounts '
     + 'in minor units of the account currency). all (default): each part, one refused part never hiding the others. Never a '
-    + 'verify token, secret or token. Read only: subscribing and connecting are set-meta-webhooks (which also removes the app '
-    + 'from the Page), alerts set-meta-alert-subscription and remove-meta-alert-subscription — or the Owner sets them up in '
-    + 'Meta\'s App Dashboard (Webhooks of the app; callback https://<the API>/webhooks/meta/<app id>); the app is installed on '
-    + 'a Page in Meta Business Suite › All Tools › Business Apps, or with the Graph API Explorer and a Page token. This read '
-    + 'shows the result either way.',
+    + 'verify token, secret or token. Read only: subscribing and connecting are set-meta-webhooks (which also installs the app '
+    + 'on the chosen Page and removes it), alerts set-meta-alert-subscription and remove-meta-alert-subscription — or the '
+    + 'Owner sets them up in Meta\'s App Dashboard (Webhooks of the app; callback https://<the API>/webhooks/meta/<app id>) '
+    + 'and Meta Business Suite › All Tools › Business Apps (the app on a Page). This read shows the result either way.',
   async handler(args): Promise<ToolResult> {
     const a = args as Record<string, unknown>
     return guardedMeta(() => liveWebhooks({

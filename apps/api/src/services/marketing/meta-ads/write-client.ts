@@ -21,7 +21,7 @@
  * Never logs a token, a request body or an answer.
  */
 import { metaRestWriteCall, metaRuploadCall, metaWriteCall, type MetaRestWriteRequest, type MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaTargetingKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
+import { metaWriteRuleAuth, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaTargetingKind, type MetaWebhookKind } from '../../gateway/meta-calls.js'
 import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
@@ -249,15 +249,37 @@ const cut = (words: string | null | undefined) => (words ? (words.length > MAX_W
 /** Step 36 review B3 — the kinds a change makes AS the chosen Page (its own token: gateway meta-page-token.ts). */
 const PAGE_KINDS: ReadonlySet<string> = new Set(['page', 'leadform', 'testlead'])
 
+/** Step 30 part 3 review round 2 (A-L3) — the token a change goes with by its gateway rule (meta-calls.ts metaWriteRuleAuth). */
+function ruleAuthOf(change: MetaObjectChange): 'page' | 'app' | undefined {
+  const route = change.via?.path ?? (change.edge ? `${change.objectId}/${change.edge}` : change.objectId)
+  // As metaWriteCall sends it: a removal as such, else PATCH when the request travels as one, else POST.
+  return metaWriteRuleAuth(change.method && change.method !== 'POST' ? change.method : change.via?.method ?? 'POST', route, change.kind)
+}
+
 /** The failure of a change's answer, in words about a CHANGE (errors.ts says them about a read). */
-function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>, kind?: string): MetaFailure {
+function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>, change?: MetaObjectChange): MetaFailure {
   const failure = failureOfAnswer(answer)
   if (failure.origin !== 'meta') return failure
   const words = cut(answer.verdict?.channelMessage)
   const code = failure.code ? ` (${failure.code})` : ''
+  const kind = change?.kind
+  const auth = change ? ruleAuthOf(change) : undefined
+  // Step 30 part 3 review round 2 (B-3, A-L3) — a change made with the APP token (its rule's `auth: 'app'`: remove-page,
+  // install-page exact's step 1, an app subscription): a refused token is the app's, never the Page's or the system user's.
+  if (auth === 'app' && (failure.authLost || failure.permissionDenied)) {
+    return {
+      ...failure,
+      sentence: failure.authLost
+        ? `Meta did not accept the business's Meta app token for this change${code}${words ? `: ${words}` : ''}. Check the app id and secret in Settings › Channels › Meta. Nothing was changed.`
+        : `Meta refused this change made with the business's Meta app token${code}${words ? `: ${words}` : ''}. Nothing was changed.`,
+    }
+  }
   // Step 36 review B3 — a change made with the Page's own token: a refused token or permission is the Page's condition
   // (the system user's role or task on the chosen Page), never "make a new system-user token" or the ad account's.
   if (kind && PAGE_KINDS.has(kind) && (failure.authLost || failure.permissionDenied)) {
+    // Step 30 part 3 review round 2 (B-3) — a webhook change made as the Page (install-page, `via`) brings its own words for
+    // Meta's codes (`explain`, which the kit adds): the generic sentence here, never step 36's lead-form task advice.
+    if (change?.via) return { ...failure, sentence: `Meta did not accept this change made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. Nothing was changed.` }
     return {
       ...failure,
       sentence: `Meta did not accept this change made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. The system user may have lost its role or its Advertise task on the Page (Meta Business settings › Users › System users › Assign assets), or its token pages_manage_ads. Nothing was changed.`,
@@ -395,7 +417,7 @@ export async function metaSendChange(
     return { node, readBack: node ? 'second-read' : 'none', waitedMs }
   }
   // Not a plain success: what Meta answered, then what the object is now.
-  const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer, change.kind)
+  const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer, change)
   const unanswered = answer.status === 0 || answer.status >= 500
   const wanted = expectedOf(change)
   // Step 18 — an edge create or a DELETE cannot be judged by reading the object: Meta's answer is all there is (step 39:

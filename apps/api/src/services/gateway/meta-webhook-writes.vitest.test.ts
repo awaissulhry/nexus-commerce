@@ -22,8 +22,8 @@ vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: v
 
 import { gatewayLedger, gatewayMetaChosen, gatewayMetaPage } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
-import { metaWriteCall } from './meta.js'
-import { metaWriteVerdict } from './meta-calls.js'
+import { metaCall, metaWriteCall } from './meta.js'
+import { metaCallVerdict, metaWriteVerdict } from './meta-calls.js'
 import { alertFiltersProblem, alertValueProblem, META_WEBHOOK_FIELDS } from './meta-webhook-rules.js'
 import { META_WEBHOOK_TOPICS } from '../marketing/meta-ads/webhook-topics.js'
 import { __metaObjectLimitsTest } from './meta-object-limits.js'
@@ -162,10 +162,8 @@ describe('the chosen ad account\'s connected app and the chosen Page', () => {
     expect(h.calls).toHaveLength(2)
   })
 
-  it('the CHOSEN Page: the app removed with the app token; installing (a Page token) is never sent; another Page never', async () => {
+  it('the CHOSEN Page: the app removed with the app token; another Page never', async () => {
     gatewayMetaPage['m-1'] = PAGE
-    // Review B1 / D-2 — Meta installs an app on a Page only with a Page access token: no rule sends it.
-    expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, body: form({ subscribed_fields: 'leadgen,feed' }), objectKind: 'page' })).toMatch(/the only Meta change Nexus sends/)
     // The removal is the app's (its rule's token), never the Page's: step 36's Page token goes only on a rule marked `page`.
     expect(verdict({ url: `${BASE}/${PAGE}/subscribed_apps`, method: 'DELETE', objectKind: 'page' })).toMatchObject({ write: { rule: 'page.subscribed_apps.delete', auth: 'app' } })
     expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, method: 'DELETE', objectKind: 'page', auth: 'page' })).toMatch(/only with the account's own system-user token/)
@@ -177,6 +175,109 @@ describe('the chosen ad account\'s connected app and the chosen Page', () => {
     delete gatewayMetaPage['m-1']
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: {}, method: 'DELETE', check: false })).rejects.toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
     expect(h.calls).toHaveLength(1)
+  })
+})
+
+describe('part 3 — the app installed on the CHOSEN Page with the Page\'s own token (step 36\'s mode)', () => {
+  const PAGE_TOKEN = 'EAAPageTokenForTests1234567890'
+  const pageToken = () => new Response(JSON.stringify({ id: PAGE, access_token: PAGE_TOKEN }), { status: 200 })
+  const install = (fields: string, extra: Record<string, unknown> = {}) => metaWriteCall({ connectionId: 'm-1', operation: 'webhooks.installPage', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: { subscribed_fields: fields }, check: false, ...extra })
+
+  it('the rule: POST subscribed_fields (the receiver\'s Page fields, each once) by the rule\'s Page token, never a caller\'s ask', () => {
+    expect(verdict({ url: `${BASE}/${PAGE}/subscribed_apps`, body: form({ subscribed_fields: 'leadgen,feed' }), objectKind: 'page' })).toMatchObject({ write: { rule: 'page.subscribed_apps', objectId: PAGE, auth: 'page', kinds: ['page'], edgeCall: true } })
+    expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, body: form({ subscribed_fields: 'leadgen,ratings' }), objectKind: 'page' })).toMatch(/the Page's subscribed fields are only/)
+    expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, body: form({ subscribed_fields: 'leadgen,leadgen' }), objectKind: 'page' })).toMatch(/each field once/)
+    expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, body: form({ subscribed_fields: 'leadgen' }), objectKind: 'page', auth: 'page' })).toMatch(/only with the account's own system-user token/)
+    expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, body: form({ subscribed_fields: 'leadgen' }), objectKind: 'campaign' })).toMatch(/the only Meta change Nexus sends/)
+    expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, body: form({ subscribed_fields: 'leadgen', access_token: 'x' }), objectKind: 'page' })).toMatch(/which no Nexus change sends/)
+    expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps?subscribed_fields=leadgen`, body: form({ subscribed_fields: 'leadgen' }), objectKind: 'page' })).toMatch(/never in the URL/)
+  })
+
+  it('on the wire: the gateway reads the CHOSEN Page\'s token, then sends the install with it (never the system user\'s, never the app\'s)', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    h.answers.push(pageToken)
+    expect((await install('leadgen,feed')).ok).toBe(true)
+    expect(h.calls).toHaveLength(2)
+    expect([new URL(h.calls[0].url).pathname, new URL(h.calls[0].url).searchParams.get('fields'), new URL(h.calls[0].url).searchParams.get('access_token')]).toEqual([`/v26.0/${PAGE}`, 'access_token', 'meta-system-user-token'])
+    const sent = h.calls[1]
+    expect([sent.init.method, new URL(sent.url).pathname, new URL(sent.url).searchParams.get('access_token'), String(sent.init.body)]).toEqual(['POST', `/v26.0/${PAGE}/subscribed_apps`, PAGE_TOKEN, 'subscribed_fields=leadgen%2Cfeed'])
+    expect(JSON.stringify(gatewayLedger)).not.toContain(PAGE_TOKEN)
+    // An edge of the Page: no 30-s gap holds the next one (the undo's DELETE right after).
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: {}, method: 'DELETE', check: false })).ok).toBe(true)
+    expect(new URL(h.calls[2].url).searchParams.get('access_token')).toBe('1234567|app-secret-for-tests')
+  })
+
+  it('another Page, no Page chosen, Meta changes switched off, or no Page token from Meta: nothing sent', async () => {
+    gatewayMetaPage['m-1'] = '120000000000011'
+    await expect(install('leadgen')).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
+    delete gatewayMetaPage['m-1']
+    await expect(install('leadgen')).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
+    expect(h.calls).toHaveLength(0)
+    gatewayMetaPage['m-1'] = PAGE
+    h.answers.push(() => new Response(JSON.stringify({ id: PAGE }), { status: 200 }))
+    await expect(install('leadgen')).rejects.toMatchObject({ code: 'META_PAGE_TOKEN_UNAVAILABLE', message: expect.stringMatching(/the app installed on the Page and its connected apps read \(set-meta-webhooks\): Manage, Create content or Moderate/) })
+    expect(h.calls).toHaveLength(1)
+    vi.stubEnv('NEXUS_META_ADS_WRITES', 'off')
+    await expect(install('leadgen')).rejects.toMatchObject({ code: 'PUBLISH_GATED' })
+    expect(h.calls).toHaveLength(1)
+  })
+
+  it('the ONE Page-token read: the chosen Page\'s connected apps, with id, name, subscribed_fields only; the token never in the answer', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    h.answers.push(pageToken, () => new Response(JSON.stringify({ data: [{ id: APP, name: 'Nexus', subscribed_fields: ['leadgen'], echo: PAGE_TOKEN }] }), { status: 200 }))
+    const read = await metaCall({ connectionId: 'm-1', operation: 'webhooks.setup.pageApps', path: `${PAGE}/subscribed_apps`, query: { fields: 'id,subscribed_fields', limit: 100 } })
+    expect(read.ok).toBe(true)
+    expect(new URL(h.calls[1].url).searchParams.get('access_token')).toBe(PAGE_TOKEN)
+    expect(read.text).not.toContain(PAGE_TOKEN)
+    h.calls = []
+    for (const query of [{ fields: 'id,access_token' }, { fields: 'id', summary: 'true' }, {}] as Array<Record<string, string>>) {
+      await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: `${PAGE}/subscribed_apps`, query })).rejects.toMatchObject({ code: 'META_READ_ONLY' })
+    }
+    await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: `${PAGE}/subscribed_apps`, query: { fields: 'id' }, auth: 'app' })).rejects.toMatchObject({ code: 'META_READ_ONLY' })
+    await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: '120000000000011/subscribed_apps', query: { fields: 'id' } })).rejects.toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
+    expect(h.calls).toHaveLength(0)
+    // An ad account's connected apps stay a read with the system-user token.
+    h.answers.push(() => new Response(JSON.stringify({ data: [] }), { status: 200 }))
+    expect((await metaCall({ connectionId: 'm-1', operation: 'x', path: `${ACT}/subscribed_apps`, query: { fields: 'app_id,app_name' } })).ok).toBe(true)
+    expect(new URL(h.calls[0].url).searchParams.get('access_token')).toBe('meta-system-user-token')
+  })
+
+  it('review A-F4 — the Page-token read takes limit as digits (≤ 100) and after as Meta\'s cursor only: nothing rides on them', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    const read = (query: Record<string, string>) => metaCallVerdict({ method: 'GET', url: `${BASE}/${PAGE}/subscribed_apps?${new URLSearchParams({ fields: 'id,subscribed_fields', ...query })}`, kind: 'read' })
+    for (const limit of ['1.fields(access_token)', '101', '1000', '-1', '1e2', ' 10', '']) {
+      expect(read({ limit }).problem, limit).toBe('a Page\'s connected apps are read with a limit of digits only, at most 100')
+    }
+    for (const after of ['QVFI&access_token=x', 'QVFI%26x', 'QVFI.fields(id)', 'QVFI(x)', 'QVFI x', '', 'Q'.repeat(513)]) {
+      expect(read({ after }).problem, after).toBe('a Page\'s connected apps are read with after as Meta\'s own cursor only (letters, digits, _, - and =, at most 512)')
+    }
+    expect(read({ limit: '100', after: 'QVFIUmxtX0Z6dGFCLTNnVXc9' })).toEqual({ problem: null, renewalClientId: null, pageRead: { pageId: PAGE } })
+    expect(read({ limit: '25' }).problem).toBeNull()
+    // Through the gateway: refused before any token is read, nothing sent.
+    await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: `${PAGE}/subscribed_apps`, query: { fields: 'id', limit: '1.fields(access_token)' } })).rejects.toMatchObject({ code: 'META_READ_ONLY' })
+    await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: `${PAGE}/subscribed_apps`, query: { fields: 'id', after: 'a&b' } })).rejects.toMatchObject({ code: 'META_READ_ONLY' })
+    expect(h.calls).toHaveLength(0)
+  })
+
+  it('review A-F5 / A-F6 — Meta refusing the PAGE token on that read never resets the system-user token\'s check; writes off: no Page token, not read', async () => {
+    gatewayMetaPage['m-1'] = PAGE
+    const forget = vi.mocked((await import('../cx/connectors/meta/token-check.js')).forgetMetaTokenCheck)
+    forget.mockClear()
+    const dead = () => new Response(JSON.stringify({ error: { message: 'Error validating access token', type: 'OAuthException', code: 190 } }), { status: 400 })
+    h.answers.push(() => new Response(JSON.stringify({ id: PAGE, access_token: 'EAAPageTokenForTests1234567890' }), { status: 200 }), dead)
+    const answer = await metaCall({ connectionId: 'm-1', operation: 'webhooks.setup.pageApps', path: `${PAGE}/subscribed_apps`, query: { fields: 'id,subscribed_fields', limit: 100 } })
+    expect(answer).toMatchObject({ ok: false, verdict: { errorClass: 'auth_revoked' } })
+    // The same answer to a read with the system-user token still does (the next heartbeat checks it at once) — once: the
+    // Page-token read before it did not.
+    h.answers.push(dead)
+    await metaCall({ connectionId: 'm-1', operation: 'x', path: `${ACT}/subscribed_apps`, query: { fields: 'app_id' } })
+    await vi.waitFor(() => expect(forget).toHaveBeenCalledWith('m-1'))
+    expect(forget).toHaveBeenCalledTimes(1)
+    // Meta changes switched off: the gateway reads no Page token, so the read is gated (nothing sent).
+    h.calls = []
+    vi.stubEnv('NEXUS_META_ADS_WRITES', 'off')
+    await expect(metaCall({ connectionId: 'm-1', operation: 'x', path: `${PAGE}/subscribed_apps`, query: { fields: 'id' } })).rejects.toMatchObject({ code: 'PUBLISH_GATED', outcome: 'gated' })
+    expect(h.calls).toHaveLength(0)
   })
 })
 
