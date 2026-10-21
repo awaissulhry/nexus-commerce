@@ -34,7 +34,7 @@ import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, 
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaReadSecrets, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaBoostWriteKind, type MetaJudgedWrite, type MetaLabelsKind, type MetaMediaWriteKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
-import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaPageKind, type MetaWebhookKind, type MetaWriteKind } from './meta-calls.js'
+import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaPageKind, type MetaTargetingKind, type MetaWebhookKind, type MetaWriteKind } from './meta-calls.js'
 import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwnerProblem, noteBlockListDraftMade, type MetaCheckRead } from './meta-brand-safety-owner.js'
 import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
@@ -152,6 +152,11 @@ export interface GatewayRequest {
    * remembered for, and used by, only the same run.
    */
   metaRun?: string
+  /**
+   * Meta step 20 (review A2) — the targeting keys the change's draft changed (meta.ts targetingKeys): the gateway lets only
+   * these (within the rule's own key set) differ from the ad set's live targeting it reads itself right before the send.
+   */
+  metaTargetingKeys?: readonly string[]
 }
 
 export interface GatewayResponse {
@@ -452,12 +457,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // `adaccount` and step 28's `page`), its own app, the chosen ad account or the chosen Page (metaWebhookOwnerProblem).
     const owner = metaWrite.auth === 'page' ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
       : isWebhookRule(metaWrite.rule) ? await metaWebhookOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
-      : metaWrite.targeting ? (req.metaObjectKind === 'adsettargeting' ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
+      // Step 20 — a targeting rule names its own kind (step 39 an ad set's targeting; step 20 its audience or placements).
+      : metaWrite.targeting ? ((metaWrite.kinds as readonly string[] | undefined)?.includes(req.metaObjectKind ?? '') ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
         : isBrandSafetyRule(metaWrite.rule) ? await metaBrandSafetyOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind ?? '', metaCheckRead(req.connectionId), req.metaRun)
           // Step 32 — a dataset, custom conversion or event source group change: chosen by its rule (it also names step 19's
           // `adaccount` and step 28's `page`, whose own checks run first), then signals-rule.ts with every id inside the body.
           : isSignalsRule(metaWrite.rule) ? await metaSignalsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
-          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind> | undefined, req.metaParent)
+          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind | MetaTargetingKind> | undefined, req.metaParent)
           ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
           ?? await metaMediaAssetsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
@@ -636,7 +642,15 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // Meta step 39 (Q7, review A2) — an ad set's targeting: its live targeting is read (with its owner and kind check) now
     // that the call holds its slot, right before the send, so nothing changed in Ads Manager during a wait is overwritten.
     if (metaWrite?.targeting && req.connectionId && attempts === 0) {
-      const owner = await metaTargetingOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
+      // Step 20 — with the owner check of every id the change adds inside the spec.
+      const connectionId = req.connectionId
+      const write = metaWrite
+      // Step 20 (review A2) — a step 20 rule (its own judge) changes only the keys its draft changed: every other key, also
+      // one of the rule's own, must equal the live spec (a newer Ads Manager edit during a wait is never overwritten).
+      const asked = req.metaTargetingKeys?.filter((k) => write.targeting!.keys.has(k)) ?? null
+      if (write.targeting.judge && !asked?.length) return refuse('refused', 'META_WRITE_NOT_ALLOWED', `Nothing was sent to Meta: a targeting change of ${write.objectId} names the keys it changes.`, 403)
+      const narrowed = asked?.length ? { ...write, targeting: { ...write.targeting, keys: new Set(asked) } } : write
+      const owner = await metaTargetingOwnerProblem(connectionId, narrowed, req.metaObjectKind, metaCheckRead(connectionId), (ids) => metaBodyIdsProblem(connectionId, { ...write, ids }))
       if (owner) return refuse('refused', owner.code, owner.sentence, 403)
     }
     attempts++
@@ -1014,7 +1028,8 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       continue
     }
     // Step 21 — a label, a value rule set or a reach & frequency prediction: among the chosen ad account's own.
-    if (inner.kind === 'adlabel' || inner.kind === 'valueruleset' || inner.kind === 'rfprediction') {
+    // Step 20 — a place page set inside an ad set's targeting: among the chosen ad account's own too.
+    if (inner.kind === 'adlabel' || inner.kind === 'valueruleset' || inner.kind === 'rfprediction' || inner.kind === 'placepageset') {
       const problem = await metaAccountListedProblem(connectionId, inner.id, inner.kind, false, accountLists)
       if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, 'Nothing was sent to Meta: inside this change, ') }
       continue
@@ -1255,11 +1270,13 @@ function metaOwnerIo(connectionId: string, write: MetaJudgedWrite): import('./me
 }
 
 /** Meta step 21 — the chosen ad account's own lists a change's object or body id must be on. */
-type MetaAccountListKind = 'adlabel' | 'valueruleset' | 'rfprediction'
+type MetaAccountListKind = 'adlabel' | 'valueruleset' | 'rfprediction' | 'placepageset'
 const META_ACCOUNT_LISTS: Readonly<Record<MetaAccountListKind, { edge: string; word: string }>> = {
   adlabel: { edge: 'adlabels', word: 'label' },
   valueruleset: { edge: 'value_rule_set', word: 'value rule set' },
   rfprediction: { edge: 'reachfrequencypredictions', word: 'reach and frequency prediction' },
+  // Step 20 — reference/ad-account/ad_place_page_sets.md (the documented list of the account's place page sets).
+  placepageset: { edge: 'ad_place_page_sets', word: 'place page set' },
 }
 
 /**

@@ -956,6 +956,10 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-webhooks': ['basis', 'plan', 'reach'],
   'set-meta-alert-subscription': ['basis', 'plan', 'reach'],
   'remove-meta-alert-subscription': ['basis', 'plan', 'reach'],
+  // Meta step 20 (2026-10-21): an ad set's targeting and placements, the ad account's controls (meta-ads-kit).
+  'set-meta-targeting': ['basis', 'plan', 'reach'],
+  'set-meta-placements': ['basis', 'plan', 'reach'],
+  'set-meta-account-controls': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],
