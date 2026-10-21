@@ -164,6 +164,8 @@ export async function connectMeta(input: { body: unknown; targetConnectionId?: s
   }
   const { connectionId, placement } = placed
 
+  // Meta step 30 — the webhook receiver reads a connection's app id once per 5 minutes: new credentials are read at once.
+  await import('../../../marketing/meta-ads/webhook-receiver.js').then((m) => m.forgetMetaAppIds(connectionId)).catch(() => undefined)
   // 5 — what Nexus keeps of the check, and what the system user sees.
   await saveTokenHealth(connectionId, health)
   await recordConnectionEvent({

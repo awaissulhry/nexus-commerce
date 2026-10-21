@@ -34,7 +34,7 @@ import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, 
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaReadSecrets, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaBoostWriteKind, type MetaJudgedWrite, type MetaLabelsKind, type MetaMediaWriteKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
-import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaPageKind, type MetaWriteKind } from './meta-calls.js'
+import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaPageKind, type MetaWebhookKind, type MetaWriteKind } from './meta-calls.js'
 import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwnerProblem, noteBlockListDraftMade, type MetaCheckRead } from './meta-brand-safety-owner.js'
 import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
@@ -42,6 +42,7 @@ import { metaPageOwnerProblem } from './meta-page-owner.js'
 import { MetaPageTokenUnavailable, metaPageTokenFor, scrubExactToken } from './meta-page-token.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { META_SIGNALS_WRITE_RULES, type MetaSignalsKind } from './meta-signals-rules.js'
+import { META_WEBHOOK_WRITE_RULES } from './meta-webhook-rules.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { MAX_RULE_BODY_IDS, ruleBodyIds } from './meta-ad-rule-rules.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
@@ -371,6 +372,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   const metaExport = req.channel === 'META' && req.method === 'PUT' ? metaRestFileExportOf({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers }) : null
   if (metaExport && 'problem' in metaExport) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${metaExport.problem} (${req.method} ${safePath(req.url)}).`, 403)
   if (metaExport) metaRest = true
+  // Step 30 — the body a webhook subscription is sent with: the judged body plus the verify token (set below).
+  let metaSendBody: string | null = null
   if (req.channel === 'META' && req.method !== 'GET' && !metaExport) {
     const judged = metaWriteVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers, objectKind: req.metaObjectKind })
     if ('problem' in judged) {
@@ -382,6 +385,12 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       return refuse('gated', 'PUBLISH_GATED', 'Nothing was sent to Meta: Meta changes are switched off in Nexus (NEXUS_META_ADS_WRITES), so Meta is not asked to check one either.', 503)
     }
     metaWrite = judged.write
+    // Step 30 — a change that names a Meta app (an app subscription, an ad account's connected app) goes only for the
+    // connection's OWN app, as the token renewal does.
+    if (metaWrite.appId) {
+      const own = await (await import('../cx/token.service.js')).metaAppIdOf(req.connectionId)
+      if (!own || own !== metaWrite.appId) return refuse('refused', 'META_WRITE_NOT_ALLOWED', 'Nothing was sent to Meta: a webhook change is sent only for this connection\'s own Meta app.', 403)
+    }
     // Step 26 (review B1) — a change on Meta's partnership REST host: the token goes as a Bearer header, like step 16's reads.
     metaRest = metaWrite.host === 'rest'
   } else if (req.channel === 'META' && !metaExport) {
@@ -439,16 +448,26 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // Step 36 (Q1) — a change made AS the chosen Facebook Page (a rule marked `auth: 'page'`): its object must be that Page
     // or a child of it the gateway confirms (meta-page-owner.ts), before the Page's token is read. By the rule, never the
     // kind alone: step 28 names `page` too.
+    // Step 30 — a webhook or alert subscription change (meta-webhook-rules.ts): by its rule too (it names step 19's
+    // `adaccount` and step 28's `page`), its own app, the chosen ad account or the chosen Page (metaWebhookOwnerProblem).
     const owner = metaWrite.auth === 'page' ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
+      : isWebhookRule(metaWrite.rule) ? await metaWebhookOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
       : metaWrite.targeting ? (req.metaObjectKind === 'adsettargeting' ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
         : isBrandSafetyRule(metaWrite.rule) ? await metaBrandSafetyOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind ?? '', metaCheckRead(req.connectionId), req.metaRun)
           // Step 32 — a dataset, custom conversion or event source group change: chosen by its rule (it also names step 19's
           // `adaccount` and step 28's `page`, whose own checks run first), then signals-rule.ts with every id inside the body.
           : isSignalsRule(metaWrite.rule) ? await metaSignalsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
-          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind> | undefined, req.metaParent)
+          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind> | undefined, req.metaParent)
           ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
           ?? await metaMediaAssetsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
+    // Step 30 — an app subscription carries the verify token Meta echoes to Nexus's receiver: the server's own
+    // (META_WEBHOOK_VERIFY_TOKEN), added here to the judged body, never a caller's and never on the ledger.
+    if (metaWrite.verifyToken) {
+      const verify = process.env.META_WEBHOOK_VERIFY_TOKEN?.trim()
+      if (!verify) return refuse('held', 'META_VERIFY_TOKEN_UNSET', 'Held, nothing sent: no webhook verify token is set on the API service (META_WEBHOOK_VERIFY_TOKEN), so Meta could not verify Nexus\'s receiver.', 409)
+      metaSendBody = `${metaWrite.body}&${new URLSearchParams({ verify_token: verify }).toString()}`
+    }
     if (!metaWrite.check) {
       // Step 23 — a call on an edge (an upload, a folder, a removal) edits no object: no 30-s gap, only Meta's own hold.
       const state = await metaObjectState(req.connectionId, metaWrite.objectId)
@@ -487,6 +506,10 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   let pageToken: string | null = null
   try {
     if (metaWrite?.auth === 'page' && req.connectionId) token = pageToken = await metaPageTokenFor(req.connectionId)
+    // Step 30 — a rule marked `auth: 'app'` (an app's webhook subscription, the app's removal from the chosen Page) goes with
+    // the connection's own Meta APP token, read here for this one call; a caller never asks for it (the verdict refuses a
+    // caller's `auth` on a change), and no other rule ever gets it.
+    else if (metaWrite?.auth === 'app' && req.connectionId) token = await tokenFor({ ...req, auth: 'app' })
     else token = await tokenFor(req)
   } catch (err) {
     if (err instanceof MetaPageTokenUnavailable) {
@@ -622,7 +645,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       // Never follow a redirect: a channel call carries its token in a header, and a custom token header
       // (x-amz-access-token, X-Shopify-Access-Token) would travel to the redirect's host.
       // Step 23 — nothing in the body of a call to Meta's upload host: Meta fetches the file from its link.
-      const res = await fetch(sendUrl, { method: req.method, headers, body: (metaWrite?.host === 'rupload' || (metaWrite?.host === 'rest' && !metaWrite.body) ? undefined : metaWrite?.multipart ? metaMultipartBody(metaWrite.multipart) : googleBody ?? metaWrite?.body ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
+      const res = await fetch(sendUrl, { method: req.method, headers, body: (metaWrite?.host === 'rupload' || (metaWrite?.host === 'rest' && !metaWrite.body) ? undefined : metaWrite?.multipart ? metaMultipartBody(metaWrite.multipart) : googleBody ?? metaSendBody ?? metaWrite?.body ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
       status = res.status
       responseHeaders = res.headers
       text = await res.text()
@@ -843,6 +866,25 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
   // Both of the kind's own fields, each present with a value.
   if (META_KIND_FIELD[kind].some((name) => { const value = body?.[name]; return value === undefined || value === null || value === '' })) return notKind()
   return null
+}
+
+/**
+ * Meta step 30 — a webhook or alert subscription change: `act_<id>` must be THE ad account this business chose through
+ * this connection, an app id its own Meta app, a Page id the Page it chose (MetaAccountLink). Anything else: nothing sent.
+ */
+async function metaWebhookOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: string | undefined): Promise<{ code: string; sentence: string } | null> {
+  if (!kind || !(write.kinds as readonly string[] | undefined)?.includes(kind) || (kind !== 'adaccount' && kind !== 'app' && kind !== 'page')) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: this change is not one of a ${kind}.` }
+  const id = write.objectId
+  if (kind === 'adaccount') {
+    const chosen = await metaChosenAdAccountOf(connectionId)
+    return chosen && id === `act_${chosen}` ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${id} is not the Meta ad account this business chose through this connection.` }
+  }
+  if (kind === 'app') {
+    const own = await (await import('../cx/token.service.js')).metaAppIdOf(connectionId)
+    return own && id === own ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: app ${id} is not this connection's own Meta app.` }
+  }
+  const page = await metaChosenPageOf(connectionId)
+  return page && id === page ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${id} is not the Facebook Page this business chose through this connection.` }
 }
 
 /**
@@ -1074,6 +1116,9 @@ const isBrandSafetyRule = (name: string): boolean => META_BRAND_SAFETY_WRITE_RUL
 
 /** Meta step 32 — is this the name of a dataset / custom conversion write rule (meta-signals-rules.ts)? Read when judged. */
 const isSignalsRule = (name: string): boolean => META_SIGNALS_WRITE_RULES.some((rule) => rule.name === name)
+
+/** Meta step 30 — is this the name of a webhook or alert subscription write rule (meta-webhook-rules.ts)? Read when judged. */
+const isWebhookRule = (name: string): boolean => META_WEBHOOK_WRITE_RULES.some((rule) => rule.name === name)
 
 /**
  * Meta step 32 — the owner check of a dataset, custom conversion or event source group change. What it shares with an

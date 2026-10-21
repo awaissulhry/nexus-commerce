@@ -81,6 +81,7 @@ import { META_LEAD_FORM_WRITE_RULES } from './meta-lead-form-rules.js'
 import { META_BOOST_WRITE_RULES, metaRestWriteVerdict } from './meta-boost-rules.js'
 import { META_SIGNALS_WRITE_RULES, type MetaSignalsKind } from './meta-signals-rules.js'
 import { META_AD_WRITE_RULES } from './meta-ad-rules.js'
+import { META_WEBHOOK_WRITE_RULES } from './meta-webhook-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -968,7 +969,8 @@ export function metaCheckAllowed(status: string, proven: boolean = META_UPDATE_C
  */
 export interface MetaWriteRule {
   name: string
-  method: 'POST' | 'DELETE'
+  /** Step 30: PATCH (an alert subscription's status). */
+  method: 'POST' | 'DELETE' | 'PATCH'
   /** The route, lower case, without the version (`120000000000001`). */
   path: RegExp
   required: readonly string[]
@@ -1021,10 +1023,13 @@ export interface MetaWriteRule {
   targeting?: ReadonlySet<string>
   /**
    * Step 36 (Q1) — 'page': the change goes with the business's CHOSEN Facebook Page's own token, which the gateway itself
-   * reads for that one call (meta-page-token.ts) and never hands out. Only a rule marked so; every other rule and every
-   * read keep the system-user token. A caller can never ask for it (a caller's `auth` other than the account's is refused).
+   * reads for that one call (meta-page-token.ts) and never hands out. Step 30 — 'app': the change goes with the
+   * connection's own Meta APP token (an app's webhook subscription, the app's removal from the chosen Page), which the
+   * gateway reads the same way. Only a rule marked so; every other rule keeps the system-user token, and a rule's token
+   * is never another's (no Page token on an app rule, nor the reverse). A caller can never ask for either (a caller's
+   * `auth` other than the account's is refused).
    */
-  auth?: 'page'
+  auth?: 'page' | 'app'
   /**
    * Step 36 review A6 — what the ledger keeps of this change's body when it fails (default: the body, made safe): a test
    * lead keeps its questions' names, never the answers.
@@ -1046,6 +1051,18 @@ export interface MetaWriteRule {
    * any, the ledger keeps the body's length only, and each is cut out of Meta's answer before it leaves the gateway.
    */
   secret?: (params: ReadonlyMap<string, string>) => string[]
+  // ── step 30 (meta-webhook-rules.ts) ──
+  /**
+   * A DELETE whose parameters ride in the URL's query, as Meta's SDK sends a DELETE's (an app's webhook subscription:
+   * `object`, `fields`), judged like a body; it takes no body. Every other call with a query is refused.
+   */
+  inQuery?: true
+  /** The gateway adds `verify_token` (META_WEBHOOK_VERIFY_TOKEN) to the body it sends: never a caller's, never logged. */
+  verifyToken?: true
+  /** A check of the route with the judged keys (a callback that must be Nexus's own for the path's app). */
+  routeCheck?: (route: string, params: ReadonlyMap<string, string>) => string | null
+  /** The Meta app this change names (in its path or app_id): the gateway sends it only for the connection's own app. */
+  appIdOf?: (route: string, params: ReadonlyMap<string, string>) => string | null
 }
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
@@ -1069,6 +1086,8 @@ export type MetaBoostWriteKind = 'iguser' | 'igmedia'
   // Step 32 — a dataset (pixel), its business portfolio, a custom conversion, an event source group, an Instagram account
   // (meta-signals-rules.ts MetaSignalsKind; its creates name step 19's `adaccount`, a Page dataset step 28's `page`).
   | MetaSignalsKind
+  // Step 30 — the connection's own Meta app (MetaWebhookKind, below).
+  | MetaWebhookKind
 /** Step 28 — what only the recommendation and experiment tools name: a business portfolio (a new study), a study, a
  * Page, a Page video test (an apply names the chosen ad account itself, `adaccount`). */
 export type MetaOptimizeKind = 'business' | 'adstudy' | 'page' | 'pagevideotest'
@@ -1115,6 +1134,13 @@ export type MetaBrandSafetyKind = 'adsettargeting' | 'publisherblocklist' | 'con
  * (`auth: 'page'`) to meta-page-owner.ts.
  */
 export type MetaPageKind = 'leadform' | 'testlead'
+/**
+ * Step 30 — what only the webhook tools name: the connection's own Meta app (its webhook subscriptions). They also name
+ * the chosen ad account itself (step 19's `adaccount`: its connected app, its alert subscriptions) and the chosen Page
+ * (step 28's `page`: the app's removal from it); the gateway checks a webhook RULE's write in gateway.ts
+ * metaWebhookOwnerProblem.
+ */
+export type MetaWebhookKind = 'app'
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
 export interface MetaWriteBodyId {
   id: string
@@ -1230,8 +1256,11 @@ export interface MetaJudgedWrite {
   kinds?: readonly MetaWriteKind[]
   /** Step 18 — the ids inside the body: each must be of the chosen ad account (the gateway checks them before sending). */
   ids?: MetaWriteBodyId[]
-  /** Step 18 — a DELETE (a budget schedule's; step 22: remove-meta-ads-items'); every other change is a POST. Step 26: a PUT on Meta's partnership host. */
-  method?: 'DELETE' | 'PUT'
+  /**
+   * Step 18 — a DELETE (a budget schedule's; step 22: remove-meta-ads-items'); every other change is a POST. Step 26: a PUT
+   * on Meta's partnership host. Step 30: a PATCH (an alert subscription's status).
+   */
+  method?: 'DELETE' | 'PUT' | 'PATCH'
   /** Step 29 — a POST that only reads (Meta's preview of a rule): no per-object hold is noted for it. */
   readOnly?: true
   /** Step 23 — the media ids inside the body (the gateway checks each). */
@@ -1254,12 +1283,19 @@ export interface MetaJudgedWrite {
   reportRun?: true
   /** Step 39 — the targeting sent and the keys it may change (the gateway compares the rest with the live targeting). */
   targeting?: { sent: Record<string, unknown>; keys: ReadonlySet<string> }
-  /** Step 36 (Q1) — the rule's own auth: 'page' = the chosen Page's token, read by the gateway for this one call. */
-  auth?: 'page'
+  /**
+   * Step 36 (Q1) — the rule's own auth: 'page' = the chosen Page's token, read by the gateway for this one call; step 30 —
+   * 'app' = the connection's own app token, read the same way.
+   */
+  auth?: 'page' | 'app'
   /** Step 36 review A6 — the body as the ledger keeps it when the change fails (the rule's `ledger`). */
   ledgerBody?: string
   /** Step 26 — the partnership ad codes the body carries (MetaWriteRule.secret): never in the ledger or an answer. */
   secrets?: string[]
+  /** Step 30 — the gateway adds the verify token to the body it sends. */
+  verifyToken?: true
+  /** Step 30 — the Meta app it names: sent only when it is the connection's own. */
+  appId?: string
 }
 
 /** The gateway's verdict on a Meta call that is not a GET: why it is refused (and whether as a batch), or the judged write. */
@@ -1269,7 +1305,7 @@ export type MetaWriteVerdict = { problem: string; batch?: true } | { write: Meta
  * Step 17 — the verdict on one Meta call that is not a GET, judged on the same canonical parse as a read (graphRouteOf):
  * the exact allow-list above, the declared kind equal to the body's (a check = read, a change = write), the account's own
  * token, no caller headers, no query string (a change carries its parameters in its body only, so the body judged is the
- * one sent), each key named once. Whether the object is of the business's chosen ad account is the gateway's next step
+ * one sent; step 30: but a DELETE rule marked `inQuery`, whose query is judged as a body is), each key named once. Whether the object is of the business's chosen ad account is the gateway's next step
  * (it needs the database or one live read), and so are Meta's per-object limits.
  */
 export function metaWriteVerdict(input: { method: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string, string>; objectKind?: string }): MetaWriteVerdict {
@@ -1289,7 +1325,8 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   if ('problem' in graph) return refuse(graph.problem)
   const pinned = metaGraphApiVersion()
   if (graph.version !== pinned) return refuse(`Nexus calls Meta only on API version ${pinned} (this call: ${graph.version ?? 'no version'})`)
-  if ([...graph.search.keys()].length > 0) return refuse('a Meta change carries its parameters in its body, never in the URL')
+  const queryKeys = [...graph.search.keys()]
+  if (queryKeys.length > 0 && method !== 'DELETE') return refuse('a Meta change carries its parameters in its body, never in the URL')
   const batch = metaBatchProblem(method, graph.route, input.body)
   if (batch) return { problem: batch, batch: true }
   // Review A5 (step 31) — a DELETE body that is not form text (bytes, an object) is refused, never sent as an empty one.
@@ -1297,22 +1334,42 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   // Step 18 — a DELETE goes only by a DELETE rule for the kind the call names (a budget schedule's), with no body. Step 22 —
   // a DELETE rule that names keys (an image's hash, a video's id; step 39: a share's agency, a list's posts) takes exactly those as its form body, judged like a POST's.
   const deleteRules = method === 'DELETE' ? writeRules().filter((r) => r.method === 'DELETE' && r.path.test(graph.route) && kindMatches(r, input.objectKind)) : []
-  const bareDelete = deleteRules.find((r) => !r.required.length && !r.optional.length)
   const noBody = input.body === undefined || input.body === ''
+  // Step 30 — a DELETE rule marked `inQuery` (an app's webhook subscription, the app's link to the chosen ad account) takes
+  // its keys in the URL's QUERY, as Meta's SDK sends a DELETE's parameters, judged like a body, and no body at all. No
+  // other call carries a query (refused above for a POST, below for every other DELETE).
+  const queryRule = deleteRules.find((r) => r.inQuery)
+  if (queryRule) {
+    if (!noBody) return refuse('this Meta DELETE carries its parameters in the URL\'s query, never in a body')
+    if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
+    const params = new Map(graph.search)
+    if (queryKeys.length !== params.size) return refuse('a Meta change names each parameter once')
+    const named = [...params.keys()]
+    if (!queryRule.required.every((k) => params.has(k)) || !named.every((k) => queryRule.required.includes(k) || queryRule.optional.includes(k))) {
+      return refuse(`this DELETE takes ${[...queryRule.required, ...queryRule.optional].join(', ') || 'no parameters'}; it names ${named.join(', ') || 'none'}`)
+    }
+    for (const [key, value] of params) if (!/^[\x20-\x7e]*$/.test(value)) return refuse(`the value of "${key}" is plain ASCII`)
+    const problem = queryRule.values(params) ?? queryRule.routeCheck?.(graph.route, params) ?? null
+    if (problem) return refuse(problem)
+    const appId = queryRule.appIdOf?.(graph.route, params) ?? undefined
+    return { write: { rule: queryRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: queryRule.kinds, method: 'DELETE', ...(queryRule.auth ? { auth: queryRule.auth } : {}), ...(appId ? { appId } : {}) } }
+  }
+  if (queryKeys.length > 0) return refuse('a Meta change carries its parameters in its body, never in the URL')
+  const bareDelete = deleteRules.find((r) => !r.required.length && !r.optional.length)
   // Step 26 — a DELETE on a partnership edge of the chosen Instagram account or of its media that matches none of
   // set-meta-partnership-access's rules, in its own words.
   if (method === 'DELETE' && /^\d+\/(branded_content_tag_approval|partnership_ad_code)$/.test(graph.route) && !(bareDelete && noBody) && !(deleteRules.some((r) => r.required.length || r.optional.length) && !noBody)) {
     return refuse('on the chosen Instagram account\'s partnership edges Nexus deletes only what set-meta-partnership-access sends: creators taken off its tag-approval list (user_ids) and the ad code of one of its media (no body)')
   }
   if (method === 'DELETE' && !(bareDelete && noBody) && !(deleteRules.some((r) => r.required.length || r.optional.length) && !noBody)) {
-    return refuse('Nexus deletes on Meta only a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), a concluded video test of the chosen Page (set-meta-experiment), a test lead Nexus made on a lead form of the chosen Page (set-meta-lead-form), one of its automated rules (remove-meta-ad-rule), the undo of a create or a copy, and what a person explicitly asked remove-meta-ads-items to delete: a campaign, ad set, ad or creative named with its kind (no body), an image or a video of the chosen ad account\'s library (its hash or video_id as the only body key) or a part of an Instant Experience of the chosen Page, and what the brand-safety tools name (a block list, its shares, people, posts and ad accounts: set-meta-block-list, remove-meta-block-list); and for audiences (step 31) one of the chosen ad account\'s own audiences (no body), the hashed people of one of its customer lists or of all of them (payload) or an audience\'s share with ad accounts (adaccounts) — remove-meta-audience, set-meta-audience-members, set-meta-audience-sharing; and for datasets (step 32) a dataset\'s link to the chosen ad account (account_id and business as the body: set-meta-dataset-access) and a custom conversion Nexus made (no body: remove-meta-signal-items); it cancels no async batch')
+    return refuse('Nexus deletes on Meta only a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), a concluded video test of the chosen Page (set-meta-experiment), a test lead Nexus made on a lead form of the chosen Page (set-meta-lead-form), one of its automated rules (remove-meta-ad-rule), the undo of a create or a copy, and what a person explicitly asked remove-meta-ads-items to delete: a campaign, ad set, ad or creative named with its kind (no body), an image or a video of the chosen ad account\'s library (its hash or video_id as the only body key) or a part of an Instant Experience of the chosen Page, and what the brand-safety tools name (a block list, its shares, people, posts and ad accounts: set-meta-block-list, remove-meta-block-list); and for audiences (step 31) one of the chosen ad account\'s own audiences (no body), the hashed people of one of its customer lists or of all of them (payload) or an audience\'s share with ad accounts (adaccounts) — remove-meta-audience, set-meta-audience-members, set-meta-audience-sharing; and for datasets (step 32) a dataset\'s link to the chosen ad account (account_id and business as the body: set-meta-dataset-access) and a custom conversion Nexus made (no body: remove-meta-signal-items); and for webhooks (step 30) an app\'s webhook subscription (object and fields in the URL\'s query), the app\'s link to the chosen ad account (app_id in the query) or to the chosen Page (set-meta-webhooks) and one of the chosen ad account\'s alert subscriptions (remove-meta-alert-subscription); it cancels no async batch')
   }
   if (bareDelete && noBody) {
     if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
     // Step 26 — a DELETE on an edge (an ad code of an Instagram media) edits no object: no 30-s gap (MetaWriteRule.edgeCall).
     return { write: { rule: bareDelete.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: bareDelete.kinds, method: 'DELETE', ...(bareDelete.edgeCall ? { edgeCall: true as const } : {}), ...(bareDelete.auth ? { auth: bareDelete.auth } : {}) } }
   }
-  if (method !== 'POST' && method !== 'DELETE') return refuse(`Nexus sends Meta no ${method}`)
+  if (method !== 'POST' && method !== 'DELETE' && method !== 'PATCH') return refuse(`Nexus sends Meta no ${method}`)
   // Step 29 — a POST with no body by a rule made for one (a rule's run now, or Meta's preview of it — that one goes as a
   // read): judged before step 21's empty-body POST, which never takes such a rule.
   if (method === 'POST' && noBody) {
@@ -1333,7 +1390,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const parsed = writeParams(input.body)
   if ('problem' in parsed) return refuse(parsed.problem)
   const keys = [...parsed.params.keys()]
-  const rule = writeRules().find((r) => r.method === method && r.path.test(graph.route) && kindMatches(r, input.objectKind)
+  const rule = writeRules().find((r) => r.method === method && !r.inQuery && r.path.test(graph.route) && kindMatches(r, input.objectKind)
     && r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k))
     && (!r.anyOf || r.anyOf.some((k) => parsed.params.has(k))))
   if (!rule) {
@@ -1352,7 +1409,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     if (/^act_\d+\/(adcreatives|asyncadcreatives)$/.test(graph.route) || input.objectKind === 'creative') {
       return refuse(`the only Meta change Nexus sends on a creative is create-meta-creative's (a creative of the chosen ad account, or its async job), set-meta-creative's (a creative's name, status or labels) or remove-meta-ads-items' delete, each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
     }
-    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a create or a copy (create-meta-campaign, create-meta-ad-set, copy-meta-ads: each its own edge and keys), or a delete a person asked for (remove-meta-ads-items: each its own path and keys), or a label, value rule or reach & frequency change (set-meta-labels, set-meta-value-rules, create-meta-reach-frequency: each its own path and keys), or a change of one of the chosen ad account's automated rules (set-meta-ad-rule), or a report run of the chosen ad account's numbers (meta-ads-report: POST /act_<id>/insights, which changes nothing), or a brand-safety change named with its kind (set-meta-brand-safety, set-meta-block-list, remove-meta-block-list), or an audience change named with its kind (create-meta-audience, set-meta-audience, set-meta-audience-members, set-meta-audience-sharing: each its own path and keys), or a lead-form change of the chosen Facebook Page named with its kind (create-meta-lead-form, set-meta-lead-form), or a dataset or custom conversion change named with its kind (create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion, remove-meta-signal-items: each its own path and keys); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a create or a copy (create-meta-campaign, create-meta-ad-set, copy-meta-ads: each its own edge and keys), or a delete a person asked for (remove-meta-ads-items: each its own path and keys), or a label, value rule or reach & frequency change (set-meta-labels, set-meta-value-rules, create-meta-reach-frequency: each its own path and keys), or a change of one of the chosen ad account's automated rules (set-meta-ad-rule), or a report run of the chosen ad account's numbers (meta-ads-report: POST /act_<id>/insights, which changes nothing), or a brand-safety change named with its kind (set-meta-brand-safety, set-meta-block-list, remove-meta-block-list), or an audience change named with its kind (create-meta-audience, set-meta-audience, set-meta-audience-members, set-meta-audience-sharing: each its own path and keys), or a lead-form change of the chosen Facebook Page named with its kind (create-meta-lead-form, set-meta-lead-form), or a dataset or custom conversion change named with its kind (create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion, remove-meta-signal-items: each its own path and keys), or a webhook or alert subscription (set-meta-webhooks, set-meta-alert-subscription); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
@@ -1365,7 +1422,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
       if (!pattern.test(value)) return refuse(`the value of "${key}" is printable text (no control or format characters)`)
     } else if (!/^[\x20-\x7e]*$/.test(value)) return refuse(`the value of "${key}" is plain ASCII`)
   }
-  const problem = rule.values(parsed.params)
+  const problem = rule.values(parsed.params) ?? rule.routeCheck?.(graph.route, parsed.params) ?? null
   if (problem) return refuse(problem)
   // Step 23 — the file part: its name, its size and its own judge (the text is never quoted back).
   if (rule.file) {
@@ -1402,9 +1459,12 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   // Step 26 — the partnership ad codes in the body: the ledger never keeps them, and Meta's answer loses them.
   const secrets = rule.secret ? rule.secret(parsed.params).filter((s) => typeof s === 'string' && s.length >= 4) : []
   const media = { ...(assets.length ? { assets } : {}), ...(rule.edgeCall ? { edgeCall: true as const } : {}), ...(rule.bulky ? { bulky: true as const } : {}), ...(multipart ? { multipart } : {}), ...(secrets.length ? { secrets } : {}) }
+  // Step 30 — the verify token the gateway adds, and the Meta app the change names (sent only for the connection's own).
+  const appId = rule.appIdOf?.(graph.route, parsed.params) ?? undefined
+  const webhook = { ...(rule.verifyToken ? { verifyToken: true as const } : {}), ...(appId ? { appId } : {}) }
   // A write with a file goes as its multipart body only (`body` stays empty: nothing else of it is ever sent).
-  // Step 36 — the Page token mode, and what the ledger keeps of a failed test lead.
-  return { write: { rule: rule.name, objectId: graph.segments[0], check, body: multipart ? '' : body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}), ...(method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...media, ...(targeting ? { targeting } : {}), ...(rule.personal ? { personal: true as const } : {}), ...(rule.auth ? { auth: rule.auth } : {}), ...(rule.ledger ? { ledgerBody: new URLSearchParams(rule.ledger(parsed.params)).toString() } : {}) } }
+  // Step 36 — the Page token mode (step 30: the app token mode), and what the ledger keeps of a failed test lead.
+  return { write: { rule: rule.name, objectId: graph.segments[0], check, body: multipart ? '' : body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}), ...(method === 'DELETE' ? { method: 'DELETE' as const } : method === 'PATCH' ? { method: 'PATCH' as const } : {}), ...media, ...(targeting ? { targeting } : {}), ...(rule.personal ? { personal: true as const } : {}), ...(rule.auth ? { auth: rule.auth } : {}), ...(rule.ledger ? { ledgerBody: new URLSearchParams(rule.ledger(parsed.params)).toString() } : {}), ...webhook } }
 }
 
 /** Step 26 — the keys only an existing post's creative or a creator's video copy carries (create-meta-boost). */
@@ -1420,8 +1480,9 @@ const MAX_ANY_WRITE_BODY = Math.max(200_000, META_IMAGE_MAX_BODY, MEMBERS_MAX_BO
 /** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts), step 19's, step 22's, step 21's (meta-labels-rules.ts) step 28's (meta-optimize-rules.ts) and step 29's rule changes (meta-ad-rule-rules.ts) — read when judged, never at load. */
 // Step 23 — then create-meta-media's media rules (meta-media-rules.ts); step 25's creative rules (meta-creative-rules.ts);
 // step 39's brand-safety rules; step 31's audience rules (meta-audience-rules.ts); step 26's boost and partnership-access
-// rules (meta-boost-rules.ts); step 36's lead-form rules; step 32's dataset and custom conversion rules (meta-signals-rules.ts); step 27's ad rules (meta-ad-rules.ts).
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...metaCreateWriteRules(), ...META_REMOVE_WRITE_RULES, ...metaLabelsWriteRules(), ...META_OPTIMIZE_WRITE_RULES, ...META_MEDIA_WRITE_RULES, ...metaAdRuleWriteRules(), ...META_CREATIVE_WRITE_RULES, ...META_BRAND_SAFETY_WRITE_RULES, ...META_AUDIENCE_WRITE_RULES, ...META_BOOST_WRITE_RULES, ...META_LEAD_FORM_WRITE_RULES, ...META_SIGNALS_WRITE_RULES, ...META_AD_WRITE_RULES]
+// rules (meta-boost-rules.ts); step 36's lead-form rules; step 32's dataset and custom conversion rules (meta-signals-rules.ts); step 27's ad rules (meta-ad-rules.ts);
+// step 30's webhook and alert subscription rules (meta-webhook-rules.ts) last.
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...metaCreateWriteRules(), ...META_REMOVE_WRITE_RULES, ...metaLabelsWriteRules(), ...META_OPTIMIZE_WRITE_RULES, ...META_MEDIA_WRITE_RULES, ...metaAdRuleWriteRules(), ...META_CREATIVE_WRITE_RULES, ...META_BRAND_SAFETY_WRITE_RULES, ...META_AUDIENCE_WRITE_RULES, ...META_BOOST_WRITE_RULES, ...META_LEAD_FORM_WRITE_RULES, ...META_SIGNALS_WRITE_RULES, ...META_AD_WRITE_RULES, ...META_WEBHOOK_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

@@ -9,9 +9,9 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
 import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
-import type { MetaChangeResult, MetaWriteTarget } from './write-client.js'
+import type { MetaChangeResult, MetaRequestVia, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -61,6 +61,8 @@ export interface MetaChangeRequest {
    * Step 23: an upload names the chosen ad account (`adaccount`) or its business portfolio (step 28's `business`);
    * captions name the library video (step 22's `video`). Its `kind` is then `ad`, as for step 22's deletes.
    * Step 31: an audience (`customaudience`) or the chosen ad account (`adaccount`: its audiences, opt-outs, settings).
+   * Step 30: the chosen ad account (`adaccount`: its connected app, its alert subscriptions), the connection's own app
+   * (`app`), the chosen Page (step 28's `page`: the app's removal from it).
    */
   objectKind?: 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
     // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
@@ -78,6 +80,8 @@ export interface MetaChangeRequest {
     | MetaBoostWriteKind
     // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
     | MetaSignalsKind
+    // Step 30 — the connection's own Meta app (its webhook subscriptions).
+    | MetaWebhookKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
@@ -129,6 +133,9 @@ export interface MetaChangeRequest {
   // ── step 27 ──
   /** A new ad's check runs Meta's synchronous integrity review with it (synchronous_ad_review, AD-026 … AD-028). */
   adReview?: boolean
+  // ── step 30 (webhook and alert subscriptions) ──
+  /** Its path, a DELETE's query, PATCH (write-client.ts MetaRequestVia); Meta's answer is all there is. */
+  via?: MetaRequestVia
 }
 
 export interface MetaChangeDraft {

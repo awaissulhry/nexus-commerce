@@ -330,6 +330,8 @@ export function objectChangeOf(request: MetaChangeRequest): MetaObjectChange {
     ...(request.readBackOf ? { readBackOf: request.readBackOf } : {}),
     // Step 36 — a request never read back (a test lead).
     ...(request.skipReadBack ? { skipReadBack: request.skipReadBack } : {}),
+    // Step 30 — a webhook or alert subscription change travels as its request says (write-client.ts MetaRequestVia).
+    ...(request.via ? { via: request.via } : {}),
   }
 }
 

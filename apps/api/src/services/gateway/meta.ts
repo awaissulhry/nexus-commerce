@@ -19,7 +19,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
+import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWebhookKind } from './meta-calls.js'
 import { metaRuploadUrl } from './meta-media-rules.js'
 import type { MetaSignalsKind } from './meta-signals-rules.js'
 
@@ -92,6 +92,8 @@ export interface MetaWriteRequest {
     | MetaBoostWriteKind
     // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
     | MetaSignalsKind
+    // Step 30 — the connection's own Meta app (its webhook subscriptions).
+    | MetaWebhookKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -107,12 +109,27 @@ export interface MetaWriteRequest {
    * Step 39: the brand-safety edges (a block list's draft, list, shares, people, ad accounts and posts; the account's
    * inventory filter). Step 31: an ad account's audiences, an audience's people and shares. Step 32: a dataset's and a
    * custom conversion's creates, a dataset's ad account, an event source group and its share, a claim (MetaSignalsEdge).
+   * Step 30: an app's webhook subscriptions, the chosen ad account's alert subscriptions, the app's link (MetaWebhookEdge).
    */
   edge?: MetaWriteEdge
-  /** Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body; step 39: a share's agency, a list's posts; step 31: an audience's people or share); default POST. */
-  method?: 'POST' | 'DELETE'
+  /**
+   * Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body; step 39: a
+   * share's agency, a list's posts; step 31: an audience's people or share; step 30: its keys in `query`); step 30 — PATCH
+   * (an alert subscription's status); default POST.
+   */
+  method?: 'POST' | 'DELETE' | 'PATCH'
   /** Step 39 (review A9) — the run of the change this request belongs to (a block-list draft is used only by its own run). */
   run?: string
+  /**
+   * Step 30 — the path below the version when it is not `<objectId>[/<edge>]` (`act_<id>/subscriptions/<id>`); it still
+   * starts with `objectId`, the object the gateway confirms.
+   */
+  path?: string
+  /**
+   * Step 30 — a DELETE's parameters in the URL's query, as Meta's SDK sends them (an app's webhook subscription, the app's
+   * link to the chosen ad account); `params` is then empty. The gateway refuses a query on every other call.
+   */
+  query?: Record<string, string>
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
@@ -130,10 +147,16 @@ export interface MetaWriteRequest {
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
   | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaBoostEdge | MetaSignalsEdge | MetaAdEdge
+  | MetaWebhookEdge
 /** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
 export type MetaAdEdge = 'ads'
 /** Step 26 — set-meta-partnership-access: the chosen Instagram account's partnership edges and a media's ad code. */
 export type MetaBoostEdge = 'branded_content_ad_permissions' | 'branded_content_tag_approval' | 'collaboration_invites' | 'partnership_ad_code'
+/**
+ * Step 30 — an app's webhook subscriptions (`<app>/subscriptions`), the chosen ad account's alert subscriptions
+ * (`act_<id>/subscriptions`), the app's link to the chosen ad account or the chosen Page (`subscribed_apps`).
+ */
+export type MetaWebhookEdge = 'subscribed_apps' | 'subscriptions'
 /**
  * Step 32 — a dataset made on the ad account or the business portfolio (`adspixels`) or for a Page / Instagram account
  * (`dataset`), a custom conversion (`customconversions`), a dataset's or an event source group's ad account
@@ -180,13 +203,14 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
   const body = remove
     ? (Object.keys(req.params).length ? new URLSearchParams(req.params).toString() : undefined)
     : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: check } : {}) }).toString()
+  const path = req.path ?? (req.edge ? `${req.objectId}/${req.edge}` : req.objectId)
   return gatewayCall({
     channel: 'META',
     operation: req.operation,
     kind: req.check ? 'read' : 'write',
     connectionId: req.connectionId,
-    url: metaUrl(req.edge ? `${req.objectId}/${req.edge}` : req.objectId),
-    method: remove ? 'DELETE' : 'POST',
+    url: metaUrl(path, remove ? req.query ?? {} : {}),
+    method: remove ? 'DELETE' : req.method === 'PATCH' ? 'PATCH' : 'POST',
     body,
     metaObjectKind: req.objectKind,
     ...(req.parent ? { metaParent: req.parent } : {}),
