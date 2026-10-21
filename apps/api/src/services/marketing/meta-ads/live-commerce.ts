@@ -107,7 +107,10 @@ import {
 } from './catalog-rule.js'
 import { ITEM_LIST_FIELDS, itemMoney, itemRow, PRICE_NOTE, withNote } from './live-catalog.js'
 import { currencyExponent } from './money.js'
-import { META_ITEM_ERROR_TYPE_SET } from '../../meta/meta-catalog-lists.js'
+import {
+  META_ITEM_ERROR_TYPE_SET, META_SET_ENUM_OPS, META_SET_FILTER_ENUMS, META_SET_FILTER_MAX_BYTES, META_SET_FILTER_OPS, META_SET_FILTER_PRICE_FIELDS, META_SET_FILTER_TEXT_FIELDS,
+  META_SET_LABEL_FIELD, META_SET_LIST_OPS, META_SET_MAX_VALUE_CHARS, META_SET_MAX_VALUES, META_SET_PRICE_OPS, META_SET_TEXT_OPS,
+} from '../../meta/meta-catalog-lists.js'
 import { portfolioTaken, takenIds } from './taken.js'
 
 type Row = Record<string, unknown>
@@ -141,22 +144,15 @@ const idsNote = (count: IdCount) => (count.notExact ? { idsNotExact: count.notEx
  * the documented field is `tags` — and stays behind LIVE-PROBES CT-063b: Meta may answer it with an error or with a silent
  * 0 matches (a set that never delivers), so an answer that uses it says so.
  */
-const SET_FILTER_TEXT_FIELDS = [
-  'retailer_id', 'retailer_product_group_id', 'name', 'brand', 'category', 'product_type', 'color', 'size', 'material', 'pattern',
-  'custom_label_0', 'custom_label_1', 'custom_label_2', 'custom_label_3', 'custom_label_4', 'internal_label', 'tags',
-] as const
+// Step 34 — the lists live in services/meta/meta-catalog-lists.ts (a leaf the gateway's write judge reuses), unchanged.
+const SET_FILTER_TEXT_FIELDS = META_SET_FILTER_TEXT_FIELDS
 /** Fields with Meta's fixed values (product items), tested with eq / neq / is_any / is_not_any only. */
-const SET_FILTER_ENUMS: Readonly<Record<'availability' | 'condition' | 'gender' | 'age_group', readonly string[]>> = {
-  availability: ['in stock', 'out of stock', 'preorder', 'available for order'],
-  condition: ['new', 'refurbished', 'used'],
-  gender: ['female', 'male', 'unisex'],
-  age_group: ['adult', 'infant', 'kids', 'newborn', 'toddler'],
-}
+const SET_FILTER_ENUMS = META_SET_FILTER_ENUMS
 /** Price fields: Meta's number is the price × 100 in every currency (setFilterPriceAmount). */
-const SET_FILTER_PRICE_FIELDS = ['price_amount', 'sale_price_amount'] as const
+const SET_FILTER_PRICE_FIELDS = META_SET_FILTER_PRICE_FIELDS
 const SET_FILTER_FIELDS = [...SET_FILTER_TEXT_FIELDS, 'availability', 'condition', 'gender', 'age_group', ...SET_FILTER_PRICE_FIELDS] as const
 type SetFilterField = typeof SET_FILTER_FIELDS[number]
-const SET_FILTER_OPS = ['eq', 'neq', 'contains', 'not_contains', 'i_contains', 'is_any', 'is_not_any', 'starts_with', 'lt', 'lte', 'gt', 'gte'] as const
+const SET_FILTER_OPS = META_SET_FILTER_OPS
 type SetFilterOp = typeof SET_FILTER_OPS[number]
 export const SET_MATCH = ['all', 'any'] as const
 /** Fields a facets read may count (no price: a facet of prices would be money). */
@@ -165,12 +161,12 @@ export const SET_FACET_FIELDS = [
   'custom_label_0', 'custom_label_1', 'custom_label_2', 'custom_label_3', 'custom_label_4',
 ] as const
 export const MAX_SET_CONDITIONS = 20
-const MAX_SET_VALUES = 100
-const MAX_SET_VALUE_CHARS = 200
+const MAX_SET_VALUES = META_SET_MAX_VALUES
+const MAX_SET_VALUE_CHARS = META_SET_MAX_VALUE_CHARS
 /** At most this many bytes of encoded rule on a read (preview, items, facets): a read never needs a big filter. */
 const MAX_SET_FILTER_READ_BYTES = 8 * 1024
 /** Meta's cap on a set's filter ("max length: 500 KiB"): lane C4's set writes pass it as maxBytes. */
-export const MAX_SET_FILTER_WRITE_BYTES = 500 * 1024
+export const MAX_SET_FILTER_WRITE_BYTES = META_SET_FILTER_MAX_BYTES
 
 const lowerArg = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v)
 /**
@@ -185,12 +181,12 @@ export const setConditionArg = z.object({
   amountMinor: z.number().int().min(0).max(1_000_000_000).optional().describe('a price condition: minor units of currency (4990 = 49.90); only for a person who may see revenue'),
 })
 
-const TEXT_OPS: ReadonlySet<string> = new Set(['eq', 'neq', 'contains', 'not_contains', 'i_contains', 'is_any', 'is_not_any', 'starts_with'])
-const ENUM_OPS: ReadonlySet<string> = new Set(['eq', 'neq', 'is_any', 'is_not_any'])
-const PRICE_OPS: ReadonlySet<string> = new Set(['eq', 'neq', 'lt', 'lte', 'gt', 'gte'])
-const LIST_OPS: ReadonlySet<string> = new Set(['is_any', 'is_not_any'])
+const TEXT_OPS = META_SET_TEXT_OPS
+const ENUM_OPS = META_SET_ENUM_OPS
+const PRICE_OPS = META_SET_PRICE_OPS
+const LIST_OPS = META_SET_LIST_OPS
 const PRICE_FIELDS: ReadonlySet<string> = new Set(SET_FILTER_PRICE_FIELDS)
-const LABEL_FIELD = /^(custom_label_[0-4]|internal_label|tags)$/
+const LABEL_FIELD = META_SET_LABEL_FIELD
 const PLAIN_ASCII = /^[\x20-\x7e]+$/
 
 export interface SetCondition { field: SetFilterField; op: SetFilterOp; value?: string | null; values?: string[] | null; amountMinor?: number | null }

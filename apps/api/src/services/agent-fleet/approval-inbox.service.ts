@@ -919,6 +919,12 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'create-meta-experiment': ['basis', 'plan', 'reach'],
   'set-meta-experiment': ['basis', 'plan', 'reach'],
   'end-meta-experiment': ['basis', 'plan', 'reach'],
+  // Meta step 34 (2026-10-21): catalogs, segments, their settings, access and product sets; deletes on explicit ask.
+  'create-meta-catalog': ['basis', 'plan', 'reach'],
+  'set-meta-catalog': ['basis', 'plan', 'reach'],
+  'set-meta-catalog-access': ['basis', 'plan', 'reach'],
+  'set-meta-product-set': ['basis', 'plan', 'reach'],
+  'remove-meta-catalog-items': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

@@ -921,6 +921,24 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { kind: 'study', id: '120000000000041', type: 'SPLIT_TEST', fields: { name: 'Test A', end_time: '4102444800' }, undo: { action: 'update', studyId: '120000000000041', name: 'Test A', endTime: '2100-01-01T00:00:00Z' }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
         after: { kind: 'study', id: '120000000000041', type: 'SPLIT_TEST', fields: { name: 'Test B', end_time: '4102531200' }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 34: a catalog or set it made is deleted by the same tool (removeMade / action undo + undoOf); settings,
+      // categories, pixels and access go back as they were (an empty earlier value cannot be set again: said).
+      'create-meta-catalog': {
+        before: { op: 'create', made: null, madeAt: '', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'create', made: { id: '120000000000100', name: 'Catalog A', segment: false, parentId: null }, madeAt: '2026-10-21T08:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-catalog': {
+        before: { op: 'settings', catalogId: '120000000000100', fields: { name: 'Catalog A' }, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'settings', catalogId: '120000000000100', fields: { name: 'Catalog B' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-catalog-access': {
+        before: { op: 'assign', catalogId: '120000000000100', userId: '100000000000001', assigned: false, tasks: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'assign', catalogId: '120000000000100', userId: '100000000000001', assigned: true, tasks: ['ADVERTISE'], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-product-set': {
+        before: { op: 'change', catalogId: '120000000000100', productSetId: '120000000000110', set: { name: 'Set A', filter: '{"brand":{"eq":"Shop A"}}', retailerId: null }, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'change', catalogId: '120000000000100', productSetId: '120000000000110', set: { name: 'Set B', filter: '{"brand":{"eq":"Shop A"}}', retailerId: null }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1093,7 +1111,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
       'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads',
       'remove-meta-ads-items', 'set-meta-labels', 'set-meta-value-rules', 'create-meta-reach-frequency',
-      'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment']) {
+      'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment',
+      'create-meta-catalog', 'set-meta-catalog', 'set-meta-catalog-access', 'set-meta-product-set', 'remove-meta-catalog-items']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

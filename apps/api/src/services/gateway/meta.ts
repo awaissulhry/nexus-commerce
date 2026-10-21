@@ -18,6 +18,7 @@
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { META_REST_HOST, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
+import type { MetaCatalogKind } from './meta-catalog-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -76,6 +77,8 @@ export interface MetaWriteRequest {
   objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
     // Step 28 — a business portfolio (a new study), a study, a Page, a Page video test (an apply names act_<id>).
     | MetaOptimizeKind
+    // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
+    | MetaCatalogKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -88,8 +91,8 @@ export interface MetaWriteRequest {
   edge?: MetaWriteEdge
   /** Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body); default POST. */
   method?: 'POST' | 'DELETE'
-  /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
-  parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own); step 34: a feed's catalog. */
+  parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
   recommendations?: boolean
 }
@@ -98,7 +101,12 @@ export interface MetaWriteRequest {
  * The edges a change posts to: a budget schedule (step 18); a campaign's or ad set's create on the ad account (`act_<id>`),
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
-export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
+export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge | MetaCatalogEdge
+/**
+ * Step 34 — a catalog made on a portfolio, a catalog's categories, pixels, people and partners, a product set made in it, the
+ * items_batch that deletes its items.
+ */
+export type MetaCatalogEdge = 'owned_product_catalogs' | 'categories' | 'external_event_sources' | 'assigned_users' | 'agencies' | 'product_sets' | 'items_batch'
 /** Step 28 — an apply (`act_<id>/recommendations`), a new study (`<business>/ad_studies`), a new Page video test (`<page>/ab_tests`). */
 export type MetaOptimizeEdge = 'recommendations' | 'ad_studies' | 'ab_tests'
 /** Step 22 — remove-meta-ads-items: an image or a video out of the ad account's library, a video's caption languages. */

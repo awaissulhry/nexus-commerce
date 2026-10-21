@@ -65,3 +65,39 @@ export const META_ITEM_ERROR_TYPES = [
 ] as const
 
 export const META_ITEM_ERROR_TYPE_SET: ReadonlySet<string> = new Set(META_ITEM_ERROR_TYPES)
+
+/**
+ * Meta ads step 34 — the product-set filter's ALLOW-lists, moved here unchanged from step 13's live-commerce.ts (which
+ * imports them back), so the gateway's write judge (gateway/meta-catalog-rules.ts) reuses the very lists the reads and the
+ * tools use, without an import cycle (this module imports nothing). Checked 2026-10-21 on the v26 reference
+ * product-set.md "Filter Rules": fields of product items (availability, condition, gender, age_group are enums;
+ * price_amount and sale_price_amount = the price × 100 "for all currencies"), operators eq, neq, contains, not_contains,
+ * i_contains, is_any, is_not_any, starts_with ("now only available for the product category field"), lt, lte, gt, gte, and,
+ * or. `internal_label` stays behind LIVE-PROBES CT-063b (see live-commerce.ts).
+ */
+export const META_SET_FILTER_TEXT_FIELDS = [
+  'retailer_id', 'retailer_product_group_id', 'name', 'brand', 'category', 'product_type', 'color', 'size', 'material', 'pattern',
+  'custom_label_0', 'custom_label_1', 'custom_label_2', 'custom_label_3', 'custom_label_4', 'internal_label', 'tags',
+] as const
+/** Fields with Meta's fixed values (product items), tested with eq / neq / is_any / is_not_any only. */
+export const META_SET_FILTER_ENUMS: Readonly<Record<'availability' | 'condition' | 'gender' | 'age_group', readonly string[]>> = {
+  availability: ['in stock', 'out of stock', 'preorder', 'available for order'],
+  condition: ['new', 'refurbished', 'used'],
+  gender: ['female', 'male', 'unisex'],
+  age_group: ['adult', 'infant', 'kids', 'newborn', 'toddler'],
+}
+/** Price fields: Meta's number is the price × 100 in every currency. */
+export const META_SET_FILTER_PRICE_FIELDS = ['price_amount', 'sale_price_amount'] as const
+export const META_SET_FILTER_OPS = ['eq', 'neq', 'contains', 'not_contains', 'i_contains', 'is_any', 'is_not_any', 'starts_with', 'lt', 'lte', 'gt', 'gte'] as const
+/** Which operators each kind of field takes (Meta: contains is for text only; eq for enums; numbers compare). */
+export const META_SET_TEXT_OPS: ReadonlySet<string> = new Set(['eq', 'neq', 'contains', 'not_contains', 'i_contains', 'is_any', 'is_not_any', 'starts_with'])
+export const META_SET_ENUM_OPS: ReadonlySet<string> = new Set(['eq', 'neq', 'is_any', 'is_not_any'])
+export const META_SET_PRICE_OPS: ReadonlySet<string> = new Set(['eq', 'neq', 'lt', 'lte', 'gt', 'gte'])
+export const META_SET_LIST_OPS: ReadonlySet<string> = new Set(['is_any', 'is_not_any'])
+/** At most this many values in one condition, each at most this many characters (step 13's limits). */
+export const META_SET_MAX_VALUES = 100
+export const META_SET_MAX_VALUE_CHARS = 200
+/** Label fields: Meta takes no non-English characters in a label filter (product-set.md "Limitations"). */
+export const META_SET_LABEL_FIELD = /^(custom_label_[0-4]|internal_label|tags)$/
+/** Meta's cap on a set's filter ("max length: 500 KiB", product-set.md): the writes' cap (live-commerce.ts MAX_SET_FILTER_WRITE_BYTES). */
+export const META_SET_FILTER_MAX_BYTES = 500 * 1024

@@ -35,6 +35,7 @@ import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } fro
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
+import { isMetaCatalogBodyKind, isMetaCatalogKind, type MetaCatalogKind } from './meta-catalog-rules.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
 import { writeLedgerRow } from './ledger.js'
@@ -132,12 +133,15 @@ export interface GatewayRequest {
   metaObjectKind?: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
     // Meta step 28: a new study's portfolio, a study, a Page, a Page video test (meta-optimize-owner.ts confirms each).
     | MetaOptimizeKind
+    // Meta step 34: a catalog, product set, item or feed of this business, the portfolio a catalog is made in
+    // (meta-catalog-owner.ts confirms each).
+    | MetaCatalogKind
   /**
    * Meta step 18: a change of a budget schedule (high-demand period, `metaObjectKind: 'highdemandperiod'`) names the
    * campaign or ad set it belongs to; the gateway confirms that object is of the chosen ad account AND lists the period
-   * among its own budget schedules before anything is sent.
+   * among its own budget schedules before anything is sent. Meta step 34: a feed's catalog (a feed node names none).
    */
-  metaParent?: { kind: 'campaign' | 'adset'; id: string }
+  metaParent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }
 }
 
 export interface GatewayResponse {
@@ -668,7 +672,7 @@ const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudie
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaCatalogKind | undefined, parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   // Step 19 — a create (and Meta's check of one: validate_only is documented on creates) names the ad account itself: it
   // goes only to act_<the account this business chose through this connection>, never another.
@@ -676,6 +680,11 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
     const chosen = await metaChosenAdAccountOf(connectionId)
     if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus creates nothing on Meta.' }
     return id === `act_${chosen}` ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: a create goes only to the Meta ad account this business chose through this connection.' }
+  }
+  // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in (meta-catalog-owner.ts).
+  if (isMetaCatalogKind(kind)) {
+    const { metaCatalogOwnerProblem } = await import('./meta-catalog-owner.js')
+    return metaCatalogOwnerProblem(connectionId, write, kind, metaOwnerIo(connectionId, write), parent)
   }
   // Step 28 — a new study's portfolio, a study, a Page, a Page video test (meta-optimize-owner.ts).
   if (kind === 'business' || kind === 'adstudy' || kind === 'page' || kind === 'pagevideotest') {
@@ -726,7 +735,7 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
  * object's own budget schedules (ONE live read of `/<campaign | ad set>/budget_schedules`, at most 50 per object — Meta's
  * limit, high-demand-period.md). Anything else: nothing is sent.
  */
-async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWrite, parent: { kind: 'campaign' | 'adset'; id: string } | undefined): Promise<{ code: string; sentence: string } | null> {
+async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWrite, parent: { kind: 'campaign' | 'adset' | 'catalog'; id: string } | undefined): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   if (!parent || (parent.kind !== 'campaign' && parent.kind !== 'adset') || !/^\d{1,20}$/.test(parent.id)) {
     return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of budget schedule ${id} names the campaign or ad set it belongs to.` }
@@ -812,6 +821,7 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
   if (write.ids.length > 150) return { code: 'META_WRITE_NOT_ALLOWED', sentence: 'Nothing was sent to Meta: a change names at most 150 objects inside its body.' }
   let pixels: Set<string> | null | undefined
   let optimizeCheck: ((inner: MetaWriteBodyId) => Promise<{ code: string; sentence: string } | null>) | undefined
+  let catalogCheck: ((inner: MetaWriteBodyId) => Promise<{ code: string; sentence: string } | null>) | undefined
   // Step 21 — each of the chosen ad account's own lists read once per change.
   const accountLists = new Map<MetaAccountListKind, Set<string> | null>()
   for (const inner of write.ids) {
@@ -863,6 +873,14 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
     if (inner.kind === 'adsetorad' || inner.kind === 'adaccount' || inner.kind === 'person' || inner.kind === 'pagevideo' || inner.kind === 'studycell') {
       optimizeCheck ??= (await import('./meta-optimize-owner.js')).metaOptimizeBodyChecker(connectionId, write, metaOwnerIo(connectionId, write))
       const problem = await optimizeCheck(inner)
+      if (problem) return problem
+      continue
+    }
+    // Step 34 — an id inside a catalog change: a segment's parent, a pixel, an event source, a person, a partner, a shop
+    // (meta-catalog-owner.ts); each list read once per change.
+    if (isMetaCatalogBodyKind(inner.kind)) {
+      catalogCheck ??= (await import('./meta-catalog-owner.js')).metaCatalogBodyChecker(connectionId, write, metaOwnerIo(connectionId, write))
+      const problem = await catalogCheck(inner)
       if (problem) return problem
       continue
     }
