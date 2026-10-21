@@ -86,7 +86,7 @@ describe('the brand-safety allow-list entries (metaWriteVerdict)', () => {
     expect(problem({ body: form({ targeting: JSON.stringify(LIVE), status: 'PAUSED' }), objectKind: 'adsettargeting' })).toMatch(/only Meta change/)
     expect(problem({ body: form({ targeting: '{"custom_audiences":[{"id":123456789012345678}]}' }), objectKind: 'adsettargeting' })).toMatch(/one spelling only|exactly/)
     expect(problem({ body: form({ targeting: `{"a":"x${String.fromCharCode(7)}"}` }), objectKind: 'adsettargeting' })).toMatch(/printable text/)
-    expect(problem({ body: form({ targeting: JSON.stringify({ zips: Array.from({ length: 12000 }, (_, i) => `IT:${i}`) }) }), objectKind: 'adsettargeting' })).toMatch(/200000 for the largest brand-safety change/)
+    expect(problem({ body: form({ targeting: JSON.stringify({ zips: Array.from({ length: 12000 }, (_, i) => `IT:${i}`) }) }), objectKind: 'adsettargeting' })).toMatch(/at most 200000 characters/)
   })
   it('the account\'s filter: documented levels only, one per placement, on act_<id> named an ad account', () => {
     const url = `${BASE}/act_${ACCOUNT}/brand_safety_content_filter_levels`
@@ -132,12 +132,13 @@ describe('the brand-safety allow-list entries (metaWriteVerdict)', () => {
   })
   it('DELETEs: a list or a content list with no body; an unshare, a person, posts or an ad account with their keys in the body', () => {
     expect(verdict({ method: 'DELETE', url: `${BASE}/${LIST}`, objectKind: 'publisherblocklist' })).toMatchObject({ write: { rule: 'blocklist.delete', method: 'DELETE', body: '' } })
-    expect(problem({ method: 'DELETE', url: `${BASE}/${LIST}`, objectKind: 'publisherblocklist', body: 'agency_id=1' })).toMatch(/deletes nothing on Meta yet/)
+    expect(problem({ method: 'DELETE', url: `${BASE}/${LIST}`, objectKind: 'publisherblocklist', body: 'agency_id=1' })).toMatch(/Nexus deletes on Meta only/)
     expect(verdict({ method: 'DELETE', url: `${BASE}/${LIST}/agencies`, objectKind: 'publisherblocklist', body: form({ agency_id: OTHER_PORTFOLIO }) })).toMatchObject({ write: { rule: 'blocklist.unshare', method: 'DELETE', body: `agency_id=${OTHER_PORTFOLIO}` } })
-    expect(problem({ method: 'DELETE', url: `${BASE}/${LIST}/agencies`, objectKind: 'publisherblocklist' })).toMatch(/deletes nothing/)
+    expect(problem({ method: 'DELETE', url: `${BASE}/${LIST}/agencies`, objectKind: 'publisherblocklist' })).toMatch(/Nexus deletes on Meta only/)
     expect(verdict({ method: 'DELETE', url: `${BASE}/${CBL}/content`, objectKind: 'contentblocklist', body: form({ facebook_ids: '["120000000000901_120000000000902"]' }) })).toMatchObject({ write: { rule: 'contentblocklist.remove', method: 'DELETE' } })
     expect(verdict({ method: 'DELETE', url: `${BASE}/${CBL}/applied_ad_accounts`, objectKind: 'contentblocklist', body: form({ account_id: ACCOUNT }) })).toMatchObject({ write: { ids: [{ id: ACCOUNT, kind: 'adaccount' }] } })
-    expect(problem({ method: 'DELETE', url: `${BASE}/${AD_SET}`, objectKind: 'adset' })).toMatch(/deletes nothing on Meta yet/)
+    // Since step 22 (main): an ad set's DELETE is step 19's object.delete rule (the undo of a create, or an explicit ask).
+    expect(verdict({ method: 'DELETE', url: `${BASE}/${AD_SET}`, objectKind: 'adset' })).toMatchObject({ write: { rule: 'object.delete', method: 'DELETE' } })
     expect(problem({ method: 'DELETE', url: `${BASE}/${AD_SET}` })).toMatch(/cancels no async batch/)
   })
   it('shares, roles, ad accounts and posts: exact keys and values', () => {
@@ -300,7 +301,9 @@ describe('owners of the account, portfolio and lists', () => {
     __metaObjectLimitsTest.useMemory()
     h.answers.push(json({ id: LIST, business_owner_id: PORTFOLIO }), json({ success: true }))
     expect((await call(LIST, 'publisherblocklist', {}, 'DELETE')).ok).toBe(true)
-    expect(sent(1)).toMatchObject({ method: 'DELETE', body: undefined })
+    // The merge with main: a DELETE without keys sends no form field (main's gateway passes its empty body on).
+    expect(sent(1).method).toBe('DELETE')
+    expect(sent(1).body ?? '').toBe('')
     h.calls = []
     __metaObjectLimitsTest.useMemory()
     gatewayMetaSharedPortfolios.add(PORTFOLIO)

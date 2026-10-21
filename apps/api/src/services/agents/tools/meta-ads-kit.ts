@@ -330,9 +330,9 @@ function doneSettingsSentence(request: MetaChangeRequest, result: MetaChangeResu
         : result.readBack === 'none' || !result.node
           ? 'Meta confirmed it; Nexus could not read it back (meta-ads-live shows it).'
           // Step 21 — a create whose read-back judges no field (a reach & frequency prediction is worked out later): made.
-          // Step 39 — nothing asked to read back (a draft Meta made): its id.
+          // Step 39 — the same for a block-list draft Meta made.
           : !Object.keys(expected).length
-            ? `Meta made it${typeof result.node.id === 'string' || typeof result.node.id === 'number' ? ` (id ${result.node.id})` : ''}.`
+            ? 'Meta made it.'
             : `Meta made it; it now reads ${readsOf(result.node, expected)}.`
   return `${request.label}: ${read}${result.waitedMs ? ` Nexus waited ${Math.round(result.waitedMs / 1000)} s first (Meta's limit of one change of an object every 30 s).` : ''}`
 }

@@ -292,7 +292,10 @@ describe('meta-webhooks', () => {
       sharedWithBusinesses: null, sharedWithNotRead: expect.stringMatching(/slow down/), appliedToAdAccounts: [{ adAccountId: '1234567890' }],
     })
     h.graph = (req) => (req.path === '120000000000701' ? { id: '120000000000701', name: 'Risky', business: { id: PORTFOLIO } }
-      : req.path.endsWith('/instagram_content') ? metaError('17', 'User request limit reached', 'rate_limited') : { data: [{ id: '1234567890', account_id: 'act_1234567890' }] })
+      : req.path.endsWith('/instagram_content') ? metaError('17', 'User request limit reached', 'rate_limited')
+        // Step 39 — a content block list is the portfolio's own only when its content_block_lists list names it.
+        : req.path.endsWith('/content_block_lists') ? { data: [{ id: '120000000000701' }] }
+          : { data: [{ id: '1234567890', account_id: 'act_1234567890' }] })
     expect((await run('meta-brand-safety', { view: 'content-block-list', contentBlockListId: '120000000000701', content: 'instagram' })).data).toMatchObject({
       content: { ids: null, notRead: expect.stringMatching(/slow down/) }, appliedToAdAccounts: [{ adAccountId: '1234567890' }],
     })
