@@ -412,10 +412,10 @@ export function sendersVerdict(input: { browserCount: number | null; serverCount
 /** The gap in words (the coverage gap names Meta's numbers). */
 export function gapWords(gap: string, event: string, coverage: number | null, goal: number | null): string {
   switch (gap) {
-    case 'none': return `No gap: ${event} reaches Meta from the browser AND from a server, and the server copy covers ${coverage}% of browser ${event} events (Meta's goal: ${goal}%). Nexus sending it too would add nothing (upload-meta-events stays off).`
-    case 'coverage': return `Partly covered: the server copy covers about ${coverage}% of browser ${event} events; Meta's goal is ${goal}%. Some purchases reach Meta from the browser only. Fix the sender's server events and their event_id first (the shop platform's Meta app); Nexus would send only the missing ones, with the same event_id, after the Owner's word.`
+    case 'none': return `No gap: ${event} reaches Meta from the browser AND from a server, and the server copy covers ${coverage}% of browser ${event} events (Meta's goal: ${goal}%). A copy from Nexus would add nothing (upload-meta-events sends no website sale: only sales taken in by hand in Nexus).`
+    case 'coverage': return `Partly covered: the server copy covers about ${coverage}% of browser ${event} events; Meta's goal is ${goal}%. Some purchases reach Meta from the browser only. Fix the sender's server events and their event_id (the shop platform's Meta app, its data sharing). Nexus cannot fill a website gap: it cannot give a copy the event_id of the shop's browser event, so a copy would count twice — not until a Nexus shop pixel exists (a later step). upload-meta-events sends only sales taken in by hand in Nexus.`
     case 'dedup': return `Both send ${event}, but Meta deduplicates none of them: the same purchase may be counted twice. Fix the sender's event_id (the shop platform's pixel and Conversions API must share it); Nexus sending more would not help.`
-    case 'server': return `Only the browser pixel sends ${event}: Meta's stats and its Dataset Quality API both show no server copy (Conversions API) in the window. This is the gap Nexus could fill (upload-meta-events, with the same event_id as the browser event), after the Owner's word.`
+    case 'server': return `Only the browser pixel sends ${event}: Meta's stats and its Dataset Quality API both show no server copy (Conversions API) in the window. Switch the shop platform's own Conversions API on (its Meta app's data sharing). Nexus cannot fill this website gap: a copy from Nexus would lack the browser event's event_id and count twice — not until a Nexus shop pixel exists (a later step). upload-meta-events sends only sales taken in by hand in Nexus.`
     case 'browser': return `Only a server sends ${event}: the browser pixel did not send it in the window. Check the pixel on the shop (the shop platform's Meta app); Nexus does not send browser events.`
     default: return `Unknown: Meta's answers do not settle it — no ${event} in the window, Meta's stats and its Dataset Quality API disagree, a part was refused, or Meta gave no coverage goal (see each part). Widen hours (up to 672) or check the parts below.`
   }
@@ -485,7 +485,7 @@ async function sourcesView(account: MetaChosenAccount, pixelId: string, input: {
       'how many purchases were sent twice or deduplicated as a count — only the percentages of events carrying each key, of browser events deduplicated and of coverage',
       'whether the SERVER_ONLY / WEB_ONLY counts include events Meta deduplicated (not documented: LIVE-PROBES SG-030c)',
     ],
-    note: `Counts are Meta's, over the last ${hours} hours (windows shorter than 7 days). Nexus checked first that no other business in Nexus uses this pixel. Nexus sends no event itself until upload-meta-events (step 33) is switched on by the Owner.`,
+    note: `Counts are Meta's, over the last ${hours} hours (windows shorter than 7 days). Nexus checked first that no other business in Nexus uses this pixel. Nexus sends no website sale itself: upload-meta-events (off until a person switches it on) sends only sales taken in by hand in Nexus, with partner_agent nexus — they are server events and show in these counts (agentName nexus counts them).`,
   }
 }
 

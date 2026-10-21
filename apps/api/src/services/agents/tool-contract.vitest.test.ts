@@ -1224,7 +1224,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-dataset', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion', 'remove-meta-signal-items',
       'create-meta-ad', 'set-meta-ad',
       'set-meta-webhooks', 'set-meta-alert-subscription', 'remove-meta-alert-subscription',
-      'set-meta-targeting', 'set-meta-placements', 'set-meta-account-controls']) {
+      'set-meta-targeting', 'set-meta-placements', 'set-meta-account-controls',
+      'upload-meta-events']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

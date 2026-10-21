@@ -309,7 +309,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
   const metaWorld = (f: { path: string; text: string }) => /^services\/(marketing\/meta-ads\/|agents\/tools\/meta-ads-|gateway\/(meta|gateway\.ts))/.test(f.path) || META_IMPORT.test(f.text)
   const callers = (name: string) => all.filter((f) => new RegExp(`(?<!function |\\.)\\b${name}\\(`).test(f.text)).map((f) => f.path).sort()
   it('metaWriteCall, metaSendChange, metaCheckChange, removalDraft and metaRemoveDraft have the callers they have today, and no other', () => {
-    expect(callers('metaWriteCall')).toEqual(['services/marketing/meta-ads/write-client.ts'])
+    // Step 33 — upload-meta-events sends its Conversions API events through its own client (a POST to <pixel>/events only).
+    expect(callers('metaWriteCall')).toEqual(['services/marketing/meta-ads/events-client.ts', 'services/marketing/meta-ads/write-client.ts'])
     // Step 23 — create-meta-media's requests bring their own senders (an upload read again, the video-ads upload's calls).
     // Step 25 — create-meta-creative's create and async job bring their own senders too (the creative read back).
     // Step 27 — create-meta-ad's create (the ad and its inline creative read back), set-meta-ad's update (its creative read

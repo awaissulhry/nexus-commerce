@@ -380,6 +380,29 @@ export function fetchMetaChoices(connectionId: string, refresh = false, fetchImp
   return get(`/api/meta-ads/connections/${encodeURIComponent(connectionId)}/choices${query({ refresh: refresh ? 1 : null })}`, fetchImpl)
 }
 
+/**
+ * Meta step 33 (D2) — the business's "Send sales to Meta (Conversions API)" switch: off by default; a person with
+ * settings.security.manage turns it on (`canChange`: this person may). On, Claude may ASK to send purchases
+ * (upload-meta-events); each send is a change a person approves — or, with "Claude's changes need no approval" on, it runs
+ * 20 s after Claude asks, in the asker's name.
+ */
+export interface MetaEventsSwitch { on: boolean; since: string | null; by: string | null }
+
+export async function fetchMetaEventsSwitch(fetchImpl: FetchImpl = fetch): Promise<{ switch: MetaEventsSwitch; canChange: boolean }> {
+  const body = await get<{ switch: MetaEventsSwitch; canChange?: boolean }>('/api/meta-ads/conversions-api', fetchImpl)
+  return { switch: body.switch, canChange: body.canChange === true }
+}
+
+export async function setMetaEventsSwitch(on: boolean, fetchImpl: FetchImpl = fetch): Promise<MetaEventsSwitch> {
+  const res = await fetchImpl(`${getBackendUrl()}/api/meta-ads/conversions-api`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ on }),
+  })
+  return (await readJson<{ switch: MetaEventsSwitch }>(res)).switch
+}
+
 /** Save which assets Nexus reads; the server checks them against what Meta offers and queues the first read. */
 export async function saveMetaSelection(connectionId: string, body: MetaSelectionBody, fetchImpl: FetchImpl = fetch): Promise<SaveMetaSelectionResult> {
   const res = await fetchImpl(`${getBackendUrl()}/api/meta-ads/connections/${encodeURIComponent(connectionId)}/selection`, {
