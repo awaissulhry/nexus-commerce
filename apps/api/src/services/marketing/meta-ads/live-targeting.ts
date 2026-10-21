@@ -806,7 +806,7 @@ export async function targetingCheck(input: TargetingCheckInput) {
       // The guide's own form: comma-separated lists (audiences/special-ad-category, "Eligibility").
       const read = await metaReadOne({ connectionId }, {
         operation: 'targeting.audienceSacEligibility', path: id,
-        query: { fields: 'id,name,is_eligible_for_sac_campaigns', ad_account_id: adAccountId, special_ad_categories: input.specialAdCategories!.join(','), special_ad_category_countries: input.countries!.map((c) => c.toUpperCase()).join(',') },
+        query: { fields: META_AUDIENCE_SAC_FIELDS, ad_account_id: adAccountId, special_ad_categories: input.specialAdCategories!.join(','), special_ad_category_countries: input.countries!.map((c) => c.toUpperCase()).join(',') },
       })
       const b = read.body as Record<string, unknown>
       const eligible = typeof b.is_eligible_for_sac_campaigns === 'boolean' ? b.is_eligible_for_sac_campaigns : null
@@ -870,7 +870,6 @@ export async function targetingCheck(input: TargetingCheckInput) {
       if (!currency && (input.bidAmountCents != null || input.lifetimeBudgetCents != null || input.dailyBudgetCents != null)) {
         refuse('Nexus has not read this ad account\'s currency yet, so it cannot send an amount (it never assumes one). Read the account first (meta-ads-live view account) or leave the amounts out.')
       }
-      if (input.adSetId && (input.dailyBudgetCents != null || input.directSend)) refuse('dailyBudgetCents and directSend go on the account estimate only (no adSetId).')
       const spec = input.targeting === undefined || input.targeting === null ? null : parsedSpec(input.targeting)
       if (spec) await checkSpecOwned(account, spec)
       const promoted = input.promotedObject === undefined || input.promotedObject === null ? null : await checkPromotedObject(account, input.promotedObject)
@@ -880,7 +879,7 @@ export async function targetingCheck(input: TargetingCheckInput) {
       if (input.optimizationGoal) query.optimization_goal = input.optimizationGoal
       if (input.pacingType) query.pacing_type = input.pacingType
       if (input.lifetimeDays) query.lifetime_in_days = input.lifetimeDays
-      // Review fix B1 — the account estimate also takes a daily budget and a direct send (SDK adaccount.py).
+      // Review fix B1 — both estimates also take a daily budget and a direct send (SDK adaccount.py, adset.py).
       if (input.directSend) query.is_direct_send_campaign = true
       const amounts = [['bid_amount', 'bidAmountCents', input.bidAmountCents], ['lifetime_budget', 'lifetimeBudgetCents', input.lifetimeBudgetCents], ['daily_budget', 'dailyBudgetCents', input.dailyBudgetCents]] as const
       for (const [key, arg, cents] of amounts) {

@@ -231,9 +231,10 @@ describe('read only by construction', () => {
     expect(ok(`${BASE}/act_1234567890/delivery_estimate?optimization_goal=REACH&targeting_spec={}&promoted_object={}&fields=estimate_ready`)).toBeNull()
     expect(ok(`${BASE}/120000000000201/delivery_estimate?targeting_spec={}&fields=estimate_ready`)).toBeNull()
     expect(ok(`${BASE}/act_1234567890/message_delivery_estimate?targeting_spec={}&promoted_object={}&bid_amount=100&lifetime_budget=1000&lifetime_in_days=7&pacing_type=STANDARD`)).toBeNull()
-    // Review fix B1 — the account estimate also takes a daily budget and a direct send; an ad set's does not.
+    // Review fix B1 — both estimates also take a daily budget and a direct send (SDK adaccount.py, adset.py); nothing else.
     expect(ok(`${BASE}/act_1234567890/message_delivery_estimate?targeting_spec={}&daily_budget=100&is_direct_send_campaign=true`)).toBeNull()
-    expect(ok(`${BASE}/120000000000201/message_delivery_estimate?daily_budget=100`)).toMatch(/"daily_budget" is not one/)
+    expect(ok(`${BASE}/120000000000201/message_delivery_estimate?daily_budget=100&is_direct_send_campaign=true`)).toBeNull()
+    expect(ok(`${BASE}/120000000000201/message_delivery_estimate?daily_budget=100&lifetime_days=7`)).toMatch(/"lifetime_days" is not one/)
     expect(ok(`${BASE}/act_1234567890?fields=marketing_messages_settings{whatsapp_activation_status}`)).toBeNull()
     expect(ok(`${BASE}/act_1234567890/targetingsentencelines?targeting_spec={}&hide_targeting_spec_from_return=true`)).toBeNull()
     expect(ok(`${BASE}/120000000000301/targetingsentencelines?targeting_spec={}`)).toMatch(/"targeting_spec" is not one/)

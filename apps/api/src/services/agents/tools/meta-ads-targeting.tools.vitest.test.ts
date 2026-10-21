@@ -401,13 +401,16 @@ describe('meta-targeting-check', () => {
       whatsappActivationStatus: 'ACTIVE', currency: 'EUR', minorUnitDigits: 2, bidAmountCents: 150, lifetimeBudgetCents: 10000,
       estimateCostMetaUnits: 12.5, estimateDelivery: 900, estimateStatus: 'READY', note: expect.stringMatching(/Meta does not document its unit/),
     })
-    // The account estimate takes a daily budget and a direct send; an ad set's does not.
+    // Both estimates take a daily budget and a direct send.
     h.calls.length = 0
     const spec = { ...SPEC, publisher_platforms: ['whatsapp'], whatsapp_positions: ['marketing_messages'] }
     expect((await check({ check: 'message-delivery', targeting: spec, promotedObject: { page_id: '120000000000010' }, dailyBudgetCents: 2500, directSend: true })).ok).toBe(true)
     expect(h.calls.at(-1)).toMatchObject({ path: `act_${OWN}/message_delivery_estimate`, query: { daily_budget: 2500, is_direct_send_campaign: true, targeting_spec: spec } })
     expect(refusedCalls()).toEqual([])
-    expect((await check({ check: 'message-delivery', adSetId: '120000000000201', dailyBudgetCents: 2500 })).error).toMatch(/account estimate only/)
+    h.calls.length = 0
+    expect((await check({ check: 'message-delivery', adSetId: '120000000000201', dailyBudgetCents: 2500, directSend: true })).ok).toBe(true)
+    expect(h.calls.at(-1)).toMatchObject({ path: '120000000000201/message_delivery_estimate', query: { daily_budget: 2500, is_direct_send_campaign: true } })
+    expect(refusedCalls()).toEqual([])
     // Meta refusing the activation read is said, not fatal.
     const { MetaReadError, failureOfAnswer } = await import('../../marketing/meta-ads/errors.js')
     h.answer = (req) => (req.path === `act_${OWN}` ? new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'validation', channelCode: '100', channelMessage: 'nonexisting field (marketing_messages_settings)' } as never }), req.operation, 1) : { data: [] })

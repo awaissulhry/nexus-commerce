@@ -134,9 +134,9 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^act_\d+\/deprecatedtargetingadsets$/, keys: new Set(['type']) },
   { route: /^act_\d+\/reachestimate$/, keys: new Set(['targeting_spec']) },
   { route: /^(act_)?\d+\/delivery_estimate$/, keys: new Set(['optimization_goal', 'targeting_spec', 'promoted_object']) },
-  { route: /^(act_)?\d+\/message_delivery_estimate$/, keys: new Set(['targeting_spec', 'promoted_object', 'optimization_goal', 'bid_amount', 'lifetime_budget', 'lifetime_in_days', 'pacing_type']) },
-  // Review fix B1 — the account's marketing-message estimate also takes a daily budget and a direct send (SDK adaccount.py).
-  { route: /^act_\d+\/message_delivery_estimate$/, keys: new Set(['daily_budget', 'is_direct_send_campaign']) },
+  // Review fix B1 — both marketing-message estimates also take a daily budget and a direct send (SDK adaccount.py and
+  // adset.py get_message_delivery_estimate).
+  { route: /^(act_)?\d+\/message_delivery_estimate$/, keys: new Set(['targeting_spec', 'promoted_object', 'optimization_goal', 'bid_amount', 'lifetime_budget', 'lifetime_in_days', 'pacing_type', 'daily_budget', 'is_direct_send_campaign']) },
   { route: /^act_\d+\/targetingsentencelines$/, keys: new Set(['targeting_spec', 'hide_targeting_spec_from_return']) },
   // Review fix A1 — only on the audience-eligibility read itself (its exact field list), never on another object read.
   { route: /^\d+$/, keys: new Set(['ad_account_id', 'special_ad_categories', 'special_ad_category_countries']), when: (query) => query.get('fields') === META_AUDIENCE_SAC_FIELDS },
