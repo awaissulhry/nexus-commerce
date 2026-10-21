@@ -46,7 +46,10 @@ const SHIFT_CRITICAL = 0.5
 const CTR_MIN_IMPRESSIONS = 500
 /** A shift of cost per purchase or ROAS needs this many purchases on each side. */
 const SHIFT_MIN_PURCHASES = 3
-/** A day's cost per purchase and ROAS count only when it spent at least this share of the earlier days' median spend day. */
+/**
+ * A day's cost per purchase and ROAS count only when it spent at least this share of the earlier days' median spend day
+ * (the lower of all earlier days' median and the last 14's, so a budget cut does not leave them unjudged for weeks).
+ */
 const PURCHASE_MIN_SPEND_SHARE = 0.4
 /** Meta's own pushes read as signals (channel-alerts kinds of step 30). */
 export const META_SIGNAL_NOTICES = ['meta-ads-creative-fatigue', 'meta-ads-account-status', 'meta-ads-object-issue'] as const
@@ -196,9 +199,10 @@ export function metaAnomaliesOf(history: MetaAdsDay[], checked: MetaAdsDay[]): {
   const anomalies: MetaAnomaly[] = []
   const notChecked: string[] = []
   if (!recent.length) return { anomalies, notChecked: ['every metric: Nexus has read none of the checked days yet'] }
-  // The volume floor of cost per purchase and ROAS: 40 % of the earlier days' median spend day (read days with spend).
+  // The volume floor of cost per purchase and ROAS: 40 % of the earlier days' median spend day (read days with spend) —
+  // of all of them or of the last 14, whichever is lower (after a budget cut the recent days set the scale).
   const spends = earlier.map((d) => d.spendCents).filter((v) => v > 0)
-  const floor = spends.length ? PURCHASE_MIN_SPEND_SHARE * median(spends) : 0
+  const floor = spends.length ? PURCHASE_MIN_SPEND_SHARE * Math.min(median(spends), median(spends.slice(-META_ANOMALY_MIN_HISTORY))) : 0
   const enough = (d: ReadDay) => d.spendCents >= floor
   for (const metric of META_ANOMALY_METRICS) {
     const spec = METRICS[metric]

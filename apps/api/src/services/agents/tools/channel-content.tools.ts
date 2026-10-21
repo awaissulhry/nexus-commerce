@@ -430,7 +430,7 @@ async function planFacebookInstagram(op: 'publish' | 'unpublish', named: { id: s
     const stored = publicationsOf(write.baseline)
     const key = (list: Publication[]) => JSON.stringify([...list].sort((a, b) => a.publicationId.localeCompare(b.publicationId)))
     if (!stored || key(stored) !== key(next)) {
-      return { error: `${where}: dropping the Nexus draft of the Sales channels would change more than the ${FB_IG} channel (the draft holds other changes, or Shopify's own list moved). Ask facebookInstagram without reset. ${nothing}` }
+      return { error: `${where}: dropping the Nexus draft of the Sales channels would change more than the ${FB_IG} channel (the draft holds other changes, it was already sent, or Shopify's own list moved). Ask facebookInstagram without reset. ${nothing}` }
     }
   }
   const nameOf = (id: string) => channels!.find((c) => c.id === id)?.name ?? id
@@ -541,8 +541,9 @@ const setShopifyContent: AgentTool = {
     + 'publication changes; refused when the store has no channel of that name (or more than one) or it is already so. The '
     + 'draft edit is approved in Nexus (or runs by this business\'s "Claude\'s changes need no approval" switch); Shopify '
     + 'changes only when a person sends the draft (Review and synchronize). undo-change puts the draft back the other way '
-    + '(a draft it made where there was none is dropped again); once the draft is sent, undo-change cannot put it back: ask '
-    + 'facebookInstagram unpublish (or publish) instead.',
+    + '(a draft it made where there was none is dropped again); once the draft is sent, undo-change refuses (where there was '
+    + 'no draft before) or makes a new draft for a person to send: to change Shopify again, ask facebookInstagram unpublish '
+    + '(or publish).',
   async handler(args): Promise<ToolResult> {
     const plan = await planShopifyContent(args, NOTHING)
     if ('error' in plan) return { ok: false, error: plan.error }

@@ -189,6 +189,15 @@ describe('metaAnomaliesOf — the volume floor of cost per purchase and ROAS (re
     const shift = metaAnomaliesOf(past, week).anomalies.find((a) => a.kind === 'shift' && a.metric === 'costPerPurchase')!
     expect(shift.sentence).toMatch(/than in the 29 read days before \(1 with too little spend left out\) \(worse\)\.$/)
   })
+  it('after a budget cut the last 14 earlier days set the floor: a stopped purchase tracking is still judged', () => {
+    // 28 days at the usual spend, then 14 days at 3.00 (a cut to 30 %): all 42 days' median alone would leave every new day out.
+    const cut = Array.from({ length: 14 }, (_, i) => day(addDays(START, 28 + i), { spendCents: 300, impressions: 600, clicks: 12, purchases: 1, purchaseValueCents: 1500 }))
+    const past = [...history(28), ...cut]
+    const stopped = day(addDays(START, 42), { spendCents: 300, impressions: 600, clicks: 12, purchases: 0, purchaseValueCents: 0 })
+    const { anomalies, notChecked } = metaAnomaliesOf(past, [stopped])
+    expect(anomalies.find((a) => a.metric === 'roas' && a.kind === 'day')).toMatchObject({ date: stopped.date, direction: 'down', reads: 'worse' })
+    expect(notChecked.filter((n) => n.startsWith('ROAS'))).toEqual([])
+  })
 })
 
 describe('metaAnomalySignal — the loader', () => {
