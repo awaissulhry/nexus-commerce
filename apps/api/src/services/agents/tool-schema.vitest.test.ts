@@ -42,7 +42,8 @@ const PROMISED: Record<string, { properties: string[]; required: string[] }> = {
   'channel-stock-drift': { properties: ['productId', 'limit'], required: [] },
   'replenishment-forecast': { properties: ['productId'], required: ['productId'] },
   'insights-metric': { properties: ['days'], required: [] },
-  'detect-anomalies': { properties: ['limit'], required: [] },
+  // Meta ads step 44 — it keeps limit and adds the Meta signal's channel, days and Meta connection.
+  'detect-anomalies': { properties: ['limit', 'channel', 'days', 'connectionId'], required: [] },
   'draft-alt-text': { properties: ['productId'], required: ['productId'] },
   'draft-listing-content': { properties: ['productId'], required: ['productId'] },
   'draft-seo': { properties: ['productId'], required: ['productId'] },
