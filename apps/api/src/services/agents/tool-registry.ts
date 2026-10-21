@@ -107,6 +107,7 @@ import { META_ADS_REMOVE_TOOLS } from './tools/meta-ads-remove.tools.js'
 import { META_ADS_LABELS_RULES_TOOLS } from './tools/meta-ads-labels-rules.tools.js'
 // Meta ads step 28 (2026-10-21): apply recommendations; make, change and end experiments.
 import { META_ADS_OPTIMIZE_CHANGES_TOOLS } from './tools/meta-ads-optimize-changes.tools.js'
+import { META_ADS_COMMERCE_TOOLS } from './tools/meta-ads-commerce.tools.js'
 // Meta ads step 7 (2026-10-21): insights at every level, background report runs, saved and partner reports (read only).
 import { META_ADS_INSIGHTS_TOOLS } from './tools/meta-ads-insights.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -342,6 +343,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_LABELS_RULES_TOOLS,
   // Meta ads step 28 (2026-10-21): apply-meta-recommendations, create-meta-experiment, set-meta-experiment, end-meta-experiment.
   ...META_ADS_OPTIMIZE_CHANGES_TOOLS,
+  // Meta ads step 13 (2026-10-21): meta-product-sets, meta-commerce, meta-instagram-product-tags (read only).
+  ...META_ADS_COMMERCE_TOOLS,
   // Meta ads step 7 (2026-10-21): meta-ads-numbers, meta-ads-report, meta-ads-saved-reports (read only).
   ...META_ADS_INSIGHTS_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).

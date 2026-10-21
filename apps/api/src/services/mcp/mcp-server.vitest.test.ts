@@ -66,6 +66,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 22 (2026-10-21) — remove-meta-ads-items reads Meta live and deletes there (on the person's explicit ask).
 // Meta ads step 21 (2026-10-21) — set-meta-labels, set-meta-value-rules and create-meta-reach-frequency read Meta live and change it.
 // Meta ads step 28 (2026-10-21) — apply-meta-recommendations, create-meta-experiment, set-meta-experiment and end-meta-experiment.
+// Meta ads step 13 (2026-10-21) — meta-product-sets, meta-commerce and meta-instagram-product-tags read Meta live.
 // Meta ads step 7 (2026-10-21) — meta-ads-numbers, meta-ads-report and meta-ads-saved-reports read Meta live.
 
 const OPEN_WORLD = [
@@ -90,9 +91,10 @@ const OPEN_WORLD = [
   'meta-account-access', 'meta-account-health', 'meta-activity-log', 'meta-ad-account', 'meta-ad-accounts', 'meta-ad-details', 'meta-ad-library',
   'meta-ad-preview', 'meta-ad-rules', 'meta-ad-sets', 'meta-ads-graph-read', 'meta-ads-live', 'meta-ads-numbers', 'meta-ads-report',
   'meta-ads-saved-reports', 'meta-audiences', 'meta-billing', 'meta-brand-safety', 'meta-campaigns', 'meta-catalog-feeds', 'meta-catalog-health',
-  'meta-catalog-items', 'meta-catalogs', 'meta-comments', 'meta-connection', 'meta-datasets', 'meta-experiments', 'meta-instagram-media',
-  'meta-instant-experiences', 'meta-labels', 'meta-lead-forms', 'meta-leads', 'meta-media-library', 'meta-page-posts', 'meta-partnership-content',
-  'meta-recommendations', 'meta-targeting-check', 'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
+  'meta-catalog-items', 'meta-catalogs', 'meta-comments', 'meta-commerce', 'meta-connection', 'meta-datasets', 'meta-experiments',
+  'meta-instagram-media', 'meta-instagram-product-tags', 'meta-instant-experiences', 'meta-labels', 'meta-lead-forms', 'meta-leads',
+  'meta-media-library', 'meta-page-posts', 'meta-partnership-content', 'meta-product-sets', 'meta-recommendations', 'meta-targeting-check',
+  'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
   'remove-google-conversion-actions', 'remove-google-labels', 'remove-meta-ads-items', 'reopen-listing', 'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
