@@ -16,6 +16,7 @@ import { priceFor } from '../ai/rate-cards.js'
 import { runOrQueueTool } from './approval-gate.service.js'
 import { z } from 'zod'
 import { toolsFor, type ToolPrincipal } from './call-tool.js'
+import { maskSecretArgs } from './secret-args.js'
 import type { AgentTool } from './tool-types.js'
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
@@ -176,7 +177,8 @@ export async function runToolLoop(opts: {
           steps.push({
             type: 'tool',
             name: block.name,
-            args: block.input,
+            // Item 7 — the run's steps never keep a secret argument (secret-args.ts).
+            args: maskSecretArgs(block.name, block.input),
             result,
             ms: Date.now() - tt,
           })

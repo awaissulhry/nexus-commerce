@@ -11,6 +11,7 @@
  */
 import type { Prisma } from '@nexus/database'
 import prisma from '../../db.js'
+import { maskSecretArgs } from '../agents/secret-args.js'
 
 export async function mintExemplarFromDecision(
   approvalId: string,
@@ -34,7 +35,8 @@ export async function mintExemplarFromDecision(
         toolName: approval.toolName,
         preview: approval.preview,
       } as Prisma.InputJsonValue,
-      proposal: (approval.args ?? {}) as Prisma.InputJsonValue,
+      // Item 7 — a record: a secret argument (a creator's ad code) as the mask, never its sealed or plain value.
+      proposal: (maskSecretArgs(approval.toolName, approval.args) ?? {}) as Prisma.InputJsonValue,
       operatorNote: reason ?? null,
     },
   })

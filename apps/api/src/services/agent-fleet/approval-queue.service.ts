@@ -63,6 +63,7 @@ import {
 import { masterCurrency } from '../fx-rate.service.js'
 import { cannotApproveFor, planApprovalRefusal, reversibilityOf, UNDO_WINDOW_MS } from './approval-inbox.service.js'
 import { stepUpOf } from '../agents/step-up-approval.js'
+import { maskSecretArgs } from '../agents/secret-args.js'
 import { bulkApproveRefusal } from './bulk-approve-policy.js'
 import { FLEET_CHARTERS, resolveCharter } from './charter-registry.js'
 import { resolveFleetLabels } from './fleet-labels.service.js'
@@ -1023,7 +1024,8 @@ export async function queueDetail(id: string, viewer: ToolPrincipal | null): Pro
     change: recorded ? { id: recorded.id, undoable: undo === 'possible', undoneAt: iso(recorded.undoneAt), whyNotUndoable } : null,
     canEdit: mayEdit,
     // The request's own arguments, for the drawer's edit form: only when this viewer may edit it (same gate as canEdit).
-    editArgs: mayEdit ? rec(ap.args) : null,
+    // Item 7 — never a secret one (an edit patches the arguments it names; the sealed value stays on the request).
+    editArgs: mayEdit ? rec(maskSecretArgs(ap.toolName, ap.args)) : null,
   }
 }
 

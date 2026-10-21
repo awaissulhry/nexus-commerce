@@ -32,6 +32,7 @@ import type { StrategyNarrowing } from '../advertising/ads-strategy/claude.js'
 import { logger } from '../../utils/logger.js'
 import { linkUndoRequest, recordExecutedChangeSafely } from './change-record.service.js'
 import { queuePlan } from './change-plan.service.js'
+import { callBusinessId, maskSecretArgs, sealSecretArgs } from './secret-args.js'
 import {
   callTool,
   doorOf,
@@ -69,7 +70,7 @@ export interface GateOutcome {
   /** C6 — a queued change plan: how many steps, the Nexus-written summary, and its hash. */
   plan?: { steps: number; summary: string; planHash: string }
   /** C6 — a plan that was not stored: each step's refusal, to fix and submit again. */
-  refusals?: Array<{ step: number; tool: string; error: string }>
+  refusals?: Array<{ step: number; tool: string; error: string; status?: 409 | 503 }>
 }
 
 /**
@@ -175,6 +176,15 @@ export async function runOrQueueTool(
   if (!tool.execute) {
     return { ok: true, mode: 'preview', preview: visible.preview ?? visible.data }
   }
+  // Item 7 — its secret arguments sealed for this tool and this business (secret-args.ts); the door opens them when the
+  // request runs. No encryption key: refused in words, nothing stored.
+  let stored: Record<string, unknown>
+  try {
+    stored = await sealSecretArgs(tool, args, callBusinessId(principal))
+  } catch (err) {
+    if (err instanceof ToolAccessError) return { ok: false, mode: 'error', error: err.message }
+    throw err
+  }
   // The row keeps the raw preview: whoever reads it is filtered for their own
   // permissions then, and an approver cleared for money sees all of it.
   const ap = await prisma.agentApproval.create({
@@ -182,7 +192,7 @@ export async function runOrQueueTool(
       agentRunId,
       toolName: name,
       riskTier: policy.riskTier,
-      args: args as Prisma.InputJsonValue,
+      args: stored as Prisma.InputJsonValue,
       preview: (raw.preview ?? raw.data) as Prisma.InputJsonValue,
       status: 'pending',
       expiresAt: new Date(Date.now() + EXPIRY_HOURS * 3600 * 1000),
@@ -329,7 +339,7 @@ export async function requestApproval(
       trigger: 'manual',
       status: 'done',
       ok: true,
-      input: { tool: name, args } as Prisma.InputJsonValue,
+      input: { tool: name, args: maskSecretArgs(name, args) } as Prisma.InputJsonValue,
       userId: principal.userId,
       ...runOrigin(principal),
       endedAt: new Date(),
@@ -475,9 +485,11 @@ export async function decideApproval(
 }
 
 export async function listApprovals(status?: string) {
-  return prisma.agentApproval.findMany({
+  const rows = await prisma.agentApproval.findMany({
     where: status ? { status } : {},
     orderBy: { requestedAt: 'desc' },
     take: 50,
   })
+  // Item 7 — a view: each secret argument as the mask, sealed or (a request stored before item 7) plain.
+  return rows.map((row) => ({ ...row, args: maskSecretArgs(row.toolName, row.args) as Prisma.JsonValue }))
 }

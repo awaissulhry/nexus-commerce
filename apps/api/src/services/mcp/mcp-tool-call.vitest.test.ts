@@ -22,6 +22,7 @@ vi.mock('../oauth/oauth-config.js', () => ({ oauthIssuer: () => 'https://web.exa
 import { runToolForClaude } from './mcp-tool-call.js'
 import type { McpPrincipal } from './mcp-auth.js'
 import type { AgentTool } from '../agents/tool-types.js'
+import { getTool } from '../agents/tool-registry.js'
 
 const principal = {
   kind: 'user',
@@ -249,5 +250,43 @@ describe('N4 — what a single change does once it runs', () => {
     gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-4', rule: { by: 'person', level: 'confirm', confirm: { summary: 's', planHash: 'h' } } })
     expect(answerOf(await runToolForClaude(principal, reaching, { business: 'Xavia Racing' })).next)
       .toMatch(/^Nothing has changed yet\. The person who asked can approve it with their authenticator code \(confirm\)/)
+  })
+})
+
+describe('C7 / item 7 — a secret argument never reaches the run record', () => {
+  beforeEach(() => {
+    gate.runOrQueueTool.mockReset()
+    gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-1' })
+    db.agentRun.create.mockClear()
+  })
+
+  it('a tool\'s own (create-meta-boost\'s ad code, meta-partnership-content\'s ad codes)', async () => {
+    await runToolForClaude(principal, getTool('create-meta-boost')!, { source: 'creator-instagram-code', adCode: 'SECRET_CODE_1', business: principal.business.name })
+    await runToolForClaude(principal, getTool('meta-partnership-content')!, { view: 'lookup', adCodes: ['SECRET_CODE_2'] })
+    const inputs = db.agentRun.create.mock.calls.map((call) => (call[0] as { data: { input: { args: Record<string, unknown> } } }).data.input)
+    expect(inputs[0]!.args).toEqual({ source: 'creator-instagram-code', adCode: '[redacted]' })
+    expect(inputs[1]!.args).toEqual({ view: 'lookup', adCodes: '[redacted]' })
+    // The gate still gets the code: it seals it where the request is stored.
+    expect(gate.runOrQueueTool.mock.calls[0]![1]).toMatchObject({ adCode: 'SECRET_CODE_1' })
+  })
+
+  it('a secret Nexus cannot store (no encryption key: the gate\'s refusal in words) ends the run as failed, never crashed, and Claude reads the words', async () => {
+    const words = 'create-meta-boost: Nexus could not encrypt its secret argument adCode (no encryption key is set up), so the request was not stored.'
+    gate.runOrQueueTool.mockResolvedValue({ ok: false, mode: 'error', error: words })
+    db.agentRun.update.mockClear()
+    const result = await runToolForClaude(principal, getTool('create-meta-boost')!, { source: 'creator-instagram-code', adCode: 'SECRET_CODE_1', business: principal.business.name })
+    const finished = (db.agentRun.update.mock.calls.at(-1)![0] as { data: Record<string, unknown> }).data
+    expect(finished).toMatchObject({ status: 'failed', ok: false, errorMessage: words })
+    expect(JSON.stringify(finished)).not.toContain('crashed')
+    expect(JSON.stringify(result.content)).toContain('no encryption key is set up')
+    expect(JSON.stringify(result)).not.toContain('SECRET_CODE_1')
+  })
+
+  it('nor one inside a change plan\'s steps', async () => {
+    const steps = [{ tool: 'create-meta-boost', args: { source: 'creator-instagram-code', adCode: 'SECRET_CODE_1', name: 'Creator boost' } }]
+    await runToolForClaude(principal, getTool('submit-change-plan')!, { title: 'Boosts', steps, business: principal.business.name })
+    const input = (db.agentRun.create.mock.calls[0]![0] as { data: { input: unknown } }).data.input
+    expect(input).toMatchObject({ args: { title: 'Boosts', steps: [{ tool: 'create-meta-boost', args: { source: 'creator-instagram-code', adCode: '[redacted]', name: 'Creator boost' } }] } })
+    expect(JSON.stringify(input)).not.toContain('SECRET_CODE_1')
   })
 })

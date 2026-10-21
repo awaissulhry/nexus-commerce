@@ -72,9 +72,14 @@
  *   logger.warn) so the token service can raise an alert. Decrypt never
  *   falls back: a v2 blob needs KMS, full stop.
  *
- *   Access: only the CX token service may call decryptCredentials /
- *   reencryptCredentials. Routes and jobs get tokens from that service,
- *   never from this module, so the decrypt surface stays one file wide.
+ *   Access: decryptCredentials / reencryptCredentials are called only by
+ *   the CX token service (channel tokens), services/cx/apps.service.ts
+ *   (an app's client secret and signing key), services/cx/ingress/
+ *   ebay-quarantine-crypto.ts (quarantined eBay payloads), the rotate job
+ *   (jobs/cx-credentials-rotate.job.ts) and services/agents/secret-args.ts
+ *   (a stored request's secret tool arguments, opened only in the agent
+ *   tools' door). Routes and other jobs get tokens from the token service,
+ *   never from this module; a new caller is added to this list.
  *
  * Plaintext detection:
  *   isEncrypted(value) is true iff the string starts with "v1:" (the
