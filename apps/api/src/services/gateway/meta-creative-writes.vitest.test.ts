@@ -23,7 +23,7 @@ vi.mock('../cx/token.service.js', () => ({
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
 
-import { GATEWAY_META_PAGE, gatewayLedger, gatewayMetaChosen, gatewayMetaMedia, gatewayMetaTakenLinks } from '../../test-support/gateway-stubs.js'
+import { gatewayLedger, gatewayMetaChosen, gatewayMetaInstagram, gatewayMetaPage, gatewayMetaTakenLinks } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { metaWriteCall } from './meta.js'
 import { metaWriteVerdict } from './meta-calls.js'
@@ -36,7 +36,7 @@ import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
 
 const BASE = `https://graph.facebook.com/${META_DEFAULT_GRAPH_API_VERSION}`
 const ACT = 'act_1234567890'
-const PAGE = GATEWAY_META_PAGE
+const PAGE = '120000000000010'
 const IG = '17841400000000001'
 const HASH = 'abc123def456'
 const CREATIVE = '120000000000301'
@@ -85,7 +85,11 @@ beforeEach(() => {
   __metaObjectLimitsTest.useMemory()
   h.calls = []; h.answers = []; gatewayLedger.length = 0
   for (const key of Object.keys(gatewayMetaChosen)) delete gatewayMetaChosen[key]
-  for (const key of Object.keys(gatewayMetaMedia)) delete gatewayMetaMedia[key]
+  // Step 19 / 21's stubs: the chosen Page and Instagram account of the test connection.
+  for (const key of Object.keys(gatewayMetaPage)) delete gatewayMetaPage[key]
+  for (const key of Object.keys(gatewayMetaInstagram)) delete gatewayMetaInstagram[key]
+  gatewayMetaPage['m-1'] = PAGE
+  gatewayMetaInstagram['m-1'] = IG
   gatewayMetaTakenLinks.clear()
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     h.calls.push({ url: String(url), init })

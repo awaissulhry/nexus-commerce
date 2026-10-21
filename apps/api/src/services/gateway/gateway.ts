@@ -30,10 +30,10 @@
 import { createHash } from 'node:crypto'
 import { withSpan } from '../../utils/otel-setup.js'
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
-import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade, metaChosenAdAccountOf, metaChosenMediaAssetsOf, metaLinkTaken, metaPortfolioShared, metaStoredObject } from './account.js'
+import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade, metaChosenAdAccountOf, metaChosenInstagramOf, metaChosenPageOf, metaLinkTaken, metaPortfolioShared, metaStoredObject } from './account.js'
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
-import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite, type MetaMediaWriteKind } from './meta-calls.js'
+import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite, type MetaLabelsKind, type MetaMediaWriteKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
 import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
@@ -130,7 +130,11 @@ export interface GatewayRequest {
    * trust it: it confirms it (the business's stored row, or a field only that kind has in its one live read) and refuses
    * the change otherwise, so the write allow-list is literally a campaign, an ad set or an ad — never a creative or a Page.
    */
-  metaObjectKind?: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'creative' | MetaMediaWriteKind
+  metaObjectKind?: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
+    // Meta step 28: a new study's portfolio, a study, a Page, a Page video test (meta-optimize-owner.ts confirms each).
+    | MetaOptimizeKind
+    // Meta step 23: a video upload this connection started (Meta's upload host).
+    | MetaMediaWriteKind
   /**
    * Meta step 18: a change of a budget schedule (high-demand period, `metaObjectKind: 'highdemandperiod'`) names the
    * campaign or ad set it belongs to; the gateway confirms that object is of the chosen ad account AND lists the period
@@ -672,7 +676,7 @@ const META_KIND_FIELD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudi
   ad: META_KIND_FIELDS.ad,
   // Step 18 — only as an id INSIDE a change's body (an ad set's customer exclusions), never the object a change names.
   customaudience: META_KIND_FIELDS.customaudience,
-  // Step 25 — a creative (set-meta-creative, create-meta-creative's undo): object_type + status, as every read checks it.
+  // Step 22 — a creative remove-meta-ads-items deletes (object_type + status; a creative has its account_id).
   creative: META_KIND_FIELDS.creative,
 }
 const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudience' | 'creative', string>> = { campaign: 'campaign', adset: 'ad set', ad: 'ad', customaudience: 'custom audience', creative: 'creative' }
@@ -686,18 +690,37 @@ const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudie
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'creative' | 'highdemandperiod' | MetaMediaWriteKind | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
+  // Step 19 — a create (and Meta's check of one: validate_only is documented on creates) names the ad account itself: it
+  // goes only to act_<the account this business chose through this connection>, never another.
+  if (kind === 'adaccount') {
+    const chosen = await metaChosenAdAccountOf(connectionId)
+    if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus creates nothing on Meta.' }
+    return id === `act_${chosen}` ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: a create goes only to the Meta ad account this business chose through this connection.' }
+  }
+  // Step 23 — a folder in a business portfolio's media library: step 28's portfolio check, then no other Nexus business
+  // shares that portfolio (its library would be that business's too).
+  if (kind === 'business' && write.rule === 'portfolio.folder.create') return metaFolderPortfolioProblem(connectionId, write)
+  // Step 28 — a new study's portfolio, a study, a Page, a Page video test (meta-optimize-owner.ts).
+  if (kind === 'business' || kind === 'adstudy' || kind === 'page' || kind === 'pagevideotest') {
+    const { metaOptimizeOwnerProblem } = await import('./meta-optimize-owner.js')
+    return metaOptimizeOwnerProblem(connectionId, write, kind, metaOwnerIo(connectionId, write))
+  }
   // Step 18 — a budget schedule: its campaign or ad set first, then the period among that object's own.
   if (kind === 'highdemandperiod') return metaPeriodOwnerProblem(connectionId, write, parent)
-  // Step 23 — an edge of the chosen ad account or its portfolio, a video upload this connection started, a library video.
-  if (kind === 'adaccount' || kind === 'portfolio' || kind === 'video' || kind === 'libraryvideo') return metaMediaOwnerProblem(connectionId, write, kind)
+  // Step 22 — a video of the chosen ad account's library, or a part of an Instant Experience of the chosen Page.
+  if (kind === 'video' || kind === 'canvaselement') return metaListedOwnerProblem(connectionId, write.objectId, kind, write.check)
+  // Step 21 — a label or a value rule set: among the chosen ad account's own (metaAccountListedProblem).
+  if (kind === 'adlabel' || kind === 'valueruleset') return metaAccountListedProblem(connectionId, write.objectId, kind, write.check)
+  // Step 23 — a video upload this connection started (Meta's upload host, a video-ads finish).
+  if (kind === 'startedvideo') return metaStartedVideoProblem(connectionId, write)
   if (!kind || !Object.prototype.hasOwnProperty.call(META_KIND_FIELD, kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of ${id} names the kind of object it changes (a campaign, an ad set or an ad).` }
-  if (write.check && kind !== 'campaign') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has a check (validate_only) only for campaign changes, and ${id} is named a ${META_KIND_WORD[kind]}.` }
+  if (write.check && kind !== 'campaign') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has a check (validate_only) only for campaign changes, and ${id} is named ${kind === 'adset' || kind === 'ad' ? 'an' : 'a'} ${META_KIND_WORD[kind]}.` }
   const chosen = await metaChosenAdAccountOf(connectionId)
   if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus changes nothing on Meta.' }
   const notChosen = { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: object ${id} is not of the Meta ad account this business chose through this connection.` }
-  const notKind = (detail = '') => ({ code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${id} is not a ${META_KIND_WORD[kind]} Nexus can confirm${detail}; a Nexus change writes only a campaign, an ad set or an ad of its own kind.` })
+  const notKind = (detail = '') => ({ code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${id} is not a ${META_KIND_WORD[kind]} Nexus can confirm${detail}; a Nexus change writes only an object of the kind it names.` })
   const stored = await metaStoredObject(id)
   if (stored) {
     if (stored.adAccountId !== chosen) return notChosen
@@ -742,6 +765,51 @@ async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWri
   return listed.has(id) ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: ${id} is not a budget schedule of ${META_KIND_WORD[parent.kind]} ${parent.id}.` }
 }
 
+/**
+ * Meta step 22 — a video (of the chosen ad account's library: `act_<id>/advideos`, "Ad account library video ID") or a part
+ * of an Instant Experience (of the chosen Page: `<page id>/canvas_elements`) has no account_id to read: it must be LISTED
+ * there — up to 5 pages of 100 (the read side's ownVideo looks at 500 too). Not listed, or the list could not be read in
+ * full up to there: nothing is sent. Meta's check (validate_only) is documented for neither.
+ */
+async function metaListedOwnerProblem(connectionId: string, id: string, kind: 'video' | 'canvaselement', check: boolean): Promise<{ code: string; sentence: string } | null> {
+  const what = kind === 'video' ? 'video' : 'Instant Experience part'
+  if (check) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has no check (validate_only) for a change of a ${what}.` }
+  const owner = kind === 'video' ? await metaChosenAdAccountOf(connectionId) : await metaChosenPageOf(connectionId)
+  if (!owner) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: kind === 'video' ? 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection.' : 'Nothing was sent to Meta: this business has no Facebook Page chosen through this connection.' }
+  const listed = await metaListedIdsPaged(connectionId, kind === 'video' ? `act_${owner}/advideos` : `${owner}/canvas_elements`, 5)
+  if (listed === null) return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: Nexus could not read the ${kind === 'video' ? 'chosen ad account\'s video library' : 'chosen Page\'s Instant Experience parts'} to confirm ${id} is there.` }
+  return listed.has(id) ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${what} ${id} is not ${kind === 'video' ? 'in the chosen ad account\'s video library' : 'a part of the chosen Page\'s Instant Experiences'} (Nexus looks at the first 500).` }
+}
+
+/**
+ * Meta step 22 — the ids of one Meta list (fields=id), page by page (cursor `after`, never Meta's next link: it carries the
+ * token), at most `maxPages` of 100: each row's OWN `id` only (review A6: never an id inside a row — LIVE-PROBES CR-487).
+ * Null when a page could not be read; the ids of the pages read when the list goes on past them.
+ */
+async function metaListedIdsPaged(connectionId: string, path: string, maxPages: number): Promise<Set<string> | null> {
+  const ids = new Set<string>()
+  const idOf = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : '')
+  let after: string | null = null
+  for (let page = 0; page < maxPages; page++) {
+    const url = new URL(`${metaGraphBase()}/${path}`)
+    url.searchParams.set('fields', 'id')
+    url.searchParams.set('limit', '100')
+    if (after) url.searchParams.set('after', after)
+    let body: { data?: Array<Record<string, unknown>>; paging?: { cursors?: { after?: unknown }; next?: unknown } } | null
+    try {
+      const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+      body = answer.ok ? answer.json<typeof body>() : null
+    } catch {
+      return null
+    }
+    if (!body || !Array.isArray(body.data)) return null
+    for (const row of body.data) if (idOf(row?.id)) ids.add(idOf(row?.id))
+    after = typeof body.paging?.cursors?.after === 'string' && body.paging?.next ? body.paging.cursors.after : null
+    if (!after) break
+  }
+  return ids
+}
+
 /** The ids of one Meta list (fields=id, at most 100, one page), or null when it could not be read. */
 async function metaListedIds(connectionId: string, path: string): Promise<Set<string> | null> {
   const url = new URL(`${metaGraphBase()}/${path}`)
@@ -770,7 +838,22 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
   if (!write.ids?.length) return null
   if (write.ids.length > 150) return { code: 'META_WRITE_NOT_ALLOWED', sentence: 'Nothing was sent to Meta: a change names at most 150 objects inside its body.' }
   let pixels: Set<string> | null | undefined
+  let optimizeCheck: ((inner: MetaWriteBodyId) => Promise<{ code: string; sentence: string } | null>) | undefined
+  // Step 21 — each of the chosen ad account's own lists read once per change.
+  const accountLists = new Map<MetaAccountListKind, Set<string> | null>()
   for (const inner of write.ids) {
+    // Step 21 — a label, a value rule set or a reach & frequency prediction: among the chosen ad account's own.
+    if (inner.kind === 'adlabel' || inner.kind === 'valueruleset' || inner.kind === 'rfprediction') {
+      const problem = await metaAccountListedProblem(connectionId, inner.id, inner.kind, false, accountLists)
+      if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, 'Nothing was sent to Meta: inside this change, ') }
+      continue
+    }
+    // Step 21 — a prediction's destination: the Facebook Page or the Instagram account this business chose, no other.
+    if (inner.kind === 'destination') {
+      const [page, instagram] = await Promise.all([metaChosenPageOf(connectionId), metaChosenInstagramOf(connectionId)])
+      if (inner.id !== page && inner.id !== instagram) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${inner.id} is neither the Facebook Page nor the Instagram account this business chose through this connection.` }
+      continue
+    }
     // Review A4 — a catalog or a product set: the ONE catalog rule (marketing/meta-ads/catalog-rule.ts): of the chosen ad
     // account's business portfolio, and that portfolio no other Nexus business's.
     if (inner.kind === 'catalog' || inner.kind === 'productset') {
@@ -781,6 +864,19 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       if (problem) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: inside this change, ${problem}` }
       continue
     }
+    // Step 19 — the Page a new ad set promotes: the Page this business chose through this connection, no other.
+    if (inner.kind === 'page') {
+      const page = await metaChosenPageOf(connectionId)
+      if (!page || page !== inner.id) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: Page ${inner.id} is not the Facebook Page this business chose through this connection.` }
+      continue
+    }
+    // Step 19 — a custom conversion: one of the chosen ad account's own (act_<id>/customconversions; Meta allows 100 per account).
+    if (inner.kind === 'customconversion') {
+      const chosen = await metaChosenAdAccountOf(connectionId)
+      const own = chosen ? await metaListedIds(connectionId, `act_${chosen}/customconversions`) : null
+      if (!own?.has(inner.id)) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: custom conversion ${inner.id} is not one Nexus can confirm among the chosen ad account's own.` }
+      continue
+    }
     if (inner.kind === 'pixel') {
       if (pixels === undefined) {
         const chosen = await metaChosenAdAccountOf(connectionId)
@@ -789,35 +885,91 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       if (!pixels?.has(inner.id)) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: pixel ${inner.id} is not one Nexus can confirm among the chosen ad account's own pixels.` }
       continue
     }
+    // Step 28 — an ad set or ad of a recommendation, a lift cell's ad account, a viewer, a Page video, a study's own cell
+    // (a custom conversion is step 19's check above).
+    if (inner.kind === 'adsetorad' || inner.kind === 'adaccount' || inner.kind === 'person' || inner.kind === 'pagevideo' || inner.kind === 'studycell') {
+      optimizeCheck ??= (await import('./meta-optimize-owner.js')).metaOptimizeBodyChecker(connectionId, write, metaOwnerIo(connectionId, write))
+      const problem = await optimizeCheck(inner)
+      if (problem) return problem
+      continue
+    }
+    // Step 22 — a video inside a body (the video a library removal names): listed in the chosen ad account's library.
     const problem = await metaOwnerProblem(connectionId, { ...write, objectId: inner.id, check: false }, inner.kind)
     if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, `Nothing was sent to Meta: inside this change, `) }
   }
   return null
 }
 
+/**
+ * Meta step 28 — what meta-optimize-owner.ts's checks read through this gateway: the chosen ad account, one GET (null
+ * unless Meta answered it with a success), and the campaign / ad set / ad check above.
+ */
+function metaOwnerIo(connectionId: string, write: MetaJudgedWrite): import('./meta-optimize-owner.js').MetaOwnerIo {
+  return {
+    chosenAdAccount: () => metaChosenAdAccountOf(connectionId),
+    read: async (path, query) => {
+      const url = new URL(`${metaGraphBase()}/${path}`)
+      for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value)
+      try {
+        const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+        return answer.ok ? answer.json<Record<string, unknown>>() : null
+      } catch {
+        return null
+      }
+    },
+    objectProblem: (id, kind) => metaOwnerProblem(connectionId, { ...write, objectId: id, check: false }, kind),
+  }
+}
+
+/** Meta step 21 — the chosen ad account's own lists a change's object or body id must be on. */
+type MetaAccountListKind = 'adlabel' | 'valueruleset' | 'rfprediction'
+const META_ACCOUNT_LISTS: Readonly<Record<MetaAccountListKind, { edge: string; word: string }>> = {
+  adlabel: { edge: 'adlabels', word: 'label' },
+  valueruleset: { edge: 'value_rule_set', word: 'value rule set' },
+  rfprediction: { edge: 'reachfrequencypredictions', word: 'reach and frequency prediction' },
+}
+
+/**
+ * Meta step 21 — a label (its node names no account on v26), a value rule set or a reach & frequency prediction is the
+ * chosen ad account's own only when that account's own list holds it (`act_<id>/adlabels | value_rule_set |
+ * reachfrequencypredictions`, fields=id, up to 5 pages of 100 — the read side's labels check looks at 500 too). Not listed,
+ * or the list could not be read: nothing is sent. Meta documents no check (validate_only) for any of them.
+ */
+async function metaAccountListedProblem(connectionId: string, id: string, kind: MetaAccountListKind, check: boolean, lists: Map<MetaAccountListKind, Set<string> | null> = new Map()): Promise<{ code: string; sentence: string } | null> {
+  const { edge, word } = META_ACCOUNT_LISTS[kind]
+  if (check) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has no check (validate_only) for a change of a ${word}.` }
+  const chosen = await metaChosenAdAccountOf(connectionId)
+  if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection.' }
+  if (!lists.has(kind)) lists.set(kind, await metaListedIdsPaged(connectionId, `act_${chosen}/${edge}`, 5))
+  const listed = lists.get(kind)
+  if (!listed) return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: Nexus could not read the chosen ad account's ${word}s to confirm ${id} is one of them.` }
+  return listed.has(id) ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${word} ${id} is not one of the chosen ad account's own (Nexus looks at the first 500).` }
+}
+
 const notChosenMedia = (sentence: string) => ({ code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${sentence}` })
 
 /**
- * Meta step 23 — what a media change names (meta-media-rules.ts), checked before anything is sent:
- *   adaccount  `act_<id>` IS the ad account this business chose through this connection (its AD_ACCOUNT link);
- *   portfolio  the business portfolio IS the chosen ad account's own (stored at selection) AND no other Nexus business's
- *              chosen ad account is of it (nexus_meta_links_taken PORTFOLIO) — a shared portfolio's library is never
- *              written (step 10's PORTFOLIO_TAKEN);
- *   video      a video upload THIS connection started on the chosen ad account (the gateway noted Meta's answer).
- * The sentence never names another business's account or portfolio.
+ * Meta step 23 — a video upload THIS connection started on the chosen ad account (the gateway noted Meta's answer to the
+ * video-ads start): the only object of a call to Meta's upload host. An upload on `act_<id>`'s own edge is step 19's
+ * `adaccount` check, a video of the library (its captions) step 22's `video`, a folder's portfolio step 28's `business`.
  */
-async function metaMediaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: MetaMediaWriteKind): Promise<{ code: string; sentence: string } | null> {
-  // Step 25 — Meta documents its check on a creative's create (the rule says so: write.checkable), on no upload.
-  if (write.check && !write.checkable) return { code: 'META_WRITE_NOT_ALLOWED', sentence: 'Nothing was sent to Meta: Meta has no check (validate_only) for an upload, a folder or a removal from the library.' }
+async function metaStartedVideoProblem(connectionId: string, write: MetaJudgedWrite): Promise<{ code: string; sentence: string } | null> {
+  if (write.check) return { code: 'META_WRITE_NOT_ALLOWED', sentence: 'Nothing was sent to Meta: Meta has no check (validate_only) for an upload.' }
   const chosen = await metaChosenAdAccountOf(connectionId)
   if (!chosen) return notChosenMedia('this business has no Meta ad account chosen through this connection, so Nexus uploads nothing to Meta.')
-  if (kind === 'adaccount') return write.objectId === `act_${chosen}` ? null : notChosenMedia('the ad account this change names is not the one this business chose through this connection.')
-  if (kind === 'video') return metaVideoStartedOn(connectionId, write.objectId) === chosen ? null : notChosenMedia(`video ${write.objectId} is not an upload Nexus started on the chosen ad account through this connection.`)
-  if (kind === 'libraryvideo') return metaLibraryVideoProblem(connectionId, chosen, write.objectId, '')
-  const assets = await metaChosenMediaAssetsOf(connectionId)
-  if (!assets.portfolioId) return notChosenMedia('the chosen ad account names no business portfolio, so Nexus makes no folder in a portfolio\'s media library.')
-  if (write.objectId !== assets.portfolioId) return notChosenMedia('the business portfolio this change names is not the one of the ad account this business chose.')
-  if (await metaPortfolioShared(assets.portfolioId)) {
+  return metaVideoStartedOn(connectionId, write.objectId) === chosen ? null : notChosenMedia(`video ${write.objectId} is not an upload Nexus started on the chosen ad account through this connection.`)
+}
+
+/**
+ * Meta step 23 — a folder goes into a business portfolio's media library only when step 28's check confirms the portfolio
+ * IS the chosen ad account's own (meta-optimize-owner.ts `business`) AND no other Nexus business's chosen ad account is of
+ * it (nexus_meta_links_taken PORTFOLIO, step 10's PORTFOLIO_TAKEN). The sentence never names the other business.
+ */
+async function metaFolderPortfolioProblem(connectionId: string, write: MetaJudgedWrite): Promise<{ code: string; sentence: string } | null> {
+  const { metaOptimizeOwnerProblem } = await import('./meta-optimize-owner.js')
+  const owner = await metaOptimizeOwnerProblem(connectionId, write, 'business', metaOwnerIo(connectionId, write))
+  if (owner) return owner
+  if (await metaPortfolioShared(write.objectId)) {
     return notChosenMedia('another business in Nexus uses an ad account of this business portfolio, so Nexus changes nothing in the portfolio\'s media library (it would be that business\'s too).')
   }
   return null
@@ -834,14 +986,16 @@ async function metaMediaOwnerProblem(connectionId: string, write: MetaJudgedWrit
 async function metaMediaAssetsProblem(connectionId: string, write: MetaJudgedWrite): Promise<{ code: string; sentence: string } | null> {
   if (!write.assets?.length) return null
   const chosen = await metaChosenAdAccountOf(connectionId)
-  const assets = await metaChosenMediaAssetsOf(connectionId)
-  // Step 25 — one read of the library per change: each edge's ids, and the images of the change by their hashes.
-  const lists = new Map<string, Set<string> | null>()
+  // Step 25 — a creative's ids: the chosen Page and Instagram account read once, the creative's images read by their
+  // hashes once, each other list once per change.
+  const creative = write.assets.some((a) => CREATIVE_ASSET_KINDS.has(a.kind))
+  const mine = creative ? { pageId: await metaChosenPageOf(connectionId), instagramId: await metaChosenInstagramOf(connectionId) } : null
   const hashes = write.assets.filter((a) => a.kind === 'adimage').map((a) => a.id)
   const images = hashes.length && chosen ? await metaLibraryImages(connectionId, chosen, hashes) : null
+  const lists = new Map<string, Set<string> | null>()
   for (const asset of write.assets) {
-    if (CREATIVE_ASSET_KINDS.has(asset.kind)) {
-      const problem = await metaCreativeAssetProblem(connectionId, assets, asset, images, lists)
+    if (mine && CREATIVE_ASSET_KINDS.has(asset.kind)) {
+      const problem = await metaCreativeAssetProblem(connectionId, mine, asset, images, lists)
       if (problem) return problem
       continue
     }
@@ -851,17 +1005,15 @@ async function metaMediaAssetsProblem(connectionId: string, write: MetaJudgedWri
     }
     if (asset.kind === 'creativefolder') {
       // Review A5 — the same reach as the tool's own check (META_MEDIA_LIST_MAX), failing closed past it.
-      const folders = assets.portfolioId ? await metaListedIdsUpTo(connectionId, `${assets.portfolioId}/creative_folders`) : null
+      // The folder change's own object: the portfolio metaFolderPortfolioProblem confirmed before.
+      const folders = await metaListedIdsUpTo(connectionId, `${write.objectId}/creative_folders`)
       if (!folders?.has(asset.id)) return notChosenMedia(`inside this change, folder ${asset.id} is not one Nexus can confirm among the chosen portfolio's media-library folders (it reads the first ${META_MEDIA_LIST_MAX}).`)
       continue
     }
-    if (asset.kind === 'libraryvideo') {
-      const problem = chosen ? await metaLibraryVideoProblem(connectionId, chosen, asset.id, 'inside this change, ', lists) : notChosenMedia('this business has no Meta ad account chosen through this connection.')
-      if (problem) return problem
-      continue
-    }
-    if (!assets.instagramId) return notChosenMedia('this business has no Instagram account chosen, so no Instagram media is brought into its ad account.')
-    if (!(await metaInstagramMediaOwned(connectionId, asset.id, assets.instagramId))) {
+    // Step 21's chosen Instagram account (metaChosenInstagramOf).
+    const instagram = await metaChosenInstagramOf(connectionId)
+    if (!instagram) return notChosenMedia('this business has no Instagram account chosen, so no Instagram media is brought into its ad account.')
+    if (!(await metaInstagramMediaOwned(connectionId, asset.id, instagram))) {
       return notChosenMedia(`inside this change, Instagram media ${asset.id} is not one Nexus can confirm as the chosen Instagram account's.`)
     }
   }
@@ -869,82 +1021,32 @@ async function metaMediaAssetsProblem(connectionId: string, write: MetaJudgedWri
 }
 
 /**
- * Review round 2 — the ids in the FIRST META_MEDIA_LIST_MAX rows of one Meta list (100 a page, `after`), counted in rows;
- * null when a read failed. The tool reads the same rows (change-media.ts listPaged up to META_MEDIA_LIST_MAX): an id seen
- * there is confirmed, an id not seen is refused (fail closed: past those rows, or after a failed read, nothing is confirmed).
- */
-async function metaListedIdsUpTo(connectionId: string, path: string): Promise<Set<string> | null> {
-  const ids = new Set<string>()
-  let rows = 0
-  let after: string | null = null
-  while (rows < META_MEDIA_LIST_MAX) {
-    const url = new URL(`${metaGraphBase()}/${path}`)
-    url.searchParams.set('fields', 'id')
-    url.searchParams.set('limit', String(Math.min(100, META_MEDIA_LIST_MAX - rows)))
-    if (after) url.searchParams.set('after', after)
-    let body: { data?: Array<{ id?: unknown }>; paging?: { next?: unknown; cursors?: { after?: unknown } } } | null
-    try {
-      const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
-      body = answer.ok ? answer.json<{ data?: Array<{ id?: unknown }>; paging?: { next?: unknown; cursors?: { after?: unknown } } }>() : null
-    } catch {
-      return null
-    }
-    if (!body || !Array.isArray(body.data)) return null
-    for (const row of body.data) {
-      if (rows >= META_MEDIA_LIST_MAX) break
-      rows++
-      if (typeof row?.id === 'string' || typeof row?.id === 'number') ids.add(String(row.id))
-    }
-    const next = body.paging?.next && typeof body.paging.cursors?.after === 'string' ? body.paging.cursors.after : null
-    if (!next || body.data.length === 0) break
-    after = next
-  }
-  return ids
-}
-
-/**
- * Review A2 / B1 — a video of the chosen ad account's library: listed on act_<id>/advideos or act_<id>/video_ads (a
- * video-ads upload; whether advideos lists one is LIVE-PROBE MD-019u), each in its first META_MEDIA_LIST_MAX rows: seen
- * there = confirmed; not seen (past those rows, or a read failed) = not confirmed, nothing sent.
- */
-async function metaLibraryVideoProblem(connectionId: string, chosen: string, videoId: string, where: string, lists?: Map<string, Set<string> | null>): Promise<{ code: string; sentence: string } | null> {
-  if (!/^\d{1,20}$/.test(videoId)) return notChosenMedia(`${where}${videoId} is not a video id.`)
-  for (const edge of ['advideos', 'video_ads']) {
-    // Step 25 — a creative may name several videos: each edge is read once per change (`lists`).
-    const path = `act_${chosen}/${edge}`
-    if (lists && !lists.has(path)) lists.set(path, await metaListedIdsUpTo(connectionId, path))
-    const listed = lists ? lists.get(path) ?? null : await metaListedIdsUpTo(connectionId, path)
-    if (listed?.has(videoId)) return null
-  }
-  return notChosenMedia(`${where}video ${videoId} is not one Nexus can confirm in the chosen ad account's video library (it reads the first ${META_MEDIA_LIST_MAX} of advideos and of video_ads).`)
-}
-
-/**
  * Meta step 25 — the ids INSIDE a creative (meta-creative-rules.ts), each the business's own before anything is sent:
- *   identitypage / identityinstagram  the Page and Instagram account the creative runs as: the CHOSEN ones (MetaAccountLink
- *                     PAGE / INSTAGRAM); a partnership ad may run as the partner's (creator as main identity, master CR-321)
- *                     only when the chosen one is its sponsor (`with`); a sponsor beside the chosen identity is a partner;
+ *   identitypage / identityinstagram  the Page and Instagram account the creative runs as: the CHOSEN ones (step 19's
+ *                     metaChosenPageOf, step 21's metaChosenInstagramOf); a partnership ad may run as the partner's (creator as
+ *                     main identity, master CR-321) only when the chosen one is its sponsor (`with`); a sponsor beside the
+ *                     chosen identity is a partner;
  *   partnerpage / partnerinstagram  a partner's (never the chosen one itself, never one another Nexus business chose:
  *                     nexus_meta_links_taken PAGE / INSTAGRAM — Meta asks the partner's permission itself);
- *   chosenpage        a call to action's Page: the chosen one;
  *   adimage           an image of the chosen ad account's library, by its hash (one read of the change's hashes);
  *   pagepost          a post of the chosen Page (<chosen Page id>_<post id>);
  *   canvas            an Instant Experience whose owner is the chosen Page (one read); canvaselement an element of it;
  *   leadform          a lead form whose page is the chosen Page (one read);
  *   pageevent         an event whose owner is the chosen Page; igevent an upcoming event of the chosen Instagram account.
+ * A library video and a call to action's Page are step 22's `video` and step 19's `page` body ids (metaBodyIdsProblem).
  * Anything Nexus cannot confirm (a read failed, a field missing) is refused: nothing is sent. The sentence never names
  * another business.
  */
-const CREATIVE_ASSET_KINDS: ReadonlySet<string> = new Set(['identitypage', 'identityinstagram', 'partnerpage', 'partnerinstagram', 'chosenpage', 'adimage', 'pagepost', 'canvas', 'canvaselement', 'leadform', 'pageevent', 'igevent'])
+const CREATIVE_ASSET_KINDS: ReadonlySet<string> = new Set(['identitypage', 'identityinstagram', 'partnerpage', 'partnerinstagram', 'adimage', 'pagepost', 'canvas', 'canvaselement', 'leadform', 'pageevent', 'igevent'])
 
 async function metaCreativeAssetProblem(
   connectionId: string,
-  mine: { instagramId: string | null; pageId?: string | null },
+  mine: { pageId: string | null; instagramId: string | null },
   asset: { id: string; kind: string; with?: string },
   images: Set<string> | null,
   lists: Map<string, Set<string> | null>,
 ): Promise<{ code: string; sentence: string } | null> {
-  const page = mine.pageId ?? null
+  const page = mine.pageId
   const ig = mine.instagramId
   const where = 'inside this creative, '
   const ownerOf = (value: unknown) => {
@@ -970,7 +1072,6 @@ async function metaCreativeAssetProblem(
     }
     case 'partnerpage': return partner('PAGE', asset.id, page, 'Page')
     case 'partnerinstagram': return partner('INSTAGRAM', asset.id, ig, 'Instagram account')
-    case 'chosenpage': return page && asset.id === page ? null : notChosenMedia(`${where}Page ${asset.id} is not the Page this business chose.`)
     case 'pagepost': return page && asset.id.startsWith(`${page}_`) ? null : notChosenMedia(`${where}post ${asset.id} is not a post of the Page this business chose.`)
     case 'adimage': return images?.has(asset.id) ? null : notChosenMedia(`${where}image ${asset.id} is not one Nexus can confirm in the chosen ad account's image library (create-meta-media uploads it and answers its hash).`)
     case 'canvas':
@@ -1031,6 +1132,40 @@ async function metaLibraryImages(connectionId: string, chosen: string, hashes: s
     }
   }
   return found
+}
+
+/**
+ * Review round 2 — the ids in the FIRST META_MEDIA_LIST_MAX rows of one Meta list (100 a page, `after`), counted in rows;
+ * null when a read failed. The tool reads the same rows (change-media.ts listPaged up to META_MEDIA_LIST_MAX): an id seen
+ * there is confirmed, an id not seen is refused (fail closed: past those rows, or after a failed read, nothing is confirmed).
+ */
+async function metaListedIdsUpTo(connectionId: string, path: string): Promise<Set<string> | null> {
+  const ids = new Set<string>()
+  let rows = 0
+  let after: string | null = null
+  while (rows < META_MEDIA_LIST_MAX) {
+    const url = new URL(`${metaGraphBase()}/${path}`)
+    url.searchParams.set('fields', 'id')
+    url.searchParams.set('limit', String(Math.min(100, META_MEDIA_LIST_MAX - rows)))
+    if (after) url.searchParams.set('after', after)
+    let body: { data?: Array<{ id?: unknown }>; paging?: { next?: unknown; cursors?: { after?: unknown } } } | null
+    try {
+      const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+      body = answer.ok ? answer.json<{ data?: Array<{ id?: unknown }>; paging?: { next?: unknown; cursors?: { after?: unknown } } }>() : null
+    } catch {
+      return null
+    }
+    if (!body || !Array.isArray(body.data)) return null
+    for (const row of body.data) {
+      if (rows >= META_MEDIA_LIST_MAX) break
+      rows++
+      if (typeof row?.id === 'string' || typeof row?.id === 'number') ids.add(String(row.id))
+    }
+    const next = body.paging?.next && typeof body.paging.cursors?.after === 'string' ? body.paging.cursors.after : null
+    if (!next || body.data.length === 0) break
+    after = next
+  }
+  return ids
 }
 
 /** One read of a field list of a Meta object (fields as given), or null when it could not be read. */

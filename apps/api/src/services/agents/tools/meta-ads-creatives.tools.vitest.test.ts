@@ -287,7 +287,7 @@ describe('create-meta-creative — undo', () => {
     h.send.mockImplementation(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
     const r = await run({ action: 'undo', creatives: ['120000000000301'] })
     expect(r.ok, JSON.stringify(r)).toBe(true)
-    expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: '120000000000301', kind: 'creative', method: 'DELETE', operation: 'creative.remove' })
+    expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: '120000000000301', kind: 'creative', method: 'DELETE', operation: 'creative.delete' })
     expect(h.listPaged.mock.calls[0][2]).toBe(`${ACT}/ads`)
     expect(create.undo!.request(r.change)).toMatchObject({ refusal: expect.stringMatching(/cannot bring a deleted creative back/) })
   })

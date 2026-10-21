@@ -37,3 +37,14 @@ export async function maskTakenAssets(settings: Record<string, unknown>): Promis
   if (Array.isArray(settings.promotePages)) settings.promotePages = await maskTakenRows('PAGE', settings.promotePages)
   if (Array.isArray(settings.instagramAccounts)) settings.instagramAccounts = await maskTakenRows('INSTAGRAM', settings.instagramAccounts)
 }
+
+/**
+ * Step 10 review A1 — a portfolio another business's chosen ad account belongs to (nexus_meta_links_taken PORTFOLIO) is
+ * its id and the flag only, before any call: two businesses in one portfolio never read each other's library. (Moved here
+ * from live-media.ts in step 12 fix A4, so the catalog rule reads it without importing the media reads.)
+ */
+export const PORTFOLIO_TAKEN = 'Another business in Nexus reads an ad account of this Meta business portfolio, so the portfolio\'s media library, folders and tags are not read here (they would show that business\'s media too). Read this ad account\'s own media with views images and videos.'
+
+export async function portfolioTaken(portfolioId: string): Promise<{ portfolioId: string; takenByAnotherBusiness: true; sentence: string } | null> {
+  return (await takenIds('PORTFOLIO', [portfolioId])).has(portfolioId) ? { portfolioId, takenByAnotherBusiness: true, sentence: PORTFOLIO_TAKEN } : null
+}

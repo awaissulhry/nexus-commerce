@@ -19,7 +19,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST } from './meta-calls.js'
+import { META_REST_HOST, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
 import { metaRuploadUrl } from './meta-media-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
@@ -76,7 +76,9 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative'
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
+    // Step 28 — a business portfolio (a new study), a study, a Page, a Page video test (an apply names act_<id>).
+    | MetaOptimizeKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -87,11 +89,36 @@ export interface MetaWriteRequest {
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
   /** Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. */
   edge?: MetaWriteEdge
-  /** Step 18 — DELETE (a budget schedule's, no body; step 23: an image's or video's removal, its key in the body); default POST. */
+  /** Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body); default POST. */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
+  recommendations?: boolean
 }
+
+/**
+ * The edges a change posts to: a budget schedule (step 18); a campaign's or ad set's create on the ad account (`act_<id>`),
+ * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
+ */
+export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
+  | MetaMediaEdge | MetaCreativeEdge
+/** Step 28 — an apply (`act_<id>/recommendations`), a new study (`<business>/ad_studies`), a new Page video test (`<page>/ab_tests`). */
+export type MetaOptimizeEdge = 'recommendations' | 'ad_studies' | 'ab_tests'
+/** Step 22 — remove-meta-ads-items: an image or a video out of the ad account's library, a video's caption languages. */
+export type MetaRemoveEdge = 'adimages' | 'advideos' | 'captions'
+/**
+ * Step 21 — set-meta-labels (a label made on the ad account, labels added to a campaign), set-meta-value-rules (a value rule
+ * set made, deleted or translated) and create-meta-reach-frequency (a prediction, a reservation, a cancel).
+ */
+export type MetaLabelsEdge = 'adlabels' | 'value_rule_set' | 'delete_rule_set' | 'value_rule_set_translation' | 'reachfrequencypredictions'
+/**
+ * Step 23 — create-meta-media's edges beyond step 22's (its uploads also post to adimages, advideos and captions): Meta's
+ * video-ads upload on the ad account, a folder on its business portfolio.
+ */
+export type MetaMediaEdge = 'video_ads' | 'creative_folders'
+/** Step 25 — create-meta-creative: a creative and an async creative job on the chosen ad account (a creative's labels: step 21's `adlabels`). */
+export type MetaCreativeEdge = 'adcreatives' | 'asyncadcreatives'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):
@@ -101,8 +128,11 @@ export interface MetaWriteRequest {
  */
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
-  // Step 23 — a DELETE that names its object by a key (an image's hash, a video's id) carries it as its form body.
-  const body = remove && !Object.keys(req.params).length ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
+  const check = req.recommendations ? '["validate_only","include_recommendations"]' : '["validate_only"]'
+  // Step 22 — a DELETE with parameters (an image's hash, a video's id) sends them as its form body, as a POST does.
+  const body = remove
+    ? (Object.keys(req.params).length ? new URLSearchParams(req.params).toString() : undefined)
+    : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: check } : {}) }).toString()
   return gatewayCall({
     channel: 'META',
     operation: req.operation,
@@ -153,13 +183,6 @@ export async function metaRestCall(req: Omit<MetaCallRequest, 'auth'>): Promise<
   })
 }
 
-/**
- * The edges a change creates on (step 18: an object's budget schedules; step 23: the chosen ad account's images, videos
- * and video-ads uploads, its business portfolio's media-library folders, a library video's captions; step 25: the chosen
- * ad account's creatives and async creative jobs, a creative's labels).
- */
-export type MetaWriteEdge = 'budget_schedules' | 'adimages' | 'advideos' | 'video_ads' | 'creative_folders' | 'captions' | 'adcreatives' | 'asyncadcreatives' | 'adlabels'
-
 export interface MetaUploadRequest {
   connectionId: string
   operation: string
@@ -186,7 +209,7 @@ export async function metaRuploadCall(req: MetaUploadRequest): Promise<GatewayRe
     url: metaRuploadUrl(req.videoId),
     method: 'POST',
     body: new URLSearchParams({ file_url: req.fileUrl }).toString(),
-    metaObjectKind: 'video',
+    metaObjectKind: 'startedvideo',
     maxTransientRetries: 0,
     max429Retries: 0,
     maxRateWaitMs: req.maxRateWaitMs,

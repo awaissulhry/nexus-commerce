@@ -7,8 +7,8 @@
  *   adaccount.creative.async    POST /act_<id>/asyncadcreatives   the same creative as Meta's asynchronous job (M5-33)
  *   creative.update             POST /<creative id>               name, status, adlabels — all Meta lets change (CR-010/011)
  *   creative.adlabels           POST /<creative id>/adlabels      labels added (CR-009)
- *   creative.remove             DELETE /<creative id>             create-meta-creative's undo of a creative it made NEW
- *                                                                 (lane C1's step 22 reuses it for an explicit delete)
+ * create-meta-creative's undo (DELETE /<creative id> of a creative it made NEW) goes by step 22's `creative.delete` rule
+ * (meta-remove-rules.ts), the same DELETE a person's explicit remove-meta-ads-items sends.
  *
  * Every JSON spec is an ALLOW-list at every depth (CREATIVE_KEYS below): a key not named at its depth is refused, a value
  * is judged by its own judge (a person's text — any language, accents, €, emoji, but no bidirectional control and at least
@@ -55,7 +55,7 @@
  *     adasyncrequestset.py, adaccount.py create_async_ad_creative (creative_spec, name, notification_mode,
  *     notification_uri) — the keys and enums below.
  */
-import type { MetaWriteAsset, MetaWriteRule } from './meta-calls.js'
+import type { MetaWriteAsset, MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
 import { BIDI_CONTROLS, META_MEDIA_TEXT_PATTERN, metaPublicLinkProblem, VISIBLE } from './meta-media-rules.js'
 
 // ── the silent features ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -115,7 +115,8 @@ export const META_FORMAT_DATA_SOURCES = ['none', 'catalog', 'manual_uploads', 'a
 // ── value judges ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** A walk's findings: the ids inside (checked by the gateway), sentences a person reads, and a guard on size. */
-export interface CreativeWalk { assets: MetaWriteAsset[]; warnings: string[]; nodes: number; instagram: boolean }
+/** `ids`: the body ids other steps already check (step 22's library `video`, step 19's chosen `page`). */
+export interface CreativeWalk { assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; warnings: string[]; nodes: number; instagram: boolean }
 type Out = { value: unknown } | { problem: string }
 type Judge = (value: unknown, path: string, walk: CreativeWalk) => Out
 const ok = (value: unknown): Out => ({ value })
@@ -195,6 +196,16 @@ const id = (kind: MetaWriteAsset['kind']): Judge => (value, path, walk) => {
   walk.assets.push({ id: v, kind })
   return ok(v)
 }
+/**
+ * A Meta id checked by the gateway's body-id check of another step (metaBodyIdsProblem): a video of the chosen ad
+ * account's library (step 22's `video`), the chosen Page (step 19's `page`).
+ */
+const bodyId = (kind: 'video' | 'page'): Judge => (value, path, walk) => {
+  const v = digits(value)
+  if (!v) return no(`${path} is a Meta id (digits, as a string)`)
+  walk.ids.push({ id: v, kind })
+  return ok(v)
+}
 /** An id Meta scopes to the promoted Page or WhatsApp account itself (a flow, a conversation template): digits. */
 const scopedId: Judge = (value, path) => (digits(value) ? ok(value) : no(`${path} is a Meta id (digits, as a string)`))
 /** An image of the chosen account's library, by its hash. */
@@ -266,10 +277,11 @@ function oneOf(...judges: Judge[]): Judge {
   return (value, path, walk) => {
     let first: Out | null = null
     for (const judge of judges) {
-      const before = { assets: walk.assets.length, warnings: walk.warnings.length }
+      const before = { assets: walk.assets.length, ids: walk.ids.length, warnings: walk.warnings.length }
       const judged = judge(value, path, walk)
       if ('value' in judged) return judged
       walk.assets.length = before.assets
+      walk.ids.length = before.ids
       walk.warnings.length = before.warnings
       first ??= judged
     }
@@ -356,7 +368,7 @@ const ctaValue = obj({
   link_format: token,
   app_destination: enumOf(APP_DESTINATIONS),
   app_link: instagramAppLink,
-  page: id('chosenpage'),
+  page: bodyId('page'),
   lead_gen_form_id: id('leadform'),
   whatsapp_number: phone,
   product_link: link,
@@ -424,7 +436,7 @@ const customizationRule = obj({
   description: text(META_CREATIVE_TEXT.description, { lines: true }),
   caption: displayLink,
   template_url_spec: templateUrl,
-  video_id: id('libraryvideo'),
+  video_id: bodyId('video'),
   picture,
   image_hash: hash,
 }, ['customization_spec'])
@@ -436,7 +448,7 @@ const childAttachment = obj({
   caption: displayLink,
   image_hash: hash,
   picture,
-  video_id: id('libraryvideo'),
+  video_id: bodyId('video'),
   call_to_action: callToAction,
   image_crops: crops(),
   static_card: bool,
@@ -498,7 +510,7 @@ const photoData = obj({
   image_crops: refuse('Meta takes no crop on a photo post ("Facebook typically renders images from photo posts in full"): use link_data for a cropped image'),
 })
 const videoData = obj({
-  video_id: id('libraryvideo'),
+  video_id: bodyId('video'),
   image_hash: hash,
   image_url: picture,
   message: text(META_CREATIVE_TEXT.message, { lines: true }),
@@ -577,7 +589,7 @@ const textAsset = (max: number, opts: { lines?: boolean; blank?: boolean } = {})
 
 const assetFeedSpec = obj({
   images: list(obj({ hash, url: picture, image_crops: crops(), url_tags: urlTags, adlabels: assetLabels }), 49),
-  videos: list(obj({ video_id: id('libraryvideo'), thumbnail_url: picture, thumbnail_hash: hash, url_tags: urlTags, adlabels: assetLabels }, ['video_id']), 49),
+  videos: list(obj({ video_id: bodyId('video'), thumbnail_url: picture, thumbnail_hash: hash, url_tags: urlTags, adlabels: assetLabels }, ['video_id']), 49),
   bodies: list(textAsset(META_CREATIVE_TEXT.message, { lines: true }), 49),
   titles: list(textAsset(META_CREATIVE_TEXT.headline), 49),
   descriptions: list(textAsset(META_CREATIVE_TEXT.description, { lines: true, blank: true }), 49),
@@ -694,7 +706,7 @@ const CREATIVE_KEYS: Readonly<Record<string, { judge: Judge; json: boolean }>> =
   call_to_action: { judge: callToAction, json: true },
   ad_disclaimer_spec: { judge: obj({ title: enumOf(['DISCLAIMER', 'HEALTH_DISCLAIMER', 'IMPORTANT_SAFETY_INFORMATION', 'MEDICATION_GUIDE', 'OFFER_DETAILS', 'PRESCRIBING_INFORMATION', 'TERMS_AND_CONDITIONS']), text: text(1000, { lines: true }), url: link }, ['title']), json: true },
   portrait_customizations: { judge: obj({ carousel_delivery_mode: enumOf(['fixed_num_cards']), specifications: list(obj({ background_color: obj({ top_color: hex, bottom_color: hex }, ['top_color', 'bottom_color']) }), 10) }), json: true },
-  platform_customizations: { judge: obj({ instagram: obj({ image_url: picture, image_hash: hash, image_crops: crops(), video_id: id('libraryvideo') }) }, ['instagram']), json: true },
+  platform_customizations: { judge: obj({ instagram: obj({ image_url: picture, image_hash: hash, image_crops: crops(), video_id: bodyId('video') }) }, ['instagram']), json: true },
   interactive_components_spec: { judge: obj({
     components: list((value, path, walk) => {
       if (value && typeof value === 'object' && !Array.isArray(value) && ((value as Record<string, unknown>).type === 'poll' || 'poll_spec' in (value as object))) return no(`${path}: Meta removed polls from creatives in v26 (all versions from 2026-10-27)`)
@@ -748,7 +760,7 @@ export const META_CREATIVE_REFUSED: Readonly<Record<string, string>> = {
 // ── the judge ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** A walk's new start. `instagram`: the creative names an Instagram account (Instagram's limits are said). */
-export const newCreativeWalk = (instagram = false): CreativeWalk => ({ assets: [], warnings: [], nodes: 0, instagram })
+export const newCreativeWalk = (instagram = false): CreativeWalk => ({ assets: [], ids: [], warnings: [], nodes: 0, instagram })
 
 /** One key of a creative, decoded (a JSON key as its object), judged; the cleaned value or why not. */
 export function judgeCreativeKey(key: string, value: unknown, walk: CreativeWalk): Out {
@@ -1005,7 +1017,7 @@ export const META_CREATIVE_MAX_ASSETS = 150
  * allow-list, each JSON key in ONE spelling (exactly what JSON.stringify writes of what was judged), every value judged, the
  * silent features all present. Returns the decoded creative and its ids, or why not.
  */
-export function judgeCreativeForm(params: ReadonlyMap<string, string>, skip: readonly string[] = []): { creative: Record<string, unknown>; assets: MetaWriteAsset[] } | { problem: string } {
+export function judgeCreativeForm(params: ReadonlyMap<string, string>, skip: readonly string[] = []): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[] } | { problem: string } {
   const creative: Record<string, unknown> = {}
   const story = params.get('object_story_spec')
   const walk = newCreativeWalk(!!params.get('instagram_user_id') || (!!story && /"instagram_user_id"/.test(story)))
@@ -1024,7 +1036,7 @@ export function judgeCreativeForm(params: ReadonlyMap<string, string>, skip: rea
 }
 
 /** After a creative's keys were judged: the silent features, the identity, the ids (deduplicated and bounded). */
-export function finishCreative(creative: Record<string, unknown>, walk: CreativeWalk): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; warnings: string[] } | { problem: string } {
+export function finishCreative(creative: Record<string, unknown>, walk: CreativeWalk): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; warnings: string[] } | { problem: string } {
   if (!creative.object_story_spec && !creative.object_story_id) return { problem: 'a creative names object_story_spec (Nexus fills the chosen Page) or object_story_id (a post of the chosen Page)' }
   if (creative.object_story_spec && creative.object_story_id) return { problem: 'a creative names object_story_spec or object_story_id, not both' }
   const contradiction = creativeTypeProblem(creative)
@@ -1040,7 +1052,13 @@ export function finishCreative(creative: Record<string, unknown>, walk: Creative
     seen.add(key)
     return true
   })
-  if (assets.length > META_CREATIVE_MAX_ASSETS) return { problem: `a creative names at most ${META_CREATIVE_MAX_ASSETS} ids` }
+  const ids = walk.ids.filter((a) => {
+    const key = `id:${a.kind}:${a.id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  if (assets.length + ids.length > META_CREATIVE_MAX_ASSETS) return { problem: `a creative names at most ${META_CREATIVE_MAX_ASSETS} ids` }
   // An element of an Instant Experience is checked against the creative's own experience (its canvas_doc link).
   const canvases = assets.filter((a) => a.kind === 'canvas')
   for (const a of assets) {
@@ -1048,7 +1066,7 @@ export function finishCreative(creative: Record<string, unknown>, walk: Creative
     if (canvases.length !== 1) return { problem: 'collection_thumbnails go with exactly one Instant Experience link (https://fb.com/canvas_doc/<id>)' }
     a.with = canvases[0].id
   }
-  return { creative, assets, warnings: walk.warnings }
+  return { creative, assets, ids, warnings: walk.warnings }
 }
 
 // ── the rules ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1069,8 +1087,12 @@ const createAssets = (params: ReadonlyMap<string, string>): MetaWriteAsset[] => 
   const judged = judgeCreativeForm(params, ['execution_options'])
   return 'problem' in judged ? [] : judged.assets
 }
+const createIds = (params: ReadonlyMap<string, string>): MetaWriteBodyId[] => {
+  const judged = judgeCreativeForm(params, ['execution_options'])
+  return 'problem' in judged ? [] : judged.ids
+}
 /** The async job's creative_spec: the same creative as one JSON object (its parts as objects, not as JSON text). */
-function asyncSpec(raw: string | undefined): { creative: Record<string, unknown>; assets: MetaWriteAsset[] } | { problem: string } {
+function asyncSpec(raw: string | undefined): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[] } | { problem: string } {
   let spec: unknown
   try { spec = JSON.parse(raw ?? '') } catch { return { problem: 'creative_spec is JSON' } }
   if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return { problem: 'creative_spec is a JSON object' }
@@ -1103,8 +1125,8 @@ export const META_CREATIVE_WRITE_RULES: readonly MetaWriteRule[] = [
     // The keys Nexus answers in words (META_CREATIVE_REFUSED) match the rule so that its judge says why; it refuses each.
     optional: [...Object.keys(CREATIVE_KEYS).filter((k) => !['name', 'degrees_of_freedom_spec', 'contextual_multi_ads'].includes(k)), ...Object.keys(META_CREATIVE_REFUSED), 'execution_options'],
     anyOf: ['object_story_spec', 'object_story_id'],
-    text: CREATIVE_JSON_TEXT, maxBody: META_CREATIVE_MAX_BODY, edgeCall: true, budget: false, check: true,
-    values: createJudge, assets: createAssets,
+    text: CREATIVE_JSON_TEXT, maxBody: META_CREATIVE_MAX_BODY, edgeCall: true, budget: false,
+    values: createJudge, assets: createAssets, ids: createIds,
   },
   {
     // M5-33 (master CR-033): the same creative as Meta's asynchronous job — notification_mode OFF only (Nexus gives Meta no
@@ -1122,6 +1144,10 @@ export const META_CREATIVE_WRITE_RULES: readonly MetaWriteRule[] = [
     assets: (params) => {
       const judged = asyncSpec(params.get('creative_spec'))
       return 'problem' in judged ? [] : judged.assets
+    },
+    ids: (params) => {
+      const judged = asyncSpec(params.get('creative_spec'))
+      return 'problem' in judged ? [] : judged.ids
     },
   },
   {
@@ -1142,12 +1168,5 @@ export const META_CREATIVE_WRITE_RULES: readonly MetaWriteRule[] = [
     name: 'creative.adlabels', method: 'POST', path: /^\d{1,20}\/adlabels$/, kinds: CREATIVE,
     required: ['adlabels'], optional: [], text: { adlabels: META_MEDIA_TEXT_PATTERN }, budget: false,
     values: (params) => labelsJudge(params.get('adlabels')!),
-  },
-  {
-    // M5-32: create-meta-creative's undo of a creative it made NEW (no body). Lane C1's step 22 (remove-meta-ads-items)
-    // reuses it for a delete a person asks for.
-    name: 'creative.remove', method: 'DELETE', path: /^\d{1,20}$/, kinds: CREATIVE,
-    required: [], optional: [], budget: false,
-    values: () => null,
   },
 ]

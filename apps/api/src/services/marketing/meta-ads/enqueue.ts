@@ -6,6 +6,9 @@
  *   MANUAL    "Read now" (POST /api/meta-ads/sync): at most once an hour per account, refused in words otherwise
  *   TOKEN     after a good token (credentials replaced, or "Check now" valid) when the last read lost the token: at once,
  *             outside the hourly limit (review A2)
+ *   WEBHOOK   step 30: a verified Meta webhook named an object of the account — its structure is read again once per
+ *             WEBHOOK_REREAD_WINDOW_MS, at the end of that window (every push inside it shares the one read); only on the
+ *             queue, never in the receiving process (enqueueMetaWebhookReread)
  *
  * With queue workers (ENABLE_QUEUE_WORKERS=1) the read goes on the `meta-ads-sync` queue — one job per account and day
  * (DAILY) or hour (MANUAL, BACKFILL), so a second ask while one is kept adds nothing; without them (or when the queue
@@ -35,6 +38,8 @@ const hhmm = (at: Date) => `${at.toISOString().slice(11, 16)} UTC`
 export function metaAdsSyncJobId(kind: MetaAdsSyncKind, adAccountId: string, now: Date = new Date()): string {
   // TOKEN: per hour, like MANUAL — pressing "Check token now" again cannot queue a second full read while one waits
   // or runs (and in this process, a read already running for the account is never started twice: runInline).
+  // WEBHOOK: per window (step 30), so a burst of pushes is one read.
+  if (kind === 'WEBHOOK') return safeJobId('meta-ads', 'webhook', adAccountId, String(webhookWindowStart(now).getTime()))
   const stamp = kind === 'DAILY' ? now.toISOString().slice(0, 10) : now.toISOString().slice(0, 13)
   return safeJobId('meta-ads', kind.toLowerCase(), adAccountId, stamp)
 }
@@ -82,17 +87,17 @@ function runInline(adAccountId: string, kind: MetaAdsSyncKind): void {
   })
 }
 
-async function addToQueue(data: MetaAdsSyncJobData, jobId: string): Promise<boolean> {
+async function addToQueue(data: MetaAdsSyncJobData, jobId: string, delayMs?: number): Promise<boolean> {
   if (process.env.ENABLE_QUEUE_WORKERS !== '1') return false
   try {
     const { metaAdsSyncQueue } = await import('../../../lib/queue.js')
-    const added = metaAdsSyncQueue.add('sync', data, { jobId })
+    const added = metaAdsSyncQueue.add('sync', data, { jobId, ...(delayMs && delayMs > 0 ? { delay: delayMs } : {}) })
     added.catch(() => {})
     const answer = await Promise.race([added.then(() => 'ok' as const), new Promise<'timeout'>((resolve) => { setTimeout(() => resolve('timeout'), ENQUEUE_TIMEOUT_MS).unref?.() })])
     if (answer === 'ok') return true
-    logger.warn('[meta-ads-sync] the queue did not answer; reading in this process instead', { kind: data.kind })
+    logger.warn(`[meta-ads-sync] the queue did not answer; ${data.kind === 'WEBHOOK' ? 'the push is tried again' : 'reading in this process instead'}`, { kind: data.kind })
   } catch (error) {
-    logger.warn('[meta-ads-sync] queueing failed; reading in this process instead', { kind: data.kind, error: error instanceof Error ? error.message : String(error) })
+    logger.warn(`[meta-ads-sync] queueing failed; ${data.kind === 'WEBHOOK' ? 'the push is tried again' : 'reading in this process instead'}`, { kind: data.kind, error: error instanceof Error ? error.message : String(error) })
   }
   return false
 }
@@ -134,4 +139,35 @@ export async function metaReadAfterGoodToken(connectionId: string): Promise<void
   } catch (error) {
     logger.warn('[meta-ads-sync] could not clear a lost-token read', { error: error instanceof Error ? error.message : String(error) })
   }
+}
+
+// ── step 30: the re-read a verified Meta webhook asks for ────────────────────────────────────────────────────────────
+
+/** Pushes for one ad account inside this window share one structure read, run when the window ends. */
+export const WEBHOOK_REREAD_WINDOW_MS = 10 * 60_000
+/** The read starts this long after its window ends (a push stamped at the last second is inside it). */
+const WEBHOOK_REREAD_MARGIN_MS = 30_000
+
+export const webhookWindowStart = (now: Date): Date => new Date(Math.floor(now.getTime() / WEBHOOK_REREAD_WINDOW_MS) * WEBHOOK_REREAD_WINDOW_MS)
+
+export interface WebhookRereadOutcome {
+  queued: boolean
+  /** Why nothing was queued, in words; null when queued. */
+  reason: string | null
+  /** True when trying again later can help (the queue did not answer); false when nothing will (switched off, no queue, not this business's). */
+  retry: boolean
+}
+
+/**
+ * Step 30 — ask for a structure read of this business's ad account after a verified Meta webhook named one of its
+ * objects (MetaAdsSyncKind WEBHOOK). Never runs the read in this process: without queue workers the next daily read
+ * catches up, and a receiver must answer Meta within seconds.
+ */
+export async function enqueueMetaWebhookReread(adAccountId: string, now: Date = new Date()): Promise<WebhookRereadOutcome> {
+  if (metaAdsSyncSwitchedOff()) return { queued: false, reason: SWITCHED_OFF_SENTENCE, retry: false }
+  if (!(await listMetaReadTargets()).some((target) => target.adAccountId === adAccountId)) return { queued: false, reason: NOT_THIS_ACCOUNT_SENTENCE, retry: false }
+  if (process.env.ENABLE_QUEUE_WORKERS !== '1') return { queued: false, reason: 'Queue workers are off in this process; the next daily read shows the change.', retry: false }
+  const delay = webhookWindowStart(now).getTime() + WEBHOOK_REREAD_WINDOW_MS + WEBHOOK_REREAD_MARGIN_MS - now.getTime()
+  if (await addToQueue({ adAccountId, kind: 'WEBHOOK' }, metaAdsSyncJobId('WEBHOOK', adAccountId, now), delay)) return { queued: true, reason: null, retry: false }
+  return { queued: false, reason: 'The read queue did not answer.', retry: true }
 }
