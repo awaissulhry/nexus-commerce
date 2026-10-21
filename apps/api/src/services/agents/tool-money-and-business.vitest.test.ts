@@ -186,6 +186,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-google-account-links': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-account.tools test)',
   'set-meta-connection': 'it reads what the business\'s Meta system user can see live from Meta, and no business here has Meta connected (meta-ads-connection.tools test)',
   'set-meta-status': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-status.tools test)',
+  'set-meta-campaign': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-campaign-settings.tools test)',
+  'set-meta-ad-set': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-campaign-settings.tools test)',
+  'set-meta-budget-schedule': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-campaign-settings.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -243,6 +246,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-ad-account': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
   'meta-billing': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
   'meta-account-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
+  // Meta ads step 11: audiences and datasets read Meta live (their own tests run them on an account).
+  'meta-audiences': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-audiences.tools test)',
+  'meta-datasets': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-datasets.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -535,6 +541,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-ads-graph-read': () => ({ path: 'act_1234567890/campaigns' }),
   // Meta ads step 17: the write base's status change refuses in words here (no business has Meta; its own test runs it).
   'set-meta-status': () => ({ items: [{ kind: 'campaign', id: '120000000000001' }], status: 'PAUSED' }),
+  // Meta ads step 18: the settings changes refuse in words here (no business has Meta; their own test runs them).
+  'set-meta-campaign': () => ({ campaignId: '120000000000001', dailyBudgetCents: 5000 }),
+  'set-meta-ad-set': () => ({ adSetId: '120000000000002', bidAmountCents: 150 }),
+  'set-meta-budget-schedule': () => ({ action: 'switch', level: 'campaign', objectId: '120000000000001', enabled: false }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),
@@ -571,6 +581,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-ad-account': () => ({ view: 'settings' }),
   'meta-billing': () => ({ view: 'spend' }),
   'meta-account-access': () => ({ view: 'people' }),
+  // Meta ads step 11: no business here has Meta, so both refuse in words before any call.
+  'meta-audiences': () => ({ view: 'list' }),
+  'meta-datasets': () => ({ view: 'sources' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

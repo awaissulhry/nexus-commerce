@@ -395,7 +395,7 @@ export async function objectRules(input: { connectionId?: string | null; kind: '
   }
 }
 
-const HDP_CORE = 'id,budget_value,budget_value_type,recurrence_type,time_start,time_end'
+export const HDP_CORE = 'id,budget_value,budget_value_type,recurrence_type,time_start,time_end'
 /** SDK-only fields of a high-demand period: their own group. */
 const HDP_EXTRA = 'ad_object_id,weekly_schedule'
 const HDP_NOTE = 'budgetValue is Meta\'s number as sent: an increase by an amount (ABSOLUTE; Meta does not document whether it is in whole currency units or the smallest unit — Nexus does not convert it) or by a multiplier (MULTIPLIER). Budget scheduling needs a daily budget, ≤ 50 periods, each ≥ 3 hours, at most 8× the daily budget. A schedule cannot be edited or deleted by API once made.'
