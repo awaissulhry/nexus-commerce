@@ -62,6 +62,13 @@ export type MetaCallGroup = 'ads' | 'insights' | 'auth'
  */
 interface GraphRoute { version: string | null; segments: string[]; route: string; search: URLSearchParams }
 
+/**
+ * Step 16 (2026-10-21) — the one Graph edge Meta spells with hyphens, allowed as exactly this segment and only as the
+ * edge of a numeric id (`<digits>/<edge>`, nothing after it): `GET /{business-id}/partnership-ads-advertisable-content` (checked on
+ * developers.facebook.com/documentation/ads-commerce/marketing-api/ad-creative/partnership-ads/content-discovery-api.md).
+ */
+const GRAPH_HYPHEN_EDGES: ReadonlySet<string> = new Set(['partnership-ads-advertisable-content'])
+
 function graphRouteOf(url: string): GraphRoute | { problem: string } | null {
   let parsed: URL
   try { parsed = new URL(url) } catch { return null }
@@ -72,9 +79,14 @@ function graphRouteOf(url: string): GraphRoute | { problem: string } | null {
   const pieces = raw.split('/').slice(1)
   if (pieces.some((piece) => piece === '')) return { problem: 'a Meta path has no empty segment' }
   if (pieces.some((piece) => piece === '.' || piece === '..')) return { problem: 'a Meta path has no . or .. segment' }
+  // Step 16 review A2 — the path judged is the path read: a backslash is a `/` to the URL parser (so `host\x/…` would be
+  // judged as one path and sent as another), and nothing else may make the parsed path differ from the written one.
+  if (url.includes('\\') || raw !== parsed.pathname) return { problem: 'a Meta URL is written plainly: no backslash, and the path as written is the path read' }
   const version = /^v\d+\.\d+$/.test(pieces[0]) ? pieces[0] : null
   const segments = version ? pieces.slice(1) : pieces
-  if (segments.some((piece) => !/^[A-Za-z0-9_]+$/.test(piece))) return { problem: 'a Meta path segment is letters, digits and _ only' }
+  // Step 16 review A6 — the hyphenated edge only as `<digits>/<edge>`: exactly two segments, the first a numeric id.
+  const hyphenEdge = (piece: string, i: number) => i === 1 && segments.length === 2 && /^\d+$/.test(segments[0]) && GRAPH_HYPHEN_EDGES.has(piece)
+  if (segments.some((piece, i) => !/^[A-Za-z0-9_]+$/.test(piece) && !hyphenEdge(piece, i))) return { problem: 'a Meta path segment is letters, digits and _ only' }
   return { version, segments, route: segments.join('/').toLowerCase(), search: parsed.searchParams }
 }
 
@@ -223,6 +235,20 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^act_\d+\/generatepreviews$/, keys: new Set(['ad_format', 'creative', 'creative_feature', 'dynamic_asset_label', 'dynamic_customization', 'product_item_ids']), when: previewRead },
   { route: /^\d+\/previews$/, keys: new Set(['ad_format', 'creative_feature', 'dynamic_asset_label', 'dynamic_customization', 'product_item_ids']), when: previewRead },
   { route: /^\d+\/canvases$/, keys: new Set(['is_hidden', 'is_published']) },
+  // Step 16 — partnership content, research, brand safety (marketing/meta-ads/live-partners.ts, live-safety.ts), each
+  // only on its own route, with exactly the parameters Meta documents there (the pages are named in those files).
+  { route: /^\d+\/partnership-ads-advertisable-content$/, keys: new Set(['fb_page_id', 'ig_user_id', 'ad_partner_ig_user_ids', 'ad_partner_page_ids', 'platform_types', 'media_types', 'post_types', 'content_types', 'ad_eligibilities', 'ad_usages', 'country_codes', 'start_date', 'end_date', 'search_key', 'sort_by', 'is_recommended', 'content_ids', 'permalinks', 'ad_codes']) },
+  { route: /^\d+\/branded_content_ad_permissions$/, keys: new Set(['creator_username']) },
+  { route: /^\d+\/branded_content_tag_approval$/, keys: new Set(['user_ids']) },
+  { route: /^\d+\/creator_marketplace_creators$/, keys: new Set(['creator_countries', 'creator_states', 'creator_min_followers', 'creator_max_followers', 'creator_interests', 'creator_min_engaged_accounts', 'creator_max_engaged_accounts', 'major_audience_age_bucket', 'major_audience_gender', 'major_audience_countries', 'major_audience_states', 'major_audience_device_type', 'query', 'similar_to_creators', 'recommendation_type', 'username', 'custom_audience_id', 'platform', 'page_name', 'creator_language', 'creator_latest_post_activity', 'creator_follower_growth', 'verified_account', 'featured_in_paid_ads', 'has_portfolio', 'exclude_messaged_creators']) },
+  { route: /^ads_archive$/, keys: new Set(['ad_reached_countries', 'search_terms', 'search_type', 'search_page_ids', 'ad_active_status', 'ad_delivery_date_min', 'ad_delivery_date_max', 'ad_type', 'languages', 'media_type', 'publisher_platforms']) },
+  { route: /^ig_hashtag_search$/, keys: new Set(['user_id', 'q']) },
+  { route: /^\d+\/(top_media|recent_media)$/, keys: new Set(['user_id']) },
+  { route: /^\d+\/assigned_users$/, keys: new Set(['business_id']) },
+  { route: /^\d+\/publisher_delivery_report$/, keys: new Set(['platform', 'position', 'sort_by', 'name_contains', 'publisher_status', 'start_date', 'end_date']) },
+  { route: /^\d+\/(content_delivery_report|adjacent_content_delivery_report)$/, keys: new Set(['platform', 'position', 'datetime']) },
+  { route: /^(publisher_delivery_report_date_ranges|content_delivery_report_date_ranges|adjacent_content_delivery_report_date_ranges)$/, keys: new Set(['platform', 'position']) },
+  { route: /^brand_safety_publisher_list$/, keys: new Set(['platform', 'position', 'sort_by', 'search_query', 'start_date', 'end_date', 'blue_verified', 'follower_count', 'app_store_category_contains', 'include_summary']) },
 ]
 /**
  * Step 9 — the `type` values a /search read may carry: targeting options only (targeting-search reference), never
@@ -333,8 +359,11 @@ function fieldsProblem(value: string): string | null {
   return null
 }
 
-/** The gateway's verdict on a Meta call: why it is refused (null: it may go), and the renewal's client_id when it is one. */
-export interface MetaCallVerdict { problem: string | null; renewalClientId: string | null }
+/**
+ * The gateway's verdict on a Meta call: why it is refused (null: it may go), and the renewal's client_id when it is one.
+ * `rest`: a read of Meta's REST host (api.facebook.com, step 16) — the token goes as a Bearer header, never on the URL.
+ */
+export interface MetaCallVerdict { problem: string | null; renewalClientId: string | null; rest?: true }
 
 /**
  * The verdict on one Meta call, judged on the canonical parse. `auth` is how the caller asked the call to be authorised
@@ -348,6 +377,8 @@ export function metaCallVerdict(input: { method: string; url: string; kind: stri
   if (input.kind !== 'read') return refuse('a GET of Meta is a read, and this call is not declared a read')
   if (input.body !== undefined && input.body !== null && input.body !== '') return refuse('a read of Meta carries no body')
   if (input.headers && Object.keys(input.headers).length > 0) return refuse('a Meta call carries no header of the caller\'s own')
+  const rest = metaRestVerdict(input.url, input.auth)
+  if (rest) return rest
   const graph = graphRouteOf(input.url)
   if (!graph) return refuse('Nexus calls Meta only at https://graph.facebook.com')
   if ('problem' in graph) return refuse(graph.problem)
@@ -388,6 +419,58 @@ export function metaCallVerdict(input: { method: string; url: string; kind: stri
   }
   if (segments.length === 1 && /^\d+$/.test(segments[0]) && fields === null) return refuse('a read of one object names its fields (a Page node can carry its token)')
   return { problem: null, renewalClientId: null }
+}
+
+// ── Meta's REST host (step 16, 2026-10-21) ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Meta's partnership-ads REST endpoints live on a second host, `https://api.facebook.com`, take the token as
+ * `Authorization: Bearer <token>` with `X-API-Version: 1.0.0`, and answer plain JSON (checked 2026-10-21 on
+ * developers.facebook.com/documentation/ads-commerce/marketing-api/guides/branded-content-permissions.md and
+ * …/ad-creative/partnership-ads/fb-account-level-permissioning.md). Nexus READS four of them, GET only, for the
+ * business's chosen Facebook Page (the caller's path names it; live-partners.ts checks it is the chosen one):
+ *   partnership-ads/fb-account-level-permissions/{page_id}      status, partner_page_ids, permission_direction, offset, limit
+ *   partnership-ads/fb-branded-content/{page_id}/brand-allowlist-status
+ *   partnership-ads/fb-branded-content/{page_id}/brand-allowlisted-creators
+ *   partnership-ads/fb-branded-content/{page_id}/branded-content-posts   start_date, end_date, creator_page_ids, limit, offset
+ * Everything else on that host (the PUT / POST / DELETE of the same paths, the content-block-list CSV export, which is a PUT,
+ * and the business-level adjacent-content file download) is refused. Meta documents no appsecret_proof there, so none is
+ * sent (LIVE-PROBES CR-347).
+ */
+export const META_REST_HOST = 'api.facebook.com'
+export const META_REST_API_VERSION = '1.0.0'
+const REST_READS: ReadonlyArray<{ route: RegExp; keys: ReadonlySet<string> }> = [
+  { route: /^partnership-ads\/fb-account-level-permissions\/\d{1,25}$/, keys: new Set(['status', 'partner_page_ids', 'permission_direction', 'offset', 'limit']) },
+  { route: /^partnership-ads\/fb-branded-content\/\d{1,25}\/(brand-allowlist-status|brand-allowlisted-creators)$/, keys: new Set() },
+  { route: /^partnership-ads\/fb-branded-content\/\d{1,25}\/branded-content-posts$/, keys: new Set(['start_date', 'end_date', 'creator_page_ids', 'limit', 'offset']) },
+]
+
+/** Null when the URL is not on Meta's REST host; else the verdict on it (a read, with the account's own token only). */
+function metaRestVerdict(url: string, auth: unknown): MetaCallVerdict | null {
+  let parsed: URL
+  try { parsed = new URL(url) } catch { return null }
+  if (parsed.hostname !== META_REST_HOST) return null
+  const refuse = (problem: string): MetaCallVerdict => ({ problem, renewalClientId: null })
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.hash || parsed.port) return refuse(`Nexus calls Meta's REST host only as https://${META_REST_HOST}`)
+  const raw = url.replace(/^https:\/\/[^/?#]*/i, '').split(/[?#]/)[0] || '/'
+  if (raw.includes('%')) return refuse('a Meta path is never percent-encoded')
+  // Review A2 — the path judged is the path read (a backslash is a `/` to the URL parser).
+  if (url.includes('\\') || raw !== parsed.pathname) return refuse('a Meta URL is written plainly: no backslash, and the path as written is the path read')
+  const pieces = raw.split('/').slice(1)
+  if (pieces.some((piece) => !/^[a-z0-9-]+$/.test(piece))) return refuse(`a path on ${META_REST_HOST} is lower-case letters, digits and - only, with no empty segment`)
+  const route = pieces.join('/')
+  const rule = REST_READS.find((r) => r.route.test(route))
+  if (!rule) return refuse(`Nexus reads only the partnership permissions and branded-content lists of the chosen Page at ${META_REST_HOST} (this path: /${route})`)
+  if (auth !== undefined && auth !== 'account') return refuse(`a read of ${META_REST_HOST} goes only with the account's own system-user token`)
+  const seen = new Set<string>()
+  for (const key of parsed.searchParams.keys()) {
+    if (!/^[a-z_][a-z0-9_]*$/.test(key)) return refuse(`the query key "${key}" is not one Meta reads (lower-case letters, digits and _)`)
+    if (seen.has(key)) return refuse(`the query names "${key}" more than once`)
+    seen.add(key)
+    if (NOT_A_READ_KEYS.test(key) || GATEWAY_OWNED_KEYS.has(key) || TOKEN_NAME.test(key)) return refuse(`the query names "${key}", which no Nexus read sends`)
+    if (!rule.keys.has(key)) return refuse(`the query key "${key}" is not one a Nexus read of Meta uses here`)
+  }
+  return { problem: null, renewalClientId: null, rest: true }
 }
 
 /** Why the gateway refuses this Meta call, in words, or null when it may go (metaCallVerdict's problem). */

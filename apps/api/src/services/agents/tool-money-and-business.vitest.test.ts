@@ -226,6 +226,11 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-instagram-media': 'it reads the business\'s chosen Meta ad account, Page or Instagram account live from Meta, and no business here has one (meta-ads-media.tools test)',
   'meta-ad-preview': 'it reads the business\'s chosen Meta ad account, Page or Instagram account live from Meta, and no business here has one (meta-ads-media.tools test)',
   'meta-instant-experiences': 'it reads the business\'s chosen Meta ad account, Page or Instagram account live from Meta, and no business here has one (meta-ads-media.tools test)',
+  // Meta ads step 16: partnership content, research, brand safety and webhooks read Meta live (their own tests run them on an account).
+  'meta-partnership-content': 'it reads the business\'s chosen Meta Page and Instagram account live from Meta, and no business here has one (meta-ads-partners.tools test)',
+  'meta-ad-library': 'it reads Meta live through the business\'s Meta connection, and no business here has one (meta-ads-partners.tools test)',
+  'meta-brand-safety': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-safety.tools test)',
+  'meta-webhooks': 'it reads the business\'s Meta app and chosen ad account live from Meta, and no business here has one (meta-ads-safety.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -535,6 +540,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-instagram-media': () => ({ view: 'media' }),
   'meta-ad-preview': () => ({ view: 'ad', adId: '120000000000001' }),
   'meta-instant-experiences': () => ({ view: 'list' }),
+  // Meta ads step 16: no business here has Meta, so each refuses in words before any call.
+  'meta-partnership-content': () => ({ view: 'search' }),
+  'meta-ad-library': () => ({ view: 'search', searchTerms: 'casco', countries: ['IT'] }),
+  'meta-brand-safety': () => ({ view: 'block-lists' }),
+  'meta-webhooks': () => ({ view: 'all' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),
