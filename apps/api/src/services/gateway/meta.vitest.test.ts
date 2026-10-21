@@ -340,8 +340,18 @@ describe('read only by construction', () => {
       ['120000000000010/feed?fields=id&since=2026-10-01', 'since'], ['120000000000010/feed?fields=id&with=LOCATION', 'with'],
       ['act_1234567890/insights?fields=spend&metric=page_media_view', 'metric'], ['120000000000010_500000000000001/insights?level=ad', 'level'],
       ['120000000000301/previews?ad_format=MOBILE_FEED_STANDARD&creative={}', 'creative'], ['120000000000301/previews?place_page_id=1', 'place_page_id'],
-      ['act_1234567890/generatepreviews?ad_format=X&post={}', 'post'], ['120000000000010/canvases?fields=id&is_published=true&user_ids=[1]', 'user_ids'],
+      ['act_1234567890/generatepreviews?ad_format=MOBILE_FEED_STANDARD&post={}', 'post'], ['120000000000010/canvases?fields=id&is_published=true&user_ids=[1]', 'user_ids'],
       ['120000000000010/live_videos?fields=id&source=target', 'source'], ['120000000000010/ads_posts?fields=id&include_hidden=true', 'include_hidden'],
+    ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
+    // Round 2 (c) — the organic-insight keys only on an organic read (no field list, every metric one Nexus names); the
+    // preview keys only with an ad_format of the v26 enum.
+    for (const [path, key] of [
+      ['120000000000101/insights?fields=spend&metric=page_media_view', 'metric'], ['120000000000101/insights?fields=spend&period=day', 'period'],
+      ['120000000000101/insights?fields=spend&since=2026-10-01', 'since'], ['120000000000010/insights?metric=spend', 'metric'],
+      ['120000000000010/insights?metric=page_media_view,impressions&period=day', 'metric'], ['120000000000010/insights?period=day', 'period'],
+      ['120000000000010_500000000000001/insights?metric=post_clicks&fields=id', 'metric'],
+      ['act_1234567890/generatepreviews?ad_format=THREADS_STREAM&creative={}', 'ad_format'], ['act_1234567890/generatepreviews?creative={}', 'creative'],
+      ['120000000000301/previews?product_item_ids=["1"]', 'product_item_ids'],
     ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
     // FIELD_DENIED stays: comments (step 14), leads and messages are never asked inside fields, on posts and Instagram too.
     expect(q('120000000000010_500000000000001?fields=id,comments{message}')).toMatch(/never expands "comments"/)

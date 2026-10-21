@@ -20,6 +20,12 @@ vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.
 vi.mock('../../marketing/meta-ads/read-client.js', async () => ({
   metaReadOne: vi.fn(async (_t: unknown, req: Req) => {
     h.calls.push(req)
+    // A list page (step 6's listPaged asks `limit`) answers h.all's rows; one object answers h.one.
+    if (req.query?.limit !== undefined && h.all) {
+      const rows = h.all(req)
+      if (rows instanceof Error) throw rows
+      return { body: { data: rows ?? [] }, calls: 1 }
+    }
     const answer = h.one?.(req) ?? {}
     if (answer instanceof Error) throw answer
     return { body: answer, calls: 1 }
@@ -46,6 +52,7 @@ vi.mock('../../../db.js', () => {
 })
 
 import { META_ADS_MEDIA_TOOLS } from './meta-ads-media.tools.js'
+import { META_ADS_READ_TOOLS } from './meta-ads-read.tools.js'
 import { linkOfIframe, PAGE_TOKEN_NOTE, pagePostId, PORTFOLIO_TAKEN, tidy } from '../../marketing/meta-ads/live-media.js'
 import { offeredOn } from '../call-tool.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
@@ -223,11 +230,21 @@ describe('only the chosen Page, Instagram account and the account\'s own media',
     expect((await run('meta-media-library', { view: 'playlist-videos', playlistId: '200000000000001' })).error).toMatch(/not the chosen Facebook Page's/)
     expect(h.calls.every((c) => c.operation.endsWith('OwnerCheck'))).toBe(true)
   })
-  it('an ad or creative of another ad account is refused (Nexus rows, else its account_id)', async () => {
-    h.one = () => ({ account_id: '5550001112' })
+  it('an ad or creative is checked with the ONE owner + kind check (objectInAccount): another account\'s, or another kind, is refused', async () => {
+    h.one = () => ({ account_id: '5550001112', adset_id: '120000000000201', creative: { id: '1' }, object_type: 'SHARE', status: 'ACTIVE' })
     expect((await run('meta-ad-preview', { view: 'ad', adId: '120000000000999' })).error).toMatch(/does not belong to the ad account/)
     expect((await run('meta-page-posts', { view: 'ad-post', creativeId: '120000000000999' })).error).toMatch(/does not belong to the ad account/)
-    expect(h.calls.every((c) => c.operation === 'graph.ownerCheck')).toBe(true)
+    expect(h.calls.map((c) => [c.operation, c.query?.fields])).toEqual([['preview.adCheck', 'account_id,adset_id,creative'], ['posts.creativeCheck', 'account_id,object_type,status']])
+    // A campaign id given as an ad: the ad's own fields are missing, so it is refused before any preview is asked.
+    h.calls.length = 0
+    h.one = () => ({ account_id: ACCOUNT })
+    expect((await run('meta-ad-preview', { view: 'ad', adId: '120000000000998', adFormats: ['MOBILE_FEED_STANDARD'] })).error).toMatch(/not an ad of this ad account/)
+    expect(h.calls.map((c) => c.operation)).toEqual(['preview.adCheck'])
+    // One Nexus has read as a campaign is refused as an ad with no call at all.
+    h.calls.length = 0
+    h.known = new Map([['120000000000101', 'campaign']])
+    expect((await run('meta-ad-preview', { view: 'share-link', adId: '120000000000101' })).error).toMatch(/is a campaign of this ad account, not an ad/)
+    expect(h.calls).toHaveLength(0)
   })
   it('a Page or Instagram account another business uses is its id and the flag only', async () => {
     h.one = (req) => (req.path === PAGE ? { id: PAGE, instagram_business_account: { id: IG, username: 'shop_a' } } : { id: req.path })
@@ -418,5 +435,14 @@ describe('step 10 review fixes', () => {
   })
   it('no tool description holds a bare number of four digits or more (a money-like value)', () => {
     for (const t of META_ADS_MEDIA_TOOLS) expect({ name: t.name, numbers: t.description.match(/\b\d{4,}\b/g) }).toEqual({ name: t.name, numbers: null })
+  })
+  it('round 2 (b) — meta-ads-graph-read never sends the organic-insight keys on a campaign\'s insights: refused with no call', async () => {
+    h.known = new Map([['120000000000101', 'campaign']])
+    const graphRead = META_ADS_READ_TOOLS.find((t) => t.name === 'meta-ads-graph-read')!
+    for (const params of [{ metric: 'page_media_view' }, { period: 'day' }, { since: '2026-10-01' }]) {
+      const res = await graphRead.handler(graphRead.input.parse({ path: '120000000000101/insights', fields: 'spend', params }), { can: () => true, via: 'claude' } as never)
+      expect({ params, ok: res.ok }).toEqual({ params, ok: false })
+    }
+    expect(h.calls).toHaveLength(0)
   })
 })

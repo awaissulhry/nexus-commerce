@@ -6,7 +6,8 @@
  * ONLY the business's chosen assets (metaChosenAccount), with fixed field lists per node type (a caller never names a
  * Graph field or path):
  *   - the chosen ad account `act_<id>` (images, videos, playables, website assets) and its own campaigns, ads and creatives
- *     (ownObject: Nexus's rows, else one live account_id read);
+ *     (live.ts objectInAccount, the one owner + kind check: Nexus's rows, else one live read of account_id and two
+ *     fields only that kind has — services/meta/meta-kinds.ts);
  *   - the chosen ad account's own business portfolio (its media library, folders, tags) and the system user's own folders;
  *   - the chosen Facebook Page (`connection.page`): its posts (`<page id>_<post id>` only), live videos, playlists,
  *     Instant Experiences and insights; a video of the chosen ad account's library or of the chosen Page;
@@ -65,7 +66,11 @@ import { metaObjectId } from '../../cx/connectors/meta/discovery.js'
 import type { MetaQueryValue } from '../../gateway/meta.js'
 import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
-import { graphSafe, list, metaChosenAccount, MetaLiveRefusal, objectKindOf, ownObject, type MetaChosenAccount } from './live.js'
+import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectInAccount, objectKindOf, type MetaChosenAccount } from './live.js'
+import { fieldRefused, listPaged } from './live-objects.js'
+import { AD_FORMATS, IG_ACCOUNT_METRICS, IG_MEDIA_METRICS, PAGE_METRICS, POST_METRICS } from '../../meta/meta-media-lists.js'
+
+export { AD_FORMATS, IG_ACCOUNT_METRICS, IG_MEDIA_METRICS, PAGE_METRICS, POST_METRICS }
 import { maskTakenRows, takenIds } from './taken.js'
 
 type Row = Record<string, unknown>
@@ -93,12 +98,6 @@ export function tidy(value: unknown, depth = 0): unknown {
     return out
   }
   return safe
-}
-
-/** Meta refused a field this node does not have (#100): the read is asked again with the documented fields only. */
-function fieldRefused(err: unknown): err is MetaReadError {
-  return err instanceof MetaReadError && err.failure.origin === 'meta' && !err.failure.authLost && !err.failure.throttled
-    && !err.failure.permissionDenied && (err.failure.code ?? '').split('/')[0] === '100'
 }
 
 /**
@@ -135,7 +134,7 @@ async function oneWithFallback(connectionId: string, operation: string, path: st
 }
 
 async function listWithFallback(connectionId: string, operation: string, path: string, core: string, more: string, query: Record<string, MetaQueryValue>, maxRows: number) {
-  const read = await withFallback(core, more, (fields) => list(connectionId, operation, path, { ...query, fields }, maxRows))
+  const read = await withFallback(core, more, (fields) => listPaged(connectionId, operation, path, { ...query, fields }, maxRows))
   return { ...read.value, note: read.note }
 }
 
@@ -223,7 +222,7 @@ export async function ownVideo(account: MetaChosenAccount, id: string): Promise<
     if (from.value && idText(obj((from.value.body as Row).from)?.id) === account.pageId) return videoId
   }
   // 2. The chosen ad account's library (its first 500 videos).
-  const library = await list(account.connectionId, 'media.videoLibraryCheck', `${act(account.adAccountId)}/advideos`, { fields: 'id' }, 500)
+  const library = await listPaged(account.connectionId, 'media.videoLibraryCheck', `${act(account.adAccountId)}/advideos`, { fields: 'id' }, 500)
   if (library.rows.some((r) => idText(r.id) === videoId)) return videoId
   throw new MetaLiveRefusal(library.more
     ? 'That video is not the chosen Page\'s nor among the first 500 videos of the chosen ad account\'s library, so it is not read.'
@@ -358,7 +357,7 @@ export async function liveMedia(input: MediaInput) {
       if (input.name) query.name = input.name
       if (input.minWidth) query.minwidth = input.minWidth
       if (input.minHeight) query.minheight = input.minHeight
-      const read = await list(connectionId, 'media.images', `${act(adAccountId)}/adimages`, query, maxRows)
+      const read = await listPaged(connectionId, 'media.images', `${act(adAccountId)}/adimages`, query, maxRows)
       return {
         ...base,
         items: read.rows.map((r) => {
@@ -383,7 +382,7 @@ export async function liveMedia(input: MediaInput) {
       const videoId = await ownVideo(account, input.videoId)
       const node = await onPage(() => oneWithFallback(connectionId, 'media.video', videoId, MEDIA_FIELDS.VideoDetail, MORE_VIDEO_FIELDS))
       const [thumbnails, captions] = await Promise.all([
-        part(() => list(connectionId, 'media.videoThumbnails', `${videoId}/thumbnails`, { fields: MEDIA_FIELDS.VideoThumbnail }, 50)),
+        part(() => listPaged(connectionId, 'media.videoThumbnails', `${videoId}/thumbnails`, { fields: MEDIA_FIELDS.VideoThumbnail }, 50)),
         part(() => listWithFallback(connectionId, 'media.videoCaptions', `${videoId}/captions`, MEDIA_FIELDS.VideoCaption, MEDIA_FIELDS.VideoCaptionMore, {}, 50)),
       ])
       return {
@@ -401,11 +400,11 @@ export async function liveMedia(input: MediaInput) {
       const query: Record<string, MetaQueryValue> = { fields: MEDIA_FIELDS.VideoAd }
       if (input.from) query.since = input.from
       if (input.to) query.until = input.to
-      const read = await list(connectionId, 'media.videoAds', `${act(adAccountId)}/video_ads`, query, maxRows)
+      const read = await listPaged(connectionId, 'media.videoAds', `${act(adAccountId)}/video_ads`, query, maxRows)
       return { ...base, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Videos uploaded through Meta\'s video-ads upload: an id and when it changed; view video reads one (status, details).' }
     }
     case 'playables': {
-      const read = await list(connectionId, 'media.playables', `${act(adAccountId)}/adplayables`, { fields: MEDIA_FIELDS.Playable }, maxRows)
+      const read = await listPaged(connectionId, 'media.playables', `${act(adAccountId)}/adplayables`, { fields: MEDIA_FIELDS.Playable }, maxRows)
       return { ...base, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Playable (HTML5) assets are for app-install ads only.' }
     }
     case 'business-images':
@@ -423,34 +422,34 @@ export async function liveMedia(input: MediaInput) {
         return { ...base, portfolioId: portfolio, items: read.rows.map(videoRow), more: read.more, fieldsNote: read.note }
       }
       const fields = edge === 'images' ? MEDIA_FIELDS.BusinessImage : MEDIA_FIELDS.BusinessCreative
-      const read = await list(connectionId, `media.business${edge === 'images' ? 'Images' : 'Creatives'}`, `${portfolio}/${edge}`, { ...query, fields }, maxRows)
+      const read = await listPaged(connectionId, `media.business${edge === 'images' ? 'Images' : 'Creatives'}`, `${portfolio}/${edge}`, { ...query, fields }, maxRows)
       return { ...base, portfolioId: portfolio, items: read.rows.map((r) => tidy(r)), more: read.more }
     }
     case 'folders': {
       const portfolio = portfolioOf(account)
       const taken = await portfolioTaken(portfolio)
       if (taken) return { ...base, ...taken }
-      const read = await list(connectionId, 'media.folders', `${portfolio}/creative_folders`, { fields: MEDIA_FIELDS.Folder }, maxRows)
+      const read = await listPaged(connectionId, 'media.folders', `${portfolio}/creative_folders`, { fields: MEDIA_FIELDS.Folder }, maxRows)
       return { ...base, portfolioId: portfolio, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Nexus does not create or change folders here (Meta has a create call; a later Nexus media step may use it); a person can in Business Settings › Media library.' }
     }
     case 'tags': {
       const portfolio = portfolioOf(account)
       const taken = await portfolioTaken(portfolio)
       if (taken) return { ...base, ...taken }
-      const read = await list(connectionId, 'media.tags', `${portfolio}/creative_asset_tags`, { fields: MEDIA_FIELDS.Tag }, maxRows)
+      const read = await listPaged(connectionId, 'media.tags', `${portfolio}/creative_asset_tags`, { fields: MEDIA_FIELDS.Tag }, maxRows)
       return { ...base, portfolioId: portfolio, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Meta documents no API to create, change or delete these tags.' }
     }
     case 'my-folders': {
       const systemUser = idText(account.connection.systemUser?.id)
       if (!systemUser) throw new MetaLiveRefusal('Nexus has not read which system user this connection acts as yet (meta-connection view check reads it).')
-      const read = await list(connectionId, 'media.assignedFolders', `${systemUser}/assigned_creative_folders`, { fields: MEDIA_FIELDS.AssignedFolder }, maxRows)
+      const read = await listPaged(connectionId, 'media.assignedFolders', `${systemUser}/assigned_creative_folders`, { fields: MEDIA_FIELDS.AssignedFolder }, maxRows)
       return { ...base, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'The folders the business\'s system user may use, with its tasks on each.' }
     }
     case 'website-assets': {
       if (!input.link) throw new MetaLiveRefusal('Name the landing page (link, a full https:// address).')
       const [assets, info] = await Promise.all([
-        part(() => list(connectionId, 'media.websiteAssets', `${act(adAccountId)}/website_creative_assets`, { fields: MEDIA_FIELDS.WebsiteAssets, link_url: input.link! }, 50)),
-        part(() => list(connectionId, 'media.websiteInfo', `${act(adAccountId)}/website_creative_info`, { fields: MEDIA_FIELDS.WebsiteInfo, link_url: input.link! }, 50)),
+        part(() => listPaged(connectionId, 'media.websiteAssets', `${act(adAccountId)}/website_creative_assets`, { fields: MEDIA_FIELDS.WebsiteAssets, link_url: input.link! }, 50)),
+        part(() => listPaged(connectionId, 'media.websiteInfo', `${act(adAccountId)}/website_creative_info`, { fields: MEDIA_FIELDS.WebsiteInfo, link_url: input.link! }, 50)),
       ])
       if (!assets.value && !info.value) throw new MetaLiveRefusal(assets.notRead ?? 'Meta refused the read.')
       return {
@@ -461,12 +460,12 @@ export async function liveMedia(input: MediaInput) {
       }
     }
     case 'asset-urls': {
-      const read = await list(connectionId, 'media.assetUrls', `${act(adAccountId)}/urls_for_asset_extraction`, { fields: MEDIA_FIELDS.AssetUrl }, maxRows)
+      const read = await listPaged(connectionId, 'media.assetUrls', `${act(adAccountId)}/urls_for_asset_extraction`, { fields: MEDIA_FIELDS.AssetUrl }, maxRows)
       return { ...base, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'The addresses Meta takes website media and site links from for this ad account.' }
     }
     case 'campaign-videos': {
       if (!input.campaignId) throw new MetaLiveRefusal('Name the campaign (campaignId).')
-      const campaignId = await ownObject(account, input.campaignId, 'campaign')
+      const campaignId = await objectInAccount(account, input.campaignId, 'campaign', 'media.campaignCheck')
       const query: Record<string, MetaQueryValue> = {}
       if (input.from || input.to) query.date_range = { ...(input.from ? { start: input.from } : {}), ...(input.to ? { end: input.to } : {}) }
       const read = await listWithFallback(connectionId, 'media.campaignVideoGroups', `${campaignId}/video_groups`, MEDIA_FIELDS.VideoGroup, MEDIA_FIELDS.VideoGroupMore, query, maxRows)
@@ -476,12 +475,12 @@ export async function liveMedia(input: MediaInput) {
       const pageId = pageOf(account)
       const query: Record<string, MetaQueryValue> = { fields: MEDIA_FIELDS.LiveVideo }
       if (input.broadcastStatus?.length) query.broadcast_status = input.broadcastStatus
-      const read = await onPage(() => list(connectionId, 'media.liveVideos', `${pageId}/live_videos`, query, maxRows))
+      const read = await onPage(() => listPaged(connectionId, 'media.liveVideos', `${pageId}/live_videos`, query, maxRows))
       return { ...base, pageId, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'A finished live broadcast becomes a video (video.id) that can be boosted. No stream address or key is ever read.' }
     }
     case 'playlists': {
       const pageId = pageOf(account)
-      const read = await onPage(() => list(connectionId, 'media.playlists', `${pageId}/video_lists`, { fields: MEDIA_FIELDS.VideoList }, maxRows))
+      const read = await onPage(() => listPaged(connectionId, 'media.playlists', `${pageId}/video_lists`, { fields: MEDIA_FIELDS.VideoList }, maxRows))
       return { ...base, pageId, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Meta has no API to create playlists; view playlist-videos lists one.' }
     }
     case 'playlist-videos': {
@@ -512,17 +511,6 @@ export const POST_FIELDS = {
   AdPost: 'id,account_id,effective_object_story_id,object_story_id,effective_instagram_media_id,instagram_permalink_url,source_instagram_media_id',
 } as const
 
-/** Page metrics Meta has not deprecated (pages-api/platforminsights/page/deprecated-metrics: the alternatives it names, and the rest). */
-export const PAGE_METRICS = [
-  'page_media_view', 'page_total_media_view_unique', 'page_post_engagements', 'page_follows', 'page_daily_follows', 'page_daily_follows_unique',
-  'page_daily_unfollows_unique', 'page_follows_city', 'page_follows_country', 'page_views_total', 'page_total_actions',
-  'page_actions_post_reactions_total', 'page_video_views', 'page_video_views_paid', 'page_video_views_organic', 'page_video_complete_views_30s',
-] as const
-export const POST_METRICS = [
-  'post_media_view', 'post_total_media_view_unique', 'post_clicks', 'post_clicks_by_type', 'post_reactions_by_type_total', 'post_reactions_like_total',
-  'post_reactions_love_total', 'post_reactions_wow_total', 'post_reactions_haha_total', 'post_reactions_sorry_total', 'post_reactions_anger_total',
-  'post_video_views', 'post_video_avg_time_watched', 'post_video_complete_views_30s_unique',
-] as const
 export const PAGE_PERIODS = ['day', 'week', 'days_28', 'month', 'lifetime', 'total_over_range'] as const
 /** The breakdowns Meta's deprecation page names for the media-view metrics. */
 export const PAGE_BREAKDOWNS = ['is_from_ads', 'is_from_followers'] as const
@@ -574,7 +562,7 @@ export async function livePagePosts(input: PostsInput) {
     case 'published':
     case 'visitor': {
       const edge = input.view === 'feed' ? 'feed' : input.view === 'published' ? 'published_posts' : 'visitor_posts'
-      // The feed answers at most 100 posts per call (list() never asks more than 100).
+      // The feed answers at most 100 posts per call (listPaged() never asks more than 100).
       const read = await onPage(() => listWithFallback(connectionId, `posts.${edge}`, `${pageId}/${edge}`, POST_FIELDS.PagePost, POST_FIELDS.ListMore, hiddenExpired(), maxRows))
       return {
         ...base, ...pageRows(pageId, read.rows), more: read.more, fieldsNote: read.note,
@@ -611,7 +599,7 @@ export async function livePagePosts(input: PostsInput) {
       const check = await onPage(() => metaReadOne({ connectionId }, { operation: 'posts.postCheck', path: postId, query: { fields: 'id' } }))
       stillOnPage(pageId, check.body as Row)
       if (input.view === 'post-sponsors') {
-        const read = await onPage(() => list(connectionId, 'posts.sponsors', `${postId}/sponsor_tags`, { fields: POST_FIELDS.Sponsor }, maxRows))
+        const read = await onPage(() => listPaged(connectionId, 'posts.sponsors', `${postId}/sponsor_tags`, { fields: POST_FIELDS.Sponsor }, maxRows))
         const rows = await PAGE_MASKED(read.rows)
         return {
           ...base, postId,
@@ -620,7 +608,7 @@ export async function livePagePosts(input: PostsInput) {
         }
       }
       if (input.view === 'post-dynamic') {
-        const read = await onPage(() => list(connectionId, 'posts.dynamicPosts', `${postId}/dynamic_posts`, { fields: POST_FIELDS.DynamicPost }, maxRows))
+        const read = await onPage(() => listPaged(connectionId, 'posts.dynamicPosts', `${postId}/dynamic_posts`, { fields: POST_FIELDS.DynamicPost }, maxRows))
         return { ...base, postId, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'The catalog-ad posts Meta made from this post (Meta documents only the edge; these fields are its SDK\'s).' }
       }
       return insights(account, `${postId}/insights`, 'posts.postInsights', input, POST_METRICS, ['post_media_view', 'post_total_media_view_unique', 'post_clicks', 'post_reactions_by_type_total'], { postId })
@@ -652,13 +640,13 @@ async function adPost(account: MetaChosenAccount, input: PostsInput) {
   if (!input.adId && !input.creativeId) throw new MetaLiveRefusal('Name the ad (adId) or the creative (creativeId).')
   let creative: Row
   if (input.adId) {
-    const adId = await ownObject(account, input.adId, 'ad')
+    const adId = await objectInAccount(account, input.adId, 'ad', 'posts.adCheck')
     const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'posts.adCreative', path: adId, query: { fields: `id,account_id,creative{${POST_FIELDS.AdPost}}` } })
     const body = read.body as Row
     if (idText(body.account_id) !== account.adAccountId) throw new MetaLiveRefusal('That ad does not belong to the ad account this business chose, so it is not read.')
     creative = obj(body.creative) ?? {}
   } else {
-    const creativeId = await ownObject(account, input.creativeId!, 'creative')
+    const creativeId = await objectInAccount(account, input.creativeId!, 'creative', 'posts.creativeCheck')
     const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'posts.creative', path: creativeId, query: { fields: POST_FIELDS.AdPost } })
     creative = read.body as Row
     if (idText(creative.account_id) !== account.adAccountId) throw new MetaLiveRefusal('That creative does not belong to the ad account this business chose, so it is not read.')
@@ -691,17 +679,6 @@ export const IG_FIELDS = {
   Quota: 'config,quota_usage',
   Event: 'id,title,start_time,end_time,notification_subtypes,notification_target_time',
 } as const
-/** ig-media/insights metrics (impressions: deprecated for media made after 2024-07-02, not offered). */
-export const IG_MEDIA_METRICS = [
-  'views', 'reach', 'likes', 'comments', 'saved', 'shares', 'reposts', 'total_interactions', 'follows', 'profile_visits', 'profile_activity',
-  'navigation', 'replies', 'link_clicks', 'ig_reels_avg_watch_time', 'ig_reels_video_view_total_time', 'reels_skip_rate', 'facebook_views',
-  'crossposted_views', 'total_views', 'total_likes', 'total_comments',
-] as const
-/** ig-user/insights metrics (impressions: deprecated since v22, not offered). */
-export const IG_ACCOUNT_METRICS = [
-  'reach', 'views', 'accounts_engaged', 'total_interactions', 'likes', 'comments', 'saves', 'shares', 'reposts', 'replies', 'follows_and_unfollows',
-  'profile_links_taps', 'follower_demographics', 'engaged_audience_demographics',
-] as const
 /** Which media each metric exists on (ig-media/insights, "Media Product Type"); AD media are judged as FEED. */
 export const IG_MEDIA_METRIC_TYPES: Readonly<Record<typeof IG_MEDIA_METRICS[number], readonly string[]>> = {
   views: ['FEED', 'REELS', 'STORY'], reach: ['FEED', 'REELS', 'STORY'], likes: ['FEED', 'REELS'], comments: ['FEED', 'REELS'], saved: ['FEED', 'REELS'],
@@ -763,11 +740,11 @@ export async function liveInstagram(input: InstagramInput) {
       const query: Record<string, MetaQueryValue> = { fields: IG_FIELDS.Media }
       if (input.from) query.since = input.from
       if (input.to) query.until = input.to
-      const read = await onPage(() => list(connectionId, 'instagram.media', `${instagramId}/media`, query, maxRows))
+      const read = await onPage(() => listPaged(connectionId, 'instagram.media', `${instagramId}/media`, query, maxRows))
       return { ...base, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Posts, reels and carousels (children: each card), newest first; Meta answers the 10,000 most recent, without stories (view stories). mediaUrl is missing when the media holds copyrighted music.' }
     }
     case 'stories': {
-      const read = await onPage(() => list(connectionId, 'instagram.stories', `${instagramId}/stories`, { fields: IG_FIELDS.Story }, maxRows))
+      const read = await onPage(() => listPaged(connectionId, 'instagram.stories', `${instagramId}/stories`, { fields: IG_FIELDS.Story }, maxRows))
       return { ...base, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Stories live 24 hours; Meta returns no live or reshared stories.' }
     }
     case 'media-detail': {
@@ -826,7 +803,7 @@ export async function liveInstagram(input: InstagramInput) {
       return { ...base, quota: rowsOf(read.body).map((r) => tidy(r)), note: 'How many posts the account published through the API in the last 24 hours (quotaUsage) against Meta\'s limit (config).' }
     }
     case 'upcoming-events': {
-      const read = await onPage(() => list(connectionId, 'instagram.upcomingEvents', `${instagramId}/upcoming_events`, { fields: IG_FIELDS.Event }, maxRows))
+      const read = await onPage(() => listPaged(connectionId, 'instagram.upcomingEvents', `${instagramId}/upcoming_events`, { fields: IG_FIELDS.Event }, maxRows))
       return { ...base, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Events a reminder ad can point to.' }
     }
   }
@@ -840,7 +817,7 @@ async function instagramAccounts(account: MetaChosenAccount, maxRows: number) {
   const parts: Record<string, unknown> = {}
   if (account.businessId) {
     for (const edge of ['instagram_accounts', 'instagram_business_accounts'] as const) {
-      const read = await part(() => list(connectionId, `instagram.${edge}`, `${account.businessId}/${edge}`, { fields: IG_FIELDS.Account }, maxRows))
+      const read = await part(() => listPaged(connectionId, `instagram.${edge}`, `${account.businessId}/${edge}`, { fields: IG_FIELDS.Account }, maxRows))
       parts[edge === 'instagram_accounts' ? 'portfolio' : 'portfolioBusiness'] = read.value ? (await IG_MASKED(read.value.rows)).map((r) => igAccountRow(r, chosen, 'portfolio')) : { notRead: read.notRead }
     }
   } else parts.portfolio = { notRead: 'The chosen ad account names no business portfolio.' }
@@ -851,7 +828,7 @@ async function instagramAccounts(account: MetaChosenAccount, maxRows: number) {
       ? (await IG_MASKED([obj((connected.value.body as Row).instagram_business_account)].filter((r): r is Row => !!r))).map((r) => igAccountRow(r, chosen, 'page'))
       : { notRead: `${connected.notRead} ${PAGE_TOKEN_NOTE}` }
     for (const edge of ['instagram_accounts', 'page_backed_instagram_accounts'] as const) {
-      const read = await part(() => list(connectionId, `instagram.page.${edge}`, `${pageId}/${edge}`, { fields: IG_FIELDS.Account }, maxRows))
+      const read = await part(() => listPaged(connectionId, `instagram.page.${edge}`, `${pageId}/${edge}`, { fields: IG_FIELDS.Account }, maxRows))
       parts[edge === 'instagram_accounts' ? 'pageAccounts' : 'pageBacked'] = read.value ? (await IG_MASKED(read.value.rows)).map((r) => igAccountRow(r, chosen, 'page')) : { notRead: `${read.notRead} ${PAGE_TOKEN_NOTE}` }
     }
   } else parts.page = { notRead: NO_PAGE }
@@ -866,28 +843,6 @@ async function instagramAccounts(account: MetaChosenAccount, maxRows: number) {
 export const PREVIEW_VIEWS = ['ad', 'creative', 'spec', 'instant-experience', 'share-link'] as const
 export type PreviewView = typeof PREVIEW_VIEWS[number]
 
-/**
- * ad_format: the generatepreviews / previews reference enum (v26.0) and SDK, exactly (THREADS_STREAM, which only the Instagram
- * preview guide names, is not offered). Some name placements Meta has retired (MESSENGER_MOBILE_STORY_MEDIA,
- * INSTANT_ARTICLE_*): Meta refuses them, and the answer says so for that placement.
- */
-export const AD_FORMATS = [
-  'AUDIENCE_NETWORK_INSTREAM_VIDEO', 'AUDIENCE_NETWORK_INSTREAM_VIDEO_MOBILE', 'AUDIENCE_NETWORK_OUTSTREAM_VIDEO', 'AUDIENCE_NETWORK_REWARDED_VIDEO',
-  'BIZ_DISCO_FEED_MOBILE', 'DESKTOP_FEED_STANDARD', 'FACEBOOK_IFU_REELS_MOBILE', 'FACEBOOK_PROFILE_FEED_DESKTOP', 'FACEBOOK_PROFILE_FEED_MOBILE',
-  'FACEBOOK_PROFILE_REELS_MOBILE', 'FACEBOOK_REELS_BANNER', 'FACEBOOK_REELS_BANNER_DESKTOP', 'FACEBOOK_REELS_BANNER_FEED_ANDROID',
-  'FACEBOOK_REELS_BANNER_FEED_ANDROID_LARGE', 'FACEBOOK_REELS_BANNER_FULLSCREEN_IOS', 'FACEBOOK_REELS_BANNER_FULLSCREEN_MOBILE', 'FACEBOOK_REELS_MOBILE',
-  'FACEBOOK_REELS_POSTLOOP', 'FACEBOOK_REELS_POSTLOOP_FEED', 'FACEBOOK_REELS_SIMILAR_PRODUCTS_MOBILE', 'FACEBOOK_REELS_STICKER', 'FACEBOOK_STORY_MOBILE',
-  'FACEBOOK_STORY_STICKER_MOBILE', 'INSTAGRAM_EXPLORE_CONTEXTUAL', 'INSTAGRAM_EXPLORE_GRID_HOME', 'INSTAGRAM_EXPLORE_IMMERSIVE', 'INSTAGRAM_FEED_WEB',
-  'INSTAGRAM_FEED_WEB_M_SITE', 'INSTAGRAM_LEAD_GEN_MULTI_SUBMIT_ADS', 'INSTAGRAM_PROFILE_FEED', 'INSTAGRAM_PROFILE_REELS', 'INSTAGRAM_REELS',
-  'INSTAGRAM_REELS_OVERLAY', 'INSTAGRAM_REELS_WEB', 'INSTAGRAM_REELS_WEB_M_SITE', 'INSTAGRAM_SEARCH_CHAIN', 'INSTAGRAM_SEARCH_GRID', 'INSTAGRAM_STANDARD',
-  'INSTAGRAM_STORY', 'INSTAGRAM_STORY_EFFECT_TRAY', 'INSTAGRAM_STORY_WEB', 'INSTAGRAM_STORY_WEB_M_SITE', 'INSTANT_ARTICLE_RECIRCULATION_AD',
-  'INSTANT_ARTICLE_STANDARD', 'INSTREAM_BANNER_DESKTOP', 'INSTREAM_BANNER_FEED_IOS', 'INSTREAM_BANNER_FULLSCREEN_IOS', 'INSTREAM_BANNER_FULLSCREEN_MOBILE',
-  'INSTREAM_BANNER_IMMERSIVE_MOBILE', 'INSTREAM_BANNER_MOBILE', 'INSTREAM_VIDEO_DESKTOP', 'INSTREAM_VIDEO_FULLSCREEN_IOS', 'INSTREAM_VIDEO_FULLSCREEN_MOBILE',
-  'INSTREAM_VIDEO_IMAGE', 'INSTREAM_VIDEO_IMMERSIVE_MOBILE', 'INSTREAM_VIDEO_MOBILE', 'JOB_BROWSER_DESKTOP', 'JOB_BROWSER_MOBILE', 'MARKETPLACE_MOBILE',
-  'MESSENGER_MOBILE_INBOX_MEDIA', 'MESSENGER_MOBILE_STORY_MEDIA', 'MOBILE_BANNER', 'MOBILE_FEED_BASIC', 'MOBILE_FEED_STANDARD', 'MOBILE_FULLWIDTH',
-  'MOBILE_INTERSTITIAL', 'MOBILE_MEDIUM_RECTANGLE', 'MOBILE_NATIVE', 'RIGHT_COLUMN_STANDARD', 'SUGGESTED_VIDEO_DESKTOP', 'SUGGESTED_VIDEO_FULLSCREEN_MOBILE',
-  'SUGGESTED_VIDEO_IMMERSIVE_MOBILE', 'SUGGESTED_VIDEO_MOBILE', 'WATCH_FEED_HOME', 'WATCH_FEED_MOBILE', 'WHATSAPP_STATUS_MEDIA',
-] as const
 /** creative_feature: the reference enum plus the features the Advantage+ creative guide previews. */
 export const CREATIVE_FEATURES = [
   'ig_video_native_subtitle', 'image_animation', 'product_browsing', 'product_metadata_automation', 'profile_card', 'standard_enhancements_catalog',
@@ -1048,7 +1003,7 @@ export async function livePreview(input: PreviewInput) {
   const { connectionId, adAccountId } = account
   if (input.view === 'share-link') {
     if (!input.adId) throw new MetaLiveRefusal('Name the ad (adId).')
-    const adId = await ownObject(account, input.adId, 'ad')
+    const adId = await objectInAccount(account, input.adId, 'ad', 'preview.adCheck')
     const read = await metaReadOne({ connectionId }, { operation: 'preview.shareLink', path: adId, query: { fields: 'id,account_id,preview_shareable_link' } })
     const body = read.body as Row
     if (idText(body.account_id) !== adAccountId) throw new MetaLiveRefusal('That ad does not belong to the ad account this business chose, so it is not read.')
@@ -1074,7 +1029,7 @@ export async function livePreview(input: PreviewInput) {
   if (input.view === 'ad' || input.view === 'creative') {
     const id = input.view === 'ad' ? input.adId : input.creativeId
     if (!id) throw new MetaLiveRefusal(input.view === 'ad' ? 'Name the ad (adId).' : 'Name the creative (creativeId).')
-    const own = await ownObject(account, id, input.view)
+    const own = await objectInAccount(account, id, input.view, `preview.${input.view}Check`)
     path = `${own}/previews`
     subject = input.view === 'ad' ? { adId: own } : { creativeId: own }
   } else {
@@ -1160,7 +1115,7 @@ export async function liveInstantExperiences(input: IxInput) {
       const query: Record<string, MetaQueryValue> = { fields: IX_FIELDS.Canvas }
       if (typeof input.published === 'boolean') query.is_published = input.published
       if (typeof input.hidden === 'boolean') query.is_hidden = input.hidden
-      const read = await onPage(() => list(connectionId, 'ix.canvases', `${pageId}/canvases`, query, maxRows))
+      const read = await onPage(() => listPaged(connectionId, 'ix.canvases', `${pageId}/canvases`, query, maxRows))
       return { pageId, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'An unpublished one can still be changed (and may be left behind by an unfinished builder); a published one cannot. meta-ad-preview view instant-experience shows one.' }
     }
     case 'one': {
@@ -1170,7 +1125,7 @@ export async function liveInstantExperiences(input: IxInput) {
       return { pageId, canvas: tidy(read.body), fieldsNote: read.note }
     }
     case 'elements': {
-      const read = await onPage(() => list(connectionId, 'ix.elements', `${pageId}/canvas_elements`, { fields: IX_FIELDS.Element }, maxRows))
+      const read = await onPage(() => listPaged(connectionId, 'ix.elements', `${pageId}/canvas_elements`, { fields: IX_FIELDS.Element }, maxRows))
       return { pageId, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'The parts (photos, videos, buttons, text, product sets…) made on the Page for Instant Experiences.' }
     }
   }
