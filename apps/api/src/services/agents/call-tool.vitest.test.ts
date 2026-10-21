@@ -6,7 +6,8 @@
  * nowhere else, and the money a person may not see never comes back. A system
  * principal (crons, the fleet) is the one exception, and only for 1 and 3.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { randomBytes } from 'node:crypto'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { AgentTool } from './tool-types.js'
 
@@ -74,6 +75,20 @@ const TOOLS: Record<string, AgentTool> = {
     input: z.object({}).loose(),
     handler,
   },
+  // Item 7 — a tool with a secret argument, as create-meta-boost's adCode.
+  'boost-code': {
+    name: 'boost-code',
+    title: 'Test tool',
+    category: 'advertising',
+    description: 'test tool',
+    riskTier: 'high',
+    readOnly: false,
+    requires: ['ads.bids.edit'],
+    secretArgs: ['adCode'],
+    input: z.object({ adCode: z.string() }),
+    handler,
+    execute,
+  },
 }
 
 vi.mock('./tool-registry.js', () => ({
@@ -81,6 +96,7 @@ vi.mock('./tool-registry.js', () => ({
   listTools: () => Object.values(TOOLS),
 }))
 
+import { __test as cryptoTest } from '../../lib/crypto.js'
 import { withWorkspace, workspaceContext } from '../../lib/workspace-context.js'
 import {
   approvableToolNames,
@@ -92,6 +108,7 @@ import {
   ToolAccessError,
   type UserPrincipal,
 } from './call-tool.js'
+import { sealSecretArgs } from './secret-args.js'
 
 const WS_A = { workspaceId: 'ws_alpha_0001', actorUserId: 'u1', membershipId: 'm1', roleKeys: ['OPS'] }
 const WS_B = { workspaceId: 'ws_bravo_0002', actorUserId: 'u1', membershipId: 'm2', roleKeys: ['OPS'] }
@@ -386,5 +403,48 @@ describe('C1 — what a tool is told about its caller', () => {
     await executeTool(systemPrincipal('Awais'), 'change-price', { price: 1 })
     expect(ctxOf(execute)).toMatchObject({ via: 'system', userId: 'Awais' })
     expect(ctxOf(execute).approvalId).toBeUndefined()
+  })
+})
+
+describe('Item 7 — the door opens a secret argument in the caller’s own business first', () => {
+  // Person A, verified in business B (WS_B); the work may be bound to business A (WS_A), or to nothing.
+  const personA = (): UserPrincipal => ({ ...person(['ai.run', 'ads.bids.edit'], WS_B), label: 'Person A' })
+  const sealedFor = async (workspaceId: string) =>
+    (await sealSecretArgs(TOOLS['boost-code'], { adCode: 'CODE_TEST_DOOR' }, workspaceId)).adCode
+
+  beforeEach(() => {
+    // A made-up key for this run only (never a real one); KMS stays unset, so the env-key envelope is used.
+    vi.stubEnv('NEXUS_CREDENTIAL_ENC_KEY', randomBytes(32).toString('base64'))
+    vi.stubEnv('NEXUS_KMS_KEY_ID', undefined)
+    cryptoTest.resetKeyCache()
+  })
+  afterAll(() => cryptoTest.resetKeyCache())
+
+  it('nothing bound, profiles on: a value sealed for B opens for the dry run and the run; one sealed for A is refused, nothing runs', async () => {
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
+    await callTool(personA(), 'boost-code', { adCode: await sealedFor(WS_B.workspaceId) })
+    expect(handler).toHaveBeenCalledWith({ adCode: 'CODE_TEST_DOOR' }, expect.anything())
+    await executeTool(personA(), 'boost-code', { adCode: await sealedFor(WS_B.workspaceId) })
+    expect(execute).toHaveBeenCalledWith({ adCode: 'CODE_TEST_DOOR' }, expect.anything())
+
+    handler.mockClear()
+    execute.mockClear()
+    const fromA = { adCode: await sealedFor(WS_A.workspaceId) }
+    for (const call of [callTool, executeTool]) {
+      await expect(call(personA(), 'boost-code', fromA)).rejects.toMatchObject({ code: 'secret_refused', statusCode: 409 })
+    }
+    expect(handler).not.toHaveBeenCalled()
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('bound to business A: the value sealed for B opens (then the door refuses the other business, 403); the one sealed for A is refused at the opening (409)', async () => {
+    const forB = { adCode: await sealedFor(WS_B.workspaceId) }
+    const forA = { adCode: await sealedFor(WS_A.workspaceId) }
+    for (const call of [callTool, executeTool]) {
+      await expect(withWorkspace(WS_A, () => call(personA(), 'boost-code', forB))).rejects.toMatchObject({ code: 'workspace_mismatch', statusCode: 403 })
+      await expect(withWorkspace(WS_A, () => call(personA(), 'boost-code', forA))).rejects.toMatchObject({ code: 'secret_refused', statusCode: 409 })
+    }
+    expect(handler).not.toHaveBeenCalled()
+    expect(execute).not.toHaveBeenCalled()
   })
 })
