@@ -218,6 +218,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-catalog-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-catalog-admin.tools test)',
   'set-meta-product-set': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-catalog-admin.tools test)',
   'remove-meta-catalog-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-catalog-admin.tools test)',
+  'set-meta-account-settings': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-account-settings.tools test)',
+  'set-meta-spend-cap': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-account-settings.tools test)',
+  'set-meta-insights-features': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-account-settings.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -653,6 +656,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-catalog-access': () => ({ action: 'unshare', catalogId: '120000000000100', partnerBusinessId: '120000000000091' }),
   'set-meta-product-set': () => ({ action: 'change', productSetId: '120000000000110', name: 'Set B' }),
   'remove-meta-catalog-items': () => ({ kind: 'product-set', productSetId: '120000000000110', confirmDelete: true }),
+  // Meta ads step 40: the account's own settings refuse in words here (no business has Meta; their own test runs them).
+  'set-meta-account-settings': () => ({ name: 'Shop A ads' }),
+  'set-meta-spend-cap': () => ({ action: 'set', capCents: 50000 }),
+  'set-meta-insights-features': () => ({ feature: 'impression_device' }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),

@@ -157,7 +157,7 @@ export interface MetaWriteRequest {
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
   | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaBoostEdge | MetaSignalsEdge | MetaAdEdge
-  | MetaWebhookEdge | MetaTargetingEdge | MetaEventsEdge | MetaCatalogEdge
+  | MetaWebhookEdge | MetaTargetingEdge | MetaEventsEdge | MetaCatalogEdge | MetaAccountEdge
 /** Step 33 — upload-meta-events: Conversions API events of a pixel (`<pixel id>/events`). */
 export type MetaEventsEdge = 'events'
 /** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
@@ -207,6 +207,8 @@ export type MetaLabelsEdge = 'adlabels' | 'value_rule_set' | 'delete_rule_set' |
 export type MetaMediaEdge = 'video_ads' | 'creative_folders'
 /** Step 25 — create-meta-creative: a creative and an async creative job on the chosen ad account (a creative's labels: step 21's `adlabels`). */
 export type MetaCreativeEdge = 'adcreatives' | 'asyncadcreatives'
+/** Step 40 — the chosen ad account's account-level tracking specs, and its insights features (switched on, never off). */
+export type MetaAccountEdge = 'tracking' | 'insights/feature-settings'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):

@@ -38,6 +38,8 @@ import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaPageKind, type
 import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwnerProblem, noteBlockListDraftMade, type MetaCheckRead } from './meta-brand-safety-owner.js'
 import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
+// Step 40 — the ad account's own changes (their refusal names a change, not a create).
+import { META_ACCOUNT_SETTINGS_WRITE_RULES } from './meta-account-settings-rules.js'
 import { metaPageOwnerProblem } from './meta-page-owner.js'
 import { MetaPageTokenUnavailable, metaPageTokenFor, scrubExactToken } from './meta-page-token.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
@@ -746,7 +748,11 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // Meta answers a throttle with an error code (often with no usage header): hold the bucket all the same — 300 s, the
     // block Meta's rate-limit page names for an ad account's score. The two per-object limits (4841018, 1487632) hold only
     // that object (above), never the account's whole bucket.
-    if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec && !objectLimit) {
+    // Step 40 fix round 1 (B-1) — nor does 17/1885172: Meta's 10 spending-limit changes a DAY per ad account (rate-limiting.md
+    // "Ad Account Level Ad Spend Rate Limits") is a daily count, not a throttle — holding the bucket 300 s would stop every
+    // other Meta read and change of the business (a pause too) for nothing. set-meta-spend-cap says it in words, never again.
+    const dailyCount = verdict.channelCode === '17/1885172'
+    if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec && !objectLimit && !dailyCount) {
       await observeRate(req.channel, key, { retryAfterSec: 300 })
     }
     // Meta says the token is dead: the next heartbeat checks it again at once, rather than trusting a check kept for hours.
@@ -834,8 +840,10 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
   // goes only to act_<the account this business chose through this connection>, never another.
   if (kind === 'adaccount') {
     const chosen = await metaChosenAdAccountOf(connectionId)
-    if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus creates nothing on Meta.' }
-    return id === `act_${chosen}` ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: a create goes only to the Meta ad account this business chose through this connection.' }
+    // Step 40 — a change of the ad account itself (its settings, spending limit, tracking specs, insights features) in its own words.
+    const own = META_ACCOUNT_SETTINGS_WRITE_RULES.some((rule) => rule.name === write.rule)
+    if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus ${own ? 'changes' : 'creates'} nothing on Meta.` }
+    return id === `act_${chosen}` ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: own ? 'Nothing was sent to Meta: a change of an ad account goes only to the Meta ad account this business chose through this connection.' : 'Nothing was sent to Meta: a create goes only to the Meta ad account this business chose through this connection.' }
   }
   // Step 23 — a folder in a business portfolio's media library: step 28's portfolio check, then no other Nexus business
   // shares that portfolio (its library would be that business's too).
