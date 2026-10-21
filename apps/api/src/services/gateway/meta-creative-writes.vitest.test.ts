@@ -23,7 +23,7 @@ vi.mock('../cx/token.service.js', () => ({
 vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.fn(async () => undefined) }))
 vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
 
-import { GATEWAY_META_PAGE, gatewayLedger, gatewayMetaChosen, gatewayMetaMedia, gatewayMetaTakenLinks } from '../../test-support/gateway-stubs.js'
+import { gatewayLedger, gatewayMetaChosen, gatewayMetaInstagram, gatewayMetaPage, gatewayMetaTakenLinks } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { metaWriteCall } from './meta.js'
 import { metaWriteVerdict } from './meta-calls.js'
@@ -36,7 +36,7 @@ import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
 
 const BASE = `https://graph.facebook.com/${META_DEFAULT_GRAPH_API_VERSION}`
 const ACT = 'act_1234567890'
-const PAGE = GATEWAY_META_PAGE
+const PAGE = '120000000000010'
 const IG = '17841400000000001'
 const HASH = 'abc123def456'
 const CREATIVE = '120000000000301'
@@ -85,7 +85,11 @@ beforeEach(() => {
   __metaObjectLimitsTest.useMemory()
   h.calls = []; h.answers = []; gatewayLedger.length = 0
   for (const key of Object.keys(gatewayMetaChosen)) delete gatewayMetaChosen[key]
-  for (const key of Object.keys(gatewayMetaMedia)) delete gatewayMetaMedia[key]
+  // Step 19 / 21's stubs: the chosen Page and Instagram account of the test connection.
+  for (const key of Object.keys(gatewayMetaPage)) delete gatewayMetaPage[key]
+  for (const key of Object.keys(gatewayMetaInstagram)) delete gatewayMetaInstagram[key]
+  gatewayMetaPage['m-1'] = PAGE
+  gatewayMetaInstagram['m-1'] = IG
   gatewayMetaTakenLinks.clear()
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     h.calls.push({ url: String(url), init })
@@ -217,7 +221,8 @@ describe('the creative allow-list, at every depth', () => {
   it('Meta\'s check (validate_only) goes for the creative create only, exactly in Nexus\'s spelling, declared a read', () => {
     const body = form(creative(), { execution_options: '["validate_only"]' })
     const v = verdict({ body, kind: 'read' })
-    expect('write' in v && v.write).toMatchObject({ rule: 'adaccount.creative.create', check: true, checkable: true })
+    // Step 19's adaccount owner check lets Meta's check of a create go (validate_only is documented on creates).
+    expect('write' in v && v.write).toMatchObject({ rule: 'adaccount.creative.create', check: true })
     expect(problem({ body, kind: 'write' })).toMatch(/goes as a read/)
     expect(problem({ body: form(creative(), { execution_options: '["validate_only","include_recommendations"]' }), kind: 'read' })).toMatch(/only execution_options/)
     // The creative update and its labels have no check (not documented): refused.
@@ -244,7 +249,7 @@ describe('a creative on the gateway', () => {
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(other))) })).rejects.toThrow(/Page 120000000000099 is not the one this business chose/)
     h.answers.push(json({ data: [] }))
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(creative()))) })).rejects.toThrow(/image abc123def456 is not one Nexus can confirm/)
-    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: 'act_5555555555', objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(creative()))) })).rejects.toThrow(/not the one this business chose/)
+    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: 'act_5555555555', objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(creative()))) })).rejects.toThrow(/a create goes only to the Meta ad account this business chose/)
     expect(h.calls.filter((c) => c.init.method === 'POST')).toHaveLength(0)
   })
 
@@ -281,7 +286,7 @@ describe('a creative on the gateway', () => {
     expect(sent(0).url.searchParams.get('fields')).toBe('account_id,object_type,status')
     expect(sent(1).method).toBe('POST')
     expect(new URLSearchParams(sent(1).body!).get('name')).toBe('Creativo B — €')
-    expect(problem({ url: `${BASE}/${CREATIVE}`, objectKind: 'creative', body: new URLSearchParams({ status: 'DELETED' }).toString() })).toMatch(/DELETED is a delete/)
+    expect(problem({ url: `${BASE}/${CREATIVE}`, objectKind: 'creative', body: new URLSearchParams({ status: 'DELETED' }).toString() })).toMatch(/deletes nothing by a status change/)
     expect(problem({ url: `${BASE}/${CREATIVE}`, objectKind: 'creative', body: new URLSearchParams({ object_story_spec: '{}' }).toString() })).toMatch(/only Meta change/)
     expect(problem({ url: `${BASE}/${CREATIVE}`, objectKind: 'creative', body: new URLSearchParams({ adlabels: '[{"name":"a"} ]' }).toString() })).toMatch(/one spelling/)
     // Another account's creative: nothing sent.

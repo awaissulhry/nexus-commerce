@@ -479,10 +479,11 @@ async function createDraft(account: MetaChangeAccount, request: CreativeRequest)
   const instagram = !!(built.creative.object_story_spec as { instagram_user_id?: unknown } | undefined)?.instagram_user_id || !!built.creative.instagram_user_id
   const label = `Create creative "${name}" in ad account ${act}${async ? ' as Meta\'s async job' : ''}`
   const request1: MetaChangeRequest = {
-    step: 1, label, kind: 'adaccount', objectId: act, params,
+    step: 1, label, kind: 'ad', objectKind: 'adaccount', objectId: act, params,
     // Meta documents validate_only on POST /act_<id>/adcreatives (reference/ad-account/adcreatives), not on asyncadcreatives.
     check: async ? 'none' : 'meta', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
-    operation: async ? 'creative.async' : 'creative.create', edge: async ? 'asyncadcreatives' : 'adcreatives',
+    // Each edge spelled as itself (no request builder computes its edge: step 21's pin).
+    ...(async ? { operation: 'creative.async', edge: 'asyncadcreatives' as const } : { operation: 'creative.create', edge: 'adcreatives' as const }),
     send: async ? sendAsync(act, params, asked, { name, fromExistingPost }) : sendCreate(act, params, asked, { name, fromExistingPost }),
     doneSentence: (result) => createdSentence(label, result.node),
   }
@@ -577,9 +578,10 @@ async function undoDraft(account: MetaChangeAccount, ids: string[]): Promise<Cre
   const requests: MetaChangeRequest[] = going.map((id, i) => {
     const label = `Delete creative ${id} (made new by Nexus) from ad account ${act}`
     return {
-      step: i + 1, label, kind: 'creative', objectId: id, params: {},
+      step: i + 1, label, kind: 'ad', objectKind: 'creative', objectId: id, params: {},
       check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
-      operation: 'creative.remove', method: 'DELETE',
+      // Step 22's creative.delete rule (meta-remove-rules.ts): the same DELETE remove-meta-ads-items sends on a person's ask.
+      operation: 'creative.delete', method: 'DELETE',
       doneSentence: () => `${label}: Meta deleted it.`,
     }
   })
@@ -651,17 +653,18 @@ export async function setCreativeDraft(account: MetaChangeAccount, request: SetC
     const label = `creative ${id}${now.name ? ` "${now.name}"` : ''}`
     if (Object.keys(params).length) {
       requests.push({
-        step: requests.length + 1, label: `Change ${label}: ${Object.keys(params).map((k) => (k === 'adlabels' ? 'labels' : k)).join(', ')}`, kind: 'creative', objectId: id, params,
+        step: requests.length + 1, label: `Change ${label}: ${Object.keys(params).map((k) => (k === 'adlabels' ? 'labels' : k)).join(', ')}`, kind: 'ad', objectKind: 'creative', objectId: id, params,
         check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: true,
         operation: 'creative.update', ...(Object.keys(expect).length ? { expect } : {}), readBackFields: 'id,name,status',
       })
     }
     if (newAdds.length) {
       requests.push({
-        step: requests.length + 1, label: `Add label${newAdds.length === 1 ? '' : 's'} ${newAdds.map((l) => `"${l}"`).join(', ')} to ${label}`, kind: 'creative', objectId: id,
+        step: requests.length + 1, label: `Add label${newAdds.length === 1 ? '' : 's'} ${newAdds.map((l) => `"${l}"`).join(', ')} to ${label}`, kind: 'ad', objectKind: 'creative', objectId: id,
         params: { adlabels: JSON.stringify(newAdds.map((n) => ({ name: n }))) },
         check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: true,
-        operation: 'creative.addLabels', edge: 'adlabels',
+        // Step 21's edge rule shape: the creative itself is read back (its adlabels edge answers success, not a new object).
+        operation: 'creative.addLabels', edge: 'adlabels', readBackObject: true,
         doneSentence: () => `Add label${newAdds.length === 1 ? '' : 's'} to ${label}: Meta took ${newAdds.length === 1 ? 'it' : 'them'}.`,
       })
     }
