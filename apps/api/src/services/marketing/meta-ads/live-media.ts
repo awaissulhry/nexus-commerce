@@ -170,7 +170,7 @@ function portfolioOf(account: MetaChosenAccount): string {
   return account.businessId
 }
 
-export const PORTFOLIO_TAKEN = 'Another business in Nexus reads an ad account of this Meta business portfolio, so the portfolio\'s media library, folders and tags are not read here (they would show that business\'s media too). Read this ad account\'s own media with views images and videos, and the system user\'s own folders with view my-folders.'
+export const PORTFOLIO_TAKEN = 'Another business in Nexus reads an ad account of this Meta business portfolio, so the portfolio\'s media library, folders and tags are not read here (they would show that business\'s media too). Read this ad account\'s own media with views images and videos.'
 
 /**
  * Step 10 review A1 — a portfolio another business's chosen ad account belongs to (nexus_meta_links_taken PORTFOLIO) is
@@ -440,6 +440,10 @@ export async function liveMedia(input: MediaInput) {
       return { ...base, portfolioId: portfolio, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Meta documents no API to create, change or delete these tags.' }
     }
     case 'my-folders': {
+      // Round 3 F1 — the system user's folders are its portfolio's: when another business shares that portfolio (and the
+      // system user), they would list that business's folders too, so they are the portfolio's id and the flag only.
+      const taken = await portfolioTaken(portfolioOf(account))
+      if (taken) return { ...base, ...taken }
       const systemUser = idText(account.connection.systemUser?.id)
       if (!systemUser) throw new MetaLiveRefusal('Nexus has not read which system user this connection acts as yet (meta-connection view check reads it).')
       const read = await listPaged(connectionId, 'media.assignedFolders', `${systemUser}/assigned_creative_folders`, { fields: MEDIA_FIELDS.AssignedFolder }, maxRows)
@@ -790,10 +794,17 @@ export async function liveInstagram(input: InstagramInput) {
       const odd = metrics.find((m) => !(IG_ACCOUNT_METRICS as readonly string[]).includes(m))
       if (odd) throw new MetaLiveRefusal(`"${odd}" is not a metric Nexus asks of an account; it asks ${IG_ACCOUNT_METRICS.join(', ')}.`)
       const demographic = metrics.some((m) => m.endsWith('_demographics'))
+      // Round 3 F2 — demographics are period=lifetime with a timeframe (which overrides since / until, so neither is sent);
+      // the interaction metrics are period=day: Meta refuses the two kinds in one read.
+      if (demographic && !metrics.every((m) => m.endsWith('_demographics'))) {
+        throw new MetaLiveRefusal('Ask the demographics (follower_demographics, engaged_audience_demographics) apart from the other metrics: Meta reads them over a timeframe, the others by day.')
+      }
       const query: Record<string, MetaQueryValue> = { metric: metrics.join(','), period: demographic ? 'lifetime' : 'day', metric_type: input.metricType ?? 'total_value' }
       if (demographic) query.timeframe = input.timeframe ?? 'this_month'
-      if (input.from) query.since = input.from
-      if (input.to) query.until = input.to
+      else {
+        if (input.from) query.since = input.from
+        if (input.to) query.until = input.to
+      }
       if (input.breakdown) query.breakdown = input.breakdown
       const read = await onPage(() => metaReadOne({ connectionId }, { operation: 'instagram.accountInsights', path: `${instagramId}/insights`, query }))
       return { ...base, metrics, items: rowsOf(read.body).map((r) => tidy(r)), note: 'Organic account numbers (without from/to: the last 24 hours). Demographics: the top 45 only, for the timeframe. Delayed up to 48 hours; an unavailable metric comes back empty, not 0.' }
@@ -949,13 +960,14 @@ export async function previewSpec(account: MetaChosenAccount, spec: PreviewSpec)
       if (langs.length < 2 || langs.filter((l) => l.isDefault).length !== 1) throw new MetaLiveRefusal('A multi-language preview needs 2 to 10 languages, exactly one of them isDefault.')
       need(spec.imageHash ?? spec.imageUrl ?? spec.videoId, 'one imageHash, imageUrl or videoId')
       const videoId = spec.videoId ? await ownVideo(account, spec.videoId) : null
-      if (langs.some((l) => l.label === VIDEO_LABEL)) throw new MetaLiveRefusal(`"${VIDEO_LABEL}" is the video's own label: name the language another way.`)
+      if (langs.some((l) => l.label === VIDEO_LABEL || l.label === IMAGE_LABEL)) throw new MetaLiveRefusal(`"${VIDEO_LABEL}" and "${IMAGE_LABEL}" are the media's own labels: name the language another way.`)
       const label = (l: PreviewLanguage) => [{ name: l.label }]
       return {
         object_story_spec: story({}),
         asset_feed_spec: drop({
           ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
-          images: videoId ? undefined : [spec.imageHash ? { hash: spec.imageHash } : { url: spec.imageUrl }],
+          // Round 3 N1 — the image labelled like the video (Meta's table asks image_label for SINGLE_IMAGE; its example omits it).
+          images: videoId ? undefined : [{ ...(spec.imageHash ? { hash: spec.imageHash } : { url: spec.imageUrl }), adlabels: [{ name: IMAGE_LABEL }] }],
           // Review B6 — SINGLE_VIDEO needs the video labelled and each rule's video_label (one video for every language).
           videos: videoId ? [drop({ video_id: videoId, adlabels: [{ name: VIDEO_LABEL }], ...(spec.imageHash ? { thumbnail_hash: spec.imageHash } : spec.imageUrl ? { thumbnail_url: spec.imageUrl } : {}) })] : undefined,
           bodies: langs.map((l) => ({ text: l.message, adlabels: label(l) })),
@@ -967,6 +979,7 @@ export async function previewSpec(account: MetaChosenAccount, spec: PreviewSpec)
             customization_spec: { locales: l.locales }, is_default: l.isDefault ? true : undefined,
             body_label: { name: l.label }, title_label: { name: l.label }, description_label: { name: l.label }, link_url_label: { name: l.label },
             video_label: videoId ? { name: VIDEO_LABEL } : undefined,
+            image_label: videoId ? undefined : { name: IMAGE_LABEL },
           })),
         }),
       }
@@ -976,6 +989,8 @@ export async function previewSpec(account: MetaChosenAccount, spec: PreviewSpec)
 
 /** The one video's label in a multi-language spec (asset_feed_spec videos[].adlabels and each rule's video_label). */
 const VIDEO_LABEL = 'nexus_video'
+/** The one image's label in a multi-language image spec (images[].adlabels and each rule's image_label). */
+const IMAGE_LABEL = 'nexus_image'
 
 /** The link inside Meta's iframe (`src="…"`), with Meta's `&amp;` read back. */
 export function linkOfIframe(iframe: string | null): string | null {

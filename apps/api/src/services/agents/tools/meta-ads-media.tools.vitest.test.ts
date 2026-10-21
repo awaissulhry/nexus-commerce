@@ -394,10 +394,12 @@ describe('what Meta refuses is said plainly', () => {
 describe('step 10 review fixes', () => {
   it('A1 — a business portfolio another business\'s ad account belongs to is its id and the flag only, with NO call', async () => {
     h.taken = [{ id: '9876543210' }]
-    for (const view of ['business-images', 'business-videos', 'business-creatives', 'folders', 'tags']) {
+    // Round 3 F1 — the system user's own folders too: they are that shared portfolio's.
+    for (const view of ['business-images', 'business-videos', 'business-creatives', 'folders', 'tags', 'my-folders']) {
       expect(await run('meta-media-library', { view })).toEqual({ ok: true, data: { adAccountId: ACCOUNT, portfolioId: '9876543210', takenByAnotherBusiness: true, sentence: PORTFOLIO_TAKEN } })
     }
-    expect(PORTFOLIO_TAKEN).toMatch(/views images and videos.*my-folders/)
+    expect(PORTFOLIO_TAKEN).toMatch(/views images and videos/)
+    expect(PORTFOLIO_TAKEN).not.toMatch(/my-folders/)
     expect(h.calls).toHaveLength(0)
     // The ad account's own library still reads.
     expect((await run('meta-media-library', { view: 'images' })).ok).toBe(true)
@@ -444,5 +446,27 @@ describe('step 10 review fixes', () => {
       expect({ params, ok: res.ok }).toEqual({ params, ok: false })
     }
     expect(h.calls).toHaveLength(0)
+  })
+  it('round 3 F2 — Instagram demographics go apart from the other metrics, with their timeframe and never a since / until', async () => {
+    expect((await run('meta-instagram-media', { view: 'account-insights', metrics: ['follower_demographics', 'reach'] })).error).toMatch(/demographics .* apart from the other metrics/)
+    expect(h.calls).toHaveLength(0)
+    h.one = () => ({ data: [] })
+    await run('meta-instagram-media', { view: 'account-insights', metrics: ['engaged_audience_demographics'], timeframe: 'this_week', from: '2026-10-01', to: '2026-10-20' })
+    expect(h.calls[0].query).toEqual({ metric: 'engaged_audience_demographics', period: 'lifetime', metric_type: 'total_value', timeframe: 'this_week' })
+    h.calls.length = 0
+    await run('meta-instagram-media', { view: 'account-insights', metrics: ['reach'], from: '2026-10-01', to: '2026-10-20' })
+    expect(h.calls[0].query).toEqual({ metric: 'reach', period: 'day', metric_type: 'total_value', since: '2026-10-01', until: '2026-10-20' })
+  })
+  it('round 3 N1 — a multi-language image spec labels the image and names it in every rule, as the video is', async () => {
+    h.one = () => ({ data: [{ body: '<iframe src="https://p"></iframe>' }] })
+    const languages = [
+      { label: 'italian', locales: [23], isDefault: true, message: 'Nuova stagione', headline: 'Giacche', link: 'https://shop.example.com/it' },
+      { label: 'french', locales: [9], message: 'Nouvelle saison', headline: 'Vestes', link: 'https://shop.example.com/fr' },
+    ]
+    await run('meta-ad-preview', { view: 'spec', spec: { kind: 'multi-language', imageHash: '0123456789abcdef0123456789abcdef', languages } })
+    const feed = (h.calls[0].query!.creative as { asset_feed_spec: Record<string, unknown> }).asset_feed_spec
+    expect(feed.images).toEqual([{ hash: '0123456789abcdef0123456789abcdef', adlabels: [{ name: 'nexus_image' }] }])
+    expect((feed.asset_customization_rules as Array<Record<string, unknown>>).map((r) => [r.image_label, r.video_label])).toEqual([[{ name: 'nexus_image' }, undefined], [{ name: 'nexus_image' }, undefined]])
+    expect((await run('meta-ad-preview', { view: 'spec', spec: { kind: 'multi-language', imageHash: 'abc', languages: [{ ...languages[0], label: 'nexus_image' }, languages[1]] } })).error).toMatch(/the media's own labels/)
   })
 })
