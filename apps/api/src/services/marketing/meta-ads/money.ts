@@ -36,9 +36,14 @@ export const META_CURRENCY_OFFSETS: Readonly<Record<string, 1 | 100>> = {
   USD: 100, UYU: 100, VEF: 100, VND: 1, FBZ: 100, VES: 100,
 }
 
-/** Meta's offset for a currency of its table; null for no currency or one Meta does not list. */
-export function metaCurrencyOffset(currency: string | null | undefined): 1 | 100 | null {
-  return currency ? META_CURRENCY_OFFSETS[currency.trim().toUpperCase()] ?? null : null
+/**
+ * Step 3 review round 3 — the ONE normalised currency code the write path uses: upper case, exactly three letters A–Z.
+ * Never trimmed: a padded code (" TWD", "TWD ") is refused (null), so it can never fall back to another currency's
+ * decimals or offset (10× or 100× off).
+ */
+export function metaCurrencyCode(currency: string | null | undefined): string | null {
+  const code = typeof currency === 'string' ? currency.toUpperCase() : null
+  return code && /^[A-Z]{3}$/.test(code) ? code : null
 }
 
 /** A Meta offset-unit integer (number or numeric string) → micros; null for no value or not a whole number. */
@@ -108,10 +113,15 @@ export function metaAccountSpendCapMicros(value: unknown, currency: string | nul
  * Meta ad-account currencies at all.
  */
 export function minorToMetaUnits(minor: number, currency: string | null | undefined): number | null {
-  if (!Number.isSafeInteger(minor) || minor < 0 || !currency) return null
-  const micros = BigInt(minor) * 10n ** BigInt(Math.max(0, 6 - currencyExponent(currency)))
-  const per = BigInt(1_000_000 / metaOffset(currency))
-  return micros % per === 0n ? Number(micros / per) : null
+  // Review round 3 — one normalised code for the decimals AND the offset (a malformed code is null, never guessed).
+  const code = metaCurrencyCode(currency)
+  if (!Number.isSafeInteger(minor) || minor < 0 || !code) return null
+  const micros = BigInt(minor) * 10n ** BigInt(Math.max(0, 6 - currencyExponent(code)))
+  const per = BigInt(1_000_000 / metaOffset(code))
+  if (micros % per !== 0n) return null
+  // Review round 3 — never a rounded number: Meta's units past 2^53 are refused.
+  const units = micros / per
+  return units <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(units) : null
 }
 
 /**
@@ -140,20 +150,28 @@ export function currencyAmountMicros(value: unknown): { micros: bigint; currency
  * offset 100 → two decimals of Meta's hundredths, offset 1 → whole units, no decimals. EUR 50000 → "500.00", JPY 1250 →
  * "1250", BHD 1250 (1.250) → "1.25", BHD 12500 → "12.50", CRC 125000 (1250.00) → "1250", TWD 1200 (12.00) → "12".
  *
+ * Minor units are Nexus's: the currency's decimals as Intl / CLDR counts them (currencyExponent), which is not always
+ * ISO 4217 — this Node's ICU gives COP, HUF, IDR and PKR 0 decimals where ISO 4217 gives 2 (and BHD, JOD 3; CRC, TWD 2).
+ * Step 40's preview must therefore show the standard string it sends WITH the currency code and state the decimals it
+ * counted the amount in (e.g. 'spend cap "12" TWD — Nexus counted 1200 in 2 decimals, Meta takes whole units').
+ *
  * Null — the caller refuses, nothing is sent — when:
  *   - minor ≤ 0: "A value of 0 signifies no spending-cap" (reference/ad-account), so a cap of 0 would REMOVE the cap,
  *     and a negative cap is no cap at all. Removing the cap is its own change, spend_cap_action=delete (reference/
  *     ad-account Updating: "removes the spend_cap from the account"), and it SPENDS MONEY (the account then spends
  *     without a limit); never this helper;
- *   - the currency is missing or not one of Meta's (META_CURRENCY_OFFSETS);
- *   - it is not a whole number of Meta's units (minorToMetaUnits null: BHD 5 = 0.005, TWD 1250 = 12.50) or not a whole
- *     number at all.
+ *   - the currency is missing, not exactly three letters (metaCurrencyCode: " TWD" is refused, "eur" is EUR) or not one
+ *     of Meta's (META_CURRENCY_OFFSETS);
+ *   - it is not a whole number of Meta's units (minorToMetaUnits null: BHD 5 = 0.005, TWD 1250 = 12.50), not a whole
+ *     number at all, or more Meta units than a safe integer (2^53 − 1).
  */
 export function minorToMetaStandard(minor: number, currency: string | null | undefined): string | null {
   if (!Number.isSafeInteger(minor) || minor <= 0) return null
-  const offset = metaCurrencyOffset(currency)
-  if (offset === null) return null
-  const units = minorToMetaUnits(minor, currency)
+  // Review round 3 — normalised ONCE; the same code gives the offset, the decimals and Meta's units.
+  const code = metaCurrencyCode(currency)
+  const offset = code ? META_CURRENCY_OFFSETS[code] ?? null : null
+  if (!code || offset === null) return null
+  const units = minorToMetaUnits(minor, code)
   if (units === null) return null
   if (offset === 1) return String(units)
   return `${Math.trunc(units / 100)}.${String(units % 100).padStart(2, '0')}`

@@ -47,7 +47,7 @@ vi.mock('../../../db.js', () => ({
 
 import { META_ADS_ACCOUNT_TOOLS, META_BILLING_MONEY } from './meta-ads-account.tools.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
-import { currencyAmountMicros, META_CURRENCY_OFFSETS, META_OFFSET_ONE, metaAccountSpendCapMicros, metaCurrencyOffset, minorOf, minorToMetaStandard, minorToMetaUnits } from '../../marketing/meta-ads/money.js'
+import { currencyAmountMicros, META_CURRENCY_OFFSETS, META_OFFSET_ONE, metaAccountSpendCapMicros, metaCurrencyCode, minorOf, minorToMetaStandard, minorToMetaUnits } from '../../marketing/meta-ads/money.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
 
@@ -391,6 +391,33 @@ describe('meta-billing, review round 2', () => {
     }
     expect(JSON.stringify(data(await run('meta-billing', { view: 'invoice-groups' })))).not.toMatch(/IT00000000000/)
   })
+  it('addresses of a personal-use account, or one Meta says nothing about, show no street or post code (review round 3)', async () => {
+    const liable = { street1: 'Via A 1', street2: 'Scala B', city: 'Rome', postal_code: '00100', country: 'IT', vat_tax_id: 'IT00000000000' }
+    for (const flags of [{ is_personal: 1 }, {}]) {
+      h.answer = (req) => (/tax_id/.test(fieldsOf(req)) ? { tax_id_status: 3, ...flags, liable_address: liable } : answers(req))
+      const tax = data(await run('meta-billing', { view: 'tax' }))
+      expect(tax.addresses.liable, JSON.stringify(flags)).toEqual({ city: 'Rome', state: null, country: 'IT', validationStatus: null })
+      h.answer = (req) => (req.path === `act_${ACCOUNT}` && fieldsOf(req).includes('account_status') ? { ...(answers(req) as object), ...flags, is_personal: (flags as { is_personal?: number }).is_personal, liable_address: liable, business_street: 'Via A 1', business_zip: '00100', business_city: 'Rome' } : answers(req))
+      const settings = data(await run('meta-ad-account', { view: 'settings' }))
+      expect(settings.addresses.liable).toEqual({ city: 'Rome', state: null, country: 'IT', validationStatus: null })
+      expect(settings.businessAddress).toMatchObject({ city: 'Rome' })
+      for (const out of [tax, settings]) expect(JSON.stringify(out)).not.toMatch(/Via A 1|Scala B|00100|IT00000000000/)
+      h.answer = (req) => {
+        if (fieldsOf(req) === 'is_personal,tax_id_status') return flags
+        if (req.path.endsWith('/extended_credit_invoice_groups')) return { data: [{ id: GROUP, name: 'Group A', bill_to_address: liable }] }
+        return answers(req)
+      }
+      expect(JSON.stringify(data(await run('meta-billing', { view: 'invoice-groups' })))).not.toMatch(/Via A 1|00100|IT00000000000/)
+    }
+    // A business-use account (is_personal explicitly 0): the street and post code show (and, in billing, its tax ids).
+    h.answer = (req) => (/tax_id/.test(fieldsOf(req)) ? { tax_id_status: 3, is_personal: 0, liable_address: liable } : answers(req))
+    expect(data(await run('meta-billing', { view: 'tax' })).addresses.liable).toMatchObject({ street: ['Via A 1', 'Scala B'], postalCode: '00100', vatTaxId: 'IT00000000000' })
+    h.answer = (req) => (req.path === `act_${ACCOUNT}` && fieldsOf(req).includes('account_status') ? { ...(answers(req) as object), liable_address: liable, business_street: 'Via A 1', business_zip: '00100' } : answers(req))
+    const settings = data(await run('meta-ad-account', { view: 'settings' }))
+    expect(settings.addresses.liable).toMatchObject({ street: ['Via A 1', 'Scala B'], postalCode: '00100' })
+    expect(settings.addresses.liable.vatTaxId).toBeUndefined()
+    expect(settings.businessAddress).toMatchObject({ street: 'Via A 1', zip: '00100' })
+  })
   it('credit lines: one whose owner Meta does not name is treated as another business\'s — no amounts, no names (A3)', async () => {
     h.answer = (req) => (req.path.endsWith('/extendedcredits') ? { data: [
       { id: '500000000000004', credit_type: 'ADS_BUSINESS', legal_entity_name: 'Unknown ltd', owner_business_name: 'Unknown owner', partition_from: 'Unknown grant', balance: { amount: '4.00', currency: 'USD', offsetted_amount: '400' } },
@@ -628,7 +655,23 @@ describe('the units (facts F1 X4, SDK currencyamount.py)', () => {
   it('Meta\'s currency table: the offset-1 currencies are exactly those metaOffset counts in whole units', () => {
     expect(Object.keys(META_CURRENCY_OFFSETS)).toHaveLength(66)
     expect(Object.entries(META_CURRENCY_OFFSETS).filter(([, o]) => o === 1).map(([c]) => c).sort()).toEqual([...META_OFFSET_ONE].sort())
-    expect([metaCurrencyOffset('bhd'), metaCurrencyOffset('JOD'), metaCurrencyOffset('CRC'), metaCurrencyOffset('TWD'), metaCurrencyOffset('KWD'), metaCurrencyOffset(null)]).toEqual([100, 100, 1, 1, null, null])
+    expect(['BHD', 'JOD', 'CRC', 'TWD'].map((c) => META_CURRENCY_OFFSETS[c])).toEqual([100, 100, 1, 1])
+    expect(META_CURRENCY_OFFSETS.KWD).toBeUndefined()
+  })
+  it('one normalised currency code (review round 3): upper case, three letters, never trimmed — a padded code is refused, never 10× or 100× off', () => {
+    expect([metaCurrencyCode('eur'), metaCurrencyCode('EUR'), metaCurrencyCode(' TWD'), metaCurrencyCode('TWD '), metaCurrencyCode('EURO'), metaCurrencyCode(''), metaCurrencyCode(null)]).toEqual(['EUR', 'EUR', null, null, null, null, null])
+    expect(minorToMetaStandard(50000, 'eur')).toBe('500.00')
+    expect(minorToMetaStandard(1200, 'twd')).toBe('12')
+    for (const [minor, currency] of [[1250, ' TWD'], [1200, 'TWD '], [125000, ' CRC'], [1250, ' BHD'], [1250, 'BHD '], [2300, ' PKR'], [50000, 'EURO'], [50000, ' EUR']] as const) {
+      expect(minorToMetaStandard(minor, currency), `${minor} "${currency}"`).toBeNull()
+      expect(minorToMetaUnits(minor, currency), `${minor} "${currency}"`).toBeNull()
+    }
+  })
+  it('never a rounded cap: Meta units past 2^53 are refused (review round 3)', () => {
+    expect(minorToMetaStandard(900719925474099, 'PKR')).toBeNull()
+    expect(minorToMetaUnits(900719925474099, 'PKR')).toBeNull()
+    expect(minorToMetaUnits(Number.MAX_SAFE_INTEGER, 'EUR')).toBe(Number.MAX_SAFE_INTEGER)
+    expect(minorToMetaStandard(Number.MAX_SAFE_INTEGER, 'EUR')).toBe('90071992547409.91')
   })
   it('minor units → Meta\'s offset units, only when whole, never below 0, never without a currency (the one helper)', () => {
     expect(minorToMetaUnits(1250, 'EUR')).toBe(1250)

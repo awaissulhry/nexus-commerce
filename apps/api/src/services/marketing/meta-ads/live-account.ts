@@ -132,14 +132,18 @@ function portfolioRef(value: unknown, taken: ReadonlySet<string>, own: string | 
 
 const portfolioIdsOf = (values: unknown[]) => values.map((v) => idText(obj(v)?.id)).filter((id): id is string => !!id)
 
-/** An address Meta keeps (CRMAddress). Tax ids only where billing asks for them. */
-function addressOf(v: unknown, withTaxIds: boolean) {
+/**
+ * An address Meta keeps (CRMAddress). Review round 3 — street and postal code only for an account Meta says is for
+ * business use (businessUse: on a personal-use account, or when Meta does not say, they could be a person's home); tax
+ * ids only where billing asks for them, on the same condition.
+ */
+function addressOf(v: unknown, show: { street: boolean; taxIds: boolean }) {
   const a = obj(v)
   if (!a) return null
   return {
-    street: [a.street1, a.street2, a.street3, a.street4].map(text).filter(Boolean), city: text(a.city), state: text(a.state), postalCode: text(a.postal_code),
-    country: text(a.country), validationStatus: text(a.validation_status),
-    ...(withTaxIds ? { vatTaxId: text(a.vat_tax_id), registrationLabel: text(a.registration_label), registrationNumber: text(a.registration_number), cnpjTaxId: text(a.cnpj_tax_id) } : {}),
+    ...(show.street ? { street: [a.street1, a.street2, a.street3, a.street4].map(text).filter(Boolean) } : {}), city: text(a.city), state: text(a.state),
+    ...(show.street ? { postalCode: text(a.postal_code) } : {}), country: text(a.country), validationStatus: text(a.validation_status),
+    ...(show.street && show.taxIds ? { vatTaxId: text(a.vat_tax_id), registrationLabel: text(a.registration_label), registrationNumber: text(a.registration_number), cnpjTaxId: text(a.cnpj_tax_id) } : {}),
   }
 }
 
@@ -230,6 +234,7 @@ async function accountSettings(account: MetaChosenAccount) {
   }
   const d = obj(obj(declaration.value?.body)?.agency_client_declaration)
   const customAudience = obj(body.custom_audience_info)
+  const streets = businessUse(body)
   return {
     adAccountId, name: text(body.name), status, statusText: statusText(status), disableReason: reason, disableReasonText: reason === null ? null : DISABLE_REASON_WORDS[reason] ?? `Reason ${reason}`,
     ageDays: num(body.age), createdTime: text(body.created_time), currency: text(body.currency),
@@ -242,9 +247,10 @@ async function accountSettings(account: MetaChosenAccount) {
     migratedPermissions: bool(body.has_migrated_permissions), notificationsOn: bool(body.is_notifications_enabled),
     inventoryFilterLevels: strings(body.brand_safety_content_filter_levels),
     dsa: { payor: text(body.default_dsa_payor), beneficiary: text(body.default_dsa_beneficiary) },
+    // Review round 3 — street and post code only when Meta says the account is for business use (else a person's home).
     businessAddress: {
-      name: text(body.business_name), street: text(body.business_street), street2: text(body.business_street2), city: text(body.business_city),
-      state: text(body.business_state), zip: text(body.business_zip), countryCode: text(body.business_country_code),
+      name: text(body.business_name), ...(streets ? { street: text(body.business_street), street2: text(body.business_street2) } : {}), city: text(body.business_city),
+      state: text(body.business_state), ...(streets ? { zip: text(body.business_zip) } : {}), countryCode: text(body.business_country_code),
     },
     promotable: promotable ? {
       pages: strings(promotable.promotable_page_ids).map((id) => pageRef(id, takenPages, account)), appIds: strings(promotable.promotable_app_ids),
@@ -252,7 +258,7 @@ async function accountSettings(account: MetaChosenAccount) {
     } : null,
     marketingMessages: body.marketing_messages_settings === undefined ? null : tidy(body.marketing_messages_settings),
     // SDK only (AA-022): Meta's answer decides; a refusal is named in missing.
-    addresses: { liable: addressOf(body.liable_address, false), sendBillTo: addressOf(body.send_bill_to_address, false), soldTo: addressOf(body.sold_to_address, false) },
+    addresses: { liable: addressOf(body.liable_address, { street: streets, taxIds: false }), sendBillTo: addressOf(body.send_bill_to_address, { street: streets, taxIds: false }), soldTo: addressOf(body.sold_to_address, { street: streets, taxIds: false }) },
     ownerPortfolio: portfolioRef(body.owner_business, takenPortfolios, own), viewablePortfolio: portfolioRef(body.viewable_business, takenPortfolios, own),
     accessExpires: text(body.user_access_expire_time),
     customAudienceInfo: customAudience ? { newCustomerTag: text(customAudience.new_customer_tag), existingCustomerTag: text(customAudience.existing_customer_tag), audienceTypeParam: text(customAudience.audience_type_param_name) } : null,
@@ -267,6 +273,7 @@ async function accountSettings(account: MetaChosenAccount) {
     notes: [
       'nexusTasks: what Nexus\'s system user may do on this account (MANAGE is needed for the payment method, ADVERTISE or MANAGE for prepay and tax).',
       'personalUse: Meta treats the account as used for private purposes (it changes how VAT is charged); it is not whether the account belongs to a business.',
+      ...(streets ? [] : ['The addresses show no street or post code: the account is for personal use (or Meta did not say), so they could be a person\'s home.']),
       'Meta cannot change the currency or time zone of an ad account by any API (Ads Manager neither: a new ad account is the way); the name, DSA defaults, business address, spending limit and notifications are changes a person approves.',
       'Status, money, terms and the opportunity score at a glance: meta-ads-live view account; spending limit and payment: meta-billing.',
     ],
@@ -618,14 +625,14 @@ async function billingTax(account: MetaChosenAccount) {
     adAccountId: account.adAccountId,
     taxId: taxIds ? text(body.tax_id) : null, taxIdType: text(body.tax_id_type), taxIdStatus: status, taxIdStatusText: status === null ? null : TAX_STATUS_WORDS[status] ?? `Status ${status}`,
     taxIdRequired: bool(body.is_tax_id_required), personalUse: flag(body.is_personal),
-    addresses: { liable: addressOf(body.liable_address, taxIds), sendBillTo: addressOf(body.send_bill_to_address, taxIds), soldTo: addressOf(body.sold_to_address, taxIds) },
+    addresses: { liable: addressOf(body.liable_address, { street: taxIds, taxIds }), sendBillTo: addressOf(body.send_bill_to_address, { street: taxIds, taxIds }), soldTo: addressOf(body.sold_to_address, { street: taxIds, taxIds }) },
     missing,
     notes: [
       'Meta has no documented API to set the VAT number or the business address used for tax: a person sets them in Meta Business settings › Billing and payments.',
       'personalUse: the account is used for private purposes, so Meta charges VAT as to a consumer.',
       ...(taxIds ? [] : [flag(body.is_personal) === null && num(body.tax_id_status) !== 5
-        ? 'Meta did not say whether the account is for personal use, so Nexus does not show its tax and registration numbers (they could be a person\'s).'
-        : 'A personal-use account: its tax and registration numbers are a person\'s, so Nexus does not show them.']),
+        ? 'Meta did not say whether the account is for personal use, so Nexus does not show its tax and registration numbers, streets or post codes (they could be a person\'s).'
+        : 'A personal-use account: its tax and registration numbers, streets and post codes are a person\'s, so Nexus does not show them.']),
     ],
   }
 }
@@ -851,7 +858,7 @@ async function billingPortfolioView(account: MetaChosenAccount, view: BillingVie
           }
           out.push({
             creditLineId, invoiceGroupId: groupId, name: text(g.name), autoEnroll: bool(g.auto_enroll), purchaseOrderNumber: text(g.customer_po_number),
-            billTo: addressOf(g.bill_to_address, taxIds), soldTo: addressOf(g.sold_to_address, taxIds), liable: addressOf(g.liable_address, taxIds), adAccounts,
+            billTo: addressOf(g.bill_to_address, { street: taxIds, taxIds }), soldTo: addressOf(g.sold_to_address, { street: taxIds, taxIds }), liable: addressOf(g.liable_address, { street: taxIds, taxIds }), adAccounts,
           })
         }
       }
@@ -861,7 +868,7 @@ async function billingPortfolioView(account: MetaChosenAccount, view: BillingVie
           'An invoice group puts several ad accounts of a credit line on ONE monthly invoice. adAccounts: the accounts in each group (another business\'s by id only).',
           ...(lines.owned.length || lines.foreign.length ? [] : [NO_CREDIT_LINE]),
           ...(lines.foreign.length ? [FOREIGN_LINES] : []),
-          ...(taxIds ? [] : ['The addresses show no tax or registration numbers: the ad account is for personal use (or Meta did not say), so they would be a person\'s.']),
+          ...(taxIds ? [] : ['The addresses show no street, post code, tax or registration number: the ad account is for personal use (or Meta did not say), so they would be a person\'s.']),
           'Nexus does not read the invoice e-mail addresses (people\'s addresses); a person sees them in Meta Business settings › Billing and payments.',
         ],
       }
