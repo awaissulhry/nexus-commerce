@@ -21,7 +21,9 @@
  * Meta facts (checked 2026-10-21 on developers.facebook.com/documentation/ads-commerce/marketing-api/…, `.md` pages, and
  * Meta's Python Business SDK facebook_business/adobjects/*.py; the lists and rules are in meta-insights-lists.ts):
  *   - reference/ad-account/insights — GET and POST, the parameters, the v26 fields; POST makes an AdReportRun
- *     (`{report_run_id}`), only on /act_{ad_account_id}/insights; errors 3018 (37 months), 2642, 105;
+ *     (`{report_run_id}`); Meta documents the POST on the campaign and ad set insights edges too (ad-campaign-group/
+ *     insights, ad-campaign/insights, best-practices "POST <AD_OBJECT>/insights") — Nexus sends it on the chosen account's
+ *     path only, an object as a filter (one anchored path the gateway checks); errors 3018 (37 months), 2642, 105;
  *   - insights/best-practices — async jobs: poll `async_status` until "Job Completed" AND `async_percent_completion` 100,
  *     "Job Skipped" = expired (resubmit), the id expires after 30 days (never stored), a failed run carries error_code,
  *     error_message, error_subcode, error_user_title, error_user_msg since v25; results at GET /<run>/insights; the
@@ -49,7 +51,7 @@ import { metaReportRunCall, type MetaQueryValue } from '../../gateway/meta.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaReadOne } from './read-client.js'
 import { failureOfAnswer, failureOfThrow, MetaReadError } from './errors.js'
-import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectInAccount, type MetaChosenAccount } from './live.js'
+import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectInAccount, objectKindOf, type MetaChosenAccount } from './live.js'
 import { fieldRefused } from './live-objects.js'
 import { insightStatusFilter } from './mappers.js'
 import { currencyExponent, decimalToMicros, minorOf } from './money.js'
@@ -60,8 +62,9 @@ import {
   DEAD_WINDOWS, DEFAULT_METRICS, FILTER_FIELDS, filterValueProblem, INSIGHT_LEVELS, LEVEL_IDENTITY, MAX_MONTHS_BACK, MAX_PERIODS,
   META_ACTION_BREAKDOWNS, META_INSIGHT_BREAKDOWNS, META_INSIGHT_METRICS, METRIC_GROUPS, MMM_FILTERS, MONEY_KINDS, REPORT_BUILDER_DIMENSIONS,
   REPORT_BUILDER_METRICS, REPORT_BUILDER_WINDOWS, SORTABLE_KINDS, TYPE2_ACTION_BREAKDOWNS, WINDOWS_NOT_OFFERED,
-  type InsightLevel, type MetricGroup, type MetricKind,
+  hasKey, lookup, ownList, type InsightLevel, type MetricGroup, type MetricKind,
 } from '../../meta/meta-insights-lists.js'
+import { META_KIND_FIELDS, META_KIND_WORDS, withArticle } from '../../meta/meta-kinds.js'
 
 type Row = Record<string, unknown>
 const act = (id: string) => `act_${id}`
@@ -132,12 +135,14 @@ export interface NumbersInput {
   after?: string | null
   /** The person may see ad spend: only then may a read sort or filter by an amount (the order or the cut would show it). */
   seesMoney: boolean
+  /** meta-ads-report: the read goes on the account's path, its object as a filter. */
+  asReportRun?: boolean
 }
 
 // ── words ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Placement words (IN-032, IN-086, IN-087, CR-242): Instagram feed / Explore / Reels / Stories, Threads feed. */
-const PLACEMENT_WORDS: Readonly<Record<string, string>> = {
+const PLACEMENT_WORDS: Readonly<Record<string, string>> = ownList<string>(Object.entries({
   feed: 'Feed', right_hand_column: 'Facebook right column', marketplace: 'Facebook Marketplace', video_feeds: 'Facebook video feeds',
   story: 'Facebook Stories', search: 'Facebook search results', instream_video: 'In-stream videos', facebook_reels: 'Facebook Reels',
   facebook_reels_overlay: 'Ads on Facebook Reels', profile_feed: 'Facebook profile feed', notification: 'Facebook notifications',
@@ -145,9 +150,9 @@ const PLACEMENT_WORDS: Readonly<Record<string, string>> = {
   instagram_reels: 'Instagram Reels', instagram_profile_feed: 'Instagram profile feed', instagram_search: 'Instagram search results',
   ig_search: 'Instagram search results (video)', messenger_inbox: 'Messenger inbox', messenger_stories: 'Messenger Stories',
   an_classic: 'Audience Network', rewarded_video: 'Audience Network rewarded video', threads_feed: 'Threads feed',
-}
+}))
 
-const FEATURE_NOTE = (name: string, feature: string) => `${name} answers NOTHING, without an error, until the ad account switches it on (Meta's insights feature "${feature}", since 2026-08-06; a person switches it on in Ads Manager — no rows here means switched off, not 0).`
+const FEATURE_NOTE = (name: string, feature: string) => `${name} may be switched off for this ad account: Meta then answers NOTHING, without an error (its insights feature "${feature}", since 2026-08-06) — no rows means switched off or no delivery, never 0. Whether it is on: meta-ad-account view insights-features (step 3); a person switches it on in Ads Manager. After that, a background report (meta-ads-report) returns its full history, min(10, number of ad sets) such runs per 24 hours.`
 const TOO_MUCH = 'Meta could not answer this much at once. Ask fewer days, a lower level, fewer breakdowns or fewer metrics — or start the same read in the background: meta-ads-report action start with the same arguments (it may take up to an hour).'
 export const PORTFOLIO_SENTENCE = 'Meta has no insights for a whole business portfolio (its marketing-mix-modeling page: "the Insights API works on the ad account level and below" — a portfolio is read account by account). Each business in Nexus reads its own chosen ad account only: meta-ads-numbers reads it; another ad account of the portfolio may be another business\'s, so Nexus never adds them up.'
 
@@ -173,8 +178,8 @@ export interface NumbersPlan {
   featureGated: string[]
 }
 
-const LEVEL_RANK: Readonly<Record<InsightLevel, number>> = { account: 0, campaign: 1, adset: 2, ad: 3 }
-const KIND_WORD: Readonly<Record<string, string>> = { account: 'the ad account', campaign: 'campaign', adset: 'ad set', ad: 'ad' }
+const LEVEL_RANK = ownList<number>([['account', 0], ['campaign', 1], ['adset', 2], ['ad', 3]]) as Readonly<Record<InsightLevel, number>>
+const KIND_WORD = ownList<string>([['account', 'the ad account'], ['campaign', 'campaign'], ['adset', 'ad set'], ['ad', 'ad']])
 
 /** A day `months` calendar months before `day` (the 1st of a month never past its end). */
 export function monthsBefore(day: string, months: number): string {
@@ -197,9 +202,27 @@ export function comparisonPeriod(from: string, to: string, compare: typeof COMPA
 
 const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v
 
+/**
+ * Ids named in filters: each checked to be the chosen account's own and of that kind (one stored-row lookup, else one
+ * live read each), at most MAX_FILTER_IDS in one request (review A F5: the MMM export and the Report Builder too).
+ */
+function idBudget() {
+  let used = 0
+  return {
+    async check(account: MetaChosenAccount, f: NumbersFilter, operation: string) {
+      const spec = lookup(FILTER_FIELDS, f.field)
+      if (spec?.value !== 'ids') return
+      const ids = (Array.isArray(f.value) ? f.value : [f.value]) as string[]
+      used += ids.length
+      if (used > MAX_FILTER_IDS) throw new MetaLiveRefusal(`At most ${MAX_FILTER_IDS} ids in the filters of one read (each is checked to be this ad account's own).`)
+      for (const id of ids) await objectInAccount(account, id, spec.kind!, operation)
+    },
+  }
+}
+
 /** One metric name from a caller: on the list, else refused with the nearest reason. */
 function metricOk(name: string): void {
-  if (META_INSIGHT_METRICS[name]) return
+  if (hasKey(META_INSIGHT_METRICS, name)) return
   if (/^(auction_|deduping_|creative_fatigue|creative_diversity|wish_bid)/.test(name)) throw new MetaLiveRefusal(`"${name}" is read by meta-ad-details view diagnostics (auction, overlap, fatigue and diversity of one object), not here.`)
   if (/_ranking$/.test(name)) throw new MetaLiveRefusal(`"${name}": quality, engagement-rate and conversion-rate rankings are not in Meta's v26 insights reference; meta-ad-details view diagnostics shows them only if Meta still answers them.`)
   if (name === 'comparison_node') throw new MetaLiveRefusal('comparison_node: Meta\'s insights edge takes no comparison period (only the Report Builder does): ask compare (previous-period, previous-year) or periods here — Nexus computes the change — or meta-ads-saved-reports view report-builder with comparisonFrom / comparisonTo.')
@@ -253,8 +276,9 @@ export async function planNumbers(account: MetaChosenAccount, input: NumbersInpu
   // Breakdowns (IN-030 … IN-043) and action breakdowns (IN-046): on the lists, in a combination Meta keeps (IN-047).
   if (breakdowns.length > 4) throw new MetaLiveRefusal('At most 4 breakdowns at once (Meta keeps few combinations: view catalogue lists them).')
   for (const x of breakdowns) {
-    if (BREAKDOWNS_NOT_OFFERED[x]) throw new MetaLiveRefusal(`${x}: ${BREAKDOWNS_NOT_OFFERED[x]}.`)
-    if (!META_INSIGHT_BREAKDOWNS[x]) throw new MetaLiveRefusal(`"${x}" is not a breakdown Nexus asks Meta (view catalogue lists every one).`)
+    const notOffered = lookup(BREAKDOWNS_NOT_OFFERED, x)
+    if (notOffered) throw new MetaLiveRefusal(`${x}: ${notOffered}.`)
+    if (!hasKey(META_INSIGHT_BREAKDOWNS, x)) throw new MetaLiveRefusal(`"${x}" is not a breakdown Nexus asks Meta (view catalogue lists every one).`)
     if (META_INSIGHT_BREAKDOWNS[x].notAtAccount && level === 'account') throw new MetaLiveRefusal(`Meta does not answer ${x} for the whole account at once (its breakdowns page / best practices): ask level campaign, adset or ad.`)
   }
   const actionBreakdowns = [...new Set((input.actionBreakdowns ?? []).map((x) => x.trim()))]
@@ -367,7 +391,10 @@ export async function planNumbers(account: MetaChosenAccount, input: NumbersInpu
     if (preset === 'lifetime') throw new MetaLiveRefusal('Meta disabled lifetime: maximum reads its 37 months.')
     if (!(DATE_PRESETS as readonly string[]).includes(preset)) throw new MetaLiveRefusal(`datePreset is one of ${DATE_PRESETS.join(', ')}.`)
     query.date_preset = preset
-    if (preset === 'maximum' || preset === 'data_maximum' || preset === 'last_year' || preset === 'this_year') earliest = monthsBefore(today, preset === 'last_year' ? 24 : MAX_MONTHS_BACK)
+    // Review B-4 — how far back a preset reaches, where it reaches past a retention limit.
+    if (preset === 'maximum' || preset === 'data_maximum') earliest = monthsBefore(today, MAX_MONTHS_BACK)
+    else if (preset === 'this_year') earliest = `${today.slice(0, 4)}-01-01`
+    else if (preset === 'last_year') earliest = `${Number(today.slice(0, 4)) - 1}-01-01`
     if (!input.datePreset) notes.push('No days named: the last 30 days (Meta\'s default), today included.')
   }
   if (!periods) {
@@ -414,11 +441,11 @@ export async function planNumbers(account: MetaChosenAccount, input: NumbersInpu
 
   // Filters (IN-063): the caller's, the shortcuts, and every status (archived and deleted objects are left out otherwise).
   const filtering: Array<{ field: string; operator: string; value: unknown }> = []
-  let idsChecked = 0
+  const ids = idBudget()
   const exponent = currencyExponent(account.currency)
   const amount = (cents: number) => (cents / 10 ** exponent).toFixed(exponent)
   for (const f of input.filters ?? []) {
-    const spec = FILTER_FIELDS[f.field]
+    const spec = lookup(FILTER_FIELDS, f.field)
     if (!spec) throw new MetaLiveRefusal(`"${f.field}" is not a filter Nexus sends (${Object.keys(FILTER_FIELDS).join(', ')}).`)
     let value: unknown = f.value
     if (spec.value === 'money') {
@@ -428,12 +455,7 @@ export async function planNumbers(account: MetaChosenAccount, input: NumbersInpu
     }
     const problem = filterValueProblem(f.field, f.operator, value)
     if (problem) throw new MetaLiveRefusal(`${problem}.`)
-    if (spec.value === 'ids') {
-      const ids = (Array.isArray(value) ? value : [value]) as string[]
-      idsChecked += ids.length
-      if (idsChecked > MAX_FILTER_IDS) throw new MetaLiveRefusal(`At most ${MAX_FILTER_IDS} ids in the filters of one read (each is checked to be this ad account's own).`)
-      for (const id of ids) await objectInAccount(account, id, spec.kind!, 'numbers.filterOwnerCheck')
-    }
+    await ids.check(account, { ...f, value: value as NumbersFilter['value'] }, 'numbers.filterOwnerCheck')
     if (spec.unverified) notes.push(`The filter ${f.field} is not on a Meta page in this form (DOT notation): Meta's own answer decides.`)
     if (f.operator === 'CONTAIN' || f.operator === 'STARTS_WITH' || f.operator === 'ENDS_WITH' || f.operator === 'NOT_CONTAIN') notes.push(`${f.field} ${f.operator}: Meta's total row does not follow this filter (its best practices: use IN for that).`)
     filtering.push({ field: f.field, operator: f.operator, value })
@@ -450,6 +472,8 @@ export async function planNumbers(account: MetaChosenAccount, input: NumbersInpu
   } else if (statusField && input.includeArchived === false) {
     notes.push('Without archived and deleted ones: Meta leaves them out of a level read unless a status filter names them.')
   }
+  // A report run reads the account's path (meta-ads-report): the object it is about goes as one more filter, counted here.
+  if (input.asReportRun && objectKind !== 'account') filtering.push({ field: `${objectKind}.id`, operator: 'IN', value: [objectId] })
   if (filtering.length > 20) throw new MetaLiveRefusal('At most 20 filters at once.')
   if (filtering.length) query.filtering = filtering
   if (sort) query.sort = [sort]
@@ -468,6 +492,8 @@ export async function planNumbers(account: MetaChosenAccount, input: NumbersInpu
   for (const x of featureGated) notes.push(FEATURE_NOTE(x, META_INSIGHT_BREAKDOWNS[x].feature!))
   if (breakdowns.some((x) => META_INSIGHT_BREAKDOWNS[x]?.type1)) notes.push('Region and hourly breakdowns (Meta\'s Type 1): purchases and other actions on the shop\'s website or app are not returned with them.')
   if (breakdowns.some((x) => META_INSIGHT_BREAKDOWNS[x]?.type2) || actionBreakdowns.some((x) => TYPE2_ACTION_BREAKDOWNS.has(x))) notes.push('Product, device, destination and carousel-card breakdowns (Meta\'s Type 2): website numbers come without the breakdown value, app numbers not at all.')
+  const guideOnly = breakdowns.filter((x) => META_INSIGHT_BREAKDOWNS[x]?.guideOnly)
+  if (guideOnly.length) notes.push(`${guideOnly.join(', ')}: on Meta's Breakdowns guide but not in its reference list of breakdowns; if Meta refuses it, its own sentence says so (a live check is pending).`)
   const namesOnly = breakdowns.filter((x) => META_INSIGHT_BREAKDOWNS[x]?.namesOnly)
   if (namesOnly.length) notes.push(`${namesOnly.join(', ')}: Meta names these breakdowns without describing them; its own answer decides what they hold.`)
   if (breakdowns.length) notes.push('Every breakdown value is estimated by Meta (its breakdowns page).')
@@ -527,7 +553,7 @@ export interface MappedRow {
   nexusProductId?: string | null
 }
 
-const ROW_IDS: Readonly<Record<string, keyof MappedRow>> = { campaign_id: 'campaignId', campaign_name: 'campaignName', adset_id: 'adSetId', adset_name: 'adSetName', ad_id: 'adId', ad_name: 'adName' }
+const ROW_IDS = ownList<keyof MappedRow>([['campaign_id', 'campaignId'], ['campaign_name', 'campaignName'], ['adset_id', 'adSetId'], ['adset_name', 'adSetName'], ['ad_id', 'adId'], ['ad_name', 'adName']])
 
 /**
  * One insights row → Nexus's: ids and names, the breakdown values (placements in words), the numbers, and every amount in
@@ -629,21 +655,41 @@ async function withSkus(rows: MappedRow[]): Promise<void> {
 }
 
 /** Pages of an insights edge (cursor `after`; Meta's next link carries the token and is never followed), with Meta's total. */
+/** At most this many pages per read (Meta may answer fewer rows a page than asked). */
+const MAX_PAGES = 50
+
+/**
+ * Pages of an insights edge (cursor `after`; Meta's next link carries the token and is never followed), with Meta's total.
+ * Review A F1 — each page asks only for the rows still missing, so the read ends exactly at maxRows with the cursor of the
+ * next row; were Meta to send more than asked, the extra rows are cut and there is no exact cursor (`cut`, nextAfter null).
+ */
 async function readPages(connectionId: string, operation: string, path: string, query: Record<string, MetaQueryValue>, maxRows: number, after: string | null) {
   const rows: Row[] = []
   let summary: Row | null = null
   let cursor = after
-  for (let page = 0; page < Math.ceil(maxRows / PAGE_ROWS) + 1; page++) {
-    const { body } = await metaReadOne<Row>({ connectionId }, { operation, path, query: { ...query, limit: Math.min(PAGE_ROWS, maxRows), ...(cursor ? { after: cursor } : {}) } })
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const { body } = await metaReadOne<Row>({ connectionId }, { operation, path, query: { ...query, limit: Math.min(PAGE_ROWS, maxRows - rows.length), ...(cursor ? { after: cursor } : {}) } })
     if (page === 0) summary = obj(body.summary)
     rows.push(...rowsOf(body.data))
     const paging = obj(body.paging)
     const next = paging?.next ? text(obj(paging.cursors)?.after) : null
-    if (!next) return { rows: rows.slice(0, maxRows), summary, nextAfter: null as string | null }
-    if (rows.length >= maxRows) return { rows: rows.slice(0, maxRows), summary, nextAfter: rows.length > maxRows ? null : next }
+    if (rows.length > maxRows) return { rows: rows.slice(0, maxRows), summary, nextAfter: null as string | null, cut: true }
+    if (!next) return { rows, summary, nextAfter: null as string | null, cut: false }
+    if (rows.length === maxRows) return { rows, summary, nextAfter: next as string | null, cut: false }
     cursor = next
   }
-  return { rows: rows.slice(0, maxRows), summary, nextAfter: cursor }
+  return { rows, summary, nextAfter: cursor, cut: false }
+}
+
+/**
+ * Review A F2 — an answer cut to fit one reply keeps fewer rows than were read, so it carries NO cursor (paging on would
+ * skip the rows cut): `more` says there is more, the person asks fewer rows or metrics.
+ */
+function fitRows<T extends { rows: unknown[]; more: boolean; nextAfter: string | null; notes: string[] }>(answer: T): T {
+  if (JSON.stringify(answer).length <= MAX_ANSWER_CHARS) return answer
+  const kept = [...answer.rows]
+  while (kept.length > 1 && JSON.stringify({ ...answer, rows: kept }).length > MAX_ANSWER_CHARS) kept.splice(Math.max(1, Math.floor(kept.length * 0.8)))
+  return { ...answer, rows: kept, more: true, nextAfter: null, notes: [...answer.notes, `The answer was cut to ${kept.length} of ${answer.rows.length} rows to fit; ask fewer rows (maxRows), metrics or breakdowns to see the rest.`] }
 }
 
 /** Meta could not answer this much at once (its timeouts and data-per-call limit): said with the way out. */
@@ -670,7 +716,7 @@ export function numbersCatalogue() {
     breakdowns,
     breakdownsNotAsked: BREAKDOWNS_NOT_OFFERED,
     combinations: [
-      'One breakdown alone (never impression_device alone); together only: age + gender; publisher_platform + platform_position and / or impression_device; a Dynamic Creative asset + age and / or gender.',
+      'One breakdown alone (never impression_device or platform_position alone); together only: age + gender; publisher_platform + platform_position and / or impression_device; a Dynamic Creative asset + age and / or gender.',
       'Action breakdowns: action_type (default), action_target_id, action_destination with age, gender, country, region, publisher_platform (and its combinations), product_id, hourly; action_device with publisher_platform / platform_position / impression_device; action_reaction alone (or with action_type); a carousel card with impression_device, country, age, gender or age + gender; the others alone.',
       'By hour: no reach, frequency, unique counts or video_*. frequency_value: reach only. Dynamic Creative assets: impressions, clicks, spend, reach, actions, action_values only. Region: no video_p25…p100 or average watch time. app_store_clicks and newsfeed_* never with a breakdown.',
       'Switched on per account (empty, not 0, until then): impression_device, hourly by the audience\'s time zone, frequency_value, comscore_market.',
@@ -703,9 +749,11 @@ export async function metaNumbers(input: NumbersInput) {
   try {
     read = await readPages(account.connectionId, `numbers.${input.view}`, plan.path, { ...plan.query, fields: [...plan.fields, ...plan.extras].join(',') }, maxRows, input.after ?? null)
   } catch (err) {
-    if (!(plan.extras.length && fieldRefused(err))) tooMuch(err)
+    // Review B-2 — only a refused FIELD makes the read go again without the extra fields: Meta's "too much at once" (its
+    // 100/1487534 and 100/1504018 also count as #100) ends the read with the way out, never a second heavy call.
+    if (!(plan.extras.length && fieldRefused(err) && !err.failure.shrink)) tooMuch(err)
     // T3 — fields only other Meta pages name: when Meta refuses them, the rows come without them, and the answer says so.
-    missing.push(`Meta refused ${plan.extras.join(', ')} here (${(err as MetaReadError).failure.sentence}); the rows come without them.`)
+    missing.push(`Meta refused this read with ${plan.extras.join(', ')} (${(err as MetaReadError).failure.sentence}); it was read again without them.`)
     try {
       read = await readPages(account.connectionId, `numbers.${input.view}.core`, plan.path, { ...plan.query, fields: plan.fields.join(',') }, maxRows, input.after ?? null)
     } catch (again) { tooMuch(again) }
@@ -719,20 +767,15 @@ export async function metaNumbers(input: NumbersInput) {
   if (plan.breakdowns.includes('product_id')) await withSkus(rows)
   const total = read!.summary ? mapInsightRow(read!.summary, ctx, plan.breakdowns, left) : null
   const notes = [...plan.notes]
-  if (!rows.length && plan.featureGated.length) notes.unshift(`No rows: ${plan.featureGated.join(', ')} may be switched off for this ad account (not 0) — or nothing delivered in these days.`)
+  if (!rows.length && plan.featureGated.length) notes.unshift(`No rows: ${plan.featureGated.join(', ')} may be switched off for this ad account (not 0) — or nothing delivered in these days; meta-ad-account view insights-features says which are on.`)
   if (plan.breakdowns.includes('product_id')) notes.push('nexusSku: Meta\'s retailer id matched to this business\'s Nexus SKUs (a catalog fed by another system, e.g. Shopify, may use other ids: then null).')
   if (left.size) notes.push(`Meta also sent ${[...left].join(', ')}, which Nexus does not show.`)
-  let answer = {
-    ...base, rows, total, more: !!read!.nextAfter, nextAfter: read!.nextAfter,
+  if (read!.cut) notes.push('Meta sent more rows than asked; the extra ones were left out and there is no cursor to page on from here.')
+  return fitRows({
+    ...base, rows, total, more: !!read!.nextAfter || read!.cut, nextAfter: read!.nextAfter,
     ...(plan.compare ? { periods: plan.periods, changes: changesOf(rows) } : plan.periods ? { periods: plan.periods } : {}),
     estimated: plan.estimated, inDevelopment: plan.inDevelopment, missing, dropped: plan.dropped, notes, moneyUnit: moneyUnit(account.currency),
-  }
-  if (JSON.stringify(answer).length > MAX_ANSWER_CHARS) {
-    const kept = [...rows]
-    while (kept.length > 1 && JSON.stringify({ ...answer, rows: kept }).length > MAX_ANSWER_CHARS) kept.splice(Math.max(1, Math.floor(kept.length * 0.8)))
-    answer = { ...answer, rows: kept, more: true, notes: [...notes, `The answer was cut to ${kept.length} rows to fit; ask fewer metrics, fewer breakdowns or fewer rows (maxRows), or page with nextAfter.`] }
-  }
-  return answer
+  })
 }
 
 // ── meta-ads-report: report runs (IN-067 … IN-071) ──────────────────────────────────────────────────────────────────
@@ -741,10 +784,10 @@ export const REPORT_ACTIONS = ['start', 'status', 'fetch', 'file'] as const
 export const REPORT_KINDS = ['numbers', 'mmm'] as const
 export const EXPORT_FORMATS = ['csv', 'xls'] as const
 
-const STATUS_WORDS: Readonly<Record<string, string>> = {
+const STATUS_WORDS: Readonly<Record<string, string>> = ownList<string>(Object.entries({
   'Job Not Started': 'Waiting to start at Meta.', 'Job Started': 'Started at Meta, not running yet.', 'Job Running': 'Running at Meta.',
   'Job Completed': 'Finished.', 'Job Failed': 'Failed at Meta (see error); check the read and start it again.', 'Job Skipped': 'Expired at Meta: start it again.',
-}
+}))
 
 /** IN-067 / IN-071 — start a report run of the chosen ad account (a numbers read, or Meta's MMM export). */
 export async function startReportRun(input: NumbersInput & { kind: typeof REPORT_KINDS[number]; exportFormat?: typeof EXPORT_FORMATS[number] | null; exportName?: string | null }) {
@@ -769,25 +812,23 @@ export async function startReportRun(input: NumbersInput & { kind: typeof REPORT
     if (input.timeIncrement && input.timeIncrement !== 'daily' && input.timeIncrement !== 1 && input.timeIncrement !== 'all_days') throw new MetaLiveRefusal('An MMM export is by day (daily) or for the whole period (all_days): Meta\'s marketing-mix-modeling page.')
     params.time_increment = input.timeIncrement === 'daily' || input.timeIncrement === 1 ? 1 : 'all_days'
     const filters: Array<{ field: string; operator: string; value: unknown }> = []
+    const ids = idBudget()
     for (const f of input.filters ?? []) {
-      if (!MMM_FILTERS[f.field]?.includes(f.operator)) throw new MetaLiveRefusal(`An MMM export takes only these filters (Meta's page): ${Object.entries(MMM_FILTERS).map(([k, o]) => `${k} ${o.join('/')}`).join(', ')}.`)
+      if (!lookup(MMM_FILTERS, f.field)?.includes(f.operator)) throw new MetaLiveRefusal(`An MMM export takes only these filters (Meta's page): ${Object.entries(MMM_FILTERS).map(([k, o]) => `${k} ${o.join('/')}`).join(', ')}.`)
       const problem = filterValueProblem(f.field, f.operator, f.value)
       if (problem) throw new MetaLiveRefusal(`${problem}.`)
-      const spec = FILTER_FIELDS[f.field]
-      if (spec.value === 'ids') for (const id of (f.value as string[])) await objectInAccount(account, id, spec.kind!, 'report.filterOwnerCheck')
+      await ids.check(account, f, 'report.filterOwnerCheck')
       filters.push({ field: f.field, operator: f.operator, value: f.value })
     }
+    if (filters.length > 20) throw new MetaLiveRefusal('At most 20 filters at once.')
     if (filters.length) params.filtering = filters
-    notes = ['MMM: impressions and spend per ad set and day (spend estimated), by country, region, device, platform and placement. Meta delivers it ONLY as a CSV file: action file gives its link when the run is done (action fetch has no rows for it).']
+    notes = ['MMM: impressions and spend per ad set and day (spend estimated), by country, region, device, platform and placement. Meta delivers it ONLY as a CSV file: action file gives its link when the run is done (action fetch has no rows for it).', REPORT_QUOTAS]
   } else {
     if (input.view === 'catalogue' || input.view === 'portfolio' || input.view === 'check') throw new MetaLiveRefusal('A report run reads view numbers, products, assets or hourly.')
-    const plan = await planNumbers(account, input)
-    if (plan.objectKind !== 'account') {
-      // Meta documents the POST on /act_{id}/insights only: the object becomes a filter on that account's read.
-      const field = `${plan.objectKind}.id`
-      const filtering = [...((plan.query.filtering as unknown[]) ?? []), { field, operator: 'IN', value: [plan.objectId] }]
-      plan.query.filtering = filtering
-    }
+    // Meta documents the POST on the campaign and ad set insights edges too; Nexus sends it on the chosen account's path
+    // only (one anchored path the gateway checks against the chosen account), the object as one more filter (planNumbers,
+    // counted in its 20).
+    const plan = await planNumbers(account, { ...input, asReportRun: true })
     // A report run asks only fields on Meta's v26 list: one Meta refuses would fail the whole run (a direct read drops it).
     params = { ...plan.query, fields: plan.fields.join(',') }
     if (plan.extras.length) plan.notes.push(`${plan.extras.join(', ')}: not on Meta's v26 field list, so a report run does not ask them (meta-ads-numbers tries them in a direct read).`)
@@ -798,7 +839,11 @@ export async function startReportRun(input: NumbersInput & { kind: typeof REPORT
         params.export_name = input.exportName
       }
     }
-    notes = plan.notes
+    // Review B-8 — inside a background run, reach older than 13 months is not "a background report gets it": this run
+    // counts against Meta's 10 such runs a day per ad account, and past that Meta leaves reach out without an error.
+    notes = [...plan.notes.map((n) => (n.startsWith('Meta leaves reach, frequency and cost per 1,000 people reached out of a direct read')
+      ? 'Reach, frequency and cost per 1,000 people reached with breakdowns more than 13 months back: this background run counts against Meta\'s 10 such runs a day per ad account (its best practices); past that Meta leaves them out WITHOUT an error.'
+      : n)), REPORT_QUOTAS]
   }
   let answer: GatewayResponse
   try {
@@ -820,20 +865,39 @@ export async function startReportRun(input: NumbersInput & { kind: typeof REPORT
 }
 
 const RUN_FIELDS = 'id,account_id,async_status,async_percent_completion,time_ref,time_completed'
+/** Review B-8 — Meta's quotas on background runs, said at the start. */
+const REPORT_QUOTAS = 'Meta\'s quotas: a breakdown switched on per account (impression_device, hourly by the audience\'s time zone, frequency_value) returns its full history only in background runs, min(10, number of ad sets) per 24 hours (out-of-cycle changes 2026-05-08); reach with breakdowns more than 13 months back, 10 runs a day per ad account (best practices) — past either, Meta answers without those numbers rather than an error.'
 
-/** The run, checked to be the chosen ad account's (account_id and a report run's own two fields), with its state. */
+/**
+ * The run, checked to be the chosen ad account's and a report run, with its state — in ONE read (review A F5): Nexus's
+ * stored rows first (a campaign, ad set, ad or creative of the account is not a run), then `account_id` and a run's own two
+ * fields (services/meta/meta-kinds.ts reportrun) with the state, from the same answer. When Meta refuses the SDK's extra
+ * fields, the best-practices page's own; when it refuses a run's own fields, the id is no report run. When Meta could not
+ * be asked, the refusal says so — never "does not belong".
+ */
 async function ownRun(account: MetaChosenAccount, reportRunId: string) {
-  const id = await objectInAccount(account, reportRunId, 'reportrun', 'report.ownerCheck')
-  // The fields Meta's best-practices page shows on every run, with the SDK's date range and is_running; when Meta refuses
-  // those, the page's own.
+  const id = metaObjectId(reportRunId)
+  if (!id) throw new MetaLiveRefusal(`"${reportRunId}" is not a Meta report run id (digits).`)
+  const stored = await objectKindOf(account, id)
+  if (stored) throw new MetaLiveRefusal(`That id is ${withArticle(META_KIND_WORDS[stored])} of this ad account, not a report run.`)
+  const read = async (fields: string, operation: string) => (await metaReadOne<Row>({ connectionId: account.connectionId }, { operation, path: id, query: { fields } })).body
+  const unconfirmed = (err: MetaReadError) => new MetaLiveRefusal(`Nexus could not confirm that this report run is of the ad account this business chose (${err.failure.sentence}), so it is not read.`)
   let body: Row
   try {
-    body = (await metaReadOne<Row>({ connectionId: account.connectionId }, { operation: 'report.status', path: id, query: { fields: `${RUN_FIELDS},date_start,date_stop,is_running` } })).body
+    body = await read(`${RUN_FIELDS},date_start,date_stop,is_running`, 'report.ownerCheck')
   } catch (err) {
-    if (!fieldRefused(err)) throw err
-    body = (await metaReadOne<Row>({ connectionId: account.connectionId }, { operation: 'report.status.core', path: id, query: { fields: RUN_FIELDS } })).body
+    if (!(err instanceof MetaReadError)) throw err
+    if (!fieldRefused(err) || err.failure.shrink) throw unconfirmed(err)
+    try {
+      body = await read(RUN_FIELDS, 'report.coreOwnerCheck')
+    } catch (again) {
+      if (!(again instanceof MetaReadError)) throw again
+      if (again.failure.origin === 'meta' && /nonexisting field/i.test(again.failure.sentence)) throw new MetaLiveRefusal('That id is not a report run (Meta does not know a report run\'s own fields on it), so it is not read.')
+      throw unconfirmed(again)
+    }
   }
-  if (metaAdAccountId(body.account_id) !== account.adAccountId) throw new MetaLiveRefusal('That report run is not of the ad account this business chose, so it is not read.')
+  if (metaAdAccountId(body.account_id) !== account.adAccountId) throw new MetaLiveRefusal('That report run does not belong to the ad account this business chose, so it is not read.')
+  if (META_KIND_FIELDS.reportrun.some((name) => { const v = body[name]; return v === undefined || v === null || v === '' })) throw new MetaLiveRefusal('That id is not a report run of this ad account, so it is not read.')
   const status = text(body.async_status)
   const percent = num(body.async_percent_completion)
   return { id, body, status, percent, done: status === 'Job Completed' && percent === 100 }
@@ -916,11 +980,12 @@ export async function reportRunRows(input: { connectionId?: string | null; repor
       cut = true
     }
     return {
-      account: accountOf(account), reportRunId: run.id, rowCount: rows.length, csv, csvWithMoney, more: !!read.nextAfter || cut, nextAfter: cut ? null : read.nextAfter,
+      account: accountOf(account), reportRunId: run.id, rowCount: rows.length, csv, csvWithMoney, more: !!read.nextAfter || cut || read.cut, nextAfter: cut || read.cut ? null : read.nextAfter,
       notes: [...notes, 'csv: Nexus\'s own file of the rows without amounts; csvWithMoney with the amounts in minor units (cents) — for a person who may see ad spend. Excel opens either. Meta\'s own CSV / Excel: action file.', ...(cut ? ['The file was cut to fit one answer: ask fewer rows (maxRows).'] : [])],
     }
   }
-  return { account: accountOf(account), reportRunId: run.id, rows, more: !!read.nextAfter, nextAfter: read.nextAfter, notes, moneyUnit: moneyUnit(account.currency) }
+  // Review A F6 — the rows are capped like meta-ads-numbers' answer (a cut answer carries no cursor).
+  return fitRows({ account: accountOf(account), reportRunId: run.id, rows, more: !!read.nextAfter || read.cut, nextAfter: read.nextAfter, notes, moneyUnit: moneyUnit(account.currency) })
 }
 
 /** The documented export_report link (INSBP): it needs the viewer signed in to Meta with access to the ad account. */
@@ -994,24 +1059,30 @@ export const VIEWABILITY_TYPES = ['DISPLAY_EVENT', 'IMPRESSION', 'VIDEO_EVENT'] 
  * operation on this endpoint" for create / update / delete, or an empty Creating section) — a person does these in Ads
  * Manager › Reports (Ads Reporting).
  */
-export const META_CANNOT: ReadonlyArray<{ what: string; where: string; proof: string }> = [
+export const META_CANNOT: ReadonlyArray<{ what: string; where: string; proof: string; documented: boolean }> = [
+  // documented: true — the page says "You can't perform this operation on this endpoint". documented: false — the page's
+  // Creating section is empty and Meta's SDK class has only api_get: Meta documents no API for it (review B-7).
   // reference/ad-account/ads_reporting_mmm_reports, reference/business/ads_reporting_mmm_reports: Creating / Updating / Deleting "can't".
-  { what: 'make, change or delete an MMM report of Ads Reporting', where: 'Ads Manager › Reports › Marketing Mix Modeling Data Export', proof: 'reference/ad-account/ads_reporting_mmm_reports' },
+  { what: 'make, change or delete an MMM report of Ads Reporting', where: 'Ads Manager › Reports › Marketing Mix Modeling Data Export', proof: 'reference/ad-account/ads_reporting_mmm_reports', documented: true },
   // reference/ad-account/ads_reporting_mmm_schedulers: Creating / Updating / Deleting "can't".
-  { what: 'schedule an MMM export or change a schedule', where: 'Ads Manager › Reports (scheduled exports)', proof: 'reference/ad-account/ads_reporting_mmm_schedulers' },
-  // reference/business/ads_reporting_exports: read only.
-  { what: 'make, share or delete an Ads Reporting export', where: 'Ads Manager › Reports › Exports', proof: 'reference/business/ads_reporting_exports' },
-  // reference/ad-account/ad_custom_derived_metrics: Creating empty, Updating / Deleting "can't".
-  { what: 'make, change or delete a custom metric (a formula column)', where: 'Ads Manager › Columns › Custom metrics', proof: 'reference/ad-account/ad_custom_derived_metrics' },
+  { what: 'schedule an MMM export or change a schedule', where: 'Ads Manager › Reports (scheduled exports)', proof: 'reference/ad-account/ads_reporting_mmm_schedulers', documented: true },
+  // reference/business/ads_reporting_exports: Creating / Updating / Deleting "can't".
+  { what: 'make, share or delete an Ads Reporting export', where: 'Ads Manager › Reports › Exports', proof: 'reference/business/ads_reporting_exports', documented: true },
+  // reference/ad-account/ad_custom_derived_metrics: Creating empty, Updating / Deleting "can't"; SDK adcustomderivedmetrics.py api_get only.
+  { what: 'create or change a custom metric (a formula column)', where: 'Ads Manager › Columns › Custom metrics', proof: 'reference/ad-account/ad_custom_derived_metrics', documented: false },
   // reference/business/custom_pivots: Creating / Updating / Deleting "can't".
-  { what: 'make or change a custom breakdown (custom pivot) or a saved report', where: 'Ads Manager › Reports', proof: 'reference/business/custom_pivots' },
-  // reference/ad-account/report_specs: Reading and Creating empty, Updating / Deleting "can't".
-  { what: 'read or make report specs (the page documents no read)', where: 'Ads Manager › Reports', proof: 'reference/ad-account/report_specs' },
-  // reference/ad-account/reporting: Creating empty, Updating / Deleting "can't".
-  { what: 'save a Report Builder table as a report', where: 'Ads Manager › Reports', proof: 'reference/ad-account/reporting' },
-  // reference/business/measurement_reports, third_party_partner_*: read only; studies are set up with the measurement partner.
-  { what: 'order or change a measurement-partner study, brand-lift panel or viewability report', where: 'with the Meta measurement partner (and Meta)', proof: 'reference/business/third_party_partner_panel_requests' },
+  { what: 'make or change a custom breakdown (custom pivot) or a saved report', where: 'Ads Manager › Reports', proof: 'reference/business/custom_pivots', documented: true },
+  // reference/ad-account/report_specs: Reading and Creating empty, Updating / Deleting "can't" (view report-specs still asks the read).
+  { what: 'create or change report specs', where: 'Ads Manager › Reports', proof: 'reference/ad-account/report_specs', documented: false },
+  // reference/ad-account/reporting: Creating empty, Updating / Deleting "can't"; SDK adsreportbuilder.py api_get only.
+  { what: 'save a Report Builder table as a report', where: 'Ads Manager › Reports', proof: 'reference/ad-account/reporting', documented: false },
+  // reference/business/third_party_partner_panel_requests (+ recurring, viewability), measurement_reports: Creating empty or "can't";
+  // SDK thirdpartypartnerpanelrequest.py api_get only — studies are set up with the measurement partner.
+  { what: 'create or change a measurement-partner study, brand-lift panel or viewability report', where: 'with the Meta measurement partner (and Meta)', proof: 'reference/business/third_party_partner_panel_requests', documented: false },
 ]
+
+/** One plain sentence per entry: "Meta cannot …" where its page says so, "Meta documents no API to …" where it is silent. */
+export const cannotSentence = (c: typeof META_CANNOT[number]) => (c.documented ? `Meta cannot ${c.what} by API (${c.proof}): ${c.where}.` : `Meta documents no API to ${c.what} (${c.proof}; its SDK only reads it): ${c.where}.`)
 
 /** A business-level read: the chosen account's portfolio, and only when no other business in Nexus reads an ad account of it. */
 async function ownPortfolio(account: MetaChosenAccount): Promise<string> {
@@ -1025,7 +1096,7 @@ async function ownPortfolio(account: MetaChosenAccount): Promise<string> {
 /** One page of a list (cursor `after`), as Meta answers it. */
 async function listPage(connectionId: string, operation: string, path: string, query: Record<string, MetaQueryValue>, maxRows: number, after: string | null) {
   const read = await readPages(connectionId, operation, path, query, maxRows, after)
-  return { rows: read.rows, summary: read.summary, nextAfter: read.nextAfter }
+  return { rows: read.rows, summary: read.summary, nextAfter: read.nextAfter, more: !!read.nextAfter || read.cut }
 }
 
 const MMM_REPORT_FIELDS = 'id,export_name,export_format,export_type,async_status,mmm_status,time_start,has_seen'
@@ -1077,13 +1148,13 @@ export interface SavedInput {
 
 /** meta-ads-saved-reports — the Ads Reporting artefacts and partner reports Meta lets a system user READ. */
 export async function savedReports(input: SavedInput) {
-  if (input.view === 'what-meta-cannot') return { items: META_CANNOT, sentence: 'Meta\'s API reads these artefacts but cannot make or change them: a person does it in Ads Manager › Reports (Ads Reporting) or with the measurement partner.' }
+  if (input.view === 'what-meta-cannot') return { items: META_CANNOT.map((c) => ({ ...c, sentence: cannotSentence(c) })), sentence: 'Meta\'s API reads these artefacts but offers (or documents) no way to make or change them: a person does it in Ads Manager › Reports (Ads Reporting) or with the measurement partner.' }
   const account = await metaChosenAccount(input.connectionId)
   const { connectionId } = account
   const maxRows = Math.min(MAX_NUMBER_ROWS, Math.max(1, Math.trunc(input.maxRows ?? 100)))
   const after = input.after ?? null
   const base = { account: accountOf(account) }
-  const cannot = (proof: string) => META_CANNOT.filter((c) => c.proof === proof).map((c) => `Meta cannot ${c.what} by API (${c.proof}): ${c.where}.`)
+  const cannot = (proof: string) => META_CANNOT.filter((c) => c.proof === proof).map(cannotSentence)
   switch (input.view) {
     case 'mmm-reports': {
       // IN-072 — the account's (or the portfolio's) MMM reports made in Ads Reporting.
@@ -1135,14 +1206,15 @@ export async function savedReports(input: SavedInput) {
       for (const w of windows) if (!(REPORT_BUILDER_WINDOWS as readonly string[]).includes(w)) throw new MetaLiveRefusal(`${w}: the Report Builder's windows that still answer are ${REPORT_BUILDER_WINDOWS.join(', ')} (7d_view and 28d_view return no data since 2026-01-12).`)
       if (windows.length) query.attribution_windows = windows
       const filtering: Array<{ field: string; operator: string; value: unknown }> = []
+      const ids = idBudget()
       for (const f of input.filters ?? []) {
-        if (FILTER_FIELDS[f.field]?.value === 'money') throw new MetaLiveRefusal('The Report Builder takes no amount filter from Nexus.')
+        if (lookup(FILTER_FIELDS, f.field)?.value === 'money') throw new MetaLiveRefusal('The Report Builder takes no amount filter from Nexus.')
         const problem = filterValueProblem(f.field, f.operator, f.value)
         if (problem) throw new MetaLiveRefusal(`${problem}.`)
-        const spec = FILTER_FIELDS[f.field]
-        if (spec.value === 'ids') for (const id of (f.value as string[])) await objectInAccount(account, id, spec.kind!, 'saved.filterOwnerCheck')
+        await ids.check(account, f, 'saved.filterOwnerCheck')
         filtering.push({ field: f.field, operator: f.operator, value: f.value })
       }
+      if (filtering.length > 20) throw new MetaLiveRefusal('At most 20 filters at once.')
       if (filtering.length) query.filtering = filtering
       if (input.sortBy) {
         if (!metrics.includes(input.sortBy) && !dimensions.includes(input.sortBy)) throw new MetaLiveRefusal('sortBy is one of the metrics or dimensions asked.')

@@ -12,9 +12,12 @@
  *     "This metric is in development" label; the GET parameters (action_attribution_windows enum, action_breakdowns,
  *     breakdowns enum, date_preset, default_summary, filtering operators, level, product_id_limit, sort "no more than one
  *     element", summary_action_breakdowns, time_increment 1–90 | monthly | all_days, time_range, time_ranges,
- *     use_account_attribution_setting, use_unified_attribution_setting); the POST ("an AdReportRun will be created",
- *     only on /act_{ad_account_id}/insights; adds export_format csv | xls, export_name, export_columns, graph_cache
- *     "internal use only"); errors 3018 (start beyond 37 months), 2642 (cursor), 105 (too many parameters);
+ *     use_account_attribution_setting, use_unified_attribution_setting); the POST ("an AdReportRun will be created";
+ *     adds export_format csv | xls, export_name, export_columns, graph_cache "internal use only") — Meta documents it on
+ *     /act_{id}/insights and on the campaign and ad set insights edges too (ad-campaign-group/insights,
+ *     ad-campaign/insights, best-practices "POST <AD_OBJECT>/insights"); Nexus sends it only on the chosen account's
+ *     path, an object as a filter, so the gateway checks one anchored path against the chosen account; errors 3018
+ *     (start beyond 37 months), 2642 (cursor), 105 (too many parameters);
  *   - insights/breakdowns (BRK): Type 1 / Type 2 off-Meta rules, "Combining breakdowns" (the permutations below, the
  *     ones marked * may add action_type, action_target_id, action_destination), Dynamic Creative asset breakdowns with
  *     impressions, clicks, spend, reach, actions, action_values only, image_asset / video_asset not at account level,
@@ -51,6 +54,22 @@ export type MetricKind =
   | 'histogram' // list<AdsHistogramStats> (video retention curves)
   | 'raw' // an object Meta does not describe in units (an asset, a string list): as Meta sent it
   | 'rawMoney' // an amount whose unit or currency Meta does not name: as Meta sent it, restricted
+
+/**
+ * Review A F3 (step 7) — every list here is looked up by a name a caller or Meta gives: own keys only. The lists are
+ * null-prototype objects (`constructor`, `__proto__`, `toString`, `hasOwnProperty` are never their keys), and each
+ * lookup of a caller's name goes through `lookup` / `hasKey` as well.
+ */
+export const hasKey = (o: object, k: string): boolean => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k)
+export function lookup<T>(o: Readonly<Record<string, T>>, k: string): T | undefined {
+  return hasKey(o, k) ? o[k] : undefined
+}
+/** A list as a frozen null-prototype object. */
+export function ownList<T>(entries: Iterable<readonly [string, T]>): Readonly<Record<string, T>> {
+  const out = Object.create(null) as Record<string, T>
+  for (const [k, v] of entries) out[k] = v
+  return Object.freeze(out)
+}
 
 export const METRIC_GROUPS = [
   'identity', 'delivery', 'clicks', 'formats', 'results', 'conversions', 'standard-events', 'video', 'catalog', 'assets',
@@ -102,7 +121,7 @@ const many = (names: string, group: MetricGroup, kind: MetricKind, flags = ''): 
  * rankings (not on v26), comparison_node (the insights edge takes no comparison period: IN-026), the app-only SKAdNetwork
  * fields, and the breakdown values themselves (they come back with their breakdown).
  */
-export const META_INSIGHT_METRICS: Readonly<Record<string, MetricSpec>> = Object.fromEntries([
+export const META_INSIGHT_METRICS: Readonly<Record<string, MetricSpec>> = ownList<MetricSpec>([
   // IN-010 — identity and setup columns.
   ...many(`account_currency account_id account_name campaign_id campaign_name campaign_start campaign_end adset_id adset_name adset_start
     adset_end ad_id ad_name objective optimization_goal buying_type attribution_setting anchor_event_attribution_setting
@@ -200,18 +219,18 @@ export const META_INSIGHT_METRICS: Readonly<Record<string, MetricSpec>> = Object
   ['estimated_ad_recall_rate', spec('recall', 'ratio', 'x')], ['estimated_ad_recallers', spec('recall', 'count', 'x')],
   // RC-007 — the opportunity-score figure per row (name only on Meta's page).
   ['opportunity_score_l4', spec('other', 'ratio')],
-])
+] as Array<[string, MetricSpec]>)
 
 /** What a read asks when the caller names no metric (Ads Manager's first columns; Meta's own default is impressions and spend). */
 export const DEFAULT_METRICS = ['spend', 'impressions', 'reach', 'frequency', 'clicks', 'inline_link_clicks', 'ctr', 'cpc', 'cpm', 'actions', 'action_values', 'purchase_roas', 'results', 'cost_per_result'] as const
 
 /** The identity columns each level adds on its own (the row says what it is about). */
-export const LEVEL_IDENTITY: Readonly<Record<InsightLevel, readonly string[]>> = {
-  account: ['account_id', 'account_name'],
-  campaign: ['campaign_id', 'campaign_name'],
-  adset: ['campaign_id', 'adset_id', 'adset_name'],
-  ad: ['campaign_id', 'adset_id', 'ad_id', 'ad_name'],
-}
+export const LEVEL_IDENTITY = ownList<readonly string[]>([
+  ['account', ['account_id', 'account_name']],
+  ['campaign', ['campaign_id', 'campaign_name']],
+  ['adset', ['campaign_id', 'adset_id', 'adset_name']],
+  ['ad', ['campaign_id', 'adset_id', 'ad_id', 'ad_name']],
+]) as Readonly<Record<InsightLevel, readonly string[]>>
 
 export const INSIGHT_LEVELS = ['account', 'campaign', 'adset', 'ad'] as const
 export type InsightLevel = typeof INSIGHT_LEVELS[number]
@@ -240,11 +259,16 @@ export interface BreakdownSpec {
   months?: number
   /** Only its name is on Meta's page: Meta's own answer decides what it returns. */
   namesOnly?: true
+  /**
+   * Review B-1 — on Meta's Breakdowns guide but in neither the v26 reference enum nor the SDK's AdsInsights.Breakdowns:
+   * Meta may refuse it as a value outside the enum (#100), then in its own words (LIVE-PROBES IN-038). Not advertised.
+   */
+  guideOnly?: true
 }
 const b = (family: BreakdownFamily, more: Omit<BreakdownSpec, 'family'> = {}): BreakdownSpec => ({ family, ...more })
 
 /** Every breakdown a numbers read may ask (master IN-030 … IN-043, IN-086, IN-087, CR-242). */
-export const META_INSIGHT_BREAKDOWNS: Readonly<Record<string, BreakdownSpec>> = {
+export const META_INSIGHT_BREAKDOWNS: Readonly<Record<string, BreakdownSpec>> = ownList<BreakdownSpec>(Object.entries({
   age: b('demographic', { star: true }), gender: b('demographic', { star: true }),
   country: b('place', { star: true }), region: b('place', { star: true, type1: true }),
   comscore_market: b('place', { feature: 'comscore' }), zip: b('place', { namesOnly: true }), place_page_id: b('place', { notAtAccount: true }),
@@ -266,7 +290,7 @@ export const META_INSIGHT_BREAKDOWNS: Readonly<Record<string, BreakdownSpec>> = 
   media_format: b('automation', { namesOnly: true }), media_origin_url: b('automation', { namesOnly: true }), media_text_content: b('automation', { namesOnly: true }),
   media_type: b('automation', { namesOnly: true }),
   // On the Breakdowns guide ("User segment (ex: new, existing) of Advantage+ Shopping Campaigns"), not in the reference enum.
-  user_segment_key: b('audience'), user_persona_id: b('audience', { namesOnly: true }), user_persona_name: b('audience', { namesOnly: true }), overlap_segment: b('audience', { namesOnly: true }),
+  user_segment_key: b('audience', { guideOnly: true }), user_persona_id: b('audience', { namesOnly: true }), user_persona_name: b('audience', { namesOnly: true }), overlap_segment: b('audience', { namesOnly: true }),
   landing_destination: b('destination', { namesOnly: true }), mdsa_landing_destination: b('destination', { namesOnly: true }), conversion_destination: b('destination', { namesOnly: true }),
   ad_extension_domain: b('destination', { namesOnly: true }), ad_extension_url: b('destination', { namesOnly: true }), marketing_messages_btn_name: b('destination', { namesOnly: true }),
   signal_source_bucket: b('signal', { namesOnly: true }), standard_event_content_type: b('signal', { namesOnly: true }),
@@ -275,13 +299,13 @@ export const META_INSIGHT_BREAKDOWNS: Readonly<Record<string, BreakdownSpec>> = 
   reels_trending_topic: b('instagram', { namesOnly: true }), rta_ugc_topic: b('instagram', { namesOnly: true }), is_rendered_as_delayed_skip_ad: b('instagram', { namesOnly: true }),
   breakdown_ad_objective: b('reporting', { namesOnly: true }), breakdown_reporting_ad_id: b('reporting', { namesOnly: true }),
   rule_set_id: b('reporting', { namesOnly: true }), rule_set_name: b('reporting', { namesOnly: true }),
-}
+} as Record<string, BreakdownSpec>))
 
 /** The breakdown only a report run takes (MMM: an async CSV export, never with another breakdown). */
 export const MMM_BREAKDOWN = 'mmm'
 
 /** Breakdowns in Meta's v26 enum that Nexus does not send, each with the reason said to the person. */
-export const BREAKDOWNS_NOT_OFFERED: Readonly<Record<string, string>> = {
+export const BREAKDOWNS_NOT_OFFERED: Readonly<Record<string, string>> = ownList<string>(Object.entries({
   dma: 'Meta no longer supports dma since 2026-06-22 (out-of-cycle changes 2026): use comscore_market',
   mmm: 'Meta answers mmm only as a background CSV export: meta-ads-report action start with kind mmm',
   app_id: 'app-install ads (SKAdNetwork) only: Nexus does not ask it', skan_campaign_id: 'app-install ads (SKAdNetwork) only: Nexus does not ask it',
@@ -297,7 +321,7 @@ export const BREAKDOWNS_NOT_OFFERED: Readonly<Record<string, string>> = {
   sot_attribution_model_type: 'a name only, no meaning documented (master IN-044, out of scope)', sot_attribution_window: 'a name only, no meaning documented (master IN-044, out of scope)',
   sot_channel: 'a name only, no meaning documented (master IN-044, out of scope)', sot_event_type: 'a name only, no meaning documented (master IN-044, out of scope)',
   sot_source: 'a name only, no meaning documented (master IN-044, out of scope)',
-}
+} as Record<string, string>))
 
 /** The Dynamic Creative asset breakdowns and the only metrics Meta answers with them (BRK). */
 export const DC_ASSET_BREAKDOWNS = ['body_asset', 'title_asset', 'description_asset', 'image_asset', 'video_asset', 'link_url_asset', 'call_to_action_asset', 'ad_format_asset'] as const
@@ -359,8 +383,10 @@ export function breakdownCombinationProblem(breakdowns: readonly string[], actio
   const starAdds = acts.some((a) => a !== 'action_type')
   if (bds.length === 0) return null
   if (bds.includes('impression_device') && bds.length === 1) return 'Meta never takes impression_device alone: add publisher_platform (or action_device)'
+  // Review B-6 — Meta's list has platform_position only with publisher_platform.
+  if (bds.includes('platform_position') && !bds.includes('publisher_platform')) return 'Meta keeps platform_position only with publisher_platform (its list of combinations): add publisher_platform'
   if (bds.length === 1) {
-    const one = META_INSIGHT_BREAKDOWNS[bds[0]]
+    const one = lookup(META_INSIGHT_BREAKDOWNS, bds[0])
     if (starAdds && !one?.star) return `Meta adds action_target_id or action_destination only to the breakdowns its list marks (${bds[0]} is not one): ask without them`
     return null
   }
@@ -414,8 +440,15 @@ const ID_OPS = ['IN', 'NOT_IN', 'EQUAL', 'NOT_EQUAL'] as const
 const TEXT_OPS = ['CONTAIN', 'NOT_CONTAIN', 'EQUAL', 'NOT_EQUAL', 'STARTS_WITH', 'ENDS_WITH'] as const
 const NUMBER_OPS = ['GREATER_THAN', 'GREATER_THAN_OR_EQUAL', 'LESS_THAN', 'LESS_THAN_OR_EQUAL', 'EQUAL'] as const
 
-/** Every status an insights filter may name (DELETED too: insights of deleted objects are kept, F1 X3). */
-export const FILTER_STATUSES = ['ACTIVE', 'PAUSED', 'IN_PROCESS', 'WITH_ISSUES', 'ARCHIVED', 'DELETED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO'] as const
+/**
+ * Review B-5 — the statuses each level's effective_status filter may name: the ones Nexus reads (marketing/meta-ads/
+ * mappers.ts CAMPAIGN_STATUSES_READ, ADSET_STATUSES_READ, AD_STATUSES_READ — the same lists, held equal by a test) and
+ * DELETED (insights of deleted objects are kept, F1 X3). Kept here, not imported: this file is a leaf the gateway reads.
+ */
+const CAMPAIGN_FILTER_STATUSES = ['ACTIVE', 'PAUSED', 'IN_PROCESS', 'WITH_ISSUES', 'ARCHIVED', 'DELETED'] as const
+const ADSET_FILTER_STATUSES = [...CAMPAIGN_FILTER_STATUSES, 'CAMPAIGN_PAUSED'] as const
+const AD_FILTER_STATUSES = [...ADSET_FILTER_STATUSES, 'ADSET_PAUSED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO'] as const
+export const FILTER_STATUSES: Readonly<Record<'campaign' | 'adset' | 'ad', readonly string[]>> = { campaign: CAMPAIGN_FILTER_STATUSES, adset: ADSET_FILTER_STATUSES, ad: AD_FILTER_STATUSES }
 export const PUBLISHER_PLATFORMS = ['facebook', 'instagram', 'messenger', 'audience_network', 'threads'] as const
 export const DEVICE_PLATFORMS = ['mobile_app', 'mobile_web', 'desktop'] as const
 
@@ -438,27 +471,28 @@ export const ACTION_TYPES = [
 
 const LEVEL_PREFIXES = ['campaign', 'adset', 'ad'] as const
 /** Master IN-063 — the filter fields Nexus sends (DOT notation), each with its operators and the value it takes. */
-export const FILTER_FIELDS: Readonly<Record<string, FilterSpec>> = Object.fromEntries([
+export const FILTER_FIELDS: Readonly<Record<string, FilterSpec>> = ownList<FilterSpec>([
   ...LEVEL_PREFIXES.flatMap((p): Array<[string, FilterSpec]> => [
     [`${p}.id`, { operators: ID_OPS, value: 'ids', kind: p }],
     [`${p}.name`, { operators: TEXT_OPS, value: 'text' }],
-    [`${p}.effective_status`, { operators: LIST_OPS, value: 'statuses', values: FILTER_STATUSES }],
+    [`${p}.effective_status`, { operators: LIST_OPS, value: 'statuses', values: FILTER_STATUSES[p] }],
     [`${p}.impressions`, { operators: NUMBER_OPS, value: 'count' }],
     [`${p}.spend`, { operators: NUMBER_OPS, value: 'money', unverified: true }],
   ]),
-  ['publisher_platform', { operators: LIST_OPS, value: 'enum', values: PUBLISHER_PLATFORMS }],
-  ['device_platform', { operators: LIST_OPS, value: 'enum', values: DEVICE_PLATFORMS }],
-  ['platform_position', { operators: LIST_OPS, value: 'pattern' }],
-  ['country', { operators: LIST_OPS, value: 'country' }],
-  ['region', { operators: LIST_OPS, value: 'pattern' }],
+  // Review B-5 — documented as filters only on the marketing-mix-modeling page: Meta's own answer decides on a normal read.
+  ['publisher_platform', { operators: LIST_OPS, value: 'enum', values: PUBLISHER_PLATFORMS, unverified: true }],
+  ['device_platform', { operators: LIST_OPS, value: 'enum', values: DEVICE_PLATFORMS, unverified: true }],
+  ['platform_position', { operators: LIST_OPS, value: 'pattern', unverified: true }],
+  ['country', { operators: LIST_OPS, value: 'country', unverified: true }],
+  ['region', { operators: LIST_OPS, value: 'pattern', unverified: true }],
   ['action_type', { operators: LIST_OPS, value: 'actionTypes', values: ACTION_TYPES, unverified: true }],
-])
+] as Array<[string, FilterSpec]>)
 
 /** MMM page — the ONLY filters an mmm export takes, each with its operators. */
-export const MMM_FILTERS: Readonly<Record<string, readonly string[]>> = {
-  'campaign.id': ['IN', 'NOT_IN'], 'campaign.name': ['CONTAIN', 'NOT_CONTAIN'], 'adset.id': ['IN', 'NOT_IN'], 'adset.name': ['CONTAIN', 'NOT_CONTAIN'],
-  country: ['IN'], region: ['IN'], device_platform: ['IN'], publisher_platform: ['IN'], platform_position: ['IN'],
-}
+export const MMM_FILTERS: Readonly<Record<string, readonly string[]>> = ownList<readonly string[]>([
+  ['campaign.id', ['IN', 'NOT_IN']], ['campaign.name', ['CONTAIN', 'NOT_CONTAIN']], ['adset.id', ['IN', 'NOT_IN']], ['adset.name', ['CONTAIN', 'NOT_CONTAIN']],
+  ['country', ['IN']], ['region', ['IN']], ['device_platform', ['IN']], ['publisher_platform', ['IN']], ['platform_position', ['IN']],
+])
 
 export const MAX_FILTERS = 20
 export const MAX_FILTER_VALUES = 50
@@ -468,7 +502,7 @@ const TEXT_VALUE = /^[^\u0000-\u001f"\\]{1,100}$/
 
 /** Why a filter value is refused, or null (`money` arrives as Meta's decimal of the currency, e.g. "12.5"). */
 export function filterValueProblem(field: string, operator: string, value: unknown): string | null {
-  const f = FILTER_FIELDS[field]
+  const f = lookup(FILTER_FIELDS, field)
   if (!f) return `"${field}" is not a filter Nexus sends (${Object.keys(FILTER_FIELDS).join(', ')})`
   if (!f.operators.includes(operator)) return `${field} takes ${f.operators.join(', ')}`
   const list = operator === 'IN' || operator === 'NOT_IN'
@@ -499,7 +533,7 @@ export function filteringProblem(raw: string, mmm = false): string | null {
     if (Object.keys(e).sort().join(',') !== 'field,operator,value') return 'each filter is exactly {field, operator, value}'
     if (typeof e.field !== 'string' || typeof e.operator !== 'string') return 'each filter names its field and operator'
     if (mmm) {
-      const ops = MMM_FILTERS[e.field]
+      const ops = lookup(MMM_FILTERS, e.field)
       if (!ops || !ops.includes(e.operator)) return `an mmm export takes only these filters (marketing-mix-modeling page): ${Object.entries(MMM_FILTERS).map(([f, o]) => `${f} ${o.join('/')}`).join(', ')}`
     }
     const problem = filterValueProblem(e.field, e.operator, e.value)
@@ -518,7 +552,7 @@ export function sortProblem(value: string): string | null {
   if (!m) return 'a sort ends in _ascending or _descending'
   const field = m[1]
   if (field.startsWith('actions:')) return (ACTION_TYPES as readonly string[]).includes(field.slice(8)) ? null : 'a sort by actions names one of Nexus\'s action types'
-  const s = META_INSIGHT_METRICS[field]
+  const s = lookup(META_INSIGHT_METRICS, field)
   return s && SORTABLE_KINDS.has(s.kind) ? null : `"${field}" is not a number a read sorts by`
 }
 
@@ -544,7 +578,12 @@ const OFFERED_BREAKDOWNS: ReadonlySet<string> = new Set(Object.keys(META_INSIGHT
 const REPORT_BREAKDOWNS: ReadonlySet<string> = new Set([...OFFERED_BREAKDOWNS, MMM_BREAKDOWN])
 
 /** The value checks of the insights query keys step 7 adds (a GET of `act_<id>/insights` or `<object>/insights`). */
-export const INSIGHTS_KEY_CHECKS: Readonly<Record<string, (raw: string | null) => boolean>> = {
+export const INSIGHTS_KEY_CHECKS: Readonly<Record<string, (raw: string | null) => boolean>> = ownList<(raw: string | null) => boolean>(Object.entries({
+  // Review A F4 — step 2's four keys too, now by value (step 2's reads, the daily read and meta-ads-graph-read send only these).
+  level: (raw: string | null) => (INSIGHT_LEVELS as readonly string[]).includes(raw ?? ''),
+  time_range: (raw: string | null) => { try { return range(JSON.parse(raw ?? '')) } catch { return false } },
+  time_increment: (raw: string | null) => timeIncrementOk(raw),
+  filtering: (raw: string | null) => raw !== null && filteringProblem(raw) === null,
   breakdowns: (raw) => subsetList(raw, OFFERED_BREAKDOWNS, 4),
   action_breakdowns: (raw) => subsetList(raw, META_ACTION_BREAKDOWNS, 4),
   summary_action_breakdowns: (raw) => subsetList(raw, META_ACTION_BREAKDOWNS, 4),
@@ -554,13 +593,17 @@ export const INSIGHTS_KEY_CHECKS: Readonly<Record<string, (raw: string | null) =
   sort: (raw) => { const list = jsonList(raw); return !!list && list.length === 1 && typeof list[0] === 'string' && sortProblem(list[0]) === null },
   default_summary: (raw) => raw === 'true',
   use_account_attribution_setting: (raw) => raw === 'true' || raw === 'false',
-  product_id_limit: (raw) => /^\d{1,4}$/.test(raw ?? '') && Number(raw) >= 1 && Number(raw) <= 1000,
+  product_id_limit: (raw: string | null) => /^\d{1,4}$/.test(raw ?? '') && Number(raw) >= 1 && Number(raw) <= 1000,
+}))
+/** time_increment: 1–90 days, monthly or all_days (INS). */
+function timeIncrementOk(raw: string | null): boolean {
+  return raw === 'all_days' || raw === 'monthly' || (/^\d{1,2}$/.test(raw ?? '') && Number(raw) >= 1 && Number(raw) <= 90)
 }
 
 /** A `fields` value made only of names on the metric list (a report run's body: judged in full, not only for tokens). */
 export function fieldsListProblem(raw: string): string | null {
   const names = raw.split(',')
-  if (!names.length || names.length > 300 || names.some((n) => !META_INSIGHT_METRICS[n])) return 'fields names only metrics on Nexus\'s insights list'
+  if (!names.length || names.length > 300 || names.some((n) => !hasKey(META_INSIGHT_METRICS, n))) return 'fields names only metrics on Nexus\'s insights list'
   return new Set(names).size === names.length ? null : 'fields names each metric once'
 }
 
@@ -587,7 +630,7 @@ export function reportRunProblem(params: ReadonlyMap<string, string>): string | 
   }
   if (params.has('time_range')) { let r: unknown; try { r = JSON.parse(raw('time_range')!) } catch { r = null } if (!range(r)) return 'time_range is {since, until}, two days' }
   const inc = raw('time_increment')
-  if (inc !== null && !(inc === 'all_days' || inc === 'monthly' || (/^\d{1,2}$/.test(inc) && Number(inc) >= 1 && Number(inc) <= 90))) return 'time_increment is 1–90, monthly or all_days'
+  if (inc !== null && !timeIncrementOk(inc)) return 'time_increment is 1–90, monthly or all_days'
   const format = raw('export_format')
   if (format !== null && format !== 'csv' && format !== 'xls') return 'export_format is csv or xls'
   const name = raw('export_name')
@@ -633,7 +676,7 @@ const sortingOk = (raw: string | null) => {
 }
 
 /** The value checks of the Report Builder keys (each key only with a value Nexus sends). */
-export const REPORT_BUILDER_KEY_CHECKS: Readonly<Record<string, (raw: string | null) => boolean>> = {
+export const REPORT_BUILDER_KEY_CHECKS: Readonly<Record<string, (raw: string | null) => boolean>> = ownList<(raw: string | null) => boolean>(Object.entries({
   metrics: (raw) => subsetList(raw, REPORT_BUILDER_METRICS, 30),
   dimensions: (raw) => subsetList(raw, REPORT_BUILDER_DIMENSIONS, 4),
   attribution_windows: (raw) => subsetList(raw, REPORT_BUILDER_WINDOWS, REPORT_BUILDER_WINDOWS.length),
@@ -644,5 +687,5 @@ export const REPORT_BUILDER_KEY_CHECKS: Readonly<Record<string, (raw: string | n
   sorting: sortingOk,
   default_summary: (raw) => raw === 'true' || raw === 'false',
   summary_count: (raw) => raw === 'true' || raw === 'false',
-  offset: (raw) => /^\d{1,6}$/.test(raw ?? ''),
-}
+  offset: (raw: string | null) => /^\d{1,6}$/.test(raw ?? ''),
+}))

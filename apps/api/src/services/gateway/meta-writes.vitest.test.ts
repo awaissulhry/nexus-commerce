@@ -397,6 +397,18 @@ describe('step 7 — a report run (POST /act_<id>/insights) is a READ of the cho
     expect(failed.ok).toBe(false)
     expect(h.calls).toHaveLength(2)
   })
+  it('review round 1 — A-F3: Object.prototype\'s names in a report run\'s fields, breakdowns or filters are refused; A-F6: the path in lower case only', () => {
+    for (const name of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      expect(runProblem({ level: 'ad', fields: `spend,${name}` }), name).toMatch(/only metrics on Nexus's insights list/)
+      expect(runProblem({ level: 'ad', breakdowns: [name] }), name).toMatch(/breakdowns are breakdowns on Nexus's list/)
+      expect(() => runProblem({ level: 'adset', breakdowns: ['mmm'], export_format: 'csv', filtering: [{ field: name, operator: 'IN', value: ['1'] }] })).not.toThrow()
+      expect(runProblem({ level: 'adset', breakdowns: ['mmm'], export_format: 'csv', filtering: [{ field: name, operator: 'IN', value: ['1'] }] }), name).toMatch(/takes only these filters/)
+      expect(runProblem({ level: 'ad', filtering: [{ field: name, operator: 'IN', value: ['1'] }] }), name).toMatch(/not a filter Nexus sends/)
+    }
+    expect(runProblem({ level: 'ad', fields: 'spend' }, 'read', `${BASE}/ACT_1234567890/insights`)).toMatch(/written in lower case/)
+    expect(runProblem({ level: 'ad', fields: 'spend' }, 'read', `${BASE}/act_1234567890/INSIGHTS`)).toMatch(/written in lower case/)
+    expect(runProblem({ level: 'ad', fields: 'spend' })).toBeNull()
+  })
   it('metaReportRunCall sends exactly that: the form body of the read, as a read, for the named account', async () => {
     h.answers.push(json({ report_run_id: '6000000000002' }))
     const res = await metaReportRunCall({ connectionId: 'm-1', operation: 'report.start', adAccountId: '1234567890', params: { level: 'adset', breakdowns: ['mmm'], export_format: 'csv', fields: 'impressions,spend', time_increment: 1 } })

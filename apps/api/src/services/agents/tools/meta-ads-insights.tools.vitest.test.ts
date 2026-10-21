@@ -209,7 +209,8 @@ describe('meta-ads-numbers', () => {
     h.answer = () => ({ data: [] })
     const off = await data('meta-ads-numbers', { breakdowns: ['publisher_platform', 'impression_device'] })
     expect(off.notes[0]).toMatch(/No rows: impression_device may be switched off for this ad account \(not 0\)/)
-    expect(off.notes.join(' ')).toMatch(/answers NOTHING, without an error, until the ad account switches it on/)
+    expect(off.notes.join(' ')).toMatch(/may be switched off for this ad account: Meta then answers NOTHING, without an error/)
+    expect(off.notes.join(' ')).toMatch(/meta-ad-account view insights-features/)
   })
   it('hourly: reach, frequency and unique counts are left out of the defaults (Meta answers 0); named, they are refused', async () => {
     const out = await data('meta-ads-numbers', { view: 'hourly' })
@@ -312,7 +313,7 @@ describe('meta-ads-numbers', () => {
     const out = await data('meta-ads-numbers', { metrics: ['impressions', 'instagram_profile_visits'] })
     expect(insightCalls()).toHaveLength(2)
     expect(String(last().query?.fields)).not.toMatch(/instagram_profile_visits/)
-    expect(out.missing[0]).toMatch(/Meta refused instagram_profile_visits here/)
+    expect(out.missing[0]).toMatch(/Meta refused this read with instagram_profile_visits/)
     expect(out.rows).toHaveLength(1)
   })
   it('too much at once: the answer points to the background report run', async () => {
@@ -365,10 +366,12 @@ describe('meta-ads-report', () => {
     expect(await refused('meta-ads-report', { action: 'start', kind: 'mmm', campaignId: CAMPAIGN })).toMatch(/whole ad account/)
   })
   it('status: a report run of another ad account, or an id that is no report run, is refused before its state is read', async () => {
-    h.answer = (req) => (req.path === RUN ? { id: RUN, account_id: '1234567890', async_status: 'Job Running', async_percent_completion: 40, time_ref: 1792000000 } : { data: [] })
+    h.ownerAnswer = (req) => (req.path === RUN ? { id: RUN, account_id: '1234567890', async_status: 'Job Running', async_percent_completion: 40, time_ref: 1792000000 } : null)
     const out = await data('meta-ads-report', { action: 'status', reportRunId: RUN })
     expect(out).toMatchObject({ reportRunId: RUN, status: 'Job Running', percent: 40, done: false, statusText: 'Running at Meta.' })
-    expect(h.calls.find((c) => c.operation === 'report.ownerCheck')?.query).toEqual({ fields: 'account_id,async_status,async_percent_completion' })
+    // Review A F5 — ONE read: the account, a run's own fields and its state from the same answer.
+    expect(h.calls.map((c) => [c.operation, c.path, c.query])).toEqual([['report.ownerCheck', RUN, { fields: 'id,account_id,async_status,async_percent_completion,time_ref,time_completed,date_start,date_stop,is_running' }]])
+    h.ownerAnswer = null
     h.owners.set('6000000000002', '5550001112')
     h.calls.length = 0
     expect(await refused('meta-ads-report', { action: 'status', reportRunId: '6000000000002' })).toMatch(/does not belong to the ad account/)
@@ -379,18 +382,30 @@ describe('meta-ads-report', () => {
     expect(gatewayProblems()).toEqual([])
   })
   it('status: finished only when completed AND 100 %; a failed run carries Meta\'s error and what it means', async () => {
-    h.answer = (req) => (req.operation === 'report.error' ? { error_code: -3, error_subcode: 1504045, error_message: 'Report too large' } : { id: RUN, account_id: '1234567890', async_status: 'Job Failed', async_percent_completion: 0 })
+    h.ownerAnswer = () => ({ id: RUN, account_id: '1234567890', async_status: 'Job Failed', async_percent_completion: 0 })
+    h.answer = (req) => (req.operation === 'report.error' ? { error_code: -3, error_subcode: 1504045, error_message: 'Report too large' } : { data: [] })
     const failed = await data('meta-ads-report', { action: 'status', reportRunId: RUN })
     expect(failed).toMatchObject({ done: false, error: { code: -3, subcode: 1504045, meaning: expect.stringMatching(/too large/) } })
-    h.answer = () => ({ id: RUN, account_id: '1234567890', async_status: 'Job Completed', async_percent_completion: 99 })
+    h.ownerAnswer = () => ({ id: RUN, account_id: '1234567890', async_status: 'Job Completed', async_percent_completion: 99 })
     expect((await data('meta-ads-report', { action: 'status', reportRunId: RUN })).done).toBe(false)
     expect(await refused('meta-ads-report', { action: 'fetch', reportRunId: RUN })).toMatch(/not finished/)
-    // The SDK's extra fields refused: the best-practices page's own fields answer.
-    h.answer = (req) => (String(req.query?.fields).includes('is_running') ? refusedByMeta('(#100) Tried accessing nonexisting field (is_running)') : { id: RUN, account_id: '1234567890', async_status: 'Job Completed', async_percent_completion: 100 })
+    // The SDK's extra fields refused: the best-practices page's own fields answer (a second read only then).
+    h.calls.length = 0
+    h.ownerAnswer = (req) => (String(req.query?.fields).includes('is_running') ? refusedByMeta('(#100) Tried accessing nonexisting field (is_running)') : { id: RUN, account_id: '1234567890', async_status: 'Job Completed', async_percent_completion: 100 })
     expect(await data('meta-ads-report', { action: 'status', reportRunId: RUN })).toMatchObject({ done: true, dateStart: null })
+    expect(h.calls.map((c) => c.operation)).toEqual(['report.ownerCheck', 'report.coreOwnerCheck'])
+    // No report run at all (Meta knows no run's own fields on it): refused; Meta could not be asked: said so.
+    h.ownerAnswer = () => refusedByMeta('(#100) Tried accessing nonexisting field (async_status) on node type (AdImage)')
+    expect(await refused('meta-ads-report', { action: 'status', reportRunId: '6000000000003' })).toMatch(/not a report run/)
+    h.ownerAnswer = () => new MetaReadError(failureOfAnswer({ status: 500, verdict: { errorClass: 'transient', channelCode: '2', channelMessage: 'Service temporarily unavailable' } as never }), 'x', 1)
+    expect(await refused('meta-ads-report', { action: 'status', reportRunId: '6000000000003' })).toMatch(/could not confirm/)
+    // A run's own two fields missing (another node with an account_id): not a run.
+    h.ownerAnswer = () => ({ id: '6000000000004', account_id: '1234567890' })
+    expect(await refused('meta-ads-report', { action: 'status', reportRunId: '6000000000004' })).toMatch(/not a report run of this ad account/)
   })
   it('fetch: the rows of a finished run, mapped like meta-ads-numbers; csv without and with the amounts', async () => {
-    h.answer = (req) => (req.path === RUN ? { id: RUN, account_id: '1234567890', async_status: 'Job Completed', async_percent_completion: 100 } : { data: [{ ...ROW, country: 'IT', mystery_field: '1' }], paging: { cursors: { after: 'c2' }, next: 'https://graph.facebook.com/x?access_token=EAAsecret' } })
+    h.ownerAnswer = () => ({ id: RUN, account_id: '1234567890', async_status: 'Job Completed', async_percent_completion: 100 })
+    h.answer = () => ({ data: [{ ...ROW, country: 'IT', mystery_field: '1' }], paging: { cursors: { after: 'c2' }, next: 'https://graph.facebook.com/x?access_token=EAAsecret' } })
     const out = await data('meta-ads-report', { action: 'fetch', reportRunId: RUN, maxRows: 1 })
     expect(last()).toMatchObject({ path: `${RUN}/insights`, query: { limit: 1 } })
     expect(out.rows[0]).toMatchObject({ breakdown: { country: 'IT' }, money: { spend: 12345 } })
@@ -405,14 +420,14 @@ describe('meta-ads-report', () => {
     expect(gatewayProblems()).toEqual([])
   })
   it('file: Meta\'s documented export link (opens for a person signed in to Meta) — a link of any other shape is never passed on', async () => {
-    const done = { id: RUN, account_id: '1234567890', async_status: 'Job Completed', async_percent_completion: 100 }
-    h.answer = (req) => (req.operation === 'report.file' ? { async_report_url: `https://www.facebook.com/ads/ads_insights/export_report/?report_run_id=${RUN}&format=csv&name=mmm&extra=1`, is_async_export: true } : done)
+    h.ownerAnswer = () => ({ id: RUN, account_id: '1234567890', async_status: 'Job Completed', async_percent_completion: 100 })
+    h.answer = () => ({ async_report_url: `https://www.facebook.com/ads/ads_insights/export_report/?report_run_id=${RUN}&format=csv&name=mmm&extra=1`, is_async_export: true })
     const out = await data('meta-ads-report', { action: 'file', reportRunId: RUN, fileFormat: 'xls', exportName: 'Shop A' })
     expect(out.exportLink).toEqual({
       metaFile: `https://www.facebook.com/ads/ads_insights/export_report/?report_run_id=${RUN}&name=mmm&format=csv`,
       export: `https://www.facebook.com/ads/ads_insights/export_report/?report_run_id=${RUN}&name=Shop+A&format=xls`, format: 'xls',
     })
-    h.answer = (req) => (req.operation === 'report.file' ? { async_report_url: 'https://lookaside.fbsbx.com/file/abc.csv?token=xyz' } : done)
+    h.answer = () => ({ async_report_url: 'https://lookaside.fbsbx.com/file/abc.csv?token=xyz' })
     const withheld = await data('meta-ads-report', { action: 'file', reportRunId: RUN })
     expect(withheld.exportLink.metaFile).toBeNull()
     expect(withheld.metaLinkNote).toMatch(/does not recognise/)
@@ -487,5 +502,131 @@ describe('meta-ads-saved-reports', () => {
     const cannot = await data('meta-ads-saved-reports', { view: 'what-meta-cannot' })
     expect(cannot.items.map((c: any) => c.proof)).toEqual(expect.arrayContaining(['reference/ad-account/ad_custom_derived_metrics', 'reference/business/custom_pivots', 'reference/ad-account/ads_reporting_mmm_schedulers']))
     expect(gatewayProblems()).toEqual([])
+  })
+})
+
+describe('step 7 review round 1', () => {
+  const page = (n: number, from: number, next: string | null) => ({ data: Array.from({ length: n }, (_, i) => ({ ...ROW, campaign_id: String(120000000001000 + from + i) })), paging: next ? { cursors: { after: next }, next: `https://graph.facebook.com/x?after=${next}` } : {} })
+  it('A-F1 — maxRows 150: the second page asks only the 50 missing rows, and the cursor goes on from row 151', async () => {
+    h.answer = (req) => (req.query?.after ? page(Number(req.query.limit), 100, 'c3') : page(Number(req.query?.limit), 0, 'c2'))
+    const out = await data('meta-ads-numbers', { maxRows: 150 })
+    expect(insightCalls().map((c) => [c.query?.limit, c.query?.after ?? null])).toEqual([[100, null], [50, 'c2']])
+    expect(out.rows).toHaveLength(150)
+    expect(out).toMatchObject({ more: true, nextAfter: 'c3' })
+    // The saved-report lists page the same way.
+    h.calls.length = 0
+    await data('meta-ads-saved-reports', { view: 'mmm-reports', maxRows: 150 })
+    expect(insightCalls().map((c) => c.query?.limit)).toEqual([100, 50])
+    // Meta sending more than asked: the extra rows are cut and there is no cursor to page on.
+    h.answer = () => page(120, 0, 'c9')
+    const over = await data('meta-ads-numbers', { maxRows: 100 })
+    expect(over).toMatchObject({ more: true, nextAfter: null })
+    expect(over.rows).toHaveLength(100)
+  })
+  it('A-F2 / A-F6 — an answer cut to fit carries no cursor (numbers and a report run\'s rows)', async () => {
+    const long = 'Shop A '.repeat(150)
+    h.answer = () => ({ data: Array.from({ length: 100 }, (_, i) => ({ ...ROW, campaign_id: String(120000000001000 + i), campaign_name: long })), paging: { cursors: { after: 'c2' }, next: 'https://graph.facebook.com/x' } })
+    const out = await data('meta-ads-numbers', { maxRows: 500 })
+    expect(out.rows.length).toBeLessThan(500)
+    expect(out).toMatchObject({ more: true, nextAfter: null })
+    expect(out.notes.join(' ')).toMatch(/cut to \d+ of 500 rows/)
+    h.ownerAnswer = () => ({ id: RUN, account_id: '1234567890', async_status: 'Job Completed', async_percent_completion: 100 })
+    const rows = await data('meta-ads-report', { action: 'fetch', reportRunId: RUN, maxRows: 500 })
+    expect(rows.rows.length).toBeLessThan(500)
+    expect(rows).toMatchObject({ more: true, nextAfter: null })
+  })
+  it('A-F3 — Object.prototype\'s names are no metric, breakdown, filter, sort or MMM filter: refused in words, nothing sent', async () => {
+    for (const name of ['constructor', '__proto__']) {
+      expect(await refused('meta-ads-numbers', { metrics: [name] }), name).toMatch(/not a metric Nexus asks/)
+      expect(await refused('meta-ads-numbers', { breakdowns: [name] }), name).toMatch(/not a breakdown Nexus asks/)
+      expect(await refused('meta-ads-numbers', { sortBy: name }), name).toMatch(/not a metric Nexus asks/)
+    }
+    for (const field of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      expect(await refused('meta-ads-numbers', { filters: [{ field, operator: 'IN', value: ['1'] }] }), field).toMatch(/not a filter Nexus sends/)
+      expect(await refused('meta-ads-report', { action: 'start', kind: 'mmm', filters: [{ field, operator: 'IN', value: ['1'] }] }), field).toMatch(/takes only these filters/)
+      expect(await refused('meta-ads-saved-reports', { view: 'report-builder', filters: [{ field, operator: 'IN', value: ['1'] }] }), field).toMatch(/not a filter Nexus sends/)
+    }
+    expect(h.calls).toHaveLength(0)
+  })
+  it('A-F4 — meta-ads-graph-read on an insights edge: the gateway now checks its level, days and filters by value', async () => {
+    const { META_ADS_READ_TOOLS } = await import('./meta-ads-read.tools.js')
+    const graph = META_ADS_READ_TOOLS.find((t) => t.name === 'meta-ads-graph-read')!
+    const ask = (params: Record<string, string>) => graph.handler(graph.input.parse({ path: `${CAMPAIGN}/insights`, fields: 'spend', params }), allMoney as never)
+    await ask({ level: 'ad', time_range: '{"since":"2026-10-01","until":"2026-10-07"}', time_increment: '1', filtering: JSON.stringify([{ field: 'ad.effective_status', operator: 'IN', value: ['ACTIVE', 'DELETED'] }]) })
+    expect(gatewayProblems()).toEqual([])
+    h.calls.length = 0
+    await ask({ filtering: JSON.stringify([{ field: 'anything', operator: 'WHATEVER', value: 'x' }]) })
+    await ask({ level: 'everything' })
+    await ask({ time_increment: '365' })
+    expect(gatewayProblems().map(([, p]) => p)).toEqual([expect.stringMatching(/"filtering" is not one/), expect.stringMatching(/"level" is not one/), expect.stringMatching(/"time_increment" is not one/)])
+  })
+  it('A-F5 — the MMM export and the Report Builder check at most 50 filter ids, before any call', async () => {
+    // One filter holds at most 50 values (the argument's own bound); two of 26 are 52 ids.
+    const half = (from: number) => Array.from({ length: 26 }, (_, i) => String(120000000003000 + from + i))
+    for (const id of [...half(0), ...half(100)]) h.known.set(id, 'campaign')
+    expect(await refused('meta-ads-report', { action: 'start', kind: 'mmm', filters: [{ field: 'campaign.id', operator: 'IN', value: half(0) }, { field: 'campaign.id', operator: 'NOT_IN', value: half(100) }] })).toMatch(/At most 50 ids/)
+    expect(await refused('meta-ads-saved-reports', { view: 'report-builder', filters: [{ field: 'campaign.id', operator: 'IN', value: half(0) }, { field: 'campaign.id', operator: 'NOT_IN', value: half(100) }] })).toMatch(/At most 50 ids/)
+    expect(h.runs).toHaveLength(0)
+    expect(insightCalls()).toHaveLength(0)
+  })
+  it('A-F6 — a report run of one object counts that object\'s filter among the 20', async () => {
+    const filters = Array.from({ length: 19 }, (_, i) => ({ field: 'campaign.name', operator: 'NOT_CONTAIN', value: `x${i}` }))
+    // 19 + the status filter = 20: a direct read goes; a report run of one campaign adds its own filter = 21.
+    await data('meta-ads-numbers', { campaignId: CAMPAIGN, filters })
+    expect(await refused('meta-ads-report', { action: 'start', campaignId: CAMPAIGN, filters })).toMatch(/At most 20 filters/)
+    expect(h.runs).toHaveLength(0)
+  })
+  it('B-1 — user_segment_key is not advertised; asked, the answer says Meta may refuse it', async () => {
+    expect(JSON.stringify(tool('meta-ads-numbers').input.shape) + tool('meta-ads-numbers').description).not.toMatch(/user_segment_key|new vs existing/)
+    const out = await data('meta-ads-numbers', { breakdowns: ['user_segment_key'] })
+    expect(out.notes.join(' ')).toMatch(/user_segment_key: on Meta's Breakdowns guide but not in its reference list/)
+  })
+  it('B-2 — Meta\'s too-much-data codes are not a refused field: one call, and the way out', async () => {
+    for (const code of ['100/1487534', '100/1504018']) {
+      h.calls.length = 0
+      h.answer = () => new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'validation', channelCode: code, channelMessage: 'Please reduce the amount of data' } as never }), 'x', 1)
+      expect(await refused('meta-ads-numbers', { metrics: ['impressions', 'instagram_profile_visits'] }), code).toMatch(/meta-ads-report action start/)
+      expect(insightCalls(), code).toHaveLength(1)
+    }
+  })
+  it('B-4 — this_year reaches back to 1 January, last_year to 1 January last year (not 37 or 24 months)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date('2026-10-21T12:00:00Z'))
+      // 1 January 2026 is within hourly's 13 months: no retention note (37 months back would have one).
+      expect((await data('meta-ads-numbers', { view: 'hourly', datePreset: 'this_year' })).notes.join(' ')).not.toMatch(/keeps it 13 months/)
+      expect((await data('meta-ads-numbers', { view: 'hourly', datePreset: 'last_year' })).notes.join(' ')).toMatch(/keeps it 13 months/)
+      vi.setSystemTime(new Date('2026-01-15T12:00:00Z'))
+      // 1 January 2025 is within 13 months of 15 January 2026 (24 months back would not be).
+      expect((await data('meta-ads-numbers', { view: 'hourly', datePreset: 'last_year' })).notes.join(' ')).not.toMatch(/keeps it 13 months/)
+      expect((await data('meta-ads-numbers', { breakdowns: ['frequency_value'], datePreset: 'last_year' })).notes.join(' ')).toMatch(/keeps it 6 months/)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('B-5 — each level\'s status filter names its own statuses; MMM-page-only filters are said to be unverified', async () => {
+    expect(await refused('meta-ads-numbers', { filters: [{ field: 'campaign.effective_status', operator: 'IN', value: ['ADSET_PAUSED'] }] })).toMatch(/campaign.effective_status takes ACTIVE, PAUSED, IN_PROCESS, WITH_ISSUES, ARCHIVED, DELETED\.$/)
+    await data('meta-ads-numbers', { level: 'adset', filters: [{ field: 'adset.effective_status', operator: 'IN', value: ['CAMPAIGN_PAUSED'] }] })
+    const out = await data('meta-ads-numbers', { filters: [{ field: 'country', operator: 'IN', value: ['IT'] }] })
+    expect(out.notes.join(' ')).toMatch(/The filter country is not on a Meta page in this form/)
+  })
+  it('B-6 — platform_position goes only with publisher_platform', async () => {
+    expect(await refused('meta-ads-numbers', { breakdowns: ['platform_position'] })).toMatch(/platform_position only with publisher_platform/)
+    expect(await refused('meta-ads-numbers', { breakdowns: ['platform_position', 'impression_device'] })).toMatch(/platform_position only with publisher_platform/)
+    await data('meta-ads-numbers', { breakdowns: ['publisher_platform', 'platform_position'] })
+  })
+  it('B-7 / B-8 — "documents no API" where Meta is silent; report runs state Meta\'s quotas and the reach limit', async () => {
+    const cannot = await data('meta-ads-saved-reports', { view: 'what-meta-cannot' })
+    const specs = cannot.items.find((c: any) => c.proof === 'reference/ad-account/report_specs')
+    expect(specs.sentence).toMatch(/^Meta documents no API to create or change report specs/)
+    expect(JSON.stringify(cannot)).not.toMatch(/read or make report specs/)
+    expect(cannot.items.find((c: any) => c.proof === 'reference/ad-account/ad_custom_derived_metrics').sentence).toMatch(/^Meta documents no API to create or change a custom metric/)
+    expect(cannot.items.find((c: any) => c.proof === 'reference/business/custom_pivots').sentence).toMatch(/^Meta cannot make or change a custom breakdown/)
+    const started = await data('meta-ads-report', { action: 'start', breakdowns: ['age'], from: '2025-01-01', to: '2025-03-31' })
+    expect(started.notes.join(' ')).toMatch(/min\(10, number of ad sets\) per 24 hours/)
+    expect(started.notes.join(' ')).toMatch(/this background run counts against Meta's 10 such runs a day per ad account.*WITHOUT an error/)
+    expect(started.notes.join(' ')).not.toMatch(/a background report \(meta-ads-report\) gets them/)
+    const mmm = await data('meta-ads-report', { action: 'start', kind: 'mmm' })
+    expect(mmm.notes.join(' ')).toMatch(/Meta's quotas/)
   })
 })

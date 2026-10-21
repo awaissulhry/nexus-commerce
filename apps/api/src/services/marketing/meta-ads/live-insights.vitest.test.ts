@@ -11,7 +11,9 @@ vi.mock('../../../db.js', () => ({ default: {} }))
 import {
   ATTRIBUTION_WINDOWS, BREAKDOWNS_NOT_OFFERED, breakdownCombinationProblem, DATE_PRESETS, DEAD_WINDOWS, filteringProblem, INSIGHTS_KEY_CHECKS,
   META_ACTION_BREAKDOWNS, META_INSIGHT_BREAKDOWNS, META_INSIGHT_METRICS, METRIC_GROUPS, MONEY_KINDS, reportRunProblem, sortProblem, WINDOWS_NOT_OFFERED,
+  FILTER_FIELDS, MMM_FILTERS, fieldsListProblem, filterValueProblem, hasKey, lookup,
 } from '../../meta/meta-insights-lists.js'
+import { AD_STATUSES_READ, ADSET_STATUSES_READ, CAMPAIGN_STATUSES_READ, insightStatusFilter } from './mappers.js'
 import { changesOf, comparisonPeriod, mapInsightRow, monthsBefore, rowsCsv, type MappedRow } from './live-insights.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../../meta/api-version.js'
@@ -142,5 +144,60 @@ describe('rows', () => {
     expect(only).toMatchObject({ inCurrent: true, inEarlier: false, numbers: { impressions: { current: 5, earlier: null, change: null, changePct: null } } })
     const [zero] = changesOf([r('current', 5), r('earlier', 0)])
     expect(zero.numbers.impressions).toEqual({ current: 5, earlier: 0, change: 5, changePct: null })
+  })
+})
+
+describe('step 7 review round 1 — the lists', () => {
+  const PROTO = ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf']
+  it('A-F3 — Object.prototype\'s names are on no list: lookups, checks and a report run body refuse them in words (never a TypeError)', () => {
+    for (const name of PROTO) {
+      expect(hasKey(META_INSIGHT_METRICS, name), name).toBe(false)
+      expect(lookup(META_INSIGHT_BREAKDOWNS, name), name).toBeUndefined()
+      expect(lookup(BREAKDOWNS_NOT_OFFERED, name), name).toBeUndefined()
+      expect(lookup(FILTER_FIELDS, name), name).toBeUndefined()
+      expect(lookup(MMM_FILTERS, name), name).toBeUndefined()
+      expect(fieldsListProblem(`spend,${name}`), name).toMatch(/only metrics on Nexus's insights list/)
+      expect(sortProblem(`${name}_descending`), name).toMatch(/not a number a read sorts by/)
+      expect(filterValueProblem(name, 'IN', ['1']), name).toMatch(/not a filter Nexus sends/)
+      expect(filteringProblem(JSON.stringify([{ field: name, operator: 'IN', value: ['1'] }])), name).toMatch(/not a filter Nexus sends/)
+      expect(filteringProblem(JSON.stringify([{ field: name, operator: 'IN', value: ['1'] }]), true), name).toMatch(/mmm export takes only/)
+      expect(breakdownCombinationProblem([name, 'age'], []), name).toMatch(/does not combine/)
+      expect(reportRunProblem(new Map([['level', 'ad'], ['fields', `spend,${name}`]])), name).toMatch(/only metrics/)
+      expect(reportRunProblem(new Map([['level', 'ad'], ['breakdowns', JSON.stringify([name])]])), name).toMatch(/breakdowns are breakdowns on Nexus's list/)
+      expect(INSIGHTS_KEY_CHECKS.breakdowns(JSON.stringify([name])), name).toBe(false)
+    }
+    // Two layers: the lookups read own keys only, even of an ordinary object; the lists have no prototype at all.
+    for (const name of PROTO) {
+      expect(hasKey({ spend: 1 }, name), name).toBe(false)
+      expect(lookup({ spend: 1 } as Record<string, number>, name), name).toBeUndefined()
+    }
+    expect(hasKey({ spend: 1 }, 'spend')).toBe(true)
+    expect(Object.getPrototypeOf(META_INSIGHT_METRICS)).toBeNull()
+    expect(Object.getPrototypeOf(FILTER_FIELDS)).toBeNull()
+  })
+  it('A-F4 — insights level, time_range, time_increment and filtering checked by value; every value step 2 and the daily read send passes', () => {
+    expect(INSIGHTS_KEY_CHECKS.level('adset')).toBe(true)
+    expect(INSIGHTS_KEY_CHECKS.level('everything')).toBe(false)
+    expect(INSIGHTS_KEY_CHECKS.time_increment('1')).toBe(true)
+    expect(INSIGHTS_KEY_CHECKS.time_increment('all_days')).toBe(true)
+    expect(INSIGHTS_KEY_CHECKS.time_increment('91')).toBe(false)
+    expect(INSIGHTS_KEY_CHECKS.time_range('{"since":"2026-10-01","until":"2026-10-19"}')).toBe(true)
+    expect(INSIGHTS_KEY_CHECKS.time_range('{"since":"2026-10-19","until":"2026-10-01"}')).toBe(false)
+    expect(INSIGHTS_KEY_CHECKS.filtering('[{"field":"anything","operator":"WHATEVER","value":"x"}]')).toBe(false)
+    for (const grain of ['CAMPAIGN', 'ADSET', 'AD'] as const) expect(INSIGHTS_KEY_CHECKS.filtering(JSON.stringify(insightStatusFilter(grain))), grain).toBe(true)
+    // meta-ads-live view insights: one campaign of the account, by EQUAL.
+    expect(INSIGHTS_KEY_CHECKS.filtering(JSON.stringify([...insightStatusFilter('AD'), { field: 'campaign.id', operator: 'EQUAL', value: '120000000000101' }]))).toBe(true)
+  })
+  it('B-5 — each level\'s status list is the one Nexus reads (mappers.ts), plus DELETED', () => {
+    expect([...FILTER_FIELDS['campaign.effective_status'].values!].sort()).toEqual([...CAMPAIGN_STATUSES_READ, 'DELETED'].sort())
+    expect([...FILTER_FIELDS['adset.effective_status'].values!].sort()).toEqual([...ADSET_STATUSES_READ, 'DELETED'].sort())
+    expect([...FILTER_FIELDS['ad.effective_status'].values!].sort()).toEqual([...AD_STATUSES_READ, 'DELETED'].sort())
+    expect(filterValueProblem('campaign.effective_status', 'IN', ['CAMPAIGN_PAUSED'])).toMatch(/takes ACTIVE/)
+    for (const f of ['country', 'region', 'publisher_platform', 'device_platform', 'platform_position']) expect(FILTER_FIELDS[f].unverified, f).toBe(true)
+  })
+  it('B-1 / B-6 — user_segment_key is marked guide-only; platform_position goes only with publisher_platform', () => {
+    expect(META_INSIGHT_BREAKDOWNS.user_segment_key.guideOnly).toBe(true)
+    expect(breakdownCombinationProblem(['platform_position'], [])).toMatch(/only with publisher_platform/)
+    expect(breakdownCombinationProblem(['publisher_platform', 'platform_position'], [])).toBeNull()
   })
 })

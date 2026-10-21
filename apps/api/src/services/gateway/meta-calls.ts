@@ -111,8 +111,9 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *     <id>/adsets | ads (meta-ads-live, review B5: Meta documents these, not `filtering` on act_<id>/adsets | ads):
  *     effective_status;
  *   - step 2, a portfolio's <id>/owned_ad_accounts and <id>/client_ad_accounts: search_query (AA-002; pending has none);
- *   - step 2, insights (act_<id>/insights, <object>/insights): level, time_range, time_increment, filtering — never
- *     use_unified_attribution_setting or action_report_time (Meta ignores both since 2025-06-10, facts F2 T1);
+ *   - step 2, insights (act_<id>/insights, <object>/insights): level, time_range, time_increment, filtering (each checked
+ *     by value since step 7, review A F4) — never use_unified_attribution_setting or action_report_time (Meta ignores
+ *     both since 2025-06-10, facts F2 T1);
  *   - step 2, act_<id>/async_requests: status, type (master ACC-028, SDK only: a refusal from Meta answers plainly;
  *     LIVE-PROBES.md).
  *   - step 6 (meta-campaigns, meta-ad-sets, meta-ad-details, meta-labels, meta-value-rules; checked on the v26 reference
@@ -179,7 +180,8 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^act_\d+\/(campaigns|adsets|ads)$/, keys: new Set(['effective_status']) },
   { route: /^\d+\/(adsets|ads)$/, keys: new Set(['effective_status']) },
   { route: /^\d+\/(owned|client)_ad_accounts$/, keys: new Set(['search_query']) },
-  { route: /^(act_)?\d+\/insights$/, keys: new Set(['level', 'time_range', 'time_increment', 'filtering']) },
+  // (Step 7 review A F4: insights' level, time_range, time_increment and filtering moved to step 7's entries below — the
+  // same keys on the same routes, now each checked by value.)
   { route: /^act_\d+\/async_requests$/, keys: new Set(['status', 'type']) },
   // Step 9 (meta-targeting-search / meta-targeting-check, live-targeting.ts) — each key only on its own path:
   //   - Graph's targeting search /search (not an account path; `type` only from META_SEARCH_TYPES, below);
@@ -287,7 +289,8 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/tags$/, keys: new Set(['posted_before']), when: (query) => isoDateTime(query.get('posted_before')) },
   { route: /^\d+\/tags$/, keys: new Set(['media_type']), when: (query) => subsetOf(query.get('media_type'), ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM']) },
   // Step 7 — numbers, report runs and saved reports (marketing/meta-ads/live-insights.ts), each key only on its own route
-  // and only with a value on services/meta/meta-insights-lists.ts: the insights keys on act_<id>/insights and
+  // and only with a value on services/meta/meta-insights-lists.ts (step 2's level, time_range, time_increment and filtering
+  // too, for every reader of insights: meta-ads-live, the daily read, meta-ads-graph-read): the insights keys on act_<id>/insights and
   // <object>/insights (a report run's results, GET /<run>/insights, take none of them); the Report Builder's on
   // act_<id>/reporting; the portfolio's custom pivots, pivot preview, measurement reports and partner studies, each its own.
   ...Object.entries(INSIGHTS_KEY_CHECKS).map(([key, check]) => ({ route: /^(act_)?\d+\/insights$/, keys: new Set([key]), when: (query: URLSearchParams) => check(query.get(key)) })),
@@ -784,8 +787,11 @@ const META_WRITE_RULES: readonly MetaWriteRule[] = [
   },
   {
     // Step 7 (meta-ads-report, master IN-067 / IN-070 / IN-071): POST /act_<id>/insights starts a report run of the chosen ad
-    // account's numbers (Meta documents the POST on this path only: reference/ad-account/insights "Creating"). Every key and
-    // value is judged on the insights lists (services/meta/meta-insights-lists.ts reportRunProblem).
+    // account's numbers. Meta documents the POST on the account's, a campaign's and an ad set's insights edges
+    // (reference/ad-account/insights, ad-campaign-group/insights, ad-campaign/insights "Creating"; best-practices "POST
+    // <AD_OBJECT>/insights"): Nexus sends it only on the account's path — an object goes as a filter — so this ONE anchored
+    // path is checked against the chosen account. Every key and value is judged on the insights lists
+    // (services/meta/meta-insights-lists.ts reportRunProblem).
     name: 'insights.reportRun',
     method: 'POST',
     path: /^act_\d{1,25}\/insights$/,
@@ -855,6 +861,8 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const check = parsed.params.has('execution_options')
   if (rule.reportRun) {
     if (input.kind !== 'read') return refuse('a report run changes nothing on Meta and goes as a read; this one is declared otherwise')
+    // Review A F6 — the path exactly as Nexus writes it: act_<digits>/insights, lower case.
+    if (!/^act_\d{1,25}\/insights$/.test(graph.segments.join('/'))) return refuse('a report run is POST /act_<id>/insights, written in lower case')
   } else if (input.kind !== (check ? 'read' : 'write')) {
     return refuse(check ? 'Meta\'s check (validate_only) changes nothing and goes as a read; this one is declared otherwise' : 'a Meta change goes as a write; this one is declared otherwise')
   }

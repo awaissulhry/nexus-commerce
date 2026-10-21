@@ -909,6 +909,35 @@ describe('step 7 — numbers, report runs and saved reports: each new key on its
   })
 })
 
+describe('step 7 review round 1 — insights GETs: step 2\'s keys by value too; Object.prototype\'s names are no list entry', () => {
+  const ok = (path: string) => metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${path}`, kind: 'read' })
+  const q = (v: unknown) => encodeURIComponent(JSON.stringify(v))
+  it('A-F4 — level, time_range, time_increment and filtering: Nexus\'s values go, any other is refused by its name', () => {
+    for (const path of [
+      // The daily read and meta-ads-live, as they send them.
+      `act_1234567890/insights?level=ad&time_increment=1&time_range=${q({ since: '2026-10-01', until: '2026-10-19' })}&fields=spend&filtering=${q([{ field: 'ad.effective_status', operator: 'IN', value: ['ACTIVE', 'PAUSED', 'IN_PROCESS', 'WITH_ISSUES', 'ARCHIVED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO', 'DELETED'] }, { field: 'campaign.id', operator: 'EQUAL', value: '120000000000101' }])}`,
+      'act_1234567890/insights?level=account&time_increment=all_days&fields=spend',
+    ]) expect(ok(path), path).toBeNull()
+    for (const [path, key] of [
+      [`act_1234567890/insights?fields=spend&filtering=${q([{ field: 'anything', operator: 'WHATEVER', value: 'x' }])}`, 'filtering'],
+      [`120000000000101/insights?fields=spend&filtering=${q([{ field: 'campaign.effective_status', operator: 'IN', value: ['ADSET_PAUSED'] }])}`, 'filtering'],
+      ['act_1234567890/insights?fields=spend&level=everything', 'level'],
+      ['act_1234567890/insights?fields=spend&time_increment=365', 'time_increment'],
+      [`act_1234567890/insights?fields=spend&time_range=${q({ since: '2026-10-19', until: '2026-10-01' })}`, 'time_range'],
+      [`act_1234567890/insights?fields=spend&time_range=${q({ since: '2026-10-01', until: '2026-10-19', extra: 1 })}`, 'time_range'],
+    ] as const) expect(ok(path), path).toMatch(new RegExp(`"${key}" is not one`))
+  })
+  it('A-F3 — a filter, breakdown or sort named after Object.prototype is refused plainly (no TypeError, its ledger row stands)', () => {
+    for (const name of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      expect(() => ok(`act_1234567890/insights?fields=spend&filtering=${q([{ field: name, operator: 'IN', value: ['1'] }])}`)).not.toThrow()
+      expect(ok(`act_1234567890/insights?fields=spend&filtering=${q([{ field: name, operator: 'IN', value: ['1'] }])}`), name).toMatch(/"filtering" is not one/)
+      expect(ok(`act_1234567890/insights?fields=spend&breakdowns=${q([name])}`), name).toMatch(/"breakdowns" is not one/)
+      expect(ok(`act_1234567890/insights?fields=spend&sort=${q([`${name}_descending`])}`), name).toMatch(/"sort" is not one/)
+      expect(ok(`act_1234567890/reporting?filtering=${q([{ field: name, operator: 'IN', value: ['1'] }])}`), name).toMatch(/"filtering" is not one/)
+    }
+  })
+})
+
 function metaWriteProblemOf(method: string, url: string, body: string): string | null {
   const verdict = metaWriteVerdict({ method, url, kind: 'write', body })
   return 'problem' in verdict ? verdict.problem : null

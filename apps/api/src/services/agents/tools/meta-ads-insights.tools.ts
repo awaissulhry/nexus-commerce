@@ -58,7 +58,7 @@ const numbersArgs = {
   adId: metaIdArg('read from this ad of the chosen ad account'),
   metrics: z.array(z.string().trim().regex(/^[a-z0-9_]{1,80}$/)).max(100).optional().describe('Meta\'s metric names (view catalogue lists them), e.g. spend, impressions, reach, ctr, cpc, actions, action_values, purchase_roas, results, cost_per_result, video_p75_watched_actions; default: spend, impressions, reach, frequency, clicks, link clicks, CTR, CPC, CPM, actions, action values, purchase ROAS, results, cost per result'),
   groups: z.array(z.preprocess(lower, z.enum(METRIC_GROUPS))).max(METRIC_GROUPS.length).optional().describe(`whole groups of metrics: ${METRIC_GROUPS.join(', ')}`),
-  breakdowns: z.array(z.string().trim().regex(/^[a-z0-9_]{1,60}$/)).max(4).optional().describe('split the rows by, e.g. age, gender, country, region, publisher_platform, platform_position (Instagram feed / Explore / Reels / Stories, Threads feed), device_platform, impression_device, comscore_market, user_segment_key (new vs existing customers), frequency_value; only Meta\'s combinations (view catalogue)'),
+  breakdowns: z.array(z.string().trim().regex(/^[a-z0-9_]{1,60}$/)).max(4).optional().describe('split the rows by, e.g. age, gender, country, region, publisher_platform, platform_position (Instagram feed / Explore / Reels / Stories, Threads feed), device_platform, impression_device, comscore_market, frequency_value; only Meta\'s combinations (view catalogue)'),
   assetBreakdown: z.enum(ASSET_VIEW_BREAKDOWNS as [string, ...string[]]).optional().describe('view assets: the asset breakdown (body_asset, title_asset, image_asset, video_asset … or an Advantage+ creative one: creative_automation_asset_id, gen_ai_asset_type, media_type …)'),
   audienceTime: z.boolean().optional().describe('view hourly: by the audience\'s time zone (default: the ad account\'s)'),
   actionBreakdowns: z.array(z.enum(META_ACTION_BREAKDOWNS)).max(4).optional().describe('split the actions by, e.g. action_type (default), action_device, action_destination, action_reaction, action_video_sound, action_carousel_card_name'),
@@ -132,14 +132,14 @@ const metaAdsNumbers: AgentTool = {
     + 'by the campaign\'s own goal, conversions, values and ROAS, standard events, video, catalog, messaging, Instagram '
     + 'profile visits, research fields — view catalogue lists every one, and which Meta ESTIMATES or still develops), split '
     + 'by breakdowns (age, gender, country, region, placements incl. Instagram Reels / Stories / Explore and Threads feed, '
-    + 'device, hour, frequency, new vs existing customers, assets, Advantage+ creative, products …) and action breakdowns '
+    + 'device, hour, frequency, assets, Advantage+ creative, products …) and action breakdowns '
     + '— only in the combinations Meta keeps, checked before the call. Attribution windows (7-day and 28-day view return no '
     + 'data since 2026-01-12; Meta reports each ad set\'s own setting, as Ads Manager), presets or exact days (37 months '
     + 'back), several periods or a comparison with the period before or a year before (Nexus computes the change; Meta\'s '
     + 'insights take no comparison period), rows per day, week or month, filters, one sort, Meta\'s total row. Archived and '
-    + 'deleted objects are included unless asked otherwise. Some breakdowns answer NOTHING until the account switches them '
-    + 'on (impression_device, hourly by the audience\'s time zone, frequency_value, comscore_market): the answer says so, '
-    + 'never 0. Too much for one read: meta-ads-report runs it in the background. A whole business portfolio: Meta has no '
+    + 'deleted objects are included unless asked otherwise. Some breakdowns may be switched off for the account and then '
+    + 'answer NOTHING (impression_device, hourly by the audience\'s time zone, frequency_value, comscore_market): the answer '
+    + 'says so, never 0 (whether they are on: meta-ad-account view insights-features). Too much for one read: meta-ads-report runs it in the background. A whole business portfolio: Meta has no '
     + 'such insights — each business reads its own ad account. An ad\'s conversion tracking specs: meta-ad-details; a boosted '
     + 'Instagram post\'s past boosts: meta-instagram-media. Read only; amounts in minor units (cents) of the account '
     + 'currency under money (a person without the ad-spend money permission gets the rest).',
@@ -252,7 +252,7 @@ const metaAdsSavedReports: AgentTool = {
     + 'partner lift, MMM v2; reportType). partner-studies: brand-lift, panel-sales and reach studies (recurring too); '
     + 'partner-viewability: viewability reports — both exist only when Meta set up a measurement partner. The portfolio\'s '
     + 'views are read only when no other business in Nexus reads an ad account of that portfolio. what-meta-cannot: '
-    + 'making, changing, sharing or scheduling reports, custom metrics and custom breakdowns has no API — a person does it '
+    + 'making, changing, sharing or scheduling reports, custom metrics and custom breakdowns: Meta offers or documents no API for it — a person does it '
     + 'in Ads Manager › Reports. Read only; Meta\'s raw tables and metadata (tableAsMeta, metadataAsMeta: amounts in '
     + 'Meta\'s own units) need the ad-spend money permission.',
   async handler(args): Promise<ToolResult> {
