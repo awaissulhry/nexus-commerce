@@ -254,6 +254,9 @@ describe('a pixel another business in Nexus uses is never read (review A4)', () 
     h.connections = [CHOSEN]
     h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/shared_accounts` ? metaError('200') : [])
     expect((await run({ view: 'quality' })).error).toMatch(/could not check/)
+    // Review round 3 — a refused /agencies read is unchecked, never an empty list.
+    h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/agencies` ? metaError('200') : [])
+    expect((await run({ view: 'quality' })).error).toMatch(/could not check/)
     const row = data(await run({ view: 'list' })).items[0]
     expect(row).not.toHaveProperty('name')
     expect(row).not.toHaveProperty('takenByAnotherBusiness')
@@ -310,9 +313,11 @@ describe('a pixel another business in Nexus uses is never read (review A4)', () 
   it('A-N7 — access: a partner portfolio another business in Nexus uses is its id and the flag', async () => {
     h.taken = [{ id: '3333333333' }]
     h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/shared_agencies` && req.operation === 'datasets.sharedAgencies'
-      ? [{ id: '3333333333', name: 'Shop B portfolio' }, { id: '4444444444', name: 'Agency X' }] : [])
+      ? [{ id: '3333333333', name: 'Shop B portfolio' }, { id: '4444444444', name: 'Agency X' }]
+      : req.path === `${PIXEL}/agencies` && req.operation === 'datasets.agencies' ? [{ id: '3333333333', name: 'Shop B portfolio' }] : [])
     const res = data(await run({ view: 'access' }))
     expect(res.partnerBusinesses.sharedAgencies).toEqual([{ id: '3333333333', takenByAnotherBusiness: true }, { id: '4444444444', name: 'Agency X', takenByAnotherBusiness: false }])
+    expect(res.partnerBusinesses.agencies).toEqual([{ id: '3333333333', takenByAnotherBusiness: true }])
     expect(JSON.stringify(res)).not.toMatch(/Shop B/)
   })
   it('A-N2 — gateway and legacy-offline: full rows only for checked datasets, any other by its id', async () => {
@@ -606,8 +611,8 @@ describe('A-N5 — a custom conversion is read only through a checked pixel', ()
 
 describe('debug feeds never carry a buyer\'s data', () => {
   it('A-S1 — addresses without a scheme lose their query too; event-setup and value diagnostics are stripped', async () => {
-    expect(stripUrls(['shop.example/thanks?order=55&email=a@b.c', '/checkout/thanks?email=a@b.c', '//cdn.shop.example/a?b=1', 'Is it ready? yes', '10.0.0.1/thanks?email=a@b.c', 'localhost:3000/checkout?email=a@b.c', 'version 1.2? no']))
-      .toEqual(['shop.example/thanks', '/checkout/thanks', '//cdn.shop.example/a', 'Is it ready? yes', '10.0.0.1/thanks', 'localhost:3000/checkout', 'version 1.2? no'])
+    expect(stripUrls(['shop.example/thanks?order=55&email=a@b.c', '/checkout/thanks?email=a@b.c', '//cdn.shop.example/a?b=1', 'Is it ready? yes', '10.0.0.1/thanks?email=a@b.c', 'localhost:3000/checkout?email=a@b.c', 'version 1.2? no', 'url:shop.example/thanks?email=a@b.c', 'https:shop.example/x?email=a']))
+      .toEqual(['shop.example/thanks', '/checkout/thanks', '//cdn.shop.example/a', 'Is it ready? yes', '10.0.0.1/thanks', 'localhost:3000/checkout', 'version 1.2? no', 'url:shop.example/thanks', 'https:shop.example/x'])
     h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels
       : req.path === `${PIXEL}/event_rules` ? [{ id: '1', event_type: 'Purchase', rule: '{"url":{"i_contains":"thanks"}}', sample_urls: ['https://shop.example/thanks?email=a@b.c', 'shop.example/thanks?order=55'] }]
         : req.path === `${PIXEL}/extractors` ? [{ id: '2', event_type: 'Purchase', domain_uri: 'https://shop.example/p?ref=x' }] : [])

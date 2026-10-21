@@ -189,7 +189,7 @@ export function statsWindows(hours: number, now: Date = new Date()): Array<{ sta
   return Array.from({ length: count }, (_, i) => ({ start: start + i * length, end: i === count - 1 ? end : start + (i + 1) * length }))
 }
 
-const WEB_ADDRESS_QUERY = /((?:[a-z][a-z0-9+.-]*:)?\/\/[^\s?#"'<>]*|(?<![\w@.:-])(?:(?:[a-z0-9-]+\.)+[a-z]{2,63}|\d{1,3}(?:\.\d{1,3}){3}|localhost)(?::\d{1,5})?(?:\/[^\s?#"'<>]*)?|(?<![\w\/.:-])\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi
+const WEB_ADDRESS_QUERY = /((?:[a-z][a-z0-9+.-]*:)?\/\/[^\s?#"'<>]*|(?<![\w@.-])(?:(?:[a-z0-9-]+\.)+[a-z]{2,63}|\d{1,3}(?:\.\d{1,3}){3}|localhost)(?::\d{1,5})?(?:\/[^\s?#"'<>]*)?|(?<![\w\/.:-])\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi
 /** Review A5 / A-S1 — every web address in Meta's answer without its query and fragment, at any depth. */
 export function stripUrls(value: unknown, depth = 0): unknown {
   // With a scheme, or without one (shop.example/thanks?…, 10.0.0.1/…?…, localhost:3000/…?…, //shop.example?…, a path

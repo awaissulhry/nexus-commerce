@@ -281,6 +281,13 @@ describe('what an audience touches', () => {
     expect(res.sharedWithAdAccounts).toEqual([{ adAccountId: OTHER_ACCOUNT, takenByAnotherBusiness: true }])
     expect(JSON.stringify(res)).not.toMatch(/Shop B/)
   })
+  it('sharing: a recipient whose portfolio another business in Nexus uses shows that portfolio by id and the flag only', async () => {
+    h.taken = [{ id: '2' }]
+    h.rowsFor = (req) => (req.path === `${AUD}/shared_account_info` ? [{ account_id: '4444444444', account_name: 'Agency X ads', business_id: '2', business_name: 'Shop B' }] : [])
+    const res = data(await run({ view: 'sharing', audienceId: AUD }))
+    expect(res.recipients).toEqual([expect.objectContaining({ adAccountId: '4444444444', businessId: '2', businessName: null, businessTakenByAnotherBusiness: true })])
+    expect(JSON.stringify(res)).not.toMatch(/Shop B/)
+  })
   it('one refused part is said in words while the rest answers; a lost token ends the view', async () => {
     h.rowsFor = (req) => (req.path === `${AUD}/shared_account_campaign_info` ? metaError('100') : [])
     const res = data(await run({ view: 'sharing', audienceId: AUD }))

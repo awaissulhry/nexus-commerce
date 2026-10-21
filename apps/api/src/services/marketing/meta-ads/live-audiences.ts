@@ -683,7 +683,10 @@ export async function audiencesView(input: AudiencesInput) {
       const [info, campaigns, accounts] = await Promise.all([
         part(async () => {
           const read = await readRows(connectionId, 'audiences.sharedAccountInfo', `${own.audienceId}/shared_account_info`, { fields: SHARED_INFO_FIELDS }, maxRows)
-          return maskedAccounts(read.rows.map((r) => ({ adAccountId: metaAdAccountId(r.account_id), accountName: text(r.account_name), businessId: idText(r.business_id), businessName: text(r.business_name), sharingStatus: plain(r.sharing_status, 1) ?? null })), 'adAccountId')
+          const rows = read.rows.map((r) => ({ adAccountId: metaAdAccountId(r.account_id), accountName: text(r.account_name), businessId: idText(r.business_id), businessName: text(r.business_name), sharingStatus: plain(r.sharing_status, 1) ?? null }))
+          // Re-review round 3 — a recipient whose portfolio another business in Nexus uses: that portfolio's id and the flag, no name.
+          const takenPortfolios = await takenIds('PORTFOLIO', rows.map((r) => r.businessId).filter((id): id is string => !!id))
+          return maskedAccounts(rows.map((r) => (r.businessId && takenPortfolios.has(r.businessId) ? { ...r, businessName: null, businessTakenByAnotherBusiness: true } : r)), 'adAccountId')
         }),
         part(async () => {
           const read = await readRows(connectionId, 'audiences.sharedCampaigns', `${own.audienceId}/shared_account_campaign_info`, { fields: SHARED_CAMPAIGN_FIELDS }, maxRows)
