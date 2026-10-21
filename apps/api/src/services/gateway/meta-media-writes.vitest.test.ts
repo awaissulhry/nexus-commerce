@@ -163,15 +163,23 @@ describe('the write allow-list for media (metaWriteVerdict)', () => {
   it('review A6 — step 23\'s own text: no bidirectional control, a visible character, a title counted in UTF-8 bytes', () => {
     const url = `${BASE}/${ACT}/advideos`
     const link = 'https://cdn.example.com/v.mp4'
-    expect(problem({ url, body: form({ file_url: link, name: 'Spot \u202Egnp.exe' }) })).toMatch(/bidirectional control/)
-    expect(problem({ url, body: form({ file_url: link, name: 'A\u2066b\u2069' }) })).toMatch(/bidirectional control/)
-    expect(problem({ url, body: form({ file_url: link, name: '\u200B\u200B\u2060' }) })).toMatch(/visible character/)
+    expect(problem({ url, body: form({ file_url: link, name: 'Spot \u202Egnp.exe' }) })).toMatch(/no control or format characters/)
+    expect(problem({ url, body: form({ file_url: link, name: 'A\u2066b\u2069' }) })).toMatch(/no control or format characters/)
+    expect(problem({ url, body: form({ file_url: link, name: '\u200B\u200B\u2060' }) })).toMatch(/no control or format characters/)
+    expect(problem({ url, body: form({ file_url: link, name: '\u3164\u2800' }) })).toMatch(/visible character/)
     expect(problem({ url, body: form({ file_url: link, title: 'ä'.repeat(127) }) })).toBeNull()
     expect(problem({ url, body: form({ file_url: link, title: 'ä'.repeat(128) }) })).toMatch(/254 bytes/)
-    expect(problem({ url: `${BASE}/${PORTFOLIO}/creative_folders`, objectKind: 'portfolio', body: form({ name: '\u200E\uFEFF' }) })).toMatch(/bidirectional|visible/)
+    expect(problem({ url: `${BASE}/${PORTFOLIO}/creative_folders`, objectKind: 'portfolio', body: form({ name: '\u200E\uFEFF' }) })).toMatch(/no control or format characters/)
     expect(metaMediaTextProblem('Spring 2026 è ✓', 100, 'name')).toBeNull()
+    // Review round 2 — blanks that draw nothing (Hangul fillers, braille blank) and a combining mark alone are not visible;
+    // a mark on a base is, and a joiner only between two emoji is fine.
+    for (const blank of ['\u3164', '\u115F\u1160', '\u2800\u2800', '\uFFA0', '\u0301', '\u0301\u0302']) expect(metaMediaTextProblem(blank, 100, 'name'), JSON.stringify(blank)).toMatch(/visible character/)
+    expect(metaMediaTextProblem('Cafe\u0301', 100, 'name')).toBeNull()
+    expect(metaMediaTextProblem('Team \u{1F469}\u200D\u{1F4BB}', 100, 'name')).toBeNull()
+    expect(metaMediaTextProblem('Te\u200Dam', 100, 'name')).toMatch(/control or format character/)
+    expect(metaMediaTextProblem('Spot\u00ADA', 100, 'name')).toMatch(/control or format character/)
   })
-  it('MD-026 captions: an SRT file part the gateway encodes, its name <name>.<locale>.srt, at most 200 KB; the undo by locales_to_delete', () => {
+  it('MD-026 captions: an SRT file part the gateway encodes, its name <name>.<locale>.srt, at most 200,000 bytes; the undo by locales_to_delete', () => {
     const url = `${BASE}/${VIDEO}/captions`
     const srt = '1\n00:00:01,000 --> 00:00:03,500\nCiao!\n\n2\n00:00:04,000 --> 00:00:06,000\nSpedizione gratuita ✓'
     const ok = verdict({ url, objectKind: 'libraryvideo', body: form({ captions_file: srt, captions_file_name: 'spot.it_IT.srt', default_locale: 'it_IT' }) })
@@ -184,8 +192,12 @@ describe('the write allow-list for media (metaWriteVerdict)', () => {
     expect(problem({ url, objectKind: 'libraryvideo', body: form({ captions_file: srt, captions_file_name: 'a.it_IT.srt', locales_to_delete: '["it_IT"]' }) })).toMatch(/only Meta change/)
     expect(problem({ url, objectKind: 'adaccount', body: form({ captions_file: srt, captions_file_name: 'a.it_IT.srt' }) })).toMatch(/only Meta change/)
     const big = `1\n00:00:01,000 --> 00:00:02,000\n${'x'.repeat(META_CAPTIONS_MAX_BYTES)}`
-    expect(metaSrtProblem(big)).toMatch(/at most 200 KB/)
-    expect(problem({ url, objectKind: 'libraryvideo', body: form({ captions_file: big, captions_file_name: 'a.it_IT.srt' }) })).toMatch(/at most 200 KB|at most \d+ characters/)
+    expect(META_CAPTIONS_MAX_BYTES).toBe(200_000)
+    expect(metaSrtProblem(big)).toMatch(/at most 200,000 bytes/)
+    expect(problem({ url, objectKind: 'libraryvideo', body: form({ captions_file: big, captions_file_name: 'a.it_IT.srt' }) })).toMatch(/at most 200,000 bytes|at most \d+ characters/)
+    // Review round 2 — every control character but tab, line feed and carriage return: C0 and C1 (U+0080–U+009F).
+    for (const bad of ['\u0085', '\u0080', '\u009F', '\u001B', '\u007F']) expect(metaSrtProblem(`${srt}${bad}`), JSON.stringify(bad)).toMatch(/plain text/)
+    expect(metaSrtProblem(srt.replace(/\n/g, '\r\n').replace('Ciao!', 'Ciao!\tok'))).toBeNull()
     expect(verdict({ url, objectKind: 'libraryvideo', body: form({ locales_to_delete: '["it_IT"]', default_locale: 'none' }) })).toMatchObject({ write: { rule: 'video.captions.remove', body: 'locales_to_delete=%5B%22it_IT%22%5D&default_locale=none' } })
     expect(problem({ url, objectKind: 'libraryvideo', body: form({ locales_to_delete: '[ "it_IT" ]' }) })).toMatch(/JSON list/)
     expect(problem({ url, objectKind: 'libraryvideo', body: form({ locales_to_delete: '["it_IT","it_IT"]' }) })).toMatch(/JSON list/)
@@ -294,6 +306,18 @@ describe('through the gateway', () => {
     noteMetaVideoStarted('m-5', '1234567890', VIDEO, Date.now() - 7 * 60 * 60_000)
     expect(metaVideoStartedOn('m-5', VIDEO)).toBeNull()
   })
+  it('review round 2 — the parent folder is confirmed when SEEN in the first 500 rows (counted in rows): row 450 of 600 passes, row 550 is refused', async () => {
+    const page = (from: number, more: boolean) => json({ data: Array.from({ length: 100 }, (_, i) => ({ id: String(120000000001000 + from + i) })), ...(more ? { paging: { cursors: { after: `c${from}` }, next: 'more' } } : {}) })
+    const folderCall = (parent: string) => metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'Inner', parent_folder_id: parent }, check: false })
+    for (let p = 0; p < 6; p++) h.answers.push(page(1 + p * 100, p < 5))
+    expect((await folderCall(String(120000000001000 + 450))).ok).toBe(true)
+    // Five reads of 100 rows (500), never the sixth page, then the POST.
+    expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET', 'GET', 'GET', 'GET', 'POST'])
+    h.calls = []; h.answers = []
+    for (let p = 0; p < 6; p++) h.answers.push(page(1 + p * 100, p < 5))
+    expect(await folderCall(String(120000000001000 + 550)).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/folder 120000000001550 is not one Nexus can confirm/) })
+    expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
+  })
   it('a folder: on the chosen account\'s OWN portfolio, never one another Nexus business shares; its parent among the portfolio\'s folders', async () => {
     h.answers.push(json({ id: '120000000000702' }))
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'folder', objectId: PORTFOLIO, objectKind: 'portfolio', edge: 'creative_folders', params: { name: 'Spring 2026' }, check: false })).ok).toBe(true)
@@ -337,7 +361,8 @@ describe('through the gateway', () => {
     h.answers.push(json({ data: [{ id: '120000000000599' }] }), json({ data: [] }))
     expect(await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'advideos', method: 'DELETE', params: { video_id: VIDEO }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/not one Nexus can confirm in the chosen ad account's video library/) })
     expect(h.calls.map((c) => c.init.method)).toEqual(['GET', 'GET'])
-    // A library longer than Nexus reads (500): not confirmed, nothing deleted (fail closed).
+    // An id not seen in the rows Nexus reads (here the list ends without it, then video_ads cannot be read): not confirmed,
+    // nothing deleted (fail closed).
     h.calls = []
     for (let i = 0; i < 5; i++) h.answers.push(json({ data: [{ id: `12000000000070${i}` }], paging: { cursors: { after: `c${i}` }, next: 'more' } }))
     h.answers.push(json({ data: [] }))

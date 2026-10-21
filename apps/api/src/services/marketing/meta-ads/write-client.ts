@@ -91,12 +91,22 @@ export function readsOf(node: Record<string, unknown>, expected: Record<string, 
   return parts.length ? parts.join(', ') : 'as before'
 }
 
+/** Step 18 review A7 — times are sent as UTC Unix seconds and read back as ISO 8601: both judged as Unix seconds. */
+const TIME_FIELDS = new Set(['start_time', 'end_time', 'time_start', 'time_end'])
+const unixOf = (v: unknown): string => {
+  const text = String(v)
+  if (/^\d{1,11}$/.test(text)) return text
+  const ms = Date.parse(text)
+  return Number.isFinite(ms) ? String(Math.floor(ms / 1000)) : text
+}
+
 /** Step 18 — the fields of a read-back that do not show what was asked (a field not sent back is not judged). */
 export function readBackMismatch(node: Record<string, unknown> | null, expected: Record<string, string>): string[] {
   if (!node) return []
   return Object.entries(expected).filter(([field, value]) => {
     const got = node[field]
     if (got === undefined || got === null) return false
+    if (TIME_FIELDS.has(field)) return unixOf(got) !== unixOf(value)
     return (typeof got === 'string' || typeof got === 'number' || typeof got === 'boolean' ? String(got) : JSON.stringify(got)) !== value
   }).map(([field]) => field)
 }

@@ -647,7 +647,11 @@ async function creativesUsingVideos(connectionId: string, act: string, videoIds:
   return { by, complete: !read.more }
 }
 
-/** A video's caption locales and its default one, as Meta answers them now (`is_default` is SDK only: null when refused). */
+/**
+ * A video's caption locales and its default one, as Meta answers them now. VideoCaption's reference documents `locale`,
+ * `is_default`, `is_auto_generated`, `create_time`, `locale_name` and `uri`; when Meta still refuses `is_default`, the
+ * locales are read alone and the default is unknown (null: the undo then cannot put a default back, and says so).
+ */
 export async function videoCaptions(connectionId: string, videoId: string): Promise<{ locales: Set<string>; defaultLocale: string | null; defaultKnown: boolean }> {
   const read = async (fields: string) => listPaged(connectionId, 'media.videoCaptions', `${videoId}/captions`, { fields }, 100)
   let rows: Array<Record<string, unknown>>
@@ -702,7 +706,7 @@ async function captionsDraft(account: MetaChangeAccount, captions: CaptionsSourc
     totals: { captions: 1, requests: 1 },
     warnings: [
       'Meta has no check for captions (its captions edge lists no validate_only): the preview is built from the file and the video as they are now.',
-      'Captions spend nothing. The file is sent once and never kept by Nexus.',
+      'Captions spend nothing. The caption text is kept only with this request (its approval, the run that asked for it, or its change-plan step: the text the person approves), never in the change record, the call ledger or logs.',
       `Its undo takes the ${locale} captions off the video again (Meta's locales_to_delete; Meta has no delete on this edge)${setDefault ? (now.defaultKnown ? ` and puts the default caption back to ${now.defaultLocale}` : ', but Nexus could not read the default caption before, so the undo cannot put it back') : ''}.`,
     ],
     spendsMoney: [], skipped: [], requests: [request],

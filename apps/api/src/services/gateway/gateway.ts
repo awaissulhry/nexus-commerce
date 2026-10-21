@@ -845,14 +845,19 @@ async function metaMediaAssetsProblem(connectionId: string, write: MetaJudgedWri
   return null
 }
 
-/** The ids of one Meta list, page by page (100 a page, `after`), at most META_MEDIA_LIST_MAX; null when unread or longer. */
+/**
+ * Review round 2 — the ids in the FIRST META_MEDIA_LIST_MAX rows of one Meta list (100 a page, `after`), counted in rows;
+ * null when a read failed. The tool reads the same rows (change-media.ts listPaged up to META_MEDIA_LIST_MAX): an id seen
+ * there is confirmed, an id not seen is refused (fail closed: past those rows, or after a failed read, nothing is confirmed).
+ */
 async function metaListedIdsUpTo(connectionId: string, path: string): Promise<Set<string> | null> {
   const ids = new Set<string>()
+  let rows = 0
   let after: string | null = null
-  for (let page = 0; page * 100 < META_MEDIA_LIST_MAX; page++) {
+  while (rows < META_MEDIA_LIST_MAX) {
     const url = new URL(`${metaGraphBase()}/${path}`)
     url.searchParams.set('fields', 'id')
-    url.searchParams.set('limit', '100')
+    url.searchParams.set('limit', String(Math.min(100, META_MEDIA_LIST_MAX - rows)))
     if (after) url.searchParams.set('after', after)
     let body: { data?: Array<{ id?: unknown }>; paging?: { next?: unknown; cursors?: { after?: unknown } } } | null
     try {
@@ -862,19 +867,22 @@ async function metaListedIdsUpTo(connectionId: string, path: string): Promise<Se
       return null
     }
     if (!body || !Array.isArray(body.data)) return null
-    for (const row of body.data) if (typeof row?.id === 'string' || typeof row?.id === 'number') ids.add(String(row.id))
+    for (const row of body.data) {
+      if (rows >= META_MEDIA_LIST_MAX) break
+      rows++
+      if (typeof row?.id === 'string' || typeof row?.id === 'number') ids.add(String(row.id))
+    }
     const next = body.paging?.next && typeof body.paging.cursors?.after === 'string' ? body.paging.cursors.after : null
-    if (!next) return ids
+    if (!next || body.data.length === 0) break
     after = next
   }
-  // Longer than Nexus reads: an id not seen may be past it — not confirmed.
-  return null
+  return ids
 }
 
 /**
  * Review A2 / B1 — a video of the chosen ad account's library: listed on act_<id>/advideos or act_<id>/video_ads (a
- * video-ads upload; whether advideos lists one is LIVE-PROBE MD-019u), each read up to META_MEDIA_LIST_MAX. Unread or
- * longer lists: not confirmed, nothing sent.
+ * video-ads upload; whether advideos lists one is LIVE-PROBE MD-019u), each in its first META_MEDIA_LIST_MAX rows: seen
+ * there = confirmed; not seen (past those rows, or a read failed) = not confirmed, nothing sent.
  */
 async function metaLibraryVideoProblem(connectionId: string, chosen: string, videoId: string, where: string): Promise<{ code: string; sentence: string } | null> {
   if (!/^\d{1,20}$/.test(videoId)) return notChosenMedia(`${where}${videoId} is not a video id.`)

@@ -4,8 +4,9 @@
  * from this business's library or a public link through the safe fetch, are planned exactly and never shown; "was it new?"
  * is read before the upload (Meta gives the same picture the same hash) and only what an upload made new is ever taken
  * back; a video's link is fetched by Meta (Nexus relays no byte), through advideos or Meta's video-ads upload, or comes from
- * the chosen Instagram account (music swap); a folder only in the chosen account's own unshared portfolio; thumbnails,
- * captions, playables, chunked bytes and copies from another account are answered in words. Made-up ids.
+ * the chosen Instagram account (music swap); a folder only in the chosen account's own unshared portfolio; captions (an
+ * SRT text) only onto a library video, a locale once, with an undo that takes only that locale off; thumbnails, playables,
+ * chunked bytes and copies from another account are answered in words. Made-up ids.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
@@ -119,7 +120,11 @@ beforeEach(async () => {
   })
   h.read.mockReset(); h.read.mockImplementation(async () => imagesHolding())
   h.lists = new Map(); h.longer = new Set()
-  h.listPaged.mockReset(); h.listPaged.mockImplementation(async (_c: string, _op: string, path: string) => ({ rows: h.lists.get(path) ?? [], more: h.longer.has(path), totalCount: null }))
+  // Like listPaged: at most `max` rows, `more` when the list goes on (or the path is in `longer`).
+  h.listPaged.mockReset(); h.listPaged.mockImplementation(async (_c: string, _op: string, path: string, _q: unknown, max: number) => {
+    const all = h.lists.get(path) ?? []
+    return { rows: all.slice(0, max), more: all.length > max || h.longer.has(path), totalCount: null }
+  })
   h.send.mockReset(); h.rupload.mockReset(); h.ownMedia.mockReset()
   h.taken.mockReset(); h.taken.mockImplementation(async () => new Set<string>())
 })
@@ -140,7 +145,7 @@ describe('the tool', () => {
     expect(() => ask({ kind: 'undo', uploads: [{ kind: 'image' }] })).toThrow()
     expect(() => ask({ kind: 'undo', uploads: [{ kind: 'video', hash: 'abc' }] })).toThrow()
   })
-  it('thumbnail, captions, playable, chunked bytes and a copy from another account: plain answers, nothing read or sent', async () => {
+  it('thumbnail, playable, chunked bytes and a copy from another account: plain answers, nothing read or sent', async () => {
     for (const [args, words] of [
       [{ kind: 'thumbnail' }, THUMBNAIL_ANSWER], [{ kind: 'playable' }, PLAYABLE_ANSWER],
       [{ kind: 'video', video: { videoUrl: 'https://cdn.example.com/v.mp4', method: 'chunked' } }, CHUNKED_ANSWER],
@@ -230,6 +235,16 @@ describe('images', () => {
   })
 })
 
+describe('images — the approved picture only', () => {
+  it('IMAGE_MOVED: bytes that are not the approved picture are never sent', async () => {
+    // The fetch hands bytes whose sha256 is not the one the plan holds (the file changed between the read and the send).
+    h.fetchPhoto.mockImplementation(async (link: string) => ({ buffer: PNG, mimeType: 'image/png', bytes: PNG.length, contentHash: 'f'.repeat(64), host: new URL(link).hostname, url: link }))
+    const ran = await run({ kind: 'image', images: [{ libraryImageId: 'da_hero' }] })
+    expect(ran).toEqual({ ok: false, error: expect.stringMatching(/^Not run: Meta changed nothing\..*"Hero A" is not the picture that was approved; nothing was sent/) })
+    expect(h.send).not.toHaveBeenCalled()
+  })
+})
+
 describe('videos', () => {
   it('by its link (Nexus\'s library video): Meta fetches it on advideos; the run reads its status; new by its own clock', async () => {
     const out = await preview({ kind: 'video', video: { libraryVideoId: 'da_clip', name: 'Clip A' } })
@@ -272,6 +287,14 @@ describe('videos', () => {
     const ran = await run({ kind: 'video', video: { libraryVideoId: 'da_clip' } })
     expect(ran).toEqual({ ok: false, error: expect.stringContaining(OWNER_UPLOAD_STEPS) })
   })
+  it('B6 — an unknown music-swap word keeps the run polling until its time limit (only SUCCESSFUL or a failure word ends it)', async () => {
+    h.ownMedia.mockImplementation(async (_a: unknown, id: string) => ({ mediaId: id, productType: 'REELS' }))
+    h.send.mockImplementationOnce(async () => ({ node: { id: '120000000000505', created_time: new Date().toISOString(), status: { video_status: 'ready' }, replace_audio_status: 'QUEUED_FOR_MIX' }, readBack: 'second-read', waitedMs: 0 }))
+    h.read.mockImplementation(async () => ({ body: { id: '120000000000505', status: { video_status: 'ready' }, replace_audio_status: 'QUEUED_FOR_MIX' }, calls: 1 }))
+    const ran = await run({ kind: 'video', video: { instagramMediaId: '17900000000000001', swapAudioAssetId: '1234567' } })
+    expect(h.read.mock.calls.filter((c) => c[1].path === '120000000000505')).toHaveLength(__mediaTiming.polls)
+    expect(ran.data.steps[0].sentence).toMatch(/music swap: QUEUED_FOR_MIX/)
+  })
   it('the chosen Instagram account\'s video, its music swapped (exact JSON); another account\'s media and odd combinations refused', async () => {
     h.ownMedia.mockImplementation(async (_a: unknown, id: string) => ({ mediaId: id, productType: 'REELS' }))
     h.send.mockImplementationOnce(async () => ({ node: { id: '120000000000504', created_time: new Date().toISOString(), status: { video_status: 'ready' }, replace_audio_status: 'SUCCESSFUL' }, readBack: 'second-read', waitedMs: 0 }))
@@ -289,7 +312,8 @@ describe('videos', () => {
 describe('videos — review fixes', () => {
   it('B4: video_ads takes only the video — a name, title or description is refused in words, never dropped; A6: text checked', async () => {
     expect(await preview({ kind: 'video', video: { videoUrl: 'https://cdn.example.com/v.mp4', method: 'video_ads', title: 'Spot A' } })).toEqual({ ok: false, error: expect.stringMatching(/video_ads finish takes only the video.*Use method advideos/) })
-    expect(await preview({ kind: 'video', video: { libraryVideoId: 'da_clip', name: '\u200B\u200B' } })).toEqual({ ok: false, error: expect.stringMatching(/name has at least one visible character/) })
+    expect(await preview({ kind: 'video', video: { libraryVideoId: 'da_clip', name: '\u3164\u2800' } })).toEqual({ ok: false, error: expect.stringMatching(/name has at least one visible character/) })
+    expect(await preview({ kind: 'video', video: { libraryVideoId: 'da_clip', name: '\u200B\u200B' } })).toEqual({ ok: false, error: expect.stringMatching(/name carries no control or format character/) })
     expect(await preview({ kind: 'video', video: { libraryVideoId: 'da_clip', title: 'Spot \u202Eabc' } })).toEqual({ ok: false, error: expect.stringMatching(/bidirectional control/) })
     expect(h.send).not.toHaveBeenCalled()
   })
@@ -336,6 +360,15 @@ describe('captions (MD-026)', () => {
 })
 
 describe('folders', () => {
+  it('review round 2 — the same 500 rows as the gateway: a parent in row 450 of a 600-row list passes, one in row 550 is refused', async () => {
+    h.listPaged.mockImplementation(async (_c: string, _op: string, _path: string, _q: unknown, max: number) => {
+      const all = Array.from({ length: 600 }, (_, i) => ({ id: String(120000000001000 + i + 1), name: `F${i + 1}`, parent_folder_id: null }))
+      return { rows: all.slice(0, max), more: all.length > max, totalCount: null }
+    })
+    const at450 = await preview({ kind: 'folder', folder: { name: 'Inner', parentFolderId: String(120000000001000 + 450) } })
+    expect(at450.ok).toBe(true)
+    expect(await preview({ kind: 'folder', folder: { name: 'Inner', parentFolderId: String(120000000001000 + 550) } })).toEqual({ ok: false, error: expect.stringMatching(/not one of the portfolio's media-library folders Nexus can read \(it reads the first 500\)/) })
+  })
   it('only in the chosen account\'s own portfolio, never a shared one; its parent must be the portfolio\'s; no undo', async () => {
     h.taken.mockImplementationOnce(async () => new Set(['9876543210']))
     expect(await preview({ kind: 'folder', folder: { name: 'Spring 2026' } })).toEqual({ ok: false, error: FOLDER_TAKEN })

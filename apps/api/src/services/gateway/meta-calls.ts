@@ -714,8 +714,11 @@ export interface MetaWriteRule {
   kinds?: readonly MetaWriteKind[]
   /** Step 18 — at least one of these keys (a settings rule has no single required key). */
   anyOf?: readonly string[]
-  /** Step 18 — keys whose value may be any printable text (a name, the EU payer): every other value stays plain ASCII. */
-  text?: ReadonlySet<string>
+  /**
+   * Step 18 — keys whose value may be text a person types (a name, the EU payer), each with its pattern
+   * (meta-settings-rules.ts META_NAME_TEXT / META_STRICT_TEXT): every other value stays plain ASCII.
+   */
+  text?: Readonly<Record<string, RegExp>>
   /** Step 18 — the longest body of this rule (default MAX_WRITE_BODY). */
   maxBody?: number
   /** Step 18 — the ids inside the body, each checked to be of the chosen ad account by the gateway before anything goes. */
@@ -753,7 +756,7 @@ export type MetaMediaWriteKind = 'adaccount' | 'portfolio' | 'video' | 'libraryv
 /** Step 23 — a media id inside a change's body, and what the gateway checks it is (meta-media-rules.ts). */
 export interface MetaWriteAsset { id: string; kind: 'instagrammedia' | 'startedvideo' | 'creativefolder' | 'libraryvideo' }
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
-export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' }
+export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' }
 
 const fieldsValueProblem = (value: string): string | null => {
   const names = value.split(',')
@@ -886,8 +889,9 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   for (const [key, value] of parsed.params) {
     // Step 23 — a file's text is judged as the file (rule.file, below), never as a field.
     if (rule.file?.key === key) continue
-    if (rule.text?.has(key)) {
-      if (!PRINTABLE_TEXT.test(value)) return refuse(`the value of "${key}" is printable text (no control characters)`)
+    const pattern = rule.text && Object.prototype.hasOwnProperty.call(rule.text, key) ? rule.text[key] : null
+    if (pattern) {
+      if (!pattern.test(value)) return refuse(`the value of "${key}" is printable text (no control or format characters)`)
     } else if (!/^[\x20-\x7e]*$/.test(value)) return refuse(`the value of "${key}" is plain ASCII`)
   }
   const problem = rule.values(parsed.params)
@@ -897,7 +901,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     const text = parsed.params.get(rule.file.key) ?? ''
     const fileName = parsed.params.get(rule.file.nameKey) ?? ''
     if (!rule.file.name.test(fileName)) return refuse(`${rule.file.nameKey} is not a file name this change sends`)
-    if (Buffer.byteLength(text, 'utf8') > rule.file.maxBytes) return refuse(`${rule.file.key} is at most ${Math.floor(rule.file.maxBytes / 1024)} KB`)
+    if (Buffer.byteLength(text, 'utf8') > rule.file.maxBytes) return refuse(`${rule.file.key} is at most ${rule.file.maxBytes.toLocaleString('en')} bytes`)
     const fileProblem = rule.file.judge(text)
     if (fileProblem) return refuse(fileProblem)
   }
@@ -923,8 +927,6 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
 const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kinds
   ? !!kind && (rule.kinds as readonly string[]).includes(kind)
   : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
-/** Step 18 — printable text in any script (a name with accents or an emoji, the EU payer's name): no control character. */
-const PRINTABLE_TEXT = /^[^\p{Cc}\p{Cs}\u2028\u2029]*$/u
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY); step 23: an image's bytes. */
 const MAX_ANY_WRITE_BODY = Math.max(16_000, META_IMAGE_MAX_BODY)
 /** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts) and step 23's media rules (meta-media-rules.ts) — read when judged, never at load. */

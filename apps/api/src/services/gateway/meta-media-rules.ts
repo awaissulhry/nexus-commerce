@@ -68,7 +68,7 @@ export const META_MEDIA_TEXT = { name: 100, title: 254, description: 2000, folde
  */
 export const META_MEDIA_LIST_MAX = 500
 /** Meta's caption file cap ("The file size limit for video captions is 200K"). */
-export const META_CAPTIONS_MAX_BYTES = 200 * 1024
+export const META_CAPTIONS_MAX_BYTES = 200_000
 /** A locale as Meta's caption file names carry it (`filename.en_US.srt`, error 386). */
 export const META_LOCALE = /^[a-z]{2}_[A-Z]{2}$/
 /** A caption file's name: `<name>.<locale>.srt` (Meta: "File name must be in the format filename.locale.srt"). */
@@ -137,18 +137,28 @@ export function metaFileUrlProblem(value: string): string | null {
 
 /** Review A6 — bidirectional controls (embeddings, overrides, isolates, marks): text a person reads never carries them. */
 const BIDI_CONTROLS = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/u
-/** At least one character a person sees: not a space, a separator, a control or a format (zero-width) character. */
-const VISIBLE = /[^\p{White_Space}\p{Z}\p{Cc}\p{Cf}]/u
+/**
+ * Step 23's text pattern for the gateway's text check (MetaWriteRule.text): no control, format or surrogate character, but
+ * U+200D (zero-width joiner) BETWEEN two emoji, as a family emoji is written — the same rule as step 18's META_NAME_TEXT.
+ */
+export const META_MEDIA_TEXT_PATTERN = /^(?:[^\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]|(?<=\p{Extended_Pictographic}[\u{FE0F}\u{1F3FB}-\u{1F3FF}]?)\u200D(?=\p{Extended_Pictographic}))*$/u
+/**
+ * Review round 2 — at least one character a person sees: not a space, a separator, a control or a format (zero-width)
+ * character, not a Hangul or braille blank (U+115F, U+1160, U+3164, U+FFA0, U+2800), and not a combining mark alone (a mark
+ * counts only on a visible base, which is then the visible character).
+ */
+const VISIBLE = /[^\p{White_Space}\p{Z}\p{Cc}\p{Cf}\p{M}\u115F\u1160\u3164\uFFA0\u2800]/u
 
 /**
  * Review A6 — why step 23's own text (a name, a title, a description) is refused, or null: 1 to `max` characters (a
- * title: UTF-8 bytes, see META_MEDIA_TEXT), at least one visible character, no bidirectional control. Stricter than the
- * shared printable-text check (meta-calls.ts PRINTABLE_TEXT, which lets bidi controls and an all-zero-width name through).
+ * title: UTF-8 bytes, see META_MEDIA_TEXT), at least one visible character, no bidirectional control, no control or format
+ * character but a joiner between emoji (META_MEDIA_TEXT_PATTERN).
  */
 export function metaMediaTextProblem(value: string, max: number, what: string, unit: 'characters' | 'bytes' = 'characters'): string | null {
   const length = unit === 'bytes' ? Buffer.byteLength(value, 'utf8') : [...value].length
   if (!value.trim() || length > max) return `${what} is 1 to ${max} ${unit === 'bytes' ? 'bytes (UTF-8; Meta counts some characters as more than one)' : 'characters'}`
   if (BIDI_CONTROLS.test(value)) return `${what} carries no bidirectional control character (they can reorder what a person reads)`
+  if (!META_MEDIA_TEXT_PATTERN.test(value)) return `${what} carries no control or format character (a zero-width joiner only between two emoji)`
   if (!VISIBLE.test(value)) return `${what} has at least one visible character`
   return null
 }
@@ -156,14 +166,15 @@ export function metaMediaTextProblem(value: string, max: number, what: string, u
 const textOf = (max: number, what: string, unit: 'characters' | 'bytes' = 'characters'): Judge => (value) => metaMediaTextProblem(value, max, what, unit)
 
 /**
- * MD-026 — why a caption file's text is refused, or null: UTF-8 of at most 200 KB (Meta's cap), no control character but a
- * line break or a tab, and SubRip's shape: blocks apart by a blank line, each a number, a time line
+ * MD-026 — why a caption file's text is refused, or null: UTF-8 of at most 200,000 bytes (Meta's "200K"), no control
+ * character (C0 or C1) but a line break or a tab, and SubRip's shape: blocks apart by a blank line, each a number, a time line
  * (`00:00:01,000 --> 00:00:04,000`) and at least one line of text. The text is never quoted.
  */
 export function metaSrtProblem(text: string): string | null {
   if (!text.trim()) return 'the caption file is SubRip text (.srt) and is empty'
-  if (Buffer.byteLength(text, 'utf8') > META_CAPTIONS_MAX_BYTES) return `the caption file is at most ${META_CAPTIONS_MAX_BYTES / 1024} KB (Meta's limit)`
-  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u2028\u2029\uFFFD]/.test(text)) return 'the caption file is plain text (no control character but line breaks and tabs)'
+  if (Buffer.byteLength(text, 'utf8') > META_CAPTIONS_MAX_BYTES) return `the caption file is at most ${META_CAPTIONS_MAX_BYTES.toLocaleString('en')} bytes (Meta's 200K limit)`
+  // Review round 2 — every control character (\p{Cc}: C0 and C1, U+0080–U+009F) but tab, line feed and carriage return.
+  if (/(?![\t\n\r])\p{Cc}|[\u2028\u2029\uFFFD]/u.test(text)) return 'the caption file is plain text (no control character but line breaks and tabs)'
   const blocks = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim().split(/\n[ \t]*\n+/)
   for (const [i, block] of blocks.entries()) {
     const lines = block.split('\n')
@@ -210,7 +221,7 @@ const hashJudge: Judge = (value) => (/^[A-Za-z0-9]{1,64}$/.test(value) ? null : 
 const ACCOUNT: readonly MetaMediaWriteKind[] = ['adaccount']
 const PORTFOLIO: readonly MetaMediaWriteKind[] = ['portfolio']
 const LIBRARY_VIDEO: readonly MetaMediaWriteKind[] = ['libraryvideo']
-const VIDEO_TEXT = new Set(['name', 'title', 'description'])
+const VIDEO_TEXT = { name: META_MEDIA_TEXT_PATTERN, title: META_MEDIA_TEXT_PATTERN, description: META_MEDIA_TEXT_PATTERN }
 const videoText = { name: textOf(META_MEDIA_TEXT.name, 'name'), title: textOf(META_MEDIA_TEXT.title, 'title', 'bytes'), description: textOf(META_MEDIA_TEXT.description, 'description') }
 /** `default_locale`: a locale, or `none` (no default caption). */
 const defaultLocale: Judge = (value) => (value === 'none' || META_LOCALE.test(value) ? null : 'default_locale is a locale (it_IT) or none')
@@ -263,7 +274,7 @@ export const META_MEDIA_WRITE_RULES: readonly MetaWriteRule[] = [
   {
     // BM-058: a folder in the business portfolio's media library (SDK only; Meta has no update or delete for it).
     name: 'portfolio.folder.create', method: 'POST', path: /^\d{1,20}\/creative_folders$/, kinds: PORTFOLIO,
-    required: ['name'], optional: ['description', 'parent_folder_id'], text: new Set(['name', 'description']), edgeCall: true, budget: false,
+    required: ['name'], optional: ['description', 'parent_folder_id'], text: { name: META_MEDIA_TEXT_PATTERN, description: META_MEDIA_TEXT_PATTERN }, edgeCall: true, budget: false,
     values: judged({ name: textOf(META_MEDIA_TEXT.folderName, 'name'), description: textOf(META_MEDIA_TEXT.folderDescription, 'description'), parent_folder_id: digits('parent_folder_id') }),
     assets: (params) => (params.has('parent_folder_id') ? [{ id: params.get('parent_folder_id')!, kind: 'creativefolder' }] : []),
   },

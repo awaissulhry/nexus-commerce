@@ -7,7 +7,9 @@
  * approves it, it runs as that person, and its undo takes back only what it made new.
  *
  * Nothing here spends money. The image bytes it sends are never stored, logged or shown (the gateway's ledger keeps their
- * length only); a video is never relayed: Meta fetches it from its public link.
+ * length only); a caption text, an argument of the request, is kept only with that request (its approval, the run that
+ * asked for it, or its change-plan step) — never in the change record, the ledger (its length only) or logs; a video is
+ * never relayed: Meta fetches it from its public link.
  *
  * Step 22 (lane C1, remove-meta-ads-items) will delete images and videos on a person's explicit ask with the same two
  * DELETE rules (gateway/meta-media-rules.ts); until then this tool's undo (kind undo) is the only removal, and it removes
@@ -87,7 +89,7 @@ function finish(draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest
     image: 'A creative uses an image by its hash (image_hash). new: false or null means the picture was already there or Nexus could not prove it was not — its undo never removes it.',
     video: 'A creative may use the video only once Meta says it is ready (meta-media-library view video reads its status).',
     folder: 'Meta has no API to rename or delete a folder: it stays.',
-    captions: 'The captions show on the video wherever its ads run; Nexus did not keep the file.',
+    captions: 'The captions show on the video wherever its ads run. Their text stays only with this request (its approval, the run that asked for it, or its change-plan step); the change record, the call ledger and logs never hold it.',
     undo: 'Meta cannot put a removed file back: upload it again (create-meta-media).',
   }
   return {
@@ -247,8 +249,9 @@ const createMetaMedia: AgentTool = {
     + 'takes the locale off again). thumbnail and playable are answered in words: Meta takes a custom thumbnail only for a '
     + 'video associated with a Page (it comes with the Page step; a creative sets its video\'s thumbnail itself), and Nexus '
     + 'holds no HTML5 playable files. An upload SPENDS NOTHING (it is used only once a creative and an ad use it) and Meta '
-    + 'has no check for it (no validate_only on these edges): the preview says so. Image bytes and caption files are never '
-    + 'stored or logged.'
+    + 'has no check for it (no validate_only on these edges): the preview says so. Image bytes are never stored or logged; a '
+    + 'caption text is kept only with its request (its approval, the run that asked for it, or its change-plan step), never '
+    + 'in the change record, the call ledger or logs.'
     + META_CHANGE_RULES,
   undo: mediaUndo,
   handler: (args, ctx) => {
