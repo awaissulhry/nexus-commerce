@@ -31,7 +31,7 @@ import { factHash, type ToolContext, type ToolResult } from '../tool-types.js'
 import { approvedRun, canonical, notRun } from './ads-change-kit.js'
 import { metaChangeAccount, type MetaChangeAccount } from '../../marketing/meta-ads/change-account.js'
 import type { MetaChangeDraft, MetaChangeRequest } from '../../marketing/meta-ads/change-draft.js'
-import { metaCheckChange, metaSendChange, MetaWriteError, type MetaChangeResult } from '../../marketing/meta-ads/write-client.js'
+import { expectedOf, metaCheckChange, metaSendChange, MetaWriteError, readBackMismatch, readsOf, type MetaChangeResult, type MetaObjectChange } from '../../marketing/meta-ads/write-client.js'
 import { MetaReadError } from '../../marketing/meta-ads/errors.js'
 import { metaAdsWritesMode } from '../../gateway/channels.js'
 import { metaObjectState, META_ADSET_BUDGET_CHANGES_PER_HOUR, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
@@ -237,7 +237,7 @@ export async function metaChangePreview(args: Record<string, unknown>, ctx: Tool
   if (checkable.length && !remembered) {
     for (const request of checkable) {
       try {
-        await metaCheckChange(account.target, { objectId: request.objectId, kind: request.kind, params: request.params, operation: `${request.kind}.status` })
+        await metaCheckChange(account.target, { ...objectChangeOf(request), budget: undefined, readBackInPost: undefined })
       } catch (err) {
         if (!(err instanceof MetaWriteError)) throw err
         return { ok: false, error: err.outcome === 'refused'
@@ -261,6 +261,8 @@ export interface MetaRunStep {
   sentence: string
   /** done: the object as Meta read it back (status, effective_status), when it could be read. */
   readBack?: { status: string | null; effectiveStatus: string | null } | null
+  /** Step 18 — done, a change past status: the fields it asked, as Meta read them back. */
+  values?: Record<string, unknown>
 }
 
 export interface MetaRunOutcome {
@@ -270,8 +272,45 @@ export interface MetaRunOutcome {
   after: unknown
 }
 
+/**
+ * Step 18 — one request as the write client sends it: its own gateway operation (default `<kind>.status`), the kind the
+ * gateway confirms, its read-back and what that must show, and for a budget schedule its edge, method and parent. A
+ * status change (set-meta-status) gives none of the step 18 fields and goes exactly as in step 17.
+ */
+export function objectChangeOf(request: MetaChangeRequest): MetaObjectChange {
+  return {
+    objectId: request.objectId,
+    kind: request.objectKind ?? request.kind,
+    params: request.params,
+    operation: request.operation ?? `${request.kind}.status`,
+    budget: request.budget,
+    readBackInPost: request.readBackInPost,
+    ...(request.expect ? { expect: request.expect } : {}),
+    ...(request.readBackFields ? { readBackFields: request.readBackFields } : {}),
+    ...(request.edge ? { edge: request.edge } : {}),
+    ...(request.method ? { method: request.method } : {}),
+    ...(request.parent ? { parent: request.parent } : {}),
+  }
+}
+
+/** Step 18 — the step's sentence for a done request past status: what Meta reads back for the fields it asked. */
+function doneSettingsSentence(request: MetaChangeRequest, result: MetaChangeResult): string {
+  const expected = expectedOf(request)
+  const read = result.afterError
+    ? `Meta's answer was not a success (${result.afterError.replace(/\.$/, '')}), but Nexus read it back as asked: Meta made it.`
+    : request.method === 'DELETE'
+      ? 'Meta confirmed it.'
+      : result.readBack === 'none' || !result.node
+        ? 'Meta confirmed it; Nexus could not read it back (meta-ads-live shows it).'
+        : `Meta made it; it now reads ${readsOf(result.node, expected)}.`
+  return `${request.label}: ${read}${result.waitedMs ? ` Nexus waited ${Math.round(result.waitedMs / 1000)} s first (Meta's limit of one change of an object every 30 s).` : ''}`
+}
+
 /** The step's sentence for a done request. */
 function doneSentence(request: MetaChangeRequest, result: MetaChangeResult): string {
+  // Step 23 — a request with its own sender says what Meta made in its own words.
+  if (request.doneSentence) return request.doneSentence(result)
+  if (request.expect || request.method === 'DELETE' || request.edge) return doneSettingsSentence(request, result)
   const status = typeof result.node?.status === 'string' ? result.node.status : null
   const effective = typeof result.node?.effective_status === 'string' ? result.node.effective_status : null
   const wanted = request.params.status
@@ -330,9 +369,16 @@ export async function runMetaChange(
       continue
     }
     try {
-      const result = await metaSendChange(account.target, {
-        objectId: request.objectId, kind: request.kind, params: request.params, operation: `${request.kind}.status`, budget: request.budget, readBackInPost: request.readBackInPost,
-      })
+      // Step 23 — a request may bring its own sender (an upload read again, a multi-call video upload): one step all the same.
+      const result = request.send ? await request.send(account.target) : await metaSendChange(account.target, objectChangeOf(request))
+      // Step 18 — a change past status: Meta said success, but a field it asked reads back otherwise: not done (no
+      // record, no undo), and a missed step for what follows.
+      const moved = request.expect ? readBackMismatch(result.node, expectedOf(request)) : []
+      if (moved.length) {
+        missedAt ??= request.step
+        steps.push({ step: request.step, label: request.label, outcome: 'not_confirmed', sentence: `${request.label}: Meta answered success but it reads back ${readsOf(result.node!, expectedOf(request))}, not what was asked (${moved.join(', ')}). Nexus records no change for it and never sends it again by itself; meta-ads-live shows it now.` })
+        continue
+      }
       // Meta said success, but the object reads back with another status than the one asked: not done (no record, no
       // undo), and a missed step for what follows (no later switch-on).
       const readStatus = typeof result.node?.status === 'string' ? result.node.status : null
@@ -345,6 +391,7 @@ export async function runMetaChange(
       steps.push({
         step: request.step, label: request.label, outcome: 'done', sentence: doneSentence(request, result),
         readBack: result.node ? { status: typeof result.node.status === 'string' ? result.node.status : null, effectiveStatus: typeof result.node.effective_status === 'string' ? result.node.effective_status : null } : null,
+        ...(request.expect && result.node ? { values: Object.fromEntries(Object.keys(request.expect).map((f) => [f, result.node![f] ?? null])) } : {}),
       })
     } catch (err) {
       // Review fix A3 — EVERY error ends in a step, never in a lost run: what was already done keeps its record and undo.

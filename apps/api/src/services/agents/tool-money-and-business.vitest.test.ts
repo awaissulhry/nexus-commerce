@@ -239,6 +239,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-lead-forms': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has one (meta-ads-engagement.tools test)',
   'meta-leads': 'it reads the business\'s chosen Meta Page or ad account live from Meta, and no business here has one (meta-ads-engagement.tools test)',
   'meta-comments': 'it reads the business\'s chosen Meta Page or Instagram account live from Meta, and no business here has one (meta-ads-engagement.tools test)',
+  // Meta ads step 23: an upload reads the business's chosen Meta ad account before anything (meta-ads-media-upload.tools test).
+  'create-meta-media': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-media-upload.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -562,6 +564,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-lead-forms': () => ({ view: 'list' }),
   'meta-leads': () => ({ view: 'form', formId: '600000000000001' }),
   'meta-comments': () => ({ view: 'post', postId: '120000000000010_500000000000001' }),
+  // Meta ads step 23: an upload refuses in words before any fetch or call (no business here has Meta; its own test runs it).
+  'create-meta-media': () => ({ kind: 'image', images: [{ libraryImageId: 'da_test_asset' }] }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

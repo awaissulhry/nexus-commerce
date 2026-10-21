@@ -8,6 +8,8 @@
  * facts F1 X6): a change of N objects is N requests, sent in order, each with its own outcome (meta-ads-kit.ts).
  */
 import type { MetaStatusKind } from './live-status.js'
+import type { MetaWriteEdge } from '../../gateway/meta.js'
+import type { MetaChangeResult, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -15,7 +17,8 @@ export interface MetaChangeRequest {
   step: number
   /** What a person reads, e.g. 'Pause campaign "Spring sale" (120000000000001)'. */
   label: string
-  kind: MetaStatusKind
+  /** The kind of object it changes; step 23: `adaccount` / `portfolio` for an upload on that object's edge. */
+  kind: MetaStatusKind | 'adaccount' | 'portfolio'
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
@@ -36,6 +39,30 @@ export interface MetaChangeRequest {
   budget: boolean
   /** Its undo is a change of the same object (so it meets Meta's per-object limits too); false: it has none (an archive). */
   undoable: boolean
+  // ── step 18: a request past status (all optional; a status change needs none of them) ──
+  /** The gateway / ledger operation (default `<kind>.status`). */
+  operation?: string
+  /** What the read-back must show, field → value as sent (default: `status`). */
+  expect?: Record<string, string>
+  /** The fields read back (default id,status,effective_status). */
+  readBackFields?: string
+  /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`). */
+  objectKind?: 'highdemandperiod'
+  /** A create on the object's edge (POST /<id>/budget_schedules). */
+  edge?: MetaWriteEdge
+  /** DELETE (a budget schedule's); default POST. */
+  method?: 'POST' | 'DELETE'
+  /** A budget schedule's campaign or ad set. */
+  parent?: { kind: 'campaign' | 'adset'; id: string }
+  // ── step 23: a request that brings its own sender ──
+  /**
+   * Sends the request itself (an upload whose answer is read again, or Meta's video-ads upload, whose later calls need the
+   * first one's answer): the kit runs it as ONE step in place of metaSendChange. It goes only through the write client
+   * (the gateway), and rejects with a MetaWriteError exactly like metaSendChange (not_sent, refused, unknown).
+   */
+  send?: (target: MetaWriteTarget) => Promise<MetaChangeResult>
+  /** The step's sentence when Meta made it (else the kit's own). */
+  doneSentence?: (result: MetaChangeResult) => string
 }
 
 export interface MetaChangeDraft {

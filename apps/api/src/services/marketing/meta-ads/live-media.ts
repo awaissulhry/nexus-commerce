@@ -442,7 +442,7 @@ export async function liveMedia(input: MediaInput) {
       const taken = await portfolioTaken(portfolio)
       if (taken) return { ...base, ...taken }
       const read = await listPaged(connectionId, 'media.folders', `${portfolio}/creative_folders`, { fields: MEDIA_FIELDS.Folder }, maxRows)
-      return { ...base, portfolioId: portfolio, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Nexus does not create or change folders here (Meta has a create call; a later Nexus media step may use it); a person can in Business Settings › Media library.' }
+      return { ...base, portfolioId: portfolio, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'create-meta-media makes a folder here (Meta has no API to rename or delete one); a person can change them in Business Settings › Media library.' }
     }
     case 'tags': {
       const portfolio = portfolioOf(account)
