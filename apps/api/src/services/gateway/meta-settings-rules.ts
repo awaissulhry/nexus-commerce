@@ -526,3 +526,11 @@ export const META_SETTINGS_WRITE_RULES: readonly MetaWriteRule[] = [
     budget: false,
   },
 ]
+
+// ── Step 19 (2026-10-21): the same judges for the same fields at create (meta-create-rules.ts) ─────────────────────────
+
+/** A value's judge (why it is refused, or null), for the rules of another file. */
+export type MetaJudge = Judge
+/** The judges of a campaign's and an ad set's settings: create-meta-campaign / create-meta-ad-set judge the same fields alike. */
+export const META_SETTINGS_JUDGES: Readonly<{ campaign: Readonly<Record<string, Judge>>; adset: Readonly<Record<string, Judge>> }> = { campaign: CAMPAIGN_JUDGES, adset: ADSET_JUDGES }
+export { canonical as metaCanonicalJson, judged as metaJudged, promotedIds as metaPromotedIds, whole as metaWholeJudge, textOf as metaTextJudge, unixTime as metaUnixJudge, oneOf as metaOneOfJudge }

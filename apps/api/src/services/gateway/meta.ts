@@ -73,7 +73,7 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount'
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -83,12 +83,20 @@ export interface MetaWriteRequest {
   maxRateWaitMs?: number
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
   /** Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. */
-  edge?: 'budget_schedules'
+  edge?: MetaWriteEdge
   /** Step 18 — DELETE (a budget schedule's, no body); default POST. */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
+  recommendations?: boolean
 }
+
+/**
+ * The edges a change posts to: a budget schedule (step 18); a campaign's or ad set's create on the ad account (`act_<id>`),
+ * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
+ */
+export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):
@@ -98,7 +106,8 @@ export interface MetaWriteRequest {
  */
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
-  const body = remove ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
+  const check = req.recommendations ? '["validate_only","include_recommendations"]' : '["validate_only"]'
+  const body = remove ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: check } : {}) }).toString()
   return gatewayCall({
     channel: 'META',
     operation: req.operation,

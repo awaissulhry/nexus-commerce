@@ -55,7 +55,7 @@ export const META_MATERIAL = ['basis', 'plan', 'reach'] as const
 export const META_CHANGE_RULES =
   ' Nothing changes until a person approves it in Nexus (Approvals) — or, when this business\'s "Claude\'s changes need no '
   + 'approval" switch is on, it runs 20 s after the request unless stopped; either way it runs as that person, never by a '
-  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause); '
+  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause and the create of a campaign or an ad set); '
   + 'for any other the preview says why not, and the run reads the live state again first. With Meta changes switched off '
   + 'nothing is sent, not even a check. The '
   + 'preview says what changes (from → to), what can make the account spend more (spendsMoney — the person\'s decision) '
@@ -101,6 +101,8 @@ export interface MetaPreview {
   requests: Array<{ step: number; label: string; metaCheck: MetaRequestCheck }>
   basis: string
   plan: string
+  /** Step 19 — what Meta's check of a create recommended (include_recommendations, master CMP-031), when it had any. */
+  metaRecommendations?: unknown[]
 }
 
 /** A re-check of an approval (the gate's fresh dry run): it reads, it does not ask Meta to check again. */
@@ -174,7 +176,7 @@ async function limitWarnings(account: MetaChangeAccount, draft: MetaChangeDraft)
   return out
 }
 
-function previewOf(account: MetaChangeAccount, draft: MetaChangeDraft, checks: MetaRequestCheck[], recheck: boolean, limits: string[]): MetaPreview {
+function previewOf(account: MetaChangeAccount, draft: MetaChangeDraft, checks: MetaRequestCheck[], recheck: boolean, limits: string[], recommendations: unknown[] = []): MetaPreview {
   const { reach, warning } = reachOf(account)
   const spends = draft.spendsMoney
   const warnings = [...spends.map((s) => `SPENDS MONEY (your decision): ${s}`), ...(warning ? [warning] : []), ...draft.warnings, ...limits]
@@ -193,8 +195,15 @@ function previewOf(account: MetaChangeAccount, draft: MetaChangeDraft, checks: M
     requests: draft.requests.map((r, i) => ({ step: r.step, label: r.label, metaCheck: checks[i] })),
     basis: factHash(draft.stands),
     plan: planOf(draft),
+    ...(recommendations.length ? { metaRecommendations: recommendations } : {}),
   }
 }
+
+/** Step 19 — Meta's recommendations as the preview shows them: at most 10, each at most 1,000 characters of its JSON. */
+const shownRecommendations = (list: unknown[]): unknown[] => list.slice(0, 10).map((r) => {
+  const text = JSON.stringify(r) ?? ''
+  return text.length > 1000 ? `${text.slice(0, 999)}…` : r
+})
 
 /** How long Meta's acceptance of an exact plan is remembered: the same plan within it is not checked twice. */
 export const CHECK_MEMORY_MS = 30 * 60_000
@@ -234,10 +243,12 @@ export async function metaChangePreview(args: Record<string, unknown>, ctx: Tool
   const checkable = draft.requests.filter((r) => r.check === 'meta')
   const plan = planOf(draft)
   const remembered = checkable.length ? await rememberedCheck(account.adAccountId, plan) : null
+  const recommendations: unknown[] = []
   if (checkable.length && !remembered) {
     for (const request of checkable) {
       try {
-        await metaCheckChange(account.target, { ...objectChangeOf(request), budget: undefined, readBackInPost: undefined })
+        const answer = await metaCheckChange(account.target, { ...objectChangeOf(request), budget: undefined, readBackInPost: undefined })
+        if (answer?.recommendations?.length) recommendations.push(...answer.recommendations)
       } catch (err) {
         if (!(err instanceof MetaWriteError)) throw err
         return { ok: false, error: err.outcome === 'refused'
@@ -247,7 +258,7 @@ export async function metaChangePreview(args: Record<string, unknown>, ctx: Tool
     }
     await rememberCheck(account.adAccountId, plan)
   }
-  return { ok: true, preview: previewOf(account, draft, draft.requests.map((r) => (r.check === 'meta' ? 'accepted' : r.check === 'not-yet' ? 'not-used-yet' : 'no-check')), false, limits) }
+  return { ok: true, preview: previewOf(account, draft, draft.requests.map((r) => (r.check === 'meta' ? 'accepted' : r.check === 'not-yet' ? 'not-used-yet' : 'no-check')), false, limits, shownRecommendations(recommendations)) }
 }
 
 // ── run ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -290,6 +301,7 @@ export function objectChangeOf(request: MetaChangeRequest): MetaObjectChange {
     ...(request.edge ? { edge: request.edge } : {}),
     ...(request.method ? { method: request.method } : {}),
     ...(request.parent ? { parent: request.parent } : {}),
+    ...(request.recommendations ? { recommendations: true } : {}),
   }
 }
 

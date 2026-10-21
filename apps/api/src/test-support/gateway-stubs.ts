@@ -22,6 +22,8 @@ export const gatewayLedger: GatewayLedgerRow[] = []
 export const gatewayMetaChosen: Record<string, string | null> = {}
 /** Meta step 17: Meta objects in this business's stored rows (`objectId` → account and kind); every other is not stored. */
 export const gatewayMetaStored: Record<string, { adAccountId: string; kind: 'campaign' | 'adset' | 'ad' }> = {}
+/** Meta step 19: the Facebook Page each connection chose (`connectionId` → Page id); none unless a test sets it. */
+export const gatewayMetaPage: Record<string, string> = {}
 
 export const accountModule = {
   accountStatusOf: async (id: string): Promise<GatewayAccountState | null> =>
@@ -31,6 +33,8 @@ export const accountModule = {
   googleMerchantDataSourceNexusMade: async (merchantId: string, dataSourceId: string): Promise<boolean> => !gatewayMerchantForeignSources.has(`${merchantId}:${dataSourceId}`),
   metaChosenAdAccountOf: async (connectionId: string): Promise<string | null> => (connectionId in gatewayMetaChosen ? gatewayMetaChosen[connectionId] : '1234567890'),
   metaStoredObject: async (objectId: string): Promise<{ adAccountId: string; kind: 'campaign' | 'adset' | 'ad' } | null> => gatewayMetaStored[objectId] ?? null,
+  // Meta step 19: the chosen Facebook Page of a connection (a test sets gatewayMetaPage[connectionId]).
+  metaChosenPageOf: async (connectionId: string): Promise<string | null> => gatewayMetaPage[connectionId] ?? null,
 }
 export const ledgerModule = {
   writeLedgerRow: async (row: GatewayLedgerRow): Promise<void> => { gatewayLedger.push(row) },
