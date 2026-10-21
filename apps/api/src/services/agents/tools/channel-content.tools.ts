@@ -7,7 +7,11 @@
  *                         the Nexus draft values waiting to be synchronized
  *   set-shopify-content   change those store fields in the listing's Nexus draft (the linked workspace), through the
  *                         Shopify sheet's own writer (`saveShopifySheetCells`); Shopify changes when the draft is
- *                         synchronized from Nexus. Approved by a person.
+ *                         synchronized from Nexus. Approved by a person. Meta ads step 44 (master CT-193): also put the
+ *                         product into, or take it out of, the store's Facebook & Instagram sales channel (the draft's
+ *                         Sales channels value gains or loses exactly that publication; the reviewed sync sends it with
+ *                         Shopify's publishablePublish / publishableUnpublish through the gateway). Shopify's channel
+ *                         then feeds the Meta catalog on its own (D7: Shopify keeps writing that catalog, Nexus does not).
  *   listing-live-content  what one listing holds on its channel right now (`readLiveListing` / `publicLiveRead`: one
  *                         read per listing per 30 s, through the channel clients; the raw provider documents stay on the
  *                         server)
@@ -63,6 +67,44 @@ const SHOPIFY_FIELDS_MISSING =
   'Nexus has no copy of this store\'s field list yet, so the Shopify sheet has dropped every store metafield from this read: they are missing here, not empty.'
 
 const shopifySchemaMissing = (sheet: StudioSheet) => sheet.meta.schemaMissing.some((key) => key === 'SHOPIFY' || key.startsWith('SHOPIFY:'))
+
+/**
+ * Meta ads step 44 (master CT-193) — the product's Sales channels on its Shopify row: the store's own field (a JSON list
+ * of { publicationId, publishDate }), written through the same writer as the text fields, but ONLY by facebookInstagram:
+ * the one change Claude may make to it adds or removes the store's Facebook & Instagram publication, nothing else.
+ */
+const SALES_CHANNELS = 'salesChannels'
+function salesChannelsField(sheet: StudioSheet): (Field & { info: InformationField }) | null {
+  const column = sheet.columns.find((c) => c.shopifyField?.id === SALES_CHANNELS)
+  return column ? { name: SALES_CHANNELS, content: false, columns: [column], info: column.shopifyField! } : null
+}
+/**
+ * The store's Facebook & Instagram channel: Shopify's channel app of that name (Meta's), in the store's publications.
+ * Review fix (step 44) — by the channel's own name only ("Facebook & Instagram", or with "and"), no longer any name that
+ * holds both words: a merchant catalog named "Facebook Instagram …" is a publication too and must never match.
+ * RE-CHECK ON THE NEXT SHOPIFY VERSION BUMP (api-version.ts, P5.3): `Publication.name` (linked-products-gateway.ts
+ * readLinkedStoreSchema) is deprecated in Admin GraphQL 2026-07. The non-deprecated way is `Publication.channels` →
+ * `Channel.app` (its `handle`), with `Publication.catalog` telling an app catalog from a market or B2B one; neither the
+ * Meta app's handle nor whether its publication lists a Channel is documented, and checking needs a read of a store, so
+ * the name stays until then (a store with no channel of that name is refused; two are refused, never guessed).
+ */
+const FB_IG = 'Facebook & Instagram'
+const isFacebookInstagram = (name: string) => name.trim().toLowerCase().replace(/\s+/g, ' ').replace(/ and /g, ' & ') === FB_IG.toLowerCase()
+type Publication = { publicationId: string; publishDate: string | null }
+/** The Sales channels value as the sheet holds it (JSON text or a list), or null when it cannot be read as one. */
+function publicationsOf(value: unknown): Publication[] | null {
+  if (value == null || value === '') return []
+  let list: unknown = value
+  if (typeof value === 'string') { try { list = JSON.parse(value) } catch { return null } }
+  if (!Array.isArray(list)) return null
+  const out: Publication[] = []
+  for (const entry of list) {
+    const e = entry as { publicationId?: unknown; publishDate?: unknown } | null
+    if (!e || typeof e.publicationId !== 'string') return null
+    out.push({ publicationId: e.publicationId, publishDate: typeof e.publishDate === 'string' ? e.publishDate : null })
+  }
+  return out
+}
 
 function shopifyFields(sheet: StudioSheet): Array<Field & { info: InformationField }> {
   return sheet.columns.filter((column) => column.shopifyField && isShopifyContent(column.shopifyField))
@@ -220,6 +262,9 @@ const setShopifyContentInput = z.object({
   englishMeaning: z.record(z.string().trim().min(1).max(200), z.string().max(20_000)).optional()
     .refine((value) => !value || Object.keys(value).length <= MAX_FIELDS, { message: 'too many fields' })
     .describe('per text field set, what the new text says in English, for the person who approves it: required unless the language is en'),
+  // Meta ads step 44 (master CT-193) — the Shopify-fed Meta catalog.
+  facebookInstagram: z.enum(['publish', 'unpublish']).optional()
+    .describe('publish: put the product into the store\'s Facebook & Instagram sales channel (Shopify\'s channel then adds it to the Meta catalog it feeds); unpublish: take it out. In the listing\'s Nexus draft like the fields; asked alone (not with fields or reset — but reset ["salesChannels"], which undo-change asks to drop a draft that differs from Shopify by that channel alone)'),
 })
 
 interface ShopifyFieldPlan {
@@ -234,6 +279,8 @@ interface ShopifyFieldPlan {
   to: string | null
   nexusDraft: boolean
   englishMeaning?: string
+  /** Step 44 — how the preview shows from → to (the Sales channels by name), when not the raw values. */
+  shown?: { from: unknown; to: unknown }
 }
 interface ShopifyPlan {
   product: { id: string; sku: string }
@@ -244,11 +291,16 @@ interface ShopifyPlan {
   status: string | null
   fields: ShopifyFieldPlan[]
   unchanged: string[]
+  /** Step 44 — a Facebook & Instagram sales channel change: which way, and the publication. */
+  facebookInstagram?: { op: 'publish' | 'unpublish'; channel: string; publicationId: string }
+  /** Step 44 review — the product's own Shopify status as the sheet shows it (null: not shown), for the catalog note. */
+  productStatus?: { value: string | null; nexusDraft: boolean }
 }
 
 /** What each named field holds now on the product's Shopify row: its value and whether it is a Nexus draft. */
 function fieldState(sheet: StudioSheet, row: StudioRow, names: string[]) {
-  const all = shopifyFields(sheet)
+  const sales = salesChannelsField(sheet)
+  const all = [...shopifyFields(sheet), ...(sales ? [sales] : [])]
   return Object.fromEntries(names.map((name) => {
     const field = all.find((f) => f.name === name)
     const cell = field ? row.values[field.columns[0].key] : undefined
@@ -265,7 +317,12 @@ async function planShopifyContent(args: Record<string, unknown>, nothing: string
   const resets = [...new Set(Array.isArray(args.reset) ? (args.reset as string[]) : [])]
   // In name order: a stored approval's arguments come back from jsonb with their keys re-ordered.
   const names = [...new Set([...Object.keys(sets), ...resets])].sort((x, y) => x.localeCompare(y))
-  if (!names.length) return { error: `Name what to change: fields or reset. ${nothing}` }
+  const op = args.facebookInstagram === 'publish' || args.facebookInstagram === 'unpublish' ? args.facebookInstagram : null
+  // Step 44 review — undo of a channel change made where the Sales channels held no draft drops that draft again (the
+  // sheet's own reset), rather than writing a draft equal to what Shopify has.
+  const dropDraft = !!op && !Object.keys(sets).length && resets.length === 1 && resets[0] === SALES_CHANNELS
+  if (op && names.length && !dropDraft) return { error: `facebookInstagram is asked alone: change ${listed(names)} in another request. ${nothing}` }
+  if (!names.length && !op) return { error: `Name what to change: fields, reset or facebookInstagram. ${nothing}` }
   const both = resets.filter((name) => name in sets)
   if (both.length) return { error: `${listed(both)} cannot be set and reset in one change. ${nothing}` }
 
@@ -279,6 +336,7 @@ async function planShopifyContent(args: Record<string, unknown>, nothing: string
   const row = sheet.rows.find((r) => r.id === named.id && (r.aliasId ?? null) === aliasKey)
   if (!row) return { error: `${named.sku} has no row in the Shopify listing${aliasKey ? ` "${aliasKey}"` : ''}. ${nothing}` }
   if (!row.listing) return { error: `${named.sku} has no Shopify listing yet: create the listing first. ${nothing}` }
+  if (op) return planFacebookInstagram(op, named, sheet, row, aliasKey, nothing, dropDraft)
   const all = shopifyFields(sheet)
   const fields: ShopifyFieldPlan[] = []
   const unchanged: string[] = []
@@ -287,7 +345,9 @@ async function planShopifyContent(args: Record<string, unknown>, nothing: string
     const field = all.find((f) => fieldMatch(f, name)) ?? all.find((f) => formerMatch(f, name))
     if (!field) {
       const other = sheet.columns.find((c) => c.shopifyField && [c.shopifyField.id, c.shopifyField.label, c.key, c.label, ...formerNamesOf(c.key)].some((n) => n.toLowerCase() === name.toLowerCase()))
-      refusals.push(other ? `${name}: a listing setting (price, stock, status, sales channels, media), not text or an attribute` : `${name}: not a field of this store's Shopify listings`)
+      refusals.push(other
+        ? `${name}: a listing setting (price, stock, status, sales channels, media), not text or an attribute${other.shopifyField?.id === SALES_CHANNELS ? ' (the Facebook & Instagram channel: facebookInstagram)' : ''}`
+        : `${name}: not a field of this store's Shopify listings`)
       continue
     }
     const cell = row.values[field.columns[0].key]
@@ -327,6 +387,78 @@ async function planShopifyContent(args: Record<string, unknown>, nothing: string
   }
 }
 
+/**
+ * Step 44 (master CT-193) — the product's Sales channels with the store's Facebook & Instagram publication added or taken
+ * away, and nothing else changed: the store's channels come from Nexus's copy of its field list (its publications, by
+ * name; the writer checks each against the store again), the value from the row as the sheet reads it.
+ */
+async function planFacebookInstagram(op: 'publish' | 'unpublish', named: { id: string; sku: string }, sheet: StudioSheet, row: StudioRow, aliasKey: string | null, nothing: string, dropDraft = false): Promise<ShopifyPlan | { error: string }> {
+  const where = `Not possible on Shopify · ${named.sku}`
+  const field = salesChannelsField(sheet)
+  if (!field) return { error: `${where}: this store's Shopify listings have no Sales channels field in Nexus (its connection may lack Shopify's read_publications / write_publications access). ${nothing}` }
+  const cell = row.values[field.columns[0].key]
+  if (!cell) return { error: `${where}: Sales channels are set on the product, not on a variant: name the product. ${nothing}` }
+  if (!cell.editable) return { error: `${where}: Sales channels: ${cell.writeBlockedReason ?? 'it cannot be edited here'}. ${nothing}` }
+  const write = cell.shopifyWrite
+  if (!write) return { error: `${where}: the Shopify sheet does not write Sales channels. ${nothing}` }
+  const accountId = sheet.scope.connectionId ?? ''
+  let channels: Array<{ id: string; name: string }> | undefined
+  try {
+    const { readShopifyDisplaySchema } = await import('../../pim/channel-specs/shopify.js')
+    channels = (await readShopifyDisplaySchema(accountId)).publications?.map((p) => ({ id: p.id, name: p.name }))
+  } catch (error) {
+    return { error: `${where}: Nexus could not read this store's sales channels (${error instanceof Error ? error.message : String(error)}). ${nothing}` }
+  }
+  if (!channels) return { error: `${where}: Nexus cannot see this store's sales channels: its Shopify connection lacks read_publications. ${nothing}` }
+  const fbIg = channels.filter((c) => isFacebookInstagram(c.name))
+  const alike = fbIg.length ? [] : channels.filter((c) => /facebook/i.test(c.name) && /instagram/i.test(c.name))
+  if (alike.length) return { error: `${where}: this store has no sales channel named "${FB_IG}", only ${alike.map((c) => `"${c.name}"`).join(', ')} (a catalog can carry such a name too): Nexus does not guess which one feeds the Meta catalog. A person sets it in the product sheet's Sales channels. ${nothing}` }
+  if (!fbIg.length) return { error: `${where}: this store has no ${FB_IG} sales channel. It comes with Shopify's ${FB_IG} app (Meta's), which a person installs and connects in Shopify; Nexus does not. ${nothing}` }
+  if (fbIg.length > 1) return { error: `${where}: this store has ${fbIg.length} sales channels named like ${FB_IG} (${fbIg.map((c) => `"${c.name}"`).join(', ')}): Nexus does not guess which one feeds the Meta catalog. A person sets it in the product sheet's Sales channels. ${nothing}` }
+  const target = fbIg[0]
+  const now = publicationsOf(cell.value)
+  if (!now) return { error: `${where}: Nexus cannot read the product's Sales channels as Shopify's list. ${nothing}` }
+  const isIn = now.some((p) => p.publicationId === target.id)
+  if (op === 'publish' ? isIn : !isIn) {
+    return { error: `Nothing to change: ${named.sku} is ${op === 'publish' ? 'already' : 'not'} in the store's ${FB_IG} sales channel${cell.nexusDraft ? ' (in the Nexus draft)' : ''}. ${nothing}` }
+  }
+  const next = (op === 'publish' ? [...now, { publicationId: target.id, publishDate: null }] : now.filter((p) => p.publicationId !== target.id))
+    .sort((a, b) => a.publicationId.localeCompare(b.publicationId))
+  if (dropDraft) {
+    // The draft goes only when it differs from Shopify's own list (the writer's baseline) by exactly this channel.
+    if (!cell.nexusDraft) return { error: `Nothing to change: ${named.sku}'s Sales channels hold no Nexus draft to drop. ${nothing}` }
+    const stored = publicationsOf(write.baseline)
+    const key = (list: Publication[]) => JSON.stringify([...list].sort((a, b) => a.publicationId.localeCompare(b.publicationId)))
+    if (!stored || key(stored) !== key(next)) {
+      return { error: `${where}: dropping the Nexus draft of the Sales channels would change more than the ${FB_IG} channel (the draft holds other changes, it was already sent, or Shopify's own list moved). Ask facebookInstagram without reset. ${nothing}` }
+    }
+  }
+  const nameOf = (id: string) => channels!.find((c) => c.id === id)?.name ?? id
+  // Step 44 review — only an active Shopify product reaches the catalog: the product's own status, as the sheet shows it.
+  const statusColumn = sheet.columns.find((c) => c.shopifyField?.id === 'status')
+  const statusCell = statusColumn ? row.values[statusColumn.key] : undefined
+  return {
+    product: { id: named.id, sku: named.sku }, accountId, aliasKey, language: sheet.scope.locale,
+    label: `${channelLabel('SHOPIFY')} · ${named.sku}${aliasKey ? ` (${aliasKey})` : ''}`, status: row.listing?.listingStatus ?? null,
+    fields: [{ name: SALES_CHANNELS, column: field.columns[0], ownerId: write.ownerId, fieldId: write.fieldId, token: write.token, baseline: write.baseline,
+      reset: dropDraft, from: cell.value ?? null, to: dropDraft ? null : JSON.stringify(next), nexusDraft: !!cell.nexusDraft,
+      shown: { from: now.map((p) => nameOf(p.publicationId)), to: next.map((p) => nameOf(p.publicationId)) } }],
+    unchanged: [],
+    facebookInstagram: { op, channel: target.name, publicationId: target.id },
+    productStatus: { value: typeof statusCell?.value === 'string' && statusCell.value ? statusCell.value.toUpperCase() : null, nexusDraft: !!statusCell?.nexusDraft },
+  }
+}
+
+/** Step 44 review — the catalog note's last sentence: a product that is not active is in the channel but not in the catalog. */
+function catalogReach(plan: ShopifyPlan): string {
+  if (plan.facebookInstagram?.op !== 'publish') return ''
+  const status = plan.productStatus?.value ?? null
+  if (status === 'ACTIVE') return ''
+  return status
+    ? ` The product's own Shopify status is ${status}${plan.productStatus?.nexusDraft ? ' (in the Nexus draft)' : ''}: it is published to the channel, but does not reach the Meta catalog until it is active.`
+    : ' Only an active Shopify product reaches the Meta catalog.'
+}
+
 /** The Shopify sheet's writer for these cells (its own token and baseline checks); the answer per field. */
 async function saveCells(plan: ShopifyPlan, actor: string | null) {
   const { saveShopifySheetCells } = await import('../../shopify/channel-sheet.service.js')
@@ -336,7 +468,11 @@ async function saveCells(plan: ShopifyPlan, actor: string | null) {
   }, actor) as Promise<{ ok: boolean; cells: Record<string, { ok: boolean; reason?: string }> }>
 }
 
-type ShopifyChange = { productId: string; accountId: string; aliasKey: string | null; language: string; fields: Record<string, { value: unknown; nexusDraft: boolean } | null> }
+type ShopifyChange = {
+  productId: string; accountId: string; aliasKey: string | null; language: string; fields: Record<string, { value: unknown; nexusDraft: boolean } | null>
+  /** Step 44 — a Facebook & Instagram sales channel change, which way. */
+  facebookInstagram?: 'publish' | 'unpublish'
+}
 
 /** C2 — undo: a new set-shopify-content that sets each field's earlier Nexus draft value again, or drops the draft. */
 export const SET_SHOPIFY_CONTENT_UNDO: ToolUndo = {
@@ -351,6 +487,14 @@ export const SET_SHOPIFY_CONTENT_UNDO: ToolUndo = {
   request(change) {
     const before = (change.before ?? {}) as Partial<ShopifyChange>
     if (typeof before.productId !== 'string') return { refusal: 'This change does not name its product.' }
+    // Step 44 — a Facebook & Instagram sales channel change is put back the other way: that publication only. Review fix —
+    // where the Sales channels held no Nexus draft before, the draft it made is dropped again (the sheet's reset).
+    if (before.facebookInstagram === 'publish' || before.facebookInstagram === 'unpublish') {
+      return { tool: 'set-shopify-content', args: { product: before.productId, ...(before.accountId ? { accountId: before.accountId } : {}),
+        ...(before.aliasKey ? { aliasKey: before.aliasKey } : {}), ...(before.language ? { language: before.language } : {}),
+        facebookInstagram: before.facebookInstagram === 'publish' ? 'unpublish' : 'publish',
+        ...(before.fields?.[SALES_CHANNELS]?.nexusDraft === false ? { reset: [SALES_CHANNELS] } : {}) } }
+    }
     const fields: Record<string, string | null> = {}
     const reset: string[] = []
     const englishMeaning: Record<string, string> = {}
@@ -389,7 +533,17 @@ const setShopifyContent: AgentTool = {
     + 'synchronize): no Claude tool and no sync sends a draft with unreviewed changes. The listing\'s title and description are text: '
     + 'its own with set-listing-content (SHOPIFY, GLOBAL), the shared text with set-content. Refused when Nexus has no copy of the store\'s field list (the metafields would be '
     + 'invisible), when the product has no Shopify listing yet, and for a field that cannot be edited (the reason is '
-    + 'given). Give englishMeaning for every text set unless the store language is en. A person approves it in Nexus.',
+    + 'given). Give englishMeaning for every text set unless the store language is en. facebookInstagram (asked alone): '
+    + 'put the product into (publish) or take it out of (unpublish) the store\'s Facebook & Instagram sales channel — in the '
+    + 'same Nexus draft, so Shopify changes only when a person sends it with Review and synchronize; Shopify\'s channel then '
+    + 'adds it to or takes it off the Meta catalog it feeds, on its own schedule (not documented), and Meta catalog ads that '
+    + 'use that catalog may start or stop showing it; only an active Shopify product reaches the catalog. Only that '
+    + 'publication changes; refused when the store has no channel of that name (or more than one) or it is already so. The '
+    + 'draft edit is approved in Nexus (or runs by this business\'s "Claude\'s changes need no approval" switch); Shopify '
+    + 'changes only when a person sends the draft (Review and synchronize). undo-change puts the draft back the other way '
+    + '(a draft it made where there was none is dropped again); once the draft is sent, undo-change refuses (where there was '
+    + 'no draft before) or makes a new draft for a person to send: to change Shopify again, ask facebookInstagram unpublish '
+    + '(or publish).',
   async handler(args): Promise<ToolResult> {
     const plan = await planShopifyContent(args, NOTHING)
     if ('error' in plan) return { ok: false, error: plan.error }
@@ -402,13 +556,16 @@ const setShopifyContent: AgentTool = {
         listing: plan.label,
         language: plan.language,
         changes: Object.fromEntries(plan.fields.map((f) => [f.name, {
-          from: f.from, to: f.to, ...(f.reset ? { reset: true } : {}), ...(f.englishMeaning ? { englishMeaning: f.englishMeaning } : {}),
+          from: f.shown ? f.shown.from : f.from, to: f.shown ? f.shown.to : f.to, ...(f.reset ? { reset: true } : {}), ...(f.englishMeaning ? { englishMeaning: f.englishMeaning } : {}),
         }])),
         reach: { listing: plan.label, status: plan.status, otherListingsChange: false },
         // The writer's own tokens and baselines: a draft edit or a Shopify change in between moves it.
         basis: basisOf(plan.fields.map((f) => [f.name, f.ownerId, f.token, f.baseline, f.nexusDraft])),
         ...(plan.unchanged.length ? { unchanged: plan.unchanged } : {}),
-        note: 'Saved in the Shopify listing\'s Nexus draft only: Shopify changes when the draft is synchronized from Nexus, and its automation waits for a review.',
+        ...(plan.facebookInstagram ? { facebookInstagram: plan.facebookInstagram } : {}),
+        note: plan.facebookInstagram
+          ? `Saved in the Shopify listing's Nexus draft only: Shopify changes when a person sends the draft with Review and synchronize in Nexus. Only the "${plan.facebookInstagram.channel}" sales channel ${plan.facebookInstagram.op === 'publish' ? 'is added' : 'is taken away'}; every other channel stays as it is. Shopify's channel then ${plan.facebookInstagram.op === 'publish' ? 'adds the product to' : 'takes the product off'} the Meta catalog it feeds, on its own schedule (Shopify and Meta do not say how soon); Meta catalog ads that use that catalog may then ${plan.facebookInstagram.op === 'publish' ? 'start' : 'stop'} showing it. Nexus writes no Meta catalog item itself.${catalogReach(plan)}`
+          : 'Saved in the Shopify listing\'s Nexus draft only: Shopify changes when the draft is synchronized from Nexus, and its automation waits for a review.',
       },
     }
   },
@@ -419,7 +576,8 @@ const setShopifyContent: AgentTool = {
     const saved = plan.fields.filter((f) => result.cells[f.name]?.ok)
     const refused = plan.fields.filter((f) => !result.cells[f.name]?.ok).map((f) => `${f.name}: ${result.cells[f.name]?.reason ?? 'not saved'}`)
     if (!saved.length) return { ok: false, error: `The Shopify sheet refused it: ${listed(refused)}. ${NOTHING_WRITTEN}` }
-    const record = (fields: ShopifyChange['fields']): ShopifyChange => ({ productId: plan.product.id, accountId: plan.accountId, aliasKey: plan.aliasKey, language: plan.language, fields })
+    const record = (fields: ShopifyChange['fields']): ShopifyChange => ({ productId: plan.product.id, accountId: plan.accountId, aliasKey: plan.aliasKey, language: plan.language, fields,
+      ...(plan.facebookInstagram ? { facebookInstagram: plan.facebookInstagram.op } : {}) })
     const sheet = await readShopifySheet(plan.product.id, plan.accountId, plan.language)
     const row = 'error' in sheet ? undefined : sheet.rows.find((r) => r.id === plan.product.id && (r.aliasId ?? null) === plan.aliasKey)
     const names = saved.map((f) => f.name)
