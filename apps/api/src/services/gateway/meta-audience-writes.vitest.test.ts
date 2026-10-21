@@ -31,7 +31,7 @@ vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.f
 vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
 
 import { createHash } from 'node:crypto'
-import { gatewayLedger, gatewayMetaChosen, gatewayMetaStored } from '../../test-support/gateway-stubs.js'
+import { gatewayLedger, gatewayMetaChosen, gatewayMetaPage, gatewayMetaStored } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { metaWriteCall } from './meta.js'
 import { metaWriteVerdict } from './meta-calls.js'
@@ -62,6 +62,7 @@ beforeEach(() => {
   h.calls = []; h.answers = []; h.idProblems.clear(); h.idAsked = []; gatewayLedger.length = 0
   for (const key of Object.keys(gatewayMetaChosen)) delete gatewayMetaChosen[key]
   for (const key of Object.keys(gatewayMetaStored)) delete gatewayMetaStored[key]
+  for (const key of Object.keys(gatewayMetaPage)) delete gatewayMetaPage[key]
   vi.stubEnv('NEXUS_META_ADS_WRITES', 'on')
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     h.calls.push({ url: String(url), init })
@@ -103,7 +104,7 @@ describe('creates on the ad account\'s edges', () => {
   })
   it('a video audience (subtype ENGAGEMENT, the array rule) names its videos; a lookalike one source', () => {
     const video = JSON.stringify([{ object_id: '120000000000090', event_name: 'video_watched' }])
-    expect(verdict({ body: form({ name: 'Viewers A', subtype: 'ENGAGEMENT', rule: video }) })).toMatchObject({ write: { rule: 'audience.create.video', ids: [{ id: '120000000000090', kind: 'video' }] } })
+    expect(verdict({ body: form({ name: 'Viewers A', subtype: 'ENGAGEMENT', rule: video }) })).toMatchObject({ write: { rule: 'audience.create.video', ids: [{ id: '120000000000090', kind: 'sourcevideo' }] } })
     expect(problem({ body: form({ name: 'Viewers A', subtype: 'ENGAGEMENT', rule: JSON.stringify([{ object_id: '1', event_name: 'video_liked' }]) }) })).toMatch(/video rule/)
     const spec = JSON.stringify({ ratio: 0.03, starting_ratio: 0.01 })
     expect(verdict({ body: form({ name: 'Look A', subtype: 'LOOKALIKE', origin_audience_id: AUDIENCE, lookalike_spec: spec }) }))
@@ -156,7 +157,7 @@ describe('changes of one audience and of the account', () => {
   it('sharing: POST and DELETE /<audience>/ad_accounts, the recipients named; never replace', () => {
     const url = `${BASE}/${AUDIENCE}/ad_accounts`
     expect(verdict({ url, objectKind: 'customaudience', body: form({ adaccounts: '["1234567891"]', permissions: 'targeting' }) }))
-      .toMatchObject({ write: { rule: 'audience.share', ids: [{ id: '1234567891', kind: 'adaccount' }] } })
+      .toMatchObject({ write: { rule: 'audience.share', ids: [{ id: '1234567891', kind: 'shareaccount' }] } })
     expect(problem({ url, objectKind: 'customaudience', body: form({ adaccounts: '["1234567891"]', replace: 'true' }) })).toMatch(/only Meta change/)
     expect(problem({ url, objectKind: 'customaudience', body: form({ adaccounts: '["act_1234567891"]' }) })).toMatch(/Meta ids/)
     // Review A1 — an unshare names no recipient to check: taking access away is how a share with another business ends.
@@ -167,8 +168,9 @@ describe('changes of one audience and of the account', () => {
   })
   it('a delete of an audience: no body, named an audience — never a campaign; step 18\'s budget schedule delete unchanged', () => {
     expect(verdict({ url: `${BASE}/${AUDIENCE}`, method: 'DELETE', objectKind: 'customaudience' })).toEqual({ write: { rule: 'audience.delete', objectId: AUDIENCE, check: false, body: '', budget: false, kinds: ['customaudience'], method: 'DELETE' } })
-    expect(problem({ url: `${BASE}/${AUDIENCE}`, method: 'DELETE', objectKind: 'campaign' })).toMatch(/deletes nothing on Meta yet/)
-    expect(problem({ url: `${BASE}/${AUDIENCE}`, method: 'DELETE', objectKind: 'customaudience', body: 'x=1' })).toMatch(/deletes nothing on Meta yet but a scheduled budget increase/)
+    // Step 22's campaign delete is its own rule (remove-meta-ads-items), never the audience's.
+    expect(verdict({ url: `${BASE}/${AUDIENCE}`, method: 'DELETE', objectKind: 'campaign' })).not.toMatchObject({ write: { rule: 'audience.delete' } })
+    expect(problem({ url: `${BASE}/${AUDIENCE}`, method: 'DELETE', objectKind: 'customaudience', body: 'x=1' })).toMatch(/Nexus deletes on Meta only .*for audiences \(step 31\)/)
     expect(verdict({ url: `${BASE}/120000000000031`, method: 'DELETE', objectKind: 'highdemandperiod' })).toMatchObject({ write: { rule: 'budget_schedule.delete' } })
     // Review A5 — a DELETE body that is not form text is refused, never sent as an empty one.
     expect(problem({ url: `${BASE}/${AUDIENCE}`, method: 'DELETE', objectKind: 'customaudience', body: new Uint8Array([1]) })).toMatch(/form text/)
@@ -194,8 +196,8 @@ describe('the people of a customer list: hashes only, in a DELETE', () => {
     expect(problem({ url: `${BASE}/${AUDIENCE}/users`, objectKind: 'customaudience', body: form({ payload: PAYLOAD, session: SESSION }) })).toMatch(/only Meta change/)
     expect(problem({ url: `${BASE}/${AUDIENCE}/usersreplace`, objectKind: 'customaudience', body: form({ payload: PAYLOAD, session: SESSION }) })).toMatch(/only Meta change/)
     // A DELETE of people without a body, or named as the account: refused.
-    expect(problem({ url: `${BASE}/${AUDIENCE}/users`, method: 'DELETE', objectKind: 'customaudience' })).toMatch(/deletes nothing on Meta yet/)
-    expect(problem({ url: `${BASE}/${AUDIENCE}/users`, method: 'DELETE', objectKind: 'adaccount', body: form({ payload: PAYLOAD }) })).toMatch(/deletes nothing on Meta yet/)
+    expect(problem({ url: `${BASE}/${AUDIENCE}/users`, method: 'DELETE', objectKind: 'customaudience' })).toMatch(/Nexus deletes on Meta only/)
+    expect(problem({ url: `${BASE}/${AUDIENCE}/users`, method: 'DELETE', objectKind: 'adaccount', body: form({ payload: PAYLOAD }) })).toMatch(/Nexus deletes on Meta only/)
   })
   it('through the gateway: the body goes with the DELETE, and a refused one leaves no hash in the ledger', async () => {
     h.answers.push(json({ id: AUDIENCE, account_id: '1234567890', subtype: 'CUSTOM', time_created: 1700000000 }), json({ error: { code: 100, message: 'Invalid parameter' } }, 400))
@@ -231,13 +233,44 @@ describe('the people of a customer list: hashes only, in a DELETE', () => {
 })
 
 describe('the ids inside an audience change are the business\'s own', () => {
-  it('a Page another business chose inside a rule: nothing is sent', async () => {
-    h.idProblems.set(PAGE, `Facebook Page ${PAGE} is not the Facebook Page this business chose.`)
+  it('a Page inside a rule is step 19\'s `page` (the chosen Page): another is refused, nothing is sent', async () => {
+    gatewayMetaPage['m-1'] = '120000000000089'
     const page = { inclusions: { operator: 'or', rules: [{ event_sources: [{ id: PAGE, type: 'page' }], retention_seconds: 86400, filter: EVENT }] } }
     const err = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'customaudiences', params: { name: 'Fans A', rule: JSON.stringify(page) }, check: false }).catch((e) => e)
-    expect(err).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/inside this change, Facebook Page/) })
+    expect(err).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/Page 120000000000080 is not the Facebook Page this business chose/) })
     expect(h.calls).toHaveLength(0)
-    expect(h.idAsked).toEqual([{ id: PAGE, kind: 'page' }])
+    expect(h.idAsked).toEqual([])
+    gatewayMetaPage['m-1'] = PAGE
+    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'customaudiences', params: { name: 'Fans A', rule: JSON.stringify(page) }, check: false })).ok).toBe(true)
+  })
+  it('merge — step 31\'s own kinds go to audience-ids.ts; step 22\'s `video` and step 28\'s `adaccount` keep main\'s checks', async () => {
+    // A source video (step 31): audience-ids.ts as `video`; a share recipient: audience-ids.ts as `adaccount`.
+    h.idProblems.set('120000000000090', 'That video is not in the chosen ad account\'s library or on the chosen Facebook Page, so it is not read.')
+    const video = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'customaudiences', params: { name: 'Viewers A', subtype: 'ENGAGEMENT', rule: '[{"object_id":"120000000000090","event_name":"video_watched"}]' }, check: false }).catch((e) => e)
+    expect(video).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/inside this change, That video is not/) })
+    h.answers.push(json({ id: AUDIENCE, account_id: '1234567890', subtype: 'CUSTOM', time_created: 1700000000 }))
+    await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: AUDIENCE, objectKind: 'customaudience', edge: 'ad_accounts', params: { adaccounts: '["1234567891"]' }, check: false })
+    expect(h.idAsked).toEqual([{ id: '120000000000090', kind: 'video' }, { id: '1234567891', kind: 'adaccount' }])
+    // Step 22's `video` (a library removal) is listed in the ad account's library by main's own check — never audience-ids.ts.
+    h.idAsked = []; h.calls = []
+    h.answers.push(json({ data: [{ id: '120000000000095' }] }), json({ success: true }))
+    const removal = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: 'act_1234567890', objectKind: 'adaccount', edge: 'advideos', method: 'DELETE', params: { video_id: '120000000000095' }, check: false }).catch((e) => e)
+    expect(h.idAsked).toEqual([])
+    expect(h.calls.some((c) => new URL(c.url).pathname === '/v26.0/act_1234567890/advideos' && (c.init.method ?? 'GET') === 'GET')).toBe(true)
+    void removal
+    // Step 28's `adaccount` (a lift cell's account) is exactly the chosen one by main's own check — never audience-ids.ts.
+    h.idAsked = []; h.calls = []
+    const T0 = 4_102_444_800
+    const lift = {
+      name: 'Lift', type: 'LIFT', start_time: String(T0), end_time: String(T0 + 86400), observation_end_time: String(T0 + 2 * 86400),
+      cells: JSON.stringify([{ name: 'test', treatment_percentage: 90, control_percentage: 10, adaccounts: ['5555555555'] }]),
+      objectives: JSON.stringify([{ name: 'Purchases', is_primary: true, type: 'CONVERSIONS', adspixels: [{ id: PIXEL, event_names: ['fb_pixel_purchase'] }] }]),
+    }
+    h.answers.push(json({ id: ACT, business: { id: '120000000000090' } }))
+    const cell = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: '120000000000090', objectKind: 'business', edge: 'ad_studies', params: lift, check: false }).catch((e) => e)
+    expect(cell).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/an ad account named is not the one this business chose/) })
+    expect(h.idAsked).toEqual([])
+    expect(h.calls.every((c) => (c.init.method ?? 'GET') === 'GET')).toBe(true)
   })
   it('a campaign or ad set a lookalike learns from: of the chosen account as either kind', async () => {
     gatewayMetaStored['120000000000001'] = { adAccountId: '1234567890', kind: 'adset' }

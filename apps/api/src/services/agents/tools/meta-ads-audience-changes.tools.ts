@@ -111,7 +111,7 @@ type Done = Array<{ request: MetaChangeDraft['requests'][number]; result: { node
 function createIds(r: AudienceCreateRequest): MetaWriteBodyId[] {
   const ids: MetaWriteBodyId[] = []
   if (r.rule) ids.push(...audienceRuleIds(r.rule))
-  for (const id of r.video?.videoIds ?? []) ids.push({ id, kind: 'video' })
+  for (const id of r.video?.videoIds ?? []) ids.push({ id, kind: 'sourcevideo' })
   if (r.catalog) {
     ids.push({ id: r.catalog.productSetId, kind: 'productset' })
     if (r.catalog.pixelId) ids.push({ id: r.catalog.pixelId, kind: 'pixel' })
@@ -464,7 +464,7 @@ const buildShare = (args: Record<string, unknown>): MetaDraftBuilder => guarded(
   const audience = await liveAudienceDetail(chosen, request.audienceId)
   const sharing = await liveAudienceSharing(chosen, audience.id)
   const use = await liveAudienceUse(chosen, audience.id)
-  const idProblems = request.action === 'share' ? await liveIdProblems(chosen, request.adAccountIds.map((id) => ({ id, kind: 'adaccount' as const }))) : []
+  const idProblems = request.action === 'share' ? await liveIdProblems(chosen, request.adAccountIds.map((id) => ({ id, kind: 'shareaccount' as const }))) : []
   return shareDraft(request, { audience, sharing, use, idProblems })
 })
 

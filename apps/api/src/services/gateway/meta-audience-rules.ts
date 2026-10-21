@@ -423,7 +423,7 @@ const ruleIds = (params: Params): MetaWriteBodyId[] => {
   const ids: MetaWriteBodyId[] = []
   if (params.get('subtype') === 'ENGAGEMENT') {
     const rule = parsedOf(params, 'rule')
-    if (Array.isArray(rule)) for (const r of rule) if (plainObject(r) && isId(r.object_id)) ids.push({ id: r.object_id, kind: 'video' })
+    if (Array.isArray(rule)) for (const r of rule) if (plainObject(r) && isId(r.object_id)) ids.push({ id: r.object_id, kind: 'sourcevideo' })
   } else if (params.has('rule')) {
     ids.push(...audienceRuleIds(parsedOf(params, 'rule')))
   }
@@ -437,7 +437,7 @@ const ruleIds = (params: Params): MetaWriteBodyId[] => {
   const existing = parsedOf(params, 'existing_customers')
   if (Array.isArray(existing)) for (const id of existing) if (isId(id)) ids.push({ id, kind: 'customaudience' })
   const accounts = parsedOf(params, 'adaccounts')
-  if (Array.isArray(accounts)) for (const id of accounts) if (isId(id)) ids.push({ id, kind: 'adaccount' })
+  if (Array.isArray(accounts)) for (const id of accounts) if (isId(id)) ids.push({ id, kind: 'shareaccount' })
   return dedupe(ids)
 }
 
@@ -553,7 +553,6 @@ export const META_AUDIENCE_WRITE_RULES: readonly MetaWriteRule[] = [
     // set-meta-audience-members mode remove: people who opted out of the business's e-mail, hashed, out of ONE list.
     name: 'audience.users.remove',
     method: 'DELETE',
-    deleteBody: true,
     personal: true,
     path: /^\d{1,20}\/users$/,
     kinds: ['customaudience'],
@@ -567,7 +566,6 @@ export const META_AUDIENCE_WRITE_RULES: readonly MetaWriteRule[] = [
     // set-meta-audience-members mode opt_out_everywhere: the same people out of EVERY customer list of the account.
     name: 'adaccount.usersofanyaudience',
     method: 'DELETE',
-    deleteBody: true,
     personal: true,
     path: ACCOUNT_EDGE('usersofanyaudience'),
     kinds: ['adaccount'],
@@ -593,7 +591,6 @@ export const META_AUDIENCE_WRITE_RULES: readonly MetaWriteRule[] = [
     // set-meta-audience-sharing unshare: the recipients' ads using it stop for good.
     name: 'audience.unshare',
     method: 'DELETE',
-    deleteBody: true,
     path: /^\d{1,20}\/ad_accounts$/,
     kinds: ['customaudience'],
     required: ['adaccounts'],

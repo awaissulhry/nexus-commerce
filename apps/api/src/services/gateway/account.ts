@@ -61,6 +61,18 @@ export async function metaChosenAdAccountOf(connectionId: string): Promise<strin
   return link?.externalId ?? null
 }
 
+/** Meta step 19: the Facebook Page this business chose through this connection (its PAGE MetaAccountLink), or null. */
+export async function metaChosenPageOf(connectionId: string): Promise<string | null> {
+  const link = await prisma.metaAccountLink.findFirst({ where: { connectionId, product: 'PAGE' }, select: { externalId: true } })
+  return link?.externalId ?? null
+}
+
+/** Meta step 21: the Instagram account this business chose through this connection (its INSTAGRAM MetaAccountLink), or null. */
+export async function metaChosenInstagramOf(connectionId: string): Promise<string | null> {
+  const link = await prisma.metaAccountLink.findFirst({ where: { connectionId, product: 'INSTAGRAM' }, select: { externalId: true } })
+  return link?.externalId ?? null
+}
+
 /** The kinds of Meta object Nexus's daily read stores (and a change by object id may name). */
 export type MetaStoredKind = 'campaign' | 'adset' | 'ad'
 
@@ -79,4 +91,13 @@ export async function metaStoredObject(objectId: string): Promise<{ adAccountId:
   if (adSet) return { adAccountId: adSet.adAccountId, kind: 'adset' }
   if (ad) return { adAccountId: ad.adAccountId, kind: 'ad' }
   return null
+}
+
+/**
+ * Meta step 23: is this business portfolio also that of ANOTHER business's chosen ad account (nexus_meta_links_taken
+ * PORTFOLIO, step 10)? Then its media library is that business's too, and no Nexus change writes there.
+ */
+export async function metaPortfolioShared(portfolioId: string): Promise<boolean> {
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`SELECT t.id FROM nexus_meta_links_taken('PORTFOLIO', ${[portfolioId]}::text[]) AS t(id)`
+  return rows.some((row) => row.id === portfolioId)
 }

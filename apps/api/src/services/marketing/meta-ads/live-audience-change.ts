@@ -182,7 +182,10 @@ export async function liveAudiencesNamed(account: MetaChosenAccount, names: stri
   }
 }
 
-const AUDIENCE_ID_KINDS: ReadonlySet<string> = new Set<AudienceIdKind>(['page', 'instagram', 'leadform', 'canvas', 'video', 'adaccount'])
+/** The body-id kinds audience-ids.ts judges (step 31's own `sourcevideo` and `shareaccount` are its `video` and `adaccount`). */
+const AUDIENCE_ID_KIND: Readonly<Record<string, AudienceIdKind>> = {
+  page: 'page', instagram: 'instagram', leadform: 'leadform', canvas: 'canvas', sourcevideo: 'video', shareaccount: 'adaccount',
+}
 
 /**
  * Whose is every id named inside a change (the same kinds the gateway checks again before sending): the problems in
@@ -204,8 +207,8 @@ export async function liveIdProblems(account: MetaChosenAccount, ids: MetaWriteB
           if (!(err instanceof MetaLiveRefusal)) throw err
           await objectInAccount(account, inner.id, 'adset', 'audiences.originCheck')
         }
-      } else if (AUDIENCE_ID_KINDS.has(inner.kind)) {
-        const problem = await audienceIdProblem(account, { id: inner.id, kind: inner.kind as AudienceIdKind })
+      } else if (Object.prototype.hasOwnProperty.call(AUDIENCE_ID_KIND, inner.kind)) {
+        const problem = await audienceIdProblem(account, { id: inner.id, kind: AUDIENCE_ID_KIND[inner.kind] })
         if (problem) problems.push(problem)
       } else problems.push(`${inner.id} is not an id an audience change names.`)
     } catch (err) {
