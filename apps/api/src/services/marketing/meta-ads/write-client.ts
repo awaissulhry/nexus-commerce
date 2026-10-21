@@ -59,6 +59,8 @@ export interface MetaObjectChange {
   kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
     // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
     | MetaOptimizeKind
+    // Step 29 — one of the chosen ad account's automated rules.
+    | 'adrule'
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -77,6 +79,8 @@ export interface MetaObjectChange {
    * a background copy (`act_<id>/async_batch_requests`) and an asynchronous ad copy (`act_<id>/asyncadcopies`).
    * Step 23 — an upload on the ad account (`act_<id>/adimages | advideos | video_ads`), a folder on its business portfolio
    * (`<id>/creative_folders`), a library video's captions (`<id>/captions`).
+   * Step 29 — a rule made on act_<id>/adrules_library (the new rule read back); a rule's run (POST /<rule id>/execute: Meta's
+   * {"success": true} is the answer — nothing is read back, as for any edge whose answer names no new id).
    */
   edge?: MetaWriteEdge
   /** Step 18 — DELETE (a budget schedule's; step 22's deletes): Meta's {"success": true} is the answer, nothing is read back. */

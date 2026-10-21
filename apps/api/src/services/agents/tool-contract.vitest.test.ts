@@ -935,6 +935,22 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { kind: 'set', creativeId: '120000000000301', name: 'Creative A', status: 'ACTIVE', labels: ['Spring'] },
         after: { kind: 'set', creativeId: '120000000000301', name: 'Creative B', labels: [], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 29: a rule switched off is switched on again; a deleted rule is made again (a new rule) by set-meta-ad-rule.
+      'set-meta-ad-rule': {
+        before: { kind: 'adrule', action: 'status', id: '120000000000101', exists: 'yes', undo: { action: 'status', ruleId: '120000000000101', enabled: true }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'adrule', action: 'status', id: '120000000000101', exists: 'yes', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'remove-meta-ad-rule': {
+        before: {
+          kind: 'adrule', action: 'remove', id: '120000000000101', exists: 'yes', noUndo: [], accountId: 'conn-1', adAccountId: '1234567890',
+          undo: {
+            action: 'create', name: 'Rule A', enable: true,
+            evaluation: { type: 'SCHEDULE', filters: [{ field: 'entity_type', operator: 'EQUAL', value: 'ADSET' }, { field: 'time_preset', operator: 'EQUAL', value: 'LAST_7D' }, { field: 'spent', operator: 'GREATER_THAN', valueCents: 5000 }] },
+            execution: { type: 'PAUSE' }, schedule: { type: 'DAILY' },
+          },
+        },
+        after: { kind: 'adrule', action: 'remove', id: '120000000000101', exists: 'no', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1108,7 +1124,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads',
       'remove-meta-ads-items', 'set-meta-labels', 'set-meta-value-rules', 'create-meta-reach-frequency',
       'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment', 'create-meta-media',
-      'create-meta-creative', 'set-meta-creative']) {
+      'create-meta-creative', 'set-meta-creative', 'set-meta-ad-rule', 'remove-meta-ad-rule']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
