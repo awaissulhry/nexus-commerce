@@ -113,6 +113,10 @@ import { META_ADS_MEDIA_UPLOAD_TOOLS } from './tools/meta-ads-media-upload.tools
 import { META_ADS_CREATIVES_TOOLS } from './tools/meta-ads-creatives.tools.js'
 // Meta ads step 29 (2026-10-21): Meta's automated rules.
 import { META_ADS_RULES_TOOLS } from './tools/meta-ads-rules.tools.js'
+// Meta ads step 7 (2026-10-21): insights at every level, background report runs, saved and partner reports (read only).
+import { META_ADS_INSIGHTS_TOOLS } from './tools/meta-ads-insights.tools.js'
+// Meta ads step 39 (2026-10-21): brand safety — set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
+import { META_ADS_BRAND_SAFETY_TOOLS } from './tools/meta-ads-brand-safety.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -354,6 +358,10 @@ const ALL: AgentTool[] = [
   ...META_ADS_CREATIVES_TOOLS,
   // Meta ads step 29 (2026-10-21): set-meta-ad-rule (make, change, switch, run Meta's rules), remove-meta-ad-rule.
   ...META_ADS_RULES_TOOLS,
+  // Meta ads step 7 (2026-10-21): meta-ads-numbers, meta-ads-report, meta-ads-saved-reports (read only).
+  ...META_ADS_INSIGHTS_TOOLS,
+  // Meta ads step 39 (2026-10-21): set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
+  ...META_ADS_BRAND_SAFETY_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

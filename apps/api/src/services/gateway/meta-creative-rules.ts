@@ -57,6 +57,8 @@
  */
 import type { MetaWriteAsset, MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
 import { BIDI_CONTROLS, META_MEDIA_TEXT_PATTERN, metaPublicLinkProblem, VISIBLE } from './meta-media-rules.js'
+// Step 39's import rule: META_VALIDATE_ONLY from the leaf meta-write-check.ts, never a value from meta-calls.ts (only types).
+import { META_VALIDATE_ONLY } from './meta-write-check.js'
 
 // ── the silent features ─────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -1073,13 +1075,12 @@ export function finishCreative(creative: Record<string, unknown>, walk: Creative
 
 /** A creative of 49 assets per kind in several languages form-encodes letters outside ASCII at up to 12 characters each. */
 export const META_CREATIVE_MAX_BODY = 600_000
-const VALIDATE_ONLY = '["validate_only"]'
 const CREATIVE_JSON_TEXT: Record<string, RegExp> = Object.fromEntries(Object.keys(CREATIVE_KEYS).map((k) => [k, META_MEDIA_TEXT_PATTERN]))
 const ACCOUNT = ['adaccount'] as const
 const CREATIVE = ['creative'] as const
 
 const createJudge = (params: ReadonlyMap<string, string>): string | null => {
-  if (params.has('execution_options') && params.get('execution_options') !== VALIDATE_ONLY) return `the only execution_options Nexus sends is exactly ${VALIDATE_ONLY} (Meta's check, which changes nothing)`
+  if (params.has('execution_options') && params.get('execution_options') !== META_VALIDATE_ONLY) return `the only execution_options Nexus sends is exactly ${META_VALIDATE_ONLY} (Meta's check, which changes nothing)`
   const judged = judgeCreativeForm(params, ['execution_options'])
   return 'problem' in judged ? judged.problem : null
 }

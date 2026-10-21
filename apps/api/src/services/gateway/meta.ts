@@ -19,7 +19,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
+import { META_REST_HOST, type MetaBrandSafetyKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
 import { metaRuploadUrl } from './meta-media-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
@@ -81,6 +81,8 @@ export interface MetaWriteRequest {
     | MetaOptimizeKind
     // Step 29 — one of the chosen ad account's automated rules.
     | 'adrule'
+    // Step 39 — an ad set's targeting, a publisher or content block list (brand safety).
+    | MetaBrandSafetyKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -93,10 +95,14 @@ export interface MetaWriteRequest {
    * Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. Step 29 — a
    * rule made on the ad account's rule library (`POST /act_<id>/adrules_library`) and a rule's run now (`POST /<rule
    * id>/execute`, no body).
+   * Step 39: the brand-safety edges (a block list's draft, list, shares, people, ad accounts and posts; the account's
+   * inventory filter).
    */
   edge?: MetaWriteEdge
-  /** Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body); default POST. */
+  /** Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body; step 39: a share's agency, a list's posts); default POST. */
   method?: 'POST' | 'DELETE'
+  /** Step 39 (review A9) — the run of the change this request belongs to (a block-list draft is used only by its own run). */
+  run?: string
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
@@ -108,9 +114,12 @@ export interface MetaWriteRequest {
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
-  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge
+  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge
 /** Step 29 — a rule made on the ad account's rule library (`act_<id>/adrules_library`), a rule's run now (`<rule id>/execute`). */
 export type MetaRuleEdge = 'adrules_library' | 'execute'
+/** Step 39 — the brand-safety edges (the account's filter, a block list's draft, list, shares, people, ad accounts and posts). */
+export type MetaBrandSafetyEdge = 'brand_safety_content_filter_levels' | 'block_list_drafts' | 'publisher_block_lists' | 'agencies'
+  | 'assigned_users' | 'auto_applied_ad_accounts' | 'content_block_lists' | 'content' | 'applied_ad_accounts'
 /** Step 28 — an apply (`act_<id>/recommendations`), a new study (`<business>/ad_studies`), a new Page video test (`<page>/ab_tests`). */
 export type MetaOptimizeEdge = 'recommendations' | 'ad_studies' | 'ab_tests'
 /** Step 22 — remove-meta-ads-items: an image or a video out of the ad account's library, a video's caption languages. */
@@ -151,6 +160,7 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
     body,
     metaObjectKind: req.objectKind,
     ...(req.parent ? { metaParent: req.parent } : {}),
+    ...(req.run ? { metaRun: req.run } : {}),
     maxTransientRetries: req.check ? 1 : 0,
     max429Retries: 0,
     maxRateWaitMs: req.maxRateWaitMs,
@@ -169,6 +179,27 @@ export function metaRestUrl(path: string, query: Record<string, MetaQueryValue> 
     url.searchParams.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value))
   }
   return url.toString()
+}
+
+/**
+ * Step 39 (BS-033) — the CSV export of a content block list: `PUT https://api.facebook.com/content_block_lists/<id>/file_download`
+ * (Meta makes a new file each call), through the gateway as a read (meta-calls.ts metaRestFileExportOf: the list must be
+ * the chosen portfolio's). Never retried: a second call would make a second file.
+ */
+export async function metaRestFileExport(req: { connectionId: string; operation: string; contentBlockListId: string; triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook' }): Promise<GatewayResponse> {
+  return gatewayCall({
+    channel: 'META',
+    operation: req.operation,
+    kind: 'read',
+    connectionId: req.connectionId,
+    url: metaRestUrl(`content_block_lists/${req.contentBlockListId}/file_download`),
+    method: 'PUT',
+    auth: 'account',
+    maxTransientRetries: 0,
+    max429Retries: 0,
+    timeoutMs: 60_000,
+    ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
+  })
 }
 
 /**
@@ -247,5 +278,35 @@ export async function metaRuploadCall(req: MetaUploadRequest): Promise<GatewayRe
     max429Retries: 0,
     maxRateWaitMs: req.maxRateWaitMs,
     timeoutMs: req.timeoutMs ?? 120_000,
+  })
+}
+
+// ── report runs (step 7, 2026-10-21) ─────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One report run of the chosen ad account's numbers: `POST /act_<id>/insights` with the read's parameters as a form body
+ * (Meta makes an AdReportRun and answers `{ report_run_id }`; nothing on the account changes). It goes as a READ: never
+ * braked, held or retried like a change; the gateway judges every key and value (meta-calls.ts reportRunProblem) and
+ * checks the ad account is the one this business chose through this connection. Not retried after no answer: Meta may
+ * have started it (a second run would only cost a read).
+ */
+export async function metaReportRunCall(req: { connectionId: string; operation: string; adAccountId: string; params: Record<string, MetaQueryValue>; triggeredBy?: 'cron' | 'manual' | 'api' }): Promise<GatewayResponse> {
+  const body = new URLSearchParams()
+  for (const [key, value] of Object.entries(req.params)) {
+    if (value === undefined || value === null) continue
+    body.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value))
+  }
+  return gatewayCall({
+    channel: 'META',
+    operation: req.operation,
+    kind: 'read',
+    connectionId: req.connectionId,
+    url: metaUrl(`act_${req.adAccountId}/insights`),
+    method: 'POST',
+    body: body.toString(),
+    maxTransientRetries: 0,
+    max429Retries: 0,
+    timeoutMs: 60_000,
+    ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
   })
 }
