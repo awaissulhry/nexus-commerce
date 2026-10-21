@@ -900,6 +900,20 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-connection': ['basis', 'plan', 'reach'],
   // Meta step 17 (2026-10-21): the live state it stands on, the requests it sends, where it lands (meta-ads-kit).
   'set-meta-status': ['basis', 'plan', 'reach'],
+  // Meta step 18 (2026-10-21): a campaign's and an ad set's settings, budgets and bids; scheduled budget increases.
+  'set-meta-campaign': ['basis', 'plan', 'reach'],
+  'set-meta-ad-set': ['basis', 'plan', 'reach'],
+  'set-meta-budget-schedule': ['basis', 'plan', 'reach'],
+  // Meta step 19 (2026-10-21): new campaigns and ad sets, and copies (born PAUSED); their undo deletes only what they made.
+  'create-meta-campaign': ['basis', 'plan', 'reach'],
+  'create-meta-ad-set': ['basis', 'plan', 'reach'],
+  'copy-meta-ads': ['basis', 'plan', 'reach'],
+  // Meta step 22 (2026-10-21): a delete on the person's explicit ask (everything it takes with it is in the basis).
+  'remove-meta-ads-items': ['basis', 'plan', 'reach'],
+  // Meta step 21 (2026-10-21): labels, value rules, reach & frequency (a booking is the person's decision).
+  'set-meta-labels': ['basis', 'plan', 'reach'],
+  'set-meta-value-rules': ['basis', 'plan', 'reach'],
+  'create-meta-reach-frequency': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

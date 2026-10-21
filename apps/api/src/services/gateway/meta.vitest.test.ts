@@ -299,6 +299,54 @@ describe('read only by construction', () => {
   it('a caller\'s own headers never travel on a Meta call', () => {
     expect(ok(`${BASE}/me?fields=id`, { headers: { 'X-HTTP-Method-Override': 'POST' } })).toMatch(/no header/)
   })
+  it('step 11 — audiences and datasets add only their own keys, each on its own path', () => {
+    // Audiences: the account's list, one audience as the chosen account sees it, its sessions, value data, recipients.
+    expect(ok(`${BASE}/act_1234567890/customaudiences?fields=id,name,delete_time&filtering=[{"field":"delete_time","operator":"GREATER_THAN","value":0}]&pixel_id=120000000000501&limit=50`)).toBeNull()
+    expect(ok(`${BASE}/120000000000401?fields=id,audience_labels&ad_account_id=1234567890&acting_account_id=1234567890`)).toBeNull()
+    // Review A8 — only on that read (it asks the labels), never on another object read.
+    expect(ok(`${BASE}/120000000000401?fields=id,name&acting_account_id=1234567890`)).toMatch(/"acting_account_id" is not one/)
+    expect(ok(`${BASE}/120000000000201?fields=id,status&ad_account_id=1234567890`)).toMatch(/"ad_account_id" is not one/)
+    expect(ok(`${BASE}/120000000000401/sessions?fields=session_id,num_received&session_id=7`)).toBeNull()
+    expect(ok(`${BASE}/120000000000401/health?fields=health&calculated_date=2026-10-01&processed_date=2026-10-02`)).toBeNull()
+    expect(ok(`${BASE}/120000000000401/adaccounts?fields=id&permissions=targeting`)).toBeNull()
+    expect(ok(`${BASE}/120000000000401/ads?fields=id,adset_id&effective_status=["ACTIVE"]`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/initiated_audience_sharing_requests?fields=id&recipient_id=1&request_status=PENDING`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/received_audience_sharing_requests?fields=id&initiator_id=1&request_status=PENDING`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/shared_audience_permissions?fields=share_account_id&partner_id=1`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/received_audience_permissions?fields=share_account_id&partner_id=1`)).toBeNull()
+    // Datasets: portfolio search, a pixel's accounts / people, its audiences and conversions, stats, quality, diagnostics.
+    expect(ok(`${BASE}/9876543210/adspixels?fields=id,name&name_filter=shop&summary=total_count`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/shared_accounts?business=9876543210&fields=account_id`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/assigned_users?business=9876543210&fields=id,name,user_type,tasks`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/audiences?fields=id&ad_account=1234567890`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/customconversions?fields=id&ad_account=1234567890`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/customconversions?fields=id&include_archived=true&summary=total_count`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/stats?aggregation=event&event_source=SERVER_ONLY&agent=shop&event=Purchase&start_time=1&end_time=2`)).toBeNull()
+    expect(ok(`${BASE}/dataset_quality?dataset_id=120000000000501&agent_name=shop&fields=web{event_name,event_coverage{percentage},dedupe_key_feedback{dedupe_key}}`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/setup_quality?fields=event_name&agent_name=shop`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/ads_signal_diagnostic_issues?fields=event_name&ad_account_id=1234567890`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/domain_last_fired_time?fields=domain_name&domain_name_list=["shop.example"]`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/recent_events?fields=count&event=Purchase&lookback_window=86400`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/real_time_event_log?fields=event&start_time=1&end_time=2`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/raw_fires?fields=event&event=Purchase&filter_type=host&filter=shop.example`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/microdata_stats?fields=has_valid_events&catalog_id=1`)).toMatch(/"catalog_id" is not one/)
+    expect(ok(`${BASE}/120000000000501/cpas_events_debugging_info?fields=counts&action_source=WEBSITE`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/extractors?fields=id&current_domain=https://shop.example`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/offline_event_uploads?fields=id&start_time=1&end_time=2&sort_by=CREATION_TIME&order=DESCENDING&upload_tag=t`)).toBeNull()
+    // Each key only where it is used.
+    expect(ok(`${BASE}/act_1234567890/campaigns?fields=id&pixel_id=1`)).toMatch(/"pixel_id" is not one/)
+    expect(ok(`${BASE}/act_1234567890/adsets?fields=id&filtering=[]`)).toMatch(/"filtering" is not one/)
+    expect(ok(`${BASE}/act_1234567890?fields=id&acting_account_id=1`)).toMatch(/"acting_account_id" is not one/)
+    expect(ok(`${BASE}/act_1234567890/insights?fields=spend&aggregation=event`)).toMatch(/"aggregation" is not one/)
+    expect(ok(`${BASE}/120000000000501/stats?aggregation=event&dataset_id=1`)).toMatch(/"dataset_id" is not one/)
+    expect(ok(`${BASE}/dataset_quality?dataset_id=1&ad_account_id=1&fields=web{event_name}`)).toMatch(/"ad_account_id" is not one/)
+    expect(ok(`${BASE}/120000000000501/raw_fires?fields=event&lookback_window=1`)).toMatch(/"lookback_window" is not one/)
+    expect(ok(`${BASE}/120000000000501/shared_accounts?fields=id&permissions=targeting`)).toMatch(/"permissions" is not one/)
+    expect(ok(`${BASE}/act_1234567890/adspixels?fields=id&name_filter=x`)).toMatch(/"name_filter" is not one/)
+    expect(ok(`${BASE}/act_1234567890/customconversions?fields=id&include_archived=true`)).toMatch(/"include_archived" is not one/)
+    // The people behind a pixel only through its edge, never expanded inside fields.
+    expect(ok(`${BASE}/120000000000501?fields=id,assigned_users{id,name}`)).toMatch(/never expands "assigned_users"/)
+  })
   it('step 17 — the publish mode is live (only the write allow-list reaches it); NEXUS_META_ADS_WRITES=off is the brake', () => {
     expect(publishModeOf('META')).toBe('live')
     for (const brake of ['off', 'OFF', 'false', '0', 'no', ' No ']) {
@@ -499,6 +547,53 @@ describe('read only by construction', () => {
     for (const value of ['["retailer_id"]', 'retailer_id', '{"retailer_id":', '42', 'null', '"x"', '']) {
       expect(q(`120000000000700/products?fields=id&filter=${encodeURIComponent(value)}`), value).toMatch(/"filter" is not one/)
     }
+  })
+  it('step 3 — the account itself, its billing and who has access: each key only on its own edge; the feature settings are the only hyphenated paths', () => {
+    const q = (path: string) => ok(`${BASE}/${path}`)
+    for (const path of [
+      'act_1234567890/assigned_users?fields=id,name,tasks,permitted_tasks,business{id,name}&business=9876543210&summary=total_count',
+      '120000000000010/assigned_users?fields=id,name,tasks&business=9876543210', '170000000000001/assigned_users?fields=id,name,tasks&business=9876543210',
+      'act_1234567890/advertisable_applications?fields=id,name&business_id=9876543210',
+      'act_1234567890/connected_instagram_accounts_with_iabp?fields=id,username&business_id=9876543210',
+      'act_1234567890/minimum_budgets?fields=currency,min_daily_budget_imp&bid_amount=150',
+      'act_1234567890/campaign_attribution_options?app_id=300000000000001&optimization_goal=APP_INSTALLS&event_name=PURCHASE',
+      'act_1234567890/insights/feature-settings?insights_feature=comscore', 'act_1234567890/insights/feature-settings/list-features',
+      'act_1234567890/activities?fields=event_type,extra_data&since=1760000000&until=1760086400',
+      '9876543210/business_invoices?fields=id,amount_due&start_date=2026-01-01&end_date=2026-10-01&issue_start_date=2026-01-01&issue_end_date=2026-10-01&type=INV&summary=total_count',
+      '9876543210/business_invoices?fields=id&invoice_id=123456', '9876543210/extendedcreditapplications?fields=id,status&only_show_pending=true',
+      'act_1234567890/users?fields=id,name,tasks', 'act_1234567890/agencies?fields=id,name,access_status,permitted_tasks', '9876543210/extendedcredits?fields=id,balance',
+      '100000000000001/assigned_ad_accounts?fields=account_id,name', '100000000000001/extended_credit_invoice_groups?fields=id,name',
+      // Review B4, B1, A4, A2.
+      'act_1234567890/activities?fields=event_type&category=BUDGET&since=1760000000&until=1760086400', '9876543210/owned_instagram_assets?fields=id,ig_user_id',
+      '9876543210/client_instagram_assets?fields=id,ig_user_id', '9876543210/extendedcredits?fields=id,owner_business{id}',
+      'act_1234567890?fields=agency_client_declaration{agency_representing_client,client_name,client_city}',
+      '100000000000001/assigned_product_catalogs?fields=id,name,owner_business{id}',
+    ]) expect(q(path), path).toBeNull()
+    for (const [path, key] of [
+      ['act_1234567890/campaigns?fields=id&business=9876543210', 'business'], ['act_1234567890/users?fields=id&business=9876543210', 'business'],
+      ['act_1234567890/applications?fields=id&business_id=9876543210', 'business_id'], ['act_1234567890/insights?fields=spend&insights_feature=comscore', 'insights_feature'],
+      ['act_1234567890/ads?fields=id&since=1760000000', 'since'], ['act_1234567890/minimum_budgets?bid_amount=150&app_id=1', 'app_id'],
+      ['9876543210/owned_ad_accounts?fields=id&type=INV', 'type'], ['9876543210/extendedcredits?fields=id&only_show_pending=true', 'only_show_pending'],
+      ['act_1234567890/campaign_attribution_options?app_id=1&custom_event_str=x', 'custom_event_str'], ['9876543210/business_invoices?fields=id&root_id=1', 'root_id'],
+      ['act_1234567890/activities?fields=event_type&category=AD', 'category'], ['act_1234567890/activities?fields=event_type&category=account', 'category'],
+      ['120000000000101/activities?fields=event_type&category=BUDGET', 'category'], ['act_1234567890/campaigns?fields=id&category=BUDGET', 'category'],
+      // Review round 4 — BUDGET only (where Meta files billing events), exact case; the days only as Unix seconds.
+      ['act_1234567890/activities?fields=event_type&category=ACCOUNT', 'category'], ['act_1234567890/activities?fields=event_type&category=budget', 'category'],
+      ['act_1234567890/activities?fields=event_type&since=yesterday', 'since'], ['act_1234567890/activities?fields=event_type&since=-5', 'since'],
+      ['act_1234567890/activities?fields=event_type&since=1760000000&until=abc', 'until'], ['act_1234567890/activities?fields=event_type&since=1760000000.5', 'since'],
+      ['act_1234567890/activities?fields=event_type&until=2026-10-21', 'until'], ['act_1234567890/activities?fields=event_type&since=1234567890123', 'since'],
+      ['9876543210/owned_instagram_assets?fields=id&business=9876543210', 'business'],
+    ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
+    // A hyphen only in the two feature-settings paths, exactly as Meta writes them.
+    for (const path of [
+      'act_1234567890/insights/feature-settings/other-list', 'act_1234567890/feature-settings', '120000000000101/insights/feature-settings',
+      'act_1234567890/insights/feature-settings/list-features/x', 'act_1234567890/Insights/feature-settings', 'act_1234567890/insights/list-features',
+      'act_1234567890/ad-images', 'act_1234567890/insights/feature_settings-',
+    ]) expect(q(path), path).toMatch(/letters, digits and _ only|not one a Nexus read/)
+    // FIELD_DENIED stays: people and agencies are read through their own edge, never expanded into the account.
+    expect(q('act_1234567890?fields=id,users{name}')).toMatch(/never expands "users"/)
+    expect(q('act_1234567890?fields=id,agencies{name}')).toMatch(/never expands "agencies"/)
+    expect(q('act_1234567890?fields=id,assigned_users{name}')).toMatch(/never expands "assigned_users"/)
   })
 })
 
