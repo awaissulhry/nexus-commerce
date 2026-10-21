@@ -36,6 +36,21 @@ export interface MetaChangeRequest {
   budget: boolean
   /** Its undo is a change of the same object (so it meets Meta's per-object limits too); false: it has none (an archive). */
   undoable: boolean
+  // ── step 18: a request past status (all optional; a status change needs none of them) ──
+  /** The gateway / ledger operation (default `<kind>.status`). */
+  operation?: string
+  /** What the read-back must show, field → value as sent (default: `status`). */
+  expect?: Record<string, string>
+  /** The fields read back (default id,status,effective_status). */
+  readBackFields?: string
+  /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`). */
+  objectKind?: 'highdemandperiod'
+  /** A create on the object's edge (POST /<id>/budget_schedules). */
+  edge?: 'budget_schedules'
+  /** DELETE (a budget schedule's); default POST. */
+  method?: 'POST' | 'DELETE'
+  /** A budget schedule's campaign or ad set. */
+  parent?: { kind: 'campaign' | 'adset'; id: string }
 }
 
 export interface MetaChangeDraft {

@@ -73,7 +73,7 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad'
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -82,6 +82,12 @@ export interface MetaWriteRequest {
   /** How long the call may wait for a slot of the account's rate bucket (a change waits longer than a read). */
   maxRateWaitMs?: number
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
+  /** Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. */
+  edge?: 'budget_schedules'
+  /** Step 18 — DELETE (a budget schedule's, no body); default POST. */
+  method?: 'POST' | 'DELETE'
+  /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
+  parent?: { kind: 'campaign' | 'adset'; id: string }
 }
 
 /**
@@ -91,16 +97,18 @@ export interface MetaWriteRequest {
  * GatewayRefusal; an answer (ok or not) comes back with its verdict.
  */
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
-  const body = new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
+  const remove = req.method === 'DELETE'
+  const body = remove ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
   return gatewayCall({
     channel: 'META',
     operation: req.operation,
     kind: req.check ? 'read' : 'write',
     connectionId: req.connectionId,
-    url: metaUrl(req.objectId),
-    method: 'POST',
+    url: metaUrl(req.edge ? `${req.objectId}/${req.edge}` : req.objectId),
+    method: remove ? 'DELETE' : 'POST',
     body,
     metaObjectKind: req.objectKind,
+    ...(req.parent ? { metaParent: req.parent } : {}),
     maxTransientRetries: req.check ? 1 : 0,
     max429Retries: 0,
     maxRateWaitMs: req.maxRateWaitMs,
