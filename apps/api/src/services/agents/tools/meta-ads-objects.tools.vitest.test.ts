@@ -84,7 +84,7 @@ describe('the five tools are reads of Meta', () => {
       expect({ name: t.name, readOnly: t.readOnly, openWorld: t.openWorld, execute: t.execute, requires: t.requires }).toEqual({ name: t.name, readOnly: true, openWorld: true, execute: undefined, requires: ['ads.view'] })
     }
     for (const name of ['meta-campaigns', 'meta-ad-sets', 'meta-ad-details']) {
-      expect(tool(name).restrictedFields).toMatchObject({ dailyBudgetCents: 'financials.adspend.view', bidInfoCents: 'financials.adspend.view', budgetValue: 'financials.adspend.view', maxBid: 'financials.adspend.view', auctionBid: 'financials.adspend.view', metaRaw: 'financials.adspend.view', spendMeta: 'financials.adspend.view' })
+      expect(tool(name).restrictedFields).toMatchObject({ dailyBudgetCents: 'financials.adspend.view', bidInfoCents: 'financials.adspend.view', budgetValue: 'financials.adspend.view', maxBid: 'financials.adspend.view', auctionBid: 'financials.adspend.view', metaRaw: 'financials.adspend.view', spendMeta: 'financials.adspend.view', roasFloor: 'financials.adspend.view', bidConstraints: 'financials.adspend.view' })
     }
   })
 })
@@ -466,7 +466,7 @@ describe('Meta\'s traps, said plainly', () => {
     expect(roasFloorOf(null)).toBeNull()
   })
   it('every money key an answer carries is restricted (scan of the answers above)', () => {
-    for (const key of ['dailyBudgetCents', 'lifetimeBudgetCents', 'budgetRemainingCents', 'spendCapCents', 'bidAmountCents', 'dailyMinSpendTargetCents', 'dailySpendCapCents', 'lifetimeMinSpendTargetCents', 'lifetimeSpendCapCents', 'spendCents', 'purchaseValueCents', 'currentAverageCost', 'bidRecommendation', 'auctionMaxCompetitorBid', 'revenueMeta', 'conversionCostMeta']) {
+    for (const key of ['dailyBudgetCents', 'lifetimeBudgetCents', 'budgetRemainingCents', 'spendCapCents', 'bidAmountCents', 'dailyMinSpendTargetCents', 'dailySpendCapCents', 'lifetimeMinSpendTargetCents', 'lifetimeSpendCapCents', 'spendCents', 'purchaseValueCents', 'currentAverageCost', 'bidRecommendation', 'auctionMaxCompetitorBid', 'revenueMeta', 'conversionCostMeta', 'roasFloor', 'bidConstraints']) {
       expect(META_OBJECTS_MONEY, key).toHaveProperty(key, 'financials.adspend.view')
     }
   })
