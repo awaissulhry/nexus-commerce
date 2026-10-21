@@ -44,6 +44,7 @@
  */
 import { createHmac } from 'node:crypto'
 import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
+import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -109,6 +110,18 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *     filtering on act_<id>/recommendations (one campaign's: the ad-recommendations page); the suggested_ads and
  *     smart_suggested_ads parameters (never a pixel, product set, app or CMS id: not this step's to check); adlocale is
  *     one of step 9's META_SEARCH_TYPES; categorization_criteria on <catalog>/categories.
+ *   - step 10 (media, posts, Instagram media, previews, Instant Experiences — marketing/meta-ads/live-media.ts), each
+ *     only on its own edge: act_<id>/adimages hashes, name, minwidth, minheight; act_<id>/advideos title, minlength,
+ *     maxlength; act_<id>/video_ads since, until; a portfolio's <id>/images | videos | creatives creative_folder_id;
+ *     act_<id>/website_creative_assets | website_creative_info link_url; <campaign>/video_groups date_range;
+ *     <page>/live_videos broadcast_status; <page>/feed | published_posts | visitor_posts include_hidden, show_expired;
+ *     <page>/ads_posts include_inline_create, exclude_dynamic_ads, since, until; <Instagram account>/media since, until;
+ *     <page | Instagram account | Instagram media>/insights metric, period, since, until, breakdown, metric_type,
+ *     timeframe and <page>_<post>/insights metric, period, since, until, breakdown (organic insights);
+ *     act_<id>/generatepreviews ad_format, creative, creative_feature, dynamic_asset_label, dynamic_customization,
+ *     product_item_ids and <ad | creative>/previews the same without creative; <page>/canvases is_hidden, is_published.
+ *     The organic-insight keys go only on a read with no field list whose metrics are all Nexus's organic ones, the
+ *     preview keys only with an ad_format of the v26 enum (services/meta/meta-media-lists.ts, `when` below).
  */
 const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
 /**
@@ -128,6 +141,14 @@ function fieldNamed(query: URLSearchParams, name: string): boolean {
   }
   return top.split(',').some((f) => f.trim() === name)
 }
+/** Step 10 — an organic insights read (Page, post, Instagram): no field list, and every metric one Nexus names. */
+function organicInsightRead(query: URLSearchParams): boolean {
+  const metrics = (query.get('metric') ?? '').split(',')
+  return !query.has('fields') && metrics.length > 0 && metrics.every((m) => META_ORGANIC_METRICS.has(m))
+}
+/** Step 10 — a preview read: one ad_format of the v26 enum. */
+const previewRead = (query: URLSearchParams): boolean => META_AD_FORMATS.has(query.get('ad_format') ?? '')
+
 /** A route's own keys; `when`: they go only on a read whose query also passes this (review fix A1, step 9). */
 const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (query: URLSearchParams) => boolean }> = [
   { route: /^debug_token$/, keys: new Set(['input_token']) },
@@ -183,6 +204,25 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/categories$/, keys: new Set(['categorization_criteria']) },
   // Review fix A6 — the Page ad limits per Page (problems view).
   { route: /^act_\d+\/ads_volume$/, keys: new Set(['show_breakdown_by_actor']) },
+  // Step 10 — media, posts, Instagram media, previews, Instant Experiences (marketing/meta-ads/live-media.ts).
+  { route: /^act_\d+\/adimages$/, keys: new Set(['hashes', 'name', 'minwidth', 'minheight']) },
+  { route: /^act_\d+\/advideos$/, keys: new Set(['title', 'minlength', 'maxlength']) },
+  { route: /^act_\d+\/video_ads$/, keys: new Set(['since', 'until']) },
+  { route: /^\d+\/(images|videos|creatives)$/, keys: new Set(['creative_folder_id']) },
+  { route: /^act_\d+\/(website_creative_assets|website_creative_info)$/, keys: new Set(['link_url']) },
+  { route: /^\d+\/video_groups$/, keys: new Set(['date_range']) },
+  { route: /^\d+\/live_videos$/, keys: new Set(['broadcast_status']) },
+  { route: /^\d+\/(feed|published_posts|visitor_posts)$/, keys: new Set(['include_hidden', 'show_expired']) },
+  { route: /^\d+\/ads_posts$/, keys: new Set(['include_inline_create', 'exclude_dynamic_ads', 'since', 'until']) },
+  { route: /^\d+\/media$/, keys: new Set(['since', 'until']) },
+  // Round 2 (c) — the organic-insight keys only on an organic read: no field list (an ads insights read always names its
+  // fields) and every metric one of Nexus's organic lists (services/meta/meta-media-lists.ts); the preview keys only with
+  // an ad_format of the v26 enum.
+  { route: /^\d+\/insights$/, keys: new Set(['metric', 'period', 'since', 'until', 'breakdown', 'metric_type', 'timeframe']), when: organicInsightRead },
+  { route: /^\d+_\d+\/insights$/, keys: new Set(['metric', 'period', 'since', 'until', 'breakdown']), when: organicInsightRead },
+  { route: /^act_\d+\/generatepreviews$/, keys: new Set(['ad_format', 'creative', 'creative_feature', 'dynamic_asset_label', 'dynamic_customization', 'product_item_ids']), when: previewRead },
+  { route: /^\d+\/previews$/, keys: new Set(['ad_format', 'creative_feature', 'dynamic_asset_label', 'dynamic_customization', 'product_item_ids']), when: previewRead },
+  { route: /^\d+\/canvases$/, keys: new Set(['is_hidden', 'is_published']) },
 ]
 /**
  * Step 9 — the `type` values a /search read may carry: targeting options only (targeting-search reference), never

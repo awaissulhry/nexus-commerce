@@ -53,6 +53,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 17 (2026-10-21) — set-meta-status reads Meta live and changes it (pause, switch on, archive).
 // Meta ads step 9 (2026-10-21) — meta-targeting-search and meta-targeting-check read Meta live.
 // Meta ads step 6 (2026-10-21) — meta-campaigns, meta-ad-sets, meta-ad-details, meta-labels and meta-value-rules read Meta live.
+// Meta ads step 10 (2026-10-21) — meta-media-library, meta-page-posts, meta-instagram-media, meta-ad-preview and meta-instant-experiences read Meta live.
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -72,8 +73,8 @@ const OPEN_WORLD = [
   'google-ads-numbers', 'google-ads-query', 'google-merchant-live', 'graduate-google-experiment', 'graduate-keyword',
   'harvest-search-term',
   'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
-  'meta-ad-accounts', 'meta-ad-details', 'meta-ad-sets', 'meta-ads-graph-read', 'meta-ads-live', 'meta-campaigns', 'meta-connection', 'meta-labels',
-  'meta-targeting-check', 'meta-targeting-search', 'meta-value-rules',
+  'meta-ad-accounts', 'meta-ad-details', 'meta-ad-preview', 'meta-ad-sets', 'meta-ads-graph-read', 'meta-ads-live', 'meta-campaigns', 'meta-connection',
+  'meta-instagram-media', 'meta-instant-experiences', 'meta-labels', 'meta-media-library', 'meta-page-posts', 'meta-targeting-check', 'meta-targeting-search', 'meta-value-rules',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
   'remove-google-conversion-actions', 'remove-google-labels', 'reopen-listing', 'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
@@ -249,7 +250,8 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
     expect(appOnly).toEqual(AI_DRAFTS)
     // C7 — and only confirm-change is Claude's alone: a person confirms in Claude with a code; in Nexus they approve.
     // W4-1 — and report-ads-run: the scheduled Claude run's own report.
-    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name).sort()).toEqual(['confirm-change', 'report-ads-run'])
+    // Meta ads step 10 (review A2) — and meta-ad-preview: its links are public, and the in-app chat keeps tool results.
+    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name).sort()).toEqual(['confirm-change', 'meta-ad-preview', 'report-ads-run'])
   })
 })
 

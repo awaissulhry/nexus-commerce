@@ -256,8 +256,8 @@ describe.runIf(canRun)('bootstrap-fresh-database.mjs — isolation, not just sch
     await asRuntime(async c => {
       const insert = (id: string, workspaceId: string, external: string) => c.query(`INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","isActive","updatedAt")
         VALUES ($1,$2,'META',$3,true,now())`, [id, workspaceId, external])
-      const link = (id: string, workspaceId: string, connectionId: string, externalId: string) => c.query(`INSERT INTO "MetaAccountLink" (id,"workspaceId","connectionId",product,"externalId",label,"selectedByUserId","updatedAt")
-        VALUES ($1,$2,$3,'AD_ACCOUNT',$4,'Shop A','u-1',now())`, [id, workspaceId, connectionId, externalId])
+      const link = (id: string, workspaceId: string, connectionId: string, externalId: string) => c.query(`INSERT INTO "MetaAccountLink" (id,"workspaceId","connectionId",product,"externalId",label,metadata,"selectedByUserId","updatedAt")
+        VALUES ($1,$2,$3,'AD_ACCOUNT',$4,'Shop A','{"businessId":"9876543210"}'::jsonb,'u-1',now())`, [id, workspaceId, connectionId, externalId])
       const inBusiness = (workspaceId: string) => c.query("SELECT set_config('nexus.workspace_id', $1, true)", [workspaceId])
       const refused = async (work: () => Promise<unknown>, constraint: string) => {
         await c.query('SAVEPOINT refusal')
@@ -273,8 +273,12 @@ describe.runIf(canRun)('bootstrap-fresh-database.mjs — isolation, not just sch
       await insert('meta-user-other', 'bootstrap-other-profile', '120000000000001')
       const takenElsewhere = await c.query(`SELECT * FROM nexus_meta_links_taken('AD_ACCOUNT', ARRAY['1234567890','1234567891']) AS t(id)`)
       expect(takenElsewhere.rows.map((r: { id: string }) => r.id)).toEqual(['1234567890'])
+      // Step 10 (20261021r10): the business portfolio of another business's chosen ad account is taken too (its own is not).
+      const portfolio = await c.query(`SELECT * FROM nexus_meta_links_taken('PORTFOLIO', ARRAY['9876543210','9876543211']) AS t(id)`)
+      expect(portfolio.rows.map((r: { id: string }) => r.id)).toEqual(['9876543210'])
       await refused(() => link('meta-link-other', 'bootstrap-other-profile', 'meta-user-other', '1234567890'), 'MetaAccountLink_product_externalId_key')
       await inBusiness('nexus_legacy_workspace')
+      expect((await c.query(`SELECT * FROM nexus_meta_links_taken('PORTFOLIO', ARRAY['9876543210'])`)).rows).toEqual([])
       const owned = await c.query(`SELECT count(*)::int AS n FROM "ChannelAccountOwnership" WHERE "channelType" = 'META'`)
       expect(owned.rows[0].n).toBe(0)
     })

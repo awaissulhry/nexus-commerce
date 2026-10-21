@@ -120,7 +120,8 @@ export function workspacePolicySql() {
   // for the account picker; yes or no per id, never naming the business. Byte-for-byte the tail of 20261013d.
   sql.push(readFileSync(new URL('../workspaces/google-links-taken.sql', import.meta.url), 'utf8'))
   // Meta ads M1 — which Meta ids (ad account, Facebook Page, Instagram account) another business already picked, for the
-  // asset picker; yes or no per id, never naming the business. Byte-for-byte the tail of 20261020f.
+  // asset picker, and (step 10) which business portfolio another business's chosen ad account belongs to; yes or no per
+  // id, never naming the business. Byte-for-byte the tail of 20261021r10_meta_links_taken_portfolio.
   sql.push(readFileSync(new URL('../workspaces/meta-links-taken.sql', import.meta.url), 'utf8'))
   return sql.join('\n') + '\n' 
 }

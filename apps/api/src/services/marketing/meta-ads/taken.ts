@@ -6,7 +6,8 @@
  */
 import prisma from '../../../db.js'
 
-export type MetaTakenProduct = 'AD_ACCOUNT' | 'PAGE' | 'INSTAGRAM'
+/** PORTFOLIO (step 10): a Meta business portfolio another business's chosen ad account belongs to. */
+export type MetaTakenProduct = 'AD_ACCOUNT' | 'PAGE' | 'INSTAGRAM' | 'PORTFOLIO'
 
 /** Which of these ids another business already picked, for one product. */
 export async function takenIds(product: MetaTakenProduct, ids: string[]): Promise<Set<string>> {

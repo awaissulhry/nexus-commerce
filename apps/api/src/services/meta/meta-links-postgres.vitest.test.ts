@@ -6,7 +6,8 @@
  * Two businesses, ALPHA and BRAVO, each with a Meta connection of the same system user (one system user may be
  * connected in many businesses). BRAVO already reads ad account X and uses Page P.
  *
- *   1. nexus_meta_links_taken (SECURITY DEFINER): ALPHA learns which of the ids it asks about another business uses —
+ *   1. nexus_meta_links_taken (SECURITY DEFINER): ALPHA learns which of the ids it asks about another business uses (and,
+ *      step 10, which business portfolio another business's chosen ad account belongs to) —
  *      never an id it did not ask about, never its own picks, never which business; it needs a business and a product;
  *      only the runtime role may execute it. Control: row security hides BRAVO's link from ALPHA's own queries.
  *   2. The choices as answered: an asset BRAVO uses is its id only (no name, currency, business portfolio).
@@ -119,12 +120,17 @@ describe.skipIf(!concurrentDatabaseUrl())('Meta: one Meta id in one business (re
     expect(await taken(BRAVO, 'AD_ACCOUNT', [ID.x])).toEqual([])
     expect(await taken(ALPHA, 'AD_ACCOUNT', [])).toEqual([])
     expect(await taken(ALPHA, 'AD_ACCOUNT', null)).toEqual([])
+    // Step 10 (20261021r10): a business portfolio is taken when ANOTHER business's chosen ad account belongs to it (the
+    // portfolio stored with BRAVO's pick of X): ALPHA never reads that portfolio's media library; BRAVO's own is not taken.
+    expect(await taken(ALPHA, 'PORTFOLIO', ['9876543210', '9876543211'])).toEqual([{ id: '9876543210' }])
+    expect(await taken(BRAVO, 'PORTFOLIO', ['9876543210'])).toEqual([])
+    expect(await taken(ALPHA, 'PORTFOLIO', [ID.x])).toEqual([])
   })
 
   it('it needs a business and a product; only the runtime role may execute it, as its owner', async () => {
     await expect(database.pool.query(`SELECT * FROM nexus_meta_links_taken('AD_ACCOUNT', ARRAY['1'])`)).rejects.toThrow(/needs a business/)
-    await expect(taken(ALPHA, 'CATALOG', [ID.x])).rejects.toThrow(/AD_ACCOUNT, PAGE or INSTAGRAM/)
-    await expect(taken(ALPHA, null, [ID.x])).rejects.toThrow(/AD_ACCOUNT, PAGE or INSTAGRAM/)
+    await expect(taken(ALPHA, 'CATALOG', [ID.x])).rejects.toThrow(/AD_ACCOUNT, PAGE, INSTAGRAM or PORTFOLIO/)
+    await expect(taken(ALPHA, null, [ID.x])).rejects.toThrow(/AD_ACCOUNT, PAGE, INSTAGRAM or PORTFOLIO/)
     const [grant] = (await database.pool.query(`SELECT
       has_function_privilege('nexus_workspace_runtime', 'nexus_meta_links_taken(text, text[])', 'EXECUTE') AS runtime,
       EXISTS (SELECT 1 FROM pg_proc p, aclexplode(p.proacl) a WHERE p.proname = 'nexus_meta_links_taken' AND a.grantee = 0) AS public,
