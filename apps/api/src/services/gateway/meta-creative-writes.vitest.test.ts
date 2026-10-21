@@ -28,8 +28,8 @@ import { __rateTest } from './rate.js'
 import { metaWriteCall } from './meta.js'
 import { metaWriteVerdict } from './meta-calls.js'
 import {
-  creativeKindOf, judgeCreativeForm, META_AI_GENERATED_FEATURES, META_CREATIVE_FEATURES, META_FEATURES_GUIDE, META_FEATURES_OTHER, META_FEATURES_SPEC_REFERENCE,
-  META_FORMAT_AUTOMATION_FORMATS, META_NON_CATALOG_FORMATS, metaCreativeTextProblem, silentKeysOf, type CreativeKind,
+  creativeTypeOf, isJsonCreativeKey, judgeCreativeForm, META_AI_GENERATED_FEATURES, META_CREATIVE_FEATURES, META_FEATURES_GUIDE, META_FEATURES_OTHER, META_FEATURES_SPEC_REFERENCE,
+  META_FORMAT_AUTOMATION_FORMATS, META_NON_CATALOG_FORMATS, metaCreativeTextProblem, partsOptIns, silentKeysFor,
 } from './meta-creative-rules.js'
 import { __metaObjectLimitsTest } from './meta-object-limits.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
@@ -41,27 +41,36 @@ const IG = '17841400000000001'
 const HASH = 'abc123def456'
 const CREATIVE = '120000000000301'
 
-/** Every silent key a creative of this kind must name, OFF (review B: each only where Meta documents it for the kind). */
-const silent = (kind: CreativeKind = 'website') => {
-  const want = silentKeysOf(kind)
+/**
+ * A creative with every silent key it must name, OFF — computed by the gateway's own rule (silentKeysFor) from what the
+ * creative does; a key the creative already names is kept (so a test can leave one out or change it).
+ */
+const complete = (c: Record<string, unknown>): Record<string, any> => {
+  const want = silentKeysFor(c)
+  const story = c.object_story_spec as { link_data?: Record<string, unknown> } | undefined
+  const cards = Array.isArray(story?.link_data?.child_attachments) && !('multi_share_optimized' in story!.link_data!)
   return {
     degrees_of_freedom_spec: { creative_features_spec: Object.fromEntries(META_CREATIVE_FEATURES.map((f) => [f, { enroll_status: 'OPT_OUT' }])) },
     contextual_multi_ads: { enroll_status: 'OPT_OUT' },
     ...(want.formats ? { format_transformation_spec: want.formats.map((format) => ({ format, data_source: ['none'] })) } : {}),
     ...(want.audios ? { asset_feed_spec: { audios: [] as unknown[] } } : {}),
     ...(want.destination ? { destination_spec: { destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' } } : {}),
+    ...(want.productTags ? { interactive_components_spec: { components: [{ type: 'product_tag', enroll_status: 'opt_out' }] } } : {}),
+    ...c,
+    ...(cards ? { object_story_spec: { ...story, link_data: { ...story!.link_data, multi_share_optimized: false } } } : {}),
   }
 }
-/** A creative of another kind: its own story and the silent keys of that kind. */
-const ofKind = (kind: CreativeKind, story: Record<string, unknown>, over: Record<string, unknown> = {}) => ({ name: 'Creative A', object_story_spec: { page_id: PAGE, ...story }, ...silent(kind), ...over })
+/** A creative of the chosen Page with this story (and its silent keys). */
+const withStory = (story: Record<string, unknown>, over: Record<string, unknown> = {}) => complete({ name: 'Creative A', object_story_spec: { page_id: PAGE, ...story }, ...over })
+/** The silent keys a creative of an existing post with no website link names. */
+const postSilent = () => ({ degrees_of_freedom_spec: { creative_features_spec: Object.fromEntries(META_CREATIVE_FEATURES.map((f) => [f, { enroll_status: 'OPT_OUT' }])) }, contextual_multi_ads: { enroll_status: 'OPT_OUT' } })
 /** A full image creative, as decoded keys. */
-const creative = (over: Record<string, unknown> = {}) => ({
+const creative = (over: Record<string, unknown> = {}) => complete({
   name: 'Creative A',
   object_story_spec: { page_id: PAGE, instagram_user_id: IG, link_data: { link: 'https://www.example.com/shoes', message: 'Scarpe nuove — 20 € 🎉\nSolo oggi', name: 'Nuove scarpe', image_hash: HASH, call_to_action: { type: 'SHOP_NOW', value: { link: 'https://www.example.com/shoes' } } } },
-  ...silent(),
   ...over,
 })
-const JSON_KEYS = new Set(['object_story_spec', 'asset_feed_spec', 'degrees_of_freedom_spec', 'contextual_multi_ads', 'format_transformation_spec', 'destination_spec', 'adlabels', 'call_to_action', 'facebook_branded_content', 'instagram_branded_content', 'interactive_components_spec', 'creative_sourcing_spec', 'branded_content', 'ad_disclaimer_spec', 'portrait_customizations', 'platform_customizations'])
+const JSON_KEYS = { has: (k: string) => isJsonCreativeKey(k) }
 const form = (c: Record<string, unknown>, extra: Record<string, string> = {}) => new URLSearchParams({ ...Object.fromEntries(Object.entries(c).map(([k, v]) => [k, JSON_KEYS.has(k) ? JSON.stringify(v) : String(v)])), ...extra }).toString()
 const verdict = (input: Partial<Parameters<typeof metaWriteVerdict>[0]>) => metaWriteVerdict({ method: 'POST', url: `${BASE}/${ACT}/adcreatives`, kind: 'write', objectKind: 'adaccount', ...input })
 const problem = (input: Partial<Parameters<typeof metaWriteVerdict>[0]>) => {
@@ -150,7 +159,7 @@ describe('the creative allow-list, at every depth', () => {
     expect(problem({ body: form(at('https://www.example.com/?access_token=abc')) })).toMatch(/no key, signature or sign-in/)
     expect(problem({ body: form(at('https://localhost/x')) })).toMatch(/public host/)
     expect(problem({ body: form(at('https://192.168.0.1/x')) })).toMatch(/public host/)
-    const call = ofKind('call', { link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'CALL_NOW', value: { link: 'tel:+15555550100' } } } })
+    const call = withStory({ link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'CALL_NOW', value: { link: 'tel:+15555550100' } } } })
     expect(problem({ body: form(call) })).toBeNull()
     expect(problem({ body: form(at('tel:+15555550100')) })).toMatch(/https/)
     // MD-005: a picture Meta fetches — a public link of the business's own host, never one of Meta's CDN links.
@@ -186,16 +195,16 @@ describe('the creative allow-list, at every depth', () => {
       asset_feed_spec: { images: [{ hash: HASH }], bodies: [{ text: 'Uno' }, { text: 'Due' }], titles: [{ text: 'T' }], link_urls: [{ website_url: 'https://www.example.com/' }], call_to_action_types: ['SHOP_NOW'], ad_formats: ['SINGLE_IMAGE'], audios: [] },
     })
     expect(problem({ body: form(dco) })).toBeNull()
-    const welcome = ofKind('messaging', { link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'MESSAGE_PAGE', value: { app_destination: 'MESSENGER' } }, page_welcome_message: { type: 'VISUAL_EDITOR', version: 2, landing_screen_type: 'welcome_message', media_type: 'text', text_format: { customer_action_type: 'ice_breakers', message: { text: 'Ciao {{user_first_name}}!', ice_breakers: [{ title: 'Taglie?', response: 'Dalla S alla XXL' }], quick_replies: [] } }, user_edit: false, surface: 'visual_editor_new' } } })
+    const welcome = withStory({ link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'MESSAGE_PAGE', value: { app_destination: 'MESSENGER' } }, page_welcome_message: { type: 'VISUAL_EDITOR', version: 2, landing_screen_type: 'welcome_message', media_type: 'text', text_format: { customer_action_type: 'ice_breakers', message: { text: 'Ciao {{user_first_name}}!', ice_breakers: [{ title: 'Taglie?', response: 'Dalla S alla XXL' }], quick_replies: [] } }, user_edit: false, surface: 'visual_editor_new' } } })
     expect(problem({ body: form(welcome) })).toBeNull()
-    const collection = ofKind('instant-experience', { link_data: { link: 'https://fb.com/canvas_doc/120000000000901', message: 'Scopri', image_hash: HASH, collection_thumbnails: ['1', '2', '3', '4'].map((n) => ({ element_id: `12000000000099${n}`, element_crops: { '100x100': [[0, 0], [100, 100]] } })) } })
+    const collection = withStory({ link_data: { link: 'https://fb.com/canvas_doc/120000000000901', message: 'Scopri', image_hash: HASH, collection_thumbnails: ['1', '2', '3', '4'].map((n) => ({ element_id: `12000000000099${n}`, element_crops: { '100x100': [[0, 0], [100, 100]] } })) } })
     expect(problem({ body: form(collection) })).toBeNull()
     const three = creative({ object_story_spec: { page_id: PAGE, link_data: { link: 'https://fb.com/canvas_doc/120000000000901', image_hash: HASH, collection_thumbnails: ['1', '2', '3'].map((n) => ({ element_id: `12000000000099${n}` })) } } })
     expect(problem({ body: form(three) })).toMatch(/4 to 4/)
   })
 
   it('collects every id inside for the gateway\'s check (identity, images, videos, canvas and its elements, forms)', () => {
-    const c = ofKind('instant-experience', { instagram_user_id: IG, link_data: { link: 'https://fb.com/canvas_doc/120000000000901', image_hash: HASH, collection_thumbnails: ['1', '2', '3', '4'].map((n) => ({ element_id: `12000000000099${n}` })), call_to_action: { type: 'SIGN_UP', value: { lead_gen_form_id: '120000000000777' } } } })
+    const c = withStory({ instagram_user_id: IG, link_data: { link: 'https://fb.com/canvas_doc/120000000000901', image_hash: HASH, collection_thumbnails: ['1', '2', '3', '4'].map((n) => ({ element_id: `12000000000099${n}` })), call_to_action: { type: 'SIGN_UP', value: { lead_gen_form_id: '120000000000777' } } } })
     const judged = judgeCreativeForm(new URLSearchParams(form(c)) as unknown as Map<string, string>)
     expect('assets' in judged).toBe(true)
     const kinds = (judged as { assets: Array<{ kind: string; id: string; with?: string }> }).assets
@@ -256,10 +265,10 @@ describe('a creative on the gateway', () => {
   })
 
   it('a post, an Instant Experience and a lead form must be the chosen Page\'s', async () => {
-    const post = (id: string) => ({ ...silent('existing-post'), name: 'From a post', object_story_id: id })
+    const post = (id: string) => ({ ...postSilent(), name: 'From a post', object_story_id: id })
     await metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post(`${PAGE}_500000000000001`)))) })
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(post('120000000000099_500000000000001')))) })).rejects.toThrow(/not a post of the Page this business chose/)
-    const form1 = ofKind('lead', { link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'SIGN_UP', value: { lead_gen_form_id: '120000000000777' } } } })
+    const form1 = withStory({ link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'SIGN_UP', value: { lead_gen_form_id: '120000000000777' } } } })
     h.calls = []
     h.answers.push(json({ data: [{ hash: HASH }] }), json({ id: '120000000000777', page: { id: '120000000000099' } }))
     await expect(metaWriteCall({ connectionId: 'm-1', operation: 'creative.create', objectId: ACT, objectKind: 'adaccount', edge: 'adcreatives', params: Object.fromEntries(new URLSearchParams(form(form1))) })).rejects.toThrow(/lead form 120000000000777 is not one Nexus can confirm/)
@@ -311,44 +320,6 @@ describe('a creative on the gateway', () => {
 })
 
 describe('review round 1', () => {
-  it('B — the silent keys follow the kind of creative: each only where Meta documents it', () => {
-    expect(silentKeysOf('website')).toEqual({ audios: true, formats: META_NON_CATALOG_FORMATS, destination: true })
-    expect(silentKeysOf('catalog')).toEqual({ audios: true, formats: META_FORMAT_AUTOMATION_FORMATS, destination: true })
-    for (const kind of ['messaging', 'lead', 'call', 'event', 'reminder', 'profile', 'instant-experience', 'page-post'] as const) expect(silentKeysOf(kind), kind).toEqual({ audios: true, formats: null, destination: false })
-    expect(silentKeysOf('existing-post')).toEqual({ audios: false, formats: null, destination: false })
-    expect(META_NON_CATALOG_FORMATS).not.toContain('da_collection')
-    expect(META_NON_CATALOG_FORMATS).not.toContain('catalog_single_media')
-    // Each kind passes with exactly its own keys, and is refused with another kind's.
-    const kinds: Array<[CreativeKind, Record<string, unknown>]> = [
-      ['website', { link_data: { link: 'https://www.example.com/', image_hash: HASH } }],
-      ['messaging', { link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'WHATSAPP_MESSAGE', value: { app_destination: 'WHATSAPP' } } } }],
-      ['lead', { link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'SIGN_UP', value: { lead_gen_form_id: '120000000000777' } } } }],
-      ['call', { link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'CALL_NOW', value: { link: 'tel:+15555550100' } } } }],
-      ['profile', { link_data: { link: 'https://www.instagram.com/shop_a', image_hash: HASH, call_to_action: { type: 'VIEW_INSTAGRAM_PROFILE', value: { link: 'https://www.instagram.com/shop_a' } } } }],
-      ['page-post', { photo_data: { image_hash: HASH, caption: 'Nuovo' } }],
-      ['instant-experience', { link_data: { link: 'https://fb.com/canvas_doc/120000000000901', image_hash: HASH } }],
-      ['catalog', { template_data: { message: '{{product.name}}', link: 'https://www.example.com/' } }],
-    ]
-    for (const [kind, story] of kinds) {
-      const c = ofKind(kind, story)
-      expect(creativeKindOf(c), kind).toBe(kind)
-      expect(problem({ body: form(c) }), kind).toBeNull()
-      if (kind !== 'website' && kind !== 'catalog') {
-        expect(problem({ body: form({ ...c, destination_spec: { destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' } }) }), kind).toMatch(/Shops guide covers website-destination creatives only/)
-        expect(problem({ body: form({ ...c, format_transformation_spec: META_NON_CATALOG_FORMATS.map((format) => ({ format, data_source: ['none'] })) }) }), kind).toMatch(/format automation for website and catalog creatives only/)
-      }
-    }
-    // A website creative never carries the catalog formats; a catalog creative needs all six.
-    expect(problem({ body: form(creative({ format_transformation_spec: META_FORMAT_AUTOMATION_FORMATS.map((format) => ({ format, data_source: ['none'] })) })) })).toMatch(/no other format/)
-    expect(problem({ body: form(ofKind('catalog', { template_data: { message: 'x', link: 'https://www.example.com/' } }, { format_transformation_spec: META_NON_CATALOG_FORMATS.map((format) => ({ format, data_source: ['none'] })) })) })).toMatch(/each of da_collection/)
-    // An existing post: no asset feed, format or shop key — music only when asked.
-    const post = { ...silent('existing-post'), name: 'From a post', object_story_id: `${PAGE}_500000000000001` }
-    expect(creativeKindOf(post)).toBe('existing-post')
-    expect(problem({ body: form(post) })).toBeNull()
-    expect(problem({ body: form({ ...post, asset_feed_spec: { audios: [] } }) })).toMatch(/only for music asked/)
-    expect(problem({ body: form({ ...post, asset_feed_spec: { audios: [{ type: 'random' }] } }) })).toBeNull()
-  })
-
   it('A2 — one Instagram account: the story\'s and the top level\'s must be the same (adcreatives and the async job)', () => {
     const two = creative({ instagram_user_id: '17841499999999999' })
     expect(problem({ body: form(two) })).toMatch(/ONE Instagram account/)
@@ -357,13 +328,13 @@ describe('review round 1', () => {
   })
 
   it('A5 — an Instant Experience link only in Meta\'s one form', () => {
-    const at = (link: string) => ofKind('instant-experience', { link_data: { link, image_hash: HASH } })
+    const at = (link: string) => withStory({ link_data: { link, image_hash: HASH } })
     expect(problem({ body: form(at('https://fb.com/canvas_doc/120000000000901')) })).toBeNull()
     for (const link of ['https://fb.com/canvas_doc/120000000000901/', 'https://www.facebook.com/canvas_doc/120000000000901', 'https://fb.com/canvas_doc/120000000000901?x=1', 'https://www.fb.com/canvas_doc/120000000000901', 'https://fb.com/xcanvas_doc/120000000000901']) {
       expect(problem({ body: form(at(link)) }), link).toMatch(/exactly https:\/\/fb\.com\/canvas_doc/)
     }
     // A canvas link in any link key is checked as the creative's Instant Experience.
-    const cta = ofKind('instant-experience', { link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'LEARN_MORE', value: { link: 'https://fb.com/canvas_doc/120000000000902' } } } })
+    const cta = withStory({ link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'LEARN_MORE', value: { link: 'https://fb.com/canvas_doc/120000000000902' } } } })
     const judged = judgeCreativeForm(new URLSearchParams(form(cta)) as unknown as Map<string, string>)
     expect((judged as { assets: Array<{ kind: string; id: string }> }).assets).toEqual(expect.arrayContaining([{ id: '120000000000902', kind: 'canvas' }]))
   })
@@ -389,16 +360,120 @@ describe('review round 1', () => {
     const meta = creative()
     ;(meta.degrees_of_freedom_spec.creative_features_spec as Record<string, unknown>).product_extensions = { enroll_status: 'OPT_IN', action_metadata: { type: 'MANUAL' } }
     expect(problem({ body: form(meta) })).toMatch(/product_extensions.action_metadata is not a key/)
-    expect(problem({ body: form(creative({ contextual_multi_ads: { enroll_status: 'OPT_OUT', action_metadata: { type: 'DEFAULT' } } })) })).toBeNull()
+    expect(problem({ body: form(creative({ contextual_multi_ads: { enroll_status: 'OPT_OUT', action_metadata: { type: 'DEFAULT' } } })) })).toMatch(/action_metadata is not a key/)
     const cta = (type: string) => creative({ object_story_spec: { page_id: PAGE, link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type, value: { link: 'https://www.example.com/' } } } } })
     expect(problem({ body: form(cta('BUY_ACTIVITY_TICKETS')) })).toMatch(/is one of/)
     expect(problem({ body: form(cta('STREAM_NOW')) })).toMatch(/is one of/)
-    expect(problem({ body: form(ofKind('page-post', { photo_data: { image_hash: HASH, branded_content_sponsor_relationship: 'x' } })) })).toMatch(/branded_content_sponsor_relationship is not a key/)
+    expect(problem({ body: form(withStory({ photo_data: { image_hash: HASH, branded_content_sponsor_relationship: 'x' } })) })).toMatch(/branded_content_sponsor_relationship is not a key/)
   })
 
   it('B5 / B6 — a shop destination and a Threads id are answered in Meta\'s own terms', () => {
     expect(problem({ body: form(creative({ destination_spec: { destination_type: 'WEBSITE_AND_SHOP' } })) })).toMatch(/WEBSITE_AND_SHOP_OPT_OUT/)
     expect(problem({ body: form(creative({ asset_feed_spec: { audios: [], onsite_destinations: [{ storefront_shop_id: '1' }] } })) })).toMatch(/cannot confirm a Facebook or Instagram shop/)
     expect(problem({ body: form(creative({ threads_user_id: '123' })) })).toMatch(/Threads ads on the Instagram account/)
+  })
+})
+
+describe('review round 2', () => {
+  const web = { link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'SHOP_NOW', value: { link: 'https://www.example.com/' } } } }
+  /** The creative WITHOUT the website keys (destination_spec, format_transformation_spec) — what the probes sent. */
+  const bare = (c: Record<string, any>) => Object.fromEntries(Object.entries(c).filter(([k]) => k !== 'destination_spec' && k !== 'format_transformation_spec'))
+
+  it('1 — a website destination anywhere needs the website keys, whatever other markers say; a contradicting marker is refused', () => {
+    const cases: Array<[string, Record<string, any>]> = [
+      ['control', withStory(web)],
+      ['object_type EVENT', withStory(web, { object_type: 'EVENT' })],
+      ['WhatsApp number', withStory({ ...web, whats_app_business_phone_number: '+15555550100' })],
+      ['marketing message', withStory(web, { marketing_message_structured_spec: { language: 'it_IT' } })],
+      ['message extensions', withStory(web, { asset_feed_spec: { audios: [], message_extensions: [{ type: 'MESSAGE_PAGE' }] } })],
+      ['welcome message', withStory({ link_data: { ...web.link_data, page_welcome_message: 'Ciao' } })],
+      ['layer CALL_NOW', withStory({ link_data: { ...web.link_data, image_layer_specs: [{ layer_type: 'text_overlay', content: { type: 'CALL_NOW' } }] } })],
+      ['layer VISIT_PROFILE', withStory({ link_data: { ...web.link_data, image_layer_specs: [{ layer_type: 'text_overlay', content: { type: 'VISIT_PROFILE' } }] } })],
+      ['card CALL_NOW', withStory({ link_data: { link: 'https://www.example.com/', child_attachments: [{ link: 'https://www.example.com/1', image_hash: HASH }, { link: 'https://www.example.com/2', image_hash: HASH, call_to_action: { type: 'CALL_NOW', value: { link: 'tel:+15555550100' } } }] } })],
+      ['video product_link only', withStory({ video_data: { video_id: '120000000000444', image_hash: HASH, call_to_action: { type: 'SHOP_NOW', value: { product_link: 'https://www.example.com/p1' } } } })],
+    ]
+    for (const [label, c] of cases) {
+      expect(silentKeysFor(c).destination, label).toBe(true)
+      expect(problem({ body: form(bare(c)) }), label).not.toBeNull()
+    }
+    // The stray markers of another type are refused even with the website keys; the plain ones pass with them.
+    for (const label of ['object_type EVENT', 'WhatsApp number', 'marketing message', 'message extensions', 'welcome message', 'card CALL_NOW']) {
+      expect(problem({ body: form(cases.find(([l]) => l === label)![1]) }), label).toMatch(/main button makes it a standard creative/)
+    }
+    for (const label of ['control', 'layer CALL_NOW', 'layer VISIT_PROFILE', 'video product_link only']) {
+      expect(problem({ body: form(cases.find(([l]) => l === label)![1]) }), label).toBeNull()
+    }
+    // The type comes from the main button and the feed's optimization_type only.
+    expect(creativeTypeOf(withStory({ link_data: { ...web.link_data, page_welcome_message: 'Ciao' } }))).toBe('standard')
+    expect(creativeTypeOf(withStory({ link_data: { link: 'https://www.example.com/', call_to_action: { type: 'LEARN_MORE', value: { app_destination: 'MESSENGER' } } } }))).toBe('messaging')
+    // A messaging creative with an https link carries the website keys too (asking for more fails safe: Meta checks first).
+    const ctm = withStory({ link_data: { link: 'https://www.example.com/', image_hash: HASH, call_to_action: { type: 'MESSAGE_PAGE', value: { app_destination: 'MESSENGER' } }, page_welcome_message: 'Ciao' } })
+    expect(problem({ body: form(ctm) })).toBeNull()
+    expect(problem({ body: form(bare(ctm)) })).not.toBeNull()
+    // A catalog marker needs all six formats.
+    const catalog = withStory({ template_data: { message: '{{product.name}}', link: 'https://www.example.com/' } })
+    expect(silentKeysFor(catalog).formats).toEqual(META_FORMAT_AUTOMATION_FORMATS)
+    expect(problem({ body: form(catalog) })).toBeNull()
+    expect(problem({ body: form({ ...catalog, format_transformation_spec: META_NON_CATALOG_FORMATS.map((format) => ({ format, data_source: ['none'] })) }) })).toMatch(/each of da_collection/)
+    // No website destination, no catalog part: no format or shop key (an Instant Experience, a photo post).
+    const ix = withStory({ link_data: { link: 'https://fb.com/canvas_doc/120000000000901', image_hash: HASH } })
+    expect(silentKeysFor(ix)).toMatchObject({ formats: null, destination: false })
+    expect(problem({ body: form({ ...ix, destination_spec: { destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' } }) })).toMatch(/Shops guide covers creatives with a website destination only/)
+    // An existing post: no asset feed unless music; with a website button, the website keys.
+    const post = { ...postSilent(), name: 'From a post', object_story_id: `${PAGE}_500000000000001` }
+    expect(problem({ body: form(post) })).toBeNull()
+    expect(problem({ body: form({ ...post, asset_feed_spec: { audios: [] } }) })).toMatch(/only for music asked/)
+    const postWeb = { ...post, call_to_action: { type: 'SHOP_NOW', value: { link: 'https://www.example.com/' } } }
+    expect(problem({ body: form(postWeb) })).toMatch(/website destination or a catalog part names format_transformation_spec|names format_transformation_spec/)
+    expect(problem({ body: form(complete(postWeb)) })).toBeNull()
+  })
+
+  it('2 — product tags said on every image creative (single, carousel, feed images); card order said on every carousel', () => {
+    const carousel = withStory({ link_data: { link: 'https://www.example.com/', child_attachments: [{ link: 'https://www.example.com/1', image_hash: HASH }, { link: 'https://www.example.com/2', image_hash: HASH }] } })
+    expect(silentKeysFor(carousel).productTags).toBe(true)
+    expect(problem({ body: form(carousel) })).toBeNull()
+    expect(problem({ body: form(Object.fromEntries(Object.entries(carousel).filter(([k]) => k !== 'interactive_components_spec'))) })).toMatch(/product_tag enroll_status/)
+    const unordered = { ...carousel, object_story_spec: { ...carousel.object_story_spec, link_data: Object.fromEntries(Object.entries(carousel.object_story_spec.link_data).filter(([k]) => k !== 'multi_share_optimized')) } }
+    expect(problem({ body: form(unordered) })).toMatch(/multi_share_optimized/)
+    const feedImages = creative({ object_story_spec: { page_id: PAGE }, asset_feed_spec: { audios: [], images: [{ hash: HASH }], bodies: [{ text: 'Uno' }], link_urls: [{ website_url: 'https://www.example.com/' }], call_to_action_types: ['SHOP_NOW'], ad_formats: ['SINGLE_IMAGE'] } })
+    expect(silentKeysFor(feedImages).productTags).toBe(true)
+    expect(problem({ body: form(Object.fromEntries(Object.entries(feedImages).filter(([k]) => k !== 'interactive_components_spec'))) })).toMatch(/product_tag enroll_status/)
+    expect(problem({ body: form({ ...feedImages, asset_feed_spec: { ...feedImages.asset_feed_spec, carousels: [{ child_attachments: [{ image_label: { name: 'a' } }, { image_label: { name: 'b' } }] }] } }) })).toMatch(/every asset-feed carousel names multi_share_optimized/)
+    // An explicit opt-in is said too; a component without its enroll_status is refused.
+    expect(problem({ body: form({ ...carousel, interactive_components_spec: { components: [{ type: 'product_tag', enroll_status: 'opt_in' }] } }) })).toBeNull()
+    expect(problem({ body: form({ ...carousel, interactive_components_spec: { components: [{ type: 'product_tag' }] } }) })).toMatch(/names enroll_status/)
+    // A video's thumbnail is not an image creative.
+    expect(silentKeysFor(withStory({ video_data: { video_id: '120000000000444', image_hash: HASH } })).productTags).toBe(false)
+  })
+
+  it('4 — every OPT_IN inside the parts is named; a customization under a feature switched off is refused', () => {
+    const layers = withStory({ template_data: { message: 'x', link: 'https://www.example.com/', image_layer_specs: [{ layer_type: 'frame_overlay', frame_auto_show_enroll_status: 'OPT_IN', content: { type: 'price', auto_show_enroll_status: 'OPT_IN' } }] } }, { media_sourcing_spec: { related_media: { opt_in_status: 'OPT_IN' } } })
+    const named = partsOptIns(layers).join(' | ')
+    expect(named).toMatch(/object_story_spec\.template_data\.image_layer_specs\[0\]\.frame_auto_show_enroll_status OPT_IN/)
+    expect(named).toMatch(/image_layer_specs\[0\]\.content\.auto_show_enroll_status OPT_IN/)
+    expect(named).toMatch(/media_sourcing_spec\.related_media\.opt_in_status OPT_IN/)
+    const tuned = creative()
+    ;(tuned.degrees_of_freedom_spec.creative_features_spec as Record<string, unknown>).text_optimizations = { enroll_status: 'OPT_IN', customizations: { text_extraction: { enroll_status: 'OPT_IN' } } }
+    expect(partsOptIns(tuned).join(' ')).toMatch(/text_optimizations\.customizations\.text_extraction\.enroll_status OPT_IN/)
+    expect(partsOptIns(tuned).join(' ')).not.toMatch(/creative_features_spec\.text_optimizations\.enroll_status/)
+    const off = creative()
+    ;(off.degrees_of_freedom_spec.creative_features_spec as Record<string, unknown>).adapt_to_placement = { enroll_status: 'OPT_OUT', customizations: { aspect_ratio_config: { ar_9_16: { adapt: { enroll_status: 'OPT_IN' } } } } }
+    expect(problem({ body: form(off) })).toMatch(/customizations go only with adapt_to_placement switched on/)
+  })
+
+  it('5 — a %-encoded fb.com / facebook.com link is refused (it could hide a canvas_doc path)', () => {
+    for (const link of ['https://fb.com/%63anvas_doc/120000000000901', 'https://www.facebook.com/c%61nvas_doc/120000000000901', 'https://www.facebook.com/shop%2Fa']) {
+      expect(problem({ body: form(withStory({ link_data: { link, image_hash: HASH } })) }), link).toMatch(/without %-encoding/)
+    }
+  })
+
+  it('6 — promo codes: two letters at least, each source once, the manual source with its code and only then', () => {
+    const promo = (p: unknown) => creative({ asset_feed_spec: { audios: [], promotional_metadata: p } })
+    expect(problem({ body: form(promo({ allowed_coupon_code_sources: ['AD_CREATIVE_MANUAL_COUPON_CODES'], manual_coupon_codes: ['10'] })) })).toMatch(/at least two letters/)
+    expect(problem({ body: form(promo({ allowed_coupon_code_sources: ['AD_CREATIVE_MANUAL_COUPON_CODES'], manual_coupon_codes: ['_-'] })) })).toMatch(/at least two letters/)
+    expect(problem({ body: form(promo({ allowed_coupon_code_sources: ['AD_CREATIVE_PRIMARY_TEXT', 'AD_CREATIVE_PRIMARY_TEXT'] })) })).toMatch(/each source once/)
+    expect(problem({ body: form(promo({ allowed_coupon_code_sources: ['AD_CREATIVE_MANUAL_COUPON_CODES'] })) })).toMatch(/goes with its code/)
+    expect(problem({ body: form(promo({ allowed_coupon_code_sources: ['AD_CREATIVE_PRIMARY_TEXT'], manual_coupon_codes: ['SPRING10'] })) })).toMatch(/goes only with the source AD_CREATIVE_MANUAL_COUPON_CODES/)
+    expect(problem({ body: form(promo({ allowed_coupon_code_sources: ['AD_CREATIVE_PRIMARY_TEXT', 'AD_CREATIVE_MANUAL_COUPON_CODES'], manual_coupon_codes: ['SPRING10'] })) })).toBeNull()
   })
 })
