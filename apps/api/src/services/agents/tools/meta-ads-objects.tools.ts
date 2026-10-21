@@ -52,6 +52,9 @@ export const META_OBJECTS_MONEY = {
   bidRecommendation: ADSPEND, currentAverageCost: ADSPEND, spendMeta: ADSPEND, revenueMeta: ADSPEND, conversionCostMeta: ADSPEND,
   // An answer Meta does not document (recommendation data, ad proposals, creative insights, smart suggestions): it may hold amounts.
   metaRaw: ADSPEND,
+  // An ad set's minimum-ROAS floor, read back as a plain ROAS — and Meta's bid_constraints it comes from (ROAS × 10,000):
+  // a ROAS target, gated like roas (META_MONEY).
+  roasFloor: ADSPEND, bidConstraints: ADSPEND,
 } as const
 
 const lower = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v)
