@@ -189,6 +189,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-campaign': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-campaign-settings.tools test)',
   'set-meta-ad-set': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-campaign-settings.tools test)',
   'set-meta-budget-schedule': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-campaign-settings.tools test)',
+  'set-meta-brand-safety': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
+  'set-meta-block-list': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
+  'remove-meta-block-list': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -538,6 +541,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-campaign': () => ({ campaignId: '120000000000001', dailyBudgetCents: 5000 }),
   'set-meta-ad-set': () => ({ adSetId: '120000000000002', bidAmountCents: 150 }),
   'set-meta-budget-schedule': () => ({ action: 'switch', level: 'campaign', objectId: '120000000000001', enabled: false }),
+  // Meta ads step 39: the brand-safety changes refuse in words here (no business has Meta; their own test runs them).
+  'set-meta-brand-safety': () => ({ adSets: [{ adSetId: '120000000000002', addCategories: ['gambling'] }] }),
+  'set-meta-block-list': () => ({ action: 'apply-account', blockListId: '120000000000601' }),
+  'remove-meta-block-list': () => ({ kind: 'publisher', blockListId: '120000000000601', confirmDelete: true }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),

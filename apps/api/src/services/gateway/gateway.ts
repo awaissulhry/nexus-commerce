@@ -34,6 +34,8 @@ import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, 
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite } from './meta-calls.js'
+import { metaRestFileExportOf, type MetaWriteKind } from './meta-calls.js'
+import { BRAND_SAFETY_KINDS, metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwnerProblem, noteBlockListDraftMade, type MetaCheckRead } from './meta-brand-safety-owner.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
@@ -129,13 +131,23 @@ export interface GatewayRequest {
    * trust it: it confirms it (the business's stored row, or a field only that kind has in its one live read) and refuses
    * the change otherwise, so the write allow-list is literally a campaign, an ad set or an ad — never a creative or a Page.
    */
-  metaObjectKind?: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  metaObjectKind?: MetaWriteKind
   /**
    * Meta step 18: a change of a budget schedule (high-demand period, `metaObjectKind: 'highdemandperiod'`) names the
    * campaign or ad set it belongs to; the gateway confirms that object is of the chosen ad account AND lists the period
    * among its own budget schedules before anything is sent.
    */
   metaParent?: { kind: 'campaign' | 'adset'; id: string }
+  /**
+   * Meta step 39 (Q8): the text of the ONE file a change uploads (a block list's URL file, made by Nexus). The gateway judges
+   * it with the rule's own judge and sends it as the rule's one multipart file part; never a path or bytes of a caller's.
+   */
+  metaFile?: string
+  /**
+   * Meta step 39 (review A9): the run of a Nexus change this call belongs to (the kit's own id): a block-list draft is
+   * remembered for, and used by, only the same run.
+   */
+  metaRun?: string
 }
 
 export interface GatewayResponse {
@@ -148,6 +160,8 @@ export interface GatewayResponse {
   attempts: number
   verdict: ChannelVerdict | null
   rate: { remaining: number | null; limit: number | null }
+  /** Meta step 39 (review A7): how many token-shaped things the gateway removed from Meta's answer (absent: none). */
+  scrubbed?: number
   json<T = unknown>(): T | null
 }
 
@@ -347,8 +361,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   let metaWrite: MetaJudgedWrite | null = null
   // Step 16 — a read of Meta's REST host (api.facebook.com): its token goes as a Bearer header (meta-calls.ts).
   let metaRest = false
-  if (req.channel === 'META' && req.method !== 'GET') {
-    const judged = metaWriteVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers, objectKind: req.metaObjectKind })
+  // Step 39 (BS-033) — the one PUT of Meta's REST host, the content block list's CSV export: a read, judged apart (its list
+  // is checked to be the chosen portfolio's after the account's status, 3b).
+  const metaExport = req.channel === 'META' && req.method === 'PUT' ? metaRestFileExportOf({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers }) : null
+  if (metaExport && 'problem' in metaExport) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${metaExport.problem} (${req.method} ${safePath(req.url)}).`, 403)
+  if (metaExport) metaRest = true
+  if (req.channel === 'META' && req.method !== 'GET' && !metaExport) {
+    const judged = metaWriteVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers, objectKind: req.metaObjectKind, file: req.metaFile })
     if ('problem' in judged) {
       return refuse('refused', judged.batch ? 'META_BATCH_NOT_ALLOWED' : 'META_WRITE_NOT_ALLOWED', `Nothing was sent to Meta: ${judged.problem} (${req.method} ${safePath(req.url)}).`, 403)
     }
@@ -358,7 +377,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       return refuse('gated', 'PUBLISH_GATED', 'Nothing was sent to Meta: Meta changes are switched off in Nexus (NEXUS_META_ADS_WRITES), so Meta is not asked to check one either.', 503)
     }
     metaWrite = judged.write
-  } else if (req.channel === 'META') {
+  } else if (req.channel === 'META' && !metaExport) {
     // One verdict on one canonical parse (meta-calls.ts): the refusal, and for the renewal the client_id it names.
     const judged = metaCallVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
     if (judged.problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${judged.problem} (${req.method} ${safePath(req.url)}).`, 403)
@@ -400,13 +419,25 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // only). Then Meta's per-object limits: a change waits 30 s after the last one of the same object, and an ad set's
   // budget changes wait out Meta's hour (meta-object-limits.ts).
   if (metaWrite && req.connectionId) {
-    const owner = await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, req.metaParent)
-      ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
+    // Step 39 — brand safety: an ad set's targeting is compared with its live targeting only once the call holds its rate
+    // slot, right before it is sent (review A2, see 6–7); an ad account, portfolio or block list of the chosen ad account
+    // is checked by meta-brand-safety-owner.ts (its own reads through this gateway), with every id inside the body.
+    const owner = metaWrite.targeting ? (req.metaObjectKind === 'adsettargeting' ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
+      : req.metaObjectKind && BRAND_SAFETY_KINDS.has(req.metaObjectKind) ? await metaBrandSafetyOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId), req.metaRun)
+        : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | undefined, req.metaParent)
+          ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
     if (!metaWrite.check) {
       const wait = metaObjectWait(await metaObjectState(req.connectionId, metaWrite.objectId), metaWrite.budget)
       if (wait) return refuse('refused', 'RATE_LIMITED_LOCAL', `Not sent yet: ${wait.why}. Retry in ${Math.ceil(wait.waitMs / 1000)} s; nothing was changed.`, 429, wait.waitMs)
     }
+  }
+
+  // Step 39 (BS-033) — the CSV export only of the chosen portfolio's content block list.
+  if (metaExport && 'contentBlockListId' in metaExport) {
+    if (!req.connectionId) return refuse('refused', 'ACCOUNT_REQUIRED', 'Nothing was sent to Meta: the export names the Meta connection it is for.', 400)
+    const owner = await metaExportOwnerProblem(req.connectionId, metaExport.contentBlockListId, metaCheckRead(req.connectionId))
+    if (owner) return refuse('refused', owner.code, owner.sentence, 403)
   }
 
   // 4. push lock + wrong-account guard (writes)
@@ -467,8 +498,15 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     ...callerHeaders,
     ...marketHeaders,
     ...(token ? authHeadersOf(req.channel, token) : {}),
-    // A Meta change is a form (Meta's `-F` fields), as the gateway judged it.
-    ...(metaWrite ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+    // A Meta change is a form (Meta's `-F` fields), as the gateway judged it (step 39: a file upload is multipart, its
+    // boundary set by fetch; a DELETE without keys has no body).
+    ...(metaWrite && metaWrite.body && !metaWrite.file ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+  }
+  // Step 39 (Q8) — the one file part, exactly as judged, with the rule's own key, file name and content type.
+  let metaForm: FormData | null = null
+  if (metaWrite?.file) {
+    metaForm = new FormData()
+    metaForm.append(metaWrite.file.key, new Blob([metaWrite.file.text], { type: metaWrite.file.contentType }), metaWrite.file.filename)
   }
   // Meta: the token and its appsecret_proof go on the URL that is sent (never on `url`, which the ledger, the trace and
   // the answer carry). The proof is made from the app secret the token service holds for this connection, or from the
@@ -535,12 +573,18 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     if (!slot.ok) {
       return refuse('refused', 'RATE_LIMITED_LOCAL', `Not sent yet: the ${name} rate limit for this account needs ${Math.ceil(slot.waitMs / 1000)} s more. Retry later.`, 429, slot.waitMs)
     }
+    // Meta step 39 (Q7, review A2) — an ad set's targeting: its live targeting is read (with its owner and kind check) now
+    // that the call holds its slot, right before the send, so nothing changed in Ads Manager during a wait is overwritten.
+    if (metaWrite?.targeting && req.connectionId && attempts === 0) {
+      const owner = await metaTargetingOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
+      if (owner) return refuse('refused', owner.code, owner.sentence, 403)
+    }
     attempts++
     timedOut = false
     try {
       // Never follow a redirect: a channel call carries its token in a header, and a custom token header
       // (x-amz-access-token, X-Shopify-Access-Token) would travel to the redirect's host.
-      const res = await fetch(sendUrl, { method: req.method, headers, body: (googleBody ?? metaWrite?.body ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
+      const res = await fetch(sendUrl, { method: req.method, headers, body: (googleBody ?? (metaWrite ? (metaForm ?? (metaWrite.body || undefined)) : undefined) ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
       status = res.status
       responseHeaders = res.headers
       text = await res.text()
@@ -588,6 +632,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // held that one object (613/4841018: 30 s for its changes; 613/1487632: an hour for that ad set's budget changes).
   const objectLimit = verdict?.channelCode === '613/4841018' ? 'edits' : verdict?.channelCode === '613/1487632' ? 'budget' : null
   if (req.channel === 'META' && metaWrite && req.connectionId) {
+    // Step 39 — a block-list draft Meta made: only this run may make a list from it, once (its next request).
+    if (ok && metaWrite.rule === 'blocklist.draft') noteBlockListDraftMade(req.connectionId, req.metaRun, text)
     if (objectLimit) await holdMetaObject(req.connectionId, metaWrite.objectId, objectLimit)
     else if (ok || status === 0 || status >= 500) await noteMetaObjectTouched(req.connectionId, metaWrite.objectId, { budget: ok && metaWrite.budget && !metaWrite.check })
   }
@@ -634,6 +680,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     attempts,
     verdict,
     rate: { remaining: reading?.remaining ?? null, limit: reading?.limit ?? null },
+    ...(metaScrubbed ? { scrubbed: metaScrubbed } : {}),
     json<T>() {
       try { return text ? (JSON.parse(text) as T) : null } catch { return null }
     },
@@ -765,10 +812,30 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       if (!pixels?.has(inner.id)) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: pixel ${inner.id} is not one Nexus can confirm among the chosen ad account's own pixels.` }
       continue
     }
+    // Step 39 — the brand-safety kinds of id are checked by meta-brand-safety-owner.ts, never here.
+    if (inner.kind !== 'adset' && inner.kind !== 'ad' && inner.kind !== 'customaudience') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an ad set, an ad or a custom audience.` }
     const problem = await metaOwnerProblem(connectionId, { ...write, objectId: inner.id, check: false }, inner.kind)
     if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, `Nothing was sent to Meta: inside this change, `) }
   }
   return null
+}
+
+/**
+ * Meta step 39 — one Graph read for a brand-safety owner check, through this gateway (its read gate, ledger and rate
+ * bucket): Meta's body (and how many token shapes were scrubbed from it), or Meta's words when there is none. Never retried.
+ */
+function metaCheckRead(connectionId: string): MetaCheckRead {
+  return async (path, query) => {
+    const url = new URL(`${metaGraphBase()}/${path}`)
+    for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value)
+    try {
+      const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+      const body = answer.ok ? answer.json<Record<string, unknown>>() : null
+      return body && typeof body === 'object' && !Array.isArray(body) ? { body, words: null, scrubbed: answer.scrubbed ?? 0 } : { body: null, words: answer.verdict?.channelMessage ?? null }
+    } catch (err) {
+      return { body: null, words: err instanceof Error ? err.message : String(err) }
+    }
+  }
 }
 
 /** No answer at all (network error or timeout) — thrown by `gatewayFetch`, as `fetch` itself throws. */

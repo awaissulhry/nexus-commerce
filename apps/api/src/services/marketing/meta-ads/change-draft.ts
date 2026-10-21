@@ -8,6 +8,9 @@
  * facts F1 X6): a change of N objects is N requests, sent in order, each with its own outcome (meta-ads-kit.ts).
  */
 import type { MetaStatusKind } from './live-status.js'
+import type { MetaWriteEdge } from '../../gateway/meta.js'
+import type { MetaWriteKind } from '../../gateway/meta-calls.js'
+import type { MetaChangeResult } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -15,7 +18,8 @@ export interface MetaChangeRequest {
   step: number
   /** What a person reads, e.g. 'Pause campaign "Spring sale" (120000000000001)'. */
   label: string
-  kind: MetaStatusKind
+  /** A campaign, ad set or ad (step 39: a request of another kind names it in `objectKind` and leaves this out). */
+  kind?: MetaStatusKind
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
@@ -43,14 +47,27 @@ export interface MetaChangeRequest {
   expect?: Record<string, string>
   /** The fields read back (default id,status,effective_status). */
   readBackFields?: string
-  /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`). */
-  objectKind?: 'highdemandperiod'
-  /** A create on the object's edge (POST /<id>/budget_schedules). */
-  edge?: 'budget_schedules'
+  /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 39: an ad set's targeting, an ad account, its portfolio, a block list). */
+  objectKind?: MetaWriteKind
+  /** A create on the object's edge (POST /<id>/budget_schedules; step 39: the brand-safety edges). */
+  edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
   /** A budget schedule's campaign or ad set. */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  // ── step 39 (brand safety) ──
+  /** The text of the one file Nexus made for this request (a block list's URL file; part of the approved plan). */
+  file?: string
+  /** The read-back that judges it (meta write-client `judge`), and what is read (default the object). */
+  judge?: (node: Record<string, unknown>) => { moved: string[]; reads: string }
+  readBackOf?: string
+  /**
+   * Params it takes from an earlier request of the same change, just before it is sent (a list made from the draft step 1
+   * uploaded): its plan holds the rest. A MetaWriteError it throws ends the run there (nothing more is sent).
+   */
+  prepare?: (done: ReadonlyArray<{ request: MetaChangeRequest; result: MetaChangeResult }>) => Promise<Record<string, string>>
+  /** The capability grant Meta needs for it (D6): Meta refusing it for access answers with the no-grant controls. */
+  grant?: string
 }
 
 export interface MetaChangeDraft {

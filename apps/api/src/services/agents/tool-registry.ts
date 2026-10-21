@@ -96,6 +96,8 @@ import { META_ADS_OPTIMIZE_TOOLS } from './tools/meta-ads-optimize.tools.js'
 // Meta ads step 14 (2026-10-21): lead forms, leads and comments (read only; leads and comments are Claude's door only).
 import { META_ADS_ENGAGEMENT_TOOLS } from './tools/meta-ads-engagement.tools.js'
 import { META_ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/meta-ads-campaign-settings.tools.js'
+// Meta ads step 39 (2026-10-21): brand safety — set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
+import { META_ADS_BRAND_SAFETY_TOOLS } from './tools/meta-ads-brand-safety.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -312,6 +314,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_ENGAGEMENT_TOOLS,
   // Meta ads step 18 (2026-10-21): set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule (settings, budgets, bids).
   ...META_ADS_CAMPAIGN_SETTINGS_TOOLS,
+  // Meta ads step 39 (2026-10-21): set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
+  ...META_ADS_BRAND_SAFETY_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

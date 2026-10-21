@@ -884,6 +884,16 @@ describe('C1 — every registered tool keeps the contract', () => {
         },
         after: { kind: 'highdemandperiod', id: '120000000000031', parent: { kind: 'campaign', id: '120000000000001' }, fields: { budget_value: '30', exists: 'yes' }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 39: an ad set's brand-safety keys go back (the account's filter too, where it had one); a block list made
+      // is deleted (remove-meta-block-list), a share unshared.
+      'set-meta-brand-safety': {
+        before: { adSets: [{ id: '120000000000002', name: 'Ad set B', safety: { brand_safety_content_filter_levels: ['FEED_STANDARD'], excluded_publisher_categories: [], excluded_publisher_list_ids: [], brand_safety_content_severity_levels: [], excluded_brand_safety_content_types: [] } }], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { adSets: [{ id: '120000000000002', name: 'Ad set B', safety: { brand_safety_content_filter_levels: ['FEED_STRICT'], excluded_publisher_categories: ['gambling'], excluded_publisher_list_ids: [], brand_safety_content_severity_levels: [], excluded_brand_safety_content_types: [] } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-block-list': {
+        before: { action: 'share', blockListId: '120000000000601', agencyId: '5550000002', shared: false, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'share', blockListId: '120000000000601', agencyId: '5550000002', role: 'APPLY_BLOCK_LIST', shared: true, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1053,7 +1063,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-custom-goals', 'set-google-custom-audiences', 'set-google-user-lists', 'set-google-reusable-audiences',
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
-      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule']) {
+      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
+      'set-meta-brand-safety', 'set-meta-block-list', 'remove-meta-block-list']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

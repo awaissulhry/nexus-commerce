@@ -17,7 +17,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST } from './meta-calls.js'
+import { META_REST_HOST, type MetaWriteKind } from './meta-calls.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -73,7 +73,7 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  objectKind: MetaWriteKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -82,13 +82,24 @@ export interface MetaWriteRequest {
   /** How long the call may wait for a slot of the account's rate bucket (a change waits longer than a read). */
   maxRateWaitMs?: number
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
-  /** Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. */
-  edge?: 'budget_schedules'
-  /** Step 18 — DELETE (a budget schedule's, no body); default POST. */
+  /**
+   * Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. Step 39: the
+   * brand-safety edges (a block list's draft, list, shares, people, ad accounts and posts; the account's inventory filter).
+   */
+  edge?: MetaWriteEdge
+  /** Step 18 — DELETE (a budget schedule's, no body; step 39: with its form body when it names keys); default POST. */
   method?: 'POST' | 'DELETE'
+  /** Step 39 (Q8) — the text of the one file Nexus made (a block list's URL file): sent as the rule's multipart file part. */
+  file?: string
+  /** Step 39 (review A9) — the run of the change this request belongs to (a block-list draft is used only by its own run). */
+  run?: string
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
 }
+
+/** The edges a Nexus change writes on: step 18's budget schedules; step 39's brand-safety edges. */
+export type MetaWriteEdge = 'budget_schedules' | 'brand_safety_content_filter_levels' | 'block_list_drafts' | 'publisher_block_lists' | 'agencies'
+  | 'assigned_users' | 'auto_applied_ad_accounts' | 'content_block_lists' | 'content' | 'applied_ad_accounts'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):
@@ -98,7 +109,9 @@ export interface MetaWriteRequest {
  */
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
-  const body = remove ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
+  // Step 39 — a file upload has no form field (the file is its one part); a DELETE carries its keys only when it has some.
+  const empty = req.file !== undefined || (remove && !Object.keys(req.params).length)
+  const body = empty ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
   return gatewayCall({
     channel: 'META',
     operation: req.operation,
@@ -109,6 +122,8 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
     body,
     metaObjectKind: req.objectKind,
     ...(req.parent ? { metaParent: req.parent } : {}),
+    ...(req.file !== undefined ? { metaFile: req.file } : {}),
+    ...(req.run ? { metaRun: req.run } : {}),
     maxTransientRetries: req.check ? 1 : 0,
     max429Retries: 0,
     maxRateWaitMs: req.maxRateWaitMs,
@@ -127,6 +142,27 @@ export function metaRestUrl(path: string, query: Record<string, MetaQueryValue> 
     url.searchParams.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value))
   }
   return url.toString()
+}
+
+/**
+ * Step 39 (BS-033) — the CSV export of a content block list: `PUT https://api.facebook.com/content_block_lists/<id>/file_download`
+ * (Meta makes a new file each call), through the gateway as a read (meta-calls.ts metaRestFileExportOf: the list must be
+ * the chosen portfolio's). Never retried: a second call would make a second file.
+ */
+export async function metaRestFileExport(req: { connectionId: string; operation: string; contentBlockListId: string; triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook' }): Promise<GatewayResponse> {
+  return gatewayCall({
+    channel: 'META',
+    operation: req.operation,
+    kind: 'read',
+    connectionId: req.connectionId,
+    url: metaRestUrl(`content_block_lists/${req.contentBlockListId}/file_download`),
+    method: 'PUT',
+    auth: 'account',
+    maxTransientRetries: 0,
+    max429Retries: 0,
+    timeoutMs: 60_000,
+    ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
+  })
 }
 
 /**

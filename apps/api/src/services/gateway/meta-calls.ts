@@ -35,8 +35,8 @@
  * body keys and values) that Nexus's own change tools send — today a status change of one campaign, ad set or ad, and
  * Meta's check of it (validate_only, a campaign's only). Step 18 (2026-10-21) adds the settings changes of a campaign,
  * an ad set and a budget schedule (meta-settings-rules.ts: exact keys per kind of object, every value judged, the ids
- * inside a body named for the gateway's account check). Every other non-GET is refused; so is every batch (no Nexus
- * change sends one yet: metaBatchProblem).
+ * inside a body named for the gateway's account check). Step 39 adds the brand-safety changes (meta-brand-safety-rules.ts).
+ * Every other non-GET is refused; so is every batch (no Nexus change sends one yet: metaBatchProblem).
  *
  * Every call with a token carries `appsecret_proof` = HMAC-SHA256(key = the app secret, message = `<token>|<time>`) and
  * `appsecret_time` = that time in seconds, as Meta's Login Security page asks today (checked 2026-10-20:
@@ -48,6 +48,7 @@ import { createHmac } from 'node:crypto'
 import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
 import { META_SETTINGS_WRITE_RULES } from './meta-settings-rules.js'
+import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -510,8 +511,8 @@ export function metaCallVerdict(input: { method: string; url: string; kind: stri
  *   partnership-ads/fb-branded-content/{page_id}/brand-allowlist-status
  *   partnership-ads/fb-branded-content/{page_id}/brand-allowlisted-creators
  *   partnership-ads/fb-branded-content/{page_id}/branded-content-posts   start_date, end_date, creator_page_ids, limit, offset
- * Everything else on that host (the PUT / POST / DELETE of the same paths, the content-block-list CSV export, which is a PUT,
- * and the business-level adjacent-content file download) is refused. Meta documents no appsecret_proof there, so none is
+ * Everything else on that host (the PUT / POST / DELETE of the same paths and the business-level adjacent-content file
+ * download) is refused; step 39 adds one PUT, the content-block-list CSV export (metaRestFileExportOf, below). Meta documents no appsecret_proof there, so none is
  * sent (LIVE-PROBES CR-347).
  */
 export const META_REST_HOST = 'api.facebook.com'
@@ -548,6 +549,30 @@ function metaRestVerdict(url: string, auth: unknown): MetaCallVerdict | null {
     if (!rule.keys.has(key)) return refuse(`the query key "${key}" is not one a Nexus read of Meta uses here`)
   }
   return { problem: null, renewalClientId: null, rest: true }
+}
+
+/**
+ * Step 39 (master BS-033) — the ONE call Nexus sends to Meta's REST host that is not a GET: the CSV export of a content
+ * block list, `PUT https://api.facebook.com/content_block_lists/{content_block_list_id}/file_download` (content-block-lists.md:
+ * "This endpoint is a PUT and not a GET, as every time this endpoint is called, a new file will be created and stored for
+ * retrieval"; Bearer token, X-API-Version 1.0.0; it answers the file's name, size, counts and a download URL). It changes
+ * no ad and no list, so it goes as a read (never retried by the caller: each call makes a file), with no query, no body
+ * and the account's own token; the gateway first checks the list is the chosen portfolio's (meta-brand-safety-owner.ts).
+ * Null when the call is not on that path; `{ problem }` when it is, but not exactly that call.
+ */
+export function metaRestFileExportOf(input: { method: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string, string> }): { contentBlockListId: string } | { problem: string } | null {
+  let parsed: URL
+  try { parsed = new URL(input.url) } catch { return null }
+  if (parsed.hostname !== META_REST_HOST || input.method.toUpperCase() !== 'PUT') return null
+  const match = /^\/content_block_lists\/(\d{1,20})\/file_download$/.exec(parsed.pathname)
+  const raw = input.url.replace(/^https:\/\/[^/?#]*/i, '').split(/[?#]/)[0] || '/'
+  if (!match || raw !== parsed.pathname || input.url.includes('\\') || raw.includes('%')) return null
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.hash || parsed.port || parsed.search) return { problem: `the content block list export is exactly PUT https://${META_REST_HOST}/content_block_lists/<id>/file_download, with no query` }
+  if (input.kind !== 'read') return { problem: 'the content block list export changes no ad or list and goes as a read; this one is declared otherwise' }
+  if (input.body !== undefined && input.body !== null && input.body !== '') return { problem: 'the content block list export carries no body' }
+  if (input.headers && Object.keys(input.headers).length > 0) return { problem: 'a Meta call carries no header of the caller\'s own' }
+  if (input.auth !== undefined && input.auth !== 'account') return { problem: `a call to ${META_REST_HOST} goes only with the account's own system-user token` }
+  return { contentBlockListId: match[1] }
 }
 
 /** Why the gateway refuses this Meta call, in words, or null when it may go (metaCallVerdict's problem). */
@@ -722,12 +747,30 @@ export interface MetaWriteRule {
   maxBody?: number
   /** Step 18 — the ids inside the body, each checked to be of the chosen ad account by the gateway before anything goes. */
   ids?: (params: ReadonlyMap<string, string>) => MetaWriteBodyId[]
+  /**
+   * Step 39 (Q8) — the ONE file part of a multipart change Nexus makes itself (a block-list draft's URL file): its form key,
+   * file name and content type are the rule's, never the caller's; the text is judged (and capped) before it goes.
+   */
+  file?: { key: string; filename: string; contentType: string; maxBytes: number; judge: (text: string) => string | null }
+  /**
+   * Step 39 (Q7) — the body's `targeting` may change only these keys: every other key must be exactly the ad set's LIVE
+   * targeting, which the gateway reads itself (with its owner and kind check) once the write holds its rate slot.
+   */
+  targeting?: ReadonlySet<string>
 }
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
 export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  // Step 39 — brand safety: an ad set's targeting (its brand-safety keys; the gateway reads the ad set itself), the chosen
+  // ad account itself (`act_<id>`), its business portfolio, a publisher block list, a content block list.
+  | 'adsettargeting' | 'adaccount' | 'business' | 'publisherblocklist' | 'contentblocklist'
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
-export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' }
+export interface MetaWriteBodyId {
+  id: string
+  // Step 39: the chosen ad account (digits), its portfolio, a portfolio a list is shared with or unshared from (never one
+  // another business in Nexus uses), a publisher block list, the draft this run made.
+  kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' | 'adaccount' | 'business' | 'agency' | 'publisherblocklist' | 'blocklistdraft'
+}
 
 const fieldsValueProblem = (value: string): string | null => {
   const names = value.split(',')
@@ -789,6 +832,10 @@ export interface MetaJudgedWrite {
   ids?: MetaWriteBodyId[]
   /** Step 18 — a DELETE (a budget schedule's); every other change is a POST. */
   method?: 'DELETE'
+  /** Step 39 — the one file part, as judged: the gateway sends it as multipart/form-data with the rule's key, name and type. */
+  file?: { key: string; filename: string; contentType: string; text: string }
+  /** Step 39 — the targeting sent and the keys it may change (the gateway compares the rest with the live targeting). */
+  targeting?: { sent: Record<string, unknown>; keys: ReadonlySet<string> }
 }
 
 /** The gateway's verdict on a Meta call that is not a GET: why it is refused (and whether as a batch), or the judged write. */
@@ -801,7 +848,7 @@ export type MetaWriteVerdict = { problem: string; batch?: true } | { write: Meta
  * one sent), each key named once. Whether the object is of the business's chosen ad account is the gateway's next step
  * (it needs the database or one live read), and so are Meta's per-object limits.
  */
-export function metaWriteVerdict(input: { method: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string, string>; objectKind?: string }): MetaWriteVerdict {
+export function metaWriteVerdict(input: { method: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string, string>; objectKind?: string; file?: unknown }): MetaWriteVerdict {
   const refuse = (problem: string): MetaWriteVerdict => ({ problem })
   const method = input.method.toUpperCase()
   if (input.headers && Object.keys(input.headers).length > 0) return refuse('a Meta call carries no header of the caller\'s own')
@@ -815,24 +862,41 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   if ([...graph.search.keys()].length > 0) return refuse('a Meta change carries its parameters in its body, never in the URL')
   const batch = metaBatchProblem(method, graph.route, input.body)
   if (batch) return { problem: batch, batch: true }
-  // Step 18 — a DELETE goes only by a DELETE rule for the kind the call names (today a budget schedule's), with no body.
-  const deleteRule = method === 'DELETE' ? writeRules().find((r) => r.method === 'DELETE' && r.path.test(graph.route) && kindMatches(r, input.objectKind)) : undefined
-  if (method === 'DELETE' && (!deleteRule || (input.body !== undefined && input.body !== ''))) {
-    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule; deleting campaigns, ad sets and ads is its own tool, not built yet), and cancels no async batch')
+  // Step 18 — a DELETE goes only by a DELETE rule for the kind the call names (a budget schedule's), with no body. Step 39 —
+  // a DELETE rule that names keys takes its form body (Meta's own `curl -X DELETE -F agency_id=…`), judged like a POST's.
+  if (method !== 'POST' && method !== 'DELETE') return refuse(`Nexus sends Meta no ${method}`)
+  const candidates = writeRules().filter((r) => r.method === method && r.path.test(graph.route) && kindMatches(r, input.objectKind))
+  const bodyless = input.body === undefined || input.body === null || input.body === ''
+  if (method === 'DELETE') {
+    const deleteRule = bodyless ? candidates.find((r) => !r.required.length && !r.optional.length) : undefined
+    if (!deleteRule && (bodyless || !candidates.some((r) => r.required.length || r.optional.length))) {
+      return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule) and what its brand-safety tools name (a block list, its shares, people, posts and ad accounts: set-meta-block-list, remove-meta-block-list; deleting campaigns, ad sets and ads is its own tool, not built yet), and cancels no async batch')
+    }
+    if (deleteRule) {
+      if (input.file !== undefined) return refuse('a Meta DELETE carries no file')
+      if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
+      return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE' } }
+    }
   }
-  if (deleteRule) {
+  // Step 39 (Q8) — a file upload: exactly the one file part its rule names (Nexus made the text), nothing else.
+  const fileRule = candidates.find((r) => r.file)
+  if (input.file !== undefined || fileRule) {
+    if (!fileRule?.file || typeof input.file !== 'string') return refuse(`Nexus uploads a file to Meta only as a block list's URL file (POST /<business portfolio>/block_list_drafts, named a business portfolio); this one is ${method} /${graph.segments.join('/')}`)
+    if (!bodyless) return refuse('a Meta file upload carries no other field: the file is its only part')
+    if (Buffer.byteLength(input.file, 'utf8') > fileRule.file.maxBytes) return refuse(`the file is at most ${fileRule.file.maxBytes} bytes`)
+    const fileProblem = fileRule.file.judge(input.file)
+    if (fileProblem) return refuse(fileProblem)
     if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
-    return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE' } }
+    const { key, filename, contentType } = fileRule.file
+    return { write: { rule: fileRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, ...(fileRule.kinds ? { kinds: fileRule.kinds } : {}), file: { key, filename, contentType, text: input.file } } }
   }
-  if (method !== 'POST') return refuse(`Nexus sends Meta no ${method}`)
   const parsed = writeParams(input.body)
   if ('problem' in parsed) return refuse(parsed.problem)
   const keys = [...parsed.params.keys()]
-  const rule = writeRules().find((r) => r.method === method && r.path.test(graph.route) && kindMatches(r, input.objectKind)
-    && r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k))
+  const rule = candidates.find((r) => r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k))
     && (!r.anyOf || r.anyOf.some((k) => parsed.params.has(k))))
   if (!rule) {
-    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys); this one is POST /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a brand-safety change named with its kind (set-meta-brand-safety, set-meta-block-list, remove-meta-block-list); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
@@ -853,22 +917,29 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const body = new URLSearchParams(order.map((k): [string, string] => [k, parsed.params.get(k)!])).toString()
   const budget = typeof rule.budget === 'function' ? rule.budget(parsed.params) : rule.budget
   const ids = rule.ids?.(parsed.params) ?? []
-  return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}) } }
+  // Step 39 — the targeting as sent, for the gateway's comparison with the live one; a DELETE with keys is a DELETE.
+  const targeting = rule.targeting ? { sent: JSON.parse(parsed.params.get('targeting') ?? '{}') as Record<string, unknown>, keys: rule.targeting } : null
+  return {
+    write: {
+      rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}),
+      ...(method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...(targeting ? { targeting } : {}),
+    },
+  }
 }
 
 /** Step 18 — a rule with kinds matches only a call that names one of them; the status rule (no kinds) a campaign, ad set or ad. */
 const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kinds
   ? !!kind && (rule.kinds as readonly string[]).includes(kind)
   : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
-/** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
-const MAX_ANY_WRITE_BODY = 16_000
-/** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts) — read when judged, never at load. */
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES]
+/** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY); step 39: an ad set's whole targeting. */
+const MAX_ANY_WRITE_BODY = 200_000
+/** Step 17's status rule, step 18's settings rules, step 39's brand-safety rules — read when judged, never at load. */
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...META_BRAND_SAFETY_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {
   if (typeof body !== 'string' || !body) return { problem: 'a Meta change carries its parameters as a form body' }
-  if (body.length > MAX_ANY_WRITE_BODY) return { problem: `a Meta change body is at most ${MAX_WRITE_BODY} characters (${MAX_ANY_WRITE_BODY} for the largest settings change)` }
+  if (body.length > MAX_ANY_WRITE_BODY) return { problem: `a Meta change body is at most ${MAX_WRITE_BODY} characters (${MAX_ANY_WRITE_BODY} for the largest brand-safety change)` }
   const params = new Map<string, string>()
   for (const [key, value] of new URLSearchParams(body)) {
     if (!/^[a-z_][a-z0-9_]*$/.test(key)) return { problem: `the body key "${key.slice(0, 40)}" is not one Meta reads (lower-case letters, digits and _)` }
