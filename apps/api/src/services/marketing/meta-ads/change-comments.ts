@@ -86,9 +86,13 @@ const shown = (v: boolean | null | undefined, yes: string, no: string) => (v ===
  */
 const canWarning = (field: string, what: string) => `Meta answered ${field} false to the system user's read (the viewer, not the Page): the Page may still ${what}; if it may not, Meta refuses in its own words and nothing changes.`
 
-/** One request of a comment change (Meta has no check for any of them; nothing spends). */
+/**
+ * One request of a comment change (Meta has no check for any of them; nothing spends). Facebook and Instagram go AS the
+ * chosen Page (step 27b's `asPage`: the Page's own rate limit, said in the preview); Threads with the ad account's token.
+ */
 function request(r: Omit<MetaChangeRequest, 'step' | 'check' | 'raisesSpend' | 'readBackInPost' | 'budget' | 'explain'>): MetaChangeRequest {
-  return { step: 1, check: 'none', raisesSpend: false, readBackInPost: false, budget: false, explain: COMMENT_EXPLAIN, ...r }
+  const asPage = !String(r.objectKind ?? '').startsWith('threads')
+  return { step: 1, check: 'none', raisesSpend: false, readBackInPost: false, budget: false, explain: COMMENT_EXPLAIN, ...(asPage ? { asPage: true as const } : {}), ...r }
 }
 
 function draftOf(input: {
