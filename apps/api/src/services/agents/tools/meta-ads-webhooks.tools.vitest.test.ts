@@ -2,8 +2,9 @@
  * Meta step 30 part 2 — set-meta-webhooks, set-meta-alert-subscription and remove-meta-alert-subscription as the approval
  * gate uses them (the account, the live reads and Meta are stand-ins; the gateway rules are proven in
  * gateway/meta-webhook-writes): each a change a person approves, nothing spends, Meta has no check, what is sent is
- * exactly the request the gateway's rule takes, Instagram is the App Dashboard's, a removal needs the person's explicit
- * ask, and undo puts back what each replaced. Made-up ids and names.
+ * exactly the request the gateway's rule takes, Instagram's fields are the App Dashboard's (its per-account step is
+ * install-page, part 3), a removal needs the person's explicit ask, and undo puts back what each replaced. Made-up ids
+ * and names.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -11,6 +12,10 @@ const h = vi.hoisted(() => ({
   account: { target: { connectionId: 'm-1', adAccountId: '1234567890' }, accountId: 'm-1', adAccountId: '1234567890', name: 'Shop A ads', currency: 'EUR' } as Record<string, unknown> | { refusal: string },
   appId: '1234567' as string | null,
   pageId: '120000000000010' as string | null,
+  instagramId: '170000000000001' as string | null,
+  /** Part 3 — the app on the chosen Page (read with the Page's own token), or the read's failure. */
+  page: { installed: false, fields: [] as string[] } as { installed: boolean; fields: string[] } | Error,
+  linked: '170000000000001' as string | null | Error,
   app: [] as Array<{ object: string; fields: string[]; active: boolean | null; nexusCallback: boolean; callbackOrigin: string | null }>,
   adAccount: { connected: false },
   /** The businesses connecting the same Meta app (this one is the legacy workspace when no profile is in context). */
@@ -22,12 +27,14 @@ vi.mock('../../marketing/meta-ads/change-account.js', () => ({ metaChangeAccount
 vi.mock('../../cx/token.service.js', () => ({ metaAppIdOf: vi.fn(async () => h.appId) }))
 vi.mock('../../marketing/meta-ads/live.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/live.js')>()),
-  metaChosenAccount: vi.fn(async () => ({ pageId: h.pageId })),
+  metaChosenAccount: vi.fn(async () => ({ pageId: h.pageId, instagramId: h.instagramId })),
 }))
 vi.mock('../../marketing/meta-ads/live-webhook-setup.js', () => ({
   liveAppSubscriptions: vi.fn(async () => structuredClone(h.app)),
   liveAdAccountApps: vi.fn(async () => ({ ...h.adAccount })),
   liveAlertSubscription: vi.fn(async () => (h.alert ? structuredClone(h.alert) : null)),
+  livePageApps: vi.fn(async () => { if (h.page instanceof Error) throw h.page; return structuredClone(h.page) }),
+  livePageInstagram: vi.fn(async () => { if (h.linked instanceof Error) throw h.linked; return h.linked }),
 }))
 vi.mock('../../marketing/meta-ads/webhook-receiver.js', () => ({
   metaAppUsers: vi.fn(async () => { if (h.users instanceof Error) throw h.users; return structuredClone(h.users) }),
@@ -42,7 +49,8 @@ import { META_ADS_WEBHOOKS_TOOLS } from './meta-ads-webhooks.tools.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
 import { __metaObjectLimitsTest } from '../../gateway/meta-object-limits.js'
-import { DASHBOARD_ONLY, PAGE_INSTALL_ROADS, webhooksDraft } from '../../marketing/meta-ads/change-webhooks.js'
+import { DASHBOARD_ONLY, PAGE_INSTALL_EXPLAIN, PAGE_TOKEN_TASKS, webhooksDraft } from '../../marketing/meta-ads/change-webhooks.js'
+import { localFailure, MetaReadError } from '../../marketing/meta-ads/errors.js'
 import { alertParamsOf, alertSpecOf } from '../../marketing/meta-ads/change-alert-subscriptions.js'
 import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
 
@@ -68,7 +76,8 @@ beforeEach(() => {
   vi.unstubAllEnvs()
   vi.stubEnv('NEXUS_PUBLIC_API_URL', 'https://api.example.test')
   h.account = { target: { connectionId: 'm-1', adAccountId: '1234567890' }, accountId: 'm-1', adAccountId: '1234567890', name: 'Shop A ads', currency: 'EUR' }
-  h.appId = '1234567'; h.pageId = '120000000000010'
+  h.appId = '1234567'; h.pageId = '120000000000010'; h.instagramId = '170000000000001'; h.linked = '170000000000001'
+  h.page = { installed: false, fields: [] }
   h.app = []; h.adAccount = { connected: false }; h.alert = null
   h.users = { users: [{ workspaceId: 'nexus_legacy_workspace', connectionId: 'm-1', systemUserId: null }], unsure: false }
   h.send.mockReset(); h.send.mockImplementation(ok())
@@ -120,8 +129,8 @@ describe('set-meta-webhooks', () => {
     expect(out.preview.warnings.join(' ')).toMatch(/now calls https:\/\/other\.example; this change points it at Nexus's receiver/)
     expect(out.preview.warnings).toContainEqual(expect.stringMatching(/^No undo for: The earlier callback \(https:\/\/other\.example\) is not put back/))
     expect(await preview(webhooks, { action: 'subscribe-app', object: 'instagram' })).toEqual({ ok: false, error: DASHBOARD_ONLY })
-    // M22 — the per-account Instagram step Nexus cannot do yet is named.
-    expect(DASHBOARD_ONLY).toMatch(/linked Facebook Page's \/subscribed_apps with the Instagram fields — which Nexus cannot do yet/)
+    // M22 / part 3 — the per-account Instagram step is named, and it is Nexus's own now (install-page instagram).
+    expect(DASHBOARD_ONLY).toMatch(/per-account step, its linked Facebook Page subscribed to the app: set-meta-webhooks install-page with object instagram does it/)
     expect(() => webhooks.input.parse({ action: 'subscribe-app', object: 'ad_account', fields: ['photos'] })).toThrow()
     expect(await preview(webhooks, { action: 'subscribe-app', object: 'catalog', fields: ['leadgen'] })).toEqual({ ok: false, error: expect.stringMatching(/does not take leadgen on catalog/) })
     vi.stubEnv('NEXUS_PUBLIC_API_URL', ''); vi.stubEnv('PUBLIC_API_URL', ''); vi.stubEnv('RAILWAY_PUBLIC_DOMAIN', '')
@@ -157,17 +166,111 @@ describe('set-meta-webhooks', () => {
     expect(webhooks.undo!.request(off.change)).toMatchObject({ args: { action: 'connect-ad-account' } })
   })
 
-  it('install-page answers with Meta\'s own roads (a Page token); remove-page goes with the app token, reads nothing, has no undo', async () => {
-    expect(await preview(webhooks, { action: 'install-page' })).toEqual({ ok: false, error: PAGE_INSTALL_ROADS })
-    expect(PAGE_INSTALL_ROADS).toMatch(/Meta Business Suite › All Tools › Business Apps/)
-    expect(PAGE_INSTALL_ROADS).toMatch(/Graph API Explorer with a Page token/)
+  it('install-page (part 3): the CHOSEN Page with its own token (the gateway\'s rule), standing on its apps; undo removes the app', async () => {
+    const out = await preview(webhooks, { action: 'install-page', fields: ['leadgen'] })
+    expect(out.preview).toMatchObject({ spendsMoney: false, metaCheck: { checked: 'none' }, requests: [{ step: 1, label: 'Install the app on Page 120000000000010: leadgen' }] })
+    expect(out.preview.changes['Page 120000000000010: the app']).toEqual({ from: 'not installed', to: 'leadgen' })
+    expect(out.preview.warnings).toContain(PAGE_TOKEN_TASKS)
+    expect(PAGE_TOKEN_TASKS).toMatch(/Manage, Create content or Moderate task.*pages_manage_metadata and pages_show_list/)
+    expect(out.preview.warnings.join(' ')).toMatch(/only when the app is subscribed to it as well \(set-meta-webhooks subscribe-app object page/)
+    const done = await run(webhooks, { action: 'install-page', fields: ['leadgen'] })
+    expect(sent()).toHaveLength(1)
+    expect(sent()[0]).toMatchObject({ objectId: '120000000000010', kind: 'page', edge: 'subscribed_apps', operation: 'webhooks.installPage', params: { subscribed_fields: 'leadgen' } })
+    // No token asked: the Page's own is its gateway rule's (`auth: 'page'`), read by the gateway.
+    expect(sent()[0].via).toEqual({})
+    expect(webhooks.undo!.request(done.change)).toEqual({ tool: 'set-meta-webhooks', args: { connectionId: 'm-1', action: 'remove-page', why: expect.any(String) } })
+    h.page = { installed: true, fields: ['leadgen'] }
+    expect(await webhooks.undo!.current({ before: done.change.before, after: done.change.after })).toEqual(done.change.after)
+    // The chosen Page changed since: the undo sees it moved.
+    h.pageId = '120000000000011'
+    expect(await webhooks.undo!.current({ before: done.change.before, after: done.change.after })).not.toEqual(done.change.after)
+    // Meta's refusals in plain words (the kit adds them to the step's sentence).
+    expect(PAGE_INSTALL_EXPLAIN['200']).toMatch(/Manage, Create content or Moderate/)
+    h.pageId = null
+    expect(await preview(webhooks, { action: 'install-page' })).toEqual({ ok: false, error: expect.stringMatching(/no Facebook Page chosen/) })
+  })
+
+  it('install-page: the whole list it wants is sent (added or replaced, the Page ends with it); `exact` takes the app off first when a field goes', async () => {
+    h.page = { installed: true, fields: ['feed'] }
+    const done = await run(webhooks, { action: 'install-page', fields: ['leadgen'] })
+    expect(sent()[0].params).toEqual({ subscribed_fields: 'feed,leadgen' })
+    const undo = webhooks.undo!.request(done.change) as { args: Record<string, unknown> }
+    expect(undo).toEqual({ tool: 'set-meta-webhooks', args: { connectionId: 'm-1', action: 'install-page', fields: ['feed'], exact: true, why: expect.any(String) } })
+    expect(webhooks.input.safeParse(undo.args).success).toBe(true)
+    // The undo itself: exactly feed again — off first (the app token), then on with feed (step 2 stands on step 1).
+    h.page = { installed: true, fields: ['feed', 'leadgen'] }
+    h.send.mockClear()
+    const back = await preview(webhooks, undo.args)
+    expect(back.preview.requests).toMatchObject([{ step: 1, label: 'Remove the app from Page 120000000000010 (it goes on again in step 2)' }, { step: 2, label: 'Install the app on Page 120000000000010: feed' }])
+    expect(back.preview.warnings.join(' ')).toMatch(/comes off Page 120000000000010 first .* reaches nobody/)
+    const again = await run(webhooks, undo.args)
+    expect(sent().map((c) => [c.method ?? 'POST', c.params])).toEqual([['DELETE', {}], ['POST', { subscribed_fields: 'feed' }]])
+    expect(webhooks.undo!.request(again.change)).toMatchObject({ args: { action: 'install-page', fields: ['feed', 'leadgen'], exact: true } })
+    // Already so: nothing to change.
+    h.page = { installed: true, fields: ['feed', 'leadgen'] }
+    expect(await preview(webhooks, { action: 'install-page', fields: ['leadgen'] })).toEqual({ ok: false, error: expect.stringMatching(/^Nothing to change: Page 120000000000010: feed, leadgen already subscribed/) })
+  })
+
+  it('install-page: Messenger fields need pages_messaging; fields the receiver does not take are named, kept out of the undo', async () => {
+    const messages = await preview(webhooks, { action: 'install-page', fields: ['messages', 'leadgen'] })
+    expect(messages.preview.warnings.join(' ')).toMatch(/messages is a Messenger field: Meta also needs pages_messaging/)
+    h.page = { installed: true, fields: ['feed', 'ratings'] }
+    const out = await preview(webhooks, { action: 'install-page', fields: ['leadgen'] })
+    expect(out.preview.warnings.join(' ')).toMatch(/also has ratings, which Nexus's receiver does not take and so does not send: if Meta replaces the list/)
+    expect(out.preview.warnings).toContainEqual(expect.stringMatching(/^No undo for: Nexus's receiver does not take ratings/))
+    expect(() => webhooks.input.parse({ action: 'install-page', fields: ['ratings'] })).toThrow()
+    expect(await preview(webhooks, { action: 'install-page', fields: ['items_batch'] })).toEqual({ ok: false, error: expect.stringMatching(/does not take items_batch on page/) })
+    expect(await preview(webhooks, { action: 'install-page', object: 'catalog' })).toEqual({ ok: false, error: expect.stringMatching(/names no object, or instagram/) })
+  })
+
+  it('install-page: no Page token (or Meta refused the read) — nothing sent, what the Page needs said', async () => {
+    h.page = new MetaReadError(localFailure('Held, nothing sent: Meta gave Nexus no token for the business\'s chosen Facebook Page.', 'META_PAGE_TOKEN_UNAVAILABLE'), 'webhooks.setup.pageApps', 0)
+    const out = await preview(webhooks, { action: 'install-page' })
+    expect(out).toEqual({ ok: false, error: expect.stringMatching(/could not read which apps are installed on Page 120000000000010 \(Held, nothing sent: Meta gave Nexus no token.*Installing takes the same Page token, so nothing is sent\. Meta installs an app on a Page only with the Page's own token/) })
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
+  it('WH-013 — install-page instagram: the chosen Page linked to the chosen Instagram account; done once the app is on it', async () => {
+    const done = await run(webhooks, { action: 'install-page', object: 'instagram' })
+    expect(sent()[0]).toMatchObject({ objectId: '120000000000010', kind: 'page', edge: 'subscribed_apps' })
+    expect(done.change.after).toMatchObject({ action: 'install-page', object: 'instagram', pageId: '120000000000010' })
+    expect(webhooks.undo!.request(done.change)).toMatchObject({ args: { action: 'remove-page' } })
+    h.page = { installed: true, fields: ['leadgen'] }
+    expect(await preview(webhooks, { action: 'install-page', object: 'instagram' })).toEqual({ ok: false, error: expect.stringMatching(/^Nothing to change: Page 120000000000010: the app is installed, so Meta delivers the Instagram account's notifications/) })
+    h.page = { installed: false, fields: [] }
+    h.linked = '170000000000009'
+    expect(await preview(webhooks, { action: 'install-page', object: 'instagram' })).toEqual({ ok: false, error: expect.stringMatching(/not the Page linked to the chosen Instagram account 170000000000001 \(it is linked to 170000000000009\)/) })
+    h.linked = null
+    expect(await preview(webhooks, { action: 'install-page', object: 'instagram' })).toEqual({ ok: false, error: expect.stringMatching(/it has no Instagram account linked/) })
+    h.instagramId = null
+    expect(await preview(webhooks, { action: 'install-page', object: 'instagram' })).toEqual({ ok: false, error: expect.stringMatching(/no Instagram account chosen/) })
+    // The Instagram fields themselves stay the App Dashboard's.
+    expect(await preview(webhooks, { action: 'subscribe-app', object: 'instagram' })).toEqual({ ok: false, error: DASHBOARD_ONLY })
+  })
+
+  it('remove-page: the app token; it reads the Page\'s apps (its own token) so its undo installs the fields again; unread, no undo', async () => {
+    h.page = { installed: true, fields: ['leadgen', 'feed'] }
     const out = await preview(webhooks, { action: 'remove-page' })
-    expect(out.preview.warnings.join(' ')).toMatch(/Nexus cannot read which apps are installed on the Page/)
-    expect(out.preview.warnings).toContainEqual(expect.stringMatching(/^No undo for: It has no undo: Nexus does not install the app on a Page/))
+    expect(out.preview.changes['Page 120000000000010: the app']).toEqual({ from: 'feed, leadgen', to: 'not installed' })
     const off = await run(webhooks, { action: 'remove-page' })
     expect(sent()[0]).toMatchObject({ objectId: '120000000000010', kind: 'page', method: 'DELETE', via: {} })
     expect(sent()[0].via).toEqual({})
-    expect(webhooks.undo!.request(off.change)).toEqual({ refusal: expect.stringMatching(/It has no undo: Nexus does not install the app on a Page/) })
+    expect(webhooks.undo!.request(off.change)).toEqual({ tool: 'set-meta-webhooks', args: { connectionId: 'm-1', action: 'install-page', fields: ['feed', 'leadgen'], why: expect.any(String) } })
+    h.page = { installed: false, fields: [] }
+    expect(await webhooks.undo!.current({ before: off.change.before, after: off.change.after })).toEqual(off.change.after)
+    expect(await preview(webhooks, { action: 'remove-page' })).toEqual({ ok: false, error: expect.stringMatching(/^Nothing to change: Page 120000000000010: the app is not installed/) })
+    // Only fields the receiver does not take: nothing to put back, said before approval.
+    h.page = { installed: true, fields: ['ratings'] }
+    const foreign = await preview(webhooks, { action: 'remove-page' })
+    expect(foreign.preview.warnings).toContainEqual(expect.stringMatching(/^No undo for: The app had only ratings on the Page/))
+    // The Page's token not to be had: the removal still goes (the app token), without an undo.
+    h.page = new MetaReadError(localFailure('Held, nothing sent: Meta gave Nexus no token for the business\'s chosen Facebook Page.', 'META_PAGE_TOKEN_UNAVAILABLE'), 'webhooks.setup.pageApps', 0)
+    const unread = await preview(webhooks, { action: 'remove-page' })
+    expect(unread.preview.warnings.join(' ')).toMatch(/could not read which apps are installed on the Page \(Held, nothing sent/)
+    expect(unread.preview.warnings).toContainEqual(expect.stringMatching(/^No undo for: It has no undo: Nexus could not read the fields the app had/))
+    h.send.mockClear()
+    const blind = await run(webhooks, { action: 'remove-page' })
+    expect(webhooks.undo!.request(blind.change)).toEqual({ refusal: expect.stringMatching(/Nexus could not read the fields the app had/) })
     h.pageId = null
     expect(await preview(webhooks, { action: 'remove-page' })).toEqual({ ok: false, error: expect.stringMatching(/no Facebook Page chosen/) })
   })

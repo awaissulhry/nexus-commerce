@@ -7,8 +7,9 @@
  *              META_WEBHOOK_VERIFY_TOKEN (never a caller's, never shown); DELETE always names an object
  *   adaccount  POST / DELETE /act_<id>/subscribed_apps with app_id (the connection's own app) — the CHOSEN ad account;
  *              POST /act_<id>/subscriptions, PATCH and DELETE /act_<id>/subscriptions/<id> — its alert subscriptions
- *   page       DELETE /<page id>/subscribed_apps with the APP token — the CHOSEN Page (installing takes a Page access
- *              token, which Nexus has no mode for: never sent — review B1, lane decision D-2)
+ *   page       POST /<page id>/subscribed_apps subscribed_fields with the CHOSEN Page's own token (step 36's Page-token
+ *              mode, `auth: 'page'`: the gateway reads it; part 3), DELETE /<page id>/subscribed_apps with the APP token
+ *              — the CHOSEN Page only (gateway.ts metaPageOwnerProblem / metaWebhookOwnerProblem)
  *
  * Checked 2026-10-21 (developers.facebook.com and Meta's Python Business SDK, main):
  *   - graph-api/reference/app/subscriptions (v26.0): POST object, callback_url, fields, include_values, verify_token
@@ -23,9 +24,12 @@
  *     delete_subscribed_apps (app_id). Meta's SDK sends a DELETE's parameters in the query string (api.py: `if method in
  *     ('GET', 'DELETE'): params=…`), so a DELETE here carries them there.
  *   - graph-api/reference/page/subscribed_apps: POST subscribed_fields (a Page access token of a person who can perform
- *     the CREATE_CONTENT, MANAGE or MODERATE task on the Page; "cannot subscribe to Instagram") — not sent by Nexus;
- *     DELETE with an App Access Token ("an app can remove its own webhook subscription from a Page"); answers {success,
- *     messaging_success}.
+ *     the CREATE_CONTENT, MANAGE or MODERATE task on the Page, pages_manage_metadata and pages_show_list; Messenger fields
+ *     also pages_messaging; "cannot subscribe to Instagram" fields — an Instagram account's webhooks need its linked Page
+ *     subscribed to any Page field, instagram-platform webhooks); GET (the same Page token) lists the installed apps with
+ *     id, name, subscribed_fields; DELETE with an App Access Token ("an app can remove its own webhook subscription from a
+ *     Page"); answers {success, messaging_success}. Whether a second POST replaces the field list or adds to it is not
+ *     documented (LIVE-PROBES WH-010u): Nexus sends the whole list it wants, so either way the Page ends with it.
  *   - marketing-api/ads-webhooks/subscriptions.md: POST /act_<id>/subscriptions event_type, filters (≤ 20 {field, value,
  *     operator}, entity_type CAMPAIGN | ADSET | AD), field, value, operator, status ENABLED (default) | DISABLED; PATCH
  *     /act_<id>/subscriptions/<id> status; DELETE; money in the currency's minor unit, times epoch seconds; Meta's
@@ -354,12 +358,28 @@ export const META_WEBHOOK_WRITE_RULES: readonly MetaWriteRule[] = [
     budget: false,
   },
   {
+    // set-meta-webhooks install-page (part 3): POST /<page id>/subscribed_apps subscribed_fields=… with the CHOSEN Page's
+    // own token (the gateway reads it: meta-page-token.ts; its owner check: meta-page-owner.ts). The Page's connected apps
+    // are an edge: no ad object is edited, so Meta's 30-s gap of an ad object does not hold it.
+    name: 'page.subscribed_apps',
+    method: 'POST',
+    path: /^\d{1,25}\/subscribed_apps$/,
+    kinds: ['page'],
+    auth: 'page',
+    edgeCall: true,
+    required: ['subscribed_fields'],
+    optional: [],
+    values: (params) => fieldList(params.get('subscribed_fields'), META_WEBHOOK_FIELDS.page, 'the Page\'s subscribed fields'),
+    budget: false,
+  },
+  {
     // set-meta-webhooks remove-page: DELETE /<page id>/subscribed_apps with the app token (the app removes itself).
     name: 'page.subscribed_apps.delete',
     method: 'DELETE',
     path: /^\d{1,25}\/subscribed_apps$/,
     kinds: ['page'],
     auth: 'app',
+    edgeCall: true,
     required: [],
     optional: [],
     values: () => null,

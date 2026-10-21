@@ -5,6 +5,9 @@
  *     per object its fields and whether its callback is Nexus's own receiver — the callback itself never leaves this
  *     file (a path can carry a secret), only "Nexus's" yes / no and its origin;
  *   - the apps connected to the chosen ad account (`GET /act_<id>/subscribed_apps?fields=app_id,app_name`);
+ *   - part 3: the apps installed on the chosen Page (`GET /<page>/subscribed_apps?fields=id,subscribed_fields`): Meta
+ *     answers it only to the Page's own token, which the gateway reads itself (meta-calls.ts `pageRead`); and the
+ *     Instagram account linked to the chosen Page (`GET /<page>?fields=id,instagram_business_account{id}`);
  *   - the ad account's alert subscriptions (`GET /act_<id>/subscriptions[/<id>]`): event, field, value, operator,
  *     filters, status — as Meta writes them (the undo of a removal sends exactly these again).
  */
@@ -62,6 +65,22 @@ export async function liveAppSubscriptions(connectionId: string, appId: string):
 export async function liveAdAccountApps(connectionId: string, adAccountId: string, appId: string): Promise<{ connected: boolean }> {
   const read = await graphPage(connectionId, 'webhooks.setup.adAccountApps', `act_${adAccountId}/subscribed_apps`, { fields: 'app_id,app_name', limit: 100 })
   return { connected: read.rows.some((r) => (idOf(r.app_id) ?? idOf(r.id)) === appId) }
+}
+
+/** Part 3 — the connection's app on the chosen Page: installed or not, and with which fields (sorted). */
+export interface PageAppState { installed: boolean; fields: string[] }
+
+/** Is the connection's app installed on the chosen Page, and with which fields? (The Page's own token: the gateway's.) */
+export async function livePageApps(connectionId: string, pageId: string, appId: string): Promise<PageAppState> {
+  const read = await graphPage(connectionId, 'webhooks.setup.pageApps', `${pageId}/subscribed_apps`, { fields: 'id,subscribed_fields', limit: 100 })
+  const mine = read.rows.find((r) => idOf(r.id) === appId)
+  return { installed: !!mine, fields: mine ? namesOf(mine.subscribed_fields).sort() : [] }
+}
+
+/** Part 3 (WH-013) — the Instagram professional account linked to the chosen Page, or null (the system-user token). */
+export async function livePageInstagram(connectionId: string, pageId: string): Promise<string | null> {
+  const { body } = await metaReadOne<Row>({ connectionId }, { operation: 'webhooks.setup.pageInstagram', path: pageId, query: { fields: 'id,instagram_business_account{id}' } })
+  return idOf(obj(body.instagram_business_account)?.id)
 }
 
 /** One alert subscription as Meta writes it (the values as text, the filters as Meta's list). */

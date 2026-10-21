@@ -3,9 +3,9 @@
  * ad account (master rows WH-005, 007–010, 012, 013, 051–054, 056, 057; the receiver is part 1):
  *   set-meta-webhooks                the app's webhook subscription of one object (fields, Nexus's receiver as the
  *                                    callback, include_values; app-wide), the chosen ad account connected to the app, the
- *                                    app removed from the chosen Page (installing takes a Page token: Meta Business Suite ›
- *                                    All Tools › Business Apps, or the Graph API Explorer); Instagram / WhatsApp fields only
- *                                    in the App Dashboard
+ *                                    app installed on or removed from the chosen Page (part 3: installing with the Page's
+ *                                    own token, step 36's mode; also the Instagram account's per-account step, WH-013);
+ *                                    Instagram / WhatsApp fields only in the App Dashboard
  *   set-meta-alert-subscription      a new alert on the ad account (a new object, a setting changing, a metric crossing a
  *                                    threshold, a milestone), or one switched on / off
  *   remove-meta-alert-subscription   an alert removed (only on the person's explicit ask)
@@ -19,7 +19,8 @@ import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
 import { metaChangePreview, metaConnectionArg, metaWhyArg, META_CHANGE_RULES, recordAccount, runMetaChange, type MetaDraftBuilder } from './meta-ads-kit.js'
 import { metaChosenAccount, MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
-import { liveAdAccountApps, liveAlertSubscription, liveAppSubscriptions } from '../../marketing/meta-ads/live-webhook-setup.js'
+import { liveAdAccountApps, liveAlertSubscription, liveAppSubscriptions, livePageApps, livePageInstagram } from '../../marketing/meta-ads/live-webhook-setup.js'
+import { MetaReadError } from '../../marketing/meta-ads/errors.js'
 import { metaAppUsers } from '../../marketing/meta-ads/webhook-receiver.js'
 import { workspaceIdForQuery } from '../../../lib/workspace-context.js'
 import { webhooksDraft, WEBHOOK_ACTIONS, WEBHOOK_OBJECT_NAMES, type WebhooksLive, type WebhooksRecord, type WebhooksRequest } from '../../marketing/meta-ads/change-webhooks.js'
@@ -62,7 +63,14 @@ const webhooksRequest = (args: Record<string, unknown>): WebhooksRequest => ({
   action: args.action as WebhooksRequest['action'],
   ...(typeof args.object === 'string' ? { object: args.object } : {}),
   ...(Array.isArray(args.fields) ? { fields: args.fields as string[] } : {}),
+  ...(args.exact === true ? { exact: true } : {}),
 })
+
+/** Part 3 — a read the draft can do without (the Page's apps, its Instagram link): Meta's or the gateway's words instead. */
+const orProblem = (err: unknown): { error: string } => {
+  if (err instanceof MetaReadError) return { error: err.message }
+  throw err
+}
 
 const buildWebhooks = (args: Record<string, unknown>): MetaDraftBuilder => guarded(async (account) => {
   const request = webhooksRequest(args)
@@ -74,8 +82,17 @@ const buildWebhooks = (args: Record<string, unknown>): MetaDraftBuilder => guard
     live.otherBusinesses = await otherBusinessesOf(appId)
   } else if (request.action === 'connect-ad-account' || request.action === 'disconnect-ad-account') {
     live.adAccount = await liveAdAccountApps(account.accountId, account.adAccountId, appId)
-  } else if (request.action === 'remove-page') {
-    live.pageId = (await metaChosenAccount(account.accountId)).pageId
+  } else {
+    // install-page / remove-page — the CHOSEN Page; its apps are read with the Page's own token (the gateway's, part 3).
+    const chosen = await metaChosenAccount(account.accountId)
+    live.pageId = chosen.pageId
+    if (chosen.pageId) {
+      const pageId = chosen.pageId
+      live.page = await livePageApps(account.accountId, pageId, appId).catch(orProblem)
+      if (request.action === 'install-page' && request.object === 'instagram') {
+        live.instagram = await livePageInstagram(account.accountId, pageId).then((linked) => ({ chosen: chosen.instagramId, linked })).catch(orProblem)
+      }
+    }
   }
   return webhooksDraft(request, live)
 })
@@ -101,8 +118,11 @@ const webhooksUndo: ToolUndo = {
     if (after.action === 'connect-ad-account' || after.action === 'disconnect-ad-account') {
       return { ...after, connected: (await liveAdAccountApps(account.accountId, account.adAccountId, appId)).connected }
     }
-    // remove-page has no undo (Nexus cannot read a Page's apps nor install the app on a Page).
-    return null
+    // install-page / remove-page — the app on the Page the change was of (the chosen one; read with its own token).
+    const pageId = (await metaChosenAccount(account.accountId)).pageId
+    if (!pageId || pageId !== after.pageId) return { ...after, pageId }
+    const page = await livePageApps(account.accountId, pageId, appId)
+    return { ...after, fields: page.installed ? page.fields : null }
   },
   request(change: ToolChange) {
     const before = (change.before ?? {}) as WebhooksRecord & { accountId?: string }
@@ -124,15 +144,16 @@ const setMetaWebhooks: AgentTool = {
   requiresApprovalDefault: true,
   openWorld: true,
   // No way back: switching an inactive subscription on again, a foreign callback replaced, a subscription of an app another
-  // business uses, removing the app from a Page (Nexus cannot install it back: Business Apps or the Graph API Explorer).
+  // business uses, fields Nexus's receiver does not take, removing the app from a Page whose apps Nexus could not read.
   reversibility: 'partial',
   maxClaudeTrust: 'ask',
   requires: [F.adsCampaignsManage],
   input: z.object({
     connectionId: metaConnectionArg,
-    action: z.enum(WEBHOOK_ACTIONS).describe('subscribe-app / unsubscribe-app: the app\'s webhook subscription of one object (app-wide); connect-ad-account / disconnect-ad-account: the chosen ad account delivers its ads notifications to the app (or stops); remove-page: the app off the chosen Facebook Page; install-page answers with Meta\'s own roads (it takes a Page access token)'),
-    object: z.enum(WEBHOOK_OBJECT_NAMES).optional().describe('subscribe-app, unsubscribe-app: ad_account (ads notifications), application (account status, trigger rules, app alerts), page (leads, comments, messages), catalog (batches, feeds), permissions; instagram and whatsapp_business_account are set only in Meta\'s App Dashboard'),
-    fields: z.array(z.enum(ALL_FIELDS)).min(1).max(40).optional().describe('subscribe-app: the object\'s fields (default: every field Nexus\'s receiver takes for it); unsubscribe-app: only these (default: the whole object)'),
+    action: z.enum(WEBHOOK_ACTIONS).describe('subscribe-app / unsubscribe-app: the app\'s webhook subscription of one object (app-wide); connect-ad-account / disconnect-ad-account: the chosen ad account delivers its ads notifications to the app (or stops); install-page / remove-page: the app on / off the chosen Facebook Page (installing with the Page\'s own token)'),
+    object: z.enum(WEBHOOK_OBJECT_NAMES).optional().describe('subscribe-app, unsubscribe-app: ad_account (ads notifications), application (account status, trigger rules, app alerts), page (leads, comments, messages), catalog (batches, feeds), permissions; instagram and whatsapp_business_account fields are set only in Meta\'s App Dashboard. install-page: none, or instagram — the per-account step of the chosen Instagram account (its linked Page, which must be the chosen Page)'),
+    fields: z.array(z.enum(ALL_FIELDS)).min(1).max(40).optional().describe('subscribe-app: the object\'s fields (default: every field Nexus\'s receiver takes for it); unsubscribe-app: only these (default: the whole object); install-page: the Page\'s fields (default: every page field Nexus\'s receiver takes), added to the ones it has'),
+    exact: z.boolean().optional().describe('install-page: the Page\'s fields become exactly `fields` (when one must go, the app comes off the Page first and goes on again); default: added to the ones it has'),
     why: metaWhyArg,
   }),
   description:
@@ -143,10 +164,12 @@ const setMetaWebhooks: AgentTool = {
     + 'subscription). A subscription is app-wide: when another business in Nexus uses the same Meta app, a subscribe says it '
     + 'changes what that business receives too, and an unsubscribe is refused (the App Dashboard then). Connect the chosen '
     + 'ad account to the app (Meta needs an ADMIN of the ad account: when the system user is not one, Meta refuses and '
-    + 'nothing changes) or disconnect it; remove the app from the chosen Page (the app token; no undo). Installing the app '
-    + 'on a Page takes a Page access token Nexus has no mode for: install-page answers with Meta\'s roads (Meta Business '
-    + 'Suite › All Tools › Business Apps, or the Graph API Explorer with a Page token). Instagram and WhatsApp fields are '
-    + 'set only in Meta\'s App Dashboard (Instagram also per account with a Page token). The App '
+    + 'nothing changes) or disconnect it. Install the app on the chosen Facebook Page with its fields (leads, comments, '
+    + 'messages …: the Page\'s OWN token, which Nexus reads with the system user — it needs the Manage, Create content or '
+    + 'Moderate task on the Page and pages_manage_metadata, pages_show_list; Messenger fields pages_messaging; when it lacks '
+    + 'them, Meta refuses and nothing changes), or remove it (the app token; its undo installs the fields it had). '
+    + 'install-page with object instagram is the Instagram account\'s per-account step (its linked Page, the chosen one). '
+    + 'Instagram and WhatsApp FIELDS are set only in Meta\'s App Dashboard. The App '
     + 'Dashboard is as good a road for all of this (Webhooks of the app, the callback above, the verify token set on the '
     + 'API): meta-webhooks reads the result either way. Meta first verifies the callback (META_WEBHOOK_VERIFY_TOKEN on the '
     + 'API service, never shown). Nothing here spends money. Meta has no check for these changes. Undo puts back what it '

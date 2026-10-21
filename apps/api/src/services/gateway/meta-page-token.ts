@@ -2,10 +2,12 @@
  * Meta step 36 (2026-10-21) — THE Page token mode (cross-lane question Q1, lane C2's proposal, built once here; lanes C2
  * — steps 24, 27 — and C4 — steps 37, 38 — reuse it, never a second one).
  *
- * Some Meta changes are made AS the Page and take the Page's own access token: lead forms and test leads (step 36), and
- * later Page posts, comments, messages. Nexus holds no Page token. For a write rule marked `auth: 'page'`
- * (meta-calls.ts MetaWriteRule), and only for one, the gateway itself reads the token of the business's CHOSEN Facebook
- * Page (its PAGE MetaAccountLink — never a Page a caller names), for that one call:
+ * Some Meta changes are made AS the Page and take the Page's own access token: lead forms and test leads (step 36), the
+ * app installed on the Page (step 30 part 3), and later Page posts, comments, messages. Nexus holds no Page token. For a
+ * write rule marked `auth: 'page'` (meta-calls.ts MetaWriteRule), and only for one — and for the ONE read Meta answers
+ * only to a Page token, the Page's connected apps (`<page>/subscribed_apps`, meta-calls.ts metaCallVerdict `pageRead`,
+ * step 30 part 3: what install-page and remove-page stand on and put back) — the gateway itself reads the token of the
+ * business's CHOSEN Facebook Page (its PAGE MetaAccountLink — never a Page a caller names), for that one call:
  *
  *   GET https://graph.facebook.com/<version>/<chosen page id>?fields=access_token   with the business's system-user token
  *   and its appsecret_proof — master ACC-014. The field IS on the v26 Page reference (checked 2026-10-21,
@@ -47,7 +49,7 @@ export class MetaPageTokenUnavailable extends Error {
  * role other than Live Contributor on the Page; when the business requires two-factor authentication, an authenticated
  * user), the task the change needs (lead forms and test leads: Advertise, create guide) and the token's permissions.
  */
-export const META_PAGE_TOKEN_NEEDS = 'Meta answers a Page\'s own token only to someone with a role on the Page other than Live Contributor (and, when the business requires two-factor authentication, one who is authenticated): the system user needs the business\'s chosen Facebook Page assigned to it in Meta Business settings (Users › System users › Assign assets) with the task this change needs — lead forms and test leads: Advertise ("Create ads") — and its token needs ads_management, business_management, pages_manage_ads, pages_read_engagement and pages_show_list.'
+export const META_PAGE_TOKEN_NEEDS = 'Meta answers a Page\'s own token only to someone with a role on the Page other than Live Contributor (and, when the business requires two-factor authentication, one who is authenticated): the system user needs the business\'s chosen Facebook Page assigned to it in Meta Business settings (Users › System users › Assign assets) with the task this change needs — lead forms and test leads: Advertise ("Create ads"); the app installed on the Page and its connected apps read (set-meta-webhooks): Manage, Create content or Moderate — and its token needs ads_management, business_management, pages_manage_ads, pages_read_engagement and pages_show_list (the app on the Page: pages_manage_metadata and pages_show_list, Messenger fields also pages_messaging).'
 
 /**
  * Review A1 — one exact secret (the Page's token, the system-user token) out of a text: as written, and — when the text is
