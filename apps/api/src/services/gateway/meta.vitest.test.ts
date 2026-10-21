@@ -690,6 +690,31 @@ describe('step 16 — partnership, research and brand-safety reads: their own ke
   })
 })
 
+describe('step 16 review fixes — no creator picked by gender or age; a backslash never splits the judged path from the sent one; the hyphenated edge only after an id', () => {
+  const ok = (url: string, extra: Partial<Parameters<typeof metaReadOnlyProblem>[0]> = {}) => metaReadOnlyProblem({ method: 'GET', url, kind: 'read', ...extra })
+  it('A1 — creator_gender and creator_age_bucket are refused; the audience filters stay', () => {
+    expect(ok(`${BASE}/170000000000001/creator_marketplace_creators?creator_gender=["female"]&fields=id`)).toMatch(/"creator_gender" is not one/)
+    expect(ok(`${BASE}/170000000000001/creator_marketplace_creators?creator_age_bucket=["18_to_24"]&fields=id`)).toMatch(/"creator_age_bucket" is not one/)
+    expect(ok(`${BASE}/170000000000001/creator_marketplace_creators?major_audience_gender=["female"]&major_audience_age_bucket=["18_to_24"]&fields=id`)).toBeNull()
+  })
+  it('A2 — a backslash anywhere is refused on both hosts (the URL parser reads it as /)', () => {
+    expect(new URL('https://graph.facebook.com\\x/v26.0/act_1/campaigns').pathname).toBe('/x/v26.0/act_1/campaigns')
+    expect(ok('https://graph.facebook.com\\x/v26.0/act_1/campaigns?fields=id')).toMatch(/no backslash/)
+    expect(ok(`${BASE}/act_1/campaigns\\x?fields=id`)).not.toBeNull()
+    expect(ok('https://api.facebook.com\\x/partnership-ads/fb-branded-content/120000000000010/brand-allowlist-status')).toMatch(/no backslash/)
+    expect(ok('https://api.facebook.com/partnership-ads/fb-branded-content/120000000000010\\brand-allowlist-status')).not.toBeNull()
+    // The plain forms still go.
+    expect(ok(`${BASE}/act_1/campaigns?fields=id`)).toBeNull()
+    expect(ok('https://api.facebook.com/partnership-ads/fb-branded-content/120000000000010/brand-allowlist-status')).toBeNull()
+  })
+  it('A6 — the hyphenated edge only as <digits>/partnership-ads-advertisable-content, nothing before or after', () => {
+    expect(ok(`${BASE}/9876543210/partnership-ads-advertisable-content?fields=content_id`)).toBeNull()
+    for (const path of ['me/partnership-ads-advertisable-content', 'act_1/partnership-ads-advertisable-content', '123/partnership-ads-advertisable-content/x', '123/456/partnership-ads-advertisable-content']) {
+      expect(ok(`${BASE}/${path}?fields=content_id`), path).toMatch(/letters, digits and _ only/)
+    }
+  })
+})
+
 function metaWriteProblemOf(method: string, url: string, body: string): string | null {
   const verdict = metaWriteVerdict({ method, url, kind: 'write', body })
   return 'problem' in verdict ? verdict.problem : null

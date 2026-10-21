@@ -63,8 +63,8 @@ export type MetaCallGroup = 'ads' | 'insights' | 'auth'
 interface GraphRoute { version: string | null; segments: string[]; route: string; search: URLSearchParams }
 
 /**
- * Step 16 (2026-10-21) — the one Graph edge Meta spells with hyphens, allowed as exactly this segment and only as an
- * edge (never the first segment): `GET /{business-id}/partnership-ads-advertisable-content` (checked on
+ * Step 16 (2026-10-21) — the one Graph edge Meta spells with hyphens, allowed as exactly this segment and only as the
+ * edge of a numeric id (`<digits>/<edge>`, nothing after it): `GET /{business-id}/partnership-ads-advertisable-content` (checked on
  * developers.facebook.com/documentation/ads-commerce/marketing-api/ad-creative/partnership-ads/content-discovery-api.md).
  */
 const GRAPH_HYPHEN_EDGES: ReadonlySet<string> = new Set(['partnership-ads-advertisable-content'])
@@ -79,9 +79,14 @@ function graphRouteOf(url: string): GraphRoute | { problem: string } | null {
   const pieces = raw.split('/').slice(1)
   if (pieces.some((piece) => piece === '')) return { problem: 'a Meta path has no empty segment' }
   if (pieces.some((piece) => piece === '.' || piece === '..')) return { problem: 'a Meta path has no . or .. segment' }
+  // Step 16 review A2 — the path judged is the path read: a backslash is a `/` to the URL parser (so `host\x/…` would be
+  // judged as one path and sent as another), and nothing else may make the parsed path differ from the written one.
+  if (url.includes('\\') || raw !== parsed.pathname) return { problem: 'a Meta URL is written plainly: no backslash, and the path as written is the path read' }
   const version = /^v\d+\.\d+$/.test(pieces[0]) ? pieces[0] : null
   const segments = version ? pieces.slice(1) : pieces
-  if (segments.some((piece, i) => !/^[A-Za-z0-9_]+$/.test(piece) && !(i > 0 && GRAPH_HYPHEN_EDGES.has(piece)))) return { problem: 'a Meta path segment is letters, digits and _ only' }
+  // Step 16 review A6 — the hyphenated edge only as `<digits>/<edge>`: exactly two segments, the first a numeric id.
+  const hyphenEdge = (piece: string, i: number) => i === 1 && segments.length === 2 && /^\d+$/.test(segments[0]) && GRAPH_HYPHEN_EDGES.has(piece)
+  if (segments.some((piece, i) => !/^[A-Za-z0-9_]+$/.test(piece) && !hyphenEdge(piece, i))) return { problem: 'a Meta path segment is letters, digits and _ only' }
   return { version, segments, route: segments.join('/').toLowerCase(), search: parsed.searchParams }
 }
 
@@ -449,6 +454,8 @@ function metaRestVerdict(url: string, auth: unknown): MetaCallVerdict | null {
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.hash || parsed.port) return refuse(`Nexus calls Meta's REST host only as https://${META_REST_HOST}`)
   const raw = url.replace(/^https:\/\/[^/?#]*/i, '').split(/[?#]/)[0] || '/'
   if (raw.includes('%')) return refuse('a Meta path is never percent-encoded')
+  // Review A2 — the path judged is the path read (a backslash is a `/` to the URL parser).
+  if (url.includes('\\') || raw !== parsed.pathname) return refuse('a Meta URL is written plainly: no backslash, and the path as written is the path read')
   const pieces = raw.split('/').slice(1)
   if (pieces.some((piece) => !/^[a-z0-9-]+$/.test(piece))) return refuse(`a path on ${META_REST_HOST} is lower-case letters, digits and - only, with no empty segment`)
   const route = pieces.join('/')

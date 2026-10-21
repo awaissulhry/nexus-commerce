@@ -67,8 +67,8 @@ const metaBrandSafety: AgentTool = {
     + 'content-report: the posts and videos they ran in or next to, by hour (last 15 days); content-lookup: one video or Page '
     + 'found there; adjacent-report-dates, adjacent-report: the posts above and below the ads in Feed and Reels. '
     + 'partner-publishers, partner-publishers-dates: Meta\'s list of partner publishers per placement. Meta cannot yet list '
-    + 'the content block lists of one ad account or check one post (planned, view account-content-block-lists), and its CSV '
-    + 'export is a change (view content-block-list-file says where it is). These reads need a capability grant from Meta '
+    + 'the content block lists of one ad account or check one post (planned, view account-content-block-lists); the CSV '
+    + 'export comes with step 39, Nexus brand-safety changes (view content-block-list-file). These reads need a capability grant from Meta '
     + '(block lists, content block lists, delivery reports, Feed verification): when Meta has not granted it, the answer '
     + 'says so plainly and names the controls that need no grant (inventory filter, placements, excluded publisher '
     + 'categories). Only the chosen ad account, its portfolio and its own ad sets; another business\'s ad account or Page is '
@@ -106,7 +106,7 @@ const metaWebhooks: AgentTool = {
   }),
   description:
     'How Meta\'s webhooks are set up for the business, live from Meta. app: the business\'s Meta app\'s webhook '
-    + 'subscriptions (object, fields, active, the callback address without its query) — read with the app\'s own token; '
+    + 'subscriptions (object, fields, active, the callback shown by its origin only) — read with the app\'s own token; '
     + 'ad-account: the apps connected to the chosen ad account (events reach an app only when both are set up; isNexusApp '
     + 'marks the business\'s own); page: the apps and fields subscribed on the chosen Facebook Page (Meta answers this only to '
     + 'a Page token: when it refuses, the answer says so); alerts: the ad account\'s alert subscriptions made by this app '

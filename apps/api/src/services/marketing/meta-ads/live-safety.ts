@@ -61,7 +61,7 @@ import { failureOfAnswer, failureOfThrow, localFailure, MetaReadError } from './
 import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectKindOf, type MetaChosenAccount } from './live.js'
 import { metaReadOne } from './read-client.js'
 import { takenIds } from './taken.js'
-import { graphPage, idOf, noted, num, obj, pageOf, part, portfolioOf, rowsOf, text, type Row } from './live-partners.js'
+import { fieldsRefused, graphPage, idOf, noted, num, obj, pageOf, part, portfolioOf, rowsOf, text, type Row } from './live-partners.js'
 
 // ── shared ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -143,6 +143,18 @@ export const FOLLOWER_BUCKETS = ['less_than_10K', 'between_10K_and_100K', 'betwe
 export const CONTENT_PLATFORM_EDGES = { facebook: 'facebook_content', instagram: 'instagram_content', threads: 'threads_content' } as const
 
 const BLOCK_LIST_FIELDS = 'id,name,last_update_user,last_update_time,business_owner_id,owner_ad_account_id,items_count'
+/** Review B2 — `items_count` is on the block-list guide but not in the SDK's PublisherBlockList: without it when Meta refuses it. */
+const BLOCK_LIST_CORE = 'id,name,last_update_user,last_update_time,business_owner_id,owner_ad_account_id'
+
+/** A block-list read with the guide's fields, read once more without items_count when Meta refuses the field list (code 100). */
+async function withoutItemsCount<T>(read: (fields: string) => Promise<T>, extra = ''): Promise<{ value: T; itemsCountNote: string | null }> {
+  try {
+    return { value: await read(`${BLOCK_LIST_FIELDS}${extra}`), itemsCountNote: null }
+  } catch (err) {
+    if (!fieldsRefused(err)) throw err
+    return { value: await read(`${BLOCK_LIST_CORE}${extra}`), itemsCountNote: `Meta refused items_count (${err.failure.sentence}); read without it (LIVE-PROBES BS-009).` }
+  }
+}
 const PL_FIELDS: Record<(typeof PL_PLATFORMS)[number], string> = {
   facebook: 'ads_in_live_videos,blue_verified_page,content_creator,date_added,language,median_views_per_video_in_last_28_days,page_followers,url,username,videos_uploaded_last_week',
   audience_network: 'age_rating,app_store_category,content_creator,date_added,is_audience_network_classic,is_audience_network_rewarded,language,url',
@@ -168,13 +180,16 @@ const dayOf = (v: string | null | undefined, what: string): string | null => {
 async function ownBlockList(account: MetaChosenAccount, id: string | null | undefined, items: boolean) {
   const blockListId = metaObjectId(id)
   if (!blockListId) throw new MetaLiveRefusal('Name the block list (blockListId, from view block-lists).')
-  const { body } = await granted(GRANT.blockLists, () => metaReadOne<Row>({ connectionId: account.connectionId }, { operation: 'safety.blockList', path: blockListId, query: { fields: items ? `${BLOCK_LIST_FIELDS},web_publishers,app_publishers` : BLOCK_LIST_FIELDS } }))
+  const read = await withoutItemsCount((fields) => granted(GRANT.blockLists, () => metaReadOne<Row>({ connectionId: account.connectionId }, { operation: 'safety.blockList', path: blockListId, query: { fields } })), items ? ',web_publishers,app_publishers' : '')
+  const body = read.value.body
   const ownerAccount = metaAdAccountId(body.owner_ad_account_id)
   const ownerBusiness = idOf(body.business_owner_id)
+  // Review A5 — a list owned by an ad account another business in Nexus uses: its id and the flag only, nothing more read.
+  if (ownerAccount && ownerAccount !== account.adAccountId && (await takenIds('AD_ACCOUNT', [ownerAccount])).has(ownerAccount)) return { blockListId, body, taken: true, itemsCountNote: read.itemsCountNote }
   if (ownerAccount !== account.adAccountId && (!account.businessId || ownerBusiness !== account.businessId)) {
     throw new MetaLiveRefusal('That block list is not the chosen ad account\'s or its business portfolio\'s, so it is not shown.')
   }
-  return { blockListId, body }
+  return { blockListId, body, taken: false, itemsCountNote: read.itemsCountNote }
 }
 
 /** One live brand-safety view. `canSeePeople`: the person may see the team (people's roles on a block list). */
@@ -186,11 +201,15 @@ export async function liveSafety(input: SafetyInput, canSeePeople: boolean) {
   const after = input.after ? { after: input.after } : {}
   switch (input.view) {
     case 'block-lists': {
-      const read = await granted(GRANT.blockLists, () => graphPage(connectionId, 'safety.blockLists', `${ACT(account)}/publisher_block_lists`, { fields: `${BLOCK_LIST_FIELDS},is_auto_blocking_on`, limit: limit(100), ...after }))
-      return { ...base, items: read.rows.map(blockListRow), nextAfter: read.nextAfter, note: 'Publisher block lists of the chosen ad account (apps on Audience Network, Facebook in-stream videos, Reels and Instagram profile feed). A block list holds at most 10,000 URLs; a business owns at most 200.' }
+      const { value: read, itemsCountNote } = await withoutItemsCount((fields) => granted(GRANT.blockLists, () => graphPage(connectionId, 'safety.blockLists', `${ACT(account)}/publisher_block_lists`, { fields, limit: limit(100), ...after })), ',is_auto_blocking_on')
+      const rows = read.rows.map(blockListRow)
+      // Review A5 — a list owned by an ad account another business in Nexus uses: its id and the flag only.
+      const taken = await takenIds('AD_ACCOUNT', rows.map((r) => r.ownerAdAccountId).filter((id): id is string => !!id && id !== account.adAccountId))
+      return { ...base, items: rows.map((r) => (r.ownerAdAccountId && taken.has(r.ownerAdAccountId) ? { blockListId: r.blockListId, takenByAnotherBusiness: true } : r)), nextAfter: read.nextAfter, itemsCountNote, note: 'Publisher block lists of the chosen ad account (apps on Audience Network, Facebook in-stream videos, Reels and Instagram profile feed). A block list holds at most 10,000 URLs; a business owns at most 200.' }
     }
     case 'block-list': {
-      const { blockListId, body } = await ownBlockList(account, input.blockListId, !!input.items)
+      const { blockListId, body, taken, itemsCountNote } = await ownBlockList(account, input.blockListId, !!input.items)
+      if (taken) return { ...base, blockListId, takenByAnotherBusiness: true }
       const [agencies, people, applied] = await Promise.all([
         part(async () => (await granted(GRANT.blockLists, () => graphPage(connectionId, 'safety.blockListAgencies', `${blockListId}/agencies`, { fields: 'id,name', limit: 100 }))).rows.map((r) => ({ businessId: idOf(r.id), name: text(r.name) }))),
         canSeePeople && account.businessId
@@ -201,7 +220,7 @@ export async function liveSafety(input: SafetyInput, canSeePeople: boolean) {
       const web = Array.isArray(body.web_publishers) ? body.web_publishers.filter((p): p is Row => !!obj(p)).map((p) => ({ url: text(p.domain_url), name: text(p.publisher_name), id: idOf(p.id) })) : null
       const apps = Array.isArray(body.app_publishers) ? body.app_publishers.filter((p): p is Row => !!obj(p)).map((p) => graphSafe(p)) : null
       return {
-        ...base, blockList: blockListRow(body),
+        ...base, blockList: blockListRow(body), itemsCountNote,
         ...(input.items ? { webPublishers: web ? cut(web, 500) : null, appPublishers: apps ? cut(apps, 500) : null } : {}),
         sharedWithBusinesses: agencies.value, sharedWithNotRead: agencies.notRead,
         peopleRoles: people.value, peopleRolesNotRead: people.notRead,
@@ -235,7 +254,7 @@ export async function liveSafety(input: SafetyInput, canSeePeople: boolean) {
     case 'content-block-list-file':
       // content-block-lists.md: "This endpoint is a PUT and not a GET, as every time this endpoint is called, a new file will
       // be created and stored for retrieval" (PUT https://api.facebook.com/content_block_lists/{id}/file_download).
-      return { ...base, available: false, sentence: 'Meta makes the CSV of a content block list with a PUT that creates a new file every time, so it is not a read: Nexus\'s Meta reads send GETs only. View content-block-list with content facebook, instagram or threads lists the posts page by page; the CSV export comes with the block-list change tools (step 39), or a person downloads it in Meta\'s Brand Safety and Suitability hub.' }
+      return { ...base, available: false, comesWith: 'step 39', sentence: 'The CSV export of a content block list comes with step 39 (Nexus brand-safety changes): Meta offers it as a PUT that makes a new file every time, and Nexus\'s Meta reads send GETs only. Until then view content-block-list with content facebook, instagram or threads lists the posts page by page, or a person downloads the CSV in Meta\'s Brand Safety and Suitability hub.' }
     case 'account-content-block-lists':
       // content-block-lists.md: GET /<account_id>/content_block_lists and fields=contains.content_id(…) — "This endpoint is
       // planned but not yet available."
@@ -286,7 +305,11 @@ export async function liveSafety(input: SafetyInput, canSeePeople: boolean) {
       const read = await granted(adjacent ? GRANT.feedVerification : GRANT.deliveryReports, () => graphPage(connectionId, `safety.${edge}`, `${adSetId}/${edge}`, {
         platform: adjacent ? input.platform ?? 'facebook' : 'facebook', position: input.position!, ...(input.datetime ? { datetime: input.datetime } : {}),
         ...(adjacent ? {} : { fields: 'content_id,creator_id,estimated_impressions', summary: 'true' }), ...(input.limit ? { limit: Math.max(25, limit(500)) } : {}), ...after,
-      }))
+      })).catch((err) => {
+        // Review B3 (AS-018) — when Meta has no such ad-set edge, the only documented form is the business-wide file.
+        if (adjacent && noSuchEdge(err)) throw new MetaLiveRefusal(`Meta answers no adjacent-content report for one ad set (${(err as MetaReadError).message}). Meta gives this only as a business-wide file covering every ad account of the portfolio; Nexus does not read it (it would hold other businesses' rows). View adjacent-report-dates shows the hours Meta has; a person downloads the file in Meta's Brand Safety and Suitability hub.`)
+        throw err
+      })
       return {
         ...base, adSetId, summary: obj(read.body.summary) ? graphSafe(read.body.summary) : null,
         items: adjacent ? read.rows.map((r) => graphSafe(r)) : read.rows.map((r) => ({ contentId: idOf(r.content_id) ?? text(r.content_id), creatorId: idOf(r.creator_id), estimatedImpressions: num(r.estimated_impressions) })),
@@ -306,7 +329,8 @@ export async function liveSafety(input: SafetyInput, canSeePeople: boolean) {
       }
       const videoId = metaObjectId(input.videoId)
       if (!videoId) throw new MetaLiveRefusal('Name what to look up: videoId (a content_id from view content-report) or pageId (a creator_id).')
-      const { body } = await granted(GRANT.deliveryReports, () => metaReadOne<Row>({ connectionId }, { operation: 'safety.lookupVideo', path: videoId, query: { fields: 'id,permalink_url,created_time,updated_time,from{id,name},description,picture' } }))
+      // Review B7 — reading a video is not the delivery-report grant: Meta's own words, with the plain next step.
+      const { body } = await noted(() => metaReadOne<Row>({ connectionId }, { operation: 'safety.lookupVideo', path: videoId, query: { fields: 'id,permalink_url,created_time,updated_time,from{id,name},description,picture' } }), 'Meta lets the system user read a video only when it may see it; another Page\'s public video can need Meta\'s Page Public Content Access feature (App Review). Until then, open the video on Facebook.')
       const from = obj(body.from)
       const fromId = idOf(from?.id)
       if (fromId && (await takenIds('PAGE', [fromId])).has(fromId)) return { ...base, videoId, pageId: fromId, takenByAnotherBusiness: true }
@@ -335,6 +359,12 @@ export async function liveSafety(input: SafetyInput, canSeePeople: boolean) {
       return { ...base, placements: read.rows.map((r) => graphSafe(r))[0] ?? null, note: 'The latest date and the number of partner publishers per placement.' }
     }
   }
+}
+
+/** Meta says the path or edge does not exist (100/33 "Unsupported get request", 2500 "Unknown path components", …). */
+function noSuchEdge(err: unknown): boolean {
+  if (!(err instanceof MetaReadError) || err.failure.origin !== 'meta' || err.failure.permissionDenied || err.failure.authLost || err.failure.throttled) return false
+  return err.failure.notFound || /^(2500|100\/33)(\/|$)/.test(err.failure.code ?? '') || /unknown path|nonexisting|unsupported get request/i.test(err.failure.sentence)
 }
 
 function blockListRow(r: Row) {
@@ -383,11 +413,11 @@ function alertRow(r: Row) {
   }
 }
 
-/** A callback URL as it may be shown: origin and path only (a query could carry a secret someone put there). */
+/** Review A4 — a callback URL as it may be shown: its origin only (scheme and host); a path or query can carry a secret. */
 const callbackOf = (v: unknown): string | null => {
   const raw = text(v)
   if (!raw) return null
-  try { const u = new URL(raw); return `${u.origin}${u.pathname}` } catch { return null }
+  try { return new URL(raw).origin } catch { return null }
 }
 
 /** One read with the business's Meta APP token (the app's own subscriptions), Meta's failure in words. */
@@ -448,7 +478,7 @@ export async function liveWebhooks(input: { connectionId?: string | null; view: 
     ...(adAccount ? { adAccountApps: adAccount.value, adAccountAppsNotRead: adAccount.notRead } : {}),
     ...(page ? { pageApps: page.value, pageAppsNotRead: page.notRead } : {}),
     ...(alerts ? { alertSubscriptions: alerts.value?.items ?? null, alertSubscriptionsNextAfter: alerts.value?.nextAfter ?? null, alertSubscriptionsNotRead: alerts.notRead } : {}),
-    note: 'Meta\'s ads webhooks take two connections: the app\'s subscription to the ad_account fields (appSubscriptions) and the ad account connected to the app (adAccountApps, isNexusApp). Alert subscriptions are this app\'s threshold and change alerts on the ad account (amounts in minor units of the account currency). No verify token, secret or token is ever read. Subscribing and connecting are changes (set-meta-webhooks, a later step).',
+    note: 'Meta\'s ads webhooks take two connections: the app\'s subscription to the ad_account fields (appSubscriptions; the callback shown by its origin only) and the ad account connected to the app (adAccountApps, isNexusApp). Alert subscriptions are this app\'s threshold and change alerts on the ad account (amounts in minor units of the account currency). No verify token, secret or token is ever read. Subscribing and connecting are changes (set-meta-webhooks, a later step).',
   }
 }
 

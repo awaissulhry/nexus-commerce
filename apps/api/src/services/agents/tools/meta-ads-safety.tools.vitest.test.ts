@@ -136,7 +136,7 @@ describe('meta-brand-safety', () => {
   })
   it('what Meta cannot do (yet) answers in words with no call: the account\'s content block lists, one post\'s check, the CSV (a PUT)', async () => {
     expect((await run('meta-brand-safety', { view: 'account-content-block-lists' })).data).toMatchObject({ available: false, sentence: expect.stringMatching(/planned but not yet available/) })
-    expect((await run('meta-brand-safety', { view: 'content-block-list-file' })).data).toMatchObject({ available: false, sentence: expect.stringMatching(/PUT that creates a new file/) })
+    expect((await run('meta-brand-safety', { view: 'content-block-list-file' })).data).toMatchObject({ available: false, comesWith: 'step 39', sentence: expect.stringMatching(/^The CSV export of a content block list comes with step 39 \(Nexus brand-safety changes\)/) })
     expect(h.calls).toHaveLength(0)
   })
   it('publisher-report: only an ad set of the chosen account (Nexus\'s rows, else account and kind live); Meta\'s parameters', async () => {
@@ -200,7 +200,7 @@ describe('meta-brand-safety', () => {
 
 describe('meta-webhooks', () => {
   it('all: the app\'s subscriptions with the APP token, the ad account\'s and the Page\'s apps, the alerts — each part on its own', async () => {
-    h.app = () => ({ status: 200, text: JSON.stringify({ data: [{ object: 'ad_account', callback_url: 'https://nexus.example/api/webhooks/meta?verify=s3cret', active: true, fields: [{ name: 'effective_status', version: 'v26.0' }, 'creative_fatigue'] }] }) })
+    h.app = () => ({ status: 200, text: JSON.stringify({ data: [{ object: 'ad_account', callback_url: 'https://nexus.example/hooks/catch/123456/abcSECRETkey/?verify=s3cret', active: true, fields: [{ name: 'effective_status', version: 'v26.0' }, 'creative_fatigue'] }] }) })
     h.graph = (req) => {
       if (req.path === 'act_1234567890/subscribed_apps') return { data: [{ app_id: '5550000001', app_name: 'Nexus' }, { app_id: '5550000009', app_name: 'Other' }] }
       if (req.path === `${PAGE}/subscribed_apps`) return metaError('200', 'Requires a Page access token', 'forbidden', 403)
@@ -209,8 +209,8 @@ describe('meta-webhooks', () => {
     const res = await run('meta-webhooks', {})
     expect(res.ok).toBe(true)
     const data = res.data as Record<string, unknown>
-    expect(data.appSubscriptions).toEqual([{ object: 'ad_account', callbackUrl: 'https://nexus.example/api/webhooks/meta', active: true, fields: ['effective_status', 'creative_fatigue'] }])
-    expect(JSON.stringify(data)).not.toContain('s3cret')
+    expect(data.appSubscriptions).toEqual([{ object: 'ad_account', callbackUrl: 'https://nexus.example', active: true, fields: ['effective_status', 'creative_fatigue'] }])
+    expect(JSON.stringify(data)).not.toMatch(/s3cret|abcSECRETkey|hooks\/catch/)
     expect(data.adAccountApps).toEqual([{ appId: '5550000001', appName: 'Nexus', isNexusApp: true }, { appId: '5550000009', appName: 'Other', isNexusApp: false }])
     expect(data.pageApps).toBeNull()
     expect(data.pageAppsNotRead).toMatch(/Page access token.*step 30/)
@@ -234,5 +234,41 @@ describe('meta-webhooks', () => {
     h.connections = []
     expect((await run('meta-webhooks', {})).error).toMatch(/Settings › Channels › Meta/)
     expect((await run('meta-brand-safety', { view: 'block-lists' })).error).toMatch(/Settings › Channels › Meta/)
+  })
+})
+
+describe('step 16 review fixes', () => {
+  it('A5 — a block list owned by an ad account another business in Nexus uses: its id and the flag only, nothing more read', async () => {
+    h.taken = new Set(['1234567891'])
+    h.graph = () => ({ data: [{ id: '120000000000901', name: 'Ours', owner_ad_account_id: '1234567890' }, { id: '120000000000903', name: 'Shop B list', owner_ad_account_id: 'act_1234567891' }] })
+    const list = await run('meta-brand-safety', { view: 'block-lists' })
+    expect((list.data as { items: unknown[] }).items).toEqual([expect.objectContaining({ blockListId: '120000000000901', name: 'Ours' }), { blockListId: '120000000000903', takenByAnotherBusiness: true }])
+    h.calls.length = 0
+    h.graph = () => ({ id: '120000000000903', name: 'Shop B list', owner_ad_account_id: '1234567891', business_owner_id: PORTFOLIO })
+    const one = await run('meta-brand-safety', { view: 'block-list', blockListId: '120000000000903' }, can(['ads.view', 'users.manage']))
+    expect(one.data).toEqual({ adAccountId: '1234567890', blockListId: '120000000000903', takenByAnotherBusiness: true })
+    expect(h.calls).toHaveLength(1)
+    expect(JSON.stringify([list, one])).not.toContain('Shop B list')
+  })
+  it('B2 — when Meta refuses items_count, the block list is read again without it, and says so', async () => {
+    h.graph = (req) => (String(req.query?.fields).includes('items_count') ? metaError('100', 'Tried accessing nonexisting field (items_count)') : { data: [{ id: '120000000000901', name: 'Ours', owner_ad_account_id: '1234567890' }] })
+    const res = await run('meta-brand-safety', { view: 'block-lists' })
+    expect(h.calls.map((c) => String(c.query?.fields).includes('items_count'))).toEqual([true, false])
+    expect(res.data).toMatchObject({ itemsCountNote: expect.stringMatching(/refused items_count/), items: [{ blockListId: '120000000000901' }] })
+    expect(refusedByGateway()).toEqual([])
+  })
+  it('B3 — AS-018: when Meta has no ad-set adjacent report, it says Meta gives it only as a business-wide file Nexus does not read', async () => {
+    h.graph = () => metaError('100/33', 'Unsupported get request. Object with ID does not support this operation', 'not_found')
+    const res = await run('meta-brand-safety', { view: 'adjacent-report', adSetId: ADSET, platform: 'facebook', position: 'feed' })
+    expect(res.error).toMatch(/only as a business-wide file covering every ad account of the portfolio; Nexus does not read it/)
+    // The grant refusal stays the D6 sentence.
+    h.graph = () => metaError('3', 'Application does not have the capability to make this API call', 'forbidden', 403)
+    expect((await run('meta-brand-safety', { view: 'adjacent-report', adSetId: ADSET, platform: 'facebook', position: 'feed' })).error).toMatch(/brand_safety_feed_verification.*no-grant controls/)
+  })
+  it('B7 — a video Meta will not show is answered in Meta\'s own words, not as the delivery-report grant', async () => {
+    h.graph = () => metaError('10', 'Permission denied for this video', 'forbidden', 403)
+    const res = await run('meta-brand-safety', { view: 'content-lookup', videoId: '773000000000002' })
+    expect(res.error).toMatch(/Permission denied for this video.*Page Public Content Access/)
+    expect(res.error).not.toMatch(/brand_safety_third_party_partners|capability/)
   })
 })

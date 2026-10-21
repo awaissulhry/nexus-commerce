@@ -265,3 +265,51 @@ describe('meta-ad-library', () => {
     expect(refusedByGateway()).toEqual([])
   })
 })
+
+describe('step 16 review fixes', () => {
+  it('A1 — no creator filter by gender or age (the audience filters stay)', () => {
+    const parse = (creatorFilters: Record<string, unknown>) => tool('meta-partnership-content').input.parse({ view: 'creators', creatorFilters })
+    expect(() => parse({ gender: ['female'] })).toThrow()
+    expect(() => parse({ ageBuckets: ['18_to_24'] })).toThrow()
+    expect(() => parse({ audienceGender: ['female'], audienceAgeBuckets: ['25_to_34'] })).not.toThrow()
+  })
+  it('A3 — the Ad Library never searches another business\'s Page, and masks an ad of one', async () => {
+    h.taken = new Set(['120000000000011'])
+    const refused = await run('meta-ad-library', { view: 'search', pageIds: ['120000000000011', '120000000000030'], countries: ['IT'] })
+    expect(refused.error).toMatch(/Another business in Nexus uses 120000000000011/)
+    expect(h.calls).toHaveLength(0)
+    h.graph = () => ({ data: [{ id: '880000000000002', page_id: '120000000000011', page_name: 'Shop B', ad_creative_bodies: ['Promo'] }, { id: '880000000000003', page_id: '120000000000030', page_name: 'Rival' }] })
+    const res = await run('meta-ad-library', { view: 'search', searchTerms: 'casco', countries: ['IT'] })
+    expect((res.data as { items: unknown[] }).items).toEqual([{ pageId: '120000000000011', takenByAnotherBusiness: true }, expect.objectContaining({ libraryId: '880000000000003', pageName: 'Rival' })])
+    expect(JSON.stringify(res)).not.toMatch(/Shop B|Promo/)
+  })
+  it('A3 — a hashtag id that is another business\'s Page or Instagram account is not read', async () => {
+    h.taken = new Set(['170000000000099'])
+    expect((await run('meta-ad-library', { view: 'hashtag', hashtagId: '170000000000099' })).data).toEqual({ hashtagId: '170000000000099', takenByAnotherBusiness: true })
+    expect(h.calls).toHaveLength(0)
+  })
+  it('B1 — Instagram permissions: Meta\'s default answer (no fields named), both spellings of the status mapped', async () => {
+    h.graph = () => ({ data: [{ id: '990000000000001', creator_username: 'rider_x', creator_id: '170000000000099', permission_status: 'PENDING' }, { id: '990000000000002', status: 'APPROVED', permission_type: 'ACCOUNT' }] })
+    const res = await run('meta-partnership-content', { view: 'instagram-permissions' })
+    expect(h.calls[0].query).not.toHaveProperty('fields')
+    expect((res.data as { items: unknown[] }).items).toEqual([
+      expect.objectContaining({ permissionId: '990000000000001', status: 'PENDING', creatorUsername: 'rider_x' }),
+      expect.objectContaining({ permissionId: '990000000000002', status: 'APPROVED', permissionType: 'ACCOUNT' }),
+    ])
+    expect(refusedByGateway()).toEqual([])
+  })
+  it('B5 — one creator by username: Meta\'s creator insights too (never the word comments); without them, then the profile, when Meta refuses', async () => {
+    h.graph = () => ({ data: [{ id: '170000000000099', username: 'rider_x', insights: { data: [{ name: 'total_followers', period: 'overall', total_value: { value: 52000 } }] } }] })
+    const res = await run('meta-partnership-content', { view: 'creators', username: 'rider_x' })
+    const fields = String(h.calls[0].query!.fields)
+    expect(fields).toContain('insights.metrics(total_followers,creator_reach,creator_engaged_accounts,reels_interaction_rate,total_views,account_interactions)')
+    expect(fields).not.toMatch(/comments/)
+    expect((res.data as { items: Array<Record<string, unknown>> }).items[0]).toMatchObject({ insights: [{ metric: 'total_followers', period: 'overall', value: 52000 }] })
+    h.calls.length = 0
+    h.graph = (req) => (String(req.query?.fields).includes('insights.metrics') || String(req.query?.fields).includes('recent_media') ? metaError('100', 'Invalid parameter') : { data: [{ id: '170000000000099', username: 'rider_x' }] })
+    const fallback = await run('meta-partnership-content', { view: 'creators', username: 'rider_x' })
+    expect(h.calls.map((c) => [String(c.query?.fields).includes('insights.metrics'), String(c.query?.fields).includes('recent_media')])).toEqual([[true, true], [false, true], [false, false]])
+    expect(fallback).toMatchObject({ ok: true, data: { fieldsNote: expect.stringMatching(/profile only/), items: [{ id: '170000000000099' }] } })
+    expect(refusedByGateway()).toEqual([])
+  })
+})

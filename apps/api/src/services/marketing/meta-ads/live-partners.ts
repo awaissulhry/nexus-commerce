@@ -202,23 +202,30 @@ const ORGANIC = 'organic_insights'
 
 /** The creator filters Meta documents on creator_marketplace_creators (instagram-platform/…/creator-marketplace). */
 export interface CreatorFilters {
-  countries?: string[]; states?: string[]; minFollowers?: number; maxFollowers?: number; ageBuckets?: string[]; interests?: string[]
-  gender?: string[]; minEngagedAccounts?: number; maxEngagedAccounts?: number; audienceAgeBuckets?: string[]; audienceGender?: string[]
+  countries?: string[]; states?: string[]; minFollowers?: number; maxFollowers?: number; interests?: string[]
+  minEngagedAccounts?: number; maxEngagedAccounts?: number; audienceAgeBuckets?: string[]; audienceGender?: string[]
   audienceCountries?: string[]; audienceStates?: string[]; audienceDevices?: string[]; query?: string; similarTo?: string[]
   recommendation?: string; platform?: string; pageName?: string; languages?: string[]; latestPostActivity?: string; followerGrowth?: string
   verified?: boolean; featuredInPaidAds?: boolean; hasPortfolio?: boolean; excludeMessaged?: boolean
 }
 const CREATOR_PARAM: Readonly<Record<keyof CreatorFilters, string>> = {
   countries: 'creator_countries', states: 'creator_states', minFollowers: 'creator_min_followers', maxFollowers: 'creator_max_followers',
-  ageBuckets: 'creator_age_bucket', interests: 'creator_interests', gender: 'creator_gender', minEngagedAccounts: 'creator_min_engaged_accounts',
+  interests: 'creator_interests', minEngagedAccounts: 'creator_min_engaged_accounts',
   maxEngagedAccounts: 'creator_max_engaged_accounts', audienceAgeBuckets: 'major_audience_age_bucket', audienceGender: 'major_audience_gender',
   audienceCountries: 'major_audience_countries', audienceStates: 'major_audience_states', audienceDevices: 'major_audience_device_type',
   query: 'query', similarTo: 'similar_to_creators', recommendation: 'recommendation_type', platform: 'platform', pageName: 'page_name',
   languages: 'creator_language', latestPostActivity: 'creator_latest_post_activity', followerGrowth: 'creator_follower_growth',
   verified: 'verified_account', featuredInPaidAds: 'featured_in_paid_ads', hasPortfolio: 'has_portfolio', excludeMessaged: 'exclude_messaged_creators',
 }
-// Contact e-mail, gender and age of a creator are not asked: Nexus does not keep or pass on creators' personal data.
+// Contact e-mail, gender and age of a creator are neither asked nor filtered on (review A1): Nexus does not pick or describe a
+// person by gender or age. The audience filters (major_audience_*) describe a creator's followers as a group.
 const CREATOR_CORE = 'id,username,is_account_verified,biography,country,onboarded_status,badges,portfolio_url,profile_picture_url,platforms,page_id,page_name,category'
+/**
+ * Review B5 (IN-093, the creator side) — one creator's Creator Insights (creator-marketplace page, "Creator Insights
+ * Metrics"): total_followers, creator_reach, creator_engaged_accounts, reels_interaction_rate, total_views,
+ * account_interactions. Only with a username; when Meta refuses them, the detail without them, then the profile only.
+ */
+const CREATOR_INSIGHTS = 'insights.metrics(total_followers,creator_reach,creator_engaged_accounts,reels_interaction_rate,total_views,account_interactions)'
 const CREATOR_DETAIL = `${CREATOR_CORE},has_brand_partnership_experience,past_brand_partnership_partners,recent_media.limit(10){id,media_type,product_type,permalink,thumbnail_url,creation_time,caption,tagged_brand},branded_content_media.limit(10){id,media_type,product_type,permalink,creation_time,caption,tagged_brand}`
 
 const COLLAB_FIELDS = 'id,caption,media_type,media_product_type,permalink,timestamp,username,total_like_count,total_comments_count,total_views_count'
@@ -331,6 +338,9 @@ function creatorRow(r: Row) {
     ...(r.past_brand_partnership_partners !== undefined ? { pastBrandPartners: list(r.past_brand_partnership_partners).map((p) => text(p) ?? text(obj(p)?.name) ?? null).filter(Boolean) } : {}),
     ...(r.recent_media !== undefined ? { recentMedia: media(r.recent_media) } : {}),
     ...(r.branded_content_media !== undefined ? { brandedContentMedia: media(r.branded_content_media) } : {}),
+    ...(r.insights !== undefined ? {
+      insights: rowsOf(r.insights).map((i) => ({ metric: text(i.name), period: text(i.period), timeRange: text(i.time_range), value: num(obj(i.total_value)?.value), platform: text(i.platform) })),
+    } : {}),
   }
 }
 
@@ -398,10 +408,15 @@ export async function livePartnership(input: PartnershipInput) {
       const instagramId = instagramOf(account)
       const name = input.creatorUsername?.trim().replace(/^@/, '') || null
       if (name && !IG_USERNAME.test(name)) throw new MetaLiveRefusal('An Instagram username is 1–30 letters, digits, dots and underscores.')
+      // Review B1 — the guide's request names no fields and the SDK's IGBCAdsPermission lists only id, permission_type and
+      // status, so Meta's own default answer is read and both spellings are mapped (LIVE-PROBES CR-345).
       const read = await noted(() => graphPage(connectionId, 'partners.igPermissions', `${instagramId}/branded_content_ad_permissions`, {
-        fields: 'id,creator_username,creator_id,creator_fb_page,permission_status', limit: Math.min(100, input.limit ?? 50), ...(name ? { creator_username: name } : {}), ...(input.after ? { after: input.after } : {}),
+        limit: Math.min(100, input.limit ?? 50), ...(name ? { creator_username: name } : {}), ...(input.after ? { after: input.after } : {}),
       }), PARTNERSHIP_ACCESS)
-      const rows = read.rows.map((r) => ({ permissionId: idOf(r.id), creatorUsername: text(r.creator_username), creatorInstagramId: idOf(r.creator_id), creatorPageId: idOf(r.creator_fb_page), status: text(r.permission_status) }))
+      const rows = read.rows.map((r) => ({
+        permissionId: idOf(r.id), creatorUsername: text(r.creator_username), creatorInstagramId: idOf(r.creator_id), creatorPageId: idOf(r.creator_fb_page),
+        status: text(r.permission_status) ?? text(r.status), permissionType: text(r.permission_type),
+      }))
       const taken = await takenSets(rows.map((r) => r.creatorPageId), rows.map((r) => r.creatorInstagramId))
       return {
         ...base,
@@ -504,19 +519,26 @@ export async function livePartnership(input: PartnershipInput) {
       const audience = input.customAudienceId ? await ownAudience(account, input.customAudienceId) : null
       const query = { ...creatorQuery(filters), ...(name ? { username: name } : {}), ...(audience ? { custom_audience_id: audience } : {}), limit: Math.min(50, input.limit ?? 25), ...(input.after ? { after: input.after } : {}) }
       const path = `${instagramId}/creator_marketplace_creators`
-      let read: Awaited<ReturnType<typeof graphPage>>
+      // Each field list in turn while Meta refuses the one before for its fields (code 100): with a username the creator's
+      // insights, media and partnerships, then the same without insights, then the profile only.
+      const lists = name ? [`${CREATOR_DETAIL},${CREATOR_INSIGHTS}`, CREATOR_DETAIL, CREATOR_CORE] : [CREATOR_CORE]
+      let read: Awaited<ReturnType<typeof graphPage>> | null = null
       let fieldsNote: string | null = null
-      try {
-        read = await noted(() => graphPage(connectionId, 'partners.creators', path, { ...query, fields: name ? CREATOR_DETAIL : CREATOR_CORE }), CREATOR_ACCESS)
-      } catch (err) {
-        if (!name || !fieldsRefused(err)) throw err
-        read = await noted(() => graphPage(connectionId, 'partners.creators', path, { ...query, fields: CREATOR_CORE }), CREATOR_ACCESS)
-        fieldsNote = `Meta refused the creator's media and partnership fields (${err.failure.sentence}); the creator's profile only.`
+      for (const [i, fields] of lists.entries()) {
+        try {
+          read = await noted(() => graphPage(connectionId, 'partners.creators', path, { ...query, fields }), CREATOR_ACCESS)
+          break
+        } catch (err) {
+          if (i === lists.length - 1 || !fieldsRefused(err)) throw err
+          fieldsNote = i === 0
+            ? `Meta refused the creator's insights (${err.failure.sentence}); read without them.`
+            : `Meta refused the creator's media and partnership fields (${err.failure.sentence}); the creator's profile only.`
+        }
       }
-      const rows = read.rows.map(creatorRow)
+      const rows = read!.rows.map(creatorRow)
       const taken = await takenSets(rows.map((r) => r.pageId), rows.map((r) => r.id))
       return {
-        ...base, items: rows.map((r) => ((r.id && taken.instagram.has(r.id)) || (r.pageId && taken.pages.has(r.pageId)) ? { id: r.id, takenByAnotherBusiness: true } : r)), nextAfter: read.nextAfter, fieldsNote,
+        ...base, items: rows.map((r) => ((r.id && taken.instagram.has(r.id)) || (r.pageId && taken.pages.has(r.pageId)) ? { id: r.id, takenByAnotherBusiness: true } : r)), nextAfter: read!.nextAfter, fieldsNote,
         note: 'Creators from Meta\'s Creator Marketplace for partnership ads (Meta\'s ranking; with customAudienceId: creators whose followers overlap that saved audience). Contact e-mail, gender and age of creators are not read. Messaging a creator happens in Meta\'s apps.',
       }
     }
@@ -567,6 +589,9 @@ export async function liveLibrary(input: LibraryInput) {
     case 'search': {
       const terms = input.searchTerms?.trim() || null
       const pageIds = idList(input.pageIds, 'Page')
+      // Review A3 — the Ad Library is public, but Nexus never uses it to look into another business's own Page.
+      const takenPages = await takenIds('PAGE', pageIds)
+      if (takenPages.size) throw new MetaLiveRefusal(`Another business in Nexus uses ${[...takenPages].join(', ')}, so Nexus does not search its ads here.`)
       if (!terms && pageIds.length === 0) throw new MetaLiveRefusal('Name what to search: searchTerms (at most 100 characters; Meta does not translate them — search in the market\'s language) or pageIds (at most 10 Pages).')
       if (!input.countries?.length) throw new MetaLiveRefusal('Name the countries the ads reached (countries: ISO codes such as IT, DE, or ALL). Meta returns a non-political ad only when it reached the EU.')
       const from = day(input.from, 'from')
@@ -585,7 +610,7 @@ export async function liveLibrary(input: LibraryInput) {
       }), LIBRARY_ACCESS)
       return {
         // Meta: an empty page while paging is the end.
-        items: read.rows.map(libraryRow), nextAfter: read.rows.length ? read.nextAfter : null,
+        items: await maskLibrary(read.rows.map(libraryRow)), nextAfter: read.rows.length ? read.nextAfter : null,
         note: 'Ads from Meta\'s public Ad Library (other advertisers included): texts, dates, platforms and, for ads delivered to the EU or UK, Meta\'s EU transparency data (reach, ages, genders, locations, payer and beneficiary). Spend and impressions are public for political ads only. libraryUrl opens the ad on facebook.com/ads/library. Downloading creatives is allowed only for analysis under Meta\'s Ad Library terms; Nexus stores none of it.',
       }
     }
@@ -606,6 +631,11 @@ export async function liveLibrary(input: LibraryInput) {
       const instagramId = instagramOf(account)
       let hashtagId = input.hashtagId ? metaObjectId(input.hashtagId) : null
       if (input.hashtagId && !hashtagId) throw new MetaLiveRefusal('hashtagId is a Meta id (digits only).')
+      // Review A3 — an id that is another business's Page or Instagram account is never read as a "hashtag".
+      if (hashtagId) {
+        const taken = await takenSets([hashtagId], [hashtagId])
+        if (taken.pages.size || taken.instagram.size) return { hashtagId, takenByAnotherBusiness: true }
+      }
       const tag = input.hashtag?.trim().replace(/^#/, '') || null
       if (!hashtagId) {
         if (!tag || !/^[\p{L}\p{N}_]{1,100}$/u.test(tag)) throw new MetaLiveRefusal('Name the hashtag (letters, digits and _; no #, spaces or emojis) or its hashtagId.')
@@ -633,6 +663,12 @@ export async function liveLibrary(input: LibraryInput) {
       return { pageId, items: read.rows.map((r) => ({ postId: text(r.id), message: text(r.message), createdAt: text(r.created_time), permalink: text(r.permalink_url), type: text(r.status_type) })), nextAfter: read.nextAfter, note: 'Public posts of another Facebook Page, for research.' }
     }
   }
+}
+
+/** Review A3 — an ad of a Page another business in Nexus uses: its Page id and the flag only. */
+async function maskLibrary(rows: Array<ReturnType<typeof libraryRow>>) {
+  const taken = await takenIds('PAGE', rows.map((r) => r.pageId).filter((id): id is string => !!id))
+  return rows.map((r) => (r.pageId && taken.has(r.pageId) ? { pageId: r.pageId, takenByAnotherBusiness: true } : r))
 }
 
 function libraryRow(r: Row) {
