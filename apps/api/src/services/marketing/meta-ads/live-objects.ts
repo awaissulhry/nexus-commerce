@@ -861,7 +861,7 @@ export async function creativeDetail(input: { connectionId?: string | null; crea
  * name), and a Page another business in Nexus uses is its id and the flag only; never the business portfolio a limit is
  * scoped to (ad_limit_scope_business… is not asked). Counts Meta's docs name, the rest from Meta's SDK in their own group.
  */
-async function pageAdLimits(account: MetaChosenAccount) {
+export async function pageAdLimits(account: MetaChosenAccount) {
   const read = await listGroups(account.connectionId, 'objects.problems.adsVolume', `${act(account.adAccountId)}/ads_volume`, [
     { name: 'core', fields: 'actor_id,ads_running_or_in_review_count,current_account_ads_running_or_in_review_count,limit_on_ads_running_or_in_review' },
     { name: 'sdk', fields: 'future_limit_on_ads_running_or_in_review,future_limit_activation_date,ad_limit_set_by_page_admin' },

@@ -336,7 +336,7 @@ describe('captions (MD-026)', () => {
     expect(JSON.stringify(out.preview)).not.toContain('Ciao')
     h.send.mockImplementationOnce(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
     const ran = await tool.execute!(ask({ kind: 'captions', captions: { videoId: VIDEO, locale: 'it_IT', srt: SRT, fileName: 'Spot A', defaultLocale: 'it_IT' } }), approved(out.preview)) as ToolResult & { data: Record<string, any> }
-    expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: VIDEO, kind: 'libraryvideo', edge: 'captions', operation: 'media.captionsUpload', params: { captions_file: SRT, captions_file_name: 'spot-a.it_IT.srt', default_locale: 'it_IT' } })
+    expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: VIDEO, kind: 'video', edge: 'captions', operation: 'media.captionsUpload', params: { captions_file: SRT, captions_file_name: 'spot-a.it_IT.srt', default_locale: 'it_IT' } })
     expect(ran.change!.after).toEqual({ kind: 'captions', items: [{ kind: 'captions', videoId: VIDEO, locale: 'it_IT', new: true, setDefault: 'it_IT', defaultBefore: 'en_US' }], accountId: 'm-1', adAccountId: '1234567890' })
     expect(JSON.stringify(ran)).not.toContain('Ciao')
     // Its undo: the locale off again, the default back — through kind undo, valid for the tool's own input.
@@ -352,9 +352,14 @@ describe('captions (MD-026)', () => {
     expect(await preview({ kind: 'undo', uploads: [{ kind: 'captions', videoId: VIDEO, locale: 'it_IT', restoreDefault: 'none' }] })).toEqual({ ok: false, error: expect.stringMatching(/with default none/) })
     const args = { kind: 'undo', uploads: [{ kind: 'captions', videoId: VIDEO, locale: 'it_IT', restoreDefault: 'en_US' }] }
     const out = await preview(args)
+    expect(out.preview.requests.map((r: { label: string }) => r.label)).toEqual([expect.stringMatching(/Take the it_IT captions/), expect.stringMatching(/default caption of video .* back to en_US/)])
+    h.send.mockImplementationOnce(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
     h.send.mockImplementationOnce(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
     const ran = await tool.execute!(ask(args), approved(out.preview)) as ToolResult & { data: Record<string, any> }
-    expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: VIDEO, kind: 'libraryvideo', edge: 'captions', operation: 'media.captionsRemove', params: { locales_to_delete: '["it_IT"]', default_locale: 'en_US' } })
+    // Step 22's captions.delete takes the language alone; the default it replaced goes back in its own request after it.
+    expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: VIDEO, kind: 'video', edge: 'captions', operation: 'media.captionsRemove' })
+    expect(h.send.mock.calls[0][1].params).toEqual({ locales_to_delete: '["it_IT"]' })
+    expect(h.send.mock.calls[1][1]).toMatchObject({ objectId: VIDEO, kind: 'video', edge: 'captions', operation: 'media.captionsDefault', params: { default_locale: 'en_US' } })
     expect(ran.change!.after).toEqual({ kind: 'undo', items: [{ kind: 'captions', videoId: VIDEO, locale: 'it_IT', removed: true }], accountId: 'm-1', adAccountId: '1234567890' })
   })
 })

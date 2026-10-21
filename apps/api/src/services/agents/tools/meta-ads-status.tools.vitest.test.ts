@@ -202,6 +202,8 @@ describe('the run', () => {
     expect(ran.ok).toBe(true)
     expect(ran.data.steps.map((s: { label: string; outcome: string }) => [s.label.split(' ')[0], s.outcome])).toEqual([['Archive', 'refused'], ['Pause', 'done']])
     expect(ran.data.sentence).toMatch(/Meta made 1 of 2 requests/)
+    // Step 22 review A5 — a change with an undo keeps its sentence.
+    expect(ran.data.sentence).toMatch(/Undo puts back only what Meta made\.$/)
     expect((ran.change!.after as { items: unknown[] }).items).toEqual([{ kind: 'campaign', id: CAMPAIGN.id, status: 'PAUSED' }])
   })
   it('review fix A3 — any error of a request (the database too) ends in a not-sent step: what was done keeps its record and undo', async () => {

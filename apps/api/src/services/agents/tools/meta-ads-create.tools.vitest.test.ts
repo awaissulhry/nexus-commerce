@@ -199,6 +199,7 @@ describe('fix round 1', () => {
     expect(ran.ok).toBe(true)
     expect(ran.data.steps[0]).toMatchObject({ outcome: 'not_confirmed', sentence: expect.stringMatching(/Meta made it, but it reads back .*status ACTIVE, not what was asked \(status\)\. Nexus records what Meta made/) })
     expect(ran.data.sentence).toMatch(/0 of 1 requests as asked/)
+    expect(ran.data.sentence).toMatch(/Undo puts back only what Meta made\.$/)
     expect(ran.change!.after).toMatchObject({ op: 'create', top: [{ kind: 'campaign', id: NEW }], notAsAsked: expect.stringMatching(/status ACTIVE/) })
     expect(tool('create-meta-campaign').undo!.request({ ...ran.change!, id: 'chg-9' })).toMatchObject({ tool: 'create-meta-campaign', args: { removeMade: true, undoOf: 'chg-9' } })
   })

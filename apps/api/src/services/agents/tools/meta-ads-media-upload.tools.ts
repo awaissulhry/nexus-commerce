@@ -75,7 +75,9 @@ function recordItem(draft: MediaDraft, request: MetaChangeRequest, result: MetaC
     case 'undo': {
       if (request.params.hash) return { kind: 'image', hash: request.params.hash, removed: true }
       if (request.params.locales_to_delete) return { kind: 'captions', videoId: request.objectId, locale: (JSON.parse(request.params.locales_to_delete) as string[])[0], removed: true }
-      return { kind: 'video', videoId: request.params.video_id, removed: true }
+      if (request.params.video_id) return { kind: 'video', videoId: request.params.video_id, removed: true }
+      // The default caption put back after a caption language came off: part of that item, no record of its own.
+      return null
     }
   }
 }

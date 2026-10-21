@@ -35,14 +35,16 @@
  *           that (its change record says so; an image that was already there is never deleted): an image by its hash
  *           (DELETE /act_<id>/adimages hash, only while no creative uses it — M5-03), a video by its id (DELETE
  *           /act_<id>/advideos video_id — M5-09; review A1: only while no creative of the account uses it, read first; review
- *           B3: the library is read on advideos AND video_ads), a caption locale by `locales_to_delete`. Meta cannot put a
- *           removed file back: re-upload it.
+ *           B3: the library is read on advideos AND video_ads), a caption locale by `locales_to_delete`. Every removal goes
+ *           through step 22's rules (gateway meta-remove-rules.ts: image.delete, video.remove, captions.delete, which also
+ *           confirm a video by the chosen account's advideos list); only the default caption put back after a caption
+ *           locale came off is step 23's own call (video.captions.default). Meta cannot put a removed file back: re-upload it.
  *   captions MD-026 (review B1: "User has advertiser access on account that owns the video", docs/graph-api/reference/video/
  *           captions): an SRT text the person gives (UTF-8, at most 200 KB, SubRip's shape) and its locale, onto a video of the
  *           chosen account's library — POST /<video id>/captions with `captions_file` (`<name>.<locale>.srt`, a multipart
  *           file part the gateway itself encodes: MetaWriteRule.file) and `default_locale` (a locale or none). Meta takes a
  *           locale once (482), so an upload is always new; Meta has no DELETE there: its undo is `locales_to_delete` on the
- *           same edge, with the default put back when Nexus read it before (MD-027).
+ *           same edge, then the default put back by a call of its own when Nexus read it before (MD-027, MD-027d).
  * Plain answers (no call): MD-024 thumbnails only for a video associated with a Page ("Thumbnails can only be created on
  * Videos that have been associated with a Page"; it comes with step 24's Page step; a creative sets its video's thumbnail
  * itself), MD-029 Nexus holds no HTML5 playable files.
@@ -695,7 +697,7 @@ async function captionsDraft(account: MetaChangeAccount, captions: CaptionsSourc
   const label = `Add ${locale} captions (${fileName}, ${Math.ceil(Buffer.byteLength(srt, 'utf8') / 1024)} KB) to video ${videoId} of ad account act_${account.adAccountId}${setDefault ? `; default caption: ${setDefault}` : ''}`
   const params: Record<string, string> = { captions_file: srt, captions_file_name: fileName, ...(setDefault ? { default_locale: setDefault } : {}) }
   const request: MetaChangeRequest = {
-    step: 1, label, kind: 'ad', objectKind: 'libraryvideo', objectId: videoId, params,
+    step: 1, label, kind: 'ad', objectKind: 'video', objectId: videoId, params,
     check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
     operation: 'media.captionsUpload', edge: 'captions',
     doneSentence: () => `${label}: Meta took it.`,
@@ -801,10 +803,11 @@ async function undoDraft(account: MetaChangeAccount, uploads: UploadRef[]): Prom
   if (!going.length) return { refusal: `Nothing to take back: ${skipped.join(' ')}` }
   const requests: MetaChangeRequest[] = going.map((upload, i) => {
     if (upload.kind === 'captions') {
-      const label = `Take the ${upload.locale} captions (added by Nexus) off video ${upload.videoId} of ad account ${act}${upload.restoreDefault ? `; default caption back to ${upload.restoreDefault}` : ''}`
+      const label = `Take the ${upload.locale} captions (added by Nexus) off video ${upload.videoId} of ad account ${act}`
+      // Step 22's captions.delete: the language alone (its default caption goes back in a request of its own, below).
       return {
-        step: i + 1, label, kind: 'ad', objectKind: 'libraryvideo', objectId: upload.videoId,
-        params: { locales_to_delete: JSON.stringify([upload.locale]), ...(upload.restoreDefault ? { default_locale: upload.restoreDefault } : {}) },
+        step: i + 1, label, kind: 'ad', objectKind: 'video', objectId: upload.videoId,
+        params: { locales_to_delete: JSON.stringify([upload.locale]) },
         check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
         operation: 'media.captionsRemove', edge: 'captions',
         doneSentence: () => `${label}: Meta took it.`,
@@ -818,6 +821,18 @@ async function undoDraft(account: MetaChangeAccount, uploads: UploadRef[]): Prom
       operation: upload.kind === 'image' ? 'media.imageRemove' : 'media.videoRemove', edge: upload.kind === 'image' ? 'adimages' : 'advideos', method: 'DELETE',
       doneSentence: () => `${label}: Meta removed it.`,
     }
+  })
+  // The default caption an upload replaced goes back only after its language came off (step 22's needs), last.
+  going.forEach((upload, i) => {
+    if (upload.kind !== 'captions' || !upload.restoreDefault) return
+    const label = `Put the default caption of video ${upload.videoId} back to ${upload.restoreDefault}`
+    requests.push({
+      step: requests.length + 1, label, kind: 'ad', objectKind: 'video', objectId: upload.videoId,
+      params: { default_locale: upload.restoreDefault },
+      check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
+      operation: 'media.captionsDefault', edge: 'captions', needs: [i + 1],
+      doneSentence: () => `${label}: Meta took it.`,
+    })
   })
   const lineOf = (u: UploadRef): [string, unknown, unknown] => (u.kind === 'captions' ? [`Video ${u.videoId} ${u.locale} captions`, 'on the video', 'taken off'] : [u.kind === 'image' ? `Image ${u.hash}` : `Video ${u.videoId}`, 'in the ad account\'s library', 'removed'])
   return {

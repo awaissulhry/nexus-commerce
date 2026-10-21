@@ -85,7 +85,7 @@ export interface CopyLive {
 
 /** Answers in words (AD-054, the creative, the Advantage+ migration flag). */
 export const COPY_NOT_SENT = [
-  'Moving an ad: Meta cannot change an ad\'s ad set — copy it into the other ad set here; the old one stays (pause it with set-meta-status, or delete it with remove-meta-ads-items, step 22).',
+  'Moving an ad: Meta cannot change an ad\'s ad set — copy it into the other ad set here; the old one stays (pause it with set-meta-status, or delete it with remove-meta-ads-items when the person asks to delete it).',
   'A copy with a whole new creative: create-meta-creative and set-meta-ad (a copy here changes only the creative\'s name and URL tags).',
   'migrate_to_advantage_plus on a copy: Meta blocks it in v26 — not sent.',
   'Meta\'s asyncadcopies edge: no documented parameters and no SDK method — never sent; several ads are copied in the background through Meta\'s documented async batch instead.',
