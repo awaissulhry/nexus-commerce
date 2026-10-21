@@ -22,6 +22,7 @@
  */
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import { BLOCK_LIST_ROLES, blockListEntry, blockListFileOf, MAX_POSTS_PER_PLATFORM } from '../../gateway/meta-brand-safety-rules.js'
+import { META_NAME_TEXT } from '../../gateway/meta-settings-rules.js'
 import { MetaWriteError, type MetaChangeResult } from './write-client.js'
 import { localFailure } from './errors.js'
 
@@ -158,6 +159,11 @@ export function blockListDraft(request: BlockListRequest, live: BlockListLive, w
   let before: BlockListRecord = { action: a }
   let after: BlockListRecord = { action: a }
   const need = (value: string | undefined, what: string) => (value ? null : `Name ${what} for action ${a}.`)
+  // A list's name is judged here as the gateway judges it (step 18's META_NAME_TEXT): refused at the preview, never after
+  // the person approved it.
+  if (request.name !== undefined && !META_NAME_TEXT.test(request.name)) {
+    return { refusal: 'A block list\'s name is text a person reads: no control or format characters (an invisible space, a direction mark). Type the name again without them.' }
+  }
   const delivering = live.delivering
   const unblocks = (what: string) => (delivering === false
     ? warnings.push(`${what}: nothing spends yet — no campaign of the account delivers now.`)

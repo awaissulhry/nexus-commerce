@@ -68,6 +68,16 @@ describe('create and replace (BS-005–008)', () => {
   })
 })
 
+describe('list names', () => {
+  it('every list name is judged in the preview as the gateway judges it: a format character (a zero-width space) is refused in words', () => {
+    const zwsp = `List${String.fromCharCode(0x200b)}B`
+    for (const [action, extra] of [['create', { urls: ['example.com'] }], ['replace', { blockListId: LIST, urls: ['example.com'] }], ['create-account-list', {}], ['create-content-list', {}], ['rename-content-list', { contentBlockListId: CBL }]] as const) {
+      expect(blockListDraft({ action, name: zwsp, ...extra }, { ...base, list, accountLists: [], contentLists: [], contentList: { contentBlockListId: CBL, name: 'Posts A' } }, wait), action).toEqual({ refusal: expect.stringMatching(/no control or format characters/) })
+    }
+    expect(draftOf(blockListDraft({ action: 'create-content-list', name: 'Liste sûre 🛡️' }, { ...base, contentLists: [] }, wait)).requests).toHaveLength(1)
+  })
+})
+
 describe('the other publisher block-list actions', () => {
   it('create-account-list (BS-011): an empty list on act_<id>; Meta documents no way to fill it there (said)', () => {
     const d = draftOf(blockListDraft({ action: 'create-account-list', name: 'List C' }, { ...base, accountLists: [] }, wait))
