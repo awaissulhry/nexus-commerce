@@ -956,6 +956,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-webhooks': ['basis', 'plan', 'reach'],
   'set-meta-alert-subscription': ['basis', 'plan', 'reach'],
   'remove-meta-alert-subscription': ['basis', 'plan', 'reach'],
+  // Meta step 33 (2026-10-21): the pixel, the sales and what was sent before (basis), the sales it sends
+  // (plan), where it lands (reach).
+  'upload-meta-events': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

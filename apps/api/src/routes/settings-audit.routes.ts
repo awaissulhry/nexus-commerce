@@ -39,6 +39,7 @@ const KNOWN_KEYS: ReadonlyArray<SettingsAuditKey> = [
   'api-keys',
   'company',
   'terminology',
+  'meta-conversions-api',
 ]
 
 const settingsAuditRoutes: FastifyPluginAsync = async (fastify) => {
@@ -216,6 +217,14 @@ async function applyRevert(
         afterSnapshot[k] = (updated as any)[k] ?? null
       return { ok: true, before: beforeSnapshot, after: afterSnapshot }
     }
+    // Meta step 33 review F7 — buyers' hashed data leaves Nexus while it is on: only a person with settings.security.manage
+    // turns it on or off (Settings › Channels › Meta), never a revert of the history (settings.workspace.edit).
+    case 'meta-conversions-api':
+      return {
+        ok: false,
+        code: 400,
+        error: 'The "Send sales to Meta" switch is turned on or off only in Settings › Channels › Meta, by a person who manages the business\'s security; the history never reverts it.',
+      }
     case 'terminology':
     case 'api-keys':
     case 'profile.password':

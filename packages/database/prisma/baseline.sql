@@ -2355,6 +2355,8 @@ CREATE TABLE "AccountSettings" (
     "timezone" TEXT NOT NULL DEFAULT 'America/New_York',
     "currency" TEXT NOT NULL DEFAULT 'USD',
     "primaryMarketplace" TEXT,
+    "metaConversionsApiOnAt" TIMESTAMP(3),
+    "metaConversionsApiOnBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
