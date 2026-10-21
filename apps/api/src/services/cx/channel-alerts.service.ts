@@ -102,6 +102,19 @@ export const CHANNEL_ALERT_KINDS = [
   'google-ads-disapproved',
   'google-ads-auto-apply',
   'google-ads-changed-by-google',
+  // Meta ads step 30 (2026-10-21): what a verified Meta webhook says needs a look (marketing/meta-ads/webhook-topics.ts).
+  // Read only: Nexus changes nothing at Meta. No amount in the text.
+  'meta-ads-object-issue',
+  'meta-ads-account-status',
+  'meta-ads-alert-fired',
+  'meta-ads-creative-fatigue',
+  'meta-ads-recommendation',
+  'meta-ads-product-set-issue',
+  'meta-app-notice',
+  'meta-messaging-policy',
+  'meta-lead-received',
+  'meta-catalog-update',
+  'meta-product-review',
 ] as const
 
 export type ChannelAlertKind = (typeof CHANNEL_ALERT_KINDS)[number]

@@ -701,6 +701,24 @@ export async function metaAppIdOf(connectionId: string): Promise<string | null> 
 }
 
 /**
+ * Meta ads step 30 — is a webhook delivery signed by THIS connection's Meta app? `other_app` when the connection uses
+ * another app than `appId` (the app the callback URL names), `match` / `mismatch` for X-Hub-Signature-256 over the RAW
+ * body with its app secret, `no_app` when no usable app is stored. Never the secret, never an exception for a bad
+ * header (webhook-signature.ts).
+ */
+export async function metaWebhookSignatureCheck(connectionId: string, appId: string, rawBody: Buffer, header: string | string[] | undefined): Promise<'match' | 'mismatch' | 'other_app' | 'no_app'> {
+  let app: MetaAppCredentials
+  try {
+    app = (await metaCredentialsOf(connectionId)).app
+  } catch {
+    return 'no_app'
+  }
+  if (app.appId !== appId) return 'other_app'
+  const { metaWebhookSignatureOk } = await import('./connectors/meta/webhook-signature.js')
+  return metaWebhookSignatureOk(rawBody, header, app.appSecret) ? 'match' : 'mismatch'
+}
+
+/**
  * Renew a 60-day Meta system-user token (called under the refresh lease, inside its renewal window). Meta's documented
  * call: GET oauth/access_token?grant_type=fb_exchange_token&client_id&client_secret&set_token_expires_in_60_days=true
  * &fb_exchange_token=<the current token> (the gateway adds this one: metaRenewalToken) → { access_token, token_type,

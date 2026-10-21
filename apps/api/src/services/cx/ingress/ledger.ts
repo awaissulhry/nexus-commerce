@@ -28,7 +28,7 @@ const unclaimedUnverifiedEbay: Prisma.WebhookEventWhereInput = {
 }
 
 /** What established trust for this event, or that nothing did. */
-export type VerifiedBy = 'ebay_ecdsa' | 'sqs_iam' | 'shopify_hmac' | 'none'
+export type VerifiedBy = 'ebay_ecdsa' | 'sqs_iam' | 'shopify_hmac' | 'meta_hmac' | 'none'
 
 /** A retry cannot turn an audit record of a rejected delivery into trusted work. */
 export function isVerifiedInbound(event: { channel: string; signatureOk?: boolean | null; verifiedBy?: string | null }): boolean {
@@ -54,6 +54,8 @@ const MAX_RAW_BODY_BYTES = 1024 * 1024
 const VERIFICATION_HEADERS = new Set([
   'x-shopify-hmac-sha256', 'x-shopify-webhook-id', 'x-shopify-topic', 'x-shopify-shop-domain',
   'webhook-id', 'webhook-timestamp', 'webhook-signature', 'x-ebay-signature',
+  // Meta ads step 30: kept with a REJECTED Meta delivery's raw body, so the signature can be checked again later.
+  'x-hub-signature-256',
 ])
 const MAX_VERIFICATION_HEADER_LENGTH = 8192
 
