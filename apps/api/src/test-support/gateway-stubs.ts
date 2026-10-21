@@ -53,9 +53,12 @@ export const accountModule = {
   // Meta step 25: whether another business chose this Page or Instagram account.
   metaLinkTaken: async (product: 'PAGE' | 'INSTAGRAM', id: string): Promise<boolean> => gatewayMetaTakenLinks.has(`${product}:${id}`),
   metaChosenPortfolioOf: async (connectionId: string): Promise<string | null> => (connectionId in gatewayMetaPortfolio ? gatewayMetaPortfolio[connectionId] : '9876543210'),
-  metaPageObjectNexusMade: async (kind: 'leadform' | 'testlead', objectId: string, pageId: string): Promise<boolean> => gatewayMetaNexusMade.has(`${kind}:${objectId}:${pageId}`),
+  metaPageObjectNexusMade: async (kind: 'leadform' | 'testlead' | 'canvas', objectId: string, pageId: string): Promise<boolean> => gatewayMetaNexusMade.has(`${kind}:${objectId}:${pageId}`),
   META_LEAD_FORM_CREATE_TOOL: 'create-meta-lead-form',
   META_LEAD_FORM_SET_TOOL: 'set-meta-lead-form',
+  // Meta step 27b: the Instant Experience tools.
+  META_IX_CREATE_TOOL: 'create-meta-instant-experience',
+  META_IX_SET_TOOL: 'set-meta-instant-experience',
 }
 export const ledgerModule = {
   writeLedgerRow: async (row: GatewayLedgerRow): Promise<void> => { gatewayLedger.push(row) },

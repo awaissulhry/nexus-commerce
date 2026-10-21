@@ -40,7 +40,7 @@ import { metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwner
 import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
 // Step 40 — the ad account's own changes (their refusal names a change, not a create).
 import { META_ACCOUNT_SETTINGS_WRITE_RULES } from './meta-account-settings-rules.js'
-import { metaPageOwnerProblem } from './meta-page-owner.js'
+import { metaPageOwnerProblem, noteCanvasElementMade } from './meta-page-owner.js'
 import { MetaPageTokenUnavailable, metaPageTokenFor, scrubExactToken } from './meta-page-token.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { META_SIGNALS_WRITE_RULES, type MetaSignalsKind } from './meta-signals-rules.js'
@@ -467,7 +467,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // kind alone: step 28 names `page` too.
     // Step 30 — a webhook or alert subscription change (meta-webhook-rules.ts): by its rule too (it names step 19's
     // `adaccount` and step 28's `page`), its own app, the chosen ad account or the chosen Page (metaWebhookOwnerProblem).
-    const owner = metaWrite.auth === 'page' ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
+    // Step 27b — with the run of the change: a part an Instant Experience names may be one this same run made.
+    const owner = metaWrite.auth === 'page' ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId), req.metaRun)
       : isWebhookRule(metaWrite.rule) ? await metaWebhookOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
       // Step 20 — a targeting rule names its own kind (step 39 an ad set's targeting; step 20 its audience or placements).
       : metaWrite.targeting ? ((metaWrite.kinds as readonly string[] | undefined)?.includes(req.metaObjectKind ?? '') ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
@@ -744,6 +745,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   if (req.channel === 'META' && metaWrite && !metaWrite.reportRun && req.connectionId && metaWrite.objectLimits !== false) {
     // Step 39 — a block-list draft Meta made: only this run may make a list from it, once (its next request).
     if (ok && metaWrite.rule === 'blocklist.draft') noteBlockListDraftMade(req.connectionId, req.metaRun, text)
+    // Step 27b — a part of an Instant Experience Meta made: the same run may name it (the experience, a footer, a carousel).
+    if (ok && metaWrite.rule === 'canvas.element.create') noteCanvasElementMade(req.connectionId, req.metaRun, text)
     if (objectLimit) await holdMetaObject(req.connectionId, metaWrite.objectId, objectLimit)
     // Step 29 — a POST that only reads (Meta's preview of a rule) changes nothing: no 30-s hold of the object either.
     else if (!metaWrite.edgeCall && !metaWrite.readOnly && (ok || status === 0 || status >= 500)) await noteMetaObjectTouched(req.connectionId, metaWrite.objectId, { budget: ok && metaWrite.budget && !metaWrite.check })
@@ -762,7 +765,11 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // "Ad Account Level Ad Spend Rate Limits") is a daily count, not a throttle — holding the bucket 300 s would stop every
     // other Meta read and change of the business (a pause too) for nothing. set-meta-spend-cap says it in words, never again.
     const dailyCount = verdict.channelCode === '17/1885172'
-    if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec && !objectLimit && !dailyCount) {
+    // Step 27b review A-1 — nor does a Page's own limit on a change made AS the Page (`auth: 'page'`): 80001 ("too many calls
+    // to this Page account") and step 36's 80005 count against that PAGE, not the business's ad account — holding its 'ads'
+    // bucket 300 s would refuse every other Meta change of the business (a pause too) for nothing. The tool says it in words.
+    const pageLimit = metaWrite?.auth === 'page' && /^8000[15](\/|$)/.test(verdict.channelCode ?? '')
+    if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec && !objectLimit && !dailyCount && !pageLimit) {
       await observeRate(req.channel, key, { retryAfterSec: 300 })
     }
     // Meta says the token is dead: the next heartbeat checks it again at once, rather than trusting a check kept for hours.
@@ -1137,7 +1144,9 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
     }
     // Step 39 — the brand-safety kinds of id (a portfolio a list is shared with, a block list, a draft) are checked by
     // meta-brand-safety-owner.ts for a brand-safety rule's write, never here; step 36's Page photo by meta-page-owner.ts.
-    if (inner.kind === 'business' || inner.kind === 'agency' || inner.kind === 'publisherblocklist' || inner.kind === 'blocklistdraft' || inner.kind === 'pagephoto') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
+    // Step 27b — and the ids inside an Instant Experience (a post, an Instagram media, a video, a part): meta-page-owner.ts.
+    if (inner.kind === 'business' || inner.kind === 'agency' || inner.kind === 'publisherblocklist' || inner.kind === 'blocklistdraft' || inner.kind === 'pagephoto'
+      || inner.kind === 'pagepost' || inner.kind === 'instagrammedia' || inner.kind === 'canvasvideo' || inner.kind === 'canvaselement') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
     // Step 22 — a video inside a body (the video a library removal names): listed in the chosen ad account's library.
     const problem = await metaOwnerProblem(connectionId, { ...write, objectId: inner.id, check: false }, inner.kind)
     if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, `Nothing was sent to Meta: inside this change, `) }

@@ -187,8 +187,14 @@ async function limitWarnings(account: MetaChangeAccount, draft: MetaChangeDraft)
   }
   if (recent.length) out.push(`Meta allows one change of the same object every 30 s: ${recent.join('; ')} ${recent.length === 1 ? 'was' : 'were'} changed or checked moments ago, so Nexus waits up to 30 s before sending ${recent.length === 1 ? 'it' : 'them'}.`)
   if (draft.requests.some((r) => r.undoable)) out.push('Its undo changes the same objects again: Meta takes that only 30 s after this change (one change of an object every 30 s), so an undo asked at once waits that out.')
-  if (draft.requests.length > 10) {
-    out.push(`This change sends ${draft.requests.length} requests. At Meta's Limited access tier an ad account takes about 20 changes per 5 minutes (a change counts 3 of its 60 points): Nexus sends them in order and stops when Meta says to slow down; the answer then lists the ones not sent.`)
+  // Step 27b — a request made with the chosen Page's own token counts against the PAGE's rate limit, not the ad account's.
+  const asPage = draft.requests.filter((r) => r.asPage).length
+  const onAccount = draft.requests.length - asPage
+  if (onAccount > 10) {
+    out.push(`This change sends ${onAccount} requests. At Meta's Limited access tier an ad account takes about 20 changes per 5 minutes (a change counts 3 of its 60 points): Nexus sends them in order and stops when Meta says to slow down; the answer then lists the ones not sent.`)
+  }
+  if (asPage) {
+    out.push(`${asPage === 1 ? 'Its request goes' : `${asPage} of its requests go`} AS the chosen Facebook Page (with the Page's own token): Meta counts ${asPage === 1 ? 'it' : 'them'} against the PAGE's own rate limit (80001: "too many calls to this Page account"), not the ad account's. Nexus sends them in order and stops when Meta says to slow down.`)
   }
   return out
 }

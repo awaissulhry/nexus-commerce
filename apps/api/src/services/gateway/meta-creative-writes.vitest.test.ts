@@ -349,7 +349,7 @@ describe('review round 1', () => {
   it('A5 — an Instant Experience link only in Meta\'s one form', () => {
     const at = (link: string) => withStory({ link_data: { link, image_hash: HASH } })
     expect(problem({ body: form(at('https://fb.com/canvas_doc/120000000000901')) })).toBeNull()
-    for (const link of ['https://fb.com/canvas_doc/120000000000901/', 'https://www.facebook.com/canvas_doc/120000000000901', 'https://fb.com/canvas_doc/120000000000901?x=1', 'https://www.fb.com/canvas_doc/120000000000901', 'https://fb.com/xcanvas_doc/120000000000901']) {
+    for (const link of ['https://fb.com/canvas_doc/120000000000901/', 'https://www.facebook.com/canvas_doc/120000000000901', 'https://fb.com/canvas_doc/120000000000901?x=1', 'https://www.fb.com/canvas_doc/120000000000901', 'https://fb.com/xcanvas_doc/120000000000901', 'https://fb.com/canvas_doc/0120000000000901']) {
       expect(problem({ body: form(at(link)) }), link).toMatch(/exactly https:\/\/fb\.com\/canvas_doc/)
     }
     // A canvas link in any link key is checked as the creative's Instant Experience.
