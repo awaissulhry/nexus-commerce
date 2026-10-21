@@ -116,7 +116,7 @@ export interface MetaWriteRequest {
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
-  | MetaMediaEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge
+  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge
 /** Step 31 — an ad account's new audiences and product audiences, its opt-outs; an audience's people and its shares. */
 export type MetaAudienceEdge = 'customaudiences' | 'product_audiences' | 'usersofanyaudience' | 'users' | 'ad_accounts'
 /** Step 29 — a rule made on the ad account's rule library (`act_<id>/adrules_library`), a rule's run now (`<rule id>/execute`). */
@@ -138,6 +138,8 @@ export type MetaLabelsEdge = 'adlabels' | 'value_rule_set' | 'delete_rule_set' |
  * video-ads upload on the ad account, a folder on its business portfolio.
  */
 export type MetaMediaEdge = 'video_ads' | 'creative_folders'
+/** Step 25 — create-meta-creative: a creative and an async creative job on the chosen ad account (a creative's labels: step 21's `adlabels`). */
+export type MetaCreativeEdge = 'adcreatives' | 'asyncadcreatives'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):

@@ -67,6 +67,7 @@ import { META_REMOVE_WRITE_RULES } from './meta-remove-rules.js'
 import { metaLabelsWriteRules } from './meta-labels-rules.js'
 import { META_OPTIMIZE_WRITE_RULES } from './meta-optimize-rules.js'
 import { META_IMAGE_MAX_BODY, META_MEDIA_WRITE_RULES, metaRuploadVerdict } from './meta-media-rules.js'
+import { META_CREATIVE_WRITE_RULES } from './meta-creative-rules.js'
 import { metaAdRuleWriteRules } from './meta-ad-rule-rules.js'
 import { MEMBERS_MAX_BODY, META_AUDIENCE_WRITE_RULES } from './meta-audience-rules.js'
 import { INSIGHTS_KEY_CHECKS, MAX_REPORT_RUN_BODY, REPORT_BUILDER_KEY_CHECKS, reportRunProblem } from '../meta/meta-insights-lists.js'
@@ -1029,7 +1030,20 @@ export type MetaLabelsKind = 'adlabel' | 'valueruleset'
  */
 export type MetaMediaWriteKind = 'startedvideo'
 /** Step 23 — a media id inside a change's body, and what the gateway checks it is (meta-media-rules.ts). */
-export interface MetaWriteAsset { id: string; kind: 'instagrammedia' | 'startedvideo' | 'creativefolder' }
+export interface MetaWriteAsset {
+  id: string
+  kind: 'instagrammedia' | 'startedvideo' | 'creativefolder'
+    // Step 25 — the ids inside a creative (meta-creative-rules.ts; gateway.ts metaCreativeAssetProblem): the identity Page and
+    // Instagram account (the chosen ones; a partnership ad's partner's when the chosen one is its sponsor — `with`), a
+    // partner's Page or Instagram account, an image of the chosen account's library (its hash), a post of the chosen Page,
+    // an Instant Experience of the chosen Page and an element of it (`with`: the experience), a lead form of the chosen
+    // Page, an event of the chosen Page or of the chosen Instagram account. A library video and the chosen Page of a call to
+    // action are step 22's `video` and step 19's `page` body ids.
+    | 'identitypage' | 'identityinstagram' | 'partnerpage' | 'partnerinstagram' | 'adimage' | 'pagepost' | 'canvas' | 'canvaselement'
+    | 'leadform' | 'pageevent' | 'igevent'
+  /** Step 25 — the id it goes with (a partner's sponsor, an element's Instant Experience). */
+  with?: string
+}
 /**
  * Step 39 — what only the brand-safety tools name: an ad set's targeting (its brand-safety keys; the gateway reads the
  * ad set itself), a publisher block list, a content block list. They also name the chosen ad account (`adaccount`) and
@@ -1234,6 +1248,11 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     if (method === 'POST' && /^act_\d+\/(adimages|advideos|video_ads)$|^\d+\/(creative_folders|captions)$/.test(graph.route)) {
       return refuse(`the only Meta change Nexus sends on a media edge is create-meta-media's upload, named with its kind (an image's bytes, a video's link or the chosen Instagram account's video, a video-ads upload, a portfolio folder, captions, a video's default caption), or a removal by remove-meta-ads-items' rules, each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
     }
+    // Step 25 — a call on a creative (its edges, or a creative named by its kind) that matches none of create-meta-creative's
+    // or set-meta-creative's rules (nor step 22's delete), in its own words.
+    if (/^act_\d+\/(adcreatives|asyncadcreatives)$/.test(graph.route) || input.objectKind === 'creative') {
+      return refuse(`the only Meta change Nexus sends on a creative is create-meta-creative's (a creative of the chosen ad account, or its async job), set-meta-creative's (a creative's name, status or labels) or remove-meta-ads-items' delete, each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    }
     return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a create or a copy (create-meta-campaign, create-meta-ad-set, copy-meta-ads: each its own edge and keys), or a delete a person asked for (remove-meta-ads-items: each its own path and keys), or a label, value rule or reach & frequency change (set-meta-labels, set-meta-value-rules, create-meta-reach-frequency: each its own path and keys), or a change of one of the chosen ad account's automated rules (set-meta-ad-rule), or a report run of the chosen ad account's numbers (meta-ads-report: POST /act_<id>/insights, which changes nothing), or a brand-safety change named with its kind (set-meta-brand-safety, set-meta-block-list, remove-meta-block-list), or an audience change named with its kind (create-meta-audience, set-meta-audience, set-meta-audience-members, set-meta-audience-sharing: each its own path and keys); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
@@ -1295,8 +1314,9 @@ const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kin
 // step 31 — 10,000 hashed e-mails of an audience's people (MEMBERS_MAX_BODY).
 const MAX_ANY_WRITE_BODY = Math.max(200_000, META_IMAGE_MAX_BODY, MEMBERS_MAX_BODY)
 /** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts), step 19's, step 22's, step 21's (meta-labels-rules.ts) step 28's (meta-optimize-rules.ts) and step 29's rule changes (meta-ad-rule-rules.ts) — read when judged, never at load. */
-// Step 23 — then create-meta-media's media rules (meta-media-rules.ts); step 39's brand-safety rules; step 31's audience rules (meta-audience-rules.ts).
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...metaCreateWriteRules(), ...META_REMOVE_WRITE_RULES, ...metaLabelsWriteRules(), ...META_OPTIMIZE_WRITE_RULES, ...META_MEDIA_WRITE_RULES, ...metaAdRuleWriteRules(), ...META_BRAND_SAFETY_WRITE_RULES, ...META_AUDIENCE_WRITE_RULES]
+// Step 23 — then create-meta-media's media rules (meta-media-rules.ts); step 25's creative rules (meta-creative-rules.ts);
+// step 39's brand-safety rules; step 31's audience rules (meta-audience-rules.ts).
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...metaCreateWriteRules(), ...META_REMOVE_WRITE_RULES, ...metaLabelsWriteRules(), ...META_OPTIMIZE_WRITE_RULES, ...META_MEDIA_WRITE_RULES, ...metaAdRuleWriteRules(), ...META_CREATIVE_WRITE_RULES, ...META_BRAND_SAFETY_WRITE_RULES, ...META_AUDIENCE_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

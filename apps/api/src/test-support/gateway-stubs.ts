@@ -28,6 +28,8 @@ export const gatewayMetaPage: Record<string, string> = {}
 export const gatewayMetaInstagram: Record<string, string> = {}
 /** Meta step 23: business portfolios another business's chosen ad account is of. */
 export const gatewayMetaSharedPortfolios = new Set<string>()
+/** Meta step 25: Pages and Instagram accounts another business chose (`PAGE:<id>`, `INSTAGRAM:<id>`). */
+export const gatewayMetaTakenLinks = new Set<string>()
 
 /** Meta step 39: each connection's chosen ad account's business portfolio; a connection not here has `9876543210`. */
 export const gatewayMetaPortfolio: Record<string, string | null> = {}
@@ -46,6 +48,8 @@ export const accountModule = {
   metaChosenInstagramOf: async (connectionId: string): Promise<string | null> => gatewayMetaInstagram[connectionId] ?? null,
   // Meta step 23: whether another business's chosen ad account shares this business portfolio.
   metaPortfolioShared: async (portfolioId: string): Promise<boolean> => gatewayMetaSharedPortfolios.has(portfolioId),
+  // Meta step 25: whether another business chose this Page or Instagram account.
+  metaLinkTaken: async (product: 'PAGE' | 'INSTAGRAM', id: string): Promise<boolean> => gatewayMetaTakenLinks.has(`${product}:${id}`),
   metaChosenPortfolioOf: async (connectionId: string): Promise<string | null> => (connectionId in gatewayMetaPortfolio ? gatewayMetaPortfolio[connectionId] : '9876543210'),
 }
 export const ledgerModule = {
