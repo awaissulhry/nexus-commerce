@@ -11,7 +11,8 @@
  *                                                   WITH synchronous_ad_review, optionally include_recommendations — the
  *                                                   only check documented with more than validate_only; AD-026 … AD-028)
  *   ad.update             POST /<ad id>             name, the creative by its id (a swap), labels (the whole list), the
- *                                                   ad's own start / end time (or cleared: Meta's "update the value to empty")
+ *                                                   ad's own start / end time, its tracking, conversion domain and persona
+ *                                                   (each also cleared: Meta's "update the value to empty")
  *   ad.adlabels           POST /<ad id>/adlabels    labels added
  *   ad.remove             DELETE /<ad id>           ONLY create-meta-ad's undo of an ad THAT change made (change-ads.ts
  *                                                   adUndoDraft is the one draft that builds it, from the change's own
@@ -34,7 +35,15 @@
  *     never change; ARCHIVED → only name and status (to DELETED); DELETED → only name; "You can remove values for any
  *     optional fields by updating the value to empty"; no update parameter table (Meta documents no validate_only there).
  *     "Deleting": DELETE /{ad_id}; "You cannot delete ads in ad set with creative_sequence settings".
- *   - reference/adgroup/adlabels.md and reference/ad-label.md: POST /<ad id>/adlabels with adlabels (SDK create_ad_label).
+ *   - reference/ad-label.md ("Updating": an object's labels; the adgroup/adlabels page is a 404): POST /<ad id>/adlabels
+ *     with adlabels (SDK ad.py create_ad_label).
+ *
+ * Review round 1 (A1, A2) — THE activation rule, here for the tool and the gateway alike (metaActivationProblem): an ad is
+ * made ACTIVE, or a creative goes onto an ACTIVE ad, only when that creative reads an explicit OPT_OUT for EVERY Advantage+
+ * creative feature Meta documents (step 25's META_CREATIVE_FEATURES and the deprecated standard_enhancements bundle) — any
+ * opt-in, any feature not said, or switches Nexus cannot read: create it PAUSED, preview it, then switch it on with
+ * set-meta-status. The gateway reads an existing creative's switches in the same read as its account_id
+ * (gateway.ts metaCreativeActivationProblem; `activation` on the body id).
  *   - ad-creative/messaging-ads/website-ads-click-to-message.md: the "message us" footer is passed INLINE on POST /ads, the
  *     creative spec itself as `creative` (Meta's guides; the reference also shows {"creative": {…}} — LIVE-PROBES AD-024i).
  *   - ad-creative/multi-media-ads.md, flexible-ad-format.md, out-of-cycle-changes/occ-2026.md (2026-10-19, creative audience
@@ -42,7 +51,7 @@
  */
 import type { MetaWriteAsset, MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
 import {
-  adCodesIn, judgeAdPersona, judgeAssetGroups, judgeCreativeSpec, labelsJudge, META_AI_GENERATED_FEATURES, META_CREATIVE_MAX_BODY, metaCreativeTextProblem,
+  adCodesIn, judgeAdPersona, judgeAssetGroups, judgeCreativeSpec, labelsJudge, META_AI_GENERATED_FEATURES, META_CREATIVE_FEATURES, META_CREATIVE_MAX_BODY, metaCreativeTextProblem,
 } from './meta-creative-rules.js'
 import { META_MEDIA_TEXT_PATTERN } from './meta-media-rules.js'
 
@@ -76,8 +85,11 @@ export const META_AD_REFUSED: Readonly<Record<string, string>> = {
 
 const isDigits = (value: string | undefined, max = 20) => !!value && new RegExp(`^\\d{1,${max}}$`).test(value)
 const UNIX_SECONDS = /^\d{10}$/
-/** A domain as Meta wants it on conversion_domain: "only the first and second level domains", e.g. example.com. */
-export const META_CONVERSION_DOMAIN = /^(?=.{3,253}$)(?!www\.)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?){1,2}$/
+/**
+ * A domain as Meta wants it on conversion_domain: "only the first and second level domains", e.g. example.com — review B6:
+ * exactly two levels (shop.example.com is refused).
+ */
+export const META_CONVERSION_DOMAIN = /^(?=.{3,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
 
 /** The ad's `creative`: an existing creative by its id, or (a new ad only) an inline creative judged by step 25's judge. */
 export type JudgedAdCreative = { creativeId: string } | { creative: Record<string, unknown>; assets: MetaWriteAsset[] } | { problem: string }
@@ -95,6 +107,28 @@ export function judgeAdCreative(raw: string | undefined, inline: boolean): Judge
   if (keys.length === 1 && keys[0] === 'creative') return { problem: 'Nexus sends an inline creative as Meta\'s guides do: the creative spec itself as creative, not wrapped in {"creative": …}' }
   const judged = judgeCreativeSpec(raw, 'creative')
   return 'problem' in judged ? judged : { creative: judged.creative, assets: judged.assets }
+}
+
+/** Every Advantage+ creative feature Meta documents, and the deprecated bundle by its own name: an ACTIVE ad's creative says OPT_OUT for each. */
+export const META_ACTIVATE_FEATURES: readonly string[] = [...new Set([...META_CREATIVE_FEATURES, 'standard_enhancements'])].sort()
+/** What a person reads when an ad may not be (or show a creative while it is) ACTIVE. */
+export const META_ACTIVATE_RULE = 'create it PAUSED, preview it, then switch it on with set-meta-status (Meta\'s rule for AI features)'
+
+/**
+ * Review round 1 (A1, A2) — may an ad be ACTIVE with this creative? Only when the creative reads an explicit OPT_OUT for every
+ * feature of META_ACTIVATE_FEATURES and switches on none at all (an unknown name too): fail-closed — a creative made outside
+ * Nexus, with a feature not said or switches Nexus cannot read, is refused the same way. Why not, or null.
+ */
+export function metaActivationProblem(creative: Record<string, unknown> | null | undefined, what = 'the creative'): string | null {
+  const dof = creative && typeof creative === 'object' ? (creative as { degrees_of_freedom_spec?: { creative_features_spec?: unknown } }).degrees_of_freedom_spec : undefined
+  const spec = dof && typeof dof === 'object' ? dof.creative_features_spec : undefined
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return `${what} reads no Advantage+ feature switches (made outside Nexus, or Nexus cannot read them), so a feature generated with AI cannot be ruled out: ${META_ACTIVATE_RULE}`
+  const features = spec as Record<string, { enroll_status?: unknown } | undefined>
+  const on = Object.keys(features).filter((f) => features[f]?.enroll_status === 'OPT_IN').sort()
+  if (on.length) return `${what} switches on ${on.join(', ')}: ${META_ACTIVATE_RULE}`
+  const unsaid = META_ACTIVATE_FEATURES.filter((f) => features[f]?.enroll_status !== 'OPT_OUT')
+  if (unsaid.length) return `${what} does not say OPT_OUT for ${unsaid.slice(0, 5).join(', ')}${unsaid.length > 5 ? ` and ${unsaid.length - 5} more` : ''} (Meta may switch such a feature on by itself): ${META_ACTIVATE_RULE}`
+  return null
 }
 
 /** The Advantage+ creative features generated with AI that an inline creative switches ON (CR-404: never ACTIVE at once). */
@@ -159,15 +193,18 @@ function adValues(params: Params, create: boolean): string | null {
   if (params.has('creative')) {
     const creative = judgeAdCreative(params.get('creative'), create)
     if ('problem' in creative) return creative.problem
-    // CR-404 (creative/generative-ai-features.md, get-started.md) — an ad whose creative opts into a feature generated with AI
-    // is made PAUSED, previewed, and only then switched on: never ACTIVE at once.
-    if ('creative' in creative && params.get('status') === 'ACTIVE' && aiFeaturesOn(creative.creative).length) {
-      return `an ad whose creative switches on ${aiFeaturesOn(creative.creative).join(', ')} (generated with AI) is made PAUSED and previewed before it is switched on (Meta's rule): it is never created ACTIVE`
+    // CR-404 (creative/generative-ai-features.md, get-started.md) and review round 1 (A2) — an ACTIVE ad's inline creative
+    // says OPT_OUT for every Advantage+ feature; an existing creative's switches are read by the gateway (`activation`).
+    if ('creative' in creative && params.get('status') === 'ACTIVE') {
+      const p = metaActivationProblem(creative.creative, 'the new ad\'s creative')
+      if (p) return `a new ad is created ACTIVE only with a creative that switches on no Advantage+ feature — ${p}`
     }
   }
   if (params.has('adlabels')) { const p = labelsJudge(params.get('adlabels')!); if (p) return p }
-  if (params.has('tracking_specs')) { const t = trackingPixels(params.get('tracking_specs')); if ('problem' in t) return t.problem }
-  if (params.has('conversion_domain') && !META_CONVERSION_DOMAIN.test(params.get('conversion_domain')!)) return 'conversion_domain is a domain as Meta wants it: the first and second level only, e.g. example.com (no https://, path or www.)'
+  // Review B2 — on an update, tracking, the conversion domain and the persona may also be cleared (an empty value).
+  const cleared = (key: string) => !create && params.get(key) === ''
+  if (params.has('tracking_specs') && !cleared('tracking_specs')) { const t = trackingPixels(params.get('tracking_specs')); if ('problem' in t) return t.problem }
+  if (params.has('conversion_domain') && !cleared('conversion_domain') && !META_CONVERSION_DOMAIN.test(params.get('conversion_domain')!)) return 'conversion_domain is a domain as Meta wants it: the first and second level only, e.g. example.com (no https://, path or sub-domain)'
   for (const key of ['ad_schedule_start_time', 'ad_schedule_end_time']) {
     if (params.has(key)) { const p = timeProblem(params.get(key)!, key, !create); if (p) return p }
   }
@@ -177,7 +214,7 @@ function adValues(params: Params, create: boolean): string | null {
   if (params.has('engagement_audience') && params.get('engagement_audience') !== 'true') return 'engagement_audience is true (Meta builds no audience without it: leave it out)'
   for (const key of ['display_sequence', 'priority']) if (params.has(key) && !/^\d{1,9}$/.test(params.get(key)!)) return `${key} is a whole number (0 or more)`
   if (params.has('creative_asset_groups_spec')) { const g = judgeAssetGroups(params.get('creative_asset_groups_spec')); if ('problem' in g) return g.problem }
-  if (params.has('creative_audience_pairing_persona')) { const p = judgeAdPersona(params.get('creative_audience_pairing_persona')); if ('problem' in p) return p.problem }
+  if (params.has('creative_audience_pairing_persona') && !cleared('creative_audience_pairing_persona')) { const p = judgeAdPersona(params.get('creative_audience_pairing_persona')); if ('problem' in p) return p.problem }
   return null
 }
 
@@ -186,8 +223,13 @@ function adIds(params: Params, create: boolean): MetaWriteBodyId[] {
   const out: MetaWriteBodyId[] = []
   if (create && isDigits(params.get('adset_id'))) out.push({ id: params.get('adset_id')!, kind: 'adset' })
   const creative = params.has('creative') ? judgeAdCreative(params.get('creative'), create) : null
-  if (creative && 'creativeId' in creative) out.push({ id: creative.creativeId, kind: 'creative' })
-  const tracking = params.has('tracking_specs') ? trackingPixels(params.get('tracking_specs')) : null
+  // Review A1 — an existing creative an ad shows while ACTIVE: the gateway reads its switches with its account_id (a new ad
+  // created ACTIVE: always; a swap: when the ad it goes onto is ACTIVE).
+  if (creative && 'creativeId' in creative) {
+    const activation = create ? (params.get('status') === 'ACTIVE' ? 'always' as const : null) : 'if-ad-active' as const
+    out.push({ id: creative.creativeId, kind: 'creative', ...(activation ? { activation } : {}) })
+  }
+  const tracking = params.has('tracking_specs') && params.get('tracking_specs') !== '' ? trackingPixels(params.get('tracking_specs')) : null
   if (tracking && 'pixels' in tracking) out.push(...tracking.pixels.map((id) => ({ id, kind: 'pixel' as const })))
   return out
 }
@@ -203,8 +245,17 @@ const ACCOUNT = ['adaccount'] as const
 const AD = ['ad'] as const
 /** Keys whose values a person types (text with any letters, emoji; JSON of a creative or of groups' texts). */
 const AD_TEXT: Readonly<Record<string, RegExp>> = { name: META_MEDIA_TEXT_PATTERN, creative: META_MEDIA_TEXT_PATTERN, adlabels: META_MEDIA_TEXT_PATTERN, creative_asset_groups_spec: META_MEDIA_TEXT_PATTERN }
-/** The keys set-meta-ad changes on POST /<ad id> (AD-031, AD-038, AD-042, AD-043, AD-044). */
-export const META_AD_UPDATE_KEYS = ['name', 'creative', 'adlabels', 'ad_schedule_start_time', 'ad_schedule_end_time'] as const
+/**
+ * The keys set-meta-ad changes on POST /<ad id> (AD-031, AD-038, AD-042, AD-043, AD-044; review B2: AD-029 tracking, AD-030
+ * the conversion domain — "Required to create or update an ad" — and CR-427 the persona, OCC 2026-10-19 "POST /{ad-id}").
+ */
+export const META_AD_UPDATE_KEYS = ['name', 'creative', 'adlabels', 'ad_schedule_start_time', 'ad_schedule_end_time', 'tracking_specs', 'conversion_domain', 'creative_audience_pairing_persona'] as const
+/**
+ * Review A4 — the longest update body set-meta-ad's own input can make: a 400-unit name and 50 labels of 100 units, each
+ * unit at most 9 form-encoded characters (a 3-byte letter, %XX%XX%XX), plus the JSON around them and the other keys. The
+ * preview never promises a body the gateway would refuse.
+ */
+export const META_AD_UPDATE_MAX_BODY = 64_000
 
 /** Step 27 — create-meta-ad's and set-meta-ad's entries of the write allow-list (meta-calls.ts writeRules). */
 export const META_AD_WRITE_RULES: readonly MetaWriteRule[] = [
@@ -227,14 +278,14 @@ export const META_AD_WRITE_RULES: readonly MetaWriteRule[] = [
     // M6-04, M6-05 (master AD-031, AD-038, AD-042, AD-043, AD-044, CR-436): what set-meta-ad changes on the ad itself.
     name: 'ad.update', method: 'POST', path: /^\d{1,20}$/, kinds: AD,
     required: [], optional: [...META_AD_UPDATE_KEYS], anyOf: [...META_AD_UPDATE_KEYS],
-    text: { name: META_MEDIA_TEXT_PATTERN, adlabels: META_MEDIA_TEXT_PATTERN }, budget: false,
+    text: { name: META_MEDIA_TEXT_PATTERN, adlabels: META_MEDIA_TEXT_PATTERN }, maxBody: META_AD_UPDATE_MAX_BODY, budget: false,
     values: (params) => adValues(params, false),
     ids: (params) => adIds(params, false),
   },
   {
     // Master AD-043: labels added to an ad (a name alone makes the label in the chosen account).
     name: 'ad.adlabels', method: 'POST', path: /^\d{1,20}\/adlabels$/, kinds: AD,
-    required: ['adlabels'], optional: [], text: { adlabels: META_MEDIA_TEXT_PATTERN }, budget: false,
+    required: ['adlabels'], optional: [], text: { adlabels: META_MEDIA_TEXT_PATTERN }, maxBody: META_AD_UPDATE_MAX_BODY, budget: false,
     values: (params) => labelsJudge(params.get('adlabels')!),
   },
   {

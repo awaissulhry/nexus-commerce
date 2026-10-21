@@ -736,7 +736,8 @@ const mediaSourcingSpec: Judge = (value, path, walk) => {
   const judged = obj({
     related_media: obj({ opt_in_status: enumOf(['OPT_IN', 'OPT_OUT']) }, ['opt_in_status']),
     images: list(obj({ hash, url: picture, image_crops: list(obj({ type: enumOf(['manual', 'auto_crop', 'smart_crop', 'super_crop']), crop_spec: crops() }, ['type']), 4), ...mediaCommon }, ['source', 'opt_in_status']), 10),
-    videos: list(obj({ video_id: id('libraryvideo'), original_video_id: id('libraryvideo'), thumbnail_url: picture, thumbnail_source: token, ...mediaCommon }, ['video_id', 'source', 'opt_in_status']), 10),
+    // Review B6 — each video names its original video and a thumbnail (its link or how Meta makes it), as the guide asks.
+    videos: list(obj({ video_id: id('libraryvideo'), original_video_id: id('libraryvideo'), thumbnail_url: picture, thumbnail_source: token, ...mediaCommon }, ['video_id', 'original_video_id', 'source', 'opt_in_status']), 10),
     ...mediaTextKeys,
   })(value, path, walk)
   if ('problem' in judged) return judged
@@ -746,6 +747,7 @@ const mediaSourcingSpec: Judge = (value, path, walk) => {
   if (m.related_media && (images.length || videos.length)) return no(`${path}: related_media never goes beside explicit images or videos (Meta's multi-media guide)`)
   if (images.length + videos.length > 10) return no(`${path} holds at most 10 images and videos together`)
   if (images.some((i) => !i.hash === !i.url)) return no(`${path}.images: each image names its hash or its url, one of them`)
+  if ((m.videos as Array<{ thumbnail_url?: string; thumbnail_source?: string }> | undefined ?? []).some((v) => !v.thumbnail_url && !v.thumbnail_source)) return no(`${path}.videos: each video names thumbnail_url or thumbnail_source (Meta's multi-media guide)`)
   const hashes = images.map((i) => i.hash).filter(Boolean)
   if (new Set(hashes).size !== hashes.length || new Set(videos.map((v) => v.video_id)).size !== videos.length) return no(`${path} names each image hash and each video once (Meta refuses duplicates)`)
   return judged
@@ -1254,12 +1256,32 @@ export function judgeCreativeForm(params: ReadonlyMap<string, string>, skip: rea
   return finishCreative(creative, walk)
 }
 
+/**
+ * Step 27 review B6 — a multi-media ad (ad-creative/multi-media-ads.md "Limitations"): "The primary media in
+ * object_story_spec must also appear in media_sourcing_spec" — its image hash (or picture link) among the images, its video
+ * among the videos. Why not, or null.
+ */
+export function multiMediaProblem(creative: Record<string, unknown>): string | null {
+  const media = creative.media_sourcing_spec as { images?: Array<{ hash?: string; url?: string }>; videos?: Array<{ video_id?: string }> } | undefined
+  if (!media || !(media.images?.length || media.videos?.length)) return null
+  const story = (creative.object_story_spec ?? {}) as { link_data?: { image_hash?: string; picture?: string }; video_data?: { video_id?: string }; photo_data?: { image_hash?: string; url?: string } }
+  const video = story.video_data?.video_id
+  if (video) return (media.videos ?? []).some((v) => v.video_id === video) ? null : `media_sourcing_spec.videos names the primary video ${video} of object_story_spec too (Meta's multi-media rule)`
+  const hash = story.link_data?.image_hash ?? story.photo_data?.image_hash
+  const url = story.link_data?.picture ?? story.photo_data?.url
+  if (hash) return (media.images ?? []).some((i) => i.hash === hash) ? null : `media_sourcing_spec.images names the primary image ${hash} of object_story_spec too (Meta's multi-media rule)`
+  if (url) return (media.images ?? []).some((i) => i.url === url) ? null : 'media_sourcing_spec.images names the primary picture link of object_story_spec too (Meta\'s multi-media rule)'
+  return 'a multi-media ad names its primary image or video in object_story_spec (link_data image_hash or picture, or video_data video_id), and lists it in media_sourcing_spec too'
+}
+
 /** After a creative's keys were judged: the silent features, the identity, the ids (deduplicated and bounded). */
 export function finishCreative(creative: Record<string, unknown>, walk: CreativeWalk): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; warnings: string[] } | { problem: string } {
   if (!creative.object_story_spec && !isExistingPostCreative(creative)) return { problem: 'a creative names object_story_spec (Nexus fills the chosen Page) or object_story_id (a post of the chosen Page) — or, made by create-meta-boost, an Instagram media, an Instagram post link or a creator\'s ad code' }
   if (creative.object_story_spec && creative.object_story_id) return { problem: 'a creative names object_story_spec or object_story_id, not both' }
   const contradiction = creativeTypeProblem(creative)
   if (contradiction) return { problem: contradiction }
+  const multi = multiMediaProblem(creative)
+  if (multi) return { problem: multi }
   const silent = silentFeaturesProblem(creative)
   if (silent) return { problem: silent }
   // Step 26 — the source of an existing post (create-meta-boost) and, for a creator's content, its sponsors (the chosen ones).

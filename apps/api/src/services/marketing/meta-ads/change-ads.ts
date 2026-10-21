@@ -33,9 +33,9 @@ import {
   AD_STATUSES_BUT_DELETED, AD_TOOL, buildCreative, cleanCreativeJson, createdSentence, creativeWarnings, madeNode, type CreativeRequest,
 } from './change-creatives.js'
 import {
-  aiFeaturesOn, judgeAdCreative, META_AD_CHECK, META_AD_CHECK_WITH_RECOMMENDATIONS, META_AD_NAME_MAX, META_CONVERSION_DOMAIN, trackingPixels,
+  aiFeaturesOn, judgeAdCreative, META_ACTIVATE_FEATURES, META_AD_CHECK, META_AD_CHECK_WITH_RECOMMENDATIONS, META_AD_NAME_MAX, META_CONVERSION_DOMAIN, metaActivationProblem, trackingPixels,
 } from '../../gateway/meta-ad-rules.js'
-import { judgeAdPersona, judgeAssetGroups, META_AI_GENERATED_FEATURES, META_CREATIVE_TEXT, metaCreativeTextProblem } from '../../gateway/meta-creative-rules.js'
+import { judgeAdPersona, judgeAssetGroups, META_AI_GENERATED_FEATURES, META_CREATIVE_TEXT, metaCreativeTextProblem, partsOptIns } from '../../gateway/meta-creative-rules.js'
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { MetaChangeAccount } from './change-account.js'
 import { metaSendChange, MetaWriteError, META_UNKNOWN_OUTCOME, type MetaChangeResult, type MetaWriteTarget } from './write-client.js'
@@ -43,7 +43,7 @@ import { localFailure } from './errors.js'
 import { metaReadOne } from './read-client.js'
 import { metaChosenAccount, MetaLiveRefusal, objectInAccount, type MetaChosenAccount } from './live.js'
 import { pageOf } from './live-media.js'
-import { listPaged } from './live-objects.js'
+import { listPaged, readGroups } from './live-objects.js'
 
 export { AD_TOOL }
 export const SET_AD_TOOL = 'set-meta-ad'
@@ -122,7 +122,8 @@ export function targetsDsaArea(targeting: unknown): boolean {
   if (!geo) return true
   for (const [key, value] of Object.entries(geo)) {
     if (key === 'countries') { if (!Array.isArray(value) || value.some((c) => typeof c !== 'string' || DSA_COUNTRIES.has(c.toUpperCase()))) return true; continue }
-    if (key === 'location_types' || key === 'location_cluster_ids') continue
+    // Review A7 — location_cluster_ids name places Nexus cannot place: counted as the EU (fail safe), like custom locations.
+    if (key === 'location_types') continue
     if (['regions', 'cities', 'zips', 'places', 'geo_markets', 'electoral_districts', 'medium_geo_areas', 'small_geo_areas', 'large_geo_areas', 'neighborhoods', 'subcities', 'subneighborhoods', 'metro_areas'].includes(key)) {
       if (!Array.isArray(value)) return true
       for (const entry of value) {
@@ -207,6 +208,74 @@ async function readParents(chosen: MetaChosenAccount, adSetId: string): Promise<
       categories: Array.isArray(camp.special_ad_categories) ? camp.special_ad_categories.map(String) : [],
     },
   }
+}
+
+/**
+ * The EU's payer and beneficiary an ad under this ad set needs (DSA; F1 X7): the ad set's, else the account's defaults (read
+ * only then). Review B3 — the same for a new ad and for a creative swap ("significantly edited ads": Meta answers 3858152).
+ */
+async function dsaFor(chosen: MetaChosenAccount, act: string, adSet: Parents['adSet'], what: string): Promise<{ refusal: string } | { from: 'adset' | 'account' | 'mixed' | 'not-needed'; warning: string | null }> {
+  if (!adSet.eu) return { from: 'not-needed', warning: null }
+  let defaults: Row = {}
+  if (!adSet.payor || !adSet.beneficiary) defaults = (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.dsaDefaultsRead', path: act, query: { fields: 'default_dsa_payor,default_dsa_beneficiary' } })).body
+  const payor = adSet.payor ?? text(defaults.default_dsa_payor)
+  const beneficiary = adSet.beneficiary ?? text(defaults.default_dsa_beneficiary)
+  if (!payor || !beneficiary) {
+    return { refusal: `Nothing was asked of Meta: ad set ${adSet.id} reaches the EU, and ${what} there needs who pays for it and who it is for (the EU's DSA): the ad set names ${!adSet.payor && !adSet.beneficiary ? 'neither' : !adSet.payor ? 'no payer' : 'no beneficiary'}, and the ad account has no default for ${!payor && !beneficiary ? 'either' : !payor ? 'the payer' : 'the beneficiary'}. Meta would refuse it (3858079 / 3858081 / 3858152). Set them on the ad set (set-meta-ad-set) or as the account's defaults first.` }
+  }
+  const from = adSet.payor && adSet.beneficiary ? 'adset' as const : !adSet.payor && !adSet.beneficiary ? 'account' as const : 'mixed' as const
+  return { from, warning: `EU (DSA): the ad set reaches the EU; Meta shows the payer and beneficiary ${from === 'adset' ? 'of the ad set' : from === 'account' ? 'of the ad account\'s defaults (Meta fills them in)' : 'of the ad set and, where it names none, of the account\'s defaults'}.` }
+}
+
+/** AD-029 — the pixels a tracking change names are the chosen account's own (its first 100 read now); why not, or null. */
+async function foreignPixels(chosen: MetaChosenAccount, act: string, pixels: string[]): Promise<string | null> {
+  if (!pixels.length) return null
+  const own = await listPaged(chosen.connectionId, 'ad.pixelsRead', `${act}/adspixels`, { fields: 'id' }, 100)
+  const owned = new Set(own.rows.map((r) => idOf(r.id)).filter(Boolean))
+  const foreign = pixels.filter((p) => !owned.has(p))
+  return foreign.length ? `Nothing was asked of Meta: pixel ${foreign.join(', ')} is not one of the chosen ad account's own pixels${own.more ? ' (Nexus reads its first 100)' : ''}.` : null
+}
+
+/** The fields an existing creative is read with: its switches (review A2), its political class and its links. */
+export const CREATIVE_SWITCH_FIELDS = 'id,name,status,object_story_spec,asset_feed_spec,degrees_of_freedom_spec,contextual_multi_ads,format_transformation_spec,interactive_components_spec,effective_authorization_category'
+
+/**
+ * Review A2 — what an EXISTING creative switches on, as Meta reads it (a person reads it before approving): Advantage+
+ * features on or not said, multi-advertiser ads, format automation, automatic product tags, music, and every other opt-in of
+ * its parts (step 25's partsOptIns).
+ */
+export function existingCreativeSwitches(c: Row): string[] {
+  const spec = isObject(c.degrees_of_freedom_spec) && isObject(c.degrees_of_freedom_spec.creative_features_spec) ? c.degrees_of_freedom_spec.creative_features_spec as Record<string, { enroll_status?: unknown } | undefined> : null
+  const out: string[] = []
+  if (!spec) out.push('it reads no Advantage+ feature switches (made outside Nexus?) — Meta may switch some on by itself')
+  else {
+    const on = Object.keys(spec).filter((f) => spec[f]?.enroll_status === 'OPT_IN').sort()
+    const unsaid = META_ACTIVATE_FEATURES.filter((f) => spec[f]?.enroll_status !== 'OPT_OUT' && spec[f]?.enroll_status !== 'OPT_IN')
+    if (on.length) out.push(`Advantage+ features ON: ${on.join(', ')}`)
+    if (unsaid.length) out.push(`Advantage+ features not said (Meta's default applies): ${unsaid.slice(0, 8).join(', ')}${unsaid.length > 8 ? ` and ${unsaid.length - 8} more` : ''}`)
+  }
+  const multi = isObject(c.contextual_multi_ads) ? c.contextual_multi_ads.enroll_status : undefined
+  if (multi === 'OPT_IN') out.push('multi-advertiser ads ON')
+  else if (multi !== 'OPT_OUT') out.push('multi-advertiser ads not said (Meta opts a creative in when it is not said)')
+  const formats = Array.isArray(c.format_transformation_spec) ? (c.format_transformation_spec as unknown[]).filter(isObject).filter((f) => !(Array.isArray(f.data_source) && f.data_source.length === 1 && f.data_source[0] === 'none')).map((f) => String(f.format)) : []
+  if (formats.length) out.push(`format automation ON: ${formats.join(', ')}`)
+  const components = isObject(c.interactive_components_spec) && Array.isArray(c.interactive_components_spec.components) ? c.interactive_components_spec.components as unknown[] : []
+  if (components.some((x) => isObject(x) && x.type === 'product_tag' && x.enroll_status === 'opt_in')) out.push('automatic product tags ON')
+  const audios = isObject(c.asset_feed_spec) ? c.asset_feed_spec.audios : undefined
+  if (Array.isArray(audios) && audios.length) out.push('music ON')
+  out.push(...partsOptIns(c))
+  return out
+}
+
+/**
+ * Master CR-218 (website-ads-click-to-message.md "Supported objectives") — the campaign objectives each "message us" footer
+ * runs in: WhatsApp — Sales, Traffic, Engagement, Leads, Awareness; Messenger — not Engagement; Instagram — Sales, Traffic,
+ * Leads only (review B6).
+ */
+export const FOOTER_OBJECTIVES: Readonly<Record<typeof MESSAGE_FOOTERS[number], readonly string[]>> = {
+  whatsapp: ['OUTCOME_SALES', 'OUTCOME_TRAFFIC', 'OUTCOME_ENGAGEMENT', 'OUTCOME_LEADS', 'OUTCOME_AWARENESS'],
+  messenger: ['OUTCOME_SALES', 'OUTCOME_TRAFFIC', 'OUTCOME_LEADS', 'OUTCOME_AWARENESS'],
+  instagram_message: ['OUTCOME_SALES', 'OUTCOME_TRAFFIC', 'OUTCOME_LEADS'],
 }
 
 /** The spend sentence of a new ad created ACTIVE: it spends only when its ad set AND campaign are on (read now). */
@@ -294,18 +363,10 @@ async function createAdDraft(account: MetaChangeAccount, request: AdRequest): Pr
   if (inSet >= META_ADS_PER_AD_SET) return { refusal: `Nothing was asked of Meta: ad set ${adSetId} already has ${inSet} ads that are not deleted, and Meta takes at most ${META_ADS_PER_AD_SET} per ad set (archived ones count on Meta's ad page). Use another ad set.` }
 
   // EU / DSA: an ad under an ad set that targets the EU needs a payer and a beneficiary (the ad set's, else the account's default).
-  let dsaFrom: 'adset' | 'account' | 'mixed' | 'not-needed' = 'not-needed'
-  if (adSet.eu) {
-    let defaults: Row = {}
-    if (!adSet.payor || !adSet.beneficiary) defaults = (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.dsaDefaultsRead', path: act, query: { fields: 'default_dsa_payor,default_dsa_beneficiary' } })).body
-    const payor = adSet.payor ?? text(defaults.default_dsa_payor)
-    const beneficiary = adSet.beneficiary ?? text(defaults.default_dsa_beneficiary)
-    if (!payor || !beneficiary) {
-      return { refusal: `Nothing was asked of Meta: ad set ${adSetId} reaches the EU, and an ad there needs who pays for it and who it is for (the EU's DSA): the ad set names ${!adSet.payor && !adSet.beneficiary ? 'neither' : !adSet.payor ? 'no payer' : 'no beneficiary'}, and the ad account has no default for ${!payor && !beneficiary ? 'either' : !payor ? 'the payer' : 'the beneficiary'}. Meta would refuse it (3858079 / 3858081 / 3858152). Set them on the ad set (set-meta-ad-set) or as the account's defaults first.` }
-    }
-    dsaFrom = adSet.payor && adSet.beneficiary ? 'adset' : !adSet.payor && !adSet.beneficiary ? 'account' : 'mixed'
-    warnings.push(`EU (DSA): the ad set reaches the EU; Meta shows the payer and beneficiary ${dsaFrom === 'adset' ? 'of the ad set' : dsaFrom === 'account' ? 'of the ad account\'s defaults (Meta fills them in when the ad is made)' : 'of the ad set and, where it names none, of the account\'s defaults'}.`)
-  }
+  const dsa = await dsaFor(chosen, act, adSet, 'an ad')
+  if ('refusal' in dsa) return dsa
+  const dsaFrom = dsa.from
+  if (dsa.warning) warnings.push(dsa.warning)
 
   // The creative: an existing one of the account, or a new one built by step 25's builder.
   let creativeParam: string
@@ -314,19 +375,24 @@ async function createAdDraft(account: MetaChangeAccount, request: AdRequest): Pr
   let inline: InlineMade | null = null
   let creativeLabel: string
   let creativeStands: unknown
+  // Review A2 — why this creative may not go out ACTIVE (any Advantage+ feature on or not said), or null.
+  let activation: string | null
   if (request.creativeId) {
     const creativeId = await objectInAccount(chosen, request.creativeId, 'creative', 'ad.creativeOwnerCheck')
-    const c = (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.creativeRead', path: creativeId, query: { fields: 'id,name,status,object_story_spec,asset_feed_spec,degrees_of_freedom_spec,effective_authorization_category' } })).body
+    const c = (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.creativeRead', path: creativeId, query: { fields: CREATIVE_SWITCH_FIELDS } })).body
     if (text(c.status) === 'DELETED') return { refusal: `Nothing was asked of Meta: creative ${creativeId} is deleted.` }
     const auth = text(c.effective_authorization_category)
     if (auth && auth !== 'NONE') return { refusal: `Nothing was asked of Meta: Meta classes creative ${creativeId} as ${auth} (a political or social-issue ad), and such ads are banned in the EU since 2025-10-06.` }
     aiOn = aiFeaturesOn(c)
+    activation = metaActivationProblem(c, `creative ${creativeId}`)
     links = creativeLinks({ object_story_spec: c.object_story_spec, asset_feed_spec: c.asset_feed_spec })
     creativeParam = JSON.stringify({ creative_id: creativeId })
     creativeLabel = `creative ${creativeId}${text(c.name) ? ` "${text(c.name)}"` : ''}`
-    creativeStands = { creativeId, aiOn }
+    const switches = existingCreativeSwitches(c)
+    creativeStands = { creativeId, aiOn, activation: activation === null, switches }
     if (adSet.dynamicCreative) warnings.push('A Dynamic Creative ad set takes a creative with an asset feed (asset_feed_spec): Meta\'s check answers when this one is not.')
     warnings.push(`The ad shows ${creativeLabel} as Meta holds it: a creative cannot change once made.`)
+    warnings.push(switches.length ? `What creative ${creativeId} switches on, as Meta reads it: ${switches.join('; ')}.` : `Creative ${creativeId} reads every Advantage+ feature OFF, multi-advertiser ads OFF and no other opt-in.`)
   } else {
     const feed = { ...(request.creative!.assetFeed ?? {}), ...(request.messageFooter ? { message_extensions: [{ type: request.messageFooter }] } : {}) }
     const built = buildCreative({ ...request.creative!, action: 'create', assetFeed: Object.keys(feed).length ? feed : null, inlineOnAd: true }, { pageId: pageOf(chosen), instagramId: chosen.instagramId })
@@ -336,18 +402,21 @@ async function createAdDraft(account: MetaChangeAccount, request: AdRequest): Pr
     const judged = judgeAdCreative(creativeParam, true)
     if ('problem' in judged) return { refusal: `Nothing was asked of Meta: ${judged.problem}.` }
     aiOn = built.featuresOn.filter((f) => META_AI_GENERATED_FEATURES.has(f)).sort()
+    activation = metaActivationProblem(built.creative, 'the new creative')
     links = creativeLinks(built.creative)
     inline = { name: String(built.creative.name), asked: built.featuresOn, fromExistingPost: !!request.creative!.postId }
     creativeLabel = `a new creative "${String(built.creative.name)}" made with it`
     creativeStands = { inline: true, pageId: chosen.pageId, instagramId: chosen.instagramId }
     const instagram = !!(built.creative.object_story_spec as { instagram_user_id?: unknown } | undefined)?.instagram_user_id || !!built.creative.instagram_user_id
     warnings.push(...creativeWarnings(built, request.creative!, { instagram }).filter((w) => !w.startsWith('A creative spends nothing')))
-    if (request.messageFooter) warnings.push(`A "message us" footer (${request.messageFooter}): Meta opens the website in its in-app browser with a button to message the business; the ad set must send to a website (destination WEBSITE or UNDEFINED — Meta's check answers otherwise).`)
+    if (request.messageFooter) {
+      // Review B6 — the footer runs only in the objectives Meta lists for its channel.
+      if (!FOOTER_OBJECTIVES[request.messageFooter].includes(campaign.objective ?? '')) return { refusal: `Nothing was asked of Meta: a "message us" footer of ${request.messageFooter} runs only in ${FOOTER_OBJECTIVES[request.messageFooter].map((o) => o.replace('OUTCOME_', '').toLowerCase()).join(', ')} campaigns (Meta's guide), and campaign ${campaign.id} is ${campaign.objective ?? 'of an unknown objective'}.` }
+      warnings.push(`A "message us" footer (${request.messageFooter}): Meta opens the website in its in-app browser with a button to message the business; the ad set must send to a website (destination WEBSITE or UNDEFINED — Meta's check answers otherwise).`)
+    }
   }
-  // CR-404 / F1 M5-23 — an ad with a feature generated with AI is created PAUSED, previewed, then switched on: never ACTIVE at once.
-  if (aiOn.length && activate) {
-    return { refusal: `Nothing was asked of Meta: the creative switches on ${aiOn.join(', ')} (generated with AI), and Meta's rule is to create such an ad PAUSED, preview each feature (meta-ad-preview view ad, creativeFeature) and only then switch it on (set-meta-status, SPENDS MONEY). Ask again without activate.` }
-  }
+  // CR-404 / F1 M5-23, review A2 — an ad goes out ACTIVE only with a creative that says OPT_OUT for every Advantage+ feature.
+  if (activation && activate) return { refusal: `Nothing was asked of Meta: ${activation}.` }
 
   const params: Record<string, string> = { name, adset_id: adSetId, creative: creativeParam, status: activate ? 'ACTIVE' : 'PAUSED' }
   const lines: Array<[string, unknown, unknown]> = [
@@ -367,10 +436,8 @@ async function createAdDraft(account: MetaChangeAccount, request: AdRequest): Pr
     const specs = request.tracking.map((t) => ({ 'action.type': [t.action ?? 'offsite_conversion'], fb_pixel: [t.pixelId] }))
     const judged = trackingPixels(JSON.stringify(specs))
     if ('problem' in judged) return { refusal: `Nothing was asked of Meta: ${judged.problem}.` }
-    const own = await listPaged(chosen.connectionId, 'ad.pixelsRead', `${act}/adspixels`, { fields: 'id' }, 100)
-    const owned = new Set(own.rows.map((r) => idOf(r.id)).filter(Boolean))
-    const foreign = judged.pixels.filter((p) => !owned.has(p))
-    if (foreign.length) return { refusal: `Nothing was asked of Meta: pixel ${foreign.join(', ')} is not one of the chosen ad account's own pixels${own.more ? ` (Nexus reads its first 100)` : ''}.` }
+    const foreign = await foreignPixels(chosen, act, judged.pixels)
+    if (foreign) return { refusal: foreign }
     pixels = judged.pixels
     params.tracking_specs = JSON.stringify(specs)
     lines.push(['Tracking', '—', request.tracking.map((t) => `${t.action ?? 'offsite_conversion'} on pixel ${t.pixelId}`).join('; ')])
@@ -378,7 +445,7 @@ async function createAdDraft(account: MetaChangeAccount, request: AdRequest): Pr
   }
   if (request.conversionDomain) {
     const domain = request.conversionDomain.trim().toLowerCase()
-    if (!META_CONVERSION_DOMAIN.test(domain)) return { refusal: 'Nothing was asked of Meta: conversionDomain is a domain as Meta wants it — the first and second level only, e.g. example.com (no https://, path or www.).' }
+    if (!META_CONVERSION_DOMAIN.test(domain)) return { refusal: 'Nothing was asked of Meta: conversionDomain is a domain as Meta wants it — the first and second level only, e.g. example.com (no https://, path or sub-domain).' }
     if (!domainOfLinks(domain, links)) return { refusal: `Nothing was asked of Meta: the creative names no website link on ${domain}, and the conversion domain is where the ad's conversions happen (master AD-030: the domain of the creative's link).` }
     params.conversion_domain = domain
     lines.push(['Conversion domain', '—', domain])
@@ -466,7 +533,7 @@ async function createAdDraft(account: MetaChangeAccount, request: AdRequest): Pr
 // ── undo: take back an ad a create made ─────────────────────────────────────────────────────────────────────────────
 
 /** The change record of THIS business that made this ad in this ad account (not undone): its inline creative, if new. */
-async function adRecordOf(adId: string, adAccountId: string): Promise<{ id: string; creativeId: string | null } | null> {
+async function adRecordOf(adId: string, adAccountId: string): Promise<{ id: string; creativeId: string | null; createdStatus: string | null } | null> {
   const rows = await prisma.agentChange.findMany({
     where: { toolName: AD_TOOL, undoneAt: null, after: { path: ['items'], array_contains: [{ adId }] } },
     select: { id: true, after: true },
@@ -476,8 +543,15 @@ async function adRecordOf(adId: string, adAccountId: string): Promise<{ id: stri
   if (!row) return null
   const items = ((row.after as { items?: Array<Record<string, unknown>> }).items ?? [])
   const creative = items.find((i) => i.kind === 'creative' && i.adId === adId && i.new === true && typeof i.creativeId === 'string')
-  return { id: row.id, creativeId: creative ? String(creative.creativeId) : null }
+  const made = items.find((i) => i.kind === 'ad' && i.adId === adId)
+  return { id: row.id, creativeId: creative ? String(creative.creativeId) : null, createdStatus: typeof made?.status === 'string' ? made.status : null }
 }
+
+/**
+ * Review A7 / B1 — Meta's numbers lag ("Insights refresh every 15 minutes"): an ad created ACTIVE, or changed after it was
+ * made (updated_time ≠ created_time), is not judged "never ran" until 30 minutes after its last change.
+ */
+export const INSIGHTS_LAG_MS = 30 * 60_000
 
 /** The ad's numbers since it was made (spend, impressions) — null when they could not be read (then nothing is deleted). */
 async function everRan(chosen: MetaChosenAccount, adId: string, createdTime: string | null): Promise<{ spend: number; impressions: number } | null> {
@@ -513,7 +587,7 @@ export async function adUndoDraft(account: MetaChangeAccount, ids: string[]): Pr
   if (new Set(ids).size !== ids.length) return { refusal: 'Name each ad once.' }
   const chosen = await metaChosenAccount(account.accountId)
   const act = `act_${account.adAccountId}`
-  const records = new Map<string, { creativeId: string | null }>()
+  const records = new Map<string, { creativeId: string | null; createdStatus: string | null }>()
   const refusals: string[] = []
   for (const id of ids) {
     const record = await adRecordOf(id, account.adAccountId)
@@ -526,7 +600,7 @@ export async function adUndoDraft(account: MetaChangeAccount, ids: string[]): Pr
   const states: Array<Record<string, unknown>> = []
   for (const id of ids) {
     await objectInAccount(chosen, id, 'ad', 'ad.ownerCheck')
-    const ad = (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.undoRead', path: id, query: { fields: 'id,status,effective_status,adset_id,created_time,creative{id}' } })).body
+    const ad = (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.undoRead', path: id, query: { fields: 'id,status,effective_status,adset_id,created_time,updated_time,creative{id}' } })).body
     const status = text(ad.status)
     states.push({ adId: id, status, effective: text(ad.effective_status) })
     if (status === 'DELETED') { skipped.push(`Ad ${id} is already deleted.`); continue }
@@ -536,6 +610,13 @@ export async function adUndoDraft(account: MetaChangeAccount, ids: string[]): Pr
     if (!set) { skipped.push(`Ad ${id} stays: Meta did not name its ad set, so Nexus cannot rule out a Dynamic Creative ad or an ad sequence (Meta deletes neither).`); continue }
     if (set.is_dynamic_creative === true) { skipped.push(`Ad ${id} stays: it is a Dynamic Creative ad, which Meta never lets be deleted or archived (error 1340029) — delete or archive its ad set instead.`); continue }
     if (Array.isArray(set.creative_sequence) ? set.creative_sequence.length > 0 : !!set.creative_sequence) { skipped.push(`Ad ${id} stays: its ad set has an ad sequence, and Meta deletes no ad of it.`); continue }
+    const createdMs = Date.parse(isoOf(ad.created_time) ?? '')
+    const updatedMs = Date.parse(isoOf(ad.updated_time) ?? '')
+    const createdActive = records.get(id)!.createdStatus === 'ACTIVE'
+    if (createdActive || (Number.isFinite(updatedMs) && updatedMs !== createdMs)) {
+      const settled = Math.max(Number.isFinite(createdMs) ? createdMs : Date.now(), Number.isFinite(updatedMs) ? updatedMs : 0) + INSIGHTS_LAG_MS
+      if (Date.now() < settled) { skipped.push(`Ad ${id} stays for now: it was ${createdActive ? 'created ACTIVE' : 'changed after it was made'}, and Meta's numbers lag up to 15 minutes; try again after ${new Date(settled).toISOString().slice(11, 16)} UTC.`); continue }
+    }
     const ran = await everRan(chosen, id, text(ad.created_time))
     if (!ran) { skipped.push(`Ad ${id} stays: Nexus could not read its numbers, so it cannot confirm the ad never ran.`); continue }
     if (ran.spend > 0 || ran.impressions > 0) { skipped.push(`Ad ${id} stays: it has run (${ran.impressions} impressions, spend ${ran.spend}) and Meta keeps its numbers only while it exists — archive it with set-meta-status (status ARCHIVED) instead.`); continue }
@@ -593,7 +674,12 @@ export async function adDraft(account: MetaChangeAccount, request: AdRequest): P
   }
 }
 
+
 // ── set-meta-ad ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** AD-044 — an optional field cleared (Meta: "update the value to empty"). */
+export const AD_CLEARS = ['start', 'end', 'tracking', 'conversionDomain', 'persona'] as const
+export type AdClear = typeof AD_CLEARS[number]
 
 export interface SetAdRequest {
   adId: string
@@ -604,13 +690,52 @@ export interface SetAdRequest {
   addLabels?: string[] | null
   scheduleStart?: string | null
   scheduleEnd?: string | null
-  /** AD-044 — clear the ad's own start or end time (it then follows its campaign's schedule). */
-  clearSchedule?: Array<'start' | 'end'> | null
+  /** Review B2 — AD-029: the ad's pixel tracking from now (the chosen account's own pixels). */
+  tracking?: AdTracking[] | null
+  /** Review B2 — AD-030: the conversion domain ("Required to create or update an ad in a campaign that shares data with a pixel"). */
+  conversionDomain?: string | null
+  /** Review B2 — CR-427: the ad's age and gender persona. */
+  persona?: AdPersona | null
+  clear?: AdClear[] | null
 }
-export interface AdState { adId: string; name: string | null; status: string | null; creativeId: string | null; labels: string[]; scheduleStart: string | null; scheduleEnd: string | null }
+export interface AdState {
+  adId: string; name: string | null; status: string | null; creativeId: string | null; labels: string[]; scheduleStart: string | null; scheduleEnd: string | null
+  /** The ad's pixel tracking as Nexus writes it ([] none), or null when Meta's specs hold others Nexus does not write. */
+  tracking: AdTracking[] | null
+  conversionDomain: string | null
+  persona: AdPersona | null
+  /** Meta refused the persona field: a persona change has no undo then, so none is made. */
+  personaUnread?: boolean
+}
 
-/** The fields set-meta-ad reads of an ad (and its undo reads again). */
-export const AD_SET_FIELDS = 'id,name,status,effective_status,adset_id,campaign_id,creative{id},adlabels{name},ad_schedule_start_time,ad_schedule_end_time'
+/** The fields set-meta-ad reads of an ad (and its undo reads again); the persona in a group of its own (readAdState). */
+export const AD_SET_FIELDS = 'id,name,status,effective_status,adset_id,campaign_id,creative{id},adlabels{name},ad_schedule_start_time,ad_schedule_end_time,tracking_specs,conversion_domain'
+const AD_PERSONA_FIELD = 'creative_audience_pairing_persona'
+
+const trackingKey = (t: AdTracking) => `${t.pixelId}:${t.action ?? 'offsite_conversion'}`
+/** Meta's tracking_specs as Nexus's own pixel list (sorted), or null when they hold a spec Nexus does not write. */
+export function trackingOf(value: unknown): AdTracking[] | null {
+  if (value === undefined || value === null || value === '') return []
+  if (!Array.isArray(value)) return null
+  const first = (v: unknown) => (Array.isArray(v) && v.length === 1 ? v[0] : v)
+  const out: AdTracking[] = []
+  for (const spec of value) {
+    if (!isObject(spec) || Object.keys(spec).length !== 2 || !('fb_pixel' in spec)) return null
+    const action = first(spec['action.type'])
+    const pixelId = idOf(first(spec.fb_pixel))
+    if (!pixelId || (action !== 'offsite_conversion' && action !== 'leadgen_quality_conversion')) return null
+    out.push({ pixelId, action })
+  }
+  return out.sort((a, b) => trackingKey(a).localeCompare(trackingKey(b)))
+}
+/** Meta's creative_audience_pairing_persona as Nexus's persona, or null. */
+export function personaOf(value: unknown): AdPersona | null {
+  if (!isObject(value)) return null
+  const p: AdPersona = { ...(typeof value.age_min === 'number' ? { ageMin: value.age_min } : {}), ...(typeof value.age_max === 'number' ? { ageMax: value.age_max } : {}), ...(Array.isArray(value.genders) ? { genders: value.genders.map(Number) } : {}) }
+  return Object.keys(p).length ? p : null
+}
+/** A persona as Meta writes it (age_min, age_max, genders). */
+export const personaParam = (p: AdPersona) => JSON.stringify({ ...(typeof p.ageMin === 'number' ? { age_min: p.ageMin } : {}), ...(typeof p.ageMax === 'number' ? { age_max: p.ageMax } : {}), ...(p.genders?.length ? { genders: p.genders } : {}) })
 
 export function adStateOf(adId: string, body: Row): AdState {
   const rows = Array.isArray(body.adlabels) ? body.adlabels : isObject(body.adlabels) && Array.isArray(body.adlabels.data) ? body.adlabels.data : []
@@ -618,48 +743,86 @@ export function adStateOf(adId: string, body: Row): AdState {
     adId, name: text(body.name), status: text(body.status), creativeId: idOf(isObject(body.creative) ? body.creative.id : null),
     labels: (rows as unknown[]).map((l) => (isObject(l) ? text(l.name) : null)).filter((l): l is string => !!l),
     scheduleStart: isoOf(body.ad_schedule_start_time), scheduleEnd: isoOf(body.ad_schedule_end_time),
+    tracking: trackingOf(body.tracking_specs), conversionDomain: text(body.conversion_domain), persona: personaOf(body[AD_PERSONA_FIELD]),
   }
 }
+
+/** One ad as set-meta-ad (and its undo) reads it — its persona in a group of its own: Meta may refuse that new field. */
+export async function readAdState(connectionId: string, adId: string, operation = 'ad.read'): Promise<{ state: AdState; body: Row }> {
+  const { body, missing } = await readGroups(connectionId, operation, adId, [{ name: 'core', fields: AD_SET_FIELDS }, { name: 'persona', fields: AD_PERSONA_FIELD }])
+  const state = adStateOf(adId, body)
+  return { state: missing.some((m) => m.part === 'persona') ? { ...state, personaUnread: true } : state, body }
+}
+
+const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 export async function setAdDraft(account: MetaChangeAccount, request: SetAdRequest): Promise<AdDraft | { refusal: string }> {
   try {
     const chosen = await metaChosenAccount(account.accountId)
+    const act = `act_${account.adAccountId}`
     const id = await objectInAccount(chosen, request.adId, 'ad', 'ad.ownerCheck')
-    const read = await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.read', path: id, query: { fields: AD_SET_FIELDS } })
-    const now = adStateOf(id, read.body)
-    const effective = text(read.body.effective_status)
+    const { state: now, body } = await readAdState(chosen.connectionId, id)
+    const effective = text(body.effective_status)
     if (now.status === 'DELETED') return { refusal: `Ad ${id} is deleted: Meta lets only its name change, and Nexus changes nothing on it.` }
-    const archived = now.status === 'ARCHIVED'
-    const asked = { creative: !!request.creativeId, labels: !!(request.labels || request.addLabels), schedule: !!(request.scheduleStart || request.scheduleEnd || request.clearSchedule?.length) }
-    if (archived && (asked.creative || asked.labels || asked.schedule)) return { refusal: `Ad ${id} is archived: Meta lets only its name (and a delete) change on it.` }
+    const clear = new Set(request.clear ?? [])
+    const asked = {
+      creative: !!request.creativeId, labels: !!(request.labels || request.addLabels),
+      schedule: !!(request.scheduleStart || request.scheduleEnd || clear.has('start') || clear.has('end')),
+      tracking: !!request.tracking || clear.has('tracking'), domain: !!request.conversionDomain || clear.has('conversionDomain'), persona: !!request.persona || clear.has('persona'),
+    }
+    if (now.status === 'ARCHIVED' && Object.values(asked).some(Boolean)) return { refusal: `Ad ${id} is archived: Meta lets only its name (and a delete) change on it.` }
+    if ((request.scheduleStart && clear.has('start')) || (request.scheduleEnd && clear.has('end')) || (request.tracking && clear.has('tracking')) || (request.conversionDomain && clear.has('conversionDomain')) || (request.persona && clear.has('persona'))) {
+      return { refusal: 'Set a field or clear it, not both.' }
+    }
     const params: Record<string, string> = {}
     const expect: Record<string, string> = {}
     const skipped: string[] = []
     const warnings: string[] = ['Meta has no check for an ad\'s update (POST /<ad id> has no update parameter table, so no validate_only): the preview is built from the ad as it is now, and the run reads it again first.']
     const spendsMoney: string[] = []
     const lines: Array<[string, unknown, unknown]> = []
+    const after: Record<string, unknown> = { kind: 'set', adId: id }
     const name = request.name?.trim() || null
     if (name) {
       const p = metaCreativeTextProblem(name, META_AD_NAME_MAX, 'name')
       if (p) return { refusal: `Nothing was asked of Meta: ${p}.` }
-      if (name !== now.name) { params.name = name; expect.name = name; lines.push([`Ad ${id} name`, now.name, name]) } else skipped.push(`Ad ${id} is already named "${name}".`)
+      if (name !== now.name) { params.name = name; expect.name = name; after.name = name; lines.push([`Ad ${id} name`, now.name, name]) } else skipped.push(`Ad ${id} is already named "${name}".`)
     }
+    // The ad set and campaign: for a swap (the EU's payer and beneficiary), the own schedule (sales and app promotion only)
+    // and what an ACTIVE ad spends.
+    let parents: Parents | null = null
+    if (asked.creative || asked.schedule || (asked.persona && now.status === 'ACTIVE')) {
+      const adSetId = idOf(body.adset_id)
+      if (!adSetId) return { refusal: `Meta did not name the ad set of ad ${id}, so Nexus cannot judge this change: nothing was asked of Meta.` }
+      parents = await readParents(chosen, adSetId)
+    }
+    const activeWhere = () => (parents ? ` — its ad set is ${statusWords(parents.adSet.status, parents.adSet.effective)} and its campaign ${statusWords(parents.campaign.status, parents.campaign.effective)} now${parents.adSet.status === 'ACTIVE' && parents.campaign.status === 'ACTIVE' ? '' : ' (nothing spends while either is off)'}` : '')
+    let links: string[] | null = null
     let swap = false
     if (request.creativeId) {
       const creativeId = await objectInAccount(chosen, request.creativeId, 'creative', 'ad.creativeOwnerCheck')
       if (creativeId === now.creativeId) skipped.push(`Ad ${id} already shows creative ${creativeId}.`)
       else {
-        const c = (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.creativeRead', path: creativeId, query: { fields: 'id,name,status,degrees_of_freedom_spec,effective_authorization_category' } })).body
+        const c = (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.creativeRead', path: creativeId, query: { fields: CREATIVE_SWITCH_FIELDS } })).body
         if (text(c.status) === 'DELETED') return { refusal: `Nothing was asked of Meta: creative ${creativeId} is deleted.` }
         const auth = text(c.effective_authorization_category)
         if (auth && auth !== 'NONE') return { refusal: `Nothing was asked of Meta: Meta classes creative ${creativeId} as ${auth} (a political or social-issue ad), banned in the EU since 2025-10-06.` }
-        const ai = aiFeaturesOn(c)
-        if (ai.length && now.status === 'ACTIVE') return { refusal: `Nothing was asked of Meta: creative ${creativeId} switches on ${ai.join(', ')} (generated with AI), and Meta's rule is that an ad with such features is PAUSED and previewed before it runs. Pause ad ${id} first (set-meta-status), swap, see the preview, then switch it on.` }
+        // Review A2 — a creative goes onto an ACTIVE ad only when it says OPT_OUT for every Advantage+ feature.
+        const activation = now.status === 'ACTIVE' ? metaActivationProblem(c, `creative ${creativeId}`) : null
+        if (activation) return { refusal: `Nothing was asked of Meta: ad ${id} is ACTIVE, and ${activation} — or pause the ad first (set-meta-status), swap, preview, then switch it on.` }
+        // Review B3 — a swap is a "significant edit": an EU ad set needs its payer and beneficiary (Meta answers 3858152).
+        const dsa = await dsaFor(chosen, act, parents!.adSet, 'an ad with a new creative')
+        if ('refusal' in dsa) return dsa
+        if (dsa.warning) warnings.push(dsa.warning)
         params.creative = JSON.stringify({ creative_id: creativeId })
         expect.creative_id = creativeId
+        after.creativeId = creativeId
         swap = true
+        links = creativeLinks({ object_story_spec: c.object_story_spec, asset_feed_spec: c.asset_feed_spec })
         lines.push([`Ad ${id} creative`, now.creativeId, creativeId])
         warnings.push(`A creative swap sends the ad back to Meta's review (F1 X8): ${now.status === 'ACTIVE' ? 'this ad is ACTIVE, so it may not deliver until Meta approves the new creative' : 'it is not running now, so it simply waits for review'}. Its undo swaps the old creative back (a review again).`)
+        const switches = existingCreativeSwitches(c)
+        warnings.push(switches.length ? `What creative ${creativeId} switches on, as Meta reads it: ${switches.join('; ')}.` : `Creative ${creativeId} reads every Advantage+ feature OFF, multi-advertiser ads OFF and no other opt-in.`)
+        const ai = aiFeaturesOn(c)
         if (ai.length) warnings.push(`The new creative uses ${ai.join(', ')} (generated with AI): see each feature in the preview (meta-ad-preview view ad, creativeFeature) before switching the ad on.`)
       }
     }
@@ -674,15 +837,12 @@ export async function setAdDraft(account: MetaChangeAccount, request: SetAdReque
     const newAdds = (adds ?? []).filter((l) => !now.labels.includes(l))
     if (adds && !newAdds.length) skipped.push(`Ad ${id} already has ${adds.length === 1 ? 'that label' : 'those labels'}.`)
     const finalLabels = labels ?? [...now.labels, ...newAdds]
-    if (params.adlabels || newAdds.length) lines.push([`Ad ${id} labels`, now.labels.join(', ') || 'none', finalLabels.join(', ') || 'none'])
+    if (params.adlabels || newAdds.length) { after.labels = [...finalLabels].sort(); lines.push([`Ad ${id} labels`, now.labels.join(', ') || 'none', finalLabels.join(', ') || 'none']) }
     // AD-031 / AD-044 — the ad's own schedule (sales and app-promotion campaigns only), set or cleared.
     let scheduleChanged = false
-    const clear = new Set(request.clearSchedule ?? [])
     if (asked.schedule) {
-      if ((request.scheduleStart && clear.has('start')) || (request.scheduleEnd && clear.has('end'))) return { refusal: 'Set a time or clear it, not both.' }
-      const campaignId = idOf(read.body.campaign_id)
-      const camp = campaignId ? (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.campaignRead', path: campaignId, query: { fields: 'id,objective' } })).body : {}
-      if (!(SALES_AND_APP_OBJECTIVES as readonly string[]).includes(text(camp.objective) ?? '')) return { refusal: `Nothing was asked of Meta: an ad's own start and end time is "only available for sales and app promotion campaigns", and this ad's campaign is ${text(camp.objective) ?? 'of an unknown objective'}.` }
+      const objective = parents!.campaign.objective
+      if (!(SALES_AND_APP_OBJECTIVES as readonly string[]).includes(objective ?? '')) return { refusal: `Nothing was asked of Meta: an ad's own start and end time is "only available for sales and app promotion campaigns", and this ad's campaign is ${objective ?? 'of an unknown objective'}.` }
       const start = request.scheduleStart ? unixOf(request.scheduleStart) : null
       const end = request.scheduleEnd ? unixOf(request.scheduleEnd) : null
       if ((request.scheduleStart && start === null) || (request.scheduleEnd && end === null)) return { refusal: 'Nothing was asked of Meta: scheduleStart and scheduleEnd are times with their offset (2026-11-02T08:00:00+01:00).' }
@@ -690,35 +850,87 @@ export async function setAdDraft(account: MetaChangeAccount, request: SetAdReque
       const nextEnd = clear.has('end') ? null : end !== null ? new Date(end * 1000).toISOString() : now.scheduleEnd
       if (end !== null && end <= nowSec()) return { refusal: 'Nothing was asked of Meta: scheduleEnd is in the past.' }
       if (nextStart && nextEnd && Date.parse(nextEnd) <= Date.parse(nextStart)) return { refusal: 'Nothing was asked of Meta: the end is after the start.' }
-      for (const [key, next, old, value] of [['ad_schedule_start_time', nextStart, now.scheduleStart, start], ['ad_schedule_end_time', nextEnd, now.scheduleEnd, end]] as const) {
+      for (const [key, field, next, old, value] of [['ad_schedule_start_time', 'scheduleStart', nextStart, now.scheduleStart, start], ['ad_schedule_end_time', 'scheduleEnd', nextEnd, now.scheduleEnd, end]] as const) {
         if (next === old) continue
         params[key] = next === null ? '' : String(value)
         if (next !== null) expect[key] = String(value)
+        after[field] = next
         scheduleChanged = true
         lines.push([`Ad ${id} own ${key === 'ad_schedule_start_time' ? 'start' : 'end'}`, old ?? 'the campaign\'s', next ?? 'cleared (the campaign\'s)'])
       }
       if (!scheduleChanged) skipped.push(`Ad ${id} already has that schedule.`)
+      else if (now.status === 'ACTIVE') spendsMoney.push(`Ad ${id} is ACTIVE (${statusWords(now.status, effective)}): its own schedule changes, so it may spend at times it did not before${activeWhere()}.`)
+    }
+    // Review B2 — AD-029: tracking, the chosen account's own pixels (the same checks as a new ad's).
+    let trackingChanged = false
+    if (asked.tracking) {
+      if (now.tracking === null) return { refusal: `Nothing was asked of Meta: ad ${id}'s tracking holds specs Nexus does not write (Meta's or another tool's): changing it would drop them and Nexus could not put them back. meta-ad-details view ad shows them.` }
+      const next: AdTracking[] = clear.has('tracking') ? [] : [...request.tracking!].map((t) => ({ pixelId: t.pixelId, action: t.action ?? 'offsite_conversion' })).sort((a, b) => trackingKey(a).localeCompare(trackingKey(b)))
+      if (sameJson(next, now.tracking)) skipped.push(`Ad ${id} already has that tracking.`)
       else {
-        warnings.push('Meta lets an ad\'s fields change only when they "were used during ad creation": an ad made without its own schedule may refuse one now (Meta\'s words then say so).')
-        if (now.status === 'ACTIVE') {
-          const set = idOf(read.body.adset_id)
-          const s = set ? (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.adSetRead', path: set, query: { fields: 'id,name,status,effective_status' } })).body : {}
-          const c = campaignId ? (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.campaignStatusRead', path: campaignId, query: { fields: 'id,name,status,effective_status' } })).body : {}
-          spendsMoney.push(`Ad ${id} is ACTIVE (${statusWords(now.status, effective)}): its own schedule changes, so it may spend at times it did not before — its ad set is ${statusWords(text(s.status), text(s.effective_status))} and its campaign ${statusWords(text(c.status), text(c.effective_status))} now${text(s.status) === 'ACTIVE' && text(c.status) === 'ACTIVE' ? '' : ' (nothing spends while either is off)'}.`)
-        }
+        if (next.length) {
+          const specs = next.map((t) => ({ 'action.type': [t.action], fb_pixel: [t.pixelId] }))
+          const judged = trackingPixels(JSON.stringify(specs))
+          if ('problem' in judged) return { refusal: `Nothing was asked of Meta: ${judged.problem}.` }
+          const foreign = await foreignPixels(chosen, act, judged.pixels)
+          if (foreign) return { refusal: foreign }
+          params.tracking_specs = JSON.stringify(specs)
+        } else params.tracking_specs = ''
+        after.tracking = next
+        trackingChanged = true
+        lines.push([`Ad ${id} tracking`, now.tracking.map(trackingKey).join(', ') || 'none', next.map(trackingKey).join(', ') || 'cleared'])
       }
     }
+    // Review B2 — AD-030: the conversion domain, a domain of the creative's link (the new creative's on a swap).
+    if (asked.domain) {
+      const domain = clear.has('conversionDomain') ? null : request.conversionDomain!.trim().toLowerCase()
+      if (domain === now.conversionDomain) skipped.push(`Ad ${id} already has that conversion domain.`)
+      else {
+        if (domain) {
+          if (!META_CONVERSION_DOMAIN.test(domain)) return { refusal: 'Nothing was asked of Meta: conversionDomain is a domain as Meta wants it — the first and second level only, e.g. example.com (no https://, path or sub-domain).' }
+          if (!links && now.creativeId) {
+            const c = (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.creativeLinksRead', path: now.creativeId, query: { fields: 'id,object_story_spec,asset_feed_spec' } })).body
+            links = creativeLinks({ object_story_spec: c.object_story_spec, asset_feed_spec: c.asset_feed_spec })
+          }
+          if (!domainOfLinks(domain, links ?? [])) return { refusal: `Nothing was asked of Meta: the ad's creative names no website link on ${domain}, and the conversion domain is where the ad's conversions happen (master AD-030).` }
+          expect.conversion_domain = domain
+        }
+        params.conversion_domain = domain ?? ''
+        after.conversionDomain = domain
+        lines.push([`Ad ${id} conversion domain`, now.conversionDomain ?? 'none', domain ?? 'cleared'])
+      }
+    }
+    // Review B2 — CR-427: the ad's persona (the ad set must have creative audience pairing on for it to act).
+    if (asked.persona) {
+      if (now.personaUnread) return { refusal: `Nothing was asked of Meta: Meta did not answer ad ${id}'s persona, so Nexus could not put it back: no persona change is made.` }
+      const next = clear.has('persona') ? null : personaOf(JSON.parse(personaParam(request.persona!)))
+      if (sameJson(next, now.persona)) skipped.push(`Ad ${id} already has that persona.`)
+      else {
+        if (next) {
+          const judged = judgeAdPersona(personaParam(next))
+          if ('problem' in judged) return { refusal: `Nothing was asked of Meta: ${judged.problem}.` }
+        }
+        params.creative_audience_pairing_persona = next ? personaParam(next) : ''
+        after.persona = next
+        lines.push([`Ad ${id} persona`, now.persona ? personaParam(now.persona) : 'none', next ? personaParam(next) : 'cleared'])
+        warnings.push('Persona (creative audience pairing): it acts only when the ad set has creative audience pairing switched on; a persona set on one image or video wins over this one.')
+        if (now.status === 'ACTIVE') spendsMoney.push(`Ad ${id} is ACTIVE: its persona changes, so it may reach other people than before${activeWhere()}.`)
+      }
+    }
+    if (asked.schedule || asked.tracking || asked.domain || asked.persona) warnings.push('Meta lets an ad\'s fields change only when they "were used during ad creation": an ad made without one may refuse it now (Meta\'s words then say so).')
     const requests: MetaChangeRequest[] = []
     const label = `ad ${id}${now.name ? ` "${now.name}"` : ''}`
     if (Object.keys(params).length) {
       const sendExpect = Object.fromEntries(Object.entries(expect).filter(([k]) => k !== 'creative_id'))
+      const readBackFields = 'id,name,status,effective_status,creative{id},ad_schedule_start_time,ad_schedule_end_time,conversion_domain'
+      const words: Record<string, string> = { adlabels: 'labels', ad_schedule_start_time: 'own start', ad_schedule_end_time: 'own end', tracking_specs: 'tracking', conversion_domain: 'conversion domain', creative_audience_pairing_persona: 'persona' }
       requests.push({
-        step: requests.length + 1, label: `Change ${label}: ${Object.keys(params).map((k) => ({ adlabels: 'labels', ad_schedule_start_time: 'own start', ad_schedule_end_time: 'own end' } as Record<string, string>)[k] ?? k).join(', ')}`,
-        kind: 'ad', objectId: id, params, check: 'none', raisesSpend: scheduleChanged && now.status === 'ACTIVE', readBackInPost: false, budget: false, undoable: true,
-        operation: 'ad.update', ...(Object.keys(expect).length ? { expect } : {}), readBackFields: 'id,name,status,effective_status,creative{id},ad_schedule_start_time,ad_schedule_end_time',
+        step: requests.length + 1, label: `Change ${label}: ${Object.keys(params).map((k) => words[k] ?? k).join(', ')}`,
+        kind: 'ad', objectId: id, params, check: 'none', raisesSpend: spendsMoney.length > 0, readBackInPost: false, budget: false, undoable: true,
+        operation: 'ad.update', ...(Object.keys(expect).length ? { expect } : {}), readBackFields,
         // The creative reads back as {id}: the run judges it as creative_id (expect), what Meta now shows.
         send: async (target) => {
-          const r = await metaSendChange(target, { objectId: id, kind: 'ad', params, operation: 'ad.update', ...(Object.keys(sendExpect).length ? { expect: sendExpect } : {}), readBackFields: 'id,name,status,effective_status,creative{id},ad_schedule_start_time,ad_schedule_end_time' })
+          const r = await metaSendChange(target, { objectId: id, kind: 'ad', params, operation: 'ad.update', ...(Object.keys(sendExpect).length ? { expect: sendExpect } : {}), readBackFields })
           const creative = r.node?.creative
           const shows = idOf(isObject(creative) ? creative.id : null)
           return { ...r, node: r.node ? { ...r.node, ...(shows ? { creative_id: shows } : {}) } : r.node }
@@ -733,20 +945,17 @@ export async function setAdDraft(account: MetaChangeAccount, request: SetAdReque
         operation: 'ad.addLabels', edge: 'adlabels',
         doneSentence: () => `Add label${newAdds.length === 1 ? '' : 's'} to ${label}: Meta took ${newAdds.length === 1 ? 'it' : 'them'}.`,
       })
+      warnings.push('A label that does not exist yet is made in the ad account by its name. Meta lists validate_only on an ad\'s labels edge, but Nexus asks Meta\'s check only of a new ad.')
     }
-    if (newAdds.length) warnings.push('A label that does not exist yet is made in the ad account by its name. Meta lists validate_only on an ad\'s labels edge, but Nexus asks Meta\'s check only of a new ad.')
+    const changed = [params.name ? 'name' : null, swap ? 'creative' : null, params.adlabels || newAdds.length ? 'labels' : null, scheduleChanged ? 'own schedule' : null, trackingChanged ? 'tracking' : null, 'conversion_domain' in params ? 'conversion domain' : null, 'creative_audience_pairing_persona' in params ? 'persona' : null].filter(Boolean)
     return {
-      summary: `Meta: change ${label} (${[name && params.name ? 'name' : null, swap ? 'creative' : null, params.adlabels || newAdds.length ? 'labels' : null, scheduleChanged ? 'own schedule' : null].filter(Boolean).join(', ') || 'nothing'}).`,
+      summary: `Meta: change ${label} (${changed.join(', ') || 'nothing'}).`,
       changes: changeLines(lines).changes,
       totals: { ads: requests.length ? 1 : 0, requests: requests.length },
       warnings, spendsMoney, skipped, requests,
-      stands: { action: 'set', ...now, effective },
+      stands: { action: 'set', ...now, effective, ...(parents ? { adSet: { status: parents.adSet.status, eu: parents.adSet.eu }, campaign: { status: parents.campaign.status, objective: parents.campaign.objective } } : {}) },
       before: { kind: 'set', ...now },
-      after: {
-        kind: 'set', adId: id, ...(params.name ? { name: params.name } : {}), ...(swap ? { creativeId: expect.creative_id } : {}), ...(params.adlabels || newAdds.length ? { labels: [...finalLabels].sort() } : {}),
-        ...('ad_schedule_start_time' in params ? { scheduleStart: params.ad_schedule_start_time ? isoOf(params.ad_schedule_start_time) : null } : {}),
-        ...('ad_schedule_end_time' in params ? { scheduleEnd: params.ad_schedule_end_time ? isoOf(params.ad_schedule_end_time) : null } : {}),
-      },
+      after,
       ad: { action: 'set' },
     }
   } catch (err) {
@@ -754,4 +963,3 @@ export async function setAdDraft(account: MetaChangeAccount, request: SetAdReque
     throw err
   }
 }
-

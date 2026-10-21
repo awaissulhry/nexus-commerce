@@ -810,7 +810,16 @@ export interface MetaWriteAsset {
   with?: string
 }
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account (step 27: a creative an ad uses too). */
-export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'creative' }
+export interface MetaWriteBodyId {
+  id: string
+  kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'creative'
+  /**
+   * Step 27 review A1 — a creative an ad shows while ACTIVE: its Advantage+ switches are read with its account_id and must
+   * all say OPT_OUT (meta-ad-rules.ts metaActivationProblem) — `always` (a new ad created ACTIVE) or `if-ad-active` (a swap:
+   * when the ad being changed is ACTIVE).
+   */
+  activation?: 'always' | 'if-ad-active'
+}
 
 const fieldsValueProblem = (value: string): string | null => {
   const names = value.split(',')

@@ -123,9 +123,10 @@ async function draftFor(args: Record<string, unknown>, build: MetaDraftBuilder):
 /**
  * The exact plan of a change: its requests (object, form fields), in order — never their labels. Step 26 (review A3): a
  * request may give the fields its plan reads (`planParams`: a creator's ad code replaced in this hash; the request's arguments
- * still carry it).
+ * still carry it). Step 27 review A6: a check's own execution_options too (a new ad's check with Meta's recommendations is
+ * never answered from one without them); a request without them (set-meta-status) hashes exactly as before.
  */
-const planOf = (draft: MetaChangeDraft): string => factHash(draft.requests.map((r) => ({ objectId: r.objectId, params: r.planParams ?? r.params })))
+const planOf = (draft: MetaChangeDraft): string => factHash(draft.requests.map((r) => ({ objectId: r.objectId, params: r.planParams ?? r.params, ...(r.checkOptions ? { checkOptions: r.checkOptions } : {}) })))
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
