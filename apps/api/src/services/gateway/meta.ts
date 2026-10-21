@@ -22,6 +22,7 @@ import { metaGraphBase } from '../meta/api-version.js'
 import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaEventsKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaTargetingKind, type MetaWebhookKind } from './meta-calls.js'
 import { metaRuploadUrl } from './meta-media-rules.js'
 import type { MetaSignalsKind } from './meta-signals-rules.js'
+import type { MetaCatalogKind } from './meta-catalog-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -98,6 +99,8 @@ export interface MetaWriteRequest {
     | MetaTargetingKind
     // Step 33 — a pixel, for its Conversions API events (edge `events`).
     | MetaEventsKind
+    // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
+    | MetaCatalogKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -137,8 +140,8 @@ export interface MetaWriteRequest {
   query?: Record<string, string>
   /** Step 20 (review A2) — the targeting keys this change's draft changed: the only ones the gateway lets differ from live. */
   targetingKeys?: string[]
-  /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
-  parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own); step 34: a feed's catalog. */
+  parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
   recommendations?: boolean
   /**
@@ -154,7 +157,7 @@ export interface MetaWriteRequest {
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
   | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaBoostEdge | MetaSignalsEdge | MetaAdEdge
-  | MetaWebhookEdge | MetaTargetingEdge | MetaEventsEdge
+  | MetaWebhookEdge | MetaTargetingEdge | MetaEventsEdge | MetaCatalogEdge
 /** Step 33 — upload-meta-events: Conversions API events of a pixel (`<pixel id>/events`). */
 export type MetaEventsEdge = 'events'
 /** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
@@ -183,6 +186,11 @@ export type MetaBrandSafetyEdge = 'brand_safety_content_filter_levels' | 'block_
   | 'assigned_users' | 'auto_applied_ad_accounts' | 'content_block_lists' | 'content' | 'applied_ad_accounts'
 /** Step 36 — a lead form on the chosen Page, a test lead on a form of it. */
 export type MetaPageEdge = 'leadgen_forms' | 'test_leads'
+/**
+ * Step 34 — a catalog made on a portfolio, a catalog's categories, pixels, people and partners, a product set made in it, the
+ * items_batch that deletes its items.
+ */
+export type MetaCatalogEdge = 'owned_product_catalogs' | 'categories' | 'external_event_sources' | 'assigned_users' | 'agencies' | 'product_sets' | 'items_batch'
 /** Step 28 — an apply (`act_<id>/recommendations`), a new study (`<business>/ad_studies`), a new Page video test (`<page>/ab_tests`). */
 export type MetaOptimizeEdge = 'recommendations' | 'ad_studies' | 'ab_tests'
 /** Step 22 — remove-meta-ads-items: an image or a video out of the ad account's library, a video's caption languages. */

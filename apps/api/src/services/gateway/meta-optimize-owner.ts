@@ -59,8 +59,8 @@ const idOf = (v: unknown): string | null => {
   return (typeof raw === 'string' || typeof raw === 'number') && /^\d{1,25}$/.test(String(raw)) ? String(raw) : null
 }
 
-/** The ids of a list, following Meta's `after` cursor up to `maxPages` pages; null when a page could not be read or more pages are left. */
-async function listedIds(io: MetaOwnerIo, path: string, query: Record<string, string> = {}, maxPages = 10): Promise<Set<string> | null> {
+/** The ids of a list, following Meta's `after` cursor up to `maxPages` pages; null when a page could not be read or more pages are left. Step 34 reuses it (meta-catalog-owner.ts). */
+export async function listedIds(io: MetaOwnerIo, path: string, query: Record<string, string> = {}, maxPages = 10): Promise<Set<string> | null> {
   const ids = new Set<string>()
   let after: string | null = null
   for (let page = 0; page < maxPages; page++) {
@@ -74,8 +74,8 @@ async function listedIds(io: MetaOwnerIo, path: string, query: Record<string, st
   return null
 }
 
-/** The chosen ad account's business portfolio, read now (null: none, or not readable). */
-async function chosenBusiness(io: MetaOwnerIo, chosen: string): Promise<string | null> {
+/** The chosen ad account's business portfolio, read now (null: none, or not readable). Step 34 reuses it (meta-catalog-owner.ts). */
+export async function chosenBusiness(io: MetaOwnerIo, chosen: string): Promise<string | null> {
   const body = await io.read(`act_${chosen}`, { fields: 'business{id}' })
   return idOf(body?.business)
 }

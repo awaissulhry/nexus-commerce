@@ -11,6 +11,7 @@ import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
 import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaTargetingKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
 import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
+import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
 import type { MetaChangeResult, MetaRequestVia, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
@@ -84,12 +85,14 @@ export interface MetaChangeRequest {
     | MetaWebhookKind
     // Step 20 — an ad set's audience or its placements (set-meta-targeting, set-meta-placements).
     | MetaTargetingKind
+    // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
+    | MetaCatalogKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
-  /** A budget schedule's campaign or ad set. */
-  parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** A budget schedule's campaign or ad set; step 34: a feed's catalog. */
+  parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }
   /** Step 19 — Meta's check of this create asks its setup recommendations too (master CMP-031). */
   recommendations?: boolean
   /**
