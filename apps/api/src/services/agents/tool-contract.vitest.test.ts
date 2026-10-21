@@ -1061,6 +1061,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { op: 'change', catalogId: '120000000000100', productSetId: '120000000000110', set: { name: 'Set A', filter: '{"brand":{"eq":"Shop A"}}', retailerId: null }, accountId: 'conn-1', adAccountId: '1234567890' },
         after: { op: 'change', catalogId: '120000000000100', productSetId: '120000000000110', set: { name: 'Set B', filter: '{"brand":{"eq":"Shop A"}}', retailerId: null }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 40: the account settings it replaced go back through the same tool; the previous spending limit is set again.
+      'set-meta-account-settings': {
+        before: { kind: 'adaccount', id: '1234567890', fields: { name: 'Shop A ads', default_dsa_payor: null, default_dsa_beneficiary: null }, undo: { name: 'Shop A ads', dsa: { clear: true } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'adaccount', id: '1234567890', fields: { name: 'Shop A', default_dsa_payor: 'Shop A', default_dsa_beneficiary: 'Shop A' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-spend-cap': {
+        before: { kind: 'spendcap', id: '1234567890', action: 'raise', fields: { spend_cap: '50000' }, undo: { action: 'set', capCents: 50000 }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'spendcap', id: '1234567890', action: 'raise', fields: { spend_cap: '75000' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1244,7 +1253,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-meta-webhooks', 'set-meta-alert-subscription', 'remove-meta-alert-subscription',
       'set-meta-targeting', 'set-meta-placements', 'set-meta-account-controls',
       'upload-meta-events',
-      'create-meta-catalog', 'set-meta-catalog', 'set-meta-catalog-access', 'set-meta-product-set', 'remove-meta-catalog-items']) {
+      'create-meta-catalog', 'set-meta-catalog', 'set-meta-catalog-access', 'set-meta-product-set', 'remove-meta-catalog-items', 'set-meta-account-settings', 'set-meta-spend-cap', 'set-meta-insights-features']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
