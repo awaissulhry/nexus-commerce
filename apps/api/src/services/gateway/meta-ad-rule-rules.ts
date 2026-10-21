@@ -92,9 +92,9 @@ export const RULE_ATTRIBUTION_PREFIXES = [
   '28d_view_1d_click', '1d_view_7d_click', '7d_view_7d_click', '28d_view_7d_click', '7d_view_28d_click', '28d_view_28d_click',
 ] as const
 
-/** At most this many filters, ids in one list, people to notify, custom schedule entries. */
+/** At most this many filters, ids in one list (the gateway checks at most 150 ids of a rule, one by one), people to notify, custom schedule entries. */
 export const MAX_RULE_FILTERS = 50
-export const MAX_RULE_IDS = 250
+export const MAX_RULE_IDS = 150
 export const MAX_RULE_PEOPLE = 50
 export const MAX_SCHEDULE_ENTRIES = 50
 const MAX_TEXT = 400
@@ -102,49 +102,158 @@ const MAX_FIELD = 200
 
 // ── field names ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
+const LEVELS = ['ad', 'adset', 'campaign'] as const
+type RuleLevel = typeof LEVELS[number]
 // A name never starts with a level word (one level prefix only: `ad.adset.spent` is not a field).
 const NAME = '(?!(?:ad|adset|campaign)\\.)[a-z][a-z0-9_]{0,79}(?:\\.[a-z][a-z0-9_]{0,79})?'
-const ATTR = `(?:(?:${RULE_ATTRIBUTION_PREFIXES.join('|')}):)?`
-const SIMPLE_FIELD = new RegExp(`^(?:(?:ad|adset|campaign)\\.)?${ATTR}${NAME}$`)
-const AGGREGATE_FIELD = new RegExp(`^aggregate\\(${ATTR}${NAME}\\)$`)
+/** A simple field: its level prefix, its attribution window prefix, its base name (a time preset prefix is part of the name). */
+const SIMPLE_PARTS = new RegExp(`^(?:(ad|adset|campaign)\\.)?(?:(${RULE_ATTRIBUTION_PREFIXES.join('|')}):)?(${NAME})$`)
+const AGGREGATE_PARTS = new RegExp(`^aggregate\\((?:(${RULE_ATTRIBUTION_PREFIXES.join('|')}):)?(${NAME})\\)$`)
 const CONSTANT = /^\d{1,9}(?:\.\d{1,6})?$/
+/** One term of a formula: its opening parentheses, a field, aggregate(field) or a constant, its closing ones (review B2). */
+const FORMULA_TERM = /^(\(*)(aggregate\([^()]*\)|[^()]+)(\)*)$/
 
-/** The id fields of an evaluation spec, and the kind of object each names (an unprefixed id: a campaign, ad set or ad). */
-export const ID_FIELDS: Readonly<Record<string, 'adobject' | 'campaign' | 'adset' | 'ad'>> = { id: 'adobject', 'ad.id': 'ad', 'adset.id': 'adset', 'campaign.id': 'campaign', aggregation_id: 'adobject' }
-const LABEL_FIELD = /^(?:(?:ad|adset|campaign)\.)?adlabel_ids$/
-
+const RANGE4: readonly RuleOperator[] = ['GREATER_THAN', 'LESS_THAN', 'IN_RANGE', 'NOT_IN_RANGE']
+const LIST: readonly RuleOperator[] = ['IN', 'NOT_IN']
+const SETS: readonly RuleOperator[] = ['ANY', 'ALL', 'NONE']
 /**
- * Why a rule field name is not one of Meta's grammar, or null: a field with its optional level and attribution prefixes,
- * aggregate(field), or a formula of such fields and constants separated by single spaces with + - * / (parentheses
- * balanced, at most 6 fields). Lower-case ASCII only.
+ * The metadata fields (evaluation-spec.md "Metadata filters", both tables) and the operators each takes — review B3: a
+ * setting takes only its own; any other field is a result (insights) or an advanced field.
  */
-export function ruleFieldProblem(field: unknown): string | null {
-  if (typeof field !== 'string' || !field) return 'a rule field is a name (lower-case letters, digits, _ . :)'
-  if (field.length > MAX_FIELD) return `a rule field is at most ${MAX_FIELD} characters`
-  if (SIMPLE_FIELD.test(field) || AGGREGATE_FIELD.test(field)) return null
-  if (!field.includes(' ')) return `"${field.slice(0, 60)}" is not a rule field Meta documents (a field, its ad. / adset. / campaign. and attribution prefixes, aggregate(…) or a formula)`
+const METADATA_OPERATORS: Readonly<Record<string, readonly RuleOperator[]>> = {
+  id: ['EQUAL', 'IN', 'NOT_IN'], entity_type: ['EQUAL'], name: ['EQUAL', 'CONTAIN', 'NOT_CONTAIN'], adlabel_ids: SETS,
+  objective: LIST, buying_type: LIST, billing_event: LIST, optimization_goal: LIST, is_autobid: LIST, effective_status: LIST, budget_reset_period: LIST,
+  'placement.page_types': SETS, start_time: RANGE4, stop_time: ['GREATER_THAN', 'LESS_THAN'],
+  daily_budget: RANGE4, lifetime_budget: RANGE4, spend_cap: RANGE4, bid_amount: RANGE4, created_time: RANGE4, updated_time: RANGE4,
+  hours_since_creation: RANGE4, estimated_budget_spending_percentage: RANGE4, audience_reached_percentage: RANGE4, active_time: RANGE4, current_time: RANGE4,
+  // Special filters (evaluation-spec.md "Special filters"; evaluation-spec-filters.md aggregation_id).
+  time_preset: ['EQUAL'], attribution_window: ['EQUAL'], aggregation_id: ['IN'],
+}
+/** Results (insights) and advanced fields: "GREATER_THAN, LESS_THAN, EQUAL, IN_RANGE, NOT_IN_RANGE" (evaluation-spec.md). */
+const RESULT_OPERATORS: readonly RuleOperator[] = ['GREATER_THAN', 'LESS_THAN', 'EQUAL', 'IN_RANGE', 'NOT_IN_RANGE']
+/** Metadata that takes no prefix at all ("Supported Prefixes: none", and the special filters). */
+const NO_PREFIX = new Set(['entity_type', 'current_time', 'time_preset', 'attribution_window', 'aggregation_id'])
+/** The numeric metadata a formula may hold (evaluation-spec-filters.md "Valid numeric metadata fields"). */
+const FORMULA_METADATA = new Set(['bid_amount', 'daily_budget', 'lifetime_budget', 'spend_cap'])
+/** STATS_MILESTONE trigger fields (trigger-based-rules.md "Supported Trigger Field Values"). */
+export const MILESTONE_FIELDS: ReadonlySet<string> = new Set([
+  'impressions', 'unique_impressions', 'reach', 'clicks', 'unique_clicks', 'spent', 'results', 'app_custom_event',
+  ...['achievement_unlocked', 'activate_app', 'add_payment_info', 'add_to_cart', 'add_to_wishlist', 'complete_registration', 'content_view', 'initiated_checkout',
+    'level_achieved', 'purchase', 'rate', 'search', 'spent_credits', 'tutorial_completion'].map((e) => `app_custom_event_fb_mobile_${e}`),
+  'app_custom_event_other', 'leadgen', 'like', 'link_click', 'mobile_app_install', 'offsite_conversion', 'offsite_conversion_add_to_cart', 'offsite_conversion_checkout',
+  ...['add_payment_info', 'add_to_cart', 'add_to_wishlist', 'complete_registration', 'initiate_checkout', 'lead', 'other', 'purchase', 'search', 'view_content'].map((e) => `offsite_conversion_fb_pixel_${e}`),
+  'offsite_engagement', 'post', 'post_comment', 'post_engagement', 'post_like', 'post_reaction', 'view_content', 'video_play', 'video_view', 'vote',
+])
+
+/** The fields aggregate(…) takes (evaluation-spec-filters.md "Supported fields"), each with an optional time preset prefix. */
+const AGGREGATE_BASES = new Set(['clicks', 'cpc', 'cpm', 'cpp', 'ctr', 'frequency', 'impressions', 'mobile_app_purchase_roas', 'reach', 'result_rate', 'spent', 'unique_clicks', 'unique_impressions', 'website_purchase_roas', 'cost_per_unique_click'])
+const TIME_PRESET_PREFIX = new RegExp(`^(?:${RULE_TIME_PRESETS.map((p) => p.toLowerCase()).join('|')})_`)
+const aggregateProblem = (base: string) => (AGGREGATE_BASES.has(base.replace(TIME_PRESET_PREFIX, '')) ? null : `aggregate(…) takes one of Meta's aggregated results (reach, impressions, clicks, spent, cpc, …), not ${base}`)
+
+/** A field as Meta's grammar reads it. */
+export type ParsedRuleField =
+  | { kind: 'simple'; level: RuleLevel | null; attribution: string | null; base: string }
+  | { kind: 'aggregate'; attribution: string | null; base: string }
+  | { kind: 'formula'; terms: Array<{ kind: 'simple'; level: RuleLevel | null; attribution: string | null; base: string } | { kind: 'aggregate'; attribution: string | null; base: string }> }
+
+const isMetadataBase = (base: string) => Object.prototype.hasOwnProperty.call(METADATA_OPERATORS, base)
+/** Review A2 — an id named any other way than id, adlabel_ids or aggregation_id (campaign_id, account_id, …): never sent. */
+const OTHER_ID = /(^|_)ids?$/
+
+function simpleProblem(p: { level: RuleLevel | null; attribution: string | null; base: string }, inFormula: boolean): string | null {
+  const meta = isMetadataBase(p.base)
+  if (!meta && OTHER_ID.test(p.base)) return `"${p.base}" names ids another way than id, adlabel_ids or aggregation_id: Nexus never sends it`
+  if (meta && p.attribution) return `an attribution window (${p.attribution}:) is for results, not for the setting ${p.base}`
+  if (meta && p.level && NO_PREFIX.has(p.base)) return `${p.base} takes no level prefix`
+  if (inFormula && meta && !FORMULA_METADATA.has(p.base)) return `a formula or an aggregate holds results and only bid_amount, daily_budget, lifetime_budget or spend_cap of the settings (not ${p.base})`
+  return null
+}
+
+/** The field parsed, or why it is not one of Meta's grammar (lower-case ASCII only). */
+export function parseRuleField(field: unknown): ParsedRuleField | { problem: string } {
+  if (typeof field !== 'string' || !field) return { problem: 'a rule field is a name (lower-case letters, digits, _ . :)' }
+  if (field.length > MAX_FIELD) return { problem: `a rule field is at most ${MAX_FIELD} characters` }
+  const term = (text: string) => {
+    const simple = SIMPLE_PARTS.exec(text)
+    if (simple) return { kind: 'simple' as const, level: (simple[1] as RuleLevel | undefined) ?? null, attribution: simple[2] ?? null, base: simple[3] }
+    const aggregate = AGGREGATE_PARTS.exec(text)
+    if (aggregate) return { kind: 'aggregate' as const, attribution: aggregate[1] ?? null, base: aggregate[2] }
+    return null
+  }
+  const one = term(field)
+  if (one) {
+    const problem = one.kind === 'simple' ? simpleProblem(one, false) : aggregateProblem(one.base)
+    return problem ? { problem } : one
+  }
+  if (!field.includes(' ')) return { problem: `"${field.slice(0, 60)}" is not a rule field Meta documents (a field, its ad. / adset. / campaign. and attribution prefixes, aggregate(…) or a formula)` }
   const parts = field.split(' ')
-  if (parts.length % 2 === 0) return 'a formula alternates fields (or numbers) and + - * /, separated by single spaces'
+  if (parts.length % 2 === 0) return { problem: 'a formula alternates fields (or numbers) and + - * /, separated by single spaces' }
   let depth = 0
-  let fields = 0
+  const terms: Extract<ParsedRuleField, { kind: 'formula' }>['terms'] = []
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]
     if (i % 2 === 1) {
-      if (!['+', '-', '*', '/'].includes(part)) return `"${part.slice(0, 10)}" is not a formula operator (+ - * /)`
+      if (!['+', '-', '*', '/'].includes(part)) return { problem: `"${part.slice(0, 10)}" is not a formula operator (+ - * /)` }
       continue
     }
-    const open = /^\(*/.exec(part)![0].length
-    const close = /\)*$/.exec(part)![0].length
-    const term = part.slice(open, part.length - close)
-    depth += open
-    if (CONSTANT.test(term)) { /* a constant */ } else if (SIMPLE_FIELD.test(term) || AGGREGATE_FIELD.test(term)) fields++
-    else return `"${term.slice(0, 60)}" in the formula is not a rule field or a number`
-    depth -= close
-    if (depth < 0) return 'a formula closes a parenthesis it did not open'
+    const m = FORMULA_TERM.exec(part)
+    if (!m) return { problem: `"${part.slice(0, 60)}" in the formula is not a rule field or a number` }
+    depth += m[1].length
+    if (!CONSTANT.test(m[2])) {
+      const t = term(m[2])
+      if (!t) return { problem: `"${m[2].slice(0, 60)}" in the formula is not a rule field or a number` }
+      const problem = t.kind === 'simple' ? simpleProblem(t, true) : aggregateProblem(t.base)
+      if (problem) return { problem }
+      terms.push(t)
+    }
+    depth -= m[3].length
+    if (depth < 0) return { problem: 'a formula closes a parenthesis it did not open' }
   }
-  if (depth !== 0) return 'a formula\'s parentheses are balanced'
-  if (fields === 0) return 'a formula names at least one field'
-  return fields > 6 ? 'a formula names at most 6 fields (Meta)' : null
+  if (depth !== 0) return { problem: 'a formula\'s parentheses are balanced' }
+  if (terms.length === 0) return { problem: 'a formula names at least one field' }
+  return terms.length > 6 ? { problem: 'a formula names at most 6 fields (Meta)' } : { kind: 'formula', terms }
+}
+
+/** Why a rule field name is not one of Meta's grammar, or null. */
+export function ruleFieldProblem(field: unknown): string | null {
+  const parsed = parseRuleField(field)
+  return 'problem' in parsed ? parsed.problem : null
+}
+
+/** Is the field a setting (metadata) — a simple field whose base is one of Meta's metadata fields? */
+export function isMetadataRuleField(field: string): boolean {
+  const parsed = parseRuleField(field)
+  return !('problem' in parsed) && parsed.kind === 'simple' && isMetadataBase(parsed.base)
+}
+
+/** A results field named with a level or attribution prefix, an aggregate or a formula: an advanced field (schedule rules only). */
+export function isAdvancedRuleField(field: string): boolean {
+  const parsed = parseRuleField(field)
+  if ('problem' in parsed) return false
+  if (parsed.kind !== 'simple') return true
+  return !isMetadataBase(parsed.base) && (parsed.level !== null || parsed.attribution !== null || /^(daily|lifetime)_ratio_spent$/.test(parsed.base))
+}
+
+/**
+ * Review A2 — the kind of object an id or label field names, by its BASE name (after its level and attribution
+ * prefixes): an unprefixed id or an aggregation id is a campaign, ad set or ad (`adobject`), a prefixed id that level's
+ * object, adlabel_ids an ad label. Null: not an id field.
+ */
+export function ruleIdKind(field: string): 'adobject' | 'campaign' | 'adset' | 'ad' | 'adlabel' | null {
+  const m = SIMPLE_PARTS.exec(field)
+  if (!m) return null
+  const [, level, , base] = m
+  if (base === 'id') return (level as 'ad' | 'adset' | 'campaign' | undefined) ?? 'adobject'
+  if (base === 'aggregation_id') return 'adobject'
+  if (base === 'adlabel_ids') return 'adlabel'
+  return null
+}
+
+/** The operators a field takes (review B3): a setting its own, a result or an advanced field the five Meta lists. */
+export function ruleFieldOperators(field: string): readonly RuleOperator[] {
+  const parsed = parseRuleField(field)
+  if ('problem' in parsed || parsed.kind !== 'simple' || !isMetadataBase(parsed.base)) return RESULT_OPERATORS
+  return METADATA_OPERATORS[parsed.base]
 }
 
 // ── values ──────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -155,7 +264,8 @@ const exactKeys = (o: Record<string, unknown>, allowed: readonly string[], requi
 /** A number Meta reads as written: finite, at most 1e15 (an integer within JS's exact range). */
 const isNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e15
 const isInt = (v: unknown, min: number, max: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max
-const isText = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0 && [...v].length <= MAX_TEXT
+/** Review A6 — text judged as PARSED (a "\u0001" in the JSON is a control character here): no control or format character. */
+const isText = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0 && [...v].length <= MAX_TEXT && META_NAME_TEXT.test(v)
 const isScalar = (v: unknown) => isNumber(v) || isText(v) || typeof v === 'boolean'
 /** A Meta id inside a spec: digits, as a JSON string. */
 export const isRuleId = (v: unknown): v is string => typeof v === 'string' && /^\d{1,20}$/.test(v)
@@ -170,35 +280,36 @@ export function ruleValueProblem(operator: unknown, value: unknown, where: strin
     case 'GREATER_THAN': case 'LESS_THAN':
       return isNumber(value) ? null : `${where}: ${operator} compares a number`
     case 'EQUAL': case 'NOT_EQUAL':
-      return isScalar(value) ? null : `${where}: ${operator} compares one number, text or true / false`
+      return isScalar(value) ? null : `${where}: ${operator} compares one number, text (no control or format characters) or true / false`
     case 'IN_RANGE': case 'NOT_IN_RANGE':
       return Array.isArray(value) && value.length === 2 && value.every(isNumber) && (value[0] as number) <= (value[1] as number) ? null : `${where}: ${operator} takes [low, high], two numbers`
     case 'IN': case 'NOT_IN': case 'ANY': case 'ALL': case 'NONE':
       return Array.isArray(value) && value.length >= 1 && value.length <= MAX_RULE_IDS && value.every(isScalar) ? null : `${where}: ${operator} takes a list of 1 to ${MAX_RULE_IDS} values`
     case 'CONTAIN': case 'NOT_CONTAIN':
-      return isText(value) ? null : `${where}: ${operator} takes text`
+      return isText(value) ? null : `${where}: ${operator} takes text (no control or format characters)`
     default:
       return `${where}: the operator is one of ${RULE_OPERATORS.join(', ')}`
   }
 }
 
-/** Why one filter is refused, or null: exact keys, Meta's field grammar, its operator's value, the special fields' own rules. */
+/** Why a field's operator and value are refused (its own operators; ids as id lists; the special filters' values), or null. */
+function conditionProblem(field: string, operator: unknown, value: unknown, named: string): string | null {
+  const allowed = ruleFieldOperators(field)
+  if (!(allowed as readonly unknown[]).includes(operator)) return `${named}: ${field} takes ${allowed.join(', ')} (Meta)`
+  if (field === 'entity_type') return (RULE_ENTITY_TYPES as readonly unknown[]).includes(value) ? null : `${named}: entity_type EQUAL AD, ADSET or CAMPAIGN`
+  if (field === 'time_preset') return (RULE_TIME_PRESETS as readonly unknown[]).includes(value) ? null : `${named}: time_preset EQUAL one of Meta's presets`
+  if (field === 'attribution_window') return value === 'ACCOUNT_DEFAULT' ? null : `${named}: attribution_window is only EQUAL ACCOUNT_DEFAULT (Meta)`
+  if (ruleIdKind(field)) return operator === 'EQUAL' ? (isRuleId(value) ? null : `${named}: EQUAL one Meta id (digits, as a JSON string)`) : idList(value, named)
+  return ruleValueProblem(operator, value, named)
+}
+
+/** Why one filter is refused, or null: exact keys, Meta's field grammar, the field's own operators and its value. */
 function filterProblem(f: unknown, where: string): string | null {
   if (!plainObject(f) || !exactKeys(f, ['field', 'value', 'operator'], ['field', 'value', 'operator'])) return `${where} is {field, value, operator}`
   const field = f.field as string
   const fieldProblem = ruleFieldProblem(field)
   if (fieldProblem) return `${where}: ${fieldProblem}`
-  const named = `${where} (${field})`
-  if (field === 'entity_type') return f.operator === 'EQUAL' && (RULE_ENTITY_TYPES as readonly unknown[]).includes(f.value) ? null : `${named}: entity_type EQUAL AD, ADSET or CAMPAIGN`
-  if (field === 'time_preset') return f.operator === 'EQUAL' && (RULE_TIME_PRESETS as readonly unknown[]).includes(f.value) ? null : `${named}: time_preset EQUAL one of Meta's presets`
-  if (field === 'attribution_window') return f.operator === 'EQUAL' && f.value === 'ACCOUNT_DEFAULT' ? null : `${named}: attribution_window is only EQUAL ACCOUNT_DEFAULT (Meta)`
-  if (field in ID_FIELDS) {
-    if (field === 'aggregation_id') return f.operator === 'IN' ? idList(f.value, named) : `${named}: aggregation_id takes IN only`
-    if (f.operator === 'EQUAL') return isRuleId(f.value) ? null : `${named}: EQUAL one Meta id (digits, as a JSON string)`
-    return f.operator === 'IN' || f.operator === 'NOT_IN' ? idList(f.value, named) : `${named}: an id filter takes EQUAL, IN or NOT_IN`
-  }
-  if (LABEL_FIELD.test(field)) return ['ANY', 'ALL', 'NONE'].includes(f.operator as string) ? idList(f.value, named) : `${named}: adlabel_ids takes ANY, ALL or NONE`
-  return ruleValueProblem(f.operator, f.value, named)
+  return conditionProblem(field, f.operator, f.value, `${where} (${field})`)
 }
 
 /** Why a trigger is refused, or null (trigger-based-rules.md). */
@@ -210,9 +321,10 @@ function triggerProblem(t: unknown): string | null {
   if ('field' in t) { const problem = ruleFieldProblem(t.field); if (problem) return `the trigger: ${problem}` }
   if (('value' in t) !== ('operator' in t)) return 'a trigger names its value and operator together'
   if ((type === 'METADATA_UPDATE' || type === 'STATS_MILESTONE' || type === 'STATS_CHANGE') && !('field' in t)) return `a ${type} trigger names its field`
+  if (type === 'STATS_MILESTONE' && !MILESTONE_FIELDS.has(t.field as string)) return `a STATS_MILESTONE trigger is on one of Meta's milestone fields (impressions, reach, clicks, spent, results, …; not ${String(t.field)})`
   if (type === 'STATS_MILESTONE' && !(t.operator === 'EQUAL' && isNumber(t.value) && t.value > 0)) return 'a STATS_MILESTONE trigger is EQUAL a positive number (Meta)'
   if (type === 'STATS_CHANGE' && !['GREATER_THAN', 'LESS_THAN', 'IN_RANGE', 'NOT_IN_RANGE'].includes(t.operator as string)) return 'a STATS_CHANGE trigger is GREATER_THAN, LESS_THAN, IN_RANGE or NOT_IN_RANGE (Meta)'
-  return 'operator' in t ? ruleValueProblem(t.operator, t.value, 'the trigger') : null
+  return 'operator' in t ? conditionProblem(t.field as string, t.operator, t.value, 'the trigger') : null
 }
 
 /** Why an evaluation spec is refused, or null. */
@@ -291,7 +403,7 @@ export function executionSpecProblem(spec: unknown): string | null {
   const change = CHANGE_EXECUTION_TYPES.has(type)
   if (change !== seen.has('change_spec')) return change ? `${type} names its change_spec` : `only a budget or bid change takes a change_spec (not ${type})`
   if ((type === 'REBALANCE_BUDGET') !== seen.has('rebalance_spec')) return type === 'REBALANCE_BUDGET' ? 'REBALANCE_BUDGET names its rebalance_spec' : `only REBALANCE_BUDGET takes a rebalance_spec (not ${type})`
-  if (!change && (seen.has('execution_count_limit') || seen.has('action_frequency'))) return 'execution_count_limit and action_frequency go with a budget or bid change only (Meta)'
+  if (type !== 'CHANGE_BUDGET' && type !== 'CHANGE_BID' && (seen.has('execution_count_limit') || seen.has('action_frequency'))) return 'execution_count_limit and action_frequency go with CHANGE_BUDGET and CHANGE_BID only (Meta\'s execution-spec table)'
   if (type === 'PING_ENDPOINT' && seen.size) return 'PING_ENDPOINT takes no execution option (Meta: trigger rules need none)'
   return null
 }
@@ -305,9 +417,9 @@ export function scheduleSpecProblem(spec: unknown): string | null {
   if (!Array.isArray(entries) || entries.length < 1 || entries.length > MAX_SCHEDULE_ENTRIES) return `a CUSTOM schedule lists 1 to ${MAX_SCHEDULE_ENTRIES} times`
   for (const e of entries) {
     if (!plainObject(e) || !exactKeys(e, ['start_minute', 'end_minute', 'days']) || !('start_minute' in e || 'days' in e)) return 'each schedule time is {start_minute, end_minute, days} with start_minute or days (Meta)'
-    const minute = (v: unknown) => isInt(v, 0, 1440) && (v as number) % 30 === 0
-    if ('start_minute' in e && !minute(e.start_minute)) return 'start_minute is minutes after midnight, a multiple of 30 (0 … 1440)'
-    if ('end_minute' in e && (!('start_minute' in e) || !minute(e.end_minute) || (e.end_minute as number) < (e.start_minute as number))) return 'end_minute goes with start_minute, a multiple of 30, not before it'
+    const minute = (v: unknown, max: number) => isInt(v, 0, max) && (v as number) % 30 === 0
+    if ('start_minute' in e && !minute(e.start_minute, 1410)) return 'start_minute is minutes after midnight, a multiple of 30 (0 … 1410)'
+    if ('end_minute' in e && (!('start_minute' in e) || !minute(e.end_minute, 1440) || (e.end_minute as number) < (e.start_minute as number))) return 'end_minute goes with start_minute, a multiple of 30, not before it'
     if ('days' in e && !(Array.isArray(e.days) && e.days.length >= 1 && e.days.length <= 7 && e.days.every((d) => isInt(d, 0, 6)) && new Set(e.days).size === e.days.length)) return 'days lists 0 (Sunday) … 6 (Saturday), each once'
   }
   return null
@@ -378,17 +490,19 @@ function wholeRuleProblem(params: Params): string | null {
 }
 
 /**
- * The ids inside a rule change's body, each with the kind of object it names: the objects its filters are scoped to
- * (id, ad.id, adset.id, campaign.id, aggregation_id — an unprefixed id or an aggregation id is a campaign, ad set or ad:
- * `adobject`) and the ad labels it reads (adlabel_ids). The gateway checks each is of the chosen ad account.
+ * The ids inside a rule change's body, each with the kind of object it names (review A2: by the field's BASE name — after
+ * its level and attribution prefixes — in its filters AND its trigger): the objects it is scoped to (id, ad.id, adset.id,
+ * campaign.id, aggregation_id — an unprefixed id or an aggregation id is a campaign, ad set or ad: `adobject`) and the ad
+ * labels it reads (adlabel_ids). The gateway checks each is of the chosen ad account.
  */
 export function ruleBodyIds(body: string): Array<{ id: string; kind: 'adobject' | 'campaign' | 'adset' | 'ad' | 'adlabel' }> {
   const spec = canonicalJson(new URLSearchParams(body).get('evaluation_spec') ?? '')
-  if (!plainObject(spec) || !Array.isArray(spec.filters)) return []
+  if (!plainObject(spec)) return []
+  const conditions = [...(Array.isArray(spec.filters) ? spec.filters : []), ...(plainObject(spec.trigger) ? [spec.trigger] : [])]
   const out: Array<{ id: string; kind: 'adobject' | 'campaign' | 'adset' | 'ad' | 'adlabel' }> = []
-  for (const f of spec.filters) {
+  for (const f of conditions) {
     if (!plainObject(f) || typeof f.field !== 'string') continue
-    const kind = Object.prototype.hasOwnProperty.call(ID_FIELDS, f.field) ? ID_FIELDS[f.field] : LABEL_FIELD.test(f.field) ? 'adlabel' : null
+    const kind = ruleIdKind(f.field)
     if (!kind) continue
     for (const id of Array.isArray(f.value) ? f.value : [f.value]) if (isRuleId(id)) out.push({ id, kind })
   }

@@ -105,7 +105,8 @@ describe('create', () => {
   it('a trigger rule: no schedule, the webhook warning, Ads Manager never shows it', () => {
     const d = draft({ action: 'create', name: 'Ping', evaluation: { type: 'TRIGGER', filters: [{ field: 'entity_type', operator: 'EQUAL', value: 'ADSET' }], trigger: { type: 'METADATA_UPDATE', field: 'daily_budget' } }, execution: { type: 'PING_ENDPOINT' } })
     expect(d.requests[0].params.schedule_spec).toBeUndefined()
-    expect(d.warnings.join(' ')).toMatch(/ads_rules_engine webhook/)
+    expect(d.warnings.join(' ')).toMatch(/callback URL of this Meta app's webhook subscription for the ads_rules_engine field/)
+    expect(d.warnings.join(' ')).not.toMatch(/step 30/)
     expect(d.warnings.join(' ')).toMatch(/Ads Manager never shows it/)
   })
 })
@@ -172,6 +173,44 @@ describe('update, status, run, remove', () => {
     expect(d.spendsMoney[0]).toMatch(/without it, what it would have stopped keeps spending/)
     expect((d.before as { undo: Record<string, unknown> }).undo).toMatchObject({ action: 'create', name: 'Rule A', enable: true, schedule: { type: 'DAILY' } })
     expect(d.after).toMatchObject({ exists: 'no' })
+  })
+})
+
+describe('review round 1', () => {
+  const rotate: AdRuleRequest = { action: 'create', name: 'Rotate', evaluation: { type: 'SCHEDULE', filters: [{ field: 'entity_type', operator: 'EQUAL', value: 'AD' }, { field: 'adset.id', operator: 'IN', value: [AD_SET] }] }, execution: { type: 'ROTATE' }, schedule: { type: 'DAILY' } }
+  const ROTATE = { execution_type: 'ROTATE' }
+  const TARGET = { execution_type: 'CHANGE_BID', execution_options: [{ field: 'change_spec', value: { amount: 1500, target_field: 'cost_per_purchase_fb' }, operator: 'EQUAL' }] }
+  it('A1 — ROTATE switches the next ad on: SPENDS MONEY when made on, switched on, changed while on, or run', () => {
+    const on = draft({ ...rotate, enable: true })
+    expect(on.spendsMoney[0]).toMatch(/switches the next ad of the ad set on/)
+    expect(on.requests[0].raisesSpend).toBe(true)
+    expect(draft(rotate).spendsMoney).toEqual([])
+    const rotateRule = live({ execution: ROTATE, evaluation: { evaluation_type: 'SCHEDULE', filters: [{ field: 'entity_type', value: 'AD', operator: 'EQUAL' }, { field: 'adset.id', value: [AD_SET], operator: 'IN' }] } })
+    expect(draft({ action: 'status', ruleId: RULE, enabled: true }, { live: { ...rotateRule, status: 'DISABLED' } }).spendsMoney[0]).toMatch(/switches the next ad of the ad set on/)
+    expect(draft({ action: 'run', ruleId: RULE }, { live: rotateRule }).spendsMoney[0]).toMatch(/switches the next ad of the ad set on/)
+    expect(draft({ action: 'update', ruleId: RULE, schedule: { type: 'HOURLY' } }, { live: rotateRule }).spendsMoney[0]).toMatch(/spend more/)
+  })
+  it('A4 — a move towards a target cuts too: switching it off, changing it or deleting it while on is SPENDS MONEY', () => {
+    const target = live({ execution: TARGET })
+    expect(draft({ action: 'status', ruleId: RULE, enabled: false }, { live: target }).spendsMoney[0]).toMatch(/keeps spending/)
+    expect(removeRuleDraft(ctx({ live: target })).spendsMoney[0]).toMatch(/keeps spending/)
+  })
+  it('A5 — money Meta holds that does not go back to exactly the same amount is never named again', () => {
+    const half = { evaluation: { evaluation_type: 'SCHEDULE', filters: [{ field: 'entity_type', value: 'ADSET', operator: 'EQUAL' }, { field: 'time_preset', value: 'LAST_7D', operator: 'EQUAL' }, { field: 'spent', value: '50.5', operator: 'GREATER_THAN' }] }, execution: { execution_type: 'PAUSE' }, schedule: { schedule_type: 'DAILY' } }
+    expect(ruleInputOf(half, 'EUR')).toMatchObject({ why: expect.stringMatching(/cannot name again exactly/) })
+    const ugx = { ...half, evaluation: { ...half.evaluation, filters: [half.evaluation.filters[0], half.evaluation.filters[1], { field: 'spent', value: 5050, operator: 'GREATER_THAN' }] } }
+    expect(ruleInputOf(ugx, 'UGX')).toMatchObject({ why: expect.any(String) })
+    const whole = { ...half, evaluation: { ...half.evaluation, filters: [half.evaluation.filters[0], half.evaluation.filters[1], { field: 'spent', value: 5000, operator: 'GREATER_THAN' }] } }
+    expect(ruleInputOf({ ...whole, execution: { execution_type: 'CHANGE_BUDGET', execution_options: [{ field: 'change_spec', value: { amount: 30.5, unit: 'ACCOUNT_CURRENCY' }, operator: 'EQUAL' }] } }, 'EUR')).toMatchObject({ why: expect.stringMatching(/exactly in minor units/) })
+    expect(ruleInputOf({ ...ugx, evaluation: { ...ugx.evaluation, filters: [half.evaluation.filters[0], half.evaluation.filters[1], { field: 'spent', value: 5000, operator: 'GREATER_THAN' }] } }, 'UGX')).not.toHaveProperty('why')
+  })
+  it('B3 — a trigger takes no prefixed result and milestones only on Meta\'s fields; settings take their own operators', () => {
+    const t = (trigger: NonNullable<AdRuleRequest['evaluation']>['trigger'], filters = [{ field: 'entity_type', operator: 'EQUAL' as const, value: 'ADSET' }, { field: 'time_preset', operator: 'EQUAL' as const, value: 'TODAY' }]) =>
+      refusal({ action: 'create', name: 'T', evaluation: { type: 'TRIGGER', filters, trigger }, execution: { type: 'NOTIFICATION' } })
+    expect(t({ type: 'STATS_CHANGE', field: 'adset.cpc', operator: 'GREATER_THAN', valueCents: 100 })).toMatch(/not allowed as a trigger/)
+    expect(t({ type: 'METADATA_CREATION' }, [{ field: 'entity_type', operator: 'EQUAL', value: 'ADSET' }, { field: 'time_preset', operator: 'EQUAL', value: 'TODAY' }, { field: 'campaign.today_spent', operator: 'GREATER_THAN', valueCents: 100 }])).toMatch(/schedule rules only/)
+    expect(t({ type: 'STATS_MILESTONE', field: 'ctr', operator: 'EQUAL', value: 2 }, [{ field: 'entity_type', operator: 'EQUAL', value: 'ADSET' }, { field: 'time_preset', operator: 'EQUAL', value: 'LIFETIME' }])).toMatch(/milestone fields/)
+    expect(refusal({ ...pauseRule, evaluation: { ...pauseRule.evaluation!, filters: [...pauseRule.evaluation!.filters!, { field: 'campaign.objective', operator: 'EQUAL', value: 'OUTCOME_SALES' }] } })).toMatch(/objective takes IN, NOT_IN/)
   })
 })
 

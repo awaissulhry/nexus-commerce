@@ -127,13 +127,14 @@ describe('set-meta-ad-rule', () => {
     expect(undo).toMatchObject({ tool: 'remove-meta-ad-rule', args: { ruleId: NEW_RULE, confirmDelete: true, connectionId: 'm-1' } })
     expect(tool('remove-meta-ad-rule').input.safeParse((undo as { args: unknown }).args).success).toBe(true)
   })
-  it('create: Meta reads the new rule back ON although it was asked OFF — not done, no record', async () => {
+  it('review A3 — a new rule Meta reads back ON although it was asked OFF is recorded (it exists), named, and its undo deletes it', async () => {
     const p = await preview('set-meta-ad-rule', createArgs)
     h.send.mockImplementation(async () => readBack({ id: NEW_RULE, status: 'ENABLED' }))
     const out = await run('set-meta-ad-rule', createArgs, p.preview)
-    expect(out.ok).toBe(false)
-    expect(out.error).toMatch(/Not confirmed: .*reads back status ENABLED/)
-    expect(out.change).toBeUndefined()
+    expect(out.ok).toBe(true)
+    expect(out.data.warning).toMatch(new RegExp(`Meta made rule ${NEW_RULE} but reads it back ENABLED, not DISABLED .*it can act now.*remove-meta-ad-rule`))
+    expect(out.change!.after).toMatchObject({ id: NEW_RULE, exists: 'yes' })
+    expect(tool('set-meta-ad-rule').undo!.request(out.change!)).toMatchObject({ tool: 'remove-meta-ad-rule', args: { ruleId: NEW_RULE, confirmDelete: true } })
   })
   it('status on: Meta\'s preview of the rule in the preview, SPENDS MONEY for a raise; the run sends only the status; undo switches it back', async () => {
     h.live = { ...structuredClone(LIVE), status: 'DISABLED', specs: { ...LIVE.specs, execution: RAISE } }
@@ -173,7 +174,7 @@ describe('set-meta-ad-rule', () => {
   })
   it('Meta\'s 2703 is said in plain words; a rule of another account is refused in words', async () => {
     const p = await preview('set-meta-ad-rule', createArgs)
-    h.send.mockImplementation(async () => { throw new MetaWriteError({ origin: 'meta', httpStatus: 400, code: '2703', authLost: false, throttled: false, permissionDenied: false, notFound: false, sentence: 'Meta refused it (2703): Rules that turn off ads can\'t have cost conditions. Nothing was changed.' }, 'adRule.create', 'refused') })
+    h.send.mockImplementation(async () => { throw new MetaWriteError({ origin: 'meta', httpStatus: 400, code: '100/2703', authLost: false, throttled: false, permissionDenied: false, notFound: false, sentence: 'Meta refused it (100/2703): Rules that turn off ads can\'t have cost conditions. Nothing was changed.' }, 'adRule.create', 'refused') })
     const out = await run('set-meta-ad-rule', createArgs, p.preview)
     expect(out.ok).toBe(false)
     expect(out.error).toMatch(/In plain words: Meta does not take a rule that turns ads off together with a spend or cost condition/)

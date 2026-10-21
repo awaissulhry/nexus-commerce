@@ -371,7 +371,10 @@ export async function runMetaChange(
       // Step 18 — a change past status: Meta said success, but a field it asked reads back otherwise: not done (no
       // record, no undo), and a missed step for what follows.
       const moved = request.expect ? readBackMismatch(result.node, expectedOf(request)) : []
-      if (moved.length) {
+      // Step 29 review A3 — a new object Meta made but reads back otherwise (a rule asked OFF, read ON): it exists, so it is
+      // recorded (its undo deletes it) and the tool's finish says so; a later raise of the same change is not sent.
+      if (moved.length && request.recordWhenMoved) missedAt ??= request.step
+      else if (moved.length) {
         missedAt ??= request.step
         steps.push({ step: request.step, label: request.label, outcome: 'not_confirmed', sentence: `${request.label}: Meta answered success but it reads back ${readsOf(result.node!, expectedOf(request))}, not what was asked (${moved.join(', ')}). Nexus records no change for it and never sends it again by itself; meta-ads-live shows it now.` })
         continue
@@ -379,7 +382,7 @@ export async function runMetaChange(
       // Meta said success, but the object reads back with another status than the one asked: not done (no record, no
       // undo), and a missed step for what follows (no later switch-on).
       const readStatus = typeof result.node?.status === 'string' ? result.node.status : null
-      if (readStatus && request.params.status && readStatus !== request.params.status) {
+      if (readStatus && request.params.status && readStatus !== request.params.status && !request.recordWhenMoved) {
         missedAt ??= request.step
         steps.push({ step: request.step, label: request.label, outcome: 'not_confirmed', sentence: `${request.label}: Meta answered success but it reads back ${readStatus}${typeof result.node?.effective_status === 'string' ? ` (${result.node.effective_status})` : ''}, not ${request.params.status}. Nexus records no change for it and never sends it again by itself; meta-ads-live shows it now.` })
         continue

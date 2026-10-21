@@ -925,7 +925,7 @@ const STATUS_WORDS: Record<string, string> = {
 const EXECUTION_WORDS: Record<string, string> = {
   PAUSE: 'pauses the matching objects', UNPAUSE: 'switches the matching objects on (they can spend)', CHANGE_BUDGET: 'changes ad set budgets',
   CHANGE_CAMPAIGN_BUDGET: 'changes campaign budgets', CHANGE_BID: 'changes ad set bids', NOTIFICATION: 'notifies people',
-  PING_ENDPOINT: 'calls the app\'s webhook', ROTATE: 'rotates the ads of an ad set', REBALANCE_BUDGET: 'moves budget between ad sets',
+  PING_ENDPOINT: 'calls the app\'s webhook', ROTATE: 'pauses the ad running now and switches the next ad of the ad set on', REBALANCE_BUDGET: 'moves budget between ad sets',
 }
 const TRIGGER_WORDS: Record<string, string> = {
   METADATA_CREATION: 'when an object is created', METADATA_UPDATE: 'when a setting changes', STATS_MILESTONE: 'each time a number reaches a milestone',
@@ -1016,6 +1016,8 @@ function executionOption(raw: Row, account: MetaChosenAccount) {
 /** Could this rule raise spend when it runs (switch on, a budget or bid raise, or a change towards a target)? */
 function canRaiseSpend(type: string | null, options: Array<Record<string, unknown>>): boolean {
   if (type === 'UNPAUSE') return true
+  // Step 29 review A1 — ROTATE switches the next ad of each matched ad set on (execution-spec.md; master RU-018).
+  if (type === 'ROTATE') return true
   if (type !== 'CHANGE_BUDGET' && type !== 'CHANGE_CAMPAIGN_BUDGET' && type !== 'CHANGE_BID' && type !== 'REBALANCE_BUDGET') return false
   if (type === 'REBALANCE_BUDGET') return true
   const spec = options.find((o) => o.option === 'change_spec')

@@ -93,14 +93,14 @@ const executionArg = z.object({
   }).optional().describe('REBALANCE_BUDGET: how budget moves between ad sets'),
   notifyUserIds: z.array(z.string().trim().regex(/^\d{1,20}$/, 'a Facebook user id is digits only')).min(1).max(MAX_RULE_PEOPLE).optional()
     .describe('Facebook people Meta notifies (and, for a schedule rule, e-mails a daily summary); Nexus cannot check who they are'),
-  maxActionsPerObject: z.number().int().min(1).max(100_000).optional().describe('budget or bid changes: at most this many per object (execution_count_limit)'),
-  minMinutesBetweenActions: z.number().int().min(1).max(525_600).optional().describe('budget or bid changes: at least this many minutes between two on the same object (action_frequency)'),
+  maxActionsPerObject: z.number().int().min(1).max(100_000).optional().describe('CHANGE_BUDGET, CHANGE_BID: at most this many changes per object (execution_count_limit)'),
+  minMinutesBetweenActions: z.number().int().min(1).max(525_600).optional().describe('CHANGE_BUDGET, CHANGE_BID: at least this many minutes between two changes of the same object (action_frequency)'),
 }).describe('what the rule does to the objects that match (update: the whole action)')
 const scheduleArg = z.object({
   type: z.preprocess(upper, z.enum(RULE_SCHEDULE_TYPES)).describe('DAILY (just after midnight, account time), HOURLY, SEMI_HOURLY, CUSTOM (times)'),
   times: z.array(z.object({
     days: z.array(z.number().int().min(0).max(6)).min(1).max(7).optional().describe('0 = Sunday … 6 = Saturday (default every day)'),
-    startMinute: z.number().int().min(0).max(1440).optional().describe('minutes after midnight, a multiple of 30 (alone: that time; without it: every 30 minutes on the days)'),
+    startMinute: z.number().int().min(0).max(1410).optional().describe('minutes after midnight, a multiple of 30 up to 1410 (alone: that time; without it: every 30 minutes on the days)'),
     endMinute: z.number().int().min(0).max(1440).optional().describe('with startMinute: to this minute (a multiple of 30)'),
   })).min(1).max(MAX_SCHEDULE_ENTRIES).optional().describe('CUSTOM: the times (OR-ed)'),
 }).describe('a schedule rule\'s schedule (update: the whole schedule)')
@@ -125,7 +125,7 @@ const specOf = (v: unknown): Record<string, unknown> | null => {
 
 /** Meta's 2703 in plain words (reference adrules_library: "Rules that turn off ads can't have cost conditions"). */
 function plainMetaWords(out: ToolResult): ToolResult {
-  if (out.ok || typeof out.error !== 'string' || !/\(2703\b/.test(out.error)) return out
+  if (out.ok || typeof out.error !== 'string' || !/[(/]2703\b/.test(out.error)) return out
   return { ...out, error: `${out.error} In plain words: Meta does not take a rule that turns ads off together with a spend or cost condition — change the conditions (no spend or cost condition) or the action (notify instead), and ask again.` }
 }
 
@@ -143,8 +143,14 @@ function ruleFinish(draft: MetaChangeDraft, done: Array<{ request: MetaChangeDra
     ? ruleStateOf(text(node.name), text(node.status), { evaluation: specOf(node.evaluation_spec), execution: specOf(node.execution_spec), schedule: specOf(node.schedule_spec) })
     : null
   const after: RuleRecord = { ...planned, id, ...(read ? { rule: read } : {}) }
+  // Review A3 — a new rule Meta reads back with another status than asked (asked OFF, read ON): it exists and can act now.
+  const readStatus = node && typeof node.status === 'string' ? node.status : null
+  const asked = planned.rule?.status ?? null
+  const otherStatus = planned.action === 'create' && readStatus && asked && readStatus !== asked
+    ? `Meta made rule ${id || '(id not read)'} but reads it back ${readStatus}, not ${asked} as Nexus asked${readStatus === 'ENABLED' ? ': it can act now' : ''}. set-meta-ad-rule action status (enabled ${asked === 'ENABLED'}) or remove-meta-ad-rule (ruleId ${id || '?'}) puts that right; the undo of this change deletes it.`
+    : null
   return {
-    data: { ruleId: id || null, name: after.rule?.name ?? null, status: after.rule?.status ?? null, ...(before.noUndo?.length ? { noUndo: before.noUndo } : {}), ...(read ? {} : { readBack: 'Meta\'s read-back held no specs: the record keeps the rule as Nexus sent it.' }) },
+    data: { ruleId: id || null, name: after.rule?.name ?? null, status: after.rule?.status ?? null, ...(otherStatus ? { warning: otherStatus } : {}), ...(before.noUndo?.length ? { noUndo: before.noUndo } : {}), ...(read ? {} : { readBack: 'Meta\'s read-back held no specs: the record keeps the rule as Nexus sent it.' }) },
     before,
     after,
   }
@@ -246,8 +252,8 @@ const setMetaAdRule: AgentTool = {
     + 'and a change shows Meta\'s own preview of the objects the rule would act on now (a POST that only reads). Money in '
     + 'minor units of the account currency (valueCents, amountCents, limitCents, targetValueCents); a ROAS or a ratio '
     + 'exactly as Meta reads it (valueAsMeta). Switching on, making on or running a rule that can raise spend (switch on, a '
-    + 'raise, a move towards a target, a rebalance) is SPENDS MONEY; so is switching off or changing a rule that is on and '
-    + 'pauses or cuts (what it stops keeps spending). Meta has no check for rules. Not here: Meta\'s recommended rules '
+    + 'raise, a move towards a target, a rebalance, a rotation — it switches the next ad on) is SPENDS MONEY; so is switching '
+    + 'off or changing a rule that is on and pauses or cuts (a cut, a move towards a target: what it stops keeps spending). Meta has no check for rules. Not here: Meta\'s recommended rules '
     + '(recommended_rule_key: Meta documents no value) and the enum\'s undocumented actions. Undo deletes a new rule, puts '
     + 'back a change or a switch; a run has no undo (meta-ad-rules view history shows what it did). Deleting is '
     + 'remove-meta-ad-rule.'
@@ -299,7 +305,7 @@ const removeMetaAdRule: AgentTool = {
     'Delete ONE of Meta\'s automated rules on the business\'s chosen Meta ad account (meta-ad-rules view list shows them) — '
     + 'only when the person explicitly asked to delete it (confirmDelete: true). Deleting is for good on Meta; undo makes a '
     + 'NEW rule with the same name, conditions, action, schedule and status (a new id; the deleted one\'s run history does '
-    + 'not come back). Deleting a rule that is on and pauses ads or cuts budgets or bids is SPENDS MONEY: what it would have '
+    + 'not come back). Deleting a rule that is on and pauses ads, cuts budgets or bids or moves them towards a target is SPENDS MONEY: what it would have '
     + 'stopped keeps spending. To stop a rule for a while, switch it off instead (set-meta-ad-rule action status). Meta has '
     + 'no check for this change.'
     + META_CHANGE_RULES,

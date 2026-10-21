@@ -55,6 +55,11 @@ export interface MetaChangeRequest {
   method?: 'POST' | 'DELETE'
   /** A budget schedule's campaign or ad set. */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  /**
+   * Step 29 — a create whose new object exists even when Meta reads it back otherwise than asked (a rule asked OFF, read
+   * ON): it is recorded as done (so its undo deletes it) and the tool's finish says what it reads; never sent again.
+   */
+  recordWhenMoved?: true
 }
 
 export interface MetaChangeDraft {

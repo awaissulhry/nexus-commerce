@@ -97,18 +97,20 @@ describe('the rule entries of the write allow-list', () => {
     expect(withFilter({ field: 'attribution_window', value: '7D_CLICK', operator: 'EQUAL' })).toMatch(/only EQUAL ACCOUNT_DEFAULT/)
     expect(withFilter({ field: 'adset.id', value: [120000000000002], operator: 'IN' })).toMatch(/as JSON strings/)
     expect(withFilter({ field: 'adset.id', value: [AD_SET], operator: 'IN' })).toBeNull()
-    expect(withFilter({ field: 'adlabel_ids', value: ['120000000000301'], operator: 'IN' })).toMatch(/ANY, ALL or NONE/)
+    expect(withFilter({ field: 'adlabel_ids', value: ['120000000000301'], operator: 'IN' })).toMatch(/adlabel_ids takes ANY, ALL, NONE/)
     expect(withFilter({ field: 'name', value: 'Saldi città', operator: 'CONTAIN' })).toBeNull()
     expect(withFilter({ field: 'name', value: 'Saldi ‮città', operator: 'CONTAIN' })).toMatch(/printable text/)
-    expect(withFilter({ field: 'spent', value: 1, operator: 'LIKE' })).toMatch(/operator is one of/)
+    expect(withFilter({ field: 'spent', value: 1, operator: 'LIKE' })).toMatch(/spent takes GREATER_THAN, LESS_THAN, EQUAL, IN_RANGE, NOT_IN_RANGE/)
     expect(create({ evaluation: { evaluation_type: 'SCHEDULE', filters: [{ field: 'spent', value: 1, operator: 'GREATER_THAN' }] } })).toMatch(/entity_type or an id filter/)
     expect(create({ evaluation: { ...EVAL, filters: [...EVAL.filters, { field: 'time_preset', value: 'TODAY', operator: 'EQUAL' }] } })).toMatch(/at most one time_preset/)
   })
   it('field names: Meta\'s grammar (prefixes, aggregate, formulas of at most 6 fields), nothing else', () => {
-    for (const ok of ['spent', 'adset.daily_budget', 'campaign.28d_view_1d_click:lifetime_results', 'yesterday_spent', 'offsite_conversion.fb_pixel_purchase', 'aggregate(lifetime_reach)', 'today_spent / adset.daily_budget', '0.8 * cpc + 0.2 * cpm', '(adset.spent - spent)']) {
+    for (const ok of ['spent', 'adset.daily_budget', 'campaign.28d_view_1d_click:lifetime_results', 'yesterday_spent', 'offsite_conversion.fb_pixel_purchase', 'aggregate(lifetime_reach)', 'today_spent / adset.daily_budget', '0.8 * cpc + 0.2 * cpm', '(adset.spent - spent)',
+      // Review B2 — Meta's own good examples with an aggregate inside a formula.
+      'today_impressions / aggregate(today_impressions)', '(today_impressions / aggregate(today_impressions))', 'constructor']) {
       expect(ruleFieldProblem(ok), ok).toBeNull()
     }
-    for (const bad of ['Spent', 'lifetime_campaign.spent x', 'ad.adset.spent', 'today_impressions/yesterday_impressions', 'spent; DROP', '(spent', 'a + b + c + d + e + f + g', 'aggregate(adset.reach)', `${'x'.repeat(201)}`]) {
+    for (const bad of ['Spent', 'lifetime_campaign.spent x', 'ad.adset.spent', 'campaign_id', 'adset.account_id', 'campaign.7d_click:id', 'campaign.inline:adlabel_ids', '1d_click:daily_budget', 'adset.entity_type', 'aggregate(daily_budget)', 'id + spent', 'today_impressions/yesterday_impressions', 'spent; DROP', '(spent', 'a + b + c + d + e + f + g', 'aggregate(adset.reach)', `${'x'.repeat(201)}`]) {
       expect(ruleFieldProblem(bad), bad).not.toBeNull()
     }
   })
@@ -143,7 +145,7 @@ describe('the rule entries of the write allow-list', () => {
     expect(opt('NOTIFICATION', [{ field: 'user_ids', value: ['100001', '100002'], operator: 'EQUAL' }])).toBeNull()
     expect(opt('NOTIFICATION', [{ field: 'user_ids', value: [100001], operator: 'EQUAL' }])).toMatch(/Facebook user ids/)
     expect(opt('NOTIFICATION', [{ field: 'user_ids', value: ['100001'], operator: 'IN' }])).toMatch(/operator is EQUAL/)
-    expect(opt('PAUSE', [{ field: 'execution_count_limit', value: 3, operator: 'EQUAL' }])).toMatch(/budget or bid change only/)
+    expect(opt('PAUSE', [{ field: 'execution_count_limit', value: 3, operator: 'EQUAL' }])).toMatch(/CHANGE_BUDGET and CHANGE_BID only/)
     expect(opt('CHANGE_BID', [change({ amount: 5, unit: 'PERCENTAGE' }), { field: 'action_frequency', value: 1440, operator: 'EQUAL' }, { field: 'execution_count_limit', value: 3, operator: 'EQUAL' }])).toBeNull()
   })
   it('an update: a name, the WHOLE rule (RU-026), or a status alone — never mixed, never DELETED', () => {
@@ -180,6 +182,45 @@ describe('the rule entries of the write allow-list', () => {
       { id: CAMPAIGN, kind: 'adobject' }, { id: AD_SET, kind: 'adset' }, { id: '120000000000301', kind: 'adlabel' }, { id: '120000000000003', kind: 'adobject' },
     ])
     expect(wholeRuleSpecsProblem(EVAL, PAUSE, DAILY)).toBeNull()
+  })
+})
+
+describe('review round 1 — isolation, operators, Meta\'s grammar', () => {
+  const withFilter = (f: Record<string, unknown>) => create({ evaluation: { ...EVAL, filters: [{ field: 'entity_type', value: 'ADSET', operator: 'EQUAL' }, f] } })
+  it('A2 — ids by their base name, in the filters AND the trigger; no other *_id field; no attribution on a setting', () => {
+    expect(withFilter({ field: 'campaign.7d_click:id', value: ['120000000000009'], operator: 'IN' })).toMatch(/attribution window .* not for the setting id/)
+    expect(withFilter({ field: 'campaign.inline:adlabel_ids', value: ['120000000000301'], operator: 'ANY' })).toMatch(/not for the setting adlabel_ids/)
+    expect(withFilter({ field: 'campaign_id', value: ['120000000000009'], operator: 'IN' })).toMatch(/names ids another way/)
+    const trigger = { evaluation_type: 'TRIGGER', filters: [{ field: 'entity_type', value: 'ADSET', operator: 'EQUAL' }], trigger: { type: 'METADATA_UPDATE', field: 'adset.id', value: ['120000000000008'], operator: 'IN' } }
+    expect(create({ evaluation: trigger, schedule: null })).toBeNull()
+    expect(ruleBodyIds(form({ evaluation_spec: JSON.stringify(trigger) }))).toEqual([{ id: '120000000000008', kind: 'adset' }])
+    expect(create({ evaluation: { ...trigger, trigger: { ...trigger.trigger, value: [120000000000008] } }, schedule: null })).toMatch(/as JSON strings/)
+  })
+  it('A6 — "constructor" is not an id field; a control character inside a parsed value is refused', () => {
+    expect(withFilter({ field: 'constructor', value: 1, operator: 'GREATER_THAN' })).toBeNull()
+    expect(withFilter({ field: 'name', value: 'A\u0001B', operator: 'CONTAIN' })).toMatch(/no control or format characters/)
+    expect(withFilter({ field: 'name', value: 'Shop A', operator: 'CONTAIN' })).toBeNull()
+  })
+  it('B3 — each field takes its own operators; milestones only on Meta\'s fields', () => {
+    expect(withFilter({ field: 'name', value: 'x', operator: 'GREATER_THAN' })).toMatch(/name takes EQUAL, CONTAIN, NOT_CONTAIN/)
+    expect(withFilter({ field: 'campaign.objective', value: 'OUTCOME_SALES', operator: 'EQUAL' })).toMatch(/objective takes IN, NOT_IN/)
+    expect(withFilter({ field: 'campaign.objective', value: ['OUTCOME_SALES'], operator: 'IN' })).toBeNull()
+    expect(withFilter({ field: 'placement.page_types', value: ['INSTAGRAMSTORY'], operator: 'IN' })).toMatch(/ANY, ALL, NONE/)
+    expect(withFilter({ field: 'spent', value: [1, 2], operator: 'IN' })).toMatch(/spent takes GREATER_THAN/)
+    expect(withFilter({ field: 'cpc', value: 100, operator: 'NOT_EQUAL' })).toMatch(/cpc takes GREATER_THAN/)
+    expect(withFilter({ field: 'stop_time', value: [1, 2], operator: 'IN_RANGE' })).toMatch(/stop_time takes GREATER_THAN, LESS_THAN/)
+    const milestone = (field: string) => create({ evaluation: { evaluation_type: 'TRIGGER', filters: [{ field: 'entity_type', value: 'AD', operator: 'EQUAL' }, { field: 'time_preset', value: 'LIFETIME', operator: 'EQUAL' }], trigger: { type: 'STATS_MILESTONE', field, value: 10, operator: 'EQUAL' } }, schedule: null })
+    expect(milestone('link_click')).toBeNull()
+    expect(milestone('ctr')).toMatch(/milestone fields/)
+  })
+  it('12 — start_minute below 1440; execution_count_limit and action_frequency with CHANGE_BUDGET / CHANGE_BID only', () => {
+    expect(create({ schedule: { schedule_type: 'CUSTOM', schedule: [{ start_minute: 1440 }] } })).toMatch(/0 … 1410/)
+    expect(create({ schedule: { schedule_type: 'CUSTOM', schedule: [{ start_minute: 1410, end_minute: 1440 }] } })).toBeNull()
+    expect(create({ evaluation: { ...EVAL, filters: [{ field: 'entity_type', value: 'CAMPAIGN', operator: 'EQUAL' }] }, execution: { execution_type: 'CHANGE_CAMPAIGN_BUDGET', execution_options: [{ field: 'change_spec', value: { amount: 10, unit: 'PERCENTAGE' }, operator: 'EQUAL' }, { field: 'execution_count_limit', value: 2, operator: 'EQUAL' }] } })).toMatch(/CHANGE_BUDGET and CHANGE_BID only/)
+  })
+  it('the refusal sentences name the rule tools', () => {
+    expect(problem({ method: 'DELETE', url: `${BASE}/${RULE}`, body: undefined })).toMatch(/remove-meta-ad-rule/)
+    expect(problem({ url: `${BASE}/${RULE}`, body: form({ name: 'x' }) })).toMatch(/set-meta-ad-rule/)
   })
 })
 

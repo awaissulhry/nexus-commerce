@@ -32,8 +32,8 @@ import { currencyExponent } from './money.js'
 import type { LiveRule, LiveRuleSpecs, RulePreview, RuleWords } from './live-rules.js'
 import { META_NAME_TEXT, typedTextOk } from '../../gateway/meta-settings-rules.js'
 import {
-  AD_RULE_READ_BACK, CHANGE_EXECUTION_TYPES, isRuleId, ruleFieldProblem, TODAY_TIME_PRESETS, TRIGGER_EXECUTION_TYPES, wholeRuleSpecsProblem,
-  type RuleExecutionType, type RuleOperator,
+  AD_RULE_READ_BACK, CHANGE_EXECUTION_TYPES, isAdvancedRuleField, isMetadataRuleField, isRuleId, MILESTONE_FIELDS, parseRuleField, ruleFieldProblem, ruleIdKind,
+  TODAY_TIME_PRESETS, TRIGGER_EXECUTION_TYPES, wholeRuleSpecsProblem, type RuleExecutionType, type RuleOperator,
 } from '../../gateway/meta-ad-rule-rules.js'
 
 type Row = Record<string, unknown>
@@ -73,30 +73,26 @@ const refuse = (message: string): never => { throw new RuleRefusal(message) }
 
 // ── fields: which way a value goes ──────────────────────────────────────────────────────────────────────────────────
 
-/** Id fields and the aggregation id: their values are Meta ids (plain). */
-const ID_LIKE = /^(?:(?:ad|adset|campaign)\.)?(?:id|adlabel_ids)$|^aggregation_id$/
+/** Id and label fields (by their BASE name — review A2: the gateway's ruleIdKind): their values are Meta ids (plain). */
+const isIdField = (field: string) => ruleIdKind(field) !== null
 /** Which value key a field takes: plain `value`, money `valueCents`, or `valueAsMeta` (step 8's allow-list decides). */
 export function valueKeyOf(field: string): 'value' | 'valueCents' | 'valueAsMeta' {
-  if (ID_LIKE.test(field) || isPlainRuleField(field)) return 'value'
+  if (isIdField(field) || isPlainRuleField(field)) return 'value'
   if (isMoneyRuleField(field)) return 'valueCents'
   return 'valueAsMeta'
 }
 
-/** The metadata fields (evaluation-spec.md "Metadata filters"): any other field is a result (insights) and needs a time_preset. */
-const METADATA_FIELDS = new Set([
-  'id', 'entity_type', 'name', 'adlabel_ids', 'objective', 'start_time', 'stop_time', 'buying_type', 'billing_event', 'optimization_goal', 'is_autobid',
-  'daily_budget', 'lifetime_budget', 'spend_cap', 'bid_amount', 'created_time', 'updated_time', 'effective_status', 'placement.page_types',
-  'budget_reset_period', 'hours_since_creation', 'estimated_budget_spending_percentage', 'audience_reached_percentage', 'active_time', 'current_time',
-  'time_preset', 'attribution_window', 'aggregation_id',
-])
+/** A setting (any other field is a result and needs a time_preset) — the gateway's own table of metadata fields. */
+const isMetadata = (field: string) => isMetadataRuleField(field)
 /** Metadata filters Meta supports for schedule rules only. */
 const SCHEDULE_ONLY_METADATA = new Set(['effective_status', 'placement.page_types', 'budget_reset_period', 'hours_since_creation', 'estimated_budget_spending_percentage', 'audience_reached_percentage', 'active_time', 'current_time'])
-/** Insights fields Meta's table marks "not allowed for trigger based rules". */
+/** Insights fields Meta's table marks "not allowed for trigger based rules" (judged on the field's base name). */
 const NOT_FOR_TRIGGERS = /^(mobile_app_purchase_roas|website_purchase_roas|offline_conversion(\..+)?|cost_per_offline_conversion|cost_per_offline_other|cost_per_post_engagement|lifetime_impressions|lifetime_spent|today_spent|yesterday_spent)$/
-const levelLess = (field: string) => field.replace(/^(ad|adset|campaign)\./, '')
-const isMetadata = (field: string) => METADATA_FIELDS.has(levelLess(field)) || METADATA_FIELDS.has(field)
-/** An advanced field (schedule rules only): a formula, an aggregate, an attribution prefix, an alias. */
-const isAdvanced = (field: string) => field.includes(' ') || field.startsWith('aggregate(') || field.includes(':') || /^(daily|lifetime)_ratio_spent$/.test(field)
+/** A simple field's base name (no level, no attribution prefix); the field itself for an aggregate or a formula. */
+const baseOf = (field: string) => { const p = parseRuleField(field); return !('problem' in p) && p.kind === 'simple' ? p.base : field }
+const levelLess = (field: string) => baseOf(field)
+/** An advanced field (schedule rules only): a prefixed result, a formula, an aggregate, an alias (review B3). */
+const isAdvanced = (field: string) => isAdvancedRuleField(field)
 /** STATS_MILESTONE minimums (trigger-based-rules.md): spent in the currency's base unit. */
 const MILESTONE_MINIMUM: Readonly<Record<string, number>> = { impressions: 1000, unique_impressions: 1000, reach: 1000, clicks: 10, unique_clicks: 10, spent: 1000, results: 5 }
 
@@ -104,7 +100,7 @@ const MILESTONE_MINIMUM: Readonly<Record<string, number>> = { impressions: 1000,
 
 /** A plain value as Meta takes it: ids as text (a number is taken only while it is exact). */
 function plainValue(field: string, value: RuleValue, where: string): RuleValue {
-  if (!ID_LIKE.test(field)) return value
+  if (!isIdField(field)) return value
   const asId = (v: RuleScalar) => (typeof v === 'number' && Number.isSafeInteger(v) && v > 0 ? String(v) : v)
   const out = Array.isArray(value) ? value.map(asId) : asId(value)
   for (const v of Array.isArray(out) ? out : [out]) if (!isRuleId(v)) refuse(`${where}: ${field} takes Meta ids, as text of digits.`)
@@ -230,13 +226,27 @@ function unsafeNumber(v: unknown, depth = 0): boolean {
   return false
 }
 
+/**
+ * Review A5 — Meta's base-unit amount as minor units, only when it goes back to EXACTLY the same amount (step 8's
+ * metaBudgetCents rounds: UGX 5050 → 51 → 5100, EUR "50.5" → 51): else null, and the rule is not named again.
+ */
+function exactCents(v: unknown, currency: string | null): number | null {
+  const c = metaBudgetCents(v, currency)
+  if (c === null) return null
+  try {
+    return ruleMoneyParam(c, currency) === Number(v) ? c : null
+  } catch (err) {
+    if (err instanceof MetaUnitError) return null
+    throw err
+  }
+}
 /** A value as a request can name it again: text the tool's input takes (≤ 400, no control or format character), a number, true / false. */
 const asScalar = (v: unknown): RuleScalar | null => (typeof v === 'string' ? (typedTextOk(v, META_NAME_TEXT, 400) ? v : null) : typeof v === 'number' || typeof v === 'boolean' ? v : null)
 /** A rule's name a request can name again (the tool's own check), else null. */
 const nameAgain = (name: string | null): string | null => (typedTextOk(name, META_NAME_TEXT, 400) ? name : null)
 const cents = (v: unknown, currency: string | null): number | number[] | null => {
-  if (Array.isArray(v)) { const out = v.map((x) => metaBudgetCents(x, currency)); return out.length === 2 && out.every((x) => x !== null) ? out as number[] : null }
-  return metaBudgetCents(v, currency)
+  if (Array.isArray(v)) { const out = v.map((x) => exactCents(x, currency)); return out.length === 2 && out.every((x) => x !== null) ? out as number[] : null }
+  return exactCents(v, currency)
 }
 
 /** One condition as a request names it, or null when Nexus cannot name it again exactly. */
@@ -247,7 +257,7 @@ function conditionInputOf(raw: unknown, currency: string | null): RuleConditionI
   if (key === 'value') {
     const value = Array.isArray(f.value) ? f.value.map(asScalar) : asScalar(f.value)
     if (value === null || (Array.isArray(value) && value.some((x) => x === null))) return null
-    const ids = ID_LIKE.test(f.field) ? (Array.isArray(value) ? value : [value]).map((x) => (typeof x === 'number' && Number.isSafeInteger(x) ? String(x) : x)) : null
+    const ids = isIdField(f.field) ? (Array.isArray(value) ? value : [value]).map((x) => (typeof x === 'number' && Number.isSafeInteger(x) ? String(x) : x)) : null
     return { field: f.field, operator: f.operator as RuleOperator, value: ids ? (Array.isArray(value) ? ids as RuleScalar[] : ids[0] as RuleScalar) : value as RuleValue }
   }
   if (key === 'valueCents') {
@@ -303,18 +313,18 @@ export function ruleInputOf(specs: LiveRuleSpecs, currency: string | null): { ev
         const key = valueKeyOf(c.target_field)
         const n = typeof c.amount === 'number' ? c.amount : Number(c.amount)
         if (!Number.isFinite(n)) return { why: 'its change\'s target is not readable.' }
-        if (key === 'valueCents') { const v = metaBudgetCents(c.amount, currency); if (v === null) return { why: 'its change\'s target is not readable.' }; change.targetValueCents = v } else if (key === 'value') change.targetValue = n
+        if (key === 'valueCents') { const v = exactCents(c.amount, currency); if (v === null) return { why: 'its change\'s target cannot be named again exactly in minor units.' }; change.targetValueCents = v } else if (key === 'value') change.targetValue = n
         else change.targetValueAsMeta = n
         if (c.limit !== undefined) { const v = cents(c.limit, currency); if (!Array.isArray(v)) return { why: 'its change\'s limit is not readable.' }; change.limitCents = v }
       } else {
         if (c.unit !== 'ACCOUNT_CURRENCY' && c.unit !== 'PERCENTAGE') return { why: 'its change\'s unit is not readable.' }
         change.unit = c.unit
-        if (c.unit === 'ACCOUNT_CURRENCY') { const v = metaBudgetCents(c.amount, currency); if (v === null) return { why: 'its change\'s amount is not readable.' }; change.amountCents = v } else {
+        if (c.unit === 'ACCOUNT_CURRENCY') { const v = exactCents(c.amount, currency); if (v === null) return { why: 'its change\'s amount cannot be named again exactly in minor units.' }; change.amountCents = v } else {
           const n = typeof c.amount === 'number' ? c.amount : Number(c.amount)
           if (!Number.isFinite(n)) return { why: 'its change\'s amount is not readable.' }
           change.amountPercent = n
         }
-        if (c.limit !== undefined) { const v = metaBudgetCents(c.limit, currency); if (v === null) return { why: 'its change\'s limit is not readable.' }; change.limitCents = v }
+        if (c.limit !== undefined) { const v = exactCents(c.limit, currency); if (v === null) return { why: 'its change\'s limit cannot be named again exactly in minor units.' }; change.limitCents = v }
       }
       execution.change = change
     } else if (o.field === 'rebalance_spec') {
@@ -404,7 +414,10 @@ function scheduleText(s: RuleScheduleInput | undefined): string | null {
   return `CUSTOM: ${(s.times ?? []).map((t) => `${t.days ? `days ${t.days.join(',')}` : 'every day'}${t.startMinute !== undefined ? ` from minute ${t.startMinute}${t.endMinute !== undefined ? ` to ${t.endMinute}` : ''}` : ''}`).join('; ')}`
 }
 
-/** A brake: a rule that pauses or cuts (its absence lets spend go on) — PAUSE, a cut by an amount, a rebalance that pauses donors. */
+/**
+ * A brake: a rule that pauses or cuts (its absence lets spend go on) — PAUSE, a cut by an amount, a move towards a target
+ * (review A4: it cuts as well as raises), a rebalance that pauses donors.
+ */
 export function ruleIsBrake(execution: Row | null): boolean {
   if (!execution) return false
   const type = execution.execution_type
@@ -412,7 +425,7 @@ export function ruleIsBrake(execution: Row | null): boolean {
   const options = Array.isArray(execution.execution_options) ? execution.execution_options.map(obj) : []
   const value = (field: string) => { const o = options.find((x) => x?.field === field); const v = o?.value; return typeof v === 'string' ? (() => { try { return obj(JSON.parse(v)) } catch { return null } })() : obj(v) }
   if (type === 'REBALANCE_BUDGET') { const r = value('rebalance_spec'); return r?.type === 'EVEN' || r?.type === 'PROPORTIONAL' }
-  if (CHANGE_EXECUTION_TYPES.has(type as string)) { const c = value('change_spec'); return !!c && c.target_field === undefined && Number(c.amount) < 0 }
+  if (CHANGE_EXECUTION_TYPES.has(type as string)) { const c = value('change_spec'); return !!c && (c.target_field !== undefined || Number(c.amount) < 0) }
   return false
 }
 
@@ -452,7 +465,7 @@ export interface RuleDraftContext {
 }
 
 const META_NO_CHECK = 'Meta has no check (validate_only) for a rule: the preview is built from the rule as Meta has it, and the run reads it again first.'
-const PING_WARNING = 'Meta calls this app\'s ads_rules_engine webhook (PING_ENDPOINT): the app needs that webhook subscription, and Nexus\'s receiver for it is not built yet (Meta step 30) — until then each call reaches nothing.'
+const PING_WARNING = 'PING_ENDPOINT sends each match to the callback URL of this Meta app\'s webhook subscription for the ads_rules_engine field (set in the app\'s webhook settings): it reaches Nexus only if that subscription points at Nexus\'s Meta webhook receiver, else it goes wherever the app\'s subscription points, or nowhere.'
 
 function liveFrom(ctx: RuleDraftContext): LiveRule {
   if (!ctx.live) refuse('Nexus could not read the rule.')
@@ -474,7 +487,7 @@ function ruleProblems(r: { evaluation: RuleEvaluationInput; execution: RuleExecu
   const x = r.execution
   if (type === 'TRIGGER') {
     if (!TRIGGER_EXECUTION_TYPES.has(x.type)) refuse(`A trigger rule takes NOTIFICATION, PAUSE, UNPAUSE or PING_ENDPOINT (Meta): ${x.type} is for schedule rules.`)
-    const scheduleOnly = fields.find((f) => SCHEDULE_ONLY_METADATA.has(levelLess(f)) || isAdvanced(f) || NOT_FOR_TRIGGERS.test(f) || f === 'attribution_window')
+    const scheduleOnly = fields.find((f) => SCHEDULE_ONLY_METADATA.has(levelLess(f)) || isAdvanced(f) || NOT_FOR_TRIGGERS.test(baseOf(f)) || f === 'attribution_window')
     if (scheduleOnly) refuse(`${scheduleOnly} is a condition for schedule rules only (Meta's tables).`)
     if (preset && !(TODAY_TIME_PRESETS as readonly unknown[]).includes(preset.value)) refuse('A trigger rule takes only a time_preset that includes today (LIFETIME, TODAY, LAST_7_DAYS …; Meta).')
     if (trigger?.type === 'STATS_MILESTONE') {
@@ -483,7 +496,8 @@ function ruleProblems(r: { evaluation: RuleEvaluationInput; execution: RuleExecu
       const given = trigger.valueCents !== undefined && !Array.isArray(trigger.valueCents) ? ruleMoneyParam(trigger.valueCents, currency) : typeof trigger.value === 'number' ? trigger.value : null
       if (min !== undefined && given !== null && given < min) refuse(`A milestone on ${trigger.field} is at least ${min}${trigger.field === 'spent' ? ' in Meta\'s base unit of the currency (cents for EUR)' : ''} (Meta).`)
     }
-    if (trigger?.field && NOT_FOR_TRIGGERS.test(trigger.field)) refuse(`${trigger.field} is not allowed as a trigger (Meta's insights table).`)
+    if (trigger?.field && (NOT_FOR_TRIGGERS.test(baseOf(trigger.field)) || isAdvanced(trigger.field))) refuse(`${trigger.field} is not allowed as a trigger (Meta's insights table; prefixed results and formulas are for schedule rules).`)
+    if (trigger?.type === 'STATS_MILESTONE' && trigger.field && !MILESTONE_FIELDS.has(trigger.field)) refuse(`A milestone trigger is on one of Meta's milestone fields (impressions, reach, clicks, spent, results, link_click, …), not ${trigger.field}.`)
   } else if (x.type === 'PING_ENDPOINT') refuse('PING_ENDPOINT is for trigger rules only (Meta).')
   if ((x.type === 'CHANGE_BUDGET' || x.type === 'CHANGE_BID' || x.type === 'REBALANCE_BUDGET') && entity !== undefined && entity !== 'ADSET') refuse(`${x.type} applies to ad sets only (Meta): its entity_type is ADSET.`)
   if (x.type === 'CHANGE_CAMPAIGN_BUDGET' && entity !== undefined && entity !== 'CAMPAIGN') refuse('CHANGE_CAMPAIGN_BUDGET applies to campaigns only (Meta): its entity_type is CAMPAIGN.')
@@ -505,9 +519,9 @@ function ruleWarnings(r: { evaluation: RuleEvaluationInput; execution: RuleExecu
   if (x.notifyUserIds?.length) out.push(`Meta notifies the Facebook people ${x.notifyUserIds.join(', ')}${r.evaluation.type === 'SCHEDULE' ? ' (and e-mails them a daily summary at 00:30 in the account\'s time zone)' : ''}: Nexus cannot check who they are — name only people of this business.`)
   if (x.type === 'UNPAUSE' && !fields.includes('effective_status')) out.push('Without an effective_status filter, Meta\'s default for a switch-on rule takes every object that is not deleted or archived (paused ones too): scope it tightly (an id, a name or effective_status).')
   const cost = [...fields, r.evaluation.trigger?.field ?? ''].some((f) => f && valueKeyOf(f) === 'valueCents' && !isMetadata(f))
-  if ((x.type === 'PAUSE' || x.type === 'REBALANCE_BUDGET') && cost) out.push('Meta may refuse this (its error 2703: "Rules that turn off ads can\'t have cost conditions"): if it does, change the conditions (no spend or cost condition) or the action (notify instead).')
+  if ((x.type === 'PAUSE' || x.type === 'REBALANCE_BUDGET') && cost) out.push('Meta lists an error 2703 ("Rules that turn off ads can\'t have cost conditions") for rules, though its own trigger sample pauses ads on cost_per_purchase_fb: its answer decides; if it refuses, change the conditions or the action (notify instead).')
   if ([...fields, x.change?.targetField ?? '', x.rebalance?.targetField ?? ''].some((f) => /(^|\.)(7d|28d)_view(_\d+d_click)?:/.test(f))) out.push('A 7-day or 28-day view attribution window returns no data since 2026-01-12 (Meta): a condition on it never matches.')
-  if (x.type === 'ROTATE') out.push('ROTATE pauses the ad running now and switches the next ad of the ad set on.')
+  if (x.type === 'ROTATE') out.push('ROTATE pauses the ad running now and switches the next ad of each matched ad set on: the next ad can spend.')
   if (x.type === 'REBALANCE_BUDGET' && (x.rebalance?.type === 'EVEN' || x.rebalance?.type === 'PROPORTIONAL')) out.push(`${x.rebalance.type} pauses the ad sets that match and moves their budget to the others (Meta).`)
   if (x.type === 'REBALANCE_BUDGET') out.push('Meta rebalances daily and lifetime budgets apart (a daily budget only to daily ones), and from a lifetime budget it moves only what is left of it.')
   if (x.type === 'CHANGE_BID') out.push('CHANGE_BID changes the bid of ad sets that bid by hand (a bid cap or a cost cap); others have no bid to change.')
@@ -551,7 +565,7 @@ export function createRuleDraft(request: AdRuleRequest, ctx: RuleDraftContext): 
   const request1: MetaChangeRequest = {
     step: 1, label: `Make the rule "${request.name!.trim()}" (${on ? 'switched on' : 'switched off'})`, kind: 'campaign', objectKind: 'adaccount', objectId: `act_${ctx.adAccountId}`,
     params, check: 'none', raisesSpend: !!raises, readBackInPost: false, budget: false, undoable: true, operation: 'adRule.create', edge: 'adrules_library',
-    expect: { status }, readBackFields: AD_RULE_READ_BACK,
+    expect: { status }, readBackFields: AD_RULE_READ_BACK, recordWhenMoved: true,
   }
   const before: RuleRecord = { kind: 'adrule', action: 'create', id: '', exists: 'no', undo: null, noUndo: [] }
   const after: RuleRecord = { kind: 'adrule', action: 'create', id: '', exists: 'yes', rule: ruleStateOf(request.name!.trim(), status, { evaluation: specs.evaluation, execution: specs.execution, schedule: specs.schedule ?? null }) }

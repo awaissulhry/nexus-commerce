@@ -8,6 +8,10 @@
  * TWD and VND). Step 8 reads that unit back as minor units with metaBudgetCents (live-optimize.ts); this is its inverse. A
  * request names amounts in MINOR units of the account currency (`…Cents`); a negative amount is a cut (a change_spec);
  * an amount Meta cannot hold exactly (BHD and JOD have 3 decimals, Meta counts hundredths) is refused, never rounded.
+ * Review B5 — change-spec.md's second example writes a cost target and its limits in WHOLE currency (`amount: 5.0`,
+ * `limit: [2.0, 10.0]`), and so do the cost filters of the change-spec and rebalance samples (4.5, 3.0); but the same
+ * page's table ("5000 to represent $50 USD"), the evaluation-spec "Insights Filters" note and the trigger guide's minimums
+ * ("spent 1000 (cents)") say the currency's base unit. Nexus follows the base unit (LIVE-PROBES RU-010 reads one back).
  */
 import { currencyExponent, metaOffset } from './money.js'
 import { MetaUnitError } from './settings-units.js'
