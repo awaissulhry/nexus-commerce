@@ -196,9 +196,11 @@ export interface AdsUsing { byCreative: Map<string, CreativeUser[]>; byVideo: Ma
 
 /**
  * Review B1 — the creative fields that name a video (reference/ad-creative.md): `video_id` ("Facebook object ID for video
- * in this ad"), `object_story_spec.video_data.video_id` and `asset_feed_spec.videos` (each {video_id, …}).
+ * in this ad"), `object_story_spec.video_data.video_id`, a carousel's video cards
+ * `object_story_spec.link_data.child_attachments[].video_id` (AdCreativeLinkDataChildAttachment, master CR-019) and
+ * `asset_feed_spec.videos` (each {video_id, …}).
  */
-export const CREATIVE_VIDEO_FIELDS = 'creative{id,video_id,object_story_spec{video_data{video_id}},asset_feed_spec{videos}}'
+export const CREATIVE_VIDEO_FIELDS = 'creative{id,video_id,object_story_spec{video_data{video_id},link_data{child_attachments{video_id}}},asset_feed_spec{videos}}'
 
 /** The video ids a creative (as `CREATIVE_VIDEO_FIELDS` reads it) shows. */
 export function videosOfCreative(creative: Row | null): string[] {
@@ -206,6 +208,7 @@ export function videosOfCreative(creative: Row | null): string[] {
   const ids = [
     idText(creative.video_id),
     idText(obj(obj(creative.object_story_spec)?.video_data)?.video_id),
+    ...listOf(obj(obj(creative.object_story_spec)?.link_data)?.child_attachments).map((c) => idText(obj(c)?.video_id)),
     ...listOf(obj(creative.asset_feed_spec)?.videos).map((v) => idText(obj(v)?.video_id)),
   ]
   return [...new Set(ids.filter((v): v is string => !!v))]

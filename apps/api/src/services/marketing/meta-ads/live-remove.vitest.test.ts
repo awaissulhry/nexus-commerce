@@ -20,6 +20,7 @@ vi.mock('./read-client.js', () => ({
 
 import { liveAdsByCreative, livePageCanvasElements, liveRemoveImages, liveRemoveObjects } from './live-remove.js'
 import { MetaReadError } from './errors.js'
+import { metaRemoveDraft } from './change-remove.js'
 
 const target = { connectionId: 'm-1', adAccountId: '1234567890' }
 const C = '120000000000001'
@@ -101,6 +102,18 @@ describe('the account\'s ads by creative, images, Instant Experience parts', () 
     expect([...images.values()]).toEqual([{ hash: 'abc', name: 'a.jpg', status: 'ACTIVE', creatives: ['120000000000041'] }, { hash: 'def', name: null, status: 'ACTIVE', creatives: ['120000000000042'] }])
     expect(h.reads[0].query.hashes).toEqual(['abc', 'def'])
   })
+  it('review B1 round 2 — an archived carousel ad with a video card makes that video\'s removal refused', async () => {
+    const VIDEO = '120000000000063'
+    h.answers['act_1234567890/ads'] = { data: [
+      { id: A, account_id: '1234567890', effective_status: 'ARCHIVED', creative: { id: '120000000000043', object_story_spec: { link_data: { child_attachments: [{ image_hash: 'abc' }, { video_id: VIDEO }] } } } },
+    ] }
+    const adsByCreative = await liveAdsByCreative(target, true)
+    const live = {
+      adAccountId: '1234567890', objects: new Map(), creatives: new Map(), adsByCreative, images: new Map(), imageCreatives: new Map(),
+      library: { has: new Set([VIDEO]), more: false }, captions: new Map(), page: null, problems: [],
+    }
+    expect(metaRemoveDraft({ items: [{ kind: 'video', id: VIDEO }] }, live)).toEqual({ refusal: expect.stringMatching(/^Nothing is deleted: Video 120000000000063 is named by the creative of 1 ad this change does not delete \(120000000000003 ARCHIVED\)/) })
+  })
   it('review A6 — an Instant Experience part by its OWN id only (never an id inside its row)', async () => {
     h.answers['120000000000080/canvas_elements'] = { data: [{ element: { id: '120000000000070' } }, { id: '120000000000071', element: { id: '120000000000072' } }] }
     expect([...(await livePageCanvasElements(target, '120000000000080')).ids]).toEqual(['120000000000071'])
@@ -111,9 +124,12 @@ describe('the account\'s ads by creative, images, Instant Experience parts', () 
       { id: A, account_id: '1234567890', effective_status: 'ACTIVE', creative: { id: '120000000000040', video_id: '120000000000060' } },
       { id: '120000000000004', account_id: '1234567890', effective_status: 'PAUSED', creative: { id: '120000000000041', object_story_spec: { video_data: { video_id: '120000000000061' } } } },
       { id: '120000000000005', account_id: '1234567890', effective_status: 'PAUSED', creative: { id: '120000000000042', asset_feed_spec: { videos: [{ video_id: '120000000000060' }, { video_id: '120000000000062' }] } } },
+      // Review B1 round 2 — a carousel with a video card (AdCreativeLinkDataChildAttachment video_id, master CR-019).
+      { id: '120000000000006', account_id: '1234567890', effective_status: 'ARCHIVED', creative: { id: '120000000000043', object_story_spec: { link_data: { child_attachments: [{ image_hash: 'abc' }, { video_id: '120000000000063' }] } } } },
     ] }
     const read = await liveAdsByCreative(target, true)
-    expect(h.reads[0].query.fields).toBe('id,account_id,name,effective_status,creative{id,video_id,object_story_spec{video_data{video_id}},asset_feed_spec{videos}}')
+    expect(h.reads[0].query.fields).toBe('id,account_id,name,effective_status,creative{id,video_id,object_story_spec{video_data{video_id},link_data{child_attachments{video_id}}},asset_feed_spec{videos}}')
+    expect(read.byVideo!.get('120000000000063')).toEqual([{ id: '120000000000006', name: null, effectiveStatus: 'ARCHIVED' }])
     expect(read.byVideo!.get('120000000000060')!.map((u) => u.id)).toEqual([A, '120000000000005'])
     expect(read.byVideo!.get('120000000000061')!.map((u) => u.id)).toEqual(['120000000000004'])
     expect(read.byVideo!.get('120000000000062')!.map((u) => u.id)).toEqual(['120000000000005'])

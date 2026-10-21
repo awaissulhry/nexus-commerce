@@ -105,8 +105,8 @@ describe('the allow-list: each delete exactly as Meta documents it, nothing more
 })
 
 describe('review B1 — the one read of the account\'s ads with the videos their creatives show passes the read allow-list', () => {
-  it('creative{id,video_id,object_story_spec{video_data{video_id}},asset_feed_spec{videos}} on act_<id>/ads', () => {
-    const fields = 'id,account_id,name,effective_status,creative{id,video_id,object_story_spec{video_data{video_id}},asset_feed_spec{videos}}'
+  it('creative{id,video_id,object_story_spec{video_data{video_id},link_data{child_attachments{video_id}}},asset_feed_spec{videos}} on act_<id>/ads', () => {
+    const fields = 'id,account_id,name,effective_status,creative{id,video_id,object_story_spec{video_data{video_id},link_data{child_attachments{video_id}}},asset_feed_spec{videos}}'
     const url = `${BASE}/${ACT}/ads?fields=${encodeURIComponent(fields)}&effective_status=${encodeURIComponent('["ACTIVE","ARCHIVED"]')}&limit=100`
     expect(metaCallVerdict({ method: 'GET', url, kind: 'read' }).problem).toBeNull()
   })

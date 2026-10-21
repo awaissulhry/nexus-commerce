@@ -274,7 +274,7 @@ export function metaRemoveDraft(request: RemoveRequest, live: RemoveLive): MetaC
     if ('problem' in using) { problems.push(using.problem); continue }
     const blocking = using.users.filter((u) => !adStep.has(u.id))
     if (blocking.length) {
-      problems.push(`Video ${id} is shown by ${plural(blocking.length, 'ad')} this change does not delete (${firstIds(blocking.map((u) => `${u.id}${u.effectiveStatus ? ` ${u.effectiveStatus}` : ''}`))}): Nexus removes no video an ad still shows — delete those ads in the same request, or keep the video.`)
+      problems.push(`Video ${id} is named by the creative of ${plural(blocking.length, 'ad')} this change does not delete (${firstIds(blocking.map((u) => `${u.id}${u.effectiveStatus ? ` ${u.effectiveStatus}` : ''}`))}): an ad on, paused or archived still names it (Meta may refuse, or the ad may break), so Nexus removes it only when those ads are deleted in the same request — name them too, or keep the video.`)
       continue
     }
     const needs = [...new Set(using.users.map((u) => adStep.get(u.id)!))].sort((a, b) => a - b)
@@ -286,7 +286,7 @@ export function metaRemoveDraft(request: RemoveRequest, live: RemoveLive): MetaC
   }
   if (videos.length) {
     // LIVE-PROBES MD-019: Meta's reference does not say whether a video a creative (with no ad) uses can be removed.
-    warnings.push(`Meta "dissociates" a video from the ad account (reference/ad-account/advideos.md). Nexus checked the account's ads (their creatives' video_id, video_data and asset feed videos): no ad left after this change shows ${videos.length === 1 ? 'it' : 'them'}. A creative no ad uses may still name ${videos.length === 1 ? 'it' : 'one'}; Meta does not say whether it then refuses — its answer decides, in its own words.`)
+    warnings.push(`Meta "dissociates" a video from the ad account (reference/ad-account/advideos.md). Nexus checked the account's ads (their creatives' video_id, video_data, carousel video cards and asset feed videos): no ad left after this change names ${videos.length === 1 ? 'it' : 'them'}. A creative no ad uses may still name ${videos.length === 1 ? 'it' : 'one'}; Meta does not say whether it then refuses — its answer decides, in its own words.`)
   }
 
   // ── parts of an Instant Experience of the chosen Page ──

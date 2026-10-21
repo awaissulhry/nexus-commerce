@@ -157,7 +157,7 @@ describe('videos, captions, Instant Experience parts', () => {
   it('a video of the library no ad shows: removed (Meta\'s silence about a creative with no ad said); not there: skipped; past 500: refused', () => {
     const d = draft([{ kind: 'video', id: VIDEO }], live({ library: { has: new Set([VIDEO]), more: false }, adsByCreative: noAds }))
     expect(d.requests).toEqual([expect.objectContaining({ objectId: 'act_1234567890', edge: 'advideos', params: { video_id: VIDEO }, method: 'DELETE', operation: 'video.remove' })])
-    expect(d.warnings.join(' ')).toMatch(/Nexus checked the account's ads .*no ad left after this change shows it\. A creative no ad uses may still name it; Meta does not say whether it then refuses — its answer decides/)
+    expect(d.warnings.join(' ')).toMatch(/Nexus checked the account's ads .*no ad left after this change names it\. A creative no ad uses may still name it; Meta does not say whether it then refuses — its answer decides/)
     expect(d.warnings.join(' ')).not.toMatch(/cannot tell which creatives use/)
     expect(draft([{ kind: 'video', id: VIDEO }], live({ library: { has: new Set(), more: false }, adsByCreative: noAds })).skipped[0]).toMatch(/not in the chosen ad account's library/)
     expect(refusal([{ kind: 'video', id: VIDEO }], live({ library: { has: new Set(), more: true }, adsByCreative: noAds }))).toMatch(/not among the first 500 videos/)
@@ -165,7 +165,7 @@ describe('videos, captions, Instant Experience parts', () => {
   it('review B1 — a video an ad shows that this change does not delete: refused; with that ad deleted first: after it (needs)', () => {
     const shows = { byCreative: new Map(), byVideo: new Map([[VIDEO, [{ id: A1, name: 'Ad 1', effectiveStatus: 'ACTIVE' }]]]), more: false }
     expect(refusal([{ kind: 'video', id: VIDEO }], live({ library: { has: new Set([VIDEO]), more: false }, adsByCreative: shows })))
-      .toMatch(/Video 120000000000060 is shown by 1 ad this change does not delete \(120000000000003 ACTIVE\): Nexus removes no video an ad still shows/)
+      .toMatch(/Video 120000000000060 is named by the creative of 1 ad this change does not delete \(120000000000003 ACTIVE\): an ad on, paused or archived still names it \(Meta may refuse, or the ad may break\), so Nexus removes it only when those ads are deleted in the same request/)
     const ad = object({ kind: 'ad', id: A1, adSetId: S1, campaignId: C })
     const d = draft([{ kind: 'video', id: VIDEO }, { kind: 'ad', id: A1 }], live({ objects: objects(ad), library: { has: new Set([VIDEO]), more: false }, adsByCreative: shows }))
     expect(d.requests.map((r) => [r.step, r.operation, r.needs ?? null])).toEqual([[1, 'ad.delete', null], [2, 'video.remove', [1]]])

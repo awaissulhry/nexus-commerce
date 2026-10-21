@@ -160,7 +160,7 @@ describe('run', () => {
   })
   it('review B1 — a video an ad still shows is refused; read with the creatives\' video fields', async () => {
     h.videoUsers = new Map([['120000000000060', [{ id: A, name: 'Ad 1', effectiveStatus: 'ACTIVE' }]]])
-    expect(await preview({ items: [{ kind: 'video', id: '120000000000060' }] })).toEqual({ ok: false, error: expect.stringMatching(/Video 120000000000060 is shown by 1 ad this change does not delete/) })
+    expect(await preview({ items: [{ kind: 'video', id: '120000000000060' }] })).toEqual({ ok: false, error: expect.stringMatching(/Video 120000000000060 is named by the creative of 1 ad this change does not delete/) })
     const ok = await preview({ items: [{ kind: 'video', id: '120000000000060' }, { kind: 'ad', id: A }] })
     expect(ok.preview.requests.map((x: { label: string }) => x.label)).toEqual([`Delete ad "Ad 1" (${A})`, 'Remove video 120000000000060 from the ad account\'s library'])
   })
