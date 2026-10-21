@@ -206,7 +206,7 @@ const metaAdLibrary: AgentTool = {
     + 'through the business\'s own Instagram account. hashtag: public Instagram posts with a hashtag (top or recent; Meta '
     + 'allows 30 different hashtags per 7 days; needs Meta\'s Instagram Public Content Access review); recent-hashtags: '
     + 'the ones used. page-posts: another Facebook Page\'s public posts (needs Page Public Content Access). A Page or '
-    + 'Instagram account another business in Nexus uses is never read here (its id and a flag only). Read only.',
+    + 'Instagram account another business in Nexus uses is never shown here (its id and a flag only). Read only.',
   async handler(args): Promise<ToolResult> {
     const a = args as Record<string, unknown>
     const str = (k: string) => (typeof a[k] === 'string' ? a[k] as string : null)
