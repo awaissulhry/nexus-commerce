@@ -167,10 +167,13 @@ export async function readGroups(connectionId: string, operation: string, path: 
 
 export const MAX_ROWS = 500
 
-/** A list, page by page (cursor `after`; Meta's next link carries the token and is never followed), with Meta's total. */
-export async function listPaged(connectionId: string, operation: string, path: string, query: Record<string, MetaQueryValue>, maxRows: number, withTotal = false): Promise<{ rows: Row[]; more: boolean; totalCount: number | null }> {
+/**
+ * A list, page by page (cursor `after`; Meta's next link carries the token and is never followed), with Meta's total.
+ * `pageSize`: at most this many per call (step 14: Instagram answers at most 50 comments per call).
+ */
+export async function listPaged(connectionId: string, operation: string, path: string, query: Record<string, MetaQueryValue>, maxRows: number, withTotal = false, pageSize = 100): Promise<{ rows: Row[]; more: boolean; totalCount: number | null }> {
   const max = Math.min(MAX_ROWS, Math.max(1, Math.trunc(maxRows)))
-  const limit = Math.min(100, max)
+  const limit = Math.min(Math.max(1, Math.trunc(pageSize)), 100, max)
   const rows: Row[] = []
   let after: string | null = null
   let totalCount: number | null = null

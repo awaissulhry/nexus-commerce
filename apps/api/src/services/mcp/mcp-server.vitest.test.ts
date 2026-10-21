@@ -56,6 +56,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 10 (2026-10-21) — meta-media-library, meta-page-posts, meta-instagram-media, meta-ad-preview and meta-instant-experiences read Meta live.
 // Meta ads step 16 (2026-10-21) — meta-partnership-content, meta-ad-library, meta-brand-safety and meta-webhooks read Meta live.
 // Meta ads step 8 (2026-10-21) — meta-recommendations, meta-experiments and meta-ad-rules read Meta live.
+// Meta ads step 14 (2026-10-21) — meta-lead-forms, meta-leads and meta-comments read Meta live.
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -76,9 +77,9 @@ const OPEN_WORLD = [
   'harvest-search-term',
   'import-catalog', 'issue-refund', 'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock',
   'meta-ad-accounts', 'meta-ad-details', 'meta-ad-library', 'meta-ad-preview', 'meta-ad-rules', 'meta-ad-sets', 'meta-ads-graph-read',
-  'meta-ads-live', 'meta-brand-safety', 'meta-campaigns', 'meta-connection', 'meta-experiments', 'meta-instagram-media', 'meta-instant-experiences',
-  'meta-labels', 'meta-media-library', 'meta-page-posts', 'meta-partnership-content', 'meta-recommendations', 'meta-targeting-check',
-  'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
+  'meta-ads-live', 'meta-brand-safety', 'meta-campaigns', 'meta-comments', 'meta-connection', 'meta-experiments', 'meta-instagram-media',
+  'meta-instant-experiences', 'meta-labels', 'meta-lead-forms', 'meta-leads', 'meta-media-library', 'meta-page-posts', 'meta-partnership-content',
+  'meta-recommendations', 'meta-targeting-check', 'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
   'remove-google-conversion-actions', 'remove-google-labels', 'reopen-listing', 'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
@@ -255,7 +256,8 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
     // C7 — and only confirm-change is Claude's alone: a person confirms in Claude with a code; in Nexus they approve.
     // W4-1 — and report-ads-run: the scheduled Claude run's own report.
     // Meta ads step 10 (review A2) — and meta-ad-preview: its links are public, and the in-app chat keeps tool results.
-    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name).sort()).toEqual(['confirm-change', 'meta-ad-preview', 'report-ads-run'])
+    // Meta ads step 14 — and meta-leads, meta-comments: people's data is never kept in an in-app run.
+    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name).sort()).toEqual(['confirm-change', 'meta-ad-preview', 'meta-comments', 'meta-leads', 'report-ads-run'])
   })
 })
 

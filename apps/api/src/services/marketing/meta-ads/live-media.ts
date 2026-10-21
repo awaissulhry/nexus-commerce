@@ -139,7 +139,7 @@ async function listWithFallback(connectionId: string, operation: string, path: s
 }
 
 /** One part of an answer that may fail on its own (an edge Meta may refuse): its rows, or Meta's sentence. */
-async function part<T>(work: () => Promise<T>): Promise<{ value: T | null; notRead: string | null }> {
+export async function part<T>(work: () => Promise<T>): Promise<{ value: T | null; notRead: string | null }> {
   try {
     return { value: await work(), notRead: null }
   } catch (err) {
@@ -155,12 +155,12 @@ const NO_PAGE = 'No Facebook Page is chosen for this business yet. A person choo
 const NO_INSTAGRAM = 'No Instagram account is chosen for this business yet. A person chooses it in Settings › Channels › Meta, or Claude asks for it with set-meta-connection (a person approves it).'
 export const PAGE_TOKEN_NOTE = 'If Meta\'s words ask for a Page access token or a Page permission: Nexus reads the Page with the business\'s system-user token for now (the system user needs the Page assigned in Meta Business settings); reads that need the Page\'s own token come with a later Nexus step.'
 
-function pageOf(account: MetaChosenAccount): string {
+export function pageOf(account: MetaChosenAccount): string {
   if (!account.pageId) throw new MetaLiveRefusal(NO_PAGE)
   return account.pageId
 }
 
-function instagramOf(account: MetaChosenAccount): string {
+export function instagramOf(account: MetaChosenAccount): string {
   if (!account.instagramId) throw new MetaLiveRefusal(NO_INSTAGRAM)
   return account.instagramId
 }
@@ -181,7 +181,7 @@ async function portfolioTaken(portfolioId: string): Promise<{ portfolioId: strin
 }
 
 /** A Page or Instagram read: when Meta refuses it for the token, the answer says what that means. */
-async function onPage<T>(work: () => Promise<T>): Promise<T> {
+export async function onPage<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work()
   } catch (err) {
@@ -201,7 +201,7 @@ export function pagePostId(pageId: string, id: string): string {
 }
 
 /** Meta answers a post with its own canonical id: it must still be the chosen Page's (else nothing of it is returned). */
-function stillOnPage(pageId: string, body: Row): void {
+export function stillOnPage(pageId: string, body: Row): void {
   const id = idText(body.id)
   if (id && !id.startsWith(`${pageId}_`)) throw new MetaLiveRefusal('Meta answered with a post that is not on the Facebook Page this business chose; nothing of it is returned.')
 }

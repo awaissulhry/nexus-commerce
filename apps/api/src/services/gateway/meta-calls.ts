@@ -262,7 +262,33 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/history$/, keys: new Set(['object_id', 'action', 'hide_no_changes']) },
   { route: /^act_\d+\/adrules_history$/, keys: new Set(['object_id', 'action', 'hide_no_changes']) },
   { route: /^\d+\/ab_tests$/, keys: new Set(['since', 'until']) },
+  // Step 14 — leads, lead forms and comments (marketing/meta-ads/live-engagement.ts), each only on its own edge: a form's or
+  // an ad's leads take Meta's time filter in exactly its documented shape (leadTimeFiltering); a Facebook post's or
+  // comment's comments take filter, order, since (SDK pagepost.py / comment.py get_comments); an Instagram account's tags
+  // take posted_after, posted_before, media_type (ig-user/tags). Leads, comments and forms stay out of `fields`
+  // (FIELD_DENIED): they are read only through these edges.
+  { route: /^\d+\/leads$/, keys: new Set(['filtering']), when: leadTimeFiltering },
+  { route: /^\d+_\d+\/comments$/, keys: new Set(['filter', 'order', 'since']) },
+  { route: /^\d+\/tags$/, keys: new Set(['posted_after', 'posted_before', 'media_type']) },
 ]
+/**
+ * Step 14 — a leads read's `filtering` is Meta's documented time filter and nothing else (lead-ads/retrieving.md,
+ * "Filtering Leads"): one or two `{ field: "time_created", operator: LESS_THAN | GREATER_THAN | GREATER_THAN_OR_EQUAL,
+ * value: <unix seconds> }`, no other key.
+ */
+function leadTimeFiltering(query: URLSearchParams): boolean {
+  const raw = query.get('filtering')
+  if (raw === null) return true
+  let list: unknown
+  try { list = JSON.parse(raw) } catch { return false }
+  return Array.isArray(list) && list.length >= 1 && list.length <= 2 && list.every((f) => {
+    if (!f || typeof f !== 'object' || Array.isArray(f)) return false
+    const entry = f as Record<string, unknown>
+    return Object.keys(entry).sort().join(',') === 'field,operator,value' && entry.field === 'time_created'
+      && ['LESS_THAN', 'GREATER_THAN', 'GREATER_THAN_OR_EQUAL'].includes(entry.operator as string)
+      && typeof entry.value === 'number' && Number.isInteger(entry.value) && entry.value >= 0
+  })
+}
 /**
  * Step 9 — the `type` values a /search read may carry: targeting options only (targeting-search reference), never
  * people, Pages or places. live-targeting.ts SEARCH_TYPE_OF sends exactly these.

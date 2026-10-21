@@ -359,6 +359,59 @@ describe('read only by construction', () => {
     expect(q('170000000000001/media?fields=id,comments{text}')).toMatch(/never expands "comments"/)
     expect(q('120000000000010?fields=id,conversations{messages}')).toMatch(/never expands/)
   })
+  it('step 14 — leads, lead forms and comments: read only through their own edges, each key only there', () => {
+    const q = (path: string) => ok(`${BASE}/${path}`)
+    const filter = (list: unknown) => `filtering=${encodeURIComponent(JSON.stringify(list))}`
+    const since = { field: 'time_created', operator: 'GREATER_THAN_OR_EQUAL', value: 1760000000 }
+    const until = { field: 'time_created', operator: 'LESS_THAN', value: 1760600000 }
+    // Allowed where the read uses it.
+    for (const path of [
+      '120000000000010/leadgen_forms?fields=id,name,status&limit=100',
+      '600000000000001?fields=id,name,status,questions',
+      `600000000000001/leads?fields=id,created_time,field_data,custom_disclaimer_responses&${filter([since, until])}`,
+      `120000000000301/leads?fields=id,created_time,field_data&${filter([{ field: 'time_created', operator: 'GREATER_THAN', value: 1760000000 }])}`,
+      '600000000000001/leads?fields=id,field_data&limit=100',
+      '600000000000001/test_leads?fields=id,field_data', '700000000000001?fields=id,ad_id,form_id',
+      '120000000000010_500000000000001/comments?fields=id,message,from{id,name}&summary=true&filter=stream&order=reverse_chronological&since=1760000000',
+      '500000000000001_800000000000001/comments?fields=id,message&filter=toplevel&order=chronological',
+      '120000000000010_500000000000001?fields=id,reactions.type(LOVE).limit(0).summary(total_count)',
+      '120000000000010_500000000000001?fields=id,reactions.limit(0).summary(total_count),shares',
+      '120000000000010_500000000000001/sharedposts?fields=id,from{id,name},message',
+      '120000000000010_500000000000001/dynamic_posts?fields=id,product_id', '900000000000001/comments?fields=id,message&summary=true',
+      '900000000000001/likes?fields=id&summary=true&limit=1',
+      '120000000000010/blocked?fields=id,name', '120000000000010/ratings?fields=rating,review_text,reviewer{id,name},open_graph_story{id}',
+      '170000000000001/media?fields=id', '180000000000001/comments?fields=id,text,username,from{id,username}&limit=50',
+      '180000000000001/ordered_comments?fields=id,text&limit=50', '190000000000001?fields=id,media{id}', '190000000000001/replies?fields=id,text',
+      '170000000000001?fields=id,mentioned_comment.comment_id(190000000000001){id,text,timestamp,media{id,permalink}}',
+      '170000000000001?fields=id,mentioned_media.media_id(180000000000002){id,caption,comments_count}',
+      '170000000000001/tags?fields=id,username&posted_after=2026-10-01T00:00:00&posted_before=2026-10-20T23:59:59&media_type=IMAGE,VIDEO',
+    ]) expect(q(path), path).toBeNull()
+    // The leads filter is exactly Meta's time filter: no other field, operator, value or key.
+    for (const list of [
+      [{ field: 'form_id', operator: 'EQUAL', value: 1 }], [{ ...since, operator: 'IN' }], [{ ...since, value: '1760000000' }],
+      [{ ...since, value: -1 }], [{ ...since, extra: 1 }], [], [since, until, since], { ...since },
+    ]) expect(q(`600000000000001/leads?fields=id&${filter(list)}`), JSON.stringify(list)).toMatch(/"filtering" is not one/)
+    expect(q('600000000000001/leads?fields=id&filtering=not-json')).toMatch(/"filtering" is not one/)
+    // Each key only on its own edge.
+    for (const [path, key] of [
+      ['act_1234567890/campaigns?fields=id&filter=stream', 'filter'], ['120000000000010/feed?fields=id&order=chronological', 'order'],
+      ['180000000000001/comments?fields=id&since=1760000000', 'since'], ['180000000000001/comments?fields=id&filter=stream', 'filter'],
+      ['600000000000001/test_leads?fields=id&filtering=[]', 'filtering'], ['120000000000010/leadgen_forms?fields=id&filtering=[]', 'filtering'],
+      ['120000000000010_500000000000001/comments?fields=id&live_filter=no_filter', 'live_filter'],
+      ['170000000000001/media?fields=id&posted_after=2026-10-01', 'posted_after'], ['120000000000010/blocked?fields=id&user=1', 'user'],
+      ['170000000000001/tags?fields=id&since=2026-10-01', 'since'], ['120000000000010_500000000000001/reactions?type=LOVE', 'type'],
+    ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
+    // FIELD_DENIED and NESTED_DENIED stay: leads, comments, lead forms never inside fields; ratings, feed, blocked never nested.
+    for (const fields of [
+      'id,leadgen_forms{id,name}', 'id,leadgen_forms.limit(5){leads{field_data}}', 'id,leads{field_data}', 'id,leads.fields(field_data)',
+      'id,comments.limit(0).summary(true)', 'id,comments{message,from}', 'id,ads{leads{id}}',
+    ]) expect(q(`120000000000010?fields=${encodeURIComponent(fields)}`), fields).toMatch(/never expands "(leadgen_forms|leads|comments)"/)
+    expect(q(`600000000000001?fields=${encodeURIComponent('id,leads{field_data}')}`)).toMatch(/never expands "leads"/)
+    expect(q(`170000000000001?fields=${encodeURIComponent('id,mentioned_media.media_id(1){comments{text}}')}`)).toMatch(/never expands "comments"/)
+    for (const nested of ['ratings', 'blocked', 'feed']) {
+      expect(q(`act_1234567890?fields=${encodeURIComponent(`promote_pages{id,${nested}{id}}`)}`), nested).toMatch(new RegExp(`never expands "${nested}" inside another field`))
+    }
+  })
 })
 
 describe('signing and the token', () => {
