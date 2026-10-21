@@ -603,7 +603,9 @@ const assetFeedSpec = obj({
   // Master CR-251 (callback form) and CR-253 (Messenger / WhatsApp calling: reference only — Meta's answer decides).
   call_ads_configuration: obj({ callback_type: enumOf(['FORM']), call_destination_type: enumOf(['PHONE', 'MESSENGER', 'MESSENGER_AND_PHONE', 'WEBSITE_AND_CALL', 'WHATSAPP', 'WHATSAPP_ORGANIC']), phone_number: phone }),
   // Master CR-261: an upcoming event of the chosen Instagram account (the reminder button).
-  upcoming_events: list(obj({ event_id: id('igevent'), event_title: text(META_CREATIVE_TEXT.headline), start_time: int(1_000_000_000, 4_000_000_000) }, ['event_id']), 1),
+  // Review round 3 — instagram/marketing-api/guides/reminder-ads.md: link_data with a LEARN_MORE button and the dummy link
+  // https://fb.com/, upcoming_events [{event_id, event_title, start_time "2024-05-11T16:00:00+0000"}] (an ISO time, not seconds).
+  upcoming_events: list(obj({ event_id: id('igevent'), event_title: text(META_CREATIVE_TEXT.headline), start_time: (value, path) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+0000$/.test(value) && Number.isFinite(Date.parse(value.replace('+0000', 'Z'))) ? ok(value) : no(`${path} is a time as Meta writes it (2026-11-05T16:00:00+0000)`)) }, ['event_id']), 1),
   // Master CR-440: promo codes (review B1, checked on docs/marketing-api/reference/ad-asset-promotional-metadata/): the code
   // sources are always named — only the creative's text and Nexus's own code, never Meta's automatic sources — and at most
   // ONE manual code (2+ characters: letters, digits, - and _). offer_details is not sent; neither is a catalog.
@@ -813,7 +815,9 @@ export function creativeTypeProblem(creative: Record<string, unknown>): string |
     ['call', anyMember(creative, 'call_ads_configuration') || anyMember(creative, 'link', (v) => typeof v === 'string' && v.startsWith('tel:')) || ctaTypes.includes('CALL_NOW'), 'a call part (CALL_NOW, a tel: link, call_ads_configuration)'],
     ['profile', ctaTypes.some((t) => PROFILE_CTAS.has(t)), 'a profile-visit button'],
     ['lead', anyMember(creative, 'lead_gen_form_id'), 'a lead form'],
-    ['event', creative.object_type === 'EVENT' || anyMember(creative, 'event_id') || ctaTypes.some((t) => EVENT_CTAS.has(t)), 'an event part (object_type EVENT, an event id, an event button)'],
+    // Review round 3 — an asset feed's upcoming_events (a reminder ad, CR-261: Meta's guide uses LEARN_MORE) are not an event ad.
+    ['event', creative.object_type === 'EVENT' || anyMember(creative.object_story_spec, 'event_id') || anyMember(creative.call_to_action, 'event_id')
+      || anyMember((creative.asset_feed_spec as { call_to_actions?: unknown } | undefined)?.call_to_actions, 'event_id') || ctaTypes.some((t) => EVENT_CTAS.has(t)), 'an event part (object_type EVENT, an event id, an event button)'],
   ]
   for (const [needs, present, what] of markers) {
     // A multi-destination feed's buttons are all messaging ones, a unified profile visit's all profile ones (CR-217, CR-225).
@@ -829,9 +833,16 @@ export const META_CATALOG_FORMATS: readonly string[] = ['da_collection', 'catalo
 /** The rest: a single image or video, or a carousel (master CR-422, CR-423). */
 export const META_NON_CATALOG_FORMATS: readonly string[] = META_FORMAT_AUTOMATION_FORMATS.filter((f) => !META_CATALOG_FORMATS.includes(f))
 
-/** The keys whose https value is a WEBSITE destination (an Instant Experience's canvas_doc link and tel: are not). */
+/**
+ * The keys whose https value is a WEBSITE destination. Review round 3 — Meta's own destinations are not: an Instant
+ * Experience, Messenger (fb.com/messenger_doc, m.me), a Facebook Page, Instagram, WhatsApp (wa.me, api.whatsapp.com); nor tel:.
+ */
 const DESTINATION_KEYS = ['link', 'product_link', 'website_url', 'carousel_see_more_url', 'site_link_url']
-const isWebsite = (v: unknown) => typeof v === 'string' && v.startsWith('https://') && !CANVAS_LINK.test(v)
+const META_OWNED_HOST = /(^|\.)(fb\.com|facebook\.com|m\.me|messenger\.com|instagram\.com|wa\.me|whatsapp\.com|threads\.net)$/
+const isWebsite = (v: unknown) => {
+  if (typeof v !== 'string' || !v.startsWith('https://')) return false
+  try { return !META_OWNED_HOST.test(new URL(v).hostname) } catch { return false }
+}
 /** Does the body name an https website destination anywhere (a link, a card's link, a button's link, a feed link, a template URL)? */
 export function hasWebsiteDestination(creative: Record<string, unknown>): boolean {
   return DESTINATION_KEYS.some((k) => anyMember(creative, k, isWebsite)) || anyMember(creative.template_url_spec, 'url', isWebsite)
@@ -841,15 +852,16 @@ export function hasCatalogMarker(creative: Record<string, unknown>): boolean {
   const story = (creative.object_story_spec ?? {}) as Record<string, unknown>
   return !!story.template_data || !!creative.product_set_id || !!creative.recommender_settings || !!creative.categorization_criteria || !!creative.category_media_source || !!creative.template_url_spec
 }
-/** Does the body show images (a single image, carousel cards, a photo, asset-feed images, an Instagram image)? Not a video's thumbnail. */
+/**
+ * Can the creative show an image Meta may tag? Review round 3, fail-safe: an image hash, a picture or an image link at ANY
+ * depth (a video's thumbnail and its per-language rules included), asset-feed images, a photo post, or any link_data (a link
+ * ad with no image of its own shows the linked page's image).
+ */
+const IMAGE_KEYS = ['image_hash', 'picture', 'image_url', 'thumbnail_hash', 'thumbnail_url', 'site_link_image_hash', 'site_link_image_url', 'frame_image_hash']
 export function hasImages(creative: Record<string, unknown>): boolean {
-  const story = (creative.object_story_spec ?? {}) as Record<string, Record<string, unknown> | undefined>
-  const img = (o: unknown) => !!o && typeof o === 'object' && (!!(o as Record<string, unknown>).image_hash || !!(o as Record<string, unknown>).picture)
-  const link = story.link_data
-  const cards = Array.isArray(link?.child_attachments) ? (link!.child_attachments as unknown[]) : []
+  const story = (creative.object_story_spec ?? {}) as Record<string, unknown>
   const feed = (creative.asset_feed_spec ?? {}) as { images?: unknown[] }
-  const ig = ((creative.platform_customizations ?? {}) as { instagram?: Record<string, unknown> }).instagram
-  return img(link) || cards.some(img) || !!story.photo_data || (Array.isArray(feed.images) && feed.images.length > 0) || !!ig?.image_hash || !!ig?.image_url
+  return IMAGE_KEYS.some((k) => anyMember(creative, k)) || !!story.link_data || !!story.photo_data || (Array.isArray(feed.images) && feed.images.length > 0)
 }
 
 /**
@@ -873,6 +885,16 @@ export function silentKeysFor(creative: Record<string, unknown>): { audios: bool
   }
 }
 
+/**
+ * Review round 3 — what the tool SENDS: the minimum the gateway requires (silentKeysFor), and on an existing post (whose
+ * own link is not in the body: it may lead to a website) the shop and non-catalog format opt-outs too — fail-safe; the
+ * gateway accepts every extra opt-out, and Meta's validate_only answers first (LIVE-PROBES CR-416q).
+ */
+export function silentKeysToSend(creative: Record<string, unknown>): ReturnType<typeof silentKeysFor> {
+  const min = silentKeysFor(creative)
+  return creative.object_story_id ? { ...min, formats: min.formats ?? META_NON_CATALOG_FORMATS, destination: true } : min
+}
+
 /** The silent features a creative must carry explicitly (the binding lane rule; review B, round 2): why not, or null. */
 export function silentFeaturesProblem(creative: Record<string, unknown>): string | null {
   const dof = creative.degrees_of_freedom_spec as { creative_features_spec?: Record<string, { enroll_status?: unknown }> } | undefined
@@ -881,22 +903,29 @@ export function silentFeaturesProblem(creative: Record<string, unknown>): string
   if (missing.length) return `a creative names an enroll_status for every Advantage+ creative feature Meta documents (missing: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', …' : ''}): Nexus switches none on silently`
   if (!(creative.contextual_multi_ads as { enroll_status?: unknown } | undefined)?.enroll_status) return 'a creative names contextual_multi_ads.enroll_status (Meta opts a creative into multi-advertiser ads when it is missing)'
   const want = silentKeysFor(creative)
-  const formats = Array.isArray(creative.format_transformation_spec) ? (creative.format_transformation_spec as Array<{ format?: unknown }>).map((f) => String(f.format)) : null
+  // Review round 3 — the gateway REQUIRES the minimum and ACCEPTS every extra opt-out (data_source none); it never refuses an
+  // opt-out. A format switched on (another data source) goes only where the minimum names that format.
+  const entries = Array.isArray(creative.format_transformation_spec) ? (creative.format_transformation_spec as Array<{ format?: unknown; data_source?: unknown }>) : []
+  const sent = entries.map((f) => String(f.format))
+  if (new Set(sent).size !== sent.length) return 'format_transformation_spec names each format once'
   if (want.formats) {
-    const sent = formats ?? []
-    if (sent.length !== want.formats.length || want.formats.some((f) => sent.filter((x) => x === f).length !== 1)) return `a creative with ${want.formats.length === 6 ? 'a catalog part' : 'a website destination'} names format_transformation_spec for each of ${want.formats.join(', ')} once, and no other format (Meta transforms the format by itself when one is missing)`
-  } else if (formats) return 'Meta documents format automation for website and catalog creatives only: this creative has neither a website destination nor a catalog part, so Nexus sends none'
+    const missing = want.formats.filter((f) => !sent.includes(f))
+    if (missing.length) return `a creative with ${want.formats.length === 6 ? 'a catalog part' : 'a website destination'} names format_transformation_spec for each of ${want.formats.join(', ')} (missing: ${missing.join(', ')}; Meta transforms the format by itself when one is missing)`
+  }
+  const optedIn = entries.filter((f) => !(Array.isArray(f.data_source) && f.data_source.length === 1 && f.data_source[0] === 'none')).map((f) => String(f.format))
+  const misplaced = optedIn.filter((f) => !want.formats?.includes(f))
+  if (misplaced.length) return `format automation ${misplaced.join(', ')} is switched on only where Meta documents it for this creative (${want.formats?.join(', ') || 'no format here'}); an opt-out (data_source none) goes anywhere`
   const feed = creative.asset_feed_spec as Record<string, unknown> | undefined
   if (want.audios) {
     if (!feed || !Array.isArray(feed.audios)) return 'a creative names asset_feed_spec.audios (empty: no music; Meta\'s guide opts out of music that way)'
   } else if (feed && (Object.keys(feed).some((k) => k !== 'audios') || !Array.isArray(feed.audios) || !feed.audios.length)) return 'a creative of an existing post takes an asset_feed_spec only for music asked (audios random)'
   const destination = (creative.destination_spec as { destination_type?: unknown } | undefined)?.destination_type
+  // (destination_spec takes only WEBSITE_AND_SHOP_OPT_OUT: an extra one is an opt-out, accepted anywhere — review round 3.)
   if (want.destination && !destination) return 'a creative with a website destination or a catalog part names destination_spec.destination_type (v26 sends an eligible creative to the shop by itself when it is missing)'
-  if (!want.destination && creative.destination_spec) return 'Meta\'s Shops guide covers creatives with a website destination only: this one has none, so Nexus sends no destination_spec'
-  if (want.productTags) {
-    const tag = ((creative.interactive_components_spec as { components?: Array<{ type?: unknown; enroll_status?: unknown }> } | undefined)?.components ?? []).find((c) => c?.type === 'product_tag')
-    if (!tag?.enroll_status) return 'a creative with images names interactive_components_spec product_tag enroll_status (Meta tags catalog products on single and carousel images by itself otherwise)'
-  }
+  // Review round 3 — EXACTLY one product_tag component (an opt-out and an opt-in side by side would leave Meta to choose).
+  const tags = ((creative.interactive_components_spec as { components?: Array<{ type?: unknown; enroll_status?: unknown }> } | undefined)?.components ?? []).filter((c) => c?.type === 'product_tag')
+  if (tags.length > 1) return 'interactive_components_spec names ONE product_tag component'
+  if (want.productTags && !tags[0]?.enroll_status) return 'a creative with images names interactive_components_spec product_tag enroll_status (Meta tags catalog products on single and carousel images by itself otherwise)'
   const story = (creative.object_story_spec ?? {}) as { link_data?: Record<string, unknown> }
   if (Array.isArray(story.link_data?.child_attachments) && typeof story.link_data!.multi_share_optimized !== 'boolean') return 'a carousel names link_data.multi_share_optimized (Meta reorders the cards by itself otherwise)'
   const carousels = (feed?.carousels ?? []) as Array<Record<string, unknown>>

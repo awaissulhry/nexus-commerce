@@ -32,7 +32,7 @@
 import prisma from '../../../db.js'
 import {
   creativeTypeOf, finishCreative, isJsonCreativeKey, judgeCreativeForm, judgeCreativeKey, META_AI_GENERATED_FEATURES, META_CREATIVE_FEATURES, META_CREATIVE_TEXT,
-  metaCreativeTextProblem, newCreativeWalk, partsOptIns, silentKeysFor, type CreativeType,
+  metaCreativeTextProblem, newCreativeWalk, partsOptIns, silentKeysToSend, type CreativeType,
 } from '../../gateway/meta-creative-rules.js'
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { MetaChangeAccount } from './change-account.js'
@@ -158,7 +158,7 @@ export interface BuiltCreative {
   featuresOn: string[]
   /** Review round 2 — what the creative is, by its main button, and the silent keys it carries (gateway silentKeysFor). */
   type: CreativeType
-  silent: ReturnType<typeof silentKeysFor>
+  silent: ReturnType<typeof silentKeysToSend>
   /** Review A1 — Meta's automatic product tags said for its images (off unless asked; null: no image), and a carousel. */
   productTags: 'on' | 'off' | null
   carousel: boolean
@@ -232,9 +232,10 @@ export function buildCreative(request: CreativeRequest, chosen: { pageId: string
     if (feedCarousels.some((c) => isObject(c) && 'multi_share_optimized' in c)) return { refusal: 'Nothing was asked of Meta: the card order is the argument carouselAutoOrder, not carousels[].multi_share_optimized.' }
     ;(creative.asset_feed_spec as Record<string, unknown>).carousels = feedCarousels.map((c) => (isObject(c) ? { ...c, multi_share_optimized: auto } : c))
   }
-  // Review round 2 — the silent keys follow what the creative DOES (gateway silentKeysFor, the same function the gateway
-  // judges with): a website destination anywhere, a catalog part, images.
-  const silent = silentKeysFor(creative)
+  // Review round 2 — the silent keys follow what the creative DOES (gateway silentKeysFor, the minimum the gateway requires):
+  // a website destination anywhere, a catalog part, images. Round 3 — an existing post gets the shop and format opt-outs too
+  // (silentKeysToSend: its own link may lead to a website; the gateway accepts every extra opt-out).
+  const silent = silentKeysToSend(creative)
   const type = creativeTypeOf(creative)
   // Review A1 / round 2 — Meta tags catalog products on single and carousel images by itself ("enabled by default"):
   // said explicitly on every creative with images — opt_out unless the request asks (then opt_in).
