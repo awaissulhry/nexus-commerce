@@ -69,16 +69,17 @@ reads its numbers live, today included.
 
 ### Meta ads
 
-Nexus reads the Meta ad account a person chose for the business, with its Facebook Page and Instagram account, per ad account, never per market. The `meta-…` tools read it; they take no `channel`, and `ads-overview`, `ad-campaigns`, `ad-search-terms`, `ad-targets`, `ad-changes` and `ad-recommendations` do not read Meta. Every Meta tool, and what Meta's API cannot do, is in the `meta-ads` skill. With no Meta connection every Meta tool says so: leave Meta out and say why.
+Nexus reads the Meta ad account a person chose for the business, with its Facebook Page and Instagram account, per ad account, never per market. The `meta-…` tools read it; they take no `channel`, and `ads-overview`, `ad-campaigns`, `ad-search-terms`, `ad-targets` and `ad-recommendations` do not read Meta. Two shared reads do, with `channel: "meta"`: `detect-anomalies` and `ad-changes`. Every Meta tool, and what Meta's API cannot do, is in the `meta-ads` skill. With no Meta connection every Meta tool says so: leave Meta out and say why.
 
 Read, in this order:
 1. `meta-account-health` (`view: "summary"`: Nexus's own records, no Meta call): the connection and its token, the ad account's status, the daily read. When something does not deliver, `view: "problems"` (live, with Meta's reasons).
 2. `meta-ads-overview` (`days: 7`): Nexus's daily read — spend, purchases and purchase value as Meta counts them, ROAS, the window before; then `view: "campaigns"`, `view: "adsets"` and `view: "trend"`.
-3. `meta-activity-log` over the week: what changed, who changed it (made outside Nexus too) and why something stopped.
-4. `meta-recommendations` (`view: "overview"`): Meta's opportunity score and its recommendations, each with the signature an apply takes.
-5. `meta-ad-rules`: Meta's own automated rules, which act inside Meta on their own (trigger rules never show in Ads Manager).
-6. `meta-experiments`: the tests that run. Before proposing a change to a campaign, ad set or ad, `view: "object"`: a change can spoil its test.
-7. When a question needs it: `meta-ads-numbers` (breakdowns by placement, age, country …; today included), `meta-ad-details` (`view: "diagnostics"`: auction overlap between the account's own ad sets, creative fatigue), `meta-ad-sets` (still learning, where it really runs).
+3. `detect-anomalies` (`channel: "meta"`, or the default `all`, which adds it to the triggered alerts; `days` up to 14): the Meta signal, computed by Nexus from its daily read (no Meta call) — a day that breaks from the usual and the days together shifting, in spend, click-through rate, cost per purchase and ROAS, each with its severity; `metaSaid` adds what Meta itself pushed in those days (creative fatigue, the account's status, an object with a problem). Cost per purchase and ROAS count only days that spent enough (`notChecked` says when too few did); a worsening inside the last 28 days can still ease, since Meta restates them; a day not read is named, never 0.
+4. `ad-changes` (`channel: "meta"`, `days: 14`): the changes made on Meta through Nexus, newest first — which tool, who decided it (`decidedVia`; source `automation` is a change Claude asked for that the business's "Claude's changes need no approval" switch ran, `operator` one a person approved), the plan step, what it replaced and wrote, and whether undo can still put it back. Then `meta-activity-log` over the week: what changed, who changed it (made outside Nexus too) and why something stopped.
+5. `meta-recommendations` (`view: "overview"`): Meta's opportunity score and its recommendations, each with the signature an apply takes.
+6. `meta-ad-rules`: Meta's own automated rules, which act inside Meta on their own (trigger rules never show in Ads Manager).
+7. `meta-experiments`: the tests that run. Before proposing a change to a campaign, ad set or ad, `view: "object"`: a change can spoil its test.
+8. When a question needs it: `meta-ads-numbers` (breakdowns by placement, age, country …; today included), `meta-ad-details` (`view: "diagnostics"`: auction overlap between the account's own ad sets, creative fatigue), `meta-ad-sets` (still learning, where it really runs).
 
 How Meta's numbers differ:
 - Purchases and purchase value are Meta's attributed numbers, counted with each ad set's own attribution setting. Never call them sales, orders or ACoS, and never add them to Amazon's or Google's; ROAS is purchase value ÷ spend, as Meta counts them. Amounts are minor units of the ad account's currency.
@@ -95,7 +96,7 @@ Per market, a few lines: spend and sales against last week, ACoS against the tar
 
 Google Ads, per account: cost, conversions and conversion value against the period before (only when `previous` is there), the alerts, the brand split, the search terms that cost most with no conversion, what Google did on its own, and the Google Ads changes you would ask for and why.
 
-Meta ads, per ad account: spend, purchases and purchase value as Meta counts them against the window before (only when both were read in full), the account's problems, the campaigns and ad sets that spend with no purchase, what changed outside Nexus, what Meta's rules and tests are doing, and the Meta changes you would ask for and why.
+Meta ads, per ad account: spend, purchases and purchase value as Meta counts them against the window before (only when both were read in full), the account's problems, the swings the Meta signal found, the campaigns and ad sets that spend with no purchase, what changed through Nexus and outside it, what Meta's rules and tests are doing, and the Meta changes you would ask for and why.
 
 ## 3. Propose (one plan per review)
 
