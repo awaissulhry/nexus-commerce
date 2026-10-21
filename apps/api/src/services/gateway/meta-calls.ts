@@ -282,6 +282,37 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/tags$/, keys: new Set(['posted_after']), when: (query) => isoDateTime(query.get('posted_after')) },
   { route: /^\d+\/tags$/, keys: new Set(['posted_before']), when: (query) => isoDateTime(query.get('posted_before')) },
   { route: /^\d+\/tags$/, keys: new Set(['media_type']), when: (query) => subsetOf(query.get('media_type'), ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM']) },
+  // Step 11 (meta-audiences / meta-datasets, live-audiences.ts and live-datasets.ts) — each key only on its own path:
+  //   - audiences: the account's list (filtering for expiring ones, pixel_id), one audience as the chosen account sees it
+  //     (ad_account_id, acting_account_id), its upload sessions, value data, recipients; the portfolio's sharing;
+  //   - datasets: the portfolio's pixel search, a pixel's ad accounts / people (business), audiences and custom
+  //     conversions of the chosen account (ad_account), stats (also a custom conversion's), Meta's Dataset Quality API
+  //     (dataset_id, agent_name), the diagnostics edges and legacy offline uploads.
+  { route: /^act_\d+\/customaudiences$/, keys: new Set(['filtering', 'pixel_id']) },
+  // Only on the read of a shared-in audience as the chosen account sees it (the one read that asks its labels).
+  { route: /^\d+$/, keys: new Set(['ad_account_id', 'acting_account_id']), when: (query) => fieldNamed(query, 'audience_labels') },
+  { route: /^\d+\/sessions$/, keys: new Set(['session_id']) },
+  { route: /^\d+\/health$/, keys: new Set(['calculated_date', 'processed_date']) },
+  { route: /^\d+\/adaccounts$/, keys: new Set(['permissions']) },
+  { route: /^\d+\/initiated_audience_sharing_requests$/, keys: new Set(['recipient_id', 'request_status']) },
+  { route: /^\d+\/received_audience_sharing_requests$/, keys: new Set(['initiator_id', 'request_status']) },
+  { route: /^\d+\/(shared|received)_audience_permissions$/, keys: new Set(['partner_id']) },
+  { route: /^\d+\/adspixels$/, keys: new Set(['name_filter']) },
+  { route: /^\d+\/(shared_accounts|assigned_users)$/, keys: new Set(['business']) },
+  { route: /^\d+\/(audiences|customconversions)$/, keys: new Set(['ad_account']) },
+  { route: /^\d+\/customconversions$/, keys: new Set(['include_archived']) },
+  { route: /^\d+\/stats$/, keys: new Set(['aggregation', 'event', 'event_source', 'agent', 'start_time', 'end_time']) },
+  { route: /^dataset_quality$/, keys: new Set(['dataset_id', 'agent_name']) },
+  { route: /^\d+\/(setup_quality|integration_quality)$/, keys: new Set(['agent_name']) },
+  { route: /^\d+\/ads_signal_diagnostic_issues$/, keys: new Set(['ad_account_id']) },
+  { route: /^\d+\/(event_last_fired_time|recent_events|raw_fires)$/, keys: new Set(['event']) },
+  { route: /^\d+\/domain_last_fired_time$/, keys: new Set(['domain_name_list']) },
+  { route: /^\d+\/recent_events$/, keys: new Set(['lookback_window']) },
+  { route: /^\d+\/real_time_event_log$/, keys: new Set(['start_time', 'end_time']) },
+  { route: /^\d+\/raw_fires$/, keys: new Set(['filter_type', 'filter']) },
+  { route: /^\d+\/cpas_events_debugging_info$/, keys: new Set(['action_source']) },
+  { route: /^\d+\/extractors$/, keys: new Set(['current_domain']) },
+  { route: /^\d+\/offline_event_uploads$/, keys: new Set(['start_time', 'end_time', 'sort_by', 'order', 'upload_tag']) },
 ]
 /** Step 14 review A2 — the key's value is one of these. */
 function valueIn(key: string, values: readonly string[]): (query: URLSearchParams) => boolean {

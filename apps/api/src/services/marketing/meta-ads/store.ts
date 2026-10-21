@@ -136,6 +136,12 @@ export async function recordSyncOutcome(adAccountId: string, outcome: MetaSyncOu
   return account
 }
 
+/** Step 30 — a webhook's structure re-read (kind WEBHOOK): only structureSyncedAt moves. */
+export async function recordStructureRead(adAccountId: string, at: Date | null): Promise<void> {
+  if (!at) return
+  await prisma.metaAdAccount.update({ where: { meta_ad_account: workspaceKey({ adAccountId }) }, data: { structureSyncedAt: at } })
+}
+
 // ── read state per step ──────────────────────────────────────────────────────────────────────────────────────────
 
 export async function getReadStates(adAccountId: string) {

@@ -25,6 +25,29 @@ export async function verifiedChannelWorkspace(channel: string, externalAccountI
   return candidates[0]
 }
 
+/**
+ * Meta ads step 30 — every active route of a channel whose notification names no account Nexus can trust before its
+ * signature is checked (META: the body says which ad account or Page, but only the app secret of a connected business
+ * proves Meta sent it, and each business keeps its own secret). The caller checks the signature with each candidate's
+ * own secret, inside that candidate's business, and routes on the body only after one matched. No secret is read here.
+ */
+export async function activeChannelRoutes(channel: string) {
+  const PAGE = 200
+  const out: Array<{ workspaceId: string; connectionId: string; externalAccountId: string | null }> = []
+  // Every route, page by page (a business is never left out because many are connected).
+  for (let after: string | null = null; ;) {
+    const page: typeof out = await prisma.channelAccountRoute.findMany({
+      where: { channelType: channel, workspace: { status: 'active' }, ...(after ? { connectionId: { gt: after } } : {}) },
+      select: { workspaceId: true, connectionId: true, externalAccountId: true },
+      orderBy: { connectionId: 'asc' },
+      take: PAGE,
+    })
+    out.push(...page)
+    if (page.length < PAGE) return out
+    after = page[page.length - 1].connectionId
+  }
+}
+
 /** Only the notification recipient is a routing key. Competitors in Offers are not. */
 export function amazonNotificationSeller(raw: unknown): string | undefined {
   if (!raw || typeof raw !== 'object') return undefined
