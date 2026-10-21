@@ -682,7 +682,22 @@ function fieldsProblem(value: string): string | null {
  * The gateway's verdict on a Meta call: why it is refused (null: it may go), and the renewal's client_id when it is one.
  * `rest`: a read of Meta's REST host (api.facebook.com, step 16) — the token goes as a Bearer header, never on the URL.
  */
-export interface MetaCallVerdict { problem: string | null; renewalClientId: string | null; rest?: true }
+export interface MetaCallVerdict {
+  problem: string | null
+  renewalClientId: string | null
+  rest?: true
+  /**
+   * Step 30 part 3 — the ONE read that goes with a Page's own token: the apps installed on a Page (`<page>/subscribed_apps`).
+   * The gateway reads that token itself (meta-page-token.ts), only when `pageId` is the business's CHOSEN Page.
+   */
+  pageRead?: { pageId: string }
+}
+
+/** Step 30 part 3 — what the read of a Page's connected apps may name (reference/page/subscribed_apps: id, name, subscribed_fields). */
+const PAGE_APPS_READ_KEYS: ReadonlySet<string> = new Set(['fields', 'limit', 'after'])
+const PAGE_APPS_READ_FIELDS: ReadonlySet<string> = new Set(['id', 'name', 'subscribed_fields'])
+/** Review A-F4 — Meta's paging cursor as Meta writes it (base64url-like: letters, digits, _, - and =). */
+const PAGE_APPS_CURSOR = /^[A-Za-z0-9_=-]{1,512}$/
 
 /**
  * The verdict on one Meta call, judged on the canonical parse. `auth` is how the caller asked the call to be authorised
@@ -743,6 +758,23 @@ export function metaCallVerdict(input: { method: string; url: string; kind: stri
     return refuse('a read of Pages (accounts) names its fields: Meta answers each Page\'s token by default')
   }
   if (segments.length === 1 && /^\d+$/.test(segments[0]) && fields === null) return refuse('a read of one object names its fields (a Page node can carry its token)')
+  // Step 30 part 3 — a node's connected apps (`<id>/subscribed_apps`; an ad account's is `act_<id>/…`) is a Page's: Meta
+  // answers it only to that Page's own access token (reference/page/subscribed_apps). It goes with the token the gateway
+  // reads itself for the CHOSEN Page (gateway.ts), never at a caller's ask, and names only these keys and fields.
+  const pageApps = /^(\d{1,25})\/subscribed_apps$/.exec(route)
+  if (pageApps) {
+    if (input.auth !== undefined && input.auth !== 'account') return refuse('a Page\'s connected apps are read with the chosen Page\'s own token, which the gateway reads itself: a caller asks for no token')
+    const names = (fields ?? '').split(',')
+    if (![...seen].every((k) => PAGE_APPS_READ_KEYS.has(k)) || fields === null || !names.every((n) => PAGE_APPS_READ_FIELDS.has(n))) {
+      return refuse('a Page\'s connected apps are read with fields from id, name, subscribed_fields (and limit, after) only')
+    }
+    // Review A-F4 — and their values exactly: this read goes with a Page's token, so nothing may ride on limit or after.
+    const limit = search.get('limit')
+    if (limit !== null && (!/^\d{1,3}$/.test(limit) || Number(limit) > 100)) return refuse('a Page\'s connected apps are read with a limit of digits only, at most 100')
+    const after = search.get('after')
+    if (after !== null && !PAGE_APPS_CURSOR.test(after)) return refuse('a Page\'s connected apps are read with after as Meta\'s own cursor only (letters, digits, _, - and =, at most 512)')
+    return { problem: null, renewalClientId: null, pageRead: { pageId: pageApps[1] } }
+  }
   return { problem: null, renewalClientId: null }
 }
 
@@ -1542,6 +1574,14 @@ const BOOST_KEYS: ReadonlySet<string> = new Set(['source_instagram_media_id', 'i
 const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kinds
   ? !!kind && (rule.kinds as readonly string[]).includes(kind)
   : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
+/**
+ * Step 30 part 3 review round 2 (A-L3) — the token a change goes with by its rule: 'page' (the chosen Page's own), 'app'
+ * (the connection's app token), undefined (the system user's). For the WORDS of a failure only (write-client.ts): what is
+ * sent, and with which token, is the verdict's alone.
+ */
+export function metaWriteRuleAuth(verb: MetaWriteRule['method'], route: string, objectKind?: string): 'page' | 'app' | undefined {
+  return writeRules().find((r) => r.method === verb && r.path.test(route.toLowerCase()) && kindMatches(r, objectKind))?.auth
+}
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
 // Step 23 — an image upload's bytes (META_IMAGE_MAX_BODY) are the largest body; step 39: an ad set's whole targeting;
 // step 31 — 10,000 hashed e-mails of an audience's people (MEMBERS_MAX_BODY).

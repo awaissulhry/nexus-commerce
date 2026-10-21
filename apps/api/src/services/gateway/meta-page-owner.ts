@@ -2,7 +2,8 @@
  * Meta step 36 (2026-10-21) — the owner check of a change made AS the chosen Facebook Page (a write rule with
  * `auth: 'page'`, meta-lead-form-rules.ts). Before the gateway reads the Page's token (meta-page-token.ts) and sends
  * anything, the object the change names must be:
- *   page      the business's CHOSEN Page itself (its PAGE MetaAccountLink, row-level security: never another business's);
+ *   page      the business's CHOSEN Page itself (its PAGE MetaAccountLink, row-level security: never another business's;
+ *             step 30 part 3: the app installed on it, page.subscribed_apps);
  *   leadform  a lead form OF that Page: one create-meta-lead-form made there (Nexus's own change records), else ONE live
  *             read of the form through this gateway (`GET /<form>?fields=id,page_id,questions{type}`, the business's
  *             system-user token): the same id must come back, its `page_id` must be the chosen Page and it must have

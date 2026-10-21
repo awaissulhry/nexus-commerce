@@ -50,6 +50,7 @@ import { META_LEAD_TYPES_SENT, metaLeadFormCreateProblem, metaTestLeadProblem } 
 import { metaPageTokenFor, MetaPageTokenUnavailable, scrubExactToken } from './meta-page-token.js'
 import { __metaObjectLimitsTest } from './meta-object-limits.js'
 import { metaSendChange } from '../marketing/meta-ads/write-client.js'
+import { failureOfThrow } from '../marketing/meta-ads/errors.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
 
 const BASE = `https://graph.facebook.com/${META_DEFAULT_GRAPH_API_VERSION}`
@@ -536,5 +537,49 @@ describe('review round 1', () => {
     const denied = await metaSendChange(target, { objectId: PAGE, kind: 'page', edge: 'leadgen_forms', params: formParams(), operation: 'leadform.create' }).catch((e) => e)
     expect(denied.message).toMatch(/made as the chosen Facebook Page/)
     expect(denied.message).not.toMatch(/ad account|ads_management/)
+  })
+})
+
+describe('step 30 part 3 review round 2 (A-L1) — the SYSTEM-USER token refused on the Page-token read', () => {
+  it('190 / 102 on GET <page>?fields=access_token: token gone (forgotten check, "sign in again" words), never the Page\'s tasks; other refusals unchanged', async () => {
+    const forget = vi.mocked((await import('../cx/connectors/meta/token-check.js')).forgetMetaTokenCheck)
+    for (const code of [190, 102]) {
+      forget.mockClear()
+      __metaObjectLimitsTest.useMemory()
+      h.answers.push(json({ error: { code, type: 'OAuthException', message: 'Error validating access token: Session has expired' } }, 400))
+      const err = await metaWriteCall({ connectionId: 'm-1', operation: 'leadform.create', objectId: PAGE, objectKind: 'page', edge: 'leadgen_forms', params: formParams(), check: false }).catch((e) => e)
+      expect(err, String(code)).toBeInstanceOf(GatewayRefusal)
+      expect(err, String(code)).toMatchObject({ outcome: 'held', code: 'ACCOUNT_NEEDS_SIGNIN', message: expect.stringMatching(/^Held, nothing sent: Meta no longer accepts this business's system-user token \(Error validating access token: Session has expired\), with which Nexus asks Meta for the chosen Page's token\. Make a new token in Meta Business settings and enter it in Settings → Channels → Meta\.$/) })
+      expect(err.message, String(code)).not.toMatch(/Assign assets|Advertise|Live Contributor/)
+      // errors.ts reads it as the token gone.
+      expect(failureOfThrow(err), String(code)).toMatchObject({ authLost: true, code: 'ACCOUNT_NEEDS_SIGNIN' })
+      await vi.waitFor(() => expect(forget).toHaveBeenCalledWith('m-1'))
+    }
+    // Final re-review — 190/492 ("Invalid session": no role on the Page) is the Page's, not the system-user token's.
+    forget.mockClear()
+    __metaObjectLimitsTest.useMemory()
+    h.answers.push(json({ error: { code: 190, error_subcode: 492, type: 'OAuthException', message: 'Invalid session' } }, 400))
+    const page492 = await metaWriteCall({ connectionId: 'm-1', operation: 'leadform.create', objectId: PAGE, objectKind: 'page', edge: 'leadgen_forms', params: formParams(), check: false }).catch((e) => e)
+    expect(page492).toMatchObject({ code: 'META_PAGE_TOKEN_UNAVAILABLE' })
+    expect(forget).not.toHaveBeenCalled()
+    // Through the write client: not sent, the token gone (the kit stops there).
+    forget.mockClear()
+    __metaObjectLimitsTest.useMemory()
+    h.answers.push(json({ error: { code: 190, type: 'OAuthException', message: 'Error validating access token' } }, 400))
+    const viaClient = await metaSendChange({ connectionId: 'm-1', adAccountId: '1234567890' }, { objectId: PAGE, kind: 'page', edge: 'leadgen_forms', params: formParams(), operation: 'leadform.create' }).catch((e) => e)
+    expect(viaClient).toMatchObject({ outcome: 'not_sent', failure: { authLost: true }, message: expect.stringMatching(/no longer accepts this business's system-user token/) })
+    // The Page's connected apps read (set-meta-webhooks): the same words.
+    h.answers.push(json({ error: { code: 190, type: 'OAuthException', message: 'Error validating access token' } }, 400))
+    await expect(metaCall({ connectionId: 'm-1', operation: 'webhooks.setup.pageApps', path: `${PAGE}/subscribed_apps`, query: { fields: 'id,subscribed_fields', limit: 100 } })).rejects.toMatchObject({ code: 'ACCOUNT_NEEDS_SIGNIN' })
+    await vi.waitFor(() => expect(forget).toHaveBeenCalledTimes(2))
+    // A permission refusal of that read stays the Page's condition, its check not forgotten.
+    forget.mockClear()
+    __metaObjectLimitsTest.useMemory()
+    h.answers.push(json({ error: { code: 200, message: '(#200) The user must be an admin, editor, or moderator of the page' } }, 403))
+    const denied = await metaWriteCall({ connectionId: 'm-1', operation: 'leadform.create', objectId: PAGE, objectKind: 'page', edge: 'leadgen_forms', params: formParams(), check: false }).catch((e) => e)
+    expect(denied).toMatchObject({ code: 'META_PAGE_TOKEN_UNAVAILABLE', message: expect.stringMatching(/Advertise/) })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(forget).not.toHaveBeenCalled()
+    expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
   })
 })

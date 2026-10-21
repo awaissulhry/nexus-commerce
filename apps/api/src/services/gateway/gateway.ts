@@ -375,6 +375,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   let metaWrite: MetaJudgedWrite | null = null
   // Step 16 — a read of Meta's REST host (api.facebook.com): its token goes as a Bearer header (meta-calls.ts).
   let metaRest = false
+  // Step 30 part 3 — the one read made with the chosen Page's own token (its connected apps; meta-calls.ts pageRead).
+  let metaPageRead = false
   // Step 39 (BS-033) — the one PUT of Meta's REST host, the content block list's CSV export: a read, judged apart (its list
   // is checked to be the chosen portfolio's after the account's status, 3b).
   const metaExport = req.channel === 'META' && req.method === 'PUT' ? metaRestFileExportOf({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers }) : null
@@ -406,6 +408,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     const judged = metaCallVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
     if (judged.problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${judged.problem} (${req.method} ${safePath(req.url)}).`, 403)
     metaRest = judged.rest === true
+    // Step 30 part 3 — a Page's connected apps are read with the Page's own token (5, below): only of the business's CHOSEN
+    // Page (its PAGE MetaAccountLink), never a Page a caller names.
+    if (judged.pageRead) {
+      const chosen = req.connectionId ? await metaChosenPageOf(req.connectionId) : null
+      if (!chosen || chosen !== judged.pageRead.pageId) return refuse('refused', 'META_PAGE_NOT_CHOSEN', 'Nothing was sent to Meta: a Page\'s connected apps are read only of the Facebook Page this business chose through this connection (with that Page\'s own token).', 403)
+      metaPageRead = true
+    }
     // The renewal names the app it is for: it must be THIS connection's own app, never another.
     if (judged.renewalClientId !== null) {
       const appId = req.connectionId ? await (await import('../cx/token.service.js')).metaAppIdOf(req.connectionId) : null
@@ -516,7 +525,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // it goes on the URL that is sent, never on `url` (the ledger, the trace, the answer), and is scrubbed from the answer.
   let pageToken: string | null = null
   try {
-    if (metaWrite?.auth === 'page' && req.connectionId) token = pageToken = await metaPageTokenFor(req.connectionId)
+    // Step 30 part 3 — and the one read of the chosen Page's connected apps (Meta answers it only to the Page's token).
+    if ((metaWrite?.auth === 'page' || metaPageRead) && req.connectionId) token = pageToken = await metaPageTokenFor(req.connectionId)
     // Step 30 — a rule marked `auth: 'app'` (an app's webhook subscription, the app's removal from the chosen Page) goes with
     // the connection's own Meta APP token, read here for this one call; a caller never asks for it (the verdict refuses a
     // caller's `auth` on a change), and no other rule ever gets it.
@@ -763,7 +773,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       await observeRate(req.channel, key, { retryAfterSec: 300 })
     }
     // Meta says the token is dead: the next heartbeat checks it again at once, rather than trusting a check kept for hours.
-    if ((verdict.errorClass === 'auth_revoked' || verdict.errorClass === 'auth_expired') && req.connectionId) {
+    // Step 30 part 3 review A-F5 — not when the dead token was the chosen Page's own, on the read of its connected apps:
+    // that says nothing of the business's system-user token.
+    if ((verdict.errorClass === 'auth_revoked' || verdict.errorClass === 'auth_expired') && req.connectionId && !metaPageRead) {
       const connectionId = req.connectionId
       void import('../cx/connectors/meta/token-check.js').then((m) => m.forgetMetaTokenCheck(connectionId)).catch(() => undefined)
     }

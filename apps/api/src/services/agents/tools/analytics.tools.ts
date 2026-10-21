@@ -11,6 +11,7 @@ import prisma from '../../../db.js'
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
+import { logger } from '../../../utils/logger.js'
 import { AI_DRAFT_SURFACES, aiDraft } from './draft.tools.js'
 import { isLiveProduct, liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 
@@ -203,45 +204,107 @@ const insightsMetric: AgentTool = {
   },
 }
 
+/** Meta ads step 44 — which signals detect-anomalies answers. */
+const ANOMALY_CHANNELS = ['all', 'alerts', 'meta'] as const
+const lowerText = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v)
+const ADSPEND = FIELDS.financialsAdspendView
+
 const detectAnomalies: AgentTool = {
   name: 'detect-anomalies',
   title: 'Triggered alerts',
-  input: z.object({ limit: z.coerce.number().int().min(1).max(100).optional().describe('max events (default 20)') }),
+  input: z.object({
+    limit: z.coerce.number().int().min(1).max(100).optional().describe('max events (default 20)'),
+    // Meta ads step 44 (master IN-102) — the Meta signal, computed from Nexus's daily read.
+    channel: z.preprocess(lowerText, z.enum(ANOMALY_CHANNELS)).default('all')
+      .describe('all (default): the triggered alerts and, when Meta is connected, the Meta signal; alerts: only the triggered alerts; meta: only the Meta signal'),
+    days: z.coerce.number().int().min(1).max(14).optional()
+      .describe('Meta: how many recent days to check, ending yesterday in the ad account\'s time zone (default 7); the up to 56 read days before them are the history'),
+    connectionId: z.string().trim().min(1).max(64).optional().describe('Meta: the Meta connection (from meta-connection); default: this business\'s one'),
+  }),
   requires: [F.insightsView],
+  // Meta ads step 44 — the Meta signal's amounts (each day's or days' value and what is usual) sit under these keys.
+  restrictedFields: { spendCents: ADSPEND, costPerPurchaseCents: ADSPEND, roas: ADSPEND },
   category: 'insights',
   riskTier: 'low',
   readOnly: true,
   description:
-    'Recently triggered alert/anomaly events (metric, threshold, observed value).',
-  async handler(args) {
-    const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 100)
-    const rows = await prisma.alertEvent.findMany({
-      where: { status: 'TRIGGERED' },
-      orderBy: { triggeredAt: 'desc' },
-      take: limit,
-      select: {
-        value: true,
-        status: true,
-        triggeredAt: true,
-        rule: {
-          select: {
-            name: true,
-            metric: true,
-            operator: true,
-            threshold: true,
+    'Recently triggered alert/anomaly events (metric, threshold, observed value). '
+    + 'Meta (channel all or meta, with the ads view permission): unusual swings in the business\'s OWN Meta ads numbers, '
+    + 'computed by Nexus from its daily read — no Meta call (Meta has no public API for its anomaly signal). Each of the '
+    + 'last days (default 7, ending yesterday in the ad account\'s time zone) is compared with the up to 56 read days '
+    + 'before them, for spend, click-through rate, cost per purchase and ROAS: a day 2 standard deviations or more away '
+    + '(and 20 % or more), and the checked days together moving 25 % or more; each says up or down, worse, better or '
+    + 'changed (spend), its severity, and whether Meta can still restate it (the last 28 days: late purchases). Cost per '
+    + 'purchase and ROAS count only days that spent at least 40 % of the median spend day (of all earlier days or the last '
+    + '14, whichever is lower). A day '
+    + 'Nexus did not read is named and left out, never a zero; a metric with too little history says so (notChecked). '
+    + 'metaSaid adds what Meta itself pushed in those days (creative fatigue, the ad account\'s status, an object with a '
+    + 'problem). Amounts are minor units of the ad account\'s currency; a person without the ad-spend money permission '
+    + 'gets the same answer without them. Read only.',
+  async handler(args, ctx) {
+    const channel = (args.channel ?? 'all') as (typeof ANOMALY_CHANNELS)[number]
+    const out: Record<string, unknown> = {}
+    if (channel !== 'meta') {
+      const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 100)
+      const rows = await prisma.alertEvent.findMany({
+        where: { status: 'TRIGGERED' },
+        orderBy: { triggeredAt: 'desc' },
+        take: limit,
+        select: {
+          value: true,
+          status: true,
+          triggeredAt: true,
+          rule: {
+            select: {
+              name: true,
+              metric: true,
+              operator: true,
+              threshold: true,
+            },
           },
         },
-      },
-    })
-    const anomalies = rows.map((r) => ({
-      rule: r.rule?.name ?? '(rule deleted)',
-      metric: r.rule?.metric ?? null,
-      operator: r.rule?.operator ?? null,
-      threshold: r.rule?.threshold ?? null,
-      value: r.value,
-      triggeredAt: r.triggeredAt,
-    }))
-    return { ok: true, data: { count: anomalies.length, anomalies } }
+      })
+      const anomalies = rows.map((r) => ({
+        rule: r.rule?.name ?? '(rule deleted)',
+        metric: r.rule?.metric ?? null,
+        operator: r.rule?.operator ?? null,
+        threshold: r.rule?.threshold ?? null,
+        value: r.value,
+        triggeredAt: r.triggeredAt,
+      }))
+      out.count = anomalies.length
+      out.anomalies = anomalies
+    }
+    if (channel !== 'alerts') {
+      // Meta numbers are ad data: shown with the ads view permission, as every Meta read tool requires it.
+      if (!ctx.can(F.adsView)) {
+        if (channel === 'meta') return { ok: false, error: 'The Meta signal reads ad numbers: it needs the ads view permission.' }
+        out.meta = { shown: false, sentence: 'The Meta signal is left out: it needs the ads view permission.' }
+      } else {
+        let refused: string | null = null
+        try {
+          const { metaAnomalySignal } = await import('../../marketing/meta-ads/anomaly-signal.js')
+          const { MetaAdsReadError } = await import('../../marketing/meta-ads/read.service.js')
+          try {
+            out.meta = await metaAnomalySignal({ connectionId: typeof args.connectionId === 'string' ? args.connectionId : null, days: typeof args.days === 'number' ? args.days : null })
+          } catch (err) {
+            if (!(err instanceof MetaAdsReadError)) throw err
+            refused = err.message
+          }
+        } catch (err) {
+          // Review fix (step 44) — channel meta fails as any read does; with the alerts (all), no error of the Meta part
+          // (the database, a grant, a module) takes the alerts down: logged, and said in words.
+          if (channel === 'meta') throw err
+          logger.warn('[detect-anomalies] the Meta signal could not be read; the alerts are answered without it', { error: err instanceof Error ? err.message : String(err) })
+          out.meta = { shown: false, sentence: 'Nexus could not read the Meta signal just now; the triggered alerts are answered without it.' }
+        }
+        if (refused !== null) {
+          if (channel === 'meta') return { ok: false, error: refused }
+          out.meta = { shown: false, sentence: refused }
+        }
+      }
+    }
+    return { ok: true, data: out }
   },
 }
 

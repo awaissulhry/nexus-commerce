@@ -465,6 +465,102 @@ describe('A2 — ad-changes', () => {
   })
 })
 
+// ── ad-changes, Meta (step 44) ───────────────────────────────────────────────────────────────────────
+
+describe('Meta ads step 44 — ad-changes channel meta: the Meta change kit\'s records', () => {
+  const ids_: Record<string, string> = {}
+  beforeAll(async () => {
+    const at = (h: number) => new Date(Date.now() - h * 3600_000)
+    const seed = async (workspaceId: string, mark: string) => inside(workspaceId, async () => {
+      const db = database.client
+      const run = await db.agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'done', via: 'claude' } as never })
+      const approval = (toolName: string, preview: unknown, extra: Record<string, unknown> = {}) =>
+        db.agentApproval.create({ data: { agentRunId: run.id, toolName, riskTier: 'high', args: {}, preview: preview as never, status: 'executed', decidedBy: `${mark} Owner`, decisionVia: 'nexus', ...extra } as never })
+      const change = (approvalId: string, toolName: string, executedAt: Date, extra: Record<string, unknown> = {}) =>
+        db.agentChange.create({ data: { approvalId, toolName, via: 'claude', executedAt, reversibility: 'full', outbound: true, ...extra } as never })
+      // A pause (undo possible), its stamp names the Meta ad account.
+      const pause = await approval('set-meta-status', { summary: `Meta: pause campaign "${mark} spring" (120000000000001).`, spendsMoney: false })
+      ids_[`${mark}:pause`] = (await change(pause.id, 'set-meta-status', at(5), {
+        before: { items: [{ kind: 'campaign', id: '120000000000001', status: 'ACTIVE' }], accountId: 'm-1', adAccountId: '1234567890' },
+        after: { items: [{ kind: 'campaign', id: '120000000000001', status: 'PAUSED' }], accountId: 'm-1', adAccountId: '1234567890' },
+      })).id
+      // A budget change run by the no-approval switch in the asker's name: its summary and what it wrote are money.
+      const budget = await approval('set-meta-campaign', { summary: `Meta: change campaign "${mark} spring" (120000000000001): daily budget.` }, { decisionVia: 'no-approval' })
+      ids_[`${mark}:budget`] = (await change(budget.id, 'set-meta-campaign', at(3), {
+        before: { campaignId: '120000000000001', dailyBudgetCents: 1500, adAccountId: '1234567890' },
+        after: { campaignId: '120000000000001', dailyBudgetCents: 2500, adAccountId: '1234567890' },
+      })).id
+      // A step of a change plan: its own summary comes from the step's preview.
+      const plan = await approval('submit-change-plan', { summary: '2 changes' })
+      const step = await db.agentPlanStep.create({ data: { approvalId: plan.id, position: 2, toolName: 'set-meta-status', args: {}, preview: { summary: `Meta: pause ad set "${mark} loser" (120000000000002).` }, status: 'done' } as never })
+      ids_[`${mark}:step`] = (await change(plan.id, 'set-meta-status', at(2), { planStepId: step.id, before: { items: [] }, after: { items: [] } })).id
+      // An archive: no undo.
+      const archive = await approval('set-meta-status', { summary: 'Meta: archive ad 120000000000003.' })
+      ids_[`${mark}:archive`] = (await change(archive.id, 'set-meta-status', at(1), { reversibility: 'none', before: { items: [] }, after: { items: [] } })).id
+      // Three days old: outside a one-day window.
+      const older = await approval('set-meta-status', { summary: 'Meta: pause ad 120000000000004.' })
+      ids_[`${mark}:older`] = (await change(older.id, 'set-meta-status', at(72), { before: { items: [] }, after: { items: [] } })).id
+      // Not a Meta change: never listed.
+      const price = await approval('set-price', { summary: 'price' })
+      await change(price.id, 'set-price', at(4), { outbound: false })
+    })
+    await seed(A, 'Shop A')
+    await seed(OTHER, 'Shop B')
+  })
+
+  it('newest first: the tool, who decided and how, the plan step, the Meta ad account, the summary, what it replaced and wrote, the undo', async () => {
+    const answer = await call('ad-changes', { channel: 'meta', limit: 100 })
+    expect(answer.ok, answer.error).toBe(true)
+    const data = answer.data!
+    expect(data).toMatchObject({ channel: 'meta', outsideNexus: expect.stringMatching(/meta-activity-log/) })
+    expect(ids(data.items, 'changeId')).toEqual([ids_['Shop A:archive'], ids_['Shop A:step'], ids_['Shop A:budget'], ids_['Shop A:pause'], ids_['Shop A:older']])
+    const [archive, step, budget, pause] = data.items
+    expect(pause).toMatchObject({
+      source: 'operator', actor: 'Shop A Owner', decidedVia: 'nexus', action: 'set-meta-status', title: 'Pause, switch on or archive Meta ads',
+      adAccountId: '1234567890', note: 'Asked: Meta: pause campaign "Shop A spring" (120000000000001).', undoable: true, undo: 'possible',
+      replaced: { items: [{ kind: 'campaign', id: '120000000000001', status: 'ACTIVE' }] }, wrote: { items: [{ status: 'PAUSED' }] },
+    })
+    // Review fix — the business's no-approval switch ran it: source automation, decidedVia kept.
+    expect(budget).toMatchObject({ source: 'automation', decidedVia: 'no-approval', action: 'set-meta-campaign', wrote: { dailyBudgetCents: 2500 } })
+    // Review fix — the note is what was asked (a change Meta made in part shows only that part in replaced / wrote).
+    expect(step).toMatchObject({ source: 'operator', planStep: 2, note: 'Asked: Meta: pause ad set "Shop A loser" (120000000000002).' })
+    expect(archive).toMatchObject({ undoable: false, undo: 'not possible' })
+    expect(data.dataAsOf).toBe(archive.at)
+    // Business B's Meta changes never show.
+    expect(JSON.stringify(data)).not.toContain('Shop B')
+  })
+
+  it('a person without the ad-spend money permission gets the same rows without the summary and what was replaced and written', async () => {
+    const seen = (await call('ad-changes', { channel: 'meta', limit: 100 }, operator())).data!
+    expect(seen.items).toHaveLength(5)
+    for (const item of seen.items) {
+      expect(item).not.toHaveProperty('note')
+      expect(item).not.toHaveProperty('replaced')
+      expect(item).not.toHaveProperty('wrote')
+      expect(item).toHaveProperty('action')
+    }
+    expect(JSON.stringify(seen)).not.toContain('2500')
+  })
+
+  it('pages with no change twice; automation is what the no-approval switch ran, operator the rest; the others answer in words; a campaign or target filter is refused', async () => {
+    const whole = ids((await call('ad-changes', { channel: 'meta', limit: 100 })).data!.items, 'changeId')
+    const { items, pages } = await walk('ad-changes', { channel: 'meta' }, 1)
+    expect(ids(items, 'changeId')).toEqual(whole)
+    expect(pages).toBe(5)
+    // Review fix — a change the business's "no approval" switch ran (#691) is found under automation, never hidden.
+    expect(ids((await call('ad-changes', { channel: 'meta', source: 'operator', limit: 100 })).data!.items, 'changeId')).toEqual(whole.filter((id) => id !== ids_['Shop A:budget']))
+    const automation = (await call('ad-changes', { channel: 'meta', source: 'automation', limit: 100 })).data!
+    expect(ids(automation.items, 'changeId')).toEqual([ids_['Shop A:budget']])
+    expect(automation.items[0]).toMatchObject({ source: 'automation', decidedVia: 'no-approval' })
+    expect((await call('ad-changes', { channel: 'meta', source: 'external' })).data).toMatchObject({ items: [], note: expect.stringMatching(/meta-activity-log/) })
+    expect((await call('ad-changes', { channel: 'meta', source: 'system' })).data).toMatchObject({ items: [], note: expect.stringMatching(/^Nexus makes no Meta change by itself\..*source automation \(decidedVia no-approval\)/) })
+    expect(await call('ad-changes', { channel: 'meta', campaignId: 'ar-c1' })).toEqual({ ok: false, error: expect.stringMatching(/^campaignId and targetId name Amazon or eBay objects/) })
+    // The window: a change older than the days asked is left out.
+    expect(ids((await call('ad-changes', { channel: 'meta', days: 1, limit: 100 })).data!.items, 'changeId')).not.toContain(ids_['Shop A:older'])
+    expect((await call('ad-changes', { channel: 'meta', days: 1, limit: 100 })).data!.items).toHaveLength(4)
+  })
+})
+
 // ── ad-recommendations ───────────────────────────────────────────────────────────────────────────────
 
 describe('A2 — ad-recommendations', () => {

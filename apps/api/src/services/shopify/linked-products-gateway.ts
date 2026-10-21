@@ -182,6 +182,8 @@ export async function readLinkedStoreSchema(gql: ShopifyGraphql, options: { cate
     inputs: Object.fromEntries(['product', 'variant', 'inventory', 'measurement'].map(key => [key, settings[`${key}Input`]?.inputFields?.map((f: { name: string }) => f.name) ?? []])),
     scopes: settings.currentAppInstallation?.accessScopes?.map((s: { handle: string }) => s.handle) ?? [],
   } : undefined
+  // `Publication.name` is deprecated in Admin GraphQL 2026-07 (`Publication.channels` → `Channel.app` / `Channel.name` is the
+  // way on); set-shopify-content's Facebook & Instagram channel is found by it. Re-check both on the next version bump.
   const publications = native?.scopes.some(s => ['read_publications', 'write_publications'].includes(s))
     ? await collectShopifyPages<any>(async after => (await gql(`query NexusInformationStorePublications($after:String) { publications(first:100,after:$after) { nodes { id name supportsFuturePublishing } ${pageInfo} } }`, { after })).publications) : undefined
   const data = { ...(publications ? { publications } : {}), definitions, ...(templates.length ? { templates } : {}), metaobjectDefinitions, types: settings.metafieldDefinitionTypes, locales: settings.shopLocales, ...(native ? { native, currency: settings.shop?.currencyCode } : {}) }
