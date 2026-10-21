@@ -358,7 +358,8 @@ function pageInstallDraft(req: WebhooksRequest, live: WebhooksLive): MetaChangeD
     // Review round 2 B-2 — the undo is install-page `exact` with a field to drop: two steps, the app off and then on with
     // the earlier fields. An Undo on the Claude activity page is approved by its click (change-undo.service.ts): this
     // preview is the only place a person reads what that undo does.
-    if (undo && target.some((f) => !back.includes(f))) {
+    // A field the receiver does not take (kept off the undo) makes it two steps too, when Meta adds rather than replaces.
+    if (undo && (target.some((f) => !back.includes(f)) || foreign.length)) {
       warnings.push(`Its undo takes the app off Page ${pageId} and puts it back with the earlier fields (${words(back)}): if that second step fails, the app stays off the Page — no lead, comment or message notification of the Page reaches Nexus — until install-page runs again.`)
     }
   }

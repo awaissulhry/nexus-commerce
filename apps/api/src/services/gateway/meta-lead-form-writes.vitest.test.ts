@@ -555,6 +555,13 @@ describe('step 30 part 3 review round 2 (A-L1) — the SYSTEM-USER token refused
       expect(failureOfThrow(err), String(code)).toMatchObject({ authLost: true, code: 'ACCOUNT_NEEDS_SIGNIN' })
       await vi.waitFor(() => expect(forget).toHaveBeenCalledWith('m-1'))
     }
+    // Final re-review — 190/492 ("Invalid session": no role on the Page) is the Page's, not the system-user token's.
+    forget.mockClear()
+    __metaObjectLimitsTest.useMemory()
+    h.answers.push(json({ error: { code: 190, error_subcode: 492, type: 'OAuthException', message: 'Invalid session' } }, 400))
+    const page492 = await metaWriteCall({ connectionId: 'm-1', operation: 'leadform.create', objectId: PAGE, objectKind: 'page', edge: 'leadgen_forms', params: formParams(), check: false }).catch((e) => e)
+    expect(page492).toMatchObject({ code: 'META_PAGE_TOKEN_UNAVAILABLE' })
+    expect(forget).not.toHaveBeenCalled()
     // Through the write client: not sent, the token gone (the kit stops there).
     forget.mockClear()
     __metaObjectLimitsTest.useMemory()

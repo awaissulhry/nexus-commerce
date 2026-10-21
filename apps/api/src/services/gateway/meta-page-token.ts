@@ -180,7 +180,8 @@ export async function metaPageTokenFor(connectionId: string, deps: { timeoutMs?:
   if (token) return token
   // Review round 2 A-L1 — the system-user token itself refused (190, 102): gone. A code errors.ts reads as "token gone"
   // (ACCOUNT_NEEDS_SIGNIN, held), its words, and the heartbeat's check forgotten (gateway.ts does the same after a call).
-  if (failed && (failed.errorClass === 'auth_revoked' || failed.errorClass === 'auth_expired')) {
+  // Not 190/492 ("Invalid session": no role on the Page — Meta's error-handling guide): that is the Page's, said below.
+  if (failed && (failed.errorClass === 'auth_revoked' || failed.errorClass === 'auth_expired') && !/^190\/492$/.test(failed.code ?? '')) {
     void import('../cx/connectors/meta/token-check.js').then((m) => m.forgetMetaTokenCheck(connectionId)).catch(() => undefined)
     throw new MetaPageTokenUnavailable('ACCOUNT_NEEDS_SIGNIN', `Held, nothing sent: Meta no longer accepts this business's system-user token${failed.words ? ` (${failed.words})` : ''}, with which Nexus asks Meta for the chosen Page's token. Make a new token in Meta Business settings and enter it in Settings → Channels → Meta.`)
   }

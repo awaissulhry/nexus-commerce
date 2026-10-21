@@ -307,6 +307,9 @@ describe('set-meta-webhooks', () => {
     expect((await preview(webhooks, { action: 'install-page', fields: ['mention'] })).preview.warnings.join(' ')).not.toMatch(/Its undo takes the app off/)
     h.page = { installed: true, fields: ['feed', 'mention'] }
     expect((await preview(webhooks, { action: 'install-page', fields: ['feed'], exact: true })).preview.warnings.join(' ')).not.toMatch(/Its undo takes the app off/)
+    // Final re-review — a field the receiver does not take on the Page makes the exact undo two steps too: said.
+    h.page = { installed: true, fields: ['feed', 'ratings'] }
+    expect((await preview(webhooks, { action: 'install-page', fields: ['feed'] })).preview.warnings.join(' ')).toMatch(/Its undo takes the app off Page 120000000000010 and puts it back with the earlier fields \(feed\)/)
   })
 
   it('review round 2 A-L2 / A-N2 — `exact`: step 2 sent and refused by Meta → off; step 2 sent but not confirmed → off, or its install not confirmed', async () => {

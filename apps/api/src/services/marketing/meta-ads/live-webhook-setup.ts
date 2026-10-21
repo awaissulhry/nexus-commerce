@@ -84,7 +84,7 @@ export function pageTokenReadError(err: unknown, pageId: string): unknown {
   const base = (err.failure.code ?? '').split('/')[0]
   const words = err.failure.authLost ? PAGE_INSTALL_EXPLAIN['190']
     : base === '210' ? PAGE_INSTALL_EXPLAIN['210']
-      : base === '200' || base === '10' ? PAGE_INSTALL_EXPLAIN['200'] : null
+      : base === '200' || base === '10' || err.failure.permissionDenied ? PAGE_INSTALL_EXPLAIN['200'] : null
   if (!words) return err
   const sentence = `Meta refused the chosen Page's own token for the read of Page ${pageId}'s connected apps${err.failure.code ? ` (${err.failure.code})` : ''}: ${words}`
   return new MetaReadError({ ...err.failure, authLost: false, sentence }, err.operation, err.callsSpent)
