@@ -680,12 +680,13 @@ function billingExtraOf(raw: unknown): { kept: Record<string, string | number | 
   return { kept: Object.keys(kept).length ? kept : null, dropped, droppedKeys }
 }
 
-/** A day (YYYY-MM-DD) → Unix seconds at 00:00 UTC. */
-const unixOf = (day: string) => Math.floor(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10)) / 1000)
+/** A day (YYYY-MM-DD) → Unix seconds at 00:00 UTC. Step 5's activity log reads the same days the same way. */
+export const unixOf = (day: string) => Math.floor(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10)) / 1000)
 
-const ACTIVITY_FIELDS = 'event_time,event_type,translated_event_type,actor_id,actor_name,application_id,application_name,object_id,object_name,object_type,date_time_in_timezone,extra_data'
-/** Who made a billing change: Nexus's own system user or the chosen Page by name; anyone else is Meta's id only. */
-function actorOf(account: MetaChosenAccount, r: Row) {
+/** AdActivity's fields (reference/ad-activity): the billing events here, and step 5's activity log (live-health.ts). */
+export const ACTIVITY_FIELDS = 'event_time,event_type,translated_event_type,actor_id,actor_name,application_id,application_name,object_id,object_name,object_type,date_time_in_timezone,extra_data'
+/** Who made a billing change: Nexus's own system user or the chosen Page by name; anyone else is Meta's id only (step 5's activity log uses the same rule). */
+export function actorOf(account: MetaChosenAccount, r: Row) {
   const actorId = idText(r.actor_id)
   // Review round 4 (step 5's rule, one for every tool) — people are named only in meta-account-access view people.
   const bySystemUser = !!actorId && actorId === (account.connection.systemUser?.id ?? null)

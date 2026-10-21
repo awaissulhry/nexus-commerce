@@ -68,6 +68,11 @@ import type { HealthCheck, Verdict } from './types.js'
 import { PLATFORM_HEALTH_JOB, startPlatformHealthWatchdogCron } from '../../jobs/platform-health-watchdog.job.js'
 import { isKnownCron } from '../../jobs/cron-registry.js'
 
+/** Review A5 (Meta step 5) — the checks the watchdog runs, pinned: a check removed from the registry turns this red. */
+const EXPECTED_CHECKS = [
+  'cron-runs', 'processes', 'ads-daily-reports', 'ads-report-feeds', 'sqp-feed', 'economics-feed', 'keyword-rank-feed', 'ads-writes', 'queue-drain',
+  'plan-steps', 'ads-rule-gates', 'ads-engines-idle', 'meta-ads',
+]
 const A = LEGACY_WORKSPACE_ID
 const B = 'platform_health_bravo'
 const ON = process.env.NEXUS_WORKSPACES_ENABLED === '1'
@@ -141,7 +146,10 @@ afterAll(async () => {
 describe('gathers — every check measures against the real schema', () => {
   it('no check throws: each is ok, warn, fail or an honest "could not measure" that is not a read error', async () => {
     const results = await inside(() => measurePlatformHealth(NOW))
-    expect(results.map((r) => r.id)).toEqual(HEALTH_CHECKS.map((c) => c.id))
+    expect(results.map((r) => r.id)).toEqual(EXPECTED_CHECKS)
+    expect(HEALTH_CHECKS.map((c) => c.id)).toEqual(EXPECTED_CHECKS)
+    // Meta step 5 — a business with no Meta connection has nothing to watch: ok, never "could not measure".
+    expect(results.find((r) => r.id === 'meta-ads')).toMatchObject({ status: 'ok', message: expect.stringMatching(/no Meta connection/) })
     for (const r of results) {
       expect(['ok', 'warn', 'fail', 'unknown'], r.id).toContain(r.status)
       expect(r.message, r.id).not.toMatch(/the check failed while reading/)
@@ -247,12 +255,12 @@ describe('store and alert — one row per check, one alert per failing check, re
 describe('platform-health-checks — Claude\'s read', () => {
   it('the newest run, worst first, with evidence, since when not ok, and the open alerts; problems only on request', async () => {
     const run = await inside(() => runPlatformHealthWatchdog({ now: new Date(), triggeredBy: 'manual' }))
-    expect(watchdogSummary(run)).toMatch(/^checks=12 ok=\d+ warn=\d+ fail=\d+ unknown=\d+/)
+    expect(watchdogSummary(run)).toMatch(new RegExp(`^checks=${EXPECTED_CHECKS.length} ok=\\d+ warn=\\d+ fail=\\d+ unknown=\\d+`))
     const answer = await call('platform-health-checks', {})
     expect(answer.ok).toBe(true)
     expect(answer.data.run).toMatchObject({ runId: run.runId, triggeredBy: 'manual', stale: false })
     const checks = answer.data.checks as Array<{ check: string; status: string; message: string; evidence: unknown; lastOkAt: string | null }>
-    expect(checks).toHaveLength(12)
+    expect(checks.map((c) => c.check).sort()).toEqual([...EXPECTED_CHECKS].sort())
     const rank = { fail: 0, warn: 1, unknown: 2, ok: 3 } as Record<string, number>
     expect(checks.map((c) => rank[c.status])).toEqual([...checks.map((c) => rank[c.status])].sort((a, b) => a - b))
     const cron = checks.find((c) => c.check === 'cron-runs')!

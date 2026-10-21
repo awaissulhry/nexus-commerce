@@ -97,6 +97,7 @@ import { META_ADS_OPTIMIZE_TOOLS } from './tools/meta-ads-optimize.tools.js'
 import { META_ADS_ENGAGEMENT_TOOLS } from './tools/meta-ads-engagement.tools.js'
 import { META_ADS_CATALOG_TOOLS } from './tools/meta-ads-catalog.tools.js'
 import { META_ADS_ACCOUNT_TOOLS } from './tools/meta-ads-account.tools.js'
+import { META_ADS_HEALTH_TOOLS } from './tools/meta-ads-health.tools.js'
 // Meta ads step 11 (2026-10-21): audiences and datasets (pixels), read only.
 import { META_ADS_AUDIENCES_TOOLS } from './tools/meta-ads-audiences.tools.js'
 import { META_ADS_DATASETS_TOOLS } from './tools/meta-ads-datasets.tools.js'
@@ -104,6 +105,8 @@ import { META_ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/meta-ads-campaign-sett
 import { META_ADS_CREATE_TOOLS } from './tools/meta-ads-create.tools.js'
 import { META_ADS_REMOVE_TOOLS } from './tools/meta-ads-remove.tools.js'
 import { META_ADS_LABELS_RULES_TOOLS } from './tools/meta-ads-labels-rules.tools.js'
+// Meta ads step 28 (2026-10-21): apply recommendations; make, change and end experiments.
+import { META_ADS_OPTIMIZE_CHANGES_TOOLS } from './tools/meta-ads-optimize-changes.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -322,6 +325,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_CATALOG_TOOLS,
   // Meta ads step 3 (2026-10-21): meta-ad-account, meta-billing, meta-account-access (read only).
   ...META_ADS_ACCOUNT_TOOLS,
+  // Meta ads step 5 (2026-10-21): meta-account-health, meta-activity-log (read only).
+  ...META_ADS_HEALTH_TOOLS,
   // Meta ads step 11 (2026-10-21): meta-audiences, meta-datasets (read only; datasets view sources = the D2 check).
   ...META_ADS_AUDIENCES_TOOLS,
   ...META_ADS_DATASETS_TOOLS,
@@ -333,6 +338,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_REMOVE_TOOLS,
   // Meta ads step 21 (2026-10-21): set-meta-labels, set-meta-value-rules, create-meta-reach-frequency (a booking SPENDS MONEY).
   ...META_ADS_LABELS_RULES_TOOLS,
+  // Meta ads step 28 (2026-10-21): apply-meta-recommendations, create-meta-experiment, set-meta-experiment, end-meta-experiment.
+  ...META_ADS_OPTIMIZE_CHANGES_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

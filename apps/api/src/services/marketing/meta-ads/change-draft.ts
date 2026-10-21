@@ -9,7 +9,7 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaLabelsKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -50,6 +50,8 @@ export interface MetaChangeRequest {
    * the chosen ad account itself, `adaccount`).
    */
   objectKind?: 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
+    // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
+    | MetaOptimizeKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
