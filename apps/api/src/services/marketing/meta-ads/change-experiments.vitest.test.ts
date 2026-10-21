@@ -17,7 +17,7 @@ const S2 = '120000000000202'
 const A1 = '120000000000301'
 const A2 = '120000000000302'
 const C1 = '120000000000101'
-const obj = (kind: StudyObject['kind'], id: string, on = true): [string, StudyObject] => [id, { kind, id, name: `Shop A ${kind} ${id.slice(-3)}`, effectiveStatus: on ? 'ACTIVE' : 'PAUSED' }]
+const obj = (kind: StudyObject['kind'], id: string, on = true): [string, StudyObject] => [id, { kind, id, name: `Shop A ${kind} ${id.slice(-3)}`, on }]
 const createLive = (extra: Partial<CreateExperimentLive> = {}): CreateExperimentLive => ({
   now: NOW, adAccountId: '1234567890', currency: 'EUR', businessId: '120000000000090', pageId: '120000000000010',
   objects: new Map([obj('adset', S1), obj('adset', S2, false), obj('ad', A1), obj('ad', A2), obj('campaign', C1)]), objectStudies: new Map(), openStudies: 3,
@@ -70,9 +70,16 @@ describe('create-meta-experiment', () => {
     expect(JSON.parse(d.requests[0].params.objectives)).toEqual([{ name: 'Purchases', is_primary: true, type: 'CONVERSIONS', adspixels: [{ id: '120000000000050', event_names: ['fb_pixel_purchase'] }] }])
     expect(d.requests[0].params.observation_end_time).toBe(String(NOW + 29 * 86400))
     expect(d.warnings.join(' ')).toMatch(/Meta's grant/)
-    expect(refusal(createExperimentDraft({ ...lift, objectives: [{ name: 'P', pixelId: '120000000000059' }] }, createLive()))).toMatch(/not one of the chosen ad account's own pixels/)
+    expect(refusal(createExperimentDraft({ ...lift, objectives: [{ name: 'P', pixelId: '120000000000059', pixelEvents: ['fb_pixel_purchase' as const] }] }, createLive()))).toMatch(/not one of the chosen ad account's own pixels/)
     expect(refusal(createExperimentDraft({ ...lift, objectives: [] }, createLive()))).toMatch(/at least one objective/)
     expect(refusal(createExperimentDraft({ ...lift, cells: [{ name: 'test', percent: 95, controlPercent: 10, wholeAdAccount: true }] }, createLive()))).toMatch(/at most 100/)
+    // Review B3 — a holdout in every lift cell; one cell makes 100 with it; a pixel names the events it counts.
+    expect(refusal(createExperimentDraft({ ...lift, cells: [{ name: 'test', percent: 90, wholeAdAccount: true }] }, createLive()))).toMatch(/has a holdout/)
+    expect(refusal(createExperimentDraft({ ...lift, cells: [{ name: 'test', percent: 80, controlPercent: 10, wholeAdAccount: true }] }, createLive()))).toMatch(/sum to exactly 100/)
+    expect(refusal(createExperimentDraft({ ...lift, objectives: [{ name: 'P', pixelId: '120000000000050' }] }, createLive()))).toMatch(/name the pixel events/)
+    // Review B5 — the whole account is measured by a lift study still going: Nexus's own rule, said as such.
+    expect(refusal(createExperimentDraft(lift, createLive({ openLifts: [{ studyId: '120000000000049', name: 'Old lift', state: 'measuring', endTime: NOW - 3600 }] })))).toMatch(/already measured by study "Old lift".*Nexus's own rule \(Meta documents none\)/)
+    expect(refusal(createExperimentDraft(ab, createLive({ objectStudies: new Map([[S1, [{ studyId: '120000000000049', name: 'Old lift', state: 'measuring', endTime: NOW - 3600 }]]]) })))).toMatch(/Nexus's own rule/)
     expect(refusal(createExperimentDraft({ ...ab, cells: [{ name: 'A', percent: 50, controlPercent: 5, adSetIds: [S1] }, { name: 'B', percent: 45, adSetIds: [S2] }] }, createLive()))).toMatch(/lift study's only/)
   })
   it('a Page video test: 2–4 of the chosen Page\'s unpublished videos, the control among them, organic', () => {
@@ -140,6 +147,26 @@ describe('set-meta-experiment', () => {
     const longer = ok(setExperimentDraft({ action: 'update', studyId: v2.id, endTime: iso(NOW + 20 * 86400) }, setLive(v2)))
     expect(longer.requests[0].params).toEqual({ end_time: String(NOW + 20 * 86400), observation_end_time: String(NOW + 20 * 86400) })
     expect(longer.requests[0].raisesSpend).toBe(true)
+  })
+  it('review B6 / B1 — a new start against the end it keeps; a creative test\'s shares sum to 100 on a change; a lift end past its observation end', () => {
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: study().id, startTime: iso(NOW + 16 * 86400) }, setLive(study())))).toMatch(/at or after its end.*endTime too/)
+    const v2 = study({ type: 'SPLIT_TEST_V2', cells: [{ id: '120000000000061', name: 'a', treatment: 50, control: null, adAccounts: [], campaigns: [], adSets: [], ads: [A1] }, { id: '120000000000062', name: 'b', treatment: 50, control: null, adAccounts: [], campaigns: [], adSets: [], ads: [A2] }] })
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: v2.id, splits: [{ cellId: '120000000000061', percent: 40 }, { cellId: '120000000000062', percent: 50 }] }, setLive(v2)))).toMatch(/sum to exactly 100/)
+    const lift = study({ type: 'LIFT', state: 'running', startTime: NOW - 86400, endTime: NOW + 6 * 86400, observationEndTime: NOW + 8 * 86400, cells: [{ id: '120000000000061', name: 'test', treatment: 90, control: 10, adAccounts: ['1234567890'], campaigns: [], adSets: [], ads: [] }] })
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: lift.id, endTime: iso(NOW + 10 * 86400) }, setLive(lift)))).toMatch(/passes its observation end.*name observationEndTime too/)
+    expect(ok(setExperimentDraft({ action: 'update', studyId: lift.id, endTime: iso(NOW + 7 * 86400) }, setLive(lift))).requests[0].params).toEqual({ end_time: String(NOW + 7 * 86400) })
+    const same = study({ ...lift, observationEndTime: NOW + 6 * 86400 })
+    expect(ok(setExperimentDraft({ action: 'update', studyId: lift.id, endTime: iso(NOW + 10 * 86400) }, setLive(same))).requests[0].params).toEqual({ end_time: String(NOW + 10 * 86400), observation_end_time: String(NOW + 10 * 86400) })
+  })
+  it('review A9 — undo arguments pass the tool\'s own input: a long old name, more than 50 viewers → said, not recorded', () => {
+    const longName = study({ state: 'running', startTime: NOW - 86400, name: 'x'.repeat(201) })
+    const d = ok(setExperimentDraft({ action: 'update', studyId: longName.id, name: 'Short' }, setLive(longName)))
+    expect((d.before as ExperimentRecord).undo).toBeNull()
+    expect((d.before as ExperimentRecord).noUndo!.join(' ')).toMatch(/old name is not one Nexus can send back/)
+    const many = study({ state: 'running', startTime: NOW - 86400, viewers: Array.from({ length: 60 }, (_, i) => String(100000000000100 + i)) })
+    const v = ok(setExperimentDraft({ action: 'update', studyId: many.id, viewers: [] }, setLive(many)))
+    expect((v.before as ExperimentRecord).undo).toBeNull()
+    expect((v.before as ExperimentRecord).noUndo!.join(' ')).toMatch(/shared with 60 people/)
   })
   it('share: only people with a role on the ad account; the old list is the undo', () => {
     expect(refusal(setExperimentDraft({ action: 'update', studyId: running.id, viewers: ['100000000000001', '100000000000009'] }, setLive(running)))).toMatch(/100000000000009 has no role/)

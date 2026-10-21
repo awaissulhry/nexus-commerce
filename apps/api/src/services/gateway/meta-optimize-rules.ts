@@ -224,6 +224,8 @@ function cellsProblem(value: string, type: string | null, update: boolean): stri
       if (!isPercent(cell.control_percentage)) return 'control_percentage is a number with at most two decimals from 0 to 100'
       sum += cell.control_percentage as number
     }
+    // Review B3 — a new lift cell has a holdout above 0 (the control group is what a lift study measures against).
+    if (type === 'LIFT' && !existing && !(typeof cell.control_percentage === 'number' && cell.control_percentage > 0)) return 'a lift study\'s cell has a holdout (control_percentage above 0)'
     const named = CELL_OBJECT_KEYS.filter((k) => k in cell)
     if (!existing && named.length !== 1) return 'a new cell names exactly one kind of object: adsets, campaigns, ads or adaccounts'
     if (named.length > 1) return 'a cell names one kind of object'
@@ -246,6 +248,8 @@ function cellsProblem(value: string, type: string | null, update: boolean): stri
   // An update that names every cell's split is judged the same way (Meta: "provide the percentage of all existing and new
   // cells"); one that names none leaves the split as it is.
   if ((!update || everyPercent) && sum > 100 + 1e-9) return 'the percentages of all cells sum to at most 100'
+  // Review B3 — one lift cell: its share and holdout sum to exactly 100 (Meta's lift guide).
+  if (!update && type === 'LIFT' && list.length === 1 && Math.abs(sum - 100) > 1e-9) return 'a lift study of one cell: treatment_percentage + control_percentage = 100'
   return null
 }
 
@@ -265,8 +269,9 @@ function objectivesProblem(value: string): string | null {
       const px = o.adspixels
       if (!Array.isArray(px) || px.length < 1 || px.length > 5) return 'adspixels lists 1 to 5 pixels'
       for (const p of px) {
-        if (!plainObject(p) || !exactKeys(p, ['id', 'event_names'], ['id']) || !isId(p.id)) return 'each pixel is {id, event_names}'
-        if ('event_names' in p && (!Array.isArray(p.event_names) || !p.event_names.length || new Set(p.event_names).size !== p.event_names.length
+        // Review B3 — with a pixel, the events counted are named (Meta's lift guide).
+        if (!plainObject(p) || !exactKeys(p, ['id', 'event_names'], ['id', 'event_names']) || !isId(p.id)) return 'each pixel is exactly {id, event_names}'
+        if ((!Array.isArray(p.event_names) || !p.event_names.length || new Set(p.event_names).size !== p.event_names.length
           || p.event_names.some((e) => !(LIFT_PIXEL_EVENTS as readonly unknown[]).includes(e)))) return `event_names lists ${LIFT_PIXEL_EVENTS.join(', ')}, each once`
       }
     }
@@ -302,9 +307,9 @@ const STUDY_JUDGES = (update: boolean): Record<string, Judge> => ({
   observation_end_time: unixTime('observation_end_time'),
   cells: (value, params) => cellsProblem(value, update ? null : params.get('type') ?? null, update),
   objectives: (value) => objectivesProblem(value),
-  creative_test_config: creativeTestConfig,
   confidence_level: confidenceJudge,
-  ...(update ? { viewers: viewersJudge } : {}),
+  // Review A5 — a test budget is a creative test's at its creation only (no Nexus change sends it later).
+  ...(update ? { viewers: viewersJudge } : { creative_test_config: creativeTestConfig }),
 })
 
 function studyJudged(update: boolean) {
@@ -402,7 +407,7 @@ function videoTestIds(params: Params): MetaWriteBodyId[] {
   return Array.isArray(list) ? list.filter(isId).map((id) => ({ id, kind: 'pagevideo' as const })) : []
 }
 
-const STUDY_UPDATE_KEYS = ['name', 'description', 'start_time', 'end_time', 'cooldown_start_time', 'observation_end_time', 'cells', 'objectives', 'creative_test_config', 'confidence_level', 'viewers'] as const
+const STUDY_UPDATE_KEYS = ['name', 'description', 'start_time', 'end_time', 'cooldown_start_time', 'observation_end_time', 'cells', 'objectives', 'confidence_level', 'viewers'] as const
 
 /** Step 28 — apply-meta-recommendations, create-meta-experiment, set-meta-experiment and end-meta-experiment on the write allow-list. */
 export const META_OPTIMIZE_WRITE_RULES: readonly MetaWriteRule[] = [

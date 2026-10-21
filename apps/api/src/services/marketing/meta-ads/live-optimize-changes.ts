@@ -64,7 +64,7 @@ export interface ApplyTarget {
   /** campaign / ad set: Meta's offset-unit amounts as strings (null: none). */
   dailyBudget: string | null
   lifetimeBudget: string | null
-  /** ad set: its campaign, and whether that campaign holds the budget (Advantage campaign budget). */
+  /** ad set and ad: its campaign (its configured status); an ad set: whether that campaign holds the budget (Advantage campaign budget). */
   campaignId: string | null
   campaignStatus: string | null
   campaignHasBudget: boolean | null
@@ -86,7 +86,7 @@ export const PLACEMENT_KEYS = ['publisher_platforms', 'facebook_positions', 'ins
 
 const ADSET_FIELDS = 'id,account_id,name,status,effective_status,campaign_id,daily_budget,lifetime_budget,optimization_goal,billing_event,destination_type,targeting,campaign{id,status,daily_budget,lifetime_budget}'
 const CAMPAIGN_FIELDS = 'id,account_id,name,objective,status,effective_status,daily_budget,lifetime_budget'
-const AD_FIELDS = 'id,account_id,name,status,effective_status,adset_id,creative{id},adset{id,status}'
+const AD_FIELDS = 'id,account_id,name,status,effective_status,adset_id,creative{id},adset{id,status},campaign{id,status}'
 const FIELDS_OF = { adset: ADSET_FIELDS, campaign: CAMPAIGN_FIELDS, ad: AD_FIELDS } as const
 const WORD = { adset: 'ad set', campaign: 'campaign', ad: 'ad' } as const
 
@@ -138,21 +138,31 @@ export async function liveApplyTargets(target: MetaOptimizeTarget, ids: string[]
   return out
 }
 
+/** One copy an apply made, and how Nexus knows: Meta names its source (`source_adset_id` / `source_ad_id`), or only its time. */
+export interface FoundCopy { kind: 'adset' | 'ad'; id: string; name: string | null; status: string | null; sourceId: string | null; foundBy: 'source' | 'time' }
+
 /**
- * The copies an apply made: ad sets in the given campaigns, or ads in the given ad sets, created at or after `since`
- * (Unix seconds) and not among the objects Nexus already knew there. Best effort: null when a list could not be read.
+ * The copies an apply made (review A4): the account's ad sets (or ads) changed since the run started whose SOURCE is one
+ * of the objects applied to (Meta's `source_adset_id` / `source_ad_id`: AdSet and Ad fields in Meta's SDK adset.py /
+ * ad.py), made at or after `since` (the run's start, Unix seconds). One with no source, made since then in a campaign
+ * (ad set) of an object applied to, is found by its TIME only: kept apart (`foundBy: 'time'`) — undo names it as such and
+ * a person decides. Best effort: null when the list could not be read.
  */
-export async function liveNewCopies(target: MetaOptimizeTarget, parents: Array<{ kind: 'campaign' | 'adset'; id: string }>, since: number, known: Set<string>): Promise<Array<{ kind: 'adset' | 'ad'; id: string; name: string | null; status: string | null }> | null> {
-  const out: Array<{ kind: 'adset' | 'ad'; id: string; name: string | null; status: string | null }> = []
+export async function liveNewCopies(target: MetaOptimizeTarget, kind: 'adset' | 'ad', sources: Set<string>, parents: Set<string>, since: number): Promise<FoundCopy[] | null> {
+  const out: FoundCopy[] = []
+  const sourceField = kind === 'adset' ? 'source_adset_id' : 'source_ad_id'
+  const parentField = kind === 'adset' ? 'campaign_id' : 'adset_id'
   try {
-    for (const parent of parents) {
-      const edge = parent.kind === 'campaign' ? 'adsets' : 'ads'
-      const read = await listPaged(target.connectionId, `optimizeChange.copies.${edge}`, `${parent.id}/${edge}`, { fields: 'id,name,status,created_time' }, 200)
-      for (const row of read.rows) {
-        const id = text(row.id)
-        const created = unixOf(row.created_time)
-        if (id && !known.has(id) && created !== null && created >= since) out.push({ kind: parent.kind === 'campaign' ? 'adset' : 'ad', id, name: text(row.name), status: text(row.status) })
-      }
+    const read = await listPaged(target.connectionId, `optimizeChange.copies.${kind}`, `act_${target.adAccountId}/${kind === 'adset' ? 'adsets' : 'ads'}`, {
+      fields: `id,name,status,created_time,${sourceField},${parentField}`, updated_since: since,
+    }, 500)
+    for (const row of read.rows) {
+      const id = text(row.id)
+      const created = unixOf(row.created_time)
+      if (!id || sources.has(id) || created === null || created < since) continue
+      const sourceId = idText(row[sourceField])
+      if (sourceId && sources.has(sourceId)) out.push({ kind, id, name: text(row.name), status: text(row.status), sourceId, foundBy: 'source' })
+      else if (!sourceId && parents.has(text(row[parentField]) ?? '')) out.push({ kind, id, name: text(row.name), status: text(row.status), sourceId: null, foundBy: 'time' })
     }
   } catch (err) {
     if (err instanceof MetaReadError) return null
@@ -241,23 +251,26 @@ export async function liveStudy(account: MetaChosenAccount, studyId: string, now
 }
 
 /** The studies of the chosen account that are not over yet (planned, running or measuring), for Meta's 100-at-once limit. */
-export async function liveOpenStudies(account: MetaChosenAccount, now: Date = new Date()): Promise<{ open: number; read: number; more: boolean }> {
-  const read = await listPaged(account.connectionId, 'optimizeChange.studies', `act_${account.adAccountId}/impacting_ad_studies`, { fields: 'id,start_time,end_time,observation_end_time,canceled_time' }, 1000)
-  const open = read.rows.filter((r) => {
-    const s = studyState({ startTime: metaTime(r.start_time), endTime: metaTime(r.end_time), observationEndTime: metaTime(r.observation_end_time), canceledTime: metaTime(r.canceled_time) }, now)
-    return s === 'planned' || s === 'running'
-  }).length
-  return { open, read: read.rows.length, more: read.more }
+export async function liveOpenStudies(account: MetaChosenAccount, now: Date = new Date()): Promise<{ open: number; read: number; more: boolean; openLifts: OpenStudyRow[] }> {
+  const read = await listPaged(account.connectionId, 'optimizeChange.studies', `act_${account.adAccountId}/impacting_ad_studies`, { fields: 'id,name,type,start_time,end_time,observation_end_time,canceled_time' }, 1000)
+  const rows = read.rows.map((r) => openRow(r, now))
+  return { open: rows.filter((s) => s.state === 'planned' || s.state === 'running').length, read: read.rows.length, more: read.more, openLifts: rows.filter((s) => s.type === 'LIFT' && notOver(s)) }
 }
 
-/** The studies a campaign, ad set or ad is in that are not over (planned or running), with their windows. */
-export async function liveObjectStudies(account: MetaChosenAccount, kind: 'campaign' | 'adset' | 'ad', id: string, now: Date = new Date()): Promise<Array<{ studyId: string; name: string | null; state: StudyState | null; startTime: number | null; endTime: number | null }>> {
-  const read = await listPaged(account.connectionId, `optimizeChange.${kind}Studies`, `${id}/ad_studies`, { fields: 'id,name,start_time,end_time,observation_end_time,canceled_time' }, 100)
-  return read.rows.map((r) => ({
-    studyId: text(r.id) ?? '', name: text(r.name),
-    state: studyState({ startTime: metaTime(r.start_time), endTime: metaTime(r.end_time), observationEndTime: metaTime(r.observation_end_time), canceledTime: metaTime(r.canceled_time) }, now),
-    startTime: unixOf(r.start_time), endTime: unixOf(r.end_time),
-  })).filter((s) => s.studyId && (s.state === 'planned' || s.state === 'running'))
+/** A study as the "one test at a time" rule reads it. */
+export interface OpenStudyRow { studyId: string; name: string | null; type: string | null; state: StudyState | null; startTime: number | null; endTime: number | null }
+const openRow = (r: Row, now: Date): OpenStudyRow => ({
+  studyId: text(r.id) ?? '', name: text(r.name), type: text(r.type),
+  state: studyState({ startTime: metaTime(r.start_time), endTime: metaTime(r.end_time), observationEndTime: metaTime(r.observation_end_time), canceledTime: metaTime(r.canceled_time) }, now),
+  startTime: unixOf(r.start_time), endTime: unixOf(r.end_time),
+})
+/** Not over: planned or running — and a lift study in its observation window too (it still measures). */
+const notOver = (s: OpenStudyRow) => s.state === 'planned' || s.state === 'running' || (s.state === 'measuring' && s.type === 'LIFT')
+
+/** The studies a campaign, ad set or ad is in that are not over (planned, running, a lift study still measuring). */
+export async function liveObjectStudies(account: MetaChosenAccount, kind: 'campaign' | 'adset' | 'ad', id: string, now: Date = new Date()): Promise<OpenStudyRow[]> {
+  const read = await listPaged(account.connectionId, `optimizeChange.${kind}Studies`, `${id}/ad_studies`, { fields: 'id,name,type,start_time,end_time,observation_end_time,canceled_time' }, 100)
+  return read.rows.map((r) => openRow(r, now)).filter((s) => s.studyId && notOver(s))
 }
 
 /** The chosen ad account's business portfolio, read now (studies are made on it). */
@@ -326,6 +339,9 @@ export const MAX_STUDY_OBJECTS_CONFIRMED = 30
  * (Nexus's rows, else one read each). Another account's object anywhere in it: refused, the other account never named.
  */
 export async function studyForeignProblem(account: MetaChosenAccount, study: LiveStudy): Promise<string | null> {
+  // Review A8 — the same rule as the gateway (meta-optimize-owner.ts): the study is owned by the chosen account's portfolio.
+  const business = await liveAccountBusiness(account)
+  if (!business || study.businessId !== business) return `Study ${study.id} is not owned by the business portfolio of the ad account this business chose: Nexus changes only its own portfolio's studies (one shared with it is changed by its owner).`
   if (!study.cells) return `Nexus could not read the cells of study ${study.id}${study.cellsNote ? ` (${study.cellsNote})` : ''}, so it cannot confirm everything in it is the chosen ad account's: it changes nothing.`
   if (study.type === 'SPLIT_TEST_V2' && study.cellsNote) return `Nexus could not read which ads creative test ${study.id} holds (${study.cellsNote}), so it cannot confirm they are the chosen ad account's: it changes nothing.`
   if (study.cells.some((c) => c.adAccounts.some((a) => a !== account.adAccountId))) return `Study ${study.id} also measures another ad account: Nexus changes a study only when everything in it is the chosen ad account's (Ads Manager, or the business that shares it).`

@@ -24,6 +24,7 @@ import { changeLines, plural, type MetaChangeDraft, type MetaChangeRequest } fro
 import { money } from './change-settings-common.js'
 import type { LiveCell, LiveStudy } from './live-optimize-changes.js'
 import { budgetParam, MetaUnitError, unixSecondsParam } from './settings-units.js'
+import { META_NAME_TEXT, typedTextOk } from '../../gateway/meta-settings-rules.js'
 
 export const EXPERIMENT_KINDS = ['ab-test', 'creative-test', 'lift', 'page-video-test'] as const
 export type ExperimentKind = typeof EXPERIMENT_KINDS[number]
@@ -84,8 +85,11 @@ export interface CreateExperimentRequest {
   durationMinutes?: number
 }
 
-/** One object of a cell as read now. */
-export interface StudyObject { kind: 'campaign' | 'adset' | 'ad'; id: string; name: string | null; effectiveStatus: string | null }
+/**
+ * One object of a cell as read now. `on`: it can deliver now — its own configured status and its parents' each ACTIVE
+ * (review A2: change-recommendations.ts deliversNow), never Meta's effective status alone.
+ */
+export interface StudyObject { kind: 'campaign' | 'adset' | 'ad'; id: string; name: string | null; on: boolean }
 export interface OpenStudy { studyId: string; name: string | null; state: string | null; endTime: number | null }
 
 export interface CreateExperimentLive {
@@ -98,6 +102,8 @@ export interface CreateExperimentLive {
   objects: Map<string, StudyObject>
   objectStudies: Map<string, OpenStudy[]>
   openStudies: number | null
+  /** The lift studies that touch the chosen account and are not over (a lift still measuring included). */
+  openLifts?: OpenStudy[]
   pixels: Set<string> | null
   customConversions: Set<string> | null
   videos: Array<{ id: string; title: string | null; published: boolean | null }>
@@ -139,9 +145,13 @@ function objectProblem(o: { kind: 'campaign' | 'adset' | 'ad'; id: string }, liv
   const read = live.objects.get(o.id)
   if (!read || read.kind !== o.kind) return `${objectWord(o.kind)} ${o.id} is not ${o.kind === 'campaign' ? 'a' : 'an'} ${objectWord(o.kind)} of the chosen ad account.`
   const open = live.objectStudies.get(o.id) ?? []
-  if (open.length) return `${listed(read)} is already in ${open.map((s) => `study "${s.name ?? s.studyId}" (${s.studyId}, ${s.state}${s.endTime ? ` until ${isoOf(s.endTime)}` : ''})`).join(', ')}: an object is in one test at a time, or the results mix.`
+  if (open.length) return `${listed(read)} is already in ${openWords(open)}. ${ONE_TEST_RULE}`
   return null
 }
+
+/** Review B5 — Nexus's own rule, said as such. */
+const ONE_TEST_RULE = 'Nexus\'s own rule (Meta documents none): an object is in one test at a time — a lift study still measuring counts — so the results do not mix.'
+const openWords = (open: OpenStudy[]) => open.map((s) => `study "${s.name ?? s.studyId}" (${s.studyId}, ${s.state}${s.endTime ? ` until ${isoOf(s.endTime)}` : ''})`).join(', ')
 
 /** A cell as Meta writes it (name, share, holdout, its objects). */
 function cellParam(cell: ExperimentCellInput, type: string, adAccountId: string): Record<string, unknown> {
@@ -168,6 +178,8 @@ function cellsProblem(cells: ExperimentCellInput[], type: string, existingShare 
     if (type === 'SPLIT_TEST_V2' && !Number.isInteger(cell.percent)) return 'A creative test\'s shares are whole numbers (Meta\'s guide).'
     if (cell.controlPercent !== undefined && type !== 'LIFT') return 'A holdout (controlPercent) is a lift study\'s only.'
     if (cell.controlPercent !== undefined && (cell.controlPercent < 0 || cell.controlPercent > 100 || !two(cell.controlPercent))) return `Cell "${cell.name}": its holdout is 0 to 100 % with at most two decimals.`
+    // Review B3 — a lift cell has a holdout (Meta: the control group sees none of the ads; without one nothing is measured).
+    if (type === 'LIFT' && !(cell.controlPercent !== undefined && cell.controlPercent > 0)) return `Cell "${cell.name}": a lift study's cell has a holdout (controlPercent above 0).`
     if (cell.wholeAdAccount && type !== 'LIFT') return 'The whole ad account is a lift study\'s cell only.'
     sum += cell.percent + (cell.controlPercent ?? 0)
     for (const o of objects) {
@@ -183,6 +195,11 @@ function cellsProblem(cells: ExperimentCellInput[], type: string, existingShare 
   return null
 }
 
+/** Review B3 — a lift study of ONE cell: its share and holdout make the whole audience (Meta: "must equal 100"). */
+const singleLiftProblem = (cells: Array<{ name: string | null; percent: number; controlPercent?: number }>): string | null =>
+  cells.length === 1 && Math.abs(cells[0].percent + (cells[0].controlPercent ?? 0) - 100) > 1e-9
+    ? `A lift study of one cell: its share and holdout sum to exactly 100 % (Meta's lift guide; now ${cells[0].percent} + ${cells[0].controlPercent ?? 0}).` : null
+
 function objectivesParam(objectives: ObjectiveInput[], live: { pixels: Set<string> | null; customConversions: Set<string> | null }): Array<Record<string, unknown>> | { refusal: string } {
   if (!objectives.length) return { refusal: 'A lift study measures at least one objective (Meta): name it with its pixel (and events) or custom conversions.' }
   if (objectives.length > 5) return { refusal: 'At most 5 objectives in Nexus.' }
@@ -191,11 +208,13 @@ function objectivesParam(objectives: ObjectiveInput[], live: { pixels: Set<strin
   const out: Array<Record<string, unknown>> = []
   for (const [i, o] of objectives.entries()) {
     if (!o.pixelId && !o.customConversionIds?.length) return { refusal: `Objective "${o.name}" names its source: the ad account's pixel (pixelId) or custom conversions.` }
+    // Review B3 — Meta's lift guide: with a pixel as the source, the events to count are named.
+    if (o.pixelId && !o.pixelEvents?.length) return { refusal: `Objective "${o.name}": name the pixel events it counts (pixelEvents, e.g. fb_pixel_purchase) — Meta's lift guide asks for them with a pixel.` }
     if (o.pixelId && !live.pixels?.has(o.pixelId)) return { refusal: `Pixel ${o.pixelId} is not one of the chosen ad account's own pixels.` }
     for (const id of o.customConversionIds ?? []) if (!live.customConversions?.has(id)) return { refusal: `Custom conversion ${id} is not one of the chosen ad account's.` }
     out.push({
       name: o.name, is_primary: primaries ? !!o.primary : i === 0, type: 'CONVERSIONS',
-      ...(o.pixelId ? { adspixels: [{ id: o.pixelId, ...(o.pixelEvents?.length ? { event_names: [...new Set(o.pixelEvents)] } : {}) }] } : {}),
+      ...(o.pixelId ? { adspixels: [{ id: o.pixelId, event_names: [...new Set(o.pixelEvents!)] }] } : {}),
       ...(o.customConversionIds?.length ? { customconversions: [...new Set(o.customConversionIds)].map((id) => ({ id })) } : {}),
     })
   }
@@ -272,6 +291,9 @@ export function createExperimentDraft(request: CreateExperimentRequest, live: Cr
   if (problem) return { refusal: problem }
   if (cellObjectIds(cells).length > MAX_STUDY_OBJECTS_CREATE) return { refusal: `A new test names at most ${MAX_STUDY_OBJECTS_CREATE} objects in Nexus (each is read twice before it is asked: Meta's Limited access tier allows about 60 reads per 5 minutes).` }
   if (type === 'SPLIT_TEST_V2' && Math.abs(cells.reduce((s, c) => s + c.percent, 0) - 100) > 1e-9) return { refusal: 'A creative test\'s shares sum to exactly 100 % (Meta\'s guide).' }
+  if (type === 'LIFT') { const single = singleLiftProblem(cells); if (single) return { refusal: single } }
+  // Review B5 — a cell of the whole ad account overlaps every lift study that still measures the account.
+  if (cells.some((c) => c.wholeAdAccount) && live.openLifts?.length) return { refusal: `The whole ad account is already measured by ${openWords(live.openLifts)}. ${ONE_TEST_RULE}` }
   const seen = new Set<string>()
   for (const o of cellObjectIds(cells)) {
     if (seen.has(o.id)) return { refusal: `${objectWord(o.kind)} ${o.id} is in two cells: an object is in one cell only.` }
@@ -304,7 +326,7 @@ export function createExperimentDraft(request: CreateExperimentRequest, live: Cr
       lines.push(['Creative test budget', 'none', `${b.lifetimeBudgetPercent} % of the lifetime budget`])
     }
     params.creative_test_config = JSON.stringify(config)
-    const adsOn = cellObjectIds(cells).map((o) => live.objects.get(o.id)!).filter((o) => o.effectiveStatus === 'ACTIVE')
+    const adsOn = cellObjectIds(cells).map((o) => live.objects.get(o.id)!).filter((o) => o.on)
     spendsMoney.push(`A creative test with its own test budget (${b.dailyBudgetCents !== undefined ? `${money(b.dailyBudgetCents, cur)} a day` : `${b.lifetimeBudgetPercent} % of the lifetime budget`}): Meta does not say whether it comes on top of the ads' own budgets — ${adsOn.length ? `${plural(adsOn.length, 'ad')} ${adsOn.length === 1 ? 'is' : 'are'} on, so it can spend from ${isoOf(start)}` : 'none of the ads is on now: nothing spends unless they are on during the test'}.`)
   }
   if (type === 'LIFT') {
@@ -331,8 +353,8 @@ export function createExperimentDraft(request: CreateExperimentRequest, live: Cr
     const objs = cellObjects(c).flatMap((o) => o.ids.map((id) => live.objects.get(id)!).map(listed))
     lines.push([`Cell "${c.name}"`, 'none', `${c.percent} %${c.controlPercent !== undefined ? ` (+ ${c.controlPercent} % holdout)` : ''}: ${c.wholeAdAccount ? `the whole ad account ${live.adAccountId}` : objs.join(', ')}`])
   }
-  const on = cellObjectIds(cells).map((o) => live.objects.get(o.id)!).filter((o) => o.effectiveStatus === 'ACTIVE')
-  const off = cellObjectIds(cells).map((o) => live.objects.get(o.id)!).filter((o) => o.effectiveStatus !== 'ACTIVE')
+  const on = cellObjectIds(cells).map((o) => live.objects.get(o.id)!).filter((o) => o.on)
+  const off = cellObjectIds(cells).map((o) => live.objects.get(o.id)!).filter((o) => !o.on)
   if (type !== 'SPLIT_TEST_V2') warnings.push(`A ${words} adds no budget: the cells' campaigns and ad sets keep spending as they are set (${on.length} on, ${off.length} not on); Meta only splits who sees which.`)
   if (off.length) warnings.push(`Not on now, so they deliver nothing in the test unless switched on: ${off.slice(0, 5).map(listed).join(', ')}${off.length > 5 ? ', …' : ''}.`)
   if (type !== 'LIFT') warnings.push('Test one variable only, with comparable budgets and audiences, and agree the result that decides (and its attribution) before it starts (Meta\'s split-testing guidelines).')
@@ -450,22 +472,26 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
   const iso = (u: number | null) => (u === null ? 'none' : isoOf(u))
   const refuseAfterStart = (what: string) => (started ? { refusal: `${who} has started: Meta does not let ${what} change once a study runs.` } : null)
 
+  // Review A9 — an undo argument passes the tool's own input (text of the tool's length, no control or format character).
   if (request.name !== undefined && request.name !== s.name) {
     params.name = request.name
     lines.push(['Name', s.name, request.name])
-    if (s.name) undo.name = s.name
+    if (typedTextOk(s.name, META_NAME_TEXT, 200)) undo.name = s.name
+    else noUndo.push('Its old name is not one Nexus can send back (empty, longer than 200 characters or with a format character).')
   }
   if (request.description !== undefined && request.description !== s.description) {
     params.description = request.description
     lines.push(['Description', s.description, request.description])
-    if (s.description) undo.description = s.description
-    else noUndo.push('It had no description: Nexus cannot put an empty one back.')
+    if (typedTextOk(s.description, META_NAME_TEXT, 1000)) undo.description = s.description
+    else noUndo.push('Its old description is not one Nexus can send back (empty, longer than 1000 characters or with a format character).')
   }
   if (request.startTime !== undefined) {
     const r = refuseAfterStart('its start'); if (r) return r
     const start = timeOf(request.startTime, 'its start')
     if (typeof start !== 'number') return start
     if (start <= live.now) return { refusal: 'A study starts in the future.' }
+    // Review B6 — checked against the end it keeps when no new end is named.
+    if (request.endTime === undefined && s.endTime !== null && start >= s.endTime) return { refusal: `Its start would be at or after its end (${iso(s.endTime)}): name a later endTime too.` }
     if (start !== s.startTime) {
       params.start_time = String(start)
       if (s.type === 'SPLIT_TEST_V2') params.cooldown_start_time = String(start)
@@ -485,6 +511,12 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
     if (end !== s.endTime) {
       params.end_time = String(end)
       if (s.type === 'SPLIT_TEST_V2') params.observation_end_time = String(end)
+      // Review B1 / A10 — an end past the observation end moves that too: with it when they were one (no post-test window),
+      // else the person names the new observation end (a lift study) — Meta keeps observation_end_time ≥ end_time.
+      else if (s.observationEndTime !== null && end > s.observationEndTime && request.observationEndTime === undefined) {
+        if (s.observationEndTime === s.endTime) params.observation_end_time = String(end)
+        else return { refusal: s.type === 'LIFT' ? `The new end passes its observation end (${iso(s.observationEndTime)}): name observationEndTime too (at or after the new end).` : `The new end passes its observation end (${iso(s.observationEndTime)}), which Nexus moves only for a lift study: change it in Ads Manager.` }
+      }
       lines.push(['End', iso(s.endTime), iso(end)])
       // A running study's end only moves later (Meta); its old, earlier end comes back only through end-meta-experiment.
       if (started) noUndo.push(`Its old end (${iso(s.endTime)}) is not put back by undo: a running study's end only moves later; end-meta-experiment ends it sooner.`)
@@ -572,6 +604,17 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
     } else if (share > 100 + 1e-9) return { refusal: 'The cells\' shares sum to at most 100 %.' }
     const minCells = s.type === 'LIFT' ? 1 : 2
     if (kept.length + added.length < minCells) return { refusal: `A ${TYPE_WORDS[s.type]} keeps at least ${minCells} cell${minCells === 1 ? '' : 's'}.` }
+    if (withShares) {
+      const total = share + added.reduce((sum, c) => sum + c.percent + (c.controlPercent ?? 0), 0)
+      // Review B6 — a creative test's shares sum to exactly 100 on a change too (Meta's guide).
+      if (s.type === 'SPLIT_TEST_V2' && Math.abs(total - 100) > 1e-9) return { refusal: `A creative test's shares sum to exactly 100 % (now ${Math.round(total * 100) / 100}).` }
+      // Review B3 — a lift study left with one cell: its share and holdout make the whole audience.
+      if (s.type === 'LIFT' && kept.length + added.length === 1) {
+        const only = kept.length ? { name: kept[0].name, percent: Number(existing[0].treatment_percentage), controlPercent: Number(existing[0].control_percentage) } : added[0]
+        const single = singleLiftProblem([only])
+        if (single) return { refusal: single }
+      }
+    }
     params.cells = JSON.stringify([...existing, ...added.map((c) => cellParam(c, s.type!, live.adAccountId))])
     for (const c of s.cells) {
       if (removed.has(c.id)) { lines.push([`Cell "${c.name ?? c.id}"`, `${c.treatment ?? '?'} %`, 'removed']); continue }
@@ -585,7 +628,7 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
     if (added.length || request.addObjects?.length || removed.size) noUndo.push(started ? 'Meta lets nothing be removed from a running study: added cells and objects stay.' : 'Added or removed cells and objects are not put back by undo (ask set-meta-experiment again before it starts).')
     if (request.addObjects?.length || added.length) {
       const addedObjs = addedObjectIds(request).map((o) => live.objects.get(o.id)!).filter(Boolean)
-      if (addedObjs.some((o) => o.effectiveStatus === 'ACTIVE')) warnings.push('The objects added keep spending as they are set; the test only splits who sees which.')
+      if (addedObjs.some((o) => o.on)) warnings.push('The objects added keep spending as they are set; the test only splits who sees which.')
     }
   }
   if (request.objectives !== undefined) {
@@ -609,8 +652,9 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
     }
     params.viewers = JSON.stringify(next)
     lines.push(['Shared with', s.viewers ? `${s.viewers.length} people` : 'not read', `${next.length} people (ids only)`])
-    if (s.viewers) undo.viewers = s.viewers
-    else noUndo.push('Meta did not answer who the study was shared with, so Nexus cannot put that back.')
+    // Review A9 — the undo's list passes the tool's own input (at most 50 people).
+    if (s.viewers && s.viewers.length <= MAX_STUDY_VIEWERS) undo.viewers = s.viewers
+    else noUndo.push(s.viewers ? `It was shared with ${s.viewers.length} people, more than the ${MAX_STUDY_VIEWERS} Nexus sends in one list, so undo cannot put that list back.` : 'Meta did not answer who the study was shared with, so Nexus cannot put that back.')
     warnings.push('People are Meta ids only: their names stay on Meta\'s side, and Nexus stores no more than the ids of this change.')
   }
   if (!Object.keys(params).length) return { refusal: `Nothing to change: ${who} is as asked already, or the request names no change.` }

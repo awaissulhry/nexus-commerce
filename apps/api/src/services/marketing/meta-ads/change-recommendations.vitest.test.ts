@@ -6,7 +6,7 @@
  * restore (undo) through step 18's and step 17's rules. Made-up ids.
  */
 import { describe, expect, it } from 'vitest'
-import { additionalBudgetParam, applyDraft, applyTargetIds, restoreDraft, APPLY_TYPES, type ApplyLive, type ApplyRecord } from './change-recommendations.js'
+import { additionalBudgetParam, applyDraft, applyTargetIds, deliversNow, restoreDraft, APPLY_TYPES, type ApplyLive, type ApplyRecord } from './change-recommendations.js'
 import type { ApplyTarget, LiveRecommendation } from './live-optimize-changes.js'
 import type { MetaChangeDraft } from './change-draft.js'
 
@@ -79,7 +79,7 @@ describe('per type', () => {
     const on = ok(applyDraft({ signature: '1' }, live(rec('AUTOMATIC_PLACEMENTS', [S1]), [target({ kind: 'adset', id: S1 })])))
     expect(on.spendsMoney.join(' ')).toMatch(/can spend more of their budgets from now/)
     expect(on.changes[Object.keys(on.changes)[0]]).toEqual({ from: 'publisher_platforms: facebook; facebook_positions: feed', to: 'Advantage+ placements (Meta picks)' })
-    const off = ok(applyDraft({ signature: '1' }, live(rec('AUTOMATIC_PLACEMENTS', [S1]), [target({ kind: 'adset', id: S1, effectiveStatus: 'CAMPAIGN_PAUSED' })])))
+    const off = ok(applyDraft({ signature: '1' }, live(rec('AUTOMATIC_PLACEMENTS', [S1]), [target({ kind: 'adset', id: S1, effectiveStatus: 'CAMPAIGN_PAUSED', campaignStatus: 'PAUSED' })])))
     expect(off.spendsMoney).toEqual([])
     expect(off.requests[0].raisesSpend).toBe(false)
     expect(off.warnings.join(' ')).toMatch(/Nothing spends more yet/)
@@ -89,13 +89,37 @@ describe('per type', () => {
     expect(refusal(applyDraft({ signature: '1' }, live(rec('CONVERSION_LEADS_OPTIMIZATION', [S1]), [target({ kind: 'adset', id: S1 })])))).toMatch(/allowNewObjects: true.*adsmanager/)
     expect(refusal(applyDraft({ signature: '1', allowNewObjects: true }, live(rec('MUSIC', [A1]), [target({ kind: 'ad', id: A1 })])))).toMatch(/allowNewObjects goes with/)
     const d = ok(applyDraft({ signature: '1', allowNewObjects: true }, live(rec('CONVERSION_LEADS_OPTIMIZATION', [S1]), [target({ kind: 'adset', id: S1, effectiveStatus: 'PAUSED', status: 'PAUSED' })])))
-    expect(d.spendsMoney.join(' ')).toMatch(/does not say whether the copies start running/)
+    expect(d.spendsMoney.join(' ')).toMatch(/does not say whether they start running/)
     expect(d.requests[0]).toMatchObject({ raisesSpend: true, undoable: true })
   })
-  it('the landing-page goal: undo sets each ad set\'s old goal and billing back', () => {
-    const d = ok(applyDraft({ signature: '1' }, live(rec('LANDING_PAGE_VIEW_OPTIMIZATION_GOAL', [S1]), [target({ kind: 'adset', id: S1 })])))
-    expect(d.spendsMoney).toEqual([])
+  it('review A3 — creative fatigue always SPENDS MONEY (Meta adds ads and does not say whether they start ACTIVE), even when nothing is on', () => {
+    const d = ok(applyDraft({ signature: '1', allowNewObjects: true }, live(rec('CREATIVE_FATIGUE', [A1]), [target({ kind: 'ad', id: A1, status: 'PAUSED' })])))
+    expect(d.spendsMoney.join(' ')).toMatch(/does not say whether they start running.*none of these ads is on/)
+    expect(d.requests[0].raisesSpend).toBe(true)
+  })
+  it('review B2 — the landing-page goal (Meta\'s texts differ: a goal change or a new campaign): allowNewObjects, SPENDS MONEY, undo sets each goal back and pauses the copies', () => {
+    expect(refusal(applyDraft({ signature: '1' }, live(rec('LANDING_PAGE_VIEW_OPTIMIZATION_GOAL', [S1]), [target({ kind: 'adset', id: S1 })])))).toMatch(/allowNewObjects: true/)
+    const d = ok(applyDraft({ signature: '1', allowNewObjects: true }, live(rec('LANDING_PAGE_VIEW_OPTIMIZATION_GOAL', [S1]), [target({ kind: 'adset', id: S1 })])))
+    expect(d.spendsMoney.join(' ')).toMatch(/or a campaign/)
+    expect(d.warnings.join(' ')).toMatch(/texts differ/)
     expect((d.before as ApplyRecord).undo).toEqual([{ kind: 'adset', id: S1, optimizationGoal: 'LINK_CLICKS', billingEvent: 'IMPRESSIONS' }])
+    // Review A9 — a goal or billing outside Nexus's own lists never goes into the undo.
+    const odd = ok(applyDraft({ signature: '1', allowNewObjects: true }, live(rec('LANDING_PAGE_VIEW_OPTIMIZATION_GOAL', [S1]), [target({ kind: 'adset', id: S1, billingEvent: 'CLICKS' })])))
+    expect((odd.before as ApplyRecord).undo).toBeNull()
+    expect((odd.before as ApplyRecord).noUndo!.join(' ')).toMatch(/billing CLICKS is not one Nexus sends/)
+  })
+  it('review A1 — Meta picks the objects: a recommendation that names none is never applied', () => {
+    expect(refusal(applyTargetIds({ signature: '1' }, rec('ADVANTAGE_PLUS_AUDIENCE', [])))).toMatch(/names no object/)
+    expect(refusal(applyDraft({ signature: '1' }, live(rec('ADVANTAGE_PLUS_AUDIENCE', []), [])))).toMatch(/read no object/)
+  })
+  it('review A2 — "on" is the configured status chain (an ad with its ad set and campaign); a status not read may be on', () => {
+    expect(deliversNow(target({ kind: 'adset', id: S1, effectiveStatus: 'IN_PROCESS' }))).toBe(true)
+    expect(deliversNow(target({ kind: 'adset', id: S1, effectiveStatus: 'ACTIVE', campaignStatus: 'PAUSED' }))).toBe(false)
+    expect(deliversNow(target({ kind: 'ad', id: A1, effectiveStatus: 'PENDING_REVIEW', adSetStatus: 'ACTIVE', campaignStatus: 'ACTIVE' }))).toBe(true)
+    expect(deliversNow(target({ kind: 'ad', id: A1, adSetStatus: 'PAUSED' }))).toBe(false)
+    expect(deliversNow(target({ kind: 'ad', id: A1, adSetStatus: null, campaignStatus: null }))).toBe(true)
+    const pending = ok(applyDraft({ signature: '1' }, live(rec('AUTOMATIC_PLACEMENTS', [S1]), [target({ kind: 'adset', id: S1, effectiveStatus: 'WITH_ISSUES' })])))
+    expect(pending.spendsMoney.join(' ')).toMatch(/can spend more/)
   })
 })
 
@@ -136,8 +160,12 @@ describe('restore (the undo of an apply)', () => {
     expect(d.requests[0]).toMatchObject({ expect: { daily_budget: '5000' }, readBackFields: 'id,daily_budget' })
     expect(d.skipped.join(' ')).toMatch(/daily budget is 200.00 EUR already/)
     expect(d.spendsMoney).toEqual([])
-    const up = ok(restoreDraft('SCALE_GOOD_CAMPAIGN', [{ kind: 'adset', id: S1, dailyBudgetCents: 20000 }], { targets: now, currency: 'EUR', budgetChangesLastHour: {} }))
-    expect(up.spendsMoney.join(' ')).toMatch(/goes back UP/)
+    // Review A6 — an undo only lowers a budget back: a raise is refused (set-meta-ad-set's, with its own SPENDS MONEY).
+    expect(refusal(restoreDraft('SCALE_GOOD_CAMPAIGN', [{ kind: 'adset', id: S1, dailyBudgetCents: 20000 }], { targets: now, currency: 'EUR', budgetChangesLastHour: {} }))).toMatch(/would raise it.*only lowers a budget back/)
+    // Review A4 — a copy found by its time only is named so in the undo's preview.
+    const byTime = ok(restoreDraft('CONVERSION_LEADS_OPTIMIZATION', [{ kind: 'adset', id: S2, status: 'PAUSED', foundBy: 'time' }], { targets: now, currency: 'EUR', budgetChangesLastHour: {} }))
+    expect(byTime.changes[Object.keys(byTime.changes)[0]]).toEqual({ from: 'ACTIVE', to: 'PAUSED (found by its time only)' })
+    expect(byTime.warnings.join(' ')).toMatch(/found by its time only.*a person may have made it by hand/)
   })
   it('a goal goes back with its billing; a campaign budget goes back with the campaign check the kit decides', () => {
     const d = ok(restoreDraft('LANDING_PAGE_VIEW_OPTIMIZATION_GOAL', [{ kind: 'adset', id: S1, optimizationGoal: 'LINK_CLICKS', billingEvent: 'LINK_CLICKS' }], { targets: [target({ kind: 'adset', id: S1, optimizationGoal: 'LANDING_PAGE_VIEWS' })], currency: 'EUR', budgetChangesLastHour: {} }))

@@ -24,7 +24,7 @@ import {
   livePageVideoTest, liveRecommendation, liveStudy, studyForeignProblem, type ApplyTarget,
 } from '../../marketing/meta-ads/live-optimize-changes.js'
 import {
-  APPLY_TYPES, applyDraft, applyFields, applyLevel, applyTargetIds, restoreDraft, type ApplyRecord, type ApplyRequest, type RestoreItem,
+  APPLY_TYPES, applyDraft, applyFields, applyLevel, applyTargetIds, deliversNow, restoreDraft, type ApplyRecord, type ApplyRequest, type RestoreItem,
 } from '../../marketing/meta-ads/change-recommendations.js'
 import {
   addedObjectIds, cellObjectIds, createExperimentDraft, endExperimentDraft, EXPERIMENT_KINDS, MAX_STUDY_OBJECTS_CREATE, setExperimentDraft, studyFields,
@@ -89,6 +89,7 @@ const restoreItem = z.object({
   optimizationGoal: z.enum(OPTIMIZATION_GOALS).optional().describe('its performance goal as it was'),
   billingEvent: z.enum(BILLING_EVENTS).optional().describe('its billing as it was'),
   status: z.literal('PAUSED').optional().describe('a copy the apply made: paused'),
+  foundBy: z.literal('time').optional().describe('a copy found by its time only (Meta named no source): the preview says so'),
 })
 
 const buildApply = (args: Record<string, unknown>): MetaDraftBuilder => guarded(async (account) => {
@@ -136,57 +137,72 @@ function applyFinish(draft: MetaChangeDraft, done: Array<{ request: MetaChangeDr
 
 /**
  * Right after an apply: the objects read again (what Meta made of them — the record undo compares with), and for a type
- * that makes copies, the copies Nexus finds (undo pauses them). Meta's per-object limits learn the objects it changed.
+ * that makes copies, the copies Nexus finds by Meta's source field since the run started (undo pauses them; one found by
+ * its time only is named so). Meta's per-object limits learn the objects it changed. Review A7 — Meta has applied it by
+ * now: a failure here never drops the record or its undo; the answer says what could not be read.
  */
 async function afterApply(result: ToolResult, startedAt: number): Promise<ToolResult> {
   const change = result.change as { before: ApplyRecord & { accountId?: string }; after: ApplyRecord & { accountId?: string; adAccountId?: string } } | undefined
   if (!result.ok || !change?.after?.signature) return result
-  const account = await recordAccount(change.after)
-  if (!account) return result
+  const notes: string[] = []
   const rule = APPLY_TYPES[change.after.type]
-  const objects = []
-  const read: ApplyTarget[] = []
-  for (const o of change.after.objects) {
-    const live = await liveApplyTargets(account.target, [o.id], o.kind).catch(() => ({ refusal: 'not read' }))
-    if ('refusal' in live) { objects.push({ ...o, unread: true }); continue }
-    read.push(live[0])
-    objects.push({ ...o, fields: applyFields(change.after.type, live[0]) })
-  }
-  for (const o of change.after.objects) await noteMetaObjectTouched(account.accountId, o.id, { budget: rule?.undo === 'budgets' && o.kind === 'adset' })
-  const after: ApplyRecord = { ...change.after, objects: objects.map(({ unread: _u, ...o }) => o) }
-  const before: ApplyRecord = { ...change.before }
+  const after: ApplyRecord & { accountId?: string; adAccountId?: string } = { ...change.after }
+  const before: ApplyRecord & { accountId?: string; adAccountId?: string } = { ...change.before }
+  const readBack: Array<Record<string, unknown>> = []
   let copiesSentence: string | null = null
-  if (rule?.undo === 'pause-copies') {
-    const parents = change.after.type === 'CONVERSION_LEADS_OPTIMIZATION'
-      ? [...new Set(read.map((t) => t.campaignId).filter((x): x is string => !!x))].map((idOf) => ({ kind: 'campaign' as const, id: idOf }))
-      : [...new Set(read.map((t) => t.adSetId).filter((x): x is string => !!x))].map((idOf) => ({ kind: 'adset' as const, id: idOf }))
-    const known = new Set(change.after.objects.map((o) => o.id))
-    const copies = await liveNewCopies(account.target, parents, startedAt, known)
-    if (copies) {
-      after.copies = copies
-      before.undo = copies.filter((c) => c.status !== 'PAUSED').map((c) => ({ kind: c.kind, id: c.id, status: 'PAUSED' as const }))
-      if (!before.undo.length) before.undo = null
-      const running = copies.filter((c) => c.status === 'ACTIVE')
-      copiesSentence = copies.length
-        ? `Meta made ${copies.length} new ${copies[0].kind === 'adset' ? 'ad set' : 'ad'}${copies.length === 1 ? '' : 's'} (${copies.map((c) => `${c.id}: ${c.status ?? 'status not read'}`).join(', ')})${running.length ? ` — ${running.length} ${running.length === 1 ? 'is' : 'are'} ACTIVE and can spend; set-meta-status or undo pauses them` : ''}.`
-        : 'Nexus found no new copy yet (Meta may make them later): meta-ads-live shows the ad sets and ads now.'
-    } else {
-      after.copiesUnread = true
-      before.undo = null
-      before.noUndo = [...(before.noUndo ?? []), 'Nexus could not read the copies Meta made right after the apply: pause them with set-meta-status (meta-ads-live shows them).']
-      copiesSentence = 'Nexus could not read the copies Meta made: meta-ads-live shows them; pause them with set-meta-status if they run.'
+  let account: Awaited<ReturnType<typeof recordAccount>> = null
+  try { account = await recordAccount(change.after) } catch (err) { notes.push(`Nexus could not open the account again to read the change back (${err instanceof Error ? err.message : String(err)}).`) }
+  if (account) {
+    const read: ApplyTarget[] = []
+    const objects = []
+    for (const o of change.after.objects) {
+      const live = await liveApplyTargets(account.target, [o.id], o.kind).catch(() => ({ refusal: 'not read' }))
+      if ('refusal' in live) { objects.push(o); readBack.push({ kind: o.kind, id: o.id, name: o.name, notRead: true }); continue }
+      read.push(live[0])
+      const fields = applyFields(change.after.type, live[0])
+      objects.push({ ...o, fields })
+      readBack.push({ kind: o.kind, id: o.id, name: o.name, now: fields })
     }
+    after.objects = objects
+    try {
+      for (const o of change.after.objects) await noteMetaObjectTouched(account.accountId, o.id, { budget: rule?.undo === 'budgets' && o.kind === 'adset' })
+    } catch { notes.push('Nexus could not note Meta\'s per-object limits for these objects: a change of one of them within 30 s may be refused by Meta.') }
+    if (rule?.copies) {
+      const sources = new Set(change.after.objects.map((o) => o.id))
+      const parents = new Set(read.map((t) => (rule.copies === 'adset' ? t.campaignId : t.adSetId)).filter((x): x is string => !!x))
+      const copies = await liveNewCopies(account.target, rule.copies, sources, parents, startedAt).catch(() => null)
+      if (copies) {
+        after.copies = copies.map(({ kind, id, name, status }) => ({ kind, id, name, status }))
+        const pause = copies.filter((c) => c.status !== 'PAUSED' && c.status !== 'ARCHIVED' && c.status !== 'DELETED')
+        const items: RestoreItem[] = pause.slice(0, MAX_APPLY_OBJECTS - (before.undo?.length ?? 0)).map((c) => ({ kind: c.kind, id: c.id, status: 'PAUSED' as const, ...(c.foundBy === 'time' ? { foundBy: 'time' as const } : {}) }))
+        if (items.length < pause.length) before.noUndo = [...(before.noUndo ?? []), `Meta made more copies than one undo pauses (${MAX_APPLY_OBJECTS}): pause the rest with set-meta-status.`]
+        before.undo = [...(before.undo ?? []), ...items]
+        if (!before.undo.length) before.undo = null
+        const running = copies.filter((c) => c.status === 'ACTIVE')
+        const byTime = copies.filter((c) => c.foundBy === 'time')
+        copiesSentence = copies.length
+          ? `Meta made ${copies.length} new ${rule.copies === 'adset' ? 'ad set' : 'ad'}${copies.length === 1 ? '' : 's'} (${copies.map((c) => `${c.id}: ${c.status ?? 'status not read'}${c.foundBy === 'time' ? ', found by its time only' : ''}`).join(', ')})${running.length ? ` — ${running.length} ${running.length === 1 ? 'is' : 'are'} ACTIVE and can spend; set-meta-status or undo pauses them` : ''}.${byTime.length ? ' One found by its time only has no source on Meta\'s side: it may be one a person made at the same moment — the undo names it so.' : ''}`
+          : 'Nexus found no new copy yet (Meta may make them later): meta-ads-live shows the ad sets and ads now; pause any with set-meta-status.'
+      } else {
+        after.copiesUnread = true
+        before.noUndo = [...(before.noUndo ?? []), 'Nexus could not read the copies Meta made right after the apply: pause them with set-meta-status (meta-ads-live shows them).']
+        copiesSentence = 'Nexus could not read the copies Meta made: meta-ads-live shows them; pause them with set-meta-status if they run.'
+      }
+    }
+  } else if (rule?.copies) {
+    before.noUndo = [...(before.noUndo ?? []), 'Nexus could not look for the copies Meta made: pause them with set-meta-status (meta-ads-live shows them).']
   }
   const data = result.data as Record<string, unknown>
   return {
     ...result,
     data: {
       ...data,
-      readBack: objects.map((o) => ({ kind: o.kind, id: o.id, name: o.name, ...('unread' in o ? { notRead: true } : { now: o.fields }) })),
+      ...(readBack.length ? { readBack } : {}),
       ...(after.copies ? { copies: after.copies } : {}),
       ...(copiesSentence ? { copiesSentence } : {}),
+      ...(notes.length ? { nexusNote: `Meta applied it. ${notes.join(' ')}` } : {}),
     },
-    change: { before: { ...before, accountId: change.before.accountId ?? change.after.accountId, adAccountId: change.after.adAccountId } as unknown, after: { ...after, accountId: change.after.accountId, adAccountId: change.after.adAccountId } as unknown },
+    change: { before: { ...before, accountId: change.before.accountId ?? change.after.accountId, adAccountId: change.after.adAccountId } as unknown, after: after as unknown },
   }
 }
 
@@ -241,7 +257,7 @@ const applyMetaRecommendations: AgentTool = {
       objectId: metaIdArg('an ad set (no campaign budget) or a campaign (campaign budget) the recommendation names'),
       additionalBudgetCents: centsArg('how much more it may spend (added to its daily or lifetime budget)'),
     })).min(1).max(MAX_APPLY_OBJECTS).optional().describe('SCALE_GOOD_CAMPAIGN: the raise per object (Meta takes the amounts you name; it gives none by API)'),
-    allowNewObjects: z.literal(true).optional().describe('CONVERSION_LEADS_OPTIMIZATION, CREATIVE_FATIGUE: you accept that Meta makes new ad sets or ads that may start running (SPENDS MONEY; undo pauses the ones Nexus finds) — without it Nexus does not apply these'),
+    allowNewObjects: z.literal(true).optional().describe('CONVERSION_LEADS_OPTIMIZATION, CREATIVE_FATIGUE, LANDING_PAGE_VIEW_OPTIMIZATION_GOAL: you accept that Meta makes new ad sets, ads or a campaign that may start running (SPENDS MONEY; undo pauses the copies Nexus finds) — without it Nexus does not apply these'),
     restore: z.object({
       type: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,79}$/).describe('the recommendation type that was applied'),
       items: z.array(restoreItem).min(1).max(MAX_APPLY_OBJECTS).describe('what each object goes back to'),
@@ -257,8 +273,8 @@ const applyMetaRecommendations: AgentTool = {
     + 'is answered with the Nexus tool that does the same, or the recommendation\'s Ads Manager link. Nexus reads the '
     + 'recommendation (signatures go stale) and every object it names again first; the objects must be the chosen account\'s. '
     + 'A budget raise, wider delivery in an object that is on, and copies or new ads Meta makes are SPENDS MONEY (the line '
-    + 'says when nothing is on); Meta does not say whether its copies start running, so those two types need allowNewObjects: '
-    + 'true. Meta has no check for an apply and answers only "success": the run reads the objects back. '
+    + 'says when nothing is on); Meta does not say whether its copies start running, so the types that make them need '
+    + 'allowNewObjects: true. Meta has no check for an apply and answers only "success": the run reads the objects back. '
     + 'Applying means agreeing to Meta\'s advertising terms. Undo puts back the budgets and goals it replaced and pauses the '
     + 'copies it made; Advantage+ audience, placements, Shops ads, product set expansion and creative features have no way '
     + 'back in Nexus (the preview says so).'
@@ -266,7 +282,8 @@ const applyMetaRecommendations: AgentTool = {
   undo: applyUndo,
   handler: (args, ctx) => metaChangePreview(args, ctx, buildApply(args)),
   execute: async (args, ctx) => {
-    const startedAt = Math.floor(Date.now() / 1000) - 120
+    // Review A4 — the copies' window starts when this run starts (never earlier: an object made before is never a copy).
+    const startedAt = Math.floor(Date.now() / 1000)
     const result = await runMetaChange(args, ctx, buildApply(args), applyFinish)
     return args.restore ? result : afterApply(result, startedAt)
   },
@@ -298,7 +315,7 @@ const studyObjects = async (account: MetaChangeAccount, chosen: Awaited<ReturnTy
   for (const o of ids) {
     const read = await liveApplyTargets(account.target, [o.id], o.kind)
     if ('refusal' in read) return { refusal: read.refusal }
-    objects.set(o.id, { kind: o.kind, id: o.id, name: read[0].name, effectiveStatus: read[0].effectiveStatus })
+    objects.set(o.id, { kind: o.kind, id: o.id, name: read[0].name, on: deliversNow(read[0]) })
     objectStudies.set(o.id, (await liveObjectStudies(chosen, o.kind, o.id)).map((s) => ({ studyId: s.studyId, name: s.name, state: s.state, endTime: s.endTime })))
   }
   return { objects, objectStudies }
@@ -334,6 +351,7 @@ const buildCreate = (args: Record<string, unknown>): MetaDraftBuilder => guarded
     objects: read.objects,
     objectStudies: read.objectStudies,
     openStudies: open.more ? null : open.open,
+    openLifts: open.openLifts.map((s) => ({ studyId: s.studyId, name: s.name, state: s.state, endTime: s.endTime })),
     pixels: lift && request.objectives?.some((o) => o.pixelId) ? await liveAccountPixels(account.target) : null,
     customConversions: lift && request.objectives?.some((o) => o.customConversionIds?.length) ? await liveAccountCustomConversions(account.target) : null,
   })

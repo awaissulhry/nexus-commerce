@@ -861,7 +861,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   // Step 18 — a DELETE goes only by a DELETE rule for the kind the call names (today a budget schedule's), with no body.
   const deleteRule = method === 'DELETE' ? writeRules().find((r) => r.method === 'DELETE' && r.path.test(graph.route) && kindMatches(r, input.objectKind)) : undefined
   if (method === 'DELETE' && (!deleteRule || (input.body !== undefined && input.body !== ''))) {
-    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule; deleting campaigns, ad sets and ads is its own tool, not built yet), and cancels no async batch')
+    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule) and what the experiment, rule and recommendation tools delete by their own rules (a concluded Page video test: set-meta-experiment); deleting campaigns, ad sets and ads is its own tool, not built yet, and Nexus cancels no async batch')
   }
   if (deleteRule) {
     if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')

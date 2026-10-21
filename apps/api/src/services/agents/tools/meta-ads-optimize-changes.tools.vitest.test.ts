@@ -17,10 +17,11 @@ const h = vi.hoisted(() => ({
   study: null as Record<string, unknown> | null,
   foreign: null as string | null,
   people: new Set<string>(['100000000000001', '100000000000002']),
+  accountFails: false,
   check: vi.fn(async () => undefined),
   send: vi.fn(),
 }))
-vi.mock('../../marketing/meta-ads/change-account.js', () => ({ metaChangeAccount: vi.fn(async () => h.account) }))
+vi.mock('../../marketing/meta-ads/change-account.js', () => ({ metaChangeAccount: vi.fn(async () => { if (h.accountFails) throw new Error('connection to the database lost'); return h.account }) }))
 vi.mock('../../marketing/meta-ads/live.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/live.js')>()),
   metaChosenAccount: vi.fn(async () => h.chosen),
@@ -46,7 +47,7 @@ vi.mock('../../marketing/meta-ads/live-optimize-changes.js', async (importActual
     liveNewCopies: vi.fn(async () => (h.copies ? structuredClone(h.copies) : null)),
     liveStudy: vi.fn(async () => { if (!h.study) throw new (await import('../../marketing/meta-ads/live.js')).MetaLiveRefusal('That study does not touch the ad account this business chose.'); return structuredClone(h.study) }),
     studyForeignProblem: vi.fn(async () => h.foreign),
-    liveOpenStudies: vi.fn(async () => ({ open: 2, read: 2, more: false })),
+    liveOpenStudies: vi.fn(async () => ({ open: 2, read: 2, more: false, openLifts: [] })),
     liveObjectStudies: vi.fn(async () => []),
     liveAccountBusiness: vi.fn(async () => '120000000000090'),
     liveAccountCustomConversions: vi.fn(async () => new Set<string>()),
@@ -101,6 +102,7 @@ beforeEach(() => {
   h.rec = { signature: '1234567', type: 'SCALE_GOOD_CAMPAIGN', stage: 'mid_flight_recommendation', objectIds: [S1], adsManagerUrl: null, time: null }
   h.targets = new Map([[S1, adSet()], ['120000000000202', adSet({ id: '120000000000202', name: 'Ad set C' })], [C1, { ...adSet({ kind: 'campaign', id: C1, name: 'Campaign A' }) }]])
   h.copies = []
+  h.accountFails = false
   h.study = structuredClone(STUDY_LIVE)
   h.foreign = null
 })
@@ -172,18 +174,41 @@ describe('apply-meta-recommendations', () => {
     // Meta's copies may run: only with the person's explicit word (like activate: true on a create).
     expect(await preview('apply-meta-recommendations', { signature: '1234567' })).toEqual({ ok: false, error: expect.stringMatching(/allowNewObjects: true/) })
     const p = (await preview('apply-meta-recommendations', { signature: '1234567', allowNewObjects: true })).preview
-    expect(p.spendsMoneyBecause.join(' ')).toMatch(/does not say whether the copies start running/)
-    h.copies = [{ kind: 'adset', id: '120000000000209', name: 'Ad set B – Copy', status: 'ACTIVE' }]
+    expect(p.spendsMoneyBecause.join(' ')).toMatch(/does not say whether they start running/)
+    h.copies = [
+      { kind: 'adset', id: '120000000000209', name: 'Ad set B – Copy', status: 'ACTIVE', sourceId: S1, foundBy: 'source' },
+      { kind: 'adset', id: '120000000000210', name: 'Made by hand?', status: 'ACTIVE', sourceId: null, foundBy: 'time' },
+    ]
     h.send.mockImplementationOnce(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
+    const startedAt = Math.floor(Date.now() / 1000)
     const ran = await run('apply-meta-recommendations', { signature: '1234567', allowNewObjects: true }, p)
-    expect(ran.data.copiesSentence).toMatch(/1 new ad set \(120000000000209: ACTIVE\) — 1 is ACTIVE and can spend/)
+    expect(ran.data.copiesSentence).toMatch(/2 new ad sets \(120000000000209: ACTIVE, 120000000000210: ACTIVE, found by its time only\) — 2 are ACTIVE and can spend/)
+    // Review A4 — found by Meta's source field, in the account's ad sets changed since the run started (never earlier).
+    const { liveNewCopies } = await import('../../marketing/meta-ads/live-optimize-changes.js')
+    const call = vi.mocked(liveNewCopies).mock.calls.at(-1)!
+    expect([call[1], [...call[2]], [...call[3]]]).toEqual(['adset', [S1], [C1]])
+    expect(call[4]).toBeGreaterThanOrEqual(startedAt)
     const back = tool('apply-meta-recommendations').undo!.request(ran.change!)
-    expect(back).toMatchObject({ tool: 'apply-meta-recommendations', args: { restore: { items: [{ kind: 'adset', id: '120000000000209', status: 'PAUSED' }] } } })
+    expect(back).toMatchObject({ tool: 'apply-meta-recommendations', args: { restore: { items: [{ kind: 'adset', id: '120000000000209', status: 'PAUSED' }, { kind: 'adset', id: '120000000000210', status: 'PAUSED', foundBy: 'time' }] } } })
+    expect(tool('apply-meta-recommendations').input.safeParse((back as { args: unknown }).args).success).toBe(true)
+    h.targets.set('120000000000209', adSet({ id: '120000000000209' }))
+    h.targets.set('120000000000210', adSet({ id: '120000000000210' }))
+    const undoPreview = (await preview('apply-meta-recommendations', (back as { args: Record<string, unknown> }).args)).preview
+    expect(undoPreview.warnings.join(' ')).toMatch(/found by its time only/)
     // Copies Nexus could not read: no undo, said.
     h.copies = null
     h.send.mockImplementationOnce(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
     const blind = await run('apply-meta-recommendations', { signature: '1234567', allowNewObjects: true }, p)
     expect(tool('apply-meta-recommendations').undo!.request(blind.change!)).toEqual({ refusal: expect.stringMatching(/could not read the copies/) })
+  })
+  it('review A7 — a failure after Meta applied it never drops the record or its undo; the answer says what was not read', async () => {
+    const p = (await preview('apply-meta-recommendations', args)).preview
+    h.send.mockImplementationOnce(async () => { h.accountFails = true; return { node: { success: true }, readBack: 'none', waitedMs: 0 } })
+    const ran = await run('apply-meta-recommendations', args, p)
+    expect(ran.ok).toBe(true)
+    expect(ran.data.nexusNote).toMatch(/^Meta applied it\. Nexus could not open the account again.*database lost/)
+    expect(ran.change!.before).toMatchObject({ undo: [{ kind: 'adset', id: S1, dailyBudgetCents: 5000 }] })
+    expect(ran.change!.after).toMatchObject({ objects: [{ id: S1, fields: { daily_budget: '11000' } }], accountId: 'm-1' })
   })
   it('Advantage+ audience: no undo in Nexus (targeting is set-meta-targeting\'s), said before and after', async () => {
     h.rec = { ...h.rec!, type: 'ADVANTAGE_PLUS_AUDIENCE' }

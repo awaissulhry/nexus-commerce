@@ -36,7 +36,7 @@ export const META_OPTIONAL_SCOPES: string[] = [
 /** What each permission lets Nexus do, for the sentence a missing one gets. */
 const NEEDED_FOR: Readonly<Record<string, string>> = {
   ads_read: 'read the ad account, its campaigns and its numbers',
-  ads_management: 'change ads (set-meta-status pauses, switches on and archives campaigns, ad sets and ads; set-meta-campaign, set-meta-ad-set and set-meta-budget-schedule change their settings, budgets and bids)',
+  ads_management: 'change ads (set-meta-status pauses, switches on and archives campaigns, ad sets and ads; set-meta-campaign, set-meta-ad-set and set-meta-budget-schedule change their settings, budgets and bids; the recommendation, experiment and rule tools apply the recommendations of Meta and make, change and end its tests and rules)',
   business_management: "read the business portfolio's assets",
   pages_show_list: 'list the Facebook Pages',
   pages_read_engagement: "read the Pages' Instagram accounts",

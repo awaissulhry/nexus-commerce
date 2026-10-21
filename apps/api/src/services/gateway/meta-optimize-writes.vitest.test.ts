@@ -153,7 +153,7 @@ describe('study.create: POST /<business>/ad_studies', () => {
     expect(create({ ...AB, viewers: ['1'] })).toMatch(/only Meta change/)
     expect(create({ ...AB, end_time: String(T0) })).toMatch(/end_time is after start_time/)
     expect(create({ ...AB, observation_end_time: String(T0 + 20 * 86400) })).toMatch(/no cooldown or observation/)
-    expect(create({ ...AB, objectives: [{ name: 'P', is_primary: true, type: 'CONVERSIONS', adspixels: [{ id: PIXEL }] }] })).toMatch(/lift study's/)
+    expect(create({ ...AB, objectives: [{ name: 'P', is_primary: true, type: 'CONVERSIONS', adspixels: [{ id: PIXEL, event_names: ['fb_pixel_purchase'] }] }] })).toMatch(/lift study's/)
     expect(create({ ...AB, creative_test_config: { daily_budget: 1 } })).toMatch(/creative test's only/)
     const v2 = { name: 'C', type: 'SPLIT_TEST_V2', start_time: String(T0), cooldown_start_time: String(T0), end_time: String(T0 + 86400), observation_end_time: String(T0 + 86400), creative_test_config: { daily_budget: 15000 }, cells: [{ name: 'a', treatment_percentage: 50, ads: [AD] }, { name: 'b', treatment_percentage: 50, ads: ['120000000000005'] }] }
     expect(create({ ...v2, observation_end_time: String(T0 + 2 * 86400) })).toMatch(/observation_end_time = end_time/)
@@ -163,11 +163,16 @@ describe('study.create: POST /<business>/ad_studies', () => {
     expect(create({ ...v2, creative_test_config: { daily_budget: 15000, lifetime_budget_percentage: 5 } })).toMatch(/exactly/)
     const lift = { name: 'Lift', type: 'LIFT', start_time: String(T0), end_time: String(T0 + 86400), cells: [{ name: 'test', treatment_percentage: 90, control_percentage: 10, campaigns: [CAMPAIGN] }] }
     expect(create(lift)).toMatch(/at least one objective/)
-    expect(create({ ...lift, cooldown_start_time: String(T0), objectives: [{ name: 'P', is_primary: true, type: 'CONVERSIONS', adspixels: [{ id: PIXEL }] }] })).toMatch(/deprecated/)
-    expect(create({ ...lift, objectives: [{ name: 'P', is_primary: false, type: 'CONVERSIONS', adspixels: [{ id: PIXEL }] }] })).toMatch(/exactly one objective is the primary/)
+    expect(create({ ...lift, cooldown_start_time: String(T0), objectives: [{ name: 'P', is_primary: true, type: 'CONVERSIONS', adspixels: [{ id: PIXEL, event_names: ['fb_pixel_purchase'] }] }] })).toMatch(/deprecated/)
+    expect(create({ ...lift, objectives: [{ name: 'P', is_primary: false, type: 'CONVERSIONS', adspixels: [{ id: PIXEL, event_names: ['fb_pixel_purchase'] }] }] })).toMatch(/exactly one objective is the primary/)
     expect(create({ ...lift, objectives: [{ name: 'P', is_primary: true, type: 'CONVERSIONS', applications: [{ id: '1' }] }] })).toMatch(/and only adspixels, customconversions/)
     expect(create({ ...lift, objectives: [{ name: 'P', is_primary: true, type: 'CONVERSIONS', adspixels: [{ id: PIXEL, event_names: ['fb_mobile_purchase'] }] }] })).toMatch(/event_names lists/)
-    expect(create({ ...lift, cells: [{ name: 'test', treatment_percentage: 90, control_percentage: 20, campaigns: [CAMPAIGN] }], objectives: [{ name: 'P', is_primary: true, type: 'CONVERSIONS', adspixels: [{ id: PIXEL }] }] })).toMatch(/at most 100/)
+    // Review B3 — a lift cell has a holdout above 0; one cell's share and holdout make 100; a pixel names its events.
+    const objective = [{ name: 'P', is_primary: true, type: 'CONVERSIONS', adspixels: [{ id: PIXEL, event_names: ['fb_pixel_purchase'] }] }]
+    expect(create({ ...lift, cells: [{ name: 'test', treatment_percentage: 90, campaigns: [CAMPAIGN] }], objectives: objective })).toMatch(/has a holdout/)
+    expect(create({ ...lift, cells: [{ name: 'test', treatment_percentage: 80, control_percentage: 10, campaigns: [CAMPAIGN] }], objectives: objective })).toMatch(/treatment_percentage \+ control_percentage = 100/)
+    expect(create({ ...lift, objectives: [{ name: 'P', is_primary: true, type: 'CONVERSIONS', adspixels: [{ id: PIXEL }] }] })).toMatch(/exactly \{id, event_names\}/)
+    expect(create({ ...lift, cells: [{ name: 'test', treatment_percentage: 90, control_percentage: 20, campaigns: [CAMPAIGN] }], objectives: [{ name: 'P', is_primary: true, type: 'CONVERSIONS', adspixels: [{ id: PIXEL, event_names: ['fb_pixel_purchase'] }] }] })).toMatch(/at most 100/)
   })
   it('through the gateway: only on the chosen ad account\'s own portfolio', async () => {
     h.answers.push(json({ id: ACT, business: { id: '120000000000099' } }))
@@ -194,6 +199,8 @@ describe('study.update: POST /<study>', () => {
   it('refuses the rest; a study body named a campaign goes nowhere, a status named a study neither', () => {
     expect(update({})).toBeTruthy()
     expect(update({ type: 'LIFT' })).toMatch(/only Meta change/)
+    // Review A5 — a creative test's budget is set at its creation only.
+    expect(update({ creative_test_config: { daily_budget: 100 } })).toMatch(/only Meta change/)
     expect(update({ cells: [{ id: '1', treatment_percentage: 60 }, { id: '2', treatment_percentage: 60 }] })).toMatch(/at most 100/)
     expect(update({ end_time: String(T0 + 86400), observation_end_time: String(T0) })).toMatch(/at or after end_time/)
     expect(update({ viewers: ['1', '1'] })).toMatch(/each once/)
