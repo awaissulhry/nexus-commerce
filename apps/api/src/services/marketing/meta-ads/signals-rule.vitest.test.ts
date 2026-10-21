@@ -1,9 +1,9 @@
 /**
  * Meta step 32 — the ONE ownership rule the tools and the gateway ask (signals-rule.ts): only the chosen ad account, its
  * business portfolio (never one another Nexus business shares), a pixel step 11's verdict finds free (taken and unchecked
- * are never changed), the chosen ad account inside a body, partners and people that are no other Nexus business's, custom
- * conversions of the account (deleted only when Nexus made them), event source groups of the portfolio, the chosen Page /
- * Instagram account; any read that fails refuses. Every read it sends passes the real read gate. Meta and the database
+ * are never changed), the chosen ad account inside a body, custom conversions of the account (deleted only when Nexus
+ * made them, claimed only when no portfolio holds them), event source groups of the portfolio, the chosen Page /
+ * Instagram account; any read that fails refuses. Partner, server-event and people access are not step 32's. Every read it sends passes the real read gate. Meta and the database
  * are stand-ins; made-up ids only.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -120,6 +120,12 @@ describe('the chosen ad account and its portfolio only', () => {
     expect(await ask('eventSourceGroup.create', BIZ, 'business', { event_sources: `["${PIXEL}"]`, name: 'G' })).toBeNull()
     expect(await ask('eventSourceGroup.create', BIZ, 'business', { event_sources: `["${PIXEL}","${FOREIGN_PIXEL}"]`, name: 'G' })).not.toBeNull()
     expect(await ask('customConversion.claim', BIZ, 'business', { custom_conversion_id: CC })).toBeNull()
+    // Review B2 — one a portfolio already holds is not claimed (the chosen one's: nothing to claim; another's: refused).
+    h.w.conversions[CC].business = { id: BIZ }
+    expect(await ask('customConversion.claim', BIZ, 'business', { custom_conversion_id: CC })).toMatchObject({ sentence: expect.stringMatching(/already the chosen portfolio's/) })
+    h.w.conversions[CC].business = { id: '1111111111' }
+    expect(await ask('customConversion.claim', BIZ, 'business', { custom_conversion_id: CC })).toMatchObject({ sentence: expect.stringMatching(/held by another business portfolio/) })
+    delete h.w.conversions[CC].business
     h.w.conversions[CC].account_id = 'act_5555555555'
     expect(await ask('customConversion.claim', BIZ, 'business', { custom_conversion_id: CC })).toMatchObject({ sentence: expect.stringMatching(/not a custom conversion of the chosen ad account/) })
   })
@@ -134,12 +140,6 @@ describe('a pixel: step 11\'s verdict — only free is changed', () => {
     expect(JSON.stringify(await ask('dataset.settings', PIXEL, 'pixel', { name: 'Shop A' }))).not.toContain('5555555555')
     h.w.takenAccounts.clear(); h.w.owner[PIXEL] = '1111111111'
     expect(await ask('dataset.settings', PIXEL, 'pixel', { name: 'Shop A' })).toMatchObject({ sentence: expect.stringMatching(/could not check whether another business in Nexus also uses this pixel/) })
-  })
-  it('server-event partners: none another Nexus business\'s portfolio, never the chosen one\'s', async () => {
-    expect(await ask('dataset.settings', PIXEL, 'pixel', { server_events_business_ids: '["2222222222"]' })).toBeNull()
-    h.w.takenPortfolios.add('2222222222')
-    expect(await ask('dataset.settings', PIXEL, 'pixel', { server_events_business_ids: '["2222222222"]' })).toMatchObject({ sentence: expect.stringMatching(/another business in Nexus uses/) })
-    expect(await ask('dataset.settings', PIXEL, 'pixel', { server_events_business_ids: `["${BIZ}"]` })).toMatchObject({ sentence: expect.stringMatching(/own business portfolio, not a partner/) })
   })
   it('connect / disconnect: only the chosen ad account and its portfolio in the body', async () => {
     expect(await ask('dataset.disconnectAccount', PIXEL, 'pixel', { account_id: OWN, business: BIZ })).toBeNull()
@@ -157,14 +157,6 @@ describe('a pixel: step 11\'s verdict — only free is changed', () => {
     expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: OWN, business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/connected to an ad account another business in Nexus uses/) })
     h.w.owner[FOREIGN_PIXEL] = '1111111111'
     expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: OWN, business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/not owned by its business portfolio/) })
-  })
-  it('a partner: not the chosen portfolio, never another Nexus business\'s; a person: one of the portfolio\'s own', async () => {
-    expect(await ask('dataset.sharePartner', PIXEL, 'pixel', { business: '4444444444', permitted_tasks: '["ANALYZE"]' })).toBeNull()
-    h.w.takenPortfolios.add('4444444444')
-    expect(await ask('dataset.sharePartner', PIXEL, 'pixel', { business: '4444444444', permitted_tasks: '["ANALYZE"]' })).toMatchObject({ sentence: expect.stringMatching(/never shares a dataset with, or takes one from, another Nexus business/) })
-    expect(await ask('dataset.removePartner', PIXEL, 'pixel', { business: '4444444444' })).not.toBeNull()
-    expect(await ask('dataset.assignPerson', PIXEL, 'pixel', { user: '701', tasks: '["ADVERTISE"]' })).toBeNull()
-    expect(await ask('dataset.assignPerson', PIXEL, 'pixel', { user: '999', tasks: '["ADVERTISE"]' })).toMatchObject({ sentence: expect.stringMatching(/not one of the chosen ad account's business portfolio's own people/) })
   })
 })
 
@@ -207,7 +199,6 @@ describe('refusals', () => {
   it('every read the rule sends passes the real read gate', async () => {
     h.w.agencies[FOREIGN_PIXEL] = ['3333333333']
     await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: OWN, business: BIZ })
-    await ask('dataset.assignPerson', PIXEL, 'pixel', { user: '701', tasks: '["ADVERTISE"]' })
     await ask('eventSourceGroup.update', GROUP, 'eventsourcegroup', { name: 'G' })
     await ask('customConversion.update', CC, 'customconversion', { name: 'X' })
     expect(h.calls.length).toBeGreaterThan(10)

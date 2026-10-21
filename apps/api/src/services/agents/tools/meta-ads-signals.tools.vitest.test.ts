@@ -1,6 +1,6 @@
 /**
- * Meta step 32 — create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion,
- * set-meta-event-setup and remove-meta-signal-items as the approval gate uses them (Meta, the database and the account are
+ * Meta step 32 — create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion and
+ * remove-meta-signal-items as the approval gate uses them (Meta, the database and the account are
  * stand-ins): the change contract of every Meta change tool; previews from the live state through the ONE ownership rule
  * (a pixel another business uses, or one Nexus cannot check, is never changed); Meta's one-pixel and 100-conversion rules;
  * what Meta cannot do said in words; a run only as a request a person approved, sending exactly what the preview showed;
@@ -41,15 +41,10 @@ vi.mock('../../marketing/meta-ads/read-client.js', async () => {
       const rows: Array<Record<string, unknown>> = edge === 'adspixels' ? w.accountPixels.map((id: string) => ({ id, name: `Pixel ${id}` }))
         : edge === 'shared_agencies' || edge === 'agencies' ? (w.agencies[head] ?? []).map((id: string) => ({ id }))
           : edge === 'shared_accounts' ? (w.accounts[`${head}:${req.query?.business}`] ?? [])
-            : edge === 'business_users' ? w.people.map((id: string) => ({ id }))
-              : edge === 'system_users' ? []
-                : edge === 'event_source_groups' ? w.groups.map((id: string) => ({ id }))
-                  : edge === 'server_events_permitted_business' ? w.serverEvents.map((id: string) => ({ id }))
-                    : edge === 'assigned_users' ? w.assigned
-                      : edge === 'adsets' ? w.adSets
-                        : edge === 'customconversions' ? Object.entries(w.conversions).map(([id, c]) => ({ id, ...(c as object) }))
-                          : edge === 'event_rules' ? [{ id: '120000000000901', event_type: 'Purchase', rule: '{"url":{"i_contains":"thank-you"}}', rule_type: 'URL', status: 'ACTIVE', sample_urls: ['https://shop.example/thank-you?order=1'] }]
-                            : []
+            : edge === 'event_source_groups' ? w.groups.map((id: string) => ({ id }))
+              : edge === 'adsets' ? w.adSets
+                : edge === 'customconversions' ? Object.entries(w.conversions).map(([id, c]) => ({ id, ...(c as object) }))
+                  : []
       onRows(rows)
       return { rows: rows.length, calls: 1, truncated: false }
     }),
@@ -78,7 +73,7 @@ import { __metaObjectLimitsTest } from '../../gateway/meta-object-limits.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem, metaWriteVerdict } from '../../gateway/meta-calls.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../../meta/api-version.js'
-import { EVENT_SETUP_CANNOT, TRAFFIC_PERMISSIONS_CANNOT } from '../../marketing/meta-ads/change-signals.js'
+import { DEFAULT_VALUE_UPDATE_HELD, SETUP_CANNOT } from '../../marketing/meta-ads/change-signals.js'
 import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
 
 const tool = (name: string) => META_ADS_SIGNALS_TOOLS.find((t) => t.name === name)!
@@ -113,17 +108,16 @@ beforeEach(() => {
   h.calls = []
   h.w = {
     portfolio: BIZ, accountPixels: [PIXEL], owner: {}, accounts: { [`${PIXEL}:${BIZ}`]: [{ account_id: OWN }], [`${FREE_ELSEWHERE}:${BIZ}`]: [] },
-    agencies: {}, people: ['700'], groups: [GROUP], group: { [GROUP]: { name: 'Group A', event_sources: [{ id: PIXEL }] } },
+    agencies: {}, groups: [GROUP], group: { [GROUP]: { name: 'Group A', event_sources: [{ id: PIXEL }] } },
     settings: { [PIXEL]: structuredClone(SETTINGS), [FREE_ELSEWHERE]: { ...structuredClone(SETTINGS), id: FREE_ELSEWHERE, name: 'Second' } },
-    serverEvents: [], assigned: [{ id: '700', tasks: ['ANALYZE'] }],
-    adSets: [{ id: AD_SET, name: 'Ad set B', effective_status: 'ACTIVE', promoted_object: { pixel_id: PIXEL, custom_conversion_id: CC } }],
+    adSets: [{ id: AD_SET, name: 'Ad set B', status: 'ACTIVE', campaign: { status: 'ACTIVE' }, promoted_object: { pixel_id: PIXEL, custom_conversion_id: CC } }],
     conversions: { [CC]: { account_id: `act_${OWN}`, name: 'Thank you page', custom_event_type: 'PURCHASE', default_conversion_value: 10, pixel: { id: PIXEL }, rule: '{"url":{"i_contains":"thank-you"}}', is_unavailable: false } },
     takenPortfolios: new Set(), takenAccounts: new Set(), nexusMade: new Set(),
   }
 })
 
 describe('the tools', () => {
-  it('each change tool keeps the Meta change contract; set-meta-event-setup is read only', () => {
+  it('each change tool keeps the Meta change contract; nothing that only refuses is a tool', () => {
     const changes = ['create-meta-dataset', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion', 'remove-meta-signal-items']
     for (const name of changes) {
       const t = tool(name)
@@ -139,10 +133,13 @@ describe('the tools', () => {
     for (const name of ['set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion']) expect(tool(name)).toMatchObject({ reversibility: 'partial', undo: expect.anything() })
     expect(tool('set-meta-custom-conversion').requires).toEqual(['ads.campaigns.manage', 'financials.adspend.view'])
     expect(tool('set-meta-dataset').consequencesFor!({ eventSourceGroup: { action: 'create' } })).toEqual({ reversibility: 'none' })
-    expect(tool('set-meta-dataset-access').consequencesFor!({ action: 'remove-partner' })).toEqual({ reversibility: 'none' })
     expect(tool('set-meta-custom-conversion').consequencesFor!({ action: 'claim' })).toEqual({ reversibility: 'none' })
-    expect(tool('set-meta-event-setup')).toMatchObject({ readOnly: true, openWorld: true })
-    expect(tool('set-meta-event-setup').execute).toBeUndefined()
+    expect(META_ADS_SIGNALS_TOOLS.map((t) => t.name)).toEqual(['create-meta-dataset', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion', 'remove-meta-signal-items'])
+    // Lane C3 decision: only the chosen ad account is connected or disconnected; no partner, server-event or people access.
+    expect(tool('set-meta-dataset-access').input.safeParse({ pixelId: PIXEL, action: 'assign-person' }).success).toBe(false)
+    expect(tool('set-meta-dataset-access').input.safeParse({ pixelId: PIXEL, action: 'share-with-partner' }).success).toBe(false)
+    expect(tool('set-meta-dataset').description).toContain(SETUP_CANNOT)
+    expect(tool('set-meta-dataset-access').description).toMatch(/Business settings/)
     // remove-meta-signal-items only on the person's explicit ask.
     expect(() => parse(tool('remove-meta-signal-items'), { items: [{ kind: 'customConversion', id: CC }] })).toThrow()
   })
@@ -199,9 +196,6 @@ describe('set-meta-dataset', () => {
     expect(back).toMatchObject({ tool: 'set-meta-dataset', args: { connectionId: 'conn-1', pixelId: PIXEL, automaticMatching: { enabled: false }, dataUse: 'ADVERTISING_AND_ANALYTICS' } })
     expect(tool('set-meta-dataset').input.safeParse((back as { args: unknown }).args).success).toBe(true)
   })
-  it('traffic permissions: Meta cannot change them by API — said, nothing queued', async () => {
-    expect(await preview('set-meta-dataset', { pixelId: PIXEL, trafficPermissions: { blockDomains: ['spam.example'] } })).toMatchObject({ ok: false, error: TRAFFIC_PERMISSIONS_CANNOT })
-  })
   it('an event source group: create from free pixels only; update of one of the portfolio\'s with its undo', async () => {
     expect(await preview('set-meta-dataset', { eventSourceGroup: { action: 'create', name: 'G', pixelIds: [PIXEL, '120000000000999'] } })).toMatchObject({ ok: false })
     const p = await preview('set-meta-dataset', { eventSourceGroup: { action: 'update', groupId: GROUP, name: 'Group B' } })
@@ -225,30 +219,19 @@ describe('set-meta-dataset-access', () => {
     expect(sent()[0]).toMatchObject({ objectId: FREE_ELSEWHERE, kind: 'pixel', edge: 'shared_accounts', params: { account_id: OWN, business: BIZ } })
     expect(tool('set-meta-dataset-access').undo!.request(r.change!)).toMatchObject({ tool: 'set-meta-dataset-access', args: { pixelId: FREE_ELSEWHERE, action: 'disconnect-ad-account' } })
   })
-  it('disconnect lists the ad sets that lose the dataset; it goes as Meta\'s DELETE', async () => {
+  it('disconnect lists the ad sets that lose the dataset — also those on a custom conversion of it; it goes as Meta\'s DELETE', async () => {
+    // Review A5 — an ad set optimising on a custom conversion of this pixel (not on the pixel itself) counts too.
+    h.w.adSets = [{ id: AD_SET, name: 'Ad set B', status: 'ACTIVE', campaign: { status: 'ACTIVE' }, promoted_object: { custom_conversion_id: CC } }]
     const p = await preview('set-meta-dataset-access', { pixelId: PIXEL, action: 'disconnect-ad-account' })
     expect(p.preview.warnings.join(' ')).toMatch(/1 ad set .*Ad set B/)
     h.send.mockResolvedValueOnce(ok({ success: true }))
     await run('set-meta-dataset-access', { pixelId: PIXEL, action: 'disconnect-ad-account' }, p.preview)
     expect(sent()[0]).toMatchObject({ method: 'DELETE', edge: 'shared_accounts', params: { account_id: OWN, business: BIZ } })
   })
-  it('a partner another Nexus business uses, or a person outside the portfolio, is refused', async () => {
-    h.w.takenPortfolios.add('4444444444')
-    expect(await preview('set-meta-dataset-access', { pixelId: PIXEL, action: 'share-with-partner', partnerBusinessId: '4444444444', partnerTasks: ['ANALYZE'] })).toMatchObject({ ok: false, error: expect.stringMatching(/never shares a dataset with/) })
-    expect(await preview('set-meta-dataset-access', { pixelId: PIXEL, action: 'assign-person', personId: '999', personTasks: ['ADVERTISE'] })).toMatchObject({ ok: false, error: expect.stringMatching(/own people/) })
-  })
-  it('a person of the portfolio: from their tasks to the new ones, undo puts theirs back', async () => {
-    const args = { pixelId: PIXEL, action: 'assign-person', personId: '700', personTasks: ['ANALYZE', 'ADVERTISE'] }
-    const p = await preview('set-meta-dataset-access', args)
-    expect(p.preview.changes).toMatchObject({ 'person 700': { from: 'ANALYZE', to: 'ADVERTISE, ANALYZE' } })
-    h.send.mockResolvedValueOnce(ok({ success: true }))
-    const r = await run('set-meta-dataset-access', args, p.preview)
-    expect(sent()[0]).toMatchObject({ edge: 'assigned_users', params: { user: '700', tasks: '["ADVERTISE","ANALYZE"]' } })
-    h.w.assigned = [{ id: '700', tasks: ['ADVERTISE', 'ANALYZE'] }]
-    expect(await tool('set-meta-dataset-access').undo!.current(r.change!)).toEqual(r.change!.after)
-    const back = tool('set-meta-dataset-access').undo!.request(r.change!)
-    expect(back).toMatchObject({ args: { action: 'assign-person', personId: '700', personTasks: ['ANALYZE'] } })
-    expect(tool('set-meta-dataset-access').input.safeParse((back as { args: unknown }).args).success).toBe(true)
+  it('connecting a dataset ad sets of the account optimise on is SPENDS MONEY (by the ad set\'s and its campaign\'s status)', async () => {
+    h.w.adSets = [{ id: AD_SET, name: 'Ad set B', status: 'ACTIVE', campaign: { status: 'PAUSED' }, promoted_object: { pixel_id: FREE_ELSEWHERE } }]
+    const p = await preview('set-meta-dataset-access', { pixelId: FREE_ELSEWHERE, action: 'connect-ad-account' })
+    expect(p.preview).toMatchObject({ spendsMoney: true, spendsMoneyBecause: [expect.stringMatching(/nothing spends yet/)] })
   })
 })
 
@@ -273,26 +256,29 @@ describe('set-meta-custom-conversion', () => {
   it('a rule outside Meta\'s operators is refused by the argument itself', () => {
     expect(tool('set-meta-custom-conversion').input.safeParse({ name: 'X', pixelId: PIXEL, rule: { url: { is_any: ['a'] } }, eventType: 'PURCHASE' }).success).toBe(false)
   })
-  it('update: a default-value raise while an ACTIVE ad set optimises on it is SPENDS MONEY; undo puts the old value back', async () => {
-    const args = { action: 'update', customConversionId: CC, defaultValueCents: 2000 }
+  it('review B1 — an update never sends a default value (its read-back unit is not documented); a name change and its undo', async () => {
+    expect(await preview('set-meta-custom-conversion', { action: 'update', customConversionId: CC, defaultValueCents: 2000 })).toMatchObject({ ok: false, error: DEFAULT_VALUE_UPDATE_HELD })
+    const args = { action: 'update', customConversionId: CC, name: 'Thanks' }
     const p = await preview('set-meta-custom-conversion', args)
-    expect(p.preview).toMatchObject({ spendsMoney: true, spendsMoneyBecause: [expect.stringMatching(/1 is on now.*Ad set B/)] })
-    h.send.mockResolvedValueOnce(ok({ id: CC, name: 'Thank you page', default_conversion_value: 20 }))
+    expect(p.preview.spendsMoney).toBe(false)
+    h.send.mockResolvedValueOnce(ok({ id: CC, name: 'Thanks' }))
     const r = await run('set-meta-custom-conversion', args, p.preview)
-    expect(sent()[0]).toMatchObject({ objectId: CC, kind: 'customconversion', params: { default_conversion_value: '20' } })
+    expect(sent()[0]).toMatchObject({ objectId: CC, kind: 'customconversion', params: { name: 'Thanks' } })
     const back = tool('set-meta-custom-conversion').undo!.request(r.change!)
-    expect(back).toMatchObject({ tool: 'set-meta-custom-conversion', args: { action: 'update', customConversionId: CC, defaultValueCents: 1000 } })
+    expect(back).toMatchObject({ tool: 'set-meta-custom-conversion', args: { action: 'update', customConversionId: CC, name: 'Thank you page' } })
+    expect(tool('set-meta-custom-conversion').input.safeParse((back as { args: unknown }).args).success).toBe(true)
+  })
+  it('review B2 — a claim reads the conversion\'s portfolio: already the chosen one\'s = nothing to change; another\'s = refused', async () => {
+    h.w.conversions[CC].business = { id: BIZ }
+    expect(await preview('set-meta-custom-conversion', { action: 'claim', customConversionId: CC })).toMatchObject({ ok: false, error: expect.stringMatching(/Nothing to change/) })
+    h.w.conversions[CC].business = { id: '1111111111' }
+    expect(await preview('set-meta-custom-conversion', { action: 'claim', customConversionId: CC })).toMatchObject({ ok: false, error: expect.stringMatching(/another business portfolio/) })
+    delete h.w.conversions[CC].business
+    expect((await preview('set-meta-custom-conversion', { action: 'claim', customConversionId: CC })).ok).toBe(true)
   })
 })
 
-describe('set-meta-event-setup and remove-meta-signal-items', () => {
-  it('event setup: Meta cannot — said, with what is set up now (page addresses without their query) and the API way instead', async () => {
-    const res = (await tool('set-meta-event-setup').handler(parse(tool('set-meta-event-setup'), { want: 'create-rule' }), asker)) as ToolResult & { data: Record<string, any> }
-    expect(res.ok).toBe(true)
-    expect(res.data.metaCannot).toBe(EVENT_SETUP_CANNOT)
-    expect(res.data.instead).toMatch(/set-meta-custom-conversion/)
-    expect(JSON.stringify(res.data.eventSetup)).not.toContain('order=1')
-  })
+describe('remove-meta-signal-items', () => {
   it('delete: only a custom conversion Nexus made; an event rule answers that Meta cannot; the run sends one DELETE', async () => {
     const args = { items: [{ kind: 'customConversion', id: CC }, { kind: 'eventRule', id: '120000000000901' }], confirmDelete: true }
     expect(await preview('remove-meta-signal-items', args)).toMatchObject({ ok: false, error: expect.stringMatching(/deletes only a custom conversion it made itself/) })
@@ -313,19 +299,17 @@ describe('the gates the tools stand behind', () => {
     h.w.accountPixels = [PIXEL]
     h.w.nexusMade.add(CC)
     await preview('set-meta-dataset', { pixelId: PIXEL, dataUse: 'ANALYTICS_ONLY' })
-    await preview('set-meta-dataset-access', { pixelId: PIXEL, action: 'server-event-partners', serverEventBusinessIds: ['2222222222'] })
-    await preview('set-meta-dataset-access', { pixelId: PIXEL, action: 'assign-person', personId: '700', personTasks: ['ADVERTISE'] })
+    await preview('set-meta-dataset-access', { pixelId: PIXEL, action: 'disconnect-ad-account' })
     await preview('set-meta-custom-conversion', { action: 'update', customConversionId: CC, name: 'New' })
     await preview('remove-meta-signal-items', { items: [{ kind: 'customConversion', id: CC }], confirmDelete: true })
-    await tool('set-meta-event-setup').handler(parse(tool('set-meta-event-setup'), {}), asker)
     const refused = h.calls.map((c) => [c.path, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' })]).filter(([, p]) => p)
     expect(refused).toEqual([])
     // What the runs above sent, judged by the gateway's own verdict.
     h.send.mockResolvedValue(ok({ success: true }))
     const cases: Array<[string, Record<string, unknown>]> = [
       ['set-meta-dataset', { pixelId: PIXEL, name: 'Renamed', firstPartyCookieStatus: 'FIRST_PARTY_COOKIE_DISABLED' }],
-      ['set-meta-dataset-access', { pixelId: PIXEL, action: 'share-with-partner', partnerBusinessId: '4444444444', partnerTasks: ['ANALYZE', 'UPLOAD'] }],
-      ['set-meta-dataset-access', { pixelId: PIXEL, action: 'server-event-partners', serverEventBusinessIds: ['2222222222'] }],
+      ['set-meta-dataset-access', { pixelId: PIXEL, action: 'disconnect-ad-account' }],
+      ['set-meta-custom-conversion', { action: 'update', customConversionId: CC, name: 'Renamed', description: 'Thanks page' }],
       ['set-meta-custom-conversion', { name: 'Thanks', pixelId: PIXEL, rule: { and: [{ event: { eq: 'Purchase' } }, { value: { gt: 100 } }] }, eventType: 'PURCHASE', description: 'Big orders' }],
       ['remove-meta-signal-items', { items: [{ kind: 'customConversion', id: CC }], confirmDelete: true }],
     ]

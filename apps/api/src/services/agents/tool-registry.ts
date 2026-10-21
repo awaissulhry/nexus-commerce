@@ -100,6 +100,7 @@ import { META_ADS_AUDIENCES_TOOLS } from './tools/meta-ads-audiences.tools.js'
 import { META_ADS_DATASETS_TOOLS } from './tools/meta-ads-datasets.tools.js'
 import { META_ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/meta-ads-campaign-settings.tools.js'
 // Meta ads step 32 (2026-10-21): datasets, custom conversions, event setup (changes; event setup is read only).
+// Meta ads step 32 (2026-10-21): datasets and custom conversions (changes).
 import { META_ADS_SIGNALS_TOOLS } from './tools/meta-ads-signals.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
@@ -321,7 +322,7 @@ const ALL: AgentTool[] = [
   // Meta ads step 18 (2026-10-21): set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule (settings, budgets, bids).
   ...META_ADS_CAMPAIGN_SETTINGS_TOOLS,
   // Meta ads step 32 (2026-10-21): create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion,
-  // set-meta-event-setup (read only: Meta cannot), remove-meta-signal-items.
+  // remove-meta-signal-items.
   ...META_ADS_SIGNALS_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,

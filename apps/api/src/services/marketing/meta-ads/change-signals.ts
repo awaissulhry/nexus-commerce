@@ -1,19 +1,21 @@
 /**
  * Meta step 32 — the dataset, custom conversion and event source group changes as drafts (pure: built from a request and
- * the live facts the tool read; no call). Master rows BM-057, SG-006–SG-014, SG-018, SG-019, SG-021, SG-022, SG-024,
- * SG-041, SG-090–SG-094, SG-098–SG-100, SG-102–SG-104. Meta's facts behind each are in gateway/meta-signals-rules.ts.
+ * the live facts the tool read; no call). Master rows BM-057, SG-006–SG-013, SG-018, SG-019, SG-041, SG-090–SG-094,
+ * SG-098–SG-100, SG-102–SG-104 (SG-014, SG-021, SG-022, SG-024 — partner, server-event and people access — are not here:
+ * lane C3 decision, step 41). Meta's facts behind each are in gateway/meta-signals-rules.ts.
  *
- * Nothing here can make the account spend more but one thing: a custom conversion's default value is what value-based
- * bidding counts each conversion as, so raising it while ad sets optimise on that conversion can let a ROAS goal spend
- * more of its budget (SPENDS MONEY, said like a ROAS-floor drop). Disconnecting a dataset, data use "analytics only" and
- * deleting a custom conversion take signal AWAY from ad sets: warned in words (delivery), never more spend.
+ * What can make the account spend more is giving ad sets their dataset BACK: connecting it to the chosen ad account, or
+ * its data use back to ads, lets the ad sets that optimise on it (or on a custom conversion of it) deliver again — SPENDS
+ * MONEY, said like a switch-on. Disconnecting a dataset, data use "analytics only" and deleting a custom conversion take
+ * signal AWAY: warned in words (delivery). A custom conversion's default value is never changed after creation here (its
+ * read-back unit is not documented: LIVE-PROBE SG-090).
  */
 import { changeLines, plural, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
-import { decimalToMicros, minorOf, currencyExponent } from './money.js'
+import { currencyExponent } from './money.js'
 import { money } from './change-settings-common.js'
 import type { AdSetUsing, ConversionRow, PixelSettings } from './live-signals.js'
 import {
-  AUTOMATIC_MATCHING_FIELDS, CONVERSION_UPDATE_KEYS, conversionRuleProblem, MAX_CUSTOM_CONVERSIONS, PARTNER_TASKS, PERSON_TASKS, type MetaSignalsEdge, type MetaSignalsKind,
+  AUTOMATIC_MATCHING_FIELDS, conversionRuleProblem, MAX_CUSTOM_CONVERSIONS, type MetaSignalsEdge, type MetaSignalsKind,
 } from '../../gateway/meta-signals-rules.js'
 
 // ── what Meta cannot do (the proof is in the code comments; the tools say these sentences) ───────────────────────────
@@ -26,10 +28,15 @@ import {
  */
 export const EVENT_SETUP_CANNOT = 'Meta cannot change this by API: its public Marketing API reads event rules and parameter extractors (meta-datasets view event-setup) but has no create, change or delete for them (v26 reference ads-pixel/event_rules and ads-pixel/extractors: "You can\'t perform this operation"; Meta\'s SDK has no write either). A person does it in Events Manager › the dataset › Settings › Event setup tool (or Meta\'s own Ads MCP server does it on Meta\'s side).'
 /**
- * RECHECK-C3 SG-041: ads-pixel/domain_control_rule.md — Creating and Deleting empty, Updating "can't perform"; SDK
- * AdsPixelDomainControlRule is a plain read object, AdsPixel has no such edge and its update takes no domain list.
+ * The sentence set-meta-dataset says (lane C3 decision: no tool or argument that only refuses). Proof: RECHECK-C3 SG-041 —
+ * ads-pixel/domain_control_rule.md has Creating and Deleting empty and Updating "can't perform"; SDK
+ * AdsPixelDomainControlRule is a plain read object, AdsPixel has no such edge and its update takes no domain list — and
+ * SG-098…SG-104 above. Nexus reads event rules and parameter extractors (step 11, meta-datasets view event-setup) but not
+ * traffic permissions or domain-control rules yet (only an event Meta rejected by one: view diagnostics check event-log).
  */
-export const TRAFFIC_PERMISSIONS_CANNOT = 'Meta cannot change this by API: traffic permissions (the domains a pixel accepts or blocks) can be read but not written through Meta\'s public API (v26 reference ads-pixel/domain_control_rule: no create, update or delete; the pixel update takes no domain list). A person sets them in Events Manager › the dataset › Settings › Traffic permissions.'
+export const SETUP_CANNOT = 'Meta cannot change event rules, parameter extractors, domain-control rules or traffic permissions by API (v26 reference ads-pixel/event_rules, extractors, domain_control_rule: "can\'t perform"; Meta\'s SDK has no write either): a person does it in Events Manager › the dataset › Settings (Event setup tool, Traffic permissions). meta-datasets view event-setup reads the event rules and parameter extractors; Nexus does not read traffic permissions yet (view diagnostics check event-log shows an event Meta rejected by them).'
+/** Lane C3 decision: who else may use a dataset is not a step 32 change. */
+export const ACCESS_ELSEWHERE = 'Partner portfolios, the businesses allowed to send a dataset\'s server events and people\'s tasks on it are set in Meta\'s Business settings › Data sources › Datasets (Nexus\'s partner-access step, 41, is where they will be): not here.'
 /** SG-017 — a pixel has no delete (ads-pixel.md "Deleting" is empty; no delete edge). */
 export const DATASET_NO_DELETE = 'A dataset (pixel) cannot be deleted through Meta\'s API (its reference has no delete): once made it stays; a person can only stop using it or remove its ad accounts.'
 
@@ -48,9 +55,6 @@ export function conversionValueText(cents: number, currency: string | null): str
   const fraction = String(cents % base).padStart(exponent, '0').replace(/0+$/, '')
   return fraction ? `${whole}.${fraction}` : String(whole)
 }
-
-/** Meta's default value (a decimal of the currency) → minor units; null when there is none or it is not a number. */
-export const conversionValueCents = (value: string | null, currency: string | null): number | null => (value === null ? null : minorOf(decimalToMicros(value), currency))
 
 // ── shared ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -74,15 +78,22 @@ const sortedIds = (ids: readonly string[]) => [...new Set(ids)].sort()
 const listWords = (values: readonly string[] | null) => (values === null ? 'unknown' : values.length ? values.join(', ') : 'none')
 /**
  * Giving ad sets their dataset back (connecting it to the chosen ad account, or its data use back to ads) lets the ad sets
- * that optimise on it deliver again: SPENDS MONEY, said like a switch-on — "nothing spends yet" when none of them is on.
+ * that optimise on it deliver again: SPENDS MONEY, said like a switch-on. "Nothing spends yet" only when every one of them
+ * is off by its own or its campaign's configured status (review A2); a list Nexus could not read whole (the first 500 ad
+ * sets, the first 200 custom conversions) is never taken for "none": SPENDS MONEY all the same (review A3).
  */
 function signalBackSpends(what: string, adSetsUsing: { adSets: AdSetUsing[]; more: boolean } | undefined): string[] {
   const adSets = adSetsUsing?.adSets ?? []
-  if (!adSets.length) return []
-  const on = adSets.filter((a) => a.effectiveStatus === 'ACTIVE')
-  return [`${what} lets ${plural(adSets.length, 'ad set')} that optimise on it deliver on its events again: ${on.length ? `${plural(on.length, 'is', 'are')} on now, so the account can spend more from now` : 'nothing spends yet: none of them is on'} — ${adSetWords(adSets, adSetsUsing!.more)}.`]
+  const more = adSetsUsing?.more ?? false
+  if (!adSets.length) {
+    return more ? [`${what} may let ad sets that optimise on it deliver on its events again: Nexus read only the first 500 ad sets (and 200 custom conversions) of the account and found none, but ones beyond them may be on.`] : []
+  }
+  const on = adSets.filter((a) => a.on)
+  const now = on.length ? `${plural(on.length, 'is', 'are')} on now, so the account can spend more from now` : more ? 'none of those Nexus read is on, but Nexus read only the first 500 ad sets: ones beyond them may be' : 'nothing spends yet: none of them is on (by its own or its campaign\'s status)'
+  return [`${what} lets ${plural(adSets.length, 'ad set')} that optimise on it (or on a custom conversion of it) deliver on its events again: ${now} — ${adSetWords(adSets, more)}.`]
 }
-const adSetWords = (adSets: AdSetUsing[], more: boolean) => `${adSets.slice(0, 10).map((a) => `"${a.name ?? 'no name'}" (${a.id}, ${a.effectiveStatus ?? 'status unknown'})`).join('; ')}${adSets.length > 10 ? `; and ${adSets.length - 10} more` : ''}${more ? ' (Nexus read the first 500 ad sets of the account)' : ''}`
+const statusWords = (a: AdSetUsing) => (a.on ? 'on' : `off: ${[a.status && a.status !== 'ACTIVE' ? `ad set ${a.status}` : null, a.campaignStatus && a.campaignStatus !== 'ACTIVE' ? `campaign ${a.campaignStatus}` : null].filter(Boolean).join(', ') || 'paused'}`)
+const adSetWords = (adSets: AdSetUsing[], more: boolean) => `${adSets.slice(0, 10).map((a) => `"${a.name ?? 'no name'}" (${a.id}, ${statusWords(a)})`).join('; ')}${adSets.length > 10 ? `; and ${adSets.length - 10} more` : ''}${more ? ' (Nexus read only the first 500 ad sets of the account)' : ''}`
 
 /** One way a signals field is VIEWED (what a change wrote, read back, and what undo reads compare as the same string). */
 export function signalView(value: unknown): string | null {
@@ -203,21 +214,25 @@ export function pixelSettingsDraft(req: PixelSettingsRequest, facts: { settings:
       if (enabled) warnings.push('Automatic advanced matching sends what shoppers type into the shop\'s forms (e-mail, phone, name, …), hashed in their browser, to Meta: a decision under the GDPR and the shop\'s privacy notice. The shop platform\'s Meta app may manage this setting too and set it back.')
     }
   }
+  // Review A6 — a value Meta did not answer is unknown, never taken for EMPTY: it is sent, and undo says it cannot put it back.
   if (req.firstPartyCookieStatus !== undefined) {
-    if (req.firstPartyCookieStatus === (s.firstPartyCookieStatus ?? 'EMPTY')) skipped.push(`First-party cookies are already ${req.firstPartyCookieStatus}.`)
+    if (req.firstPartyCookieStatus === s.firstPartyCookieStatus) skipped.push(`First-party cookies are already ${req.firstPartyCookieStatus}.`)
     else {
       put('first_party_cookie_status', s.firstPartyCookieStatus, req.firstPartyCookieStatus, 'first-party cookies')
-      undo.firstPartyCookieStatus = s.firstPartyCookieStatus ?? 'EMPTY'
+      if (s.firstPartyCookieStatus) undo.firstPartyCookieStatus = s.firstPartyCookieStatus
+      else noUndo.push('Meta did not say its first-party cookie setting, so undo cannot put it back.')
       if (req.firstPartyCookieStatus === 'FIRST_PARTY_COOKIE_DISABLED') warnings.push('Without first-party cookies Meta matches fewer browser events to people (lower match rate); the shop\'s consent banner still decides what the browser sends.')
     }
   }
   let spends: string[] = []
   if (req.dataUse !== undefined) {
-    if (req.dataUse === (s.dataUseSetting ?? 'EMPTY')) skipped.push(`Its data use is already ${req.dataUse}.`)
+    if (req.dataUse === s.dataUseSetting) skipped.push(`Its data use is already ${req.dataUse}.`)
     else {
       put('data_use_setting', s.dataUseSetting, req.dataUse, 'data use')
-      undo.dataUse = s.dataUseSetting ?? 'EMPTY'
-      if (s.dataUseSetting === 'ANALYTICS_ONLY') spends = signalBackSpends('Its data use back to ads', facts.adSetsUsing)
+      if (s.dataUseSetting) undo.dataUse = s.dataUseSetting
+      else noUndo.push('Meta did not say its data use, so undo cannot put it back.')
+      // From analytics only — or from a data use Meta did not say (it may have been analytics only) — to anything else.
+      if (req.dataUse !== 'ANALYTICS_ONLY' && (s.dataUseSetting === 'ANALYTICS_ONLY' || s.dataUseSetting === null)) spends = signalBackSpends('Its data use back to ads', facts.adSetsUsing)
       if (req.dataUse === 'ANALYTICS_ONLY') {
         const { adSets, more } = facts.adSetsUsing
         warnings.push(`Analytics only: Meta stops using this dataset's events for ads (optimising, audiences, measurement in ads).${adSets.length ? ` ${plural(adSets.length, 'ad set')} optimise on it and lose that signal: ${adSetWords(adSets, more)}.` : ' No ad set of the chosen ad account optimises on it now.'}`)
@@ -233,7 +248,7 @@ export function pixelSettingsDraft(req: PixelSettingsRequest, facts: { settings:
     summary: `Change ${plural(fieldsAsked.length, 'setting')} of the dataset "${s.name ?? s.id}" (${s.id}).`,
     changes, totals: { settings: fieldsAsked.length }, warnings, spendsMoney: spends, skipped,
     requests: [request(1, `Change the settings of dataset "${s.name ?? s.id}" (${s.id})`, 'pixel', s.id, params, { operation: 'dataset.settings', expect, readBackFields: PIXEL_READ_BACK, undoable: Object.keys(undo).length > 1, raisesSpend: spends.length > 0 })],
-    stands: { pixel: s, adSets: facts.adSetsUsing.adSets.map((a) => [a.id, a.effectiveStatus]) },
+    stands: { pixel: s, adSets: facts.adSetsUsing.adSets.map((a) => [a.id, a.on]), more: facts.adSetsUsing.more },
     before: { ...record(before), undo: Object.keys(undo).length > 1 ? { tool: 'set-meta-dataset', args: undo } : null, noUndo },
     after: record(after),
   }
@@ -302,18 +317,10 @@ export function groupDraft(req: GroupRequest, facts: GroupFacts): Draft {
   }
 }
 
-// ── set-meta-dataset-access (SG-014, SG-018, SG-019, SG-021, SG-022, SG-024) ────────────────────────────────────────
+// ── set-meta-dataset-access (SG-018, SG-019): the CHOSEN ad account only ────────────────────────────────────────────
 
-export type AccessAction = 'connect-ad-account' | 'disconnect-ad-account' | 'share-with-partner' | 'remove-partner' | 'assign-person' | 'server-event-partners'
-export interface AccessRequest {
-  pixelId: string
-  action: AccessAction
-  partnerBusinessId?: string
-  partnerTasks?: string[]
-  personId?: string
-  personTasks?: string[]
-  serverEventBusinessIds?: string[]
-}
+export type AccessAction = 'connect-ad-account' | 'disconnect-ad-account'
+export interface AccessRequest { pixelId: string; action: AccessAction }
 export interface AccessFacts {
   pixelId: string
   pixelName: string | null
@@ -323,16 +330,9 @@ export interface AccessFacts {
   ownerBusinessId?: string | null
   /** Is the chosen ad account connected to it (null: Meta does not say)? */
   connected?: boolean | null
+  /** The ad sets that optimise on it or on a custom conversion of it. */
   adSetsUsing?: { adSets: AdSetUsing[]; more: boolean }
-  /** Its partner portfolios (null: Meta does not show them). */
-  partners?: string[] | null
-  /** A person's tasks on it now (null: not assigned; undefined: Meta does not show them). */
-  personTasks?: string[] | null
-  /** The portfolios allowed to send its server events now (null: Meta does not show them). */
-  serverEventBusinesses?: string[] | null
 }
-
-const NO_PERSON_REMOVAL = 'Meta\'s API has no removal of a person from a dataset (SDK adspixel.py: no delete on assigned_users): a person takes them off in Meta\'s business settings › Data sources › Datasets.'
 
 export function accessDraft(req: AccessRequest, facts: AccessFacts): Draft {
   const who = `dataset "${facts.pixelName ?? facts.pixelId}" (${facts.pixelId})`
@@ -364,56 +364,9 @@ export function accessDraft(req: AccessRequest, facts: AccessFacts): Draft {
           noUndo: back ? [] : ['The dataset is not owned by the chosen ad account\'s business portfolio, so Nexus cannot connect it again: the portfolio that owns it does.'],
         },
         [adSets.length
-          ? `${plural(adSets.length, 'ad set')} of the chosen ad account optimise on this dataset and stop getting its events (their delivery breaks until another dataset is chosen): ${adSetWords(adSets, more)}.`
-          : `No ad set of the chosen ad account optimises on this dataset now${more ? ' among the first 500 Nexus read' : ''}.`,
+          ? `${plural(adSets.length, 'ad set')} of the chosen ad account optimise on this dataset (or a custom conversion of it) and stop getting its events (their delivery breaks until another dataset is chosen): ${adSetWords(adSets, more)}.`
+          : `No ad set of the chosen ad account optimises on this dataset (or a custom conversion of it) now${more ? ' among the first 500 ad sets Nexus read' : ''}.`,
         'After this, the dataset is no longer on the chosen ad account: Nexus then reads and changes it only to connect it again.'])
-    }
-    case 'share-with-partner': {
-      const partner = req.partnerBusinessId
-      const tasks = req.partnerTasks?.length ? inOrder(req.partnerTasks, PARTNER_TASKS) : null
-      if (!partner || !tasks) return { refusal: 'Name the partner business portfolio (partnerBusinessId) and what it may do (partnerTasks: ADVERTISE, ANALYZE, UPLOAD, EDIT).' }
-      const already = facts.partners?.includes(partner)
-      return base(`Share ${who} with the partner business portfolio ${partner} (${tasks.join(', ')}).`, [[`partner ${partner}`, already ? 'shared (tasks not shown by Meta)' : 'not shared', tasks.join(', ')]],
-        request(1, `Share ${who} with partner ${partner}`, 'pixel', facts.pixelId, { business: partner, permitted_tasks: jsonList(tasks) }, { operation: 'dataset.sharePartner', ...edgeOf('agencies') }),
-        { before: { partner: already ? 'yes' : 'no' }, after: { partner: 'yes' }, undo: already ? null : { tool: 'set-meta-dataset-access', args: { ...pixelArgs, action: 'remove-partner', partnerBusinessId: partner } }, noUndo: already ? ['It was already shared with that partner: Meta does not show the tasks it had, so they cannot be put back.'] : [] },
-        [
-          ...(tasks.includes('EDIT') ? ['EDIT lets the partner manage the dataset and change its settings; Meta says EDIT access is limited and may refuse it.'] : []),
-          'If the partner has no approved relationship with this business portfolio yet, Meta answers with a pending request: the dataset is shared once the partner accepts it.',
-          'From then on Nexus checks the partner\'s ad accounts on this dataset every time it reads or changes it: if Meta does not show them, Nexus stops changing it (and its undo) — a person then removes the partner in Meta\'s business settings.',
-          'Removing a partner (the undo) needs a business admin\'s own token per Meta\'s pixel-sharing guide: Meta may refuse it for Nexus\'s system user.',
-        ])
-    }
-    case 'remove-partner': {
-      const partner = req.partnerBusinessId
-      if (!partner) return { refusal: 'Name the partner business portfolio (partnerBusinessId).' }
-      if (facts.partners && !facts.partners.includes(partner)) return { refusal: `Nothing to change: ${who} is not shared with the partner ${partner}.` }
-      return base(`Remove the partner business portfolio ${partner} from ${who}.`, [[`partner ${partner}`, 'shared', 'removed']],
-        request(1, `Remove partner ${partner} from ${who}`, 'pixel', facts.pixelId, { business: partner }, { operation: 'dataset.removePartner', ...edgeOf('agencies'), method: 'DELETE' }),
-        { before: { partner: 'yes' }, after: { partner: 'no' }, undo: null, noUndo: ['Sharing it again is a new share (set-meta-dataset-access share-with-partner) that the partner may have to accept again; Meta does not show the tasks it had.'] },
-        ['The partner\'s use of this dataset stops (its ads, uploads and reports with it).', 'Meta\'s pixel-sharing guide asks a business admin\'s own token for this: Meta may refuse it for Nexus\'s system user, and then a person removes the partner in business settings.'])
-    }
-    case 'assign-person': {
-      const person = req.personId
-      const tasks = req.personTasks?.length ? inOrder(req.personTasks, PERSON_TASKS) : null
-      if (!person || !tasks) return { refusal: 'Name the person or system user (personId) and the tasks (personTasks: ADVERTISE, ANALYZE, UPLOAD, EDIT, AA_ANALYZE).' }
-      const now = facts.personTasks
-      if (now && jsonList(now) === jsonList(tasks)) return { refusal: `Nothing to change: ${person} already has ${tasks.join(', ')} on ${who}.` }
-      const back = now && now.length ? { tool: 'set-meta-dataset-access', args: { ...pixelArgs, action: 'assign-person', personId: person, personTasks: now } } : null
-      return base(`Give ${person} ${tasks.join(', ')} on ${who}.`, [[`person ${person}`, now === undefined ? 'unknown' : now === null ? 'not assigned' : now.join(', '), tasks.join(', ')]],
-        request(1, `Give ${person} ${tasks.join(', ')} on ${who}`, 'pixel', facts.pixelId, { user: person, tasks: jsonList(tasks) }, { operation: 'dataset.assignPerson', ...edgeOf('assigned_users') }),
-        { before: { tasks: now ? jsonList(now) : null }, after: { tasks: jsonList(tasks) }, undo: back, noUndo: back ? [] : [NO_PERSON_REMOVAL] },
-        ['Meta documents this in its SDK and its Ads CLI (dataset assign-user), not in the v26 reference: Meta\'s answer decides. Whether Meta replaces a person\'s tasks or adds to them is not documented.'])
-    }
-    case 'server-event-partners': {
-      if (!req.serverEventBusinessIds) return { refusal: 'Name the full list of business portfolios that may send this dataset\'s server events (serverEventBusinessIds; [] for none).' }
-      const now = facts.serverEventBusinesses
-      if (now === null || now === undefined) return { refusal: `Meta does not show which businesses may send ${who}'s server events now, so Nexus cannot say from → to or put it back; nothing is sent.` }
-      const ids = sortedIds(req.serverEventBusinessIds)
-      if (jsonList(ids) === jsonList(now)) return { refusal: `Nothing to change: exactly these businesses may already send ${who}'s server events.` }
-      return base(`Let ${listWords(ids)} send server events to ${who}.`, [['may send server events', listWords(now), listWords(ids)]],
-        request(1, `Set who may send server events to ${who}`, 'pixel', facts.pixelId, { server_events_business_ids: jsonList(ids) }, { operation: 'dataset.serverEventPartners' }),
-        { before: { server_events_business_ids: jsonList(now) }, after: { server_events_business_ids: jsonList(ids) }, undo: { tool: 'set-meta-dataset-access', args: { ...pixelArgs, action: 'server-event-partners', serverEventBusinessIds: now } }, noUndo: [] },
-        ['Only for a partner that sends this dataset\'s events from its own server (a partner integration); Nexus itself sends with this business\'s own system user and needs no entry here.'])
     }
   }
 }
@@ -421,6 +374,7 @@ export function accessDraft(req: AccessRequest, facts: AccessFacts): Draft {
 // ── set-meta-custom-conversion (SG-090 … SG-094) ─────────────────────────────────────────────────────────────────────
 
 export interface ConversionCreateRequest { name: string; pixelId: string; rule: unknown; eventType: string; defaultValueCents?: number; description?: string; actionSource?: string }
+/** defaultValueCents on an update is refused (DEFAULT_VALUE_UPDATE_HELD): it is here so the refusal says why. */
 export interface ConversionUpdateRequest { customConversionId: string; name?: string; description?: string; defaultValueCents?: number }
 
 const RULE_FIXED = 'A custom conversion\'s rule can never change after it is made (Meta updates only its name, description and default value): a different rule is a new custom conversion, and ad sets keep the old one until they are moved.'
@@ -453,15 +407,22 @@ export function conversionCreateDraft(req: ConversionCreateRequest, facts: { adA
   }
 }
 
-export function conversionUpdateDraft(req: ConversionUpdateRequest, facts: { row: ConversionRow; currency: string | null; adSetsUsing: { adSets: AdSetUsing[]; more: boolean } }): Draft {
+/**
+ * Review B1 — the unit of a custom conversion's default value is not documented both ways (the update takes a float of the
+ * currency, the field reads back as Meta's int): Nexus does not change it after creation, so neither a raise nor an undo
+ * can land a value 100 times off, until LIVE-PROBE SG-090 shows what 0.01 reads back as.
+ */
+export const DEFAULT_VALUE_UPDATE_HELD = 'Nexus does not change a custom conversion\'s default value after creation yet: Meta takes it as a decimal of the currency but reads it back as a whole number, and its documentation does not say which unit it keeps (LIVE-PROBE SG-090). A person changes it in Events Manager; Nexus sets it only when it creates a custom conversion.'
+
+export function conversionUpdateDraft(req: ConversionUpdateRequest, facts: { row: ConversionRow }): Draft {
   const c = facts.row
+  if (req.defaultValueCents !== undefined) return { refusal: DEFAULT_VALUE_UPDATE_HELD }
   if (c.isUnavailable) return { refusal: `Meta has flagged the custom conversion "${c.name ?? c.id}" (it may suggest information Meta's terms do not allow): Meta refuses any change of it (error 2460004). A person appeals it in Events Manager, or a new custom conversion replaces it.` }
   const params: Record<string, string> = {}
   const lines: Array<[string, unknown, unknown]> = []
   const skipped: string[] = []
   const undo: Record<string, unknown> = { action: 'update', customConversionId: c.id }
   const noUndo: string[] = []
-  const spends: string[] = []
   if (req.name !== undefined) {
     if (req.name === c.name) skipped.push(`It is already named "${req.name}".`)
     else { params.name = req.name; lines.push(['name', c.name ?? 'not set', req.name]); if (c.name) undo.name = c.name; else noUndo.push('Its old name could not be read.') }
@@ -470,47 +431,35 @@ export function conversionUpdateDraft(req: ConversionUpdateRequest, facts: { row
     if (req.description === c.description) skipped.push('Its description is already that.')
     else { params.description = req.description; lines.push(['description', c.description ?? 'none', req.description]); if (c.description) undo.description = c.description; else noUndo.push('It had no description, and Meta takes no empty one back.') }
   }
-  if (req.defaultValueCents !== undefined) {
-    const old = conversionValueCents(c.defaultValue, facts.currency) ?? 0
-    if (req.defaultValueCents === old) skipped.push(`Its default value is already ${money(old, facts.currency)}.`)
-    else {
-      params.default_conversion_value = conversionValueText(req.defaultValueCents, facts.currency)
-      lines.push(['default value', money(old, facts.currency), money(req.defaultValueCents, facts.currency)])
-      undo.defaultValueCents = old
-      const { adSets, more } = facts.adSetsUsing
-      if (req.defaultValueCents > old && adSets.length) {
-        const on = adSets.filter((a) => a.effectiveStatus === 'ACTIVE')
-        spends.push(`a higher default value makes each conversion of "${c.name ?? c.id}" count for more in value-based bidding, so ${plural(adSets.length, 'ad set')} that optimise on it (a ROAS goal above all) may spend more of their budgets: ${on.length ? `${plural(on.length, 'is', 'are')} on now` : 'nothing spends yet: none of them is on'} — ${adSetWords(adSets, more)}.`)
-      }
-    }
-  }
-  if (!Object.keys(params).length) return { refusal: skipped.length ? `Nothing to change: ${skipped.join(' ')}` : `Nothing to change: Meta changes only a custom conversion's ${CONVERSION_UPDATE_KEYS.join(', ')} (${RULE_FIXED})` }
+  if (!Object.keys(params).length) return { refusal: skipped.length ? `Nothing to change: ${skipped.join(' ')}` : `Nothing to change: Nexus changes only a custom conversion's name and description (${RULE_FIXED})` }
   const fields = Object.keys(params)
   const { changes } = changeLines(lines)
   const view = (o: Record<string, unknown>) => Object.fromEntries(fields.map((f) => [f, signalView(o[f])]))
   const back = Object.keys(undo).length > 2
   return {
     summary: `Change ${plural(fields.length, 'setting')} of the custom conversion "${c.name ?? c.id}" (${c.id}).`,
-    changes, totals: { settings: fields.length }, warnings: [RULE_FIXED], spendsMoney: spends, skipped,
+    changes, totals: { settings: fields.length }, warnings: [RULE_FIXED], spendsMoney: [], skipped,
     requests: [request(1, `Change custom conversion "${c.name ?? c.id}" (${c.id})`, 'customconversion', c.id, params, {
-      operation: 'customConversion.update', raisesSpend: spends.length > 0, undoable: back,
-      expect: Object.fromEntries(fields.filter((f) => f !== 'default_conversion_value').map((f) => [f, params[f]])), readBackFields: 'id,name,description,default_conversion_value',
+      operation: 'customConversion.update', undoable: back, expect: { ...params }, readBackFields: 'id,name,description',
     })],
-    stands: { conversion: c, adSets: facts.adSetsUsing.adSets.map((a) => [a.id, a.effectiveStatus]) },
-    before: { part: 'conversion', id: c.id, customConversionId: c.id, fields: view({ name: c.name, description: c.description, default_conversion_value: c.defaultValue }), undo: back ? { tool: 'set-meta-custom-conversion', args: undo } : null, noUndo },
+    stands: { conversion: c },
+    before: { part: 'conversion', id: c.id, customConversionId: c.id, fields: view({ name: c.name, description: c.description }), undo: back ? { tool: 'set-meta-custom-conversion', args: undo } : null, noUndo },
     after: { part: 'conversion', id: c.id, customConversionId: c.id, fields: view(params) },
   }
 }
 
+/** Review B2 — a claim only for a custom conversion no portfolio holds yet; one the chosen portfolio holds needs nothing. */
 export function conversionClaimDraft(facts: { row: ConversionRow; portfolio: string }): Draft {
   const c = facts.row
+  if (c.businessId === facts.portfolio) return { refusal: `Nothing to change: the custom conversion "${c.name ?? c.id}" is already the chosen ad account's business portfolio's.` }
+  if (c.businessId) return { refusal: `The custom conversion "${c.name ?? c.id}" is already held by another business portfolio, so Nexus does not claim it.` }
   const noWay = 'Meta has no way back for a claim by API (no unclaim edge): the business portfolio keeps it.'
   return {
     summary: `Claim the custom conversion "${c.name ?? c.id}" (${c.id}) into the business portfolio ${facts.portfolio}.`,
     changes: changeLines([['owner of custom conversion ' + c.id, 'the ad account', `business portfolio ${facts.portfolio}`]]).changes,
     totals: { customConversions: 1 }, warnings: [noWay], spendsMoney: [], skipped: [],
     requests: [request(1, `Claim custom conversion "${c.name ?? c.id}" into portfolio ${facts.portfolio}`, 'business', facts.portfolio, { custom_conversion_id: c.id }, { operation: 'customConversion.claim', ...edgeOf('claim_custom_conversions') })],
-    stands: { conversion: c.id, portfolio: facts.portfolio },
+    stands: { conversion: c.id, business: c.businessId, portfolio: facts.portfolio },
     before: { part: 'conversion', id: c.id, customConversionId: c.id, fields: { claimed: 'no' }, undo: null, noUndo: [noWay] } satisfies SignalsRecord,
     after: { part: 'conversion', id: c.id, customConversionId: c.id, fields: { claimed: 'yes' } } satisfies SignalsRecord,
   }

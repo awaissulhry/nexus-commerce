@@ -17,17 +17,17 @@
  *     instagram_manage_events); SDK page.py / iguser.py create_dataset (dataset_name).
  *   - ads-pixel.md "Updating": automatic_matching_fields (em, fn, ln, ph, ge, zp, ct, st, country, db, external_id),
  *     data_use_setting (EMPTY, ADVERTISING_AND_ANALYTICS, ANALYTICS_ONLY), enable_automatic_matching, first_party_cookie_status
- *     (EMPTY, FIRST_PARTY_COOKIE_ENABLED, FIRST_PARTY_COOKIE_DISABLED), name, server_events_business_ids (array of numeric
- *     strings) → {success}; "Deleting" is empty (a pixel cannot be deleted, SG-017). SDK adspixel.py api_update adds
- *     server_events_business_ids_add / _remove: never sent (the documented whole list is).
- *   - ads-pixel/shared_accounts.md: POST and DELETE, account_id + business both required → {success}.
- *   - ads-pixel/agencies.md: Creating "can't perform", Deleting empty — stale: the Pixel Agency Sharing guide
- *     (docs/marketing-api/business-asset-management/guides/business-pixel-sharing) documents POST /{pixel}/agencies with
- *     business + permitted_tasks (ANALYZE, UPLOAD, ADVERTISE, EDIT — "EDIT access is currently limited"), answering
- *     {success} or {success, pending_request_id}, and DELETE /{pixel}/agencies with business ("requires an admin USER access
- *     token from the pixel-owning business"); SDK adspixel.py create_agency / delete_agencies.
- *   - ads-pixel/assigned_users.md: Creating "can't perform"; SDK adspixel.py create_assigned_user (user int, tasks
- *     ADVERTISE | ANALYZE | EDIT | UPLOAD | AA_ANALYZE) and the Ads CLI `dataset assign-user` — built, LIVE-PROBE SG-024.
+ *     (EMPTY, FIRST_PARTY_COOKIE_ENABLED, FIRST_PARTY_COOKIE_DISABLED), name, server_events_business_ids → {success};
+ *     "Deleting" is empty (a pixel cannot be deleted, SG-017). server_events_business_ids is never sent here (below).
+ *   - ads-pixel/shared_accounts.md: POST and DELETE, account_id + business both required → {success}. For the DELETE the
+ *     page lists the two parameters but shows no sample of how they travel; Meta's audiences guide sends a DELETE with a
+ *     body (DELETE /{audience}/users, payload) and its SDK puts DELETE parameters on the query string. Nexus sends them as
+ *     the form body (a change never carries a query string) — LIVE-PROBE SG-019 settles it.
+ * Lane C3 decision (review round 1): who ELSE may use a dataset — partner portfolios (POST / DELETE /{pixel}/agencies),
+ * businesses allowed to send its server events (server_events_business_ids) and people's tasks (POST
+ * /{pixel}/assigned_users) — gives or takes another business's or a person's access to the pixel's customer events: like
+ * set-google-account-links / set-google-user-access it needs its own permission and an Owner exception. It is not here: it
+ * belongs to step 41 (partner access) or Meta's Business settings.
  *   - business/event_source_groups.md: POST, event_sources (list of ids) + name both required → {id}; SDK
  *     eventsourcegroup.py api_update (event_sources, name) and create_shared_account (accounts) — SDK only (BM-057).
  *   - ad-account/customconversions.md + docs/marketing-api/reference/custom-conversion (older page, its create table and
@@ -49,13 +49,11 @@ export const META_SIGNALS_KINDS = ['adaccount', 'business', 'pixel', 'customconv
 export type MetaSignalsKind = typeof META_SIGNALS_KINDS[number]
 export const isMetaSignalsKind = (kind: unknown): kind is MetaSignalsKind => typeof kind === 'string' && (META_SIGNALS_KINDS as readonly string[]).includes(kind)
 /** The edges a step 32 change posts to (`POST /<object>/<edge>`). */
-export type MetaSignalsEdge = 'adspixels' | 'dataset' | 'customconversions' | 'shared_accounts' | 'agencies' | 'assigned_users' | 'event_source_groups' | 'claim_custom_conversions'
+export type MetaSignalsEdge = 'adspixels' | 'dataset' | 'customconversions' | 'shared_accounts' | 'event_source_groups' | 'claim_custom_conversions'
 
 export const AUTOMATIC_MATCHING_FIELDS = ['em', 'fn', 'ln', 'ph', 'ge', 'zp', 'ct', 'st', 'country', 'db', 'external_id'] as const
 export const FIRST_PARTY_COOKIE_STATUSES = ['FIRST_PARTY_COOKIE_ENABLED', 'FIRST_PARTY_COOKIE_DISABLED', 'EMPTY'] as const
 export const DATA_USE_SETTINGS = ['ADVERTISING_AND_ANALYTICS', 'ANALYTICS_ONLY', 'EMPTY'] as const
-export const PARTNER_TASKS = ['ADVERTISE', 'ANALYZE', 'UPLOAD', 'EDIT'] as const
-export const PERSON_TASKS = ['ADVERTISE', 'ANALYZE', 'UPLOAD', 'EDIT', 'AA_ANALYZE'] as const
 /** SDK customconversion.py CustomEventType (the older reference page lists the same 20). */
 export const CONVERSION_EVENT_TYPES = [
   'ADD_PAYMENT_INFO', 'ADD_TO_CART', 'ADD_TO_WISHLIST', 'COMPLETE_REGISTRATION', 'CONTACT', 'CONTENT_VIEW', 'CUSTOMIZE_PRODUCT', 'DONATE',
@@ -68,9 +66,8 @@ export const CONVERSION_ACTION_SOURCES = ['website', 'app', 'chat', 'email', 'ph
 export const CONVERSION_RULE_OPERATORS = ['i_contains', 'i_not_contains', 'contains', 'not_contains', 'eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'regex_match'] as const
 /** Meta: at most 100 custom conversions per ad account. */
 export const MAX_CUSTOM_CONVERSIONS = 100
-/** The most pixels an event source group is sent with, partners a pixel's server events list, conditions of a rule. */
+/** The most pixels an event source group is sent with, conditions of a rule. */
 export const MAX_GROUP_SOURCES = 50
-export const MAX_SERVER_EVENT_BUSINESSES = 50
 export const MAX_RULE_CONDITIONS = 10
 
 type Params = ReadonlyMap<string, string>
@@ -158,7 +155,6 @@ const PIXEL_JUDGES: Record<string, Judge> = {
   automatic_matching_fields: jsonList('automatic_matching_fields', (v) => (AUTOMATIC_MATCHING_FIELDS as readonly string[]).includes(v), 1, AUTOMATIC_MATCHING_FIELDS.length, `of ${AUTOMATIC_MATCHING_FIELDS.join(', ')}`),
   first_party_cookie_status: oneOf(FIRST_PARTY_COOKIE_STATUSES, 'first_party_cookie_status'),
   data_use_setting: oneOf(DATA_USE_SETTINGS, 'data_use_setting'),
-  server_events_business_ids: jsonList('server_events_business_ids', isId, 0, MAX_SERVER_EVENT_BUSINESSES, 'business portfolio ids (digits)'),
 }
 export const PIXEL_SETTING_KEYS = Object.keys(PIXEL_JUDGES)
 
@@ -171,7 +167,11 @@ const CONVERSION_JUDGES: Record<string, Judge> = {
   description: textOf(500, 'description'),
   action_source_type: oneOf(CONVERSION_ACTION_SOURCES, 'action_source_type'),
 }
-export const CONVERSION_UPDATE_KEYS = ['name', 'description', 'default_conversion_value'] as const
+/**
+ * Review B1 — an update sends its name and description only: the default value's read-back unit is not documented (the
+ * update takes a float, the field reads as an int), so Nexus sets it only on create until LIVE-PROBE SG-090.
+ */
+export const CONVERSION_UPDATE_KEYS = ['name', 'description'] as const
 
 const GROUP_JUDGES: Record<string, Judge> = {
   name: textOf(100, 'name'),
@@ -196,7 +196,7 @@ export const META_SIGNALS_WRITE_RULES: readonly MetaWriteRule[] = [
     required: ['dataset_name'], optional: [], text: { dataset_name: META_NAME_TEXT }, values: judged({ dataset_name: textOf(100, 'dataset_name') }), budget: false,
   },
   {
-    // set-meta-dataset (SG-010–013) and set-meta-dataset-access server-event partners (SG-014).
+    // set-meta-dataset (SG-010–013).
     name: 'dataset.settings', method: 'POST', path: /^\d{1,20}$/, kinds: ['pixel'],
     required: [], optional: PIXEL_SETTING_KEYS, anyOf: PIXEL_SETTING_KEYS, text: { name: META_NAME_TEXT }, values: judged(PIXEL_JUDGES), budget: false,
   },
@@ -206,28 +206,10 @@ export const META_SIGNALS_WRITE_RULES: readonly MetaWriteRule[] = [
     required: ['account_id', 'business'], optional: [], values: judged({ account_id: digits('account_id'), business: digits('business') }), budget: false,
   },
   {
-    // set-meta-dataset-access disconnect-ad-account (SG-019): Meta's DELETE with its two keys in the form body.
+    // set-meta-dataset-access disconnect-ad-account (SG-019): a DELETE with its two required keys as the form body (see
+    // the header: Meta shows no sample of how they travel — LIVE-PROBE SG-019).
     name: 'dataset.disconnectAccount', method: 'DELETE', path: /^\d{1,20}\/shared_accounts$/, kinds: ['pixel'],
     required: ['account_id', 'business'], optional: [], values: judged({ account_id: digits('account_id'), business: digits('business') }), budget: false,
-  },
-  {
-    // set-meta-dataset-access share-with-partner (SG-021).
-    name: 'dataset.sharePartner', method: 'POST', path: /^\d{1,20}\/agencies$/, kinds: ['pixel'],
-    required: ['business', 'permitted_tasks'], optional: [],
-    values: judged({ business: digits('business'), permitted_tasks: jsonList('permitted_tasks', (v) => (PARTNER_TASKS as readonly string[]).includes(v), 1, PARTNER_TASKS.length, `of ${PARTNER_TASKS.join(', ')}`) }),
-    budget: false,
-  },
-  {
-    // set-meta-dataset-access remove-partner (SG-022).
-    name: 'dataset.removePartner', method: 'DELETE', path: /^\d{1,20}\/agencies$/, kinds: ['pixel'],
-    required: ['business'], optional: [], values: judged({ business: digits('business') }), budget: false,
-  },
-  {
-    // set-meta-dataset-access assign-person (SG-024).
-    name: 'dataset.assignPerson', method: 'POST', path: /^\d{1,20}\/assigned_users$/, kinds: ['pixel'],
-    required: ['user', 'tasks'], optional: [],
-    values: judged({ user: digits('user'), tasks: jsonList('tasks', (v) => (PERSON_TASKS as readonly string[]).includes(v), 1, PERSON_TASKS.length, `of ${PERSON_TASKS.join(', ')}`) }),
-    budget: false,
   },
   {
     // set-meta-dataset event source group create (BM-057).
@@ -251,10 +233,10 @@ export const META_SIGNALS_WRITE_RULES: readonly MetaWriteRule[] = [
     text: { name: META_NAME_TEXT, description: META_STRICT_TEXT }, maxBody: 4_000, values: judged(CONVERSION_JUDGES), budget: false,
   },
   {
-    // set-meta-custom-conversion update (SG-092): only these three — Meta never changes a rule.
+    // set-meta-custom-conversion update (SG-092): name and description only — Meta never changes a rule (B1: no value).
     name: 'customConversion.update', method: 'POST', path: /^\d{1,20}$/, kinds: ['customconversion'],
     required: [], optional: [...CONVERSION_UPDATE_KEYS], anyOf: [...CONVERSION_UPDATE_KEYS], text: { name: META_NAME_TEXT, description: META_STRICT_TEXT },
-    values: judged({ name: CONVERSION_JUDGES.name, description: CONVERSION_JUDGES.description, default_conversion_value: conversionValue }), budget: false,
+    values: judged({ name: CONVERSION_JUDGES.name, description: CONVERSION_JUDGES.description }), budget: false,
   },
   {
     // remove-meta-signal-items (SG-093): only a custom conversion Nexus made (signals-rule.ts).

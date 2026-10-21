@@ -855,7 +855,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   // judged below exactly like a POST, its form body and all.
   const bodied = !!deleteRule && deleteRule.required.length > 0
   if (method === 'DELETE' && (!deleteRule || (!bodied && input.body !== undefined && input.body !== ''))) {
-    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule; deleting campaigns, ad sets and ads is its own tool, not built yet), and cancels no async batch')
+    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase and what another of its change tools names by its own entry for the kind of object given (set-meta-budget-schedule; set-meta-dataset-access, remove-meta-signal-items); deleting campaigns, ad sets and ads is its own tool, not built yet, and Nexus cancels no async batch')
   }
   if (deleteRule && !bodied) {
     if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
@@ -869,7 +869,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     && r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k))
     && (!r.anyOf || r.anyOf.some((k) => parsed.params.has(k))))
   if (!rule) {
-    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys); this one is POST /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a change on one of its change tools' own entries for the kind of object named, each with its own keys (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule; create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion, remove-meta-signal-items); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY

@@ -402,9 +402,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // budget changes wait out Meta's hour (meta-object-limits.ts).
   if (metaWrite && req.connectionId) {
     // Step 32 — a dataset, custom conversion or event source group change: its own rule (marketing/meta-ads/signals-rule.ts).
-    const owner = isMetaSignalsKind(req.metaObjectKind)
+    const owner = (isMetaSignalsKind(req.metaObjectKind)
       ? await (await import('../marketing/meta-ads/signals-rule.js')).metaSignalsProblem(req.connectionId, metaWrite, req.metaObjectKind)
-      : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, req.metaParent)
+      : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, req.metaParent))
       ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
     if (!metaWrite.check) {

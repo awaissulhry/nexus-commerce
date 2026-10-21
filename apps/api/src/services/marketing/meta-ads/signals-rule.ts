@@ -1,27 +1,27 @@
 /**
- * Meta step 32 — the ONE rule for whose dataset, custom conversion, event source group, partner and person a change of
- * THIS business names. The tools ask it before the preview and when the approved change runs (meta-ads-signals.tools.ts),
+ * Meta step 32 — the ONE rule for whose dataset, custom conversion and event source group a change of THIS business
+ * names. The tools ask it before the preview and when the approved change runs (meta-ads-signals.tools.ts),
  * and the gateway asks it again before anything is sent (gateway.ts 3b, `metaSignalsProblem`). Reads only, through the
  * gateway; every pixel judged with step 11's verdict (live-audiences.ts ownPixel / pixelVerdict), never assumed free.
  *
  *   ad account     only the chosen one (`act_<chosen>`).
  *   portfolio      only the chosen ad account's business portfolio, read live (`act_<id>?fields=business{id}`), and never
  *                  one another Nexus business's chosen ad account is also in (nexus_meta_links_taken PORTFOLIO): two
- *                  businesses in one portfolio never change its datasets, groups or people from Nexus.
+ *                  businesses in one portfolio never change its datasets or groups from Nexus.
  *   pixel          one of the chosen ad account's pixels that no other Nexus business uses (step 11's verdict: taken,
  *                  unchecked or free — only free is changed). To CONNECT a pixel that is not on the chosen ad account yet:
  *                  one the chosen portfolio owns, and every ad account and partner portfolio it is shared with checked
  *                  (the same reads as the verdict).
  *   ad account in a body (account_id, accounts)   only the chosen ad account; business = the chosen portfolio.
- *   partner        a business portfolio that is not the chosen one and no other Nexus business's.
- *   person         one of the chosen portfolio's own people or system users (business_users, system_users).
  *   custom conversion   of the chosen ad account (its account_id), its pixel free; to delete, one Nexus made (its create
- *                  is in this business's own change records: AgentChange of set-meta-custom-conversion, after.created).
+ *                  is in this business's own change records: AgentChange of set-meta-custom-conversion, after.created); to
+ *                  claim, one no business portfolio holds yet (its business{id}: review B2).
  *   event source group  one of the chosen portfolio's (`<portfolio>/event_source_groups`), every dataset in it free.
  *   Page / Instagram    the business's chosen Page / Instagram account (its MetaAccountLink), and no other's.
- * Checked 2026-10-21: reference/ad-account (business), business/business_users and business/system_users (SDK business.py
- * get_business_users / get_system_users), business/event_source_groups (fields id, name; SDK eventsourcegroup.py
- * event_sources, owner_business), custom-conversion (account_id, pixel), ads-pixel (owner_business).
+ * Partner portfolios, server-event businesses and people on a dataset are not step 32's (lane C3 decision): no rule here.
+ * Checked 2026-10-21: reference/ad-account (business), business/event_source_groups (fields id, name; SDK
+ * eventsourcegroup.py event_sources, owner_business), custom-conversion (account_id, pixel, business), ads-pixel
+ * (owner_business).
  */
 import prisma from '../../../db.js'
 import { metaAdAccountId, metaObjectId } from '../../cx/connectors/meta/discovery.js'
@@ -37,7 +37,6 @@ export const CUSTOM_CONVERSION_TOOL = 'set-meta-custom-conversion'
 
 const idOf = (v: unknown): string | null => (v && typeof v === 'object' ? metaObjectId((v as { id?: unknown }).id) : metaObjectId(v))
 const MAX_PARTNERS = 5
-const MAX_PEOPLE = 500
 
 // ── the pieces (each throws MetaLiveRefusal with words; a tool turns it into its refusal) ─────────────────────────────
 
@@ -45,9 +44,9 @@ const MAX_PEOPLE = 500
 export async function ownPortfolio(account: MetaChosenAccount): Promise<string> {
   const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'signalsRule.portfolio', path: act(account.adAccountId), query: { fields: 'business{id}' } })
   const id = idOf((read.body as { business?: unknown }).business)
-  if (!id) refuse('The chosen ad account belongs to no business portfolio, so Nexus changes nothing at the portfolio level (its datasets, groups and people).')
+  if (!id) refuse('The chosen ad account belongs to no business portfolio, so Nexus changes nothing at the portfolio level (its datasets and event source groups).')
   if ((await takenIds('PORTFOLIO', [id])).size > 0) {
-    refuse('Another business in Nexus also has an ad account in this Meta business portfolio, so what lives at the portfolio level (its datasets, event source groups, people) may be that business\'s too: Nexus changes none of it. A person does it in Meta\'s business settings.')
+    refuse('Another business in Nexus also has an ad account in this Meta business portfolio, so what lives at the portfolio level (its datasets, event source groups, custom conversions it holds) may be that business\'s too: Nexus changes none of it. A person does it in Meta\'s business settings.')
   }
   return id
 }
@@ -90,27 +89,6 @@ export async function connectablePixel(account: MetaChosenAccount, pixelId: stri
   return { pixelId: id, onAccount: false }
 }
 
-/** A partner portfolio a pixel may be shared with (or its sharing removed): not the chosen portfolio, no other Nexus business's. */
-export async function ownPartner(businessId: string, portfolio: string): Promise<string> {
-  const id = metaObjectId(businessId) ?? refuse(`"${businessId}" is not a Meta business portfolio id (digits).`)
-  if (id === portfolio) refuse('That is the chosen ad account\'s own business portfolio, not a partner: its people and ad accounts are given access with assign-person and connect-ad-account.')
-  if ((await takenIds('PORTFOLIO', [id])).size > 0) refuse('That business portfolio is one another business in Nexus uses: Nexus never shares a dataset with, or takes one from, another Nexus business.')
-  return id
-}
-
-/** One of the chosen portfolio's own people or system users (their business-scoped ids). */
-export async function ownPerson(account: MetaChosenAccount, userId: string, portfolio: string): Promise<string> {
-  const id = metaObjectId(userId) ?? refuse(`"${userId}" is not a Meta person or system user id (digits).`)
-  const [people, systemUsers] = await Promise.all([
-    readRows(account.connectionId, 'signalsRule.people', `${portfolio}/business_users`, { fields: 'id' }, MAX_PEOPLE),
-    readRows(account.connectionId, 'signalsRule.systemUsers', `${portfolio}/system_users`, { fields: 'id' }, MAX_PEOPLE),
-  ])
-  const ids = new Set([...people.rows, ...systemUsers.rows].map((r) => idOf(r.id)).filter((p): p is string => !!p))
-  if (ids.has(id)) return id
-  if (people.more || systemUsers.more) refuse(`The business portfolio has more people than Nexus reads at once (${MAX_PEOPLE}), and that one was not among them.`)
-  return refuse('That is not one of the chosen ad account\'s business portfolio\'s own people or system users (business settings › People / System users), so Nexus gives them nothing.')
-}
-
 /** Did Nexus make this custom conversion, for this business, on this ad account? (Its own change records, row-level security.) */
 export async function nexusMadeConversion(adAccountId: string, customConversionId: string): Promise<boolean> {
   const row = await prisma.agentChange.findFirst({
@@ -128,18 +106,18 @@ export async function nexusMadeConversion(adAccountId: string, customConversionI
 }
 
 /** A custom conversion of the chosen ad account whose pixel no other Nexus business uses (and, to delete, one Nexus made). */
-export async function ownConversion(account: MetaChosenAccount, customConversionId: string, opts: { nexusMade?: boolean } = {}): Promise<{ id: string; pixelId: string }> {
+export async function ownConversion(account: MetaChosenAccount, customConversionId: string, opts: { nexusMade?: boolean } = {}): Promise<{ id: string; pixelId: string; businessId: string | null }> {
   const id = metaObjectId(customConversionId) ?? refuse(`"${customConversionId}" is not a Meta custom conversion id (digits).`)
   // custom_event_type: only a custom conversion has one, so no other object of the account passes (step 11 review A7).
-  const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'signalsRule.conversion', path: id, query: { fields: 'account_id,custom_event_type,pixel{id}' } })
-  const body = read.body as { account_id?: unknown; custom_event_type?: unknown; pixel?: unknown }
+  const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'signalsRule.conversion', path: id, query: { fields: 'account_id,custom_event_type,pixel{id},business{id}' } })
+  const body = read.body as { account_id?: unknown; custom_event_type?: unknown; pixel?: unknown; business?: unknown }
   if (metaAdAccountId(body.account_id) !== account.adAccountId || typeof body.custom_event_type !== 'string') refuse('That is not a custom conversion of the chosen ad account, so Nexus does not change it.')
   const pixelId = idOf(body.pixel) ?? refuse('Meta names no pixel for that custom conversion, so Nexus cannot check whether another business in Nexus counts its events; it is not changed.')
   await ownSignalPixel(account, pixelId)
   if (opts.nexusMade && !(await nexusMadeConversion(account.adAccountId, id))) {
     refuse('Nexus deletes only a custom conversion it made itself (set-meta-custom-conversion), and its records hold no such create for this one: a person deletes it in Events Manager.')
   }
-  return { id, pixelId }
+  return { id, pixelId, businessId: idOf(body.business) }
 }
 
 /** An event source group of the chosen portfolio whose datasets are all free pixels of the chosen ad account. */
@@ -190,19 +168,17 @@ async function judge(account: MetaChosenAccount, rule: string, objectId: string,
       const portfolio = await ownPortfolio(account)
       if (objectId !== portfolio) refuse('That business portfolio is not the chosen ad account\'s.')
       if (rule === 'eventSourceGroup.create') for (const pixelId of jsonIds(params.get('event_sources')) ?? refuse('event_sources lists datasets.')) await ownSignalPixel(account, pixelId)
-      if (rule === 'customConversion.claim') await ownConversion(account, params.get('custom_conversion_id') ?? '')
+      if (rule === 'customConversion.claim') {
+        // Review B2 — only one no business portfolio holds yet.
+        const { businessId } = await ownConversion(account, params.get('custom_conversion_id') ?? '')
+        if (businessId) refuse(businessId === portfolio ? 'That custom conversion is already the chosen portfolio\'s: nothing to claim.' : 'That custom conversion is held by another business portfolio, so Nexus does not claim it.')
+      }
       return
     }
     case 'pixel': {
       if (rule === 'dataset.connectAccount') { await connectablePixel(account, objectId); await accountBody(); return }
       await ownSignalPixel(account, objectId)
       if (rule === 'dataset.disconnectAccount') { await accountBody(); return }
-      if (rule === 'dataset.sharePartner' || rule === 'dataset.removePartner') { await ownPartner(params.get('business') ?? '', await ownPortfolio(account)); return }
-      if (rule === 'dataset.assignPerson') { await ownPerson(account, params.get('user') ?? '', await ownPortfolio(account)); return }
-      if (params.has('server_events_business_ids')) {
-        const portfolio = await ownPortfolio(account)
-        for (const id of jsonIds(params.get('server_events_business_ids')) ?? refuse('server_events_business_ids lists business portfolios.')) await ownPartner(id, portfolio)
-      }
       return
     }
     case 'customconversion': {
