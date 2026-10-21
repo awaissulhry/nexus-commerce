@@ -20,6 +20,7 @@ import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool, ToolResult } from '../tool-types.js'
 import { connectionArg, guarded, lower, metaIdArg } from './meta-ads-read.tools.js'
 import { META_CATALOG_MONEY } from './meta-ads-catalog.tools.js'
+import { META_ITEM_ERROR_TYPES } from '../../meta/meta-catalog-lists.js'
 import {
   assertPriceFilterAllowed, COMMERCE_VIEWS, IG_TAG_VIEWS, liveCommerce, liveInstagramProductTags, liveProductSets, MAX_SET_CONDITIONS, PRODUCT_SET_VIEWS,
   SET_ERROR_PRIORITIES, SET_FACET_FIELDS, SET_MATCH, setConditionArg, type CommerceInput, type InstagramTagsInput, type ProductSetsInput, type SetCondition,
@@ -55,7 +56,7 @@ const metaProductSets: AgentTool = {
       .describe('preview: the filter a set would have; items, facets: narrow to these. Nexus builds Meta\'s rule from them (no condition = every item). A price condition only for a person who may see revenue'),
     match: z.preprocess(lower, z.enum(SET_MATCH)).optional().describe('conditions: all (default, and) | any (or)'),
     currency: z.string().trim().regex(/^[A-Za-z]{3}$/).optional().describe('price conditions: the currency of amountMinor (default the ad account\'s)'),
-    errorType: z.string().trim().regex(/^[A-Z][A-Z0-9_]{2,79}$/).optional().describe('items: only items with this Meta error type (e.g. IMAGE_RESOLUTION_LOW)'),
+    errorType: z.preprocess(upper, z.enum(META_ITEM_ERROR_TYPES)).optional().describe('items: only items with this Meta error type (e.g. IMAGE_RESOLUTION_LOW; Meta\'s list, as meta-catalog-items takes it)'),
     errorPriority: z.preprocess(upper, z.enum(SET_ERROR_PRIORITIES)).optional().describe('items: only items with errors of this priority: HIGH | MEDIUM | LOW'),
     facetFields: z.array(z.enum(SET_FACET_FIELDS)).max(SET_FACET_FIELDS.length).optional()
       .describe(`facets: the fields to count (default brand, product_type, availability): ${SET_FACET_FIELDS.join(' | ')}`),
@@ -118,7 +119,7 @@ const metaCommerce: AgentTool = {
     shopId: metaIdArg('shop: the shop (from view shops)'),
     country: countryArg.optional().describe('account: checkout, call to action and shop ads set-up for this country (ISO code, e.g. IT)'),
     countries: z.array(countryArg).max(5).optional().describe('checkout-countries: also the checkout set-up for these countries (at most 5)'),
-    locale: z.string().trim().regex(/^[a-z]{2,3}(?:[-_][A-Z]{2})?$/).optional().describe('account: the privacy policy in this language (BCP 47, e.g. it, en-US)'),
+    locale: z.string().trim().regex(/^[a-z]{2,3}(?:[-_][A-Z]{2})?$/).optional().describe('account: the privacy policy in this language (BCP 47, e.g. it, en-US; en_US is sent as en-US)'),
     maxRows: maxRowsArg(25),
     connectionId: connectionArg,
   }),

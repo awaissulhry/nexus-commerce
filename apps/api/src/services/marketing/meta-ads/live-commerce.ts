@@ -4,9 +4,11 @@
  * field lists per node type), and a product-set filter is built by Nexus from typed conditions (productSetFilter), never
  * taken as a caller's JSON. Lane C4's set writes (steps 34, 35) reuse, never copy: setConditionArg (THE zod schema of one
  * condition), assertPriceFilterAllowed (a price condition only for a person who may see revenue), productSetFilter with
- * { maxBytes: MAX_SET_FILTER_WRITE_BYTES, everyItem: false } (no condition = rule null = EVERY item: a write passes
- * everyItem true only when the request says "every item" explicitly), setFilterPriceAmount (Meta's price × 100) and
- * setFilterOut (a rule in words, a priced one only under the restricted key).
+ * { maxBytes: MAX_SET_FILTER_WRITE_BYTES, everyItem: false } (everyItem is REQUIRED: no condition = rule null = EVERY
+ * item, so a write passes true only when the request says "every item" explicitly; conditions that match every item
+ * anyway — price_amount gte 0, availability is_any of all four — make an all-items set too, so C4's preview compares
+ * matchingItems with the catalog's product_count and says "matches every item"), setFilterPriceAmount (Meta's price × 100)
+ * and setFilterOut (a rule in words, a priced one only under the restricted key).
  *
  * WHICH objects a business may read (one rule each, all reused, none copied):
  *   - product sets, their items, a filter preview and facets: only of a catalog step 12's readableCatalog allows (the
@@ -82,6 +84,9 @@
  *     product_appeal_status, rejection_reasons); both need an admin role on the business portfolio that owns the Shop,
  *     catalog_management, instagram_basic, instagram_shopping_tag_products, and ads_read / ads_management when the role
  *     on the Page comes through Business Manager (review B4).
+ *   - round 2: ig-user/available_catalogs.md, ig-user/catalog_product_search.md, ig-user/product_appeal.md name "one of
+ *     ads_management, ads_read" with the Business Manager role, ig-media/product_tags.md ads_read and ads_management (B2);
+ *     their examples send product_id / merchant_id unquoted and the SDK types them int — exactId keeps them exact or null (B1).
  *   - catalog/guides/commerce-merchant-settings-api.md: privacy_policy_localized `locale` "follows BCP 47 format" (B6).
  *   - shop.md (review B2): documents fb_sales_channel and ig_sales_channel only; shop_status and workspace are SDK only.
  */
@@ -92,7 +97,7 @@ import type { MetaQueryValue } from '../../gateway/meta.js'
 import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
 import { metaChosenAccount, MetaLiveRefusal, type MetaChosenAccount } from './live.js'
-import { listGroups, readGroups, type FieldGroup } from './live-objects.js'
+import { readGroups, type FieldGroup } from './live-objects.js'
 import { listPaged, listWithFallback, oneWithFallback, part } from './paging.js'
 import { instagramOf, ownMedia, tidy } from './live-media.js'
 import {
@@ -100,6 +105,7 @@ import {
 } from './catalog-rule.js'
 import { ITEM_LIST_FIELDS, itemMoney, itemRow, PRICE_NOTE, withNote } from './live-catalog.js'
 import { currencyExponent } from './money.js'
+import { META_ITEM_ERROR_TYPE_SET } from '../../meta/meta-catalog-lists.js'
 import { portfolioTaken, takenIds } from './taken.js'
 
 type Row = Record<string, unknown>
@@ -175,10 +181,11 @@ export interface SetCondition { field: SetFilterField; op: SetFilterOp; value?: 
 export interface SetFilterInput { conditions?: SetCondition[] | null; match?: 'all' | 'any' | null; currency?: string | null }
 /**
  * maxBytes: the encoded rule's cap (reads MAX_SET_FILTER_READ_BYTES, the default; a set write MAX_SET_FILTER_WRITE_BYTES).
- * everyItem: may no condition mean "every item of the catalog" (rule null)? True for reads (no filter); a set WRITE passes
- * false unless the request said so explicitly — then no condition is refused instead of quietly making an all-items set.
+ * everyItem (REQUIRED, review A-F1): may no condition mean "every item of the catalog" (rule null)? The reads pass true (no
+ * filter); a set WRITE passes false unless the request said so explicitly — then no condition is refused instead of
+ * quietly making an all-items set. Anything but true refuses an empty list.
  */
-export interface SetFilterOptions { maxBytes?: number; everyItem?: boolean }
+export interface SetFilterOptions { maxBytes?: number; everyItem: boolean }
 
 /** Who may filter by price: a price condition's counts and members give prices away (~30 previews = the exact price). */
 export const PRICE_FILTER_REFUSED = 'A price condition (price_amount, sale_price_amount) is only for a person who may see revenue in Nexus: counting the items under a price gives the prices away. Filter on other fields, or ask a person who may see revenue.'
@@ -220,11 +227,11 @@ const OP_HINT: Readonly<Record<'text' | 'enum' | 'price', string>> = {
  * (match all, the default) or `or` (match any). Every field, operator, value and value TYPE is checked against Meta's
  * documented rules at run time (a refusal in words, never a TypeError); a price is minor units of `currency` (default:
  * the ad account's), sent as Meta's price × 100; the encoded rule is capped (options.maxBytes). No condition = rule null
- * = every item of the catalog — refused unless options.everyItem (true by default, for reads). Price permission is
- * assertPriceFilterAllowed's, checked by the caller before this.
+ * = every item of the catalog — refused unless options.everyItem is true. Price permission is assertPriceFilterAllowed's,
+ * checked by the caller before this.
  */
-export function productSetFilter(input: SetFilterInput, defaultCurrency: string | null, options: SetFilterOptions = {}): { rule: Row | null; priceCurrency: string | null } {
-  const maxBytes = options.maxBytes ?? MAX_SET_FILTER_READ_BYTES
+export function productSetFilter(input: SetFilterInput, defaultCurrency: string | null, options: SetFilterOptions): { rule: Row | null; priceCurrency: string | null } {
+  const maxBytes = options?.maxBytes ?? MAX_SET_FILTER_READ_BYTES
   const raw: unknown = input.conditions
   if (raw !== null && raw !== undefined && !Array.isArray(raw)) throw new MetaLiveRefusal('conditions is a list of conditions (field, op, value / values / amountMinor).')
   const conditions: unknown[] = Array.isArray(raw) ? raw : []
@@ -232,7 +239,7 @@ export function productSetFilter(input: SetFilterInput, defaultCurrency: string 
   const match: unknown = input.match
   if (match !== null && match !== undefined && match !== 'all' && match !== 'any') throw new MetaLiveRefusal('match is all (every condition) or any (one of them).')
   if (input.currency !== null && input.currency !== undefined && typeof input.currency !== 'string') throw new MetaLiveRefusal('currency is a currency code (e.g. EUR).')
-  if (conditions.length === 0 && options.everyItem === false) throw new MetaLiveRefusal('No condition means every item of the catalog: say so explicitly (every item), or give the conditions.')
+  if (conditions.length === 0 && options?.everyItem !== true) throw new MetaLiveRefusal('No condition means every item of the catalog: say so explicitly (every item), or give the conditions.')
   let priceCurrency: string | null = null
   const parts = conditions.map((given, i): Row => {
     const c = obj(given)
@@ -403,7 +410,8 @@ function checkedSetArgs(input: ProductSetsInput): string[] {
   for (const [name, value] of [['parentId', input.parentId], ['ancestorId', input.ancestorId], ['productSetId', input.productSetId], ['catalogId', input.catalogId]] as const) {
     if (value && !metaObjectId(value)) throw new MetaLiveRefusal(`${name} is a Meta id (digits).`)
   }
-  if (input.errorType && !/^[A-Z][A-Z0-9_]{2,79}$/.test(input.errorType)) throw new MetaLiveRefusal('errorType is one of Meta\'s error types (e.g. IMAGE_RESOLUTION_LOW).')
+  // Review A-F2 — step 12's list of Meta's item error types (the gateway allows only those): refused here, before any call.
+  if (input.errorType && !META_ITEM_ERROR_TYPE_SET.has(input.errorType)) throw new MetaLiveRefusal('errorType is one of Meta\'s item error types (e.g. IMAGE_RESOLUTION_LOW; the list is in meta-catalog-items).')
   if (input.errorPriority && !(SET_ERROR_PRIORITIES as readonly string[]).includes(input.errorPriority)) throw new MetaLiveRefusal('errorPriority is HIGH, MEDIUM or LOW.')
   if (input.retailerId && (input.retailerId.length > 100 || /[\u0000-\u001f\u007f]/.test(input.retailerId))) throw new MetaLiveRefusal('retailerId is at most 100 characters of text.')
   const facetFields = [...new Set(input.facetFields?.length ? input.facetFields : ['brand', 'product_type', 'availability'])]
@@ -421,7 +429,7 @@ export async function liveProductSets(input: ProductSetsInput) {
   // The filter right after Nexus's own account row (a price condition's default currency is the ad account's), before any
   // Meta call.
   const { rule, priceCurrency } = input.view === 'items' || input.view === 'preview' || input.view === 'facets'
-    ? productSetFilter(input, account.currency) : { rule: null, priceCurrency: null }
+    ? productSetFilter(input, account.currency, { everyItem: true }) : { rule: null, priceCurrency: null }
   await catalogPortfolio(account)
   const { connectionId } = account
   const base = { view: input.view }
@@ -514,13 +522,10 @@ export const COMMERCE_NOT_OWN = 'That commerce account is not the chosen Faceboo
 const COMMERCE_OF_ANOTHER_BUSINESS = 'That commerce account is the shop of a Facebook Page another business in Nexus uses, so it is not read here.'
 export const COMMERCE_UNVERIFIED = 'Meta did not name that commerce account\'s Facebook Page, so Nexus cannot check that it is not another business\'s shop; it is not read (only its id is shown).'
 const CMS_LIST_CORE = 'id,display_name,merchant_status'
-// Review B2 — the shop's own id alone is the core; shop_status (SDK only) is a group of its own.
-const SHOP_GROUPS: FieldGroup[] = [
-  { name: 'core', fields: 'id' },
-  { name: 'status', fields: 'shop_status' },
-  { name: 'channels', fields: 'fb_sales_channel{status,fb_page{id,name}},ig_sales_channel{status,ig_user{id,username}}' },
-  { name: 'links', fields: 'commerce_merchant_settings{id},workspace' },
-]
+// Review B3 — shop.md documents only fb_sales_channel and ig_sales_channel (status, fb_page / ig_user): they and the id are
+// the core; shop_status, commerce_merchant_settings and workspace (SDK shop.py only) are dropped and named when refused.
+const SHOP_CORE = 'id,fb_sales_channel{status,fb_page{id,name}},ig_sales_channel{status,ig_user{id,username}}'
+const SHOP_MORE = 'shop_status,commerce_merchant_settings,workspace'
 const SETUP_CORE = 'shop_setup,payment_setup,review_status'
 const SETUP_MORE = 'deals_setup,marketplace_approval_status,marketplace_approval_status_details'
 const STATUS_WORDS: Readonly<Record<string, string>> = { ENABLED: 'on', EXTERNALLY_DISABLED: 'switched off from outside Meta (e.g. by the shop platform)', DISABLED: 'off', STAGING: 'being set up (not public)' }
@@ -610,11 +615,13 @@ function idsIn(value: unknown, out: Set<string> = new Set(), depth = 0): Set<str
 const KNOWN_KEY = /^(id|status|state|type|enabled|count|country|countries|country_code|is_[a-z0-9_]+|[a-z0-9_]+_(status|state|type|enabled|count))$/
 /** A name, kept only next to the chosen Page's or Instagram account's own id. */
 const NAME_KEY = /^(name|username|display_name)$/
-const NAMES_HIDDEN = 'Meta\'s channel and workspace objects have no documented shape (Meta\'s SDK only): Nexus keeps only ids, states, kinds, on/off flags and country codes, and a name only next to the chosen Page or Instagram account (next to any other id Nexus cannot check whose it is); a Page or account another business in Nexus uses is its id and the flag only.'
+/** Review A-F4 — a key that looks like a field name; a data-shaped key (a Page name, a URL) is left out with its value. */
+const SAFE_KEY = /^[a-z][a-z0-9_]{0,63}$/
+const NAMES_HIDDEN = 'A name is shown only for the chosen Facebook Page or Instagram account; any other Page or account is its id only (one another business in Nexus uses: its id and the flag). Meta\'s channel, workspace, per-country set-up and approval objects have no documented shape (Meta\'s SDK only), so Nexus keeps from them only ids, states, kinds, on/off flags, counts and country codes; Commerce Manager shows the rest.'
 
 /**
  * Review A6 — an SDK-only object of unknown shape (a commerce account's channels, a shop's workspace), by ALLOW-list:
- * only KNOWN_KEY leaves (and the lists / objects that hold them) are kept; a name (NAME_KEY) only next to the chosen
+ * only KNOWN_KEY leaves (and the lists / objects that hold them, under SAFE_KEY keys, never empty) are kept; a name (NAME_KEY) only next to the chosen
  * Page's or Instagram account's own id; every Page, Instagram account or portfolio another Nexus business uses is its id
  * and the flag only. Anything else — a link, a URL, a text, an id under another key, a name next to an id Nexus could not
  * check or on an object with no id — is left out.
@@ -634,8 +641,13 @@ async function maskAssets(value: unknown, account: MetaChosenAccount): Promise<u
     const named = !!id && ours.has(id)
     const out: Row = {}
     for (const [k, x] of Object.entries(r)) {
-      const kept = walk(x, depth + 1, KNOWN_KEY.test(k) || (named && NAME_KEY.test(k)))
-      if (kept !== undefined) out[k] = kept
+      if (!SAFE_KEY.test(k)) continue
+      const known = KNOWN_KEY.test(k) || (named && NAME_KEY.test(k))
+      const kept = walk(x, depth + 1, known)
+      if (kept === undefined) continue
+      // An empty object or list under a key Nexus does not know says nothing (and its key alone could be data): left out.
+      if (!known && (Array.isArray(kept) ? kept.length === 0 : !!obj(kept) && Object.keys(kept as Row).length === 0)) continue
+      out[k] = kept
     }
     return out
   }
@@ -653,7 +665,8 @@ function channelOf(v: unknown, kind: 'page' | 'instagram', account: MetaChosenAc
   const asset = !who ? null
     : !id ? { id: null, note: 'Meta named it without an id, so Nexus cannot check whose it is and does not show it.' }
       : taken.has(id) ? { id, takenByAnotherBusiness: true }
-        : { id, [kind === 'page' ? 'name' : 'username']: text(kind === 'page' ? who.name : who.username), chosenHere: id === chosen, takenByAnotherBusiness: false }
+        // Review A-F5 — a name only for the chosen Page / Instagram account (as NAMES_HIDDEN says); any other is its id only.
+        : { id, ...(id === chosen ? { [kind === 'page' ? 'name' : 'username']: text(kind === 'page' ? who.name : who.username) } : {}), chosenHere: id === chosen, takenByAnotherBusiness: false }
   return { status, statusWords: status ? STATUS_WORDS[status] ?? null : null, [kind === 'page' ? 'page' : 'instagramAccount']: asset }
 }
 
@@ -666,10 +679,11 @@ async function shopsOf(account: MetaChosenAccount, rows: Row[]) {
   })))
 }
 
-function setupOf(r: Row) {
+/** Review A-F6 — the set-up status; its objects (SDK only, no documented shape) through maskAssets. */
+async function setupOf(r: Row, account: MetaChosenAccount) {
   return {
-    shopSetup: text(r.shop_setup), paymentSetup: text(r.payment_setup), reviewStatus: tidy(r.review_status ?? null), dealsSetup: text(r.deals_setup),
-    marketplaceApprovalStatus: text(r.marketplace_approval_status), marketplaceApprovalDetails: tidy(r.marketplace_approval_status_details ?? null),
+    shopSetup: text(r.shop_setup), paymentSetup: text(r.payment_setup), reviewStatus: await maskAssets(r.review_status ?? null, account), dealsSetup: text(r.deals_setup),
+    marketplaceApprovalStatus: text(r.marketplace_approval_status), marketplaceApprovalDetails: await maskAssets(r.marketplace_approval_status_details ?? null, account),
   }
 }
 
@@ -679,8 +693,9 @@ export async function liveCommerce(input: CommerceInput) {
   // Every argument checked before any call (database or Meta).
   const country = input.country ? input.country.trim().toUpperCase() : null
   if (country && !/^[A-Z]{2}$/.test(country)) throw new MetaLiveRefusal(`"${input.country}" is not a country code (two letters, e.g. IT).`)
-  const locale = input.locale ? input.locale.trim() : null
-  if (locale && !/^[a-z]{2,3}(?:[-_][A-Z]{2})?$/.test(locale)) throw new MetaLiveRefusal(`"${input.locale}" is not a language code (BCP 47, e.g. it, en-US).`)
+  // Review B4 — Meta's guide: the locale "follows BCP 47 format", so en_US is sent as en-US.
+  const locale = input.locale ? input.locale.trim().replace('_', '-') : null
+  if (locale && !/^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(locale)) throw new MetaLiveRefusal(`"${input.locale}" is not a language code (BCP 47, e.g. it, en-US).`)
   const countries = [...new Set((input.countries ?? (country ? [country] : [])).map((c) => String(c).trim().toUpperCase()))]
   const badCountry = countries.find((c) => !/^[A-Z]{2}$/.test(c))
   if (badCountry) throw new MetaLiveRefusal(`"${badCountry}" is not a country code (two letters, e.g. IT).`)
@@ -725,7 +740,8 @@ export async function liveCommerce(input: CommerceInput) {
       if (pageId && pageId !== account.pageId && (await takenIds('PAGE', [pageId])).has(pageId)) throw new MetaLiveRefusal(COMMERCE_OF_ANOTHER_BUSINESS)
       const perCountry = country ? await Promise.all([['checkoutConfig', 'checkout_config'], ['callToAction', 'cta'], ['shopsAdsSetup', 'shops_ads_setup']].map(async ([key, field]) => {
         const got = await part(() => metaReadOne({ connectionId }, { operation: `commerce.account.${field}`, path: id, query: { fields: `id,${field}.country_code(${country})` } }))
-        return [key, got.value ? tidy((got.value.body as Row)[field] ?? null) : { notRead: got.notRead }] as const
+        // Review A-F6 — no documented shape: through maskAssets.
+        return [key, got.value ? await maskAssets((got.value.body as Row)[field] ?? null, account) : { notRead: got.notRead }] as const
       })) : null
       const policy = locale ? await part(() => metaReadOne({ connectionId }, { operation: 'commerce.account.policy', path: id, query: { fields: `id,privacy_policy_localized.locale(${locale})` } })) : null
       const status = text(b.merchant_status)
@@ -749,9 +765,9 @@ export async function liveCommerce(input: CommerceInput) {
     case 'shops': {
       // CT-144 — the account's shops and each shop's Facebook and Instagram sales channel (only channels set up appear).
       const own = await ownCommerceAccount(account, input.commerceAccountId)
-      const read = await withCommerceNote(() => listGroups(connectionId, 'commerce.shops', `${own.commerceAccountId}/shops`, SHOP_GROUPS, {}, clampRows(input.maxRows, 25)))
+      const read = await withCommerceNote(() => listWithFallback(connectionId, 'commerce.shops', `${own.commerceAccountId}/shops`, SHOP_CORE, SHOP_MORE, {}, clampRows(input.maxRows, 25)))
       return {
-        ...base, commerceAccountId: own.commerceAccountId, items: await shopsOf(account, read.rows), more: read.more, missing: read.missing,
+        ...base, commerceAccountId: own.commerceAccountId, items: await shopsOf(account, read.rows), more: read.more, fieldsNote: read.note,
         note: `A shop's id is what a product set needs to show as a shop collection (publish_to_shops, a change in a later Nexus step). Only sales channels set up appear (Meta). ${NAMES_HIDDEN}`,
       }
     }
@@ -767,8 +783,8 @@ export async function liveCommerce(input: CommerceInput) {
         if (shops.rows.some((r) => idText(r.id) === shopId)) { owner = c.commerceAccountId; break }
       }
       if (!owner) throw new MetaLiveRefusal('That shop is not one of the shops of the business\'s commerce accounts (the chosen Page\'s or the business portfolio\'s), so it is not read.')
-      const read = await withCommerceNote(() => readGroups(connectionId, 'commerce.shop', shopId, SHOP_GROUPS))
-      return { ...base, commerceAccountId: owner, shop: (await shopsOf(account, [read.body]))[0], missing: read.missing, note: NAMES_HIDDEN }
+      const read = await withCommerceNote(() => oneWithFallback(connectionId, 'commerce.shop', shopId, SHOP_CORE, SHOP_MORE))
+      return { ...base, commerceAccountId: owner, shop: (await shopsOf(account, [read.body]))[0], fieldsNote: read.note, note: NAMES_HIDDEN }
     }
     case 'setup-status': {
       // CT-143 — the shop set-up status: of a commerce account (commerceAccountId), else the chosen Page's shop.
@@ -776,8 +792,8 @@ export async function liveCommerce(input: CommerceInput) {
       const path = own ? `${own.commerceAccountId}/setup_status` : `${account.pageId}/shop_setup_status`
       const read = await withCommerceNote(() => listWithFallback(connectionId, 'commerce.setupStatus', path, SETUP_CORE, SETUP_MORE, {}, 10))
       return {
-        ...base, ...(own ? { commerceAccountId: own.commerceAccountId } : { pageId: account.pageId }), items: read.rows.map(setupOf), fieldsNote: read.note,
-        note: 'The Page\'s shop set-up status is a documented Page read; a commerce account\'s and the status fields are in Meta\'s SDK only (Meta\'s answer decides). Setting a shop up is in Commerce Manager.',
+        ...base, ...(own ? { commerceAccountId: own.commerceAccountId } : { pageId: account.pageId }), items: await Promise.all(read.rows.map((r) => setupOf(r, account))), fieldsNote: read.note,
+        note: `The Page's shop set-up status is a documented Page read; a commerce account's and the status fields are in Meta's SDK only (Meta's answer decides). Setting a shop up is in Commerce Manager. ${NAMES_HIDDEN}`,
       }
     }
     case 'checkout-countries': {
@@ -788,13 +804,13 @@ export async function liveCommerce(input: CommerceInput) {
       const perCountry = []
       for (const c of countries) {
         const got = await part(() => metaReadOne({ connectionId }, { operation: 'commerce.checkoutConfig', path: own.commerceAccountId, query: { fields: `id,checkout_config.country_code(${c})` } }))
-        perCountry.push({ country: c, checkoutConfig: got.value ? tidy((got.value.body as Row).checkout_config ?? null) : null, notRead: got.notRead })
+        perCountry.push({ country: c, checkoutConfig: got.value ? await maskAssets((got.value.body as Row).checkout_config ?? null, account) : null, notRead: got.notRead })
       }
       const listed = read.body.offsite_iab_checkout_enabled_countries
       return {
         ...base, commerceAccountId: own.commerceAccountId, name: text(read.body.display_name),
         offsiteCheckoutCountries: Array.isArray(listed) ? strings(listed) : null, fieldsNote: read.note, perCountry,
-        note: 'Offsite checkout countries are where a buyer goes from Shop checkout to the website. The list is a field of Meta\'s SDK only (fieldsNote says when Meta refuses it); checkout set-up per country is documented. Changing them is in Commerce Manager (no API).',
+        note: `Offsite checkout countries are where a buyer goes from Shop checkout to the website. The list is a field of Meta's SDK only (fieldsNote says when Meta refuses it); checkout set-up per country is documented. Changing them is in Commerce Manager (no API). ${NAMES_HIDDEN}`,
       }
     }
   }
@@ -803,8 +819,12 @@ export async function liveCommerce(input: CommerceInput) {
 // ── meta-instagram-product-tags (only the chosen Instagram account and its own media) ────────────────────────────────
 
 export const IG_TAG_VIEWS = ['eligibility', 'catalogs', 'search', 'tags', 'appeal'] as const
-// Review B4 — Meta's product-tagging requirements, for a system-user token (no Page token is needed).
-const IG_SHOP_NOTE = 'If Meta\'s words name a permission: the system user must be an ADMIN of the business portfolio that owns the Instagram Shop (with the Page role through Business Manager), and its token needs catalog_management, instagram_basic, instagram_shopping_tag_products and ads_read or ads_management; the Instagram account needs an approved Instagram Shop. No Page token is needed.'
+// Meta's product-tagging requirements per edge (each reference page, checked 2026-10-21), for a system-user token: its role on
+// the Page always comes through Business Manager; no Page token is needed. available_catalogs, catalog_product_search and
+// product_appeal: "one of ads_management, ads_read"; GET /{ig-media}/product_tags: ads_read AND ads_management (round 2 B2).
+const IG_SHOP_BASE = 'If Meta\'s words name a permission: the system user must be an ADMIN of the business portfolio that owns the Instagram Shop, the Instagram account needs an approved Instagram Shop, and the token needs catalog_management, instagram_basic, instagram_shopping_tag_products'
+export const IG_SHOP_NOTE = `${IG_SHOP_BASE} and ads_read or ads_management (Meta: one of them, as the system user's role on the Page comes through Business Manager). No Page token is needed.`
+export const IG_TAG_READ_NOTE = `${IG_SHOP_BASE}, ads_read AND ads_management (Meta's tag read needs both when the role on the Page comes through Business Manager, as a system user's does). No Page token is needed.`
 const TAG_CORE = 'product_id,merchant_id,name,price_string,image_url,review_status,is_checkout,stripped_price_string,x,y'
 const TAG_MORE = 'stripped_sale_price_string,product_url'
 const SEARCH_FIELDS = 'product_id,product_name,retailer_id,image_url,review_status,is_checkout_flow,merchant_id,product_variants'
@@ -815,8 +835,22 @@ const APPEAL_MORE = 'product_appeal_status,rejection_reasons'
 const NO_TAG_READ: Readonly<Record<string, string>> = { STORY: 'Stories', REELS: 'Reels', IGTV: 'IGTV videos', LIVE: 'Live videos' }
 const TAG_LIMITS = 'Meta: at most 20 tags on a photo or video feed post, 5 per carousel slide (20 per carousel), 30 on a Reel; Stories, IGTV, Live and mentions take no tags, and Meta\'s tag read does not cover Reels either (the Instagram app shows a Reel\'s tags); 25 tagged posts per 24 hours (a carousel counts as one); none for Creator accounts. Only products whose review status is approved show on a post.'
 
-/** An Instagram shopping read Meta may refuse for a permission: said plainly. */
-const withShopNote = <T>(work: () => Promise<T>) => withPermissionNote(IG_SHOP_NOTE, work)
+/** An Instagram shopping read Meta may refuse for a permission: said plainly, with that edge's own permissions. */
+const withShopNote = <T>(work: () => Promise<T>, note: string = IG_SHOP_NOTE) => withPermissionNote(note, work)
+
+/**
+ * Round 2 B1 — the Instagram shopping edges send product_id and merchant_id as JSON NUMBERS (Meta's examples unquoted; SDK
+ * igshoppingproductappeal.py, shadowigmediaproducttags.py, shadowigusercatalogproductsearch.py: int), and the gateway's
+ * JSON.parse keeps a number exactly only below 2^53. A number id that is not a safe integer has lost digits: null and
+ * counted (never a wrong id), as step 9 does for location clusters.
+ */
+interface IdCount { notExact: number }
+function exactId(v: unknown, count: IdCount): string | null {
+  if (typeof v === 'number' && !Number.isSafeInteger(v)) { count.notExact++; return null }
+  return metaObjectId(v)
+}
+export const IDS_NOT_EXACT = 'Meta sent some product or merchant ids as numbers too long to keep exactly, so they are null here (never a wrong id). Find the product by name or SKU (view search, meta-catalog-items) or in Commerce Manager.'
+const idsNote = (count: IdCount) => (count.notExact ? { idsNotExact: count.notExact, idsNote: IDS_NOT_EXACT } : {})
 
 /** The catalogs the chosen Instagram account may tag from, each checked against step 12's rule. */
 async function taggingCatalogs(account: MetaChosenAccount, instagramId: string) {
@@ -836,10 +870,10 @@ async function taggingCatalogs(account: MetaChosenAccount, instagramId: string) 
   return items
 }
 
-function tagRow(r: Row) {
+function tagRow(r: Row, count: IdCount) {
   const review = text(r.review_status)
   return {
-    productId: idText(r.product_id), name: text(r.name), merchantId: idText(r.merchant_id), reviewStatus: review, showsOnPost: review === 'approved',
+    productId: exactId(r.product_id, count), name: text(r.name), merchantId: exactId(r.merchant_id, count), reviewStatus: review, showsOnPost: review === 'approved',
     checkoutInInstagram: bool(r.is_checkout), imageUrl: text(r.image_url), productUrl: text(r.product_url), x: num(r.x), y: num(r.y),
     // Money (restricted keys): Meta's price strings, read in minor units only when they name an ISO currency.
     ...itemMoney({ price: r.price_string, sale_price: r.stripped_sale_price_string }), otherPriceShown: text(r.stripped_price_string),
@@ -882,16 +916,17 @@ export async function liveInstagramProductTags(input: InstagramTagsInput) {
       }
       const catalog = await readableCatalog(account, catalogId)
       const read = await withShopNote(() => listPaged(connectionId, 'igTags.search', `${instagramId}/catalog_product_search`, { catalog_id: catalog.catalogId, ...(input.search ? { q: input.search } : {}), fields: SEARCH_FIELDS }, clampRows(input.maxRows, 50)))
+      const count: IdCount = { notExact: 0 }
+      const items = read.rows.map((r) => {
+        const review = text(r.review_status)
+        return {
+          productId: exactId(r.product_id, count), name: text(r.product_name), sku: text(r.retailer_id), reviewStatus: review, taggable: review === 'approved',
+          checkoutInInstagram: bool(r.is_checkout_flow), merchantId: exactId(r.merchant_id, count), imageUrl: text(r.image_url),
+          variants: (Array.isArray(r.product_variants) ? r.product_variants : []).map((v) => ({ productId: exactId(obj(v)?.product_id, count), name: text(obj(v)?.variant_name) })),
+        }
+      })
       return {
-        ...base, catalogId: catalog.catalogId, search: input.search ?? null,
-        items: read.rows.map((r) => {
-          const review = text(r.review_status)
-          return {
-            productId: idText(r.product_id), name: text(r.product_name), sku: text(r.retailer_id), reviewStatus: review, taggable: review === 'approved',
-            checkoutInInstagram: bool(r.is_checkout_flow), merchantId: idText(r.merchant_id), imageUrl: text(r.image_url),
-            variants: (Array.isArray(r.product_variants) ? r.product_variants : []).map((v) => ({ productId: idText(obj(v)?.product_id), name: text(obj(v)?.variant_name) })),
-          }
-        }),
+        ...base, catalogId: catalog.catalogId, search: input.search ?? null, items, ...idsNote(count),
         more: read.more,
         note: 'search matches a product\'s name or SKU (Meta\'s Content ID); without it every tag-eligible product is listed. Meta takes a tag on a product not yet approved without an error, but the tag does not show until it is approved.',
       }
@@ -901,20 +936,22 @@ export async function liveInstagramProductTags(input: InstagramTagsInput) {
       const media = await ownMedia(account, need(input.mediaId, 'Name the Instagram post (mediaId, from meta-instagram-media view media).'))
       const unread = media.productType ? NO_TAG_READ[media.productType.toUpperCase()] : undefined
       if (unread) throw new MetaLiveRefusal(`Meta's product-tag read does not cover ${unread} (it reads tags on feed photos, videos and carousels only), so this post's tags are not read. The Instagram app shows them.`)
-      const read = await withShopNote(() => listWithFallback(connectionId, 'igTags.tags', `${media.mediaId}/product_tags`, TAG_CORE, TAG_MORE, {}, 30))
+      const read = await withShopNote(() => listWithFallback(connectionId, 'igTags.tags', `${media.mediaId}/product_tags`, TAG_CORE, TAG_MORE, {}, 30), IG_TAG_READ_NOTE)
+      const count: IdCount = { notExact: 0 }
+      const items = read.rows.map((r) => tagRow(r, count))
       let slides: Row[] | null = null
       if (input.slides) {
-        const children = await withShopNote(() => listPaged(connectionId, 'igTags.slides', `${media.mediaId}/children`, { fields: 'id,media_type' }, 10))
+        const children = await withShopNote(() => listPaged(connectionId, 'igTags.slides', `${media.mediaId}/children`, { fields: 'id,media_type' }, 10), IG_TAG_READ_NOTE)
         slides = []
         for (const child of children.rows) {
           const slideId = idText(child.id)
           if (!slideId) continue
           const tags = await part(() => listWithFallback(connectionId, 'igTags.slideTags', `${slideId}/product_tags`, TAG_CORE, TAG_MORE, {}, 5))
-          slides.push({ slideId, mediaType: text(child.media_type), items: tags.value ? tags.value.rows.map(tagRow) : null, notRead: tags.notRead })
+          slides.push({ slideId, mediaType: text(child.media_type), items: tags.value ? tags.value.rows.map((r) => tagRow(r, count)) : null, notRead: tags.notRead })
         }
       }
       return {
-        ...base, mediaId: media.mediaId, productType: media.productType, items: read.rows.map(tagRow), slides, fieldsNote: read.note,
+        ...base, mediaId: media.mediaId, productType: media.productType, items, slides, fieldsNote: read.note, ...idsNote(count),
         priceNote: 'A tag\'s price is Meta\'s own text (priceShown; otherPriceShown is its short form, salePriceShown the sale price). priceCents is filled only when the text names an ISO currency (e.g. 49.90 EUR).',
         note: `x and y place a tag on the photo (0–1 from the top-left). ${TAG_LIMITS} Adding or moving tags is a change (a later Nexus step); Meta cannot remove a tag through its API (Instagram app only).`,
       }
@@ -923,9 +960,10 @@ export async function liveInstagramProductTags(input: InstagramTagsInput) {
       // CT-157 — the appeal state of a product rejected for tagging (an item of a readable catalog, checked first).
       const { id, catalog } = await catalogChild(account, { kind: 'item', id: need(input.itemId, 'Name the product (itemId: Meta\'s product id, from view search or meta-catalog-items).'), catalogId: input.catalogId })
       const read = await withShopNote(() => listWithFallback(connectionId, 'igTags.appeal', `${instagramId}/product_appeal`, APPEAL_CORE, APPEAL_MORE, { product_id: id }, 5))
+      const count: IdCount = { notExact: 0 }
+      const items = read.rows.map((r) => ({ productId: exactId(r.product_id, count), reviewStatus: text(r.review_status), eligibleForAppeal: bool(r.eligible_for_appeal), appealStatus: text(r.product_appeal_status), rejectionReasons: strings(r.rejection_reasons) }))
       return {
-        ...base, catalogId: catalog.catalogId, productId: id,
-        items: read.rows.map((r) => ({ productId: idText(r.product_id), reviewStatus: text(r.review_status), eligibleForAppeal: bool(r.eligible_for_appeal), appealStatus: text(r.product_appeal_status), rejectionReasons: strings(r.rejection_reasons) })),
+        ...base, catalogId: catalog.catalogId, productId: id, items, ...idsNote(count),
         fieldsNote: read.note,
         note: 'Sending an appeal is a change (a later Nexus step); Meta answers it with success only, not the outcome — read this view again later.',
       }
