@@ -43,9 +43,11 @@
  *   - SDK page.py create_canvas_element (13 Object params, no enums) and create_canvase (body_element_ids list<string>,
  *     the booleans bool, the hero ids and source_template_id string); canvas.py api_update (the same nine).
  * Left out on purpose (each answers in words, here and in the tool): deep_link (an app link: Nexus has no app),
- * destination_set_id (no page says what it is, so Nexus cannot check it), retailer_item_ids (the advertiser's own product
- * ids, which the catalog rule cannot check — step 25's choice), rich-text styles block_type / inline_styles (not documented
- * for writing), and a delete of an Instant Experience (Meta documents none).
+ * destination_set_id (review B-3: the collection-ads guide's "Including destination catalogs" puts it on canvas_photo — it
+ * names a set of a travel destination catalog, which Nexus has none of and cannot check), retailer_item_ids (the
+ * advertiser's own product ids, which the catalog rule cannot check — step 25's choice), image_overlay_spec.text_template_tags
+ * (review B-7: array<string> on the reference, not offered yet — no guide shows a value), rich-text styles block_type /
+ * inline_styles (not documented for writing), and a delete of an Instant Experience (Meta documents none).
  */
 import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
 import { META_NAME_TEXT } from './meta-write-text.js'
@@ -113,8 +115,8 @@ export const META_CANVAS_LIMITS = {
 /** The longest body of one part or of an Instant Experience's create or edit. */
 export const META_CANVAS_MAX_BODY = 20_000
 
-/** An Instant Experience's link (`https://fb.com/canvas_doc/<id>`, collection-ads guide; step 25's one form). */
-export const META_CANVAS_LINK = /^https:\/\/fb\.com\/canvas_doc\/(\d{1,20})$/
+/** An Instant Experience's link (`https://fb.com/canvas_doc/<id>`, collection-ads guide; step 25's one form; review A-5: no leading zero). */
+export const META_CANVAS_LINK = /^https:\/\/fb\.com\/canvas_doc\/([1-9]\d{0,19})$/
 
 const isObj = (v: unknown): v is Row => !!v && typeof v === 'object' && !Array.isArray(v)
 const DIGITS = /^[1-9]\d{0,24}$/
@@ -127,6 +129,18 @@ const boolean: Judge = (v, where) => (typeof v === 'boolean' ? null : `${where} 
 /** A colour as Meta writes it: RRGGBB or AARRGGBB, upper case (its defaults: FFFFFFFF, FF777777). */
 export const META_CANVAS_COLOR = /^[0-9A-F]{6}([0-9A-F]{2})?$/
 const color: Judge = (v, where) => (typeof v === 'string' && META_CANVAS_COLOR.test(v) ? null : `${where} is a colour as Meta writes it (RRGGBB or AARRGGBB, upper case)`)
+/**
+ * Review B-6 — the same colour? Meta writes 8 hex digits (AARRGGBB: its default FFFFFFFF) while its guide sends 6 (RRGGBB):
+ * a 6-digit value is FF (opaque) + the 6 digits. Case aside; anything that is not a colour is never the same.
+ */
+export function metaCanvasColorSame(a: unknown, b: unknown): boolean {
+  const full = (v: unknown) => {
+    const upper = typeof v === 'string' ? v.toUpperCase() : ''
+    return META_CANVAS_COLOR.test(upper) ? (upper.length === 6 ? `FF${upper}` : upper) : null
+  }
+  const x = full(a)
+  return x !== null && x === full(b)
+}
 /** A font as Meta names one (`sans-serif`, `HelveticaNeue-Light`). */
 export const META_CANVAS_FONT = /^[A-Za-z][A-Za-z0-9 -]{0,63}$/
 const font: Judge = (v, where) => (typeof v === 'string' && META_CANVAS_FONT.test(v) ? null : `${where} is a font name (letters, digits, space and -; at most ${META_CANVAS_LIMITS.font})`)
@@ -195,8 +209,15 @@ const oneKeyOf = (o: unknown, keys: readonly string[], where: string): string | 
   isObj(o) && keys.filter((k) => k in o).length === 1 ? null : `${where} names exactly one of ${keys.join(', ')}`
 
 const NO_APP = 'Nexus sells online and has no app of its own, so it sends no app link (deep_link)'
-const NO_DESTINATION_SET = 'Meta documents nothing of destination_set_id (no description on the reference, no guide), so Nexus cannot check what it names and sends none'
+// Review B-3 — collection-ads guide, "Including destination catalogs": destination_set_id on canvas_photo.
+const NO_DESTINATION_SET = 'destination_set_id names a set of a travel destination catalog (Meta\'s collection-ads guide, "Including destination catalogs": destination and hotel images), which this business has none of and Nexus cannot check, so it sends none'
 const NO_RETAILER_IDS = 'Meta takes retailer_item_ids as the advertiser\'s own product ids, and Nexus cannot check a retailer id against the catalog rule: the product set (product_set_id) names the products'
+// Review B-7 — image_overlay_spec.text_template_tags (array<string> on the reference): no guide shows a value.
+const NO_TEMPLATE_TAGS = 'Nexus does not offer an overlay\'s text_template_tags yet (Meta\'s reference types it array<string>; no guide shows a value Nexus could check)'
+/** The fields Meta takes that Nexus leaves out on purpose, each with why (the tool refuses them in the same words). */
+export const META_CANVAS_LEFT_OUT: Readonly<Record<'deep_link' | 'destination_set_id' | 'retailer_item_ids' | 'text_template_tags', string>> = {
+  deep_link: NO_APP, destination_set_id: NO_DESTINATION_SET, retailer_item_ids: NO_RETAILER_IDS, text_template_tags: NO_TEMPLATE_TAGS,
+}
 const PADDINGS = { top_padding: padding, bottom_padding: padding }
 const RICH_TEXT = (max: number, lines: boolean) => obj({ plain_text: text(max, lines) }, ['plain_text'])
 const OPEN_URL = obj({ url: link }, ['url'])
@@ -211,7 +232,8 @@ const STYLED_TEXT = {
 
 const PHOTO: Judge = (v, where, ids) => oneKeyOf(v, ['photo_id', 'photo_url'], where) ?? shape(v, where, ids, {
   name: text(META_CANVAS_LIMITS.name), photo_id: id('pagephoto'), photo_url: fetched, open_url_action: OPEN_URL, style: oneOf(META_CANVAS_PHOTO_STYLES),
-  product_tags: list(META_CANVAS_LIMITS.productIds, obj({ product_id: id('productitem'), coordinates: (c, w) => (Array.isArray(c) && c.length === 2 && c.every((n) => typeof n === 'number' && n >= 0 && n <= 1) ? null : `${w} is [x, y], each from 0 to 1`) }, ['product_id', 'coordinates']), true),
+  // Review B-4 — the canvas-photo reference: "x and y greater than zero and less than 1".
+  product_tags: list(META_CANVAS_LIMITS.productIds, obj({ product_id: id('productitem'), coordinates: (c, w) => (Array.isArray(c) && c.length === 2 && c.every((n) => typeof n === 'number' && n > 0 && n < 1) ? null : `${w} is [x, y], each greater than 0 and less than 1`) }, ['product_id', 'coordinates']), true),
   hide_product_prices: boolean, deep_link: refuse(NO_APP), destination_set_id: refuse(NO_DESTINATION_SET), ...PADDINGS,
 })
 
@@ -225,7 +247,7 @@ const PRODUCT_SET: Judge = obj({
   image_overlay_spec: obj({
     overlay_template: oneOf(META_CANVAS_OVERLAY.overlay_template), text_type: oneOf(META_CANVAS_OVERLAY.text_type), text_font: oneOf(META_CANVAS_OVERLAY.text_font),
     position: oneOf(META_CANVAS_OVERLAY.position), theme_color: oneOf(META_CANVAS_OVERLAY.theme_color), float_with_margin: boolean,
-    custom_text_type: oneOf(META_CANVAS_OVERLAY.custom_text_type),
+    custom_text_type: oneOf(META_CANVAS_OVERLAY.custom_text_type), text_template_tags: refuse(NO_TEMPLATE_TAGS),
   }, ['overlay_template', 'text_type', 'text_font', 'position', 'theme_color']),
   storefront_setting: (v, where, ids) => {
     const problem = shape(v, where, ids, {

@@ -32,12 +32,12 @@ vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: v
 // Step 18's catalog rule reads Meta and the database: its verdict stands in here (catalog-rule.vitest.test.ts tests it).
 vi.mock('../marketing/meta-ads/catalog-rule.js', () => ({ metaCatalogProblem: h.catalog, newCatalogRuleMemo: () => ({ portfolios: new Map(), catalogs: new Map(), verdicts: new Map() }) }))
 
-import { gatewayLedger, gatewayMetaInstagram, gatewayMetaNexusMade, gatewayMetaPage } from '../../test-support/gateway-stubs.js'
+import { gatewayLedger, gatewayMetaInstagram, gatewayMetaNexusMade, gatewayMetaPage, gatewayMetaStored } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { gatewayCall } from './gateway.js'
 import { metaWriteCall } from './meta.js'
-import { metaWriteVerdict } from './meta-calls.js'
-import { META_CANVAS_ELEMENT_KEYS, META_CANVAS_WRITE_RULES, META_IX_TEMPLATE_IDS, metaCanvasElementOf } from './meta-canvas-rules.js'
+import { metaCallVerdict, metaWriteVerdict } from './meta-calls.js'
+import { META_CANVAS_ELEMENT_KEYS, META_CANVAS_LINK, META_CANVAS_WRITE_RULES, META_IX_TEMPLATE_IDS, metaCanvasColorSame, metaCanvasElementOf } from './meta-canvas-rules.js'
 import { __pageOwnerTest } from './meta-page-owner.js'
 import { __metaObjectLimitsTest } from './meta-object-limits.js'
 import { IX_TEMPLATES } from '../marketing/meta-ads/live-media.js'
@@ -156,7 +156,33 @@ describe('the Instant Experience rules are an exact allow-list', () => {
     expect(elementProblem('canvas_text', { rich_text: { plain_text: 'x' }, text_color: '#fff' })).toMatch(/RRGGBB/)
     expect(elementProblem('canvas_text', { rich_text: { plain_text: 'x' }, font_size: 200 })).toMatch(/from 6 to 72/)
     expect(elementProblem('canvas_text', { rich_text: { plain_text: 'x' }, top_padding: -1 })).toMatch(/from 0 to 500/)
-    expect(elementProblem('canvas_photo', { photo_id: PHOTO, product_tags: [{ product_id: ITEM, coordinates: [2, 0] }] })).toMatch(/each from 0 to 1/)
+    // Review B-4 — the canvas-photo reference: "greater than zero and less than 1" (both ends left out).
+    for (const coordinates of [[2, 0.5], [0, 0.5], [0.5, 1], [1, 1]]) {
+      expect(elementProblem('canvas_photo', { photo_id: PHOTO, product_tags: [{ product_id: ITEM, coordinates }] }), JSON.stringify(coordinates)).toMatch(/each greater than 0 and less than 1/)
+    }
+    expect(elementProblem('canvas_photo', { photo_id: PHOTO, product_tags: [{ product_id: ITEM, coordinates: [0.01, 0.99] }] })).toBeNull()
+  })
+  it('review B-3 / B-7 — the fields left out on purpose say why: a travel destination set, an overlay\'s template tags', () => {
+    expect(elementProblem('canvas_photo', { photo_id: PHOTO, destination_set_id: '120000000000090' })).toMatch(/set of a travel destination catalog .*Including destination catalogs/)
+    expect(elementProblem('canvas_product_set', { product_set_id: SET, image_overlay_spec: { overlay_template: 'pill_with_text', text_type: 'price', text_font: 'dynads_hybrid_bold', position: 'top_left', theme_color: 'background_e50900_text_ffffff', text_template_tags: ['x'] } })).toMatch(/text_template_tags yet/)
+  })
+  it('review A-5 — an Instant Experience link names its id with no leading zero', () => {
+    const button = (url: string) => elementProblem('canvas_button', { rich_text: { plain_text: 'Go' }, button_style: 'BUTTON_FILLED', open_url_action: { url } })
+    expect(button(`https://fb.com/canvas_doc/0${OTHER_CANVAS}`)).toMatch(/exactly another Instant Experience/)
+    expect(button('https://fb.com/canvas_doc/0')).toMatch(/exactly another Instant Experience/)
+    expect(META_CANVAS_LINK.test(`https://fb.com/canvas_doc/0${OTHER_CANVAS}`)).toBe(false)
+    expect(META_CANVAS_LINK.exec(`https://fb.com/canvas_doc/${OTHER_CANVAS}`)?.[1]).toBe(OTHER_CANVAS)
+    expect(META_CANVAS_LINK.test(`https://fb.com/canvas_doc/1${'0'.repeat(20)}`)).toBe(false)
+  })
+  it('review B-6 — a colour Meta writes as AARRGGBB is the RRGGBB sent when it is FF + those six digits', () => {
+    expect(metaCanvasColorSame('FFFFFFFF', 'FFFFFF')).toBe(true)
+    expect(metaCanvasColorSame('FF000000', '000000')).toBe(true)
+    expect(metaCanvasColorSame('000000', 'FF000000')).toBe(true)
+    expect(metaCanvasColorSame('ff1a2b3c', '1A2B3C')).toBe(true)
+    expect(metaCanvasColorSame('80000000', '000000')).toBe(false)
+    expect(metaCanvasColorSame('FFFFFF', 'FFFFFF')).toBe(true)
+    expect(metaCanvasColorSame('FFFFFF', null)).toBe(false)
+    expect(metaCanvasColorSame('#FFFFFF', 'FFFFFF')).toBe(false)
   })
   it('text a person types: printable, a line break only in a text block, no format characters', () => {
     expect(elementProblem('canvas_text', { rich_text: { plain_text: 'one\ntwo' } })).toBeNull()
@@ -207,6 +233,13 @@ describe('the Instant Experience rules are an exact allow-list', () => {
     const del = metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${CANVAS}`, kind: 'write', objectKind: 'canvas' })
     expect('problem' in del ? del.problem : null).toMatch(/Nexus deletes on Meta only/)
     expect(META_CANVAS_WRITE_RULES.every((r) => r.auth === 'page')).toBe(true)
+  })
+  it('review B-1 — the read of an Instant Experience may ask fb_body_elements (and the parts\' element{id}): the read gate takes them', () => {
+    const read = (fields: string) => metaCallVerdict({ method: 'GET', url: `${BASE}/${CANVAS}?fields=${encodeURIComponent(fields)}`, kind: 'read' }).problem
+    expect(read('id,name,is_published,is_hidden,background_color,body_elements,hero_asset_facebook_post_id,hero_asset_instagram_media_id,source_template{id},canvas_link,fb_body_elements')).toBeNull()
+    expect(read('id,body_elements{element{id}},fb_body_elements{element{id}}')).toBeNull()
+    // Still never a token, nor people, inside it.
+    expect(read('id,fb_body_elements,access_token')).toMatch(/never asks Meta for a token/)
   })
   it('the template ids are step 10\'s five (one list per side, kept equal)', () => {
     expect([...META_IX_TEMPLATE_IDS].sort()).toEqual(Object.values(IX_TEMPLATES).sort())
@@ -338,6 +371,31 @@ describe('made as the chosen Page, with every id checked', () => {
     h.catalog.mockResolvedValueOnce('That catalog belongs to a business portfolio another business in Nexus uses, so it is not read here.')
     expect(await make(part('canvas_product_list', EVERY_PART.canvas_product_list))).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/inside this change, That catalog belongs to a business portfolio another business/) })
     expect(h.calls).toHaveLength(0)
+  })
+  it('review A-1 — a Page\'s own limit (80001, step 36\'s 80005) on a change made as the Page holds nothing of the ad account: a pause still goes; a real throttle holds', async () => {
+    gatewayMetaStored['120000000000001'] = { adAccountId: '1234567890', kind: 'campaign' }
+    const pause = () => metaWriteCall({ connectionId: 'm-1', operation: 'status.change', objectId: '120000000000001', objectKind: 'campaign', params: { status: 'PAUSED' }, check: false }).catch((e) => e)
+    for (const code of [80001, 80005]) {
+      // Each round its own: Meta's one change of an object every 30 s (the pause of the round before) is not what is tested.
+      __metaObjectLimitsTest.useMemory()
+      h.calls = []
+      h.answers.push(tokenAnswer(), json({ error: { code, message: 'There have been too many calls to this Page account. Wait a bit and try again.' } }, 400))
+      const refused = await make(part('canvas_text', EVERY_PART.canvas_text))
+      expect(refused.ok, String(code)).toBe(false)
+      expect(refused.verdict, String(code)).toMatchObject({ errorClass: 'rate_limited', channelCode: String(code) })
+      // The business's other Meta changes go on at once — a pause above all.
+      h.answers.push(json({ success: true }))
+      expect((await pause()).ok, String(code)).toBe(true)
+      expect(h.calls.map((c) => c.init.method), String(code)).toEqual(['GET', 'POST', 'POST'])
+    }
+    // A real throttle on a change made as the Page (code 4, the app's own limit) still holds the bucket: the pause is not sent.
+    __metaObjectLimitsTest.useMemory()
+    h.calls = []
+    h.answers.push(tokenAnswer(), json({ error: { code: 4, message: 'Application request limit reached' } }, 400))
+    expect((await make(part('canvas_text', EVERY_PART.canvas_text))).ok).toBe(false)
+    expect(await pause()).toMatchObject({ code: 'RATE_LIMITED_LOCAL' })
+    expect(h.calls).toHaveLength(2)
+    delete gatewayMetaStored['120000000000001']
   })
   it('the gateway\'s refusal for a canvas route of another kind names the Instant Experience tools', async () => {
     const err = await gatewayCall({ channel: 'META', operation: 'x', kind: 'write', connectionId: 'm-1', url: `${BASE}/${PAGE}/canvases`, method: 'POST', body: form({ name: 'X', body_element_ids: JSON.stringify([PART]), is_published: 'false' }), metaObjectKind: 'campaign' }).catch((e) => e)

@@ -755,7 +755,11 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // "Ad Account Level Ad Spend Rate Limits") is a daily count, not a throttle — holding the bucket 300 s would stop every
     // other Meta read and change of the business (a pause too) for nothing. set-meta-spend-cap says it in words, never again.
     const dailyCount = verdict.channelCode === '17/1885172'
-    if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec && !objectLimit && !dailyCount) {
+    // Step 27b review A-1 — nor does a Page's own limit on a change made AS the Page (`auth: 'page'`): 80001 ("too many calls
+    // to this Page account") and step 36's 80005 count against that PAGE, not the business's ad account — holding its 'ads'
+    // bucket 300 s would refuse every other Meta change of the business (a pause too) for nothing. The tool says it in words.
+    const pageLimit = metaWrite?.auth === 'page' && /^8000[15](\/|$)/.test(verdict.channelCode ?? '')
+    if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec && !objectLimit && !dailyCount && !pageLimit) {
       await observeRate(req.channel, key, { retryAfterSec: 300 })
     }
     // Meta says the token is dead: the next heartbeat checks it again at once, rather than trusting a check kept for hours.

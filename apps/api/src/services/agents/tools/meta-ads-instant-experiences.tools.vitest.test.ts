@@ -93,6 +93,8 @@ describe('the tools', () => {
     }
     expect(create.description).toMatch(/always made UNPUBLISHED/)
     expect(create.description).toMatch(/Undo HIDES it \(Meta documents no delete/)
+    // Review A-3 — hiding an unpublished one is what Meta does not document; nothing is harmed if it refuses.
+    expect(create.description).toMatch(/hiding this unpublished one is not yet confirmed — if Meta refuses, nothing is harmed/)
     expect(set.consequencesFor!({ action: 'publish', canvasId: CANVAS })).toEqual({ reversibility: 'none' })
     expect(set.consequencesFor!({ action: 'hide', canvasId: CANVAS })).toEqual({ reversibility: 'full' })
     expect(set.consequencesFor!({ action: 'edit', canvasId: CANVAS })).toBeNull()
@@ -101,6 +103,25 @@ describe('the tools', () => {
     expect(() => create.input.parse({ ...CREATE, parts: [{ type: 'carousel', children: Array.from({ length: 11 }, () => ({ elementId: PART })) }] })).toThrow()
     expect(() => create.input.parse({ ...CREATE, backgroundColor: '#ffffff' })).toThrow()
     expect(() => set.input.parse({ action: 'publish', canvasId: CANVAS, confirmPublish: false })).toThrow()
+  })
+  it('review A-4 — a part names only its own fields at every depth: an unknown key is refused in words, the fields Nexus leaves out say why', () => {
+    const issues = (parts: unknown[]) => { const r = create.input.safeParse({ ...CREATE, parts }); return r.success ? null : r.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(' | ') }
+    expect(issues([{ type: 'photo', photoId: '800000000000001', colour: 'red' }])).toMatch(/parts\.0: "colour" is not a field of a part/)
+    expect(issues([{ type: 'footer', children: [{ type: 'button', text: 'Go', buttonLabel: 'x' }] }])).toMatch(/parts\.0\.children\.0: "buttonLabel" is not a field of a part/)
+    expect(issues([{ type: 'photo', photoId: '800000000000001', deepLink: 'app://x' }])).toMatch(/deepLink: Nexus sells online and has no app of its own/)
+    expect(issues([{ type: 'photo', photoId: '800000000000001', destinationSetId: '120000000000090' }])).toMatch(/destinationSetId: destination_set_id names a set of a travel destination catalog/)
+    expect(issues([{ type: 'productSet', productSetId: '120000000000061', retailer_item_ids: ['sku-1'] }])).toMatch(/retailer_item_ids: Meta takes retailer_item_ids as the advertiser's own product ids/)
+    const overlay = { template: 'pill_with_text', textType: 'price', font: 'dynads_hybrid_bold', position: 'top_left', themeColor: 'background_e50900_text_ffffff' }
+    expect(issues([{ type: 'productSet', productSetId: '120000000000061', overlay: { ...overlay, textTemplateTags: ['x'] } }])).toMatch(/overlay: textTemplateTags: Nexus does not offer/)
+    expect(issues([{ type: 'productSet', productSetId: '120000000000061', overlay: { ...overlay, colour: 'x' } }])).toMatch(/"colour" is not a field of an overlay/)
+    expect(issues([{ type: 'templateVideo', productSetId: '120000000000061', videoTemplate: { textColor: 'FFFFFF', font: 'x' } }])).toMatch(/"font" is not a field of an automatic video's settings/)
+    expect(issues([{ type: 'photo', photoId: '800000000000001', productTags: [{ productId: '120000000000071', x: 0.5, y: 0.5, z: 1 }] }])).toMatch(/"z" is not a field of a product tag/)
+    expect(issues([{ type: 'productSet', productSetId: '120000000000061', sections: true, sectionTitles: [{ titleId: 'popular', title: 'Top', lang: 'it' }] }])).toMatch(/"lang" is not a field of a section title/)
+    // Review B-4 — a product tag lies inside the photo, never on its edge.
+    expect(issues([{ type: 'photo', photoId: '800000000000001', productTags: [{ productId: '120000000000071', x: 0, y: 0.5 }] }])).not.toBeNull()
+    expect(issues([{ type: 'photo', photoId: '800000000000001', productTags: [{ productId: '120000000000071', x: 0.5, y: 1 }] }])).not.toBeNull()
+    expect(issues([{ type: 'photo', photoId: '800000000000001', productTags: [{ productId: '120000000000071', x: 0.01, y: 0.99 }] }])).toBeNull()
+    expect(issues(CREATE.parts)).toBeNull()
   })
 })
 
@@ -111,9 +132,9 @@ describe('create-meta-instant-experience', () => {
     expect(h.check).not.toHaveBeenCalled()
     expect(p.preview).toMatchObject({ spendsMoney: false, metaCheck: { checked: 'none', sentence: expect.stringMatching(/^Meta has no check for this change/) } })
     expect(p.preview.requests.map((r: { label: string }) => r.label)).toEqual([
-      `Make part 1: photo on the Facebook Page ${PAGE}`,
-      `Make part 2: button on the Facebook Page ${PAGE}`,
-      `Make part 3: footer holding step 2 (button) on the Facebook Page ${PAGE}`,
+      `Make part 1: photo on the Facebook Page ${PAGE} — photo 800000000000001 of the Page`,
+      `Make part 2: button on the Facebook Page ${PAGE} — label "Jetzt kaufen"; opens https://www.example.com/shop`,
+      `Make part 3: footer on the Facebook Page ${PAGE} — holding step 2 (button)`,
       `Make the Instant Experience "Experience A" (UNPUBLISHED) on the Facebook Page ${PAGE} from step 1 (photo), step 3 (footer)`,
     ])
     expect(p.preview.warnings.join(' ')).toMatch(/Meta has no check \(validate_only\) for Instant Experiences/)
@@ -150,7 +171,8 @@ describe('create-meta-instant-experience', () => {
     expect(ran!.data).toMatchObject({ canvasId: CANVAS, link: `https://fb.com/canvas_doc/${CANVAS}`, elementIds: ['120000000000801', '120000000000802', '120000000000803'], published: false })
     expect(ran!.change).toEqual({
       before: { action: 'create', pageId: PAGE, canvasId: null, name: 'Experience A', elementIds: [], hidden: null, accountId: 'm-1', adAccountId: '1234567890' },
-      after: { action: 'create', pageId: PAGE, canvasId: CANVAS, name: 'Experience A', elementIds: ['120000000000801', '120000000000802', '120000000000803'], hidden: false, accountId: 'm-1', adAccountId: '1234567890' },
+      // Review B-1 — the body Nexus SENT (the photo and the footer; the button sits in the footer), in order.
+      after: { action: 'create', pageId: PAGE, canvasId: CANVAS, name: 'Experience A', elementIds: ['120000000000801', '120000000000802', '120000000000803'], hidden: false, bodyElementIds: ['120000000000801', '120000000000803'], accountId: 'm-1', adAccountId: '1234567890' },
     })
   })
   it('run: a part Meta refuses stops what holds it and the experience; the parts made are recorded and named; Meta\'s Page limit in words', async () => {
@@ -164,7 +186,7 @@ describe('create-meta-instant-experience', () => {
     expect(ran!.data.steps[2].sentence).toMatch(/stands on step 2/)
     expect(ran!.data).toMatchObject({ canvasId: null, elementIds: ['120000000000801'] })
     expect(ran!.data.sentence).toMatch(/a part has no undo but a delete a person asks for/)
-    expect(ran!.change!.after).toMatchObject({ canvasId: null, elementIds: ['120000000000801'] })
+    expect(ran!.change!.after).toMatchObject({ canvasId: null, elementIds: ['120000000000801'], bodyElementIds: null })
   })
   it('undo hides the experience it made (Meta deletes none), valid for set-meta-instant-experience; current() reads it; no experience: words', async () => {
     const change = {
@@ -199,6 +221,20 @@ describe('set-meta-instant-experience', () => {
     expect(() => set.input.parse((back as { args: unknown }).args)).not.toThrow()
     h.canvas = { ...CANVAS_STATE, name: 'Experience B', elementIds: [PART, '120000000000805'] }
     expect(await set.undo!.current(change)).toEqual(change.after)
+  })
+  it('review B-6 — an edit of the colour to RRGGBB: Meta reads it back as FF + it, and its undo still sees it unchanged', async () => {
+    h.send.mockImplementationOnce(async () => ({ node: { id: CANVAS, is_published: false, background_color: 'FF000000' }, readBack: 'second-read', waitedMs: 0 }))
+    const { ran } = await run(set, { action: 'edit', canvasId: CANVAS, backgroundColor: '000000' })
+    expect(ran!.ok, JSON.stringify(ran)).toBe(true)
+    expect(ran!.data.steps.map((s: { outcome: string }) => s.outcome)).toEqual(['done'])
+    const change = ran!.change as { before: unknown; after: unknown }
+    expect(change.after).toMatchObject({ fields: { backgroundColor: '000000' } })
+    h.canvas = { ...CANVAS_STATE, backgroundColor: 'FF000000' }
+    expect(await set.undo!.current(change)).toEqual(change.after)
+    expect(set.undo!.request(change)).toMatchObject({ args: { action: 'edit', backgroundColor: 'FFFFFFFF' } })
+    // Another colour since: changed, said by the undo's check.
+    h.canvas = { ...CANVAS_STATE, backgroundColor: 'FF111111' }
+    expect(await set.undo!.current(change)).toMatchObject({ fields: { backgroundColor: 'FF111111' } })
   })
   it('publish: needs confirmPublish; one way in words; its record has no undo', async () => {
     expect(await set.handler(set.input.parse({ action: 'publish', canvasId: CANVAS }) as Record<string, unknown>, asker)).toEqual({ ok: false, error: expect.stringMatching(/ONE way .* confirmPublish: true/) })

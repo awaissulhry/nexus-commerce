@@ -28,6 +28,8 @@ import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
 import { metaReadOne } from './read-client.js'
 import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
+// Step 27b review B-6 — an Instant Experience's colour reads back as AARRGGBB when RRGGBB was sent.
+import { metaCanvasColorSame } from '../../gateway/meta-canvas-rules.js'
 
 /** The fields a change reads back (gateway meta-calls.ts META_READ_BACK_FIELDS holds the allow-list). */
 export const READ_BACK = 'id,status,effective_status'
@@ -239,6 +241,8 @@ export function readBackMismatch(node: Record<string, unknown> | null, expected:
     if (field === 'adlabels') return !labelListMatches(got, value)
     if (field === 'rules') return !valueRulesMatch(got, value)
     if (TIME_FIELDS.has(field)) return unixOf(got) !== unixOf(value)
+    // Step 27b review B-6 — Meta writes an Instant Experience's colour as AARRGGBB (FFFFFFFF): RRGGBB sent is FF + it.
+    if (field === 'background_color') return !metaCanvasColorSame(got, value)
     return (typeof got === 'string' || typeof got === 'number' || typeof got === 'boolean' ? String(got) : JSON.stringify(got)) !== value
   }).map(([field]) => field)
 }

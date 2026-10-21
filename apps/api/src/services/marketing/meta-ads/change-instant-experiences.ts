@@ -20,7 +20,7 @@
 import type { MetaChangeDraft, MetaChangeRequest } from './change-draft.js'
 import { changeLines, plural } from './change-draft.js'
 import {
-  META_CANVAS_COLOR, META_CANVAS_ELEMENT_JUDGES, META_CANVAS_LIMITS, META_CANVAS_LINK, metaCanvasCreateProblem, metaCanvasUpdateProblem,
+  META_CANVAS_COLOR, META_CANVAS_ELEMENT_JUDGES, META_CANVAS_LIMITS, META_CANVAS_LINK, metaCanvasColorSame, metaCanvasCreateProblem, metaCanvasUpdateProblem,
   type MetaCanvasElementKey,
 } from '../../gateway/meta-canvas-rules.js'
 import type { MetaWriteBodyId } from '../../gateway/meta-calls.js'
@@ -34,8 +34,10 @@ import { IX_TEMPLATES } from './live-media.js'
 export const IX_NO_CHECK = 'Meta has no check (validate_only) for Instant Experiences or their parts (neither the canvases nor the canvas_elements reference lists one): the preview is built from the live state, and Meta judges each request when it runs.'
 export const IX_NO_SPEND = 'Nothing spends, and Meta reviews nothing yet: an Instant Experience is shown — and reviewed — only once an ad links to it (create-meta-creative with its link https://fb.com/canvas_doc/<id>, then create-meta-ad).'
 export const IX_PAGE_LIMIT = 'Every request goes AS the chosen Page (Nexus\'s gateway reads the Page\'s own token for it), and Meta counts it against the Page\'s own rate limit: Nexus makes at most 20 parts in one change, one call each, in order.'
+/** Review A-3 — hiding an UNPUBLISHED Instant Experience (the undo of a create) is what Meta does not document. */
+export const IX_HIDE_UNPUBLISHED_WORDS = 'Meta documents is_hidden for a PUBLISHED Instant Experience (its reference: "hide a (published) canvas"), so hiding an UNPUBLISHED one is not yet confirmed (LIVE-PROBES IX27b-02); if Meta refuses it, nothing is harmed: an unpublished Instant Experience is seen by no one and no ad can use it.'
 export const IX_ONE_WAY = 'Publishing is ONE WAY: Meta says "You can only update an unpublished Instant Experience" — once published it can never be edited again (a change means a new one, which can reuse its parts); it can still be hidden.'
-export const IX_NO_DELETE = 'Meta documents no delete of an Instant Experience (its reference: "You can\'t perform this operation on this endpoint"): the undo HIDES it, and it stays in the Page\'s list (meta-instant-experiences view list). Its parts stay too; remove-meta-ads-items deletes a part on a person\'s explicit ask (Meta\'s guide documents that delete).'
+export const IX_NO_DELETE = 'Meta documents no delete of an Instant Experience (its reference: "You can\'t perform this operation on this endpoint"): the undo HIDES it, and it stays in the Page\'s list (meta-instant-experiences view list). Its parts stay too; remove-meta-ads-items deletes a part on a person\'s explicit ask (Meta\'s guide documents that delete). ' + IX_HIDE_UNPUBLISHED_WORDS
 export const IX_INSTAGRAM = 'Instagram shows Instant Experiences "on a limited basis" (Meta\'s guide), and ads with one do not run in Facebook Stories.'
 
 /** Meta's codes an Instant Experience request may meet (reference "Error Codes"), in plain words. */
@@ -212,6 +214,57 @@ function partRefusal(p: IxPartInput, where: string, child: boolean): string | nu
   }
 }
 
+/** Review A-2 — text a person typed, on one line and cut to about 100 characters (a preview line, never what is sent). */
+const PREVIEW_TEXT = 100
+const cutText = (text: string) => {
+  const line = text.replace(/\s*\n\s*/g, ' / ')
+  return `"${line.length > PREVIEW_TEXT ? `${line.slice(0, PREVIEW_TEXT - 1)}…` : line}"`
+}
+
+/**
+ * Review A-2 — WHAT goes into one part, in one line of the preview: its words (cut to ~100 characters), links in full, the
+ * photo, video, post, media, lead form, product set and product ids it names, a button's label and link; a carousel, header
+ * or footer the parts it holds. Parts hold no secret.
+ */
+export function ixPartContent(p: IxPartInput & { type: IxPartType }, holds = ''): string {
+  const bits: string[] = []
+  const t = p.videoTemplate
+  switch (p.type) {
+    case 'photo':
+      bits.push(p.photoId !== undefined ? `photo ${p.photoId} of the Page` : `picture ${p.photoUrl}`)
+      if (p.link) bits.push(`opens ${p.link}`)
+      if (p.productTags?.length) bits.push(`products tagged ${p.productTags.map((tag) => `${tag.productId} at (${tag.x}, ${tag.y})`).join(', ')}${p.hidePrices ? ', prices hidden' : ''}`)
+      break
+    case 'video': bits.push(p.videoId !== undefined ? `video ${p.videoId}` : `video ${p.videoUrl}`); break
+    case 'templateVideo':
+      bits.push(`automatic video from product set ${p.productSetId}`)
+      if (t?.nameTemplate) bits.push(`title ${cutText(t.nameTemplate)}`)
+      if (t?.bodyTemplate) bits.push(`text ${cutText(t.bodyTemplate)}`)
+      break
+    case 'productSet':
+      bits.push(`product set ${p.productSetId}${p.maxItems !== undefined ? ` (at most ${p.maxItems} products)` : ''}${p.showInFeed ? ', shown in the feed' : ''}${p.layout ? `, ${p.layout}` : ''}`)
+      if (p.itemHeadline) bits.push(`headline ${cutText(p.itemHeadline)}`)
+      if (p.itemDescription) bits.push(`description ${cutText(p.itemDescription)}`)
+      if (p.overlay) bits.push(`overlay ${p.overlay.textType}${p.overlay.customTextType ? ` (${p.overlay.customTextType})` : ''} ${p.overlay.position}`)
+      if (p.sectionTitles?.length) bits.push(`section titles ${p.sectionTitles.map((x) => `${x.titleId} → ${cutText(x.title)}`).join(', ')}`)
+      break
+    case 'productList':
+      bits.push(`products ${(p.productIds ?? []).join(', ')}`)
+      if (p.itemHeadline) bits.push(`headline ${cutText(p.itemHeadline)}`)
+      if (p.itemDescription) bits.push(`description ${cutText(p.itemDescription)}`)
+      break
+    case 'button': bits.push(`label ${cutText(p.text ?? '')}`, p.link ? `opens ${p.link}` : 'opens nothing'); break
+    case 'text': bits.push(cutText(p.text ?? '')); break
+    case 'storeLocator': bits.push('the Page\'s own store locations'); break
+    case 'leadForm': bits.push(`lead form ${p.formId}`); break
+    case 'existingPost': bits.push(p.facebookPostId !== undefined ? `Facebook post / photo / video ${p.facebookPostId}` : `Instagram media ${p.instagramMediaId}`); break
+    case 'carousel':
+    case 'header':
+    case 'footer': bits.push(`holding ${holds}`); break
+  }
+  return bits.join('; ')
+}
+
 /** Every id a request names, by kind, for the live check before it is queued (live-instant-experiences.ts liveIxRefsProblem). */
 export function ixRefsOf(items: IxPartInput[], canvas: { heroFacebookPostId?: string; heroInstagramMediaId?: string } = {}): IxRefs {
   const refs: IxRefs = { photos: [], videos: [], posts: [], instagramMedia: [], forms: [], productSets: [], productItems: [], elements: [], canvases: [] }
@@ -284,7 +337,9 @@ function planParts(items: IxPartInput[], pageId: string, firstStep: number): Pla
     const step = firstStep + requests.length
     const childSteps = childRefs.filter((r): r is { step: number; word: string } => 'step' in r).map((r) => r.step)
     const operation = 'canvas.element.create'
-    const label = `Make part ${step}: ${WORD[type]}${CONTAINERS.has(type) ? ` holding ${childRefs.map(refWord).join(', ')}` : ''}${p.name ? ` "${p.name}"` : ''} on the Facebook Page ${pageId}`
+    // Review A-2 — what goes into it, in the label (one per part) and the change line.
+    const content = ixPartContent(p as IxPartInput & { type: IxPartType }, childRefs.map(refWord).join(', '))
+    const label = `Make part ${step}: ${WORD[type]}${p.name ? ` "${p.name}"` : ''} on the Facebook Page ${pageId} — ${content}`
     const params = childSteps.length ? {} : { [key]: JSON.stringify(sample) }
     requests.push({
       step, label, objectId: pageId, objectKind: 'page', edge: 'canvas_elements', operation,
@@ -297,7 +352,7 @@ function planParts(items: IxPartInput[], pageId: string, firstStep: number): Pla
       } : {}),
       check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, skipReadBack: true, explain: IX_EXPLAIN, asPage: true,
     })
-    lines.push([`Part ${step}: ${WORD[type]}${p.name ? ` "${p.name}"` : ''}`, 'none', CONTAINERS.has(type) ? `new, holding ${childRefs.map(refWord).join(', ')}` : 'new'])
+    lines.push([`Part ${step}: ${WORD[type]}${p.name ? ` "${p.name}"` : ''}`, 'none', `new — ${content}`])
     return { step, word: WORD[type] }
   }
   const refs: Ref[] = []
@@ -315,8 +370,8 @@ function planParts(items: IxPartInput[], pageId: string, firstStep: number): Pla
 /** The body_element_ids form value: existing ids and the ids this run's steps made, in order. */
 const bodyValue = (refs: Ref[], idOf: (step: number) => string) => JSON.stringify(refs.map((r) => ('id' in r ? r.id : idOf(r.step))))
 
-/** Warnings a body's parts bring (Instagram's limits, a collection ad's needs), each said once. */
-function partWarnings(items: IxPartInput[]): string[] {
+/** Warnings a body's parts (and an experience's hero asset) bring (Instagram's limits, a collection ad's needs), each said once. */
+function partWarnings(items: IxPartInput[], hero: { heroFacebookPostId?: string; heroInstagramMediaId?: string } = {}): string[] {
   const all: IxPartInput[] = []
   const walk = (p: IxPartInput) => { all.push(p); for (const c of p.children ?? []) walk(c) }
   items.forEach(walk)
@@ -327,7 +382,18 @@ function partWarnings(items: IxPartInput[]): string[] {
   if (all.some((p) => p.type === 'productSet' && p.showInFeed)) out.push('For a collection ad (collection-ads guide): the experience holds a photo, video or automatic video, a product set with showInFeed true and a footer; the creative then names 4 collection_thumbnails (element_crops with the 100x100 key only).')
   if (all.some((p) => p.type === 'templateVideo')) out.push('An automatic video\'s settings (videoTemplate) are only shown by Meta\'s collection-ads example (text_color, text_background_color, name_template, body_template); Meta\'s answer says whether it takes them (LIVE-PROBES IX27b-06).')
   if (all.some((p) => p.overlay)) out.push('A product set\'s overlay is sent in lower case, as Meta\'s collection-ads example writes it (its reference lists the same values in upper case); Meta\'s answer settles it (LIVE-PROBES IX27b-05).')
-  if (all.some((p) => p.type === 'existingPost' || (p.facebookPostId !== undefined))) out.push('An existing post part (or hero asset) is the chosen Page\'s own post or photo or video, or the chosen Instagram account\'s own media; which id form Meta takes for a Facebook post (<page>_<post> or the photo\'s or video\'s own id) is settled live (LIVE-PROBES IX27b-04).')
+  // Review B-4 — the canvas-photo reference: product tags are "available on a limited basis to partners and advertisers that are on the allow list".
+  if (all.some((p) => p.productTags?.length)) out.push('Products tagged on a photo: Meta makes them available only to partners and advertisers on its allow list (canvas-photo reference: "Contact your Facebook representative"); Meta\'s answer says whether this business is on it.')
+  const existing = all.some((p) => p.type === 'existingPost')
+  const heroAsset = hero.heroFacebookPostId !== undefined || hero.heroInstagramMediaId !== undefined
+  // Review B-5 (a) — Meta types the id "numeric string or integer"; the partnership guide says "media ID (photo or video)".
+  if (existing || all.some((p) => p.facebookPostId !== undefined) || hero.heroFacebookPostId !== undefined) out.push('An existing post part (or hero asset) names a photo or video of the chosen Facebook Page by its own media id (Meta\'s partnership guide: an existing Facebook or Instagram "media ID (photo or video)"), or the chosen Instagram account\'s own media; Nexus also takes a Page post as <page>_<post>, and which form Meta takes is settled live (LIVE-PROBES IX27b-04).')
+  // Review B-5 (b) — advantage-catalog-ads.md: "When using an Instagram post that is a video, call the /advideos endpoint to ensure that the video is fully processed."
+  if (all.some((p) => p.instagramMediaId !== undefined) || hero.heroInstagramMediaId !== undefined) out.push('If the Instagram media is a video, Meta says to check that it is fully processed first (its partnership guide: "call the /advideos endpoint"); Meta\'s answer says when it is not.')
+  // Review B-5 (c) — Meta documents existing posts and hero assets for partnership (Advantage+ catalog) collection ads.
+  if (existing || heroAsset) out.push('Meta documents existing posts and hero assets for partnership catalog (collection) ads: an ad of such an Instant Experience may need branded_content.parent_source_instagram_media_id or parent_source_facebook_post_id on its creative (Meta\'s partnership guide), which Nexus does not send yet (CR-331).')
+  // Review B-1 — the canvas reference's body_elements lists no automatic video, lead form or existing post.
+  if (all.some((p) => p.type === 'templateVideo' || p.type === 'leadForm' || existing)) out.push('Meta\'s read of an Instant Experience\'s parts (body_elements) lists no automatic video, lead form or existing post (its canvas reference): Nexus keeps the body it sent in its change record, and refuses an edit or an undo that would lose such a part (LIVE-PROBES IX27b-12).')
   return out
 }
 
@@ -351,8 +417,12 @@ export interface IxCreateInput {
   hidden?: boolean
 }
 
-/** What a create records (undo hides the experience it made; its parts are named so remove-meta-ads-items can delete them). */
-export interface IxCreateRecord { action: 'create'; pageId: string; canvasId: string | null; name: string; elementIds: string[]; hidden: boolean | null }
+/**
+ * What a create records (undo hides the experience it made; its parts are named so remove-meta-ads-items can delete them).
+ * Review B-1 — `bodyElementIds`: the body Nexus SENT (body_element_ids, in order), which Meta's read-back may not list in
+ * full; an edit or undo that would lose one of them is refused (ixUnlistedParts).
+ */
+export interface IxCreateRecord { action: 'create'; pageId: string; canvasId: string | null; name: string; elementIds: string[]; hidden: boolean | null; bodyElementIds?: string[] | null }
 
 const canvasFields = (c: { backgroundColor?: string; swipeToOpen?: boolean; template?: string; heroFacebookPostId?: string; heroInstagramMediaId?: string }) => ({
   ...(has(c.backgroundColor) ? { background_color: c.backgroundColor! } : {}),
@@ -409,7 +479,7 @@ export function ixCreateDraft(input: IxCreateInput, ctx: IxContext): MetaChangeD
     IX_NO_DELETE, IX_INSTAGRAM,
     ...(input.template ? [`A template's layout is fixed: its parts must match it in order (meta-instant-experiences view template ${input.template} lists them); Meta's answer says when they do not.`] : []),
     ...(has(input.heroFacebookPostId) || has(input.heroInstagramMediaId) ? ['A hero asset that differs from the hero of a part is refused by Meta ("the API returns an error"); an empty one takes the part\'s (partnership-ads guide).'] : []),
-    ...partWarnings(input.parts),
+    ...partWarnings(input.parts, input),
     ...(planned.made ? [`Each part is its own request (${plural(planned.made, 'part')}); a part Meta refuses stops what holds it and the experience itself — the parts already made stay on the Page and are named in the answer (remove-meta-ads-items deletes a part on a person's explicit ask).`] : []),
   ]
   const before: IxCreateRecord = { action: 'create', pageId: ctx.pageId, canvasId: null, name: input.name, elementIds: [], hidden: null }
@@ -465,6 +535,25 @@ export interface IxEditInput {
 }
 
 const whoOf = (c: IxCanvasState) => `Instant Experience "${c.name ?? 'no name'}" (${c.canvasId})`
+
+/**
+ * Review B-1 — the parts an Instant Experience holds that Meta's read-back (body_elements) does not list: its canvas
+ * reference lists only photo, header, video, text, carousel, button, footer, store locator, product list and product set
+ * there — no automatic video, lead form or existing post (fb_body_elements adds the automatic video). Nexus knows them
+ * from the body it last sent (its change records) and from fb_body_elements when Meta answers it.
+ */
+export function ixUnlistedParts(canvas: IxCanvasState): string[] {
+  const listed = new Set(canvas.elementIds ?? [])
+  return [...new Set([...(canvas.sentElementIds ?? []), ...(canvas.fbElementIds ?? [])])].filter((id) => !listed.has(id))
+}
+/** Who names these parts: "the body Nexus last sent names it", "… and Meta's fb_body_elements name them". */
+const whenceOf = (canvas: IxCanvasState, ids: string[]) => {
+  const who = [
+    ids.some((id) => canvas.sentElementIds?.includes(id)) ? 'the body Nexus last sent' : null,
+    ids.some((id) => canvas.fbElementIds?.includes(id)) ? 'Meta\'s fb_body_elements' : null,
+  ].filter(Boolean)
+  return `${who.join(' and ')} ${who.length > 1 ? 'name' : 'names'} ${ids.length === 1 ? 'it' : 'them'}`
+}
 const sameList = (a: string[] | null | undefined, b: string[] | null | undefined) => !!a && !!b && a.length === b.length && a.every((x, i) => x === b[i])
 
 /** The edit of an unpublished Instant Experience as a draft: new parts first, then ONE POST /{canvas} with the fields changed. */
@@ -482,7 +571,9 @@ export function ixEditDraft(input: IxEditInput, canvas: IxCanvasState): MetaChan
   const noUndo: string[] = []
   const undo: Record<string, unknown> = {}
   const field = <K extends keyof IxEditFields>(key: K, label: string, now: IxEditFields[K], wanted: IxEditFields[K], param: string, value: string) => {
-    if (now !== null && now !== undefined && JSON.stringify(now) === JSON.stringify(wanted)) { skipped.push(`${label} is already ${String(wanted)}.`); return }
+    // Review B-6 — a colour Meta reads as AARRGGBB is already the RRGGBB asked when it is FF + those six digits.
+    const same = key === 'backgroundColor' ? metaCanvasColorSame(now, wanted) : JSON.stringify(now) === JSON.stringify(wanted)
+    if (now !== null && now !== undefined && same) { skipped.push(`${label} is already ${String(wanted)}.`); return }
     fixed[param] = value
     oldFields[key] = now ?? null
     newFields[key] = wanted
@@ -506,10 +597,19 @@ export function ixEditDraft(input: IxEditInput, canvas: IxCanvasState): MetaChan
     const newIds = p.refs.map((r) => ('id' in r ? r.id : null))
     if (!p.made && sameList(newIds as string[], canvas.elementIds)) skipped.push('The parts are already in this order.')
     else {
+      // Review B-1 — a part Meta's read-back does not list (but Nexus sent, or fb_body_elements names) that the new body leaves
+      // out would be lost without anyone seeing it: refused in words, never sent.
+      const kept = new Set(newIds.filter((id): id is string => !!id))
+      const lost = ixUnlistedParts(canvas).filter((id) => !kept.has(id))
+      if (lost.length) {
+        const them = lost.length === 1 ? 'it' : 'them'
+        return { refusal: `Nexus would not send this edit: the ${who} holds ${lost.length === 1 ? 'part' : 'parts'} ${lost.join(', ')} (${whenceOf(canvas, lost)}), which Meta's read-back of its body (body_elements) does not list — its reference lists no automatic video, lead form or existing post there. The new body leaves ${them} out, so ${lost.length === 1 ? 'it' : 'they'} would be lost: name ${them} in the parts where ${lost.length === 1 ? 'it belongs' : 'they belong'} (by elementId). Nothing was sent.` }
+      }
       planned = p
       oldFields.elementIds = canvas.elementIds
       lines.push(...p.lines)
-      lines.push(['Parts in order', canvas.elementIds?.join(', ') ?? 'not read', p.refs.map(refWord).join(', ')])
+      const unlisted = ixUnlistedParts(canvas)
+      lines.push(['Parts in order', `${canvas.elementIds?.join(', ') ?? 'not read'}${unlisted.length ? ` (and ${unlisted.join(', ')}, which Meta's read-back does not list)` : ''}`, p.refs.map(refWord).join(', ')])
     }
   }
   if (!Object.keys(fixed).length && !planned) {
@@ -518,7 +618,10 @@ export function ixEditDraft(input: IxEditInput, canvas: IxCanvasState): MetaChan
   // What the undo sends: the old values Meta read (a value it did not read, or none to send back, cannot be put back).
   for (const [key, old] of Object.entries(oldFields) as Array<[keyof IxEditFields, unknown]>) {
     if (key === 'elementIds') {
-      if (Array.isArray(old) && old.length) undo.parts = (old as string[]).map((id) => ({ elementId: id }))
+      // Review B-1 — an old body Meta's read-back does not list in full cannot be put back without losing what it leaves out.
+      const unlisted = ixUnlistedParts(canvas)
+      if (unlisted.length) noUndo.push(`Parts: Meta's read-back of the old body (body_elements) does not list ${unlisted.join(', ')} (${whenceOf(canvas, unlisted)}), so the undo cannot put the old body back without losing ${unlisted.length === 1 ? 'it' : 'them'}.`)
+      else if (Array.isArray(old) && old.length) undo.parts = (old as string[]).map((id) => ({ elementId: id }))
       else noUndo.push('Parts: Nexus could not read the old parts (or there were none), so the undo cannot put them back.')
     } else if (old === null || old === undefined) {
       noUndo.push(`${key === 'heroFacebookPostId' || key === 'heroInstagramMediaId' ? 'Hero asset' : key === 'template' ? 'Template' : key}: there was none (or Meta did not read it), and Meta documents no way to clear it, so the undo leaves it.`)
@@ -561,7 +664,7 @@ export function ixEditDraft(input: IxEditInput, canvas: IxCanvasState): MetaChan
       'Meta takes an edit of an UNPUBLISHED Instant Experience only; Nexus read that it is unpublished just now, and reads it again before the change runs.',
       ...(planned ? ['The parts are sent as the WHOLE new body in order: a part left out is no longer in the experience (it stays on the Page).'] : []),
       ...(noUndo.length ? [`Undo: ${noUndo.join(' ')}`] : ['Its undo puts the old values back (while the experience is still unpublished).']),
-      ...(planned ? partWarnings(input.parts!) : []),
+      ...(planned ? partWarnings(input.parts!, input) : has(input.heroFacebookPostId) || has(input.heroInstagramMediaId) ? partWarnings([], input) : []),
     ],
     spendsMoney: [],
     skipped,
@@ -580,11 +683,18 @@ export function ixPublishDraft(canvas: IxCanvasState): MetaChangeDraft | { refus
     return { summary: `The ${who} is already published.`, changes: {}, totals: {}, warnings: [], spendsMoney: [], skipped: [`The ${who} is already published: nothing to send.`], requests: [], stands: {}, before: record(true), after: record(true) }
   }
   if (canvas.published !== false) return { refusal: `Nexus could not read whether the ${who} is published, so it sends no publish.` }
-  if (canvas.elementIds !== null && !canvas.elementIds.length) return { refusal: `The ${who} has no parts: add them first (set-meta-instant-experience action edit).` }
+  // Review A-2 — the parts it makes final, one line each (Meta's read-back in order, then those it does not list).
+  const unlisted = ixUnlistedParts(canvas)
+  if (canvas.elementIds !== null && !canvas.elementIds.length && !unlisted.length) return { refusal: `The ${who} has no parts: add them first (set-meta-instant-experience action edit).` }
+  const { changes, more } = changeLines([
+    [who, 'unpublished (can be edited)', 'PUBLISHED (can never be edited again)'],
+    ...(canvas.elementIds === null ? [['Parts', 'not read', 'made final as they are'] as [string, unknown, unknown]] : canvas.elementIds.map((id, i): [string, unknown, unknown] => [`Part ${i + 1}: ${id}`, 'can be edited', 'final'])),
+    ...unlisted.map((id): [string, unknown, unknown] => [`Part ${id}`, 'can be edited', `final (${whenceOf(canvas, [id])}; Meta's read-back does not list it)`]),
+  ])
   return {
-    summary: `Publish the ${who} — ONE WAY: it can never be edited again, and ads can then link to it.`,
-    changes: changeLines([[who, 'unpublished (can be edited)', 'PUBLISHED (can never be edited again)']]).changes,
-    totals: { experiences: 1 },
+    summary: `Publish the ${who} — ONE WAY: it can never be edited again (its ${canvas.elementIds === null ? 'parts are' : `${plural(canvas.elementIds.length + unlisted.length, 'part')} ${canvas.elementIds.length + unlisted.length === 1 ? 'is' : 'are'}`} final), and ads can then link to it.`,
+    changes,
+    totals: { experiences: 1, ...(canvas.elementIds ? { parts: canvas.elementIds.length + unlisted.length } : {}), ...(more ? { moreLines: more } : {}) },
     warnings: [
       IX_ONE_WAY, IX_NO_CHECK,
       'Publishing spends nothing by itself: an ad that links to it does (create-meta-creative with its link https://fb.com/canvas_doc/<id>, then create-meta-ad — Meta reviews it with that ad).',
@@ -620,6 +730,8 @@ export function ixHiddenDraft(hide: boolean, canvas: IxCanvasState): MetaChangeD
     warnings: [
       IX_NO_CHECK,
       ...(canvas.published ? ['Meta\'s reference says is_hidden hides a PUBLISHED Instant Experience, while its guide says only an unpublished one can be updated: Meta\'s answer settles it (LIVE-PROBES IX27b-09).'] : []),
+      // Review A-3 — an UNPUBLISHED one: what Meta does not document (the undo of every create rests on it).
+      ...(canvas.published === false ? [IX_HIDE_UNPUBLISHED_WORDS] : []),
       ...(hide && canvas.published !== false ? ['Meta does not say what hiding does to an ad that already links to it: check such ads in Ads Manager first.'] : []),
       hide ? 'Its undo shows it again.' : 'Its undo hides it again.',
     ],
@@ -633,6 +745,17 @@ export function ixHiddenDraft(hide: boolean, canvas: IxCanvasState): MetaChangeD
     before: record(canvas.hidden),
     after: record(hide),
   }
+}
+
+/**
+ * The body a run SENT (body_element_ids of its `canvas.create` or `canvas.update`, in order): an existing part's id, or the
+ * id Meta answered for a part this run made (`@<step>`); undefined when that request sent no body or did not happen.
+ * Review B-1 — a create's record keeps it, as an edit's does.
+ */
+export function ixSentBody(done: ReadonlyArray<{ request: MetaChangeRequest; result: MetaChangeResult }>, operation: 'canvas.create' | 'canvas.update'): string[] | undefined {
+  const made = done.find(({ request }) => request.operation === operation)
+  const sent = made ? (made.request.planParams ?? made.request.params).body_element_ids : undefined
+  return sent ? (JSON.parse(sent) as string[]).map((ref) => (ref.startsWith('@') ? madeIdOf(done, Number(ref.slice(1)), operation) : ref)) : undefined
 }
 
 /** The ids of the parts a run made (in step order), from what Meta answered. */

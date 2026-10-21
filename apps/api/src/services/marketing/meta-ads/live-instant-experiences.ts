@@ -4,7 +4,8 @@
  *   - the chosen Facebook Page (and Instagram account) the experience is made on (step 10's pageOf);
  *   - one Instant Experience of the chosen Page (step 10's ownedByPage owner check, then its fields: name, published,
  *     hidden, colour, its parts in order — and, asked and dropped when Meta refuses them, the SDK-only hero assets,
- *     template and link);
+ *     template, link and fb_body_elements); review B-1: with the body Nexus last SENT for it (its own change records),
+ *     because Meta's canvas reference lists no automatic video, lead form or existing post in body_elements;
  *   - every id a change names inside a part or the experience, confirmed the business's own BEFORE it is queued (the
  *     gateway checks each again before anything is sent, meta-page-owner.ts): a photo the chosen Page posted, a video of the
  *     Page or of the chosen ad account's library (step 10's ownVideo), a post of the Page (step 10's pagePostId) or a photo
@@ -14,6 +15,8 @@
  * Reading an Instant Experience with the system-user token is LIVE-PROBES CR-490 (step 10) / IX27b-08: when Meta answers
  * only to the Page's own token, the answer says so (step 10's onPage) and nothing is queued.
  */
+import prisma from '../../../db.js'
+import { META_IX_CREATE_TOOL, META_IX_SET_TOOL } from '../../gateway/account.js'
 import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
 import { metaChosenAccount, MetaLiveRefusal, type MetaChosenAccount } from './live.js'
@@ -46,6 +49,13 @@ export interface IxCanvasState {
   backgroundColor: string | null
   /** Its parts in order, by id (each body element's own id); null when Meta did not answer them. */
   elementIds: string[] | null
+  /**
+   * Review B-1 — the parts of `fb_body_elements` (an SDK Canvas field: the automatic video is listed there, not in
+   * body_elements); null or absent when Meta did not answer it.
+   */
+  fbElementIds?: string[] | null
+  /** Review B-1 — the body Nexus last SENT for it (its create's or a later edit's change record); null or absent: none. */
+  sentElementIds?: string[] | null
   heroFacebookPostId: string | null
   heroInstagramMediaId: string | null
   templateId: string | null
@@ -56,7 +66,30 @@ export interface IxCanvasState {
 
 /** Read with step 10's fields (the guide's) plus the SDK-only ones a change needs to put back; refused ones are dropped. */
 const CANVAS_CORE = 'id,name,is_published,is_hidden,background_color,body_elements'
-const CANVAS_MORE = 'hero_asset_facebook_post_id,hero_asset_instagram_media_id,source_template{id},canvas_link'
+const CANVAS_MORE = 'hero_asset_facebook_post_id,hero_asset_instagram_media_id,source_template{id},canvas_link,fb_body_elements'
+/** A body's part ids in order: each row's own id, or its `element`'s (CanvasBodyElement's one field; LIVE-PROBES IX27b-08). */
+const partIdsOf = (v: unknown): string[] => rowsOf(v).map((r) => idText(obj(r)?.id) ?? idText(obj(obj(r)?.element)?.id)).filter((x): x is string => !!x)
+const BODY_ID = /^\d{1,25}$/
+
+/**
+ * Review B-1 — the body Nexus last sent for this Instant Experience of this Page: its change records (this business's only:
+ * row-level security), newest first — a create's `bodyElementIds`, an edit's `fields.elementIds` (a change that sent no
+ * parts names none). Null when Nexus sent none.
+ */
+export async function nexusIxBodyOf(pageId: string, canvasId: string): Promise<string[] | null> {
+  const rows = await prisma.agentChange.findMany({
+    where: { toolName: { in: [META_IX_CREATE_TOOL, META_IX_SET_TOOL] }, AND: [{ after: { path: ['canvasId'], equals: canvasId } }, { after: { path: ['pageId'], equals: pageId } }] },
+    select: { after: true },
+    orderBy: { executedAt: 'desc' },
+    take: 50,
+  })
+  for (const row of rows) {
+    const after = obj(row.after)
+    const body = after?.action === 'create' ? after.bodyElementIds : after?.action === 'edit' ? obj(after.fields)?.elementIds : undefined
+    if (Array.isArray(body) && body.length && body.every((id) => typeof id === 'string' && BODY_ID.test(id))) return body as string[]
+  }
+  return null
+}
 
 export async function liveIxCanvas(connectionId: string, canvasId: string): Promise<IxCanvasState> {
   const account = await metaChosenAccount(connectionId)
@@ -65,7 +98,7 @@ export async function liveIxCanvas(connectionId: string, canvasId: string): Prom
   const read = await onPage(() => oneWithFallback(account.connectionId, 'ix.change.canvas', id, CANVAS_CORE, CANVAS_MORE))
   const body = read.body ?? {}
   if (idText(body.id) !== id) throw new MetaLiveRefusal('Meta answered another object than the Instant Experience asked; nothing of it is used.')
-  const parts = body.body_elements === undefined ? null : rowsOf(body.body_elements).map((r) => idText(obj(r)?.id)).filter((x): x is string => !!x)
+  const parts = body.body_elements === undefined ? null : partIdsOf(body.body_elements)
   return {
     pageId,
     canvasId: id,
@@ -74,6 +107,8 @@ export async function liveIxCanvas(connectionId: string, canvasId: string): Prom
     hidden: typeof body.is_hidden === 'boolean' ? body.is_hidden : null,
     backgroundColor: typeof body.background_color === 'string' ? body.background_color : null,
     elementIds: parts,
+    fbElementIds: body.fb_body_elements === undefined ? null : partIdsOf(body.fb_body_elements),
+    sentElementIds: await nexusIxBodyOf(pageId, id),
     heroFacebookPostId: idText(body.hero_asset_facebook_post_id),
     heroInstagramMediaId: idText(body.hero_asset_instagram_media_id),
     templateId: idText(obj(body.source_template)?.id),
