@@ -1070,6 +1070,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { kind: 'spendcap', id: '1234567890', action: 'raise', fields: { spend_cap: '50000' }, undo: { action: 'set', capCents: 50000 }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
         after: { kind: 'spendcap', id: '1234567890', action: 'raise', fields: { spend_cap: '75000' }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 27b: an Instant Experience made is hidden (Meta deletes none); a hide is shown again; an edit goes back.
+      'create-meta-instant-experience': {
+        before: { action: 'create', pageId: '120000000000010', canvasId: null, name: 'Experience A', elementIds: [], hidden: null },
+        after: { action: 'create', pageId: '120000000000010', canvasId: '120000000000701', name: 'Experience A', elementIds: ['120000000000711'], hidden: false, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-instant-experience': {
+        before: { action: 'hide', pageId: '120000000000010', canvasId: '120000000000701', name: 'Experience A', hidden: false },
+        after: { action: 'hide', pageId: '120000000000010', canvasId: '120000000000701', name: 'Experience A', hidden: true, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1253,7 +1262,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-meta-webhooks', 'set-meta-alert-subscription', 'remove-meta-alert-subscription',
       'set-meta-targeting', 'set-meta-placements', 'set-meta-account-controls',
       'upload-meta-events',
-      'create-meta-catalog', 'set-meta-catalog', 'set-meta-catalog-access', 'set-meta-product-set', 'remove-meta-catalog-items', 'set-meta-account-settings', 'set-meta-spend-cap', 'set-meta-insights-features']) {
+      'create-meta-catalog', 'set-meta-catalog', 'set-meta-catalog-access', 'set-meta-product-set', 'remove-meta-catalog-items', 'set-meta-account-settings', 'set-meta-spend-cap', 'set-meta-insights-features',
+      'create-meta-instant-experience', 'set-meta-instant-experience']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

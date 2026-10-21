@@ -185,3 +185,34 @@ describe('step 39 — a change judged by its own read-back, a DELETE with keys, 
     expect(await outcomeOf(metaSendChange(target, { objectId: '120000000000601', kind: 'publisherblocklist', params: {}, operation: 'blockList.delete', method: 'DELETE' }))).toMatchObject({ outcome: 'refused' })
   })
 })
+
+describe('step 30 part 3 review round 2 (B-3, A-L3) — a refused token or permission, by the token its rule sends', () => {
+  const PAGE = '120000000000010'
+  const install = { objectId: PAGE, kind: 'page' as const, params: { subscribed_fields: 'feed' }, operation: 'webhooks.installPage', edge: 'subscribed_apps' as const, via: {} }
+  const removal = { objectId: PAGE, kind: 'page' as const, params: {}, operation: 'webhooks.removePage', edge: 'subscribed_apps' as const, method: 'DELETE' as const, via: {} }
+  const leadForm = { objectId: PAGE, kind: 'page' as const, params: { name: 'Form A' }, operation: 'leadform.create', edge: 'leadgen_forms' as const }
+  it('install-page (as the Page, with its own words): generic words only — never step 36\'s Advertise task or pages_manage_ads', async () => {
+    for (const [code, cls, status] of [['190', 'auth_revoked', 400], ['200', 'forbidden', 403]] as const) {
+      h.answers.push(metaError(status, code, cls, 'Meta words'))
+      const got = await outcomeOf(metaSendChange(target, install))
+      expect(got.message, code).toBe(`Meta did not accept this change made as the chosen Facebook Page (${code}): Meta words. Nothing was changed.`)
+      expect(got.message, code).not.toMatch(/Advertise task|pages_manage_ads|system-user token/)
+    }
+  })
+  it('remove-page (the APP token by its rule): a 190 is the app token\'s — never the Page\'s words, nor "a new system-user token"', async () => {
+    h.answers.push(metaError(400, '190', 'auth_revoked', 'Invalid OAuth access token'))
+    const lost = await outcomeOf(metaSendChange(target, removal))
+    expect(lost.message).toBe('Meta did not accept the business\'s Meta app token for this change (190): Invalid OAuth access token. Check the app id and secret in Settings › Channels › Meta. Nothing was changed.')
+    expect(lost.message).not.toMatch(/as the chosen Facebook Page|Advertise task|system-user token|Make a new token/)
+    h.answers.push(metaError(403, '200', 'forbidden', 'Permissions error'))
+    const denied = await outcomeOf(metaSendChange(target, removal))
+    expect(denied.message).toBe('Meta refused this change made with the business\'s Meta app token (200): Permissions error. Nothing was changed.')
+    // An app subscription goes with the app token too.
+    h.answers.push(metaError(400, '190', 'auth_revoked', 'Invalid OAuth access token'))
+    expect((await outcomeOf(metaSendChange(target, { objectId: '1234567', kind: 'app', params: { object: 'page', fields: 'feed' }, operation: 'webhooks.subscribeApp', edge: 'subscriptions', via: {} }))).message).toMatch(/^Meta did not accept the business's Meta app token for this change \(190\)/)
+  })
+  it('step 36\'s lead forms keep their words', async () => {
+    h.answers.push(metaError(400, '190', 'auth_revoked', 'Error validating access token'))
+    expect((await outcomeOf(metaSendChange(target, leadForm))).message).toBe('Meta did not accept this change made as the chosen Facebook Page (190): Error validating access token. The system user may have lost its role or its Advertise task on the Page (Meta Business settings › Users › System users › Assign assets), or its token pages_manage_ads. Nothing was changed.')
+  })
+})

@@ -128,17 +128,23 @@ export async function metaPortfolioShared(portfolioId: string): Promise<boolean>
 /** The tools whose change records name what Nexus made on a Page (step 36: lead forms and test leads). */
 export const META_LEAD_FORM_CREATE_TOOL = 'create-meta-lead-form'
 export const META_LEAD_FORM_SET_TOOL = 'set-meta-lead-form'
+/** Step 27b — the Instant Experience tools (their change records name the experiences and parts Nexus made on a Page). */
+export const META_IX_CREATE_TOOL = 'create-meta-instant-experience'
+export const META_IX_SET_TOOL = 'set-meta-instant-experience'
 
 /**
  * Meta step 36: did Nexus make this object on this Page, for the business the call runs in? Its change records say so
  * (AgentChange, row-level security: only this business's rows): a lead form create-meta-lead-form made (`after.formId`),
- * or a TEST lead set-meta-lead-form made (`after.testLeadId`). A real lead is never in them, so it is never one.
+ * or a TEST lead set-meta-lead-form made (`after.testLeadId`). A real lead is never in them, so it is never one. Step 27b —
+ * or an Instant Experience create-meta-instant-experience made (`after.canvasId`).
  */
-export async function metaPageObjectNexusMade(kind: 'leadform' | 'testlead', objectId: string, pageId: string): Promise<boolean> {
+export async function metaPageObjectNexusMade(kind: 'leadform' | 'testlead' | 'canvas', objectId: string, pageId: string): Promise<boolean> {
   const row = await prisma.agentChange.findFirst({
     where: kind === 'leadform'
       ? { toolName: META_LEAD_FORM_CREATE_TOOL, AND: [{ after: { path: ['formId'], equals: objectId } }, { after: { path: ['pageId'], equals: pageId } }] }
-      : { toolName: META_LEAD_FORM_SET_TOOL, AND: [{ after: { path: ['testLeadId'], equals: objectId } }, { after: { path: ['pageId'], equals: pageId } }] },
+      : kind === 'canvas'
+        ? { toolName: META_IX_CREATE_TOOL, AND: [{ after: { path: ['canvasId'], equals: objectId } }, { after: { path: ['pageId'], equals: pageId } }] }
+        : { toolName: META_LEAD_FORM_SET_TOOL, AND: [{ after: { path: ['testLeadId'], equals: objectId } }, { after: { path: ['pageId'], equals: pageId } }] },
     select: { id: true },
   })
   return row !== null

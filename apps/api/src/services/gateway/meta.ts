@@ -184,8 +184,8 @@ export type MetaRuleEdge = 'adrules_library' | 'execute'
 /** Step 39 — the brand-safety edges (the account's filter, a block list's draft, list, shares, people, ad accounts and posts). */
 export type MetaBrandSafetyEdge = 'brand_safety_content_filter_levels' | 'block_list_drafts' | 'publisher_block_lists' | 'agencies'
   | 'assigned_users' | 'auto_applied_ad_accounts' | 'content_block_lists' | 'content' | 'applied_ad_accounts'
-/** Step 36 — a lead form on the chosen Page, a test lead on a form of it. */
-export type MetaPageEdge = 'leadgen_forms' | 'test_leads'
+/** Step 36 — a lead form on the chosen Page, a test lead on a form of it. Step 27b — a part of an Instant Experience, an Instant Experience. */
+export type MetaPageEdge = 'leadgen_forms' | 'test_leads' | 'canvas_elements' | 'canvases'
 /**
  * Step 34 — a catalog made on a portfolio, a catalog's categories, pixels, people and partners, a product set made in it, the
  * items_batch that deletes its items.

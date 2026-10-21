@@ -973,6 +973,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-account-settings': ['basis', 'plan', 'reach'],
   'set-meta-spend-cap': ['basis', 'plan', 'reach'],
   'set-meta-insights-features': ['basis', 'plan', 'reach'],
+  // Meta step 27b (2026-10-21): Instant Experiences of the chosen Page — the Page, experience and parts it stands on, the requests, where.
+  'create-meta-instant-experience': ['basis', 'plan', 'reach'],
+  'set-meta-instant-experience': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

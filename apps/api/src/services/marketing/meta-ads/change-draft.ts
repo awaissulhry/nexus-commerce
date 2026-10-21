@@ -144,6 +144,12 @@ export interface MetaChangeRequest {
   // ── step 20 ──
   /** The targeting keys this request changes (review A2): the gateway lets only these differ from the live spec. */
   targetingKeys?: string[]
+  // ── step 27b ──
+  /**
+   * It goes with the chosen Page's own token (a gateway rule marked `auth: 'page'`): Meta counts it against the PAGE's rate
+   * limit (80001), not the ad account's — the kit's preview says so (and leaves it out of the ad account's count).
+   */
+  asPage?: true
 }
 
 export interface MetaChangeDraft {

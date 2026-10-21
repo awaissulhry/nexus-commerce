@@ -187,8 +187,14 @@ async function limitWarnings(account: MetaChangeAccount, draft: MetaChangeDraft)
   }
   if (recent.length) out.push(`Meta allows one change of the same object every 30 s: ${recent.join('; ')} ${recent.length === 1 ? 'was' : 'were'} changed or checked moments ago, so Nexus waits up to 30 s before sending ${recent.length === 1 ? 'it' : 'them'}.`)
   if (draft.requests.some((r) => r.undoable)) out.push('Its undo changes the same objects again: Meta takes that only 30 s after this change (one change of an object every 30 s), so an undo asked at once waits that out.')
-  if (draft.requests.length > 10) {
-    out.push(`This change sends ${draft.requests.length} requests. At Meta's Limited access tier an ad account takes about 20 changes per 5 minutes (a change counts 3 of its 60 points): Nexus sends them in order and stops when Meta says to slow down; the answer then lists the ones not sent.`)
+  // Step 27b — a request made with the chosen Page's own token counts against the PAGE's rate limit, not the ad account's.
+  const asPage = draft.requests.filter((r) => r.asPage).length
+  const onAccount = draft.requests.length - asPage
+  if (onAccount > 10) {
+    out.push(`This change sends ${onAccount} requests. At Meta's Limited access tier an ad account takes about 20 changes per 5 minutes (a change counts 3 of its 60 points): Nexus sends them in order and stops when Meta says to slow down; the answer then lists the ones not sent.`)
+  }
+  if (asPage) {
+    out.push(`${asPage === 1 ? 'Its request goes' : `${asPage} of its requests go`} AS the chosen Facebook Page (with the Page's own token): Meta counts ${asPage === 1 ? 'it' : 'them'} against the PAGE's own rate limit (80001: "too many calls to this Page account"), not the ad account's. Nexus sends them in order and stops when Meta says to slow down.`)
   }
   return out
 }
@@ -387,13 +393,14 @@ function doneSentence(request: MetaChangeRequest, result: MetaChangeResult): str
 /**
  * `execute` of a Meta change tool: only as a request a person approved, as that person; built again from the live state,
  * sent only when it is exactly what was approved, request by request. `finish` turns the requests Meta made (with their
- * read-back) into the record: what they replaced and wrote, for undo. Nothing done at all = not run (the steps say why).
+ * read-back) into the record: what they replaced and wrote, for undo (step 30 part 3 review round 2: with every step's
+ * outcome, so a request Meta did not confirm is told from one it refused). Nothing done at all = not run (the steps say why).
  */
 export async function runMetaChange(
   args: Record<string, unknown>,
   ctx: ToolContext,
   build: MetaDraftBuilder,
-  finish: (draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult; notAsAsked?: string }>) => MetaRunOutcome,
+  finish: (draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult; notAsAsked?: string }>, steps: readonly MetaRunStep[]) => MetaRunOutcome,
   after?: (account: MetaChangeAccount, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult }>) => Promise<string>,
 ): Promise<ToolResult> {
   const run = approvedRun(ctx, String(args.why ?? ''))
@@ -503,7 +510,7 @@ export async function runMetaChange(
   if (!done.length) {
     return notRun(steps.some((s) => s.outcome === 'not_confirmed') ? `Not confirmed: ${report}` : `Not run: Meta changed nothing. ${report}`)
   }
-  const outcome = finish(draft, done)
+  const outcome = finish(draft, done, steps)
   const bookkeeping = after ? await after(account, done).catch(() => 'Nexus\'s pages show the change after the next daily read; meta-ads-live shows it now.') : null
   // Every record names the Meta account it was made on: undo reads that account and goes to it, never another.
   const stamp = (record: unknown) => (record && typeof record === 'object' && !Array.isArray(record) ? { ...record, accountId: account.accountId, adAccountId: account.adAccountId } : record)
