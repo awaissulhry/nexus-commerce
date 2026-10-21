@@ -11,6 +11,10 @@
  *   GET  /api/meta-ads/connections/:id/choices[?refresh=1] C2  what the system user can see (Meta asked at most once per
  *                                                          5 minutes; refresh=1 asks again now)
  *   PUT  /api/meta-ads/connections/:id/selection           C3  { adAccountId, pageId?, instagramId? }
+ *   GET  /api/meta-ads/conversions-api                     step 33: the business's "Send sales to Meta" switch { on, since, by },
+ *                                                          and canChange (this person has settings.security.manage)
+ *   PUT  /api/meta-ads/conversions-api                     { on: boolean } — a person with settings.security.manage turns it on
+ *                                                          or off (Claude cannot); off by default (D2). Answers { switch, changed }.
  *
  * Disconnect is the shared POST /api/cx/connections/:id/revoke (it also lets go of this business's Meta picks).
  */
@@ -20,6 +24,9 @@ import { connectMeta, MetaConnectError, recheckMetaToken } from '../services/cx/
 import {
   getMetaChoices, listMetaConnections, metaChoicesAnswer, MetaConnectionNotFound, MetaSelectionError, saveMetaSelection,
 } from '../services/meta/meta-accounts.service.js'
+import { FEATURES as F } from '@nexus/shared/permissions'
+import { assertRequestPermission } from '../lib/auth/request-permission.js'
+import { metaEventsSwitch, setMetaEventsSwitch } from '../services/marketing/meta-ads/events-switch.js'
 
 const actorOf = (request: unknown) => ({ kind: 'operator' as const, userId: (request as { authUser?: { id?: string } }).authUser?.id ?? null })
 
@@ -84,6 +91,35 @@ export default async function metaConnectionRoutes(app: FastifyInstance) {
       return reply.send({ connection: saved.connection })
     } catch (err) {
       return fail(reply, err, 'save the Meta assets')
+    }
+  })
+
+  // Meta step 33 (D2) — "Send sales to Meta (Conversions API)": a person's own switch, per business (events-switch.ts).
+  app.get('/meta-ads/conversions-api', async (request, reply) => {
+    try {
+      const canChange = await assertRequestPermission(request, F.settingsSecurityManage).then(() => true, () => false)
+      return reply.send({ switch: await metaEventsSwitch(), canChange })
+    } catch (err) {
+      return fail(reply, err, 'read the "Send sales to Meta" switch')
+    }
+  })
+
+  app.put('/meta-ads/conversions-api', async (request, reply) => {
+    const on = (request.body as { on?: unknown } | null)?.on
+    if (typeof on !== 'boolean') return reply.code(400).send({ error: 'on must be true or false.' })
+    // A person's own switch: a signed-in person with settings.security.manage, checked here as well as by the RBAC hook
+    // (review F6) — never an API key or Claude (Claude has no route here).
+    const user = (request as { authUser?: { id?: string; email?: string; displayName?: string | null } }).authUser
+    if (!user?.id) return reply.code(403).send({ error: 'A person signed in to Nexus turns this switch on or off.' })
+    try {
+      await assertRequestPermission(request, F.settingsSecurityManage)
+    } catch {
+      return reply.code(403).send({ error: 'Turning "Send sales to Meta" on or off needs the permission to manage the business\'s security (settings.security.manage).' })
+    }
+    try {
+      return reply.send(await setMetaEventsSwitch(on, { label: user.displayName?.trim() || user.email || user.id }))
+    } catch (err) {
+      return fail(reply, err, 'change the "Send sales to Meta" switch')
     }
   })
 }

@@ -128,6 +128,12 @@ import { META_ADS_ADS_TOOLS } from './tools/meta-ads-ads.tools.js'
 // Meta ads step 32 (2026-10-21): datasets and custom conversions (changes).
 import { META_ADS_SIGNALS_TOOLS } from './tools/meta-ads-signals.tools.js'
 import { META_ADS_WEBHOOKS_TOOLS } from './tools/meta-ads-webhooks.tools.js'
+// Meta ads step 20 (2026-10-21): targeting, placements, account controls — set-meta-targeting, set-meta-placements, set-meta-account-controls.
+import { META_ADS_TARGETING_CHANGE_TOOLS } from './tools/meta-ads-targeting-change.tools.js'
+import { META_ADS_EVENTS_TOOLS } from './tools/meta-ads-events.tools.js'
+import { META_ADS_CATALOG_ADMIN_TOOLS } from './tools/meta-ads-catalog-admin.tools.js'
+// Meta ads step 40 (2026-10-21): the ad account's own settings, its spending limit, its insights features.
+import { META_ADS_ACCOUNT_SETTINGS_TOOLS } from './tools/meta-ads-account-settings.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -388,6 +394,16 @@ const ALL: AgentTool[] = [
   ...META_ADS_SIGNALS_TOOLS,
   // Meta ads step 30 part 2 (2026-10-21): set-meta-webhooks, set-meta-alert-subscription, remove-meta-alert-subscription.
   ...META_ADS_WEBHOOKS_TOOLS,
+  // Meta ads step 20 (2026-10-21): set-meta-targeting, set-meta-placements, set-meta-account-controls.
+  ...META_ADS_TARGETING_CHANGE_TOOLS,
+  // Meta ads step 33 (2026-10-21): upload-meta-events (Conversions API; off by default per business, D2).
+  ...META_ADS_EVENTS_TOOLS,
+  // Meta ads step 34 (2026-10-21): create-meta-catalog, set-meta-catalog, set-meta-catalog-access, set-meta-product-set,
+  // remove-meta-catalog-items (catalog admin and product sets; D7: no item field; deletes on explicit ask only).
+  ...META_ADS_CATALOG_ADMIN_TOOLS,
+  // Meta ads step 40 (2026-10-21): set-meta-account-settings, set-meta-spend-cap (a raise, removal or reset SPENDS MONEY),
+  // set-meta-insights-features (one-way).
+  ...META_ADS_ACCOUNT_SETTINGS_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).

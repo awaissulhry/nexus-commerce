@@ -21,7 +21,8 @@
  * Never logs a token, a request body or an answer.
  */
 import { metaRestWriteCall, metaRuploadCall, metaWriteCall, type MetaRestWriteRequest, type MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaTargetingKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
+import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
@@ -74,6 +75,10 @@ export interface MetaObjectChange {
     | MetaSignalsKind
     // Step 30 — the connection's own Meta app (its webhook subscriptions).
     | MetaWebhookKind
+    // Step 20 — an ad set's audience or its placements.
+    | MetaTargetingKind
+    // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
+    | MetaCatalogKind
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -98,8 +103,8 @@ export interface MetaObjectChange {
   edge?: MetaWriteEdge
   /** Step 18 — DELETE (a budget schedule's; step 22's deletes): Meta's {"success": true} is the answer, nothing is read back (step 39: unless `judge` reads it). */
   method?: 'POST' | 'DELETE'
-  /** Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own). */
-  parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own); step 34: a feed's catalog. */
+  parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (include_recommendations, master CMP-031). */
   recommendations?: boolean
   /** Step 21 — an edge that changes the object itself (a campaign's labels edge): the object is read back, not a new one. */
@@ -125,6 +130,8 @@ export interface MetaObjectChange {
    * (the gateway sends an app rule with the connection's app token, never at a caller's ask).
    */
   via?: MetaRequestVia
+  /** Step 20 (review A2) — the targeting keys the draft changed (the gateway lets only these differ from live). */
+  targetingKeys?: string[]
 }
 
 /** Step 30 — how a webhook or alert subscription change travels (none of it is needed by a change of an object). */
@@ -352,6 +359,7 @@ export async function metaSendChange(
       ...(change.timeoutMs ? { timeoutMs: change.timeoutMs } : {}), ...(change.runId ? { run: change.runId } : {}),
       ...(change.via?.path ? { path: change.via.path } : {}), ...(change.via?.query ? { query: change.via.query } : {}),
       ...(change.via?.method === 'PATCH' ? { method: 'PATCH' as const } : {}),
+      ...(change.targetingKeys?.length ? { targetingKeys: change.targetingKeys } : {}),
     })
   } catch (err) {
     // The gateway throws only before it sends (a refusal, or a problem of Nexus's own such as the database): nothing left.

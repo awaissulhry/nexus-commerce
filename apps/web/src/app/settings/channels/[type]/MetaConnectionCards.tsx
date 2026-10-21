@@ -8,11 +8,16 @@
  * has no sign-in popup, so the page shows no Reconnect).
  *
  * Read from GET /api/meta-ads/connections; nothing here writes to Meta. The token itself is never shown.
+ *
+ * Meta step 33 (D2) — "Send sales to Meta": the business's Conversions API switch (GET / PUT /api/meta-ads/conversions-api),
+ * off by default. Turning it on sends nothing by itself: it lets Claude ASK to send purchases (only sales taken in by hand in
+ * Nexus); each send is a change a person approves — or, with "Claude's changes need no approval" on, it runs 20 s after
+ * Claude asks, in the asker's name. Only a person with settings.security.manage may turn it on or off.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { AsOf, Banner, Card, KeyValue, type KeyValueItem } from '@/design-system/components'
-import { Button, Pill, Skeleton } from '@/design-system/primitives'
-import { checkMetaToken, fetchMetaConnections, type MetaConnection } from '@/lib/meta-ads/contract'
+import { Button, Pill, Skeleton, Toggle } from '@/design-system/primitives'
+import { checkMetaToken, fetchMetaConnections, fetchMetaEventsSwitch, setMetaEventsSwitch, type MetaConnection, type MetaEventsSwitch } from '@/lib/meta-ads/contract'
 import { formatDay, formatMoment } from '@/app/marketing/ads/meta/metaAds'
 import { MetaAccountsDialog } from '../MetaAccountsDialog'
 import { MetaCredentialsDialog } from '../MetaCredentialsDialog'
@@ -29,6 +34,9 @@ const STATE_PILL: Record<MetaConnection['state'], { tone: 'success' | 'info' | '
 }
 
 type Note = { tone: 'success' | 'warning' | 'danger'; title: string; text?: string }
+
+/** Review F5 — how a send runs, honest with "Claude's changes need no approval" (#691). */
+const SEND_RULE = 'Each send is a change a person approves in Nexus — or, with "Claude\'s changes need no approval" on, it runs 20 s after Claude asks, in the asker\'s name, unless someone stops it. Nexus has no way yet to take in such sales, so nothing is sent until it has.'
 
 export function MetaConnectionCards({ connectionId, reloadSignal, onChanged }: {
   /** The page's Meta connection; null when none is connected. */
@@ -48,6 +56,11 @@ export function MetaConnectionCards({ connectionId, reloadSignal, onChanged }: {
   const [tokenNote, setTokenNote] = useState<Note | null>(null)
   const [assetNote, setAssetNote] = useState<{ title: string; text: string } | null>(null)
   const [credentialsNote, setCredentialsNote] = useState<{ title: string; text: string } | null>(null)
+  // Null until read; a read it may not make (403) or that failed leaves it null and the row says so.
+  const [salesSwitch, setSalesSwitch] = useState<MetaEventsSwitch | null>(null)
+  const [mayChangeSales, setMayChangeSales] = useState(false)
+  const [switching, setSwitching] = useState(false)
+  const [switchNote, setSwitchNote] = useState<Note | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -62,6 +75,26 @@ export function MetaConnectionCards({ connectionId, reloadSignal, onChanged }: {
   }, [connectionId])
 
   useEffect(() => { void load() }, [load, reloadSignal])
+  useEffect(() => {
+    fetchMetaEventsSwitch().then((read) => { setSalesSwitch(read.switch); setMayChangeSales(read.canChange) }, () => { setSalesSwitch(null); setMayChangeSales(false) })
+  }, [reloadSignal])
+
+  const switchSales = async (on: boolean) => {
+    if (switching) return
+    setSwitching(true)
+    setSwitchNote(null)
+    try {
+      const next = await setMetaEventsSwitch(on)
+      setSalesSwitch(next)
+      setSwitchNote(next.on
+        ? { tone: 'success', title: 'Sending sales to Meta is on', text: `Nothing is sent yet: Claude may now ask to send sales taken in by hand in Nexus. ${SEND_RULE}` }
+        : { tone: 'success', title: 'Sending sales to Meta is off', text: 'Nexus sends Meta no sale, not even one approved earlier.' })
+    } catch (err) {
+      setSwitchNote({ tone: 'danger', title: 'The switch was not changed', text: err instanceof Error ? err.message : 'Nexus could not reach the server. Try again.' })
+    } finally {
+      setSwitching(false)
+    }
+  }
 
   const checkNow = async () => {
     if (checking || !connectionId) return
@@ -149,6 +182,17 @@ export function MetaConnectionCards({ connectionId, reloadSignal, onChanged }: {
     { label: 'Last read', value: <AsOf at={connection.read.lastReadAt} kind="event" /> },
     { label: 'Newest day read', value: connection.read.lastDataDay ? formatDay(connection.read.lastDataDay) : 'None yet' },
     { label: 'Next read', value: connection.read.nextReadAt ? <time dateTime={connection.read.nextReadAt}>{formatMoment(connection.read.nextReadAt) ?? connection.read.nextReadAt}</time> : 'Not planned' },
+    {
+      label: 'Send sales to Meta',
+      value: salesSwitch
+        ? <Toggle checked={salesSwitch.on} aria-label="Send sales to Meta (Conversions API)" disabled={switching || !mayChangeSales} aria-busy={switching || undefined} onChange={(next) => { void switchSales(next) }} />
+        : 'Not read',
+      hint: !salesSwitch
+        ? 'Your role cannot see this switch, or Nexus could not read it.'
+        : `${salesSwitch.on
+          ? `On${salesSwitch.since ? ` since ${formatMoment(salesSwitch.since) ?? salesSwitch.since}` : ''}${salesSwitch.by ? ` (${salesSwitch.by})` : ''}. Claude may ask to send sales taken in by hand in Nexus, with every such buyer's e-mail and phone hashed. ${SEND_RULE} Website sales stay with the shop's own Meta app.`
+          : `Off (the default): Nexus sends Meta no sale. On, Claude may ask to send sales taken in by hand in Nexus. ${SEND_RULE}`}${mayChangeSales ? '' : ' Turning it on or off needs the permission to manage the business\'s security.'}`,
+    },
   ]
   const canChoose = connection.state !== 'sign_in_needed' && connection.state !== 'token_problem'
 
@@ -192,6 +236,7 @@ export function MetaConnectionCards({ connectionId, reloadSignal, onChanged }: {
       >
         <div style={{ display: 'grid', gap: 'var(--nds-space-14)' }}>
           {assetNote && <Banner tone="success" title={assetNote.title} onDismiss={() => setAssetNote(null)}>{assetNote.text}</Banner>}
+          {switchNote && <Banner tone={switchNote.tone} title={switchNote.title} onDismiss={() => setSwitchNote(null)}>{switchNote.text}</Banner>}
           {connection.read.lastError && connection.state === 'read_failed' && (
             <Banner tone="danger" title="Last read failed">{connection.read.lastError}</Banner>
           )}
