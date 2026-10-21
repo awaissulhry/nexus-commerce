@@ -9,7 +9,7 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
 import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
 import type { MetaChangeResult, MetaRequestVia, MetaWriteTarget } from './write-client.js'
 
@@ -24,6 +24,12 @@ export interface MetaChangeRequest {
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
+  /**
+   * Step 26 (review A3) — the fields as this preview's plan hash reads them, when they differ from `params`: a creator's
+   * partnership ad code is replaced in it (a short code could be reversed from a hash; the request's arguments still carry the
+   * code). Default: `params`.
+   */
+  planParams?: Record<string, string>
   /**
    * Meta's check (validate_only) for this request: `meta` — asked before it is queued; `none` — Meta documents none for it
    * (ad set and ad updates); `not-yet` — Meta documents one, but Nexus does not use it for this change until a live probe
@@ -69,6 +75,9 @@ export interface MetaChangeRequest {
     | 'customaudience'
     // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
     | MetaPageKind
+    // Step 26 — the chosen Instagram account (`iguser`) or a media of it (`igmedia`); the chosen Page on Meta's partnership
+    // host is step 28's `page` (set-meta-partnership-access).
+    | MetaBoostWriteKind
     // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
     | MetaSignalsKind
     // Step 30 — the connection's own Meta app (its webhook subscriptions).
@@ -121,6 +130,9 @@ export interface MetaChangeRequest {
   skipReadBack?: true
   /** Meta's codes this request may meet, in plain words (base code → sentence), added to the step's sentence. */
   explain?: Readonly<Record<string, string>>
+  // ── step 27 ──
+  /** A new ad's check runs Meta's synchronous integrity review with it (synchronous_ad_review, AD-026 … AD-028). */
+  adReview?: boolean
   // ── step 30 (webhook and alert subscriptions) ──
   /** Its path, a DELETE's query, PATCH (write-client.ts MetaRequestVia); Meta's answer is all there is. */
   via?: MetaRequestVia

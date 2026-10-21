@@ -71,7 +71,8 @@ const complete = (c: Record<string, unknown>): Record<string, any> => {
 /** A creative of the chosen Page with this story (and its silent keys). */
 const withStory = (story: Record<string, unknown>, over: Record<string, unknown> = {}) => complete({ name: 'Creative A', object_story_spec: { page_id: PAGE, ...story }, ...over })
 /** The silent keys a creative of an existing post with no website link names. */
-const postSilent = () => ({ degrees_of_freedom_spec: { creative_features_spec: Object.fromEntries(META_CREATIVE_FEATURES.map((f) => [f, { enroll_status: 'OPT_OUT' }])) }, contextual_multi_ads: { enroll_status: 'OPT_OUT' } })
+// Step 26 (review B4) — the gateway requires the product-tag opt-out on every existing post too.
+const postSilent = () => ({ degrees_of_freedom_spec: { creative_features_spec: Object.fromEntries(META_CREATIVE_FEATURES.map((f) => [f, { enroll_status: 'OPT_OUT' }])) }, contextual_multi_ads: { enroll_status: 'OPT_OUT' }, interactive_components_spec: { components: [{ type: 'product_tag', enroll_status: 'opt_out' }] } })
 /** A full image creative, as decoded keys. */
 const creative = (over: Record<string, unknown> = {}) => complete({
   name: 'Creative A',
@@ -404,7 +405,7 @@ describe('review round 2', () => {
       ['object_type EVENT', withStory(web, { object_type: 'EVENT' })],
       ['WhatsApp number', withStory({ ...web, whats_app_business_phone_number: '+15555550100' })],
       ['marketing message', withStory(web, { marketing_message_structured_spec: { language: 'it_IT' } })],
-      ['message extensions', withStory(web, { asset_feed_spec: { audios: [], message_extensions: [{ type: 'MESSAGE_PAGE' }] } })],
+      ['message extensions', withStory(web, { asset_feed_spec: { audios: [], message_extensions: [{ type: 'messenger' }] } })],
       ['welcome message', withStory({ link_data: { ...web.link_data, page_welcome_message: 'Ciao' } })],
       ['layer CALL_NOW', withStory({ link_data: { ...web.link_data, image_layer_specs: [{ layer_type: 'text_overlay', content: { type: 'CALL_NOW' } }] } })],
       ['layer VISIT_PROFILE', withStory({ link_data: { ...web.link_data, image_layer_specs: [{ layer_type: 'text_overlay', content: { type: 'VISIT_PROFILE' } }] } })],
@@ -416,9 +417,12 @@ describe('review round 2', () => {
       expect(problem({ body: form(bare(c)) }), label).not.toBeNull()
     }
     // The stray markers of another type are refused even with the website keys; the plain ones pass with them.
-    for (const label of ['object_type EVENT', 'WhatsApp number', 'marketing message', 'message extensions', 'welcome message', 'card CALL_NOW']) {
+    for (const label of ['object_type EVENT', 'WhatsApp number', 'marketing message', 'welcome message', 'card CALL_NOW']) {
       expect(problem({ body: form(cases.find(([l]) => l === label)![1]) }), label).toMatch(/main button makes it a standard creative/)
     }
+    // Step 27 (CR-218) — a "message us" footer belongs on a website ad, but only inline on a new ad (create-meta-ad): the
+    // creative edge answers error 3, so Nexus never sends it there.
+    expect(problem({ body: form(cases.find(([l]) => l === 'message extensions')![1]) })).toMatch(/only inline on a new ad/)
     for (const label of ['control', 'layer CALL_NOW', 'layer VISIT_PROFILE', 'video product_link only']) {
       expect(problem({ body: form(cases.find(([l]) => l === label)![1]) }), label).toBeNull()
     }

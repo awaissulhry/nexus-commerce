@@ -20,8 +20,8 @@
  *   first.
  * Never logs a token, a request body or an answer.
  */
-import { metaRuploadCall, metaWriteCall, type MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
+import { metaRestWriteCall, metaRuploadCall, metaWriteCall, type MetaRestWriteRequest, type MetaWriteEdge } from '../../gateway/meta.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
@@ -68,6 +68,8 @@ export interface MetaObjectChange {
     | 'customaudience'
     // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
     | MetaPageKind
+    // Step 26 — the chosen Instagram account or a media of it (set-meta-partnership-access; its Page is step 28's `page`).
+    | MetaBoostWriteKind
     // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
     | MetaSignalsKind
     // Step 30 — the connection's own Meta app (its webhook subscriptions).
@@ -115,6 +117,8 @@ export interface MetaObjectChange {
   runId?: string
   /** Step 36 — never read back: Meta's answer (the new id) is all Nexus keeps (a test lead: these tools never read a lead). */
   skipReadBack?: true
+  /** Step 27 — a new ad's check runs Meta's synchronous integrity review with it (synchronous_ad_review, AD-027). */
+  adReview?: boolean
   /**
    * Step 30 — a webhook or alert subscription change (meta-webhook-rules.ts): its path, a DELETE's query, PATCH; Meta's
    * answer is all there is (`{success}` or the new subscription's id) — nothing is read back. Its token is its rule's
@@ -166,7 +170,9 @@ export function readsOf(node: Record<string, unknown>, expected: Record<string, 
 /** Step 18 review A7 — times are sent as UTC Unix seconds and read back as ISO 8601: both judged as Unix seconds. */
 const TIME_FIELDS = new Set(['start_time', 'end_time', 'time_start', 'time_end',
   // Step 28 — a study's windows and a Page video test's start.
-  'observation_end_time', 'cooldown_start_time', 'scheduled_experiment_timestamp'])
+  'observation_end_time', 'cooldown_start_time', 'scheduled_experiment_timestamp',
+  // Step 27 — an ad's own schedule.
+  'ad_schedule_start_time', 'ad_schedule_end_time'])
 const unixOf = (v: unknown): string => {
   const text = String(v)
   if (/^\d{1,11}$/.test(text)) return text
@@ -267,7 +273,7 @@ export async function metaCheckChange(target: MetaWriteTarget, change: MetaObjec
   try {
     answer = await metaWriteCall({
       connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind, params: change.params, check: true,
-      ...(change.parent ? { parent: change.parent } : {}), ...(change.edge ? { edge: change.edge } : {}), ...(change.recommendations ? { recommendations: true } : {}),
+      ...(change.parent ? { parent: change.parent } : {}), ...(change.edge ? { edge: change.edge } : {}), ...(change.recommendations ? { recommendations: true } : {}), ...(change.adReview ? { adReview: true } : {}),
     })
   } catch (err) {
     const failure = failureOfThrow(err) ?? localFailure(`Nexus could not ask Meta's check (${err instanceof Error ? err.message : String(err)}).`, 'NEXUS_ERROR')
@@ -437,4 +443,32 @@ export async function metaSendRupload(target: MetaWriteTarget, upload: { videoId
   const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer)
   if (answer.status === 0 || answer.status >= 500) throw new MetaWriteError({ ...failure, sentence: META_UNKNOWN_OUTCOME }, upload.operation, 'unknown')
   throw new MetaWriteError(failure, upload.operation, 'refused')
+}
+
+/** Big integers (Page and post ids on Meta's partnership host come as JSON numbers) kept exact as text before parsing. */
+function parseExactJson(raw: string): unknown {
+  try { return JSON.parse(raw.replace(/([:[,]\s*)(\d{16,})(?=\s*[,\]}])/g, '$1"$2"')) } catch { return null }
+}
+
+/**
+ * Step 26 (review B1) — one change on Meta's partnership REST host (metaRestWriteCall). Resolves with Meta's answer (a list of
+ * per-item results, or an object) as `node`; rejects with a MetaWriteError: not_sent (the gateway refused it, nothing left),
+ * refused (Meta answered an error: it changed nothing), unknown (no answer, or Meta failed on its side). Never retried. Meta
+ * answers each item of a list on its own (not all or nothing): the caller reads them.
+ */
+export async function metaSendRest(target: MetaWriteTarget, change: Omit<MetaRestWriteRequest, 'connectionId'>): Promise<MetaChangeResult> {
+  let answer: GatewayResponse
+  try {
+    answer = await metaRestWriteCall({ ...change, connectionId: target.connectionId, maxRateWaitMs: WRITE_RATE_WAIT_MS })
+  } catch (err) {
+    const failure = failureOfThrow(err) ?? localFailure(`Nexus could not send it (${err instanceof Error ? err.message : String(err)}). Nothing was sent.`, 'NEXUS_ERROR')
+    throw new MetaWriteError(failure, change.operation, 'not_sent')
+  }
+  if (answer.ok) {
+    const body = parseExactJson(answer.text)
+    return { node: Array.isArray(body) ? { items: body } : body && typeof body === 'object' ? body as Record<string, unknown> : null, readBack: 'same-request', waitedMs: 0 }
+  }
+  const failure = changeFailure(answer)
+  if (answer.status === 0 || answer.status >= 500) throw new MetaWriteError({ ...failure, sentence: META_UNKNOWN_OUTCOME }, change.operation, 'unknown')
+  throw new MetaWriteError(failure, change.operation, 'refused')
 }

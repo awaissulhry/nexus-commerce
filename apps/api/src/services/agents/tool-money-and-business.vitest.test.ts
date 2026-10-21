@@ -296,6 +296,12 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-audience-members': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
   'set-meta-audience-sharing': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
   'remove-meta-audience': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
+  // Meta ads step 26: a boost and a partnership change read the business's chosen Meta account first (meta-ads-boosts.tools test).
+  'create-meta-boost': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-boosts.tools test)',
+  'set-meta-partnership-access': 'it reads the business\'s chosen Meta Instagram account live from Meta, and no business here has Meta connected (meta-ads-boosts.tools test)',
+  // Meta ads step 27: an ad reads the business's chosen Meta ad account first (meta-ads-ads.tools test).
+  'create-meta-ad': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-ads.tools test)',
+  'set-meta-ad': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-ads.tools test)',
   // Meta ads step 32: datasets and custom conversions read and change Meta live (their own test runs them).
   'create-meta-dataset': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
   'set-meta-dataset': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
@@ -696,6 +702,12 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-audience-members': () => ({ mode: 'opt_out_everywhere' }),
   'set-meta-audience-sharing': () => ({ audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'] }),
   'remove-meta-audience': () => ({ audienceIds: ['120000000000040'], confirmDelete: true }),
+  // Meta ads step 26: a boost and a partnership change refuse in words before any call (no business here has Meta).
+  'create-meta-boost': () => ({ name: 'Boost A', source: 'facebook-post', postId: '120000000000010_500000000000001' }),
+  'set-meta-partnership-access': () => ({ action: 'approve-creators', creators: [{ instagramId: '17841400000000099' }] }),
+  // Meta ads step 27: an ad refuses in words before any call (no business here has Meta).
+  'create-meta-ad': () => ({ name: 'Ad A', adSetId: '120000000000002', creativeId: '120000000000301' }),
+  'set-meta-ad': () => ({ adId: '120000000000003', name: 'Ad B' }),
   // Meta ads step 32: no business here has Meta, so each refuses in words before any call.
   'create-meta-dataset': () => ({ name: 'Shop A dataset' }),
   'set-meta-dataset': () => ({ pixelId: '120000000000050', name: 'Shop A dataset' }),

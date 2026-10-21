@@ -31,6 +31,32 @@
  * enroll_status wherever images are, `multi_share_optimized` on every carousel — the gateway refuses a creative without
  * one of them; its type comes from its main button only, and markers of another type are refused (creativeTypeProblem).
  *
+ * Step 26 (2026-10-21) — the SAME judge takes a creative of an EXISTING post (create-meta-boost): exactly one source — a story,
+ * a post (object_story_id), an Instagram media (source_instagram_media_id + object_id), an Instagram post link
+ * (instagram_permalink_url + object_id) or a creator's partnership ad code (branded_content.instagram_boost_post_access_token +
+ * object_id, or facebook_boost_post_access_token) — each source's ids handed to the gateway (sourceAssets): the business's
+ * own post / media / link, or a CREATOR's content (branded_content.ad_format named: Meta's "boost existing post" guides put
+ * the brand's chosen Page and Instagram account as the SPONSORS then) that Meta's content discovery lists for the brand and
+ * that no other Nexus business owns. An ad code is never quoted in a sentence, and its body never reaches the ledger
+ * (`secret`). The silent keys follow step 25's rules for an existing post (silentKeysFor / silentKeysToSend /
+ * silentFeaturesProblem: isExistingPostCreative); its asset feed carries only music asked or Meta's messaging / profile-visit
+ * destinations (DOF_MESSAGING_DESTINATION, UNIFIED_PROFILE_VISIT_DESTINATION, with their call_to_actions). Checked
+ * 2026-10-21: ad-creative/partnership-ads/ads-creation/boost-existing-post.md and boost-existing-fb-post.md (object_id,
+ * source_instagram_media_id, facebook_branded_content.sponsor_page_id = the brand's Page, instagram_branded_content.sponsor_id =
+ * the brand's Instagram account, branded_content {instagram_boost_post_access_token | facebook_boost_post_access_token,
+ * ad_format 1 | 2 | 3}), …/supported-configurations/click-to-message-destinations.md (branded_content.promoted_page_id),
+ * instagram/ads-api/guides/use-posts-as-ads.md, ad-creative/profile-visit-ads/*.md, threads-ads/creation/use-posts-as-ads.md,
+ * reference/ad-account/adcreatives.md (instagram_permalink_url "URL for a post on Instagram you want to run as an ad";
+ * branded_content ad_format enum {0, 1, 2, 3}); SDK adcreativebrandedcontentads.py (ad_format int, promoted_page_id string).
+ *
+ * Step 27 (2026-10-21) — the SAME judge takes a new ad's INLINE creative (create-meta-ad: judgeCreativeSpec, the creative as
+ * one JSON object). Only there may a website ad carry a "message us" footer (asset_feed_spec.message_extensions: whatsapp,
+ * messenger or instagram_message, beside a website link and button — the creative edge and the async job refuse it, Meta
+ * answers error 3: ad-creative/messaging-ads/website-ads-click-to-message.md). media_sourcing_spec also takes a multi-media
+ * ad (ad-creative/multi-media-ads.md: up to 10 images and videos, each with its source and opt_in_status said, per-media
+ * text, landing page, placement exclusions, crops and persona — out-of-cycle-changes/occ-2026.md 2026-10-19; SDK
+ * adcreativemediasourcingspec.py). judgeAssetGroups (flexible-ad-format.md) and judgeAdPersona judge an ad's own JSON parts.
+ *
  * Checked 2026-10-21 (curl ≥ 3 s apart; .md pages under developers.facebook.com/documentation/ads-commerce/marketing-api/):
  *   - reference/ad-account/adcreatives.md "Creating": the parameter table (actor_id … wamo_whatsapp_identity_spec);
  *     execution_options list<enum{validate_only}>; "if the object_story_id being used is already in use by an existing
@@ -194,9 +220,18 @@ const picture: Judge = (value, path, walk) => {
 const ctaLink: Judge = (value, path, walk) => (typeof value === 'string' && /^tel:\+\d{6,15}$/.test(value) ? ok(value) : link(value, path, walk))
 /** A display link (`caption`, `display_url`: "must be an actual URL"): an https link or a bare host with a path. */
 const displayLink: Judge = (value, path, walk) => (typeof value === 'string' && /^(?!https?:)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(\/[A-Za-z0-9._~\-/]*)?$/.test(value) && value.length <= LINK_MAX ? ok(value) : link(value, path, walk))
-/** An Instagram app link for the unified profile visit (master CR-225): instagram://user?username=<name>. */
-const instagramAppLink: Judge = (value, path) => (typeof value === 'string' && /^instagram:\/\/user\?username=[A-Za-z0-9._]{1,30}$/.test(value) ? ok(value) : no(`${path} is instagram://user?username=<the Instagram username> (Nexus has no app of its own)`))
-const digits = (value: unknown) => (typeof value === 'string' && /^\d{1,20}$/.test(value) ? value : null)
+/**
+ * An Instagram app link for the unified profile visit (master CR-225). Step 26 (review B5) — multidestination-profile-visit.md writes it `instagram://user?username=<IG_USERNAME>&userid=<IG_USER_ID>`:
+ * the user id, when named, goes to the gateway's check as step 31's `instagram` body id (the chosen Instagram account).
+ */
+const instagramAppLink: Judge = (value, path, walk) => {
+  const m = typeof value === 'string' ? /^instagram:\/\/user\?username=[A-Za-z0-9._]{1,30}(?:&userid=([1-9]\d{0,24}))?$/.exec(value) : null
+  if (!m) return no(`${path} is instagram://user?username=<the Instagram username>[&userid=<its id>] (Nexus has no app of its own)`)
+  if (m[1]) walk.ids.push({ id: m[1], kind: 'instagram' })
+  return ok(value)
+}
+// Review round 2 (step 26) — a Meta id never starts with 0 (`0<id>` would slip past a "not the chosen one" compare).
+const digits = (value: unknown) => (typeof value === 'string' && /^[1-9]\d{0,19}$/.test(value) ? value : null)
 /** A Meta id (digits, written as a string), handed to the gateway's check as this kind of asset. */
 const id = (kind: MetaWriteAsset['kind']): Judge => (value, path, walk) => {
   const v = digits(value)
@@ -247,7 +282,27 @@ const RETAILER_ITEMS = 'Meta takes retailer_item_ids as the advertiser\'s own pr
 /** Review B1 (promo codes) — the two code sources Nexus names; no catalog promotion or Meta offer is a source. */
 const PROMO_SOURCES = 'Nexus takes promo codes only from the creative\'s text and its own code (the two sources it names): no catalog promotion or Meta offer is a code source'
 const NO_APP = 'Nexus sells online and has no app of its own, so it sends no app link, store link, playable or app id'
-const BOOST = 'a creative made from an existing Instagram or Facebook post of someone else comes with create-meta-boost (step 26)'
+const BOOST = 'a creative made from an existing post (the chosen Page\'s post, the chosen Instagram account\'s media, or a creator\'s content or ad code) is made with create-meta-boost'
+/**
+ * Step 26 — master CR-331: a partnership Advantage+ catalog ad with an existing post as its intro card is a CATALOG creative
+ * (template_data + a product set). Step 18's catalog rule is on main; this card comes with lane C2's catalog follow-up (a later
+ * small PR wires it through that rule). C2-REBASE-18.
+ */
+const CATALOG_INTRO = 'a partnership catalog ad with an existing post as its intro card (parent_source_…) is a catalog creative: it comes with lane C2\'s catalog follow-up'
+
+/**
+ * Step 26 — a creator's partnership ad code (Meta's boost-existing-post guides; master CR-323, CR-325, MD-138): letters,
+ * digits and _ = + / - (step 16's look-up takes the same; Meta shows no format, its troubleshooting note calls it "numerical"). A credential-like string: a
+ * sentence never quotes it, and a body that carries one never reaches the ledger.
+ */
+export const META_AD_CODE = /^[A-Za-z0-9_=+/-]{4,200}$/
+const adCode: Judge = (value, path) => (typeof value === 'string' && META_AD_CODE.test(value) ? ok(value) : no(`${path} is a partnership ad code as the creator shared it (letters, digits and _ = + / -; Nexus never repeats it)`))
+/**
+ * Step 26 — master CR-304: a public link to an Instagram post, exactly as Meta's media `permalink` writes it
+ * (https://www.instagram.com/p|reel|tv/<shortcode>/); the gateway confirms it is the chosen Instagram account's own media.
+ */
+export const META_IG_PERMALINK = /^https:\/\/www\.instagram\.com\/(p|reel|tv)\/[A-Za-z0-9_-]{5,40}\/$/
+const igPermalink: Judge = (value, path) => (typeof value === 'string' && META_IG_PERMALINK.test(value) ? ok(value) : no(`${path} is an Instagram post link as Meta writes it (https://www.instagram.com/p/<code>/)`))
 /**
  * Review B6 — the reference lists threads_user_id with no description of what it takes; Meta's Threads guide has a Threads
  * ad use the Instagram account ("that Instagram account needs to be used").
@@ -373,6 +428,9 @@ const LAYER = {
 }
 
 // ── the parts of a creative ─────────────────────────────────────────────────────────────────────────────────────────
+
+/** Step 27 (master CR-218) — the channels of a website ad's "message us" footer (asset_feed_spec.message_extensions). */
+export const META_MESSAGE_FOOTERS = ['whatsapp', 'messenger', 'instagram_message'] as const
 
 /** Text limits Nexus holds, Meta's own (asset-feed-spec, multi-language ads: title 255, body 4,096, description 10,000). */
 export const META_CREATIVE_TEXT = { message: 4096, headline: 255, description: 10_000, greeting: 300, iceTitle: 80, quickReply: 20, label: 100, name: 100 } as const
@@ -667,11 +725,72 @@ const assetFeedSpec = obj({
     if (!manual && promo.manual_coupon_codes?.length) return no(`${path}: a manual_coupon_codes code goes only with the source AD_CREATIVE_MANUAL_COUPON_CODES`)
     return judged
   },
-  message_extensions: list(obj({ type: token }, ['type']), 5),
+  // Step 27 (master CR-218, ad-creative/messaging-ads/website-ads-click-to-message.md) — the "message us" footer of a website
+  // ad: ONE channel, Meta's own three words. Only inline on a new ad (create-meta-ad): the creative edge answers error 3.
+  message_extensions: list(obj({ type: enumOf(META_MESSAGE_FOOTERS) }, ['type']), 1, 1),
   onsite_destinations: refuse(SHOP),
   shops_bundle: refuse(SHOP),
   app_product_page_id: refuse(NO_APP),
 })
+/**
+ * Step 27 (master CR-427; out-of-cycle-changes/occ-2026.md, 2026-10-19 "Creative audience pairing") — an age and gender
+ * persona paired with the whole ad or one image or video: {age_min, age_max, genders}. Nexus's markets are in the EU, where
+ * Meta targets nobody under 18 (F1 M6): 18 to 65.
+ */
+const persona: Judge = (value, path, walk) => {
+  const judged = obj({ age_min: int(18, 65), age_max: int(18, 65), genders: list(int(1, 2), 2, 1) })(value, path, walk)
+  if ('problem' in judged) return judged
+  const p = judged.value as { age_min?: number; age_max?: number; genders?: number[] }
+  if (!Object.keys(p).length) return no(`${path} names an age range or genders`)
+  if (p.age_min !== undefined && p.age_max !== undefined && p.age_min > p.age_max) return no(`${path}.age_min is at most age_max`)
+  if (p.genders && new Set(p.genders).size !== p.genders.length) return no(`${path}.genders names each gender once (1 men, 2 women)`)
+  return judged
+}
+
+/**
+ * Step 27 (master CR-425, CR-426; ad-creative/multi-media-ads.md, SDK adcreativemediasourcingspec.py) — a multi-media ad: up
+ * to 10 images and videos, each with its source and its related-media switch said explicitly (opt_in only when asked: the
+ * preview names it), per-media text, landing page, placement exclusions, crops and persona; global titles, bodies and
+ * descriptions. related_media never beside explicit images or videos; no hash or video twice.
+ */
+const mediaTextKeys = {
+  titles: list(obj({ text: text(META_CREATIVE_TEXT.headline) }, ['text']), 5),
+  bodies: list(obj({ text: text(META_CREATIVE_TEXT.message, { lines: true }) }, ['text']), 5),
+  descriptions: list(obj({ text: text(META_CREATIVE_TEXT.description, { lines: true }) }, ['text']), 5),
+}
+const mediaText = obj(mediaTextKeys)
+const mediaCommon = {
+  source: enumOf(['multi_media']),
+  opt_in_status: enumOf(['opt_in', 'opt_out']),
+  text_customizations: mediaText,
+  destination_customizations: list(obj({ url: link, display_url: displayLink }, ['url']), 1),
+  placement_customizations: list(obj({
+    publisher_platform: enumOf(['facebook', 'instagram', 'audience_network', 'messenger', 'whatsapp', 'threads']),
+    placement_exclusions: list(token, 20, 1),
+  }, ['publisher_platform', 'placement_exclusions']), 6),
+  creative_audience_pairing_persona: persona,
+}
+const mediaSourcingSpec: Judge = (value, path, walk) => {
+  const judged = obj({
+    related_media: obj({ opt_in_status: enumOf(['OPT_IN', 'OPT_OUT']) }, ['opt_in_status']),
+    images: list(obj({ hash, url: picture, image_crops: list(obj({ type: enumOf(['manual', 'auto_crop', 'smart_crop', 'super_crop']), crop_spec: crops() }, ['type']), 4), ...mediaCommon }, ['source', 'opt_in_status']), 10),
+    // Review B6 — each video names its original video and a thumbnail (its link or how Meta makes it), as the guide asks.
+    videos: list(obj({ video_id: bodyId('video'), original_video_id: bodyId('video'), thumbnail_url: picture, thumbnail_source: token, ...mediaCommon }, ['video_id', 'original_video_id', 'source', 'opt_in_status']), 10),
+    ...mediaTextKeys,
+  })(value, path, walk)
+  if ('problem' in judged) return judged
+  const m = judged.value as { related_media?: unknown; images?: Array<{ hash?: string; url?: string }>; videos?: Array<{ video_id: string }> }
+  const images = m.images ?? []
+  const videos = m.videos ?? []
+  if (m.related_media && (images.length || videos.length)) return no(`${path}: related_media never goes beside explicit images or videos (Meta's multi-media guide)`)
+  if (images.length + videos.length > 10) return no(`${path} holds at most 10 images and videos together`)
+  if (images.some((i) => !i.hash === !i.url)) return no(`${path}.images: each image names its hash or its url, one of them`)
+  if ((m.videos as Array<{ thumbnail_url?: string; thumbnail_source?: string }> | undefined ?? []).some((v) => !v.thumbnail_url && !v.thumbnail_source)) return no(`${path}.videos: each video names thumbnail_url or thumbnail_source (Meta's multi-media guide)`)
+  const hashes = images.map((i) => i.hash).filter(Boolean)
+  if (new Set(hashes).size !== hashes.length || new Set(videos.map((v) => v.video_id)).size !== videos.length) return no(`${path} names each image hash and each video once (Meta refuses duplicates)`)
+  return judged
+}
+
 /** A boolean that may only be this value (Meta's automatic promo-code updates stay off). */
 function enumOfBool(only: boolean): Judge {
   return (value, path) => (value === only ? ok(value) : no(`${path} is ${only} (Nexus lets Meta change no promo code by itself)`))
@@ -728,11 +847,15 @@ const formatTransformation = list(obj({ format: enumOf(META_FORMAT_AUTOMATION_FO
 const CREATIVE_KEYS: Readonly<Record<string, { judge: Judge; json: boolean }>> = {
   name: { judge: text(META_CREATIVE_TEXT.name), json: false },
   object_story_spec: { judge: objectStorySpec, json: true },
-  object_story_id: { judge: (value, path, walk) => {
-    if (typeof value !== 'string' || !/^\d{1,25}_\d{1,25}$/.test(value)) return no(`${path} is a post id (<Page id>_<post id>)`)
-    walk.assets.push({ id: value, kind: 'pagepost' })
+  // Step 26 — its id goes to the gateway from sourceAssets: the chosen Page's post, or a creator's (partnership boost).
+  object_story_id: { judge: (value, path) => {
+    if (typeof value !== 'string' || !/^[1-9]\d{0,24}_[1-9]\d{0,24}$/.test(value)) return no(`${path} is a post id (<Page id>_<post id>)`)
     return ok(value)
   }, json: false },
+  // Step 26 (create-meta-boost) — an Instagram media or post link run as an ad, with the Page (object_id) it runs under.
+  object_id: { judge: digitsOnly, json: false },
+  source_instagram_media_id: { judge: digitsOnly, json: false },
+  instagram_permalink_url: { judge: igPermalink, json: false },
   instagram_user_id: { judge: digitsOnly, json: false },
   asset_feed_spec: { judge: assetFeedSpec, json: true },
   degrees_of_freedom_spec: { judge: degreesOfFreedom, json: true },
@@ -761,7 +884,17 @@ const CREATIVE_KEYS: Readonly<Record<string, { judge: Judge; json: boolean }>> =
       return obj({ type: enumOf(['product_tag']), enroll_status: enumOf(['opt_out', 'opt_in']) }, ['type', 'enroll_status'])(value, path, walk)
     }, 10),
   }), json: true },
-  branded_content: { judge: obj({ testimonial: text(500, { lines: true }), testimonial_locale: locale, parent_source_instagram_media_id: refuse(BOOST), parent_source_facebook_post_id: refuse(BOOST), partners: refuse(BOOST) }), json: true },
+  // Step 26 — a creator's content (create-meta-boost): the identities the ad shows (ad_format 1 both, 2 the first, 3 Meta
+  // picks — Instagram only; SDK: int), the creator's ad code, the Page a partnership messaging ad opens (the chosen one).
+  branded_content: { judge: obj({
+    testimonial: text(500, { lines: true }), testimonial_locale: locale,
+    ad_format: int(1, 3),
+    instagram_boost_post_access_token: adCode,
+    facebook_boost_post_access_token: adCode,
+    promoted_page_id: bodyId('page'),
+    parent_source_instagram_media_id: refuse(CATALOG_INTRO), parent_source_facebook_post_id: refuse(CATALOG_INTRO),
+    partners: refuse('Nexus names ONE partner: create-meta-creative partner (new media) or create-meta-boost (a creator\'s content)'),
+  }), json: true },
   facebook_branded_content: { judge: obj({ sponsor_page_id: digitsOnly, shared_to_sponsor_status: token, sponsor_relationship: token }, ['sponsor_page_id']), json: true },
   instagram_branded_content: { judge: obj({ sponsor_id: digitsOnly }, ['sponsor_id']), json: true },
   creative_sourcing_spec: { judge: obj({
@@ -769,7 +902,8 @@ const CREATIVE_KEYS: Readonly<Record<string, { judge: Judge; json: boolean }>> =
     // Master CR-330 / CR-414 — product extensions: the product set shown under the ad (step 18's catalog rule).
     associated_product_set_id: bodyId('productset'),
   }), json: true },
-  media_sourcing_spec: { judge: obj({ related_media: obj({ opt_in_status: enumOf(['OPT_IN', 'OPT_OUT']) }, ['opt_in_status']) }), json: true },
+  // Step 27 — related media, or a multi-media ad's images and videos (CR-425 … CR-427: mediaSourcingSpec).
+  media_sourcing_spec: { judge: mediaSourcingSpec, json: true },
   marketing_message_structured_spec: { judge: obj({ language: locale, conversation_template_id: scopedId, footer: text(60), greeting: text(META_CREATIVE_TEXT.greeting, { lines: true }), is_optimized_text: bool }), json: true },
   recommender_settings: { judge: obj({ preferred_events: list(enumOf(['ViewContent', 'Search', 'AddToCart', 'AddToWishlist', 'InitiateCheckout', 'AddPaymentInfo', 'Purchase', 'Subscribe', 'RecurringSubscriptionPayment', 'Lead', 'CompleteRegistration', 'CustomConversion', 'AggregateCustomConversion', 'Other']), 14), product_sales_channel: enumOf(['ONLINE', 'IN_STORE', 'OMNI']) }), json: true },
   template_url_spec: { judge: templateUrl, json: true },
@@ -795,7 +929,7 @@ export const META_CREATIVE_REFUSED: Readonly<Record<string, string>> = {
   use_page_actor_override: NO_APP, omnichannel_link_spec: NO_APP,
   place_page_set_id: 'Nexus sells online and keeps no store-location pages (a place page set), so it makes no dynamic local ad',
   dynamic_ad_voice: 'Nexus sells online and keeps no store-location pages (a place page set), so it makes no dynamic local ad',
-  source_instagram_media_id: BOOST, object_id: BOOST, source_facebook_post_id: BOOST,
+  source_facebook_post_id: BOOST,
   image_file: 'Meta allows no link ad without a Page since 2017 (1885833): Nexus builds every creative from the chosen Page (object_story_spec)',
   title: 'Meta allows no link ad without a Page since 2017 (1885833): the headline goes in object_story_spec',
   body: 'Meta allows no link ad without a Page since 2017 (1885833): the text goes in object_story_spec',
@@ -875,8 +1009,8 @@ export function creativeTypeProblem(creative: Record<string, unknown>): string |
   ].filter((t): t is string => typeof t === 'string')
   const markers: Array<[CreativeType, boolean, string]> = [
     ['messaging', anyMember(creative, 'app_destination') || anyMember(creative, 'page_welcome_message') || anyMember(creative, 'partner_app_welcome_message_flow_id')
-      || anyMember(creative, 'whats_app_business_phone_number') || !!creative.marketing_message_structured_spec || anyMember(creative, 'message_extensions')
-      || ctaTypes.some((t) => MESSAGING_CTAS.has(t)), 'a messaging part (a messaging destination, a welcome message, a WhatsApp number or message, message extensions)'],
+      || anyMember(creative, 'whats_app_business_phone_number') || !!creative.marketing_message_structured_spec
+      || ctaTypes.some((t) => MESSAGING_CTAS.has(t)), 'a messaging part (a messaging destination, a welcome message, a WhatsApp number or message)'],
     ['call', anyMember(creative, 'call_ads_configuration') || anyMember(creative, 'link', (v) => typeof v === 'string' && v.startsWith('tel:')) || ctaTypes.includes('CALL_NOW'), 'a call part (CALL_NOW, a tel: link, call_ads_configuration)'],
     ['profile', ctaTypes.some((t) => PROFILE_CTAS.has(t)), 'a profile-visit button'],
     ['lead', anyMember(creative, 'lead_gen_form_id'), 'a lead form'],
@@ -890,7 +1024,23 @@ export function creativeTypeProblem(creative: Record<string, unknown>): string |
       return `the creative's main button makes it a ${type} creative, and it carries ${what}, which goes only with a ${needs} creative: name one kind of creative`
     }
   }
+  // Step 27 (master CR-218) — a "message us" footer goes only on a WEBSITE ad with a website button: Meta's guide names
+  // LEARN_MORE "or other website CTAs" and says messaging buttons are "not compatible" (website-ads-click-to-message.md).
+  if (anyMember(creative, 'message_extensions') && (type !== 'standard' || !hasWebsiteDestination(creative))) {
+    return 'a "message us" footer (asset_feed_spec.message_extensions) goes only on a website ad: a website link and a website button such as LEARN_MORE, never a messaging button'
+  }
   return null
+}
+
+/**
+ * Step 27 (master CR-218) — what only an ad's inline creative may carry: Meta answers error 3 for a creative made on its own
+ * with a "message us" footer ("Creating a standalone creative via POST /adcreatives with message_extensions is not
+ * supported", website-ads-click-to-message.md). Why not on the creative edge, or null.
+ */
+export function inlineOnlyProblem(creative: Record<string, unknown>): string | null {
+  return anyMember(creative.asset_feed_spec, 'message_extensions')
+    ? 'a "message us" footer (asset_feed_spec.message_extensions) is made only inline on a new ad (create-meta-ad messageFooter): Meta answers error 3 for a creative made on its own with one'
+    : null
 }
 
 /** Format automation formats Meta documents for catalog creatives only (format-automation; master CR-420, CR-421). */
@@ -963,10 +1113,12 @@ export function silentKeysFor(creative: Record<string, unknown>): { audios: bool
   const website = hasWebsiteDestination(creative)
   const catalog = hasCatalogMarker(creative)
   return {
-    audios: !creative.object_story_id,
+    // Step 26 — every existing-post source (a post, an Instagram media or link, a creator's ad code) keeps its own media.
+    audios: !isExistingPostCreative(creative),
     formats: catalog ? META_FORMAT_AUTOMATION_FORMATS : website ? META_NON_CATALOG_FORMATS : null,
     destination: website || catalog,
-    productTags: hasImages(creative),
+    // Step 26 (review B4) — an existing post may show images Meta tags by itself: the product-tag opt-out is required there.
+    productTags: hasImages(creative) || isExistingPostCreative(creative),
   }
 }
 
@@ -978,9 +1130,35 @@ export function silentKeysFor(creative: Record<string, unknown>): { audios: bool
 export function silentKeysToSend(creative: Record<string, unknown>): ReturnType<typeof silentKeysFor> {
   const min = silentKeysFor(creative)
   // Review (step 26 B4) — an existing post may be an image or an image carousel, which Meta tags automatically ("enabled by
-  // default"): the product-tag opt-out goes too (fail safe; LIVE-PROBE CR-416q).
-  return creative.object_story_id ? { ...min, formats: min.formats ?? META_NON_CATALOG_FORMATS, destination: true, productTags: true } : min
+  // default"): the product-tag opt-out goes too (fail safe; LIVE-PROBE CR-416q). Step 26 — every existing-post source
+  // (create-meta-boost: an Instagram media or link, a creator's ad code) gets the same opt-outs as a post of the chosen Page.
+  return isExistingPostCreative(creative) ? { ...min, formats: min.formats ?? META_NON_CATALOG_FORMATS, destination: true, productTags: true } : min
 }
+
+/**
+ * Step 26 — a creative of an EXISTING post: a post (object_story_id), an Instagram media (source_instagram_media_id), an
+ * Instagram post link (instagram_permalink_url) or a creator's partnership ad code. It shows the post's own media.
+ */
+export function isExistingPostCreative(creative: Record<string, unknown>): boolean {
+  return !!creative.object_story_id || !!creative.source_instagram_media_id || !!creative.instagram_permalink_url || !!adCodeOf(creative)
+}
+
+/** Step 26 — the creator's partnership ad code a creative carries, and for which platform, or null. Never put in a sentence. */
+export function adCodeOf(creative: Record<string, unknown>): { platform: 'INSTAGRAM' | 'FACEBOOK'; code: string } | null {
+  const branded = (creative.branded_content ?? {}) as { instagram_boost_post_access_token?: unknown; facebook_boost_post_access_token?: unknown }
+  if (typeof branded.instagram_boost_post_access_token === 'string') return { platform: 'INSTAGRAM', code: branded.instagram_boost_post_access_token }
+  if (typeof branded.facebook_boost_post_access_token === 'string') return { platform: 'FACEBOOK', code: branded.facebook_boost_post_access_token }
+  return null
+}
+
+/**
+ * Step 26 — the asset feed an existing post may carry: music asked (audios random), or Meta's destinations for it — several
+ * messaging apps (DOF_MESSAGING_DESTINATION: use-posts-as-ads.md "Click to multidestination", and its trap for a Facebook post
+ * with an Instagram account) or a unified profile visit (UNIFIED_PROFILE_VISIT_DESTINATION: multidestination-profile-visit.md
+ * "Creating ad creatives using Instagram content") with their call_to_actions; music then named explicitly (audios).
+ */
+const EXISTING_POST_FEED_KEYS = new Set(['audios', 'optimization_type', 'call_to_actions'])
+const EXISTING_POST_DESTINATIONS = new Set(['DOF_MESSAGING_DESTINATION', 'UNIFIED_PROFILE_VISIT_DESTINATION'])
 
 /** The silent features a creative must carry explicitly (the binding lane rule; review B, round 2): why not, or null. */
 export function silentFeaturesProblem(creative: Record<string, unknown>): string | null {
@@ -1005,7 +1183,14 @@ export function silentFeaturesProblem(creative: Record<string, unknown>): string
   const feed = creative.asset_feed_spec as Record<string, unknown> | undefined
   if (want.audios) {
     if (!feed || !Array.isArray(feed.audios)) return 'a creative names asset_feed_spec.audios (empty: no music; Meta\'s guide opts out of music that way)'
-  } else if (feed && (Object.keys(feed).some((k) => k !== 'audios') || !Array.isArray(feed.audios) || !feed.audios.length)) return 'a creative of an existing post takes an asset_feed_spec only for music asked (audios random)'
+  } else if (feed) {
+    // Step 26 — or for Meta's messaging / profile-visit destinations of an existing post (create-meta-boost).
+    const destinations = typeof feed.optimization_type === 'string' && EXISTING_POST_DESTINATIONS.has(feed.optimization_type)
+    if (Object.keys(feed).some((k) => !EXISTING_POST_FEED_KEYS.has(k)) || !Array.isArray(feed.audios) || (!destinations && (Object.keys(feed).length !== 1 || !feed.audios.length))
+      || (!destinations && feed.optimization_type !== undefined) || (feed.call_to_actions !== undefined && !destinations)) {
+      return 'a creative of an existing post takes an asset_feed_spec only for music asked (audios random), or for Meta\'s messaging or profile-visit destinations (optimization_type DOF_MESSAGING_DESTINATION or UNIFIED_PROFILE_VISIT_DESTINATION, with audios named)'
+    }
+  }
   const destination = (creative.destination_spec as { destination_type?: unknown } | undefined)?.destination_type
   // (destination_spec takes only WEBSITE_AND_SHOP_OPT_OUT: an extra one is an opt-out, accepted anywhere — review round 3.)
   if (want.destination && !destination) return 'a creative with a website destination or a catalog part names destination_spec.destination_type (v26 sends an eligible creative to the shop by itself when it is missing)'
@@ -1049,6 +1234,57 @@ export function identityAssets(creative: Record<string, unknown>): MetaWriteAsse
   if (igs.length) out.push({ id: igs[0], kind: 'identityinstagram', ...(sponsorIg ? { with: sponsorIg } : {}) })
   else if (sponsorIg) out.push({ id: sponsorIg, kind: 'partnerinstagram' })
   return out
+}
+
+/**
+ * Step 26 — the SOURCE of a creative, exactly one: a story; a post (object_story_id: the chosen Page's — or a creator's in a
+ * partnership boost); an Instagram media (source_instagram_media_id) or post link (instagram_permalink_url), each under a Page
+ * (object_id: the chosen one) and as the chosen Instagram account (instagram_user_id) — or a creator's media; a creator's ad
+ * code (branded_content.instagram_boost_post_access_token, with object_id, or facebook_boost_post_access_token). A creator's
+ * content names branded_content.ad_format (Nexus always says which identities the ad shows) and, as Meta's boost-existing-post
+ * guides write it, the business's chosen Page and Instagram account as its SPONSORS (facebook_branded_content.sponsor_page_id,
+ * instagram_branded_content.sponsor_id); it names no instagram_user_id (the creator's own account runs it). Answers the ids
+ * the gateway checks (each its kind; the chosen Page and Instagram account as step 19's `page` and step 31's `instagram` body
+ * ids), and whether it is a creator's content (then identityAssets does not apply).
+ */
+export function sourceAssets(creative: Record<string, unknown>): { assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; creator: boolean } | { problem: string } {
+  const code = adCodeOf(creative)
+  const branded = (creative.branded_content ?? {}) as { instagram_boost_post_access_token?: unknown; facebook_boost_post_access_token?: unknown; ad_format?: unknown }
+  if (branded.instagram_boost_post_access_token !== undefined && branded.facebook_boost_post_access_token !== undefined) return { problem: 'a creative names ONE ad code (Instagram or Facebook)' }
+  const post = typeof creative.object_story_id === 'string' ? creative.object_story_id : null
+  const media = typeof creative.source_instagram_media_id === 'string' ? creative.source_instagram_media_id : null
+  const link = typeof creative.instagram_permalink_url === 'string' ? creative.instagram_permalink_url : null
+  const sources = [creative.object_story_spec ? 'object_story_spec' : null, post ? 'object_story_id' : null, media ? 'source_instagram_media_id' : null, link ? 'instagram_permalink_url' : null, code ? 'an ad code' : null].filter(Boolean)
+  if (sources.length !== 1) return { problem: `a creative names ONE source (object_story_spec, object_story_id, source_instagram_media_id, instagram_permalink_url or a creator's ad code), not ${sources.join(' and ')}` }
+  const underPage = !!media || !!link || code?.platform === 'INSTAGRAM'
+  if (underPage && typeof creative.object_id !== 'string') return { problem: 'an Instagram media, post link or ad code runs under the chosen Page: the creative names object_id (Nexus fills it)' }
+  if (!underPage && creative.object_id !== undefined) return { problem: 'object_id goes only with an Instagram media, an Instagram post link or an Instagram ad code' }
+  const assets: MetaWriteAsset[] = []
+  const ids: MetaWriteBodyId[] = underPage ? [{ id: String(creative.object_id), kind: 'page' }] : []
+  const sponsorPage = (creative.facebook_branded_content as { sponsor_page_id?: string } | undefined)?.sponsor_page_id
+  const sponsorIg = (creative.instagram_branded_content as { sponsor_id?: string } | undefined)?.sponsor_id
+  const creator = branded.ad_format !== undefined
+  if (creator) {
+    if (creative.object_story_spec) return { problem: 'branded_content.ad_format goes with a creator\'s existing content (create-meta-boost); a partnership ad with new media names its partner (create-meta-creative partner)' }
+    if (link) return { problem: 'a creator\'s content is named by its media id, its post id or its ad code, not by a link' }
+    if (creative.instagram_user_id !== undefined) return { problem: 'a creator\'s content runs as the creator\'s own account: the creative names no instagram_user_id (the business\'s chosen Page and Instagram account are its sponsors)' }
+    if (!sponsorPage && !sponsorIg) return { problem: 'a creator\'s content names the business as its sponsor (facebook_branded_content.sponsor_page_id and/or instagram_branded_content.sponsor_id)' }
+    if (sponsorPage) ids.push({ id: sponsorPage, kind: 'page' })
+    if (sponsorIg) ids.push({ id: sponsorIg, kind: 'instagram' })
+    if (post) assets.push({ id: post, kind: 'partnercontent' })
+    if (media) assets.push({ id: media, kind: 'partnercontent' })
+    if (code) assets.push({ id: code.code, kind: 'adcode', with: code.platform })
+    return { assets, ids, creator: true }
+  }
+  if (code) return { problem: 'a creator\'s ad code goes with branded_content.ad_format (Nexus always says which identities the ad shows)' }
+  if (media || link) {
+    if (typeof creative.instagram_user_id !== 'string') return { problem: 'the business\'s own Instagram media runs as the chosen Instagram account: the creative names instagram_user_id (Nexus fills it)' }
+    if (sponsorPage || sponsorIg) return { problem: 'Meta\'s guides document no partner on a boost of the business\'s own Instagram media: a partnership ad with new media is create-meta-creative partner' }
+    assets.push(media ? { id: media, kind: 'instagrammedia' } : { id: link!, kind: 'igpermalink' })
+  }
+  // A post of the chosen Page (step 25's rule); its sponsors, if any, are partners (identityAssets).
+  if (post) assets.push({ id: post, kind: 'pagepost' })
+  return { assets, ids, creator: false }
 }
 
 /**
@@ -1125,26 +1361,49 @@ export function judgeCreativeForm(params: ReadonlyMap<string, string>, skip: rea
   return finishCreative(creative, walk)
 }
 
+/**
+ * Step 27 review B6 — a multi-media ad (ad-creative/multi-media-ads.md "Limitations"): "The primary media in
+ * object_story_spec must also appear in media_sourcing_spec" — its image hash (or picture link) among the images, its video
+ * among the videos. Why not, or null.
+ */
+export function multiMediaProblem(creative: Record<string, unknown>): string | null {
+  const media = creative.media_sourcing_spec as { images?: Array<{ hash?: string; url?: string }>; videos?: Array<{ video_id?: string }> } | undefined
+  if (!media || !(media.images?.length || media.videos?.length)) return null
+  const story = (creative.object_story_spec ?? {}) as { link_data?: { image_hash?: string; picture?: string }; video_data?: { video_id?: string }; photo_data?: { image_hash?: string; url?: string } }
+  const video = story.video_data?.video_id
+  if (video) return (media.videos ?? []).some((v) => v.video_id === video) ? null : `media_sourcing_spec.videos names the primary video ${video} of object_story_spec too (Meta's multi-media rule)`
+  const hash = story.link_data?.image_hash ?? story.photo_data?.image_hash
+  const url = story.link_data?.picture ?? story.photo_data?.url
+  if (hash) return (media.images ?? []).some((i) => i.hash === hash) ? null : `media_sourcing_spec.images names the primary image ${hash} of object_story_spec too (Meta's multi-media rule)`
+  if (url) return (media.images ?? []).some((i) => i.url === url) ? null : 'media_sourcing_spec.images names the primary picture link of object_story_spec too (Meta\'s multi-media rule)'
+  return 'a multi-media ad names its primary image or video in object_story_spec (link_data image_hash or picture, or video_data video_id), and lists it in media_sourcing_spec too'
+}
+
 /** After a creative's keys were judged: the silent features, the identity, the ids (deduplicated and bounded). */
 export function finishCreative(creative: Record<string, unknown>, walk: CreativeWalk): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; warnings: string[] } | { problem: string } {
-  if (!creative.object_story_spec && !creative.object_story_id) return { problem: 'a creative names object_story_spec (Nexus fills the chosen Page) or object_story_id (a post of the chosen Page)' }
+  if (!creative.object_story_spec && !isExistingPostCreative(creative)) return { problem: 'a creative names object_story_spec (Nexus fills the chosen Page) or object_story_id (a post of the chosen Page) — or, made by create-meta-boost, an Instagram media, an Instagram post link or a creator\'s ad code' }
   if (creative.object_story_spec && creative.object_story_id) return { problem: 'a creative names object_story_spec or object_story_id, not both' }
   const contradiction = creativeTypeProblem(creative)
   if (contradiction) return { problem: contradiction }
+  const multi = multiMediaProblem(creative)
+  if (multi) return { problem: multi }
   const silent = silentFeaturesProblem(creative)
   if (silent) return { problem: silent }
   const extensions = productExtensionsProblem(creative)
   if (extensions) return { problem: extensions }
-  const identity = identityAssets(creative)
+  // Step 26 — the source of an existing post (create-meta-boost) and, for a creator's content, its sponsors (the chosen ones).
+  const source = sourceAssets(creative)
+  if ('problem' in source) return source
+  const identity = source.creator ? [] : identityAssets(creative)
   if ('problem' in identity) return identity
   const seen = new Set<string>()
-  const assets = [...identity, ...walk.assets].filter((a) => {
+  const assets = [...identity, ...source.assets, ...walk.assets].filter((a) => {
     const key = `${a.kind}:${a.id}:${a.with ?? ''}`
     if (seen.has(key)) return false
     seen.add(key)
     return true
   })
-  const ids = walk.ids.filter((a) => {
+  const ids = [...source.ids, ...walk.ids].filter((a) => {
     const key = `id:${a.kind}:${a.id}`
     if (seen.has(key)) return false
     seen.add(key)
@@ -1174,7 +1433,8 @@ const CREATIVE = ['creative'] as const
 const createJudge = (params: ReadonlyMap<string, string>): string | null => {
   if (params.has('execution_options') && params.get('execution_options') !== META_VALIDATE_ONLY) return `the only execution_options Nexus sends is exactly ${META_VALIDATE_ONLY} (Meta's check, which changes nothing)`
   const judged = judgeCreativeForm(params, ['execution_options'])
-  return 'problem' in judged ? judged.problem : null
+  // Step 27 — a "message us" footer is made only inline on a new ad.
+  return 'problem' in judged ? judged.problem : inlineOnlyProblem(judged.creative)
 }
 const createAssets = (params: ReadonlyMap<string, string>): MetaWriteAsset[] => {
   const judged = judgeCreativeForm(params, ['execution_options'])
@@ -1184,28 +1444,52 @@ const createIds = (params: ReadonlyMap<string, string>): MetaWriteBodyId[] => {
   const judged = judgeCreativeForm(params, ['execution_options'])
   return 'problem' in judged ? [] : judged.ids
 }
-/** The async job's creative_spec: the same creative as one JSON object (its parts as objects, not as JSON text). */
-function asyncSpec(raw: string | undefined): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[] } | { problem: string } {
+/**
+ * A creative as ONE JSON object (its parts as objects, not as JSON text): the async job's creative_spec (step 25) and, step
+ * 27, a new ad's inline `creative` (create-meta-ad) — `label` names it in the sentence. Every key judged, ONE spelling.
+ */
+export function judgeCreativeSpec(raw: string | undefined, label = 'creative_spec'): { creative: Record<string, unknown>; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; warnings: string[] } | { problem: string } {
   let spec: unknown
-  try { spec = JSON.parse(raw ?? '') } catch { return { problem: 'creative_spec is JSON' } }
-  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return { problem: 'creative_spec is a JSON object' }
-  const walk = newCreativeWalk()
+  try { spec = JSON.parse(raw ?? '') } catch { return { problem: `${label} is JSON` } }
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return { problem: `${label} is a JSON object` }
+  const story = (spec as { object_story_spec?: { instagram_user_id?: unknown } }).object_story_spec
+  const walk = newCreativeWalk(typeof (spec as { instagram_user_id?: unknown }).instagram_user_id === 'string' || typeof story?.instagram_user_id === 'string')
   const creative: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(spec as Record<string, unknown>)) {
     const judged = judgeCreativeKey(key, value, walk)
-    if ('problem' in judged) return { problem: `creative_spec.${judged.problem}` }
+    if ('problem' in judged) return { problem: `${label}.${judged.problem}` }
     creative[key] = judged.value
   }
-  if (JSON.stringify(creative) !== raw) return { problem: 'creative_spec is written in one spelling (as JSON.stringify writes it)' }
-  if (typeof creative.name !== 'string') return { problem: 'creative_spec names the creative (name)' }
+  if (JSON.stringify(creative) !== raw) return { problem: `${label} is written in one spelling (as JSON.stringify writes it)` }
+  if (typeof creative.name !== 'string') return { problem: `${label} names the creative (name)` }
   return finishCreative(creative, walk)
 }
-const labelsJudge = (value: string): string | null => {
+const asyncSpec = (raw: string | undefined) => {
+  const judged = judgeCreativeSpec(raw)
+  if ('problem' in judged) return judged
+  // Step 27 — a "message us" footer is made only inline on a new ad (the async job makes a creative on its own).
+  const inline = inlineOnlyProblem(judged.creative)
+  return inline ? { problem: inline } : judged
+}
+/** A label list in ONE spelling (step 27: an ad's labels too). */
+export const labelsJudge = (value: string): string | null => {
   let parsed: unknown
   try { parsed = JSON.parse(value) } catch { return 'adlabels is JSON' }
   const judged = labels(parsed, 'adlabels', newCreativeWalk())
   if ('problem' in judged) return judged.problem
   return JSON.stringify(judged.value) === value ? null : 'adlabels is written in one spelling (as JSON.stringify writes it)'
+}
+
+/** Step 26 — the creator's ad codes in a creative's branded_content (or an async job's creative_spec), as text. */
+export function adCodesIn(raw: string | undefined, spec: boolean): string[] {
+  if (!raw || !/_boost_post_access_token/.test(raw)) return []
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const branded = (spec ? parsed?.branded_content : parsed) as Record<string, unknown> | undefined
+    return [branded?.instagram_boost_post_access_token, branded?.facebook_boost_post_access_token].filter((v): v is string => typeof v === 'string')
+  } catch {
+    return []
+  }
 }
 
 /** Step 25 — create-meta-creative's and set-meta-creative's entries of the write allow-list (meta-calls.ts writeRules). */
@@ -1217,7 +1501,10 @@ export const META_CREATIVE_WRITE_RULES: readonly MetaWriteRule[] = [
     required: ['name', 'degrees_of_freedom_spec', 'contextual_multi_ads'],
     // The keys Nexus answers in words (META_CREATIVE_REFUSED) match the rule so that its judge says why; it refuses each.
     optional: [...Object.keys(CREATIVE_KEYS).filter((k) => !['name', 'degrees_of_freedom_spec', 'contextual_multi_ads'].includes(k)), ...Object.keys(META_CREATIVE_REFUSED), 'execution_options'],
-    anyOf: ['object_story_spec', 'object_story_id'],
+    // Step 26 — or an existing post's other sources (create-meta-boost): an Instagram media or link, a creator's ad code.
+    anyOf: ['object_story_spec', 'object_story_id', 'source_instagram_media_id', 'instagram_permalink_url', 'branded_content'],
+    // Step 26 — a creator's ad code in the body: never in the ledger, cut out of Meta's answer.
+    secret: (params) => adCodesIn(params.get('branded_content'), false),
     text: CREATIVE_JSON_TEXT, maxBody: META_CREATIVE_MAX_BODY, edgeCall: true, budget: false,
     values: createJudge, assets: createAssets, ids: createIds,
   },
@@ -1226,6 +1513,7 @@ export const META_CREATIVE_WRITE_RULES: readonly MetaWriteRule[] = [
     // address to call back; it reads the job itself).
     name: 'adaccount.creative.async', method: 'POST', path: /^act_\d{1,20}\/asyncadcreatives$/, kinds: ACCOUNT,
     required: ['name', 'creative_spec'], optional: ['notification_mode'],
+    secret: (params) => adCodesIn(params.get('creative_spec'), true),
     text: { name: META_MEDIA_TEXT_PATTERN, creative_spec: META_MEDIA_TEXT_PATTERN }, maxBody: META_CREATIVE_MAX_BODY, edgeCall: true, budget: false,
     values: (params) => {
       const name = metaCreativeTextProblem(params.get('name') ?? '', META_CREATIVE_TEXT.name, 'name')
@@ -1265,3 +1553,56 @@ export const META_CREATIVE_WRITE_RULES: readonly MetaWriteRule[] = [
     values: (params) => labelsJudge(params.get('adlabels')!),
   },
 ]
+
+// ── step 27: the JSON parts of a new ad that are not its creative, judged with the same judges ──────────────────────
+
+/** One JSON form value judged by `judge`, in ONE spelling; its ids for the gateway's check. */
+function judgedJson(raw: string | undefined, label: string, judge: Judge): { value: unknown; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; warnings: string[] } | { problem: string } {
+  let parsed: unknown
+  try { parsed = JSON.parse(raw ?? '') } catch { return { problem: `${label} is JSON` } }
+  const walk = newCreativeWalk()
+  const judged = judge(parsed, label, walk)
+  if ('problem' in judged) return judged
+  if (JSON.stringify(judged.value) !== raw) return { problem: `${label} is written in one spelling (as JSON.stringify writes it)` }
+  return { value: judged.value, assets: walk.assets, ids: walk.ids, warnings: walk.warnings }
+}
+
+/** The text types of a flexible-format group (flexible-ad-format.md: primary_text, headline, …; the creative's own three). */
+export const META_ASSET_GROUP_TEXT_TYPES = ['primary_text', 'headline', 'description'] as const
+const TEXT_MAX: Readonly<Record<string, number>> = { primary_text: META_CREATIVE_TEXT.message, headline: META_CREATIVE_TEXT.headline, description: META_CREATIVE_TEXT.description }
+
+/**
+ * Step 27 (master CR-430, F1 M5-20; flexible-ad-format.md, checked 2026-10-21) — `creative_asset_groups_spec` on a new ad:
+ * {"groups":[{images[{hash}], videos[{video_id}], texts[{text, text_type}], call_to_action{type, value{link}}}]} — each group
+ * at least one image or video, at most 5 texts of a text type, every call to action of ONE type. Images of the chosen
+ * account's library, videos of its video library (the gateway checks each).
+ */
+export function judgeAssetGroups(raw: string | undefined): { value: unknown; assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; warnings: string[] } | { problem: string } {
+  const group = obj({
+    images: list(obj({ hash }, ['hash']), 10),
+    videos: list(obj({ video_id: bodyId('video') }, ['video_id']), 10),
+    texts: list((value, path, walk) => {
+      const judged = obj({ text_type: enumOf(META_ASSET_GROUP_TEXT_TYPES), text: (v, p) => (typeof v === 'string' ? ok(v) : no(`${p} is text`)) }, ['text', 'text_type'])(value, path, walk)
+      if ('problem' in judged) return judged
+      const t = judged.value as { text: string; text_type: string }
+      const problem = metaCreativeTextProblem(t.text, TEXT_MAX[t.text_type], `${path}.text`, { lines: t.text_type !== 'headline' })
+      return problem ? no(problem) : judged
+    }, 15),
+    call_to_action: obj({ type: enumOf(META_CTA_TYPES), value: obj({ link }, ['link']) }, ['type']),
+  })
+  const judged = judgedJson(raw, 'creative_asset_groups_spec', obj({ groups: list(group, 10, 1) }, ['groups']))
+  if ('problem' in judged) return judged
+  const groups = (judged.value as { groups: Array<{ images?: unknown[]; videos?: unknown[]; texts?: Array<{ text_type: string }>; call_to_action?: { type: string } }> }).groups
+  for (const [i, g] of groups.entries()) {
+    if (!(g.images?.length || g.videos?.length)) return { problem: `creative_asset_groups_spec.groups[${i}] holds at least one image or video` }
+    for (const type of META_ASSET_GROUP_TEXT_TYPES) if ((g.texts ?? []).filter((t) => t.text_type === type).length > 5) return { problem: `creative_asset_groups_spec.groups[${i}] holds at most 5 texts of type ${type}` }
+  }
+  const ctas = new Set(groups.map((g) => g.call_to_action?.type).filter(Boolean))
+  if (ctas.size > 1) return { problem: 'every call to action of creative_asset_groups_spec is of ONE type (Meta\'s flexible-format rule)' }
+  return judged
+}
+
+/** Step 27 (master CR-427) — `creative_audience_pairing_persona` on a new ad (the whole ad's persona). */
+export function judgeAdPersona(raw: string | undefined): { value: unknown } | { problem: string } {
+  return judgedJson(raw, 'creative_audience_pairing_persona', persona)
+}

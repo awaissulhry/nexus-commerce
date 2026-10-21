@@ -57,7 +57,7 @@ export const META_MATERIAL = ['basis', 'plan', 'reach'] as const
 export const META_CHANGE_RULES =
   ' Nothing changes until a person approves it in Nexus (Approvals) — or, when this business\'s "Claude\'s changes need no '
   + 'approval" switch is on, it runs 20 s after the request unless stopped; either way it runs as that person, never by a '
-  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause and the create of a campaign, an ad set or a creative); '
+  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause and the create of a campaign, an ad set, a creative or an ad); '
   + 'for any other the preview says why not, and the run reads the live state again first. With Meta changes switched off '
   + 'nothing is sent, not even a check. The '
   + 'preview says what changes (from → to), what can make the account spend more (spendsMoney — the person\'s decision) '
@@ -129,11 +129,17 @@ async function draftFor(args: Record<string, unknown>, build: MetaDraftBuilder):
 /**
  * The exact plan of a change: its requests (object, form fields), in order — never their labels. Step 36 review A3 — and a
  * request's method, edge and object kind, ONLY when it names them: a status change's plan hash stays byte for byte what
- * step 17 made (a pending approval does not go stale at a deploy).
+ * step 17 made (a pending approval does not go stale at a deploy). Step 26 (review A3): a request may give the fields its
+ * plan reads (`planParams`: a creator's ad code replaced in this hash; the request's arguments still carry it). Step 27
+ * review A6: a new ad's check (Meta's integrity review, and its recommendations when asked) — only on such a request, so
+ * every other plan hash stays as it was: a check with recommendations is never answered from the remembered acceptance of
+ * one without them.
  */
 export const planOf = (draft: MetaChangeDraft): string => factHash(draft.requests.map((r) => ({
-  objectId: r.objectId, params: r.params,
+  objectId: r.objectId, params: r.planParams ?? r.params,
   ...(r.method ? { method: r.method } : {}), ...(r.edge ? { edge: r.edge } : {}), ...(r.objectKind ? { objectKind: r.objectKind } : {}),
+  // Only a request that asks Meta's integrity review (step 27's new ad) hashes its check: every other plan stays as it was.
+  ...(r.adReview ? { adReview: true, ...(r.recommendations ? { recommendations: true } : {}) } : {}),
 })))
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -316,6 +322,8 @@ export function objectChangeOf(request: MetaChangeRequest): MetaObjectChange {
     ...(request.method ? { method: request.method } : {}),
     ...(request.parent ? { parent: request.parent } : {}),
     ...(request.recommendations ? { recommendations: true } : {}),
+    // Step 27 — a new ad's check carries Meta's synchronous integrity review.
+    ...(request.adReview ? { adReview: true } : {}),
     ...(request.readBackObject ? { readBackObject: true as const } : {}),
     // Step 39 — the read-back that judges it.
     ...(request.judge ? { judge: request.judge } : {}),

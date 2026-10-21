@@ -19,7 +19,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST, type MetaBrandSafetyKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWebhookKind } from './meta-calls.js'
+import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWebhookKind } from './meta-calls.js'
 import { metaRuploadUrl } from './meta-media-rules.js'
 import type { MetaSignalsKind } from './meta-signals-rules.js'
 
@@ -88,6 +88,8 @@ export interface MetaWriteRequest {
     | 'customaudience'
     // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
     | MetaPageKind
+    // Step 26 — the chosen Instagram account or a media of it (set-meta-partnership-access; its Page is step 28's `page`).
+    | MetaBoostWriteKind
     // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
     | MetaSignalsKind
     // Step 30 — the connection's own Meta app (its webhook subscriptions).
@@ -132,6 +134,11 @@ export interface MetaWriteRequest {
   parent?: { kind: 'campaign' | 'adset'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
   recommendations?: boolean
+  /**
+   * Step 27 — a new ad's check (POST /act_<id>/ads) runs Meta's synchronous integrity review with it (`synchronous_ad_review`,
+   * documented only beside validate_only; AD-026 … AD-028). The gateway's ad-create rule judges the exact value.
+   */
+  adReview?: boolean
 }
 
 /**
@@ -139,8 +146,12 @@ export interface MetaWriteRequest {
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
-  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaSignalsEdge
+  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaBoostEdge | MetaSignalsEdge | MetaAdEdge
   | MetaWebhookEdge
+/** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
+export type MetaAdEdge = 'ads'
+/** Step 26 — set-meta-partnership-access: the chosen Instagram account's partnership edges and a media's ad code. */
+export type MetaBoostEdge = 'branded_content_ad_permissions' | 'branded_content_tag_approval' | 'collaboration_invites' | 'partnership_ad_code'
 /**
  * Step 30 — an app's webhook subscriptions (`<app>/subscriptions`), the chosen ad account's alert subscriptions
  * (`act_<id>/subscriptions`), the app's link to the chosen ad account or the chosen Page (`subscribed_apps`).
@@ -186,7 +197,8 @@ export type MetaCreativeEdge = 'adcreatives' | 'asyncadcreatives'
  */
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
-  const check = req.recommendations ? '["validate_only","include_recommendations"]' : '["validate_only"]'
+  // Step 27 — a new ad's check adds Meta's synchronous integrity review (adReview); step 19's recommendations come last.
+  const check = JSON.stringify(['validate_only', ...(req.adReview ? ['synchronous_ad_review'] : []), ...(req.recommendations ? ['include_recommendations'] : [])])
   // Step 22 — a DELETE with parameters (an image's hash, a video's id) sends them as its form body, as a POST does.
   const body = remove
     ? (Object.keys(req.params).length ? new URLSearchParams(req.params).toString() : undefined)
@@ -261,6 +273,40 @@ export async function metaRestCall(req: Omit<MetaCallRequest, 'auth'>): Promise<
     max429Retries: 0,
     timeoutMs: req.timeoutMs ?? 60_000,
     ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
+  })
+}
+
+export interface MetaRestWriteRequest {
+  connectionId: string
+  operation: string
+  /** The path below the host, e.g. `partnership-ads/fb-account-level-permissions/<page id>` (the gateway confirms the Page is the chosen one). */
+  path: string
+  method: 'POST' | 'PUT' | 'DELETE'
+  query?: Record<string, string>
+  /** The JSON body as text, in Nexus's one spelling (meta-boost-rules.ts). */
+  body?: string
+  maxRateWaitMs?: number
+}
+
+/**
+ * Step 26 (review B1) — one change on Meta's partnership REST host (api.facebook.com) through the gateway: the account's
+ * system-user token as `Authorization: Bearer` with `X-API-Version: 1.0.0` (the gateway adds both), the chosen Page in the
+ * path, a JSON body or a judged query (meta-boost-rules.ts metaRestWriteVerdict). Never retried.
+ */
+export async function metaRestWriteCall(req: MetaRestWriteRequest): Promise<GatewayResponse> {
+  return gatewayCall({
+    channel: 'META',
+    operation: req.operation,
+    kind: 'write',
+    connectionId: req.connectionId,
+    url: metaRestUrl(req.path, req.query ?? {}),
+    method: req.method,
+    ...(req.body ? { body: req.body } : {}),
+    metaObjectKind: 'page',
+    maxTransientRetries: 0,
+    max429Retries: 0,
+    maxRateWaitMs: req.maxRateWaitMs,
+    timeoutMs: 60_000,
   })
 }
 

@@ -969,9 +969,11 @@ describe('step 16 — partnership, research and brand-safety reads: their own ke
     expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, { auth: 'app' })).toMatch(/own system-user token/)
     expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, { auth: 'none' })).toMatch(/own system-user token/)
     expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, { headers: { Authorization: 'Bearer x' } })).toMatch(/no header/)
-    // Never a change: a PUT, POST or DELETE of the same paths goes to the write allow-list, which has no REST host at all.
+    // A PUT, POST or DELETE of the same paths goes to the write allow-list: step 26 (review B1) judges the chosen Page's
+    // partnership writes there (meta-boost-writes.vitest.test.ts); a call not named as the Page's change, or a body where
+    // none goes, is refused.
     for (const method of ['PUT', 'POST', 'DELETE']) {
-      expect(metaWriteProblemOf(method, `${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, 'is_enabled=true')).toMatch(/graph\.facebook\.com/)
+      expect(metaWriteProblemOf(method, `${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, 'is_enabled=true')).toMatch(/partnership host/)
     }
     expect(metaRenewalOf(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`)).toBeNull()
   })
