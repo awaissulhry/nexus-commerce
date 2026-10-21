@@ -24,7 +24,8 @@ import {
   audienceRuleProblem, lookalikeRatioOk, lookalikeSpecProblem, OPT_OUT_LINK, type AudienceSourceType,
   AUDIENCE_LABELS, CUSTOMER_FILE_SOURCES, LOOKALIKE_TYPES, PRODUCT_EVENTS, SHARE_PERMISSIONS, USE_FOR_PRODUCTS, VIDEO_EVENTS,
 } from '../../gateway/meta-audience-rules.js'
-import { META_NAME_TEXT, META_STRICT_TEXT, typedTextOk } from '../../gateway/meta-settings-rules.js'
+import { typedTextOk } from '../../gateway/meta-settings-rules.js'
+import { META_NAME_TEXT, META_STRICT_TEXT } from '../../gateway/meta-write-text.js'
 
 export type AudienceLabel = typeof AUDIENCE_LABELS[number]
 export type CustomerFileSource = typeof CUSTOMER_FILE_SOURCES[number]

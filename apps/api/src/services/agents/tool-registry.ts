@@ -113,6 +113,8 @@ import { META_ADS_MEDIA_UPLOAD_TOOLS } from './tools/meta-ads-media-upload.tools
 import { META_ADS_RULES_TOOLS } from './tools/meta-ads-rules.tools.js'
 // Meta ads step 7 (2026-10-21): insights at every level, background report runs, saved and partner reports (read only).
 import { META_ADS_INSIGHTS_TOOLS } from './tools/meta-ads-insights.tools.js'
+// Meta ads step 39 (2026-10-21): brand safety — set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
+import { META_ADS_BRAND_SAFETY_TOOLS } from './tools/meta-ads-brand-safety.tools.js'
 // Meta ads step 31 (2026-10-21): audiences — create, change, people (opt-outs out; D8), sharing, delete.
 import { META_ADS_AUDIENCE_CHANGES_TOOLS } from './tools/meta-ads-audience-changes.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -356,6 +358,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_RULES_TOOLS,
   // Meta ads step 7 (2026-10-21): meta-ads-numbers, meta-ads-report, meta-ads-saved-reports (read only).
   ...META_ADS_INSIGHTS_TOOLS,
+  // Meta ads step 39 (2026-10-21): set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
+  ...META_ADS_BRAND_SAFETY_TOOLS,
   // Meta ads step 31 (2026-10-21): create-meta-audience, set-meta-audience, set-meta-audience-members,
   // set-meta-audience-sharing, remove-meta-audience.
   ...META_ADS_AUDIENCE_CHANGES_TOOLS,

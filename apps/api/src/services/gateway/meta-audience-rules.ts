@@ -46,7 +46,8 @@
  * Meta documents no validate_only on any custom-audience edge (facts F1 §M8): no rule here takes execution_options.
  */
 import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
-import { META_NAME_TEXT, META_STRICT_TEXT } from './meta-settings-rules.js'
+// The text patterns from their leaf module (meta-write-text.ts): a rules file takes no value from a module still loading.
+import { META_NAME_TEXT, META_STRICT_TEXT } from './meta-write-text.js'
 
 type Params = ReadonlyMap<string, string>
 type Judge = (value: string, params: Params) => string | null

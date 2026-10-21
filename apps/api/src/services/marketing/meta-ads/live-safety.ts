@@ -56,6 +56,7 @@
 import { metaAdAccountId, metaObjectId } from '../../cx/connectors/meta/discovery.js'
 import { metaAppIdOf } from '../../cx/token.service.js'
 import { metaCall } from '../../gateway/meta.js'
+import { metaRestFileExport } from '../../gateway/meta.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { failureOfAnswer, failureOfThrow, localFailure, MetaReadError } from './errors.js'
 import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectKindOf, type MetaChosenAccount } from './live.js'
@@ -66,10 +67,14 @@ import { fieldsRefused, graphPage, idOf, noted, num, obj, pageOf, part, portfoli
 // ── shared ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** The controls that need no capability grant (D6), named in every answer where Meta refuses for the grant. */
-export const NO_GRANT_CONTROLS = 'the inventory filter (Meta\'s brand_safety_content_filter_levels on the ad account — meta-ads-live view account shows it — and per ad set), placement choices and exclusions in each ad set\'s targeting, the excluded publisher categories (dating, gambling; on Audience Network and in-stream also debated social issues, mature audiences, tragedy and conflict) and the ad account\'s own controls; block lists themselves stay in Meta\'s Brand Safety and Suitability hub (Business settings).'
+export const NO_GRANT_CONTROLS = 'the inventory filter (Meta\'s brand_safety_content_filter_levels on the ad account — meta-ads-live view account shows it — and per ad set), placement choices and exclusions in each ad set\'s targeting, the excluded publisher categories (dating, gambling; on Audience Network and in-stream also debated social issues, mature audiences, tragedy and conflict) and the ad account\'s own controls — set-meta-brand-safety sets the inventory filter, the excluded categories and an ad set\'s block lists; block lists themselves stay in Meta\'s Brand Safety and Suitability hub (Business settings).'
 
-function grantRefusal(err: MetaReadError, grant: string): MetaLiveRefusal {
-  return new MetaLiveRefusal(`Meta has not granted this capability to the business (${grant}): ${err.message} The no-grant controls are ${NO_GRANT_CONTROLS}`)
+/**
+ * D6 — Meta refused for its capability grant: the grant, Meta's words and the no-grant controls (step 39's changes too).
+ * Both guides: "The app requires the … capability grant" (block-list.md, content-block-lists.md).
+ */
+export function grantRefusal(err: { message: string }, grant: string): MetaLiveRefusal {
+  return new MetaLiveRefusal(`Meta has not granted this capability: the app needs Meta's ${grant} grant. Meta: ${err.message} The no-grant controls are ${NO_GRANT_CONTROLS}`)
 }
 
 /** A brand-safety read: when Meta refuses for access, the D6 sentence (the grant it needs and the no-grant controls). */
@@ -82,7 +87,7 @@ async function granted<T>(grant: string, work: () => Promise<T>): Promise<T> {
   }
 }
 
-const GRANT = {
+export const GRANT = {
   blockLists: 'block_list_management_v2_api_access',
   contentBlockLists: 'brand_safety_content_block_list',
   deliveryReports: 'brand_safety_third_party_partners',
@@ -239,6 +244,7 @@ export async function liveSafety(input: SafetyInput, canSeePeople: boolean) {
       if (!cblId) throw new MetaLiveRefusal('Name the content block list (contentBlockListId, from view content-block-lists).')
       const { body } = await granted(GRANT.contentBlockLists, () => metaReadOne<Row>({ connectionId }, { operation: 'safety.contentBlockList', path: cblId, query: { fields: 'id,name,business' } }))
       if (idOf(body.business) !== businessId) throw new MetaLiveRefusal('That content block list is not the business portfolio\'s, so it is not shown.')
+      await portfolioListsIt(connectionId, businessId, cblId)
       const edge = input.content ? CONTENT_PLATFORM_EDGES[input.content] : null
       const [content, applied] = await Promise.all([
         edge ? part(async () => granted(GRANT.contentBlockLists, () => graphPage(connectionId, `safety.${edge}`, `${cblId}/${edge}`, { fields: 'id', limit: limit(500), ...after }))) : Promise.resolve(null),
@@ -251,10 +257,27 @@ export async function liveSafety(input: SafetyInput, canSeePeople: boolean) {
         note: 'The posts on the list (content: facebook, instagram or threads) and the ad accounts it is applied to. Whether one post is on a list cannot be asked yet: Meta lists that read as planned but not available.',
       }
     }
-    case 'content-block-list-file':
-      // content-block-lists.md: "This endpoint is a PUT and not a GET, as every time this endpoint is called, a new file will
-      // be created and stored for retrieval" (PUT https://api.facebook.com/content_block_lists/{id}/file_download).
-      return { ...base, available: false, comesWith: 'step 39', sentence: 'The CSV export of a content block list comes with step 39 (Nexus brand-safety changes): Meta offers it as a PUT that makes a new file every time, and Nexus\'s Meta reads send GETs only. Until then view content-block-list with content facebook, instagram or threads lists the posts page by page, or a person downloads the CSV in Meta\'s Brand Safety and Suitability hub.' }
+    case 'content-block-list-file': {
+      // Step 39 (BS-033) — content-block-lists.md: "This endpoint is a PUT and not a GET, as every time this endpoint is called,
+      // a new file will be created and stored for retrieval" (PUT https://api.facebook.com/content_block_lists/{id}/file_download;
+      // it answers content_block_list_id, download_url, file_metadata {name, size_bytes, facebook_content_count,
+      // instagram_content_count}). It changes no ad and no list: the ONE PUT the gateway lets through on Meta's REST host, for
+      // the portfolio's own list only (gateway meta-brand-safety-owner.ts). The download link is never answered (it can carry
+      // a token or a signature): the person downloads the file in Meta's hub.
+      const businessId = portfolioOf(account)
+      const cblId = metaObjectId(input.contentBlockListId)
+      if (!cblId) throw new MetaLiveRefusal('Name the content block list (contentBlockListId, from view content-block-lists).')
+      const { body } = await granted(GRANT.contentBlockLists, () => metaReadOne<Row>({ connectionId }, { operation: 'safety.contentBlockList', path: cblId, query: { fields: 'id,name,business' } }))
+      if (idOf(body.business) !== businessId) throw new MetaLiveRefusal('That content block list is not the business portfolio\'s, so no file of it is made.')
+      await portfolioListsIt(connectionId, businessId, cblId)
+      const made = await granted(GRANT.contentBlockLists, () => exportFile(connectionId, cblId))
+      const meta = obj(made.file_metadata)
+      return {
+        ...base, contentBlockList: { contentBlockListId: idOf(body.id), name: text(body.name) },
+        file: { name: text(meta?.name), sizeBytes: num(meta?.size_bytes), facebookPosts: num(meta?.facebook_content_count), instagramPosts: num(meta?.instagram_content_count) },
+        sentence: 'Meta made a new CSV file of this list\'s posts (every call makes a new one). Nexus does not show its download link, which can carry a token or a signature: a person downloads the file in Meta\'s Brand Safety and Suitability hub (Business settings › Brand safety and suitability › block lists).',
+      }
+    }
     case 'account-content-block-lists':
       // content-block-lists.md: GET /<account_id>/content_block_lists and fields=contains.content_id(…) — "This endpoint is
       // planned but not yet available."
@@ -359,6 +382,39 @@ export async function liveSafety(input: SafetyInput, canSeePeople: boolean) {
       return { ...base, placements: read.rows.map((r) => graphSafe(r))[0] ?? null, note: 'The latest date and the number of partner publishers per placement.' }
     }
   }
+}
+
+/**
+ * Step 39 review A1 — an id is a content block list only when Meta lists it among the portfolio's own (a catalog, a Page
+ * or another node of the portfolio also answers `business`): every page (Meta: at most 200 per business), refused while
+ * one is left unread.
+ */
+async function portfolioListsIt(connectionId: string, businessId: string, cblId: string): Promise<void> {
+  let after: string | null = null
+  for (let page = 0; page < 5; page++) {
+    const read = await granted(GRANT.contentBlockLists, () => graphPage(connectionId, 'safety.contentBlockListsCheck', `${businessId}/content_block_lists`, { fields: 'id', limit: 100, ...(after ? { after } : {}) }))
+    if (read.rows.some((r) => idOf(r.id) === cblId)) return
+    if (!read.nextAfter) throw new MetaLiveRefusal('That id is not one of the business portfolio\'s content block lists, so nothing of it is read.')
+    after = read.nextAfter
+  }
+  throw new MetaLiveRefusal('Nexus could not read all of the business portfolio\'s content block lists to confirm that one, so nothing of it is read.')
+}
+
+/** Step 39 (BS-033) — one CSV export of a content block list (a PUT that makes a file), Meta's failure in words. Never retried. */
+async function exportFile(connectionId: string, contentBlockListId: string): Promise<Row> {
+  const operation = 'safety.contentBlockListFile'
+  let answer: GatewayResponse
+  try {
+    answer = await metaRestFileExport({ connectionId, operation, contentBlockListId })
+  } catch (err) {
+    const failure = failureOfThrow(err)
+    if (failure) throw new MetaReadError(failure, operation, 0)
+    throw err
+  }
+  if (!answer.ok) throw new MetaReadError(failureOfAnswer(answer), operation, 1)
+  const body = answer.json<Row>()
+  if (!obj(body)) throw new MetaReadError(localFailure('Meta answered with something that is not JSON.', 'NOT_JSON'), operation, 1)
+  return body
 }
 
 /** Meta says the path or edge does not exist (100/33 "Unsupported get request", 2500 "Unknown path components", …). */

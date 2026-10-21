@@ -37,7 +37,7 @@ import {
   AGGREGATION_OPERATORS, AGGREGATION_TYPES, audienceRuleIds, AUDIENCE_LABELS, AUDIENCE_SOURCE_TYPES, CUSTOMER_FILE_SOURCES, FILTER_OPERATORS, LOOKALIKE_TYPES,
   MAX_RETENTION_SECONDS, OPT_OUT_LINK, PRODUCT_EVENTS, RULE_FIELD, RULE_SET_OPERATORS, SHARE_PERMISSIONS, USE_FOR_PRODUCTS, VIDEO_EVENTS,
 } from '../../gateway/meta-audience-rules.js'
-import { META_NAME_TEXT, META_STRICT_TEXT } from '../../gateway/meta-settings-rules.js'
+import { META_NAME_TEXT, META_STRICT_TEXT } from '../../gateway/meta-write-text.js'
 
 // ── arguments ───────────────────────────────────────────────────────────────────────────────────────────────────
 

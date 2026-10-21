@@ -34,7 +34,10 @@ import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, 
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite, type MetaLabelsKind, type MetaMediaWriteKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
+import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaWriteKind } from './meta-calls.js'
 import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
+import { metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwnerProblem, noteBlockListDraftMade, type MetaCheckRead } from './meta-brand-safety-owner.js'
+import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { MAX_RULE_BODY_IDS, ruleBodyIds } from './meta-ad-rule-rules.js'
@@ -131,21 +134,18 @@ export interface GatewayRequest {
    * trust it: it confirms it (the business's stored row, or a field only that kind has in its one live read) and refuses
    * the change otherwise, so the write allow-list is literally a campaign, an ad set or an ad — never a creative or a Page.
    */
-  metaObjectKind?: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
-    // Meta step 28: a new study's portfolio, a study, a Page, a Page video test (meta-optimize-owner.ts confirms each).
-    | MetaOptimizeKind
-    // Meta step 23: a video upload this connection started (Meta's upload host).
-    | MetaMediaWriteKind
-    // Meta step 29: one of the chosen ad account's automated rules.
-    | 'adrule'
-    // Meta step 31: one of the chosen ad account's own custom audiences.
-    | 'customaudience'
+  metaObjectKind?: MetaWriteKind
   /**
    * Meta step 18: a change of a budget schedule (high-demand period, `metaObjectKind: 'highdemandperiod'`) names the
    * campaign or ad set it belongs to; the gateway confirms that object is of the chosen ad account AND lists the period
    * among its own budget schedules before anything is sent.
    */
   metaParent?: { kind: 'campaign' | 'adset'; id: string }
+  /**
+   * Meta step 39 (review A9): the run of a Nexus change this call belongs to (the kit's own id): a block-list draft is
+   * remembered for, and used by, only the same run.
+   */
+  metaRun?: string
 }
 
 export interface GatewayResponse {
@@ -158,6 +158,8 @@ export interface GatewayResponse {
   attempts: number
   verdict: ChannelVerdict | null
   rate: { remaining: number | null; limit: number | null }
+  /** Meta step 39 (review A7): how many token-shaped things the gateway removed from Meta's answer (absent: none). */
+  scrubbed?: number
   json<T = unknown>(): T | null
 }
 
@@ -359,7 +361,12 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   let metaWrite: MetaJudgedWrite | null = null
   // Step 16 — a read of Meta's REST host (api.facebook.com): its token goes as a Bearer header (meta-calls.ts).
   let metaRest = false
-  if (req.channel === 'META' && req.method !== 'GET') {
+  // Step 39 (BS-033) — the one PUT of Meta's REST host, the content block list's CSV export: a read, judged apart (its list
+  // is checked to be the chosen portfolio's after the account's status, 3b).
+  const metaExport = req.channel === 'META' && req.method === 'PUT' ? metaRestFileExportOf({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers }) : null
+  if (metaExport && 'problem' in metaExport) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${metaExport.problem} (${req.method} ${safePath(req.url)}).`, 403)
+  if (metaExport) metaRest = true
+  if (req.channel === 'META' && req.method !== 'GET' && !metaExport) {
     const judged = metaWriteVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers, objectKind: req.metaObjectKind })
     if ('problem' in judged) {
       return refuse('refused', judged.batch ? 'META_BATCH_NOT_ALLOWED' : 'META_WRITE_NOT_ALLOWED', `Nothing was sent to Meta: ${judged.problem} (${req.method} ${safePath(req.url)}).`, 403)
@@ -370,7 +377,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       return refuse('gated', 'PUBLISH_GATED', 'Nothing was sent to Meta: Meta changes are switched off in Nexus (NEXUS_META_ADS_WRITES), so Meta is not asked to check one either.', 503)
     }
     metaWrite = judged.write
-  } else if (req.channel === 'META') {
+  } else if (req.channel === 'META' && !metaExport) {
     // One verdict on one canonical parse (meta-calls.ts): the refusal, and for the renewal the client_id it names.
     const judged = metaCallVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
     if (judged.problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${judged.problem} (${req.method} ${safePath(req.url)}).`, 403)
@@ -417,9 +424,16 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     const chosen = await metaChosenAdAccountOf(req.connectionId)
     if (!chosen || chosen !== metaWrite.objectId) return refuse('refused', 'META_ACCOUNT_NOT_CHOSEN', 'Nothing was sent to Meta: a report run is only of the Meta ad account this business chose through this connection.', 403)
   } else if (metaWrite && req.connectionId) {
-    const owner = await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, req.metaParent)
-      ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
-      ?? await metaMediaAssetsProblem(req.connectionId, metaWrite)
+    // Step 39 — brand safety: an ad set's targeting is compared with its live targeting only once the call holds its rate
+    // slot, right before it is sent (review A2, see 6–7); a brand-safety RULE's write (an ad account, portfolio or block list
+    // of the chosen ad account) is checked by meta-brand-safety-owner.ts (its own reads through this gateway), with every id
+    // inside the body. Chosen by the rule that judged the write, never by the kind alone: steps 19, 23 and 28 name
+    // `adaccount` and `business` too, and keep their own checks.
+    const owner = metaWrite.targeting ? (req.metaObjectKind === 'adsettargeting' ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
+      : isBrandSafetyRule(metaWrite.rule) ? await metaBrandSafetyOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind ?? '', metaCheckRead(req.connectionId), req.metaRun)
+        : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind> | undefined, req.metaParent)
+          ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
+          ?? await metaMediaAssetsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
     if (!metaWrite.check) {
       // Step 23 — a call on an edge (an upload, a folder, a removal) edits no object: no 30-s gap, only Meta's own hold.
@@ -427,6 +441,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       const wait = metaObjectWait(metaWrite.edgeCall ? { ...state, touchedAt: null } : state, metaWrite.budget)
       if (wait) return refuse('refused', 'RATE_LIMITED_LOCAL', `Not sent yet: ${wait.why}. Retry in ${Math.ceil(wait.waitMs / 1000)} s; nothing was changed.`, 429, wait.waitMs)
     }
+  }
+
+  // Step 39 (BS-033) — the CSV export only of the chosen portfolio's content block list.
+  if (metaExport && 'contentBlockListId' in metaExport) {
+    if (!req.connectionId) return refuse('refused', 'ACCOUNT_REQUIRED', 'Nothing was sent to Meta: the export names the Meta connection it is for.', 400)
+    const owner = await metaExportOwnerProblem(req.connectionId, metaExport.contentBlockListId, metaCheckRead(req.connectionId))
+    if (owner) return refuse('refused', owner.code, owner.sentence, 403)
   }
 
   // 4. push lock + wrong-account guard (writes)
@@ -564,6 +585,12 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     if (!slot.ok) {
       return refuse('refused', 'RATE_LIMITED_LOCAL', `Not sent yet: the ${name} rate limit for this account needs ${Math.ceil(slot.waitMs / 1000)} s more. Retry later.`, 429, slot.waitMs)
     }
+    // Meta step 39 (Q7, review A2) — an ad set's targeting: its live targeting is read (with its owner and kind check) now
+    // that the call holds its slot, right before the send, so nothing changed in Ads Manager during a wait is overwritten.
+    if (metaWrite?.targeting && req.connectionId && attempts === 0) {
+      const owner = await metaTargetingOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
+      if (owner) return refuse('refused', owner.code, owner.sentence, 403)
+    }
     attempts++
     timedOut = false
     try {
@@ -620,6 +647,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // held that one object (613/4841018: 30 s for its changes; 613/1487632: an hour for that ad set's budget changes).
   const objectLimit = verdict?.channelCode === '613/4841018' ? 'edits' : verdict?.channelCode === '613/1487632' ? 'budget' : null
   if (req.channel === 'META' && metaWrite && !metaWrite.reportRun && req.connectionId) {
+    // Step 39 — a block-list draft Meta made: only this run may make a list from it, once (its next request).
+    if (ok && metaWrite.rule === 'blocklist.draft') noteBlockListDraftMade(req.connectionId, req.metaRun, text)
     if (objectLimit) await holdMetaObject(req.connectionId, metaWrite.objectId, objectLimit)
     // Step 29 — a POST that only reads (Meta's preview of a rule) changes nothing: no 30-s hold of the object either.
     else if (!metaWrite.edgeCall && !metaWrite.readOnly && (ok || status === 0 || status >= 500)) await noteMetaObjectTouched(req.connectionId, metaWrite.objectId, { budget: ok && metaWrite.budget && !metaWrite.check })
@@ -675,6 +704,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     attempts,
     verdict,
     rate: { remaining: reading?.remaining ?? null, limit: reading?.limit ?? null },
+    ...(metaScrubbed ? { scrubbed: metaScrubbed } : {}),
     json<T>() {
       try { return text ? (JSON.parse(text) as T) : null } catch { return null }
     },
@@ -941,11 +971,35 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       if (problem) return problem
       continue
     }
+    // Step 39 — the brand-safety kinds of id (a portfolio a list is shared with, a block list, a draft) are checked by
+    // meta-brand-safety-owner.ts for a brand-safety rule's write, never here.
+    if (inner.kind === 'business' || inner.kind === 'agency' || inner.kind === 'publisherblocklist' || inner.kind === 'blocklistdraft') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
     // Step 22 — a video inside a body (the video a library removal names): listed in the chosen ad account's library.
     const problem = await metaOwnerProblem(connectionId, { ...write, objectId: inner.id, check: false }, inner.kind)
     if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, `Nothing was sent to Meta: inside this change, `) }
   }
   return null
+}
+
+/** Meta step 39 — is this the name of a brand-safety write rule (meta-brand-safety-rules.ts)? Read when judged, never at load. */
+const isBrandSafetyRule = (name: string): boolean => META_BRAND_SAFETY_WRITE_RULES.some((rule) => rule.name === name)
+
+/**
+ * Meta step 39 — one Graph read for a brand-safety owner check, through this gateway (its read gate, ledger and rate
+ * bucket): Meta's body (and how many token shapes were scrubbed from it), or Meta's words when there is none. Never retried.
+ */
+function metaCheckRead(connectionId: string): MetaCheckRead {
+  return async (path, query) => {
+    const url = new URL(`${metaGraphBase()}/${path}`)
+    for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value)
+    try {
+      const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+      const body = answer.ok ? answer.json<Record<string, unknown>>() : null
+      return body && typeof body === 'object' && !Array.isArray(body) ? { body, words: null, scrubbed: answer.scrubbed ?? 0 } : { body: null, words: answer.verdict?.channelMessage ?? null }
+    } catch (err) {
+      return { body: null, words: err instanceof Error ? err.message : String(err) }
+    }
+  }
 }
 
 /** One live read of a Meta object for a change's owner check (fields only), or null with Meta's words when it could not be made. */
@@ -1188,7 +1242,6 @@ async function metaInstagramMediaOwned(connectionId: string, mediaId: string, in
   const account = await metaReadFields(connectionId, instagramId, 'id,username')
   return typeof account?.username === 'string' && account.username.trim().toLowerCase() === username
 }
-
 /** No answer at all (network error or timeout) — thrown by `gatewayFetch`, as `fetch` itself throws. */
 export class GatewayNoAnswer extends Error {
   constructor(readonly channel: GatewayChannel, readonly operation: string, readonly errorClass: 'network' | 'timeout', detail: string) {

@@ -355,6 +355,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/change-media.ts': 1, // step 23: create-meta-media's undo, through step 22's removal rules
       'services/gateway/meta-ad-rule-rules.ts': 1, // step 29: the adRule.delete rule (a judge)
       'services/marketing/meta-ads/change-ad-rule.ts': 1, // step 29: remove-meta-ad-rule's delete (explicit ask: confirmDelete)
+      'services/gateway/meta-brand-safety-rules.ts': 6, // step 39: a list's delete, unshare, a person, posts, an ad account, a content list (judges)
+      'services/marketing/meta-ads/change-block-lists.ts': 6, // step 39: set-meta-block-list's undo deletes and remove-meta-block-list (explicit ask: confirmDelete)
       'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
       'services/gateway/meta-audience-rules.ts': 4, // step 31: the people out, the opt-out everywhere, the unshare, the audience delete (judges)
       'services/marketing/meta-ads/change-audiences.ts': 5, // step 31: the request type, the two people-out DELETEs, the unshare, remove-meta-audience's delete (explicit ask: confirmDelete)
@@ -405,11 +407,14 @@ const EXPECTED_COMPUTED: string[] = [
   'services/agents/tools/meta-ads-media-upload.tools.ts: (video.method as VideoSource[\'method\']) ?? null',
   'services/agents/tools/meta-ads-media-upload.tools.ts: request.edge === \'video_ads\' ? \'video_ads\' : \'advideos\'',
   'services/agents/tools/meta-ads-media-upload.tools.ts: z.enum(VIDEO_METHODS).optional().describe(\'advideos (default: Meta fetches the link onto the ad account)',
-  ...Array(5).fill('services/gateway/gateway.ts: req.method'),
+  // Step 39 — the sixth: the content-block-list export's one PUT (metaRestFileExportOf judges it; no DELETE).
+  ...Array(6).fill('services/gateway/gateway.ts: req.method'),
   'services/gateway/meta-calls.ts: \'POST\' | \'DELETE\'',
   'services/gateway/meta-calls.ts: string',
   'services/gateway/meta-calls.ts: string',
   'services/gateway/meta-calls.ts: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string',
+  'services/gateway/meta-calls.ts: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string',
+  // Step 39 — metaRestFileExportOf's input type (a judge of the export's PUT, no sender).
   'services/gateway/meta-calls.ts: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string',
   // Step 23 — the rupload judge's input type (a judge, no sender).
   'services/gateway/meta-media-rules.ts: string; url: string; kind: string; body?: unknown; objectKind?: string',
