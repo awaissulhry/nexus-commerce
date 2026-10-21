@@ -15,10 +15,12 @@ import {
   fetchMetaCampaignDays,
   fetchMetaChoices,
   fetchMetaConnections,
+  fetchMetaEventsSwitch,
   fetchMetaOverview,
   requestMetaRead,
   saveMetaCredentials,
   saveMetaSelection,
+  setMetaEventsSwitch,
 } from './contract'
 
 function reply(body: unknown, status = 200) {
@@ -67,6 +69,19 @@ describe('the connection', () => {
     await expect(saveMetaSelection('conn-1', { adAccountId: '1234567890', pageId: null, instagramId: null }, f))
       .resolves.toEqual({ ok: false, status: 409, code, product: 'AD_ACCOUNT', error: 'Refused in words.' })
     expect(JSON.parse(String(f.mock.calls[0]![1]!.body))).toEqual({ adAccountId: '1234567890', pageId: null, instagramId: null })
+  })
+})
+
+describe('step 33 — the "Send sales to Meta" switch', () => {
+  it('reads it, and a person PUTs on or off; a refusal keeps the server\'s sentence', async () => {
+    const r = reply({ switch: { on: false, since: null, by: null }, canChange: true })
+    await expect(fetchMetaEventsSwitch(r)).resolves.toEqual({ switch: { on: false, since: null, by: null }, canChange: true })
+    await expect(fetchMetaEventsSwitch(reply({ switch: { on: true, since: null, by: null } }))).resolves.toMatchObject({ canChange: false })
+    expect(r.mock.calls[0]![0]).toBe('http://localhost:8091/api/meta-ads/conversions-api')
+    const p = reply({ switch: { on: true, since: '2026-10-21T08:00:00.000Z', by: 'Owner' }, changed: true })
+    await expect(setMetaEventsSwitch(true, p)).resolves.toEqual({ on: true, since: '2026-10-21T08:00:00.000Z', by: 'Owner' })
+    expect(p.mock.calls[0]![1]).toMatchObject({ method: 'PUT', body: '{"on":true}' })
+    await expect(setMetaEventsSwitch(true, reply({ error: 'Your role may not change this switch.' }, 403))).rejects.toThrow('Your role may not change this switch.')
   })
 })
 

@@ -33,16 +33,19 @@ import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock
 import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade, metaChosenAdAccountOf, metaChosenInstagramOf, metaChosenPageOf, metaChosenPortfolioOf, metaLinkTaken, metaPortfolioShared, metaStoredObject } from './account.js'
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
-import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaReadSecrets, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaBoostWriteKind, type MetaJudgedWrite, type MetaLabelsKind, type MetaMediaWriteKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
-import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaPageKind, type MetaWebhookKind, type MetaWriteKind } from './meta-calls.js'
+import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaPersonalScrub, metaReadSecrets, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaBoostWriteKind, type MetaEventsKind, type MetaJudgedWrite, type MetaLabelsKind, type MetaMediaWriteKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
+import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaPageKind, type MetaTargetingKind, type MetaWebhookKind, type MetaWriteKind } from './meta-calls.js'
 import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwnerProblem, noteBlockListDraftMade, type MetaCheckRead } from './meta-brand-safety-owner.js'
 import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
+// Step 40 — the ad account's own changes (their refusal names a change, not a create).
+import { META_ACCOUNT_SETTINGS_WRITE_RULES } from './meta-account-settings-rules.js'
 import { metaPageOwnerProblem } from './meta-page-owner.js'
 import { MetaPageTokenUnavailable, metaPageTokenFor, scrubExactToken } from './meta-page-token.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { META_SIGNALS_WRITE_RULES, type MetaSignalsKind } from './meta-signals-rules.js'
 import { META_WEBHOOK_WRITE_RULES } from './meta-webhook-rules.js'
+import { isMetaCatalogBodyKind, isMetaCatalogKind, type MetaCatalogKind } from './meta-catalog-rules.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { MAX_RULE_BODY_IDS, ruleBodyIds } from './meta-ad-rule-rules.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
@@ -144,14 +147,19 @@ export interface GatewayRequest {
   /**
    * Meta step 18: a change of a budget schedule (high-demand period, `metaObjectKind: 'highdemandperiod'`) names the
    * campaign or ad set it belongs to; the gateway confirms that object is of the chosen ad account AND lists the period
-   * among its own budget schedules before anything is sent.
+   * among its own budget schedules before anything is sent. Meta step 34: a feed's catalog (a feed node names none).
    */
-  metaParent?: { kind: 'campaign' | 'adset'; id: string }
+  metaParent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }
   /**
    * Meta step 39 (review A9): the run of a Nexus change this call belongs to (the kit's own id): a block-list draft is
    * remembered for, and used by, only the same run.
    */
   metaRun?: string
+  /**
+   * Meta step 20 (review A2) — the targeting keys the change's draft changed (meta.ts targetingKeys): the gateway lets only
+   * these (within the rule's own key set) differ from the ad set's live targeting it reads itself right before the send.
+   */
+  metaTargetingKeys?: readonly string[]
 }
 
 export interface GatewayResponse {
@@ -452,12 +460,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // `adaccount` and step 28's `page`), its own app, the chosen ad account or the chosen Page (metaWebhookOwnerProblem).
     const owner = metaWrite.auth === 'page' ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
       : isWebhookRule(metaWrite.rule) ? await metaWebhookOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
-      : metaWrite.targeting ? (req.metaObjectKind === 'adsettargeting' ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
+      // Step 20 — a targeting rule names its own kind (step 39 an ad set's targeting; step 20 its audience or placements).
+      : metaWrite.targeting ? ((metaWrite.kinds as readonly string[] | undefined)?.includes(req.metaObjectKind ?? '') ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
         : isBrandSafetyRule(metaWrite.rule) ? await metaBrandSafetyOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind ?? '', metaCheckRead(req.connectionId), req.metaRun)
           // Step 32 — a dataset, custom conversion or event source group change: chosen by its rule (it also names step 19's
           // `adaccount` and step 28's `page`, whose own checks run first), then signals-rule.ts with every id inside the body.
           : isSignalsRule(metaWrite.rule) ? await metaSignalsOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind)
-          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind> | undefined, req.metaParent)
+          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind | MetaSignalsKind | MetaWebhookKind | MetaTargetingKind> | undefined, req.metaParent)
           ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
           ?? await metaMediaAssetsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
@@ -468,7 +477,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       if (!verify) return refuse('held', 'META_VERIFY_TOKEN_UNSET', 'Held, nothing sent: no webhook verify token is set on the API service (META_WEBHOOK_VERIFY_TOKEN), so Meta could not verify Nexus\'s receiver.', 409)
       metaSendBody = `${metaWrite.body}&${new URLSearchParams({ verify_token: verify }).toString()}`
     }
-    if (!metaWrite.check) {
+    // Step 33 — Conversions API events meet none of Meta's per-object limits (objectLimits false).
+    if (!metaWrite.check && metaWrite.objectLimits !== false) {
       // Step 23 — a call on an edge (an upload, a folder, a removal) edits no object: no 30-s gap, only Meta's own hold.
       const state = await metaObjectState(req.connectionId, metaWrite.objectId)
       const wait = metaObjectWait(metaWrite.edgeCall ? { ...state, touchedAt: null } : state, metaWrite.budget)
@@ -636,7 +646,15 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // Meta step 39 (Q7, review A2) — an ad set's targeting: its live targeting is read (with its owner and kind check) now
     // that the call holds its slot, right before the send, so nothing changed in Ads Manager during a wait is overwritten.
     if (metaWrite?.targeting && req.connectionId && attempts === 0) {
-      const owner = await metaTargetingOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
+      // Step 20 — with the owner check of every id the change adds inside the spec.
+      const connectionId = req.connectionId
+      const write = metaWrite
+      // Step 20 (review A2) — a step 20 rule (its own judge) changes only the keys its draft changed: every other key, also
+      // one of the rule's own, must equal the live spec (a newer Ads Manager edit during a wait is never overwritten).
+      const asked = req.metaTargetingKeys?.filter((k) => write.targeting!.keys.has(k)) ?? null
+      if (write.targeting.judge && !asked?.length) return refuse('refused', 'META_WRITE_NOT_ALLOWED', `Nothing was sent to Meta: a targeting change of ${write.objectId} names the keys it changes.`, 403)
+      const narrowed = asked?.length ? { ...write, targeting: { ...write.targeting, keys: new Set(asked) } } : write
+      const owner = await metaTargetingOwnerProblem(connectionId, narrowed, req.metaObjectKind, metaCheckRead(connectionId), (ids) => metaBodyIdsProblem(connectionId, { ...write, ids }))
       if (owner) return refuse('refused', owner.code, owner.sentence, 403)
     }
     attempts++
@@ -655,6 +673,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
         text = clean.text
         metaScrubbed += clean.scrubbed
       }
+      // Step 33 — an answer to buyers' hashed data never carries a hash or an e-mail on (meta-calls.ts metaPersonalScrub).
+      if (metaWrite?.personal) text = metaPersonalScrub(text)
     } catch (err) {
       status = 0
       timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
@@ -710,7 +730,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // Step 17 — what Meta's per-object limits learn from a change or a check of one: it reached Meta (or may have), or Meta
   // held that one object (613/4841018: 30 s for its changes; 613/1487632: an hour for that ad set's budget changes).
   const objectLimit = verdict?.channelCode === '613/4841018' ? 'edits' : verdict?.channelCode === '613/1487632' ? 'budget' : null
-  if (req.channel === 'META' && metaWrite && !metaWrite.reportRun && req.connectionId) {
+  // Step 33 — Conversions API events meet none of Meta's per-object limits: nothing is held or noted for them.
+  if (req.channel === 'META' && metaWrite && !metaWrite.reportRun && req.connectionId && metaWrite.objectLimits !== false) {
     // Step 39 — a block-list draft Meta made: only this run may make a list from it, once (its next request).
     if (ok && metaWrite.rule === 'blocklist.draft') noteBlockListDraftMade(req.connectionId, req.metaRun, text)
     if (objectLimit) await holdMetaObject(req.connectionId, metaWrite.objectId, objectLimit)
@@ -727,7 +748,11 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // Meta answers a throttle with an error code (often with no usage header): hold the bucket all the same — 300 s, the
     // block Meta's rate-limit page names for an ad account's score. The two per-object limits (4841018, 1487632) hold only
     // that object (above), never the account's whole bucket.
-    if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec && !objectLimit) {
+    // Step 40 fix round 1 (B-1) — nor does 17/1885172: Meta's 10 spending-limit changes a DAY per ad account (rate-limiting.md
+    // "Ad Account Level Ad Spend Rate Limits") is a daily count, not a throttle — holding the bucket 300 s would stop every
+    // other Meta read and change of the business (a pause too) for nothing. set-meta-spend-cap says it in words, never again.
+    const dailyCount = verdict.channelCode === '17/1885172'
+    if (verdict.errorClass === 'rate_limited' && !reading?.retryAfterSec && !objectLimit && !dailyCount) {
       await observeRate(req.channel, key, { retryAfterSec: 300 })
     }
     // Meta says the token is dead: the next heartbeat checks it again at once, rather than trusting a check kept for hours.
@@ -751,7 +776,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     rateLimitRemaining: reading?.remaining ?? null,
     rateLimitLimit: reading?.limit ?? null,
     attempts,
-    // Meta step 31 — a body of people's hashed data (an audience's people) and Meta's answer to it are never kept: only their size.
+    // Meta step 31 — a body of people's hashed data (an audience's people; step 33: a buyer's in a Conversions API event) and
+    // Meta's answer to it are never kept: only their size.
     // Step 23 — an image upload's bytes are never kept: their length only.
     // Step 36 review A6 — a Meta change whose rule names its ledger form (a test lead: the questions' names, never the
     // answers) keeps only that.
@@ -805,7 +831,7 @@ const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudie
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | 'adrule' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | MetaBoostWriteKind | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | 'adrule' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | MetaBoostWriteKind | MetaCatalogKind | MetaEventsKind | undefined, parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   // Step 29 — Meta's automated rules: the chosen ad account's rule library (a rule's create, with every id inside the
   // rule checked), or one of its rules (and the ids inside).
@@ -814,12 +840,19 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
   // goes only to act_<the account this business chose through this connection>, never another.
   if (kind === 'adaccount') {
     const chosen = await metaChosenAdAccountOf(connectionId)
-    if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus creates nothing on Meta.' }
-    return id === `act_${chosen}` ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: a create goes only to the Meta ad account this business chose through this connection.' }
+    // Step 40 — a change of the ad account itself (its settings, spending limit, tracking specs, insights features) in its own words.
+    const own = META_ACCOUNT_SETTINGS_WRITE_RULES.some((rule) => rule.name === write.rule)
+    if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus ${own ? 'changes' : 'creates'} nothing on Meta.` }
+    return id === `act_${chosen}` ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: own ? 'Nothing was sent to Meta: a change of an ad account goes only to the Meta ad account this business chose through this connection.' : 'Nothing was sent to Meta: a create goes only to the Meta ad account this business chose through this connection.' }
   }
   // Step 23 — a folder in a business portfolio's media library: step 28's portfolio check, then no other Nexus business
   // shares that portfolio (its library would be that business's too).
   if (kind === 'business' && write.rule === 'portfolio.folder.create') return metaFolderPortfolioProblem(connectionId, write)
+  // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in (meta-catalog-owner.ts).
+  if (isMetaCatalogKind(kind)) {
+    const { metaCatalogOwnerProblem } = await import('./meta-catalog-owner.js')
+    return metaCatalogOwnerProblem(connectionId, write, kind, metaOwnerIo(connectionId, write), parent)
+  }
   // Step 28 — a new study's portfolio, a study, a Page, a Page video test (meta-optimize-owner.ts).
   if (kind === 'business' || kind === 'adstudy' || kind === 'page' || kind === 'pagevideotest') {
     const { metaOptimizeOwnerProblem } = await import('./meta-optimize-owner.js')
@@ -836,6 +869,14 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
   // Step 26 — the chosen Instagram account itself, or a media of it (set-meta-partnership-access). The chosen Page on Meta's
   // partnership host is step 28's `page` check (above).
   if (kind === 'iguser' || kind === 'igmedia') return metaInstagramOwnerProblem(connectionId, write, kind)
+  // Step 33 — a pixel's Conversions API events: the business switched sending on, and the pixel is one of the chosen ad
+  // account's own that no other business in Nexus uses (marketing/meta-ads/events-rule.ts, the tool's own rule).
+  if (kind === 'pixel') {
+    if (write.check || write.rule !== 'pixel.events') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a pixel takes only Nexus's Conversions API events, and Meta has no check for them.` }
+    const { metaEventsPixelProblem } = await import('../marketing/meta-ads/events-rule.js')
+    const problem = await metaEventsPixelProblem(connectionId, id)
+    return problem ? { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${problem}` } : null
+  }
   if (!kind || !Object.prototype.hasOwnProperty.call(META_KIND_FIELD, kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of ${id} names the kind of object it changes (a campaign, an ad set or an ad).` }
   if (write.check && kind !== 'campaign') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has a check (validate_only) only for campaign changes, and ${id} is named ${kind === 'adset' || kind === 'ad' ? 'an' : 'a'} ${META_KIND_WORD[kind]}.` }
   const chosen = await metaChosenAdAccountOf(connectionId)
@@ -893,7 +934,7 @@ async function metaWebhookOwnerProblem(connectionId: string, write: MetaJudgedWr
  * object's own budget schedules (ONE live read of `/<campaign | ad set>/budget_schedules`, at most 50 per object — Meta's
  * limit, high-demand-period.md). Anything else: nothing is sent.
  */
-async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWrite, parent: { kind: 'campaign' | 'adset'; id: string } | undefined): Promise<{ code: string; sentence: string } | null> {
+async function metaPeriodOwnerProblem(connectionId: string, write: MetaJudgedWrite, parent: { kind: 'campaign' | 'adset' | 'catalog'; id: string } | undefined): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   if (!parent || (parent.kind !== 'campaign' && parent.kind !== 'adset') || !/^\d{1,20}$/.test(parent.id)) {
     return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of budget schedule ${id} names the campaign or ad set it belongs to.` }
@@ -992,6 +1033,7 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
   // Step 25 — this call's memo of the catalog rule (the portfolio read once, each catalog and id judged once): made per
   // call and dropped with it, so nothing carries across calls, connections or businesses.
   let catalogMemo: import('../marketing/meta-ads/catalog-rule.js').CatalogRuleMemo | undefined
+  let catalogCheck: ((inner: MetaWriteBodyId) => Promise<{ code: string; sentence: string } | null>) | undefined
   // Step 21 — each of the chosen ad account's own lists read once per change.
   const accountLists = new Map<MetaAccountListKind, Set<string> | null>()
   for (const inner of write.ids) {
@@ -1014,7 +1056,8 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       continue
     }
     // Step 21 — a label, a value rule set or a reach & frequency prediction: among the chosen ad account's own.
-    if (inner.kind === 'adlabel' || inner.kind === 'valueruleset' || inner.kind === 'rfprediction') {
+    // Step 20 — a place page set inside an ad set's targeting: among the chosen ad account's own too.
+    if (inner.kind === 'adlabel' || inner.kind === 'valueruleset' || inner.kind === 'rfprediction' || inner.kind === 'placepageset') {
       const problem = await metaAccountListedProblem(connectionId, inner.id, inner.kind, false, accountLists)
       if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, 'Nothing was sent to Meta: inside this change, ') }
       continue
@@ -1069,6 +1112,14 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
     if (inner.kind === 'adsetorad' || inner.kind === 'adaccount' || inner.kind === 'person' || inner.kind === 'pagevideo' || inner.kind === 'studycell') {
       optimizeCheck ??= (await import('./meta-optimize-owner.js')).metaOptimizeBodyChecker(connectionId, write, metaOwnerIo(connectionId, write))
       const problem = await optimizeCheck(inner)
+      if (problem) return problem
+      continue
+    }
+    // Step 34 — an id inside a catalog change: a segment's parent, a pixel, an event source, a person, a partner, a shop
+    // (meta-catalog-owner.ts); each list read once per change.
+    if (isMetaCatalogBodyKind(inner.kind)) {
+      catalogCheck ??= (await import('./meta-catalog-owner.js')).metaCatalogBodyChecker(connectionId, write, metaOwnerIo(connectionId, write))
+      const problem = await catalogCheck(inner)
       if (problem) return problem
       continue
     }
@@ -1255,11 +1306,13 @@ function metaOwnerIo(connectionId: string, write: MetaJudgedWrite): import('./me
 }
 
 /** Meta step 21 — the chosen ad account's own lists a change's object or body id must be on. */
-type MetaAccountListKind = 'adlabel' | 'valueruleset' | 'rfprediction'
+type MetaAccountListKind = 'adlabel' | 'valueruleset' | 'rfprediction' | 'placepageset'
 const META_ACCOUNT_LISTS: Readonly<Record<MetaAccountListKind, { edge: string; word: string }>> = {
   adlabel: { edge: 'adlabels', word: 'label' },
   valueruleset: { edge: 'value_rule_set', word: 'value rule set' },
   rfprediction: { edge: 'reachfrequencypredictions', word: 'reach and frequency prediction' },
+  // Step 20 — reference/ad-account/ad_place_page_sets.md (the documented list of the account's place page sets).
+  placepageset: { edge: 'ad_place_page_sets', word: 'place page set' },
 }
 
 /**

@@ -17,6 +17,9 @@ const h = vi.hoisted(() => {
     list: vi.fn(async () => [] as unknown[]),
     choices: vi.fn(async () => ({ adAccounts: { items: [], error: null } }) as unknown),
     save: vi.fn(async () => ({ connection: { connectionId: 'conn-1' }, changed: true }) as unknown),
+    salesSwitch: vi.fn(async () => ({ on: false, since: null, by: null }) as unknown),
+    mayManageSecurity: true,
+    setSalesSwitch: vi.fn(async (on: boolean, actor: { label: string }) => ({ switch: { on, since: on ? '2026-10-21T08:00:00.000Z' : null, by: on ? actor.label : null }, changed: true }) as unknown),
     logged: [] as unknown[],
   }
 })
@@ -25,6 +28,12 @@ vi.mock('../services/meta/meta-accounts.service.js', () => ({
   listMetaConnections: h.list, getMetaChoices: h.choices, metaChoicesAnswer: async (c: unknown) => c, saveMetaSelection: h.save,
   MetaConnectionNotFound: h.MetaConnectionNotFound, MetaSelectionError: h.MetaSelectionError,
 }))
+vi.mock('../lib/auth/request-permission.js', () => ({
+  assertRequestPermission: vi.fn(async (_request: unknown, permission: string) => {
+    if (permission !== 'settings.security.manage' || !h.mayManageSecurity) throw Object.assign(new Error(`This operation requires ${permission}.`), { statusCode: 403 })
+  }),
+}))
+vi.mock('../services/marketing/meta-ads/events-switch.js', () => ({ metaEventsSwitch: h.salesSwitch, setMetaEventsSwitch: h.setSalesSwitch }))
 vi.mock('../utils/logger.js', () => ({ logger: { error: vi.fn((...a: unknown[]) => { h.logged.push(a) }), warn: vi.fn(), info: vi.fn() } }))
 
 import metaConnectionRoutes from './meta-connection.routes.js'
@@ -84,5 +93,30 @@ describe('health, choices and the choice', () => {
     expect(res.json()).toMatchObject({ code: 'taken_by_other_business', product: 'AD_ACCOUNT' })
     h.choices.mockRejectedValueOnce(new h.MetaConnectionNotFound('This Meta connection is not connected to this business.'))
     expect((await app.inject({ method: 'GET', url: '/api/meta-ads/connections/other/choices' })).statusCode).toBe(404)
+  })
+})
+
+describe('step 33 — the "Send sales to Meta" switch', () => {
+  it('reads the business\'s switch and whether this person may change it; a person turns it on or off by name', async () => {
+    h.mayManageSecurity = true
+    expect((await app.inject({ method: 'GET', url: '/api/meta-ads/conversions-api' })).json()).toEqual({ switch: { on: false, since: null, by: null }, canChange: true })
+    const on = await app.inject({ method: 'PUT', url: '/api/meta-ads/conversions-api', payload: { on: true } })
+    expect(on.statusCode).toBe(200)
+    expect(on.json()).toEqual({ switch: { on: true, since: '2026-10-21T08:00:00.000Z', by: 'user-1' }, changed: true })
+    expect(h.setSalesSwitch).toHaveBeenLastCalledWith(true, { label: 'user-1' })
+  })
+  it('review F6 — the route itself refuses a person without settings.security.manage (not only the RBAC hook)', async () => {
+    h.mayManageSecurity = false
+    expect((await app.inject({ method: 'GET', url: '/api/meta-ads/conversions-api' })).json()).toMatchObject({ canChange: false })
+    const res = await app.inject({ method: 'PUT', url: '/api/meta-ads/conversions-api', payload: { on: true } })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error).toMatch(/settings\.security\.manage/)
+    expect(h.setSalesSwitch).not.toHaveBeenCalled()
+    h.mayManageSecurity = true
+  })
+  it('refuses a body that is not true or false', async () => {
+    const res = await app.inject({ method: 'PUT', url: '/api/meta-ads/conversions-api', payload: { on: 'yes' } })
+    expect(res.statusCode).toBe(400)
+    expect(h.setSalesSwitch).not.toHaveBeenCalled()
   })
 })

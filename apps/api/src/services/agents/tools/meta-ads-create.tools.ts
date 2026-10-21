@@ -93,14 +93,17 @@ const UNDO_ONLY = new Set(['connectionId', 'why', 'removeMade', 'undoOf'])
  * security), never ids a caller names; each object it made read live; deleted only while nothing else hangs under it and it
  * has spent nothing (change-create-common.ts removalDraft).
  */
-async function removeMadeDraft(tool: CreateTool, args: Record<string, unknown>, account: MetaChangeAccount): Promise<MetaChangeDraft | { refusal: string }> {
+async function removeMadeDraft(tool: CreateTool, args: Record<string, unknown>, account: MetaChangeAccount, run?: string | null): Promise<MetaChangeDraft | { refusal: string }> {
   const extra = Object.keys(args).filter((k) => args[k] !== undefined && !UNDO_ONLY.has(k))
   if (extra.length) return { refusal: `removeMade is the undo of an earlier ${tool} change and takes nothing else (${extra.join(', ')}).` }
   const changeId = typeof args.undoOf === 'string' ? args.undoOf.trim() : ''
   if (!changeId) return { refusal: `removeMade is only the undo of an earlier ${tool} change (undo-change asks for it with undoOf): this tool deletes nothing else.` }
-  const row = await prisma.agentChange.findFirst({ where: { id: changeId, toolName: tool }, select: { after: true, undoneAt: true } })
+  const row = await prisma.agentChange.findFirst({ where: { id: changeId, toolName: tool }, select: { after: true, undoneAt: true, undoneByApprovalId: true } })
   if (!row) return { refusal: `Change ${changeId} is not a ${tool} change of this business.` }
   if (row.undoneAt) return { refusal: `Change ${changeId} was undone already.` }
+  // Step 20 re-review 2 — the delete RUNS only as the request undo-change tied to that change (linkUndoRequest), so its
+  // "moved since" and "already waiting" checks were made and the change is marked undone after it; a preview needs none.
+  if (run !== undefined && (!run || row.undoneByApprovalId !== run)) return { refusal: `an undo runs through undo-change, and this request is not the one undo-change tied to change ${changeId}.` }
   const record = (row.after ?? {}) as unknown as MadeRecord & { adAccountId?: string }
   if (record.adAccountId && record.adAccountId !== account.adAccountId) return { refusal: `Change ${changeId} made its objects on another Meta ad account than the one this business uses now: Nexus deletes nothing there.` }
   const live: MadeNow[] = []
@@ -201,8 +204,8 @@ const restOf = <T>(args: Record<string, unknown>): T => {
 
 // ── create-meta-campaign ────────────────────────────────────────────────────────────────────────────────────────
 
-const buildCampaign = (args: Record<string, unknown>): MetaDraftBuilder => guarded(async (account) => {
-  if (args.removeMade === true) return removeMadeDraft('create-meta-campaign', args, account)
+const buildCampaign = (args: Record<string, unknown>, run?: string | null): MetaDraftBuilder => guarded(async (account) => {
+  if (args.removeMade === true) return removeMadeDraft('create-meta-campaign', args, account, run)
   const request = restOf<CampaignCreateRequest>(args)
   const target = account.target
   const merged = request.promotedObject ? promotedMerged(null, request.promotedObject) : {}
@@ -254,13 +257,13 @@ const createMetaCampaign: AgentTool = {
     + META_CHANGE_RULES,
   undo: madeUndo('create-meta-campaign'),
   handler: (args, ctx) => metaChangePreview(args, ctx, buildCampaign(args)),
-  execute: (args, ctx) => runMetaChange(args, ctx, buildCampaign(args), madeFinish, bookkeeping),
+  execute: (args, ctx) => runMetaChange(args, ctx, buildCampaign(args, ctx.approvalId ?? null), madeFinish, bookkeeping),
 }
 
 // ── create-meta-ad-set ──────────────────────────────────────────────────────────────────────────────────────────
 
-const buildAdSet = (args: Record<string, unknown>): MetaDraftBuilder => guarded(async (account) => {
-  if (args.removeMade === true) return removeMadeDraft('create-meta-ad-set', args, account)
+const buildAdSet = (args: Record<string, unknown>, run?: string | null): MetaDraftBuilder => guarded(async (account) => {
+  if (args.removeMade === true) return removeMadeDraft('create-meta-ad-set', args, account, run)
   const request = restOf<AdSetCreateRequest>(args)
   if (!request.campaignId) return { refusal: 'Name the campaign the new ad set goes in (campaignId; create-meta-campaign makes one).' }
   const target = account.target
@@ -353,13 +356,13 @@ const createMetaAdSet: AgentTool = {
     + META_CHANGE_RULES,
   undo: madeUndo('create-meta-ad-set'),
   handler: (args, ctx) => metaChangePreview(args, ctx, buildAdSet(args)),
-  execute: (args, ctx) => runMetaChange(args, ctx, buildAdSet(args), madeFinish, bookkeeping),
+  execute: (args, ctx) => runMetaChange(args, ctx, buildAdSet(args, ctx.approvalId ?? null), madeFinish, bookkeeping),
 }
 
 // ── copy-meta-ads ───────────────────────────────────────────────────────────────────────────────────────────────
 
-const buildCopy = (args: Record<string, unknown>): MetaDraftBuilder => guarded(async (account) => {
-  if (args.removeMade === true) return removeMadeDraft('copy-meta-ads', args, account)
+const buildCopy = (args: Record<string, unknown>, run?: string | null): MetaDraftBuilder => guarded(async (account) => {
+  if (args.removeMade === true) return removeMadeDraft('copy-meta-ads', args, account, run)
   const request = restOf<CopyRequest>(args)
   if (!request.kind) return { refusal: 'Name what is copied: kind campaign, adset or ad.' }
   const target = account.target
@@ -425,7 +428,7 @@ const copyMetaAds: AgentTool = {
     + META_CHANGE_RULES,
   undo: madeUndo('copy-meta-ads'),
   handler: (args, ctx) => metaChangePreview(args, ctx, buildCopy(args)),
-  execute: (args, ctx) => runMetaChange(args, ctx, buildCopy(args), madeFinish, bookkeeping),
+  execute: (args, ctx) => runMetaChange(args, ctx, buildCopy(args, ctx.approvalId ?? null), madeFinish, bookkeeping),
 }
 
 export const META_ADS_CREATE_TOOLS: AgentTool[] = [createMetaCampaign, createMetaAdSet, copyMetaAds]

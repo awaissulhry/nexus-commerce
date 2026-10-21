@@ -175,7 +175,8 @@ describe('how to act on a recommendation (RC-023)', () => {
   })
   it('a read-only type names the Nexus tool that does the same, or Meta\'s screens', () => {
     expect(howToAct('BUDGET_LIMITED', false)).toMatchObject({ byApi: false, spendsMoney: 'yes', nexusTools: ['set-meta-ad-set', 'set-meta-campaign'] })
-    expect(howToAct('SIGNALS_GROWTH_CAPI_V2', false).nexusTools).toEqual(['meta-datasets', 'upload-meta-events'])
+    // Step 33 review F2 — upload-meta-events never sends the website's events: the shop platform's own CAPI does.
+    expect(howToAct('SIGNALS_GROWTH_CAPI_V2', false).nexusTools).toEqual(['meta-datasets'])
     expect(howToAct('UNIFIED_INBOX', false).sentence).toMatch(/Ads Manager link/)
     expect(howToAct(null, false)).toMatchObject({ byApi: false, nexusTools: [] })
   })

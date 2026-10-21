@@ -172,7 +172,8 @@ export function createTargeting(t: CreateTargetingAsk): { value: string; eu: boo
     throw new MetaUnitError(`Meta does not let ads reach people under 18 in the EU, the EEA or Switzerland, and ${youthCountries.length ? `it reaches ${youthCountries.join(', ')}` : 'Nexus cannot tell which country a region or city key is in'}: the minimum age is 18 at least.`)
   }
   if (adv && t.ageMax !== undefined) throw new MetaUnitError('With Advantage+ audience Meta sets the maximum age itself (65): leave ageMax out.')
-  if (adv && t.ageMin !== undefined && t.ageMin > 25) throw new MetaUnitError('With Advantage+ audience Meta takes a minimum age of 25 at most (the rest are suggestions).')
+  // Step 20 (review B6) — the same rule as an edit: with Advantage+ audience the minimum age is 18 to 25.
+  if (adv && t.ageMin !== undefined && (t.ageMin > 25 || t.ageMin < 18)) throw new MetaUnitError('With Advantage+ audience Meta takes a minimum age of 25 at most, 18 at least (the rest are suggestions).')
   const spec: Record<string, unknown> = { geo_locations: geo }
   if (t.ageMin !== undefined) spec.age_min = t.ageMin
   if (t.ageMax !== undefined) spec.age_max = t.ageMax

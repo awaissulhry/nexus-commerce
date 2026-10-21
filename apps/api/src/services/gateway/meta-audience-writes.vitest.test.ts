@@ -152,7 +152,11 @@ describe('changes of one audience and of the account', () => {
     expect(problem({ url, body: form({ custom_audience_info: '{"audience_type_param_name":"audience_type"}' }) })).toMatch(/new_customer_tag and \/ or existing_customer_tag/)
     expect(verdict({ url, body: form({ custom_audience_info: '{"audience_type_param_name":"audience_type","new_customer_tag":"prospecting"}' }) })).toMatchObject({ write: { rule: 'adaccount.audiences' } })
     // Nothing else of the account: never its spend cap or DSA defaults here.
-    expect(problem({ url, body: form({ spend_cap: '100' }) })).toMatch(/only Meta change/)
+    // Step 40 — the spending limit and the DSA defaults are set-meta-spend-cap's and set-meta-account-settings' own rules
+    // (adaccount.spend_cap, adaccount.settings): never mixed into an audience change.
+    expect(problem({ url, body: form({ spend_cap: '100', existing_customers: '[]' }) })).toMatch(/only Meta change/)
+    expect(problem({ url, body: form({ default_dsa_payor: 'Shop A', default_dsa_beneficiary: 'Shop A', existing_customers: '[]' }) })).toMatch(/only Meta change/)
+    expect(verdict({ url, body: form({ spend_cap: '100' }) })).toMatchObject({ write: { rule: 'adaccount.spend_cap' } })
   })
   it('sharing: POST and DELETE /<audience>/ad_accounts, the recipients named; never replace', () => {
     const url = `${BASE}/${AUDIENCE}/ad_accounts`
