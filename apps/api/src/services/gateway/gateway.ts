@@ -359,6 +359,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       return refuse('gated', 'PUBLISH_GATED', 'Nothing was sent to Meta: Meta changes are switched off in Nexus (NEXUS_META_ADS_WRITES), so Meta is not asked to check one either.', 503)
     }
     metaWrite = judged.write
+    // Step 26 (review B1) — a change on Meta's partnership REST host: the token goes as a Bearer header, like step 16's reads.
+    metaRest = metaWrite.host === 'rest'
   } else if (req.channel === 'META') {
     // One verdict on one canonical parse (meta-calls.ts): the refusal, and for the renewal the client_id it names.
     const judged = metaCallVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
@@ -473,7 +475,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     ...(token ? authHeadersOf(req.channel, token) : {}),
     // A Meta change is a form (Meta's `-F` fields), as the gateway judged it.
     // (step 23: a call to the upload host has no body; a file part's multipart body brings its own boundary type)
-    ...(metaWrite && metaWrite.host !== 'rupload' && !metaWrite.multipart ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+    ...(metaWrite && metaWrite.host !== 'rupload' && metaWrite.host !== 'rest' && !metaWrite.multipart ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+    // Step 26 (review B1) — Meta's partnership host takes a JSON body (when the change has one).
+    ...(metaWrite?.host === 'rest' && metaWrite.body ? { 'Content-Type': 'application/json' } : {}),
     // Step 23 — Meta's upload host: the judged `file_url` header (the link Meta fetches), never a caller's own header.
     ...(metaWrite?.headers ?? {}),
   }
@@ -553,7 +557,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       // Never follow a redirect: a channel call carries its token in a header, and a custom token header
       // (x-amz-access-token, X-Shopify-Access-Token) would travel to the redirect's host.
       // Step 23 — nothing in the body of a call to Meta's upload host: Meta fetches the file from its link.
-      const res = await fetch(sendUrl, { method: req.method, headers, body: (metaWrite?.host === 'rupload' ? undefined : metaWrite?.multipart ? metaMultipartBody(metaWrite.multipart) : googleBody ?? metaWrite?.body ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
+      const res = await fetch(sendUrl, { method: req.method, headers, body: (metaWrite?.host === 'rupload' || (metaWrite?.host === 'rest' && !metaWrite.body) ? undefined : metaWrite?.multipart ? metaMultipartBody(metaWrite.multipart) : googleBody ?? metaWrite?.body ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
       status = res.status
       responseHeaders = res.headers
       text = await res.text()
@@ -571,8 +575,10 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // Step 26 — a creator's partnership ad code (in a change's body, or a content look-up's query) never leaves the gateway
     // in Meta's answer: not to the caller, a sentence or the ledger.
     if (req.channel === 'META') {
+      // Review A4 — in every spelling an answer may carry it: as is, JSON-escaped (\" and \/), %-encoded.
       for (const secret of metaWrite?.secrets ?? metaReadSecrets(req.url)) {
-        if (text.includes(secret)) { text = text.split(secret).join('[removed]'); metaScrubbed += 1 }
+        const forms = [...new Set([secret, JSON.stringify(secret).slice(1, -1), JSON.stringify(secret).slice(1, -1).replace(/\//g, '\\/'), encodeURIComponent(secret), new URLSearchParams({ s: secret }).toString().slice(2)])].sort((a, b) => b.length - a.length)
+        for (const form of forms) if (form && text.includes(form)) { text = text.split(form).join('[removed]'); metaScrubbed += 1 }
       }
     }
     reading = status ? rateReadingOf(req.channel, responseHeaders, status) : null
@@ -699,8 +705,10 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
   const id = write.objectId
   // Step 18 — a budget schedule: its campaign or ad set first, then the period among that object's own.
   if (kind === 'highdemandperiod') return metaPeriodOwnerProblem(connectionId, write, parent)
-  // Step 26 — the chosen Instagram account itself, or a media of it (set-meta-partnership-access).
+  // Step 26 — the chosen Instagram account itself, or a media of it (set-meta-partnership-access); review B1 — the chosen Page
+  // on Meta's partnership host.
   if (kind === 'iguser' || kind === 'igmedia') return metaInstagramOwnerProblem(connectionId, write, kind)
+  if (kind === 'page') return metaPageOwnerProblem(connectionId, write)
   // Step 23 — an edge of the chosen ad account or its portfolio, a video upload this connection started, a library video.
   if (kind === 'adaccount' || kind === 'portfolio' || kind === 'video' || kind === 'libraryvideo') return metaMediaOwnerProblem(connectionId, write, kind)
   if (!kind || !Object.prototype.hasOwnProperty.call(META_KIND_FIELD, kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of ${id} names the kind of object it changes (a campaign, an ad set or an ad).` }
@@ -834,6 +842,17 @@ async function metaInstagramOwnerProblem(connectionId: string, write: MetaJudged
   if (!assets.instagramId) return notChosenMedia('this business has no Instagram account chosen, so Nexus changes no Instagram partnership setting.')
   if (kind === 'iguser') return write.objectId === assets.instagramId ? null : notChosenMedia('the Instagram account this change names is not the one this business chose.')
   return (await metaInstagramMediaOwned(connectionId, write.objectId, assets.instagramId)) ? null : notChosenMedia(`Instagram media ${write.objectId} is not one Nexus can confirm as the chosen Instagram account's.`)
+}
+
+/**
+ * Review B1 (step 26) — a change on Meta's partnership host names a Page in its path: it IS the Page this business chose
+ * (MetaAccountLink PAGE). Meta documents no check (validate_only) there.
+ */
+async function metaPageOwnerProblem(connectionId: string, write: MetaJudgedWrite): Promise<{ code: string; sentence: string } | null> {
+  if (write.check) return { code: 'META_WRITE_NOT_ALLOWED', sentence: 'Nothing was sent to Meta: Meta has no check (validate_only) on its partnership host.' }
+  const assets = await metaChosenMediaAssetsOf(connectionId)
+  if (!assets.pageId) return notChosenMedia('this business has no Facebook Page chosen, so Nexus changes no Facebook partnership setting.')
+  return write.objectId === assets.pageId ? null : notChosenMedia('the Page this change names is not the one this business chose.')
 }
 
 /**
@@ -1036,7 +1055,7 @@ async function metaCreativeAssetProblem(
  *                    first META_MEDIA_LIST_MAX).
  * Anything Nexus cannot confirm (a read failed, nothing found) is refused: nothing is sent.
  */
-const BOOST_ASSET_KINDS: ReadonlySet<string> = new Set(['choseninstagram', 'partnercontent', 'adcode', 'igpermalink', 'collabinvite'])
+const BOOST_ASSET_KINDS: ReadonlySet<string> = new Set(['choseninstagram', 'partnercontent', 'adcode', 'igpermalink', 'collabinvite', 'brandedpost'])
 
 async function metaBoostAssetProblem(
   connectionId: string,
@@ -1077,6 +1096,18 @@ async function metaBoostAssetProblem(
       if (!lists.has(key)) lists.set(key, await metaListedValuesUpTo(connectionId, `${ig}/media`, 'id,permalink', 'permalink'))
       return lists.get(key)?.has(asset.id) ? null : notChosenMedia(`${where}${asset.id} is not a link to one of the chosen Instagram account's own media Nexus can confirm (it reads the first ${META_MEDIA_LIST_MAX}).`)
     }
+    case 'brandedpost': {
+      // Review B1 — a post Meta lists among the branded-content posts that tag the chosen Page (the first
+      // META_MEDIA_LIST_MAX; one read per change), by a creator Page no other Nexus business uses.
+      if (!page) return notChosenMedia('this business has no Facebook Page chosen, so no sponsor tag is removed.')
+      const key = `branded:${page}`
+      if (!lists.has(key)) lists.set(key, (await metaBrandedPosts(connectionId, page)) as unknown as Set<string> | null)
+      const posts = lists.get(key) as unknown as Map<string, string | null> | null
+      if (!posts?.has(asset.id)) return notChosenMedia(`${where}post ${asset.id} is not one Nexus can confirm among the branded-content posts that tag the chosen Page (it reads the first ${META_MEDIA_LIST_MAX}).`)
+      const creator = posts.get(asset.id)
+      if (creator && await metaLinkTaken('PAGE', creator)) return notChosenMedia(`${where}post ${asset.id} is by a Page another business in Nexus uses, so Nexus does not change it.`)
+      return null
+    }
     case 'collabinvite': {
       if (!ig) return notChosenMedia('this business has no Instagram account chosen, so it answers no Collab invite.')
       const key = `${ig}/collaboration_invites`
@@ -1085,6 +1116,33 @@ async function metaBoostAssetProblem(
     }
   }
   return notChosenMedia(`${where}${asset.kind === 'adcode' ? 'the ad code' : asset.id} is not an id Nexus can confirm.`)
+}
+
+/**
+ * Review B1 (step 26) — the branded-content posts that tag the chosen Page (Meta's partnership host, one read of the first
+ * META_MEDIA_LIST_MAX): post id → its creator Page. Big ids are kept exact as text. Null when the read failed.
+ */
+async function metaBrandedPosts(connectionId: string, pageId: string): Promise<Map<string, string | null> | null> {
+  const url = new URL(`https://api.facebook.com/partnership-ads/fb-branded-content/${pageId}/branded-content-posts`)
+  url.searchParams.set('limit', String(META_MEDIA_LIST_MAX))
+  try {
+    const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', auth: 'account', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+    if (!answer.ok) return null
+    let body: unknown
+    try { body = JSON.parse(answer.text.replace(/([:[,]\s*)(\d{16,})(?=\s*[,\]}])/g, '$1"$2"')) } catch { return null }
+    const rows = Array.isArray(body) ? body : Array.isArray((body as { data?: unknown } | null)?.data) ? (body as { data: unknown[] }).data : null
+    if (!rows) return null
+    const idText = (v: unknown) => ((typeof v === 'string' || typeof v === 'number') && /^\d{1,25}$/.test(String(v)) ? String(v) : null)
+    const out = new Map<string, string | null>()
+    for (const row of rows) {
+      const r = (row && typeof row === 'object' ? row : {}) as { fb_post_id?: unknown; creator_page_id?: unknown }
+      const id = idText(r.fb_post_id)
+      if (id) out.set(id, idText(r.creator_page_id))
+    }
+    return out
+  } catch {
+    return null
+  }
 }
 
 /**

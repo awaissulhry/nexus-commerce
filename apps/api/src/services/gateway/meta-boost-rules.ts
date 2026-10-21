@@ -11,7 +11,6 @@
  *                                                                (CR-344 ask, CR-346 revoke)
  *   iguser.tagApproval.add         POST   /<ig id>/branded_content_tag_approval     user_ids (CR-354)
  *   iguser.tagApproval.remove      DELETE /<ig id>/branded_content_tag_approval     user_ids (CR-355)
- *   igmedia.adCode.create          POST   /<media id>/partnership_ad_code           no parameter (CR-363)
  *   igmedia.adCode.remove          DELETE /<media id>/partnership_ad_code           no parameter (CR-364)
  *   iguser.collab.respond          POST   /<ig id>/collaboration_invites            media_id + accept (MD-132)
  *
@@ -23,9 +22,24 @@
  * edges: the change tools say "Meta has no check for this change". An ad code is never quoted in a sentence, and a body that
  * carries one never reaches the ledger (`secret`).
  *
- * The Facebook side (api.facebook.com/partnership-ads/…: account-level permissions, the brand allowlist, the sponsor tag on
- * branded-content posts — master CR-348 … CR-362, OT-014 … OT-031) is NOT here: lane C2 files those writes under the Page's own
- * token, which comes with lane C4's Page-token mode (step 36): C2-PAGE-TOKEN. The REST host stays read-only (meta-calls.ts).
+ * CR-363 (an ad code made for the business's own media) is answered in words, never sent: Meta answers the code once, in the
+ * answer to that call, and no Nexus path shows a run's answer to the person afterwards (marketing/meta-ads/change-boosts.ts).
+ *
+ * Review B1 (round 1) — the Facebook side lives on Meta's partnership REST host, api.facebook.com (metaRestWriteVerdict below):
+ *   POST   partnership-ads/fb-account-level-permissions/<page>                    [{"partner_page_id":N,"action":A}, …]
+ *            A: send-request, cancel-request, accept-request, reject-request, revoke-permission (Meta's own examples
+ *            send "revoke-permission" where its list says "remove-permission": LIVE-PROBES CR-352r)
+ *   PUT    partnership-ads/fb-branded-content/<page>/brand-allowlist-status?is_enabled=true|false   (no body)
+ *   POST   partnership-ads/fb-branded-content/<page>/brand-allowlisted-creators   {"creator_page_ids":[N, …]}
+ *   DELETE partnership-ads/fb-branded-content/<page>/brand-allowlisted-creators?creator_page_ids=[N, …]   (no body)
+ *   DELETE partnership-ads/fb-branded-content/<page>/branded-content-posts?post_ids=[N, …]   (no body)
+ * <page> IS the business's chosen Page (kind `page`); each partner / creator Page is no other Nexus business's and never the
+ * chosen Page (`partnerpage`); each post is one Meta lists among the branded-content posts that tag the chosen Page, by a
+ * creator no other Nexus business uses (`brandedpost`). The token is the account's system-user token as `Authorization:
+ * Bearer`, with `X-API-Version: 1.0.0` (the gateway sets both; no caller header) — "All endpoints require an Authorization:
+ * Bearer token" + facebook_branded_content_ads_brand (fb-account-level-permissioning.md, branded-content-permissions.md; step 16
+ * reads the same host so). If Meta refuses the system user, the step says Meta's words; step 36's Page-token mode (`auth:
+ * 'page'`) is the fallback, not built here. Each list is NOT atomic: Meta answers per item.
  *
  * Checked 2026-10-21 (curl ≥ 3 s apart, developers.facebook.com/documentation/…; Meta's Python Business SDK main,
  * facebook_business/adobjects):
@@ -47,7 +61,7 @@
  * Meta's pages show a User token for the tag approvals and the Collab invites: Nexus sends the business's system-user token, and
  * Meta's own refusal answers in words (LIVE-PROBES CR-354, MD-132).
  */
-import type { MetaWriteAsset, MetaWriteRule } from './meta-calls.js'
+import type { MetaWriteAsset, MetaWriteRule, MetaWriteVerdict } from './meta-calls.js'
 import { META_AD_CODE } from './meta-creative-rules.js'
 
 type Params = ReadonlyMap<string, string>
@@ -65,6 +79,7 @@ export function metaUserIdsProblem(value: string): string | null {
 const creators = (params: Params): MetaWriteAsset[] => (params.get('user_ids') ?? '').split(',').filter(isDigits).map((id) => ({ id, kind: 'partnerinstagram' as const }))
 
 const ACCOUNT = ['adaccount'] as const
+const PAGE = ['page'] as const
 const IG_USER = ['iguser'] as const
 const IG_MEDIA = ['igmedia'] as const
 
@@ -109,13 +124,6 @@ export const META_BOOST_WRITE_RULES: readonly MetaWriteRule[] = [
     assets: creators,
   },
   {
-    // CR-363: an ad code made for a media of the chosen Instagram account (Meta: "for media you own"), so a partner can boost
-    // it. No parameter; Meta answers the code, which the tool shows once and never stores.
-    name: 'igmedia.adCode.create', method: 'POST', path: /^\d{1,25}\/partnership_ad_code$/, kinds: IG_MEDIA,
-    required: [], optional: [], noBody: true, edgeCall: true, budget: false,
-    values: () => null,
-  },
-  {
     // CR-364: the ad code taken off a media of the chosen Instagram account — also the undo of CR-363.
     name: 'igmedia.adCode.remove', method: 'DELETE', path: /^\d{1,25}\/partnership_ad_code$/, kinds: IG_MEDIA,
     required: [], optional: [], edgeCall: true, budget: false,
@@ -132,3 +140,106 @@ export const META_BOOST_WRITE_RULES: readonly MetaWriteRule[] = [
     assets: (params) => [{ id: params.get('media_id')!, kind: 'collabinvite' }],
   },
 ]
+
+// ── Meta's partnership REST host: the Facebook side (review B1, round 1) ───────────────────────────────────────────────
+
+/** Meta's partnership REST host (meta-calls.ts META_REST_HOST; a test holds them equal). */
+export const META_PARTNERSHIP_REST_HOST = 'api.facebook.com'
+/** The account-level permission actions Nexus sends (fb-account-level-permissioning.md; revoke-permission as Meta's examples). */
+export const META_FB_PERMISSION_ACTIONS = ['send-request', 'cancel-request', 'accept-request', 'reject-request', 'revoke-permission'] as const
+/** Partner Pages one permission change names (Meta takes an array; Nexus keeps a change small). */
+export const META_FB_PARTNERS_MAX = 10
+/** Creator Pages or posts one allowlist / untag change names. */
+export const META_FB_LIST_MAX = 25
+
+const ID = '\\d{1,25}'
+const ids = (list: string) => list.slice(1, -1).split(',')
+const listOf = (value: string | null, max: number): string[] | null => {
+  if (value === null || !new RegExp(`^\\[${ID}(,${ID})*\\]$`).test(value)) return null
+  const out = ids(value)
+  return out.length <= max && new Set(out).size === out.length ? out : null
+}
+const PERMISSION_ITEM = new RegExp(`^\\{"partner_page_id":(${ID}),"action":"(${META_FB_PERMISSION_ACTIONS.join('|')})"\\}$`)
+
+/** The permission body in Nexus's one spelling: `[{"partner_page_id":N,"action":"A"}, …]`, 1 to 10 partners, each once. */
+export function metaPermissionBodyOf(items: Array<{ pageId: string; action: string }>): string {
+  return `[${items.map((i) => `{"partner_page_id":${i.pageId},"action":"${i.action}"}`).join(',')}]`
+}
+function permissionItems(body: string): Array<{ pageId: string; action: string }> | null {
+  if (!body.startsWith('[{') || !body.endsWith('}]')) return null
+  const parts = body.slice(1, -1).split('},{').map((p, i, all) => `${i === 0 ? '' : '{'}${p}${i === all.length - 1 ? '' : '}'}`)
+  const items: Array<{ pageId: string; action: string }> = []
+  for (const part of parts) {
+    const m = PERMISSION_ITEM.exec(part)
+    if (!m) return null
+    items.push({ pageId: m[1], action: m[2] })
+  }
+  if (!items.length || items.length > META_FB_PARTNERS_MAX || new Set(items.map((i) => i.pageId)).size !== items.length) return null
+  return metaPermissionBodyOf(items) === body ? items : null
+}
+
+type RestInput = { method: string; url: string; kind: string; body?: unknown; objectKind?: string }
+
+/**
+ * Review B1 — the verdict on a change of Meta's partnership REST host (null: not that host). Exact routes and methods, the
+ * chosen Page in the path (the gateway confirms it: kind `page`), the query and the JSON body judged as allow-lists in ONE
+ * spelling, each Page / post id handed to the gateway's check. Only a write; nothing else on that host is sent.
+ */
+export function metaRestWriteVerdict(input: RestInput): MetaWriteVerdict | null {
+  let url: URL
+  try { url = new URL(input.url) } catch { return null }
+  if (url.hostname !== META_PARTNERSHIP_REST_HOST) return null
+  const refuse = (problem: string): MetaWriteVerdict => ({ problem })
+  if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hash) return refuse(`Nexus calls Meta's partnership host only as https://${META_PARTNERSHIP_REST_HOST}`)
+  const raw = input.url.replace(/^https:\/\/[^/?#]*/i, '').split(/[?#]/)[0] || '/'
+  if (raw.includes('%') || input.url.includes('\\') || raw !== url.pathname) return refuse('a Meta path is written plainly: no %-encoding, no backslash')
+  const pieces = raw.split('/').slice(1)
+  if (pieces.some((p) => !/^[a-z0-9-]+$/.test(p))) return refuse(`a path on ${META_PARTNERSHIP_REST_HOST} is lower-case letters, digits and - only`)
+  if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
+  if (input.objectKind !== 'page') return refuse('a change on Meta\'s partnership host names the chosen Page as its object (kind page)')
+  const method = input.method.toUpperCase()
+  const route = pieces.join('/')
+  const keys = [...url.searchParams.keys()]
+  if (new Set(keys).size !== keys.length) return refuse('the query names a key more than once')
+  const body = typeof input.body === 'string' ? input.body : input.body == null ? '' : null
+  if (body === null) return refuse('a change on Meta\'s partnership host carries its JSON body as text')
+  const onlyQuery = (key: string | null) => (key === null ? keys.length === 0 : keys.length === 1 && keys[0] === key)
+  const write = (rule: string, pageId: string, assets: MetaWriteAsset[], sent: string): MetaWriteVerdict => ({
+    write: { rule, objectId: pageId, check: false, body: sent, budget: false, kinds: PAGE, edgeCall: true, host: 'rest', ...(method === 'DELETE' ? { method: 'DELETE' as const } : method === 'PUT' ? { method: 'PUT' as const } : {}), ...(assets.length ? { assets } : {}) },
+  })
+  let m = /^partnership-ads\/fb-account-level-permissions\/(\d{1,25})$/.exec(route)
+  if (m && method === 'POST') {
+    if (!onlyQuery(null)) return refuse('an account-level permission change carries no query')
+    const items = permissionItems(body)
+    if (!items) return refuse(`the permission change is [{"partner_page_id":<Page id>,"action":"${META_FB_PERMISSION_ACTIONS.join('|')}"}, …] in Nexus's one spelling: 1 to ${META_FB_PARTNERS_MAX} partner Pages, each once`)
+    return write('page.fbPermissions', m[1], items.map((i) => ({ id: i.pageId, kind: 'partnerpage' as const })), body)
+  }
+  m = /^partnership-ads\/fb-branded-content\/(\d{1,25})\/brand-allowlist-status$/.exec(route)
+  if (m && method === 'PUT') {
+    if (body) return refuse('the allowlist switch carries no body')
+    if (!onlyQuery('is_enabled') || !['true', 'false'].includes(url.searchParams.get('is_enabled') ?? '')) return refuse('the allowlist switch is ?is_enabled=true or false, nothing else')
+    return write('page.fbAllowlistStatus', m[1], [], '')
+  }
+  m = /^partnership-ads\/fb-branded-content\/(\d{1,25})\/brand-allowlisted-creators$/.exec(route)
+  if (m && method === 'POST') {
+    if (!onlyQuery(null)) return refuse('adding creators to the allowlist carries no query (the Page ids go in the JSON body)')
+    const list = /^\{"creator_page_ids":(\[[^\]]*\])\}$/.exec(body)
+    const pages = list ? listOf(list[1], META_FB_LIST_MAX) : null
+    if (!pages) return refuse(`adding creators is {"creator_page_ids":[<Page id>, …]}: 1 to ${META_FB_LIST_MAX} Pages, each once, no space`)
+    return write('page.fbAllowCreators', m[1], pages.map((id) => ({ id, kind: 'partnerpage' as const })), body)
+  }
+  if (m && method === 'DELETE') {
+    if (body) return refuse('removing creators from the allowlist carries no body')
+    const pages = onlyQuery('creator_page_ids') ? listOf(url.searchParams.get('creator_page_ids'), META_FB_LIST_MAX) : null
+    if (!pages) return refuse(`removing creators is ?creator_page_ids=[<Page id>, …]: 1 to ${META_FB_LIST_MAX} Pages, each once`)
+    return write('page.fbDisallowCreators', m[1], pages.map((id) => ({ id, kind: 'partnerpage' as const })), '')
+  }
+  m = /^partnership-ads\/fb-branded-content\/(\d{1,25})\/branded-content-posts$/.exec(route)
+  if (m && method === 'DELETE') {
+    if (body) return refuse('removing the sponsor tag carries no body')
+    const posts = onlyQuery('post_ids') ? listOf(url.searchParams.get('post_ids'), META_FB_LIST_MAX) : null
+    if (!posts) return refuse(`removing the sponsor tag is ?post_ids=[<post id>, …]: 1 to ${META_FB_LIST_MAX} posts, each once`)
+    return write('page.fbUntagPosts', m[1], posts.map((id) => ({ id, kind: 'brandedpost' as const })), '')
+  }
+  return refuse(`on ${META_PARTNERSHIP_REST_HOST} Nexus changes only the chosen Page's account-level partnership permissions, its branded-content allowlist and the sponsor tag of posts that tag it (this one is ${method} /${route})`)
+}

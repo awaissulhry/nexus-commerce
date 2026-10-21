@@ -75,7 +75,7 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative' | 'iguser' | 'igmedia'
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative' | 'iguser' | 'igmedia' | 'page'
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -149,6 +149,42 @@ export async function metaRestCall(req: Omit<MetaCallRequest, 'auth'>): Promise<
     max429Retries: 0,
     timeoutMs: req.timeoutMs ?? 60_000,
     ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
+  })
+}
+
+export interface MetaRestWriteRequest {
+  connectionId: string
+  operation: string
+  /** The chosen Facebook Page the change is for (in its path; the gateway confirms it is the chosen one). */
+  pageId: string
+  /** The path below the host, e.g. `partnership-ads/fb-account-level-permissions/<page id>`. */
+  path: string
+  method: 'POST' | 'PUT' | 'DELETE'
+  query?: Record<string, string>
+  /** The JSON body as text, in Nexus's one spelling (meta-boost-rules.ts). */
+  body?: string
+  maxRateWaitMs?: number
+}
+
+/**
+ * Step 26 (review B1) — one change on Meta's partnership REST host (api.facebook.com) through the gateway: the account's
+ * system-user token as `Authorization: Bearer` with `X-API-Version: 1.0.0` (the gateway adds both), the chosen Page in the
+ * path, a JSON body or a judged query (meta-boost-rules.ts metaRestWriteVerdict). Never retried.
+ */
+export async function metaRestWriteCall(req: MetaRestWriteRequest): Promise<GatewayResponse> {
+  return gatewayCall({
+    channel: 'META',
+    operation: req.operation,
+    kind: 'write',
+    connectionId: req.connectionId,
+    url: metaRestUrl(req.path, req.query ?? {}),
+    method: req.method,
+    ...(req.body ? { body: req.body } : {}),
+    metaObjectKind: 'page',
+    maxTransientRetries: 0,
+    max429Retries: 0,
+    maxRateWaitMs: req.maxRateWaitMs,
+    timeoutMs: 60_000,
   })
 }
 

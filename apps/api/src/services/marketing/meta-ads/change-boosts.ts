@@ -22,18 +22,21 @@
  *                       copy-creator-video (MD-138): a creator's Instagram video into the chosen account's video library with
  *                       the creator's ad code (step 23's video sender; its undo is create-meta-media's).
  *                       undo: step 25's creative undo (creativeUndoDraft) for creatives THIS tool made new.
- *   set-meta-partnership-access  the chosen Instagram account's partnership side: ask a creator for account-level permission
- *                       or revoke it, add / remove creators on the approved-tagging list, make / delete an ad code of its own
- *                       media, accept / decline a Collab invite. The Facebook side (account-level permissions, the brand
- *                       allowlist, sponsor tags on branded-content posts — api.facebook.com) is answered in words:
- *                       C2-PAGE-TOKEN (it comes with the Page-token mode, step 36).
+ *   set-meta-partnership-access  the chosen Instagram account's partnership side (ask a creator for account-level permission
+ *                       or revoke it, add / remove creators on the approved-tagging list, delete an ad code of its own media,
+ *                       accept / decline a Collab invite; making an ad code is answered in words — review A2) and the chosen
+ *                       Page's (review B1: account-level permissions with partner Pages, the branded-content allowlist and
+ *                       its creators, the sponsor tag of posts that tag it — Meta's partnership host api.facebook.com, with
+ *                       the system-user token as Bearer; Meta answers each item of a list on its own).
  *
- * The ad code (a creator's, or one Meta makes for the business's own media) is credential-like: never in a preview, a change
- * record (only its fingerprint, a SHA-256 prefix), a sentence Nexus keeps or the call ledger; a code Meta makes is shown ONCE in
- * the run's own answer. Nothing here spends money: a boost is a creative, and a creative serves only once an ad uses it
- * (create-meta-ad, step 27).
+ * A creator's ad code is credential-like. Review A1 (round 1) — it IS kept with the request until it runs (the approval's
+ * arguments, a plan step's): people who can read this business's requests can read it; Nexus says so. It is never in a
+ * preview, a change record, the plan / basis hashes (review A3: the content it unlocks pins them), the call ledger or a Meta
+ * answer Nexus passes on (the gateway cuts it out). create-meta-boost is Claude's door only (surfaces mcp: the in-app assistant
+ * keeps its steps' arguments). A code for the business's own media (CR-363) is answered in words (review A2): Meta answers it
+ * once and no Nexus path shows a run's answer afterwards. Nothing here spends money: a boost is a creative, and a creative
+ * serves only once an ad uses it (create-meta-ad, step 27).
  */
-import { createHash } from 'node:crypto'
 import {
   BOOST_TOOL, buildCreative, creativeUndoDraft, creativeWarnings, createdSentence, MAX_CREATIVE_UNDO, sendCreate,
   type CreativeDraft, type CreativeRequest,
@@ -41,8 +44,8 @@ import {
 import { sendAdVideo } from './change-media.js'
 import { changeLines, plural, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { MetaChangeAccount } from './change-account.js'
-import type { MetaChangeResult, MetaWriteTarget } from './write-client.js'
-import { MetaReadError } from './errors.js'
+import { metaSendRest, MetaWriteError, META_UNKNOWN_OUTCOME, type MetaChangeResult, type MetaWriteTarget } from './write-client.js'
+import { localFailure, MetaReadError } from './errors.js'
 import { metaChosenAccount, MetaLiveRefusal, type MetaChosenAccount } from './live.js'
 import { instagramOf, onPage, ownMedia, pageOf, pagePostId } from './live-media.js'
 import { livePartnership } from './live-partners.js'
@@ -50,7 +53,7 @@ import { listPaged } from './live-objects.js'
 import { metaReadOne } from './read-client.js'
 import { takenIds } from './taken.js'
 import { META_AD_CODE, META_CTA_TYPES, META_IG_PERMALINK } from '../../gateway/meta-creative-rules.js'
-import { META_TAG_APPROVAL_MAX } from '../../gateway/meta-boost-rules.js'
+import { META_FB_LIST_MAX, META_FB_PARTNERS_MAX, META_FB_PERMISSION_ACTIONS, META_TAG_APPROVAL_MAX, metaPermissionBodyOf } from '../../gateway/meta-boost-rules.js'
 
 export { BOOST_TOOL }
 export const PARTNERSHIP_TOOL = 'set-meta-partnership-access'
@@ -59,8 +62,11 @@ type Row = Record<string, unknown>
 const isObject = (v: unknown): v is Row => !!v && typeof v === 'object' && !Array.isArray(v)
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
 const idText = (v: unknown): string | null => ((typeof v === 'string' || typeof v === 'number') && /^\d{1,25}$/.test(String(v)) ? String(v) : null)
-/** A credential-like code's fingerprint for the record: a SHA-256 prefix (never the code). */
-export const fingerprintOf = (code: string) => `sha256:${createHash('sha256').update(code).digest('hex').slice(0, 16)}`
+/**
+ * Review A1 (round 1) — what is true of a creator's ad code in Nexus, said in every preview that carries one and in the tool's
+ * description.
+ */
+export const AD_CODE_KEPT = 'The creator\'s ad code is kept with this request until it runs (its approval, or its change-plan step): people who can read this business\'s requests can read it. It is not shown in this preview, not in the change record, not in the call ledger, and the gateway cuts it out of Meta\'s answers.'
 
 // ── create-meta-boost: the request ──────────────────────────────────────────────────────────────────────────────────
 
@@ -85,7 +91,7 @@ export interface BoostRequest {
   postId?: string | null
   mediaId?: string | null
   permalink?: string | null
-  /** A creator's partnership ad code (credential-like: never in a preview, a record or the ledger). */
+  /** A creator's partnership ad code (credential-like: kept with the request until it runs; never in a preview, a change record or the ledger). */
   adCode?: string | null
   withInstagram?: boolean | null
   threads?: boolean | null
@@ -102,6 +108,8 @@ export interface BoostRequest {
 
 /** Meta's Messenger and Instagram Direct destinations as its multi-destination example writes them (use-posts-as-ads.md). */
 const MESSENGER_LINK = 'https://fb.com/messenger_doc/'
+/** Review B6 — every profile-visit guide opens with this warning (ig-profile-visit.md, fb-page-visit.md, multidestination-…). */
+const PROFILE_VISIT_LIMITED = 'Meta says profile-visit ad creation on its Marketing API is in limited availability, rolled out to advertisers step by step: if this account does not have it yet, Meta\'s check refuses it (then a person makes it in Ads Manager or asks Meta).'
 const INSTAGRAM_LINK = 'https://www.instagram.com/'
 /** How many of the account's creatives the run reads just before the send ("was it new?"; more = not proven new). */
 export const CREATIVES_BEFORE_MAX = 500
@@ -288,9 +296,11 @@ async function creatorSource(chosen: MetaChosenAccount, request: BoostRequest, a
       creator: true, instagram: platform === 'INSTAGRAM', label: `a creator's ${platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'} content${row.contentId ? ` ${row.contentId}` : ''} (by the creator's ad code)`, media: null,
       warnings: [
         ...warnings,
-        'The creator\'s ad code goes to Meta in this request only: it is not shown in this preview, the change record keeps only its fingerprint, and the call ledger never keeps it. Until the request runs it rests with the request like every argument. The code also unlocks archived content and hidden Collab posts (Meta\'s guide).',
+        AD_CODE_KEPT,
+        'The code also unlocks archived content and hidden Collab posts (Meta\'s guide).',
       ],
-      stands: { adCode: fingerprintOf(code), contentId: row.contentId, author: row.author, platform },
+      // Review A3 — the content the code unlocks pins what the change stands on; the code is in no hash.
+      stands: { contentId: row.contentId, author: row.author, platform },
     }
   }
   if (source === 'creator-instagram-media') {
@@ -343,9 +353,12 @@ async function buttonOf(chosen: MetaChosenAccount, request: BoostRequest, source
     if (apps.some((a) => !(MESSAGING_APPS as readonly string[]).includes(a))) throw new MetaLiveRefusal(`A messaging button opens ${MESSAGING_APPS.join(' or ')}.`)
     if (source.creator) {
       if (apps.length !== 1 || apps[0] !== 'MESSENGER') throw new MetaLiveRefusal('A partnership ad with a messaging button opens Messenger (Meta\'s click-to-message partnership guide): button.apps ["MESSENGER"].')
+      // Review B7 — the partnership click-to-message guide writes value {app_destination: "MESSENGER", link: "<LINK_URL>"}
+      // and says no more about the link: the person names it (LIVE-PROBES CR-327).
+      if (!button.link) throw new MetaLiveRefusal('A partnership ad\'s Messenger button names its link (button.link: Meta\'s click-to-message partnership guide writes a link beside app_destination MESSENGER without saying more — e.g. the business\'s website).')
       return {
-        parts: { call_to_action: { type: 'LEARN_MORE', value: { app_destination: 'MESSENGER', link: MESSENGER_LINK } } }, existingFeed: null,
-        brandedExtra: { promoted_page_id: pageId }, words: 'Messenger with the chosen Page', warnings: ['Messages from the ad go to the chosen Page (branded_content.promoted_page_id).'],
+        parts: { call_to_action: { type: 'LEARN_MORE', value: { app_destination: 'MESSENGER', link: button.link } } }, existingFeed: null,
+        brandedExtra: { promoted_page_id: pageId }, words: 'Messenger with the chosen Page', warnings: ['Messages from the ad go to the chosen Page (branded_content.promoted_page_id). Meta\'s guide does not say what the button\'s link does beside Messenger (LIVE-PROBES CR-327).'],
       }
     }
     if (apps.includes('INSTAGRAM_DIRECT') && !source.instagram) throw new MetaLiveRefusal('Instagram Direct needs the ad to run as the chosen Instagram account (withInstagram, and a chosen Instagram account).')
@@ -371,16 +384,17 @@ async function buttonOf(chosen: MetaChosenAccount, request: BoostRequest, source
   const profile = button.visit ?? (request.source === 'facebook-post' ? 'facebook' : 'instagram')
   if (request.source === 'facebook-post') {
     if (profile !== 'facebook') throw new MetaLiveRefusal('A Facebook post\'s profile-visit button opens the chosen Page (button.visit facebook): Meta documents the Instagram and both-profiles buttons for Instagram posts.')
-    return { parts: { call_to_action: { type: 'VISIT_PROFILE', value: { link: `https://www.facebook.com/${pageId}` } } }, existingFeed: null, brandedExtra: {}, words: 'a visit to the chosen Page', warnings: [] }
+    return { parts: { call_to_action: { type: 'VISIT_PROFILE', value: { link: `https://www.facebook.com/${pageId}` } } }, existingFeed: null, brandedExtra: {}, words: 'a visit to the chosen Page', warnings: [PROFILE_VISIT_LIMITED] }
   }
   if (profile === 'facebook') throw new MetaLiveRefusal('An Instagram post\'s profile-visit button opens the chosen Instagram profile (instagram) or lets Meta pick between it and the Page (both).')
   const username = await instagramUsername(chosen)
   const igLink = `https://www.instagram.com/${username}`
-  if (profile === 'instagram') return { parts: { call_to_action: { type: 'VIEW_INSTAGRAM_PROFILE', value: { link: igLink } } }, existingFeed: null, brandedExtra: {}, words: `a visit to @${username}`, warnings: [] }
+  if (profile === 'instagram') return { parts: { call_to_action: { type: 'VIEW_INSTAGRAM_PROFILE', value: { link: igLink } } }, existingFeed: null, brandedExtra: {}, words: `a visit to @${username}`, warnings: [PROFILE_VISIT_LIMITED] }
   return {
-    parts: {}, brandedExtra: {}, words: `a visit to @${username} or to the chosen Page (Meta picks per person)`, warnings: ['Meta picks the Instagram profile or the Facebook Page per person (UNIFIED_PROFILE_VISIT_DESTINATION).'],
+    parts: {}, brandedExtra: {}, words: `a visit to @${username} or to the chosen Page (Meta picks per person)`, warnings: ['Meta picks the Instagram profile or the Facebook Page per person (UNIFIED_PROFILE_VISIT_DESTINATION).', PROFILE_VISIT_LIMITED],
     existingFeed: { optimization_type: 'UNIFIED_PROFILE_VISIT_DESTINATION', call_to_actions: [
-      { type: 'VIEW_INSTAGRAM_PROFILE', value: { link: igLink, app_link: `instagram://user?username=${username}` } },
+      // Review B5 — multidestination-profile-visit.md: instagram://user?username=<IG_USERNAME>&userid=<IG_USER_ID>.
+      { type: 'VIEW_INSTAGRAM_PROFILE', value: { link: igLink, app_link: `instagram://user?username=${username}&userid=${instagramOf(chosen)}` } },
       { type: 'VISIT_PROFILE', value: { link: `https://www.facebook.com/${pageId}` } },
     ] },
   }
@@ -401,7 +415,22 @@ function threadsProblem(source: ResolvedSource): string | null {
 }
 
 export interface BoostDraft extends CreativeDraft {
-  boost: { source: BoostSource | 'video'; adCode: string | null; name?: string }
+  /** What the record keeps: the source and, for a creator's content, the content id (never the ad code — review A3). */
+  boost: { source: BoostSource | 'video'; name?: string; contentId?: string | null }
+}
+
+/** Review A3 — what stands for an ad code in a plan hash (the code itself is in no hash: a short code can be reversed). */
+const AD_CODE_IN_PLAN = '[a creator\'s ad code]'
+/** A creative's form fields with a creator's ad code replaced, for the plan hash only (what is SENT keeps the code). */
+export function withoutAdCode(params: Record<string, string>): Record<string, string> {
+  if (!params.branded_content || !/_boost_post_access_token/.test(params.branded_content)) return params
+  try {
+    const branded = JSON.parse(params.branded_content) as Record<string, unknown>
+    for (const key of ['instagram_boost_post_access_token', 'facebook_boost_post_access_token']) if (key in branded) branded[key] = AD_CODE_IN_PLAN
+    return { ...params, branded_content: JSON.stringify(branded) }
+  } catch {
+    return { ...params, branded_content: AD_CODE_IN_PLAN }
+  }
 }
 
 /** Read just before the send: the ids of the ad account's creatives (null: more than Nexus reads, so "new" is not proven). */
@@ -452,6 +481,8 @@ async function boostCreateDraft(account: MetaChangeAccount, request: BoostReques
   const label = `Boost ${resolved.label} as creative "${name}" in ad account ${act}`
   const request1: MetaChangeRequest = {
     step: 1, label, kind: 'adaccount', objectId: act, params: built.params,
+    // Review A3 — the plan hash leaves a creator's ad code out (the content it unlocks is in what the change stands on).
+    planParams: withoutAdCode(built.params),
     // Meta documents validate_only on POST /act_<id>/adcreatives (reference/ad-account/adcreatives): Meta checks it first.
     check: 'meta', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
     operation: 'creative.create', edge: 'adcreatives',
@@ -475,7 +506,6 @@ async function boostCreateDraft(account: MetaChangeAccount, request: BoostReques
     ['Button', '—', button.words],
     ['Advantage+ creative features ON', '—', asked.length ? asked.join(', ') : 'none'],
   ])
-  const code = source.endsWith('-code') ? request.adCode?.trim() ?? null : null
   return {
     summary: `Meta: boost ${resolved.label} as creative "${name}" in ad account ${act} (a creative spends nothing).`,
     changes, totals: { creatives: 1, requests: 1, featuresOn: asked.length },
@@ -484,7 +514,7 @@ async function boostCreateDraft(account: MetaChangeAccount, request: BoostReques
     before: { kind: 'create', items: [] },
     after: { kind: 'create', items: [{ kind: 'creative', name }] },
     creative: { action: 'create', name, featuresOn: asked },
-    boost: { source, adCode: code ? fingerprintOf(code) : null, name },
+    boost: { source, name, ...(resolved.creator ? { contentId: (resolved.stands.contentId as string | null) ?? null } : {}) },
   }
 }
 
@@ -506,7 +536,7 @@ async function copyVideoDraft(account: MetaChangeAccount, request: BoostRequest)
   const params = { source_instagram_media_id: mediaId, partnership_ad_ad_code: code, is_partnership_ad: 'true' }
   const label = `Copy the creator's Instagram video ${mediaId} into ad account ${act}'s video library (with the creator's ad code)`
   const request1: MetaChangeRequest = {
-    step: 1, label, kind: 'adaccount', objectId: act, params,
+    step: 1, label, kind: 'adaccount', objectId: act, params, planParams: { ...params, partnership_ad_ad_code: AD_CODE_IN_PLAN },
     // Meta documents no validate_only on advideos (reference/ad-account/advideos): no check.
     check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
     operation: 'media.videoUpload', edge: 'advideos',
@@ -524,15 +554,15 @@ async function copyVideoDraft(account: MetaChangeAccount, request: BoostRequest)
       ...warnings,
       'Meta has no check for an upload (its advideos edge lists no validate_only): the preview is built from Meta\'s content discovery as it is now.',
       'An upload spends nothing. Meta needs it processed before a creative uses it: the run waits for Meta\'s processing and says where it stands.',
-      'The creator\'s ad code goes to Meta in this request only: it is not shown in this preview, the change record keeps only its fingerprint, and the call ledger never keeps it.',
+      AD_CODE_KEPT,
       'Its undo removes the video again (create-meta-media kind undo) only when this copy made it new, and only while no creative uses it.',
     ],
     spendsMoney: [], skipped: [], requests: [request1],
-    stands: { action: 'copy-creator-video', adAccountId: account.adAccountId, mediaId, adCode: fingerprintOf(code), author: row.author },
+    stands: { action: 'copy-creator-video', adAccountId: account.adAccountId, mediaId, contentId: row.contentId, author: row.author },
     before: { kind: 'video', items: [] },
     after: { kind: 'video', items: [{ kind: 'video', source: `creator-instagram:${mediaId}`, method: 'advideos' }] },
     creative: { action: 'create' },
-    boost: { source: 'video', adCode: fingerprintOf(code) },
+    boost: { source: 'video' },
   }
 }
 
@@ -564,27 +594,29 @@ export type PartnershipAction = typeof PARTNERSHIP_ACTIONS[number]
 export const MAX_CREATORS = 10
 
 /**
- * C2-PAGE-TOKEN — the Facebook side of partnership access lives on Meta's REST host (api.facebook.com/partnership-ads/…,
- * fb-account-level-permissioning.md and guides/branded-content-permissions.md: a POST of an array of {partner_page_id,
- * action} — send-request, cancel-request, accept-request, reject-request, remove-permission (Meta's example sends
- * "revoke-permission"); a PUT of brand-allowlist-status?is_enabled; a POST / DELETE of brand-allowlisted-creators; a DELETE of
- * branded-content-posts?post_ids). Lane C2 files these Page-level writes under the Page's OWN token, which comes with lane
- * C4's Page-token mode (step 36, gateway `auth: 'page'`): until it is wired here, Nexus answers in words and sends nothing.
- * (Meta's pages show only "Authorization: Bearer <ACCESS_TOKEN>"; step 16 reads the same host with the system-user token —
- * LIVE-PROBES CR-347 settles which token Meta takes for these writes.)
+ * Review B1 (round 1) — the Facebook side, on Meta's partnership REST host (api.facebook.com, gateway/meta-boost-rules.ts):
+ * the chosen Page's account-level partnership permissions (fb-account-level-permissioning.md: send-request, cancel-request,
+ * accept-request, reject-request; Meta's list says remove-permission and its example sends revoke-permission — Nexus sends
+ * revoke-permission, LIVE-PROBES CR-352r), its branded-content allowlist (on / off, creators added / removed) and the sponsor
+ * tag of posts that tag it (guides/branded-content-permissions.md). The system-user token goes as the Bearer Meta's pages ask
+ * for (step 16 reads the same host so); if Meta refuses it, the step says Meta's words — step 36's Page-token mode (`auth:
+ * 'page'`) is the fallback, not built here.
  */
-export const FACEBOOK_ACTION_CALLS: Readonly<Record<string, string>> = {
-  'facebook-request': 'send a Facebook partnership-permission request to a creator Page (action send-request)',
-  'facebook-cancel': 'cancel a Facebook partnership request the Page sent (action cancel-request)',
-  'facebook-accept': 'accept a Facebook partnership request the Page received (action accept-request)',
-  'facebook-reject': 'reject a Facebook partnership request the Page received (action reject-request)',
-  'facebook-remove': 'end an approved Facebook partnership permission (action remove-permission; Meta\'s example sends revoke-permission)',
-  'facebook-allowlist': 'switch the Page\'s branded-content allowlist on or off (PUT brand-allowlist-status)',
-  'facebook-allow-creators': 'add creator Pages to the branded-content allowlist (POST brand-allowlisted-creators)',
-  'facebook-disallow-creators': 'take creator Pages off the branded-content allowlist (DELETE brand-allowlisted-creators)',
-  'facebook-untag': 'remove the Page\'s sponsor tag from branded-content posts (DELETE branded-content-posts)',
+export const FB_ACTION_OF: Readonly<Record<string, typeof META_FB_PERMISSION_ACTIONS[number]>> = {
+  'facebook-request': 'send-request', 'facebook-cancel': 'cancel-request', 'facebook-accept': 'accept-request', 'facebook-reject': 'reject-request', 'facebook-remove': 'revoke-permission',
 }
-export const facebookPageTokenAnswer = (action: string) => `Not queued: to ${FACEBOOK_ACTION_CALLS[action] ?? 'change the Facebook side of partnership access'}, Meta's partnership host (api.facebook.com) acts as the chosen Facebook Page, which needs the Page's own access token — Nexus does not hold it yet: it comes with the Page-token mode (step 36). Until then a person does it in Meta Business Suite (Brand collabs manager › Partnership ads, or the Page's branded-content settings); meta-partnership-content shows the current state (views facebook-permissions, allowlist, tagged-posts).`
+const FB_WORDS: Readonly<Record<string, string>> = {
+  'send-request': 'Send a partnership request to', 'cancel-request': 'Cancel the partnership request sent to', 'accept-request': 'Accept the partnership request of',
+  'reject-request': 'Reject the partnership request of', 'revoke-permission': 'End the partnership permission with',
+}
+
+/**
+ * Review A2 (round 1) — CR-363: Meta answers a partnership ad code ONCE, in the answer to the call that makes it (ad-codes.md
+ * documents no read of it), and no Nexus path shows a run's answer to the person afterwards (an approved run's answer goes back
+ * to the click that approved it only; a rule run, a change-plan step or the "no approval" switch drops it). So Nexus does not
+ * make one: it would be a code nobody can read.
+ */
+export const CREATE_AD_CODE_ANSWER = 'Not queued: Meta answers a partnership ad code only once, in the answer to the call that makes it, and Nexus cannot show it to you later (Meta documents no way to read it back) — so Nexus does not make one. Make the code in the Instagram app (Meta\'s ad-codes guide points creators there: the post\'s partnership ad code), where you can read and share it. delete-ad-code removes a code from one of the business\'s own media.'
 
 export interface CreatorRef { instagramId?: string | null; username?: string | null }
 export interface PartnershipRequest {
@@ -592,6 +624,12 @@ export interface PartnershipRequest {
   creators?: CreatorRef[]
   mediaId?: string | null
   accept?: boolean | null
+  /** facebook-…: the partner / creator Pages (their ids). */
+  pages?: string[]
+  /** facebook-allowlist: on (true) or off (false). */
+  enabled?: boolean | null
+  /** facebook-untag: the branded-content posts (their ids as Meta's tagged-posts view lists them). */
+  postIds?: string[]
 }
 
 /** The creators of a request as Instagram ids: a username resolved (business discovery), never the chosen account, never another Nexus business's. */
@@ -618,7 +656,7 @@ async function creatorIds(chosen: MetaChosenAccount, creators: CreatorRef[], max
 }
 
 export interface PartnershipDraft extends MetaChangeDraft {
-  partnership: { action: PartnershipAction; instagramId: string; creators?: string[]; mediaId?: string; accept?: boolean }
+  partnership: { action: PartnershipAction; instagramId?: string; pageId?: string; creators?: string[]; pages?: string[]; postIds?: string[]; mediaId?: string; accept?: boolean; enabled?: boolean }
 }
 
 const NO_CHECK = 'Meta has no check for this change (no validate_only on the Instagram partnership, tag-approval, ad-code or Collab edges): the preview is built from what Meta holds now.'
@@ -707,43 +745,31 @@ async function tagApprovalDraft(chosen: MetaChosenAccount, request: PartnershipR
   }
 }
 
-async function adCodeDraft(chosen: MetaChosenAccount, request: PartnershipRequest, create: boolean): Promise<PartnershipDraft> {
+async function deleteAdCodeDraft(chosen: MetaChosenAccount, request: PartnershipRequest): Promise<PartnershipDraft> {
   const instagramId = instagramOf(chosen)
   if (!request.mediaId) throw new MetaLiveRefusal('Name the media (mediaId: a media of the chosen Instagram account; meta-instagram-media lists them).')
-  // ad-codes.md: "for media you own" — the chosen Instagram account's own media only (Meta's owner, read live).
+  // ad-codes.md: "from media you own" — the chosen Instagram account's own media only (Meta's owner, read live).
   const own = await ownMedia(chosen, request.mediaId)
-  const label = create ? `Make a partnership ad code for media ${own.mediaId} of the chosen Instagram account` : `Delete the partnership ad code of media ${own.mediaId} of the chosen Instagram account`
-  const request1: MetaChangeRequest = {
-    step: 1, label, kind: 'igmedia', objectId: own.mediaId, params: {},
-    check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
-    operation: create ? 'partnership.adCodeCreate' : 'partnership.adCodeDelete', edge: 'partnership_ad_code', ...(create ? {} : { method: 'DELETE' as const }),
-    // The code Meta answers is shown ONCE, in this step's sentence of the run's own answer; the record keeps its fingerprint.
-    doneSentence: (result: MetaChangeResult) => {
-      if (!create) return `${label}: Meta deleted it.`
-      const code = text(result.node?.ad_code)
-      return code
-        ? `${label}: Meta made ad code ${code} — share it with the partner now: Nexus shows it this once and keeps only its fingerprint (if it is lost, delete it and make a new one).`
-        : `${label}: Meta answered without a code Nexus can read; the Instagram app shows the post's partnership ad code.`
-    },
-  }
+  const label = `Delete the partnership ad code of media ${own.mediaId} of the chosen Instagram account`
   return {
-    summary: `Meta: ${create ? 'make a partnership ad code for' : 'delete the partnership ad code of'} media ${own.mediaId} of the chosen Instagram account.`,
-    changes: changeLines([[`Media ${own.mediaId} partnership ad code`, create ? 'none Nexus knows of' : 'the one Meta holds (not readable)', create ? 'made (Meta answers it once)' : 'deleted']]).changes,
+    summary: `Meta: delete the partnership ad code of media ${own.mediaId} of the chosen Instagram account.`,
+    changes: changeLines([[`Media ${own.mediaId} partnership ad code`, 'the one Meta holds (Meta documents no read of it)', 'deleted']]).changes,
     totals: { media: 1, requests: 1 },
-    warnings: create ? [
-      'An ad code lets the partner who has it boost this content as a partnership ad featuring both accounts (archived content and hidden Collab posts too); the ad appears in Meta\'s Ad Library, and boosted content can no longer be edited on Instagram.',
-      'The code Meta answers is shown once, in the run\'s own answer: Nexus never keeps it (only its fingerprint) and never logs it.',
-      'Its undo deletes the media\'s ad code again (DELETE partnership_ad_code).',
+    warnings: [
+      'A deleted ad code cannot come back: a new one is a different code. What happens to ads already built with it Meta does not say.',
       NO_CHECK, SPENDS_NOTHING,
       'Meta documents this with instagram_branded_content_creator on the business\'s own Instagram account; when Meta refuses, the step says Meta\'s own words.',
-    ] : [
-      'A deleted ad code cannot come back: a new one (create-ad-code) is a different code. What happens to ads already built with it Meta does not say.',
-      NO_CHECK, SPENDS_NOTHING,
     ],
-    spendsMoney: [], skipped: [], requests: [request1],
+    spendsMoney: [], skipped: [],
+    requests: [{
+      step: 1, label, kind: 'igmedia', objectId: own.mediaId, params: {},
+      check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
+      operation: 'partnership.adCodeDelete', edge: 'partnership_ad_code', method: 'DELETE',
+      doneSentence: () => `${label}: Meta deleted it.`,
+    }],
     stands: { action: request.action, instagramId, mediaId: own.mediaId },
-    before: { kind: 'partnership', action: request.action, instagramId, mediaId: own.mediaId, code: create ? 'none known' : 'present' },
-    after: { kind: 'partnership', action: request.action, instagramId, mediaId: own.mediaId, code: create ? 'made' : 'deleted' },
+    before: { kind: 'partnership', action: request.action, instagramId, mediaId: own.mediaId, code: 'present' },
+    after: { kind: 'partnership', action: request.action, instagramId, mediaId: own.mediaId, code: 'deleted' },
     partnership: { action: request.action, instagramId, mediaId: own.mediaId },
   }
 }
@@ -769,7 +795,9 @@ async function collabDraft(chosen: MetaChosenAccount, request: PartnershipReques
   // The inviting account must be no other Nexus business's (its username, through business discovery; a personal account
   // is no business's chosen Instagram account — Meta's discovery finds professional accounts only).
   const owner = text(invite.ownerUsername)
-  if (owner) {
+  // Review A5 — an invite whose sender Meta does not name is answered by nobody: Nexus cannot tell whose it is.
+  if (!owner) throw new MetaLiveRefusal(`Meta does not name who sent the Collab invite to media ${mediaId}, so Nexus cannot confirm it is no other business's in Nexus: nothing was asked of Meta (answer it in the Instagram app).`)
+  {
     try {
       const found = await livePartnership({ connectionId: chosen.connectionId, view: 'creator-id', username: owner }) as unknown as { takenByAnotherBusiness?: unknown }
       if (found.takenByAnotherBusiness === true) throw new MetaLiveRefusal('That Collab invite comes from an Instagram account another business in Nexus uses: nothing was asked of Meta.')
@@ -779,7 +807,7 @@ async function collabDraft(chosen: MetaChosenAccount, request: PartnershipReques
     }
   }
   const accept = request.accept
-  const label = `${accept ? 'Accept' : 'Decline'} the Collab invite to media ${mediaId}${owner ? ` from @${owner}` : ''} for the chosen Instagram account ${instagramId}`
+  const label = `${accept ? 'Accept' : 'Decline'} the Collab invite to media ${mediaId} from @${owner} for the chosen Instagram account ${instagramId}`
   return {
     summary: `Meta: ${accept ? 'accept' : 'decline'} a Collab invite of the chosen Instagram account.`,
     changes: changeLines([[`Collab invite to media ${mediaId}`, 'pending', accept ? 'accepted' : 'declined']]).changes,
@@ -807,15 +835,19 @@ async function collabDraft(chosen: MetaChosenAccount, request: PartnershipReques
 /** The draft of one set-meta-partnership-access request (the Facebook actions never reach here: the tool answers them). */
 export async function partnershipDraft(account: MetaChangeAccount, request: PartnershipRequest): Promise<PartnershipDraft | { refusal: string }> {
   try {
-    if (request.action.startsWith('facebook-')) return { refusal: facebookPageTokenAnswer(request.action) }
+    if (request.action === 'create-ad-code') return { refusal: CREATE_AD_CODE_ANSWER }
     const chosen = await metaChosenAccount(account.accountId)
+    if (FB_ACTION_OF[request.action]) return await fbPermissionDraft(chosen, request)
     switch (request.action) {
+      case 'facebook-allowlist': return await fbAllowlistDraft(chosen, request)
+      case 'facebook-allow-creators': return await fbCreatorsDraft(chosen, request, true)
+      case 'facebook-disallow-creators': return await fbCreatorsDraft(chosen, request, false)
+      case 'facebook-untag': return await fbUntagDraft(chosen, request)
       case 'request': return await permissionDraft(chosen, request, false)
       case 'revoke': return await permissionDraft(chosen, request, true)
       case 'approve-creators': return await tagApprovalDraft(chosen, request, true)
       case 'unapprove-creators': return await tagApprovalDraft(chosen, request, false)
-      case 'create-ad-code': return await adCodeDraft(chosen, request, true)
-      case 'delete-ad-code': return await adCodeDraft(chosen, request, false)
+      case 'delete-ad-code': return await deleteAdCodeDraft(chosen, request)
       case 'collab-invite': return await collabDraft(chosen, request)
     }
     return { refusal: `Unknown action ${request.action}.` }
@@ -827,3 +859,215 @@ export async function partnershipDraft(account: MetaChangeAccount, request: Part
 
 /** Is a value one of Meta's CTA types? (A boost's link buttons are all of them — a test holds it.) */
 export const isMetaCta = (type: string) => META_CTA_TYPES.includes(type)
+
+// ── the Facebook side (review B1): Meta's partnership REST host ────────────────────────────────────────────────────────
+
+const FB_NO_CHECK = 'Meta has no check for this change (no validate_only on its partnership host): the preview is built from what Meta holds now, read through Nexus\'s partnership views (meta-partnership-content).'
+const FB_ACCESS = 'Meta asks for facebook_branded_content_ads_brand and an Authorization: Bearer token on its partnership host: Nexus sends the business\'s system-user token (as step 16\'s reads of the same host do). If Meta refuses it, the step says Meta\'s own words.'
+const NOT_ATOMIC = 'Meta answers each Page or post of the list on its own (not all or nothing): the run says what Meta did for each, and only what Meta made is recorded (and undone).'
+
+/** Partner / creator Page ids of a request: digits, each once, never the chosen Page, never one another Nexus business uses. */
+async function pageIds(chosen: MetaChosenAccount, pages: string[], max: number, what: string): Promise<string[]> {
+  const ids = [...new Set(pages.map((p) => p.trim()))]
+  if (!ids.length) throw new MetaLiveRefusal(`Name the ${what} (pages: their Facebook Page ids).`)
+  if (ids.length !== pages.length) throw new MetaLiveRefusal('Name each Page once.')
+  if (ids.length > max) throw new MetaLiveRefusal(`At most ${max} Pages per request.`)
+  if (ids.some((id) => !/^\d{1,25}$/.test(id))) throw new MetaLiveRefusal('A Page is named by its id (digits).')
+  if (ids.includes(pageOf(chosen))) throw new MetaLiveRefusal(`A ${what.replace(/s$/, '')} is another Page than the business's own chosen one.`)
+  const taken = await takenIds('PAGE', ids)
+  if (taken.size) throw new MetaLiveRefusal(`Page${taken.size === 1 ? '' : 's'} ${[...taken].join(', ')} ${taken.size === 1 ? 'is' : 'are'} one another business in Nexus uses: nothing was asked of Meta.`)
+  return ids
+}
+
+/** One item of Meta's per-item answer: its id, whether Meta made it, and Meta's words. */
+interface FbItem { id: string | null; ok: boolean; words: string }
+function fbItems(node: Record<string, unknown> | null, idKey: string): FbItem[] {
+  const items = Array.isArray(node?.items) ? (node!.items as unknown[]).filter(isObject) : []
+  return items.map((it) => {
+    const ok = it.status === 'success' || it.status_code === 200 || it.status_code === '200'
+    const status = typeof it.alp_permission_status === 'number' || typeof it.alp_permission_status === 'string' ? ` (status ${String(it.alp_permission_status)})` : ''
+    return { id: idText(it[idKey]), ok, words: ok ? `done${status}` : `Meta refused it${text(it.error_message) ? `: ${text(it.error_message)}` : it.error_code || it.status_code ? ` (${String(it.error_code ?? it.status_code)})` : ''}` }
+  })
+}
+
+/**
+ * The sender of one list change: Meta answers each item on its own. Nothing made at all → refused (nothing changed); an
+ * answer with no per-item result → not confirmed (Nexus cannot say what Meta did).
+ */
+function sendFbList(call: Parameters<typeof metaSendRest>[1], idKey: string) {
+  return async (target: MetaWriteTarget): Promise<MetaChangeResult> => {
+    const result = await metaSendRest(target, call)
+    const items = fbItems(result.node, idKey)
+    if (!items.length) throw new MetaWriteError(localFailure(`Meta answered without a result per Page or post, so Nexus cannot say what it did. ${META_UNKNOWN_OUTCOME}`, 'META_NO_ITEMS'), call.operation, 'unknown')
+    if (!items.some((i) => i.ok)) throw new MetaWriteError(localFailure(`Meta changed none of them: ${items.map((i) => `${i.id ?? '?'} — ${i.words}`).join('; ')}.`, 'META_ITEMS_REFUSED'), call.operation, 'refused')
+    return { node: { items }, readBack: 'same-request', waitedMs: 0 }
+  }
+}
+const itemsSentence = (label: string, result: MetaChangeResult) => `${label}: ${((result.node?.items ?? []) as FbItem[]).map((i) => `${i.id ?? '?'} ${i.words}`).join('; ')}.`
+
+/** CR-348 … CR-352, OT-014 … OT-016 — the chosen Page's account-level partnership permissions with partner Pages. */
+async function fbPermissionDraft(chosen: MetaChosenAccount, request: PartnershipRequest): Promise<PartnershipDraft> {
+  const pageId = pageOf(chosen)
+  const action = FB_ACTION_OF[request.action]
+  const ids = await pageIds(chosen, request.pages ?? [], META_FB_PARTNERS_MAX, 'partner Pages')
+  // Step 16's read (fb-account-level-permissions, both directions) for these partners: what each permission reads now.
+  const now = await livePartnership({ connectionId: chosen.connectionId, view: 'facebook-permissions', partnerPageIds: ids, limit: 1000 }) as unknown as { items?: Row[] }
+  const rows = (now.items ?? []).map((r) => ({ page: idText(r.partnerPageId), status: text(r.status), direction: text(r.direction) }))
+  const of = (id: string) => rows.filter((r) => r.page === id)
+  const has = (id: string, status: string, direction?: string) => of(id).some((r) => r.status === status && (!direction || r.direction === direction))
+  const skipped: string[] = []
+  const going = ids.filter((id) => {
+    const ok = action === 'send-request' ? !has(id, 'PENDING_APPROVAL') && !has(id, 'APPROVED')
+      : action === 'cancel-request' ? has(id, 'PENDING_APPROVAL', 'sent')
+        : action === 'accept-request' || action === 'reject-request' ? has(id, 'PENDING_APPROVAL', 'received')
+          : has(id, 'APPROVED')
+    if (!ok) skipped.push(`Page ${id}: ${action === 'send-request' ? 'a request is pending or the permission is approved already' : action === 'cancel-request' ? 'no request the Page sent is pending' : action === 'revoke-permission' ? 'no approved permission' : 'no request from it is pending'} (${of(id).map((r) => `${r.direction ?? '?'} ${r.status ?? '?'}`).join(', ') || 'none'}).`)
+    return ok
+  })
+  const route = `partnership-ads/fb-account-level-permissions/${pageId}`
+  const body = metaPermissionBodyOf(going.map((id) => ({ pageId: id, action })))
+  const label = `${FB_WORDS[action]} ${plural(going.length, 'partner Page')} (${going.join(', ')}) for the chosen Page ${pageId}`
+  const operation = `partnership.fb.${action}`
+  const requests: MetaChangeRequest[] = going.length ? [{
+    step: 1, label, kind: 'page', objectId: pageId, params: { route, method: 'POST', body },
+    check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, operation,
+    send: sendFbList({ operation, pageId, path: route, method: 'POST', body }, 'partner_page_id'),
+    doneSentence: (result) => itemsSentence(label, result),
+  }] : []
+  return {
+    summary: `Meta: ${FB_WORDS[action].toLowerCase()} ${plural(going.length, 'partner Page')} for the chosen Facebook Page.`,
+    changes: changeLines(going.map((id) => [`Partner Page ${id}`, of(id).map((r) => `${r.direction} ${r.status}`).join(', ') || 'none', action])).changes,
+    totals: { pages: going.length, requests: requests.length, ...(skipped.length ? { skipped: skipped.length } : {}) },
+    warnings: [
+      action === 'send-request' ? 'This sends each partner Page a request (outbound to a third party); once it accepts, the business can run partnership ads with that Page without a permission per post.'
+        : action === 'accept-request' ? 'Accepting lets the partner Page use the business\'s content for ITS partnership ads — a person\'s decision.'
+          : action === 'reject-request' ? 'A rejected request cannot be undone by Nexus: the partner has to ask again.'
+            : action === 'cancel-request' ? 'A canceled request can no longer be accepted by the partner.'
+              : 'Ending the permission stops either side from using it for partnership ads. Meta\'s list calls this action remove-permission, its example sends revoke-permission: Nexus sends revoke-permission (LIVE-PROBES CR-352r).',
+      NOT_ATOMIC, FB_NO_CHECK, SPENDS_NOTHING, FB_ACCESS,
+    ],
+    spendsMoney: [], skipped, requests,
+    stands: { action: request.action, pageId, permissions: going.map((id) => ({ id, now: of(id) })) },
+    before: { kind: 'partnership', action: request.action, pageId, pages: going.map((id) => ({ pageId: id, now: of(id).map((r) => `${r.direction} ${r.status}`) })) },
+    after: { kind: 'partnership', action: request.action, pageId, pages: going.map((id) => ({ pageId: id })) },
+    partnership: { action: request.action, pageId, pages: going },
+  }
+}
+
+/** CR-357, OT-026 — the chosen Page's branded-content allowlist on or off (Meta's own answer reads it back). */
+async function fbAllowlistDraft(chosen: MetaChosenAccount, request: PartnershipRequest): Promise<PartnershipDraft> {
+  const pageId = pageOf(chosen)
+  if (typeof request.enabled !== 'boolean') throw new MetaLiveRefusal('Say enabled true (only allowlisted creator Pages may tag the Page) or false (any creator allowed to make branded content may).')
+  const now = await livePartnership({ connectionId: chosen.connectionId, view: 'allowlist' }) as unknown as { allowlistStatus?: unknown; allowlistStatusNotRead?: unknown }
+  const status = text(now.allowlistStatus)
+  if (!status) throw new MetaLiveRefusal(`Nexus could not read the allowlist status first, so it changes nothing: ${text(now.allowlistStatusNotRead) ?? 'Meta answered no status.'}`)
+  const wanted = request.enabled ? 'ENABLED' : 'DISABLED'
+  const route = `partnership-ads/fb-branded-content/${pageId}/brand-allowlist-status`
+  const label = `Switch the branded-content allowlist of the chosen Page ${pageId} ${request.enabled ? 'on' : 'off'}`
+  const operation = 'partnership.fb.allowlistStatus'
+  const query = { is_enabled: request.enabled ? 'true' : 'false' }
+  const requests: MetaChangeRequest[] = status === wanted ? [] : [{
+    step: 1, label, kind: 'page', objectId: pageId, params: { route, method: 'PUT', ...query },
+    check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, operation,
+    send: async (target) => {
+      const result = await metaSendRest(target, { operation, pageId, path: route, method: 'PUT', query })
+      const read = text(result.node?.allowlist_status)
+      if (read && read !== wanted) throw new MetaWriteError(localFailure(`Meta answered success but the allowlist reads ${read}, not ${wanted}. Nexus records no change and never sends it again by itself.`, 'META_NOT_AS_ASKED'), operation, 'unknown')
+      return result
+    },
+    doneSentence: (result) => `${label}: Meta ${text(result.node?.allowlist_status) ? `reads it ${text(result.node?.allowlist_status)}` : 'took it'}.`,
+  }]
+  return {
+    summary: `Meta: switch the chosen Page's branded-content allowlist ${request.enabled ? 'on' : 'off'}.`,
+    changes: changeLines([[`Page ${pageId} branded-content allowlist`, status, wanted]]).changes,
+    totals: { requests: requests.length },
+    warnings: [
+      request.enabled ? 'ENABLED: only the creator Pages on the allowlist may tag the Page in branded content.' : 'DISABLED: any creator allowed to make branded content may tag the Page.',
+      'Its undo switches it back.', FB_NO_CHECK, SPENDS_NOTHING, FB_ACCESS,
+    ],
+    spendsMoney: [], skipped: status === wanted ? [`The allowlist already reads ${status}.`] : [], requests,
+    stands: { action: request.action, pageId, status },
+    before: { kind: 'partnership', action: request.action, pageId, enabled: status === 'ENABLED' },
+    after: { kind: 'partnership', action: request.action, pageId, enabled: request.enabled },
+    partnership: { action: request.action, pageId, enabled: request.enabled },
+  }
+}
+
+/** CR-359, CR-360, OT-028, OT-029 — creator Pages added to or taken off the chosen Page's branded-content allowlist. */
+async function fbCreatorsDraft(chosen: MetaChosenAccount, request: PartnershipRequest, add: boolean): Promise<PartnershipDraft> {
+  const pageId = pageOf(chosen)
+  const ids = await pageIds(chosen, request.pages ?? [], META_FB_LIST_MAX, 'creator Pages')
+  const now = await livePartnership({ connectionId: chosen.connectionId, view: 'allowlist' }) as unknown as { creators?: unknown; creatorsNotRead?: unknown }
+  if (!Array.isArray(now.creators)) throw new MetaLiveRefusal(`Nexus could not read the allowlisted creators first, so it changes nothing: ${text(now.creatorsNotRead) ?? 'Meta answered no list.'}`)
+  const listed = new Set((now.creators as Row[]).map((r) => idText(r.creatorPageId)).filter((id): id is string => !!id))
+  const going = ids.filter((id) => listed.has(id) !== add)
+  const skipped = ids.filter((id) => listed.has(id) === add).map((id) => `Page ${id} is ${add ? 'already' : 'not'} on the allowlist.`)
+  const route = `partnership-ads/fb-branded-content/${pageId}/brand-allowlisted-creators`
+  const label = `${add ? 'Add' : 'Take'} ${plural(going.length, 'creator Page')} (${going.join(', ')}) ${add ? 'to' : 'off'} the branded-content allowlist of the chosen Page ${pageId}`
+  const operation = add ? 'partnership.fb.allowCreators' : 'partnership.fb.disallowCreators'
+  // POST takes {"creator_page_ids":[…]} as its JSON body; DELETE takes ?creator_page_ids=[…] (branded-content-permissions.md).
+  const list = `[${going.join(',')}]`
+  const call = add ? { operation, pageId, path: route, method: 'POST' as const, body: `{"creator_page_ids":${list}}` } : { operation, pageId, path: route, method: 'DELETE' as const, query: { creator_page_ids: list } }
+  const requests: MetaChangeRequest[] = going.length ? [{
+    step: 1, label, kind: 'page', objectId: pageId, params: { route, method: call.method, ...(add ? { body: call.body! } : { creator_page_ids: list }) },
+    check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, operation,
+    send: sendFbList(call, 'creator_page_id'),
+    doneSentence: (result) => itemsSentence(label, result),
+  }] : []
+  return {
+    summary: `Meta: ${add ? 'add' : 'take'} ${plural(going.length, 'creator Page')} ${add ? 'to' : 'off'} the chosen Page's branded-content allowlist.`,
+    changes: changeLines(going.map((id) => [`Creator Page ${id} on the allowlist`, add ? 'no' : 'yes', add ? 'yes' : 'no'])).changes,
+    totals: { pages: going.length, requests: requests.length, ...(skipped.length ? { skipped: skipped.length } : {}) },
+    warnings: [
+      ...(add ? [] : ['Taking a creator off the allowlist does not remove the branded-content posts that already tag the Page (facebook-untag does).']),
+      NOT_ATOMIC, FB_NO_CHECK, SPENDS_NOTHING, FB_ACCESS,
+    ],
+    spendsMoney: [], skipped, requests,
+    stands: { action: request.action, pageId, listed: [...listed].sort(), going },
+    before: { kind: 'partnership', action: request.action, pageId, pages: going.map((id) => ({ pageId: id, listed: !add })) },
+    after: { kind: 'partnership', action: request.action, pageId, pages: going.map((id) => ({ pageId: id, listed: add })) },
+    partnership: { action: request.action, pageId, pages: going },
+  }
+}
+
+/** CR-362, OT-031 — the Page's sponsor tag removed from branded-content posts that tag it (no undo: the creator re-tags). */
+async function fbUntagDraft(chosen: MetaChosenAccount, request: PartnershipRequest): Promise<PartnershipDraft> {
+  const pageId = pageOf(chosen)
+  const asked = [...new Set((request.postIds ?? []).map((p) => p.trim()))]
+  if (!asked.length) throw new MetaLiveRefusal('Name the posts (postIds: as meta-partnership-content view tagged-posts lists them).')
+  if (asked.length !== (request.postIds ?? []).length) throw new MetaLiveRefusal('Name each post once.')
+  if (asked.length > META_FB_LIST_MAX) throw new MetaLiveRefusal(`At most ${META_FB_LIST_MAX} posts per request.`)
+  if (asked.some((id) => !/^\d{1,25}$/.test(id))) throw new MetaLiveRefusal('A post is named by its id (digits), as view tagged-posts lists it.')
+  // Step 16's read of the posts that tag the chosen Page: each post must be one of them, by no other Nexus business's Page.
+  const now = await livePartnership({ connectionId: chosen.connectionId, view: 'tagged-posts', limit: 500 }) as unknown as { items?: Row[] }
+  const posts = new Map((now.items ?? []).map((r) => [idText(r.postId), r] as const))
+  for (const id of asked) {
+    const row = posts.get(id)
+    if (!row) throw new MetaLiveRefusal(`Post ${id} is not among the branded-content posts that tag the chosen Page Nexus reads (the latest 500).`)
+    if (row.takenByAnotherBusiness === true) throw new MetaLiveRefusal(`Post ${id} is by a Page another business in Nexus uses: Nexus does not change it.`)
+  }
+  const route = `partnership-ads/fb-branded-content/${pageId}/branded-content-posts`
+  const list = `[${asked.join(',')}]`
+  const label = `Remove the chosen Page's sponsor tag from ${plural(asked.length, 'branded-content post')} (${asked.join(', ')})`
+  const operation = 'partnership.fb.untagPosts'
+  return {
+    summary: `Meta: remove the chosen Page's sponsor tag from ${plural(asked.length, 'branded-content post')}.`,
+    changes: changeLines(asked.map((id) => [`Post ${id}`, `tags the Page (by ${text(posts.get(id)?.creatorPageName) ?? idText(posts.get(id)?.creatorPageId) ?? 'a creator'})`, 'a generic post (no sponsor tag)'])).changes,
+    totals: { posts: asked.length, requests: 1 },
+    warnings: [
+      'Removing the tag turns each post into a generic Facebook post. Nexus cannot put a tag back (reversibility none): only the creator can tag the Page again.',
+      NOT_ATOMIC, FB_NO_CHECK, SPENDS_NOTHING, FB_ACCESS,
+    ],
+    spendsMoney: [], skipped: [],
+    requests: [{
+      step: 1, label, kind: 'page', objectId: pageId, params: { route, method: 'DELETE', post_ids: list },
+      check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, operation,
+      send: sendFbList({ operation, pageId, path: route, method: 'DELETE', query: { post_ids: list } }, 'fb_post_id'),
+      doneSentence: (result) => itemsSentence(label, result),
+    }],
+    stands: { action: request.action, pageId, posts: asked },
+    before: { kind: 'partnership', action: request.action, pageId, posts: asked.map((id) => ({ postId: id, tagged: true })) },
+    after: { kind: 'partnership', action: request.action, pageId, posts: asked.map((id) => ({ postId: id, tagged: false })) },
+    partnership: { action: request.action, pageId, postIds: asked },
+  }
+}

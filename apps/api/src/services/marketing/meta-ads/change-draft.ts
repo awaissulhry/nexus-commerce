@@ -22,10 +22,15 @@ export interface MetaChangeRequest {
    * for a video of the chosen account's library (its captions). Step 26: `iguser` the chosen Instagram account, `igmedia` a
    * media of it (set-meta-partnership-access).
    */
-  kind: MetaStatusKind | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative' | 'iguser' | 'igmedia'
+  kind: MetaStatusKind | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative' | 'iguser' | 'igmedia' | 'page'
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
+  /**
+   * Step 26 (review A3) — the fields as the plan hash reads them, when they differ from `params`: a creator's partnership ad code
+   * is left out of the hash (a short code could be reversed from it). Default: `params`.
+   */
+  planParams?: Record<string, string>
   /**
    * Meta's check (validate_only) for this request: `meta` — asked before it is queued; `none` — Meta documents none for it
    * (ad set and ad updates); `not-yet` — Meta documents one, but Nexus does not use it for this change until a live probe

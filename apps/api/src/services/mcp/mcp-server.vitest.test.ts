@@ -260,7 +260,8 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
     // W4-1 — and report-ads-run: the scheduled Claude run's own report.
     // Meta ads step 10 (review A2) — and meta-ad-preview: its links are public, and the in-app chat keeps tool results.
     // Meta ads step 14 — and meta-leads, meta-comments: people's data is never kept in an in-app run.
-    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name).sort()).toEqual(['confirm-change', 'meta-ad-preview', 'meta-comments', 'meta-leads', 'report-ads-run'])
+    // Meta ads step 26 (review A1) — and create-meta-boost: the in-app chat keeps its steps' arguments (a creator's ad code).
+    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name).sort()).toEqual(['confirm-change', 'create-meta-boost', 'meta-ad-preview', 'meta-comments', 'meta-leads', 'report-ads-run'])
   })
 })
 

@@ -204,7 +204,16 @@ const ctaLink: Judge = (value, path, walk) => (typeof value === 'string' && /^te
 /** A display link (`caption`, `display_url`: "must be an actual URL"): an https link or a bare host with a path. */
 const displayLink: Judge = (value, path, walk) => (typeof value === 'string' && /^(?!https?:)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(\/[A-Za-z0-9._~\-/]*)?$/.test(value) && value.length <= LINK_MAX ? ok(value) : link(value, path, walk))
 /** An Instagram app link for the unified profile visit (master CR-225): instagram://user?username=<name>. */
-const instagramAppLink: Judge = (value, path) => (typeof value === 'string' && /^instagram:\/\/user\?username=[A-Za-z0-9._]{1,30}$/.test(value) ? ok(value) : no(`${path} is instagram://user?username=<the Instagram username> (Nexus has no app of its own)`))
+/**
+ * Step 26 (review B5) — multidestination-profile-visit.md writes it `instagram://user?username=<IG_USERNAME>&userid=<IG_USER_ID>`:
+ * the user id, when named, goes to the gateway's check (the chosen Instagram account).
+ */
+const instagramAppLink: Judge = (value, path, walk) => {
+  const m = typeof value === 'string' ? /^instagram:\/\/user\?username=[A-Za-z0-9._]{1,30}(?:&userid=(\d{1,25}))?$/.exec(value) : null
+  if (!m) return no(`${path} is instagram://user?username=<the Instagram username>[&userid=<its id>] (Nexus has no app of its own)`)
+  if (m[1]) walk.assets.push({ id: m[1], kind: 'choseninstagram' })
+  return ok(value)
+}
 const digits = (value: unknown) => (typeof value === 'string' && /^\d{1,20}$/.test(value) ? value : null)
 /** A Meta id (digits, written as a string), handed to the gateway's check as this kind of asset. */
 const id = (kind: MetaWriteAsset['kind']): Judge => (value, path, walk) => {
@@ -949,7 +958,8 @@ export function silentKeysFor(creative: Record<string, unknown>): { audios: bool
     audios: !isExistingPostCreative(creative),
     formats: catalog ? META_FORMAT_AUTOMATION_FORMATS : website ? META_NON_CATALOG_FORMATS : null,
     destination: website || catalog,
-    productTags: hasImages(creative),
+    // Step 26 (review B4) — an existing post may show images Meta tags by itself: the product-tag opt-out is required there.
+    productTags: hasImages(creative) || isExistingPostCreative(creative),
   }
 }
 

@@ -19,6 +19,7 @@ const h = vi.hoisted(() => ({
   listPaged: vi.fn(),
   partners: vi.fn(),
   send: vi.fn(),
+  rest: vi.fn(),
   check: vi.fn(),
   owned: vi.fn(),
 }))
@@ -44,6 +45,7 @@ vi.mock('../../marketing/meta-ads/read-client.js', () => ({ metaReadOne: h.read 
 vi.mock('../../marketing/meta-ads/write-client.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/write-client.js')>()),
   metaSendChange: h.send,
+  metaSendRest: h.rest,
   metaCheckChange: h.check,
 }))
 vi.mock('../../../db.js', () => ({
@@ -63,7 +65,7 @@ vi.mock('../../../db.js', () => ({
 
 import { META_ADS_BOOSTS_TOOLS } from './meta-ads-boosts.tools.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
-import { BOOST_LINK_CTAS, fingerprintOf, isMetaCta } from '../../marketing/meta-ads/change-boosts.js'
+import { AD_CODE_KEPT, BOOST_LINK_CTAS, CREATE_AD_CODE_ANSWER, isMetaCta, withoutAdCode } from '../../marketing/meta-ads/change-boosts.js'
 import { CREATIVE_RECORD_TOOLS } from '../../marketing/meta-ads/change-creatives.js'
 import { __mediaTiming } from '../../marketing/meta-ads/change-media.js'
 import { MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
@@ -124,6 +126,7 @@ beforeEach(() => {
   h.listPaged.mockReset(); h.listPaged.mockImplementation(async () => ({ rows: [], more: false, totalCount: null }))
   h.partners.mockReset(); h.partners.mockImplementation(async (input: { view: string }) => (input.view === 'lookup' ? { items: [lookupRow()] } : { items: [] }))
   h.send.mockReset()
+  h.rest.mockReset()
   h.check.mockReset(); h.check.mockImplementation(async () => undefined)
   h.owned.mockReset(); h.owned.mockImplementation(async (_a: unknown, id: string) => id)
 })
@@ -137,6 +140,10 @@ describe('the tools', () => {
       expect(MATERIAL_PREVIEW_FIELDS[tool.name]).toEqual(['basis', 'plan', 'reach'])
     }
     expect(boost.secretArgs).toEqual(['adCode'])
+    // Review A1 — Claude's door only (the in-app assistant keeps its steps' arguments), and the truth about the code said.
+    expect(boost.surfaces).toEqual(['mcp'])
+    expect(boost.description).toContain(AD_CODE_KEPT)
+    expect(boost.description).not.toMatch(/never (shown, )?recorded/)
     expect(boost.description).toMatch(/SPENDS NOTHING/)
     expect(boost.consequencesFor!({ action: 'undo' })).toEqual({ reversibility: 'none' })
     expect(access.consequencesFor!({ action: 'delete-ad-code' })).toEqual({ reversibility: 'none' })
@@ -248,7 +255,12 @@ describe('create-meta-boost — the preview', () => {
     expect(h.partners).toHaveBeenCalledWith(expect.objectContaining({ view: 'lookup', adCodes: [CODE] }))
     expect(sentJson('branded_content')).toEqual({ instagram_boost_post_access_token: CODE, ad_format: 1 })
     expect(JSON.stringify(p.preview)).not.toContain(CODE)
-    expect(p.preview.warnings.join(' ')).toMatch(/ad code goes to Meta in this request only/)
+    expect(p.preview.warnings).toContain(AD_CODE_KEPT)
+    // Review A3 — the code is in no hash: the plan reads it replaced, the basis stands on the content it unlocks.
+    expect(withoutAdCode(checked().params).branded_content).not.toContain(CODE)
+    const again = await preview({ name: 'B', source: 'creator-instagram-code', adCode: 'Other0Code9' })
+    expect(again.preview.plan).toBe(p.preview.plan)
+    expect(again.preview.basis).toBe(p.preview.basis)
     const fb = await preview({ name: 'B', source: 'creator-facebook-code', adCode: CODE })
     expect(fb.ok).toBe(false)
     expect(fb.error).toMatch(/is Instagram content/)
@@ -272,8 +284,11 @@ describe('create-meta-boost — the preview', () => {
     expect(checked().params.call_to_action).toBeUndefined()
     expect(sentJson('asset_feed_spec')).toMatchObject({ optimization_type: 'DOF_MESSAGING_DESTINATION', audios: [], call_to_actions: [{ type: 'MESSAGE_PAGE' }, { type: 'INSTAGRAM_MESSAGE', value: { app_destination: 'INSTAGRAM_DIRECT', link: 'https://www.instagram.com/' } }] })
     h.check.mockClear()
-    await preview({ name: 'B', source: 'creator-instagram-media', mediaId: MEDIA, button: { kind: 'messaging' } })
-    expect(sentJson('call_to_action')).toEqual({ type: 'LEARN_MORE', value: { app_destination: 'MESSENGER', link: 'https://fb.com/messenger_doc/' } })
+    // Review B7 — the partnership click-to-message guide writes a link (<LINK_URL>) and no more: the person names it.
+    expect(await refusal({ name: 'B', source: 'creator-instagram-media', mediaId: MEDIA, button: { kind: 'messaging' } })).toMatch(/names its link/)
+    h.check.mockClear()
+    await preview({ name: 'B', source: 'creator-instagram-media', mediaId: MEDIA, button: { kind: 'messaging', link: 'https://www.example.com/' } })
+    expect(sentJson('call_to_action')).toEqual({ type: 'LEARN_MORE', value: { app_destination: 'MESSENGER', link: 'https://www.example.com/' } })
     expect(sentJson('branded_content')).toEqual({ ad_format: 1, promoted_page_id: PAGE })
     h.check.mockClear()
     await preview({ name: 'B', source: 'facebook-post', postId: POST, button: { kind: 'profile' } })
@@ -281,11 +296,23 @@ describe('create-meta-boost — the preview', () => {
     h.check.mockClear()
     await preview({ name: 'B', source: 'instagram-media', mediaId: MEDIA, button: { kind: 'profile', visit: 'both' } })
     expect(sentJson('asset_feed_spec')).toEqual({ optimization_type: 'UNIFIED_PROFILE_VISIT_DESTINATION', audios: [], call_to_actions: [
-      { type: 'VIEW_INSTAGRAM_PROFILE', value: { link: 'https://www.instagram.com/shop_a', app_link: 'instagram://user?username=shop_a' } },
+      { type: 'VIEW_INSTAGRAM_PROFILE', value: { link: 'https://www.instagram.com/shop_a', app_link: `instagram://user?username=shop_a&userid=${IG}` } },
       { type: 'VISIT_PROFILE', value: { link: `https://www.facebook.com/${PAGE}` } },
     ] })
     expect(await refusal({ name: 'B', source: 'creator-instagram-media', mediaId: MEDIA, button: { kind: 'profile' } })).toMatch(/business's own posts only/)
     expect(await refusal({ name: 'B', source: 'creator-instagram-media', mediaId: MEDIA, button: { kind: 'messaging', apps: ['INSTAGRAM_DIRECT'] } })).toMatch(/opens Messenger/)
+  })
+
+  it('review B4 / B6 — every boost sends the product-tag opt-out; a profile visit says Meta\'s limited availability', async () => {
+    for (const args of [{ source: 'facebook-post', postId: POST }, { source: 'instagram-media', mediaId: MEDIA }, { source: 'creator-instagram-code', adCode: CODE }]) {
+      h.check.mockClear()
+      const p = await preview({ name: 'B', ...args })
+      expect(p.ok, JSON.stringify(p)).toBe(true)
+      expect(sentJson('interactive_components_spec')).toEqual({ components: [{ type: 'product_tag', enroll_status: 'opt_out' }] })
+      expect(p.preview.warnings.join(' ')).toMatch(/Automatic product tags: OFF/)
+    }
+    const visit = await preview({ name: 'B', source: 'facebook-post', postId: POST, button: { kind: 'profile' } })
+    expect(visit.preview.warnings.join(' ')).toMatch(/limited availability/)
   })
 
   it('Threads: never a creator\'s content, a story or a carousel with a video; no Threads id is sent', async () => {
@@ -335,7 +362,8 @@ describe('create-meta-boost — the run', () => {
     const r = await run({ name: 'Boost A', source: 'creator-instagram-code', adCode: CODE })
     expect(r.ok, JSON.stringify(r)).toBe(true)
     expect(JSON.stringify(r.change)).not.toContain(CODE)
-    expect(r.change.after.items[0].adCode).toBe(fingerprintOf(CODE))
+    expect(r.change.after.items[0].contentId).toBe(MEDIA)
+    expect(r.change.after.items[0].adCode).toBeUndefined()
   })
 
   it('undo: deletes only a creative a create-meta-boost of this business made new, while no ad uses it', async () => {
@@ -370,14 +398,72 @@ describe('create-meta-boost — the run', () => {
 })
 
 describe('set-meta-partnership-access', () => {
-  it('the Facebook side is answered in words (C2-PAGE-TOKEN): nothing read, nothing queued', async () => {
-    for (const action of ['facebook-request', 'facebook-cancel', 'facebook-accept', 'facebook-reject', 'facebook-remove', 'facebook-allowlist', 'facebook-allow-creators', 'facebook-disallow-creators', 'facebook-untag']) {
-      const words = await refusal({ action }, access)
-      expect(words).toMatch(/Page's own access token/)
-      expect(words).toMatch(/Page-token mode \(step 36\)/)
-    }
-    expect(h.partners).not.toHaveBeenCalled()
-    expect(h.read).not.toHaveBeenCalled()
+  it('review B1 — the Facebook permissions: the chosen Page, partners read first (only those that can move go), one list, Meta per item', async () => {
+    const PARTNER = '120000000000555'
+    const OTHER = '120000000000556'
+    h.partners.mockImplementation(async (input: { view: string }) => (input.view === 'facebook-permissions'
+      ? { items: [{ partnerPageId: OTHER, status: 'APPROVED', direction: 'sent' }] }
+      : { items: [] }))
+    h.rest.mockImplementation(async () => ({ node: { items: [{ partner_page_id: PARTNER, alp_permission_id: 9, alp_permission_status: 1, status: 'success' }] }, readBack: 'same-request', waitedMs: 0 }))
+    const p = await preview({ action: 'facebook-request', pages: [PARTNER, OTHER] }, access)
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    expect(p.preview.skipped.join(' ')).toMatch(/Page 120000000000556: a request is pending or the permission is approved already/)
+    expect(p.preview.metaCheck.sentence).toMatch(/Meta has no check/)
+    expect(p.preview.warnings.join(' ')).toMatch(/not all or nothing/)
+    const r = await run({ action: 'facebook-request', pages: [PARTNER, OTHER] }, access)
+    expect(h.rest.mock.calls[0][1]).toMatchObject({ pageId: PAGE, path: `partnership-ads/fb-account-level-permissions/${PAGE}`, method: 'POST', body: `[{"partner_page_id":${PARTNER},"action":"send-request"}]` })
+    expect(r.data.steps[0].sentence).toMatch(/120000000000555 done \(status 1\)/)
+    expect(r.change.after.pages).toEqual([{ pageId: PARTNER }])
+    const undo = access.undo!.request(r.change)
+    expect(undo).toMatchObject({ tool: 'set-meta-partnership-access', args: { action: 'facebook-cancel', pages: [PARTNER] } })
+    expect(access.input.safeParse((undo as { args: unknown }).args).success).toBe(true)
+    // Ending a permission sends Meta's example spelling, revoke-permission.
+    h.rest.mockClear()
+    await run({ action: 'facebook-remove', pages: [OTHER] }, access)
+    expect(h.rest.mock.calls[0][1].body).toBe(`[{"partner_page_id":${OTHER},"action":"revoke-permission"}]`)
+    // Meta made none of the list: the step is refused, nothing recorded.
+    h.rest.mockImplementation(async () => ({ node: { items: [{ partner_page_id: PARTNER, status: 'failure', error_code: 404, error_message: 'No active permission found for this partner.' }] }, readBack: 'same-request', waitedMs: 0 }))
+    h.partners.mockImplementation(async () => ({ items: [{ partnerPageId: PARTNER, status: 'APPROVED', direction: 'received' }] }))
+    const none = await access.execute!(parse(access)({ action: 'facebook-remove', pages: [PARTNER] }), approved((await preview({ action: 'facebook-remove', pages: [PARTNER] }, access)).preview)) as ToolResult
+    expect(none.ok).toBe(false)
+    // The chosen Page itself, another Nexus business's Page: refused in words, nothing read.
+    expect(await refusal({ action: 'facebook-request', pages: [PAGE] }, access)).toMatch(/another Page than the business's own chosen one/)
+    h.taken.add(`PAGE:${PARTNER}`)
+    expect(await refusal({ action: 'facebook-accept', pages: [PARTNER] }, access)).toMatch(/another business in Nexus uses/)
+    expect(access.undo!.request({ before: {}, after: { kind: 'partnership', action: 'facebook-reject', pageId: PAGE, pages: [{ pageId: PARTNER }] } })).toMatchObject({ refusal: expect.stringMatching(/rejected partnership request/) })
+    expect(access.consequencesFor!({ action: 'facebook-reject' })).toEqual({ reversibility: 'none' })
+    expect(access.consequencesFor!({ action: 'facebook-untag' })).toEqual({ reversibility: 'none' })
+  })
+
+  it('review B1 — the branded-content allowlist: switched from what it reads, creators added / taken off, posts untagged', async () => {
+    const CREATOR = '120000000000557'
+    h.partners.mockImplementation(async (input: { view: string }) => {
+      if (input.view === 'allowlist') return { allowlistStatus: 'DISABLED', creators: [{ creatorPageId: '120000000000558' }] }
+      if (input.view === 'tagged-posts') return { items: [{ postId: '505613696297499', creatorPageId: CREATOR, creatorPageName: 'Creator One' }] }
+      return { items: [] }
+    })
+    h.rest.mockImplementation(async (_t: unknown, call: { method: string }) => ({ node: call.method === 'PUT' ? { allowlist_status: 'ENABLED' } : { items: [{ creator_page_id: CREATOR, fb_post_id: '505613696297499', status_code: 200 }] }, readBack: 'same-request', waitedMs: 0 }))
+    const on = await run({ action: 'facebook-allowlist', enabled: true }, access)
+    expect(h.rest.mock.calls[0][1]).toMatchObject({ method: 'PUT', path: `partnership-ads/fb-branded-content/${PAGE}/brand-allowlist-status`, query: { is_enabled: 'true' } })
+    expect(on.data.steps[0].sentence).toMatch(/reads it ENABLED/)
+    expect(access.undo!.request(on.change)).toMatchObject({ args: { action: 'facebook-allowlist', enabled: false } })
+    expect(await refusal({ action: 'facebook-allowlist', enabled: false }, access)).toMatch(/already reads DISABLED/)
+    h.rest.mockClear()
+    const add = await run({ action: 'facebook-allow-creators', pages: [CREATOR, '120000000000558'] }, access)
+    expect(h.rest.mock.calls[0][1]).toMatchObject({ method: 'POST', body: `{"creator_page_ids":[${CREATOR}]}` })
+    expect(access.undo!.request(add.change)).toMatchObject({ args: { action: 'facebook-disallow-creators', pages: [CREATOR] } })
+    h.rest.mockClear()
+    await run({ action: 'facebook-disallow-creators', pages: ['120000000000558'] }, access)
+    expect(h.rest.mock.calls[0][1]).toMatchObject({ method: 'DELETE', query: { creator_page_ids: '[120000000000558]' } })
+    h.rest.mockClear()
+    const untag = await run({ action: 'facebook-untag', postIds: ['505613696297499'] }, access)
+    expect(h.rest.mock.calls[0][1]).toMatchObject({ method: 'DELETE', path: `partnership-ads/fb-branded-content/${PAGE}/branded-content-posts`, query: { post_ids: '[505613696297499]' } })
+    expect(access.undo!.request(untag.change)).toMatchObject({ refusal: expect.stringMatching(/only the creator can tag the Page again/) })
+    expect(await refusal({ action: 'facebook-untag', postIds: ['505613696297400'] }, access)).toMatch(/not among the branded-content posts/)
+    h.partners.mockImplementation(async (input: { view: string }) => (input.view === 'tagged-posts' ? { items: [{ postId: '505613696297499', creatorPageId: CREATOR, takenByAnotherBusiness: true }] } : { items: [] }))
+    expect(await refusal({ action: 'facebook-untag', postIds: ['505613696297499'] }, access)).toMatch(/another business in Nexus uses/)
+    h.partners.mockImplementation(async () => ({ allowlistStatusNotRead: 'Meta: (#200) Permissions error' }))
+    expect(await refusal({ action: 'facebook-allowlist', enabled: true }, access)).toMatch(/could not read the allowlist status first.*Permissions error/)
   })
 
   it('request: a creator by username or id — never the chosen account, never another Nexus business\'s; one already asked is said, not sent', async () => {
@@ -426,22 +512,16 @@ describe('set-meta-partnership-access', () => {
     expect(await refusal({ action: 'approve-creators', creators: [{ instagramId: CREATOR_IG }] }, access)).toMatch(/could not read the approved-tagging list first.*Advanced Access/)
   })
 
-  it('create-ad-code: only the chosen account\'s own media; the code Meta makes is shown ONCE in the run\'s step, the record keeps its fingerprint', async () => {
-    h.send.mockImplementation(async () => ({ node: { ad_code: 'MetaMadeCode42' }, readBack: 'none', waitedMs: 0 }))
-    const r = await run({ action: 'create-ad-code', mediaId: MEDIA }, access)
-    expect(r.ok, JSON.stringify(r)).toBe(true)
-    expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: MEDIA, kind: 'igmedia', edge: 'partnership_ad_code', params: {} })
-    expect(r.data.steps[0].sentence).toMatch(/Meta made ad code MetaMadeCode42 — share it with the partner now/)
-    expect(JSON.stringify(r.change)).not.toContain('MetaMadeCode42')
-    expect(r.change.after.adCode).toBe(fingerprintOf('MetaMadeCode42'))
-    expect(JSON.stringify({ ...r.data, steps: undefined })).not.toContain('MetaMadeCode42')
-    expect(access.undo!.request(r.change)).toMatchObject({ args: { action: 'delete-ad-code', mediaId: MEDIA } })
+  it('review A2 — create-ad-code is answered in words (nobody could read the code); delete-ad-code only for the chosen account\'s own media, no undo', async () => {
+    expect(await refusal({ action: 'create-ad-code', mediaId: MEDIA }, access)).toBe(CREATE_AD_CODE_ANSWER)
+    expect(CREATE_AD_CODE_ANSWER).toMatch(/Nexus cannot show it to you later/)
+    expect(h.send).not.toHaveBeenCalled()
     reads[MEDIA] = { id: MEDIA, owner: { id: '17841400000000777' } }
-    expect(await refusal({ action: 'create-ad-code', mediaId: MEDIA }, access)).toMatch(/not the chosen Instagram account's/)
+    expect(await refusal({ action: 'delete-ad-code', mediaId: MEDIA }, access)).toMatch(/not the chosen Instagram account's/)
     reads[MEDIA] = { id: MEDIA, owner: { id: IG } }
     h.send.mockImplementation(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
     const del = await run({ action: 'delete-ad-code', mediaId: MEDIA }, access)
-    expect(h.send.mock.calls.at(-1)![1]).toMatchObject({ method: 'DELETE', edge: 'partnership_ad_code' })
+    expect(h.send.mock.calls.at(-1)![1]).toMatchObject({ method: 'DELETE', edge: 'partnership_ad_code', kind: 'igmedia', objectId: MEDIA })
     expect(access.undo!.request(del.change)).toMatchObject({ refusal: expect.stringMatching(/cannot bring a deleted ad code back/) })
   })
 
@@ -464,5 +544,8 @@ describe('set-meta-partnership-access', () => {
       return { items: [] }
     })
     expect(await refusal({ action: 'collab-invite', mediaId: MEDIA, accept: true }, access)).toMatch(/another business in Nexus uses/)
+    // Review A5 — an invite whose sender Meta does not name: refused.
+    h.partners.mockImplementation(async (input: { view: string }) => (input.view === 'collab-invites' ? { items: [{ mediaId: MEDIA }], nextAfter: null } : { items: [] }))
+    expect(await refusal({ action: 'collab-invite', mediaId: MEDIA, accept: true }, access)).toMatch(/does not name who sent/)
   })
 })
