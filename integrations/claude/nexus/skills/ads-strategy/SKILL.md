@@ -1,6 +1,6 @@
 ---
 name: ads-strategy
-description: Set a business's advertising strategy in Nexus, for Amazon Sponsored Products (per market, and per category or product inside a market) and eBay Promoted Listings - read the strategy Nexus holds (ads-strategy) and the older settings that still bind (campaign targets, budgets, spend ceilings, bid policies, protected terms, automation levels), show one table per market, ask the person's goal and numbers per market and for any category or product that differs, then propose the changes as ONE change plan a person approves (set-ads-strategy for the strategy). The strategy lives in Nexus, never in this skill. Use when the person wants to set or change targets, budgets, ceilings, bid limits or what Claude may do alone for a market, a category or a product, plan ads for a launch or a new market, or asks what their ads strategy is.
+description: Set a business's advertising strategy in Nexus, for Amazon Sponsored Products (per market, and per category or product inside a market) and eBay Promoted Listings - read the strategy Nexus holds (ads-strategy) and the older settings that still bind (campaign targets, budgets, spend ceilings, bid policies, protected terms, automation levels), show one table per market, ask the person's goal and numbers per market and for any category or product that differs, then propose the changes as ONE change plan a person approves (set-ads-strategy for the strategy). The strategy lives in Nexus, never in this skill. Meta ads have no strategy in Nexus; their goals live in Meta's own campaigns and ad sets, changed with the Meta change tools. Use when the person wants to set or change targets, budgets, ceilings, bid limits or what Claude may do alone for a market, a category or a product, plan ads for a launch or a new market, or asks what their ads strategy is.
 ---
 
 # Ads strategy
@@ -44,6 +44,8 @@ eBay, per market (the strategy covers Amazon only in this release):
 9. `ebay-ad-details` (`view`: `listings`, `ad-groups` or `keywords`; `market`, `campaignId`): each promoted listing's ad rate and break-even rate, a Priority campaign's ad groups, its keywords and bids.
 
 Google Ads has no strategy in Nexus: its changes are the Google Ads change tools (set-google-… and the build tools; the `google-ads` skill), each a request a person approves in Nexus.
+
+Meta ads (Facebook and Instagram) have no strategy in Nexus either, and the strategy's levels (`claudeAutonomy`) do not reach them. A Meta goal lives in Meta's own campaigns and ad sets: read it with `meta-campaigns` and `meta-ad-sets` (objective, budget, bid strategy, bid or ROAS goal, spend cap), the account's spend so far against its spending limit with `meta-billing`, and what Meta does on its own with `meta-ad-rules` and `meta-recommendations`. To change it, the Meta change tools (`set-meta-campaign`, `set-meta-ad-set`, `set-meta-budget-schedule`, `set-meta-spend-cap` for the account's spending limit; every tool in the `meta-ads` skill): each a request a person approves in Nexus — or that runs after the short window when the business switched "Claude's changes need no approval" on — never by a rule of its own. A raise is SPENDS MONEY, the person's decision. Show the Meta goal in its own table, per ad account, with Meta's numbers as Meta counts them (purchases with each ad set's own attribution setting; ROAS, never ACoS), never added to Amazon's.
 
 Not readable by any tool — write "not readable", never guess: a campaign's max bid change % and CPC ceiling, which campaigns a rule reaches (A1 rows give only the count, `reach`); eBay campaign policy rate/bid caps and floors, eBay search terms. Budget baselines, monthly budget plans, budget schedules and pools are in `ad-budgets`; hourly bid plans in `ad-hourly-plans`; portfolios in `ad-portfolios`.
 
@@ -140,6 +142,7 @@ The Owner controls each product's brain with `set-ads-brain` (one request per ch
 | Amazon Ads connection mode and enabling its writes | Nexus's Amazon Ads connection (an operator's step) |
 | eBay dial, kill switch, monthly ceiling (that screen sets the EBAY_IT ceiling only today) | Ads › eBay › Rules & Automation |
 | eBay campaign-level rate and rate strategy, ad groups | Ads › eBay |
+| Connecting Meta (its app and system-user token); "Send sales to Meta" (the Conversions API, off by default) | Settings › Channels › Meta |
 
 ## 9. After
 
