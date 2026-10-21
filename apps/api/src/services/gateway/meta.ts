@@ -65,6 +65,9 @@ export async function metaCall(req: MetaCallRequest): Promise<GatewayResponse> {
   })
 }
 
+/** Step 18 — the edges a change goes to below its object (step 31: an ad account's audiences, an audience's people and shares). */
+export type MetaWriteEdge = 'budget_schedules' | 'customaudiences' | 'product_audiences' | 'usersofanyaudience' | 'users' | 'ad_accounts'
+
 export interface MetaWriteRequest {
   /** The META connection the change is for (required: a change always names its account). */
   connectionId: string
@@ -73,7 +76,7 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'customaudience' | 'adaccount'
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -83,8 +86,8 @@ export interface MetaWriteRequest {
   maxRateWaitMs?: number
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
   /** Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. */
-  edge?: 'budget_schedules'
-  /** Step 18 — DELETE (a budget schedule's, no body); default POST. */
+  edge?: MetaWriteEdge
+  /** Step 18 — DELETE (a budget schedule's, no body; step 31: an audience's people or share carry one); default POST. */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
@@ -98,7 +101,8 @@ export interface MetaWriteRequest {
  */
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
-  const body = remove ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
+  // Step 31 — a DELETE with fields (an audience's hashed people, its share) carries them as its form body, as Meta documents.
+  const body = remove && Object.keys(req.params).length === 0 ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
   return gatewayCall({
     channel: 'META',
     operation: req.operation,

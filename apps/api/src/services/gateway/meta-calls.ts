@@ -48,6 +48,7 @@ import { createHmac } from 'node:crypto'
 import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
 import { META_SETTINGS_WRITE_RULES } from './meta-settings-rules.js'
+import { META_AUDIENCE_WRITE_RULES } from './meta-audience-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -753,12 +754,21 @@ export interface MetaWriteRule {
   maxBody?: number
   /** Step 18 — the ids inside the body, each checked to be of the chosen ad account by the gateway before anything goes. */
   ids?: (params: ReadonlyMap<string, string>) => MetaWriteBodyId[]
+  /** Step 31 — a DELETE that carries a form body (an audience's people, its sharing), judged like a POST. */
+  deleteBody?: boolean
+  /** Step 31 — the body holds people's hashed data: the ledger keeps neither it nor Meta's answer. */
+  personal?: boolean
 }
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
-export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'customaudience' | 'adaccount'
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
-export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' }
+export interface MetaWriteBodyId {
+  id: string
+  kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset'
+    // Step 31 — an audience's sources and shares (gateway.ts metaBodyIdsProblem; marketing/meta-ads/audience-ids.ts).
+    | 'campaignOrAdset' | 'adaccount' | 'page' | 'instagram' | 'leadform' | 'canvas' | 'video'
+}
 
 const fieldsValueProblem = (value: string): string | null => {
   const names = value.split(',')
@@ -820,6 +830,8 @@ export interface MetaJudgedWrite {
   ids?: MetaWriteBodyId[]
   /** Step 18 — a DELETE (a budget schedule's); every other change is a POST. */
   method?: 'DELETE'
+  /** Step 31 — the body holds people's hashed data: the ledger keeps neither it nor Meta's answer (gateway.ts 9). */
+  personal?: true
 }
 
 /** The gateway's verdict on a Meta call that is not a GET: why it is refused (and whether as a batch), or the judged write. */
@@ -847,23 +859,25 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const batch = metaBatchProblem(method, graph.route, input.body)
   if (batch) return { problem: batch, batch: true }
   // Step 18 — a DELETE goes only by a DELETE rule for the kind the call names (today a budget schedule's), with no body.
-  const deleteRule = method === 'DELETE' ? writeRules().find((r) => r.method === 'DELETE' && r.path.test(graph.route) && kindMatches(r, input.objectKind)) : undefined
-  if (method === 'DELETE' && (!deleteRule || (input.body !== undefined && input.body !== ''))) {
-    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule; deleting campaigns, ad sets and ads is its own tool, not built yet), and cancels no async batch')
+  // Step 31 — or, with a form body, by a rule that takes one (deleteBody: an audience's people, its sharing), judged below.
+  const bodyDelete = method === 'DELETE' && typeof input.body === 'string' && input.body !== ''
+  const deleteRule = method === 'DELETE' ? writeRules().find((r) => r.method === 'DELETE' && r.path.test(graph.route) && kindMatches(r, input.objectKind) && !!r.deleteBody === bodyDelete) : undefined
+  if (method === 'DELETE' && !deleteRule) {
+    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule; deleting campaigns, ad sets and ads is its own tool, not built yet), an audience of it, the hashed people of one of its customer lists or an audience\'s share with an ad account (remove-meta-audience, set-meta-audience-members, set-meta-audience-sharing), and cancels no async batch')
   }
-  if (deleteRule) {
+  if (deleteRule && !bodyDelete) {
     if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
     return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE' } }
   }
-  if (method !== 'POST') return refuse(`Nexus sends Meta no ${method}`)
+  if (method !== 'POST' && !bodyDelete) return refuse(`Nexus sends Meta no ${method}`)
   const parsed = writeParams(input.body)
   if ('problem' in parsed) return refuse(parsed.problem)
   const keys = [...parsed.params.keys()]
-  const rule = writeRules().find((r) => r.method === method && r.path.test(graph.route) && kindMatches(r, input.objectKind)
+  const rule = writeRules().find((r) => r.method === method && !!r.deleteBody === bodyDelete && r.path.test(graph.route) && kindMatches(r, input.objectKind)
     && r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k))
     && (!r.anyOf || r.anyOf.some((k) => parsed.params.has(k))))
   if (!rule) {
-    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys); this one is POST /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or an audience change named with its kind (create-meta-audience, set-meta-audience, set-meta-audience-members, set-meta-audience-sharing: each its own path and keys); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
@@ -884,22 +898,31 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const body = new URLSearchParams(order.map((k): [string, string] => [k, parsed.params.get(k)!])).toString()
   const budget = typeof rule.budget === 'function' ? rule.budget(parsed.params) : rule.budget
   const ids = rule.ids?.(parsed.params) ?? []
-  return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}) } }
+  return {
+    write: {
+      rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}),
+      // Step 31 — a DELETE with a body (an audience's people, its sharing); people's hashed data kept out of the ledger.
+      ...(bodyDelete ? { method: 'DELETE' as const } : {}), ...(rule.personal ? { personal: true as const } : {}),
+    },
+  }
 }
 
 /** Step 18 — a rule with kinds matches only a call that names one of them; the status rule (no kinds) a campaign, ad set or ad. */
 const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kinds
   ? !!kind && (rule.kinds as readonly string[]).includes(kind)
   : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
-/** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
-const MAX_ANY_WRITE_BODY = 16_000
-/** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts) — read when judged, never at load. */
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES]
+/**
+ * Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). Step 31: 760,000 — a
+ * request of 10,000 hashed e-mails (meta-audience-rules.ts MEMBERS_MAX_BODY); every other rule keeps its own limit.
+ */
+const MAX_ANY_WRITE_BODY = 760_000
+/** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts), then step 31's audience rules (meta-audience-rules.ts) — read when judged, never at load. */
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...META_AUDIENCE_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {
   if (typeof body !== 'string' || !body) return { problem: 'a Meta change carries its parameters as a form body' }
-  if (body.length > MAX_ANY_WRITE_BODY) return { problem: `a Meta change body is at most ${MAX_WRITE_BODY} characters (${MAX_ANY_WRITE_BODY} for the largest settings change)` }
+  if (body.length > MAX_ANY_WRITE_BODY) return { problem: `a Meta change body is at most ${MAX_WRITE_BODY} characters (${MAX_ANY_WRITE_BODY} for the largest: the hashed people of an audience)` }
   const params = new Map<string, string>()
   for (const [key, value] of new URLSearchParams(body)) {
     if (!/^[a-z_][a-z0-9_]*$/.test(key)) return { problem: `the body key "${key.slice(0, 40)}" is not one Meta reads (lower-case letters, digits and _)` }

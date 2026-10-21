@@ -8,6 +8,7 @@
  * facts F1 X6): a change of N objects is N requests, sent in order, each with its own outcome (meta-ads-kit.ts).
  */
 import type { MetaStatusKind } from './live-status.js'
+import type { MetaWriteEdge } from '../../gateway/meta.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -43,10 +44,10 @@ export interface MetaChangeRequest {
   expect?: Record<string, string>
   /** The fields read back (default id,status,effective_status). */
   readBackFields?: string
-  /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`). */
-  objectKind?: 'highdemandperiod'
-  /** A create on the object's edge (POST /<id>/budget_schedules). */
-  edge?: 'budget_schedules'
+  /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 31: an audience, the ad account). */
+  objectKind?: 'highdemandperiod' | 'customaudience' | 'adaccount'
+  /** A create on the object's edge (POST /<id>/budget_schedules; step 31: an account's audiences, an audience's people or shares). */
+  edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
   /** A budget schedule's campaign or ad set. */

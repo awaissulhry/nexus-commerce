@@ -20,7 +20,7 @@
  *   first.
  * Never logs a token, a request body or an answer.
  */
-import { metaWriteCall } from '../../gateway/meta.js'
+import { metaWriteCall, type MetaWriteEdge } from '../../gateway/meta.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
@@ -55,7 +55,7 @@ export interface MetaWriteTarget { connectionId: string; adAccountId: string }
 export interface MetaObjectChange {
   objectId: string
   /** The kind of object (the gateway confirms it before anything is sent). */
-  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'customaudience' | 'adaccount'
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -69,7 +69,7 @@ export interface MetaObjectChange {
   /** Step 18 — the fields read back (default id,status,effective_status); on the POST only when `readBackInPost`. */
   readBackFields?: string
   /** Step 18 — a create on the object's edge (POST /<id>/budget_schedules): the new object is read back, not the parent. */
-  edge?: 'budget_schedules'
+  edge?: MetaWriteEdge
   /** Step 18 — DELETE (a budget schedule's): Meta's {"success": true} is the answer, nothing is read back. */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own). */

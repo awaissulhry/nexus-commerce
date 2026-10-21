@@ -904,6 +904,12 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-campaign': ['basis', 'plan', 'reach'],
   'set-meta-ad-set': ['basis', 'plan', 'reach'],
   'set-meta-budget-schedule': ['basis', 'plan', 'reach'],
+  // Meta step 31 (2026-10-21): audiences — create, change, people, sharing, delete.
+  'create-meta-audience': ['basis', 'plan', 'reach'],
+  'set-meta-audience': ['basis', 'plan', 'reach'],
+  'set-meta-audience-members': ['basis', 'plan', 'reach'],
+  'set-meta-audience-sharing': ['basis', 'plan', 'reach'],
+  'remove-meta-audience': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

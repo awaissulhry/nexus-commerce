@@ -265,7 +265,7 @@ export async function ownMedia(account: MetaChosenAccount, id: string): Promise<
 }
 
 /** An object whose `owner` must be the chosen Page (an Instant Experience, a video playlist). */
-async function ownedByPage(account: MetaChosenAccount, id: string, what: string, operation: string): Promise<string> {
+export async function ownedByPage(account: MetaChosenAccount, id: string, what: string, operation: string): Promise<string> {
   const pageId = pageOf(account)
   const objectId = metaObjectId(id)
   if (!objectId) throw new MetaLiveRefusal(`"${id}" is not a Meta ${what} id (digits).`)
