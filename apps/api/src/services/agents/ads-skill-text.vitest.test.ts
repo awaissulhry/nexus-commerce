@@ -30,7 +30,7 @@ const skill = (name: string) => readFileSync(new URL(`${name}/SKILL.md`, SKILLS)
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
 /** The skills that ask for or explain ad changes (Amazon; G13 2026-10-16: and Google Ads, which names every Google tool). */
-const ADS_SKILLS = ['ads-daily-manager', 'ads-weekly-review', 'ads-playbook', 'ads-strategy', 'automation-review', 'google-ads'] as const
+const ADS_SKILLS = ['ads-daily-manager', 'ads-weekly-review', 'ads-playbook', 'ads-strategy', 'automation-review', 'google-ads', 'meta-ads'] as const
 const DAILY = skill('ads-daily-manager')
 const SECTION_10 = DAILY.slice(DAILY.indexOf('## 10. The ads brain'), DAILY.indexOf('## Setting up the routine'))
 
@@ -179,6 +179,15 @@ describe('G13 — the google-ads skill', () => {
     const google = listTools().map((t) => t.name).filter((name) => name.includes('google'))
     expect(google.length).toBeGreaterThan(50)
     for (const name of google) expect(text, name).toContain(`\`${name}\``)
+  })
+})
+
+describe('Meta step 45 — the meta-ads skill', () => {
+  it('names every Meta tool, so a new one is not left out', () => {
+    const text = skill('meta-ads')
+    const meta = listTools().map((t) => t.name).filter((name) => /(^|-)meta(-|$)/.test(name))
+    expect(meta.length).toBeGreaterThan(80)
+    for (const name of meta) expect(text, name).toContain(`\`${name}\``)
   })
 })
 
