@@ -9,9 +9,10 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaTargetingKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
 import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
-import type { MetaChangeResult, MetaWriteTarget } from './write-client.js'
+import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
+import type { MetaChangeResult, MetaRequestVia, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -61,6 +62,8 @@ export interface MetaChangeRequest {
    * Step 23: an upload names the chosen ad account (`adaccount`) or its business portfolio (step 28's `business`);
    * captions name the library video (step 22's `video`). Its `kind` is then `ad`, as for step 22's deletes.
    * Step 31: an audience (`customaudience`) or the chosen ad account (`adaccount`: its audiences, opt-outs, settings).
+   * Step 30: the chosen ad account (`adaccount`: its connected app, its alert subscriptions), the connection's own app
+   * (`app`), the chosen Page (step 28's `page`: the app's removal from it).
    */
   objectKind?: 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
     // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
@@ -78,12 +81,18 @@ export interface MetaChangeRequest {
     | MetaBoostWriteKind
     // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
     | MetaSignalsKind
+    // Step 30 — the connection's own Meta app (its webhook subscriptions).
+    | MetaWebhookKind
+    // Step 20 — an ad set's audience or its placements (set-meta-targeting, set-meta-placements).
+    | MetaTargetingKind
+    // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
+    | MetaCatalogKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
-  /** A budget schedule's campaign or ad set. */
-  parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** A budget schedule's campaign or ad set; step 34: a feed's catalog. */
+  parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }
   /** Step 19 — Meta's check of this create asks its setup recommendations too (master CMP-031). */
   recommendations?: boolean
   /**
@@ -129,6 +138,12 @@ export interface MetaChangeRequest {
   // ── step 27 ──
   /** A new ad's check runs Meta's synchronous integrity review with it (synchronous_ad_review, AD-026 … AD-028). */
   adReview?: boolean
+  // ── step 30 (webhook and alert subscriptions) ──
+  /** Its path, a DELETE's query, PATCH (write-client.ts MetaRequestVia); Meta's answer is all there is. */
+  via?: MetaRequestVia
+  // ── step 20 ──
+  /** The targeting keys this request changes (review A2): the gateway lets only these differ from the live spec. */
+  targetingKeys?: string[]
   // ── step 27b ──
   /**
    * It goes with the chosen Page's own token (a gateway rule marked `auth: 'page'`): Meta counts it against the PAGE's rate

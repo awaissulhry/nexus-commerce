@@ -19,9 +19,10 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
+import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaEventsKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaTargetingKind, type MetaWebhookKind } from './meta-calls.js'
 import { metaRuploadUrl } from './meta-media-rules.js'
 import type { MetaSignalsKind } from './meta-signals-rules.js'
+import type { MetaCatalogKind } from './meta-catalog-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -92,6 +93,14 @@ export interface MetaWriteRequest {
     | MetaBoostWriteKind
     // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
     | MetaSignalsKind
+    // Step 30 — the connection's own Meta app (its webhook subscriptions).
+    | MetaWebhookKind
+    // Step 20 — an ad set's audience or its placements (set-meta-targeting, set-meta-placements).
+    | MetaTargetingKind
+    // Step 33 — a pixel, for its Conversions API events (edge `events`).
+    | MetaEventsKind
+    // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
+    | MetaCatalogKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -107,14 +116,32 @@ export interface MetaWriteRequest {
    * Step 39: the brand-safety edges (a block list's draft, list, shares, people, ad accounts and posts; the account's
    * inventory filter). Step 31: an ad account's audiences, an audience's people and shares. Step 32: a dataset's and a
    * custom conversion's creates, a dataset's ad account, an event source group and its share, a claim (MetaSignalsEdge).
+   * Step 30: an app's webhook subscriptions, the chosen ad account's alert subscriptions, the app's link (MetaWebhookEdge).
+   * Step 33: `POST /<pixel id>/events` (Conversions API, MetaEventsEdge).
    */
   edge?: MetaWriteEdge
-  /** Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body; step 39: a share's agency, a list's posts; step 31: an audience's people or share); default POST. */
-  method?: 'POST' | 'DELETE'
+  /**
+   * Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body; step 39: a
+   * share's agency, a list's posts; step 31: an audience's people or share; step 30: its keys in `query`); step 30 — PATCH
+   * (an alert subscription's status); default POST.
+   */
+  method?: 'POST' | 'DELETE' | 'PATCH'
   /** Step 39 (review A9) — the run of the change this request belongs to (a block-list draft is used only by its own run). */
   run?: string
-  /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
-  parent?: { kind: 'campaign' | 'adset'; id: string }
+  /**
+   * Step 30 — the path below the version when it is not `<objectId>[/<edge>]` (`act_<id>/subscriptions/<id>`); it still
+   * starts with `objectId`, the object the gateway confirms.
+   */
+  path?: string
+  /**
+   * Step 30 — a DELETE's parameters in the URL's query, as Meta's SDK sends them (an app's webhook subscription, the app's
+   * link to the chosen ad account); `params` is then empty. The gateway refuses a query on every other call.
+   */
+  query?: Record<string, string>
+  /** Step 20 (review A2) — the targeting keys this change's draft changed: the only ones the gateway lets differ from live. */
+  targetingKeys?: string[]
+  /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own); step 34: a feed's catalog. */
+  parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
   recommendations?: boolean
   /**
@@ -130,10 +157,18 @@ export interface MetaWriteRequest {
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
   | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaBoostEdge | MetaSignalsEdge | MetaAdEdge
+  | MetaWebhookEdge | MetaTargetingEdge | MetaEventsEdge | MetaCatalogEdge | MetaAccountEdge
+/** Step 33 — upload-meta-events: Conversions API events of a pixel (`<pixel id>/events`). */
+export type MetaEventsEdge = 'events'
 /** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
 export type MetaAdEdge = 'ads'
 /** Step 26 — set-meta-partnership-access: the chosen Instagram account's partnership edges and a media's ad code. */
 export type MetaBoostEdge = 'branded_content_ad_permissions' | 'branded_content_tag_approval' | 'collaboration_invites' | 'partnership_ad_code'
+/**
+ * Step 30 — an app's webhook subscriptions (`<app>/subscriptions`), the chosen ad account's alert subscriptions
+ * (`act_<id>/subscriptions`), the app's link to the chosen ad account or the chosen Page (`subscribed_apps`).
+ */
+export type MetaWebhookEdge = 'subscribed_apps' | 'subscriptions'
 /**
  * Step 32 — a dataset made on the ad account or the business portfolio (`adspixels`) or for a Page / Instagram account
  * (`dataset`), a custom conversion (`customconversions`), a dataset's or an event source group's ad account
@@ -142,6 +177,8 @@ export type MetaBoostEdge = 'branded_content_ad_permissions' | 'branded_content_
 export type MetaSignalsEdge = 'adspixels' | 'dataset' | 'customconversions' | 'shared_accounts' | 'event_source_groups' | 'claim_custom_conversions'
 /** Step 31 — an ad account's new audiences and product audiences, its opt-outs; an audience's people and its shares. */
 export type MetaAudienceEdge = 'customaudiences' | 'product_audiences' | 'usersofanyaudience' | 'users' | 'ad_accounts'
+/** Step 20 — the ad account's controls, a place page set made on the ad account (and Meta's background variant, SDK only). */
+export type MetaTargetingEdge = 'account_controls' | 'ad_place_page_sets' | 'ad_place_page_sets_async'
 /** Step 29 — a rule made on the ad account's rule library (`act_<id>/adrules_library`), a rule's run now (`<rule id>/execute`). */
 export type MetaRuleEdge = 'adrules_library' | 'execute'
 /** Step 39 — the brand-safety edges (the account's filter, a block list's draft, list, shares, people, ad accounts and posts). */
@@ -149,6 +186,11 @@ export type MetaBrandSafetyEdge = 'brand_safety_content_filter_levels' | 'block_
   | 'assigned_users' | 'auto_applied_ad_accounts' | 'content_block_lists' | 'content' | 'applied_ad_accounts'
 /** Step 36 — a lead form on the chosen Page, a test lead on a form of it. Step 27b — a part of an Instant Experience, an Instant Experience. */
 export type MetaPageEdge = 'leadgen_forms' | 'test_leads' | 'canvas_elements' | 'canvases'
+/**
+ * Step 34 — a catalog made on a portfolio, a catalog's categories, pixels, people and partners, a product set made in it, the
+ * items_batch that deletes its items.
+ */
+export type MetaCatalogEdge = 'owned_product_catalogs' | 'categories' | 'external_event_sources' | 'assigned_users' | 'agencies' | 'product_sets' | 'items_batch'
 /** Step 28 — an apply (`act_<id>/recommendations`), a new study (`<business>/ad_studies`), a new Page video test (`<page>/ab_tests`). */
 export type MetaOptimizeEdge = 'recommendations' | 'ad_studies' | 'ab_tests'
 /** Step 22 — remove-meta-ads-items: an image or a video out of the ad account's library, a video's caption languages. */
@@ -165,6 +207,8 @@ export type MetaLabelsEdge = 'adlabels' | 'value_rule_set' | 'delete_rule_set' |
 export type MetaMediaEdge = 'video_ads' | 'creative_folders'
 /** Step 25 — create-meta-creative: a creative and an async creative job on the chosen ad account (a creative's labels: step 21's `adlabels`). */
 export type MetaCreativeEdge = 'adcreatives' | 'asyncadcreatives'
+/** Step 40 — the chosen ad account's account-level tracking specs, and its insights features (switched on, never off). */
+export type MetaAccountEdge = 'tracking' | 'insights/feature-settings'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):
@@ -180,17 +224,19 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
   const body = remove
     ? (Object.keys(req.params).length ? new URLSearchParams(req.params).toString() : undefined)
     : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: check } : {}) }).toString()
+  const path = req.path ?? (req.edge ? `${req.objectId}/${req.edge}` : req.objectId)
   return gatewayCall({
     channel: 'META',
     operation: req.operation,
     kind: req.check ? 'read' : 'write',
     connectionId: req.connectionId,
-    url: metaUrl(req.edge ? `${req.objectId}/${req.edge}` : req.objectId),
-    method: remove ? 'DELETE' : 'POST',
+    url: metaUrl(path, remove ? req.query ?? {} : {}),
+    method: remove ? 'DELETE' : req.method === 'PATCH' ? 'PATCH' : 'POST',
     body,
     metaObjectKind: req.objectKind,
     ...(req.parent ? { metaParent: req.parent } : {}),
     ...(req.run ? { metaRun: req.run } : {}),
+    ...(req.targetingKeys?.length ? { metaTargetingKeys: req.targetingKeys } : {}),
     maxTransientRetries: req.check ? 1 : 0,
     max429Retries: 0,
     maxRateWaitMs: req.maxRateWaitMs,

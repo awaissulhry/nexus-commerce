@@ -127,6 +127,13 @@ import { META_ADS_BOOSTS_TOOLS } from './tools/meta-ads-boosts.tools.js'
 import { META_ADS_ADS_TOOLS } from './tools/meta-ads-ads.tools.js'
 // Meta ads step 32 (2026-10-21): datasets and custom conversions (changes).
 import { META_ADS_SIGNALS_TOOLS } from './tools/meta-ads-signals.tools.js'
+import { META_ADS_WEBHOOKS_TOOLS } from './tools/meta-ads-webhooks.tools.js'
+// Meta ads step 20 (2026-10-21): targeting, placements, account controls — set-meta-targeting, set-meta-placements, set-meta-account-controls.
+import { META_ADS_TARGETING_CHANGE_TOOLS } from './tools/meta-ads-targeting-change.tools.js'
+import { META_ADS_EVENTS_TOOLS } from './tools/meta-ads-events.tools.js'
+import { META_ADS_CATALOG_ADMIN_TOOLS } from './tools/meta-ads-catalog-admin.tools.js'
+// Meta ads step 40 (2026-10-21): the ad account's own settings, its spending limit, its insights features.
+import { META_ADS_ACCOUNT_SETTINGS_TOOLS } from './tools/meta-ads-account-settings.tools.js'
 // Meta ads step 27b (2026-10-21): Instant Experiences of the chosen Page (changes made as the Page).
 import { META_ADS_INSTANT_EXPERIENCE_TOOLS } from './tools/meta-ads-instant-experiences.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -387,6 +394,18 @@ const ALL: AgentTool[] = [
   // Meta ads step 32 (2026-10-21): create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion,
   // remove-meta-signal-items.
   ...META_ADS_SIGNALS_TOOLS,
+  // Meta ads step 30 part 2 (2026-10-21): set-meta-webhooks, set-meta-alert-subscription, remove-meta-alert-subscription.
+  ...META_ADS_WEBHOOKS_TOOLS,
+  // Meta ads step 20 (2026-10-21): set-meta-targeting, set-meta-placements, set-meta-account-controls.
+  ...META_ADS_TARGETING_CHANGE_TOOLS,
+  // Meta ads step 33 (2026-10-21): upload-meta-events (Conversions API; off by default per business, D2).
+  ...META_ADS_EVENTS_TOOLS,
+  // Meta ads step 34 (2026-10-21): create-meta-catalog, set-meta-catalog, set-meta-catalog-access, set-meta-product-set,
+  // remove-meta-catalog-items (catalog admin and product sets; D7: no item field; deletes on explicit ask only).
+  ...META_ADS_CATALOG_ADMIN_TOOLS,
+  // Meta ads step 40 (2026-10-21): set-meta-account-settings, set-meta-spend-cap (a raise, removal or reset SPENDS MONEY),
+  // set-meta-insights-features (one-way).
+  ...META_ADS_ACCOUNT_SETTINGS_TOOLS,
   // Meta ads step 27b (2026-10-21): create-meta-instant-experience (parts + the experience, UNPUBLISHED; undo hides it) and
   // set-meta-instant-experience (edit while unpublished, publish one way, hide / show again) — as the chosen Page.
   ...META_ADS_INSTANT_EXPERIENCE_TOOLS,

@@ -34,7 +34,7 @@ describe('Meta write rules: load order', () => {
   beforeEach(() => { vi.resetModules() })
 
   it('finds the rules files', () => {
-    expect(RULE_FILES).toEqual(expect.arrayContaining(['meta-settings-rules.ts', 'meta-brand-safety-rules.ts']))
+    expect(RULE_FILES).toEqual(expect.arrayContaining(['meta-settings-rules.ts', 'meta-brand-safety-rules.ts', 'meta-webhook-rules.ts']))
   })
 
   it('no rules file takes a value from meta-calls.ts (only types)', () => {

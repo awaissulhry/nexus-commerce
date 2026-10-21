@@ -51,7 +51,7 @@ import { META_NAME_TEXT } from './meta-write-text.js'
  * interest's or a place's name as Meta holds it) — never a control character or a line separator. Every key but the
  * brand-safety ones must equal the live targeting anyway (the gateway compares), and those are judged token by token.
  */
-const TARGETING_TEXT = /^[^\p{Cc}\p{Cs}\u2028\u2029]*$/u
+export const TARGETING_TEXT = /^[^\p{Cc}\p{Cs}\u2028\u2029]*$/u
 
 type Params = ReadonlyMap<string, string>
 type Judge = (value: string, params: Params) => string | null
@@ -297,13 +297,20 @@ export function sameJson(a: unknown, b: unknown, depth = 0): boolean {
  * outside `keys` is the live value exactly (none added, none dropped but a read-only `effective_…` one, none sent that is
  * read-only), and every brand-safety key the change SETS to something new passes its value judge.
  */
-export function targetingOutsideProblem(live: Record<string, unknown>, sent: Record<string, unknown>, keys: ReadonlySet<string>): string | null {
-  const only = `a brand-safety change changes only ${[...keys].join(', ')}`
+export function targetingOutsideProblem(
+  live: Record<string, unknown>, sent: Record<string, unknown>, keys: ReadonlySet<string>,
+  // Step 20 — a rule with its own keys judges their values itself (meta-targeting-rules.ts targetingValueProblem).
+  judge: (key: string, value: unknown, live?: unknown) => string | null = (key, value) => brandSafetyValueProblem(key as BrandSafetyTargetingKey, value),
+  what = 'a brand-safety change',
+): string | null {
+  const only = `${what} changes only ${[...keys].join(', ')}`
   for (const key of Object.keys(sent)) {
     if (isReadOnlyTargetingKey(key)) return `targeting.${key} is read-only (Meta computes it), so Nexus never sends it`
     if (keys.has(key)) {
       if (Object.prototype.hasOwnProperty.call(live, key) && sameJson(live[key], sent[key])) continue
-      const problem = brandSafetyValueProblem(key as BrandSafetyTargetingKey, sent[key])
+      // Step 20 (re-review 1) — the live value, null when the live spec has no such key (never undefined: the judge pins
+      // what must stay as Meta holds it against nothing, too).
+      const problem = judge(key, sent[key], Object.prototype.hasOwnProperty.call(live, key) ? live[key] : null)
       if (problem) return problem
       continue
     }

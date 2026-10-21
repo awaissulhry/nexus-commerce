@@ -48,6 +48,7 @@
  *     not tied to a record.
  */
 import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
+import { targetingValueProblem } from './meta-targeting-rules.js'
 import {
   BID_STRATEGIES, META_NAME_TEXT, META_SETTINGS_JUDGES, META_STRICT_TEXT, MIN_PERIOD_SECONDS, OUTCOME_OBJECTIVES, metaCanonicalJson, metaJudged,
   metaOneOfJudge, metaPromotedIds, metaWholeJudge, type MetaJudge,
@@ -211,12 +212,17 @@ export function metaCreateWriteRules(): readonly MetaWriteRule[] {
     if ('age_min' in t && !isInt(t.age_min, 13, 65)) return 'age_min is 13 to 65'
     if ('age_max' in t && !isInt(t.age_max, 13, 65)) return 'age_max is 13 to 65'
     if ('age_min' in t && 'age_max' in t && (t.age_max as number) < (t.age_min as number)) return 'age_max is at least age_min'
-    if (auto.advantage_audience === 1 && (('age_max' in t) || ('age_min' in t && (t.age_min as number) > 25))) return 'with Advantage+ audience Meta takes an age_min of 25 at most and no age_max'
+    // Step 20 (review B6) — the same rule as an edit (meta-targeting-rules.ts audienceWholeProblem): age_max fixed at 65
+    // (absent, or 65 itself), age_min 18 to 25 (advantage-audience.md).
+    if (auto.advantage_audience === 1 && (('age_max' in t && t.age_max !== 65) || ('age_min' in t && ((t.age_min as number) > 25 || (t.age_min as number) < 18)))) return 'with Advantage+ audience Meta takes an age_min of 25 at most (18 to 25) and no age_max but its fixed 65'
     if ('genders' in t && !(Array.isArray(t.genders) && t.genders.length === 1 && (t.genders[0] === 1 || t.genders[0] === 2))) return 'genders is [1] (men) or [2] (women); left out: everyone'
     for (const k of ['custom_audiences', 'excluded_custom_audiences'] as const) {
       if (k in t && !(Array.isArray(t[k]) && (t[k] as unknown[]).length >= 1 && (t[k] as unknown[]).length <= 500 && (t[k] as unknown[]).every((a) => plainObject(a) && exactKeys(a, ['id'], ['id']) && isId(a.id))
         && new Set((t[k] as Array<{ id: string }>).map((a) => a.id)).size === (t[k] as unknown[]).length)) return `${k} lists up to 500 {id} (the account's own audiences), each once`
     }
+    // Step 20 — the minimal create spec is a subset of the ONE targeting allow-list (meta-targeting-rules.ts): each key
+    // passes its value judge there too.
+    for (const [k, v] of Object.entries(t)) { const problem = targetingValueProblem(k, v); if (problem) return problem }
     return null
   })
   /** Step 18's promoted object judge for its keys; the keys only a create sends judged here (their owners: gateway ids). */

@@ -1015,6 +1015,61 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { part: 'conversion', id: '', fields: {}, created: false, undo: { tool: 'remove-meta-signal-items', args: { items: [{ kind: 'customConversion', id: '120000000000060' }], confirmDelete: true } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
         after: { part: 'conversion', id: '120000000000060', customConversionId: '120000000000060', fields: { exists: 'yes' }, created: true, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 30 part 2: fields a subscription added are removed; a new alert is removed, a status goes back, a removed
+      // alert is made again with the same conditions.
+      'set-meta-webhooks': {
+        before: { action: 'subscribe-app', object: 'ad_account', fields: ['effective_status'], undo: { action: 'unsubscribe-app', object: 'ad_account', fields: ['with_issues_ad_objects'] }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'subscribe-app', object: 'ad_account', fields: ['effective_status', 'with_issues_ad_objects'], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-alert-subscription': {
+        before: { action: 'create', subscriptionId: null, exists: false, undo: { subscriptionId: '120000000000040', confirmDelete: true }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'create', subscriptionId: '120000000000040', exists: true, spec: { eventType: 'OBJECT_CREATED', entityType: 'CAMPAIGN' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'remove-meta-alert-subscription': {
+        before: { action: 'remove', subscriptionId: '120000000000040', exists: true, undo: { action: 'create', eventType: 'INSIGHTS_UPDATED', entityType: 'AD', field: 'cpc', operator: 'GREATER_THAN', thresholdCents: [200] }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'remove', subscriptionId: '120000000000040', exists: false, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 20: an ad set's targeting keys and placements go back as Meta held them; the account's old whole controls
+      // are posted again.
+      'set-meta-targeting': {
+        before: { adSets: [{ id: '120000000000002', name: 'Ad set B', keys: { age_min: 18, genders: null } }], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { adSets: [{ id: '120000000000002', name: 'Ad set B', keys: { age_min: 25, genders: [2] } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-placements': {
+        before: { adSets: [{ id: '120000000000002', name: 'Ad set B', keys: { publisher_platforms: null }, softOptOut: null }], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { adSets: [{ id: '120000000000002', name: 'Ad set B', keys: { publisher_platforms: ['facebook', 'instagram'] }, softOptOut: { facebook_positions: ['marketplace'] } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-account-controls': {
+        before: { exists: true, audience: { age_min: 18 }, placement: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { exists: true, audience: { age_min: 21 }, placement: { placement_exclusions: ['FACEBOOK_MARKETPLACE'] }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 34: a catalog or set it made is deleted by the same tool (removeMade / action undo + undoOf); settings,
+      // categories, pixels and access go back as they were (an empty earlier value cannot be set again: said).
+      'create-meta-catalog': {
+        before: { op: 'create', made: null, madeAt: '', accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'create', made: { id: '120000000000100', name: 'Catalog A', segment: false, parentId: null }, madeAt: '2026-10-21T08:00:00.000Z', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-catalog': {
+        before: { op: 'settings', catalogId: '120000000000100', fields: { name: 'Catalog A' }, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'settings', catalogId: '120000000000100', fields: { name: 'Catalog B' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-catalog-access': {
+        before: { op: 'assign', catalogId: '120000000000100', userId: '100000000000001', assigned: false, tasks: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'assign', catalogId: '120000000000100', userId: '100000000000001', assigned: true, tasks: ['ADVERTISE'], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-product-set': {
+        before: { op: 'change', catalogId: '120000000000100', productSetId: '120000000000110', set: { name: 'Set A', filter: '{"brand":{"eq":"Shop A"}}', retailerId: null }, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { op: 'change', catalogId: '120000000000100', productSetId: '120000000000110', set: { name: 'Set B', filter: '{"brand":{"eq":"Shop A"}}', retailerId: null }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 40: the account settings it replaced go back through the same tool; the previous spending limit is set again.
+      'set-meta-account-settings': {
+        before: { kind: 'adaccount', id: '1234567890', fields: { name: 'Shop A ads', default_dsa_payor: null, default_dsa_beneficiary: null }, undo: { name: 'Shop A ads', dsa: { clear: true } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'adaccount', id: '1234567890', fields: { name: 'Shop A', default_dsa_payor: 'Shop A', default_dsa_beneficiary: 'Shop A' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-spend-cap': {
+        before: { kind: 'spendcap', id: '1234567890', action: 'raise', fields: { spend_cap: '50000' }, undo: { action: 'set', capCents: 50000 }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'spendcap', id: '1234567890', action: 'raise', fields: { spend_cap: '75000' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 27b: an Instant Experience made is hidden (Meta deletes none); a hide is shown again; an edit goes back.
       'create-meta-instant-experience': {
         before: { action: 'create', pageId: '120000000000010', canvasId: null, name: 'Experience A', elementIds: [], hidden: null },
@@ -1203,7 +1258,12 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-lead-form', 'set-meta-lead-form',
       'create-meta-boost', 'set-meta-partnership-access',
       'create-meta-dataset', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion', 'remove-meta-signal-items',
-      'create-meta-ad', 'set-meta-ad', 'create-meta-instant-experience', 'set-meta-instant-experience']) {
+      'create-meta-ad', 'set-meta-ad',
+      'set-meta-webhooks', 'set-meta-alert-subscription', 'remove-meta-alert-subscription',
+      'set-meta-targeting', 'set-meta-placements', 'set-meta-account-controls',
+      'upload-meta-events',
+      'create-meta-catalog', 'set-meta-catalog', 'set-meta-catalog-access', 'set-meta-product-set', 'remove-meta-catalog-items', 'set-meta-account-settings', 'set-meta-spend-cap', 'set-meta-insights-features',
+      'create-meta-instant-experience', 'set-meta-instant-experience']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

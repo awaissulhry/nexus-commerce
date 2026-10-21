@@ -207,6 +207,20 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'remove-meta-block-list': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
   'create-meta-lead-form': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-lead-forms.tools test)',
   'set-meta-lead-form': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-lead-forms.tools test)',
+  'set-meta-webhooks': 'it reads the business\'s Meta app and chosen ad account live from Meta, and no business here has Meta connected (meta-ads-webhooks.tools test)',
+  'set-meta-alert-subscription': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-webhooks.tools test)',
+  'remove-meta-alert-subscription': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-webhooks.tools test)',
+  'set-meta-targeting': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-targeting-change.tools test)',
+  'set-meta-placements': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-targeting-change.tools test)',
+  'set-meta-account-controls': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-targeting-change.tools test)',
+  'create-meta-catalog': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-catalog-admin.tools test)',
+  'set-meta-catalog': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-catalog-admin.tools test)',
+  'set-meta-catalog-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-catalog-admin.tools test)',
+  'set-meta-product-set': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-catalog-admin.tools test)',
+  'remove-meta-catalog-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-catalog-admin.tools test)',
+  'set-meta-account-settings': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-account-settings.tools test)',
+  'set-meta-spend-cap': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-account-settings.tools test)',
+  'set-meta-insights-features': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-account-settings.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -305,6 +319,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-dataset-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
   'set-meta-custom-conversion': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
   'remove-meta-signal-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  // Meta ads step 33: off by default per business, and no business here has Meta (meta-ads-events.tools test runs it).
+  'upload-meta-events': 'it is switched off for every business by default, and no business here has Meta connected (meta-ads-events.tools test)',
   // Meta ads step 27b: Instant Experiences read the business's chosen Meta ad account and Page live (meta-ads-instant-experiences.tools test).
   'create-meta-instant-experience': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-instant-experiences.tools test)',
   'set-meta-instant-experience': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-instant-experiences.tools test)',
@@ -629,6 +645,24 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // Meta ads step 36: lead forms and test leads refuse in words here (no business has Meta; their own test runs them).
   'create-meta-lead-form': () => ({ name: 'Form A', questions: [{ type: 'FULL_NAME' }, { type: 'EMAIL' }], privacyPolicy: { url: 'https://example.com/privacy' } }),
   'set-meta-lead-form': () => ({ action: 'archive', formId: '600000000000001' }),
+  // Meta ads step 30 part 2: the webhook and alert subscription changes refuse in words here (their own test runs them).
+  'set-meta-webhooks': () => ({ action: 'connect-ad-account' }),
+  'set-meta-alert-subscription': () => ({ action: 'create', eventType: 'OBJECT_CREATED', entityType: 'CAMPAIGN' }),
+  'remove-meta-alert-subscription': () => ({ subscriptionId: '120000000000040', confirmDelete: true }),
+  // Meta ads step 20: targeting, placements and the account's controls refuse in words here (no business has Meta; their own test runs them).
+  'set-meta-targeting': () => ({ adSets: [{ adSetId: '120000000000002', ageMin: 21 }] }),
+  'set-meta-placements': () => ({ adSets: [{ adSetId: '120000000000002', advantagePlacements: true }] }),
+  'set-meta-account-controls': () => ({ ageMin: 21 }),
+  // Meta ads step 34: the catalog changes refuse in words here (no business has Meta; their own test runs them).
+  'create-meta-catalog': () => ({ name: 'Catalog A' }),
+  'set-meta-catalog': () => ({ action: 'settings', catalogId: '120000000000100', name: 'Catalog B' }),
+  'set-meta-catalog-access': () => ({ action: 'unshare', catalogId: '120000000000100', partnerBusinessId: '120000000000091' }),
+  'set-meta-product-set': () => ({ action: 'change', productSetId: '120000000000110', name: 'Set B' }),
+  'remove-meta-catalog-items': () => ({ kind: 'product-set', productSetId: '120000000000110', confirmDelete: true }),
+  // Meta ads step 40: the account's own settings refuse in words here (no business has Meta; their own test runs them).
+  'set-meta-account-settings': () => ({ name: 'Shop A ads' }),
+  'set-meta-spend-cap': () => ({ action: 'set', capCents: 50000 }),
+  'set-meta-insights-features': () => ({ feature: 'impression_device' }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),
@@ -710,6 +744,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-dataset-access': () => ({ pixelId: '120000000000050', action: 'connect-ad-account' }),
   'set-meta-custom-conversion': () => ({ action: 'update', customConversionId: '120000000000060', name: 'Shop A thanks' }),
   'remove-meta-signal-items': () => ({ items: [{ kind: 'customConversion', id: '120000000000060' }], confirmDelete: true }),
+  // Meta ads step 33: refuses in words (the business's switch is off; no business here has Meta).
+  'upload-meta-events': () => ({ orderIds: ['order-1'], manualAs: 'phone_call' }),
   // Meta ads step 27b: no business here has Meta, so each refuses in words before any call.
   'create-meta-instant-experience': () => ({ name: 'Experience A', parts: [{ type: 'text', text: 'Hello' }] }),
   'set-meta-instant-experience': () => ({ action: 'hide', canvasId: '120000000000701' }),

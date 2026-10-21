@@ -309,12 +309,16 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
   const metaWorld = (f: { path: string; text: string }) => /^services\/(marketing\/meta-ads\/|agents\/tools\/meta-ads-|gateway\/(meta|gateway\.ts))/.test(f.path) || META_IMPORT.test(f.text)
   const callers = (name: string) => all.filter((f) => new RegExp(`(?<!function |\\.)\\b${name}\\(`).test(f.text)).map((f) => f.path).sort()
   it('metaWriteCall, metaSendChange, metaCheckChange, removalDraft and metaRemoveDraft have the callers they have today, and no other', () => {
-    expect(callers('metaWriteCall')).toEqual(['services/marketing/meta-ads/write-client.ts'])
+    // Step 33 — upload-meta-events sends its Conversions API events through its own client (a POST to <pixel>/events only).
+    expect(callers('metaWriteCall')).toEqual(['services/marketing/meta-ads/events-client.ts', 'services/marketing/meta-ads/write-client.ts'])
     // Step 23 — create-meta-media's requests bring their own senders (an upload read again, the video-ads upload's calls).
     // Step 25 — create-meta-creative's create and async job bring their own senders too (the creative read back).
     // Step 27 — create-meta-ad's create (the ad and its inline creative read back), set-meta-ad's update (its creative read
     // back as creative_id) and the undo's creative removal (only once the ad reads DELETED) bring their own senders.
-    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-kit.ts', 'services/marketing/meta-ads/change-ads.ts', 'services/marketing/meta-ads/change-creatives.ts', 'services/marketing/meta-ads/change-media.ts'])
+    // Step 40 — set-meta-account-settings, set-meta-spend-cap and set-meta-insights-features bring their own senders too: the
+    // same request through metaSendChange, then a read-back (the agency declaration, the tracking specs, the features) or
+    // Meta's 10-a-day limit in words. None sends a DELETE.
+    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-account-settings.tools.ts', 'services/agents/tools/meta-ads-kit.ts', 'services/marketing/meta-ads/change-ads.ts', 'services/marketing/meta-ads/change-creatives.ts', 'services/marketing/meta-ads/change-media.ts'])
     expect(callers('metaCheckChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
     expect(callers('removalDraft')).toEqual(['services/agents/tools/meta-ads-create.tools.ts'])
     expect(all.find((f) => f.path === 'services/agents/tools/meta-ads-create.tools.ts')!.text.match(/\bremovalDraft\(/g)).toHaveLength(1)
@@ -343,7 +347,7 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/agents/tools/meta-ads-kit.ts': 2, // the step's sentence for a done DELETE (no sender)
       'services/gateway/gateway.ts': 2, // the request type; a repeatable method
       'services/gateway/meta.ts': 4, // metaWriteCall: the type and the method it sends; step 26: metaRestWriteCall's type (the partnership host)
-      'services/gateway/meta-calls.ts': 11, // the allow-list's verdict on a DELETE, with or without a body, and step 31's refusal of a non-text body; step 26's refusal on a partnership edge (a judge, no sender)
+      'services/gateway/meta-calls.ts': 13, // the allow-list's verdict on a DELETE, with or without a body, and step 31's refusal of a non-text body; step 26's refusal on a partnership edge; step 30's DELETE with its keys in the query (a judge, no sender)
       'services/gateway/meta-create-rules.ts': 1, // the object.delete rule (a judge)
       'services/gateway/meta-remove-rules.ts': 4, // step 22: creative.delete, image.delete, video.remove, canvaselement.delete (judges)
       'services/gateway/meta-settings-rules.ts': 1, // the budget_schedule.delete rule (a judge)
@@ -363,7 +367,7 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/change-block-lists.ts': 6, // step 39: set-meta-block-list's undo deletes and remove-meta-block-list (explicit ask: confirmDelete)
       'services/gateway/meta-lead-form-rules.ts': 1, // step 36: the testlead.delete rule (a judge)
       'services/marketing/meta-ads/change-lead-forms.ts': 2, // step 36: a test lead's replace and remove-test-lead (only test leads Nexus made)
-      'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
+      'services/marketing/meta-ads/write-client.ts': 5, // passes on what a request names
       'services/gateway/meta-audience-rules.ts': 4, // step 31: the people out, the opt-out everywhere, the unshare, the audience delete (judges)
       'services/marketing/meta-ads/change-audiences.ts': 5, // step 31: the request type, the two people-out DELETEs, the unshare, remove-meta-audience's delete (explicit ask: confirmDelete)
       // Step 26 — set-meta-partnership-access: creators off the tag-approval list (also the undo of an approval), an ad code's
@@ -375,6 +379,11 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       // Step 27 — create-meta-ad's undo: an ad it made that never ran (step 19's object.delete), then its inline creative made
       // new (step 22's creative.delete: the request and its own sender, sent only once the ad reads DELETED).
       'services/marketing/meta-ads/change-ads.ts': 3,
+      'services/gateway/meta-webhook-rules.ts': 4, // step 30: app.subscriptions.delete, adaccount.subscribed_apps.delete, page.subscribed_apps.delete, adaccount.alert.delete (judges)
+      'services/marketing/meta-ads/change-webhooks.ts': 3, // step 30: set-meta-webhooks' unsubscribe-app, disconnect-ad-account, remove-page
+      'services/marketing/meta-ads/change-alert-subscriptions.ts': 1, // step 30: remove-meta-alert-subscription's delete of one alert subscription of the chosen ad account
+      'services/gateway/meta-catalog-rules.ts': 11, // step 34: nine catalog DELETE rules and the items_batch DELETE judge (judges)
+      'services/marketing/meta-ads/change-catalog-admin.ts': 8, // step 34: remove-meta-catalog-items' deletes (explicit ask), the undo of a catalog / set Nexus made, a pixel, person or partner off a catalog (meta-catalog-writes test)
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.
     const computed = world.flatMap((f) => [...f.text.matchAll(/\bmethod:\s*([^,}\n]+)/g)].map((m) => m[1].trim())
@@ -430,7 +439,8 @@ const EXPECTED_COMPUTED: string[] = [
   ...Array(6).fill('services/gateway/gateway.ts: req.method'),
   // Step 26 — metaRestWriteVerdict's input type (the partnership host's judge, no sender).
   'services/gateway/meta-boost-rules.ts: string; url: string; kind: string; body?: unknown; objectKind?: string',
-  'services/gateway/meta-calls.ts: \'POST\' | \'DELETE\'',
+  // Step 30 — a rule's method: PATCH too (an alert subscription's status).
+  'services/gateway/meta-calls.ts: \'POST\' | \'DELETE\' | \'PATCH\'',
   'services/gateway/meta-calls.ts: string',
   'services/gateway/meta-calls.ts: string',
   'services/gateway/meta-calls.ts: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string',
@@ -441,7 +451,8 @@ const EXPECTED_COMPUTED: string[] = [
   'services/gateway/meta-media-rules.ts: string; url: string; kind: string; body?: unknown; objectKind?: string',
   // Step 26 — metaRestWriteCall: its request type and the method it passes on (the partnership host).
   'services/gateway/meta.ts: \'POST\' | \'PUT\' | \'DELETE\'',
-  'services/gateway/meta.ts: remove ? \'DELETE\' : \'POST\'',
+  // Step 30 — metaWriteCall sends PATCH too (an alert subscription's status).
+  'services/gateway/meta.ts: remove ? \'DELETE\' : req.method === \'PATCH\' ? \'PATCH\' : \'POST\'',
   'services/gateway/meta.ts: req.method',
   // Step 31 — audienceRequest passes on the literal method its caller names (a delete, the people out, an unshare).
   'services/marketing/meta-ads/change-audiences.ts: o.method',

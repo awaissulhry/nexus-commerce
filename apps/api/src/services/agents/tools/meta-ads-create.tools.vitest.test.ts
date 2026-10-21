@@ -13,7 +13,7 @@ const h = vi.hoisted(() => ({
   source: {} as Record<string, unknown>,
   dsaDefaults: { payor: 'Shop A', beneficiary: 'Shop A' } as Record<string, string> | null,
   made: {} as Record<string, Record<string, unknown>>,
-  changes: {} as Record<string, { toolName: string; after: unknown; undoneAt: Date | null }>,
+  changes: {} as Record<string, { toolName: string; after: unknown; undoneAt: Date | null; undoneByApprovalId?: string | null }>,
   check: vi.fn(async (): Promise<unknown> => ({ recommendations: [] })),
   send: vi.fn(),
 }))
@@ -48,7 +48,7 @@ vi.mock('../../../db.js', () => ({
     agentChange: {
       findFirst: vi.fn(async ({ where }: { where: { id: string; toolName: string } }) => {
         const row = h.changes[where.id]
-        return row && row.toolName === where.toolName ? { after: row.after, undoneAt: row.undoneAt } : null
+        return row && row.toolName === where.toolName ? { after: row.after, undoneAt: row.undoneAt, undoneByApprovalId: row.undoneByApprovalId ?? null } : null
       }),
     },
   },
@@ -165,6 +165,11 @@ describe('create-meta-campaign', () => {
     expect(up.ok).toBe(true)
     expect(h.check).toHaveBeenCalledTimes(1) // Meta has no check for a delete
     expect(up.preview).toMatchObject({ spendsMoney: false, requests: [{ step: 1, metaCheck: 'no-check' }] })
+    // Step 20 re-review 2 — the delete runs only as the request undo-change tied to that change (linkUndoRequest).
+    expect(await t.execute!(undoArgs, { can: () => true, via: 'claude', userId: 'u-owner', approvalId: 'ap-1', approvedByPerson: true, decidedVia: 'nexus', approvedPreview: up.preview }))
+      .toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: an undo runs through undo-change/) })
+    expect(h.send).toHaveBeenCalledTimes(1)
+    h.changes['chg-1'].undoneByApprovalId = 'ap-1'
     h.send.mockImplementationOnce(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
     const removed = await run('create-meta-campaign', undoArgs, up.preview)
     expect(removed.ok).toBe(true)

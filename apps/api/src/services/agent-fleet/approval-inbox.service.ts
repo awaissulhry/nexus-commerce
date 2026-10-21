@@ -952,6 +952,27 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-dataset-access': ['basis', 'plan', 'reach'],
   'set-meta-custom-conversion': ['basis', 'plan', 'reach'],
   'remove-meta-signal-items': ['basis', 'plan', 'reach'],
+  // Meta step 30 part 2 (2026-10-21): webhook and alert subscriptions.
+  'set-meta-webhooks': ['basis', 'plan', 'reach'],
+  'set-meta-alert-subscription': ['basis', 'plan', 'reach'],
+  'remove-meta-alert-subscription': ['basis', 'plan', 'reach'],
+  // Meta step 20 (2026-10-21): an ad set's targeting and placements, the ad account's controls (meta-ads-kit).
+  'set-meta-targeting': ['basis', 'plan', 'reach'],
+  'set-meta-placements': ['basis', 'plan', 'reach'],
+  'set-meta-account-controls': ['basis', 'plan', 'reach'],
+  // Meta step 33 (2026-10-21): the pixel, the sales and what was sent before (basis), the sales it sends
+  // (plan), where it lands (reach).
+  'upload-meta-events': ['basis', 'plan', 'reach'],
+  // Meta step 34 (2026-10-21): catalogs, segments, their settings, access and product sets; deletes on explicit ask.
+  'create-meta-catalog': ['basis', 'plan', 'reach'],
+  'set-meta-catalog': ['basis', 'plan', 'reach'],
+  'set-meta-catalog-access': ['basis', 'plan', 'reach'],
+  'set-meta-product-set': ['basis', 'plan', 'reach'],
+  'remove-meta-catalog-items': ['basis', 'plan', 'reach'],
+  // Meta step 40 (2026-10-21): the ad account's own settings, its spending limit, an insights feature switched on.
+  'set-meta-account-settings': ['basis', 'plan', 'reach'],
+  'set-meta-spend-cap': ['basis', 'plan', 'reach'],
+  'set-meta-insights-features': ['basis', 'plan', 'reach'],
   // Meta step 27b (2026-10-21): Instant Experiences of the chosen Page — the Page, experience and parts it stands on, the requests, where.
   'create-meta-instant-experience': ['basis', 'plan', 'reach'],
   'set-meta-instant-experience': ['basis', 'plan', 'reach'],
