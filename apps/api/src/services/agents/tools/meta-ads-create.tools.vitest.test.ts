@@ -115,6 +115,12 @@ describe('the tools', () => {
     expect(() => tool('create-meta-campaign').input.parse({ ...CREATE, specialAdCategories: ['ISSUES_ELECTIONS_POLITICS'] })).toThrow()
     expect(() => tool('create-meta-campaign').input.parse({ ...CREATE, objective: 'CONVERSIONS' })).toThrow()
     expect(() => tool('create-meta-campaign').input.parse({ ...CREATE, name: 'Shop ‮A' })).toThrow()
+    // Review A7 — at most 70 included and 70 excluded custom audiences (the gateway confirms at most 150 ids in one change).
+    const audiences = (n: number) => Array.from({ length: n }, (_, i) => String(120000000000100 + i))
+    const adSet = { campaignId: C, name: 'Ad set B', optimizationGoal: 'LINK_CLICKS', targeting: { countries: ['IT'] } }
+    expect(tool('create-meta-ad-set').input.safeParse({ ...adSet, targeting: { countries: ['IT'], customAudienceIds: audiences(70), excludedCustomAudienceIds: audiences(70) } }).success).toBe(true)
+    expect(tool('create-meta-ad-set').input.safeParse({ ...adSet, targeting: { countries: ['IT'], customAudienceIds: audiences(71) } }).success).toBe(false)
+    expect(tool('create-meta-ad-set').input.safeParse({ ...adSet, targeting: { countries: ['IT'], excludedCustomAudienceIds: audiences(71) } }).success).toBe(false)
     expect(tool('create-meta-campaign').description).toMatch(/message_campaign/)
     expect(tool('copy-meta-ads').description).toMatch(/Meta cannot move an ad|cannot change an ad's ad set/)
   })

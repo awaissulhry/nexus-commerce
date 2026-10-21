@@ -32,6 +32,7 @@ import { changeLines, plural, type MetaChangeDraft, type MetaChangeRequest } fro
 import { money } from './change-settings-common.js'
 import { KIND_WORD, nothingMade, REMOVE_LATER, type MadeKind } from './change-create-common.js'
 import { DSA_COUNTRIES, type CopyAdSetFacts, type CopySource, type DsaDefaults } from './live-create.js'
+import { MAX_BACKGROUND_BODY, MAX_PART_BODY } from '../../gateway/meta-create-rules.js'
 import type { LiveCampaign } from './live-settings.js'
 import { budgetParam, metaUnitsToMinor, MetaUnitError, unixSecondsParam } from './settings-units.js'
 
@@ -132,9 +133,12 @@ function draft(r: CopyRequest, live: CopyLive, nowDate: Date): MetaChangeDraft |
     warnings.push('Meta\'s asyncadcopies edge documents no parameters (and its SDK has no method for it), so Nexus never sends it: the ads go as parts of Meta\'s documented async batch, each a copy of one ad with its status_option said.')
     warnings.push(`A background copy is made by Meta later (not all or nothing) and Nexus never has the copies' ids: it has no undo through Nexus — ${REMOVE_LATER}.`)
     if (r.activate) spendsMoney.push(`The copied ads are made ACTIVE: each spends once Meta approves it and its ad set and campaign are on${r.targetAdSetId && live.targetAdSet && !(live.targetAdSet.status === 'ACTIVE' && live.targetAdSet.campaignStatus === 'ACTIVE') ? ' — the target ad set or its campaign is not on, so nothing spends yet' : ''}.`)
+    const params = { name: `Nexus copy of ${plural(ids.length, 'ad')}`, adbatch: JSON.stringify(parts) }
+    const tooLong = backgroundTooLong(parts, params)
+    if (tooLong) return { refusal: tooLong }
     return finish({
       step: 1, label: `Copy ${plural(ids.length, 'ad')} in the background (${statusOption})`, kind: 'ad', objectKind: 'adaccount', objectId: `act_${live.adAccountId}`,
-      edge: 'async_batch_requests', params: { name: `Nexus copy of ${plural(ids.length, 'ad')}`, adbatch: JSON.stringify(parts) }, check: 'none',
+      edge: 'async_batch_requests', params, check: 'none',
       raisesSpend: r.activate === true, readBackInPost: false, budget: false, undoable: false, operation: 'copy.background', readBackFields: 'id',
     }, lines, warnings, spendsMoney, live, 'background-copy')
   }
@@ -273,9 +277,12 @@ function draft(r: CopyRequest, live: CopyLive, nowDate: Date): MetaChangeDraft |
   if (r.background) {
     const part = { name: `${r.kind}_copy_1`, relative_url: `${s.id}/copies`, body: new URLSearchParams(Object.entries(params)).toString() }
     warnings.push(`A background copy is made by Meta later (Meta's async batch; not all or nothing): Nexus gets the request's id, not the copies' ids, so it has no undo through Nexus — meta-campaigns view copies shows the copies; ${REMOVE_LATER}.`)
+    const batch = { name: `Nexus copy of ${KIND_WORD[r.kind]} ${s.id}`, adbatch: JSON.stringify([part]) }
+    const tooLong = backgroundTooLong([part], batch)
+    if (tooLong) return { refusal: tooLong }
     return finish({
       step: 1, label: `Copy ${who} with its ads in the background (${statusOption})`, kind: r.kind, objectKind: 'adaccount', objectId: `act_${live.adAccountId}`,
-      edge: 'async_batch_requests', params: { name: `Nexus copy of ${KIND_WORD[r.kind]} ${s.id}`, adbatch: JSON.stringify([part]) },
+      edge: 'async_batch_requests', params: batch,
       check: 'none', raisesSpend: r.activate === true, readBackInPost: false, budget: false, undoable: false, operation: 'copy.background', readBackFields: 'id',
     }, lines, warnings, spendsMoney, live, 'background-copy')
   }
@@ -289,6 +296,18 @@ function draft(r: CopyRequest, live: CopyLive, nowDate: Date): MetaChangeDraft |
     readBackFields: 'id,name,status,effective_status',
     recordEvenIfNotAsAsked: true,
   }, lines, warnings, spendsMoney, live, 'copy')
+}
+
+/**
+ * Review round 2 — the gateway's own size limits, judged in the PREVIEW so a background copy too long to send is refused
+ * before anyone approves it: each part's form body at most MAX_PART_BODY characters, the whole request (form-encoded, as
+ * sent) at most MAX_BACKGROUND_BODY (meta-create-rules.ts copy.background).
+ */
+function backgroundTooLong(parts: Array<{ body: string }>, params: Record<string, string>): string | null {
+  const longest = Math.max(...parts.map((p) => p.body.length))
+  if (longest > MAX_PART_BODY) return `One copy of this background request is ${longest} characters long; Nexus sends at most ${MAX_PART_BODY} per copy — use a shorter rename prefix or suffix.`
+  const total = new URLSearchParams(params).toString().length
+  return total > MAX_BACKGROUND_BODY ? `This background request is ${total} characters long once encoded; Nexus sends at most ${MAX_BACKGROUND_BODY} — copy fewer ads at once, or use a shorter rename prefix or suffix.` : null
 }
 
 function finish(request: MetaChangeRequest, lines: Array<[string, unknown, unknown]>, warnings: string[], spendsMoney: string[], live: CopyLive, op: 'copy' | 'background-copy'): MetaChangeDraft {

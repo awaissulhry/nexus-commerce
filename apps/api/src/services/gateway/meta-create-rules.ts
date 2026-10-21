@@ -78,6 +78,9 @@ export const COPY_STATUS_OPTIONS = ['PAUSED', 'ACTIVE', 'INHERITED_FROM_SOURCE']
 export const CREATE_CHECK_VALUES = ['["validate_only"]', '["validate_only","include_recommendations"]'] as const
 /** Nexus's own limits: the most copies one background request holds, ads one async ad copy names, parts of a schedule. */
 export const MAX_BACKGROUND_COPIES = 20
+/** The longest form body of one background part, and of the whole background request (copy-meta-ads checks both in its preview). */
+export const MAX_PART_BODY = 4_000
+export const MAX_BACKGROUND_BODY = 16_000
 const MAX_PERIODS = 50
 const AMOUNT_MAX = 100_000_000_000
 
@@ -125,7 +128,7 @@ const renameOptions: MetaJudge = json('rename_options', (o) => {
 
 /** A form body inside an async batch part, in ONE spelling (URLSearchParams writes it again the same), each key once. */
 function partParams(body: unknown): Map<string, string> | null {
-  if (typeof body !== 'string' || !body || body.length > 4000) return null
+  if (typeof body !== 'string' || !body || body.length > MAX_PART_BODY) return null
   const params = new Map<string, string>()
   for (const [k, v] of new URLSearchParams(body)) {
     if (!/^[a-z_][a-z0-9_]*$/.test(k) || params.has(k)) return null
@@ -407,7 +410,7 @@ export function metaCreateWriteRules(): readonly MetaWriteRule[] {
       required: ['name', 'adbatch'],
       optional: [],
       text: { name: META_NAME_TEXT, adbatch: META_NAME_TEXT },
-      maxBody: 16_000,
+      maxBody: MAX_BACKGROUND_BODY,
       values: (p) => {
         if (!typedOk(p.get('name'), 100, META_NAME_TEXT)) return 'name (of the background request) is 1 to 100 characters of printable text'
         const parts = adbatchParts(p.get('adbatch') ?? '')

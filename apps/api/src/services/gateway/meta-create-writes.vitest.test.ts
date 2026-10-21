@@ -291,24 +291,70 @@ describe('review B3 — the WhatsApp marketing-messages field: read on the ad ac
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 
-describe('review A2 — removalDraft is the ONE draft that sends object.delete today (step 22 adds an explicit-ask delete)', () => {
-  it('no other Meta change draft or tool builds a DELETE request but the budget schedule\'s own (a high-demand period)', () => {
-    const roots = [join(HERE, '../marketing/meta-ads'), join(HERE, '../agents/tools')]
-    const senders: string[] = []
-    for (const root of roots) {
-      for (const file of readdirSync(root)) {
-        // The drafts (change-*.ts) and the Meta tools name what is sent; write-client.ts only passes on what a draft named.
-        if (!file.endsWith('.ts') || file.includes('.test.') || !file.startsWith(root.endsWith('tools') ? 'meta-ads-' : 'change-')) continue
-        const text = readFileSync(join(root, file), 'utf8')
-        if (/method:\s*'DELETE'/.test(text)) senders.push(file)
-      }
+describe('review A2 — every Meta DELETE has one sender today: removalDraft (step 22 adds an explicit-ask delete)', () => {
+  const SRC = join(HERE, '../..')
+  /** Every non-test .ts file under apps/api/src, by its path from there. */
+  const files = (dir: string, out: string[] = []): string[] => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) { if (entry.name !== 'node_modules') files(path, out) } else if (entry.name.endsWith('.ts') && !entry.name.includes('.test.') && !entry.name.endsWith('.d.ts')) out.push(path)
     }
-    expect(senders.sort()).toEqual(['change-budget-schedule.ts', 'change-create-common.ts'])
-    const common = readFileSync(join(HERE, '../marketing/meta-ads/change-create-common.ts'), 'utf8')
-    expect(common.match(/method:\s*'DELETE'/g)).toHaveLength(1)
-    const removal = common.slice(common.indexOf('export function removalDraft'), common.indexOf('// ── scheduled budget increases'))
-    expect(removal).toMatch(/method: 'DELETE'/)
-    const schedule = readFileSync(join(HERE, '../marketing/meta-ads/change-budget-schedule.ts'), 'utf8')
-    expect(schedule).toMatch(/objectKind: 'highdemandperiod'[^\n]*method: 'DELETE'|method: 'DELETE'[^\n]*objectKind: 'highdemandperiod'/)
+    return out
+  }
+  /** Code without comments (a sentence about a DELETE is not one). */
+  const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1')
+  const all = files(SRC).map((path) => ({ path: path.slice(SRC.length + 1), text: code(readFileSync(path, 'utf8')) }))
+  /** The Meta write world: what builds, sends or judges a Meta change. */
+  const META_IMPORT = /from '[^']*(meta-ads\/[\w-]+|meta-ads-kit|gateway\/meta[\w-]*)\.js'|channel:\s*['"`]META['"`]/
+  const metaWorld = (f: { path: string; text: string }) => /^services\/(marketing\/meta-ads\/|agents\/tools\/meta-ads-|gateway\/(meta|gateway\.ts))/.test(f.path) || META_IMPORT.test(f.text)
+  const callers = (name: string) => all.filter((f) => new RegExp(`(?<!function |\\.)\\b${name}\\(`).test(f.text)).map((f) => f.path).sort()
+  it('metaWriteCall, metaSendChange, metaCheckChange and removalDraft have the callers they have today, and no other', () => {
+    expect(callers('metaWriteCall')).toEqual(['services/marketing/meta-ads/write-client.ts'])
+    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
+    expect(callers('metaCheckChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
+    expect(callers('removalDraft')).toEqual(['services/agents/tools/meta-ads-create.tools.ts'])
+    expect(all.find((f) => f.path === 'services/agents/tools/meta-ads-create.tools.ts')!.text.match(/\bremovalDraft\(/g)).toHaveLength(1)
+  })
+  it('no gateway call of Meta outside the gateway names a method but GET', () => {
+    const META_CALL = /gateway(Call|Fetch)\(\{[^]*?channel:\s*['"`]META['"`][^]*?\}\)/g
+    const writers = all.filter((f) => !f.path.startsWith('services/gateway/')).flatMap((f) => [...f.text.matchAll(META_CALL)]
+      .filter((m) => /\bmethod:/.test(m[0]) && !/\bmethod:\s*['"`]GET['"`]/.test(m[0])).map(() => f.path))
+    expect(writers).toEqual([])
+  })
+  it('DELETE, in any quoting or as any method value, appears in the Meta write world only where it does today', () => {
+    const world = all.filter(metaWorld)
+    const deletes = Object.fromEntries(world.map((f) => [f.path, (f.text.match(/(['"`])DELETE\1/g) ?? []).length]).filter(([, n]) => n))
+    expect(deletes).toEqual({
+      'services/agents/tools/meta-ads-campaign-settings.tools.ts': 1, // reads a done request's method (no sender)
+      'services/agents/tools/meta-ads-kit.ts': 2, // the step's sentence for a done DELETE (no sender)
+      'services/gateway/gateway.ts': 2, // the request type; a repeatable method
+      'services/gateway/meta.ts': 3, // metaWriteCall: the type and the method it sends
+      'services/gateway/meta-calls.ts': 6, // the allow-list's verdict on a DELETE (a judge, no sender)
+      'services/gateway/meta-create-rules.ts': 1, // the object.delete rule (a judge)
+      'services/gateway/meta-settings-rules.ts': 1, // the budget_schedule.delete rule (a judge)
+      'services/marketing/meta-ads/change-budget-schedule.ts': 1, // a budget schedule's delete (kind highdemandperiod)
+      'services/marketing/meta-ads/change-create-common.ts': 1, // removalDraft: the undo of a create or a copy
+      'services/marketing/meta-ads/change-draft.ts': 1, // the request type
+      'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
+    })
+    // A method named by a constant, a variable or a ternary: only where it is passed on.
+    const computed = world.flatMap((f) => [...f.text.matchAll(/\bmethod:\s*([^,}\n]+)/g)].map((m) => m[1].trim())
+      .filter((v) => !/^(['"`])(GET|POST|PUT|PATCH|DELETE)\1( as const)?$/.test(v) && !/^['"`]GET['"`] \|/.test(v)).map((v) => `${f.path}: ${v}`))
+    expect(computed.sort()).toEqual(EXPECTED_COMPUTED)
+    const common = all.find((f) => f.path === 'services/marketing/meta-ads/change-create-common.ts')!.text
+    const removal = common.slice(common.indexOf('export function removalDraft'), common.indexOf('export function scheduleSpecs'))
+    expect(removal.match(/method: 'DELETE'/g)).toHaveLength(1)
+    expect(all.find((f) => f.path === 'services/marketing/meta-ads/change-budget-schedule.ts')!.text).toMatch(/objectKind: 'highdemandperiod', method: 'DELETE'/)
   })
 })
+/** Methods passed on, not chosen: the kit hands a request's own method to the write client; the gateway and its types. */
+const EXPECTED_COMPUTED: string[] = [
+  'services/agents/tools/meta-ads-kit.ts: request.method',
+  ...Array(5).fill('services/gateway/gateway.ts: req.method'),
+  'services/gateway/meta-calls.ts: \'POST\' | \'DELETE\'',
+  'services/gateway/meta-calls.ts: string',
+  'services/gateway/meta-calls.ts: string',
+  'services/gateway/meta-calls.ts: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string',
+  'services/gateway/meta-calls.ts: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string',
+  'services/gateway/meta.ts: remove ? \'DELETE\' : \'POST\'',
+]

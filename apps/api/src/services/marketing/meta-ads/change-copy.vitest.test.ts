@@ -115,6 +115,12 @@ describe('copy-meta-ads', () => {
     expect(judged(d)).toMatchObject({ write: { rule: 'copy.background' } })
     expect(d.before).toMatchObject({ op: 'background-copy' })
   })
+  it('round 2 — the gateway\'s size limits are judged in the preview: a background request too long is refused before approval', () => {
+    const many = Array.from({ length: 20 }, (_, i) => `1200000000000${i + 10}`)
+    const long = 'ü'.repeat(100)
+    expect(no({ kind: 'ad', adIds: many, background: true, rename: { prefix: long, suffix: long } }, { source: null })).toMatch(/at most 16000 — copy fewer ads at once/)
+    expect(ok({ kind: 'ad', adIds: many, background: true, rename: { suffix: 'IT+probe copy' } }, { source: null }).requests).toHaveLength(1)
+  })
   it('review A6 — an ad set in the EU\'s outermost regions needs its payer / beneficiary too', () => {
     const re = { ...SOURCE, adSets: [{ id: S, name: 'Ad set B', countries: ['RE'], dsaPayor: null, dsaBeneficiary: null }] }
     expect(no({ kind: 'campaign', sourceId: C, deepCopy: true }, { source: re })).toMatch(/3858079/)

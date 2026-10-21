@@ -223,9 +223,10 @@ export async function liveMadeObject(target: MetaSettingsTarget, kind: MadeKind,
   if (kind === 'ad') {
     const adSet = obj(body.adset)
     const sequence = strings(obj(adSet?.creative_sequence)?.data ?? adSet?.creative_sequence) ?? []
-    // best-practices/manage-your-ad-object-status.md: ads in a creative_sequence cannot be deleted; reference/adgroup.md
-    // (1340029): a dynamic creative ad is deleted with its ad set only.
-    if (sequence.includes(id)) undeletable = `Meta refuses to delete an ad that is part of its ad set's ad sequence (pause the ad set with set-meta-status instead).`
+    // reference/adgroup.md: "You cannot delete ads in ad set with `creative_sequence` settings" (every ad of such an ad set,
+    // not only the listed ones); error-reference.md 1340029: "Currently deletion of Dynamic Creative Ad is not allowed.
+    // Please proceed by deleting parent Ad Set". Both checked 2026-10-21.
+    if (sequence.length > 0) undeletable = `Meta refuses to delete an ad in an ad set with an ad sequence (pause the ad set with set-meta-status instead).`
     else if (adSet?.is_dynamic_creative === true || adSet?.is_dynamic_creative === 'true') undeletable = `Meta refuses to delete a dynamic creative ad on its own (only its ad set can be deleted).`
   }
   const children: string[] = []
