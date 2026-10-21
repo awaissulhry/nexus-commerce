@@ -485,7 +485,7 @@ async function boostCreateDraft(account: MetaChangeAccount, request: BoostReques
   const asked = built.featuresOn
   const label = `Boost ${resolved.label} as creative "${name}" in ad account ${act}`
   const request1: MetaChangeRequest = {
-    step: 1, label, kind: 'adaccount', objectId: act, params: built.params,
+    step: 1, label, kind: 'ad', objectKind: 'adaccount', objectId: act, params: built.params,
     // Review A3 — this preview's plan hash reads the code replaced (the content it unlocks is in what the change stands on).
     planParams: withoutAdCode(built.params),
     // Meta documents validate_only on POST /act_<id>/adcreatives (reference/ad-account/adcreatives): Meta checks it first.
@@ -541,7 +541,7 @@ async function copyVideoDraft(account: MetaChangeAccount, request: BoostRequest)
   const params = { source_instagram_media_id: mediaId, partnership_ad_ad_code: code, is_partnership_ad: 'true' }
   const label = `Copy the creator's Instagram video ${mediaId} into ad account ${act}'s video library (with the creator's ad code)`
   const request1: MetaChangeRequest = {
-    step: 1, label, kind: 'adaccount', objectId: act, params, planParams: { ...params, partnership_ad_ad_code: AD_CODE_IN_PLAN },
+    step: 1, label, kind: 'ad', objectKind: 'adaccount', objectId: act, params, planParams: { ...params, partnership_ad_ad_code: AD_CODE_IN_PLAN },
     // Meta documents no validate_only on advideos (reference/ad-account/advideos): no check.
     check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
     operation: 'media.videoUpload', edge: 'advideos',
@@ -687,7 +687,7 @@ async function permissionDraft(chosen: MetaChosenAccount, request: PartnershipRe
   const requests: MetaChangeRequest[] = going.map((id, i) => {
     const label = revoke ? `Revoke the Instagram partnership permission of creator ${id} for the chosen Instagram account ${instagramId}` : `Ask creator ${id} for Instagram partnership permission for the chosen Instagram account ${instagramId}`
     return {
-      step: i + 1, label, kind: 'iguser', objectId: instagramId, params: { creator_instagram_account: id, ...(revoke ? { revoke: 'true' } : {}) },
+      step: i + 1, label, kind: 'ad', objectKind: 'iguser', objectId: instagramId, params: { creator_instagram_account: id, ...(revoke ? { revoke: 'true' } : {}) },
       check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
       operation: revoke ? 'partnership.revoke' : 'partnership.request', edge: 'branded_content_ad_permissions', readBackFields: 'id,permission_type,status',
       doneSentence: (result) => `${label}: Meta took it${idText(result.node?.id) ? ` (permission ${idText(result.node?.id)}${text(result.node?.status) ? `, ${text(result.node?.status)}` : ''})` : ''}.`,
@@ -728,7 +728,7 @@ async function tagApprovalDraft(chosen: MetaChosenAccount, request: PartnershipR
   const skipped = ids.filter((id) => approved.has(id) === approve).map((id) => `Creator ${id} is ${approve ? 'already' : 'not'} on the approved-tagging list.`)
   const requests: MetaChangeRequest[] = going.length ? [{
     step: 1, label: `${approve ? 'Add' : 'Take'} ${plural(going.length, 'creator')} ${approve ? 'to' : 'off'} the approved-tagging list of the chosen Instagram account ${instagramId}`,
-    kind: 'iguser', objectId: instagramId, params: { user_ids: going.join(',') },
+    kind: 'ad', objectKind: 'iguser', objectId: instagramId, params: { user_ids: going.join(',') },
     check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
     operation: approve ? 'partnership.tagApprove' : 'partnership.tagUnapprove', edge: 'branded_content_tag_approval', ...(approve ? {} : { method: 'DELETE' as const }),
     doneSentence: () => `${approve ? 'Added' : 'Took'} ${going.join(', ')} ${approve ? 'to' : 'off'} the approved-tagging list: Meta took ${going.length === 1 ? 'it' : 'all of them'}.`,
@@ -767,7 +767,7 @@ async function deleteAdCodeDraft(chosen: MetaChosenAccount, request: Partnership
     ],
     spendsMoney: [], skipped: [],
     requests: [{
-      step: 1, label, kind: 'igmedia', objectId: own.mediaId, params: {},
+      step: 1, label, kind: 'ad', objectKind: 'igmedia', objectId: own.mediaId, params: {},
       check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
       operation: 'partnership.adCodeDelete', edge: 'partnership_ad_code', method: 'DELETE',
       doneSentence: () => `${label}: Meta deleted it.`,
@@ -825,7 +825,7 @@ async function collabDraft(chosen: MetaChosenAccount, request: PartnershipReques
     ],
     spendsMoney: [], skipped: [],
     requests: [{
-      step: 1, label, kind: 'iguser', objectId: instagramId, params: { media_id: mediaId, accept: accept ? 'true' : 'false' },
+      step: 1, label, kind: 'ad', objectKind: 'iguser', objectId: instagramId, params: { media_id: mediaId, accept: accept ? 'true' : 'false' },
       check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
       operation: 'partnership.collab', edge: 'collaboration_invites',
       doneSentence: () => `${label}: Meta took it.`,
@@ -934,7 +934,7 @@ async function fbPermissionDraft(chosen: MetaChosenAccount, request: Partnership
   const label = `${FB_WORDS[action]} ${plural(going.length, 'partner Page')} (${going.join(', ')}) for the chosen Page ${pageId}`
   const operation = `partnership.fb.${action}`
   const requests: MetaChangeRequest[] = going.length ? [{
-    step: 1, label, kind: 'page', objectId: pageId, params: { route, method: 'POST', body },
+    step: 1, label, kind: 'ad', objectKind: 'page', objectId: pageId, params: { route, method: 'POST', body },
     check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, operation,
     send: sendFbList({ operation, path: route, method: 'POST', body }, 'partner_page_id'),
     doneSentence: (result) => itemsSentence(label, result),
@@ -972,7 +972,7 @@ async function fbAllowlistDraft(chosen: MetaChosenAccount, request: PartnershipR
   const operation = 'partnership.fb.allowlistStatus'
   const query = { is_enabled: request.enabled ? 'true' : 'false' }
   const requests: MetaChangeRequest[] = status === wanted ? [] : [{
-    step: 1, label, kind: 'page', objectId: pageId, params: { route, method: 'PUT', ...query },
+    step: 1, label, kind: 'ad', objectKind: 'page', objectId: pageId, params: { route, method: 'PUT', ...query },
     check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, operation,
     send: async (target) => {
       const result = await metaSendRest(target, { operation, path: route, method: 'PUT', query })
@@ -1014,7 +1014,7 @@ async function fbCreatorsDraft(chosen: MetaChosenAccount, request: PartnershipRe
   const list = `[${going.join(',')}]`
   const call = add ? { operation, path: route, method: 'POST' as const, body: `{"creator_page_ids":${list}}` } : { operation, path: route, method: 'DELETE' as const, query: { creator_page_ids: list } }
   const requests: MetaChangeRequest[] = going.length ? [{
-    step: 1, label, kind: 'page', objectId: pageId, params: { route, method: call.method, ...(add ? { body: call.body! } : { creator_page_ids: list }) },
+    step: 1, label, kind: 'ad', objectKind: 'page', objectId: pageId, params: { route, method: call.method, ...(add ? { body: call.body! } : { creator_page_ids: list }) },
     check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, operation,
     send: sendFbList(call, 'creator_page_id'),
     doneSentence: (result) => itemsSentence(label, result),
@@ -1067,7 +1067,7 @@ async function fbUntagDraft(chosen: MetaChosenAccount, request: PartnershipReque
     ],
     spendsMoney: [], skipped: [],
     requests: [{
-      step: 1, label, kind: 'page', objectId: pageId, params: { route, method: 'DELETE', post_ids: list },
+      step: 1, label, kind: 'ad', objectKind: 'page', objectId: pageId, params: { route, method: 'DELETE', post_ids: list },
       check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, operation,
       send: sendFbList({ operation, path: route, method: 'DELETE', query: { post_ids: list } }, 'fb_post_id'),
       doneSentence: (result) => itemsSentence(label, result),

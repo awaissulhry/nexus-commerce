@@ -264,7 +264,7 @@ const metaAdsGraphRead: AgentTool = {
     path: z.string().trim().min(1).max(120).describe('act_<the chosen ad account>[/edge] or <a campaign, ad set, ad or creative id of it>[/edge]: e.g. act_1234567890/async_requests, act_1234567890/adimages, 120000000000001/insights'),
     fields: z.string().trim().min(1).max(800).optional().describe('Meta\'s field list, from that object\'s own list (e.g. id,name,status; spend,impressions; insights.date_preset(last_7d){spend}); default: a few of them'),
     params: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,40}$/), z.union([z.string().max(500), z.number(), z.boolean()])).optional()
-      .describe('other query parameters, only those Nexus sends on that path: insights → level, time_range, time_increment, filtering; act_<id>/campaigns | adsets | ads and <campaign or ad set id>/adsets | ads → effective_status; act_<id>/async_requests → status, type; never a token'),
+      .describe('other query parameters, only those Nexus sends on that path: insights → level, time_range, time_increment, filtering (each value checked; JSON in double quotes, e.g. time_range {"since":"2026-10-01","until":"2026-10-19"} — single quotes are refused); act_<id>/campaigns | adsets | ads and <campaign or ad set id>/adsets | ads → effective_status; act_<id>/async_requests → status, type; never a token'),
     limit: z.number().int().min(1).max(MAX_GRAPH_ROWS).optional().describe(`an edge: at most this many rows (default 100, at most ${MAX_GRAPH_ROWS})`),
     after: z.string().trim().min(1).max(500).optional().describe('the nextAfter of the answer before'),
     connectionId: connectionArg,

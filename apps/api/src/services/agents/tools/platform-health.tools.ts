@@ -58,7 +58,8 @@ const platformHealthChecks: AgentTool = {
     + 'terms and the other report feeds, Brand Analytics weeks and last night\'s report requests, Economics, Keyword Tracker search volume (Brand Analytics, weekly; organic/sponsored rank have no Amazon source)), '
     + 'whether ad writes really reached Amazon (applied, refused by the write gate, failed, stuck), approved plan steps '
     + 'skipped or failed by reason, ads rules held at the graduation gate only by the connection, automation at AUTO '
-    + 'that writes nothing, and the queue path. Each check: ok, warn, fail or unknown (could not measure — never ok), '
+    + 'that writes nothing, the queue path, and the Meta ads connection (token checked and not near its end, the daily read, '
+    + 'the ad account\'s status at Meta, Meta\'s throttles; details: meta-account-health). Each check: ok, warn, fail or unknown (could not measure — never ok), '
     + 'in plain words with its likely cause, next step and evidence, and since when it is not ok; plus the open '
     + 'watchdog alerts. Read it first in a daily run. A run older than 26 hours is stale (the watchdog itself did not '
     + 'run): live: true measures every check now, without storing or alerting. Read only.',

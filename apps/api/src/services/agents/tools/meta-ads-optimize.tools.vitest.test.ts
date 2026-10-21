@@ -124,7 +124,7 @@ describe('meta-recommendations', () => {
     expect(out).toMatchObject({ opportunityScore: 71.5, totalScoreLift: 10, scoreNotRead: null, itemsNotRead: null })
     expect(out.items[0]).toMatchObject({
       type: 'SCALE_GOOD_CAMPAIGN', signature: '1234567', opportunityScoreLift: 6, stageText: 'for campaigns, ad sets or ads that run now',
-      objects: [{ id: '120000000000201', kind: 'adset', name: 'Shop A adset 201' }], howToAct: { byApi: true, tool: 'apply-meta-recommendations', toolComesWith: 'a later Nexus step (step 28)', spendsMoney: 'yes' },
+      objects: [{ id: '120000000000201', kind: 'adset', name: 'Shop A adset 201' }], howToAct: { byApi: true, tool: 'apply-meta-recommendations', spendsMoney: 'yes' },
       // Review fix A6 — a budget recommendation's texts can name amounts: restricted.
       liftEstimate: null, body: null, moneyTextAsMeta: { liftEstimate: 'Up to 8% more purchases', body: 'Two ad sets deliver well' },
     })
@@ -434,7 +434,7 @@ describe('meta-ad-rules', () => {
   it('preview: Meta\'s preview is a POST with no read form — it comes with set-meta-ad-rule, and no call is made', async () => {
     const out = await data('meta-ad-rules', { view: 'preview', ruleId: '23850000000000001' })
     expect(out.sentence).toMatch(/POST request/)
-    expect(out.sentence).toMatch(/set-meta-ad-rule \(step 29\)/)
+    expect(out.sentence).toMatch(/set-meta-ad-rule sends it as part of its own preview/)
     expect(h.calls).toHaveLength(0)
   })
 })

@@ -35,14 +35,16 @@
  *           that (its change record says so; an image that was already there is never deleted): an image by its hash
  *           (DELETE /act_<id>/adimages hash, only while no creative uses it — M5-03), a video by its id (DELETE
  *           /act_<id>/advideos video_id — M5-09; review A1: only while no creative of the account uses it, read first; review
- *           B3: the library is read on advideos AND video_ads), a caption locale by `locales_to_delete`. Meta cannot put a
- *           removed file back: re-upload it.
+ *           B3: the library is read on advideos AND video_ads), a caption locale by `locales_to_delete`. Every removal goes
+ *           through step 22's rules (gateway meta-remove-rules.ts: image.delete, video.remove, captions.delete, which also
+ *           confirm a video by the chosen account's advideos list); only the default caption put back after a caption
+ *           locale came off is step 23's own call (video.captions.default). Meta cannot put a removed file back: re-upload it.
  *   captions MD-026 (review B1: "User has advertiser access on account that owns the video", docs/graph-api/reference/video/
  *           captions): an SRT text the person gives (UTF-8, at most 200 KB, SubRip's shape) and its locale, onto a video of the
  *           chosen account's library — POST /<video id>/captions with `captions_file` (`<name>.<locale>.srt`, a multipart
  *           file part the gateway itself encodes: MetaWriteRule.file) and `default_locale` (a locale or none). Meta takes a
  *           locale once (482), so an upload is always new; Meta has no DELETE there: its undo is `locales_to_delete` on the
- *           same edge, with the default put back when Nexus read it before (MD-027).
+ *           same edge, then the default put back by a call of its own when Nexus read it before (MD-027, MD-027d).
  * Plain answers (no call): MD-024 thumbnails only for a video associated with a Page ("Thumbnails can only be created on
  * Videos that have been associated with a Page"; it comes with step 24's Page step; a creative sets its video's thumbnail
  * itself), MD-029 Nexus holds no HTML5 playable files.
@@ -317,7 +319,7 @@ async function imageDraft(account: MetaChangeAccount, sources: ImageSource[]): P
     const label = `Upload image "${image.label}" (${image.source}; ${image.width}×${image.height}, ${Math.ceil(image.bytes / 1024)} KB) to ad account ${act}`
     byStep.set(i + 1, { source: image.source, label: image.label })
     return {
-      step: i + 1, label, kind: 'adaccount', objectId: act,
+      step: i + 1, label, kind: 'ad', objectKind: 'adaccount', objectId: act,
       // A custom sender (review A6): the plan holds the picture's sha256, never its Base64; the sender sends `bytes` = the
       // Base64 of exactly these bytes, made at send time.
       params: { bytes_sha256: image.sha256 },
@@ -534,12 +536,13 @@ async function videoDraft(account: MetaChangeAccount, video: VideoSource): Promi
     : `Upload video "${label}" (${source}) to ad account ${act}: Meta fetches it from ${host}${method === 'video_ads' ? ' through its video-ads upload (start, the link, finish)' : ''}`
   const swap = !!video.swapAudioAssetId
   const request: MetaChangeRequest = {
-    step: 1, label: stepLabel, kind: 'adaccount', objectId: act,
+    step: 1, label: stepLabel, kind: 'ad', objectKind: 'adaccount', objectId: act,
     // A custom sender: `params` are the keys its calls send (the plan Nexus compares) — for video_ads, the start's
     // upload_phase and the link the upload host gets as its file_url header (meta-media-rules.ts), then the finish.
     params,
     check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
-    operation: method === 'video_ads' ? 'media.videoAds' : 'media.videoUpload', edge: method === 'video_ads' ? 'video_ads' : 'advideos',
+    // Each edge spelled as it is (step 21's rule: no request builder computes its edge).
+    ...(method === 'video_ads' ? { operation: 'media.videoAds', edge: 'video_ads' as const } : { operation: 'media.videoUpload', edge: 'advideos' as const }),
     send: method === 'video_ads' ? sendVideoAds(act, url!) : sendAdVideo(act, params, swap),
     doneSentence: (result) => `${stepLabel}: Meta made it; video ${String(result.node?.videoId ?? '?')}, ${String(result.node?.statusText ?? '')}${result.node?.replaceAudioStatus ? `; music swap: ${String(result.node.replaceAudioStatus)}` : ''}; ${newWords(result.node?.new)}.`,
   }
@@ -585,11 +588,11 @@ async function folderDraft(account: MetaChangeAccount, folder: NonNullable<Media
   const label = `Create folder "${name}"${parent ? ` inside folder ${parent}` : ''} in the business portfolio's media library`
   const params: Record<string, string> = { name, ...(folder.description?.trim() ? { description: folder.description.trim() } : {}), ...(parent ? { parent_folder_id: parent } : {}) }
   const request: MetaChangeRequest = {
-    step: 1, label, kind: 'portfolio', objectId: portfolio, params,
+    step: 1, label, kind: 'ad', objectKind: 'business', objectId: portfolio, params,
     check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
     operation: 'media.folderCreate', edge: 'creative_folders',
     send: async (target) => {
-      const result = await metaSendChange(target, { objectId: portfolio, kind: 'portfolio', params, operation: 'media.folderCreate', edge: 'creative_folders', readBackFields: 'id,name,creation_time' })
+      const result = await metaSendChange(target, { objectId: portfolio, kind: 'business', params, operation: 'media.folderCreate', edge: 'creative_folders', readBackFields: 'id,name,creation_time' })
       const id = result.node && (typeof result.node.id === 'string' || typeof result.node.id === 'number') ? String(result.node.id) : null
       if (!id) throw new MetaWriteError(localFailure(`Meta answered the folder without an id, so Nexus cannot say what it made. ${META_UNKNOWN_OUTCOME}`, 'NO_FOLDER_ID'), 'media.folderCreate', 'unknown')
       return { node: { folderId: id, name: typeof result.node?.name === 'string' ? result.node.name : name }, readBack: result.readBack, waitedMs: result.waitedMs }
@@ -699,7 +702,7 @@ async function captionsDraft(account: MetaChangeAccount, captions: CaptionsSourc
   const label = `Add ${locale} captions (${fileName}, ${Math.ceil(Buffer.byteLength(srt, 'utf8') / 1024)} KB) to video ${videoId} of ad account act_${account.adAccountId}${setDefault ? `; default caption: ${setDefault}` : ''}`
   const params: Record<string, string> = { captions_file: srt, captions_file_name: fileName, ...(setDefault ? { default_locale: setDefault } : {}) }
   const request: MetaChangeRequest = {
-    step: 1, label, kind: 'libraryvideo', objectId: videoId, params,
+    step: 1, label, kind: 'ad', objectKind: 'video', objectId: videoId, params,
     check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
     operation: 'media.captionsUpload', edge: 'captions',
     doneSentence: () => `${label}: Meta took it.`,
@@ -806,10 +809,11 @@ async function undoDraft(account: MetaChangeAccount, uploads: UploadRef[]): Prom
   if (!going.length) return { refusal: `Nothing to take back: ${skipped.join(' ')}` }
   const requests: MetaChangeRequest[] = going.map((upload, i) => {
     if (upload.kind === 'captions') {
-      const label = `Take the ${upload.locale} captions (added by Nexus) off video ${upload.videoId} of ad account ${act}${upload.restoreDefault ? `; default caption back to ${upload.restoreDefault}` : ''}`
+      const label = `Take the ${upload.locale} captions (added by Nexus) off video ${upload.videoId} of ad account ${act}`
+      // Step 22's captions.delete: the language alone (its default caption goes back in a request of its own, below).
       return {
-        step: i + 1, label, kind: 'libraryvideo', objectId: upload.videoId,
-        params: { locales_to_delete: JSON.stringify([upload.locale]), ...(upload.restoreDefault ? { default_locale: upload.restoreDefault } : {}) },
+        step: i + 1, label, kind: 'ad', objectKind: 'video', objectId: upload.videoId,
+        params: { locales_to_delete: JSON.stringify([upload.locale]) },
         check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
         operation: 'media.captionsRemove', edge: 'captions',
         doneSentence: () => `${label}: Meta took it.`,
@@ -817,12 +821,24 @@ async function undoDraft(account: MetaChangeAccount, uploads: UploadRef[]): Prom
     }
     const label = upload.kind === 'image' ? `Remove image ${upload.hash} (uploaded new by Nexus) from ad account ${act}` : `Remove video ${upload.videoId} (uploaded by Nexus) from ad account ${act}`
     return {
-      step: i + 1, label, kind: 'adaccount', objectId: act,
+      step: i + 1, label, kind: 'ad', objectKind: 'adaccount', objectId: act,
       params: upload.kind === 'image' ? { hash: upload.hash } : { video_id: upload.videoId },
       check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
-      operation: upload.kind === 'image' ? 'media.imageRemove' : 'media.videoRemove', edge: upload.kind === 'image' ? 'adimages' : 'advideos', method: 'DELETE',
+      ...(upload.kind === 'image' ? { operation: 'media.imageRemove', edge: 'adimages' as const } : { operation: 'media.videoRemove', edge: 'advideos' as const }), method: 'DELETE',
       doneSentence: () => `${label}: Meta removed it.`,
     }
+  })
+  // The default caption an upload replaced goes back only after its language came off (step 22's needs), last.
+  going.forEach((upload, i) => {
+    if (upload.kind !== 'captions' || !upload.restoreDefault) return
+    const label = `Put the default caption of video ${upload.videoId} back to ${upload.restoreDefault}`
+    requests.push({
+      step: requests.length + 1, label, kind: 'ad', objectKind: 'video', objectId: upload.videoId,
+      params: { default_locale: upload.restoreDefault },
+      check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false,
+      operation: 'media.captionsDefault', edge: 'captions', needs: [i + 1],
+      doneSentence: () => `${label}: Meta took it.`,
+    })
   })
   const lineOf = (u: UploadRef): [string, unknown, unknown] => (u.kind === 'captions' ? [`Video ${u.videoId} ${u.locale} captions`, 'on the video', 'taken off'] : [u.kind === 'image' ? `Image ${u.hash}` : `Video ${u.videoId}`, 'in the ad account\'s library', 'removed'])
   return {

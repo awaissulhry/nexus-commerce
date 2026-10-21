@@ -144,3 +144,38 @@ describe('a change', () => {
     expect(h.writes).toHaveLength(0)
   })
 })
+
+describe('step 39 — a change judged by its own read-back, a DELETE with keys, the one file', () => {
+  const judge = (node: Record<string, unknown>) => {
+    const listed = Array.isArray(node.data) ? (node.data as Array<{ id: string }>).map((r) => r.id) : []
+    return { moved: listed.includes('5550000002') ? [] : ['its shares'], reads: `its shares ${listed.join(',') || 'none'}` }
+  }
+  const share = { objectId: '120000000000601', kind: 'publisherblocklist' as const, params: { agency_id: '5550000002', permitted_roles: '["APPLY_BLOCK_LIST"]' }, operation: 'blockList.share', edge: 'agencies' as const, readBackOf: '120000000000601/agencies', readBackFields: 'id', judge }
+  it('success: one GET of what it names (never the answer), handed back for the judge', async () => {
+    h.answers.push(answer(200, { success: true }))
+    h.readAnswer = { data: [{ id: '5550000002' }] }
+    expect(await metaSendChange(target, share)).toEqual({ node: { data: [{ id: '5550000002' }] }, readBack: 'second-read', waitedMs: 0 })
+    expect(h.writes[0]).toMatchObject({ objectId: '120000000000601', objectKind: 'publisherblocklist', edge: 'agencies', params: share.params })
+    expect(h.reads).toEqual([{ operation: 'blockList.share.readBack', path: '120000000000601/agencies', query: { fields: 'id' } }])
+  })
+  it('an error answer: the read-back decides — as asked = made; not as asked = refused, in its own words', async () => {
+    h.answers.push(metaError(400, '100', 'validation', 'Already shared'))
+    h.readAnswer = { data: [{ id: '5550000002' }] }
+    expect(await metaSendChange(target, share)).toMatchObject({ afterError: expect.stringMatching(/Already shared/) })
+    h.answers.push(metaError(400, '100', 'validation', 'Invalid parameter'))
+    h.readAnswer = { data: [] }
+    expect(await outcomeOf(metaSendChange(target, share))).toMatchObject({ outcome: 'refused', message: expect.stringMatching(/Invalid parameter.*it reads its shares none/) })
+  })
+  it('a DELETE with keys and the file (as its form keys) pass through as asked; a DELETE answered with an error (no judge) made nothing', async () => {
+    h.answers.push(answer(200, { success: true }))
+    await metaSendChange(target, { objectId: '120000000000601', kind: 'publisherblocklist', params: { agency_id: '5550000002' }, operation: 'blockList.unshare', edge: 'agencies', method: 'DELETE' })
+    expect(h.writes[0]).toMatchObject({ method: 'DELETE', edge: 'agencies', params: { agency_id: '5550000002' } })
+    h.answers.push(answer(200, { id: '120000000000801' }))
+    h.readAnswer = { id: '120000000000801', async_job_status: 'scheduled' }
+    const draft = await metaSendChange(target, { objectId: '9876543210', kind: 'business', params: { publisher_urls_file: 'example.com', publisher_urls_file_name: 'publisher_urls.txt' }, operation: 'blockList.draft', edge: 'block_list_drafts', readBackFields: 'id,async_job_status' })
+    expect(h.writes[1]).toMatchObject({ edge: 'block_list_drafts', params: { publisher_urls_file: 'example.com', publisher_urls_file_name: 'publisher_urls.txt' } })
+    expect(draft.node).toEqual({ id: '120000000000801', async_job_status: 'scheduled' })
+    h.answers.push(metaError(400, '100', 'validation', 'Cannot delete'))
+    expect(await outcomeOf(metaSendChange(target, { objectId: '120000000000601', kind: 'publisherblocklist', params: {}, operation: 'blockList.delete', method: 'DELETE' }))).toMatchObject({ outcome: 'refused' })
+  })
+})

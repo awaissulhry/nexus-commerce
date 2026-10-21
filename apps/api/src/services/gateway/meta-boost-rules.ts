@@ -14,7 +14,8 @@
  *   igmedia.adCode.remove          DELETE /<media id>/partnership_ad_code           no parameter (CR-364)
  *   iguser.collab.respond          POST   /<ig id>/collaboration_invites            media_id + accept (MD-132)
  *
- * The object each names is checked by the gateway before anything is sent (gateway.ts metaInstagramOwnerProblem): `<ig id>`
+ * The object each names is checked by the gateway before anything is sent (gateway.ts metaInstagramOwnerProblem; the ad account
+ * of a video copy by step 19's `adaccount` check): `<ig id>`
  * IS the business's chosen Instagram account, `<media id>` is a media of it. Every id inside the body: a creator (never the
  * chosen account itself, never an Instagram account another Nexus business chose — `partnerinstagram`), a Collab invite the
  * chosen account has pending (`collabinvite`), a creator's ad code whose content Meta's content discovery lists for the brand,
@@ -33,7 +34,7 @@
  *   POST   partnership-ads/fb-branded-content/<page>/brand-allowlisted-creators   {"creator_page_ids":[N, …]}
  *   DELETE partnership-ads/fb-branded-content/<page>/brand-allowlisted-creators?creator_page_ids=[N, …]   (no body)
  *   DELETE partnership-ads/fb-branded-content/<page>/branded-content-posts?post_ids=[N, …]   (no body)
- * <page> IS the business's chosen Page (kind `page`); each partner / creator Page is no other Nexus business's and never the
+ * <page> IS the business's chosen Page (kind `page`: step 28's check); each partner / creator Page is no other Nexus business's and never the
  * chosen Page (`partnerpage`); each post is one Meta lists among the branded-content posts that tag the chosen Page, by a
  * creator no other Nexus business uses (`brandedpost`). The token is the account's system-user token as `Authorization:
  * Bearer`, with `X-API-Version: 1.0.0` (the gateway sets both; no caller header) — "All endpoints require an Authorization:

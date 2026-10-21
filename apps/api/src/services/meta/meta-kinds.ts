@@ -17,8 +17,10 @@
  *   creative        object_type + status               (no other node above has object_type)
  *   customaudience  subtype + time_created             (a saved audience has time_created but no subtype)
  *   placepageset    parent_page + pages_count          (only an ad place page set has them)
+ *   reportrun       async_status + async_percent_completion  (step 7: an AdReportRun, SDK adreportrun.py; Meta's
+ *                                                       insights best-practices page shows both on every run)
  */
-export type MetaObjectKind = 'campaign' | 'adset' | 'ad' | 'creative' | 'customaudience' | 'placepageset'
+export type MetaObjectKind = 'campaign' | 'adset' | 'ad' | 'creative' | 'customaudience' | 'placepageset' | 'reportrun'
 
 export const META_KIND_FIELDS: Readonly<Record<MetaObjectKind, readonly [string, string]>> = {
   campaign: ['objective', 'effective_status'],
@@ -27,10 +29,12 @@ export const META_KIND_FIELDS: Readonly<Record<MetaObjectKind, readonly [string,
   creative: ['object_type', 'status'],
   customaudience: ['subtype', 'time_created'],
   placepageset: ['parent_page', 'pages_count'],
+  reportrun: ['async_status', 'async_percent_completion'],
 }
 
 export const META_KIND_WORDS: Readonly<Record<MetaObjectKind, string>> = {
   campaign: 'campaign', adset: 'ad set', ad: 'ad', creative: 'creative', customaudience: 'custom audience', placepageset: 'place page set',
+  reportrun: 'report run',
 }
 
 /** "a campaign", "an ad set". */

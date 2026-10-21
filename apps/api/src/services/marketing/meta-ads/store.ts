@@ -136,6 +136,12 @@ export async function recordSyncOutcome(adAccountId: string, outcome: MetaSyncOu
   return account
 }
 
+/** Step 30 — a webhook's structure re-read (kind WEBHOOK): only structureSyncedAt moves. */
+export async function recordStructureRead(adAccountId: string, at: Date | null): Promise<void> {
+  if (!at) return
+  await prisma.metaAdAccount.update({ where: { meta_ad_account: workspaceKey({ adAccountId }) }, data: { structureSyncedAt: at } })
+}
+
 // ── read state per step ──────────────────────────────────────────────────────────────────────────────────────────
 
 export async function getReadStates(adAccountId: string) {
@@ -294,12 +300,9 @@ export async function replaceDailyMetrics(adAccountId: string, entityType: MetaA
  * their children's effective status ("CAMPAIGN_PAUSED") follows at the next daily read. Never throws: a change that ran
  * is never failed by its bookkeeping.
  */
-export async function recordStatusReadBack(adAccountId: string, items: ReadonlyArray<{ kind: 'campaign' | 'adset' | 'ad' | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative' | 'iguser' | 'igmedia' | 'page'; id: string; status: string; effectiveStatus: string | null }>): Promise<number> {
+export async function recordStatusReadBack(adAccountId: string, items: ReadonlyArray<{ kind: 'campaign' | 'adset' | 'ad'; id: string; status: string; effectiveStatus: string | null }>): Promise<number> {
   let rows = 0
   for (const item of items) {
-    // Step 23 — a change request may name an edge (an upload, a video's captions): no stored status row of its own (step 25:
-    // nor a creative; step 26: nor an Instagram account or media).
-    if (item.kind !== 'campaign' && item.kind !== 'adset' && item.kind !== 'ad') continue
     const data = { status: item.status, ...(item.effectiveStatus ? { effectiveStatus: item.effectiveStatus } : {}) }
     try {
       const done = item.kind === 'campaign'

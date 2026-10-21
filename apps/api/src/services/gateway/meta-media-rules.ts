@@ -1,17 +1,19 @@
 /**
  * Meta step 23 (2026-10-21) — the write allow-list entries of create-meta-media: an image's bytes, a video by a public
  * link or from the chosen Instagram account, Meta's resumable video-ads upload (start, the file's link on Meta's upload
- * host, finish), a folder in the business portfolio's media library, and the undo of an upload (an image by its hash, a
- * video by its id). EXACT keys per edge and every value judged: the image bytes strict Base64 of a JPG or PNG of at most
- * 8 MB, a link https only to a public host with no key or signature on it, ids digits only, JSON in one spelling, text
- * only where a person types it (a name, a title, a description). Step 22 (lane C1, remove-meta-ads-items) reuses the two
- * DELETE rules below for an explicit delete of an image or a video.
+ * host, finish), a folder in the business portfolio's media library, captions on a video of the library, and a video's
+ * default caption (what the undo of captions puts back). EXACT keys per edge and every value judged: the image bytes strict
+ * Base64 of a JPG or PNG of at most 8 MB, a link https only to a public host with no key or signature on it, ids digits
+ * only, JSON in one spelling, text only where a person types it (a name, a title, a description). The undo of an upload
+ * sends through step 22's rules (meta-remove-rules.ts: an image by its hash, a video by its video_id, a caption language by
+ * locales_to_delete); only the default caption it puts back is this file's (video.captions.default).
  *
  * The object a call names (its kind) and every id in its body are checked by the gateway before anything is sent
- * (gateway.ts metaMediaOwnerProblem / metaMediaAssetsProblem): `act_<id>` IS the business's chosen ad account; the
- * portfolio IS the chosen ad account's own and is not shared with another Nexus business; an Instagram media is the chosen
- * Instagram account's; a folder is the portfolio's; a video on the upload host or in a finish is one THIS connection
- * started on the chosen ad account (noteMetaVideoStarted, below).
+ * (gateway.ts metaOwnerProblem, metaFolderPortfolioProblem, metaStartedVideoProblem / metaMediaAssetsProblem): `act_<id>`
+ * IS the business's chosen ad account (step 19's `adaccount`); a video of the library is listed there (step 22's `video`);
+ * the portfolio IS the chosen ad account's own (step 28's `business`) and is not shared with another Nexus business; an Instagram media is the chosen Instagram account's; a
+ * folder is the portfolio's; a video on the upload host or in a finish is one THIS connection started on the chosen ad
+ * account (`startedvideo`: noteMetaVideoStarted, below).
  *
  * Checked 2026-10-21 (curl ≥ 3 s apart, developers.facebook.com/documentation/ads-commerce/marketing-api/…`.md`, and
  * Meta's Python Business SDK main, facebook_business/adobjects/*.py):
@@ -45,7 +47,7 @@
  *     operation on this endpoint" — a folder Nexus makes stays (no undo). Built from the SDK; Meta's answer decides
  *     (LIVE-PROBES BM-058).
  */
-import type { MetaMediaWriteKind, MetaWriteRule, MetaWriteVerdict } from './meta-calls.js'
+import type { MetaWriteKind, MetaWriteRule, MetaWriteVerdict } from './meta-calls.js'
 import { metaGraphApiVersion } from '../meta/api-version.js'
 
 /** Meta's resumable upload host (guides/videoads/fbvideoads.md, step 2). */
@@ -125,10 +127,9 @@ export function metaFileUrlProblem(value: string): string | null {
 }
 
 /**
- * Step 25 — step 23's link rule, named for any key (a creative's link, a picture Meta fetches, a display link): one
- * spelling (the URL parser's), https, a public host by its name, no user, password, port or #fragment, no key, signature or
- * sign-in in its query, at most `max` characters (Meta: a creative's URL "≤1000"). `example` hosts are refused too (a
- * made-up link never reaches Meta).
+ * Step 25 — this link rule, named for any key (a creative's link, a picture Meta fetches, a display link): one spelling
+ * (the URL parser's), https, a public host by its name, no user, password, port or #fragment, no key, signature or sign-in
+ * in its query, at most `max` characters (Meta: a creative's URL "≤1000"). `example` hosts are refused too.
  */
 export function metaPublicLinkProblem(value: string, what: string, max: number): string | null {
   if (!value || value.length > max) return `${what} is a link of at most ${max} characters`
@@ -225,27 +226,15 @@ const audioSpec: Judge = (value) => {
   }
 }
 
-/** An image hash as Meta writes it (hex letters and digits; step 10's reads take the same). */
-const hashJudge: Judge = (value) => (/^[A-Za-z0-9]{1,64}$/.test(value) ? null : 'hash is an image hash (letters and digits)')
-
-const ACCOUNT: readonly MetaMediaWriteKind[] = ['adaccount']
-const PORTFOLIO: readonly MetaMediaWriteKind[] = ['portfolio']
-const LIBRARY_VIDEO: readonly MetaMediaWriteKind[] = ['libraryvideo']
+// Step 19's `adaccount` (the chosen ad account itself), step 28's `business` (its portfolio), step 22's `video` (a video of
+// the library).
+const ACCOUNT: readonly MetaWriteKind[] = ['adaccount']
+const PORTFOLIO: readonly MetaWriteKind[] = ['business']
+const LIBRARY_VIDEO: readonly MetaWriteKind[] = ['video']
 const VIDEO_TEXT = { name: META_MEDIA_TEXT_PATTERN, title: META_MEDIA_TEXT_PATTERN, description: META_MEDIA_TEXT_PATTERN }
 const videoText = { name: textOf(META_MEDIA_TEXT.name, 'name'), title: textOf(META_MEDIA_TEXT.title, 'title', 'bytes'), description: textOf(META_MEDIA_TEXT.description, 'description') }
 /** `default_locale`: a locale, or `none` (no default caption). */
 const defaultLocale: Judge = (value) => (value === 'none' || META_LOCALE.test(value) ? null : 'default_locale is a locale (it_IT) or none')
-/** `locales_to_delete` in Nexus's one spelling: a JSON list of 1 to 5 locales, each once. */
-const localesToDelete: Judge = (value) => {
-  try {
-    const parsed: unknown = JSON.parse(value)
-    if (JSON.stringify(parsed) !== value || !Array.isArray(parsed) || !parsed.length || parsed.length > 5) throw new Error('shape')
-    if (!parsed.every((l) => typeof l === 'string' && META_LOCALE.test(l)) || new Set(parsed).size !== parsed.length) throw new Error('shape')
-    return null
-  } catch {
-    return 'locales_to_delete is a JSON list of 1 to 5 locales, each once (["it_IT"])'
-  }
-}
 
 /** Step 23 — create-meta-media's entries of the write allow-list (meta-calls.ts writeRules). */
 export const META_MEDIA_WRITE_RULES: readonly MetaWriteRule[] = [
@@ -289,20 +278,6 @@ export const META_MEDIA_WRITE_RULES: readonly MetaWriteRule[] = [
     assets: (params) => (params.has('parent_folder_id') ? [{ id: params.get('parent_folder_id')!, kind: 'creativefolder' }] : []),
   },
   {
-    // M5-03 / MD-007: an image out of the chosen ad account's library (create-meta-media's undo; step 22 reuses it).
-    name: 'adaccount.image.remove', method: 'DELETE', path: /^act_\d{1,20}\/adimages$/, kinds: ACCOUNT,
-    required: ['hash'], optional: [], edgeCall: true, budget: false,
-    values: judged({ hash: hashJudge }),
-  },
-  {
-    // M5-09 / MD-019: a video out of the chosen ad account's library (create-meta-media's undo; step 22 reuses it). Review
-    // A2 — the video_id must be in the chosen account's library (the gateway reads it): step 22 has only this guard.
-    name: 'adaccount.video.remove', method: 'DELETE', path: /^act_\d{1,20}\/advideos$/, kinds: ACCOUNT,
-    required: ['video_id'], optional: [], edgeCall: true, budget: false,
-    values: judged({ video_id: digits('video_id') }),
-    assets: (params) => [{ id: params.get('video_id')!, kind: 'libraryvideo' }],
-  },
-  {
     // MD-026: an SRT caption file onto a video of the chosen account's library. The gateway itself sends `captions_file` as
     // a multipart file part named by `captions_file_name` (MetaWriteRule.file); every other key is a plain field. Lane C4
     // (step 39, Q8: a feed's CSV, a block list) can reuse the same `file` field for its own rule.
@@ -316,11 +291,12 @@ export const META_MEDIA_WRITE_RULES: readonly MetaWriteRule[] = [
     }),
   },
   {
-    // MD-027 (the undo of MD-026): a caption locale taken off a video of the chosen account's library — Meta has no DELETE
-    // on the captions edge; `locales_to_delete` on the same POST is its way (and `default_locale` puts a default back).
-    name: 'video.captions.remove', method: 'POST', path: /^\d{1,20}\/captions$/, kinds: LIBRARY_VIDEO,
-    required: ['locales_to_delete'], optional: ['default_locale'], edgeCall: true, budget: false,
-    values: judged({ locales_to_delete: localesToDelete, default_locale: defaultLocale }),
+    // The undo of MD-026 takes the caption language off with step 22's captions.delete (locales_to_delete alone); when the
+    // upload had set the default caption, the undo then puts the one before it back with this call alone (step 22's rule
+    // takes no default_locale). Meta lists default_locale among the edge's own parameters; alone: LIVE-PROBES MD-027d.
+    name: 'video.captions.default', method: 'POST', path: /^\d{1,20}\/captions$/, kinds: LIBRARY_VIDEO,
+    required: ['default_locale'], optional: [], edgeCall: true, budget: false,
+    values: judged({ default_locale: defaultLocale }),
   },
 ]
 
@@ -352,7 +328,7 @@ export function metaRuploadSendUrl(url: string, proof: { appsecret_proof: string
 /**
  * The verdict on a call to Meta's upload host, or null when the call is not for that host. Exactly POST
  * `https://rupload.facebook.com/video-ads-upload/<pinned version>/<video id>` with nothing else on the address, declared
- * a write of kind `video` with the account's own token, no header of the caller's own, and a form body of ONE key,
+ * a write of kind `startedvideo` with the account's own token, no header of the caller's own, and a form body of ONE key,
  * `file_url` (judged like advideos' link): the gateway sends it as Meta's `file_url` header, adds `Authorization: OAuth
  * <token>` itself and sends no body — no video byte travels through Nexus. The video must be one THIS connection started on
  * the chosen ad account (the gateway checks it before anything is sent).
@@ -366,13 +342,13 @@ export function metaRuploadVerdict(input: { method: string; url: string; kind: s
   if (!route) return refuse(`Nexus sends Meta's upload host only https://${META_RUPLOAD_HOST}/video-ads-upload/${metaGraphApiVersion()}/<video id>, with nothing else on the address`)
   if (input.method.toUpperCase() !== 'POST') return refuse('Meta\'s upload host takes a POST only from Nexus')
   if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
-  if (input.objectKind !== 'video') return refuse('a call to Meta\'s upload host names the video upload it is for (kind video)')
+  if (input.objectKind !== 'startedvideo') return refuse('a call to Meta\'s upload host names the video upload it is for (kind startedvideo)')
   if (typeof input.body !== 'string' || !input.body) return refuse('a call to Meta\'s upload host carries the video\'s link as file_url')
   const params = [...new URLSearchParams(input.body)]
   if (params.length !== 1 || params[0][0] !== 'file_url') return refuse('a call to Meta\'s upload host carries exactly one key, file_url: Nexus sends no video bytes')
   const problem = metaFileUrlProblem(params[0][1])
   if (problem) return refuse(problem)
-  return { write: { rule: 'video.rupload', objectId: route[1], check: false, body: '', budget: false, kinds: ['video'], edgeCall: true, host: 'rupload', headers: { file_url: params[0][1] } } }
+  return { write: { rule: 'video.rupload', objectId: route[1], check: false, body: '', budget: false, kinds: ['startedvideo'], edgeCall: true, host: 'rupload', headers: { file_url: params[0][1] } } }
 }
 
 // ── the video uploads THIS connection started (MD-015 → MD-016 / MD-017) ────────────────────────────────────────────

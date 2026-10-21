@@ -467,7 +467,7 @@ describe('set-meta-partnership-access', () => {
     expect(r.change.before.pages).toEqual([{ pageId: A, listed: false }])
     expect(access.undo!.request(r.change)).toMatchObject({ args: { action: 'facebook-disallow-creators', pages: [A] } })
     // Review round 2 — an id with a leading 0 is not an id (it would pass "not the chosen one" while Meta reads the same id).
-    for (const args of [{ action: 'facebook-request', pages: [`0${PAGE}`] }, { action: 'facebook-untag', postIds: ['0505613696297499'] }, { action: 'request', creators: [{ instagramId: `0${IG}` }] }, { action: 'delete-ad-code', mediaId: `0${MEDIA}` }]) {
+    for (const args of [{ action: 'facebook-request', pages: [`0${PAGE}`] }, { action: 'facebook-untag', postIds: ['0500000000000099'] }, { action: 'request', creators: [{ instagramId: `0${IG}` }] }, { action: 'delete-ad-code', mediaId: `0${MEDIA}` }]) {
       expect(access.input.safeParse(args).success, JSON.stringify(args)).toBe(false)
     }
     expect(boost.input.safeParse({ name: 'B', source: 'facebook-post', postId: `0${POST}` }).success).toBe(false)
@@ -478,10 +478,10 @@ describe('set-meta-partnership-access', () => {
     const CREATOR = '120000000000557'
     h.partners.mockImplementation(async (input: { view: string }) => {
       if (input.view === 'allowlist') return { allowlistStatus: 'DISABLED', creators: [{ creatorPageId: '120000000000558' }] }
-      if (input.view === 'tagged-posts') return { items: [{ postId: '505613696297499', creatorPageId: CREATOR, creatorPageName: 'Creator One' }] }
+      if (input.view === 'tagged-posts') return { items: [{ postId: '500000000000099', creatorPageId: CREATOR, creatorPageName: 'Creator One' }] }
       return { items: [] }
     })
-    h.rest.mockImplementation(async (_t: unknown, call: { method: string }) => ({ node: call.method === 'PUT' ? { allowlist_status: 'ENABLED' } : { items: [{ creator_page_id: CREATOR, fb_post_id: '505613696297499', status_code: 200 }] }, readBack: 'same-request', waitedMs: 0 }))
+    h.rest.mockImplementation(async (_t: unknown, call: { method: string }) => ({ node: call.method === 'PUT' ? { allowlist_status: 'ENABLED' } : { items: [{ creator_page_id: CREATOR, fb_post_id: '500000000000099', status_code: 200 }] }, readBack: 'same-request', waitedMs: 0 }))
     const on = await run({ action: 'facebook-allowlist', enabled: true }, access)
     expect(h.rest.mock.calls[0][1]).toMatchObject({ method: 'PUT', path: `partnership-ads/fb-branded-content/${PAGE}/brand-allowlist-status`, query: { is_enabled: 'true' } })
     expect(on.data.steps[0].sentence).toMatch(/reads it ENABLED/)
@@ -495,15 +495,15 @@ describe('set-meta-partnership-access', () => {
     await run({ action: 'facebook-disallow-creators', pages: ['120000000000558'] }, access)
     expect(h.rest.mock.calls[0][1]).toMatchObject({ method: 'DELETE', query: { creator_page_ids: '[120000000000558]' } })
     h.rest.mockClear()
-    const untag = await run({ action: 'facebook-untag', postIds: ['505613696297499'] }, access)
-    expect(h.rest.mock.calls[0][1]).toMatchObject({ method: 'DELETE', path: `partnership-ads/fb-branded-content/${PAGE}/branded-content-posts`, query: { post_ids: '[505613696297499]' } })
+    const untag = await run({ action: 'facebook-untag', postIds: ['500000000000099'] }, access)
+    expect(h.rest.mock.calls[0][1]).toMatchObject({ method: 'DELETE', path: `partnership-ads/fb-branded-content/${PAGE}/branded-content-posts`, query: { post_ids: '[500000000000099]' } })
     expect(access.undo!.request(untag.change)).toMatchObject({ refusal: expect.stringMatching(/only the creator can tag the Page again/) })
-    expect(await refusal({ action: 'facebook-untag', postIds: ['505613696297400'] }, access)).toMatch(/not among the branded-content posts/)
+    expect(await refusal({ action: 'facebook-untag', postIds: ['500000000000098'] }, access)).toMatch(/not among the branded-content posts/)
     // Round 2 — a post whose creator Page Meta does not name is refused (Nexus cannot tell whose it is).
-    h.partners.mockImplementation(async (input: { view: string }) => (input.view === 'tagged-posts' ? { items: [{ postId: '505613696297499' }] } : { items: [] }))
-    expect(await refusal({ action: 'facebook-untag', postIds: ['505613696297499'] }, access)).toMatch(/names no creator Page/)
-    h.partners.mockImplementation(async (input: { view: string }) => (input.view === 'tagged-posts' ? { items: [{ postId: '505613696297499', creatorPageId: CREATOR, takenByAnotherBusiness: true }] } : { items: [] }))
-    expect(await refusal({ action: 'facebook-untag', postIds: ['505613696297499'] }, access)).toMatch(/another business in Nexus uses/)
+    h.partners.mockImplementation(async (input: { view: string }) => (input.view === 'tagged-posts' ? { items: [{ postId: '500000000000099' }] } : { items: [] }))
+    expect(await refusal({ action: 'facebook-untag', postIds: ['500000000000099'] }, access)).toMatch(/names no creator Page/)
+    h.partners.mockImplementation(async (input: { view: string }) => (input.view === 'tagged-posts' ? { items: [{ postId: '500000000000099', creatorPageId: CREATOR, takenByAnotherBusiness: true }] } : { items: [] }))
+    expect(await refusal({ action: 'facebook-untag', postIds: ['500000000000099'] }, access)).toMatch(/another business in Nexus uses/)
     h.partners.mockImplementation(async () => ({ allowlistStatusNotRead: 'Meta: (#200) Permissions error' }))
     expect(await refusal({ action: 'facebook-allowlist', enabled: true }, access)).toMatch(/could not read the allowlist status first.*Permissions error/)
   })

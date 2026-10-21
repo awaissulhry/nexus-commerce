@@ -25,6 +25,7 @@ import { adminRoutes } from "./routes/admin.js";
 import { monitoringRoutes } from "./routes/monitoring.js";
 import { shopifyWebhookRoutes } from "./routes/shopify-webhooks.js";
 import etsyWebhookRoutes from "./routes/etsy-webhooks.routes.js";
+import metaWebhookRoutes from "./routes/meta-webhooks.routes.js";
 import { estyRoutes } from "./routes/etsy.js";
 import { syncRoutes } from "./routes/sync.routes.js";
 import { ebayAuthRoutes } from "./routes/ebay-auth.js";
@@ -593,6 +594,9 @@ app.register(shopifyWebhookRoutes);
 // Nexus by any path. Etsy configures webhooks in its portal, not by API, so nothing
 // arrives until the Owner points it here and sets ETSY_WEBHOOK_SIGNING_SECRET.
 app.register(etsyWebhookRoutes);
+// Meta ads step 30 — Meta's webhook receiver (/webhooks/meta/<app id>): signature on the raw bytes with the business's
+// own app secret, then the inbound ledger. Nothing arrives until the Owner subscribes the app (set-meta-webhooks).
+app.register(metaWebhookRoutes);
 app.register(estyRoutes);
 app.register(syncRoutes, { prefix: '/api' });
 app.register(ebayAuthRoutes);
