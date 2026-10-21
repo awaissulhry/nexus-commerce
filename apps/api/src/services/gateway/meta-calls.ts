@@ -48,6 +48,7 @@ import { createHmac } from 'node:crypto'
 import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
 import { META_SETTINGS_WRITE_RULES } from './meta-settings-rules.js'
+import { META_OPTIMIZE_WRITE_RULES } from './meta-optimize-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -308,6 +309,9 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/cpas_events_debugging_info$/, keys: new Set(['action_source']) },
   { route: /^\d+\/extractors$/, keys: new Set(['current_domain']) },
   { route: /^\d+\/offline_event_uploads$/, keys: new Set(['start_time', 'end_time', 'sort_by', 'order', 'upload_tag']) },
+  // Step 28 — who has a role on the chosen ad account (a study is shared only with them: meta-optimize-owner.ts); Meta's
+  // ad-account/assigned_users requires the business it is asked in.
+  { route: /^act_\d+\/assigned_users$/, keys: new Set(['business']) },
 ]
 /** Step 14 review A2 — the key's value is one of these. */
 function valueIn(key: string, values: readonly string[]): (query: URLSearchParams) => boolean {
@@ -757,8 +761,16 @@ export interface MetaWriteRule {
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
 export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  // Step 28 — an apply's ad account (act_<id>/recommendations), a new study's portfolio, a study, a Page, a Page video test.
+  | 'adaccount' | 'business' | 'adstudy' | 'page' | 'pagevideotest'
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
-export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' }
+export interface MetaWriteBodyId {
+  id: string
+  kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset'
+    // Step 28 — a campaign (a budget raise), an ad set or ad (a recommendation's selection), a lift cell's ad account, a
+    // custom conversion, a study's viewer, a Page video, a study's own cell (meta-optimize-owner.ts).
+    | 'campaign' | 'adsetorad' | 'adaccount' | 'customconversion' | 'person' | 'pagevideo' | 'studycell'
+}
 
 const fieldsValueProblem = (value: string): string | null => {
   const names = value.split(',')
@@ -894,7 +906,7 @@ const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kin
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
 const MAX_ANY_WRITE_BODY = 16_000
 /** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts) — read when judged, never at load. */
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES]
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...META_OPTIMIZE_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

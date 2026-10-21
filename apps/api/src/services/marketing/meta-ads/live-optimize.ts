@@ -1,8 +1,10 @@
 /**
  * Meta ads step 8 (2026-10-21) — reads of Meta's opportunity score and recommendations, its A/B tests and lift studies
  * (and the chosen Page's video A/B tests), and Meta's own automated rules, LIVE from Meta through the gateway (GET only).
- * Nothing here stores anything, and nothing here changes Meta: applying a recommendation (step 28), making or ending a
- * test (step 28) and making, changing, previewing or running a rule (step 29) are change tools of their own.
+ * Nothing here stores anything, and nothing here changes Meta: applying a recommendation (apply-meta-recommendations),
+ * making, changing or ending a test (create-meta-experiment, set-meta-experiment, end-meta-experiment — step 28's
+ * meta-ads-optimize-changes.tools.ts) and making, changing, previewing or running a rule (step 29) are change tools of
+ * their own.
  *
  * ONLY the business's chosen assets (metaChosenAccount), with fixed field lists per node type (a caller never names a
  * Graph field or path):
@@ -29,7 +31,7 @@
  *     spelling, recommendation_names, locale, fields=recommendation_content "to include the lift_estimate and body
  *     strings"; adds ad_account_id, opportunity_score, recommendation_name, level); a signature is missing for types that
  *     "cannot be resolved in the API"; "there could be fewer recommendations returned by the API versus what is shown in
- *     Ads Manager"; the apply types and their extra_data (the apply itself is step 28); there is no dismiss call (RC-024)
+ *     Ads Manager"; the apply types and their extra_data (the apply: apply-meta-recommendations); there is no dismiss call (RC-024)
  *   - the score now: ad-account field `opportunity_score` (same page, "a field of an ad account")
  *   - score history (…/performance-recommendations-history-api): from_date, to_date (YYYY-MM-DD), get_reason; window
  *     ≤ 45 days (5014022), from defaults to to − 14 days, to today or later → 5014023, "data may be missing the most
@@ -242,10 +244,10 @@ const STAGE_WORDS: Record<string, string> = {
 
 /**
  * The types Meta applies by API (performance-recommendations "Recommendation-specific parameters"; master RC-008…RC-021):
- * apply-meta-recommendations (a later Nexus step, step 28) will send them, each a request a person approves. `spendsMoney` as the master rows
+ * apply-meta-recommendations sends them (step 28), each a request a person approves. `spendsMoney` as the master rows
  * judge it: yes = can raise spend at once, maybe = can widen delivery, no = same budget.
  */
-const APPLY_BY_API: Readonly<Record<string, { what: string; spendsMoney: 'yes' | 'maybe' | 'no' }>> = {
+export const APPLY_BY_API: Readonly<Record<string, { what: string; spendsMoney: 'yes' | 'maybe' | 'no' }>> = {
   ADVANTAGE_PLUS_AUDIENCE: { what: 'switches Advantage+ audience on for the ad sets (Meta may show the ads beyond the audience set)', spendsMoney: 'yes' },
   AUTOMATIC_PLACEMENTS: { what: 'switches Advantage+ placements on for the ad sets (more placements)', spendsMoney: 'yes' },
   LANDING_PAGE_VIEW_OPTIMIZATION_GOAL: { what: 'changes the ad sets\' goal to landing page views (learning restarts)', spendsMoney: 'no' },
@@ -293,13 +295,13 @@ const ACT_ELSEWHERE: Readonly<Record<string, { tools: string[]; what: string }>>
   UNIFIED_INBOX: { tools: [], what: 'answer unread customer messages within 5 hours (Meta Business Suite inbox)' },
 }
 
-/** How a person acts on one recommendation (RC-023): Meta's apply (step 28), a Nexus tool, or Meta's screens. */
+/** How a person acts on one recommendation (RC-023): Meta's apply (apply-meta-recommendations), a Nexus tool, or Meta's screens. */
 export function howToAct(type: string | null, hasSignature: boolean) {
   const apply = type ? APPLY_BY_API[type] : undefined
   if (apply && hasSignature) {
     return {
-      byApi: true, tool: 'apply-meta-recommendations', toolComesWith: 'a later Nexus step (step 28)', spendsMoney: apply.spendsMoney, what: apply.what,
-      sentence: `Meta applies this by API. Nexus's apply-meta-recommendations comes with a later Nexus step (step 28), and will ask for it as a request a person approves${apply.spendsMoney === 'yes' ? ' — it SPENDS MONEY' : apply.spendsMoney === 'maybe' ? ' — it can widen delivery' : ''}; until then, the Ads Manager link. The signature goes stale: read again right before.`,
+      byApi: true, tool: 'apply-meta-recommendations', spendsMoney: apply.spendsMoney, what: apply.what,
+      sentence: `Meta applies this by API: apply-meta-recommendations asks for it with this signature as a request a person approves${apply.spendsMoney === 'yes' ? ' — it SPENDS MONEY' : apply.spendsMoney === 'maybe' ? ' — it can widen delivery' : ''} (or use the Ads Manager link). The signature goes stale: apply-meta-recommendations reads it again right before.`,
     }
   }
   const elsewhere = type ? ACT_ELSEWHERE[type] : undefined
@@ -344,7 +346,7 @@ function mapRecommendation(raw: Row, known: Map<string, { kind: string; name: st
 }
 
 /** The recommendations inside an answer's rows (`data[{ recommendations: […] }]`, or the rows themselves). */
-function recommendationsOf(rows: Row[]): Row[] {
+export function recommendationsOf(rows: Row[]): Row[] {
   const out: Row[] = []
   for (const row of rows) {
     if (Array.isArray(row.recommendations)) out.push(...row.recommendations.filter((r): r is Row => !!obj(r)))
@@ -562,7 +564,7 @@ function mapStudy(raw: Row, account: MetaChosenAccount, now: Date = new Date()) 
   }
 }
 
-const STUDY_NOTE = 'A study cannot be deleted (Meta has no delete for it); a running one can only be extended or given more objects. Making, changing and ending tests (create-meta-experiment, set-meta-experiment, end-meta-experiment) come with a later Nexus step (step 28). Changing an ad set, ad or campaign that is in a running test can spoil the test.'
+const STUDY_NOTE = 'A study cannot be deleted (Meta has no delete for it); a running one can only be extended or given more objects. Making, changing and ending tests: create-meta-experiment, set-meta-experiment, end-meta-experiment (each a request a person approves). Changing an ad set, ad or campaign that is in a running test can spoil the test.'
 const LIFT_NOTE = 'Conversion lift needs Meta\'s own grant ("Conversion Lift Measurement is currently limited", Meta\'s lift guide): when Meta refuses, the business asks its Meta representative. Study objectives and results also need the Meta app above development access (Meta\'s error 270).'
 
 /** The studies Meta says touch the chosen ad account (impacting_ad_studies), as Meta gives them. */
@@ -571,7 +573,7 @@ async function impactingStudies(account: MetaChosenAccount, fields: string, maxR
 }
 
 /** A study id from a caller, read only when Meta's list of studies that touch the chosen account names it. */
-async function ownStudy(account: MetaChosenAccount, studyId: string): Promise<{ studyId: string; type: string | null; startTime: string | null }> {
+export async function ownStudy(account: MetaChosenAccount, studyId: string): Promise<{ studyId: string; type: string | null; startTime: string | null }> {
   const id = metaObjectId(studyId)
   if (!id) throw new MetaLiveRefusal(`"${studyId}" is not a Meta study id (digits).`)
   const read = await impactingStudies(account, 'id,type,start_time', 1000)
@@ -836,7 +838,7 @@ export async function metaExperiments(input: ExperimentInput) {
           return accountsMasked(rows.map((r) => String(r.account_id ?? r.id ?? '')), account, names)
         }),
       ])
-      return { ...base, studyId: own.studyId, viewers: viewers.value, viewersNotRead: viewers.notRead, adAccounts: related.value, adAccountsNotRead: related.notRead, note: 'People are Meta ids only (their names stay on Meta\'s side). Sharing a study (set-meta-experiment) comes with a later Nexus step (step 28).' }
+      return { ...base, studyId: own.studyId, viewers: viewers.value, viewersNotRead: viewers.notRead, adAccounts: related.value, adAccountsNotRead: related.notRead, note: 'People are Meta ids only (their names stay on Meta\'s side). Sharing a study: set-meta-experiment viewers (a request a person approves; only people with a role on the ad account).' }
     }
     case 'object': {
       // AD-019 / EX-003 — is this campaign, ad set or ad in a test (before changing it)?
@@ -861,7 +863,7 @@ export async function metaExperiments(input: ExperimentInput) {
         const body = (await metaReadOne({ connectionId }, { operation: 'experiments.brandLiftCampaign', path: id, query: { fields: 'can_create_brand_lift_study,brand_lift_studies{id,name,type,start_time,end_time,observation_end_time,canceled_time}' } })).body as Row
         campaign = { campaignId: id, canCreateBrandLiftStudy: bool(body.can_create_brand_lift_study), studies: (Array.isArray(body.brand_lift_studies) ? body.brand_lift_studies : rowsOf(body.brand_lift_studies)).map(obj).filter((s): s is Row => !!s).map((s) => mapStudy(s, account)) }
       }
-      return { ...base, canCreateBrandLiftStudy: accountRead.value, accountNotRead: accountRead.notRead, campaign, note: 'Brand lift studies are Meta\'s "Automated Brand Lift V2" studies; making one (create-meta-experiment, where Meta allows it) comes with a later Nexus step (step 28).' }
+      return { ...base, canCreateBrandLiftStudy: accountRead.value, accountNotRead: accountRead.notRead, campaign, note: 'Brand lift studies are Meta\'s "Automated Brand Lift V2" studies; Meta documents no way to make one by API (its lift guide covers conversion lift only), so they are made in Ads Manager or with Meta\'s representative. create-meta-experiment makes A/B tests, creative tests and conversion lift studies.' }
     }
     case 'private-lift': {
       // EX-010 — Meta-run private lift computations and continuous lift configs (only where a study of that kind exists).

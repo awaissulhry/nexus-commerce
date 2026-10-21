@@ -56,6 +56,8 @@ export interface MetaObjectChange {
   objectId: string
   /** The kind of object (the gateway confirms it before anything is sent). */
   kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+    // Step 28 — an apply's ad account, a new study's portfolio, a study, a Page, a Page video test.
+    | 'adaccount' | 'business' | 'adstudy' | 'page' | 'pagevideotest'
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -70,6 +72,8 @@ export interface MetaObjectChange {
   readBackFields?: string
   /** Step 18 — a create on the object's edge (POST /<id>/budget_schedules): the new object is read back, not the parent. */
   edge?: 'budget_schedules'
+    // Step 28 — an apply (act_<id>/recommendations answers {"success": true}), a study, a Page video test.
+    | 'recommendations' | 'ad_studies' | 'ab_tests'
   /** Step 18 — DELETE (a budget schedule's): Meta's {"success": true} is the answer, nothing is read back. */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own). */
@@ -90,7 +94,9 @@ export function readsOf(node: Record<string, unknown>, expected: Record<string, 
 }
 
 /** Step 18 review A7 — times are sent as UTC Unix seconds and read back as ISO 8601: both judged as Unix seconds. */
-const TIME_FIELDS = new Set(['start_time', 'end_time', 'time_start', 'time_end'])
+const TIME_FIELDS = new Set(['start_time', 'end_time', 'time_start', 'time_end',
+  // Step 28 — a study's windows and a Page video test's start.
+  'observation_end_time', 'cooldown_start_time', 'scheduled_experiment_timestamp'])
 const unixOf = (v: unknown): string => {
   const text = String(v)
   if (/^\d{1,11}$/.test(text)) return text

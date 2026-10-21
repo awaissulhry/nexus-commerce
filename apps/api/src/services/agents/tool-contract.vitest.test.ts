@@ -884,6 +884,16 @@ describe('C1 — every registered tool keeps the contract', () => {
         },
         after: { kind: 'highdemandperiod', id: '120000000000031', parent: { kind: 'campaign', id: '120000000000001' }, fields: { budget_value: '30', exists: 'yes' }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 28: an applied budget raise goes back through the apply tool's restore; a study's name, dates, split and
+      // viewers go back through set-meta-experiment.
+      'apply-meta-recommendations': {
+        before: { type: 'SCALE_GOOD_CAMPAIGN', signature: '1234567', currency: 'EUR', objects: [{ kind: 'adset', id: '120000000000002', name: 'Ad set B', fields: { daily_budget: '5000', lifetime_budget: null } }], undo: [{ kind: 'adset', id: '120000000000002', dailyBudgetCents: 5000 }], noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { type: 'SCALE_GOOD_CAMPAIGN', signature: '1234567', currency: 'EUR', objects: [{ kind: 'adset', id: '120000000000002', name: 'Ad set B', fields: { daily_budget: '11000', lifetime_budget: null } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-experiment': {
+        before: { kind: 'study', id: '120000000000041', type: 'SPLIT_TEST', fields: { name: 'Test A', end_time: '4102444800' }, undo: { action: 'update', studyId: '120000000000041', name: 'Test A', endTime: '2100-01-01T00:00:00Z' }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'study', id: '120000000000041', type: 'SPLIT_TEST', fields: { name: 'Test B', end_time: '4102531200' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1053,7 +1063,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-custom-goals', 'set-google-custom-audiences', 'set-google-user-lists', 'set-google-reusable-audiences',
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
-      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule']) {
+      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
+      'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

@@ -74,6 +74,8 @@ export interface MetaWriteRequest {
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
   objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+    // Step 28 — act_<id> (an apply), a business portfolio (a new study), a study, a Page, a Page video test.
+    | 'adaccount' | 'business' | 'adstudy' | 'page' | 'pagevideotest'
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -84,6 +86,8 @@ export interface MetaWriteRequest {
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
   /** Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. */
   edge?: 'budget_schedules'
+    // Step 28 — POST /act_<id>/recommendations (an apply), /<business>/ad_studies (a study), /<page>/ab_tests (a video test).
+    | 'recommendations' | 'ad_studies' | 'ab_tests'
   /** Step 18 — DELETE (a budget schedule's, no body); default POST. */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */

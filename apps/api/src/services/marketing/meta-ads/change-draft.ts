@@ -45,8 +45,12 @@ export interface MetaChangeRequest {
   readBackFields?: string
   /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`). */
   objectKind?: 'highdemandperiod'
+    // Step 28 — an apply's ad account, a new study's portfolio, a study, a Page, a Page video test.
+    | 'adaccount' | 'business' | 'adstudy' | 'page' | 'pagevideotest'
   /** A create on the object's edge (POST /<id>/budget_schedules). */
   edge?: 'budget_schedules'
+    // Step 28 — an apply, a new study, a new Page video test.
+    | 'recommendations' | 'ad_studies' | 'ab_tests'
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
   /** A budget schedule's campaign or ad set. */
