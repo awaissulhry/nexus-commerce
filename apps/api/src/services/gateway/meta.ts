@@ -19,7 +19,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST, type MetaBrandSafetyKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
+import { META_REST_HOST, type MetaBrandSafetyKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
 import { metaRuploadUrl } from './meta-media-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
@@ -85,6 +85,8 @@ export interface MetaWriteRequest {
     | MetaBrandSafetyKind
     // Step 31 — one of the chosen ad account's own custom audiences.
     | 'customaudience'
+    // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
+    | MetaPageKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -116,7 +118,7 @@ export interface MetaWriteRequest {
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
-  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge
+  | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge
 /** Step 31 — an ad account's new audiences and product audiences, its opt-outs; an audience's people and its shares. */
 export type MetaAudienceEdge = 'customaudiences' | 'product_audiences' | 'usersofanyaudience' | 'users' | 'ad_accounts'
 /** Step 29 — a rule made on the ad account's rule library (`act_<id>/adrules_library`), a rule's run now (`<rule id>/execute`). */
@@ -124,6 +126,8 @@ export type MetaRuleEdge = 'adrules_library' | 'execute'
 /** Step 39 — the brand-safety edges (the account's filter, a block list's draft, list, shares, people, ad accounts and posts). */
 export type MetaBrandSafetyEdge = 'brand_safety_content_filter_levels' | 'block_list_drafts' | 'publisher_block_lists' | 'agencies'
   | 'assigned_users' | 'auto_applied_ad_accounts' | 'content_block_lists' | 'content' | 'applied_ad_accounts'
+/** Step 36 — a lead form on the chosen Page, a test lead on a form of it. */
+export type MetaPageEdge = 'leadgen_forms' | 'test_leads'
 /** Step 28 — an apply (`act_<id>/recommendations`), a new study (`<business>/ad_studies`), a new Page video test (`<page>/ab_tests`). */
 export type MetaOptimizeEdge = 'recommendations' | 'ad_studies' | 'ab_tests'
 /** Step 22 — remove-meta-ads-items: an image or a video out of the ad account's library, a video's caption languages. */

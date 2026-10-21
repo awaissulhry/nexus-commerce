@@ -257,7 +257,8 @@ describe('the destructive POST of step 21 (a value rule set\'s delete_rule_set) 
     const computed = builders.flatMap((f) => [...f.text.matchAll(/(?<=[{,]\s*)edge:\s*([^,}\n]+)/g)].map((m) => m[1].trim())
       .filter((v) => !/^(['"`])[a-z_]+\1( as const)?$/.test(v)).map((v) => `${f.path}: ${v}`))
     // Step 31 — audienceRequest passes on the literal edge its caller names (customaudiences, users, ad_accounts, …).
-    expect(computed).toEqual(['services/agents/tools/meta-ads-kit.ts: request.edge', 'services/marketing/meta-ads/change-audiences.ts: o.edge'])
+    // Step 36 — the kit's plan hash names a request's own edge too (planOf: no sender).
+    expect(computed).toEqual(['services/agents/tools/meta-ads-kit.ts: r.edge', 'services/agents/tools/meta-ads-kit.ts: request.edge', 'services/marketing/meta-ads/change-audiences.ts: o.edge'])
     const draft = code(readFileSync(join(SRC, 'services/marketing/meta-ads/change-value-rules.ts'), 'utf8'))
     expect(draft.indexOf('request.confirmDelete !== true')).toBeGreaterThan(0)
     expect(draft.indexOf('request.confirmDelete !== true')).toBeLessThan(draft.indexOf("edge: 'delete_rule_set'"))

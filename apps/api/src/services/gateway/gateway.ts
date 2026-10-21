@@ -34,10 +34,12 @@ import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, 
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite, type MetaLabelsKind, type MetaMediaWriteKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
-import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaWriteKind } from './meta-calls.js'
+import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaPageKind, type MetaWriteKind } from './meta-calls.js'
 import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwnerProblem, noteBlockListDraftMade, type MetaCheckRead } from './meta-brand-safety-owner.js'
 import { META_BRAND_SAFETY_WRITE_RULES } from './meta-brand-safety-rules.js'
+import { metaPageOwnerProblem } from './meta-page-owner.js'
+import { MetaPageTokenUnavailable, metaPageTokenFor, scrubExactToken } from './meta-page-token.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { MAX_RULE_BODY_IDS, ruleBodyIds } from './meta-ad-rule-rules.js'
@@ -429,9 +431,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // of the chosen ad account) is checked by meta-brand-safety-owner.ts (its own reads through this gateway), with every id
     // inside the body. Chosen by the rule that judged the write, never by the kind alone: steps 19, 23 and 28 name
     // `adaccount` and `business` too, and keep their own checks.
-    const owner = metaWrite.targeting ? (req.metaObjectKind === 'adsettargeting' ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
-      : isBrandSafetyRule(metaWrite.rule) ? await metaBrandSafetyOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind ?? '', metaCheckRead(req.connectionId), req.metaRun)
-        : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind> | undefined, req.metaParent)
+    // Step 36 (Q1) — a change made AS the chosen Facebook Page (a rule marked `auth: 'page'`): its object must be that Page
+    // or a child of it the gateway confirms (meta-page-owner.ts), before the Page's token is read. By the rule, never the
+    // kind alone: step 28 names `page` too.
+    const owner = metaWrite.auth === 'page' ? await metaPageOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, metaCheckRead(req.connectionId))
+      : metaWrite.targeting ? (req.metaObjectKind === 'adsettargeting' ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a targeting change of ${metaWrite.objectId} names it an ad set's targeting.` })
+        : isBrandSafetyRule(metaWrite.rule) ? await metaBrandSafetyOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind ?? '', metaCheckRead(req.connectionId), req.metaRun)
+          : await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind as Exclude<MetaWriteKind, MetaBrandSafetyKind | MetaPageKind> | undefined, req.metaParent)
           ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
           ?? await metaMediaAssetsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
@@ -467,9 +473,18 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
 
   // 5. headers + signing
   let token: string | null
+  // Step 36 (Q1) — a change made as the chosen Page goes with the Page's OWN token, which the gateway reads here for this one
+  // call (meta-page-token.ts: with the system-user token, for the chosen Page only) and keeps in memory for this call only:
+  // it goes on the URL that is sent, never on `url` (the ledger, the trace, the answer), and is scrubbed from the answer.
+  let pageToken: string | null = null
   try {
-    token = await tokenFor(req)
+    if (metaWrite?.auth === 'page' && req.connectionId) token = pageToken = await metaPageTokenFor(req.connectionId)
+    else token = await tokenFor(req)
   } catch (err) {
+    if (err instanceof MetaPageTokenUnavailable) {
+      if (err.code === 'PUBLISH_GATED') return refuse('gated', err.code, err.message, 503)
+      return err.code === 'RATE_LIMITED_LOCAL' ? refuse('refused', err.code, err.message, 429, err.retryAfterMs) : refuse('held', err.code, err.message, 409)
+    }
     return refuse('held', 'TOKEN_UNAVAILABLE', `Held, nothing sent: no ${name} token for this account (${err instanceof Error ? err.message : String(err)}).`, 409)
   }
   // P1.5 — eBay's three market headers (X-EBAY-C-MARKETPLACE-ID, Content-Language, Accept-Language) from
@@ -612,6 +627,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
       text = err instanceof Error ? err.message : String(err)
     }
+    // Step 36 (Q1) — the Page's token never leaves the gateway, not even in an answer or an error that echoed it: as written,
+    // URL-encoded, and in every string of a JSON answer once decoded (an echo with JSON \u escapes).
+    if (pageToken) {
+      const clean = scrubExactToken(text, pageToken)
+      text = clean.text
+      metaScrubbed += clean.removed
+    }
     reading = status ? rateReadingOf(req.channel, responseHeaders, status) : null
     // Shopify GraphQL: errors and THROTTLED arrive inside a 200; the headroom is in the body.
     const gql = req.channel === 'SHOPIFY' && status === 200 ? shopifyGraphqlBodyOf(text) : null
@@ -689,7 +711,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     attempts,
     // Meta step 31 — a body of people's hashed data (an audience's people) and Meta's answer to it are never kept: only their size.
     // Step 23 — an image upload's bytes are never kept: their length only.
-    requestPayload: ok ? undefined : metaWrite?.personal ? { __personal: true, bytes: metaWrite.body.length } : metaWrite?.bulky ? { __omitted: 'the bytes of a Meta upload are never kept', bytes: typeof req.body === 'string' ? req.body.length : null } : typeof req.body === 'string' || req.body == null ? ledgerSafeBody(req.body ?? null) : { __binary: true, bytes: req.body instanceof Uint8Array ? req.body.byteLength : null },
+    // Step 36 review A6 — a Meta change whose rule names its ledger form (a test lead: the questions' names, never the
+    // answers) keeps only that.
+    requestPayload: ok ? undefined : metaWrite?.personal ? { __personal: true, bytes: metaWrite.body.length } : metaWrite?.bulky ? { __omitted: 'the bytes of a Meta upload are never kept', bytes: typeof req.body === 'string' ? req.body.length : null } : metaWrite?.ledgerBody !== undefined ? ledgerSafeBody(metaWrite.ledgerBody) : typeof req.body === 'string' || req.body == null ? ledgerSafeBody(req.body ?? null) : { __binary: true, bytes: req.body instanceof Uint8Array ? req.body.byteLength : null },
     // Review 2 — how many access_token keys were dropped from a Meta answer (it never reaches the ledger either).
     responsePayload: metaWrite?.personal ? (ok ? undefined : { __personal: true, bytes: text.length }) : metaScrubbed ? { scrubbed: metaScrubbed, ...(ok ? {} : { body: ledgerSafeBody(text) }) } : ok ? undefined : ledgerSafeBody(text),
   })
@@ -972,8 +996,8 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       continue
     }
     // Step 39 — the brand-safety kinds of id (a portfolio a list is shared with, a block list, a draft) are checked by
-    // meta-brand-safety-owner.ts for a brand-safety rule's write, never here.
-    if (inner.kind === 'business' || inner.kind === 'agency' || inner.kind === 'publisherblocklist' || inner.kind === 'blocklistdraft') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
+    // meta-brand-safety-owner.ts for a brand-safety rule's write, never here; step 36's Page photo by meta-page-owner.ts.
+    if (inner.kind === 'business' || inner.kind === 'agency' || inner.kind === 'publisherblocklist' || inner.kind === 'blocklistdraft' || inner.kind === 'pagephoto') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not an object this change may name.` }
     // Step 22 — a video inside a body (the video a library removal names): listed in the chosen ad account's library.
     const problem = await metaOwnerProblem(connectionId, { ...write, objectId: inner.id, check: false }, inner.kind)
     if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, `Nothing was sent to Meta: inside this change, `) }

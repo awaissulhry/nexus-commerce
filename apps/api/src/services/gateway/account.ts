@@ -61,10 +61,14 @@ export async function metaChosenAdAccountOf(connectionId: string): Promise<strin
   return link?.externalId ?? null
 }
 
-/** Meta step 19: the Facebook Page this business chose through this connection (its PAGE MetaAccountLink), or null. */
+/**
+ * Meta step 19: the Facebook Page this business chose through this connection (its PAGE MetaAccountLink, digits only), or
+ * null. Step 36 (Q1, the Page token mode): read in the business the call runs in (row-level security), so a Page another
+ * business chose is never this one; the ONLY Page whose own token the gateway ever reads (meta-page-token.ts).
+ */
 export async function metaChosenPageOf(connectionId: string): Promise<string | null> {
   const link = await prisma.metaAccountLink.findFirst({ where: { connectionId, product: 'PAGE' }, select: { externalId: true } })
-  return link?.externalId ?? null
+  return link?.externalId && /^\d{1,25}$/.test(link.externalId) ? link.externalId : null
 }
 
 /** Meta step 21: the Instagram account this business chose through this connection (its INSTAGRAM MetaAccountLink), or null. */
@@ -119,4 +123,23 @@ export async function metaLinkTaken(product: 'PAGE' | 'INSTAGRAM', id: string): 
 export async function metaPortfolioShared(portfolioId: string): Promise<boolean> {
   const rows = await prisma.$queryRaw<Array<{ id: string }>>`SELECT t.id FROM nexus_meta_links_taken('PORTFOLIO', ${[portfolioId]}::text[]) AS t(id)`
   return rows.some((row) => row.id === portfolioId)
+}
+
+/** The tools whose change records name what Nexus made on a Page (step 36: lead forms and test leads). */
+export const META_LEAD_FORM_CREATE_TOOL = 'create-meta-lead-form'
+export const META_LEAD_FORM_SET_TOOL = 'set-meta-lead-form'
+
+/**
+ * Meta step 36: did Nexus make this object on this Page, for the business the call runs in? Its change records say so
+ * (AgentChange, row-level security: only this business's rows): a lead form create-meta-lead-form made (`after.formId`),
+ * or a TEST lead set-meta-lead-form made (`after.testLeadId`). A real lead is never in them, so it is never one.
+ */
+export async function metaPageObjectNexusMade(kind: 'leadform' | 'testlead', objectId: string, pageId: string): Promise<boolean> {
+  const row = await prisma.agentChange.findFirst({
+    where: kind === 'leadform'
+      ? { toolName: META_LEAD_FORM_CREATE_TOOL, AND: [{ after: { path: ['formId'], equals: objectId } }, { after: { path: ['pageId'], equals: pageId } }] }
+      : { toolName: META_LEAD_FORM_SET_TOOL, AND: [{ after: { path: ['testLeadId'], equals: objectId } }, { after: { path: ['pageId'], equals: pageId } }] },
+    select: { id: true },
+  })
+  return row !== null
 }
