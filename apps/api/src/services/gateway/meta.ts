@@ -90,6 +90,11 @@ export interface MetaWriteRequest {
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  /**
+   * Step 27 — the execution_options of a check, when not Meta's plain check (`["validate_only"]`): a new ad's check adds
+   * Meta's synchronous integrity review (and, when asked, its recommendations). The gateway's rule judges the exact value.
+   */
+  checkOptions?: string
 }
 
 /**
@@ -101,7 +106,7 @@ export interface MetaWriteRequest {
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
   // Step 23 — a DELETE that names its object by a key (an image's hash, a video's id) carries it as its form body.
-  const body = remove && !Object.keys(req.params).length ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
+  const body = remove && !Object.keys(req.params).length ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: req.checkOptions ?? '["validate_only"]' } : {}) }).toString()
   return gatewayCall({
     channel: 'META',
     operation: req.operation,
@@ -194,6 +199,8 @@ export async function metaRestWriteCall(req: MetaRestWriteRequest): Promise<Gate
 export type MetaWriteEdge = 'budget_schedules' | 'adimages' | 'advideos' | 'video_ads' | 'creative_folders' | 'captions' | 'adcreatives' | 'asyncadcreatives' | 'adlabels'
   // Step 26: the chosen Instagram account's partnership edges and a media's ad code (set-meta-partnership-access).
   | 'branded_content_ad_permissions' | 'branded_content_tag_approval' | 'collaboration_invites' | 'partnership_ad_code'
+  // Step 27: the chosen ad account's ads (create-meta-ad).
+  | 'ads'
 
 export interface MetaUploadRequest {
   connectionId: string

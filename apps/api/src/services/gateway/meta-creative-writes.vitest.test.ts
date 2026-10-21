@@ -386,7 +386,7 @@ describe('review round 2', () => {
       ['object_type EVENT', withStory(web, { object_type: 'EVENT' })],
       ['WhatsApp number', withStory({ ...web, whats_app_business_phone_number: '+15555550100' })],
       ['marketing message', withStory(web, { marketing_message_structured_spec: { language: 'it_IT' } })],
-      ['message extensions', withStory(web, { asset_feed_spec: { audios: [], message_extensions: [{ type: 'MESSAGE_PAGE' }] } })],
+      ['message extensions', withStory(web, { asset_feed_spec: { audios: [], message_extensions: [{ type: 'messenger' }] } })],
       ['welcome message', withStory({ link_data: { ...web.link_data, page_welcome_message: 'Ciao' } })],
       ['layer CALL_NOW', withStory({ link_data: { ...web.link_data, image_layer_specs: [{ layer_type: 'text_overlay', content: { type: 'CALL_NOW' } }] } })],
       ['layer VISIT_PROFILE', withStory({ link_data: { ...web.link_data, image_layer_specs: [{ layer_type: 'text_overlay', content: { type: 'VISIT_PROFILE' } }] } })],
@@ -398,9 +398,12 @@ describe('review round 2', () => {
       expect(problem({ body: form(bare(c)) }), label).not.toBeNull()
     }
     // The stray markers of another type are refused even with the website keys; the plain ones pass with them.
-    for (const label of ['object_type EVENT', 'WhatsApp number', 'marketing message', 'message extensions', 'welcome message', 'card CALL_NOW']) {
+    for (const label of ['object_type EVENT', 'WhatsApp number', 'marketing message', 'welcome message', 'card CALL_NOW']) {
       expect(problem({ body: form(cases.find(([l]) => l === label)![1]) }), label).toMatch(/main button makes it a standard creative/)
     }
+    // Step 27 (CR-218) — a "message us" footer belongs on a website ad, but only inline on a new ad (create-meta-ad): the
+    // creative edge answers error 3, so Nexus never sends it there.
+    expect(problem({ body: form(cases.find(([l]) => l === 'message extensions')![1]) })).toMatch(/only inline on a new ad/)
     for (const label of ['control', 'layer CALL_NOW', 'layer VISIT_PROFILE', 'video product_link only']) {
       expect(problem({ body: form(cases.find(([l]) => l === label)![1]) }), label).toBeNull()
     }

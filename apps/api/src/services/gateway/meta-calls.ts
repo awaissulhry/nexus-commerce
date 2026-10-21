@@ -51,6 +51,7 @@ import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.
 import { META_IMAGE_MAX_BODY, META_MEDIA_WRITE_RULES, metaRuploadVerdict } from './meta-media-rules.js'
 import { META_CREATIVE_WRITE_RULES } from './meta-creative-rules.js'
 import { META_BOOST_WRITE_RULES, metaRestWriteVerdict } from './meta-boost-rules.js'
+import { META_AD_WRITE_RULES } from './meta-ad-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -763,7 +764,8 @@ export interface MetaWriteRule {
   file?: { key: string; nameKey: string; name: RegExp; contentType: string; maxBytes: number; judge: (text: string) => string | null }
   /**
    * Step 25 — Meta documents validate_only on this rule's edge (POST /act_<id>/adcreatives): its check (execution_options,
-   * judged by the rule) may go for a kind other than a campaign. Only the creative create carries it.
+   * judged by the rule) may go for a kind other than a campaign. Only the creative create carries it — and, step 27, the ad
+   * create (POST /act_<id>/ads: validate_only with synchronous_ad_review, AD-026 … AD-028).
    */
   check?: true
   /**
@@ -807,8 +809,8 @@ export interface MetaWriteAsset {
     | 'brandedpost'
   with?: string
 }
-/** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
-export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' }
+/** Step 18 — an id inside a change's body, and what it must be of the chosen ad account (step 27: a creative an ad uses too). */
+export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'creative' }
 
 const fieldsValueProblem = (value: string): string | null => {
   const names = value.split(',')
@@ -993,9 +995,9 @@ const MAX_ANY_WRITE_BODY = Math.max(16_000, META_IMAGE_MAX_BODY)
 /**
  * Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts), step 23's media rules (meta-media-rules.ts)
  * and step 25's creative rules (meta-creative-rules.ts) — read when judged, never at load. Step 26: the boost and
- * partnership-access rules (meta-boost-rules.ts).
+ * partnership-access rules (meta-boost-rules.ts). Step 27: the ad rules (meta-ad-rules.ts).
  */
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_MEDIA_WRITE_RULES, ...META_CREATIVE_WRITE_RULES, ...META_BOOST_WRITE_RULES]
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_MEDIA_WRITE_RULES, ...META_CREATIVE_WRITE_RULES, ...META_BOOST_WRITE_RULES, ...META_AD_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

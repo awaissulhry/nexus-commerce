@@ -76,6 +76,8 @@ export interface MetaObjectChange {
   parent?: { kind: 'campaign' | 'adset'; id: string }
   /** Step 23 — how long the call may take (an image's bytes: longer than the 60 s default). */
   timeoutMs?: number
+  /** Step 27 — a check's execution_options when not Meta's plain check (a new ad's: with its synchronous integrity review). */
+  checkOptions?: string
 }
 
 /** Step 18 — what the read-back must show: the request's own `expect`, else its status. */
@@ -91,8 +93,8 @@ export function readsOf(node: Record<string, unknown>, expected: Record<string, 
   return parts.length ? parts.join(', ') : 'as before'
 }
 
-/** Step 18 review A7 — times are sent as UTC Unix seconds and read back as ISO 8601: both judged as Unix seconds. */
-const TIME_FIELDS = new Set(['start_time', 'end_time', 'time_start', 'time_end'])
+/** Step 18 review A7 — times are sent as UTC Unix seconds and read back as ISO 8601: both judged as Unix seconds (step 27: an ad's own schedule too). */
+const TIME_FIELDS = new Set(['start_time', 'end_time', 'time_start', 'time_end', 'ad_schedule_start_time', 'ad_schedule_end_time'])
 const unixOf = (v: unknown): string => {
   const text = String(v)
   if (/^\d{1,11}$/.test(text)) return text
@@ -127,13 +129,16 @@ function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>): Met
   return { ...failure, sentence: `Meta refused it${code}${words ? `: ${words}` : ''}. Nothing was changed.` }
 }
 
-/** Meta's check (validate_only) of one change: resolves when Meta would accept it; rejects with a MetaWriteError. */
-export async function metaCheckChange(target: MetaWriteTarget, change: MetaObjectChange): Promise<void> {
+/**
+ * Meta's check (validate_only) of one change: resolves when Meta would accept it — with Meta's answer (step 27: a new ad's
+ * check may carry Meta's recommendations) — and rejects with a MetaWriteError.
+ */
+export async function metaCheckChange(target: MetaWriteTarget, change: MetaObjectChange): Promise<Record<string, unknown> | null> {
   const operation = `${change.operation}.check`
   let answer: GatewayResponse
   try {
     // Step 25 — a create on an edge is checked on that edge (POST /act_<id>/adcreatives with validate_only).
-    answer = await metaWriteCall({ connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind, params: change.params, check: true, ...(change.parent ? { parent: change.parent } : {}), ...(change.edge ? { edge: change.edge } : {}) })
+    answer = await metaWriteCall({ connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind, params: change.params, check: true, ...(change.parent ? { parent: change.parent } : {}), ...(change.edge ? { edge: change.edge } : {}), ...(change.checkOptions ? { checkOptions: change.checkOptions } : {}) })
   } catch (err) {
     const failure = failureOfThrow(err) ?? localFailure(`Nexus could not ask Meta's check (${err instanceof Error ? err.message : String(err)}).`, 'NEXUS_ERROR')
     throw new MetaWriteError(failure, operation, 'not_sent')
@@ -141,7 +146,7 @@ export async function metaCheckChange(target: MetaWriteTarget, change: MetaObjec
   if (answer.ok) {
     const body = answer.json<{ success?: unknown }>()
     if (body && body.success === false) throw new MetaWriteError(localFailure('Meta answered its check with success: false and gave no reason.', 'CHECK_FAILED'), operation, 'refused')
-    return
+    return body && typeof body === 'object' ? body : null
   }
   const failure = changeFailure(answer)
   // No answer, Meta unwell or a throttle: nothing was judged (the change itself was never sent: nothing can have moved).

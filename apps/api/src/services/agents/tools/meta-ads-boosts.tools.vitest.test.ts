@@ -153,7 +153,8 @@ describe('the tools', () => {
     expect(access.consequencesFor!({ action: 'collab-invite' })).toEqual({ reversibility: 'none' })
     expect(access.consequencesFor!({ action: 'approve-creators' })).toEqual({ reversibility: 'partial' })
     // A creative either tool claims is claimed for the other ("was it new?").
-    expect(CREATIVE_RECORD_TOOLS).toEqual(['create-meta-creative', 'create-meta-boost'])
+    // Step 27: create-meta-ad claims the inline creative of an ad it made too.
+    expect(CREATIVE_RECORD_TOOLS).toEqual(['create-meta-creative', 'create-meta-boost', 'create-meta-ad'])
     for (const cta of BOOST_LINK_CTAS) expect(isMetaCta(cta), cta).toBe(true)
   })
 })

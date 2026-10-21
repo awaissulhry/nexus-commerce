@@ -43,6 +43,12 @@ describe('Meta\'s check (validate_only)', () => {
     await metaCheckChange(target, change)
     expect(h.writes).toEqual([{ connectionId: 'm-1', operation: 'campaign.status.check', objectId: '120000000000001', objectKind: 'campaign', params: { status: 'PAUSED' }, check: true }])
   })
+  it('step 27 — a new ad\'s check carries its own execution_options (the integrity review), and Meta\'s answer comes back', async () => {
+    h.answers.push(answer(200, { success: true, recommendations: [{ title: 'T' }] }))
+    const got = await metaCheckChange(target, { objectId: 'act_1234567890', kind: 'adaccount', params: { name: 'Ad A' }, operation: 'ad.create', edge: 'ads', checkOptions: '["validate_only","synchronous_ad_review"]' })
+    expect(got).toEqual({ success: true, recommendations: [{ title: 'T' }] })
+    expect(h.writes[0]).toMatchObject({ objectId: 'act_1234567890', edge: 'ads', check: true, checkOptions: '["validate_only","synchronous_ad_review"]' })
+  })
   it('Meta\'s refusal is judged (refused); no answer, Meta unwell, a throttle or a gateway refusal is not judged (not_sent)', async () => {
     h.answers.push(metaError(400, '100', 'validation', 'Invalid parameter'))
     expect(await outcomeOf(metaCheckChange(target, change))).toEqual({ outcome: 'refused', message: expect.stringMatching(/Meta refused it \(100\): Invalid parameter/) })

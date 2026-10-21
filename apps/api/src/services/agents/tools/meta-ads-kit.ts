@@ -55,7 +55,7 @@ export const META_MATERIAL = ['basis', 'plan', 'reach'] as const
 export const META_CHANGE_RULES =
   ' Nothing changes until a person approves it in Nexus (Approvals) — or, when this business\'s "Claude\'s changes need no '
   + 'approval" switch is on, it runs 20 s after the request unless stopped; either way it runs as that person, never by a '
-  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause and a new creative); '
+  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause, a new creative and a new ad); '
   + 'for any other the preview says why not, and the run reads the live state again first. With Meta changes switched off '
   + 'nothing is sent, not even a check. The '
   + 'preview says what changes (from → to), what can make the account spend more (spendsMoney — the person\'s decision) '
@@ -178,10 +178,11 @@ async function limitWarnings(account: MetaChangeAccount, draft: MetaChangeDraft)
   return out
 }
 
-function previewOf(account: MetaChangeAccount, draft: MetaChangeDraft, checks: MetaRequestCheck[], recheck: boolean, limits: string[]): MetaPreview {
+function previewOf(account: MetaChangeAccount, draft: MetaChangeDraft, checks: MetaRequestCheck[], recheck: boolean, limits: string[], checkWords: string[] = []): MetaPreview {
   const { reach, warning } = reachOf(account)
   const spends = draft.spendsMoney
-  const warnings = [...spends.map((s) => `SPENDS MONEY (your decision): ${s}`), ...(warning ? [warning] : []), ...draft.warnings, ...limits]
+  // Step 27 — what Meta said with its check (a new ad's recommendations), read-only words after the draft's own.
+  const warnings = [...spends.map((s) => `SPENDS MONEY (your decision): ${s}`), ...(warning ? [warning] : []), ...draft.warnings, ...checkWords, ...limits]
   const metaCheck = checkSummary(checks, recheck)
   return {
     summary: draft.summary,
@@ -238,10 +239,13 @@ export async function metaChangePreview(args: Record<string, unknown>, ctx: Tool
   const checkable = draft.requests.filter((r) => r.check === 'meta')
   const plan = planOf(draft)
   const remembered = checkable.length ? await rememberedCheck(account.adAccountId, plan) : null
+  // Step 27 — what a request makes of Meta's answer to its check (a new ad's recommendations): words for the preview.
+  const checkWords: string[] = []
   if (checkable.length && !remembered) {
     for (const request of checkable) {
       try {
-        await metaCheckChange(account.target, { ...objectChangeOf(request), budget: undefined, readBackInPost: undefined })
+        const answer = await metaCheckChange(account.target, { ...objectChangeOf(request), budget: undefined, readBackInPost: undefined })
+        if (request.checkWords) checkWords.push(...request.checkWords(answer ?? null))
       } catch (err) {
         if (!(err instanceof MetaWriteError)) throw err
         return { ok: false, error: err.outcome === 'refused'
@@ -251,7 +255,7 @@ export async function metaChangePreview(args: Record<string, unknown>, ctx: Tool
     }
     await rememberCheck(account.adAccountId, plan)
   }
-  return { ok: true, preview: previewOf(account, draft, draft.requests.map((r) => (r.check === 'meta' ? 'accepted' : r.check === 'not-yet' ? 'not-used-yet' : 'no-check')), false, limits) }
+  return { ok: true, preview: previewOf(account, draft, draft.requests.map((r) => (r.check === 'meta' ? 'accepted' : r.check === 'not-yet' ? 'not-used-yet' : 'no-check')), false, limits, checkWords) }
 }
 
 // ── run ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -294,6 +298,8 @@ export function objectChangeOf(request: MetaChangeRequest): MetaObjectChange {
     ...(request.edge ? { edge: request.edge } : {}),
     ...(request.method ? { method: request.method } : {}),
     ...(request.parent ? { parent: request.parent } : {}),
+    // Step 27 — a new ad's check carries Meta's synchronous integrity review.
+    ...(request.checkOptions ? { checkOptions: request.checkOptions } : {}),
   }
 }
 

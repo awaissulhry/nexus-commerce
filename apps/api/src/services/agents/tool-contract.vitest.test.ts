@@ -890,6 +890,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { kind: 'partnership', action: 'approve-creators', instagramId: '17841400000000001', creators: [{ instagramId: '17841400000000099', approved: false }] },
         after: { kind: 'partnership', action: 'approve-creators', instagramId: '17841400000000001', creators: [{ instagramId: '17841400000000099', approved: true }], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 27: an ad it made (never run) is deleted again; a rename and a creative swap go back.
+      'create-meta-ad': {
+        before: { kind: 'create', items: [] },
+        after: { kind: 'create', items: [{ kind: 'ad', adId: '120000000000003', adSetId: '120000000000002', name: 'Ad A', status: 'PAUSED', creativeId: '120000000000301' }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-ad': {
+        before: { kind: 'set', adId: '120000000000003', name: 'Ad A', status: 'PAUSED', creativeId: '120000000000301', labels: [], scheduleStart: null, scheduleEnd: null },
+        after: { kind: 'set', adId: '120000000000003', name: 'Ad B', creativeId: '120000000000302', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1060,7 +1069,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
       'set-meta-connection', 'set-meta-status', 'create-meta-media', 'create-meta-creative', 'set-meta-creative',
-      'create-meta-boost', 'set-meta-partnership-access']) {
+      'create-meta-boost', 'set-meta-partnership-access', 'create-meta-ad', 'set-meta-ad']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

@@ -73,6 +73,11 @@ export interface MetaChangeRequest {
   send?: (target: MetaWriteTarget) => Promise<MetaChangeResult>
   /** The step's sentence when Meta made it (else the kit's own). */
   doneSentence?: (result: MetaChangeResult) => string
+  // ── step 27: Meta's check with more than validate_only ──
+  /** The execution_options of its check (a new ad's: `["validate_only","synchronous_ad_review"]`, AD-026 … AD-028). */
+  checkOptions?: string
+  /** What the preview says of Meta's answer to its check (Meta's recommendations: read-only words). */
+  checkWords?: (answer: Record<string, unknown> | null) => string[]
 }
 
 export interface MetaChangeDraft {
