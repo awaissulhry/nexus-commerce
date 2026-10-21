@@ -13,7 +13,7 @@ const h = vi.hoisted(() => ({
   connections: [] as Array<Record<string, unknown>>,
   calls: [] as Array<Req & { via: string }>,
   graph: null as null | ((req: Req) => unknown),
-  app: null as null | ((req: Req) => { status: number; text: string }),
+  app: null as null | ((req: Req) => { status: number; text: string; verdict?: Record<string, unknown> }),
   taken: new Set<string>(),
   adSets: new Set<string>(),
   // Step 39 (BS-033) — what the content block list's CSV export answers.
@@ -37,7 +37,7 @@ vi.mock('../../gateway/meta.js', async (importOriginal) => {
     metaCall: vi.fn(async (req: Req) => {
       h.calls.push({ ...req, via: 'metaCall' })
       const a = h.app?.(req) ?? { status: 200, text: '{"data":[]}' }
-      return { outcome: 'sent', ok: a.status < 400, status: a.status, text: a.text, verdict: null, json: () => JSON.parse(a.text), headers: new Headers(), url: '', attempts: 1, rate: { remaining: null, limit: null } }
+      return { outcome: 'sent', ok: a.status < 400, status: a.status, text: a.text, verdict: a.verdict ?? null, json: () => JSON.parse(a.text), headers: new Headers(), url: '', attempts: 1, rate: { remaining: null, limit: null } }
     }),
     metaRestFileExport: vi.fn(async (req: { operation: string; contentBlockListId: string }) => {
       h.calls.push({ operation: req.operation, path: `content_block_lists/${req.contentBlockListId}/file_download`, via: 'export' })
@@ -59,6 +59,10 @@ import { META_ADS_SAFETY_TOOLS } from './meta-ads-safety.tools.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
+import { PAGE_PART_GATED } from '../../marketing/meta-ads/live-safety.js'
+import { livePageApps } from '../../marketing/meta-ads/live-webhook-setup.js'
+import { MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
+import { PAGE_INSTALL_EXPLAIN } from '../../marketing/meta-ads/change-webhooks.js'
 
 const tool = (name: string) => META_ADS_SAFETY_TOOLS.find((t) => t.name === name)!
 const can = (granted: string[] = ['ads.view']) => ({ can: (p: string) => granted.includes(p), via: 'claude' as const })
@@ -247,7 +251,7 @@ describe('meta-webhooks', () => {
     expect(JSON.stringify(data)).not.toMatch(/s3cret|abcSECRETkey|hooks\/catch/)
     expect(data.adAccountApps).toEqual([{ appId: '5550000001', appName: 'Nexus', isNexusApp: true }, { appId: '5550000009', appName: 'Other', isNexusApp: false }])
     expect(data.pageApps).toBeNull()
-    expect(data.pageAppsNotRead).toMatch(/Page access token.*step 30/)
+    expect(data.pageAppsNotRead).toMatch(/only to the Page's own token.*Manage, Create content or Moderate.*set-meta-webhooks install-page installs the app on the Page/)
     expect(data.alertSubscriptions).toEqual([
       { subscriptionId: '900000000000001', eventType: 'INSIGHTS_UPDATED', status: 'ENABLED', field: 'cpc', operator: 'GREATER_THAN', thresholdCents: 200, filters: [{ field: 'entity_type', operator: 'EQUAL', value: 'AD' }, { field: 'daily_budget', operator: 'IN_RANGE', valueCents: [1000, 5000] }] },
       { subscriptionId: '900000000000002', eventType: 'INSIGHTS_UPDATED', status: null, field: 'ctr', operator: 'LESS_THAN', threshold: '0.5', filters: [] },
@@ -256,6 +260,60 @@ describe('meta-webhooks', () => {
     expect(app).toMatchObject({ path: '5550000001/subscriptions', auth: 'app', query: { fields: 'object,callback_url,fields,active' } })
     expect(refusedByGateway()).toEqual([])
   })
+  it('step 30 part 3 review A-F5 — Meta refusing the PAGE token says the Page token\'s words, never "the system-user token"', async () => {
+    h.graph = (req) => (req.path === `${PAGE}/subscribed_apps` ? metaError('190', 'Error validating access token', 'auth_revoked') : { data: [] })
+    const res = await run('meta-webhooks', { view: 'page' })
+    const data = res.data as Record<string, unknown>
+    expect(data.pageApps).toBeNull()
+    expect(data.pageAppsNotRead).toBe(`Meta refused the chosen Page's own token for the read of Page ${PAGE}'s connected apps (190): ${PAGE_INSTALL_EXPLAIN['190']}`)
+    expect(data.pageAppsNotRead).not.toMatch(/no longer accepts this business's system-user token|Make a new token/)
+    // The draft's own read (install-page, remove-page): the same words, and not "auth lost" (the system-user token is fine).
+    const err = await livePageApps('conn-1', PAGE, '5550000001').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(MetaReadError)
+    expect((err as MetaReadError).failure).toMatchObject({ authLost: false, code: '190', sentence: expect.stringMatching(/^Meta refused the chosen Page's own token .*the business's system-user token itself is not the problem\.$/) })
+    // 210 ("not the Page's own"): its own words, then the part's.
+    h.graph = (req) => (req.path === `${PAGE}/subscribed_apps` ? metaError('210', 'User not visible', 'forbidden', 403) : { data: [] })
+    expect(((await run('meta-webhooks', { view: 'page' })).data as Record<string, unknown>).pageAppsNotRead).toMatch(/^Meta refused the chosen Page's own token .*\(210\): Meta took the token as not the Page's own.* Meta answers a Page's connected apps only to the Page's own token/)
+    // Any other failure goes on as it came.
+    h.graph = (req) => (req.path === `${PAGE}/subscribed_apps` ? metaError('17', 'User request limit reached', 'rate_limited') : { data: [] })
+    expect(((await run('meta-webhooks', { view: 'page' })).data as Record<string, unknown>).pageAppsNotRead).toMatch(/slow down/)
+  })
+  it('step 30 part 3 review round 2 B-4 — a permission (200, 10) on the Page-token read says the Page\'s task, never "the ad account … ads_read"', async () => {
+    for (const code of ['200', '10']) {
+      h.graph = (req) => (req.path === `${PAGE}/subscribed_apps` ? metaError(code, 'Permissions error', 'forbidden', 403) : { data: [] })
+      const err = await livePageApps('conn-1', PAGE, '5550000001').catch((e: unknown) => e)
+      expect(err, code).toBeInstanceOf(MetaReadError)
+      expect((err as MetaReadError).failure.sentence, code).toBe(`Meta refused the chosen Page's own token for the read of Page ${PAGE}'s connected apps (${code}): ${PAGE_INSTALL_EXPLAIN['200']}`)
+      expect((err as MetaReadError).message, code).not.toMatch(/ad account is assigned|ads_read/)
+      const notRead = ((await run('meta-webhooks', { view: 'page' })).data as Record<string, unknown>).pageAppsNotRead as string
+      expect(notRead, code).toMatch(/Manage, Create content or Moderate task/)
+      expect(notRead, code).not.toMatch(/ad account is assigned|ads_read/)
+    }
+    // 102 (the session) has the 190 words; the Messenger task is Moderate (or Messaging).
+    expect(PAGE_INSTALL_EXPLAIN['102']).toBe(PAGE_INSTALL_EXPLAIN['190'])
+    expect(PAGE_INSTALL_EXPLAIN['200']).toMatch(/Messenger fields the Moderate \(or Messaging\) task and pages_messaging/)
+  })
+  it('step 30 part 3 review round 2 A-N1 — more apps on the Page than one read and Nexus\'s not among them: refused in words, never "not installed"', async () => {
+    const paged = { data: [{ id: '5550000009', subscribed_fields: ['feed'] }], paging: { cursors: { after: 'QVFIUmxtX0Z6' }, next: `https://graph.facebook.com/v26.0/${PAGE}/subscribed_apps?after=QVFIUmxtX0Z6` } }
+    h.graph = (req) => (req.path === `${PAGE}/subscribed_apps` ? paged : { data: [] })
+    const err = await livePageApps('conn-1', PAGE, '5550000001').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(MetaLiveRefusal)
+    expect((err as Error).message).toMatch(/^Meta lists more apps on Page 120000000000010 than one read gives \(100\), and the business's Meta app is not among the first: Nexus cannot tell whether it is installed there, so nothing is sent\./)
+    // Found on the first page: read as it is, whatever comes after; no next page and not found: not installed.
+    h.graph = (req) => (req.path === `${PAGE}/subscribed_apps` ? { ...paged, data: [...paged.data, { id: '5550000001', subscribed_fields: ['mention', 'feed'] }] } : { data: [] })
+    expect(await livePageApps('conn-1', PAGE, '5550000001')).toEqual({ installed: true, fields: ['feed', 'mention'] })
+    h.graph = (req) => (req.path === `${PAGE}/subscribed_apps` ? { data: paged.data } : { data: [] })
+    expect(await livePageApps('conn-1', PAGE, '5550000001')).toEqual({ installed: false, fields: [] })
+  })
+  it('step 30 part 3 review A-F6 — with Meta changes switched off the page part is not read (no Page token), and the description says so', async () => {
+    h.graph = (req) => (req.path === `${PAGE}/subscribed_apps`
+      ? new MetaReadError({ origin: 'gateway', httpStatus: 0, code: 'PUBLISH_GATED', authLost: false, throttled: false, permissionDenied: false, notFound: false, sentence: 'Nothing was sent to Meta: Meta changes are switched off in Nexus (NEXUS_META_ADS_WRITES), so Nexus reads no Page token either.' }, 'webhooks.pageApps', 0)
+      : { data: [] })
+    const data = (await run('meta-webhooks', {})).data as Record<string, unknown>
+    expect(data).toMatchObject({ pageApps: null, pageAppsNotRead: PAGE_PART_GATED, adAccountApps: [] })
+    expect(PAGE_PART_GATED).toMatch(/Nexus reads no Page token while Meta changes are switched off \(NEXUS_META_ADS_WRITES is not live\)/)
+    expect(tool('meta-webhooks').description).toMatch(/while Meta changes are switched off — NEXUS_META_ADS_WRITES not live — Nexus reads no Page token, so this part is not read and the answer says so/)
+  })
   it('alerts: one subscription by id; another view reads only its part', async () => {
     h.graph = () => ({ subscription_id: '900000000000001', event_type: 'OBJECT_CREATED', filters: [{ field: 'entity_type', value: 'CAMPAIGN', operator: 'EQUAL' }] })
     const res = await run('meta-webhooks', { view: 'alerts', subscriptionId: '900000000000001' })
@@ -263,6 +321,42 @@ describe('meta-webhooks', () => {
     expect(res.data).toMatchObject({ alertSubscriptions: [{ subscriptionId: '900000000000001', eventType: 'OBJECT_CREATED' }] })
     expect(res.data).not.toHaveProperty('appSubscriptions')
     expect(refusedByGateway()).toEqual([])
+  })
+  it('step 12 rounds 2–3 — Meta refusing the APP token (190) ends only the app part; a throttle in a part keeps the parts read (as #706)', async () => {
+    h.app = () => ({ status: 400, text: '{"error":{"code":190}}', verdict: { errorClass: 'auth_revoked', channelCode: '190', channelMessage: 'Invalid OAuth access token' } })
+    h.graph = (req) => (req.path === 'act_1234567890/subscribed_apps' ? { data: [{ app_id: '5550000001', app_name: 'Nexus' }] } : { data: [] })
+    const res = await run('meta-webhooks', {})
+    expect(res.ok).toBe(true)
+    const data = res.data as Record<string, unknown>
+    expect(data.appSubscriptions).toBeNull()
+    expect(data.appSubscriptionsNotRead).toBe('Meta does not accept the app token; check the app id / secret in Settings › Channels › Meta.')
+    expect(data.adAccountApps).toEqual([{ appId: '5550000001', appName: 'Nexus', isNexusApp: true }])
+    expect(data.alertSubscriptions).toEqual([])
+    h.app = () => ({ status: 400, text: '{"error":{"code":17}}', verdict: { errorClass: 'rate_limited', channelCode: '17', channelMessage: 'User request limit reached' } })
+    const throttled = await run('meta-webhooks', {})
+    expect(throttled.ok).toBe(true)
+    expect(throttled.data).toMatchObject({ appSubscriptions: null, appSubscriptionsNotRead: expect.stringMatching(/slow down/), adAccountApps: [{ appId: '5550000001' }] })
+    h.app = null
+    h.graph = (req) => (req.path === 'act_1234567890/subscribed_apps' ? metaError('17', 'User request limit reached', 'rate_limited') : { data: [] })
+    expect((await run('meta-webhooks', {})).data).toMatchObject({ adAccountApps: null, adAccountAppsNotRead: expect.stringMatching(/slow down/), alertSubscriptions: [] })
+  })
+  it('step 12 round 3 — a throttle in one part of a block list or content block list keeps the parts read (as #706)', async () => {
+    h.graph = (req) => {
+      if (req.path === '120000000000901') return { id: '120000000000901', name: 'Apps', business_owner_id: PORTFOLIO }
+      if (req.path.endsWith('/agencies')) return metaError('17', 'User request limit reached', 'rate_limited')
+      return { data: [{ id: 'act_1234567890' }] }
+    }
+    expect((await run('meta-brand-safety', { view: 'block-list', blockListId: '120000000000901' })).data).toMatchObject({
+      sharedWithBusinesses: null, sharedWithNotRead: expect.stringMatching(/slow down/), appliedToAdAccounts: [{ adAccountId: '1234567890' }],
+    })
+    h.graph = (req) => (req.path === '120000000000701' ? { id: '120000000000701', name: 'Risky', business: { id: PORTFOLIO } }
+      : req.path.endsWith('/instagram_content') ? metaError('17', 'User request limit reached', 'rate_limited')
+        // Step 39 — a content block list is the portfolio's own only when its content_block_lists list names it.
+        : req.path.endsWith('/content_block_lists') ? { data: [{ id: '120000000000701' }] }
+          : { data: [{ id: '1234567890', account_id: 'act_1234567890' }] })
+    expect((await run('meta-brand-safety', { view: 'content-block-list', contentBlockListId: '120000000000701', content: 'instagram' })).data).toMatchObject({
+      content: { ids: null, notRead: expect.stringMatching(/slow down/) }, appliedToAdAccounts: [{ adAccountId: '1234567890' }],
+    })
   })
   it('a business without Meta is told who connects it', async () => {
     h.connections = []

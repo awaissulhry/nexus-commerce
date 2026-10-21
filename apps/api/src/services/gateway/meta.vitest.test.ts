@@ -267,7 +267,8 @@ describe('read only by construction', () => {
     ['120000000000201/asyncadrequests?fields=id&statuses=["ERROR"]', 'act_1234567890/asyncadcreatives?fields=id&statuses=["ERROR"]', 'statuses'],
     ['act_1234567890/asyncadcreatives?fields=id&is_completed=true', 'act_1234567890/adlabels?fields=id&is_completed=true', 'is_completed'],
     ['120000000000201/delivery_stats?groups=["LEARNING_STAGE_EXIT"]&bid_recommendation_type=LOWEST_COST_TO_COST_CAP', '120000000000201/targeting_insights?groups=["LEARNING_STAGE_EXIT"]', 'groups'],
-    ['120000000000201/insights?fields=spend&breakdowns=["body_asset"]&time_range={"since":"2026-10-01","until":"2026-10-19"}', 'act_1234567890/insights?fields=spend&breakdowns=["body_asset"]', 'breakdowns'],
+    // Step 7 — breakdowns now also on act_<id>/insights (value-checked there and here): refused on any other route.
+    ['120000000000201/insights?fields=spend&breakdowns=["body_asset"]&time_range={"since":"2026-10-01","until":"2026-10-19"}', 'act_1234567890/campaigns?fields=id&breakdowns=["body_asset"]', 'breakdowns'],
     ['act_1234567890/adsbylabels?fields=id&ad_label_ids=["120000000000601"]&operator=ANY', '120000000000601/ads?fields=id&ad_label_ids=["120000000000601"]', 'ad_label_ids'],
     ['act_1234567890/value_rule_set?fields=id,name&product_type=AUDIENCE&status=ACTIVE', 'act_1234567890/campaigns?fields=id&product_type=AUDIENCE', 'product_type'],
     ['act_1234567890/recommendations?fields=title&filtering=[{"field":"object_id","operator":"EQUAL","value":"120000000000101"}]', 'act_1234567890/adsets?fields=id&filtering=[]', 'filtering'],
@@ -298,6 +299,54 @@ describe('read only by construction', () => {
   })
   it('a caller\'s own headers never travel on a Meta call', () => {
     expect(ok(`${BASE}/me?fields=id`, { headers: { 'X-HTTP-Method-Override': 'POST' } })).toMatch(/no header/)
+  })
+  it('step 11 — audiences and datasets add only their own keys, each on its own path', () => {
+    // Audiences: the account's list, one audience as the chosen account sees it, its sessions, value data, recipients.
+    expect(ok(`${BASE}/act_1234567890/customaudiences?fields=id,name,delete_time&filtering=[{"field":"delete_time","operator":"GREATER_THAN","value":0}]&pixel_id=120000000000501&limit=50`)).toBeNull()
+    expect(ok(`${BASE}/120000000000401?fields=id,audience_labels&ad_account_id=1234567890&acting_account_id=1234567890`)).toBeNull()
+    // Review A8 — only on that read (it asks the labels), never on another object read.
+    expect(ok(`${BASE}/120000000000401?fields=id,name&acting_account_id=1234567890`)).toMatch(/"acting_account_id" is not one/)
+    expect(ok(`${BASE}/120000000000201?fields=id,status&ad_account_id=1234567890`)).toMatch(/"ad_account_id" is not one/)
+    expect(ok(`${BASE}/120000000000401/sessions?fields=session_id,num_received&session_id=7`)).toBeNull()
+    expect(ok(`${BASE}/120000000000401/health?fields=health&calculated_date=2026-10-01&processed_date=2026-10-02`)).toBeNull()
+    expect(ok(`${BASE}/120000000000401/adaccounts?fields=id&permissions=targeting`)).toBeNull()
+    expect(ok(`${BASE}/120000000000401/ads?fields=id,adset_id&effective_status=["ACTIVE"]`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/initiated_audience_sharing_requests?fields=id&recipient_id=1&request_status=PENDING`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/received_audience_sharing_requests?fields=id&initiator_id=1&request_status=PENDING`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/shared_audience_permissions?fields=share_account_id&partner_id=1`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/received_audience_permissions?fields=share_account_id&partner_id=1`)).toBeNull()
+    // Datasets: portfolio search, a pixel's accounts / people, its audiences and conversions, stats, quality, diagnostics.
+    expect(ok(`${BASE}/9876543210/adspixels?fields=id,name&name_filter=shop&summary=total_count`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/shared_accounts?business=9876543210&fields=account_id`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/assigned_users?business=9876543210&fields=id,name,user_type,tasks`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/audiences?fields=id&ad_account=1234567890`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/customconversions?fields=id&ad_account=1234567890`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/customconversions?fields=id&include_archived=true&summary=total_count`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/stats?aggregation=event&event_source=SERVER_ONLY&agent=shop&event=Purchase&start_time=1&end_time=2`)).toBeNull()
+    expect(ok(`${BASE}/dataset_quality?dataset_id=120000000000501&agent_name=shop&fields=web{event_name,event_coverage{percentage},dedupe_key_feedback{dedupe_key}}`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/setup_quality?fields=event_name&agent_name=shop`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/ads_signal_diagnostic_issues?fields=event_name&ad_account_id=1234567890`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/domain_last_fired_time?fields=domain_name&domain_name_list=["shop.example"]`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/recent_events?fields=count&event=Purchase&lookback_window=86400`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/real_time_event_log?fields=event&start_time=1&end_time=2`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/raw_fires?fields=event&event=Purchase&filter_type=host&filter=shop.example`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/microdata_stats?fields=has_valid_events&catalog_id=1`)).toMatch(/"catalog_id" is not one/)
+    expect(ok(`${BASE}/120000000000501/cpas_events_debugging_info?fields=counts&action_source=WEBSITE`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/extractors?fields=id&current_domain=https://shop.example`)).toBeNull()
+    expect(ok(`${BASE}/120000000000501/offline_event_uploads?fields=id&start_time=1&end_time=2&sort_by=CREATION_TIME&order=DESCENDING&upload_tag=t`)).toBeNull()
+    // Each key only where it is used.
+    expect(ok(`${BASE}/act_1234567890/campaigns?fields=id&pixel_id=1`)).toMatch(/"pixel_id" is not one/)
+    expect(ok(`${BASE}/act_1234567890/adsets?fields=id&filtering=[]`)).toMatch(/"filtering" is not one/)
+    expect(ok(`${BASE}/act_1234567890?fields=id&acting_account_id=1`)).toMatch(/"acting_account_id" is not one/)
+    expect(ok(`${BASE}/act_1234567890/insights?fields=spend&aggregation=event`)).toMatch(/"aggregation" is not one/)
+    expect(ok(`${BASE}/120000000000501/stats?aggregation=event&dataset_id=1`)).toMatch(/"dataset_id" is not one/)
+    expect(ok(`${BASE}/dataset_quality?dataset_id=1&ad_account_id=1&fields=web{event_name}`)).toMatch(/"ad_account_id" is not one/)
+    expect(ok(`${BASE}/120000000000501/raw_fires?fields=event&lookback_window=1`)).toMatch(/"lookback_window" is not one/)
+    expect(ok(`${BASE}/120000000000501/shared_accounts?fields=id&permissions=targeting`)).toMatch(/"permissions" is not one/)
+    expect(ok(`${BASE}/act_1234567890/adspixels?fields=id&name_filter=x`)).toMatch(/"name_filter" is not one/)
+    expect(ok(`${BASE}/act_1234567890/customconversions?fields=id&include_archived=true`)).toMatch(/"include_archived" is not one/)
+    // The people behind a pixel only through its edge, never expanded inside fields.
+    expect(ok(`${BASE}/120000000000501?fields=id,assigned_users{id,name}`)).toMatch(/never expands "assigned_users"/)
   })
   it('step 17 — the publish mode is live (only the write allow-list reaches it); NEXUS_META_ADS_WRITES=off is the brake', () => {
     expect(publishModeOf('META')).toBe('live')
@@ -452,6 +501,132 @@ describe('read only by construction', () => {
     ]) expect(f(fields), fields).toMatch(/reactions inside fields only as a count/)
     // A count closing an expansion is one too.
     expect(f('id,attachments{target{id},reactions.limit(0).summary(total_count)}')).toBeNull()
+  })
+  it('step 12 — catalogs, items, feeds and catalog health: each key only on its own edge', () => {
+    const q = (path: string) => ok(`${BASE}/${path}`)
+    const filter = encodeURIComponent('{"retailer_id":{"is_any":["SKU-1"]}}')
+    // Allowed where the read uses it.
+    for (const path of [
+      '120000000000700/assigned_users?fields=id,name,tasks&business=9876543210',
+      '120000000000700/data_sources?fields=id,name&ingestion_source_type=ALL',
+      `120000000000700/products?fields=id,retailer_id,price&filter=${filter}&error_priority=HIGH&error_type=IMAGE_RESOLUTION_LOW&summary=total_count`,
+      `120000000000710/products?fields=id&filter=${filter}`,
+      '120000000000700/check_batch_request_status?fields=handle,status&handle=AbC-1_2&load_ids_of_invalid_requests=true',
+      '120000000000700/product_sets_batch?fields=handle,status&handle=AbC-1',
+      '120000000000700/diagnostics?fields=title&types=["IMAGE_QUALITY"]&severities=["MUST_FIX"]&affected_channels=["da"]&affected_entities=["product_item"]&affected_features=["checkout"]',
+      '120000000000700/event_stats?fields=event&breakdowns=["DEVICE_TYPE"]',
+      '120000000000760/da_checks?fields=key,result&checks=["pixel_decline"]&connection_method=ALL',
+      '120000000000720/errors?fields=id,summary&error_priority=HIGH',
+      '120000000000740/override_details?fields=key,type,values&type=COUNTRY&keys=["IT"]',
+      '9876543210/collaborative_ads_collaboration_requests?fields=id,status&request_role=RECEIVER',
+      '120000000000740?fields=id,retailer_id,retailer_product_group_id,price&override_country=IT',
+      '120000000000740?fields=id,retailer_product_group_id&override_language=it_IT',
+      '120000000000700/dpa_eligible_ad_accounts?fields=id,account_id&search=1234567890',
+    ]) expect(q(path), path).toBeNull()
+    // Refused anywhere else: on another edge, or an override on a read that is not an item's.
+    for (const [path, key] of [
+      // Step 3 (#717) allows business on act_<id>/assigned_users (Meta requires it there); it stays refused on other edges.
+      ['act_1234567890/agencies?fields=id&business=9876543210', 'business'], ['120000000000700/agencies?fields=id&business=9876543210', 'business'],
+      [`act_1234567890/ads?fields=id&filter=${filter}`, 'filter'], ['120000000000700/product_feeds?fields=id&error_type=X', 'error_type'],
+      ['120000000000700/product_feeds?fields=id&handle=x', 'handle'], ['120000000000700/insights?fields=spend&types=["X"]', 'types'],
+      ['120000000000700/products?fields=id&bulk_pagination=true', 'bulk_pagination'], ['120000000000700/products?fields=id&return_only_approved_products=true', 'return_only_approved_products'],
+      ['120000000000700/check_batch_request_status?handle=x&error_priority=HIGH', 'error_priority'], ['120000000000760/da_checks?fields=key&event=Purchase', 'event'],
+      ['120000000000700/connected_businesses?fields=id&role=ADMIN', 'role'], ['120000000000700/dpa_eligible_ad_accounts?fields=id&search=x', 'search'],
+      ['120000000000740?fields=id,name&override_country=IT', 'override_country'], ['120000000000740?fields=id,product_catalog{retailer_product_group_id}&override_language=it_IT', 'override_language'],
+      ['act_1234567890?fields=name&override_country=IT', 'override_country'], ['9876543210/collaborative_ads_collaboration_requests?fields=id&since=2026-01-01', 'since'],
+      ['120000000000700/products?fields=id&error_type=NOT_A_META_ERROR', 'error_type'], ['120000000000700/products?fields=id&error_type=image_resolution_low', 'error_type'],
+      ['120000000000700/dpa_eligible_ad_accounts?fields=id&search=Shop', 'search'], ['act_1234567890/adaccounts?fields=id&search=1234567890', 'search'],
+    ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
+    // A catalog's people and partners are read through their edges, never expanded into fields.
+    expect(q('120000000000700?fields=id,assigned_users{name}')).toMatch(/never expands "assigned_users"/)
+    expect(q('120000000000700?fields=id,agencies{name}')).toMatch(/never expands "agencies"/)
+  })
+  it('step 12 round 4 item 7 — an items read\'s filter only as a JSON object (as the facets filter)', () => {
+    const q = (path: string) => ok(`${BASE}/${path}`)
+    for (const rule of ['{"retailer_id":{"is_any":["SKU-1"]}}', '{"and":[{"availability":{"eq":"in stock"}},{"review_status":{"eq":"rejected"}}]}']) {
+      expect(q(`120000000000700/products?fields=id&filter=${encodeURIComponent(rule)}`), rule).toBeNull()
+    }
+    for (const value of ['["retailer_id"]', 'retailer_id', '{"retailer_id":', '42', 'null', '"x"', '']) {
+      expect(q(`120000000000700/products?fields=id&filter=${encodeURIComponent(value)}`), value).toMatch(/"filter" is not one/)
+    }
+  })
+  it('step 3 — the account itself, its billing and who has access: each key only on its own edge; the feature settings are the only hyphenated paths', () => {
+    const q = (path: string) => ok(`${BASE}/${path}`)
+    for (const path of [
+      'act_1234567890/assigned_users?fields=id,name,tasks,permitted_tasks,business{id,name}&business=9876543210&summary=total_count',
+      '120000000000010/assigned_users?fields=id,name,tasks&business=9876543210', '170000000000001/assigned_users?fields=id,name,tasks&business=9876543210',
+      'act_1234567890/advertisable_applications?fields=id,name&business_id=9876543210',
+      'act_1234567890/connected_instagram_accounts_with_iabp?fields=id,username&business_id=9876543210',
+      'act_1234567890/minimum_budgets?fields=currency,min_daily_budget_imp&bid_amount=150',
+      'act_1234567890/campaign_attribution_options?app_id=300000000000001&optimization_goal=APP_INSTALLS&event_name=PURCHASE',
+      'act_1234567890/insights/feature-settings?insights_feature=comscore', 'act_1234567890/insights/feature-settings/list-features',
+      'act_1234567890/activities?fields=event_type,extra_data&since=1760000000&until=1760086400',
+      '9876543210/business_invoices?fields=id,amount_due&start_date=2026-01-01&end_date=2026-10-01&issue_start_date=2026-01-01&issue_end_date=2026-10-01&type=INV&summary=total_count',
+      '9876543210/business_invoices?fields=id&invoice_id=123456', '9876543210/extendedcreditapplications?fields=id,status&only_show_pending=true',
+      'act_1234567890/users?fields=id,name,tasks', 'act_1234567890/agencies?fields=id,name,access_status,permitted_tasks', '9876543210/extendedcredits?fields=id,balance',
+      '100000000000001/assigned_ad_accounts?fields=account_id,name', '100000000000001/extended_credit_invoice_groups?fields=id,name',
+      // Review B4, B1, A4, A2.
+      'act_1234567890/activities?fields=event_type&category=BUDGET&since=1760000000&until=1760086400', '9876543210/owned_instagram_assets?fields=id,ig_user_id',
+      '9876543210/client_instagram_assets?fields=id,ig_user_id', '9876543210/extendedcredits?fields=id,owner_business{id}',
+      'act_1234567890?fields=agency_client_declaration{agency_representing_client,client_name,client_city}',
+      '100000000000001/assigned_product_catalogs?fields=id,name,owner_business{id}',
+    ]) expect(q(path), path).toBeNull()
+    for (const [path, key] of [
+      ['act_1234567890/campaigns?fields=id&business=9876543210', 'business'], ['act_1234567890/users?fields=id&business=9876543210', 'business'],
+      ['act_1234567890/applications?fields=id&business_id=9876543210', 'business_id'], ['act_1234567890/insights?fields=spend&insights_feature=comscore', 'insights_feature'],
+      ['act_1234567890/ads?fields=id&since=1760000000', 'since'], ['act_1234567890/minimum_budgets?bid_amount=150&app_id=1', 'app_id'],
+      ['9876543210/owned_ad_accounts?fields=id&type=INV', 'type'], ['9876543210/extendedcredits?fields=id&only_show_pending=true', 'only_show_pending'],
+      ['act_1234567890/campaign_attribution_options?app_id=1&custom_event_str=x', 'custom_event_str'], ['9876543210/business_invoices?fields=id&root_id=1', 'root_id'],
+      // Step 5 widens category to Meta's own enum on the account's log and an ad set's (its own test below); never another value
+      // or another case. Step 3's round 4: the days only as Unix seconds.
+      ['act_1234567890/activities?fields=event_type&category=BILLING', 'category'], ['act_1234567890/activities?fields=event_type&category=account', 'category'],
+      ['120000000000101/activities?fields=event_type&category=account', 'category'], ['act_1234567890/campaigns?fields=id&category=BUDGET', 'category'],
+      ['act_1234567890/activities?fields=event_type&category=budget', 'category'],
+      ['act_1234567890/activities?fields=event_type&since=yesterday', 'since'], ['act_1234567890/activities?fields=event_type&since=-5', 'since'],
+      ['act_1234567890/activities?fields=event_type&since=1760000000&until=abc', 'until'], ['act_1234567890/activities?fields=event_type&since=1760000000.5', 'since'],
+      ['act_1234567890/activities?fields=event_type&until=2026-10-21', 'until'], ['act_1234567890/activities?fields=event_type&since=1234567890123', 'since'],
+      ['9876543210/owned_instagram_assets?fields=id&business=9876543210', 'business'],
+    ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
+    // A hyphen only in the two feature-settings paths, exactly as Meta writes them.
+    for (const path of [
+      'act_1234567890/insights/feature-settings/other-list', 'act_1234567890/feature-settings', '120000000000101/insights/feature-settings',
+      'act_1234567890/insights/feature-settings/list-features/x', 'act_1234567890/Insights/feature-settings', 'act_1234567890/insights/list-features',
+      'act_1234567890/ad-images', 'act_1234567890/insights/feature_settings-',
+    ]) expect(q(path), path).toMatch(/letters, digits and _ only|not one a Nexus read/)
+    // FIELD_DENIED stays: people and agencies are read through their own edge, never expanded into the account.
+    expect(q('act_1234567890?fields=id,users{name}')).toMatch(/never expands "users"/)
+    expect(q('act_1234567890?fields=id,agencies{name}')).toMatch(/never expands "agencies"/)
+    expect(q('act_1234567890?fields=id,assigned_users{name}')).toMatch(/never expands "assigned_users"/)
+  })
+  it('step 13 — product sets, facets, Instagram product search and appeals: each key only on its own edge', () => {
+    const q = (path: string) => ok(`${BASE}/${path}`)
+    const filter = encodeURIComponent('{"brand":{"eq":"Shop A"}}')
+    // Allowed where the read uses it.
+    for (const path of [
+      '120000000000700/product_sets?fields=id,name,filter&parent_id=0&ancestor_id=120000000000800&has_children=true&retailer_id=SET-1&summary=total_count',
+      `120000000000800/products?fields=id,retailer_id,price&filter=${filter}&error_priority=HIGH&error_type=IMAGE_RESOLUTION_LOW&summary=total_count`,
+      `120000000000700/facets?fields=facets,item_count&facets=${encodeURIComponent('["brand","color"]')}&filter=${filter}`,
+      '170000000000001/catalog_product_search?fields=product_id,product_name&catalog_id=120000000000700&q=SKU-1',
+      '170000000000001/product_appeal?fields=product_id,review_status&product_id=120000000000740',
+      '130000000000001?fields=id,checkout_config.country_code(IT),shops_ads_setup.country_code(IT)',
+      '130000000000001?fields=id,privacy_policy_localized.locale(en_US)', '130000000000001?fields=id,privacy_policy_localized.locale(en-US)',
+      '130000000000001/shops?fields=id,shop_status,fb_sales_channel{status,fb_page{id,name}},ig_sales_channel{status,ig_user{id,username}}',
+      '120000000000010/shop_setup_status?fields=shop_setup,payment_setup,review_status',
+    ]) expect(q(path), path).toBeNull()
+    // Refused anywhere else.
+    for (const [path, key] of [
+      ['120000000000700/products?fields=id&parent_id=0', 'parent_id'], ['120000000000700/product_feeds?fields=id&has_children=true', 'has_children'],
+      ['act_1234567890/ads?fields=id&retailer_id=SET-1', 'retailer_id'], ['120000000000700/products?fields=id&facets=["brand"]', 'facets'],
+      [`120000000000700/product_feeds?fields=id&filter=${filter}`, 'filter'], ['170000000000001/media?fields=id&q=x', 'q'],
+      ['170000000000001/media?fields=id&catalog_id=120000000000700', 'catalog_id'], ['178000000000001/product_tags?fields=product_id&product_id=1', 'product_id'],
+      ['170000000000001/product_appeal?fields=product_id&appeal_reason=x', 'appeal_reason'], ['130000000000001/shops?fields=id&filter=x', 'filter'],
+      // Review A7 — only in the shape Nexus sends: digits, a JSON list of field names, a JSON object.
+      ['170000000000001/catalog_product_search?fields=product_id&catalog_id=abc', 'catalog_id'], ['170000000000001/catalog_product_search?fields=product_id&catalog_id=1,2', 'catalog_id'],
+      ['170000000000001/product_appeal?fields=product_id&product_id=SKU-1', 'product_id'],
+      [`120000000000700/facets?fields=facets&facets=${encodeURIComponent('brand')}`, 'facets'], [`120000000000700/facets?fields=facets&facets=${encodeURIComponent('["Brand Name"]')}`, 'facets'],
+      [`120000000000700/facets?fields=facets&facets=${encodeURIComponent('[]')}`, 'facets'], [`120000000000700/facets?fields=facets&facets=${encodeURIComponent('[{"field":"brand"}]')}`, 'facets'],
+      [`120000000000700/facets?fields=facets&filter=${encodeURIComponent('["brand"]')}`, 'filter'], ['120000000000700/facets?fields=facets&filter=brand', 'filter'],
+    ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
   })
 })
 
@@ -794,9 +969,11 @@ describe('step 16 — partnership, research and brand-safety reads: their own ke
     expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, { auth: 'app' })).toMatch(/own system-user token/)
     expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, { auth: 'none' })).toMatch(/own system-user token/)
     expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, { headers: { Authorization: 'Bearer x' } })).toMatch(/no header/)
-    // Never a change: a PUT, POST or DELETE of the same paths goes to the write allow-list, which has no REST host at all.
+    // A PUT, POST or DELETE of the same paths goes to the write allow-list: step 26 (review B1) judges the chosen Page's
+    // partnership writes there (meta-boost-writes.vitest.test.ts); a call not named as the Page's change, or a body where
+    // none goes, is refused.
     for (const method of ['PUT', 'POST', 'DELETE']) {
-      expect(metaWriteProblemOf(method, `${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, 'is_enabled=true')).toMatch(/graph\.facebook\.com/)
+      expect(metaWriteProblemOf(method, `${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, 'is_enabled=true')).toMatch(/partnership host/)
     }
     expect(metaRenewalOf(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`)).toBeNull()
   })
@@ -848,6 +1025,131 @@ describe('step 16 review fixes — no creator picked by gender or age; a backsla
     expect(ok(`${BASE}/9876543210/partnership-ads-advertisable-content?fields=content_id`)).toBeNull()
     for (const path of ['me/partnership-ads-advertisable-content', 'act_1/partnership-ads-advertisable-content', '123/partnership-ads-advertisable-content/x', '123/456/partnership-ads-advertisable-content']) {
       expect(ok(`${BASE}/${path}?fields=content_id`), path).toMatch(/letters, digits and _ only/)
+    }
+  })
+})
+
+describe('step 5 — the change history: each activity key only on its own route, only with a value Nexus sends', () => {
+  const q = (path: string) => metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${path}`, kind: 'read' })
+  it('the account\'s log and an ad set\'s own: days, Meta\'s categories, an actor; the object filter on the account\'s log only', () => {
+    for (const path of [
+      'act_1234567890/activities?fields=event_time,event_type&since=1760000000&until=1760086400&category=BUDGET',
+      'act_1234567890/activities?fields=event_type&category=TARGETING&uid=100000000000002',
+      'act_1234567890/activities?fields=event_type&since=1760000000&until=1760086400&oid=120000000000001&add_children=true',
+      'act_1234567890/activities?fields=event_type&oid=120000000000003&add_children=false',
+      '120000000000002/activities?fields=event_type&since=1760000000&until=1760086400&business_id=9876543210&category=AD_SET&uid=100000000000001',
+      // Step 3's billing read (category BUDGET) still goes.
+      'act_1234567890/activities?fields=event_type&category=BUDGET&since=1760000000&until=1760086400',
+    ]) expect(q(path), path).toBeNull()
+  })
+  it('anything else is refused by name', () => {
+    for (const [path, key] of [
+      ['act_1234567890/activities?fields=event_type&category=budget', 'category'], ['act_1234567890/activities?fields=event_type&category=BUDGET,BID', 'category'],
+      ['act_1234567890/activities?fields=event_type&uid=me', 'uid'], ['act_1234567890/activities?fields=event_type&oid=act_1', 'oid'],
+      ['act_1234567890/activities?fields=event_type&add_children=1', 'add_children'], ['act_1234567890/activities?fields=event_type&extra_oids=["1"]', 'extra_oids'],
+      ['act_1234567890/activities?fields=event_type&data_source=CALYPSO', 'data_source'], ['act_1234567890/activities?fields=event_type&business_id=9876543210', 'business_id'],
+      ['120000000000002/activities?fields=event_type&oid=120000000000001', 'oid'], ['120000000000002/activities?fields=event_type&add_children=true', 'add_children'],
+      ['120000000000002/activities?fields=event_type&since=yesterday', 'since'], ['120000000000002/activities?fields=event_type&business_id=x', 'business_id'],
+      ['act_1234567890/campaigns?fields=id&oid=120000000000001', 'oid'], ['act_1234567890/ads?fields=id&uid=100000000000002', 'uid'],
+      ['120000000000002/insights?fields=spend&business_id=9876543210', 'business_id'],
+    ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
+  })
+  it('the health reads go as plain reads: the Page\'s integrity, conversions and pixels, creatives', () => {
+    for (const path of [
+      '120000000000010/page_status', 'act_1234567890/customconversions?fields=id,name,custom_event_type,is_archived,is_unavailable,last_fired_time&limit=100',
+      'act_1234567890/adspixels?fields=id,name,is_unavailable,last_fired_time,owner_business{id}&limit=100', 'act_1234567890/adcreatives?fields=id,name,status&limit=100',
+      'act_1234567890?fields=failed_delivery_checks{check_name,summary,description,extra_info{adgroup_ids,campaign_ids,countries}}',
+    ]) expect(q(path), path).toBeNull()
+  })
+})
+
+describe('step 7 — numbers, report runs and saved reports: each new key on its own route, only with a value on the insights lists', () => {
+  const ok = (path: string) => metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${path}`, kind: 'read' })
+  const q = (v: unknown) => encodeURIComponent(JSON.stringify(v))
+  it('allowed where meta-ads-numbers and meta-ads-saved-reports read', () => {
+    for (const path of [
+      `act_1234567890/insights?level=ad&fields=spend,impressions&breakdowns=${q(['publisher_platform', 'platform_position'])}&action_breakdowns=${q(['action_type', 'action_destination'])}&action_attribution_windows=${q(['1d_click', '7d_click', '1d_view', 'incrementality'])}&date_preset=last_7d&sort=${q(['spend_descending'])}&default_summary=true&summary_action_breakdowns=${q(['action_type'])}&use_account_attribution_setting=true`,
+      `120000000000101/insights?fields=spend&breakdowns=${q(['product_id'])}&product_id_limit=25&time_ranges=${q([{ since: '2026-10-01', until: '2026-10-07' }, { since: '2026-09-24', until: '2026-09-30' }])}`,
+      `act_1234567890/insights?fields=actions&sort=${q(['actions:omni_purchase_ascending'])}`,
+      // A report run's results take only paging.
+      '6000000000001/insights?limit=100&after=QVFI',
+      `act_1234567890/reporting?metrics=${q(['spend', 'impressions'])}&dimensions=${q(['campaign_name'])}&date_preset=last_30d&comparison_time_range=${q({ since: '2026-09-01', until: '2026-09-30' })}&attribution_windows=${q(['7d_click'])}&sorting=${q([{ field: 'spend', direction: 'desc' }])}&default_summary=true&summary_count=true&offset=100&filtering=${q([{ field: 'campaign.name', operator: 'CONTAIN', value: 'IT' }])}`,
+      'act_1234567890/ads_reporting_mmm_reports?fields=id,export_name', 'act_1234567890/ad_custom_derived_metrics?fields=id,name,formula', 'act_1234567890/report_specs',
+      '9876543210/custom_pivots?fields=id,name&permission=shared&saved_report_id=1234',
+      `9876543210/ads_custom_pivots_preview?fields=account_id&ad_account_ids=${q(['1234567890'])}&date_preset=last_30d&group_name=Group%201`,
+      '9876543210/measurement_reports?fields=id,status&report_type=mmm_report_v2',
+      `9876543210/third_party_partner_panel_requests?fields=id&status=${q(['SUCCESS'])}&study_type=${q(['BRAND_LIFT'])}`,
+      `9876543210/third_party_partner_panel_recurring_requests?fields=id&status=${q(['ONGOING'])}`,
+      '9876543210/third_party_partner_viewability_requests?fields=id&start_ds=2026-10-01&end_ds=2026-10-07&platform=INSTAGRAM&type=IMPRESSION',
+    ]) expect(ok(path), path).toBeNull()
+  })
+  it.each([
+    // A value off the lists is refused by its key's name, on the very route it belongs to.
+    [`act_1234567890/insights?fields=spend&breakdowns=${q(['dma'])}`, 'breakdowns'],
+    [`act_1234567890/insights?fields=spend&breakdowns=${q(['mmm'])}`, 'breakdowns'],
+    [`act_1234567890/insights?fields=spend&breakdowns=${q(['age', 'gender', 'country', 'region', 'zip'])}`, 'breakdowns'],
+    [`act_1234567890/insights?fields=spend&action_attribution_windows=${q(['7d_view'])}`, 'action_attribution_windows'],
+    [`act_1234567890/insights?fields=spend&action_attribution_windows=${q(['skan_click'])}`, 'action_attribution_windows'],
+    ['act_1234567890/insights?fields=spend&date_preset=lifetime', 'date_preset'],
+    [`act_1234567890/insights?fields=spend&sort=${q(['spend_descending', 'reach_descending'])}`, 'sort'],
+    [`act_1234567890/insights?fields=spend&sort=${q(['access_token_descending'])}`, 'sort'],
+    ['act_1234567890/insights?fields=spend&default_summary=false', 'default_summary'],
+    ['act_1234567890/insights?fields=spend&product_id_limit=5000', 'product_id_limit'],
+    [`act_1234567890/insights?fields=spend&time_ranges=${q([{ since: '2026-10-07', until: '2026-10-01' }])}`, 'time_ranges'],
+    [`act_1234567890/reporting?metrics=${q(['access_token'])}`, 'metrics'],
+    [`act_1234567890/reporting?dimensions=${q(['user_email'])}`, 'dimensions'],
+    [`act_1234567890/reporting?attribution_windows=${q(['28d_view'])}`, 'attribution_windows'],
+    [`act_1234567890/reporting?filtering=${q([{ field: 'user.email', operator: 'EQUAL', value: 'x' }])}`, 'filtering'],
+    ['9876543210/measurement_reports?fields=id&report_type=all', 'report_type'],
+    ['9876543210/custom_pivots?fields=id&creator_id=1234', 'creator_id'],
+    [`9876543210/ads_custom_pivots_preview?fields=account_id&ad_account_ids=${q(['1', '2'])}`, 'ad_account_ids'],
+    // Never sent anywhere (Meta ignores both since 2025-06-10).
+    ['act_1234567890/insights?fields=spend&use_unified_attribution_setting=true', 'use_unified_attribution_setting'],
+    ['act_1234567890/insights?fields=spend&action_report_time=mixed', 'action_report_time'],
+    ['act_1234567890/insights?fields=spend&export_format=csv', 'export_format'],
+    // Each key only on its own route.
+    [`act_1234567890/campaigns?fields=id&date_preset=last_7d`, 'date_preset'],
+    [`120000000000101/adsets?fields=id&action_attribution_windows=${q(['1d_click'])}`, 'action_attribution_windows'],
+    [`act_1234567890/insights?fields=spend&metrics=${q(['spend'])}`, 'metrics'],
+    [`act_1234567890/reporting?breakdowns=${q(['age'])}`, 'breakdowns'],
+    ['act_1234567890/adsets?fields=id&report_type=mmm_report_v2', 'report_type'],
+    ['9876543210/ads_reporting_exports?fields=id&start_ds=2026-10-01&end_ds=2026-10-07', 'start_ds'],
+  ])('refused: %s (%s)', (path, key) => {
+    expect(ok(path)).toMatch(new RegExp(`"${key}" is not one`))
+  })
+})
+
+describe('step 7 review round 1 — insights GETs: step 2\'s keys by value too; Object.prototype\'s names are no list entry', () => {
+  const ok = (path: string) => metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${path}`, kind: 'read' })
+  const q = (v: unknown) => encodeURIComponent(JSON.stringify(v))
+  it('A-F4 — level, time_range, time_increment and filtering: Nexus\'s values go, any other is refused by its name', () => {
+    for (const path of [
+      // The daily read and meta-ads-live, as they send them.
+      `act_1234567890/insights?level=ad&time_increment=1&time_range=${q({ since: '2026-10-01', until: '2026-10-19' })}&fields=spend&filtering=${q([{ field: 'ad.effective_status', operator: 'IN', value: ['ACTIVE', 'PAUSED', 'IN_PROCESS', 'WITH_ISSUES', 'ARCHIVED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO', 'DELETED'] }, { field: 'campaign.id', operator: 'EQUAL', value: '120000000000101' }])}`,
+      'act_1234567890/insights?level=account&time_increment=all_days&fields=spend',
+    ]) expect(ok(path), path).toBeNull()
+    for (const [path, key] of [
+      [`act_1234567890/insights?fields=spend&filtering=${q([{ field: 'anything', operator: 'WHATEVER', value: 'x' }])}`, 'filtering'],
+      [`120000000000101/insights?fields=spend&filtering=${q([{ field: 'campaign.effective_status', operator: 'IN', value: ['ADSET_PAUSED'] }])}`, 'filtering'],
+      ['act_1234567890/insights?fields=spend&level=everything', 'level'],
+      ['act_1234567890/insights?fields=spend&time_increment=365', 'time_increment'],
+      [`act_1234567890/insights?fields=spend&time_range=${q({ since: '2026-10-19', until: '2026-10-01' })}`, 'time_range'],
+      [`act_1234567890/insights?fields=spend&time_range=${q({ since: '2026-10-01', until: '2026-10-19', extra: 1 })}`, 'time_range'],
+    ] as const) expect(ok(path), path).toMatch(new RegExp(`"${key}" is not one`))
+  })
+  it('re-review 2 — a bad VALUE of a key Nexus sends there is said so; a key Nexus never sends there keeps its own words', () => {
+    expect(ok(`act_1234567890/insights?fields=spend&time_range=${encodeURIComponent("{'since':'2026-10-01','until':'2026-10-19'}")}`)).toMatch(/the value of "time_range" is not one Nexus sends here/)
+    expect(ok('act_1234567890/insights?fields=spend&level=everything')).toMatch(/the value of "level" is not one Nexus sends here/)
+    expect(ok('act_1234567890/insights?fields=spend&metadata=1')).toMatch(/the query key "metadata" is not one a Nexus read of Meta uses here/)
+    expect(ok('act_1234567890/campaigns?fields=id&level=ad')).toMatch(/the query key "level" is not one a Nexus read of Meta uses here/)
+  })
+  it('A-F3 — a filter, breakdown or sort named after Object.prototype is refused plainly (no TypeError, its ledger row stands)', () => {
+    for (const name of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      expect(() => ok(`act_1234567890/insights?fields=spend&filtering=${q([{ field: name, operator: 'IN', value: ['1'] }])}`)).not.toThrow()
+      expect(ok(`act_1234567890/insights?fields=spend&filtering=${q([{ field: name, operator: 'IN', value: ['1'] }])}`), name).toMatch(/"filtering" is not one/)
+      expect(ok(`act_1234567890/insights?fields=spend&breakdowns=${q([name])}`), name).toMatch(/"breakdowns" is not one/)
+      expect(ok(`act_1234567890/insights?fields=spend&sort=${q([`${name}_descending`])}`), name).toMatch(/"sort" is not one/)
+      expect(ok(`act_1234567890/reporting?filtering=${q([{ field: name, operator: 'IN', value: ['1'] }])}`), name).toMatch(/"filtering" is not one/)
     }
   })
 })

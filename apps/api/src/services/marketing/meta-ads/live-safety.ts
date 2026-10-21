@@ -49,7 +49,7 @@
  *     ≤ 5000 per page; 2.4K calls per hour); GET /brand_safety_publisher_list_metadata
  *   - webhooks (reference/app/subscriptions: object, callback_url, fields, active — app token; reference/ad-account/
  *     subscribed_apps (SDK adaccountsubscribedapps.py: app_id, app_name); reference/page/subscribed_apps (a Page token,
- *     pages_manage_metadata; subscribed_fields); ads-webhooks/subscriptions: GET /act_{id}/subscriptions[/{id}] (ads_read;
+ *     pages_manage_metadata; subscribed_fields — step 30 part 3: the gateway reads it with the chosen Page's own token); ads-webhooks/subscriptions: GET /act_{id}/subscriptions[/{id}] (ads_read;
  *     scoped to the account and the app that made it; event_type, field, value, operator, filters ≤ 20, status; budgets,
  *     spend and bid amounts in the currency's minor unit)
  */
@@ -62,6 +62,7 @@ import { failureOfAnswer, failureOfThrow, localFailure, MetaReadError } from './
 import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectKindOf, type MetaChosenAccount } from './live.js'
 import { metaReadOne } from './read-client.js'
 import { takenIds } from './taken.js'
+import { pageTokenReadError } from './live-webhook-setup.js'
 import { fieldsRefused, graphPage, idOf, noted, num, obj, pageOf, part, portfolioOf, rowsOf, text, type Row } from './live-partners.js'
 
 // ── shared ────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -436,6 +437,9 @@ function blockListRow(r: Row) {
 export const WEBHOOK_VIEWS = ['all', 'app', 'ad-account', 'page', 'alerts'] as const
 export type WebhookView = typeof WEBHOOK_VIEWS[number]
 
+/** Step 30 part 3 review A-F6 — the page part while Meta changes are switched off: no Page token is read, so it is not read. */
+export const PAGE_PART_GATED = 'Not read: Meta answers a Page\'s connected apps only to the Page\'s own token, and Nexus reads no Page token while Meta changes are switched off (NEXUS_META_ADS_WRITES is not live). This part is seen in Meta Business Suite › All Tools › Business Apps meanwhile.'
+
 /**
  * ads-webhooks/subscriptions: budgets, spend, bid amounts and cost metrics in a subscription are in the account
  * currency's minor unit (cents). Each such field's value is answered as `…Cents` (money, restricted).
@@ -500,7 +504,12 @@ export async function liveWebhooks(input: { connectionId?: string | null; view: 
   const want = (v: WebhookView) => input.view === 'all' || input.view === v
   const app = want('app') ? await part(async () => {
     if (!appId) throw new MetaLiveRefusal('No Meta app id is stored for this connection (a person enters it in Settings › Channels › Meta).')
-    const body = await appRead(connectionId, 'webhooks.app', `${appId}/subscriptions`, 'object,callback_url,fields,active')
+    // Step 12 round 2 — the token here is the APP's, not the system user's: Meta refusing it ends only this part, with
+    // the step a person takes (not "make a new system-user token").
+    const body = await appRead(connectionId, 'webhooks.app', `${appId}/subscriptions`, 'object,callback_url,fields,active').catch((err) => {
+      if (err instanceof MetaReadError && err.failure.authLost) throw new MetaLiveRefusal('Meta does not accept the app token; check the app id / secret in Settings › Channels › Meta.')
+      throw err
+    })
     return rowsOf(body).map((r) => ({
       object: text(r.object), callbackUrl: callbackOf(r.callback_url), active: typeof r.active === 'boolean' ? r.active : null,
       fields: (Array.isArray(r.fields) ? r.fields : []).map((f) => text(f) ?? text(obj(f)?.name)).filter(Boolean),
@@ -512,8 +521,13 @@ export async function liveWebhooks(input: { connectionId?: string | null; view: 
   }) : null
   const page = want('page') ? await part(async () => {
     const pageId = pageOf(account)
-    const read = await graphPage(connectionId, 'webhooks.pageApps', `${pageId}/subscribed_apps`, { fields: 'id,name,subscribed_fields', limit: 100 }).catch((err) => {
-      if (err instanceof MetaReadError && err.failure.permissionDenied) throw new MetaLiveRefusal(`${err.message} Meta answers a Page's connected apps only to a Page access token (pages_manage_metadata, a person with a task on the Page); Nexus reads with the business's system-user token, so this part comes with the webhook set-up step (step 30) or is seen in Meta Business settings.`)
+    const read = await graphPage(connectionId, 'webhooks.pageApps', `${pageId}/subscribed_apps`, { fields: 'id,name,subscribed_fields', limit: 100 }).catch((caught) => {
+      // Step 30 part 3 review A-F6 — with Meta changes switched off the gateway reads no Page token (step 36), so this part
+      // is not read at all; that gate stays.
+      if (caught instanceof MetaReadError && caught.failure.code === 'PUBLISH_GATED') throw new MetaLiveRefusal(PAGE_PART_GATED)
+      // Review A-F5 — Meta refusing the Page's own token is said in the Page token's words (never "the system-user token").
+      const err = pageTokenReadError(caught, pageId)
+      if (err instanceof MetaReadError && err.failure.permissionDenied) throw new MetaLiveRefusal(`${err.message} Meta answers a Page's connected apps only to the Page's own token, which Nexus reads with the business's system user: it needs the Manage, Create content or Moderate task on the Page (an employee system user also the Page assigned: Meta Business settings › Users › System users › Assign assets) and pages_manage_metadata, pages_show_list on its token; until then this part is seen in Meta Business settings or the App Dashboard. set-meta-webhooks install-page installs the app on the Page.`)
       throw err
     })
     return { pageId, apps: read.rows.map((r) => ({ appId: idOf(r.id), name: text(r.name), fields: (Array.isArray(r.subscribed_fields) ? r.subscribed_fields : []).map((f) => text(f) ?? text(obj(f)?.name)).filter(Boolean), isNexusApp: !!appId && idOf(r.id) === appId })) }
@@ -534,7 +548,7 @@ export async function liveWebhooks(input: { connectionId?: string | null; view: 
     ...(adAccount ? { adAccountApps: adAccount.value, adAccountAppsNotRead: adAccount.notRead } : {}),
     ...(page ? { pageApps: page.value, pageAppsNotRead: page.notRead } : {}),
     ...(alerts ? { alertSubscriptions: alerts.value?.items ?? null, alertSubscriptionsNextAfter: alerts.value?.nextAfter ?? null, alertSubscriptionsNotRead: alerts.notRead } : {}),
-    note: 'Meta\'s ads webhooks take two connections: the app\'s subscription to the ad_account fields (appSubscriptions; the callback shown by its origin only) and the ad account connected to the app (adAccountApps, isNexusApp). Alert subscriptions are this app\'s threshold and change alerts on the ad account (amounts in minor units of the account currency). No verify token, secret or token is ever read. Subscribing and connecting are changes (set-meta-webhooks, a later step).',
+    note: 'Meta\'s ads webhooks take two connections: the app\'s subscription to the ad_account fields (appSubscriptions; the callback shown by its origin only) and the ad account connected to the app (adAccountApps, isNexusApp). Alert subscriptions are this app\'s threshold and change alerts on the ad account (amounts in minor units of the account currency). No verify token, secret or token is ever read. Subscribing and connecting are set-meta-webhooks (or Meta\'s App Dashboard: this read shows the result either way); the app is installed on the chosen Page with set-meta-webhooks install-page (the Page\'s own token; or Meta Business Suite › All Tools › Business Apps); alerts are set-meta-alert-subscription and remove-meta-alert-subscription.',
   }
 }
 

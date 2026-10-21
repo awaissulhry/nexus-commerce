@@ -20,6 +20,7 @@ export const META_SCOPE = {
   pages_read_engagement: 'pages_read_engagement',
   instagram_basic: 'instagram_basic',
   catalog_management: 'catalog_management',
+  pages_manage_ads: 'pages_manage_ads',
 } as const
 
 export const META_REQUIRED_SCOPES: string[] = [META_SCOPE.ads_read]
@@ -31,17 +32,20 @@ export const META_OPTIONAL_SCOPES: string[] = [
   META_SCOPE.pages_read_engagement,
   META_SCOPE.instagram_basic,
   META_SCOPE.catalog_management,
+  // Step 22 (review B2) — Instant Experience parts: guides/instant-experiences.md "Before you start" names it.
+  META_SCOPE.pages_manage_ads,
 ]
 
 /** What each permission lets Nexus do, for the sentence a missing one gets. */
 const NEEDED_FOR: Readonly<Record<string, string>> = {
   ads_read: 'read the ad account, its campaigns and its numbers',
-  ads_management: 'change ads (set-meta-status pauses, switches on and archives campaigns, ad sets and ads; set-meta-campaign, set-meta-ad-set and set-meta-budget-schedule change their settings, budgets and bids)',
-  business_management: "read the business portfolio's assets",
+  ads_management: 'change ads (set-meta-status pauses, switches on and archives campaigns, ad sets and ads; set-meta-campaign, set-meta-ad-set and set-meta-budget-schedule change their settings, budgets and bids; create-meta-campaign, create-meta-ad-set and copy-meta-ads make new ones, paused; remove-meta-ads-items deletes on a person\'s explicit ask; apply-meta-recommendations, create-meta-experiment, set-meta-experiment and end-meta-experiment apply the recommendations of Meta and make, change and end its tests)',
+  business_management: "read the business portfolio's assets, make a catalog or catalog segment in it (create-meta-catalog) and share a catalog with a partner (set-meta-catalog-access)",
   pages_show_list: 'list the Facebook Pages',
   pages_read_engagement: "read the Pages' Instagram accounts",
   instagram_basic: 'read the Instagram accounts (with pages_show_list)',
-  catalog_management: 'read the catalogs (later Nexus versions)',
+  catalog_management: 'read the catalogs, and change them with create-meta-catalog, set-meta-catalog, set-meta-catalog-access, set-meta-product-set and remove-meta-catalog-items',
+  pages_manage_ads: 'delete parts of an Instant Experience of the chosen Page with remove-meta-ads-items (Meta also asks pages_read_engagement, pages_show_list and the Page\'s ADVERTISE task)',
 }
 
 export interface MetaPermissionGap { scope: string; required: boolean; neededFor: string }

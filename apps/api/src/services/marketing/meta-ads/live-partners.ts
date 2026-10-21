@@ -62,6 +62,7 @@ import { failureOfAnswer, failureOfThrow, localFailure, MetaReadError } from './
 import { metaChosenAccount, MetaLiveRefusal, type MetaChosenAccount } from './live.js'
 import { metaReadAll, metaReadOne } from './read-client.js'
 import { takenIds } from './taken.js'
+import { part as sharedPart } from './paging.js'
 
 export type Row = Record<string, unknown>
 
@@ -123,15 +124,11 @@ export async function restRead(connectionId: string, operation: string, path: st
   return body
 }
 
-/** Each part of an answer on its own: a part Meta refuses says why, and never hides the others. */
-export async function part<T>(work: () => Promise<T>): Promise<{ value: T | null; notRead: string | null }> {
-  try {
-    return { value: await work(), notRead: null }
-  } catch (err) {
-    if (err instanceof MetaReadError || err instanceof MetaLiveRefusal) return { value: null, notRead: err.message }
-    throw err
-  }
-}
+/**
+ * Each part of an answer on its own: a part Meta refuses says why, and never hides the others — a lost token or a throttle
+ * too (step 16 as merged; the shared `part` of paging.ts with stopOnLost: false).
+ */
+export const part = <T>(work: () => Promise<T>) => sharedPart(work, { stopOnLost: false })
 
 /** Meta refused the field list itself (code 100 from Meta, not a lost token or a throttle): read again with the core fields. */
 export function fieldsRefused(err: unknown): err is MetaReadError {

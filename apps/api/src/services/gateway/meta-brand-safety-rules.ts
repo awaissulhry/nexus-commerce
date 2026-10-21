@@ -51,7 +51,7 @@ import { META_NAME_TEXT } from './meta-write-text.js'
  * interest's or a place's name as Meta holds it) — never a control character or a line separator. Every key but the
  * brand-safety ones must equal the live targeting anyway (the gateway compares), and those are judged token by token.
  */
-const TARGETING_TEXT = /^[^\p{Cc}\p{Cs}\u2028\u2029]*$/u
+export const TARGETING_TEXT = /^[^\p{Cc}\p{Cs}\u2028\u2029]*$/u
 
 type Params = ReadonlyMap<string, string>
 type Judge = (value: string, params: Params) => string | null
@@ -86,8 +86,11 @@ export const MAX_SAFETY_TOKENS = 20
  */
 export const MAX_BLOCK_LIST_URLS = 250
 export const MAX_URL_LENGTH = 300
-/** The ONE file part Nexus sends (block_list_drafts): its form key, file name and content type are fixed here. */
-export const BLOCK_LIST_FILE = { key: 'publisher_urls_file', filename: 'publisher_urls.txt', contentType: 'text/plain' } as const
+/**
+ * The ONE file part Nexus sends (block_list_drafts): its form key, file name and content type are fixed here. The draft
+ * passes the text as `key` and the name as `nameKey` (step 23's MetaWriteRule.file; `nameKey` itself is never sent).
+ */
+export const BLOCK_LIST_FILE = { key: 'publisher_urls_file', nameKey: 'publisher_urls_file_name', filename: 'publisher_urls.txt', contentType: 'text/plain' } as const
 export const MAX_BLOCK_LIST_FILE_BYTES = MAX_BLOCK_LIST_URLS * (MAX_URL_LENGTH + 1)
 /**
  * Posts per platform in one content block-list request: Meta takes 50,000 per mutation; Nexus's tool arguments hold 250
@@ -294,13 +297,20 @@ export function sameJson(a: unknown, b: unknown, depth = 0): boolean {
  * outside `keys` is the live value exactly (none added, none dropped but a read-only `effective_…` one, none sent that is
  * read-only), and every brand-safety key the change SETS to something new passes its value judge.
  */
-export function targetingOutsideProblem(live: Record<string, unknown>, sent: Record<string, unknown>, keys: ReadonlySet<string>): string | null {
-  const only = `a brand-safety change changes only ${[...keys].join(', ')}`
+export function targetingOutsideProblem(
+  live: Record<string, unknown>, sent: Record<string, unknown>, keys: ReadonlySet<string>,
+  // Step 20 — a rule with its own keys judges their values itself (meta-targeting-rules.ts targetingValueProblem).
+  judge: (key: string, value: unknown, live?: unknown) => string | null = (key, value) => brandSafetyValueProblem(key as BrandSafetyTargetingKey, value),
+  what = 'a brand-safety change',
+): string | null {
+  const only = `${what} changes only ${[...keys].join(', ')}`
   for (const key of Object.keys(sent)) {
     if (isReadOnlyTargetingKey(key)) return `targeting.${key} is read-only (Meta computes it), so Nexus never sends it`
     if (keys.has(key)) {
       if (Object.prototype.hasOwnProperty.call(live, key) && sameJson(live[key], sent[key])) continue
-      const problem = brandSafetyValueProblem(key as BrandSafetyTargetingKey, sent[key])
+      // Step 20 (re-review 1) — the live value, null when the live spec has no such key (never undefined: the judge pins
+      // what must stay as Meta holds it against nothing, too).
+      const problem = judge(key, sent[key], Object.prototype.hasOwnProperty.call(live, key) ? live[key] : null)
       if (problem) return problem
       continue
     }
@@ -358,14 +368,17 @@ export const META_BRAND_SAFETY_WRITE_RULES: readonly MetaWriteRule[] = [
     budget: false,
   },
   {
-    // BS-005: the URL file as a draft (multipart, the one file part Nexus sends; no other key).
+    // BS-005: the URL file as a draft (multipart, the one file part Nexus sends; no other key). The text goes as a form key
+    // the gateway turns into the file part (step 23's MetaWriteRule.file); `bulky`: the ledger keeps its length only.
     name: 'blocklist.draft',
     method: 'POST',
     path: /^\d{1,20}\/block_list_drafts$/,
     kinds: ['business'],
-    required: [],
+    required: [BLOCK_LIST_FILE.key, BLOCK_LIST_FILE.nameKey],
     optional: [],
-    file: { ...BLOCK_LIST_FILE, maxBytes: MAX_BLOCK_LIST_FILE_BYTES, judge: blockListFileProblem },
+    maxBody: 3 * MAX_BLOCK_LIST_FILE_BYTES + 200,
+    bulky: true,
+    file: { key: BLOCK_LIST_FILE.key, nameKey: BLOCK_LIST_FILE.nameKey, name: /^publisher_urls\.txt$/, contentType: BLOCK_LIST_FILE.contentType, maxBytes: MAX_BLOCK_LIST_FILE_BYTES, judge: blockListFileProblem },
     values: () => null,
     budget: false,
   },

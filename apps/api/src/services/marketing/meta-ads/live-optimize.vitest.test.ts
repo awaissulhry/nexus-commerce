@@ -162,10 +162,11 @@ describe('study results — only known plain metrics unrestricted, a creative te
 })
 
 describe('how to act on a recommendation (RC-023)', () => {
-  it('a type Meta applies, with its signature: apply-meta-recommendations, which comes with a later step; a budget raise SPENDS MONEY', () => {
-    expect(howToAct('SCALE_GOOD_CAMPAIGN', true)).toMatchObject({ byApi: true, tool: 'apply-meta-recommendations', toolComesWith: 'a later Nexus step (step 28)', spendsMoney: 'yes' })
+  it('a type Meta applies, with its signature: apply-meta-recommendations (step 28); a budget raise SPENDS MONEY', () => {
+    expect(howToAct('SCALE_GOOD_CAMPAIGN', true)).toMatchObject({ byApi: true, tool: 'apply-meta-recommendations', spendsMoney: 'yes' })
+    expect(howToAct('SCALE_GOOD_CAMPAIGN', true)).not.toHaveProperty('toolComesWith')
     expect(howToAct('SCALE_GOOD_CAMPAIGN', true).sentence).toMatch(/SPENDS MONEY/)
-    expect(howToAct('SCALE_GOOD_CAMPAIGN', true).sentence).toMatch(/comes with a later Nexus step \(step 28\)/)
+    expect(howToAct('SCALE_GOOD_CAMPAIGN', true).sentence).toMatch(/apply-meta-recommendations asks for it with this signature/)
     expect(howToAct('MUSIC', true)).toMatchObject({ byApi: true, spendsMoney: 'no' })
   })
   it('the same type without a signature cannot be applied by API now', () => {
@@ -174,7 +175,8 @@ describe('how to act on a recommendation (RC-023)', () => {
   })
   it('a read-only type names the Nexus tool that does the same, or Meta\'s screens', () => {
     expect(howToAct('BUDGET_LIMITED', false)).toMatchObject({ byApi: false, spendsMoney: 'yes', nexusTools: ['set-meta-ad-set', 'set-meta-campaign'] })
-    expect(howToAct('SIGNALS_GROWTH_CAPI_V2', false).nexusTools).toEqual(['meta-datasets', 'upload-meta-events'])
+    // Step 33 review F2 — upload-meta-events never sends the website's events: the shop platform's own CAPI does.
+    expect(howToAct('SIGNALS_GROWTH_CAPI_V2', false).nexusTools).toEqual(['meta-datasets'])
     expect(howToAct('UNIFIED_INBOX', false).sentence).toMatch(/Ads Manager link/)
     expect(howToAct(null, false)).toMatchObject({ byApi: false, nexusTools: [] })
   })

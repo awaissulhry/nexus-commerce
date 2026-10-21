@@ -22,18 +22,19 @@ export const gatewayLedger: GatewayLedgerRow[] = []
 export const gatewayMetaChosen: Record<string, string | null> = {}
 /** Meta step 17: Meta objects in this business's stored rows (`objectId` → account and kind); every other is not stored. */
 export const gatewayMetaStored: Record<string, { adAccountId: string; kind: 'campaign' | 'adset' | 'ad' }> = {}
-/** Meta step 36: the Facebook Page each Meta connection chose (`connectionId` → digits); a connection not here chose `120000000000010`. */
-export const gatewayMetaPages: Record<string, string | null> = {}
+/** Meta step 19: the Facebook Page each connection chose (`connectionId` → Page id); none unless a test sets it. */
+export const gatewayMetaPage: Record<string, string> = {}
+/** Meta step 21: the Instagram account each connection chose (`connectionId` → id); none unless a test sets it. */
+export const gatewayMetaInstagram: Record<string, string> = {}
+/** Meta step 23: business portfolios another business's chosen ad account is of. */
+export const gatewayMetaSharedPortfolios = new Set<string>()
+/** Meta step 25: Pages and Instagram accounts another business chose (`PAGE:<id>`, `INSTAGRAM:<id>`). */
+export const gatewayMetaTakenLinks = new Set<string>()
 /** Meta step 36: what Nexus's change records say it made on a Page (`${kind}:${objectId}:${pageId}`); nothing else is. */
 export const gatewayMetaNexusMade = new Set<string>()
 
-/** Meta step 37: the Instagram account each Meta connection chose (`connectionId` → digits); a connection not here chose `170000000000010`. */
-export const gatewayMetaInstagram: Record<string, string | null> = {}
-
 /** Meta step 39: each connection's chosen ad account's business portfolio; a connection not here has `9876543210`. */
 export const gatewayMetaPortfolio: Record<string, string | null> = {}
-/** Meta step 39: business portfolios another business in Nexus uses. */
-export const gatewayMetaTakenPortfolios = new Set<string>()
 
 export const accountModule = {
   accountStatusOf: async (id: string): Promise<GatewayAccountState | null> =>
@@ -43,13 +44,22 @@ export const accountModule = {
   googleMerchantDataSourceNexusMade: async (merchantId: string, dataSourceId: string): Promise<boolean> => !gatewayMerchantForeignSources.has(`${merchantId}:${dataSourceId}`),
   metaChosenAdAccountOf: async (connectionId: string): Promise<string | null> => (connectionId in gatewayMetaChosen ? gatewayMetaChosen[connectionId] : '1234567890'),
   metaStoredObject: async (objectId: string): Promise<{ adAccountId: string; kind: 'campaign' | 'adset' | 'ad' } | null> => gatewayMetaStored[objectId] ?? null,
+  // Meta step 19: the chosen Facebook Page of a connection (a test sets gatewayMetaPage[connectionId]).
+  metaChosenPageOf: async (connectionId: string): Promise<string | null> => gatewayMetaPage[connectionId] ?? null,
+  // Meta step 21: the chosen Instagram account of a connection (a test sets gatewayMetaInstagram[connectionId]).
+  metaChosenInstagramOf: async (connectionId: string): Promise<string | null> => gatewayMetaInstagram[connectionId] ?? null,
+  // Meta step 23: whether another business's chosen ad account shares this business portfolio.
+  metaPortfolioShared: async (portfolioId: string): Promise<boolean> => gatewayMetaSharedPortfolios.has(portfolioId),
+  // Meta step 25: whether another business chose this Page or Instagram account.
+  metaLinkTaken: async (product: 'PAGE' | 'INSTAGRAM', id: string): Promise<boolean> => gatewayMetaTakenLinks.has(`${product}:${id}`),
   metaChosenPortfolioOf: async (connectionId: string): Promise<string | null> => (connectionId in gatewayMetaPortfolio ? gatewayMetaPortfolio[connectionId] : '9876543210'),
-  metaPortfolioTakenByAnother: async (portfolioId: string): Promise<boolean> => gatewayMetaTakenPortfolios.has(portfolioId),
-  metaChosenPageOf: async (connectionId: string): Promise<string | null> => (connectionId in gatewayMetaPages ? gatewayMetaPages[connectionId] : '120000000000010'),
-  metaPageObjectNexusMade: async (kind: 'leadform' | 'testlead', objectId: string, pageId: string): Promise<boolean> => gatewayMetaNexusMade.has(`${kind}:${objectId}:${pageId}`),
+  metaPageObjectNexusMade: async (kind: 'leadform' | 'testlead' | 'canvas', objectId: string, pageId: string): Promise<boolean> => gatewayMetaNexusMade.has(`${kind}:${objectId}:${pageId}`),
   META_LEAD_FORM_CREATE_TOOL: 'create-meta-lead-form',
   META_LEAD_FORM_SET_TOOL: 'set-meta-lead-form',
-  metaChosenInstagramOf: async (connectionId: string): Promise<string | null> => (connectionId in gatewayMetaInstagram ? gatewayMetaInstagram[connectionId] : '170000000000010'),
+  // Meta step 27b: the Instant Experience tools.
+  META_IX_CREATE_TOOL: 'create-meta-instant-experience',
+  META_IX_SET_TOOL: 'set-meta-instant-experience',
+  // Meta step 37: the comment tool.
   META_COMMENTS_TOOL: 'set-meta-comments',
 }
 export const ledgerModule = {

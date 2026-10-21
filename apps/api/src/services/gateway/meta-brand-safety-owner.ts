@@ -20,7 +20,7 @@
  * the brand-safety keys that is not exactly Meta's (meta-brand-safety-rules.ts targetingOutsideProblem). No live read:
  * nothing is sent. A sentence never names another business's account or portfolio.
  */
-import { metaChosenAdAccountOf, metaChosenPortfolioOf, metaPortfolioTakenByAnother } from './account.js'
+import { metaChosenAdAccountOf, metaChosenPortfolioOf, metaPortfolioShared } from './account.js'
 import { holdsInexactNumber, targetingOutsideProblem } from './meta-brand-safety-rules.js'
 import type { MetaJudgedWrite, MetaWriteBodyId } from './meta-calls.js'
 
@@ -32,8 +32,6 @@ export type MetaCheckRead = (path: string, query: Record<string, string>) => Pro
 
 export type OwnerProblem = { code: string; sentence: string } | null
 
-/** The step-39 kinds a change names (gateway.ts routes them here). */
-export const BRAND_SAFETY_KINDS: ReadonlySet<string> = new Set(['adaccount', 'business', 'publisherblocklist', 'contentblocklist'])
 /** The rules that only APPLY a publisher block list (a list Meta lists for the chosen ad account may be one shared with it). */
 const APPLY_ONLY_RULES: ReadonlySet<string> = new Set(['blocklist.apply_account'])
 
@@ -92,7 +90,7 @@ async function ownPortfolioProblem(owner: Owner, id: string): Promise<OwnerProbl
   const portfolio = await portfolioOf(owner)
   if (!portfolio) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `${NOTHING}the chosen ad account names no business portfolio, so Nexus changes no brand-safety list of one.` }
   if (id !== portfolio) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `${NOTHING}business portfolio ${id} is not the chosen ad account's own.` }
-  if (await metaPortfolioTakenByAnother(portfolio)) {
+  if (await metaPortfolioShared(portfolio)) {
     return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `${NOTHING}the chosen ad account's business portfolio is also used by another business in Nexus, so Nexus changes no brand-safety list there (it would be that business's too).` }
   }
   return null
@@ -110,7 +108,7 @@ async function publisherBlockListProblem(owner: Owner, id: string, apply: boolea
   if (read.body) {
     if (accountOf(read.body.owner_ad_account_id) === owner.chosen) return null
     const business = idOf(read.body.business_owner_id)
-    if (business && business === (await portfolioOf(owner)) && !(await metaPortfolioTakenByAnother(business))) return null
+    if (business && business === (await portfolioOf(owner)) && !(await metaPortfolioShared(business))) return null
   }
   if (apply && owner.chosen) {
     const listed = await owner.read(`act_${owner.chosen}/publisher_block_lists`, { fields: 'id', limit: '100' })
@@ -166,7 +164,7 @@ async function kindProblem(owner: Owner, kind: string, id: string, rule: string)
     case 'agency': {
       if (!/^\d{1,25}$/.test(id)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}a block list is shared with a business portfolio named by its id (digits).` }
       if (id === (await portfolioOf(owner))) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}${id} is this business's own portfolio: a block list is shared with another business.` }
-      if (await metaPortfolioTakenByAnother(id)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}${id} is a business portfolio another business in Nexus uses: Nexus never shares a block list with another business of its own.` }
+      if (await metaPortfolioShared(id)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}${id} is a business portfolio another business in Nexus uses: Nexus never shares a block list with another business of its own.` }
       return null
     }
     case 'blocklistdraft':
@@ -204,9 +202,14 @@ async function bodyIdsProblem(owner: Owner, ids: readonly MetaWriteBodyId[], rul
  * must be of the chosen ad account and an ad set; the targeting sent differs from the live one only in the brand-safety
  * keys; each block list it newly excludes is one the chosen ad account may use.
  */
-export async function metaTargetingOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: string | undefined, read: MetaCheckRead): Promise<OwnerProblem> {
+export async function metaTargetingOwnerProblem(
+  connectionId: string, write: MetaJudgedWrite, kind: string | undefined, read: MetaCheckRead,
+  // Step 20 — the gateway's owner check of the ids a targeting change ADDS (custom audiences, place page sets, product sets).
+  bodyIds?: (ids: MetaWriteBodyId[]) => Promise<OwnerProblem>,
+): Promise<OwnerProblem> {
   const id = write.objectId
-  if (kind !== 'adsettargeting' || !write.targeting) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}a targeting change of ${id} names it an ad set's targeting.` }
+  // Step 20 — the kind the rule names (step 39: an ad set's targeting; step 20: its audience or its placements).
+  if (!kind || !write.targeting || !(write.kinds as readonly string[] | undefined)?.includes(kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}a targeting change of ${id} names it an ad set's targeting.` }
   const chosen = await metaChosenAdAccountOf(connectionId)
   if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `${NOTHING}this business has no Meta ad account chosen through this connection, so Nexus changes nothing on Meta.` }
   const answer = await read(id, { fields: 'account_id,optimization_goal,billing_event,targeting' })
@@ -223,8 +226,20 @@ export async function metaTargetingOwnerProblem(connectionId: string, write: Met
   const live = answer.body.targeting
   if (!plainObject(live)) return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `${NOTHING}Meta answered no targeting for ad set ${id}, so Nexus cannot keep the rest of it exactly as it is.` }
   if (holdsInexactNumber(live)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}ad set ${id}'s live targeting holds a number Nexus cannot carry exactly, so Nexus sends no targeting for it (change it in Ads Manager).` }
-  const outside = targetingOutsideProblem(live, write.targeting.sent, write.targeting.keys)
+  const outside = write.targeting.judge
+    ? targetingOutsideProblem(live, write.targeting.sent, write.targeting.keys, write.targeting.judge, 'this change')
+    : targetingOutsideProblem(live, write.targeting.sent, write.targeting.keys)
   if (outside) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}${outside} (ad set ${id}).` }
+  // Step 20 — every id the change ADDS inside the spec is the chosen ad account's (one already there is Meta's own state).
+  if (write.targeting.addedIds) {
+    const added = write.targeting.addedIds(live, write.targeting.sent)
+    if (added.length > 150) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `${NOTHING}a change names at most 150 objects inside its body.` }
+    if (added.length) {
+      if (!bodyIds) return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `${NOTHING}Nexus could not check the objects this change adds to ad set ${id}.` }
+      const problem = await bodyIds(added)
+      if (problem) return problem
+    }
+  }
   const listed = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
   const before = new Set(listed(live.excluded_publisher_list_ids))
   const added = listed(write.targeting.sent.excluded_publisher_list_ids).filter((listId) => !before.has(listId))

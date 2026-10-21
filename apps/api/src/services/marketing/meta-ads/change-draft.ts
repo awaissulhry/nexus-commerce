@@ -9,8 +9,10 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaWriteKind } from '../../gateway/meta-calls.js'
-import type { MetaChangeResult } from './write-client.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaCommentKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaTargetingKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
+import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
+import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
+import type { MetaChangeResult, MetaRequestVia, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -23,6 +25,12 @@ export interface MetaChangeRequest {
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
+  /**
+   * Step 26 (review A3) — the fields as this preview's plan hash reads them, when they differ from `params`: a creator's
+   * partnership ad code is replaced in it (a short code could be reversed from a hash; the request's arguments still carry the
+   * code). Default: `params`.
+   */
+  planParams?: Record<string, string>
   /**
    * Meta's check (validate_only) for this request: `meta` — asked before it is queued; `none` — Meta documents none for it
    * (ad set and ad updates); `not-yet` — Meta documents one, but Nexus does not use it for this change until a live probe
@@ -47,17 +55,75 @@ export interface MetaChangeRequest {
   expect?: Record<string, string>
   /** The fields read back (default id,status,effective_status). */
   readBackFields?: string
-  /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 39: an ad set's targeting, an ad account, its portfolio, a block list). */
-  objectKind?: MetaWriteKind
-  /** A create on the object's edge (POST /<id>/budget_schedules; step 39: the brand-safety edges). */
+  /**
+   * The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 19: a create names
+   * the chosen ad account itself, `adaccount`). Step 29: a Meta automated rule (`adrule`) or the ad account's rule
+   * library (`adaccount`, a rule's create); `kind` then only types the request (`campaign` by convention).
+   * Step 23: an upload names the chosen ad account (`adaccount`) or its business portfolio (step 28's `business`);
+   * captions name the library video (step 22's `video`). Its `kind` is then `ad`, as for step 22's deletes.
+   * Step 31: an audience (`customaudience`) or the chosen ad account (`adaccount`: its audiences, opt-outs, settings).
+   * Step 30: the chosen ad account (`adaccount`: its connected app, its alert subscriptions), the connection's own app
+   * (`app`), the chosen Page (step 28's `page`: the app's removal from it).
+   */
+  objectKind?: 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
+    // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
+    | MetaOptimizeKind
+    // Step 29 — a Meta automated rule.
+    | 'adrule'
+    // Step 39 — an ad set's targeting, a publisher or content block list (brand safety).
+    | MetaBrandSafetyKind
+    // Step 31 — one of the chosen ad account's own custom audiences.
+    | 'customaudience'
+    // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
+    | MetaPageKind
+    // Step 26 — the chosen Instagram account (`iguser`) or a media of it (`igmedia`); the chosen Page on Meta's partnership
+    // host is step 28's `page` (set-meta-partnership-access).
+    | MetaBoostWriteKind
+    // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
+    | MetaSignalsKind
+    // Step 30 — the connection's own Meta app (its webhook subscriptions).
+    | MetaWebhookKind
+    // Step 20 — an ad set's audience or its placements (set-meta-targeting, set-meta-placements).
+    | MetaTargetingKind
+    // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
+    | MetaCatalogKind
+    // Step 37 — a post or comment of the chosen Page, a comment on a branded-content post, a comment on the chosen Instagram
+    // account's media, a Threads ad's post or reply (set-meta-comments; its Instagram media and account are step 26's
+    // `igmedia` and `iguser`, a block names the chosen Page, `page`).
+    | MetaCommentKind
+  /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
-  /** A budget schedule's campaign or ad set; step 37 — a Threads post's or reply's ad, a branded-content comment's post. */
-  parent?: { kind: 'campaign' | 'adset' | 'ad' | 'brandedpost'; id: string }
+  /** A budget schedule's campaign or ad set; step 34: a feed's catalog; step 37 — a Threads post's or reply's ad, a branded-content comment's post. */
+  parent?: { kind: 'campaign' | 'adset' | 'catalog' | 'ad' | 'brandedpost'; id: string }
+  /** Step 19 — Meta's check of this create asks its setup recommendations too (master CMP-031). */
+  recommendations?: boolean
+  /**
+   * Step 19 (review A4) — a create or a copy: when Meta answers success but the new object reads back otherwise, it is still
+   * recorded as made (with what it reads), so its undo can delete it; never "no record" for an object Meta made.
+   */
+  recordEvenIfNotAsAsked?: boolean
+  /**
+   * Step 22 — the steps of the same change this request stands on (a creative deleted after the ads that use it, an image
+   * after the creatives that use it): when one of them did not happen as asked, it is not sent.
+   */
+  needs?: number[]
+  /**
+   * Step 21 — an edge that changes the object itself (labels ADDED to a campaign: POST /<campaign>/adlabels answers
+   * {"success": true}): the object is read back, never a new one.
+   */
+  readBackObject?: true
+  // ── step 23: a request that brings its own sender ──
+  /**
+   * Sends the request itself (an upload whose answer is read again, or Meta's video-ads upload, whose later calls need the
+   * first one's answer): the kit runs it as ONE step in place of metaSendChange. It goes only through the write client
+   * (the gateway), and rejects with a MetaWriteError exactly like metaSendChange (not_sent, refused, unknown).
+   */
+  send?: (target: MetaWriteTarget) => Promise<MetaChangeResult>
+  /** The step's sentence when Meta made it (else the kit's own). */
+  doneSentence?: (result: MetaChangeResult) => string
   // ── step 39 (brand safety) ──
-  /** The text of the one file Nexus made for this request (a block list's URL file; part of the approved plan). */
-  file?: string
   /** The read-back that judges it (meta write-client `judge`), and what is read (default the object). */
   judge?: (node: Record<string, unknown>) => { moved: string[]; reads: string }
   readBackOf?: string
@@ -73,6 +139,21 @@ export interface MetaChangeRequest {
   skipReadBack?: true
   /** Meta's codes this request may meet, in plain words (base code → sentence), added to the step's sentence. */
   explain?: Readonly<Record<string, string>>
+  // ── step 27 ──
+  /** A new ad's check runs Meta's synchronous integrity review with it (synchronous_ad_review, AD-026 … AD-028). */
+  adReview?: boolean
+  // ── step 30 (webhook and alert subscriptions) ──
+  /** Its path, a DELETE's query, PATCH (write-client.ts MetaRequestVia); Meta's answer is all there is. */
+  via?: MetaRequestVia
+  // ── step 20 ──
+  /** The targeting keys this request changes (review A2): the gateway lets only these differ from the live spec. */
+  targetingKeys?: string[]
+  // ── step 27b ──
+  /**
+   * It goes with the chosen Page's own token (a gateway rule marked `auth: 'page'`): Meta counts it against the PAGE's rate
+   * limit (80001), not the ad account's — the kit's preview says so (and leaves it out of the ad account's count).
+   */
+  asPage?: true
   // ── step 37 (comments) ──
   /** Meta's success is the whole answer (a like, a block — no id, never read back): the step says "Meta confirmed it." */
   answerOnly?: true
@@ -96,6 +177,8 @@ export interface MetaChangeDraft {
   /** What it replaces and what it writes, in one shape per tool (AgentChange; undo reads them). */
   before: unknown
   after: unknown
+  /** Step 22 — everything a delete takes with it (every ad set and ad of a campaign or ad set, by id), shown in full. */
+  alsoDeleted?: unknown
 }
 
 export const MAX_CHANGE_LINES = 20

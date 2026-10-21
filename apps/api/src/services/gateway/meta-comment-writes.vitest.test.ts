@@ -31,7 +31,7 @@ vi.mock('../cx/deprecation-watch.service.js', () => ({ watchForDeprecation: vi.f
 vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: vi.fn(async () => undefined) }))
 vi.mock('../../utils/otel-setup.js', () => ({ withSpan: vi.fn(async (_n: string, _a: Record<string, unknown>, fn: (span: null) => Promise<unknown>) => fn(null)) }))
 
-import { gatewayLedger, gatewayMetaChosen, gatewayMetaInstagram, gatewayMetaPages } from '../../test-support/gateway-stubs.js'
+import { gatewayLedger, gatewayMetaChosen, gatewayMetaInstagram, gatewayMetaPage } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { metaUrl, metaWriteCall } from './meta.js'
 import { metaReadOnlyProblem, metaWriteVerdict } from './meta-calls.js'
@@ -65,7 +65,10 @@ beforeEach(() => {
   __rateTest.useMemory()
   __metaObjectLimitsTest.useMemory()
   h.calls = []; h.answers = []; gatewayLedger.length = 0
-  for (const store of [gatewayMetaPages, gatewayMetaInstagram, gatewayMetaChosen]) for (const key of Object.keys(store)) delete store[key]
+  for (const store of [gatewayMetaPage, gatewayMetaInstagram, gatewayMetaChosen]) for (const key of Object.keys(store)) delete store[key]
+  // The chosen Page and Instagram account of m-1 (main's stubs choose none unless a test sets them).
+  gatewayMetaPage['m-1'] = PAGE
+  gatewayMetaInstagram['m-1'] = IG
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     h.calls.push({ url: String(url), init })
     return h.answers.shift()?.() ?? new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -121,7 +124,7 @@ describe('the comment rules are an exact allow-list', () => {
     expect(metaWriteVerdict({ method: 'POST', url: `${BASE}/${POST}/likes`, kind: 'write', objectKind: 'fbpost', body: 'x=1' })).toMatchObject({ problem: expect.stringMatching(/only Meta change/) })
     expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${COMMENT}/likes`, kind: 'write', objectKind: 'fbcomment' })).toMatchObject({ write: { rule: 'fblike.delete', method: 'DELETE', auth: 'page' } })
     expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${COMMENT}`, kind: 'write', objectKind: 'fbcomment' })).toMatchObject({ write: { rule: 'fbcomment.delete', method: 'DELETE', auth: 'page' } })
-    expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${COMMENT}`, kind: 'write', objectKind: 'fbcomment', body: 'x=1' })).toMatchObject({ problem: expect.stringMatching(/deletes nothing on Meta yet/) })
+    expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${COMMENT}`, kind: 'write', objectKind: 'fbcomment', body: 'x=1' })).toMatchObject({ problem: expect.stringMatching(/deletes on Meta only .*set-meta-comments/) })
     // A bodyless POST on any other path is still refused.
     expect(metaWriteVerdict({ method: 'POST', url: `${BASE}/${COMMENT}`, kind: 'write', objectKind: 'fbcomment', body: '' })).toMatchObject({ problem: expect.stringMatching(/form body/) })
   })
@@ -138,7 +141,7 @@ describe('the comment rules are an exact allow-list', () => {
     expect(block(form({ user: '300000000000001' }), 'DELETE')).toMatchObject({ problem: expect.stringMatching(/only Meta change/) })
     expect(block(form({ psid: '300000000000001', user: '300000000000001' }), 'DELETE')).toMatchObject({ problem: expect.stringMatching(/only Meta change/) })
     expect(block(form({ psid: '["300000000000001"]' }), 'DELETE')).toMatchObject({ problem: expect.stringMatching(/one Page-scoped id/) })
-    expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${PAGE}/blocked`, kind: 'write', objectKind: 'page' })).toMatchObject({ problem: expect.stringMatching(/deletes nothing on Meta yet/) })
+    expect(metaWriteVerdict({ method: 'DELETE', url: `${BASE}/${PAGE}/blocked`, kind: 'write', objectKind: 'page' })).toMatchObject({ problem: expect.stringMatching(/deletes on Meta only .*set-meta-comments/) })
   })
   it('the Instagram comment poll\'s two reads pass the read gate as they are sent (total_comments_count included)', () => {
     expect(IG_POLL_MEDIA_FIELDS).toContain('total_comments_count')
@@ -213,7 +216,7 @@ describe('the owner check, then the Page token', () => {
   it('a post of another Page (another business\'s too), no Page chosen, a shape that is not a post: refused before any call', async () => {
     const like = (objectId: string, connectionId = 'm-1') => metaWriteCall({ connectionId, operation: 'fblike.create', objectId, objectKind: 'fbpost', edge: 'likes', params: {}, check: false }).catch((e) => e)
     expect(await like(`${OTHER_PAGE}_500000000000001`)).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
-    gatewayMetaPages['m-3'] = null
+    delete gatewayMetaPage['m-3']
     expect(await like(POST, 'm-3')).toMatchObject({ code: 'META_PAGE_NOT_CHOSEN' })
     expect(h.calls).toHaveLength(0)
     // The Page's own post: one read of its id, then a like with no body, as the Page.
@@ -221,7 +224,8 @@ describe('the owner check, then the Page token', () => {
     const res = await metaWriteCall({ connectionId: 'm-1', operation: 'fblike.create', objectId: POST, objectKind: 'fbpost', edge: 'likes', params: {}, check: false })
     expect(res.ok).toBe(true)
     expect(paths()).toEqual([`GET /${POST}`, `GET /${PAGE}`, `POST /${POST}/likes`])
-    expect(sent(2).body).toBeUndefined()
+    // No form field: the gateway sends an empty body, as for step 29's run now (meta-ad-rule-writes).
+    expect(sent(2).body).toBe('')
   })
   it('an edit only of a comment the chosen Page wrote', async () => {
     h.answers.push(json({ id: POST }), json({ id: COMMENT, from: { id: '300000000000001' } }))
@@ -267,7 +271,7 @@ describe('the owner check, then the Page token', () => {
     // A node of another kind (Meta: nonexisting field), and no Instagram account chosen.
     h.answers.push(json({ error: { code: 100, message: 'Tried accessing nonexisting field (media) on node type (Page)' } }, 400))
     expect(await metaWriteCall({ connectionId: 'm-1', operation: 'igcomment.hide', objectId: PAGE, objectKind: 'igcomment', params: { hide: 'true' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_WRITE_NOT_ALLOWED', message: expect.stringMatching(/not an Instagram comment/) })
-    gatewayMetaInstagram['m-4'] = null
+    delete gatewayMetaInstagram['m-4']
     expect(await metaWriteCall({ connectionId: 'm-4', operation: 'igcomment.hide', objectId: IG_COMMENT, objectKind: 'igcomment', params: { hide: 'true' }, check: false }).catch((e) => e)).toMatchObject({ code: 'META_INSTAGRAM_NOT_CHOSEN' })
     expect(h.calls.every((c) => c.init.method === 'GET')).toBe(true)
   })

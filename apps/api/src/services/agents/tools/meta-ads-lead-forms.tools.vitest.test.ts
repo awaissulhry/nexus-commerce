@@ -115,7 +115,7 @@ describe('create-meta-lead-form', () => {
     const { ran } = await run(create, CREATE)
     expect(ran!.ok).toBe(true)
     expect(h.send.mock.calls[0][1]).toMatchObject({ objectId: '120000000000010', kind: 'page', edge: 'leadgen_forms', operation: 'leadform.create', readBackFields: 'id,name,status' })
-    expect(ran!.data).toMatchObject({ formId: '600000000000001', pageId: '120000000000010', steps: [{ outcome: 'done', sentence: expect.stringMatching(/Meta made it \(id 600000000000001\)/) }] })
+    expect(ran!.data).toMatchObject({ formId: '600000000000001', pageId: '120000000000010', steps: [{ outcome: 'done', sentence: expect.stringMatching(/Meta made it\./) }] })
     expect(ran!.change).toEqual({
       before: { pageId: '120000000000010', formId: null, name: 'Form A', archived: null, accountId: 'm-1', adAccountId: '1234567890' },
       after: { pageId: '120000000000010', formId: '600000000000001', name: 'Form A', archived: false, accountId: 'm-1', adAccountId: '1234567890' },

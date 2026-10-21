@@ -190,7 +190,7 @@ export const META_COMMENT_WRITE_RULES: readonly MetaWriteRule[] = [
     path: /^\d{1,25}_\d{1,25}\/likes$/,
     kinds: ['fbpost', 'fbcomment', 'fbpagecomment'],
     auth: 'page',
-    bare: true,
+    emptyBody: true,
     required: [],
     optional: [],
     values: () => null,

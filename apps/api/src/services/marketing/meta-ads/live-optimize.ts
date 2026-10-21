@@ -1,8 +1,10 @@
 /**
  * Meta ads step 8 (2026-10-21) — reads of Meta's opportunity score and recommendations, its A/B tests and lift studies
  * (and the chosen Page's video A/B tests), and Meta's own automated rules, LIVE from Meta through the gateway (GET only).
- * Nothing here stores anything, and nothing here changes Meta: applying a recommendation (step 28), making or ending a
- * test (step 28) and making, changing, previewing or running a rule (step 29) are change tools of their own.
+ * Nothing here stores anything, and nothing here changes Meta: applying a recommendation (apply-meta-recommendations),
+ * making, changing or ending a test (create-meta-experiment, set-meta-experiment, end-meta-experiment — step 28's
+ * meta-ads-optimize-changes.tools.ts) and making, changing, previewing or running a rule (set-meta-ad-rule, remove-meta-ad-rule — step 29) are change tools of
+ * their own.
  *
  * ONLY the business's chosen assets (metaChosenAccount), with fixed field lists per node type (a caller never names a
  * Graph field or path):
@@ -29,7 +31,7 @@
  *     spelling, recommendation_names, locale, fields=recommendation_content "to include the lift_estimate and body
  *     strings"; adds ad_account_id, opportunity_score, recommendation_name, level); a signature is missing for types that
  *     "cannot be resolved in the API"; "there could be fewer recommendations returned by the API versus what is shown in
- *     Ads Manager"; the apply types and their extra_data (the apply itself is step 28); there is no dismiss call (RC-024)
+ *     Ads Manager"; the apply types and their extra_data (the apply: apply-meta-recommendations); there is no dismiss call (RC-024)
  *   - the score now: ad-account field `opportunity_score` (same page, "a field of an ad account")
  *   - score history (…/performance-recommendations-history-api): from_date, to_date (YYYY-MM-DD), get_reason; window
  *     ≤ 45 days (5014022), from defaults to to − 14 days, to today or later → 5014023, "data may be missing the most
@@ -68,7 +70,8 @@
  *   - the rule preview is a POST: "Preview the evaluation of a Schedule Based Rule by sending a POST request"
  *     (ad-rules/guides/api-calls "Preview a rule"); the SDK has only AdRule.create_preview (method POST) and the ad-rule
  *     reference lists no preview edge to read. Meta documents NO GET form, and the gateway's reads are GET only by
- *     construction, so the preview comes with set-meta-ad-rule (step 29) — RULE_PREVIEW_SENTENCE.
+ *     construction, so the preview is part of set-meta-ad-rule's own preview (step 29: a POST that only reads, on the
+ *     gateway's write allow-list as a read) — RULE_PREVIEW_SENTENCE.
  */
 import { metaAdAccountId, metaObjectId } from '../../cx/connectors/meta/discovery.js'
 import prisma from '../../../db.js'
@@ -242,20 +245,22 @@ const STAGE_WORDS: Record<string, string> = {
 
 /**
  * The types Meta applies by API (performance-recommendations "Recommendation-specific parameters"; master RC-008…RC-021):
- * apply-meta-recommendations (a later Nexus step, step 28) will send them, each a request a person approves. `spendsMoney` as the master rows
+ * apply-meta-recommendations sends them (step 28), each a request a person approves. `spendsMoney` as the master rows
  * judge it: yes = can raise spend at once, maybe = can widen delivery, no = same budget.
  */
-const APPLY_BY_API: Readonly<Record<string, { what: string; spendsMoney: 'yes' | 'maybe' | 'no' }>> = {
+export const APPLY_BY_API: Readonly<Record<string, { what: string; spendsMoney: 'yes' | 'maybe' | 'no' }>> = {
   ADVANTAGE_PLUS_AUDIENCE: { what: 'switches Advantage+ audience on for the ad sets (Meta may show the ads beyond the audience set)', spendsMoney: 'yes' },
   AUTOMATIC_PLACEMENTS: { what: 'switches Advantage+ placements on for the ad sets (more placements)', spendsMoney: 'yes' },
-  LANDING_PAGE_VIEW_OPTIMIZATION_GOAL: { what: 'changes the ad sets\' goal to landing page views (learning restarts)', spendsMoney: 'no' },
+  // Step 28 review — Meta's texts differ: its parameters say a goal change, its type table says a new campaign with it.
+  LANDING_PAGE_VIEW_OPTIMIZATION_GOAL: { what: 'changes the ad sets\' goal to landing page views, or makes a campaign with that goal (Meta\'s texts differ; learning restarts)', spendsMoney: 'yes' },
   PRODUCT_SET_BOOSTING: { what: 'lets catalog ads show products beyond the product set', spendsMoney: 'maybe' },
   CONVERSION_LEADS_OPTIMIZATION: { what: 'duplicates the ad sets and ads with a conversion-leads goal (new objects)', spendsMoney: 'yes' },
   APLUSC_STANDARD_ENHANCEMENTS_BUNDLE: { what: 'switches Advantage+ creative standard enhancements on for the ads', spendsMoney: 'no' },
   AUTOFLOW_OPT_IN: { what: 'lets Meta deliver variations of the ads (standard enhancements)', spendsMoney: 'no' },
   MUSIC: { what: 'lets Meta add music to the ads (Sound Collection Terms apply)', spendsMoney: 'no' },
   UNCROP_IMAGE: { what: 'lets Meta\'s AI expand the images to more placements', spendsMoney: 'no' },
-  CREATIVE_FATIGUE: { what: 'makes AI variations of fatigued ads (new ads)', spendsMoney: 'maybe' },
+  // Step 28 review — Meta adds new ads (its texts differ: copies of the ad, or AI variations) and does not say their status.
+  CREATIVE_FATIGUE: { what: 'makes new ads from fatigued ones (Meta\'s texts differ: copies with a new creative, or AI variations)', spendsMoney: 'yes' },
   BACKGROUND_GENERATION: { what: 'switches AI backgrounds on or off for product images', spendsMoney: 'no' },
   PERFORMANT_CREATIVE_REELS_OPT_IN: { what: 'adds Reels placements to the ad sets', spendsMoney: 'yes' },
   SHOPS_ADS_SAOFF: { what: 'turns website ad sets into Shops ads (website and shop)', spendsMoney: 'maybe' },
@@ -271,8 +276,8 @@ const ACT_ELSEWHERE: Readonly<Record<string, { tools: string[]; what: string }>>
   BUDGET_LIMITED: { tools: ['set-meta-ad-set', 'set-meta-campaign'], what: 'raise the budget of the limited campaign or ad set (SPENDS MONEY)' },
   CAPI_CRM_GUIDANCE_V2: { tools: ['meta-datasets'], what: 'connect CRM data to the Conversions API (lead ads; Nexus shops do not run them)' },
   CAPI_CRM_SETUP: { tools: ['meta-datasets'], what: 'finish the CRM set-up of the Conversions API (lead ads)' },
-  CAPI_PERFORMANCE_MATCH_KEY_V2: { tools: ['meta-datasets', 'upload-meta-events'], what: 'send more match keys with server events (meta-datasets shows who sends what first)' },
-  SIGNALS_GROWTH_CAPI_V2: { tools: ['meta-datasets', 'upload-meta-events'], what: 'add the Conversions API next to the pixel (check first whether the shop platform already sends server events)' },
+  CAPI_PERFORMANCE_MATCH_KEY_V2: { tools: ['meta-datasets'], what: 'send more match keys with the website\'s server events — the shop platform\'s own Conversions API sends them (its Meta app\'s data sharing level); meta-datasets shows who sends what. upload-meta-events sends only sales taken in by hand in Nexus, never the website\'s' },
+  SIGNALS_GROWTH_CAPI_V2: { tools: ['meta-datasets'], what: 'add the Conversions API next to the pixel — switch on the shop platform\'s own (its Meta app\'s data sharing); meta-datasets shows whether it already sends server events. Nexus cannot send the website\'s events without double counting until a Nexus shop pixel exists (a later step)' },
   PIXEL_OPTIMIZATION_HIE: { tools: ['meta-datasets'], what: 'send high-intent events from the pixel' },
   PIXEL_UPSELL: { tools: ['meta-datasets', 'create-meta-dataset'], what: 'connect the website with a Meta pixel' },
   CREATIVE_LIMITED: { tools: ['create-meta-creative', 'create-meta-ad'], what: 'add fresh creatives to the ad set' },
@@ -293,13 +298,13 @@ const ACT_ELSEWHERE: Readonly<Record<string, { tools: string[]; what: string }>>
   UNIFIED_INBOX: { tools: [], what: 'answer unread customer messages within 5 hours (Meta Business Suite inbox)' },
 }
 
-/** How a person acts on one recommendation (RC-023): Meta's apply (step 28), a Nexus tool, or Meta's screens. */
+/** How a person acts on one recommendation (RC-023): Meta's apply (apply-meta-recommendations), a Nexus tool, or Meta's screens. */
 export function howToAct(type: string | null, hasSignature: boolean) {
   const apply = type ? APPLY_BY_API[type] : undefined
   if (apply && hasSignature) {
     return {
-      byApi: true, tool: 'apply-meta-recommendations', toolComesWith: 'a later Nexus step (step 28)', spendsMoney: apply.spendsMoney, what: apply.what,
-      sentence: `Meta applies this by API. Nexus's apply-meta-recommendations comes with a later Nexus step (step 28), and will ask for it as a request a person approves${apply.spendsMoney === 'yes' ? ' — it SPENDS MONEY' : apply.spendsMoney === 'maybe' ? ' — it can widen delivery' : ''}; until then, the Ads Manager link. The signature goes stale: read again right before.`,
+      byApi: true, tool: 'apply-meta-recommendations', spendsMoney: apply.spendsMoney, what: apply.what,
+      sentence: `Meta applies this by API: apply-meta-recommendations asks for it with this signature as a request a person approves${apply.spendsMoney === 'yes' ? ' — it SPENDS MONEY' : apply.spendsMoney === 'maybe' ? ' — it can widen delivery' : ''} (or use the Ads Manager link). The signature goes stale: apply-meta-recommendations reads it again right before.`,
     }
   }
   const elsewhere = type ? ACT_ELSEWHERE[type] : undefined
@@ -344,7 +349,7 @@ function mapRecommendation(raw: Row, known: Map<string, { kind: string; name: st
 }
 
 /** The recommendations inside an answer's rows (`data[{ recommendations: […] }]`, or the rows themselves). */
-function recommendationsOf(rows: Row[]): Row[] {
+export function recommendationsOf(rows: Row[]): Row[] {
   const out: Row[] = []
   for (const row of rows) {
     if (Array.isArray(row.recommendations)) out.push(...row.recommendations.filter((r): r is Row => !!obj(r)))
@@ -562,7 +567,7 @@ function mapStudy(raw: Row, account: MetaChosenAccount, now: Date = new Date()) 
   }
 }
 
-const STUDY_NOTE = 'A study cannot be deleted (Meta has no delete for it); a running one can only be extended or given more objects. Making, changing and ending tests (create-meta-experiment, set-meta-experiment, end-meta-experiment) come with a later Nexus step (step 28). Changing an ad set, ad or campaign that is in a running test can spoil the test.'
+const STUDY_NOTE = 'A study cannot be deleted (Meta has no delete for it); a running one can only be extended or given more objects. Making, changing and ending tests: create-meta-experiment, set-meta-experiment, end-meta-experiment (each a request a person approves). Changing an ad set, ad or campaign that is in a running test can spoil the test.'
 const LIFT_NOTE = 'Conversion lift needs Meta\'s own grant ("Conversion Lift Measurement is currently limited", Meta\'s lift guide): when Meta refuses, the business asks its Meta representative. Study objectives and results also need the Meta app above development access (Meta\'s error 270).'
 
 /** The studies Meta says touch the chosen ad account (impacting_ad_studies), as Meta gives them. */
@@ -571,7 +576,7 @@ async function impactingStudies(account: MetaChosenAccount, fields: string, maxR
 }
 
 /** A study id from a caller, read only when Meta's list of studies that touch the chosen account names it. */
-async function ownStudy(account: MetaChosenAccount, studyId: string): Promise<{ studyId: string; type: string | null; startTime: string | null }> {
+export async function ownStudy(account: MetaChosenAccount, studyId: string): Promise<{ studyId: string; type: string | null; startTime: string | null }> {
   const id = metaObjectId(studyId)
   if (!id) throw new MetaLiveRefusal(`"${studyId}" is not a Meta study id (digits).`)
   const read = await impactingStudies(account, 'id,type,start_time', 1000)
@@ -836,7 +841,7 @@ export async function metaExperiments(input: ExperimentInput) {
           return accountsMasked(rows.map((r) => String(r.account_id ?? r.id ?? '')), account, names)
         }),
       ])
-      return { ...base, studyId: own.studyId, viewers: viewers.value, viewersNotRead: viewers.notRead, adAccounts: related.value, adAccountsNotRead: related.notRead, note: 'People are Meta ids only (their names stay on Meta\'s side). Sharing a study (set-meta-experiment) comes with a later Nexus step (step 28).' }
+      return { ...base, studyId: own.studyId, viewers: viewers.value, viewersNotRead: viewers.notRead, adAccounts: related.value, adAccountsNotRead: related.notRead, note: 'People are Meta ids only (their names stay on Meta\'s side). Sharing a study: set-meta-experiment viewers (a request a person approves; only people with a role on the ad account).' }
     }
     case 'object': {
       // AD-019 / EX-003 — is this campaign, ad set or ad in a test (before changing it)?
@@ -861,7 +866,7 @@ export async function metaExperiments(input: ExperimentInput) {
         const body = (await metaReadOne({ connectionId }, { operation: 'experiments.brandLiftCampaign', path: id, query: { fields: 'can_create_brand_lift_study,brand_lift_studies{id,name,type,start_time,end_time,observation_end_time,canceled_time}' } })).body as Row
         campaign = { campaignId: id, canCreateBrandLiftStudy: bool(body.can_create_brand_lift_study), studies: (Array.isArray(body.brand_lift_studies) ? body.brand_lift_studies : rowsOf(body.brand_lift_studies)).map(obj).filter((s): s is Row => !!s).map((s) => mapStudy(s, account)) }
       }
-      return { ...base, canCreateBrandLiftStudy: accountRead.value, accountNotRead: accountRead.notRead, campaign, note: 'Brand lift studies are Meta\'s "Automated Brand Lift V2" studies; making one (create-meta-experiment, where Meta allows it) comes with a later Nexus step (step 28).' }
+      return { ...base, canCreateBrandLiftStudy: accountRead.value, accountNotRead: accountRead.notRead, campaign, note: 'Brand lift studies are Meta\'s "Automated Brand Lift V2" studies; Meta documents no way to make one by API (its lift guide covers conversion lift only), so they are made in Ads Manager or with Meta\'s representative. create-meta-experiment makes A/B tests, creative tests and conversion lift studies.' }
     }
     case 'private-lift': {
       // EX-010 — Meta-run private lift computations and continuous lift configs (only where a study of that kind exists).
@@ -913,7 +918,7 @@ export const RULE_HISTORY_ACTIONS = [
   'ENABLE_WTWA_UPSELL_IN_DUPLICATION', 'ENDPOINT_PINGED', 'ERROR', 'FACEBOOK_NOTIFICATION_SENT', 'MESSAGE_SENT', 'NOT_CHANGED', 'PAUSED', 'UNPAUSED',
 ] as const
 
-const RULE_FIELDS = 'id,account_id,name,status,evaluation_spec,execution_spec,schedule_spec,created_by{id},created_time,updated_time,disable_error_code'
+export const RULE_FIELDS = 'id,account_id,name,status,evaluation_spec,execution_spec,schedule_spec,created_by{id},created_time,updated_time,disable_error_code'
 const HISTORY_FIELDS = 'timestamp,is_manual,results,evaluation_spec,execution_spec,schedule_spec,exception_code,exception_message'
 
 const STATUS_WORDS: Record<string, string> = {
@@ -923,7 +928,7 @@ const STATUS_WORDS: Record<string, string> = {
 const EXECUTION_WORDS: Record<string, string> = {
   PAUSE: 'pauses the matching objects', UNPAUSE: 'switches the matching objects on (they can spend)', CHANGE_BUDGET: 'changes ad set budgets',
   CHANGE_CAMPAIGN_BUDGET: 'changes campaign budgets', CHANGE_BID: 'changes ad set bids', NOTIFICATION: 'notifies people',
-  PING_ENDPOINT: 'calls the app\'s webhook', ROTATE: 'rotates the ads of an ad set', REBALANCE_BUDGET: 'moves budget between ad sets',
+  PING_ENDPOINT: 'calls the app\'s webhook', ROTATE: 'pauses the ad running now and switches the next ad of the ad set on', REBALANCE_BUDGET: 'moves budget between ad sets',
 }
 const TRIGGER_WORDS: Record<string, string> = {
   METADATA_CREATION: 'when an object is created', METADATA_UPDATE: 'when a setting changes', STATS_MILESTONE: 'each time a number reaches a milestone',
@@ -1014,6 +1019,8 @@ function executionOption(raw: Row, account: MetaChosenAccount) {
 /** Could this rule raise spend when it runs (switch on, a budget or bid raise, or a change towards a target)? */
 function canRaiseSpend(type: string | null, options: Array<Record<string, unknown>>): boolean {
   if (type === 'UNPAUSE') return true
+  // Step 29 review A1 — ROTATE switches the next ad of each matched ad set on (execution-spec.md; master RU-018).
+  if (type === 'ROTATE') return true
   if (type !== 'CHANGE_BUDGET' && type !== 'CHANGE_CAMPAIGN_BUDGET' && type !== 'CHANGE_BID' && type !== 'REBALANCE_BUDGET') return false
   if (type === 'REBALANCE_BUDGET') return true
   const spec = options.find((o) => o.option === 'change_spec')
@@ -1089,9 +1096,9 @@ function mapHistory(raw: Row, account: MetaChosenAccount) {
 
 /**
  * RU-031 — why the rule preview is not here (the header has the proof): Meta's preview is a POST, the gateway's reads are
- * GET only, and Meta documents no GET form.
+ * GET only, and Meta documents no GET form. set-meta-ad-rule sends it as part of its own preview (step 29).
  */
-export const RULE_PREVIEW_SENTENCE = 'Meta\'s preview of a rule (which objects a schedule rule would hit now) is a POST request (POST /<rule id>/preview, Meta\'s Ad Rules guide), and Meta documents no read (GET) form of it. Nexus\'s reads never send a POST, so the preview comes with set-meta-ad-rule (step 29), next to running a rule now. Until then: view rule says the rule\'s conditions in plain words, view history what it did at each run, and meta-ads-live shows the objects as they are now.'
+export const RULE_PREVIEW_SENTENCE = 'Meta\'s preview of a rule (which objects a schedule rule would act on now) is a POST request (POST /<rule id>/preview, Meta\'s Ad Rules guide), and Meta documents no read (GET) form of it, so this read tool does not send it. set-meta-ad-rule sends it as part of its own preview: action run (run a schedule rule now), action status with enabled true, or action update of a schedule rule lists the objects Meta says the rule would act on now, and nothing changes until a person approves. view rule says the rule\'s conditions in plain words, view history what it did at each run.'
 
 export interface RuleInput {
   connectionId?: string | null
@@ -1110,7 +1117,7 @@ export interface RuleInput {
  * is anything of the rule read (`fields`, which name a field only a rule has, so another node of the account — a campaign
  * — is refused by Meta, #100, and never read on).
  */
-async function ownRule(account: MetaChosenAccount, ruleId: string, fields: string): Promise<{ id: string; body: Row }> {
+export async function ownRule(account: MetaChosenAccount, ruleId: string, fields: string): Promise<{ id: string; body: Row }> {
   const id = metaObjectId(ruleId)
   if (!id) throw new MetaLiveRefusal(`"${ruleId}" is not a Meta rule id (digits).`)
   const notARule = () => new MetaLiveRefusal('That is not a rule of the ad account this business chose (Meta does not show it as one), so it is not read.')
