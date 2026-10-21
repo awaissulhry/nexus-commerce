@@ -124,7 +124,8 @@ export function metaActivationProblem(creative: Record<string, unknown> | null |
   const spec = dof && typeof dof === 'object' ? dof.creative_features_spec : undefined
   if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return `${what} reads no Advantage+ feature switches (made outside Nexus, or Nexus cannot read them), so a feature generated with AI cannot be ruled out: ${META_ACTIVATE_RULE}`
   const features = spec as Record<string, { enroll_status?: unknown } | undefined>
-  const on = Object.keys(features).filter((f) => features[f]?.enroll_status === 'OPT_IN').sort()
+  // Re-check (step 27): fail closed — any value but exactly OPT_OUT (opt_in, a missing status, an odd word) counts as on.
+  const on = Object.keys(features).filter((f) => features[f]?.enroll_status !== 'OPT_OUT').sort()
   if (on.length) return `${what} switches on ${on.join(', ')}: ${META_ACTIVATE_RULE}`
   const unsaid = META_ACTIVATE_FEATURES.filter((f) => features[f]?.enroll_status !== 'OPT_OUT')
   if (unsaid.length) return `${what} does not say OPT_OUT for ${unsaid.slice(0, 5).join(', ')}${unsaid.length > 5 ? ` and ${unsaid.length - 5} more` : ''} (Meta may switch such a feature on by itself): ${META_ACTIVATE_RULE}`

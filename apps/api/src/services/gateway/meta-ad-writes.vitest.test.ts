@@ -129,6 +129,11 @@ describe('a new ad: exact keys, every value judged', () => {
     expect(metaActivationProblem({ degrees_of_freedom_spec: { creative_features_spec: { image_touchups: { enroll_status: 'OPT_OUT' } } } })).toMatch(/does not say OPT_OUT/)
     expect(metaActivationProblem({})).toMatch(/reads no Advantage\+ feature switches/)
     expect(metaActivationProblem({ degrees_of_freedom_spec: { creative_features_spec: { ...Object.fromEntries(META_ACTIVATE_FEATURES.map((f) => [f, { enroll_status: 'OPT_OUT' }])), some_new_feature: { enroll_status: 'OPT_IN' } } } })).toMatch(/some_new_feature/)
+    // Fail closed: any value but exactly OPT_OUT counts as on (lower case, a missing status, an odd word).
+    const allOut = Object.fromEntries(META_ACTIVATE_FEATURES.map((f) => [f, { enroll_status: 'OPT_OUT' }]))
+    for (const odd of [{ enroll_status: 'opt_in' }, {}, { enroll_status: 'DEFAULT' }]) {
+      expect(metaActivationProblem({ degrees_of_freedom_spec: { creative_features_spec: { ...allOut, some_sdk_feature: odd } } })).toMatch(/some_sdk_feature/)
+    }
   })
 
   it('CR-218: a "message us" footer inline on a website ad only — never with a messaging button, never on the creative edge', () => {
