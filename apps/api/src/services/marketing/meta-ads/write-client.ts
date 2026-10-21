@@ -55,7 +55,7 @@ export interface MetaWriteTarget { connectionId: string; adAccountId: string }
 export interface MetaObjectChange {
   objectId: string
   /** The kind of object (the gateway confirms it before anything is sent). */
-  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'app' | 'page'
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -69,11 +69,24 @@ export interface MetaObjectChange {
   /** Step 18 — the fields read back (default id,status,effective_status); on the POST only when `readBackInPost`. */
   readBackFields?: string
   /** Step 18 — a create on the object's edge (POST /<id>/budget_schedules): the new object is read back, not the parent. */
-  edge?: 'budget_schedules'
+  edge?: 'budget_schedules' | 'subscribed_apps' | 'subscriptions'
   /** Step 18 — DELETE (a budget schedule's): Meta's {"success": true} is the answer, nothing is read back. */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  /**
+   * Step 30 — a webhook or alert subscription change (meta-webhook-rules.ts): its path, a DELETE's query, the app token,
+   * PATCH; Meta's answer is all there is (`{success}` or the new subscription's id) — nothing is read back.
+   */
+  via?: MetaRequestVia
+}
+
+/** Step 30 — how a webhook or alert subscription change travels (none of it is needed by a change of an object). */
+export interface MetaRequestVia {
+  path?: string
+  query?: Record<string, string>
+  auth?: 'app'
+  method?: 'PATCH'
 }
 
 /** Step 18 — what the read-back must show: the request's own `expect`, else its status. */
@@ -205,6 +218,8 @@ export async function metaSendChange(
       connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind,
       params: { ...change.params, ...(change.readBackInPost ? { fields } : {}) }, check: false, maxRateWaitMs: WRITE_RATE_WAIT_MS,
       ...(change.edge ? { edge: change.edge } : {}), ...(change.method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...(change.parent ? { parent: change.parent } : {}),
+      ...(change.via?.path ? { path: change.via.path } : {}), ...(change.via?.query ? { query: change.via.query } : {}),
+      ...(change.via?.auth ? { auth: change.via.auth } : {}), ...(change.via?.method === 'PATCH' ? { method: 'PATCH' as const } : {}),
     })
   } catch (err) {
     // The gateway throws only before it sends (a refusal, or a problem of Nexus's own such as the database): nothing left.
@@ -213,6 +228,8 @@ export async function metaSendChange(
   }
   const body = answer.ok ? answer.json<Record<string, unknown>>() : null
   if (answer.ok && !(body && body.success === false)) {
+    // Step 30 — a webhook or alert subscription: Meta's answer is the result (nothing of it is an object to read back).
+    if (change.via) return { node: body, readBack: 'none', waitedMs }
     if (body && typeof body.status === 'string') return { node: body, readBack: 'same-request', waitedMs }
     // Step 18 — a DELETE answers {"success": true}: the object is gone, nothing to read back.
     if (change.method === 'DELETE') return { node: body, readBack: 'none', waitedMs }
@@ -231,13 +248,15 @@ export async function metaSendChange(
   const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer)
   const unanswered = answer.status === 0 || answer.status >= 500
   const wanted = expectedOf(change)
-  // Step 18 — an edge create or a DELETE cannot be judged by reading the object: Meta's answer is all there is.
-  const node = change.edge || change.method === 'DELETE' ? null : await readObject(target, change.objectId, `${operation}.readAfterError`, fields)
+  // Step 18 — an edge create or a DELETE cannot be judged by reading the object: Meta's answer is all there is (step 30:
+  // nor a webhook or alert subscription change).
+  const answerOnly = !!change.edge || change.method === 'DELETE' || !!change.via
+  const node = answerOnly ? null : await readObject(target, change.objectId, `${operation}.readAfterError`, fields)
   if (node && Object.keys(wanted).length && Object.keys(wanted).every((f) => node[f] !== undefined && node[f] !== null) && !readBackMismatch(node, wanted).length) {
     return { node, readBack: 'second-read', waitedMs, afterError: unanswered ? 'Meta did not answer, or failed on its side' : failure.sentence }
   }
   // Step 18 — a create on an edge or a DELETE that Meta answered with an error made nothing (Meta judged it).
-  if ((change.edge || change.method === 'DELETE') && !unanswered) throw new MetaWriteError(failure, operation, 'refused')
+  if (answerOnly && !unanswered) throw new MetaWriteError(failure, operation, 'refused')
   if (!node) {
     const sentence = unanswered
       ? META_UNKNOWN_OUTCOME

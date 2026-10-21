@@ -73,7 +73,7 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'app' | 'page'
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -83,9 +83,18 @@ export interface MetaWriteRequest {
   maxRateWaitMs?: number
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
   /** Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. */
-  edge?: 'budget_schedules'
-  /** Step 18 — DELETE (a budget schedule's, no body); default POST. */
-  method?: 'POST' | 'DELETE'
+  edge?: 'budget_schedules' | 'subscribed_apps' | 'subscriptions'
+  /** Step 18 — DELETE (a budget schedule's, no body); step 30 — PATCH (an alert subscription's status); default POST. */
+  method?: 'POST' | 'DELETE' | 'PATCH'
+  /**
+   * Step 30 — the path below the version when it is not `<objectId>[/<edge>]` (`act_<id>/subscriptions/<id>`); it still
+   * starts with `objectId`, the object the gateway confirms.
+   */
+  path?: string
+  /** Step 30 — a DELETE's parameters, sent in the query (as Meta's SDK sends them); `params` is then empty. */
+  query?: Record<string, string>
+  /** Step 30 — the connection's Meta APP token instead of its system-user token (an app subscription). */
+  auth?: 'app'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
 }
@@ -99,14 +108,16 @@ export interface MetaWriteRequest {
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
   const body = remove ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
+  const path = req.path ?? (req.edge ? `${req.objectId}/${req.edge}` : req.objectId)
   return gatewayCall({
     channel: 'META',
     operation: req.operation,
     kind: req.check ? 'read' : 'write',
     connectionId: req.connectionId,
-    url: metaUrl(req.edge ? `${req.objectId}/${req.edge}` : req.objectId),
-    method: remove ? 'DELETE' : 'POST',
+    url: metaUrl(path, remove ? req.query ?? {} : {}),
+    method: remove ? 'DELETE' : req.method === 'PATCH' ? 'PATCH' : 'POST',
     body,
+    ...(req.auth ? { auth: req.auth } : {}),
     metaObjectKind: req.objectKind,
     ...(req.parent ? { metaParent: req.parent } : {}),
     maxTransientRetries: req.check ? 1 : 0,

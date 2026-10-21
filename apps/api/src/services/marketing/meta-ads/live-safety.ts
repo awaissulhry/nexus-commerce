@@ -457,7 +457,7 @@ export async function liveWebhooks(input: { connectionId?: string | null; view: 
   const page = want('page') ? await part(async () => {
     const pageId = pageOf(account)
     const read = await graphPage(connectionId, 'webhooks.pageApps', `${pageId}/subscribed_apps`, { fields: 'id,name,subscribed_fields', limit: 100 }).catch((err) => {
-      if (err instanceof MetaReadError && err.failure.permissionDenied) throw new MetaLiveRefusal(`${err.message} Meta answers a Page's connected apps only to a Page access token (pages_manage_metadata, a person with a task on the Page); Nexus reads with the business's system-user token, so this part comes with the webhook set-up step (step 30) or is seen in Meta Business settings.`)
+      if (err instanceof MetaReadError && err.failure.permissionDenied) throw new MetaLiveRefusal(`${err.message} Meta answers a Page's connected apps only to a Page access token (pages_manage_metadata, a person with a task on the Page); Nexus reads with the business's system-user token, so this part is seen in Meta Business settings or the App Dashboard (set-meta-webhooks installs the app on the Page, when Meta takes the system-user token for it).`)
       throw err
     })
     return { pageId, apps: read.rows.map((r) => ({ appId: idOf(r.id), name: text(r.name), fields: (Array.isArray(r.subscribed_fields) ? r.subscribed_fields : []).map((f) => text(f) ?? text(obj(f)?.name)).filter(Boolean), isNexusApp: !!appId && idOf(r.id) === appId })) }
@@ -478,7 +478,7 @@ export async function liveWebhooks(input: { connectionId?: string | null; view: 
     ...(adAccount ? { adAccountApps: adAccount.value, adAccountAppsNotRead: adAccount.notRead } : {}),
     ...(page ? { pageApps: page.value, pageAppsNotRead: page.notRead } : {}),
     ...(alerts ? { alertSubscriptions: alerts.value?.items ?? null, alertSubscriptionsNextAfter: alerts.value?.nextAfter ?? null, alertSubscriptionsNotRead: alerts.notRead } : {}),
-    note: 'Meta\'s ads webhooks take two connections: the app\'s subscription to the ad_account fields (appSubscriptions; the callback shown by its origin only) and the ad account connected to the app (adAccountApps, isNexusApp). Alert subscriptions are this app\'s threshold and change alerts on the ad account (amounts in minor units of the account currency). No verify token, secret or token is ever read. Subscribing and connecting are changes (set-meta-webhooks, a later step).',
+    note: 'Meta\'s ads webhooks take two connections: the app\'s subscription to the ad_account fields (appSubscriptions; the callback shown by its origin only) and the ad account connected to the app (adAccountApps, isNexusApp). Alert subscriptions are this app\'s threshold and change alerts on the ad account (amounts in minor units of the account currency). No verify token, secret or token is ever read. Subscribing, connecting and installing are set-meta-webhooks (or Meta\'s App Dashboard: this read shows the result either way); alerts are set-meta-alert-subscription and remove-meta-alert-subscription.',
   }
 }
 

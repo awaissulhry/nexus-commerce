@@ -112,8 +112,9 @@ const metaWebhooks: AgentTool = {
     + 'a Page token: when it refuses, the answer says so); alerts: the ad account\'s alert subscriptions made by this app '
     + '(new objects, a field changing, a number crossing a threshold or reaching a milestone, with their filters; amounts '
     + 'in minor units of the account currency). all (default): each part, one refused part never hiding the others. Never a '
-    + 'verify token, secret or token. Read only: subscribing, connecting and alert changes are set-meta-webhooks and the '
-    + 'alert tools (a later step).',
+    + 'verify token, secret or token. Read only: subscribing, connecting and installing are set-meta-webhooks, alerts '
+    + 'set-meta-alert-subscription and remove-meta-alert-subscription — or the Owner sets them up in Meta\'s App Dashboard '
+    + '(Webhooks of the app; callback https://<the API>/webhooks/meta/<app id>), and this read shows the result either way.',
   async handler(args): Promise<ToolResult> {
     const a = args as Record<string, unknown>
     return guardedMeta(() => liveWebhooks({

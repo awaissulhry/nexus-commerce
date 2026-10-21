@@ -8,6 +8,7 @@
  * facts F1 X6): a change of N objects is N requests, sent in order, each with its own outcome (meta-ads-kit.ts).
  */
 import type { MetaStatusKind } from './live-status.js'
+import type { MetaRequestVia } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -15,6 +16,11 @@ export interface MetaChangeRequest {
   step: number
   /** What a person reads, e.g. 'Pause campaign "Spring sale" (120000000000001)'. */
   label: string
+  /**
+   * The kind of a status change's object. A change whose object is named by `objectKind` (a budget schedule; step 30: the
+   * ad account, the app, the Page) carries a status kind too, which nothing reads for it: `objectKind` is what the
+   * write client and the gateway go by.
+   */
   kind: MetaStatusKind
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
@@ -43,14 +49,19 @@ export interface MetaChangeRequest {
   expect?: Record<string, string>
   /** The fields read back (default id,status,effective_status). */
   readBackFields?: string
-  /** The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`). */
-  objectKind?: 'highdemandperiod'
-  /** A create on the object's edge (POST /<id>/budget_schedules). */
-  edge?: 'budget_schedules'
+  /**
+   * The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 30: the chosen ad
+   * account itself, the connection's own app, the chosen Page).
+   */
+  objectKind?: 'highdemandperiod' | 'adaccount' | 'app' | 'page'
+  /** A create on the object's edge (POST /<id>/budget_schedules; step 30: subscribed_apps, subscriptions). */
+  edge?: 'budget_schedules' | 'subscribed_apps' | 'subscriptions'
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
   /** A budget schedule's campaign or ad set. */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 30 — a webhook or alert subscription change: its path, query, token and method (write-client.ts). */
+  via?: MetaRequestVia
 }
 
 export interface MetaChangeDraft {

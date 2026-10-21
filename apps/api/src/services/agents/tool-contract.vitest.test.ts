@@ -884,6 +884,20 @@ describe('C1 — every registered tool keeps the contract', () => {
         },
         after: { kind: 'highdemandperiod', id: '120000000000031', parent: { kind: 'campaign', id: '120000000000001' }, fields: { budget_value: '30', exists: 'yes' }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 30 part 2: fields a subscription added are removed; a new alert is removed, a status goes back, a removed
+      // alert is made again with the same conditions.
+      'set-meta-webhooks': {
+        before: { action: 'subscribe-app', object: 'ad_account', fields: ['effective_status'], undo: { action: 'unsubscribe-app', object: 'ad_account', fields: ['with_issues_ad_objects'] }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'subscribe-app', object: 'ad_account', fields: ['effective_status', 'with_issues_ad_objects'], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-alert-subscription': {
+        before: { action: 'create', subscriptionId: null, exists: false, undo: { subscriptionId: '120000000000040', confirmDelete: true }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'create', subscriptionId: '120000000000040', exists: true, spec: { eventType: 'OBJECT_CREATED', entityType: 'CAMPAIGN' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'remove-meta-alert-subscription': {
+        before: { action: 'remove', subscriptionId: '120000000000040', exists: true, undo: { action: 'create', eventType: 'INSIGHTS_UPDATED', entityType: 'AD', field: 'cpc', operator: 'GREATER_THAN', thresholdCents: [200] }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'remove', subscriptionId: '120000000000040', exists: false, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1053,7 +1067,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-custom-goals', 'set-google-custom-audiences', 'set-google-user-lists', 'set-google-reusable-audiences',
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
-      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule']) {
+      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
+      'set-meta-webhooks', 'set-meta-alert-subscription', 'remove-meta-alert-subscription']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

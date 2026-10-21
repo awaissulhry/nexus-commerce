@@ -290,6 +290,8 @@ export function objectChangeOf(request: MetaChangeRequest): MetaObjectChange {
     ...(request.edge ? { edge: request.edge } : {}),
     ...(request.method ? { method: request.method } : {}),
     ...(request.parent ? { parent: request.parent } : {}),
+    // Step 30 — a webhook or alert subscription change travels as its request says (write-client.ts MetaRequestVia).
+    ...(request.via ? { via: request.via } : {}),
   }
 }
 

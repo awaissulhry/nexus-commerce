@@ -213,7 +213,7 @@ describe('meta-webhooks', () => {
     expect(JSON.stringify(data)).not.toMatch(/s3cret|abcSECRETkey|hooks\/catch/)
     expect(data.adAccountApps).toEqual([{ appId: '5550000001', appName: 'Nexus', isNexusApp: true }, { appId: '5550000009', appName: 'Other', isNexusApp: false }])
     expect(data.pageApps).toBeNull()
-    expect(data.pageAppsNotRead).toMatch(/Page access token.*step 30/)
+    expect(data.pageAppsNotRead).toMatch(/Page access token.*set-meta-webhooks installs the app on the Page/)
     expect(data.alertSubscriptions).toEqual([
       { subscriptionId: '900000000000001', eventType: 'INSIGHTS_UPDATED', status: 'ENABLED', field: 'cpc', operator: 'GREATER_THAN', thresholdCents: 200, filters: [{ field: 'entity_type', operator: 'EQUAL', value: 'AD' }, { field: 'daily_budget', operator: 'IN_RANGE', valueCents: [1000, 5000] }] },
       { subscriptionId: '900000000000002', eventType: 'INSIGHTS_UPDATED', status: null, field: 'ctr', operator: 'LESS_THAN', threshold: '0.5', filters: [] },

@@ -30,7 +30,7 @@
 import { createHash } from 'node:crypto'
 import { withSpan } from '../../utils/otel-setup.js'
 import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
-import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade, metaChosenAdAccountOf, metaStoredObject } from './account.js'
+import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade, metaChosenAdAccountOf, metaChosenPageOf, metaStoredObject } from './account.js'
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
 import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite } from './meta-calls.js'
@@ -129,7 +129,7 @@ export interface GatewayRequest {
    * trust it: it confirms it (the business's stored row, or a field only that kind has in its one live read) and refuses
    * the change otherwise, so the write allow-list is literally a campaign, an ad set or an ad — never a creative or a Page.
    */
-  metaObjectKind?: 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+  metaObjectKind?: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'app' | 'page'
   /**
    * Meta step 18: a change of a budget schedule (high-demand period, `metaObjectKind: 'highdemandperiod'`) names the
    * campaign or ad set it belongs to; the gateway confirms that object is of the chosen ad account AND lists the period
@@ -347,6 +347,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   let metaWrite: MetaJudgedWrite | null = null
   // Step 16 — a read of Meta's REST host (api.facebook.com): its token goes as a Bearer header (meta-calls.ts).
   let metaRest = false
+  // Step 30 — the body a webhook subscription is sent with: the judged body plus the verify token (set below).
+  let metaSendBody: string | null = null
   if (req.channel === 'META' && req.method !== 'GET') {
     const judged = metaWriteVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers, objectKind: req.metaObjectKind })
     if ('problem' in judged) {
@@ -358,6 +360,12 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       return refuse('gated', 'PUBLISH_GATED', 'Nothing was sent to Meta: Meta changes are switched off in Nexus (NEXUS_META_ADS_WRITES), so Meta is not asked to check one either.', 503)
     }
     metaWrite = judged.write
+    // Step 30 — a change that names a Meta app (an app subscription, an ad account's connected app) goes only for the
+    // connection's OWN app, as the token renewal does.
+    if (metaWrite.appId) {
+      const own = await (await import('../cx/token.service.js')).metaAppIdOf(req.connectionId)
+      if (!own || own !== metaWrite.appId) return refuse('refused', 'META_WRITE_NOT_ALLOWED', 'Nothing was sent to Meta: a webhook change is sent only for this connection\'s own Meta app.', 403)
+    }
   } else if (req.channel === 'META') {
     // One verdict on one canonical parse (meta-calls.ts): the refusal, and for the renewal the client_id it names.
     const judged = metaCallVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
@@ -403,6 +411,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     const owner = await metaOwnerProblem(req.connectionId, metaWrite, req.metaObjectKind, req.metaParent)
       ?? await metaBodyIdsProblem(req.connectionId, metaWrite)
     if (owner) return refuse('refused', owner.code, owner.sentence, 403)
+    // Step 30 — an app subscription carries the verify token Meta echoes to Nexus's receiver: the server's own
+    // (META_WEBHOOK_VERIFY_TOKEN), added here to the judged body, never a caller's and never on the ledger.
+    if (metaWrite.verifyToken) {
+      const verify = process.env.META_WEBHOOK_VERIFY_TOKEN?.trim()
+      if (!verify) return refuse('held', 'META_VERIFY_TOKEN_UNSET', 'Held, nothing sent: no webhook verify token is set on the API service (META_WEBHOOK_VERIFY_TOKEN), so Meta could not verify Nexus\'s receiver.', 409)
+      metaSendBody = `${metaWrite.body}&${new URLSearchParams({ verify_token: verify }).toString()}`
+    }
     if (!metaWrite.check) {
       const wait = metaObjectWait(await metaObjectState(req.connectionId, metaWrite.objectId), metaWrite.budget)
       if (wait) return refuse('refused', 'RATE_LIMITED_LOCAL', `Not sent yet: ${wait.why}. Retry in ${Math.ceil(wait.waitMs / 1000)} s; nothing was changed.`, 429, wait.waitMs)
@@ -468,7 +483,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     ...marketHeaders,
     ...(token ? authHeadersOf(req.channel, token) : {}),
     // A Meta change is a form (Meta's `-F` fields), as the gateway judged it.
-    ...(metaWrite ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+    ...(metaWrite && metaWrite.method !== 'DELETE' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
   }
   // Meta: the token and its appsecret_proof go on the URL that is sent (never on `url`, which the ledger, the trace and
   // the answer carry). The proof is made from the app secret the token service holds for this connection, or from the
@@ -540,7 +555,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     try {
       // Never follow a redirect: a channel call carries its token in a header, and a custom token header
       // (x-amz-access-token, X-Shopify-Access-Token) would travel to the redirect's host.
-      const res = await fetch(sendUrl, { method: req.method, headers, body: (googleBody ?? metaWrite?.body ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
+      const res = await fetch(sendUrl, { method: req.method, headers, body: (googleBody ?? metaSendBody ?? (metaWrite?.method === 'DELETE' ? undefined : metaWrite?.body) ?? req.body ?? undefined) as RequestInit["body"], redirect: 'error', signal: req.signal ? AbortSignal.any([req.signal, AbortSignal.timeout(req.timeoutMs ?? 30_000)]) : AbortSignal.timeout(req.timeoutMs ?? 30_000) })
       status = res.status
       responseHeaders = res.headers
       text = await res.text()
@@ -664,10 +679,12 @@ const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudie
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | 'app' | 'page' | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   // Step 18 — a budget schedule: its campaign or ad set first, then the period among that object's own.
   if (kind === 'highdemandperiod') return metaPeriodOwnerProblem(connectionId, write, parent)
+  // Step 30 — the ad account itself, the connection's own app, the chosen Page (meta-webhook-rules.ts).
+  if (kind === 'adaccount' || kind === 'app' || kind === 'page') return metaScopeOwnerProblem(connectionId, write, kind)
   if (!kind || !Object.prototype.hasOwnProperty.call(META_KIND_FIELD, kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of ${id} names the kind of object it changes (a campaign, an ad set or an ad).` }
   if (write.check && kind !== 'campaign') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has a check (validate_only) only for campaign changes, and ${id} is named a ${META_KIND_WORD[kind]}.` }
   const chosen = await metaChosenAdAccountOf(connectionId)
@@ -698,6 +715,25 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
   // Both of the kind's own fields, each present with a value.
   if (META_KIND_FIELD[kind].some((name) => { const value = body?.[name]; return value === undefined || value === null || value === '' })) return notKind()
   return null
+}
+
+/**
+ * Meta step 30 — a webhook or alert subscription change: `act_<id>` must be THE ad account this business chose through
+ * this connection, an app id its own Meta app, a Page id the Page it chose (MetaAccountLink). Anything else: nothing sent.
+ */
+async function metaScopeOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'adaccount' | 'app' | 'page'): Promise<{ code: string; sentence: string } | null> {
+  if (!write.kinds?.includes(kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: this change is not one of a ${kind}.` }
+  const id = write.objectId
+  if (kind === 'adaccount') {
+    const chosen = await metaChosenAdAccountOf(connectionId)
+    return chosen && id === `act_${chosen}` ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${id} is not the Meta ad account this business chose through this connection.` }
+  }
+  if (kind === 'app') {
+    const own = await (await import('../cx/token.service.js')).metaAppIdOf(connectionId)
+    return own && id === own ? null : { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: app ${id} is not this connection's own Meta app.` }
+  }
+  const page = await metaChosenPageOf(connectionId)
+  return page && id === page ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${id} is not the Facebook Page this business chose through this connection.` }
 }
 
 /**

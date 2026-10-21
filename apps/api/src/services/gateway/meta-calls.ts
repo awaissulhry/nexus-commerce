@@ -48,6 +48,7 @@ import { createHmac } from 'node:crypto'
 import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
 import { META_SETTINGS_WRITE_RULES } from './meta-settings-rules.js'
+import { META_WEBHOOK_WRITE_RULES } from './meta-webhook-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -728,7 +729,8 @@ export function metaCheckAllowed(status: string, proven: boolean = META_UPDATE_C
  */
 export interface MetaWriteRule {
   name: string
-  method: 'POST' | 'DELETE'
+  /** Step 30: PATCH (an alert subscription's status). */
+  method: 'POST' | 'DELETE' | 'PATCH'
   /** The route, lower case, without the version (`120000000000001`). */
   path: RegExp
   required: readonly string[]
@@ -753,10 +755,24 @@ export interface MetaWriteRule {
   maxBody?: number
   /** Step 18 — the ids inside the body, each checked to be of the chosen ad account by the gateway before anything goes. */
   ids?: (params: ReadonlyMap<string, string>) => MetaWriteBodyId[]
+  // ── step 30 (meta-webhook-rules.ts) ──
+  /** The token it goes with when not the account's system-user token: the connection's Meta APP token. */
+  auth?: 'app'
+  /** A DELETE whose parameters ride in the URL's query (as Meta's SDK sends a DELETE's), judged like a body. */
+  inQuery?: true
+  /** The gateway adds `verify_token` (META_WEBHOOK_VERIFY_TOKEN) to the body it sends: never a caller's, never logged. */
+  verifyToken?: true
+  /** A check of the route with the judged keys (a callback that must be Nexus's own for the path's app). */
+  routeCheck?: (route: string, params: ReadonlyMap<string, string>) => string | null
+  /** The Meta app this change names (in its path or app_id): the gateway sends it only for the connection's own app. */
+  appIdOf?: (route: string, params: ReadonlyMap<string, string>) => string | null
 }
 
-/** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
-export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+/**
+ * Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period).
+ * Step 30 — the chosen ad account itself (`act_<id>`), the connection's own Meta app, the chosen Page.
+ */
+export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'app' | 'page'
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
 export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' }
 
@@ -818,8 +834,14 @@ export interface MetaJudgedWrite {
   kinds?: readonly MetaWriteKind[]
   /** Step 18 — the ids inside the body: each must be of the chosen ad account (the gateway checks them before sending). */
   ids?: MetaWriteBodyId[]
-  /** Step 18 — a DELETE (a budget schedule's); every other change is a POST. */
-  method?: 'DELETE'
+  /** Step 18 — a DELETE (a budget schedule's); step 30 — a PATCH (an alert subscription's status); else a POST. */
+  method?: 'DELETE' | 'PATCH'
+  /** Step 30 — the token it goes with: the connection's app token (default: the account's). */
+  auth?: 'app'
+  /** Step 30 — the gateway adds the verify token to the body it sends. */
+  verifyToken?: true
+  /** Step 30 — the Meta app it names: sent only when it is the connection's own. */
+  appId?: string
 }
 
 /** The gateway's verdict on a Meta call that is not a GET: why it is refused (and whether as a batch), or the judged write. */
@@ -836,26 +858,44 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const refuse = (problem: string): MetaWriteVerdict => ({ problem })
   const method = input.method.toUpperCase()
   if (input.headers && Object.keys(input.headers).length > 0) return refuse('a Meta call carries no header of the caller\'s own')
-  if (input.auth !== undefined && input.auth !== 'account') return refuse('a Meta change goes only with the account\'s own system-user token')
+  // Step 30 — the app token only by a rule that names it (an app subscription, a Page uninstall), checked below.
+  if (input.auth !== undefined && input.auth !== 'account' && input.auth !== 'app') return refuse('a Meta change goes only with the account\'s own system-user token')
+  const tokenOk = (rule: MetaWriteRule): string | null => ((rule.auth ?? 'account') === (input.auth ?? 'account') ? null
+    : rule.auth === 'app' ? 'this Meta change goes only with the connection\'s own app token' : 'a Meta change goes only with the account\'s own system-user token')
   // The Graph root with its version (`…/v26.0/`, Meta's batch endpoint) is judged as the root, so a batch is named as one.
   const graph = graphRouteOf(input.url.replace(/^(https:\/\/graph\.facebook\.com\/v\d+\.\d+)\/(?=$|[?#])/i, '$1'))
   if (!graph) return refuse('Nexus calls Meta only at https://graph.facebook.com')
   if ('problem' in graph) return refuse(graph.problem)
   const pinned = metaGraphApiVersion()
   if (graph.version !== pinned) return refuse(`Nexus calls Meta only on API version ${pinned} (this call: ${graph.version ?? 'no version'})`)
-  if ([...graph.search.keys()].length > 0) return refuse('a Meta change carries its parameters in its body, never in the URL')
+  const queryKeys = [...graph.search.keys()]
+  if (queryKeys.length > 0 && method !== 'DELETE') return refuse('a Meta change carries its parameters in its body, never in the URL')
   const batch = metaBatchProblem(method, graph.route, input.body)
   if (batch) return { problem: batch, batch: true }
-  // Step 18 — a DELETE goes only by a DELETE rule for the kind the call names (today a budget schedule's), with no body.
+  // Step 18 — a DELETE goes only by a DELETE rule for the kind the call names (a budget schedule's; step 30: an app
+  // subscription, the ad account's or the Page's connected app, an alert subscription), with no body; step 30 — its
+  // parameters, when it has any, in the query, judged like a body.
   const deleteRule = method === 'DELETE' ? writeRules().find((r) => r.method === 'DELETE' && r.path.test(graph.route) && kindMatches(r, input.objectKind)) : undefined
-  if (method === 'DELETE' && (!deleteRule || (input.body !== undefined && input.body !== ''))) {
-    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule; deleting campaigns, ad sets and ads is its own tool, not built yet), and cancels no async batch')
+  if (method === 'DELETE' && (!deleteRule || (input.body !== undefined && input.body !== '') || (queryKeys.length > 0 && !deleteRule.inQuery))) {
+    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), a webhook subscription or connected app (set-meta-webhooks) and an alert subscription (remove-meta-alert-subscription); deleting campaigns, ad sets and ads is its own tool, not built yet, and it cancels no async batch')
   }
   if (deleteRule) {
     if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
-    return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE' } }
+    const tokenProblem = tokenOk(deleteRule)
+    if (tokenProblem) return refuse(tokenProblem)
+    const params = new Map(graph.search)
+    if (queryKeys.length !== params.size) return refuse('a Meta change names each parameter once')
+    const keys = [...params.keys()]
+    if (!deleteRule.required.every((k) => params.has(k)) || !keys.every((k) => deleteRule.required.includes(k) || deleteRule.optional.includes(k))) {
+      return refuse(`this DELETE takes ${[...deleteRule.required, ...deleteRule.optional].join(', ') || 'no parameters'}; it names ${keys.join(', ') || 'none'}`)
+    }
+    for (const [key, value] of params) if (!/^[\x20-\x7e]*$/.test(value)) return refuse(`the value of "${key}" is plain ASCII`)
+    const problem = deleteRule.values(params) ?? deleteRule.routeCheck?.(graph.route, params) ?? null
+    if (problem) return refuse(problem)
+    const appId = deleteRule.appIdOf?.(graph.route, params) ?? undefined
+    return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE', ...(deleteRule.auth ? { auth: deleteRule.auth } : {}), ...(appId ? { appId } : {}) } }
   }
-  if (method !== 'POST') return refuse(`Nexus sends Meta no ${method}`)
+  if (method !== 'POST' && method !== 'PATCH') return refuse(`Nexus sends Meta no ${method}`)
   const parsed = writeParams(input.body)
   if ('problem' in parsed) return refuse(parsed.problem)
   const keys = [...parsed.params.keys()]
@@ -863,8 +903,10 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     && r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k))
     && (!r.anyOf || r.anyOf.some((k) => parsed.params.has(k))))
   if (!rule) {
-    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys); this one is POST /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a webhook or alert subscription (set-meta-webhooks, set-meta-alert-subscription); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
+  const tokenProblem = tokenOk(rule)
+  if (tokenProblem) return refuse(tokenProblem)
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
   if ((input.body as string).length > maxBody) return refuse(`a Meta change body is at most ${maxBody} characters`)
@@ -874,7 +916,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
       if (!pattern.test(value)) return refuse(`the value of "${key}" is printable text (no control or format characters)`)
     } else if (!/^[\x20-\x7e]*$/.test(value)) return refuse(`the value of "${key}" is plain ASCII`)
   }
-  const problem = rule.values(parsed.params)
+  const problem = rule.values(parsed.params) ?? rule.routeCheck?.(graph.route, parsed.params) ?? null
   if (problem) return refuse(problem)
   const check = parsed.params.has('execution_options')
   if (input.kind !== (check ? 'read' : 'write')) {
@@ -884,7 +926,11 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const body = new URLSearchParams(order.map((k): [string, string] => [k, parsed.params.get(k)!])).toString()
   const budget = typeof rule.budget === 'function' ? rule.budget(parsed.params) : rule.budget
   const ids = rule.ids?.(parsed.params) ?? []
-  return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}) } }
+  const appId = rule.appIdOf?.(graph.route, parsed.params) ?? undefined
+  return { write: {
+    rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}),
+    ...(method === 'PATCH' ? { method: 'PATCH' as const } : {}), ...(rule.auth ? { auth: rule.auth } : {}), ...(rule.verifyToken ? { verifyToken: true as const } : {}), ...(appId ? { appId } : {}),
+  } }
 }
 
 /** Step 18 — a rule with kinds matches only a call that names one of them; the status rule (no kinds) a campaign, ad set or ad. */
@@ -893,8 +939,8 @@ const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kin
   : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
 const MAX_ANY_WRITE_BODY = 16_000
-/** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts) — read when judged, never at load. */
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES]
+/** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts), then step 30's webhook rules — read when judged, never at load. */
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...META_WEBHOOK_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {
