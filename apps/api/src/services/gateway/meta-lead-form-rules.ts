@@ -45,7 +45,7 @@
  * and is_lead_capture_ai_agent_enabled=true (always sent false until Meta explains it).
  */
 import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
-import { META_NAME_TEXT } from './meta-settings-rules.js'
+import { META_NAME_TEXT } from './meta-write-text.js'
 
 type Params = ReadonlyMap<string, string>
 type Row = Record<string, unknown>
@@ -92,7 +92,7 @@ export const META_LEAD_KEY = /^[A-Za-z0-9_]{1,100}$/
 export const META_LEAD_FORM_MAX_BODY = 64_000
 
 /**
- * Text a person types: step 18's ONE shared pattern (meta-settings-rules.ts META_NAME_TEXT — no control or format
+ * Text a person types: step 18's ONE shared pattern (meta-write-text.ts META_NAME_TEXT — no control or format
  * character, so no bidi override, zero-width mark or tag character; the zero-width joiner only between two emoji).
  */
 const PRINTABLE = META_NAME_TEXT

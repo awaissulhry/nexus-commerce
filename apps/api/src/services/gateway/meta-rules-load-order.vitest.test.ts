@@ -24,6 +24,19 @@ describe('Meta write rules: load order', () => {
     expect(safety.META_BRAND_SAFETY_WRITE_RULES.length).toBeGreaterThan(0)
   })
 
+  it('loads meta-settings-rules.ts first: the lead-form rules hold real patterns (step 36)', async () => {
+    await import('./meta-settings-rules.js')
+    const forms = await import('./meta-lead-form-rules.js')
+    const texts = forms.META_LEAD_FORM_WRITE_RULES.flatMap((r) => Object.values(r.text ?? {}))
+    expect(texts.length).toBeGreaterThan(0)
+    expect(texts.every((p) => p instanceof RegExp)).toBe(true)
+  })
+
+  it('loads meta-lead-form-rules.ts first (step 36)', async () => {
+    const forms = await import('./meta-lead-form-rules.js')
+    expect(forms.META_LEAD_FORM_WRITE_RULES.length).toBeGreaterThan(0)
+  })
+
   it('loads meta-calls.ts first, and every rule is in writeRules', async () => {
     const calls = await import('./meta-calls.js')
     const settings = await import('./meta-settings-rules.js')
