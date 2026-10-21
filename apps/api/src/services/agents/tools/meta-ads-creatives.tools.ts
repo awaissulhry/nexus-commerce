@@ -44,6 +44,7 @@ function requestOf(args: Record<string, unknown>): CreativeRequest {
     formatAutomation: (args.formatAutomation as CreativeRequest['formatAutomation']) ?? [],
     shopDestination: args.shopDestination === true,
     autoProductTags: args.autoProductTags === true,
+    productTags: (args.productTags as CreativeRequest['productTags']) ?? null,
     carouselAutoOrder: args.carouselAutoOrder === true,
     partner: partner ? { pageId: str(partner.pageId), instagramId: str(partner.instagramId), mainIdentity: partner.mainIdentity === 'creator' ? 'creator' : 'brand' } : null,
     async: args.async === true,
@@ -126,7 +127,7 @@ const createMetaCreative: AgentTool = {
     story: spec('create: Meta\'s object_story_spec WITHOUT page_id and instagram_user_id (Nexus fills the business\'s chosen Page and Instagram account): link_data (image or link ad, carousel child_attachments 2–10, collection collection_thumbnails, messaging page_welcome_message), photo_data, video_data (video_id of the account\'s library), text_data or template_data (Advantage+ catalog); images by image_hash from create-meta-media or picture / url / image_url (a public https link Meta fetches)'),
     postId: z.string().trim().regex(/^\d{1,25}_\d{1,25}$/, 'a post id: <Page id>_<post id>').optional().describe('create: or an existing post of the chosen Page (object_story_id, meta-page-posts lists them)'),
     assetFeed: spec('create: Meta\'s asset_feed_spec (Dynamic Creative, placement or language customization, multi-destination messaging, profile visits, call ads, reminders, promo codes) WITHOUT audios (music is its own argument)'),
-    parts: spec('create: the creative\'s other keys, as Meta names them: url_tags, adlabels, call_to_action (with postId), ad_disclaimer_spec, portrait_customizations, platform_customizations, interactive_components_spec, branded_content (testimonial), creative_sourcing_spec (site links), media_sourcing_spec, marketing_message_structured_spec, recommender_settings, template_url_spec, categorization_criteria, category_media_source, object_type'),
+    parts: spec('create: the creative\'s other keys, as Meta names them: url_tags, adlabels, call_to_action (with postId), ad_disclaimer_spec, portrait_customizations, platform_customizations, branded_content (testimonial), creative_sourcing_spec (site links; associated_product_set_id for product extensions), media_sourcing_spec, marketing_message_structured_spec, product_set_id (an Advantage+ catalog creative, with story.template_data), product_data (catalog items under the ad: [{product_id, product_source MANUAL, product_decision ACCEPT}]), recommender_settings, template_url_spec, categorization_criteria, category_media_source, object_type. Every product set and catalog item must be of a catalog of the chosen ad account\'s business portfolio (or a client catalog whose owner is no other business in Nexus)'),
     withInstagram: z.boolean().optional().describe('create: run on Instagram too, as the chosen Instagram account (default: true when one is chosen)'),
     aiFeatures: z.array(z.enum(META_CREATIVE_FEATURES as [string, ...string[]])).max(80).optional().describe('create: the Advantage+ creative features to switch ON (every other one Meta documents is sent OFF)'),
     featureSettings: z.record(z.string(), z.record(z.string(), z.unknown())).optional().describe('create: per feature switched on, its customizations as Meta documents them (adapt_to_placement: aspect_ratio_config {ar_4_5|ar_9_16: {adapt: {enroll_status}}}, image_crop_style, showcase_card_display; text_optimizations / enhance_cta: text_extraction {enroll_status}), e.g. {"adapt_to_placement":{"aspect_ratio_config":{"ar_9_16":{"adapt":{"enroll_status":"OPT_OUT"}}}}}'),
@@ -138,6 +139,11 @@ const createMetaCreative: AgentTool = {
     })).max(6).optional().describe('create: format automation switched ON (every other format is sent with data_source none)'),
     shopDestination: z.boolean().optional().describe('create: shop routing (WEBSITE_AND_SHOP) — answered in words: it names a Facebook or Instagram shop Nexus cannot confirm as the business\'s own (it comes with the catalog / commerce steps); a website creative is sent WEBSITE_AND_SHOP_OPT_OUT'),
     autoProductTags: z.boolean().optional().describe('create: let Meta tag catalog products on a static image by itself (default false: sent opt_out)'),
+    productTags: z.array(z.object({
+      productId: z.string().trim().regex(/^\d{1,20}$/, 'a catalog item id (digits)').describe('the catalog item (meta-catalog-items lists them)'),
+      x: z.number().min(0).max(1).describe('its place across the media, 0 (left) to 1 (right)'),
+      y: z.number().min(0).max(1).describe('its place down the media, 0 (top) to 1 (bottom)'),
+    })).min(1).max(10).optional().describe('create: catalog items tagged by hand on the media (Instagram product tags; Meta\'s automatic tagging is then off — not with autoProductTags)'),
     carouselAutoOrder: z.boolean().optional().describe('create: let Meta reorder a carousel\'s cards (multi_share_optimized; default false: the cards stay in your order)'),
     partner: z.object({
       pageId: metaIdArg('the partner\'s (creator\'s) Facebook Page').optional(),
@@ -160,11 +166,14 @@ const createMetaCreative: AgentTool = {
     + 'are OFF unless asked — the preview names each one switched on, and the run reads the creative back and says what '
     + 'Meta kept (Meta drops an ineligible opt-in silently). Each silent key goes only where Meta documents it for the kind '
     + 'of creative (website, catalog, messaging, lead, call, event, Instant Experience, existing post…). Automatic product tags '
-    + 'on a static image and the reordering of carousel cards are OFF unless asked (autoProductTags, carouselAutoOrder). A '
+    + 'on a static image and the reordering of carousel cards are OFF unless asked (autoProductTags, carouselAutoOrder); '
+    + 'productTags tags catalog items by hand instead. A product set (product_set_id, product extensions) or catalog item '
+    + '(productTags, product_data) must be of a catalog of the chosen ad account\'s business portfolio, or a client catalog '
+    + 'whose owner is no other business in Nexus — checked before the preview and again before it is sent. A '
     + 'feature generated with AI means the ad using it must start '
     + 'PAUSED and be previewed (meta-ad-preview) first. A partnership ad names its partner (partner); Meta asks the '
     + 'partner\'s permission itself. Refused in words: political ads (banned in the EU), WhatsApp Status identities (not in '
-    + 'the EU), app links (Nexus has no app), catalog and product-set ids (they come with the catalog rule), polls (gone in '
+    + 'the EU), app links (Nexus has no app), retailer_item_ids (no documented shape), catalog promo-code sources, polls (gone in '
     + 'v26), Threads ids (Threads runs through Instagram), shop routing (a shop Nexus cannot confirm), saved Page welcome flows '
     + '(they need the Page\'s own token). A creative SPENDS NOTHING (it serves only once an ad uses it) and '
     + 'cannot be changed once made: a new look is a new creative swapped onto the ad, which sends an ACTIVE ad back to '
