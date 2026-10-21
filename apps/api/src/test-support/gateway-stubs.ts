@@ -26,6 +26,8 @@ export const gatewayMetaStored: Record<string, { adAccountId: string; kind: 'cam
 export const gatewayMetaPage: Record<string, string> = {}
 /** Meta step 21: the Instagram account each connection chose (`connectionId` → id); none unless a test sets it. */
 export const gatewayMetaInstagram: Record<string, string> = {}
+/** Meta step 23: business portfolios another business's chosen ad account is of. */
+export const gatewayMetaSharedPortfolios = new Set<string>()
 
 export const accountModule = {
   accountStatusOf: async (id: string): Promise<GatewayAccountState | null> =>
@@ -39,6 +41,8 @@ export const accountModule = {
   metaChosenPageOf: async (connectionId: string): Promise<string | null> => gatewayMetaPage[connectionId] ?? null,
   // Meta step 21: the chosen Instagram account of a connection (a test sets gatewayMetaInstagram[connectionId]).
   metaChosenInstagramOf: async (connectionId: string): Promise<string | null> => gatewayMetaInstagram[connectionId] ?? null,
+  // Meta step 23: whether another business's chosen ad account shares this business portfolio.
+  metaPortfolioShared: async (portfolioId: string): Promise<boolean> => gatewayMetaSharedPortfolios.has(portfolioId),
 }
 export const ledgerModule = {
   writeLedgerRow: async (row: GatewayLedgerRow): Promise<void> => { gatewayLedger.push(row) },

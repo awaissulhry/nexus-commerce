@@ -329,6 +329,8 @@ function doneSettingsSentence(request: MetaChangeRequest, result: MetaChangeResu
 
 /** The step's sentence for a done request. */
 function doneSentence(request: MetaChangeRequest, result: MetaChangeResult): string {
+  // Step 23 — a request with its own sender says what Meta made in its own words.
+  if (request.doneSentence) return request.doneSentence(result)
   if (request.expect || request.method === 'DELETE' || request.edge) return doneSettingsSentence(request, result)
   const status = typeof result.node?.status === 'string' ? result.node.status : null
   const effective = typeof result.node?.effective_status === 'string' ? result.node.effective_status : null
@@ -395,7 +397,8 @@ export async function runMetaChange(
       continue
     }
     try {
-      const result = await metaSendChange(account.target, objectChangeOf(request))
+      // Step 23 — a request may bring its own sender (an upload read again, a multi-call video upload): one step all the same.
+      const result = request.send ? await request.send(account.target) : await metaSendChange(account.target, objectChangeOf(request))
       // Step 18 — a change past status: Meta said success, but a field it asked reads back otherwise: not done (no
       // record, no undo), and a missed step for what follows.
       const moved = request.expect ? readBackMismatch(result.node, expectedOf(request)) : []

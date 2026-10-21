@@ -3,6 +3,8 @@
  * graph.facebook.com). Reads are GETs (metaCall); a change (step 17) is a POST of a form body (metaWriteCall) that the
  * gateway lets through only when it is on its write allow-list and its object is of the business's chosen ad account
  * (meta-calls.ts metaWriteVerdict, gateway.ts 3b).
+ * Step 23: a video's link handed to Meta's resumable upload host (metaRuploadCall, rupload.facebook.com — judged in
+ * meta-media-rules.ts; Nexus sends no video byte).
  *
  * - `path` is below the pinned version (services/meta/api-version.ts): `me`, `act_123/campaigns`, `debug_token`.
  * - `query` values are sent as Meta reads them: text as is, a list or an object as JSON (`fields` may be a list).
@@ -18,6 +20,7 @@
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { META_REST_HOST, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
+import { metaRuploadUrl } from './meta-media-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -104,7 +107,8 @@ export interface MetaWriteRequest {
  * The edges a change posts to: a budget schedule (step 18); a campaign's or ad set's create on the ad account (`act_<id>`),
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
-export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge | MetaRuleEdge
+export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
+  | MetaMediaEdge | MetaRuleEdge
 /** Step 29 — a rule made on the ad account's rule library (`act_<id>/adrules_library`), a rule's run now (`<rule id>/execute`). */
 export type MetaRuleEdge = 'adrules_library' | 'execute'
 /** Step 28 — an apply (`act_<id>/recommendations`), a new study (`<business>/ad_studies`), a new Page video test (`<page>/ab_tests`). */
@@ -116,6 +120,11 @@ export type MetaRemoveEdge = 'adimages' | 'advideos' | 'captions'
  * set made, deleted or translated) and create-meta-reach-frequency (a prediction, a reservation, a cancel).
  */
 export type MetaLabelsEdge = 'adlabels' | 'value_rule_set' | 'delete_rule_set' | 'value_rule_set_translation' | 'reachfrequencypredictions'
+/**
+ * Step 23 — create-meta-media's edges beyond step 22's (its uploads also post to adimages, advideos and captions): Meta's
+ * video-ads upload on the ad account, a folder on its business portfolio.
+ */
+export type MetaMediaEdge = 'video_ads' | 'creative_folders'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):
@@ -202,5 +211,39 @@ export async function metaRulePreviewCall(req: { connectionId: string; ruleId: s
     maxTransientRetries: 1,
     max429Retries: 0,
     timeoutMs: req.timeoutMs ?? 60_000,
+  })
+}
+
+export interface MetaUploadRequest {
+  connectionId: string
+  operation: string
+  /** The video upload THIS connection started on the chosen ad account (video_ads upload_phase=start answered it). */
+  videoId: string
+  /** The public https link Meta fetches the file from (Nexus sends no byte of it). */
+  fileUrl: string
+  timeoutMs?: number
+  maxRateWaitMs?: number
+}
+
+/**
+ * Meta step 23 (MD-016) — hand Meta a video's public link on its resumable upload host:
+ * `POST https://rupload.facebook.com/video-ads-upload/<version>/<video id>` with the link as Meta's `file_url` header
+ * (the gateway judges it from this form body and adds `Authorization: OAuth <token>` itself; meta-media-rules.ts). Never
+ * retried: Meta may have started fetching.
+ */
+export async function metaRuploadCall(req: MetaUploadRequest): Promise<GatewayResponse> {
+  return gatewayCall({
+    channel: 'META',
+    operation: req.operation,
+    kind: 'write',
+    connectionId: req.connectionId,
+    url: metaRuploadUrl(req.videoId),
+    method: 'POST',
+    body: new URLSearchParams({ file_url: req.fileUrl }).toString(),
+    metaObjectKind: 'startedvideo',
+    maxTransientRetries: 0,
+    max429Retries: 0,
+    maxRateWaitMs: req.maxRateWaitMs,
+    timeoutMs: req.timeoutMs ?? 120_000,
   })
 }

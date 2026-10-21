@@ -921,6 +921,11 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { kind: 'study', id: '120000000000041', type: 'SPLIT_TEST', fields: { name: 'Test A', end_time: '4102444800' }, undo: { action: 'update', studyId: '120000000000041', name: 'Test A', endTime: '2100-01-01T00:00:00Z' }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
         after: { kind: 'study', id: '120000000000041', type: 'SPLIT_TEST', fields: { name: 'Test B', end_time: '4102531200' }, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 23: what an upload made new comes out of the ad account's library again (create-meta-media kind undo).
+      'create-meta-media': {
+        before: { kind: 'image', items: [{ kind: 'image', source: 'da_test', inLibrary: false }] },
+        after: { kind: 'image', items: [{ kind: 'image', source: 'da_test', hash: '0123456789abcdef0123456789abcdef', new: true }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 29: a rule switched off is switched on again; a deleted rule is made again (a new rule) by set-meta-ad-rule.
       'set-meta-ad-rule': {
         before: { kind: 'adrule', action: 'status', id: '120000000000101', exists: 'yes', undo: { action: 'status', ruleId: '120000000000101', enabled: true }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
@@ -1109,7 +1114,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
       'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads',
       'remove-meta-ads-items', 'set-meta-labels', 'set-meta-value-rules', 'create-meta-reach-frequency',
-      'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment',
+      'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment', 'create-meta-media',
       'set-meta-ad-rule', 'remove-meta-ad-rule']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }

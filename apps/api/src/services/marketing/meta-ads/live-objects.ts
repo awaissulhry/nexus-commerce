@@ -57,6 +57,11 @@ import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectInAccount, type Me
 import { AD_STATUSES_READ, ADSET_STATUSES_READ, CAMPAIGN_STATUSES_READ, purchasesOf } from './mappers.js'
 import { decimalToMicros, metaUnitsToMicros, minorOf } from './money.js'
 import { takenIds } from './taken.js'
+import { catalogPortfolio, readableCatalog } from './catalog-rule.js'
+import { fieldRefused, listPaged, MAX_ROWS } from './paging.js'
+
+// Step 12 fix A4 — listPaged, fieldRefused and MAX_ROWS live in the leaf paging.ts; re-exported for the reads that import them here.
+export { fieldRefused, listPaged, MAX_ROWS }
 
 type Row = Record<string, unknown>
 export type ObjectKind = 'campaign' | 'adset' | 'ad' | 'creative'
@@ -118,21 +123,6 @@ function statusFilter(asked: string[] | null | undefined, allowed: readonly stri
 export interface FieldGroup { name: string; fields: string; query?: Record<string, MetaQueryValue> }
 export interface MissingPart { part: string; sentence: string }
 
-/**
- * Review fix A5 — Meta refused a FIELD it was asked: only then does asking for less help. Either a #100 ("nonexisting
- * field" and the like), or (re-review) a permission refusal FROM META (#3, #10, #200–#299) — a gated field (the WhatsApp
- * identity, learning stage, Instagram branded content) may be refused that way. Never on a lost token, a throttle, the
- * gateway, an object that is not there, a blocked account (#368), an account-wide insights refusal (100/3191001) or Meta
- * failing on its side (transient: no answer, a 5xx, a timeout). A refused core group still ends the read.
- */
-export function fieldRefused(err: unknown): err is MetaReadError {
-  if (!(err instanceof MetaReadError)) return false
-  const f = err.failure
-  if (f.origin !== 'meta' || f.authLost || f.throttled || f.notFound || f.transient || !f.code) return false
-  if (f.permissionDenied) return /^(3|10|2\d\d)(\/|$)/.test(f.code)
-  return /^100(\/|$)/.test(f.code)
-}
-
 /** A read of its own that adds to an answer (Advantage+ state, placements, …) failed: said in Meta's words, unless the token or a throttle ends the read. */
 function partFailed(err: unknown): err is MetaReadError {
   return err instanceof MetaReadError && !err.failure.authLost && !err.failure.throttled
@@ -163,31 +153,6 @@ export async function readGroups(connectionId: string, operation: string, path: 
     }
   }
   return { body, missing }
-}
-
-export const MAX_ROWS = 500
-
-/**
- * A list, page by page (cursor `after`; Meta's next link carries the token and is never followed), with Meta's total.
- * `pageSize`: at most this many per call (step 14: Instagram answers at most 50 comments per call).
- */
-export async function listPaged(connectionId: string, operation: string, path: string, query: Record<string, MetaQueryValue>, maxRows: number, withTotal = false, pageSize = 100): Promise<{ rows: Row[]; more: boolean; totalCount: number | null }> {
-  const max = Math.min(MAX_ROWS, Math.max(1, Math.trunc(maxRows)))
-  const limit = Math.min(Math.max(1, Math.trunc(pageSize)), 100, max)
-  const rows: Row[] = []
-  let after: string | null = null
-  let totalCount: number | null = null
-  for (let page = 0; page < 50; page++) {
-    const read = await metaReadOne<{ data?: unknown[]; paging?: { cursors?: { after?: unknown }; next?: unknown }; summary?: { total_count?: unknown } }>({ connectionId }, {
-      operation, path, query: { ...query, limit, ...(withTotal && !after ? { summary: 'total_count' } : {}), ...(after ? { after } : {}) },
-    })
-    if (page === 0) totalCount = num(read.body.summary?.total_count)
-    rows.push(...rowsOf(read.body.data))
-    const next = typeof read.body.paging?.cursors?.after === 'string' && read.body.paging?.next ? read.body.paging.cursors.after : null
-    if (rows.length >= max || !next) return { rows: rows.slice(0, max), more: rows.length > max || (!!next && rows.length >= max), totalCount }
-    after = next
-  }
-  return { rows: rows.slice(0, max), more: true, totalCount }
 }
 
 /** A list in field groups: when Meta refuses the full field list, the list is read with its core group only and says so. */
@@ -1099,24 +1064,21 @@ export const CATEGORY_CRITERIA = ['BRAND', 'CATEGORY', 'PRODUCT_TYPE'] as const
 /** CR-459 — the catalog categories (top 1,000 by product count) of the catalog an ad set of the account promotes. */
 export async function catalogCategories(input: { connectionId?: string | null; adSetId: string; criteria: typeof CATEGORY_CRITERIA[number]; maxRows?: number }) {
   const account = await metaChosenAccount(input.connectionId)
+  // Step 12 — a portfolio another business in Nexus uses too: no catalog read at all, before any call.
+  await catalogPortfolio(account)
   const adSetId = await ownedId(account, input.adSetId, 'adset')
   const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'objects.adset.promotedObject', path: adSetId, query: { fields: 'promoted_object' } })
   const catalogId = metaObjectId(obj((read.body as Row).promoted_object)?.product_catalog_id)
   if (!catalogId) throw new MetaLiveRefusal('This ad set promotes no product catalog (its promoted object names none), so there are no catalog categories to read for it.')
-  // Review fix A7 — the catalog must be the chosen ad account's own business portfolio's (a catalog shared in from elsewhere
-  // is not read here). Two Nexus businesses on one portfolio would both pass: step 12 adds CATALOG to
-  // nexus_meta_links_taken (taken.ts) and re-checks catalogCategories against it.
-  const owner = await metaReadOne({ connectionId: account.connectionId }, { operation: 'objects.catalog.ownerCheck', path: catalogId, query: { fields: 'business{id}' } })
-  const ownerId = metaObjectId(obj((owner.body as Row).business)?.id)
-  if (!ownerId || !account.businessId || ownerId !== account.businessId) {
-    throw new MetaLiveRefusal('The catalog this ad set promotes is not owned by the chosen ad account\'s business portfolio, so its categories are not read here.')
-  }
+  // Step 12 — THE one catalog rule (live-catalog.ts readableCatalog): the chosen account's portfolio is used by no other
+  // business in Nexus, and it owns the catalog or the catalog is one of its client catalogs.
+  await readableCatalog(account, catalogId, 'objects.catalog.ownerCheck')
   const categories = await listPaged(account.connectionId, 'objects.catalog.categories', `${catalogId}/categories`, { categorization_criteria: input.criteria, fields: 'criteria_value,name,description,destination_uri,image_url' }, input.maxRows ?? 200)
   return {
     adSetId, catalogId, criteria: input.criteria,
     items: categories.rows.map((r) => ({ criteriaValue: text(r.criteria_value), name: text(r.name), description: text(r.description), destinationUri: text(r.destination_uri), imageUrl: text(r.image_url) })),
     more: categories.more,
-    note: 'Meta answers the top 1,000 categories by product count. They belong to the catalog, so every category ad of that catalog shares them. The catalog itself: the catalog tools. Nexus checks the catalog belongs to the chosen account\'s business portfolio; which Nexus business uses a catalog is checked once the catalog reads arrive (step 12).',
+    note: 'Meta answers the top 1,000 categories by product count. They belong to the catalog, so every category ad of that catalog shares them. The catalog itself: meta-catalogs. Nexus reads a catalog only when the chosen ad account\'s business portfolio owns it (or it is a client catalog of that portfolio) and no other business in Nexus uses that portfolio.',
   }
 }
 
