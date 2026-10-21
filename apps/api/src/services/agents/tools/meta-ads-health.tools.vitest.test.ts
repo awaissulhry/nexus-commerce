@@ -168,7 +168,9 @@ function answers(req: Req): unknown {
     }
   }
   if (req.path.endsWith('/activities')) {
-    if (req.operation === 'billing.events' || req.operation === 'billing.eventsAll') return { data: [{ event_type: 'ad_account_billing_charge_failed', event_time: '2026-10-19T00:00:00+0000', translated_event_type: 'Charge failed', actor_name: 'Person A', extra_data: '{"amount":"12.00"}' }] }
+    // Step 3 round 4 — billing events from category BUDGET; failed charges (in no category) from one read of the whole log.
+    if (req.operation === 'billing.events') return { data: [{ event_type: 'ad_account_billing_decline', event_time: '2026-10-18T00:00:00+0000', translated_event_type: 'Payment declined', actor_id: PERSON, actor_name: 'Person A', extra_data: '{"amount":"9.00"}' }] }
+    if (req.operation === 'billing.eventsChargeFailed') return { data: [{ event_type: 'ad_account_billing_charge_failed', event_time: '2026-10-19T00:00:00+0000', translated_event_type: 'Charge failed', actor_id: PERSON, actor_name: 'Person A', extra_data: '{"amount":"12.00"}' }, activity({})] }
     return { data: ACTIVITIES }
   }
   return { data: [] }
@@ -278,8 +280,15 @@ describe('meta-account-health', () => {
     expect(out.problems.join(' ')).toMatch(/grace period/)
     expect(out.problems.join(' ')).toMatch(/no payment method/)
     expect(out.adsWaitingForBilling).toEqual([{ adId: AD, name: 'Ad A', adSetId: ADSET }])
-    expect(out.troubleEvents).toEqual([{ time: expect.any(String), type: 'ad_account_billing_charge_failed', typeText: 'Charge failed' }])
-    expect(JSON.stringify(out)).not.toMatch(/Person A|12\.00/)
+    expect(out.troubleEvents).toEqual([
+      { time: expect.any(String), type: 'ad_account_billing_charge_failed', typeText: 'Charge failed' }, { time: expect.any(String), type: 'ad_account_billing_decline', typeText: 'Payment declined' },
+    ])
+    expect(JSON.stringify(out)).not.toMatch(/Person A|12\.00|9\.00/)
+    // Step 3 round 4 — when Meta refuses the failed-charges read, the payment view says so (the BUDGET events still count).
+    h.answer = (req) => (req.operation === 'billing.eventsChargeFailed' ? refusedByMeta('(#100) Invalid parameter') : answers(req))
+    const partly = data(await run('meta-account-health', { view: 'payment', days: 30 }))
+    expect(partly.troubleEvents.map((e: { type: string }) => e.type)).toEqual(['ad_account_billing_decline'])
+    expect(partly.missing).toEqual([{ part: 'billingEvents.failedCharges', sentence: expect.stringMatching(/Invalid parameter/) }])
   })
   it('payment: a payment method is its kind only — never Meta\'s masked text, its id or a coupon\'s amounts (review A1)', async () => {
     h.funding = true
@@ -364,6 +373,10 @@ describe('meta-activity-log', () => {
     expect(JSON.stringify(out)).not.toMatch(/Person A|Person B|someone@example\.com|x@y\.example\.com/)
     expect(out.whyItStopped.map((w: { type: string }) => w.type)).toEqual(['account_spending_limit_reached', 'ad_review_declined'])
     expect(limit.object.name).toBe('Shop A ads')
+  })
+  it('a change by Nexus\'s system user without its app is still Nexus\'s (step 3\'s actorOf names it)', async () => {
+    h.answer = (req) => (req.path.endsWith('/activities') ? { data: [activity({ actor_id: SYSTEM_USER, actor_name: 'Nexus system user' })] } : answers(req))
+    expect(data(await run('meta-activity-log', {})).events[0].by).toEqual({ madeByNexus: true, actorId: SYSTEM_USER, who: 'Nexus\'s own system user', actorName: 'Nexus system user', app: null })
   })
   it('a person without the ad-spend permission gets no budget or billing details', async () => {
     const out = data(await run('meta-activity-log', {}))

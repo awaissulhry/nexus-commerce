@@ -147,7 +147,7 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *     act_<id>/advertisable_applications and act_<id>/connected_instagram_accounts_with_iabp; bid_amount on
  *     act_<id>/minimum_budgets; app_id, optimization_goal, event_name on act_<id>/campaign_attribution_options;
  *     insights_feature on act_<id>/insights/feature-settings (with …/list-features: GRAPH_HYPHEN_ROUTES);
- *     since and until (Unix seconds) and category=BUDGET (that value only) on act_<id>/activities; start_date, end_date, issue_start_date, issue_end_date, invoice_id, type on
+ *     since and until (Unix seconds) and category BUDGET (step 5: one of Meta's categories) on act_<id>/activities; start_date, end_date, issue_start_date, issue_end_date, invoice_id, type on
  *     <portfolio>/business_invoices; only_show_pending on <portfolio>/extendedcreditapplications.
  *   - step 5 (the change history — marketing/meta-ads/live-health.ts): category (Meta's enum) and uid on act_<id>/activities
  *     and <ad set>/activities; since, until and business_id on <ad set>/activities; oid and add_children on
@@ -307,8 +307,8 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   // Step 3 review round 4 (step 5 review A4) — the days only as Unix seconds, as Nexus sends them.
   { route: /^act_\d+\/activities$/, keys: new Set(['since']), when: (query) => /^\d{1,12}$/.test(query.get('since') ?? '') },
   { route: /^act_\d+\/activities$/, keys: new Set(['until']), when: (query) => /^\d{1,12}$/.test(query.get('until') ?? '') },
-  // Review B4, round 4 — the billing events' category only: BUDGET (reference/ad-activity files every billing event there).
-  { route: /^act_\d+\/activities$/, keys: new Set(['category']), when: (query) => query.get('category') === 'BUDGET' },
+  // Review B4, round 4 — the billing events' category BUDGET (reference/ad-activity files every billing event there): step 5's
+  // entry below allows it among Meta's own categories (the change history filters by each of them).
   { route: /^\d+\/business_invoices$/, keys: new Set(['start_date', 'end_date', 'issue_start_date', 'issue_end_date', 'invoice_id', 'type']) },
   { route: /^\d+\/extendedcreditapplications$/, keys: new Set(['only_show_pending']) },
   // Step 5 (meta-activity-log — marketing/meta-ads/live-health.ts) — the change history, each key only with a value Nexus

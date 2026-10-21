@@ -67,7 +67,7 @@ import { MetaReadError } from './errors.js'
 import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectInAccount, type MetaChosenAccount } from './live.js'
 import { deliveryProblems, listPaged, MAX_ROWS, STATUS_WORDS } from './live-objects.js'
 import { onPage, pageOf } from './live-media.js'
-import { ACTIVITY_FIELDS, billingView, DISABLE_REASON_WORDS, unixOf } from './live-account.js'
+import { ACTIVITY_FIELDS, actorOf, billingView, CHARGE_FAILED, DISABLE_REASON_WORDS, unixOf } from './live-account.js'
 import { fieldsRefused } from './live-partners.js'
 import { takenIds } from './taken.js'
 
@@ -331,7 +331,7 @@ function paymentKindOf(v: unknown): { type: number | null; typeText: string | nu
 }
 
 /** The billing events that mean trouble (step 3's BILLING_EVENT_TYPES, read through billingView). */
-const PAYMENT_TROUBLE_EVENTS: ReadonlySet<string> = new Set(['ad_account_billing_charge_failed', 'ad_account_billing_decline', 'ad_account_billing_chargeback', 'remove_funding_source'])
+const PAYMENT_TROUBLE_EVENTS: ReadonlySet<string> = new Set([CHARGE_FAILED, 'ad_account_billing_decline', 'ad_account_billing_chargeback', 'remove_funding_source'])
 
 /** LG-011 — payment trouble before the ads stop: status, reason, payment set-up, ads waiting for billing, failed charges. */
 async function healthPayment(account: MetaChosenAccount, input: HealthInput) {
@@ -359,7 +359,11 @@ async function healthPayment(account: MetaChosenAccount, input: HealthInput) {
   if (pay && pay.hasPaymentMethod === false) problems.push('The account has no payment method: ads can be made but do not deliver.')
   if (waitingAds.length) problems.push(`${waitingAds.length} ad${waitingAds.length === 1 ? ' waits' : 's wait'} for billing information (PENDING_BILLING_INFO).`)
   if (trouble.length) problems.push(`${trouble.length} failed or declined charge${trouble.length === 1 ? '' : 's'}, chargebacks or removed payment methods in the last ${days} days.`)
-  const missing = ([['paymentSetup', setup], ['adsWaitingForBilling', waiting], ['billingEvents', events]] as const).filter(([, p]) => p.notRead).map(([part, p]) => ({ part, sentence: p.notRead! }))
+  const missing = [
+    ...([['paymentSetup', setup], ['adsWaitingForBilling', waiting], ['billingEvents', events]] as const).filter(([, p]) => p.notRead).map(([part, p]) => ({ part, sentence: p.notRead! })),
+    // Step 3 round 4 — failed charges come from a read of their own (they are in no Meta category): its refusal is said.
+    ...rowsOf((events.value as unknown as Row | null)?.missing).map((m) => ({ part: `billingEvents.${text(m.part) ?? 'part'}`, sentence: text(m.sentence) ?? '' })),
+  ]
   return {
     adAccountId, from, to,
     trouble: problems.length > 0, problems,
@@ -664,12 +668,11 @@ const addUtcDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z
 /** One activity-log row as the tools answer it: who (Nexus by name, anyone else by id), what, on which object. */
 function activityRow(r: Row, account: MetaChosenAccount, ownIds: ReadonlySet<string>) {
   const type = text(r.event_type)
-  const actorId = idText(r.actor_id)
   const appId = idText(r.application_id)
-  const systemUserId = account.connection.systemUser?.id ?? null
   const nexusApp = !!appId && appId === account.connection.appId
-  const bySystemUser = !!actorId && actorId === systemUserId
-  const byPage = !!actorId && actorId === account.pageId
+  // Step 3's one names rule (live-account.ts actorOf): Nexus's own system user and the chosen Page by name, anyone else by id.
+  const actor = actorOf(account, r)
+  const bySystemUser = !!actor.actorId && actor.actorId === (account.connection.systemUser?.id ?? null)
   const objectId = idText(r.object_id) ?? text(r.object_id)
   const objectType = text(r.object_type)
   const personal = PERSONAL_EVENTS.has(type ?? '')
@@ -680,12 +683,7 @@ function activityRow(r: Row, account: MetaChosenAccount, ownIds: ReadonlySet<str
   return {
     time: timeOf(r.event_time), timeInAccountZone: text(r.date_time_in_timezone), type, typeText: text(r.translated_event_type),
     object: { id: objectId, type: objectType, ...(nameShown ? { name: text(r.object_name) } : r.object_name ? { nameLeftOut: true } : {}) },
-    by: {
-      madeByNexus: bySystemUser || nexusApp,
-      who: bySystemUser ? 'Nexus\'s own system user' : byPage ? 'the chosen Facebook Page' : actorId ? 'someone else (a person, an agency or Meta)' : null,
-      actorId, ...(bySystemUser || byPage ? { actorName: text(r.actor_name) } : {}),
-      app: appId ? { appId, name: text(r.application_name), nexusApp } : null,
-    },
+    by: { madeByNexus: bySystemUser || nexusApp, ...actor, app: appId ? { appId, name: text(r.application_name), nexusApp } : null },
     ...(split.plain ? { change: split.plain } : {}),
     ...(split.money ? { metaRaw: split.money } : {}),
     ...(details.leftOut ? { detailsLeftOut: details.leftOut, leftOutKeys: details.leftOutKeys } : {}),
