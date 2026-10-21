@@ -48,6 +48,7 @@ const RECEIPT_REGISTRY: Record<string, Record<string, () => Promise<InboundRecei
 
 const SHOPIFY_WEBHOOKS = '../../../routes/shopify-webhooks.js'
 const ETSY_WEBHOOKS = '../../../routes/etsy-webhooks.routes.js'
+const META_WEBHOOKS = '../../marketing/meta-ads/webhook-receiver.js'
 
 /**
  * Keys are the event types the RECEIVERS write, not the channel's own topic strings.
@@ -85,6 +86,35 @@ const REGISTRY: Record<string, Record<string, Loader>> = {
     // Historical stored names remain replayable, never offered as subscriptions.
     'order.cancelled': async () => (await import(ETSY_WEBHOOKS)).handleEtsyOrderEvent,
     'order.refunded': async () => (await import(ETSY_WEBHOOKS)).handleEtsyOrderEvent,
+  },
+  // Meta ads step 30 — the topics the Meta receiver acts on (a re-read of the ad account and/or an alerts-inbox
+  // notice); META_HANDLED_TOPICS in marketing/meta-ads/webhook-topics.ts is the same list (a test holds them equal).
+  // Topics Meta only records are written as done and need no handler. Each change is re-checked for ownership first.
+  META: {
+    'ad_account.effective_status': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'ad_account.field_changed': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'ad_account.subscriptions': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'ad_account.creative_fatigue': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'ad_account.ad_recommendations': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'ad_account.in_process_ad_objects': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'ad_account.with_issues_ad_objects': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'ad_account.ads_async_creation_request': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'ad_account.product_set_issue': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'application.ad_account': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'application.ads_rules_engine': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'application.async_requests': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'application.dev_alerts': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'page.leadgen': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'page.messaging_in_thread_lead_form_submit': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'page.messaging_policy_enforcement': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'page.messaging_integrity': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'page.product_review': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'instagram.messaging_policy_enforcement': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'catalog.items_batch': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'catalog.product_feed': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'permissions.connected': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'permissions.public_search': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
+    'permissions.social_ads': async () => (await import(META_WEBHOOKS)).handleMetaWebhookEvent,
   },
 }
 

@@ -33,15 +33,20 @@ import {
 } from './mappers.js'
 import { metaReadAll, metaReadOne } from './read-client.js'
 import {
-  ensureMetaAdAccount, getReadStates, markUnseenRemoved, recordSyncOutcome, replaceDailyMetrics, saveAccountDetails, saveReadState, upsertAdSets, upsertAds,
+  ensureMetaAdAccount, getReadStates, markUnseenRemoved, recordStructureRead, recordSyncOutcome, replaceDailyMetrics, saveAccountDetails, saveReadState, upsertAdSets, upsertAds,
   upsertCampaigns,
 } from './store.js'
 import { metaReadTargetFor } from './targets.js'
 import { maskTakenAssets } from './taken.js'
 import type { MetaAdData, MetaAdSetData, MetaAdsEntityType, MetaAdsReadResource, MetaAdsSyncStatus, MetaAdsTarget, MetaCampaignData, MetaDailyMetricData } from './types.js'
 
-/** TOKEN: the read queued at once after a good token, when the last read lost the token (review A2). */
-export type MetaAdsSyncKind = 'BACKFILL' | 'DAILY' | 'MANUAL' | 'TOKEN'
+/**
+ * TOKEN: the read queued at once after a good token, when the last read lost the token (review A2).
+ * WEBHOOK (step 30): the re-read a verified Meta webhook asks for — the account and its campaigns, ad sets and ads, no
+ * daily numbers (a push says an object changed, never its numbers); it moves only structureSyncedAt, never the account's
+ * last read and its status (those stay the daily read's and "Read now"'s, so a push never blocks "Read now").
+ */
+export type MetaAdsSyncKind = 'BACKFILL' | 'DAILY' | 'MANUAL' | 'TOKEN' | 'WEBHOOK'
 
 /** More daily rows than this in one grain's read is not kept (memory); the read says so. */
 export const MAX_METRIC_ROWS = 200_000
@@ -91,6 +96,7 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
   let stored = false
   let metricsStored = false
   const outcome: { structureSyncedAt?: Date; backfillCompletedAt?: Date } = {}
+  const structureOnly = options.kind === 'WEBHOOK'
 
   const step = async (name: string, resource: MetaAdsReadResource | null, work: () => Promise<number>): Promise<boolean> => {
     if (stopped) return false
@@ -204,7 +210,7 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
 
     // 5–7 — daily numbers per grain.
     const backfill = !account.backfillCompletedAt
-    result.mode = backfill ? 'BACKFILL' : 'DAILY'
+    result.mode = structureOnly ? null : backfill ? 'BACKFILL' : 'DAILY'
     const states = await getReadStates(adAccountId)
     const readThroughOf = (grain: MetaAdsEntityType): string | null => {
       if (grain === 'CAMPAIGN') return account.metricsReadThrough ? dateToDay(account.metricsReadThrough) : null
@@ -214,7 +220,7 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
     const windowOf = (grain: MetaAdsEntityType): DayWindow => (backfill || !readThroughOf(grain)
       ? metaBackfillWindow(context.timeZone, now)
       : metaReadWindow(context.timeZone, now, readThroughOf(grain)))
-    result.window = windowOf('CAMPAIGN')
+    result.window = structureOnly ? null : windowOf('CAMPAIGN')
     const level = { ACCOUNT: 'account', CAMPAIGN: 'campaign', ADSET: 'adset', AD: 'ad' } as const
     const LEVEL_WORDS = { ACCOUNT: 'account', CAMPAIGN: 'campaign', ADSET: 'ad set', AD: 'ad' } as const
     /** Levels where Meta refused the status filter this run: read without it (live objects only), said in words. */
@@ -278,11 +284,13 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
     }
     // Review B1 — the account's own days first: its totals include every child (live, archived, deleted) and its reach
     // is Meta's own; Ads › Meta's totals and days come from these, never from a sum of campaigns.
-    const accountDaysOk = await step('accountDays', null, () => days('ACCOUNT'))
-    const campaignDaysOk = await step('campaignDays', null, () => days('CAMPAIGN'))
-    await step('adSetDays', null, () => days('ADSET'))
-    await step('adDays', null, () => days('AD'))
-    if (backfill && campaignDaysOk && accountDaysOk) outcome.backfillCompletedAt = new Date()
+    if (!structureOnly) {
+      const accountDaysOk = await step('accountDays', null, () => days('ACCOUNT'))
+      const campaignDaysOk = await step('campaignDays', null, () => days('CAMPAIGN'))
+      await step('adSetDays', null, () => days('ADSET'))
+      await step('adDays', null, () => days('AD'))
+      if (backfill && campaignDaysOk && accountDaysOk) outcome.backfillCompletedAt = new Date()
+    }
   }
 
   if (failures.length === 0) result.status = result.notes.length ? 'PARTIAL' : 'SUCCESS'
@@ -290,7 +298,8 @@ export async function syncMetaAdAccount(target: MetaAdsTarget, options: { kind: 
   else if (failures.some((f) => f.failure.throttled)) result.status = 'THROTTLED'
   else result.status = stored ? 'PARTIAL' : 'FAILED'
   result.error = failures[0]?.failure.sentence ?? result.notes[0] ?? null
-  await recordSyncOutcome(adAccountId, { status: result.status, error: result.error, calls: result.calls, at: new Date(), ...outcome })
+  if (structureOnly) await recordStructureRead(adAccountId, outcome.structureSyncedAt ?? null)
+  else await recordSyncOutcome(adAccountId, { status: result.status, error: result.error, calls: result.calls, at: new Date(), ...outcome })
   if (metricsStored) publishMarketingEvent({ type: 'campaign.metrics.refreshed', channel: 'META', marketplace: null, rows: result.metricRows, ts: Date.now() })
   logger.info('[meta-ads-sync] read finished', {
     adAccountId: adAccountId.slice(-4), kind: result.kind, mode: result.mode, status: result.status, calls: result.calls,
