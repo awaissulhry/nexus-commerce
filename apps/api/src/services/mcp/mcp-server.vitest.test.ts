@@ -80,6 +80,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 32 (2026-10-21) — create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion and
 // remove-meta-signal-items read Meta live and change it.
 // Meta ads step 30 part 2 (2026-10-21) — set-meta-webhooks, set-meta-alert-subscription and remove-meta-alert-subscription read Meta live and change it.
+// Meta ads step 33 (2026-10-21) — upload-meta-events reads Meta live and sends purchases to a pixel.
 // Meta ads step 34 (2026-10-21) — create-meta-catalog, set-meta-catalog, set-meta-catalog-access, set-meta-product-set and remove-meta-catalog-items read Meta live and change it.
 
 const OPEN_WORLD = [
@@ -141,7 +142,7 @@ const OPEN_WORLD = [
   'set-promotion', 'set-sd-brand-safety', 'set-sd-budget-rule', 'set-sd-optimization-rule', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid',
   'shipping-rates', 'shopify-content', 'submit-aplus-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock',
   'tune-ad-engine', 'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change',
-  'upload-ad-asset', 'upload-google-sales', 'void-shipping-label',
+  'upload-ad-asset', 'upload-google-sales', 'upload-meta-events', 'void-shipping-label',
 ]
 
 /**

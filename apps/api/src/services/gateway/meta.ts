@@ -19,7 +19,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWebhookKind } from './meta-calls.js'
+import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaEventsKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWebhookKind } from './meta-calls.js'
 import { metaRuploadUrl } from './meta-media-rules.js'
 import type { MetaSignalsKind } from './meta-signals-rules.js'
 import type { MetaCatalogKind } from './meta-catalog-rules.js'
@@ -95,6 +95,8 @@ export interface MetaWriteRequest {
     | MetaSignalsKind
     // Step 30 — the connection's own Meta app (its webhook subscriptions).
     | MetaWebhookKind
+    // Step 33 — a pixel, for its Conversions API events (edge `events`).
+    | MetaEventsKind
     // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
     | MetaCatalogKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
@@ -113,6 +115,7 @@ export interface MetaWriteRequest {
    * inventory filter). Step 31: an ad account's audiences, an audience's people and shares. Step 32: a dataset's and a
    * custom conversion's creates, a dataset's ad account, an event source group and its share, a claim (MetaSignalsEdge).
    * Step 30: an app's webhook subscriptions, the chosen ad account's alert subscriptions, the app's link (MetaWebhookEdge).
+   * Step 33: `POST /<pixel id>/events` (Conversions API, MetaEventsEdge).
    */
   edge?: MetaWriteEdge
   /**
@@ -150,7 +153,9 @@ export interface MetaWriteRequest {
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
   | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaBoostEdge | MetaSignalsEdge | MetaAdEdge
-  | MetaWebhookEdge | MetaCatalogEdge
+  | MetaWebhookEdge | MetaEventsEdge | MetaCatalogEdge
+/** Step 33 — upload-meta-events: Conversions API events of a pixel (`<pixel id>/events`). */
+export type MetaEventsEdge = 'events'
 /** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
 export type MetaAdEdge = 'ads'
 /** Step 26 — set-meta-partnership-access: the chosen Instagram account's partnership edges and a media's ad code. */

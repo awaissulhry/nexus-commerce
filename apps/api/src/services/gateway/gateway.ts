@@ -33,7 +33,7 @@ import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock
 import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade, metaChosenAdAccountOf, metaChosenInstagramOf, metaChosenPageOf, metaChosenPortfolioOf, metaLinkTaken, metaPortfolioShared, metaStoredObject } from './account.js'
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
-import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaReadSecrets, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaBoostWriteKind, type MetaJudgedWrite, type MetaLabelsKind, type MetaMediaWriteKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
+import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaPersonalScrub, metaReadSecrets, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaBoostWriteKind, type MetaEventsKind, type MetaJudgedWrite, type MetaLabelsKind, type MetaMediaWriteKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
 import { metaRestFileExportOf, type MetaBrandSafetyKind, type MetaPageKind, type MetaWebhookKind, type MetaWriteKind } from './meta-calls.js'
 import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { metaBrandSafetyOwnerProblem, metaExportOwnerProblem, metaTargetingOwnerProblem, noteBlockListDraftMade, type MetaCheckRead } from './meta-brand-safety-owner.js'
@@ -469,7 +469,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       if (!verify) return refuse('held', 'META_VERIFY_TOKEN_UNSET', 'Held, nothing sent: no webhook verify token is set on the API service (META_WEBHOOK_VERIFY_TOKEN), so Meta could not verify Nexus\'s receiver.', 409)
       metaSendBody = `${metaWrite.body}&${new URLSearchParams({ verify_token: verify }).toString()}`
     }
-    if (!metaWrite.check) {
+    // Step 33 — Conversions API events meet none of Meta's per-object limits (objectLimits false).
+    if (!metaWrite.check && metaWrite.objectLimits !== false) {
       // Step 23 — a call on an edge (an upload, a folder, a removal) edits no object: no 30-s gap, only Meta's own hold.
       const state = await metaObjectState(req.connectionId, metaWrite.objectId)
       const wait = metaObjectWait(metaWrite.edgeCall ? { ...state, touchedAt: null } : state, metaWrite.budget)
@@ -656,6 +657,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
         text = clean.text
         metaScrubbed += clean.scrubbed
       }
+      // Step 33 — an answer to buyers' hashed data never carries a hash or an e-mail on (meta-calls.ts metaPersonalScrub).
+      if (metaWrite?.personal) text = metaPersonalScrub(text)
     } catch (err) {
       status = 0
       timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
@@ -711,7 +714,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // Step 17 — what Meta's per-object limits learn from a change or a check of one: it reached Meta (or may have), or Meta
   // held that one object (613/4841018: 30 s for its changes; 613/1487632: an hour for that ad set's budget changes).
   const objectLimit = verdict?.channelCode === '613/4841018' ? 'edits' : verdict?.channelCode === '613/1487632' ? 'budget' : null
-  if (req.channel === 'META' && metaWrite && !metaWrite.reportRun && req.connectionId) {
+  // Step 33 — Conversions API events meet none of Meta's per-object limits: nothing is held or noted for them.
+  if (req.channel === 'META' && metaWrite && !metaWrite.reportRun && req.connectionId && metaWrite.objectLimits !== false) {
     // Step 39 — a block-list draft Meta made: only this run may make a list from it, once (its next request).
     if (ok && metaWrite.rule === 'blocklist.draft') noteBlockListDraftMade(req.connectionId, req.metaRun, text)
     if (objectLimit) await holdMetaObject(req.connectionId, metaWrite.objectId, objectLimit)
@@ -752,7 +756,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     rateLimitRemaining: reading?.remaining ?? null,
     rateLimitLimit: reading?.limit ?? null,
     attempts,
-    // Meta step 31 — a body of people's hashed data (an audience's people) and Meta's answer to it are never kept: only their size.
+    // Meta step 31 — a body of people's hashed data (an audience's people; step 33: a buyer's in a Conversions API event) and
+    // Meta's answer to it are never kept: only their size.
     // Step 23 — an image upload's bytes are never kept: their length only.
     // Step 36 review A6 — a Meta change whose rule names its ledger form (a test lead: the questions' names, never the
     // answers) keeps only that.
@@ -806,7 +811,7 @@ const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudie
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | 'adrule' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | MetaBoostWriteKind | MetaCatalogKind | undefined, parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }): Promise<{ code: string; sentence: string } | null> {
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | 'adrule' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind | MetaBoostWriteKind | MetaCatalogKind | MetaEventsKind | undefined, parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   // Step 29 — Meta's automated rules: the chosen ad account's rule library (a rule's create, with every id inside the
   // rule checked), or one of its rules (and the ids inside).
@@ -842,6 +847,14 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
   // Step 26 — the chosen Instagram account itself, or a media of it (set-meta-partnership-access). The chosen Page on Meta's
   // partnership host is step 28's `page` check (above).
   if (kind === 'iguser' || kind === 'igmedia') return metaInstagramOwnerProblem(connectionId, write, kind)
+  // Step 33 — a pixel's Conversions API events: the business switched sending on, and the pixel is one of the chosen ad
+  // account's own that no other business in Nexus uses (marketing/meta-ads/events-rule.ts, the tool's own rule).
+  if (kind === 'pixel') {
+    if (write.check || write.rule !== 'pixel.events') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a pixel takes only Nexus's Conversions API events, and Meta has no check for them.` }
+    const { metaEventsPixelProblem } = await import('../marketing/meta-ads/events-rule.js')
+    const problem = await metaEventsPixelProblem(connectionId, id)
+    return problem ? { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${problem}` } : null
+  }
   if (!kind || !Object.prototype.hasOwnProperty.call(META_KIND_FIELD, kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of ${id} names the kind of object it changes (a campaign, an ad set or an ad).` }
   if (write.check && kind !== 'campaign') return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has a check (validate_only) only for campaign changes, and ${id} is named ${kind === 'adset' || kind === 'ad' ? 'an' : 'a'} ${META_KIND_WORD[kind]}.` }
   const chosen = await metaChosenAdAccountOf(connectionId)

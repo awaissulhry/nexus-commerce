@@ -313,6 +313,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-dataset-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
   'set-meta-custom-conversion': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
   'remove-meta-signal-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  // Meta ads step 33: off by default per business, and no business here has Meta (meta-ads-events.tools test runs it).
+  'upload-meta-events': 'it is switched off for every business by default, and no business here has Meta connected (meta-ads-events.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -725,6 +727,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-dataset-access': () => ({ pixelId: '120000000000050', action: 'connect-ad-account' }),
   'set-meta-custom-conversion': () => ({ action: 'update', customConversionId: '120000000000060', name: 'Shop A thanks' }),
   'remove-meta-signal-items': () => ({ items: [{ kind: 'customConversion', id: '120000000000060' }], confirmDelete: true }),
+  // Meta ads step 33: refuses in words (the business's switch is off; no business here has Meta).
+  'upload-meta-events': () => ({ orderIds: ['order-1'], manualAs: 'phone_call' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),
