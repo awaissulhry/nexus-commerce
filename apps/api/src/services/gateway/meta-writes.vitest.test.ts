@@ -117,7 +117,7 @@ describe('the write allow-list (metaWriteVerdict)', () => {
     expect(problem({ body: `status=PAUSED&fields=${'id,'.repeat(800)}id` })).toMatch(/at most 2000/)
   })
   it('refuses DELETE, PUT, a caller\'s header, any token but the account\'s, another host, version or an odd path', () => {
-    expect(problem({ method: 'DELETE', body: undefined })).toMatch(/deletes nothing on Meta yet/)
+    expect(problem({ method: 'DELETE', body: undefined })).toMatch(/deletes on Meta only/)
     expect(problem({ method: 'PUT', body: 'status=PAUSED' })).toMatch(/no PUT/)
     expect(problem({ body: 'status=PAUSED', headers: { 'X-HTTP-Method-Override': 'DELETE' } })).toMatch(/no header/)
     expect(problem({ body: 'status=PAUSED', auth: 'app' })).toMatch(/system-user token/)
@@ -138,7 +138,7 @@ describe('batches (ACC-022/023/025–027): the plumbing judges each part; only s
   it('a Graph batch is refused as a batch, naming the first part Nexus would not send even on its own', () => {
     const ok = verdict({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: `v26.0/${CAMPAIGN}`, body: 'status=PAUSED' }]) })
     expect(ok).toMatchObject({ batch: true, problem: expect.stringMatching(/sends no Meta batch request yet.*not all|one by one/) })
-    expect(problem({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: CAMPAIGN, body: 'status=PAUSED' }, { method: 'DELETE', relative_url: AD_SET }]) })).toMatch(/part 2: Nexus deletes nothing/)
+    expect(problem({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: CAMPAIGN, body: 'status=PAUSED' }, { method: 'DELETE', relative_url: AD_SET }]) })).toMatch(/part 2: Nexus deletes on Meta only/)
     expect(problem({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: CAMPAIGN, body: 'status={result=one:$.id}' }]) })).toMatch(/depends on another part/)
     expect(problem({ url: `${BASE}/`, body: batch([{ method: 'POST', relative_url: 'v26.0/', body: 'batch=[]' }]) })).toMatch(/batch inside a batch/)
     expect(problem({ url: `${BASE}/`, body: batch(Array.from({ length: 51 }, () => ({ method: 'POST', relative_url: CAMPAIGN, body: 'status=PAUSED' }))) })).toMatch(/at most 50/)

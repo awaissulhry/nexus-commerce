@@ -8,7 +8,7 @@
  * undo deletes (a campaign takes its ad sets and ads with it, an ad set its ads), `madeAt` when. Undo asks the SAME tool
  * with `removeMade: true` and `undoOf: <the change's id>`: the tool reads that change's record (in this business), never an
  * id a caller names, and deletes only what it says the change made (gateway rule object.delete, meta-create-rules.ts).
- * What cannot go back is said, pointing to remove-meta-ads-items (step 22, not built yet): an object that now holds
+ * What cannot go back is said, pointing to remove-meta-ads-items (step 22, on the person's explicit ask): an object that now holds
  * something the change did not make, one that has spent, a background copy (Meta makes those copies later; Nexus never had
  * their ids).
  */
@@ -68,7 +68,7 @@ export function madeByCopy(kind: MadeKind, node: Record<string, unknown> | null,
 
 // ── the undo: delete what the change made (removeMade) ──────────────────────────────────────────────────────────────
 
-export const REMOVE_LATER = 'remove it with remove-meta-ads-items (step 22, not built yet) or in Ads Manager'
+export const REMOVE_LATER = 'delete it with remove-meta-ads-items (only when the person asks to delete it) or in Ads Manager'
 
 /**
  * The undo of a create or a copy as a draft: one DELETE per top object the change made that is still there, holds only

@@ -41,11 +41,11 @@
  *     is documented on every copies edge, so a part is never left to Meta's default). reference/ad-account/asyncadcopies.md:
  *     the edge exists but its "Creating" section is empty and Meta's SDK has no method for it (AD-048): Nexus NEVER sends
  *     it — ads are copied in the background as `<ad id>/copies` parts of the async batch instead (no rule here: refused).
- *   - best-practices/manage-your-ad-object-status.md: DELETE /{id} = status DELETED, final. Until step 22
- *     (remove-meta-ads-items) builds on it, ONLY the undo of a create or a copy sends `object.delete`:
- *     change-create-common.ts removalDraft is the one draft that builds such a request (meta-create-writes.vitest.test.ts
- *     pins it), and it takes the ids from the change's own record, never from a caller. Step 22 makes the rule an
- *     explicit-ask delete of any own campaign, ad set or ad — so the rule itself is not tied to a record.
+ *   - best-practices/manage-your-ad-object-status.md: DELETE /{id} = status DELETED, final. Two drafts build such a
+ *     request (meta-create-writes.vitest.test.ts pins both): change-create-common.ts removalDraft, the undo of a create or a
+ *     copy, which takes the ids from the change's own record, never from a caller; and step 22's change-remove.ts
+ *     metaRemoveDraft (remove-meta-ads-items), an explicit-ask delete of any own campaign, ad set or ad — so the rule itself is
+ *     not tied to a record.
  */
 import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
 import {
@@ -428,9 +428,9 @@ export function metaCreateWriteRules(): readonly MetaWriteRule[] {
       },
     },
     {
-      // DELETE /{campaign | ad set | ad id}, no body. Until step 22 (remove-meta-ads-items) ONLY the undo of a create or a
-      // copy sends it (change-create-common.ts removalDraft, pinned by a test), and only for the objects that change's own
-      // record says it made. Step 22 reuses this rule for an explicit-ask delete.
+      // DELETE /{campaign | ad set | ad id}, no body: the undo of a create or a copy (change-create-common.ts removalDraft,
+      // only what that change's own record says it made) and step 22's explicit-ask delete (change-remove.ts metaRemoveDraft,
+      // remove-meta-ads-items) — the two senders a test pins.
       name: 'object.delete',
       method: 'DELETE',
       path: /^\d{1,20}$/,

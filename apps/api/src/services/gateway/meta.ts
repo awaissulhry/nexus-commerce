@@ -17,7 +17,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST } from './meta-calls.js'
+import { META_REST_HOST, type MetaRemoveKind } from './meta-calls.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -73,7 +73,7 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount'
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -84,7 +84,7 @@ export interface MetaWriteRequest {
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
   /** Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. */
   edge?: MetaWriteEdge
-  /** Step 18 — DELETE (a budget schedule's, no body); default POST. */
+  /** Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body); default POST. */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
@@ -96,7 +96,9 @@ export interface MetaWriteRequest {
  * The edges a change posts to: a budget schedule (step 18); a campaign's or ad set's create on the ad account (`act_<id>`),
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
-export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies'
+export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge
+/** Step 22 — remove-meta-ads-items: an image or a video out of the ad account's library, a video's caption languages. */
+export type MetaRemoveEdge = 'adimages' | 'advideos' | 'captions'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):
@@ -107,7 +109,10 @@ export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copie
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
   const check = req.recommendations ? '["validate_only","include_recommendations"]' : '["validate_only"]'
-  const body = remove ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: check } : {}) }).toString()
+  // Step 22 — a DELETE with parameters (an image's hash, a video's id) sends them as its form body, as a POST does.
+  const body = remove
+    ? (Object.keys(req.params).length ? new URLSearchParams(req.params).toString() : undefined)
+    : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: check } : {}) }).toString()
   return gatewayCall({
     channel: 'META',
     operation: req.operation,

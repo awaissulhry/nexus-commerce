@@ -908,6 +908,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'create-meta-campaign': ['basis', 'plan', 'reach'],
   'create-meta-ad-set': ['basis', 'plan', 'reach'],
   'copy-meta-ads': ['basis', 'plan', 'reach'],
+  // Meta step 22 (2026-10-21): a delete on the person's explicit ask (everything it takes with it is in the basis).
+  'remove-meta-ads-items': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

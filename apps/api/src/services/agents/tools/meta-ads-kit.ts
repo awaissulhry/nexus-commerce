@@ -103,6 +103,8 @@ export interface MetaPreview {
   plan: string
   /** Step 19 — what Meta's check of a create recommended (include_recommendations, master CMP-031), when it had any. */
   metaRecommendations?: unknown[]
+  /** Step 22 — everything a delete takes with it, in full (change-draft.ts alsoDeleted). */
+  alsoDeleted?: unknown
 }
 
 /** A re-check of an approval (the gate's fresh dry run): it reads, it does not ask Meta to check again. */
@@ -196,6 +198,7 @@ function previewOf(account: MetaChangeAccount, draft: MetaChangeDraft, checks: M
     basis: factHash(draft.stands),
     plan: planOf(draft),
     ...(recommendations.length ? { metaRecommendations: recommendations } : {}),
+    ...(draft.alsoDeleted !== undefined ? { alsoDeleted: draft.alsoDeleted } : {}),
   }
 }
 
@@ -281,6 +284,8 @@ export interface MetaRunOutcome {
   data: Record<string, unknown>
   before: unknown
   after: unknown
+  /** Step 22 (review A5) — the change has no undo: this sentence takes the place of "Undo puts back only what Meta made." */
+  noUndo?: string
 }
 
 /**
@@ -378,6 +383,13 @@ export async function runMetaChange(
       steps.push({ step: request.step, label: request.label, outcome: 'not_sent', sentence: `${request.label}: not sent — step ${missedAt} did not happen, and Nexus sends nothing that can make the account spend more after a step of the same change that did not (what it stood on may have been that step).` })
       continue
     }
+    // Step 22 — a request that stands on earlier steps of the same change goes only when each of them happened as asked.
+    const missing = (request.needs ?? []).filter((s) => !done.some((d) => d.request.step === s && !d.notAsAsked))
+    if (missing.length) {
+      missedAt ??= request.step
+      steps.push({ step: request.step, label: request.label, outcome: 'not_sent', sentence: `${request.label}: not sent — it stands on step ${missing.join(', ')} of this change, which did not happen as asked.` })
+      continue
+    }
     try {
       const result = await metaSendChange(account.target, objectChangeOf(request))
       // Step 18 — a change past status: Meta said success, but a field it asked reads back otherwise: not done (no
@@ -445,7 +457,7 @@ export async function runMetaChange(
       summary: draft.summary,
       account: { accountId: account.accountId, adAccountId: account.adAccountId },
       sentence: partial
-        ? `Meta made ${done.filter((d) => !d.notAsAsked).length} of ${draft.requests.length} requests as asked; the steps say what happened to each. Undo puts back only what Meta made.`
+        ? `Meta made ${done.filter((d) => !d.notAsAsked).length} of ${draft.requests.length} requests as asked; the steps say what happened to each. ${outcome.noUndo ?? 'Undo puts back only what Meta made.'}`
         : `Meta made all ${draft.requests.length} request${draft.requests.length === 1 ? '' : 's'}.`,
       done: done.length,
       of: draft.requests.length,

@@ -61,6 +61,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 11 (2026-10-21) — meta-audiences and meta-datasets read Meta live.
 // Meta ads step 18 (2026-10-21) — set-meta-campaign, set-meta-ad-set and set-meta-budget-schedule read Meta live and change it.
 // Meta ads step 19 (2026-10-21) — create-meta-campaign, create-meta-ad-set and copy-meta-ads read Meta live and change it.
+// Meta ads step 22 (2026-10-21) — remove-meta-ads-items reads Meta live and deletes there (on the person's explicit ask).
 
 const OPEN_WORLD = [
   'ad-assets', 'ad-creatives', 'add-ad-targets', 'add-google-assets', 'add-google-campaign-type-ads', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'adjust-google-sales',
@@ -87,7 +88,7 @@ const OPEN_WORLD = [
   'meta-targeting-search', 'meta-value-rules', 'meta-webhooks',
   'move-google-ads', 'pause-ads', 'promote-ebay-listings', 'promote-google-campaign-draft', 'promote-google-experiment', 'publish-listing', 'publish-review', 'receive-stock',
   'reconcile-stock-count', 'relist-listing', 'remove-google-ads-items', 'remove-google-bid-strategy',
-  'remove-google-conversion-actions', 'remove-google-labels', 'reopen-listing', 'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
+  'remove-google-conversion-actions', 'remove-google-labels', 'remove-meta-ads-items', 'reopen-listing', 'replace-google-keywords', 'replicate-ad-structure', 'reply-to-review',
   'request-review',
   'resend-prices', 'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign',
   'resume-automation', 'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
