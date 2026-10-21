@@ -275,6 +275,7 @@ describe('read only by construction', () => {
     ['act_1234567890/smart_suggested_ads?objective=OUTCOME_SALES&destination_type=WEBSITE', 'act_1234567890/smart_suggested_ads?product_set_id=120000000000030', 'product_set_id'],
     ['search?type=adlocale&q=Italian', 'act_1234567890/campaigns?fields=id&q=Italian', 'q'],
     ['120000000000700/categories?categorization_criteria=BRAND&fields=name', '120000000000700/products?categorization_criteria=BRAND&fields=name', 'categorization_criteria'],
+    ['act_1234567890/ads_volume?fields=actor_id,ads_running_or_in_review_count&show_breakdown_by_actor=true', 'act_1234567890/adsets?fields=id&show_breakdown_by_actor=true', 'show_breakdown_by_actor'],
   ])('step 6 — %s is allowed; %s is refused (%s only where it is used)', (allowed, refused, key) => {
     expect(ok(`${BASE}/${allowed}`)).toBeNull()
     expect(ok(`${BASE}/${refused}`)).toMatch(new RegExp(`"${key}" is not one`))

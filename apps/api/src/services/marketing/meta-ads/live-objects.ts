@@ -29,8 +29,11 @@
  *     graph-api/reference/adgroup/facebook_feedback: param dynamic_post, "feedback objects with a preview link and a list
  *     of related comments" — Nexus asks its id only (comments are people's words: the comments lane reads them).
  *   - ad-creative: fields incl. object_story_spec{whats_app_business_phone_number} (only when asked by that name),
- *     degrees_of_freedom_spec, format_transformation_spec, wamo_whatsapp_identity_spec, params thumbnail_width / _height;
- *     `destination_spec` (changelog v24.0) and `instagram_branded_content` are not on the v26 field list: own group.
+ *     degrees_of_freedom_spec, format_transformation_spec, params thumbnail_width / _height; `destination_spec` (changelog
+ *     v24.0) and `instagram_branded_content` are not on the v26 field list, wamo_whatsapp_identity_spec is gated (v26
+ *     changelog) and threads_user_id (creative), contextual_bundling_spec (ad set), is_autobid (ad) are not in Meta's SDK
+ *     v26: each its own group (review B F1, F2).
+ *   - kinds: services/meta/meta-kinds.ts (the one table; live.ts objectInAccount reads it).
  *   - ad-label: fields id, created_time, name, updated_time; account edges campaignsbylabels / adsetsbylabels /
  *     adsbylabels / adcreativesbylabels (ad_label_ids, operator ALL | ANY; SDK adaccount.py); label edges adcreatives,
  *     ads, adsets, campaigns (no params).
@@ -50,7 +53,7 @@ import { metaAdAccountId, metaObjectId, AD_ACCOUNT_STATUS_WORDS } from '../../cx
 import type { MetaQueryValue } from '../../gateway/meta.js'
 import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
-import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectInAccount, objectKindOf, type MetaChosenAccount } from './live.js'
+import { graphSafe, metaChosenAccount, MetaLiveRefusal, objectInAccount, type MetaChosenAccount } from './live.js'
 import { AD_STATUSES_READ, ADSET_STATUSES_READ, CAMPAIGN_STATUSES_READ, purchasesOf } from './mappers.js'
 import { decimalToMicros, metaUnitsToMicros, minorOf } from './money.js'
 import { takenIds } from './taken.js'
@@ -111,13 +114,27 @@ function statusFilter(asked: string[] | null | undefined, allowed: readonly stri
 
 // ── reads: one object in field groups, one list with paging ─────────────────────────────────────────────────────────
 
-export interface FieldGroup { name: string; fields: string }
+/** A group of fields, and the query keys that go only with it (the gateway lets them through only on a read naming its field). */
+export interface FieldGroup { name: string; fields: string; query?: Record<string, MetaQueryValue> }
 export interface MissingPart { part: string; sentence: string }
 
-/** Meta itself refused what was asked (not a lost token, a throttle, Nexus's gateway or an object that is not there). */
-function metaRefusedAsk(err: unknown): err is MetaReadError {
-  return err instanceof MetaReadError && err.failure.origin === 'meta' && !err.failure.authLost && !err.failure.throttled && !err.failure.notFound
+/**
+ * Review fix A5 — Meta refused a FIELD it was asked (#100, "nonexisting field" and the like): only then does asking for
+ * less help. Never on a lost token, a throttle, the gateway, an object that is not there, a permission refusal or Meta
+ * failing on its side (transient: no answer, a 5xx, a timeout).
+ */
+export function fieldRefused(err: unknown): err is MetaReadError {
+  if (!(err instanceof MetaReadError)) return false
+  const f = err.failure
+  return f.origin === 'meta' && !f.authLost && !f.throttled && !f.notFound && !f.permissionDenied && !f.transient && !!f.code && /^100(\/|$)/.test(f.code)
 }
+
+/** A read of its own that adds to an answer (Advantage+ state, placements, …) failed: said in Meta's words, unless the token or a throttle ends the read. */
+function partFailed(err: unknown): err is MetaReadError {
+  return err instanceof MetaReadError && !err.failure.authLost && !err.failure.throttled
+}
+
+const groupQuery = (groups: FieldGroup[]) => Object.assign({}, ...groups.map((g) => g.query ?? {})) as Record<string, MetaQueryValue>
 
 /**
  * One object, every group of fields in ONE call. When Meta refuses that call, each group is read alone: the first (the
@@ -125,19 +142,19 @@ function metaRefusedAsk(err: unknown): err is MetaReadError {
  */
 export async function readGroups(connectionId: string, operation: string, path: string, groups: FieldGroup[], query: Record<string, MetaQueryValue> = {}): Promise<{ body: Row; missing: MissingPart[] }> {
   try {
-    const read = await metaReadOne({ connectionId }, { operation, path, query: { ...query, fields: groups.map((g) => g.fields).join(',') } })
+    const read = await metaReadOne({ connectionId }, { operation, path, query: { ...query, ...groupQuery(groups), fields: groups.map((g) => g.fields).join(',') } })
     return { body: read.body as Row, missing: [] }
   } catch (err) {
-    if (groups.length < 2 || !metaRefusedAsk(err)) throw err
+    if (groups.length < 2 || !fieldRefused(err)) throw err
   }
   const body: Row = {}
   const missing: MissingPart[] = []
   for (const [i, group] of groups.entries()) {
     try {
-      const read = await metaReadOne({ connectionId }, { operation: `${operation}.${group.name}`, path, query: { ...query, fields: group.fields } })
+      const read = await metaReadOne({ connectionId }, { operation: `${operation}.${group.name}`, path, query: { ...query, ...(group.query ?? {}), fields: group.fields } })
       Object.assign(body, read.body as Row)
     } catch (err) {
-      if (i === 0 || !metaRefusedAsk(err)) throw err
+      if (i === 0 || !fieldRefused(err)) throw err
       missing.push({ part: group.name, sentence: err.failure.sentence })
     }
   }
@@ -171,7 +188,7 @@ export async function listGroups(connectionId: string, operation: string, path: 
   try {
     return { ...(await listPaged(connectionId, operation, path, { ...query, fields: groups.map((g) => g.fields).join(',') }, maxRows, withTotal)), missing: [] as MissingPart[] }
   } catch (err) {
-    if (groups.length < 2 || !metaRefusedAsk(err)) throw err
+    if (groups.length < 2 || !fieldRefused(err)) throw err
     const sentence = err.failure.sentence
     const read = await listPaged(connectionId, `${operation}.core`, path, { ...query, fields: groups[0].fields }, maxRows, withTotal)
     return { ...read, missing: groups.slice(1).map((g) => ({ part: g.name, sentence: `Meta refused these details in a list (${sentence}); read one object for them.` })) }
@@ -180,16 +197,12 @@ export async function listGroups(connectionId: string, operation: string, path: 
 
 // ── ownership: only the chosen ad account's own objects ─────────────────────────────────────────────────────────────
 
-/** A campaign, ad set, ad or creative id from a caller, read only when it is the chosen account's own (else refused). */
+/**
+ * A campaign, ad set, ad or creative id from a caller, read only when it is the chosen account's own AND that kind (review
+ * fix A1: live.ts objectInAccount, the one read-side check, on the one table of kinds — services/meta/meta-kinds.ts).
+ */
 export async function ownedId(account: MetaChosenAccount, id: string, kind: ObjectKind): Promise<string> {
-  const objectId = metaObjectId(id)
-  if (!objectId) throw new MetaLiveRefusal(`"${id}" is not a Meta ${KIND_WORDS[kind]} id (digits).`)
-  const known = await objectKindOf(account, objectId)
-  if (known && known !== kind) throw new MetaLiveRefusal(`That id is a ${KIND_WORDS[known]} of this ad account, not a ${KIND_WORDS[kind]}.`)
-  if (!known && !(await objectInAccount(account, objectId))) {
-    throw new MetaLiveRefusal(`That ${KIND_WORDS[kind]} does not belong to the ad account this business chose, so it is not read.`)
-  }
-  return objectId
+  return objectInAccount(account, id, kind)
 }
 
 /** Pages and Instagram accounts an object names: ids only, each marked chosen here or another business's (never which). */
@@ -301,7 +314,7 @@ export async function campaignDetail(input: { connectionId?: string | null; camp
     } : null
     if (!info) advantageNote = 'Meta sent no Advantage+ state for this campaign.'
   } catch (err) {
-    if (!metaRefusedAsk(err)) throw err
+    if (!partFailed(err)) throw err
     advantageNote = `Meta did not answer the Advantage+ state: ${err.failure.sentence}`
   }
   // RC-006 — a campaign has no recommendations field on v26: the account's recommendations, filtered to this campaign.
@@ -312,13 +325,16 @@ export async function campaignDetail(input: { connectionId?: string | null; camp
       fields: 'recommendation_type,title,message,importance,blame_field,object_id,estimated_impact,recommendation_data',
       filtering: [{ field: 'object_id', operator: 'EQUAL', value: id }],
     }, 50)
-    // Meta's SDK nests them in a `recommendations` list per row; the ad-recommendations page reads them as rows: both read.
+    // Review B F4 — Meta's pages disagree on this read: the ad-recommendations webhook page queries these fields with an
+    // object_id filter, as rows; Meta's SDK has the edge answer AdAccountRecommendations (a `recommendations` list per row)
+    // and lists only recommendation_names / recommendation_stages as its parameters, no filtering. A row of either shape is
+    // read; when Meta refuses the call, recommendationsNote says so (LIVE-PROBES RC-006, with GET /<campaign>?fields=recommendations).
     recommendations = read.rows.flatMap((r) => (Array.isArray(r.recommendations) ? rowsOf(r.recommendations) : [r])).filter((r) => text(r.object_id) === id).map((r) => ({
       type: text(r.recommendation_type), title: text(r.title), message: text(r.message), importance: text(r.importance), blameField: text(r.blame_field),
       metaRaw: spec({ estimated_impact: r.estimated_impact ?? null, recommendation_data: r.recommendation_data ?? null }),
     }))
   } catch (err) {
-    if (!metaRefusedAsk(err)) throw err
+    if (!partFailed(err)) throw err
     recommendationsNote = `Meta did not answer recommendations for this campaign: ${err.failure.sentence}`
   }
   return {
@@ -414,9 +430,11 @@ export const ADSET_CORE_FIELDS = [
   'is_incremental_attribution_enabled', 'promoted_object', 'destination_type', 'targeting', 'targeting_optimization_types', 'dsa_payor',
   'dsa_beneficiary', 'regional_regulated_categories', 'regional_regulation_identities', 'ad_set_goal', 'is_dynamic_creative', 'creative_sequence',
   'time_based_ad_rotation_id_blocks', 'time_based_ad_rotation_intervals', 'asset_feed_id', 'instagram_user_id', 'value_rule_set_id',
-  'rf_prediction_id', 'lifetime_imps', 'multi_optimization_goal_weight', 'campaign_attribution', 'contextual_bundling_spec',
+  'rf_prediction_id', 'lifetime_imps', 'multi_optimization_goal_weight', 'campaign_attribution',
   'brand_safety_config', 'use_new_app_click', 'source_adset_id', 'adlabels{id,name}', 'issues_info', 'campaign_active_time', 'created_time', 'updated_time',
 ].join(',')
+/** Review B F2 — on the v26 reference but not in Meta's SDK v26: its own group (LIVE-PROBES). */
+const ADSET_BUNDLING_FIELDS = 'contextual_bundling_spec'
 /** AS-003 — only for active ad sets, not dynamic creative; "Not all ad accounts are eligible": its own group. */
 const ADSET_LEARNING_FIELDS = 'learning_stage_info'
 /** AS-005, CR-439, RC-006 — review of a dynamic creative ad set's assets, and Meta's recommendations (only when present). */
@@ -426,6 +444,15 @@ export const ADSET_PLACEMENT_FIELDS = 'targeting{effective_publisher_platforms,e
 
 /** A short list row of an ad set (the list's own fields). */
 export const ADSET_LIST_FIELDS = 'id,campaign_id,name,status,configured_status,effective_status,optimization_goal,billing_event,bid_strategy,bid_amount,daily_budget,lifetime_budget,budget_remaining,start_time,end_time,destination_type,is_dynamic_creative,value_rule_set_id,adlabels{id,name},issues_info,created_time,updated_time'
+
+/**
+ * Review B F5 — Meta writes a minimum-ROAS floor as ROAS × 10,000 (bid_constraints.roas_average_floor, range 100–10,000,000:
+ * 0.01×–1000×; marketing-api/bidding/overview/bid-strategy). The ONE place it is read back as a plain ROAS (2.5 = 2.5×).
+ */
+export function roasFloorOf(bidConstraints: unknown): number | null {
+  const n = num(obj(bidConstraints)?.roas_average_floor)
+  return n === null ? null : n / 10_000
+}
 
 export function adSetOf(r: Row, currency: string | null) {
   const billing = text(r.billing_event)
@@ -437,7 +464,7 @@ export function adSetOf(r: Row, currency: string | null) {
     bidAmountCents: cents(r.bid_amount, currency),
     ...(r.bid_amount !== undefined ? { bidPer: billing === 'IMPRESSIONS' ? 'per 1,000 impressions (billing on impressions)' : 'per result (the optimisation goal)' } : {}),
     ...(bidInfo ? { bidInfoCents: Object.fromEntries(Object.entries(bidInfo).map(([k, v]) => [k, cents(v, currency)])) } : {}),
-    bidConstraints: spec(r.bid_constraints),
+    bidConstraints: spec(r.bid_constraints), roasFloor: roasFloorOf(r.bid_constraints),
     dailyBudgetCents: cents(r.daily_budget, currency), lifetimeBudgetCents: cents(r.lifetime_budget, currency), budgetRemainingCents: cents(r.budget_remaining, currency),
     dailyMinSpendTargetCents: cents(r.daily_min_spend_target, currency), dailySpendCapCents: capCents(r.daily_spend_cap, currency),
     lifetimeMinSpendTargetCents: cents(r.lifetime_min_spend_target, currency), lifetimeSpendCapCents: capCents(r.lifetime_spend_cap, currency),
@@ -475,6 +502,7 @@ export async function adSetDetail(input: { connectionId?: string | null; adSetId
   const id = await ownedId(account, input.adSetId, 'adset')
   const { body, missing } = await readGroups(account.connectionId, 'objects.adset', id, [
     { name: 'core', fields: ADSET_CORE_FIELDS }, { name: 'learning', fields: ADSET_LEARNING_FIELDS }, { name: 'review', fields: ADSET_REVIEW_FIELDS },
+    { name: 'contextualBundling', fields: ADSET_BUNDLING_FIELDS },
   ])
   let placements: Row | null = null
   try {
@@ -482,7 +510,7 @@ export async function adSetDetail(input: { connectionId?: string | null; adSetId
     const t = obj((read.body as Row).targeting)
     placements = t ? Object.fromEntries(Object.entries(t).filter(([k]) => k.startsWith('effective_')).map(([k, v]) => [k.replace(/^effective_/, '').replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase()), spec(v)])) : null
   } catch (err) {
-    if (!metaRefusedAsk(err)) throw err
+    if (!partFailed(err)) throw err
     missing.push({ part: 'placements', sentence: err.failure.sentence })
   }
   const learning = obj(body.learning_stage_info)
@@ -557,7 +585,7 @@ export async function adSetDeliveryStats(input: { connectionId?: string | null; 
   try {
     rows = (await listPaged(account.connectionId, 'objects.adset.deliveryStats', `${id}/delivery_stats`, { ...query, fields: DELIVERY_STATS_FIELDS }, 10)).rows
   } catch (err) {
-    if (!metaRefusedAsk(err)) throw err
+    if (!fieldRefused(err)) throw err
     // The fields are SDK-only: Meta's own default answer, as it is.
     rows = (await listPaged(account.connectionId, 'objects.adset.deliveryStats.default', `${id}/delivery_stats`, query, 10)).rows
     shape = 'meta-default'
@@ -565,8 +593,10 @@ export async function adSetDeliveryStats(input: { connectionId?: string | null; 
   return {
     adSetId: id, shape,
     items: rows.map((r) => (shape === 'named' ? {
-      learningStage: spec(r.learning_stage_info), learningStageExit: spec(r.learning_stage_exit_info), lastSignificantEditTime: text(r.last_significant_edit_ts),
-      unsupportedFeatures: spec(r.unsupported_features), bidRecommendation: spec(r.bid_recommendation), currentAverageCost: spec(r.current_average_cost),
+      lastSignificantEditTime: text(r.last_significant_edit_ts), unsupportedFeatures: spec(r.unsupported_features),
+      bidRecommendation: spec(r.bid_recommendation), currentAverageCost: spec(r.current_average_cost),
+      // Review fix A6 — shapes known only from Meta's SDK (they may name amounts): under metaRaw.
+      metaRaw: spec({ learning_stage_info: r.learning_stage_info ?? null, learning_stage_exit_info: r.learning_stage_exit_info ?? null }),
     } : { metaRaw: spec(r) })),
     note: 'Meta documents the request, not the answer (its fields are known only from Meta\'s SDK). bidRecommendation and currentAverageCost are Meta\'s amounts as sent (unit not documented). Acting on a bid recommendation is a bid change (it can spend more).',
   }
@@ -605,11 +635,9 @@ export async function adSetActionableInsights(input: { connectionId?: string | n
  */
 export async function audienceAdSets(input: { connectionId?: string | null; audienceId: string; statuses?: string[] | null; maxRows?: number }) {
   const account = await metaChosenAccount(input.connectionId)
-  const audienceId = metaObjectId(input.audienceId)
-  if (!audienceId) throw new MetaLiveRefusal(`"${input.audienceId}" is not a Meta audience id (digits).`)
-  const kind = await objectKindOf(account, audienceId)
-  if (kind) throw new MetaLiveRefusal(`That id is a ${KIND_WORDS[kind]} of this ad account, not a custom audience.`)
-  if (!(await objectInAccount(account, audienceId))) throw new MetaLiveRefusal('That custom audience is not the chosen ad account\'s own (an audience shared from another ad account is not read here), so it is not read.')
+  // Review fix A1 — a custom audience of the chosen account (account_id and two fields only an audience has); an audience
+  // shared from another ad account names that account, so it is refused here.
+  const audienceId = await objectInAccount(account, input.audienceId, 'customaudience')
   const read = await listPaged(account.connectionId, 'objects.audience.ads', `${audienceId}/ads`, {
     fields: 'id,name,account_id,campaign_id,adset_id,effective_status,adset{id,name,effective_status}', effective_status: statusFilter(input.statuses, AD_LIST_STATUSES, 'ad'),
   }, input.maxRows ?? 500)
@@ -644,12 +672,16 @@ export const AD_CORE_FIELDS = [
   'id', 'account_id', 'campaign_id', 'adset_id', 'name', 'status', 'configured_status', 'effective_status', AD_CREATIVE_NESTED, 'adset{destination_type}',
   'ad_active_time', 'ad_schedule_start_time', 'ad_schedule_end_time', 'adlabels{id,name}', 'conversion_domain', 'tracking_specs', 'conversion_specs',
   'tracking_and_conversion_with_defaults', 'display_sequence', 'priority', 'engagement_audience', 'source_ad_id', 'last_updated_by_app_id',
-  'special_ad_categories', 'targeting', 'bid_amount', 'bid_info', 'bid_type', 'is_autobid', 'issues_info', 'created_time', 'updated_time',
+  'special_ad_categories', 'targeting', 'bid_amount', 'bid_info', 'bid_type', 'issues_info', 'created_time', 'updated_time',
 ].join(',')
-/** AD-005 (with review_feedback_breakdown=true), AD-007 (reading runs the checks), AD-009, CR-431. */
+/**
+ * AD-005 (review_feedback_breakdown=true goes only with ad_review_feedback: the gateway lets it through only there), AD-007
+ * (reading runs the checks), AD-009, CR-431; is_autobid is on the v26 reference but not in Meta's SDK v26 (review B F2).
+ */
 const AD_GROUPS: FieldGroup[] = [
-  { name: 'core', fields: AD_CORE_FIELDS }, { name: 'review', fields: 'ad_review_feedback' }, { name: 'checks', fields: 'failed_delivery_checks' },
-  { name: 'recommendations', fields: 'recommendations' }, { name: 'flexibleFormat', fields: 'creative_asset_groups_spec' },
+  { name: 'core', fields: AD_CORE_FIELDS }, { name: 'review', fields: 'ad_review_feedback', query: { review_feedback_breakdown: true } },
+  { name: 'checks', fields: 'failed_delivery_checks' }, { name: 'recommendations', fields: 'recommendations' },
+  { name: 'flexibleFormat', fields: 'creative_asset_groups_spec' }, { name: 'autobid', fields: 'is_autobid' },
 ]
 export const AD_LIST_FIELDS = `id,account_id,campaign_id,adset_id,name,status,configured_status,effective_status,${AD_CREATIVE_NESTED.replace(',media_sourcing_spec,asset_feed_spec', '')},issues_info,adlabels{id,name},ad_active_time,source_ad_id,last_updated_by_app_id,created_time,updated_time`
 
@@ -684,12 +716,14 @@ export async function adsList(input: { connectionId?: string | null; campaignId?
   const read = await listGroups(account.connectionId, 'objects.ads', path, [{ name: 'core', fields: AD_LIST_FIELDS }], {
     effective_status: statusFilter(input.statuses, AD_LIST_STATUSES, 'ad'), ...(typeof input.changedSince === 'number' ? { updated_since: input.changedSince } : {}),
   }, input.maxRows ?? (creativeId ? MAX_ROWS : 100), !creativeId)
-  const rows = creativeId ? read.rows.filter((r) => text(obj(r.creative)?.id) === creativeId) : read.rows
+  // Review fix A1 — only the chosen account's own ads, whatever an edge answers (AD_LIST_FIELDS asks account_id).
+  const own = read.rows.filter((r) => metaAdAccountId(r.account_id) === account.adAccountId)
+  const rows = creativeId ? own.filter((r) => text(obj(r.creative)?.id) === creativeId) : own
   return {
     adAccountId: account.adAccountId, currency: account.currency, campaignId, adSetId, creativeId, totalCount: creativeId ? null : read.totalCount,
     items: rows.map((r) => adOf(r, account.currency)), more: read.more,
     ...(creativeId ? { adsLookedAt: read.rows.length, note: read.more ? 'More ads exist than were looked at: name the campaign or ad set to look at all of them.' : 'Every ad of this list was looked at.' } : {}),
-    notes: ['Archived ads come only when ARCHIVED is asked (statuses); deleted ads never in a list (Meta refuses a DELETED filter) — read one by its id (view ad).', 'Numbers inline: meta-ads-live view ads.'],
+    notes: ['Archived ads are in the list by default (every status but DELETED); statuses narrows it. Deleted ads are never in a list (Meta refuses a DELETED filter) — read one by its id (view ad).', 'Numbers inline: meta-ads-live view ads.'],
   }
 }
 
@@ -697,7 +731,7 @@ export async function adsList(input: { connectionId?: string | null; campaignId?
 export async function adDetail(input: { connectionId?: string | null; adId: string }) {
   const account = await metaChosenAccount(input.connectionId)
   const id = await ownedId(account, input.adId, 'ad')
-  const { body, missing } = await readGroups(account.connectionId, 'objects.ad', id, AD_GROUPS, { review_feedback_breakdown: true })
+  const { body, missing } = await readGroups(account.connectionId, 'objects.ad', id, AD_GROUPS)
   const creative = obj(body.creative)
   const destination = text(obj(body.adset)?.destination_type)
   const feed = obj(creative?.asset_feed_spec)
@@ -725,21 +759,28 @@ export async function adDetail(input: { connectionId?: string | null; adId: stri
 
 /** Creative fields of the v26 reference Nexus reads (CR-002, CR-220 apart, CR-248, CR-270, CR-306, CR-336, CR-402, CR-424, CR-437). */
 export const CREATIVE_CORE_FIELDS = [
-  'id', 'account_id', 'name', 'status', 'object_type', 'actor_id', 'instagram_user_id', 'threads_user_id', 'object_story_spec', 'object_story_id',
+  'id', 'account_id', 'name', 'status', 'object_type', 'actor_id', 'instagram_user_id', 'object_story_spec', 'object_story_id',
   'effective_object_story_id', 'effective_instagram_media_id', 'source_instagram_media_id', 'source_facebook_post_id', 'instagram_permalink_url',
   'asset_feed_spec', 'degrees_of_freedom_spec', 'media_sourcing_spec', 'format_transformation_spec', 'contextual_multi_ads', 'creative_sourcing_spec',
   'generative_asset_spec', 'url_tags', 'call_to_action_type', 'call_to_action', 'body', 'title', 'link_url', 'object_url', 'image_hash', 'image_url',
   'video_id', 'thumbnail_url', 'authorization_category', 'effective_authorization_category', 'branded_content', 'branded_content_sponsor_page_id',
   'facebook_branded_content', 'platform_customizations', 'portrait_customizations', 'ad_disclaimer_spec', 'product_set_id', 'product_data',
-  'messenger_sponsored_message', 'wamo_whatsapp_identity_spec', 'interactive_components_spec', 'page_welcome_message', 'template_url_spec',
+  'messenger_sponsored_message', 'interactive_components_spec', 'page_welcome_message', 'template_url_spec',
   'recommender_settings', 'applink_treatment', 'categorization_criteria', 'place_page_set_id', 'adlabels{id,name}',
 ].join(',')
 /** Not on the v26 creative field list: CR-269 (changelog v24) and CR-336 — their own groups. */
-const CREATIVE_GROUPS: FieldGroup[] = [{ name: 'core', fields: CREATIVE_CORE_FIELDS }, { name: 'destination', fields: 'destination_spec' }, { name: 'instagramBranded', fields: 'instagram_branded_content' }]
+const CREATIVE_GROUPS: FieldGroup[] = [
+  { name: 'core', fields: CREATIVE_CORE_FIELDS }, { name: 'destination', fields: 'destination_spec' }, { name: 'instagramBranded', fields: 'instagram_branded_content' },
+  // Review B F1 — gated by Meta (v26 changelog: WhatsApp identity on creatives is for accounts Meta lets in), and B F2 —
+  // threads_user_id is on the v26 reference but not in Meta's SDK v26: each its own group.
+  { name: 'whatsAppIdentity', fields: 'wamo_whatsapp_identity_spec' }, { name: 'threads', fields: 'threads_user_id' },
+]
 /** CR-220 — Meta answers the WhatsApp number only when asked by this name (a call of its own: it names object_story_spec again). */
 const CREATIVE_WHATSAPP_FIELDS = 'object_story_spec{whats_app_business_phone_number}'
 
-export const CREATIVE_LIST_FIELDS = 'id,account_id,name,status,object_type,title,body,call_to_action_type,image_hash,video_id,thumbnail_url,actor_id,instagram_user_id,effective_object_story_id,effective_instagram_media_id,instagram_permalink_url,product_set_id,wamo_whatsapp_identity_spec,adlabels{id,name}'
+export const CREATIVE_LIST_FIELDS = 'id,account_id,name,status,object_type,title,body,call_to_action_type,image_hash,video_id,thumbnail_url,actor_id,instagram_user_id,effective_object_story_id,effective_instagram_media_id,instagram_permalink_url,product_set_id,adlabels{id,name}'
+/** CR-248 — gated (review B F1): a list asks it in its own group; never on an ad set's creatives (Meta does not answer it there). */
+const CREATIVE_LIST_WHATSAPP: FieldGroup = { name: 'whatsAppIdentity', fields: 'wamo_whatsapp_identity_spec' }
 
 function creativeOf(r: Row) {
   const story = obj(r.object_story_spec)
@@ -768,11 +809,12 @@ function creativeOf(r: Row) {
 export async function creativesList(input: { connectionId?: string | null; campaignId?: string | null; adSetId?: string | null; adId?: string | null; maxRows?: number }) {
   const account = await metaChosenAccount(input.connectionId)
   const owner = input.adId ? await ownedId(account, input.adId, 'ad') : input.adSetId ? await ownedId(account, input.adSetId, 'adset') : input.campaignId ? await ownedId(account, input.campaignId, 'campaign') : null
-  const read = await listGroups(account.connectionId, 'objects.creatives', owner ? `${owner}/adcreatives` : `${act(account.adAccountId)}/adcreatives`, [{ name: 'core', fields: CREATIVE_LIST_FIELDS }], {}, input.maxRows ?? 100)
+  const groups: FieldGroup[] = [{ name: 'core', fields: CREATIVE_LIST_FIELDS }, ...(input.adSetId && !input.adId ? [] : [CREATIVE_LIST_WHATSAPP])]
+  const read = await listGroups(account.connectionId, 'objects.creatives', owner ? `${owner}/adcreatives` : `${act(account.adAccountId)}/adcreatives`, groups, {}, input.maxRows ?? 100)
   const own = read.rows.filter((r) => r.account_id === undefined || metaAdAccountId(r.account_id) === account.adAccountId)
   return {
-    adAccountId: account.adAccountId, items: own.map((r) => creativeOf(r)), more: read.more,
-    notes: ['Meta lists at most 50,000 creatives of an account (no paging past that).', 'thumbnailUrl is a temporary link from Meta\'s CDN: show it, never keep it.'],
+    adAccountId: account.adAccountId, items: own.map((r) => creativeOf(r)), more: read.more, missing: read.missing,
+    notes: ['Meta lists at most 50,000 creatives of an account (no paging past that).', 'whatsAppIdentity: only for accounts Meta lets use WhatsApp identities on creatives, and never on an ad set\'s creatives (Meta does not answer it there).', 'thumbnailUrl is a temporary link from Meta\'s CDN: show it, never keep it.'],
   }
 }
 
@@ -781,14 +823,15 @@ export async function creativeDetail(input: { connectionId?: string | null; crea
   const account = await metaChosenAccount(input.connectionId)
   const id = await ownedId(account, input.creativeId, 'creative')
   const size = { ...(input.thumbnailWidth ? { thumbnail_width: input.thumbnailWidth } : {}), ...(input.thumbnailHeight ? { thumbnail_height: input.thumbnailHeight } : {}) }
-  const { body, missing } = await readGroups(account.connectionId, 'objects.creative', id, CREATIVE_GROUPS, size)
+  // The thumbnail size goes with the group that names thumbnail_url (the gateway lets it through only there).
+  const { body, missing } = await readGroups(account.connectionId, 'objects.creative', id, CREATIVE_GROUPS.map((g) => (g.name === 'core' ? { ...g, query: size } : g)))
   if (body.account_id !== undefined && metaAdAccountId(body.account_id) !== account.adAccountId) throw new MetaLiveRefusal('That creative does not belong to the ad account this business chose, so it is not read.')
   let whatsAppNumber: string | null = null
   try {
     const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'objects.creative.whatsapp', path: id, query: { fields: CREATIVE_WHATSAPP_FIELDS } })
     whatsAppNumber = text(obj((read.body as Row).object_story_spec)?.whats_app_business_phone_number)
   } catch (err) {
-    if (!metaRefusedAsk(err)) throw err
+    if (!partFailed(err)) throw err
     missing.push({ part: 'whatsAppNumber', sentence: err.failure.sentence })
   }
   const story = obj(body.object_story_spec)
@@ -806,6 +849,29 @@ export async function creativeDetail(input: { connectionId?: string | null; crea
   }
 }
 
+/**
+ * Review fix A6 — the Page ad limits (ads running or in review, per Page): explicit fields only, the Page by id (never its
+ * name), and a Page another business in Nexus uses is its id and the flag only; never the business portfolio a limit is
+ * scoped to (ad_limit_scope_business… is not asked). Counts Meta's docs name, the rest from Meta's SDK in their own group.
+ */
+async function pageAdLimits(account: MetaChosenAccount) {
+  const read = await listGroups(account.connectionId, 'objects.problems.adsVolume', `${act(account.adAccountId)}/ads_volume`, [
+    { name: 'core', fields: 'actor_id,ads_running_or_in_review_count,current_account_ads_running_or_in_review_count,limit_on_ads_running_or_in_review' },
+    { name: 'sdk', fields: 'future_limit_on_ads_running_or_in_review,future_limit_activation_date,ad_limit_set_by_page_admin' },
+  ], { show_breakdown_by_actor: true }, 50)
+  const taken = await takenIds('PAGE', read.rows.map((r) => text(r.actor_id)).filter((id): id is string => !!id))
+  return read.rows.map((r) => {
+    const pageId = text(r.actor_id)
+    if (pageId && taken.has(pageId)) return { pageId, takenByAnotherBusiness: true }
+    return {
+      pageId, chosenHere: pageId ? pageId === account.pageId : null, takenByAnotherBusiness: false,
+      adsRunningOrInReview: num(r.ads_running_or_in_review_count), thisAccountAdsRunningOrInReview: num(r.current_account_ads_running_or_in_review_count),
+      limit: num(r.limit_on_ads_running_or_in_review), futureLimit: num(r.future_limit_on_ads_running_or_in_review), futureLimitFrom: text(r.future_limit_activation_date),
+      limitSetByPageAdmin: bool(r.ad_limit_set_by_page_admin),
+    }
+  })
+}
+
 /** RC-029 — every problem that stops delivery, in one answer (like Meta's ads_get_errors, with the account's own state). */
 export async function deliveryProblems(input: { connectionId?: string | null; includePausedByParent?: boolean; maxRows?: number }) {
   const account = await metaChosenAccount(input.connectionId)
@@ -821,10 +887,12 @@ export async function deliveryProblems(input: { connectionId?: string | null; in
     { name: 'core', fields: 'id,name,campaign_id,adset_id,effective_status,issues_info' }, { name: 'review', fields: 'ad_review_feedback' }, { name: 'checks', fields: 'failed_delivery_checks' },
   ], { effective_status: adStatuses }, max)
   let adsVolume: unknown = null
+  let adsVolumeNote: string | null = null
   try {
-    adsVolume = (await listPaged(connectionId, 'objects.problems.adsVolume', `${act(adAccountId)}/ads_volume`, {}, 10)).rows.map((r) => spec(r))
+    adsVolume = await pageAdLimits(account)
   } catch (err) {
-    if (!metaRefusedAsk(err)) throw err
+    if (!partFailed(err)) throw err
+    adsVolumeNote = `Meta did not answer the Page ad limits: ${err.failure.sentence}`
   }
   const problem = (level: string, r: Row) => ({
     level, id: text(r.id), name: text(r.name), campaignId: text(r.campaign_id), adSetId: text(r.adset_id), effectiveStatus: text(r.effective_status), statusText: statusText(r.effective_status),
@@ -837,7 +905,7 @@ export async function deliveryProblems(input: { connectionId?: string | null; in
     account: { status, statusText: status === null ? null : AD_ACCOUNT_STATUS_WORDS[status] ?? `Status ${status}`, disableReason: num(a.disable_reason), failedDeliveryChecks: checksOf(a.failed_delivery_checks) },
     problems: [...campaigns.rows.map((r) => problem('campaign', r)), ...adSets.rows.map((r) => problem('adset', r)), ...adRows.filter((r) => !waiting.has(r.effectiveStatus ?? ''))],
     waiting: adRows.filter((r) => waiting.has(r.effectiveStatus ?? '')),
-    adsVolume,
+    adsVolume, ...(adsVolumeNote ? { adsVolumeNote } : {}),
     more: campaigns.more || adSets.more || ads.more, missing: ads.missing,
     notes: [
       'problems: what stops delivery now (issues, a rejection, a missing payment method); waiting: ads in review or being processed (and paused by their campaign or ad set when asked).',
@@ -865,7 +933,7 @@ async function readInsightGroups(connectionId: string, operation: string, path: 
     const read = await metaReadOne({ connectionId }, { operation, path, query: { ...query, fields: groups.map((g) => g.fields).join(',') } })
     return { row: rowsOf((read.body as Row).data)[0] ?? {}, missing: [] }
   } catch (err) {
-    if (!metaRefusedAsk(err)) throw err
+    if (!fieldRefused(err)) throw err
   }
   const row: Row = {}
   const missing: MissingPart[] = []
@@ -874,7 +942,7 @@ async function readInsightGroups(connectionId: string, operation: string, path: 
       const read = await metaReadOne({ connectionId }, { operation: `${operation}.${group.name}`, path, query: { ...query, fields: group.fields } })
       Object.assign(row, rowsOf((read.body as Row).data)[0] ?? {})
     } catch (err) {
-      if (!metaRefusedAsk(err)) throw err
+      if (!fieldRefused(err)) throw err
       missing.push({ part: group.name, sentence: err.failure.sentence })
     }
   }
@@ -890,8 +958,9 @@ export async function objectDiagnostics(input: { connectionId?: string | null; k
     kind: input.kind, id, from: input.from, to: input.to,
     overlap: missing.some((m) => m.part === 'overlap') ? null : { dedupingRatio: spec(row.deduping_ratio), source1Ratio: spec(row.deduping_1st_source_ratio), source2Ratio: spec(row.deduping_2nd_source_ratio), source3Ratio: spec(row.deduping_3rd_source_ratio) },
     auction: missing.some((m) => m.part === 'auction') ? null : { auctionBid: spec(row.auction_bid), auctionCompetitiveness: spec(row.auction_competitiveness), auctionMaxCompetitorBid: spec(row.auction_max_competitor_bid), wishBid: spec(row.wish_bid) },
-    fatigue: missing.some((m) => m.part === 'fatigue') ? null : pick('creative_fatigue_summary,creative_fatigued_ads'),
-    diversity: missing.some((m) => m.part === 'diversity') ? null : pick('creative_diversity_score,creative_diversity_label,creative_diversity_data'),
+    // Review fix A6 — shapes Meta does not document (they may name ads and amounts): under metaRaw.
+    fatigue: missing.some((m) => m.part === 'fatigue') ? null : { metaRaw: pick('creative_fatigue_summary,creative_fatigued_ads') },
+    diversity: missing.some((m) => m.part === 'diversity') ? null : { metaRaw: pick('creative_diversity_score,creative_diversity_label,creative_diversity_data') },
     rankings: missing.some((m) => m.part === 'rankings') || ['quality_ranking', 'engagement_rate_ranking', 'conversion_rate_ranking'].every((n) => row[n] === undefined) ? null : pick('quality_ranking,engagement_rate_ranking,conversion_rate_ranking'),
     missing,
     notes: [
@@ -950,8 +1019,15 @@ export async function creativeJobs(input: { connectionId?: string | null; jobId?
 export async function creativeInsights(input: { connectionId?: string | null; creativeId: string }) {
   const account = await metaChosenAccount(input.connectionId)
   const id = await ownedId(account, input.creativeId, 'creative')
-  const read = await listPaged(account.connectionId, 'objects.creative.insights', `${id}/creative_insights`, {}, 50)
-  return { creativeId: id, items: read.rows.map((r) => ({ metaRaw: spec(r) })), more: read.more, note: 'Meta documents this edge but not its answer: Meta\'s answer as it is (it may hold amounts). The creative\'s numbers per ad: meta-ads-live view insights at level ad.' }
+  // Review B F6 — Meta's SDK names one field, aesthetics; when Meta refuses it, Meta's own default answer.
+  let read
+  try {
+    read = await listPaged(account.connectionId, 'objects.creative.insights', `${id}/creative_insights`, { fields: 'aesthetics' }, 50)
+  } catch (err) {
+    if (!fieldRefused(err)) throw err
+    read = await listPaged(account.connectionId, 'objects.creative.insights.default', `${id}/creative_insights`, {}, 50)
+  }
+  return { creativeId: id, items: read.rows.map((r) => ({ metaRaw: spec(r) })), more: read.more, note: 'Meta documents this edge but not its answer (its SDK names `aesthetics`): Meta\'s answer as it is (it may hold amounts). The creative\'s numbers per ad: meta-ads-live view insights at level ad.' }
 }
 
 export const SUGGESTED_USE_CASES = ['AD_STRATEGIES', 'AUTOMATED_APP_ADS', 'AUTOMATED_SHOPPING_ADS', 'AUTOMATED_SHOPPING_ADS_MDSA', 'LEAD_GEN_ASC_ADS', 'MANUAL_FLOW_APP_ADS', 'MANUAL_FLOW_SHOPS_ADS', 'MANUAL_FLOW_WEBSITE_ADS', 'MANUAL_FLOW_WEBSITE_AND_APP_ADS', 'SALES_WEB_APP_ADS'] as const
@@ -993,7 +1069,10 @@ export async function adFeedback(input: { connectionId?: string | null; adId: st
   const account = await metaChosenAccount(input.connectionId)
   const id = await ownedId(account, input.adId, 'ad')
   const read = await listPaged(account.connectionId, 'objects.ad.feedback', `${id}/facebook_feedback`, { fields: 'id' }, 50)
-  return { adId: id, feedbackIds: read.rows.map((r) => text(r.id)).filter(Boolean), more: read.more, note: 'Only the ids: the comments under an ad (people\'s names and words) are read by the comments tool, with its own checks; the preview link Meta adds is never asked (anyone with it can open it).' }
+  return {
+    adId: id, feedbackIds: read.rows.map((r) => text(r.id)).filter(Boolean), more: read.more,
+    note: 'Only the ids: the comments under an ad (people\'s names and words) are read by the comments tool, with its own checks; the preview link Meta adds is never asked (anyone with it can open it). For a dynamic creative ad Meta takes one generated post id (dynamic_post); Nexus does not send one yet (it cannot check that a post is this business\'s own until its post reads, step 10), so Meta answers the ad\'s own feedback.',
+  }
 }
 
 /** CR-447 — Meta's locale keys for a language rule (numeric keys, e.g. 6 English (US)), searched by name. */
@@ -1012,8 +1091,9 @@ export async function catalogCategories(input: { connectionId?: string | null; a
   const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'objects.adset.promotedObject', path: adSetId, query: { fields: 'promoted_object' } })
   const catalogId = metaObjectId(obj((read.body as Row).promoted_object)?.product_catalog_id)
   if (!catalogId) throw new MetaLiveRefusal('This ad set promotes no product catalog (its promoted object names none), so there are no catalog categories to read for it.')
-  // The catalog must be the chosen ad account's own business portfolio's (a catalog shared in from elsewhere is not read
-  // here; Nexus's catalog tools check catalogs on their own).
+  // Review fix A7 — the catalog must be the chosen ad account's own business portfolio's (a catalog shared in from elsewhere
+  // is not read here). Two Nexus businesses on one portfolio would both pass: step 12 adds CATALOG to
+  // nexus_meta_links_taken (taken.ts) and re-checks catalogCategories against it.
   const owner = await metaReadOne({ connectionId: account.connectionId }, { operation: 'objects.catalog.ownerCheck', path: catalogId, query: { fields: 'business{id}' } })
   const ownerId = metaObjectId(obj((owner.body as Row).business)?.id)
   if (!ownerId || !account.businessId || ownerId !== account.businessId) {
@@ -1024,7 +1104,7 @@ export async function catalogCategories(input: { connectionId?: string | null; a
     adSetId, catalogId, criteria: input.criteria,
     items: categories.rows.map((r) => ({ criteriaValue: text(r.criteria_value), name: text(r.name), description: text(r.description), destinationUri: text(r.destination_uri), imageUrl: text(r.image_url) })),
     more: categories.more,
-    note: 'Meta answers the top 1,000 categories by product count. They belong to the catalog, so every category ad of that catalog shares them. The catalog itself: the catalog tools.',
+    note: 'Meta answers the top 1,000 categories by product count. They belong to the catalog, so every category ad of that catalog shares them. The catalog itself: the catalog tools. Nexus checks the catalog belongs to the chosen account\'s business portfolio; which Nexus business uses a catalog is checked once the catalog reads arrive (step 12).',
   }
 }
 
@@ -1039,21 +1119,27 @@ export async function labelsList(input: { connectionId?: string | null; maxRows?
   return { adAccountId: account.adAccountId, totalCount: read.totalCount, items: read.rows.map(labelOf), more: read.more, note: 'Up to 100,000 labels per account; at most 50 on one object.' }
 }
 
-/** Is this label the chosen account's own? Its list holds it (a label node names no account on v26). */
-async function ownedLabel(account: MetaChosenAccount, labelId: string): Promise<string> {
-  const id = metaObjectId(labelId)
-  if (!id) throw new MetaLiveRefusal(`"${labelId}" is not a Meta label id (digits).`)
+/**
+ * Are these labels the chosen account's own? Its list holds them (a label node names no account on v26). Review fix A2: the
+ * account's labels are read ONCE (up to 500) and every id is checked against that set.
+ */
+async function ownedLabels(account: MetaChosenAccount, labelIds: string[]): Promise<string[]> {
+  const ids = labelIds.map((labelId) => metaObjectId(labelId) ?? (() => { throw new MetaLiveRefusal(`"${labelId}" is not a Meta label id (digits).`) })())
   const own = await listPaged(account.connectionId, 'objects.labels.ownerCheck', `${act(account.adAccountId)}/adlabels`, { fields: 'id' }, MAX_ROWS)
-  if (!own.rows.some((r) => text(r.id) === id)) {
-    throw new MetaLiveRefusal(own.more ? 'That label is not among the first 500 labels of the chosen ad account, so it is not read.' : 'That label is not one of the chosen ad account\'s, so it is not read.')
+  const mine = new Set(own.rows.map((r) => text(r.id)))
+  const foreign = ids.filter((id) => !mine.has(id))
+  if (foreign.length) {
+    throw new MetaLiveRefusal(own.more
+      ? `${foreign.join(', ')} is not among the first 500 labels of the chosen ad account, so it is not read.`
+      : `${foreign.join(', ')} is not a label of the chosen ad account, so it is not read.`)
   }
-  return id
+  return [...new Set(ids)]
 }
 
 /** CMP-086 — one label. */
 export async function labelDetail(input: { connectionId?: string | null; labelId: string }) {
   const account = await metaChosenAccount(input.connectionId)
-  const id = await ownedLabel(account, input.labelId)
+  const [id] = await ownedLabels(account, [input.labelId])
   const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'objects.label', path: id, query: { fields: 'id,name,created_time,updated_time' } })
   return { adAccountId: account.adAccountId, label: labelOf(read.body as Row) }
 }
@@ -1074,18 +1160,17 @@ const LABEL_FIELDS: Readonly<Record<LabelObjectKind, string>> = {
  */
 export async function labelObjects(input: { connectionId?: string | null; labelIds: string[]; operator?: 'ALL' | 'ANY' | null; kind: LabelObjectKind; maxRows?: number }) {
   const account = await metaChosenAccount(input.connectionId)
-  const ids: string[] = []
-  for (const labelId of input.labelIds) ids.push(await ownedLabel(account, labelId))
-  const unique = [...new Set(ids)]
+  const unique = await ownedLabels(account, input.labelIds)
   const fields = LABEL_FIELDS[input.kind]
   const read = unique.length === 1 && !input.operator
     ? await listPaged(account.connectionId, `objects.label.${input.kind}`, `${unique[0]}/${LABEL_EDGE[input.kind]}`, { fields }, input.maxRows ?? 200)
     : await listPaged(account.connectionId, `objects.labels.${input.kind}`, `${act(account.adAccountId)}/${LABEL_EDGE[input.kind]}bylabels`, { fields, ad_label_ids: unique, operator: input.operator ?? 'ANY' }, input.maxRows ?? 200)
-  const own = read.rows.filter((r) => r.account_id === undefined || metaAdAccountId(r.account_id) === account.adAccountId)
+  const own = read.rows.filter((r) => metaAdAccountId(r.account_id) === account.adAccountId)
   return {
     adAccountId: account.adAccountId, labelIds: unique, operator: unique.length === 1 && !input.operator ? null : input.operator ?? 'ANY', kind: input.kind,
     items: own.map((r) => ({ id: text(r.id), name: text(r.name), campaignId: text(r.campaign_id), adSetId: text(r.adset_id), status: text(r.status), effectiveStatus: text(r.effective_status), statusText: statusText(r.effective_status), objective: text(r.objective), objectType: text(r.object_type), title: text(r.title) })),
     more: read.more,
+    note: 'Meta\'s label edges take no status filter and, like every Meta list, leave deleted objects out (and may leave archived ones out): read one by its id in meta-campaigns, meta-ad-sets or meta-ad-details.',
   }
 }
 

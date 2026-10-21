@@ -24,6 +24,11 @@ export interface MetaFailure {
    * asks again for half the days, down to one day.
    */
   shrink?: boolean
+  /**
+   * Step 6 review fix A5 — Meta (or the network) failed on its side: no answer, a 5xx, a timeout or Meta's own "temporary"
+   * error. Asking again for less (a field group at a time) does not help; only a refused field does.
+   */
+  transient?: boolean
   /** One plain sentence for a person. Never a token or a request body. */
   sentence: string
 }
@@ -57,7 +62,7 @@ export function localFailure(sentence: string, code: string): MetaFailure {
 /** The failure of an answer that is not ok. */
 export function failureOfAnswer(answer: Pick<GatewayResponse, 'status' | 'verdict'>): MetaFailure {
   if (answer.status === 0) {
-    return { origin: 'network', httpStatus: 0, code: null, authLost: false, throttled: false, permissionDenied: false, notFound: false, sentence: 'Meta did not answer. Nexus tries again at the next read.' }
+    return { origin: 'network', httpStatus: 0, code: null, authLost: false, throttled: false, permissionDenied: false, notFound: false, transient: true, sentence: 'Meta did not answer. Nexus tries again at the next read.' }
   }
   const cls = answer.verdict?.errorClass ?? 'unknown'
   const code = answer.verdict?.channelCode ?? null
@@ -82,7 +87,8 @@ export function failureOfAnswer(answer: Pick<GatewayResponse, 'status' | 'verdic
     case 'configuration':
       return { ...base, sentence: `Nexus asked Meta in a way Meta no longer accepts${words ? `: ${words}` : '.'} This is for Nexus to fix; nothing was changed.` }
     case 'transient':
-      return { ...base, sentence: `Meta had a temporary problem${words ? ` (${words})` : ''}. Nexus tries again at the next read.` }
+    case 'timeout':
+      return { ...base, transient: true, sentence: `Meta had a temporary problem${words ? ` (${words})` : ''}. Nexus tries again at the next read.` }
     default:
       return { ...base, sentence: `Meta refused the read${words ? `: ${words}` : ` (${answer.status}).`}` }
   }
@@ -102,7 +108,7 @@ export function failureOfThrow(err: unknown): MetaFailure | null {
     }
   }
   if (err instanceof GatewayNoAnswer) {
-    return { origin: 'network', httpStatus: 0, code: err.errorClass, authLost: false, throttled: false, permissionDenied: false, notFound: false, sentence: 'Meta did not answer. Nexus tries again at the next read.' }
+    return { origin: 'network', httpStatus: 0, code: err.errorClass, authLost: false, throttled: false, permissionDenied: false, notFound: false, transient: true, sentence: 'Meta did not answer. Nexus tries again at the next read.' }
   }
   return null
 }

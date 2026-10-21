@@ -26,6 +26,7 @@ import { ACCOUNT_CORE_FIELDS, ACCOUNT_MONEY_FIELDS, ACCOUNT_SETTINGS_FIELDS, AD_
 import { decimalToMicros, metaUnitsToMicros, minorOf } from './money.js'
 import type { MetaQueryValue } from '../../gateway/meta.js'
 import { maskTakenRows, takenIds } from './taken.js'
+import { META_KIND_FIELDS, META_KIND_WORDS, withArticle, type MetaObjectKind } from '../../meta/meta-kinds.js'
 import { ACCOUNT_EDGES, GRAPH_DEFAULT_FIELDS, graphFieldsProblem, graphParamAllowed, OBJECT_EDGES, OBJECT_NODE, type GraphNode, type GraphObjectKind } from './graph-allow.js'
 
 /** A refusal in words (no Meta call was made, or Meta's answer was not usable). */
@@ -213,14 +214,9 @@ async function listWithNumbers(connectionId: string, operation: string, path: st
   }
 }
 
-/** A campaign or ad set id from a caller, read only when it is the chosen account's own (else refused in words). */
+/** A campaign or ad set id from a caller, read only when it is the chosen account's own AND that kind (objectInAccount). */
 async function ownObject(account: MetaChosenAccount, id: string, what: 'campaign' | 'ad set'): Promise<string> {
-  const objectId = metaObjectId(id)
-  if (!objectId) throw new MetaLiveRefusal(`"${id}" is not a Meta ${what} id (digits).`)
-  const kind = await objectKindOf(account, objectId)
-  if (kind && kind !== (what === 'campaign' ? 'campaign' : 'adset')) throw new MetaLiveRefusal(`That id is a ${kind} of this ad account, not a ${what}.`)
-  if (!kind && !(await objectInAccount(account, objectId))) throw new MetaLiveRefusal(`That ${what} does not belong to the ad account this business chose, so it is not read.`)
-  return objectId
+  return objectInAccount(account, id, what === 'campaign' ? 'campaign' : 'adset')
 }
 
 /** One live view of the chosen ad account. */
@@ -375,18 +371,33 @@ export async function objectKindOf(account: MetaChosenAccount, objectId: string)
 }
 
 /**
- * Does this campaign or ad set belong to the chosen ad account? Nexus's own rows first, else one live read of its
- * account_id (a campaign made since the last daily read). Never a Page or another account's object.
+ * Step 6 review fix A1 — THE read-side check of an id a caller names: it is the chosen ad account's own AND of the kind
+ * named, else refused in words. Nexus's own rows of the daily read first (their kind compared), else ONE live read of
+ * `account_id` and the two fields only that kind has (services/meta/meta-kinds.ts — the same table the gateway's write
+ * check uses): Meta's "nonexisting field", a field missing, or another account → refused. When Meta could not be asked (a
+ * throttle, a lost token, no answer) the refusal says so — never "does not belong". Returns the id.
  */
-export async function objectInAccount(account: MetaChosenAccount, objectId: string): Promise<boolean> {
-  if (await objectKindOf(account, objectId)) return true
-  try {
-    const read = await metaReadOne({ connectionId: account.connectionId }, { operation: 'graph.ownerCheck', path: objectId, query: { fields: 'account_id' } })
-    return metaAdAccountId((read.body as { account_id?: unknown }).account_id) === account.adAccountId
-  } catch (err) {
-    if (err instanceof MetaReadError) return false
-    throw err
+export async function objectInAccount(account: MetaChosenAccount, objectId: string, kind: MetaObjectKind, operation = 'graph.ownerCheck'): Promise<string> {
+  const word = META_KIND_WORDS[kind]
+  const id = metaObjectId(objectId)
+  if (!id) throw new MetaLiveRefusal(`"${objectId}" is not a Meta ${word} id (digits).`)
+  const stored = await objectKindOf(account, id)
+  if (stored) {
+    if (stored !== kind) throw new MetaLiveRefusal(`That id is ${withArticle(META_KIND_WORDS[stored])} of this ad account, not ${withArticle(word)}.`)
+    return id
   }
+  const fields = META_KIND_FIELDS[kind]
+  let body: Record<string, unknown>
+  try {
+    body = (await metaReadOne({ connectionId: account.connectionId }, { operation, path: id, query: { fields: ['account_id', ...fields].join(',') } })).body as Record<string, unknown>
+  } catch (err) {
+    if (!(err instanceof MetaReadError)) throw err
+    if (err.failure.origin === 'meta' && /nonexisting field/i.test(err.failure.sentence)) throw new MetaLiveRefusal(`That id is not ${withArticle(word)} (Meta does not know ${withArticle(word)}'s own fields on it), so it is not read.`)
+    throw new MetaLiveRefusal(`Nexus could not confirm that this ${word} is of the ad account this business chose (${err.failure.sentence}), so it is not read.`)
+  }
+  if (metaAdAccountId(body.account_id) !== account.adAccountId) throw new MetaLiveRefusal(`That ${word} does not belong to the ad account this business chose, so it is not read.`)
+  if (fields.some((name) => { const value = body[name]; return value === undefined || value === null || value === '' })) throw new MetaLiveRefusal(`That id is not ${withArticle(word)} of this ad account, so it is not read.`)
+  return id
 }
 
 export interface GraphReadInput {

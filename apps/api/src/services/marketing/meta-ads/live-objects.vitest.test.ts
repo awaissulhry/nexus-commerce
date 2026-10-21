@@ -18,7 +18,7 @@ vi.mock('./read-client.js', () => ({
 vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => []) }))
 vi.mock('../../../db.js', () => ({ default: {} }))
 
-import { listGroups, listPaged, readGroups, STATUS_WORDS } from './live-objects.js'
+import { fieldRefused, listGroups, listPaged, readGroups, STATUS_WORDS } from './live-objects.js'
 import { MetaReadError, failureOfAnswer } from './errors.js'
 
 const refused = (cls: string, code: string, words: string) => new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: cls, channelCode: code, channelMessage: words } as never }), 'x', 1)
@@ -47,6 +47,19 @@ describe('readGroups', () => {
       await expect(readGroups('conn-1', 'op', '1', groups)).rejects.toBeInstanceOf(MetaReadError)
       expect(h.calls).toHaveLength(1)
     }
+  })
+})
+
+describe('review fix A5 — fieldRefused: only a refused field makes a part-by-part read worth it', () => {
+  it('a #100 field refusal yes; Meta failing on its side, a timeout, no answer, a permission, a missing object, a throttle or a lost token no', () => {
+    expect(fieldRefused(refused('validation', '100', 'nonexisting field'))).toBe(true)
+    expect(fieldRefused(refused('validation', '100/1487534', 'reduce the data'))).toBe(true)
+    for (const [cls, code] of [['transient', '2'], ['transient', '1'], ['timeout', '-'], ['forbidden', '10'], ['forbidden', '200'], ['not_found', '100/33'], ['rate_limited', '17'], ['auth_revoked', '190'], ['validation', '2635']]) {
+      expect(fieldRefused(refused(cls, code, 'x')), `${cls} ${code}`).toBe(false)
+    }
+    expect(fieldRefused(new MetaReadError(failureOfAnswer({ status: 0 } as never), 'x', 0))).toBe(false)
+    expect(failureOfAnswer({ status: 502, verdict: { errorClass: 'transient', channelCode: '2', channelMessage: 'x' } as never }).transient).toBe(true)
+    expect(fieldRefused(new Error('x'))).toBe(false)
   })
 })
 

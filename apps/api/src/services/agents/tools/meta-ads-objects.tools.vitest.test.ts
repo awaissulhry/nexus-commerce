@@ -15,14 +15,20 @@ const h = vi.hoisted(() => ({
   answer: null as null | ((req: { operation: string; path: string; query?: Record<string, unknown> }) => unknown),
   known: new Map<string, string>(),
   owners: new Map<string, string>(),
+  ownerAnswer: null as null | ((req: { operation: string; path: string; query?: Record<string, unknown> }) => unknown),
   taken: [] as Array<{ product: string; id: string }>,
 }))
 vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => h.connections) }))
 vi.mock('../../marketing/meta-ads/read-client.js', async () => ({
   metaReadOne: vi.fn(async (_t: unknown, req: Req) => {
     h.calls.push(req)
-    // The live ownership check (live.ts objectInAccount): the object's account_id.
-    if (req.operation === 'graph.ownerCheck') return { body: { account_id: h.owners.get(req.path) ?? '5550001112' }, calls: 1 }
+    // The live ownership check (live.ts objectInAccount): the object's account_id and a value for each kind field asked.
+    if (req.operation === 'graph.ownerCheck') {
+      const out = h.ownerAnswer?.(req)
+      if (out instanceof Error) throw out
+      if (out) return { body: out, calls: 1 }
+      return { body: Object.fromEntries(String(req.query?.fields ?? '').split(',').map((f) => [f, f === 'account_id' ? h.owners.get(req.path) ?? '5550001112' : 'x'])), calls: 1 }
+    }
     const out = h.answer?.(req)
     if (out instanceof Error) throw out
     return { body: out ?? { data: [] }, calls: 1 }
@@ -44,6 +50,8 @@ vi.mock('../../../db.js', () => {
 })
 
 import { META_ADS_OBJECTS_TOOLS, META_OBJECTS_MONEY } from './meta-ads-objects.tools.js'
+import { META_ADS_READ_TOOLS } from './meta-ads-read.tools.js'
+import { roasFloorOf } from '../../marketing/meta-ads/live-objects.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
@@ -65,7 +73,7 @@ const CHOSEN = {
 }
 
 beforeEach(() => {
-  h.connections = [CHOSEN]; h.calls.length = 0; h.answer = null; h.taken = []; h.owners = new Map()
+  h.connections = [CHOSEN]; h.calls.length = 0; h.answer = null; h.taken = []; h.owners = new Map(); h.ownerAnswer = null
   h.known = new Map([[CAMPAIGN, 'campaign'], [ADSET, 'adset'], [AD, 'ad'], [CREATIVE, 'creative']])
 })
 
@@ -143,14 +151,14 @@ describe('only the chosen ad account\'s own objects', () => {
     expect((await run('meta-campaigns', { view: 'campaign', campaignId: '120000000000998' })).ok).toBe(true)
   })
   it('an id of another kind is refused in words', async () => {
-    expect((await run('meta-ad-sets', { view: 'adset', adSetId: CAMPAIGN })).error).toMatch(/is a campaign of this ad account, not a ad set/)
-    expect((await run('meta-ad-details', { view: 'creative', creativeId: AD })).error).toMatch(/is a ad of this ad account, not a creative/)
+    expect((await run('meta-ad-sets', { view: 'adset', adSetId: CAMPAIGN })).error).toMatch(/is a campaign of this ad account, not an ad set/)
+    expect((await run('meta-ad-details', { view: 'creative', creativeId: AD })).error).toMatch(/is an ad of this ad account, not a creative/)
     expect(h.calls).toHaveLength(0)
   })
   it('a label, value rule set, budget period or creative job is read only when the account\'s own list holds it', async () => {
     h.answer = () => ({ data: [{ id: '120000000000601' }] })
-    expect((await run('meta-labels', { view: 'label', labelId: '120000000000699' })).error).toMatch(/not one of the chosen ad account's/)
-    expect((await run('meta-labels', { view: 'objects', labelIds: ['120000000000601', '120000000000699'], kind: 'ads' })).error).toMatch(/not one of the chosen ad account's/)
+    expect((await run('meta-labels', { view: 'label', labelId: '120000000000699' })).error).toMatch(/120000000000699 is not a label of the chosen ad account/)
+    expect((await run('meta-labels', { view: 'objects', labelIds: ['120000000000601', '120000000000699'], kind: 'ads' })).error).toMatch(/120000000000699 is not a label of the chosen ad account/)
     expect((await run('meta-value-rules', { view: 'set', ruleSetId: '120000000000899' })).error).toMatch(/not one of the chosen ad account's/)
     expect((await run('meta-campaigns', { view: 'budget-schedule', campaignId: CAMPAIGN, periodId: '120000000000999' })).error).toMatch(/not one of this campaign's/)
     expect((await run('meta-ad-details', { view: 'creative-jobs', jobId: '120000000000999' })).error).toMatch(/not one of the chosen ad account's async creative jobs/)
@@ -159,7 +167,7 @@ describe('only the chosen ad account\'s own objects', () => {
   })
   it('a custom audience of another ad account is refused; an ad of another account using it is left out', async () => {
     h.owners.set('120000000000500', '5550001112')
-    expect((await run('meta-ad-sets', { view: 'by-audience', audienceId: '120000000000500' })).error).toMatch(/not the chosen ad account's own/)
+    expect((await run('meta-ad-sets', { view: 'by-audience', audienceId: '120000000000500' })).error).toMatch(/custom audience does not belong to the ad account/)
     // A campaign's id is not an audience (its ads would be read as the audience's).
     expect((await run('meta-ad-sets', { view: 'by-audience', audienceId: CAMPAIGN })).error).toMatch(/is a campaign of this ad account, not a custom audience/)
     h.owners.set('120000000000501', '1234567890')
@@ -171,6 +179,60 @@ describe('only the chosen ad account\'s own objects', () => {
     expect(res.data).toMatchObject({ adsRead: 1, adSets: [{ adSetId: ADSET, name: 'Ad set A', ads: [{ adId: AD }] }] })
     expect(JSON.stringify(res.data)).not.toContain('Other')
     expect(h.calls.at(-1)).toMatchObject({ path: '120000000000501/ads' })
+  })
+  it('review fix A1 — an id of another kind is refused on the kind fields of the one table, with no further call', async () => {
+    const AUDIENCE = '120000000000555'
+    h.known = new Map([[CAMPAIGN, 'campaign']])
+    h.owners.set(AUDIENCE, '1234567890')
+    const notThatKind = (req: Req) => (/objective|optimization_goal|adset_id|object_type/.test(fieldsOf(req))
+      ? refusedByMeta(`(#100) Tried accessing nonexisting field (${fieldsOf(req).split(',')[1]}) on node type (CustomAudience)`) : null)
+    h.ownerAnswer = notThatKind
+    for (const [name, args] of [
+      ['meta-campaigns', { view: 'campaign', campaignId: AUDIENCE }], ['meta-ad-sets', { view: 'adset', adSetId: AUDIENCE }],
+      ['meta-ad-details', { view: 'ads', adSetId: AUDIENCE }], ['meta-ad-details', { view: 'creative', creativeId: AUDIENCE }],
+    ] as Array<[string, Record<string, unknown>]>) {
+      h.calls.length = 0
+      expect((await run(name, args)).error, name).toMatch(/is not an? (campaign|ad set|creative) \(Meta does not know/)
+      expect(h.calls.map((c) => c.operation), name).toEqual(['graph.ownerCheck'])
+    }
+    // The kind's two fields from the one table (services/meta/meta-kinds.ts).
+    h.calls.length = 0
+    await run('meta-campaigns', { view: 'campaign', campaignId: AUDIENCE })
+    expect(h.calls[0].query).toEqual({ fields: 'account_id,objective,effective_status' })
+    // A campaign's id is not an audience; an audience answering without its own fields is not one either.
+    h.calls.length = 0
+    expect((await run('meta-ad-sets', { view: 'by-audience', audienceId: CAMPAIGN })).error).toMatch(/is a campaign of this ad account, not a custom audience/)
+    expect(h.calls).toHaveLength(0)
+    h.ownerAnswer = () => ({ account_id: '1234567890', subtype: 'CUSTOM' })
+    expect((await run('meta-ad-sets', { view: 'by-audience', audienceId: AUDIENCE })).error).toMatch(/is not a custom audience of this ad account/)
+    // meta-ads-live (step 2) goes through the same check: an audience as campaignId is refused.
+    h.ownerAnswer = notThatKind
+    h.calls.length = 0
+    const live = META_ADS_READ_TOOLS.find((t) => t.name === 'meta-ads-live')!
+    expect((await live.handler(live.input.parse({ view: 'ads', campaignId: AUDIENCE }), ctx as never)).error).toMatch(/is not a campaign \(Meta does not know/)
+    expect(h.calls.map((c) => c.operation)).toEqual(['graph.ownerCheck'])
+  })
+  it('review fix A9 — when Meta could not be asked (a throttle, a lost token) the refusal says so, never "does not belong"', async () => {
+    h.known = new Map()
+    h.ownerAnswer = () => new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'rate_limited', channelCode: '17', channelMessage: 'User request limit reached' } as never }), 'x', 1)
+    const res = await run('meta-ad-sets', { view: 'adset', adSetId: ADSET })
+    expect(res.error).toMatch(/could not confirm.*slow down/)
+    expect(res.error).not.toMatch(/does not belong/)
+    h.ownerAnswer = () => new MetaReadError(failureOfAnswer({ status: 400, verdict: { errorClass: 'auth_revoked', channelCode: '190', channelMessage: 'Session invalid' } as never }), 'x', 1)
+    expect((await run('meta-ad-sets', { view: 'adset', adSetId: ADSET })).error).toMatch(/could not confirm.*no longer accepts this business's system-user token/)
+  })
+  it('review fix A2 — every label is checked against ONE read of the account\'s labels', async () => {
+    h.answer = (req) => (req.path.endsWith('/adlabels') ? { data: [{ id: '120000000000601' }, { id: '120000000000602' }, { id: '120000000000603' }] } : { data: [] })
+    await run('meta-labels', { view: 'objects', labelIds: ['120000000000601', '120000000000602', '120000000000603'], kind: 'campaigns' })
+    expect(h.calls.filter((c) => c.path.endsWith('/adlabels'))).toHaveLength(1)
+  })
+  it('review fix A5 — a transient failure or a permission refusal is never retried part by part', async () => {
+    for (const [cls, code] of [['transient', '2'], ['timeout', '-'], ['forbidden', '10'], ['not_found', '100/33']]) {
+      h.calls.length = 0
+      h.answer = () => new MetaReadError(failureOfAnswer({ status: cls === 'transient' ? 500 : 400, verdict: { errorClass: cls, channelCode: code, channelMessage: 'x' } as never }), 'x', 1)
+      expect((await run('meta-ad-details', { view: 'ad', adId: AD })).ok, cls).toBe(false)
+      expect(h.calls.map((c) => c.operation), cls).toEqual(['objects.ad'])
+    }
   })
   it('a Page or Instagram account of another business is its id and the flag only', async () => {
     h.taken = [{ product: 'PAGE', id: '120000000000011' }]
@@ -240,7 +302,9 @@ describe('Meta\'s traps, said plainly', () => {
     })
     // The first call asked every group with review_feedback_breakdown; then one call per group.
     expect(h.calls[0].query).toMatchObject({ review_feedback_breakdown: true })
-    expect(h.calls.map((c) => c.operation)).toEqual(['objects.ad', 'objects.ad.core', 'objects.ad.review', 'objects.ad.checks', 'objects.ad.recommendations', 'objects.ad.flexibleFormat'])
+    expect(h.calls.map((c) => c.operation)).toEqual(['objects.ad', 'objects.ad.core', 'objects.ad.review', 'objects.ad.checks', 'objects.ad.recommendations', 'objects.ad.flexibleFormat', 'objects.ad.autobid'])
+    // review_feedback_breakdown goes only with the review group's own call (the gateway lets it through only there).
+    expect(h.calls.filter((c) => c.query?.review_feedback_breakdown).map((c) => c.operation)).toEqual(['objects.ad', 'objects.ad.review'])
     // The core refused: the read fails with Meta's words.
     h.calls.length = 0
     h.answer = () => refusedByMeta('Unsupported get request')
@@ -274,11 +338,12 @@ describe('Meta\'s traps, said plainly', () => {
   })
   it('the ads of one creative: the list is looked through (Meta documents no creative filter) and says how many were', async () => {
     h.answer = () => ({ data: [
-      { id: AD, adset_id: ADSET, campaign_id: CAMPAIGN, name: 'Ad A', creative: { id: CREATIVE } },
-      { id: '120000000000302', adset_id: ADSET, campaign_id: CAMPAIGN, name: 'Ad B', creative: { id: '120000000000402' } },
+      { id: AD, account_id: '1234567890', adset_id: ADSET, campaign_id: CAMPAIGN, name: 'Ad A', creative: { id: CREATIVE } },
+      { id: '120000000000302', account_id: '1234567890', adset_id: ADSET, campaign_id: CAMPAIGN, name: 'Ad B', creative: { id: '120000000000402' } },
+      { id: '120000000000303', account_id: '5550001112', adset_id: ADSET, campaign_id: CAMPAIGN, name: 'Other', creative: { id: CREATIVE } },
     ] })
     const res = await run('meta-ad-details', { view: 'ads', creativeId: CREATIVE })
-    expect(res.data).toMatchObject({ creativeId: CREATIVE, adsLookedAt: 2, items: [{ adId: AD }] })
+    expect(res.data).toMatchObject({ creativeId: CREATIVE, adsLookedAt: 3, items: [{ adId: AD }] })
     expect((res.data as { items: unknown[] }).items).toHaveLength(1)
     expect(h.calls[0].query).not.toHaveProperty('filtering')
   })
@@ -298,6 +363,8 @@ describe('Meta\'s traps, said plainly', () => {
     }
     const res = await run('meta-ad-details', { view: 'diagnostics', adSetId: ADSET, from: '2026-10-01', to: '2026-10-19' })
     expect(res.data).toMatchObject({ auction: { auctionBid: '1.20', wishBid: '2.00' }, overlap: { dedupingRatio: '0.12' }, rankings: null, missing: [{ part: 'rankings' }] })
+    // Review fix A6 — undocumented shapes under metaRaw (money-restricted).
+    expect((res.data as { fatigue: unknown; diversity: unknown })).toMatchObject({ fatigue: { metaRaw: expect.any(Object) }, diversity: { metaRaw: expect.any(Object) } })
     expect((await run('meta-ad-details', { view: 'diagnostics', adSetId: ADSET, from: '2026-01-01', to: '2026-10-19' })).error).toMatch(/92 days/)
   })
   it('results per asset: the breakdown asked, spend and purchase value in cents', async () => {
@@ -342,6 +409,34 @@ describe('Meta\'s traps, said plainly', () => {
     expect(res.data).toMatchObject({ totalCount: 2, more: false })
     expect(h.calls.map((c) => [c.query?.after ?? null, c.query?.summary ?? null])).toEqual([[null, 'total_count'], ['c1', null]])
     expect(JSON.stringify(res.data)).not.toContain('SECRET')
+  })
+  it('review fix A6 — Page ad limits: explicit fields, a Page of another business is its id and the flag only, no portfolio id', async () => {
+    h.taken = [{ product: 'PAGE', id: '120000000000011' }]
+    h.answer = (req) => (req.path.endsWith('/ads_volume')
+      ? { data: [{ actor_id: '120000000000010', ads_running_or_in_review_count: 12, limit_on_ads_running_or_in_review: 250 }, { actor_id: '120000000000011', ads_running_or_in_review_count: 40 }] }
+      : req.path === 'act_1234567890' ? { account_status: 1 } : { data: [] })
+    const res = await run('meta-ad-details', { view: 'problems' })
+    expect((res.data as { adsVolume: unknown }).adsVolume).toEqual([
+      expect.objectContaining({ pageId: '120000000000010', chosenHere: true, adsRunningOrInReview: 12, limit: 250 }),
+      { pageId: '120000000000011', takenByAnotherBusiness: true },
+    ])
+    const volume = h.calls.find((c) => c.path.endsWith('/ads_volume'))!
+    expect(volume.query).toMatchObject({ show_breakdown_by_actor: true })
+    expect(fieldsOf(volume)).not.toMatch(/actor_name|ad_limit_scope/)
+  })
+  it('review B F1 — a creative list asks the WhatsApp identity in its own group, and never on an ad set\'s creatives', async () => {
+    h.answer = () => ({ data: [] })
+    await run('meta-ad-details', { view: 'creatives' })
+    expect(fieldsOf(h.calls.at(-1)!)).toMatch(/,wamo_whatsapp_identity_spec$/)
+    await run('meta-ad-details', { view: 'creatives', adSetId: ADSET })
+    expect(fieldsOf(h.calls.at(-1)!)).not.toMatch(/wamo_whatsapp_identity_spec/)
+    expect(h.calls.at(-1)!.path).toBe(`${ADSET}/adcreatives`)
+  })
+  it('review B F5 — a minimum-ROAS floor is read back as a plain ROAS (Meta writes ROAS × 10,000)', () => {
+    expect(roasFloorOf({ roas_average_floor: 25000 })).toBe(2.5)
+    expect(roasFloorOf({ roas_average_floor: '100' })).toBe(0.01)
+    expect(roasFloorOf({})).toBeNull()
+    expect(roasFloorOf(null)).toBeNull()
   })
   it('every money key an answer carries is restricted (scan of the answers above)', () => {
     for (const key of ['dailyBudgetCents', 'lifetimeBudgetCents', 'budgetRemainingCents', 'spendCapCents', 'bidAmountCents', 'dailyMinSpendTargetCents', 'dailySpendCapCents', 'lifetimeMinSpendTargetCents', 'lifetimeSpendCapCents', 'spendCents', 'purchaseValueCents', 'currentAverageCost', 'bidRecommendation', 'auctionMaxCompetitorBid', 'revenueMeta', 'conversionCostMeta']) {

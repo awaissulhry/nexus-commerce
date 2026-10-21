@@ -76,7 +76,8 @@ import type { MetaQueryValue } from '../../gateway/meta.js'
 import { META_AUDIENCE_SAC_FIELDS } from '../../gateway/meta-calls.js'
 import { MetaReadError } from './errors.js'
 import { metaReadAll, metaReadOne } from './read-client.js'
-import { metaChosenAccount, metaConnectionFor, MetaLiveRefusal, objectKindOf, type MetaChosenAccount } from './live.js'
+import { metaChosenAccount, metaConnectionFor, MetaLiveRefusal, objectInAccount, type MetaChosenAccount } from './live.js'
+import type { MetaObjectKind } from '../../meta/meta-kinds.js'
 import { currencyExponent, metaOffset } from './money.js'
 import { takenIds } from './taken.js'
 
@@ -342,45 +343,15 @@ async function readRows(connectionId: string, operation: string, path: string, q
 }
 
 type OwnKind = 'ad set' | 'ad' | 'custom audience' | 'place page set'
-/**
- * Review fix A5 — TWO fields only that kind of object has together (as step 17's gateway owner check, gateway.ts
- * META_KIND_FIELD), checked 2026-10-21 on Meta's Python Business SDK (adset.py, ad.py, customaudience.py,
- * adplacepageset.py; campaign.py, adcreative.py, savedaudience.py and reachfrequencyprediction.py have neither pair): a
- * read asking them of another kind is refused by Meta ("nonexisting field") or comes back without them.
- */
-const OWN_KIND_FIELDS: Readonly<Record<OwnKind, readonly [string, string]>> = {
-  'ad set': ['optimization_goal', 'billing_event'],
-  ad: ['adset_id', 'creative'],
-  'custom audience': ['subtype', 'time_created'],
-  'place page set': ['parent_page', 'pages_count'],
-}
-const KIND_WORD: Readonly<Record<string, string>> = { campaign: 'campaign', adset: 'ad set', ad: 'ad', creative: 'creative' }
-const an = (word: string) => `${/^[aeiou]/.test(word) ? 'an' : 'a'} ${word}`
+/** Step 6 review fix A1 — the one table of kinds (services/meta/meta-kinds.ts) and the one read-side check (live.ts objectInAccount). */
+const OWN_KIND: Readonly<Record<OwnKind, MetaObjectKind>> = { 'ad set': 'adset', ad: 'ad', 'custom audience': 'customaudience', 'place page set': 'placepageset' }
 
 /**
- * A Meta id that is the chosen account's own AND of the kind named, else refused in words: Nexus's own rows of the daily
- * read first, else ONE live read of its account_id and two fields only that kind has. An own campaign or audience is never
- * taken as an ad set, nor an ad set as an ad.
+ * A Meta id that is the chosen account's own AND of the kind named, else refused in words (live.ts objectInAccount: Nexus's
+ * own rows first, else ONE live read of its account_id and two fields only that kind has).
  */
 async function ownId(account: MetaChosenAccount, id: string, what: OwnKind): Promise<string> {
-  const objectId = metaObjectId(id) ?? refuse(`"${id}" is not a Meta ${what} id (digits).`)
-  const stored = await objectKindOf(account, objectId)
-  if (stored) {
-    if (KIND_WORD[stored] !== what) refuse(`That id is ${an(KIND_WORD[stored])} of this ad account, not ${an(what)}.`)
-    return objectId
-  }
-  const fields = OWN_KIND_FIELDS[what]
-  let body: Record<string, unknown>
-  try {
-    body = (await metaReadOne({ connectionId: account.connectionId }, { operation: 'targeting.ownerCheck', path: objectId, query: { fields: ['account_id', ...fields].join(',') } })).body as Record<string, unknown>
-  } catch (err) {
-    if (!(err instanceof MetaReadError)) throw err
-    if (/nonexisting field/i.test(err.failure.sentence)) refuse(`That id is not ${an(what)} (Meta does not know ${an(what)}'s own fields on it), so it is not read.`)
-    refuse(`Nexus could not confirm that this ${what} is of the ad account this business chose (${err.failure.sentence}), so it is not read.`)
-  }
-  if (metaAdAccountId(body!.account_id) !== account.adAccountId) refuse(`That ${what} does not belong to the ad account this business chose, so it is not read.`)
-  if (fields.some((name) => { const value = body![name]; return value === undefined || value === null || value === '' })) refuse(`That id is not ${an(what)} of this ad account, so it is not read.`)
-  return objectId
+  return objectInAccount(account, id, OWN_KIND[what], 'targeting.ownerCheck')
 }
 
 // ── meta-targeting-search ────────────────────────────────────────────────────────────────────────────────────────

@@ -181,6 +181,8 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^act_\d+\/suggested_ads$/, keys: new Set(['use_case', 'objective', 'optimization_goal', 'optimization_event', 'countries', 'rank_by', 'promoted_object_page_id']) },
   { route: /^act_\d+\/smart_suggested_ads$/, keys: new Set(['objective', 'optimization_goal', 'custom_event_type', 'destination_type']) },
   { route: /^\d+\/categories$/, keys: new Set(['categorization_criteria']) },
+  // Review fix A6 — the Page ad limits per Page (problems view).
+  { route: /^act_\d+\/ads_volume$/, keys: new Set(['show_breakdown_by_actor']) },
 ]
 /**
  * Step 9 — the `type` values a /search read may carry: targeting options only (targeting-search reference), never
