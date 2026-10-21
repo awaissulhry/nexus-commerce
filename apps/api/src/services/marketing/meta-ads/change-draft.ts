@@ -9,7 +9,7 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaTargetingKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
 import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
 import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
 import type { MetaChangeResult, MetaRequestVia, MetaWriteTarget } from './write-client.js'
@@ -83,6 +83,8 @@ export interface MetaChangeRequest {
     | MetaSignalsKind
     // Step 30 — the connection's own Meta app (its webhook subscriptions).
     | MetaWebhookKind
+    // Step 20 — an ad set's audience or its placements (set-meta-targeting, set-meta-placements).
+    | MetaTargetingKind
     // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
     | MetaCatalogKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
@@ -139,6 +141,9 @@ export interface MetaChangeRequest {
   // ── step 30 (webhook and alert subscriptions) ──
   /** Its path, a DELETE's query, PATCH (write-client.ts MetaRequestVia); Meta's answer is all there is. */
   via?: MetaRequestVia
+  // ── step 20 ──
+  /** The targeting keys this request changes (review A2): the gateway lets only these differ from the live spec. */
+  targetingKeys?: string[]
 }
 
 export interface MetaChangeDraft {

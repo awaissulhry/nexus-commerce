@@ -1029,6 +1029,20 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { action: 'remove', subscriptionId: '120000000000040', exists: true, undo: { action: 'create', eventType: 'INSIGHTS_UPDATED', entityType: 'AD', field: 'cpc', operator: 'GREATER_THAN', thresholdCents: [200] }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
         after: { action: 'remove', subscriptionId: '120000000000040', exists: false, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 20: an ad set's targeting keys and placements go back as Meta held them; the account's old whole controls
+      // are posted again.
+      'set-meta-targeting': {
+        before: { adSets: [{ id: '120000000000002', name: 'Ad set B', keys: { age_min: 18, genders: null } }], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { adSets: [{ id: '120000000000002', name: 'Ad set B', keys: { age_min: 25, genders: [2] } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-placements': {
+        before: { adSets: [{ id: '120000000000002', name: 'Ad set B', keys: { publisher_platforms: null }, softOptOut: null }], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { adSets: [{ id: '120000000000002', name: 'Ad set B', keys: { publisher_platforms: ['facebook', 'instagram'] }, softOptOut: { facebook_positions: ['marketplace'] } }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-account-controls': {
+        before: { exists: true, audience: { age_min: 18 }, placement: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { exists: true, audience: { age_min: 21 }, placement: { placement_exclusions: ['FACEBOOK_MARKETPLACE'] }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 34: a catalog or set it made is deleted by the same tool (removeMade / action undo + undoOf); settings,
       // categories, pixels and access go back as they were (an empty earlier value cannot be set again: said).
       'create-meta-catalog': {
@@ -1228,6 +1242,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-dataset', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion', 'remove-meta-signal-items',
       'create-meta-ad', 'set-meta-ad',
       'set-meta-webhooks', 'set-meta-alert-subscription', 'remove-meta-alert-subscription',
+      'set-meta-targeting', 'set-meta-placements', 'set-meta-account-controls',
       'upload-meta-events',
       'create-meta-catalog', 'set-meta-catalog', 'set-meta-catalog-access', 'set-meta-product-set', 'remove-meta-catalog-items']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)

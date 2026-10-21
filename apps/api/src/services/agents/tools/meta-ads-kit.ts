@@ -332,6 +332,8 @@ export function objectChangeOf(request: MetaChangeRequest): MetaObjectChange {
     ...(request.skipReadBack ? { skipReadBack: request.skipReadBack } : {}),
     // Step 30 — a webhook or alert subscription change travels as its request says (write-client.ts MetaRequestVia).
     ...(request.via ? { via: request.via } : {}),
+    // Step 20 (review A2) — the targeting keys the draft changed, for the gateway's live comparison.
+    ...(request.targetingKeys?.length ? { targetingKeys: request.targetingKeys } : {}),
   }
 }
 
