@@ -362,7 +362,7 @@ async function healthPayment(account: MetaChosenAccount, input: HealthInput) {
   if (status === 9) problems.push('The account is in its grace period: ads still run, but the open balance must be paid before it ends.')
   if (status === 8) problems.push('A payment is being settled; ads still run.')
   if (reason === 3) problems.push('Meta disabled the account for a payment risk.')
-  if (pay && !methodUnknown && pay.hasPaymentMethod === false) problems.push('The account has no payment method: ads can be made but do not deliver.')
+  if (pay && !methodUnknown && pay.hasPaymentMethod === false) problems.push('The account has no payment method, so ads can be made but do not deliver.')
   if (waitingAds.length) problems.push(`${waitingAds.length} ad${waitingAds.length === 1 ? ' waits' : 's wait'} for billing information (PENDING_BILLING_INFO).`)
   if (trouble.length) problems.push(`${trouble.length} failed or declined charge${trouble.length === 1 ? '' : 's'}, chargebacks or removed payment methods in the last ${days} days.`)
   const missing = [
