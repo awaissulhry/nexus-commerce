@@ -249,6 +249,19 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/(content_delivery_report|adjacent_content_delivery_report)$/, keys: new Set(['platform', 'position', 'datetime']) },
   { route: /^(publisher_delivery_report_date_ranges|content_delivery_report_date_ranges|adjacent_content_delivery_report_date_ranges)$/, keys: new Set(['platform', 'position']) },
   { route: /^brand_safety_publisher_list$/, keys: new Set(['platform', 'position', 'sort_by', 'search_query', 'start_date', 'end_date', 'blue_verified', 'follower_count', 'app_store_category_contains', 'include_summary']) },
+  // Step 8 (meta-recommendations / meta-experiments / meta-ad-rules, live-optimize.ts) — each key only on its own path:
+  // the account's recommendations (stages, names) and the portfolio's, asked about the chosen account only
+  // (ad_account_ids; stages, names, locale — never scopes); the opportunity-score history window; a study objective's
+  // result breakdowns and day (GET /<objective id>); a rule's and the account's rule history filters; a Page's video
+  // tests window.
+  { route: /^act_\d+\/recommendations$/, keys: new Set(['recommendation_stages', 'recommendation_names']) },
+  { route: /^\d+\/recommendations$/, keys: new Set(['ad_account_ids', 'recommendation_stages', 'recommendation_names', 'locale']) },
+  { route: /^act_\d+\/opportunity_score_history$/, keys: new Set(['from_date', 'to_date', 'get_reason']) },
+  // Review fix A2 — only on the read that asks a study objective's `results` (never on another bare-id read).
+  { route: /^\d+$/, keys: new Set(['breakdowns', 'ds']), when: (query) => fieldNamed(query, 'results') },
+  { route: /^\d+\/history$/, keys: new Set(['object_id', 'action', 'hide_no_changes']) },
+  { route: /^act_\d+\/adrules_history$/, keys: new Set(['object_id', 'action', 'hide_no_changes']) },
+  { route: /^\d+\/ab_tests$/, keys: new Set(['since', 'until']) },
 ]
 /**
  * Step 9 — the `type` values a /search read may carry: targeting options only (targeting-search reference), never

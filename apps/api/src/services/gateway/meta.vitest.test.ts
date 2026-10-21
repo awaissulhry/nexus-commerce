@@ -494,6 +494,49 @@ describe('refusals send nothing and have their ledger row', () => {
   })
 })
 
+describe('step 8 — recommendations, studies and rules add only their own query keys, each on its own path', () => {
+  const ok = (path: string) => metaReadOnlyProblem({ method: 'GET', url: `${BASE}/${path}`, kind: 'read' })
+  it('allowed where meta-recommendations, meta-experiments and meta-ad-rules read', () => {
+    for (const path of [
+      'act_1234567890?fields=opportunity_score',
+      'act_1234567890/recommendations?recommendation_stages=["mfr"]&recommendation_names=["fragmentation"]',
+      '9876543210/recommendations?ad_account_ids=1234567890&fields=recommendation_content&recommendation_stages=["mid_flight_recommendation"]&recommendation_names=["fragmentation"]&locale=it_IT',
+      'act_1234567890/opportunity_score_history?from_date=2026-10-01&to_date=2026-10-19&get_reason=true',
+      'act_1234567890/impacting_ad_studies?fields=id,name,type,start_time,business{id},created_by{id}&limit=100',
+      '9876543210/ad_studies?fields=id,name&limit=100',
+      '6100000000001/cells?fields=id,name,treatment_percentage,adaccounts.limit(100),campaigns.limit(100),adsets.limit(100),control_percentage,ad_ids&limit=100',
+      '6300000000001?fields=id,name,type,is_primary,last_updated_results,results&breakdowns=["cell_id","age"]',
+      '6300000000001?fields=id,results&breakdowns=["cell_id"]&ds=2026-10-20',
+      '6100000000001/related_ad_accounts?fields=account_id,name', '6100000000001/viewers?fields=id',
+      '120000000000101?fields=can_create_brand_lift_study,brand_lift_studies{id,name,type,start_time,end_time}',
+      '120000000000201/ad_studies?fields=id,name',
+      'act_1234567890/adrules_library?fields=id,account_id,name,status,evaluation_spec,execution_spec,schedule_spec,created_by{id}',
+      '23850000000000001/history?fields=timestamp,results&object_id=120000000000201&action=CHANGED_BUDGET&hide_no_changes=true',
+      'act_1234567890/adrules_history?fields=timestamp,results,rule_id&object_id=120000000000201&action=PAUSED&hide_no_changes=true',
+      '120000000000010/ab_tests?fields=id,name&since=1790812800&until=1792454400',
+    ]) expect(ok(path), path).toBeNull()
+  })
+  it('refused anywhere else, and the keys Nexus never sends are refused there too', () => {
+    for (const [path, key] of [
+      // The portfolio is asked about the chosen account only: never `scopes` (owned / shared accounts).
+      ['9876543210/recommendations?scopes=["shared"]', 'scopes'], ['act_1234567890/recommendations?ad_account_ids=1', 'ad_account_ids'],
+      ['act_1234567890/recommendations?locale=it_IT', 'locale'], ['act_1234567890/campaigns?fields=id&recommendation_stages=["mfr"]', 'recommendation_stages'],
+      ['act_1234567890/insights?fields=spend&from_date=2026-10-01', 'from_date'], ['act_1234567890/opportunity_score_history?time_range={}', 'time_range'],
+      ['act_1234567890?fields=id&breakdowns=["age"]', 'breakdowns'], ['120000000000101/ad_studies?fields=id&breakdowns=["age"]', 'breakdowns'],
+      ['6100000000001/cells?fields=id&breakdowns=["cell_id"]', 'breakdowns'],
+      // Review fix A2 — on a bare id only with a top-level `results` field (a study objective's results read).
+      ['120000000000101?fields=id,name&breakdowns=["age"]', 'breakdowns'], ['120000000000101?fields=id,name&ds=2026-10-20', 'ds'],
+      ['120000000000101?fields=id,insights{results}&breakdowns=["age"]', 'breakdowns'], ['120000000000101/insights?fields=spend&ds=2026-10-20', 'ds'],
+      // Review fix S4 — `.fields(results)` is a nested list, not a top-level results field.
+      ['120000000000101?fields=id,insights.fields(results)&breakdowns=["age"]', 'breakdowns'], ['120000000000101?fields=id,insights.fields(results)&ds=2026-10-20', 'ds'],
+      ['act_1234567890/history?object_id=1', 'object_id'], ['120000000000201/adrules_history?action=PAUSED', 'action'],
+      ['act_1234567890/adrules_library?fields=id&evaluation_type=TRIGGER', 'evaluation_type'], ['act_1234567890/adrules_history?evaluation_type=TRIGGER', 'evaluation_type'],
+      ['120000000000010/feed?fields=id&until=1792454400', 'until'], ['act_1234567890/ab_tests?since=1', 'since'],
+      ['act_1234567890/impacting_ad_studies?fields=id&study_status=ACTIVE', 'study_status'],
+    ]) expect(ok(path), path).toMatch(new RegExp(`"${key}" is not one`))
+  })
+})
+
 describe('rate limits', () => {
   it('a bucket per kind of call: insights and the sign-in apart from the rest', () => {
     expect(metaCallGroup(`${BASE}/act_1234567890/insights?level=campaign`)).toBe('insights')
