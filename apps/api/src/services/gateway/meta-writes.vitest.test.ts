@@ -426,6 +426,15 @@ describe('step 7 — a report run (POST /act_<id>/insights) is a READ of the cho
     // A report run names no kind: a call naming one is not a report run (only the status rule matches an unnamed kind).
     expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'read', body, objectKind: 'adaccount' })).toHaveProperty('problem')
     expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'read', body })).toMatchObject({ write: { rule: 'insights.reportRun', reportRun: true } })
+    // Follow-up of the merge review — no object kind at all (the status rule's unnamed-kind match let campaign / adset / ad
+    // through before), and no account id with a leading zero.
+    for (const objectKind of ['campaign', 'adset', 'ad', 'creative', 'adrule']) {
+      expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'read', body, objectKind }), objectKind).toHaveProperty('problem')
+    }
+    expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'read', body, objectKind: 'campaign' })).toMatchObject({ problem: expect.stringMatching(/names no object/) })
+    for (const account of ['act_0', 'act_0123456789', 'act_00']) {
+      expect(metaWriteVerdict({ method: 'POST', url: `${BASE}/${account}/insights`, kind: 'read', body }), account).toHaveProperty('problem')
+    }
     // The report-run body on any other path (an object's insights, the account's create edges, the account itself): refused.
     for (const path of [`${CAMPAIGN}/insights`, 'act_1234567890/campaigns', 'act_1234567890/adsets', 'act_1234567890', CAMPAIGN, 'act_1234567890/recommendations', `${CAMPAIGN}/ad_studies`, `${CAMPAIGN}/ab_tests`,
       // Step 23's media edges.
