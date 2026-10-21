@@ -282,6 +282,12 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-ads-numbers': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
   'meta-ads-report': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
   'meta-ads-saved-reports': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
+  // Meta ads step 31: the audience changes read the business's chosen Meta ad account live (their own test runs them).
+  'create-meta-audience': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
+  'set-meta-audience': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
+  'set-meta-audience-members': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
+  'set-meta-audience-sharing': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
+  'remove-meta-audience': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-audience-changes.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -660,6 +666,12 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-ads-numbers': () => ({ view: 'numbers' }),
   'meta-ads-report': () => ({ action: 'status', reportRunId: '6000000000001' }),
   'meta-ads-saved-reports': () => ({ view: 'mmm-reports' }),
+  // Meta ads step 31: no business here has Meta, so each refuses in words before any call.
+  'create-meta-audience': () => ({ kind: 'customer_list', name: 'List A' }),
+  'set-meta-audience': () => ({ audienceId: '120000000000040', name: 'List B' }),
+  'set-meta-audience-members': () => ({ mode: 'opt_out_everywhere' }),
+  'set-meta-audience-sharing': () => ({ audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'] }),
+  'remove-meta-audience': () => ({ audienceIds: ['120000000000040'], confirmDelete: true }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

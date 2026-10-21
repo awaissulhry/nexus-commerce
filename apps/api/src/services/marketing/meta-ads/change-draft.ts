@@ -53,6 +53,7 @@ export interface MetaChangeRequest {
    * library (`adaccount`, a rule's create); `kind` then only types the request (`campaign` by convention).
    * Step 23: an upload names the chosen ad account (`adaccount`) or its business portfolio (step 28's `business`);
    * captions name the library video (step 22's `video`). Its `kind` is then `ad`, as for step 22's deletes.
+   * Step 31: an audience (`customaudience`) or the chosen ad account (`adaccount`: its audiences, opt-outs, settings).
    */
   objectKind?: 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
     // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
@@ -61,7 +62,9 @@ export interface MetaChangeRequest {
     | 'adrule'
     // Step 39 — an ad set's targeting, a publisher or content block list (brand safety).
     | MetaBrandSafetyKind
-  /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute). */
+    // Step 31 — one of the chosen ad account's own custom audiences.
+    | 'customaudience'
+  /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
