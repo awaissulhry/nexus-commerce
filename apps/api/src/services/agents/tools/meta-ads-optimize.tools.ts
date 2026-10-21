@@ -81,9 +81,9 @@ const metaRecommendationsTool: AgentTool = {
     + 'recommendations, read live from Meta. view overview (default): the score now with every recommendation, like '
     + 'Meta\'s own opportunity-score tool. score: the score only. list: each recommendation with its type, stage, the '
     + 'campaigns, ad sets or ads it is about (names where Nexus has read them), Meta\'s expected lift, the points it adds '
-    + 'to the score, its Ads Manager link, and how to act on it: the types Meta applies by API will go through '
-    + 'apply-meta-recommendations, which comes with a later Nexus step (step 28; a person approves; a budget raise SPENDS '
-    + 'MONEY) — until then the Ads Manager link; the others name the Nexus tool that does the same or Meta\'s screens. '
+    + 'to the score, its Ads Manager link, and how to act on it: the types Meta applies by API go through '
+    + 'apply-meta-recommendations with their signature (a person approves; a budget raise SPENDS MONEY) or the Ads '
+    + 'Manager link; the others name the Nexus tool that does the same or Meta\'s screens. '
     + 'The texts of budget recommendations can name amounts and need the ad-spend money permission. Nexus also applies '
     + 'the stage and name filters to what Meta answers. portfolio: the business portfolio\'s read, asked about the chosen '
     + 'account only. '
@@ -153,8 +153,8 @@ const metaExperimentsTool: AgentTool = {
     + 'campaign\'s. private-lift: Meta-run lift computations. page-video-tests, page-video-test: the chosen Page\'s '
     + 'video A/B tests with each video\'s numbers and the declared winner. A study cannot be deleted; conversion lift '
     + 'needs Meta\'s grant and results need the Meta app above development access — Meta\'s refusal is passed on in '
-    + 'plain words. Making, changing or ending a test (create-meta-experiment, set-meta-experiment, '
-    + 'end-meta-experiment) comes with a later Nexus step (step 28). Read only; spend, cost, value and earnings — and any '
+    + 'plain words. Making, changing or ending a test: create-meta-experiment, set-meta-experiment, '
+    + 'end-meta-experiment (each a request a person approves). Read only; spend, cost, value and earnings — and any '
     + 'metric Nexus does not know — sit under moneyAsMeta (Meta\'s own units, ad-spend money permission). Filters Nexus '
     + 'applies itself read up to 10 pages and say so when more may match.',
   async handler(args): Promise<ToolResult> {

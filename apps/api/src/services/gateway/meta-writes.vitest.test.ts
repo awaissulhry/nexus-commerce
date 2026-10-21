@@ -411,7 +411,8 @@ describe('step 7 — a report run (POST /act_<id>/insights) is a READ of the cho
     expect(runProblem({ level: 'ad', fields: 'spend' })).toBeNull()
   })
   it('merge with steps 18–22 — no change rule takes a report-run path, and the report-run rule takes no change path', () => {
-    const KINDS = [undefined, 'campaign', 'adset', 'ad', 'adaccount', 'highdemandperiod', 'creative', 'video', 'canvaselement', 'adlabel', 'valueruleset']
+    // Every kind a change may name (steps 17–22 and step 28's business, adstudy, page, pagevideotest).
+    const KINDS = [undefined, 'campaign', 'adset', 'ad', 'adaccount', 'highdemandperiod', 'creative', 'video', 'canvaselement', 'adlabel', 'valueruleset', 'business', 'adstudy', 'page', 'pagevideotest']
     const body = form({ level: 'campaign', fields: 'spend' })
     for (const objectKind of KINDS) {
       // As a write (a change's kind): never judged a change, whatever kind the call names.
@@ -426,7 +427,7 @@ describe('step 7 — a report run (POST /act_<id>/insights) is a READ of the cho
     expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'read', body, objectKind: 'adaccount' })).toHaveProperty('problem')
     expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'read', body })).toMatchObject({ write: { rule: 'insights.reportRun', reportRun: true } })
     // The report-run body on any other path (an object's insights, the account's create edges, the account itself): refused.
-    for (const path of [`${CAMPAIGN}/insights`, 'act_1234567890/campaigns', 'act_1234567890/adsets', 'act_1234567890', CAMPAIGN]) {
+    for (const path of [`${CAMPAIGN}/insights`, 'act_1234567890/campaigns', 'act_1234567890/adsets', 'act_1234567890', CAMPAIGN, 'act_1234567890/recommendations', `${CAMPAIGN}/ad_studies`, `${CAMPAIGN}/ab_tests`]) {
       for (const kind of ['read', 'write']) expect(metaWriteVerdict({ method: 'POST', url: `${BASE}/${path}`, kind, body }), `${path} ${kind}`).toHaveProperty('problem')
     }
     // Its body may be longer than a status change's, never than its own maximum.
