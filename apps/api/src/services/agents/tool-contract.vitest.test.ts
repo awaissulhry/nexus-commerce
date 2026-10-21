@@ -952,6 +952,19 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { action: 'share', blockListId: '120000000000601', agencyId: '5550000002', shared: false, accountId: 'conn-1', adAccountId: '1234567890' },
         after: { action: 'share', blockListId: '120000000000601', agencyId: '5550000002', role: 'APPLY_BLOCK_LIST', shared: true, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 31: an audience made is deleted again; an audience change goes back through the same tool; a share is undone.
+      'create-meta-audience': {
+        before: { created: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { created: [{ audienceId: '120000000000040', name: 'List A', kind: 'website' }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-audience': {
+        before: { audienceId: '120000000000040', fields: { name: 'List A' }, undo: { audienceId: '120000000000040', name: 'List A', existingCustomers: [] }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { audienceId: '120000000000040', fields: { name: 'List B' }, undo: null, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-audience-sharing': {
+        before: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: false, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: true, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 36: a form it made is archived (Meta deletes no form); archive ⇄ re-activate; a test lead it made is deleted.
       'create-meta-lead-form': {
         before: { pageId: '120000000000010', formId: null, name: 'Form A', archived: null, accountId: 'conn-1', adAccountId: '1234567890' },
@@ -1136,6 +1149,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment', 'create-meta-media',
       'set-meta-ad-rule', 'remove-meta-ad-rule',
       'set-meta-brand-safety', 'set-meta-block-list', 'remove-meta-block-list',
+      'create-meta-audience', 'set-meta-audience', 'set-meta-audience-members', 'set-meta-audience-sharing', 'remove-meta-audience',
       'create-meta-lead-form', 'set-meta-lead-form']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }

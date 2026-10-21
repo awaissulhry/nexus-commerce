@@ -53,7 +53,7 @@ import {
 } from './channels.js'
 import { bucketKey, observeRate, takeToken } from './rate.js'
 import { ledgerSafeBody } from './redact.js'
-import { classifyChannelAnswer, type ChannelVerdict, type GatewayChannel } from './vocabulary.js'
+import { classifyChannelAnswer, metaErrorOf, type ChannelVerdict, type GatewayChannel } from './vocabulary.js'
 import { watchForDeprecation } from '../cx/deprecation-watch.service.js'
 
 export type GatewayOutcome = 'sent' | 'would_send' | 'gated' | 'refused' | 'held'
@@ -663,6 +663,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // 8. classify
   const ok = status >= 200 && status < 300 && !graphqlErrors && (req.answerOk ? req.answerOk(text) : true)
   const verdict = ok ? null : classifyChannelAnswer(req.channel, status, text, { timedOut })
+  // Meta step 31 review A4 — an answer to people's hashed data keeps only Meta's own code and message fields, never its raw text.
+  if (verdict && metaWrite?.personal) verdict.channelMessage = metaPersonalWords(text, status)
   // Step 17 — what Meta's per-object limits learn from a change or a check of one: it reached Meta (or may have), or Meta
   // held that one object (613/4841018: 30 s for its changes; 613/1487632: an hour for that ad set's budget changes).
   const objectLimit = verdict?.channelCode === '613/4841018' ? 'edits' : verdict?.channelCode === '613/1487632' ? 'budget' : null
@@ -707,12 +709,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     rateLimitRemaining: reading?.remaining ?? null,
     rateLimitLimit: reading?.limit ?? null,
     attempts,
+    // Meta step 31 — a body of people's hashed data (an audience's people) and Meta's answer to it are never kept: only their size.
     // Step 23 — an image upload's bytes are never kept: their length only.
     // Step 36 review A6 — a Meta change whose rule names its ledger form (a test lead: the questions' names, never the
     // answers) keeps only that.
-    requestPayload: ok ? undefined : metaWrite?.bulky ? { __omitted: 'the bytes of a Meta upload are never kept', bytes: typeof req.body === 'string' ? req.body.length : null } : metaWrite?.ledgerBody !== undefined ? ledgerSafeBody(metaWrite.ledgerBody) : typeof req.body === 'string' || req.body == null ? ledgerSafeBody(req.body ?? null) : { __binary: true, bytes: req.body instanceof Uint8Array ? req.body.byteLength : null },
+    requestPayload: ok ? undefined : metaWrite?.personal ? { __personal: true, bytes: metaWrite.body.length } : metaWrite?.bulky ? { __omitted: 'the bytes of a Meta upload are never kept', bytes: typeof req.body === 'string' ? req.body.length : null } : metaWrite?.ledgerBody !== undefined ? ledgerSafeBody(metaWrite.ledgerBody) : typeof req.body === 'string' || req.body == null ? ledgerSafeBody(req.body ?? null) : { __binary: true, bytes: req.body instanceof Uint8Array ? req.body.byteLength : null },
     // Review 2 — how many access_token keys were dropped from a Meta answer (it never reaches the ledger either).
-    responsePayload: metaScrubbed ? { scrubbed: metaScrubbed, ...(ok ? {} : { body: ledgerSafeBody(text) }) } : ok ? undefined : ledgerSafeBody(text),
+    responsePayload: metaWrite?.personal ? (ok ? undefined : { __personal: true, bytes: text.length }) : metaScrubbed ? { scrubbed: metaScrubbed, ...(ok ? {} : { body: ledgerSafeBody(text) }) } : ok ? undefined : ledgerSafeBody(text),
   })
 
   return {
@@ -881,6 +884,16 @@ async function metaListedIdsPaged(connectionId: string, path: string, maxPages: 
   return ids
 }
 
+/**
+ * Meta step 31 review A4 — the words kept of an error answer to people's hashed data (an audience's people): Meta's own
+ * title, message and code fields only (metaErrorOf), never the raw answer text (it could echo what was sent).
+ */
+function metaPersonalWords(text: string, status: number): string {
+  const e = metaErrorOf(text)
+  const said = e.userTitle && e.userMessage ? `${e.userTitle}: ${e.userMessage}` : e.userMessage ?? e.userTitle ?? e.message
+  return said ? said.slice(0, 500) : `Meta answered HTTP ${status || 'nothing'} without an error message.`
+}
+
 /** The ids of one Meta list (fields=id, at most 100, one page), or null when it could not be read. */
 async function metaListedIds(connectionId: string, path: string): Promise<Set<string> | null> {
   const url = new URL(`${metaGraphBase()}/${path}`)
@@ -913,6 +926,24 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
   // Step 21 — each of the chosen ad account's own lists read once per change.
   const accountLists = new Map<MetaAccountListKind, Set<string> | null>()
   for (const inner of write.ids) {
+    // Step 31 — a campaign or ad set a lookalike learns from: either kind, of the chosen ad account.
+    if (inner.kind === 'campaignOrAdset') {
+      const asCampaign = await metaOwnerProblem(connectionId, { ...write, objectId: inner.id, check: false }, 'campaign')
+      const problem = asCampaign ? await metaOwnerProblem(connectionId, { ...write, objectId: inner.id, check: false }, 'adset') : null
+      if (asCampaign && problem) return { code: problem.code, sentence: `Nothing was sent to Meta: inside this change, ${inner.id} is not a campaign or ad set Nexus can confirm of the Meta ad account this business chose.` }
+      continue
+    }
+    // Step 31 — an Instagram account, lead form, Instant Experience or source video an audience is built from, or an ad
+    // account it is shared with: the read side's own ownership rules (marketing/meta-ads/audience-ids.ts). Its own kinds
+    // (`sourcevideo`, `shareaccount`): step 22's `video` and step 28's `adaccount` keep their checks below; a Page is step
+    // 19's `page` (the chosen Page), the same rule.
+    if (inner.kind === 'instagram' || inner.kind === 'leadform' || inner.kind === 'canvas' || inner.kind === 'sourcevideo' || inner.kind === 'shareaccount') {
+      const { metaAudienceIdProblem } = await import('../marketing/meta-ads/audience-ids.js')
+      const kind = inner.kind === 'sourcevideo' ? 'video' : inner.kind === 'shareaccount' ? 'adaccount' : inner.kind
+      const problem = await metaAudienceIdProblem(connectionId, { id: inner.id, kind })
+      if (problem) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: inside this change, ${problem}` }
+      continue
+    }
     // Step 21 — a label, a value rule set or a reach & frequency prediction: among the chosen ad account's own.
     if (inner.kind === 'adlabel' || inner.kind === 'valueruleset' || inner.kind === 'rfprediction') {
       const problem = await metaAccountListedProblem(connectionId, inner.id, inner.kind, false, accountLists)

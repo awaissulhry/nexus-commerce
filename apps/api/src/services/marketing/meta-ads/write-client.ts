@@ -63,6 +63,8 @@ export interface MetaObjectChange {
     | 'adrule'
     // Step 39 — an ad set's targeting, a publisher or content block list (brand safety).
     | MetaBrandSafetyKind
+    // Step 31 — one of the chosen ad account's own custom audiences.
+    | 'customaudience'
     // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
     | MetaPageKind
   params: Record<string, string>

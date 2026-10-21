@@ -340,7 +340,7 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/agents/tools/meta-ads-kit.ts': 2, // the step's sentence for a done DELETE (no sender)
       'services/gateway/gateway.ts': 2, // the request type; a repeatable method
       'services/gateway/meta.ts': 3, // metaWriteCall: the type and the method it sends
-      'services/gateway/meta-calls.ts': 9, // the allow-list's verdict on a DELETE, with or without a body (a judge, no sender)
+      'services/gateway/meta-calls.ts': 10, // the allow-list's verdict on a DELETE, with or without a body, and step 31's refusal of a non-text body (a judge, no sender)
       'services/gateway/meta-create-rules.ts': 1, // the object.delete rule (a judge)
       'services/gateway/meta-remove-rules.ts': 4, // step 22: creative.delete, image.delete, video.remove, canvaselement.delete (judges)
       'services/gateway/meta-settings-rules.ts': 1, // the budget_schedule.delete rule (a judge)
@@ -360,6 +360,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/gateway/meta-lead-form-rules.ts': 1, // step 36: the testlead.delete rule (a judge)
       'services/marketing/meta-ads/change-lead-forms.ts': 2, // step 36: a test lead's replace and remove-test-lead (only test leads Nexus made)
       'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
+      'services/gateway/meta-audience-rules.ts': 4, // step 31: the people out, the opt-out everywhere, the unshare, the audience delete (judges)
+      'services/marketing/meta-ads/change-audiences.ts': 5, // step 31: the request type, the two people-out DELETEs, the unshare, remove-meta-audience's delete (explicit ask: confirmDelete)
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.
     const computed = world.flatMap((f) => [...f.text.matchAll(/\bmethod:\s*([^,}\n]+)/g)].map((m) => m[1].trim())
@@ -400,6 +402,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
 })
 /** Methods passed on, not chosen: the kit hands a request's own method to the write client; the gateway and its types. */
 const EXPECTED_COMPUTED: string[] = [
+  // Step 31 — an audience rule's aggregation method (absolute | percentile), not an HTTP method.
+  'services/agents/tools/meta-ads-audience-changes.tools.ts: z.enum([\'absolute\'',
   // Step 36 — the kit's plan hash names a request's own method (planOf: no sender).
   'services/agents/tools/meta-ads-kit.ts: r.method',
   'services/agents/tools/meta-ads-kit.ts: request.method',
@@ -419,6 +423,8 @@ const EXPECTED_COMPUTED: string[] = [
   // Step 23 — the rupload judge's input type (a judge, no sender).
   'services/gateway/meta-media-rules.ts: string; url: string; kind: string; body?: unknown; objectKind?: string',
   'services/gateway/meta.ts: remove ? \'DELETE\' : \'POST\'',
+  // Step 31 — audienceRequest passes on the literal method its caller names (a delete, the people out, an unshare).
+  'services/marketing/meta-ads/change-audiences.ts: o.method',
   // Step 23 — a video's upload method again (advideos | video_ads).
   'services/marketing/meta-ads/change-media.ts: \'advideos\' | \'video_ads\' = video.method === \'video_ads\' ? \'video_ads\' : \'advideos\'',
   'services/marketing/meta-ads/change-media.ts: \'advideos\' | \'video_ads\'; new: boolean | null',

@@ -928,6 +928,12 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-brand-safety': ['basis', 'plan', 'reach'],
   'set-meta-block-list': ['basis', 'plan', 'reach'],
   'remove-meta-block-list': ['basis', 'plan', 'reach'],
+  // Meta step 31 (2026-10-21): audiences — create, change, people, sharing, delete.
+  'create-meta-audience': ['basis', 'plan', 'reach'],
+  'set-meta-audience': ['basis', 'plan', 'reach'],
+  'set-meta-audience-members': ['basis', 'plan', 'reach'],
+  'set-meta-audience-sharing': ['basis', 'plan', 'reach'],
+  'remove-meta-audience': ['basis', 'plan', 'reach'],
   // Meta step 36 (2026-10-21): lead forms and test leads of the chosen Page (meta-ads-lead-forms.tools.ts).
   'create-meta-lead-form': ['basis', 'plan', 'reach'],
   'set-meta-lead-form': ['basis', 'plan', 'reach'],

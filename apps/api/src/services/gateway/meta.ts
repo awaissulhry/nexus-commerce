@@ -83,6 +83,8 @@ export interface MetaWriteRequest {
     | 'adrule'
     // Step 39 — an ad set's targeting, a publisher or content block list (brand safety).
     | MetaBrandSafetyKind
+    // Step 31 — one of the chosen ad account's own custom audiences.
+    | 'customaudience'
     // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
     | MetaPageKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
@@ -98,10 +100,10 @@ export interface MetaWriteRequest {
    * rule made on the ad account's rule library (`POST /act_<id>/adrules_library`) and a rule's run now (`POST /<rule
    * id>/execute`, no body).
    * Step 39: the brand-safety edges (a block list's draft, list, shares, people, ad accounts and posts; the account's
-   * inventory filter).
+   * inventory filter). Step 31: an ad account's audiences, an audience's people and shares.
    */
   edge?: MetaWriteEdge
-  /** Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body; step 39: a share's agency, a list's posts); default POST. */
+  /** Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body; step 39: a share's agency, a list's posts; step 31: an audience's people or share); default POST. */
   method?: 'POST' | 'DELETE'
   /** Step 39 (review A9) — the run of the change this request belongs to (a block-list draft is used only by its own run). */
   run?: string
@@ -116,7 +118,9 @@ export interface MetaWriteRequest {
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
-  | MetaMediaEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaPageEdge
+  | MetaMediaEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge
+/** Step 31 — an ad account's new audiences and product audiences, its opt-outs; an audience's people and its shares. */
+export type MetaAudienceEdge = 'customaudiences' | 'product_audiences' | 'usersofanyaudience' | 'users' | 'ad_accounts'
 /** Step 29 — a rule made on the ad account's rule library (`act_<id>/adrules_library`), a rule's run now (`<rule id>/execute`). */
 export type MetaRuleEdge = 'adrules_library' | 'execute'
 /** Step 39 — the brand-safety edges (the account's filter, a block list's draft, list, shares, people, ad accounts and posts). */
