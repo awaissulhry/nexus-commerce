@@ -56,6 +56,7 @@
 import { createHmac } from 'node:crypto'
 import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
+import { META_ITEM_ERROR_TYPE_SET } from '../meta/meta-catalog-lists.js'
 import { META_SETTINGS_WRITE_RULES } from './meta-settings-rules.js'
 import { metaCreateWriteRules } from './meta-create-rules.js'
 import { META_REMOVE_WRITE_RULES } from './meta-remove-rules.js'
@@ -159,13 +160,31 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *     product_item_ids and <ad | creative>/previews the same without creative; <page>/canvases is_hidden, is_published.
  *     The organic-insight keys go only on a read with no field list whose metrics are all Nexus's organic ones, the
  *     preview keys only with an ad_format of the v26 enum (services/meta/meta-media-lists.ts, `when` below).
+ *   - step 12 (catalogs, items, feeds, catalog health — marketing/meta-ads/live-catalog.ts), each only on its own edge:
+ *     <catalog>/assigned_users business (required by Meta); <catalog>/data_sources ingestion_source_type;
+ *     <catalog | feed>/products filter (a filter Nexus builds from typed args), error_priority, error_type (only one of
+ *     Meta's item error types, services/meta/meta-catalog-lists.ts); <catalog>/dpa_eligible_ad_accounts search (only an
+ *     ad account id: is the chosen account eligible);
+ *     <catalog>/check_batch_request_status handle, load_ids_of_invalid_requests; <catalog>/product_sets_batch handle;
+ *     <catalog>/diagnostics types, severities, affected_channels, affected_entities, affected_features;
+ *     <catalog>/event_stats breakdowns; <pixel | app>/da_checks checks, connection_method; <upload>/errors
+ *     error_priority; <item>/override_details keys, type; <portfolio>/collaborative_ads_collaboration_requests
+ *     request_role; and override_country, override_language only on one item's read (its field list names
+ *     META_ITEM_OVERRIDE_FIELD, `when` below).
  *   - step 3 (the account itself, its billing, who has access — marketing/meta-ads/live-account.ts), each only on its own
  *     edge: business on act_<id>/assigned_users and <Page | IG asset | catalog | pixel>/assigned_users; business_id on
  *     act_<id>/advertisable_applications and act_<id>/connected_instagram_accounts_with_iabp; bid_amount on
  *     act_<id>/minimum_budgets; app_id, optimization_goal, event_name on act_<id>/campaign_attribution_options;
  *     insights_feature on act_<id>/insights/feature-settings (with …/list-features: GRAPH_HYPHEN_ROUTES);
- *     since and until (Unix seconds) and category=BUDGET (that value only) on act_<id>/activities; start_date, end_date, issue_start_date, issue_end_date, invoice_id, type on
+ *     since and until (Unix seconds) and category BUDGET (step 5: one of Meta's categories) on act_<id>/activities; start_date, end_date, issue_start_date, issue_end_date, invoice_id, type on
  *     <portfolio>/business_invoices; only_show_pending on <portfolio>/extendedcreditapplications.
+ *   - step 5 (the change history — marketing/meta-ads/live-health.ts): category (Meta's enum) and uid on act_<id>/activities
+ *     and <ad set>/activities; since, until and business_id on <ad set>/activities; oid and add_children on
+ *     act_<id>/activities — each with the values Nexus sends only.
+ *   - step 13 (product sets, commerce, Instagram product tags — marketing/meta-ads/live-commerce.ts), each only on its own
+ *     edge: <catalog>/product_sets parent_id, ancestor_id, has_children, retailer_id; <catalog>/facets facets, filter (both
+ *     built by Nexus from typed args); <Instagram account>/catalog_product_search catalog_id, q; <Instagram account>/
+ *     product_appeal product_id. A set's items use the products edge's keys above.
  */
 const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
 /**
@@ -173,6 +192,8 @@ const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
  * parameters (live-targeting.ts, check audience-special-category): those keys go on a bare object id only with it.
  */
 export const META_AUDIENCE_SAC_FIELDS = 'id,name,is_eligible_for_sac_campaigns'
+/** Step 12 — a field only a catalog item has: an item's country / language view (override_*) goes only on a read naming it. */
+export const META_ITEM_OVERRIDE_FIELD = 'retailer_product_group_id'
 /** Step 6 — does the read's `fields` name this field at its top level (not inside a `{…}` or `(…)`)? */
 function fieldNamed(query: URLSearchParams, name: string): boolean {
   const fields = query.get('fields') ?? ''
@@ -190,9 +211,28 @@ function organicInsightRead(query: URLSearchParams): boolean {
   const metrics = (query.get('metric') ?? '').split(',')
   return !query.has('fields') && metrics.length > 0 && metrics.every((m) => META_ORGANIC_METRICS.has(m))
 }
+/** Step 13 review A7 — a JSON list of 1–20 field names ([a-z0-9_]), as Nexus sends a facets read. */
+function jsonFieldNames(value: string | null): boolean {
+  try {
+    const list: unknown = JSON.parse(value ?? '')
+    return Array.isArray(list) && list.length > 0 && list.length <= 20 && list.every((f) => typeof f === 'string' && /^[a-z0-9_]{1,64}$/.test(f))
+  } catch { return false }
+}
+/**
+ * Step 12 round 4 item 7 (the same check as step 13's facets `filter`) — a JSON object (an item filter rule Nexus
+ * built), never a list, a string or a number.
+ */
+function jsonObject(value: string | null): boolean {
+  try {
+    const rule: unknown = JSON.parse(value ?? '')
+    return !!rule && typeof rule === 'object' && !Array.isArray(rule)
+  } catch { return false }
+}
 /** Step 10 — a preview read: one ad_format of the v26 enum. */
 const previewRead = (query: URLSearchParams): boolean => META_AD_FORMATS.has(query.get('ad_format') ?? '')
 
+/** Step 5 — AdActivity's categories (v26 ad-campaign/activities `category`; SDK adactivity.py Category), exact case. */
+export const META_ACTIVITY_CATEGORIES = ['ACCOUNT', 'AD', 'AD_KEYWORDS', 'AD_SET', 'AUDIENCE', 'BID', 'BUDGET', 'CAMPAIGN', 'DATE', 'STATUS', 'TARGETING'] as const
 /** A route's own keys; `when`: they go only on a read whose query also passes this (review fix A1, step 9). */
 const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (query: URLSearchParams) => boolean }> = [
   { route: /^debug_token$/, keys: new Set(['input_token']) },
@@ -306,6 +346,24 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/tags$/, keys: new Set(['posted_after']), when: (query) => isoDateTime(query.get('posted_after')) },
   { route: /^\d+\/tags$/, keys: new Set(['posted_before']), when: (query) => isoDateTime(query.get('posted_before')) },
   { route: /^\d+\/tags$/, keys: new Set(['media_type']), when: (query) => subsetOf(query.get('media_type'), ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM']) },
+  // Step 12 — catalogs, items, feeds, catalog health (marketing/meta-ads/live-catalog.ts), each key on its own edge.
+  { route: /^\d+\/assigned_users$/, keys: new Set(['business']) },
+  { route: /^\d+\/data_sources$/, keys: new Set(['ingestion_source_type']) },
+  { route: /^\d+\/products$/, keys: new Set(['error_priority']) },
+  // Round 4 item 7 — filter only in the shape Nexus sends (itemFilter, REJECTED): a JSON object.
+  { route: /^\d+\/products$/, keys: new Set(['filter']), when: (query) => jsonObject(query.get('filter')) },
+  // Fix B5 — error_type only with one of Meta's item error types; search on the eligible ad accounts only as one account id.
+  { route: /^\d+\/products$/, keys: new Set(['error_type']), when: (query) => META_ITEM_ERROR_TYPE_SET.has(query.get('error_type') ?? '') },
+  { route: /^\d+\/dpa_eligible_ad_accounts$/, keys: new Set(['search']), when: (query) => /^\d{1,25}$/.test(query.get('search') ?? '') },
+  { route: /^\d+\/check_batch_request_status$/, keys: new Set(['handle', 'load_ids_of_invalid_requests']) },
+  { route: /^\d+\/product_sets_batch$/, keys: new Set(['handle']) },
+  { route: /^\d+\/diagnostics$/, keys: new Set(['types', 'severities', 'affected_channels', 'affected_entities', 'affected_features']) },
+  { route: /^\d+\/event_stats$/, keys: new Set(['breakdowns']) },
+  { route: /^\d+\/da_checks$/, keys: new Set(['checks', 'connection_method']) },
+  { route: /^\d+\/errors$/, keys: new Set(['error_priority']) },
+  { route: /^\d+\/override_details$/, keys: new Set(['keys', 'type']) },
+  { route: /^\d+\/collaborative_ads_collaboration_requests$/, keys: new Set(['request_role']) },
+  { route: /^\d+$/, keys: new Set(['override_country', 'override_language']), when: (query) => fieldNamed(query, META_ITEM_OVERRIDE_FIELD) },
   // Step 3 (meta-ad-account, meta-billing, meta-account-access — marketing/meta-ads/live-account.ts), each key only on its
   // own edge: the business on assigned users (the ad account's, and a Page's, Instagram asset's, catalog's or pixel's —
   // Meta requires it); the portfolio on an account's advertisable apps and Instagram accounts with IABP; a manual bid on
@@ -319,10 +377,20 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   // Step 3 review round 4 (step 5 review A4) — the days only as Unix seconds, as Nexus sends them.
   { route: /^act_\d+\/activities$/, keys: new Set(['since']), when: (query) => /^\d{1,12}$/.test(query.get('since') ?? '') },
   { route: /^act_\d+\/activities$/, keys: new Set(['until']), when: (query) => /^\d{1,12}$/.test(query.get('until') ?? '') },
-  // Review B4, round 4 — the billing events' category only: BUDGET (reference/ad-activity files every billing event there).
-  { route: /^act_\d+\/activities$/, keys: new Set(['category']), when: (query) => query.get('category') === 'BUDGET' },
+  // Review B4, round 4 — the billing events' category BUDGET (reference/ad-activity files every billing event there): step 5's
+  // entry below allows it among Meta's own categories (the change history filters by each of them).
   { route: /^\d+\/business_invoices$/, keys: new Set(['start_date', 'end_date', 'issue_start_date', 'issue_end_date', 'invoice_id', 'type']) },
   { route: /^\d+\/extendedcreditapplications$/, keys: new Set(['only_show_pending']) },
+  // Step 5 (meta-activity-log — marketing/meta-ads/live-health.ts) — the change history, each key only with a value Nexus
+  // sends: Meta's category (the v26 enum of the ad set's own edge, exact case) and the actor filter uid on the account's
+  // log and an ad set's own (/{adset}/activities documents since, until, uid and business_id); the object filter oid and
+  // add_children on the account's log (SDK adaccount.py get_activities only: LIVE-PROBES LG-001, LG-001b).
+  { route: /^(act_)?\d+\/activities$/, keys: new Set(['category']), when: valueIn('category', META_ACTIVITY_CATEGORIES) },
+  { route: /^(act_)?\d+\/activities$/, keys: new Set(['uid']), when: digitsIn('uid') },
+  { route: /^\d+\/activities$/, keys: new Set(['since', 'until']), when: (query) => ['since', 'until'].every((key) => !query.has(key) || /^\d{1,12}$/.test(query.get(key) ?? '')) },
+  { route: /^\d+\/activities$/, keys: new Set(['business_id']), when: digitsIn('business_id') },
+  { route: /^act_\d+\/activities$/, keys: new Set(['oid']), when: digitsIn('oid') },
+  { route: /^act_\d+\/activities$/, keys: new Set(['add_children']), when: valueIn('add_children', ['true', 'false']) },
   // Step 11 (meta-audiences / meta-datasets, live-audiences.ts and live-datasets.ts) — each key only on its own path:
   //   - audiences: the account's list (filtering for expiring ones, pixel_id), one audience as the chosen account sees it
   //     (ad_account_id, acting_account_id), its upload sessions, value data, recipients; the portfolio's sharing;
@@ -357,7 +425,20 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   // Step 28 — who has a role on the chosen ad account (a study is shared only with them: meta-optimize-owner.ts); Meta's
   // ad-account/assigned_users requires the business it is asked in.
   { route: /^act_\d+\/assigned_users$/, keys: new Set(['business']) },
+  // Step 13 — product sets, facets, Instagram product search and appeals (marketing/meta-ads/live-commerce.ts), each key on
+  // its own edge (a set's items take the products edge's filter, error_priority, error_type above).
+  { route: /^\d+\/product_sets$/, keys: new Set(['parent_id', 'ancestor_id', 'has_children', 'retailer_id']) },
+  // Review A7 — and only in the shape Nexus sends: facets a JSON list of field names, filter a JSON object, ids digits.
+  { route: /^\d+\/facets$/, keys: new Set(['facets']), when: (query) => jsonFieldNames(query.get('facets')) },
+  { route: /^\d+\/facets$/, keys: new Set(['filter']), when: (query) => jsonObject(query.get('filter')) },
+  { route: /^\d+\/catalog_product_search$/, keys: new Set(['catalog_id']), when: (query) => /^\d{1,25}$/.test(query.get('catalog_id') ?? '') },
+  { route: /^\d+\/catalog_product_search$/, keys: new Set(['q']) },
+  { route: /^\d+\/product_appeal$/, keys: new Set(['product_id']), when: (query) => /^\d{1,25}$/.test(query.get('product_id') ?? '') },
 ]
+/** Step 5 — the key's value is a Meta id (digits). */
+function digitsIn(key: string): (query: URLSearchParams) => boolean {
+  return (query) => /^\d{1,25}$/.test(query.get(key) ?? '')
+}
 /** Step 14 review A2 — the key's value is one of these. */
 function valueIn(key: string, values: readonly string[]): (query: URLSearchParams) => boolean {
   return (query) => values.includes(query.get(key) ?? '')

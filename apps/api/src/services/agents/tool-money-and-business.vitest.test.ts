@@ -253,13 +253,24 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-lead-forms': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has one (meta-ads-engagement.tools test)',
   'meta-leads': 'it reads the business\'s chosen Meta Page or ad account live from Meta, and no business here has one (meta-ads-engagement.tools test)',
   'meta-comments': 'it reads the business\'s chosen Meta Page or Instagram account live from Meta, and no business here has one (meta-ads-engagement.tools test)',
+  // Meta ads step 12: the catalog reads read Meta live for the chosen account's business portfolio (meta-ads-catalog.tools test).
+  'meta-catalogs': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
+  'meta-catalog-items': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
+  'meta-catalog-feeds': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
+  'meta-catalog-health': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-catalog.tools test)',
   // Meta ads step 3: the account itself, its billing and who has access read Meta live.
   'meta-ad-account': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
   'meta-billing': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
   'meta-account-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
+  // Meta ads step 5: the change history reads the chosen ad account live (meta-account-health's default view needs no call).
+  'meta-activity-log': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-health.tools test)',
   // Meta ads step 11: audiences and datasets read Meta live (their own tests run them on an account).
   'meta-audiences': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-audiences.tools test)',
   'meta-datasets': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-datasets.tools test)',
+  // Meta ads step 13: product sets, commerce accounts and Instagram product tags read Meta live (meta-ads-commerce.tools test).
+  'meta-product-sets': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
+  'meta-commerce': 'it reads the business\'s chosen Meta Page and business portfolio live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
+  'meta-instagram-product-tags': 'it reads the business\'s chosen Instagram account live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
   // Meta ads step 23: an upload reads the business's chosen Meta ad account before anything (meta-ads-media-upload.tools test).
   'create-meta-media': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-media-upload.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -604,14 +615,28 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-lead-forms': () => ({ view: 'list' }),
   'meta-leads': () => ({ view: 'form', formId: '600000000000001' }),
   'meta-comments': () => ({ view: 'post', postId: '120000000000010_500000000000001' }),
+  // Meta ads step 12: the catalog reads refuse in words because no business here has Meta (meta-ads-catalog.tools.vitest.test.ts
+  // runs every view on an account).
+  'meta-catalogs': () => ({ view: 'list' }),
+  'meta-catalog-items': () => ({ view: 'list', catalogId: '120000000000700' }),
+  'meta-catalog-feeds': () => ({ view: 'list', catalogId: '120000000000700' }),
+  'meta-catalog-health': () => ({ view: 'readiness', catalogId: '120000000000700' }),
   // Meta ads step 3: each tool's default view refuses in words because no business here has Meta
   // (meta-ads-account.tools.vitest.test.ts runs every view on an account).
   'meta-ad-account': () => ({ view: 'settings' }),
   'meta-billing': () => ({ view: 'spend' }),
   'meta-account-access': () => ({ view: 'people' }),
+  // Meta ads step 5: the health summary is Nexus's own records (no Meta here: it says so); the history refuses in words
+  // (meta-ads-health.tools.vitest.test.ts runs every view on an account).
+  'meta-account-health': () => ({ view: 'summary' }),
+  'meta-activity-log': () => ({ scope: 'account' }),
   // Meta ads step 11: no business here has Meta, so both refuse in words before any call.
   'meta-audiences': () => ({ view: 'list' }),
   'meta-datasets': () => ({ view: 'sources' }),
+  // Meta ads step 13: refused in words because no business here has Meta (meta-ads-commerce.tools.vitest.test.ts runs every view).
+  'meta-product-sets': () => ({ view: 'list', catalogId: '120000000000700' }),
+  'meta-commerce': () => ({ view: 'accounts' }),
+  'meta-instagram-product-tags': () => ({ view: 'eligibility' }),
   // Meta ads step 23: an upload refuses in words before any fetch or call (no business here has Meta; its own test runs it).
   'create-meta-media': () => ({ kind: 'image', images: [{ libraryImageId: 'da_test_asset' }] }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
