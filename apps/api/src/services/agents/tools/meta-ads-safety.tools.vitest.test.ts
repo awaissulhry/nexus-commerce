@@ -13,7 +13,7 @@ const h = vi.hoisted(() => ({
   connections: [] as Array<Record<string, unknown>>,
   calls: [] as Array<Req & { via: string }>,
   graph: null as null | ((req: Req) => unknown),
-  app: null as null | ((req: Req) => { status: number; text: string }),
+  app: null as null | ((req: Req) => { status: number; text: string; verdict?: Record<string, unknown> }),
   taken: new Set<string>(),
   adSets: new Set<string>(),
   // Step 39 (BS-033) — what the content block list's CSV export answers.
@@ -37,7 +37,7 @@ vi.mock('../../gateway/meta.js', async (importOriginal) => {
     metaCall: vi.fn(async (req: Req) => {
       h.calls.push({ ...req, via: 'metaCall' })
       const a = h.app?.(req) ?? { status: 200, text: '{"data":[]}' }
-      return { outcome: 'sent', ok: a.status < 400, status: a.status, text: a.text, verdict: null, json: () => JSON.parse(a.text), headers: new Headers(), url: '', attempts: 1, rate: { remaining: null, limit: null } }
+      return { outcome: 'sent', ok: a.status < 400, status: a.status, text: a.text, verdict: a.verdict ?? null, json: () => JSON.parse(a.text), headers: new Headers(), url: '', attempts: 1, rate: { remaining: null, limit: null } }
     }),
     metaRestFileExport: vi.fn(async (req: { operation: string; contentBlockListId: string }) => {
       h.calls.push({ operation: req.operation, path: `content_block_lists/${req.contentBlockListId}/file_download`, via: 'export' })
@@ -263,6 +263,39 @@ describe('meta-webhooks', () => {
     expect(res.data).toMatchObject({ alertSubscriptions: [{ subscriptionId: '900000000000001', eventType: 'OBJECT_CREATED' }] })
     expect(res.data).not.toHaveProperty('appSubscriptions')
     expect(refusedByGateway()).toEqual([])
+  })
+  it('step 12 rounds 2–3 — Meta refusing the APP token (190) ends only the app part; a throttle in a part keeps the parts read (as #706)', async () => {
+    h.app = () => ({ status: 400, text: '{"error":{"code":190}}', verdict: { errorClass: 'auth_revoked', channelCode: '190', channelMessage: 'Invalid OAuth access token' } })
+    h.graph = (req) => (req.path === 'act_1234567890/subscribed_apps' ? { data: [{ app_id: '5550000001', app_name: 'Nexus' }] } : { data: [] })
+    const res = await run('meta-webhooks', {})
+    expect(res.ok).toBe(true)
+    const data = res.data as Record<string, unknown>
+    expect(data.appSubscriptions).toBeNull()
+    expect(data.appSubscriptionsNotRead).toBe('Meta does not accept the app token; check the app id / secret in Settings › Channels › Meta.')
+    expect(data.adAccountApps).toEqual([{ appId: '5550000001', appName: 'Nexus', isNexusApp: true }])
+    expect(data.alertSubscriptions).toEqual([])
+    h.app = () => ({ status: 400, text: '{"error":{"code":17}}', verdict: { errorClass: 'rate_limited', channelCode: '17', channelMessage: 'User request limit reached' } })
+    const throttled = await run('meta-webhooks', {})
+    expect(throttled.ok).toBe(true)
+    expect(throttled.data).toMatchObject({ appSubscriptions: null, appSubscriptionsNotRead: expect.stringMatching(/slow down/), adAccountApps: [{ appId: '5550000001' }] })
+    h.app = null
+    h.graph = (req) => (req.path === 'act_1234567890/subscribed_apps' ? metaError('17', 'User request limit reached', 'rate_limited') : { data: [] })
+    expect((await run('meta-webhooks', {})).data).toMatchObject({ adAccountApps: null, adAccountAppsNotRead: expect.stringMatching(/slow down/), alertSubscriptions: [] })
+  })
+  it('step 12 round 3 — a throttle in one part of a block list or content block list keeps the parts read (as #706)', async () => {
+    h.graph = (req) => {
+      if (req.path === '120000000000901') return { id: '120000000000901', name: 'Apps', business_owner_id: PORTFOLIO }
+      if (req.path.endsWith('/agencies')) return metaError('17', 'User request limit reached', 'rate_limited')
+      return { data: [{ id: 'act_1234567890' }] }
+    }
+    expect((await run('meta-brand-safety', { view: 'block-list', blockListId: '120000000000901' })).data).toMatchObject({
+      sharedWithBusinesses: null, sharedWithNotRead: expect.stringMatching(/slow down/), appliedToAdAccounts: [{ adAccountId: '1234567890' }],
+    })
+    h.graph = (req) => (req.path === '120000000000701' ? { id: '120000000000701', name: 'Risky', business: { id: PORTFOLIO } }
+      : req.path.endsWith('/instagram_content') ? metaError('17', 'User request limit reached', 'rate_limited') : { data: [{ id: '1234567890', account_id: 'act_1234567890' }] })
+    expect((await run('meta-brand-safety', { view: 'content-block-list', contentBlockListId: '120000000000701', content: 'instagram' })).data).toMatchObject({
+      content: { ids: null, notRead: expect.stringMatching(/slow down/) }, appliedToAdAccounts: [{ adAccountId: '1234567890' }],
+    })
   })
   it('a business without Meta is told who connects it', async () => {
     h.connections = []

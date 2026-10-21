@@ -14,7 +14,8 @@ import { syncMetaAdAccountById } from '../services/marketing/meta-ads/sync.servi
 import { metaAdsSyncSwitchedOff } from '../services/marketing/meta-ads/sync-switch.js'
 import { logger } from '../utils/logger.js'
 
-const KINDS = new Set(['BACKFILL', 'DAILY', 'MANUAL', 'TOKEN'])
+// WEBHOOK (step 30): a structure read after a verified Meta webhook, queued by enqueueMetaWebhookReread.
+const KINDS = new Set(['BACKFILL', 'DAILY', 'MANUAL', 'TOKEN', 'WEBHOOK'])
 
 /** One job's work, in the business the job carries (WorkspaceWorker binds it). Exported for tests. */
 export async function processMetaAdsSyncJob(data: Partial<MetaAdsSyncJobData> | undefined) {

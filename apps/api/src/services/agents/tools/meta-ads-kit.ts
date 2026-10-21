@@ -57,7 +57,7 @@ export const META_MATERIAL = ['basis', 'plan', 'reach'] as const
 export const META_CHANGE_RULES =
   ' Nothing changes until a person approves it in Nexus (Approvals) — or, when this business\'s "Claude\'s changes need no '
   + 'approval" switch is on, it runs 20 s after the request unless stopped; either way it runs as that person, never by a '
-  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause); '
+  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause and the create of a campaign or an ad set); '
   + 'for any other the preview says why not, and the run reads the live state again first. With Meta changes switched off '
   + 'nothing is sent, not even a check. The '
   + 'preview says what changes (from → to), what can make the account spend more (spendsMoney — the person\'s decision) '
@@ -103,6 +103,10 @@ export interface MetaPreview {
   requests: Array<{ step: number; label: string; metaCheck: MetaRequestCheck }>
   basis: string
   plan: string
+  /** Step 19 — what Meta's check of a create recommended (include_recommendations, master CMP-031), when it had any. */
+  metaRecommendations?: unknown[]
+  /** Step 22 — everything a delete takes with it, in full (change-draft.ts alsoDeleted). */
+  alsoDeleted?: unknown
 }
 
 /** A re-check of an approval (the gate's fresh dry run): it reads, it does not ask Meta to check again. */
@@ -122,8 +126,8 @@ async function draftFor(args: Record<string, unknown>, build: MetaDraftBuilder):
   }
 }
 
-/** The exact plan of a change: its requests (object, form fields — step 39: and the file it uploads), in order — never their labels. */
-const planOf = (draft: MetaChangeDraft): string => factHash(draft.requests.map((r) => ({ objectId: r.objectId, params: r.params, ...(r.file !== undefined ? { file: r.file } : {}) })))
+/** The exact plan of a change: its requests (object, form fields), in order — never their labels. */
+const planOf = (draft: MetaChangeDraft): string => factHash(draft.requests.map((r) => ({ objectId: r.objectId, params: r.params })))
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -176,7 +180,7 @@ async function limitWarnings(account: MetaChangeAccount, draft: MetaChangeDraft)
   return out
 }
 
-function previewOf(account: MetaChangeAccount, draft: MetaChangeDraft, checks: MetaRequestCheck[], recheck: boolean, limits: string[]): MetaPreview {
+function previewOf(account: MetaChangeAccount, draft: MetaChangeDraft, checks: MetaRequestCheck[], recheck: boolean, limits: string[], recommendations: unknown[] = []): MetaPreview {
   const { reach, warning } = reachOf(account)
   const spends = draft.spendsMoney
   const warnings = [...spends.map((s) => `SPENDS MONEY (your decision): ${s}`), ...(warning ? [warning] : []), ...draft.warnings, ...limits]
@@ -195,8 +199,16 @@ function previewOf(account: MetaChangeAccount, draft: MetaChangeDraft, checks: M
     requests: draft.requests.map((r, i) => ({ step: r.step, label: r.label, metaCheck: checks[i] })),
     basis: factHash(draft.stands),
     plan: planOf(draft),
+    ...(recommendations.length ? { metaRecommendations: recommendations } : {}),
+    ...(draft.alsoDeleted !== undefined ? { alsoDeleted: draft.alsoDeleted } : {}),
   }
 }
+
+/** Step 19 — Meta's recommendations as the preview shows them: at most 10, each at most 1,000 characters of its JSON. */
+const shownRecommendations = (list: unknown[]): unknown[] => list.slice(0, 10).map((r) => {
+  const text = JSON.stringify(r) ?? ''
+  return text.length > 1000 ? `${text.slice(0, 999)}…` : r
+})
 
 /** How long Meta's acceptance of an exact plan is remembered: the same plan within it is not checked twice. */
 export const CHECK_MEMORY_MS = 30 * 60_000
@@ -236,10 +248,12 @@ export async function metaChangePreview(args: Record<string, unknown>, ctx: Tool
   const checkable = draft.requests.filter((r) => r.check === 'meta')
   const plan = planOf(draft)
   const remembered = checkable.length ? await rememberedCheck(account.adAccountId, plan) : null
+  const recommendations: unknown[] = []
   if (checkable.length && !remembered) {
     for (const request of checkable) {
       try {
-        await metaCheckChange(account.target, { ...objectChangeOf(request), budget: undefined, readBackInPost: undefined })
+        const answer = await metaCheckChange(account.target, { ...objectChangeOf(request), budget: undefined, readBackInPost: undefined })
+        if (answer?.recommendations?.length) recommendations.push(...answer.recommendations)
       } catch (err) {
         if (!(err instanceof MetaWriteError)) throw err
         return { ok: false, error: err.outcome === 'refused'
@@ -249,7 +263,7 @@ export async function metaChangePreview(args: Record<string, unknown>, ctx: Tool
     }
     await rememberCheck(account.adAccountId, plan)
   }
-  return { ok: true, preview: previewOf(account, draft, draft.requests.map((r) => (r.check === 'meta' ? 'accepted' : r.check === 'not-yet' ? 'not-used-yet' : 'no-check')), false, limits) }
+  return { ok: true, preview: previewOf(account, draft, draft.requests.map((r) => (r.check === 'meta' ? 'accepted' : r.check === 'not-yet' ? 'not-used-yet' : 'no-check')), false, limits, shownRecommendations(recommendations)) }
 }
 
 // ── run ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -272,6 +286,8 @@ export interface MetaRunOutcome {
   data: Record<string, unknown>
   before: unknown
   after: unknown
+  /** Step 22 (review A5) — the change has no undo: this sentence takes the place of "Undo puts back only what Meta made." */
+  noUndo?: string
 }
 
 /**
@@ -292,8 +308,9 @@ export function objectChangeOf(request: MetaChangeRequest): MetaObjectChange {
     ...(request.edge ? { edge: request.edge } : {}),
     ...(request.method ? { method: request.method } : {}),
     ...(request.parent ? { parent: request.parent } : {}),
-    // Step 39 — the file it uploads and the read-back that judges it.
-    ...(request.file !== undefined ? { file: request.file } : {}),
+    ...(request.recommendations ? { recommendations: true } : {}),
+    ...(request.readBackObject ? { readBackObject: true as const } : {}),
+    // Step 39 — the read-back that judges it.
     ...(request.judge ? { judge: request.judge } : {}),
     ...(request.readBackOf ? { readBackOf: request.readBackOf } : {}),
   }
@@ -312,6 +329,7 @@ function doneSettingsSentence(request: MetaChangeRequest, result: MetaChangeResu
         ? 'Meta confirmed it.'
         : result.readBack === 'none' || !result.node
           ? 'Meta confirmed it; Nexus could not read it back (meta-ads-live shows it).'
+          // Step 21 — a create whose read-back judges no field (a reach & frequency prediction is worked out later): made.
           // Step 39 — nothing asked to read back (a draft Meta made): its id.
           : !Object.keys(expected).length
             ? `Meta made it${typeof result.node.id === 'string' || typeof result.node.id === 'number' ? ` (id ${result.node.id})` : ''}.`
@@ -321,6 +339,8 @@ function doneSettingsSentence(request: MetaChangeRequest, result: MetaChangeResu
 
 /** The step's sentence for a done request. */
 function doneSentence(request: MetaChangeRequest, result: MetaChangeResult): string {
+  // Step 23 — a request with its own sender says what Meta made in its own words.
+  if (request.doneSentence) return request.doneSentence(result)
   if (request.expect || request.method === 'DELETE' || request.edge || request.judge) return doneSettingsSentence(request, result)
   const status = typeof result.node?.status === 'string' ? result.node.status : null
   const effective = typeof result.node?.effective_status === 'string' ? result.node.effective_status : null
@@ -342,7 +362,7 @@ export async function runMetaChange(
   args: Record<string, unknown>,
   ctx: ToolContext,
   build: MetaDraftBuilder,
-  finish: (draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult }>) => MetaRunOutcome,
+  finish: (draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult; notAsAsked?: string }>) => MetaRunOutcome,
   after?: (account: MetaChangeAccount, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult }>) => Promise<string>,
 ): Promise<ToolResult> {
   const run = approvedRun(ctx, String(args.why ?? ''))
@@ -365,14 +385,15 @@ export async function runMetaChange(
   }
 
   const steps: MetaRunStep[] = []
-  const done: Array<{ request: MetaChangeRequest; result: MetaChangeResult }> = []
+  const done: Array<{ request: MetaChangeRequest; result: MetaChangeResult; notAsAsked?: string }> = []
   let stoppedAt: number | null = null
   // Review fix A1 — the first request of this change that did not happen: a later switch-on (or raise) is never sent,
   // because what its "nothing spends yet" stood on may be exactly that request.
   let missedAt: number | null = null
-  // Step 39 (review A9) — a change that uploads a file gets this run's own id: the gateway lets a request use only what an
-  // earlier request of the SAME run made (a block-list draft). Every other change goes exactly as before.
-  const runId = draft.requests.some((r) => r.file !== undefined) ? randomUUID() : null
+  // Step 39 (review A9) — a change whose later request takes ids from an earlier one (`prepare`: a list made from the
+  // block-list draft it uploaded) gets this run's own id: the gateway lets a request use only what an earlier request of
+  // the SAME run made. Every other change goes exactly as before.
+  const runId = draft.requests.some((r) => r.prepare !== undefined) ? randomUUID() : null
   for (const request of draft.requests) {
     if (stoppedAt !== null) {
       steps.push({ step: request.step, label: request.label, outcome: 'not_sent', sentence: `${request.label}: not sent — Nexus stopped after step ${stoppedAt}.` })
@@ -382,14 +403,31 @@ export async function runMetaChange(
       steps.push({ step: request.step, label: request.label, outcome: 'not_sent', sentence: `${request.label}: not sent — step ${missedAt} did not happen, and Nexus sends nothing that can make the account spend more after a step of the same change that did not (what it stood on may have been that step).` })
       continue
     }
+    // Step 22 — a request that stands on earlier steps of the same change goes only when each of them happened as asked.
+    const missing = (request.needs ?? []).filter((s) => !done.some((d) => d.request.step === s && !d.notAsAsked))
+    if (missing.length) {
+      missedAt ??= request.step
+      steps.push({ step: request.step, label: request.label, outcome: 'not_sent', sentence: `${request.label}: not sent — it stands on step ${missing.join(', ')} of this change, which did not happen as asked.` })
+      continue
+    }
     try {
       // Step 39 — a request that takes params from an earlier one (a list made from the draft step 1 uploaded) gets them now.
       const params = request.prepare ? { ...request.params, ...(await request.prepare(done)) } : request.params
-      const result = await metaSendChange(account.target, { ...objectChangeOf(request), params, ...(runId ? { runId } : {}) })
+      // Step 23 — a request may bring its own sender (an upload read again, a multi-call video upload): one step all the same.
+      const result = request.send ? await request.send(account.target) : await metaSendChange(account.target, { ...objectChangeOf(request), params, ...(runId ? { runId } : {}) })
       // Step 18 — a change past status: Meta said success, but a field it asked reads back otherwise: not done (no
       // record, no undo), and a missed step for what follows. Step 39: or its own read-back judge says so.
       const judged = request.judge && result.node && result.readBack !== 'none' ? request.judge(result.node) : null
       const moved = judged ? judged.moved : request.expect ? readBackMismatch(result.node, expectedOf(request)) : []
+      // Step 19 (review A4) — a create or a copy Meta made that reads back otherwise: recorded as made (so undo can delete
+      // it), the step not confirmed, and a missed step for what follows.
+      if (moved.length && request.recordEvenIfNotAsAsked) {
+        missedAt ??= request.step
+        const reads = readsOf(result.node!, expectedOf(request))
+        done.push({ request, result, notAsAsked: reads })
+        steps.push({ step: request.step, label: request.label, outcome: 'not_confirmed', sentence: `${request.label}: Meta made it, but it reads back ${reads}, not what was asked (${moved.join(', ')}). Nexus records what Meta made (its undo can delete it) and never sends it again by itself; meta-ads-live shows it now.` })
+        continue
+      }
       if (moved.length) {
         missedAt ??= request.step
         steps.push({ step: request.step, label: request.label, outcome: 'not_confirmed', sentence: `${request.label}: Meta answered success but it reads back ${judged ? judged.reads : readsOf(result.node!, expectedOf(request))}, not what was asked (${moved.join(', ')}). Nexus records no change for it and never sends it again by itself; meta-ads-live shows it now.` })
@@ -438,14 +476,14 @@ export async function runMetaChange(
   const bookkeeping = after ? await after(account, done).catch(() => 'Nexus\'s pages show the change after the next daily read; meta-ads-live shows it now.') : null
   // Every record names the Meta account it was made on: undo reads that account and goes to it, never another.
   const stamp = (record: unknown) => (record && typeof record === 'object' && !Array.isArray(record) ? { ...record, accountId: account.accountId, adAccountId: account.adAccountId } : record)
-  const partial = done.length < draft.requests.length
+  const partial = done.length < draft.requests.length || done.some((d) => d.notAsAsked)
   return {
     ok: true,
     data: {
       summary: draft.summary,
       account: { accountId: account.accountId, adAccountId: account.adAccountId },
       sentence: partial
-        ? `Meta made ${done.length} of ${draft.requests.length} requests; the steps say what happened to each. Undo puts back only what Meta made.`
+        ? `Meta made ${done.filter((d) => !d.notAsAsked).length} of ${draft.requests.length} requests as asked; the steps say what happened to each. ${outcome.noUndo ?? 'Undo puts back only what Meta made.'}`
         : `Meta made all ${draft.requests.length} request${draft.requests.length === 1 ? '' : 's'}.`,
       done: done.length,
       of: draft.requests.length,

@@ -24,10 +24,9 @@ describe('create and replace (BS-005–008)', () => {
   it('create: the file as a draft (Nexus writes it), then the list from it once Meta read it; nothing spends', async () => {
     const d = draftOf(blockListDraft({ action: 'create', name: 'List B', urls: ['Example.com', 'https://www.facebook.com/a-page'] }, { ...base, accountLists: [{ blockListId: LIST, name: 'List A' }] }, wait))
     expect(d.requests.map((r) => [r.step, r.objectKind, r.objectId, r.edge, r.params, r.grant])).toEqual([
-      [1, 'business', PORTFOLIO, 'block_list_drafts', {}, 'block_list_management_v2_api_access'],
+      [1, 'business', PORTFOLIO, 'block_list_drafts', { publisher_urls_file: 'example.com\nhttps://www.facebook.com/a-page', publisher_urls_file_name: 'publisher_urls.txt' }, 'block_list_management_v2_api_access'],
       [2, 'business', PORTFOLIO, 'publisher_block_lists', { name: 'List B' }, 'block_list_management_v2_api_access'],
     ])
-    expect(d.requests[0].file).toBe('example.com\nhttps://www.facebook.com/a-page')
     expect(d.requests.every((r) => r.check === 'none' && !r.raisesSpend)).toBe(true)
     expect(d.spendsMoney).toEqual([])
     expect(await d.requests[1].prepare!(done({ id: '120000000000801', async_job_status: 'scheduled' }))).toEqual({ draft_id: '120000000000801' })

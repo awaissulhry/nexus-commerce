@@ -3,6 +3,8 @@
  * graph.facebook.com). Reads are GETs (metaCall); a change (step 17) is a POST of a form body (metaWriteCall) that the
  * gateway lets through only when it is on its write allow-list and its object is of the business's chosen ad account
  * (meta-calls.ts metaWriteVerdict, gateway.ts 3b).
+ * Step 23: a video's link handed to Meta's resumable upload host (metaRuploadCall, rupload.facebook.com — judged in
+ * meta-media-rules.ts; Nexus sends no video byte).
  *
  * - `path` is below the pinned version (services/meta/api-version.ts): `me`, `act_123/campaigns`, `debug_token`.
  * - `query` values are sent as Meta reads them: text as is, a list or an object as JSON (`fields` may be a list).
@@ -17,7 +19,8 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST, type MetaWriteKind } from './meta-calls.js'
+import { META_REST_HOST, type MetaBrandSafetyKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind } from './meta-calls.js'
+import { metaRuploadUrl } from './meta-media-rules.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -73,7 +76,11 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: MetaWriteKind
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
+    // Step 28 — a business portfolio (a new study), a study, a Page, a Page video test (an apply names act_<id>).
+    | MetaOptimizeKind
+    // Step 39 — an ad set's targeting, a publisher or content block list (brand safety).
+    | MetaBrandSafetyKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -87,19 +94,39 @@ export interface MetaWriteRequest {
    * brand-safety edges (a block list's draft, list, shares, people, ad accounts and posts; the account's inventory filter).
    */
   edge?: MetaWriteEdge
-  /** Step 18 — DELETE (a budget schedule's, no body; step 39: with its form body when it names keys); default POST. */
+  /** Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body; step 39: a share's agency, a list's posts); default POST. */
   method?: 'POST' | 'DELETE'
-  /** Step 39 (Q8) — the text of the one file Nexus made (a block list's URL file): sent as the rule's multipart file part. */
-  file?: string
   /** Step 39 (review A9) — the run of the change this request belongs to (a block-list draft is used only by its own run). */
   run?: string
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
+  /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
+  recommendations?: boolean
 }
 
-/** The edges a Nexus change writes on: step 18's budget schedules; step 39's brand-safety edges. */
-export type MetaWriteEdge = 'budget_schedules' | 'brand_safety_content_filter_levels' | 'block_list_drafts' | 'publisher_block_lists' | 'agencies'
+/**
+ * The edges a change posts to: a budget schedule (step 18); a campaign's or ad set's create on the ad account (`act_<id>`),
+ * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
+ */
+export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
+  | MetaMediaEdge | MetaBrandSafetyEdge
+/** Step 39 — the brand-safety edges (the account's filter, a block list's draft, list, shares, people, ad accounts and posts). */
+export type MetaBrandSafetyEdge = 'brand_safety_content_filter_levels' | 'block_list_drafts' | 'publisher_block_lists' | 'agencies'
   | 'assigned_users' | 'auto_applied_ad_accounts' | 'content_block_lists' | 'content' | 'applied_ad_accounts'
+/** Step 28 — an apply (`act_<id>/recommendations`), a new study (`<business>/ad_studies`), a new Page video test (`<page>/ab_tests`). */
+export type MetaOptimizeEdge = 'recommendations' | 'ad_studies' | 'ab_tests'
+/** Step 22 — remove-meta-ads-items: an image or a video out of the ad account's library, a video's caption languages. */
+export type MetaRemoveEdge = 'adimages' | 'advideos' | 'captions'
+/**
+ * Step 21 — set-meta-labels (a label made on the ad account, labels added to a campaign), set-meta-value-rules (a value rule
+ * set made, deleted or translated) and create-meta-reach-frequency (a prediction, a reservation, a cancel).
+ */
+export type MetaLabelsEdge = 'adlabels' | 'value_rule_set' | 'delete_rule_set' | 'value_rule_set_translation' | 'reachfrequencypredictions'
+/**
+ * Step 23 — create-meta-media's edges beyond step 22's (its uploads also post to adimages, advideos and captions): Meta's
+ * video-ads upload on the ad account, a folder on its business portfolio.
+ */
+export type MetaMediaEdge = 'video_ads' | 'creative_folders'
 
 /**
  * One Meta change (or Meta's check of one) through the gateway. A change is never retried (`maxTransientRetries 0`):
@@ -109,9 +136,11 @@ export type MetaWriteEdge = 'budget_schedules' | 'brand_safety_content_filter_le
  */
 export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayResponse> {
   const remove = req.method === 'DELETE'
-  // Step 39 — a file upload has no form field (the file is its one part); a DELETE carries its keys only when it has some.
-  const empty = req.file !== undefined || (remove && !Object.keys(req.params).length)
-  const body = empty ? undefined : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: '["validate_only"]' } : {}) }).toString()
+  const check = req.recommendations ? '["validate_only","include_recommendations"]' : '["validate_only"]'
+  // Step 22 — a DELETE with parameters (an image's hash, a video's id) sends them as its form body, as a POST does.
+  const body = remove
+    ? (Object.keys(req.params).length ? new URLSearchParams(req.params).toString() : undefined)
+    : new URLSearchParams({ ...req.params, ...(req.check ? { execution_options: check } : {}) }).toString()
   return gatewayCall({
     channel: 'META',
     operation: req.operation,
@@ -122,7 +151,6 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
     body,
     metaObjectKind: req.objectKind,
     ...(req.parent ? { metaParent: req.parent } : {}),
-    ...(req.file !== undefined ? { metaFile: req.file } : {}),
     ...(req.run ? { metaRun: req.run } : {}),
     maxTransientRetries: req.check ? 1 : 0,
     max429Retries: 0,
@@ -182,5 +210,39 @@ export async function metaRestCall(req: Omit<MetaCallRequest, 'auth'>): Promise<
     max429Retries: 0,
     timeoutMs: req.timeoutMs ?? 60_000,
     ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
+  })
+}
+
+export interface MetaUploadRequest {
+  connectionId: string
+  operation: string
+  /** The video upload THIS connection started on the chosen ad account (video_ads upload_phase=start answered it). */
+  videoId: string
+  /** The public https link Meta fetches the file from (Nexus sends no byte of it). */
+  fileUrl: string
+  timeoutMs?: number
+  maxRateWaitMs?: number
+}
+
+/**
+ * Meta step 23 (MD-016) — hand Meta a video's public link on its resumable upload host:
+ * `POST https://rupload.facebook.com/video-ads-upload/<version>/<video id>` with the link as Meta's `file_url` header
+ * (the gateway judges it from this form body and adds `Authorization: OAuth <token>` itself; meta-media-rules.ts). Never
+ * retried: Meta may have started fetching.
+ */
+export async function metaRuploadCall(req: MetaUploadRequest): Promise<GatewayResponse> {
+  return gatewayCall({
+    channel: 'META',
+    operation: req.operation,
+    kind: 'write',
+    connectionId: req.connectionId,
+    url: metaRuploadUrl(req.videoId),
+    method: 'POST',
+    body: new URLSearchParams({ file_url: req.fileUrl }).toString(),
+    metaObjectKind: 'startedvideo',
+    maxTransientRetries: 0,
+    max429Retries: 0,
+    maxRateWaitMs: req.maxRateWaitMs,
+    timeoutMs: req.timeoutMs ?? 120_000,
   })
 }
