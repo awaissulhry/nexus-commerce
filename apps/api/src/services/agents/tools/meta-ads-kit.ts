@@ -284,6 +284,8 @@ export interface MetaRunOutcome {
   data: Record<string, unknown>
   before: unknown
   after: unknown
+  /** Step 22 (review A5) — the change has no undo: this sentence takes the place of "Undo puts back only what Meta made." */
+  noUndo?: string
 }
 
 /**
@@ -455,7 +457,7 @@ export async function runMetaChange(
       summary: draft.summary,
       account: { accountId: account.accountId, adAccountId: account.adAccountId },
       sentence: partial
-        ? `Meta made ${done.filter((d) => !d.notAsAsked).length} of ${draft.requests.length} requests as asked; the steps say what happened to each. Undo puts back only what Meta made.`
+        ? `Meta made ${done.filter((d) => !d.notAsAsked).length} of ${draft.requests.length} requests as asked; the steps say what happened to each. ${outcome.noUndo ?? 'Undo puts back only what Meta made.'}`
         : `Meta made all ${draft.requests.length} request${draft.requests.length === 1 ? '' : 's'}.`,
       done: done.length,
       of: draft.requests.length,

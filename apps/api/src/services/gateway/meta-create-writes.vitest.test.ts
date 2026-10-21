@@ -355,6 +355,24 @@ describe('review A2 — every Meta DELETE has two senders: removalDraft (undo of
     const removeFile = all.find((f) => f.path === 'services/marketing/meta-ads/change-remove.ts')!.text
     expect(removeFile.match(/method: 'DELETE' as const/g)).toHaveLength(1)
     expect(removeFile).not.toMatch(/export (const|function) deleteOf/)
+    // Review A3 — every deleteOf( call sits in metaRemoveDraft's body: an ad / ad set / campaign, a creative, an image, a
+    // video, an Instant Experience part — five, no more.
+    const draftBody = removeFile.slice(removeFile.indexOf('export function metaRemoveDraft'), removeFile.indexOf('/** A child as the preview lists it. */'))
+    expect(draftBody.match(/\bdeleteOf\(/g)).toHaveLength(5)
+    expect(removeFile.match(/\bdeleteOf\(/g)).toHaveLength(5)
+  })
+  it('review A2 — the one destructive POST (a video\'s caption languages) is built only in change-remove.ts, once', () => {
+    const world = all.filter(metaWorld)
+    const naming = (pattern: RegExp) => Object.fromEntries(world.map((f) => [f.path, (f.text.match(pattern) ?? []).length]).filter(([, n]) => n))
+    expect(naming(/locales_to_delete/g)).toEqual({
+      'services/gateway/meta-remove-rules.ts': 6, // the captions.delete rule and its refusals (a judge)
+      'services/marketing/meta-ads/change-remove.ts': 1, // metaRemoveDraft: the request's one body key
+    })
+    expect(naming(/['"`]captions\.delete['"`]/g)).toEqual({
+      'services/gateway/meta-remove-rules.ts': 1, // the rule's name
+      'services/marketing/meta-ads/change-remove.ts': 1, // metaRemoveDraft: the request's operation
+    })
+    expect(naming(/edge: ['"`]captions['"`]/g)).toEqual({ 'services/marketing/meta-ads/change-remove.ts': 1 })
     expect(all.find((f) => f.path === 'services/marketing/meta-ads/change-budget-schedule.ts')!.text).toMatch(/objectKind: 'highdemandperiod', method: 'DELETE'/)
   })
 })

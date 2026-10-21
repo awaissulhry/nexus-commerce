@@ -12,11 +12,13 @@
  * file again (reference/ad-image.md, ad-account/advideos.md), caption languages only by uploading their SRT again, an
  * Instant Experience part only by making it again.
  *
- * CMP-051 (Meta's bulk delete, DELETE act_<id>/campaigns with delete_strategy DELETE_ANY | DELETE_OLDEST |
- * DELETE_ARCHIVED_BEFORE and a before_date Meta describes only as "delete campaigns before this date": reference/ad-account/
- * campaigns.md "Deleting", checked 2026-10-21) is never sent: Meta picks which campaigns die and the preview could not name
- * them (facts F1 M3b-04: "Nexus: never use the bulk form"). Its job — clearing old archived campaigns — is done here by
- * name: meta-campaigns lists the archived ones, and up to 50 go in one request, each listed with everything under it.
+ * CMP-051 (Meta's bulk delete, DELETE act_<id>/campaigns with delete_strategy, before_date, object_count: reference/
+ * ad-account/campaigns.md "Deleting", checked 2026-10-21; facts F1 M3b-04: "Nexus: never use the bulk form") is never
+ * sent: with DELETE_ANY or DELETE_OLDEST Meta picks which campaigns die; with DELETE_ARCHIVED_BEFORE Meta does not say which
+ * date it compares ("delete campaigns before this date") and a call may stop partway (it answers
+ * objects_left_to_delete_count) — so no preview could name exactly what goes. Its job — clearing old archived campaigns —
+ * is done here by name: meta-campaigns lists the archived ones, and up to 50 go in one request, each listed with
+ * everything under it.
  * AD-046 (many ads at once: Meta's batch, not all-or-nothing) is the same request: up to 50 items, each its own request.
  * Meta's own MCP has no delete tool (its CLI deletes one object without a preview); this one lists every child that goes,
  * refuses where Meta would, and answers step by step.
@@ -70,7 +72,9 @@ const buildRemove = (args: Record<string, unknown>): MetaDraftBuilder => async (
     const creativeIds = items.filter((i) => i.kind === 'creative').map((i) => i.id!)
     const creatives = creativeIds.length ? await liveRemoveCreatives(target, creativeIds) : { creatives: new Map(), problems: [] }
     const aliveCreatives = [...creatives.creatives.values()].filter((c) => c.status !== 'DELETED')
-    const adsByCreative = aliveCreatives.length ? await liveAdsByCreative(target) : null
+    // One look at the account's ads: which use a named creative, and (review B1) which show a named video.
+    const withVideos = items.some((i) => i.kind === 'video' || i.kind === 'captions')
+    const adsByCreative = aliveCreatives.length || withVideos ? await liveAdsByCreative(target, withVideos) : null
     const hashes = items.filter((i) => i.kind === 'image').map((i) => i.hash!)
     const images = hashes.length ? await liveRemoveImages(target, [...new Set(hashes)]) : new Map()
     // The creatives Meta lists on an image that this request does not name: their status now (a deleted one is no user).
@@ -151,11 +155,12 @@ const removeMetaAdsItems: AgentTool = {
     + 'takes all its ad sets and ads with it, an ad set its ads. The preview lists EVERY ad set and ad that goes with a '
     + 'campaign or ad set (archived ones too), says what stops delivering, and that an ad set\'s share of a campaign budget '
     + 'moves to the other ad sets (the total stays). Refused in words, nothing deleted: an ad of a sequenced ad set, a '
-    + 'dynamic creative ad alone (delete its ad set), a creative an ad uses or an image a creative uses unless those go in '
-    + 'the same request, anything not of the chosen account or Page. Already deleted: skipped. At most 50 items (10 images '
+    + 'dynamic creative ad alone (delete its ad set), a creative an ad uses, an image a creative uses or a video an ad '
+    + 'shows unless those go in the same request, anything not of the chosen account or Page. Deleting caption languages '
+    + 'names the ads that show the video (they change at once). Already deleted: skipped. At most 50 items (10 images '
     + 'and videos), each its own request in order; one that stands on another (a creative after its ads) goes only if that '
-    + 'one happened. Meta\'s bulk campaign delete is never sent (Meta picks which die): list the archived campaigns '
-    + '(meta-campaigns) and name them here.'
+    + 'one happened. Meta\'s bulk campaign delete is never sent (Meta picks which die, or does not say which date it '
+    + 'compares and may stop partway): list the archived campaigns (meta-campaigns) and name them here.'
     + META_CHANGE_RULES,
   handler: (args, ctx) => metaChangePreview(args, ctx, buildRemove(args)),
   execute: (args, ctx) => runMetaChange(args, ctx, buildRemove(args), (draft, done) => {
@@ -167,6 +172,8 @@ const removeMetaAdsItems: AgentTool = {
       data: { deleted: deleted.map((i) => ({ kind: i.kind, id: i.id, ...(i.locales ? { locales: i.locales } : {}) })), noUndo: 'A deletion on Meta is final: nothing here can be put back.' },
       before: { op: 'remove', items: deleted } satisfies RemoveRecord,
       after: { op: 'remove', items: deleted.map((i) => ({ kind: i.kind, id: i.id, ...(i.locales ? { locales: i.locales } : {}), status: 'DELETED' })) } satisfies RemoveRecord,
+      // Review A5 — a partial run says there is no undo, never "Undo puts back only what Meta made".
+      noUndo: 'A deletion on Meta is final: there is no undo, also for what Meta did delete.',
     }
   }, async (account, done) => {
     const objects = done.filter((d) => (OBJECT_KINDS as readonly string[]).includes(d.request.kind) && d.request.operation === `${d.request.kind}.delete`)

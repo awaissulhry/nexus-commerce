@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   account: { target: { connectionId: 'm-1', adAccountId: '1234567890' }, accountId: 'm-1', adAccountId: '1234567890', name: 'Shop A ads', currency: 'EUR' } as Record<string, unknown> | { refusal: string },
   objects: new Map<string, Record<string, unknown>>(),
   users: new Map<string, Array<{ id: string; name: string | null; effectiveStatus: string | null }>>(),
+  videoUsers: new Map<string, Array<{ id: string; name: string | null; effectiveStatus: string | null }>>(),
   check: vi.fn(),
   send: vi.fn(),
   stored: vi.fn(async () => 1),
@@ -23,10 +24,10 @@ vi.mock('../../marketing/meta-ads/live-remove.js', async (importActual) => ({
     problems: items.filter((i) => !h.objects.has(`${i.kind}:${i.id}`)).map((i) => `Meta does not find ${i.kind} ${i.id} (or the system user cannot see it): nothing to delete.`),
   })),
   liveRemoveCreatives: vi.fn(async (_t: unknown, ids: string[]) => ({ creatives: new Map(ids.map((id) => [id, { id, name: 'Creative C', status: 'ACTIVE', objectType: 'SHARE' }])), problems: [] })),
-  liveAdsByCreative: vi.fn(async () => ({ byCreative: h.users, more: false })),
+  liveAdsByCreative: vi.fn(async (_t: unknown, withVideos?: boolean) => ({ byCreative: h.users, byVideo: withVideos ? h.videoUsers : null, more: false })),
   liveRemoveImages: vi.fn(async () => new Map()),
   liveCreativeStatus: vi.fn(async () => null),
-  liveVideoLibrary: vi.fn(async () => ({ videos: new Map(), more: false })),
+  liveVideoLibrary: vi.fn(async () => ({ videos: new Map([['120000000000060', { description: null, createdTime: null }]]), more: false })),
   liveVideoCaptions: vi.fn(async () => ({ locales: [] })),
   livePageCanvasElements: vi.fn(async () => ({ ids: new Set(), more: false })),
 }))
@@ -76,6 +77,7 @@ beforeEach(() => {
     [`ad:${A}`, { ...base, kind: 'ad', id: A, name: 'Ad 1', adSetId: '120000000000022', campaignId: '120000000000021', creativeId: CR }],
   ])
   h.users = new Map([[CR, [{ id: A, name: 'Ad 1', effectiveStatus: 'PAUSED' }]]])
+  h.videoUsers = new Map()
 })
 
 describe('the change contract', () => {
@@ -146,6 +148,21 @@ describe('run', () => {
     expect(h.send).toHaveBeenCalledTimes(1)
     expect(r).toMatchObject({ ok: false })
     expect(JSON.stringify(r)).toMatch(/not sent — it stands on step 1 of this change, which did not happen as asked/)
+  })
+  it('review A5 — a partial run of a delete says there is no undo, never "Undo puts back only what Meta made"', async () => {
+    const args = { items: [{ kind: 'ad', id: A }, { kind: 'campaign', id: C }] }
+    const p = (await preview(args)).preview
+    h.send.mockImplementationOnce(async () => ({ node: { success: true }, readBack: 'none', waitedMs: 0 }))
+    h.send.mockImplementationOnce(async () => { throw new MetaWriteError(localFailure('Meta refused it (100): Invalid parameter. Nothing was changed.', '100'), 'campaign.delete', 'refused') })
+    const r = await run(args, p)
+    expect(r.data.sentence).toBe('Meta made 1 of 2 requests as asked; the steps say what happened to each. A deletion on Meta is final: there is no undo, also for what Meta did delete.')
+    expect(r.data.sentence).not.toMatch(/Undo puts back/)
+  })
+  it('review B1 — a video an ad still shows is refused; read with the creatives\' video fields', async () => {
+    h.videoUsers = new Map([['120000000000060', [{ id: A, name: 'Ad 1', effectiveStatus: 'ACTIVE' }]]])
+    expect(await preview({ items: [{ kind: 'video', id: '120000000000060' }] })).toEqual({ ok: false, error: expect.stringMatching(/Video 120000000000060 is shown by 1 ad this change does not delete/) })
+    const ok = await preview({ items: [{ kind: 'video', id: '120000000000060' }, { kind: 'ad', id: A }] })
+    expect(ok.preview.requests.map((x: { label: string }) => x.label)).toEqual([`Delete ad "Ad 1" (${A})`, 'Remove video 120000000000060 from the ad account\'s library'])
   })
   it('a changed live state (a new ad set under the campaign) is not run', async () => {
     const args = { items: [{ kind: 'campaign', id: C }] }

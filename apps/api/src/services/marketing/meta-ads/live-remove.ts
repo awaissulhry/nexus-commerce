@@ -5,11 +5,11 @@
  *     with what each delivers now; an ad set's campaign and its budget (a campaign budget's share moves to the other ad
  *     sets), and those other ad sets; an ad's ad set's sequence and dynamic creative flag (Meta refuses those ads alone);
  *   - each creative named: its account, kind and status, and the account's ads that use it (one look at the account's
- *     ads, at most 500, every status but DELETED);
+ *     ads, at most 500, every status but DELETED) — with each ad's creative's videos when a video or its captions are named;
  *   - each image named by its hash: the chosen ad account's library entry (status, the creatives Meta says use it) and the
  *     status of those creatives;
  *   - the chosen ad account's video library (at most 500) for each video named, and the caption languages of a video;
- *   - the chosen Page's Instant Experience parts (at most 500) for each part named.
+ *   - the chosen Page's Instant Experience parts (at most 500, by each part's own id) for each part named.
  * Built on step 6's reads (live-objects.ts listPaged, the list statuses) and step 17's account and kind check (the fields
  * only a kind has: services/meta/meta-kinds.ts) — never a copy. Nothing here stores anything; an object of another ad
  * account, another kind or another Page is a problem in words, never read further.
@@ -65,11 +65,16 @@ export interface RemoveObject {
   childrenMore: boolean
   /** An ad set under a campaign budget: its campaign, and the campaign's other ad sets (not deleted). */
   campaignBudget: { campaignId: string; name: string | null; otherAdSets: Array<{ id: string; effectiveStatus: string | null }>; more: boolean } | null
+  /** A campaign's smart_promotion_type when it marks a legacy Advantage+ shopping or app campaign (else null). */
+  legacy: string | null
 }
+
+/** smart_promotion_type of a legacy Advantage+ shopping / app campaign (change-campaign-settings.ts reads the same). */
+const LEGACY_PROMOTION = new Set(['AUTOMATED_SHOPPING_ADS', 'SMART_APP_PROMOTION'])
 
 /** The fields of one read, per kind: its account, its kind's own two fields, its name and status, its parents. */
 export const REMOVE_FIELDS: Readonly<Record<RemoveObjectKind, string>> = {
-  campaign: `id,account_id,name,status,${META_KIND_FIELDS.campaign.join(',')}`,
+  campaign: `id,account_id,name,status,${META_KIND_FIELDS.campaign.join(',')},smart_promotion_type`,
   adset: `id,account_id,name,status,${META_KIND_FIELDS.adset.join(',')},effective_status,campaign_id,campaign{id,name,daily_budget,lifetime_budget}`,
   ad: `id,account_id,name,status,effective_status,${META_KIND_FIELDS.ad[0]},campaign_id,creative{id},adset{id,creative_sequence,is_dynamic_creative}`,
 }
@@ -123,6 +128,7 @@ export async function liveRemoveObjects(target: MetaSettingsTarget, items: Reado
         adSetId: item.kind === 'ad' ? idText(body.adset_id) ?? idText(adSet?.id) : null,
         creativeId: item.kind === 'ad' ? idText(obj(body.creative)?.id) : null,
         undeletable: null, children: [], childrenMore: false, campaignBudget: null,
+        legacy: item.kind === 'campaign' && LEGACY_PROMOTION.has(text(body.smart_promotion_type) ?? '') ? text(body.smart_promotion_type) : null,
       }
       if (status !== 'DELETED') {
         if (item.kind === 'ad') {
@@ -182,27 +188,52 @@ export async function liveRemoveCreatives(target: MetaSettingsTarget, ids: reado
   return { creatives, problems }
 }
 
-/** An ad that uses a creative (every status but DELETED). */
+/** An ad that uses a creative or shows a video (every status but DELETED). */
 export interface CreativeUser { id: string; name: string | null; effectiveStatus: string | null }
 
+/** The account's ads by the creative each uses and by the videos that creative shows; `more` when it has more than 500. */
+export interface AdsUsing { byCreative: Map<string, CreativeUser[]>; byVideo: Map<string, CreativeUser[]> | null; more: boolean }
+
 /**
- * The chosen ad account's ads by the creative each uses — ONE look at the account's ads (every status but DELETED, at most
- * 500; `more` when the account has more). Meta documents no filter by creative on act_<id>/ads (step 6, CR-007), and a
- * creative has no list of its ads: this is the one way to know.
+ * Review B1 — the creative fields that name a video (reference/ad-creative.md): `video_id` ("Facebook object ID for video
+ * in this ad"), `object_story_spec.video_data.video_id` and `asset_feed_spec.videos` (each {video_id, …}).
  */
-export async function liveAdsByCreative(target: MetaSettingsTarget): Promise<{ byCreative: Map<string, CreativeUser[]>; more: boolean }> {
+export const CREATIVE_VIDEO_FIELDS = 'creative{id,video_id,object_story_spec{video_data{video_id}},asset_feed_spec{videos}}'
+
+/** The video ids a creative (as `CREATIVE_VIDEO_FIELDS` reads it) shows. */
+export function videosOfCreative(creative: Row | null): string[] {
+  if (!creative) return []
+  const ids = [
+    idText(creative.video_id),
+    idText(obj(obj(creative.object_story_spec)?.video_data)?.video_id),
+    ...listOf(obj(creative.asset_feed_spec)?.videos).map((v) => idText(obj(v)?.video_id)),
+  ]
+  return [...new Set(ids.filter((v): v is string => !!v))]
+}
+
+/**
+ * The chosen ad account's ads by the creative each uses (and, `withVideos`, by the videos that creative shows) — ONE look at
+ * the account's ads (every status but DELETED, at most 500; `more` when the account has more). Meta documents no filter by
+ * creative on act_<id>/ads (step 6, CR-007), and neither a creative nor a video has a list of its ads: this is the one way
+ * to know. A creative no ad uses is not seen here.
+ */
+export async function liveAdsByCreative(target: MetaSettingsTarget, withVideos = false): Promise<AdsUsing> {
   const read = await listPaged(target.connectionId, 'remove.read.accountAds', `act_${target.adAccountId}/ads`, {
-    fields: 'id,account_id,name,effective_status,creative{id}', effective_status: [...AD_LIST_STATUSES],
+    fields: `id,account_id,name,effective_status,${withVideos ? CREATIVE_VIDEO_FIELDS : 'creative{id}'}`, effective_status: [...AD_LIST_STATUSES],
   }, MAX_ROWS)
   const byCreative = new Map<string, CreativeUser[]>()
+  const byVideo = withVideos ? new Map<string, CreativeUser[]>() : null
   for (const r of read.rows) {
     if (r.account_id !== undefined && metaAdAccountId(r.account_id) !== target.adAccountId) continue
-    const creative = idText(obj(r.creative)?.id)
+    const creative = obj(r.creative)
+    const creativeId = idText(creative?.id)
     const id = idText(r.id)
-    if (!creative || !id) continue
-    byCreative.set(creative, [...(byCreative.get(creative) ?? []), { id, name: text(r.name), effectiveStatus: text(r.effective_status) }])
+    if (!id) continue
+    const user = { id, name: text(r.name), effectiveStatus: text(r.effective_status) }
+    if (creativeId) byCreative.set(creativeId, [...(byCreative.get(creativeId) ?? []), user])
+    if (byVideo) for (const v of videosOfCreative(creative)) byVideo.set(v, [...(byVideo.get(v) ?? []), user])
   }
-  return { byCreative, more: read.more }
+  return { byCreative, byVideo, more: read.more }
 }
 
 // ── the library: images, videos, captions ────────────────────────────────────────────────────────────────────────
@@ -258,12 +289,12 @@ export async function liveVideoCaptions(target: MetaSettingsTarget, videoId: str
 // ── Instant Experience parts ─────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * The chosen Page's Instant Experience parts (its first 500; Meta answers each as {element}: its id is the row's or the
- * element's own — both taken). A Page read may need the Page's own token: Meta's words then say so.
+ * The chosen Page's Instant Experience parts (its first 500), by each part's OWN id (the row's `id`; review A6: never an id
+ * inside it — LIVE-PROBES CR-487). A Page read may need the Page's own token: Meta's words then say so.
  */
 export async function livePageCanvasElements(target: MetaSettingsTarget, pageId: string): Promise<{ ids: Set<string>; more: boolean }> {
-  const read = await listPaged(target.connectionId, 'remove.read.canvasElements', `${pageId}/canvas_elements`, { fields: 'element' }, MAX_ROWS)
+  const read = await listPaged(target.connectionId, 'remove.read.canvasElements', `${pageId}/canvas_elements`, { fields: 'id' }, MAX_ROWS)
   const ids = new Set<string>()
-  for (const r of read.rows) for (const v of [r.id, obj(r.element)?.id]) { const id = metaObjectId(v); if (id) ids.add(id) }
+  for (const r of read.rows) { const id = metaObjectId(r.id); if (id) ids.add(id) }
   return { ids, more: read.more }
 }

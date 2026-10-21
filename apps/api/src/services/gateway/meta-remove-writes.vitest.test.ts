@@ -26,7 +26,7 @@ vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: v
 import { gatewayLedger, gatewayMetaChosen, gatewayMetaPage, gatewayMetaStored } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from './rate.js'
 import { metaWriteCall } from './meta.js'
-import { metaWriteVerdict } from './meta-calls.js'
+import { metaCallVerdict, metaWriteVerdict } from './meta-calls.js'
 import { __metaObjectLimitsTest } from './meta-object-limits.js'
 import { META_DEFAULT_GRAPH_API_VERSION } from '../meta/api-version.js'
 
@@ -97,10 +97,18 @@ describe('the allow-list: each delete exactly as Meta documents it, nothing more
     expect(problem({ url: `${BASE}/${PART}`, objectKind: 'canvaselement', body: 'x=1' })).toMatch(/deletes on Meta only/)
     expect(problem({ url: `${BASE}/${PART}`, objectKind: 'page' })).toMatch(/deletes on Meta only/)
   })
-  it('Meta\'s bulk campaign delete is not on the list (CMP-051: Meta picks which die)', () => {
+  it('Meta\'s bulk campaign delete is not on the list (CMP-051: Meta picks which die, or does not say which date it compares and may stop partway)', () => {
     for (const body of ['delete_strategy=DELETE_ANY', 'delete_strategy=DELETE_ARCHIVED_BEFORE&before_date=2026-01-01', 'delete_strategy=DELETE_OLDEST&object_count=5']) {
       expect(problem({ url: `${BASE}/${ACT}/campaigns`, objectKind: 'adaccount', body })).toMatch(/deletes on Meta only/)
     }
+  })
+})
+
+describe('review B1 — the one read of the account\'s ads with the videos their creatives show passes the read allow-list', () => {
+  it('creative{id,video_id,object_story_spec{video_data{video_id}},asset_feed_spec{videos}} on act_<id>/ads', () => {
+    const fields = 'id,account_id,name,effective_status,creative{id,video_id,object_story_spec{video_data{video_id}},asset_feed_spec{videos}}'
+    const url = `${BASE}/${ACT}/ads?fields=${encodeURIComponent(fields)}&effective_status=${encodeURIComponent('["ACTIVE","ARCHIVED"]')}&limit=100`
+    expect(metaCallVerdict({ method: 'GET', url, kind: 'read' }).problem).toBeNull()
   })
 })
 
@@ -160,16 +168,18 @@ describe('through the gateway: only the chosen ad account\'s (or Page\'s) own', 
     expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname])).toEqual([['GET', `/v26.0/${ACT}/advideos`], ['POST', `/v26.0/${VIDEO}/captions`]])
     expect(new URLSearchParams(String(h.calls[1].init.body)).get('locales_to_delete')).toBe('["en_US"]')
   })
-  it('an Instant Experience part goes only when it is the chosen Page\'s (its own id or its element\'s)', async () => {
+  it('review A6 — an Instant Experience part goes only when it is the chosen Page\'s, by the part\'s OWN id (never an id inside a row)', async () => {
     const noPage = await metaWriteCall({ connectionId: 'm-1', operation: 'canvaselement.delete', objectId: PART, objectKind: 'canvaselement', params: {}, check: false, method: 'DELETE' }).catch((e) => e)
     expect(noPage).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/no Facebook Page chosen/) })
     gatewayMetaPage['m-1'] = PAGE
-    h.answers.push(json({ data: [{ element: { id: '120000000000071' } }] }))
+    h.answers.push(json({ data: [{ id: '120000000000071', element: { id: PART } }, { element: { id: PART } }] }))
     const foreign = await metaWriteCall({ connectionId: 'm-1', operation: 'canvaselement.delete', objectId: PART, objectKind: 'canvaselement', params: {}, check: false, method: 'DELETE' }).catch((e) => e)
     expect(foreign).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/not a part of the chosen Page's Instant Experiences/) })
     expect(new URL(h.calls[0].url).pathname).toBe(`/v26.0/${PAGE}/canvas_elements`)
+    expect(new URL(h.calls[0].url).searchParams.get('fields')).toBe('id')
+    expect(h.calls.filter((c) => c.init.method === 'DELETE')).toHaveLength(0)
     h.calls = []
-    h.answers.push(json({ data: [{ element: { id: PART } }] }))
+    h.answers.push(json({ data: [{ id: PART }] }))
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'canvaselement.delete', objectId: PART, objectKind: 'canvaselement', params: {}, check: false, method: 'DELETE' })).ok).toBe(true)
     expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname])).toEqual([['GET', `/v26.0/${PAGE}/canvas_elements`], ['DELETE', `/v26.0/${PART}`]])
   })

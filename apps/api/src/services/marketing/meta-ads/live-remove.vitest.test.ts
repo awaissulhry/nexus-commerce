@@ -39,7 +39,8 @@ describe('liveRemoveObjects', () => {
       { kind: 'adset', id: S, status: 'ARCHIVED', effectiveStatus: 'ARCHIVED', creativeId: null },
       { kind: 'ad', id: A, effectiveStatus: 'CAMPAIGN_PAUSED', creativeId: '120000000000040' },
     ], childrenMore: false })
-    expect(h.reads[0].query.fields).toBe('id,account_id,name,status,objective,effective_status')
+    expect(h.reads[0].query.fields).toBe('id,account_id,name,status,objective,effective_status,smart_promotion_type')
+    expect(read.objects.get(`campaign:${C}`)!.legacy).toBeNull()
     const statuses = h.reads.find((r) => r.path === `${C}/ads`)!.query.effective_status as string[]
     expect(statuses).toContain('ARCHIVED')
     expect(statuses).not.toContain('DELETED')
@@ -54,6 +55,8 @@ describe('liveRemoveObjects', () => {
       `${S} is not an ad set (Meta answered without an ad set's own fields); name its kind as meta-ads-live shows it.`,
       `Meta does not find ad ${A} (or the system user cannot see it): nothing to delete.`,
     ])
+    h.answers[C] = { id: C, account_id: '1234567890', status: 'PAUSED', objective: 'OUTCOME_SALES', effective_status: 'PAUSED', smart_promotion_type: 'AUTOMATED_SHOPPING_ADS' }
+    expect((await liveRemoveObjects(target, [{ kind: 'campaign', id: C }])).objects.get(`campaign:${C}`)!.legacy).toBe('AUTOMATED_SHOPPING_ADS')
     h.answers[C] = { id: C, account_id: '1234567890', status: 'DELETED', objective: 'OUTCOME_SALES', effective_status: 'DELETED' }
     h.reads = []
     expect((await liveRemoveObjects(target, [{ kind: 'campaign', id: C }])).objects.get(`campaign:${C}`)).toMatchObject({ status: 'DELETED', children: [] })
@@ -98,8 +101,24 @@ describe('the account\'s ads by creative, images, Instant Experience parts', () 
     expect([...images.values()]).toEqual([{ hash: 'abc', name: 'a.jpg', status: 'ACTIVE', creatives: ['120000000000041'] }, { hash: 'def', name: null, status: 'ACTIVE', creatives: ['120000000000042'] }])
     expect(h.reads[0].query.hashes).toEqual(['abc', 'def'])
   })
-  it('an Instant Experience part\'s id: its row\'s or its element\'s', async () => {
-    h.answers['120000000000080/canvas_elements'] = { data: [{ element: { id: '120000000000070' } }, { id: '120000000000071' }] }
-    expect([...(await livePageCanvasElements(target, '120000000000080')).ids]).toEqual(['120000000000070', '120000000000071'])
+  it('review A6 — an Instant Experience part by its OWN id only (never an id inside its row)', async () => {
+    h.answers['120000000000080/canvas_elements'] = { data: [{ element: { id: '120000000000070' } }, { id: '120000000000071', element: { id: '120000000000072' } }] }
+    expect([...(await livePageCanvasElements(target, '120000000000080')).ids]).toEqual(['120000000000071'])
+    expect(h.reads[0].query.fields).toBe('id')
+  })
+  it('review B1 — with videos: the ads by each video their creative shows (video_id, video_data, asset feed videos)', async () => {
+    h.answers['act_1234567890/ads'] = { data: [
+      { id: A, account_id: '1234567890', effective_status: 'ACTIVE', creative: { id: '120000000000040', video_id: '120000000000060' } },
+      { id: '120000000000004', account_id: '1234567890', effective_status: 'PAUSED', creative: { id: '120000000000041', object_story_spec: { video_data: { video_id: '120000000000061' } } } },
+      { id: '120000000000005', account_id: '1234567890', effective_status: 'PAUSED', creative: { id: '120000000000042', asset_feed_spec: { videos: [{ video_id: '120000000000060' }, { video_id: '120000000000062' }] } } },
+    ] }
+    const read = await liveAdsByCreative(target, true)
+    expect(h.reads[0].query.fields).toBe('id,account_id,name,effective_status,creative{id,video_id,object_story_spec{video_data{video_id}},asset_feed_spec{videos}}')
+    expect(read.byVideo!.get('120000000000060')!.map((u) => u.id)).toEqual([A, '120000000000005'])
+    expect(read.byVideo!.get('120000000000061')!.map((u) => u.id)).toEqual(['120000000000004'])
+    expect(read.byVideo!.get('120000000000062')!.map((u) => u.id)).toEqual(['120000000000005'])
+    h.reads = []
+    expect((await liveAdsByCreative(target)).byVideo).toBeNull()
+    expect(h.reads[0].query.fields).toBe('id,account_id,name,effective_status,creative{id}')
   })
 })

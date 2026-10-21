@@ -20,6 +20,7 @@ export const META_SCOPE = {
   pages_read_engagement: 'pages_read_engagement',
   instagram_basic: 'instagram_basic',
   catalog_management: 'catalog_management',
+  pages_manage_ads: 'pages_manage_ads',
 } as const
 
 export const META_REQUIRED_SCOPES: string[] = [META_SCOPE.ads_read]
@@ -31,6 +32,8 @@ export const META_OPTIONAL_SCOPES: string[] = [
   META_SCOPE.pages_read_engagement,
   META_SCOPE.instagram_basic,
   META_SCOPE.catalog_management,
+  // Step 22 (review B2) — Instant Experience parts: guides/instant-experiences.md "Before you start" names it.
+  META_SCOPE.pages_manage_ads,
 ]
 
 /** What each permission lets Nexus do, for the sentence a missing one gets. */
@@ -42,6 +45,7 @@ const NEEDED_FOR: Readonly<Record<string, string>> = {
   pages_read_engagement: "read the Pages' Instagram accounts",
   instagram_basic: 'read the Instagram accounts (with pages_show_list)',
   catalog_management: 'read the catalogs (later Nexus versions)',
+  pages_manage_ads: 'delete parts of an Instant Experience of the chosen Page with remove-meta-ads-items (Meta also asks pages_read_engagement, pages_show_list and the Page\'s ADVERTISE task)',
 }
 
 export interface MetaPermissionGap { scope: string; required: boolean; neededFor: string }

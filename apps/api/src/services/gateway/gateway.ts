@@ -740,23 +740,23 @@ async function metaListedOwnerProblem(connectionId: string, id: string, kind: 'v
   if (check) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: Meta has no check (validate_only) for a change of a ${what}.` }
   const owner = kind === 'video' ? await metaChosenAdAccountOf(connectionId) : await metaChosenPageOf(connectionId)
   if (!owner) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: kind === 'video' ? 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection.' : 'Nothing was sent to Meta: this business has no Facebook Page chosen through this connection.' }
-  const listed = await metaListedIdsPaged(connectionId, kind === 'video' ? `act_${owner}/advideos` : `${owner}/canvas_elements`, kind === 'video' ? 'id' : 'element', 5)
+  const listed = await metaListedIdsPaged(connectionId, kind === 'video' ? `act_${owner}/advideos` : `${owner}/canvas_elements`, 5)
   if (listed === null) return { code: 'META_ACCOUNT_UNCONFIRMED', sentence: `Nothing was sent to Meta: Nexus could not read the ${kind === 'video' ? 'chosen ad account\'s video library' : 'chosen Page\'s Instant Experience parts'} to confirm ${id} is there.` }
   return listed.has(id) ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${what} ${id} is not ${kind === 'video' ? 'in the chosen ad account\'s video library' : 'a part of the chosen Page\'s Instant Experiences'} (Nexus looks at the first 500).` }
 }
 
 /**
- * Meta step 22 — the ids of one Meta list, page by page (cursor `after`, never Meta's next link: it carries the token), at
- * most `maxPages` of 100: a row's `id`, and the `id` inside its `element` (an Instant Experience part's list answers each
- * part as {element}). Null when a page could not be read; the ids of the pages read when the list goes on past them.
+ * Meta step 22 — the ids of one Meta list (fields=id), page by page (cursor `after`, never Meta's next link: it carries the
+ * token), at most `maxPages` of 100: each row's OWN `id` only (review A6: never an id inside a row — LIVE-PROBES CR-487).
+ * Null when a page could not be read; the ids of the pages read when the list goes on past them.
  */
-async function metaListedIdsPaged(connectionId: string, path: string, fields: string, maxPages: number): Promise<Set<string> | null> {
+async function metaListedIdsPaged(connectionId: string, path: string, maxPages: number): Promise<Set<string> | null> {
   const ids = new Set<string>()
   const idOf = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : '')
   let after: string | null = null
   for (let page = 0; page < maxPages; page++) {
     const url = new URL(`${metaGraphBase()}/${path}`)
-    url.searchParams.set('fields', fields)
+    url.searchParams.set('fields', 'id')
     url.searchParams.set('limit', '100')
     if (after) url.searchParams.set('after', after)
     let body: { data?: Array<Record<string, unknown>>; paging?: { cursors?: { after?: unknown }; next?: unknown } } | null
@@ -767,9 +767,7 @@ async function metaListedIdsPaged(connectionId: string, path: string, fields: st
       return null
     }
     if (!body || !Array.isArray(body.data)) return null
-    for (const row of body.data) {
-      for (const v of [row?.id, (row?.element as Record<string, unknown> | undefined)?.id]) if (idOf(v)) ids.add(idOf(v))
-    }
+    for (const row of body.data) if (idOf(row?.id)) ids.add(idOf(row?.id))
     after = typeof body.paging?.cursors?.after === 'string' && body.paging?.next ? body.paging.cursors.after : null
     if (!after) break
   }
