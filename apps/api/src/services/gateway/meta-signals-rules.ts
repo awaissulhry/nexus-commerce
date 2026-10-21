@@ -22,7 +22,8 @@
  *   - ads-pixel/shared_accounts.md: POST and DELETE, account_id + business both required → {success}. For the DELETE the
  *     page lists the two parameters but shows no sample of how they travel; Meta's audiences guide sends a DELETE with a
  *     body (DELETE /{audience}/users, payload) and its SDK puts DELETE parameters on the query string. Nexus sends them as
- *     the form body (a change never carries a query string) — LIVE-PROBE SG-019 settles it.
+ *     the form body (step 22's mechanism in meta-calls.ts: a DELETE rule that names keys takes exactly those as its body;
+ *     a change never carries a query string) — LIVE-PROBE SG-019 settles it.
  * Lane C3 decision (review round 1): who ELSE may use a dataset — partner portfolios (POST / DELETE /{pixel}/agencies),
  * businesses allowed to send its server events (server_events_business_ids) and people's tasks (POST
  * /{pixel}/assigned_users) — gives or takes another business's or a person's access to the pixel's customer events: like
@@ -42,14 +43,17 @@
  * SignalsIWLExtractor and AdsPixelDomainControlRule have no create, update or delete) — RECHECK-C3 SG-041, SG-098…SG-104.
  */
 import type { MetaWriteRule } from './meta-calls.js'
-import { META_NAME_TEXT, META_STRICT_TEXT } from './meta-settings-rules.js'
+import { META_NAME_TEXT, META_STRICT_TEXT } from './meta-write-text.js'
 
-/** The kinds of object a step 32 change names (the gateway confirms each: signals-rule.ts). */
-export const META_SIGNALS_KINDS = ['adaccount', 'business', 'pixel', 'customconversion', 'eventsourcegroup', 'page', 'instagram'] as const
-export type MetaSignalsKind = typeof META_SIGNALS_KINDS[number]
-export const isMetaSignalsKind = (kind: unknown): kind is MetaSignalsKind => typeof kind === 'string' && (META_SIGNALS_KINDS as readonly string[]).includes(kind)
-/** The edges a step 32 change posts to (`POST /<object>/<edge>`). */
-export type MetaSignalsEdge = 'adspixels' | 'dataset' | 'customconversions' | 'shared_accounts' | 'event_source_groups' | 'claim_custom_conversions'
+/**
+ * The kinds of object only a step 32 change names (the gateway checks each with signals-rule.ts, chosen by the rule that
+ * judged the write): a dataset (pixel) that passes step 11's verdict, the chosen ad account's business portfolio that no
+ * other Nexus business shares, a custom conversion of the chosen ad account whose dataset is free (Nexus-made to delete),
+ * an event source group of that portfolio, the chosen Instagram account (step 31's rule). Where step 32 means exactly an
+ * earlier step's rule it names that step's kind: a create on act_<the chosen account> is step 19's `adaccount`, the
+ * chosen Page step 28's `page`. Its edges are meta.ts MetaSignalsEdge.
+ */
+export type MetaSignalsKind = 'dataset' | 'datasetportfolio' | 'datasetconversion' | 'eventsourcegroup' | 'instagram'
 
 export const AUTOMATIC_MATCHING_FIELDS = ['em', 'fn', 'ln', 'ph', 'ge', 'zp', 'ct', 'st', 'country', 'db', 'external_id'] as const
 export const FIRST_PARTY_COOKIE_STATUSES = ['FIRST_PARTY_COOKIE_ENABLED', 'FIRST_PARTY_COOKIE_DISABLED', 'EMPTY'] as const
@@ -187,7 +191,7 @@ export const META_SIGNALS_WRITE_RULES: readonly MetaWriteRule[] = [
   },
   {
     // create-meta-dataset level business (SG-007, SDK only).
-    name: 'dataset.createInBusiness', method: 'POST', path: /^\d{1,20}\/adspixels$/, kinds: ['business'],
+    name: 'dataset.createInBusiness', method: 'POST', path: /^\d{1,20}\/adspixels$/, kinds: ['datasetportfolio'],
     required: ['name'], optional: [], text: { name: META_NAME_TEXT }, values: judged({ name: textOf(100, 'name') }), budget: false,
   },
   {
@@ -197,23 +201,23 @@ export const META_SIGNALS_WRITE_RULES: readonly MetaWriteRule[] = [
   },
   {
     // set-meta-dataset (SG-010–013).
-    name: 'dataset.settings', method: 'POST', path: /^\d{1,20}$/, kinds: ['pixel'],
+    name: 'dataset.settings', method: 'POST', path: /^\d{1,20}$/, kinds: ['dataset'],
     required: [], optional: PIXEL_SETTING_KEYS, anyOf: PIXEL_SETTING_KEYS, text: { name: META_NAME_TEXT }, values: judged(PIXEL_JUDGES), budget: false,
   },
   {
     // set-meta-dataset-access connect-ad-account (SG-018).
-    name: 'dataset.connectAccount', method: 'POST', path: /^\d{1,20}\/shared_accounts$/, kinds: ['pixel'],
+    name: 'dataset.connectAccount', method: 'POST', path: /^\d{1,20}\/shared_accounts$/, kinds: ['dataset'],
     required: ['account_id', 'business'], optional: [], values: judged({ account_id: digits('account_id'), business: digits('business') }), budget: false,
   },
   {
     // set-meta-dataset-access disconnect-ad-account (SG-019): a DELETE with its two required keys as the form body (see
     // the header: Meta shows no sample of how they travel — LIVE-PROBE SG-019).
-    name: 'dataset.disconnectAccount', method: 'DELETE', path: /^\d{1,20}\/shared_accounts$/, kinds: ['pixel'],
+    name: 'dataset.disconnectAccount', method: 'DELETE', path: /^\d{1,20}\/shared_accounts$/, kinds: ['dataset'],
     required: ['account_id', 'business'], optional: [], values: judged({ account_id: digits('account_id'), business: digits('business') }), budget: false,
   },
   {
     // set-meta-dataset event source group create (BM-057).
-    name: 'eventSourceGroup.create', method: 'POST', path: /^\d{1,20}\/event_source_groups$/, kinds: ['business'],
+    name: 'eventSourceGroup.create', method: 'POST', path: /^\d{1,20}\/event_source_groups$/, kinds: ['datasetportfolio'],
     required: ['event_sources', 'name'], optional: [], text: { name: META_NAME_TEXT }, values: judged(GROUP_JUDGES), budget: false,
   },
   {
@@ -234,18 +238,18 @@ export const META_SIGNALS_WRITE_RULES: readonly MetaWriteRule[] = [
   },
   {
     // set-meta-custom-conversion update (SG-092): name and description only — Meta never changes a rule (B1: no value).
-    name: 'customConversion.update', method: 'POST', path: /^\d{1,20}$/, kinds: ['customconversion'],
+    name: 'customConversion.update', method: 'POST', path: /^\d{1,20}$/, kinds: ['datasetconversion'],
     required: [], optional: [...CONVERSION_UPDATE_KEYS], anyOf: [...CONVERSION_UPDATE_KEYS], text: { name: META_NAME_TEXT, description: META_STRICT_TEXT },
     values: judged({ name: CONVERSION_JUDGES.name, description: CONVERSION_JUDGES.description }), budget: false,
   },
   {
     // remove-meta-signal-items (SG-093): only a custom conversion Nexus made (signals-rule.ts).
-    name: 'customConversion.delete', method: 'DELETE', path: /^\d{1,20}$/, kinds: ['customconversion'],
+    name: 'customConversion.delete', method: 'DELETE', path: /^\d{1,20}$/, kinds: ['datasetconversion'],
     required: [], optional: [], values: () => null, budget: false,
   },
   {
     // set-meta-custom-conversion claim (SG-094).
-    name: 'customConversion.claim', method: 'POST', path: /^\d{1,20}\/claim_custom_conversions$/, kinds: ['business'],
+    name: 'customConversion.claim', method: 'POST', path: /^\d{1,20}\/claim_custom_conversions$/, kinds: ['datasetportfolio'],
     required: ['custom_conversion_id'], optional: [], values: judged({ custom_conversion_id: digits('custom_conversion_id') }), budget: false,
   },
 ]

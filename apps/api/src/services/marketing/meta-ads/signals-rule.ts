@@ -4,7 +4,7 @@
  * and the gateway asks it again before anything is sent (gateway.ts 3b, `metaSignalsProblem`). Reads only, through the
  * gateway; every pixel judged with step 11's verdict (live-audiences.ts ownPixel / pixelVerdict), never assumed free.
  *
- *   ad account     only the chosen one (`act_<chosen>`).
+ *   ad account     only the chosen one (`act_<chosen>`: step 19's check — the gateway runs it before this rule).
  *   portfolio      only the chosen ad account's business portfolio, read live (`act_<id>?fields=business{id}`), and never
  *                  one another Nexus business's chosen ad account is also in (nexus_meta_links_taken PORTFOLIO): two
  *                  businesses in one portfolio never change its datasets or groups from Nexus.
@@ -17,7 +17,8 @@
  *                  is in this business's own change records: AgentChange of set-meta-custom-conversion, after.created); to
  *                  claim, one no business portfolio holds yet (its business{id}: review B2).
  *   event source group  one of the chosen portfolio's (`<portfolio>/event_source_groups`), every dataset in it free.
- *   Page / Instagram    the business's chosen Page / Instagram account (its MetaAccountLink), and no other's.
+ *   Page / Instagram    the business's chosen Page / Instagram account (its MetaAccountLink), and no other's — the tools
+ *                  ask it here; the gateway asks step 28's (Page) and step 31's (Instagram) rule, the same meaning.
  * Partner portfolios, server-event businesses and people on a dataset are not step 32's (lane C3 decision): no rule here.
  * Checked 2026-10-21: reference/ad-account (business), business/event_source_groups (fields id, name; SDK
  * eventsourcegroup.py event_sources, owner_business), custom-conversion (account_id, pixel, business), ads-pixel
@@ -25,7 +26,8 @@
  */
 import prisma from '../../../db.js'
 import { metaAdAccountId, metaObjectId } from '../../cx/connectors/meta/discovery.js'
-import { canonicalJson, type MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
+import { canonicalJson } from '../../gateway/meta-signals-rules.js'
+import type { MetaWriteKind } from '../../gateway/meta-calls.js'
 import { MetaReadError } from './errors.js'
 import { metaChosenAccount, MetaLiveRefusal, type MetaChosenAccount } from './live.js'
 import { act, chosenPixelIds, ownPixel, part, pixelAccounts, readRows, refuse } from './live-audiences.js'
@@ -152,7 +154,7 @@ const jsonIds = (value: string | undefined): string[] | null => {
   return Array.isArray(list) && list.every((v) => typeof v === 'string') ? list as string[] : null
 }
 
-async function judge(account: MetaChosenAccount, rule: string, objectId: string, kind: MetaSignalsKind, params: ReadonlyMap<string, string>): Promise<void> {
+async function judge(account: MetaChosenAccount, rule: string, objectId: string, kind: MetaWriteKind, params: ReadonlyMap<string, string>): Promise<void> {
   const accountBody = async () => {
     const portfolio = await ownPortfolio(account)
     if (params.get('account_id') !== account.adAccountId) refuse('A dataset is connected to or disconnected from the chosen ad account only.')
@@ -160,11 +162,11 @@ async function judge(account: MetaChosenAccount, rule: string, objectId: string,
   }
   switch (kind) {
     case 'adaccount': {
-      if (objectId !== act(account.adAccountId)) refuse('That ad account is not the one this business chose.')
+      // act_<the chosen account> itself is step 19's check (gateway.ts metaOwnerProblem, run first): here only the body.
       if (rule === 'customConversion.create') await ownSignalPixel(account, params.get('event_source_id') ?? '')
       return
     }
-    case 'business': {
+    case 'datasetportfolio': {
       const portfolio = await ownPortfolio(account)
       if (objectId !== portfolio) refuse('That business portfolio is not the chosen ad account\'s.')
       if (rule === 'eventSourceGroup.create') for (const pixelId of jsonIds(params.get('event_sources')) ?? refuse('event_sources lists datasets.')) await ownSignalPixel(account, pixelId)
@@ -175,13 +177,13 @@ async function judge(account: MetaChosenAccount, rule: string, objectId: string,
       }
       return
     }
-    case 'pixel': {
+    case 'dataset': {
       if (rule === 'dataset.connectAccount') { await connectablePixel(account, objectId); await accountBody(); return }
       await ownSignalPixel(account, objectId)
       if (rule === 'dataset.disconnectAccount') { await accountBody(); return }
       return
     }
-    case 'customconversion': {
+    case 'datasetconversion': {
       await ownConversion(account, objectId, { nexusMade: rule === 'customConversion.delete' })
       return
     }
@@ -195,11 +197,12 @@ async function judge(account: MetaChosenAccount, rule: string, objectId: string,
       }
       return
     }
+    // The chosen Page (step 28's rule) and the chosen Instagram account (step 31's) are checked by the gateway first.
     case 'page':
-    case 'instagram': {
-      await ownMessagingAccount(account, kind, objectId)
+    case 'instagram':
       return
-    }
+    default:
+      refuse(`A dataset or custom conversion change does not name ${objectId} as ${kind}.`)
   }
 }
 
@@ -207,7 +210,7 @@ async function judge(account: MetaChosenAccount, rule: string, objectId: string,
  * The gateway's question (gateway.ts 3b): why this judged step 32 change may not be sent for this connection, or null.
  * Never Meta's check (none is documented for these changes); any read that fails refuses it.
  */
-export async function metaSignalsProblem(connectionId: string, write: { rule: string; objectId: string; check: boolean; body: string }, kind: MetaSignalsKind): Promise<{ code: string; sentence: string } | null> {
+export async function metaSignalsProblem(connectionId: string, write: { rule: string; objectId: string; check: boolean; body: string }, kind: MetaWriteKind): Promise<{ code: string; sentence: string } | null> {
   const no = (code: string, sentence: string) => ({ code, sentence: `Nothing was sent to Meta: ${sentence}` })
   if (write.check) return no('META_WRITE_NOT_ALLOWED', 'Meta has no check (validate_only) for a dataset, custom conversion or event source group change.')
   try {

@@ -64,7 +64,7 @@ describe('create-meta-dataset', () => {
   })
   it('business level is the SDK route (terms, connect after); page / Instagram send dataset_name and say the permission', () => {
     const b = draft(datasetCreateDraft({ level: 'business', name: 'Shop A 2' }, { adAccountId: ACCOUNT, objectId: PORTFOLIO }))
-    expect(b.requests[0]).toMatchObject({ objectKind: 'business', objectId: PORTFOLIO, edge: 'adspixels', operation: 'dataset.createInBusiness' })
+    expect(b.requests[0]).toMatchObject({ objectKind: 'datasetportfolio', objectId: PORTFOLIO, edge: 'adspixels', operation: 'dataset.createInBusiness' })
     expect(b.warnings.join(' ')).toMatch(/SDK.*Business Tools terms/)
     const p = draft(datasetCreateDraft({ level: 'page', name: 'Shop A chats' }, { adAccountId: ACCOUNT, objectId: '120000000000010' }))
     expect(p.requests[0]).toMatchObject({ objectKind: 'page', edge: 'dataset', params: { dataset_name: 'Shop A chats' } })
@@ -122,7 +122,7 @@ describe('set-meta-dataset: a pixel\'s settings', () => {
 describe('set-meta-dataset: an event source group', () => {
   it('create: one request on the portfolio\'s edge, sorted datasets, no way back', () => {
     const d = draft(groupDraft({ action: 'create', name: 'Group A', pixelIds: ['3', '1'] }, { portfolio: PORTFOLIO, adAccountId: ACCOUNT }))
-    expect(d.requests[0]).toMatchObject({ objectKind: 'business', objectId: PORTFOLIO, edge: 'event_source_groups', params: { event_sources: '["1","3"]', name: 'Group A' } })
+    expect(d.requests[0]).toMatchObject({ objectKind: 'datasetportfolio', objectId: PORTFOLIO, edge: 'event_source_groups', params: { event_sources: '["1","3"]', name: 'Group A' } })
     expect(d.before).toMatchObject({ undo: null })
   })
   it('update: from → to and its undo; share: the chosen ad account only', () => {
@@ -173,13 +173,13 @@ describe('set-meta-custom-conversion', () => {
   it('review B1 — update: name and description only; a default value is refused (its read-back unit is not documented)', () => {
     expect(refusal(conversionUpdateDraft({ customConversionId: CC, defaultValueCents: 2000 }, { row: ROW }))).toBe(DEFAULT_VALUE_UPDATE_HELD)
     const d = draft(conversionUpdateDraft({ customConversionId: CC, name: 'Thanks' }, { row: ROW }))
-    expect(d.requests[0]).toMatchObject({ objectKind: 'customconversion', params: { name: 'Thanks' }, raisesSpend: false })
+    expect(d.requests[0]).toMatchObject({ objectKind: 'datasetconversion', params: { name: 'Thanks' }, raisesSpend: false })
     expect(d.spendsMoney).toEqual([])
     expect((d.before as { undo: { args: unknown } }).undo.args).toEqual({ action: 'update', customConversionId: CC, name: 'Thank you page' })
     expect(refusal(conversionUpdateDraft({ customConversionId: CC, name: 'X' }, { row: { ...ROW, isUnavailable: true } }))).toMatch(/2460004/)
   })
   it('review B2 — claim only one no portfolio holds: the chosen one\'s needs nothing, another\'s is refused', () => {
-    expect(draft(conversionClaimDraft({ row: ROW, portfolio: PORTFOLIO })).requests[0]).toMatchObject({ objectKind: 'business', objectId: PORTFOLIO, params: { custom_conversion_id: CC } })
+    expect(draft(conversionClaimDraft({ row: ROW, portfolio: PORTFOLIO })).requests[0]).toMatchObject({ objectKind: 'datasetportfolio', objectId: PORTFOLIO, params: { custom_conversion_id: CC } })
     expect(refusal(conversionClaimDraft({ row: { ...ROW, businessId: PORTFOLIO }, portfolio: PORTFOLIO }))).toMatch(/Nothing to change/)
     expect(refusal(conversionClaimDraft({ row: { ...ROW, businessId: '5555' }, portfolio: PORTFOLIO }))).toMatch(/another business portfolio/)
   })
@@ -188,7 +188,7 @@ describe('set-meta-custom-conversion', () => {
 describe('remove-meta-signal-items', () => {
   it('a custom conversion is one DELETE; an event rule or a parameter extractor answers that Meta cannot', () => {
     const d = draft(removeDraft([{ kind: 'customConversion', id: CC }, { kind: 'eventRule', id: '5' }], { conversions: [{ row: ROW, adSetsUsing: using('ACTIVE') }] }))
-    expect(d.requests).toMatchObject([{ objectKind: 'customconversion', objectId: CC, method: 'DELETE', params: {}, undoable: false }])
+    expect(d.requests).toMatchObject([{ objectKind: 'datasetconversion', objectId: CC, method: 'DELETE', params: {}, undoable: false }])
     expect(d.skipped[0]).toContain(EVENT_SETUP_CANNOT)
     expect(d.warnings.join(' ')).toMatch(/for good.*Ad set B/s)
     expect(refusal(removeDraft([{ kind: 'parameterExtractor', id: '6' }], { conversions: [] }))).toMatch(/Meta cannot change this by API/)

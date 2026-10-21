@@ -81,7 +81,8 @@ vi.mock('../../../db.js', () => ({
   },
 }))
 
-import { metaSignalsProblem } from './signals-rule.js'
+import { metaSignalsProblem, ownMessagingAccount } from './signals-rule.js'
+import { metaChosenAccount } from './live.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
 
@@ -115,77 +116,80 @@ beforeEach(() => {
 describe('the chosen ad account and its portfolio only', () => {
   it('an ad-account create only on act_<chosen>; a custom conversion create only from a free pixel of it', async () => {
     expect(await ask('dataset.create', `act_${OWN}`, 'adaccount', { name: 'Shop A' })).toBeNull()
-    expect(await ask('dataset.create', 'act_5555555555', 'adaccount', { name: 'Shop A' })).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', sentence: expect.stringMatching(/not the one this business chose/) })
+    // act_<another account> is step 19's check, which the gateway runs first (meta-signals-writes test): not repeated here.
+    expect(await ask('dataset.create', 'act_5555555555', 'adaccount', { name: 'Shop A' })).toBeNull()
+    // A kind step 32 does not name: refused.
+    expect(await ask('dataset.settings', PIXEL, 'campaign', { name: 'Shop A' })).toMatchObject({ sentence: expect.stringMatching(/does not name/) })
     expect(await ask('customConversion.create', `act_${OWN}`, 'adaccount', { event_source_id: PIXEL })).toBeNull()
     expect(await ask('customConversion.create', `act_${OWN}`, 'adaccount', { event_source_id: FOREIGN_PIXEL })).toMatchObject({ sentence: expect.stringMatching(/not on the ad account this business chose/) })
   })
   it('a portfolio change only in the chosen account\'s portfolio, and never in one another Nexus business shares', async () => {
-    expect(await ask('dataset.createInBusiness', BIZ, 'business', { name: 'Shop A' })).toBeNull()
-    expect(await ask('dataset.createInBusiness', '1111111111', 'business', { name: 'Shop A' })).toMatchObject({ sentence: expect.stringMatching(/not the chosen ad account's/) })
+    expect(await ask('dataset.createInBusiness', BIZ, 'datasetportfolio', { name: 'Shop A' })).toBeNull()
+    expect(await ask('dataset.createInBusiness', '1111111111', 'datasetportfolio', { name: 'Shop A' })).toMatchObject({ sentence: expect.stringMatching(/not the chosen ad account's/) })
     h.w.takenPortfolios.add(BIZ)
-    expect(await ask('dataset.createInBusiness', BIZ, 'business', { name: 'Shop A' })).toMatchObject({ sentence: expect.stringMatching(/Another business in Nexus also has an ad account in this Meta business portfolio/) })
+    expect(await ask('dataset.createInBusiness', BIZ, 'datasetportfolio', { name: 'Shop A' })).toMatchObject({ sentence: expect.stringMatching(/Another business in Nexus also has an ad account in this Meta business portfolio/) })
     h.w.takenPortfolios.clear(); h.w.portfolio = null
-    expect(await ask('dataset.createInBusiness', BIZ, 'business', { name: 'Shop A' })).toMatchObject({ sentence: expect.stringMatching(/no business portfolio/) })
+    expect(await ask('dataset.createInBusiness', BIZ, 'datasetportfolio', { name: 'Shop A' })).toMatchObject({ sentence: expect.stringMatching(/no business portfolio/) })
   })
   it('a group create holds only free pixels of the chosen account; a claim only a custom conversion of it', async () => {
-    expect(await ask('eventSourceGroup.create', BIZ, 'business', { event_sources: `["${PIXEL}"]`, name: 'G' })).toBeNull()
-    expect(await ask('eventSourceGroup.create', BIZ, 'business', { event_sources: `["${PIXEL}","${FOREIGN_PIXEL}"]`, name: 'G' })).not.toBeNull()
-    expect(await ask('customConversion.claim', BIZ, 'business', { custom_conversion_id: CC })).toBeNull()
+    expect(await ask('eventSourceGroup.create', BIZ, 'datasetportfolio', { event_sources: `["${PIXEL}"]`, name: 'G' })).toBeNull()
+    expect(await ask('eventSourceGroup.create', BIZ, 'datasetportfolio', { event_sources: `["${PIXEL}","${FOREIGN_PIXEL}"]`, name: 'G' })).not.toBeNull()
+    expect(await ask('customConversion.claim', BIZ, 'datasetportfolio', { custom_conversion_id: CC })).toBeNull()
     // Review B2 — one a portfolio already holds is not claimed (the chosen one's: nothing to claim; another's: refused).
     h.w.conversions[CC].business = { id: BIZ }
-    expect(await ask('customConversion.claim', BIZ, 'business', { custom_conversion_id: CC })).toMatchObject({ sentence: expect.stringMatching(/already the chosen portfolio's/) })
+    expect(await ask('customConversion.claim', BIZ, 'datasetportfolio', { custom_conversion_id: CC })).toMatchObject({ sentence: expect.stringMatching(/already the chosen portfolio's/) })
     h.w.conversions[CC].business = { id: '1111111111' }
-    expect(await ask('customConversion.claim', BIZ, 'business', { custom_conversion_id: CC })).toMatchObject({ sentence: expect.stringMatching(/held by another business portfolio/) })
+    expect(await ask('customConversion.claim', BIZ, 'datasetportfolio', { custom_conversion_id: CC })).toMatchObject({ sentence: expect.stringMatching(/held by another business portfolio/) })
     delete h.w.conversions[CC].business
     h.w.conversions[CC].account_id = 'act_5555555555'
-    expect(await ask('customConversion.claim', BIZ, 'business', { custom_conversion_id: CC })).toMatchObject({ sentence: expect.stringMatching(/not a custom conversion of the chosen ad account/) })
+    expect(await ask('customConversion.claim', BIZ, 'datasetportfolio', { custom_conversion_id: CC })).toMatchObject({ sentence: expect.stringMatching(/not a custom conversion of the chosen ad account/) })
   })
 })
 
 describe('a pixel: step 11\'s verdict — only free is changed', () => {
   it('free: its settings go; taken (another business\'s ad account on it): refused; unchecked (owned elsewhere): refused', async () => {
-    expect(await ask('dataset.settings', PIXEL, 'pixel', { name: 'Shop A' })).toBeNull()
+    expect(await ask('dataset.settings', PIXEL, 'dataset', { name: 'Shop A' })).toBeNull()
     h.w.accounts[`${PIXEL}:${BIZ}`].push({ account_id: '5555555555' })
     h.w.takenAccounts.add('5555555555')
-    expect(await ask('dataset.settings', PIXEL, 'pixel', { name: 'Shop A' })).toMatchObject({ sentence: expect.stringMatching(/another business in Nexus uses/) })
-    expect(JSON.stringify(await ask('dataset.settings', PIXEL, 'pixel', { name: 'Shop A' }))).not.toContain('5555555555')
+    expect(await ask('dataset.settings', PIXEL, 'dataset', { name: 'Shop A' })).toMatchObject({ sentence: expect.stringMatching(/another business in Nexus uses/) })
+    expect(JSON.stringify(await ask('dataset.settings', PIXEL, 'dataset', { name: 'Shop A' }))).not.toContain('5555555555')
     h.w.takenAccounts.clear(); h.w.owner[PIXEL] = '1111111111'
-    expect(await ask('dataset.settings', PIXEL, 'pixel', { name: 'Shop A' })).toMatchObject({ sentence: expect.stringMatching(/could not check whether another business in Nexus also uses this pixel/) })
+    expect(await ask('dataset.settings', PIXEL, 'dataset', { name: 'Shop A' })).toMatchObject({ sentence: expect.stringMatching(/could not check whether another business in Nexus also uses this pixel/) })
   })
   it('connect / disconnect: only the chosen ad account and its portfolio in the body', async () => {
-    expect(await ask('dataset.disconnectAccount', PIXEL, 'pixel', { account_id: OWN, business: BIZ })).toBeNull()
-    expect(await ask('dataset.disconnectAccount', PIXEL, 'pixel', { account_id: '5555555555', business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/chosen ad account only/) })
-    expect(await ask('dataset.disconnectAccount', PIXEL, 'pixel', { account_id: OWN, business: '1111111111' })).toMatchObject({ sentence: expect.stringMatching(/own business portfolio only/) })
+    expect(await ask('dataset.disconnectAccount', PIXEL, 'dataset', { account_id: OWN, business: BIZ })).toBeNull()
+    expect(await ask('dataset.disconnectAccount', PIXEL, 'dataset', { account_id: '5555555555', business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/chosen ad account only/) })
+    expect(await ask('dataset.disconnectAccount', PIXEL, 'dataset', { account_id: OWN, business: '1111111111' })).toMatchObject({ sentence: expect.stringMatching(/own business portfolio only/) })
     // A CONNECT body too: the chosen ad account and its portfolio only.
-    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: '5555555555', business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/chosen ad account only/) })
-    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: OWN, business: '1111111111' })).toMatchObject({ sentence: expect.stringMatching(/own business portfolio only/) })
+    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'dataset', { account_id: '5555555555', business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/chosen ad account only/) })
+    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'dataset', { account_id: OWN, business: '1111111111' })).toMatchObject({ sentence: expect.stringMatching(/own business portfolio only/) })
   })
   it('connect a pixel not on the account yet: only one the chosen portfolio owns, none of its accounts or partners another business\'s', async () => {
-    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: OWN, business: BIZ })).toBeNull()
+    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'dataset', { account_id: OWN, business: BIZ })).toBeNull()
     h.w.agencies[FOREIGN_PIXEL] = ['3333333333']
     h.w.takenPortfolios.add('3333333333')
-    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: OWN, business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/shared with a business portfolio another business in Nexus uses/) })
+    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'dataset', { account_id: OWN, business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/shared with a business portfolio another business in Nexus uses/) })
     h.w.agencies = {}; h.w.takenPortfolios.clear()
     h.w.accounts[`${FOREIGN_PIXEL}:${BIZ}`] = [{ account_id: '5555555555' }]
     h.w.takenAccounts.add('5555555555')
-    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: OWN, business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/connected to an ad account another business in Nexus uses/) })
+    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'dataset', { account_id: OWN, business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/connected to an ad account another business in Nexus uses/) })
     h.w.owner[FOREIGN_PIXEL] = '1111111111'
-    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: OWN, business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/not owned by its business portfolio/) })
+    expect(await ask('dataset.connectAccount', FOREIGN_PIXEL, 'dataset', { account_id: OWN, business: BIZ })).toMatchObject({ sentence: expect.stringMatching(/not owned by its business portfolio/) })
   })
 })
 
 describe('custom conversions, groups, the Page', () => {
   it('a custom conversion of the account changes; to delete, only one Nexus made', async () => {
-    expect(await ask('customConversion.update', CC, 'customconversion', { name: 'X' })).toBeNull()
-    expect(await ask('customConversion.delete', CC, 'customconversion')).toMatchObject({ sentence: expect.stringMatching(/deletes only a custom conversion it made itself/) })
+    expect(await ask('customConversion.update', CC, 'datasetconversion', { name: 'X' })).toBeNull()
+    expect(await ask('customConversion.delete', CC, 'datasetconversion')).toMatchObject({ sentence: expect.stringMatching(/deletes only a custom conversion it made itself/) })
     h.w.nexusMade.add(CC)
-    expect(await ask('customConversion.delete', CC, 'customconversion')).toBeNull()
+    expect(await ask('customConversion.delete', CC, 'datasetconversion')).toBeNull()
     // Another object of the account (no custom_event_type) is never taken for one.
     h.w.conversions[CC] = { account_id: `act_${OWN}`, pixel: { id: PIXEL } }
-    expect(await ask('customConversion.update', CC, 'customconversion', { name: 'X' })).toMatchObject({ sentence: expect.stringMatching(/not a custom conversion/) })
+    expect(await ask('customConversion.update', CC, 'datasetconversion', { name: 'X' })).toMatchObject({ sentence: expect.stringMatching(/not a custom conversion/) })
     // Its pixel taken: never changed.
     h.w.conversions[CC] = { account_id: `act_${OWN}`, custom_event_type: 'PURCHASE', pixel: { id: FOREIGN_PIXEL } }
-    expect(await ask('customConversion.update', CC, 'customconversion', { name: 'X' })).not.toBeNull()
+    expect(await ask('customConversion.update', CC, 'datasetconversion', { name: 'X' })).not.toBeNull()
   })
   it('a group of the portfolio whose datasets are all free; shared with the chosen ad account only', async () => {
     expect(await ask('eventSourceGroup.update', GROUP, 'eventsourcegroup', { name: 'G' })).toBeNull()
@@ -196,25 +200,28 @@ describe('custom conversions, groups, the Page', () => {
     expect(await ask('eventSourceGroup.update', '120000000000899', 'eventsourcegroup', { name: 'G' })).toMatchObject({ sentence: expect.stringMatching(/not an event source group of the chosen/) })
   })
   it('a messaging dataset only for the chosen Page (its link); none for an Instagram account not chosen', async () => {
+    // The tools ask ownMessagingAccount; the gateway asks step 28's (Page) and step 31's (Instagram) rule, the same meaning.
+    const chosen = await metaChosenAccount('conn-1')
+    expect(await ownMessagingAccount(chosen, 'page', PAGE)).toBe(PAGE)
+    await expect(ownMessagingAccount(chosen, 'page', '120000000000011')).rejects.toThrow(/not the Facebook Page this business chose/)
+    await expect(ownMessagingAccount(chosen, 'instagram', '170000000000001')).rejects.toThrow(/no Instagram account chosen/)
     expect(await ask('dataset.createForMessaging', PAGE, 'page', { dataset_name: 'Chats' })).toBeNull()
-    expect(await ask('dataset.createForMessaging', '120000000000011', 'page', { dataset_name: 'Chats' })).toMatchObject({ sentence: expect.stringMatching(/not the Facebook Page this business chose/) })
-    expect(await ask('dataset.createForMessaging', '170000000000001', 'instagram', { dataset_name: 'Chats' })).toMatchObject({ sentence: expect.stringMatching(/no Instagram account chosen/) })
   })
 })
 
 describe('refusals', () => {
   it('a read Meta refuses, no Meta connection, or Meta\'s check: nothing goes', async () => {
     h.w.fail = 'act_'
-    expect(await ask('dataset.createInBusiness', BIZ, 'business', { name: 'Shop A' })).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED', sentence: expect.stringMatching(/could not confirm whose it is/) })
+    expect(await ask('dataset.createInBusiness', BIZ, 'datasetportfolio', { name: 'Shop A' })).toMatchObject({ code: 'META_ACCOUNT_UNCONFIRMED', sentence: expect.stringMatching(/could not confirm whose it is/) })
     h.w.fail = null; h.connections = []
     expect(await ask('dataset.create', `act_${OWN}`, 'adaccount', { name: 'Shop A' })).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', sentence: expect.stringMatching(/No Meta connection of this business/) })
-    expect(await metaSignalsProblem('conn-1', { rule: 'dataset.settings', objectId: PIXEL, check: true, body: 'name=x' }, 'pixel')).toMatchObject({ sentence: expect.stringMatching(/no check/) })
+    expect(await metaSignalsProblem('conn-1', { rule: 'dataset.settings', objectId: PIXEL, check: true, body: 'name=x' }, 'dataset')).toMatchObject({ sentence: expect.stringMatching(/no check/) })
   })
   it('every read the rule sends passes the real read gate', async () => {
     h.w.agencies[FOREIGN_PIXEL] = ['3333333333']
-    await ask('dataset.connectAccount', FOREIGN_PIXEL, 'pixel', { account_id: OWN, business: BIZ })
+    await ask('dataset.connectAccount', FOREIGN_PIXEL, 'dataset', { account_id: OWN, business: BIZ })
     await ask('eventSourceGroup.update', GROUP, 'eventsourcegroup', { name: 'G' })
-    await ask('customConversion.update', CC, 'customconversion', { name: 'X' })
+    await ask('customConversion.update', CC, 'datasetconversion', { name: 'X' })
     expect(h.calls.length).toBeGreaterThan(10)
     const refused = h.calls.map((c) => [c.path, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' })]).filter(([, p]) => p)
     expect(refused).toEqual([])

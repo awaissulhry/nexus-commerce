@@ -198,7 +198,7 @@ describe('set-meta-dataset', () => {
     h.send.mockResolvedValueOnce(ok({ id: PIXEL, enable_automatic_matching: true, automatic_matching_fields: ['ph', 'em'], data_use_setting: 'ANALYTICS_ONLY' }))
     const r = await run('set-meta-dataset', args, p.preview)
     expect(r.ok).toBe(true)
-    expect(sent()[0]).toMatchObject({ objectId: PIXEL, kind: 'pixel', params: { enable_automatic_matching: 'true', automatic_matching_fields: '["em","ph"]', data_use_setting: 'ANALYTICS_ONLY' } })
+    expect(sent()[0]).toMatchObject({ objectId: PIXEL, kind: 'dataset', params: { enable_automatic_matching: 'true', automatic_matching_fields: '["em","ph"]', data_use_setting: 'ANALYTICS_ONLY' } })
     // Undo: unchanged since → it asks set-meta-dataset with what was replaced.
     h.w.settings[PIXEL] = { ...SETTINGS, enable_automatic_matching: true, automatic_matching_fields: ['em', 'ph'], data_use_setting: 'ANALYTICS_ONLY' }
     const change = r.change!
@@ -233,7 +233,7 @@ describe('set-meta-dataset-access', () => {
     expect(p.ok).toBe(true)
     h.send.mockResolvedValueOnce(ok({ success: true }))
     const r = await run('set-meta-dataset-access', { pixelId: FREE_ELSEWHERE, action: 'connect-ad-account' }, p.preview)
-    expect(sent()[0]).toMatchObject({ objectId: FREE_ELSEWHERE, kind: 'pixel', edge: 'shared_accounts', params: { account_id: OWN, business: BIZ } })
+    expect(sent()[0]).toMatchObject({ objectId: FREE_ELSEWHERE, kind: 'dataset', edge: 'shared_accounts', params: { account_id: OWN, business: BIZ } })
     expect(tool('set-meta-dataset-access').undo!.request(r.change!)).toMatchObject({ tool: 'set-meta-dataset-access', args: { pixelId: FREE_ELSEWHERE, action: 'disconnect-ad-account' } })
   })
   it('disconnect lists the ad sets that lose the dataset — also those on a custom conversion of it; it goes as Meta\'s DELETE', async () => {
@@ -280,7 +280,7 @@ describe('set-meta-custom-conversion', () => {
     expect(p.preview.spendsMoney).toBe(false)
     h.send.mockResolvedValueOnce(ok({ id: CC, name: 'Thanks' }))
     const r = await run('set-meta-custom-conversion', args, p.preview)
-    expect(sent()[0]).toMatchObject({ objectId: CC, kind: 'customconversion', params: { name: 'Thanks' } })
+    expect(sent()[0]).toMatchObject({ objectId: CC, kind: 'datasetconversion', params: { name: 'Thanks' } })
     const back = tool('set-meta-custom-conversion').undo!.request(r.change!)
     expect(back).toMatchObject({ tool: 'set-meta-custom-conversion', args: { action: 'update', customConversionId: CC, name: 'Thank you page' } })
     expect(tool('set-meta-custom-conversion').input.safeParse((back as { args: unknown }).args).success).toBe(true)
@@ -306,7 +306,7 @@ describe('remove-meta-signal-items', () => {
     h.send.mockResolvedValueOnce(ok({ success: true }))
     const r = await run('remove-meta-signal-items', args, p.preview)
     expect(r.ok).toBe(true)
-    expect(sent()).toMatchObject([{ objectId: CC, kind: 'customconversion', method: 'DELETE', params: {} }])
+    expect(sent()).toMatchObject([{ objectId: CC, kind: 'datasetconversion', method: 'DELETE', params: {} }])
     expect(await preview('remove-meta-signal-items', { items: [{ kind: 'parameterExtractor', id: '1' }], confirmDelete: true })).toMatchObject({ ok: false, error: expect.stringMatching(/Meta cannot change this by API/) })
   })
 })

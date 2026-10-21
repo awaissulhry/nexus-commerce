@@ -164,7 +164,8 @@ export function graphFieldsProblem(fields: string, node: GraphNode = 'AdAccount'
             continue
           }
           const arg = argument()
-          if (!MODIFIERS[modifier]) throw new FieldsRefusal(`".${modifier}(…)" is not a modifier meta-ads-graph-read sends (only .limit, .date_preset, .time_increment, .time_range).`)
+          // Step 7 re-review 2 — own keys only: ".constructor(…)" is no modifier (a plain refusal, never a TypeError).
+          if (!Object.prototype.hasOwnProperty.call(MODIFIERS, modifier)) throw new FieldsRefusal(`".${modifier}(…)" is not a modifier meta-ads-graph-read sends (only .limit, .date_preset, .time_increment, .time_range).`)
           if (!MODIFIERS[modifier].test(arg.trim())) throw new FieldsRefusal(`".${modifier}(${arg.slice(0, 40)})" is not a value Nexus sends.`)
           continue
         }

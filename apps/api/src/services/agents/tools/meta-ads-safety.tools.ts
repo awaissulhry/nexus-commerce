@@ -37,7 +37,7 @@ const metaBrandSafety: AgentTool = {
     view: z.preprocess(lowerArg, z.enum(SAFETY_VIEWS)).describe(SAFETY_VIEWS.join(' | ')),
     blockListId: idArg('block-list: the publisher block list (from view block-lists)'),
     items: z.boolean().optional().describe('block-list: also the blocked web and app publishers (at most 500 of each shown)'),
-    contentBlockListId: idArg('content-block-list: the content block list (from view content-block-lists)'),
+    contentBlockListId: idArg('content-block-list, content-block-list-file: the content block list (from view content-block-lists)'),
     content: lowerEnum(Object.keys(CONTENT_PLATFORM_EDGES) as [string, ...string[]], 'content-block-list: also list its posts on'),
     adSetId: idArg('publisher-report, content-report, adjacent-report: an ad set of the chosen ad account'),
     platform: lowerEnum(PLATFORMS, 'the reports and date ranges, partner-publishers: the platform (publisher reports: audience_network, facebook, instagram; adjacent: facebook, instagram, threads; partner-publishers: audience_network, facebook)'),
@@ -67,12 +67,14 @@ const metaBrandSafety: AgentTool = {
     + 'content-report: the posts and videos they ran in or next to, by hour (last 15 days); content-lookup: one video or Page '
     + 'found there; adjacent-report-dates, adjacent-report: the posts above and below the ads in Feed and Reels. '
     + 'partner-publishers, partner-publishers-dates: Meta\'s list of partner publishers per placement. Meta cannot yet list '
-    + 'the content block lists of one ad account or check one post (planned, view account-content-block-lists); the CSV '
-    + 'export comes with step 39, Nexus brand-safety changes (view content-block-list-file). These reads need a capability grant from Meta '
+    + 'the content block lists of one ad account or check one post (planned, view account-content-block-lists). '
+    + 'content-block-list-file: Meta makes a new CSV file of a content block list (it changes no ad or list); the answer gives '
+    + 'its name, size and post counts — never the download link — and the person downloads it in Meta\'s hub. These reads need a capability grant from Meta '
     + '(block lists, content block lists, delivery reports, Feed verification): when Meta has not granted it, the answer '
     + 'says so plainly and names the controls that need no grant (inventory filter, placements, excluded publisher '
     + 'categories). Only the chosen ad account, its portfolio and its own ad sets; another business\'s ad account or Page is '
-    + 'its id and a flag only. Read only: block-list changes are set-meta-block-list (a later step).',
+    + 'its id and a flag only. Read only: block-list changes are set-meta-block-list and remove-meta-block-list; the '
+    + 'inventory filter, categories and block lists of an ad set are set-meta-brand-safety.',
   async handler(args, ctx): Promise<ToolResult> {
     const a = args as Record<string, unknown>
     const str = (k: string) => (typeof a[k] === 'string' ? a[k] as string : null)

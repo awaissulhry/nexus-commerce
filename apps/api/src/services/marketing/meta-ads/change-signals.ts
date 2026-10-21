@@ -11,11 +11,12 @@
  * read-back unit is not documented: LIVE-PROBE SG-090).
  */
 import { changeLines, plural, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
+import type { MetaSignalsEdge } from '../../gateway/meta.js'
 import { currencyExponent } from './money.js'
 import { money } from './change-settings-common.js'
 import type { AdSetUsing, ConversionRow, PixelSettings } from './live-signals.js'
 import {
-  AUTOMATIC_MATCHING_FIELDS, conversionRuleProblem, MAX_CUSTOM_CONVERSIONS, type MetaSignalsEdge, type MetaSignalsKind,
+  AUTOMATIC_MATCHING_FIELDS, conversionRuleProblem, MAX_CUSTOM_CONVERSIONS, type MetaSignalsKind,
 } from '../../gateway/meta-signals-rules.js'
 
 // ── what Meta cannot do (the proof is in the code comments; the tools say these sentences) ───────────────────────────
@@ -61,14 +62,13 @@ export function conversionValueText(cents: number, currency: string | null): str
 type Draft = MetaChangeDraft | { refusal: string }
 
 /**
- * One request of a step 32 change. Its object is named by `objectKind` (what the gateway confirms: signals-rule.ts) and
- * its own `operation`; MetaChangeRequest.kind is set-meta-status's (a campaign, ad set or ad) and is never read for a
- * request that names both (meta-ads-kit.ts objectChangeOf), so it carries the fixed placeholder below.
+ * One request of a step 32 change. Its object is named by `objectKind` (what the gateway confirms: step 19's `adaccount`,
+ * step 28's `page`, else its own kinds — signals-rule.ts) and its own `operation`; it leaves MetaChangeRequest.kind (a
+ * status change's) out.
  */
-function request(step: number, label: string, objectKind: MetaSignalsKind, objectId: string, params: Record<string, string>, extra: Partial<MetaChangeRequest> & { operation: string }): MetaChangeRequest {
-  return { step, label, kind: STATUS_KIND_UNUSED, objectKind, objectId, params, check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, ...extra }
+function request(step: number, label: string, objectKind: MetaSignalsKind | 'adaccount' | 'page', objectId: string, params: Record<string, string>, extra: Partial<MetaChangeRequest> & { operation: string }): MetaChangeRequest {
+  return { step, label, objectKind, objectId, params, check: 'none', raisesSpend: false, readBackInPost: false, budget: false, undoable: false, ...extra }
 }
-const STATUS_KIND_UNUSED = 'campaign' as const
 const edgeOf = (edge: MetaSignalsEdge) => ({ edge })
 
 /** The order Meta lists the fields in (ads-pixel.md), so one set has one spelling. */
@@ -146,7 +146,7 @@ export function datasetCreateDraft(req: DatasetCreateRequest, facts: DatasetCrea
   } else if (req.level === 'business') {
     where = `the business portfolio ${facts.objectId}`
     warnings.push('Meta documents this create only in its SDK (business adspixels): Meta\'s answer decides. A business admin must have accepted Meta\'s Business Tools terms first (a person does it in Events Manager); the new dataset is on no ad account until set-meta-dataset-access connects it.')
-    r = request(1, `Create the dataset (pixel) "${req.name}" in ${where}`, 'business', facts.objectId!, { name: req.name },
+    r = request(1, `Create the dataset (pixel) "${req.name}" in ${where}`, 'datasetportfolio', facts.objectId!, { name: req.name },
       { operation: 'dataset.createInBusiness', ...edgeOf('adspixels'), expect: { name: req.name }, readBackFields: 'id,name' })
   } else {
     const page = req.level === 'page'
@@ -247,7 +247,7 @@ export function pixelSettingsDraft(req: PixelSettingsRequest, facts: { settings:
   return {
     summary: `Change ${plural(fieldsAsked.length, 'setting')} of the dataset "${s.name ?? s.id}" (${s.id}).`,
     changes, totals: { settings: fieldsAsked.length }, warnings, spendsMoney: spends, skipped,
-    requests: [request(1, `Change the settings of dataset "${s.name ?? s.id}" (${s.id})`, 'pixel', s.id, params, { operation: 'dataset.settings', expect, readBackFields: PIXEL_READ_BACK, undoable: Object.keys(undo).length > 1, raisesSpend: spends.length > 0 })],
+    requests: [request(1, `Change the settings of dataset "${s.name ?? s.id}" (${s.id})`, 'dataset', s.id, params, { operation: 'dataset.settings', expect, readBackFields: PIXEL_READ_BACK, undoable: Object.keys(undo).length > 1, raisesSpend: spends.length > 0 })],
     stands: { pixel: s, adSets: facts.adSetsUsing.adSets.map((a) => [a.id, a.on]), more: facts.adSetsUsing.more },
     before: { ...record(before), undo: Object.keys(undo).length > 1 ? { tool: 'set-meta-dataset', args: undo } : null, noUndo },
     after: record(after),
@@ -270,7 +270,7 @@ export function groupDraft(req: GroupRequest, facts: GroupFacts): Draft {
     return {
       summary: `Create the event source group "${req.name}" in the business portfolio ${facts.portfolio} with ${plural(ids.length, 'dataset')}.`,
       changes, totals: { groups: 1, datasets: ids.length }, warnings: [...warnings, GROUP_NO_UNDO], spendsMoney: [], skipped: [],
-      requests: [request(1, `Create the event source group "${req.name}"`, 'business', facts.portfolio, { event_sources: jsonList(ids), name: req.name }, { operation: 'eventSourceGroup.create', ...edgeOf('event_source_groups'), expect: { name: req.name }, readBackFields: 'id,name' })],
+      requests: [request(1, `Create the event source group "${req.name}"`, 'datasetportfolio', facts.portfolio, { event_sources: jsonList(ids), name: req.name }, { operation: 'eventSourceGroup.create', ...edgeOf('event_source_groups'), expect: { name: req.name }, readBackFields: 'id,name' })],
       stands: { portfolio: facts.portfolio, pixelIds: ids },
       before: { part: 'group', id: '', fields: {}, created: false, undo: null, noUndo: [GROUP_NO_UNDO] } satisfies SignalsRecord,
       after: { part: 'group', id: '', fields: { name: req.name, event_sources: signalView(ids) }, created: true } satisfies SignalsRecord,
@@ -347,7 +347,7 @@ export function accessDraft(req: AccessRequest, facts: AccessFacts): Draft {
       if (facts.connected === true) return { refusal: `Nothing to change: ${who} is already connected to the chosen ad account ${facts.adAccountId}.` }
       if (facts.connected === null || facts.connected === undefined) return { refusal: `Meta does not show whether ${who} is connected to the chosen ad account, so Nexus cannot say from → to; nothing is sent.` }
       return base(`Connect ${who} to the chosen ad account ${facts.adAccountId}.`, [['ad account ' + facts.adAccountId, 'not connected', 'connected']],
-        request(1, `Connect ${who} to ad account ${facts.adAccountId}`, 'pixel', facts.pixelId, { account_id: facts.adAccountId, business: facts.portfolio }, { operation: 'dataset.connectAccount', ...edgeOf('shared_accounts') }),
+        request(1, `Connect ${who} to ad account ${facts.adAccountId}`, 'dataset', facts.pixelId, { account_id: facts.adAccountId, business: facts.portfolio }, { operation: 'dataset.connectAccount', ...edgeOf('shared_accounts') }),
         { before: { connected: 'no' }, after: { connected: 'yes' }, undo: { tool: 'set-meta-dataset-access', args: { ...pixelArgs, action: 'disconnect-ad-account' } }, noUndo: [] },
         ['Ads of the chosen ad account can then track and optimise on this dataset\'s events.'],
         signalBackSpends('Connecting it', facts.adSetsUsing))
@@ -357,7 +357,7 @@ export function accessDraft(req: AccessRequest, facts: AccessFacts): Draft {
       const { adSets, more } = facts.adSetsUsing ?? { adSets: [], more: false }
       const back = facts.ownerBusinessId === facts.portfolio
       return base(`Disconnect ${who} from the chosen ad account ${facts.adAccountId}.`, [['ad account ' + facts.adAccountId, 'connected', 'not connected']],
-        request(1, `Disconnect ${who} from ad account ${facts.adAccountId}`, 'pixel', facts.pixelId, { account_id: facts.adAccountId, business: facts.portfolio }, { operation: 'dataset.disconnectAccount', ...edgeOf('shared_accounts'), method: 'DELETE' }),
+        request(1, `Disconnect ${who} from ad account ${facts.adAccountId}`, 'dataset', facts.pixelId, { account_id: facts.adAccountId, business: facts.portfolio }, { operation: 'dataset.disconnectAccount', ...edgeOf('shared_accounts'), method: 'DELETE' }),
         {
           before: { connected: 'yes' }, after: { connected: 'no' },
           undo: back ? { tool: 'set-meta-dataset-access', args: { ...pixelArgs, action: 'connect-ad-account' } } : null,
@@ -439,7 +439,7 @@ export function conversionUpdateDraft(req: ConversionUpdateRequest, facts: { row
   return {
     summary: `Change ${plural(fields.length, 'setting')} of the custom conversion "${c.name ?? c.id}" (${c.id}).`,
     changes, totals: { settings: fields.length }, warnings: [RULE_FIXED], spendsMoney: [], skipped,
-    requests: [request(1, `Change custom conversion "${c.name ?? c.id}" (${c.id})`, 'customconversion', c.id, params, {
+    requests: [request(1, `Change custom conversion "${c.name ?? c.id}" (${c.id})`, 'datasetconversion', c.id, params, {
       operation: 'customConversion.update', undoable: back, expect: { ...params }, readBackFields: 'id,name,description',
     })],
     stands: { conversion: c },
@@ -458,7 +458,7 @@ export function conversionClaimDraft(facts: { row: ConversionRow; portfolio: str
     summary: `Claim the custom conversion "${c.name ?? c.id}" (${c.id}) into the business portfolio ${facts.portfolio}.`,
     changes: changeLines([['owner of custom conversion ' + c.id, 'the ad account', `business portfolio ${facts.portfolio}`]]).changes,
     totals: { customConversions: 1 }, warnings: [noWay], spendsMoney: [], skipped: [],
-    requests: [request(1, `Claim custom conversion "${c.name ?? c.id}" into portfolio ${facts.portfolio}`, 'business', facts.portfolio, { custom_conversion_id: c.id }, { operation: 'customConversion.claim', ...edgeOf('claim_custom_conversions') })],
+    requests: [request(1, `Claim custom conversion "${c.name ?? c.id}" into portfolio ${facts.portfolio}`, 'datasetportfolio', facts.portfolio, { custom_conversion_id: c.id }, { operation: 'customConversion.claim', ...edgeOf('claim_custom_conversions') })],
     stands: { conversion: c.id, business: c.businessId, portfolio: facts.portfolio },
     before: { part: 'conversion', id: c.id, customConversionId: c.id, fields: { claimed: 'no' }, undo: null, noUndo: [noWay] } satisfies SignalsRecord,
     after: { part: 'conversion', id: c.id, customConversionId: c.id, fields: { claimed: 'yes' } } satisfies SignalsRecord,
@@ -476,7 +476,7 @@ export function removeDraft(items: Array<{ kind: SignalItemKind; id: string }>, 
   const requests: MetaChangeRequest[] = []
   const lines: Array<[string, unknown, unknown]> = []
   for (const { row, adSetsUsing } of facts.conversions) {
-    requests.push(request(requests.length + 1, `Delete custom conversion "${row.name ?? row.id}" (${row.id})`, 'customconversion', row.id, {}, { operation: 'customConversion.delete', method: 'DELETE' }))
+    requests.push(request(requests.length + 1, `Delete custom conversion "${row.name ?? row.id}" (${row.id})`, 'datasetconversion', row.id, {}, { operation: 'customConversion.delete', method: 'DELETE' }))
     lines.push([`custom conversion "${row.name ?? row.id}" (${row.id})`, 'exists', 'deleted'])
     if (adSetsUsing.adSets.length) warnings.push(`"${row.name ?? row.id}": ${plural(adSetsUsing.adSets.length, 'ad set')} optimise on it and lose their conversion event (their delivery breaks until another one is chosen): ${adSetWords(adSetsUsing.adSets, adSetsUsing.more)}.`)
   }

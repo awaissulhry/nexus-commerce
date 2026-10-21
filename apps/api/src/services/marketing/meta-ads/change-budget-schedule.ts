@@ -74,7 +74,7 @@ const unix = (iso: string | null) => (iso ? Math.floor(Date.parse(iso) / 1000) :
 const isoOf = (sec: number) => new Date(sec * 1000).toISOString()
 
 /** A period's increase in words: "+20.00 EUR a day" or "+40%". */
-function increaseWords(type: string | null, value: number | null, currency: string | null): string {
+export function increaseWords(type: string | null, value: number | null, currency: string | null): string {
   if (value === null) return 'unknown'
   return type === 'MULTIPLIER' ? `+${value}% of the daily budget` : `+${money(scheduleAbsoluteCents(value, currency), currency)} on the daily budget (Meta's number ${value}: whole ${currency ?? 'units'})`
 }
@@ -224,7 +224,7 @@ function draft(request: BudgetScheduleRequest, live: BudgetScheduleLive, now: Da
 }
 
 /** Meta: "the total budget cannot exceed 8 times the daily budget" — the increase is at most 7 daily budgets (700%). */
-function capProblem(increase: { type: 'ABSOLUTE' | 'MULTIPLIER'; value: string; cents: number | null }, dailyCents: number, currency: string | null): string | null {
+export function capProblem(increase: { type: 'ABSOLUTE' | 'MULTIPLIER'; value: string; cents: number | null }, dailyCents: number, currency: string | null): string | null {
   if (increase.type === 'MULTIPLIER') return Number(increase.value) > 700 ? 'Meta keeps the total at most 8 times the daily budget: an increase of at most 700%.' : null
   return increase.cents! > 7 * dailyCents ? `Meta keeps the total at most 8 times the daily budget (${money(dailyCents, currency)} a day): an increase of at most ${money(7 * dailyCents, currency)}.` : null
 }
