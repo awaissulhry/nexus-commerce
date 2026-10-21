@@ -269,8 +269,8 @@ function objectivesProblem(value: string): string | null {
       const px = o.adspixels
       if (!Array.isArray(px) || px.length < 1 || px.length > 5) return 'adspixels lists 1 to 5 pixels'
       for (const p of px) {
-        // Review B3 — with a pixel, the events counted are named (Meta's lift guide).
-        if (!plainObject(p) || !exactKeys(p, ['id', 'event_names'], ['id', 'event_names']) || !isId(p.id)) return 'each pixel is exactly {id, event_names}'
+        // Review B3 / NEW-5 — Nexus's own rule: with a pixel, the events counted are named (Meta: "event_names per ID, if applicable").
+        if (!plainObject(p) || !exactKeys(p, ['id', 'event_names'], ['id', 'event_names']) || !isId(p.id)) return 'each pixel is exactly {id, event_names} (Nexus names the events a lift counts)'
         if ((!Array.isArray(p.event_names) || !p.event_names.length || new Set(p.event_names).size !== p.event_names.length
           || p.event_names.some((e) => !(LIFT_PIXEL_EVENTS as readonly unknown[]).includes(e)))) return `event_names lists ${LIFT_PIXEL_EVENTS.join(', ')}, each once`
       }

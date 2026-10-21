@@ -168,6 +168,47 @@ describe('set-meta-experiment', () => {
     expect((v.before as ExperimentRecord).undo).toBeNull()
     expect((v.before as ExperimentRecord).noUndo!.join(' ')).toMatch(/shared with 60 people/)
   })
+  it('round 2 NEW-1 — a lift change never sends a holdout Meta did not answer; a split holdout above 0; every kept cell named', () => {
+    const lift = study({ type: 'LIFT', cells: [
+      { id: '120000000000061', name: 'A', treatment: 35, control: null, adAccounts: [], campaigns: [C1], adSets: [], ads: [] },
+      { id: '120000000000062', name: 'B', treatment: 35, control: 10, adAccounts: [], campaigns: [], adSets: [S1], ads: [] },
+    ] })
+    const addC = [{ name: 'C', percent: 10, controlPercent: 5, adSetIds: ['120000000000203'] }]
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: lift.id, addCells: addC }, setLive(lift)))).toMatch(/could not read the holdout of cell "A".*name it in splits/)
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: lift.id, splits: [{ cellId: '120000000000061', percent: 40, controlPercent: 0 }, { cellId: '120000000000062', percent: 40, controlPercent: 5 }] }, setLive(lift)))).toMatch(/has a holdout \(controlPercent above 0\)/)
+    const read = study({ ...lift, cells: [{ ...lift.cells![0], control: 5 }, lift.cells![1]] })
+    const d = ok(setExperimentDraft({ action: 'update', studyId: lift.id, addCells: addC }, setLive(read)))
+    expect(JSON.parse(d.requests[0].params.cells)).toEqual([
+      { id: '120000000000061', treatment_percentage: 35, control_percentage: 5 }, { id: '120000000000062', treatment_percentage: 35, control_percentage: 10 },
+      { name: 'C', treatment_percentage: 10, control_percentage: 5, adsets: ['120000000000203'] },
+    ])
+    expect(d.changes).toMatchObject({ 'Cell "A" share (sent as it is)': { from: '35 % (+ 5 % holdout)', to: '35 % (+ 5 % holdout)' }, 'Cell "B" share (sent as it is)': { from: '35 % (+ 10 % holdout)', to: '35 % (+ 10 % holdout)' } })
+  })
+  it('round 2 NEW-2 — an end that moved the observation end too: the old observation end is in the undo (a lift study before it starts)', () => {
+    const lift = study({ type: 'LIFT', observationEndTime: NOW + 15 * 86400, cells: [{ id: '120000000000061', name: 'test', treatment: 90, control: 10, adAccounts: ['1234567890'], campaigns: [], adSets: [], ads: [] }] })
+    const d = ok(setExperimentDraft({ action: 'update', studyId: lift.id, endTime: iso(NOW + 20 * 86400) }, setLive(lift)))
+    expect(d.requests[0].params).toEqual({ end_time: String(NOW + 20 * 86400), observation_end_time: String(NOW + 20 * 86400) })
+    expect((d.before as ExperimentRecord).undo).toEqual({ action: 'update', studyId: lift.id, endTime: iso(NOW + 15 * 86400).replace('.000Z', 'Z'), observationEndTime: iso(NOW + 15 * 86400).replace('.000Z', 'Z') })
+    const ab = study({ observationEndTime: NOW + 15 * 86400 })
+    const a = ok(setExperimentDraft({ action: 'update', studyId: ab.id, endTime: iso(NOW + 20 * 86400) }, setLive(ab)))
+    expect((a.before as ExperimentRecord).noUndo!.join(' ')).toMatch(/old observation end .* not put back by undo: Nexus moves an observation end only for a lift study/)
+  })
+  it('round 2 A9 / B5 / B6 — a name longer in UTF-16 than the tool takes; no object test while a whole-account lift runs; a removal checks the 100 %', () => {
+    const emoji = study({ state: 'running', startTime: NOW - 86400, name: '🏍'.repeat(150) })
+    expect((ok(setExperimentDraft({ action: 'update', studyId: emoji.id, name: 'Short' }, setLive(emoji))).before as ExperimentRecord).undo).toBeNull()
+    const whole = { studyId: '120000000000049', name: 'Account lift', state: 'running', endTime: NOW + 3600, wholeAccount: true }
+    expect(refusal(createExperimentDraft(ab, createLive({ openLifts: [whole] })))).toMatch(/whole ad account is measured by study "Account lift".*Nexus's own rule/)
+    expect(refusal(createExperimentDraft(ab, createLive({ openLifts: [{ ...whole, wholeAccount: null }] })))).toMatch(/could not read its cells/)
+    expect(refusal(createExperimentDraft(ab, createLive({ openLifts: [{ ...whole, wholeAccount: false }] })))).toBeNull()
+    const v2 = study({ type: 'SPLIT_TEST_V2', cells: [
+      { id: '120000000000061', name: 'a', treatment: 50, control: null, adAccounts: [], campaigns: [], adSets: [], ads: [A1] },
+      { id: '120000000000062', name: 'b', treatment: 25, control: null, adAccounts: [], campaigns: [], adSets: [], ads: [A2] },
+      { id: '120000000000063', name: 'c', treatment: 25, control: null, adAccounts: [], campaigns: [], adSets: [], ads: ['120000000000303'] },
+    ] })
+    expect(refusal(setExperimentDraft({ action: 'update', studyId: v2.id, removeCellIds: ['120000000000063'] }, setLive(v2)))).toMatch(/sum to exactly 100 % \(now 75\)/)
+    const removed = ok(setExperimentDraft({ action: 'update', studyId: v2.id, removeCellIds: ['120000000000063'], splits: [{ cellId: '120000000000061', percent: 50 }, { cellId: '120000000000062', percent: 50 }] }, setLive(v2)))
+    expect(JSON.parse(removed.requests[0].params.cells)).toEqual([{ id: '120000000000061', treatment_percentage: 50 }, { id: '120000000000062', treatment_percentage: 50 }])
+  })
   it('share: only people with a role on the ad account; the old list is the undo', () => {
     expect(refusal(setExperimentDraft({ action: 'update', studyId: running.id, viewers: ['100000000000001', '100000000000009'] }, setLive(running)))).toMatch(/100000000000009 has no role/)
     const d = ok(setExperimentDraft({ action: 'update', studyId: running.id, viewers: ['100000000000001', '100000000000002'] }, setLive(running)))

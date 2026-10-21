@@ -250,14 +250,16 @@ const STAGE_WORDS: Record<string, string> = {
 export const APPLY_BY_API: Readonly<Record<string, { what: string; spendsMoney: 'yes' | 'maybe' | 'no' }>> = {
   ADVANTAGE_PLUS_AUDIENCE: { what: 'switches Advantage+ audience on for the ad sets (Meta may show the ads beyond the audience set)', spendsMoney: 'yes' },
   AUTOMATIC_PLACEMENTS: { what: 'switches Advantage+ placements on for the ad sets (more placements)', spendsMoney: 'yes' },
-  LANDING_PAGE_VIEW_OPTIMIZATION_GOAL: { what: 'changes the ad sets\' goal to landing page views (learning restarts)', spendsMoney: 'no' },
+  // Step 28 review — Meta's texts differ: its parameters say a goal change, its type table says a new campaign with it.
+  LANDING_PAGE_VIEW_OPTIMIZATION_GOAL: { what: 'changes the ad sets\' goal to landing page views, or makes a campaign with that goal (Meta\'s texts differ; learning restarts)', spendsMoney: 'yes' },
   PRODUCT_SET_BOOSTING: { what: 'lets catalog ads show products beyond the product set', spendsMoney: 'maybe' },
   CONVERSION_LEADS_OPTIMIZATION: { what: 'duplicates the ad sets and ads with a conversion-leads goal (new objects)', spendsMoney: 'yes' },
   APLUSC_STANDARD_ENHANCEMENTS_BUNDLE: { what: 'switches Advantage+ creative standard enhancements on for the ads', spendsMoney: 'no' },
   AUTOFLOW_OPT_IN: { what: 'lets Meta deliver variations of the ads (standard enhancements)', spendsMoney: 'no' },
   MUSIC: { what: 'lets Meta add music to the ads (Sound Collection Terms apply)', spendsMoney: 'no' },
   UNCROP_IMAGE: { what: 'lets Meta\'s AI expand the images to more placements', spendsMoney: 'no' },
-  CREATIVE_FATIGUE: { what: 'makes AI variations of fatigued ads (new ads)', spendsMoney: 'maybe' },
+  // Step 28 review — Meta adds new ads (its texts differ: copies of the ad, or AI variations) and does not say their status.
+  CREATIVE_FATIGUE: { what: 'makes new ads from fatigued ones (Meta\'s texts differ: copies with a new creative, or AI variations)', spendsMoney: 'yes' },
   BACKGROUND_GENERATION: { what: 'switches AI backgrounds on or off for product images', spendsMoney: 'no' },
   PERFORMANT_CREATIVE_REELS_OPT_IN: { what: 'adds Reels placements to the ad sets', spendsMoney: 'yes' },
   SHOPS_ADS_SAOFF: { what: 'turns website ad sets into Shops ads (website and shop)', spendsMoney: 'maybe' },

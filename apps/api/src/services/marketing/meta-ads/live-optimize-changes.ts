@@ -27,6 +27,8 @@ const obj = (v: unknown): Row | null => (v && typeof v === 'object' && !Array.is
 const idText = (v: unknown): string | null => ((typeof v === 'string' || typeof v === 'number') && /^\d{1,25}$/.test(String(v)) ? String(v) : null)
 const rowsOf = (v: unknown): Row[] => (Array.isArray(obj(v)?.data) ? (obj(v)!.data as unknown[]).filter((r): r is Row => !!obj(r)) : [])
 const idsOf = (v: unknown): string[] => (Array.isArray(v) ? v : rowsOf(v)).map((x) => idText(obj(x)?.id ?? x)).filter((x): x is string => !!x)
+/** Ad account ids of a list, as digits (Meta may answer act_<id>, a number, or an object with either). */
+const accountIdsOf = (v: unknown): string[] => (Array.isArray(v) ? v : rowsOf(v)).map((x) => metaAdAccountId(obj(x)?.account_id ?? obj(x)?.id ?? x)).filter((x): x is string => !!x)
 const num = (v: unknown): number | null => { const n = typeof v === 'number' ? v : Number(v); return v === null || v === undefined || v === '' || typeof v === 'boolean' || !Number.isFinite(n) ? null : n }
 /** A Meta amount as sent (offset units, a string); 0 is Meta's "none" for a budget. */
 const amount = (v: unknown): string | null => { const t = text(v); return t && /^\d{1,16}$/.test(t) && !/^0+$/.test(t) ? t : null }
@@ -212,7 +214,7 @@ const CELL_EXTRA = 'control_percentage,ad_ids'
 
 const cellOf = (r: Row): LiveCell => ({
   id: text(r.id)!, name: text(r.name), treatment: num(r.treatment_percentage), control: num(r.control_percentage),
-  adAccounts: idsOf(r.adaccounts).map((a) => metaAdAccountId(a) ?? a), campaigns: idsOf(r.campaigns), adSets: idsOf(r.adsets), ads: idsOf(r.ad_ids),
+  adAccounts: accountIdsOf(r.adaccounts), campaigns: idsOf(r.campaigns), adSets: idsOf(r.adsets), ads: idsOf(r.ad_ids),
 })
 
 /** One study of the chosen account (Meta's list of the studies that impact it names it), with its cells, objectives and viewers. */
@@ -251,10 +253,22 @@ export async function liveStudy(account: MetaChosenAccount, studyId: string, now
 }
 
 /** The studies of the chosen account that are not over yet (planned, running or measuring), for Meta's 100-at-once limit. */
-export async function liveOpenStudies(account: MetaChosenAccount, now: Date = new Date()): Promise<{ open: number; read: number; more: boolean; openLifts: OpenStudyRow[] }> {
+export async function liveOpenStudies(account: MetaChosenAccount, now: Date = new Date()): Promise<{ open: number; read: number; more: boolean; openLifts: Array<OpenStudyRow & { wholeAccount: boolean | null }> }> {
   const read = await listPaged(account.connectionId, 'optimizeChange.studies', `act_${account.adAccountId}/impacting_ad_studies`, { fields: 'id,name,type,start_time,end_time,observation_end_time,canceled_time' }, 1000)
   const rows = read.rows.map((r) => openRow(r, now))
-  return { open: rows.filter((s) => s.state === 'planned' || s.state === 'running').length, read: read.rows.length, more: read.more, openLifts: rows.filter((s) => s.type === 'LIFT' && notOver(s)) }
+  // Review B5 — whether each open lift measures the WHOLE chosen account (a cell of it): read from its cells (null: not read).
+  const openLifts = []
+  for (const lift of rows.filter((s) => s.type === 'LIFT' && notOver(s)).slice(0, 10)) {
+    let wholeAccount: boolean | null = null
+    try {
+      const cells = await listPaged(account.connectionId, 'optimizeChange.liftCells', `${lift.studyId}/cells`, { fields: 'id,adaccounts.limit(100)' }, 150)
+      wholeAccount = cells.rows.some((c) => accountIdsOf(c.adaccounts).includes(account.adAccountId))
+    } catch (err) {
+      if (!(err instanceof MetaReadError) || err.failure.authLost || err.failure.throttled) throw err
+    }
+    openLifts.push({ ...lift, wholeAccount })
+  }
+  return { open: rows.filter((s) => s.state === 'planned' || s.state === 'running').length, read: read.rows.length, more: read.more, openLifts }
 }
 
 /** A study as the "one test at a time" rule reads it. */

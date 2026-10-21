@@ -242,6 +242,13 @@ describe('create-meta-experiment', () => {
     expect(ran.data).toMatchObject({ id: STUDY, kind: 'study', type: 'SPLIT_TEST' })
     expect(ran.change!.after).toMatchObject({ kind: 'study', id: STUDY })
   })
+  it('round 2 — "on" in the preview is deliversNow (configured status chain), not Meta\'s effective status', async () => {
+    h.targets.set(S1, adSet({ effectiveStatus: 'ACTIVE', campaignStatus: 'PAUSED' }))
+    h.targets.set('120000000000202', adSet({ id: '120000000000202', effectiveStatus: 'IN_PROCESS' }))
+    const p = (await preview('create-meta-experiment', ab)).preview
+    expect(p.warnings.join(' ')).toMatch(/1 on, 1 not on/)
+    expect(p.warnings.join(' ')).toMatch(/Not on now.*Ad set B/)
+  })
   it('an object another account owns: refused before any change', async () => {
     h.targets.delete('120000000000202')
     expect(await preview('create-meta-experiment', ab)).toEqual({ ok: false, error: expect.stringMatching(/is not of the chosen ad account/) })

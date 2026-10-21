@@ -16,7 +16,7 @@ vi.mock('./read-client.js', () => ({
   metaReadAll: vi.fn(),
 }))
 
-import { liveNewCopies, studyForeignProblem, type LiveStudy } from './live-optimize-changes.js'
+import { liveNewCopies, liveOpenStudies, studyForeignProblem, type LiveStudy } from './live-optimize-changes.js'
 import type { MetaChosenAccount } from './live.js'
 
 const T = { connectionId: 'm-1', adAccountId: '1234567890' }
@@ -54,6 +54,21 @@ describe('liveNewCopies (review A4)', () => {
     const { localFailure } = await import('./errors.js')
     h.answer = () => { throw new MetaReadError(localFailure('Meta refused it.', 'X'), 'x', 1) }
     expect(await liveNewCopies(T, 'ad', new Set(['1']), new Set(), SINCE)).toBeNull()
+  })
+})
+
+describe('liveOpenStudies (round 2 B5)', () => {
+  it('each open lift: does a cell measure the whole chosen account (read from its cells; null when Meta does not answer)', async () => {
+    const lift = (id: string) => ({ id, name: `Lift ${id.slice(-2)}`, type: 'LIFT', start_time: iso(SINCE - 86400), end_time: iso(Math.floor(Date.now() / 1000) + 86400) })
+    const { MetaReadError, localFailure } = await import('./errors.js')
+    h.answer = (path) => {
+      if (path.endsWith('/impacting_ad_studies')) return { data: [lift('120000000000041'), lift('120000000000042'), lift('120000000000043'), { id: '120000000000044', type: 'SPLIT_TEST', start_time: iso(SINCE), end_time: iso(Math.floor(Date.now() / 1000) + 86400) }] }
+      if (path === '120000000000041/cells') return { data: [{ id: '1', adaccounts: ['act_1234567890'] }] }
+      if (path === '120000000000042/cells') return { data: [{ id: '2', adaccounts: [], campaigns: { data: [{ id: C1 }] } }] }
+      throw new MetaReadError(localFailure('Meta refused it.', 'X'), 'x', 1)
+    }
+    const out = await liveOpenStudies({ connectionId: 'm-1', adAccountId: '1234567890' } as MetaChosenAccount)
+    expect(out.openLifts.map((l) => [l.studyId, l.wholeAccount])).toEqual([['120000000000041', true], ['120000000000042', false], ['120000000000043', null]])
   })
 })
 

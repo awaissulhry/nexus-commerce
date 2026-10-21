@@ -182,7 +182,8 @@ async function afterApply(result: ToolResult, startedAt: number): Promise<ToolRe
         const byTime = copies.filter((c) => c.foundBy === 'time')
         copiesSentence = copies.length
           ? `Meta made ${copies.length} new ${rule.copies === 'adset' ? 'ad set' : 'ad'}${copies.length === 1 ? '' : 's'} (${copies.map((c) => `${c.id}: ${c.status ?? 'status not read'}${c.foundBy === 'time' ? ', found by its time only' : ''}`).join(', ')})${running.length ? ` — ${running.length} ${running.length === 1 ? 'is' : 'are'} ACTIVE and can spend; set-meta-status or undo pauses them` : ''}.${byTime.length ? ' One found by its time only has no source on Meta\'s side: it may be one a person made at the same moment — the undo names it so.' : ''}`
-          : 'Nexus found no new copy yet (Meta may make them later): meta-ads-live shows the ad sets and ads now; pause any with set-meta-status.'
+          : 'Nexus found no new copy yet.'
+        copiesSentence += ' Copies Meta makes LATER are not found by the undo: meta-ads-live shows the ad sets and ads; pause any with set-meta-status.'
       } else {
         after.copiesUnread = true
         before.noUndo = [...(before.noUndo ?? []), 'Nexus could not read the copies Meta made right after the apply: pause them with set-meta-status (meta-ads-live shows them).']
@@ -295,7 +296,7 @@ const cellArg = z.object({
   name: typedText(100).describe('the cell\'s name'),
   description: typedText(500).optional(),
   percent: percentArg('its share of the audience that sees the ads (10–100; a creative test: whole numbers summing to 100)', 10),
-  controlPercent: percentArg('lift: its holdout (people who see none of these ads)', 0).optional(),
+  controlPercent: z.number().gt(0).max(100).optional().describe('lift: its holdout (people who see none of these ads), above 0'),
   campaignIds: idList('its campaigns (A/B test of campaigns, lift)', 50).optional(),
   adSetIds: idList('its ad sets (A/B test of ad sets, lift)', 50).optional(),
   adIds: idList('creative test: its ONE ad', 1).optional(),
@@ -351,7 +352,7 @@ const buildCreate = (args: Record<string, unknown>): MetaDraftBuilder => guarded
     objects: read.objects,
     objectStudies: read.objectStudies,
     openStudies: open.more ? null : open.open,
-    openLifts: open.openLifts.map((s) => ({ studyId: s.studyId, name: s.name, state: s.state, endTime: s.endTime })),
+    openLifts: open.openLifts.map((s) => ({ studyId: s.studyId, name: s.name, state: s.state, endTime: s.endTime, wholeAccount: s.wholeAccount })),
     pixels: lift && request.objectives?.some((o) => o.pixelId) ? await liveAccountPixels(account.target) : null,
     customConversions: lift && request.objectives?.some((o) => o.customConversionIds?.length) ? await liveAccountCustomConversions(account.target) : null,
   })
@@ -494,7 +495,7 @@ const setMetaExperiment: AgentTool = {
     splits: z.array(z.object({
       cellId: metaIdArg('a cell (meta-experiments view study)'),
       percent: percentArg('its new share (at least 10)', 10),
-      controlPercent: percentArg('lift: its new holdout', 0).optional(),
+      controlPercent: z.number().gt(0).max(100).optional().describe('lift: its new holdout (above 0; needed when Meta did not answer the old one)'),
     })).min(1).max(10).optional().describe('before it starts only: every remaining cell\'s share'),
     addCells: z.array(cellArg).min(1).max(5).optional().describe('new cells (Meta needs every cell\'s share with it; the new shares fit in what is left of 100 %)'),
     removeCellIds: z.array(id).min(1).max(9).optional().describe('before it starts only: cells to remove'),

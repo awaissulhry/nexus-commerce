@@ -90,7 +90,11 @@ export interface CreateExperimentRequest {
  * (review A2: change-recommendations.ts deliversNow), never Meta's effective status alone.
  */
 export interface StudyObject { kind: 'campaign' | 'adset' | 'ad'; id: string; name: string | null; on: boolean }
-export interface OpenStudy { studyId: string; name: string | null; state: string | null; endTime: number | null }
+export interface OpenStudy {
+  studyId: string; name: string | null; state: string | null; endTime: number | null
+  /** A lift study: does a cell measure the whole chosen ad account (null: its cells were not read — counted as yes)? */
+  wholeAccount?: boolean | null
+}
 
 export interface CreateExperimentLive {
   /** UTC Unix seconds. */
@@ -208,8 +212,9 @@ function objectivesParam(objectives: ObjectiveInput[], live: { pixels: Set<strin
   const out: Array<Record<string, unknown>> = []
   for (const [i, o] of objectives.entries()) {
     if (!o.pixelId && !o.customConversionIds?.length) return { refusal: `Objective "${o.name}" names its source: the ad account's pixel (pixelId) or custom conversions.` }
-    // Review B3 — Meta's lift guide: with a pixel as the source, the events to count are named.
-    if (o.pixelId && !o.pixelEvents?.length) return { refusal: `Objective "${o.name}": name the pixel events it counts (pixelEvents, e.g. fb_pixel_purchase) — Meta's lift guide asks for them with a pixel.` }
+    // Review B3 / NEW-5 — Nexus's own rule: with a pixel as the source, the events counted are named (Meta's lift guide:
+    // "event_names per ID, if applicable").
+    if (o.pixelId && !o.pixelEvents?.length) return { refusal: `Objective "${o.name}": name the pixel events it counts (pixelEvents, e.g. fb_pixel_purchase) — Nexus's own rule, so the lift measures what is meant (Meta: "event_names per ID, if applicable").` }
     if (o.pixelId && !live.pixels?.has(o.pixelId)) return { refusal: `Pixel ${o.pixelId} is not one of the chosen ad account's own pixels.` }
     for (const id of o.customConversionIds ?? []) if (!live.customConversions?.has(id)) return { refusal: `Custom conversion ${id} is not one of the chosen ad account's.` }
     out.push({
@@ -292,8 +297,11 @@ export function createExperimentDraft(request: CreateExperimentRequest, live: Cr
   if (cellObjectIds(cells).length > MAX_STUDY_OBJECTS_CREATE) return { refusal: `A new test names at most ${MAX_STUDY_OBJECTS_CREATE} objects in Nexus (each is read twice before it is asked: Meta's Limited access tier allows about 60 reads per 5 minutes).` }
   if (type === 'SPLIT_TEST_V2' && Math.abs(cells.reduce((s, c) => s + c.percent, 0) - 100) > 1e-9) return { refusal: 'A creative test\'s shares sum to exactly 100 % (Meta\'s guide).' }
   if (type === 'LIFT') { const single = singleLiftProblem(cells); if (single) return { refusal: single } }
-  // Review B5 — a cell of the whole ad account overlaps every lift study that still measures the account.
+  // Review B5 — a cell of the whole ad account overlaps every lift study that still measures the account; and while a lift
+  // measures the WHOLE account (or its cells were not read), no new test of its objects starts.
   if (cells.some((c) => c.wholeAdAccount) && live.openLifts?.length) return { refusal: `The whole ad account is already measured by ${openWords(live.openLifts)}. ${ONE_TEST_RULE}` }
+  const wholeLifts = (live.openLifts ?? []).filter((l) => l.wholeAccount !== false)
+  if (!cells.some((c) => c.wholeAdAccount) && wholeLifts.length) return { refusal: `The whole ad account is measured by ${openWords(wholeLifts)}${wholeLifts.some((l) => l.wholeAccount === null) ? ' (Nexus could not read its cells, so it counts it as measuring the whole account)' : ''}: every object in it is in that test. ${ONE_TEST_RULE}` }
   const seen = new Set<string>()
   for (const o of cellObjectIds(cells)) {
     if (seen.has(o.id)) return { refusal: `${objectWord(o.kind)} ${o.id} is in two cells: an object is in one cell only.` }
@@ -476,13 +484,13 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
   if (request.name !== undefined && request.name !== s.name) {
     params.name = request.name
     lines.push(['Name', s.name, request.name])
-    if (typedTextOk(s.name, META_NAME_TEXT, 200)) undo.name = s.name
+    if (typedTextOk(s.name, META_NAME_TEXT, 200) && s.name.length <= 200) undo.name = s.name
     else noUndo.push('Its old name is not one Nexus can send back (empty, longer than 200 characters or with a format character).')
   }
   if (request.description !== undefined && request.description !== s.description) {
     params.description = request.description
     lines.push(['Description', s.description, request.description])
-    if (typedTextOk(s.description, META_NAME_TEXT, 1000)) undo.description = s.description
+    if (typedTextOk(s.description, META_NAME_TEXT, 1000) && s.description.length <= 1000) undo.description = s.description
     else noUndo.push('Its old description is not one Nexus can send back (empty, longer than 1000 characters or with a format character).')
   }
   if (request.startTime !== undefined) {
@@ -514,8 +522,13 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
       // Review B1 / A10 — an end past the observation end moves that too: with it when they were one (no post-test window),
       // else the person names the new observation end (a lift study) — Meta keeps observation_end_time ≥ end_time.
       else if (s.observationEndTime !== null && end > s.observationEndTime && request.observationEndTime === undefined) {
-        if (s.observationEndTime === s.endTime) params.observation_end_time = String(end)
-        else return { refusal: s.type === 'LIFT' ? `The new end passes its observation end (${iso(s.observationEndTime)}): name observationEndTime too (at or after the new end).` : `The new end passes its observation end (${iso(s.observationEndTime)}), which Nexus moves only for a lift study: change it in Ads Manager.` }
+        if (s.observationEndTime === s.endTime) {
+          params.observation_end_time = String(end)
+          lines.push(['Observation end', iso(s.observationEndTime), `${iso(end)} (moves with the end)`])
+          // Review NEW-2 — the observation end it moved goes back with the end (a lift study, before it starts, still ahead).
+          if (s.type === 'LIFT' && !started && s.observationEndTime > live.now) undo.observationEndTime = isoOf(s.observationEndTime)
+          else noUndo.push(`Its old observation end (${iso(s.observationEndTime)}) is not put back by undo${s.type === 'LIFT' ? (started ? ': a running study\'s end only moves later' : ': it is not in the future') : ': Nexus moves an observation end only for a lift study'}.`)
+        } else return { refusal: s.type === 'LIFT' ? `The new end passes its observation end (${iso(s.observationEndTime)}): name observationEndTime too (at or after the new end).` : `The new end passes its observation end (${iso(s.observationEndTime)}), which Nexus moves only for a lift study: change it in Ads Manager.` }
       }
       lines.push(['End', iso(s.endTime), iso(end)])
       // A running study's end only moves later (Meta); its old, earlier end comes back only through end-meta-experiment.
@@ -578,14 +591,16 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
       const p = objectProblem(o, live)
       if (p) return { refusal: p }
     }
-    const withShares = !!(request.splits?.length || request.addCells?.length)
+    // Review B6 — a removal sends every remaining cell's share too (Meta: they are correlated), so the sums are checked.
+    const withShares = !!(request.splits?.length || request.addCells?.length || request.removeCellIds?.length)
     const kept = s.cells.filter((c) => !removed.has(c.id))
     const existing = kept.map((c) => {
       const out: Record<string, unknown> = { id: c.id }
       if (withShares) {
         const sp = splits.get(c.id)
         out.treatment_percentage = sp?.percent ?? c.treatment
-        if (s.type === 'LIFT') out.control_percentage = sp?.controlPercent ?? c.control ?? 0
+        // Review NEW-1 — never a holdout of 0 that Meta did not answer: the split's, else the one read (refused below when neither).
+        if (s.type === 'LIFT') out.control_percentage = sp?.controlPercent ?? c.control
       }
       const adds = addedTo.get(c.id)
       const level = cellLevel(c)
@@ -593,6 +608,12 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
       return out
     })
     if (withShares && existing.some((c) => typeof c.treatment_percentage !== 'number')) return { refusal: 'Nexus could not read every cell\'s share, which Meta needs with a change of the split or a new cell.' }
+    if (withShares && s.type === 'LIFT') {
+      const unread = kept.filter((c, i) => typeof existing[i].control_percentage !== 'number')
+      if (unread.length) return { refusal: `Nexus could not read the holdout of cell ${unread.map((c) => `"${c.name ?? c.id}"`).join(', ')}, and Meta needs every cell's share and holdout with this change: name it in splits (controlPercent).` }
+      const none = kept.filter((c, i) => !((existing[i].control_percentage as number) > 0))
+      if (none.length) return { refusal: `Cell ${none.map((c) => `"${c.name ?? c.id}"`).join(', ')}: a lift study's cell has a holdout (controlPercent above 0).` }
+    }
     for (const c of existing) if (typeof c.treatment_percentage === 'number' && (c.treatment_percentage < 10 || !two(c.treatment_percentage))) return { refusal: 'Each cell\'s share is 10 to 100 % with at most two decimals (Meta: at least 10).' }
     const share = existing.reduce((sum, c) => sum + (typeof c.treatment_percentage === 'number' ? c.treatment_percentage : 0) + (typeof c.control_percentage === 'number' ? c.control_percentage : 0), 0)
     const added = request.addCells ?? []
@@ -624,6 +645,14 @@ export function setExperimentDraft(request: SetExperimentRequest, live: SetExper
       if (adds?.length) lines.push([`Cell "${c.name ?? c.id}" objects`, `${(cellLevel(c)?.ids.length ?? 0)}`, `+ ${adds.map((x) => listed(live.objects.get(x.id)!)).join(', ')}`])
     }
     for (const c of added) lines.push([`New cell "${c.name}"`, 'none', `${c.percent} %${c.controlPercent !== undefined ? ` (+ ${c.controlPercent} % holdout)` : ''}`])
+    // Review NEW-1 — every kept cell's share (and holdout) goes with the change: the preview names each one sent unchanged.
+    if (withShares) {
+      kept.forEach((c, i) => {
+        if (splits.has(c.id)) return
+        const sent = `${existing[i].treatment_percentage} %${s.type === 'LIFT' ? ` (+ ${existing[i].control_percentage} % holdout)` : ''}`
+        lines.push([`Cell "${c.name ?? c.id}" share (sent as it is)`, sent, sent])
+      })
+    }
     if (request.splits?.length && s.cells.every((c) => c.treatment !== null)) undo.splits = s.cells.filter((c) => !removed.has(c.id)).map((c) => ({ cellId: c.id, percent: c.treatment!, ...(s.type === 'LIFT' && c.control !== null ? { controlPercent: c.control } : {}) }))
     if (added.length || request.addObjects?.length || removed.size) noUndo.push(started ? 'Meta lets nothing be removed from a running study: added cells and objects stay.' : 'Added or removed cells and objects are not put back by undo (ask set-meta-experiment again before it starts).')
     if (request.addObjects?.length || added.length) {
