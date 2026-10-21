@@ -190,7 +190,7 @@ describe('set-meta-webhooks', () => {
     // fields ask on top, and who needs the Page assigned.
     expect(PAGE_INSTALL_EXPLAIN['200']).toMatch(/Manage, Create content or Moderate/)
     for (const words of [PAGE_TOKEN_TASKS, PAGE_INSTALL_EXPLAIN['200'], PAGE_INSTALL_EXPLAIN['10']]) {
-      expect(words).toMatch(/leadgen also (asks )?the Advertise task and leads_retrieval, ads_management and pages_read_engagement, Messenger fields the Moderate task and pages_messaging/)
+      expect(words).toMatch(/leadgen also (asks )?the Advertise task and leads_retrieval, ads_management and pages_read_engagement, Messenger fields the Moderate \(or Messaging\) task and pages_messaging/)
       expect(words).toMatch(/An admin system user reaches the business's Pages without being assigned them; an employee system user needs the Page assigned \(Meta Business settings › Users › System users › Assign assets\)/)
     }
     h.pageId = null
@@ -269,18 +269,71 @@ describe('set-meta-webhooks', () => {
     expect(await webhooks.undo!.current({ before: done.change.before, after: done.change.after })).not.toEqual(done.change.after)
   })
 
-  it('review B-4 — the default: the Page fields that are not Messenger\'s; Messenger fields only when named', async () => {
+  it('review B-4 / round 2 B-1 — the default: feed, mention, product_review (no Messenger field, no leadgen); those only when named', async () => {
     const done = await run(webhooks, { action: 'install-page' })
-    expect(sent()[0].params).toEqual({ subscribed_fields: 'feed,leadgen,mention,product_review' })
-    expect(done.change.after).toMatchObject({ fields: ['feed', 'leadgen', 'mention', 'product_review'] })
+    expect(sent()[0].params).toEqual({ subscribed_fields: 'feed,mention,product_review' })
+    expect(done.change.after).toMatchObject({ fields: ['feed', 'mention', 'product_review'] })
     const out = await preview(webhooks, { action: 'install-page' })
     expect(out.preview.warnings.join(' ')).not.toMatch(/is a Messenger field|are Messenger fields/)
-    expect(webhooks.input.shape.fields.description).toMatch(/default: the page fields that are not Messenger's — leadgen, feed, mention, product_review; object instagram: product_review only; Messenger fields only when named/)
+    expect(out.preview.warnings.join(' ')).not.toMatch(/^leadgen needs|leadgen needs the Advertise task/)
+    expect(webhooks.input.shape.fields.description).toMatch(/default: feed, mention, product_review — no Messenger field, no leadgen; object instagram: product_review only; leadgen and Messenger fields only when named/)
+  })
+
+  it('review round 2 B-1 — leadgen named: said before approval that it needs the Advertise task and leads_retrieval, or Meta refuses the whole install', async () => {
+    const LEADGEN_LINE = 'leadgen needs the Advertise task on the Page and leads_retrieval on the token (plus ads_management and pages_read_engagement): without them Meta refuses the whole install, the other fields too.'
+    const named = await preview(webhooks, { action: 'install-page', fields: ['leadgen', 'feed'] })
+    expect(named.preview.requests).toMatchObject([{ step: 1, label: 'Install the app on Page 120000000000010: feed, leadgen' }])
+    expect(named.preview.warnings).toContain(LEADGEN_LINE)
+    // Already on the Page and sent again with the whole list: said too (Meta judges the whole POST).
+    h.page = { installed: true, fields: ['leadgen'] }
+    expect((await preview(webhooks, { action: 'install-page', fields: ['feed'] })).preview.warnings).toContain(LEADGEN_LINE)
+    // Not in the list: not said.
+    h.page = { installed: false, fields: [] }
+    expect((await preview(webhooks, { action: 'install-page', fields: ['feed'] })).preview.warnings).not.toContain(LEADGEN_LINE)
+  })
+
+  it('review round 2 B-2 — when this install\'s undo is two steps (install-page exact), its preview says what that undo does', async () => {
+    h.page = { installed: true, fields: ['feed'] }
+    const out = await preview(webhooks, { action: 'install-page', fields: ['mention'] })
+    expect(out.preview.warnings).toContain('Its undo takes the app off Page 120000000000010 and puts it back with the earlier fields (feed): if that second step fails, the app stays off the Page — no lead, comment or message notification of the Page reaches Nexus — until install-page runs again.')
+    // Its undo is that two-step change indeed.
+    const done = await run(webhooks, { action: 'install-page', fields: ['mention'] })
+    const undo = webhooks.undo!.request(done.change) as { args: Record<string, unknown> }
+    expect(undo.args).toMatchObject({ action: 'install-page', fields: ['feed'], exact: true })
+    h.page = { installed: true, fields: ['feed', 'mention'] }
+    expect((await preview(webhooks, undo.args)).preview.requests).toHaveLength(2)
+    // An undo of one step (the app removed again; or exact with nothing to drop): not said.
+    h.page = { installed: false, fields: [] }
+    expect((await preview(webhooks, { action: 'install-page', fields: ['mention'] })).preview.warnings.join(' ')).not.toMatch(/Its undo takes the app off/)
+    h.page = { installed: true, fields: ['feed', 'mention'] }
+    expect((await preview(webhooks, { action: 'install-page', fields: ['feed'], exact: true })).preview.warnings.join(' ')).not.toMatch(/Its undo takes the app off/)
+  })
+
+  it('review round 2 A-L2 / A-N2 — `exact`: step 2 sent and refused by Meta → off; step 2 sent but not confirmed → off, or its install not confirmed', async () => {
+    const args = { action: 'install-page', fields: ['feed'], exact: true }
+    h.page = { installed: true, fields: ['feed', 'leadgen'] }
+    // Meta refused step 2 (it judged it: nothing installed) — the app is off.
+    h.send.mockImplementationOnce(ok()).mockImplementationOnce(async () => { throw new MetaWriteError({ ...localFailure('Meta did not accept this change made as the chosen Facebook Page (200): Permissions error. Nothing was changed.', '200'), origin: 'meta', permissionDenied: true }, 'webhooks.installPage', 'refused') })
+    const refused = await run(webhooks, args)
+    expect(refused.data.steps.map((s: { outcome: string }) => s.outcome)).toEqual(['done', 'refused'])
+    expect(refused.data.steps[1].sentence).toContain(PAGE_INSTALL_EXPLAIN['200'])
+    expect(refused.data.sentence).toMatch(/^Meta made 1 of 2 requests as asked: the app is off Page 120000000000010 now — step 1 removed it and step 2 did not install it again/)
+    expect(refused.data.appOffPage).toBe('120000000000010')
+    expect(refused.change.after).toMatchObject({ fields: null })
+    // Step 2 sent, no answer from Meta (it may have installed it): not said flatly "off".
+    h.send.mockReset()
+    h.send.mockImplementationOnce(ok()).mockImplementationOnce(async () => { throw new MetaWriteError({ ...localFailure('Meta did not answer, or failed on its side: it may still have made it.', 'UNKNOWN'), origin: 'meta' }, 'webhooks.installPage', 'unknown') })
+    const unsure = await run(webhooks, args)
+    expect(unsure.data.steps.map((s: { outcome: string }) => s.outcome)).toEqual(['done', 'not_confirmed'])
+    expect(unsure.data.sentence).toBe('Meta made 1 of 2 requests as asked: the app is off Page 120000000000010, or its install is not confirmed — step 1 removed it and Meta did not confirm step 2 (it may still have installed it; the steps say why). meta-webhooks shows it; ask set-meta-webhooks install-page again if it is off, or undo this change to install the earlier fields (feed, leadgen).')
+    expect(unsure.data).not.toHaveProperty('appOffPage')
+    expect(unsure.data.appOffPageOrNotConfirmed).toBe('120000000000010')
+    expect(unsure.data.sentence).not.toMatch(/the app is off Page 120000000000010 now/)
   })
 
   it('install-page: Messenger fields need pages_messaging; fields the receiver does not take are named, kept out of the undo', async () => {
     const messages = await preview(webhooks, { action: 'install-page', fields: ['messages', 'leadgen'] })
-    expect(messages.preview.warnings.join(' ')).toMatch(/messages is a Messenger field: Meta also needs the Moderate task on the Page and pages_messaging on the token, and without them refuses the whole install/)
+    expect(messages.preview.warnings.join(' ')).toMatch(/messages is a Messenger field: Meta also needs the Moderate \(or Messaging\) task on the Page and pages_messaging on the token, and without them refuses the whole install/)
     h.page = { installed: true, fields: ['feed', 'ratings'] }
     const out = await preview(webhooks, { action: 'install-page', fields: ['leadgen'] })
     expect(out.preview.warnings.join(' ')).toMatch(/also has ratings, which Nexus's receiver does not take and so does not send: if Meta replaces the list with this one, it goes\./)

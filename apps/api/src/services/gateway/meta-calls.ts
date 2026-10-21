@@ -1558,6 +1558,14 @@ const BOOST_KEYS: ReadonlySet<string> = new Set(['source_instagram_media_id', 'i
 const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kinds
   ? !!kind && (rule.kinds as readonly string[]).includes(kind)
   : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
+/**
+ * Step 30 part 3 review round 2 (A-L3) — the token a change goes with by its rule: 'page' (the chosen Page's own), 'app'
+ * (the connection's app token), undefined (the system user's). For the WORDS of a failure only (write-client.ts): what is
+ * sent, and with which token, is the verdict's alone.
+ */
+export function metaWriteRuleAuth(verb: MetaWriteRule['method'], route: string, objectKind?: string): 'page' | 'app' | undefined {
+  return writeRules().find((r) => r.method === verb && r.path.test(route.toLowerCase()) && kindMatches(r, objectKind))?.auth
+}
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
 // Step 23 — an image upload's bytes (META_IMAGE_MAX_BODY) are the largest body; step 39: an ad set's whole targeting;
 // step 31 — 10,000 hashed e-mails of an audience's people (MEMBERS_MAX_BODY).

@@ -387,13 +387,14 @@ function doneSentence(request: MetaChangeRequest, result: MetaChangeResult): str
 /**
  * `execute` of a Meta change tool: only as a request a person approved, as that person; built again from the live state,
  * sent only when it is exactly what was approved, request by request. `finish` turns the requests Meta made (with their
- * read-back) into the record: what they replaced and wrote, for undo. Nothing done at all = not run (the steps say why).
+ * read-back) into the record: what they replaced and wrote, for undo (step 30 part 3 review round 2: with every step's
+ * outcome, so a request Meta did not confirm is told from one it refused). Nothing done at all = not run (the steps say why).
  */
 export async function runMetaChange(
   args: Record<string, unknown>,
   ctx: ToolContext,
   build: MetaDraftBuilder,
-  finish: (draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult; notAsAsked?: string }>) => MetaRunOutcome,
+  finish: (draft: MetaChangeDraft, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult; notAsAsked?: string }>, steps: readonly MetaRunStep[]) => MetaRunOutcome,
   after?: (account: MetaChangeAccount, done: Array<{ request: MetaChangeRequest; result: MetaChangeResult }>) => Promise<string>,
 ): Promise<ToolResult> {
   const run = approvedRun(ctx, String(args.why ?? ''))
@@ -503,7 +504,7 @@ export async function runMetaChange(
   if (!done.length) {
     return notRun(steps.some((s) => s.outcome === 'not_confirmed') ? `Not confirmed: ${report}` : `Not run: Meta changed nothing. ${report}`)
   }
-  const outcome = finish(draft, done)
+  const outcome = finish(draft, done, steps)
   const bookkeeping = after ? await after(account, done).catch(() => 'Nexus\'s pages show the change after the next daily read; meta-ads-live shows it now.') : null
   // Every record names the Meta account it was made on: undo reads that account and goes to it, never another.
   const stamp = (record: unknown) => (record && typeof record === 'object' && !Array.isArray(record) ? { ...record, accountId: account.accountId, adAccountId: account.adAccountId } : record)

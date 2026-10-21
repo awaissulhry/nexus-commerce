@@ -26,7 +26,10 @@
  *     Nothing is cached, stored, logged or traced. Its own ledger row keeps the path only (`graph.facebook.com/v26.0/<page
  *     id>`), never a body that went well; a failure keeps Meta's words, which carry no token, and are scrubbed anyway.
  *   - No Page token from Meta (refused, or the Page answers none: the system user has no task on it) → nothing is sent,
- *     and the sentence says what the Page needs in Meta Business settings, with Meta's own words.
+ *     and the sentence says what the Page needs in Meta Business settings, with Meta's own words. Step 30 part 3 review
+ *     round 2 A-L1 — but Meta refusing the SYSTEM-USER token this read goes with (190, 102) is that token gone: the next
+ *     heartbeat checks it at once (as gateway.ts does for a system-user call) and the refusal is "sign in again" in
+ *     errors.ts's words, never the Page's tasks.
  */
 import { metaGraphBase } from '../meta/api-version.js'
 import { metaChosenPageOf } from './account.js'
@@ -38,7 +41,7 @@ import { classifyChannelAnswer } from './vocabulary.js'
 
 /** Why there is no Page token for this call: nothing is sent, and the sentence says what the Page needs. */
 export class MetaPageTokenUnavailable extends Error {
-  constructor(readonly code: 'META_PAGE_NOT_CHOSEN' | 'META_PAGE_TOKEN_UNAVAILABLE' | 'RATE_LIMITED_LOCAL' | 'PUBLISH_GATED', message: string, readonly retryAfterMs: number | null = null) {
+  constructor(readonly code: 'META_PAGE_NOT_CHOSEN' | 'META_PAGE_TOKEN_UNAVAILABLE' | 'RATE_LIMITED_LOCAL' | 'PUBLISH_GATED' | 'ACCOUNT_NEEDS_SIGNIN', message: string, readonly retryAfterMs: number | null = null) {
     super(message)
     this.name = 'MetaPageTokenUnavailable'
   }
@@ -49,7 +52,7 @@ export class MetaPageTokenUnavailable extends Error {
  * role other than Live Contributor on the Page; when the business requires two-factor authentication, an authenticated
  * user), the task the change needs (lead forms and test leads: Advertise, create guide) and the token's permissions.
  */
-export const META_PAGE_TOKEN_NEEDS = 'Meta answers a Page\'s own token only to someone with a role on the Page other than Live Contributor (and, when the business requires two-factor authentication, one who is authenticated): the system user needs the task this change needs on the business\'s chosen Facebook Page — lead forms and test leads: Advertise ("Create ads"); the app installed on the Page and its connected apps read (set-meta-webhooks): Manage, Create content or Moderate (leadgen also Advertise, Messenger fields Moderate) — an admin system user reaches the business\'s Pages without being assigned them, an employee system user needs the Page assigned to it in Meta Business settings (Users › System users › Assign assets); and its token needs ads_management, business_management, pages_manage_ads, pages_read_engagement and pages_show_list (the app on the Page: pages_manage_metadata and pages_show_list; leadgen also leads_retrieval, ads_management and pages_read_engagement; Messenger fields also pages_messaging).'
+export const META_PAGE_TOKEN_NEEDS = 'Meta answers a Page\'s own token only to someone with a role on the Page other than Live Contributor (and, when the business requires two-factor authentication, one who is authenticated): the system user needs the task this change needs on the business\'s chosen Facebook Page — lead forms and test leads: Advertise ("Create ads"); the app installed on the Page and its connected apps read (set-meta-webhooks): Manage, Create content or Moderate (leadgen also Advertise, Messenger fields Moderate or Messaging) — an admin system user reaches the business\'s Pages without being assigned them, an employee system user needs the Page assigned to it in Meta Business settings (Users › System users › Assign assets); and its token needs ads_management, business_management, pages_manage_ads, pages_read_engagement and pages_show_list (the app on the Page: pages_manage_metadata and pages_show_list; leadgen also leads_retrieval, ads_management and pages_read_engagement; Messenger fields also pages_messaging).'
 
 /**
  * Review A1 — one exact secret (the Page's token, the system-user token) out of a text: as written, and — when the text is
@@ -175,6 +178,12 @@ export async function metaPageTokenFor(connectionId: string, deps: { timeoutMs?:
     rateLimitRemaining: reading?.remaining ?? null, rateLimitLimit: reading?.limit ?? null, attempts: 1,
   })
   if (token) return token
+  // Review round 2 A-L1 — the system-user token itself refused (190, 102): gone. A code errors.ts reads as "token gone"
+  // (ACCOUNT_NEEDS_SIGNIN, held), its words, and the heartbeat's check forgotten (gateway.ts does the same after a call).
+  if (failed && (failed.errorClass === 'auth_revoked' || failed.errorClass === 'auth_expired')) {
+    void import('../cx/connectors/meta/token-check.js').then((m) => m.forgetMetaTokenCheck(connectionId)).catch(() => undefined)
+    throw new MetaPageTokenUnavailable('ACCOUNT_NEEDS_SIGNIN', `Held, nothing sent: Meta no longer accepts this business's system-user token${failed.words ? ` (${failed.words})` : ''}, with which Nexus asks Meta for the chosen Page's token. Make a new token in Meta Business settings and enter it in Settings → Channels → Meta.`)
+  }
   if (!status) throw new MetaPageTokenUnavailable('META_PAGE_TOKEN_UNAVAILABLE', `Held, nothing sent: Meta did not answer Nexus's request for the chosen Page's token${timedOut ? ' in time' : ''}. Nothing was changed; ask again later.`)
   const why = failed?.words ? `Meta's words: ${failed.words}${failed.code ? ` (${failed.code})` : ''}` : answerProblem ?? `Meta answered ${status}`
   throw new MetaPageTokenUnavailable('META_PAGE_TOKEN_UNAVAILABLE', `Held, nothing sent: Meta gave Nexus no token for the business's chosen Facebook Page (${why}). ${META_PAGE_TOKEN_NEEDS}`)

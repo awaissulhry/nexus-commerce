@@ -18,7 +18,7 @@
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool, ToolChange, ToolUndo } from '../tool-types.js'
-import { metaChangePreview, metaConnectionArg, metaWhyArg, META_CHANGE_RULES, recordAccount, runMetaChange, type MetaDraftBuilder } from './meta-ads-kit.js'
+import { metaChangePreview, metaConnectionArg, metaWhyArg, META_CHANGE_RULES, recordAccount, runMetaChange, type MetaDraftBuilder, type MetaRunStep } from './meta-ads-kit.js'
 import { metaChosenAccount, MetaLiveRefusal } from '../../marketing/meta-ads/live.js'
 import { liveAdAccountApps, liveAlertSubscription, liveAppSubscriptions, livePageApps, livePageInstagram } from '../../marketing/meta-ads/live-webhook-setup.js'
 import { MetaReadError } from '../../marketing/meta-ads/errors.js'
@@ -109,8 +109,10 @@ function plainFinish(draft: MetaChangeDraft) {
  * app token) before it installs it again (step 2, the Page token, which stands on step 1). When only step 1 happened (Meta's
  * rate limit, no Page token, a refusal, a 5xx), the app is OFF the Page: the record says so (no fields), its undo installs
  * the earlier fields, and the run's sentence says it plainly. Every other run is the draft's own record (plainFinish).
+ * Review round 2 A-L2 — step 2 sent but NOT CONFIRMED (the kit's `not_confirmed`: no answer, Meta failed on its side — it
+ * may have installed it): the app is off the Page OR on it, said as such; Meta refusing step 2 (or step 2 not sent) is off.
  */
-function webhooksFinish(draft: MetaChangeDraft, done: Array<{ request: MetaChangeDraft['requests'][number] }>) {
+function webhooksFinish(draft: MetaChangeDraft, done: Array<{ request: MetaChangeDraft['requests'][number] }>, steps: readonly MetaRunStep[] = []) {
   const outcome = plainFinish(draft)
   const after = draft.after as WebhooksRecord
   const removed = done.some((d) => d.request.operation === 'webhooks.removePage')
@@ -118,7 +120,13 @@ function webhooksFinish(draft: MetaChangeDraft, done: Array<{ request: MetaChang
   if (after.action !== 'install-page' || !removed || installed) return outcome
   const before = draft.before as WebhooksRecord
   const back = before.undo?.action === 'install-page' ? before.undo.fields ?? [] : []
-  const sentence = `Meta made ${done.length} of ${draft.requests.length} requests as asked: the app is off Page ${after.pageId} now — step 1 removed it and step 2 did not install it again (the steps say why), so no lead, comment or message notification of the Page reaches Nexus. Ask set-meta-webhooks install-page again${back.length ? `, or undo this change to install the earlier fields (${[...back].sort().join(', ')})` : ''}.`
+  const undoToo = back.length ? `, or undo this change to install the earlier fields (${[...back].sort().join(', ')})` : ''
+  const installStep = draft.requests.find((r) => r.operation === 'webhooks.installPage')?.step
+  if (steps.some((s) => s.step === installStep && s.outcome === 'not_confirmed')) {
+    const sentence = `Meta made ${done.length} of ${draft.requests.length} requests as asked: the app is off Page ${after.pageId}, or its install is not confirmed — step 1 removed it and Meta did not confirm step 2 (it may still have installed it; the steps say why). meta-webhooks shows it; ask set-meta-webhooks install-page again if it is off${undoToo}.`
+    return { ...outcome, data: { ...outcome.data, sentence, appOffPageOrNotConfirmed: after.pageId ?? null }, after: { ...after, fields: null } }
+  }
+  const sentence = `Meta made ${done.length} of ${draft.requests.length} requests as asked: the app is off Page ${after.pageId} now — step 1 removed it and step 2 did not install it again (the steps say why), so no lead, comment or message notification of the Page reaches Nexus. Ask set-meta-webhooks install-page again${undoToo}.`
   return { ...outcome, data: { ...outcome.data, sentence, appOffPage: after.pageId ?? null }, after: { ...after, fields: null } }
 }
 
@@ -176,7 +184,7 @@ const setMetaWebhooks: AgentTool = {
     connectionId: metaConnectionArg,
     action: z.enum(WEBHOOK_ACTIONS).describe('subscribe-app / unsubscribe-app: the app\'s webhook subscription of one object (app-wide); connect-ad-account / disconnect-ad-account: the chosen ad account delivers its ads notifications to the app (or stops); install-page / remove-page: the app on / off the chosen Facebook Page (installing with the Page\'s own token)'),
     object: z.enum(WEBHOOK_OBJECT_NAMES).optional().describe('subscribe-app, unsubscribe-app: ad_account (ads notifications), application (account status, trigger rules, app alerts), page (leads, comments, messages), catalog (batches, feeds), permissions; instagram and whatsapp_business_account fields are set only in Meta\'s App Dashboard. install-page: none, or instagram — the app on the chosen Instagram account\'s linked Page (which must be the chosen Page), its per-account step; whether that is enough for the account\'s notifications is not yet confirmed'),
-    fields: z.array(z.enum(ALL_FIELDS)).min(1).max(40).optional().describe('subscribe-app: the object\'s fields (default: every field Nexus\'s receiver takes for it); unsubscribe-app: only these (default: the whole object); install-page: the Page\'s fields (default: the page fields that are not Messenger\'s — leadgen, feed, mention, product_review; object instagram: product_review only; Messenger fields only when named), added to the ones it has'),
+    fields: z.array(z.enum(ALL_FIELDS)).min(1).max(40).optional().describe('subscribe-app: the object\'s fields (default: every field Nexus\'s receiver takes for it); unsubscribe-app: only these (default: the whole object); install-page: the Page\'s fields (default: feed, mention, product_review — no Messenger field, no leadgen; object instagram: product_review only; leadgen and Messenger fields only when named), added to the ones it has'),
     exact: z.boolean().optional().describe('install-page: the Page\'s fields become exactly `fields` (when one must go, the app comes off the Page first and goes on again); default: added to the ones it has'),
     why: metaWhyArg,
   }),
@@ -190,9 +198,10 @@ const setMetaWebhooks: AgentTool = {
     + 'ad account to the app (Meta needs an ADMIN of the ad account: when the system user is not one, Meta refuses and '
     + 'nothing changes) or disconnect it. Install the app on the chosen Facebook Page with its fields (leads, comments, '
     + 'messages …: the Page\'s OWN token, which Nexus reads with the system user — it needs the Manage, Create content or '
-    + 'Moderate task on the Page and pages_manage_metadata, pages_show_list; leadgen also the Advertise task and '
-    + 'leads_retrieval, ads_management, pages_read_engagement; Messenger fields, sent only when named, the Moderate task and '
-    + 'pages_messaging; when it lacks them, Meta refuses and nothing changes), or remove it (the app token; its undo '
+    + 'Moderate task on the Page and pages_manage_metadata, pages_show_list; leadgen, sent only when named, also the '
+    + 'Advertise task and leads_retrieval, ads_management, pages_read_engagement; Messenger fields, sent only when named, '
+    + 'the Moderate (or Messaging) task and pages_messaging; when it lacks them, Meta refuses and nothing changes), or '
+    + 'remove it (the app token; its undo '
     + 'installs the fields it had). install-page with object instagram installs the app on the Instagram account\'s linked '
     + 'Page (the chosen one) — whether that is enough for the account\'s notifications is not yet confirmed (Meta\'s newer '
     + 'guide names the Instagram fields there, which Nexus cannot send; then the App Dashboard). '

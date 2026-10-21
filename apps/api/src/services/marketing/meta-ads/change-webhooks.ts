@@ -10,12 +10,13 @@
  *   install-page           POST /<page>/subscribed_apps subscribed_fields — the CHOSEN Page, with its own token (part 3:
  *                          step 36's mode, the gateway reads it), standing on the Page's apps read with the same token
  *                          (WH-010). The whole list it wants is sent (the Page's own fields Nexus takes, plus the asked
- *                          ones; by default the Page fields that are not Messenger's). Whether Meta replaces the Page's
- *                          list or adds to it is not documented, and Nexus's own calls cannot tell the two apart (every
- *                          POST it sends holds every Nexus field already on the Page): sending the whole list is safe
- *                          either way. `exact` makes it exactly the asked ones: a removal (the app token) and a POST when
- *                          one must go (the undo's way back); when only the removal happens, the app is off the Page until
- *                          install-page runs again (the run says so; its undo installs the earlier fields)
+ *                          ones; by default feed, mention and product_review: no Messenger field, no leadgen). Whether
+ *                          Meta replaces the Page's list or adds to it is not documented, and Nexus's own calls cannot
+ *                          tell the two apart (every POST it sends holds every Nexus field already on the Page): sending
+ *                          the whole list is safe either way. `exact` makes it exactly the asked ones: a removal (the app
+ *                          token) and a POST when one must go (the undo's way back); when only the removal happens, the
+ *                          app is off the Page until install-page runs again (the run says so; its undo installs the
+ *                          earlier fields)
  *   install-page instagram the per-account step of the Instagram account (WH-013): its linked Page — which must be the
  *                          chosen Page, linked to the chosen Instagram account — gets the app with ONE Page field. Meta's
  *                          docs disagree on what this step takes: the v26 Instagram webhooks setup (Facebook Login) POSTs
@@ -97,20 +98,23 @@ const ASSIGN_PAGE = 'An admin system user reaches the business\'s Pages without 
 /**
  * Part 3 — what Meta needs to install an app on a Page (reference/page/subscribed_apps), in words. Review B-5 — and what
  * the fields ask on top: leadgen the ADVERTISE task and leads_retrieval, ads_management, pages_read_engagement (Lead Ads
- * webhooks guide, "Install Your App"), Messenger fields the MODERATE task and pages_messaging (Messenger Platform webhooks,
- * "Subscribe your Page").
+ * webhooks guide, "Install Your App"), Messenger fields the MODERATE (or MESSAGING) task and pages_messaging (Messenger
+ * Platform webhooks, "Subscribe your Page"; Webhooks for Pages: MESSAGING).
  */
-export const PAGE_TOKEN_TASKS = `Meta installs an app on a Page only with the Page's own token: Nexus reads the chosen Page's token with the business's system user (step 36), so the system user needs the Manage, Create content or Moderate task on the Page and its token pages_manage_metadata and pages_show_list; leadgen also asks the Advertise task and leads_retrieval, ads_management and pages_read_engagement, Messenger fields the Moderate task and pages_messaging. ${ASSIGN_PAGE} Without them Meta gives no Page token or refuses, and nothing changes.`
+export const PAGE_TOKEN_TASKS = `Meta installs an app on a Page only with the Page's own token: Nexus reads the chosen Page's token with the business's system user (step 36), so the system user needs the Manage, Create content or Moderate task on the Page and its token pages_manage_metadata and pages_show_list; leadgen also asks the Advertise task and leads_retrieval, ads_management and pages_read_engagement, Messenger fields the Moderate (or Messaging) task and pages_messaging. ${ASSIGN_PAGE} Without them Meta gives no Page token or refuses, and nothing changes.`
 /** Part 3 — the Page fields that are Messenger's: Meta also needs pages_messaging for them. */
 const MESSENGER_FIELDS: ReadonlySet<string> = new Set(['messages', 'message_echoes', 'message_reads', 'message_deliveries', 'message_reactions', 'message_edits', 'messaging_postbacks', 'messaging_referrals', 'messaging_handovers', 'standby', 'messaging_policy_enforcement', 'messaging_integrity', 'messaging_in_thread_lead_form_submit'])
 /** Review B-5 — Meta's 200 / 10 on an install (a permission or task missing), in words. */
-const PAGE_PERMISSIONS = `Installing the app on a Page needs the Manage, Create content or Moderate task on it for the system user, and pages_manage_metadata and pages_show_list on its token; leadgen also the Advertise task and leads_retrieval, ads_management and pages_read_engagement, Messenger fields the Moderate task and pages_messaging. ${ASSIGN_PAGE}`
+const PAGE_PERMISSIONS = `Installing the app on a Page needs the Manage, Create content or Moderate task on it for the system user, and pages_manage_metadata and pages_show_list on its token; leadgen also the Advertise task and leads_retrieval, ads_management and pages_read_engagement, Messenger fields the Moderate (or Messaging) task and pages_messaging. ${ASSIGN_PAGE}`
+/** Part 3 — Meta refusing the Page's own token (190; review round 2 B-4: 102, the session, the same words). */
+const PAGE_TOKEN_REFUSED = 'Meta did not accept the Page\'s own token, which Nexus reads for each change: the system user may have lost its role or task on the chosen Page; the business\'s system-user token itself is not the problem.'
 /** Part 3 — Meta's codes an install on a Page may meet (graph-api errors), in plain words. */
 export const PAGE_INSTALL_EXPLAIN: Readonly<Record<string, string>> = {
   200: PAGE_PERMISSIONS,
   10: PAGE_PERMISSIONS,
   210: 'Meta took the token as not the Page\'s own: Nexus sends the chosen Page\'s token, read for this change — the system user may have no task on the Page (an employee system user needs the Page assigned: Meta Business settings › Users › System users › Assign assets).',
-  190: 'Meta did not accept the Page\'s own token, which Nexus reads for each change: the system user may have lost its role or task on the chosen Page; the business\'s system-user token itself is not the problem.',
+  190: PAGE_TOKEN_REFUSED,
+  102: PAGE_TOKEN_REFUSED,
 }
 const NO_PAGE = 'This business has no Facebook Page chosen (set-meta-connection chooses one).'
 const APP_WIDE = (n: number) => `This subscription is app-wide: ${n === 1 ? 'another business' : `${n} other businesses`} in Nexus use${n === 1 ? 's' : ''} the same Meta app, so this also changes what ${n === 1 ? 'it receives' : 'they receive'} (each still gets only its own ad accounts' and Pages' notifications).`
@@ -258,17 +262,22 @@ export function webhooksDraft(req: WebhooksRequest, live: WebhooksLive): MetaCha
 
 /** The Page fields Nexus's receiver takes (META_WEBHOOK_FIELDS.page). */
 const PAGE_FIELDS: readonly string[] = metaWebhookFieldsOf('page') ?? []
+/** Review round 2 B-1 — the Page's lead field: the Advertise task and leads_retrieval on top of the install's own. */
+const LEADGEN = 'leadgen'
 /**
  * Review B-4 — install-page's default: the Page fields that are NOT Messenger's. Checked on the saved pages: of the 17,
  * MESSENGER_FIELDS' 13 are Messenger fields — 11 in the field table of Meta Webhooks for Messenger Platform (messages,
  * message_echoes, message_reads, message_deliveries, message_reactions, message_edits, messaging_postbacks,
  * messaging_referrals, messaging_handovers, messaging_policy_enforcement, standby), and messaging_integrity and
  * messaging_in_thread_lead_form_submit typed Messenger…Field on the Webhooks reference for Page. They need the MODERATE
- * task and pages_messaging (Messenger Platform webhooks, "Subscribe your Page"), which step 36's token list does not name,
- * and Meta then refuses the WHOLE install. leadgen, feed, mention and product_review are the Page's own fields (Webhooks
- * reference for Page). Messenger fields go only when asked by name.
+ * (or MESSAGING) task and pages_messaging (Messenger Platform webhooks, "Subscribe your Page"), which step 36's token list
+ * does not name, and Meta then refuses the WHOLE install. leadgen, feed, mention and product_review are the Page's own
+ * fields (Webhooks reference for Page). Review round 2 B-1 — nor leadgen: it needs the ADVERTISE task and leads_retrieval
+ * (Lead Ads webhooks, "Install Your App"), and Meta refuses the whole POST naming every field it lacks a permission for
+ * (#200): with leadgen in it, a plain install-page would likely install nothing. Messenger fields and leadgen go only
+ * when asked by name.
  */
-const PAGE_DEFAULT_FIELDS: readonly string[] = PAGE_FIELDS.filter((f) => !MESSENGER_FIELDS.has(f))
+const PAGE_DEFAULT_FIELDS: readonly string[] = PAGE_FIELDS.filter((f) => !MESSENGER_FIELDS.has(f) && f !== LEADGEN)
 /**
  * Review B-4 — the ONE Page field install-page instagram installs when the app is not on the Page (the step needs the app
  * on the linked Page, not a field's notifications). leadgen asks the ADVERTISE task and leads_retrieval, ads_management,
@@ -323,7 +332,9 @@ function pageInstallDraft(req: WebhooksRequest, live: WebhooksLive): MetaChangeD
   const removeFirst = req.exact === true && current.installed && current.fields.some((f) => !target.includes(f))
   const warnings = [PAGE_TOKEN_TASKS]
   const messenger = target.filter((f) => MESSENGER_FIELDS.has(f))
-  if (messenger.length) warnings.push(`${words(messenger)} ${messenger.length === 1 ? 'is a Messenger field' : 'are Messenger fields'}: Meta also needs the Moderate task on the Page and pages_messaging on the token, and without them refuses the whole install.`)
+  if (messenger.length) warnings.push(`${words(messenger)} ${messenger.length === 1 ? 'is a Messenger field' : 'are Messenger fields'}: Meta also needs the Moderate (or Messaging) task on the Page and pages_messaging on the token, and without them refuses the whole install.`)
+  // Review round 2 B-1 — leadgen goes only when named (or already on the Page): what it asks on top, said before approval.
+  if (target.includes(LEADGEN)) warnings.push('leadgen needs the Advertise task on the Page and leads_retrieval on the token (plus ads_management and pages_read_engagement): without them Meta refuses the whole install, the other fields too.')
   warnings.push('Meta delivers a Page field to Nexus only when the app is subscribed to it as well (set-meta-webhooks subscribe-app object page, or the App Dashboard).')
   if (object === 'instagram') warnings.push(`The Instagram account's own fields (comments, mentions, messages …) are set in the App Dashboard (Webhooks of the app, object instagram). This step installs the app on the linked Page with ${words(target)}; ${IG_STEP_UNCONFIRMED}.`)
   if (removeFirst) {
@@ -343,6 +354,12 @@ function pageInstallDraft(req: WebhooksRequest, live: WebhooksLive): MetaChangeD
       noUndo.push(back.length
         ? `Nexus's receiver does not take ${words(foreign)}, so its undo does not subscribe ${foreign.length === 1 ? 'it' : 'them'} again.`
         : `It has no undo at all: the app had only ${words(foreign)} on the Page, which Nexus's receiver does not take, so Nexus cannot put the Page back as it was.`)
+    }
+    // Review round 2 B-2 — the undo is install-page `exact` with a field to drop: two steps, the app off and then on with
+    // the earlier fields. An Undo on the Claude activity page is approved by its click (change-undo.service.ts): this
+    // preview is the only place a person reads what that undo does.
+    if (undo && target.some((f) => !back.includes(f))) {
+      warnings.push(`Its undo takes the app off Page ${pageId} and puts it back with the earlier fields (${words(back)}): if that second step fails, the app stays off the Page — no lead, comment or message notification of the Page reaches Nexus — until install-page runs again.`)
     }
   }
   const install = request({
