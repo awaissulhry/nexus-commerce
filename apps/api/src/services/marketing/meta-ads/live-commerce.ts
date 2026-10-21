@@ -88,7 +88,9 @@
  *     ads_management, ads_read" with the Business Manager role, ig-media/product_tags.md ads_read and ads_management (B2);
  *     their examples send product_id / merchant_id unquoted and the SDK types them int — exactId keeps them exact or null (B1).
  *   - catalog/guides/commerce-merchant-settings-api.md: privacy_policy_localized `locale` "follows BCP 47 format" (B6).
- *   - shop.md (review B2): documents fb_sales_channel and ig_sales_channel only; shop_status and workspace are SDK only.
+ *   - shop.md (review B2, round 3): documents fb_sales_channel and ig_sales_channel only (status, fb_page / ig_user; no
+ *     sub-field selection, its sample has no Page / account id); shop_status and workspace are SDK only (api_specs Shop.json
+ *     types both channels Object); SDK commercemerchantsettings.py types checkout_config as a string.
  */
 import { z } from 'zod'
 import { FIELDS } from '@nexus/shared/permissions'
@@ -98,8 +100,8 @@ import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
 import { metaChosenAccount, MetaLiveRefusal, type MetaChosenAccount } from './live.js'
 import { readGroups, type FieldGroup } from './live-objects.js'
-import { listPaged, listWithFallback, oneWithFallback, part } from './paging.js'
-import { instagramOf, ownMedia, tidy } from './live-media.js'
+import { fieldRefused, listPaged, listWithFallback, oneWithFallback, part } from './paging.js'
+import { instagramOf, ownMedia, PAGE_TOKEN_NOTE, tidy } from './live-media.js'
 import {
   CATALOG_NO_OWNER, CATALOG_OF_ANOTHER_BUSINESS, catalogChild, catalogPortfolio, need, readableCatalog, type ReadableCatalog,
 } from './catalog-rule.js'
@@ -111,12 +113,26 @@ import { portfolioTaken, takenIds } from './taken.js'
 type Row = Record<string, unknown>
 
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
-const idText = (v: unknown): string | null => ((typeof v === 'string' || typeof v === 'number') && String(v).trim() ? String(v).trim() : null)
 const num = (v: unknown): number | null => { const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN; return Number.isFinite(n) ? n : null }
 const bool = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null)
 const obj = (v: unknown): Row | null => (v && typeof v === 'object' && !Array.isArray(v) ? v as Row : null)
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.map(text).filter((s): s is string => !!s) : [])
 const clampRows = (n: number | undefined, dflt: number) => Math.min(500, Math.max(1, Math.trunc(n ?? dflt)))
+
+/**
+ * Round 2 B1 / round 3 — Meta may send an id as a JSON NUMBER (the Instagram shopping edges do: Meta's examples unquoted;
+ * SDK igshoppingproductappeal.py, shadowigmediaproducttags.py, shadowigusercatalogproductsearch.py: int), and the gateway's
+ * JSON.parse keeps a number exactly only below 2^53. A number id that is not a safe integer has lost digits: null and
+ * counted (never a wrong id), as step 9 does for location clusters. Every id this file reads from Meta's answers goes
+ * through it (ids, owner and taken checks too).
+ */
+interface IdCount { notExact: number }
+function exactId(v: unknown, count: IdCount): string | null {
+  if (typeof v === 'number' && !Number.isSafeInteger(v)) { count.notExact++; return null }
+  return metaObjectId(v)
+}
+export const IDS_NOT_EXACT = 'Meta sent some ids as numbers too long to keep exactly, so they are null here (never a wrong id). A product: find it by name or SKU (meta-instagram-product-tags view search, meta-catalog-items) or in Commerce Manager.'
+const idsNote = (count: IdCount) => (count.notExact ? { idsNotExact: count.notExact, idsNote: IDS_NOT_EXACT } : {})
 
 // ── product-set filters: built by Nexus from typed conditions (lane C4's writes reuse this) ──────────────────────────
 
@@ -373,7 +389,7 @@ const PREVIEW_NOTE = 'Meta has no check (validate_only) for a product-set change
 function setRow(r: Row) {
   const count = num(r.product_count)
   return {
-    productSetId: idText(r.id), name: text(r.name), retailerId: text(r.retailer_id), productCount: count, ...setFilterOut(r.filter),
+    productSetId: exactId(r.id, { notExact: 0 }), name: text(r.name), retailerId: text(r.retailer_id), productCount: count, ...setFilterOut(r.filter),
     ...(count === 0 ? { warning: EMPTY_SET } : {}),
   }
 }
@@ -522,10 +538,25 @@ export const COMMERCE_NOT_OWN = 'That commerce account is not the chosen Faceboo
 const COMMERCE_OF_ANOTHER_BUSINESS = 'That commerce account is the shop of a Facebook Page another business in Nexus uses, so it is not read here.'
 export const COMMERCE_UNVERIFIED = 'Meta did not name that commerce account\'s Facebook Page, so Nexus cannot check that it is not another business\'s shop; it is not read (only its id is shown).'
 const CMS_LIST_CORE = 'id,display_name,merchant_status'
-// Review B3 — shop.md documents only fb_sales_channel and ig_sales_channel (status, fb_page / ig_user): they and the id are
-// the core; shop_status, commerce_merchant_settings and workspace (SDK shop.py only) are dropped and named when refused.
-const SHOP_CORE = 'id,fb_sales_channel{status,fb_page{id,name}},ig_sales_channel{status,ig_user{id,username}}'
+// Review B3 / round 3 — shop.md documents only fb_sales_channel and ig_sales_channel (with status and fb_page / ig_user, but
+// no sub-field selection: its sample answers fb_page{name}, ig_user{username}, no id; SDK api_specs Shop.json: Object).
+// Nexus asks the channels with the Page's / Instagram account's id first (SHOP_CORE_EXPANDED, to check whose they are) and,
+// when Meta refuses a field there, the plain documented channels (SHOP_CORE_PLAIN: a Page or account without an id is not
+// shown). shop_status, commerce_merchant_settings and workspace (SDK shop.py only) are dropped and named when refused.
+const SHOP_CORE_EXPANDED = 'id,fb_sales_channel{status,fb_page{id,name}},ig_sales_channel{status,ig_user{id,username}}'
+const SHOP_CORE_PLAIN = 'id,fb_sales_channel,ig_sales_channel'
 const SHOP_MORE = 'shop_status,commerce_merchant_settings,workspace'
+export const SHOP_CHANNELS_PLAIN = 'Meta refused the Page and Instagram account details inside the sales channels, so they are read as Meta documents them: a Page or account Meta names without an id is not shown (Nexus cannot check whose it is).'
+
+/** A shop read with the expanded channels, else (a field Meta refuses there) the plain documented ones. */
+async function shopRead<T>(read: (core: string) => Promise<T>): Promise<{ value: T; channelsNote: string | null }> {
+  try {
+    return { value: await read(SHOP_CORE_EXPANDED), channelsNote: null }
+  } catch (err) {
+    if (!fieldRefused(err)) throw err
+    return { value: await read(SHOP_CORE_PLAIN), channelsNote: `${SHOP_CHANNELS_PLAIN} (Meta: ${err.failure.sentence})` }
+  }
+}
 const SETUP_CORE = 'shop_setup,payment_setup,review_status'
 const SETUP_MORE = 'deals_setup,marketplace_approval_status,marketplace_approval_status_details'
 const STATUS_WORDS: Readonly<Record<string, string>> = { ENABLED: 'on', EXTERNALLY_DISABLED: 'switched off from outside Meta (e.g. by the shop platform)', DISABLED: 'off', STAGING: 'being set up (not public)' }
@@ -564,16 +595,18 @@ async function commerceLists(account: MetaChosenAccount, maxRows: number) {
     portfolio = { rows: read.value?.rows ?? [], notRead: read.notRead }
   }
   if (!page && !portfolio) throw new MetaLiveRefusal(portfolioNote === COMMERCE_PORTFOLIO_SHARED ? `${COMMERCE_PORTFOLIO_SHARED} No Facebook Page is chosen, so nothing is read.` : COMMERCE_NOTHING)
-  const pageIds = await takenIds('PAGE', (portfolio?.rows ?? []).map((r) => idText(obj(r.merchant_page)?.id)).filter((id): id is string => !!id && id !== account.pageId))
+  // Round 3 — ids exact or not at all: an account whose id is not exact is left out; a Page id that is not exact = unverified.
+  const uncounted: IdCount = { notExact: 0 }
+  const pageIds = await takenIds('PAGE', (portfolio?.rows ?? []).map((r) => exactId(obj(r.merchant_page)?.id, uncounted)).filter((id): id is string => !!id && id !== account.pageId))
   const rows: CommerceRow[] = []
   for (const r of page?.value?.rows ?? []) {
-    const id = idText(r.id)
+    const id = exactId(r.id, uncounted)
     if (id) rows.push({ commerceAccountId: id, on: 'page', row: r, takenByAnotherBusiness: false, unverified: false })
   }
   for (const r of portfolio?.rows ?? []) {
-    const id = idText(r.id)
+    const id = exactId(r.id, uncounted)
     if (!id || rows.some((x) => x.commerceAccountId === id)) continue
-    const merchantPage = idText(obj(r.merchant_page)?.id)
+    const merchantPage = exactId(obj(r.merchant_page)?.id, uncounted)
     rows.push({ commerceAccountId: id, on: 'portfolio', row: r, takenByAnotherBusiness: !!merchantPage && pageIds.has(merchantPage), unverified: !merchantPage })
   }
   return { rows, pageNotRead: page?.notRead ?? null, portfolioNotRead: portfolio?.notRead ?? null, portfolioNote }
@@ -604,7 +637,8 @@ function idsIn(value: unknown, out: Set<string> = new Set(), depth = 0): Set<str
   if (Array.isArray(value)) for (const v of value) idsIn(v, out, depth + 1)
   const r = obj(value)
   if (r) {
-    const id = idText(r.id)
+    // Round 3 — exact or not at all (maskAssets counts the inexact ones).
+    const id = exactId(r.id, { notExact: 0 })
     if (id) out.add(id)
     for (const v of Object.values(r)) idsIn(v, out, depth + 1)
   }
@@ -626,27 +660,30 @@ const NAMES_HIDDEN = 'A name is shown only for the chosen Facebook Page or Insta
  * and the flag only. Anything else — a link, a URL, a text, an id under another key, a name next to an id Nexus could not
  * check or on an object with no id — is left out.
  */
-async function maskAssets(value: unknown, account: MetaChosenAccount): Promise<unknown> {
+async function maskAssets(value: unknown, account: MetaChosenAccount, count: IdCount): Promise<unknown> {
   const ids = [...idsIn(value)]
   const taken = new Set([...(await takenIds('PAGE', ids)), ...(await takenIds('INSTAGRAM', ids)), ...(await takenIds('PORTFOLIO', ids))])
   const ours = new Set([account.pageId, account.instagramId].filter((id): id is string => !!id))
+  /** An empty object or list says nothing (and under a key Nexus does not know, its key alone could be data). */
+  const empty = (x: unknown) => (Array.isArray(x) ? x.length === 0 : !!obj(x) && Object.keys(x as Row).length === 0)
   /** known: the key this value sits under is one Nexus keeps (a plain value is kept only then). */
   const walk = (v: unknown, depth: number, known: boolean): unknown => {
     if (depth > 8) return undefined
-    if (Array.isArray(v)) return v.map((x) => walk(x, depth + 1, known)).filter((x) => x !== undefined)
+    if (Array.isArray(v)) return v.map((x) => walk(x, depth + 1, known)).filter((x) => x !== undefined && (known || !empty(x)))
     const r = obj(v)
     if (!r) return known ? v : undefined
-    const id = idText(r.id)
+    // Round 3 — an id kept only exactly (a number too long to be exact is left out and counted).
+    const id = exactId(r.id, count)
     if (id && taken.has(id)) return { id, takenByAnotherBusiness: true }
     const named = !!id && ours.has(id)
     const out: Row = {}
     for (const [k, x] of Object.entries(r)) {
+      if (k === 'id') { if (id) out.id = id; continue }
       if (!SAFE_KEY.test(k)) continue
       const known = KNOWN_KEY.test(k) || (named && NAME_KEY.test(k))
       const kept = walk(x, depth + 1, known)
       if (kept === undefined) continue
-      // An empty object or list under a key Nexus does not know says nothing (and its key alone could be data): left out.
-      if (!known && (Array.isArray(kept) ? kept.length === 0 : !!obj(kept) && Object.keys(kept as Row).length === 0)) continue
+      if (!known && empty(kept)) continue
       out[k] = kept
     }
     return out
@@ -655,35 +692,50 @@ async function maskAssets(value: unknown, account: MetaChosenAccount): Promise<u
 }
 
 /** A shop's sales channel: its status in words and the Page or Instagram account (by id; another business's is the flag only). */
-function channelOf(v: unknown, kind: 'page' | 'instagram', account: MetaChosenAccount, taken: Set<string>) {
+function channelOf(v: unknown, kind: 'page' | 'instagram', account: MetaChosenAccount, taken: Set<string>, count: IdCount) {
   const c = obj(v)
   if (!c) return null
   const status = text(c.status)
   const who = obj(kind === 'page' ? c.fb_page : c.ig_user)
-  const id = idText(who?.id)
+  const id = exactId(who?.id, count)
   const chosen = kind === 'page' ? account.pageId : account.instagramId
   const asset = !who ? null
-    : !id ? { id: null, note: 'Meta named it without an id, so Nexus cannot check whose it is and does not show it.' }
+    : !id ? { id: null, note: who.id === undefined || who.id === null
+      ? 'Meta named it without an id, so Nexus cannot check whose it is and does not show it.'
+      : 'Meta sent its id in a form Nexus cannot read exactly, so Nexus cannot check whose it is and does not show it.' }
       : taken.has(id) ? { id, takenByAnotherBusiness: true }
         // Review A-F5 — a name only for the chosen Page / Instagram account (as NAMES_HIDDEN says); any other is its id only.
         : { id, ...(id === chosen ? { [kind === 'page' ? 'name' : 'username']: text(kind === 'page' ? who.name : who.username) } : {}), chosenHere: id === chosen, takenByAnotherBusiness: false }
   return { status, statusWords: status ? STATUS_WORDS[status] ?? null : null, [kind === 'page' ? 'page' : 'instagramAccount']: asset }
 }
 
-async function shopsOf(account: MetaChosenAccount, rows: Row[]) {
-  const ids = rows.flatMap((r) => [idText(obj(obj(r.fb_sales_channel)?.fb_page)?.id), idText(obj(obj(r.ig_sales_channel)?.ig_user)?.id)]).filter((id): id is string => !!id)
+async function shopsOf(account: MetaChosenAccount, rows: Row[], count: IdCount) {
+  const uncounted: IdCount = { notExact: 0 } // channelOf counts these
+  const ids = rows.flatMap((r) => [exactId(obj(obj(r.fb_sales_channel)?.fb_page)?.id, uncounted), exactId(obj(obj(r.ig_sales_channel)?.ig_user)?.id, uncounted)]).filter((id): id is string => !!id)
   const taken = new Set([...(await takenIds('PAGE', ids)), ...(await takenIds('INSTAGRAM', ids))])
   return Promise.all(rows.map(async (r) => ({
-    shopId: idText(r.id), status: text(r.shop_status), facebook: channelOf(r.fb_sales_channel, 'page', account, taken), instagram: channelOf(r.ig_sales_channel, 'instagram', account, taken),
-    commerceAccountId: idText(obj(r.commerce_merchant_settings)?.id), workspace: r.workspace === undefined ? undefined : await maskAssets(r.workspace ?? null, account),
+    shopId: exactId(r.id, count), status: text(r.shop_status), facebook: channelOf(r.fb_sales_channel, 'page', account, taken, count), instagram: channelOf(r.ig_sales_channel, 'instagram', account, taken, count),
+    commerceAccountId: exactId(obj(r.commerce_merchant_settings)?.id, count), workspace: r.workspace === undefined ? undefined : await maskAssets(r.workspace ?? null, account, count),
   })))
 }
 
+/**
+ * Round 3 — a per-country set-up field: Meta's SDK (commercemerchantsettings.py) types checkout_config as a STRING. Text of
+ * no documented shape is not shown, but it is never turned into null (that would read as "nothing set up"): it says so.
+ * An object goes through maskAssets; true / false as they are.
+ */
+export const CONFIG_TEXT_NOT_SHOWN = 'Meta answered this set-up as text (its SDK types checkout_config as a string), which has no documented shape: the text is not shown here; Commerce Manager shows it.'
+async function maskConfig(value: unknown, account: MetaChosenAccount, count: IdCount): Promise<unknown> {
+  if (typeof value === 'string' || typeof value === 'number') return String(value).trim() ? { textNotShown: true, note: CONFIG_TEXT_NOT_SHOWN } : null
+  if (typeof value === 'boolean') return { value }
+  return maskAssets(value ?? null, account, count)
+}
+
 /** Review A-F6 — the set-up status; its objects (SDK only, no documented shape) through maskAssets. */
-async function setupOf(r: Row, account: MetaChosenAccount) {
+async function setupOf(r: Row, account: MetaChosenAccount, count: IdCount) {
   return {
-    shopSetup: text(r.shop_setup), paymentSetup: text(r.payment_setup), reviewStatus: await maskAssets(r.review_status ?? null, account), dealsSetup: text(r.deals_setup),
-    marketplaceApprovalStatus: text(r.marketplace_approval_status), marketplaceApprovalDetails: await maskAssets(r.marketplace_approval_status_details ?? null, account),
+    shopSetup: text(r.shop_setup), paymentSetup: text(r.payment_setup), reviewStatus: await maskAssets(r.review_status ?? null, account, count), dealsSetup: text(r.deals_setup),
+    marketplaceApprovalStatus: text(r.marketplace_approval_status), marketplaceApprovalDetails: await maskAssets(r.marketplace_approval_status_details ?? null, account, count),
   }
 }
 
@@ -736,12 +788,15 @@ export async function liveCommerce(input: CommerceInput) {
       const b = read.body
       // Review A3 — the Page check straight after the read, before anything else is read or returned.
       const page = obj(b.merchant_page)
-      const pageId = idText(page?.id)
+      const pageId = exactId(page?.id, { notExact: 0 })
+      // Round 3 — a Page Meta names with an id Nexus cannot read exactly cannot be checked: fail closed.
+      if (page && page.id !== undefined && page.id !== null && !pageId) throw new MetaLiveRefusal(COMMERCE_UNVERIFIED)
       if (pageId && pageId !== account.pageId && (await takenIds('PAGE', [pageId])).has(pageId)) throw new MetaLiveRefusal(COMMERCE_OF_ANOTHER_BUSINESS)
+      const count: IdCount = { notExact: 0 }
       const perCountry = country ? await Promise.all([['checkoutConfig', 'checkout_config'], ['callToAction', 'cta'], ['shopsAdsSetup', 'shops_ads_setup']].map(async ([key, field]) => {
         const got = await part(() => metaReadOne({ connectionId }, { operation: `commerce.account.${field}`, path: id, query: { fields: `id,${field}.country_code(${country})` } }))
-        // Review A-F6 — no documented shape: through maskAssets.
-        return [key, got.value ? await maskAssets((got.value.body as Row)[field] ?? null, account) : { notRead: got.notRead }] as const
+        // Review A-F6 / round 3 — no documented shape: through maskConfig (text not shown, objects masked).
+        return [key, got.value ? await maskConfig((got.value.body as Row)[field] ?? null, account, count) : { notRead: got.notRead }] as const
       })) : null
       const policy = locale ? await part(() => metaReadOne({ connectionId }, { operation: 'commerce.account.policy', path: id, query: { fields: `id,privacy_policy_localized.locale(${locale})` } })) : null
       const status = text(b.merchant_status)
@@ -750,11 +805,11 @@ export async function liveCommerce(input: CommerceInput) {
         status, statusWords: status ? STATUS_WORDS[status] ?? null : null, contactEmail: text(b.contact_email), terms: text(b.terms),
         page: page ? { pageId, ...(pageId === account.pageId ? { name: text(page.name) } : {}), chosenHere: pageId === account.pageId } : null,
         offsiteCheckoutCountries: Array.isArray(b.offsite_iab_checkout_enabled_countries) ? strings(b.offsite_iab_checkout_enabled_countries) : null,
-        facebookChannel: b.facebook_channel === undefined ? null : await maskAssets(b.facebook_channel, account), instagramChannel: b.instagram_channel === undefined ? null : await maskAssets(b.instagram_channel, account),
+        facebookChannel: b.facebook_channel === undefined ? null : await maskAssets(b.facebook_channel, account, count), instagramChannel: b.instagram_channel === undefined ? null : await maskAssets(b.instagram_channel, account, count),
         paymentProvider: text(b.payment_provider),
         ...(country ? { country, perCountry: Object.fromEntries(perCountry ?? []) } : {}),
         ...(locale ? { locale, privacyPolicy: policy?.value ? tidy((policy.value.body as Row).privacy_policy_localized ?? null) : { notRead: policy?.notRead ?? null } } : {}),
-        missing: read.missing,
+        missing: read.missing, ...idsNote(count),
         notes: [
           'Checkout, call to action and shop ads set-up are per country (country); the privacy policy per language (locale). Meta: checkout set-up needs a shop platform\'s (partner) integration.',
           'offsiteCheckoutCountries, the Page, channels and payment provider are in Meta\'s SDK only: missing names any Meta refused. Changing these is in Commerce Manager (Meta documents a status, policy and checkout change for shop platforms only).',
@@ -765,9 +820,10 @@ export async function liveCommerce(input: CommerceInput) {
     case 'shops': {
       // CT-144 — the account's shops and each shop's Facebook and Instagram sales channel (only channels set up appear).
       const own = await ownCommerceAccount(account, input.commerceAccountId)
-      const read = await withCommerceNote(() => listWithFallback(connectionId, 'commerce.shops', `${own.commerceAccountId}/shops`, SHOP_CORE, SHOP_MORE, {}, clampRows(input.maxRows, 25)))
+      const { value: read, channelsNote } = await withCommerceNote(() => shopRead((core) => listWithFallback(connectionId, 'commerce.shops', `${own.commerceAccountId}/shops`, core, SHOP_MORE, {}, clampRows(input.maxRows, 25))))
+      const count: IdCount = { notExact: 0 }
       return {
-        ...base, commerceAccountId: own.commerceAccountId, items: await shopsOf(account, read.rows), more: read.more, fieldsNote: read.note,
+        ...base, commerceAccountId: own.commerceAccountId, items: await shopsOf(account, read.rows, count), more: read.more, fieldsNote: read.note, channelsNote, ...idsNote(count),
         note: `A shop's id is what a product set needs to show as a shop collection (publish_to_shops, a change in a later Nexus step). Only sales channels set up appear (Meta). ${NAMES_HIDDEN}`,
       }
     }
@@ -780,19 +836,23 @@ export async function liveCommerce(input: CommerceInput) {
       let owner: string | null = null
       for (const c of candidates) {
         const shops = await withCommerceNote(() => listPaged(connectionId, 'commerce.shopCheck', `${c.commerceAccountId}/shops`, { fields: 'id' }, 100))
-        if (shops.rows.some((r) => idText(r.id) === shopId)) { owner = c.commerceAccountId; break }
+        if (shops.rows.some((r) => exactId(r.id, { notExact: 0 }) === shopId)) { owner = c.commerceAccountId; break }
       }
       if (!owner) throw new MetaLiveRefusal('That shop is not one of the shops of the business\'s commerce accounts (the chosen Page\'s or the business portfolio\'s), so it is not read.')
-      const read = await withCommerceNote(() => oneWithFallback(connectionId, 'commerce.shop', shopId, SHOP_CORE, SHOP_MORE))
-      return { ...base, commerceAccountId: owner, shop: (await shopsOf(account, [read.body]))[0], fieldsNote: read.note, note: NAMES_HIDDEN }
+      const { value: read, channelsNote } = await withCommerceNote(() => shopRead((core) => oneWithFallback(connectionId, 'commerce.shop', shopId, core, SHOP_MORE)))
+      const count: IdCount = { notExact: 0 }
+      const shop = (await shopsOf(account, [read.body], count))[0]
+      return { ...base, commerceAccountId: owner, shop, fieldsNote: read.note, channelsNote, ...idsNote(count), note: NAMES_HIDDEN }
     }
     case 'setup-status': {
       // CT-143 — the shop set-up status: of a commerce account (commerceAccountId), else the chosen Page's shop.
       const own = input.commerceAccountId || !account.pageId ? await ownCommerceAccount(account, input.commerceAccountId) : null
       const path = own ? `${own.commerceAccountId}/setup_status` : `${account.pageId}/shop_setup_status`
       const read = await withCommerceNote(() => listWithFallback(connectionId, 'commerce.setupStatus', path, SETUP_CORE, SETUP_MORE, {}, 10))
+      const count: IdCount = { notExact: 0 }
+      const items = await Promise.all(read.rows.map((r) => setupOf(r, account, count)))
       return {
-        ...base, ...(own ? { commerceAccountId: own.commerceAccountId } : { pageId: account.pageId }), items: await Promise.all(read.rows.map((r) => setupOf(r, account))), fieldsNote: read.note,
+        ...base, ...(own ? { commerceAccountId: own.commerceAccountId } : { pageId: account.pageId }), items, fieldsNote: read.note, ...idsNote(count),
         note: `The Page's shop set-up status is a documented Page read; a commerce account's and the status fields are in Meta's SDK only (Meta's answer decides). Setting a shop up is in Commerce Manager. ${NAMES_HIDDEN}`,
       }
     }
@@ -802,14 +862,15 @@ export async function liveCommerce(input: CommerceInput) {
       const own = await ownCommerceAccount(account, input.commerceAccountId)
       const read = await withCommerceNote(() => oneWithFallback(connectionId, 'commerce.checkoutCountries', own.commerceAccountId, 'id,display_name', 'offsite_iab_checkout_enabled_countries'))
       const perCountry = []
+      const count: IdCount = { notExact: 0 }
       for (const c of countries) {
         const got = await part(() => metaReadOne({ connectionId }, { operation: 'commerce.checkoutConfig', path: own.commerceAccountId, query: { fields: `id,checkout_config.country_code(${c})` } }))
-        perCountry.push({ country: c, checkoutConfig: got.value ? await maskAssets((got.value.body as Row).checkout_config ?? null, account) : null, notRead: got.notRead })
+        perCountry.push({ country: c, checkoutConfig: got.value ? await maskConfig((got.value.body as Row).checkout_config ?? null, account, count) : null, notRead: got.notRead })
       }
       const listed = read.body.offsite_iab_checkout_enabled_countries
       return {
         ...base, commerceAccountId: own.commerceAccountId, name: text(read.body.display_name),
-        offsiteCheckoutCountries: Array.isArray(listed) ? strings(listed) : null, fieldsNote: read.note, perCountry,
+        offsiteCheckoutCountries: Array.isArray(listed) ? strings(listed) : null, fieldsNote: read.note, perCountry, ...idsNote(count),
         note: `Offsite checkout countries are where a buyer goes from Shop checkout to the website. The list is a field of Meta's SDK only (fieldsNote says when Meta refuses it); checkout set-up per country is documented. Changing them is in Commerce Manager (no API). ${NAMES_HIDDEN}`,
       }
     }
@@ -838,26 +899,13 @@ const TAG_LIMITS = 'Meta: at most 20 tags on a photo or video feed post, 5 per c
 /** An Instagram shopping read Meta may refuse for a permission: said plainly, with that edge's own permissions. */
 const withShopNote = <T>(work: () => Promise<T>, note: string = IG_SHOP_NOTE) => withPermissionNote(note, work)
 
-/**
- * Round 2 B1 — the Instagram shopping edges send product_id and merchant_id as JSON NUMBERS (Meta's examples unquoted; SDK
- * igshoppingproductappeal.py, shadowigmediaproducttags.py, shadowigusercatalogproductsearch.py: int), and the gateway's
- * JSON.parse keeps a number exactly only below 2^53. A number id that is not a safe integer has lost digits: null and
- * counted (never a wrong id), as step 9 does for location clusters.
- */
-interface IdCount { notExact: number }
-function exactId(v: unknown, count: IdCount): string | null {
-  if (typeof v === 'number' && !Number.isSafeInteger(v)) { count.notExact++; return null }
-  return metaObjectId(v)
-}
-export const IDS_NOT_EXACT = 'Meta sent some product or merchant ids as numbers too long to keep exactly, so they are null here (never a wrong id). Find the product by name or SKU (view search, meta-catalog-items) or in Commerce Manager.'
-const idsNote = (count: IdCount) => (count.notExact ? { idsNotExact: count.notExact, idsNote: IDS_NOT_EXACT } : {})
 
 /** The catalogs the chosen Instagram account may tag from, each checked against step 12's rule. */
-async function taggingCatalogs(account: MetaChosenAccount, instagramId: string) {
+async function taggingCatalogs(account: MetaChosenAccount, instagramId: string, count: IdCount) {
   const read = await withShopNote(() => listPaged(account.connectionId, 'igTags.catalogs', `${instagramId}/available_catalogs`, { fields: 'catalog_id,catalog_name,shop_name,product_count' }, 25))
   const items: Row[] = []
   for (const r of read.rows) {
-    const catalogId = idText(r.catalog_id)
+    const catalogId = exactId(r.catalog_id, count)
     if (!catalogId) continue
     const check = await part(() => readableCatalog(account, catalogId))
     if (check.notRead === CATALOG_OF_ANOTHER_BUSINESS) items.push({ catalogId, takenByAnotherBusiness: true })
@@ -903,14 +951,16 @@ export async function liveInstagramProductTags(input: InstagramTagsInput) {
     case 'catalogs': {
       // CT-150 — the catalogs it may tag from (Meta answers one; collaborative catalogs are not supported), each checked.
       await catalogPortfolio(account)
-      return { ...base, items: await taggingCatalogs(account, instagramId), note: 'Instagram Shops use one catalog. A catalog is shown only when Nexus may read it (the chosen ad account\'s business portfolio owns it, or it is a client catalog of it whose owner Meta names and no other business in Nexus uses).' }
+      const count: IdCount = { notExact: 0 }
+      const items = await taggingCatalogs(account, instagramId, count)
+      return { ...base, items, ...idsNote(count), note: 'Instagram Shops use one catalog. A catalog is shown only when Nexus may read it (the chosen ad account\'s business portfolio owns it, or it is a client catalog of it whose owner Meta names and no other business in Nexus uses).' }
     }
     case 'search': {
       // CT-151 — tag-eligible products of a readable catalog (by name or SKU), with their review status.
       await catalogPortfolio(account)
       let catalogId = input.catalogId ? need(metaObjectId(input.catalogId), `"${input.catalogId}" is not a Meta catalog id (digits).`) : null
       if (!catalogId) {
-        const readable = (await taggingCatalogs(account, instagramId)).filter((c) => c.readable === true)
+        const readable = (await taggingCatalogs(account, instagramId, { notExact: 0 })).filter((c) => c.readable === true)
         if (readable.length !== 1) throw new MetaLiveRefusal(readable.length ? 'This account may tag from several catalogs: name one (catalogId, from view catalogs).' : 'Nexus finds no catalog this Instagram account may tag from that the business may read (view catalogs says why).')
         catalogId = readable[0].catalogId as string
       }
@@ -941,12 +991,13 @@ export async function liveInstagramProductTags(input: InstagramTagsInput) {
       const items = read.rows.map((r) => tagRow(r, count))
       let slides: Row[] | null = null
       if (input.slides) {
-        const children = await withShopNote(() => listPaged(connectionId, 'igTags.slides', `${media.mediaId}/children`, { fields: 'id,media_type' }, 10), IG_TAG_READ_NOTE)
+        // Round 3 — each read its own words: the slides are an Instagram media read (step 10's words), each slide's tags the tag read.
+        const children = await withPermissionNote(PAGE_TOKEN_NOTE, () => listPaged(connectionId, 'igTags.slides', `${media.mediaId}/children`, { fields: 'id,media_type' }, 10))
         slides = []
         for (const child of children.rows) {
-          const slideId = idText(child.id)
+          const slideId = exactId(child.id, count)
           if (!slideId) continue
-          const tags = await part(() => listWithFallback(connectionId, 'igTags.slideTags', `${slideId}/product_tags`, TAG_CORE, TAG_MORE, {}, 5))
+          const tags = await part(() => withShopNote(() => listWithFallback(connectionId, 'igTags.slideTags', `${slideId}/product_tags`, TAG_CORE, TAG_MORE, {}, 5), IG_TAG_READ_NOTE))
           slides.push({ slideId, mediaType: text(child.media_type), items: tags.value ? tags.value.rows.map((r) => tagRow(r, count)) : null, notRead: tags.notRead })
         }
       }

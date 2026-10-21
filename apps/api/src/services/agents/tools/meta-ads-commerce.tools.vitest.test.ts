@@ -46,12 +46,13 @@ import { META_CATALOG_MONEY } from './meta-ads-catalog.tools.js'
 import { CATALOG_NO_OWNER, CATALOG_NOT_READABLE, CATALOG_PORTFOLIO_SHARED } from '../../marketing/meta-ads/catalog-rule.js'
 import { visibleTo } from '../call-tool.js'
 import {
-  assertPriceFilterAllowed, COMMERCE_NOT_OWN, IDS_NOT_EXACT, IG_SHOP_NOTE, IG_TAG_READ_NOTE, COMMERCE_PORTFOLIO_SHARED, COMMERCE_UNVERIFIED, EMPTY_SET, INTERNAL_LABEL_NOTE, liveCommerce, liveProductSets,
+  assertPriceFilterAllowed, COMMERCE_NOT_OWN, CONFIG_TEXT_NOT_SHOWN, IDS_NOT_EXACT, IG_SHOP_NOTE, IG_TAG_READ_NOTE, SHOP_CHANNELS_PLAIN, COMMERCE_PORTFOLIO_SHARED, COMMERCE_UNVERIFIED, EMPTY_SET, INTERNAL_LABEL_NOTE, liveCommerce, liveProductSets,
   MAX_SET_FILTER_WRITE_BYTES, PRICE_FILTER_REFUSED, productSetFilter, setConditionArg, setFilterOut, setFilterPriceAmount, setFilterWords, SET_PRICE_UNIT,
 } from '../../marketing/meta-ads/live-commerce.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
+import { PAGE_TOKEN_NOTE } from '../../marketing/meta-ads/live-media.js'
 
 const tool = (name: string) => META_ADS_COMMERCE_TOOLS.find((t) => t.name === name)!
 const ctx = { can: () => true, via: 'claude' as const }
@@ -484,6 +485,50 @@ describe('commerce accounts: only the chosen Page\'s and an unshared portfolio\'
     expect(one.data.shop).toMatchObject({ shopId: SHOP, status: null, facebook: { status: 'ENABLED' } })
     for (const f of SDK_ONLY) expect(one.data.fieldsNote).toContain(f)
   })
+  it('round 3 — Meta refuses the sub-fields inside the sales channels: the plain documented channels are read, a Page without an id not shown', async () => {
+    // Meta's sample answer for the plain channels: fb_page{name}, ig_user{username}, no id (shop.md).
+    const plain = { id: SHOP, shop_status: 'ENABLED', fb_sales_channel: { status: 'ENABLED', fb_page: { name: 'Shop A' } }, ig_sales_channel: { status: 'STAGING', ig_user: { username: 'shop_b' } } }
+    h.override = (req) => {
+      const fields = String(req.query?.fields ?? '')
+      if (req.path === `${CMS}/shops` && fields === 'id') return [{ id: SHOP }]
+      if (req.path !== `${CMS}/shops` && req.path !== SHOP) return undefined
+      if (/_sales_channel\{/.test(fields)) return metaError('100', 'Tried accessing nonexisting field (fb_page) on node type (Object)')
+      return req.path === SHOP ? plain : [plain]
+    }
+    for (const args of [{ view: 'shops', commerceAccountId: CMS }, { view: 'shop', shopId: SHOP, commerceAccountId: CMS }]) {
+      h.calls.length = 0
+      const res = await run('meta-commerce', args)
+      const shop = args.view === 'shops' ? res.data.items[0] : res.data.shop
+      expect(shop, args.view).toMatchObject({ shopId: SHOP, status: 'ENABLED', facebook: { status: 'ENABLED', page: { id: null, note: expect.stringMatching(/without an id/) } }, instagram: { status: 'STAGING', instagramAccount: { id: null } } })
+      expect(res.data.channelsNote, args.view).toContain(SHOP_CHANNELS_PLAIN)
+      expect(h.calls.filter((c) => c.path !== `${CMS}/shops` || c.query?.fields !== 'id').at(-1)?.query?.fields, args.view).toMatch(/^id,fb_sales_channel,ig_sales_channel(,|$)/)
+      expect(JSON.stringify(shop), args.view).not.toMatch(/shop_b|Shop A/)
+    }
+  })
+  it('round 3 — ids Meta sends as numbers too long to be exact are left out everywhere (shop, channels, workspace), and an account Page that is not exact fails closed', async () => {
+    const lost = ['9007199254740992', '1152921504606846976', '2305843009213693952', '4611686018427387904', '9223372036854775808']
+    h.routes[`${CMS}/shops`] = [{
+      id: 9007199254740993, shop_status: 'ENABLED', fb_sales_channel: { status: 'ENABLED', fb_page: { id: 2 ** 60, name: 'Shop X' } },
+      ig_sales_channel: { status: 'ENABLED', ig_user: { id: Number(IG), username: 'shop_a' } }, commerce_merchant_settings: { id: 2 ** 61 },
+      workspace: { id: 2 ** 62, is_active: true, pages: [{ id: 2 ** 63, name: 'Shop Y' }] },
+    }]
+    const res = await run('meta-commerce', { view: 'shops', commerceAccountId: CMS })
+    expect(res.data.items[0]).toMatchObject({ shopId: null, commerceAccountId: null, facebook: { page: { id: null, note: expect.stringMatching(/cannot read exactly/) } }, instagram: { instagramAccount: { id: IG, username: 'shop_a', chosenHere: true } } })
+    expect(res.data.items[0].workspace).toEqual({ isActive: true })
+    expect(res.data).toMatchObject({ idsNotExact: 5, idsNote: IDS_NOT_EXACT })
+    for (const digits of lost) expect(JSON.stringify(res.data)).not.toContain(digits)
+    expect(JSON.stringify(res.data)).not.toMatch(/Shop X|Shop Y/)
+    h.routes[CMS] = { ...(h.routes[CMS] as object), merchant_page: { id: 2 ** 60, name: 'Shop Z' } }
+    expect((await run('meta-commerce', { view: 'account', commerceAccountId: CMS })).error).toBe(COMMERCE_UNVERIFIED)
+  })
+  it('round 3 — a per-country set-up Meta answers as text (SDK: checkout_config is a string) says "text not shown", never null', async () => {
+    h.override = (req) => (req.path === CMS && /checkout_config\.country_code/.test(String(req.query?.fields)) ? { id: CMS, checkout_config: 'https://shop-a.example/checkout?shop=x' } : undefined)
+    const account = await run('meta-commerce', { view: 'account', commerceAccountId: CMS, country: 'IT' })
+    expect(account.data.perCountry.checkoutConfig).toEqual({ textNotShown: true, note: CONFIG_TEXT_NOT_SHOWN })
+    const countries = await run('meta-commerce', { view: 'checkout-countries', commerceAccountId: CMS, countries: ['IT'] })
+    expect(countries.data.perCountry[0].checkoutConfig).toEqual({ textNotShown: true, note: CONFIG_TEXT_NOT_SHOWN })
+    expect(JSON.stringify([account.data, countries.data])).not.toContain('shop-a.example/checkout')
+  })
   it('round 2 A-F5 — a sales channel names only the chosen Page / Instagram account; any other is its id only', async () => {
     const shops = await run('meta-commerce', { view: 'shops', commerceAccountId: CMS })
     expect(shops.data.items[0].facebook.page).toEqual({ id: PAGE, name: 'Shop A', chosenHere: true, takenByAnotherBusiness: false })
@@ -602,6 +647,17 @@ describe('Instagram product tags: only the chosen Instagram account and its own 
       expect(res.error, args.view).toContain(IG_SHOP_NOTE)
       expect(res.error, args.view).not.toMatch(/AND ads_management/)
     }
+  })
+  it('round 3 — each read its own permission words: the slides (an Instagram media read) step 10\'s, each slide\'s tags the tag read\'s', async () => {
+    const denied = () => metaError('10', 'Application does not have permission for this action', 'forbidden')
+    h.routes[`${MEDIA}/children`] = denied()
+    const children = await run('meta-instagram-product-tags', { view: 'tags', mediaId: MEDIA, slides: true })
+    expect(children.error).toContain(PAGE_TOKEN_NOTE)
+    expect(children.error).not.toContain(IG_TAG_READ_NOTE)
+    h.routes = defaultRoutes()
+    h.routes[`${SLIDE}/product_tags`] = denied()
+    const slides = await run('meta-instagram-product-tags', { view: 'tags', mediaId: MEDIA, slides: true })
+    expect(slides.data.slides).toEqual([expect.objectContaining({ slideId: SLIDE, items: null, notRead: expect.stringContaining(IG_TAG_READ_NOTE) })])
   })
   it('round 2 B1 — product and merchant ids that arrive as numbers too long to be exact are null and counted, never a wrong id', async () => {
     // 2^53 + 1 cannot be held by a JSON number: JSON.parse (the gateway's) gives 2^53, a different id.
