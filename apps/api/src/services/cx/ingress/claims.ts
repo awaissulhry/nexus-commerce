@@ -127,6 +127,63 @@ export async function deferInboundClaim(claim: InboundClaim, reason: string, del
 }
 
 /**
+ * Meta ads step 30 — claim many rows of the current business in two round trips, for a receiver that settles a batch
+ * of changes inline (Meta: up to 1000 per delivery, answered within seconds). Exactly the claim rule of claimInbound
+ * per row — verified, not eBay, not archived, pending or failed, not under a live lease, not waiting for its backoff,
+ * attempts left; the attempt is spent when the claim is taken — with ONE token for the batch. The caller finishes with
+ * finishInboundClaimMany within the lease (no renewal: a batch is settled in seconds).
+ */
+export async function claimInboundMany(ids: string[], now?: Date): Promise<{ token: string; claims: InboundClaim[] }> {
+  const token = randomUUID()
+  if (ids.length === 0) return { token, claims: [] }
+  now ??= await inboundDatabaseNow()
+  const leaseEnd = new Date(now.getTime() + LEASE_MS)
+  await prisma.webhookEvent.updateMany({
+    where: {
+      id: { in: ids }, channel: { not: 'EBAY' }, status: { in: ['pending', 'failed'] }, archivedAt: null, leaseToken: null,
+      attempts: { lt: MAX_INBOUND_ATTEMPTS },
+      AND: [
+        VERIFIED_INBOUND_WHERE,
+        { OR: [{ processingUntil: null }, { processingUntil: { lte: now } }] },
+        { OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] },
+      ],
+    },
+    data: { status: 'pending', attempts: { increment: 1 }, processingToken: token, processingUntil: leaseEnd, nextAttemptAt: leaseEnd, isProcessed: false, processedAt: null },
+  })
+  const rows = await prisma.webhookEvent.findMany({
+    where: { id: { in: ids }, processingToken: token },
+    select: { id: true, attempts: true, payload: true, connectionId: true, eventType: true, channel: true },
+  })
+  return { token, claims: rows.map((row) => ({ id: row.id, token, attempt: row.attempts, payload: row.payload, connectionId: row.connectionId, eventType: row.eventType, channel: row.channel })) }
+}
+
+/**
+ * Finish a batch claim: `done` rows finished, `release` rows handed back unspent (the answer budget ran out before
+ * their turn; due again at once), `failed` rows retried after their backoff or dead-lettered, each as
+ * finishInboundClaim does. Only rows still held by this token are touched.
+ */
+export async function finishInboundClaimMany(claims: InboundClaim[], outcome: { done: string[]; release: string[]; failed: Array<{ id: string; error: string }> }, now?: Date): Promise<void> {
+  if (claims.length === 0) return
+  now ??= await inboundDatabaseNow()
+  const token = claims[0].token
+  const held = { channel: { not: 'EBAY' }, status: 'pending', archivedAt: null, processingToken: token, processingUntil: { gt: now }, AND: [VERIFIED_INBOUND_WHERE] } satisfies Prisma.WebhookEventWhereInput
+  if (outcome.done.length) {
+    await prisma.webhookEvent.updateMany({ where: { ...held, id: { in: outcome.done } }, data: {
+      status: 'done', isProcessed: true, processedAt: now, processingToken: null, processingUntil: null, nextAttemptAt: null, lastError: null, error: null,
+    } })
+  }
+  if (outcome.release.length) {
+    await prisma.webhookEvent.updateMany({ where: { ...held, id: { in: outcome.release } }, data: {
+      attempts: { decrement: 1 }, processingToken: null, processingUntil: null, nextAttemptAt: now,
+    } })
+  }
+  for (const failure of outcome.failed) {
+    const claim = claims.find((c) => c.id === failure.id)
+    if (claim) await finishInboundClaim(claim, false, failure.error, now)
+  }
+}
+
+/**
  * Run `work` under a claim: renew the lease while it runs, then finish the row.
  *
  * If a renewal finds the lease lost, `signal` aborts and the result is not recorded:

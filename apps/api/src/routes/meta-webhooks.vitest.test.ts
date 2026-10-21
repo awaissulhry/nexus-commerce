@@ -11,8 +11,9 @@ const SECRET = 'a-made-up-app-secret-for-tests-01'
 const APP = '1234567890123'
 const h = vi.hoisted(() => ({
   appConnected: true,
-  received: [] as Array<{ appId: string; body: unknown; businesses: unknown[] }>,
-  rejected: [] as Array<{ raw: Buffer | null; reason: string }>,
+  received: [] as Array<{ appId: string; body: unknown; signers: unknown[]; users: unknown[] }>,
+  mismatches: [] as Array<{ appId: string; businesses: unknown[] }>,
+  connectedAsked: 0,
   outcome: { changes: 1, recorded: 1, duplicates: 0, ignored: 0, handled: 1, failed: 0, later: 0, notRecorded: 0 } as Record<string, number> | null,
 }))
 
@@ -21,13 +22,14 @@ vi.mock('../services/marketing/meta-ads/webhook-receiver.js', async () => {
   const { metaWebhookSignatureOk } = await import('../services/cx/connectors/meta/webhook-signature.js')
   return {
     META_APP_ID: /^\d{5,25}$/,
-    metaAppConnected: async (appId: string) => h.appConnected && appId === APP,
-    metaSigningBusinesses: async (appId: string, raw: Buffer, header: string | undefined) => ({
-      businesses: appId === APP && metaWebhookSignatureOk(raw, header, SECRET) ? [{ workspaceId: 'ws-a', connectionId: 'conn-a', systemUserId: null }] : [],
-      appKnown: appId === APP,
-    }),
-    receiveMetaWebhook: async (input: { appId: string; body: unknown; businesses: unknown[] }) => { h.received.push(input); return h.outcome },
-    recordMetaRejection: async (raw: Buffer | null, _headers: unknown, reason: string) => { h.rejected.push({ raw, reason }) },
+    metaAppConnected: async (appId: string) => { h.connectedAsked++; return h.appConnected && appId === APP },
+    metaSignatureVerdicts: async (appId: string, raw: Buffer, header: string | undefined) => {
+      const user = { workspaceId: 'ws-a', connectionId: 'conn-a', systemUserId: null }
+      const ok = appId === APP && metaWebhookSignatureOk(raw, header, SECRET)
+      return { users: appId === APP ? [user] : [], signers: ok ? [user] : [], mismatched: appId === APP && !ok ? [user] : [] }
+    },
+    receiveMetaWebhook: async (input: { appId: string; body: unknown; signers: unknown[]; users: unknown[] }) => { h.received.push(input); return h.outcome },
+    recordMetaSignatureMismatch: async (appId: string, _raw: Buffer, _headers: unknown, businesses: unknown[]) => { h.mismatches.push({ appId, businesses }) },
   }
 })
 
@@ -48,7 +50,8 @@ const post = (body: string, signature: string | null = sign(body), appId = APP, 
 beforeEach(() => {
   h.appConnected = true
   h.received.length = 0
-  h.rejected.length = 0
+  h.mismatches.length = 0
+  h.connectedAsked = 0
   h.outcome = { changes: 1, recorded: 1, duplicates: 0, ignored: 0, handled: 1, failed: 0, later: 0, notRecorded: 0 }
   vi.stubEnv('META_WEBHOOK_VERIFY_TOKEN', 'a-long-verify-token-for-tests')
 })
@@ -71,6 +74,7 @@ describe('GET — Meta\'s verification', () => {
     const unset = await verify('hub.mode=subscribe&hub.challenge=1&hub.verify_token=')
     expect(unset.statusCode).toBe(403)
     expect(unset.body).not.toContain('1')
+    expect((await verify('hub.mode=subscribe&hub.challenge=%3Cscript%3E&hub.verify_token=a-long-verify-token-for-tests')).statusCode).toBe(403)
   })
 })
 
@@ -82,33 +86,41 @@ describe('POST — a notification', () => {
     expect(res.statusCode).toBe(200)
     expect(h.received).toHaveLength(1)
     expect((h.received[0].body as any).entry[0].changes[0].value.object_id).toBe('120210000000000001')
-    expect(h.received[0].businesses).toEqual([{ workspaceId: 'ws-a', connectionId: 'conn-a', systemUserId: null }])
-    expect(h.rejected).toEqual([])
+    expect(h.received[0].signers).toEqual([{ workspaceId: 'ws-a', connectionId: 'conn-a', systemUserId: null }])
+    expect(h.mismatches).toEqual([])
   })
 
   it('a charset on the content type changes nothing', async () => {
     expect((await post(body, sign(body), APP, 'application/json; charset=utf-8')).statusCode).toBe(200)
   })
 
-  it('unsigned, wrongly signed or signed for another app: 401, recorded as rejected with the raw bytes, never handed on', async () => {
-    for (const res of [await post(body, null), await post(body, sign(body, 'a-forged-secret-00000000000000000')), await post(body, sign(body), '5550000000000')]) {
-      expect(res.statusCode).toBe(401)
+  it('review F2 — a known app whose secret signs nothing: 200 (Meta must not unsubscribe), nothing read, the mismatch handed to the receiver for its row and notice', async () => {
+    for (const res of [await post(body, null), await post(body, sign(body, 'a-forged-secret-00000000000000000'))]) {
+      expect(res.statusCode).toBe(200)
     }
     expect(h.received).toEqual([])
-    expect(h.rejected).toHaveLength(3)
-    expect(h.rejected[0].raw?.toString('utf8')).toBe(body)
-    expect(h.rejected[2].reason).toMatch(/No business connected in Nexus uses this Meta app/)
+    expect(h.mismatches).toEqual([{ appId: APP, businesses: [{ workspaceId: 'ws-a', connectionId: 'conn-a', systemUserId: null }] }, { appId: APP, businesses: [expect.anything()] }])
   })
 
-  it('a forged body that is not even JSON is 401, not 400: nothing reads it before the signature', async () => {
+  it('review F2 — an app no business uses: 401 before the body is read (even past the size cap), nothing stored', async () => {
+    expect((await post(body, sign(body), '5550000000000')).statusCode).toBe(401)
+    const huge = `{"x":"${'a'.repeat(5 * 1024 * 1024)}"}`
+    expect((await post(huge, null, '5550000000000')).statusCode).toBe(401)
+    expect((await post(body, sign(body), 'abc')).statusCode).toBe(401)
+    expect(h.received).toEqual([])
+    expect(h.mismatches).toEqual([])
+    // The known app's cap is 4 MB.
+    expect((await post(huge, null)).statusCode).toBe(413)
+  })
+
+  it('a forged body that is not even JSON is never parsed: 200 and nothing handed on', async () => {
     const res = await post('{not json', 'sha256=' + '0'.repeat(64))
-    expect(res.statusCode).toBe(401)
+    expect(res.statusCode).toBe(200)
     expect(h.received).toEqual([])
   })
 
-  it('a SIGNED body that is not JSON is 400; an app id that is not digits is 404; an empty body 400', async () => {
+  it('a SIGNED body that is not JSON is 400; an empty body 400', async () => {
     expect((await post('{not json')).statusCode).toBe(400)
-    expect((await post(body, sign(body), 'abc')).statusCode).toBe(404)
     expect((await call({ method: 'POST', url: `/webhooks/meta/${APP}`, headers: { 'content-type': 'application/json' } })).statusCode).toBe(400)
   })
 

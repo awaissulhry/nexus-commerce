@@ -31,13 +31,21 @@ export async function verifiedChannelWorkspace(channel: string, externalAccountI
  * proves Meta sent it, and each business keeps its own secret). The caller checks the signature with each candidate's
  * own secret, inside that candidate's business, and routes on the body only after one matched. No secret is read here.
  */
-export async function activeChannelRoutes(channel: string, limit = 50) {
-  return prisma.channelAccountRoute.findMany({
-    where: { channelType: channel, workspace: { status: 'active' } },
-    select: { workspaceId: true, connectionId: true, externalAccountId: true },
-    orderBy: { connectionId: 'asc' },
-    take: limit,
-  })
+export async function activeChannelRoutes(channel: string) {
+  const PAGE = 200
+  const out: Array<{ workspaceId: string; connectionId: string; externalAccountId: string | null }> = []
+  // Every route, page by page (a business is never left out because many are connected).
+  for (let after: string | null = null; ;) {
+    const page: typeof out = await prisma.channelAccountRoute.findMany({
+      where: { channelType: channel, workspace: { status: 'active' }, ...(after ? { connectionId: { gt: after } } : {}) },
+      select: { workspaceId: true, connectionId: true, externalAccountId: true },
+      orderBy: { connectionId: 'asc' },
+      take: PAGE,
+    })
+    out.push(...page)
+    if (page.length < PAGE) return out
+    after = page[page.length - 1].connectionId
+  }
 }
 
 /** Only the notification recipient is a routing key. Competitors in Offers are not. */

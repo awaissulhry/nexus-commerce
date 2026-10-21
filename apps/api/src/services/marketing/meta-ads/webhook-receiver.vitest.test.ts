@@ -1,30 +1,35 @@
 /**
- * Meta ads step 30 — the receiver's decisions: which businesses' own app secret signed a delivery (each checked inside
- * its own business), which ONE of them each change belongs to (a link it chose through that connection, its app, its
- * system user — else ignored), what one ledger row per change holds, that Meta's retries are no-ops, and what the
- * handler does (ownership again, the re-read, the notice) in the row's business. The ledger, claims, token service and
- * database are doubles that keep each business's rows apart; the ledger and claims themselves are proven on PostgreSQL
- * in services/cx/ingress. Made-up ids, names and secrets (public repo).
+ * Meta ads step 30 — the receiver's decisions: which connections use an app (no secret read for anything else), whose
+ * own secret signed a delivery (each checked inside its own business), what a signature that matches nobody leaves
+ * behind (one row and one notice per business using the app, never the bytes, never the platform's business), which
+ * ONE business each change belongs to, the batch it is recorded in, that Meta's retries are no-ops, that each distinct
+ * action runs once inside the answer budget, and what the handler checks again on a replay. The ledger, claims, token
+ * service and database are doubles that keep each business's rows apart; the batch ledger itself is proven on
+ * PostgreSQL in services/cx/ingress/ledger-batch-postgres. Made-up ids, names and secrets (public repo).
  */
 import { createHmac } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-type Row = { id: string; ws: string; channel: string; eventType: string; externalId: string; payload: any; status: string; connectionId: string | null; signatureOk: boolean | null; verifiedBy: string; lastError?: string | null; rawBody?: Buffer | null; deliveries: number }
+type Row = { id: string; ws: string; channel: string; eventType: string; externalId: string; payload: any; status: string; connectionId: string | null; signatureOk: boolean | null; verifiedBy: string; lastError?: string | null; rawBody?: unknown; headers?: unknown; deliveries: number; token?: string | null }
 const h = vi.hoisted(() => ({
   ws: null as string | null,
   routes: [] as Array<{ workspaceId: string; connectionId: string; externalAccountId: string | null }>,
   apps: {} as Record<string, { appId: string; secret: string; ws: string }>,
+  appIdReads: 0,
   links: [] as Array<{ ws: string; connectionId: string; product: string; externalId: string }>,
   connections: [] as Array<{ ws: string; id: string; externalAccountId: string }>,
   checks: [] as Array<{ connectionId: string; ws: string | null }>,
   rows: [] as Row[],
+  batches: [] as Array<{ ws: string | null; size: number }>,
   ledgerDown: false,
   notices: [] as Array<{ ws: string | null; alert: any }>,
+  unread: new Set<string>(),
   rereads: [] as Array<{ ws: string | null; adAccountId: string }>,
   reread: { queued: true, reason: null as string | null, retry: false },
 }))
 
 vi.mock('../../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
+vi.mock('../../../lib/workspace-context.js', () => ({ workspaceIdForQuery: () => h.ws }))
 vi.mock('../../../lib/workspace-ingress.js', () => {
   const inWs = async <T>(ws: string, work: () => T) => { const before = h.ws; h.ws = ws; try { return await work() } finally { h.ws = before } }
   return {
@@ -43,7 +48,7 @@ vi.mock('../../cx/token.service.js', async () => {
       if (app.appId !== appId) return 'other_app'
       return metaWebhookSignatureOk(raw, header, app.secret) ? 'match' : 'mismatch'
     },
-    metaAppIdOf: async (connectionId: string) => (h.apps[connectionId]?.ws === h.ws ? h.apps[connectionId].appId : null),
+    metaAppIdOf: async (connectionId: string) => { h.appIdReads++; return h.apps[connectionId]?.ws === h.ws ? h.apps[connectionId].appId : null },
   }
 })
 vi.mock('../../../db.js', () => ({
@@ -57,34 +62,43 @@ vi.mock('../../../db.js', () => ({
     },
   },
 }))
-vi.mock('../../cx/ingress/ledger.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../cx/ingress/ledger.js')>()),
-  recordInbound: async (rec: any) => {
-    if (h.ledgerDown) return { id: null, duplicate: false }
-    const ws = h.ws as string
-    const externalId = rec.externalId ?? `sha256:${rec.rawBody?.length}`
-    const found = h.rows.find((r) => r.ws === ws && r.channel === rec.channel && r.externalId === externalId)
-    if (found) { found.deliveries++; return { id: found.id, duplicate: true, existingStatus: found.status } }
-    const row: Row = { id: `row-${h.rows.length + 1}`, ws, channel: rec.channel, eventType: rec.eventType, externalId, payload: rec.payload, status: rec.status ?? 'pending', connectionId: rec.connectionId ?? null, signatureOk: rec.signatureOk, verifiedBy: rec.verifiedBy, lastError: rec.lastError ?? null, rawBody: rec.rawBody ?? null, deliveries: 1 }
-    h.rows.push(row)
-    return { id: row.id, duplicate: false }
-  },
+const write = (rec: any) => {
+  const ws = h.ws as string
+  const found = h.rows.find((r) => r.ws === ws && r.channel === rec.channel && r.externalId === rec.externalId)
+  if (found) { found.deliveries++; return { id: found.id, duplicate: true, existingStatus: found.status } }
+  const row: Row = { id: `row-${h.rows.length + 1}`, ws, channel: rec.channel, eventType: rec.eventType, externalId: rec.externalId, payload: rec.payload, status: rec.status ?? 'pending', connectionId: rec.connectionId ?? null, signatureOk: rec.signatureOk, verifiedBy: rec.verifiedBy, lastError: rec.lastError ?? null, rawBody: rec.rawBody ?? null, headers: rec.headers, deliveries: 1 }
+  h.rows.push(row)
+  return { id: row.id, duplicate: false }
+}
+vi.mock('../../cx/ingress/ledger.js', () => ({
+  recordInbound: async (rec: any) => (h.ledgerDown ? { id: null, duplicate: false } : write(rec)),
+  recordInboundBatch: async (recs: any[]) => { h.batches.push({ ws: h.ws, size: recs.length }); return recs.map((rec) => (h.ledgerDown ? { id: null, duplicate: false } : write(rec))) },
 }))
 vi.mock('../../cx/ingress/claims.js', () => ({
-  claimInbound: async (id: string) => {
-    const row = h.rows.find((r) => r.id === id && r.ws === h.ws)
-    if (!row || row.status !== 'pending') return null
-    return { id, token: 't', attempt: 1, payload: row.payload, connectionId: row.connectionId, eventType: row.eventType, channel: row.channel }
+  claimInboundMany: async (ids: string[]) => {
+    const claims = h.rows.filter((r) => ids.includes(r.id) && r.ws === h.ws && r.status === 'pending' && !r.token)
+      .map((r) => { r.token = 'batch'; return { id: r.id, token: 'batch', attempt: 1, payload: r.payload, connectionId: r.connectionId, eventType: r.eventType, channel: r.channel } })
+    return { token: 'batch', claims }
   },
-  runWithInboundClaim: async (claim: any, work: any) => {
-    const row = h.rows.find((r) => r.id === claim.id)!
-    try { const out = await work(claim, new AbortController().signal); row.status = 'done'; return out } catch (err) { row.status = 'failed'; throw err }
+  finishInboundClaimMany: async (_claims: unknown, outcome: { done: string[]; release: string[]; failed: Array<{ id: string }> }) => {
+    for (const r of h.rows) {
+      if (outcome.done.includes(r.id)) { r.status = 'done'; r.token = null }
+      if (outcome.release.includes(r.id)) r.token = null
+      if (outcome.failed.some((f) => f.id === r.id)) { r.status = 'failed'; r.token = null }
+    }
   },
 }))
-vi.mock('../../cx/channel-alerts.service.js', () => ({ raiseChannelAlertInTx: async (_tx: unknown, alert: unknown) => { h.notices.push({ ws: h.ws, alert }); return { created: 1, deduped: 0, recipients: 1 } } }))
+// One unread notice per (business, kind, subject), as channel-alerts does.
+vi.mock('../../cx/channel-alerts.service.js', () => ({ raiseChannelAlertInTx: async (_tx: unknown, alert: any) => {
+  const key = `${h.ws}|${alert.kind}|${alert.entityType}|${alert.entityId}`
+  if (h.unread.has(key)) return { created: 0, deduped: 1, recipients: 1 }
+  h.unread.add(key)
+  h.notices.push({ ws: h.ws, alert })
+  return { created: 1, deduped: 0, recipients: 1 }
+} }))
 vi.mock('./enqueue.js', () => ({ enqueueMetaWebhookReread: async (adAccountId: string) => { h.rereads.push({ ws: h.ws, adAccountId }); return h.reread } }))
 
-const { metaSigningBusinesses, receiveMetaWebhook, handleMetaWebhookEvent, metaAppConnected, recordMetaRejection, routeMetaChanges } = await import('./webhook-receiver.js')
+const { metaSignatureVerdicts, receiveMetaWebhook, handleMetaWebhookEvent, metaAppConnected, metaAppUsers, recordMetaSignatureMismatch, routeMetaChanges, forgetMetaAppIds } = await import('./webhook-receiver.js')
 const { metaWebhookChanges } = await import('./webhook-topics.js')
 
 const APP = '1234567890123'
@@ -101,101 +115,121 @@ const A = { workspaceId: 'ws-a', connectionId: 'conn-a', systemUserId: USER_A }
 const B = { workspaceId: 'ws-b', connectionId: 'conn-b', systemUserId: '120000000000012' }
 
 beforeEach(() => {
+  forgetMetaAppIds()
   h.ws = null
   h.routes = [{ workspaceId: 'ws-a', connectionId: 'conn-a', externalAccountId: USER_A }, { workspaceId: 'ws-b', connectionId: 'conn-b', externalAccountId: '120000000000012' }, { workspaceId: 'ws-c', connectionId: 'conn-c', externalAccountId: '120000000000013' }]
   h.apps = { 'conn-a': { appId: APP, secret: SECRET, ws: 'ws-a' }, 'conn-b': { appId: APP, secret: SECRET, ws: 'ws-b' }, 'conn-c': { appId: OTHER_APP, secret: 'the-secret-of-another-app-000000', ws: 'ws-c' } }
+  h.appIdReads = 0
   h.links = [
     { ws: 'ws-a', connectionId: 'conn-a', product: 'AD_ACCOUNT', externalId: ACT_A },
     { ws: 'ws-a', connectionId: 'conn-a', product: 'PAGE', externalId: PAGE_A },
     { ws: 'ws-b', connectionId: 'conn-b', product: 'AD_ACCOUNT', externalId: ACT_B },
   ]
   h.connections = [{ ws: 'ws-a', id: 'conn-a', externalAccountId: USER_A }]
-  h.checks.length = 0; h.rows.length = 0; h.notices.length = 0; h.rereads.length = 0
+  h.checks.length = 0; h.rows.length = 0; h.notices.length = 0; h.rereads.length = 0; h.batches.length = 0
+  h.unread.clear()
   h.ledgerDown = false
   h.reread = { queued: true, reason: null, retry: false }
 })
 
-describe('trust: whose own app secret signed these bytes', () => {
-  it('each connection checks with its own secret inside its own business; only the matching ones are candidates', async () => {
+describe('trust: who uses the app, whose own secret signed these bytes', () => {
+  it('only the connections of the path\'s app check a signature, each inside its own business; app ids are read once per TTL', async () => {
     const raw = Buffer.from(JSON.stringify({ object: 'ad_account', entry: [issue(ACT_A)] }))
     h.apps['conn-b'].secret = 'a-stale-secret-business-b-kept-00'
-    const signed = await metaSigningBusinesses(APP, raw, sign(raw))
-    expect(signed).toEqual({ businesses: [A], appKnown: true })
-    expect(h.checks).toEqual([{ connectionId: 'conn-a', ws: 'ws-a' }, { connectionId: 'conn-b', ws: 'ws-b' }, { connectionId: 'conn-c', ws: 'ws-c' }])
-    expect(await metaSigningBusinesses(APP, raw, sign(raw, 'a-forged-secret-00000000000000000'))).toEqual({ businesses: [], appKnown: true })
-    expect(await metaSigningBusinesses('5550000000000', raw, sign(raw))).toEqual({ businesses: [], appKnown: false })
-    expect(await metaSigningBusinesses('not-an-app', raw, sign(raw))).toEqual({ businesses: [], appKnown: false })
+    const verdicts = await metaSignatureVerdicts(APP, raw, sign(raw))
+    expect(verdicts).toEqual({ users: [A, B], signers: [A], mismatched: [B] })
+    // conn-c uses another app: its secret is never touched.
+    expect(h.checks).toEqual([{ connectionId: 'conn-a', ws: 'ws-a' }, { connectionId: 'conn-b', ws: 'ws-b' }])
+    const reads = h.appIdReads
+    await metaSignatureVerdicts(APP, raw, sign(raw))
+    await metaSignatureVerdicts('5550000000000', raw, sign(raw))
+    expect(h.appIdReads).toBe(reads)
   })
 
-  it('verification knows only apps a connected business uses', async () => {
+  it('an app no business uses has no users (refused before its body is read); verification knows only used apps', async () => {
+    expect(await metaAppUsers('5550000000000')).toEqual([])
+    expect(await metaAppUsers('not-an-app')).toEqual([])
     expect(await metaAppConnected(APP)).toBe(true)
     expect(await metaAppConnected(OTHER_APP)).toBe(true)
     expect(await metaAppConnected('5550000000000')).toBe(false)
-    expect(await metaAppConnected('x')).toBe(false)
   })
 
-  it('a rejected delivery is one legacy row: the raw bytes and the signature header, nothing parsed', async () => {
-    const raw = Buffer.from('not json at all')
-    await recordMetaRejection(raw, { 'x-hub-signature-256': 'sha256=00' }, 'X-Hub-Signature-256 does not match.')
-    expect(h.rows).toEqual([expect.objectContaining({ ws: 'legacy', channel: 'META', eventType: 'unverified', payload: {}, signatureOk: false, verifiedBy: 'none', status: 'failed', rawBody: raw })])
+  it('a signature nobody\'s secret matches: one row per business per hour (digest + header, never the bytes) and one notice each; never the platform\'s business', async () => {
+    const raw = Buffer.from('{"object":"page","entry":[{"id":"120000000000001","messaging":[{"message":{"text":"another business\'s customer wrote this"}}]}]}')
+    const at = new Date('2026-10-21T09:10:00Z')
+    await recordMetaSignatureMismatch(APP, raw, { 'x-hub-signature-256': 'sha256=00' }, [A, B], at)
+    await recordMetaSignatureMismatch(APP, Buffer.from('{"other":1}'), { 'x-hub-signature-256': 'sha256=11' }, [A, B], new Date('2026-10-21T09:40:00Z'))
+    expect(h.rows.map((r) => [r.ws, r.eventType, r.signatureOk, r.status, r.deliveries])).toEqual([['ws-a', 'unverified', false, 'failed', 2], ['ws-b', 'unverified', false, 'failed', 2]])
+    expect(h.rows.every((r) => r.rawBody === null && !JSON.stringify(r).includes('customer wrote'))).toBe(true)
+    expect(h.rows[0].payload).toEqual({ appId: APP, firstDigest: expect.stringMatching(/^[0-9a-f]{64}$/) })
+    expect(h.notices.map((n) => [n.ws, n.alert.kind, n.alert.entityId])).toEqual([['ws-a', 'meta-webhook-signature', `${APP}~signature`], ['ws-b', 'meta-webhook-signature', `${APP}~signature`]])
+    expect(h.rows.some((r) => r.ws === 'legacy')).toBe(false)
   })
 })
 
 describe('routing: one business per change, never another', () => {
   it('an app two businesses share: each ad account goes to the business that chose it; one nobody chose is ignored', async () => {
     const body = { object: 'ad_account', entry: [issue(ACT_A), issue(ACT_B, '120000000000302'), issue(ACT_NOBODY, '120000000000303')] }
-    const out = await receiveMetaWebhook({ appId: APP, businesses: [A, B], body })
+    const out = await receiveMetaWebhook({ appId: APP, signers: [A, B], users: [A, B], body })
     expect(out).toMatchObject({ changes: 3, recorded: 2, ignored: 1, handled: 2, notRecorded: 0 })
-    expect(h.rows.map((r) => [r.ws, r.connectionId, r.eventType, r.payload.entryId])).toEqual([
-      ['ws-a', 'conn-a', 'ad_account.with_issues_ad_objects', ACT_A],
-      ['ws-b', 'conn-b', 'ad_account.with_issues_ad_objects', ACT_B],
+    expect(h.rows.map((r) => [r.ws, r.connectionId, r.eventType, r.payload.entryId, r.status])).toEqual([
+      ['ws-a', 'conn-a', 'ad_account.with_issues_ad_objects', ACT_A, 'done'],
+      ['ws-b', 'conn-b', 'ad_account.with_issues_ad_objects', ACT_B, 'done'],
     ])
     expect(h.rows.every((r) => r.signatureOk === true && r.verifiedBy === 'meta_hmac')).toBe(true)
-    // The handler ran in each row's own business: the re-read and the notice too.
     expect(h.rereads).toEqual([{ ws: 'ws-a', adAccountId: ACT_A }, { ws: 'ws-b', adAccountId: ACT_B }])
-    expect(h.notices.map((n) => [n.ws, n.alert.entityId])).toEqual([['ws-a', `${ACT_A}~120000000000301`], ['ws-b', `${ACT_B}~120000000000302`]])
+    expect(h.notices.map((n) => n.ws)).toEqual(['ws-a', 'ws-b'])
     expect(JSON.stringify(h.rows.filter((r) => r.ws === 'ws-a'))).not.toContain(ACT_B)
+  })
+
+  it('review F3 — two businesses on one app, one secret stale: nothing lands in the other, and app-level changes land nowhere', async () => {
+    const devAlert = { object: 'application', entry: [{ id: APP, time: 1, changes: [{ field: 'dev_alerts', value: { notification_id: '1', header: 'Rate limit' } }] }] }
+    // B's secret is stale: only A signed; B still USES the app, so nobody gets the app-level alert.
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A, B], body: devAlert })).toMatchObject({ recorded: 0, ignored: 1 })
+    // B's own ad account in a delivery only A's secret signed: never A's, never recorded.
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A, B], body: { object: 'ad_account', entry: [issue(ACT_B)] } })).toMatchObject({ recorded: 0, ignored: 1 })
+    expect(h.rows).toEqual([])
+    // With A the only business on the app, the alert is A's.
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: devAlert })).toMatchObject({ recorded: 1, handled: 1 })
+    expect(h.notices).toEqual([{ ws: 'ws-a', alert: expect.objectContaining({ kind: 'meta-app-notice', title: 'Meta app alert: Rate limit' }) }])
   })
 
   it('a link the business chose through ANOTHER connection than the one whose secret signed is not routed', async () => {
     h.links = [{ ws: 'ws-a', connectionId: 'conn-a-second', product: 'AD_ACCOUNT', externalId: ACT_A }]
-    const out = await receiveMetaWebhook({ appId: APP, businesses: [A], body: { object: 'ad_account', entry: [issue(ACT_A)] } })
-    expect(out).toMatchObject({ recorded: 0, ignored: 1 })
-    expect(h.rows).toEqual([])
-  })
-
-  it('app-level and catalog changes go only to the ONE business using the app; with two, nobody gets them', async () => {
-    const devAlert = { object: 'application', entry: [{ id: APP, time: 1, changes: [{ field: 'dev_alerts', value: { notification_id: '1', header: 'Rate limit', subtitle: 'Your app is close to its limit' } }] }] }
-    expect(await receiveMetaWebhook({ appId: APP, businesses: [A, B], body: devAlert })).toMatchObject({ recorded: 0, ignored: 1 })
-    expect(await receiveMetaWebhook({ appId: APP, businesses: [A], body: devAlert })).toMatchObject({ recorded: 1, handled: 1 })
-    expect(h.notices).toEqual([{ ws: 'ws-a', alert: expect.objectContaining({ kind: 'meta-app-notice', title: 'Meta app alert: Rate limit' }) }])
-    const batch = { object: 'catalog', entry: [{ id: '120000000000777', time: 1, changes: [{ field: 'items_batch', value: { catalog_id: '120000000000777', handle: 'h1', status: 'Finished' } }] }] }
-    expect(await receiveMetaWebhook({ appId: APP, businesses: [A, B], body: batch })).toMatchObject({ ignored: 1 })
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: { object: 'ad_account', entry: [issue(ACT_A)] } })).toMatchObject({ recorded: 0, ignored: 1 })
   })
 
   it('an application ad_account change by the account it names; permissions only for the business\'s own system user', async () => {
     const status = { object: 'application', entry: [{ id: APP, time: 1, changes: [{ field: 'ad_account', value: { id: ACT_B, account_status: 2, disable_reason: 1 } }] }] }
-    await receiveMetaWebhook({ appId: APP, businesses: [A, B], body: status })
+    await receiveMetaWebhook({ appId: APP, signers: [A, B], users: [A, B], body: status })
     expect(h.rows.map((r) => r.ws)).toEqual(['ws-b'])
     expect(h.notices[0]).toMatchObject({ ws: 'ws-b', alert: { kind: 'meta-ads-account-status', severity: 'danger' } })
-    expect(h.rereads).toEqual([{ ws: 'ws-b', adAccountId: ACT_B }])
     const revoked = (user: string) => ({ object: 'permissions', entry: [{ id: user, time: 2, changes: [{ field: 'connected', value: { verb: 'disconnected' } }] }] })
-    expect(await receiveMetaWebhook({ appId: APP, businesses: [A, B], body: revoked(USER_A) })).toMatchObject({ recorded: 1 })
-    expect(await receiveMetaWebhook({ appId: APP, businesses: [A, B], body: revoked('120000000000099') })).toMatchObject({ recorded: 0, ignored: 1 })
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A, B], users: [A, B], body: revoked(USER_A) })).toMatchObject({ recorded: 1 })
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A, B], users: [A, B], body: revoked('120000000000099') })).toMatchObject({ recorded: 0, ignored: 1 })
   })
 
-  it('an object Nexus does not route is ignored, never stored', async () => {
-    const owners = await routeMetaChanges([A], metaWebhookChanges({ object: 'user', entry: [{ id: USER_A, time: 1, changes: [{ field: 'photos', value: {} }] }] })!)
-    expect(owners).toEqual([null])
-    expect(await receiveMetaWebhook({ appId: APP, businesses: [A], body: { hello: 'world' } })).toBeNull()
+  it('an object Nexus does not route is ignored; a body that is not Meta\'s envelope is null', async () => {
+    expect(await routeMetaChanges([A], [A], metaWebhookChanges({ object: 'user', entry: [{ id: USER_A, time: 1, changes: [{ field: 'photos', value: {} }] }] })!)).toEqual([null])
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: { hello: 'world' } })).toBeNull()
   })
 })
 
-describe('recording: one row per change, retries are no-ops', () => {
+describe('review F1 — notices of opposite states never hide each other', () => {
+  it('an unread "active again" does not hide a later "disabled"', async () => {
+    const status = (s: number, time: number) => ({ object: 'application', entry: [{ id: APP, time, changes: [{ field: 'ad_account', value: { id: ACT_A, account_status: s } }] }] })
+    await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: status(1, 1) })
+    await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: status(2, 2) })
+    await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: status(2, 3) })
+    expect(h.notices.map((n) => [n.alert.severity, n.alert.entityId])).toEqual([['info', `${ACT_A}~status~1`], ['danger', `${ACT_A}~status~2`]])
+  })
+})
+
+describe('recording and settling', () => {
   it('Meta resending the same delivery adds a delivery and does nothing again', async () => {
     const body = { object: 'ad_account', entry: [issue(ACT_A)] }
-    await receiveMetaWebhook({ appId: APP, businesses: [A], body })
-    const again = await receiveMetaWebhook({ appId: APP, businesses: [A], body })
+    await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body })
+    const again = await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body })
     expect(again).toMatchObject({ recorded: 0, duplicates: 1, handled: 0 })
     expect(h.rows).toHaveLength(1)
     expect(h.rows[0].deliveries).toBe(2)
@@ -203,37 +237,49 @@ describe('recording: one row per change, retries are no-ops', () => {
     expect(h.rereads).toHaveLength(1)
   })
 
+  it('review F5 — a 1000-update delivery: one batch per business, each distinct action once, answered well inside 4 s', async () => {
+    const changes = Array.from({ length: 1000 }, (_, i) => ({ field: 'field_changed', value: { object_id: `1200000000${String(i).padStart(5, '0')}`, object_type: 'ad', changed_fields: ['effective_status'] } }))
+    const started = Date.now()
+    const out = await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: { object: 'ad_account', entry: [{ id: ACT_A, time: 1782862117, changes }] }, startedAt: started })
+    expect(Date.now() - started).toBeLessThan(4_000)
+    expect(out).toMatchObject({ changes: 1000, recorded: 1000, handled: 1000, notRecorded: 0 })
+    expect(h.batches).toEqual([{ ws: 'ws-a', size: 1000 }])
+    expect(h.rereads).toEqual([{ ws: 'ws-a', adAccountId: ACT_A }])
+    expect(h.rows.every((r) => r.status === 'done')).toBe(true)
+  })
+
   it('topics Nexus only records are written done, keep no message text and run nothing', async () => {
     const body = { object: 'page', entry: [{ id: PAGE_A, time: 1458692752478, messaging: [{ sender: { id: '7000000000000001' }, recipient: { id: PAGE_A }, timestamp: 1, message: { mid: 'm1', text: 'my phone is …' } }] }] }
-    const out = await receiveMetaWebhook({ appId: APP, businesses: [A], body })
-    expect(out).toMatchObject({ recorded: 1, handled: 0 })
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body })).toMatchObject({ recorded: 1, handled: 0 })
     expect(h.rows[0]).toMatchObject({ eventType: 'page.messages', status: 'done', payload: { value: { timestamp: 1, message: { mid: 'm1' } } } })
     expect(JSON.stringify(h.rows[0])).not.toMatch(/phone|7000000000000001/)
   })
 
-  it('a change the ledger cannot take is counted, so the delivery is answered 503 and Meta sends it again', async () => {
+  it('a change the ledger cannot take is counted, so the delivery is answered 503', async () => {
     h.ledgerDown = true
-    expect(await receiveMetaWebhook({ appId: APP, businesses: [A], body: { object: 'ad_account', entry: [issue(ACT_A)] } })).toMatchObject({ notRecorded: 1, recorded: 0 })
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: { object: 'ad_account', entry: [issue(ACT_A)] } })).toMatchObject({ notRecorded: 1, recorded: 0 })
   })
 
-  it('past the answer budget, recorded changes stay due for the retry sweep instead of running inline', async () => {
-    const out = await receiveMetaWebhook({ appId: APP, businesses: [A], body: { object: 'ad_account', entry: [issue(ACT_A)] }, startedAt: Date.now() - 60_000 })
-    expect(out).toMatchObject({ recorded: 1, handled: 0, later: 1 })
+  it('past the answer budget, recorded changes stay due for the retry sweep; a re-read the queue refused is a failure to retry', async () => {
+    expect(await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: { object: 'ad_account', entry: [issue(ACT_A)] }, startedAt: Date.now() - 60_000 })).toMatchObject({ recorded: 1, handled: 0, later: 1 })
     expect(h.rows[0].status).toBe('pending')
-    expect(h.notices).toHaveLength(0)
+    h.reread = { queued: false, reason: 'The read queue did not answer.', retry: true }
+    const out = await receiveMetaWebhook({ appId: APP, signers: [A], users: [A], body: { object: 'ad_account', entry: [issue(ACT_A, '120000000000999')] } })
+    expect(out).toMatchObject({ failed: 1, handled: 0 })
+    expect(h.rows[1].status).toBe('failed')
   })
 })
 
-describe('the handler (receiver, retry sweep, replay)', () => {
+describe('the handler (retry sweep, replay)', () => {
+  const stored = (over: Record<string, unknown> = {}) => ({ appId: APP, object: 'ad_account', entryId: ACT_A, field: 'with_issues_ad_objects', time: 1, value: { id: '120000000000301', level: 'AD' }, ...over })
+  const inA = <T>(work: () => Promise<T>) => { h.ws = 'ws-a'; return work().finally(() => { h.ws = null }) }
+
   it('the replay registry loads this handler for every topic it acts on', async () => {
     const { inboundHandlerFor } = await import('../../cx/ingress/handlers.js')
     const { META_HANDLED_TOPICS } = await import('./webhook-topics.js')
     expect(META_HANDLED_TOPICS.length).toBeGreaterThan(20)
     for (const topic of META_HANDLED_TOPICS) expect(await inboundHandlerFor('META', topic)).toBe(handleMetaWebhookEvent)
   })
-
-  const stored = (over: Record<string, unknown> = {}) => ({ appId: APP, object: 'ad_account', entryId: ACT_A, field: 'with_issues_ad_objects', time: 1, value: { id: '120000000000301', level: 'AD' }, ...over })
-  const inA = <T>(work: () => Promise<T>) => { h.ws = 'ws-a'; return work().finally(() => { h.ws = null }) }
 
   it('does nothing for a change no longer this business\'s (the link was let go before a replay)', async () => {
     h.links = []
@@ -242,12 +288,12 @@ describe('the handler (receiver, retry sweep, replay)', () => {
     expect(h.rereads).toEqual([])
   })
 
-  it('asks for the re-read; a queue that did not answer fails the attempt (the ledger retries), a queue switched off does not', async () => {
+  it('a queue that did not answer fails the attempt (the ledger retries); a queue switched off does not', async () => {
+    const inProcess = stored({ field: 'in_process_ad_objects', value: { id: '1', level: 'AD', status_name: 'Active' } })
     h.reread = { queued: false, reason: 'The read queue did not answer.', retry: true }
-    await expect(inA(() => handleMetaWebhookEvent(stored({ field: 'in_process_ad_objects', value: { id: '1', level: 'AD', status_name: 'Active' } }), { connectionId: 'conn-a', eventType: 'ad_account.in_process_ad_objects', channel: 'META' }))).rejects.toThrow(/not queued/)
-    h.reread = { queued: false, reason: 'Queue workers are off in this process; the next daily read shows the change.', retry: false }
-    await expect(inA(() => handleMetaWebhookEvent(stored({ field: 'in_process_ad_objects', value: { id: '1', level: 'AD', status_name: 'Active' } }), { connectionId: 'conn-a', eventType: 'ad_account.in_process_ad_objects', channel: 'META' }))).resolves.toBeUndefined()
-    expect(h.notices).toEqual([])
+    await expect(inA(() => handleMetaWebhookEvent(inProcess, { connectionId: 'conn-a', eventType: 'ad_account.in_process_ad_objects', channel: 'META' }))).rejects.toThrow(/not queued/)
+    h.reread = { queued: false, reason: 'Queue workers are off in this process.', retry: false }
+    await expect(inA(() => handleMetaWebhookEvent(inProcess, { connectionId: 'conn-a', eventType: 'ad_account.in_process_ad_objects', channel: 'META' }))).resolves.toBeUndefined()
   })
 
   it('refuses a row with no connection or no readable change; a record-only topic does nothing', async () => {
@@ -257,11 +303,18 @@ describe('the handler (receiver, retry sweep, replay)', () => {
     expect(h.notices).toEqual([])
   })
 
-  it('an app-level change runs only while the connection still uses that app', async () => {
+  it('review F3 on replay — an app-level change runs only while the connection uses the app AND it is the one business using it', async () => {
     const devAlert = stored({ object: 'application', entryId: APP, field: 'dev_alerts', value: { notification_id: '1', header: 'Rate limit' } })
+    // conn-a and conn-b both use APP: nothing.
+    await inA(() => handleMetaWebhookEvent(devAlert, { connectionId: 'conn-a', eventType: 'application.dev_alerts', channel: 'META' }))
+    expect(h.notices).toHaveLength(0)
+    h.routes = h.routes.filter((r) => r.connectionId !== 'conn-b')
+    forgetMetaAppIds()
     await inA(() => handleMetaWebhookEvent(devAlert, { connectionId: 'conn-a', eventType: 'application.dev_alerts', channel: 'META' }))
     expect(h.notices).toHaveLength(1)
+    h.unread.clear()
     h.apps['conn-a'].appId = '5550000000000'
+    forgetMetaAppIds()
     await inA(() => handleMetaWebhookEvent(devAlert, { connectionId: 'conn-a', eventType: 'application.dev_alerts', channel: 'META' }))
     expect(h.notices).toHaveLength(1)
   })

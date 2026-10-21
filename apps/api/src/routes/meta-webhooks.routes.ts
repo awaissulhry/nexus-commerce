@@ -5,10 +5,13 @@
  *         (constant time) and an app a connected business uses → 200 with exactly `hub.challenge` (text/plain);
  *         otherwise 403, so a subscription to an app Nexus does not know fails at once. Its request log is off: the
  *         query string holds the verify token.
- *   POST  a notification (WH-002, WH-004): the raw bytes are kept unparsed until a connected business's own app secret
- *         matched X-Hub-Signature-256 over them; then services/marketing/meta-ads/webhook-receiver.ts routes, records
- *         and handles each change. 200 when every change is recorded or ignored, 503 when the ledger could not take one
- *         (Meta resends; recorded changes are duplicates), 401 when no secret signed it (recorded as rejected).
+ *   POST  a notification (WH-002, WH-004):
+ *         - an app id no connected business uses → 401 before the body is read (no secret touched, nothing stored);
+ *         - the raw bytes stay unparsed until a business's own app secret matched X-Hub-Signature-256 over them; then
+ *           services/marketing/meta-ads/webhook-receiver.ts routes, records and settles each change;
+ *         - a known app that NO business's secret signs → 200 (Meta unsubscribes a Page after an hour of failures),
+ *           nothing read, one ledger row and one notice per business using the app (recordMetaSignatureMismatch);
+ *         - 503 only when the ledger could not take a change (Meta resends; the recorded ones are duplicates).
  *
  * The callback URL Meta is given is this path with the business's Meta app id (set-meta-webhooks, the change tool, or
  * the App Dashboard for Instagram and Messenger fields). No Prisma here: the receiver service does the work.
@@ -17,10 +20,10 @@ import type { FastifyInstance } from 'fastify'
 import { logger } from '../utils/logger.js'
 import { registerRawJsonParser, type RawBodyRequest } from '../utils/webhook.js'
 import { metaChallengeOf, metaVerifyTokenOk } from '../services/cx/connectors/meta/webhook-signature.js'
-import { META_APP_ID, metaAppConnected, metaSigningBusinesses, receiveMetaWebhook, recordMetaRejection } from '../services/marketing/meta-ads/webhook-receiver.js'
+import { META_APP_ID, metaAppConnected, metaSignatureVerdicts, receiveMetaWebhook, recordMetaSignatureMismatch } from '../services/marketing/meta-ads/webhook-receiver.js'
 import { parseMetaJson } from '../services/marketing/meta-ads/webhook-topics.js'
 
-/** Meta batches up to 1000 updates; a bigger body than this is refused before anything else. */
+/** Meta batches up to 1000 updates; a bigger body than this is refused. Read only for an app a business uses. */
 export const META_WEBHOOK_BODY_LIMIT = 4 * 1024 * 1024
 
 export default async function metaWebhookRoutes(app: FastifyInstance): Promise<void> {
@@ -41,22 +44,28 @@ export default async function metaWebhookRoutes(app: FastifyInstance): Promise<v
     return reply.status(200).header('content-type', 'text/plain; charset=utf-8').header('x-content-type-options', 'nosniff').send(challenge)
   })
 
-  app.post('/webhooks/meta/:appId', { bodyLimit: META_WEBHOOK_BODY_LIMIT }, async (request, reply) => {
+  app.post('/webhooks/meta/:appId', {
+    bodyLimit: META_WEBHOOK_BODY_LIMIT,
+    // Before the body is read: an app no connected business uses is refused, its body never read nor stored.
+    onRequest: async (request, reply) => {
+      const { appId } = request.params as { appId: string }
+      if (!META_APP_ID.test(appId) || !(await metaAppConnected(appId))) {
+        logger.warn('[meta-webhooks] a delivery for an app no business uses was refused', { appIdValid: META_APP_ID.test(appId) })
+        return reply.status(401).send({ error: 'Unknown app.' })
+      }
+    },
+  }, async (request, reply) => {
     const startedAt = Date.now()
     const { appId } = request.params as { appId: string }
     const raw = (request as RawBodyRequest).rawBody ?? null
-    if (!META_APP_ID.test(appId)) return reply.status(404).send({ error: 'Not found.' })
     if (!raw || raw.length === 0) return reply.status(400).send({ error: 'Empty body.' })
 
     // 1 — trust, on the raw bytes, before any parse.
-    const signers = await metaSigningBusinesses(appId, raw, request.headers['x-hub-signature-256'])
-    if (signers.businesses.length === 0) {
-      const reason = signers.appKnown
-        ? 'X-Hub-Signature-256 does not match the app secret of any business connected with this Meta app.'
-        : 'No business connected in Nexus uses this Meta app, so no secret can check the signature.'
-      await recordMetaRejection(raw, request.headers, reason)
-      logger.warn('[meta-webhooks] signature rejected', { appKnown: signers.appKnown })
-      return reply.status(401).send({ error: 'Signature verification failed.' })
+    const verdicts = await metaSignatureVerdicts(appId, raw, request.headers['x-hub-signature-256'])
+    if (verdicts.mismatched.length) await recordMetaSignatureMismatch(appId, raw, request.headers, verdicts.mismatched)
+    if (verdicts.signers.length === 0) {
+      logger.warn('[meta-webhooks] signature matched no business using this app; nothing read', { users: verdicts.users.length })
+      return reply.status(verdicts.users.length ? 200 : 401).send(verdicts.users.length ? { success: true } : { error: 'Unknown app.' })
     }
 
     // 2 — verified: only now is the body read.
@@ -67,7 +76,7 @@ export default async function metaWebhookRoutes(app: FastifyInstance): Promise<v
       logger.warn('[meta-webhooks] a signed delivery is not JSON')
       return reply.status(400).send({ error: 'The body is not JSON.' })
     }
-    const outcome = await receiveMetaWebhook({ appId, businesses: signers.businesses, body, startedAt })
+    const outcome = await receiveMetaWebhook({ appId, signers: verdicts.signers, users: verdicts.users, body, startedAt })
     if (!outcome) return reply.status(200).send({ success: true, ignored: true })
     if (outcome.notRecorded > 0) {
       logger.error('[meta-webhooks] changes not recorded; Meta is asked to send them again', { notRecorded: outcome.notRecorded, changes: outcome.changes })

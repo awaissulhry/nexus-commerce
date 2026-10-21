@@ -57,13 +57,23 @@ export interface MetaTopic {
   accountKey?: string
   /** Value paths kept on the ledger row (an allow-list; dotted for nested objects). */
   keep: readonly string[]
+  /**
+   * Value paths that identify ONE event (a lead, a comment, an alert, a batch): when one is present, Meta's retries
+   * are recognised by them alone, whatever `entry.time` says. Topics without one are keyed on the whole change and
+   * `entry.time` (a state that can come back later must not be taken for a retry).
+   */
+  idKeys?: readonly string[]
   act: MetaWebhookAction
 }
 
 const MESSAGE = ['timestamp', 'message.mid', 'message.is_echo'] as const
+// EN-041 (review B2): a person who clicks a Click-to-Messenger / Click-to-Direct ad starts the thread with a `messages`
+// event whose message.referral names the ad (messenger-platform/reference/webhook-events/messages).
+const MESSAGE_FROM_AD = [...MESSAGE, 'message.referral.source', 'message.referral.type', 'message.referral.ad_id', 'message.referral.ref', 'message.referral.ads_context_data.ad_title', 'message.referral.ads_context_data.post_id', 'message.referral.ads_context_data.product_id'] as const
 const REFERRAL = ['timestamp', 'referral.source', 'referral.type', 'referral.ad_id', 'referral.ref', 'referral.ads_context_data.ad_title', 'referral.ads_context_data.post_id', 'referral.ads_context_data.product_id', 'referral.ads_context_data.flow_id'] as const
 const POLICY = ['timestamp', 'policy_enforcement.action', 'policy_enforcement.reason'] as const
-const IG_COMMENT = ['id', 'parent_id', 'media.id', 'media.ad_id', 'media.original_media_id', 'media.media_product_type'] as const
+// Review B1 — Facebook Login for Business sends the comment as `comment_id` (Instagram Login as `id`): both kept.
+const IG_COMMENT = ['comment_id', 'id', 'parent_id', 'media.id', 'media.ad_id', 'media.original_media_id', 'media.media_product_type'] as const
 
 /**
  * Every topic Nexus knows. A topic not here is recorded with no value kept and nothing done (an object Nexus routes,
@@ -75,7 +85,7 @@ export const META_WEBHOOK_TOPICS: Readonly<Record<string, MetaTopic>> = {
   'ad_account.field_changed': { rows: ['WH-016'], route: 'AD_ACCOUNT', keep: ['object_id', 'object_type', 'changed_fields'], act: 'reread' },
   'ad_account.subscriptions': { rows: ['WH-017'], route: 'AD_ACCOUNT', keep: ['subscription_id', 'account_id', 'object_id', 'object_type', 'field'], act: 'notice' },
   'ad_account.creative_fatigue': { rows: ['WH-018'], route: 'AD_ACCOUNT', keep: ['ad_account_id', 'adgroup_id', 'creative_fatigue_level', 'creative_fatigue_message'], act: 'notice' },
-  'ad_account.ad_recommendations': { rows: ['WH-019'], route: 'AD_ACCOUNT', keep: ['ad_account_id', 'ad_object_ids', 'recommendation_type', 'recommendation_stage', 'recommendation_hash', 'recommendation_message'], act: 'notice' },
+  'ad_account.ad_recommendations': { rows: ['WH-019'], route: 'AD_ACCOUNT', keep: ['ad_account_id', 'ad_object_ids', 'recommendation_type', 'recommendation_stage', 'recommendation_hash', 'recommendation_message'], idKeys: ['recommendation_hash'], act: 'notice' },
   'ad_account.in_process_ad_objects': { rows: ['WH-020'], route: 'AD_ACCOUNT', keep: ['id', 'level', 'status_name'], act: 'reread' },
   'ad_account.with_issues_ad_objects': { rows: ['WH-021'], route: 'AD_ACCOUNT', keep: ['id', 'level', 'error_code', 'error_summary', 'error_message'], act: 'reread+notice' },
   'ad_account.ads_async_creation_request': { rows: ['WH-022'], route: 'AD_ACCOUNT', keep: ['status', 'result_id', 'error_code', 'error_message', 'result.result_id', 'result.error_code', 'result.error_message'], act: 'reread+notice' },
@@ -85,15 +95,15 @@ export const META_WEBHOOK_TOPICS: Readonly<Record<string, MetaTopic>> = {
   'application.ads_rules_engine': { rows: ['WH-025'], route: 'AD_ACCOUNT', accountKey: 'account_id', keep: ['rule_id', 'account_id', 'object_id', 'object_type', 'trigger_type', 'trigger_field'], act: 'notice' },
   // WH-026: Meta documents only polling for async insights runs (insights/best-practices); the field is recorded and a
   // failure noticed, nothing waits for it (RECHECK-C3 WH-026).
-  'application.async_requests': { rows: ['WH-026'], route: 'APP', keep: ['category', 'verb', 'report_id'], act: 'notice' },
-  'application.dev_alerts': { rows: ['WH-027'], route: 'APP', keep: ['notification_id', 'date', 'header', 'subtitle'], act: 'notice' },
+  'application.async_requests': { rows: ['WH-026'], route: 'APP', keep: ['category', 'verb', 'report_id'], idKeys: ['report_id', 'verb'], act: 'notice' },
+  'application.dev_alerts': { rows: ['WH-027'], route: 'APP', keep: ['notification_id', 'date', 'header', 'subtitle'], idKeys: ['notification_id'], act: 'notice' },
   // ── page ── routed by entry.id, the Page
-  'page.leadgen': { rows: ['LD-036', 'WH-028'], route: 'PAGE', keep: ['leadgen_id', 'page_id', 'form_id', 'adgroup_id', 'ad_id', 'created_time'], act: 'notice' },
+  'page.leadgen': { rows: ['LD-036', 'WH-028'], route: 'PAGE', keep: ['leadgen_id', 'page_id', 'form_id', 'adgroup_id', 'ad_id', 'created_time'], idKeys: ['leadgen_id'], act: 'notice' },
   // LD-050: Meta documents only the field name; only ids are kept.
-  'page.messaging_in_thread_lead_form_submit': { rows: ['LD-050', 'WH-036'], route: 'PAGE', keep: ['timestamp', 'page_id', 'form_id', 'leadgen_id', 'lead_id', 'ad_id', 'created_time'], act: 'notice' },
-  'page.feed': { rows: ['WH-029'], route: 'PAGE', keep: ['item', 'verb', 'post_id', 'comment_id', 'parent_id', 'created_time', 'post.id', 'post.promotion_status'], act: 'record' },
-  'page.mention': { rows: ['WH-030'], route: 'PAGE', keep: ['item', 'verb', 'post_id', 'comment_id'], act: 'record' },
-  'page.messages': { rows: ['WH-031'], route: 'PAGE', keep: MESSAGE, act: 'record' },
+  'page.messaging_in_thread_lead_form_submit': { rows: ['LD-050', 'WH-036'], route: 'PAGE', keep: ['timestamp', 'page_id', 'form_id', 'leadgen_id', 'lead_id', 'ad_id', 'created_time'], idKeys: ['leadgen_id', 'lead_id'], act: 'notice' },
+  'page.feed': { rows: ['WH-029'], route: 'PAGE', keep: ['item', 'verb', 'post_id', 'comment_id', 'parent_id', 'created_time', 'post.id', 'post.promotion_status'], idKeys: ['comment_id', 'post_id', 'item', 'verb'], act: 'record' },
+  'page.mention': { rows: ['WH-030'], route: 'PAGE', keep: ['item', 'verb', 'post_id', 'comment_id'], idKeys: ['comment_id', 'post_id', 'item', 'verb'], act: 'record' },
+  'page.messages': { rows: ['WH-031', 'EN-041'], route: 'PAGE', keep: MESSAGE_FROM_AD, act: 'record' },
   'page.message_echoes': { rows: ['WH-031'], route: 'PAGE', keep: MESSAGE, act: 'record' },
   'page.message_reads': { rows: ['WH-031'], route: 'PAGE', keep: ['timestamp', 'read.watermark'], act: 'record' },
   'page.message_deliveries': { rows: ['WH-031'], route: 'PAGE', keep: ['timestamp', 'delivery.watermark'], act: 'record' },
@@ -108,10 +118,10 @@ export const META_WEBHOOK_TOPICS: Readonly<Record<string, MetaTopic>> = {
   'page.messaging_integrity': { rows: ['WH-035'], route: 'PAGE', keep: ['timestamp'], act: 'notice' },
   'page.product_review': { rows: ['WH-040'], route: 'PAGE', keep: ['product_item_id', 'status', 'reasons'], act: 'notice' },
   // ── instagram (Facebook Login) ── routed by entry.id, the Instagram account
-  'instagram.comments': { rows: ['WH-041'], route: 'INSTAGRAM', keep: IG_COMMENT, act: 'record' },
-  'instagram.live_comments': { rows: ['WH-042'], route: 'INSTAGRAM', keep: IG_COMMENT, act: 'record' },
-  'instagram.mentions': { rows: ['WH-043'], route: 'INSTAGRAM', keep: ['media_id', 'comment_id'], act: 'record' },
-  'instagram.messages': { rows: ['WH-044'], route: 'INSTAGRAM', keep: MESSAGE, act: 'record' },
+  'instagram.comments': { rows: ['WH-041'], route: 'INSTAGRAM', keep: IG_COMMENT, idKeys: ['comment_id', 'id'], act: 'record' },
+  'instagram.live_comments': { rows: ['WH-042'], route: 'INSTAGRAM', keep: IG_COMMENT, idKeys: ['comment_id', 'id'], act: 'record' },
+  'instagram.mentions': { rows: ['WH-043'], route: 'INSTAGRAM', keep: ['media_id', 'comment_id'], idKeys: ['comment_id', 'media_id'], act: 'record' },
+  'instagram.messages': { rows: ['WH-044', 'EN-041'], route: 'INSTAGRAM', keep: MESSAGE_FROM_AD, act: 'record' },
   'instagram.message_echoes': { rows: ['WH-044'], route: 'INSTAGRAM', keep: MESSAGE, act: 'record' },
   'instagram.message_reactions': { rows: ['WH-044'], route: 'INSTAGRAM', keep: ['timestamp', 'reaction.mid', 'reaction.action'], act: 'record' },
   'instagram.message_edit': { rows: ['WH-044'], route: 'INSTAGRAM', keep: ['timestamp', 'message_edit.mid'], act: 'record' },
@@ -127,7 +137,7 @@ export const META_WEBHOOK_TOPICS: Readonly<Record<string, MetaTopic>> = {
   // ── catalog ── no per-catalog subscribe edge exists (CT-165, RECHECK-C3): the app's catalog subscription delivers for
   // catalogs its system user can reach, so a catalog event is routed only to the ONE business using the app. Nexus
   // never depends on these pushes (CT-166): the catalog reads poll batch status and feed uploads themselves.
-  'catalog.items_batch': { rows: ['WH-048', 'CT-163', 'CT-165'], route: 'APP', keep: ['catalog_id', 'handle', 'status'], act: 'notice' },
+  'catalog.items_batch': { rows: ['WH-048', 'CT-163', 'CT-165'], route: 'APP', keep: ['catalog_id', 'handle', 'status'], idKeys: ['handle', 'status'], act: 'notice' },
   'catalog.product_feed': { rows: ['WH-049', 'CT-164', 'CT-165'], route: 'APP', keep: ['catalog_id', 'product_feed_id', 'status'], act: 'notice' },
   // ── permissions ── user-scoped (WH-050): routed only when entry.id is the business's own system user
   'permissions.connected': { rows: ['WH-050'], route: 'USER', keep: ['verb'], act: 'notice' },
@@ -152,6 +162,8 @@ export const MAX_CHANGES_PER_DELIVERY = 2000
 /** One change of a delivery, as Meta sent it (value unreduced; it never leaves this process). */
 export interface MetaWebhookChange {
   object: string
+  /** Where in the entry it came from: Messenger / Instagram events (messaging, standby) carry their own timestamp. */
+  source: 'changes' | 'messaging' | 'standby' | 'changed_fields'
   entryId: string
   /** entry.time: when Meta SENT the notification (seconds, or milliseconds on Messenger). */
   time: number | null
@@ -204,8 +216,8 @@ export function metaWebhookChanges(body: unknown): MetaWebhookChange[] | null {
   const object = typeof root?.object === 'string' ? root.object.trim() : ''
   if (!root || !object || !Array.isArray(root.entry)) return null
   const out: MetaWebhookChange[] = []
-  const push = (entryId: string, time: number | null, field: string, value: Record<string, unknown>) => {
-    if (out.length < MAX_CHANGES_PER_DELIVERY) out.push({ object, entryId, time, field, value })
+  const push = (source: MetaWebhookChange['source'], entryId: string, time: number | null, field: string, value: Record<string, unknown>) => {
+    if (out.length < MAX_CHANGES_PER_DELIVERY) out.push({ object, source, entryId, time, field, value })
   }
   for (const raw of root.entry) {
     const entry = rec(raw)
@@ -218,18 +230,18 @@ export function metaWebhookChanges(body: unknown): MetaWebhookChange[] | null {
       if (!change || !field) continue
       const value = rec(change.value) ?? {}
       const changed = Array.isArray(value.changed_fields) ? value.changed_fields : []
-      push(entryId, time, field === 'field_changed' && changed.includes('effective_status') ? 'effective_status' : field, value)
+      push('changes', entryId, time, field === 'field_changed' && changed.includes('effective_status') ? 'effective_status' : field, value)
     }
     for (const m of Array.isArray(entry.messaging) ? entry.messaging : []) {
       const event = rec(m)
-      if (event) push(entryId, time, messagingFieldOf(object, event), event)
+      if (event) push('messaging', entryId, time, messagingFieldOf(object, event), event)
     }
     for (const s of Array.isArray(entry.standby) ? entry.standby : []) {
       const event = rec(s)
-      if (event) push(entryId, time, 'standby', event)
+      if (event) push('standby', entryId, time, 'standby', event)
     }
     for (const f of Array.isArray(entry.changed_fields) ? entry.changed_fields : []) {
-      if (typeof f === 'string' && f.trim()) push(entryId, time, f.trim(), {})
+      if (typeof f === 'string' && f.trim()) push('changed_fields', entryId, time, f.trim(), {})
     }
   }
   return out
@@ -239,7 +251,7 @@ export function metaWebhookChanges(body: unknown): MetaWebhookChange[] | null {
 export const metaTopicOf = (change: Pick<MetaWebhookChange, 'object' | 'field'>): string => `${change.object}.${change.field}`.slice(0, 120)
 
 /** How a change is routed, or null when Nexus does not route its object at all. */
-export function metaRouteOf(change: MetaWebhookChange): { kind: MetaRouteKind; id: string | null } | null {
+export function metaRouteOf(change: Omit<MetaWebhookChange, 'source'>): { kind: MetaRouteKind; id: string | null } | null {
   const topic = META_WEBHOOK_TOPICS[metaTopicOf(change)]
   const kind = topic?.route ?? OBJECT_ROUTE[change.object]
   if (!kind) return null
@@ -294,9 +306,29 @@ export function metaWebhookPayload(appId: string, change: MetaWebhookChange): Me
   return { appId, object: change.object, entryId: change.entryId, field: change.field, time: change.time, value: keptValue(change.value, topic?.keep ?? []) }
 }
 
-/** Stable across Meta's retries of the same change (its bytes, whatever batch it came in): the ledger's delivery id. */
+const scalarAt = (value: Record<string, unknown>, path: string): unknown => {
+  let at: unknown = value
+  for (const part of path.split('.')) at = rec(at)?.[part]
+  return typeof at === 'string' || typeof at === 'number' || typeof at === 'boolean' ? at : null
+}
+const MESSAGING_IDS = ['message.mid', 'message_edit.mid', 'reaction.mid', 'postback.mid', 'read.mid'] as const
+
+/**
+ * The ledger's delivery id for a change, the same on every retry of Meta's (whatever batch it comes in). Review F4:
+ *   - a topic with event ids (a lead, a comment, an alert, a batch handle): those ids alone;
+ *   - a Messenger / Instagram event: its message id and its own timestamp, never `entry.time` (when it was SENT);
+ *   - anything else: the whole change and `entry.time` (a state that comes back later is a new change).
+ */
 export function metaChangeKey(appId: string, change: MetaWebhookChange): string {
-  const digest = createHash('sha256').update(JSON.stringify([appId, change.object, change.entryId, change.time, change.field, change.value])).digest('hex')
+  const topic = META_WEBHOOK_TOPICS[metaTopicOf(change)]
+  const ids = (topic?.idKeys ?? []).map((path) => scalarAt(change.value, path))
+  let identity: unknown[]
+  if (ids.some((v) => v !== null && v !== '')) identity = ['ids', ...ids]
+  else if (change.source === 'messaging' || change.source === 'standby') {
+    const mid = MESSAGING_IDS.map((path) => scalarAt(change.value, path)).find((v) => v !== null && v !== '') ?? null
+    identity = mid !== null ? ['mid', mid, change.value.timestamp ?? null] : ['event', change.value]
+  } else identity = ['time', change.time, change.value]
+  const digest = createHash('sha256').update(JSON.stringify([appId, change.object, change.entryId, change.field, ...identity])).digest('hex')
   return `meta:${digest}`
 }
 
@@ -313,7 +345,7 @@ export function metaChangeTime(time: number | null): Date | null {
 export type MetaNoticeKind =
   | 'meta-ads-object-issue' | 'meta-ads-account-status' | 'meta-ads-alert-fired' | 'meta-ads-creative-fatigue'
   | 'meta-ads-recommendation' | 'meta-ads-product-set-issue' | 'meta-app-notice' | 'meta-messaging-policy'
-  | 'meta-lead-received' | 'meta-catalog-update' | 'meta-product-review'
+  | 'meta-lead-received' | 'meta-catalog-update' | 'meta-product-review' | 'meta-webhook-signature'
 
 export interface MetaNotice {
   kind: MetaNoticeKind
@@ -332,7 +364,12 @@ const levelWord = (v: unknown): string => LEVEL_WORDS[String(v ?? '').toUpperCas
 const s = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : null)
 const sentence = (v: unknown): string => { const t = s(v); return t ? ` Meta says: "${t}"` : '' }
 
-/** The notice a change raises, or null (this value needs none: a fatigue going LOW, a grant, a finished async run). */
+/**
+ * The notice a change raises, or null (this value needs none: a fatigue going LOW, a grant, a finished async run).
+ * Review F1 — a notice is one unread per subject (channel-alerts), so the subject of a STATE names the state: an unread
+ * "active again" never hides a later "disabled", a MEDIUM fatigue never hides a HIGH one, a Finished batch never hides
+ * a failed one.
+ */
 export function metaWebhookNotice(payload: MetaWebhookPayload): MetaNotice | null {
   const v = payload.value
   const topic = `${payload.object}.${payload.field}`
@@ -341,27 +378,27 @@ export function metaWebhookNotice(payload: MetaWebhookPayload): MetaNotice | nul
   switch (topic) {
     case 'ad_account.with_issues_ad_objects': {
       const id = s(v.id) ?? 'unknown'
-      return { kind: 'meta-ads-object-issue', severity: 'warn', title: `Meta: a ${levelWord(v.level)} has a problem`, body: `Meta reports a problem on ${levelWord(v.level)} ${id} (error ${s(v.error_code) ?? 'without a code'}).${sentence(v.error_summary)} Nexus reads the ad account again to show its current status.`, entityType: 'meta-ad-object', entityId: `${account}~${id}`, href: ADS_PAGE }
+      return { kind: 'meta-ads-object-issue', severity: 'warn', title: `Meta: a ${levelWord(v.level)} has a problem`, body: `Meta reports a problem on ${levelWord(v.level)} ${id} (error ${s(v.error_code) ?? 'without a code'}).${sentence(v.error_summary)} Nexus reads the ad account again to show its current status.`, entityType: 'meta-ad-object', entityId: `${account}~${id}~issue~${s(v.error_code) ?? ''}`, href: ADS_PAGE }
     }
     case 'ad_account.ads_async_creation_request': {
       const code = s(v.error_code) ?? s(rec(v.result)?.error_code)
       const status = s(v.status) ?? ''
       if (!code && !/fail|error/i.test(status)) return null
-      return { kind: 'meta-ads-object-issue', severity: 'warn', title: 'Meta: an ad creation job failed', body: `An ad or creative Meta was creating in the background did not finish (status ${status || 'unknown'}${code ? `, error ${code}` : ''}).${sentence(v.error_message ?? rec(v.result)?.error_message)}`, entityType: 'meta-ad-account', entityId: account, href: ADS_PAGE }
+      return { kind: 'meta-ads-object-issue', severity: 'warn', title: 'Meta: an ad creation job failed', body: `An ad or creative Meta was creating in the background did not finish (status ${status || 'unknown'}${code ? `, error ${code}` : ''}).${sentence(v.error_message ?? rec(v.result)?.error_message)}`, entityType: 'meta-ad-account', entityId: `${account}~async~${status || code || ''}`, href: ADS_PAGE }
     }
     case 'ad_account.product_set_issue': {
       const id = s(v.product_set_id) ?? 'unknown'
-      return { kind: 'meta-ads-product-set-issue', severity: 'warn', title: 'Meta: a product set used by ads has a problem', body: `Product set ${id}${s(v.type) ? ` (${s(v.type)})` : ''}.${sentence(v.description)}${s(v.recommended_action) ? ` Meta suggests: "${s(v.recommended_action)}"` : ''}`, entityType: 'meta-product-set', entityId: `${account}~${id}`, href: ADS_PAGE }
+      return { kind: 'meta-ads-product-set-issue', severity: 'warn', title: 'Meta: a product set used by ads has a problem', body: `Product set ${id}${s(v.type) ? ` (${s(v.type)})` : ''}.${sentence(v.description)}${s(v.recommended_action) ? ` Meta suggests: "${s(v.recommended_action)}"` : ''}`, entityType: 'meta-product-set', entityId: `${account}~${id}~${s(v.type) ?? ''}`, href: ADS_PAGE }
     }
     case 'ad_account.subscriptions': {
       const object = s(v.object_id) ?? 'unknown'
-      return { kind: 'meta-ads-alert-fired', severity: 'warn', title: 'Meta: one of your alert subscriptions fired', body: `Alert subscription ${s(v.subscription_id) ?? 'unknown'} fired for ${levelWord(v.object_type)} ${object}${s(v.field) ? ` (${s(v.field)})` : ''}. Read the ${levelWord(v.object_type)}'s current numbers before acting: Nexus keeps no amount from the push.`, entityType: 'meta-ad-object', entityId: `${account}~${object}~alert`, href: ADS_PAGE }
+      return { kind: 'meta-ads-alert-fired', severity: 'warn', title: 'Meta: one of your alert subscriptions fired', body: `Alert subscription ${s(v.subscription_id) ?? 'unknown'} fired for ${levelWord(v.object_type)} ${object}${s(v.field) ? ` (${s(v.field)})` : ''}. Read the ${levelWord(v.object_type)}'s current numbers before acting: Nexus keeps no amount from the push.`, entityType: 'meta-ad-object', entityId: `${account}~${object}~alert~${s(v.subscription_id) ?? ''}`, href: ADS_PAGE }
     }
     case 'ad_account.creative_fatigue': {
       const level = String(v.creative_fatigue_level ?? '').toUpperCase()
       if (level !== 'HIGH' && level !== 'MEDIUM') return null
       const ad = s(v.adgroup_id) ?? 'unknown'
-      return { kind: 'meta-ads-creative-fatigue', severity: level === 'HIGH' ? 'warn' : 'info', title: `Meta: an ad's creative is wearing out (${level.toLowerCase()})`, body: `Ad ${ad}: its creative fatigue is now ${level.toLowerCase()}.${sentence(v.creative_fatigue_message)} Read its last 7 days (frequency, CTR, cost per result) before changing it.`, entityType: 'meta-ad-object', entityId: `${account}~${ad}~fatigue`, href: ADS_PAGE }
+      return { kind: 'meta-ads-creative-fatigue', severity: level === 'HIGH' ? 'warn' : 'info', title: `Meta: an ad's creative is wearing out (${level.toLowerCase()})`, body: `Ad ${ad}: its creative fatigue is now ${level.toLowerCase()}.${sentence(v.creative_fatigue_message)} Read its last 7 days (frequency, CTR, cost per result) before changing it.`, entityType: 'meta-ad-object', entityId: `${account}~${ad}~fatigue~${level}`, href: ADS_PAGE }
     }
     case 'ad_account.ad_recommendations': {
       const type = s(v.recommendation_type) ?? 'a recommendation'
@@ -370,7 +407,7 @@ export function metaWebhookNotice(payload: MetaWebhookPayload): MetaNotice | nul
     case 'application.ad_account': {
       const status = typeof v.account_status === 'number' ? v.account_status : Number(v.account_status)
       const words = Number.isFinite(status) ? AD_ACCOUNT_STATUS_WORDS[status] ?? `status ${status}` : 'unknown'
-      return { kind: 'meta-ads-account-status', severity: status === 1 ? 'info' : 'danger', title: status === 1 ? 'Meta: the ad account is active again' : `Meta: the ad account is now ${words.toLowerCase()}`, body: `Meta changed ad account ${account} to "${words}"${Number(v.disable_reason) ? ` (disable reason ${v.disable_reason})` : ''}. Nexus reads the account again.`, entityType: 'meta-ad-account', entityId: account, href: ADS_PAGE }
+      return { kind: 'meta-ads-account-status', severity: status === 1 ? 'info' : 'danger', title: status === 1 ? 'Meta: the ad account is active again' : `Meta: the ad account is now ${words.toLowerCase()}`, body: `Meta changed ad account ${account} to "${words}"${Number(v.disable_reason) ? ` (disable reason ${v.disable_reason})` : ''}. Nexus reads the account again.`, entityType: 'meta-ad-account', entityId: `${account}~status~${Number.isFinite(status) ? status : 'unknown'}`, href: ADS_PAGE }
     }
     case 'application.ads_rules_engine': {
       const object = s(v.object_id) ?? 'unknown'
@@ -390,29 +427,46 @@ export function metaWebhookNotice(payload: MetaWebhookPayload): MetaNotice | nul
     case 'page.messaging_integrity':
     case 'instagram.messaging_policy_enforcement': {
       const where = payload.object === 'page' ? `Page ${payload.entryId}` : `Instagram account ${payload.entryId}`
-      const action = s(rec(v.policy_enforcement)?.action)
-      return { kind: 'meta-messaging-policy', severity: 'danger', title: 'Meta enforced its messaging policy', body: `Meta took a messaging policy action on ${where}${action ? ` (${action})` : ''}.${sentence(rec(v.policy_enforcement)?.reason)} Send no more messages from this account until it is resolved in Meta.`, entityType: payload.object === 'page' ? 'meta-page' : 'meta-instagram', entityId: payload.entryId, href: null }
+      const action = (s(rec(v.policy_enforcement)?.action) ?? '').toLowerCase()
+      // Review B5 — Meta's actions (messaging_policy_enforcement): warning, block, unblock.
+      if (action === 'unblock') {
+        return { kind: 'meta-messaging-policy', severity: 'info', title: 'Meta lifted its messaging block', body: `Meta lifted the messaging block on ${where}: messages can be sent again.`, entityType: payload.object === 'page' ? 'meta-page' : 'meta-instagram', entityId: `${payload.entryId}~policy~unblock`, href: null }
+      }
+      const block = action === 'block'
+      return { kind: 'meta-messaging-policy', severity: block ? 'danger' : 'warn', title: block ? 'Meta blocked messaging for a policy breach' : 'Meta warned about its messaging policy', body: `Meta took a messaging policy action on ${where}${action ? ` (${action})` : ''}.${sentence(rec(v.policy_enforcement)?.reason)} ${block ? 'Send no more messages from this account until it is resolved in Meta.' : 'Check the messages sent from this account before Meta blocks it.'}`, entityType: payload.object === 'page' ? 'meta-page' : 'meta-instagram', entityId: `${payload.entryId}~policy~${action || topic}`, href: null }
     }
     case 'page.product_review': {
       if (String(v.status ?? '').toUpperCase() !== 'REJECTED') return null
       const item = s(v.product_item_id) ?? 'unknown'
       const reasons = Array.isArray(v.reasons) ? v.reasons.map(s).filter(Boolean).slice(0, 5).join('; ') : ''
-      return { kind: 'meta-product-review', severity: 'warn', title: 'Meta rejected a catalog item in review', body: `Catalog item ${item} was rejected in Meta's product review on Page ${payload.entryId}.${reasons ? ` Meta says: "${reasons}"` : ''}`, entityType: 'meta-catalog-item', entityId: item, href: null }
+      return { kind: 'meta-product-review', severity: 'warn', title: 'Meta rejected a catalog item in review', body: `Catalog item ${item} was rejected in Meta's product review on Page ${payload.entryId}.${reasons ? ` Meta says: "${reasons}"` : ''}`, entityType: 'meta-catalog-item', entityId: `${item}~${String(v.status).toUpperCase()}`, href: null }
     }
     case 'catalog.items_batch':
     case 'catalog.product_feed': {
       const status = s(v.status) ?? 'unknown'
       const batch = topic === 'catalog.items_batch'
-      return { kind: 'meta-catalog-update', severity: status === 'Finished' ? 'info' : 'warn', title: batch ? `Meta: a catalog batch is ${status.toLowerCase()}` : `Meta: a catalog feed upload is ${status.toLowerCase()}`, body: batch ? `Catalog ${payload.entryId}: batch ${s(v.handle) ?? 'unknown'} is "${status}". Requests in it that had errors were NOT saved: check the batch status for them.` : `Catalog ${payload.entryId}: feed ${s(v.product_feed_id) ?? 'unknown'} is "${status}". Check the upload's errors.`, entityType: 'meta-catalog', entityId: `${payload.entryId}~${s(v.handle) ?? s(v.product_feed_id) ?? ''}`, href: null }
+      return { kind: 'meta-catalog-update', severity: status === 'Finished' ? 'info' : 'warn', title: batch ? `Meta: a catalog batch is ${status.toLowerCase()}` : `Meta: a catalog feed upload is ${status.toLowerCase()}`, body: batch ? `Catalog ${payload.entryId}: batch ${s(v.handle) ?? 'unknown'} is "${status}". Requests in it that had errors were NOT saved: check the batch status for them.` : `Catalog ${payload.entryId}: feed ${s(v.product_feed_id) ?? 'unknown'} is "${status}". Check the upload's errors.`, entityType: 'meta-catalog', entityId: `${payload.entryId}~${s(v.handle) ?? s(v.product_feed_id) ?? ''}~${status}`, href: null }
     }
     case 'permissions.connected':
     case 'permissions.public_search':
     case 'permissions.social_ads': {
       const verb = s(v.verb) ?? ''
       if (!/^(disconnected|revoked|removed)$/i.test(verb)) return null
-      return { kind: 'meta-app-notice', severity: 'warn', title: 'Meta: a permission of the business\'s Meta app was removed', body: `Meta says ${payload.field.replace('_', ' ')} was ${verb} for the system user of this business. Check the Meta connection in Settings › Channels › Meta ("Check now").`, entityType: 'meta-app', entityId: `${payload.appId}~${payload.field}`, href: CHANNELS_PAGE }
+      return { kind: 'meta-app-notice', severity: 'warn', title: 'Meta: a permission of the business\'s Meta app was removed', body: `Meta says ${payload.field.replace('_', ' ')} was ${verb} for the system user of this business. Check the Meta connection in Settings › Channels › Meta ("Check now").`, entityType: 'meta-app', entityId: `${payload.appId}~${payload.field}~${verb.toLowerCase()}`, href: CHANNELS_PAGE }
     }
     default:
       return null
+  }
+}
+
+/**
+ * Review F2 — a delivery for this business's Meta app that the app secret Nexus holds for it does not sign: nothing
+ * of it was read. One unread notice per app (the subject), however many such deliveries arrive.
+ */
+export function metaSignatureNotice(appId: string): MetaNotice {
+  return {
+    kind: 'meta-webhook-signature', severity: 'danger', title: 'Meta webhook signatures stopped matching',
+    body: `Meta sent notifications for Meta app ${appId} that the app secret Nexus holds for this business does not sign, so Nexus read none of them. Was the app secret changed in Meta? Enter the new one in Settings › Channels › Meta (Replace).`,
+    entityType: 'meta-app', entityId: `${appId}~signature`, href: CHANNELS_PAGE,
   }
 }

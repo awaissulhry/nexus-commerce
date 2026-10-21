@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   META_HANDLED_TOPICS, META_WEBHOOK_TOPICS, keptValue, messagingFieldOf, metaChangeKey, metaChangeTime, metaRouteOf, metaTopicOf,
-  metaWebhookChanges, metaWebhookNotice, metaWebhookPayload, parseMetaJson, type MetaWebhookChange,
+  metaSignatureNotice, metaWebhookChanges, metaWebhookNotice, metaWebhookPayload, parseMetaJson, type MetaWebhookChange,
 } from './webhook-topics.js'
 import { replayableEventTypes } from '../../cx/ingress/handlers.js'
 
@@ -33,7 +33,7 @@ describe('the envelope', () => {
       { field: 'field_changed', value: { object_id: '120000000000301', object_type: 'ad', changed_fields: ['name'] } },
     ]))!
     expect(changes.map(metaTopicOf)).toEqual(['ad_account.effective_status', 'ad_account.with_issues_ad_objects', 'ad_account.field_changed'])
-    expect(changes[0]).toMatchObject({ object: 'ad_account', entryId: ACT, time: 1782862117 })
+    expect(changes[0]).toMatchObject({ object: 'ad_account', source: 'changes', entryId: ACT, time: 1782862117 })
   })
 
   it('reads Messenger and Instagram events by the key that carries them, standby and changed_fields too', () => {
@@ -63,7 +63,7 @@ describe('the envelope', () => {
 })
 
 describe('routing keys', () => {
-  const change = (object: string, field: string, value: Record<string, unknown> = {}, entryId = ACT): MetaWebhookChange => ({ object, entryId, time: 1, field, value })
+  const change = (object: string, field: string, value: Record<string, unknown> = {}, entryId = ACT): MetaWebhookChange => ({ object, source: 'changes', entryId, time: 1, field, value })
   it('ad account topics by the entry (act_ dropped); application ones by the account their value names', () => {
     expect(metaRouteOf(change('ad_account', 'with_issues_ad_objects'))).toEqual({ kind: 'AD_ACCOUNT', id: ACT })
     expect(metaRouteOf(change('ad_account', 'creative_fatigue', {}, `act_${ACT}`))).toEqual({ kind: 'AD_ACCOUNT', id: ACT })
@@ -91,8 +91,14 @@ describe('what the ledger keeps', () => {
     ] }] })!
     expect(metaWebhookPayload(APP, message).value).toEqual({ timestamp: 1, message: { mid: 'm1' } })
     expect(metaWebhookPayload(APP, referral).value).toEqual({ timestamp: 2, referral: { source: 'ADS', type: 'OPEN_THREAD', ad_id: '120000000000301', ref: 'spring', ads_context_data: { ad_title: 'Shop A jacket', post_id: '120000000000555' } } })
-    const [comment] = metaWebhookChanges({ object: 'instagram', entry: [{ id: IG, time: 1, changes: [{ field: 'comments', value: { from: { id: '1', username: 'someone' }, id: '1790000000000001', text: 'nice', media: { id: '1790000000000002', ad_id: '120000000000301', ad_title: 'Shop A jacket' } } }] }] })!
-    expect(metaWebhookPayload(APP, comment).value).toEqual({ id: '1790000000000001', media: { id: '1790000000000002', ad_id: '120000000000301' } })
+    // Review B1 — Facebook Login for Business: {from{id, username}, comment_id, parent_id, text, media{id, ad_id, ad_title, original_media_id, media_product_type}}.
+    const [comment] = metaWebhookChanges({ object: 'instagram', entry: [{ id: IG, time: 1, changes: [{ field: 'comments', value: { from: { id: '1', username: 'someone' }, comment_id: '1790000000000001', parent_id: '1790000000000003', text: 'nice', media: { id: '1790000000000002', ad_id: '120000000000301', ad_title: 'Shop A jacket', original_media_id: '1790000000000004', media_product_type: 'FEED' } } }] }] })!
+    expect(metaWebhookPayload(APP, comment).value).toEqual({ comment_id: '1790000000000001', parent_id: '1790000000000003', media: { id: '1790000000000002', ad_id: '120000000000301', original_media_id: '1790000000000004', media_product_type: 'FEED' } })
+    // Review B2 / EN-041 — a Click-to-Messenger (or Click-to-Direct) ad click opens the thread with a messages event naming the ad.
+    for (const object of ['page', 'instagram']) {
+      const [fromAd] = metaWebhookChanges({ object, entry: [{ id: PAGE, time: 1, messaging: [{ sender: { id: '7000000000000001' }, recipient: { id: PAGE }, timestamp: 3, message: { mid: 'm9', text: 'is it in stock?', referral: { source: 'ADS', type: 'OPEN_THREAD', ad_id: '120000000000301', ref: 'spring', ads_context_data: { ad_title: 'Shop A jacket', photo_url: 'https://example.invalid/p.jpg', post_id: '120000000000555', product_id: '120000000000666' } } } }] }] })!
+      expect(metaWebhookPayload(APP, fromAd).value).toEqual({ timestamp: 3, message: { mid: 'm9', referral: { source: 'ADS', type: 'OPEN_THREAD', ad_id: '120000000000301', ref: 'spring', ads_context_data: { ad_title: 'Shop A jacket', post_id: '120000000000555', product_id: '120000000000666' } } } })
+    }
     const [fired] = metaWebhookChanges(adAccountBody([{ field: 'subscriptions', value: { subscription_id: '3333333333', account_id: ACT, object_id: '4444444444', object_type: 'adset', field: 'daily_budget', current_value: '1500' } }]))!
     expect(metaWebhookPayload(APP, fired).value).toEqual({ subscription_id: '3333333333', account_id: ACT, object_id: '4444444444', object_type: 'adset', field: 'daily_budget' })
     const [rule] = metaWebhookChanges({ object: 'application', entry: [{ id: APP, time: 1, changes: [{ field: 'ads_rules_engine', value: { rule_id: '1', account_id: ACT, object_id: '2', object_type: 'AD', trigger_type: 'STATS_CHANGE', trigger_field: 'spent', current_value: '{"spent":12345}' } }] }] })!
@@ -104,6 +110,23 @@ describe('what the ledger keeps', () => {
 
   it('caps text and lists, and keeps only scalars (a nested object is never kept wholesale)', () => {
     expect(keptValue({ a: 'x'.repeat(900), b: Array.from({ length: 80 }, (_, i) => i), c: { deep: { secret: 1 } } }, ['a', 'b', 'c'])).toEqual({ a: `${'x'.repeat(499)}…`, b: Array.from({ length: 50 }, (_, i) => i) })
+  })
+
+  it('review F4 — event ids key a change whatever entry.time says; Messenger events by message id and their own timestamp; states by time', () => {
+    const lead = (time: number, leadgen_id = '120000000000901') => metaWebhookChanges({ object: 'page', entry: [{ id: PAGE, time, changes: [{ field: 'leadgen', value: { leadgen_id, form_id: '1', page_id: PAGE } }] }] })![0]
+    expect(metaChangeKey(APP, lead(1))).toBe(metaChangeKey(APP, lead(99)))
+    expect(metaChangeKey(APP, lead(1))).not.toBe(metaChangeKey(APP, lead(1, '120000000000902')))
+    const message = (entryTime: number, timestamp: number, mid = 'm1') => metaWebhookChanges({ object: 'page', entry: [{ id: PAGE, time: entryTime, messaging: [{ sender: { id: '7' }, recipient: { id: PAGE }, timestamp, message: { mid, text: 'x' } }] }] })![0]
+    expect(metaChangeKey(APP, message(1, 5))).toBe(metaChangeKey(APP, message(2, 5)))
+    expect(metaChangeKey(APP, message(1, 5))).not.toBe(metaChangeKey(APP, message(1, 5, 'm2')))
+    const read = (entryTime: number) => metaWebhookChanges({ object: 'page', entry: [{ id: PAGE, time: entryTime, messaging: [{ sender: { id: '7' }, recipient: { id: PAGE }, timestamp: 6, read: { watermark: 9 } }] }] })![0]
+    expect(metaChangeKey(APP, read(1))).toBe(metaChangeKey(APP, read(2)))
+    // A state with no event id (fatigue HIGH again next week) is a new change when Meta sends it at another time.
+    const fatigue = (time: number) => metaWebhookChanges({ object: 'ad_account', entry: [{ id: ACT, time, changes: [{ field: 'creative_fatigue', value: { adgroup_id: '1', creative_fatigue_level: 'HIGH' } }] }] })![0]
+    expect(metaChangeKey(APP, fatigue(1))).not.toBe(metaChangeKey(APP, fatigue(2)))
+    // IG comments by their comment id.
+    const comment = (time: number) => metaWebhookChanges({ object: 'instagram', entry: [{ id: IG, time, changes: [{ field: 'comments', value: { comment_id: '1790000000000001', text: 'x' } }] }] })![0]
+    expect(metaChangeKey(APP, comment(1))).toBe(metaChangeKey(APP, comment(2)))
   })
 
   it('a change has one delivery key across retries and batches; another change, another key', () => {
@@ -127,7 +150,7 @@ describe('the alerts inbox', () => {
   const payload = (object: string, field: string, value: Record<string, unknown>, entryId = ACT) => ({ appId: APP, object, entryId, field, time: 1, value })
   it('an object with issues: a warning naming the object and Meta\'s summary, deduped per object', () => {
     const n = metaWebhookNotice(payload('ad_account', 'with_issues_ad_objects', { id: '120000000000301', level: 'AD', error_code: '567', error_summary: 'Rejected' }))!
-    expect(n).toMatchObject({ kind: 'meta-ads-object-issue', severity: 'warn', entityType: 'meta-ad-object', entityId: `${ACT}~120000000000301`, href: '/marketing/ads/meta' })
+    expect(n).toMatchObject({ kind: 'meta-ads-object-issue', severity: 'warn', entityType: 'meta-ad-object', entityId: `${ACT}~120000000000301~issue~567`, href: '/marketing/ads/meta' })
     expect(n.body).toContain('ad 120000000000301')
     expect(n.body).toContain('"Rejected"')
   })
@@ -143,7 +166,7 @@ describe('the alerts inbox', () => {
     expect(metaWebhookNotice(payload('ad_account', 'ads_async_creation_request', { status: 'FAILED', result: { error_code: 100 } }))?.severity).toBe('warn')
   })
   it('the account status in Meta\'s words; disabled is danger, active again info', () => {
-    expect(metaWebhookNotice(payload('application', 'ad_account', { id: ACT, account_status: 2, disable_reason: 1 }, APP))).toMatchObject({ kind: 'meta-ads-account-status', severity: 'danger', entityId: ACT, title: 'Meta: the ad account is now disabled' })
+    expect(metaWebhookNotice(payload('application', 'ad_account', { id: ACT, account_status: 2, disable_reason: 1 }, APP))).toMatchObject({ kind: 'meta-ads-account-status', severity: 'danger', entityId: `${ACT}~status~2`, title: 'Meta: the ad account is now disabled' })
     expect(metaWebhookNotice(payload('application', 'ad_account', { id: ACT, account_status: 1 }, APP))?.severity).toBe('info')
   })
   it('a fired alert subscription names the field, never an amount', () => {
@@ -152,9 +175,19 @@ describe('the alerts inbox', () => {
     expect(n.body).toContain('daily_budget')
     expect(n.body).not.toMatch(/1500|15\.00/)
   })
-  it('messaging policy enforcement is danger on the Page or Instagram account; a lead names its form and ad', () => {
-    expect(metaWebhookNotice(payload('page', 'messaging_policy_enforcement', { policy_enforcement: { action: 'block', reason: 'spam' } }, PAGE))).toMatchObject({ kind: 'meta-messaging-policy', severity: 'danger', entityType: 'meta-page', entityId: PAGE })
+  it('review F1 — a state is in the subject, so opposite states never hide each other', () => {
+    const fatigue = (level: string) => metaWebhookNotice(payload('ad_account', 'creative_fatigue', { adgroup_id: '1', creative_fatigue_level: level }))!.entityId
+    expect(fatigue('MEDIUM')).not.toBe(fatigue('HIGH'))
+    const feed = (status: string) => metaWebhookNotice(payload('catalog', 'product_feed', { product_feed_id: '9', status }, '120000000000777'))!.entityId
+    expect(feed('Finished')).not.toBe(feed('Failed'))
+    expect(metaWebhookNotice(payload('application', 'ad_account', { id: ACT, account_status: 1 }, APP))!.entityId).not.toBe(metaWebhookNotice(payload('application', 'ad_account', { id: ACT, account_status: 2 }, APP))!.entityId)
+  })
+  it('review B5 — messaging policy: block is danger, warning is warn, unblock is info; on the Page or Instagram account; a lead names its form and ad', () => {
+    expect(metaWebhookNotice(payload('page', 'messaging_policy_enforcement', { policy_enforcement: { action: 'block', reason: 'spam' } }, PAGE))).toMatchObject({ kind: 'meta-messaging-policy', severity: 'danger', entityType: 'meta-page', entityId: `${PAGE}~policy~block` })
+    expect(metaWebhookNotice(payload('page', 'messaging_policy_enforcement', { policy_enforcement: { action: 'warning', reason: 'spam' } }, PAGE))?.severity).toBe('warn')
+    expect(metaWebhookNotice(payload('page', 'messaging_policy_enforcement', { policy_enforcement: { action: 'unblock' } }, PAGE))).toMatchObject({ severity: 'info', entityId: `${PAGE}~policy~unblock` })
     expect(metaWebhookNotice(payload('instagram', 'messaging_policy_enforcement', {}, IG))?.entityType).toBe('meta-instagram')
+    expect(metaSignatureNotice(APP)).toMatchObject({ kind: 'meta-webhook-signature', severity: 'danger', entityId: `${APP}~signature` })
     expect(metaWebhookNotice(payload('page', 'leadgen', { form_id: '120000000000888', ad_id: '120000000000301' }, PAGE))?.body).toMatch(/form 120000000000888 from ad 120000000000301/)
   })
   it('a catalog batch says that requests with errors were not saved', () => {
@@ -176,7 +209,7 @@ describe('the topic table', () => {
   })
 
   it('no topic keeps what a person wrote', () => {
-    const forbidden = /(^|\.)(text|message|from|username|name|sender|recipient|current_value|email|phone)$/
+    const forbidden = /(^|\.)(text|message|from|username|name|sender|recipient|current_value|email|phone|photo_url|video_url)$/
     const kept = Object.entries(META_WEBHOOK_TOPICS).flatMap(([topic, t]) => t.keep.filter((k) => forbidden.test(k)).map((k) => `${topic}:${k}`))
     expect(kept).toEqual([])
   })

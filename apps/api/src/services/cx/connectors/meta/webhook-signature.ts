@@ -39,9 +39,9 @@ export function metaVerifyTokenOk(given: unknown, expected: string | undefined |
 
 /**
  * A challenge Nexus may echo: Meta's pages call it "an int" (Graph getting started) and "a random string" (ads webhooks
- * get started). Echoed only after the verify token matched, as text/plain; anything with spaces, controls or over 512
- * characters is refused.
+ * get started). Echoed only after the verify token matched, as text/plain; only letters, digits, `.`, `_` and `-`, at
+ * most 512 of them.
  */
 export function metaChallengeOf(value: unknown): string | null {
-  return typeof value === 'string' && /^[\x21-\x7e]{1,512}$/.test(value) ? value : null
+  return typeof value === 'string' && /^[A-Za-z0-9._-]{1,512}$/.test(value) ? value : null
 }

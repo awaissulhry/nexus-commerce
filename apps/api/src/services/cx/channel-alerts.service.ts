@@ -115,6 +115,8 @@ export const CHANNEL_ALERT_KINDS = [
   'meta-lead-received',
   'meta-catalog-update',
   'meta-product-review',
+  // Review F2: deliveries for the business's Meta app that its stored app secret does not sign.
+  'meta-webhook-signature',
 ] as const
 
 export type ChannelAlertKind = (typeof CHANNEL_ALERT_KINDS)[number]
