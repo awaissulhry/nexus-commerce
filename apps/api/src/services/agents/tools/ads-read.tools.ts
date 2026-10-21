@@ -44,6 +44,11 @@
  * keywords, negatives, search terms and the brand split, asset groups, products, what Google does on its own, Google's
  * recommendations, the alerts and the disapprovals — each the page's own read service (google-ads/read-detail,
  * read-search-terms, read-acts and alerts services), never a query of its own. Still read only.
+ *
+ * Meta ads step 44 — `ad-changes` also takes `channel: meta`: the changes Nexus made on Meta, from the Meta change kit's
+ * own records (AgentChange of every Meta change tool: what it replaced and wrote, stamped with the Meta ad account), with
+ * who decided it, the plan step it ran as, and whether undo-change can still put it back. Changes made outside Nexus (Ads
+ * Manager, Meta's own rules, another tool) are Meta's history: meta-activity-log reads it live.
  */
 
 import { adProductOf, isLifetimeBudget, SPONSORED_DISPLAY } from '@nexus/shared/ads-ad-product'
@@ -247,6 +252,10 @@ const CHANNELS = ['amazon', 'ebay'] as const
 type AdChannel = (typeof CHANNELS)[number]
 const channelArg = z.preprocess(lower, z.enum(CHANNELS)).default('amazon')
   .describe('amazon (default) or ebay (Promoted Listings)')
+/** Meta ads step 44 — ad-changes also lists the changes Nexus made on Meta (the kit's records); the other reads stay as they are. */
+const CHANGE_CHANNELS = ['amazon', 'ebay', 'meta'] as const
+const changeChannelArg = z.preprocess(lower, z.enum(CHANGE_CHANNELS)).default('amazon')
+  .describe('amazon (default), ebay (Promoted Listings) or meta (the changes Nexus made on Meta)')
 /** Google Ads step 1a — the reads that also take google (ads-overview, ad-campaigns); the others stay amazon | ebay. */
 const READ_CHANNELS = ['amazon', 'ebay', 'google'] as const
 type ReadChannel = (typeof READ_CHANNELS)[number]
@@ -1528,8 +1537,8 @@ const adChanges: AgentTool = {
   requires: [F.adsView],
   restrictedFields: AD_MONEY,
   input: z.object({
-    channel: channelArg,
-    campaignId: z.string().trim().min(1).max(64).optional().describe('only this campaign: its Nexus id (campaignId in ad-campaigns, for the channel asked)'),
+    channel: changeChannelArg,
+    campaignId: z.string().trim().min(1).max(64).optional().describe('only this campaign: its Nexus id (campaignId in ad-campaigns, for the channel asked; not for meta)'),
     targetId: z.string().trim().min(1).max(64).optional().describe('Amazon only: this target, by its Nexus id (targetId in ad-targets)'),
     source: z.preprocess(lower, z.enum(CHANGE_SOURCES)).optional()
       .describe('only changes by automation (rules, schedules, engines), an operator, the system, or made outside Nexus'),
@@ -1544,10 +1553,17 @@ const adChanges: AgentTool = {
     + 'writer\'s reason and evidence), whether it reached Amazon (delivery), and whether it can be undone '
     + '(undoActionLogId) or why not. Filter by campaignId, targetId or source.'
     + ' eBay (channel ebay): the eBay ad audit trail — each write, its campaign, who made it (operator, automation, or '
-    + 'accepted from eBay), what it replaced and wrote, and whether eBay took it (or it ran in sandbox).' + MONEY_WORDS
+    + 'accepted from eBay), what it replaced and wrote, and whether eBay took it (or it ran in sandbox).'
+    + ' Meta (channel meta): the changes Nexus made on Meta, newest first — each Meta change tool\'s own record: when, which '
+    + 'tool (action), who decided it (decidedVia: in Nexus, or "no-approval" when the business\'s switch ran it in the name of '
+    + 'the person who asked), the plan step it ran as, the Meta ad account, its summary (note), what it replaced and wrote, '
+    + 'and whether undo-change can still put it back (undo, with changeId). Every Meta change in Nexus runs as a person\'s '
+    + 'approval (source operator); changes made outside Nexus (Ads Manager, Meta\'s own rules) are read with '
+    + 'meta-activity-log.' + MONEY_WORDS
     + ' Returns { items, nextCursor }; a page can hold fewer rows than limit to stay within a size limit: follow nextCursor for the rest.',
   handler: (args) => listTool('ad-changes', async () => {
     if ((args as { channel?: string }).channel === 'ebay') return ebayChanges(args, scopeOf('ad-changes', args))
+    if ((args as { channel?: string }).channel === 'meta') return metaChanges(args, scopeOf('ad-changes', args))
     const a = args as { campaignId?: string; targetId?: string; source?: ChangeSource; days: number; limit?: number; cursor?: string }
     const size = pageSize(a.limit)
     const scope = scopeOf('ad-changes', args)
@@ -1670,6 +1686,113 @@ async function ebayChanges(args: Record<string, unknown>, scope: string): Promis
       }),
       nextCursor: page.nextCursor,
       ...(page.nextCursor ? { more: moreHint(page.items.length, null, page.cut, 'campaignId or source') } : {}),
+    },
+  }
+}
+
+// ── ad-changes, Meta (step 44): the changes Nexus made on Meta ───────────────────────────────────────
+
+const META_OUTSIDE = 'Changes made outside Nexus (in Ads Manager, by Meta\'s own rules or another tool) are not here: meta-activity-log reads the Meta ad account\'s whole history live.'
+const LIVE_APPROVALS = ['pending', 'scheduled', 'executing']
+
+/** The Meta change tools, by the registry (loaded when asked: the registry imports this file). Name → title. */
+async function metaChangeTools(): Promise<Map<string, string>> {
+  const { listTools } = await import('../tool-registry.js')
+  return new Map(listTools()
+    .filter((t) => !t.readOnly && !t.control && !!t.execute && t.category === 'advertising' && /(^|-)meta-/.test(t.name))
+    .map((t) => [t.name, t.title]))
+}
+
+/** A preview's own summary (a Meta change's draft summary), capped; null when it has none. */
+function summaryOf(preview: unknown): string | null {
+  const summary = (preview as { summary?: unknown } | null)?.summary
+  return typeof summary === 'string' && summary.trim() ? (summary.length > 500 ? `${summary.slice(0, 499)}…` : summary) : null
+}
+
+/**
+ * Meta ads step 44 — the Meta change kit's records (AgentChange of every Meta change tool), newest first, keyset-paged by
+ * when it ran. What a change replaced and wrote, and its summary, are under money keys (a budget, a bid, a spending limit
+ * can be in them): a person without the ad-spend money permission gets the rest.
+ */
+async function metaChanges(args: Record<string, unknown>, scope: string): Promise<ToolResult> {
+  const a = args as { campaignId?: string; targetId?: string; source?: ChangeSource; days: number; limit?: number; cursor?: string }
+  if (a.campaignId || a.targetId) {
+    return { ok: false, error: 'campaignId and targetId name Amazon or eBay objects: Meta changes are listed by time and source. meta-activity-log reads one Meta campaign\'s, ad set\'s or ad\'s whole history.' }
+  }
+  const from = new Date(Date.now() - a.days * 86_400_000)
+  const base = { channel: 'meta' as const, window: { from: day(from), days: a.days }, outsideNexus: META_OUTSIDE }
+  if (a.source && a.source !== 'operator') {
+    return {
+      ok: true,
+      data: {
+        ...base, dataAsOf: null, items: [], nextCursor: null,
+        note: a.source === 'external'
+          ? 'Nexus records only the Meta changes made through it. meta-activity-log reads what was changed outside Nexus.'
+          : 'Nexus makes no Meta change by itself: every Meta change runs as a person\'s approval (source operator).',
+      },
+    }
+  }
+  const size = pageSize(a.limit)
+  const start = decodeCursor(scope, a.cursor)
+  const after = start ? new Date(String(start.values[0])) : null
+  if (after && Number.isNaN(after.getTime())) throw new InvalidCursorError()
+  const tools = await metaChangeTools()
+  const rows = await prisma.agentChange.findMany({
+    where: {
+      toolName: { in: [...tools.keys()] },
+      executedAt: { gte: from },
+      ...(after && start ? { OR: [{ executedAt: { lt: after } }, { executedAt: after, id: { gt: start.id } }] } : {}),
+    },
+    orderBy: [{ executedAt: 'desc' }, { id: 'asc' }],
+    take: size + 1,
+    select: {
+      id: true, toolName: true, executedAt: true, reversibility: true, before: true, after: true, undoneAt: true, undoneByApprovalId: true,
+      approvalId: true, planStepId: true, approval: { select: { decisionVia: true, decidedBy: true, preview: true } },
+    },
+  })
+  const shown = rows.slice(0, size)
+  const stepIds = shown.map((r) => r.planStepId).filter((id): id is string => !!id)
+  const steps = stepIds.length ? await prisma.agentPlanStep.findMany({ where: { id: { in: stepIds } }, select: { id: true, position: true, preview: true } }) : []
+  const stepOf = new Map(steps.map((s) => [s.id, s]))
+  const undoIds = shown.map((r) => r.undoneByApprovalId).filter((id): id is string => !!id)
+  const liveUndos = new Set(undoIds.length
+    ? (await prisma.agentApproval.findMany({ where: { id: { in: undoIds }, status: { in: LIVE_APPROVALS } }, select: { id: true } })).map((x) => x.id)
+    : [])
+  const { undoStateOf } = await import('../claude-activity.service.js')
+  const positionOf = (r: (typeof shown)[number]): CursorPosition => ({ values: [r.executedAt.toISOString()], id: r.id })
+  const last = shown.at(-1)
+  const page = fitPage({ items: shown, nextCursor: rows.length > size && last ? encodeCursor(scope, positionOf(last)) : null }, scope, positionOf)
+  return {
+    ok: true,
+    data: {
+      ...base,
+      dataAsOf: iso(rows[0]?.executedAt ?? null),
+      items: page.items.map((r) => {
+        const step = r.planStepId ? stepOf.get(r.planStepId) : undefined
+        const stamp = (r.after ?? r.before ?? {}) as { adAccountId?: unknown }
+        const undo = undoStateOf(r, liveUndos)
+        const decidedBy = typeof r.approval?.decidedBy === 'string' ? r.approval.decidedBy.slice(0, 120) : null
+        return {
+          changeId: r.id,
+          at: iso(r.executedAt),
+          source: 'operator' as const,
+          actor: decidedBy,
+          decidedVia: r.approval?.decisionVia ?? null,
+          action: r.toolName,
+          title: tools.get(r.toolName) ?? null,
+          adAccountId: typeof stamp.adAccountId === 'string' ? stamp.adAccountId : null,
+          approvalId: r.approvalId,
+          ...(step ? { planStep: step.position } : {}),
+          note: summaryOf(step ? step.preview : r.approval?.preview),
+          replaced: r.before,
+          wrote: r.after,
+          undoable: undo === 'possible',
+          undo,
+          ...(r.undoneAt ? { undoneAt: iso(r.undoneAt) } : {}),
+        }
+      }),
+      nextCursor: page.nextCursor,
+      ...(page.nextCursor ? { more: moreHint(page.items.length, null, page.cut, 'days or source') } : {}),
     },
   }
 }

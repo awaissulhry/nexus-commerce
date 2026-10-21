@@ -1488,6 +1488,13 @@ afterAll(async () => {
   await database?.close()
 }, 30_000)
 
+/**
+ * Meta ads step 44 — the two checks below run EVERY registered tool (twice each, and the business check once per id set)
+ * against PGlite: past 300 tools they take well over vitest's 10 s default on a loaded machine. Each gets this much time;
+ * what they check is unchanged.
+ */
+const EVERY_TOOL_TIMEOUT = 120_000
+
 describe('MCP.2 — coverage', () => {
   it('every registered tool is exercised here or is an AI draft', () => {
     const missing = listTools()
@@ -1549,7 +1556,7 @@ describe('MCP.2 — money a person may not see never comes back', () => {
       if (JSON.stringify(stripped) !== text) problems.push(`${tool.name}: differs beyond the money`)
     }
     expect(problems).toEqual([])
-  })
+  }, EVERY_TOOL_TIMEOUT)
 
   it('a revenue grant reveals revenue, and only revenue', async () => {
     const revenueOnly = principal(A, [...EVERY_ACTION, FIELDS.financialsRevenueView])
@@ -1578,7 +1585,7 @@ describe('MCP.2 — a tool reads only the business it runs in', () => {
       }
     }
     expect(leaks).toEqual([])
-  })
+  }, EVERY_TOOL_TIMEOUT)
 
   it('business B’s ids are simply not found from business A', async () => {
     const out = await run(cleared(A), 'order-detail', ARGS['order-detail'](seeded[B]))

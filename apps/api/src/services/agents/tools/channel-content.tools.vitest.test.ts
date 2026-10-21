@@ -45,8 +45,14 @@ const shop = vi.hoisted(() => ({
   refuse: null as null | string,
   sheetCalls: [] as Array<Record<string, unknown>>,
   sheet: null as null | ((input: any) => any),
+  // Meta ads step 44 — the store's sales channels, as Nexus's copy of its field list names them.
+  publications: undefined as undefined | Array<{ id: string; name: string; supportsFuturePublishing: boolean }>,
 }))
 vi.mock('../../pim/information-sheet.js', () => ({ getInformationSheet: async (input: any) => { shop.sheetCalls.push(input); return shop.sheet!(input) } }))
+vi.mock('../../pim/channel-specs/shopify.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../pim/channel-specs/shopify.js')>()),
+  readShopifyDisplaySchema: async () => ({ definitions: [], metaobjectDefinitions: [], locales: [], types: [], revision: 'r1', ...(shop.publications ? { publications: shop.publications } : {}) }),
+}))
 vi.mock('../../shopify/channel-sheet.service.js', () => ({
   saveShopifySheetCells: async (productId: string, scope: Record<string, unknown>, body: any, actor: string | null) => {
     shop.saves.push({ productId, scope, body, actor })
@@ -75,6 +81,7 @@ vi.mock('../../pim/readiness-index.service.js', async () => (await import('../..
 import { callTool, ToolAccessError, type UserPrincipal } from '../call-tool.js'
 import { runOrQueueTool } from '../approval-gate.service.js'
 import { checkStaleness, commitScheduledApproval, MATERIAL_PREVIEW_FIELDS, scheduleApproval } from '../../agent-fleet/approval-inbox.service.js'
+import { getTool } from '../tool-registry.js'
 
 const A = LEGACY_WORKSPACE_ID
 const business = { workspaceId: A, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -111,6 +118,7 @@ async function preview(args: Record<string, unknown>, tool = 'set-shopify-conten
 const productOf = (id: string) => inside(() => db().product.findUniqueOrThrow({ where: { id }, include: { translations: true } }))
 const german = async (id: string) => (await productOf(id)).translations.find((row) => row.language === 'de')
 const queueRows = (ids: string[]) => inside(() => db().outboundSyncQueue.count({ where: { productId: { in: ids } } }))
+const getToolInput = () => getTool('set-shopify-content')!.input
 
 
 const STORE_PRODUCT = 'gid://shopify/Product/9001'
@@ -125,6 +133,16 @@ const COLUMNS = [
   column('tags', 'Tags', { type: 'list.single_line_text_field' }),
   column('price', 'Price', { type: 'money', currency: 'EUR' }),
   column('metafield:PRODUCT:custom.pockets', 'Pockets', { discovery: 'definition', type: 'number_integer', definition: { id: 'def-1', ownerType: 'PRODUCT', namespace: 'custom', key: 'pockets', name: 'Pockets', type: 'number_integer', validations: [], access: {} } }),
+  // Meta ads step 44 — the store's Sales channels (made-up publication ids).
+  column('salesChannels', 'Sales channels', { type: 'publication', group: 'Publishing' }),
+]
+const ONLINE = 'gid://shopify/Publication/1001'
+const FB_IG = 'gid://shopify/Publication/1002'
+const POS = 'gid://shopify/Publication/1003'
+const STORE_CHANNELS = [
+  { id: ONLINE, name: 'Online Store', supportsFuturePublishing: true },
+  { id: FB_IG, name: 'Facebook & Instagram', supportsFuturePublishing: false },
+  { id: POS, name: 'Point of Sale', supportsFuturePublishing: false },
 ]
 let family = { id: '', sku: '' }
 function shopifySheet(input: { productId: string }) {
@@ -180,7 +198,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   shop.schemaMissing = []
-  shop.cells = { vendor: { value: 'Store value', nexusDraft: false }, 'metafield:PRODUCT:custom.pockets': { value: '2', nexusDraft: false } }
+  shop.cells = { vendor: { value: 'Store value', nexusDraft: false }, 'metafield:PRODUCT:custom.pockets': { value: '2', nexusDraft: false },
+    salesChannels: { value: JSON.stringify([{ publicationId: ONLINE, publishDate: null }, { publicationId: POS, publishDate: null }]), nexusDraft: false } }
+  shop.publications = STORE_CHANNELS
   shop.saves = []
   shop.refuse = null
 })
@@ -298,6 +318,62 @@ describe('set-shopify-content', { timeout: 30_000 }, () => {
     expect(await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: undo.approvalId! } }))).toMatchObject({ toolName: 'set-shopify-content', args: { product: family.id, reset: ['vendor'] } })
     expect(await approveAndRun(undo.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
     expect(shop.cells.vendor).toEqual({ value: 'Store value', nexusDraft: false })
+  })
+})
+
+describe('Meta ads step 44 — set-shopify-content facebookInstagram: the Shopify-fed Meta catalog (master CT-193)', { timeout: 30_000 }, () => {
+  it('publish: only the Facebook & Instagram publication is added to the draft\'s Sales channels, by name in the preview; approved, the writer gets the cell; undo takes it out again', async () => {
+    const { approvalId, preview: p } = await queued({ product: family.sku, facebookInstagram: 'publish' })
+    expect(p).toMatchObject({
+      action: 'set-shopify-content', listing: 'Shopify · TEST-SKU-T11',
+      changes: { salesChannels: { from: ['Online Store', 'Point of Sale'], to: ['Online Store', 'Facebook & Instagram', 'Point of Sale'] } },
+      facebookInstagram: { op: 'publish', channel: 'Facebook & Instagram', publicationId: FB_IG },
+      note: expect.stringMatching(/Review and synchronize.*Only the "Facebook & Instagram" sales channel is added; every other channel stays as it is.*Meta catalog/),
+    })
+    expect(shop.saves).toHaveLength(0)
+    expect(await inside(() => checkStaleness(approvalId))).toEqual({ stale: false, why: null })
+    expect(await approveAndRun(approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(shop.saves).toHaveLength(1)
+    expect(shop.saves[0].body.cells).toEqual([{
+      colId: 'salesChannels', receiptKey: 'salesChannels', ownerId: STORE_PRODUCT, fieldId: 'salesChannels', token: expect.stringMatching(/^token-\d+$/), baseline: 'Store value',
+      value: JSON.stringify([{ publicationId: ONLINE, publishDate: null }, { publicationId: FB_IG, publishDate: null }, { publicationId: POS, publishDate: null }]), intent: 'set',
+    }])
+    const change = await inside(() => db().agentChange.findFirstOrThrow({ where: { approvalId } }))
+    expect(change).toMatchObject({ toolName: 'set-shopify-content', before: { facebookInstagram: 'publish', fields: { salesChannels: { nexusDraft: false } } }, after: { facebookInstagram: 'publish', fields: { salesChannels: { nexusDraft: true } } } })
+    // Undo: the other way, that publication only.
+    const undo = await ask('undo-change', { approvalId })
+    expect(undo, undo.error).toMatchObject({ ok: true, mode: 'queued' })
+    expect(await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: undo.approvalId! } }))).toMatchObject({ toolName: 'set-shopify-content', args: { product: family.id, facebookInstagram: 'unpublish' } })
+    expect(await approveAndRun(undo.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
+    expect(JSON.parse(String(shop.cells.salesChannels.value))).toEqual([{ publicationId: ONLINE, publishDate: null }, { publicationId: POS, publishDate: null }])
+  })
+
+  it('unpublish keeps every other channel and its schedule', async () => {
+    shop.cells.salesChannels = { value: JSON.stringify([{ publicationId: ONLINE, publishDate: '2026-11-01T08:00:00Z' }, { publicationId: FB_IG, publishDate: null }]), nexusDraft: false }
+    const out = await preview({ product: family.id, facebookInstagram: 'unpublish' })
+    expect(out, out.error).toMatchObject({ ok: true, preview: { changes: { salesChannels: { from: ['Online Store', 'Facebook & Instagram'], to: ['Online Store'] } } } })
+    const { approvalId } = await queued({ product: family.id, facebookInstagram: 'unpublish' })
+    expect(await approveAndRun(approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(shop.saves.at(-1)!.body.cells[0].value).toBe(JSON.stringify([{ publicationId: ONLINE, publishDate: '2026-11-01T08:00:00Z' }]))
+  })
+
+  it('refused in words: already so, no such channel, two of them, channels not visible, asked with fields, the Sales channels field through fields', async () => {
+    shop.cells.salesChannels = { value: JSON.stringify([{ publicationId: FB_IG, publishDate: null }]), nexusDraft: true }
+    expect(await preview({ product: family.id, facebookInstagram: 'publish' })).toMatchObject({ ok: false, error: expect.stringMatching(/^Nothing to change: TEST-SKU-T11 is already in the store's Facebook & Instagram sales channel \(in the Nexus draft\)/) })
+    shop.cells.salesChannels = { value: JSON.stringify([]), nexusDraft: false }
+    expect(await preview({ product: family.id, facebookInstagram: 'unpublish' })).toMatchObject({ ok: false, error: expect.stringMatching(/^Nothing to change: TEST-SKU-T11 is not in/) })
+    shop.publications = STORE_CHANNELS.filter((c) => c.id !== FB_IG)
+    expect(await preview({ product: family.id, facebookInstagram: 'publish' })).toMatchObject({ ok: false, error: expect.stringMatching(/has no Facebook & Instagram sales channel.*Nexus does not/) })
+    shop.publications = [...STORE_CHANNELS, { id: 'gid://shopify/Publication/1004', name: 'Facebook and Instagram (old)', supportsFuturePublishing: false }]
+    expect(await preview({ product: family.id, facebookInstagram: 'publish' })).toMatchObject({ ok: false, error: expect.stringMatching(/2 sales channels named like Facebook & Instagram.*does not guess/) })
+    shop.publications = undefined
+    expect(await preview({ product: family.id, facebookInstagram: 'publish' })).toMatchObject({ ok: false, error: expect.stringMatching(/lacks read_publications/) })
+    shop.publications = STORE_CHANNELS
+    expect(await preview({ product: family.id, facebookInstagram: 'publish', fields: { vendor: 'X' } })).toMatchObject({ ok: false, error: expect.stringMatching(/facebookInstagram is asked alone/) })
+    // The Sales channels field itself is never set through fields: only facebookInstagram changes it, one publication.
+    expect(await preview({ product: family.id, fields: { salesChannels: '[]' } })).toMatchObject({ ok: false, error: expect.stringMatching(/salesChannels: a listing setting .*\(the Facebook & Instagram channel: facebookInstagram\)/) })
+    expect(() => getToolInput().parse({ product: family.id, facebookInstagram: 'remove' })).toThrow()
+    expect(shop.saves).toHaveLength(0)
   })
 })
 
