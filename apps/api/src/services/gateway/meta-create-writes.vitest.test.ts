@@ -349,6 +349,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/change-remove.ts': 1, // step 22: metaRemoveDraft's one delete request builder (explicit ask)
       'services/gateway/meta-labels-rules.ts': 1, // step 21: the adlabel.delete rule (a judge)
       'services/marketing/meta-ads/change-labels.ts': 1, // step 21: labelsDraft's label delete (explicit ask: confirmDelete)
+      'services/gateway/meta-optimize-rules.ts': 1, // step 28: the pageVideoTest.delete rule (a judge)
+      'services/marketing/meta-ads/change-experiments.ts': 1, // step 28: a concluded Page video test's delete (set-meta-experiment)
       'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.

@@ -33,7 +33,7 @@ import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock
 import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade, metaChosenAdAccountOf, metaChosenInstagramOf, metaChosenPageOf, metaStoredObject } from './account.js'
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
-import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite, type MetaLabelsKind, type MetaRemoveKind } from './meta-calls.js'
+import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWriteBodyId } from './meta-calls.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
@@ -130,6 +130,8 @@ export interface GatewayRequest {
    * the change otherwise, so the write allow-list is literally a campaign, an ad set or an ad — never a creative or a Page.
    */
   metaObjectKind?: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
+    // Meta step 28: a new study's portfolio, a study, a Page, a Page video test (meta-optimize-owner.ts confirms each).
+    | MetaOptimizeKind
   /**
    * Meta step 18: a change of a budget schedule (high-demand period, `metaObjectKind: 'highdemandperiod'`) names the
    * campaign or ad set it belongs to; the gateway confirms that object is of the chosen ad account AND lists the period
@@ -666,7 +668,7 @@ const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudie
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   // Step 19 — a create (and Meta's check of one: validate_only is documented on creates) names the ad account itself: it
   // goes only to act_<the account this business chose through this connection>, never another.
@@ -674,6 +676,11 @@ async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, ki
     const chosen = await metaChosenAdAccountOf(connectionId)
     if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus creates nothing on Meta.' }
     return id === `act_${chosen}` ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: a create goes only to the Meta ad account this business chose through this connection.' }
+  }
+  // Step 28 — a new study's portfolio, a study, a Page, a Page video test (meta-optimize-owner.ts).
+  if (kind === 'business' || kind === 'adstudy' || kind === 'page' || kind === 'pagevideotest') {
+    const { metaOptimizeOwnerProblem } = await import('./meta-optimize-owner.js')
+    return metaOptimizeOwnerProblem(connectionId, write, kind, metaOwnerIo(connectionId, write))
   }
   // Step 18 — a budget schedule: its campaign or ad set first, then the period among that object's own.
   if (kind === 'highdemandperiod') return metaPeriodOwnerProblem(connectionId, write, parent)
@@ -804,6 +811,7 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
   if (!write.ids?.length) return null
   if (write.ids.length > 150) return { code: 'META_WRITE_NOT_ALLOWED', sentence: 'Nothing was sent to Meta: a change names at most 150 objects inside its body.' }
   let pixels: Set<string> | null | undefined
+  let optimizeCheck: ((inner: MetaWriteBodyId) => Promise<{ code: string; sentence: string } | null>) | undefined
   // Step 21 — each of the chosen ad account's own lists read once per change.
   const accountLists = new Map<MetaAccountListKind, Set<string> | null>()
   for (const inner of write.ids) {
@@ -850,11 +858,40 @@ async function metaBodyIdsProblem(connectionId: string, write: MetaJudgedWrite):
       if (!pixels?.has(inner.id)) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: pixel ${inner.id} is not one Nexus can confirm among the chosen ad account's own pixels.` }
       continue
     }
+    // Step 28 — an ad set or ad of a recommendation, a lift cell's ad account, a viewer, a Page video, a study's own cell
+    // (a custom conversion is step 19's check above).
+    if (inner.kind === 'adsetorad' || inner.kind === 'adaccount' || inner.kind === 'person' || inner.kind === 'pagevideo' || inner.kind === 'studycell') {
+      optimizeCheck ??= (await import('./meta-optimize-owner.js')).metaOptimizeBodyChecker(connectionId, write, metaOwnerIo(connectionId, write))
+      const problem = await optimizeCheck(inner)
+      if (problem) return problem
+      continue
+    }
     // Step 22 — a video inside a body (the video a library removal names): listed in the chosen ad account's library.
     const problem = await metaOwnerProblem(connectionId, { ...write, objectId: inner.id, check: false }, inner.kind)
     if (problem) return { code: problem.code, sentence: problem.sentence.replace(/^Nothing was sent to Meta: /, `Nothing was sent to Meta: inside this change, `) }
   }
   return null
+}
+
+/**
+ * Meta step 28 — what meta-optimize-owner.ts's checks read through this gateway: the chosen ad account, one GET (null
+ * unless Meta answered it with a success), and the campaign / ad set / ad check above.
+ */
+function metaOwnerIo(connectionId: string, write: MetaJudgedWrite): import('./meta-optimize-owner.js').MetaOwnerIo {
+  return {
+    chosenAdAccount: () => metaChosenAdAccountOf(connectionId),
+    read: async (path, query) => {
+      const url = new URL(`${metaGraphBase()}/${path}`)
+      for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value)
+      try {
+        const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+        return answer.ok ? answer.json<Record<string, unknown>>() : null
+      } catch {
+        return null
+      }
+    },
+    objectProblem: (id, kind) => metaOwnerProblem(connectionId, { ...write, objectId: id, check: false }, kind),
+  }
 }
 
 /** Meta step 21 — the chosen ad account's own lists a change's object or body id must be on. */
