@@ -29,7 +29,11 @@ const ADSPEND = FIELDS.financialsAdspendView
 /** Each tool's own money keys (minor units of the account currency, or Meta's own units where the key says AsMeta). */
 export const RECOMMENDATION_MONEY = { budgetThenCents: ADSPEND, budgetNowCents: ADSPEND, moneyTextAsMeta: ADSPEND } as const
 export const EXPERIMENT_MONEY = { moneyAsMeta: ADSPEND, snapshotsAsMeta: ADSPEND } as const
-export const RULE_MONEY = { valueCents: ADSPEND, amountCents: ADSPEND, limitCents: ADSPEND, targetValueCents: ADSPEND, oldValueCents: ADSPEND, newValueCents: ADSPEND } as const
+export const RULE_MONEY = {
+  valueCents: ADSPEND, amountCents: ADSPEND, limitCents: ADSPEND, targetValueCents: ADSPEND, oldValueCents: ADSPEND, newValueCents: ADSPEND,
+  // Review fix N1 — the value of every rule field not on Nexus's plain list (ROAS, ratios of spend, anything new).
+  valueAsMeta: ADSPEND, targetValueAsMeta: ADSPEND, oldValueAsMeta: ADSPEND, newValueAsMeta: ADSPEND,
+} as const
 
 const lower = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v)
 const upper = (v: unknown) => (typeof v === 'string' ? v.trim().toUpperCase() : v)
@@ -211,7 +215,8 @@ const metaAdRulesTool: AgentTool = {
     + 'a POST request and Meta documents no read form, so it comes with set-meta-ad-rule (step 29). Making, changing, '
     + 'switching off, running or deleting a rule (set-meta-ad-rule, remove-meta-ad-rule) comes with a later Nexus step '
     + '(step 29). Filters Nexus applies itself read up to 10 pages and say so when more may match. Read only; money in '
-    + 'conditions, actions and history in minor units (cents) of the account currency.',
+    + 'conditions, actions and history in minor units (cents) of the account currency; ROAS and any value Nexus does not '
+    + 'know as Meta gives it (…AsMeta); both need the ad-spend money permission.',
   async handler(args): Promise<ToolResult> {
     const input: RuleInput = {
       connectionId: str(args.connectionId),

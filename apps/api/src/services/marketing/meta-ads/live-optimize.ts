@@ -320,7 +320,7 @@ export function howToAct(type: string | null, hasSignature: boolean) {
  * the lift estimate sit under a restricted key (moneyTextAsMeta) instead.
  */
 const MONEY_TEXT_TYPES = new Set(['BUDGET_LIMITED', 'SCALE_GOOD_CAMPAIGN'])
-const isMoneyText = (type: string | null, name: string | null) => (!!type && MONEY_TEXT_TYPES.has(type)) || (!!name && /budget|scale_good/i.test(name))
+const isMoneyText = (type: string | null, name: string | null) => (!!type && (MONEY_TEXT_TYPES.has(type.toUpperCase()) || /budget|scale_good/i.test(type))) || (!!name && /budget|scale_good/i.test(name))
 
 /** One recommendation as Meta gives it (account or portfolio read), in Nexus's words. */
 function mapRecommendation(raw: Row, known: Map<string, { kind: string; name: string | null }>) {
@@ -480,7 +480,7 @@ export async function metaRecommendations(input: RecommendationInput) {
       try {
         read = await ask(to)
       } catch (err) {
-        if (!(err instanceof MetaReadError) || err.failure.code !== '100/5014023' || addDays(to, -1) < from) throw err
+        if (!(err instanceof MetaReadError) || !/(^|\/)5014023$/.test(err.failure.code ?? '') || addDays(to, -1) < from) throw err
         to = addDays(to, -1)
         movedBack = true
         read = await ask(to)
@@ -945,17 +945,45 @@ const HISTORY_ACTION_WORDS: Record<string, string> = {
  */
 export function isMoneyRuleField(field: string | null): boolean {
   if (!field) return false
-  const base = field.split(':').pop()!.split('.').pop()!.toLowerCase()
-  return /^(spent|today_spent|yesterday_spent|lifetime_spent|daily_budget|lifetime_budget|spend_cap|bid_amount|cpc|cpm|cpa|cpp|cost_per|cost_per_[a-z0-9_]+)$/.test(base)
+  return /^(spent|today_spent|yesterday_spent|lifetime_spent|daily_budget|lifetime_budget|spend_cap|bid_amount|cpc|cpm|cpa|cpp|cost_per|cost_per_[a-z0-9_]+)$/.test(ruleFieldBase(field))
 }
 
-/** One filter or trigger: its value, or (money) its amount in minor units under `valueCents`. */
+/** A rule field without its advanced window ("level.window:field") and its level prefix (ad. / adset. / campaign.). */
+function ruleFieldBase(field: string): string {
+  return field.split(':').pop()!.trim().toLowerCase().replace(/^(ad|adset|campaign)\./, '')
+}
+
+/**
+ * Review fix N1 — an ALLOW-list of the rule fields whose values are not money (evaluation-spec: the metadata filters that
+ * name objects, settings, times and statuses; the insights counts and rates; an app, offline or pixel event count; the
+ * status a run changed). Every other field — spend, budgets, bids, costs, ROAS, values, ratios of spend, anything new —
+ * keeps its value under a restricted key (…Cents in minor units for a known currency field, else …AsMeta as Meta gives it).
+ */
+const PLAIN_RULE_FIELDS: ReadonlySet<string> = new Set([
+  'id', 'entity_type', 'name', 'adlabel_ids', 'objective', 'start_time', 'stop_time', 'buying_type', 'billing_event', 'optimization_goal', 'is_autobid',
+  'created_time', 'updated_time', 'effective_status', 'status', 'configured_status', 'placement.page_types', 'budget_reset_period', 'hours_since_creation',
+  'estimated_budget_spending_percentage', 'audience_reached_percentage', 'active_time', 'current_time', 'time_preset', 'attribution_window',
+  'impressions', 'unique_impressions', 'lifetime_impressions', 'clicks', 'unique_clicks', 'results', 'ctr', 'link_ctr', 'result_rate', 'reach', 'frequency',
+  'leadgen', 'mobile_app_install', 'app_custom_event', 'offline_conversion', 'offsite_conversion', 'link_click', 'like', 'offsite_engagement', 'post',
+  'post_comment', 'post_engagement', 'post_like', 'post_reaction', 'view_content', 'video_play', 'vote',
+])
+export function isPlainRuleField(field: string | null): boolean {
+  if (!field) return false
+  const base = ruleFieldBase(field)
+  return PLAIN_RULE_FIELDS.has(base) || /^(app_custom_event|offline_conversion|offsite_conversion)\.[a-z0-9_]+$/.test(base)
+}
+
+/** One value of a rule field: plain (`value`), money in minor units (`valueCents`), or restricted as Meta gives it. */
+function ruleValue(field: string | null, value: unknown, currency: string | null, key: 'value' | 'targetValue' = 'value') {
+  if (isPlainRuleField(field)) return { [key]: graphSafe(value) }
+  if (isMoneyRuleField(field)) return { [`${key}Cents`]: centsOrRange(value, currency) }
+  return { [`${key}AsMeta`]: graphSafe(value) }
+}
+
+/** One filter or trigger: a plain value only for a field on the allow-list; every other value restricted. */
 function condition(raw: Row, currency: string | null) {
   const field = text(raw.field)
-  return {
-    field, operator: text(raw.operator),
-    ...(isMoneyRuleField(field) ? { valueCents: centsOrRange(raw.value, currency) } : { value: graphSafe(raw.value) }),
-  }
+  return { field, operator: text(raw.operator), ...ruleValue(field, raw.value, currency) }
 }
 
 /** A JSON value Meta may give as a string ('{"amount":…}'), read as an object. */
@@ -971,14 +999,16 @@ function executionOption(raw: Row, account: MetaChosenAccount) {
     const spec = objOrJson(value) ?? {}
     const unit = text(spec.unit)
     const target = text(spec.target_field)
+    // A target value is plain only for a field on the allow-list (a ROAS or cost target is restricted).
     const amount = target
-      ? (isMoneyRuleField(target) ? { targetValueCents: metaBudgetCents(spec.amount, account.currency) } : { targetValue: num(spec.amount) })
+      ? ruleValue(target, spec.amount, account.currency, 'targetValue')
       : unit === 'PERCENTAGE' ? { amountPercent: num(spec.amount) } : { amountCents: metaBudgetCents(spec.amount, account.currency) }
     return { option: 'change_spec', unit, targetField: target, ...amount, ...(spec.limit !== undefined && spec.limit !== null ? { limitCents: centsOrRange(spec.limit, account.currency) } : {}) }
   }
   if (field === 'user_ids') return { option: 'user_ids', people: idsOf(Array.isArray(value) ? value : [value]).map((id) => person(id, account)) }
   if (field === 'execution_count_limit' || field === 'action_frequency') return { option: field, value: num(value) }
-  return { option: field, operator: text(raw.operator), value: graphSafe(value) }
+  // Any other option (rebalance_spec, one Nexus does not know): restricted as Meta gives it.
+  return { option: field, operator: text(raw.operator), valueAsMeta: graphSafe(value) }
 }
 
 /** Could this rule raise spend when it runs (switch on, a budget or bid raise, or a change towards a target)? */
@@ -1031,11 +1061,15 @@ function mapHistory(raw: Row, account: MetaChosenAccount) {
     actions: arr(r.actions).map(obj).filter((a): a is Row => !!a).map((a) => {
       const field = text(a.field)
       const action = text(a.action)
+      // Review fix N1 — plain only for a field on the allow-list, and never for a budget or bid change.
+      const changedMoney = action === 'CHANGED_BUDGET' || action === 'CHANGED_BID'
       return {
         action, actionText: action ? HISTORY_ACTION_WORDS[action] ?? action : null, field,
         ...(isMoneyRuleField(field)
           ? { oldValueCents: metaBudgetCents(a.old_value, account.currency), newValueCents: metaBudgetCents(a.new_value, account.currency) }
-          : { oldValue: graphSafe(a.old_value ?? null), newValue: graphSafe(a.new_value ?? null) }),
+          : isPlainRuleField(field) && !changedMoney
+            ? { oldValue: graphSafe(a.old_value ?? null), newValue: graphSafe(a.new_value ?? null) }
+            : { oldValueAsMeta: graphSafe(a.old_value ?? null), newValueAsMeta: graphSafe(a.new_value ?? null) }),
       }
     }),
   }))

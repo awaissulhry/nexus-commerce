@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('../../../db.js', () => ({ default: {} }))
 vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => []) }))
 
-import { howToAct, isMoneyRuleField, mapResults, mapRule, metaBudgetCents, metaTime, studyState } from './live-optimize.js'
+import { howToAct, isMoneyRuleField, isPlainRuleField, mapResults, mapRule, metaBudgetCents, metaTime, studyState } from './live-optimize.js'
 import type { MetaChosenAccount } from './live.js'
 import { currencyExponent } from './money.js'
 
@@ -56,13 +56,21 @@ describe('metaTime and studyState', () => {
   })
 })
 
-describe('rules — money only under …Cents keys', () => {
+describe('rules — a plain value only for a known non-money field; money under …Cents, everything else …AsMeta', () => {
   it('knows which rule fields are money (spend, budgets, caps, bids, every cost metric; prefixed and advanced too)', () => {
     for (const f of ['spent', 'today_spent', 'lifetime_spent', 'adset.daily_budget', 'campaign.spend_cap', 'bid_amount', 'cpc', 'cpm', 'cpa', 'cost_per', 'cost_per_purchase_fb', 'campaign.28d_view_1d_click:lifetime_spent']) {
       expect(isMoneyRuleField(f), f).toBe(true)
     }
     for (const f of ['impressions', 'website_purchase_roas', 'daily_ratio_spent', 'entity_type', 'time_preset', 'app_custom_event.fb_mobile_spent_credits', 'frequency', null]) {
       expect(isMoneyRuleField(f), String(f)).toBe(false)
+    }
+  })
+  it('review fix N1 — the allow-list of plain rule fields: ROAS, ratios of spend and anything new are not on it', () => {
+    for (const f of ['entity_type', 'id', 'time_preset', 'attribution_window', 'hours_since_creation', 'impressions', 'reach', 'clicks', 'frequency', 'ctr', 'results', 'adset.effective_status', 'placement.page_types', 'offsite_conversion.fb_pixel_purchase', 'app_custom_event.fb_mobile_spent_credits']) {
+      expect(isPlainRuleField(f), f).toBe(true)
+    }
+    for (const f of ['website_purchase_roas', 'mobile_app_purchase_roas', 'daily_ratio_spent', 'lifetime_ratio_spent', 'spent', 'adset.daily_budget', 'cost_per_purchase_fb', 'some_new_metric', null]) {
+      expect(isPlainRuleField(f), String(f)).toBe(false)
     }
   })
   it('a schedule rule: conditions in words, money in minor units, a budget raise can raise spend; the creator is an id only', () => {
@@ -84,7 +92,7 @@ describe('rules — money only under …Cents keys', () => {
     expect(rule.filters).toEqual([
       { field: 'entity_type', operator: 'EQUAL', value: 'ADSET' }, { field: 'time_preset', operator: 'EQUAL', value: 'LAST_7_DAYS' },
       { field: 'spent', operator: 'GREATER_THAN', valueCents: 1000 }, { field: 'cost_per_purchase_fb', operator: 'IN_RANGE', valueCents: [500, 1500] },
-      { field: 'website_purchase_roas', operator: 'GREATER_THAN', value: 3 },
+      { field: 'website_purchase_roas', operator: 'GREATER_THAN', valueAsMeta: 3 },
     ])
     expect(rule.action.options).toEqual([
       { option: 'change_spec', unit: 'PERCENTAGE', targetField: null, amountPercent: 20, limitCents: 5000 },
@@ -93,7 +101,7 @@ describe('rules — money only under …Cents keys', () => {
     ])
     expect(rule.schedule).toEqual({ type: 'CUSTOM', text: 'at the set times', times: [{ days: [2, 5], startMinute: 0, endMinute: 60 }] })
     expect(rule.createdBy).toEqual({ id: '9000000000002', isThisSystemUser: false })
-    expect(JSON.stringify(rule)).not.toMatch(/"value":1000|"value":\[500/)
+    expect(JSON.stringify(rule)).not.toMatch(/"value":1000|"value":\[500|"value":3/)
   })
   it('a trigger rule is marked invisible in Ads Manager; a stopped rule says so; a pause cannot raise spend', () => {
     const rule = mapRule({
@@ -103,6 +111,9 @@ describe('rules — money only under …Cents keys', () => {
     }, account())
     expect(rule).toMatchObject({ evaluationType: 'TRIGGER', visibleInAdsManager: false, hasIssues: true, disableErrorCode: 1815, canRaiseSpend: false })
     expect(rule.trigger).toEqual({ type: 'STATS_MILESTONE', typeText: 'each time a number reaches a milestone', field: 'spent', operator: 'EQUAL', valueCents: 5000 })
+    // A ROAS trigger's value is restricted too.
+    const roas = mapRule({ evaluation_spec: { evaluation_type: 'TRIGGER', trigger: { type: 'STATS_CHANGE', field: 'mobile_app_purchase_roas', value: 2, operator: 'LESS_THAN' } } }, account())
+    expect(roas.trigger).toEqual({ type: 'STATS_CHANGE', typeText: 'when a number crosses its threshold', field: 'mobile_app_purchase_roas', operator: 'LESS_THAN', valueAsMeta: 2 })
     expect(rule.statusText).toMatch(/stopped by Meta/)
     expect(rule.schedule?.text).toMatch(/trigger fires/)
   })
@@ -110,9 +121,14 @@ describe('rules — money only under …Cents keys', () => {
     const opt = (value: unknown, currency = 'EUR') => mapRule({ execution_spec: { execution_type: 'CHANGE_BID', execution_options: [{ field: 'change_spec', value, operator: 'EQUAL' }] } }, account(currency)).action.options[0]
     expect(opt({ amount: 300, unit: 'ACCOUNT_CURRENCY', limit: 2000 })).toEqual({ option: 'change_spec', unit: 'ACCOUNT_CURRENCY', targetField: null, amountCents: 300, limitCents: 2000 })
     expect(opt({ amount: 1200, target_field: 'cost_per_purchase_fb', limit: [400, 3000] })).toEqual({ option: 'change_spec', unit: null, targetField: 'cost_per_purchase_fb', targetValueCents: 1200, limitCents: [400, 3000] })
-    expect(opt({ amount: 4, target_field: 'website_purchase_roas' })).toEqual({ option: 'change_spec', unit: null, targetField: 'website_purchase_roas', targetValue: 4 })
+    // A ROAS target is restricted (Nexus restricts ROAS everywhere); a target on a plain field is not.
+    expect(opt({ amount: 4, target_field: 'website_purchase_roas' })).toEqual({ option: 'change_spec', unit: null, targetField: 'website_purchase_roas', targetValueAsMeta: 4 })
+    expect(opt({ amount: 2.5, target_field: 'frequency' })).toEqual({ option: 'change_spec', unit: null, targetField: 'frequency', targetValue: 2.5 })
     expect(opt('{"amount":-50,"unit":"PERCENTAGE"}')).toEqual({ option: 'change_spec', unit: 'PERCENTAGE', targetField: null, amountPercent: -50 })
     expect(opt({ amount: 300, unit: 'ACCOUNT_CURRENCY' }, 'JPY')).toMatchObject({ amountCents: 300 })
+    // An option Nexus does not know is restricted as Meta gives it.
+    expect(mapRule({ execution_spec: { execution_type: 'REBALANCE_BUDGET', execution_options: [{ field: 'rebalance_spec', value: { type: 'PROPORTIONAL', target_field: 'cost_per_purchase_fb' }, operator: 'EQUAL' }] } }, account()).action.options[0])
+      .toEqual({ option: 'rebalance_spec', operator: 'EQUAL', valueAsMeta: { type: 'PROPORTIONAL', target_field: 'cost_per_purchase_fb' } })
     // A cut never raises spend; a raise does.
     expect(mapRule({ execution_spec: { execution_type: 'CHANGE_BID', execution_options: [{ field: 'change_spec', value: { amount: -50, unit: 'PERCENTAGE' } }] } }, account()).canRaiseSpend).toBe(false)
   })

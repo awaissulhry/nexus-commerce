@@ -194,7 +194,8 @@ describe('meta-recommendations', () => {
     expect(h.calls).toHaveLength(0)
     // A 5014023 (the day asked has no data yet) is asked once more, one day earlier — and said so.
     const yesterday = addDays(today, -1)
-    h.fail = (req) => (req.query?.to_date === yesterday ? metaRefusal('100/5014023', 'Meta refused the read: to_date violates one-day data latency') : null)
+    // Review fix S2 — Meta's subcode, whatever code carries it.
+    h.fail = (req) => (req.query?.to_date === yesterday ? metaRefusal('1/5014023', 'Meta refused the read: to_date violates one-day data latency') : null)
     const back = await data('meta-recommendations', { view: 'history', to: yesterday })
     expect(h.calls.map((c) => c.query?.to_date)).toEqual([yesterday, addDays(yesterday, -1)])
     expect(back).toMatchObject({ to: addDays(yesterday, -1), toNote: expect.stringMatching(/one day earlier/) })
@@ -386,11 +387,16 @@ describe('meta-ad-rules', () => {
   })
   it('history: the rule\'s runs with Meta\'s filters; old and new budgets in minor units; account-history carries the rule id', async () => {
     h.bodies.set('23850000000000001', { account_id: '1234567890', evaluation_spec: { evaluation_type: 'SCHEDULE' } })
-    h.bodies.set('23850000000000001/history', { data: [{ timestamp: '2026-10-20T00:30:00+0000', is_manual: false, evaluation_spec: { evaluation_type: 'SCHEDULE' }, execution_spec: { execution_type: 'CHANGE_BUDGET' }, results: [{ object_id: '120000000000201', object_type: 'ADSET', actions: [{ action: 'CHANGED_BUDGET', field: 'daily_budget', old_value: '5000', new_value: '6000' }] }] }] })
+    h.bodies.set('23850000000000001/history', { data: [{ timestamp: '2026-10-20T00:30:00+0000', is_manual: false, evaluation_spec: { evaluation_type: 'SCHEDULE' }, execution_spec: { execution_type: 'CHANGE_BUDGET' }, results: [{ object_id: '120000000000201', object_type: 'ADSET', actions: [{ action: 'CHANGED_BUDGET', field: 'daily_budget', old_value: '5000', new_value: '6000' }, { action: 'CHANGED_BID', field: 'bid_strategy', old_value: 'LOWEST_COST', new_value: 'COST_CAP' }, { action: 'PAUSED', field: 'status', old_value: 'ACTIVE', new_value: 'PAUSED' }] }] }] })
     const out = await data('meta-ad-rules', { view: 'history', ruleId: '23850000000000001', objectId: '120000000000201', action: 'changed_budget', hideNoChanges: true })
     expect(h.calls.map((c) => [c.path, c.query?.fields])).toEqual([['23850000000000001', 'account_id'], ['23850000000000001', 'id,evaluation_spec'], ['23850000000000001/history', expect.any(String)]])
     expect(h.calls[2].query).toMatchObject({ object_id: '120000000000201', action: 'CHANGED_BUDGET', hide_no_changes: true })
-    expect(out.runs).toEqual([{ time: '2026-10-20T00:30:00.000Z', manual: false, error: null, ruleAtRun: { evaluationType: 'SCHEDULE', action: 'CHANGE_BUDGET' }, changedSomething: true, results: [{ objectId: '120000000000201', objectType: 'ADSET', actions: [{ action: 'CHANGED_BUDGET', actionText: 'changed the budget', field: 'daily_budget', oldValueCents: 5000, newValueCents: 6000 }] }] }])
+    expect(out.runs).toEqual([{ time: '2026-10-20T00:30:00.000Z', manual: false, error: null, ruleAtRun: { evaluationType: 'SCHEDULE', action: 'CHANGE_BUDGET' }, changedSomething: true, results: [{ objectId: '120000000000201', objectType: 'ADSET', actions: [
+      { action: 'CHANGED_BUDGET', actionText: 'changed the budget', field: 'daily_budget', oldValueCents: 5000, newValueCents: 6000 },
+      // Review fix N1 — a bid or budget change is never plain; a plain field of another action is.
+      { action: 'CHANGED_BID', actionText: 'changed the bid', field: 'bid_strategy', oldValueAsMeta: 'LOWEST_COST', newValueAsMeta: 'COST_CAP' },
+      { action: 'PAUSED', actionText: 'paused it', field: 'status', oldValue: 'ACTIVE', newValue: 'PAUSED' },
+    ] }] }])
     h.bodies.set('act_1234567890/adrules_history', { data: [
       { rule_id: '23850000000000002', timestamp: '2026-10-20T01:00:00+0000', evaluation_spec: { evaluation_type: 'TRIGGER' }, results: [] },
       { rule_id: 23850000000000001, evaluation_spec: { evaluation_type: 'TRIGGER' }, results: [] },

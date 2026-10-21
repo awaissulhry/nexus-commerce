@@ -527,6 +527,8 @@ describe('step 8 — recommendations, studies and rules add only their own query
       // Review fix A2 — on a bare id only with a top-level `results` field (a study objective's results read).
       ['120000000000101?fields=id,name&breakdowns=["age"]', 'breakdowns'], ['120000000000101?fields=id,name&ds=2026-10-20', 'ds'],
       ['120000000000101?fields=id,insights{results}&breakdowns=["age"]', 'breakdowns'], ['120000000000101/insights?fields=spend&ds=2026-10-20', 'ds'],
+      // Review fix S4 — `.fields(results)` is a nested list, not a top-level results field.
+      ['120000000000101?fields=id,insights.fields(results)&breakdowns=["age"]', 'breakdowns'], ['120000000000101?fields=id,insights.fields(results)&ds=2026-10-20', 'ds'],
       ['act_1234567890/history?object_id=1', 'object_id'], ['120000000000201/adrules_history?action=PAUSED', 'action'],
       ['act_1234567890/adrules_library?fields=id&evaluation_type=TRIGGER', 'evaluation_type'], ['act_1234567890/adrules_history?evaluation_type=TRIGGER', 'evaluation_type'],
       ['120000000000010/feed?fields=id&until=1792454400', 'until'], ['act_1234567890/ab_tests?since=1', 'since'],
