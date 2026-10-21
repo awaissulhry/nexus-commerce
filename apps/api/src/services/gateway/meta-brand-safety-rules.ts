@@ -44,7 +44,7 @@
  *     meta-calls.ts metaRestFileExportOf.
  */
 import type { MetaWriteBodyId, MetaWriteRule } from './meta-calls.js'
-import { META_NAME_TEXT } from './meta-settings-rules.js'
+import { META_NAME_TEXT } from './meta-write-text.js'
 
 /**
  * An ad set's whole targeting as Meta answered it goes back: any printable text, a format character included (an

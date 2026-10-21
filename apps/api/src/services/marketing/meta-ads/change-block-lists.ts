@@ -22,7 +22,7 @@
  */
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import { BLOCK_LIST_ROLES, blockListEntry, blockListFileOf, MAX_POSTS_PER_PLATFORM } from '../../gateway/meta-brand-safety-rules.js'
-import { META_NAME_TEXT } from '../../gateway/meta-settings-rules.js'
+import { META_NAME_TEXT } from '../../gateway/meta-write-text.js'
 import { MetaWriteError, type MetaChangeResult } from './write-client.js'
 import { localFailure } from './errors.js'
 
