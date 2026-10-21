@@ -66,6 +66,7 @@ import { runOrigin } from '../agents/call-tool.js'
 import { NO_APPROVAL_VIA, type AgentTool } from '../agents/tool-types.js'
 import { argumentsRefusal } from '../agents/tool-arguments.js'
 import { getTool } from '../agents/tool-registry.js'
+import { maskSecretArgs } from '../agents/secret-args.js'
 import {
   autonomyOf,
   autoRefusal,
@@ -398,10 +399,9 @@ export async function runToolForClaude(
       const started = Date.now()
       // C3 — the business name is the door's check, never the tool's argument: recorded apart, then removed.
       const { [BUSINESS_ARGUMENT]: named, ...toolArgs } = args ?? {}
-      // C7 — a secret argument (an authenticator code) is never written to the run.
-      const recordedArgs = Object.fromEntries(
-        Object.entries(toolArgs).map(([key, value]) => [key, tool.secretArgs?.includes(key) ? '[redacted]' : value]),
-      )
+      // C7 — a secret argument (an authenticator code, an ad code) is never written to the run. Item 7 — nor one of a
+      // change plan's steps.
+      const recordedArgs = maskSecretArgs(tool, toolArgs)
       const run = await prisma.agentRun.create({
         data: {
           agentKey: MCP_AGENT_KEY,

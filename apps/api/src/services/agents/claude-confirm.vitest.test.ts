@@ -11,7 +11,7 @@
  *             undo window, and the commit's re-check of the person and the preview
  *   never     the code is never stored on the run
  */
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { generateSecret, generateSync } from 'otplib'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -37,9 +37,13 @@ vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { 
 vi.mock('../pim/readiness-index.service.js', async () => (await import('../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
 
 import { __stepUpTest } from '../../lib/auth/step-up.js'
+import { __test as cryptoTest } from '../../lib/crypto.js'
 import { commitScheduledApproval } from '../agent-fleet/approval-inbox.service.js'
 import type { McpPrincipal } from '../mcp/mcp-auth.js'
 import { runToolForClaude } from '../mcp/mcp-tool-call.js'
+import type { UserPrincipal } from './call-tool.js'
+import { runPlan } from './change-plan.service.js'
+import { undoChangeByClick } from './change-undo.service.js'
 import { confirmSummaryOf } from './claude-confirm.service.js'
 import { setClaudeRule } from './claude-trust.service.js'
 import { getTool } from './tool-registry.js'
@@ -78,6 +82,10 @@ beforeAll(async () => {
   vi.stubEnv('NEXUS_OAUTH_ISSUER', 'https://web.example.test')
   vi.stubEnv('NEXUS_AI_KILL_SWITCH', '')
   vi.stubEnv('ENABLE_QUEUE_WORKERS', '')
+  // Item 7 — a made-up key for this run only (never a real one); KMS stays unset, so secret arguments use the env key.
+  vi.stubEnv('NEXUS_CREDENTIAL_ENC_KEY', randomBytes(32).toString('base64'))
+  vi.stubEnv('NEXUS_KMS_KEY_ID', undefined)
+  cryptoTest.resetKeyCache()
   const client = database.client
   const role = await client.role.create({ data: { key: `C7_${randomUUID().slice(0, 8)}`, name: 'Confirm tester', description: 'test', isSystem: false, permissions: [...EVERYTHING] } })
   for (const who of ['asker', 'other'] as const) {
@@ -104,6 +112,7 @@ beforeEach(() => __stepUpTest.reset())
 
 afterAll(async () => {
   vi.unstubAllEnvs()
+  cryptoTest.resetKeyCache()
   await database?.close()
 }, 30_000)
 
@@ -208,5 +217,104 @@ describe('C7 — confirm-change', { timeout: TIMEOUT }, () => {
     expect(out.isError, JSON.stringify(out.answer)).toBe(false)
     await inside(() => db().agentApproval.update({ where: { id: answer.approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
     expect(await inside(() => commitScheduledApproval(answer.approvalId))).toMatchObject({ ok: true, status: 'executing' })
+  })
+})
+
+/*
+ * Owner item 7 — a secret argument (create-meta-boost's creator ad code) is stored encrypted, the plan hash is of what is
+ * stored, and it is opened only in the door (callTool / executeTool) right before a dry run, a re-check or a run reads it.
+ * set-price stands in for create-meta-boost (Meta is not reachable here): for these tests only, its price is declared
+ * a secret argument, so every path below is the real one — Claude's door, the gate, confirm-change, the commit's re-check,
+ * the plan worker, the Undo button and the Approvals page's approve.
+ */
+describe('Item 7 — a secret argument: stored encrypted, confirmed by the hash of what is stored, opened only to run', { timeout: TIMEOUT }, () => {
+  const SEALED = { __enc: expect.stringMatching(/^v1:/) }
+  async function withSecretPrice<T>(work: () => Promise<T>): Promise<T> {
+    const tool = getTool('set-price')!
+    const before = tool.secretArgs
+    tool.secretArgs = ['price']
+    try {
+      return await work()
+    } finally {
+      tool.secretArgs = before
+    }
+  }
+  /** The window closes: what the sweep then does. */
+  async function windowCloses(approvalId: string) {
+    await inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
+    return inside(() => commitScheduledApproval(approvalId))
+  }
+  /** The asker in Nexus (the Undo button, the Approvals page). */
+  const inNexus = (): UserPrincipal => ({
+    kind: 'user', userId: ids.asker, label: 'Cora Confirm', permissions: { isOwner: false, permissions: EVERYTHING }, workspace: business(A), via: 'app',
+  })
+  const confirmed = async (approvalId: string, planHash: string) => {
+    __stepUpTest.reset() // a fresh code for each confirmation in one test
+    const out = await call('confirm-change', { approvalId, planHash, code: codeOf() })
+    expect(out.isError, JSON.stringify(out.answer)).toBe(false)
+  }
+
+  beforeAll(async () => {
+    await inside(async () => {
+      for (const key of ['s1', 's2', 's3', 's4']) {
+        ids[key] = (await db().product.create({ data: { sku: `TEST-SECRET-${key.toUpperCase()}`, name: `Secret jacket ${key}`, basePrice: '100.00' } })).id
+      }
+    })
+  })
+
+  it('a plan: each step stored sealed, confirm-change with the planHash it returned works, and the step runs with the plain value', async () => {
+    await withSecretPrice(async () => {
+      const { answer } = await call('submit-change-plan', { title: 'Secret plan', steps: [{ tool: 'set-price', args: { productId: ids.s1, price: 121 } }] })
+      expect(answer, JSON.stringify(answer)).toMatchObject({ status: 'waiting_for_approval', plan: { steps: 1 }, confirm: { planHash: answer.plan.planHash } })
+      const steps = await inside(() => db().agentPlanStep.findMany({ where: { approvalId: answer.approvalId } }))
+      expect(steps.map((step) => step.args)).toEqual([{ productId: ids.s1, price: SEALED }])
+      // Claude's call left its run record with the step's secret as the mask.
+      const run = await inside(async () => db().agentRun.findUniqueOrThrow({ where: { id: (await db().agentApproval.findUniqueOrThrow({ where: { id: answer.approvalId } })).agentRunId } }))
+      expect(run.input).toMatchObject({ tool: 'submit-change-plan', args: { steps: [{ tool: 'set-price', args: { productId: ids.s1, price: '[redacted]' } }] } })
+      // The hash Claude was given is the one confirm-change recomputes from the stored rows.
+      await confirmed(answer.approvalId, answer.plan.planHash)
+      expect(await windowCloses(answer.approvalId)).toMatchObject({ ok: true, status: 'executing' })
+      // The plan worker: the step's re-check (a dry run) and its run each get the plain value.
+      expect(await inside(() => runPlan(answer.approvalId))).toMatchObject({ finished: true, counts: { done: 1 } })
+      expect(await priceOf('s1')).toBe(121)
+    })
+  })
+
+  it('one change: stored sealed, confirmed, re-checked and run with the plain value; its planned undo keeps the mask; the Undo button runs the inverse', async () => {
+    await withSecretPrice(async () => {
+      const queued = await queueAtConfirm('s2', 122)
+      expect(await approvalOf(queued.approvalId)).toMatchObject({ args: { productId: ids.s2, price: SEALED }, planHash: queued.confirm.planHash })
+      await confirmed(queued.approvalId, queued.confirm.planHash)
+      expect(await windowCloses(queued.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+      expect(await priceOf('s2')).toBe(122)
+      const change = await inside(() => db().agentChange.findFirstOrThrow({ where: { approvalId: queued.approvalId } }))
+      expect(change).toMatchObject({ undoTool: 'set-price', undoArgs: { productId: ids.s2, price: '[redacted]' } })
+      // The Undo button asks for the inverse (stored sealed again) and approves it as the Approvals page does.
+      const undone = await inside(() => undoChangeByClick(inNexus(), change.id))
+      expect(undone, JSON.stringify(undone)).toMatchObject({ ok: true, tool: 'set-price' })
+      const undoId = (undone as { approvalId: string }).approvalId
+      expect(await approvalOf(undoId)).toMatchObject({ status: 'scheduled', args: { productId: ids.s2, price: SEALED } })
+      expect(await windowCloses(undoId)).toMatchObject({ ok: true, status: 'executed' })
+      expect(await priceOf('s2')).toBe(100)
+    })
+  })
+
+  it('a request stored before item 7 (plain) still runs; a stored value that cannot be opened runs nothing and says why', async () => {
+    await withSecretPrice(async () => {
+      const old = await queueAtConfirm('s3', 123)
+      await confirmed(old.approvalId, old.confirm.planHash)
+      await inside(() => db().agentApproval.update({ where: { id: old.approvalId }, data: { args: { productId: ids.s3, price: 123 } } }))
+      expect(await windowCloses(old.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+      expect(await priceOf('s3')).toBe(123)
+
+      const broken = await queueAtConfirm('s4', 124)
+      await confirmed(broken.approvalId, broken.confirm.planHash)
+      await inside(() => db().agentApproval.update({ where: { id: broken.approvalId }, data: { args: { productId: ids.s4, price: { __enc: 'v1:AAAA.BBBB.CCCC' } } } }))
+      const out = await windowCloses(broken.approvalId)
+      expect(out).toMatchObject({ ok: false })
+      expect((out as { error?: string }).error).toMatch(/set-price: its secret argument price could not be decrypted \(bad_format\)\. Nothing was run\./)
+      expect(await approvalOf(broken.approvalId)).toMatchObject({ status: 'pending' })
+      expect(await priceOf('s4')).toBe(100)
+    })
   })
 })

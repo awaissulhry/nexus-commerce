@@ -3,8 +3,8 @@
  * partnership reads and the records are stand-ins): a boost is a creative of an EXISTING post made by step 25's builder —
  * every silent feature OFF unless asked, Meta's check first, nothing spends — from the chosen Page's post, the chosen Instagram
  * account's media or link, or a creator's content (the chosen Page and Instagram account as its sponsors; never the
- * business's own, never another Nexus business's); its eligibility is read first; a creator's ad code is said to be kept in
- * plain text with the request and its records (AD_CODE_KEPT) and is not in the preview's words or the change record; "was it
+ * business's own, never another Nexus business's); its eligibility is read first; a creator's ad code is said to be kept
+ * encrypted with the request (AD_CODE_KEPT) and is not in the preview's words or the change record; "was it
  * new?" from the account's creatives read just before the send. The partnership tool acts for the chosen Instagram account and
  * the chosen Page (Meta's partnership host, per item), answers the making of an ad code in words, and each action's undo is
  * its inverse (or says why there is none); undo-change runs a boost's undo. Made-up ids.
@@ -145,7 +145,9 @@ describe('the tools', () => {
     // Review round 2 — on both doors (the Undo button and the in-app assistant run it), and the truth about the code said.
     expect(boost.surfaces).toBeUndefined()
     expect(boost.description).toContain(AD_CODE_KEPT)
-    expect(AD_CODE_KEPT).toMatch(/plain text .* also after it runs/)
+    // Item 7 — encrypted with the request; what Nexus cannot encrypt (a conversation it was typed into) said too.
+    expect(AD_CODE_KEPT).toMatch(/encrypted with this request .* A conversation it was typed into keeps it as typed/)
+    expect(AD_CODE_KEPT).not.toMatch(/plain text/)
     expect(boost.description).not.toMatch(/never (shown, )?recorded|until it runs|not in the change record|no hash/)
     expect(boost.description).toMatch(/SPENDS NOTHING/)
     expect(boost.consequencesFor!({ action: 'undo' })).toEqual({ reversibility: 'none' })

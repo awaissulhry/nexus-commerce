@@ -58,6 +58,17 @@ describe('mintExemplarFromDecision', () => {
     expect(data.operatorNote).toBe('wrong campaign — that term converts in DE')
   })
 
+  it('Item 7 — a secret argument is kept as the mask, never its value (sealed, or plain from before item 7)', async () => {
+    for (const adCode of [{ __enc: 'v1:AAAA.BBBB.CCCC' }, 'CODE_OLD']) {
+      db.agentApproval.findUnique.mockResolvedValue({
+        id: 'ap2', toolName: 'create-meta-boost', args: { source: 'creator-instagram-code', adCode }, preview: {}, agentRunId: 'run_dir',
+      } as never)
+      await mintExemplarFromDecision('ap2', 'reject', 'not this creator')
+      const data = (db.agentExemplar.create.mock.calls.at(-1)![0] as { data: Record<string, unknown> }).data
+      expect(data.proposal).toEqual({ source: 'creator-instagram-code', adCode: '[redacted]' })
+    }
+  })
+
   it('an unknown approval mints nothing and returns null', async () => {
     db.agentApproval.findUnique.mockResolvedValue(null as never)
     const id = await mintExemplarFromDecision('ghost', 'approve')

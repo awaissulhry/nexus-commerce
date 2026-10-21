@@ -421,7 +421,9 @@ export interface AgentTool {
    */
   trustCeilingFor?: (args: Record<string, unknown>) => { level: Exclude<ClaudeTrust, 'watch' | 'auto'>; why: string } | null
   /**
-   * C7 — arguments that are secrets (an authenticator code): never written to the run record, never echoed back.
+   * C7 — arguments that are secrets (an authenticator code, a creator's ad code): never written to a run record, never
+   * echoed back. Item 7 — a stored request keeps each one encrypted, opened only in the door right before the tool runs
+   * (secret-args.ts); nothing that reads stored arguments outside the door may depend on its value.
    */
   secretArgs?: readonly string[]
   /** C1/C2 — how an executed change is put back. Every executable tool that is not `none` has one (C2). */

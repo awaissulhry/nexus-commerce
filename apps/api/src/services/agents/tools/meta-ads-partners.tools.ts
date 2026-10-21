@@ -96,6 +96,8 @@ const metaPartnershipContent: AgentTool = {
   readOnly: true,
   openWorld: true,
   requires: [F.adsView],
+  // Item 7 — creators' ad codes asked about are never written to the run record.
+  secretArgs: ['adCodes'],
   input: z.object({
     view: z.preprocess(lowerArg, z.enum(PARTNERSHIP_VIEWS)).describe(PARTNERSHIP_VIEWS.join(' | ')),
     platforms: enums(CONTENT_PLATFORMS, 2, 'search: only content on'),

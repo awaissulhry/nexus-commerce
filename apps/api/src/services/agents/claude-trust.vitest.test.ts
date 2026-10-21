@@ -25,7 +25,7 @@
  *               Pause or the kind set to off inside the window hands it back (a plan: at commit and before each step);
  *               turning it on takes settings.security.manage, off does not
  */
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { generateSecret, generateSync } from 'otplib'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -52,6 +52,7 @@ vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { 
 vi.mock('../pim/readiness-index.service.js', async () => (await import('../../test-support/readiness-module-mock.js')).readinessModuleMock(vi.fn()))
 
 import { __stepUpTest } from '../../lib/auth/step-up.js'
+import { __test as cryptoTest } from '../../lib/crypto.js'
 import { commitScheduledApproval, UNDO_WINDOW_MS } from '../agent-fleet/approval-inbox.service.js'
 import type { McpPrincipal } from '../mcp/mcp-auth.js'
 import { runToolForClaude } from '../mcp/mcp-tool-call.js'
@@ -138,6 +139,10 @@ beforeAll(async () => {
   database = await formulaDatabase()
   vi.stubEnv('NEXUS_OAUTH_ISSUER', 'https://web.example.test')
   vi.stubEnv('NEXUS_AI_KILL_SWITCH', '')
+  // Item 7 — a made-up key for this run only (never a real one); KMS stays unset, so secret arguments use the env key.
+  vi.stubEnv('NEXUS_CREDENTIAL_ENC_KEY', randomBytes(32).toString('base64'))
+  vi.stubEnv('NEXUS_KMS_KEY_ID', undefined)
+  cryptoTest.resetKeyCache()
   const client = database.client
   secret = generateSecret()
   const role = await client.role.create({
@@ -712,6 +717,25 @@ describe('NA — "Claude\'s changes need no approval": every change Claude asks 
     expect(await approvalOf(answer.approvalId)).toMatchObject({ status: 'executed', decisionVia: 'no-approval' })
     // Not a rule-run: the daily cap does not count it.
     expect((await inside(() => listClaudeRules())).autonomy.autoRunsLastDay).toBe(capBefore)
+  })
+
+  // Owner item 7 — set-price stands in for create-meta-boost (Meta is not reachable here): its price is declared a secret
+  // argument for this test only. The switch's commit re-checks and runs through the door, which opens it.
+  it('on: a change with a secret argument is stored encrypted, and the switch\'s commit runs it with the plain value', async () => {
+    await switchTo(true)
+    const tool = getTool('set-price')!
+    const secretArgs = tool.secretArgs
+    tool.secretArgs = ['price']
+    try {
+      const price = (await priceOf(ids.productA)) + 7
+      const { answer } = await call('set-price', { productId: ids.productA, price })
+      expect(answer).toMatchObject({ status: 'runs_by_rule', trust: { noApproval: true } })
+      expect(await approvalOf(answer.approvalId)).toMatchObject({ decisionVia: 'no-approval', args: { productId: ids.productA, price: { __enc: expect.stringMatching(/^v1:/) } } })
+      expect(await windowCloses(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+      expect(await priceOf(ids.productA)).toBe(price)
+    } finally {
+      tool.secretArgs = secretArgs
+    }
   })
 
   it('on: a plan is one request, scheduled as the asker, outside every level and limit; each step runs as approved by a person', async () => {

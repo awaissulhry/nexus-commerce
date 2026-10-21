@@ -33,6 +33,7 @@ import {
   type WorkspaceContext,
 } from '../../lib/workspace-context.js'
 import { getTool, listTools } from './tool-registry.js'
+import { openSecretArgs } from './secret-args.js'
 import { takeToolCall } from './tool-rate.js'
 import { PLAN_TOOL, runAsPersonApproved, runAsRuleApproved, type AgentTool, type DecidedVia, type ToolContext, type ToolDoor, type ToolPermission, type ToolResult, type ToolSurface } from './tool-types.js'
 
@@ -323,7 +324,8 @@ export async function callTool(
     throw new ToolAccessError('unknown_tool', `unknown tool: ${name}`, 404)
   }
   const tool = allowedTool(principal, name)
-  const input = parsedArgs(tool, args)
+  // Item 7 — a stored request's secret arguments are sealed (secret-args.ts): opened here, right before the tool reads them.
+  const input = parsedArgs(tool, await openSecretArgs(tool, args))
   const context: ToolContext = {
     userId: principal.kind === 'user' ? principal.userId : null,
     storedOutput: (toolName, value) => storedOutputFor(principal, toolName, value),
@@ -352,8 +354,8 @@ export async function executeTool(
   const tool = allowedTool(principal, name)
   const execute = tool.execute
   if (!execute) throw new ToolAccessError('unknown_tool', `${name} is preview-only and cannot run`, 400)
-  // Stored arguments are parsed again: what runs is exactly what the schema allows today.
-  const input = parsedArgs(tool, args)
+  // Stored arguments are parsed again: what runs is exactly what the schema allows today. Item 7 — secret ones opened first.
+  const input = parsedArgs(tool, await openSecretArgs(tool, args))
   const context: ToolContext = {
     userId: principal.kind === 'user' ? principal.userId : principal.label,
     storedOutput: (toolName, value) => storedOutputFor(principal, toolName, value),

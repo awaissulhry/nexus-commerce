@@ -25,6 +25,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { publishEvent } from '../../lib/events/publish.js'
 import { getTool } from './tool-registry.js'
+import { maskSecretArgs } from './secret-args.js'
 import { PLAN_TOOL, type AgentTool, type PlanRequest, type ToolChange, type ToolDoor, type ToolRequest, type ToolResult } from './tool-types.js'
 
 /** Approval states in which an undo request is still alive: a second one is refused meanwhile. */
@@ -118,7 +119,8 @@ export async function recordExecutedChange(input: RecordInput): Promise<string |
         ...(input.planStepId ? { planStepId: input.planStepId } : {}),
         reversibility: tool.reversibility ?? 'none',
         ...(change ? { before: (change.before ?? null) as Prisma.InputJsonValue, after: (change.after ?? null) as Prisma.InputJsonValue } : {}),
-        ...(undo ? { undoTool: undo.tool, undoArgs: undo.args as Prisma.InputJsonValue } : {}),
+        // Item 7 — kept for a person to read, never run from here: a secret argument as the mask.
+        ...(undo ? { undoTool: undo.tool, undoArgs: maskSecretArgs(undo.tool, undo.args) as Prisma.InputJsonValue } : {}),
         outbound: !!tool.openWorld,
       },
       select: { id: true },

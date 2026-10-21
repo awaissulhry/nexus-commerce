@@ -10,7 +10,7 @@
  * The real routes in a Fastify app, on a real PostgreSQL (PGlite); the signed-in person resolved as the workspace hook
  * resolves them.
  */
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { FEATURES as F } from '@nexus/shared/permissions'
@@ -34,9 +34,12 @@ vi.mock('../lib/queue.js', () => ({
 }))
 
 import { resolvePermissions } from '../lib/auth/rbac.js'
+import { __test as cryptoTest } from '../lib/crypto.js'
 import { createWorkspaceService } from '../services/workspace.service.js'
+import { queueDetail } from '../services/agent-fleet/approval-queue.service.js'
 import { runOrQueueTool } from '../services/agents/approval-gate.service.js'
 import type { UserPrincipal } from '../services/agents/call-tool.js'
+import { getTool } from '../services/agents/tool-registry.js'
 import agentFleetApprovalRoutes from './agent-fleet-approvals.routes.js'
 
 const A = LEGACY_WORKSPACE_ID
@@ -76,6 +79,10 @@ const post = (who: 'all' | 'prices', url: string, payload: unknown) => {
 beforeAll(async () => {
   database = await formulaDatabase()
   database_ready = true
+  // Item 7 — a made-up key for this run only (never a real one); KMS stays unset, so secret arguments use the env key.
+  vi.stubEnv('NEXUS_CREDENTIAL_ENC_KEY', randomBytes(32).toString('base64'))
+  vi.stubEnv('NEXUS_KMS_KEY_ID', undefined)
+  cryptoTest.resetKeyCache()
   const db = database.client
   people.all = await person('Ana Plan', EVERYTHING)
   people.prices = await person('Pat Prices', PRICES)
@@ -122,6 +129,8 @@ beforeAll(async () => {
 }, 120_000)
 
 afterAll(async () => {
+  vi.unstubAllEnvs()
+  cryptoTest.resetKeyCache()
   await app?.close()
   if (database_ready) await database.close()
 }, 30_000)
@@ -175,5 +184,72 @@ describe('C6 — a change plan on the Approvals page', { timeout: 30_000 }, () =
     // A person who may not ask for every step they keep is refused by the re-check.
     const next = (await get('all', '/agent/fleet/approvals/outside')).json() as { approvals: Row[] }
     expect(next.approvals.some((a) => a.id === ids.plan)).toBe(false)
+  })
+})
+
+/*
+ * Owner item 7 — a secret argument (create-meta-boost's creator ad code) on the Approvals page. set-price stands in for
+ * create-meta-boost (Meta is not reachable here): for these tests only, its price is declared a secret argument.
+ */
+describe('Item 7 — a secret argument on the Approvals page: the mask in the list and the edit form; an edit and an untick keep it sealed', { timeout: 30_000 }, () => {
+  const SEALED = { __enc: expect.stringMatching(/^v1:/) }
+  async function withSecretPrice<T>(work: () => Promise<T>): Promise<T> {
+    const tool = getTool('set-price')!
+    const before = tool.secretArgs
+    tool.secretArgs = ['price']
+    try {
+      return await work()
+    } finally {
+      tool.secretArgs = before
+    }
+  }
+  const queue = (tool: string, args: Record<string, unknown>) => inside(async () => {
+    const run = await database.client.agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'done', via: 'claude', oauthGrantId: 'grant-card' } })
+    const queued = await runOrQueueTool(tool, args, people.all.principal, run.id, { forceAsk: true })
+    expect(queued, queued.error).toMatchObject({ ok: true, mode: 'queued' })
+    return queued.approvalId!
+  })
+  const approval = (id: string) => inside(() => database.client.agentApproval.findUniqueOrThrow({ where: { id } }))
+
+  it('one request: the list and the edit form show the mask; an edit stores it sealed, and its audit keeps the mask', async () => {
+    await withSecretPrice(async () => {
+      const id = await queue('set-price', { productId: ids.p1, price: 55 })
+      expect((await approval(id)).args).toEqual({ productId: ids.p1, price: SEALED })
+      const rows = ((await get('all', '/agent/fleet/approvals/outside')).json() as { approvals: Array<{ id: string; args: unknown }> }).approvals
+      expect(rows.find((a) => a.id === id)!.args).toEqual({ productId: ids.p1, price: '[redacted]' })
+      expect((await inside(() => queueDetail(id, people.all.principal)))!.editArgs).toEqual({ productId: ids.p1, price: '[redacted]' })
+
+      // An edit that brings the secret in plain text: checked by the tool's own dry run, stored sealed.
+      const edited = await post('all', `/agent/fleet/approvals/${id}/amend`, { args: { price: 56 } })
+      expect(edited.statusCode, edited.body).toBe(200)
+      const first = await approval((edited.json() as { approvalId: string }).approvalId)
+      expect(first).toMatchObject({ args: { productId: ids.p1, price: SEALED }, preview: { changes: { 'base price': { from: 50, to: 56 } } } })
+      const audit = await inside(() => database.client.agentControlAudit.findFirstOrThrow({ where: { charterKey: 'operator-edit', action: 'amend_action' }, orderBy: { createdAt: 'desc' } }))
+      expect(audit).toMatchObject({ fromValue: { approvalId: id, args: { price: '[redacted]' } }, toValue: { approvalId: first.id, args: { price: '[redacted]' } } })
+
+      // An edit that leaves the secret alone: its dry run opened the sealed value (the preview shows it), which stays as it was.
+      const moved = await post('all', `/agent/fleet/approvals/${first.id}/amend`, { args: { productId: ids.p2 } })
+      expect(moved.statusCode, moved.body).toBe(200)
+      const second = await approval((moved.json() as { approvalId: string }).approvalId)
+      expect(second.args).toEqual({ productId: ids.p2, price: (first.args as { price: unknown }).price })
+      expect(second.preview).toMatchObject({ changes: { 'base price': { from: 60, to: 56 } } })
+    })
+  })
+
+  it('unticking steps of a plan: the smaller plan keeps each kept step\'s sealed value as it was, its dry run opened it', async () => {
+    await withSecretPrice(async () => {
+      const id = await queue('submit-change-plan', {
+        title: 'Secret card plan',
+        steps: [{ tool: 'set-price', args: { productId: ids.p1, price: 57 } }, { tool: 'set-price', args: { productId: ids.p2, price: 58 } }],
+      })
+      const stepsOf = (approvalId: string) => inside(() => database.client.agentPlanStep.findMany({ where: { approvalId }, orderBy: { position: 'asc' } }))
+      const before = await stepsOf(id)
+      expect(before.map((step) => step.args)).toEqual([{ productId: ids.p1, price: SEALED }, { productId: ids.p2, price: SEALED }])
+      const amended = await post('all', `/agent/fleet/approvals/${id}/plan-amend`, { keep: [2] })
+      expect(amended.statusCode, amended.body).toBe(200)
+      const after = await stepsOf((amended.json() as { approvalId: string }).approvalId)
+      expect(after.map((step) => step.args)).toEqual([before[1]!.args])
+      expect(after[0]!.preview).toMatchObject({ changes: { 'base price': { from: 60, to: 58 } } })
+    })
   })
 })

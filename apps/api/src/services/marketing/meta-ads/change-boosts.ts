@@ -29,12 +29,11 @@
  *                       its creators, the sponsor tag of posts that tag it — Meta's partnership host api.facebook.com, with
  *                       the system-user token as Bearer; Meta answers each item of a list on its own).
  *
- * A creator's ad code is credential-like, and review round 2 holds Nexus to the truth about it (AD_CODE_KEPT): it is an
- * argument of the request, so it is kept in plain text with the request and its records (the approval's and a change-plan
- * step's arguments, the run record of a change plan, the plan's hash) — also after it runs; anyone who can read this
- * business's Claude requests can read it. What this step adds: this preview's own words and the change record name the
- * content it unlocks, not the code; the call ledger keeps no body that carries it; the gateway cuts it out of Meta's answers.
- * (Encrypting secret arguments in the shared approval code is the leader's, not this step's.) A code for the business's own
+ * A creator's ad code is credential-like, and review round 2 holds Nexus to the truth about it (AD_CODE_KEPT): it is a secret
+ * argument of the request (AgentTool.secretArgs), so item 7 keeps it encrypted with the request (the approval's and a
+ * change-plan step's arguments; the plan's hash is of the encrypted form) and masked in every run record and view
+ * (agents/secret-args.ts). What this step adds: this preview's own words and the change record name the content it unlocks,
+ * not the code; the call ledger keeps no body that carries it; the gateway cuts it out of Meta's answers. A code for the business's own
  * media (CR-363) is answered in words (review A2): Meta answers it once and no Nexus path shows a run's answer afterwards.
  * Nothing here spends money: a boost is a creative, and a creative serves only once an ad uses it (create-meta-ad, step 27).
  */
@@ -68,7 +67,7 @@ const idText = (v: unknown): string | null => ((typeof v === 'string' || typeof 
  * Review round 2 — what is true of a creator's ad code in Nexus, said in every preview that carries one and in the tool's
  * description (no claim that it is not kept, not hashed or kept only until it runs).
  */
-export const AD_CODE_KEPT = 'The creator\'s ad code is kept in plain text with this request and its records, also after it runs; anyone who can read this business\'s Claude requests can read it. Use a code only from a creator who agreed to that.'
+export const AD_CODE_KEPT = 'Nexus keeps the creator\'s ad code encrypted with this request and shows it nowhere; it is opened only to check it with Meta and to send it. A conversation it was typed into keeps it as typed. Use a code only from a creator who agreed to that.'
 
 // ── create-meta-boost: the request ──────────────────────────────────────────────────────────────────────────────────
 
@@ -93,7 +92,7 @@ export interface BoostRequest {
   postId?: string | null
   mediaId?: string | null
   permalink?: string | null
-  /** A creator's partnership ad code (credential-like: kept in plain text with the request and its records — AD_CODE_KEPT). */
+  /** A creator's partnership ad code (credential-like: kept encrypted with the request — AD_CODE_KEPT). */
   adCode?: string | null
   withInstagram?: boolean | null
   threads?: boolean | null
@@ -423,7 +422,7 @@ export interface BoostDraft extends CreativeDraft {
 
 /**
  * Review A3 — what stands for an ad code in THIS preview's plan hash (a short code can be reversed from a hash). The request's
- * own arguments still carry the code, and a change plan's hash covers them (AD_CODE_KEPT).
+ * own arguments carry the code encrypted, and a change plan's hash covers only that encrypted form (item 7).
  */
 const AD_CODE_IN_PLAN = '[a creator\'s ad code]'
 /** A creative's form fields with a creator's ad code replaced, for this preview's plan hash only (what is SENT keeps the code). */

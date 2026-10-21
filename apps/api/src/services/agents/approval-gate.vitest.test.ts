@@ -7,7 +7,8 @@
  * they could have done, the decision carries their name, and the stored
  * preview stays whole while the caller gets a filtered one.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { randomBytes } from 'node:crypto'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { AgentTool } from './tool-types.js'
 
@@ -28,6 +29,34 @@ const TOOLS: Record<string, AgentTool> = {
     handler,
     execute,
   },
+  // Item 7 — a change with a secret argument (as create-meta-boost's adCode); the schema refuses anything but the code.
+  'boost-code': {
+    name: 'boost-code',
+    title: 'Test boost',
+    category: 'advertising',
+    description: 'test tool',
+    riskTier: 'high',
+    readOnly: false,
+    alwaysAsk: true,
+    requires: ['products.price.edit'],
+    secretArgs: ['adCode'],
+    input: z.object({ adCode: z.string().regex(/^[A-Z0-9_]+$/), name: z.string().optional() }),
+    handler,
+    execute,
+  },
+  // C6 — the plan control tool, as submit-change-plan: its dry run hands the plan to the gate.
+  'submit-change-plan': {
+    name: 'submit-change-plan',
+    title: 'Submit a change plan',
+    category: 'approvals',
+    description: 'test tool',
+    riskTier: 'high',
+    readOnly: false,
+    control: true,
+    requires: [],
+    input: z.object({}).loose(),
+    handler: async (args) => ({ ok: true, preview: {}, plan: { title: String(args.title), steps: args.steps as Array<{ tool: string; args: Record<string, unknown> }> } }),
+  },
 }
 
 vi.mock('./tool-registry.js', () => ({
@@ -45,11 +74,13 @@ vi.mock('../../db.js', () => {
   const db: Record<string, unknown> = {
     agentApproval: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
       updateMany: vi.fn(),
       update: vi.fn(),
       create: vi.fn(),
     },
     agentRun: { create: vi.fn() },
+    agentPlanStep: { createMany: vi.fn() },
     agentChange: { create: vi.fn(), updateMany: vi.fn(), findMany: vi.fn(async () => []) },
     // C8 — the change record and its events are written in one transaction.
     eventOutbox: { create: vi.fn(), createMany: vi.fn() },
@@ -59,7 +90,9 @@ vi.mock('../../db.js', () => {
 })
 
 import prisma from '../../db.js'
-import { decideApproval, requestApproval, runOrQueueTool } from './approval-gate.service.js'
+import { __test as cryptoTest } from '../../lib/crypto.js'
+import { decideApproval, listApprovals, requestApproval, runOrQueueTool } from './approval-gate.service.js'
+import { planHashOf } from './change-plan.service.js'
 import { systemPrincipal, type UserPrincipal } from './call-tool.js'
 import { withWorkspace } from '../../lib/workspace-context.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
@@ -290,5 +323,101 @@ describe('C2 — an executed approval keeps what it changed', () => {
     execute.mockResolvedValue({ ok: false, error: 'refused' })
     await decideApproval('a1', 'approve', PRICE_PERSON)
     expect(db.agentChange.create).not.toHaveBeenCalled()
+  })
+})
+
+describe('Item 7 — a secret argument is stored encrypted, and opened only for the tool', () => {
+  beforeAll(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {}) // the once-per-process "no KMS, env key" notice
+  })
+  beforeEach(() => {
+    // A made-up key for this run only (never a real one); KMS stays unset.
+    vi.stubEnv('NEXUS_CREDENTIAL_ENC_KEY', randomBytes(32).toString('base64'))
+    vi.stubEnv('NEXUS_KMS_KEY_ID', undefined)
+    cryptoTest.resetKeyCache()
+  })
+  afterAll(() => {
+    vi.unstubAllEnvs()
+    cryptoTest.resetKeyCache()
+  })
+  const noKey = () => {
+    vi.stubEnv('NEXUS_CREDENTIAL_ENC_KEY', undefined)
+    cryptoTest.resetKeyCache()
+  }
+  const storedArgs = () => (db.agentApproval.create.mock.calls[0]![0]!.data as unknown as { args: Record<string, unknown> }).args
+
+  it('a call with no secret argument is stored as it came, and needs no key', async () => {
+    noKey()
+    expect(await runOrQueueTool('change-price', { price: 12 }, PRICE_PERSON, 'run1')).toMatchObject({ mode: 'queued' })
+    expect(storedArgs()).toEqual({ price: 12 })
+  })
+
+  it('without a key a request with a secret is refused and nothing is stored (one change, a plan); the words name no value', async () => {
+    noKey()
+    const one = await runOrQueueTool('boost-code', { adCode: 'CODE_123' }, PRICE_PERSON, 'run1').catch((error: Error) => error)
+    const plan = await runOrQueueTool('submit-change-plan', { title: 'Boosts', steps: [{ tool: 'boost-code', args: { adCode: 'CODE_123' } }] }, PRICE_PERSON, 'run1').catch((error: Error) => error)
+    for (const error of [one, plan]) {
+      expect(error).toBeInstanceOf(Error)
+      expect((error as Error).message).toBe('boost-code: Nexus could not encrypt its secret argument adCode (no encryption key is set up), so the request was not stored.')
+    }
+    expect(db.agentApproval.create).not.toHaveBeenCalled()
+    expect(db.agentPlanStep.createMany).not.toHaveBeenCalled()
+  })
+
+  it('the approval keeps it sealed; the dry run read it in plain text', async () => {
+    const out = await runOrQueueTool('boost-code', { adCode: 'CODE_123', name: 'x' }, PRICE_PERSON, 'run1')
+    expect(out.mode).toBe('queued')
+    expect(storedArgs()).toEqual({ adCode: { __enc: expect.stringMatching(/^v1:/) }, name: 'x' })
+    expect(JSON.stringify(db.agentApproval.create.mock.calls[0]![0])).not.toContain('CODE_123')
+    expect(handler).toHaveBeenCalledWith({ adCode: 'CODE_123', name: 'x' }, expect.anything())
+  })
+
+  it('the approved run opens it right before execute (the no-approval switch and the sweep commit through here too)', async () => {
+    await runOrQueueTool('boost-code', { adCode: 'CODE_123' }, PRICE_PERSON, 'run1')
+    db.agentApproval.findUnique.mockResolvedValue({ id: 'a1', status: 'pending', toolName: 'boost-code', args: storedArgs() } as never)
+    const out = await decideApproval('a1', 'approve', systemPrincipal('Awais'))
+    expect(out).toMatchObject({ ok: true, status: 'executed' })
+    expect(execute).toHaveBeenCalledWith({ adCode: 'CODE_123' }, expect.anything())
+  })
+
+  it('a request stored before item 7 (plain text) still runs', async () => {
+    db.agentApproval.findUnique.mockResolvedValue({ id: 'a1', status: 'pending', toolName: 'boost-code', args: { adCode: 'CODE_OLD' } } as never)
+    expect((await decideApproval('a1', 'approve', PRICE_PERSON)).ok).toBe(true)
+    expect(execute).toHaveBeenCalledWith({ adCode: 'CODE_OLD' }, expect.anything())
+  })
+
+  it('a stored code that cannot be opened runs nothing, and stays for a person', async () => {
+    db.agentApproval.findUnique.mockResolvedValue({ id: 'a1', status: 'pending', toolName: 'boost-code', args: { adCode: { __enc: 'v1:AAAA.BBBB.CCCC' } } } as never)
+    const out = await decideApproval('a1', 'approve', PRICE_PERSON)
+    expect(out).toMatchObject({ ok: false })
+    expect(out.error).toMatch(/could not be decrypted/)
+    expect(execute).not.toHaveBeenCalled()
+    expect(db.agentApproval.update.mock.calls.at(-1)![0]!.data).toMatchObject({ status: 'pending' })
+  })
+
+  it('the old Approvals list (GET /agent/approvals) shows a secret argument as the mask, sealed or plain', async () => {
+    db.agentApproval.findMany.mockResolvedValue([
+      { id: 'a1', toolName: 'boost-code', args: { adCode: { __enc: 'v1:AAAA.BBBB.CCCC' }, name: 'x' } },
+      { id: 'a2', toolName: 'boost-code', args: { adCode: 'CODE_OLD' } },
+      { id: 'a3', toolName: 'change-price', args: { price: 12 } },
+    ] as never)
+    const rows = await listApprovals()
+    expect(rows.map((row) => row.args)).toEqual([{ adCode: '[redacted]', name: 'x' }, { adCode: '[redacted]' }, { price: 12 }])
+  })
+
+  it('the request button\'s run record keeps the mask', async () => {
+    db.agentRun.create.mockResolvedValue({ id: 'run9' } as never)
+    await requestApproval('boost-code', { adCode: 'CODE_123' }, PRICE_PERSON)
+    expect(db.agentRun.create.mock.calls[0]![0]!.data.input).toEqual({ tool: 'boost-code', args: { adCode: '[redacted]' } })
+  })
+
+  it('a change plan stores each step sealed, and its hash is of what is stored (what confirm-change recomputes)', async () => {
+    const out = await runOrQueueTool('submit-change-plan', { title: 'Boosts', steps: [{ tool: 'boost-code', args: { adCode: 'CODE_123' } }] }, PRICE_PERSON, 'run1')
+    expect(out.mode).toBe('queued')
+    const rows = db.agentPlanStep.createMany.mock.calls[0]![0]!.data as unknown as Array<{ args: Record<string, unknown> }>
+    expect(rows[0]!.args).toEqual({ adCode: { __enc: expect.stringMatching(/^v1:/) } })
+    expect(JSON.stringify(db.agentPlanStep.createMany.mock.calls[0]![0])).not.toContain('CODE_123')
+    expect(out.plan!.planHash).toBe(planHashOf({ title: 'Boosts', steps: [{ tool: 'boost-code', args: rows[0]!.args }] }))
+    expect(out.plan!.planHash).not.toBe(planHashOf({ title: 'Boosts', steps: [{ tool: 'boost-code', args: { adCode: 'CODE_123' } }] }))
   })
 })

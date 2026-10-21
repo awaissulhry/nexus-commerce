@@ -11,7 +11,7 @@
  * Nothing here spends money: a boost is a creative, and a creative serves only once an ad uses it (create-meta-ad, step 27).
  * The Facebook side of partnership access goes to Meta's partnership host with the system-user token (review B1); making an ad
  * code is answered in words (review A2: nobody could read it). Both tools are on both doors (review round 2: the Undo button
- * and the in-app assistant run create-meta-boost's undo); a creator's ad code is kept in plain text with its request (AD_CODE_KEPT).
+ * and the in-app assistant run create-meta-boost's undo); a creator's ad code is kept encrypted with its request (AD_CODE_KEPT).
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
@@ -144,9 +144,9 @@ const createMetaBoost: AgentTool = {
   consequencesFor: (args) => (args.action === 'undo' ? { reversibility: 'none' } : { reversibility: 'partial' }),
   maxClaudeTrust: 'ask',
   requires: [F.adsCampaignsManage],
-  // The creator's ad code is an argument: kept in plain text with the request and its records, also after it runs
-  // (AD_CODE_KEPT, said in the description and every preview that carries one). secretArgs keeps it out of a direct MCP
-  // call's run record only. Review round 2 — on both doors again: the Undo button and the in-app assistant run this tool.
+  // The creator's ad code is a secret argument: item 7 keeps it encrypted with the request and masked in every run record
+  // and view (agents/secret-args.ts; AD_CODE_KEPT, said in the description and every preview that carries one).
+  // Review round 2 — on both doors again: the Undo button and the in-app assistant run this tool.
   secretArgs: ['adCode'],
   input: z.object({
     connectionId: metaConnectionArg,
@@ -156,7 +156,7 @@ const createMetaBoost: AgentTool = {
     postId: z.string().trim().regex(/^[1-9]\d{0,24}_[1-9]\d{0,24}$/, 'a post id: <Page id>_<post id>').optional().describe('facebook-post: a post of the chosen Page; creator-facebook-post: the creator\'s post (<Page id>_<post id>; meta-page-posts / meta-partnership-content list them)'),
     mediaId: z.string().trim().regex(/^[1-9]\d{0,24}$/, 'an Instagram media id: digits').optional().describe('instagram-media: the chosen Instagram account\'s media (meta-instagram-media lists it); creator-instagram-media and copy-creator-video: the creator\'s media'),
     permalink: z.string().trim().url().max(300).optional().describe('instagram-link: the post\'s public link (https://www.instagram.com/p/<code>/) — only the chosen Instagram account\'s own media'),
-    adCode: z.string().trim().regex(META_AD_CODE, 'a partnership ad code: letters, digits and _ = + / -').optional().describe('creator-instagram-code, creator-facebook-code, copy-creator-video: the partnership ad code the creator shared — kept in plain text with this request and its records, also after it runs; anyone who can read this business\'s Claude requests can read it'),
+    adCode: z.string().trim().regex(META_AD_CODE, 'a partnership ad code: letters, digits and _ = + / -').optional().describe('creator-instagram-code, creator-facebook-code, copy-creator-video: the partnership ad code the creator shared — Nexus keeps it encrypted with this request, opened only to check and send it'),
     withInstagram: z.boolean().optional().describe('facebook-post: run on Instagram too, as the chosen Instagram account (default: true when one is chosen and Meta says the post can)'),
     threads: z.boolean().optional().describe('create: meant for Threads too — Nexus checks Threads\' rules (image, video or image carousel; no story; no partnership); Threads delivery is the ad set\'s Threads placement with the chosen Instagram account'),
     button: z.object({

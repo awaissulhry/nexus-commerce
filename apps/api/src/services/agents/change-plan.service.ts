@@ -38,6 +38,7 @@ import { deciderPrincipal, freshDryRun, movedFieldNames, movedFields, previewSta
 import { decideByRule, EXPIRY_HOURS, requestDoor, type GateOutcome, type GateRule } from './approval-gate.service.js'
 import { callTool, executeTool, ToolAccessError, type ToolPrincipal, type UserPrincipal } from './call-tool.js'
 import { recordExecutedChangeSafely } from './change-record.service.js'
+import { sealSecretArgs } from './secret-args.js'
 import { autoFreshRefusal, autoPlanStepRefusal, noApprovalCommitRefusal, noteAutoFailure } from './claude-trust.service.js'
 import { mergedStepUp } from './step-up-approval.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
@@ -180,7 +181,10 @@ export async function queuePlan(
 
   const kinds = kindsOf(checked.map((c) => c.tool))
   const summary = planSummary(kinds)
-  const planHash = planHashOf({ title, steps: plan.steps })
+  // Item 7 — each step's secret arguments sealed before they are stored (secret-args.ts). The hash is of what is stored:
+  // confirm-change recomputes it from the rows (claude-confirm.service.ts storedHash), and no hash covers a secret.
+  const stored = await Promise.all(checked.map((step) => sealSecretArgs(step.tool, step.args)))
+  const planHash = planHashOf({ title, steps: plan.steps.map((step, index) => ({ tool: step.tool, args: stored[index] })) })
   const outbound = kinds.filter((kind) => kind.outbound).reduce((n, kind) => n + kind.count, 0)
   // ADS AUTONOMY W1-3 — a step that raises (its preview's `stepUp`) makes the whole plan one a person approves with their
   // authenticator code: said on the plan itself, where the Approvals page and the bulk approve read it.
@@ -211,7 +215,7 @@ export async function queuePlan(
         approvalId: created.id,
         position: index + 1,
         toolName: step.tool.name,
-        args: step.args as Prisma.InputJsonValue,
+        args: stored[index] as Prisma.InputJsonValue,
         preview: step.raw == null ? Prisma.JsonNull : (step.raw as Prisma.InputJsonValue),
         undoesChangeId: step.undoes,
       })),

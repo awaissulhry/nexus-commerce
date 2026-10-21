@@ -48,6 +48,7 @@ import { withStepChanges } from '../services/agent-fleet/approval-queue.service.
 import { PLAN_TOOL } from '../services/agents/tool-types.js'
 import { EXPIRY_HOURS } from '../services/agents/approval-gate.service.js'
 import { getTool } from '../services/agents/tool-registry.js'
+import { maskSecretArgs, sealSecretArgs } from '../services/agents/secret-args.js'
 import type { ToolResult } from '../services/agents/tool-types.js'
 import {
   callTool,
@@ -538,6 +539,8 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
       const actor = resolveActor(
         (request as { authUser?: { id?: string; email?: string; displayName?: string } }).authUser,
       )
+      // Item 7 — a secret argument stays sealed on the new row (a patch may bring one in plain text).
+      const storedArgs = await sealSecretArgs(tool, editedArgs)
 
       const created = await prisma.$transaction(async (tx) => {
         await tx.agentApproval.update({
@@ -554,7 +557,7 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
             agentRunId: original.agentRunId,
             toolName: original.toolName,
             riskTier: original.riskTier,
-            args: editedArgs as Prisma.InputJsonValue,
+            args: storedArgs as Prisma.InputJsonValue,
             preview: (fresh.preview ?? fresh.data ?? {}) as Prisma.InputJsonValue,
             status: 'pending',
             // A fresh clock: it describes a decision taken now, not one
@@ -567,8 +570,8 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
       await recordControlChange({
         charterKey: 'operator-edit',
         action: 'amend_action',
-        from: { approvalId: original.id, args: original.args },
-        to: { approvalId: created.id, args: editedArgs },
+        from: { approvalId: original.id, args: maskSecretArgs(tool, original.args) },
+        to: { approvalId: created.id, args: maskSecretArgs(tool, editedArgs) },
         note: 'operator edited a proposal before approving it',
         actor: actor.label,
       }).catch(() => undefined)
@@ -765,7 +768,7 @@ const agentFleetApprovalRoutes: FastifyPluginAsync = async (fastify) => {
           toolName: a.toolName,
           riskTier: a.riskTier,
           status: a.status,
-          args: a.args,
+          args: maskSecretArgs(a.toolName, a.args),
           preview: a.preview,
           requestedAt: a.requestedAt,
           expiresAt: a.expiresAt,
