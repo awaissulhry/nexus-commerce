@@ -444,7 +444,12 @@ export async function liveWebhooks(input: { connectionId?: string | null; view: 
   const want = (v: WebhookView) => input.view === 'all' || input.view === v
   const app = want('app') ? await part(async () => {
     if (!appId) throw new MetaLiveRefusal('No Meta app id is stored for this connection (a person enters it in Settings › Channels › Meta).')
-    const body = await appRead(connectionId, 'webhooks.app', `${appId}/subscriptions`, 'object,callback_url,fields,active')
+    // Step 12 round 2 — the token here is the APP's, not the system user's: Meta refusing it ends only this part, with
+    // the step a person takes (not "make a new system-user token").
+    const body = await appRead(connectionId, 'webhooks.app', `${appId}/subscriptions`, 'object,callback_url,fields,active').catch((err) => {
+      if (err instanceof MetaReadError && err.failure.authLost) throw new MetaLiveRefusal('Meta does not accept the app token; check the app id / secret in Settings › Channels › Meta.')
+      throw err
+    })
     return rowsOf(body).map((r) => ({
       object: text(r.object), callbackUrl: callbackOf(r.callback_url), active: typeof r.active === 'boolean' ? r.active : null,
       fields: (Array.isArray(r.fields) ? r.fields : []).map((f) => text(f) ?? text(obj(f)?.name)).filter(Boolean),
