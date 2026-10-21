@@ -962,7 +962,7 @@ function ruleFieldBase(field: string): string {
 const PLAIN_RULE_FIELDS: ReadonlySet<string> = new Set([
   'id', 'entity_type', 'name', 'adlabel_ids', 'objective', 'start_time', 'stop_time', 'buying_type', 'billing_event', 'optimization_goal', 'is_autobid',
   'created_time', 'updated_time', 'effective_status', 'status', 'configured_status', 'placement.page_types', 'budget_reset_period', 'hours_since_creation',
-  'estimated_budget_spending_percentage', 'audience_reached_percentage', 'active_time', 'current_time', 'time_preset', 'attribution_window',
+  'audience_reached_percentage', 'active_time', 'current_time', 'time_preset', 'attribution_window',
   'impressions', 'unique_impressions', 'lifetime_impressions', 'clicks', 'unique_clicks', 'results', 'ctr', 'link_ctr', 'result_rate', 'reach', 'frequency',
   'leadgen', 'mobile_app_install', 'app_custom_event', 'offline_conversion', 'offsite_conversion', 'link_click', 'like', 'offsite_engagement', 'post',
   'post_comment', 'post_engagement', 'post_like', 'post_reaction', 'view_content', 'video_play', 'vote',
@@ -970,7 +970,7 @@ const PLAIN_RULE_FIELDS: ReadonlySet<string> = new Set([
 export function isPlainRuleField(field: string | null): boolean {
   if (!field) return false
   const base = ruleFieldBase(field)
-  return PLAIN_RULE_FIELDS.has(base) || /^(app_custom_event|offline_conversion|offsite_conversion)\.[a-z0-9_]+$/.test(base)
+  return PLAIN_RULE_FIELDS.has(base) || (/^(app_custom_event|offline_conversion|offsite_conversion)\.[a-z0-9_]+$/.test(base) && !/value|roas|revenue/.test(base))
 }
 
 /** One value of a rule field: plain (`value`), money in minor units (`valueCents`), or restricted as Meta gives it. */
@@ -1139,7 +1139,7 @@ export async function metaAdRules(input: RuleInput) {
     ...(input.objectId ? { object_id: input.objectId } : {}), ...(input.action ? { action: input.action } : {}),
     ...(input.hideNoChanges ? { hide_no_changes: true } : {}),
   }
-  const money = 'Money in conditions, actions and history in minor units (cents) of the account currency.'
+  const money = 'Money in conditions, actions and history in minor units (cents) of the account currency; …AsMeta values (ROAS, ratios of spend, fields Nexus does not know) are as Meta gives them.'
 
   switch (input.view) {
     case 'list': {

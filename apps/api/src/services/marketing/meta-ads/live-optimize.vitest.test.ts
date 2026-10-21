@@ -69,7 +69,7 @@ describe('rules — a plain value only for a known non-money field; money under 
     for (const f of ['entity_type', 'id', 'time_preset', 'attribution_window', 'hours_since_creation', 'impressions', 'reach', 'clicks', 'frequency', 'ctr', 'results', 'adset.effective_status', 'placement.page_types', 'offsite_conversion.fb_pixel_purchase', 'app_custom_event.fb_mobile_spent_credits']) {
       expect(isPlainRuleField(f), f).toBe(true)
     }
-    for (const f of ['website_purchase_roas', 'mobile_app_purchase_roas', 'daily_ratio_spent', 'lifetime_ratio_spent', 'spent', 'adset.daily_budget', 'cost_per_purchase_fb', 'some_new_metric', null]) {
+    for (const f of ['website_purchase_roas', 'mobile_app_purchase_roas', 'daily_ratio_spent', 'lifetime_ratio_spent', 'spent', 'adset.daily_budget', 'cost_per_purchase_fb', 'some_new_metric', 'estimated_budget_spending_percentage', 'offsite_conversion.fb_pixel_purchase_value', 'app_custom_event.fb_mobile_purchase_roas', null]) {
       expect(isPlainRuleField(f), String(f)).toBe(false)
     }
   })
