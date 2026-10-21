@@ -206,7 +206,7 @@ describe('study.update: POST /<study>', () => {
     expect(update({ viewers: ['1', '1'] })).toMatch(/each once/)
     expect(problem({ url: `${BASE}/${STUDY}`, objectKind: 'campaign', body: studyBody({ end_time: String(T0) }) })).toMatch(/only Meta change/)
     expect(problem({ url: `${BASE}/${STUDY}`, objectKind: 'adstudy', body: 'status=PAUSED' })).toMatch(/only Meta change/)
-    expect(problem({ url: `${BASE}/${STUDY}`, objectKind: 'adstudy', method: 'DELETE' })).toMatch(/deletes nothing/)
+    expect(problem({ url: `${BASE}/${STUDY}`, objectKind: 'adstudy', method: 'DELETE' })).toMatch(/deletes on Meta only/)
   })
   it('through the gateway: the study touches the chosen account and is its portfolio\'s; a new viewer has a role on the account', async () => {
     const reads = () => [json({ id: ACT, business: { id: BUSINESS } }), json({ id: STUDY, type: 'SPLIT_TEST', business: { id: BUSINESS } })]

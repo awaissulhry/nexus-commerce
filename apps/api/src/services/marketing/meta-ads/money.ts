@@ -20,6 +20,32 @@ export function metaOffset(currency: string | null | undefined): 1 | 100 {
   return currency && META_OFFSET_ONE.has(currency.toUpperCase()) ? 1 : 100
 }
 
+/**
+ * Step 3 review round 2 — every currency an ad account can have, with Meta's offset, exactly as Meta's table lists them
+ * (developers.facebook.com/documentation/ads-commerce/marketing-api/currencies.md, "Supported currencies", columns Code and
+ * Offset; read 2026-10-21). Offset 100: Meta counts hundredths of the currency (USD 1 = 100); offset 1: whole units (JPY 1
+ * = 1). Bahraini and Jordanian dinar (BHD, JOD) are offset 100 although they have 3 decimals; Costa Rican colón and
+ * Taiwan dollar (CRC, TWD) offset 1 although they have 2. A currency not in this table is not one Meta knows.
+ */
+export const META_CURRENCY_OFFSETS: Readonly<Record<string, 1 | 100>> = {
+  DZD: 100, ARS: 100, AUD: 100, BHD: 100, BDT: 100, BOB: 100, BGN: 100, BRL: 100, GBP: 100, CAD: 100, CLP: 1, CNY: 100,
+  COP: 1, CRC: 1, HRK: 100, CZK: 100, DKK: 100, EGP: 100, EUR: 100, GTQ: 100, HNL: 100, HKD: 100, HUF: 1, ISK: 1,
+  INR: 100, IDR: 1, ILS: 100, JPY: 1, JOD: 100, KES: 100, KRW: 1, LVL: 100, LTL: 100, MOP: 100, MYR: 100, MXN: 100,
+  NZD: 100, NIO: 100, NGN: 100, NOK: 100, PKR: 100, PYG: 1, PEN: 100, PHP: 100, PLN: 100, QAR: 100, RON: 100, RUB: 100,
+  SAR: 100, RSD: 100, SGD: 100, SKK: 100, ZAR: 100, SEK: 100, CHF: 100, TWD: 1, THB: 100, TRY: 100, AED: 100, UAH: 100,
+  USD: 100, UYU: 100, VEF: 100, VND: 1, FBZ: 100, VES: 100,
+}
+
+/**
+ * Step 3 review round 3 — the ONE normalised currency code the write path uses: upper case, exactly three letters A–Z.
+ * Never trimmed: a padded code (" TWD", "TWD ") is refused (null), so it can never fall back to another currency's
+ * decimals or offset (10× or 100× off).
+ */
+export function metaCurrencyCode(currency: string | null | undefined): string | null {
+  const code = typeof currency === 'string' ? currency.toUpperCase() : null
+  return code && /^[A-Z]{3}$/.test(code) ? code : null
+}
+
 /** A Meta offset-unit integer (number or numeric string) → micros; null for no value or not a whole number. */
 export function metaUnitsToMicros(value: unknown, currency: string | null | undefined): bigint | null {
   if (value === null || value === undefined || value === '') return null
@@ -60,4 +86,93 @@ export function microsToMinor(micros: bigint, exponent: number): number {
 /** Micros (or null) → minor units of the currency (or null). */
 export function minorOf(micros: bigint | null | undefined, currency: string | null | undefined): number | null {
   return micros === null || micros === undefined ? null : microsToMinor(micros, currencyExponent(currency))
+}
+
+/**
+ * Step 3 — THE READ HELPER: the ad account's `spend_cap` as Meta READS it: offset units ("Value specified in basic unit
+ * of the currency, for example 'cents' for USD", reference/ad-account fields); "0" means no cap → null. Meta WRITES the
+ * same cap differently (POST /act_<id> spend_cap: "standard denomination of the currency, e.g. 23.50 for USD $23.50" —
+ * facts F1 X4): that is minorToMetaStandard, never this one.
+ */
+export function metaAccountSpendCapMicros(value: unknown, currency: string | null | undefined): bigint | null {
+  const micros = metaUnitsToMicros(value, currency)
+  return micros === null || micros === 0n ? null : micros
+}
+
+/**
+ * Minor units of the account currency (what Nexus's tools take) → Meta's offset units (what minimum_budgets' bid_amount,
+ * budgets and bids take): EUR 1250 → 1250, JPY 1250 → 1250, BHD 1250 (1.250) → 125, TWD 1200 (12.00) → 12. Null when it
+ * is not a whole number of Meta's units (BHD 1255, TWD 1250), not a whole number at all, below 0, or no currency is named
+ * (a currency Nexus has not read is never assumed: the caller refuses). The ONE helper (step 9's live-targeting.ts uses it
+ * too, step 3 review round 2). NEVER for the account's spend_cap: Meta writes that in standard units (minorToMetaStandard).
+ *
+ * "Minor units" are the currency's decimals as Nexus counts them everywhere (currencyExponent: Intl/CLDR — EUR 2, JPY 0,
+ * HUF 0, TWD 2, BHD / JOD 3). Step 9 review fix A4, checked 2026-10-21 on documentation/ads-commerce/marketing-api/
+ * currencies.md: Meta's offset is 1 for CLP, COP, CRC, HUF, ISK, IDR, JPY, KRW, PYG, TWD, VND and 100 for the rest —
+ * BHD and JOD included (Meta counts hundredths of a dinar, so 3-decimal amounts must end in 0); KWD, OMR and TND are not
+ * Meta ad-account currencies at all.
+ */
+export function minorToMetaUnits(minor: number, currency: string | null | undefined): number | null {
+  // Review round 3 — one normalised code for the decimals AND the offset (a malformed code is null, never guessed).
+  const code = metaCurrencyCode(currency)
+  if (!Number.isSafeInteger(minor) || minor < 0 || !code) return null
+  const micros = BigInt(minor) * 10n ** BigInt(Math.max(0, 6 - currencyExponent(code)))
+  const per = BigInt(1_000_000 / metaOffset(code))
+  if (micros % per !== 0n) return null
+  // Review round 3 — never a rounded number: Meta's units past 2^53 are refused.
+  const units = micros / per
+  return units <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(units) : null
+}
+
+/**
+ * Step 3 — Meta's CurrencyAmount (credit lines, credit allocations, an invoice's amount due: `{ amount,
+ * amount_in_hundredths, currency, offsetted_amount }`, SDK currencyamount.py — Meta's node page answers 404) in micros of
+ * ITS OWN currency (a credit line is "measured in USD at the top level", reference extended-credit): offsetted_amount
+ * (Meta's offset units of that currency) when it is a whole number, else amount (a decimal of the currency). Null when
+ * neither is usable or no currency is named. Which of the two Meta fills is settled live (LIVE-PROBES BM-026).
+ */
+export function currencyAmountMicros(value: unknown): { micros: bigint; currency: string } | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const v = value as Record<string, unknown>
+  const currency = typeof v.currency === 'string' && /^[A-Za-z]{3}$/.test(v.currency.trim()) ? v.currency.trim().toUpperCase() : null
+  if (!currency) return null
+  const micros = metaUnitsToMicros(v.offsetted_amount, currency) ?? decimalToMicros(v.amount)
+  return micros === null ? null : { micros, currency }
+}
+
+/**
+ * Step 3 — THE WRITE HELPER for set-meta-spend-cap (step 40): minor units of the account currency → the decimal string
+ * Meta takes when the ad account's spend_cap is WRITTEN (POST /act_<id> spend_cap: "Value specified in standard
+ * denomination of the currency, e.g. 23.50 for USD $23.50", reference/ad-account Updating). Read the cap back with
+ * metaAccountSpendCapMicros (Meta READS it in offset units).
+ *
+ * Formatted from Meta's OFFSET (META_CURRENCY_OFFSETS, Meta's currencies page), never from the currency's own decimals:
+ * offset 100 → two decimals of Meta's hundredths, offset 1 → whole units, no decimals. EUR 50000 → "500.00", JPY 1250 →
+ * "1250", BHD 1250 (1.250) → "1.25", BHD 12500 → "12.50", CRC 125000 (1250.00) → "1250", TWD 1200 (12.00) → "12".
+ *
+ * Minor units are Nexus's: the currency's decimals as Intl / CLDR counts them (currencyExponent), which is not always
+ * ISO 4217 — this Node's ICU gives COP, HUF, IDR and PKR 0 decimals where ISO 4217 gives 2 (and BHD, JOD 3; CRC, TWD 2).
+ * Step 40's preview must therefore show the standard string it sends WITH the currency code and state the decimals it
+ * counted the amount in (e.g. 'spend cap "12" TWD — Nexus counted 1200 in 2 decimals, Meta takes whole units').
+ *
+ * Null — the caller refuses, nothing is sent — when:
+ *   - minor ≤ 0: "A value of 0 signifies no spending-cap" (reference/ad-account), so a cap of 0 would REMOVE the cap,
+ *     and a negative cap is no cap at all. Removing the cap is its own change, spend_cap_action=delete (reference/
+ *     ad-account Updating: "removes the spend_cap from the account"), and it SPENDS MONEY (the account then spends
+ *     without a limit); never this helper;
+ *   - the currency is missing, not exactly three letters (metaCurrencyCode: " TWD" is refused, "eur" is EUR) or not one
+ *     of Meta's (META_CURRENCY_OFFSETS);
+ *   - it is not a whole number of Meta's units (minorToMetaUnits null: BHD 5 = 0.005, TWD 1250 = 12.50), not a whole
+ *     number at all, or more Meta units than a safe integer (2^53 − 1).
+ */
+export function minorToMetaStandard(minor: number, currency: string | null | undefined): string | null {
+  if (!Number.isSafeInteger(minor) || minor <= 0) return null
+  // Review round 3 — normalised ONCE; the same code gives the offset, the decimals and Meta's units.
+  const code = metaCurrencyCode(currency)
+  const offset = code ? META_CURRENCY_OFFSETS[code] ?? null : null
+  if (!code || offset === null) return null
+  const units = minorToMetaUnits(minor, code)
+  if (units === null) return null
+  if (offset === 1) return String(units)
+  return `${Math.trunc(units / 100)}.${String(units % 100).padStart(2, '0')}`
 }

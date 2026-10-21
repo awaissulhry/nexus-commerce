@@ -35,8 +35,12 @@
  * body keys and values) that Nexus's own change tools send — today a status change of one campaign, ad set or ad, and
  * Meta's check of it (validate_only, a campaign's only). Step 18 (2026-10-21) adds the settings changes of a campaign,
  * an ad set and a budget schedule (meta-settings-rules.ts: exact keys per kind of object, every value judged, the ids
- * inside a body named for the gateway's account check). Every other non-GET is refused; so is every batch (no Nexus
- * change sends one yet: metaBatchProblem).
+ * inside a body named for the gateway's account check). Step 19 (2026-10-21) adds the creates of a campaign and an ad set
+ * on the chosen ad account's own edges, the copies of a campaign, an ad set or an ad, a background copy (an async batch of
+ * copies only) and the DELETE of a campaign, ad set or ad its undo sends (meta-create-rules.ts). Step 22 (2026-10-21) adds
+ * remove-meta-ads-items' deletes: that same DELETE on a person's explicit ask, and a creative's, an image's or a video's of
+ * the chosen ad account, a video's caption languages and an Instant Experience part's (meta-remove-rules.ts; a DELETE's
+ * parameters go as its judged form body). Every other non-GET is refused; so is every other batch (metaBatchProblem).
  *
  * Every call with a token carries `appsecret_proof` = HMAC-SHA256(key = the app secret, message = `<token>|<time>`) and
  * `appsecret_time` = that time in seconds, as Meta's Login Security page asks today (checked 2026-10-20:
@@ -48,6 +52,9 @@ import { createHmac } from 'node:crypto'
 import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
 import { META_SETTINGS_WRITE_RULES } from './meta-settings-rules.js'
+import { metaCreateWriteRules } from './meta-create-rules.js'
+import { META_REMOVE_WRITE_RULES } from './meta-remove-rules.js'
+import { metaLabelsWriteRules } from './meta-labels-rules.js'
 import { META_OPTIMIZE_WRITE_RULES } from './meta-optimize-rules.js'
 
 /** Query keys only the gateway sets. */
@@ -72,6 +79,12 @@ interface GraphRoute { version: string | null; segments: string[]; route: string
  * developers.facebook.com/documentation/ads-commerce/marketing-api/ad-creative/partnership-ads/content-discovery-api.md).
  */
 const GRAPH_HYPHEN_EDGES: ReadonlySet<string> = new Set(['partnership-ads-advertisable-content'])
+/**
+ * Step 3 — and the two hyphenated ROUTES of an ad account's insights feature settings, exactly as Meta writes them
+ * (marketing-api/insights/breakdowns, "Insights feature settings": act_<id>/insights/feature-settings and
+ * …/feature-settings/list-features). Every other segment stays letters, digits and _.
+ */
+const GRAPH_HYPHEN_ROUTES = /^act_\d+\/insights\/feature-settings(\/list-features)?$/
 
 function graphRouteOf(url: string): GraphRoute | { problem: string } | null {
   let parsed: URL
@@ -90,7 +103,9 @@ function graphRouteOf(url: string): GraphRoute | { problem: string } | null {
   const segments = version ? pieces.slice(1) : pieces
   // Step 16 review A6 — the hyphenated edge only as `<digits>/<edge>`: exactly two segments, the first a numeric id.
   const hyphenEdge = (piece: string, i: number) => i === 1 && segments.length === 2 && /^\d+$/.test(segments[0]) && GRAPH_HYPHEN_EDGES.has(piece)
-  if (segments.some((piece, i) => !/^[A-Za-z0-9_]+$/.test(piece) && !hyphenEdge(piece, i))) return { problem: 'a Meta path segment is letters, digits and _ only' }
+  // Step 3 — or one of the exact feature-settings routes.
+  const hyphenRoute = GRAPH_HYPHEN_ROUTES.test(segments.join('/'))
+  if (segments.some((piece, i) => !/^[A-Za-z0-9_]+$/.test(piece) && !hyphenEdge(piece, i) && !hyphenRoute)) return { problem: 'a Meta path segment is letters, digits and _ only' }
   return { version, segments, route: segments.join('/').toLowerCase(), search: parsed.searchParams }
 }
 
@@ -138,6 +153,13 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *     product_item_ids and <ad | creative>/previews the same without creative; <page>/canvases is_hidden, is_published.
  *     The organic-insight keys go only on a read with no field list whose metrics are all Nexus's organic ones, the
  *     preview keys only with an ad_format of the v26 enum (services/meta/meta-media-lists.ts, `when` below).
+ *   - step 3 (the account itself, its billing, who has access — marketing/meta-ads/live-account.ts), each only on its own
+ *     edge: business on act_<id>/assigned_users and <Page | IG asset | catalog | pixel>/assigned_users; business_id on
+ *     act_<id>/advertisable_applications and act_<id>/connected_instagram_accounts_with_iabp; bid_amount on
+ *     act_<id>/minimum_budgets; app_id, optimization_goal, event_name on act_<id>/campaign_attribution_options;
+ *     insights_feature on act_<id>/insights/feature-settings (with …/list-features: GRAPH_HYPHEN_ROUTES);
+ *     since and until (Unix seconds) and category=BUDGET (that value only) on act_<id>/activities; start_date, end_date, issue_start_date, issue_end_date, invoice_id, type on
+ *     <portfolio>/business_invoices; only_show_pending on <portfolio>/extendedcreditapplications.
  */
 const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
 /**
@@ -278,6 +300,23 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/tags$/, keys: new Set(['posted_after']), when: (query) => isoDateTime(query.get('posted_after')) },
   { route: /^\d+\/tags$/, keys: new Set(['posted_before']), when: (query) => isoDateTime(query.get('posted_before')) },
   { route: /^\d+\/tags$/, keys: new Set(['media_type']), when: (query) => subsetOf(query.get('media_type'), ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM']) },
+  // Step 3 (meta-ad-account, meta-billing, meta-account-access — marketing/meta-ads/live-account.ts), each key only on its
+  // own edge: the business on assigned users (the ad account's, and a Page's, Instagram asset's, catalog's or pixel's —
+  // Meta requires it); the portfolio on an account's advertisable apps and Instagram accounts with IABP; a manual bid on
+  // minimum budgets; an app's event and goal on attribution options; a feature on the insights feature settings; the days
+  // of the activity log; an invoice query; pending credit applications.
+  { route: /^act_\d+\/assigned_users$|^\d+\/assigned_users$/, keys: new Set(['business']) },
+  { route: /^act_\d+\/(advertisable_applications|connected_instagram_accounts_with_iabp)$/, keys: new Set(['business_id']) },
+  { route: /^act_\d+\/minimum_budgets$/, keys: new Set(['bid_amount']) },
+  { route: /^act_\d+\/campaign_attribution_options$/, keys: new Set(['app_id', 'optimization_goal', 'event_name']) },
+  { route: /^act_\d+\/insights\/feature-settings$/, keys: new Set(['insights_feature']) },
+  // Step 3 review round 4 (step 5 review A4) — the days only as Unix seconds, as Nexus sends them.
+  { route: /^act_\d+\/activities$/, keys: new Set(['since']), when: (query) => /^\d{1,12}$/.test(query.get('since') ?? '') },
+  { route: /^act_\d+\/activities$/, keys: new Set(['until']), when: (query) => /^\d{1,12}$/.test(query.get('until') ?? '') },
+  // Review B4, round 4 — the billing events' category only: BUDGET (reference/ad-activity files every billing event there).
+  { route: /^act_\d+\/activities$/, keys: new Set(['category']), when: (query) => query.get('category') === 'BUDGET' },
+  { route: /^\d+\/business_invoices$/, keys: new Set(['start_date', 'end_date', 'issue_start_date', 'issue_end_date', 'invoice_id', 'type']) },
+  { route: /^\d+\/extendedcreditapplications$/, keys: new Set(['only_show_pending']) },
   // Step 11 (meta-audiences / meta-datasets, live-audiences.ts and live-datasets.ts) — each key only on its own path:
   //   - audiences: the account's list (filtering for expiring ones, pixel_id), one audience as the chosen account sees it
   //     (ad_account_id, acting_account_id), its upload sessions, value data, recipients; the portfolio's sharing;
@@ -362,6 +401,14 @@ export const META_SEARCH_TYPES: ReadonlySet<string> = new Set([
 function keyAllowed(route: string, key: string, query: URLSearchParams): boolean {
   return READ_KEYS.has(key) || ROUTE_KEYS.some((r) => r.route.test(route) && r.keys.has(key) && (!r.when || r.when(query)))
 }
+/**
+ * Step 19 (2026-10-21) — fields a Nexus read asks on ONE kind of node only: the ad account's WhatsApp marketing-messages
+ * onboarding (`act_<id>?fields=marketing_messages_settings{whatsapp_activation_status}`, marketing-api/marketing-messages.md
+ * "Check whether an ad account is onboarded"; create-meta-ad-set names Meta's silent WhatsApp placement with it).
+ */
+const NODE_FIELDS: ReadonlyArray<{ field: string; route: RegExp; where: string }> = [
+  { field: 'marketing_messages_settings', route: /^act_\d+$/, where: 'the ad account itself (act_<id>)' },
+]
 /** At most this long, a `fields` value (the longest Nexus asks is far shorter). */
 const MAX_FIELDS_LENGTH = 4000
 /** A field name that is (or holds) a token: `access_token`, `page_access_token`, … — never asked for. */
@@ -525,6 +572,10 @@ export function metaCallVerdict(input: { method: string; url: string; kind: stri
   if (fields !== null) {
     const problem = fieldsProblem(fields)
     if (problem) return refuse(problem)
+    // Step 19 — a field Nexus reads only on one kind of node (NODE_FIELDS).
+    const names = new Set(fields.split(/[^A-Za-z0-9_]+/).filter(Boolean))
+    const misplaced = NODE_FIELDS.find((f) => names.has(f.field) && !f.route.test(route))
+    if (misplaced) return refuse(`${misplaced.field} is read only on ${misplaced.where}`)
   }
   if (segments.some((segment) => segment.toLowerCase() === 'accounts') && fields === null) {
     return refuse('a read of Pages (accounts) names its fields: Meta answers each Page\'s token by default')
@@ -696,8 +747,8 @@ export function metaSendUrl(url: string, token: string, proof: { appsecret_proof
  * The statuses a Nexus change writes on a campaign, ad set or ad (set-meta-status). Checked 2026-10-21 on
  * developers.facebook.com/documentation/ads-commerce/marketing-api/reference/ad-campaign-group.md ("Updating", `status`
  * enum ACTIVE, PAUSED, DELETED, ARCHIVED) and best-practices/manage-your-ad-object-status.md (ARCHIVED can only go to
- * DELETED; DELETED cannot change). DELETED is not one: deleting is its own tool (not built yet), so no Nexus change sends
- * it today.
+ * DELETED; DELETED cannot change). DELETED is not one: deleting is its own tool (remove-meta-ads-items, step 22: an HTTP
+ * DELETE on a person's explicit ask), so no Nexus change sends status=DELETED.
  */
 export const META_WRITE_STATUSES = ['ACTIVE', 'PAUSED', 'ARCHIVED'] as const
 export type MetaWriteStatus = typeof META_WRITE_STATUSES[number]
@@ -760,17 +811,26 @@ export interface MetaWriteRule {
 }
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
-export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
-  // Step 28 — an apply's ad account (act_<id>/recommendations), a new study's portfolio, a study, a Page, a Page video test.
-  | 'adaccount' | 'business' | 'adstudy' | 'page' | 'pagevideotest'
+export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind
+/** Step 28 — what only the recommendation and experiment tools name: a business portfolio (a new study), a study, a
+ * Page, a Page video test (an apply names the chosen ad account itself, `adaccount`). */
+export type MetaOptimizeKind = 'business' | 'adstudy' | 'page' | 'pagevideotest'
+/** Step 22 — what only remove-meta-ads-items names: a creative, a video of the library, a part of an Instant Experience. */
+export type MetaRemoveKind = 'creative' | 'video' | 'canvaselement'
+/** Step 21 — what set-meta-labels and set-meta-value-rules change by its own id: a label, a value rule set of the chosen ad account. */
+export type MetaLabelsKind = 'adlabel' | 'valueruleset'
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
-export interface MetaWriteBodyId {
-  id: string
-  kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset'
-    // Step 28 — a campaign (a budget raise), an ad set or ad (a recommendation's selection), a lift cell's ad account, a
-    // custom conversion, a study's viewer, a Page video, a study's own cell (meta-optimize-owner.ts).
-    | 'campaign' | 'adsetorad' | 'adaccount' | 'customconversion' | 'person' | 'pagevideo' | 'studycell'
-}
+export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' | 'campaign' | 'page' | 'customconversion' | 'video' | MetaLabelsBodyKind | MetaOptimizeBodyKind }
+/**
+ * Step 28 — ids inside a recommendation's or a study's body only: an ad set or ad of a recommendation's selection, a lift
+ * cell's ad account, a study's viewer, a Page video, a study's own cell (meta-optimize-owner.ts).
+ */
+export type MetaOptimizeBodyKind = 'adsetorad' | 'adaccount' | 'person' | 'pagevideo' | 'studycell'
+/**
+ * Step 21 — ids inside a body only: a label or a value rule set (the chosen ad account's own lists), a reach & frequency
+ * prediction (the chosen account's own predictions), a prediction's destination (the chosen Page or Instagram account).
+ */
+export type MetaLabelsBodyKind = MetaLabelsKind | 'rfprediction' | 'destination'
 
 const fieldsValueProblem = (value: string): string | null => {
   const names = value.split(',')
@@ -796,7 +856,7 @@ const META_WRITE_RULES: readonly MetaWriteRule[] = [
     optional: ['execution_options', 'fields'],
     values: (params) => {
       const status = params.get('status') ?? ''
-      if (status === 'DELETED') return 'Nexus deletes nothing on Meta yet: deleting is its own tool, not built yet'
+      if (status === 'DELETED') return 'Nexus deletes nothing by a status change: deleting is its own tool (remove-meta-ads-items, on a person\'s explicit ask)'
       if (!(META_WRITE_STATUSES as readonly string[]).includes(status)) return `status is ${META_WRITE_STATUSES.join(', ')}`
       if (params.has('execution_options')) {
         const problem = executionProblem(params.get('execution_options')!)
@@ -830,7 +890,7 @@ export interface MetaJudgedWrite {
   kinds?: readonly MetaWriteKind[]
   /** Step 18 — the ids inside the body: each must be of the chosen ad account (the gateway checks them before sending). */
   ids?: MetaWriteBodyId[]
-  /** Step 18 — a DELETE (a budget schedule's); every other change is a POST. */
+  /** Step 18 — a DELETE (a budget schedule's; step 22: remove-meta-ads-items'); every other change is a POST. */
   method?: 'DELETE'
 }
 
@@ -858,16 +918,26 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   if ([...graph.search.keys()].length > 0) return refuse('a Meta change carries its parameters in its body, never in the URL')
   const batch = metaBatchProblem(method, graph.route, input.body)
   if (batch) return { problem: batch, batch: true }
-  // Step 18 — a DELETE goes only by a DELETE rule for the kind the call names (today a budget schedule's), with no body.
-  const deleteRule = method === 'DELETE' ? writeRules().find((r) => r.method === 'DELETE' && r.path.test(graph.route) && kindMatches(r, input.objectKind)) : undefined
-  if (method === 'DELETE' && (!deleteRule || (input.body !== undefined && input.body !== ''))) {
-    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule) and a concluded video test of the chosen Page (set-meta-experiment); deleting campaigns, ad sets and ads is its own tool, not built yet, and Nexus cancels no async batch')
+  // Step 18 — a DELETE goes only by a DELETE rule for the kind the call names (a budget schedule's), with no body. Step 22 —
+  // a DELETE rule that names keys (an image's hash, a video's id) takes exactly those as its form body, judged like a POST's.
+  const deleteRules = method === 'DELETE' ? writeRules().filter((r) => r.method === 'DELETE' && r.path.test(graph.route) && kindMatches(r, input.objectKind)) : []
+  const bareDelete = deleteRules.find((r) => !r.required.length && !r.optional.length)
+  const noBody = input.body === undefined || input.body === ''
+  if (method === 'DELETE' && !(bareDelete && noBody) && !(deleteRules.some((r) => r.required.length) && !noBody)) {
+    return refuse('Nexus deletes on Meta only a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), a concluded video test of the chosen Page (set-meta-experiment), the undo of a create or a copy, and what a person explicitly asked remove-meta-ads-items to delete: a campaign, ad set, ad or creative named with its kind (no body), an image or a video of the chosen ad account\'s library (its hash or video_id as the only body key) or a part of an Instant Experience of the chosen Page; it cancels no async batch')
   }
-  if (deleteRule) {
+  if (bareDelete && noBody) {
     if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
-    return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE' } }
+    return { write: { rule: bareDelete.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: bareDelete.kinds, method: 'DELETE' } }
   }
-  if (method !== 'POST') return refuse(`Nexus sends Meta no ${method}`)
+  if (method !== 'POST' && method !== 'DELETE') return refuse(`Nexus sends Meta no ${method}`)
+  // Step 21 — a POST Meta documents with an EMPTY body (a value rule set's delete_rule_set): only by a rule that names no key
+  // for the kind the call names, with no body at all.
+  const barePost = method === 'POST' && noBody ? writeRules().find((r) => r.method === 'POST' && !r.required.length && !r.optional.length && !r.anyOf && r.path.test(graph.route) && kindMatches(r, input.objectKind)) : undefined
+  if (barePost) {
+    if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
+    return { write: { rule: barePost.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: barePost.kinds } }
+  }
   const parsed = writeParams(input.body)
   if ('problem' in parsed) return refuse(parsed.problem)
   const keys = [...parsed.params.keys()]
@@ -875,7 +945,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     && r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k))
     && (!r.anyOf || r.anyOf.some((k) => parsed.params.has(k))))
   if (!rule) {
-    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys); this one is POST /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a create or a copy (create-meta-campaign, create-meta-ad-set, copy-meta-ads: each its own edge and keys), or a delete a person asked for (remove-meta-ads-items: each its own path and keys), or a label, value rule or reach & frequency change (set-meta-labels, set-meta-value-rules, create-meta-reach-frequency: each its own path and keys); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
@@ -896,7 +966,7 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const body = new URLSearchParams(order.map((k): [string, string] => [k, parsed.params.get(k)!])).toString()
   const budget = typeof rule.budget === 'function' ? rule.budget(parsed.params) : rule.budget
   const ids = rule.ids?.(parsed.params) ?? []
-  return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}) } }
+  return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}), ...(method === 'DELETE' ? { method: 'DELETE' as const } : {}) } }
 }
 
 /** Step 18 — a rule with kinds matches only a call that names one of them; the status rule (no kinds) a campaign, ad set or ad. */
@@ -905,8 +975,8 @@ const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kin
   : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
 const MAX_ANY_WRITE_BODY = 16_000
-/** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts) — read when judged, never at load. */
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...META_OPTIMIZE_WRITE_RULES]
+/** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts), step 19's, step 22's, step 21's (meta-labels-rules.ts) and step 28's (meta-optimize-rules.ts) — read when judged, never at load. */
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...metaCreateWriteRules(), ...META_REMOVE_WRITE_RULES, ...metaLabelsWriteRules(), ...META_OPTIMIZE_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {
@@ -934,12 +1004,14 @@ function writeParams(body: unknown): { params: Map<string, string> } | { problem
  *                at most 1,000; read back per request (GET /<request set id>, /<request set id>/requests); rename
  *                (POST /<request set id> name, notification_*) and cancel (DELETE /<request id | set id>) before they run
  * Every part of a batch would be judged exactly like a call of its own (metaWriteVerdict, then the chosen-account check
- * per object), and a batch is never treated as atomic. NO kind is allowed yet: no Nexus change needs one (set-meta-status
- * sends one request per object, in order, and reports step by step). A step that needs one adds its kind here with tests.
+ * per object), and a batch is never treated as atomic. Step 19 (2026-10-21) allows the async batch for ONE use: copy-meta-ads
+ * in the background (master CMP-054), whose rule (meta-create-rules.ts copy.background) takes only parts that are copies of a
+ * campaign or an ad set and judges each exactly like that copy, naming each part's object for the account check; every
+ * other async batch matches no rule and is refused. A Graph batch stays refused (no Nexus change needs one).
  * The reads of an async request set are GETs (the read gate); its rename and cancel are refused by the write allow-list.
  */
 export type MetaBatchKind = 'graph-batch' | 'async-batch'
-export const META_BATCH_KINDS_ALLOWED: ReadonlySet<MetaBatchKind> = new Set<MetaBatchKind>()
+export const META_BATCH_KINDS_ALLOWED: ReadonlySet<MetaBatchKind> = new Set<MetaBatchKind>(['async-batch'])
 const MAX_BATCH_PARTS: Record<MetaBatchKind, number> = { 'graph-batch': 50, 'async-batch': 1000 }
 
 /** Which batch form a call is, or null. */
@@ -958,6 +1030,8 @@ export function metaBatchProblem(method: string, route: string, body: unknown): 
   const kind = metaBatchKindOf(method, route)
   if (!kind) return null
   const parts = batchParts(kind, body)
+  // Step 19 — an allowed kind: its shape is checked here, each part by the one rule that takes it (copy.background).
+  if (META_BATCH_KINDS_ALLOWED.has(kind)) return 'problem' in parts ? `Nexus sends a Meta async batch only as a background copy (${parts.problem})` : null
   const detail = 'problem' in parts ? parts.problem : parts.problems[0] ?? null
   if (!META_BATCH_KINDS_ALLOWED.has(kind) || detail) {
     const why = kind === 'graph-batch'

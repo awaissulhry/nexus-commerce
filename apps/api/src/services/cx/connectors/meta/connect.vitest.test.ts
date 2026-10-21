@@ -94,6 +94,13 @@ describe('the token check', () => {
     expect(tokenHealthOf({ app_id: APP_ID, is_valid: true, expires_at: 0, data_access_expires_at: 0 }, APP_ID)).toMatchObject({ isValid: true, dataAccessExpiresAt: null })
     expect(metaPermissionGaps([]).find((g) => g.scope === 'ads_read')).toMatchObject({ required: true })
   })
+  it('step 22 review B2 — pages_manage_ads is an optional permission, named for deleting Instant Experience parts', () => {
+    expect(metaPermissionGaps(['ads_management']).find((g) => g.scope === 'pages_manage_ads')).toEqual({
+      scope: 'pages_manage_ads', required: false,
+      neededFor: expect.stringMatching(/^delete parts of an Instant Experience of the chosen Page with remove-meta-ads-items \(Meta also asks pages_read_engagement, pages_show_list and the Page's ADVERTISE task\)$/),
+    })
+    expect(metaPermissionGaps(['ads_management', 'pages_manage_ads']).some((g) => g.scope === 'pages_manage_ads')).toBe(false)
+  })
 })
 
 describe('connect', () => {
