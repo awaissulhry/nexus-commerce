@@ -235,6 +235,10 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-recommendations': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-optimize.tools test)',
   'meta-experiments': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-optimize.tools test)',
   'meta-ad-rules': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-optimize.tools test)',
+  // Meta ads step 14: lead forms, leads and comments read the chosen Page, Instagram account or ad account live from Meta.
+  'meta-lead-forms': 'it reads the business\'s chosen Meta Page live from Meta, and no business here has one (meta-ads-engagement.tools test)',
+  'meta-leads': 'it reads the business\'s chosen Meta Page or ad account live from Meta, and no business here has one (meta-ads-engagement.tools test)',
+  'meta-comments': 'it reads the business\'s chosen Meta Page or Instagram account live from Meta, and no business here has one (meta-ads-engagement.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -553,6 +557,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-recommendations': () => ({ view: 'overview' }),
   'meta-experiments': () => ({ view: 'list' }),
   'meta-ad-rules': () => ({ view: 'list' }),
+  // Meta ads step 14: each refuses in words because no business here has Meta (meta-ads-engagement.tools.vitest.test.ts
+  // runs every view on an account).
+  'meta-lead-forms': () => ({ view: 'list' }),
+  'meta-leads': () => ({ view: 'form', formId: '600000000000001' }),
+  'meta-comments': () => ({ view: 'post', postId: '120000000000010_500000000000001' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),
@@ -1340,7 +1349,9 @@ describe('MCP.2 — money a person may not see never comes back', () => {
   // C7 — confirm-change is Claude's door only and returns its own arguments: no stored money to filter. W4-1 —
   // report-ads-run is Claude's door only too; it needs the ad-spend money permission (ads-manager.tools.vitest.test.ts).
   // Meta ads step 10 — meta-ad-preview is Claude's door only as well (its public links never reach the in-app chat); it holds no money.
-  const tools = () => listTools().filter((tool) => !AI_DRAFTS.has(tool.name) && tool.name !== 'confirm-change' && tool.name !== 'report-ads-run' && tool.name !== 'meta-ad-preview')
+  // Meta ads step 14 — so are meta-leads and meta-comments (people's data is never kept in an in-app run); no money either.
+  const mcpOnlyMeta = new Set(['meta-ad-preview', 'meta-leads', 'meta-comments'])
+  const tools = () => listTools().filter((tool) => !AI_DRAFTS.has(tool.name) && tool.name !== 'confirm-change' && tool.name !== 'report-ads-run' && !mcpOnlyMeta.has(tool.name))
 
   it('the money-cleared run really reads the seeded money (positive control)', async () => {
     const analytics = await run(cleared(A), 'product-analytics', ARGS['product-analytics'](seeded[A]))

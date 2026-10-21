@@ -262,7 +262,53 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^\d+\/history$/, keys: new Set(['object_id', 'action', 'hide_no_changes']) },
   { route: /^act_\d+\/adrules_history$/, keys: new Set(['object_id', 'action', 'hide_no_changes']) },
   { route: /^\d+\/ab_tests$/, keys: new Set(['since', 'until']) },
+  // Step 14 — leads, lead forms and comments (marketing/meta-ads/live-engagement.ts), each only on its own edge: a form's or
+  // an ad's leads take Meta's time filter in exactly its documented shape (leadTimeFiltering); a Facebook post's or
+  // comment's comments take filter, order, since (SDK pagepost.py / comment.py get_comments); an Instagram account's tags
+  // take posted_after, posted_before, media_type (ig-user/tags). Leads, comments and forms stay out of `fields`
+  // (FIELD_DENIED): they are read only through these edges. Review fix A2 — each key only with a value Nexus sends.
+  { route: /^\d+\/leads$/, keys: new Set(['filtering']), when: leadTimeFiltering },
+  { route: /^\d+_\d+\/comments$/, keys: new Set(['filter']), when: valueIn('filter', ['toplevel', 'stream']) },
+  { route: /^\d+_\d+\/comments$/, keys: new Set(['order']), when: valueIn('order', ['chronological', 'reverse_chronological']) },
+  { route: /^\d+_\d+\/comments$/, keys: new Set(['since']), when: (query) => /^\d{1,12}$/.test(query.get('since') ?? '') },
+  { route: /^\d+\/tags$/, keys: new Set(['posted_after']), when: (query) => isoDateTime(query.get('posted_after')) },
+  { route: /^\d+\/tags$/, keys: new Set(['posted_before']), when: (query) => isoDateTime(query.get('posted_before')) },
+  { route: /^\d+\/tags$/, keys: new Set(['media_type']), when: (query) => subsetOf(query.get('media_type'), ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM']) },
 ]
+/** Step 14 review A2 — the key's value is one of these. */
+function valueIn(key: string, values: readonly string[]): (query: URLSearchParams) => boolean {
+  return (query) => values.includes(query.get(key) ?? '')
+}
+/** Step 14 review A2 — an ISO date-time as Nexus sends it (`2026-10-21T00:00:00`, a real day and time). */
+function isoDateTime(value: string | null): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/.exec(value ?? '')
+  if (!m) return false
+  const d = new Date(`${value}Z`)
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 19) === value
+}
+/** Step 14 review A2 — a comma list of these values, each once, at least one. */
+function subsetOf(value: string | null, allowed: readonly string[]): boolean {
+  const list = (value ?? '').split(',')
+  return list.length > 0 && list.every((v) => allowed.includes(v)) && new Set(list).size === list.length
+}
+/**
+ * Step 14 — a leads read's `filtering` is Meta's documented time filter and nothing else (lead-ads/retrieving.md,
+ * "Filtering Leads"): one or two `{ field: "time_created", operator: LESS_THAN | GREATER_THAN | GREATER_THAN_OR_EQUAL,
+ * value: <unix seconds> }`, no other key.
+ */
+function leadTimeFiltering(query: URLSearchParams): boolean {
+  const raw = query.get('filtering')
+  if (raw === null) return true
+  let list: unknown
+  try { list = JSON.parse(raw) } catch { return false }
+  return Array.isArray(list) && list.length >= 1 && list.length <= 2 && list.every((f) => {
+    if (!f || typeof f !== 'object' || Array.isArray(f)) return false
+    const entry = f as Record<string, unknown>
+    return Object.keys(entry).sort().join(',') === 'field,operator,value' && entry.field === 'time_created'
+      && ['LESS_THAN', 'GREATER_THAN', 'GREATER_THAN_OR_EQUAL'].includes(entry.operator as string)
+      && typeof entry.value === 'number' && Number.isInteger(entry.value) && entry.value >= 0
+  })
+}
 /**
  * Step 9 — the `type` values a /search read may carry: targeting options only (targeting-search reference), never
  * people, Pages or places. live-targeting.ts SEARCH_TYPE_OF sends exactly these.
@@ -295,7 +341,17 @@ const MODIFIERS = /^(?:\s*\.\s*[A-Za-z_]+\s*\([^(){}]*\))*\s*/
 const FIELD_DENIED = new Set([
   'owned_ad_accounts', 'client_ad_accounts', 'pending_owned_ad_accounts', 'pending_client_ad_accounts', 'owned_pages', 'client_pages',
   'users', 'assigned_users', 'system_users', 'business_users', 'agencies', 'leadgen_forms', 'leads', 'conversations', 'messages', 'comments',
+  // Step 14 review A3 — people's lists Nexus reads only through their own edge (live-engagement.ts), never inside fields.
+  'test_leads', 'ordered_comments', 'sharedposts', 'replies', 'blocked', 'ratings', 'likes', 'tags',
 ])
+
+/**
+ * Step 14 review A3 — `reactions` inside fields only as a COUNT: `reactions[.type(X)].limit(0).summary(total_count)`, so
+ * no person who reacted is ever listed (Meta's own example on object/reactions).
+ */
+const REACTIONS_FIELD = /(?<![A-Za-z0-9_])reactions(?![A-Za-z0-9_])/gi
+// Re-review 2 — the count ends the field: the next character is the end, a comma or a closing } or ) (never a space).
+const REACTIONS_COUNT_ONLY = /^(?:\.type\([A-Z]{2,12}\))?\.limit\(0\)\.summary\(total_count\)(?=$|[,})])/
 
 /** Review 2 — never inside an expansion (`{…}` or `.fields(…)`): another object's Instagram account, owner, ratings, feed. */
 const NESTED_DENIED = new Set(['instagram_business_account', 'owner_business', 'ratings', 'feed', 'blocked'])
@@ -360,11 +416,16 @@ function fieldsProblem(value: string): string | null {
   if (!/^[\x20-\x7e]*$/.test(value)) return 'fields is plain ASCII letters, digits and punctuation'
   const names = value.split(/[^A-Za-z0-9_]+/).filter(Boolean)
   if (names.some((name) => TOKEN_NAME.test(name))) return 'a read never asks Meta for a token'
+  // Step 14 review A3 — ratings and blocked are denied anywhere now; inside an expansion they keep step 2's own sentence.
+  const braces = bracesProblem(value)
+  if (braces && braces.endsWith('inside another field')) return braces
   const denied = names.find((name) => FIELD_DENIED.has(name.toLowerCase()))
   if (denied) return `a read never expands "${denied}" inside fields (another business's assets, people or messages)`
   if (!names.some((name) => FIELD_NAME.test(name))) return 'fields names no field'
-  const braces = bracesProblem(value)
   if (braces) return braces
+  for (const match of value.matchAll(REACTIONS_FIELD)) {
+    if (!REACTIONS_COUNT_ONLY.test(value.slice((match.index ?? 0) + match[0].length))) return 'reactions inside fields only as a count: reactions[.type(X)].limit(0).summary(total_count)'
+  }
   for (const match of value.matchAll(ACCOUNTS_FIELD)) {
     const after = value.slice((match.index ?? 0) + match[0].length).replace(MODIFIERS, '')
     if (!after.startsWith('{')) return 'an accounts field names its own fields ({…}): Meta answers each Page\'s token by default'

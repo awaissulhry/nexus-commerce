@@ -139,7 +139,7 @@ async function listWithFallback(connectionId: string, operation: string, path: s
 }
 
 /** One part of an answer that may fail on its own (an edge Meta may refuse): its rows, or Meta's sentence. */
-async function part<T>(work: () => Promise<T>): Promise<{ value: T | null; notRead: string | null }> {
+export async function part<T>(work: () => Promise<T>): Promise<{ value: T | null; notRead: string | null }> {
   try {
     return { value: await work(), notRead: null }
   } catch (err) {
@@ -155,12 +155,12 @@ const NO_PAGE = 'No Facebook Page is chosen for this business yet. A person choo
 const NO_INSTAGRAM = 'No Instagram account is chosen for this business yet. A person chooses it in Settings › Channels › Meta, or Claude asks for it with set-meta-connection (a person approves it).'
 export const PAGE_TOKEN_NOTE = 'If Meta\'s words ask for a Page access token or a Page permission: Nexus reads the Page with the business\'s system-user token for now (the system user needs the Page assigned in Meta Business settings); reads that need the Page\'s own token come with a later Nexus step.'
 
-function pageOf(account: MetaChosenAccount): string {
+export function pageOf(account: MetaChosenAccount): string {
   if (!account.pageId) throw new MetaLiveRefusal(NO_PAGE)
   return account.pageId
 }
 
-function instagramOf(account: MetaChosenAccount): string {
+export function instagramOf(account: MetaChosenAccount): string {
   if (!account.instagramId) throw new MetaLiveRefusal(NO_INSTAGRAM)
   return account.instagramId
 }
@@ -180,13 +180,25 @@ async function portfolioTaken(portfolioId: string): Promise<{ portfolioId: strin
   return (await takenIds('PORTFOLIO', [portfolioId])).has(portfolioId) ? { portfolioId, takenByAnotherBusiness: true, sentence: PORTFOLIO_TAKEN } : null
 }
 
-/** A Page or Instagram read: when Meta refuses it for the token, the answer says what that means. */
-async function onPage<T>(work: () => Promise<T>): Promise<T> {
+/** Meta's words when a read needs the Page's own token (its #190 "must be called with a Page Access Token"). */
+const PAGE_TOKEN_WORDS = /page access token/i
+
+/**
+ * A Page or Instagram read: when Meta refuses it for the token, the answer says what that means. Step 14 review A5 — a
+ * token Meta no longer accepts keeps step 2's lost-token sentence (errors.ts: make a new token); only Meta's "needs a
+ * Page Access Token" (#190, which the vocabulary files as a lost token) is answered as the Page-token way.
+ */
+export async function onPage<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work()
   } catch (err) {
-    if (err instanceof MetaReadError && err.failure.origin === 'meta' && !err.failure.throttled && (err.failure.permissionDenied || err.failure.authLost)) {
-      throw new MetaLiveRefusal(`${err.message} ${PAGE_TOKEN_NOTE}`)
+    if (err instanceof MetaReadError && err.failure.origin === 'meta' && !err.failure.throttled) {
+      if (err.failure.permissionDenied) throw new MetaLiveRefusal(`${err.message} ${PAGE_TOKEN_NOTE}`)
+      if (err.failure.authLost && PAGE_TOKEN_WORDS.test(err.failure.sentence)) {
+        // Meta's own words only, without errors.ts's "make a new token" (the token still works).
+        const words = /token \((.*)\)\. Make a new token/s.exec(err.failure.sentence)?.[1] ?? err.failure.sentence
+        throw new MetaLiveRefusal(`Meta answers this read only to the Page's own access token, not to the business's system-user token, which still works (Meta's words: ${words}). ${PAGE_TOKEN_NOTE}`)
+      }
     }
     throw err
   }
@@ -201,7 +213,7 @@ export function pagePostId(pageId: string, id: string): string {
 }
 
 /** Meta answers a post with its own canonical id: it must still be the chosen Page's (else nothing of it is returned). */
-function stillOnPage(pageId: string, body: Row): void {
+export function stillOnPage(pageId: string, body: Row): void {
   const id = idText(body.id)
   if (id && !id.startsWith(`${pageId}_`)) throw new MetaLiveRefusal('Meta answered with a post that is not on the Facebook Page this business chose; nothing of it is returned.')
 }
