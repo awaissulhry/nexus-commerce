@@ -956,6 +956,10 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-meta-webhooks': ['basis', 'plan', 'reach'],
   'set-meta-alert-subscription': ['basis', 'plan', 'reach'],
   'remove-meta-alert-subscription': ['basis', 'plan', 'reach'],
+  // Meta step 20 (2026-10-21): an ad set's targeting and placements, the ad account's controls (meta-ads-kit).
+  'set-meta-targeting': ['basis', 'plan', 'reach'],
+  'set-meta-placements': ['basis', 'plan', 'reach'],
+  'set-meta-account-controls': ['basis', 'plan', 'reach'],
   // Meta step 33 (2026-10-21): the pixel, the sales and what was sent before (basis), the sales it sends
   // (plan), where it lands (reach).
   'upload-meta-events': ['basis', 'plan', 'reach'],

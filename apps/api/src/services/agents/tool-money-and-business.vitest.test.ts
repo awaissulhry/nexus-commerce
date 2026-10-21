@@ -210,6 +210,9 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-webhooks': 'it reads the business\'s Meta app and chosen ad account live from Meta, and no business here has Meta connected (meta-ads-webhooks.tools test)',
   'set-meta-alert-subscription': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-webhooks.tools test)',
   'remove-meta-alert-subscription': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-webhooks.tools test)',
+  'set-meta-targeting': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-targeting-change.tools test)',
+  'set-meta-placements': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-targeting-change.tools test)',
+  'set-meta-account-controls': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-targeting-change.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -635,6 +638,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-webhooks': () => ({ action: 'connect-ad-account' }),
   'set-meta-alert-subscription': () => ({ action: 'create', eventType: 'OBJECT_CREATED', entityType: 'CAMPAIGN' }),
   'remove-meta-alert-subscription': () => ({ subscriptionId: '120000000000040', confirmDelete: true }),
+  // Meta ads step 20: targeting, placements and the account's controls refuse in words here (no business has Meta; their own test runs them).
+  'set-meta-targeting': () => ({ adSets: [{ adSetId: '120000000000002', ageMin: 21 }] }),
+  'set-meta-placements': () => ({ adSets: [{ adSetId: '120000000000002', advantagePlacements: true }] }),
+  'set-meta-account-controls': () => ({ ageMin: 21 }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),

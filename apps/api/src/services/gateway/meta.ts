@@ -19,7 +19,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
-import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaEventsKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaWebhookKind } from './meta-calls.js'
+import { META_REST_HOST, type MetaBoostWriteKind, type MetaBrandSafetyKind, type MetaEventsKind, type MetaPageKind, type MetaLabelsKind, type MetaOptimizeKind, type MetaRemoveKind, type MetaTargetingKind, type MetaWebhookKind } from './meta-calls.js'
 import { metaRuploadUrl } from './meta-media-rules.js'
 import type { MetaSignalsKind } from './meta-signals-rules.js'
 
@@ -94,6 +94,8 @@ export interface MetaWriteRequest {
     | MetaSignalsKind
     // Step 30 — the connection's own Meta app (its webhook subscriptions).
     | MetaWebhookKind
+    // Step 20 — an ad set's audience or its placements (set-meta-targeting, set-meta-placements).
+    | MetaTargetingKind
     // Step 33 — a pixel, for its Conversions API events (edge `events`).
     | MetaEventsKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
@@ -133,6 +135,8 @@ export interface MetaWriteRequest {
    * link to the chosen ad account); `params` is then empty. The gateway refuses a query on every other call.
    */
   query?: Record<string, string>
+  /** Step 20 (review A2) — the targeting keys this change's draft changed: the only ones the gateway lets differ from live. */
+  targetingKeys?: string[]
   /** Step 18 — a budget schedule's campaign or ad set (the gateway confirms the period is one of its own). */
   parent?: { kind: 'campaign' | 'adset'; id: string }
   /** Step 19 — Meta's check of a create asks its setup recommendations too (`["validate_only","include_recommendations"]`). */
@@ -150,7 +154,7 @@ export interface MetaWriteRequest {
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
   | MetaMediaEdge | MetaCreativeEdge | MetaRuleEdge | MetaBrandSafetyEdge | MetaAudienceEdge | MetaPageEdge | MetaBoostEdge | MetaSignalsEdge | MetaAdEdge
-  | MetaWebhookEdge | MetaEventsEdge
+  | MetaWebhookEdge | MetaTargetingEdge | MetaEventsEdge
 /** Step 33 — upload-meta-events: Conversions API events of a pixel (`<pixel id>/events`). */
 export type MetaEventsEdge = 'events'
 /** Step 27 — create-meta-ad: a new ad on the chosen ad account (an ad's labels: step 21's `adlabels`). */
@@ -170,6 +174,8 @@ export type MetaWebhookEdge = 'subscribed_apps' | 'subscriptions'
 export type MetaSignalsEdge = 'adspixels' | 'dataset' | 'customconversions' | 'shared_accounts' | 'event_source_groups' | 'claim_custom_conversions'
 /** Step 31 — an ad account's new audiences and product audiences, its opt-outs; an audience's people and its shares. */
 export type MetaAudienceEdge = 'customaudiences' | 'product_audiences' | 'usersofanyaudience' | 'users' | 'ad_accounts'
+/** Step 20 — the ad account's controls, a place page set made on the ad account (and Meta's background variant, SDK only). */
+export type MetaTargetingEdge = 'account_controls' | 'ad_place_page_sets' | 'ad_place_page_sets_async'
 /** Step 29 — a rule made on the ad account's rule library (`act_<id>/adrules_library`), a rule's run now (`<rule id>/execute`). */
 export type MetaRuleEdge = 'adrules_library' | 'execute'
 /** Step 39 — the brand-safety edges (the account's filter, a block list's draft, list, shares, people, ad accounts and posts). */
@@ -220,6 +226,7 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
     metaObjectKind: req.objectKind,
     ...(req.parent ? { metaParent: req.parent } : {}),
     ...(req.run ? { metaRun: req.run } : {}),
+    ...(req.targetingKeys?.length ? { metaTargetingKeys: req.targetingKeys } : {}),
     maxTransientRetries: req.check ? 1 : 0,
     max429Retries: 0,
     maxRateWaitMs: req.maxRateWaitMs,
