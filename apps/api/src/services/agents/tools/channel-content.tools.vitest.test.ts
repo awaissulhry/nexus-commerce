@@ -39,7 +39,8 @@ vi.mock('../../product-read-cache.service.js', () => ({ productReadCacheService:
 // stood in for here (channel logins are sealed with the production key), at the module boundary the tools call.
 const shop = vi.hoisted(() => ({
   schemaMissing: [] as string[],
-  cells: {} as Record<string, { value: unknown; nexusDraft: boolean }>,
+  // stored: what Shopify itself holds (the writer's baseline, and what a reset gives back); default 'Store value'.
+  cells: {} as Record<string, { value: unknown; nexusDraft: boolean; stored?: string }>,
   token: 1,
   saves: [] as Array<{ productId: string; scope: Record<string, unknown>; body: any; actor: string | null }>,
   refuse: null as null | string,
@@ -60,7 +61,8 @@ vi.mock('../../shopify/channel-sheet.service.js', () => ({
     for (const cell of body.cells) {
       const key = cell.receiptKey ?? cell.colId
       if (shop.refuse && cell.fieldId === shop.refuse) { cells[key] = { ok: false, reason: 'Shopify changed this value since it was read.' }; continue }
-      shop.cells[cell.fieldId] = cell.intent === 'reset' ? { value: 'Store value', nexusDraft: false } : { value: cell.value, nexusDraft: true }
+      const was = shop.cells[cell.fieldId]
+      shop.cells[cell.fieldId] = cell.intent === 'reset' ? { ...was, value: was?.stored ?? 'Store value', nexusDraft: false } : { ...was, value: cell.value, nexusDraft: true }
       shop.token++
       cells[key] = { ok: true }
     }
@@ -135,6 +137,8 @@ const COLUMNS = [
   column('metafield:PRODUCT:custom.pockets', 'Pockets', { discovery: 'definition', type: 'number_integer', definition: { id: 'def-1', ownerType: 'PRODUCT', namespace: 'custom', key: 'pockets', name: 'Pockets', type: 'number_integer', validations: [], access: {} } }),
   // Meta ads step 44 — the store's Sales channels (made-up publication ids).
   column('salesChannels', 'Sales channels', { type: 'publication', group: 'Publishing' }),
+  // Step 44 review — the product's own Shopify status (only an active product reaches the Meta catalog).
+  column('status', 'Status', { type: 'status' }),
 ]
 const ONLINE = 'gid://shopify/Publication/1001'
 const FB_IG = 'gid://shopify/Publication/1002'
@@ -156,7 +160,7 @@ function shopifySheet(input: { productId: string }) {
     }
     if (c.key === 'tags') { values.tags = { value: ['moto'], layer: 'channel', editable: false, writable: false, writeBlockedReason: 'Tags are set by the store\'s automation.' }; continue }
     values[c.key] = { value: state.value, nexusDraft: state.nexusDraft, layer: state.nexusDraft ? 'channel' : 'master', editable: true, writable: true, writeBlockedReason: null,
-      writeField: c.writeField, writeTarget: 'channelListing', shopifyWrite: { ownerId: STORE_PRODUCT, fieldId: c.key, token: `token-${shop.token}`, baseline: 'Store value' } }
+      writeField: c.writeField, writeTarget: 'channelListing', shopifyWrite: { ownerId: STORE_PRODUCT, fieldId: c.key, token: `token-${shop.token}`, baseline: state.stored ?? 'Store value' } }
   }
   return {
     scope: { kind: 'channel', channel: 'SHOPIFY', marketplace: 'GLOBAL', label: 'Shopify · GLOBAL', connectionId: 'store-account', locale: 'en' },
@@ -198,8 +202,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   shop.schemaMissing = []
+  const storeChannels = JSON.stringify([{ publicationId: ONLINE, publishDate: null }, { publicationId: POS, publishDate: null }])
   shop.cells = { vendor: { value: 'Store value', nexusDraft: false }, 'metafield:PRODUCT:custom.pockets': { value: '2', nexusDraft: false },
-    salesChannels: { value: JSON.stringify([{ publicationId: ONLINE, publishDate: null }, { publicationId: POS, publishDate: null }]), nexusDraft: false } }
+    salesChannels: { value: storeChannels, nexusDraft: false, stored: storeChannels }, status: { value: 'ACTIVE', nexusDraft: false } }
   shop.publications = STORE_CHANNELS
   shop.saves = []
   shop.refuse = null
@@ -330,22 +335,52 @@ describe('Meta ads step 44 — set-shopify-content facebookInstagram: the Shopif
       facebookInstagram: { op: 'publish', channel: 'Facebook & Instagram', publicationId: FB_IG },
       note: expect.stringMatching(/Review and synchronize.*Only the "Facebook & Instagram" sales channel is added; every other channel stays as it is.*Meta catalog/),
     })
+    // An active product: no word about its status.
+    expect(p.note).not.toMatch(/until it is active|Only an active/)
     expect(shop.saves).toHaveLength(0)
     expect(await inside(() => checkStaleness(approvalId))).toEqual({ stale: false, why: null })
     expect(await approveAndRun(approvalId)).toMatchObject({ ok: true, status: 'executed' })
     expect(shop.saves).toHaveLength(1)
     expect(shop.saves[0].body.cells).toEqual([{
-      colId: 'salesChannels', receiptKey: 'salesChannels', ownerId: STORE_PRODUCT, fieldId: 'salesChannels', token: expect.stringMatching(/^token-\d+$/), baseline: 'Store value',
+      colId: 'salesChannels', receiptKey: 'salesChannels', ownerId: STORE_PRODUCT, fieldId: 'salesChannels', token: expect.stringMatching(/^token-\d+$/), baseline: shop.cells.salesChannels.stored,
       value: JSON.stringify([{ publicationId: ONLINE, publishDate: null }, { publicationId: FB_IG, publishDate: null }, { publicationId: POS, publishDate: null }]), intent: 'set',
     }])
     const change = await inside(() => db().agentChange.findFirstOrThrow({ where: { approvalId } }))
     expect(change).toMatchObject({ toolName: 'set-shopify-content', before: { facebookInstagram: 'publish', fields: { salesChannels: { nexusDraft: false } } }, after: { facebookInstagram: 'publish', fields: { salesChannels: { nexusDraft: true } } } })
-    // Undo: the other way, that publication only.
+    // Undo: the other way, that publication only. Review fix — there was no draft before, so the draft is dropped again
+    // (the sheet's reset), never written as a draft equal to Shopify's own list.
     const undo = await ask('undo-change', { approvalId })
     expect(undo, undo.error).toMatchObject({ ok: true, mode: 'queued' })
-    expect(await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: undo.approvalId! } }))).toMatchObject({ toolName: 'set-shopify-content', args: { product: family.id, facebookInstagram: 'unpublish' } })
+    expect(await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: undo.approvalId! } }))).toMatchObject({ toolName: 'set-shopify-content', args: { product: family.id, facebookInstagram: 'unpublish', reset: ['salesChannels'] } })
     expect(await approveAndRun(undo.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
+    expect(shop.saves.at(-1)!.body.cells).toEqual([expect.objectContaining({ fieldId: 'salesChannels', intent: 'reset', value: null })])
+    expect(shop.cells.salesChannels).toMatchObject({ nexusDraft: false })
     expect(JSON.parse(String(shop.cells.salesChannels.value))).toEqual([{ publicationId: ONLINE, publishDate: null }, { publicationId: POS, publishDate: null }])
+  })
+
+  it('review fix — undo where the Sales channels already held a draft: that draft again, the channel taken back out', async () => {
+    // A person's own draft took the Point of Sale channel away; Claude adds Facebook & Instagram on top of it.
+    shop.cells.salesChannels = { ...shop.cells.salesChannels, value: JSON.stringify([{ publicationId: ONLINE, publishDate: null }]), nexusDraft: true }
+    const { approvalId } = await queued({ product: family.id, facebookInstagram: 'publish' })
+    expect(await approveAndRun(approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    const undo = await ask('undo-change', { approvalId })
+    expect(undo, undo.error).toMatchObject({ ok: true, mode: 'queued' })
+    const asked = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: undo.approvalId! } }))
+    expect(asked.args).not.toHaveProperty('reset')
+    expect(await approveAndRun(undo.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
+    expect(shop.saves.at(-1)!.body.cells).toEqual([expect.objectContaining({ intent: 'set', value: JSON.stringify([{ publicationId: ONLINE, publishDate: null }]) })])
+    expect(shop.cells.salesChannels).toMatchObject({ nexusDraft: true })
+  })
+
+  it('review fix — a product that is not active: published to the channel, but not in the Meta catalog until it is active', async () => {
+    shop.cells.status = { value: 'DRAFT', nexusDraft: false }
+    const draft = await preview({ product: family.id, facebookInstagram: 'publish' })
+    expect(draft.preview!.note).toMatch(/The product's own Shopify status is DRAFT: it is published to the channel, but does not reach the Meta catalog until it is active\.$/)
+    shop.cells.status = { value: null, nexusDraft: false }
+    expect((await preview({ product: family.id, facebookInstagram: 'publish' })).preview!.note).toMatch(/Only an active Shopify product reaches the Meta catalog\.$/)
+    // Taking it out says nothing about the status.
+    shop.cells.salesChannels = { ...shop.cells.salesChannels, value: JSON.stringify([{ publicationId: FB_IG, publishDate: null }]) }
+    expect((await preview({ product: family.id, facebookInstagram: 'unpublish' })).preview!.note).not.toMatch(/active/)
   })
 
   it('unpublish keeps every other channel and its schedule', async () => {
@@ -364,12 +399,23 @@ describe('Meta ads step 44 — set-shopify-content facebookInstagram: the Shopif
     expect(await preview({ product: family.id, facebookInstagram: 'unpublish' })).toMatchObject({ ok: false, error: expect.stringMatching(/^Nothing to change: TEST-SKU-T11 is not in/) })
     shop.publications = STORE_CHANNELS.filter((c) => c.id !== FB_IG)
     expect(await preview({ product: family.id, facebookInstagram: 'publish' })).toMatchObject({ ok: false, error: expect.stringMatching(/has no Facebook & Instagram sales channel.*Nexus does not/) })
-    shop.publications = [...STORE_CHANNELS, { id: 'gid://shopify/Publication/1004', name: 'Facebook and Instagram (old)', supportsFuturePublishing: false }]
+    shop.publications = [...STORE_CHANNELS, { id: 'gid://shopify/Publication/1004', name: 'Facebook and Instagram', supportsFuturePublishing: false }]
     expect(await preview({ product: family.id, facebookInstagram: 'publish' })).toMatchObject({ ok: false, error: expect.stringMatching(/2 sales channels named like Facebook & Instagram.*does not guess/) })
+    // Review fix — a name that only holds both words (a merchant's catalog, say) is never the channel.
+    shop.publications = [...STORE_CHANNELS.filter((c) => c.id !== FB_IG), { id: 'gid://shopify/Publication/1005', name: 'Facebook Instagram spring catalog', supportsFuturePublishing: false }]
+    expect(await preview({ product: family.id, facebookInstagram: 'publish' })).toMatchObject({ ok: false, error: expect.stringMatching(/no sales channel named "Facebook & Instagram", only "Facebook Instagram spring catalog".*does not guess/) })
+    shop.publications = [...STORE_CHANNELS, { id: 'gid://shopify/Publication/1005', name: 'Facebook Instagram spring catalog', supportsFuturePublishing: false }]
+    shop.cells.salesChannels = { value: JSON.stringify([]), nexusDraft: false }
+    expect(await preview({ product: family.id, facebookInstagram: 'publish' })).toMatchObject({ ok: true, preview: { facebookInstagram: { publicationId: FB_IG } } })
     shop.publications = undefined
     expect(await preview({ product: family.id, facebookInstagram: 'publish' })).toMatchObject({ ok: false, error: expect.stringMatching(/lacks read_publications/) })
     shop.publications = STORE_CHANNELS
     expect(await preview({ product: family.id, facebookInstagram: 'publish', fields: { vendor: 'X' } })).toMatchObject({ ok: false, error: expect.stringMatching(/facebookInstagram is asked alone/) })
+    // Review fix — undo's reset of the Sales channels draft goes only when that draft differs from Shopify by the channel alone.
+    shop.cells.salesChannels = { value: JSON.stringify([{ publicationId: FB_IG, publishDate: null }]), nexusDraft: true, stored: JSON.stringify([{ publicationId: ONLINE, publishDate: null }]) }
+    expect(await preview({ product: family.id, facebookInstagram: 'unpublish', reset: ['salesChannels'] })).toMatchObject({ ok: false, error: expect.stringMatching(/would change more than the Facebook & Instagram channel/) })
+    expect(await preview({ product: family.id, facebookInstagram: 'unpublish', reset: ['salesChannels', 'vendor'] })).toMatchObject({ ok: false, error: expect.stringMatching(/facebookInstagram is asked alone/) })
+    expect(await preview({ product: family.id, reset: ['salesChannels'] })).toMatchObject({ ok: false, error: expect.stringMatching(/salesChannels: a listing setting/) })
     // The Sales channels field itself is never set through fields: only facebookInstagram changes it, one publication.
     expect(await preview({ product: family.id, fields: { salesChannels: '[]' } })).toMatchObject({ ok: false, error: expect.stringMatching(/salesChannels: a listing setting .*\(the Facebook & Instagram channel: facebookInstagram\)/) })
     expect(() => getToolInput().parse({ product: family.id, facebookInstagram: 'remove' })).toThrow()

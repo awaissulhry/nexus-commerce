@@ -517,11 +517,13 @@ describe('Meta ads step 44 — ad-changes channel meta: the Meta change kit\'s r
     const [archive, step, budget, pause] = data.items
     expect(pause).toMatchObject({
       source: 'operator', actor: 'Shop A Owner', decidedVia: 'nexus', action: 'set-meta-status', title: 'Pause, switch on or archive Meta ads',
-      adAccountId: '1234567890', note: 'Meta: pause campaign "Shop A spring" (120000000000001).', undoable: true, undo: 'possible',
+      adAccountId: '1234567890', note: 'Asked: Meta: pause campaign "Shop A spring" (120000000000001).', undoable: true, undo: 'possible',
       replaced: { items: [{ kind: 'campaign', id: '120000000000001', status: 'ACTIVE' }] }, wrote: { items: [{ status: 'PAUSED' }] },
     })
-    expect(budget).toMatchObject({ decidedVia: 'no-approval', action: 'set-meta-campaign', wrote: { dailyBudgetCents: 2500 } })
-    expect(step).toMatchObject({ planStep: 2, note: 'Meta: pause ad set "Shop A loser" (120000000000002).' })
+    // Review fix — the business's no-approval switch ran it: source automation, decidedVia kept.
+    expect(budget).toMatchObject({ source: 'automation', decidedVia: 'no-approval', action: 'set-meta-campaign', wrote: { dailyBudgetCents: 2500 } })
+    // Review fix — the note is what was asked (a change Meta made in part shows only that part in replaced / wrote).
+    expect(step).toMatchObject({ source: 'operator', planStep: 2, note: 'Asked: Meta: pause ad set "Shop A loser" (120000000000002).' })
     expect(archive).toMatchObject({ undoable: false, undo: 'not possible' })
     expect(data.dataAsOf).toBe(archive.at)
     // Business B's Meta changes never show.
@@ -540,14 +542,18 @@ describe('Meta ads step 44 — ad-changes channel meta: the Meta change kit\'s r
     expect(JSON.stringify(seen)).not.toContain('2500')
   })
 
-  it('pages with no change twice; sources other than operator answer in words; a campaign or target filter is refused', async () => {
+  it('pages with no change twice; automation is what the no-approval switch ran, operator the rest; the others answer in words; a campaign or target filter is refused', async () => {
     const whole = ids((await call('ad-changes', { channel: 'meta', limit: 100 })).data!.items, 'changeId')
     const { items, pages } = await walk('ad-changes', { channel: 'meta' }, 1)
     expect(ids(items, 'changeId')).toEqual(whole)
     expect(pages).toBe(5)
-    expect(ids((await call('ad-changes', { channel: 'meta', source: 'operator', limit: 100 })).data!.items, 'changeId')).toEqual(whole)
+    // Review fix — a change the business's "no approval" switch ran (#691) is found under automation, never hidden.
+    expect(ids((await call('ad-changes', { channel: 'meta', source: 'operator', limit: 100 })).data!.items, 'changeId')).toEqual(whole.filter((id) => id !== ids_['Shop A:budget']))
+    const automation = (await call('ad-changes', { channel: 'meta', source: 'automation', limit: 100 })).data!
+    expect(ids(automation.items, 'changeId')).toEqual([ids_['Shop A:budget']])
+    expect(automation.items[0]).toMatchObject({ source: 'automation', decidedVia: 'no-approval' })
     expect((await call('ad-changes', { channel: 'meta', source: 'external' })).data).toMatchObject({ items: [], note: expect.stringMatching(/meta-activity-log/) })
-    expect((await call('ad-changes', { channel: 'meta', source: 'automation' })).data).toMatchObject({ items: [], note: expect.stringMatching(/no Meta change by itself/) })
+    expect((await call('ad-changes', { channel: 'meta', source: 'system' })).data).toMatchObject({ items: [], note: expect.stringMatching(/^Nexus makes no Meta change by itself\..*source automation \(decidedVia no-approval\)/) })
     expect(await call('ad-changes', { channel: 'meta', campaignId: 'ar-c1' })).toEqual({ ok: false, error: expect.stringMatching(/^campaignId and targetId name Amazon or eBay objects/) })
     // The window: a change older than the days asked is left out.
     expect(ids((await call('ad-changes', { channel: 'meta', days: 1, limit: 100 })).data!.items, 'changeId')).not.toContain(ids_['Shop A:older'])

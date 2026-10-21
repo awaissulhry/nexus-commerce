@@ -10,7 +10,12 @@
  *                against the read days before them (up to 56): spend, click-through rate, cost per purchase and ROAS.
  *                A day is a break when it lies 2 standard deviations or more from the earlier days' mean AND moved at
  *                least 20 % from it (severity as the Insights anomalies, IH.9: 2.25 attention, 3 critical); a metric
- *                with fewer than 14 earlier days to compare is not checked, and says so
+ *                with fewer than 14 earlier days to compare is not checked, and says so (so does one whose earlier days
+ *                all had the same value: no day can be measured in standard deviations against it)
+ *   volume       a day's cost per purchase and ROAS count — in the earlier days and in the checked days — only when the
+ *                day spent at least 40 % of the earlier days' median spend day (their read days with spend): a day below
+ *                it is left out of those two, as an unread day is, never judged as a zero (a few cents with no sale, or
+ *                with one big sale, says nothing about the account)
  *   shifts       the checked days together against the earlier days together (ratios from the sums): a move of 25 % or
  *                more with enough volume on both sides (attention; 50 % or more: critical)
  *   Meta said    what Meta itself pushed in those days through a verified webhook (step 30's notices): creative fatigue,
@@ -41,6 +46,8 @@ const SHIFT_CRITICAL = 0.5
 const CTR_MIN_IMPRESSIONS = 500
 /** A shift of cost per purchase or ROAS needs this many purchases on each side. */
 const SHIFT_MIN_PURCHASES = 3
+/** A day's cost per purchase and ROAS count only when it spent at least this share of the earlier days' median spend day. */
+const PURCHASE_MIN_SPEND_SHARE = 0.4
 /** Meta's own pushes read as signals (channel-alerts kinds of step 30). */
 export const META_SIGNAL_NOTICES = ['meta-ads-creative-fatigue', 'meta-ads-account-status', 'meta-ads-object-issue'] as const
 const NOTICE_CAP = 20
@@ -56,8 +63,10 @@ interface MetricSpec {
   words: string
   /** Which way is worse; null: neither by itself (spend). */
   worse: 'up' | 'down' | null
-  /** Built on Meta's purchases (late purchases still restate the last days). */
+  /** Built on Meta's purchases (late purchases still restate the last days); its days need the volume floor. */
   purchases: boolean
+  /** What each earlier day needs to count, for the not-checked reason. */
+  needs?: string
   /** A day's value, or null when the day has too little to judge it. */
   day: (d: ReadDay) => number | null
   /** The value of several days together (from the sums), or null when they have too little to judge it. */
@@ -73,17 +82,19 @@ const METRICS: Readonly<Record<MetaAnomalyMetric, MetricSpec>> = {
     window: (s, n) => (n > 0 ? Math.round(s.spendCents / n) : null),
   },
   ctr: {
-    key: 'ctr', words: 'click-through rate', worse: 'down', purchases: false,
+    key: 'ctr', words: 'click-through rate', worse: 'down', purchases: false, needs: `each with ${CTR_MIN_IMPRESSIONS} impressions`,
     day: (d) => (d.impressions >= CTR_MIN_IMPRESSIONS ? d.ctr : null),
     window: (s) => (s.impressions >= CTR_MIN_IMPRESSIONS * 10 ? s.clicks / s.impressions : null),
   },
   costPerPurchase: {
     key: 'costPerPurchaseCents', words: 'cost per purchase', worse: 'up', purchases: true,
+    needs: `each with a purchase and spend of at least ${PURCHASE_MIN_SPEND_SHARE * 100} % of the median spend day`,
     day: (d) => (d.purchases > 0 ? d.costPerPurchaseCents : null),
     window: (s) => (s.purchases >= SHIFT_MIN_PURCHASES ? Math.round(s.spendCents / s.purchases) : null),
   },
   roas: {
     key: 'roas', words: 'ROAS', worse: 'down', purchases: true,
+    needs: `each with spend of at least ${PURCHASE_MIN_SPEND_SHARE * 100} % of the median spend day`,
     // A day that spent and sold nothing is a ROAS of 0 — the break a stopped purchase tracking shows.
     day: (d) => (d.spendCents > 0 ? d.roas : null),
     window: (s) => (s.spendCents > 0 && s.purchases >= SHIFT_MIN_PURCHASES ? s.purchaseValueCents / s.spendCents : null),
@@ -147,6 +158,12 @@ const ORDER: Record<MetaAnomalySeverity, number> = { critical: 0, attention: 1, 
 const round = (n: number, places: number) => Math.round(n * 10 ** places) / 10 ** places
 const valueOf = (metric: MetaAnomalyMetric, v: number) => (metric === 'ctr' ? round(v, 5) : metric === 'roas' ? round(v, 3) : Math.round(v))
 
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
 function stats(values: number[]): { mean: number; std: number } {
   const mean = values.reduce((s, v) => s + v, 0) / values.length
   return { mean, std: Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length) }
@@ -179,18 +196,32 @@ export function metaAnomaliesOf(history: MetaAdsDay[], checked: MetaAdsDay[]): {
   const anomalies: MetaAnomaly[] = []
   const notChecked: string[] = []
   if (!recent.length) return { anomalies, notChecked: ['every metric: Nexus has read none of the checked days yet'] }
+  // The volume floor of cost per purchase and ROAS: 40 % of the earlier days' median spend day (read days with spend).
+  const spends = earlier.map((d) => d.spendCents).filter((v) => v > 0)
+  const floor = spends.length ? PURCHASE_MIN_SPEND_SHARE * median(spends) : 0
+  const enough = (d: ReadDay) => d.spendCents >= floor
   for (const metric of META_ANOMALY_METRICS) {
     const spec = METRICS[metric]
-    const reference = earlier.map(spec.day).filter((v): v is number => v !== null && Number.isFinite(v))
+    // A day below the floor is left out of the purchase-based metrics, as an unread day is (never a zero).
+    const past = spec.purchases ? earlier.filter(enough) : earlier
+    const days = spec.purchases ? recent.filter(enough) : recent
+    const reference = past.map(spec.day).filter((v): v is number => v !== null && Number.isFinite(v))
     if (reference.length < META_ANOMALY_MIN_HISTORY) {
-      notChecked.push(`${spec.words}: ${reference.length} earlier day${reference.length === 1 ? '' : 's'} to compare with (${META_ANOMALY_MIN_HISTORY} needed${spec.purchases ? ', each with a purchase or spend' : metric === 'ctr' ? `, each with ${CTR_MIN_IMPRESSIONS} impressions` : ''})`)
+      notChecked.push(`${spec.words}: ${reference.length} earlier day${reference.length === 1 ? '' : 's'} to compare with (${META_ANOMALY_MIN_HISTORY} needed${spec.needs ? `, ${spec.needs}` : ''})`)
+      continue
+    }
+    if (!days.length) {
+      notChecked.push(`${spec.words}: no checked day spent at least ${PURCHASE_MIN_SPEND_SHARE * 100} % of the median spend day, too little to judge`)
       continue
     }
     const { mean, std } = stats(reference)
-    // Day breaks.
-    for (const day of recent) {
+    // Day breaks. Earlier days that all had the same value (a spread of 0, or of rounding only) have nothing to measure a
+    // day against: said, not skipped.
+    const spread = std > Math.abs(mean) * 1e-9
+    if (!spread) notChecked.push(`${spec.words}: every earlier day had the same value, so no single day can be measured against them (the checked days together still are)`)
+    for (const day of spread ? days : []) {
       const v = spec.day(day)
-      if (v === null || !Number.isFinite(v) || std === 0) continue
+      if (v === null || !Number.isFinite(v)) continue
       const z = (v - mean) / std
       const move = mean !== 0 ? (v - mean) / Math.abs(mean) : v === 0 ? 0 : Infinity
       if (Math.abs(z) < DAY_Z || Math.abs(move) < DAY_MIN_MOVE) continue
@@ -205,21 +236,22 @@ export function metaAnomaliesOf(history: MetaAdsDay[], checked: MetaAdsDay[]): {
       })
     }
     // The checked days together against the earlier days together.
-    const now = spec.window(sumOf(recent), recent.length)
-    const before = spec.window(sumOf(earlier), earlier.length)
+    const now = spec.window(sumOf(days), days.length)
+    const before = spec.window(sumOf(past), past.length)
     if (now === null || before === null || !Number.isFinite(now) || !Number.isFinite(before) || before === 0) continue
     const move = (now - before) / Math.abs(before)
     if (Math.abs(move) < SHIFT_MOVE) continue
     const direction = move > 0 ? 'up' : 'down'
     const reads = readsOf(spec, direction)
-    const provisional = recent.some((d) => d.provisional)
-    const from = recent[0].date
-    const to = recent[recent.length - 1].date
+    const provisional = days.some((d) => d.provisional)
+    const from = days[0].date
+    const to = days[days.length - 1].date
+    const leftOut = earlier.length - past.length
     anomalies.push({
       kind: 'shift', metric, direction, reads, severity: Math.abs(move) >= SHIFT_CRITICAL ? 'critical' : 'attention', from, to,
       changePct: Math.round(move * 100),
       observed: { [spec.key]: valueOf(metric, now) }, usual: { [spec.key]: valueOf(metric, before) }, provisional,
-      sentence: `${capital(spec.words)}${metric === 'spend' ? ' per day' : ''} from ${from} to ${to} is ${Math.abs(Math.round(move * 100))} % ${direction === 'up' ? 'higher' : 'lower'} than in the ${earlier.length} read days before (${reads}).${spec.purchases && provisional && reads === 'worse' ? CAUTION : ''}`,
+      sentence: `${capital(spec.words)}${metric === 'spend' ? ' per day' : ''} from ${from} to ${to} is ${Math.abs(Math.round(move * 100))} % ${direction === 'up' ? 'higher' : 'lower'} than in the ${past.length} read days before${leftOut ? ` (${leftOut} with too little spend left out)` : ''} (${reads}).${spec.purchases && provisional && reads === 'worse' ? CAUTION : ''}`,
     })
   }
   anomalies.sort((a, b) => ORDER[a.severity] - ORDER[b.severity] || Math.abs(b.zScore ?? 0) - Math.abs(a.zScore ?? 0) || Math.abs(b.changePct) - Math.abs(a.changePct))

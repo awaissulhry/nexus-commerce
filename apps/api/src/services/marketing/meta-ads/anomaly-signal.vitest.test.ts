@@ -7,8 +7,12 @@
  *   shifts       the checked days together moving 25 % or more (50 %: critical), with enough volume on both sides
  *   honesty      an unread day is never a zero (named, left out); too little history is said per metric; a purchase-based
  *                worsening in Meta's restated days says so; no amount in a sentence
+ *   volume       (review fix) a day below 40 % of the median spend day is left out of cost per purchase and ROAS, in the
+ *                history and in the checked days; earlier days with no spread are said, not skipped
  *   loader       not connected / no ad account in words; Meta's own pushes once per subject; the account's status
- *   the tool     channel alerts keeps the old answer; meta needs the ads view permission; money under money keys only
+ *   the tool     channel alerts keeps the old answer; meta needs the ads view permission; money under money keys only,
+ *                gone for a person without the ad-spend permission; (review fix) any error of the Meta part leaves the
+ *                alerts standing with channel all
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -18,6 +22,7 @@ const h = vi.hoisted(() => ({
   notices: [] as Array<Record<string, unknown>>,
   noticeWhere: [] as unknown[],
   alerts: [] as Array<Record<string, unknown>>,
+  overviewError: null as null | Error,
 }))
 vi.mock('../../../db.js', () => ({
   default: {
@@ -25,9 +30,15 @@ vi.mock('../../../db.js', () => ({
     alertEvent: { findMany: vi.fn(async () => h.alerts) },
   },
 }))
+// The visibleTo check loads the tool door (call-tool.ts), which reaches the queues: no Redis in a unit test.
+vi.mock('../../../lib/queue.js', () => ({
+  outboundSyncQueue: null, channelSyncQueue: null, bulkJobQueue: null, redis: null,
+  searchIndexQueue: null, readCacheQueue: null, readinessQueue: null,
+  addJobSafely: vi.fn(async () => ({ enqueued: false })),
+}))
 vi.mock('./read.service.js', async (importActual) => ({
   ...(await importActual<typeof import('./read.service.js')>()),
-  metaAdsOverview: vi.fn(async (input: unknown) => { h.overviewArgs.push(input); return h.overview }),
+  metaAdsOverview: vi.fn(async (input: unknown) => { h.overviewArgs.push(input); if (h.overviewError) throw h.overviewError; return h.overview }),
 }))
 
 import { metaAnomaliesOf, metaAnomalySignal, META_ANOMALY_HISTORY_DAYS } from './anomaly-signal.js'
@@ -135,12 +146,48 @@ describe('metaAnomaliesOf — honest gaps', () => {
     expect(notChecked).toEqual([
       'spend: 10 earlier days to compare with (14 needed)',
       'click-through rate: 10 earlier days to compare with (14 needed, each with 500 impressions)',
-      'cost per purchase: 10 earlier days to compare with (14 needed, each with a purchase or spend)',
-      'ROAS: 10 earlier days to compare with (14 needed, each with a purchase or spend)',
+      'cost per purchase: 10 earlier days to compare with (14 needed, each with a purchase and spend of at least 40 % of the median spend day)',
+      'ROAS: 10 earlier days to compare with (14 needed, each with spend of at least 40 % of the median spend day)',
     ])
+  })
+  it('earlier days that all had the same value: said in notChecked, the checked days together still compared', () => {
+    const flat = Array.from({ length: 20 }, (_, i) => day(addDays(START, i), { spendCents: 1000 + (i % 2), impressions: 2000, clicks: 40, purchases: 2, purchaseValueCents: 5000 }))
+    const week = Array.from({ length: 7 }, (_, i) => day(addDays(START, 20 + i), { spendCents: 1000, impressions: 2000, clicks: 10, purchases: 2, purchaseValueCents: 5000 }))
+    const { anomalies, notChecked } = metaAnomaliesOf(flat, week)
+    expect(notChecked).toEqual(['click-through rate: every earlier day had the same value, so no single day can be measured against them (the checked days together still are)'])
+    expect(anomalies.filter((a) => a.metric === 'ctr').map((a) => a.kind)).toEqual(['shift'])
   })
   it('no checked day read: said once', () => {
     expect(metaAnomaliesOf(history(30), [unread('2026-09-01')])).toEqual({ anomalies: [], notChecked: ['every metric: Nexus has read none of the checked days yet'] })
+  })
+})
+
+describe('metaAnomaliesOf — the volume floor of cost per purchase and ROAS (review fix)', () => {
+  it('a 40-cent checked day with no sale is not flagged for ROAS or cost per purchase, and says why', () => {
+    const past = history(30)
+    const cents = day(addDays(START, 30), { spendCents: 40, impressions: 80, clicks: 2, purchases: 0, purchaseValueCents: 0 })
+    const { anomalies, notChecked } = metaAnomaliesOf(past, [cents])
+    expect(anomalies.filter((a) => a.metric === 'roas' || a.metric === 'costPerPurchase')).toEqual([])
+    expect(notChecked).toEqual([
+      'cost per purchase: no checked day spent at least 40 % of the median spend day, too little to judge',
+      'ROAS: no checked day spent at least 40 % of the median spend day, too little to judge',
+    ])
+  })
+  it('one tiny-spend earlier day with a big purchase no longer hides a real ROAS drop', () => {
+    const past = history(30)
+    past[10] = day(past[10].date, { spendCents: 50, impressions: 100, clicks: 2, purchases: 1, purchaseValueCents: 50000 })
+    const drop = day(addDays(START, 30), { spendCents: 1000, impressions: 2000, clicks: 40, purchases: 1, purchaseValueCents: 1000 })
+    const roas = metaAnomaliesOf(past, [drop]).anomalies.find((a) => a.metric === 'roas' && a.kind === 'day')!
+    expect(roas).toMatchObject({ date: drop.date, direction: 'down', reads: 'worse', observed: { roas: 1 } })
+    expect(roas.usual.roas).toBeGreaterThan(4.5)
+    expect(roas.usual.roas).toBeLessThan(5.5)
+  })
+  it('a shift of the purchase metrics says how many earlier days were left out for too little spend', () => {
+    const past = history(30)
+    past[3] = day(past[3].date, { spendCents: 30, impressions: 60, clicks: 1, purchases: 0, purchaseValueCents: 0 })
+    const week = Array.from({ length: 7 }, (_, i) => day(addDays(START, 30 + i), { spendCents: 1600, impressions: 2000, clicks: 40, purchases: 2, purchaseValueCents: 5000 }))
+    const shift = metaAnomaliesOf(past, week).anomalies.find((a) => a.kind === 'shift' && a.metric === 'costPerPurchase')!
+    expect(shift.sentence).toMatch(/than in the 29 read days before \(1 with too little spend left out\) \(worse\)\.$/)
   })
 })
 
@@ -197,6 +244,36 @@ describe('detect-anomalies — the Meta part', () => {
   beforeEach(() => {
     h.alerts = [{ value: 12, status: 'TRIGGERED', triggeredAt: new Date('2026-10-20T10:00:00Z'), rule: { name: 'Errors', metric: 'errorRate', operator: 'gt', threshold: 5 } }]
     h.overview = { connection: null, account: null, days: [], currency: null, timeZone: null, dataAsOf: null, window: { from: '2026-08-12', to: '2026-10-20' } }
+    h.overviewError = null
+    h.notices = []
+  })
+
+  it('review fix — an error of the Meta part that is not a Meta read refusal: channel all still answers the alerts; meta fails', async () => {
+    const t = await tool()
+    h.overviewError = new Error('the database is gone')
+    const out = await t.handler(t.input.parse({}) as Record<string, unknown>, ctx(true))
+    expect(out).toEqual({ ok: true, data: { count: 1, anomalies: [expect.objectContaining({ rule: 'Errors' })], meta: { shown: false, sentence: expect.stringMatching(/^Nexus could not read the Meta signal/) } } })
+    await expect(t.handler(t.input.parse({ channel: 'meta' }) as Record<string, unknown>, ctx(true))).rejects.toThrow('the database is gone')
+  })
+
+  it('review fix — a person without the ad-spend money permission gets a Meta spend anomaly without its amounts (visibleTo)', async () => {
+    const t = await tool()
+    const { visibleTo } = await import('../../agents/call-tool.js')
+    const { FEATURES, FIELDS } = await import('@nexus/shared/permissions')
+    const all = [...history(56, '2026-08-01'), day(addDays('2026-08-01', 56), { spendCents: 3000, impressions: 6000, clicks: 120, purchases: 6, purchaseValueCents: 15000 }, true)]
+    h.overview = { connection: { connectionId: 'm-1' }, account: { adAccountId: '1234567890', accountStatus: 1 }, days: all, currency: 'EUR', timeZone: 'Europe/Rome', dataAsOf: null, window: { from: all[0].date, to: all.at(-1)!.date } }
+    const raw = await t.handler(t.input.parse({ channel: 'meta', days: 1 }) as Record<string, unknown>, ctx(true))
+    const meta = (raw.data as { meta: { anomalies: Array<{ metric: string; observed: Record<string, unknown>; usual: Record<string, unknown> }> } }).meta
+    expect(meta.anomalies.find((a) => a.metric === 'spend')).toMatchObject({ observed: { spendCents: 3000 }, usual: { spendCents: expect.any(Number) } })
+    const person = (permissions: string[]) => ({ kind: 'user' as const, userId: 'u-1', label: 'Shop A operator', permissions: { isOwner: false, permissions: new Set(permissions) }, via: 'claude' as const })
+    const everything = [...Object.values(FEATURES), ...Object.values(FIELDS)] as string[]
+    // Every permission but the ad-spend money one (and the all-money one that includes it).
+    const seen = visibleTo(person(everything.filter((p) => p !== FIELDS.financialsAdspendView && p !== FIELDS.financialsView)), t, raw)
+    const text = JSON.stringify(seen)
+    for (const key of ['spendCents', 'costPerPurchaseCents', 'roas']) expect(text).not.toContain(`"${key}"`)
+    expect((seen.data as { meta: { anomalies: unknown[] } }).meta.anomalies.length).toBe(meta.anomalies.length)
+    // With the permission, the amounts stay.
+    expect(JSON.stringify(visibleTo(person(everything), t, raw))).toContain('"spendCents":3000')
   })
 
   it('channel alerts answers exactly as before: the triggered alerts, no Meta read', async () => {

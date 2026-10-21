@@ -11,6 +11,7 @@ import prisma from '../../../db.js'
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool } from '../tool-types.js'
+import { logger } from '../../../utils/logger.js'
 import { AI_DRAFT_SURFACES, aiDraft } from './draft.tools.js'
 import { isLiveProduct, liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 
@@ -233,7 +234,8 @@ const detectAnomalies: AgentTool = {
     + 'last days (default 7, ending yesterday in the ad account\'s time zone) is compared with the up to 56 read days '
     + 'before them, for spend, click-through rate, cost per purchase and ROAS: a day 2 standard deviations or more away '
     + '(and 20 % or more), and the checked days together moving 25 % or more; each says up or down, worse, better or '
-    + 'changed (spend), its severity, and whether Meta can still restate it (the last 28 days: late purchases). A day '
+    + 'changed (spend), its severity, and whether Meta can still restate it (the last 28 days: late purchases). Cost per '
+    + 'purchase and ROAS count only days that spent at least 40 % of the median spend day. A day '
     + 'Nexus did not read is named and left out, never a zero; a metric with too little history says so (notChecked). '
     + 'metaSaid adds what Meta itself pushed in those days (creative fatigue, the ad account\'s status, an object with a '
     + 'problem). Amounts are minor units of the ad account\'s currency; a person without the ad-spend money permission '
@@ -278,14 +280,26 @@ const detectAnomalies: AgentTool = {
         if (channel === 'meta') return { ok: false, error: 'The Meta signal reads ad numbers: it needs the ads view permission.' }
         out.meta = { shown: false, sentence: 'The Meta signal is left out: it needs the ads view permission.' }
       } else {
-        const { metaAnomalySignal } = await import('../../marketing/meta-ads/anomaly-signal.js')
-        const { MetaAdsReadError } = await import('../../marketing/meta-ads/read.service.js')
+        let refused: string | null = null
         try {
-          out.meta = await metaAnomalySignal({ connectionId: typeof args.connectionId === 'string' ? args.connectionId : null, days: typeof args.days === 'number' ? args.days : null })
+          const { metaAnomalySignal } = await import('../../marketing/meta-ads/anomaly-signal.js')
+          const { MetaAdsReadError } = await import('../../marketing/meta-ads/read.service.js')
+          try {
+            out.meta = await metaAnomalySignal({ connectionId: typeof args.connectionId === 'string' ? args.connectionId : null, days: typeof args.days === 'number' ? args.days : null })
+          } catch (err) {
+            if (!(err instanceof MetaAdsReadError)) throw err
+            refused = err.message
+          }
         } catch (err) {
-          if (!(err instanceof MetaAdsReadError)) throw err
-          if (channel === 'meta') return { ok: false, error: err.message }
-          out.meta = { shown: false, sentence: err.message }
+          // Review fix (step 44) — channel meta fails as any read does; with the alerts (all), no error of the Meta part
+          // (the database, a grant, a module) takes the alerts down: logged, and said in words.
+          if (channel === 'meta') throw err
+          logger.warn('[detect-anomalies] the Meta signal could not be read; the alerts are answered without it', { error: err instanceof Error ? err.message : String(err) })
+          out.meta = { shown: false, sentence: 'Nexus could not read the Meta signal just now; the triggered alerts are answered without it.' }
+        }
+        if (refused !== null) {
+          if (channel === 'meta') return { ok: false, error: refused }
+          out.meta = { shown: false, sentence: refused }
         }
       }
     }

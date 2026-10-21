@@ -142,7 +142,7 @@ import { googleAdsActsOnItsOwn, googleAdsRecommendations } from '../../marketing
 // registry must not load in every process that lists tools.
 import type { googleAdsAlerts } from '../../marketing/google-ads/alerts.service.js'
 import { sdExpressionInWords, sdTacticInWords } from '../../advertising/sd/sd-expression-words.js'
-import type { AgentTool, ToolResult } from '../tool-types.js'
+import { NO_APPROVAL_VIA, type AgentTool, type ToolResult } from '../tool-types.js'
 
 const ADSPEND = FIELDS.financialsAdspendView
 
@@ -1556,9 +1556,11 @@ const adChanges: AgentTool = {
     + 'accepted from eBay), what it replaced and wrote, and whether eBay took it (or it ran in sandbox).'
     + ' Meta (channel meta): the changes Nexus made on Meta, newest first — each Meta change tool\'s own record: when, which '
     + 'tool (action), who decided it (decidedVia: in Nexus, or "no-approval" when the business\'s switch ran it in the name of '
-    + 'the person who asked), the plan step it ran as, the Meta ad account, its summary (note), what it replaced and wrote, '
-    + 'and whether undo-change can still put it back (undo, with changeId). Every Meta change in Nexus runs as a person\'s '
-    + 'approval (source operator); changes made outside Nexus (Ads Manager, Meta\'s own rules) are read with '
+    + 'the person who asked), the plan step it ran as, the Meta ad account, what was asked (note, "Asked: …"), what it '
+    + 'replaced and wrote (only what Meta made: a change Meta made in part shows that part), and whether undo-change can '
+    + 'still put it back (undo, with changeId). Nexus makes no Meta change by itself: a change a person approved is source '
+    + 'operator; one Claude asked for that ran by the business\'s "Claude\'s changes need no approval" switch is source '
+    + 'automation, with decidedVia no-approval. Changes made outside Nexus (Ads Manager, Meta\'s own rules) are read with '
     + 'meta-activity-log.' + MONEY_WORDS
     + ' Returns { items, nextCursor }; a page can hold fewer rows than limit to stay within a size limit: follow nextCursor for the rest.',
   handler: (args) => listTool('ad-changes', async () => {
@@ -1703,11 +1705,20 @@ async function metaChangeTools(): Promise<Map<string, string>> {
     .map((t) => [t.name, t.title]))
 }
 
-/** A preview's own summary (a Meta change's draft summary), capped; null when it has none. */
+/**
+ * A preview's own summary (a Meta change's draft summary), labelled as what was asked, capped; null when it has none.
+ * Review fix (step 44) — the change record keeps no count of the requests Meta made (runMetaChange answers done / of but
+ * records only what Meta made, in before / after): a change Meta made in part keeps the whole request's summary here.
+ */
 function summaryOf(preview: unknown): string | null {
   const summary = (preview as { summary?: unknown } | null)?.summary
-  return typeof summary === 'string' && summary.trim() ? (summary.length > 500 ? `${summary.slice(0, 499)}…` : summary) : null
+  if (typeof summary !== 'string' || !summary.trim()) return null
+  const asked = `Asked: ${summary}`
+  return asked.length > 500 ? `${asked.slice(0, 499)}…` : asked
 }
+
+/** Review fix (step 44) — what the business's "Claude's changes need no approval" switch ran (#691) is source automation. */
+const META_BY_ITSELF = 'Nexus makes no Meta change by itself. A change Claude asked for that ran by this business\'s "Claude\'s changes need no approval" switch, in the name of the person who asked, is source automation (decidedVia no-approval); one a person approved is source operator.'
 
 /**
  * Meta ads step 44 — the Meta change kit's records (AgentChange of every Meta change tool), newest first, keyset-paged by
@@ -1721,14 +1732,14 @@ async function metaChanges(args: Record<string, unknown>, scope: string): Promis
   }
   const from = new Date(Date.now() - a.days * 86_400_000)
   const base = { channel: 'meta' as const, window: { from: day(from), days: a.days }, outsideNexus: META_OUTSIDE }
-  if (a.source && a.source !== 'operator') {
+  if (a.source === 'external' || a.source === 'system') {
     return {
       ok: true,
       data: {
         ...base, dataAsOf: null, items: [], nextCursor: null,
         note: a.source === 'external'
           ? 'Nexus records only the Meta changes made through it. meta-activity-log reads what was changed outside Nexus.'
-          : 'Nexus makes no Meta change by itself: every Meta change runs as a person\'s approval (source operator).',
+          : META_BY_ITSELF,
       },
     }
   }
@@ -1737,10 +1748,13 @@ async function metaChanges(args: Record<string, unknown>, scope: string): Promis
   const after = start ? new Date(String(start.values[0])) : null
   if (after && Number.isNaN(after.getTime())) throw new InvalidCursorError()
   const tools = await metaChangeTools()
+  const by = a.source === 'automation' ? { approval: { decisionVia: NO_APPROVAL_VIA } }
+    : a.source === 'operator' ? { approval: { OR: [{ decisionVia: null }, { decisionVia: { not: NO_APPROVAL_VIA } }] } } : {}
   const rows = await prisma.agentChange.findMany({
     where: {
       toolName: { in: [...tools.keys()] },
       executedAt: { gte: from },
+      ...by,
       ...(after && start ? { OR: [{ executedAt: { lt: after } }, { executedAt: after, id: { gt: start.id } }] } : {}),
     },
     orderBy: [{ executedAt: 'desc' }, { id: 'asc' }],
@@ -1775,7 +1789,7 @@ async function metaChanges(args: Record<string, unknown>, scope: string): Promis
         return {
           changeId: r.id,
           at: iso(r.executedAt),
-          source: 'operator' as const,
+          source: r.approval?.decisionVia === NO_APPROVAL_VIA ? 'automation' as const : 'operator' as const,
           actor: decidedBy,
           decidedVia: r.approval?.decisionVia ?? null,
           action: r.toolName,
