@@ -247,12 +247,12 @@ describe('store and alert — one row per check, one alert per failing check, re
 describe('platform-health-checks — Claude\'s read', () => {
   it('the newest run, worst first, with evidence, since when not ok, and the open alerts; problems only on request', async () => {
     const run = await inside(() => runPlatformHealthWatchdog({ now: new Date(), triggeredBy: 'manual' }))
-    expect(watchdogSummary(run)).toMatch(/^checks=12 ok=\d+ warn=\d+ fail=\d+ unknown=\d+/)
+    expect(watchdogSummary(run)).toMatch(new RegExp(`^checks=${HEALTH_CHECKS.length} ok=\\d+ warn=\\d+ fail=\\d+ unknown=\\d+`))
     const answer = await call('platform-health-checks', {})
     expect(answer.ok).toBe(true)
     expect(answer.data.run).toMatchObject({ runId: run.runId, triggeredBy: 'manual', stale: false })
     const checks = answer.data.checks as Array<{ check: string; status: string; message: string; evidence: unknown; lastOkAt: string | null }>
-    expect(checks).toHaveLength(12)
+    expect(checks).toHaveLength(HEALTH_CHECKS.length)
     const rank = { fail: 0, warn: 1, unknown: 2, ok: 3 } as Record<string, number>
     expect(checks.map((c) => rank[c.status])).toEqual([...checks.map((c) => rank[c.status])].sort((a, b) => a - b))
     const cron = checks.find((c) => c.check === 'cron-runs')!

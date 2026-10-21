@@ -243,6 +243,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-ad-account': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
   'meta-billing': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
   'meta-account-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-account.tools test)',
+  // Meta ads step 5: the change history reads the chosen ad account live (meta-account-health's default view needs no call).
+  'meta-activity-log': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-health.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -571,6 +573,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-ad-account': () => ({ view: 'settings' }),
   'meta-billing': () => ({ view: 'spend' }),
   'meta-account-access': () => ({ view: 'people' }),
+  // Meta ads step 5: the health summary is Nexus's own records (no Meta here: it says so); the history refuses in words
+  // (meta-ads-health.tools.vitest.test.ts runs every view on an account).
+  'meta-account-health': () => ({ view: 'summary' }),
+  'meta-activity-log': () => ({ scope: 'account' }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),
