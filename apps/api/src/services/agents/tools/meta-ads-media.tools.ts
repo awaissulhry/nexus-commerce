@@ -77,9 +77,10 @@ const metaMediaLibrary: AgentTool = {
     + 'videos: its video library (length, status in words, Instagram-eligible). video (videoId): one video — upload and '
     + 'processing status (a creative may use it only when ready), details, thumbnails, captions. video-ads: videos sent '
     + 'through Meta\'s video-ads upload. playables: HTML5 assets (app ads only). business-images, business-videos, '
-    + 'business-creatives (folderId): the business portfolio\'s media library; folders, tags: its folders and tags (Meta has '
-    + 'no API to create or change them: Business Settings › Media library); my-folders: the folders the system user may '
-    + 'use. website-assets (link): what Meta pulls from a landing page by itself for Advantage+ creative; asset-urls: the '
+    + 'business-creatives (folderId): the business portfolio\'s media library; folders, tags: its folders and tags (Nexus '
+    + 'does not change them here; a person can in Business Settings › Media library). When another business in Nexus reads '
+    + 'an ad account of the same portfolio, the portfolio is its id only and nothing of it is read. my-folders: the folders '
+    + 'the system user may use. website-assets (link): what Meta pulls from a landing page by itself for Advantage+ creative; asset-urls: the '
     + 'addresses it pulls from. campaign-videos (campaignId): a campaign\'s video groups. live-videos, playlists, '
     + 'playlist-videos: the chosen Page\'s live broadcasts (a finished one can be boosted) and video playlists. Only the '
     + 'chosen ad account, its portfolio and the chosen Page are read. Uploading, copying and removing media are change '
@@ -180,14 +181,13 @@ const metaInstagramMedia: AgentTool = {
   input: z.object({
     view: z.preprocess(lower, z.enum(INSTAGRAM_VIEWS)).describe(INSTAGRAM_VIEWS.join(' | ')),
     mediaId: metaIdArg('media-detail, media-insights: a media of the chosen Instagram account (from view media or stories)'),
-    containerId: metaIdArg('container: the id an Instagram publish request answered'),
     videoId: metaIdArg('video-check: a video of the chosen ad account\'s library or of the chosen Page'),
     from: dayArg('media, account-insights: from'),
     to: dayArg('media, account-insights: to'),
-    metrics: z.array(z.enum(uniq(IG_MEDIA_METRICS, IG_ACCOUNT_METRICS))).max(20).optional().describe('media-insights or account-insights: Meta\'s metrics (default: views, reach and interactions)'),
+    metrics: z.array(z.enum(uniq(IG_MEDIA_METRICS, IG_ACCOUNT_METRICS))).max(20).optional().describe('media-insights (only those of the media\'s kind: a story has replies and navigation, no likes or saves) or account-insights; default: views, reach and interactions'),
     breakdown: z.enum(uniq(IG_MEDIA_BREAKDOWNS, IG_ACCOUNT_BREAKDOWNS)).optional().describe('media-insights: action_type (profile_activity) or story_navigation_action_type (navigation); account-insights: media_product_type, follow_type, follower_type, contact_button_type, or age / city / country / gender for the demographics'),
     metricType: z.enum(IG_METRIC_TYPES).optional().describe('account-insights: total_value (default) or time_series'),
-    timeframe: z.enum(IG_TIMEFRAMES).optional().describe('account-insights demographics: how far back (default last_30_days)'),
+    timeframe: z.enum(IG_TIMEFRAMES).optional().describe('account-insights demographics: this_month (default) or this_week (Meta retired the others in v20)'),
     maxRows: maxRowsArg(50),
     connectionId: connectionArg,
   }),
@@ -198,8 +198,9 @@ const metaInstagramMedia: AgentTool = {
     + 'from / to). stories: the live stories (24 hours). media-detail (mediaId): one media — whether it can be boosted and '
     + 'why not (copyrighted music, filters), the ACTIVE ads boosting it, its copyright check. media-insights, '
     + 'account-insights: Meta\'s organic numbers (views, reach, likes, saves, shares, follows, demographics; impressions '
-    + 'are retired), to pick posts to boost. container (containerId): a publish container\'s status. quota: posts '
-    + 'published through the API in 24 hours against Meta\'s limit. upcoming-events: events a reminder ad can point to. '
+    + 'are retired; only the metrics a media\'s kind has — a story has no likes), to pick posts to boost. quota: posts '
+    + 'published through the API in 24 hours against Meta\'s limit (a publish container\'s status comes with the publish '
+    + 'step: Nexus makes no containers yet). upcoming-events: events a reminder ad can point to. '
     + 'video-check (videoId): whether a video meets Instagram\'s ad rules. Only the chosen Instagram account is read: '
     + 'another account\'s media is refused. Publishing and boosting are change tools (a later Nexus step). Read only.',
   async handler(args): Promise<ToolResult> {
@@ -207,7 +208,6 @@ const metaInstagramMedia: AgentTool = {
       connectionId: str(args.connectionId),
       view: args.view as InstagramInput['view'],
       mediaId: str(args.mediaId),
-      containerId: str(args.containerId),
       videoId: str(args.videoId),
       from: str(args.from),
       to: str(args.to),
@@ -261,6 +261,9 @@ const metaAdPreview: AgentTool = {
   readOnly: true,
   openWorld: true,
   requires: [F.adsView],
+  // Review A2 — Claude's door only: the in-app chat keeps each tool result in the run's steps, and a preview link is
+  // public, so it is never stored. Through the MCP door a read's run keeps only its mode, never its answer.
+  surfaces: ['mcp'],
   input: z.object({
     view: z.preprocess(lower, z.enum(PREVIEW_VIEWS)).describe(PREVIEW_VIEWS.join(' | ')),
     adId: metaIdArg('ad, share-link: an ad of the chosen ad account'),
@@ -269,7 +272,7 @@ const metaAdPreview: AgentTool = {
     adFormats: z.array(z.enum(AD_FORMATS)).max(10).optional().describe('the placements to preview, one preview each (default MOBILE_FEED_STANDARD), e.g. INSTAGRAM_STANDARD, INSTAGRAM_STORY, INSTAGRAM_REELS, FACEBOOK_REELS_MOBILE, DESKTOP_FEED_STANDARD'),
     creativeFeature: z.enum(CREATIVE_FEATURES).optional().describe('ad, creative, spec: preview one Advantage+ creative feature (eligible, pending or ineligible)'),
     assetLabel: z.string().trim().regex(/^[A-Za-z0-9_-]{1,50}$/).optional().describe('one variation of a multi-language or asset-customization ad, by its label'),
-    productItemIds: z.array(z.string().trim().regex(/^\d{1,25}$/)).max(10).optional().describe('catalog ads: preview with these product item ids (several: a carousel)'),
+    productItemIds: z.array(z.string().trim().regex(/^\d{1,25}$/)).max(10).optional().describe('catalog ads: preview with these product item ids (several: a carousel); Meta renders them with the creative\'s own catalog — Nexus checks them against the business\'s catalog from the catalog step on'),
     language: z.string().trim().regex(/^[a-z]{2,3}_[A-Z]{2}$/).optional().describe('catalog ads: preview in this language (e.g. fr_XX)'),
     country: z.string().trim().regex(/^[A-Z]{2}$/).optional().describe('catalog ads: preview for this country (e.g. FR)'),
     spec: specArg.optional().describe('spec: the unsaved creative, built from the chosen Page and Instagram account and the account\'s own media'),
@@ -285,7 +288,8 @@ const metaAdPreview: AgentTool = {
     + 'share-link (adId): the ad\'s shareable preview link. Each answer is a link (and Meta\'s iframe) valid 24 hours: '
     + 'PUBLIC — anyone with it can open it, so it goes to the person only; Nexus never stores or logs it. Nexus previews '
     + 'through the chosen ad account only (Meta\'s account-less preview names no account Nexus can check, and answers the '
-    + 'same). Not every creative renders on every placement (Meta says so per placement). Read only.',
+    + 'same). Not every creative renders on every placement, and some formats name placements Meta has retired (Messenger '
+    + 'stories, Instant Articles): Meta says so per placement. Offered to Claude only, never in the in-app chat. Read only.',
   async handler(args): Promise<ToolResult> {
     return guarded(() => livePreview({
       connectionId: str(args.connectionId),

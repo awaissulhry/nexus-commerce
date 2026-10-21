@@ -250,7 +250,8 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
     expect(appOnly).toEqual(AI_DRAFTS)
     // C7 — and only confirm-change is Claude's alone: a person confirms in Claude with a code; in Nexus they approve.
     // W4-1 — and report-ads-run: the scheduled Claude run's own report.
-    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name).sort()).toEqual(['confirm-change', 'report-ads-run'])
+    // Meta ads step 10 (review A2) — and meta-ad-preview: its links are public, and the in-app chat keeps tool results.
+    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name).sort()).toEqual(['confirm-change', 'meta-ad-preview', 'report-ads-run'])
   })
 })
 

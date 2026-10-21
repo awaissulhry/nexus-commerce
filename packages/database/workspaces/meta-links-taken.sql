@@ -9,7 +9,10 @@
 --     rows the unique index compares (any row, whatever the state of its connection), so the picker and Save agree;
 --   * it returns only ids the caller passed in: never a business name, a business id, a connection or a label;
 --   * the caller's own picks are never returned;
---   * product is AD_ACCOUNT, PAGE or INSTAGRAM; a NULL or empty list answers nothing.
+--   * product is AD_ACCOUNT, PAGE or INSTAGRAM; a NULL or empty list answers nothing;
+--   * PORTFOLIO (Meta ads step 10, 20261021r10): a Meta business portfolio id asked about is returned when an AD_ACCOUNT
+--     link of ANOTHER business names it as its ad account's portfolio (metadata->>'businessId', stored on Save). Two
+--     businesses whose ad accounts sit in one portfolio then never read that portfolio's media library through Nexus.
 --
 -- The API asks only about ids Meta offered the caller's own system user; the answer is the same yes or no a refused Save
 -- already gives (409 taken_by_other_business).
@@ -23,10 +26,18 @@ BEGIN
   IF caller_ws IS NULL THEN
     RAISE EXCEPTION 'nexus_meta_links_taken needs a business' USING ERRCODE = '42501';
   END IF;
-  IF p_product IS NULL OR p_product NOT IN ('AD_ACCOUNT', 'PAGE', 'INSTAGRAM') THEN
-    RAISE EXCEPTION 'nexus_meta_links_taken answers AD_ACCOUNT, PAGE or INSTAGRAM, not %', p_product USING ERRCODE = '22023';
+  IF p_product IS NULL OR p_product NOT IN ('AD_ACCOUNT', 'PAGE', 'INSTAGRAM', 'PORTFOLIO') THEN
+    RAISE EXCEPTION 'nexus_meta_links_taken answers AD_ACCOUNT, PAGE, INSTAGRAM or PORTFOLIO, not %', p_product USING ERRCODE = '22023';
   END IF;
   IF p_ids IS NULL OR cardinality(p_ids) = 0 THEN
+    RETURN;
+  END IF;
+  IF p_product = 'PORTFOLIO' THEN
+    RETURN QUERY
+    SELECT DISTINCT l.metadata ->> 'businessId'
+    FROM "MetaAccountLink" l
+    WHERE l.product = 'AD_ACCOUNT' AND l.metadata ->> 'businessId' = ANY (p_ids) AND l."workspaceId" <> caller_ws
+    ORDER BY 1;
     RETURN;
   END IF;
   RETURN QUERY

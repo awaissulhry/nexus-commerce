@@ -46,7 +46,8 @@ vi.mock('../../../db.js', () => {
 })
 
 import { META_ADS_MEDIA_TOOLS } from './meta-ads-media.tools.js'
-import { linkOfIframe, PAGE_TOKEN_NOTE, pagePostId, tidy } from '../../marketing/meta-ads/live-media.js'
+import { linkOfIframe, PAGE_TOKEN_NOTE, pagePostId, PORTFOLIO_TAKEN, tidy } from '../../marketing/meta-ads/live-media.js'
+import { offeredOn } from '../call-tool.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
@@ -83,7 +84,6 @@ describe('the five tools are reads', () => {
     expect((await run('meta-page-posts', { view: 'feed' })).error).toMatch(/No Facebook Page is chosen/)
     expect((await run('meta-instant-experiences', { view: 'list' })).error).toMatch(/No Facebook Page is chosen/)
     expect((await run('meta-instagram-media', { view: 'media' })).error).toMatch(/No Instagram account is chosen/)
-    expect((await run('meta-instagram-media', { view: 'container', containerId: '17900000000000001' })).error).toMatch(/No Instagram account is chosen/)
     expect(h.calls).toHaveLength(0)
   })
 })
@@ -128,7 +128,7 @@ describe('every view asks only what the real gateway lets through', () => {
       ['meta-instagram-media', { view: 'media-insights', mediaId: '180000000000001', metrics: ['profile_activity'], breakdown: 'action_type' }],
       ['meta-instagram-media', { view: 'account-insights', metrics: ['reach'], metricType: 'time_series', from: '2026-10-01', to: '2026-10-20' }],
       ['meta-instagram-media', { view: 'account-insights', metrics: ['follower_demographics'], breakdown: 'country', timeframe: 'this_month' }],
-      ['meta-instagram-media', { view: 'container', containerId: '17900000000000001' }], ['meta-instagram-media', { view: 'quota' }],
+      ['meta-instagram-media', { view: 'quota' }],
       ['meta-instagram-media', { view: 'upcoming-events' }], ['meta-instagram-media', { view: 'video-check', videoId: '200000000000001' }],
       ['meta-instant-experiences', { view: 'list', published: true, hidden: false }], ['meta-instant-experiences', { view: 'one', canvasId: '200000000000001' }],
       ['meta-instant-experiences', { view: 'elements' }], ['meta-instant-experiences', { view: 'template', template: 'get-new-customers' }],
@@ -174,24 +174,38 @@ describe('only the chosen Page, Instagram account and the account\'s own media',
     expect(JSON.stringify(res)).not.toContain('Shop B')
   })
   it('who wrote a post is the Page or "someone else": a visitor\'s id is never handed on', async () => {
-    h.all = () => [{ id: `${PAGE}_1`, message: 'Where is my order?', from: { id: '900000000000001' } }, { id: `${PAGE}_2`, message: 'News', from: { id: PAGE } }]
+    h.all = () => [
+      { id: `${PAGE}_1`, message: 'Where is my order?', story: 'A Person wrote on Shop A', from: { id: '900000000000001' } },
+      { id: `${PAGE}_2`, message: 'News', story: 'Shop A updated its cover photo', from: { id: PAGE } },
+      { id: '120000000000099_3', message: 'Shop B news', from: { id: '120000000000099' } },
+    ]
     const res = await run('meta-page-posts', { view: 'visitor' })
     expect((res.data as { items: unknown[] }).items).toEqual([
-      expect.objectContaining({ id: `${PAGE}_1`, postedBy: 'someone else' }), expect.objectContaining({ id: `${PAGE}_2`, postedBy: 'the Page' }),
+      expect.objectContaining({ id: `${PAGE}_1`, postedBy: 'someone else' }), expect.objectContaining({ id: `${PAGE}_2`, postedBy: 'the Page', story: 'Shop A updated its cover photo' }),
     ])
-    expect(JSON.stringify(res)).not.toContain('900000000000001')
+    // Review A6 — a row not on the chosen Page is dropped and counted; a visitor's story (it names the person) is removed.
+    expect(res.data).toMatchObject({ droppedNotOnPage: 1 })
+    expect(JSON.stringify(res)).not.toMatch(/900000000000001|A Person|Shop B/)
     expect(h.calls[0]).toMatchObject({ path: `${PAGE}/visitor_posts` })
   })
   it('an Instagram media of another account is refused after one owner-only read; the chosen username is enough when Meta hides owner', async () => {
-    h.one = (req) => (req.operation === 'instagram.mediaOwnerCheck' ? { id: req.path, username: 'shop_b' } : { id: req.path, caption: 'Shop B' })
+    // Review A5 — the chosen account's username is read LIVE (it may have changed since it was chosen), never the stored one.
+    h.connections = [{ ...CHOSEN, instagram: { instagramId: IG, username: 'shop_b' } }]
+    h.one = (req) => (req.operation === 'instagram.mediaOwnerCheck' ? { id: req.path, username: 'shop_b' }
+      : req.operation === 'instagram.accountUsername' ? { id: IG, username: 'shop_a' } : { id: req.path, caption: 'Shop B' })
     const res = await run('meta-instagram-media', { view: 'media-detail', mediaId: '180000000000001' })
     expect(res.error).toMatch(/not the chosen Instagram account's/)
-    expect(h.calls.map((c) => [c.operation, c.query?.fields])).toEqual([['instagram.mediaOwnerCheck', 'id,owner,username']])
+    expect(h.calls.map((c) => [c.operation, c.path, c.query?.fields])).toEqual([
+      ['instagram.mediaOwnerCheck', '180000000000001', 'id,owner,username,media_product_type'], ['instagram.accountUsername', IG, 'id,username'],
+    ])
     h.calls.length = 0
-    h.one = (req) => (req.operation === 'instagram.mediaOwnerCheck' ? { id: req.path, username: 'Shop_A' } : { id: req.path, caption: 'ok', boost_ads_list: { data: [{ ad_id: '120000000000301', ad_status: 'ACTIVE' }] } })
+    h.one = (req) => (req.operation === 'instagram.mediaOwnerCheck' ? { id: req.path, username: 'Shop_A' }
+      : req.operation === 'instagram.accountUsername' ? { id: IG, username: 'shop_a' }
+        : { id: req.path, caption: 'ok', boost_eligibility_info: { eligible_to_boost: false, boost_ineligible_reason: 'Copyrighted music' }, boost_ads_list: { data: [{ ad_id: '120000000000301', ad_status: 'ACTIVE' }] } })
     h.known = new Map([['120000000000301', 'ad']])
     const ok = await run('meta-instagram-media', { view: 'media-detail', mediaId: '180000000000001' })
-    expect(ok).toMatchObject({ ok: true, data: { media: { caption: 'ok' }, boostAds: [{ adId: '120000000000301', status: 'ACTIVE', inChosenAdAccount: true }] } })
+    // Review B7 — the SDK's shapes: IGMediaBoostEligibilityInfo and IGBoostMediaAd.
+    expect(ok).toMatchObject({ ok: true, data: { media: { caption: 'ok' }, boost: { eligible: false, reason: 'Copyrighted music' }, boostAds: [{ adId: '120000000000301', status: 'ACTIVE', inChosenAdAccount: true }] } })
   })
   it('a video is read only when it is the chosen Page\'s or in the chosen ad account\'s library', async () => {
     h.one = (req) => (req.operation === 'media.videoOwnerCheck' ? { id: req.path, from: { id: '120000000000099' } } : { id: req.path })
@@ -312,11 +326,26 @@ describe('what Meta refuses is said plainly', () => {
     expect(res.error).toContain(PAGE_TOKEN_NOTE)
     expect(res.error).toMatch(/pages_read_engagement/)
   })
-  it('SDK-only video fields Meta refuses are dropped: the read is asked again with the documented ones, and says so', async () => {
-    h.all = (req) => (String(req.query?.fields).includes('is_instagram_eligible') ? metaError('100', 'Tried accessing nonexisting field (length)') : [{ id: '200000000000001', name: 'Promo' }])
+  it('review B2/B7 — a video read never asks `name`; only the SDK-only field Meta names is dropped, the others stay', async () => {
+    h.all = (req) => (String(req.query?.fields).includes('length') ? metaError('100', 'Tried accessing nonexisting field (length) on node type (AdVideo)') : [{ id: '200000000000001', title: 'Promo' }])
     const res = await run('meta-media-library', { view: 'videos' })
-    expect(res).toMatchObject({ ok: true, data: { items: [{ id: '200000000000001', name: 'Promo' }], fieldsNote: expect.stringMatching(/Meta refused some fields.*nonexisting field/) } })
-    expect(h.calls.map((c) => c.query?.fields)).toEqual(['id,name,description,picture,created_time,updated_time,title,length,status,permalink_url,is_instagram_eligible', 'id,name,description,picture,created_time,updated_time'])
+    expect(res).toMatchObject({ ok: true, data: { items: [{ id: '200000000000001', title: 'Promo' }], fieldsNote: expect.stringMatching(/Meta refused length here, so it is missing: .*nonexisting field/) } })
+    expect(h.calls.map((c) => c.query?.fields)).toEqual([
+      'id,description,picture,created_time,updated_time,title,length,status,permalink_url,is_instagram_eligible',
+      'id,description,picture,created_time,updated_time,title,status,permalink_url,is_instagram_eligible',
+    ])
+    expect(h.calls.some((c) => /(^|,)name(,|$)/.test(String(c.query?.fields)))).toBe(false)
+    // When Meta names no field, every SDK-only one goes at once.
+    h.calls.length = 0
+    h.all = (req) => (String(req.query?.fields).includes('title') ? metaError('100', 'Invalid parameter') : [{ id: '200000000000001' }])
+    expect((await run('meta-media-library', { view: 'videos' })).ok).toBe(true)
+    expect(h.calls.map((c) => c.query?.fields)).toEqual(['id,description,picture,created_time,updated_time,title,length,status,permalink_url,is_instagram_eligible', 'id,description,picture,created_time,updated_time'])
+  })
+  it('review A6 / B7 — a post read asks allowed_advertising_objects (the feed reference\'s name); one refused field keeps the others', async () => {
+    h.one = (req) => (String(req.query?.fields).includes('promotion_status') ? metaError('100', 'Tried accessing nonexisting field (promotion_status)') : { id: `${PAGE}_500000000000001`, is_inline_created: false })
+    const res = await run('meta-page-posts', { view: 'post', postId: `${PAGE}_500000000000001` })
+    expect(res).toMatchObject({ ok: true, data: { post: { isInlineCreated: false }, fieldsNote: expect.stringMatching(/Meta refused promotion_status/) } })
+    expect(String(h.calls[1].query?.fields)).toMatch(/is_inline_created,allowed_advertising_objects$/)
   })
   it('a metric of the other kind is refused by name before any call; IG demographics carry their timeframe', async () => {
     expect((await run('meta-page-posts', { view: 'page-insights', metrics: ['post_clicks'] })).error).toMatch(/"post_clicks" is not a metric Nexus asks here/)
@@ -324,12 +353,70 @@ describe('what Meta refuses is said plainly', () => {
     expect(h.calls).toHaveLength(0)
     h.one = () => ({ data: [] })
     await run('meta-instagram-media', { view: 'account-insights', metrics: ['follower_demographics'], breakdown: 'age' })
-    expect(h.calls[0]).toMatchObject({ path: `${IG}/insights`, query: { metric: 'follower_demographics', period: 'lifetime', timeframe: 'last_30_days', metric_type: 'total_value', breakdown: 'age' } })
+    // Review B1 — the last_… timeframes are gone since v20: this_month by default, this_week the only other.
+    expect(h.calls[0]).toMatchObject({ path: `${IG}/insights`, query: { metric: 'follower_demographics', period: 'lifetime', timeframe: 'this_month', metric_type: 'total_value', breakdown: 'age' } })
+    expect(() => tool('meta-instagram-media').input.parse({ view: 'account-insights', timeframe: 'last_30_days' })).toThrow()
+  })
+  it('review B3 — a story\'s insights default to what a story has; likes on a story are refused before the read', async () => {
+    h.one = (req) => (req.operation === 'instagram.mediaOwnerCheck' ? { id: req.path, owner: { id: IG }, media_product_type: 'STORY' } : { data: [] })
+    const res = await run('meta-instagram-media', { view: 'media-insights', mediaId: '180000000000001' })
+    expect(res).toMatchObject({ ok: true, data: { productType: 'STORY', metrics: ['views', 'reach', 'shares', 'total_interactions', 'replies', 'navigation'] } })
+    expect(h.calls[1]).toMatchObject({ path: '180000000000001/insights', query: { metric: 'views,reach,shares,total_interactions,replies,navigation' } })
+    h.calls.length = 0
+    expect((await run('meta-instagram-media', { view: 'media-insights', mediaId: '180000000000001', metrics: ['likes'] })).error).toMatch(/Meta has no "likes" for a story/)
+    expect(h.calls.map((c) => c.operation)).toEqual(['instagram.mediaOwnerCheck'])
   })
   it('a video\'s status is said in words', async () => {
     h.one = (req) => (req.operation === 'media.videoOwnerCheck' ? { id: req.path, from: { id: PAGE } } : { id: req.path, status: { video_status: 'processing', processing_progress: 40 } })
     h.all = () => []
     const res = await run('meta-media-library', { view: 'video', videoId: '200000000000001' })
     expect(res).toMatchObject({ ok: true, data: { video: { statusText: 'Meta is still processing it (40%): wait before a creative uses it' } } })
+  })
+})
+
+describe('step 10 review fixes', () => {
+  it('A1 — a business portfolio another business\'s ad account belongs to is its id and the flag only, with NO call', async () => {
+    h.taken = [{ id: '9876543210' }]
+    for (const view of ['business-images', 'business-videos', 'business-creatives', 'folders', 'tags']) {
+      expect(await run('meta-media-library', { view })).toEqual({ ok: true, data: { adAccountId: ACCOUNT, portfolioId: '9876543210', takenByAnotherBusiness: true, sentence: PORTFOLIO_TAKEN } })
+    }
+    expect(PORTFOLIO_TAKEN).toMatch(/views images and videos.*my-folders/)
+    expect(h.calls).toHaveLength(0)
+    // The ad account's own library still reads.
+    expect((await run('meta-media-library', { view: 'images' })).ok).toBe(true)
+  })
+  it('A2 — meta-ad-preview is Claude\'s door only: the in-app chat (which keeps tool results in its run) never gets a public link', () => {
+    const preview = tool('meta-ad-preview')
+    expect(preview.surfaces).toEqual(['mcp'])
+    expect([offeredOn(preview, 'mcp'), offeredOn(preview, 'app')]).toEqual([true, false])
+    expect(META_ADS_MEDIA_TOOLS.filter((t) => t.surfaces).map((t) => t.name)).toEqual(['meta-ad-preview'])
+  })
+  it('A4 — there is no container view (Nexus makes no Instagram containers yet)', () => {
+    expect(() => tool('meta-instagram-media').input.parse({ view: 'container' })).toThrow()
+  })
+  it('B4 — Instant Experience parts ask CanvasBodyElement\'s one field; B8 — THREADS_STREAM is not a v26 ad_format', async () => {
+    await run('meta-instant-experiences', { view: 'elements' })
+    expect(h.calls[0]).toMatchObject({ path: `${PAGE}/canvas_elements`, query: { fields: 'element' } })
+    expect(() => tool('meta-ad-preview').input.parse({ view: 'ad', adId: '1', adFormats: ['THREADS_STREAM'] })).toThrow()
+  })
+  it('B6 — a multi-language video spec labels the video and names it in every rule; a blank description is one space', async () => {
+    h.one = (req) => (req.operation === 'media.videoOwnerCheck' ? { id: req.path, from: { id: PAGE } } : { data: [{ body: '<iframe src="https://p"></iframe>' }] })
+    const languages = [
+      { label: 'italian', locales: [23], isDefault: true, message: 'Nuova stagione', headline: 'Giacche', link: 'https://shop.example.com/it' },
+      { label: 'french', locales: [9], message: 'Nouvelle saison', headline: 'Vestes', description: '  ', link: 'https://shop.example.com/fr' },
+    ]
+    await run('meta-ad-preview', { view: 'spec', spec: { kind: 'multi-language', videoId: '200000000000001', imageHash: '0123456789abcdef0123456789abcdef', languages } })
+    const feed = (h.calls.at(-1)!.query!.creative as { asset_feed_spec: Record<string, unknown> }).asset_feed_spec
+    expect(feed.ad_formats).toEqual(['SINGLE_VIDEO'])
+    expect(feed.videos).toEqual([{ video_id: '200000000000001', adlabels: [{ name: 'nexus_video' }], thumbnail_hash: '0123456789abcdef0123456789abcdef' }])
+    expect((feed.asset_customization_rules as Array<Record<string, unknown>>).map((r) => r.video_label)).toEqual([{ name: 'nexus_video' }, { name: 'nexus_video' }])
+    expect((feed.descriptions as Array<{ text: string }>).map((d) => d.text)).toEqual([' ', ' '])
+  })
+  it('B5 — post video metrics: the 30-second complete views are the unique ones', () => {
+    expect(() => tool('meta-page-posts').input.parse({ view: 'post-insights', metrics: ['post_video_complete_views_30s_unique'] })).not.toThrow()
+    expect(() => tool('meta-page-posts').input.parse({ view: 'post-insights', metrics: ['post_video_complete_views_30s'] })).toThrow()
+  })
+  it('no tool description holds a bare number of four digits or more (a money-like value)', () => {
+    for (const t of META_ADS_MEDIA_TOOLS) expect({ name: t.name, numbers: t.description.match(/\b\d{4,}\b/g) }).toEqual({ name: t.name, numbers: null })
   })
 })

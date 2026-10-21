@@ -1321,7 +1321,8 @@ describe('MCP.2 — coverage', () => {
 describe('MCP.2 — money a person may not see never comes back', () => {
   // C7 — confirm-change is Claude's door only and returns its own arguments: no stored money to filter. W4-1 —
   // report-ads-run is Claude's door only too; it needs the ad-spend money permission (ads-manager.tools.vitest.test.ts).
-  const tools = () => listTools().filter((tool) => !AI_DRAFTS.has(tool.name) && tool.name !== 'confirm-change' && tool.name !== 'report-ads-run')
+  // Meta ads step 10 — meta-ad-preview is Claude's door only as well (its public links never reach the in-app chat); it holds no money.
+  const tools = () => listTools().filter((tool) => !AI_DRAFTS.has(tool.name) && tool.name !== 'confirm-change' && tool.name !== 'report-ads-run' && tool.name !== 'meta-ad-preview')
 
   it('the money-cleared run really reads the seeded money (positive control)', async () => {
     const analytics = await run(cleared(A), 'product-analytics', ARGS['product-analytics'](seeded[A]))

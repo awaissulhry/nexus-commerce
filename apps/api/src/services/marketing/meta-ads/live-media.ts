@@ -31,9 +31,10 @@
  *     SDK websitecreativeassetsuggestions.py, websitecreativeinfo.py, adaccounturlforassetextraction.py)
  *   - ad-campaign-group/video_groups: date_range {start, end} (VideoGroup: SDK videogroup.py; its Page and Instagram ids
  *     are not asked)
- *   - Video node: the Graph reference lists id, name, description, picture, source, created_time, updated_time; title,
- *     length, status, permalink_url, is_instagram_eligible are SDK only (advideo.py; RECHECK MD-022) — asked, and asked
- *     again without them when Meta refuses (MORE_VIDEO_FIELDS); video/thumbnails, video/captions edges
+ *   - Video node: the Graph reference lists id, description, picture, source, created_time, updated_time (and `name`,
+ *     which the SDK's AdVideo has only as an upload parameter — never asked, review B2); title, length, status,
+ *     permalink_url, is_instagram_eligible are SDK only (advideo.py; RECHECK MD-022) — asked, and each one Meta refuses
+ *     is dropped and named (MORE_VIDEO_FIELDS); video/thumbnails, video/captions edges
  *   - page/feed, published_posts, visitor_posts: include_hidden, show_expired (SDK page.py; the feed page: at most 100 per
  *     call, ~600 ranked posts a year, unpublished posts included, is_published says which); visitor_posts: "not supported
  *     for Pages migrated to the New Pages Experience" and "supported" on the same page (LIVE-PROBES); page/ads_posts:
@@ -47,11 +48,12 @@
  *     answer after the 2026-06-15 wave is settled live (LIVE-PROBES)
  *   - IG user media (since, until), stories, content_publishing_limit, upcoming_events; IG media fields incl.
  *     boost_eligibility_info, boost_ads_list, copyright_check_information, media_audio_type (ig-media reference; the
- *     shape of boost_eligibility_info is not documented: passed on as Meta gives it); IG media insights (metric,
- *     breakdown; period is lifetime) and IG user insights (metric, period, metric_type, timeframe, breakdown, since,
- *     until); IG container: id, status, status_code, copyright_check_status — it has no owner field
- *   - previews: ad-account/generatepreviews, ad-creative/previews, adgroup/previews: ad_format (enum below; THREADS_STREAM
- *     from the Instagram preview guide), creative_feature (reference enum + the Advantage+ creative guide's features),
+ *     shapes of boost_eligibility_info and boost_ads_list are the SDK's: igmediaboosteligibilityinfo.py, igboostmediaad.py);
+ *     IG media insights (metric per media kind, breakdown; period is lifetime) and IG user insights (metric, period,
+ *     metric_type, timeframe this_month | this_week, breakdown, since, until); IG container: id, status, status_code,
+ *     copyright_check_status — it has no owner field, so it is not read here (the publish step adds it)
+ *   - previews: ad-account/generatepreviews, ad-creative/previews, adgroup/previews: ad_format (the v26 enum, exactly),
+ *     creative_feature (reference enum + the Advantage+ creative guide's features),
  *     dynamic_asset_label, dynamic_customization {language, country} (localized-catalog-da), product_item_ids; the
  *     iframe is "only valid for 24 hours"; adgroup field preview_shareable_link; multi-language-ads (asset_feed_spec,
  *     asset_customization_rules, preview with dynamic_asset_label); use-posts-as-ads (object_id, instagram_user_id,
@@ -64,7 +66,7 @@ import type { MetaQueryValue } from '../../gateway/meta.js'
 import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
 import { graphSafe, list, metaChosenAccount, MetaLiveRefusal, objectKindOf, ownObject, type MetaChosenAccount } from './live.js'
-import { maskTakenRows } from './taken.js'
+import { maskTakenRows, takenIds } from './taken.js'
 
 type Row = Record<string, unknown>
 
@@ -99,24 +101,42 @@ function fieldRefused(err: unknown): err is MetaReadError {
     && !err.failure.permissionDenied && (err.failure.code ?? '').split('/')[0] === '100'
 }
 
-const refusedNote = (more: string, err: MetaReadError) => `Meta refused some fields here (${more}), so they are missing: ${err.failure.sentence}`
+/**
+ * The SDK-only fields Meta refused: the ones its words name ("nonexisting field (x)"), else all of them. Only those are
+ * dropped, so one refused field never takes the others with it.
+ */
+export function refusedFields(more: string[], err: MetaReadError): string[] {
+  const named = [...err.failure.sentence.matchAll(/\(([a-z_]+)\)/g)].map((m) => m[1]).filter((f) => more.includes(f))
+  return named.length ? named : more
+}
 
-async function oneWithFallback(connectionId: string, operation: string, path: string, core: string, more: string, query: Record<string, MetaQueryValue> = {}) {
-  try {
-    return { body: (await metaReadOne({ connectionId }, { operation, path, query: { ...query, fields: more ? `${core},${more}` : core } })).body as Row, note: null as string | null }
-  } catch (err) {
-    if (!more || !fieldRefused(err)) throw err
-    return { body: (await metaReadOne({ connectionId }, { operation, path, query: { ...query, fields: core } })).body as Row, note: refusedNote(more, err) }
+/** Read with the documented fields plus the SDK-only ones; each refused SDK-only field is dropped (at most 4 tries). */
+async function withFallback<T>(core: string, more: string, read: (fields: string) => Promise<T>): Promise<{ value: T; note: string | null }> {
+  let asked = more ? more.split(',') : []
+  const dropped: string[] = []
+  let last = ''
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const value = await read(asked.length ? `${core},${asked.join(',')}` : core)
+      return { value, note: dropped.length ? `Meta refused ${dropped.join(', ')} here, so ${dropped.length === 1 ? 'it is' : 'they are'} missing: ${last}` : null }
+    } catch (err) {
+      if (!asked.length || !fieldRefused(err) || attempt >= 3) throw err
+      const refused = attempt === 2 ? asked : refusedFields(asked, err)
+      dropped.push(...refused)
+      asked = asked.filter((f) => !refused.includes(f))
+      last = err.failure.sentence
+    }
   }
 }
 
+async function oneWithFallback(connectionId: string, operation: string, path: string, core: string, more: string, query: Record<string, MetaQueryValue> = {}) {
+  const read = await withFallback(core, more, async (fields) => (await metaReadOne({ connectionId }, { operation, path, query: { ...query, fields } })).body as Row)
+  return { body: read.value, note: read.note }
+}
+
 async function listWithFallback(connectionId: string, operation: string, path: string, core: string, more: string, query: Record<string, MetaQueryValue>, maxRows: number) {
-  try {
-    return { ...(await list(connectionId, operation, path, { ...query, fields: more ? `${core},${more}` : core }, maxRows)), note: null as string | null }
-  } catch (err) {
-    if (!more || !fieldRefused(err)) throw err
-    return { ...(await list(connectionId, operation, path, { ...query, fields: core }, maxRows)), note: refusedNote(more, err) }
-  }
+  const read = await withFallback(core, more, (fields) => list(connectionId, operation, path, { ...query, fields }, maxRows))
+  return { ...read.value, note: read.note }
 }
 
 /** One part of an answer that may fail on its own (an edge Meta may refuse): its rows, or Meta's sentence. */
@@ -149,6 +169,16 @@ function instagramOf(account: MetaChosenAccount): string {
 function portfolioOf(account: MetaChosenAccount): string {
   if (!account.businessId) throw new MetaLiveRefusal('The chosen ad account names no business portfolio, so a portfolio\'s media library is not read (only the ad account\'s own: views images and videos).')
   return account.businessId
+}
+
+export const PORTFOLIO_TAKEN = 'Another business in Nexus reads an ad account of this Meta business portfolio, so the portfolio\'s media library, folders and tags are not read here (they would show that business\'s media too). Read this ad account\'s own media with views images and videos, and the system user\'s own folders with view my-folders.'
+
+/**
+ * Step 10 review A1 — a portfolio another business's chosen ad account belongs to (nexus_meta_links_taken PORTFOLIO) is
+ * its id and the flag only, before any call: two businesses in one portfolio never read each other's library.
+ */
+async function portfolioTaken(portfolioId: string): Promise<{ portfolioId: string; takenByAnotherBusiness: true; sentence: string } | null> {
+  return (await takenIds('PORTFOLIO', [portfolioId])).has(portfolioId) ? { portfolioId, takenByAnotherBusiness: true, sentence: PORTFOLIO_TAKEN } : null
 }
 
 /** A Page or Instagram read: when Meta refuses it for the token, the answer says what that means. */
@@ -200,18 +230,26 @@ export async function ownVideo(account: MetaChosenAccount, id: string): Promise<
     : 'That video is not in the chosen ad account\'s library or on the chosen Facebook Page, so it is not read.')
 }
 
-/** An Instagram media of the chosen Instagram account (Meta's `owner`, else its `username`); any other is refused. */
-export async function ownMedia(account: MetaChosenAccount, id: string): Promise<string> {
+/**
+ * An Instagram media of the chosen Instagram account (Meta's `owner`; else its `username` against the chosen account's
+ * username read LIVE now, never the one stored at selection); any other is refused. Answers its product type too
+ * (FEED, REELS, STORY, AD: which insights it has).
+ */
+export async function ownMedia(account: MetaChosenAccount, id: string): Promise<{ mediaId: string; productType: string | null }> {
   const instagramId = instagramOf(account)
   const mediaId = metaObjectId(id)
   if (!mediaId) throw new MetaLiveRefusal(`"${id}" is not an Instagram media id (digits).`)
   // Meta: `owner` is "only returned if the app user making the query also created the media; otherwise, username".
-  const read = await onPage(() => metaReadOne({ connectionId: account.connectionId }, { operation: 'instagram.mediaOwnerCheck', path: mediaId, query: { fields: 'id,owner,username' } }))
+  const read = await onPage(() => metaReadOne({ connectionId: account.connectionId }, { operation: 'instagram.mediaOwnerCheck', path: mediaId, query: { fields: 'id,owner,username,media_product_type' } }))
   const body = read.body as Row
+  const productType = text(body.media_product_type)
   const owner = idText(obj(body.owner)?.id ?? body.owner)
+  if (owner === instagramId) return { mediaId, productType }
   const username = text(body.username)?.toLowerCase() ?? null
-  const chosen = text(account.connection.instagram?.username)?.toLowerCase() ?? null
-  if (owner === instagramId || (!owner && username && chosen && username === chosen)) return mediaId
+  if (!owner && username) {
+    const chosen = await onPage(() => metaReadOne({ connectionId: account.connectionId }, { operation: 'instagram.accountUsername', path: instagramId, query: { fields: 'id,username' } }))
+    if (text((chosen.body as Row).username)?.toLowerCase() === username) return { mediaId, productType }
+  }
   throw new MetaLiveRefusal('That Instagram media is not the chosen Instagram account\'s, so it is not read.')
 }
 
@@ -241,8 +279,9 @@ export const BROADCAST_STATUSES = ['UNPUBLISHED', 'LIVE', 'LIVE_STOPPED', 'PROCE
 /** Fixed field lists per node type: the ONLY fields these reads ask. */
 export const MEDIA_FIELDS = {
   AdImage: 'id,hash,name,width,height,original_width,original_height,status,created_time,updated_time,url,url_128,permalink_url,creatives,is_associated_creatives_in_adgroups',
-  Video: 'id,name,description,picture,created_time,updated_time',
-  VideoDetail: 'id,name,description,picture,source,created_time,updated_time',
+  // Review B2 — never `name`: the SDK's AdVideo `name` is an upload parameter, not a field Meta reads back.
+  Video: 'id,description,picture,created_time,updated_time',
+  VideoDetail: 'id,description,picture,source,created_time,updated_time',
   VideoThumbnail: 'id,uri,width,height,scale,is_preferred',
   /** Meta documents no VideoCaption fields on v26: `locale` asked, the rest asked and dropped when refused. */
   VideoCaption: 'locale',
@@ -373,6 +412,8 @@ export async function liveMedia(input: MediaInput) {
     case 'business-videos':
     case 'business-creatives': {
       const portfolio = portfolioOf(account)
+      const taken = await portfolioTaken(portfolio)
+      if (taken) return { ...base, ...taken }
       const folder = input.folderId ? metaObjectId(input.folderId) : null
       if (input.folderId && !folder) throw new MetaLiveRefusal(`"${input.folderId}" is not a Meta folder id (digits).`)
       const query: Record<string, MetaQueryValue> = folder ? { creative_folder_id: folder } : {}
@@ -387,11 +428,15 @@ export async function liveMedia(input: MediaInput) {
     }
     case 'folders': {
       const portfolio = portfolioOf(account)
+      const taken = await portfolioTaken(portfolio)
+      if (taken) return { ...base, ...taken }
       const read = await list(connectionId, 'media.folders', `${portfolio}/creative_folders`, { fields: MEDIA_FIELDS.Folder }, maxRows)
-      return { ...base, portfolioId: portfolio, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Meta documents no API to create or change folders (Business Settings › Media library).' }
+      return { ...base, portfolioId: portfolio, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Nexus does not create or change folders here (Meta has a create call; a later Nexus media step may use it); a person can in Business Settings › Media library.' }
     }
     case 'tags': {
       const portfolio = portfolioOf(account)
+      const taken = await portfolioTaken(portfolio)
+      if (taken) return { ...base, ...taken }
       const read = await list(connectionId, 'media.tags', `${portfolio}/creative_asset_tags`, { fields: MEDIA_FIELDS.Tag }, maxRows)
       return { ...base, portfolioId: portfolio, items: read.rows.map((r) => tidy(r)), more: read.more, note: 'Meta documents no API to create, change or delete these tags.' }
     }
@@ -459,8 +504,9 @@ export const POST_FIELDS = {
   /** SDK pagepost.py and master MD-101 (not in the v26 feed field table): asked, and asked again without when refused. */
   ListMore: 'is_inline_created',
   Eligibility: 'instagram_eligibility,video_buying_eligibility,attachments{media_type,type,title,description,url,unshimmed_url,media,target,subattachments}',
-  /** SDK pagepost.py only (the feed page lists `allowed_advertising_objects`): asked, and again without when refused. */
-  More: 'is_inline_created,allowed_advertising_objectives,promotion_status',
+  /** Not in the v26 feed field table (SDK pagepost.py / master MD-101); `allowed_advertising_objects` is the feed
+   * reference's name. Each is asked, and only the ones Meta refuses are dropped. */
+  More: 'is_inline_created,allowed_advertising_objects,promotion_status',
   Sponsor: 'id,name',
   DynamicPost: 'id,title,message,description,link,image_url,product_id,created',
   AdPost: 'id,account_id,effective_object_story_id,object_story_id,effective_instagram_media_id,instagram_permalink_url,source_instagram_media_id',
@@ -475,7 +521,7 @@ export const PAGE_METRICS = [
 export const POST_METRICS = [
   'post_media_view', 'post_total_media_view_unique', 'post_clicks', 'post_clicks_by_type', 'post_reactions_by_type_total', 'post_reactions_like_total',
   'post_reactions_love_total', 'post_reactions_wow_total', 'post_reactions_haha_total', 'post_reactions_sorry_total', 'post_reactions_anger_total',
-  'post_video_views', 'post_video_avg_time_watched', 'post_video_complete_views_30s',
+  'post_video_views', 'post_video_avg_time_watched', 'post_video_complete_views_30s_unique',
 ] as const
 export const PAGE_PERIODS = ['day', 'week', 'days_28', 'month', 'lifetime', 'total_over_range'] as const
 /** The breakdowns Meta's deprecation page names for the media-view metrics. */
@@ -483,8 +529,17 @@ export const PAGE_BREAKDOWNS = ['is_from_ads', 'is_from_followers'] as const
 
 function postRow(pageId: string, row: Row) {
   const t = tidy(row) as Row
+  const by = postedBy(pageId, row)
   delete t.from
-  return { ...t, postedBy: postedBy(pageId, row) }
+  // Meta's `story` names who did what ("<a person> wrote on …"): kept only for the Page's own posts.
+  if (by !== 'the Page') delete t.story
+  return { ...t, postedBy: by }
+}
+
+/** A list of the chosen Page's posts: a row whose id is not `<page id>_…` is dropped (and counted), never shown. */
+function pageRows(pageId: string, rows: Row[]) {
+  const own = rows.filter((r) => idText(r.id)?.startsWith(`${pageId}_`))
+  return { items: own.map((r) => postRow(pageId, r)), droppedNotOnPage: rows.length - own.length }
 }
 
 export interface PostsInput {
@@ -522,7 +577,7 @@ export async function livePagePosts(input: PostsInput) {
       // The feed answers at most 100 posts per call (list() never asks more than 100).
       const read = await onPage(() => listWithFallback(connectionId, `posts.${edge}`, `${pageId}/${edge}`, POST_FIELDS.PagePost, POST_FIELDS.ListMore, hiddenExpired(), maxRows))
       return {
-        ...base, items: read.rows.map((r) => postRow(pageId, r)), more: read.more, fieldsNote: read.note,
+        ...base, ...pageRows(pageId, read.rows), more: read.more, fieldsNote: read.note,
         note: input.view === 'feed'
           ? 'Published, unpublished (dark) and scheduled posts: isPublished says which (Meta: always false for posts made inside an ad). Meta answers about 600 ranked posts a year; expired posts cannot be read.'
           : input.view === 'visitor'
@@ -536,7 +591,7 @@ export async function livePagePosts(input: PostsInput) {
       if (input.from) query.since = input.from
       if (input.to) query.until = input.to
       const read = await onPage(() => listWithFallback(connectionId, 'posts.adsPosts', `${pageId}/ads_posts`, POST_FIELDS.PagePost, POST_FIELDS.ListMore, query, maxRows))
-      return { ...base, items: read.rows.map((r) => postRow(pageId, r)), more: read.more, fieldsNote: read.note, note: 'The Page\'s ad posts, with the dark posts creatives made inline (unless includeInlineCreated is false).' }
+      return { ...base, ...pageRows(pageId, read.rows), more: read.more, fieldsNote: read.note, note: 'The Page\'s ad posts, with the dark posts creatives made inline (unless includeInlineCreated is false).' }
     }
     case 'post': {
       if (!input.postId) throw new MetaLiveRefusal('Name the post (postId, from a posts view).')
@@ -623,7 +678,9 @@ async function adPost(account: MetaChosenAccount, input: PostsInput) {
 
 // ── meta-instagram-media ─────────────────────────────────────────────────────────────────────────────────────────
 
-export const INSTAGRAM_VIEWS = ['accounts', 'media', 'stories', 'media-detail', 'media-insights', 'account-insights', 'container', 'quota', 'upcoming-events', 'video-check'] as const
+// MD-134 (a publish container's status) is not a view: Nexus makes no containers yet, and a container has no owner on
+// Meta to check; the Instagram publish step adds it for the container ids it stores.
+export const INSTAGRAM_VIEWS = ['accounts', 'media', 'stories', 'media-detail', 'media-insights', 'account-insights', 'quota', 'upcoming-events', 'video-check'] as const
 export type InstagramView = typeof INSTAGRAM_VIEWS[number]
 
 export const IG_FIELDS = {
@@ -631,7 +688,6 @@ export const IG_FIELDS = {
   MediaDetail: 'boost_eligibility_info,boost_ads_list,copyright_check_information,media_audio_type,shortcode,is_comment_enabled',
   Story: 'id,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp',
   Account: 'id,username',
-  Container: 'id,status,status_code,copyright_check_status',
   Quota: 'config,quota_usage',
   Event: 'id,title,start_time,end_time,notification_subtypes,notification_target_time',
 } as const
@@ -646,16 +702,29 @@ export const IG_ACCOUNT_METRICS = [
   'reach', 'views', 'accounts_engaged', 'total_interactions', 'likes', 'comments', 'saves', 'shares', 'reposts', 'replies', 'follows_and_unfollows',
   'profile_links_taps', 'follower_demographics', 'engaged_audience_demographics',
 ] as const
+/** Which media each metric exists on (ig-media/insights, "Media Product Type"); AD media are judged as FEED. */
+export const IG_MEDIA_METRIC_TYPES: Readonly<Record<typeof IG_MEDIA_METRICS[number], readonly string[]>> = {
+  views: ['FEED', 'REELS', 'STORY'], reach: ['FEED', 'REELS', 'STORY'], likes: ['FEED', 'REELS'], comments: ['FEED', 'REELS'], saved: ['FEED', 'REELS'],
+  shares: ['FEED', 'REELS', 'STORY'], reposts: ['FEED', 'REELS', 'STORY'], total_interactions: ['FEED', 'REELS', 'STORY'], follows: ['FEED', 'STORY'],
+  profile_visits: ['FEED', 'STORY'], profile_activity: ['FEED', 'STORY'], navigation: ['STORY'], replies: ['STORY'], link_clicks: ['STORY'],
+  ig_reels_avg_watch_time: ['REELS'], ig_reels_video_view_total_time: ['REELS'], reels_skip_rate: ['REELS'], facebook_views: ['FEED', 'REELS', 'STORY'],
+  crossposted_views: ['REELS'], total_views: ['FEED', 'REELS', 'STORY'], total_likes: ['FEED', 'REELS'], total_comments: ['FEED', 'REELS'],
+}
+const IG_MEDIA_DEFAULTS: Readonly<Record<string, string[]>> = {
+  STORY: ['views', 'reach', 'shares', 'total_interactions', 'replies', 'navigation'],
+  FEED: ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions'],
+  REELS: ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions'],
+}
 export const IG_MEDIA_BREAKDOWNS = ['action_type', 'story_navigation_action_type'] as const
 export const IG_ACCOUNT_BREAKDOWNS = ['media_product_type', 'follow_type', 'follower_type', 'contact_button_type', 'age', 'city', 'country', 'gender'] as const
-export const IG_TIMEFRAMES = ['last_14_days', 'last_30_days', 'last_90_days', 'prev_month', 'this_month', 'this_week'] as const
+/** Review B1 — the last_… and prev_month timeframes are gone since v20 (ig-user/insights): only these two answer. */
+export const IG_TIMEFRAMES = ['this_month', 'this_week'] as const
 export const IG_METRIC_TYPES = ['total_value', 'time_series'] as const
 
 export interface InstagramInput {
   connectionId?: string | null
   view: InstagramView
   mediaId?: string | null
-  containerId?: string | null
   videoId?: string | null
   from?: string | null
   to?: string | null
@@ -678,15 +747,6 @@ export async function liveInstagram(input: InstagramInput) {
   const { connectionId } = account
   const maxRows = clampRows(input.maxRows, 50)
   if (input.view === 'accounts') return instagramAccounts(account, maxRows)
-  if (input.view === 'container') {
-    // MD-134 — a container has no owner field on Meta (ig-container reference: id, status, status_code,
-    // copyright_check_status), so only those status words are asked; nothing of an account travels with them.
-    instagramOf(account)
-    const containerId = input.containerId ? metaObjectId(input.containerId) : null
-    if (!containerId) throw new MetaLiveRefusal('Name the container (containerId, digits: the id a publish request answered).')
-    const read = await onPage(() => metaReadOne({ connectionId }, { operation: 'instagram.container', path: containerId, query: { fields: IG_FIELDS.Container } }))
-    return { container: tidy(read.body), note: 'EXPIRED: not published within 24 hours; ERROR: failed (status holds Meta\'s subcode); FINISHED: ready to publish; IN_PROGRESS: still uploading; PUBLISHED: done. Meta asks to check at most once a minute, for no more than 5 minutes. A container has no owner on Meta, so Nexus cannot check it is the chosen account\'s: only its status is read.' }
-  }
   if (input.view === 'video-check') {
     if (!input.videoId) throw new MetaLiveRefusal('Name the video (videoId, from meta-media-library view videos).')
     const videoId = await ownVideo(account, input.videoId)
@@ -712,31 +772,41 @@ export async function liveInstagram(input: InstagramInput) {
     }
     case 'media-detail': {
       if (!input.mediaId) throw new MetaLiveRefusal('Name the media (mediaId, from view media or stories).')
-      const mediaId = await ownMedia(account, input.mediaId)
+      const { mediaId } = await ownMedia(account, input.mediaId)
       const read = await onPage(() => oneWithFallback(connectionId, 'instagram.mediaDetail', mediaId, IG_FIELDS.Media, IG_FIELDS.MediaDetail))
       const body = read.body
       const boosts = rowsOf(body.boost_ads_list).concat(Array.isArray(body.boost_ads_list) ? (body.boost_ads_list as unknown[]).filter((r): r is Row => !!obj(r)) : [])
       const ads = await Promise.all(boosts.map(async (b) => {
-        const adId = idText(b.ad_id ?? b.id)
-        return { adId, status: text(b.ad_status) ?? text(b.status), inChosenAdAccount: adId ? (await objectKindOf(account, adId)) === 'ad' : false }
+        // SDK IGBoostMediaAd: ad_id, ad_status.
+        const adId = idText(b.ad_id)
+        return { adId, status: text(b.ad_status), inChosenAdAccount: adId ? (await objectKindOf(account, adId)) === 'ad' : false }
       }))
       const out = tidy(body) as Row
       delete out.boostAdsList
+      delete out.boostEligibilityInfo
+      // SDK IGMediaBoostEligibilityInfo: eligible_to_boost, boost_ineligible_reason.
+      const eligibility = obj(body.boost_eligibility_info)
       return {
-        ...base, media: out, boostAds: ads, fieldsNote: read.note,
-        note: 'boostEligibilityInfo is Meta\'s word on whether it can be boosted and why not (copyrighted music, filters and other interactive parts cannot). boostAds: the ACTIVE ads boosting it (inChosenAdAccount: an ad Nexus has read for the chosen account). A boosted organic post can no longer be edited.',
+        ...base, media: out,
+        boost: eligibility ? { eligible: typeof eligibility.eligible_to_boost === 'boolean' ? eligibility.eligible_to_boost : null, reason: text(eligibility.boost_ineligible_reason) } : null,
+        boostAds: ads, fieldsNote: read.note,
+        note: 'boost is Meta\'s word on whether it can be boosted and why not (copyrighted music, filters and other interactive parts cannot). boostAds: the ACTIVE ads boosting it (inChosenAdAccount: an ad Nexus has read for the chosen account). A boosted organic post can no longer be edited.',
       }
     }
     case 'media-insights': {
       if (!input.mediaId) throw new MetaLiveRefusal('Name the media (mediaId).')
-      const mediaId = await ownMedia(account, input.mediaId)
-      const metrics = input.metrics?.length ? input.metrics : ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions']
+      const { mediaId, productType } = await ownMedia(account, input.mediaId)
+      const kind = productType === 'STORY' || productType === 'REELS' ? productType : 'FEED'
+      const metrics = input.metrics?.length ? input.metrics : IG_MEDIA_DEFAULTS[kind]
       const odd = metrics.find((m) => !(IG_MEDIA_METRICS as readonly string[]).includes(m))
       if (odd) throw new MetaLiveRefusal(`"${odd}" is not a metric Nexus asks of a media; it asks ${IG_MEDIA_METRICS.join(', ')}.`)
+      // Review B3 — a metric the media's kind has not (likes on a story, replies on a reel) is refused before the read.
+      const other = metrics.find((m) => !IG_MEDIA_METRIC_TYPES[m as typeof IG_MEDIA_METRICS[number]].includes(kind))
+      if (other) throw new MetaLiveRefusal(`Meta has no "${other}" for ${kind === 'STORY' ? 'a story' : kind === 'REELS' ? 'a reel' : 'a feed post'}; it has ${IG_MEDIA_METRICS.filter((m) => IG_MEDIA_METRIC_TYPES[m].includes(kind)).join(', ')}.`)
       const query: Record<string, MetaQueryValue> = { metric: metrics.join(',') }
       if (input.breakdown) query.breakdown = input.breakdown
       const read = await onPage(() => metaReadOne({ connectionId }, { operation: 'instagram.mediaInsights', path: `${mediaId}/insights`, query }))
-      return { ...base, mediaId, metrics, items: rowsOf(read.body).map((r) => tidy(r)), note: 'Organic numbers of the media over its life (likes, comments, views: organic only; total_…: with ads). Delayed up to 48 hours; an unavailable metric comes back empty, not 0; a story under 5 viewers has none.' }
+      return { ...base, mediaId, productType, metrics, items: rowsOf(read.body).map((r) => tidy(r)), note: 'Organic numbers of the media over its life (likes, comments, views: organic only; total_…: with ads). Delayed up to 48 hours; an unavailable metric comes back empty, not 0; a story under 5 viewers has none.' }
     }
     case 'account-insights': {
       const metrics = input.metrics?.length ? input.metrics : ['reach', 'views', 'accounts_engaged', 'total_interactions']
@@ -744,7 +814,7 @@ export async function liveInstagram(input: InstagramInput) {
       if (odd) throw new MetaLiveRefusal(`"${odd}" is not a metric Nexus asks of an account; it asks ${IG_ACCOUNT_METRICS.join(', ')}.`)
       const demographic = metrics.some((m) => m.endsWith('_demographics'))
       const query: Record<string, MetaQueryValue> = { metric: metrics.join(','), period: demographic ? 'lifetime' : 'day', metric_type: input.metricType ?? 'total_value' }
-      if (demographic) query.timeframe = input.timeframe ?? 'last_30_days'
+      if (demographic) query.timeframe = input.timeframe ?? 'this_month'
       if (input.from) query.since = input.from
       if (input.to) query.until = input.to
       if (input.breakdown) query.breakdown = input.breakdown
@@ -796,7 +866,11 @@ async function instagramAccounts(account: MetaChosenAccount, maxRows: number) {
 export const PREVIEW_VIEWS = ['ad', 'creative', 'spec', 'instant-experience', 'share-link'] as const
 export type PreviewView = typeof PREVIEW_VIEWS[number]
 
-/** ad_format: the generatepreviews / previews reference enum (v26.0), plus THREADS_STREAM (Instagram ad preview guide). */
+/**
+ * ad_format: the generatepreviews / previews reference enum (v26.0) and SDK, exactly (THREADS_STREAM, which only the Instagram
+ * preview guide names, is not offered). Some name placements Meta has retired (MESSENGER_MOBILE_STORY_MEDIA,
+ * INSTANT_ARTICLE_*): Meta refuses them, and the answer says so for that placement.
+ */
 export const AD_FORMATS = [
   'AUDIENCE_NETWORK_INSTREAM_VIDEO', 'AUDIENCE_NETWORK_INSTREAM_VIDEO_MOBILE', 'AUDIENCE_NETWORK_OUTSTREAM_VIDEO', 'AUDIENCE_NETWORK_REWARDED_VIDEO',
   'BIZ_DISCO_FEED_MOBILE', 'DESKTOP_FEED_STANDARD', 'FACEBOOK_IFU_REELS_MOBILE', 'FACEBOOK_PROFILE_FEED_DESKTOP', 'FACEBOOK_PROFILE_FEED_MOBILE',
@@ -812,7 +886,7 @@ export const AD_FORMATS = [
   'INSTREAM_VIDEO_IMAGE', 'INSTREAM_VIDEO_IMMERSIVE_MOBILE', 'INSTREAM_VIDEO_MOBILE', 'JOB_BROWSER_DESKTOP', 'JOB_BROWSER_MOBILE', 'MARKETPLACE_MOBILE',
   'MESSENGER_MOBILE_INBOX_MEDIA', 'MESSENGER_MOBILE_STORY_MEDIA', 'MOBILE_BANNER', 'MOBILE_FEED_BASIC', 'MOBILE_FEED_STANDARD', 'MOBILE_FULLWIDTH',
   'MOBILE_INTERSTITIAL', 'MOBILE_MEDIUM_RECTANGLE', 'MOBILE_NATIVE', 'RIGHT_COLUMN_STANDARD', 'SUGGESTED_VIDEO_DESKTOP', 'SUGGESTED_VIDEO_FULLSCREEN_MOBILE',
-  'SUGGESTED_VIDEO_IMMERSIVE_MOBILE', 'SUGGESTED_VIDEO_MOBILE', 'THREADS_STREAM', 'WATCH_FEED_HOME', 'WATCH_FEED_MOBILE', 'WHATSAPP_STATUS_MEDIA',
+  'SUGGESTED_VIDEO_IMMERSIVE_MOBILE', 'SUGGESTED_VIDEO_MOBILE', 'WATCH_FEED_HOME', 'WATCH_FEED_MOBILE', 'WHATSAPP_STATUS_MEDIA',
 ] as const
 /** creative_feature: the reference enum plus the features the Advantage+ creative guide previews. */
 export const CREATIVE_FEATURES = [
@@ -911,7 +985,7 @@ export async function previewSpec(account: MetaChosenAccount, spec: PreviewSpec)
       return { object_story_id: pagePostId(pageId, spec.postId!) }
     case 'instagram-post': {
       need(spec.instagramMediaId, 'instagramMediaId (a media of the chosen Instagram account)')
-      const mediaId = await ownMedia(account, spec.instagramMediaId!)
+      const { mediaId } = await ownMedia(account, spec.instagramMediaId!)
       return drop({ object_id: pageId, instagram_user_id: instagramOf(account), source_instagram_media_id: mediaId, call_to_action: cta(spec.callToAction, spec.link) })
     }
     case 'multi-language': {
@@ -920,27 +994,33 @@ export async function previewSpec(account: MetaChosenAccount, spec: PreviewSpec)
       if (langs.length < 2 || langs.filter((l) => l.isDefault).length !== 1) throw new MetaLiveRefusal('A multi-language preview needs 2 to 10 languages, exactly one of them isDefault.')
       need(spec.imageHash ?? spec.imageUrl ?? spec.videoId, 'one imageHash, imageUrl or videoId')
       const videoId = spec.videoId ? await ownVideo(account, spec.videoId) : null
+      if (langs.some((l) => l.label === VIDEO_LABEL)) throw new MetaLiveRefusal(`"${VIDEO_LABEL}" is the video's own label: name the language another way.`)
       const label = (l: PreviewLanguage) => [{ name: l.label }]
       return {
         object_story_spec: story({}),
         asset_feed_spec: drop({
           ad_formats: [videoId ? 'SINGLE_VIDEO' : 'SINGLE_IMAGE'],
           images: videoId ? undefined : [spec.imageHash ? { hash: spec.imageHash } : { url: spec.imageUrl }],
-          videos: videoId ? [drop({ video_id: videoId, ...(spec.imageHash ? { thumbnail_hash: spec.imageHash } : spec.imageUrl ? { thumbnail_url: spec.imageUrl } : {}) })] : undefined,
+          // Review B6 — SINGLE_VIDEO needs the video labelled and each rule's video_label (one video for every language).
+          videos: videoId ? [drop({ video_id: videoId, adlabels: [{ name: VIDEO_LABEL }], ...(spec.imageHash ? { thumbnail_hash: spec.imageHash } : spec.imageUrl ? { thumbnail_url: spec.imageUrl } : {}) })] : undefined,
           bodies: langs.map((l) => ({ text: l.message, adlabels: label(l) })),
           titles: langs.map((l) => ({ text: l.headline, adlabels: label(l) })),
-          descriptions: langs.map((l) => ({ text: l.description ?? '', adlabels: label(l) })),
+          descriptions: langs.map((l) => ({ text: l.description?.trim() ? l.description : ' ', adlabels: label(l) })),
           link_urls: langs.map((l) => ({ website_url: l.link, adlabels: label(l) })),
           call_to_action_types: [spec.callToAction ?? 'SHOP_NOW'],
           asset_customization_rules: langs.map((l) => drop({
             customization_spec: { locales: l.locales }, is_default: l.isDefault ? true : undefined,
             body_label: { name: l.label }, title_label: { name: l.label }, description_label: { name: l.label }, link_url_label: { name: l.label },
+            video_label: videoId ? { name: VIDEO_LABEL } : undefined,
           })),
         }),
       }
     }
   }
 }
+
+/** The one video's label in a multi-language spec (asset_feed_spec videos[].adlabels and each rule's video_label). */
+const VIDEO_LABEL = 'nexus_video'
 
 /** The link inside Meta's iframe (`src="…"`), with Meta's `&amp;` read back. */
 export function linkOfIframe(iframe: string | null): string | null {
@@ -985,6 +1065,8 @@ export async function livePreview(input: PreviewInput) {
   const options: Record<string, MetaQueryValue> = {}
   if (input.creativeFeature) options.creative_feature = input.creativeFeature
   if (input.assetLabel) options.dynamic_asset_label = input.assetLabel
+  // Review A7 — product item ids are the caller's, unchecked: Meta renders them only with the creative's own catalog, and
+  // the catalog steps (12/13) add the check that each item is in the business's chosen catalog.
   if (input.productItemIds?.length) options.product_item_ids = input.productItemIds
   if (input.language || input.country) options.dynamic_customization = drop({ language: input.language, country: input.country })
   let path: string
@@ -1044,7 +1126,8 @@ export const IX_FIELDS = {
   CanvasDetail: 'id,name,is_published,is_hidden,canvas_link,update_time,background_color,body_elements',
   /** SDK canvas.py only (the guide reads the fields above): asked, and dropped when refused. */
   CanvasMore: 'collection_hero_image,collection_thumbnails,linked_documents,unused_body_elements,store_url,source_template',
-  Element: 'id,element',
+  /** CanvasBodyElement has one field (SDK canvasbodyelement.py). */
+  Element: 'element',
 } as const
 
 export interface IxInput {

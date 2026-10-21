@@ -124,7 +124,8 @@ describe('MCP.3 — every tool describes its own arguments', () => {
     const offered = anthropicTools(OWNER)
     // C7 — confirm-change is offered on Claude's door only (surfaces ['mcp']): the in-app assistant has the Approvals page.
     // W4-1 — so is report-ads-run: the scheduled Claude run's own report.
-    const mcpOnly = new Set(['confirm-change', 'report-ads-run'])
+    // Meta ads step 10 (review A2) — and meta-ad-preview: its links are public, and the in-app chat keeps tool results.
+    const mcpOnly = new Set(['confirm-change', 'report-ads-run', 'meta-ad-preview'])
     expect(offered.map((t) => t.name).sort()).toEqual(listTools().filter((t) => !mcpOnly.has(t.name)).map((t) => t.name).sort())
     for (const tool of offered) expect(tool.input_schema).toBe(inputJsonSchema(listTools().find((t) => t.name === tool.name)!))
   })
