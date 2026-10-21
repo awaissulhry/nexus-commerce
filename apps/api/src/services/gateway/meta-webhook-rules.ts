@@ -7,7 +7,8 @@
  *              META_WEBHOOK_VERIFY_TOKEN (never a caller's, never shown); DELETE always names an object
  *   adaccount  POST / DELETE /act_<id>/subscribed_apps with app_id (the connection's own app) — the CHOSEN ad account;
  *              POST /act_<id>/subscriptions, PATCH and DELETE /act_<id>/subscriptions/<id> — its alert subscriptions
- *   page       POST /<page id>/subscribed_apps (subscribed_fields) — the CHOSEN Page; DELETE with the APP token
+ *   page       DELETE /<page id>/subscribed_apps with the APP token — the CHOSEN Page (installing takes a Page access
+ *              token, which Nexus has no mode for: never sent — review B1, lane decision D-2)
  *
  * Checked 2026-10-21 (developers.facebook.com and Meta's Python Business SDK, main):
  *   - graph-api/reference/app/subscriptions (v26.0): POST object, callback_url, fields, include_values, verify_token
@@ -21,9 +22,10 @@
  *     app_id; "an ad account admin token" (ads-webhooks get-started). SDK adaccount.py create_subscribed_app /
  *     delete_subscribed_apps (app_id). Meta's SDK sends a DELETE's parameters in the query string (api.py: `if method in
  *     ('GET', 'DELETE'): params=…`), so a DELETE here carries them there.
- *   - graph-api/reference/page/subscribed_apps: POST subscribed_fields (Page token of a person with the MODERATE task;
- *     "cannot subscribe to Instagram"), DELETE with an App Access Token ("an app can remove its own webhook subscription
- *     from a Page"); answers {success, messaging_success}.
+ *   - graph-api/reference/page/subscribed_apps: POST subscribed_fields (a Page access token of a person who can perform
+ *     the CREATE_CONTENT, MANAGE or MODERATE task on the Page; "cannot subscribe to Instagram") — not sent by Nexus;
+ *     DELETE with an App Access Token ("an app can remove its own webhook subscription from a Page"); answers {success,
+ *     messaging_success}.
  *   - marketing-api/ads-webhooks/subscriptions.md: POST /act_<id>/subscriptions event_type, filters (≤ 20 {field, value,
  *     operator}, entity_type CAMPAIGN | ADSET | AD), field, value, operator, status ENABLED (default) | DISABLED; PATCH
  *     /act_<id>/subscriptions/<id> status; DELETE; money in the currency's minor unit, times epoch seconds; Meta's
@@ -34,6 +36,8 @@ import type { MetaWriteRule } from './meta-calls.js'
 import { publicApiOrigin } from '../public-api-origin.js'
 
 type Params = ReadonlyMap<string, string>
+/** An own key of a table (never `constructor`, `__proto__` or another inherited name — review A4). */
+const hasOwn = (o: object, key: string): boolean => Object.prototype.hasOwnProperty.call(o, key)
 
 // ── app subscriptions ───────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -53,6 +57,8 @@ export const META_WEBHOOK_FIELDS: Readonly<Record<string, readonly string[]>> = 
   permissions: ['connected', 'bookmarked', 'public_search', 'social_ads'],
 }
 export const META_WEBHOOK_OBJECTS = Object.keys(META_WEBHOOK_FIELDS) as Array<keyof typeof META_WEBHOOK_FIELDS>
+/** The fields Nexus subscribes for an object, or null — an own key only (review A4: never `constructor` or `__proto__`). */
+export const metaWebhookFieldsOf = (object: string): readonly string[] | null => (hasOwn(META_WEBHOOK_FIELDS, object) ? META_WEBHOOK_FIELDS[object] : null)
 
 /** Nexus's own receiver for this app (routes/meta-webhooks.routes.ts), or why there is none. */
 export function metaWebhookCallback(appId: string): { url: string } | { error: string } {
@@ -79,26 +85,36 @@ export const ALERT_STATUSES = ['ENABLED', 'DISABLED'] as const
 const RANGE_OPS = ['GREATER_THAN', 'LESS_THAN', 'IN_RANGE', 'NOT_IN_RANGE'] as const
 
 /** How a field's value is written: money (minor units), a time (epoch seconds), a count or ratio, an enum, text, label ids. */
-export type AlertValueKind = 'money' | 'time' | 'number' | 'enum' | 'bool' | 'text' | 'ids'
+export type AlertValueKind = 'money' | 'count' | 'time' | 'number' | 'enum' | 'bool' | 'text' | 'ids'
 
-/** OBJECT_UPDATED: the metadata fields, the operators each accepts, how its value is written. */
-export const ALERT_OBJECT_FIELDS: Readonly<Record<string, { ops: readonly string[]; kind: AlertValueKind }>> = {
-  name: { ops: ['EQUAL', 'CONTAIN', 'NOT_CONTAIN'], kind: 'text' },
-  objective: { ops: ['IN', 'NOT_IN'], kind: 'enum' },
-  optimization_goal: { ops: ['IN', 'NOT_IN'], kind: 'enum' },
-  buying_type: { ops: ['IN', 'NOT_IN'], kind: 'enum' },
-  billing_event: { ops: ['IN', 'NOT_IN'], kind: 'enum' },
-  is_autobid: { ops: ['IN', 'NOT_IN'], kind: 'bool' },
-  daily_budget: { ops: RANGE_OPS, kind: 'money' },
-  lifetime_budget: { ops: RANGE_OPS, kind: 'money' },
-  spend_cap: { ops: RANGE_OPS, kind: 'money' },
-  bid_amount: { ops: RANGE_OPS, kind: 'money' },
-  adlabel_ids: { ops: ['ANY', 'ALL', 'NONE'], kind: 'ids' },
-  start_time: { ops: RANGE_OPS, kind: 'time' },
-  stop_time: { ops: ['GREATER_THAN', 'LESS_THAN'], kind: 'time' },
-  created_time: { ops: RANGE_OPS, kind: 'time' },
-  updated_time: { ops: RANGE_OPS, kind: 'time' },
+const ALL_LEVELS = ['CAMPAIGN', 'ADSET', 'AD'] as const
+/**
+ * OBJECT_UPDATED: the metadata fields, the operators each accepts, how its value is written, and the object levels Meta's
+ * table gives it (review B5: an alert on a field of another level is refused).
+ */
+export const ALERT_OBJECT_FIELDS: Readonly<Record<string, { ops: readonly string[]; kind: AlertValueKind; levels: readonly string[] }>> = {
+  name: { ops: ['EQUAL', 'CONTAIN', 'NOT_CONTAIN'], kind: 'text', levels: ALL_LEVELS },
+  objective: { ops: ['IN', 'NOT_IN'], kind: 'enum', levels: ['CAMPAIGN'] },
+  optimization_goal: { ops: ['IN', 'NOT_IN'], kind: 'enum', levels: ['ADSET'] },
+  buying_type: { ops: ['IN', 'NOT_IN'], kind: 'enum', levels: ['CAMPAIGN'] },
+  billing_event: { ops: ['IN', 'NOT_IN'], kind: 'enum', levels: ['ADSET'] },
+  is_autobid: { ops: ['IN', 'NOT_IN'], kind: 'bool', levels: ['ADSET'] },
+  daily_budget: { ops: RANGE_OPS, kind: 'money', levels: ['ADSET'] },
+  lifetime_budget: { ops: RANGE_OPS, kind: 'money', levels: ['ADSET'] },
+  spend_cap: { ops: RANGE_OPS, kind: 'money', levels: ['CAMPAIGN'] },
+  bid_amount: { ops: RANGE_OPS, kind: 'money', levels: ['ADSET', 'AD'] },
+  adlabel_ids: { ops: ['ANY', 'ALL', 'NONE'], kind: 'ids', levels: ALL_LEVELS },
+  start_time: { ops: RANGE_OPS, kind: 'time', levels: ['ADSET', 'CAMPAIGN'] },
+  stop_time: { ops: ['GREATER_THAN', 'LESS_THAN'], kind: 'time', levels: ['ADSET', 'CAMPAIGN'] },
+  created_time: { ops: RANGE_OPS, kind: 'time', levels: ALL_LEVELS },
+  updated_time: { ops: RANGE_OPS, kind: 'time', levels: ALL_LEVELS },
 }
+const objectFieldOf = (field: string) => (hasOwn(ALERT_OBJECT_FIELDS, field) ? ALERT_OBJECT_FIELDS[field] : null)
+/** The level an extra filter field belongs to (its own entry above). */
+export const alertLevelsOf = (field: string): readonly string[] => objectFieldOf(field)?.levels ?? []
+const LEVEL_WORD: Readonly<Record<string, string>> = { CAMPAIGN: 'a campaign', ADSET: 'an ad set', AD: 'an ad' }
+/** "daily_budget is a setting of an ad set (not of a campaign)". */
+const levelProblem = (field: string, entity: string) => `${field} is a setting of ${alertLevelsOf(field).map((l) => LEVEL_WORD[l]).join(' or ')} (not of ${LEVEL_WORD[entity] ?? entity})`
 
 /** INSIGHTS_UPDATED: the metric fields (all take GREATER_THAN, LESS_THAN, IN_RANGE, NOT_IN_RANGE). */
 export const ALERT_METRIC_FIELDS: readonly string[] = [
@@ -147,15 +163,16 @@ export const isAlertMoneyMetric = (field: string) => ['spent', 'today_spent', 'y
 
 /** How a field of this event type is written, or null when the event type does not take it. */
 export function alertFieldKind(eventType: string, field: string): AlertValueKind | null {
-  if (eventType === 'OBJECT_UPDATED') return ALERT_OBJECT_FIELDS[field]?.kind ?? null
+  if (eventType === 'OBJECT_UPDATED') return objectFieldOf(field)?.kind ?? null
   if (eventType === 'INSIGHTS_UPDATED') return ALERT_METRIC_FIELDS.includes(field) ? (isAlertMoneyMetric(field) ? 'money' : 'number') : null
-  if (eventType === 'INSIGHTS_MILESTONE_REACHED') return field in ALERT_MILESTONE_MINIMUMS ? (field === 'spent' ? 'money' : 'number') : null
+  // Review B5 — a milestone is a count (or spend in minor units): a whole number either way.
+  if (eventType === 'INSIGHTS_MILESTONE_REACHED') return hasOwn(ALERT_MILESTONE_MINIMUMS, field) ? (field === 'spent' ? 'money' : 'count') : null
   return null
 }
 
 /** The operators this event type and field take. */
 export function alertFieldOps(eventType: string, field: string): readonly string[] {
-  if (eventType === 'OBJECT_UPDATED') return ALERT_OBJECT_FIELDS[field]?.ops ?? []
+  if (eventType === 'OBJECT_UPDATED') return objectFieldOf(field)?.ops ?? []
   if (eventType === 'INSIGHTS_UPDATED') return RANGE_OPS
   if (eventType === 'INSIGHTS_MILESTONE_REACHED') return ['EQUAL']
   return []
@@ -170,6 +187,7 @@ function scalarProblem(kind: AlertValueKind, value: unknown): string | null {
   const s = typeof value === 'string' ? value : null
   switch (kind) {
     case 'money': return s && WHOLE.test(s) && Number(s) <= 100_000_000_000 ? null : 'an amount in the currency\'s minor unit, a whole number'
+    case 'count': return s && WHOLE.test(s) ? null : 'a whole number'
     case 'time': return s && /^\d{10}$/.test(s) ? null : 'a time in epoch seconds'
     case 'number': return s && DECIMAL.test(s) ? null : 'a number (at most 4 decimals)'
     case 'enum': return s && TOKEN.test(s) ? null : 'one of Meta\'s values (capital letters, digits and _)'
@@ -200,7 +218,10 @@ export function alertValueProblem(kind: AlertValueKind, operator: string, value:
   return p ? `the value is ${p}` : null
 }
 
-/** The canonical filters list Nexus writes: entity_type first, then up to 19 enum filters. */
+/**
+ * The canonical filters list Nexus writes: entity_type first, then up to 19 enum filters of that level — EQUAL with one
+ * value, IN / NOT_IN with a real JSON list of values (review B2, as ad-rule filters are written).
+ */
 export function alertFiltersProblem(value: string | undefined): string | null {
   if (!value) return 'filters lists at least the entity_type'
   let parsed: unknown
@@ -211,22 +232,31 @@ export function alertFiltersProblem(value: string | undefined): string | null {
   for (const [i, f] of parsed.entries()) {
     if (!f || typeof f !== 'object' || Array.isArray(f) || JSON.stringify(Object.keys(f)) !== '["field","value","operator"]') return 'each filter is {field, value, operator}, in that order'
     const { field, value: v, operator } = f as Record<string, unknown>
-    if (typeof field !== 'string' || typeof v !== 'string' || typeof operator !== 'string') return 'a filter\'s field, value and operator are text'
+    if (typeof field !== 'string' || typeof operator !== 'string') return 'a filter\'s field and operator are text'
     if (i === 0) {
-      if (field !== 'entity_type' || operator !== 'EQUAL' || !(ALERT_ENTITY_TYPES as readonly string[]).includes(v)) return 'the first filter is entity_type EQUAL CAMPAIGN, ADSET or AD'
+      if (field !== 'entity_type' || operator !== 'EQUAL' || typeof v !== 'string' || !(ALERT_ENTITY_TYPES as readonly string[]).includes(v)) return 'the first filter is entity_type EQUAL CAMPAIGN, ADSET or AD'
       continue
     }
     if (!(ALERT_FILTER_FIELDS as readonly string[]).includes(field)) return `a filter is entity_type or one of ${ALERT_FILTER_FIELDS.join(', ')}`
     if (!(ALERT_FILTER_OPS as readonly string[]).includes(operator)) return `a filter's operator is ${ALERT_FILTER_OPS.join(', ')}`
     if (seen.has(field)) return 'each filter field once'
     seen.add(field)
-    const p = alertValueProblem('enum', operator, v)
-    if (p) return `filter ${field}: ${p}`
+    const entity = (parsed[0] as Record<string, unknown>).value as string
+    if (!alertLevelsOf(field).includes(entity)) return `filter ${levelProblem(field, entity)}`
+    if (operator === 'EQUAL') {
+      if (typeof v !== 'string' || !TOKEN.test(v)) return `filter ${field}: EQUAL takes one of Meta's values (capital letters, digits and _)`
+    } else if (!Array.isArray(v) || v.length < 1 || v.length > 20 || v.some((x) => typeof x !== 'string' || !TOKEN.test(x))) {
+      return `filter ${field}: ${operator} takes a list of 1 to 20 of Meta's values`
+    }
   }
   return null
 }
 
-function alertCreateProblem(params: Params): string | null {
+/** The level a create watches: its first filter's entity_type (alertFiltersProblem has judged it). */
+const entityOf = (filters: string): string | null => { try { const f = (JSON.parse(filters) as Array<{ value?: unknown }>)[0]; return typeof f?.value === 'string' ? f.value : null } catch { return null } }
+
+/** Why a create's form is refused, or null — the gateway's judge, which the tool also asks before anything is queued. */
+export function alertCreateProblem(params: Params): string | null {
   const eventType = params.get('event_type') ?? ''
   if (!(ALERT_EVENT_TYPES as readonly string[]).includes(eventType)) return `event_type is ${ALERT_EVENT_TYPES.join(', ')}`
   const filters = alertFiltersProblem(params.get('filters'))
@@ -239,6 +269,9 @@ function alertCreateProblem(params: Params): string | null {
   if (!field) return `${eventType} names its field`
   const kind = alertFieldKind(eventType, field)
   if (!kind) return `${field} is not a field ${eventType} watches`
+  // Review B5 — a setting of the level the alert watches (Meta's table: daily_budget an ad set's, objective a campaign's, …).
+  const entity = entityOf(params.get('filters')!)
+  if (eventType === 'OBJECT_UPDATED' && entity && !alertLevelsOf(field).includes(entity)) return levelProblem(field, entity)
   if (eventType === 'OBJECT_UPDATED' && !operator && !value) return null
   if (!operator || value === undefined) return `${eventType} on ${field} names its operator and value`
   if (!alertFieldOps(eventType, field).includes(operator)) return `${field} takes ${alertFieldOps(eventType, field).join(', ')}`
@@ -263,9 +296,10 @@ export const META_WEBHOOK_WRITE_RULES: readonly MetaWriteRule[] = [
     optional: [],
     values: (params) => {
       const object = params.get('object') ?? ''
-      if (!(object in META_WEBHOOK_FIELDS)) return `object is ${META_WEBHOOK_OBJECTS.join(', ')} (Instagram and WhatsApp only in Meta's App Dashboard)`
+      const allowed = metaWebhookFieldsOf(object)
+      if (!allowed) return `object is ${META_WEBHOOK_OBJECTS.join(', ')} (Instagram and WhatsApp only in Meta's App Dashboard)`
       if (params.get('include_values') !== 'true') return 'include_values is true (Nexus reads what changed from the notification)'
-      return fieldList(params.get('fields'), META_WEBHOOK_FIELDS[object], `the ${object} fields`)
+      return fieldList(params.get('fields'), allowed, `the ${object} fields`)
     },
     routeCheck: (route, params) => {
       const app = appOfRoute(route)
@@ -288,8 +322,9 @@ export const META_WEBHOOK_WRITE_RULES: readonly MetaWriteRule[] = [
     optional: ['fields'],
     values: (params) => {
       const object = params.get('object') ?? ''
-      if (!(object in META_WEBHOOK_FIELDS)) return `object is ${META_WEBHOOK_OBJECTS.join(', ')} (a DELETE without one would remove every subscription of the app)`
-      return params.has('fields') ? fieldList(params.get('fields'), META_WEBHOOK_FIELDS[object], `the ${object} fields`) : null
+      const allowed = metaWebhookFieldsOf(object)
+      if (!allowed) return `object is ${META_WEBHOOK_OBJECTS.join(', ')} (a DELETE without one would remove every subscription of the app)`
+      return params.has('fields') ? fieldList(params.get('fields'), allowed, `the ${object} fields`) : null
     },
     appIdOf: (route) => appOfRoute(route),
     budget: false,
@@ -316,17 +351,6 @@ export const META_WEBHOOK_WRITE_RULES: readonly MetaWriteRule[] = [
     optional: [],
     values: (params) => (/^\d{5,25}$/.test(params.get('app_id') ?? '') ? null : 'app_id is a Meta app id'),
     appIdOf: (_route, params) => params.get('app_id') ?? null,
-    budget: false,
-  },
-  {
-    // set-meta-webhooks install-page: POST /<page id>/subscribed_apps subscribed_fields=… (Meta: a Page token).
-    name: 'page.subscribed_apps',
-    method: 'POST',
-    path: /^\d{1,25}\/subscribed_apps$/,
-    kinds: ['page'],
-    required: ['subscribed_fields'],
-    optional: [],
-    values: (params) => fieldList(params.get('subscribed_fields'), META_WEBHOOK_FIELDS.page, 'the Page fields'),
     budget: false,
   },
   {

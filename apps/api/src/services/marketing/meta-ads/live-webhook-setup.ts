@@ -5,8 +5,6 @@
  *     per object its fields and whether its callback is Nexus's own receiver — the callback itself never leaves this
  *     file (a path can carry a secret), only "Nexus's" yes / no and its origin;
  *   - the apps connected to the chosen ad account (`GET /act_<id>/subscribed_apps?fields=app_id,app_name`);
- *   - the apps installed on the chosen Page (`GET /<page>/subscribed_apps?fields=id,name,subscribed_fields`: Meta answers
- *     it to a Page token only, so it can be refused — the change then says it could not read the Page's apps);
  *   - the ad account's alert subscriptions (`GET /act_<id>/subscriptions[/<id>]`): event, field, value, operator,
  *     filters, status — as Meta writes them (the undo of a removal sends exactly these again).
  */
@@ -60,18 +58,10 @@ export async function liveAppSubscriptions(connectionId: string, appId: string):
   }).filter((s) => s.object)
 }
 
-/** Is the connection's app connected to the chosen ad account (its `subscribed_apps`)? And how many other apps are. */
-export async function liveAdAccountApps(connectionId: string, adAccountId: string, appId: string): Promise<{ connected: boolean; otherApps: number }> {
+/** Is the connection's app connected to the chosen ad account (its `subscribed_apps`)? */
+export async function liveAdAccountApps(connectionId: string, adAccountId: string, appId: string): Promise<{ connected: boolean }> {
   const read = await graphPage(connectionId, 'webhooks.setup.adAccountApps', `act_${adAccountId}/subscribed_apps`, { fields: 'app_id,app_name', limit: 100 })
-  const ids = read.rows.map((r) => idOf(r.app_id) ?? idOf(r.id))
-  return { connected: ids.includes(appId), otherApps: ids.filter((id) => id && id !== appId).length }
-}
-
-/** The fields the connection's app is installed with on the chosen Page (null: not installed). Meta may refuse the read. */
-export async function livePageApp(connectionId: string, pageId: string, appId: string): Promise<{ fields: string[] | null }> {
-  const read = await graphPage(connectionId, 'webhooks.setup.pageApps', `${pageId}/subscribed_apps`, { fields: 'id,name,subscribed_fields', limit: 100 })
-  const mine = read.rows.find((r) => idOf(r.id) === appId)
-  return { fields: mine ? namesOf(mine.subscribed_fields) : null }
+  return { connected: read.rows.some((r) => (idOf(r.app_id) ?? idOf(r.id)) === appId) }
 }
 
 /** One alert subscription as Meta writes it (the values as text, the filters as Meta's list). */
@@ -81,7 +71,8 @@ export interface AlertSubscriptionState {
   field: string | null
   value: string | null
   operator: string | null
-  filters: Array<{ field: string; value: string; operator: string }>
+  /** As Meta lists them: one value, or a list for IN / NOT_IN. */
+  filters: Array<{ field: string; value: string | string[]; operator: string }>
   status: string | null
 }
 
@@ -91,7 +82,7 @@ function alertOf(r: Row): AlertSubscriptionState | null {
   const subscriptionId = idOf(r.subscription_id) ?? idOf(r.id)
   if (!subscriptionId) return null
   const filters = (Array.isArray(r.filters) ? r.filters : []).map(obj).filter((f): f is Row => !!f)
-    .map((f) => ({ field: text(f.field) ?? '', value: valueText(f.value) ?? '', operator: text(f.operator) ?? '' }))
+    .map((f) => ({ field: text(f.field) ?? '', value: Array.isArray(f.value) ? f.value.map((x) => String(x)) : valueText(f.value) ?? '', operator: text(f.operator) ?? '' }))
   return { subscriptionId, eventType: text(r.event_type), field: text(r.field), value: valueText(r.value), operator: text(r.operator), filters, status: text(r.status) }
 }
 

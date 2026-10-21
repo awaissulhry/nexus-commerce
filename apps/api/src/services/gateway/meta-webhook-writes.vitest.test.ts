@@ -74,6 +74,9 @@ describe('the app subscription (POST / DELETE /<app>/subscriptions)', () => {
     // A caller never names the verify token (the gateway adds the server's own), nor mTLS or anything else.
     expect(subscribe({ ...SUB, verify_token: 'mine' })).toMatch(/which no Nexus change sends/)
     expect(subscribe({ ...SUB, include_client_certificate: 'true' })).toMatch(/the only Meta change Nexus sends/)
+    // Review A4 — own keys only: never an object (or field) named after Object's own properties.
+    for (const object of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) expect(subscribe({ ...SUB, object })).toMatch(/^object is ad_account/)
+    expect(problem({ url: `${BASE}/${APP}/subscriptions?object=constructor`, method: 'DELETE', objectKind: 'app', auth: 'app' })).toMatch(/would remove every subscription/)
     vi.stubEnv('NEXUS_PUBLIC_API_URL', '')
     vi.stubEnv('PUBLIC_API_URL', '')
     vi.stubEnv('RAILWAY_PUBLIC_DOMAIN', '')
@@ -137,20 +140,18 @@ describe('the chosen ad account\'s connected app and the chosen Page', () => {
     expect(h.calls).toHaveLength(2)
   })
 
-  it('the app on the CHOSEN Page: install with Page fields Nexus takes; remove with the app token; another Page never', async () => {
-    expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, body: form({ subscribed_fields: 'leadgen,feed' }), objectKind: 'page' })).toBeNull()
-    expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, body: form({ subscribed_fields: 'leadgen,ratings' }), objectKind: 'page' })).toMatch(/the Page fields are only/)
+  it('the CHOSEN Page: the app removed with the app token; installing (a Page token) is never sent; another Page never', async () => {
+    // Review B1 / D-2 — Meta installs an app on a Page only with a Page access token: no rule sends it.
+    expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, body: form({ subscribed_fields: 'leadgen,feed' }), objectKind: 'page' })).toMatch(/the only Meta change Nexus sends/)
     expect(problem({ url: `${BASE}/${PAGE}/subscribed_apps`, method: 'DELETE', objectKind: 'page' })).toMatch(/only with the connection's own app token/)
-    expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: { subscribed_fields: 'leadgen' }, check: false })).ok).toBe(true)
-    nextMoment()
     expect((await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: {}, method: 'DELETE', check: false, auth: 'app' })).ok).toBe(true)
-    expect(new URL(h.calls[1].url).searchParams.get('access_token')).toBe('1234567|app-secret-for-tests')
+    expect(new URL(h.calls[0].url).searchParams.get('access_token')).toBe('1234567|app-secret-for-tests')
     nextMoment()
     gatewayMetaPage['m-1'] = '120000000000011'
-    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: { subscribed_fields: 'leadgen' }, check: false })).rejects.toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: {}, method: 'DELETE', check: false, auth: 'app' })).rejects.toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
     gatewayMetaPage['m-1'] = null
-    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: { subscribed_fields: 'leadgen' }, check: false })).rejects.toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
-    expect(h.calls).toHaveLength(2)
+    await expect(metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: PAGE, objectKind: 'page', edge: 'subscribed_apps', params: {}, method: 'DELETE', check: false, auth: 'app' })).rejects.toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN' })
+    expect(h.calls).toHaveLength(1)
   })
 })
 
@@ -164,22 +165,38 @@ describe('alert subscriptions (act_<id>/subscriptions)', () => {
     expect(alert({ event_type: 'INSIGHTS_UPDATED', filters: filters(), field: 'ctr', operator: 'IN_RANGE', value: '["3","1.5"]' })).toMatch(/low then high/)
     expect(alert({ event_type: 'INSIGHTS_UPDATED', filters: filters(), field: 'ctr', operator: 'IN_RANGE', value: '[ "1","3"]' })).toMatch(/one spelling/)
     expect(alert({ event_type: 'INSIGHTS_UPDATED', filters: filters(), field: 'name', operator: 'EQUAL', value: 'x' })).toMatch(/not a field INSIGHTS_UPDATED watches/)
-    expect(alert({ event_type: 'OBJECT_UPDATED', filters: filters(), field: 'daily_budget' })).toBeNull()
-    expect(alert({ event_type: 'OBJECT_UPDATED', filters: filters(), field: 'objective', operator: 'IN', value: '["OUTCOME_SALES"]' })).toBeNull()
-    expect(alert({ event_type: 'OBJECT_UPDATED', filters: filters(), field: 'objective', operator: 'GREATER_THAN', value: '1' })).toMatch(/objective takes IN, NOT_IN/)
+    const level = (entity: string) => JSON.stringify([{ field: 'entity_type', value: entity, operator: 'EQUAL' }])
+    expect(alert({ event_type: 'OBJECT_UPDATED', filters: level('ADSET'), field: 'daily_budget' })).toBeNull()
+    expect(alert({ event_type: 'OBJECT_UPDATED', filters: level('CAMPAIGN'), field: 'objective', operator: 'IN', value: '["OUTCOME_SALES"]' })).toBeNull()
+    expect(alert({ event_type: 'OBJECT_UPDATED', filters: level('CAMPAIGN'), field: 'objective', operator: 'GREATER_THAN', value: '1' })).toMatch(/objective takes IN, NOT_IN/)
+    // Review B5 — a setting of the level the alert watches (Meta's table), and a milestone a whole number.
+    expect(alert({ event_type: 'OBJECT_UPDATED', filters: level('CAMPAIGN'), field: 'daily_budget' })).toMatch(/daily_budget is a setting of an ad set \(not of a campaign\)/)
+    expect(alert({ event_type: 'OBJECT_UPDATED', filters: level('AD'), field: 'objective', operator: 'IN', value: '["OUTCOME_SALES"]' })).toMatch(/objective is a setting of a campaign \(not of an ad\)/)
+    expect(alert({ event_type: 'OBJECT_UPDATED', filters: level('AD'), field: 'bid_amount', operator: 'GREATER_THAN', value: '150' })).toBeNull()
+    expect(alert({ event_type: 'OBJECT_UPDATED', filters: level('AD'), field: 'constructor' })).toMatch(/not a field OBJECT_UPDATED watches/)
     expect(alert({ event_type: 'INSIGHTS_MILESTONE_REACHED', filters: filters(), field: 'impressions', operator: 'EQUAL', value: '500' })).toMatch(/at least 1000/)
+    expect(alert({ event_type: 'INSIGHTS_MILESTONE_REACHED', filters: filters(), field: 'impressions', operator: 'EQUAL', value: '1500.5' })).toMatch(/a whole number/)
+    expect(alert({ event_type: 'INSIGHTS_MILESTONE_REACHED', filters: filters(), field: 'toString', operator: 'EQUAL', value: '1000' })).toMatch(/not a field INSIGHTS_MILESTONE_REACHED watches/)
     expect(alert({ event_type: 'INSIGHTS_MILESTONE_REACHED', filters: filters(), field: 'spent', operator: 'EQUAL', value: '1000' })).toBeNull()
     expect(alert({ event_type: 'INSIGHTS_UPDATED', filters: filters(), field: 'cpc', operator: 'GREATER_THAN', value: '200', status: 'PAUSED' })).toMatch(/ENABLED or DISABLED/)
     expect(alert({ event_type: 'OBJECT_DELETED', filters: filters() })).toMatch(/event_type is/)
   })
 
-  it('filters: entity_type first, at most 20 (Meta), each {field, value, operator} in order, enum fields only', () => {
-    expect(alertFiltersProblem(filters([{ field: 'objective', value: '["OUTCOME_SALES"]', operator: 'IN' }]))).toBeNull()
+  it('filters: entity_type first, at most 20 (Meta), each {field, value, operator} in order, of the level watched; IN / NOT_IN a real list', () => {
+    const campaign = (extra: unknown[]) => JSON.stringify([{ field: 'entity_type', value: 'CAMPAIGN', operator: 'EQUAL' }, ...extra])
+    // Review B2 — an IN filter's value is a JSON list in the list (as ad-rule filters), not a string holding one.
+    expect(alertFiltersProblem(campaign([{ field: 'objective', value: ['OUTCOME_SALES', 'OUTCOME_LEADS'], operator: 'IN' }]))).toBeNull()
+    expect(alertFiltersProblem(campaign([{ field: 'objective', value: '["OUTCOME_SALES"]', operator: 'IN' }]))).toMatch(/IN takes a list of 1 to 20/)
+    expect(alertFiltersProblem(campaign([{ field: 'objective', value: ['OUTCOME_SALES'], operator: 'EQUAL' }]))).toMatch(/EQUAL takes one of Meta's values/)
+    expect(alertFiltersProblem(campaign([{ field: 'objective', value: [], operator: 'NOT_IN' }]))).toMatch(/NOT_IN takes a list of 1 to 20/)
+    expect(alertFiltersProblem(campaign([{ field: 'objective', value: ['outcome_sales'], operator: 'IN' }]))).toMatch(/IN takes a list/)
+    expect(alertFiltersProblem(filters([{ field: 'objective', value: 'OUTCOME_SALES', operator: 'EQUAL' }]))).toMatch(/filter objective is a setting of a campaign \(not of an ad\)/)
     expect(alertFiltersProblem(JSON.stringify([{ field: 'objective', value: 'OUTCOME_SALES', operator: 'EQUAL' }]))).toMatch(/first filter is entity_type/)
-    expect(alertFiltersProblem(filters(Array.from({ length: 20 }, () => ({ field: 'objective', value: 'X', operator: 'EQUAL' }))))).toMatch(/1 to 20/)
+    expect(alertFiltersProblem(campaign(Array.from({ length: 20 }, () => ({ field: 'objective', value: 'X', operator: 'EQUAL' }))))).toMatch(/1 to 20/)
     expect(alertFiltersProblem(JSON.stringify([{ value: 'AD', field: 'entity_type', operator: 'EQUAL' }]))).toMatch(/in that order/)
     expect(alertFiltersProblem(filters([{ field: 'campaign.id', value: '1', operator: 'EQUAL' }]))).toMatch(/a filter is entity_type or one of/)
-    expect(alertFiltersProblem(filters([{ field: 'objective', value: 'X', operator: 'EQUAL' }, { field: 'objective', value: 'Y', operator: 'EQUAL' }]))).toMatch(/each filter field once/)
+    expect(alertFiltersProblem(filters([{ field: 'constructor', value: 'X', operator: 'EQUAL' }]))).toMatch(/a filter is entity_type or one of/)
+    expect(alertFiltersProblem(campaign([{ field: 'objective', value: 'X', operator: 'EQUAL' }, { field: 'objective', value: 'Y', operator: 'EQUAL' }]))).toMatch(/each filter field once/)
     expect(alertValueProblem('text', 'CONTAIN', ' padded')).toMatch(/plain text/)
   })
 

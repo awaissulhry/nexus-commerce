@@ -17,7 +17,7 @@
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { AlertSubscriptionState } from './live-webhook-setup.js'
 import {
-  ALERT_ENTITY_TYPES, ALERT_FILTER_FIELDS, alertFieldKind, alertFieldOps, alertFiltersProblem, alertValueProblem, ALERT_MILESTONE_MINIMUMS,
+  ALERT_ENTITY_TYPES, ALERT_FILTER_FIELDS, alertCreateProblem, alertFieldKind, alertFieldOps, alertFiltersProblem, alertValueProblem, ALERT_MILESTONE_MINIMUMS,
   type AlertValueKind,
 } from '../../gateway/meta-webhook-rules.js'
 
@@ -70,6 +70,7 @@ function valueOf(spec: AlertSpecArgs, kind: AlertValueKind, operator: string): {
   switch (kind) {
     case 'money': return one(spec.thresholdCents?.map((n) => String(Math.trunc(n))) ?? null, 'thresholdCents (minor units of the account currency)')
     case 'number': return one(spec.threshold?.map(decimal) ?? null, 'threshold')
+    case 'count': return one(spec.threshold?.map(decimal) ?? null, 'threshold (a whole number)')
     case 'time': {
       const parts = spec.thresholdTime?.map(epochOf) ?? null
       if (parts?.some((p) => p === null)) return { refusal: 'thresholdTime is ISO 8601 (e.g. 2026-11-01T08:00:00Z).' }
@@ -80,23 +81,30 @@ function valueOf(spec: AlertSpecArgs, kind: AlertValueKind, operator: string): {
   }
 }
 
+/** The gateway's own judge of the whole form (meta-webhook-rules.ts), asked before anything is queued. */
+function judgedForm(params: Record<string, string>): { params: Record<string, string> } | { refusal: string } {
+  const problem = alertCreateProblem(new Map(Object.entries(params)))
+  return problem ? { refusal: `${problem}.` } : { params }
+}
+
 /** The form fields of a create, as Meta writes them; a refusal in words. The gateway judges the same (meta-webhook-rules.ts). */
 export function alertParamsOf(spec: AlertSpecArgs): { params: Record<string, string> } | { refusal: string } {
   const filters = [{ field: 'entity_type', value: spec.entityType, operator: 'EQUAL' },
-    ...(spec.filters ?? []).map((f) => ({ field: f.field, value: f.operator === 'EQUAL' ? (f.values[0] ?? '') : JSON.stringify(f.values), operator: f.operator }))]
+    // Review B2 — IN / NOT_IN with a real JSON list (as ad-rule filters are written), EQUAL with one value.
+    ...(spec.filters ?? []).map((f) => ({ field: f.field, value: f.operator === 'EQUAL' ? (f.values[0] ?? '') : f.values, operator: f.operator }))]
   if ((spec.filters ?? []).some((f) => f.operator === 'EQUAL' && f.values.length !== 1)) return { refusal: 'An EQUAL filter takes one value.' }
   const params: Record<string, string> = { event_type: spec.eventType, filters: JSON.stringify(filters), ...(spec.status ? { status: spec.status } : {}) }
   const filterProblem = alertFiltersProblem(params.filters)
   if (filterProblem) return { refusal: `Filters: ${filterProblem}.` }
   if (spec.eventType === 'OBJECT_CREATED') {
     if (spec.field || spec.operator) return { refusal: 'OBJECT_CREATED watches new objects only: no field or operator (filter by entityType).' }
-    return { params }
+    return judgedForm(params)
   }
   if (!spec.field) return { refusal: `${spec.eventType} names its field.` }
   const kind = alertFieldKind(spec.eventType, spec.field)
   if (!kind) return { refusal: `${spec.field} is not a field ${spec.eventType} watches.` }
   params.field = spec.field
-  if (spec.eventType === 'OBJECT_UPDATED' && !spec.operator) return { params }
+  if (spec.eventType === 'OBJECT_UPDATED' && !spec.operator) return judgedForm(params)
   const operator = spec.operator ?? (spec.eventType === 'INSIGHTS_MILESTONE_REACHED' ? 'EQUAL' : '')
   if (!alertFieldOps(spec.eventType, spec.field).includes(operator)) return { refusal: `${spec.field} takes ${alertFieldOps(spec.eventType, spec.field).join(', ')}.` }
   const value = valueOf(spec, kind, operator)
@@ -106,19 +114,19 @@ export function alertParamsOf(spec: AlertSpecArgs): { params: Record<string, str
   if (spec.eventType === 'INSIGHTS_MILESTONE_REACHED' && Number(value.value) < ALERT_MILESTONE_MINIMUMS[spec.field]) {
     return { refusal: `A ${spec.field} milestone is at least ${ALERT_MILESTONE_MINIMUMS[spec.field]}${kind === 'money' ? ' (minor units)' : ''}.` }
   }
-  return { params: { ...params, operator, value: value.value } }
+  return judgedForm({ ...params, operator, value: value.value })
 }
 
 /** A live subscription as create's arguments (the undo of a removal), or null when Nexus could not write it the same way. */
 export function alertSpecOf(state: AlertSubscriptionState): AlertSpecArgs | null {
   const [first, ...rest] = state.filters
   const eventType = state.eventType as AlertSpecArgs['eventType']
-  if (!first || first.field !== 'entity_type' || !(ALERT_ENTITY_TYPES as readonly string[]).includes(first.value)) return null
+  if (!first || first.field !== 'entity_type' || typeof first.value !== 'string' || !(ALERT_ENTITY_TYPES as readonly string[]).includes(first.value)) return null
   const filters: AlertFilterArg[] = []
   for (const f of rest) {
     if (!(ALERT_FILTER_FIELDS as readonly string[]).includes(f.field) || !['EQUAL', 'IN', 'NOT_IN'].includes(f.operator)) return null
-    let values: string[]
-    try { values = f.operator === 'EQUAL' ? [f.value] : (JSON.parse(f.value) as unknown[]).map(String) } catch { return null }
+    const values = Array.isArray(f.value) ? f.value : f.operator === 'EQUAL' ? [f.value] : null
+    if (!values) return null
     filters.push({ field: f.field as AlertFilterArg['field'], operator: f.operator as AlertFilterArg['operator'], values })
   }
   const spec: AlertSpecArgs = { eventType, entityType: first.value as AlertSpecArgs['entityType'], ...(filters.length ? { filters } : {}), ...(state.status === 'DISABLED' ? { status: 'DISABLED' as const } : {}) }
@@ -131,7 +139,7 @@ export function alertSpecOf(state: AlertSubscriptionState): AlertSpecArgs | null
       let parts: string[]
       try { parts = state.value.startsWith('[') ? (JSON.parse(state.value) as unknown[]).map(String) : [state.value] } catch { return null }
       if (kind === 'money') spec.thresholdCents = parts.map(Number)
-      else if (kind === 'number') spec.threshold = parts.map(Number)
+      else if (kind === 'number' || kind === 'count') spec.threshold = parts.map(Number)
       else if (kind === 'time') spec.thresholdTime = parts.map(isoOf)
       else if (kind === 'text') spec.thresholdText = parts[0]
       else spec.thresholdList = parts
@@ -208,7 +216,8 @@ export function alertRemoveDraft(adAccountId: string, live: AlertSubscriptionSta
     [[`Alert subscription ${id}`, spec ? alertWords(spec) : 'exists', 'removed']],
     [request({ objectId: act, label: `Remove alert subscription ${id}`, params: {}, method: 'DELETE', undoable: !!spec, operation: 'alerts.remove', via: { path: `${act}/subscriptions/${id}` } })],
     { action: 'remove', id, eventType: live.eventType, field: live.field, operator: live.operator, value: live.value, filters: live.filters, status: live.status },
-    { action: 'remove', subscriptionId: id, exists: true, spec, undo: spec ? { action: 'create', ...spec } : null, noUndo: spec ? ['Its undo makes it again with the same conditions; Meta gives it a new id.'] : ['Nexus cannot write these conditions again the same way, so there is no undo.'] },
+    { action: 'remove', subscriptionId: id, exists: true, spec, undo: spec ? { action: 'create', ...spec } : null, noUndo: spec ? [] : ['Nexus cannot write these conditions again the same way, so there is no undo.'] },
     { action: 'remove', subscriptionId: id, exists: false },
+    { warnings: spec ? ['Its undo makes it again with the same conditions; Meta gives it a new id.'] : [] },
   )
 }

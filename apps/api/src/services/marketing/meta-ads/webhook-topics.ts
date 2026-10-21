@@ -253,7 +253,8 @@ export const metaTopicOf = (change: Pick<MetaWebhookChange, 'object' | 'field'>)
 /** How a change is routed, or null when Nexus does not route its object at all. */
 export function metaRouteOf(change: Omit<MetaWebhookChange, 'source'>): { kind: MetaRouteKind; id: string | null } | null {
   const topic = META_WEBHOOK_TOPICS[metaTopicOf(change)]
-  const kind = topic?.route ?? OBJECT_ROUTE[change.object]
+  // Review A4 — own keys only: an object named `constructor` or `__proto__` is no object Nexus routes.
+  const kind = topic?.route ?? (Object.prototype.hasOwnProperty.call(OBJECT_ROUTE, change.object) ? OBJECT_ROUTE[change.object] : undefined)
   if (!kind) return null
   if (kind === 'AD_ACCOUNT') return { kind, id: metaAdAccountId(topic?.accountKey ? change.value[topic.accountKey] : change.entryId) }
   if (kind === 'PAGE' || kind === 'INSTAGRAM' || kind === 'USER') return { kind, id: metaObjectId(change.entryId) }

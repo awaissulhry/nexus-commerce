@@ -12,8 +12,9 @@ const h = vi.hoisted(() => ({
   appId: '1234567' as string | null,
   pageId: '120000000000010' as string | null,
   app: [] as Array<{ object: string; fields: string[]; active: boolean | null; nexusCallback: boolean; callbackOrigin: string | null }>,
-  adAccount: { connected: false, otherApps: 0 },
-  page: { fields: null as string[] | null } as { fields: string[] | null } | Error,
+  adAccount: { connected: false },
+  /** The businesses connecting the same Meta app (this one is the legacy workspace when no profile is in context). */
+  users: { users: [{ workspaceId: 'nexus_legacy_workspace', connectionId: 'm-1', systemUserId: null }] as Array<Record<string, unknown>>, unsure: false } as { users: Array<Record<string, unknown>>; unsure: boolean } | Error,
   alert: null as null | Record<string, unknown>,
   send: vi.fn(),
 }))
@@ -26,8 +27,10 @@ vi.mock('../../marketing/meta-ads/live.js', async (importActual) => ({
 vi.mock('../../marketing/meta-ads/live-webhook-setup.js', () => ({
   liveAppSubscriptions: vi.fn(async () => structuredClone(h.app)),
   liveAdAccountApps: vi.fn(async () => ({ ...h.adAccount })),
-  livePageApp: vi.fn(async () => { if (h.page instanceof Error) throw h.page; return structuredClone(h.page) }),
   liveAlertSubscription: vi.fn(async () => (h.alert ? structuredClone(h.alert) : null)),
+}))
+vi.mock('../../marketing/meta-ads/webhook-receiver.js', () => ({
+  metaAppUsers: vi.fn(async () => { if (h.users instanceof Error) throw h.users; return structuredClone(h.users) }),
 }))
 vi.mock('../../marketing/meta-ads/write-client.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/write-client.js')>()),
@@ -39,8 +42,7 @@ import { META_ADS_WEBHOOKS_TOOLS } from './meta-ads-webhooks.tools.js'
 import { META_CHANGE_RULES } from './meta-ads-kit.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
 import { __metaObjectLimitsTest } from '../../gateway/meta-object-limits.js'
-import { MetaReadError, localFailure } from '../../marketing/meta-ads/errors.js'
-import { DASHBOARD_ONLY } from '../../marketing/meta-ads/change-webhooks.js'
+import { DASHBOARD_ONLY, PAGE_INSTALL_ROADS } from '../../marketing/meta-ads/change-webhooks.js'
 import { alertParamsOf, alertSpecOf } from '../../marketing/meta-ads/change-alert-subscriptions.js'
 import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
 
@@ -67,7 +69,8 @@ beforeEach(() => {
   vi.stubEnv('NEXUS_PUBLIC_API_URL', 'https://api.example.test')
   h.account = { target: { connectionId: 'm-1', adAccountId: '1234567890' }, accountId: 'm-1', adAccountId: '1234567890', name: 'Shop A ads', currency: 'EUR' }
   h.appId = '1234567'; h.pageId = '120000000000010'
-  h.app = []; h.adAccount = { connected: false, otherApps: 0 }; h.page = { fields: null }; h.alert = null
+  h.app = []; h.adAccount = { connected: false }; h.alert = null
+  h.users = { users: [{ workspaceId: 'nexus_legacy_workspace', connectionId: 'm-1', systemUserId: null }], unsure: false }
   h.send.mockReset(); h.send.mockImplementation(ok())
 })
 
@@ -132,6 +135,7 @@ describe('set-meta-webhooks', () => {
     h.app = [{ object: 'catalog', fields: ['items_batch'], active: true, nexusCallback: false, callbackOrigin: 'https://other.example' }]
     const foreign = await run(webhooks, { action: 'unsubscribe-app', object: 'catalog' })
     expect(webhooks.undo!.request(foreign.change)).toEqual({ refusal: expect.stringMatching(/not Nexus: Nexus cannot subscribe it back there/) })
+    expect(() => webhooks.input.parse({ action: 'subscribe-app', object: 'constructor' })).toThrow()
   })
 
   it('connect / disconnect the CHOSEN ad account (Meta needs an admin: said); each the other\'s undo', async () => {
@@ -148,23 +152,44 @@ describe('set-meta-webhooks', () => {
     expect(webhooks.undo!.request(off.change)).toMatchObject({ args: { action: 'connect-ad-account' } })
   })
 
-  it('install / remove on the CHOSEN Page; a Page whose apps cannot be read has no undo; no Page chosen is refused', async () => {
-    const done = await run(webhooks, { action: 'install-page', fields: ['leadgen', 'feed'] })
-    expect(sent()[0]).toMatchObject({ objectId: '120000000000010', kind: 'page', edge: 'subscribed_apps', params: { subscribed_fields: 'leadgen,feed' } })
-    expect(sent()[0].via).toBeUndefined()
-    expect(webhooks.undo!.request(done.change)).toMatchObject({ args: { action: 'remove-page' } })
-    h.page = { fields: ['leadgen'] }
-    h.send.mockClear()
+  it('install-page answers with Meta\'s own roads (a Page token); remove-page goes with the app token, reads nothing, has no undo', async () => {
+    expect(await preview(webhooks, { action: 'install-page' })).toEqual({ ok: false, error: PAGE_INSTALL_ROADS })
+    expect(PAGE_INSTALL_ROADS).toMatch(/Meta Business Suite › All Tools › Business Apps/)
+    expect(PAGE_INSTALL_ROADS).toMatch(/Graph API Explorer with a Page token/)
+    const out = await preview(webhooks, { action: 'remove-page' })
+    expect(out.preview.warnings.join(' ')).toMatch(/Nexus cannot read which apps are installed on the Page/)
     const off = await run(webhooks, { action: 'remove-page' })
-    expect(sent()[0]).toMatchObject({ objectId: '120000000000010', method: 'DELETE', via: { auth: 'app' } })
-    expect(webhooks.undo!.request(off.change)).toMatchObject({ args: { action: 'install-page', fields: ['leadgen'] } })
-    h.page = new MetaReadError(localFailure('Meta answers this only to a Page access token.', 'X'), 'webhooks.setup.pageApps', 1)
-    const blind = await preview(webhooks, { action: 'install-page' })
-    expect(blind.preview.warnings.join(' ')).toMatch(/could not read the apps installed on the Page .*no undo/)
-    const blindRun = await run(webhooks, { action: 'install-page' })
-    expect(webhooks.undo!.request(blindRun.change)).toEqual({ refusal: expect.stringMatching(/could not be read first/) })
+    expect(sent()[0]).toMatchObject({ objectId: '120000000000010', kind: 'page', method: 'DELETE', via: { auth: 'app' } })
+    expect(webhooks.undo!.request(off.change)).toEqual({ refusal: expect.stringMatching(/It has no undo: Nexus does not install the app on a Page/) })
     h.pageId = null
-    expect(await preview(webhooks, { action: 'install-page' })).toEqual({ ok: false, error: expect.stringMatching(/no Facebook Page chosen/) })
+    expect(await preview(webhooks, { action: 'remove-page' })).toEqual({ ok: false, error: expect.stringMatching(/no Facebook Page chosen/) })
+  })
+
+  it('review A1 / D-1 — app-wide: another business on the same app is warned on a subscribe (no undo) and blocks an unsubscribe', async () => {
+    h.users = { users: [{ workspaceId: 'nexus_legacy_workspace', connectionId: 'm-1' }, { workspaceId: 'ws-other', connectionId: 'm-9' }], unsure: false }
+    const out = await preview(webhooks, { action: 'subscribe-app', object: 'ad_account' })
+    expect(out.preview.warnings.join(' ')).toMatch(/app-wide: another business in Nexus uses the same Meta app, so this also changes what it receives/)
+    expect(JSON.stringify(out.preview)).not.toMatch(/ws-other|m-9/)
+    const done = await run(webhooks, { action: 'subscribe-app', object: 'ad_account' })
+    expect(webhooks.undo!.request(done.change)).toEqual({ refusal: expect.stringMatching(/Another business in Nexus uses this Meta app; an app-wide unsubscribe would stop its notifications too/) })
+    h.app = [{ object: 'ad_account', fields: ['effective_status'], active: true, nexusCallback: true, callbackOrigin: 'https://api.example.test' }]
+    expect(await preview(webhooks, { action: 'unsubscribe-app', object: 'ad_account' })).toEqual({ ok: false, error: expect.stringMatching(/Another business in Nexus uses this Meta app.*App Dashboard/) })
+    h.users = new Error('database unavailable')
+    expect(await preview(webhooks, { action: 'unsubscribe-app', object: 'ad_account' })).toEqual({ ok: false, error: expect.stringMatching(/could not tell whether another business/) })
+  })
+
+  it('review A2 / A3 — fields kept sorted whatever Meta\'s order; an undo subscribes back only fields Nexus takes, naming the rest', async () => {
+    h.app = [{ object: 'page', fields: ['photos', 'leadgen', 'feed'], active: true, nexusCallback: true, callbackOrigin: 'https://api.example.test' }]
+    const done = await run(webhooks, { action: 'unsubscribe-app', object: 'page' })
+    expect(done.change.before.fields).toEqual(['feed', 'leadgen', 'photos'])
+    expect(webhooks.undo!.request(done.change)).toMatchObject({ args: { action: 'subscribe-app', object: 'page', fields: ['feed', 'leadgen'] } })
+    expect(done.change.before.noUndo).toEqual([expect.stringMatching(/does not take photos/)])
+    h.app = [{ object: 'page', fields: ['leadgen', 'feed'], active: true, nexusCallback: true, callbackOrigin: 'https://api.example.test' }]
+    h.send.mockClear()
+    const added = await run(webhooks, { action: 'subscribe-app', object: 'page', fields: ['mention'] })
+    h.app = [{ object: 'page', fields: ['mention', 'leadgen', 'feed'], active: true, nexusCallback: true, callbackOrigin: 'https://api.example.test' }]
+    expect(added.change.after.fields).toEqual(['feed', 'leadgen', 'mention'])
+    expect(await webhooks.undo!.current({ before: added.change.before, after: added.change.after })).toMatchObject({ fields: ['feed', 'leadgen', 'mention'] })
   })
 
   it('no app stored for the connection: refused in words', async () => {
@@ -195,8 +220,13 @@ describe('set-meta-alert-subscription and remove-meta-alert-subscription', () =>
     expect(await preview(alerts, { action: 'create', eventType: 'OBJECT_CREATED', entityType: 'CAMPAIGN', field: 'name' })).toEqual({ ok: false, error: expect.stringMatching(/no field or operator/) })
     const filtered = await preview(alerts, { action: 'create', eventType: 'OBJECT_CREATED', entityType: 'CAMPAIGN', filters: [{ field: 'objective', operator: 'IN', values: ['OUTCOME_SALES', 'OUTCOME_LEADS'] }] })
     expect(filtered.ok).toBe(true)
-    expect(alertParamsOf({ eventType: 'OBJECT_CREATED', entityType: 'CAMPAIGN', filters: [{ field: 'objective', operator: 'IN', values: ['OUTCOME_SALES', 'OUTCOME_LEADS'] }] })).toEqual({ params: { event_type: 'OBJECT_CREATED', filters: '[{"field":"entity_type","value":"CAMPAIGN","operator":"EQUAL"},{"field":"objective","value":"[\\"OUTCOME_SALES\\",\\"OUTCOME_LEADS\\"]","operator":"IN"}]' } })
+    // Review B2 — the IN filter's values go as a real JSON list inside filters.
+    expect(alertParamsOf({ eventType: 'OBJECT_CREATED', entityType: 'CAMPAIGN', filters: [{ field: 'objective', operator: 'IN', values: ['OUTCOME_SALES', 'OUTCOME_LEADS'] }] })).toEqual({ params: { event_type: 'OBJECT_CREATED', filters: '[{"field":"entity_type","value":"CAMPAIGN","operator":"EQUAL"},{"field":"objective","value":["OUTCOME_SALES","OUTCOME_LEADS"],"operator":"IN"}]' } })
     expect(alertParamsOf({ eventType: 'OBJECT_UPDATED', entityType: 'ADSET', field: 'start_time', operator: 'GREATER_THAN', thresholdTime: ['2026-11-01T00:00:00Z'] })).toMatchObject({ params: { value: '1793491200' } })
+    // Review B5 — the field's own level; an objective IN on campaigns (the WH-051f probe's second case).
+    expect(alertParamsOf({ eventType: 'OBJECT_UPDATED', entityType: 'CAMPAIGN', field: 'daily_budget' })).toEqual({ refusal: expect.stringMatching(/daily_budget is a setting of an ad set/) })
+    expect(alertParamsOf({ eventType: 'OBJECT_UPDATED', entityType: 'CAMPAIGN', field: 'objective', operator: 'IN', thresholdList: ['OUTCOME_SALES'] })).toEqual({ params: { event_type: 'OBJECT_UPDATED', filters: '[{"field":"entity_type","value":"CAMPAIGN","operator":"EQUAL"}]', field: 'objective', operator: 'IN', value: '["OUTCOME_SALES"]' } })
+    expect(alertParamsOf({ eventType: 'INSIGHTS_MILESTONE_REACHED', entityType: 'AD', field: 'clicks', operator: 'EQUAL', threshold: [10.5] })).toEqual({ refusal: expect.stringMatching(/a whole number/) })
   })
 
   it('enable / disable one subscription of the chosen account: a PATCH; the undo switches it back; unknown ones refused', async () => {
@@ -212,14 +242,16 @@ describe('set-meta-alert-subscription and remove-meta-alert-subscription', () =>
   })
 
   it('remove: only on the explicit ask; a DELETE of that one; the undo makes it again with the same conditions', async () => {
-    h.alert = { ...ALERT, value: '["100","250"]', operator: 'IN_RANGE', filters: [...ALERT.filters, { field: 'objective', value: '["OUTCOME_SALES"]', operator: 'IN' }] }
+    h.alert = { ...ALERT, value: '["100","250"]', operator: 'IN_RANGE', filters: [{ field: 'entity_type', value: 'CAMPAIGN', operator: 'EQUAL' }, { field: 'objective', value: ['OUTCOME_SALES'], operator: 'IN' }] }
     const done = await run(remove, { subscriptionId: ALERT.subscriptionId, confirmDelete: true })
     expect(sent()[0]).toMatchObject({ objectId: 'act_1234567890', method: 'DELETE', params: {}, via: { path: 'act_1234567890/subscriptions/120000000000040' } })
     const undo = remove.undo!.request(done.change) as { tool: string; args: Record<string, unknown> }
-    expect(undo).toMatchObject({ tool: 'set-meta-alert-subscription', args: { action: 'create', eventType: 'INSIGHTS_UPDATED', entityType: 'AD', field: 'cpc', operator: 'IN_RANGE', thresholdCents: [100, 250], filters: [{ field: 'objective', operator: 'IN', values: ['OUTCOME_SALES'] }] } })
+    expect(undo).toMatchObject({ tool: 'set-meta-alert-subscription', args: { action: 'create', eventType: 'INSIGHTS_UPDATED', entityType: 'CAMPAIGN', field: 'cpc', operator: 'IN_RANGE', thresholdCents: [100, 250], filters: [{ field: 'objective', operator: 'IN', values: ['OUTCOME_SALES'] }] } })
+    // Review A7 — that it is made again is said, not listed as something with no way back.
+    expect(done.change.before.noUndo).toEqual([])
     const parsed = alerts.input.parse(undo.args) as Record<string, unknown>
     // Made again, it is the same request Meta got before.
-    expect(alertParamsOf(parsed as never)).toEqual({ params: { event_type: 'INSIGHTS_UPDATED', filters: '[{"field":"entity_type","value":"AD","operator":"EQUAL"},{"field":"objective","value":"[\\"OUTCOME_SALES\\"]","operator":"IN"}]', field: 'cpc', operator: 'IN_RANGE', value: '["100","250"]' } })
+    expect(alertParamsOf(parsed as never)).toEqual({ params: { event_type: 'INSIGHTS_UPDATED', filters: '[{"field":"entity_type","value":"CAMPAIGN","operator":"EQUAL"},{"field":"objective","value":["OUTCOME_SALES"],"operator":"IN"}]', field: 'cpc', operator: 'IN_RANGE', value: '["100","250"]' } })
     expect(alertSpecOf({ ...ALERT, filters: [{ field: 'entity_type', value: 'PAGE', operator: 'EQUAL' }] } as never)).toBeNull()
   })
 })

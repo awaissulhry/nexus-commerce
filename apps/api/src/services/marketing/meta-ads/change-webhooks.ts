@@ -7,19 +7,20 @@
  *   unsubscribe-app        DELETE /<app id>/subscriptions?object=…[&fields=…] — never without an object (WH-007)
  *   connect-ad-account     POST /act_<id>/subscribed_apps app_id — the CHOSEN ad account delivers to the app (WH-008)
  *   disconnect-ad-account  DELETE /act_<id>/subscribed_apps?app_id=… (WH-009)
- *   install-page           POST /<page>/subscribed_apps subscribed_fields — the CHOSEN Page (WH-010)
- *   remove-page            DELETE /<page>/subscribed_apps with the app token (WH-012)
- * Instagram (WH-013) and WhatsApp fields are set only in Meta's App Dashboard (app/subscriptions: "not supported … must
- * be configured using the App Dashboard"): answered plainly, nothing sent. The App Dashboard is as good a road for every
- * subscription here — meta-webhooks reads the result either way.
+ *   install-page           NOT sent (review B1, lane decision D-2): Meta takes POST /<page>/subscribed_apps only with a
+ *                          Page access token, and Nexus has no Page-token mode — answered with Meta's documented roads
+ *   remove-page            DELETE /<page>/subscribed_apps with the app token (WH-012); no undo (installing is the above)
+ * App subscriptions are APP-WIDE (review A1, D-1): when another business in Nexus uses the same Meta app, an unsubscribe
+ * would stop its notifications too — refused, and a subscribe says it changes what that business receives as well.
+ * Instagram (WH-013) and WhatsApp fields are set only in Meta's App Dashboard: answered plainly, nothing sent.
  *
  * Undo puts back what the change replaced, through this same tool: fields it added are removed, a removed subscription
- * is subscribed again (only to Nexus's own callback — a callback of another app or server is never written by Nexus),
- * a connection is taken away again and the other way round. What has no way back is said (noUndo).
+ * is subscribed again (only fields Nexus takes, only to Nexus's own callback), a connection is taken away again and the
+ * other way round. What has no way back is said (noUndo). Field lists are kept sorted (Meta lists them in any order).
  */
 import { changeLines, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { AppSubscriptionState } from './live-webhook-setup.js'
-import { META_WEBHOOK_FIELDS, META_WEBHOOK_OBJECTS } from '../../gateway/meta-webhook-rules.js'
+import { META_WEBHOOK_OBJECTS, metaWebhookFieldsOf } from '../../gateway/meta-webhook-rules.js'
 
 export const WEBHOOK_ACTIONS = ['subscribe-app', 'unsubscribe-app', 'connect-ad-account', 'disconnect-ad-account', 'install-page', 'remove-page'] as const
 export type WebhookAction = typeof WEBHOOK_ACTIONS[number]
@@ -38,7 +39,7 @@ export interface WebhooksUndoArgs { action: WebhookAction; object?: string; fiel
 export interface WebhooksRecord {
   action: WebhookAction
   object?: string | null
-  /** The object's subscribed fields, the ad account's connection, the Page's installed fields — as they were / are. */
+  /** The object's subscribed fields (sorted), or the ad account's connection — as they were / are. */
   fields?: string[] | null
   connected?: boolean | null
   undo?: WebhooksUndoArgs | null
@@ -50,12 +51,16 @@ export interface WebhooksLive {
   adAccountId: string
   pageId: string | null
   callback: { url: string } | { error: string }
+  /** How many OTHER businesses in Nexus connect the same Meta app (never which); null when Nexus could not tell. */
+  otherBusinesses: number | null
   app?: AppSubscriptionState[]
-  adAccount?: { connected: boolean; otherApps: number }
-  page?: { fields: string[] | null } | { unreadable: string }
+  adAccount?: { connected: boolean }
 }
 
-export const DASHBOARD_ONLY = 'Instagram and WhatsApp webhook fields are set only in Meta\'s App Dashboard (Meta\'s API does not take them: app/subscriptions). The Owner sets them there — Settings › Webhooks of the app, the callback Nexus\'s receiver — and meta-webhooks reads the result.'
+export const DASHBOARD_ONLY = 'Instagram and WhatsApp webhook fields are set only in Meta\'s App Dashboard (Meta\'s API does not take them: app/subscriptions): the Owner sets them there (Webhooks of the app, the callback Nexus\'s receiver). Instagram also needs a per-account step Meta takes only with a Page access token — the linked Facebook Page\'s /subscribed_apps with the Instagram fields — which Nexus cannot do yet. meta-webhooks reads the result.'
+export const PAGE_INSTALL_ROADS = 'Nexus does not install the app on a Page: Meta takes that (page/subscribed_apps) only with a Page access token of a person with a task on the Page, and Nexus has no Page-token mode yet. Meta\'s documented roads: Meta Business Suite › All Tools › Business Apps (adds the app to the Page), or the Graph API Explorer with a Page token (POST /<page id>/subscribed_apps with the fields). meta-webhooks reads the app subscription; the Page\'s own list Meta answers only to a Page token too.'
+const APP_WIDE = (n: number) => `This subscription is app-wide: ${n === 1 ? 'another business' : `${n} other businesses`} in Nexus use${n === 1 ? 's' : ''} the same Meta app, so this also changes what ${n === 1 ? 'it receives' : 'they receive'} (each still gets only its own ad accounts' and Pages' notifications).`
+const APP_WIDE_REFUSAL = 'Another business in Nexus uses this Meta app; an app-wide unsubscribe would stop its notifications too — change it in Meta\'s App Dashboard (Webhooks of the app).'
 
 const sorted = (list: readonly string[]) => [...list].sort()
 const same = (a: readonly string[], b: readonly string[]) => JSON.stringify(sorted(a)) === JSON.stringify(sorted(b))
@@ -78,12 +83,11 @@ function draft(input: {
 }
 
 /** The fields asked for one object: the list given (each one Nexus's receiver knows), or all of them. */
-function fieldsFor(object: string, asked: string[] | undefined): string[] | { refusal: string } {
-  const allowed = META_WEBHOOK_FIELDS[object]
-  if (!asked || !asked.length) return [...allowed]
+function fieldsFor(allowed: readonly string[], object: string, asked: string[] | undefined): string[] | { refusal: string } {
+  if (!asked || !asked.length) return sorted(allowed)
   const unknown = asked.filter((f) => !allowed.includes(f))
   if (unknown.length) return { refusal: `Nexus's receiver does not take ${unknown.join(', ')} on ${object}; its fields are ${allowed.join(', ')}.` }
-  return [...new Set(asked)]
+  return sorted([...new Set(asked)])
 }
 
 /** The draft of one set-meta-webhooks action, from the live state; a refusal in words. */
@@ -92,14 +96,19 @@ export function webhooksDraft(req: WebhooksRequest, live: WebhooksLive): MetaCha
   const appPath = { objectId: live.appId, kind: 'campaign' as const, objectKind: 'app' as const, edge: 'subscriptions' as const }
   const accountPath = { objectId: `act_${live.adAccountId}`, kind: 'campaign' as const, objectKind: 'adaccount' as const, edge: 'subscribed_apps' as const }
 
+  if (req.action === 'install-page') return { refusal: PAGE_INSTALL_ROADS }
+
   if (req.action === 'subscribe-app' || req.action === 'unsubscribe-app') {
     const object = req.object ?? ''
     if (object === 'instagram' || object === 'whatsapp_business_account') return { refusal: DASHBOARD_ONLY }
-    if (!(object in META_WEBHOOK_FIELDS)) return { refusal: `Name the object: ${META_WEBHOOK_OBJECTS.join(', ')}.` }
-    const wanted = fieldsFor(object, req.fields)
+    const allowed = metaWebhookFieldsOf(object)
+    if (!allowed) return { refusal: `Name the object: ${META_WEBHOOK_OBJECTS.join(', ')}.` }
+    const wanted = fieldsFor(allowed, object, req.fields)
     if ('refusal' in wanted) return wanted
-    const current = live.app?.find((s) => s.object === object) ?? null
-    const stands = { action: req.action, object, current: current ? { fields: sorted(current.fields), active: current.active, nexusCallback: current.nexusCallback } : null }
+    const found = live.app?.find((s) => s.object === object) ?? null
+    const current = found ? { ...found, fields: sorted(found.fields) } : null
+    const others = live.otherBusinesses
+    const stands = { action: req.action, object, otherBusinesses: others, current: current ? { fields: current.fields, active: current.active, nexusCallback: current.nexusCallback } : null }
     if (req.action === 'subscribe-app') {
       if ('error' in live.callback) return { refusal: `Nexus has no callback to give Meta: ${live.callback.error}` }
       const added = wanted.filter((f) => !current?.fields.includes(f))
@@ -108,30 +117,43 @@ export function webhooksDraft(req: WebhooksRequest, live: WebhooksLive): MetaCha
       }
       const warnings: string[] = []
       const noUndo: string[] = []
+      if (others === null) warnings.push('Nexus could not tell whether another business in Nexus uses this Meta app: the subscription is app-wide, so it may change what that business receives too.')
+      else if (others > 0) warnings.push(APP_WIDE(others))
       if (current && !current.nexusCallback) {
         warnings.push(`The app's ${object} subscription now calls ${current.callbackOrigin ?? 'another address'}; this change points it at Nexus's receiver (Meta keeps one callback per object). Nexus never writes another callback back.`)
         noUndo.push(`The earlier callback (${current.callbackOrigin ?? 'another address'}) is not put back: Nexus only ever gives Meta its own.`)
       }
       if (current && current.active === false) warnings.push(`The app's ${object} subscription is inactive; Meta switches it on again with this change.`)
       warnings.push('Meta first sends a verification request to Nexus\'s receiver; the change fails when it is not answered (META_WEBHOOK_VERIFY_TOKEN must be set on the API service). Apps in development mode receive only the App Dashboard\'s test notifications and those of people with a role on the app.')
-      const undo: WebhooksUndoArgs | null = !current ? { action: 'unsubscribe-app', object } : added.length ? { action: 'unsubscribe-app', object, fields: added } : null
-      if (!undo) noUndo.push('Switching an inactive subscription on again has no undo of its own (Meta has no switch to make it inactive).')
+      // Review A1 / D-1 — an undo is an app-wide unsubscribe: never while another business (or maybe one) uses the app.
+      let undo: WebhooksUndoArgs | null = !current ? { action: 'unsubscribe-app', object } : added.length ? { action: 'unsubscribe-app', object, fields: added } : null
+      if (undo && others !== 0) { undo = null; noUndo.push(others === null ? 'Nexus could not tell whether another business uses this Meta app, so its undo (an app-wide unsubscribe) is not offered.' : APP_WIDE_REFUSAL) }
+      else if (!undo && !noUndo.length) noUndo.push('Switching an inactive subscription on again has no undo of its own (Meta has no switch to make it inactive).')
+      const all = sorted([...new Set([...(current?.fields ?? []), ...wanted])])
       return draft({
         summary: `Subscribe the business's Meta app to ${object} notifications (${words(wanted)}), sent to Nexus's receiver.`,
-        lines: [[`App subscription ${object}`, current ? words(current.fields) : 'none', words([...new Set([...(current?.fields ?? []), ...wanted])])]],
+        lines: [[`App subscription ${object}`, current ? words(current.fields) : 'none', words(all)]],
         requests: [request({ ...appPath, label: `Subscribe the app to ${object}: ${words(wanted)}`, params: { object, callback_url: live.callback.url, fields: wanted.join(','), include_values: 'true' }, undoable: !!undo, operation: 'webhooks.subscribeApp', via: { auth: 'app' } })],
         stands, warnings,
         before: { action: req.action, object, fields: current?.fields ?? null, undo, noUndo },
-        after: { action: req.action, object, fields: [...new Set([...(current?.fields ?? []), ...wanted])] },
+        after: { action: req.action, object, fields: all },
       })
     }
-    // unsubscribe-app
+    // unsubscribe-app — app-wide: never while another business uses the app (or Nexus cannot tell).
+    if (others === null) return { refusal: 'Nexus could not tell whether another business in Nexus uses this Meta app; an app-wide unsubscribe could stop its notifications too — change it in Meta\'s App Dashboard (Webhooks of the app), or ask again.' }
+    if (others > 0) return { refusal: APP_WIDE_REFUSAL }
     if (!current) return draft({ summary: `The app has no ${object} subscription.`, lines: [], requests: [], stands, skipped: [`${object}: no subscription to remove.`], before: { action: req.action, object, fields: null }, after: { action: req.action, object, fields: null } })
     const removing = req.fields?.length ? wanted.filter((f) => current.fields.includes(f)) : current.fields
     if (req.fields?.length && !removing.length) return draft({ summary: `The app's ${object} subscription has none of ${words(wanted)}.`, lines: [], requests: [], stands, skipped: [`${object}: ${words(wanted)} not subscribed.`], before: { action: req.action, object, fields: current.fields }, after: { action: req.action, object, fields: current.fields } })
     const whole = !req.fields?.length || same(removing, current.fields)
-    const noUndo = current.nexusCallback ? [] : [`The subscription called ${current.callbackOrigin ?? 'another address'}, not Nexus: Nexus cannot subscribe it back there.`]
-    const undo: WebhooksUndoArgs | null = current.nexusCallback ? { action: 'subscribe-app', object, fields: removing } : null
+    // Review A3 — the undo puts back only fields Nexus takes; any other is named.
+    const back = removing.filter((f) => allowed.includes(f))
+    const foreignFields = removing.filter((f) => !allowed.includes(f))
+    const noUndo = [
+      ...(current.nexusCallback ? [] : [`The subscription called ${current.callbackOrigin ?? 'another address'}, not Nexus: Nexus cannot subscribe it back there.`]),
+      ...(current.nexusCallback && foreignFields.length ? [`Nexus's receiver does not take ${foreignFields.join(', ')}, so its undo does not subscribe ${foreignFields.length === 1 ? 'it' : 'them'} again.`] : []),
+    ]
+    const undo: WebhooksUndoArgs | null = current.nexusCallback && back.length ? { action: 'subscribe-app', object, fields: back } : null
     const left = current.fields.filter((f) => !removing.includes(f))
     return draft({
       summary: whole ? `Remove the business's Meta app's ${object} subscription (Nexus no longer gets ${object} notifications).` : `Remove ${words(removing)} from the app's ${object} subscription.`,
@@ -162,40 +184,16 @@ export function webhooksDraft(req: WebhooksRequest, live: WebhooksLive): MetaCha
     })
   }
 
-  // install-page / remove-page — the CHOSEN Page only.
+  // remove-page — the CHOSEN Page, with the app token. Nexus cannot read the Page's apps (a Page token) nor install it back.
   if (!live.pageId) return { refusal: 'This business has no Facebook Page chosen (set-meta-connection chooses one).' }
   const pagePath = { objectId: live.pageId, kind: 'campaign' as const, objectKind: 'page' as const, edge: 'subscribed_apps' as const }
-  const read = live.page ?? { unreadable: 'not read' }
-  const installed = 'fields' in read ? read.fields : undefined
-  const stands = { action: req.action, pageId: live.pageId, installed: installed === undefined ? 'unknown' : installed === null ? null : sorted(installed) }
-  const unknownWarning = 'unreadable' in read ? [`Nexus could not read the apps installed on the Page (${read.unreadable}): Meta answers that to a Page access token only, so the change has no undo.`] : []
-  if (req.action === 'install-page') {
-    const wanted = fieldsFor('page', req.fields)
-    if ('refusal' in wanted) return wanted
-    if (installed && same(installed, wanted)) return draft({ summary: `The app is already installed on Page ${live.pageId} with ${words(wanted)}.`, lines: [], requests: [], stands, skipped: [`Page ${live.pageId}: already installed with these fields.`], before: { action: req.action, fields: installed }, after: { action: req.action, fields: installed } })
-    const undo: WebhooksUndoArgs | null = installed === undefined ? null : installed === null ? { action: 'remove-page' } : { action: 'install-page', fields: installed }
-    return draft({
-      summary: `Install the business's Meta app on Page ${live.pageId} with ${words(wanted)} (leads, comments, messages and the rest reach Nexus).`,
-      lines: [[`Page ${live.pageId} app fields`, installed === undefined ? 'unknown' : words(installed), words(wanted)]],
-      requests: [request({ ...pagePath, label: `Install the app on Page ${live.pageId}: ${words(wanted)}`, params: { subscribed_fields: wanted.join(',') }, undoable: !!undo, operation: 'webhooks.installPage' })],
-      stands,
-      warnings: [
-        ...unknownWarning,
-        'Meta takes this with a Page access token of a person with the MODERATE task on the Page (page/subscribed_apps); Nexus sends the business\'s system-user token — when Meta refuses, nothing changes and the Owner installs the app on the Page in the App Dashboard (Webhooks › Page) or Meta Business Suite.',
-        'A Page field reaches Nexus only when the app is subscribed to it too (subscribe-app object page).',
-      ],
-      before: { action: req.action, fields: installed ?? null, undo, noUndo: undo ? [] : ['The Page\'s apps could not be read first, so there is no undo.'] },
-      after: { action: req.action, fields: wanted },
-    })
-  }
-  if (installed === null) return draft({ summary: `The app is not installed on Page ${live.pageId}.`, lines: [], requests: [], stands, skipped: [`Page ${live.pageId}: the app is not installed.`], before: { action: req.action, fields: null }, after: { action: req.action, fields: null } })
-  const undo: WebhooksUndoArgs | null = installed ? { action: 'install-page', fields: installed } : null
   return draft({
     summary: `Remove the business's Meta app from Page ${live.pageId} (no more Page notifications to Nexus).`,
-    lines: [[`Page ${live.pageId} app fields`, installed === undefined ? 'unknown' : words(installed), 'not installed']],
-    requests: [request({ ...pagePath, label: `Remove the app from Page ${live.pageId}`, params: {}, method: 'DELETE', undoable: !!undo, operation: 'webhooks.removePage', via: { auth: 'app' } })],
-    stands, warnings: unknownWarning,
-    before: { action: req.action, fields: installed ?? null, undo, noUndo: undo ? [] : ['The Page\'s apps could not be read first, so there is no undo.'] },
+    lines: [[`Page ${live.pageId}: the app`, 'installed or not (Nexus cannot read it)', 'not installed']],
+    requests: [request({ ...pagePath, label: `Remove the app from Page ${live.pageId}`, params: {}, method: 'DELETE', undoable: false, operation: 'webhooks.removePage', via: { auth: 'app' } })],
+    stands: { action: req.action, pageId: live.pageId },
+    warnings: ['Nexus cannot read which apps are installed on the Page (Meta answers that to a Page access token only): when the app is not installed, Meta answers and nothing changes.'],
+    before: { action: req.action, fields: null, undo: null, noUndo: [`It has no undo: ${PAGE_INSTALL_ROADS}`] },
     after: { action: req.action, fields: null },
   })
 }
