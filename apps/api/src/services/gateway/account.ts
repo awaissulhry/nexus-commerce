@@ -73,6 +73,16 @@ export async function metaChosenInstagramOf(connectionId: string): Promise<strin
   return link?.externalId ?? null
 }
 
+/**
+ * Meta step 39 (brand safety): the business portfolio of the ad account this business chose through this connection, from
+ * its AD_ACCOUNT MetaAccountLink (metadata.businessId, stored on Save), or null when the link names none.
+ */
+export async function metaChosenPortfolioOf(connectionId: string): Promise<string | null> {
+  const link = await prisma.metaAccountLink.findFirst({ where: { connectionId, product: 'AD_ACCOUNT' }, select: { metadata: true } })
+  const meta = link?.metadata && typeof link.metadata === 'object' && !Array.isArray(link.metadata) ? link.metadata as Record<string, unknown> : null
+  const id = meta?.businessId
+  return (typeof id === 'string' || typeof id === 'number') && /^\d{1,25}$/.test(String(id)) ? String(id) : null
+}
 /** The kinds of Meta object Nexus's daily read stores (and a change by object id may name). */
 export type MetaStoredKind = 'campaign' | 'adset' | 'ad'
 

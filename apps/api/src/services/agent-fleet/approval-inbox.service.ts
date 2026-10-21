@@ -924,6 +924,10 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // Meta step 29 (2026-10-21): Meta's automated rules — make, change, switch on / off, run now, delete.
   'set-meta-ad-rule': ['basis', 'plan', 'reach'],
   'remove-meta-ad-rule': ['basis', 'plan', 'reach'],
+  // Meta step 39 (2026-10-21): brand safety of ad sets and the account, block lists, deleting one (meta-ads-kit).
+  'set-meta-brand-safety': ['basis', 'plan', 'reach'],
+  'set-meta-block-list': ['basis', 'plan', 'reach'],
+  'remove-meta-block-list': ['basis', 'plan', 'reach'],
   // Programme 2 G6 — assets of every type, links at every level (google-ads-assets-all.tools.ts).
   'add-google-assets': ['basis', 'plan', 'reach'],
   'set-google-asset-links': ['basis', 'plan', 'reach'],

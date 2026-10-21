@@ -16,6 +16,8 @@ const h = vi.hoisted(() => ({
   app: null as null | ((req: Req) => { status: number; text: string; verdict?: Record<string, unknown> }),
   taken: new Set<string>(),
   adSets: new Set<string>(),
+  // Step 39 (BS-033) — what the content block list's CSV export answers.
+  exported: { status: 200, text: '{}' } as { status: number; text: string; verdict?: Record<string, unknown> },
 }))
 vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => h.connections) }))
 vi.mock('../../cx/token.service.js', () => ({ metaAppIdOf: vi.fn(async () => '5550000001') }))
@@ -35,6 +37,11 @@ vi.mock('../../gateway/meta.js', async (importOriginal) => {
     metaCall: vi.fn(async (req: Req) => {
       h.calls.push({ ...req, via: 'metaCall' })
       const a = h.app?.(req) ?? { status: 200, text: '{"data":[]}' }
+      return { outcome: 'sent', ok: a.status < 400, status: a.status, text: a.text, verdict: a.verdict ?? null, json: () => JSON.parse(a.text), headers: new Headers(), url: '', attempts: 1, rate: { remaining: null, limit: null } }
+    }),
+    metaRestFileExport: vi.fn(async (req: { operation: string; contentBlockListId: string }) => {
+      h.calls.push({ operation: req.operation, path: `content_block_lists/${req.contentBlockListId}/file_download`, via: 'export' })
+      const a = h.exported
       return { outcome: 'sent', ok: a.status < 400, status: a.status, text: a.text, verdict: a.verdict ?? null, json: () => JSON.parse(a.text), headers: new Headers(), url: '', attempts: 1, rate: { remaining: null, limit: null } }
     }),
   }
@@ -68,7 +75,7 @@ const refusedByGateway = () => h.calls
   .map((c) => [c.path, metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read', auth: c.auth })])
   .filter(([, problem]) => problem)
 
-beforeEach(() => { h.connections = [CHOSEN]; h.calls.length = 0; h.graph = null; h.app = null; h.taken = new Set(); h.adSets = new Set([ADSET]) })
+beforeEach(() => { h.connections = [CHOSEN]; h.calls.length = 0; h.graph = null; h.app = null; h.taken = new Set(); h.adSets = new Set([ADSET]); h.exported = { status: 200, text: '{}' } })
 
 describe('the two tools are reads', () => {
   it('none changes anything; both reach Meta; an alert threshold is money', () => {
@@ -114,8 +121,8 @@ describe('meta-brand-safety', () => {
   it('D6 — when Meta has not granted the capability, the answer says so and names the controls that need no grant', async () => {
     h.graph = () => metaError('200', 'Application does not have the capability to make this API call', 'forbidden', 403)
     const res = await run('meta-brand-safety', { view: 'block-lists' })
-    expect(res.error).toMatch(/^Meta has not granted this capability to the business \(block_list_management_v2_api_access\)/)
-    expect(res.error).toMatch(/no-grant controls are the inventory filter .*placement .*excluded publisher categories/)
+    expect(res.error).toMatch(/^Meta has not granted this capability: the app needs Meta's block_list_management_v2_api_access grant\./)
+    expect(res.error).toMatch(/no-grant controls are the inventory filter .*placement .*excluded publisher categories .*set-meta-brand-safety/)
     expect((await run('meta-brand-safety', { view: 'content-block-lists' })).error).toMatch(/brand_safety_content_block_list/)
     expect((await run('meta-brand-safety', { view: 'partner-publishers', position: 'instream_video' })).error).toMatch(/brand_safety_third_party_partners/)
     expect((await run('meta-brand-safety', { view: 'adjacent-report-dates', platform: 'instagram', position: 'reels' })).error).toMatch(/brand_safety_feed_verification/)
@@ -124,20 +131,47 @@ describe('meta-brand-safety', () => {
     h.graph = () => ({ id: '120000000000701', name: 'Risky', business: { id: '5550009999' } })
     expect((await run('meta-brand-safety', { view: 'content-block-list', contentBlockListId: '120000000000701' })).error).toMatch(/not the business portfolio's/)
     h.graph = (req) => (req.path === '120000000000701' ? { id: '120000000000701', name: 'Risky', business: { id: PORTFOLIO } }
-      : req.path.endsWith('/instagram_content') ? { data: [{ id: '178000000000001' }], paging: { cursors: { after: 'c' }, next: 'n' } }
-        : { data: [{ id: '1234567891', account_id: 'act_1234567891' }] })
+      : req.path === `${PORTFOLIO}/content_block_lists` ? { data: [{ id: '120000000000701' }] }
+        : req.path.endsWith('/instagram_content') ? { data: [{ id: '178000000000001' }], paging: { cursors: { after: 'c' }, next: 'n' } }
+          : { data: [{ id: '1234567891', account_id: 'act_1234567891' }] })
     h.taken = new Set(['1234567891'])
     const res = await run('meta-brand-safety', { view: 'content-block-list', contentBlockListId: '120000000000701', content: 'instagram' })
     expect(res.data).toMatchObject({ content: { platform: 'instagram', ids: ['178000000000001'], nextAfter: 'c' }, appliedToAdAccounts: [{ adAccountId: '1234567891', takenByAnotherBusiness: true }] })
     expect(h.calls.map((c) => [c.path, c.query?.fields])).toEqual([
-      ['120000000000701', 'id,name,business'], ['120000000000701', 'id,name,business'], ['120000000000701/instagram_content', 'id'], ['120000000000701/applied_ad_accounts', 'id,account_id'],
+      ['120000000000701', 'id,name,business'], ['120000000000701', 'id,name,business'], [`${PORTFOLIO}/content_block_lists`, 'id'], ['120000000000701/instagram_content', 'id'], ['120000000000701/applied_ad_accounts', 'id,account_id'],
     ])
     expect(refusedByGateway()).toEqual([])
   })
-  it('what Meta cannot do (yet) answers in words with no call: the account\'s content block lists, one post\'s check, the CSV (a PUT)', async () => {
+  it('step 39 review A1 — an id of the portfolio that is no content block list (a catalog also answers business) is not read as one', async () => {
+    h.graph = (req) => (req.path === '120000000000801' ? { id: '120000000000801', name: 'Catalog A', business: { id: PORTFOLIO } }
+      : req.path === `${PORTFOLIO}/content_block_lists` ? (req.query?.after ? { data: [{ id: '120000000000702' }] } : { data: [{ id: '120000000000701' }], paging: { cursors: { after: 'p2' }, next: 'n' } })
+        : { data: [] })
+    for (const view of ['content-block-list', 'content-block-list-file']) {
+      h.calls.length = 0
+      expect((await run('meta-brand-safety', { view, contentBlockListId: '120000000000801' })).error, view).toMatch(/not one of the business portfolio's content block lists/)
+      expect(h.calls.map((c) => [c.path, c.query?.after ?? null]), view).toEqual([['120000000000801', null], [`${PORTFOLIO}/content_block_lists`, null], [`${PORTFOLIO}/content_block_lists`, 'p2']])
+    }
+    expect(h.calls.some((c) => c.via === 'export')).toBe(false)
+  })
+  it('what Meta cannot do (yet) answers in words with no call: the account\'s content block lists, one post\'s check', async () => {
     expect((await run('meta-brand-safety', { view: 'account-content-block-lists' })).data).toMatchObject({ available: false, sentence: expect.stringMatching(/planned but not yet available/) })
-    expect((await run('meta-brand-safety', { view: 'content-block-list-file' })).data).toMatchObject({ available: false, comesWith: 'step 39', sentence: expect.stringMatching(/^The CSV export of a content block list comes with step 39 \(Nexus brand-safety changes\)/) })
     expect(h.calls).toHaveLength(0)
+  })
+  it('step 39 (BS-033) — content-block-list-file: only the portfolio\'s own list; Meta makes the CSV; its name, size and counts — never the download link', async () => {
+    expect((await run('meta-brand-safety', { view: 'content-block-list-file' })).error).toMatch(/Name the content block list/)
+    h.graph = () => ({ id: '120000000000701', name: 'Posts A', business: { id: '5550009999' } })
+    expect((await run('meta-brand-safety', { view: 'content-block-list-file', contentBlockListId: '120000000000701' })).error).toMatch(/not the business portfolio's/)
+    expect(h.calls.map((c) => c.via)).toEqual(['graph'])
+    h.calls.length = 0
+    h.graph = (req) => (req.path === `${PORTFOLIO}/content_block_lists` ? { data: [{ id: '120000000000701' }] } : { id: '120000000000701', name: 'Posts A', business: { id: PORTFOLIO } })
+    h.exported = { status: 200, text: JSON.stringify({ content_block_list_id: '120000000000701', download_url: 'https://example.com/content_ids.csv?oh=abc&oe=def', file_metadata: { name: 'content_ids.csv', size_bytes: 2048, facebook_content_count: 3, instagram_content_count: 4 } }) }
+    const res = await run('meta-brand-safety', { view: 'content-block-list-file', contentBlockListId: '120000000000701' })
+    expect(h.calls.map((c) => [c.via, c.path])).toEqual([['graph', '120000000000701'], ['graph', `${PORTFOLIO}/content_block_lists`], ['export', 'content_block_lists/120000000000701/file_download']])
+    expect(res.data).toMatchObject({ contentBlockList: { contentBlockListId: '120000000000701', name: 'Posts A' }, file: { name: 'content_ids.csv', sizeBytes: 2048, facebookPosts: 3, instagramPosts: 4 }, sentence: expect.stringMatching(/does not show its download link/) })
+    expect(JSON.stringify(res)).not.toMatch(/example\.com|oh=|download_url/)
+    // D6: Meta refusing the export for its grant names the grant and the no-grant controls.
+    h.exported = { status: 403, text: '{"error":{"code":200}}', verdict: { errorClass: 'forbidden', channelCode: '200', channelMessage: '(#200) Permissions error' } }
+    expect((await run('meta-brand-safety', { view: 'content-block-list-file', contentBlockListId: '120000000000701' })).error).toMatch(/^Meta has not granted this capability: the app needs Meta's brand_safety_content_block_list grant\..*The no-grant controls are the inventory filter/)
   })
   it('publisher-report: only an ad set of the chosen account (Nexus\'s rows, else account and kind live); Meta\'s parameters', async () => {
     h.graph = (req) => (req.path === '120000000000299' ? { account_id: '5550001112', optimization_goal: 'REACH', billing_event: 'IMPRESSIONS' } : { data: [{ url: 'www.facebook.com/example1', name: 'Acme', estimated_impressions: 4823, content_types: ['vod'], status: 'partner' }], summary: { total_count: 1 } })
@@ -258,7 +292,10 @@ describe('meta-webhooks', () => {
       sharedWithBusinesses: null, sharedWithNotRead: expect.stringMatching(/slow down/), appliedToAdAccounts: [{ adAccountId: '1234567890' }],
     })
     h.graph = (req) => (req.path === '120000000000701' ? { id: '120000000000701', name: 'Risky', business: { id: PORTFOLIO } }
-      : req.path.endsWith('/instagram_content') ? metaError('17', 'User request limit reached', 'rate_limited') : { data: [{ id: '1234567890', account_id: 'act_1234567890' }] })
+      : req.path.endsWith('/instagram_content') ? metaError('17', 'User request limit reached', 'rate_limited')
+        // Step 39 — a content block list is the portfolio's own only when its content_block_lists list names it.
+        : req.path.endsWith('/content_block_lists') ? { data: [{ id: '120000000000701' }] }
+          : { data: [{ id: '1234567890', account_id: 'act_1234567890' }] })
     expect((await run('meta-brand-safety', { view: 'content-block-list', contentBlockListId: '120000000000701', content: 'instagram' })).data).toMatchObject({
       content: { ids: null, notRead: expect.stringMatching(/slow down/) }, appliedToAdAccounts: [{ adAccountId: '1234567890' }],
     })

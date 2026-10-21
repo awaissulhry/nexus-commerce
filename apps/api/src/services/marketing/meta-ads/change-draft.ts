@@ -9,7 +9,7 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaBrandSafetyKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
 import type { MetaChangeResult, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
@@ -18,7 +18,8 @@ export interface MetaChangeRequest {
   step: number
   /** What a person reads, e.g. 'Pause campaign "Spring sale" (120000000000001)'. */
   label: string
-  kind: MetaStatusKind
+  /** A campaign, ad set or ad (step 39: a request of another kind names it in `objectKind` and leaves this out). */
+  kind?: MetaStatusKind
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
@@ -58,6 +59,8 @@ export interface MetaChangeRequest {
     | MetaOptimizeKind
     // Step 29 — a Meta automated rule.
     | 'adrule'
+    // Step 39 — an ad set's targeting, a publisher or content block list (brand safety).
+    | MetaBrandSafetyKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
@@ -90,6 +93,17 @@ export interface MetaChangeRequest {
   send?: (target: MetaWriteTarget) => Promise<MetaChangeResult>
   /** The step's sentence when Meta made it (else the kit's own). */
   doneSentence?: (result: MetaChangeResult) => string
+  // ── step 39 (brand safety) ──
+  /** The read-back that judges it (meta write-client `judge`), and what is read (default the object). */
+  judge?: (node: Record<string, unknown>) => { moved: string[]; reads: string }
+  readBackOf?: string
+  /**
+   * Params it takes from an earlier request of the same change, just before it is sent (a list made from the draft step 1
+   * uploaded): its plan holds the rest. A MetaWriteError it throws ends the run there (nothing more is sent).
+   */
+  prepare?: (done: ReadonlyArray<{ request: MetaChangeRequest; result: MetaChangeResult }>) => Promise<Record<string, string>>
+  /** The capability grant Meta needs for it (D6): Meta refusing it for access answers with the no-grant controls. */
+  grant?: string
 }
 
 export interface MetaChangeDraft {
