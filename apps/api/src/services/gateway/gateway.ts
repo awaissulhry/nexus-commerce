@@ -33,7 +33,7 @@ import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock
 import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade, metaChosenAdAccountOf, metaChosenMediaAssetsOf, metaLinkTaken, metaPortfolioShared, metaStoredObject } from './account.js'
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
-import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite, type MetaMediaWriteKind } from './meta-calls.js'
+import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaReadSecrets, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaBoostWriteKind, type MetaJudgedWrite, type MetaMediaWriteKind } from './meta-calls.js'
 import { META_MEDIA_LIST_MAX, metaMultipartBody, metaRuploadSendUrl, metaStartedVideoOf, metaVideoStartedOn, noteMetaVideoStarted } from './meta-media-rules.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
@@ -130,7 +130,7 @@ export interface GatewayRequest {
    * trust it: it confirms it (the business's stored row, or a field only that kind has in its one live read) and refuses
    * the change otherwise, so the write allow-list is literally a campaign, an ad set or an ad — never a creative or a Page.
    */
-  metaObjectKind?: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'creative' | MetaMediaWriteKind
+  metaObjectKind?: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'creative' | MetaMediaWriteKind | MetaBoostWriteKind
   /**
    * Meta step 18: a change of a budget schedule (high-demand period, `metaObjectKind: 'highdemandperiod'`) names the
    * campaign or ad set it belongs to; the gateway confirms that object is of the chosen ad account AND lists the period
@@ -568,6 +568,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
       timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
       text = err instanceof Error ? err.message : String(err)
     }
+    // Step 26 — a creator's partnership ad code (in a change's body, or a content look-up's query) never leaves the gateway
+    // in Meta's answer: not to the caller, a sentence or the ledger.
+    if (req.channel === 'META') {
+      for (const secret of metaWrite?.secrets ?? metaReadSecrets(req.url)) {
+        if (text.includes(secret)) { text = text.split(secret).join('[removed]'); metaScrubbed += 1 }
+      }
+    }
     reading = status ? rateReadingOf(req.channel, responseHeaders, status) : null
     // Shopify GraphQL: errors and THROTTLED arrive inside a 200; the headroom is in the body.
     const gql = req.channel === 'SHOPIFY' && status === 200 ? shopifyGraphqlBodyOf(text) : null
@@ -639,7 +646,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     rateLimitLimit: reading?.limit ?? null,
     attempts,
     // Step 23 — an image upload's bytes are never kept: their length only.
-    requestPayload: ok ? undefined : metaWrite?.bulky ? { __omitted: 'the bytes of a Meta upload are never kept', bytes: typeof req.body === 'string' ? req.body.length : null } : typeof req.body === 'string' || req.body == null ? ledgerSafeBody(req.body ?? null) : { __binary: true, bytes: req.body instanceof Uint8Array ? req.body.byteLength : null },
+    requestPayload: ok ? undefined : metaWrite?.bulky ? { __omitted: 'the bytes of a Meta upload are never kept', bytes: typeof req.body === 'string' ? req.body.length : null }
+      // Step 26 — a body that carries a creator's partnership ad code is never kept either (meta-boost-rules.ts `secret`).
+      : metaWrite?.secrets?.length ? { __omitted: 'a Meta change that carries a partnership ad code is never kept', bytes: typeof req.body === 'string' ? req.body.length : null } : typeof req.body === 'string' || req.body == null ? ledgerSafeBody(req.body ?? null) : { __binary: true, bytes: req.body instanceof Uint8Array ? req.body.byteLength : null },
     // Review 2 — how many access_token keys were dropped from a Meta answer (it never reaches the ledger either).
     responsePayload: metaScrubbed ? { scrubbed: metaScrubbed, ...(ok ? {} : { body: ledgerSafeBody(text) }) } : ok ? undefined : ledgerSafeBody(text),
   })
@@ -686,10 +695,12 @@ const META_KIND_WORD: Readonly<Record<'campaign' | 'adset' | 'ad' | 'customaudie
  * cannot place, of another kind, or of any other account (another business's too) gets nothing sent; the sentence never
  * names the other account.
  */
-async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'creative' | 'highdemandperiod' | MetaMediaWriteKind | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
+async function metaOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: 'campaign' | 'adset' | 'ad' | 'customaudience' | 'creative' | 'highdemandperiod' | MetaMediaWriteKind | MetaBoostWriteKind | undefined, parent?: { kind: 'campaign' | 'adset'; id: string }): Promise<{ code: string; sentence: string } | null> {
   const id = write.objectId
   // Step 18 — a budget schedule: its campaign or ad set first, then the period among that object's own.
   if (kind === 'highdemandperiod') return metaPeriodOwnerProblem(connectionId, write, parent)
+  // Step 26 — the chosen Instagram account itself, or a media of it (set-meta-partnership-access).
+  if (kind === 'iguser' || kind === 'igmedia') return metaInstagramOwnerProblem(connectionId, write, kind)
   // Step 23 — an edge of the chosen ad account or its portfolio, a video upload this connection started, a library video.
   if (kind === 'adaccount' || kind === 'portfolio' || kind === 'video' || kind === 'libraryvideo') return metaMediaOwnerProblem(connectionId, write, kind)
   if (!kind || !Object.prototype.hasOwnProperty.call(META_KIND_FIELD, kind)) return { code: 'META_WRITE_NOT_ALLOWED', sentence: `Nothing was sent to Meta: a change of ${id} names the kind of object it changes (a campaign, an ad set or an ad).` }
@@ -813,6 +824,19 @@ async function metaMediaOwnerProblem(connectionId: string, write: MetaJudgedWrit
 }
 
 /**
+ * Meta step 26 — what a partnership-access change names (meta-boost-rules.ts), checked before anything is sent: `iguser` —
+ * the path's Instagram account IS the one this business chose (MetaAccountLink INSTAGRAM); `igmedia` — the media is the
+ * chosen Instagram account's (Meta's owner, else its username: one live read). Meta documents no check (validate_only) there.
+ */
+async function metaInstagramOwnerProblem(connectionId: string, write: MetaJudgedWrite, kind: MetaBoostWriteKind): Promise<{ code: string; sentence: string } | null> {
+  if (write.check) return { code: 'META_WRITE_NOT_ALLOWED', sentence: 'Nothing was sent to Meta: Meta has no check (validate_only) for an Instagram partnership permission, a tag approval, an ad code or a Collab invite.' }
+  const assets = await metaChosenMediaAssetsOf(connectionId)
+  if (!assets.instagramId) return notChosenMedia('this business has no Instagram account chosen, so Nexus changes no Instagram partnership setting.')
+  if (kind === 'iguser') return write.objectId === assets.instagramId ? null : notChosenMedia('the Instagram account this change names is not the one this business chose.')
+  return (await metaInstagramMediaOwned(connectionId, write.objectId, assets.instagramId)) ? null : notChosenMedia(`Instagram media ${write.objectId} is not one Nexus can confirm as the chosen Instagram account's.`)
+}
+
+/**
  * Meta step 23 — the media ids INSIDE a change's body (meta-media-rules.ts `assets`), each the business's own before
  * anything is sent:
  *   instagrammedia  Meta's `owner` of the media is the chosen Instagram account (ONE live read; when Meta gives no owner,
@@ -831,6 +855,12 @@ async function metaMediaAssetsProblem(connectionId: string, write: MetaJudgedWri
   for (const asset of write.assets) {
     if (CREATIVE_ASSET_KINDS.has(asset.kind)) {
       const problem = await metaCreativeAssetProblem(connectionId, assets, asset, images, lists)
+      if (problem) return problem
+      continue
+    }
+    // Step 26 — a boost's and a partnership change's ids (meta-creative-rules.ts sourceAssets, meta-boost-rules.ts).
+    if (BOOST_ASSET_KINDS.has(asset.kind)) {
+      const problem = await metaBoostAssetProblem(connectionId, assets, asset, lists)
       if (problem) return problem
       continue
     }
@@ -987,6 +1017,133 @@ async function metaCreativeAssetProblem(
     }
   }
   return notChosenMedia(`${where}${asset.id} is not an id Nexus can confirm.`)
+}
+
+/**
+ * Meta step 26 — the ids of a boost and of a partnership-access change, each the business's own or a creator's that no other
+ * Nexus business owns, before anything is sent:
+ *   choseninstagram  the chosen Instagram account (a creator's content names it as its sponsor);
+ *   partnercontent   a creator's Instagram media or Facebook post that Meta's content discovery lists for the brand
+ *                    (GET /<portfolio>/partnership-ads-advertisable-content content_ids, the chosen Page / Instagram account —
+ *                    one live read), whose author is neither the chosen Page or Instagram account nor one another Nexus
+ *                    business chose (a Facebook post's own Page part too);
+ *   adcode           a creator's ad code: the same read by ad_codes finds exactly one content, of the platform (`with`
+ *                    INSTAGRAM | FACEBOOK) or exactly the media named (`with` a media id), whose author passes the same check —
+ *                    the code itself is never put in a sentence;
+ *   igpermalink      a post link that IS one of the chosen Instagram account's own media (its `permalink`, among the first
+ *                    META_MEDIA_LIST_MAX of /<ig id>/media);
+ *   collabinvite     a media among the chosen Instagram account's pending Collab invites (/<ig id>/collaboration_invites, the
+ *                    first META_MEDIA_LIST_MAX).
+ * Anything Nexus cannot confirm (a read failed, nothing found) is refused: nothing is sent.
+ */
+const BOOST_ASSET_KINDS: ReadonlySet<string> = new Set(['choseninstagram', 'partnercontent', 'adcode', 'igpermalink', 'collabinvite'])
+
+async function metaBoostAssetProblem(
+  connectionId: string,
+  mine: { instagramId: string | null; portfolioId: string | null; pageId?: string | null },
+  asset: { id: string; kind: string; with?: string },
+  lists: Map<string, Set<string> | null>,
+): Promise<{ code: string; sentence: string } | null> {
+  const page = mine.pageId ?? null
+  const ig = mine.instagramId
+  const where = 'inside this change, '
+  switch (asset.kind) {
+    case 'choseninstagram':
+      return ig && asset.id === ig ? null : notChosenMedia(`${where}Instagram account ${asset.id} is not the one this business chose.`)
+    case 'partnercontent':
+    case 'adcode': {
+      const code = asset.kind === 'adcode'
+      const what = code ? 'the creator\'s ad code' : `content ${asset.id}`
+      if (!mine.portfolioId || (!page && !ig)) return notChosenMedia(`${where}Nexus cannot ask Meta's content discovery about ${what}: the chosen ad account names no business portfolio, or no Page or Instagram account is chosen.`)
+      const rows = await metaAdvertisableContent(connectionId, mine.portfolioId, page, ig, code ? 'ad_codes' : 'content_ids', asset.id)
+      if (!rows) return notChosenMedia(`${where}Nexus could not ask Meta's content discovery about ${what}, so nothing is sent.`)
+      // A Facebook post may come back as its post id alone (content discovery names "Facebook post ID").
+      const row = code ? (rows.length === 1 ? rows[0] : null) : rows.find((r) => r.contentId === asset.id || (asset.id.includes('_') && r.contentId === asset.id.split('_')[1])) ?? null
+      if (!row) return notChosenMedia(`${where}Meta's content discovery does not list ${what} as content the chosen Page or Instagram account may advertise.`)
+      if (code && asset.with && /^\d+$/.test(asset.with) && row.contentId !== asset.with) return notChosenMedia(`${where}the creator's ad code unlocks other content than media ${asset.with}.`)
+      if (code && asset.with && /^(INSTAGRAM|FACEBOOK)$/.test(asset.with) && row.platform && row.platform !== asset.with) return notChosenMedia(`${where}the creator's ad code is for ${row.platform === 'INSTAGRAM' ? 'Instagram' : 'Facebook'} content, not ${asset.with === 'INSTAGRAM' ? 'Instagram' : 'Facebook'}.`)
+      const postPage = !code && /^\d+_\d+$/.test(asset.id) ? asset.id.split('_')[0] : null
+      const pages = [row.authorPage, postPage].filter((v): v is string => !!v)
+      const igs = [row.authorInstagram].filter((v): v is string => !!v)
+      if (!pages.length && !igs.length) return notChosenMedia(`${where}Meta's content discovery names no author for ${what}, so Nexus cannot confirm whose it is.`)
+      if ((page && pages.includes(page)) || (ig && igs.includes(ig))) return notChosenMedia(`${where}${what} is the business's own: a partnership boost is a creator's content (boost the business's own post as such).`)
+      for (const p of pages) if (await metaLinkTaken('PAGE', p)) return notChosenMedia(`${where}${what} is by a Page another business in Nexus uses, so no creative of this business boosts it.`)
+      for (const i of igs) if (await metaLinkTaken('INSTAGRAM', i)) return notChosenMedia(`${where}${what} is by an Instagram account another business in Nexus uses, so no creative of this business boosts it.`)
+      return null
+    }
+    case 'igpermalink': {
+      if (!ig) return notChosenMedia('this business has no Instagram account chosen, so no Instagram post link is run as its ad.')
+      const key = `${ig}/media:permalink`
+      if (!lists.has(key)) lists.set(key, await metaListedValuesUpTo(connectionId, `${ig}/media`, 'id,permalink', 'permalink'))
+      return lists.get(key)?.has(asset.id) ? null : notChosenMedia(`${where}${asset.id} is not a link to one of the chosen Instagram account's own media Nexus can confirm (it reads the first ${META_MEDIA_LIST_MAX}).`)
+    }
+    case 'collabinvite': {
+      if (!ig) return notChosenMedia('this business has no Instagram account chosen, so it answers no Collab invite.')
+      const key = `${ig}/collaboration_invites`
+      if (!lists.has(key)) lists.set(key, await metaListedValuesUpTo(connectionId, key, 'media_id', 'media_id'))
+      return lists.get(key)?.has(asset.id) ? null : notChosenMedia(`${where}media ${asset.id} is not among the Collab invites the chosen Instagram account has pending (Nexus reads the first ${META_MEDIA_LIST_MAX}).`)
+    }
+  }
+  return notChosenMedia(`${where}${asset.kind === 'adcode' ? 'the ad code' : asset.id} is not an id Nexus can confirm.`)
+}
+
+/**
+ * Step 26 — ONE look-up of Meta's content discovery (content-discovery-api.md: a direct look-up by content_ids or ad_codes,
+ * no paging, system-user tokens supported) for the brand's chosen Page and/or Instagram account: each content's id, platform
+ * and author. Null when the read failed. The URL (an ad code in its query) reaches the ledger as its path only (safePath).
+ */
+async function metaAdvertisableContent(connectionId: string, portfolioId: string, pageId: string | null, instagramId: string | null, key: 'content_ids' | 'ad_codes', value: string): Promise<Array<{ contentId: string | null; platform: string | null; authorPage: string | null; authorInstagram: string | null }> | null> {
+  const url = new URL(`${metaGraphBase()}/${portfolioId}/partnership-ads-advertisable-content`)
+  if (pageId) url.searchParams.set('fb_page_id', pageId)
+  if (instagramId) url.searchParams.set('ig_user_id', instagramId)
+  url.searchParams.set(key, JSON.stringify([value]))
+  url.searchParams.set('fields', 'content_id,platform,author{ig_user_id,fb_page_id}')
+  const idText = (v: unknown) => (typeof v === 'string' || typeof v === 'number') && /^\d{1,25}(_\d{1,25})?$/.test(String(v)) ? String(v) : null
+  try {
+    const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+    const body = answer.ok ? answer.json<{ data?: Array<Record<string, unknown>> }>() : null
+    if (!body || !Array.isArray(body.data)) return null
+    return body.data.map((row) => {
+      const author = (row?.author && typeof row.author === 'object' ? row.author : {}) as { ig_user_id?: unknown; fb_page_id?: unknown }
+      return { contentId: idText(row?.content_id), platform: typeof row?.platform === 'string' ? row.platform : null, authorPage: idText(author.fb_page_id), authorInstagram: idText(author.ig_user_id) }
+    })
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Step 26 — the values of one field in the FIRST META_MEDIA_LIST_MAX rows of a Meta list (as metaListedIdsUpTo, another
+ * field than `id`): seen = confirmed, not seen (past those rows, or a failed read: null) = not confirmed.
+ */
+async function metaListedValuesUpTo(connectionId: string, path: string, fields: string, field: string): Promise<Set<string> | null> {
+  const values = new Set<string>()
+  let rows = 0
+  let after: string | null = null
+  while (rows < META_MEDIA_LIST_MAX) {
+    const url = new URL(`${metaGraphBase()}/${path}`)
+    url.searchParams.set('fields', fields)
+    url.searchParams.set('limit', String(Math.min(100, META_MEDIA_LIST_MAX - rows)))
+    if (after) url.searchParams.set('after', after)
+    let body: { data?: Array<Record<string, unknown>>; paging?: { next?: unknown; cursors?: { after?: unknown } } } | null
+    try {
+      const answer = await gatewayCall({ channel: 'META', operation: 'write.ownerCheck', kind: 'read', connectionId, url: url.toString(), method: 'GET', maxTransientRetries: 0, max429Retries: 0, timeoutMs: 20_000 })
+      body = answer.ok ? answer.json<{ data?: Array<Record<string, unknown>>; paging?: { next?: unknown; cursors?: { after?: unknown } } }>() : null
+    } catch {
+      return null
+    }
+    if (!body || !Array.isArray(body.data)) return null
+    for (const row of body.data) {
+      if (rows >= META_MEDIA_LIST_MAX) break
+      rows++
+      const value = row?.[field]
+      if (typeof value === 'string' || typeof value === 'number') values.add(String(value))
+    }
+    const next = body.paging?.next && typeof body.paging.cursors?.after === 'string' ? body.paging.cursors.after : null
+    if (!next || body.data.length === 0) break
+    after = next
+  }
+  return values
 }
 
 /** Every `id` in a Meta answer's list (an Instant Experience's body elements and their children), a few levels deep. */

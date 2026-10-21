@@ -881,6 +881,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { kind: 'set', creativeId: '120000000000301', name: 'Creative A', status: 'ACTIVE', labels: ['Spring'] },
         after: { kind: 'set', creativeId: '120000000000301', name: 'Creative B', labels: [], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 26: a boost it made new is deleted again; a tag approval it added is taken off again.
+      'create-meta-boost': {
+        before: { kind: 'create', items: [] },
+        after: { kind: 'create', items: [{ kind: 'creative', creativeId: '120000000000302', name: 'Boost A', new: true, source: 'facebook-post' }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-partnership-access': {
+        before: { kind: 'partnership', action: 'approve-creators', instagramId: '17841400000000001', creators: [{ instagramId: '17841400000000099', approved: false }] },
+        after: { kind: 'partnership', action: 'approve-creators', instagramId: '17841400000000001', creators: [{ instagramId: '17841400000000099', approved: true }], accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
         after: { action: 'propose-account-budget', billingSetupId: '81', proposalId: '91', budget: { name: 'Budget A', spendingLimitCents: 50000, unlimited: false, endDate: null }, state: 'PENDING', accountId: 'g-1', customerId: '1234567890' },
@@ -1050,7 +1059,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-custom-goals', 'set-google-custom-audiences', 'set-google-user-lists', 'set-google-reusable-audiences',
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
-      'set-meta-connection', 'set-meta-status', 'create-meta-media', 'create-meta-creative', 'set-meta-creative']) {
+      'set-meta-connection', 'set-meta-status', 'create-meta-media', 'create-meta-creative', 'set-meta-creative',
+      'create-meta-boost', 'set-meta-partnership-access']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

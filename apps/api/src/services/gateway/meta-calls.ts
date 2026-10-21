@@ -50,6 +50,7 @@ import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
 import { META_IMAGE_MAX_BODY, META_MEDIA_WRITE_RULES, metaRuploadVerdict } from './meta-media-rules.js'
 import { META_CREATIVE_WRITE_RULES } from './meta-creative-rules.js'
+import { META_BOOST_WRITE_RULES } from './meta-boost-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -552,6 +553,20 @@ function metaRestVerdict(url: string, auth: unknown): MetaCallVerdict | null {
   return { problem: null, renewalClientId: null, rest: true }
 }
 
+/**
+ * Step 26 — the partnership ad codes a READ carries in its query (content discovery's `ad_codes` look-up): the gateway cuts
+ * them out of Meta's answer too (the ledger keeps a read's path only).
+ */
+export function metaReadSecrets(url: string): string[] {
+  try {
+    const raw = new URL(url).searchParams.get('ad_codes')
+    const list: unknown = raw ? JSON.parse(raw) : []
+    return Array.isArray(list) ? list.filter((s): s is string => typeof s === 'string' && s.length >= 4) : []
+  } catch {
+    return []
+  }
+}
+
 /** Why the gateway refuses this Meta call, in words, or null when it may go (metaCallVerdict's problem). */
 export function metaReadOnlyProblem(input: Parameters<typeof metaCallVerdict>[0]): string | null {
   return metaCallVerdict(input).problem
@@ -750,10 +765,25 @@ export interface MetaWriteRule {
    * judged by the rule) may go for a kind other than a campaign. Only the creative create carries it.
    */
   check?: true
+  /**
+   * Step 26 — a POST Meta documents with NO parameter at all (an ad code made for an Instagram media: POST
+   * /<media id>/partnership_ad_code, CR-363): the rule names no key, and the call carries no body.
+   */
+  noBody?: true
+  /**
+   * Step 26 — the partnership ad codes the body carries (credential-like strings a creator shares; meta-boost-rules.ts): with
+   * any, the ledger keeps the body's length only, and each is cut out of Meta's answer before it leaves the gateway.
+   */
+  secret?: (params: ReadonlyMap<string, string>) => string[]
 }
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
-export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'creative' | MetaMediaWriteKind
+export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'creative' | MetaMediaWriteKind | MetaBoostWriteKind
+/**
+ * Step 26 — what a partnership-access change names: the chosen Instagram account itself (`<ig id>/branded_content_ad_permissions
+ * | branded_content_tag_approval | collaboration_invites`) or a media of it (`<media id>/partnership_ad_code`).
+ */
+export type MetaBoostWriteKind = 'iguser' | 'igmedia'
 /**
  * Step 23 — what a media change names: the chosen ad account (`act_<id>/adimages | advideos | video_ads`), its business
  * portfolio (`<portfolio>/creative_folders`), or a video upload Nexus started (Meta's rupload host).
@@ -772,6 +802,10 @@ export interface MetaWriteAsset {
   kind: 'instagrammedia' | 'startedvideo' | 'creativefolder' | 'libraryvideo'
     | 'identitypage' | 'identityinstagram' | 'partnerpage' | 'partnerinstagram' | 'chosenpage' | 'adimage' | 'pagepost'
     | 'canvas' | 'canvaselement' | 'leadform' | 'pageevent' | 'igevent'
+    // Step 26 (meta-boost-rules.ts, meta-creative-rules.ts): the chosen Instagram account as a sponsor; a creator's content
+    // Meta lists as advertisable for the brand (content discovery); a creator's ad code (`with`: the media it must unlock);
+    // a public link to the chosen Instagram account's own media; a Collab invite the chosen account has pending.
+    | 'choseninstagram' | 'partnercontent' | 'adcode' | 'igpermalink' | 'collabinvite'
   with?: string
 }
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
@@ -853,6 +887,8 @@ export interface MetaJudgedWrite {
   multipart?: { fields: Array<[string, string]>; file: { key: string; filename: string; contentType: string; text: string } }
   /** Step 25 — Meta documents validate_only on this rule's edge (MetaWriteRule.check): the gateway lets its check go. */
   checkable?: true
+  /** Step 26 — the partnership ad codes the body carries (MetaWriteRule.secret): never in the ledger or an answer. */
+  secrets?: string[]
 }
 
 /** The gateway's verdict on a Meta call that is not a GET: why it is refused (and whether as a batch), or the judged write. */
@@ -888,21 +924,29 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   // in its form body, judged exactly like a POST's below.
   const deleteWithBody = !!deleteRule && deleteRule.required.length > 0
   if (method === 'DELETE' && !deleteWithBody && (!deleteRule || (input.body !== undefined && input.body !== ''))) {
-    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), an image or video create-meta-media uploaded new or a creative create-meta-creative made new (their undo; deleting campaigns, ad sets and ads is its own tool, not built yet), and cancels no async batch')
+    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule), an image or video create-meta-media uploaded new, a creative create-meta-creative or create-meta-boost made new (their undo; deleting campaigns, ad sets and ads is its own tool, not built yet), creators on the chosen Instagram account\'s tag-approval list and an ad code of its own media (set-meta-partnership-access), and cancels no async batch')
   }
   if (deleteRule && !deleteWithBody) {
     if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
-    return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE' } }
+    return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE', ...(deleteRule.edgeCall ? { edgeCall: true as const } : {}) } }
+  }
+  // Step 26 — a POST Meta documents with no parameter at all (MetaWriteRule.noBody): no body, nothing else to judge.
+  const bareRule = method === 'POST' && (input.body === undefined || input.body === null || input.body === '')
+    ? writeRules().find((r) => r.method === 'POST' && r.noBody && r.path.test(graph.route) && kindMatches(r, input.objectKind))
+    : undefined
+  if (bareRule) {
+    if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
+    return { write: { rule: bareRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: bareRule.kinds, ...(bareRule.edgeCall ? { edgeCall: true as const } : {}) } }
   }
   if (method !== 'POST' && !deleteWithBody) return refuse(`Nexus sends Meta no ${method}`)
   const parsed = writeParams(input.body)
   if ('problem' in parsed) return refuse(parsed.problem)
   const keys = [...parsed.params.keys()]
-  const rule = writeRules().find((r) => r.method === method && r.path.test(graph.route) && kindMatches(r, input.objectKind)
+  const rule = writeRules().find((r) => r.method === method && !r.noBody && r.path.test(graph.route) && kindMatches(r, input.objectKind)
     && r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k))
     && (!r.anyOf || r.anyOf.some((k) => parsed.params.has(k))))
   if (!rule) {
-    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a media upload of the chosen ad account or its portfolio named with its kind (create-meta-media: an image, a video, a folder, or the undo of one), or a creative of the chosen ad account (create-meta-creative, set-meta-creative: each its own keys); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a media upload of the chosen ad account or its portfolio named with its kind (create-meta-media: an image, a video, a folder, or the undo of one), or a creative of the chosen ad account (create-meta-creative, set-meta-creative, create-meta-boost: each its own keys), or a partnership permission of the chosen Instagram account (set-meta-partnership-access); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
@@ -939,7 +983,9 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const multipart = rule.file
     ? { fields: order.filter((k) => k !== rule.file!.key && k !== rule.file!.nameKey).map((k): [string, string] => [k, parsed.params.get(k)!]), file: { key: rule.file.key, filename: parsed.params.get(rule.file.nameKey)!, contentType: rule.file.contentType, text: parsed.params.get(rule.file.key)! } }
     : null
-  const media = { ...(assets.length ? { assets } : {}), ...(rule.edgeCall ? { edgeCall: true as const } : {}), ...(rule.bulky ? { bulky: true as const } : {}), ...(method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...(multipart ? { multipart } : {}), ...(rule.check ? { checkable: true as const } : {}) }
+  // Step 26 — the partnership ad codes in the body: the ledger never keeps them, and Meta's answer loses them.
+  const secrets = rule.secret ? rule.secret(parsed.params).filter((s) => typeof s === 'string' && s.length >= 4) : []
+  const media = { ...(assets.length ? { assets } : {}), ...(rule.edgeCall ? { edgeCall: true as const } : {}), ...(rule.bulky ? { bulky: true as const } : {}), ...(method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...(multipart ? { multipart } : {}), ...(rule.check ? { checkable: true as const } : {}), ...(secrets.length ? { secrets } : {}) }
   // A write with a file goes as its multipart body only (`body` stays empty: nothing else of it is ever sent).
   return { write: { rule: rule.name, objectId: graph.segments[0], check, body: multipart ? '' : body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}), ...media } }
 }
@@ -952,9 +998,10 @@ const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kin
 const MAX_ANY_WRITE_BODY = Math.max(16_000, META_IMAGE_MAX_BODY)
 /**
  * Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts), step 23's media rules (meta-media-rules.ts)
- * and step 25's creative rules (meta-creative-rules.ts) — read when judged, never at load.
+ * and step 25's creative rules (meta-creative-rules.ts) — read when judged, never at load. Step 26: the boost and
+ * partnership-access rules (meta-boost-rules.ts).
  */
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_MEDIA_WRITE_RULES, ...META_CREATIVE_WRITE_RULES]
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_MEDIA_WRITE_RULES, ...META_CREATIVE_WRITE_RULES, ...META_BOOST_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {

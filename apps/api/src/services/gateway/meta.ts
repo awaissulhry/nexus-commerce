@@ -75,7 +75,7 @@ export interface MetaWriteRequest {
   /** The object changed: its id, digits only (`POST /<id>`). */
   objectId: string
   /** Its kind: the gateway confirms it before anything is sent (stored row, or a field only that kind has). */
-  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative'
+  objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative' | 'iguser' | 'igmedia'
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
   params: Record<string, string>
   /** Meta's check of the change (adds `execution_options=["validate_only"]`): Meta changes nothing, so it goes as a read. */
@@ -158,6 +158,8 @@ export async function metaRestCall(req: Omit<MetaCallRequest, 'auth'>): Promise<
  * ad account's creatives and async creative jobs, a creative's labels).
  */
 export type MetaWriteEdge = 'budget_schedules' | 'adimages' | 'advideos' | 'video_ads' | 'creative_folders' | 'captions' | 'adcreatives' | 'asyncadcreatives' | 'adlabels'
+  // Step 26: the chosen Instagram account's partnership edges and a media's ad code (set-meta-partnership-access).
+  | 'branded_content_ad_permissions' | 'branded_content_tag_approval' | 'collaboration_invites' | 'partnership_ad_code'
 
 export interface MetaUploadRequest {
   connectionId: string

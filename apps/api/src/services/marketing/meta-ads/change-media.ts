@@ -418,8 +418,12 @@ const videoNode = (state: VideoState | null, videoId: string, isNew: boolean | n
   videoId, new: isNew, statusText: state?.statusText ?? 'Nexus could not read its status yet (meta-media-library view video reads it)', replaceAudioStatus: state?.replaceAudioStatus ?? null,
 })
 
-/** advideos: Meta fetches the link (MD-010), or brings in the chosen Instagram account's video (MD-020, MD-021). */
-function sendAdVideo(act: string, params: Record<string, string>, swap: boolean) {
+/**
+ * advideos: Meta fetches the link (MD-010), or brings in the chosen Instagram account's video (MD-020, MD-021). Step 26 —
+ * create-meta-boost sends a creator's video with the creator's ad code through it too (MD-138): the same read-back, processing
+ * poll and "was it new?".
+ */
+export function sendAdVideo(act: string, params: Record<string, string>, swap: boolean) {
   return async (target: MetaWriteTarget): Promise<MetaChangeResult> => {
     const operation = 'media.videoUpload'
     const sentAt = nowSec()
@@ -731,7 +735,8 @@ async function recordOf(ref: UploadRef, adAccountId: string): Promise<string | n
     : ref.kind === 'video' ? { kind: 'video', videoId: ref.videoId, new: true }
       : { kind: 'captions', videoId: ref.videoId, locale: ref.locale, new: true }
   const rows = await prisma.agentChange.findMany({
-    where: { toolName: MEDIA_TOOL, undoneAt: null, after: { path: ['items'], array_contains: [item] } },
+    // Step 26 — a creator's video create-meta-boost copied NEW into the library (MD-138) is taken back the same way.
+    where: { toolName: { in: [MEDIA_TOOL, 'create-meta-boost'] }, undoneAt: null, after: { path: ['items'], array_contains: [item] } },
     select: { id: true, after: true },
     take: 20,
   })

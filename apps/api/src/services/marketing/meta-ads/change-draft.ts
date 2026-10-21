@@ -19,9 +19,10 @@ export interface MetaChangeRequest {
   label: string
   /**
    * The kind of object it changes; step 23: `adaccount` / `portfolio` for an upload on that object's edge, `libraryvideo`
-   * for a video of the chosen account's library (its captions).
+   * for a video of the chosen account's library (its captions). Step 26: `iguser` the chosen Instagram account, `igmedia` a
+   * media of it (set-meta-partnership-access).
    */
-  kind: MetaStatusKind | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative'
+  kind: MetaStatusKind | 'adaccount' | 'portfolio' | 'libraryvideo' | 'creative' | 'iguser' | 'igmedia'
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
