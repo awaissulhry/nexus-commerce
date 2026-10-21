@@ -76,7 +76,8 @@ export function metaAccountSpendCapMicros(value: unknown, currency: string | nul
 /**
  * Step 3 — minor units of the account currency (what Nexus's tools take) → Meta's offset units (what minimum_budgets'
  * bid_amount, budgets and bids take): EUR 1250 → 1250, JPY 1250 → 1250, BHD 1250 (1.250) → 125. Null when it is not a
- * whole number of Meta's units (BHD 1255) or not a whole number at all.
+ * whole number of Meta's units (BHD 1255) or not a whole number at all. NEVER for the account's spend_cap: Meta writes
+ * that in standard units (minorToMetaStandard).
  */
 export function minorToMetaUnits(minor: number, currency: string | null | undefined): number | null {
   if (!Number.isSafeInteger(minor)) return null
@@ -99,4 +100,19 @@ export function currencyAmountMicros(value: unknown): { micros: bigint; currency
   if (!currency) return null
   const micros = metaUnitsToMicros(v.offsetted_amount, currency) ?? decimalToMicros(v.amount)
   return micros === null ? null : { micros, currency }
+}
+
+/**
+ * Step 3 review A3 — for set-meta-spend-cap (step 40): minor units of the account currency → the decimal string Meta
+ * takes when the ad account's spend_cap is WRITTEN ("standard denomination of the currency, e.g. 23.50 for USD $23.50",
+ * reference/ad-account Updating): EUR 50000 → "500.00", JPY 1250 → "1250", BHD 1250 → "1.250". The currency's own
+ * decimals (currencyExponent). Null when not a whole number of minor units. Read back with metaAccountSpendCapMicros.
+ */
+export function minorToMetaStandard(minor: number, currency: string | null | undefined): string | null {
+  if (!Number.isSafeInteger(minor)) return null
+  const exponent = currencyExponent(currency)
+  const digits = String(Math.abs(minor))
+  if (exponent === 0) return `${minor < 0 ? '-' : ''}${digits}`
+  const padded = digits.padStart(exponent + 1, '0')
+  return `${minor < 0 ? '-' : ''}${padded.slice(0, -exponent)}.${padded.slice(-exponent)}`
 }

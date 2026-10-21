@@ -65,7 +65,7 @@ const metaAdAccount: AgentTool = {
     bidAmountCents: z.number().int().min(1).max(100_000_000).optional().describe('limits: the minimum budgets for this manual bid (minor units of the account currency)'),
     appId: metaIdArg('attribution-options: an app connected to the ad account (meta-account-access view apps)'),
     optimizationGoal: z.preprocess(upper, z.string().regex(/^[A-Z_]{2,60}$/)).optional().describe('attribution-options: the ad set goal, Meta\'s name (e.g. APP_INSTALLS, OFFSITE_CONVERSIONS)'),
-    eventName: z.preprocess(upper, z.string().regex(/^[A-Z0-9_]{2,60}$/)).optional().describe('attribution-options: the app event, Meta\'s name (e.g. PURCHASE)'),
+    eventName: z.preprocess(upper, z.string().regex(/^[A-Z0-9_]{2,60}$/)).optional().describe('attribution-options: a standard app event, Meta\'s name (e.g. PURCHASE; not OTHER)'),
     feature: z.preprocess(lower, z.string().regex(/^[a-z_]{2,60}$/)).optional().describe('insights-features: only this feature (comscore, impression_device, time_of_day_viewer_tz, frequency_value)'),
     connectionId: connectionArg,
   }),
@@ -112,7 +112,7 @@ const metaBilling: AgentTool = {
     from: dayArg('events: first day (default 30 days before to); invoices: billing periods after this one (the first day of a month)'),
     to: dayArg('events: last day (default today); invoices: billing periods before this one (not included)'),
     issuedFrom: dayArg('invoices: issued on or after this day'),
-    issuedTo: dayArg('invoices: issued before this day'),
+    issuedTo: dayArg('invoices: issued before this day (only with issuedFrom)'),
     invoiceId: z.string().trim().regex(/^[A-Za-z0-9_-]{1,40}$/).optional().describe('invoices: only this invoice or credit memo number (every other filter is then ignored)'),
     invoiceType: z.preprocess(upper, z.enum(INVOICE_TYPES)).optional().describe('invoices: INV (invoice) | CM (credit memo) | DM (debit memo) | PRO_FORMA'),
     creditLineId: metaIdArg('invoice-groups, credit-allocations: only this credit line (from view credit-lines); default every one'),
@@ -129,8 +129,9 @@ const metaBilling: AgentTool = {
     + 'invoice and legal addresses. events (from, to): charges, failed charges, refunds, chargebacks and payment-method '
     + 'changes from the activity log. The business portfolio\'s billing, only when no other business in Nexus uses that '
     + 'portfolio (else its id and a flag, no call): invoices (monthly invoicing; without Meta\'s PDF links — a person '
-    + 'downloads them in Business settings › Billing and payments), credit-lines, invoice-groups (which ad accounts share '
-    + 'one invoice; never its e-mail addresses), credit-allocations, cards (type and last four only), '
+    + 'downloads them in Business settings › Billing and payments), credit-lines (one another portfolio shares in: no legal '
+    + 'names; its invoice groups and allocations are never read), invoice-groups (which ad accounts share one invoice; never '
+    + 'its e-mail addresses; no tax numbers on a personal-use account), credit-allocations, cards (type and last four only), '
     + 'credit-applications. Meta cannot, by any API: add or change a payment method, add prepaid funds, give card '
     + 'receipts, open or raise a credit line — a person does these in Meta Business settings. Changing the spending limit '
     + 'or invoice groups is a set-meta-… change a person approves. ' + READ_LINE
@@ -180,8 +181,9 @@ const metaAccountAccess: AgentTool = {
     + 'Meta app marked) and the advertisable ones. pages: the Pages promoted under the account. instagram: its Instagram '
     + 'accounts (also through the portfolio) and which of the portfolio\'s ad accounts may advertise for the chosen one. '
     + 'by-person (personId, default Nexus\'s system user): everything that person can reach in the portfolio — ad accounts, '
-    + 'Pages, Instagram accounts, catalogs, pixels, apps, asset groups, folders, datasets, WhatsApp accounts — proving the '
-    + 'system user holds only this business\'s assets. asset-people (asset, assetId): who holds tasks on the chosen Page or '
+    + 'Pages, Instagram accounts, catalogs, pixels, apps, asset groups, folders, datasets, WhatsApp accounts (a catalog, '
+    + 'pixel, app … named only when this portfolio owns it; else its id) — proving the system user holds only this '
+    + 'business\'s assets. asset-people (asset, assetId): who holds tasks on the chosen Page or '
     + 'Instagram account, a catalog of the portfolio or a pixel of the account (a Page may need its own Page token: Meta says '
     + 'so). Meta cannot: add an agency to an ad account (the agency asks, an admin accepts in Business settings). Giving or '
     + 'removing tasks and people is a set-meta-… change a person approves. ' + READ_LINE,

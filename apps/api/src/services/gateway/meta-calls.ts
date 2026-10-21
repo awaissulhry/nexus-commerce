@@ -147,7 +147,7 @@ export const META_RENEWAL_KEYS = ['client_id', 'client_secret', 'grant_type', 's
  *     act_<id>/advertisable_applications and act_<id>/connected_instagram_accounts_with_iabp; bid_amount on
  *     act_<id>/minimum_budgets; app_id, optimization_goal, event_name on act_<id>/campaign_attribution_options;
  *     insights_feature on act_<id>/insights/feature-settings (with …/list-features: GRAPH_HYPHEN_ROUTES);
- *     since, until on act_<id>/activities; start_date, end_date, issue_start_date, issue_end_date, invoice_id, type on
+ *     since, until and category=ACCOUNT (that value only) on act_<id>/activities; start_date, end_date, issue_start_date, issue_end_date, invoice_id, type on
  *     <portfolio>/business_invoices; only_show_pending on <portfolio>/extendedcreditapplications.
  */
 const READ_KEYS = new Set(['fields', 'limit', 'after', 'before', 'summary'])
@@ -300,6 +300,8 @@ const ROUTE_KEYS: Array<{ route: RegExp; keys: ReadonlySet<string>; when?: (quer
   { route: /^act_\d+\/campaign_attribution_options$/, keys: new Set(['app_id', 'optimization_goal', 'event_name']) },
   { route: /^act_\d+\/insights\/feature-settings$/, keys: new Set(['insights_feature']) },
   { route: /^act_\d+\/activities$/, keys: new Set(['since', 'until']) },
+  // Review B4 — the account's own events only: category, and only ACCOUNT.
+  { route: /^act_\d+\/activities$/, keys: new Set(['category']), when: (query) => query.get('category') === 'ACCOUNT' },
   { route: /^\d+\/business_invoices$/, keys: new Set(['start_date', 'end_date', 'issue_start_date', 'issue_end_date', 'invoice_id', 'type']) },
   { route: /^\d+\/extendedcreditapplications$/, keys: new Set(['only_show_pending']) },
 ]

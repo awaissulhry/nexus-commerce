@@ -47,7 +47,7 @@ vi.mock('../../../db.js', () => ({
 
 import { META_ADS_ACCOUNT_TOOLS, META_BILLING_MONEY } from './meta-ads-account.tools.js'
 import { MetaReadError, failureOfAnswer } from '../../marketing/meta-ads/errors.js'
-import { currencyAmountMicros, metaAccountSpendCapMicros, minorToMetaUnits } from '../../marketing/meta-ads/money.js'
+import { currencyAmountMicros, metaAccountSpendCapMicros, minorToMetaStandard, minorToMetaUnits } from '../../marketing/meta-ads/money.js'
 import { metaUrl } from '../../gateway/meta.js'
 import { metaReadOnlyProblem } from '../../gateway/meta-calls.js'
 
@@ -69,6 +69,7 @@ const PIXEL = '400000000000001'
 const CREDIT = '500000000000001'
 const GROUP = '510000000000001'
 const CATALOG = '600000000000001'
+const IG_ASSET = '180000000000001'
 const CHOSEN = {
   connectionId: 'conn-1', state: 'ok', stateText: 'ok', systemUser: { id: SYSTEM_USER, name: 'Nexus system user' }, appId: '300000000000009',
   adAccount: { adAccountId: ACCOUNT, name: 'Shop A ads', currency: 'EUR', timeZone: 'Europe/Rome', businessId: PORTFOLIO },
@@ -86,7 +87,7 @@ function answers(req: Req): unknown {
       owner_business: { id: '9000000000001', name: 'Other portfolio' }, liable_address: { street1: 'Via A 1', city: 'Rome', country: 'IT', vat_tax_id: 'IT00000000000' },
     }
   }
-  if (req.path === `act_${ACCOUNT}` && f === 'agency_client_declaration') {
+  if (req.path === `act_${ACCOUNT}` && f.startsWith('agency_client_declaration')) {
     return { agency_client_declaration: { agency_representing_client: 0, client_name: 'Shop A', client_email_address: 'someone@example.com', client_city: 'Rome' } }
   }
   if (req.path === `act_${ACCOUNT}` && f.includes('amount_spent')) return { currency: 'EUR', amount_spent: '12345', spend_cap: '50000', balance: '2000', min_daily_budget: '100', min_campaign_group_spend_cap: '10000' }
@@ -106,7 +107,8 @@ function answers(req: Req): unknown {
   if (req.path.endsWith('/applications') || req.path.endsWith('/advertisable_applications')) return { data: [{ id: APP, name: 'App A' }] }
   if (req.path.endsWith('/adspixels')) return { data: [{ id: PIXEL }] }
   if (req.path === CATALOG) return { business: { id: PORTFOLIO } }
-  if (req.path.endsWith('/extendedcredits')) return { data: [{ id: CREDIT, credit_type: 'ADS_BUSINESS', balance: { amount: '100.00', currency: 'USD', offsetted_amount: '10000' } }] }
+  if (req.path.endsWith('/extendedcredits')) return { data: [{ id: CREDIT, credit_type: 'ADS_BUSINESS', owner_business: { id: PORTFOLIO, name: 'Shop A' }, legal_entity_name: 'Shop A ltd', balance: { amount: '100.00', currency: 'USD', offsetted_amount: '10000' } }] }
+  if (req.path.endsWith('/owned_instagram_assets')) return { data: [{ id: IG_ASSET, ig_user_id: IG }] }
   if (req.path.endsWith('/extended_credit_invoice_groups')) return { data: [{ id: GROUP, name: 'Group A', emails: ['a@example.com', 'b@example.com'] }] }
   if (req.path === `${GROUP}/ad_accounts`) return { data: [{ account_id: ACCOUNT, name: 'Shop A ads' }, { account_id: '5550001112', name: 'Other ads' }] }
   if (req.path.endsWith('/insights/feature-settings/list-features')) return { data: [{ feature_name: 'comscore', feature_type: 'breakdown' }, { feature_name: 'impression_device', feature_type: 'breakdown' }] }
@@ -159,7 +161,10 @@ describe('every view asks only what the real gateway lets through', () => {
     // Only the chosen account, its portfolio, the chosen Page / Instagram account, a checked catalog or pixel, the system user,
     // an assigned person, the portfolio's credit line and invoice group.
     const roots = new Set(h.calls.map((c) => c.path.split('/')[0]))
-    expect([...roots].sort()).toEqual([`act_${ACCOUNT}`, PERSON, SYSTEM_USER, PAGE, IG, CREDIT, GROUP, PIXEL, PORTFOLIO, CATALOG].sort())
+    expect([...roots].sort()).toEqual([`act_${ACCOUNT}`, PERSON, SYSTEM_USER, PAGE, IG, IG_ASSET, CREDIT, GROUP, PIXEL, PORTFOLIO, CATALOG].sort())
+    // Instagram people are read on the portfolio's Instagram business asset, never on the IG user node (review B1).
+    expect(h.calls.some((c) => c.path === `${IG}/assigned_users`)).toBe(false)
+    expect(h.calls.find((c) => c.path === `${IG_ASSET}/assigned_users`)?.query?.business).toBe(PORTFOLIO)
   })
 })
 
@@ -173,16 +178,27 @@ describe('meta-ad-account', () => {
       return answers(req)
     }
     const out = data(await run('meta-ad-account', { view: 'settings' }))
-    expect(out.missing).toEqual([{ part: 'sdkOnly', sentence: expect.stringMatching(/nonexisting field/) }])
+    expect(out.missing).toEqual([{ part: 'sdkAddresses', sentence: expect.stringMatching(/nonexisting field/) }])
+    // The other SDK-only groups still answer (review B3): another business's portfolio is its id and the flag.
+    expect(out.ownerPortfolio).toEqual({ portfolioId: '9000000000001', takenByAnotherBusiness: true })
     expect(out.agencyDeclaration).toMatchObject({ clientName: 'Shop A', agencyRepresentingClient: false })
     expect(JSON.stringify(out)).not.toMatch(/someone@example\.com|IT00000000000/)
     expect(out.promotable.pages).toEqual([{ pageId: PAGE, chosenHere: true, takenByAnotherBusiness: false }, { pageId: '120000000000099', takenByAnotherBusiness: true }])
     expect(out.portfolio).toMatchObject({ portfolioId: PORTFOLIO, chosenAccountsPortfolio: true })
     expect(out.nexusRole).toMatch(/^Admin/)
-    expect(h.calls.filter((c) => fieldsOf(c) === 'agency_client_declaration')).toHaveLength(1)
+    expect(h.calls.filter((c) => fieldsOf(c).startsWith('agency_client_declaration'))).toHaveLength(1)
+    // Its own sub-fields, never the client's e-mail (review A4).
+    expect(h.calls.find((c) => fieldsOf(c).startsWith('agency_client_declaration'))?.query?.fields).toMatch(/^agency_client_declaration\{agency_representing_client,.*\}$/)
+  })
+  it('when Meta refuses the declaration\'s sub-field list, the whole field is read once more and the e-mail is still dropped', async () => {
+    h.answer = (req) => (fieldsOf(req).startsWith('agency_client_declaration{') ? refusedByMeta('(#100) Unknown fields') : answers(req))
+    const out = data(await run('meta-ad-account', { view: 'settings' }))
+    expect(out.agencyDeclaration).toMatchObject({ clientName: 'Shop A' })
+    expect(JSON.stringify(out)).not.toMatch(/someone@example\.com/)
+    expect(h.calls.filter((c) => fieldsOf(c).startsWith('agency_client_declaration')).map((c) => fieldsOf(c).length > 30)).toEqual([true, false])
   })
   it('a declaration Meta refuses (not a Business Manager admin) costs only itself', async () => {
-    h.answer = (req) => (fieldsOf(req) === 'agency_client_declaration' ? refusedByMeta('(#200) Requires business manager admin', '200', 'forbidden') : answers(req))
+    h.answer = (req) => (fieldsOf(req).startsWith('agency_client_declaration') ? refusedByMeta('(#200) Requires business manager admin', '200', 'forbidden') : answers(req))
     const out = data(await run('meta-ad-account', { view: 'settings' }))
     expect(out.name).toBe('Shop A ads')
     expect(out.missing).toEqual([{ part: 'agencyDeclaration', sentence: expect.stringMatching(/Business Manager admin/) }])
@@ -201,7 +217,11 @@ describe('meta-ad-account', () => {
   it('attribution-options needs an app of the account: no app, or another app, is refused before the read', async () => {
     expect((await run('meta-ad-account', { view: 'attribution-options' })).error).toMatch(/APP's events only/)
     expect((await run('meta-ad-account', { view: 'attribution-options', appId: '300000000000777', optimizationGoal: 'APP_INSTALLS' })).error).toMatch(/not one connected/)
+    expect((await run('meta-ad-account', { view: 'attribution-options', appId: APP, optimizationGoal: 'APP_INSTALLS', eventName: 'other' })).error).toMatch(/custom app event/)
     expect(h.calls.some((c) => c.path.endsWith('/campaign_attribution_options'))).toBe(false)
+    h.answer = (req) => (req.path.endsWith('/campaign_attribution_options') ? { data: [{ value: '7d_click', is_eligible: true }] } : answers(req))
+    expect(data(await run('meta-ad-account', { view: 'attribution-options', appId: APP, optimizationGoal: 'APP_INSTALLS' })).options).toEqual([{ value: '7d_click', eligible: true }])
+    expect(h.calls.find((c) => c.path.endsWith('/campaign_attribution_options'))?.query?.fields).toBe('is_eligible,value')
   })
   it('insights-features: what is available, which is on and from when', async () => {
     const out = data(await run('meta-ad-account', { view: 'insights-features' }))
@@ -210,6 +230,10 @@ describe('meta-ad-account', () => {
       { name: 'impression_device', type: 'breakdown', unlocks: 'breakdowns=impression_device', enabled: false, dataFrom: null },
     ])
     expect(out.notes.join(' ')).toMatch(/EMPTY with no error/)
+    // Review A5 — reads only: exactly the two GETs, each one the gateway passes as a read.
+    expect(h.calls.map((c) => c.path).sort()).toEqual([`act_${ACCOUNT}/insights/feature-settings`, `act_${ACCOUNT}/insights/feature-settings/list-features`])
+    for (const c of h.calls) expect(metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, (c.query ?? {}) as never), kind: 'read' })).toBeNull()
+    expect(metaReadOnlyProblem({ method: 'POST', url: metaUrl(`act_${ACCOUNT}/insights/feature-settings`), kind: 'read' })).toMatch(/not a read/)
   })
 })
 
@@ -252,15 +276,60 @@ describe('meta-billing', () => {
     const out = data(await run('meta-billing', { view: 'invoices' }))
     expect(out.invoices[0]).toMatchObject({ invoiceNumber: '1234', amountMeta: '150.00', amountDueCents: 2000, amountDueCurrency: 'EUR', adAccounts: [{ adAccountId: ACCOUNT, chosenHere: true }] })
     expect(h.calls.some((c) => /download/.test(fieldsOf(c)))).toBe(false)
+    expect((await run('meta-billing', { view: 'invoices', issuedTo: '2026-10-01' })).error).toMatch(/name issuedFrom too/)
+  })
+  it('tax: a personal-use account shows no VAT or registration numbers; is_tax_id_required is its own group', async () => {
+    h.answer = (req) => (fieldsOf(req).startsWith('tax_id') ? { tax_id: 'IT00000000000', tax_id_status: 5, is_personal: 1 } : fieldsOf(req).startsWith('liable_address') || fieldsOf(req).includes(',liable_address') ? { liable_address: { city: 'Rome', vat_tax_id: 'IT00000000000' } } : answers(req))
+    const personal = data(await run('meta-billing', { view: 'tax' }))
+    expect(personal).toMatchObject({ taxId: null, taxIdStatus: 5, personalUse: true })
+    expect(JSON.stringify(personal)).not.toMatch(/IT00000000000/)
+    h.answer = (req) => (/tax_id/.test(fieldsOf(req)) ? { tax_id: 'IT00000000000', tax_id_status: 3, is_personal: 0, liable_address: { city: 'Rome', vat_tax_id: 'IT00000000000' } } : answers(req))
+    h.calls.length = 0
+    const business = data(await run('meta-billing', { view: 'tax' }))
+    expect(business).toMatchObject({ taxId: 'IT00000000000', addresses: { liable: { vatTaxId: 'IT00000000000' } } })
+    h.calls.length = 0
+    h.answer = (req) => (fieldsOf(req).includes('is_tax_id_required') && fieldsOf(req).includes('tax_id,') ? refusedByMeta('(#200) Requires ADVERTISE', '200', 'forbidden') : fieldsOf(req) === 'is_tax_id_required' ? refusedByMeta('(#200) Requires ADVERTISE', '200', 'forbidden') : /tax_id/.test(fieldsOf(req)) ? { tax_id_status: 3 } : answers(req))
+    expect(data(await run('meta-billing', { view: 'tax' })).missing).toEqual([{ part: 'taxIdRequired', sentence: expect.stringMatching(/ADVERTISE/) }])
+  })
+  it('credit lines another portfolio owns: no legal names; one another Nexus business owns: no amounts; their groups and allocations are never read', async () => {
+    h.taken = [{ product: 'PORTFOLIO', id: '9000000000005' }]
+    h.answer = (req) => (req.path.endsWith('/extendedcredits') ? { data: [
+      { id: CREDIT, owner_business: { id: PORTFOLIO, name: 'Shop A' }, legal_entity_name: 'Shop A ltd', balance: { amount: '1.00', currency: 'USD', offsetted_amount: '100' } },
+      { id: '500000000000002', owner_business: { id: '9000000000004', name: 'Agency B' }, legal_entity_name: 'Agency B ltd', balance: { amount: '2.00', currency: 'USD', offsetted_amount: '200' } },
+      { id: '500000000000003', owner_business: { id: '9000000000005', name: 'Other business' }, legal_entity_name: 'Other ltd', balance: { amount: '3.00', currency: 'USD', offsetted_amount: '300' } },
+    ] } : answers(req))
+    const lines = data(await run('meta-billing', { view: 'credit-lines' })).creditLines
+    expect(lines[0]).toMatchObject({ creditLineId: CREDIT, ownedByThisPortfolio: true, legalEntityName: 'Shop A ltd', balanceCents: 100 })
+    expect(lines[1]).toMatchObject({ creditLineId: '500000000000002', ownedByThisPortfolio: false, balanceCents: 200, owner: { portfolioId: '9000000000004', name: 'Agency B' } })
+    expect(lines[1].legalEntityName).toBeUndefined()
+    expect(lines[2]).toEqual({ creditLineId: '500000000000003', creditType: null, accessRevoked: null, automated: null, owner: { portfolioId: '9000000000005', takenByAnotherBusiness: true }, ownedByThisPortfolio: false })
+    h.calls.length = 0
+    const groups = data(await run('meta-billing', { view: 'invoice-groups' }))
+    expect(groups.creditLinesOfOtherPortfolios).toEqual([{ creditLineId: '500000000000002', ownedByAnotherPortfolio: true }, { creditLineId: '500000000000003', ownedByAnotherPortfolio: true }])
+    const allocations = data(await run('meta-billing', { view: 'credit-allocations', creditLineId: '500000000000002' }))
+    expect(allocations).toMatchObject({ allocations: [], creditLinesOfOtherPortfolios: [{ creditLineId: '500000000000002', ownedByAnotherPortfolio: true }] })
+    expect(h.calls.filter((c) => /^50000000000000[23]\//.test(c.path))).toEqual([])
+    expect(h.calls.filter((c) => c.path.startsWith(`${CREDIT}/`)).map((c) => c.path)).toEqual([`${CREDIT}/extended_credit_invoice_groups`])
+  })
+  it('invoice groups of a personal-use account show no tax numbers in their addresses', async () => {
+    h.answer = (req) => {
+      if (fieldsOf(req) === 'is_personal,tax_id_status') return { is_personal: 1 }
+      if (req.path.endsWith('/extended_credit_invoice_groups')) return { data: [{ id: GROUP, name: 'Group A', bill_to_address: { city: 'Rome', vat_tax_id: 'IT00000000000' } }] }
+      return answers(req)
+    }
+    const out = data(await run('meta-billing', { view: 'invoice-groups' }))
+    expect(out.invoiceGroups[0].billTo).toMatchObject({ city: 'Rome' })
+    expect(JSON.stringify(out)).not.toMatch(/IT00000000000/)
   })
   it('events: the billing ones of the activity log, the days as Unix seconds', async () => {
     h.answer = (req) => (req.path.endsWith('/activities') ? { data: [
-      { event_type: 'ad_account_billing_charge', event_time: '2026-10-02T10:00:00+0000', actor_name: 'Person A', extra_data: '{"amount":"1000","currency":"EUR"}' },
+      { event_type: 'ad_account_billing_charge', event_time: '2026-10-02T10:00:00+0000', actor_name: 'Person A', extra_data: '{"amount":"1000","currency":"EUR","card":{"last4":"0000"},"note_x":"y"}' },
       { event_type: 'update_ad_set_budget', event_time: '2026-10-03T10:00:00+0000' },
     ] } : answers(req))
     const out = data(await run('meta-billing', { view: 'events', from: '2026-10-01', to: '2026-10-20' }))
-    expect(out.events).toEqual([expect.objectContaining({ type: 'ad_account_billing_charge', metaRaw: { amount: '1000', currency: 'EUR' } })])
-    expect(h.calls.find((c) => c.path.endsWith('/activities'))?.query).toMatchObject({ since: Date.UTC(2026, 9, 1) / 1000, until: Date.UTC(2026, 9, 21) / 1000 })
+    // Review A4 — only the plain keys Nexus knows; a nested object or an unknown key is left out and counted.
+    expect(out.events).toEqual([expect.objectContaining({ type: 'ad_account_billing_charge', metaRaw: { amount: '1000', currency: 'EUR' }, detailsLeftOut: 2 })])
+    expect(h.calls.find((c) => c.path.endsWith('/activities'))?.query).toMatchObject({ category: 'ACCOUNT', since: Date.UTC(2026, 9, 1) / 1000, until: Date.UTC(2026, 9, 21) / 1000 })
     expect((await run('meta-billing', { view: 'events', from: '2025-01-01', to: '2026-10-20' })).error).toMatch(/at most 366 days/)
   })
 })
@@ -287,13 +356,30 @@ describe('meta-account-access', () => {
     h.answer = (req) => (req.path === `${SYSTEM_USER}/assigned_ad_accounts` ? { data: [{ account_id: ACCOUNT, name: 'Shop A ads' }, { account_id: '5550001112', name: 'Other ads' }] } : answers(req))
     const out = data(await run('meta-account-access', { view: 'by-person', kinds: ['adAccounts'] }))
     expect(out).toMatchObject({ personId: SYSTEM_USER, nexusSystemUser: true, assets: { adAccounts: [{ id: ACCOUNT, chosenHere: true }, { id: '5550001112', takenByAnotherBusiness: true }] } })
+    h.calls.length = 0
     expect((await run('meta-account-access', { view: 'by-person', personId: '100000000000999' })).error).toMatch(/not assigned to the chosen ad account/)
+    // Review A5 — refused before any read of what that person reaches.
+    expect(h.calls.map((c) => c.path)).toEqual([`act_${ACCOUNT}/assigned_users`])
+    expect(h.calls.some((c) => /^100000000000999\//.test(c.path))).toBe(false)
+  })
+  it('by-person: a catalog, pixel, app … shows its name only when this portfolio owns it (review A2)', async () => {
+    h.answer = (req) => {
+      if (req.path === `${SYSTEM_USER}/assigned_product_catalogs`) return { data: [{ id: CATALOG, name: 'Catalog A', owner_business: { id: PORTFOLIO } }, { id: '600000000000009', name: 'Catalog of another', owner_business: { id: '9000000000007' } }, { id: '600000000000010', name: 'No owner said' }] }
+      if (req.path === `${SYSTEM_USER}/assigned_monetization_properties`) return { data: [{ id: '650000000000001' }] }
+      return answers(req)
+    }
+    const out = data(await run('meta-account-access', { view: 'by-person', kinds: ['catalogs', 'monetization'] }))
+    expect(out.assets.catalogs).toEqual([{ id: CATALOG, name: 'Catalog A', ownedByThisPortfolio: true }, { id: '600000000000009', takenByAnotherBusiness: null }, { id: '600000000000010', takenByAnotherBusiness: null }])
+    expect(out.assets.monetization).toEqual([{ id: '650000000000001', takenByAnotherBusiness: null }])
+    expect(JSON.stringify(out)).not.toMatch(/Catalog of another|No owner said/)
+    expect(h.calls.find((c) => c.path === `${SYSTEM_USER}/assigned_product_catalogs`)?.query?.fields).toBe('id,name,owner_business{id}')
   })
   it('by-person in a portfolio another business shares: catalogs and the rest are ids only', async () => {
     h.taken = [{ product: 'PORTFOLIO', id: PORTFOLIO }]
-    h.answer = (req) => (req.path.endsWith('/assigned_product_catalogs') ? { data: [{ id: CATALOG, name: 'Catalog A' }] } : answers(req))
+    h.answer = (req) => (req.path.endsWith('/assigned_product_catalogs') ? { data: [{ id: CATALOG, name: 'Catalog A', owner_business: { id: PORTFOLIO } }] } : answers(req))
     const out = data(await run('meta-account-access', { view: 'by-person', kinds: ['catalogs'] }))
     expect(out.assets.catalogs).toEqual([{ id: CATALOG, takenByAnotherBusiness: null }])
+    expect(JSON.stringify(out)).not.toMatch(/Catalog A/)
   })
   it('asset-people: only the chosen Page / Instagram account, a catalog of the portfolio, a pixel of the account', async () => {
     expect((await run('meta-account-access', { view: 'asset-people', asset: 'page', assetId: '120000000000099' })).error).toMatch(/Only the Facebook Page this business chose/)
@@ -319,6 +405,12 @@ describe('meta-account-access', () => {
     expect(out.chosenAccountMayAdvertiseFrom).toEqual([{ adAccountId: ACCOUNT, name: 'Shop A ads', chosenHere: true, takenByAnotherBusiness: false }, { adAccountId: '5550001112', takenByAnotherBusiness: true }])
     expect(out.connected).toEqual([{ instagramId: IG, username: 'shop_a', chosenHere: true, takenByAnotherBusiness: false }, { instagramId: '170000000000099', takenByAnotherBusiness: true }])
     expect(h.calls.find((c) => c.path === `${IG}/authorized_adaccounts`)?.query?.business).toBe(PORTFOLIO)
+    expect(h.calls.find((c) => c.path === `act_${ACCOUNT}/instagram_accounts`)?.query?.summary).toBe('total_count')
+  })
+  it('asset-people instagram: the chosen account must be an Instagram asset of the portfolio (owned, else client)', async () => {
+    h.answer = (req) => (req.path.endsWith('_instagram_assets') ? { data: [{ id: IG_ASSET, ig_user_id: '170000000000099' }] } : answers(req))
+    expect((await run('meta-account-access', { view: 'asset-people', asset: 'instagram' })).error).toMatch(/not an Instagram asset of the chosen ad account's business portfolio/)
+    expect(h.calls.map((c) => c.path)).toEqual([`${PORTFOLIO}/owned_instagram_assets`, `${PORTFOLIO}/client_instagram_assets`])
   })
 })
 
@@ -328,6 +420,19 @@ describe('the units (facts F1 X4, SDK currencyamount.py)', () => {
     expect(metaAccountSpendCapMicros('2350', 'JPY')).toBe(2_350_000_000n)
     expect(metaAccountSpendCapMicros('0', 'EUR')).toBeNull()
     expect(metaAccountSpendCapMicros(undefined, 'EUR')).toBeNull()
+    // BHD: Meta's offset is 100 (hundredths), so "2350" is 23.50 BHD.
+    expect(metaAccountSpendCapMicros('2350', 'BHD')).toBe(23_500_000n)
+  })
+  it('minor units → the standard-unit string Meta reads on a spend_cap WRITE (set-meta-spend-cap, step 40)', () => {
+    expect(minorToMetaStandard(50000, 'EUR')).toBe('500.00')
+    expect(minorToMetaStandard(5, 'EUR')).toBe('0.05')
+    expect(minorToMetaStandard(0, 'EUR')).toBe('0.00')
+    expect(minorToMetaStandard(1250, 'JPY')).toBe('1250')
+    expect(minorToMetaStandard(0, 'JPY')).toBe('0')
+    expect(minorToMetaStandard(1250, 'BHD')).toBe('1.250')
+    expect(minorToMetaStandard(5, 'BHD')).toBe('0.005')
+    expect(minorToMetaStandard(-250, 'USD')).toBe('-2.50')
+    expect(minorToMetaStandard(1.5, 'EUR')).toBeNull()
   })
   it('minor units → Meta\'s offset units, only when whole', () => {
     expect(minorToMetaUnits(1250, 'EUR')).toBe(1250)
