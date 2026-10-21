@@ -41,6 +41,11 @@
  * remove-meta-ads-items' deletes: that same DELETE on a person's explicit ask, and a creative's, an image's or a video's of
  * the chosen ad account, a video's caption languages and an Instant Experience part's (meta-remove-rules.ts; a DELETE's
  * parameters go as its judged form body). Every other non-GET is refused; so is every other batch (metaBatchProblem).
+ * Step 23 adds create-meta-media's uploads (meta-media-rules.ts): an image's
+ * bytes, a video's public link, a video of the chosen Instagram account, Meta's video-ads upload — whose middle call goes
+ * to Meta's resumable upload host `rupload.facebook.com` (its own exact judge: the link as Meta's `file_url` header, the
+ * token in its `Authorization: OAuth` header, no body) — a folder of the portfolio and captions; its undo sends through
+ * step 22's removal rules.
  * Step 7 adds the one POST that is a read: a report run of the chosen ad account's numbers (POST /act_<id>/insights —
  * Meta makes an AdReportRun and changes nothing on the account), declared a read, every key and value judged on the
  * insights lists, and its ad account checked to be the chosen one (gateway.ts 3b).
@@ -60,6 +65,7 @@ import { metaCreateWriteRules } from './meta-create-rules.js'
 import { META_REMOVE_WRITE_RULES } from './meta-remove-rules.js'
 import { metaLabelsWriteRules } from './meta-labels-rules.js'
 import { META_OPTIMIZE_WRITE_RULES } from './meta-optimize-rules.js'
+import { META_IMAGE_MAX_BODY, META_MEDIA_WRITE_RULES, metaRuploadVerdict } from './meta-media-rules.js'
 import { INSIGHTS_KEY_CHECKS, MAX_REPORT_RUN_BODY, REPORT_BUILDER_KEY_CHECKS, reportRunProblem } from '../meta/meta-insights-lists.js'
 
 /** Query keys only the gateway sets. */
@@ -936,6 +942,27 @@ export interface MetaWriteRule {
   /** Step 18 — the ids inside the body, each checked to be of the chosen ad account by the gateway before anything goes. */
   ids?: (params: ReadonlyMap<string, string>) => MetaWriteBodyId[]
   /**
+   * Step 23 — the media ids inside the body (an Instagram media, a video upload Nexus started, a media-library folder),
+   * each checked by the gateway to be the business's own before anything goes (gateway.ts metaMediaAssetsProblem).
+   */
+  assets?: (params: ReadonlyMap<string, string>) => MetaWriteAsset[]
+  /**
+   * Step 23 — a call on an EDGE of the chosen ad account, its portfolio or a library video (an upload, a folder, captions):
+   * it edits no object, so Meta's one-edit-per-object-every-30-s gap does not hold it (a hold Meta itself answers still does).
+   */
+  edgeCall?: boolean
+  /** Step 23 — its body is bulky (an image's bytes): the ledger keeps its length only, never the body itself. */
+  bulky?: boolean
+  /**
+   * Step 23 (review B1) — ONE file part the gateway encodes itself (Meta's `-F 'key=@file'`): the caller passes the file's
+   * TEXT as form key `key` and its file name as `nameKey`; the gateway judges both (the name against `name`, at most
+   * `maxBytes` UTF-8 bytes, `judge`) and sends a multipart body: `key` as a file part named by `nameKey`'s value with
+   * `contentType`, every other judged key as a plain field (`nameKey` itself is never sent). No caller header, nothing of
+   * the file stored or logged (with `bulky`). Used by MD-026's captions; lane C4 (step 39: a feed's CSV, a block list) can
+   * reuse it.
+   */
+  file?: { key: string; nameKey: string; name: RegExp; contentType: string; maxBytes: number; judge: (text: string) => string | null }
+  /**
    * Step 7 — a POST that changes nothing on the account (a report run: Meta makes an AdReportRun, a background read):
    * declared a read, never braked, held or retried like a change; the gateway checks the path's ad account is the chosen one.
    */
@@ -943,7 +970,7 @@ export interface MetaWriteRule {
 }
 
 /** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
-export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind
+export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind | MetaOptimizeKind | MetaMediaWriteKind
 /** Step 28 — what only the recommendation and experiment tools name: a business portfolio (a new study), a study, a
  * Page, a Page video test (an apply names the chosen ad account itself, `adaccount`). */
 export type MetaOptimizeKind = 'business' | 'adstudy' | 'page' | 'pagevideotest'
@@ -951,6 +978,14 @@ export type MetaOptimizeKind = 'business' | 'adstudy' | 'page' | 'pagevideotest'
 export type MetaRemoveKind = 'creative' | 'video' | 'canvaselement'
 /** Step 21 — what set-meta-labels and set-meta-value-rules change by its own id: a label, a value rule set of the chosen ad account. */
 export type MetaLabelsKind = 'adlabel' | 'valueruleset'
+/**
+ * Step 23 — what only create-meta-media names: a video upload Nexus started (Meta's rupload host, a video-ads finish). An
+ * upload on the ad account is step 19's `adaccount`, a video of the library (its captions) step 22's `video`, a folder's
+ * business portfolio (`<business>/creative_folders`) step 28's `business`.
+ */
+export type MetaMediaWriteKind = 'startedvideo'
+/** Step 23 — a media id inside a change's body, and what the gateway checks it is (meta-media-rules.ts). */
+export interface MetaWriteAsset { id: string; kind: 'instagrammedia' | 'startedvideo' | 'creativefolder' }
 /** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
 export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' | 'campaign' | 'page' | 'customconversion' | 'video' | MetaLabelsBodyKind | MetaOptimizeBodyKind }
 /**
@@ -1041,6 +1076,20 @@ export interface MetaJudgedWrite {
   ids?: MetaWriteBodyId[]
   /** Step 18 — a DELETE (a budget schedule's; step 22: remove-meta-ads-items'); every other change is a POST. */
   method?: 'DELETE'
+  /** Step 23 — the media ids inside the body (the gateway checks each). */
+  assets?: MetaWriteAsset[]
+  /** Step 23 — a call on an edge of the ad account or portfolio: no 30-s per-object gap (MetaWriteRule.edgeCall). */
+  edgeCall?: true
+  /** Step 23 — the ledger keeps the body's length only (an image's bytes). */
+  bulky?: true
+  /**
+   * Step 23 — Meta's resumable upload host (rupload.facebook.com, meta-media-rules.ts): the token goes in its
+   * `Authorization: OAuth` header (the gateway adds it), the judged `headers` with it, and no body.
+   */
+  host?: 'rupload'
+  headers?: Record<string, string>
+  /** Step 23 — a write with a file part (MetaWriteRule.file): the gateway sends this multipart body instead of `body`. */
+  multipart?: { fields: Array<[string, string]>; file: { key: string; filename: string; contentType: string; text: string } }
   /** Step 7 — a report run of the ad account `objectId` (digits): it changes nothing; the gateway checks the account is the chosen one. */
   reportRun?: true
 }
@@ -1060,6 +1109,9 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   const method = input.method.toUpperCase()
   if (input.headers && Object.keys(input.headers).length > 0) return refuse('a Meta call carries no header of the caller\'s own')
   if (input.auth !== undefined && input.auth !== 'account') return refuse('a Meta change goes only with the account\'s own system-user token')
+  // Step 23 — Meta's resumable video upload host has its own exact judge (meta-media-rules.ts); null: not that host.
+  const upload = metaRuploadVerdict(input)
+  if (upload) return upload
   // The Graph root with its version (`…/v26.0/`, Meta's batch endpoint) is judged as the root, so a batch is named as one.
   const graph = graphRouteOf(input.url.replace(/^(https:\/\/graph\.facebook\.com\/v\d+\.\d+)\/(?=$|[?#])/i, '$1'))
   if (!graph) return refuse('Nexus calls Meta only at https://graph.facebook.com')
@@ -1096,12 +1148,18 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
     && r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k))
     && (!r.anyOf || r.anyOf.some((k) => parsed.params.has(k))))
   if (!rule) {
+    // Step 23 — a POST on a media edge that matches none of create-meta-media's rules (nor step 22's), in its own words.
+    if (method === 'POST' && /^act_\d+\/(adimages|advideos|video_ads)$|^\d+\/(creative_folders|captions)$/.test(graph.route)) {
+      return refuse(`the only Meta change Nexus sends on a media edge is create-meta-media's upload, named with its kind (an image's bytes, a video's link or the chosen Instagram account's video, a video-ads upload, a portfolio folder, captions, a video's default caption), or a removal by remove-meta-ads-items' rules, each with its own keys; this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    }
     return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys), or a create or a copy (create-meta-campaign, create-meta-ad-set, copy-meta-ads: each its own edge and keys), or a delete a person asked for (remove-meta-ads-items: each its own path and keys), or a label, value rule or reach & frequency change (set-meta-labels, set-meta-value-rules, create-meta-reach-frequency: each its own path and keys), or a report run of the chosen ad account's numbers (meta-ads-report: POST /act_<id>/insights, which changes nothing); this one is ${method} /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
   }
   // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
   const maxBody = rule.maxBody ?? MAX_WRITE_BODY
   if ((input.body as string).length > maxBody) return refuse(`a Meta change body is at most ${maxBody} characters`)
   for (const [key, value] of parsed.params) {
+    // Step 23 — a file's text is judged as the file (rule.file, below), never as a field.
+    if (rule.file?.key === key) continue
     const pattern = rule.text && Object.prototype.hasOwnProperty.call(rule.text, key) ? rule.text[key] : null
     if (pattern) {
       if (!pattern.test(value)) return refuse(`the value of "${key}" is printable text (no control or format characters)`)
@@ -1109,6 +1167,15 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   }
   const problem = rule.values(parsed.params)
   if (problem) return refuse(problem)
+  // Step 23 — the file part: its name, its size and its own judge (the text is never quoted back).
+  if (rule.file) {
+    const text = parsed.params.get(rule.file.key) ?? ''
+    const fileName = parsed.params.get(rule.file.nameKey) ?? ''
+    if (!rule.file.name.test(fileName)) return refuse(`${rule.file.nameKey} is not a file name this change sends`)
+    if (Buffer.byteLength(text, 'utf8') > rule.file.maxBytes) return refuse(`${rule.file.key} is at most ${rule.file.maxBytes.toLocaleString('en')} bytes`)
+    const fileProblem = rule.file.judge(text)
+    if (fileProblem) return refuse(fileProblem)
+  }
   const check = parsed.params.has('execution_options')
   if (rule.reportRun) {
     if (input.kind !== 'read') return refuse('a report run changes nothing on Meta and goes as a read; this one is declared otherwise')
@@ -1122,7 +1189,14 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   if (rule.reportRun) return { write: { rule: rule.name, objectId: graph.segments[0].replace(/^act_/i, ''), check: false, body, budget: false, reportRun: true } }
   const budget = typeof rule.budget === 'function' ? rule.budget(parsed.params) : rule.budget
   const ids = rule.ids?.(parsed.params) ?? []
-  return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}), ...(method === 'DELETE' ? { method: 'DELETE' as const } : {}) } }
+  // Step 23 — the media ids inside the body, an edge call, a bulky body, a file part.
+  const assets = rule.assets?.(parsed.params) ?? []
+  const multipart = rule.file
+    ? { fields: order.filter((k) => k !== rule.file!.key && k !== rule.file!.nameKey).map((k): [string, string] => [k, parsed.params.get(k)!]), file: { key: rule.file.key, filename: parsed.params.get(rule.file.nameKey)!, contentType: rule.file.contentType, text: parsed.params.get(rule.file.key)! } }
+    : null
+  const media = { ...(assets.length ? { assets } : {}), ...(rule.edgeCall ? { edgeCall: true as const } : {}), ...(rule.bulky ? { bulky: true as const } : {}), ...(multipart ? { multipart } : {}) }
+  // A write with a file goes as its multipart body only (`body` stays empty: nothing else of it is ever sent).
+  return { write: { rule: rule.name, objectId: graph.segments[0], check, body: multipart ? '' : body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}), ...(method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...media } }
 }
 
 /** Step 18 — a rule with kinds matches only a call that names one of them; the status rule (no kinds) a campaign, ad set or ad. */
@@ -1130,14 +1204,16 @@ const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kin
   ? !!kind && (rule.kinds as readonly string[]).includes(kind)
   : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
 /** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
-const MAX_ANY_WRITE_BODY = 16_000
+// Step 23 — an image upload's bytes (META_IMAGE_MAX_BODY) are the largest body.
+const MAX_ANY_WRITE_BODY = Math.max(16_000, META_IMAGE_MAX_BODY)
 /** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts), step 19's, step 22's, step 21's (meta-labels-rules.ts) and step 28's (meta-optimize-rules.ts) — read when judged, never at load. */
-const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...metaCreateWriteRules(), ...META_REMOVE_WRITE_RULES, ...metaLabelsWriteRules(), ...META_OPTIMIZE_WRITE_RULES]
+// Step 23 — then create-meta-media's media rules (meta-media-rules.ts).
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES, ...metaCreateWriteRules(), ...META_REMOVE_WRITE_RULES, ...metaLabelsWriteRules(), ...META_OPTIMIZE_WRITE_RULES, ...META_MEDIA_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {
   if (typeof body !== 'string' || !body) return { problem: 'a Meta change carries its parameters as a form body' }
-  if (body.length > MAX_ANY_WRITE_BODY) return { problem: `a Meta change body is at most ${MAX_WRITE_BODY} characters (${MAX_ANY_WRITE_BODY} for the largest settings change)` }
+  if (body.length > MAX_ANY_WRITE_BODY) return { problem: `a Meta change body is at most ${MAX_WRITE_BODY} characters (${MAX_ANY_WRITE_BODY} for the largest change, an image upload)` }
   const params = new Map<string, string>()
   for (const [key, value] of new URLSearchParams(body)) {
     if (!/^[a-z_][a-z0-9_]*$/.test(key)) return { problem: `the body key "${key.slice(0, 40)}" is not one Meta reads (lower-case letters, digits and _)` }

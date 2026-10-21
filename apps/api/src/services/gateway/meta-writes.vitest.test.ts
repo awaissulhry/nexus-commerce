@@ -412,7 +412,7 @@ describe('step 7 — a report run (POST /act_<id>/insights) is a READ of the cho
   })
   it('merge with steps 18–22 — no change rule takes a report-run path, and the report-run rule takes no change path', () => {
     // Every kind a change may name (steps 17–22 and step 28's business, adstudy, page, pagevideotest).
-    const KINDS = [undefined, 'campaign', 'adset', 'ad', 'adaccount', 'highdemandperiod', 'creative', 'video', 'canvaselement', 'adlabel', 'valueruleset', 'business', 'adstudy', 'page', 'pagevideotest']
+    const KINDS = [undefined, 'campaign', 'adset', 'ad', 'adaccount', 'highdemandperiod', 'creative', 'video', 'canvaselement', 'adlabel', 'valueruleset', 'business', 'adstudy', 'page', 'pagevideotest', 'startedvideo']
     const body = form({ level: 'campaign', fields: 'spend' })
     for (const objectKind of KINDS) {
       // As a write (a change's kind): never judged a change, whatever kind the call names.
@@ -427,8 +427,16 @@ describe('step 7 — a report run (POST /act_<id>/insights) is a READ of the cho
     expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'read', body, objectKind: 'adaccount' })).toHaveProperty('problem')
     expect(metaWriteVerdict({ method: 'POST', url: RUN_URL, kind: 'read', body })).toMatchObject({ write: { rule: 'insights.reportRun', reportRun: true } })
     // The report-run body on any other path (an object's insights, the account's create edges, the account itself): refused.
-    for (const path of [`${CAMPAIGN}/insights`, 'act_1234567890/campaigns', 'act_1234567890/adsets', 'act_1234567890', CAMPAIGN, 'act_1234567890/recommendations', `${CAMPAIGN}/ad_studies`, `${CAMPAIGN}/ab_tests`]) {
+    for (const path of [`${CAMPAIGN}/insights`, 'act_1234567890/campaigns', 'act_1234567890/adsets', 'act_1234567890', CAMPAIGN, 'act_1234567890/recommendations', `${CAMPAIGN}/ad_studies`, `${CAMPAIGN}/ab_tests`,
+      // Step 23's media edges.
+      'act_1234567890/adimages', 'act_1234567890/advideos', 'act_1234567890/video_ads', '9876543210/creative_folders', '120000000000501/captions']) {
       for (const kind of ['read', 'write']) expect(metaWriteVerdict({ method: 'POST', url: `${BASE}/${path}`, kind, body }), `${path} ${kind}`).toHaveProperty('problem')
+    }
+    // Step 23's upload host (Meta's resumable video upload): never a report run, whatever the body or kind.
+    for (const url of [`https://rupload.facebook.com/video-ads-upload/${META_DEFAULT_GRAPH_API_VERSION}/120000000000501`, 'https://rupload.facebook.com/act_1234567890/insights', `https://graph-video.facebook.com/${META_DEFAULT_GRAPH_API_VERSION}/act_1234567890/insights`]) {
+      for (const objectKind of [undefined, 'startedvideo']) {
+        for (const kind of ['read', 'write']) expect(metaWriteVerdict({ method: 'POST', url, kind, body, objectKind }), `${url} ${kind} ${objectKind}`).not.toHaveProperty('write.reportRun')
+      }
     }
     // Its body may be longer than a status change's, never than its own maximum.
     expect(runProblem({ level: 'ad', fields: Array.from({ length: 800 }, () => 'impressions').join(',') })).toMatch(/at most 8000 characters/)

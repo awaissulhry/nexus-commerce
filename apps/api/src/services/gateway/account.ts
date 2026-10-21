@@ -92,3 +92,12 @@ export async function metaStoredObject(objectId: string): Promise<{ adAccountId:
   if (ad) return { adAccountId: ad.adAccountId, kind: 'ad' }
   return null
 }
+
+/**
+ * Meta step 23: is this business portfolio also that of ANOTHER business's chosen ad account (nexus_meta_links_taken
+ * PORTFOLIO, step 10)? Then its media library is that business's too, and no Nexus change writes there.
+ */
+export async function metaPortfolioShared(portfolioId: string): Promise<boolean> {
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`SELECT t.id FROM nexus_meta_links_taken('PORTFOLIO', ${[portfolioId]}::text[]) AS t(id)`
+  return rows.some((row) => row.id === portfolioId)
+}

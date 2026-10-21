@@ -10,6 +10,7 @@
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
 import type { MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaChangeResult, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -48,6 +49,8 @@ export interface MetaChangeRequest {
   /**
    * The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 19: a create names
    * the chosen ad account itself, `adaccount`).
+   * Step 23: an upload names the chosen ad account (`adaccount`) or its business portfolio (step 28's `business`);
+   * captions name the library video (step 22's `video`). Its `kind` is then `ad`, as for step 22's deletes.
    */
   objectKind?: 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
     // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
@@ -75,6 +78,15 @@ export interface MetaChangeRequest {
    * {"success": true}): the object is read back, never a new one.
    */
   readBackObject?: true
+  // ── step 23: a request that brings its own sender ──
+  /**
+   * Sends the request itself (an upload whose answer is read again, or Meta's video-ads upload, whose later calls need the
+   * first one's answer): the kit runs it as ONE step in place of metaSendChange. It goes only through the write client
+   * (the gateway), and rejects with a MetaWriteError exactly like metaSendChange (not_sent, refused, unknown).
+   */
+  send?: (target: MetaWriteTarget) => Promise<MetaChangeResult>
+  /** The step's sentence when Meta made it (else the kit's own). */
+  doneSentence?: (result: MetaChangeResult) => string
 }
 
 export interface MetaChangeDraft {

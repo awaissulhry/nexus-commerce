@@ -271,6 +271,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'meta-product-sets': 'it reads the business\'s Meta catalogs live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
   'meta-commerce': 'it reads the business\'s chosen Meta Page and business portfolio live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
   'meta-instagram-product-tags': 'it reads the business\'s chosen Instagram account live from Meta, and no business here has Meta (meta-ads-commerce.tools test)',
+  // Meta ads step 23: an upload reads the business's chosen Meta ad account before anything (meta-ads-media-upload.tools test).
+  'create-meta-media': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-media-upload.tools test)',
   // Meta ads step 7: the numbers, report runs and saved reports read the chosen ad account live from Meta (meta-ads-insights.tools test).
   'meta-ads-numbers': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
   'meta-ads-report': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has one (meta-ads-insights.tools test)',
@@ -639,6 +641,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'meta-product-sets': () => ({ view: 'list', catalogId: '120000000000700' }),
   'meta-commerce': () => ({ view: 'accounts' }),
   'meta-instagram-product-tags': () => ({ view: 'eligibility' }),
+  // Meta ads step 23: an upload refuses in words before any fetch or call (no business here has Meta; its own test runs it).
+  'create-meta-media': () => ({ kind: 'image', images: [{ libraryImageId: 'da_test_asset' }] }),
   // Meta ads step 7: each refuses in words because no business here has Meta (meta-ads-insights.tools.vitest.test.ts runs
   // every view on an account).
   'meta-ads-numbers': () => ({ view: 'numbers' }),

@@ -310,7 +310,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
   const callers = (name: string) => all.filter((f) => new RegExp(`(?<!function |\\.)\\b${name}\\(`).test(f.text)).map((f) => f.path).sort()
   it('metaWriteCall, metaSendChange, metaCheckChange, removalDraft and metaRemoveDraft have the callers they have today, and no other', () => {
     expect(callers('metaWriteCall')).toEqual(['services/marketing/meta-ads/write-client.ts'])
-    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
+    // Step 23 — create-meta-media's requests bring their own senders (an upload read again, the video-ads upload's calls).
+    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-kit.ts', 'services/marketing/meta-ads/change-media.ts'])
     expect(callers('metaCheckChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
     expect(callers('removalDraft')).toEqual(['services/agents/tools/meta-ads-create.tools.ts'])
     expect(all.find((f) => f.path === 'services/agents/tools/meta-ads-create.tools.ts')!.text.match(/\bremovalDraft\(/g)).toHaveLength(1)
@@ -351,6 +352,7 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/change-labels.ts': 1, // step 21: labelsDraft's label delete (explicit ask: confirmDelete)
       'services/gateway/meta-optimize-rules.ts': 1, // step 28: the pageVideoTest.delete rule (a judge)
       'services/marketing/meta-ads/change-experiments.ts': 1, // step 28: a concluded Page video test's delete (set-meta-experiment)
+      'services/marketing/meta-ads/change-media.ts': 1, // step 23: create-meta-media's undo, through step 22's removal rules
       'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
     })
     // A method named by a constant, a variable or a ternary: only where it is passed on.
@@ -376,23 +378,37 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
     expect(naming(/locales_to_delete/g)).toEqual({
       'services/gateway/meta-remove-rules.ts': 6, // the captions.delete rule and its refusals (a judge)
       'services/marketing/meta-ads/change-remove.ts': 1, // metaRemoveDraft: the request's one body key
+      // Step 23 — create-meta-media's undo of captions it added (through step 22's captions.delete; its preview's warning
+      // names the key), and the tool reading a done undo request back into its record.
+      'services/marketing/meta-ads/change-media.ts': 2,
+      'services/agents/tools/meta-ads-media-upload.tools.ts': 2,
     })
     expect(naming(/['"`]captions\.delete['"`]/g)).toEqual({
       'services/gateway/meta-remove-rules.ts': 1, // the rule's name
       'services/marketing/meta-ads/change-remove.ts': 1, // metaRemoveDraft: the request's operation
     })
-    expect(naming(/edge: ['"`]captions['"`]/g)).toEqual({ 'services/marketing/meta-ads/change-remove.ts': 1 })
+    // Step 23 — create-meta-media on the captions edge: its upload, its undo's language removal and the default caption put back.
+    expect(naming(/edge: ['"`]captions['"`]/g)).toEqual({ 'services/marketing/meta-ads/change-remove.ts': 1, 'services/marketing/meta-ads/change-media.ts': 3 })
     expect(all.find((f) => f.path === 'services/marketing/meta-ads/change-budget-schedule.ts')!.text).toMatch(/objectKind: 'highdemandperiod', method: 'DELETE'/)
   })
 })
 /** Methods passed on, not chosen: the kit hands a request's own method to the write client; the gateway and its types. */
 const EXPECTED_COMPUTED: string[] = [
   'services/agents/tools/meta-ads-kit.ts: request.method',
+  // Step 23 — a video's upload method (advideos | video_ads), not an HTTP method.
+  'services/agents/tools/meta-ads-media-upload.tools.ts: (video.method as VideoSource[\'method\']) ?? null',
+  'services/agents/tools/meta-ads-media-upload.tools.ts: request.edge === \'video_ads\' ? \'video_ads\' : \'advideos\'',
+  'services/agents/tools/meta-ads-media-upload.tools.ts: z.enum(VIDEO_METHODS).optional().describe(\'advideos (default: Meta fetches the link onto the ad account)',
   ...Array(5).fill('services/gateway/gateway.ts: req.method'),
   'services/gateway/meta-calls.ts: \'POST\' | \'DELETE\'',
   'services/gateway/meta-calls.ts: string',
   'services/gateway/meta-calls.ts: string',
   'services/gateway/meta-calls.ts: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string',
   'services/gateway/meta-calls.ts: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string',
+  // Step 23 — the rupload judge's input type (a judge, no sender).
+  'services/gateway/meta-media-rules.ts: string; url: string; kind: string; body?: unknown; objectKind?: string',
   'services/gateway/meta.ts: remove ? \'DELETE\' : \'POST\'',
+  // Step 23 — a video's upload method again (advideos | video_ads).
+  'services/marketing/meta-ads/change-media.ts: \'advideos\' | \'video_ads\' = video.method === \'video_ads\' ? \'video_ads\' : \'advideos\'',
+  'services/marketing/meta-ads/change-media.ts: \'advideos\' | \'video_ads\'; new: boolean | null',
 ]

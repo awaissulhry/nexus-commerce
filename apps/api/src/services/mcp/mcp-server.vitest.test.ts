@@ -67,6 +67,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Meta ads step 21 (2026-10-21) — set-meta-labels, set-meta-value-rules and create-meta-reach-frequency read Meta live and change it.
 // Meta ads step 28 (2026-10-21) — apply-meta-recommendations, create-meta-experiment, set-meta-experiment and end-meta-experiment.
 // Meta ads step 13 (2026-10-21) — meta-product-sets, meta-commerce and meta-instagram-product-tags read Meta live.
+// Meta ads step 23 (2026-10-21) — create-meta-media uploads images, videos and folders to Meta (and takes back what it made new).
 // Meta ads step 7 (2026-10-21) — meta-ads-numbers, meta-ads-report and meta-ads-saved-reports read Meta live.
 
 const OPEN_WORLD = [
@@ -80,7 +81,7 @@ const OPEN_WORLD = [
   'copy-google-pmax', 'copy-meta-ads', 'create-ad-campaign', 'create-ad-group', 'create-ai-goal-campaigns', 'create-ebay-campaign',
   'create-google-app-campaign', 'create-google-campaign', 'create-google-demand-gen-campaign',
   'create-google-display-campaign', 'create-google-experiment', 'create-google-rsa', 'create-meta-ad-set', 'create-meta-campaign',
-  'create-meta-experiment', 'create-meta-reach-frequency', 'create-negative-keyword',
+  'create-meta-experiment', 'create-meta-media', 'create-meta-reach-frequency', 'create-negative-keyword',
   'decide-automation-suggestions',
   'delete-listing', 'dismiss-google-recommendations', 'dispose-return-items', 'ebay-categories',
   'ebay-keywords-change', 'edit-google-assets', 'edit-google-campaign-type-ads', 'edit-google-rsa', 'email-supplier',
