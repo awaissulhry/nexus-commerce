@@ -79,6 +79,8 @@ export interface MetaWriteRequest {
   objectKind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
     // Step 28 — a business portfolio (a new study), a study, a Page, a Page video test (an apply names act_<id>).
     | MetaOptimizeKind
+    // Step 29 — one of the chosen ad account's automated rules.
+    | 'adrule'
     // Step 39 — an ad set's targeting, a publisher or content block list (brand safety).
     | MetaBrandSafetyKind
   /** The form fields, as Meta reads them (`status`, `fields`, …): sent as the body, never on the URL. */
@@ -90,8 +92,11 @@ export interface MetaWriteRequest {
   maxRateWaitMs?: number
   triggeredBy?: 'cron' | 'manual' | 'api' | 'webhook'
   /**
-   * Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. Step 39: the
-   * brand-safety edges (a block list's draft, list, shares, people, ad accounts and posts; the account's inventory filter).
+   * Step 18 — a create on the object's own edge (`POST /<id>/budget_schedules`); default: the object itself. Step 29 — a
+   * rule made on the ad account's rule library (`POST /act_<id>/adrules_library`) and a rule's run now (`POST /<rule
+   * id>/execute`, no body).
+   * Step 39: the brand-safety edges (a block list's draft, list, shares, people, ad accounts and posts; the account's
+   * inventory filter).
    */
   edge?: MetaWriteEdge
   /** Step 18 — DELETE (a budget schedule's, no body; step 22: an image's or a video's carries its key as the body; step 39: a share's agency, a list's posts); default POST. */
@@ -109,7 +114,9 @@ export interface MetaWriteRequest {
  * a copy of a campaign, ad set or ad, a background copy and an asynchronous ad copy (step 19).
  */
 export type MetaWriteEdge = 'budget_schedules' | 'campaigns' | 'adsets' | 'copies' | 'async_batch_requests' | 'asyncadcopies' | MetaRemoveEdge | MetaLabelsEdge | MetaOptimizeEdge
-  | MetaMediaEdge | MetaBrandSafetyEdge
+  | MetaMediaEdge | MetaRuleEdge | MetaBrandSafetyEdge
+/** Step 29 — a rule made on the ad account's rule library (`act_<id>/adrules_library`), a rule's run now (`<rule id>/execute`). */
+export type MetaRuleEdge = 'adrules_library' | 'execute'
 /** Step 39 — the brand-safety edges (the account's filter, a block list's draft, list, shares, people, ad accounts and posts). */
 export type MetaBrandSafetyEdge = 'brand_safety_content_filter_levels' | 'block_list_drafts' | 'publisher_block_lists' | 'agencies'
   | 'assigned_users' | 'auto_applied_ad_accounts' | 'content_block_lists' | 'content' | 'applied_ad_accounts'
@@ -210,6 +217,31 @@ export async function metaRestCall(req: Omit<MetaCallRequest, 'auth'>): Promise<
     max429Retries: 0,
     timeoutMs: req.timeoutMs ?? 60_000,
     ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
+  })
+}
+
+// ── Meta's preview of an automated rule (step 29, 2026-10-21) ─────────────────────────────────────────────────────────
+
+/**
+ * Meta's preview of a schedule rule: `POST /<rule id>/preview` with no parameter (ad-rules/guides/api-calls "Preview a
+ * rule": it "returns a list of objects that satisfy all specified filters of the rule at that time"; SDK
+ * AdRule.create_preview, POST, no params). A POST that only reads: the gateway's write allow-list judges it
+ * (meta-ad-rule-rules.ts `adRule.preview`, kind read), confirms the rule is of the chosen ad account and sends it only while
+ * Meta changes are switched on, like Meta's check. Retried once after a network error, like a read.
+ */
+export async function metaRulePreviewCall(req: { connectionId: string; ruleId: string; timeoutMs?: number }): Promise<GatewayResponse> {
+  return gatewayCall({
+    channel: 'META',
+    operation: 'rules.preview',
+    kind: 'read',
+    connectionId: req.connectionId,
+    url: metaUrl(`${req.ruleId}/preview`),
+    method: 'POST',
+    body: '',
+    metaObjectKind: 'adrule',
+    maxTransientRetries: 1,
+    max429Retries: 0,
+    timeoutMs: req.timeoutMs ?? 60_000,
   })
 }
 

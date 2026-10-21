@@ -109,6 +109,8 @@ import { META_ADS_LABELS_RULES_TOOLS } from './tools/meta-ads-labels-rules.tools
 import { META_ADS_OPTIMIZE_CHANGES_TOOLS } from './tools/meta-ads-optimize-changes.tools.js'
 import { META_ADS_COMMERCE_TOOLS } from './tools/meta-ads-commerce.tools.js'
 import { META_ADS_MEDIA_UPLOAD_TOOLS } from './tools/meta-ads-media-upload.tools.js'
+// Meta ads step 29 (2026-10-21): Meta's automated rules.
+import { META_ADS_RULES_TOOLS } from './tools/meta-ads-rules.tools.js'
 // Meta ads step 39 (2026-10-21): brand safety — set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
 import { META_ADS_BRAND_SAFETY_TOOLS } from './tools/meta-ads-brand-safety.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -348,6 +350,8 @@ const ALL: AgentTool[] = [
   ...META_ADS_COMMERCE_TOOLS,
   // Meta ads step 23 (2026-10-21): create-meta-media — images, videos and folders into the chosen ad account, and the undo.
   ...META_ADS_MEDIA_UPLOAD_TOOLS,
+  // Meta ads step 29 (2026-10-21): set-meta-ad-rule (make, change, switch, run Meta's rules), remove-meta-ad-rule.
+  ...META_ADS_RULES_TOOLS,
   // Meta ads step 39 (2026-10-21): set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
   ...META_ADS_BRAND_SAFETY_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).

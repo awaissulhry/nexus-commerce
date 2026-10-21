@@ -926,6 +926,22 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { kind: 'image', items: [{ kind: 'image', source: 'da_test', inLibrary: false }] },
         after: { kind: 'image', items: [{ kind: 'image', source: 'da_test', hash: '0123456789abcdef0123456789abcdef', new: true }], accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 29: a rule switched off is switched on again; a deleted rule is made again (a new rule) by set-meta-ad-rule.
+      'set-meta-ad-rule': {
+        before: { kind: 'adrule', action: 'status', id: '120000000000101', exists: 'yes', undo: { action: 'status', ruleId: '120000000000101', enabled: true }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { kind: 'adrule', action: 'status', id: '120000000000101', exists: 'yes', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'remove-meta-ad-rule': {
+        before: {
+          kind: 'adrule', action: 'remove', id: '120000000000101', exists: 'yes', noUndo: [], accountId: 'conn-1', adAccountId: '1234567890',
+          undo: {
+            action: 'create', name: 'Rule A', enable: true,
+            evaluation: { type: 'SCHEDULE', filters: [{ field: 'entity_type', operator: 'EQUAL', value: 'ADSET' }, { field: 'time_preset', operator: 'EQUAL', value: 'LAST_7D' }, { field: 'spent', operator: 'GREATER_THAN', valueCents: 5000 }] },
+            execution: { type: 'PAUSE' }, schedule: { type: 'DAILY' },
+          },
+        },
+        after: { kind: 'adrule', action: 'remove', id: '120000000000101', exists: 'no', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 39: an ad set's brand-safety keys go back (the account's filter too, where it had one); a block list made
       // is deleted (remove-meta-block-list), a share unshared.
       'set-meta-brand-safety': {
@@ -1105,11 +1121,12 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-google-custom-goals', 'set-google-custom-audiences', 'set-google-user-lists', 'set-google-reusable-audiences',
       'upload-google-sales', 'adjust-google-sales',
       'set-google-merchant-products', 'set-google-merchant-data-sources', 'set-google-merchant-promotions',
-        'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
-        'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads',
-        'remove-meta-ads-items', 'set-meta-labels', 'set-meta-value-rules', 'create-meta-reach-frequency',
-        'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment', 'create-meta-media',
-        'set-meta-brand-safety', 'set-meta-block-list', 'remove-meta-block-list']) {
+      'set-meta-connection', 'set-meta-status', 'set-meta-campaign', 'set-meta-ad-set', 'set-meta-budget-schedule',
+      'create-meta-campaign', 'create-meta-ad-set', 'copy-meta-ads',
+      'remove-meta-ads-items', 'set-meta-labels', 'set-meta-value-rules', 'create-meta-reach-frequency',
+      'apply-meta-recommendations', 'create-meta-experiment', 'set-meta-experiment', 'end-meta-experiment', 'create-meta-media',
+      'set-meta-ad-rule', 'remove-meta-ad-rule',
+      'set-meta-brand-safety', 'set-meta-block-list', 'remove-meta-block-list']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

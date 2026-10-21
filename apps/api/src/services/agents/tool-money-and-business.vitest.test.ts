@@ -200,6 +200,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'create-meta-experiment': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-optimize-changes.tools test)',
   'set-meta-experiment': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-optimize-changes.tools test)',
   'end-meta-experiment': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-optimize-changes.tools test)',
+  'set-meta-ad-rule': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-rules.tools test)',
+  'remove-meta-ad-rule': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-rules.tools test)',
   'set-meta-brand-safety': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
   'set-meta-block-list': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
   'remove-meta-block-list': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
@@ -587,6 +589,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'create-meta-experiment': () => ({ kind: 'ab-test', name: 'Test A', startTime: '2099-01-01T00:00:00Z', endTime: '2099-01-15T00:00:00Z', cells: [{ name: 'A', percent: 50, adSetIds: ['120000000000002'] }, { name: 'B', percent: 50, adSetIds: ['120000000000003'] }] }),
   'set-meta-experiment': () => ({ action: 'update', studyId: '120000000000041', name: 'Test B' }),
   'end-meta-experiment': () => ({ studyId: '120000000000041', endAt: '2099-01-01T00:15:00Z' }),
+  // Meta ads step 29: Meta's rules refuse in words here (no business has Meta; their own test runs them).
+  'set-meta-ad-rule': () => ({ action: 'status', ruleId: '120000000000101', enabled: false }),
+  'remove-meta-ad-rule': () => ({ ruleId: '120000000000101', confirmDelete: true }),
   // Meta ads step 39: the brand-safety changes refuse in words here (no business has Meta; their own test runs them).
   'set-meta-brand-safety': () => ({ adSets: [{ adSetId: '120000000000002', addCategories: ['gambling'] }] }),
   'set-meta-block-list': () => ({ action: 'apply-account', blockListId: '120000000000601' }),
