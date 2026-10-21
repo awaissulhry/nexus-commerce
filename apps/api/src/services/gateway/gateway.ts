@@ -33,7 +33,7 @@ import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock
 import { accountStatusOf, googleAdsCustomerLinked, googleMerchantAccountLinked, googleMerchantDataSourceNexusMade, metaChosenAdAccountOf, metaStoredObject } from './account.js'
 import { googleMerchantCall, googleMerchantCallBodyOf, merchantReadAccount } from './google-merchant-calls.js'
 import { googleAccountCallBodyOf, googleAdsAccountCall } from './google-account-calls.js'
-import { metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite } from './meta-calls.js'
+import { META_REST_API_VERSION, metaAppSecretProof, metaCallVerdict, metaSendUrl, metaWriteVerdict, scrubMetaAnswer, type MetaJudgedWrite } from './meta-calls.js'
 import { holdMetaObject, metaObjectState, metaObjectWait, noteMetaObjectTouched } from './meta-object-limits.js'
 import { metaGraphBase } from '../meta/api-version.js'
 import { META_KIND_FIELDS } from '../meta/meta-kinds.js'
@@ -339,6 +339,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // themselves; what is sent is the body as it was judged. The object's ad account is checked after the status (3b).
   let metaRenewal = false
   let metaWrite: MetaJudgedWrite | null = null
+  // Step 16 — a read of Meta's REST host (api.facebook.com): its token goes as a Bearer header (meta-calls.ts).
+  let metaRest = false
   if (req.channel === 'META' && req.method !== 'GET') {
     const judged = metaWriteVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
     if ('problem' in judged) {
@@ -354,6 +356,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     // One verdict on one canonical parse (meta-calls.ts): the refusal, and for the renewal the client_id it names.
     const judged = metaCallVerdict({ method: req.method, url: req.url, kind: req.kind, body: req.body, auth: req.auth, headers: req.headers })
     if (judged.problem) return refuse('refused', 'META_READ_ONLY', `Nothing was sent to Meta: ${judged.problem} (${req.method} ${safePath(req.url)}).`, 403)
+    metaRest = judged.rest === true
     // The renewal names the app it is for: it must be THIS connection's own app, never another.
     if (judged.renewalClientId !== null) {
       const appId = req.connectionId ? await (await import('../cx/token.service.js')).metaAppIdOf(req.connectionId) : null
@@ -464,7 +467,13 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // the answer carry). The proof is made from the app secret the token service holds for this connection, or from the
   // one a connect-time caller passes; with neither, nothing is sent.
   let sendUrl = url
-  if (req.channel === 'META' && token) {
+  // Step 16 — Meta's REST host takes the account's token as `Authorization: Bearer` with its API version header, never on
+  // the URL; Meta documents no appsecret_proof there (meta-calls.ts metaRestVerdict). No redirect is ever followed.
+  if (req.channel === 'META' && token && metaRest) {
+    headers.Authorization = `Bearer ${token}`
+    headers['X-API-Version'] = META_REST_API_VERSION
+  }
+  if (req.channel === 'META' && token && !metaRest) {
     let proof: { appsecret_proof: string; appsecret_time: string } | null = null
     try {
       proof = req.auth && typeof req.auth === 'object'

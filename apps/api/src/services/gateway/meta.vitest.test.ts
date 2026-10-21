@@ -27,8 +27,8 @@ vi.mock('../cx/connectors/meta/token-check.js', () => ({ forgetMetaTokenCheck: v
 import { gatewayLedger } from '../../test-support/gateway-stubs.js'
 import { __rateTest, bucketKey, defaultsFor, META_BUCKETS, META_FULL_BUCKETS, observeRate, takeToken } from './rate.js'
 import { gatewayCall, GatewayRefusal } from './gateway.js'
-import { metaCall, metaUrl } from './meta.js'
-import { metaAppSecretProof, metaCallGroup, metaCallVerdict, metaReadOnlyProblem, metaRenewalOf, metaSendUrl, scrubMetaAnswer } from './meta-calls.js'
+import { metaCall, metaRestCall, metaRestUrl, metaUrl } from './meta.js'
+import { metaAppSecretProof, metaCallGroup, metaCallVerdict, metaReadOnlyProblem, metaRenewalOf, metaSendUrl, metaWriteVerdict, scrubMetaAnswer } from './meta-calls.js'
 import { authHeadersOf, bucketGroupOf, publishModeOf, apiVersionOf } from './channels.js'
 import { classifyChannelAnswer } from './vocabulary.js'
 import { ledgerSafeBody } from './redact.js'
@@ -595,3 +595,102 @@ describe('the ledger never keeps a Meta secret', () => {
     expect(safe).toBe('access_token=[redacted]&appsecret_proof=[redacted]&fb_exchange_token=[redacted]&input_token=[redacted]&client_secret=[redacted]&fields=id')
   })
 })
+
+describe('step 16 — partnership, research and brand-safety reads: their own keys on their own routes, and Meta\'s REST host', () => {
+  const ok = (url: string, extra: Partial<Parameters<typeof metaReadOnlyProblem>[0]> = {}) => metaReadOnlyProblem({ method: 'GET', url, kind: 'read', ...extra })
+  const REST = 'https://api.facebook.com/partnership-ads'
+  it('the one hyphenated Graph edge, only as an edge and only that name', () => {
+    expect(ok(`${BASE}/9876543210/partnership-ads-advertisable-content?fb_page_id=120000000000010&ig_user_id=170000000000001&fields=content_id&limit=25`)).toBeNull()
+    expect(ok(`${BASE}/9876543210/partnership-ads-advertisable-content?content_ids=["1","2"]&fields=content_id`)).toBeNull()
+    expect(ok(`${BASE}/partnership-ads-advertisable-content?fields=content_id`)).toMatch(/letters, digits and _ only/)
+    expect(ok(`${BASE}/9876543210/partnership-ads-other?fields=id`)).toMatch(/letters, digits and _ only/)
+    expect(ok(`${BASE}/9876543210/partnership-ads-advertisable-content?fields=content_id&search_query=x`)).toMatch(/"search_query" is not one/)
+    // A change of it stays refused by the write allow-list.
+    expect(metaWriteProblemOf('POST', `${BASE}/9876543210/partnership-ads-advertisable-content`, 'name=x')).toMatch(/only Meta change Nexus sends/)
+  })
+  it('each new key on its own route only, a neighbour route refused', () => {
+    expect(ok(`${BASE}/170000000000001/branded_content_ad_permissions?creator_username=shop_a&fields=id`)).toBeNull()
+    expect(ok(`${BASE}/170000000000001/branded_content_tag_approval?user_ids=1,2&fields=id`)).toBeNull()
+    expect(ok(`${BASE}/170000000000001/creator_marketplace_creators?creator_countries=["IT"]&custom_audience_id=120000000000501&fields=id`)).toBeNull()
+    expect(ok(`${BASE}/170000000000001/creator_marketplace_brand_info?acting_business_id=1`)).toMatch(/"acting_business_id" is not one/)
+    expect(ok(`${BASE}/ads_archive?ad_reached_countries=["IT"]&search_terms=casco&search_page_ids=[1]&fields=id,page_id&limit=25`)).toBeNull()
+    expect(ok(`${BASE}/ads_archive?ad_reached_countries=["IT"]&bylines=["x"]`)).toMatch(/"bylines" is not one/)
+    expect(ok(`${BASE}/ig_hashtag_search?user_id=170000000000001&q=moto`)).toBeNull()
+    expect(ok(`${BASE}/17800000000000591/top_media?user_id=170000000000001&fields=id`)).toBeNull()
+    expect(ok(`${BASE}/120000000000201/publisher_delivery_report?platform=facebook&position=instream_video&start_date=2026-10-01&end_date=2026-10-20&summary=true&fields=url`)).toBeNull()
+    expect(ok(`${BASE}/120000000000201/content_delivery_report?platform=facebook&position=instream_video&datetime=2026-10-20T10:00&fields=content_id`)).toBeNull()
+    expect(ok(`${BASE}/120000000000201/adjacent_content_delivery_report?platform=facebook&position=feed&datetime=2026-10-20T10:00`)).toBeNull()
+    expect(ok(`${BASE}/adjacent_content_delivery_report_date_ranges?platform=threads&position=reels&fields=earliest_datetime`)).toBeNull()
+    expect(ok(`${BASE}/brand_safety_publisher_list?platform=facebook&position=instream_video&follower_count=all&include_summary=true&fields=url`)).toBeNull()
+    expect(ok(`${BASE}/120000000000901/assigned_users?business_id=9876543210`)).toBeNull()
+    // Neighbours: a key on the route next door is refused.
+    expect(ok(`${BASE}/120000000000201/insights?platform=facebook&fields=spend`)).toMatch(/"platform" is not one/)
+    expect(ok(`${BASE}/act_1234567890/campaigns?fields=id&user_id=1`)).toMatch(/"user_id" is not one/)
+    expect(ok(`${BASE}/120000000000201/publisher_delivery_report?datetime=2026-10-20T10:00&fields=url`)).toMatch(/"datetime" is not one/)
+    expect(ok(`${BASE}/act_1234567890/assigned_users?business_id=9876543210`)).toMatch(/"business_id" is not one/)
+    expect(ok(`${BASE}/170000000000001/media?q=moto&fields=id`)).toMatch(/"q" is not one/)
+  })
+  it('Meta\'s REST host: four GET paths of one Page, their own keys, the account\'s own token; everything else refused', () => {
+    expect(ok(`${REST}/fb-account-level-permissions/120000000000010?status=[1,2]&permission_direction=sent&limit=100&offset=0`)).toBeNull()
+    expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`)).toBeNull()
+    expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlisted-creators`)).toBeNull()
+    expect(ok(`${REST}/fb-branded-content/120000000000010/branded-content-posts?start_date=2026-10-01&end_date=2026-10-21&creator_page_ids=[1]`)).toBeNull()
+    expect(metaCallVerdict({ method: 'GET', url: `${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, kind: 'read' })).toEqual({ problem: null, renewalClientId: null, rest: true })
+    for (const url of [
+      'https://api.facebook.com/content_block_lists/120000000000701/file_download',
+      'https://api.facebook.com/content-block-lists/120000000000701/file-download',
+      'https://api.facebook.com/adjacent_content_delivery_reports/9876543210/file_download',
+      'https://api.facebook.com/adjacent-content-delivery-reports/9876543210/file-download',
+      `${REST}/fb-branded-content/120000000000010/brand-allowlist-status/x`,
+      `${REST}/fb-account-level-permissions/me`,
+      `${REST}//fb-account-level-permissions/120000000000010`,
+      `${REST}/fb-account-level-permissions/%31`,
+      `${REST}/FB-account-level-permissions/120000000000010`,
+      'http://api.facebook.com/partnership-ads/fb-branded-content/120000000000010/brand-allowlist-status',
+      'https://api.facebook.com:8443/partnership-ads/fb-branded-content/120000000000010/brand-allowlist-status',
+    ]) expect(ok(url), url).not.toBeNull()
+    expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status?is_enabled=true`)).toMatch(/"is_enabled" is not one/)
+    expect(ok(`${REST}/fb-branded-content/120000000000010/branded-content-posts?post_ids=[1]`)).toMatch(/"post_ids" is not one/)
+    expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status?access_token=x`)).toMatch(/no Nexus read sends/)
+    expect(ok(`${REST}/fb-account-level-permissions/120000000000010?limit=1&limit=2`)).toMatch(/more than once/)
+    expect(ok(`${REST}/fb-account-level-permissions/120000000000010?_method=DELETE`)).toMatch(/no Nexus read sends/)
+    expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, { auth: 'app' })).toMatch(/own system-user token/)
+    expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, { auth: 'none' })).toMatch(/own system-user token/)
+    expect(ok(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, { headers: { Authorization: 'Bearer x' } })).toMatch(/no header/)
+    // Never a change: a PUT, POST or DELETE of the same paths goes to the write allow-list, which has no REST host at all.
+    for (const method of ['PUT', 'POST', 'DELETE']) {
+      expect(metaWriteProblemOf(method, `${REST}/fb-branded-content/120000000000010/brand-allowlist-status`, 'is_enabled=true')).toMatch(/graph\.facebook\.com/)
+    }
+    expect(metaRenewalOf(`${REST}/fb-branded-content/120000000000010/brand-allowlist-status`)).toBeNull()
+  })
+  it('a REST read goes with the token as a Bearer header and Meta\'s API version header — never on the URL, no proof', async () => {
+    h.answers.push(() => new Response('[{"creator_page_id": 12345678901234567, "creator_page_name": "Shop B"}]', { status: 200 }))
+    const res = await metaRestCall({ connectionId: 'm-1', operation: 'partners.allowlistCreators', path: 'partnership-ads/fb-branded-content/120000000000010/brand-allowlisted-creators' })
+    expect(res.status).toBe(200)
+    expect(h.calls).toHaveLength(1)
+    const sent = sentUrl()
+    expect(`${sent.host}${sent.pathname}`).toBe('api.facebook.com/partnership-ads/fb-branded-content/120000000000010/brand-allowlisted-creators')
+    expect([...sent.searchParams.keys()]).toEqual([])
+    const headers = h.calls[0].init.headers as Record<string, string>
+    expect(headers.Authorization).toBe('Bearer meta-system-user-token')
+    expect(headers['X-API-Version']).toBe('1.0.0')
+    expect(h.calls[0].init.redirect).toBe('error')
+    expect(h.proofs).toEqual([])
+    expect(gatewayLedger).toEqual([expect.objectContaining({ channel: 'META', operation: 'partners.allowlistCreators', outcome: 'sent', success: true, endpoint: 'api.facebook.com/partnership-ads/fb-branded-content/120000000000010/brand-allowlisted-creators' })])
+    expect(metaRestUrl('partnership-ads/fb-account-level-permissions/1', { status: [1, 2], limit: 5 })).toBe('https://api.facebook.com/partnership-ads/fb-account-level-permissions/1?status=%5B1%2C2%5D&limit=5')
+    // A Graph read keeps its token on the URL with its proof, and no Authorization header.
+    await metaCall({ connectionId: 'm-1', operation: 'campaigns.list', path: 'act_1234567890/campaigns', query: { fields: 'id' } })
+    expect((h.calls[1].init.headers as Record<string, string>).Authorization).toBeUndefined()
+    expect(sentUrl(1).searchParams.get('access_token')).toBe('meta-system-user-token')
+  })
+  it('a REST path off the allow-list is refused with its ledger row and nothing is sent', async () => {
+    await expect(gatewayCall({ channel: 'META', operation: 'x', kind: 'read', connectionId: 'm-1', url: 'https://api.facebook.com/content_block_lists/120000000000701/file_download', method: 'GET' })).rejects.toBeInstanceOf(GatewayRefusal)
+    expect(h.calls).toHaveLength(0)
+    expect(gatewayLedger).toEqual([expect.objectContaining({ channel: 'META', outcome: 'refused', errorCode: 'META_READ_ONLY' })])
+  })
+})
+
+function metaWriteProblemOf(method: string, url: string, body: string): string | null {
+  const verdict = metaWriteVerdict({ method, url, kind: 'write', body })
+  return 'problem' in verdict ? verdict.problem : null
+}

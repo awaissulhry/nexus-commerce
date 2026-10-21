@@ -17,6 +17,7 @@
  */
 import { gatewayCall, type GatewayResponse } from './gateway.js'
 import { metaGraphBase } from '../meta/api-version.js'
+import { META_REST_HOST } from './meta-calls.js'
 
 export type MetaQueryValue = string | number | boolean | null | undefined | readonly unknown[] | Record<string, unknown>
 
@@ -103,6 +104,38 @@ export async function metaWriteCall(req: MetaWriteRequest): Promise<GatewayRespo
     maxTransientRetries: req.check ? 1 : 0,
     max429Retries: 0,
     maxRateWaitMs: req.maxRateWaitMs,
+    timeoutMs: req.timeoutMs ?? 60_000,
+    ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
+  })
+}
+
+// ── Meta's REST host (step 16, 2026-10-21) ─────────────────────────────────────────────────────────────────────────
+
+/** The absolute URL of a read on Meta's REST host (`https://api.facebook.com/<path>`; meta-calls.ts metaRestVerdict). */
+export function metaRestUrl(path: string, query: Record<string, MetaQueryValue> = {}): string {
+  const url = new URL(`https://${META_REST_HOST}/${path.replace(/^\/+/, '')}`)
+  for (const [key, value] of Object.entries(query)) {
+    if (value === undefined || value === null) continue
+    url.searchParams.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value))
+  }
+  return url.toString()
+}
+
+/**
+ * One read of Meta's REST host through the gateway (GET only; the account's own system-user token, which the gateway puts
+ * in the Authorization header with Meta's API version header). Same answer and refusals as metaCall.
+ */
+export async function metaRestCall(req: Omit<MetaCallRequest, 'auth'>): Promise<GatewayResponse> {
+  return gatewayCall({
+    channel: 'META',
+    operation: req.operation,
+    kind: 'read',
+    connectionId: req.connectionId,
+    url: metaRestUrl(req.path, req.query),
+    method: 'GET',
+    auth: 'account',
+    maxTransientRetries: req.maxTransientRetries,
+    max429Retries: 0,
     timeoutMs: req.timeoutMs ?? 60_000,
     ledger: req.triggeredBy ? { triggeredBy: req.triggeredBy } : undefined,
   })

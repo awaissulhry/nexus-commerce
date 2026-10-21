@@ -69,8 +69,9 @@ const HOSTS: Array<[Channel, RegExp]> = [
   // Any Google API host (Ads, Merchant, Analytics, sign-in, and whatever Google API comes next) except two that are
   // not the Google channel: Gemini (`generativelanguage`, services/ai) and Google Fonts (stylesheets in eBay descriptions).
   ['GOOGLE', /(?<![\w.-])(?!(?:fonts|generativelanguage)\.googleapis\.com)(?:[\w-]+\.)*googleapis\.com|accounts\.google\.com/],
-  // Meta: the Graph and Marketing API, video and resumable uploads, the Instagram Graph API and the sign-in dialog.
-  ['META', /(graph|graph-video|rupload)\.facebook\.com|graph\.instagram\.com|www\.facebook\.com\/v?[\d.]*\/?dialog\/oauth/],
+  // Meta: the Graph and Marketing API, video and resumable uploads, the Instagram Graph API and the sign-in dialog; since
+  // step 16 (2026-10-21) also Meta's REST host for partnership ads (`api.facebook.com`, read through the gateway only).
+  ['META', /(graph|graph-video|rupload|api)\.facebook\.com|graph\.instagram\.com|www\.facebook\.com\/v?[\d.]*\/?dialog\/oauth/],
 ]
 /** The API path written in the call itself — decides before the file's hosts (a file can mix channels). */
 const API_PATHS: Array<[Channel, RegExp]> = [

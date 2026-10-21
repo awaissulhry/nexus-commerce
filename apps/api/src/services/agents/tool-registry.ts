@@ -88,6 +88,9 @@ import { META_ADS_TARGETING_TOOLS } from './tools/meta-ads-targeting.tools.js'
 // Meta ads step 6 (2026-10-21): campaigns, ad sets, ads, creatives, labels and value rules in detail (read only).
 import { META_ADS_OBJECTS_TOOLS } from './tools/meta-ads-objects.tools.js'
 import { META_ADS_MEDIA_TOOLS } from './tools/meta-ads-media.tools.js'
+// Meta ads step 16 (2026-10-21): partnership content, research, brand safety, webhooks (read only).
+import { META_ADS_PARTNERS_TOOLS } from './tools/meta-ads-partners.tools.js'
+import { META_ADS_SAFETY_TOOLS } from './tools/meta-ads-safety.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
 import { BULK_TOOLS } from './tools/bulk.tools.js'
@@ -295,6 +298,9 @@ const ALL: AgentTool[] = [
   // Meta ads step 10 (2026-10-21): meta-media-library, meta-page-posts, meta-instagram-media, meta-ad-preview,
   // meta-instant-experiences (read only).
   ...META_ADS_MEDIA_TOOLS,
+  // Meta ads step 16 (2026-10-21): meta-partnership-content, meta-ad-library, meta-brand-safety, meta-webhooks (read only).
+  ...META_ADS_PARTNERS_TOOLS,
+  ...META_ADS_SAFETY_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
   // MCP full control C8 — what Claude did in the business (read only).
