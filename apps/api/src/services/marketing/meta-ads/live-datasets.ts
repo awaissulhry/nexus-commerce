@@ -12,7 +12,8 @@
  * ALLOW-LISTS ONLY (lesson from steps 1–2): the caller never names a Graph path, field or parameter; every view sends a
  * fixed request with a fixed field list, and every answer keeps only the keys named here. Every pixel read is one of the
  * chosen ad account's (Meta: pixels live on the ad account, `/act_<id>/adspixels`) AND checked, every time, not to be
- * connected to an ad account another business in Nexus uses (shared_accounts in the portfolio): such a pixel is
+ * connected to an ad account another business in Nexus uses (its owner portfolio, its ad accounts there and in every
+ * partner portfolio it is shared with — live-audiences.ts pixelVerdict; what Nexus cannot see is "unchecked"): such a pixel is
  * `{ pixelId, takenByAnotherBusiness: true }` only in every list and detail, and every other view refuses it (review
  * A4); never said to be free without that check. In the portfolio's lists a pixel that is not on the chosen ad account
  * is its id only. Every custom conversion read is the chosen ad account's.
@@ -188,9 +189,11 @@ export function statsWindows(hours: number, now: Date = new Date()): Array<{ sta
   return Array.from({ length: count }, (_, i) => ({ start: start + i * length, end: i === count - 1 ? end : start + (i + 1) * length }))
 }
 
-/** Review A5 — every http(s) address in Meta's answer without its query and fragment, at any depth. */
+const WEB_ADDRESS_QUERY = /((?:[a-z][a-z0-9+.-]*:)?\/\/[^\s?#"'<>]*|(?<![\w@.-])(?:[a-z0-9-]+\.)+[a-z]{2,63}(?::\d{1,5})?(?:\/[^\s?#"'<>]*)?|(?<![\w\/.:-])\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi
+/** Review A5 / A-S1 — every web address in Meta's answer without its query and fragment, at any depth. */
 export function stripUrls(value: unknown, depth = 0): unknown {
-  if (typeof value === 'string') return value.replace(/(https?:\/\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi, '$1')
+  // With a scheme, or without one (shop.example/thanks?…, //shop.example?…, a path /thanks?…): never the query.
+  if (typeof value === 'string') return value.replace(WEB_ADDRESS_QUERY, '$1')
   if (depth > 8) return value
   if (Array.isArray(value)) return value.map((v) => stripUrls(v, depth + 1))
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, stripUrls(v, depth + 1)]))
@@ -217,6 +220,11 @@ function pixelRow(row: Record<string, unknown>, keys: readonly string[], account
  * past the first MAX_TAKEN_CHECKS) is its id and why — never asserted free without the check.
  */
 async function checkedPixelRows(account: MetaChosenAccount, rows: Record<string, unknown>[], keys: readonly string[]) {
+  return checkedRows(account, rows, (r) => pixelRow(r, keys, account))
+}
+
+/** Rows that are datasets (pixels or offline sets): each checked first; `full` only for one no other business uses. */
+async function checkedRows(account: MetaChosenAccount, rows: Record<string, unknown>[], full: (row: Record<string, unknown>) => unknown) {
   let checks = MAX_TAKEN_CHECKS
   const out: unknown[] = []
   for (const r of rows) {
@@ -227,7 +235,7 @@ async function checkedPixelRows(account: MetaChosenAccount, rows: Record<string,
     const verdict = await pixelVerdict(account, id)
     if ('unchecked' in verdict) out.push({ pixelId: id, checked: false, why: `Nexus could not check whether another business in Nexus uses it (${verdict.unchecked}).` })
     else if (verdict.taken) out.push({ pixelId: id, takenByAnotherBusiness: true })
-    else out.push(pixelRow(r, keys, account))
+    else out.push(full(r))
   }
   return out
 }
@@ -308,7 +316,8 @@ async function qualityEvent(account: MetaChosenAccount, row: Record<string, unkn
     spendCents: spendOf?.cents ?? null,
     spendCurrency: spendOf?.currency ?? null,
     adSets,
-    valueDiagnostics: plain(row.value_diagnostics, 1) ?? null,
+    // Review A-S1 — an issue_example can be a page address: never its query.
+    valueDiagnostics: stripUrls(plain(row.value_diagnostics, 1) ?? null),
     delay: plain(row.event_delay, 1) ?? null,
   }
 }
@@ -349,39 +358,47 @@ export type QualityEvidence = { refused: true } | { row: boolean; matchQualitySc
 /**
  * The plain verdict of the D2 check for one event (the Owner's rule: never a false "covered" — missing purchases — and
  * never a false "missing" — double counting). Pure.
- *   - browser: Meta's stats with event_source WEB_ONLY (> 0 yes, 0 no);
- *   - server (review B2): Meta's stats with event_source SERVER_ONLY AND the Dataset Quality API must agree — server
- *     events show there as a match-quality score, an event coverage or server events carrying a dedup key. Stats > 0
- *     and the API shows them: yes; stats 0 and the API shows none: no; they disagree, or either was not read: unknown;
+ *   - browser: Meta's stats with event_source WEB_ONLY > 0 is yes; 0 is no only when the Dataset Quality API shows no
+ *     browser side either (no key carried by browser events, no coverage) — they disagree, or either was not read:
+ *     unknown (review B-N4: the filtered count may leave deduplicated events out, LIVE-PROBES SG-030c);
+ *   - server (review B2): SERVER_ONLY and the Dataset Quality API must agree — server events show there as a
+ *     match-quality score, an event coverage or server events carrying a dedup key; else unknown;
  *   - browserAndServer: yes when both are yes; no only when one side is yes and the other no; else unknown;
- *   - coverage (review B1): the larger of Meta's event_coverage and the dedup coverage summed over the keys (Meta: each
- *     key's share is incremental); the gap is none only when it reaches Meta's goal_percentage, `coverage` between 0 and
- *     the goal, `dedup` at 0 (both send, nothing deduplicated: double counting), unknown without a goal or coverage.
+ *   - the gap when both send: dedup first when Meta deduplicates nothing (the summed dedup coverage is 0: double
+ *     counting, review B-N2); else Meta's documented pair alone, event_coverage.percentage against goal_percentage —
+ *     none at or above the goal, coverage below it (review B-N1; the summed dedup coverage is information only); no
+ *     coverage or no goal: unknown. The dedup sum is null when any key's share is missing (review B-N3: missing data is
+ *     never "deduplicates none").
  */
 export function sendersVerdict(input: { browserCount: number | null; serverCount: number | null; quality: QualityEvidence }) {
   const { browserCount, serverCount, quality } = input
   const read = 'row' in quality ? quality : null
   const keys = read?.dedupKeys ?? []
-  const browser: YesNo = browserCount === null ? 'unknown' : browserCount > 0 ? 'yes' : 'no'
-  const serverByStats: YesNo = serverCount === null ? 'unknown' : serverCount > 0 ? 'yes' : 'no'
-  const serverShown = read ? read.row && (read.matchQualityScore !== null || (read.coveragePercent ?? 0) > 0 || keys.some((k) => (k.serverEventsWithKeyPercent ?? 0) > 0)) : null
-  const serverByQuality: YesNo = serverShown === null ? 'unknown' : serverShown ? 'yes' : 'no'
-  const server: YesNo = serverByStats !== 'unknown' && serverByStats === serverByQuality ? serverByStats : 'unknown'
-  const both: YesNo = browser === 'yes' && server === 'yes' ? 'yes' : (browser === 'yes' && server === 'no') || (browser === 'no' && server === 'yes') ? 'no' : 'unknown'
-  const dedupCoverage = keys.length ? keys.reduce((sum, k) => sum + (k.browserEventsDedupedPercent ?? 0), 0) : null
   const eventCoverage = read?.coveragePercent ?? null
-  const coverage = dedupCoverage === null ? eventCoverage : eventCoverage === null ? dedupCoverage : Math.max(dedupCoverage, eventCoverage)
+  const agree = (stats: YesNo, byQuality: YesNo): YesNo => (stats !== 'unknown' && stats === byQuality ? stats : 'unknown')
+  const browserByStats: YesNo = browserCount === null ? 'unknown' : browserCount > 0 ? 'yes' : 'no'
+  const browserShown = read ? keys.some((k) => (k.browserEventsWithKeyPercent ?? 0) > 0) || (eventCoverage ?? 0) > 0 : null
+  const browserByQuality: YesNo = browserShown === null ? 'unknown' : browserShown ? 'yes' : 'no'
+  // A browser count above 0 is Meta's own proof; a 0 needs the quality API to show no browser side either.
+  const browser: YesNo = browserByStats === 'yes' ? 'yes' : agree(browserByStats, browserByQuality)
+  const serverByStats: YesNo = serverCount === null ? 'unknown' : serverCount > 0 ? 'yes' : 'no'
+  const serverShown = read ? read.row && (read.matchQualityScore !== null || (eventCoverage ?? 0) > 0 || keys.some((k) => (k.serverEventsWithKeyPercent ?? 0) > 0)) : null
+  const serverByQuality: YesNo = serverShown === null ? 'unknown' : serverShown ? 'yes' : 'no'
+  const server = agree(serverByStats, serverByQuality)
+  const both: YesNo = browser === 'yes' && server === 'yes' ? 'yes' : (browser === 'yes' && server === 'no') || (browser === 'no' && server === 'yes') ? 'no' : 'unknown'
+  const dedupCoverage = keys.length && keys.every((k) => k.browserEventsDedupedPercent !== null)
+    ? keys.reduce((sum, k) => sum + (k.browserEventsDedupedPercent as number), 0) : null
   const goal = read?.goalPercent ?? null
   const deduplicated: YesNo = both !== 'yes' || dedupCoverage === null ? 'unknown' : dedupCoverage > 0 ? 'yes' : 'no'
   const gap = both === 'yes'
-    ? coverage === null ? 'unknown' : coverage === 0 ? 'dedup' : goal === null ? 'unknown' : coverage >= goal ? 'none' : 'coverage'
+    ? dedupCoverage === 0 ? 'dedup' : eventCoverage === null || goal === null ? 'unknown' : eventCoverage >= goal ? 'none' : 'coverage'
     : server === 'no' && browser === 'yes' ? 'server'
       : browser === 'no' && server === 'yes' ? 'browser'
         : 'unknown'
   const eventId = keys.find((k) => k.key === 'event_id')
   return {
-    browser, server, serverByStats, serverByQuality, both, deduplicated, gap,
-    coveragePercent: coverage, eventCoveragePercent: eventCoverage, dedupCoveragePercent: dedupCoverage, coverageGoalPercent: goal,
+    browser, browserByStats, browserByQuality, server, serverByStats, serverByQuality, both, deduplicated, gap,
+    coveragePercent: eventCoverage, coverageGoalPercent: goal, dedupCoveragePercent: dedupCoverage,
     eventIdOnBrowserPercent: eventId?.browserEventsWithKeyPercent ?? null,
     eventIdOnServerPercent: eventId?.serverEventsWithKeyPercent ?? null,
   }
@@ -440,7 +457,7 @@ async function sourcesView(account: MetaChosenAccount, pixelId: string, input: {
       bySource: refused(bySource) ? bySource : { totals: bySource.totals, note: 'Every event of the pixel per source, under Meta\'s own labels (stats aggregation event_source; Meta does not document the labels).' },
     },
     deduplication: {
-      keys, coveragePercent: verdict.coveragePercent, eventCoveragePercent: verdict.eventCoveragePercent, dedupCoveragePercent: verdict.dedupCoveragePercent,
+      keys, coveragePercent: verdict.coveragePercent, dedupCoveragePercent: verdict.dedupCoveragePercent,
       coverageGoalPercent: verdict.coverageGoalPercent, matchQualityScore: 'row' in evidence ? evidence.matchQualityScore : null, freshness: plain(eventRow?.data_freshness, 1) ?? null,
       ...(refused(quality) ? { refused: quality.refused } : {}),
     },
@@ -699,9 +716,8 @@ export async function datasetsView(input: DatasetsInput) {
         businessId
           ? part(async () => {
             const read = await readRows(connectionId, 'datasets.openbridgePortfolio', `${businessId}/openbridge_configurations`, { fields: OPENBRIDGE_FIELDS }, 100)
-            const chosen = new Set(await chosenPixelIds(account))
-            // A gateway set up for a pixel that is not on the chosen ad account: its id and pixel id only.
-            return read.rows.map((r) => (chosen.has(idText(r.pixel_id) ?? '') ? pickRow(r, OPENBRIDGE_FIELDS.split(',')) : { id: idText(r.id), pixelId: idText(r.pixel_id), onChosenAdAccount: false }))
+            // Review A-N2 — in full only for the pixel checked above; any other gateway configuration is its id only.
+            return read.rows.map((r) => (idText(r.pixel_id) === pixelId ? pickRow(r, OPENBRIDGE_FIELDS.split(',')) : { id: idText(r.id), otherPixel: true }))
           })
           : Promise.resolve({ refused: 'The chosen ad account belongs to no business portfolio Nexus knows.' }),
       ])
@@ -742,12 +758,17 @@ export async function datasetsView(input: DatasetsInput) {
       const businessId = account.businessId
       const [uploadRows, accountSets, portfolioSets] = await Promise.all([
         uploads,
-        part(async () => (await readRows(connectionId, 'datasets.offlineSets', `${act(adAccountId)}/offline_conversion_data_sets`, { fields: `${OFFLINE_SET_FIELDS},auto_track_for_ads` }, maxRows)).rows.map((r) => pickRow(r, [...OFFLINE_SET_FIELDS.split(','), 'auto_track_for_ads']))),
+        // Review A-N2 — each of the account's offline sets (datasets) is checked like a pixel of the list: one another
+        // business in Nexus uses is its id and the flag, one Nexus could not check its id and why.
+        part(async () => {
+          const read = await readRows(connectionId, 'datasets.offlineSets', `${act(adAccountId)}/offline_conversion_data_sets`, { fields: `${OFFLINE_SET_FIELDS},auto_track_for_ads` }, maxRows)
+          return checkedRows(account, read.rows, (r) => pickRow(r, [...OFFLINE_SET_FIELDS.split(','), 'auto_track_for_ads']))
+        }),
         businessId
           ? part(async () => {
             const read = await readRows(connectionId, 'datasets.offlineSetsPortfolio', `${businessId}/offline_conversion_data_sets`, { fields: `${OFFLINE_SET_FIELDS},access_type,permitted_roles,is_assigned_to_ad_accounts_in_business` }, maxRows)
-            const chosen = new Set(await chosenPixelIds(account))
-            return read.rows.map((r) => (chosen.has(idText(r.id) ?? '') ? pickRow(r, [...OFFLINE_SET_FIELDS.split(','), 'access_type', 'permitted_roles', 'is_assigned_to_ad_accounts_in_business']) : { id: idText(r.id), onChosenAdAccount: false }))
+            // In full only the pixel checked above (pixelId); any other set of the portfolio is its id only.
+            return read.rows.map((r) => (pixelId && idText(r.id) === pixelId ? pickRow(r, [...OFFLINE_SET_FIELDS.split(','), 'access_type', 'permitted_roles', 'is_assigned_to_ad_accounts_in_business']) : { id: idText(r.id), notChecked: true }))
           })
           : Promise.resolve({ refused: 'The chosen ad account belongs to no business portfolio Nexus knows.' }),
       ])
@@ -789,13 +810,21 @@ async function customConversionsView(account: MetaChosenAccount, input: Datasets
     // Review A7 — `custom_event_type` too: only a custom conversion has one, so another object of the account (a campaign,
     // an ad set) is never taken for one (Meta refuses the field on another node type).
     let owner: string | null = null
+    let pixelOf: string | null = null
     try {
-      const check = await metaReadOne({ connectionId }, { operation: 'datasets.conversionOwner', path: id, query: { fields: 'account_id,custom_event_type' } })
+      const check = await metaReadOne({ connectionId }, { operation: 'datasets.conversionOwner', path: id, query: { fields: 'account_id,custom_event_type,pixel{id}' } })
       owner = metaAdAccountId((check.body as { account_id?: unknown }).account_id)
+      pixelOf = idOf((check.body as { pixel?: unknown }).pixel)
     } catch (err) {
       if (!(err instanceof MetaReadError) || err.failure.authLost || err.failure.throttled || err.failure.origin !== 'meta') throw err
     }
     if (owner !== adAccountId) refuse('That is not a custom conversion of the chosen ad account, so it is not read.')
+    // Review A-N5 — its pixel is checked like any pixel read: one another business in Nexus uses, or one Nexus cannot
+    // check (or none named), and the conversion is not read.
+    if (!pixelOf) refuse('Meta names no pixel for that custom conversion, so Nexus cannot check whether another business in Nexus uses its events; it is not read.')
+    const verdict = await pixelVerdict(account, pixelOf)
+    if ('unchecked' in verdict) refuse(`Nexus could not check whether another business in Nexus uses that custom conversion's pixel (${verdict.unchecked}), so it is not read.`)
+    if (verdict.taken) refuse(`That custom conversion counts a pixel another business in Nexus also uses, so it is not read. ${TAKEN_PIXEL}`)
     return id
   }
   switch (scope) {

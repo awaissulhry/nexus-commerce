@@ -15,19 +15,34 @@ const h = vi.hoisted(() => ({
   answer: null as null | ((req: { operation: string; path: string; query?: Record<string, unknown> }) => unknown),
   rowsFor: null as null | ((req: { operation: string; path: string; query?: Record<string, unknown> }) => unknown),
   taken: [] as Array<{ id: string }>,
+  /** The pixel check (review A-N1): its owner portfolio, its ad accounts in a portfolio, its partner portfolios. */
+  ownerFor: null as null | ((req: { path: string }) => unknown),
+  sharedAccountsFor: null as null | ((req: { path: string; query?: Record<string, unknown> }) => unknown),
+  agenciesFor: null as null | ((req: { path: string }) => unknown),
   knownAdSets: new Set<string>(),
 }))
 vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => h.connections) }))
 vi.mock('../../marketing/meta-ads/read-client.js', async () => ({
   metaReadOne: vi.fn(async (_t: unknown, req: Req) => {
     h.calls.push(req)
+    if (req.operation === 'datasets.pixelOwner') {
+      const owner = h.ownerFor?.(req) ?? { owner_business: { id: '9876543210' } }
+      if (owner instanceof Error) throw owner
+      return { body: owner, calls: 1 }
+    }
     const body = h.answer?.(req)
     if (body instanceof Error) throw body
     return { body: body ?? {}, calls: 1 }
   }),
   metaReadAll: vi.fn(async (_t: unknown, req: Req, onRows: (rows: Record<string, unknown>[]) => void) => {
     h.calls.push(req)
-    const rows = h.rowsFor?.(req) ?? []
+    const custom = h.rowsFor?.(req)
+    // By default a pixel is the chosen portfolio's, connected to the chosen ad account only, shared with no partner.
+    const rows = req.path.endsWith('/shared_accounts') && !(custom instanceof Error) && !(Array.isArray(custom) && custom.length)
+      ? (h.sharedAccountsFor?.(req) ?? [{ account_id: '1234567890', name: 'Shop A ads' }])
+      : req.path.endsWith('/shared_agencies') && !(custom instanceof Error) && !(Array.isArray(custom) && custom.length)
+        ? (h.agenciesFor?.(req) ?? [])
+        : custom ?? []
     if (rows instanceof Error) throw rows
     onRows(rows as Record<string, unknown>[])
     return { rows: (rows as unknown[]).length, calls: 1, truncated: false }
@@ -38,7 +53,8 @@ vi.mock('../../../db.js', () => ({
     metaAdsCampaign: { findFirst: vi.fn(async () => null) },
     metaAdsAdSet: { findFirst: vi.fn(async ({ where }: { where: { adSetId?: string } }) => (where.adSetId && h.knownAdSets.has(where.adSetId) ? { id: 'x' } : null)) },
     metaAdsAd: { findFirst: vi.fn(async () => null) },
-    $queryRaw: vi.fn(async () => h.taken),
+    // nexus_meta_links_taken answers only the ids asked (taken.ts passes them as the template's second value).
+    $queryRaw: vi.fn(async (_sql: unknown, _product: unknown, ids: string[]) => h.taken.filter((t) => ids.includes(t.id))),
   },
 }))
 
@@ -76,10 +92,10 @@ const stats = (counts: Record<string, number>) => [{ aggregation: 'event', start
 let pixels: Array<Record<string, unknown>>
 beforeEach(() => {
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
-  h.connections = [CHOSEN]; h.calls.length = 0; h.taken = []; h.knownAdSets = new Set()
+  h.connections = [CHOSEN]; h.calls.length = 0; h.taken = []; h.ownerFor = null; h.sharedAccountsFor = null; h.agenciesFor = null; h.knownAdSets = new Set()
   pixels = [{ id: PIXEL, name: 'Shop A pixel', owner_business: { id: BIZ } }]
   h.answer = (req) => {
-    if (req.operation === 'datasets.conversionOwner') return { account_id: req.path === CC ? OWN : OTHER_ACCOUNT }
+    if (req.operation === 'datasets.conversionOwner') return { account_id: req.path === CC ? OWN : OTHER_ACCOUNT, pixel: { id: PIXEL } }
     if (req.path === 'dataset_quality') return { web: [{ event_name: 'Purchase' }], offline: [{ event_name: 'Purchase', composite: { score: 6.6 } }] }
     return { id: req.path, name: 'x', account_id: OWN }
   }
@@ -189,8 +205,9 @@ describe('only the chosen ad account\'s pixels', () => {
     expect(res.items[0]).toMatchObject({ pixelId: PIXEL, name: 'Shop A pixel', onChosenAdAccount: true })
     expect(res.items[1]).toEqual({ pixelId: OTHER_PIXEL, takenByAnotherBusiness: true })
     expect(JSON.stringify(res)).not.toMatch(/Shop B/)
+    // Not taken, but not on the chosen ad account either: Meta's lists cannot show where else it is used → unchecked.
     h.taken = []
-    expect(data(await run({ view: 'portfolio' })).items[1]).toEqual({ pixelId: OTHER_PIXEL, onChosenAdAccount: false, checked: true })
+    expect(data(await run({ view: 'portfolio' })).items[1]).toEqual({ pixelId: OTHER_PIXEL, onChosenAdAccount: false, checked: false })
   })
   it('access: the pixel\'s ad accounts, people and partners, read with the portfolio', async () => {
     h.rowsFor = (req) => {
@@ -216,7 +233,7 @@ describe('a pixel another business in Nexus uses is never read (review A4)', () 
   it.each(['access', 'stats', 'sources', 'quality', 'diagnostics', 'gateway', 'event-setup', 'quality-offline'])('view %s refuses it before reading it', async (view) => {
     takenPixel()
     expect((await run({ view })).error).toMatch(/another business in Nexus uses/)
-    expect(h.calls.map((c) => c.path).filter((p) => p.startsWith(PIXEL) && !p.endsWith('/shared_accounts'))).toEqual([])
+    expect(h.calls.filter((c) => c.path.startsWith(PIXEL) && c.operation !== 'datasets.pixelOwner' && !c.path.endsWith('/shared_accounts')).map((c) => c.path)).toEqual([])
     expect(h.calls.some((c) => c.path === 'dataset_quality')).toBe(false)
   })
   it('list and detail show it as its id and the flag only', async () => {
@@ -238,6 +255,53 @@ describe('a pixel another business in Nexus uses is never read (review A4)', () 
     const row = data(await run({ view: 'list' })).items[0]
     expect(row).not.toHaveProperty('name')
     expect(row).not.toHaveProperty('takenByAnotherBusiness')
+  })
+  it('A-N1 — owned by another portfolio, or not listing the chosen account: unchecked, never read in full', async () => {
+    h.ownerFor = () => ({ owner_business: { id: '2222222222' } })
+    const row = data(await run({ view: 'list' })).items[0]
+    expect(row).toMatchObject({ pixelId: PIXEL, checked: false })
+    expect(row.why).toMatch(/owned by another business portfolio/)
+    expect(row).not.toHaveProperty('name')
+    h.calls.length = 0
+    expect((await run({ view: 'detail' })).error).toMatch(/owned by another business portfolio/)
+    expect(h.calls.some((c) => c.operation === 'datasets.detail')).toBe(false)
+    h.ownerFor = null
+    h.sharedAccountsFor = () => [{ account_id: '4444444444' }]
+    expect((await run({ view: 'sources' })).error).toMatch(/does not list the chosen ad account/)
+  })
+  it('A-N1 — a partner portfolio\'s ad accounts are checked too: another business\'s there = taken; unreadable = unchecked', async () => {
+    h.agenciesFor = () => [{ id: '3333333333' }]
+    h.taken = [{ id: OTHER_ACCOUNT }]
+    h.sharedAccountsFor = (req) => (req.query?.business === '3333333333' ? [{ account_id: OTHER_ACCOUNT }] : [{ account_id: OWN }])
+    // The chosen portfolio's list answers only the chosen account, so the hit is in the partner portfolio.
+    h.taken = []
+    expect((await run({ view: 'quality' })).ok).toBe(true)
+    h.taken = [{ id: OTHER_ACCOUNT }]
+    h.sharedAccountsFor = (req) => (req.query?.business === '3333333333' ? [{ account_id: OTHER_ACCOUNT }] : [])
+    h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/shared_accounts` && req.query?.business === BIZ ? [{ account_id: OWN }] : [])
+    expect(data(await run({ view: 'list' })).items).toEqual([{ pixelId: PIXEL, takenByAnotherBusiness: true }])
+    h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/shared_accounts` && req.query?.business === '3333333333' ? metaError('200') : [])
+    h.sharedAccountsFor = () => [{ account_id: OWN }]
+    expect((await run({ view: 'sources' })).error).toMatch(/shared with another business portfolio whose ad accounts Meta does not show/)
+    expect(refusedCalls()).toEqual([])
+  })
+  it('A-N2 — gateway and legacy-offline: full rows only for checked datasets, any other by its id', async () => {
+    h.taken = [{ id: OTHER_ACCOUNT }]
+    h.rowsFor = (req) => {
+      if (req.path === `act_${OWN}/adspixels`) return pixels
+      if (req.path === `${BIZ}/openbridge_configurations`) return [{ id: '61', pixel_id: PIXEL, partner_name: 'Ours' }, { id: '62', pixel_id: OTHER_PIXEL, partner_name: 'Theirs' }]
+      if (req.path === `act_${OWN}/offline_conversion_data_sets`) return [{ id: PIXEL, name: 'Our set' }, { id: OTHER_PIXEL, name: 'Their set' }]
+      if (req.path === `${BIZ}/offline_conversion_data_sets`) return [{ id: PIXEL, name: 'Our set' }, { id: OTHER_PIXEL, name: 'Their set' }]
+      if (req.path === `${OTHER_PIXEL}/shared_accounts`) return [{ account_id: OWN }, { account_id: OTHER_ACCOUNT }]
+      return []
+    }
+    const gateway = data(await run({ view: 'gateway' }))
+    expect(gateway.portfolioGatewayConfigurations).toEqual([expect.objectContaining({ id: '61', partnerName: 'Ours' }), { id: '62', otherPixel: true }])
+    const offline = data(await run({ view: 'legacy-offline' }))
+    expect(offline.accountOfflineSets).toEqual([expect.objectContaining({ id: PIXEL, name: 'Our set' }), { pixelId: OTHER_PIXEL, takenByAnotherBusiness: true }])
+    expect(offline.portfolioOfflineSets).toEqual([{ id: PIXEL, notChecked: true }, { id: OTHER_PIXEL, notChecked: true }])
+    expect(data(await run({ view: 'legacy-offline', pixelId: PIXEL })).portfolioOfflineSets[0]).toMatchObject({ id: PIXEL, name: 'Our set' })
+    expect(JSON.stringify(gateway) + JSON.stringify(offline)).not.toMatch(/Theirs|Their set/)
   })
   it('detail lists only the chosen account\'s own audiences built on the pixel', async () => {
     h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/audiences` ? [
@@ -276,13 +340,13 @@ describe('D2 — who sends the events (view sources)', () => {
       return { last_upload_app: 'Shop app', last_upload_app_changed_time: 1760000000 }
     }
   }
-  const key = (name: string, overall: number, server = 98) => ({ dedupe_key: name, browser_events_with_dedupe_key: { percentage: 100 }, server_events_with_dedupe_key: { percentage: server }, overall_browser_coverage_from_dedupe_key: { percentage: overall } })
+  const key = (name: string, overall: number | null, server = 98, browser = 100) => ({ dedupe_key: name, browser_events_with_dedupe_key: { percentage: browser }, server_events_with_dedupe_key: { percentage: server }, overall_browser_coverage_from_dedupe_key: overall === null ? {} : { percentage: overall } })
   const noServerSide: Dqa = { coverage: 0, score: null, dedup: [key('event_id', 0, 0)] }
 
   it('browser AND server, covered to Meta\'s goal → yes, no gap (upload-meta-events stays off)', async () => {
     setup({ browser: { Purchase: 10, PageView: 900 }, server: { Purchase: 9 }, dqa: { coverage: 80, goal: 75, dedup: [key('event_id', 70), key('external_id', 12)] } })
     const res = data(await run({ view: 'sources' }))
-    expect(res.answer).toMatchObject({ browserAndServer: 'yes', browser: 'yes', server: 'yes', serverByStats: 'yes', serverByQuality: 'yes', deduplicated: 'yes', gap: 'none', coveragePercent: 82, dedupCoveragePercent: 82, eventCoveragePercent: 80, coverageGoalPercent: 75, eventIdOnServerPercent: 98 })
+    expect(res.answer).toMatchObject({ browserAndServer: 'yes', browser: 'yes', server: 'yes', serverByStats: 'yes', serverByQuality: 'yes', deduplicated: 'yes', gap: 'none', coveragePercent: 80, dedupCoveragePercent: 82, coverageGoalPercent: 75, eventIdOnServerPercent: 98 })
     expect(res.answer.sentence).toMatch(/^Does Purchase come from the browser AND a server\? yes/)
     expect(res.counts.browser).toMatchObject({ Purchase: 10 })
     expect(res.integrations.lastUploadApp).toMatchObject({ app: 'Shop app' })
@@ -313,9 +377,29 @@ describe('D2 — who sends the events (view sources)', () => {
     expect(refused.answer).toMatchObject({ server: 'unknown', gap: 'unknown' })
     expect(refused.deduplication.refused).toBe('Meta refused the read (100).')
   })
+  it('coverage is Meta\'s documented pair alone (B-N1): at the goal → none; 60% under a 75% goal → coverage even with a dedup sum of 80; no coverage → unknown', async () => {
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 9 }, dqa: { coverage: 75, goal: 75, dedup: [key('event_id', 75)] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ gap: 'none', coveragePercent: 75 })
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 9 }, dqa: { coverage: 60, goal: 75, dedup: [key('event_id', 50), key('external_id', 30)] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ gap: 'coverage', coveragePercent: 60, dedupCoveragePercent: 80 })
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 9 }, dqa: { coverage: null, dedup: [key('event_id', 50)] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ browserAndServer: 'yes', gap: 'unknown', coveragePercent: null })
+  })
+  it('B-N2 — both send and Meta deduplicates nothing: dedup, even when the coverage reaches the goal', async () => {
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 9 }, dqa: { coverage: 80, goal: 75, dedup: [key('event_id', 0), key('fbp', 0)] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ gap: 'dedup', deduplicated: 'no', dedupCoveragePercent: 0 })
+  })
+  it('B-N3 — a missing per-key share is not 0: no dedup sum, never "deduplicates none"', async () => {
+    setup({ browser: { Purchase: 10 }, server: { Purchase: 9 }, dqa: { coverage: 80, goal: 75, dedup: [key('event_id', 0), key('fbp', null)] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ dedupCoveragePercent: null, deduplicated: 'unknown', gap: 'none' })
+  })
+  it('B-N4 — browser "no" only when the quality API shows no browser side either; they disagree → unknown', async () => {
+    setup({ browser: {}, server: { Purchase: 4 }, dqa: { coverage: 0, dedup: [key('event_id', 0, 98, 100)] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ browserByStats: 'no', browserByQuality: 'yes', browser: 'unknown', gap: 'unknown' })
+  })
   it('server only → no, the gap is the browser pixel; both but nothing deduplicated → dedup; nothing at all → unknown', async () => {
-    setup({ browser: {}, server: { Purchase: 4 } })
-    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ browserAndServer: 'no', gap: 'browser' })
+    setup({ browser: {}, server: { Purchase: 4 }, dqa: { coverage: 0, dedup: [key('event_id', 0, 98, 0)] } })
+    expect(data(await run({ view: 'sources' })).answer).toMatchObject({ browserAndServer: 'no', browser: 'no', gap: 'browser' })
     setup({ browser: { Purchase: 10 }, server: { Purchase: 10 }, dqa: { coverage: 0, dedup: [key('event_id', 0)] } })
     expect(data(await run({ view: 'sources' })).answer).toMatchObject({ browserAndServer: 'yes', deduplicated: 'no', gap: 'dedup' })
     setup({ browser: {}, server: {}, dqa: noServerSide })
@@ -343,6 +427,7 @@ describe('D2 — who sends the events (view sources)', () => {
   it('sendersVerdict is the whole rule', () => {
     const read = (extra: Partial<{ row: boolean; matchQualityScore: number | null; coveragePercent: number | null; goalPercent: number | null; dedupKeys: any[] }> = {}) => ({ row: true, matchQualityScore: 6, coveragePercent: 80, goalPercent: 75, dedupKeys: [], ...extra })
     expect(sendersVerdict({ browserCount: 5, serverCount: 5, quality: read() })).toMatchObject({ both: 'yes', deduplicated: 'unknown', gap: 'none' })
+    expect(sendersVerdict({ browserCount: 5, serverCount: 5, quality: read({ coveragePercent: 74.9 }) })).toMatchObject({ gap: 'coverage' })
     // One side unread and the other at 0 proves nothing (maybe no sale at all): unknown, never "no".
     expect(sendersVerdict({ browserCount: null, serverCount: 0, quality: read({ matchQualityScore: null, coveragePercent: 0 }) })).toMatchObject({ both: 'unknown', server: 'no', gap: 'unknown' })
     expect(sendersVerdict({ browserCount: 3, serverCount: null, quality: read() })).toMatchObject({ both: 'unknown', browser: 'yes', gap: 'unknown' })
@@ -441,7 +526,7 @@ describe('custom conversions', () => {
   })
   it('one of another account — or another kind of object — is refused before it is read; stats in US dollars come under the restricted key', async () => {
     expect((await run({ view: 'custom-conversions', scope: 'one', customConversionId: '120000000000799' })).error).toMatch(/not a custom conversion of the chosen ad account/)
-    expect(h.calls.find((c) => c.operation === 'datasets.conversionOwner')?.query?.fields).toBe('account_id,custom_event_type')
+    expect(h.calls.find((c) => c.operation === 'datasets.conversionOwner')?.query?.fields).toBe('account_id,custom_event_type,pixel{id}')
     expect(h.calls.some((c) => c.operation === 'datasets.conversion')).toBe(false)
     const answer = h.answer
     h.answer = (req) => (req.operation === 'datasets.conversionOwner' ? metaError('100') : answer!(req))
@@ -463,7 +548,35 @@ describe('custom conversions', () => {
   })
 })
 
+describe('A-N5 — a custom conversion is read only through a checked pixel', () => {
+  it('its pixel taken, unchecked or not named → refused before its stats or details are read', async () => {
+    h.taken = [{ id: OTHER_ACCOUNT }]
+    h.sharedAccountsFor = () => [{ account_id: OWN }, { account_id: OTHER_ACCOUNT }]
+    expect((await run({ view: 'custom-conversions', scope: 'stats', customConversionId: CC })).error).toMatch(/counts a pixel another business in Nexus also uses/)
+    h.taken = []; h.sharedAccountsFor = null
+    h.ownerFor = () => ({ owner_business: { id: '2222222222' } })
+    expect((await run({ view: 'custom-conversions', scope: 'one', customConversionId: CC })).error).toMatch(/could not check/)
+    h.ownerFor = null
+    const answer = h.answer!
+    h.answer = (req) => (req.operation === 'datasets.conversionOwner' ? { account_id: OWN } : answer(req))
+    expect((await run({ view: 'custom-conversions', scope: 'one', customConversionId: CC })).error).toMatch(/names no pixel/)
+    expect(h.calls.some((c) => c.operation === 'datasets.conversion' || c.path === `${CC}/stats`)).toBe(false)
+  })
+})
+
 describe('debug feeds never carry a buyer\'s data', () => {
+  it('A-S1 — addresses without a scheme lose their query too; event-setup and value diagnostics are stripped', async () => {
+    expect(stripUrls(['shop.example/thanks?order=55&email=a@b.c', '/checkout/thanks?email=a@b.c', '//cdn.shop.example/a?b=1', 'Is it ready? yes']))
+      .toEqual(['shop.example/thanks', '/checkout/thanks', '//cdn.shop.example/a', 'Is it ready? yes'])
+    h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels
+      : req.path === `${PIXEL}/event_rules` ? [{ id: '1', event_type: 'Purchase', rule: '{"url":{"i_contains":"thanks"}}', sample_urls: ['https://shop.example/thanks?email=a@b.c', 'shop.example/thanks?order=55'] }]
+        : req.path === `${PIXEL}/extractors` ? [{ id: '2', event_type: 'Purchase', domain_uri: 'https://shop.example/p?ref=x' }] : [])
+    const res = data(await run({ view: 'event-setup' }))
+    expect(res.eventRules[0].sampleUrls).toEqual(['https://shop.example/thanks', 'shop.example/thanks'])
+    expect(res.parameterExtractors[0].domainUri).toBe('https://shop.example/p')
+    h.answer = (req) => (req.path === 'dataset_quality' ? { web: [{ event_name: 'Purchase', value_diagnostics: [{ issue_type: 'MISSING_OR_INVALID_VALUE', issue_example: 'shop.example/thanks?email=a@b.c' }] }] } : {})
+    expect(data(await run({ view: 'quality' })).events[0].valueDiagnostics).toEqual([{ issueType: 'MISSING_OR_INVALID_VALUE', issueExample: 'shop.example/thanks' }])
+  })
   it('raw fires and the event log: no query string, never Meta\'s raw event body', async () => {
     h.rowsFor = (req) => (req.path === `act_${OWN}/adspixels` ? pixels : req.path === `${PIXEL}/raw_fires` ? [
       { event: 'Purchase', event_src: 'browser', placed_url: 'https://shop.example/thanks?order=55&email=a@b.c', user_pii_keys: 'em,ph', data_json: '{"em":"x"}' },

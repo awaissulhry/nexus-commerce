@@ -16,11 +16,20 @@ const h = vi.hoisted(() => ({
   /** Pages of a list read page by page (scanRows): the page for a request's `after` cursor. */
   pageFor: null as null | ((req: { operation: string; path: string; query?: Record<string, unknown> }) => unknown),
   taken: [] as Array<{ id: string }>,
+  /** The pixel check (review A-N1): its owner portfolio, its ad accounts in a portfolio, its partner portfolios. */
+  ownerFor: null as null | ((req: { path: string }) => unknown),
+  sharedAccountsFor: null as null | ((req: { path: string; query?: Record<string, unknown> }) => unknown),
+  agenciesFor: null as null | ((req: { path: string }) => unknown),
 }))
 vi.mock('../../meta/meta-accounts.service.js', () => ({ listMetaConnections: vi.fn(async () => h.connections) }))
 vi.mock('../../marketing/meta-ads/read-client.js', async () => ({
   metaReadOne: vi.fn(async (_t: unknown, req: Req) => {
     h.calls.push(req)
+    if (req.operation === 'datasets.pixelOwner') {
+      const owner = h.ownerFor?.(req) ?? { owner_business: { id: '9876543210' } }
+      if (owner instanceof Error) throw owner
+      return { body: owner, calls: 1 }
+    }
     // A filtered audience list is read page by page (scanRows): one page of rowsFor, unless pageFor pages it.
     if (req.path.endsWith('/customaudiences')) {
       const page = h.pageFor?.(req) ?? { data: h.rowsFor?.(req) ?? [] }
@@ -33,7 +42,13 @@ vi.mock('../../marketing/meta-ads/read-client.js', async () => ({
   }),
   metaReadAll: vi.fn(async (_t: unknown, req: Req, onRows: (rows: Record<string, unknown>[]) => void) => {
     h.calls.push(req)
-    const rows = h.rowsFor?.(req) ?? []
+    const custom = h.rowsFor?.(req)
+    // By default a pixel is the chosen portfolio's, connected to the chosen ad account only, shared with no partner.
+    const rows = req.path.endsWith('/shared_accounts') && !(custom instanceof Error) && !(Array.isArray(custom) && custom.length)
+      ? (h.sharedAccountsFor?.(req) ?? [{ account_id: '1234567890', name: 'Shop A ads' }])
+      : req.path.endsWith('/shared_agencies') && !(custom instanceof Error) && !(Array.isArray(custom) && custom.length)
+        ? (h.agenciesFor?.(req) ?? [])
+        : custom ?? []
     if (rows instanceof Error) throw rows
     onRows(rows as Record<string, unknown>[])
     return { rows: (rows as unknown[]).length, calls: 1, truncated: false }
@@ -44,7 +59,8 @@ vi.mock('../../../db.js', () => ({
     metaAdsCampaign: { findFirst: vi.fn(async () => null) },
     metaAdsAdSet: { findFirst: vi.fn(async () => null) },
     metaAdsAd: { findFirst: vi.fn(async () => null) },
-    $queryRaw: vi.fn(async () => h.taken),
+    // nexus_meta_links_taken answers only the ids asked (taken.ts passes them as the template's second value).
+    $queryRaw: vi.fn(async (_sql: unknown, _product: unknown, ids: string[]) => h.taken.filter((t) => ids.includes(t.id))),
   },
 }))
 
@@ -82,7 +98,7 @@ const audience = (id: string, extra: Record<string, unknown> = {}) => ({
 })
 
 beforeEach(() => {
-  h.connections = [CHOSEN]; h.calls.length = 0; h.taken = []; h.pageFor = null
+  h.connections = [CHOSEN]; h.calls.length = 0; h.taken = []; h.ownerFor = null; h.sharedAccountsFor = null; h.agenciesFor = null; h.pageFor = null
   h.answer = (req) => (req.operation === 'audiences.ownerCheck' ? { account_id: req.path === AUD ? OWN : OTHER_ACCOUNT, subtype: 'CUSTOM' } : { id: req.path, ...audience(req.path) })
   h.rowsFor = (req) => {
     if (req.path === `act_${OWN}/customaudiences`) return [audience(AUD), audience(SHARED, { account_id: OTHER_ACCOUNT })]
@@ -290,12 +306,18 @@ describe('what an audience touches', () => {
         ]
       }
       if (req.path === '9876543210/received_audience_sharing_requests') return [{ id: '77', request_status: 'PENDING', custom_audiences: [{ id: '120000000000406', name: 'Offered' }] }]
+      if (req.path === '9876543210/initiated_audience_sharing_requests') return [{ id: '78', request_status: 'PENDING', custom_audiences: [{ id: AUD, name: 'Sent audience' }] }]
       return []
     }
     const res = data(await run({ view: 'business-sharing' }))
-    expect(res.permissionsShared.map((r: any) => r.audience)).toEqual([{ audienceId: AUD, name: 'Ours' }, { audienceId: SHARED, takenByAnotherBusiness: true }, { audienceId: '120000000000405' }])
+    expect(res.permissionsShared).toEqual([
+      { adAccountId: '4444444444', accountName: 'Agency X ads', audience: { audienceId: AUD, name: 'Ours' }, takenByAnotherBusiness: false },
+      { audience: { audienceId: SHARED, takenByAnotherBusiness: true } },
+      { audience: { audienceId: '120000000000405' } },
+    ])
     expect(res.requestsReceived[0].customAudiences).toEqual([{ audienceId: '120000000000406' }])
-    expect(JSON.stringify(res)).not.toMatch(/Theirs|Elsewhere|Offered/)
+    expect(res.requestsSent[0].customAudiences).toEqual([{ audienceId: AUD }])
+    expect(JSON.stringify(res)).not.toMatch(/Theirs|Elsewhere|Offered|Sent audience/)
     expect(h.calls.find((c) => c.path === '9876543210/shared_audience_permissions')?.query?.fields).toBe('audience{id,name,account_id},share_account_id,share_account_name')
   })
   it('business-sharing needs the chosen account\'s business portfolio', async () => {
