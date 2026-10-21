@@ -974,6 +974,15 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: false, accountId: 'conn-1', adAccountId: '1234567890' },
         after: { audienceId: '120000000000040', action: 'share', adAccountIds: ['1234567891'], permissions: null, shared: true, accountId: 'conn-1', adAccountId: '1234567890' },
       },
+      // Meta step 36: a form it made is archived (Meta deletes no form); archive ⇄ re-activate; a test lead it made is deleted.
+      'create-meta-lead-form': {
+        before: { pageId: '120000000000010', formId: null, name: 'Form A', archived: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { pageId: '120000000000010', formId: '600000000000001', name: 'Form A', archived: false, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-lead-form': {
+        before: { action: 'test-lead', pageId: '120000000000010', formId: '600000000000001', name: 'Form A', testLeadId: null, accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { action: 'test-lead', pageId: '120000000000010', formId: '600000000000001', name: 'Form A', testLeadId: '700000000000001', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
       // Meta step 26: a boost it made new is deleted again; a tag approval it added is taken off again.
       'create-meta-boost': {
         before: { kind: 'create', items: [] },
@@ -991,6 +1000,20 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-meta-ad': {
         before: { kind: 'set', adId: '120000000000003', name: 'Ad A', status: 'PAUSED', creativeId: '120000000000301', labels: [], scheduleStart: null, scheduleEnd: null },
         after: { kind: 'set', adId: '120000000000003', name: 'Ad B', creativeId: '120000000000302', accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      // Meta step 32: a dataset's settings, its access and a custom conversion's go back through the tool the record names;
+      // a custom conversion made is deleted again (remove-meta-signal-items, a person approves).
+      'set-meta-dataset': {
+        before: { part: 'pixel', id: '120000000000050', fields: { name: 'Shop A old' }, undo: { tool: 'set-meta-dataset', args: { pixelId: '120000000000050', name: 'Shop A old' } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { part: 'pixel', id: '120000000000050', fields: { name: 'Shop A' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-dataset-access': {
+        before: { part: 'access', id: '120000000000050', fields: { connected: 'no' }, undo: { tool: 'set-meta-dataset-access', args: { pixelId: '120000000000050', action: 'disconnect-ad-account' } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { part: 'access', id: '120000000000050', fields: { connected: 'yes' }, accountId: 'conn-1', adAccountId: '1234567890' },
+      },
+      'set-meta-custom-conversion': {
+        before: { part: 'conversion', id: '', fields: {}, created: false, undo: { tool: 'remove-meta-signal-items', args: { items: [{ kind: 'customConversion', id: '120000000000060' }], confirmDelete: true } }, noUndo: [], accountId: 'conn-1', adAccountId: '1234567890' },
+        after: { part: 'conversion', id: '120000000000060', customConversionId: '120000000000060', fields: { exists: 'yes' }, created: true, accountId: 'conn-1', adAccountId: '1234567890' },
       },
       'set-google-billing': {
         before: { action: 'propose-account-budget', billingSetupId: '81', proposalId: null, budget: null, state: 'none', accountId: 'g-1' },
@@ -1168,7 +1191,10 @@ describe('C1 — every registered tool keeps the contract', () => {
       'create-meta-creative', 'set-meta-creative', 'set-meta-ad-rule', 'remove-meta-ad-rule',
       'set-meta-brand-safety', 'set-meta-block-list', 'remove-meta-block-list',
       'create-meta-audience', 'set-meta-audience', 'set-meta-audience-members', 'set-meta-audience-sharing', 'remove-meta-audience',
-      'create-meta-boost', 'set-meta-partnership-access', 'create-meta-ad', 'set-meta-ad']) {
+      'create-meta-lead-form', 'set-meta-lead-form',
+      'create-meta-boost', 'set-meta-partnership-access',
+      'create-meta-dataset', 'set-meta-dataset', 'set-meta-dataset-access', 'set-meta-custom-conversion', 'remove-meta-signal-items',
+      'create-meta-ad', 'set-meta-ad']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

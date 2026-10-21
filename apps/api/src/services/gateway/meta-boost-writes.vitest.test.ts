@@ -13,6 +13,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({ calls: [] as Array<{ url: string; init: RequestInit }>, answers: [] as Array<() => Response> }))
 vi.mock('./account.js', () => import('../../test-support/gateway-stubs.js').then((m) => m.accountModule))
 // Step 28's Page check (meta-optimize-owner.ts, kind `page`: the partnership host's writes) reads the PAGE link itself.
+// Step 31's body-id rule (audience-ids.ts audienceIdProblem) judges a boost's `instagram` ids, with the test connection's
+// chosen Page and Instagram account in place of its live connection read.
+vi.mock('../marketing/meta-ads/audience-ids.js', async (importActual) => {
+  const actual = await importActual<typeof import('../marketing/meta-ads/audience-ids.js')>()
+  const stubs = await import('../../test-support/gateway-stubs.js')
+  return {
+    ...actual,
+    metaAudienceIdProblem: async (connectionId: string, inner: Parameters<typeof actual.audienceIdProblem>[1]) =>
+      actual.audienceIdProblem({ connectionId, adAccountId: '1234567890', pageId: stubs.gatewayMetaPage[connectionId] ?? null, instagramId: stubs.gatewayMetaInstagram[connectionId] ?? null } as never, inner),
+  }
+})
 vi.mock('../../db.js', () => import('../../test-support/gateway-stubs.js').then((m) => ({
   default: { metaAccountLink: { findFirst: async ({ where }: { where: { connectionId: string; product: string } }) => (where.product === 'PAGE' && m.gatewayMetaPage[where.connectionId] ? { externalId: m.gatewayMetaPage[where.connectionId] } : null) } },
 })))
@@ -138,17 +149,18 @@ describe('a boost goes through step 25\'s ONE creative judge', () => {
   it('a creator\'s content: the chosen Page and Instagram account are its sponsors, ad_format named, no instagram_user_id', () => {
     const c = judged(creatorMedia())
     expect('problem' in c ? c.problem : null).toBeNull()
-    expect((c as { assets: Array<{ id: string; kind: string }> }).assets).toEqual(expect.arrayContaining([{ id: IG, kind: 'choseninstagram' }, { id: MEDIA, kind: 'partnercontent' }]))
-    // The chosen Page (object_id, the sponsor Page) is step 19's `page` body id.
-    expect((c as { ids: Array<{ id: string; kind: string }> }).ids).toEqual([{ id: PAGE, kind: 'page' }])
+    expect((c as { assets: Array<{ id: string; kind: string }> }).assets).toEqual(expect.arrayContaining([{ id: MEDIA, kind: 'partnercontent' }]))
+    // The chosen Page (object_id, the sponsor Page) and Instagram account (the sponsor) are step 19's `page` and step 31's
+    // `instagram` body ids.
+    expect((c as { ids: Array<{ id: string; kind: string }> }).ids).toEqual([{ id: PAGE, kind: 'page' }, { id: IG, kind: 'instagram' }])
     expect(problem({ body: form(creatorMedia({ instagram_user_id: IG })) })).toMatch(/names no instagram_user_id/)
     expect(problem({ body: form(Object.fromEntries(Object.entries(creatorMedia()).filter(([k]) => !k.endsWith('_branded_content')))) })).toMatch(/business as its sponsor/)
     expect(problem({ body: form(creatorMedia({ branded_content: { ad_format: 4 } })) })).toMatch(/whole number from 1 to 3/)
     expect(problem({ body: form(creatorMedia({ branded_content: { ad_format: '1' } })) })).toMatch(/whole number/)
     // A creator's Facebook post by its id: the post is the creator's content (never "a post of the chosen Page").
     const fb = judged(sealed({ name: 'B', object_story_id: `${CREATOR_PAGE}_500000000000002`, ...sponsors, branded_content: { ad_format: 2 } }))
-    expect((fb as { assets: Array<{ kind: string }> }).assets.map((a) => a.kind)).toEqual(expect.arrayContaining(['choseninstagram', 'partnercontent']))
-    expect((fb as { ids: Array<{ kind: string }> }).ids.map((a) => a.kind)).toEqual(['page'])
+    expect((fb as { assets: Array<{ kind: string }> }).assets.map((a) => a.kind)).toEqual(['partnercontent'])
+    expect((fb as { ids: Array<{ kind: string }> }).ids.map((a) => a.kind)).toEqual(['page', 'instagram'])
     // ad_format with new media is create-meta-creative's partner, not a boost.
     expect(problem({ body: form(sealed({ name: 'B', object_story_spec: { page_id: PAGE, link_data: { link: 'https://www.example.com/', message: 'x' } }, ...sponsors, branded_content: { ad_format: 1 } })) })).toMatch(/ad_format goes with a creator's existing content/)
     // A creator's content by link is refused (only by id or ad code).
@@ -175,8 +187,8 @@ describe('a boost goes through step 25\'s ONE creative judge', () => {
     expect('write' in job && job.write.secrets).toEqual([CODE])
   })
 
-  it('answers in words what is not a boost: a catalog intro card (step 18), several partners', () => {
-    expect(problem({ body: form(creatorMedia({ branded_content: { ad_format: 1, parent_source_instagram_media_id: MEDIA } })) })).toMatch(/catalog creative: it comes with lane C1's catalog rule/)
+  it('answers in words what is not a boost: a catalog intro card (lane C2\'s catalog follow-up), several partners', () => {
+    expect(problem({ body: form(creatorMedia({ branded_content: { ad_format: 1, parent_source_instagram_media_id: MEDIA } })) })).toMatch(/catalog creative: it comes with lane C2's catalog follow-up/)
     expect(problem({ body: form(creatorMedia({ branded_content: { ad_format: 1, partners: [] } })) })).toMatch(/ONE partner/)
     expect(problem({ body: form(ownPost({ source_facebook_post_id: '500000000000001' })) })).toMatch(/create-meta-boost/)
   })
@@ -297,10 +309,10 @@ describe('round 1 — product tags, the app link\'s user id, every spelling of a
       { type: 'VISIT_PROFILE', value: { link: `https://www.facebook.com/${PAGE}` } },
     ] } })
     const judgedBoth = judged(both(IG))
-    expect((judgedBoth as { assets: Array<{ id: string; kind: string }> }).assets).toEqual(expect.arrayContaining([{ id: IG, kind: 'choseninstagram' }]))
+    expect((judgedBoth as { ids: Array<{ id: string; kind: string }> }).ids).toEqual(expect.arrayContaining([{ id: IG, kind: 'instagram' }]))
     expect(problem({ body: form(both('17x')) })).toMatch(/instagram:\/\/user\?username/)
     h.answers.push(json({ id: MEDIA, owner: { id: IG } }))
-    await expect(sendCreative(both('17841400000000777'))).rejects.toThrow(/Instagram account 17841400000000777 is not the one this business chose/)
+    await expect(sendCreative(both('17841400000000777'))).rejects.toThrow(/Instagram account 17841400000000777 is not the Instagram account this business chose/)
   })
 
   it('review A4 — an ad code with / + = is cut out of Meta\'s answer in every spelling (as is, JSON-escaped, \\/, %-encoded)', async () => {

@@ -119,8 +119,20 @@ describe('a new ad: exact keys, every value judged', () => {
     expect('write' in v && v.write.assets).toEqual(expect.arrayContaining([{ id: PAGE, kind: 'identitypage' }, { id: 'abc123', kind: 'adimage' }]))
   })
 
+  it('CR-211 / CR-464 / CR-471 (step 25b): an inline creative\'s product set goes to the gateway as a body id — step 18\'s catalog rule, one memo per call', () => {
+    const template = { link: 'https://www.example.com/', message: '{{product.name}}', name: '{{product.name}}', call_to_action: { type: 'SHOP_NOW' } }
+    const catalog = sealed({ name: 'Catalog A', object_story_spec: { page_id: PAGE, template_data: template }, product_set_id: '120000000000061', asset_feed_spec: { audios: [] } })
+    const v = verdict({ body: form(ad({ creative: JSON.stringify(catalog) })) })
+    expect('problem' in v ? v.problem : null).toBeNull()
+    expect('write' in v && v.write.ids).toEqual(expect.arrayContaining([{ id: ADSET, kind: 'adset' }, { id: '120000000000061', kind: 'productset' }]))
+    // Every format and the shop are opted out on a catalog creative (step 25b): one missing is refused.
+    const bare = { ...catalog, format_transformation_spec: catalog.format_transformation_spec.slice(1) }
+    expect(problem({ body: form(ad({ creative: JSON.stringify(bare) })) })).toMatch(/format_transformation_spec/)
+  })
+
   it('CR-404, review A2: an inline creative is created ACTIVE only when it opts into NO Advantage+ feature (each one refused; fully off allowed)', () => {
-    for (const feature of META_ACTIVATE_FEATURES) {
+    // product_extensions goes ON only beside a catalog's product set (step 25b's productExtensionsProblem refuses it first).
+    for (const feature of META_ACTIVATE_FEATURES.filter((f) => f !== 'product_extensions')) {
       const one = inline()
       one.degrees_of_freedom_spec.creative_features_spec[feature] = { enroll_status: 'OPT_IN' }
       expect(problem({ body: form(ad({ creative: JSON.stringify(one), status: 'ACTIVE' })) }), feature).toMatch(new RegExp(`switches on ${feature}: create it PAUSED, preview it, then switch it on with set-meta-status`))

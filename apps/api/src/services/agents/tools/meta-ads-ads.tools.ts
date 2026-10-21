@@ -226,8 +226,9 @@ const createMetaAd: AgentTool = {
     + 'its payer and beneficiary — or the account\'s defaults), its campaign (no political or social-issue ads), the creative '
     + 'and the pixels. activate needs a creative that reads OFF for every Advantage+ feature (else: create it PAUSED, preview '
     + 'it, then switch it on with set-meta-status). Meta checks it first (validate_only with its synchronous integrity review). Many ads: one request per '
-    + 'ad (Meta\'s background ad requests are a batch Nexus never sends — not all or nothing). Catalog and product-set parts '
-    + 'come with the catalog rule. action undo deletes only ads this tool made that never ran (and their inline creative it '
+    + 'ad (Meta\'s background ad requests are a batch Nexus never sends — not all or nothing). Catalog parts of a new '
+    + 'creative (product extensions, Advantage+ creative for catalog, a collection with an existing published Instant '
+    + 'Experience) pass the catalog rule first: a catalog of the chosen ad account\'s portfolio, never another business\'s. action undo deletes only ads this tool made that never ran (and their inline creative it '
     + 'made new, when no other ad uses it); an ad that ran stays — archive it with set-meta-status.'
     + META_CHANGE_RULES,
   undo: createUndo,

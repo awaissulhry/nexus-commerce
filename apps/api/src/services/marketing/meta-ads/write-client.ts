@@ -21,11 +21,12 @@
  * Never logs a token, a request body or an answer.
  */
 import { metaRestWriteCall, metaRuploadCall, metaWriteCall, type MetaRestWriteRequest, type MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
 import { metaReadOne } from './read-client.js'
+import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
 
 /** The fields a change reads back (gateway meta-calls.ts META_READ_BACK_FIELDS holds the allow-list). */
 export const READ_BACK = 'id,status,effective_status'
@@ -65,8 +66,12 @@ export interface MetaObjectChange {
     | MetaBrandSafetyKind
     // Step 31 — one of the chosen ad account's own custom audiences.
     | 'customaudience'
+    // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
+    | MetaPageKind
     // Step 26 — the chosen Instagram account or a media of it (set-meta-partnership-access; its Page is step 28's `page`).
     | MetaBoostWriteKind
+    // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
+    | MetaSignalsKind
   params: Record<string, string>
   operation: string
   budget?: boolean
@@ -108,6 +113,8 @@ export interface MetaObjectChange {
   readBackOf?: string
   /** Step 39 (review A9) — the run of the change it belongs to (the kit's own id), passed to the gateway. */
   runId?: string
+  /** Step 36 — never read back: Meta's answer (the new id) is all Nexus keeps (a test lead: these tools never read a lead). */
+  skipReadBack?: true
   /** Step 27 — a new ad's check runs Meta's synchronous integrity review with it (synchronous_ad_review, AD-027). */
   adReview?: boolean
 }
@@ -217,12 +224,23 @@ export function readBackMismatch(node: Record<string, unknown> | null, expected:
 const MAX_WORDS = 300
 const cut = (words: string | null | undefined) => (words ? (words.length > MAX_WORDS ? `${words.slice(0, MAX_WORDS - 1)}…` : words) : null)
 
+/** Step 36 review B3 — the kinds a change makes AS the chosen Page (its own token: gateway meta-page-token.ts). */
+const PAGE_KINDS: ReadonlySet<string> = new Set(['page', 'leadform', 'testlead'])
+
 /** The failure of a change's answer, in words about a CHANGE (errors.ts says them about a read). */
-function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>): MetaFailure {
+function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>, kind?: string): MetaFailure {
   const failure = failureOfAnswer(answer)
   if (failure.origin !== 'meta') return failure
   const words = cut(answer.verdict?.channelMessage)
   const code = failure.code ? ` (${failure.code})` : ''
+  // Step 36 review B3 — a change made with the Page's own token: a refused token or permission is the Page's condition
+  // (the system user's role or task on the chosen Page), never "make a new system-user token" or the ad account's.
+  if (kind && PAGE_KINDS.has(kind) && (failure.authLost || failure.permissionDenied)) {
+    return {
+      ...failure,
+      sentence: `Meta did not accept this change made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. The system user may have lost its role or its Advertise task on the Page (Meta Business settings › Users › System users › Assign assets), or its token pages_manage_ads. Nothing was changed.`,
+    }
+  }
   if (failure.authLost) return failure
   if (failure.throttled) return { ...failure, sentence: `Meta asked Nexus to slow down${code}${words ? `: ${words}` : ''}. Nothing was changed; ask again in a few minutes.` }
   if (failure.permissionDenied) return { ...failure, sentence: `Meta does not let this system user change this${words ? `: ${words}` : ''}. Check that the ad account is assigned to the system user and its token carries ads_management.` }
@@ -337,6 +355,8 @@ export async function metaSendChange(
     // Step 18 — a create on an edge answers the NEW object (read-after-write): read back that one, never the parent.
     if (change.edge) {
       const ownId = body && (typeof body.id === 'string' || typeof body.id === 'number') ? String(body.id) : null
+      // Step 36 — a test lead is never read back (Meta's answer, its id, is all Nexus keeps).
+      if (change.skipReadBack) return { node: body, readBack: 'none', waitedMs }
       if (body && ownId && Object.keys(body).length > 1) return { node: body, readBack: 'same-request', waitedMs }
       // Step 19 — a copy answers copied_<kind>_id with the ids of everything it made (ad_object_ids): the copy is read back
       // and Meta's answer kept beside it (the read cannot give those ids again).
@@ -349,7 +369,7 @@ export async function metaSendChange(
     return { node, readBack: node ? 'second-read' : 'none', waitedMs }
   }
   // Not a plain success: what Meta answered, then what the object is now.
-  const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer)
+  const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer, change.kind)
   const unanswered = answer.status === 0 || answer.status >= 500
   const wanted = expectedOf(change)
   // Step 18 — an edge create or a DELETE cannot be judged by reading the object: Meta's answer is all there is (step 39:

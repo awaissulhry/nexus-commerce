@@ -361,6 +361,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/change-ad-rule.ts': 1, // step 29: remove-meta-ad-rule's delete (explicit ask: confirmDelete)
       'services/gateway/meta-brand-safety-rules.ts': 6, // step 39: a list's delete, unshare, a person, posts, an ad account, a content list (judges)
       'services/marketing/meta-ads/change-block-lists.ts': 6, // step 39: set-meta-block-list's undo deletes and remove-meta-block-list (explicit ask: confirmDelete)
+      'services/gateway/meta-lead-form-rules.ts': 1, // step 36: the testlead.delete rule (a judge)
+      'services/marketing/meta-ads/change-lead-forms.ts': 2, // step 36: a test lead's replace and remove-test-lead (only test leads Nexus made)
       'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
       'services/gateway/meta-audience-rules.ts': 4, // step 31: the people out, the opt-out everywhere, the unshare, the audience delete (judges)
       'services/marketing/meta-ads/change-audiences.ts': 5, // step 31: the request type, the two people-out DELETEs, the unshare, remove-meta-audience's delete (explicit ask: confirmDelete)
@@ -368,6 +370,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       // removal, creators off the Page's allowlist, the sponsor tag off posts (each its own action, never a bulk delete).
       'services/gateway/meta-boost-rules.ts': 6, // the tag-approval and ad-code DELETE rules, the partnership host's two DELETE routes (judges)
       'services/marketing/meta-ads/change-boosts.ts': 5, // the tag-approval removal, the ad code's removal, the allowlist removal, the untag
+      'services/gateway/meta-signals-rules.ts': 2, // step 32: dataset.disconnectAccount, customConversion.delete (judges)
+      'services/marketing/meta-ads/change-signals.ts': 2, // step 32: a dataset's disconnect from the chosen ad account, remove-meta-signal-items' delete (explicit ask: confirmDelete; only what Nexus made)
       // Step 27 — create-meta-ad's undo: an ad it made that never ran (step 19's object.delete), then its inline creative made
       // new (step 22's creative.delete: the request and its own sender, sent only once the ad reads DELETED).
       'services/marketing/meta-ads/change-ads.ts': 3,
@@ -415,6 +419,8 @@ const EXPECTED_COMPUTED: string[] = [
   'services/agents/tools/meta-ads-audience-changes.tools.ts: z.enum([\'absolute\'',
   // Step 26 — a creator's video copied by create-meta-boost: its upload method in the record (advideos), not an HTTP method.
   'services/agents/tools/meta-ads-boosts.tools.ts: \'advideos\'',
+  // Step 36 — the kit's plan hash names a request's own method (planOf: no sender).
+  'services/agents/tools/meta-ads-kit.ts: r.method',
   'services/agents/tools/meta-ads-kit.ts: request.method',
   // Step 23 — a video's upload method (advideos | video_ads), not an HTTP method.
   'services/agents/tools/meta-ads-media-upload.tools.ts: (video.method as VideoSource[\'method\']) ?? null',

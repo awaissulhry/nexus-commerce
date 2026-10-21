@@ -290,6 +290,30 @@ export interface FormsInput {
   maxRows?: number
 }
 
+/** One form of the chosen Page with its questions (LD-025), once its id is confirmed the Page's (view form). */
+async function formView(account: MetaChosenAccount, pageId: string, formId: string) {
+  const read = await onPage(() => readGroups(account.connectionId, 'leads.form', formId, FORM_GROUPS))
+  const b = read.body
+  return {
+    pageId,
+    form: {
+      ...formRow(b),
+      questions: tidy(b.questions ?? null),
+      privacyPolicyUrl: text(b.privacy_policy_url),
+      followUpActionUrl: text(b.follow_up_action_url),
+      followUpActionText: text(b.follow_up_action_text),
+      higherIntent: bool(b.is_optimized_for_quality),
+      onlyForTargetedPeople: bool(b.block_display_for_non_targeted_viewer),
+      allowsOrganicLeads: bool(b.allow_organic_lead),
+      questionPageHeadline: text(b.question_page_custom_headline),
+      ...formSetup(b),
+      trackingParameters: tidy(b.tracking_parameters ?? null),
+    },
+    notRead: missingOf(read.missing),
+    note: 'questions: what the form asks, in order (type FULL_NAME, EMAIL, PHONE, CUSTOM …; key is the name each answer carries in a lead). higherIntent: Meta adds a review step. Making, archiving or re-activating a form and making a test lead are change tools (a later Nexus step). The answers people gave are meta-leads.',
+  }
+}
+
 /** The chosen Page's lead forms (LD-023, LD-024) and one form with its questions (LD-025). No person's data. */
 export async function liveLeadForms(input: FormsInput) {
   const account = await metaChosenAccount(input.connectionId)
@@ -297,27 +321,7 @@ export async function liveLeadForms(input: FormsInput) {
   const { connectionId } = account
   if (input.view === 'form') {
     if (!input.formId) throw new MetaLiveRefusal('Name the form (formId, from view list).')
-    const formId = await ownForm(account, input.formId)
-    const read = await onPage(() => readGroups(connectionId, 'leads.form', formId, FORM_GROUPS))
-    const b = read.body
-    return {
-      pageId,
-      form: {
-        ...formRow(b),
-        questions: tidy(b.questions ?? null),
-        privacyPolicyUrl: text(b.privacy_policy_url),
-        followUpActionUrl: text(b.follow_up_action_url),
-        followUpActionText: text(b.follow_up_action_text),
-        higherIntent: bool(b.is_optimized_for_quality),
-        onlyForTargetedPeople: bool(b.block_display_for_non_targeted_viewer),
-        allowsOrganicLeads: bool(b.allow_organic_lead),
-        questionPageHeadline: text(b.question_page_custom_headline),
-        ...formSetup(b),
-        trackingParameters: tidy(b.tracking_parameters ?? null),
-      },
-      notRead: missingOf(read.missing),
-      note: 'questions: what the form asks, in order (type FULL_NAME, EMAIL, PHONE, CUSTOM …; key is the name each answer carries in a lead). higherIntent: Meta adds a review step. Making, archiving or re-activating a form and making a test lead are change tools (a later Nexus step). The answers people gave are meta-leads.',
-    }
+    return formView(account, pageId, await ownForm(account, input.formId))
   }
   const maxRows = clampRows(input.maxRows, 100)
   const read = await onPage(() => listGroups(connectionId, 'leads.forms', `${pageId}/leadgen_forms`, FORM_LIST_GROUPS, {}, maxRows))
@@ -974,4 +978,42 @@ async function engagement(account: MetaChosenAccount, input: CommentsInput) {
     ...(notRead.length ? { notRead } : {}),
     note: 'Counts only: Meta lets nobody list who reacted. Meta\'s reactions page says LIKE counts include CARE, its SDK lists CARE apart: Nexus does not count CARE on its own. comments counts comments and replies (a comment: its replies). shares: the post\'s share count (view shares lists the public ones). Meta may answer a count only to a Page token.',
   }
+}
+
+// ── step 36 (set-meta-lead-form) ─────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Meta step 36 — the ids of a lead form's test leads and nothing else of them (Meta allows one per form): read only after
+ * the form is confirmed the chosen Page's (ownForm), through the same edge as view test (`/{form}/test_leads`,
+ * `fields=id`). No answer, no person, nothing kept.
+ */
+export async function formTestLeadIds(input: { connectionId?: string | null; formId: string }): Promise<string[]> {
+  const account = await metaChosenAccount(input.connectionId)
+  const formId = await ownFormForChange(account, input.formId)
+  const read = await onLeads(() => listPaged(account.connectionId, 'leads.testLeadIds', `${formId}/test_leads`, { fields: 'id' }, 10))
+  return read.rows.map((r) => idText(r.id)).filter((id): id is string => !!id)
+}
+
+/** ownForm's refusals when the chosen Page's list ANSWERED and did not name the form (not when the list itself failed). */
+const NOT_IN_LIST = /^That form is not (one of the lead forms|among the first \d+ lead forms) of the Facebook Page this business chose, so it is not read\.$/
+
+/**
+ * Meta step 36 review B1 — the form check of a lead-form CHANGE (archive, re-activate, test leads): ownForm first; when
+ * the chosen Page's list answered without the form — an ARCHIVED form may be left out of it — the form's own `page_id`
+ * must be the chosen Page (formOnPage: one read of id and page_id), still fail closed. View form / list (step 14) keep
+ * ownForm alone.
+ */
+export async function ownFormForChange(account: MetaChosenAccount, id: string): Promise<string> {
+  try {
+    return await ownForm(account, id)
+  } catch (err) {
+    if (!(err instanceof MetaLiveRefusal) || !NOT_IN_LIST.test(err.message)) throw err
+    return formOnPage(account, metaObjectId(id)!, pageOf(account), 'the Page\'s list of forms did not name it (an archived form may be left out)')
+  }
+}
+
+/** Meta step 36 review B1 — one form of the chosen Page as a change reads it: view form's read, after ownFormForChange. */
+export async function liveLeadFormForChange(input: { connectionId?: string | null; formId: string }) {
+  const account = await metaChosenAccount(input.connectionId)
+  return formView(account, pageOf(account), await ownFormForChange(account, input.formId))
 }

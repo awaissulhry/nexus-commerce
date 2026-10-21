@@ -205,6 +205,8 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'set-meta-brand-safety': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
   'set-meta-block-list': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
   'remove-meta-block-list': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-brand-safety.tools test)',
+  'create-meta-lead-form': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-lead-forms.tools test)',
+  'set-meta-lead-form': 'it reads the business\'s chosen Meta ad account and Page live from Meta, and no business here has Meta connected (meta-ads-lead-forms.tools test)',
   'google-ads-experiments': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'create-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
   'set-google-experiment': 'it reads the business\'s chosen Google Ads account live from Google, and no business here has one (google-ads-experiments.tools test)',
@@ -297,6 +299,12 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   // Meta ads step 27: an ad reads the business's chosen Meta ad account first (meta-ads-ads.tools test).
   'create-meta-ad': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-ads.tools test)',
   'set-meta-ad': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-ads.tools test)',
+  // Meta ads step 32: datasets and custom conversions read and change Meta live (their own test runs them).
+  'create-meta-dataset': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'set-meta-dataset': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'set-meta-dataset-access': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'set-meta-custom-conversion': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
+  'remove-meta-signal-items': 'it reads the business\'s chosen Meta ad account live from Meta, and no business here has Meta connected (meta-ads-signals.tools test)',
   'set-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'set-aplus-asins': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
   'submit-aplus-content': 'it reads and changes A+ content live at Amazon, and no business here has an Amazon account (aplus tools tests)',
@@ -615,6 +623,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-meta-brand-safety': () => ({ adSets: [{ adSetId: '120000000000002', addCategories: ['gambling'] }] }),
   'set-meta-block-list': () => ({ action: 'apply-account', blockListId: '120000000000601' }),
   'remove-meta-block-list': () => ({ kind: 'publisher', blockListId: '120000000000601', confirmDelete: true }),
+  // Meta ads step 36: lead forms and test leads refuse in words here (no business has Meta; their own test runs them).
+  'create-meta-lead-form': () => ({ name: 'Form A', questions: [{ type: 'FULL_NAME' }, { type: 'EMAIL' }], privacyPolicy: { url: 'https://example.com/privacy' } }),
+  'set-meta-lead-form': () => ({ action: 'archive', formId: '600000000000001' }),
   // Meta ads step 9: no business here has Meta, so both refuse in words before any call.
   'meta-targeting-search': () => ({ kind: 'interest', q: 'helmet' }),
   'meta-targeting-check': () => ({ check: 'reach', targeting: { geo_locations: { countries: ['IT'] } } }),
@@ -690,6 +701,12 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // Meta ads step 27: an ad refuses in words before any call (no business here has Meta).
   'create-meta-ad': () => ({ name: 'Ad A', adSetId: '120000000000002', creativeId: '120000000000301' }),
   'set-meta-ad': () => ({ adId: '120000000000003', name: 'Ad B' }),
+  // Meta ads step 32: no business here has Meta, so each refuses in words before any call.
+  'create-meta-dataset': () => ({ name: 'Shop A dataset' }),
+  'set-meta-dataset': () => ({ pixelId: '120000000000050', name: 'Shop A dataset' }),
+  'set-meta-dataset-access': () => ({ pixelId: '120000000000050', action: 'connect-ad-account' }),
+  'set-meta-custom-conversion': () => ({ action: 'update', customConversionId: '120000000000060', name: 'Shop A thanks' }),
+  'remove-meta-signal-items': () => ({ items: [{ kind: 'customConversion', id: '120000000000060' }], confirmDelete: true }),
   // Programme 2, G1: live numbers and the GAQL catch-all (google-ads-live.tools.vitest.test.ts runs them on an account).
   'google-ads-numbers': () => ({ level: 'campaign' }),
   'google-ads-query': () => ({ query: 'SELECT campaign.id, metrics.cost_micros FROM campaign' }),

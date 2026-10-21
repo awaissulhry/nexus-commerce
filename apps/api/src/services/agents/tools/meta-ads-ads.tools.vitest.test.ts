@@ -18,7 +18,16 @@ const h = vi.hoisted(() => ({
   send: vi.fn(),
   check: vi.fn(),
   owned: vi.fn(),
+  taken: new Set<string>(),
 }))
+// Step 18's catalog rule — which portfolios another Nexus business uses (nexus_meta_links_taken PORTFOLIO): a stand-in.
+vi.mock('../../marketing/meta-ads/taken.js', () => {
+  const takenIds = vi.fn(async (_product: string, ids: string[]) => new Set(ids.filter((id) => h.taken.has(id))))
+  return {
+    takenIds,
+    portfolioTaken: vi.fn(async (id: string) => ((await takenIds('PORTFOLIO', [id])).has(id) ? { portfolioId: id, takenByAnotherBusiness: true, sentence: 'taken' } : null)),
+  }
+})
 vi.mock('../../marketing/meta-ads/change-account.js', () => ({ metaChangeAccount: vi.fn(async () => h.account) }))
 vi.mock('../../marketing/meta-ads/live.js', async (importActual) => ({
   ...(await importActual<typeof import('../../marketing/meta-ads/live.js')>()),
@@ -58,6 +67,7 @@ import { META_CREATIVE_FEATURES } from '../../gateway/meta-creative-rules.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../../agent-fleet/approval-inbox.service.js'
 import { __metaObjectLimitsTest } from '../../gateway/meta-object-limits.js'
 import { MetaWriteError } from '../../marketing/meta-ads/write-client.js'
+import { MetaReadError, localFailure } from '../../marketing/meta-ads/errors.js'
 import type { ToolContext, ToolResult } from '../tool-types.js'
 
 const create = META_ADS_ADS_TOOLS.find((t) => t.name === 'create-meta-ad')!
@@ -101,6 +111,7 @@ beforeEach(() => {
   h.account = { target: { connectionId: 'm-1', adAccountId: '1234567890' }, accountId: 'm-1', adAccountId: '1234567890', name: 'Shop A ads', currency: 'EUR' }
   h.chosen = { connectionId: 'm-1', adAccountId: '1234567890', businessId: '9876543210', pageId: PAGE, instagramId: IG, timeZone: 'Europe/Rome' }
   h.records = []
+  h.taken.clear()
   reads = {
     [ADSET]: { id: ADSET, name: 'Ad set A', campaign_id: CAMPAIGN, status: 'ACTIVE', effective_status: 'ACTIVE', is_dynamic_creative: false, dsa_payor: 'Shop A', dsa_beneficiary: 'Shop A', targeting: { geo_locations: { countries: ['IT'] } } },
     [CAMPAIGN]: { id: CAMPAIGN, name: 'Campaign A', status: 'ACTIVE', effective_status: 'ACTIVE', objective: 'OUTCOME_SALES', special_ad_categories: [] },
@@ -511,5 +522,50 @@ describe('set-meta-ad — review round 1', () => {
     expect(await refusal({ adId: AD, creativeId: NEW_CREATIVE }, setAd)).toMatch(/an ad with a new creative there needs who pays for it.*3858152/)
     reads[ACT] = { default_dsa_payor: 'Shop A', default_dsa_beneficiary: 'Shop A' }
     expect((await preview({ adId: AD, creativeId: NEW_CREATIVE }, setAd)).preview.warnings.join(' ')).toMatch(/EU \(DSA\)/)
+  })
+})
+
+describe('create-meta-ad — catalog parts of an inline creative (CR-211, CR-464, CR-471) through step 18\'s catalog rule', () => {
+  const PORTFOLIO = '120000000000090'
+  const OTHER_NEXUS = '120000000000081'
+  const CATALOG = '120000000000060'
+  const FOREIGN_CATALOG = '120000000000063'
+  const SET = '120000000000061'
+  /** Meta as the catalog rule reads it: the ad account's portfolio, the set's catalog, the catalog's owner. */
+  const catalogMeta = (catalog: string, fails = false) => {
+    Object.assign(reads, {
+      [ACT]: { id: ACT, business: { id: PORTFOLIO } },
+      [SET]: { id: SET, product_catalog: { id: catalog } },
+      [CATALOG]: { id: CATALOG, business: { id: PORTFOLIO } },
+      [FOREIGN_CATALOG]: { id: FOREIGN_CATALOG, business: { id: OTHER_NEXUS } },
+      [`${PORTFOLIO}/client_product_catalogs`]: { data: [{ id: FOREIGN_CATALOG }] },
+    })
+    h.read.mockImplementation(async (_c: unknown, q: { path: string }) => {
+      if (fails && q.path === SET) throw new MetaReadError(localFailure('Meta refused it (100): Unsupported get request.', 'X'), 'r', 1)
+      return { body: reads[q.path] ?? {}, calls: 1 }
+    })
+  }
+  /** CR-464 — an Advantage+ creative for catalog: template_data and the creative's product set. */
+  const template = { name: 'Catalog A', story: { template_data: { link: 'https://www.example.com/', message: '{{product.name}} {{product.price}}', name: '{{product.name}}', call_to_action: { type: 'SHOP_NOW' } } }, parts: { product_set_id: SET } }
+
+  it('the business\'s own catalog passes (every format and the shop opted out); another business\'s, a shared portfolio and an unreadable one are refused before Meta\'s check', async () => {
+    catalogMeta(CATALOG)
+    const p = await preview({ ...base, creative: template })
+    expect(p.ok, JSON.stringify(p)).toBe(true)
+    const creative = JSON.parse(checked().params.creative)
+    expect(creative.product_set_id).toBe(SET)
+    expect(creative.format_transformation_spec).toEqual(['da_collection', 'sa_collection', 'single_media', 'catalog_single_media', 'carousel', 'video_slideshow'].map((format) => ({ format, data_source: ['none'] })))
+    expect(creative.destination_spec).toEqual({ destination_type: 'WEBSITE_AND_SHOP_OPT_OUT' })
+    expect(p.preview.warnings.join(' ')).toContain(`Catalog: product set ${SET} — each passed the catalog rule`)
+    // A catalog creative fully opted out may go ACTIVE too (the activation rule reads every feature OFF).
+    expect((await preview({ ...base, creative: template, activate: true })).ok).toBe(true)
+    h.check.mockClear()
+    catalogMeta(FOREIGN_CATALOG); h.taken.add(OTHER_NEXUS)
+    expect(await refusal({ ...base, creative: template })).toMatch(/^Nothing was asked of Meta: product set 120000000000061: That catalog belongs to a business portfolio another business in Nexus uses/)
+    catalogMeta(CATALOG); h.taken.clear(); h.taken.add(PORTFOLIO)
+    expect(await refusal({ ...base, creative: template })).toMatch(/shared with another business in Nexus.*nothing is sent/)
+    h.taken.clear(); catalogMeta(CATALOG, true)
+    expect(await refusal({ ...base, creative: template })).toMatch(/could not confirm that this product set is in one of the business's catalogs/)
+    expect(h.check).not.toHaveBeenCalled()
   })
 })

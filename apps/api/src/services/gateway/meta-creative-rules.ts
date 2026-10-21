@@ -18,8 +18,11 @@
  * checks it before anything is sent (gateway.ts metaMediaAssetsProblem): the identity Page and Instagram account are the
  * business's CHOSEN ones (a partnership ad's partner only beside the chosen one, never another Nexus business's), an image
  * hash is in the chosen account's library, a video in its video library, a post / Instant Experience / lead form / event is
- * the chosen Page's (an upcoming event the chosen Instagram account's). Catalog and product-set ids are refused in words
- * until lane C1's catalog rule (step 18) is on this base: C2-REBASE-18.
+ * the chosen Page's (an upcoming event the chosen Instagram account's). A product set (product_set_id, a template's
+ * boosted_product_set_id, product extensions' associated_product_set_id) and a catalog item (a product tag's product_id,
+ * product_data's product_id) go to the gateway as body ids (`productset`, `productitem`): step 18's ONE catalog rule
+ * (marketing/meta-ads/catalog-rule.ts metaCatalogProblem, step 12's read rule) — the tool asks it before the preview, the
+ * gateway again before it sends (metaBodyIdsProblem).
  *
  * The silent features (lane prompt, binding): every creative Nexus sends carries an explicit `enroll_status` for EVERY
  * Advantage+ creative feature Meta names (META_CREATIVE_FEATURES) and `contextual_multi_ads`; the other silent keys by
@@ -190,6 +193,9 @@ const link: Judge = (value, path, walk) => {
   if (/(^|\.)(fb|facebook)\.com$/.test(url.hostname) && /%/.test(`${url.pathname}${url.search}`)) return no(`${path}: a link to ${url.hostname} is written without %-encoding`)
   // Review round 4 — Meta's link-redirect pages (l.facebook.com/l.php?u=…, flx/warn, l.instagram.com) hide the real website.
   if (metaRedirectLink(url)) return no(`${path}: name the website itself, not Meta's redirect page (${url.hostname}${url.pathname})`)
+  // Catalog review — a collection's Instant Experience may hold a canvas_product_set (collection-ads.md step 2: a product
+  // set with show_in_feed true). Here the experience is checked as the chosen Page's; its product set is the Instant
+  // Experience tools' to check against the catalog rule when they come (after #714): LIVE-PROBES CR-471c.
   if (/(^|\.)(fb|facebook)\.com$/.test(url.hostname) && /canvas/i.test(`${url.pathname}${url.search}`)) {
     const canvas = CANVAS_LINK.exec(value)
     if (!canvas) return no(`${path}: an Instant Experience link is exactly https://fb.com/canvas_doc/<id> (Meta's collection-ads guide), nothing else`)
@@ -216,12 +222,12 @@ const ctaLink: Judge = (value, path, walk) => (typeof value === 'string' && /^te
 const displayLink: Judge = (value, path, walk) => (typeof value === 'string' && /^(?!https?:)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(\/[A-Za-z0-9._~\-/]*)?$/.test(value) && value.length <= LINK_MAX ? ok(value) : link(value, path, walk))
 /**
  * An Instagram app link for the unified profile visit (master CR-225). Step 26 (review B5) — multidestination-profile-visit.md writes it `instagram://user?username=<IG_USERNAME>&userid=<IG_USER_ID>`:
- * the user id, when named, goes to the gateway's check (the chosen Instagram account).
+ * the user id, when named, goes to the gateway's check as step 31's `instagram` body id (the chosen Instagram account).
  */
 const instagramAppLink: Judge = (value, path, walk) => {
   const m = typeof value === 'string' ? /^instagram:\/\/user\?username=[A-Za-z0-9._]{1,30}(?:&userid=([1-9]\d{0,24}))?$/.exec(value) : null
   if (!m) return no(`${path} is instagram://user?username=<the Instagram username>[&userid=<its id>] (Nexus has no app of its own)`)
-  if (m[1]) walk.assets.push({ id: m[1], kind: 'choseninstagram' })
+  if (m[1]) walk.ids.push({ id: m[1], kind: 'instagram' })
   return ok(value)
 }
 // Review round 2 (step 26) — a Meta id never starts with 0 (`0<id>` would slip past a "not the chosen one" compare).
@@ -235,9 +241,10 @@ const id = (kind: MetaWriteAsset['kind']): Judge => (value, path, walk) => {
 }
 /**
  * A Meta id checked by the gateway's body-id check of another step (metaBodyIdsProblem): a video of the chosen ad
- * account's library (step 22's `video`), the chosen Page (step 19's `page`).
+ * account's library (step 22's `video`), the chosen Page (step 19's `page`), a product set or a catalog item (step 18's
+ * catalog rule: `productset`, `productitem`).
  */
-const bodyId = (kind: 'video' | 'page'): Judge => (value, path, walk) => {
+const bodyId = (kind: 'video' | 'page' | 'productset' | 'productitem'): Judge => (value, path, walk) => {
   const v = digits(value)
   if (!v) return no(`${path} is a Meta id (digits, as a string)`)
   walk.ids.push({ id: v, kind })
@@ -256,6 +263,8 @@ const enumOf = (values: readonly string[]): Judge => (value, path) => (typeof va
 const token: Judge = (value, path) => (typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,60}$/.test(value) ? ok(value) : no(`${path} is one of Meta's words (letters, digits, _)`))
 const bool: Judge = (value, path) => (typeof value === 'boolean' ? ok(value) : no(`${path} is true or false`))
 const int = (min: number, max: number): Judge => (value, path) => (typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max ? ok(value) : no(`${path} is a whole number from ${min} to ${max}`))
+/** A position on the media, as a share of its width or height (0 to 1). */
+const share: Judge = (value, path) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1 ? ok(value) : no(`${path} is a position from 0 to 1`))
 const hex: Judge = (value, path) => (typeof value === 'string' && /^#?[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/.test(value) ? ok(value) : no(`${path} is a colour as hex (#RRGGBB)`))
 /** A phone number in international form (+<digits>): Meta checks it is the business's own WhatsApp number. */
 const phone: Judge = (value, path) => (typeof value === 'string' && /^\+?\d{6,15}$/.test(value) ? ok(value) : no(`${path} is a phone number in international form (+<digits>)`))
@@ -265,14 +274,21 @@ const country: Judge = (value, path) => (typeof value === 'string' && /^[A-Z]{2}
 /** A key Meta takes that Nexus answers in words instead. */
 const refuse = (why: string): Judge => (_value, path) => no(`${path}: ${why}`)
 
-const CATALOG = 'catalog and product-set ids come with lane C1\'s catalog rule (step 18), which checks each is the business\'s chosen catalog: Nexus sends none before it' // C2-REBASE-18: wire metaCatalogProblem here
+/**
+ * Master CR-018, CR-471 — the link-data reference documents retailer_item_ids as list<string>, "product IDs provided by the
+ * advertiser for Collections": the advertiser's own retailer ids, not Meta ids the catalog rule can check.
+ */
+const RETAILER_ITEMS = 'Meta takes retailer_item_ids as the advertiser\'s own product ids for a collection, and Nexus cannot check a retailer id against the catalog rule: it names a catalog ad\'s products by its product set (product_set_id), and products shown under an ad by product_data'
+/** Review B1 (promo codes) — the two code sources Nexus names; no catalog promotion or Meta offer is a source. */
+const PROMO_SOURCES = 'Nexus takes promo codes only from the creative\'s text and its own code (the two sources it names): no catalog promotion or Meta offer is a code source'
 const NO_APP = 'Nexus sells online and has no app of its own, so it sends no app link, store link, playable or app id'
 const BOOST = 'a creative made from an existing post (the chosen Page\'s post, the chosen Instagram account\'s media, or a creator\'s content or ad code) is made with create-meta-boost'
 /**
  * Step 26 — master CR-331: a partnership Advantage+ catalog ad with an existing post as its intro card is a CATALOG creative
- * (template_data + a product set): it comes with lane C1's catalog rule (step 18). C2-REBASE-18.
+ * (template_data + a product set). Step 18's catalog rule is on main; this card comes with lane C2's catalog follow-up (a later
+ * small PR wires it through that rule). C2-REBASE-18.
  */
-const CATALOG_INTRO = 'a partnership catalog ad with an existing post as its intro card (parent_source_…) is a catalog creative: it comes with lane C1\'s catalog rule (step 18), which checks the product set is the business\'s chosen catalog\'s'
+const CATALOG_INTRO = 'a partnership catalog ad with an existing post as its intro card (parent_source_…) is a catalog creative: it comes with lane C2\'s catalog follow-up'
 
 /**
  * Step 26 — a creator's partnership ad code (Meta's boost-existing-post guides; master CR-323, CR-325, MD-138): letters,
@@ -293,10 +309,10 @@ const igPermalink: Judge = (value, path) => (typeof value === 'string' && META_I
  */
 const THREADS = 'Meta\'s reference names a Threads id without saying what it takes, and its Threads guide runs Threads ads on the Instagram account ("that Instagram account needs to be used"): Nexus sends no Threads id; Threads delivery comes with the chosen Instagram account and the ad set\'s Threads placement'
 /**
- * Review B5 — a shop destination names a Facebook or Instagram SHOP (storefront_shop_id; the Shops guide requires
- * onsite_destinations for WEBSITE_AND_SHOP): Nexus cannot confirm a shop is this business's own.
+ * Review B5 — shop routing sends people to the Page's Facebook or Instagram shop (onsite_destinations, shops_bundle name
+ * one): Nexus cannot confirm that shop and its commerce account are this business's own.
  */
-const SHOP = 'Nexus cannot confirm a Facebook or Instagram shop (storefront_shop_id) is this business\'s own, and Meta\'s Shops guide requires one (onsite_destinations) for shop routing: it comes with the catalog / commerce steps'
+const SHOP = 'Nexus cannot confirm that the Page\'s Facebook or Instagram shop and its commerce account are this business\'s own, so it sends no shop routing: it comes with the catalog / commerce steps'
 
 /** A JSON object of exactly these keys (each optional; `need`: these must be there). */
 function obj(keys: Record<string, Judge>, need: readonly string[] = []): Judge {
@@ -544,7 +560,8 @@ const linkData = obj({
   attachment_style: enumOf(['link', 'default']),
   branded_content_sponsor_page_id: sponsorPage,
   branded_content_shared_to_sponsor_status: token,
-  // Advantage+ catalog template parts (master CR-448…463; the product set itself is refused until step 18).
+  // Advantage+ catalog template parts (master CR-448…463, CT-106: customization_rules_spec; the product set is the creative's
+  // product_set_id, through step 18's catalog rule).
   force_single_link: bool,
   show_multiple_images: bool,
   automated_product_tags: bool,
@@ -556,8 +573,8 @@ const linkData = obj({
   additional_image_index: int(0, 100),
   app_link_spec: refuse(NO_APP),
   offer_id: refuse('Meta offers are not a Nexus feature: a discount runs as the shop\'s own offer, named in the text and the disclaimer (ad_disclaimer_spec OFFER_DETAILS)'),
-  retailer_item_ids: refuse(CATALOG),
-  boosted_product_set_id: refuse(CATALOG),
+  retailer_item_ids: refuse(RETAILER_ITEMS),
+  boosted_product_set_id: bodyId('productset'),
 })
 const photoData = obj({
   image_hash: hash,
@@ -586,8 +603,15 @@ const videoData = obj({
   targeting: refuse('who sees an ad is the ad set\'s targeting (set-meta-ad-set), never a creative\'s'),
   caption_ids: refuse('Nexus adds captions to a library video itself (create-meta-media kind captions); a creative names none'),
   offer_id: refuse('Meta offers are not a Nexus feature'),
-  retailer_item_ids: refuse(CATALOG),
+  retailer_item_ids: refuse(RETAILER_ITEMS),
 }, ['video_id'])
+
+/**
+ * Master CR-041 / CR-211 — catalog items shown under the ad (product extensions; click-to-messenger.md "Add Product
+ * Extensions", in object_story_spec and at the creative's top level): [{product_id, product_source MANUAL, product_decision
+ * ACCEPT}], each item through step 18's catalog rule.
+ */
+const productData = list(obj({ product_id: bodyId('productitem'), product_source: enumOf(['MANUAL']), product_decision: enumOf(['ACCEPT']) }, ['product_id', 'product_source', 'product_decision']), 10, 1)
 
 const objectStorySpec = obj({
   page_id: digitsOnly,
@@ -600,7 +624,7 @@ const objectStorySpec = obj({
   whats_app_business_phone_number: phone,
   instagram_actor_id: refuse('Meta takes the Instagram account as instagram_user_id (instagram_actor_id is gone, errors 2238055 / 2446149): Nexus fills the chosen one'),
   threads_user_id: refuse(THREADS),
-  product_data: refuse(CATALOG),
+  product_data: productData,
 }, ['page_id'])
 
 const labels = list(obj({ name: text(META_CREATIVE_TEXT.label) }, ['name']), 50)
@@ -690,8 +714,8 @@ const assetFeedSpec = obj({
       manual_coupon_codes: list((code, at) => (typeof code === 'string' && /^(?=(?:[^A-Za-z]*[A-Za-z]){2})[A-Za-z0-9_-]{2,50}$/.test(code) ? ok(code) : no(`${at} is a promo code of 2 to 50 letters, digits, - or _, with at least two letters`)), 1, 1),
       is_auto_update_allowed: enumOfBool(false),
       offer_details: refuse('Meta\'s promotional metadata reference has no offer text Nexus sends: say the offer in the ad\'s text and its disclaimer (ad_disclaimer_spec OFFER_DETAILS)'),
-      product_catalog_id: refuse(CATALOG),
-      allowed_promo_offer_ids: refuse(CATALOG),
+      product_catalog_id: refuse(PROMO_SOURCES),
+      allowed_promo_offer_ids: refuse(PROMO_SOURCES),
     }, ['allowed_coupon_code_sources'])(value, path, walk)
     if ('problem' in judged) return judged
     const promo = judged.value as { allowed_coupon_code_sources: string[]; manual_coupon_codes?: string[] }
@@ -788,11 +812,26 @@ const FEATURE_CUSTOMIZATIONS: Readonly<Record<string, Judge>> = {
   text_optimizations: obj({ text_extraction: enrolled }),
   enhance_cta: obj({ text_extraction: enrolled }),
 }
+/**
+ * Master CR-330 / CR-414 — product extensions as Meta's examples send them (advantage-catalog-ads/product-extensions.md, on
+ * /adcreatives and /ads; partnership-ads advantage-creative.md): {enroll_status: OPT_IN, action_metadata: {type: MANUAL}}
+ * beside creative_sourcing_spec.associated_product_set_id (productExtensionsProblem).
+ */
+const FEATURE_ACTION_METADATA: Readonly<Record<string, Judge>> = {
+  product_extensions: obj({ type: enumOf(['MANUAL']) }, ['type']),
+}
 const featureDetails = (feature: string): Judge => (value, path, walk) => {
-  const judged = obj({ enroll_status: status, ...(FEATURE_CUSTOMIZATIONS[feature] ? { customizations: FEATURE_CUSTOMIZATIONS[feature] } : {}) }, ['enroll_status'])(value, path, walk)
+  const judged = obj({
+    enroll_status: status,
+    ...(FEATURE_CUSTOMIZATIONS[feature] ? { customizations: FEATURE_CUSTOMIZATIONS[feature] } : {}),
+    ...(FEATURE_ACTION_METADATA[feature] ? { action_metadata: FEATURE_ACTION_METADATA[feature] } : {}),
+  }, ['enroll_status'])(value, path, walk)
   // Review round 2 — a customization (an aspect ratio adapted, text extraction) goes only with its feature switched on.
   if ('value' in judged && (judged.value as { enroll_status?: unknown; customizations?: unknown }).enroll_status === 'OPT_OUT' && (judged.value as { customizations?: unknown }).customizations !== undefined) {
     return no(`${path}.customizations go only with ${feature} switched on (OPT_IN)`)
+  }
+  if ('value' in judged && (judged.value as { enroll_status?: unknown }).enroll_status === 'OPT_OUT' && (judged.value as { action_metadata?: unknown }).action_metadata !== undefined) {
+    return no(`${path}.action_metadata goes only with ${feature} switched on (OPT_IN)`)
   }
   return judged
 }
@@ -834,8 +873,15 @@ const CREATIVE_KEYS: Readonly<Record<string, { judge: Judge; json: boolean }>> =
   interactive_components_spec: { judge: obj({
     components: list((value, path, walk) => {
       if (value && typeof value === 'object' && !Array.isArray(value) && ((value as Record<string, unknown>).type === 'poll' || 'poll_spec' in (value as object))) return no(`${path}: Meta removed polls from creatives in v26 (all versions from 2026-10-27)`)
+      // Master CR-313 (instagram/ads-api/guides/add-interactive-elements.md): a product tagged by hand — product_tag_spec
+      // {product_id} (a catalog item, through step 18's catalog rule) and position_spec {x, y} (0 to 1; Meta requires them on
+      // images, Nexus always sends them). "You cannot set enroll_status and product_tag_spec at the same time".
+      if (value && typeof value === 'object' && !Array.isArray(value) && 'product_tag_spec' in (value as object)) {
+        if ('enroll_status' in (value as object)) return no(`${path}: a product tag names its product (product_tag_spec) or Meta's automatic tagging (enroll_status), not both (Meta answers an error)`)
+        return obj({ type: enumOf(['product_tag']), product_tag_spec: obj({ product_id: bodyId('productitem') }, ['product_id']), position_spec: obj({ x: share, y: share }, ['x', 'y']) }, ['type', 'product_tag_spec', 'position_spec'])(value, path, walk)
+      }
       // Master CR-314: the automatic product tags, said explicitly (opt_out unless the request asks: then opt_in — LIVE-PROBES CR-314).
-      return obj({ type: enumOf(['product_tag']), enroll_status: enumOf(['opt_out', 'opt_in']), product_tag_spec: refuse(CATALOG), position_spec: refuse(CATALOG) }, ['type', 'enroll_status'])(value, path, walk)
+      return obj({ type: enumOf(['product_tag']), enroll_status: enumOf(['opt_out', 'opt_in']) }, ['type', 'enroll_status'])(value, path, walk)
     }, 10),
   }), json: true },
   // Step 26 — a creator's content (create-meta-boost): the identities the ad shows (ad_format 1 both, 2 the first, 3 Meta
@@ -853,7 +899,8 @@ const CREATIVE_KEYS: Readonly<Record<string, { judge: Judge; json: boolean }>> =
   instagram_branded_content: { judge: obj({ sponsor_id: digitsOnly }, ['sponsor_id']), json: true },
   creative_sourcing_spec: { judge: obj({
     site_links_spec: list(obj({ site_link_title: text(META_CREATIVE_TEXT.headline), site_link_url: link, site_link_image_hash: hash, site_link_image_url: picture }, ['site_link_title', 'site_link_url']), 10),
-    associated_product_set_id: refuse(CATALOG),
+    // Master CR-330 / CR-414 — product extensions: the product set shown under the ad (step 18's catalog rule).
+    associated_product_set_id: bodyId('productset'),
   }), json: true },
   // Step 27 — related media, or a multi-media ad's images and videos (CR-425 … CR-427: mediaSourcingSpec).
   media_sourcing_spec: { judge: mediaSourcingSpec, json: true },
@@ -863,7 +910,10 @@ const CREATIVE_KEYS: Readonly<Record<string, { judge: Judge; json: boolean }>> =
   categorization_criteria: { judge: enumOf(['brand', 'category', 'product_type']), json: false },
   category_media_source: { judge: enumOf(['CATEGORY', 'MIXED', 'PRODUCTS_COLLAGE', 'PRODUCTS_SLIDESHOW']), json: false },
   object_type: { judge: enumOf(['SHARE', 'VIDEO', 'EVENT', 'PHOTO', 'STATUS']), json: false },
-  product_set_id: { judge: refuse(CATALOG), json: false },
+  // Master CR-234, CR-263, CR-448…465 — the Advantage+ catalog creative's product set (step 18's catalog rule).
+  product_set_id: { judge: bodyId('productset'), json: false },
+  // Master CR-041 / CR-211 — catalog items under the ad (product extensions), at the creative's top level.
+  product_data: { judge: productData, json: true },
 }
 
 /**
@@ -1026,10 +1076,16 @@ const isWebsite = (v: unknown) => {
 export function hasWebsiteDestination(creative: Record<string, unknown>): boolean {
   return DESTINATION_KEYS.some((k) => anyMember(creative, k, isWebsite)) || anyMember(creative.template_url_spec, 'url', isWebsite)
 }
-/** Catalog markers (master CR-448 …): a template, a product set, recommender or category settings, a template URL. */
+/**
+ * Catalog markers (master CR-448 …; catalog review of step 25) — EVERY catalog part, at any depth, fail safe: a template,
+ * a product set (the creative's, a template's boosted one, product extensions' associated one), product data, a product
+ * tagged by hand, recommender or category settings, a template URL. Meta's format-automation guide turns single media into
+ * a carousel or sa_collection from the catalog, and catalog single media is "enabled by default for eligible ads", so a
+ * creative with ANY of them carries every format opt-out and the shop opt-out (silentKeysFor).
+ */
+const CATALOG_MARKERS = ['template_data', 'product_set_id', 'boosted_product_set_id', 'associated_product_set_id', 'product_data', 'product_tag_spec', 'recommender_settings', 'categorization_criteria', 'category_media_source', 'template_url_spec']
 export function hasCatalogMarker(creative: Record<string, unknown>): boolean {
-  const story = (creative.object_story_spec ?? {}) as Record<string, unknown>
-  return !!story.template_data || !!creative.product_set_id || !!creative.recommender_settings || !!creative.categorization_criteria || !!creative.category_media_source || !!creative.template_url_spec
+  return CATALOG_MARKERS.some((k) => anyMember(creative, k))
 }
 /**
  * Can the creative show an image Meta may tag? Review round 3, fail-safe: an image hash, a picture or an image link at ANY
@@ -1138,12 +1194,22 @@ export function silentFeaturesProblem(creative: Record<string, unknown>): string
   const destination = (creative.destination_spec as { destination_type?: unknown } | undefined)?.destination_type
   // (destination_spec takes only WEBSITE_AND_SHOP_OPT_OUT: an extra one is an opt-out, accepted anywhere — review round 3.)
   if (want.destination && !destination) return 'a creative with a website destination or a catalog part names destination_spec.destination_type (v26 sends an eligible creative to the shop by itself when it is missing)'
-  // Review round 3 — EXACTLY one product_tag component (an opt-out and an opt-in side by side would leave Meta to choose).
-  const tags = ((creative.interactive_components_spec as { components?: Array<{ type?: unknown; enroll_status?: unknown }> } | undefined)?.components ?? []).filter((c) => c?.type === 'product_tag')
-  if (tags.length > 1) return 'interactive_components_spec names ONE product_tag component'
-  if (want.productTags && !tags[0]?.enroll_status) return 'a creative with images names interactive_components_spec product_tag enroll_status (Meta tags catalog products on single and carousel images by itself otherwise)'
-  const story = (creative.object_story_spec ?? {}) as { link_data?: Record<string, unknown> }
+  // Review round 3 — EXACTLY one product_tag component (an opt-out and an opt-in side by side would leave Meta to choose),
+  // or products tagged by hand (CR-313: "the automated tagging feature will be disabled for the ad to respect product tags
+  // that are specified by you"), never both.
+  const tags = ((creative.interactive_components_spec as { components?: Array<{ type?: unknown; enroll_status?: unknown; product_tag_spec?: unknown }> } | undefined)?.components ?? []).filter((c) => c?.type === 'product_tag')
+  const byHand = tags.filter((c) => c.product_tag_spec !== undefined)
+  if (byHand.length) {
+    if (byHand.length !== tags.length) return 'interactive_components_spec names products tagged by hand (product_tag_spec) or ONE automatic-tagging component (enroll_status), not both: tags by hand switch Meta\'s automatic tagging off'
+  } else {
+    if (tags.length > 1) return 'interactive_components_spec names ONE product_tag component'
+    if (want.productTags && !tags[0]?.enroll_status) return 'a creative with images names interactive_components_spec product_tag enroll_status (Meta tags catalog products on single and carousel images by itself otherwise)'
+  }
+  const story = (creative.object_story_spec ?? {}) as { link_data?: Record<string, unknown>; template_data?: Record<string, unknown> }
   if (Array.isArray(story.link_data?.child_attachments) && typeof story.link_data!.multi_share_optimized !== 'boolean') return 'a carousel names link_data.multi_share_optimized (Meta reorders the cards by itself otherwise)'
+  // Master CR-450 (catalog review) — a catalog template's own cards (static cards "appear either before or after all
+  // Advantage+ catalog ads": no doc says their order is kept): fail safe, the order is said too.
+  if (Array.isArray(story.template_data?.child_attachments) && typeof story.template_data!.multi_share_optimized !== 'boolean') return 'a catalog template with its own cards names template_data.multi_share_optimized (Meta may reorder the cards by itself otherwise)'
   const carousels = (feed?.carousels ?? []) as Array<Record<string, unknown>>
   if (Array.isArray(carousels) && carousels.some((c) => typeof c?.multi_share_optimized !== 'boolean')) return 'every asset-feed carousel names multi_share_optimized (Meta reorders the cards by itself otherwise)'
   return null
@@ -1178,8 +1244,8 @@ export function identityAssets(creative: Record<string, unknown>): MetaWriteAsse
  * content names branded_content.ad_format (Nexus always says which identities the ad shows) and, as Meta's boost-existing-post
  * guides write it, the business's chosen Page and Instagram account as its SPONSORS (facebook_branded_content.sponsor_page_id,
  * instagram_branded_content.sponsor_id); it names no instagram_user_id (the creator's own account runs it). Answers the ids
- * the gateway checks (each its kind; the chosen Page as step 19's `page` body id), and whether it is a creator's content (then
- * identityAssets does not apply).
+ * the gateway checks (each its kind; the chosen Page and Instagram account as step 19's `page` and step 31's `instagram` body
+ * ids), and whether it is a creator's content (then identityAssets does not apply).
  */
 export function sourceAssets(creative: Record<string, unknown>): { assets: MetaWriteAsset[]; ids: MetaWriteBodyId[]; creator: boolean } | { problem: string } {
   const code = adCodeOf(creative)
@@ -1204,7 +1270,7 @@ export function sourceAssets(creative: Record<string, unknown>): { assets: MetaW
     if (creative.instagram_user_id !== undefined) return { problem: 'a creator\'s content runs as the creator\'s own account: the creative names no instagram_user_id (the business\'s chosen Page and Instagram account are its sponsors)' }
     if (!sponsorPage && !sponsorIg) return { problem: 'a creator\'s content names the business as its sponsor (facebook_branded_content.sponsor_page_id and/or instagram_branded_content.sponsor_id)' }
     if (sponsorPage) ids.push({ id: sponsorPage, kind: 'page' })
-    if (sponsorIg) assets.push({ id: sponsorIg, kind: 'choseninstagram' })
+    if (sponsorIg) ids.push({ id: sponsorIg, kind: 'instagram' })
     if (post) assets.push({ id: post, kind: 'partnercontent' })
     if (media) assets.push({ id: media, kind: 'partnercontent' })
     if (code) assets.push({ id: code.code, kind: 'adcode', with: code.platform })
@@ -1248,6 +1314,29 @@ export function partsOptIns(creative: Record<string, unknown>): string[] {
 
 /** The ids inside a creative, deduplicated, at most this many (a creative of 49 assets per kind stays far below). */
 export const META_CREATIVE_MAX_ASSETS = 150
+/**
+ * Catalog review of step 25 — the product sets and catalog items one creative may name. Each costs live reads on the
+ * Limited-tier ads read bucket (45 reads, one back every 12.5 s): the item or set itself, and — once per catalog per check —
+ * the catalog's owner and, for a client catalog, the portfolio's client list; the ad account's portfolio is read once per
+ * check. A creative is checked three times (the tool's preview, Meta's check, the create): five keep one check at most 16
+ * reads (1 + 5 × 3), about 48 over the three (plus a client catalog's list pages): the account's ads bucket (45, refilled one
+ * per 12.5 s) makes the last ones wait a little, never refuses them — and five cover Meta's examples (one product set; two items).
+ */
+export const META_CREATIVE_MAX_CATALOG_IDS = 5
+
+/**
+ * Master CR-330 / CR-414 (catalog review) — product extensions show catalog items under the ad: Meta picks them from the
+ * associated product set, so the feature goes ON only beside creative_sourcing_spec.associated_product_set_id (a set the
+ * catalog rule checks), with action_metadata MANUAL only then; without the set Meta would pick products from a catalog
+ * the rule never saw.
+ */
+export function productExtensionsProblem(creative: Record<string, unknown>): string | null {
+  const feature = (creative.degrees_of_freedom_spec as { creative_features_spec?: Record<string, { enroll_status?: unknown; action_metadata?: unknown }> } | undefined)?.creative_features_spec?.product_extensions
+  const set = (creative.creative_sourcing_spec as { associated_product_set_id?: unknown } | undefined)?.associated_product_set_id
+  if (feature?.enroll_status === 'OPT_IN' && !set) return 'product_extensions goes ON only beside creative_sourcing_spec.associated_product_set_id (a product set of the business\'s catalog): without one Meta would pick products from a catalog Nexus never checked'
+  if (feature?.action_metadata !== undefined && !set) return 'product_extensions.action_metadata goes only beside creative_sourcing_spec.associated_product_set_id'
+  return null
+}
 
 /**
  * THE judge of a creative's form parameters as the gateway receives them (a JSON key as its JSON text): every key on the
@@ -1300,6 +1389,8 @@ export function finishCreative(creative: Record<string, unknown>, walk: Creative
   if (multi) return { problem: multi }
   const silent = silentFeaturesProblem(creative)
   if (silent) return { problem: silent }
+  const extensions = productExtensionsProblem(creative)
+  if (extensions) return { problem: extensions }
   // Step 26 — the source of an existing post (create-meta-boost) and, for a creator's content, its sponsors (the chosen ones).
   const source = sourceAssets(creative)
   if ('problem' in source) return source
@@ -1319,6 +1410,8 @@ export function finishCreative(creative: Record<string, unknown>, walk: Creative
     return true
   })
   if (assets.length + ids.length > META_CREATIVE_MAX_ASSETS) return { problem: `a creative names at most ${META_CREATIVE_MAX_ASSETS} ids` }
+  const catalogIds = ids.filter((i) => i.kind === 'productset' || i.kind === 'productitem').length
+  if (catalogIds > META_CREATIVE_MAX_CATALOG_IDS) return { problem: `a creative names at most ${META_CREATIVE_MAX_CATALOG_IDS} product sets and catalog items (this one names ${catalogIds}): each is checked live against the catalog rule, on Meta's small ads read budget` }
   // An element of an Instant Experience is checked against the creative's own experience (its canvas_doc link).
   const canvases = assets.filter((a) => a.kind === 'canvas')
   for (const a of assets) {

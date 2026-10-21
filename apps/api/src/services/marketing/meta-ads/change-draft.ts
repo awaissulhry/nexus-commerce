@@ -9,7 +9,8 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
 import type { MetaChangeResult, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
@@ -70,9 +71,13 @@ export interface MetaChangeRequest {
     | MetaBrandSafetyKind
     // Step 31 — one of the chosen ad account's own custom audiences.
     | 'customaudience'
+    // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
+    | MetaPageKind
     // Step 26 — the chosen Instagram account (`iguser`) or a media of it (`igmedia`); the chosen Page on Meta's partnership
     // host is step 28's `page` (set-meta-partnership-access).
     | MetaBoostWriteKind
+    // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
+    | MetaSignalsKind
   /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
@@ -116,6 +121,11 @@ export interface MetaChangeRequest {
   prepare?: (done: ReadonlyArray<{ request: MetaChangeRequest; result: MetaChangeResult }>) => Promise<Record<string, string>>
   /** The capability grant Meta needs for it (D6): Meta refusing it for access answers with the no-grant controls. */
   grant?: string
+  // ── step 36 (lead forms, test leads) ──
+  /** Never read back after it is made (a test lead: Nexus keeps Meta's answer, the new id, and never reads a lead). */
+  skipReadBack?: true
+  /** Meta's codes this request may meet, in plain words (base code → sentence), added to the step's sentence. */
+  explain?: Readonly<Record<string, string>>
   // ── step 27 ──
   /** A new ad's check runs Meta's synchronous integrity review with it (synchronous_ad_review, AD-026 … AD-028). */
   adReview?: boolean

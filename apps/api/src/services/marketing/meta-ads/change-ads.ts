@@ -24,9 +24,13 @@
  *            them; POST /<ad id>/adlabels: labels added. Undo puts back what it wrote, after reading the ad LIVE (a later
  *            change is never overwritten).
  *
+ * Catalog parts of an inline creative (master CR-211 product extensions, CR-464 Advantage+ creative for catalog, CR-471 a
+ * collection from a product set — its Instant Experience an existing, published one of the chosen Page, by its canvas_doc
+ * link: making one is the Page-token tools', not step 27's) go through step 25b's judge and step 18's ONE catalog rule
+ * (catalog-rule.ts metaCatalogProblem) with one memo per change, here before the preview and again in the gateway
+ * (metaBodyIdsProblem) before anything is sent; such a creative carries every format and the shop opt-out (step 25b).
  * Answered in words (no request): an inline ad set (AD-025: Meta documents no shape), many ads at once in the background
- * (AD-035, POST /act_<id>/asyncadrequestsets — the gateway refuses every batch: Nexus sends one request per ad), catalog and
- * product-set parts (CR-211, CR-464, CR-471: step 25's judge refuses them until step 18's catalog rule, C2-REBASE-18).
+ * (AD-035, POST /act_<id>/asyncadrequestsets — the gateway refuses every batch: Nexus sends one request per ad).
  */
 import prisma from '../../../db.js'
 import {
@@ -44,6 +48,7 @@ import { metaReadOne } from './read-client.js'
 import { metaChosenAccount, MetaLiveRefusal, objectInAccount, type MetaChosenAccount } from './live.js'
 import { pageOf } from './live-media.js'
 import { listPaged, readGroups } from './live-objects.js'
+import { metaCatalogProblem, newCatalogRuleMemo } from './catalog-rule.js'
 
 export { AD_TOOL }
 export const SET_AD_TOOL = 'set-meta-ad'
@@ -366,6 +371,8 @@ async function createAdDraft(account: MetaChangeAccount, request: AdRequest): Pr
   let creativeStands: unknown
   // Review A2 — why this creative may not go out ACTIVE (any Advantage+ feature on or not said), or null.
   let activation: string | null
+  // Step 25b — the product sets and catalog items of an inline creative (each passed the catalog rule).
+  let catalog: Array<{ kind: string; id: string }> = []
   if (request.creativeId) {
     const creativeId = await objectInAccount(chosen, request.creativeId, 'creative', 'ad.creativeOwnerCheck')
     const c = (await metaReadOne<Row>({ connectionId: chosen.connectionId }, { operation: 'ad.creativeRead', path: creativeId, query: { fields: CREATIVE_SWITCH_FIELDS } })).body
@@ -390,14 +397,22 @@ async function createAdDraft(account: MetaChangeAccount, request: AdRequest): Pr
     // What the gateway will judge is exactly this (step 25's judge on the inline form): a preview never promises what it refuses.
     const judged = judgeAdCreative(creativeParam, true)
     if ('problem' in judged) return { refusal: `Nothing was asked of Meta: ${judged.problem}.` }
+    // Master CR-211, CR-464, CR-471 (step 25b) — every product set and catalog item of the inline creative passes step 18's ONE
+    // catalog rule before the preview, one memo for this change (the gateway asks it again before it sends).
+    catalog = built.ids.filter((i) => i.kind === 'productset' || i.kind === 'productitem')
+    const memo = newCatalogRuleMemo()
+    for (const inner of catalog) {
+      const problem = await metaCatalogProblem(account.target, inner.kind === 'productset' ? { productSetId: inner.id } : { productItemId: inner.id }, memo)
+      if (problem) return { refusal: `Nothing was asked of Meta: ${inner.kind === 'productset' ? 'product set' : 'catalog item'} ${inner.id}: ${problem}` }
+    }
     aiOn = built.featuresOn.filter((f) => META_AI_GENERATED_FEATURES.has(f)).sort()
     activation = metaActivationProblem(built.creative, 'the new creative')
     links = creativeLinks(built.creative)
     inline = { name: String(built.creative.name), asked: built.featuresOn, fromExistingPost: !!request.creative!.postId }
     creativeLabel = `a new creative "${String(built.creative.name)}" made with it`
-    creativeStands = { inline: true, pageId: chosen.pageId, instagramId: chosen.instagramId }
+    creativeStands = { inline: true, pageId: chosen.pageId, instagramId: chosen.instagramId, catalog }
     const instagram = !!(built.creative.object_story_spec as { instagram_user_id?: unknown } | undefined)?.instagram_user_id || !!built.creative.instagram_user_id
-    warnings.push(...creativeWarnings(built, request.creative!, { instagram }).filter((w) => !w.startsWith('A creative spends nothing')))
+    warnings.push(...creativeWarnings(built, request.creative!, { instagram, catalog }).filter((w) => !w.startsWith('A creative spends nothing')))
     if (request.messageFooter) {
       // Review B6 — the footer runs only in the objectives Meta lists for its channel.
       if (!FOOTER_OBJECTIVES[request.messageFooter].includes(campaign.objective ?? '')) return { refusal: `Nothing was asked of Meta: a "message us" footer of ${request.messageFooter} runs only in ${FOOTER_OBJECTIVES[request.messageFooter].map((o) => o.replace('OUTCOME_', '').toLowerCase()).join(', ')} campaigns (Meta's guide), and campaign ${campaign.id} is ${campaign.objective ?? 'of an unknown objective'}.` }
