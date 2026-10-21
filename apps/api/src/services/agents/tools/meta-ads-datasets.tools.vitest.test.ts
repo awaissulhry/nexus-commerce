@@ -378,7 +378,7 @@ describe('D2 — who sends the events (view sources)', () => {
   const key = (name: string, overall: number | null, server = 98, browser = 100) => ({ dedupe_key: name, browser_events_with_dedupe_key: { percentage: browser }, server_events_with_dedupe_key: { percentage: server }, overall_browser_coverage_from_dedupe_key: overall === null ? {} : { percentage: overall } })
   const noServerSide: Dqa = { coverage: 0, score: null, dedup: [key('event_id', 0, 0)] }
 
-  it('browser AND server, covered to Meta\'s goal → yes, no gap (upload-meta-events stays off)', async () => {
+  it('browser AND server, covered to Meta\'s goal → yes, no gap (Nexus sends no website sale)', async () => {
     setup({ browser: { Purchase: 10, PageView: 900 }, server: { Purchase: 9 }, dqa: { coverage: 80, goal: 75, dedup: [key('event_id', 70), key('external_id', 12)] } })
     const res = data(await run({ view: 'sources' }))
     expect(res.answer).toMatchObject({ browserAndServer: 'yes', browser: 'yes', server: 'yes', serverByStats: 'yes', serverByQuality: 'yes', deduplicated: 'yes', gap: 'none', coveragePercent: 80, dedupCoveragePercent: 82, coverageGoalPercent: 75, eventIdOnServerPercent: 98 })
@@ -398,6 +398,8 @@ describe('D2 — who sends the events (view sources)', () => {
   it('server "no" only when the stats AND the Dataset Quality API show no server side; they disagree → unknown', async () => {
     setup({ browser: { Purchase: 10 }, server: {}, dqa: noServerSide })
     expect(data(await run({ view: 'sources' })).answer).toMatchObject({ browserAndServer: 'no', server: 'no', gap: 'server' })
+    // Step 33 review F2 — the words never promise that Nexus fills a website gap (it cannot rebuild the shop's event_id).
+    expect(data(await run({ view: 'sources' })).answer.gapWords).toMatch(/Nexus cannot fill this website gap.*only sales taken in by hand in Nexus/)
     setup({ browser: { Purchase: 10 }, server: {}, dqa: 'none' })
     expect(data(await run({ view: 'sources' })).answer).toMatchObject({ server: 'no', gap: 'server' })
     // The stats say no server event, but Meta's quality API scores server events: unknown, never a false "missing".

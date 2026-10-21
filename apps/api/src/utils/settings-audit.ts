@@ -24,6 +24,8 @@ export type SettingsAuditKey =
   | 'api-keys'
   | 'company'
   | 'terminology'
+  // Meta step 33 review F7 — "Send sales to Meta": recorded, never reverted from the history (settings-audit.routes.ts).
+  | 'meta-conversions-api'
 
 const KEY_LABEL: Record<SettingsAuditKey, string> = {
   account: 'Business',
@@ -33,6 +35,7 @@ const KEY_LABEL: Record<SettingsAuditKey, string> = {
   'api-keys': 'API keys',
   company: 'Company & fiscal',
   terminology: 'Terminology',
+  'meta-conversions-api': 'Meta · Send sales to Meta',
 }
 
 export type SettingsAuditAction = 'update' | 'create' | 'delete'
