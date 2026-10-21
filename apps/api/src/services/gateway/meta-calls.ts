@@ -33,7 +33,9 @@
  *   - a caller's own headers are refused (no method override or other header travels on a Meta call).
  * Writes (step 17, 2026-10-21) are judged apart, by metaWriteVerdict below: an ALLOW-list of exact (method, path shape,
  * body keys and values) that Nexus's own change tools send — today a status change of one campaign, ad set or ad, and
- * Meta's check of it (validate_only, a campaign's only). Every other non-GET is refused; so is every batch (no Nexus
+ * Meta's check of it (validate_only, a campaign's only). Step 18 (2026-10-21) adds the settings changes of a campaign,
+ * an ad set and a budget schedule (meta-settings-rules.ts: exact keys per kind of object, every value judged, the ids
+ * inside a body named for the gateway's account check). Every other non-GET is refused; so is every batch (no Nexus
  * change sends one yet: metaBatchProblem).
  *
  * Every call with a token carries `appsecret_proof` = HMAC-SHA256(key = the app secret, message = `<token>|<time>`) and
@@ -45,6 +47,7 @@
 import { createHmac } from 'node:crypto'
 import { META_GRAPH_HOST, metaGraphApiVersion } from '../meta/api-version.js'
 import { META_AD_FORMATS, META_ORGANIC_METRICS } from '../meta/meta-media-lists.js'
+import { META_SETTINGS_WRITE_RULES } from './meta-settings-rules.js'
 
 /** Query keys only the gateway sets. */
 const GATEWAY_OWNED_KEYS = new Set(['access_token', 'appsecret_proof', 'appsecret_time'])
@@ -692,17 +695,39 @@ export function metaCheckAllowed(status: string, proven: boolean = META_UPDATE_C
  * their values. `budget`: it moves an ad set's daily or lifetime budget (Meta's 4-an-hour limit, meta-object-limits.ts).
  * Each later step adds only the rules its own tools send, with tests (meta.vitest.test.ts).
  */
-interface MetaWriteRule {
+export interface MetaWriteRule {
   name: string
-  method: 'POST'
+  method: 'POST' | 'DELETE'
   /** The route, lower case, without the version (`120000000000001`). */
   path: RegExp
   required: readonly string[]
   optional: readonly string[]
   /** Why a value is refused, or null. */
   values: (params: ReadonlyMap<string, string>) => string | null
-  budget: boolean
+  /** Step 18: a function of the body when only some of its keys move an ad set's budget. */
+  budget: boolean | ((params: ReadonlyMap<string, string>) => boolean)
+  /**
+   * Step 18 — the kinds of object the rule is for: it matches only a call that names one of them (the gateway then
+   * confirms the kind). No list: any campaign, ad set or ad (the status rule).
+   */
+  kinds?: readonly MetaWriteKind[]
+  /** Step 18 — at least one of these keys (a settings rule has no single required key). */
+  anyOf?: readonly string[]
+  /**
+   * Step 18 — keys whose value may be text a person types (a name, the EU payer), each with its pattern
+   * (meta-settings-rules.ts META_NAME_TEXT / META_STRICT_TEXT): every other value stays plain ASCII.
+   */
+  text?: Readonly<Record<string, RegExp>>
+  /** Step 18 — the longest body of this rule (default MAX_WRITE_BODY). */
+  maxBody?: number
+  /** Step 18 — the ids inside the body, each checked to be of the chosen ad account by the gateway before anything goes. */
+  ids?: (params: ReadonlyMap<string, string>) => MetaWriteBodyId[]
 }
+
+/** Step 18 — the kinds of object a change names: a campaign, ad set or ad, or a budget schedule of one (high-demand period). */
+export type MetaWriteKind = 'campaign' | 'adset' | 'ad' | 'highdemandperiod'
+/** Step 18 — an id inside a change's body, and what it must be of the chosen ad account. */
+export interface MetaWriteBodyId { id: string; kind: 'adset' | 'ad' | 'customaudience' | 'pixel' | 'catalog' | 'productset' }
 
 const fieldsValueProblem = (value: string): string | null => {
   const names = value.split(',')
@@ -758,6 +783,12 @@ export interface MetaJudgedWrite {
   body: string
   /** It moves an ad set's budget (Meta's 4-an-hour limit). */
   budget: boolean
+  /** Step 18 — the kinds the rule is for (the call's named kind is one of them; the gateway confirms it). */
+  kinds?: readonly MetaWriteKind[]
+  /** Step 18 — the ids inside the body: each must be of the chosen ad account (the gateway checks them before sending). */
+  ids?: MetaWriteBodyId[]
+  /** Step 18 — a DELETE (a budget schedule's); every other change is a POST. */
+  method?: 'DELETE'
 }
 
 /** The gateway's verdict on a Meta call that is not a GET: why it is refused (and whether as a batch), or the judged write. */
@@ -770,7 +801,7 @@ export type MetaWriteVerdict = { problem: string; batch?: true } | { write: Meta
  * one sent), each key named once. Whether the object is of the business's chosen ad account is the gateway's next step
  * (it needs the database or one live read), and so are Meta's per-object limits.
  */
-export function metaWriteVerdict(input: { method: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string, string> }): MetaWriteVerdict {
+export function metaWriteVerdict(input: { method: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string, string>; objectKind?: string }): MetaWriteVerdict {
   const refuse = (problem: string): MetaWriteVerdict => ({ problem })
   const method = input.method.toUpperCase()
   if (input.headers && Object.keys(input.headers).length > 0) return refuse('a Meta call carries no header of the caller\'s own')
@@ -784,15 +815,33 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   if ([...graph.search.keys()].length > 0) return refuse('a Meta change carries its parameters in its body, never in the URL')
   const batch = metaBatchProblem(method, graph.route, input.body)
   if (batch) return { problem: batch, batch: true }
-  if (method === 'DELETE') return refuse('Nexus deletes nothing on Meta yet (deleting is its own tool, not built yet), and cancels no async batch')
+  // Step 18 — a DELETE goes only by a DELETE rule for the kind the call names (today a budget schedule's), with no body.
+  const deleteRule = method === 'DELETE' ? writeRules().find((r) => r.method === 'DELETE' && r.path.test(graph.route) && kindMatches(r, input.objectKind)) : undefined
+  if (method === 'DELETE' && (!deleteRule || (input.body !== undefined && input.body !== ''))) {
+    return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule; deleting campaigns, ad sets and ads is its own tool, not built yet), and cancels no async batch')
+  }
+  if (deleteRule) {
+    if (input.kind !== 'write') return refuse('a Meta change goes as a write; this one is declared otherwise')
+    return { write: { rule: deleteRule.name, objectId: graph.segments[0], check: false, body: '', budget: false, kinds: deleteRule.kinds, method: 'DELETE' } }
+  }
   if (method !== 'POST') return refuse(`Nexus sends Meta no ${method}`)
   const parsed = writeParams(input.body)
   if ('problem' in parsed) return refuse(parsed.problem)
   const keys = [...parsed.params.keys()]
-  const rule = META_WRITE_RULES.find((r) => r.method === method && r.path.test(graph.route)
-    && r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k)))
+  const rule = writeRules().find((r) => r.method === method && r.path.test(graph.route) && kindMatches(r, input.objectKind)
+    && r.required.every((k) => parsed.params.has(k)) && keys.every((k) => r.required.includes(k) || r.optional.includes(k))
+    && (!r.anyOf || r.anyOf.some((k) => parsed.params.has(k))))
   if (!rule) {
-    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status); this one is POST /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+    return refuse(`the only Meta change Nexus sends is a status change of one campaign, ad set or ad (POST /<id> with status), or a settings change of a campaign, an ad set or a budget schedule named with its kind (set-meta-campaign, set-meta-ad-set, set-meta-budget-schedule: each its own keys); this one is POST /${graph.segments.join('/')} with ${keys.join(', ') || 'no parameters'}`)
+  }
+  // Step 18 — each rule's own length and text keys; every other value stays plain ASCII (as step 17 judged them all).
+  const maxBody = rule.maxBody ?? MAX_WRITE_BODY
+  if ((input.body as string).length > maxBody) return refuse(`a Meta change body is at most ${maxBody} characters`)
+  for (const [key, value] of parsed.params) {
+    const pattern = rule.text && Object.prototype.hasOwnProperty.call(rule.text, key) ? rule.text[key] : null
+    if (pattern) {
+      if (!pattern.test(value)) return refuse(`the value of "${key}" is printable text (no control or format characters)`)
+    } else if (!/^[\x20-\x7e]*$/.test(value)) return refuse(`the value of "${key}" is plain ASCII`)
   }
   const problem = rule.values(parsed.params)
   if (problem) return refuse(problem)
@@ -802,19 +851,29 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   }
   const order = [...rule.required, ...rule.optional].filter((k) => parsed.params.has(k))
   const body = new URLSearchParams(order.map((k): [string, string] => [k, parsed.params.get(k)!])).toString()
-  return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget: rule.budget } }
+  const budget = typeof rule.budget === 'function' ? rule.budget(parsed.params) : rule.budget
+  const ids = rule.ids?.(parsed.params) ?? []
+  return { write: { rule: rule.name, objectId: graph.segments[0], check, body, budget, ...(rule.kinds ? { kinds: rule.kinds } : {}), ...(ids.length ? { ids } : {}) } }
 }
+
+/** Step 18 — a rule with kinds matches only a call that names one of them; the status rule (no kinds) a campaign, ad set or ad. */
+const kindMatches = (rule: MetaWriteRule, kind: string | undefined) => (rule.kinds
+  ? !!kind && (rule.kinds as readonly string[]).includes(kind)
+  : kind === undefined || kind === 'campaign' || kind === 'adset' || kind === 'ad')
+/** Step 18 — the longest body any rule takes (each rule then holds its own, default MAX_WRITE_BODY). */
+const MAX_ANY_WRITE_BODY = 16_000
+/** Step 17's status rule, then step 18's settings rules (meta-settings-rules.ts) — read when judged, never at load. */
+const writeRules = (): readonly MetaWriteRule[] => [...META_WRITE_RULES, ...META_SETTINGS_WRITE_RULES]
 
 /** A change's body, form-encoded (Meta's `-F` fields): each key lower snake_case, named once, never a gateway key. */
 function writeParams(body: unknown): { params: Map<string, string> } | { problem: string } {
   if (typeof body !== 'string' || !body) return { problem: 'a Meta change carries its parameters as a form body' }
-  if (body.length > MAX_WRITE_BODY) return { problem: `a Meta change body is at most ${MAX_WRITE_BODY} characters` }
+  if (body.length > MAX_ANY_WRITE_BODY) return { problem: `a Meta change body is at most ${MAX_WRITE_BODY} characters (${MAX_ANY_WRITE_BODY} for the largest settings change)` }
   const params = new Map<string, string>()
   for (const [key, value] of new URLSearchParams(body)) {
     if (!/^[a-z_][a-z0-9_]*$/.test(key)) return { problem: `the body key "${key.slice(0, 40)}" is not one Meta reads (lower-case letters, digits and _)` }
     if (params.has(key)) return { problem: `the body names "${key}" more than once` }
     if (GATEWAY_OWNED_KEYS.has(key) || NOT_A_READ_KEYS.test(key) || /token|secret|proof/.test(key)) return { problem: `the body names "${key}", which no Nexus change sends` }
-    if (!/^[\x20-\x7e]*$/.test(value)) return { problem: `the value of "${key}" is plain ASCII` }
     params.set(key, value)
   }
   return { params }
