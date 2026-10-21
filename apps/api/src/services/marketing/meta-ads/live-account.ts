@@ -42,7 +42,8 @@
  *     mcmeconversions (AdsMcmeConversion, SDK fields), conversion_goals (SDK only: AdsConversionGoal),
  *     campaign_attribution_options (app_id and optimization_goal REQUIRED, event_name: it answers for an app's events),
  *     activities (the edge page lists no parameter; the SDK has since / until and category — adactivity.py Category
- *     ACCOUNT, AD, AD_SET … — nothing says where billing events sit; AdActivity event types incl. the billing ones below)
+ *     ACCOUNT, AD, AD_SET, BUDGET …; reference/ad-activity "Event types by category" files every billing event under
+ *     BUDGET and ad_account_billing_charge_failed under none: BILLING_EVENT_TYPES below)
  *   - insights/breakdowns "Insights feature settings": GET act_<id>/insights/feature-settings/list-features (feature_name,
  *     feature_type) and GET act_<id>/insights/feature-settings (insights_feature filter; enabled ones only, with
  *     insights_effective_date); switching one on is a POST that cannot be undone (not here)
@@ -537,12 +538,19 @@ export const FUNDING_TYPE_WORDS: Readonly<Record<number, string>> = {
 export const TAX_STATUS_WORDS: Readonly<Record<number, string>> = {
   0: 'Unknown', 1: 'VAT not required (US / Canada)', 2: 'VAT information required', 3: 'VAT information submitted', 4: 'Offline VAT check failed', 5: 'A personal account',
 }
-/** LG-003 — the billing events of the activity log (AdActivity event_type). */
+/**
+ * LG-003 — the billing events of the activity log (AdActivity event_type). Review round 4: Meta's v26 ad-activity page
+ * ("Event types by category", checked 2026-10-21) files every one of these under category BUDGET — none under ACCOUNT
+ * (review, business information, status, people, images) — except ad_account_billing_charge_failed, which it files under
+ * no category (CHARGE_FAILED).
+ */
 export const BILLING_EVENT_TYPES: ReadonlySet<string> = new Set([
-  'ad_account_billing_charge', 'ad_account_billing_charge_failed', 'ad_account_billing_chargeback', 'ad_account_billing_chargeback_reversal',
+  'ad_account_billing_charge', 'ad_account_billing_chargeback', 'ad_account_billing_chargeback_reversal',
   'ad_account_billing_decline', 'ad_account_billing_refund', 'billing_event', 'add_funding_source', 'remove_funding_source',
   'funding_event_initiated', 'funding_event_successful',
 ])
+/** A failed charge: in the ad-activity enum, in none of Meta's categories. */
+export const CHARGE_FAILED = 'ad_account_billing_charge_failed'
 
 const NO_PAYMENT_API = 'Meta has no API to add, change or remove a payment method or to add prepaid funds: a person does it in Meta Business settings › Billing and payments (or Ads Manager › Billing).'
 
@@ -676,45 +684,61 @@ function billingExtraOf(raw: unknown): { kept: Record<string, string | number | 
 const unixOf = (day: string) => Math.floor(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10)) / 1000)
 
 const ACTIVITY_FIELDS = 'event_time,event_type,translated_event_type,actor_id,actor_name,application_id,application_name,object_id,object_name,object_type,date_time_in_timezone,extra_data'
-const isBillingEvent = (r: Row) => BILLING_EVENT_TYPES.has(text(r.event_type) ?? '')
+/** Who made a billing change: Nexus's own system user or the chosen Page by name; anyone else is Meta's id only. */
+function actorOf(account: MetaChosenAccount, r: Row) {
+  const actorId = idText(r.actor_id)
+  // Review round 4 (step 5's rule, one for every tool) — people are named only in meta-account-access view people.
+  const bySystemUser = !!actorId && actorId === (account.connection.systemUser?.id ?? null)
+  const byPage = !!actorId && actorId === account.pageId
+  return {
+    actorId, who: bySystemUser ? 'Nexus\'s own system user' : byPage ? 'the chosen Facebook Page' : actorId ? 'someone else (a person, an agency or Meta)' : null,
+    ...(bySystemUser || byPage ? { actorName: text(r.actor_name) } : {}),
+  }
+}
 
 async function billingEvents(account: MetaChosenAccount, input: { from: string; to: string; maxRows: number }) {
   const { connectionId, adAccountId } = account
   const days = { since: unixOf(input.from), until: unixOf(input.to) + 86_400 }
-  // First the account's own events (AdActivity category ACCOUNT — SDK only, adactivity.py Category; the v26 edge page lists
-  // no parameter), so 500 entries reach further back. Review round 2 (B2): nothing proves billing events sit under
-  // ACCOUNT, so when that read holds none — or Meta refuses the category (#100) — the same days are read ONCE more without
-  // a category, with the same cap, and the answer says which read answered (LIVE-PROBES LG-003 settles it).
-  let read: Awaited<ReturnType<typeof listPaged>> | null = null
-  let accountRead: { scanned: number; billingEvents: number } | { refused: string }
+  // Review round 4 — the billing events from category BUDGET, where Meta's v26 ad-activity page files them (the v26 edge
+  // page lists no parameter; the SDK has since, until, category): its budget changes are left out here.
+  const budget = await listPaged(connectionId, 'billing.events', `${act(adAccountId)}/activities`, { fields: ACTIVITY_FIELDS, category: 'BUDGET', ...days }, 500)
+  // A failed charge is in no Meta category: ONE read of the whole log of these days (the same cap) is searched for it.
+  // A throttle or a lost token ends the read; another refusal costs only the failed charges (said in Meta's words).
+  let failed: Awaited<ReturnType<typeof listPaged>> | null = null
+  const missing: MissingPart[] = []
   try {
-    read = await listPaged(connectionId, 'billing.events', `${act(adAccountId)}/activities`, { fields: ACTIVITY_FIELDS, category: 'ACCOUNT', ...days }, 500)
-    accountRead = { scanned: read.rows.length, billingEvents: read.rows.filter(isBillingEvent).length }
+    failed = await listPaged(connectionId, 'billing.eventsChargeFailed', `${act(adAccountId)}/activities`, { fields: ACTIVITY_FIELDS, ...days }, 500)
   } catch (err) {
-    if (!fieldsRefused(err)) throw err
-    accountRead = { refused: err.failure.sentence }
+    if (!(err instanceof MetaReadError) || err.failure.authLost || err.failure.throttled) throw err
+    missing.push({ part: 'failedCharges', sentence: err.failure.sentence })
   }
-  let answeredBy: 'category ACCOUNT' | 'every category' = 'category ACCOUNT'
-  if (!read || !read.rows.some(isBillingEvent)) {
-    read = await listPaged(connectionId, 'billing.eventsAll', `${act(adAccountId)}/activities`, { fields: ACTIVITY_FIELDS, ...days }, 500)
-    answeredBy = 'every category'
-  }
-  const events = read.rows.filter(isBillingEvent).slice(0, input.maxRows).map((r) => {
+  const seen = new Set<string>()
+  const rows = [
+    ...budget.rows.filter((r) => BILLING_EVENT_TYPES.has(text(r.event_type) ?? '') || text(r.event_type) === CHARGE_FAILED),
+    ...(failed?.rows ?? []).filter((r) => text(r.event_type) === CHARGE_FAILED),
+  ].filter((r) => {
+    const key = JSON.stringify([r.event_time, r.event_type, r.object_id, r.actor_id, r.extra_data])
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  }).sort((a, b) => (text(b.event_time) ?? '').localeCompare(text(a.event_time) ?? ''))
+  const events = rows.slice(0, input.maxRows).map((r) => {
     const extra = billingExtraOf(r.extra_data)
     return {
       time: text(r.event_time), timeInAccountZone: text(r.date_time_in_timezone), type: text(r.event_type), typeText: text(r.translated_event_type),
-      actorId: idText(r.actor_id), actorName: text(r.actor_name), appName: text(r.application_name), objectId: idText(r.object_id) ?? text(r.object_id), objectName: text(r.object_name),
+      ...actorOf(account, r), appName: text(r.application_name), objectId: idText(r.object_id) ?? text(r.object_id), objectName: text(r.object_name),
       // Meta's details, only the plain keys Nexus knows (they may hold amounts, in Meta's units): money all the same.
       metaRaw: extra.kept, ...(extra.dropped ? { detailsLeftOut: extra.dropped, leftOutKeys: extra.droppedKeys } : {}),
     }
   })
   return {
-    adAccountId, from: input.from, to: input.to, events, scanned: read.rows.length, answeredBy,
-    ...(answeredBy === 'every category' ? { accountCategoryRead: accountRead } : {}),
-    more: read.more ? 'Nexus read the first 500 entries of the activity log in these days; narrow the days to see older billing events.' : null,
+    adAccountId, from: input.from, to: input.to, events, scanned: { budgetCategory: budget.rows.length, wholeLog: failed ? failed.rows.length : null },
+    more: budget.more || failed?.more ? 'Nexus read the first 500 entries of the activity log in these days (each read); narrow the days to see older billing events.' : null,
+    missing,
     notes: [
-      'Charges, failed and declined charges, refunds, chargebacks and payment-method changes from the account\'s activity log. Spending-limit changes and other account events are in the activity log itself.',
-      'answeredBy: "category ACCOUNT" — Meta\'s account events held them; "every category" — that read held none (accountCategoryRead: what it held, or Meta\'s refusal), so the whole activity log of these days was read once more.',
+      'Charges, declined charges, refunds, chargebacks, payment-method changes and funding events from the account\'s activity log (Meta\'s category BUDGET); spending-limit and budget changes are in the activity log itself.',
+      'A failed charge (ad_account_billing_charge_failed) is in none of Meta\'s categories: Nexus looks for it in one read of the whole activity log of these days, so only the first 500 entries Meta answers are searched (narrow the days to search further).',
+      'who: Nexus\'s own system user or the chosen Facebook Page by name; anyone else is Meta\'s id only (meta-account-access view people names the people on the account).',
       'metaRaw: only the plain details Nexus knows (amount, currency, old and new value, reason, status …; never an e-mail address); detailsLeftOut counts what Meta sent besides and leftOutKeys names those keys (never their values).',
       'Receipts and invoices of card-paid accounts are in Ads Manager › Billing (Meta has no API for card receipts); monthly invoices of a credit line: view invoices.',
     ],

@@ -339,11 +339,11 @@ describe('meta-billing', () => {
     // Review A4 — only the plain keys Nexus knows; a nested object or an unknown key is left out and counted.
     expect(out.events).toEqual([expect.objectContaining({ type: 'ad_account_billing_charge', metaRaw: { amount: '1000', currency: 'EUR' }, detailsLeftOut: 2, leftOutKeys: ['card', 'note_x'] })])
     expect(JSON.stringify(out)).not.toMatch(/last4/)
-    expect(h.calls.find((c) => c.path.endsWith('/activities'))?.query).toMatchObject({ category: 'ACCOUNT', since: Date.UTC(2026, 9, 1) / 1000, until: Date.UTC(2026, 9, 21) / 1000 })
-    // The ACCOUNT read held a billing event: it answers alone (review round 2, B2).
-    expect(h.calls.filter((c) => c.path.endsWith('/activities'))).toHaveLength(1)
-    expect(out.answeredBy).toBe('category ACCOUNT')
-    expect(out.accountCategoryRead).toBeUndefined()
+    expect(h.calls.find((c) => c.path.endsWith('/activities'))?.query).toMatchObject({ category: 'BUDGET', since: Date.UTC(2026, 9, 1) / 1000, until: Date.UTC(2026, 9, 21) / 1000 })
+    // Review round 4 — someone Nexus does not know is Meta's id at most, never a name.
+    expect(out.events[0]).toMatchObject({ who: null, actorId: null })
+    expect(out.events[0].actorName).toBeUndefined()
+    expect(JSON.stringify(out)).not.toMatch(/Person A/)
     expect((await run('meta-billing', { view: 'events', from: '2025-01-01', to: '2026-10-20' })).error).toMatch(/at most 366 days/)
   })
 })
@@ -351,32 +351,62 @@ describe('meta-billing', () => {
 describe('meta-billing, review round 2', () => {
   const days = { view: 'events', from: '2026-10-01', to: '2026-10-20' }
   const activityReads = () => h.calls.filter((c) => c.path.endsWith('/activities'))
-  it('events: an ACCOUNT read with no billing event → the same days ONCE more without a category, the same cap; the answer says which read answered (B2)', async () => {
+  it('events: billing events from category BUDGET; a failed charge from ONE read without a category, kept only for that type (review round 4)', async () => {
     h.answer = (req) => {
       if (!req.path.endsWith('/activities')) return answers(req)
-      if (req.query?.category === 'ACCOUNT') return { data: [{ event_type: 'update_ad_account_spend_cap', event_time: '2026-10-02T10:00:00+0000' }] }
-      return { data: [{ event_type: 'ad_account_billing_charge', event_time: '2026-10-03T10:00:00+0000', extra_data: { amount: '1000', old_value: 'someone@example.com', payer_note: 'kept out', 'other@example.com': 1 } }] }
+      if (req.query?.category === 'BUDGET') return { data: [
+        { event_type: 'ad_account_billing_charge', event_time: '2026-10-03T10:00:00+0000', extra_data: { amount: '1000', old_value: 'someone@example.com', payer_note: 'kept out', 'other@example.com': 1 } },
+        { event_type: 'update_campaign_budget', event_time: '2026-10-04T10:00:00+0000' },
+        { event_type: 'ad_account_billing_refund', event_time: '2026-10-01T10:00:00+0000' },
+      ] }
+      return { data: [
+        { event_type: 'ad_account_billing_charge_failed', event_time: '2026-10-02T10:00:00+0000' },
+        // The whole log holds the BUDGET events too: never answered twice, and nothing else is taken from it.
+        { event_type: 'ad_account_billing_charge', event_time: '2026-10-03T10:00:00+0000', extra_data: { amount: '1000', old_value: 'someone@example.com', payer_note: 'kept out', 'other@example.com': 1 } },
+        { event_type: 'ad_account_billing_decline', event_time: '2026-10-05T10:00:00+0000' },
+        { event_type: 'ad_review_declined', event_time: '2026-10-06T10:00:00+0000' },
+      ] }
     }
     const out = data(await run('meta-billing', days))
     const [first, second, ...rest] = activityReads()
-    expect([first.query?.category, second.query?.category, rest.length]).toEqual(['ACCOUNT', undefined, 0])
+    expect([first.query?.category, second.query?.category, rest.length]).toEqual(['BUDGET', undefined, 0])
     expect(second.query).toEqual({ fields: first.query?.fields, since: first.query?.since, until: first.query?.until, limit: first.query?.limit })
-    expect(out).toMatchObject({ answeredBy: 'every category', accountCategoryRead: { scanned: 1, billingEvents: 0 }, scanned: 1 })
+    // The newest first: the charge, the failed charge (from the whole log), the refund; never the budget change, the review or a second copy.
+    expect(out.events.map((e: Record<string, unknown>) => e.type)).toEqual(['ad_account_billing_charge', 'ad_account_billing_charge_failed', 'ad_account_billing_refund'])
+    expect(out.scanned).toEqual({ budgetCategory: 3, wholeLog: 4 })
     // A value that looks like an e-mail address is never passed on; the keys left out are named, never their values (A6).
     // A key that is not a plain name (here an address) is counted, never named.
-    expect(out.events).toEqual([expect.objectContaining({ type: 'ad_account_billing_charge', metaRaw: { amount: '1000' }, detailsLeftOut: 3, leftOutKeys: ['old_value', 'payer_note'] })])
+    expect(out.events[0]).toMatchObject({ metaRaw: { amount: '1000' }, detailsLeftOut: 3, leftOutKeys: ['old_value', 'payer_note'] })
     expect(JSON.stringify(out)).not.toMatch(/@example\.com|kept out/)
-    expect(metaReadOnlyProblem({ method: 'GET', url: metaUrl(second.path, second.query as never), kind: 'read' })).toBeNull()
+    expect(out.notes.join(' ')).toMatch(/in none of Meta's categories/)
+    for (const c of [first, second]) expect(metaReadOnlyProblem({ method: 'GET', url: metaUrl(c.path, c.query as never), kind: 'read' })).toBeNull()
   })
-  it('events: a category Meta refuses (#100) is read once without it; a throttle is not, and ends the read', async () => {
-    h.answer = (req) => (req.path.endsWith('/activities') ? (req.query?.category ? refusedByMeta('(#100) Invalid parameter category') : { data: [{ event_type: 'ad_account_billing_refund' }] }) : answers(req))
+  it('events: a failed charge Meta files under BUDGET after all is answered once, not twice (LIVE-PROBES LG-003)', async () => {
+    const failed = { event_type: 'ad_account_billing_charge_failed', event_time: '2026-10-02T10:00:00+0000', object_id: ACCOUNT }
+    h.answer = (req) => (req.path.endsWith('/activities') ? { data: [failed] } : answers(req))
+    expect(data(await run('meta-billing', days)).events.map((e: Record<string, unknown>) => e.type)).toEqual(['ad_account_billing_charge_failed'])
+  })
+  it('events: the whole-log read Meta refuses costs only the failed charges; a throttle or a lost token ends the read', async () => {
+    h.answer = (req) => (req.path.endsWith('/activities') ? (req.query?.category ? { data: [{ event_type: 'ad_account_billing_refund' }] } : refusedByMeta('(#100) Please reduce the amount of data', '100')) : answers(req))
     const out = data(await run('meta-billing', days))
-    expect(activityReads().map((c) => c.query?.category ?? null)).toEqual(['ACCOUNT', null])
-    expect(out).toMatchObject({ answeredBy: 'every category', accountCategoryRead: { refused: expect.stringMatching(/Invalid parameter/) }, events: [expect.objectContaining({ type: 'ad_account_billing_refund' })] })
-    h.calls.length = 0
-    h.answer = (req) => (req.path.endsWith('/activities') ? refusedByMeta('(#80004) too many calls', '80004', 'rate_limited') : answers(req))
-    expect((await run('meta-billing', days)).error).toMatch(/slow down/)
-    expect(activityReads()).toHaveLength(1)
+    expect(out).toMatchObject({ events: [expect.objectContaining({ type: 'ad_account_billing_refund' })], scanned: { budgetCategory: 1, wholeLog: null }, missing: [{ part: 'failedCharges', sentence: expect.stringMatching(/reduce the amount/) }] })
+    for (const [code, cls, words] of [['80004', 'rate_limited', /slow down/], ['190', 'auth_expired', /no longer accepts/]] as const) {
+      h.calls.length = 0
+      h.answer = (req) => (req.path.endsWith('/activities') ? (req.query?.category ? { data: [] } : refusedByMeta('(#x) stop', code, cls)) : answers(req))
+      expect((await run('meta-billing', days)).error).toMatch(words)
+    }
+  })
+  it('events: who made a change — Nexus\'s system user or the chosen Page by name, anyone else Meta\'s id only (step 5\'s rule)', async () => {
+    h.answer = (req) => (req.path.endsWith('/activities') && req.query?.category ? { data: [
+      { event_type: 'add_funding_source', event_time: '2026-10-03T10:00:00+0000', actor_id: SYSTEM_USER, actor_name: 'Nexus system user' },
+      { event_type: 'billing_event', event_time: '2026-10-02T10:00:00+0000', actor_id: PAGE, actor_name: 'Shop A page' },
+      { event_type: 'remove_funding_source', event_time: '2026-10-01T10:00:00+0000', actor_id: PERSON, actor_name: 'Person A' },
+    ] } : answers(req))
+    const out = data(await run('meta-billing', days))
+    expect(out.events.map((e: Record<string, unknown>) => [e.who, e.actorId, e.actorName])).toEqual([
+      ['Nexus\'s own system user', SYSTEM_USER, 'Nexus system user'], ['the chosen Facebook Page', PAGE, 'Shop A page'], ['someone else (a person, an agency or Meta)', PERSON, undefined],
+    ])
+    expect(JSON.stringify(out)).not.toMatch(/Person A/)
   })
   it('tax: when Meta does not say the account is for business use (no is_personal), the tax numbers are masked (A6)', async () => {
     h.answer = (req) => (/tax_id/.test(fieldsOf(req)) ? { tax_id: 'IT00000000000', tax_id_status: 3, liable_address: { city: 'Rome', vat_tax_id: 'IT00000000000' } } : answers(req))

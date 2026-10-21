@@ -469,7 +469,7 @@ describe('read only by construction', () => {
       'act_1234567890/users?fields=id,name,tasks', 'act_1234567890/agencies?fields=id,name,access_status,permitted_tasks', '9876543210/extendedcredits?fields=id,balance',
       '100000000000001/assigned_ad_accounts?fields=account_id,name', '100000000000001/extended_credit_invoice_groups?fields=id,name',
       // Review B4, B1, A4, A2.
-      'act_1234567890/activities?fields=event_type&category=ACCOUNT&since=1760000000', '9876543210/owned_instagram_assets?fields=id,ig_user_id',
+      'act_1234567890/activities?fields=event_type&category=BUDGET&since=1760000000&until=1760086400', '9876543210/owned_instagram_assets?fields=id,ig_user_id',
       '9876543210/client_instagram_assets?fields=id,ig_user_id', '9876543210/extendedcredits?fields=id,owner_business{id}',
       'act_1234567890?fields=agency_client_declaration{agency_representing_client,client_name,client_city}',
       '100000000000001/assigned_product_catalogs?fields=id,name,owner_business{id}',
@@ -481,7 +481,12 @@ describe('read only by construction', () => {
       ['9876543210/owned_ad_accounts?fields=id&type=INV', 'type'], ['9876543210/extendedcredits?fields=id&only_show_pending=true', 'only_show_pending'],
       ['act_1234567890/campaign_attribution_options?app_id=1&custom_event_str=x', 'custom_event_str'], ['9876543210/business_invoices?fields=id&root_id=1', 'root_id'],
       ['act_1234567890/activities?fields=event_type&category=AD', 'category'], ['act_1234567890/activities?fields=event_type&category=account', 'category'],
-      ['120000000000101/activities?fields=event_type&category=ACCOUNT', 'category'], ['act_1234567890/campaigns?fields=id&category=ACCOUNT', 'category'],
+      ['120000000000101/activities?fields=event_type&category=BUDGET', 'category'], ['act_1234567890/campaigns?fields=id&category=BUDGET', 'category'],
+      // Review round 4 — BUDGET only (where Meta files billing events), exact case; the days only as Unix seconds.
+      ['act_1234567890/activities?fields=event_type&category=ACCOUNT', 'category'], ['act_1234567890/activities?fields=event_type&category=budget', 'category'],
+      ['act_1234567890/activities?fields=event_type&since=yesterday', 'since'], ['act_1234567890/activities?fields=event_type&since=-5', 'since'],
+      ['act_1234567890/activities?fields=event_type&since=1760000000&until=abc', 'until'], ['act_1234567890/activities?fields=event_type&since=1760000000.5', 'since'],
+      ['act_1234567890/activities?fields=event_type&until=2026-10-21', 'until'], ['act_1234567890/activities?fields=event_type&since=1234567890123', 'since'],
       ['9876543210/owned_instagram_assets?fields=id&business=9876543210', 'business'],
     ]) expect(q(path), path).toMatch(new RegExp(`"${key}" is not one`))
     // A hyphen only in the two feature-settings paths, exactly as Meta writes them.
