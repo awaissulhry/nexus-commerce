@@ -18,7 +18,8 @@ const h = vi.hoisted(() => ({
   tags: null as Record<string, string> | null,
   idProblems: [] as string[],
   sameName: { ids: [] as string[], checked: true },
-  people: { hashes: [] as string[], skipped: 0, fingerprint: 'f' },
+  people: { hashes: [] as string[], skipped: 0 },
+  existingUsers: { adSets: [] as Array<Record<string, unknown>>, problem: null as string | null },
   termsRead: vi.fn(),
   send: vi.fn(),
   check: vi.fn(async () => undefined),
@@ -46,6 +47,7 @@ vi.mock('../../marketing/meta-ads/live-audience-change.js', async () => {
     liveAudienceTypeTags: vi.fn(async () => (h.tags ? { ...h.tags } : null)),
     liveAudiencesNamed: vi.fn(async () => structuredClone(h.sameName)),
     liveIdProblems: vi.fn(async () => [...h.idProblems]),
+    liveExistingCustomerUsers: vi.fn(async () => structuredClone(h.existingUsers)),
   }
 })
 vi.mock('../../marketing/meta-ads/audience-members.js', async (importActual) => ({
@@ -103,7 +105,8 @@ beforeEach(() => {
   h.tags = null
   h.idProblems = []
   h.sameName = { ids: [], checked: true }
-  h.people = { hashes: [], skipped: 0, fingerprint: 'f' }
+  h.people = { hashes: [], skipped: 0 }
+  h.existingUsers = { adSets: [], problem: null }
 })
 
 describe('the tools', () => {
@@ -163,7 +166,7 @@ describe('create-meta-audience', () => {
     const out = await preview('create-meta-audience', { kind: 'website', name: 'Visitors B', rule: WEBSITE_RULE, prefill: true })
     expect(out.ok).toBe(true)
     // An engagement source in a website rule, a website retention past 365 days: refused in words.
-    const page = { inclusions: { operator: 'or', rules: [{ event_sources: [{ id: '120000000000080', type: 'page' }], retention_seconds: 86400 }] } }
+    const page = { inclusions: { operator: 'or', rules: [{ event_sources: [{ id: '120000000000080', type: 'page' }], retention_seconds: 86400, filter: { operator: 'and', filters: [{ field: 'event', operator: 'eq', value: 'page_engaged' }] } }] } }
     expect(await preview('create-meta-audience', { kind: 'website', name: 'x', rule: page })).toEqual({ ok: false, error: expect.stringMatching(/event sources of type pixel only/) })
     const long = { inclusions: { operator: 'or', rules: [{ ...WEBSITE_RULE.inclusions.rules[0], retention_seconds: 400 * 86400 }] } }
     expect(await preview('create-meta-audience', { kind: 'website', name: 'x', rule: long })).toEqual({ ok: false, error: expect.stringMatching(/at most 365 days/) })
@@ -217,7 +220,7 @@ describe('set-meta-audience', () => {
     const out = await preview('set-meta-audience', { audienceId: VISITORS.id, rule: wider })
     expect(out.ok).toBe(true)
     expect(out.preview.spendsMoney).toBe(true)
-    expect(out.preview.spendsMoneyBecause[0]).toMatch(/used by 1 active ad: a wider rule/)
+    expect(out.preview.spendsMoneyBecause[0]).toMatch(/used by 1 active ad: a new rule changes who is in it/)
     h.send.mockImplementationOnce(async () => ({ node: { id: VISITORS.id }, readBack: 'second-read', waitedMs: 0 }))
     const ran = await run('set-meta-audience', { audienceId: VISITORS.id, rule: wider }, out.preview)
     expect(ran.change!.before).toMatchObject({ undo: { audienceId: VISITORS.id, rule: WEBSITE_RULE } })
@@ -238,6 +241,11 @@ describe('set-meta-audience', () => {
     h.terms.existingProblem = 'Meta did not answer it'
     expect(await preview('set-meta-audience', { existingCustomers: [A] })).toEqual({ ok: false, error: expect.stringMatching(/read first for the undo/) })
     h.terms.existingCustomers = ['120000000000044']
+    // Review A3 — active ad sets that read the list are named, and the change is SPENDS MONEY.
+    h.existingUsers = { adSets: [{ id: '120000000000002', name: 'Ad set B', campaignId: '120000000000001' }], problem: null }
+    const spends = await preview('set-meta-audience', { existingCustomers: [A] })
+    expect(spends.preview.spendsMoneyBecause[0]).toMatch(/"Ad set B" \(120000000000002/)
+    h.existingUsers = { adSets: [], problem: null }
     const out = await preview('set-meta-audience', { existingCustomers: [A] })
     expect(out.preview.changes).toEqual({ 'The ad account\'s existing-customer audiences (the whole list)': { from: '120000000000044', to: A } })
     h.send.mockImplementationOnce(async () => ({ node: { id: 'act_1234567890' }, readBack: 'second-read', waitedMs: 0 }))
@@ -257,7 +265,7 @@ describe('set-meta-audience-members (D8)', () => {
     expect(h.termsRead).not.toHaveBeenCalled()
   })
   it('remove: the opted-out people as hashes in DELETE requests; no hash in the preview, the answer or the record', async () => {
-    h.people = { hashes: [hash('a@example.com'), hash('b@example.com')].sort(), skipped: 1, fingerprint: 'abc' }
+    h.people = { hashes: [hash('a@example.com'), hash('b@example.com')].sort(), skipped: 1 }
     h.terms.signed = false
     expect(await preview('set-meta-audience-members', { mode: 'remove', audienceId: A })).toEqual({ ok: false, error: expect.stringMatching(/terms are not signed/) })
     h.terms.signed = true
@@ -272,7 +280,9 @@ describe('set-meta-audience-members (D8)', () => {
     const sent = h.send.mock.calls[0][1]
     expect(sent).toMatchObject({ objectId: A, kind: 'customaudience', method: 'DELETE', edge: 'users', operation: 'audience.users.remove' })
     expect(JSON.parse(sent.params.payload)).toEqual({ schema: 'EMAIL_SHA256', data: h.people.hashes })
-    expect(JSON.parse(sent.params.session)).toMatchObject({ batch_seq: 1, last_batch_flag: true, estimated_num_total: 2 })
+    // Review B1 — no session on the DELETE: a second run with the same people sends no repeated id.
+    expect(Object.keys(sent.params)).toEqual(['payload'])
+    expect(out.preview.spendsMoney).toBe(false)
     expect(ran.data).toMatchObject({ received: 2, invalidEntries: 0, people: 2 })
     const kept = JSON.stringify({ data: ran.data, change: ran.change })
     expect(kept).not.toContain(hash('a@example.com'))
@@ -281,7 +291,7 @@ describe('set-meta-audience-members (D8)', () => {
   it('opt out everywhere goes to the ad account itself; it names no audience; nobody to take out is said', async () => {
     expect(await preview('set-meta-audience-members', { mode: 'opt_out_everywhere' })).toEqual({ ok: false, error: expect.stringMatching(/Nobody to take out/) })
     expect(await preview('set-meta-audience-members', { mode: 'opt_out_everywhere', audienceId: A })).toEqual({ ok: false, error: expect.stringMatching(/names no audience/) })
-    h.people = { hashes: [hash('a@example.com')], skipped: 0, fingerprint: 'abc' }
+    h.people = { hashes: [hash('a@example.com')], skipped: 0 }
     const out = await preview('set-meta-audience-members', { mode: 'opt_out_everywhere', since: '2026-10-01' })
     h.send.mockImplementationOnce(async () => ({ node: { num_received: 1, num_invalid_entries: 0 }, readBack: 'none', waitedMs: 0 }))
     const ran = await run('set-meta-audience-members', { mode: 'opt_out_everywhere', since: '2026-10-01' }, out.preview)

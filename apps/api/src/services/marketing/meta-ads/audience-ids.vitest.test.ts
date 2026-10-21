@@ -6,7 +6,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const h = vi.hoisted(() => ({ taken: new Set<string>(), fail: null as string | null }))
+const h = vi.hoisted(() => ({ taken: new Set<string>(), takenPortfolios: new Set<string>(), portfolios: {} as Record<string, string | null>, fail: null as string | null }))
 vi.mock('./live.js', async (importActual) => ({
   ...(await importActual<typeof import('./live.js')>()),
   metaChosenAccount: vi.fn(async () => ({ connectionId: 'm-1', adAccountId: '1234567890', pageId: '120000000000080', instagramId: '170000000000001', businessId: '120000000000090' })),
@@ -28,11 +28,20 @@ vi.mock('./live-media.js', async () => {
     }),
   }
 })
-vi.mock('./taken.js', () => ({ takenIds: vi.fn(async (_p: string, ids: string[]) => new Set(ids.filter((id) => h.taken.has(id)))) }))
+vi.mock('./taken.js', () => ({ takenIds: vi.fn(async (p: string, ids: string[]) => new Set(ids.filter((id) => (p === 'PORTFOLIO' ? h.takenPortfolios : h.taken).has(id)))) }))
+// Review A1 — the recipient ad account's business portfolio, as Meta reads it (act_<id>?fields=business{id}).
+vi.mock('./read-client.js', () => ({
+  metaReadOne: vi.fn(async (_t: unknown, req: { path: string }) => {
+    const id = req.path.replace(/^act_/, '')
+    if (h.fail) { const { MetaReadError, localFailure } = await import('./errors.js'); throw new MetaReadError(localFailure(h.fail, 'X'), 'audiences.recipientPortfolio') }
+    const business = h.portfolios[id]
+    return { body: business ? { id: req.path, business: { id: business } } : { id: req.path } }
+  }),
+}))
 
 import { metaAudienceIdProblem } from './audience-ids.js'
 
-beforeEach(() => { h.taken.clear(); h.fail = null })
+beforeEach(() => { h.taken.clear(); h.takenPortfolios.clear(); h.portfolios = { '1234567891': '120000000000090' }; h.fail = null })
 
 describe('metaAudienceIdProblem', () => {
   it('the chosen Page and Instagram account only', async () => {
@@ -56,5 +65,17 @@ describe('metaAudienceIdProblem', () => {
     h.taken.add('1234567891')
     expect(await metaAudienceIdProblem('m-1', { id: '1234567891', kind: 'adaccount' })).toMatch(/another business in Nexus uses/)
     expect(await metaAudienceIdProblem('m-1', { id: 'act_1', kind: 'adaccount' })).toMatch(/not a Meta id/)
+  })
+  it('review A1 — two businesses on ONE portfolio: a recipient of that portfolio is refused; an unreadable one too', async () => {
+    // Business A's chosen account and business B's chosen account both sit in portfolio 120000000000090; the recipient
+    // 1234567891 is no business's chosen account, but its portfolio is one business B uses.
+    h.takenPortfolios.add('120000000000090')
+    expect(await metaAudienceIdProblem('m-1', { id: '1234567891', kind: 'adaccount' })).toMatch(/business portfolio another business in Nexus uses/)
+    h.takenPortfolios.clear()
+    h.portfolios = { '1234567891': null }
+    expect(await metaAudienceIdProblem('m-1', { id: '1234567891', kind: 'adaccount' })).toMatch(/names no business portfolio Nexus can read/)
+    h.portfolios = { '1234567891': '120000000000090' }
+    h.fail = 'Meta did not answer'
+    expect(await metaAudienceIdProblem('m-1', { id: '1234567891', kind: 'adaccount' })).toMatch(/could not confirm ad account/)
   })
 })

@@ -12,8 +12,10 @@
  *   set-meta-audience-sharing   share / unshare with ad accounts — AU-065, 066
  *   remove-meta-audience        delete, lookalikes first — AU-054, 063
  * Meta documents no validate_only on any custom-audience edge (facts F1 §M8): every request is `check: 'none'`. An
- * audience is never what spends money; what can let ads that use one spend more (a wider rule, a bigger lookalike, a
- * longer retention of an audience active ads use; labels that value rules raise bids for) is said as SPENDS MONEY.
+ * audience is never what spends money; what can let ads that use one spend more is said as SPENDS MONEY — review A2:
+ * ANY change of who is in an audience that ads use (here or in an account it is shared with), in either direction (an ad
+ * set may target it or exclude it), people taken out of it, every opt-out everywhere, labels value rules may raise bids
+ * for, and a new existing-customer list that active ad sets read (A3).
  */
 import { changeLines, plural, type MetaChangeDraft, type MetaChangeRequest } from './change-draft.js'
 import type { AudienceDetail, AudienceSharing, AudienceUse, TermsState } from './live-audience-change.js'
@@ -222,6 +224,8 @@ export function createAudienceDraft(request: AudienceCreateRequest, live: Audien
       if ((l.percent !== undefined && l.tiers?.length) || (!sized && !l.type) || (sized && l.type && l.type !== 'custom_ratio') || (l.type === 'custom_ratio' && !sized)) {
         return { refusal: 'Give the lookalike ONE size: type similarity (about 1%) or reach (about 5%), percent (1–20), or tiers (custom_ratio takes a percent or tiers).' }
       }
+      // Review B3 — converter and Page-fan lookalikes are documented with a ratio only (lookalike-audiences #campaign, #page_fan).
+      if (!l.seedAudienceId && (!sized || l.type)) return { refusal: 'A lookalike of campaign or ad set converters or of the Page\'s fans takes a percent or tiers (Meta documents a ratio there, no type).' }
       const seed = live.seed
       // A value-based seed's lookalike is custom_ratio (value-based-lookalike-audiences): Nexus sends it so.
       const valueSeed = !!(l.seedAudienceId && seed?.isValueBased)
@@ -313,6 +317,8 @@ export interface AudienceSetLive {
   terms: TermsState | null
   tags: Record<string, string> | null
   idProblems: string[]
+  /** Review A3 — the ACTIVE ad sets that read the existing-customer list (null: not asked), or why they could not be read. */
+  existingUsers?: { adSets: Array<{ id: string; name: string | null; campaignId: string | null }>; problem: string | null } | null
 }
 
 export interface AudienceSetRecord {
@@ -340,6 +346,23 @@ export function audienceFieldView(param: string, value: unknown): unknown {
   }
   return String(value)
 }
+/**
+ * Review A2 — who delivers with this audience: the chosen account's active ads, or ads of an ad account it is shared with
+ * (another business's: counted as in use). Null when nothing delivers with it.
+ */
+export function inUseWords(a: Pick<AudienceDetail, 'id' | 'name'>, use: AudienceUse | null): string | null {
+  if (!use) return null
+  const others = use.otherAccounts.filter((o) => o.takenByAnotherBusiness || (o.ads ?? 0) > 0)
+  if (!use.activeAds && !others.length) return null
+  const parts = [use.activeAds ? plural(use.activeAds, 'active ad') : '', others.length ? `ads of ${plural(others.length, 'ad account')} it is shared with` : ''].filter(Boolean)
+  return `${who(a)} is used by ${parts.join(' and ')}`
+}
+/**
+ * Review A2 — any change of WHO is in an audience ads use can let them spend more, in either direction: an ad set that
+ * targets it reaches more people when it grows, one that excludes it reaches more when it shrinks. Nexus does not read
+ * which ad set includes or excludes it, so every such change is the person's decision.
+ */
+const sizeSpends = (inUse: string, what: string) => `${inUse}: ${what} changes who is in it — where an ad set targets it a bigger audience, where one excludes it a smaller one, can let it spend more of its budget.`
 const sameList = (a: readonly string[] | null | undefined, b: readonly string[] | null | undefined) => JSON.stringify([...(a ?? [])].sort()) === JSON.stringify([...(b ?? [])].sort())
 const percentOf = (ratio: unknown) => (typeof ratio === 'number' ? Math.round(ratio * 100) : null)
 
@@ -365,8 +388,7 @@ export function setAudienceDraft(request: AudienceSetRequest, live: AudienceSetL
     const params: Record<string, string> = {}
     const expect: Record<string, string> = {}
     const readable: string[] = []
-    const active = live.use?.activeAds ?? 0
-    const activeWords = `${who(a)} is used by ${plural(active, 'active ad')}`
+    const inUse = inUseWords(a, live.use)
     if (a.flagged && (a.subtype === 'CUSTOM' || a.subtype === 'LOOKALIKE')) return { refusal: `${who(a)} is flagged for integrity: Meta lets no flagged customer list or lookalike be edited (100/1713228); a person asks for a review in Audience Manager, or makes a new one.` }
     if (a.flagged) warnings.push(`${who(a)} is flagged for integrity (${a.flaggedFields.join(', ') || 'operation 471'}): Meta refuses an edit that leaves the flagged ${a.flaggedFields.length ? 'fields' : 'parts'} as they are (100/1713231).`)
     const set = (from: unknown, to: unknown, param: string, value: string, label: string, opts: { scalar?: boolean } = {}) => {
@@ -409,7 +431,7 @@ export function setAudienceDraft(request: AudienceSetRequest, live: AudienceSetL
         warnings.push('Meta keeps the people the old rule matched until their retention ends: a new rule adds people at once but takes none out (audience-rules).')
         if (previous !== undefined && !audienceRuleProblem(previous)) undo.rule = previous
         else noUndo.push('Its old rule uses parts Nexus does not send, so undo cannot put it back (Ads Manager can).')
-        if (active > 0) spendsMoney.push(`${activeWords}: a wider rule can let them spend more of their budgets.`)
+        if (inUse) spendsMoney.push(sizeSpends(inUse, 'a new rule'))
       }
     }
     if (request.optOutLink !== undefined) {
@@ -443,8 +465,10 @@ export function setAudienceDraft(request: AudienceSetRequest, live: AudienceSetL
       if (typeof cur.allow_international_seeds === 'boolean') back.allowInternationalSeeds = cur.allow_international_seeds
       if (Object.keys(back).length && (back.type || back.percent !== undefined)) undo.lookalike = back
       else noUndo.push('Its old lookalike size was not readable, so undo cannot put it back.')
-      const bigger = (l.percent !== undefined && (percentOf(cur.ratio) ?? 0) < l.percent) || l.type === 'reach' || l.allowInternationalSeeds === true
-      if (active > 0 && bigger) spendsMoney.push(`${activeWords}: a bigger lookalike can let them spend more of their budgets.`)
+      if (percentOf(cur.starting_ratio) && l.fromPercent === undefined && l.percent !== undefined) {
+        warnings.push(`Its size starts at ${percentOf(cur.starting_ratio)}% now: the size sent replaces it, so without fromPercent it starts at 0% (${percentOf(cur.starting_ratio)}–${percentOf(cur.ratio)}% becomes 0–${l.percent}%).`)
+      }
+      if (inUse) spendsMoney.push(sizeSpends(inUse, 'a new lookalike size'))
     }
     if (request.customerFileSource !== undefined) {
       if (a.subtype !== 'CUSTOM') return { refusal: `${who(a)} is not a customer list: it has no customer-file source.` }
@@ -468,22 +492,25 @@ export function setAudienceDraft(request: AudienceSetRequest, live: AudienceSetL
     }
     if (request.retentionDays !== undefined) {
       if (a.subtype !== 'CUSTOM') return { refusal: `${who(a)} is not a customer list: Meta keeps retention_days on customer lists only (a rule audience keeps people by its rule's retention).` }
+      // Review B5 — Meta's 0 (or none) is "for good": 0 → 30 is shorter, never longer.
+      const forever = !a.retentionDays
       if (request.retentionDays === a.retentionDays) skipped.push(`${who(a)} already keeps people ${request.retentionDays} days.`)
       else {
-        set(a.retentionDays, request.retentionDays, 'retention_days', String(request.retentionDays), 'kept (days)', { scalar: true })
+        set(forever ? 'for good' : a.retentionDays, request.retentionDays, 'retention_days', String(request.retentionDays), 'kept (days)', { scalar: true })
         warnings.push('retention_days on an existing audience is in Meta\'s SDK only (not its update table): Meta\'s answer decides (LIVE-PROBES AU-058).')
         if (a.retentionDays && a.retentionDays >= 1 && a.retentionDays <= 180) undo.retentionDays = a.retentionDays
         else noUndo.push('It kept people without an end: Meta documents no way back to that.')
-        // Longer than before can keep more people in it; from "forever" to a number is shorter.
-        if (active > 0 && a.retentionDays !== null && request.retentionDays > a.retentionDays) spendsMoney.push(`${activeWords}: keeping people longer can let them spend more of their budgets.`)
+        if (inUse) spendsMoney.push(sizeSpends(inUse, `keeping people ${forever ? 'not for good but' : a.retentionDays! < request.retentionDays ? 'longer,' : 'shorter,'} ${request.retentionDays} days`))
       }
     }
     if (request.productSetId !== undefined) {
       set('(not read)', request.productSetId, 'product_set_id', request.productSetId, 'product set')
+      if (inUse) spendsMoney.push(sizeSpends(inUse, 'another product set'))
       noUndo.push('Meta does not let Nexus read an audience\'s product set back, so undo cannot put the old one back.')
     }
     if (request.allowedDomains !== undefined) {
       set('(not read)', request.allowedDomains.join(', '), 'allowed_domains', JSON.stringify(request.allowedDomains), 'allowed domains')
+      if (inUse) spendsMoney.push(sizeSpends(inUse, 'other allowed domains'))
       noUndo.push('Allowed domains: Meta documents the field by its name only and gives it no read-back, so undo cannot put the old ones back.')
     }
     if (request.useInCampaigns !== undefined) {
@@ -502,12 +529,13 @@ export function setAudienceDraft(request: AudienceSetRequest, live: AudienceSetL
         expect: Object.keys(expect).length ? expect : { id: a.id }, readBackFields: ['id', ...readable].join(','),
         raisesSpend: spendsMoney.length > 0, undoable: true,
       }))
-      if (active > 0 && params.rule) warnings.push(`${activeWords}: a rule change does not send them back to Meta's review; their delivery follows the audience as Meta refills it.`)
+      if (inUse && params.rule) warnings.push(`${inUse}: a rule change does not send them back to Meta's review; their delivery follows the audience as Meta refills it.`)
     }
   }
 
   if (accountAsked) {
     const accountParams: Record<string, string> = {}
+    const accountSpends: string[] = []
     const accountId = `act_${live.adAccountId}`
     if (request.existingCustomers !== undefined) {
       const current = live.terms?.existingCustomers
@@ -520,6 +548,13 @@ export function setAudienceDraft(request: AudienceSetRequest, live: AudienceSetL
         fieldsWritten.existing_customers = [...request.existingCustomers].sort()
         fieldsBefore.existing_customers = current
         undo.existingCustomers = current
+        const users = live.existingUsers
+        if (!users || users.problem) {
+          accountSpends.push(`Nexus could not read which active ad sets use the account's existing-customer list (${users?.problem ?? 'not read'}): an existing-customer budget cap or a new-customer goal reads it, so a new list can let them spend more on other people.`)
+        } else if (users.adSets.length) {
+          const named = users.adSets.slice(0, 10).map((x) => `${x.name ? `"${x.name}"` : 'an ad set'} (${x.id}${x.campaignId ? `, campaign ${x.campaignId}` : ''})`).join(', ')
+          accountSpends.push(`${plural(users.adSets.length, 'active ad set')} read the existing-customer list (an existing-customer budget cap or a new-customer goal): ${named}${users.adSets.length > 10 ? ' and more' : ''}. Who counts as an existing customer changes on whom they may spend.`)
+        }
         warnings.push('This replaces the WHOLE list of the account\'s existing-customer audiences (Advantage+ campaigns count them as existing customers, and an ad set\'s existing-customer budget share reads them). Meta documents it in its Advantage+ Shopping guide; whether a POST replaces or adds to the list is not documented: Nexus sends the whole list (LIVE-PROBES AU-074).')
       }
     }
@@ -548,7 +583,9 @@ export function setAudienceDraft(request: AudienceSetRequest, live: AudienceSetL
     if (Object.keys(accountParams).length) {
       requests.push(audienceRequest(requests.length + 1, `Change the ad account's audience settings: ${Object.keys(accountParams).map((k) => k.replace(/_/g, ' ')).join(', ')}`, {
         objectId: accountId, objectKind: 'adaccount', params: accountParams, operation: 'adaccount.audiences', expect: { id: accountId }, readBackFields: 'id', undoable: true,
+        raisesSpend: accountSpends.length > 0,
       }))
+      spendsMoney.push(...accountSpends)
     }
   }
 
@@ -600,21 +637,26 @@ export function membersDraft(request: AudienceMembersRequest, live: AudienceMemb
     if (a.operationCode === 414) return { refusal: `${who(a)} is being replaced right now (Meta 414): Meta takes no other change of its people until that ends. Ask again later.` }
     if (a.flagged) return { refusal: `${who(a)} is flagged for integrity: Meta takes no change of its people until that is resolved in Audience Manager (100/1713230).` }
   }
-  const { hashes, skipped, fingerprint } = live.people
+  const { hashes, skipped } = live.people
   const since = request.since ?? null
   if (!hashes.length) return { refusal: `Nobody to take out: Nexus's list of people who opted out of the business's e-mail${since ? ` since ${since}` : ''} is empty${skipped ? ` (${plural(skipped, 'row')} without a usable e-mail address)` : ''}.` }
   if (hashes.length > MAX_PEOPLE) return { refusal: `${hashes.length} people opted out${since ? ` since ${since}` : ''}: Nexus sends at most ${MAX_PEOPLE} in one change (10 requests of 10,000). Ask with since (a later day) to take them out in parts.` }
-  const where = request.mode === 'remove' ? `${live.adAccountId}|${a!.id}|remove` : `${live.adAccountId}|any|opt-out`
-  const batches = memberBatches(hashes, where)
+  const batches = memberBatches(hashes)
+  // Review A2 — people taken out of a list an ad set EXCLUDES widen its delivery: the person's decision.
+  const inUse = request.mode === 'remove' ? inUseWords(a!, live.use) : null
+  const spendsMoney = request.mode === 'opt_out_everywhere'
+    ? ['Taking people out of EVERY customer list of the ad account: an ad set that excludes one of those lists can then reach them, and so spend more of its budget (Nexus does not read which lists active ads exclude).']
+    : inUse ? [sizeSpends(inUse, 'taking these people out')] : []
   const target = request.mode === 'remove' ? `customer list ${quoted(a!.name)} (${a!.id})` : 'EVERY customer list of the ad account'
   const requests = batches.map((b, i) => audienceRequest(i + 1, `Take ${plural(b.count, 'person', 'people')} who opted out of the business's e-mail out of ${target}${batches.length > 1 ? ` (batch ${i + 1} of ${batches.length})` : ''}`, request.mode === 'remove'
-    ? { objectId: a!.id, objectKind: 'customaudience', params: b.params, operation: 'audience.users.remove', edge: 'users', method: 'DELETE' }
-    : { objectId: `act_${live.adAccountId}`, objectKind: 'adaccount', params: b.params, operation: 'adaccount.optOut', edge: 'usersofanyaudience', method: 'DELETE' }))
+    ? { objectId: a!.id, objectKind: 'customaudience', params: b.params, operation: 'audience.users.remove', edge: 'users', method: 'DELETE', raisesSpend: spendsMoney.length > 0 }
+    : { objectId: `act_${live.adAccountId}`, objectKind: 'adaccount', params: b.params, operation: 'adaccount.optOut', edge: 'usersofanyaudience', method: 'DELETE', raisesSpend: true }))
   const warnings = [
     'Each e-mail goes as its SHA-256 hash only (trimmed, lower case — Meta\'s rule); Nexus keeps no list of them, and the answer counts what Meta received, never who.',
     'Meta needs up to 24 hours to apply it, and matches only people it knows.',
     'No undo: people who opted out are never put back.',
-    ...(request.mode === 'remove' && (live.use?.activeAds ?? 0) > 0 ? [`${who(a!)} is used by ${plural(live.use!.activeAds, 'active ad')}: taking people out of it restarts the learning phase of their ad sets (Meta).`] : []),
+    ...(inUse ? [`${inUse}: taking people out of it restarts the learning phase of their ad sets (Meta).`] : []),
+    ...(request.mode === 'opt_out_everywhere' ? ['It covers every customer list of the ad account, also one shared with an ad account another business in Nexus uses: an opt-out is honoured everywhere.'] : []),
     ...(skipped ? [`${plural(skipped, 'opt-out row')} without a usable e-mail address ${skipped === 1 ? 'is' : 'are'} not sent.`] : []),
     'Meta has no check for an audience change.',
   ]
@@ -624,10 +666,11 @@ export function membersDraft(request: AudienceMembersRequest, live: AudienceMemb
     changes: { [request.mode === 'remove' ? `People in ${target}` : 'People in every customer list of the ad account']: { from: 'as Meta has them', to: `${plural(hashes.length, 'person', 'people')} fewer at most (those Meta matches)` } },
     totals: { people: hashes.length, requests: requests.length, ...(skipped ? { withoutEmail: skipped } : {}) },
     warnings,
-    spendsMoney: [],
+    spendsMoney,
     skipped: [],
     requests,
-    stands: { terms: live.terms.signed, audience: a ? { id: a.id, subtype: a.subtype, operation: a.operationCode, flagged: a.flagged } : null, people: hashes.length, fingerprint },
+    // Review A8 — no hash of the people here: the plan already covers the requests (their hashes), and a new opt-out moves it.
+    stands: { terms: live.terms.signed, audience: a ? { id: a.id, subtype: a.subtype, operation: a.operationCode, flagged: a.flagged } : null, use: live.use ? { activeAds: live.use.activeAds, otherAccounts: live.use.otherAccounts } : null, people: hashes.length },
     before: record,
     after: record,
   }
@@ -641,7 +684,9 @@ export interface AudienceShareRecord { audienceId: string; action: 'share' | 'un
 
 export function shareDraft(request: AudienceShareRequest, live: AudienceShareLive): MetaChangeDraft | { refusal: string } {
   const a = live.audience
-  if (live.sharing.problem) return { refusal: live.sharing.problem }
+  // Review A1 — an audience shared with another business's account is changed by nothing but its unshare (that is how
+  // such a share ends): a share of it is refused.
+  if (live.sharing.problem && request.action === 'share') return { refusal: live.sharing.problem }
   if (live.idProblems.length) return { refusal: `Not shared: ${live.idProblems.join(' ')}` }
   const asked = [...new Set(request.adAccountIds)]
   const shared = new Set(live.sharing.accounts)

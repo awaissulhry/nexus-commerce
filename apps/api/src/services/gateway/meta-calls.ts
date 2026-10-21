@@ -861,6 +861,8 @@ export function metaWriteVerdict(input: { method: string; url: string; kind: str
   // Step 18 — a DELETE goes only by a DELETE rule for the kind the call names (today a budget schedule's), with no body.
   // Step 31 — or, with a form body, by a rule that takes one (deleteBody: an audience's people, its sharing), judged below.
   const bodyDelete = method === 'DELETE' && typeof input.body === 'string' && input.body !== ''
+  // Review A5 — a DELETE body that is not form text (bytes, an object) is refused, never sent as an empty one.
+  if (method === 'DELETE' && input.body !== undefined && input.body !== '' && typeof input.body !== 'string') return refuse('a Meta DELETE carries no body, or its fields as form text')
   const deleteRule = method === 'DELETE' ? writeRules().find((r) => r.method === 'DELETE' && r.path.test(graph.route) && kindMatches(r, input.objectKind) && !!r.deleteBody === bodyDelete) : undefined
   if (method === 'DELETE' && !deleteRule) {
     return refuse('Nexus deletes nothing on Meta yet but a scheduled budget increase of the chosen ad account (set-meta-budget-schedule; deleting campaigns, ad sets and ads is its own tool, not built yet), an audience of it, the hashed people of one of its customer lists or an audience\'s share with an ad account (remove-meta-audience, set-meta-audience-members, set-meta-audience-sharing), and cancels no async batch')

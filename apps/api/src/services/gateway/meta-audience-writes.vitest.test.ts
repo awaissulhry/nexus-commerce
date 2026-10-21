@@ -54,6 +54,7 @@ const hash = (email: string) => createHash('sha256').update(email).digest('hex')
 const WEBSITE_RULE = { inclusions: { operator: 'or', rules: [{ event_sources: [{ id: PIXEL, type: 'pixel' }], retention_seconds: 2592000, filter: { operator: 'and', filters: [{ field: 'url', operator: 'i_contains', value: 'helmets' }] } }] } }
 const PAYLOAD = JSON.stringify({ schema: 'EMAIL_SHA256', data: [hash('a@example.com'), hash('b@example.com')] })
 const SESSION = JSON.stringify({ session_id: 123456789, batch_seq: 1, last_batch_flag: true, estimated_num_total: 2 })
+const EVENT = { operator: 'and', filters: [{ field: 'event', operator: 'eq', value: 'page_engaged' }] }
 
 beforeEach(() => {
   __rateTest.useMemory()
@@ -95,7 +96,9 @@ describe('creates on the ad account\'s edges', () => {
     expect(bad({ inclusions: { operator: 'or', rules: [{ ...WEBSITE_RULE.inclusions.rules[0], retention_seconds: 10 ** 9 }] } })).toMatch(/retention_seconds/)
     expect(bad({ inclusions: { operator: 'or', rules: [{ ...WEBSITE_RULE.inclusions.rules[0], event_sources: [{ id: '12a', type: 'pixel' }] }] } })).toMatch(/an event source is/)
     // An engagement rule names its Page for the gateway's check.
-    const page = { inclusions: { operator: 'or', rules: [{ event_sources: [{ id: PAGE, type: 'page' }], retention_seconds: 31536000, filter: { operator: 'and', filters: [{ field: 'event', operator: 'eq', value: 'page_engaged' }] } }] } }
+    const page = { inclusions: { operator: 'or', rules: [{ event_sources: [{ id: PAGE, type: 'page' }], retention_seconds: 31536000, filter: EVENT }] } }
+    // Review B4 — a rule without its filter is refused (every visitor is url i_contains "").
+    expect(bad({ inclusions: { operator: 'or', rules: [{ event_sources: [{ id: PIXEL, type: 'pixel' }], retention_seconds: 86400 }] } })).toMatch(/filter is required/)
     expect(verdict({ body: form({ name: 'Fans A', rule: JSON.stringify(page) }) })).toMatchObject({ write: { ids: [{ id: PAGE, kind: 'page' }] } })
   })
   it('a video audience (subtype ENGAGEMENT, the array rule) names its videos; a lookalike one source', () => {
@@ -116,6 +119,9 @@ describe('creates on the ad account\'s edges', () => {
     expect(lookalikeSpecProblem({ type: 'similarity' })).toBeNull()
     expect(lookalikeSpecProblem({ type: 'custom_ratio' })).toMatch(/names its ratio/)
     expect(lookalikeSpecProblem({ ratio: 0.01, origin_ids: ['1'], conversion_type: 'campaign_conversions', page_id: '2' })).toMatch(/no Page/)
+    // Review B3 — converters and Page fans take a ratio, never a type alone.
+    expect(lookalikeSpecProblem({ type: 'similarity', origin_ids: ['1'], conversion_type: 'campaign_conversions' })).toMatch(/names its ratio/)
+    expect(lookalikeSpecProblem({ type: 'reach', page_id: '2', conversion_type: 'page_like' })).toMatch(/names its ratio/)
   })
   it('a catalog product audience on act_<id>/product_audiences: one event per rule, its product set and pixel named', () => {
     const body = form({ name: 'Carts A', product_set_id: '120000000000061', inclusions: '[{"retention_seconds":604800,"rule":{"event":{"eq":"AddToCart"}}}]', exclusions: '[{"retention_seconds":604800,"rule":{"event":{"eq":"Purchase"}}}]', event_sources: `[{"id":"${PIXEL}","type":"PIXEL"}]` })
@@ -153,8 +159,10 @@ describe('changes of one audience and of the account', () => {
       .toMatchObject({ write: { rule: 'audience.share', ids: [{ id: '1234567891', kind: 'adaccount' }] } })
     expect(problem({ url, objectKind: 'customaudience', body: form({ adaccounts: '["1234567891"]', replace: 'true' }) })).toMatch(/only Meta change/)
     expect(problem({ url, objectKind: 'customaudience', body: form({ adaccounts: '["act_1234567891"]' }) })).toMatch(/Meta ids/)
-    expect(verdict({ url, method: 'DELETE', objectKind: 'customaudience', body: form({ adaccounts: '["1234567891"]' }) }))
-      .toMatchObject({ write: { rule: 'audience.unshare', method: 'DELETE', ids: [{ id: '1234567891', kind: 'adaccount' }] } })
+    // Review A1 — an unshare names no recipient to check: taking access away is how a share with another business ends.
+    const unshare = verdict({ url, method: 'DELETE', objectKind: 'customaudience', body: form({ adaccounts: '["1234567891"]' }) })
+    expect(unshare).toMatchObject({ write: { rule: 'audience.unshare', method: 'DELETE' } })
+    expect('write' in unshare && unshare.write.ids).toBeUndefined()
     expect(problem({ url, method: 'DELETE', objectKind: 'customaudience', body: form({ adaccounts: '["1234567891"]', permissions: 'targeting' }) })).toMatch(/only Meta change/)
   })
   it('a delete of an audience: no body, named an audience — never a campaign; step 18\'s budget schedule delete unchanged', () => {
@@ -162,14 +170,18 @@ describe('changes of one audience and of the account', () => {
     expect(problem({ url: `${BASE}/${AUDIENCE}`, method: 'DELETE', objectKind: 'campaign' })).toMatch(/deletes nothing on Meta yet/)
     expect(problem({ url: `${BASE}/${AUDIENCE}`, method: 'DELETE', objectKind: 'customaudience', body: 'x=1' })).toMatch(/deletes nothing on Meta yet but a scheduled budget increase/)
     expect(verdict({ url: `${BASE}/120000000000031`, method: 'DELETE', objectKind: 'highdemandperiod' })).toMatchObject({ write: { rule: 'budget_schedule.delete' } })
+    // Review A5 — a DELETE body that is not form text is refused, never sent as an empty one.
+    expect(problem({ url: `${BASE}/${AUDIENCE}`, method: 'DELETE', objectKind: 'customaudience', body: new Uint8Array([1]) })).toMatch(/form text/)
+    expect(problem({ url: `${BASE}/${AUDIENCE}`, method: 'DELETE', objectKind: 'customaudience', body: { a: 1 } })).toMatch(/form text/)
   })
 })
 
 describe('the people of a customer list: hashes only, in a DELETE', () => {
-  it('remove from one list and opt out everywhere: EMAIL_SHA256 hashes and the session, as Nexus writes them', () => {
-    const one = verdict({ url: `${BASE}/${AUDIENCE}/users`, method: 'DELETE', objectKind: 'customaudience', body: form({ payload: PAYLOAD, session: SESSION }) })
+  it('remove from one list and opt out everywhere: EMAIL_SHA256 hashes only, and no session (review B1)', () => {
+    const one = verdict({ url: `${BASE}/${AUDIENCE}/users`, method: 'DELETE', objectKind: 'customaudience', body: form({ payload: PAYLOAD }) })
     expect(one).toMatchObject({ write: { rule: 'audience.users.remove', method: 'DELETE', personal: true, objectId: AUDIENCE } })
     expect(verdict({ url: `${BASE}/${ACT}/usersofanyaudience`, method: 'DELETE', body: form({ payload: PAYLOAD }) })).toMatchObject({ write: { rule: 'adaccount.usersofanyaudience', personal: true, objectId: ACT } })
+    expect(problem({ url: `${BASE}/${AUDIENCE}/users`, method: 'DELETE', objectKind: 'customaudience', body: form({ payload: PAYLOAD, session: SESSION }) })).toMatch(/only Meta change/)
   })
   it('never a plain e-mail, never an add, never more than 10,000, never another schema', () => {
     const del = (payload: unknown, extra: Record<string, string> = {}) => problem({ url: `${BASE}/${AUDIENCE}/users`, method: 'DELETE', objectKind: 'customaudience', body: form({ payload: JSON.stringify(payload), ...extra }) })
@@ -178,7 +190,6 @@ describe('the people of a customer list: hashes only, in a DELETE', () => {
     expect(del({ schema: 'EMAIL', data: [hash('a@example.com')] })).toMatch(/hashed e-mails only/)
     expect(del({ schema: ['EMAIL', 'PHONE'], data: [[hash('a@example.com'), '']] })).toMatch(/hashed e-mails only/)
     expect(del({ schema: 'EMAIL_SHA256', data: Array(MEMBERS_PER_REQUEST + 1).fill(hash('a@example.com')) })).toMatch(/1 to 10000/)
-    expect(del({ schema: 'EMAIL_SHA256', data: [hash('a@example.com')] }, { session: '{"session_id":1,"batch_seq":0,"last_batch_flag":true}' })).toMatch(/batch_seq/)
     // An add (POST /users) and a replace (POST /usersreplace) are no rule at all: Nexus adds nobody (D8).
     expect(problem({ url: `${BASE}/${AUDIENCE}/users`, objectKind: 'customaudience', body: form({ payload: PAYLOAD, session: SESSION }) })).toMatch(/only Meta change/)
     expect(problem({ url: `${BASE}/${AUDIENCE}/usersreplace`, objectKind: 'customaudience', body: form({ payload: PAYLOAD, session: SESSION }) })).toMatch(/only Meta change/)
@@ -188,8 +199,9 @@ describe('the people of a customer list: hashes only, in a DELETE', () => {
   })
   it('through the gateway: the body goes with the DELETE, and a refused one leaves no hash in the ledger', async () => {
     h.answers.push(json({ id: AUDIENCE, account_id: '1234567890', subtype: 'CUSTOM', time_created: 1700000000 }), json({ error: { code: 100, message: 'Invalid parameter' } }, 400))
-    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'audience.users.remove', objectId: AUDIENCE, objectKind: 'customaudience', edge: 'users', method: 'DELETE', params: { payload: PAYLOAD, session: SESSION }, check: false })
+    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'audience.users.remove', objectId: AUDIENCE, objectKind: 'customaudience', edge: 'users', method: 'DELETE', params: { payload: PAYLOAD }, check: false })
     expect(res.ok).toBe(false)
+    expect(res.verdict?.channelMessage).toBe('Invalid parameter')
     const del = h.calls[1]
     expect([del.init.method, new URL(del.url).pathname]).toEqual(['DELETE', `/v26.0/${AUDIENCE}/users`])
     expect(new URLSearchParams(String(del.init.body)).get('payload')).toBe(PAYLOAD)
@@ -199,6 +211,12 @@ describe('the people of a customer list: hashes only, in a DELETE', () => {
     expect(kept).not.toContain('example.com')
     expect(row.requestPayload).toMatchObject({ __personal: true })
     expect(row.responsePayload).toMatchObject({ __personal: true })
+  })
+  it('review A4 — an answer that is not Meta\'s error JSON is never kept as words: only Meta\'s own message fields', async () => {
+    h.answers.push(json({ id: AUDIENCE, account_id: '1234567890', subtype: 'CUSTOM', time_created: 1700000000 }), () => new Response(`<html>${hash('a@example.com')}</html>`, { status: 502 }))
+    const res = await metaWriteCall({ connectionId: 'm-1', operation: 'audience.users.remove', objectId: AUDIENCE, objectKind: 'customaudience', edge: 'users', method: 'DELETE', params: { payload: PAYLOAD }, check: false })
+    expect(res.verdict?.channelMessage).toBe('Meta answered HTTP 502 without an error message.')
+    expect(JSON.stringify(gatewayLedger.at(-1))).not.toContain(hash('a@example.com'))
   })
   it('opt out everywhere goes only to the chosen ad account', async () => {
     gatewayMetaChosen['m-1'] = '1234567890'
@@ -215,7 +233,7 @@ describe('the people of a customer list: hashes only, in a DELETE', () => {
 describe('the ids inside an audience change are the business\'s own', () => {
   it('a Page another business chose inside a rule: nothing is sent', async () => {
     h.idProblems.set(PAGE, `Facebook Page ${PAGE} is not the Facebook Page this business chose.`)
-    const page = { inclusions: { operator: 'or', rules: [{ event_sources: [{ id: PAGE, type: 'page' }], retention_seconds: 86400 }] } }
+    const page = { inclusions: { operator: 'or', rules: [{ event_sources: [{ id: PAGE, type: 'page' }], retention_seconds: 86400, filter: EVENT }] } }
     const err = await metaWriteCall({ connectionId: 'm-1', operation: 'x', objectId: ACT, objectKind: 'adaccount', edge: 'customaudiences', params: { name: 'Fans A', rule: JSON.stringify(page) }, check: false }).catch((e) => e)
     expect(err).toMatchObject({ code: 'META_ACCOUNT_NOT_CHOSEN', message: expect.stringMatching(/inside this change, Facebook Page/) })
     expect(h.calls).toHaveLength(0)
@@ -255,5 +273,7 @@ describe('the rule judge on its own', () => {
     expect(audienceRuleProblem(rule({ operator: 'and', filters: [leaf] }, { type: 'sum', field: 'value', operator: '>', value: 100 }))).toBeNull()
     expect(audienceRuleProblem(rule({ operator: 'and', filters: [leaf] }, { type: 'sum', operator: '>', value: 100 }))).toMatch(/names its field/)
     expect(audienceRuleProblem(rule({ operator: 'and', filters: [leaf] }, { type: 'count', operator: '>', value: 2, method: 'percentile' }))).toMatch(/in_range/)
+    // Review B4 — the types that need Meta's undocumented config are not sent.
+    expect(audienceRuleProblem(rule({ operator: 'and', filters: [leaf] }, { type: 'time_spent', field: 'x', operator: '>', value: 2 }))).toMatch(/aggregation type is one of count, sum, avg, min, max$/)
   })
 })

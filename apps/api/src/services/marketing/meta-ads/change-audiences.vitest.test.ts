@@ -18,7 +18,8 @@ const A: AudienceDetail = {
 const NO_USE: AudienceUse = { ads: [], activeAds: 0, otherAccounts: [], more: false }
 const ACTIVE: AudienceUse = { ads: [{ adId: '120000000000003', name: 'Ad A', adSetId: '120000000000002', campaignId: '120000000000001', effectiveStatus: 'ACTIVE' }], activeAds: 1, otherAccounts: [], more: false }
 const ok = <T>(d: T | { refusal: string }): T => { if (d && typeof d === 'object' && 'refusal' in d) throw new Error(d.refusal); return d as T }
-const pageRule = (type: string, days: number) => ({ inclusions: { operator: 'or' as const, rules: [{ event_sources: [{ id: '120000000000081', type: type as 'lead' }], retention_seconds: days * 86400 }] } })
+const FILTER = { operator: 'and', filters: [{ field: 'event', operator: 'eq', value: 'lead_generation_submitted' }] }
+const pageRule = (type: string, days: number) => ({ inclusions: { operator: 'or' as const, rules: [{ event_sources: [{ id: '120000000000081', type: type as 'lead' }], retention_seconds: days * 86400, filter: FILTER }] } })
 
 describe('createAudienceDraft', () => {
   it('engagement: each source\'s own longest retention (lead forms 90 days, a Page 730)', () => {
@@ -45,6 +46,9 @@ describe('createAudienceDraft', () => {
     expect(JSON.parse(value.requests[0].params.lookalike_spec)).toEqual({ type: 'custom_ratio', ratio: 0.02 })
     expect(createAudienceDraft({ kind: 'lookalike', name: 'L', lookalike: { seedAudienceId: A.id, tiers: [{ fromPercent: 0, toPercent: 3 }, { fromPercent: 2, toPercent: 5 }] } }, { ...LIVE, seed: A })).toEqual({ refusal: expect.stringMatching(/do not overlap/) })
     expect(createAudienceDraft({ kind: 'lookalike', name: 'L', lookalike: { seedAudienceId: A.id, type: 'reach', percent: 3 } }, { ...LIVE, seed: A })).toEqual({ refusal: expect.stringMatching(/ONE size/) })
+    // Review B3 — converters and Page fans take a percent or tiers, never a type alone.
+    expect(createAudienceDraft({ kind: 'lookalike', name: 'L', lookalike: { campaignIds: ['120000000000001'], type: 'similarity' } }, LIVE)).toEqual({ refusal: expect.stringMatching(/takes a percent or tiers/) })
+    expect(createAudienceDraft({ kind: 'lookalike', name: 'L', lookalike: { pageFans: true, type: 'reach' } }, LIVE)).toEqual({ refusal: expect.stringMatching(/takes a percent or tiers/) })
     const converters = ok(createAudienceDraft({ kind: 'lookalike', name: 'L', lookalike: { campaignIds: ['120000000000001'], adSetIds: ['120000000000002'], percent: 5 } }, LIVE))
     expect(JSON.parse(converters.requests[0].params.lookalike_spec)).toEqual({ ratio: 0.05, origin_ids: ['120000000000001', '120000000000002'], conversion_type: 'campaign_conversions' })
     expect(converters.requests[0].params.origin_audience_id).toBeUndefined()
@@ -65,20 +69,45 @@ describe('setAudienceDraft', () => {
     expect((d.before as { noUndo: string[] }).noUndo.join(' ')).toMatch(/no labels/)
     expect(setAudienceDraft({ audienceId: A.id, labels: ['AT_RISK'] }, live({ audience: { ...A, subtype: 'LOOKALIKE' } }))).toEqual({ refusal: expect.stringMatching(/labels on customer lists, website and app audiences only/) })
   })
-  it('a longer retention of a list active ads use spends; a shorter one does not; the SDK-only field is said', () => {
+  it('review A2 — every size change of a list ads use spends, in either direction; unused, none does; the SDK-only field is said', () => {
     const longer = ok(setAudienceDraft({ audienceId: A.id, retentionDays: 90 }, live({ use: ACTIVE })))
-    expect(longer.spendsMoney[0]).toMatch(/keeping people longer/)
+    expect(longer.spendsMoney[0]).toMatch(/keeping people longer, 90 days changes who is in it — where an ad set targets it a bigger audience, where one excludes it a smaller one/)
     expect(longer.warnings.join(' ')).toMatch(/SDK only/)
     expect(longer.requests[0]).toMatchObject({ expect: { retention_days: '90' }, readBackFields: 'id,retention_days', raisesSpend: true })
-    expect(ok(setAudienceDraft({ audienceId: A.id, retentionDays: 10 }, live({ use: ACTIVE }))).spendsMoney).toEqual([])
+    expect(ok(setAudienceDraft({ audienceId: A.id, retentionDays: 10 }, live({ use: ACTIVE }))).spendsMoney[0]).toMatch(/shorter, 10 days/)
+    expect(ok(setAudienceDraft({ audienceId: A.id, retentionDays: 10 }, live())).spendsMoney).toEqual([])
+    // Ads of an account it is shared with count too (another business's: always).
+    const shared: AudienceUse = { ...NO_USE, otherAccounts: [{ adAccountId: '1234567891', ads: null, takenByAnotherBusiness: true }] }
+    expect(ok(setAudienceDraft({ audienceId: A.id, retentionDays: 10 }, live({ use: shared }))).spendsMoney[0]).toMatch(/ads of 1 ad account it is shared with/)
+    expect(ok(setAudienceDraft({ audienceId: A.id, productSetId: '120000000000061' }, live({ use: ACTIVE }))).spendsMoney[0]).toMatch(/another product set/)
+    expect(ok(setAudienceDraft({ audienceId: A.id, allowedDomains: ['shop.example'] }, live({ use: ACTIVE }))).spendsMoney[0]).toMatch(/other allowed domains/)
   })
-  it('a lookalike\'s size: its old size is the undo; a bigger one in use spends', () => {
+  it('review B5 — Meta\'s retention 0 is "for good": 0 → 30 is shorter, said so', () => {
+    const d = ok(setAudienceDraft({ audienceId: A.id, retentionDays: 30 }, live({ audience: { ...A, retentionDays: 0 }, use: ACTIVE })))
+    expect(d.changes).toEqual({ 'audience "List A" (120000000000040): kept (days)': { from: 'for good', to: 30 } })
+    expect(d.spendsMoney[0]).toMatch(/not for good but 30 days/)
+    expect((d.before as { noUndo: string[] }).noUndo.join(' ')).toMatch(/without an end/)
+  })
+  it('a lookalike\'s size: its old size is the undo; ANY size in use spends — {percent: 5} on a 3–5% lookalike widens it to 0–5%', () => {
     const look = { ...A, subtype: 'LOOKALIKE', lookalikeSpec: { ratio: 0.01, type: 'custom_ratio' } }
     const d = ok(setAudienceDraft({ audienceId: A.id, lookalike: { percent: 3 } }, live({ audience: look, use: ACTIVE })))
     expect(d.requests[0].params).toEqual({ lookalike_spec: '{"ratio":0.03}' })
     expect(d.requests[0].expect).toEqual({ id: A.id })
-    expect(d.spendsMoney[0]).toMatch(/bigger lookalike/)
+    expect(d.spendsMoney[0]).toMatch(/a new lookalike size changes who is in it/)
     expect((d.before as { undo: unknown }).undo).toEqual({ audienceId: A.id, lookalike: { type: 'custom_ratio', percent: 1 } })
+    const tier = { ...A, subtype: 'LOOKALIKE', lookalikeSpec: { ratio: 0.05, starting_ratio: 0.03 } }
+    const wide = ok(setAudienceDraft({ audienceId: A.id, lookalike: { percent: 5 } }, live({ audience: tier, use: ACTIVE })))
+    expect(wide.spendsMoney).toHaveLength(1)
+    expect(wide.warnings.join(' ')).toMatch(/3–5% becomes 0–5%/)
+    expect((wide.before as { undo: unknown }).undo).toEqual({ audienceId: A.id, lookalike: { percent: 5, fromPercent: 3 } })
+  })
+  it('review A3 — a new existing-customer list that active ad sets read spends (they are listed); unread, it spends too', () => {
+    const base = { audience: null, terms: { ...TERMS, existingCustomers: ['120000000000044'] } }
+    const named = ok(setAudienceDraft({ existingCustomers: [A.id] }, live({ ...base, existingUsers: { adSets: [{ id: '120000000000002', name: 'Ad set B', campaignId: '120000000000001' }], problem: null } })))
+    expect(named.spendsMoney[0]).toMatch(/1 active ad set read the existing-customer list .*"Ad set B" \(120000000000002, campaign 120000000000001\)/)
+    expect(named.requests[0].raisesSpend).toBe(true)
+    expect(ok(setAudienceDraft({ existingCustomers: [A.id] }, live({ ...base, existingUsers: { adSets: [], problem: 'Meta refused it' } }))).spendsMoney[0]).toMatch(/could not read which active ad sets/)
+    expect(ok(setAudienceDraft({ existingCustomers: [A.id] }, live({ ...base, existingUsers: { adSets: [], problem: null } }))).spendsMoney).toEqual([])
   })
   it('the URL tags keep the tag not named; nothing to change is said', () => {
     const d = ok(setAudienceDraft({ audienceTypeTags: { paramName: 'audience_type', newCustomerTag: 'prospecting' } }, live({ audience: null, tags: { audience_type_param_name: 'audience_type', existing_customer_tag: 'retargeting' } })))
@@ -90,18 +119,31 @@ describe('setAudienceDraft', () => {
 
 describe('membersDraft', () => {
   it('more than 100,000 people is asked in parts; a list being replaced or flagged is refused', () => {
-    const people = { hashes: Array.from({ length: 100_001 }, (_, i) => sha256Hex(String(i))), skipped: 0, fingerprint: 'x' }
+    const people = { hashes: Array.from({ length: 100_001 }, (_, i) => sha256Hex(String(i))), skipped: 0 }
     expect(membersDraft({ mode: 'opt_out_everywhere' }, { adAccountId: '1234567890', terms: TERMS, audience: null, use: null, people })).toEqual({ refusal: expect.stringMatching(/in parts/) })
-    const one = { hashes: [sha256Hex('a@example.com')], skipped: 0, fingerprint: 'x' }
+    const one = { hashes: [sha256Hex('a@example.com')], skipped: 0 }
     expect(membersDraft({ mode: 'remove', audienceId: A.id }, { adAccountId: '1234567890', terms: TERMS, audience: { ...A, operationCode: 414 }, use: NO_USE, people: one })).toEqual({ refusal: expect.stringMatching(/being replaced/) })
     expect(membersDraft({ mode: 'remove', audienceId: A.id }, { adAccountId: '1234567890', terms: TERMS, audience: { ...A, flagged: true }, use: NO_USE, people: one })).toEqual({ refusal: expect.stringMatching(/1713230/) })
     const d = ok(membersDraft({ mode: 'remove', audienceId: A.id }, { adAccountId: '1234567890', terms: TERMS, audience: A, use: ACTIVE, people: one }))
     expect(d.warnings.join(' ')).toMatch(/restarts the learning phase/)
+    // Review A2 — people out of a list ads use, and every opt-out everywhere: the person's decision (SPENDS MONEY).
+    expect(d.spendsMoney[0]).toMatch(/taking these people out changes who is in it/)
+    expect(d.requests[0].raisesSpend).toBe(true)
+    expect(ok(membersDraft({ mode: 'remove', audienceId: A.id }, { adAccountId: '1234567890', terms: TERMS, audience: A, use: NO_USE, people: one })).spendsMoney).toEqual([])
+    const all = ok(membersDraft({ mode: 'opt_out_everywhere' }, { adAccountId: '1234567890', terms: TERMS, audience: null, use: null, people: one }))
+    expect(all.spendsMoney[0]).toMatch(/EVERY customer list/)
+    expect(all.warnings.join(' ')).toMatch(/honoured everywhere/)
+    expect(JSON.stringify(all.stands)).not.toContain(one.hashes[0])
     expect(JSON.stringify({ ...d, requests: d.requests.map((r) => r.label) })).not.toContain(one.hashes[0])
   })
 })
 
 describe('shareDraft and removeDraft', () => {
+  it('review A1 — an audience shared with another business\'s account: a share refused, its unshare let through', () => {
+    const taken = { audience: A, sharing: { accounts: ['1234567891'], problem: 'The audience is shared with an ad account another business in Nexus uses.' }, use: NO_USE, idProblems: [] }
+    expect(shareDraft({ audienceId: A.id, action: 'share', adAccountIds: ['1234567892'] }, taken)).toEqual({ refusal: expect.stringMatching(/another business in Nexus uses/) })
+    expect(ok(shareDraft({ audienceId: A.id, action: 'unshare', adAccountIds: ['1234567891'] }, taken)).requests).toHaveLength(1)
+  })
   it('an unshare of an account it is not shared with is skipped; permissions go with a share only', () => {
     const live = { audience: A, sharing: { accounts: ['1234567891'], problem: null }, use: NO_USE, idProblems: [] }
     expect(shareDraft({ audienceId: A.id, action: 'unshare', adAccountIds: ['1234567899'] }, live)).toEqual({ refusal: expect.stringMatching(/is not shared with ad account 1234567899/) })

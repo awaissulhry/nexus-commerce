@@ -46,7 +46,7 @@ import {
 } from './channels.js'
 import { bucketKey, observeRate, takeToken } from './rate.js'
 import { ledgerSafeBody } from './redact.js'
-import { classifyChannelAnswer, type ChannelVerdict, type GatewayChannel } from './vocabulary.js'
+import { classifyChannelAnswer, metaErrorOf, type ChannelVerdict, type GatewayChannel } from './vocabulary.js'
 import { watchForDeprecation } from '../cx/deprecation-watch.service.js'
 
 export type GatewayOutcome = 'sent' | 'would_send' | 'gated' | 'refused' | 'held'
@@ -584,6 +584,8 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   // 8. classify
   const ok = status >= 200 && status < 300 && !graphqlErrors && (req.answerOk ? req.answerOk(text) : true)
   const verdict = ok ? null : classifyChannelAnswer(req.channel, status, text, { timedOut })
+  // Meta step 31 review A4 — an answer to people's hashed data keeps only Meta's own code and message fields, never its raw text.
+  if (verdict && metaWrite?.personal) verdict.channelMessage = metaPersonalWords(text, status)
   // Step 17 — what Meta's per-object limits learn from a change or a check of one: it reached Meta (or may have), or Meta
   // held that one object (613/4841018: 30 s for its changes; 613/1487632: an hour for that ad set's budget changes).
   const objectLimit = verdict?.channelCode === '613/4841018' ? 'edits' : verdict?.channelCode === '613/1487632' ? 'budget' : null
@@ -729,6 +731,16 @@ async function metaAdAccountOwnerProblem(connectionId: string, objectId: string)
   const chosen = await metaChosenAdAccountOf(connectionId)
   if (!chosen) return { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: 'Nothing was sent to Meta: this business has no Meta ad account chosen through this connection, so Nexus changes nothing on Meta.' }
   return objectId === `act_${chosen}` ? null : { code: 'META_ACCOUNT_NOT_CHOSEN', sentence: `Nothing was sent to Meta: ${objectId} is not the Meta ad account this business chose through this connection.` }
+}
+
+/**
+ * Meta step 31 review A4 — the words kept of an error answer to people's hashed data (an audience's people): Meta's own
+ * title, message and code fields only (metaErrorOf), never the raw answer text (it could echo what was sent).
+ */
+function metaPersonalWords(text: string, status: number): string {
+  const e = metaErrorOf(text)
+  const said = e.userTitle && e.userMessage ? `${e.userTitle}: ${e.userMessage}` : e.userMessage ?? e.userTitle ?? e.message
+  return said ? said.slice(0, 500) : `Meta answered HTTP ${status || 'nothing'} without an error message.`
 }
 
 /** The ids of one Meta list (fields=id, at most 100, one page), or null when it could not be read. */

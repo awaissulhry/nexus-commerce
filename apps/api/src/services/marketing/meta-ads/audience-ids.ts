@@ -8,8 +8,9 @@
  *   canvas      an Instant Experience the chosen Page owns (live-media.ts ownedByPage);
  *   video       a video of the chosen Page or of the chosen ad account's library (live-media.ts ownVideo);
  *   adaccount   an ad account a share goes to: never the chosen account itself, never one another business in Nexus
- *               chose (nexus_meta_links_taken: a Meta id belongs to one business — an audience is never shared across
- *               Nexus businesses).
+ *               chose, never one of a business portfolio another business in Nexus uses (its `business` read live;
+ *               unreadable: refused) — nexus_meta_links_taken: an audience is never shared across Nexus businesses.
+ *               An UNSHARE names no recipient to check: taking access away is how such a share ends.
  * Anything Nexus cannot confirm is refused (fail closed); the sentence never names another business.
  */
 import { metaChosenAccount, MetaLiveRefusal, type MetaChosenAccount } from './live.js'
@@ -17,6 +18,7 @@ import { MetaReadError } from './errors.js'
 import { ownForm } from './live-engagement.js'
 import { ownedByPage, ownVideo } from './live-media.js'
 import { takenIds } from './taken.js'
+import { metaReadOne } from './read-client.js'
 
 export type AudienceIdKind = 'page' | 'instagram' | 'leadform' | 'canvas' | 'video' | 'adaccount'
 
@@ -46,7 +48,15 @@ export async function audienceIdProblem(account: MetaChosenAccount, inner: { id:
       case 'adaccount': {
         if (id === account.adAccountId) return 'an audience is never shared with its own ad account.'
         const taken = await takenIds('AD_ACCOUNT', [id])
-        return taken.has(id) ? `ad account ${id} is one another business in Nexus uses: an audience is never shared across Nexus businesses.` : null
+        if (taken.has(id)) return `ad account ${id} is one another business in Nexus uses: an audience is never shared across Nexus businesses.`
+        // Review A1 — and never into a business portfolio another business in Nexus uses (two businesses can share one
+        // portfolio, step 10): the recipient's portfolio is read, and a share that cannot be placed is refused.
+        const body = (await metaReadOne({ connectionId: account.connectionId }, { operation: 'audiences.recipientPortfolio', path: `act_${id}`, query: { fields: 'business{id}' } })).body as { business?: { id?: unknown } | null }
+        const portfolio = body.business && (typeof body.business.id === 'string' || typeof body.business.id === 'number') ? String(body.business.id) : null
+        if (!portfolio) return `ad account ${id} names no business portfolio Nexus can read, so Nexus cannot confirm no other business in Nexus uses it: nothing is shared.`
+        return (await takenIds('PORTFOLIO', [portfolio])).has(portfolio)
+          ? `ad account ${id} belongs to a business portfolio another business in Nexus uses: an audience is never shared across Nexus businesses.`
+          : null
       }
     }
   } catch (err) {

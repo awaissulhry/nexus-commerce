@@ -25,7 +25,7 @@ import { ownAudience } from '../../marketing/meta-ads/live-audiences.js'
 import type { MetaChangeDraft } from '../../marketing/meta-ads/change-draft.js'
 import type { MetaWriteBodyId } from '../../gateway/meta-calls.js'
 import {
-  changeableAudience, chosenOf, liveAudienceDetail, liveAudienceSharing, liveAudienceTypeTags, liveAudienceUse, liveAudiencesNamed, liveIdProblems, liveTerms,
+  changeableAudience, chosenOf, liveAudienceDetail, liveExistingCustomerUsers, liveAudienceSharing, liveAudienceTypeTags, liveAudienceUse, liveAudiencesNamed, liveIdProblems, liveTerms,
 } from '../../marketing/meta-ads/live-audience-change.js'
 import { optedOutPeople, memberCounts, NO_CONSENT } from '../../marketing/meta-ads/audience-members.js'
 import {
@@ -65,7 +65,7 @@ const ruleFilter = z.strictObject({
   filters: z.array(z.union([ruleCondition, ruleInnerFilter])).min(1).max(100).describe('filters, or a filter set of filters (two levels at most; at most 100 filters in a rule)'),
 }).describe('which events of the source count')
 const ruleAggregation = z.strictObject({
-  type: z.enum(AGGREGATION_TYPES).describe('count, sum, avg, min, max, time_spent or last_event_time_field'),
+  type: z.enum(AGGREGATION_TYPES).describe('count, sum, avg, min or max (time_spent and last_event_time_field need a config Meta does not document: not sent)'),
   field: z.string().regex(RULE_FIELD).optional().describe('the custom-data key it adds up (not for count)'),
   operator: z.enum(AGGREGATION_OPERATORS).describe('= != > >= < <= in_range not_in_range'),
   value: ruleValue,
@@ -77,7 +77,7 @@ const ruleItem = z.strictObject({
     type: z.enum(AUDIENCE_SOURCE_TYPES).describe('pixel, offline_events, page, ig_business, lead, ig_lead_generation, canvas, shopping_page, shopping_ig'),
   })).min(1).max(10).describe('its event sources'),
   retention_seconds: z.number().int().min(0).max(MAX_RETENTION_SECONDS).describe('how long a person stays (seconds; website ≤ 365 days, lead forms ≤ 90, Page / Instagram / Instant Experiences ≤ 730; 0 only for page_liked)'),
-  filter: ruleFilter.optional(),
+  filter: ruleFilter.describe('which events of the source count (required — every visitor: {"operator":"and","filters":[{"field":"url","operator":"i_contains","value":""}]})'),
   aggregation: ruleAggregation.optional(),
 })
 const ruleSet = z.strictObject({ operator: z.enum(RULE_SET_OPERATORS).describe('and / or'), rules: z.array(ruleItem).min(1).max(10).describe('its rules (10 at most, inclusions and exclusions together)') })
@@ -229,7 +229,7 @@ const createMetaAudience: AgentTool = {
     + '(the chosen Page or Instagram account, a lead form or Instant Experience of the Page, its shops); an offline audience '
     + '(events of its dataset); video viewers (videos of the Page or the ad account); a catalog product audience (a product '
     + 'set of its portfolio\'s catalog); a lookalike of a seed audience, of campaigns\' or ad sets\' converters, or of the '
-    + 'Page\'s fans (similarity, reach, 1–20%, tiers, value-based). Every id it names must be this business\'s (never one '
+    + 'Page\'s fans (similarity, reach, 1–20%, tiers, value-based; converters and fans take a percent or tiers). Every id it names must be this business\'s (never one '
     + 'another business in Nexus uses). Refused until a person signs Meta\'s Custom Audience terms for the ad account (the '
     + 'link is in the answer). No audience spends anything until an ad set uses it. Not here: Messenger / WhatsApp '
     + 'subscriber lists (Meta\'s SDK only), saved audiences (Meta has no API), Meta\'s identical-audience fetch (undo would '
@@ -252,13 +252,14 @@ const buildSet = (args: Record<string, unknown>): MetaDraftBuilder => guarded(as
   const use = audience ? await liveAudienceUse(chosen, audience.id) : null
   const terms = request.existingCustomers !== undefined ? await liveTerms(chosen) : null
   const tags = request.audienceTypeTags !== undefined ? await liveAudienceTypeTags(chosen) : null
+  const existingUsers = request.existingCustomers !== undefined ? await liveExistingCustomerUsers(chosen) : null
   const ids: MetaWriteBodyId[] = [
     ...(request.rule ? audienceRuleIds(request.rule) : []),
     ...(request.productSetId ? [{ id: request.productSetId, kind: 'productset' as const }] : []),
     ...(request.existingCustomers ?? []).map((id) => ({ id, kind: 'customaudience' as const })),
   ]
   const idProblems = await liveIdProblems(chosen, ids)
-  return setAudienceDraft(request, { adAccountId: chosen.adAccountId, audience, use, terms, tags, idProblems })
+  return setAudienceDraft(request, { adAccountId: chosen.adAccountId, audience, use, terms, tags, idProblems, existingUsers })
 })
 
 function setFinish(draft: MetaChangeDraft, done: Done) {
@@ -361,9 +362,12 @@ const setMetaAudience: AgentTool = {
     + 'audience (the people the old rule found stay until their retention ends), opt-out link, a lookalike\'s size, a '
     + 'customer list\'s source and retention, labels, a catalog audience\'s product set, allowed domains and what it may be '
     + 'used for. And the ad account\'s existing-customer audiences (the WHOLE list — read first, so undo can put it back) '
-    + 'and its audience-type URL tags. A wider rule, a bigger lookalike or a longer retention of an audience active ads use, '
-    + 'and new labels value rules may raise bids for, are SPENDS MONEY. A flagged customer list or lookalike cannot be edited '
-    + '(Meta). Not here: the labels of an audience another account shares in (Nexus never changes another account\'s '
+    + 'and its audience-type URL tags. ANY change of who is in an audience that ads use (here or in an account it is '
+    + 'shared with) — its rule, lookalike size, retention, product set, allowed domains — is SPENDS MONEY in either '
+    + 'direction (an ad set may target it or exclude it), and so are new labels value rules may raise bids for and a new '
+    + 'existing-customer list that active ad sets read (they are listed). A flagged customer list or lookalike cannot be edited '
+    + '(Meta). Not here: a catalog audience\'s events (inclusions / exclusions are in Meta\'s SDK update only, not its '
+    + 'documented one: make a new catalog audience with create-meta-audience and delete the old one), the labels of an audience another account shares in (Nexus never changes another account\'s '
     + 'audience), the fields of travel / auto / listing claim audiences (claim_objective, content_type, event_source_group, '
     + 'event_sources) and the separate rule_aggregation string (Nexus sends aggregation inside the rule). Meta has no check '
     + 'for it. Undo puts back what it replaced (what has no way back is said).'
@@ -384,7 +388,7 @@ const buildMembers = (args: Record<string, unknown>): MetaDraftBuilder => guarde
   if (request.mode === 'add' || request.mode === 'replace') return { refusal: NO_CONSENT }
   const chosen = await chosenOf(account.accountId)
   const terms = await liveTerms(chosen)
-  if (!terms.signed) return membersDraft(request, { adAccountId: chosen.adAccountId, terms, audience: null, use: null, people: { hashes: [], skipped: 0, fingerprint: '' } })
+  if (!terms.signed) return membersDraft(request, { adAccountId: chosen.adAccountId, terms, audience: null, use: null, people: { hashes: [], skipped: 0 } })
   let audience = null
   let use = null
   if (request.mode === 'remove') {
@@ -438,8 +442,11 @@ const setMetaAudienceMembers: AgentTool = {
     + 'uploaded. What it does: take the people who opted out of the business\'s e-mail (Nexus\'s suppression list: an '
     + 'unsubscribe, a spam complaint, a GDPR request, an operator\'s entry — never a bounce) out of ONE customer list '
     + '(remove) or out of EVERY customer list of the ad account (opt_out_everywhere, as Meta asks when someone opts out). '
-    + 'Each e-mail goes only as its SHA-256 hash (trimmed, lower case), at most 10,000 per request in one session; Nexus '
+    + 'Each e-mail goes only as its SHA-256 hash (trimmed, lower case), at most 10,000 per request; Nexus '
     + 'keeps no list of them and the answer gives counts only. Refused until a person signs Meta\'s Custom Audience terms. '
+    + 'Taking people out of a list ads use, and every opt_out_everywhere, is SPENDS MONEY (an ad set that excludes the '
+    + 'list can then reach them). opt_out_everywhere covers every customer list of the account, also one shared with an '
+    + 'account another business in Nexus uses: an opt-out is honoured everywhere. '
     + 'Meta applies it within about 24 hours; taking people out of a list active ads use restarts their learning. No undo: '
     + 'people who opted out are never put back. Nexus sends e-mails only: no phone, name or address (D8), no Page-scoped '
     + 'ids (Nexus keeps none), no external customer ids (Nexus never uploaded any, so none can be taken out), no US Limited '
@@ -524,7 +531,8 @@ const setMetaAudienceSharing: AgentTool = {
   }),
   description:
     'Share ONE audience of the business\'s chosen Meta ad account with other ad accounts, or stop sharing it. Only with ad '
-    + 'accounts no other business in Nexus uses (an audience is never shared across Nexus businesses), never the account '
+    + 'accounts no other business in Nexus uses, nor of a business portfolio another business in Nexus uses (an audience is '
+    + 'never shared across Nexus businesses; an unshare is always let through — it is how such a share ends), never the account '
     + 'itself; Meta needs the business portfolio to claim both accounts and answers per account. A recipient can target '
     + 'it, never change it or make a lookalike of it. Sharing never replaces the list it is shared with. STOPPING a share '
     + 'stops the recipients\' ads that use it for good (Meta: they cannot be restarted) — the preview says how many. Meta '

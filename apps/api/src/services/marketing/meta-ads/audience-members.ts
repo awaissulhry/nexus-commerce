@@ -4,10 +4,9 @@
  *
  *   ADDING people (POST /{audience}/users, /usersreplace): NOBODY. Nexus's customer data carries no marketing consent
  *   (checked 2026-10-21 in packages/database/prisma/schema.prisma: Customer and Order hold no consent field; ConsentRecord
- *   is an operator's own consent; nothing imports a buyer's opt-in from Shopify or a marketplace). So the consent query
- *   has nothing to filter on and every add or replace is refused in words (consentedCustomers). When a consent field
- *   exists, the query filters on it IN THE DATABASE (never after reading the customers), and adds and replaces go out as
- *   the removals below do (hashed, in sessions of at most 10,000 per request, one replace session at a time).
+ *   is an operator's own consent; nothing imports a buyer's opt-in from Shopify or a marketplace), so every add or replace
+ *   is refused in words (NO_CONSENT). Owner decision 2026-10-21: a later step copies Shopify's "accepts e-mail marketing"
+ *   status into Nexus; only then do adds and replaces come, with the consent filtered IN THE DATABASE query.
  *
  *   TAKING people OUT (DELETE /{audience}/users, DELETE /act_{id}/usersofanyaudience): the people who opted out of the
  *   business's e-mail — Nexus's suppression list (EmailSuppression) rows that hold for every channel (channel null) and
@@ -18,9 +17,9 @@
  * Privacy: each e-mail is normalised (trim, lower case — custom-audiences guide #hash) and hashed with SHA-256 (lowercase
  * hex) the moment it is read; the plain address is never kept, logged, stored or returned, and the hashes live only in
  * the request bodies (the gateway's ledger keeps neither them nor Meta's answer: meta-audience-rules.ts `personal`).
- * What a person reads is counts only. A batch is ≤ 10,000 hashes with its session (session_id, batch_seq from 1,
- * last_batch_flag on the last, estimated_num_total); the session id is derived from what is sent, so the preview, the
- * re-check and the run build the same requests.
+ * What a person reads is counts only. A request is ≤ 10,000 hashes and carries no session (review B1: `session` is
+ * optional on these DELETEs and Meta's DELETE examples send the payload only; an id repeated for the same people would
+ * be a session Meta closed already), so the preview, the re-check and the run build the same requests.
  */
 import { createHash } from 'node:crypto'
 import prisma from '../../../db.js'
@@ -31,11 +30,6 @@ export const NO_CONSENT = 'Nexus adds people to a Meta customer list only from c
   + 'and Nexus\'s customer records hold no marketing consent yet: no consent field exists (a buyer\'s opt-in at Shopify or a marketplace is '
   + 'not brought into Nexus). So Nexus uploads nobody — no add, no replace, no value-based seed. Website, engagement, video, catalog and '
   + 'lookalike audiences need no upload (create-meta-audience); people who opted out are taken out with mode remove or opt_out_everywhere.'
-
-/** THE consent query (D8): today it has no field to filter on, so it refuses — never a list read and filtered afterwards. */
-export function consentedCustomers(): { refusal: string } {
-  return { refusal: NO_CONSENT }
-}
 
 /** The suppression sources that mean the person said no to the business's e-mail (a hard bounce does not). */
 export const OPT_OUT_SOURCES = ['UNSUBSCRIBE_LINK', 'COMPLAINT', 'GDPR_REQUEST', 'MANUAL'] as const
@@ -57,8 +51,6 @@ export interface HashedPeople {
   hashes: string[]
   /** Rows that hold no usable e-mail address (counted, never sent). */
   skipped: number
-  /** One hash of the whole list: what the change stands on (a new opt-out moves it). */
-  fingerprint: string
 }
 
 /**
@@ -77,33 +69,21 @@ export async function optedOutPeople(since: Date | null): Promise<HashedPeople> 
     if (email) hashes.add(sha256Hex(email))
     else skipped += 1
   }
-  const sorted = [...hashes].sort()
-  return { hashes: sorted, skipped, fingerprint: sha256Hex(sorted.join('\n')) }
+  return { hashes: [...hashes].sort(), skipped }
 }
 
 export interface MemberBatch {
-  /** The form fields of one request: payload and session, as JSON strings in Nexus's canonical form. */
-  params: { payload: string; session: string }
+  /** The form field of one request: the payload, a JSON string in Nexus's canonical form (no session: review B1). */
+  params: { payload: string }
   count: number
 }
 
-/**
- * The requests that carry these hashes: ≤ 10,000 each, one session (its id derived from where they go and what they
- * are, so building it again gives the same requests; a positive 52-bit whole number, unique enough within an ad account).
- */
-export function memberBatches(hashes: string[], where: string): MemberBatch[] {
-  const sessionId = Number.parseInt(sha256Hex(`${where}|${sha256Hex(hashes.join('\n'))}`).slice(0, 13), 16) || 1
+/** The requests that carry these hashes: ≤ 10,000 each, each a removal of its own (no session). */
+export function memberBatches(hashes: string[]): MemberBatch[] {
   const out: MemberBatch[] = []
-  const total = Math.ceil(hashes.length / MEMBERS_PER_REQUEST)
-  for (let i = 0; i < total; i++) {
-    const data = hashes.slice(i * MEMBERS_PER_REQUEST, (i + 1) * MEMBERS_PER_REQUEST)
-    out.push({
-      params: {
-        payload: JSON.stringify({ schema: 'EMAIL_SHA256', data }),
-        session: JSON.stringify({ session_id: sessionId, batch_seq: i + 1, last_batch_flag: i === total - 1, estimated_num_total: hashes.length }),
-      },
-      count: data.length,
-    })
+  for (let i = 0; i < hashes.length; i += MEMBERS_PER_REQUEST) {
+    const data = hashes.slice(i, i + MEMBERS_PER_REQUEST)
+    out.push({ params: { payload: JSON.stringify({ schema: 'EMAIL_SHA256', data }) }, count: data.length })
   }
   return out
 }

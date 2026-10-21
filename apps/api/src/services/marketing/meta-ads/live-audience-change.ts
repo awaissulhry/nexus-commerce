@@ -215,3 +215,26 @@ export async function liveIdProblems(account: MetaChosenAccount, ids: MetaWriteB
   }
   return problems
 }
+
+/**
+ * Review A3 — the ACTIVE ad sets of the chosen account that read its existing-customer list: an existing-customer budget
+ * cap (existing_customer_budget_percentage, Advantage+ shopping guide) or a customer goal that excludes existing
+ * customers (ad_set_goal type 1 or 2, step 18). Read once (at most 500); a refused read is its reason, never "none".
+ */
+export async function liveExistingCustomerUsers(account: MetaChosenAccount): Promise<{ adSets: Array<{ id: string; name: string | null; campaignId: string | null }>; problem: string | null }> {
+  try {
+    const read = await readRows(account.connectionId, 'audiences.existingCustomerUsers', `${act(account.adAccountId)}/adsets`, {
+      fields: 'id,name,campaign_id,existing_customer_budget_percentage,ad_set_goal', effective_status: ['ACTIVE'],
+    }, 500, 100)
+    const reads = (r: Record<string, unknown>) => {
+      const share = num(r.existing_customer_budget_percentage)
+      const goal = r.ad_set_goal && typeof r.ad_set_goal === 'object' ? num((r.ad_set_goal as { type?: unknown }).type) : null
+      return share !== null || (goal !== null && goal > 0)
+    }
+    const adSets = read.rows.filter(reads).map((r) => ({ id: idText(r.id) ?? '', name: text(r.name), campaignId: idText(r.campaign_id) })).filter((x) => x.id)
+    return { adSets, problem: read.more ? 'the account has more active ad sets than Nexus reads at once (500)' : null }
+  } catch (err) {
+    if (err instanceof MetaReadError && !err.failure.authLost && !err.failure.throttled) return { adSets: [], problem: err.failure.sentence }
+    throw err
+  }
+}

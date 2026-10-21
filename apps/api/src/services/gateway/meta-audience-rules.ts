@@ -64,7 +64,11 @@ export const FILTER_OPERATORS = [
   '=', '!=', '>', '>=', '<', '<=', 'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'not_contains', 'i_contains', 'i_not_contains', 'is_any',
   'is_not_any', 'i_is_any', 'i_is_not_any', 'starts_with', 'i_starts_with', 'regex_match',
 ] as const
-export const AGGREGATION_TYPES = ['count', 'sum', 'avg', 'min', 'max', 'time_spent', 'last_event_time_field'] as const
+/**
+ * Review B4 — time_spent and last_event_time_field need a `config` Meta documents only as "required by certain types":
+ * Nexus does not send them.
+ */
+export const AGGREGATION_TYPES = ['count', 'sum', 'avg', 'min', 'max'] as const
 export const AGGREGATION_OPERATORS = ['=', '!=', '>', '>=', '<', '<=', 'in_range', 'not_in_range'] as const
 /** The event sources of a rule audience Nexus builds: its pixel (website, offline), its Page, Instagram account, forms, Instant Experiences, shops. */
 export const AUDIENCE_SOURCE_TYPES = ['pixel', 'offline_events', 'page', 'ig_business', 'lead', 'ig_lead_generation', 'canvas', 'shopping_page', 'shopping_ig'] as const
@@ -79,7 +83,7 @@ export const SHARE_PERMISSIONS = ['targeting', 'targeting_and_insights'] as cons
 
 /** Meta: at most 10,000 rows per users request (custom-audiences guide). */
 export const MEMBERS_PER_REQUEST = 10_000
-/** A request of 10,000 hashes, form-encoded (each `%22<64 hex>%22%2C`), with its session. */
+/** A request of 10,000 hashes, form-encoded (each `%22<64 hex>%22%2C`). */
 export const MEMBERS_MAX_BODY = 760_000
 /** The longest rule retention Meta documents (engagement audiences: 730 days); a website rule's own is 365 (the tools hold it). */
 export const MAX_RETENTION_SECONDS = 730 * 86_400
@@ -176,8 +180,9 @@ function aggregationProblem(a: unknown): string | null {
 }
 
 function ruleItemProblem(r: unknown): string | null {
-  if (!plainObject(r) || !exactKeys(r, ['event_sources', 'retention_seconds', 'filter', 'aggregation'], ['event_sources', 'retention_seconds'])) {
-    return 'a rule is {event_sources, retention_seconds, filter, aggregation}'
+  // Review B4 — filter is required (audience-rules: "Required"); every visitor is {"field":"url","operator":"i_contains","value":""}.
+  if (!plainObject(r) || !exactKeys(r, ['event_sources', 'retention_seconds', 'filter', 'aggregation'], ['event_sources', 'retention_seconds', 'filter'])) {
+    return 'a rule is {event_sources, retention_seconds, filter, aggregation?} (filter is required: every visitor is url i_contains "")'
   }
   if (!Array.isArray(r.event_sources) || r.event_sources.length < 1 || r.event_sources.length > 10) return 'a rule names 1 to 10 event sources'
   for (const s of r.event_sources) {
@@ -188,10 +193,8 @@ function ruleItemProblem(r: unknown): string | null {
   if (typeof r.retention_seconds !== 'number' || !Number.isInteger(r.retention_seconds) || r.retention_seconds < 0 || r.retention_seconds > MAX_RETENTION_SECONDS) {
     return `retention_seconds is a whole number from 0 to ${MAX_RETENTION_SECONDS}`
   }
-  if ('filter' in r) {
-    const problem = filterProblem(r.filter, 1, { n: 0 })
-    if (problem) return problem
-  }
+  const filter = filterProblem(r.filter, 1, { n: 0 })
+  if (filter) return filter
   return 'aggregation' in r ? aggregationProblem(r.aggregation) : null
 }
 
@@ -261,6 +264,10 @@ export const lookalikeRatioOk = (v: unknown, min = 0.01): v is number =>
  * A lookalike spec: type (similarity | reach | custom_ratio) or ratio, starting_ratio below it, allow_international_seeds,
  * and its source when it is not a seed audience — campaign or ad set conversions (origin_ids) or a Page's fans (page_id).
  * Never country or location_spec (v26 ignores them). `update`: only the size keys (its source never changes).
+ * Review B3 (re-checked 2026-10-21, lookalike-audiences.md): the table types origin_ids "array of integers" and page_id
+ * "int", while its own examples send them quoted ("origin_ids": "<CAMPAIGN_ID>", "page_id": "<PAGE_ID>"). Nexus sends
+ * numeric STRINGS: Meta's 15–18-digit ids are past JSON's safe integers (a parse would change them), and Graph takes a
+ * numeric string for an id. LIVE-PROBES AU-050r1 settles it.
  */
 export function lookalikeSpecProblem(spec: unknown, update = false): string | null {
   const keys = update ? ['type', 'ratio', 'starting_ratio', 'allow_international_seeds'] : ['type', 'ratio', 'starting_ratio', 'allow_international_seeds', 'origin_ids', 'conversion_type', 'page_id']
@@ -273,6 +280,8 @@ export function lookalikeSpecProblem(spec: unknown, update = false): string | nu
   if (spec.type === 'custom_ratio' && !('ratio' in spec)) return 'a custom_ratio lookalike names its ratio'
   if (update) return null
   if ('conversion_type' in spec && spec.conversion_type !== 'campaign_conversions' && spec.conversion_type !== 'page_like') return 'conversion_type is campaign_conversions or page_like'
+  // Review B3 — the converter and Page-fan lookalikes are documented with a ratio only (lookalike-audiences #campaign, #page_fan).
+  if ('conversion_type' in spec && !('ratio' in spec)) return 'a campaign-conversion or Page-fan lookalike names its ratio (Meta documents no type there)'
   if (spec.conversion_type === 'campaign_conversions') {
     if (!Array.isArray(spec.origin_ids) || spec.origin_ids.length < 1 || spec.origin_ids.length > 50 || !spec.origin_ids.every(isId) || !unique(spec.origin_ids) || 'page_id' in spec) {
       return 'a campaign-conversion lookalike names 1 to 50 campaigns or ad sets (origin_ids, digits), each once, and no Page'
@@ -332,19 +341,6 @@ function payloadProblem(payload: unknown): string | null {
   const data = payload.data
   if (!Array.isArray(data) || data.length < 1 || data.length > MEMBERS_PER_REQUEST) return `the payload holds 1 to ${MEMBERS_PER_REQUEST} hashed e-mails (Meta's limit per request)`
   return data.every((h) => typeof h === 'string' && SHA256_HEX.test(h)) ? null : 'every entry is a SHA-256 hash (64 lowercase hex characters): Nexus never sends a plain e-mail'
-}
-
-/** {"session_id":…,"batch_seq":…,"last_batch_flag":…,"estimated_num_total":…} as Nexus writes it. */
-function sessionProblem(session: unknown): string | null {
-  if (!plainObject(session) || !['session_id,batch_seq,last_batch_flag', 'session_id,batch_seq,last_batch_flag,estimated_num_total'].includes(Object.keys(session).join(','))) {
-    return 'the session is {session_id, batch_seq, last_batch_flag, estimated_num_total}'
-  }
-  const int = (v: unknown, min: number, max: number) => typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max
-  if (!int(session.session_id, 1, Number.MAX_SAFE_INTEGER)) return 'session_id is a positive whole number'
-  if (!int(session.batch_seq, 1, 1000)) return 'batch_seq is 1 to 1,000'
-  if (typeof session.last_batch_flag !== 'boolean') return 'last_batch_flag is true or false'
-  if ('estimated_num_total' in session && !int(session.estimated_num_total, 1, 100_000_000)) return 'estimated_num_total is 1 to 100,000,000'
-  return null
 }
 
 // ── the rules ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -412,9 +408,10 @@ const ACCOUNT_JUDGES: Record<string, Judge> = {
     ? null : 'custom_audience_info is {audience_type_param_name, new_customer_tag and / or existing_customer_tag}: letters, digits and _ only')),
 }
 
+// Review B1 — no `session` on these DELETEs (optional in the users reference; the guide's DELETE examples send the payload
+// only): a session id repeated for the same people would be one Meta already closed.
 const MEMBER_JUDGES: Record<string, Judge> = {
   payload: json('payload', payloadProblem),
-  session: json('session', sessionProblem),
 }
 
 const SHARE_JUDGES: Record<string, Judge> = {
@@ -561,7 +558,7 @@ export const META_AUDIENCE_WRITE_RULES: readonly MetaWriteRule[] = [
     path: /^\d{1,20}\/users$/,
     kinds: ['customaudience'],
     required: ['payload'],
-    optional: ['session'],
+    optional: [],
     maxBody: MEMBERS_MAX_BODY,
     values: judged(MEMBER_JUDGES),
     budget: false,
@@ -575,7 +572,7 @@ export const META_AUDIENCE_WRITE_RULES: readonly MetaWriteRule[] = [
     path: ACCOUNT_EDGE('usersofanyaudience'),
     kinds: ['adaccount'],
     required: ['payload'],
-    optional: ['session'],
+    optional: [],
     maxBody: MEMBERS_MAX_BODY,
     values: judged(MEMBER_JUDGES),
     budget: false,
@@ -603,7 +600,7 @@ export const META_AUDIENCE_WRITE_RULES: readonly MetaWriteRule[] = [
     optional: [],
     values: judged(SHARE_JUDGES),
     budget: false,
-    ids: ruleIds,
+    // Review A1 — taking access away needs no recipient check (it is how a share with another business's account ends).
   },
   {
     // remove-meta-audience: DELETE /{audience} (no body); its lookalikes first, each its own request.
