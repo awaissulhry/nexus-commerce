@@ -108,6 +108,26 @@ import { META_ADS_LABELS_RULES_TOOLS } from './tools/meta-ads-labels-rules.tools
 // Meta ads step 28 (2026-10-21): apply recommendations; make, change and end experiments.
 import { META_ADS_OPTIMIZE_CHANGES_TOOLS } from './tools/meta-ads-optimize-changes.tools.js'
 import { META_ADS_COMMERCE_TOOLS } from './tools/meta-ads-commerce.tools.js'
+import { META_ADS_MEDIA_UPLOAD_TOOLS } from './tools/meta-ads-media-upload.tools.js'
+// Meta ads step 25 (2026-10-21): creatives (create-meta-creative, set-meta-creative).
+import { META_ADS_CREATIVES_TOOLS } from './tools/meta-ads-creatives.tools.js'
+// Meta ads step 29 (2026-10-21): Meta's automated rules.
+import { META_ADS_RULES_TOOLS } from './tools/meta-ads-rules.tools.js'
+// Meta ads step 7 (2026-10-21): insights at every level, background report runs, saved and partner reports (read only).
+import { META_ADS_INSIGHTS_TOOLS } from './tools/meta-ads-insights.tools.js'
+// Meta ads step 39 (2026-10-21): brand safety — set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
+import { META_ADS_BRAND_SAFETY_TOOLS } from './tools/meta-ads-brand-safety.tools.js'
+// Meta ads step 31 (2026-10-21): audiences — create, change, people (opt-outs out; D8), sharing, delete.
+import { META_ADS_AUDIENCE_CHANGES_TOOLS } from './tools/meta-ads-audience-changes.tools.js'
+// Meta ads step 36 (2026-10-21): lead forms and test leads (changes made as the chosen Page).
+import { META_ADS_LEAD_FORMS_TOOLS } from './tools/meta-ads-lead-forms.tools.js'
+// Meta ads step 26 (2026-10-21): boosts of existing posts and partnership access (create-meta-boost, set-meta-partnership-access).
+import { META_ADS_BOOSTS_TOOLS } from './tools/meta-ads-boosts.tools.js'
+// Meta ads step 27 (2026-10-21): ads (create-meta-ad, set-meta-ad).
+import { META_ADS_ADS_TOOLS } from './tools/meta-ads-ads.tools.js'
+// Meta ads step 32 (2026-10-21): datasets and custom conversions (changes).
+import { META_ADS_SIGNALS_TOOLS } from './tools/meta-ads-signals.tools.js'
+import { META_ADS_WEBHOOKS_TOOLS } from './tools/meta-ads-webhooks.tools.js'
 import { META_ADS_CATALOG_ADMIN_TOOLS } from './tools/meta-ads-catalog-admin.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
@@ -344,6 +364,31 @@ const ALL: AgentTool[] = [
   ...META_ADS_OPTIMIZE_CHANGES_TOOLS,
   // Meta ads step 13 (2026-10-21): meta-product-sets, meta-commerce, meta-instagram-product-tags (read only).
   ...META_ADS_COMMERCE_TOOLS,
+  // Meta ads step 23 (2026-10-21): create-meta-media — images, videos and folders into the chosen ad account, and the undo.
+  ...META_ADS_MEDIA_UPLOAD_TOOLS,
+  // Meta ads step 25 (2026-10-21): create-meta-creative (every format, silent features off) and set-meta-creative.
+  ...META_ADS_CREATIVES_TOOLS,
+  // Meta ads step 29 (2026-10-21): set-meta-ad-rule (make, change, switch, run Meta's rules), remove-meta-ad-rule.
+  ...META_ADS_RULES_TOOLS,
+  // Meta ads step 7 (2026-10-21): meta-ads-numbers, meta-ads-report, meta-ads-saved-reports (read only).
+  ...META_ADS_INSIGHTS_TOOLS,
+  // Meta ads step 39 (2026-10-21): set-meta-brand-safety, set-meta-block-list, remove-meta-block-list.
+  ...META_ADS_BRAND_SAFETY_TOOLS,
+  // Meta ads step 31 (2026-10-21): create-meta-audience, set-meta-audience, set-meta-audience-members,
+  // set-meta-audience-sharing, remove-meta-audience.
+  ...META_ADS_AUDIENCE_CHANGES_TOOLS,
+  // Meta ads step 36 (2026-10-21): create-meta-lead-form, set-meta-lead-form (lead forms and test leads, as the Page).
+  ...META_ADS_LEAD_FORMS_TOOLS,
+  // Meta ads step 26 (2026-10-21): create-meta-boost (an existing post as a creative, partnership ads) and
+  // set-meta-partnership-access (the chosen Instagram account's partnership side).
+  ...META_ADS_BOOSTS_TOOLS,
+  // Meta ads step 27 (2026-10-21): create-meta-ad (born PAUSED, Meta's check with its integrity review) and set-meta-ad.
+  ...META_ADS_ADS_TOOLS,
+  // Meta ads step 32 (2026-10-21): create-meta-dataset, set-meta-dataset, set-meta-dataset-access, set-meta-custom-conversion,
+  // remove-meta-signal-items.
+  ...META_ADS_SIGNALS_TOOLS,
+  // Meta ads step 30 part 2 (2026-10-21): set-meta-webhooks, set-meta-alert-subscription, remove-meta-alert-subscription.
+  ...META_ADS_WEBHOOKS_TOOLS,
   // Meta ads step 34 (2026-10-21): create-meta-catalog, set-meta-catalog, set-meta-catalog-access, set-meta-product-set,
   // remove-meta-catalog-items (catalog admin and product sets; D7: no item field; deletes on explicit ask only).
   ...META_ADS_CATALOG_ADMIN_TOOLS,

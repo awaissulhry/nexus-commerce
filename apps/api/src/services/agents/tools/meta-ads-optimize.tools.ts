@@ -10,8 +10,8 @@
  *                         brand lift, Meta-run lift, the chosen Page's video A/B tests (AD-019, EX-001…EX-010, EX-012,
  *                         EX-900, EX-903)
  *   meta-ad-rules         Meta's automated rules, trigger rules included (Ads Manager hides those), one rule, a rule's
- *                         and the account's run history, why a rule stopped; the preview is a POST, so it comes with
- *                         set-meta-ad-rule, a later Nexus step (RU-001, RU-002, RU-029…RU-031, RU-034)
+ *                         and the account's run history, why a rule stopped; the preview is a POST, so it is part of
+ *                         set-meta-ad-rule's own preview (RU-001, RU-002, RU-029…RU-031, RU-034)
  * Money in minor units (cents) of the account currency, each money key restricted to the ad-spend money permission.
  */
 import { z } from 'zod'
@@ -212,9 +212,9 @@ const metaAdRulesTool: AgentTool = {
     + '…) and whether it can raise spend; a rule Meta stopped shows hasIssues and Meta\'s code (Meta does not document '
     + 'the codes). rule: one rule. history: what one rule did at each run, to which object, with old and new values and '
     + 'the rule as it was then. account-history: every rule\'s runs, newest first. preview: Meta\'s preview of a rule is '
-    + 'a POST request and Meta documents no read form, so it comes with set-meta-ad-rule (step 29). Making, changing, '
-    + 'switching off, running or deleting a rule (set-meta-ad-rule, remove-meta-ad-rule) comes with a later Nexus step '
-    + '(step 29). Filters Nexus applies itself read up to 10 pages and say so when more may match. Read only; money in '
+    + 'a POST request and Meta documents no read form, so set-meta-ad-rule sends it as part of its own preview (run now, '
+    + 'switch on, change). Making, changing, switching on or off and running a rule is set-meta-ad-rule; deleting one is '
+    + 'remove-meta-ad-rule (each a person approves). Filters Nexus applies itself read up to 10 pages and say so when more may match. Read only; money in '
     + 'conditions, actions and history in minor units (cents) of the account currency; ROAS and any value Nexus does not '
     + 'know as Meta gives it (…AsMeta); both need the ad-spend money permission.',
   async handler(args): Promise<ToolResult> {

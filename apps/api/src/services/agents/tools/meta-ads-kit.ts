@@ -26,12 +26,14 @@
  * business's chosen Meta ad account (marketing/meta-ads/change-account.ts), and the gateway checks every object of every
  * request is of it.
  */
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { factHash, type ToolContext, type ToolResult } from '../tool-types.js'
 import { approvedRun, canonical, notRun } from './ads-change-kit.js'
 import { metaChangeAccount, type MetaChangeAccount } from '../../marketing/meta-ads/change-account.js'
 import type { MetaChangeDraft, MetaChangeRequest } from '../../marketing/meta-ads/change-draft.js'
 import { expectedOf, metaCheckChange, metaSendChange, MetaWriteError, readBackMismatch, readsOf, type MetaChangeResult, type MetaObjectChange } from '../../marketing/meta-ads/write-client.js'
+import { grantRefusal } from '../../marketing/meta-ads/live-safety.js'
 import { MetaReadError } from '../../marketing/meta-ads/errors.js'
 import { metaAdsWritesMode } from '../../gateway/channels.js'
 import { metaObjectState, META_ADSET_BUDGET_CHANGES_PER_HOUR, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
@@ -55,7 +57,7 @@ export const META_MATERIAL = ['basis', 'plan', 'reach'] as const
 export const META_CHANGE_RULES =
   ' Nothing changes until a person approves it in Nexus (Approvals) — or, when this business\'s "Claude\'s changes need no '
   + 'approval" switch is on, it runs 20 s after the request unless stopped; either way it runs as that person, never by a '
-  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause and the create of a campaign or an ad set); '
+  + 'rule of its own. Meta checks a request first where Nexus uses Meta\'s check (validate_only: today a campaign pause and the create of a campaign, an ad set, a creative or an ad); '
   + 'for any other the preview says why not, and the run reads the live state again first. With Meta changes switched off '
   + 'nothing is sent, not even a check. The '
   + 'preview says what changes (from → to), what can make the account spend more (spendsMoney — the person\'s decision) '
@@ -124,8 +126,21 @@ async function draftFor(args: Record<string, unknown>, build: MetaDraftBuilder):
   }
 }
 
-/** The exact plan of a change: its requests (object, form fields), in order — never their labels. */
-const planOf = (draft: MetaChangeDraft): string => factHash(draft.requests.map((r) => ({ objectId: r.objectId, params: r.params })))
+/**
+ * The exact plan of a change: its requests (object, form fields), in order — never their labels. Step 36 review A3 — and a
+ * request's method, edge and object kind, ONLY when it names them: a status change's plan hash stays byte for byte what
+ * step 17 made (a pending approval does not go stale at a deploy). Step 26 (review A3): a request may give the fields its
+ * plan reads (`planParams`: a creator's ad code replaced in this hash; the request's arguments still carry it). Step 27
+ * review A6: a new ad's check (Meta's integrity review, and its recommendations when asked) — only on such a request, so
+ * every other plan hash stays as it was: a check with recommendations is never answered from the remembered acceptance of
+ * one without them.
+ */
+export const planOf = (draft: MetaChangeDraft): string => factHash(draft.requests.map((r) => ({
+  objectId: r.objectId, params: r.planParams ?? r.params,
+  ...(r.method ? { method: r.method } : {}), ...(r.edge ? { edge: r.edge } : {}), ...(r.objectKind ? { objectKind: r.objectKind } : {}),
+  // Only a request that asks Meta's integrity review (step 27's new ad) hashes its check: every other plan stays as it was.
+  ...(r.adReview ? { adReview: true, ...(r.recommendations ? { recommendations: true } : {}) } : {}),
+})))
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -307,29 +322,55 @@ export function objectChangeOf(request: MetaChangeRequest): MetaObjectChange {
     ...(request.method ? { method: request.method } : {}),
     ...(request.parent ? { parent: request.parent } : {}),
     ...(request.recommendations ? { recommendations: true } : {}),
+    // Step 27 — a new ad's check carries Meta's synchronous integrity review.
+    ...(request.adReview ? { adReview: true } : {}),
     ...(request.readBackObject ? { readBackObject: true as const } : {}),
+    // Step 39 — the read-back that judges it.
+    ...(request.judge ? { judge: request.judge } : {}),
+    ...(request.readBackOf ? { readBackOf: request.readBackOf } : {}),
+    // Step 36 — a request never read back (a test lead).
+    ...(request.skipReadBack ? { skipReadBack: request.skipReadBack } : {}),
+    // Step 30 — a webhook or alert subscription change travels as its request says (write-client.ts MetaRequestVia).
+    ...(request.via ? { via: request.via } : {}),
   }
+}
+
+/** Step 36 — Meta's code of a failure in the request's own plain words (base code: `80005/123` → `80005`), or ''. */
+function explained(request: MetaChangeRequest, err: MetaWriteError): string {
+  const base = (err.failure.code ?? '').split('/')[0]
+  const words = base && request.explain ? request.explain[base] : undefined
+  return words ? ` ${words}` : ''
 }
 
 /** Step 18 — the step's sentence for a done request past status: what Meta reads back for the fields it asked. */
 function doneSettingsSentence(request: MetaChangeRequest, result: MetaChangeResult): string {
   const expected = expectedOf(request)
+  // Step 39 — a request judged by its own read-back says how it reads now.
+  const judged = request.judge && result.node && result.readBack !== 'none' ? request.judge(result.node) : null
   const read = result.afterError
     ? `Meta's answer was not a success (${result.afterError.replace(/\.$/, '')}), but Nexus read it back as asked: Meta made it.`
-    : request.method === 'DELETE'
-      ? 'Meta confirmed it.'
-      : result.readBack === 'none' || !result.node
-        ? 'Meta confirmed it; Nexus could not read it back (meta-ads-live shows it).'
-        // Step 21 — a create whose read-back judges no field (a reach & frequency prediction is worked out later): made.
-        : !Object.keys(expected).length
-          ? 'Meta made it.'
-          : `Meta made it; it now reads ${readsOf(result.node, expected)}.`
+    : judged
+      ? `Meta made it; it now reads ${judged.reads}.`
+      : request.method === 'DELETE'
+        ? 'Meta confirmed it.'
+        // Step 36 — a request never read back on purpose (a test lead): Meta's answer names its id.
+        : request.skipReadBack && result.node && (typeof result.node.id === 'string' || typeof result.node.id === 'number')
+          ? `Meta made it (id ${result.node.id}).`
+        : result.readBack === 'none' || !result.node
+          ? 'Meta confirmed it; Nexus could not read it back (meta-ads-live shows it).'
+          // Step 21 — a create whose read-back judges no field (a reach & frequency prediction is worked out later): made.
+          // Step 39 — the same for a block-list draft Meta made.
+          : !Object.keys(expected).length
+            ? 'Meta made it.'
+            : `Meta made it; it now reads ${readsOf(result.node, expected)}.`
   return `${request.label}: ${read}${result.waitedMs ? ` Nexus waited ${Math.round(result.waitedMs / 1000)} s first (Meta's limit of one change of an object every 30 s).` : ''}`
 }
 
 /** The step's sentence for a done request. */
 function doneSentence(request: MetaChangeRequest, result: MetaChangeResult): string {
-  if (request.expect || request.method === 'DELETE' || request.edge) return doneSettingsSentence(request, result)
+  // Step 23 — a request with its own sender says what Meta made in its own words.
+  if (request.doneSentence) return request.doneSentence(result)
+  if (request.expect || request.method === 'DELETE' || request.edge || request.judge) return doneSettingsSentence(request, result)
   const status = typeof result.node?.status === 'string' ? result.node.status : null
   const effective = typeof result.node?.effective_status === 'string' ? result.node.effective_status : null
   const wanted = request.params.status
@@ -378,6 +419,10 @@ export async function runMetaChange(
   // Review fix A1 — the first request of this change that did not happen: a later switch-on (or raise) is never sent,
   // because what its "nothing spends yet" stood on may be exactly that request.
   let missedAt: number | null = null
+  // Step 39 (review A9) — a change whose later request takes ids from an earlier one (`prepare`: a list made from the
+  // block-list draft it uploaded) gets this run's own id: the gateway lets a request use only what an earlier request of
+  // the SAME run made. Every other change goes exactly as before.
+  const runId = draft.requests.some((r) => r.prepare !== undefined) ? randomUUID() : null
   for (const request of draft.requests) {
     if (stoppedAt !== null) {
       steps.push({ step: request.step, label: request.label, outcome: 'not_sent', sentence: `${request.label}: not sent — Nexus stopped after step ${stoppedAt}.` })
@@ -395,10 +440,14 @@ export async function runMetaChange(
       continue
     }
     try {
-      const result = await metaSendChange(account.target, objectChangeOf(request))
+      // Step 39 — a request that takes params from an earlier one (a list made from the draft step 1 uploaded) gets them now.
+      const params = request.prepare ? { ...request.params, ...(await request.prepare(done)) } : request.params
+      // Step 23 — a request may bring its own sender (an upload read again, a multi-call video upload): one step all the same.
+      const result = request.send ? await request.send(account.target) : await metaSendChange(account.target, { ...objectChangeOf(request), params, ...(runId ? { runId } : {}) })
       // Step 18 — a change past status: Meta said success, but a field it asked reads back otherwise: not done (no
-      // record, no undo), and a missed step for what follows.
-      const moved = request.expect ? readBackMismatch(result.node, expectedOf(request)) : []
+      // record, no undo), and a missed step for what follows. Step 39: or its own read-back judge says so.
+      const judged = request.judge && result.node && result.readBack !== 'none' ? request.judge(result.node) : null
+      const moved = judged ? judged.moved : request.expect ? readBackMismatch(result.node, expectedOf(request)) : []
       // Step 19 (review A4) — a create or a copy Meta made that reads back otherwise: recorded as made (so undo can delete
       // it), the step not confirmed, and a missed step for what follows.
       if (moved.length && request.recordEvenIfNotAsAsked) {
@@ -410,7 +459,7 @@ export async function runMetaChange(
       }
       if (moved.length) {
         missedAt ??= request.step
-        steps.push({ step: request.step, label: request.label, outcome: 'not_confirmed', sentence: `${request.label}: Meta answered success but it reads back ${readsOf(result.node!, expectedOf(request))}, not what was asked (${moved.join(', ')}). Nexus records no change for it and never sends it again by itself; meta-ads-live shows it now.` })
+        steps.push({ step: request.step, label: request.label, outcome: 'not_confirmed', sentence: `${request.label}: Meta answered success but it reads back ${judged ? judged.reads : readsOf(result.node!, expectedOf(request))}, not what was asked (${moved.join(', ')}). Nexus records no change for it and never sends it again by itself; meta-ads-live shows it now.` })
         continue
       }
       // Meta said success, but the object reads back with another status than the one asked: not done (no record, no
@@ -437,12 +486,14 @@ export async function runMetaChange(
         continue
       }
       if (err.outcome === 'refused' && !err.failure.throttled && !err.failure.authLost) {
-        // Meta said no for this one object: nothing changed for it, and the next object is its own request.
-        steps.push({ step: request.step, label: request.label, outcome: 'refused', sentence: `${request.label}: ${err.message}` })
+        // Meta said no for this one object: nothing changed for it, and the next object is its own request. Step 39 (D6):
+        // refused for access on a request that needs a Meta capability grant — the grant and the no-grant controls.
+        const words = request.grant && err.failure.permissionDenied ? grantRefusal(err, request.grant).message : err.message
+        steps.push({ step: request.step, label: request.label, outcome: 'refused', sentence: `${request.label}: ${words}${explained(request, err)}` })
         continue
       }
       // Not confirmed, a throttle, a lost token, a hold: the next requests would meet the same; Nexus stops here.
-      steps.push({ step: request.step, label: request.label, outcome: err.outcome === 'unknown' ? 'not_confirmed' : 'not_sent', sentence: `${request.label}: ${err.message}` })
+      steps.push({ step: request.step, label: request.label, outcome: err.outcome === 'unknown' ? 'not_confirmed' : 'not_sent', sentence: `${request.label}: ${err.message}${explained(request, err)}` })
       stoppedAt = request.step
     }
   }

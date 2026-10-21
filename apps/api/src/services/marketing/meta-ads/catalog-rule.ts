@@ -39,13 +39,22 @@
  * shown as Meta answers them; a later step adds a PIXEL taken kind.
  */
 import { metaObjectId } from '../../cx/connectors/meta/discovery.js'
-import { metaReadAll, metaReadOne } from './read-client.js'
+import { metaReadOne } from './read-client.js'
 import { MetaReadError } from './errors.js'
 import { MetaLiveRefusal, type MetaChosenAccount } from './live.js'
 import { listPaged, listWithFallback, part } from './paging.js'
 import { portfolioTaken, takenIds } from './taken.js'
 
 type Row = Record<string, unknown>
+
+/** What the catalog checks use of the chosen account: its connection and its business portfolio (a MetaChosenAccount fits). */
+export type CatalogAccount = Pick<MetaChosenAccount, 'connectionId' | 'businessId'> & {
+  /**
+   * Step 25 — one change's memo of catalog verdicts (CatalogRuleMemo.catalogs): a catalog named twice in one change is read
+   * once. Absent (every other caller): each check reads, as before.
+   */
+  catalogs?: Map<string, Promise<ReadableCatalog>>
+}
 
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
 const idText = (v: unknown): string | null => ((typeof v === 'string' || typeof v === 'number') && String(v).trim() ? String(v).trim() : null)
@@ -134,7 +143,7 @@ export const CATALOG_OF_ANOTHER_BUSINESS = 'That catalog belongs to a business p
 export const CATALOG_NO_OWNER = 'Meta names no owner business for that client catalog, so Nexus cannot tell whose it is and does not read it.'
 
 /** The chosen account's business portfolio — refused before any Meta call when there is none or another Nexus business uses it too. */
-export async function catalogPortfolio(account: MetaChosenAccount): Promise<string> {
+export async function catalogPortfolio(account: CatalogAccount): Promise<string> {
   if (!account.businessId) throw new MetaLiveRefusal(NO_PORTFOLIO)
   if (await portfolioTaken(account.businessId)) throw new MetaLiveRefusal(CATALOG_PORTFOLIO_SHARED)
   return account.businessId
@@ -155,7 +164,7 @@ export interface ReadableCatalog {
 const CATALOG_CHECK_FIELDS = 'id,name,business{id},vertical,product_count,is_catalog_segment'
 
 /** The portfolio's client catalogs (ids), for the readable check. */
-export async function clientCatalogIds(account: MetaChosenAccount, portfolioId: string): Promise<Set<string>> {
+export async function clientCatalogIds(account: CatalogAccount, portfolioId: string): Promise<Set<string>> {
   const read = await listPaged(account.connectionId, 'catalog.clientCheck', `${portfolioId}/client_product_catalogs`, { fields: 'id' }, CHECK_ROWS)
   return new Set(read.rows.map((r) => idText(r.id)).filter((id): id is string => !!id))
 }
@@ -166,7 +175,16 @@ export async function clientCatalogIds(account: MetaChosenAccount, portfolioId: 
  * named owner that is no other Nexus business's portfolio. One owner read (Meta's "nonexisting field" says the id is no
  * catalog), and the client list only when the portfolio does not own it. For a WRITE: writableCatalog, never this.
  */
-export async function readableCatalog(account: MetaChosenAccount, catalogId: string, operation = 'catalog.ownerCheck'): Promise<ReadableCatalog> {
+export async function readableCatalog(account: CatalogAccount, catalogId: string, operation = 'catalog.ownerCheck'): Promise<ReadableCatalog> {
+  if (!account.catalogs) return readableCatalogOnce(account, catalogId, operation)
+  // Step 25 — within one change only (the memo dies with it), keyed by connection, portfolio and catalog: the same verdict,
+  // a refusal included, without reading Meta again.
+  const key = `${account.connectionId}|${account.businessId ?? ''}|${catalogId}`
+  let verdict = account.catalogs.get(key)
+  if (!verdict) { verdict = readableCatalogOnce(account, catalogId, operation); account.catalogs.set(key, verdict) }
+  return verdict
+}
+async function readableCatalogOnce(account: CatalogAccount, catalogId: string, operation: string): Promise<ReadableCatalog> {
   const portfolioId = await catalogPortfolio(account)
   const id = metaObjectId(catalogId)
   if (!id) throw new MetaLiveRefusal(`"${catalogId}" is not a Meta catalog id (digits).`)
@@ -204,7 +222,7 @@ const CHILD_OWNER_FIELDS: Readonly<Record<'item' | 'group' | 'product_set', stri
 export interface CatalogChildInput { kind: CatalogChildKind; id: string; catalogId?: string | null; feedId?: string | null; uploadId?: string | null }
 
 /** Is `id` in this list of the parent (ids only, at most CHECK_ROWS)? */
-async function inList(account: MetaChosenAccount, operation: string, path: string, id: string): Promise<boolean> {
+async function inList(account: CatalogAccount, operation: string, path: string, id: string): Promise<boolean> {
   const read = await listPaged(account.connectionId, operation, path, { fields: 'id' }, CHECK_ROWS)
   return read.rows.some((r) => idText(r.id) === id)
 }
@@ -214,7 +232,7 @@ async function inList(account: MetaChosenAccount, operation: string, path: strin
  * item group or product set by its own product_catalog; a feed or event source in the catalog's own list; an upload or
  * feed rule in its feed's list; an upload error in its upload's list. Returns the id and the readable catalog.
  */
-export async function catalogChild(account: MetaChosenAccount, input: CatalogChildInput): Promise<{ id: string; catalog: ReadableCatalog }> {
+export async function catalogChild(account: CatalogAccount, input: CatalogChildInput): Promise<{ id: string; catalog: ReadableCatalog }> {
   const word = CHILD_WORDS[input.kind]
   const id = metaObjectId(input.id)
   if (!id) throw new MetaLiveRefusal(`"${input.id}" is not a Meta ${word} id (digits).`)
@@ -571,18 +589,19 @@ export async function writableCatalog(
 }
 
 // ─── Step 18 (lane C1, #711): the catalog / product-set rule for a CHANGE that names one (a promoted object). ───
-// Merged into this file when step 12 landed: both are "the one catalog rule"; metaCatalogProblem stays as #711 wrote it.
 /*
- * Meta step 18 review A4 — the ONE rule for a catalog or a product set a change of THIS business names (a promoted object's
- * product_catalog_id / product_set_id): the catalog must be owned by, or a client catalog of, the business portfolio of
- * the business's chosen ad account, AND that portfolio must not be another Nexus business's too (nexus_meta_links_taken
- * PORTFOLIO, step 10's migration 20261021r10: two businesses whose ad accounts sit in one portfolio never name each other's
- * catalogs). A product set counts as its catalog. The same rule as step 12's catalog reads; the tool asks it before the
- * preview, and the gateway asks it again before it sends anything (gateway.ts metaBodyIdsProblem).
+ * Meta step 18 review A4, owner fix (2026-10-21, found by lane R on #718): a change of THIS business may name a catalog or a
+ * product set (a promoted object's product_catalog_id / product_set_id) only when step 12's READ rule passes for it —
+ * readableCatalog / catalogChild above, never a looser copy: the chosen ad account's business portfolio is used by no other
+ * business in Nexus, and the catalog is that portfolio's own, or one of its client catalogs whose OWNER Meta names and is no
+ * portfolio another business in Nexus uses (before this fix a client catalog passed whoever owned it). A product set
+ * counts as its catalog. Naming a catalog in an ad is no write to the catalog, so the read rule (not writableCatalog) is the
+ * one. The tool asks it before the preview, and the gateway asks it again before it sends anything (gateway.ts
+ * metaBodyIdsProblem). The portfolio is read live from the ad account (`business`, reference/ad-account), so the gateway
+ * needs no stored account. Reads only, through the gateway.
  *
- * Checked 2026-10-21: reference/ad-account `business` (the portfolio of an ad account), business/owned_product_catalogs and
- * business/client_product_catalogs (Meta's SDK business.py get_owned_product_catalogs / get_client_product_catalogs),
- * product-set `product_catalog` (productset.py). Reads only, through the gateway.
+ * Step 25 — a creative also names catalog ITEMS (a product tag's product_id, product_data's product_id): an item counts as
+ * its catalog too, by the same read rule (catalogChild kind item: its own product_catalog, then readableCatalog).
  */
 export interface CatalogRuleTarget { connectionId: string; adAccountId: string }
 
@@ -591,34 +610,48 @@ const idIn = (body: unknown, key: string): string | null => {
   return metaObjectId(inner && typeof inner === 'object' ? (inner as Record<string, unknown>).id : null)
 }
 
+/** The read rule's refusal, worded for a change: what it says, and that nothing is sent. */
+const notSent = (sentence: string): string =>
+  `${sentence.replace(/,? (so (it is not|no catalog is) read( here)?|and (reads none|does not read it))\.$/, '.')} Nexus names no such catalog in a change, so nothing is sent.`
+
 /** Why this catalog / product set may not be named by a change of the chosen ad account, in words; null when it may. */
-export async function metaCatalogProblem(target: CatalogRuleTarget, ids: { catalogId?: string | null; productSetId?: string | null }): Promise<string | null> {
-  if (!ids.catalogId && !ids.productSetId) return null
+/**
+ * Step 25 — ONE change that names several catalog ids (a creative's product set, its tagged items, its product data): the
+ * ad account's portfolio is read once, each catalog's verdict and each id's verdict are remembered. The caller makes a memo
+ * per change (the tool per draft, the gateway per call) and drops it with the change: nothing is kept across changes,
+ * connections or businesses. Without a memo, metaCatalogProblem reads as before.
+ */
+export interface CatalogRuleMemo {
+  portfolios: Map<string, Promise<string | null>>
+  catalogs: Map<string, Promise<ReadableCatalog>>
+  verdicts: Map<string, Promise<string | null>>
+}
+export const newCatalogRuleMemo = (): CatalogRuleMemo => ({ portfolios: new Map(), catalogs: new Map(), verdicts: new Map() })
+
+export async function metaCatalogProblem(target: CatalogRuleTarget, ids: { catalogId?: string | null; productSetId?: string | null; productItemId?: string | null }, memo?: CatalogRuleMemo): Promise<string | null> {
+  if (!ids.catalogId && !ids.productSetId && !ids.productItemId) return null
+  if (!memo) return catalogProblemOnce(target, ids)
+  const key = `${target.connectionId}|${target.adAccountId}|${ids.catalogId ?? ''}|${ids.productSetId ?? ''}|${ids.productItemId ?? ''}`
+  let verdict = memo.verdicts.get(key)
+  if (!verdict) { verdict = catalogProblemOnce(target, ids, memo); memo.verdicts.set(key, verdict) }
+  return verdict
+}
+
+async function catalogProblemOnce(target: CatalogRuleTarget, ids: { catalogId?: string | null; productSetId?: string | null; productItemId?: string | null }, memo?: CatalogRuleMemo): Promise<string | null> {
   try {
-    const account = await metaReadOne({ connectionId: target.connectionId }, { operation: 'catalogRule.portfolio', path: `act_${target.adAccountId}`, query: { fields: 'business{id}' } })
-    const portfolio = idIn(account.body, 'business')
-    if (!portfolio) return 'The chosen ad account names no business portfolio, so Nexus cannot confirm whose catalog this is: no catalog is sent.'
-    if ((await takenIds('PORTFOLIO', [portfolio])).has(portfolio)) {
-      return 'Another business in Nexus uses an ad account of this Meta business portfolio, so its catalogs may be that business\'s: Nexus names no catalog of it here.'
-    }
-    let catalogId = ids.catalogId ?? null
-    if (ids.productSetId) {
-      const set = await metaReadOne({ connectionId: target.connectionId }, { operation: 'catalogRule.productSet', path: ids.productSetId, query: { fields: 'id,product_catalog{id}' } })
-      const ofSet = idIn(set.body, 'product_catalog')
-      if (!ofSet) return `Meta does not say which catalog product set ${ids.productSetId} is in, so it is not sent.`
-      if (catalogId && catalogId !== ofSet) return `Product set ${ids.productSetId} is not in catalog ${catalogId}.`
-      catalogId = ofSet
-    }
-    const catalogs = new Set<string>()
-    for (const edge of ['owned_product_catalogs', 'client_product_catalogs']) {
-      await metaReadAll({ connectionId: target.connectionId }, { operation: `catalogRule.${edge}`, path: `${portfolio}/${edge}`, query: { fields: 'id', limit: 100 }, maxPages: 10 }, (rows) => {
-        for (const row of rows) { const id = metaObjectId(row.id); if (id) catalogs.add(id) }
-      })
-    }
-    return catalogs.has(catalogId!) ? null : `Catalog ${catalogId} is not one the chosen ad account's business portfolio owns or was given, so it is not sent.`
+    const portfolioOf = () => metaReadOne({ connectionId: target.connectionId }, { operation: 'catalogRule.portfolio', path: `act_${target.adAccountId}`, query: { fields: 'business{id}' } }).then((read) => idIn(read.body, 'business'))
+    const accountKey = `${target.connectionId}|${target.adAccountId}`
+    let portfolio = memo?.portfolios.get(accountKey)
+    if (!portfolio) { portfolio = portfolioOf(); memo?.portfolios.set(accountKey, portfolio) }
+    const account: CatalogAccount = { connectionId: target.connectionId, businessId: await portfolio, ...(memo ? { catalogs: memo.catalogs } : {}) }
+    if (ids.productSetId) await catalogChild(account, { kind: 'product_set', id: ids.productSetId, catalogId: ids.catalogId ?? null })
+    if (ids.productItemId) await catalogChild(account, { kind: 'item', id: ids.productItemId, catalogId: ids.catalogId ?? null })
+    if (!ids.productSetId && !ids.productItemId) await readableCatalog(account, ids.catalogId!)
+    return null
   } catch (err) {
-    // Round 2 — a lookup that fails (Meta's refusal, a lost connection, the database) never lets a catalog through: the
-    // change is refused in words, here and at the gateway, and nothing is sent.
+    // A refusal of the read rule is said in its own words; a lookup that fails (Meta's refusal, a lost connection, the
+    // database) never lets a catalog through either: the change is refused in words, here and at the gateway.
+    if (err instanceof MetaLiveRefusal) return notSent(err.message)
     if (err instanceof MetaReadError) return `Nexus could not confirm the catalog (${err.message}), so it is not sent.`
     return `Nexus could not confirm the catalog (${err instanceof Error ? err.message : String(err)}), so it is not sent.`
   }

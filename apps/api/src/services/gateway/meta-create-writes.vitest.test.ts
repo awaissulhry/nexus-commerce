@@ -310,7 +310,11 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
   const callers = (name: string) => all.filter((f) => new RegExp(`(?<!function |\\.)\\b${name}\\(`).test(f.text)).map((f) => f.path).sort()
   it('metaWriteCall, metaSendChange, metaCheckChange, removalDraft and metaRemoveDraft have the callers they have today, and no other', () => {
     expect(callers('metaWriteCall')).toEqual(['services/marketing/meta-ads/write-client.ts'])
-    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
+    // Step 23 — create-meta-media's requests bring their own senders (an upload read again, the video-ads upload's calls).
+    // Step 25 — create-meta-creative's create and async job bring their own senders too (the creative read back).
+    // Step 27 — create-meta-ad's create (the ad and its inline creative read back), set-meta-ad's update (its creative read
+    // back as creative_id) and the undo's creative removal (only once the ad reads DELETED) bring their own senders.
+    expect(callers('metaSendChange')).toEqual(['services/agents/tools/meta-ads-kit.ts', 'services/marketing/meta-ads/change-ads.ts', 'services/marketing/meta-ads/change-creatives.ts', 'services/marketing/meta-ads/change-media.ts'])
     expect(callers('metaCheckChange')).toEqual(['services/agents/tools/meta-ads-kit.ts'])
     expect(callers('removalDraft')).toEqual(['services/agents/tools/meta-ads-create.tools.ts'])
     expect(all.find((f) => f.path === 'services/agents/tools/meta-ads-create.tools.ts')!.text.match(/\bremovalDraft\(/g)).toHaveLength(1)
@@ -338,8 +342,8 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/agents/tools/meta-ads-campaign-settings.tools.ts': 1, // reads a done request's method (no sender)
       'services/agents/tools/meta-ads-kit.ts': 2, // the step's sentence for a done DELETE (no sender)
       'services/gateway/gateway.ts': 2, // the request type; a repeatable method
-      'services/gateway/meta.ts': 3, // metaWriteCall: the type and the method it sends
-      'services/gateway/meta-calls.ts': 9, // the allow-list's verdict on a DELETE, with or without a body (a judge, no sender)
+      'services/gateway/meta.ts': 4, // metaWriteCall: the type and the method it sends; step 26: metaRestWriteCall's type (the partnership host)
+      'services/gateway/meta-calls.ts': 13, // the allow-list's verdict on a DELETE, with or without a body, and step 31's refusal of a non-text body; step 26's refusal on a partnership edge; step 30's DELETE with its keys in the query (a judge, no sender)
       'services/gateway/meta-create-rules.ts': 1, // the object.delete rule (a judge)
       'services/gateway/meta-remove-rules.ts': 4, // step 22: creative.delete, image.delete, video.remove, canvaselement.delete (judges)
       'services/gateway/meta-settings-rules.ts': 1, // the budget_schedule.delete rule (a judge)
@@ -351,7 +355,29 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
       'services/marketing/meta-ads/change-labels.ts': 1, // step 21: labelsDraft's label delete (explicit ask: confirmDelete)
       'services/gateway/meta-optimize-rules.ts': 1, // step 28: the pageVideoTest.delete rule (a judge)
       'services/marketing/meta-ads/change-experiments.ts': 1, // step 28: a concluded Page video test's delete (set-meta-experiment)
-      'services/marketing/meta-ads/write-client.ts': 6, // passes on what a request names
+      'services/marketing/meta-ads/change-media.ts': 1, // step 23: create-meta-media's undo, through step 22's removal rules
+      'services/marketing/meta-ads/change-creatives.ts': 1, // step 25: create-meta-creative's undo, through step 22's creative.delete rule
+      'services/gateway/meta-ad-rule-rules.ts': 1, // step 29: the adRule.delete rule (a judge)
+      'services/marketing/meta-ads/change-ad-rule.ts': 1, // step 29: remove-meta-ad-rule's delete (explicit ask: confirmDelete)
+      'services/gateway/meta-brand-safety-rules.ts': 6, // step 39: a list's delete, unshare, a person, posts, an ad account, a content list (judges)
+      'services/marketing/meta-ads/change-block-lists.ts': 6, // step 39: set-meta-block-list's undo deletes and remove-meta-block-list (explicit ask: confirmDelete)
+      'services/gateway/meta-lead-form-rules.ts': 1, // step 36: the testlead.delete rule (a judge)
+      'services/marketing/meta-ads/change-lead-forms.ts': 2, // step 36: a test lead's replace and remove-test-lead (only test leads Nexus made)
+      'services/marketing/meta-ads/write-client.ts': 5, // passes on what a request names
+      'services/gateway/meta-audience-rules.ts': 4, // step 31: the people out, the opt-out everywhere, the unshare, the audience delete (judges)
+      'services/marketing/meta-ads/change-audiences.ts': 5, // step 31: the request type, the two people-out DELETEs, the unshare, remove-meta-audience's delete (explicit ask: confirmDelete)
+      // Step 26 — set-meta-partnership-access: creators off the tag-approval list (also the undo of an approval), an ad code's
+      // removal, creators off the Page's allowlist, the sponsor tag off posts (each its own action, never a bulk delete).
+      'services/gateway/meta-boost-rules.ts': 6, // the tag-approval and ad-code DELETE rules, the partnership host's two DELETE routes (judges)
+      'services/marketing/meta-ads/change-boosts.ts': 5, // the tag-approval removal, the ad code's removal, the allowlist removal, the untag
+      'services/gateway/meta-signals-rules.ts': 2, // step 32: dataset.disconnectAccount, customConversion.delete (judges)
+      'services/marketing/meta-ads/change-signals.ts': 2, // step 32: a dataset's disconnect from the chosen ad account, remove-meta-signal-items' delete (explicit ask: confirmDelete; only what Nexus made)
+      // Step 27 — create-meta-ad's undo: an ad it made that never ran (step 19's object.delete), then its inline creative made
+      // new (step 22's creative.delete: the request and its own sender, sent only once the ad reads DELETED).
+      'services/marketing/meta-ads/change-ads.ts': 3,
+      'services/gateway/meta-webhook-rules.ts': 4, // step 30: app.subscriptions.delete, adaccount.subscribed_apps.delete, page.subscribed_apps.delete, adaccount.alert.delete (judges)
+      'services/marketing/meta-ads/change-webhooks.ts': 3, // step 30: set-meta-webhooks' unsubscribe-app, disconnect-ad-account, remove-page
+      'services/marketing/meta-ads/change-alert-subscriptions.ts': 1, // step 30: remove-meta-alert-subscription's delete of one alert subscription of the chosen ad account
       'services/gateway/meta-catalog-rules.ts': 11, // step 34: nine catalog DELETE rules and the items_batch DELETE judge (judges)
       'services/marketing/meta-ads/change-catalog-admin.ts': 8, // step 34: remove-meta-catalog-items' deletes (explicit ask), the undo of a catalog / set Nexus made, a pixel, person or partner off a catalog (meta-catalog-writes test)
     })
@@ -378,23 +404,59 @@ describe('review A2 — every Meta DELETE has its named senders: removalDraft (u
     expect(naming(/locales_to_delete/g)).toEqual({
       'services/gateway/meta-remove-rules.ts': 6, // the captions.delete rule and its refusals (a judge)
       'services/marketing/meta-ads/change-remove.ts': 1, // metaRemoveDraft: the request's one body key
+      // Step 23 — create-meta-media's undo of captions it added (through step 22's captions.delete; its preview's warning
+      // names the key), and the tool reading a done undo request back into its record.
+      'services/marketing/meta-ads/change-media.ts': 2,
+      'services/agents/tools/meta-ads-media-upload.tools.ts': 2,
     })
     expect(naming(/['"`]captions\.delete['"`]/g)).toEqual({
       'services/gateway/meta-remove-rules.ts': 1, // the rule's name
       'services/marketing/meta-ads/change-remove.ts': 1, // metaRemoveDraft: the request's operation
     })
-    expect(naming(/edge: ['"`]captions['"`]/g)).toEqual({ 'services/marketing/meta-ads/change-remove.ts': 1 })
+    // Step 23 — create-meta-media on the captions edge: its upload, its undo's language removal and the default caption put back.
+    expect(naming(/edge: ['"`]captions['"`]/g)).toEqual({ 'services/marketing/meta-ads/change-remove.ts': 1, 'services/marketing/meta-ads/change-media.ts': 3 })
     expect(all.find((f) => f.path === 'services/marketing/meta-ads/change-budget-schedule.ts')!.text).toMatch(/objectKind: 'highdemandperiod', method: 'DELETE'/)
   })
 })
 /** Methods passed on, not chosen: the kit hands a request's own method to the write client; the gateway and its types. */
 const EXPECTED_COMPUTED: string[] = [
+  // Step 31 — an audience rule's aggregation method (absolute | percentile), not an HTTP method.
+  'services/agents/tools/meta-ads-audience-changes.tools.ts: z.enum([\'absolute\'',
+  // Step 26 — a creator's video copied by create-meta-boost: its upload method in the record (advideos), not an HTTP method.
+  'services/agents/tools/meta-ads-boosts.tools.ts: \'advideos\'',
+  // Step 36 — the kit's plan hash names a request's own method (planOf: no sender).
+  'services/agents/tools/meta-ads-kit.ts: r.method',
   'services/agents/tools/meta-ads-kit.ts: request.method',
-  ...Array(5).fill('services/gateway/gateway.ts: req.method'),
-  'services/gateway/meta-calls.ts: \'POST\' | \'DELETE\'',
+  // Step 23 — a video's upload method (advideos | video_ads), not an HTTP method.
+  'services/agents/tools/meta-ads-media-upload.tools.ts: (video.method as VideoSource[\'method\']) ?? null',
+  'services/agents/tools/meta-ads-media-upload.tools.ts: request.edge === \'video_ads\' ? \'video_ads\' : \'advideos\'',
+  'services/agents/tools/meta-ads-media-upload.tools.ts: z.enum(VIDEO_METHODS).optional().describe(\'advideos (default: Meta fetches the link onto the ad account)',
+  // Step 39 — the sixth: the content-block-list export's one PUT (metaRestFileExportOf judges it; no DELETE).
+  ...Array(6).fill('services/gateway/gateway.ts: req.method'),
+  // Step 26 — metaRestWriteVerdict's input type (the partnership host's judge, no sender).
+  'services/gateway/meta-boost-rules.ts: string; url: string; kind: string; body?: unknown; objectKind?: string',
+  // Step 30 — a rule's method: PATCH too (an alert subscription's status).
+  'services/gateway/meta-calls.ts: \'POST\' | \'DELETE\' | \'PATCH\'',
   'services/gateway/meta-calls.ts: string',
   'services/gateway/meta-calls.ts: string',
   'services/gateway/meta-calls.ts: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string',
   'services/gateway/meta-calls.ts: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string',
-  'services/gateway/meta.ts: remove ? \'DELETE\' : \'POST\'',
+  // Step 39 — metaRestFileExportOf's input type (a judge of the export's PUT, no sender).
+  'services/gateway/meta-calls.ts: string; url: string; kind: string; body?: unknown; auth?: unknown; headers?: Record<string',
+  // Step 23 — the rupload judge's input type (a judge, no sender).
+  'services/gateway/meta-media-rules.ts: string; url: string; kind: string; body?: unknown; objectKind?: string',
+  // Step 26 — metaRestWriteCall: its request type and the method it passes on (the partnership host).
+  'services/gateway/meta.ts: \'POST\' | \'PUT\' | \'DELETE\'',
+  // Step 30 — metaWriteCall sends PATCH too (an alert subscription's status).
+  'services/gateway/meta.ts: remove ? \'DELETE\' : req.method === \'PATCH\' ? \'PATCH\' : \'POST\'',
+  'services/gateway/meta.ts: req.method',
+  // Step 31 — audienceRequest passes on the literal method its caller names (a delete, the people out, an unshare).
+  'services/marketing/meta-ads/change-audiences.ts: o.method',
+  // Step 26 — the creator's video's upload method in the record (advideos), and a partnership-host request's own method
+  // passed on to its sender (each literal where the request is built).
+  'services/marketing/meta-ads/change-boosts.ts: \'advideos\'',
+  'services/marketing/meta-ads/change-boosts.ts: call.method',
+  // Step 23 — a video's upload method again (advideos | video_ads).
+  'services/marketing/meta-ads/change-media.ts: \'advideos\' | \'video_ads\' = video.method === \'video_ads\' ? \'video_ads\' : \'advideos\'',
+  'services/marketing/meta-ads/change-media.ts: \'advideos\' | \'video_ads\'; new: boolean | null',
 ]

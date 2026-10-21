@@ -20,13 +20,14 @@
  *   first.
  * Never logs a token, a request body or an answer.
  */
-import { metaWriteCall, type MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import { metaRestWriteCall, metaRuploadCall, metaWriteCall, type MetaRestWriteRequest, type MetaWriteEdge } from '../../gateway/meta.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
 import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
 import type { GatewayResponse } from '../../gateway/gateway.js'
 import { metaObjectState, metaObjectWait, META_OBJECT_EDIT_GAP_MS } from '../../gateway/meta-object-limits.js'
 import { failureOfAnswer, failureOfThrow, localFailure, type MetaFailure } from './errors.js'
 import { metaReadOne } from './read-client.js'
+import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
 
 /** The fields a change reads back (gateway meta-calls.ts META_READ_BACK_FIELDS holds the allow-list). */
 export const READ_BACK = 'id,status,effective_status'
@@ -60,6 +61,20 @@ export interface MetaObjectChange {
   kind: 'campaign' | 'adset' | 'ad' | 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
     // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
     | MetaOptimizeKind
+    // Step 29 — one of the chosen ad account's automated rules.
+    | 'adrule'
+    // Step 39 — an ad set's targeting, a publisher or content block list (brand safety).
+    | MetaBrandSafetyKind
+    // Step 31 — one of the chosen ad account's own custom audiences.
+    | 'customaudience'
+    // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
+    | MetaPageKind
+    // Step 26 — the chosen Instagram account or a media of it (set-meta-partnership-access; its Page is step 28's `page`).
+    | MetaBoostWriteKind
+    // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
+    | MetaSignalsKind
+    // Step 30 — the connection's own Meta app (its webhook subscriptions).
+    | MetaWebhookKind
     // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
     | MetaCatalogKind
   params: Record<string, string>
@@ -78,9 +93,13 @@ export interface MetaObjectChange {
    * Step 18 — a create on the object's edge (POST /<id>/budget_schedules): the new object is read back, not the parent.
    * Step 19 — a campaign's or ad set's create on the ad account (`act_<id>/campaigns | adsets`), a copy (`<id>/copies`),
    * a background copy (`act_<id>/async_batch_requests`) and an asynchronous ad copy (`act_<id>/asyncadcopies`).
+   * Step 23 — an upload on the ad account (`act_<id>/adimages | advideos | video_ads`), a folder on its business portfolio
+   * (`<id>/creative_folders`), a library video's captions (`<id>/captions`).
+   * Step 29 — a rule made on act_<id>/adrules_library (the new rule read back); a rule's run (POST /<rule id>/execute: Meta's
+   * {"success": true} is the answer — nothing is read back, as for any edge whose answer names no new id).
    */
   edge?: MetaWriteEdge
-  /** Step 18 — DELETE (a budget schedule's; step 22's deletes): Meta's {"success": true} is the answer, nothing is read back. */
+  /** Step 18 — DELETE (a budget schedule's; step 22's deletes): Meta's {"success": true} is the answer, nothing is read back (step 39: unless `judge` reads it). */
   method?: 'POST' | 'DELETE'
   /** Step 18 — a budget schedule's campaign or ad set (the gateway checks the period is one of its own); step 34: a feed's catalog. */
   parent?: { kind: 'campaign' | 'adset' | 'catalog'; id: string }
@@ -88,6 +107,34 @@ export interface MetaObjectChange {
   recommendations?: boolean
   /** Step 21 — an edge that changes the object itself (a campaign's labels edge): the object is read back, not a new one. */
   readBackObject?: true
+  /** Step 23 — how long the call may take (an image's bytes: longer than the 60 s default). */
+  timeoutMs?: number
+  /**
+   * Step 39 — the change is judged by its own read-back: `readBackOf` (default the object) is read with `readBackFields`,
+   * and `judge` says which asked parts it does not show (an ad set's brand-safety keys, the account's filter, a list's
+   * shares) and how it reads.
+   */
+  judge?: (node: Record<string, unknown>) => { moved: string[]; reads: string }
+  readBackOf?: string
+  /** Step 39 (review A9) — the run of the change it belongs to (the kit's own id), passed to the gateway. */
+  runId?: string
+  /** Step 36 — never read back: Meta's answer (the new id) is all Nexus keeps (a test lead: these tools never read a lead). */
+  skipReadBack?: true
+  /** Step 27 — a new ad's check runs Meta's synchronous integrity review with it (synchronous_ad_review, AD-027). */
+  adReview?: boolean
+  /**
+   * Step 30 — a webhook or alert subscription change (meta-webhook-rules.ts): its path, a DELETE's query, PATCH; Meta's
+   * answer is all there is (`{success}` or the new subscription's id) — nothing is read back. Its token is its rule's
+   * (the gateway sends an app rule with the connection's app token, never at a caller's ask).
+   */
+  via?: MetaRequestVia
+}
+
+/** Step 30 — how a webhook or alert subscription change travels (none of it is needed by a change of an object). */
+export interface MetaRequestVia {
+  path?: string
+  query?: Record<string, string>
+  method?: 'PATCH'
 }
 
 /**
@@ -126,7 +173,9 @@ export function readsOf(node: Record<string, unknown>, expected: Record<string, 
 /** Step 18 review A7 — times are sent as UTC Unix seconds and read back as ISO 8601: both judged as Unix seconds. */
 const TIME_FIELDS = new Set(['start_time', 'end_time', 'time_start', 'time_end',
   // Step 28 — a study's windows and a Page video test's start.
-  'observation_end_time', 'cooldown_start_time', 'scheduled_experiment_timestamp'])
+  'observation_end_time', 'cooldown_start_time', 'scheduled_experiment_timestamp',
+  // Step 27 — an ad's own schedule.
+  'ad_schedule_start_time', 'ad_schedule_end_time'])
 const unixOf = (v: unknown): string => {
   const text = String(v)
   if (/^\d{1,11}$/.test(text)) return text
@@ -193,12 +242,23 @@ export function readBackMismatch(node: Record<string, unknown> | null, expected:
 const MAX_WORDS = 300
 const cut = (words: string | null | undefined) => (words ? (words.length > MAX_WORDS ? `${words.slice(0, MAX_WORDS - 1)}…` : words) : null)
 
+/** Step 36 review B3 — the kinds a change makes AS the chosen Page (its own token: gateway meta-page-token.ts). */
+const PAGE_KINDS: ReadonlySet<string> = new Set(['page', 'leadform', 'testlead'])
+
 /** The failure of a change's answer, in words about a CHANGE (errors.ts says them about a read). */
-function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>): MetaFailure {
+function changeFailure(answer: Pick<GatewayResponse, 'status' | 'verdict'>, kind?: string): MetaFailure {
   const failure = failureOfAnswer(answer)
   if (failure.origin !== 'meta') return failure
   const words = cut(answer.verdict?.channelMessage)
   const code = failure.code ? ` (${failure.code})` : ''
+  // Step 36 review B3 — a change made with the Page's own token: a refused token or permission is the Page's condition
+  // (the system user's role or task on the chosen Page), never "make a new system-user token" or the ad account's.
+  if (kind && PAGE_KINDS.has(kind) && (failure.authLost || failure.permissionDenied)) {
+    return {
+      ...failure,
+      sentence: `Meta did not accept this change made as the chosen Facebook Page${code}${words ? `: ${words}` : ''}. The system user may have lost its role or its Advertise task on the Page (Meta Business settings › Users › System users › Assign assets), or its token pages_manage_ads. Nothing was changed.`,
+    }
+  }
   if (failure.authLost) return failure
   if (failure.throttled) return { ...failure, sentence: `Meta asked Nexus to slow down${code}${words ? `: ${words}` : ''}. Nothing was changed; ask again in a few minutes.` }
   if (failure.permissionDenied) return { ...failure, sentence: `Meta does not let this system user change this${words ? `: ${words}` : ''}. Check that the ad account is assigned to the system user and its token carries ads_management.` }
@@ -216,7 +276,7 @@ export async function metaCheckChange(target: MetaWriteTarget, change: MetaObjec
   try {
     answer = await metaWriteCall({
       connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind, params: change.params, check: true,
-      ...(change.parent ? { parent: change.parent } : {}), ...(change.edge ? { edge: change.edge } : {}), ...(change.recommendations ? { recommendations: true } : {}),
+      ...(change.parent ? { parent: change.parent } : {}), ...(change.edge ? { edge: change.edge } : {}), ...(change.recommendations ? { recommendations: true } : {}), ...(change.adReview ? { adReview: true } : {}),
     })
   } catch (err) {
     const failure = failureOfThrow(err) ?? localFailure(`Nexus could not ask Meta's check (${err instanceof Error ? err.message : String(err)}).`, 'NEXUS_ERROR')
@@ -292,6 +352,9 @@ export async function metaSendChange(
       connectionId: target.connectionId, operation, objectId: change.objectId, objectKind: change.kind,
       params: { ...change.params, ...(change.readBackInPost ? { fields } : {}) }, check: false, maxRateWaitMs: WRITE_RATE_WAIT_MS,
       ...(change.edge ? { edge: change.edge } : {}), ...(change.method === 'DELETE' ? { method: 'DELETE' as const } : {}), ...(change.parent ? { parent: change.parent } : {}),
+      ...(change.timeoutMs ? { timeoutMs: change.timeoutMs } : {}), ...(change.runId ? { run: change.runId } : {}),
+      ...(change.via?.path ? { path: change.via.path } : {}), ...(change.via?.query ? { query: change.via.query } : {}),
+      ...(change.via?.method === 'PATCH' ? { method: 'PATCH' as const } : {}),
     })
   } catch (err) {
     // The gateway throws only before it sends (a refusal, or a problem of Nexus's own such as the database): nothing left.
@@ -300,12 +363,21 @@ export async function metaSendChange(
   }
   const body = answer.ok ? answer.json<Record<string, unknown>>() : null
   if (answer.ok && !(body && body.success === false)) {
+    // Step 39 — a change the tool judges by its own read-back: one GET of what it names, whatever Meta answered.
+    if (change.judge) {
+      const node = await readObject(target, change.readBackOf ?? change.objectId, `${operation}.readBack`, fields)
+      return { node: node ?? body, readBack: node ? 'second-read' : 'none', waitedMs }
+    }
+    // Step 30 — a webhook or alert subscription: Meta's answer is the result (nothing of it is an object to read back).
+    if (change.via) return { node: body, readBack: 'none', waitedMs }
     if (body && typeof body.status === 'string') return { node: body, readBack: 'same-request', waitedMs }
     // Step 18 — a DELETE answers {"success": true}: the object is gone, nothing to read back.
     if (change.method === 'DELETE') return { node: body, readBack: 'none', waitedMs }
     // Step 18 — a create on an edge answers the NEW object (read-after-write): read back that one, never the parent.
     if (change.edge) {
       const ownId = body && (typeof body.id === 'string' || typeof body.id === 'number') ? String(body.id) : null
+      // Step 36 — a test lead is never read back (Meta's answer, its id, is all Nexus keeps).
+      if (change.skipReadBack) return { node: body, readBack: 'none', waitedMs }
       if (body && ownId && Object.keys(body).length > 1) return { node: body, readBack: 'same-request', waitedMs }
       // Step 19 — a copy answers copied_<kind>_id with the ids of everything it made (ad_object_ids): the copy is read back
       // and Meta's answer kept beside it (the read cannot give those ids again).
@@ -318,12 +390,20 @@ export async function metaSendChange(
     return { node, readBack: node ? 'second-read' : 'none', waitedMs }
   }
   // Not a plain success: what Meta answered, then what the object is now.
-  const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer)
+  const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer, change.kind)
   const unanswered = answer.status === 0 || answer.status >= 500
   const wanted = expectedOf(change)
-  // Step 18 — an edge create or a DELETE cannot be judged by reading the object: Meta's answer is all there is.
-  const node = change.edge || change.method === 'DELETE' ? null : await readObject(target, change.objectId, `${operation}.readAfterError`, fields)
-  if (node && Object.keys(wanted).length && Object.keys(wanted).every((f) => node[f] !== undefined && node[f] !== null) && !readBackMismatch(node, wanted).length) {
+  // Step 18 — an edge create or a DELETE cannot be judged by reading the object: Meta's answer is all there is (step 39:
+  // unless the change names its own read-back, which then decides as a status does; step 30: nor a webhook or alert
+  // subscription change).
+  const answerOnly = !!change.edge || change.method === 'DELETE' || !!change.via
+  const node = change.judge
+    ? await readObject(target, change.readBackOf ?? change.objectId, `${operation}.readAfterError`, fields)
+    : answerOnly ? null : await readObject(target, change.objectId, `${operation}.readAfterError`, fields)
+  const asked = !!node && (change.judge
+    ? !change.judge(node).moved.length
+    : Object.keys(wanted).length > 0 && Object.keys(wanted).every((f) => node[f] !== undefined && node[f] !== null) && !readBackMismatch(node, wanted).length)
+  if (asked) {
     return { node, readBack: 'second-read', waitedMs, afterError: unanswered ? 'Meta did not answer, or failed on its side' : failure.sentence }
   }
   // Step 19 (review A4) — a copy with its children (deep_copy) or a background copy is not all or nothing: an error answer
@@ -333,16 +413,65 @@ export async function metaSendChange(
     throw new MetaWriteError({ ...failure, sentence: `Not confirmed: ${failure.sentence.replace(/ Nothing was changed\.$/, '').replace(/\.$/, '')} — but a copy with its children is not all or nothing, so part of the copy may exist (meta-campaigns view copies shows the source's copies). Nexus never sends it again by itself.` }, operation, 'unknown')
   }
   // Step 18 — a create on an edge or a DELETE that Meta answered with an error made nothing (Meta judged it).
-  if ((change.edge || change.method === 'DELETE') && !unanswered) throw new MetaWriteError(failure, operation, 'refused')
+  if (!change.judge && answerOnly && !unanswered) throw new MetaWriteError(failure, operation, 'refused')
   if (!node) {
     const sentence = unanswered
       ? META_UNKNOWN_OUTCOME
       : `${failure.sentence.replace(/ Nothing was changed\.$/, '')} — and Nexus could not read the object back to see whether it changed. Nexus never sends it again by itself; meta-ads-live shows it now.`
     throw new MetaWriteError({ ...failure, sentence }, operation, 'unknown')
   }
-  const reads = change.expect ? `it reads ${readsOf(node, wanted)}` : `it still reads ${typeof node.status === 'string' ? node.status : 'unchanged'}`
+  const reads = change.judge ? `it reads ${change.judge(node).reads}` : change.expect ? `it reads ${readsOf(node, wanted)}` : `it still reads ${typeof node.status === 'string' ? node.status : 'unchanged'}`
   if (unanswered) {
     throw new MetaWriteError({ ...failure, sentence: `Meta did not confirm it; ${reads}, but Meta may still apply it. Nexus never sends it again by itself; meta-ads-live shows it.` }, operation, 'unknown')
   }
   throw new MetaWriteError({ ...failure, sentence: `${failure.sentence.replace(/\.$/, '')} (${reads}).` }, operation, 'refused')
+}
+
+/**
+ * Meta step 23 (MD-016) — hand Meta the public link of a video upload THIS change started (video_ads upload_phase=start),
+ * on Meta's resumable upload host: Meta fetches the file itself (Nexus relays no byte). Resolves when Meta answered a
+ * success; rejects with a MetaWriteError: not_sent (the gateway refused it, nothing left), refused (Meta answered an error:
+ * it took no file), unknown (no answer, or Meta failed on its side: it may be fetching it). Never retried.
+ */
+export async function metaSendRupload(target: MetaWriteTarget, upload: { videoId: string; fileUrl: string; operation: string }): Promise<{ node: Record<string, unknown> | null }> {
+  let answer: GatewayResponse
+  try {
+    answer = await metaRuploadCall({ connectionId: target.connectionId, operation: upload.operation, videoId: upload.videoId, fileUrl: upload.fileUrl, maxRateWaitMs: WRITE_RATE_WAIT_MS })
+  } catch (err) {
+    const failure = failureOfThrow(err) ?? localFailure(`Nexus could not send it (${err instanceof Error ? err.message : String(err)}). Nothing was sent.`, 'NEXUS_ERROR')
+    throw new MetaWriteError(failure, upload.operation, 'not_sent')
+  }
+  const body = answer.ok ? answer.json<Record<string, unknown>>() : null
+  if (answer.ok && !(body && body.success === false)) return { node: body }
+  const failure = answer.ok ? localFailure('Meta answered success: false and gave no reason.', 'CHANGE_FAILED') : changeFailure(answer)
+  if (answer.status === 0 || answer.status >= 500) throw new MetaWriteError({ ...failure, sentence: META_UNKNOWN_OUTCOME }, upload.operation, 'unknown')
+  throw new MetaWriteError(failure, upload.operation, 'refused')
+}
+
+/** Big integers (Page and post ids on Meta's partnership host come as JSON numbers) kept exact as text before parsing. */
+function parseExactJson(raw: string): unknown {
+  try { return JSON.parse(raw.replace(/([:[,]\s*)(\d{16,})(?=\s*[,\]}])/g, '$1"$2"')) } catch { return null }
+}
+
+/**
+ * Step 26 (review B1) — one change on Meta's partnership REST host (metaRestWriteCall). Resolves with Meta's answer (a list of
+ * per-item results, or an object) as `node`; rejects with a MetaWriteError: not_sent (the gateway refused it, nothing left),
+ * refused (Meta answered an error: it changed nothing), unknown (no answer, or Meta failed on its side). Never retried. Meta
+ * answers each item of a list on its own (not all or nothing): the caller reads them.
+ */
+export async function metaSendRest(target: MetaWriteTarget, change: Omit<MetaRestWriteRequest, 'connectionId'>): Promise<MetaChangeResult> {
+  let answer: GatewayResponse
+  try {
+    answer = await metaRestWriteCall({ ...change, connectionId: target.connectionId, maxRateWaitMs: WRITE_RATE_WAIT_MS })
+  } catch (err) {
+    const failure = failureOfThrow(err) ?? localFailure(`Nexus could not send it (${err instanceof Error ? err.message : String(err)}). Nothing was sent.`, 'NEXUS_ERROR')
+    throw new MetaWriteError(failure, change.operation, 'not_sent')
+  }
+  if (answer.ok) {
+    const body = parseExactJson(answer.text)
+    return { node: Array.isArray(body) ? { items: body } : body && typeof body === 'object' ? body as Record<string, unknown> : null, readBack: 'same-request', waitedMs: 0 }
+  }
+  const failure = changeFailure(answer)
+  if (answer.status === 0 || answer.status >= 500) throw new MetaWriteError({ ...failure, sentence: META_UNKNOWN_OUTCOME }, change.operation, 'unknown')
+  throw new MetaWriteError(failure, change.operation, 'refused')
 }

@@ -919,6 +919,43 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'create-meta-experiment': ['basis', 'plan', 'reach'],
   'set-meta-experiment': ['basis', 'plan', 'reach'],
   'end-meta-experiment': ['basis', 'plan', 'reach'],
+  // Meta step 23 (2026-10-21): create-meta-media — the files and account it stands on, the requests (the bytes too), where.
+  'create-meta-media': ['basis', 'plan', 'reach'],
+  // Meta step 25 (2026-10-21): create-meta-creative / set-meta-creative — the chosen Page and account, the requests, where.
+  'create-meta-creative': ['basis', 'plan', 'reach'],
+  'set-meta-creative': ['basis', 'plan', 'reach'],
+  // Meta step 29 (2026-10-21): Meta's automated rules — make, change, switch on / off, run now, delete.
+  'set-meta-ad-rule': ['basis', 'plan', 'reach'],
+  'remove-meta-ad-rule': ['basis', 'plan', 'reach'],
+  // Meta step 39 (2026-10-21): brand safety of ad sets and the account, block lists, deleting one (meta-ads-kit).
+  'set-meta-brand-safety': ['basis', 'plan', 'reach'],
+  'set-meta-block-list': ['basis', 'plan', 'reach'],
+  'remove-meta-block-list': ['basis', 'plan', 'reach'],
+  // Meta step 31 (2026-10-21): audiences — create, change, people, sharing, delete.
+  'create-meta-audience': ['basis', 'plan', 'reach'],
+  'set-meta-audience': ['basis', 'plan', 'reach'],
+  'set-meta-audience-members': ['basis', 'plan', 'reach'],
+  'set-meta-audience-sharing': ['basis', 'plan', 'reach'],
+  'remove-meta-audience': ['basis', 'plan', 'reach'],
+  // Meta step 36 (2026-10-21): lead forms and test leads of the chosen Page (meta-ads-lead-forms.tools.ts).
+  'create-meta-lead-form': ['basis', 'plan', 'reach'],
+  'set-meta-lead-form': ['basis', 'plan', 'reach'],
+  // Meta step 26 (2026-10-21): create-meta-boost / set-meta-partnership-access — the source or creators it stands on, the requests, where.
+  'create-meta-boost': ['basis', 'plan', 'reach'],
+  'set-meta-partnership-access': ['basis', 'plan', 'reach'],
+  // Meta step 27 (2026-10-21): create-meta-ad / set-meta-ad — the ad set, campaign and creative it stands on, the requests, where.
+  'create-meta-ad': ['basis', 'plan', 'reach'],
+  'set-meta-ad': ['basis', 'plan', 'reach'],
+  // Meta step 32 (2026-10-21): datasets, their access, custom conversions, and the deletes of custom conversions Nexus made.
+  'create-meta-dataset': ['basis', 'plan', 'reach'],
+  'set-meta-dataset': ['basis', 'plan', 'reach'],
+  'set-meta-dataset-access': ['basis', 'plan', 'reach'],
+  'set-meta-custom-conversion': ['basis', 'plan', 'reach'],
+  'remove-meta-signal-items': ['basis', 'plan', 'reach'],
+  // Meta step 30 part 2 (2026-10-21): webhook and alert subscriptions.
+  'set-meta-webhooks': ['basis', 'plan', 'reach'],
+  'set-meta-alert-subscription': ['basis', 'plan', 'reach'],
+  'remove-meta-alert-subscription': ['basis', 'plan', 'reach'],
   // Meta step 34 (2026-10-21): catalogs, segments, their settings, access and product sets; deletes on explicit ask.
   'create-meta-catalog': ['basis', 'plan', 'reach'],
   'set-meta-catalog': ['basis', 'plan', 'reach'],

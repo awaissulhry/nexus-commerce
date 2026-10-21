@@ -9,8 +9,10 @@
  */
 import type { MetaStatusKind } from './live-status.js'
 import type { MetaWriteEdge } from '../../gateway/meta.js'
-import type { MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind } from '../../gateway/meta-calls.js'
+import type { MetaBoostWriteKind, MetaBrandSafetyKind, MetaPageKind, MetaLabelsKind, MetaOptimizeKind, MetaRemoveKind, MetaWebhookKind } from '../../gateway/meta-calls.js'
+import type { MetaSignalsKind } from '../../gateway/meta-signals-rules.js'
 import type { MetaCatalogKind } from '../../gateway/meta-catalog-rules.js'
+import type { MetaChangeResult, MetaRequestVia, MetaWriteTarget } from './write-client.js'
 
 /** One request of a change: one object, one POST /<id> with these form fields. */
 export interface MetaChangeRequest {
@@ -18,10 +20,17 @@ export interface MetaChangeRequest {
   step: number
   /** What a person reads, e.g. 'Pause campaign "Spring sale" (120000000000001)'. */
   label: string
-  kind: MetaStatusKind
+  /** A campaign, ad set or ad (step 39: a request of another kind names it in `objectKind` and leaves this out). */
+  kind?: MetaStatusKind
   objectId: string
   /** The form fields Meta gets (`status`, …), exactly as sent. */
   params: Record<string, string>
+  /**
+   * Step 26 (review A3) — the fields as this preview's plan hash reads them, when they differ from `params`: a creator's
+   * partnership ad code is replaced in it (a short code could be reversed from a hash; the request's arguments still carry the
+   * code). Default: `params`.
+   */
+  planParams?: Record<string, string>
   /**
    * Meta's check (validate_only) for this request: `meta` — asked before it is queued; `none` — Meta documents none for it
    * (ad set and ad updates); `not-yet` — Meta documents one, but Nexus does not use it for this change until a live probe
@@ -48,14 +57,35 @@ export interface MetaChangeRequest {
   readBackFields?: string
   /**
    * The object the gateway confirms, when it is not `kind` (a budget schedule: `highdemandperiod`; step 19: a create names
-   * the chosen ad account itself, `adaccount`).
+   * the chosen ad account itself, `adaccount`). Step 29: a Meta automated rule (`adrule`) or the ad account's rule
+   * library (`adaccount`, a rule's create); `kind` then only types the request (`campaign` by convention).
+   * Step 23: an upload names the chosen ad account (`adaccount`) or its business portfolio (step 28's `business`);
+   * captions name the library video (step 22's `video`). Its `kind` is then `ad`, as for step 22's deletes.
+   * Step 31: an audience (`customaudience`) or the chosen ad account (`adaccount`: its audiences, opt-outs, settings).
+   * Step 30: the chosen ad account (`adaccount`: its connected app, its alert subscriptions), the connection's own app
+   * (`app`), the chosen Page (step 28's `page`: the app's removal from it).
    */
   objectKind?: 'highdemandperiod' | 'adaccount' | MetaRemoveKind | MetaLabelsKind
     // Step 28 — a new study's portfolio, a study, a Page, a Page video test.
     | MetaOptimizeKind
+    // Step 29 — a Meta automated rule.
+    | 'adrule'
+    // Step 39 — an ad set's targeting, a publisher or content block list (brand safety).
+    | MetaBrandSafetyKind
+    // Step 31 — one of the chosen ad account's own custom audiences.
+    | 'customaudience'
+    // Step 36 — a lead form of the chosen Page, a test lead Nexus made on it.
+    | MetaPageKind
+    // Step 26 — the chosen Instagram account (`iguser`) or a media of it (`igmedia`); the chosen Page on Meta's partnership
+    // host is step 28's `page` (set-meta-partnership-access).
+    | MetaBoostWriteKind
+    // Step 32 — a dataset, its business portfolio, a custom conversion, an event source group, an Instagram account.
+    | MetaSignalsKind
+    // Step 30 — the connection's own Meta app (its webhook subscriptions).
+    | MetaWebhookKind
     // Step 34 — a catalog, product set, item or feed of this business, the portfolio a catalog is made in.
     | MetaCatalogKind
-  /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …). */
+  /** A create on the object's edge (POST /<id>/budget_schedules; step 19: act_<id>/campaigns | adsets, <id>/copies, …; step 29: act_<id>/adrules_library, <rule id>/execute; step 31: an account's audiences, an audience's people or shares). */
   edge?: MetaWriteEdge
   /** DELETE (a budget schedule's); default POST. */
   method?: 'POST' | 'DELETE'
@@ -78,6 +108,37 @@ export interface MetaChangeRequest {
    * {"success": true}): the object is read back, never a new one.
    */
   readBackObject?: true
+  // ── step 23: a request that brings its own sender ──
+  /**
+   * Sends the request itself (an upload whose answer is read again, or Meta's video-ads upload, whose later calls need the
+   * first one's answer): the kit runs it as ONE step in place of metaSendChange. It goes only through the write client
+   * (the gateway), and rejects with a MetaWriteError exactly like metaSendChange (not_sent, refused, unknown).
+   */
+  send?: (target: MetaWriteTarget) => Promise<MetaChangeResult>
+  /** The step's sentence when Meta made it (else the kit's own). */
+  doneSentence?: (result: MetaChangeResult) => string
+  // ── step 39 (brand safety) ──
+  /** The read-back that judges it (meta write-client `judge`), and what is read (default the object). */
+  judge?: (node: Record<string, unknown>) => { moved: string[]; reads: string }
+  readBackOf?: string
+  /**
+   * Params it takes from an earlier request of the same change, just before it is sent (a list made from the draft step 1
+   * uploaded): its plan holds the rest. A MetaWriteError it throws ends the run there (nothing more is sent).
+   */
+  prepare?: (done: ReadonlyArray<{ request: MetaChangeRequest; result: MetaChangeResult }>) => Promise<Record<string, string>>
+  /** The capability grant Meta needs for it (D6): Meta refusing it for access answers with the no-grant controls. */
+  grant?: string
+  // ── step 36 (lead forms, test leads) ──
+  /** Never read back after it is made (a test lead: Nexus keeps Meta's answer, the new id, and never reads a lead). */
+  skipReadBack?: true
+  /** Meta's codes this request may meet, in plain words (base code → sentence), added to the step's sentence. */
+  explain?: Readonly<Record<string, string>>
+  // ── step 27 ──
+  /** A new ad's check runs Meta's synchronous integrity review with it (synchronous_ad_review, AD-026 … AD-028). */
+  adReview?: boolean
+  // ── step 30 (webhook and alert subscriptions) ──
+  /** Its path, a DELETE's query, PATCH (write-client.ts MetaRequestVia); Meta's answer is all there is. */
+  via?: MetaRequestVia
 }
 
 export interface MetaChangeDraft {
